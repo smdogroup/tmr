@@ -5,7 +5,7 @@
 */
 int TMROctant::childId(){
   int id = 0;
-  const int h = 1 << (TMR_MAX_LEVEL - level);
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   
   id = id | ((x & h) ? 1 : 0);
   id = id | ((y & h) ? 2 : 0);
@@ -18,11 +18,11 @@ int TMROctant::childId(){
   Return the sibling of the octant
 */
 void TMROctant::getSibling( int id, TMROctant *sib ){
-  const int h = 1 << (TMR_MAX_LEVEL - level);
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
-  int xr = ((x & h) ? x-h : x);
-  int yr = ((y & h) ? y-h : y);
-  int zr = ((z & h) ? z-h : z);
+  int32_t xr = ((x & h) ? x-h : x);
+  int32_t yr = ((y & h) ? y-h : y);
+  int32_t zr = ((z & h) ? z-h : z);
 
   sib->level = level;
   sib->x = ((id & 1) ? xr+h : xr);
@@ -36,7 +36,7 @@ void TMROctant::getSibling( int id, TMROctant *sib ){
 void TMROctant::parent( TMROctant *p ){
   if (level > 0){
     p->level = level-1;
-    const int h = 1 << (TMR_MAX_LEVEL - level);
+    const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
     p->x = x & ~h;
     p->y = y & ~h;
@@ -49,7 +49,7 @@ void TMROctant::parent( TMROctant *p ){
 */
 void TMROctant::faceNeighbor( int face, TMROctant *neighbor ){
   neighbor->level = level;
-  const int h = 1 << (TMR_MAX_LEVEL - level);
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
   neighbor->x = x + ((face == 0) ? -h : (face == 1) ? h : 0);
   neighbor->y = y + ((face == 2) ? -h : (face == 3) ? h : 0);
@@ -60,7 +60,7 @@ void TMROctant::faceNeighbor( int face, TMROctant *neighbor ){
   Get the neighbor along an edge
 */
 void TMROctant::edgeNeighbor( int edge, TMROctant *neighbor ){
-  const int h = 1 << (TMR_MAX_LEVEL - level);
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->level = level;
   
   if (edge < 4){
@@ -122,7 +122,7 @@ void TMROctant::edgeNeighbor( int edge, TMROctant *neighbor ){
   Get the neighbor along a corner
 */
 void TMROctant::cornerNeighbor( int corner, TMROctant *neighbor ){
-  const int h = 1 << (TMR_MAX_LEVEL - level);
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->level = level;
 
   neighbor->x = x + (2*(corner & 1) - 1)*h;
@@ -134,10 +134,10 @@ void TMROctant::cornerNeighbor( int corner, TMROctant *neighbor ){
   Compare two octants using the Morton enconding (z-ordering)
 */
 int TMROctant::compare( const TMROctant *octant ) const {
-  unsigned int xxor = x ^ octant->x;
-  unsigned int yxor = y ^ octant->y;
-  unsigned int zxor = z ^ octant->z;
-  unsigned int sor = xxor | yxor | zxor;
+  uint32_t xxor = x ^ octant->x;
+  uint32_t yxor = y ^ octant->y;
+  uint32_t zxor = z ^ octant->z;
+  uint32_t sor = xxor | yxor | zxor;
 
   // If there is no most-significant bit, then we are done
   if (sor == 0){
@@ -170,10 +170,10 @@ int TMROctant::compare( const TMROctant *octant ) const {
   encoding, but may be at different levels.
 */
 int TMROctant::compareEncoding( const TMROctant *octant ) const {
-  unsigned int xxor = x ^ octant->x;
-  unsigned int yxor = y ^ octant->y;
-  unsigned int zxor = z ^ octant->z;
-  unsigned int sor = xxor | yxor | zxor;
+  uint32_t xxor = x ^ octant->x;
+  uint32_t yxor = y ^ octant->y;
+  uint32_t zxor = z ^ octant->z;
+  uint32_t sor = xxor | yxor | zxor;
 
   // Note that here we do not distinguish between levels
   // Check for the most-significant bit
@@ -261,6 +261,19 @@ void TMROctantArray::sortUnique(){
 }
 
 /*
+  Determine if the array contains the specified octant
+*/
+TMROctant* TMROctantArray::contains( TMROctant *q ){
+  if (!is_sorted){
+    is_sorted = 1;
+    sort();
+  }
+
+  return (TMROctant*)bsearch(q, array, size, sizeof(TMROctant), 
+                             compare_octants);
+}
+
+/*
   Merge the entries of two arrays
 */
 void TMROctantArray::merge( TMROctantArray * list ){
@@ -344,16 +357,24 @@ void TMROctantArray::getArray( TMROctant **_array, int *_size ){
   *_size = size;
 }
 
-
+/*
+  Create an queue of octants 
+*/
 TMROctantQueue::TMROctantQueue(){
   root = tip = NULL;
   num_elems = 0;
 }
 
+/*
+  Get the length of the octant queue
+*/
 int TMROctantQueue::length(){ 
   return num_elems;
 }
 
+/*
+  Push a value onto the octant queue
+*/
 void TMROctantQueue::push( TMROctant *oct ){
   if (!tip){
     root = new OcQueueNode();
@@ -368,6 +389,9 @@ void TMROctantQueue::push( TMROctant *oct ){
   num_elems++;
 }
 
+/*
+  Pop a value from the octant queue
+*/
 TMROctant TMROctantQueue::pop(){
   if (!root){
     return TMROctant();
@@ -380,9 +404,14 @@ TMROctant TMROctantQueue::pop(){
   }
 }
 
+/*
+  Convert the queue to an array 
+*/
 TMROctantArray* TMROctantQueue::toArray(){
+  // Allocate the array
   TMROctant *array = new TMROctant[ num_elems ];
   
+  // Scan through the queue and retrieve the octants
   OcQueueNode *node = root;
   int index = 0;
   while (node){
@@ -391,11 +420,18 @@ TMROctantArray* TMROctantQueue::toArray(){
     index++;
   }
 
+  // Create the array object
   TMROctantArray *list = new TMROctantArray(array, num_elems);
   return list;
 }
 
+/*
+  A hash for octants
 
+  Note that this isn't a true hash table since it does not associate
+  elements with other values. It is used to create unique lists of
+  elements and nodes within the octree mesh.
+*/
 TMROctantHash::TMROctantHash(){
   num_elems = 0;
   num_buckets = min_num_buckets;
@@ -403,48 +439,95 @@ TMROctantHash::TMROctantHash(){
   memset(hash_buckets, 0, num_buckets*sizeof(OcHashNode*));
 }
 
+/*
+  Covert the hash table to an array
+*/
 TMROctantArray * TMROctantHash::toArray(){
+  // Create an array of octants
   TMROctant *array = new TMROctant[ num_elems ];
 
-  int max_len = 0;
-  int min_len = 0;
-  int av_len = 0;
-  int min_index = -1;
-
+  // Loop over all the buckets
   for ( int i = 0, index = 0; i < num_buckets; i++ ){
+    // Get the hash bucket and extract all the elements from this
+    // bucket into the array
     OcHashNode *node = hash_buckets[i];
     
-    int len = 0;
     while (node){
       array[index] = node->oct;
       index++;
-      len++;
       node = node->next;
-    }
-
-    av_len += len;
-    if (i == 0){
-      min_len = len;
-    }
-
-    min_len = (len < min_len ? len : min_len);
-    max_len = (len > max_len ? len : max_len);
-    if (min_len == len){
-      min_index = i;
     }
   }
   
-  printf("maximum hash array length: %d\n", max_len);
-  printf("minimum hash array length: %d  index: %d\n", min_len, min_index);
-  printf("average hash array length: %d\n", av_len/num_buckets);
-
+  // Create an array object and add it to the list
   TMROctantArray *list = new TMROctantArray(array, num_elems);
   return list;
 }
 
-int TMROctantHash::addOctant( TMROctant *oct ){
+/*
+  Add an octant to the hash table. 
+
+  A new octant is added only if it is unique within the list of
+  objects. The function returns true if the octant is added, and false
+  if it already exists within the hash table.
+
+  input:
+  oct:   the octant that may be added to the hash table
+  
+  returns:
+  true if the octant is added, false if it is not
+*/
+int TMROctantHash::addOctant( TMROctant *oct ){ 
+  if (num_elems > 10*num_buckets){
+    // Redistribute the octants to new buckets
+    int num_old_buckets = num_buckets;
+    num_buckets = 2*num_buckets;
+    OcHashNode **new_buckets = new OcHashNode*[ num_buckets ];
+    memset(new_buckets, 0, num_buckets*sizeof(OcHashNode*));
+
+    // Keep track of the end bucket
+    OcHashNode **end_buckets = new OcHashNode*[ num_buckets ];
+    
+    // Redistribute the octant nodes based on the new
+    // number of buckets within the hash data structure
+    for ( int i = 0; i < num_old_buckets; i++ ){
+      OcHashNode *node = hash_buckets[i];
+      while (node){
+        int bucket = getBucket(&(node->oct));
+
+        // If this is the first new bucket, create
+        // the new node
+        if (!new_buckets[bucket]){
+          new_buckets[bucket] = new OcHashNode;
+          new_buckets[bucket]->oct = node->oct;
+          end_buckets[bucket] = new_buckets[bucket];
+        }
+        else {
+          end_buckets[bucket]->next = new OcHashNode;
+          end_buckets[bucket]->next->oct = node->oct;
+          end_buckets[bucket] = end_buckets[bucket]->next;
+        }
+        
+        // Delete the old guy
+        OcHashNode *tmp = node;
+
+        // Increment the node to the next hash
+        node = node->next;
+
+        // Free the node
+        delete tmp;
+      }
+    }
+
+    delete [] end_buckets;
+    delete [] hash_buckets;
+    hash_buckets = new_buckets;
+  }
+
   int bucket = getBucket(oct);
   
+  // If no octant has been added to the bucket, 
+  // create a new bucket
   if (!hash_buckets[bucket]){
     hash_buckets[bucket] = new OcHashNode;
     hash_buckets[bucket]->oct = *oct;
@@ -452,32 +535,44 @@ int TMROctantHash::addOctant( TMROctant *oct ){
     return 1;
   }
   else {
+    // Get the head node for the corresponding bucket
     OcHashNode *node = hash_buckets[bucket];
     while (node){
+      // The octant is in the list, quit now and return false
       if (node->oct.compare(oct) == 0){
 	return 0;
       }
       
+      // If the next node does not exist, quit
+      // while node is the last node in the linked
+      // list
       if (!node->next){
 	break;
       }
       node = node->next;
     }
     
+    // Add the octant as the last node
     node->next = new OcHashNode;
     node->next->oct = *oct;
-    node->next->next = NULL;
     num_elems++;
   }
 
   return 1;
 }
 
-// Get the buckets to place the octant in
-int TMROctantHash::getBucket( TMROctant *oct ){
-  int rx = oct->x >> (TMR_MAX_LEVEL - oct->level); 
-  int ry = oct->y >> (TMR_MAX_LEVEL - oct->level); 
-  int rz = oct->z >> (TMR_MAX_LEVEL - oct->level); 
+/*
+  Get a bucket to place the octant in. 
 
-  return rx*ry*rz % num_buckets;
+  This code creates a value based on the octant location within the
+  mesh and then takes the remainder of the number of buckets.  
+*/
+int TMROctantHash::getBucket( TMROctant *oct ){
+  int rx = oct->x >> (TMR_MAX_LEVEL - oct->level);
+  int ry = oct->y >> (TMR_MAX_LEVEL - oct->level);
+  int rz = oct->z >> (TMR_MAX_LEVEL - oct->level);
+
+  const int h = 1 << oct->level;
+
+  return (rx + (ry << oct->level) + (rz << 2*oct->level)) % num_buckets;
 }

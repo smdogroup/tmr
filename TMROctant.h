@@ -4,9 +4,25 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 
-static const int TMR_MAX_LEVEL = 30;
+/*
+  The following constants define the maximum octant depth and maximum
+  element order within the code.
+*/
+static const int TMR_LOG2_MAX_ELEMENT_ORDER = 3; 
+static const int TMR_MAX_LEVEL = 30 - TMR_LOG2_MAX_ELEMENT_ORDER;
+static const int TMR_MAX_ELEMENT_ORDER = (1 << TMR_LOG2_MAX_ELEMENT_ORDER) - 1; 
+static const int TMR_MAX_NODE_LEVEL = 30;
 
+
+/*
+  The TMR Octant class
+
+  This class defines an octant that is used to order both the elements
+  and nodes within the mesh. This class 
+
+*/
 class TMROctant {
  public:
   TMROctant(){}
@@ -21,8 +37,9 @@ class TMROctant {
   int compare( const TMROctant *octant ) const;
   int compareEncoding( const TMROctant *octant ) const;
 
-  int x, y, z;
-  int level;
+  int32_t x, y, z; // The x,y,z coordinates
+  uint16_t level; // The refinement level
+  int32_t tag; // A tag to store additional data
 };
 
 /*
@@ -36,6 +53,7 @@ class TMROctantArray {
   void getArray( TMROctant **_array, int *_size );
   void sort();
   void sortUnique();
+  TMROctant* contains( TMROctant *q );
   void merge( TMROctantArray * list );
 
  private:
@@ -84,7 +102,7 @@ class TMROctantHash {
 
  private:
   // The minimum bucket size
-  static const int min_num_buckets = (1 << 10)-1;
+  static const int min_num_buckets = (1 << 12)-1;
 
   class OcHashNode {
   public:
