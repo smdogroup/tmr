@@ -132,6 +132,10 @@ void TMROctant::cornerNeighbor( int corner, TMROctant *neighbor ){
 
 /*
   Compare two octants using the Morton enconding (z-ordering)
+
+  This function returns -1 if self < octant, 0 if self == octant and 1
+  if self > octant. Ties are broken by the level of the octant such
+  that the octants will be sorted by location then level.
 */
 int TMROctant::compare( const TMROctant *octant ) const {
   uint32_t xxor = x ^ octant->x;
@@ -208,13 +212,23 @@ static int compare_octants( const void *a, const void *b ){
 }
 
 /*
+  Compare two octant nodes
+*/
+static int compare_nodes( const void *a, const void *b ){
+  const TMROctant *ao = static_cast<const TMROctant*>(a);
+  const TMROctant *bo = static_cast<const TMROctant*>(b);
+  
+  return ao->compareEncoding(bo);
+}
+
+/*
   Store a array of octants
 */
 TMROctantArray::TMROctantArray( TMROctant *_array, int _size ){
   array = _array;
   size = _size;
   max_size = size;
-  is_sorted = is_unique = 0;
+  is_sorted = 0;
 }
 
 /*
@@ -225,18 +239,10 @@ TMROctantArray::~TMROctantArray(){
 }
 
 /*
-  Just sort the array of entries without uniquifying them
-*/
-void TMROctantArray::sort(){
-  qsort(array, size, sizeof(TMROctant), compare_octants);
-  is_sorted = 1;
-}
-
-/*
   Sort the list and remove duplicates from the array of possible
   entries.
 */
-void TMROctantArray::sortUnique(){
+void TMROctantArray::sort(){
   qsort(array, size, sizeof(TMROctant), compare_octants);
 
   // Now that the Octants are sorted, remove duplicates
@@ -257,18 +263,25 @@ void TMROctantArray::sortUnique(){
   // The new size of the array
   size = j;
 
-  is_sorted = is_unique = 1;
+  is_sorted = 1;
 }
 
 /*
   Determine if the array contains the specified octant
 */
-TMROctant* TMROctantArray::contains( TMROctant *q ){
+TMROctant* TMROctantArray::contains( TMROctant *q, int use_nodes ){
   if (!is_sorted){
     is_sorted = 1;
     sort();
   }
 
+  // Search for nodes - these will share the same
+  if (use_nodes){
+    return (TMROctant*)bsearch(q, array, size, sizeof(TMROctant), 
+                               compare_nodes);
+  }
+
+  // Search the array for an identical element
   return (TMROctant*)bsearch(q, array, size, sizeof(TMROctant), 
                              compare_octants);
 }
@@ -277,15 +290,15 @@ TMROctant* TMROctantArray::contains( TMROctant *q ){
   Merge the entries of two arrays
 */
 void TMROctantArray::merge( TMROctantArray * list ){
-  if (!is_unique){
-    sortUnique();
+  if (!is_sorted){
+    sort();
   }
-  if (!list->is_unique){
-    list->sortUnique();
+  if (!list->is_sorted){
+    list->sort();
   }
 
   // Keep track of the number of duplicates
-  int ndup = 0;
+  int nduplicates = 0;
 
   // Scan through the list and determine the number
   // of duplicates 
@@ -299,12 +312,12 @@ void TMROctantArray::merge( TMROctantArray * list ){
       break;
     }
     if (array[i].compare(&list->array[j]) == 0){
-      ndup++;
+      nduplicates++;
     }
   }
 
   // Compute the required length of the new array
-  int len = size + list->size - ndup; 
+  int len = size + list->size - nduplicates; 
 
   // Allocate a new array if required
   if (len > max_size){

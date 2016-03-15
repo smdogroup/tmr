@@ -28,11 +28,18 @@ class TMROctree {
 
   // Get the connectivity from the mesh
   // ----------------------------------
-  void createMesh( int );
+  void createMesh( int order, int *_num_nodes,
+                   int *_num_dep_nodes, int *_num_elements,
+                   int **_elem_ptr, int **_elem_conn );
 
   // Print a representation of the tree to a file
   // --------------------------------------------
   void printTree( const char * filename );
+
+  // Retrieve the octree nodes
+  void getNodes( TMROctantArray **_nodes ){
+    *_nodes = nodes;
+  }
 
  private:
   // The list octants representing the elements

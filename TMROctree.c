@@ -50,8 +50,7 @@ TMROctree::TMROctree( int refine_level ){
 }
 
 /*
-  Generate a random initial octree that can be used for
-  testing.
+  Generate a random initial octree that can be used for testing.
 */
 TMROctree::TMROctree( int nrand, int min_level, int max_level ){
   // Create an array of the octants that will be stored
@@ -73,7 +72,7 @@ TMROctree::TMROctree( int nrand, int min_level, int max_level ){
   }
 
   elements = new TMROctantArray(array, nrand);
-  elements->sortUnique();
+  elements->sort();
   is_sorted = 1;
 }
 
@@ -264,7 +263,7 @@ void TMROctree::balance( int balance_type ){
 
   // Cover the hash table to a list and uniquely sort it
   elements = hash->toArray();
-  elements->sortUnique();
+  elements->sort();
 }
 
 /*
@@ -278,7 +277,7 @@ void TMROctree::balance( int balance_type ){
   as a new octree object.
 */
 TMROctree *TMROctree::coarsen(){
-  elements->sortUnique();
+  elements->sort();
 
   int size;
   TMROctant *array;
@@ -384,7 +383,7 @@ void TMROctree::createNodes( int order ){
 
   // Cover the hash table to a list and uniquely sort it
   nodes = hash->toArray();
-  nodes->sortUnique();
+  nodes->sort();
 
   // The relationship between the dependent edges
   // and dependent face indices
@@ -400,6 +399,9 @@ void TMROctree::createNodes( int order ){
 
   int dep_conn_len = 0;
   if (order == 2){
+    // For all operations here, we compare the node numbers
+    const int use_nodes = 1;
+
     // Now check for dependent nodes on each edge and face
     for ( int i = 0; i < size; i++ ){
       // Get the child quadrant
@@ -416,7 +418,7 @@ void TMROctree::createNodes( int order ){
         p.z = array[i].x + h*dep_edge[j][2];
 
         TMROctant *t;
-        if (t = nodes->contains(&p)){
+        if (t = nodes->contains(&p, use_nodes)){
           dep_conn_len += 2; 
           t->tag = -1;
         }
@@ -429,7 +431,7 @@ void TMROctree::createNodes( int order ){
         p.z = array[i].x + h*dep_face[j][2];
 
         TMROctant *t;
-        if (t = nodes->contains(&p)){
+        if (t = nodes->contains(&p, use_nodes)){
           dep_conn_len += 4;
           t->tag = -2;
         }
@@ -474,14 +476,20 @@ void TMROctree::createNodes( int order ){
 
 /*
   Create the mesh connectivity
-  
-  
 */
-void TMROctree::createMesh( int order ){
+void TMROctree::createMesh( int order,
+                            int *_num_nodes,
+                            int *_num_dep_nodes,
+                            int *_num_elements,
+                            int **_elem_ptr, 
+                            int **_elem_conn ){
   // Scan through and create the connectivity for all the
   // elements in the Morton order
   if (order < 2){ order = 2; }
   if (order > 3){ order = 3; }
+
+  // Create the mesh and order the nodes
+  createNodes(order);
 
   // Get the current array of octants
   int size;
@@ -500,6 +508,9 @@ void TMROctree::createMesh( int order ){
     TMROctant p;
 
     if (order == 2){
+      // For all searches/comparisons, we use node numbers
+      const int use_nodes = 1;
+
       // Add all of the nodes from the adjacent elements
       const int h = 1 << (TMR_MAX_LEVEL - array[i].level);
       p.level = array[i].level;
@@ -513,7 +524,7 @@ void TMROctree::createMesh( int order ){
             p.z = array[i].z + kk*h;
 
             // Get the index for the node
-            TMROctant *t = nodes->contains(&p);
+            TMROctant *t = nodes->contains(&p, use_nodes);
             elem_conn[conn_size] = t->tag;
             conn_size++;
           }
@@ -521,6 +532,9 @@ void TMROctree::createMesh( int order ){
       }
     }
     else if (order == 3){
+      // For all searches, use nodes
+      const int use_nodes = 1;
+
       // Add all of the nodes from the adjacent elements
       const int h = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
       p.level = array[i].level+1;
@@ -535,7 +549,7 @@ void TMROctree::createMesh( int order ){
             p.z = array[i].z + kk*h;
 
             // Get the index for the node
-            TMROctant *t = nodes->contains(&p);
+            TMROctant *t = nodes->contains(&p, use_nodes);
             elem_conn[conn_size] = t->tag;
             conn_size++;
           }
@@ -546,6 +560,15 @@ void TMROctree::createMesh( int order ){
     // Set the connectivity pointer
     elem_ptr[i+1] = conn_size;
   }
+
+  // Set the nodes, dependent nodes, elements
+  *_num_nodes = num_nodes;
+  *_num_dep_nodes = num_dependent_nodes;
+  *_num_elements = num_elements;
+
+  // Set the connectivity arrays
+  *_elem_ptr = elem_ptr;
+  *_elem_conn = elem_conn;
 }
 
 /*

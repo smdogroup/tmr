@@ -38,7 +38,7 @@ class TMROctant {
   int compareEncoding( const TMROctant *octant ) const;
 
   int32_t x, y, z; // The x,y,z coordinates
-  uint16_t level; // The refinement level
+  uint32_t level; // The refinement level
   int32_t tag; // A tag to store additional data
 };
 
@@ -52,12 +52,11 @@ class TMROctantArray {
 
   void getArray( TMROctant **_array, int *_size );
   void sort();
-  void sortUnique();
-  TMROctant* contains( TMROctant *q );
+  TMROctant* contains( TMROctant *q, int use_nodes=0 );
   void merge( TMROctantArray * list );
 
  private:
-  int is_sorted, is_unique;
+  int is_sorted;
   int size, max_size;
   TMROctant *array;
 };
