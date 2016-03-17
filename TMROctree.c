@@ -414,29 +414,8 @@ void TMROctree::createNodes( int order,
   nodes = hash->toArray();
   nodes->sort();
 
-  // The relationship between the dependent edges
-  // and dependent face indices
-  const int dep_edge[][3] = {
-    {1, 0, 0}, {1, 2, 0}, {1, 0, 2}, {1, 2, 2},
-    {0, 1, 0}, {2, 1, 0}, {0, 1, 2}, {2, 1, 2},
-    {0, 0, 1}, {2, 0, 1}, {0, 2, 1}, {2, 2, 1}};
-    
-  const int dep_face[][3] = {
-    {0, 1, 1}, {2, 1, 1}, 
-    {1, 0, 1}, {1, 2, 1},
-    {1, 1, 0}, {1, 1, 2}};
-
-  const int dep_edge_lin[][3] = {
-    {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0},
-    {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0},
-    {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}};
-
-  const int dep_edge_const[][3] = {
-    {0, 0, 0}, {0, 1, 0}, {0, 0, 0}, {1, 0, 0},
-    {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0},
-    {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}};
-
-
+  // Free the hash
+  delete hash;
 
   // Build the information for the dependent nodes that
   // lie along an element edge
@@ -454,59 +433,106 @@ void TMROctree::createNodes( int order,
 
     // Now check for dependent nodes on each edge and face
     for ( int i = 0; i < size; i++ ){
+      // The following indices are used to define the
+      // unit vectors along the edges/faces of an element
+      const int iindex[] = {1, 0, 0};
+      const int jindex[] = {2, 2, 1};
+
+      // Get the side length of the element
+      const int h = 1 << (TMR_MAX_LEVEL - array[i].level);      
+
       // Get the child quadrant
-      TMROctant p;
-      p.level = array[i].level + 1;
+      TMROctant c;
+      c.level = array[i].level + 1;
       
       // Get the size of the next finest level
-      const int h = 1 << (TMR_MAX_LEVEL - array[i].level);
-      const int hp = 1 << (TMR_MAX_LEVEL - p.level);
+      const int hc = 1 << (TMR_MAX_LEVEL - c.level);
 
       // Check if this is a dependent edge
-      for ( int j = 0; j < 12; j++ ){
-        p.x = array[i].x + hp*dep_edge[j][0];
-        p.y = array[i].x + hp*dep_edge[j][1];
-        p.z = array[i].x + hp*dep_edge[j][2];
+      for ( int k = 0; k < 3; k++ ){
+	// The constant and variable unit vectors for
+	// determining the edge location
+	int ec[3] = {0, 0, 0};
+	int ie[3] = {0, 0, 0};
+	int je[3] = {0, 0, 0};
+	
+	// Set the indices of the unit vectors
+	ec[k] = 1;
+	ie[iindex[k]] = 1;
+	je[iindex[k]] = 1;
 
-        TMROctant *t;
-        if (t = nodes->contains(&p, use_nodes)){
-          if (t->tag == 1){
-            // Push the dependent node from the edge
-            edge_queue->push(p);
+	for ( int jj = 0; jj < 2; jj++ ){
+	  for ( int ii = 0; ii < 2; ii++ ){
+	    // Check the location for the dependent node
+	    c.x = array[i].x + hc*ec[0] + h*(ii*ie[0] + jj*je[0]);
+	    c.y = array[i].y + hc*ec[1] + h*(ii*ie[1] + jj*je[1]);
+	    c.z = array[i].z + hc*ec[2] + h*(ii*ie[2] + jj*je[2]);
+
+	    TMROctant *t;
+	    if (t = nodes->contains(&c, use_nodes)){
+	      if (t->tag == 1){
+		// Push the dependent node from the edge
+		edge_queue->push(&c);
             
-            // Create and push the independent nodes
-            // from the edge
-            TMROctant n;
-            n.x = array[i].x + dep_edge_const[j][0];
-            n.y = array[i].y + dep_edge_const[j][1];
-            n.z = array[i].z + dep_edge_const[j][2];
-            edge_nodes->push(n);
+		// Create and push the independent nodes from the edge
+		TMROctant n;
+		n.x = array[i].x + h*(ii*ie[0] + jj*je[0]);
+		n.y = array[i].y + h*(ii*ie[1] + jj*je[1]);
+		n.z = array[i].z + h*(ii*ie[2] + jj*je[2]);
+		edge_nodes->push(&n);
              
-            n.x = array[i].x + h*dep_edge_lin[j][0] + dep_edge_const[j][0];
-            n.y = array[i].y + h*dep_edge_lin[j][1] + dep_edge_const[j][1];
-            n.z = array[i].z + h*dep_edge_lin[j][2] + dep_edge_const[j][2];
-            edge_nodes->push(n);
-          }
-          t->tag = -1;
-        }
+		// Set the other dependent node
+		n.x += h*ec[0];
+		n.y += h*ec[1];
+		n.z += h*ec[2];
+		edge_nodes->push(&n);
+
+		// Set the node so it does not get added again
+		t->tag = -1;
+	      }
+	    }
+	  }
+	}
       }
 
       // Check if this is a dependent face
-      for ( int j = 0; j < 6; j++ ){
-        p.x = array[i].x + hp*dep_face[j][0];
-        p.y = array[i].x + hp*dep_face[j][1];
-        p.z = array[i].x + hp*dep_face[j][2];
+      for ( int k = 0; k < 3; k++ ){
+	// The constant and variable unit vectors for
+	// determining the edge location
+	int ec[3] = {0, 0, 0};
+	int ie[3] = {0, 0, 0};
+	int je[3] = {0, 0, 0};
 
-        TMROctant *t;
-        if (t = nodes->contains(&p, use_nodes)){
-          if (t->tag == 1){
-            // Push the dependent node from the face
-            face_queue->push(p);
+	// Set the indices of the unit vectors
+	ec[k] = 1;
+	ie[iindex[k]] = 1;
+	je[iindex[k]] = 1;
 
-            // Push the independent nodes from the face 
+	// Scan over each face
+	for ( int ii = 0; ii < 2; ii++ ){
+	  c.x = h*ii*ec[0] + hc*(ie[0] + je[0]);
+	  c.y = h*ii*ec[1] + hc*(ie[1] + je[1]);
+	  c.z = h*ii*ec[2] + hc*(ie[2] + je[2]);
 
-          }
-          t->tag = -2;
+	  TMROctant *t;
+	  if (t = nodes->contains(&c, use_nodes)){
+	    if (t->tag == 1){
+	      // Push the dependent node from the face
+	      face_queue->push(&c);
+
+	      // Push the independent nodes from the face 
+	      for ( int jface = 0; jface < 2; jface++ ){
+		for ( int iface = 0; iface < 2; iface++ ){
+		  TMROctant n;
+		  n.x = array[i].x + h*ii*ec[0] + h*(iface*ie[0] + jface*je[0]);
+		  n.y = array[i].y + h*ii*ec[1] + h*(iface*ie[1] + jface*je[1]);
+		  n.z = array[i].z + h*ii*ec[2] + h*(iface*ie[2] + jface*je[2]);
+		  face_nodes->push(&n);
+		}
+	      }
+	      t->tag = -2;
+	    }
+	  }
         }
       }
     }
@@ -542,26 +568,86 @@ void TMROctree::createNodes( int order,
     }
   }
 
-  // Build the dependent node information
-  int nface = face_nodes->length();
-  int nedge = edge_nodes->length();
+  // Covert the queues to arrays
+  TMROctantArray *edge_array = edge_queue->toArray();
+  TMROctantArray *face_array = face_queue->toArray();
 
+  // Free the queue objects
+  delete edge_queue;
+  delete face_queue;
+
+  // Get the arrays of edges and faces
+  int nedges, nfaces;
+  TMROctant *edges, *faces;
+  edge_array->getArray(&edges, &nedges);
+  face_array->getArray(&faces, &nfaces);
+  
   // Allocate the arrays for the dependent nodes
   int *dep_ptr = new int[ num_dependent_nodes+1 ];
-  int *dep_conn = new int[ nedge + nface ];
-  double *dep_weights = new double[ nedge + nface ];
+  int *dep_conn = new int[ order*nedges + order*order*nfaces ];
+  double *dep_weights = new double[ order*nedges + order*order*nfaces ];
 
   // Find the dependent variables and check them
-  for ( int i = 0; i < num_dependent_nodes; i++ ){
+  memset(dep_ptr, 0, (num_dependent_nodes+1)*sizeof(int));
 
+  // Add the counts from the edge and face dependent node relationships
+  for ( int i = 0; i < nedges; i++ ){
+    const int use_nodes = 1;
+    TMROctant *t = nodes->contains(&edges[i], use_nodes);
+    int node = -t->tag-1;
+    dep_ptr[node+1] = 2;
+  }
+  for ( int i = 0; i < nfaces; i++ ){
+    const int use_nodes = 1;
+    TMROctant *t = nodes->contains(&faces[i], use_nodes);
+    int node = -t->tag-1;
+    dep_ptr[node+1] = 2;
   }
 
-  *_dep_ptr = dep_ptr;
-  *_dep_conn = dep_conn;
-  *_dep_weights = dep_weights;
+  // Count up the totals so that dep_ptr points into the
+  // correct location in the dep_conn and dep_weight arrays
+  for ( int i = 0; i < num_dependent_nodes; i++ ){
+    dep_ptr[i+1] += dep_ptr[i];
+  }
 
-  // Free the hash
-  delete hash;
+  // Loop over all the independent nodes in the queues in the
+  // same order as before
+  for ( int i = 0; i < nedges; i++ ){
+    // Get the dependent node number
+    const int use_nodes = 1;
+    TMROctant *t = nodes->contains(&edges[i], use_nodes);
+    int node = -t->tag-1;
+
+    // Retrieve the independent nodes
+    for ( int k = 0; k < order; k++ ){
+      TMROctant n = edge_nodes->pop();
+      TMROctant *t = nodes->contains(&n, use_nodes);
+      dep_conn[dep_ptr[node]+k] = t->tag;
+      dep_weights[dep_ptr[node]+k] = 0.5;
+    }
+  }
+
+  // Loop over all the independent nodes in the faces
+  for ( int i = 0; i < nfaces; i++ ){    
+    // Get the dependent node number
+    const int use_nodes = 1;
+    TMROctant *t = nodes->contains(&faces[i], use_nodes);
+    int node = -t->tag-1;
+
+    // Retrieve the independent nodes
+    for ( int k = 0; k < order*order; k++ ){
+      TMROctant n = face_nodes->pop();
+      TMROctant *t = nodes->contains(&n, use_nodes);
+      dep_conn[dep_ptr[node]+k] = t->tag;
+      dep_weights[dep_ptr[node]+k] = 0.5;
+    }
+  }
+
+  // Free the remaining data
+  delete edge_array;
+  delete edge_nodes;
+  delete face_array;
+  delete face_nodes;
 }
 
 /*
@@ -572,14 +658,18 @@ void TMROctree::createMesh( int order,
                             int *_num_dep_nodes,
                             int *_num_elements,
                             int **_elem_ptr, 
-                            int **_elem_conn ){
+                            int **_elem_conn,
+			    int **_dep_ptr,
+			    int **_dep_conn, 
+			    double **_dep_weights ){
   // Scan through and create the connectivity for all the
   // elements in the Morton order
   if (order < 2){ order = 2; }
   if (order > 3){ order = 3; }
 
   // Create the mesh and order the nodes
-  createNodes(order);
+  createNodes(order, _dep_ptr, 
+	      _dep_conn, _dep_weights);
 
   // Get the current array of octants
   int size;

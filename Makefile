@@ -1,3 +1,5 @@
+include ../tacs-dev/Makefile.in
+include ../tacs-dev/TACS_Common.mk
 
 CXX=mpicxx
 

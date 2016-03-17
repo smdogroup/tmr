@@ -5,7 +5,10 @@
 #include "TMROctant.h"
 
 /*
-  Assemble a single octree
+  The main octree class. 
+
+  This is used to create, balance, and coarsen an octree as well as
+  create a mesh from the octree data.
 */
 class TMROctree {
  public:
@@ -22,15 +25,12 @@ class TMROctree {
   // --------------------------
   TMROctree *coarsen();
 
-  // Create the connectivity for the mesh
-  // ------------------------------------
-  void createNodes( int order );
-
   // Get the connectivity from the mesh
   // ----------------------------------
   void createMesh( int order, int *_num_nodes,
                    int *_num_dep_nodes, int *_num_elements,
-                   int **_elem_ptr, int **_elem_conn );
+                   int **_elem_ptr, int **_elem_conn,
+		   int **_dep_ptr, int **_dep_conn, double **_dep_weights );
 
   // Print a representation of the tree to a file
   // --------------------------------------------
@@ -42,6 +42,11 @@ class TMROctree {
   }
 
  private:
+  // Create the connectivity for the mesh
+  // ------------------------------------
+  void createNodes( int order, int **_dep_ptr, 
+		    int **_dep_conn, double **_dep_weights );
+
   // The list octants representing the elements
   TMROctantArray *elements; 
   int is_sorted; // Is the element list sorted?
