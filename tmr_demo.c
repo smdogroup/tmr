@@ -12,6 +12,8 @@ int main( int argc, char * argv[] ){
       double t1 = MPI_Wtime();
       tree->balance(7);
       t1 = MPI_Wtime() - t1;
+
+      if (next){ delete next; }
       next = tree;
 
       printf("Balance time: %15.8f\n", t1);
@@ -88,6 +90,8 @@ int main( int argc, char * argv[] ){
     delete [] elem_ptr;
     delete [] elem_conn;
   }
+
+  if (next){ delete next; }
 
   MPI_Finalize();
   return (0);

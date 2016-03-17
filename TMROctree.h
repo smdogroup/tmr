@@ -11,7 +11,7 @@ class TMROctree {
  public:
   TMROctree( int refine_level );
   TMROctree( int nrand, int min_level, int max_level );
-  TMROctree( TMROctantArray *_list, int _is_sorted );
+  TMROctree( TMROctantArray *_list );
   ~TMROctree();
 
   // Balance the tree to ensure 2-1 balancing

@@ -379,6 +379,18 @@ TMROctantQueue::TMROctantQueue(){
 }
 
 /*
+  Free the queue
+*/
+TMROctantQueue::~TMROctantQueue(){
+  OctQueueNode *node = root;
+  while (node){
+    OctQueueNode *tmp = node;
+    node = node->next;
+    delete tmp;
+  }
+}
+
+/*
   Get the length of the octant queue
 */
 int TMROctantQueue::length(){ 
@@ -390,12 +402,12 @@ int TMROctantQueue::length(){
 */
 void TMROctantQueue::push( TMROctant *oct ){
   if (!tip){
-    root = new OcQueueNode();
+    root = new OctQueueNode();
     root->oct = *oct;
     tip = root;
   }
   else {
-    tip->next = new OcQueueNode();
+    tip->next = new OctQueueNode();
     tip->next->oct = *oct;
     tip = tip->next;
   }
@@ -412,7 +424,9 @@ TMROctant TMROctantQueue::pop(){
   else {
     num_elems--;
     TMROctant temp = root->oct;
+    OctQueueNode *tmp = root;
     root = root->next;
+    delete tmp;
     return temp;
   }
 }
@@ -425,7 +439,7 @@ TMROctantArray* TMROctantQueue::toArray(){
   TMROctant *array = new TMROctant[ num_elems ];
   
   // Scan through the queue and retrieve the octants
-  OcQueueNode *node = root;
+  OctQueueNode *node = root;
   int index = 0;
   while (node){
     array[index] = node->oct;
@@ -448,8 +462,26 @@ TMROctantArray* TMROctantQueue::toArray(){
 TMROctantHash::TMROctantHash(){
   num_elems = 0;
   num_buckets = min_num_buckets;
-  hash_buckets = new OcHashNode*[ num_buckets ];
-  memset(hash_buckets, 0, num_buckets*sizeof(OcHashNode*));
+  hash_buckets = new OctHashNode*[ num_buckets ];
+  memset(hash_buckets, 0, num_buckets*sizeof(OctHashNode*));
+}
+
+/*
+  Free the memory allocated by the octant hash
+*/
+TMROctantHash::~TMROctantHash(){
+  // Free all the elements in the hash
+  for ( int i = 0; i < num_buckets; i++ ){
+    OctHashNode *node = hash_buckets[i];
+    while (node){        
+      // Delete the old guy
+      OctHashNode *tmp = node;
+      node = node->next;
+      delete tmp;
+    }
+  }
+
+  delete [] hash_buckets;
 }
 
 /*
@@ -463,7 +495,7 @@ TMROctantArray * TMROctantHash::toArray(){
   for ( int i = 0, index = 0; i < num_buckets; i++ ){
     // Get the hash bucket and extract all the elements from this
     // bucket into the array
-    OcHashNode *node = hash_buckets[i];
+    OctHashNode *node = hash_buckets[i];
     
     while (node){
       array[index] = node->oct;
@@ -495,34 +527,34 @@ int TMROctantHash::addOctant( TMROctant *oct ){
     // Redistribute the octants to new buckets
     int num_old_buckets = num_buckets;
     num_buckets = 2*num_buckets;
-    OcHashNode **new_buckets = new OcHashNode*[ num_buckets ];
-    memset(new_buckets, 0, num_buckets*sizeof(OcHashNode*));
+    OctHashNode **new_buckets = new OctHashNode*[ num_buckets ];
+    memset(new_buckets, 0, num_buckets*sizeof(OctHashNode*));
 
     // Keep track of the end bucket
-    OcHashNode **end_buckets = new OcHashNode*[ num_buckets ];
+    OctHashNode **end_buckets = new OctHashNode*[ num_buckets ];
     
     // Redistribute the octant nodes based on the new
     // number of buckets within the hash data structure
     for ( int i = 0; i < num_old_buckets; i++ ){
-      OcHashNode *node = hash_buckets[i];
+      OctHashNode *node = hash_buckets[i];
       while (node){
         int bucket = getBucket(&(node->oct));
 
         // If this is the first new bucket, create
         // the new node
         if (!new_buckets[bucket]){
-          new_buckets[bucket] = new OcHashNode;
+          new_buckets[bucket] = new OctHashNode;
           new_buckets[bucket]->oct = node->oct;
           end_buckets[bucket] = new_buckets[bucket];
         }
         else {
-          end_buckets[bucket]->next = new OcHashNode;
+          end_buckets[bucket]->next = new OctHashNode;
           end_buckets[bucket]->next->oct = node->oct;
           end_buckets[bucket] = end_buckets[bucket]->next;
         }
         
         // Delete the old guy
-        OcHashNode *tmp = node;
+        OctHashNode *tmp = node;
 
         // Increment the node to the next hash
         node = node->next;
@@ -542,14 +574,14 @@ int TMROctantHash::addOctant( TMROctant *oct ){
   // If no octant has been added to the bucket, 
   // create a new bucket
   if (!hash_buckets[bucket]){
-    hash_buckets[bucket] = new OcHashNode;
+    hash_buckets[bucket] = new OctHashNode;
     hash_buckets[bucket]->oct = *oct;
     num_elems++;
     return 1;
   }
   else {
     // Get the head node for the corresponding bucket
-    OcHashNode *node = hash_buckets[bucket];
+    OctHashNode *node = hash_buckets[bucket];
     while (node){
       // The octant is in the list, quit now and return false
       if (node->oct.compare(oct) == 0){
@@ -566,7 +598,7 @@ int TMROctantHash::addOctant( TMROctant *oct ){
     }
     
     // Add the octant as the last node
-    node->next = new OcHashNode;
+    node->next = new OctHashNode;
     node->next->oct = *oct;
     num_elems++;
   }

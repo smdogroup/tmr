@@ -10,18 +10,18 @@
   The following constants define the maximum octant depth and maximum
   element order within the code.
 */
-static const int TMR_LOG2_MAX_ELEMENT_ORDER = 3; 
-static const int TMR_MAX_LEVEL = 30 - TMR_LOG2_MAX_ELEMENT_ORDER;
-static const int TMR_MAX_ELEMENT_ORDER = (1 << TMR_LOG2_MAX_ELEMENT_ORDER) - 1; 
 static const int TMR_MAX_NODE_LEVEL = 30;
-
+static const int TMR_LOG2_MAX_ELEMENT_ORDER = 3; 
+static const int TMR_MAX_LEVEL = 
+  TMR_MAX_NODE_LEVEL - TMR_LOG2_MAX_ELEMENT_ORDER;
 
 /*
   The TMR Octant class
 
   This class defines an octant that is used to order both the elements
-  and nodes within the mesh. This class 
-
+  and nodes within the mesh. The methods can be used to compare
+  octants, find the parent, child identification number, and find
+  neighbours.
 */
 class TMROctant {
  public:
@@ -43,7 +43,13 @@ class TMROctant {
 };
 
 /*
-  A array of octants that may, or may not, be sorted and unique
+  A array of octants that may or may not be sorted 
+  
+  When the array is sorted, the octants are made unique by discarding
+  octants with a smaller level (that have larger side lengths).  After
+  the array is sorted, it is searchable either based on elements (when
+  use_nodes=0) or by node (use_nodes=1). The difference is that the
+  node search ignores the mesh level.
 */
 class TMROctantArray {
  public:
@@ -62,11 +68,15 @@ class TMROctantArray {
 };
 
 /*
-  Create a list of octants
+  Create a queue of octants
+
+  This class defines a queue of octants that are used for the balance
+  and coarsen operations.
 */
 class TMROctantQueue {
  public:
   TMROctantQueue();
+  ~TMROctantQueue();
 
   int length();
   void push( TMROctant *oct );
@@ -74,22 +84,25 @@ class TMROctantQueue {
   TMROctantArray* toArray();
   
  private:
-  class OcQueueNode {
+  // Class that defines an element within the queue
+  class OctQueueNode {
   public:
-    OcQueueNode(){
-      next = NULL;
-    }
-    
+    OctQueueNode(){ next = NULL; }
     TMROctant oct;
-    OcQueueNode *next;
+    OctQueueNode *next;
   };
 
+  // Keep track of the number of elements in the queue
   int num_elems;
-  OcQueueNode *root, *tip;
+  OctQueueNode *root, *tip;
 };
 
 /*
-  Build a hash table based on the octant ordering
+  Build a hash table based on the Morton ordering
+
+  This object enables the creation of a unique set of octants such
+  that no two have the same position/level combination. This hash
+  table can then be made into an array of unique elements or nodes.
 */
 class TMROctantHash {
  public:
@@ -103,19 +116,16 @@ class TMROctantHash {
   // The minimum bucket size
   static const int min_num_buckets = (1 << 12)-1;
 
-  class OcHashNode {
+  class OctHashNode {
   public:
-    OcHashNode(){
-      next = NULL;
-    }
-    
+    OctHashNode(){ next = NULL; }
     TMROctant oct;
-    OcHashNode *next;
+    OctHashNode *next;
   };
 
   // Keep track of the bucket size
   int num_buckets;
-  OcHashNode **hash_buckets;
+  OctHashNode **hash_buckets;
   
   // Keep track of the number of elements
   int num_elems;
