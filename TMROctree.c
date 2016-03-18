@@ -426,7 +426,7 @@ void TMROctree::createNodes( int order,
   // lie on an element face
   TMROctantQueue *face_queue = new TMROctantQueue();
   TMROctantQueue *face_nodes = new TMROctantQueue();
-
+  
   if (order == 2){
     // For all operations here, we compare the node numbers
     const int use_nodes = 1;
@@ -440,14 +440,10 @@ void TMROctree::createNodes( int order,
 
       // Get the side length of the element
       const int h = 1 << (TMR_MAX_LEVEL - array[i].level);      
-
-      // Get the child quadrant
-      TMROctant c;
-      c.level = array[i].level + 1;
       
       // Get the size of the next finest level
-      const int hc = 1 << (TMR_MAX_LEVEL - c.level);
-
+      const int hc = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
+      
       // Check if this is a dependent edge
       for ( int k = 0; k < 3; k++ ){
 	// The constant and variable unit vectors for
@@ -459,11 +455,12 @@ void TMROctree::createNodes( int order,
 	// Set the indices of the unit vectors
 	ec[k] = 1;
 	ie[iindex[k]] = 1;
-	je[iindex[k]] = 1;
+	je[jindex[k]] = 1;
 
 	for ( int jj = 0; jj < 2; jj++ ){
 	  for ( int ii = 0; ii < 2; ii++ ){
 	    // Check the location for the dependent node
+	    TMROctant c;
 	    c.x = array[i].x + hc*ec[0] + h*(ii*ie[0] + jj*je[0]);
 	    c.y = array[i].y + hc*ec[1] + h*(ii*ie[1] + jj*je[1]);
 	    c.z = array[i].z + hc*ec[2] + h*(ii*ie[2] + jj*je[2]);
@@ -506,13 +503,14 @@ void TMROctree::createNodes( int order,
 	// Set the indices of the unit vectors
 	ec[k] = 1;
 	ie[iindex[k]] = 1;
-	je[iindex[k]] = 1;
+	je[jindex[k]] = 1;
 
 	// Scan over each face
-	for ( int ii = 0; ii < 2; ii++ ){
-	  c.x = h*ii*ec[0] + hc*(ie[0] + je[0]);
-	  c.y = h*ii*ec[1] + hc*(ie[1] + je[1]);
-	  c.z = h*ii*ec[2] + hc*(ie[2] + je[2]);
+	for ( int ii = 0; ii < 1; ii++ ){
+	  TMROctant c;
+	  c.x = array[i].x + h*ii*ec[0] + hc*(ie[0] + je[0]);
+	  c.y = array[i].y + h*ii*ec[1] + hc*(ie[1] + je[1]);
+	  c.z = array[i].z + h*ii*ec[2] + hc*(ie[2] + je[2]);
 
 	  TMROctant *t;
 	  if (t = nodes->contains(&c, use_nodes)){
@@ -533,8 +531,8 @@ void TMROctree::createNodes( int order,
 	      t->tag = -2;
 	    }
 	  }
-        }
-      }
+	}
+      }     
     }
   }
   else if (order == 3){}
@@ -601,7 +599,7 @@ void TMROctree::createNodes( int order,
     const int use_nodes = 1;
     TMROctant *t = nodes->contains(&faces[i], use_nodes);
     int node = -t->tag-1;
-    dep_ptr[node+1] = 2;
+    dep_ptr[node+1] = 4;
   }
 
   // Count up the totals so that dep_ptr points into the
@@ -639,7 +637,7 @@ void TMROctree::createNodes( int order,
       TMROctant n = face_nodes->pop();
       TMROctant *t = nodes->contains(&n, use_nodes);
       dep_conn[dep_ptr[node]+k] = t->tag;
-      dep_weights[dep_ptr[node]+k] = 0.5;
+      dep_weights[dep_ptr[node]+k] = 0.25;
     }
   }
 
@@ -648,6 +646,12 @@ void TMROctree::createNodes( int order,
   delete edge_nodes;
   delete face_array;
   delete face_nodes;
+
+  // Set the pointers to the return data
+  *_dep_ptr = dep_ptr;
+  *_dep_conn = dep_conn;
+  *_dep_weights = dep_weights;
+
 }
 
 /*
@@ -694,7 +698,6 @@ void TMROctree::createMesh( int order,
       // Add all of the nodes from the adjacent elements
       const int h = 1 << (TMR_MAX_LEVEL - array[i].level);
       p.level = array[i].level;
-      p.tag = 1;
 
       for ( int kk = 0; kk < 2; kk++ ){
         for ( int jj = 0; jj < 2; jj++ ){
@@ -718,7 +721,6 @@ void TMROctree::createMesh( int order,
       // Add all of the nodes from the adjacent elements
       const int h = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
       p.level = array[i].level+1;
-      p.tag = 1;
 
       // Add all of the nodes to the hash
       for ( int kk = 0; kk < 3; kk++ ){

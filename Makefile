@@ -1,19 +1,13 @@
 include ../tacs-dev/Makefile.in
 include ../tacs-dev/TACS_Common.mk
 
-CXX=mpicxx
+OBJS = TMROctant.o TMROctree.o tmr_demo.o
 
-FLAGS=-O3
-DEBUG_FLAGS=-g
+default: ${OBJS}
+	${CXX} -o tmr_demo tmr_demo.o TMROctant.o TMROctree.o ${TACS_LD_FLAGS}
 
-default: TMROctant.o TMROctree.o tmr_demo.o
-	${CXX} TMROctant.o TMROctree.o tmr_demo.o -o tmr_demo
-
-debug: FLAGS=${DEBUG_FLAGS}
+debug: TACS_CC_FLAGS=${TACS_DEBUG_CC_FLAGS}
 debug: default
-
-%.o: %.c
-	${CXX} ${FLAGS} -c $< -o $*.o
 
 clean:
 	rm *.o

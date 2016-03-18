@@ -2,10 +2,17 @@
 #include "TACSCreator.h"
 #include "TACSAssembler.h"
 #include "Solid.h"
+#include "TACSToFH5.h"
 
 int main( int argc, char * argv[] ){
   MPI_Init(&argc, &argv);
 
+  // Allocate the TACS creator
+  int vars_per_node = 3;
+  TACSCreator *creator = new TACSCreator(MPI_COMM_WORLD, vars_per_node);
+  creator->incref();
+
+  // Create the octree
   TMROctree *tree = new TMROctree(500, 3, 6);
   tree->balance(7);
 
@@ -35,14 +42,27 @@ int main( int argc, char * argv[] ){
   // Set the length of the cube
   double dh = 1.0/(1 << TMR_MAX_LEVEL);
 
+  int num_bcs = 0;
+  int *bc_nodes = new int[ num_nodes ];
   for ( int i = 0; i < size; i++ ){
+    // Get the node location
     int node = array[i].tag;
     if (node > 0){
       Xpts[3*node] = dh*array[i].x;
       Xpts[3*node+1] = dh*array[i].y;
       Xpts[3*node+2] = dh*array[i].z;
+    
+      // Add the boundary condition
+      if (array[i].z == 0){
+	bc_nodes[num_bcs] = node;
+	num_bcs++;
+      }
     }
   }
+
+  // Set all the element ids to 0
+  int *elem_id_nums = new int[ num_elems ];
+  memset(elem_id_nums, 0, num_elems*sizeof(int));
 
   // Create the Solid element in TACS
   SolidStiffness *stiff = new SolidStiffness(1.0, 70e3, 0.3);
@@ -50,8 +70,8 @@ int main( int argc, char * argv[] ){
   elem->incref();
 
   // Set the connectivity
-  creator->setGlobalConnectivity(num_nodes, num_elements,
-				 elem_node_ptr, elem_node_conn,
+  creator->setGlobalConnectivity(num_nodes, num_elems,
+				 elem_ptr, elem_conn,
 				 elem_id_nums);
   
   // Set the boundary conditions
@@ -61,12 +81,60 @@ int main( int argc, char * argv[] ){
   creator->setNodes(Xpts);
 
   // Set the dependent nodes
-  creator->setDependentNodes(dep_nodes, dep_ptr,
+  creator->setDependentNodes(num_dep_nodes, dep_ptr,
 			     dep_conn, dep_weights);
+
+  TACSElement *elements = elem;
+
+  // This call must occur on all processor
+  creator->setElements(&elements, 1);
 
   elem->decref();
   
+  // Create the TACSAssembler object
+  TACSAssembler *tacs = creator->createTACS();
+  tacs->incref();
 
+  // Create the preconditioner
+  BVec *res = tacs->createVec();
+  BVec *ans = tacs->createVec();
+  FEMat *mat = tacs->createFEMat();
+
+  // Increment the reference count to the matrix/vectors
+  res->incref();
+  ans->incref();
+  mat->incref();
+
+  // Allocate the factorization
+  int lev = 4500;
+  double fill = 10.0;
+  int reorder_schur = 1;
+  PcScMat *pc = new PcScMat(mat, lev, fill, reorder_schur);
+  pc->incref();
+
+  // Assemble and factor the stiffness/Jacobian matrix
+  double alpha = 1.0, beta = 0.0, gamma = 0.0;
+  tacs->assembleJacobian(res, mat, alpha, beta, gamma);
+  mat->applyBCs();
+  pc->factor();
+
+  res->set(1.0);
+  res->applyBCs();
+  pc->applyFactor(res, ans);
+  tacs->setVariables(ans);
+
+  // Create an TACSToFH5 object for writing output to files
+  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                             TACSElement::OUTPUT_DISPLACEMENTS |
+                             TACSElement::OUTPUT_STRAINS |
+                             TACSElement::OUTPUT_STRESSES |
+                             TACSElement::OUTPUT_EXTRAS);
+  TACSToFH5 * f5 = new TACSToFH5(tacs, SOLID, write_flag);
+  f5->incref();
+  f5->writeToFile("octree.f5");
+
+  // Free everything
+  f5->decref();
 
 
   /*
