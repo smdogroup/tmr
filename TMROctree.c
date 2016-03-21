@@ -1,6 +1,56 @@
 #include "TMROctree.h"
 
 /*
+  The following structure is used to create the interpolation and
+  restriction operators. It stores both the node index and
+  interpolation/restriction weight values in the same structure.
+*/
+typedef struct {
+  int index;
+  double weight;
+} TMRIndexWeight;
+
+/*
+  Compare two TMRIndexWeight objects - compare them based on
+  their index value only.
+*/
+static int compare_weights( const void *a, const void *b ){
+  const TMRIndexWeight *A = static_cast<const TMRIndexWeight*>(a);
+  const TMRIndexWeight *B = static_cast<const TMRIndexWeight*>(b);
+  
+  return A->index - B->index;
+}
+
+/*
+  Sort and uniquify the list of indices and weights
+*/
+static int unique_sort_weights( TMRIndexWeight *array, int size ){
+  qsort(array, size, sizeof(TMRIndexWeight), compare_weights);
+
+  // Now that the weights are sorted, remove duplicates by adding
+  // up the weights
+  int j = 0; // Location to place entries
+  
+  for ( int i = 0; i < size; i++, j++ ){
+    // Copy over the newest weight/index data
+    if (i != j){
+      array[j] = array[i];
+    }
+
+    // While the index is the same as the next, keep
+    // adding the weight
+    while ((i < size-1) && 
+	   (array[i].index == array[i+1].index)){
+      array[j].weight += array[i+1].weight;
+      i++;
+    }
+  }
+
+  // Return the new size of the array
+  return j;
+}
+
+/*
   Refine the initial octree to the specified depth along all
   coordinate directions 
 */
@@ -41,11 +91,21 @@ TMROctree::TMROctree( int refine_level ){
   elements = new TMROctantArray(array, nocts);
   elements->sort();
 
+  // Zero the array of octant nodes
+  nodes = NULL;
+
   // Zero everything else
+  order = 2;
   num_elements = 0;
   num_nodes = 0;
   num_dependent_nodes = 0;
-  nodes = NULL;
+
+  // Zero the mesh connectivity data
+  elem_ptr = NULL;
+  elem_conn = NULL;
+  dep_ptr = NULL;
+  dep_conn = NULL;
+  dep_weights = NULL;
 }
 
 /*
@@ -72,11 +132,22 @@ TMROctree::TMROctree( int nrand, int min_level, int max_level ){
 
   elements = new TMROctantArray(array, nrand);
   elements->sort();
+
+  // Zero the array of octant nodes
   nodes = NULL;
 
+  // Zero everything else
+  order = 2;
   num_elements = 0;
   num_nodes = 0;
   num_dependent_nodes = 0;
+
+  // Zero the mesh connectivity data
+  elem_ptr = NULL;
+  elem_conn = NULL;
+  dep_ptr = NULL;
+  dep_conn = NULL;
+  dep_weights = NULL;
 }
 
 /*
@@ -85,19 +156,38 @@ TMROctree::TMROctree( int nrand, int min_level, int max_level ){
 TMROctree::TMROctree( TMROctantArray *_elements ){
   elements = _elements;
   elements->sort();
+
+  // Zero the array of octant nodes
   nodes = NULL;
 
+  // Zero everything else
+  order = 2;
   num_elements = 0;
   num_nodes = 0;
   num_dependent_nodes = 0;
+
+  // Zero the mesh connectivity data
+  elem_ptr = NULL;
+  elem_conn = NULL;
+  dep_ptr = NULL;
+  dep_conn = NULL;
+  dep_weights = NULL;
 }
 
 /*
   Free the octree
 */
 TMROctree::~TMROctree(){
+  // Free the elements and nodes
   if (elements){ delete elements; }
   if (nodes){ delete nodes; }
+
+  // Free the connectivity information if it was allocated
+  if (elem_ptr){ delete [] elem_ptr; }
+  if (elem_conn){ delete [] elem_conn; }
+  if (dep_ptr){ delete [] dep_ptr; }
+  if (dep_conn){ delete [] dep_conn; }
+  if (dep_weights){ delete [] dep_weights; }
 }
 /*
   Balance the octree in place
@@ -112,20 +202,14 @@ TMROctree::~TMROctree(){
   Note that only 0-th siblings are added/popped on the hash/queue.
   Then at the end, all neighboring siblings are added.
 
-  The type of balancing - face, edge or corner balanced - is
-  determined using the balance_type argument. Face balancing
-  is balancing across faces, corner balances across corners of 
-  the elements and corner balances across corners.
-
-  The code always balances faces and balances edges if (balance_type &
-  2) and balances corners if (balance_type & 2) && (balance_type & 4).
-
-  In other words:
-  balance_type = 1 balances faces
-  balance_type = 2 or 3 balances edge 
-  balance_type = 6 or 7 balances corners
+  The type of balancing - face/edge balanced or face/edge/corner
+  balanced is determined using the balance_corner flag. Face balancing
+  is balancing across faces, corner balances across corners of the
+  elements and corner balances across corners. The code always
+  balances faces and edges (so that there is at most one depdent node
+  per edge) and balances across corners optionally.
 */
-void TMROctree::balance( int balance_type ){
+void TMROctree::balance( int balance_corner ){
   // Create a hash table for the balanced tree
   TMROctantHash *hash = new TMROctantHash();
 
@@ -173,23 +257,21 @@ void TMROctree::balance( int balance_type ){
 
       // If we are balancing across edges, also 
       // add the edge-adjacent elements
-      if (balance_type & 2){
-	for ( int edge = 0; edge < 12; edge++ ){
-	  p.edgeNeighbor(edge, &neighbor);
-	  neighbor.getSibling(0, &q);
+      for ( int edge = 0; edge < 12; edge++ ){
+        p.edgeNeighbor(edge, &neighbor);
+        neighbor.getSibling(0, &q);
 	  
-	  // If we're in bounds, add the neighbor
-	  if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-	      q.x < hmax && q.y < hmax && q.z < hmax){
-	    if (hash->addOctant(&q)){
-	      queue->push(&q);
-	    }
-	  }
-	}
+        // If we're in bounds, add the neighbor
+        if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
+            q.x < hmax && q.y < hmax && q.z < hmax){
+          if (hash->addOctant(&q)){
+            queue->push(&q);
+          }
+        }
       }
 
       // If we're balancing across edges and 
-      if ((balance_type & 2) && (balance_type & 4)){
+      if (balance_corner){
 	for ( int corner = 0; corner < 8; corner++ ){
 	  p.cornerNeighbor(corner, &neighbor);
 	  neighbor.getSibling(0, &q);
@@ -231,23 +313,21 @@ void TMROctree::balance( int balance_type ){
       }
 
       // Add the octants across adjacent edges
-      if (balance_type & 2){
-	for ( int edge = 0; edge < 12; edge++ ){
-	  p.edgeNeighbor(edge, &neighbor);
-	  neighbor.getSibling(0, &q);
-	  
-	  // If we're in bounds, add the neighbor
-	  if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-	      q.x < hmax && q.y < hmax && q.z < hmax){
-	    if (hash->addOctant(&q)){
-	      queue->push(&q);
-	    }
-	  }
-	}
+      for ( int edge = 0; edge < 12; edge++ ){
+        p.edgeNeighbor(edge, &neighbor);
+        neighbor.getSibling(0, &q);
+	
+        // If we're in bounds, add the neighbor
+        if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
+            q.x < hmax && q.y < hmax && q.z < hmax){
+          if (hash->addOctant(&q)){
+            queue->push(&q);
+          }
+        }
       }
 
       // Add the octants across corners
-      if ((balance_type & 2) && (balance_type & 4)){
+      if (balance_corner){
 	for ( int corner = 0; corner < 8; corner++ ){
 	  p.cornerNeighbor(corner, &neighbor);
 	  neighbor.getSibling(0, &q);
@@ -272,7 +352,10 @@ void TMROctree::balance( int balance_type ){
   for ( int i = 0; i < size; i++ ){
     for ( int j = 0; j < 8; j++ ){
       array[i].getSibling(j, &q);
-      hash->addOctant(&q);
+      if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
+          q.x < hmax && q.y < hmax && q.z < hmax){
+        hash->addOctant(&q);
+      }
     }
   }
 
@@ -302,8 +385,6 @@ void TMROctree::balance( int balance_type ){
   as a new octree object.
 */
 TMROctree *TMROctree::coarsen(){
-  elements->sort();
-
   int size;
   TMROctant *array;
   elements->getArray(&array, &size);
@@ -349,12 +430,40 @@ TMROctree *TMROctree::coarsen(){
 }
 
 /*
-  Create the mesh using the internal octree data
+  Retrieve the mesh information
 */
-void TMROctree::createNodes( int order, 
-                             int **_dep_ptr, 
-                             int **_dep_conn,
-                             double **_dep_weights ){
+void TMROctree::getMesh( int *_num_nodes, 
+                         int *_num_elements, 
+                         const int **_elem_ptr, 
+                         const int **_elem_conn ){
+  if (_num_nodes){ *_num_nodes = num_nodes; }
+  if (_num_elements){ *_num_elements = num_elements; }
+  if (_elem_ptr){ *_elem_ptr = elem_ptr; }
+  if (_elem_conn){ *_elem_conn = elem_conn; }
+}
+
+/*
+  Retrieve the depednent node information
+*/
+void TMROctree::getDependentMesh( int *_num_dep_nodes, 
+                                  const int **_dep_ptr,
+                                  const int **_dep_conn,
+                                  const double **_dep_weights ){
+  if (_num_dep_nodes){ *_num_dep_nodes = num_dependent_nodes; }
+  if (_dep_ptr){ *_dep_ptr = dep_ptr; }
+  if (_dep_conn){ *_dep_conn = dep_conn; }
+  if (_dep_weights){ *_dep_weights = dep_weights; }
+}
+
+/*
+  Create the mesh using the internal octree data
+
+  This algorithm first adds all the nodes from the element to a hash
+  object that keeps a unique list of nodes.  After all the nodes are
+  added, they are sorted and uniquified. Next, we go through the
+  elements and label any possible dependent node.
+*/
+void TMROctree::createNodes(){
   // Create the octant hash that we'll add the element nodes
   TMROctantHash *hash = new TMROctantHash();
 
@@ -363,27 +472,33 @@ void TMROctree::createNodes( int order,
   TMROctant *array;
   elements->getArray(&array, &size);
 
+  // Allocate an array large enough to store all of the nodes
+  int index = 0;
+  TMROctant *all_nodes = new TMROctant[ order*order*order*size ];
+
   // Loop over all of the current octants and add the nodes
   for ( int i = 0; i < size; i++ ){
-    // The octant that we'll have to add
-    TMROctant p;
-
     if (order == 2){
       // Add all of the nodes from the adjacent elements
       const int h = 1 << (TMR_MAX_LEVEL - array[i].level);
-      p.level = array[i].level;
-      p.tag = 1;
 
       // Add all of the nodes to the hash
       for ( int kk = 0; kk < 2; kk++ ){
         for ( int jj = 0; jj < 2; jj++ ){
           for ( int ii = 0; ii < 2; ii++ ){
-            p.x = array[i].x + ii*h;
-            p.y = array[i].y + jj*h;
-            p.z = array[i].z + kk*h;
+            // Set the node level to the highest level - this will
+            // be updated when the nodes are assigned to the elements
+            all_nodes[index].level = 0;
+            
+            // Set a positive tag, this will be replaced with a 
+            // negative tag if the node is dependent
+            all_nodes[index].tag = 1;
 
-            // Add the octant
-            hash->addOctant(&p);
+            // Set the node coordinates
+            all_nodes[index].x = array[i].x + ii*h;
+            all_nodes[index].y = array[i].y + jj*h;
+            all_nodes[index].z = array[i].z + kk*h;
+            index++;
           }
         }
       }
@@ -391,19 +506,24 @@ void TMROctree::createNodes( int order,
     else if (order == 3){
       // Add all of the nodes from the adjacent elements
       const int h = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
-      p.level = array[i].level+1;
-      p.tag = 1;
 
       // Add all of the nodes to the hash
       for ( int kk = 0; kk < 3; kk++ ){
         for ( int jj = 0; jj < 3; jj++ ){
           for ( int ii = 0; ii < 3; ii++ ){
-            p.x = array[i].x + ii*h;
-            p.y = array[i].y + jj*h;
-            p.z = array[i].z + kk*h;
+            // Set the node level to the highest level - this will
+            // be updated when the nodes are assigned to the elements
+            all_nodes[index].level = 0;
+            
+            // Set a positive tag, this will be replaced with a 
+            // negative tag if the node is dependent
+            all_nodes[index].tag = 1;
 
-            // Add the octant
-            hash->addOctant(&p);
+            // Set the node coordinates
+            all_nodes[index].x = array[i].x + ii*h;
+            all_nodes[index].y = array[i].y + jj*h;
+            all_nodes[index].z = array[i].z + kk*h;
+            index++;
           }
         }
       }
@@ -411,7 +531,7 @@ void TMROctree::createNodes( int order,
   }
 
   // Cover the hash table to a list and uniquely sort it
-  nodes = hash->toArray();
+  nodes = new TMROctantArray(all_nodes, index);
   nodes->sort();
 
   // Free the hash
@@ -506,7 +626,7 @@ void TMROctree::createNodes( int order,
 	je[jindex[k]] = 1;
 
 	// Scan over each face
-	for ( int ii = 0; ii < 1; ii++ ){
+	for ( int ii = 0; ii < 2; ii++ ){
 	  TMROctant c;
 	  c.x = array[i].x + h*ii*ec[0] + hc*(ie[0] + je[0]);
 	  c.y = array[i].y + h*ii*ec[1] + hc*(ie[1] + je[1]);
@@ -581,9 +701,9 @@ void TMROctree::createNodes( int order,
   face_array->getArray(&faces, &nfaces);
   
   // Allocate the arrays for the dependent nodes
-  int *dep_ptr = new int[ num_dependent_nodes+1 ];
-  int *dep_conn = new int[ order*nedges + order*order*nfaces ];
-  double *dep_weights = new double[ order*nedges + order*order*nfaces ];
+  dep_ptr = new int[ num_dependent_nodes+1 ];
+  dep_conn = new int[ order*nedges + order*order*nfaces ];
+  dep_weights = new double[ order*nedges + order*order*nfaces ];
 
   // Find the dependent variables and check them
   memset(dep_ptr, 0, (num_dependent_nodes+1)*sizeof(int));
@@ -646,34 +766,20 @@ void TMROctree::createNodes( int order,
   delete edge_nodes;
   delete face_array;
   delete face_nodes;
-
-  // Set the pointers to the return data
-  *_dep_ptr = dep_ptr;
-  *_dep_conn = dep_conn;
-  *_dep_weights = dep_weights;
-
 }
 
 /*
   Create the mesh connectivity
 */
-void TMROctree::createMesh( int order,
-                            int *_num_nodes,
-                            int *_num_dep_nodes,
-                            int *_num_elements,
-                            int **_elem_ptr, 
-                            int **_elem_conn,
-			    int **_dep_ptr,
-			    int **_dep_conn, 
-			    double **_dep_weights ){
+void TMROctree::createMesh( int _order ){
   // Scan through and create the connectivity for all the
   // elements in the Morton order
-  if (order < 2){ order = 2; }
-  if (order > 3){ order = 3; }
+  order = _order;
+  if (_order < 2){ order = 2; }
+  if (_order > 3){ order = 3; }
 
   // Create the mesh and order the nodes
-  createNodes(order, _dep_ptr, 
-	      _dep_conn, _dep_weights);
+  createNodes();
 
   // Get the current array of octants
   int size;
@@ -682,8 +788,8 @@ void TMROctree::createMesh( int order,
 
   // We already know how large the connectivity list
   // will be and the size of the number of dependent nodes
-  int *elem_ptr = new int[ num_elements+1 ];
-  int *elem_conn = new int[ order*order*order*num_elements ];
+  elem_ptr = new int[ num_elements+1 ];
+  elem_conn = new int[ order*order*order*num_elements ];
   
   // Set the connectivity pointer
   int conn_size = 0;
@@ -708,6 +814,13 @@ void TMROctree::createMesh( int order,
 
             // Get the index for the node
             TMROctant *t = nodes->contains(&p, use_nodes);
+            
+            // Reset the node level if the element level is smaller
+            if (array[i].level > t->level){
+              t->level = array[i].level;
+            }
+
+            // Set the node number in the element connectivity
             elem_conn[conn_size] = t->tag;
             conn_size++;
           }
@@ -732,6 +845,13 @@ void TMROctree::createMesh( int order,
 
             // Get the index for the node
             TMROctant *t = nodes->contains(&p, use_nodes);
+
+            // Reset the node level if the element level is smaller
+            if (array[i].level > t->level){
+              t->level = array[i].level;
+            }
+
+            // Set the node number in the element connectivity
             elem_conn[conn_size] = t->tag;
             conn_size++;
           }
@@ -742,21 +862,400 @@ void TMROctree::createMesh( int order,
     // Set the connectivity pointer
     elem_ptr[i+1] = conn_size;
   }
+}
 
-  // Set the nodes, dependent nodes, elements
-  *_num_nodes = num_nodes;
-  *_num_dep_nodes = num_dependent_nodes;
-  *_num_elements = num_elements;
+/*
+  Create the interpolation operator
+*/
+void TMROctree::createInterpolation( TMROctree *coarse,
+                                     int **_interp_ptr,
+                                     int **_interp_conn,
+                                     double **_interp_weights ){
+  // Set the pointers to NULL
+  *_interp_ptr = NULL;
+  *_interp_conn = NULL;
+  *_interp_weights = NULL;
 
-  // Set the connectivity arrays
-  *_elem_ptr = elem_ptr;
-  *_elem_conn = elem_conn;
+  // If the nodes have not been allocated, then this function should
+  // not be called. Return no result.
+  if (!nodes || !coarse->nodes){
+    return;
+  }
+
+  // Get the size of the fine node array
+  int fine_size;
+  TMROctant *fine;
+  nodes->getArray(&fine, &fine_size);
+  
+  // Allocate the arrays
+  int conn_len = 0;
+  int max_conn_len = order*order*order*num_nodes;
+  int *interp_ptr = new int[ num_nodes+1 ];
+  int *interp_conn = new int[ max_conn_len ];
+  double *interp_weights = new double[ max_conn_len ];
+
+  // Allocate the data that will be used
+  int nnodes = 0;
+  interp_ptr[0] = 0;
+
+  // The maximum possible size of the array of weights. Note
+  // that this is found if every node is a dependent node (which is
+  // impossible) which points to a dependent face node (also
+  // impossible). It is an upper bound.
+  int max_size = (order*order*order)*(order*order);
+  TMRIndexWeight *weights = new TMRIndexWeight[ max_size ];
+
+  // Set pointers to the coarse dependent data
+  const int *cdep_ptr = coarse->dep_ptr;
+  const int *cdep_conn = coarse->dep_conn;
+  const double *cdep_weights = coarse->dep_weights;
+
+  for ( int i = 0; i < fine_size; i++ ){
+    // Use a node-based search
+    const int use_nodes = 1;
+
+    // Keep track of the number of new weight elements
+    int nweights = 0;
+
+    // Loop over all the adjacent nodes
+    if (fine[i].tag >= 0){
+      TMROctant *t = coarse->nodes->contains(&fine[i], use_nodes);
+      if (t){
+        if (t->tag >= 0){
+          weights[nweights].index = t->tag;
+          weights[nweights].weight = 1.0;
+          nweights++;
+        }
+        else {
+          // Un-ravel the dependent node connectivity
+          int node = -t->tag-1;
+          for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+            weights[nweights].index = cdep_conn[jp];
+            weights[nweights].weight = cdep_weights[jp];
+            nweights++;
+          }
+        }
+      }
+      else {
+        // Find the child-id of the node. The node uses the
+        // local length scale of the element
+        int id = fine[i].childId();
+
+        // Set the element level
+        const int h = 1 << (TMR_MAX_LEVEL - fine[i].level);
+
+        if (id == 1 || id == 2 || id == 4){
+          // Get the root sibling
+          TMROctant n;
+          fine[i].getSibling(0, &n);
+
+          // Get the node number of the 0-th sibling
+          t = coarse->nodes->contains(&n, use_nodes);
+          if (t->tag >= 0){
+            weights[nweights].index = t->tag;
+            weights[nweights].weight = 0.5;
+            nweights++;
+          }
+          else {
+            int node = -t->tag-1;
+            for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+              weights[nweights].index = cdep_conn[jp];
+              weights[nweights].weight = 0.5*cdep_weights[jp];
+              nweights++;
+            }
+          }
+
+          if (id == 1){
+            n.x = n.x + 2*h;
+          }
+          else if (id == 2){
+            n.y = n.y + 2*h;
+          }
+          else if (id == 4){
+            n.z = n.z + 2*h;
+          }
+
+          // Get the node number of the other node 
+          t = coarse->nodes->contains(&n, use_nodes);
+          if (t->tag >= 0){
+            weights[nweights].index = t->tag;
+            weights[nweights].weight = 0.5;
+            nweights++;
+          }
+          else {
+            int node = -t->tag-1;
+            for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+              weights[nweights].index = cdep_conn[jp];
+              weights[nweights].weight = 0.5*cdep_weights[jp];
+              nweights++;
+            }
+          }
+        }
+        else if (id == 3 || id == 5 || id == 6){
+          // Get the root sibling
+          TMROctant n;
+          fine[i].getSibling(0, &n);
+
+          int ie[] = {0, 0, 0};
+          int je[] = {0, 0, 0};
+          if (id == 3){
+            ie[0] = 1;  je[1] = 1;
+          }
+          else if (id == 5){
+            ie[0] = 1;  je[2] = 1;
+          }
+          else if (id == 6){
+            ie[1] = 1;  je[2] = 1;
+          }
+
+          for ( int jj = 0; jj < 2; jj++ ){
+            for ( int ii = 0; ii < 2; ii++ ){
+              TMROctant p;
+              p.x = n.x + 2*h*(ii*ie[0] + jj*je[0]);
+              p.y = n.y + 2*h*(ii*ie[1] + jj*je[1]);
+              p.z = n.z + 2*h*(ii*ie[2] + jj*je[2]);
+
+              // Get the node number of the other node 
+              t = coarse->nodes->contains(&p, use_nodes);
+              if (t->tag >= 0){
+                weights[nweights].index = t->tag;
+                weights[nweights].weight = 0.25;
+                nweights++;
+              }
+              else {
+                int node = -t->tag-1;
+                for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+                  weights[nweights].index = cdep_conn[jp];
+                  weights[nweights].weight = 0.25*cdep_weights[jp];
+                  nweights++;
+                }
+              }
+            }
+          }
+        }
+        else if (id == 7){
+          // Get the root sibling
+          TMROctant n;
+          fine[i].getSibling(0, &n);
+
+          // Add the remaining nodes
+          for ( int kk = 0; kk < 2; kk++ ){
+            for ( int jj = 0; jj < 2; jj++ ){
+              for ( int ii = 0; ii < 2; ii++ ){
+                TMROctant p;
+                p.x = n.x + 2*h*ii;
+                p.y = n.y + 2*h*jj;
+                p.z = n.z + 2*h*kk;
+
+                // Get the node number of the other node 
+                t = coarse->nodes->contains(&p, use_nodes);
+                if (t->tag >= 0){
+                  weights[nweights].index = t->tag;
+                  weights[nweights].weight = 0.125;
+                  nweights++;
+                }
+                else {
+                  int node = -t->tag-1;
+                  for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+                    weights[nweights].index = cdep_conn[jp];
+                    weights[nweights].weight = 0.125*cdep_weights[jp];
+                    nweights++;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Sort the dependent weight values
+      nweights = unique_sort_weights(weights, nweights);
+      
+      // Check whether adding these will exceed the size
+      // of the array
+      if (interp_ptr[nnodes] + nweights >= max_conn_len){
+        int estimate = ((2.0*interp_ptr[nnodes]/nnodes)*(num_nodes - nnodes));
+        max_conn_len += estimate;
+        int *temp = new int[ max_conn_len ];
+        memcpy(temp, interp_conn, conn_len*sizeof(int));
+        delete [] interp_conn;
+        interp_conn = temp;
+        
+        double *tempw = new double[ max_conn_len ];
+        memcpy(tempw, interp_weights, conn_len*sizeof(double));
+        delete [] interp_weights;
+        interp_weights = tempw;
+      }
+
+      // Extract the weights from the sorted list
+      for ( int k = 0; k < nweights; k++ ){
+        interp_conn[conn_len] = weights[k].index;
+        interp_weights[conn_len] = weights[k].weight;
+        conn_len++;
+      }
+
+      // Increment the pointer
+      interp_ptr[nnodes+1] = conn_len;
+      nnodes++;
+    }
+  }
+
+  // Free the weights
+  delete [] weights;
+
+  // Set the return arrays
+  *_interp_ptr = interp_ptr;
+  *_interp_conn = interp_conn;
+  *_interp_weights = interp_weights;
+}
+
+/*
+  Create the restriction operator
+*/
+void TMROctree::createRestriction( TMROctree *tree,
+                                   int **_interp_ptr,
+                                   int **_interp_conn,
+                                   double **_interp_weights ){
+  // Set the pointers to NULL
+  *_interp_ptr = NULL;
+  *_interp_conn = NULL;
+  *_interp_weights = NULL;
+
+  // If the nodes have not been allocated, then this function should
+  // not be called. Return no result.
+  if (!nodes || !tree->nodes){
+    return;
+  }
+
+  // Get the array of coarse nodes and the size of nodes
+  int coarse_size;
+  TMROctant *coarse;
+  tree->nodes->getArray(&coarse, &coarse_size);
+ 
+  // Set the weights for the full-approximation
+  double wvals[] = {0.5, 1.0, 0.5};
+
+  // Set the number of independent coarse nodes
+  int num_coarse_nodes = tree->num_nodes;
+
+  // Allocate the arrays
+  int conn_len = 0;
+  int max_conn_len = order*order*order*num_coarse_nodes;
+  int *interp_ptr = new int[ num_coarse_nodes+1 ];
+  int *interp_conn = new int[ max_conn_len ];
+  double *interp_weights = new double[ max_conn_len ];
+
+  // Set the initial pointer values
+  int nnodes = 0;
+  interp_ptr[0] = 0;
+
+  // The maximum possible size of the array of weights. Note
+  // that this is found if every node is a dependent node (which is
+  // impossible) which points to a dependent face node (also
+  // impossible). It is an upper bound.
+  int max_size = 27*(order*order);
+  TMRIndexWeight *weights = new TMRIndexWeight[ max_size ];
+
+  // Scan through the nodes of the coarse tree and
+  // find the next-to-adjacent nodes in the octree
+  for ( int i = 0; i < coarse_size; i++ ){
+    if (coarse[i].tag >= 0){
+      // Use node-based searching
+      const int use_nodes = 1;
+
+      // Keep track of the number of weights used
+      int nweights = 0;
+      double w = 0.0;
+
+      // Get the fine index number corresponding to the
+      // coarse index on this mesh
+      TMROctant *fine;
+      fine = nodes->contains(&coarse[i], use_nodes);
+
+      // Get the coarse node level
+      const int h = 1 << (TMR_MAX_LEVEL - fine->level);
+      
+      // Scan through the node locations for the coarse mesh
+      for ( int kk = 0; kk < 3; kk++ ){
+        for ( int jj = 0; jj < 3; jj++ ){
+          for ( int ii = 0; ii < 3; ii++ ){
+            // Set the location for the adjacent nodes
+            TMROctant n;
+            n.x = coarse[i].x + h*(ii-1);
+            n.y = coarse[i].y + h*(jj-1);
+            n.z = coarse[i].z + h*(kk-1);
+
+            // Get the element level
+            TMROctant *t;
+            t = nodes->contains(&n, use_nodes);
+            if (t){
+              double wk = wvals[ii]*wvals[jj]*wvals[kk];
+              w += wk;
+
+              if (t->tag >= 0){
+                weights[nweights].index = t->tag;
+                weights[nweights].weight = wk;
+                nweights++;
+              }
+              else {
+                int node = -t->tag-1;
+                for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
+                  weights[nweights].index = dep_conn[jp];
+                  weights[nweights].weight = wk*dep_weights[jp];
+                  nweights++;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Sort the dependent weight values
+      nweights = unique_sort_weights(weights, nweights);
+      
+      // Check whether adding these will exceed the size
+      // of the array
+      if (interp_ptr[nnodes] + nweights >= max_conn_len){
+        int estimate = ((2.0*interp_ptr[nnodes]/nnodes)*(num_nodes - nnodes));
+        max_conn_len += estimate;
+        int *temp = new int[ max_conn_len ];
+        memcpy(temp, interp_conn, conn_len*sizeof(int));
+        delete [] interp_conn;
+        interp_conn = temp;
+        
+        double *tempw = new double[ max_conn_len ];
+        memcpy(tempw, interp_weights, conn_len*sizeof(double));
+        delete [] interp_weights;
+        interp_weights = tempw;
+      }
+
+      // Extract the weights from the sorted list. Normalize
+      // the weights by the total weights added at this node
+      for ( int k = 0; k < nweights; k++ ){
+        interp_conn[conn_len] = weights[k].index;
+        interp_weights[conn_len] = weights[k].weight/w;
+        conn_len++;
+      }
+
+      // Increment the pointer
+      interp_ptr[nnodes+1] = conn_len;
+      nnodes++;
+    }
+  }
+
+  // Free the weight used
+  delete [] weights;
+
+  // Set the return arrays
+  *_interp_ptr = interp_ptr;
+  *_interp_conn = interp_conn;
+  *_interp_weights = interp_weights;
 }
 
 /*
   Print out the octree to a file for visualization
 */
-void TMROctree::printTree( const char * filename ){
+void TMROctree::printOctree( const char * filename ){
   // Iterate through and print out everything  
   FILE * fp = fopen(filename, "w");
   if (fp){
