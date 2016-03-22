@@ -106,7 +106,7 @@ int main( int argc, char * argv[] ){
     if (k == 0){
       if (rank == 0){
         printf("Creating first octree\n");
-        tree = new TMROctree(500, 1, 8);
+        tree = new TMROctree(500, 4, 10);
         tree->balance(7);
       }
 
@@ -252,13 +252,12 @@ int main( int argc, char * argv[] ){
   res->applyBCs();
 
   // Now, set up the solver
-  int gmres_iters = 30; 
-  int nrestart = 0; // Number of allowed restarts
-  int is_flexible = 0; // Is a flexible preconditioner?
-
+  int gmres_iters = 100; 
+  int nrestart = 2;
+  int is_flexible = 1;
   GMRES * ksm = new GMRES(mg->getMat(0), mg, 
                           gmres_iters, nrestart, is_flexible);
-  ksm->setTolerances(1e-12, 1e-30);
+  ksm->setTolerances(1e-8, 1e-30);
   ksm->incref();
 
   ksm->setMonitor(new KSMPrintStdout("MG", rank, freq));
