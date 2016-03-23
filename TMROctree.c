@@ -204,7 +204,15 @@ TMROctree::~TMROctree(){
   parent of the octant is refined. A zero index indicates that the
   octant is retained.
 */
-void TMROctree::refine( int refinement[] ){
+void TMROctree::refine( int refinement[], 
+			int min_level, int max_level ){
+  // Adjust the min and max levels to ensure consistency
+  if (min_level < 0){ min_level = 0; }
+  if (max_level > TMR_MAX_LEVEL){ max_level = TMR_MAX_LEVEL; }
+
+  // This is just a sanity check
+  if (min_level > max_level){ min_level = max_level; }
+
   // Create a hash table for the refined  t
   TMROctantHash *hash = new TMROctantHash();
 
@@ -225,24 +233,34 @@ void TMROctree::refine( int refinement[] ){
     if (refinement[i] == 0){
       hash->addOctant(&q);
     }
-    if (refinement[i] < 0){
-      q.level = q.level-1;
-      hash->addOctant(&q);
+    else if (refinement[i] < 0){
+      if (q.level > min_level){
+	q.level = q.level-1;
+	hash->addOctant(&q);
+      }
+      else {
+	hash->addOctant(&q);
+      }
     }
     else if (refinement[i] > 0){
-      TMROctant c;
-      c.level = q.level + 1;
-      const int h = 1 << (TMR_MAX_LEVEL - c.level);
-      
-      for ( int kk = 0; kk < 2; kk++ ){
-	for ( int jj = 0; jj < 2; jj++ ){
-	  for ( int ii = 0; ii < 2; ii++ ){
-	    c.x = q.x + 2*h*ii;
-	    c.y = q.y + 2*h*jj;
-	    c.z = q.z + 2*h*kk;
-	    hash->addOctant(&c);
+      if (q.level < max_level){
+	TMROctant c;
+	c.level = q.level + 1;
+	const int h = 1 << (TMR_MAX_LEVEL - c.level);
+	
+	for ( int kk = 0; kk < 2; kk++ ){
+	  for ( int jj = 0; jj < 2; jj++ ){
+	    for ( int ii = 0; ii < 2; ii++ ){
+	      c.x = q.x + 2*h*ii;
+	      c.y = q.y + 2*h*jj;
+	      c.z = q.z + 2*h*kk;
+	      hash->addOctant(&c);
+	    }
 	  }
 	}
+      }
+      else {
+	hash->addOctant(&q);
       }
     }
   }

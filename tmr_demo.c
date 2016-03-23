@@ -85,9 +85,11 @@ void setUpTACSCreator( int order, TACSCreator *creator,
 int main( int argc, char * argv[] ){
   MPI_Init(&argc, &argv);
 
+  MPI_Comm comm = MPI_COMM_WORLD;
+
   // Get the rank 
   int rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_rank(comm, &rank);
 
   // Create the Solid element in TACS
   SolidStiffness *stiff = new SolidStiffness(1.0, 70e3, 0.3);
@@ -103,10 +105,12 @@ int main( int argc, char * argv[] ){
   // Set the levels
   const int NUM_LEVELS = 4;
 
+  const int min_refine = 3;
+  const int max_refine = 10;
   TMROctree *root_tree = NULL;
   if (rank == 0){
     // Create a uniformly refined octree
-    root_tree = new TMROctree(3);
+    root_tree = new TMROctree(4);
   }
 
   for ( int iter = 0; iter < 4; iter++ ){
@@ -124,7 +128,7 @@ int main( int argc, char * argv[] ){
 	}
 
 	// Allocate the TACS creator
-	creator[k] = new TACSCreator(MPI_COMM_WORLD, vars_per_node);
+	creator[k] = new TACSCreator(comm, vars_per_node);
 	creator[k]->incref();
 	
 	// Set up the TACSCreator object
@@ -137,7 +141,8 @@ int main( int argc, char * argv[] ){
 	creator[k]->setElements(&elements, 1);
   
 	// Create the TACSAssembler object
-	tacs[k] = creator[k]->createTACS(TACSAssembler::NATURAL_ORDER);
+	tacs[k] = creator[k]->createTACS(TACSAssembler::NATURAL_ORDER,
+					 TACSAssembler::ADDITIVE_SCHWARZ);
 	tacs[k]->incref();
       }
       
@@ -149,7 +154,7 @@ int main( int argc, char * argv[] ){
       }
       
       // Allocate the TACS creator
-      creator[k+1] = new TACSCreator(MPI_COMM_WORLD, vars_per_node);
+      creator[k+1] = new TACSCreator(comm, vars_per_node);
       creator[k+1]->incref();
       
       // Set up the TACSCreator object
@@ -162,7 +167,14 @@ int main( int argc, char * argv[] ){
       creator[k+1]->setElements(&elements, 1);
       
       // Create the TACSAssembler object
-      tacs[k+1] = creator[k+1]->createTACS(TACSAssembler::NATURAL_ORDER);
+      if (k+1 == NUM_LEVELS-1){
+	tacs[k+1] = creator[k+1]->createTACS(TACSAssembler::TACS_AMD_ORDER,
+					     TACSAssembler::DIRECT_SCHUR);
+      }
+      else {
+	tacs[k+1] = creator[k+1]->createTACS(TACSAssembler::NATURAL_ORDER,
+					     TACSAssembler::ADDITIVE_SCHWARZ);
+      }
       tacs[k+1]->incref();
       
       // Create the interpolation/restriction objects
@@ -241,9 +253,9 @@ int main( int argc, char * argv[] ){
     
     // Set up the multigrid method
     double sor_omega = 1.2;
-    int sor_iters = 2;
+    int sor_iters = 1;
     int sor_symm = 1;
-    TACSMg *mg = new TACSMg(MPI_COMM_WORLD, NUM_LEVELS, 
+    TACSMg *mg = new TACSMg(comm, NUM_LEVELS, 
 			    sor_omega, sor_iters, sor_symm);
     mg->incref();
     
@@ -299,11 +311,11 @@ int main( int argc, char * argv[] ){
     sprintf(filename, "octree_iter%d.f5", iter);
     f5->writeToFile(filename);
 
-    // Based on the values of the local strain energy, perform
-    // a local refinement
+    // Perform a local refinement of the nodes based on the strain energy
+    // within each element
     int nelems = tacs[0]->getNumElements();
     TacsScalar *SE = new TacsScalar[ nelems ];
-    TacsScalar SE_total = 0.0;    
+    TacsScalar SE_proc_sum = 0.0;
 
     for ( int i = 0; i < nelems; i++ ){
       // Get the node locations and variables
@@ -319,23 +331,85 @@ int main( int argc, char * argv[] ){
       for ( int j = 0; j < 24; j++ ){
 	SE[i] += res[j]*vars[j];
       }
-      SE_total += SE[i];
+      SE_proc_sum += SE[i];
     }
 
-    SE_total = 0.5*SE_total/nelems;
+    // Count up the total strain energy 
+    TacsScalar SE_sum = 0.0;
+    MPI_Reduce(&SE_proc_sum, &SE_sum, 1, TACS_MPI_TYPE, MPI_SUM, 0, comm);
 
-    // Set the refinement
-    int *refinement = new int[ nelems ];
+    // Count up the total number of elements
+    int nelems_total = 0;
+    MPI_Reduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, 0, comm);
 
-    for ( int i = 0; i < nelems; i++ ){
-      refinement[i] = -1;
-      if (SE[i] > SE_total){
-	refinement[i] = 1;
+    // Gather the number of elements from each processor
+    int mpi_size;
+    MPI_Comm_size(comm, &mpi_size);
+    int *elems_per_proc = NULL;
+    int *elem_proc_offset = NULL;
+    TacsScalar *all_SE = NULL;
+
+    if (rank == 0){
+      elems_per_proc = new int[ mpi_size ];
+      elem_proc_offset = new int[ mpi_size ];
+      all_SE = new TacsScalar[ nelems_total ];
+    }
+
+    // Gather the number of elements from each processor to the root processor
+    MPI_Gather(&nelems, 1, MPI_INT, elems_per_proc, 1, MPI_INT, 0, comm);
+
+    if (rank == 0){
+      elem_proc_offset[0] = 0;
+      for ( int i = 0; i < mpi_size-1; i++ ){
+	elem_proc_offset[i+1] = elem_proc_offset[i] + elems_per_proc[i];
       }
     }
+    
+    // Gather the element strain energy values to the root processor
+    MPI_Gatherv(SE, nelems, TACS_MPI_TYPE, 
+	       all_SE, elems_per_proc, elem_proc_offset, TACS_MPI_TYPE, 0, comm);
 
-    // Refine the root tree
-    root_tree->refine(refinement);
+    // Free the element strain energy values for this processor
+    delete [] SE;
+
+    if (rank == 0){
+      // Set the cut-off strain energy value
+      TacsScalar SE_cut_off = 0.5*SE_sum/nelems_total;
+
+      // Set the refinement
+      int *refinement = new int[ nelems_total ];
+      memset(refinement, 0, nelems_total*sizeof(int));
+
+      // Get the element partition from the TACSCreator object
+      const int *partition;
+      creator[0]->getElementPartition(&partition);
+
+      for ( int i = 0; i < nelems_total; i++ ){
+	// Get the partition that this element is on
+	int proc = partition[i];
+
+	// Retrieve the offset from the 
+	int index = elem_proc_offset[proc];
+	elem_proc_offset[proc]++;
+
+	if (all_SE[index] > SE_cut_off){
+	  refinement[i] = 1;
+	}
+	else {
+	  refinement[i] = -1;
+	}
+      }
+
+      // Free the strain energy information and offset values
+      delete [] elems_per_proc;
+      delete [] elem_proc_offset;
+      delete [] all_SE;
+
+      // Refine the root tree
+      root_tree->refine(refinement, min_refine, max_refine);
+      
+      delete [] refinement;
+    }
 
     // Free everything 
     mg->decref();

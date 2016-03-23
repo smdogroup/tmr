@@ -55,7 +55,8 @@ class TMROctree {
 
   // Refine the octree
   // -----------------
-  void refine( int refinement[] );
+  void refine( int refinement[],
+	       int min_level=0, int max_level=TMR_MAX_LEVEL );
 
   // Balance the tree to ensure 2-1 balancing
   // ----------------------------------------
