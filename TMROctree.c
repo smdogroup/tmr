@@ -65,19 +65,23 @@ TMROctree::TMROctree( int refine_level ){
 
   // Compute the number of octants along each edge for
   // the leaves
-  int h = 1 << (TMR_MAX_LEVEL - refine_level);
+  int nx = 1 << refine_level;
 
   // Set the number of octants created
-  int nocts = h*h*h;
+  int nocts = nx*nx*nx;
+
+  // Compute the refinement level
+  const int hmax = 1 << TMR_MAX_LEVEL;
+  const int h = 1 << (TMR_MAX_LEVEL - refine_level);
 
   // Create an array of the octants that will be stored
   TMROctant *array = new TMROctant[ nocts ];
 
   // Create all the octants required
   int index = 0;
-  for ( int z = 0; z < h; z++ ){
-    for ( int y = 0; y < h; y++ ){
-      for ( int x = 0; x < h; x++ ){
+  for ( int z = 0; z < hmax; z += h ){
+    for ( int y = 0; y < hmax; y += h ){
+      for ( int x = 0; x < hmax; x += h ){
 	array[index].x = x;
 	array[index].y = y;
 	array[index].z = z;
@@ -189,6 +193,87 @@ TMROctree::~TMROctree(){
   if (dep_conn){ delete [] dep_conn; }
   if (dep_weights){ delete [] dep_weights; }
 }
+
+
+/*
+  Refine the octree by adding/subtracting elements
+
+  This code takes in an array of integers that are either positive,
+  negative or zero. A positive value means that the cell is refined,
+  and all children are added. A negative index means that only the
+  parent of the octant is refined. A zero index indicates that the
+  octant is retained.
+*/
+void TMROctree::refine( int refinement[] ){
+  // Create a hash table for the refined  t
+  TMROctantHash *hash = new TMROctantHash();
+
+  // Get the current array of octants
+  int size;
+  TMROctant *array;
+  elements->getArray(&array, &size);
+
+  // Get the max level
+  const int hmax = 1 << TMR_MAX_LEVEL;
+
+  // Add the element
+  for ( int i = 0; i < size; i++ ){
+    // Try adding all of the children
+    TMROctant q;
+    array[i].getSibling(0, &q);
+
+    if (refinement[i] == 0){
+      hash->addOctant(&q);
+    }
+    if (refinement[i] < 0){
+      q.level = q.level-1;
+      hash->addOctant(&q);
+    }
+    else if (refinement[i] > 0){
+      TMROctant c;
+      c.level = q.level + 1;
+      const int h = 1 << (TMR_MAX_LEVEL - c.level);
+      
+      for ( int kk = 0; kk < 2; kk++ ){
+	for ( int jj = 0; jj < 2; jj++ ){
+	  for ( int ii = 0; ii < 2; ii++ ){
+	    c.x = q.x + 2*h*ii;
+	    c.y = q.y + 2*h*jj;
+	    c.z = q.z + 2*h*kk;
+	    hash->addOctant(&c);
+	  }
+	}
+      }
+    }
+  }
+
+  // Now convert the new hash
+  TMROctantArray *child0_elems = hash->toArray();
+  child0_elems->getArray(&array, &size);
+
+  // Loop over all elements and add their siblings
+  for ( int i = 0; i < size; i++ ){
+    for ( int j = 0; j < 8; j++ ){
+      TMROctant q;
+      array[i].getSibling(j, &q);
+      if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
+          q.x < hmax && q.y < hmax && q.z < hmax){
+        hash->addOctant(&q);
+      }
+    }
+  }
+
+  // Free the temporary elements
+  delete child0_elems;
+
+  // Free the old elements class
+  if (elements){ delete elements; }
+
+  // Cover the hash table to a list and uniquely sort it
+  elements = hash->toArray();
+  elements->sort();
+}
+
 /*
   Balance the octree in place
 
@@ -464,9 +549,6 @@ void TMROctree::getDependentMesh( int *_num_dep_nodes,
   elements and label any possible dependent node.
 */
 void TMROctree::createNodes(){
-  // Create the octant hash that we'll add the element nodes
-  TMROctantHash *hash = new TMROctantHash();
-
   // Get the current array of octants
   int size;
   TMROctant *array;
@@ -530,12 +612,12 @@ void TMROctree::createNodes(){
     }
   }
 
+  // Free the existing node array
+  if (nodes){ delete nodes; }
+
   // Cover the hash table to a list and uniquely sort it
   nodes = new TMROctantArray(all_nodes, index);
   nodes->sort();
-
-  // Free the hash
-  delete hash;
 
   // Build the information for the dependent nodes that
   // lie along an element edge
@@ -699,6 +781,11 @@ void TMROctree::createNodes(){
   TMROctant *edges, *faces;
   edge_array->getArray(&edges, &nedges);
   face_array->getArray(&faces, &nfaces);
+
+  // Free the dependent node information if it already exists
+  if (dep_ptr){ delete [] dep_ptr; }
+  if (dep_conn){ delete [] dep_conn; }
+  if (dep_weights){ delete [] dep_weights; }
   
   // Allocate the arrays for the dependent nodes
   dep_ptr = new int[ num_dependent_nodes+1 ];
@@ -788,6 +875,8 @@ void TMROctree::createMesh( int _order ){
 
   // We already know how large the connectivity list
   // will be and the size of the number of dependent nodes
+  if (elem_ptr){ delete [] elem_ptr; }
+  if (elem_conn){ delete [] elem_conn; }
   elem_ptr = new int[ num_elements+1 ];
   elem_conn = new int[ order*order*order*num_elements ];
   
@@ -1133,7 +1222,7 @@ void TMROctree::createRestriction( TMROctree *tree,
   tree->nodes->getArray(&coarse, &coarse_size);
  
   // Set the weights for the full-approximation
-  double wvals[] = {0.5, 1.0, 0.5};
+  const double wvals[] = {0.5, 1.0, 0.5};
 
   // Set the number of independent coarse nodes
   int num_coarse_nodes = tree->num_nodes;

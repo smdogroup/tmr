@@ -53,6 +53,10 @@ class TMROctree {
   TMROctree( TMROctantArray *_list );
   ~TMROctree();
 
+  // Refine the octree
+  // -----------------
+  void refine( int refinement[] );
+
   // Balance the tree to ensure 2-1 balancing
   // ----------------------------------------
   void balance( int balance_corner=0 );
