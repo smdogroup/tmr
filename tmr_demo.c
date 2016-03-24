@@ -103,7 +103,7 @@ int main( int argc, char * argv[] ){
   int vars_per_node = 3;
 
   // Set the levels
-  const int NUM_LEVELS = 4;
+  const int NUM_LEVELS = 3;
 
   const int min_refine = 3;
   const int max_refine = 10;
@@ -113,7 +113,7 @@ int main( int argc, char * argv[] ){
     root_tree = new TMROctree(4);
   }
 
-  for ( int iter = 0; iter < 4; iter++ ){
+  for ( int iter = 0; iter < 3; iter++ ){
     // Keep pointers to the octree, creator and assembler objects
     TMROctree *tree = root_tree;
     TACSCreator *creator[NUM_LEVELS];
@@ -141,8 +141,7 @@ int main( int argc, char * argv[] ){
 	creator[k]->setElements(&elements, 1);
   
 	// Create the TACSAssembler object
-	tacs[k] = creator[k]->createTACS(TACSAssembler::NATURAL_ORDER,
-					 TACSAssembler::ADDITIVE_SCHWARZ);
+	tacs[k] = creator[k]->createTACS();
 	tacs[k]->incref();
       }
       
@@ -168,12 +167,10 @@ int main( int argc, char * argv[] ){
       
       // Create the TACSAssembler object
       if (k+1 == NUM_LEVELS-1){
-	tacs[k+1] = creator[k+1]->createTACS(TACSAssembler::TACS_AMD_ORDER,
-					     TACSAssembler::DIRECT_SCHUR);
+	tacs[k+1] = creator[k+1]->createTACS();
       }
       else {
-	tacs[k+1] = creator[k+1]->createTACS(TACSAssembler::NATURAL_ORDER,
-					     TACSAssembler::ADDITIVE_SCHWARZ);
+	tacs[k+1] = creator[k+1]->createTACS();
       }
       tacs[k+1]->incref();
       
@@ -297,13 +294,13 @@ int main( int argc, char * argv[] ){
     ksm->solve(res, ans);
     
     tacs[0]->setVariables(ans);
-    
+
     // Create an TACSToFH5 object for writing output to files
     unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-			       TACSElement::OUTPUT_DISPLACEMENTS |
-			       TACSElement::OUTPUT_STRAINS |
-			       TACSElement::OUTPUT_STRESSES |
-			       TACSElement::OUTPUT_EXTRAS);
+                               TACSElement::OUTPUT_DISPLACEMENTS |
+                               TACSElement::OUTPUT_STRAINS |
+                               TACSElement::OUTPUT_STRESSES |
+                               TACSElement::OUTPUT_EXTRAS);
     TACSToFH5 * f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
     f5->incref();
     
