@@ -1,0 +1,24 @@
+# Do not modify this file. Copy this file to Makefile.in and then modify it.
+
+# the full path to the root directory
+TMR_DIR = ${HOME}/hg/tmr
+CXX = mpicxx
+RM = rm -f
+
+# Flags for debugging and regular compilation versions
+TMR_CC_DEBUG_FLAGS = -fPIC -g 
+TMR_CC_FLAGS = -fPIC -O3
+
+# Set up for parallel make
+MAKE = make -j 2
+
+# Set the ar flags
+AR_FLAGS = rcs
+
+# For linux systems, use the following settings:
+SO_EXT=so
+SO_LINK_FLAGS=-fPIC -shared
+
+# For MAC OS X, use the following settings:
+# SO_EXT=so
+# SO_LINK_FLAGS=-fPIC -dynamiclib -single_module -undefined dynamic_lookup -multiply_defined suppress
