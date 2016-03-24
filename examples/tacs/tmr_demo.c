@@ -5,6 +5,24 @@
 #include "BVecInterp.h"
 #include "TACSMg.h"
 #include "TACSToFH5.h"
+#include "OctStiffness.h"
+
+/*
+  Create the elements that are required based on the global filter
+*/
+static TMROctree *element_filter;
+static TMROctant *global_octant_list;
+static TACSElement* create_element( int id ){
+  TacsScalar density = 1.0;
+  TacsScalar E = 70e3;
+  TacsScalar nu = 0.3;
+  TacsScalar q = 5.0;  
+  SolidStiffness *stiff = new OctStiffness(element_filter, 
+                                           &global_octant_list[id],
+                                           density, E, nu, q);
+  Solid<2> *elem = new Solid<2>(stiff);
+  return elem;
+}
 
 /*
   Set up the TACSCreator object and set the internal data required to
@@ -59,9 +77,11 @@ void setUpTACSCreator( int order, TACSCreator *creator,
     }
   }
 
-  // Set all the element ids to 0
+  // Set all the element ids
   int *elem_id_nums = new int[ num_elems ];
-  memset(elem_id_nums, 0, num_elems*sizeof(int));
+  for ( int i = 0; i < num_elems; i++ ){
+    elem_id_nums[i] = i;
+  }
 
   // Set the connectivity
   creator->setGlobalConnectivity(num_nodes, num_elems,

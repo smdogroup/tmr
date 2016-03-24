@@ -5,6 +5,55 @@
 #include "TMROctant.h"
 
 /*
+  The following class is used to help create the interpolation and
+  restriction operators. It stores both the node index and
+  interpolation/restriction weight values in the same structure.
+*/
+class TMRIndexWeight {
+ public:
+  int index;
+  double weight;
+
+  // Sort and uniquify a list of indices and weights
+  static int uniqueSort( TMRIndexWeight *array, int size ){
+    qsort(array, size, sizeof(TMRIndexWeight), 
+	  TMRIndexWeight::compare_weights);
+    
+    // Now that the weights are sorted, remove duplicates by adding up
+    // the weights
+    int j = 0; // Location to place entries
+  
+    for ( int i = 0; i < size; i++, j++ ){
+      // Copy over the newest weight/index data
+      if (i != j){
+	array[j] = array[i];
+      }
+      
+      // While the index is the same as the next, keep
+      // adding the weight
+      while ((i < size-1) && 
+	     (array[i].index == array[i+1].index)){
+	array[j].weight += array[i+1].weight;
+	i++;
+      }
+    }
+    
+    // Return the new size of the array
+    return j;
+  }
+
+ private:
+  // Compare two TMRIndexWeight objects - compare them based on
+  // their index value only.
+  static int compare_weights( const void *a, const void *b ){
+    const TMRIndexWeight *A = static_cast<const TMRIndexWeight*>(a);
+    const TMRIndexWeight *B = static_cast<const TMRIndexWeight*>(b);
+    
+    return A->index - B->index;
+  }
+};
+
+/*
   The main octree class. 
 
   This is used to create, balance, and coarsen an octree as well as
@@ -66,9 +115,19 @@ class TMROctree {
   // --------------------------
   TMROctree *coarsen();
 
-  // Get the connectivity from the mesh
-  // ----------------------------------
+  // Find an octant that completely encloses the provided octant
+  // -----------------------------------------------------------
+  TMROctant* findEnclosing( TMROctant *oct );
+  void findEnclosingRange( TMROctant *oct,
+			   int *low, int *high );
+
+  // Create the connectivity information for the mesh
+  // ------------------------------------------------
   void createMesh( int _order );
+
+  // Order the nodes but do not create the connectivity
+  // --------------------------------------------------
+  void createNodes( int _order );
 
   // Retrieve the mesh information
   // -----------------------------
@@ -105,10 +164,6 @@ class TMROctree {
   }
 
  private:
-  // Create the connectivity for the mesh
-  // ------------------------------------
-  void createNodes();
-
   // The list octants representing the elements
   TMROctantArray *elements; 
 
