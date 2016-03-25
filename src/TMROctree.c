@@ -162,6 +162,12 @@ void TMROctree::refine( int refinement[],
   // This is just a sanity check
   if (min_level > max_level){ min_level = max_level; }
 
+  // If the nodes were defined, delete them
+  if (nodes){ 
+    delete nodes; 
+    nodes = NULL; 
+  }
+
   // Create a hash table for the refined  t
   TMROctantHash *hash = new TMROctantHash();
 
@@ -239,6 +245,8 @@ void TMROctree::refine( int refinement[],
   // Cover the hash table to a list and uniquely sort it
   elements = hash->toArray();
   elements->sort();
+
+  delete hash;
 }
 
 /*

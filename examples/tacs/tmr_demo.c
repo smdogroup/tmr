@@ -124,18 +124,18 @@ int main( int argc, char * argv[] ){
   int vars_per_node = 3;
 
   // Set the levels
-  const int NUM_LEVELS = 2;
+  const int NUM_LEVELS = 3;
 
   const int min_refine = 3;
   const int max_refine = 10;
   TMROctree *root_tree = NULL;
   if (mpi_rank == 0){
     // Create a uniformly refined octree
-    root_tree = new TMROctree(5);
+    root_tree = new TMROctree(4);
   }
 
   // Create the uniform tree for the filter
-  TMROctree *filter_tree = new TMROctree(3);
+  TMROctree *filter_tree = new TMROctree(1);
   filter_tree->createMesh(2);
 
   for ( int iter = 0; iter < 3; iter++ ){
