@@ -16,5 +16,9 @@ OBJS = tmr_demo.o \
 default: ${OBJS}
 	${CXX} ${OBJS} ${TACS_LD_FLAGS} ${TMR_LD_FLAGS}  -o tmr_demo
 
+debug: TACS_CC_FLAGS=${TACS_DEBUG_CC_FLAGS}
+debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
+debug: default
+
 clean:
 	rm tmr_demo *.o

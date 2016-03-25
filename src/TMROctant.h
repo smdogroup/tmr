@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include "mpi.h"
 
 /*
   The following constants define the maximum octant depth and maximum
@@ -14,6 +15,15 @@ static const int TMR_MAX_NODE_LEVEL = 30;
 static const int TMR_LOG2_MAX_ELEMENT_ORDER = 3; 
 static const int TMR_MAX_LEVEL = 
   TMR_MAX_NODE_LEVEL - TMR_LOG2_MAX_ELEMENT_ORDER;
+
+/*
+  The MPI TMROctant data type
+*/
+extern MPI_Datatype TMROctant_MPI_type;
+
+// Initialize and finalize the data type
+void TMRInitialize();
+void TMRFinalize();
 
 /*
   The TMR Octant class
@@ -38,7 +48,7 @@ class TMROctant {
   int compareEncoding( const TMROctant *octant ) const;
 
   int32_t x, y, z; // The x,y,z coordinates
-  uint32_t level; // The refinement level
+  int32_t level; // The refinement level
   int32_t tag; // A tag to store additional data
 };
 

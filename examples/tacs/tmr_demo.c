@@ -10,15 +10,16 @@
 /*
   Create the elements that are required based on the global filter
 */
-static TMROctree *element_filter;
+static TMROctree *global_element_filter;
 static TMROctant *global_octant_list;
-static TACSElement* create_element( int id ){
+
+static TACSElement* create_element( int local_num, int id ){
   TacsScalar density = 1.0;
   TacsScalar E = 70e3;
   TacsScalar nu = 0.3;
   TacsScalar q = 5.0;  
-  SolidStiffness *stiff = new OctStiffness(element_filter, 
-                                           &global_octant_list[id],
+  SolidStiffness *stiff = new OctStiffness(global_element_filter, 
+                                           &global_octant_list[local_num],
                                            density, E, nu, q);
   Solid<2> *elem = new Solid<2>(stiff);
   return elem;
@@ -97,6 +98,9 @@ void setUpTACSCreator( int order, TACSCreator *creator,
   // Set the dependent nodes
   creator->setDependentNodes(num_dep_nodes, dep_ptr,
 			     dep_conn, dep_weights);
+
+  // Partition the mesh
+  creator->partitionMesh();
 }
 
 /*
@@ -104,17 +108,14 @@ void setUpTACSCreator( int order, TACSCreator *creator,
 */
 int main( int argc, char * argv[] ){
   MPI_Init(&argc, &argv);
+  TMRInitialize();
 
   MPI_Comm comm = MPI_COMM_WORLD;
 
   // Get the rank 
-  int rank;
-  MPI_Comm_rank(comm, &rank);
-
-  // Create the Solid element in TACS
-  SolidStiffness *stiff = new SolidStiffness(1.0, 70e3, 0.3);
-  Solid<2> *elem = new Solid<2>(stiff);
-  elem->incref();
+  int mpi_size, mpi_rank;
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
 
   // The order of the mesh
   int order = 2;
@@ -123,15 +124,19 @@ int main( int argc, char * argv[] ){
   int vars_per_node = 3;
 
   // Set the levels
-  const int NUM_LEVELS = 3;
+  const int NUM_LEVELS = 2;
 
   const int min_refine = 3;
   const int max_refine = 10;
   TMROctree *root_tree = NULL;
-  if (rank == 0){
+  if (mpi_rank == 0){
     // Create a uniformly refined octree
-    root_tree = new TMROctree(4);
+    root_tree = new TMROctree(5);
   }
+
+  // Create the uniform tree for the filter
+  TMROctree *filter_tree = new TMROctree(3);
+  filter_tree->createMesh(2);
 
   for ( int iter = 0; iter < 3; iter++ ){
     // Keep pointers to the octree, creator and assembler objects
@@ -140,132 +145,189 @@ int main( int argc, char * argv[] ){
     TACSAssembler *tacs[NUM_LEVELS];
     BVecInterp *restrct[NUM_LEVELS-1], *interp[NUM_LEVELS-1];
 
-    for ( int k = 0; k < NUM_LEVELS-1; k++ ){
+    for ( int k = 0; k < NUM_LEVELS; k++ ){
+      TMROctree *fine = NULL;
       // Create the finest octant tree
-      if (k == 0){
-	if (rank == 0){
-	  tree->balance(1);
-	}
+      if (mpi_rank == 0){
+        if (k == 0){
+          tree->balance(1);
+        }
+        else {
+          fine = tree;
+          tree = fine->coarsen();
+          tree->balance(0);
+        }
+      }
 
-	// Allocate the TACS creator
-	creator[k] = new TACSCreator(comm, vars_per_node);
-	creator[k]->incref();
+      // Allocate the TACS creator
+      creator[k] = new TACSCreator(comm, vars_per_node);
+      creator[k]->incref();
 	
-	// Set up the TACSCreator object
-	if (rank == 0){
-	  setUpTACSCreator(order, creator[k], tree);
-	}
+      // Set up the TACSCreator object
+      if (mpi_rank == 0){
+        setUpTACSCreator(order, creator[k], tree);
+      
+        // Scatter the number of locally owned elements
+        int num_owned = 0;
+        int *owned_elements;
+        creator[k]->getNumOwnedElements(&owned_elements);
+        MPI_Scatter(owned_elements, 1, MPI_INT,
+                    &num_owned, 1, MPI_INT, 0, comm);
 
-	// This call must occur on all processor
-	TACSElement *elements = elem;
-	creator[k]->setElements(&elements, 1);
-  
+        // Compute the maximum of locally owned
+        int max_owned = 0;
+        for ( int i = 0; i < mpi_size; i++ ){
+          if (owned_elements[i] > max_owned){
+            max_owned = owned_elements[i];
+          }
+        }
+        
+        // Allocate the local partition
+        TMROctant *local = new TMROctant[ max_owned ];
+
+        // Get the local element partition
+        const int *partition = NULL;
+        creator[k]->getElementPartition(&partition);;
+        
+        TMROctantArray *elems;
+        tree->getElements(&elems);
+        TMROctant *elements;
+        elems->getArray(&elements, NULL);
+
+        // Scan over each of the non-local processors
+        for ( int i = mpi_size-1; i >= 0; i-- ){
+          int j = 0, index = 0;
+          while (index < owned_elements[i]){
+            if (partition[j] == i){
+              local[index] = elements[j];
+              index++;
+            }
+            j++;
+          }
+
+          // Send the octants for the given partition to the
+          // external processors
+          if (i != 0){
+            int tag = 0;
+            MPI_Send(local, owned_elements[i], TMROctant_MPI_type,
+                     i, tag, comm);
+          }
+        }
+        
+        // Set the elements and create TACS
+        global_element_filter = filter_tree;
+        global_octant_list = local;
+        creator[k]->setElementCreator(create_element);
+
 	// Create the TACSAssembler object
 	tacs[k] = creator[k]->createTACS();
 	tacs[k]->incref();
-      }
-      
-      // Create the coarser octree
-      TMROctree *coarse = NULL;
-      if (rank == 0){
-	coarse = tree->coarsen();
-	coarse->balance(0);
-      }
-      
-      // Allocate the TACS creator
-      creator[k+1] = new TACSCreator(comm, vars_per_node);
-      creator[k+1]->incref();
-      
-      // Set up the TACSCreator object
-      if (rank == 0){
-	setUpTACSCreator(order, creator[k+1], coarse);
-      }
-      
-      // This call must occur on all processor
-      TACSElement *elements = elem;
-      creator[k+1]->setElements(&elements, 1);
-      
-      // Create the TACSAssembler object
-      if (k+1 == NUM_LEVELS-1){
-	tacs[k+1] = creator[k+1]->createTACS();
+
+        // Null the arrays so they are not use accidentally
+        global_element_filter = NULL;
+        global_octant_list = NULL;
+
+        // Free the local octant array
+        delete [] local;
       }
       else {
-	tacs[k+1] = creator[k+1]->createTACS();
-      }
-      tacs[k+1]->incref();
-      
-      // Create the interpolation/restriction objects
-      restrct[k] = new BVecInterp(tacs[k], tacs[k+1]);
-      restrct[k]->incref();      
-      interp[k] = new BVecInterp(tacs[k+1], tacs[k]);
-      interp[k]->incref();
+        int num_owned = 0;
+        MPI_Scatter(NULL, 1, MPI_INT,
+                    &num_owned, 1, MPI_INT, 0, comm);
 
-      if (rank == 0){      
-	// Get the node numbers for the coarse and fine operators
-	const int *nodes, *coarse_nodes;
-	int num_nodes = creator[k]->getNodeNums(&nodes);
-	int num_coarse_nodes = creator[k+1]->getNodeNums(&coarse_nodes);
-	
-	// Create the restriction operator
-	int *restrct_ptr, *restrct_conn;
-	double *restrct_weights;
-	tree->createRestriction(coarse, &restrct_ptr,
-				&restrct_conn, &restrct_weights);
-	
-	for ( int i = 0; i < num_coarse_nodes; i++ ){
-	  // Convert the node numbers
-	  for ( int jp = restrct_ptr[i]; jp < restrct_ptr[i+1]; jp++ ){
-	    restrct_conn[jp] = nodes[restrct_conn[jp]]; 
-	  }
-	  
-	  // Set the values
-	  int len = restrct_ptr[i+1] - restrct_ptr[i];
-	  restrct[k]->addInterp(coarse_nodes[i],
-				&restrct_weights[restrct_ptr[i]],
-				&restrct_conn[restrct_ptr[i]], len);
-	}
-	
-	// Free the data
-	delete [] restrct_ptr;
-	delete [] restrct_conn;
-	delete [] restrct_weights;
-	
-	// Create the interpolation
-	int *interp_ptr, *interp_conn;
-	double *interp_weights;
-	tree->createInterpolation(coarse, &interp_ptr, 
-				  &interp_conn, &interp_weights);
-	
-	for ( int i = 0; i < num_nodes; i++ ){
-	  // Convert the node numbers
-	  for ( int jp = interp_ptr[i]; jp < interp_ptr[i+1]; jp++ ){
-	    interp_conn[jp] = coarse_nodes[interp_conn[jp]]; 
-	  }
-	  
-	  // Set the values
-	  int len = interp_ptr[i+1] - interp_ptr[i];
-	  interp[k]->addInterp(nodes[i],
-			       &interp_weights[interp_ptr[i]],
-			       &interp_conn[interp_ptr[i]], len);
-	}
-	
-	// Free the data
-	delete [] interp_ptr;
-	delete [] interp_conn;
-	delete [] interp_weights;
+        TMROctant *local = new TMROctant[ num_owned ];
+        int tag = 0;
+        MPI_Recv(local, num_owned, TMROctant_MPI_type, 0, tag, comm, 
+                 MPI_STATUS_IGNORE);
+        
+        // Set the elements and the callback object
+        global_element_filter = filter_tree;
+        global_octant_list = local;
+        creator[k]->setElementCreator(create_element);
+
+	// Create the TACSAssembler object
+	tacs[k] = creator[k]->createTACS();
+	tacs[k]->incref();
+
+        // Null the arrays so they are not use accidentally
+        global_element_filter = NULL;
+        global_octant_list = NULL;
+
+        // Free the local octant array
+        delete [] local;
       }
-      
-      // Finalize the values
-      restrct[k]->finalize();
-      interp[k]->finalize();
-      
+
+      if (k > 0){
+        // Create the interpolation/restriction objects
+        restrct[k-1] = new BVecInterp(tacs[k-1], tacs[k]);
+        restrct[k-1]->incref();      
+        interp[k-1] = new BVecInterp(tacs[k], tacs[k-1]);
+        interp[k-1]->incref();
+
+        if (mpi_rank == 0){      
+          // Get the node numbers for the coarse and fine operators
+          const int *nodes, *coarse_nodes;
+          int num_nodes = creator[k-1]->getNodeNums(&nodes);
+          int num_coarse_nodes = creator[k]->getNodeNums(&coarse_nodes);
+          
+          // Create the restriction operator
+          int *restrct_ptr, *restrct_conn;
+          double *restrct_weights;
+          fine->createRestriction(tree, &restrct_ptr,
+                                  &restrct_conn, &restrct_weights);
+	
+          for ( int i = 0; i < num_coarse_nodes; i++ ){
+            // Convert the node numbers
+            for ( int jp = restrct_ptr[i]; jp < restrct_ptr[i+1]; jp++ ){
+              restrct_conn[jp] = nodes[restrct_conn[jp]]; 
+            }
+            
+            // Set the values
+            int len = restrct_ptr[i+1] - restrct_ptr[i];
+            restrct[k-1]->addInterp(coarse_nodes[i],
+                                    &restrct_weights[restrct_ptr[i]],
+                                    &restrct_conn[restrct_ptr[i]], len);
+          }
+          
+          // Free the data
+          delete [] restrct_ptr;
+          delete [] restrct_conn;
+          delete [] restrct_weights;
+          
+          // Create the interpolation
+          int *interp_ptr, *interp_conn;
+          double *interp_weights;
+          fine->createInterpolation(tree, &interp_ptr, 
+                                    &interp_conn, &interp_weights);
+          
+          for ( int i = 0; i < num_nodes; i++ ){
+            // Convert the node numbers
+            for ( int jp = interp_ptr[i]; jp < interp_ptr[i+1]; jp++ ){
+              interp_conn[jp] = coarse_nodes[interp_conn[jp]]; 
+            }
+            
+            // Set the values
+            int len = interp_ptr[i+1] - interp_ptr[i];
+            interp[k-1]->addInterp(nodes[i],
+                                   &interp_weights[interp_ptr[i]],
+                                   &interp_conn[interp_ptr[i]], len);
+          }
+          
+          // Free the data
+          delete [] interp_ptr;
+          delete [] interp_conn;
+          delete [] interp_weights;
+        }
+        
+        // Finalize the values
+        restrct[k-1]->finalize();
+        interp[k-1]->finalize();
+      }
+
       // Free the tree
-      if (tree != root_tree){
-	delete tree;
+      if (fine != root_tree){
+	delete fine;
       }
-      
-      // Assign the coarser mesh for the next level
-      tree = coarse;
     }
     
     // Set up the multigrid method
@@ -296,7 +358,7 @@ int main( int argc, char * argv[] ){
     ans->incref();
 
     int freq = 1;
-    mg->setMonitor(new KSMPrintStdout("MG", rank, freq));
+    mg->setMonitor(new KSMPrintStdout("MG", mpi_rank, freq));
     
     res->set(1.0);
     res->applyBCs();
@@ -310,7 +372,7 @@ int main( int argc, char * argv[] ){
     ksm->setTolerances(1e-8, 1e-30);
     ksm->incref();
     
-    ksm->setMonitor(new KSMPrintStdout("MG", rank, freq));
+    ksm->setMonitor(new KSMPrintStdout("MG", mpi_rank, freq));
     ksm->solve(res, ans);
     
     tacs[0]->setVariables(ans);
@@ -360,13 +422,11 @@ int main( int argc, char * argv[] ){
     MPI_Reduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, 0, comm);
 
     // Gather the number of elements from each processor
-    int mpi_size;
-    MPI_Comm_size(comm, &mpi_size);
     int *elems_per_proc = NULL;
     int *elem_proc_offset = NULL;
     TacsScalar *all_SE = NULL;
 
-    if (rank == 0){
+    if (mpi_rank == 0){
       elems_per_proc = new int[ mpi_size ];
       elem_proc_offset = new int[ mpi_size ];
       all_SE = new TacsScalar[ nelems_total ];
@@ -375,7 +435,7 @@ int main( int argc, char * argv[] ){
     // Gather the number of elements from each processor to the root processor
     MPI_Gather(&nelems, 1, MPI_INT, elems_per_proc, 1, MPI_INT, 0, comm);
 
-    if (rank == 0){
+    if (mpi_rank == 0){
       elem_proc_offset[0] = 0;
       for ( int i = 0; i < mpi_size-1; i++ ){
 	elem_proc_offset[i+1] = elem_proc_offset[i] + elems_per_proc[i];
@@ -389,7 +449,7 @@ int main( int argc, char * argv[] ){
     // Free the element strain energy values for this processor
     delete [] SE;
 
-    if (rank == 0){
+    if (mpi_rank == 0){
       // Set the cut-off strain energy value
       TacsScalar SE_cut_off = 0.5*SE_sum/nelems_total;
 
@@ -448,9 +508,9 @@ int main( int argc, char * argv[] ){
     }
   }
 
-  elem->decref();
   if (root_tree){ delete root_tree; } 
 
+  TMRFinalize();
   MPI_Finalize();
   return (0);
 }

@@ -1,5 +1,27 @@
 #include "TMROctant.h"
 
+// The TMR data type for MPI useage
+MPI_Datatype TMROctant_MPI_type;
+
+/*
+  Initialize TMR data type
+*/
+void TMRInitialize(){
+  int counts = 5;
+  MPI_Aint offset = 0;
+  MPI_Datatype type = MPI_INT32_T;
+  MPI_Type_struct(1, &counts, &offset, &type, 
+                  &TMROctant_MPI_type);
+  MPI_Type_commit(&TMROctant_MPI_type);
+}
+
+/*
+  Finalize the TMR data type
+*/
+void TMRFinalize(){
+  MPI_Type_free(&TMROctant_MPI_type);
+}
+
 /*
   Get the child id of the quadrant
 */
@@ -366,8 +388,8 @@ void TMROctantArray::merge( TMROctantArray * list ){
   Get the array
 */
 void TMROctantArray::getArray( TMROctant **_array, int *_size ){
-  *_array = array;
-  *_size = size;
+  if (_array){ *_array = array; }
+  if (_size){ *_size = size; }
 }
 
 /*

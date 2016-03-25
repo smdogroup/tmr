@@ -6,8 +6,8 @@ CXX = mpicxx
 RM = rm -f
 
 # Flags for debugging and regular compilation versions
-TMR_CC_DEBUG_FLAGS = -fPIC -g 
-TMR_CC_FLAGS = -fPIC -O3
+TMR_DEBUG_FLAGS = -fPIC -g 
+TMR_FLAGS = -fPIC -O3
 
 # Set up for parallel make
 MAKE = make -j 2

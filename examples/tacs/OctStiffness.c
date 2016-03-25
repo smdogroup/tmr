@@ -20,8 +20,8 @@ OctStiffness::OctStiffness( TMROctree *filter, TMROctant *oct,
   TMROctant *container = filter->findEnclosing(oct);
     
   // Get the side-length of the container
-  uint32_t hoct = 1 << (TMR_MAX_LEVEL - oct->level);
-  uint32_t h = 1 << (TMR_MAX_LEVEL - container->level);
+  int32_t hoct = 1 << (TMR_MAX_LEVEL - oct->level);
+  int32_t h = 1 << (TMR_MAX_LEVEL - container->level);
     
   // Get the u/v/w values within the filter octant
   double pt[3];
@@ -74,6 +74,9 @@ OctStiffness::OctStiffness( TMROctree *filter, TMROctant *oct,
 
   // Sort the array of values
   nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+
+  // Set the initial value for the densities
+  rho = 0.95;
 }
 
 /*

@@ -158,9 +158,16 @@ class TMROctree {
   // --------------------------------------------
   void printOctree( const char * filename );
 
+  // Retrieve the octree elements
+  // ----------------------------
+  void getElements( TMROctantArray **_elements ){
+    if (_elements){ *_elements = elements; }
+  }
+
   // Retrieve the octree nodes
+  // -------------------------
   void getNodes( TMROctantArray **_nodes ){
-    *_nodes = nodes;
+    if (_nodes){ *_nodes = nodes; }
   }
 
  private:

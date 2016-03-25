@@ -15,23 +15,23 @@ TMROctree::TMROctree( int refine_level ){
 
   // Compute the number of octants along each edge for
   // the leaves
-  int nx = 1 << refine_level;
+  int32_t nx = 1 << refine_level;
 
   // Set the number of octants created
   int nocts = nx*nx*nx;
 
   // Compute the refinement level
-  const uint32_t hmax = 1 << TMR_MAX_LEVEL;
-  const uint32_t h = 1 << (TMR_MAX_LEVEL - refine_level);
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  const int32_t h = 1 << (TMR_MAX_LEVEL - refine_level);
 
   // Create an array of the octants that will be stored
   TMROctant *array = new TMROctant[ nocts ];
 
   // Create all the octants required
   int index = 0;
-  for ( int z = 0; z < hmax; z += h ){
-    for ( int y = 0; y < hmax; y += h ){
-      for ( int x = 0; x < hmax; x += h ){
+  for ( int32_t z = 0; z < hmax; z += h ){
+    for ( int32_t y = 0; y < hmax; y += h ){
+      for ( int32_t x = 0; x < hmax; x += h ){
 	array[index].x = x;
 	array[index].y = y;
 	array[index].z = z;
@@ -71,12 +71,12 @@ TMROctree::TMROctree( int nrand, int min_level, int max_level ){
 
   // Generate a random number of octants along random directions
   for ( int i = 0; i < nrand; i++ ){
-    int level = min_level + (rand() % (max_level - min_level + 1));
+    int32_t level = min_level + (rand() % (max_level - min_level + 1));
 
-    uint32_t h = 1 << (TMR_MAX_LEVEL - level);
-    int x = h*(rand() % (1 << level));
-    int y = h*(rand() % (1 << level));
-    int z = h*(rand() % (1 << level));
+    const int32_t h = 1 << (TMR_MAX_LEVEL - level);
+    int32_t x = h*(rand() % (1 << level));
+    int32_t y = h*(rand() % (1 << level));
+    int32_t z = h*(rand() % (1 << level));
 
     array[i].x = x;
     array[i].y = y;
@@ -171,7 +171,7 @@ void TMROctree::refine( int refinement[],
   elements->getArray(&array, &size);
 
   // Get the max level
-  const uint32_t hmax = 1 << TMR_MAX_LEVEL;
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
   // Add the element
   for ( int i = 0; i < size; i++ ){
@@ -195,7 +195,7 @@ void TMROctree::refine( int refinement[],
       if (q.level < max_level){
 	TMROctant c;
 	c.level = q.level + 1;
-	const uint32_t h = 1 << (TMR_MAX_LEVEL - c.level);
+	const int32_t h = 1 << (TMR_MAX_LEVEL - c.level);
 	
 	for ( int kk = 0; kk < 2; kk++ ){
 	  for ( int jj = 0; jj < 2; jj++ ){
@@ -278,7 +278,7 @@ void TMROctree::balance( int balance_corner ){
   TMROctantQueue *queue = new TMROctantQueue();
 
   // Get the max level
-  const uint32_t hmax = 1 << TMR_MAX_LEVEL;
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
   // Add the element
   for ( int i = 0; i < size; i++ ){
@@ -501,13 +501,13 @@ TMROctant* TMROctree::findEnclosing( TMROctant *oct ){
   elements->getArray(&elems, &size);
 
   // Set the lower and upper bounds for the octant
-  const uint32_t hoct = 1 << (TMR_MAX_LEVEL - oct->level);
-  const uint32_t x1 = oct->x;
-  const uint32_t y1 = oct->y;
-  const uint32_t z1 = oct->z;
-  const uint32_t x2 = oct->x + hoct;
-  const uint32_t y2 = oct->y + hoct;
-  const uint32_t z2 = oct->z + hoct;
+  const int32_t hoct = 1 << (TMR_MAX_LEVEL - oct->level);
+  const int32_t x1 = oct->x;
+  const int32_t y1 = oct->y;
+  const int32_t z1 = oct->z;
+  const int32_t x2 = oct->x + hoct;
+  const int32_t y2 = oct->y + hoct;
+  const int32_t z2 = oct->z + hoct;
 
   // Set the low and high indices to the first and last
   // element of the element array
@@ -520,7 +520,7 @@ TMROctant* TMROctree::findEnclosing( TMROctant *oct ){
   // Note that if high-low=1, then mid = high
   while (high != mid){
     // Check if elems[mid] contains the provided octant
-    const uint32_t h = 1 << (TMR_MAX_LEVEL - elems[mid].level);
+    const int32_t h = 1 << (TMR_MAX_LEVEL - elems[mid].level);
     if ((elems[mid].x <= x1 && x2 <= elems[mid].x+h) &&
 	(elems[mid].y <= y1 && y2 <= elems[mid].y+h) &&
 	(elems[mid].z <= z1 && z2 <= elems[mid].z+h)){
@@ -528,16 +528,32 @@ TMROctant* TMROctree::findEnclosing( TMROctant *oct ){
     }
     
     // Compare the ordering of the two octants - if the
-    // octant is less than the other, then 
+    // octant is less than the other, then adjust the mid point 
     if (oct->compare(&elems[mid]) < 0){
-      high = mid;
+      high = mid-1;
     } 
     else {
-      low = mid;
+      low = mid+1;
     }
     
     // Re compute the mid-point and repeat
     mid = high - (int)((high - low)/2);
+  }
+
+  // Check if elems[mid] contains the provided octant
+  const int32_t h1 = 1 << (TMR_MAX_LEVEL - elems[mid].level);
+  if ((elems[mid].x <= x1 && x2 <= elems[mid].x+h1) &&
+      (elems[mid].y <= y1 && y2 <= elems[mid].y+h1) &&
+      (elems[mid].z <= z1 && z2 <= elems[mid].z+h1)){
+    return &elems[mid];
+  }
+
+  // Check if elems[mid] contains the provided octant
+  const int32_t h2 = 1 << (TMR_MAX_LEVEL - elems[low].level);
+  if ((elems[low].x <= x1 && x2 <= elems[low].x+h2) &&
+      (elems[low].y <= y1 && y2 <= elems[low].y+h2) &&
+      (elems[low].z <= z1 && z2 <= elems[low].z+h2)){
+    return &elems[low];
   }
 
   // No octant was found, return NULL
@@ -557,7 +573,6 @@ TMROctant* TMROctree::findEnclosing( TMROctant *oct ){
   output:
   low:    the lower index within the element array
   high:   the higher index within the element array
-
 */
 void TMROctree::findEnclosingRange( TMROctant *oct,
 				    int *low, int *high ){
@@ -565,7 +580,7 @@ void TMROctree::findEnclosingRange( TMROctant *oct,
   *high = num_elements;
 
   // Find the maximum level
-  uint32_t h = 1 << (TMR_MAX_LEVEL - oct->level);
+  int32_t h = 1 << (TMR_MAX_LEVEL - oct->level);
 
   // Set the node 
   TMROctant p = *oct;
@@ -645,7 +660,7 @@ void TMROctree::createNodes( int _order ){
   for ( int i = 0; i < size; i++ ){
     if (order == 2){
       // Add all of the nodes from the adjacent elements
-      const uint32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+      const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
 
       // Add all of the nodes to the hash
       for ( int kk = 0; kk < 2; kk++ ){
@@ -670,7 +685,7 @@ void TMROctree::createNodes( int _order ){
     }
     else if (order == 3){
       // Add all of the nodes from the adjacent elements
-      const uint32_t h = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
+      const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
 
       // Add all of the nodes to the hash
       for ( int kk = 0; kk < 3; kk++ ){
@@ -721,10 +736,10 @@ void TMROctree::createNodes( int _order ){
       const int jindex[] = {2, 2, 1};
 
       // Get the side length of the element
-      const uint32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);      
+      const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);      
       
       // Get the size of the next finest level
-      const uint32_t hc = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
+      const int32_t hc = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
       
       // Check if this is a dependent edge
       for ( int k = 0; k < 3; k++ ){
@@ -972,7 +987,7 @@ void TMROctree::createMesh( int _order ){
       const int use_nodes = 1;
 
       // Add all of the nodes from the adjacent elements
-      const uint32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+      const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
       p.level = array[i].level;
 
       for ( int kk = 0; kk < 2; kk++ ){
@@ -1002,7 +1017,7 @@ void TMROctree::createMesh( int _order ){
       const int use_nodes = 1;
 
       // Add all of the nodes from the adjacent elements
-      const uint32_t h = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
+      const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
       p.level = array[i].level+1;
 
       // Add all of the nodes to the hash
@@ -1112,7 +1127,7 @@ void TMROctree::createInterpolation( TMROctree *coarse,
         int id = fine[i].childId();
 
         // Set the element level
-        const uint32_t h = 1 << (TMR_MAX_LEVEL - fine[i].level);
+        const int32_t h = 1 << (TMR_MAX_LEVEL - fine[i].level);
 
         if (id == 1 || id == 2 || id == 4){
           // Get the root sibling
@@ -1343,7 +1358,7 @@ void TMROctree::createRestriction( TMROctree *tree,
       fine = nodes->contains(&coarse[i], use_nodes);
 
       // Get the coarse node level
-      const uint32_t h = 1 << (TMR_MAX_LEVEL - fine->level);
+      const int32_t h = 1 << (TMR_MAX_LEVEL - fine->level);
       
       // Scan through the node locations for the coarse mesh
       for ( int kk = 0; kk < 3; kk++ ){
@@ -1441,7 +1456,7 @@ void TMROctree::printOctree( const char * filename ){
     double dh = 1.0/(1 << TMR_MAX_LEVEL);
 
     for ( int i = 0; i < size; i++ ){
-      uint32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+      int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
       int x = array[i].x;
       int y = array[i].y;
       int z = array[i].z;
