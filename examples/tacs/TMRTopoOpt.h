@@ -16,10 +16,22 @@ class TMRTopoOpt : public ParOptProblem {
   TMRTopoOpt( int nlevels, 
               TACSAssembler *_tacs[],
               TMROctree *_filter[], 
-              TACSMg *_mg, BVec *_force );
+              TACSMg *_mg, BVec *_force, 
+              double _target_mass,
+              TACSToFH5 *f5,
+              const char *_prefix );
   ~TMRTopoOpt();
 
+  // Set or retrieve design variable values
+  // --------------------------------------
+  void setInitDesignVars( ParOptScalar x[] );
+  void setLocalComponents( ParOptScalar *xin, 
+                           ParOptVec *xout );
+  void setGlobalComponents( ParOptVec *xin, 
+                            ParOptScalar *xout );
+  
   // Set the inequality flags
+  // ------------------------
   int isSparseInequality();
   int isDenseInequality();
   int useLowerBounds();
@@ -69,21 +81,14 @@ class TMRTopoOpt : public ParOptProblem {
   void addSparseInnerProduct( double alpha, ParOptVec *x,
                               ParOptVec *cvec, double *A );
 
-  // Set the local components 
-  // ------------------------
-  void setLocalComponents( ParOptScalar *xin, 
-                           ParOptVec *xout );
-
-  // Set the global components
-  // -------------------------
-  void setGlobalComponents( ParOptVec *xin, 
-                            ParOptScalar *xout );
-
   // Write the output file
   // ---------------------
   void writeOutput( int iter, ParOptVec *x );
 
- private:  
+ private:
+  // Store the prefix
+  char prefix[128];
+
   // Store the design variable info
   int nlevels;
   TACSAssembler *tacs[MAX_NUM_LEVELS];
@@ -103,6 +108,9 @@ class TMRTopoOpt : public ParOptProblem {
   // ------------------------------------------------------
   void restrictDesignVars( int lev, ParOptScalar *xfine,
                            ParOptScalar *xcoarse );
+
+  // The initial design variable values
+  ParOptVec *xinit;
 
   // Store the Krylov solver and the multigrid object 
   TACSKsm *ksm;

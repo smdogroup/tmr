@@ -97,9 +97,11 @@ class TMRIndexWeight {
 */
 class TMROctree {
  public:
-  TMROctree( int refine_level );
+  TMROctree( int refine_level, 
+             TMROctant *_domain=NULL, int ndomain=0 );
   TMROctree( int nrand, int min_level, int max_level );
-  TMROctree( TMROctantArray *_list );
+  TMROctree( TMROctantArray *_list,
+             TMROctant *_domain=NULL, int ndomain=0 );
   ~TMROctree();
 
   // Refine the octree
@@ -171,11 +173,18 @@ class TMROctree {
   }
 
  private:
+  // Check if the provided octant is within the domain
+  int inDomain( TMROctant *p );
+
   // The list octants representing the elements
   TMROctantArray *elements; 
 
   // The nodes within the element mesh
   TMROctantArray *nodes; 
+
+  // A list of octants that define the domain
+  int ndomain;
+  TMROctant *domain;
 
   // Store the order of the mesh
   int order;

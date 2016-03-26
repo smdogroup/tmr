@@ -129,6 +129,117 @@ void setUpTACSCreator( int order, TACSCreator *creator,
   creator->partitionMesh();
 }
 
+void strain_energy_refinement( TACSAssembler *tacs, 
+                               TACSCreator *creator,
+                               TMROctree *root_tree,
+                               int min_refine, int max_refine ){
+  // Get the communicator
+  MPI_Comm comm = tacs->getMPIComm();
+  int mpi_size, mpi_rank;
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // Perform a local refinement of the nodes based on the strain energy
+  // within each element
+  int nelems = tacs->getNumElements();
+  TacsScalar *SE = new TacsScalar[ nelems ];
+  TacsScalar SE_proc_sum = 0.0;
+  
+  for ( int i = 0; i < nelems; i++ ){
+    // Get the node locations and variables
+    TacsScalar Xpts[3*8], vars[3*8], dvars[3*8], ddvars[3*8];
+    TACSElement *elem = tacs->getElement(i, Xpts, vars, dvars, ddvars);
+    
+    // Evaluate the element residual
+    TacsScalar res[3*8];
+    elem->getResidual(res, Xpts, vars, dvars, ddvars);
+    
+    // Take the inner product to get the strain energy
+    SE[i] = 0.0;
+    for ( int j = 0; j < 24; j++ ){
+      SE[i] += res[j]*vars[j];
+    }
+    SE_proc_sum += SE[i];
+  }
+  
+  // Count up the total strain energy 
+  TacsScalar SE_sum = 0.0;
+  MPI_Reduce(&SE_proc_sum, &SE_sum, 1, TACS_MPI_TYPE, MPI_SUM, 0, comm);
+  
+  // Count up the total number of elements
+  int nelems_total = 0;
+  MPI_Reduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, 0, comm);
+  
+  // Gather the number of elements from each processor
+  int *elems_per_proc = NULL;
+  int *elem_proc_offset = NULL;
+  TacsScalar *all_SE = NULL;
+  
+  if (mpi_rank == 0){
+    elems_per_proc = new int[ mpi_size ];
+    elem_proc_offset = new int[ mpi_size ];
+    all_SE = new TacsScalar[ nelems_total ];
+  }
+  
+  // Gather the number of elements from each processor to the root
+  // processor
+  MPI_Gather(&nelems, 1, MPI_INT, elems_per_proc, 1, MPI_INT, 0, comm);
+
+  if (mpi_rank == 0){
+    elem_proc_offset[0] = 0;
+    for ( int i = 0; i < mpi_size-1; i++ ){
+      elem_proc_offset[i+1] = elem_proc_offset[i] + elems_per_proc[i];
+    }
+  }
+  
+  // Gather the element strain energy values to the root processor
+  MPI_Gatherv(SE, nelems, TACS_MPI_TYPE, 
+              all_SE, elems_per_proc, elem_proc_offset, TACS_MPI_TYPE, 
+              0, comm);
+  
+  // Free the element strain energy values for this processor
+  delete [] SE;
+  
+  if (mpi_rank == 0){
+    // Set the cut-off strain energy value
+    TacsScalar SE_cut_off = 0.5*SE_sum/nelems_total;
+    
+    // Set the refinement
+    int *refinement = new int[ nelems_total ];
+    memset(refinement, 0, nelems_total*sizeof(int));
+    
+    // Get the element partition from the TACSCreator object
+    const int *partition;
+    creator->getElementPartition(&partition);
+    
+    for ( int i = 0; i < nelems_total; i++ ){
+      // Get the partition that this element is on
+      int proc = partition[i];
+      
+      // Retrieve the offset from the 
+      int index = elem_proc_offset[proc];
+      elem_proc_offset[proc]++;
+      
+      if (all_SE[index] > SE_cut_off){
+        refinement[i] = 1;
+      }
+      else {
+        refinement[i] = -1;
+      }
+    }
+    
+    // Free the strain energy information and offset values
+    delete [] elems_per_proc;
+    delete [] elem_proc_offset;
+    delete [] all_SE;
+    
+    // Refine the root tree
+    root_tree->refine(refinement, min_refine, max_refine);
+    
+    delete [] refinement;
+  }
+}
+
 /*
   Run the main function
 */
@@ -150,18 +261,52 @@ int main( int argc, char * argv[] ){
   int vars_per_node = 3;
 
   // Set the levels
-  const int NUM_LEVELS = 3;
+  const int NUM_LEVELS = 4;
 
   // Set the minimum and maximum refinement levels within the
   // octree meshes
-  const int min_refine = 4;
-  const int max_refine = 10;
+  int min_refine = 4;
+  int max_refine = 10;
 
   // Create the filter octrees
   TMROctree *filters[NUM_LEVELS];
 
+  // The ParOpt problem instance
+  ParOpt *opt = NULL;
+
+  // Set up the domain - if any
+  int ndomain = 0;
+  TMROctant *domain = NULL;
+
+  double target_mass = 0.2;
+
+  // Set up the domain for the beam
+  TMROctant beam[4];
+  for ( int i = 0; i < 4; i++ ){
+    beam[i].level = 2;
+    int32_t hbeam = 1 << (TMR_MAX_LEVEL - beam[i].level);
+    beam[i].x = 3*hbeam;
+    beam[i].y = 3*hbeam;
+    beam[i].z = i*hbeam;
+  }
+
+  // Set the domain for the
+  for ( int k = 0; k < argc; k++ ){
+    if (strcmp("beam", argv[k]) == 0){
+      ndomain = 4;
+      domain = beam;
+
+      // Set the new target mass
+      target_mass = 0.2*(0.25*0.25);
+
+      // Change the minimum refinement level to match the
+      // new domain
+      min_refine = 6;
+    }
+  }
+
   // Create the finest octree for the design variables
-  filters[0] = new TMROctree(min_refine);
+  filters[0] = new TMROctree(min_refine, domain, ndomain);
   filters[0]->createMesh(order);
 
   // Coarsen the octree filter
@@ -171,11 +316,21 @@ int main( int argc, char * argv[] ){
     filters[k]->createMesh(order);
   }
 
+  // Get the number of design variables from the filter class
+  int num_design_vars = 0;
+  filters[0]->getMesh(&num_design_vars, NULL, NULL, NULL);
+  
+  // Keep track of the design variables between iterations
+  TacsScalar *x_design = new TacsScalar[ num_design_vars ];
+  for ( int i = 0; i < num_design_vars; i++ ){
+    x_design[i] = 0.95;
+  }
+
   // Set up the octree for the analysis
   TMROctree *root_tree = NULL;
   if (mpi_rank == 0){
     // Create a uniformly refined octree
-    root_tree = new TMROctree(min_refine);
+    root_tree = new TMROctree(min_refine, domain, ndomain);
   }
 
   for ( int iter = 0; iter < 3; iter++ ){
@@ -414,8 +569,12 @@ int main( int argc, char * argv[] ){
       root_tree->getNodes(&nodes);
       TMROctant *t = nodes->contains(&p, use_nodes);
 
+      // Get the node corresponding to the numbering
+      const int *node_nums;
+      creator[0]->getNodeNums(&node_nums);
+
       // Set the force node
-      force_node = t->tag;
+      force_node = node_nums[t->tag];
     }
 
     // Broadcast the node
@@ -427,126 +586,51 @@ int main( int argc, char * argv[] ){
       TacsScalar *force_vals;
       force->getArray(&force_vals);
       int loc = force_node - owners[mpi_rank];
-      force_vals[3*loc+1] = 1e3;
-      force_vals[3*loc+2] = 1e3;
+      force_vals[3*loc] = 10.0;
+      force_vals[3*loc+1] = 10.0;
     }
+
+    // Create an TACSToFH5 object for writing output to files
+    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                               TACSElement::OUTPUT_DISPLACEMENTS |
+                               TACSElement::OUTPUT_EXTRAS);
+    TACSToFH5 *f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
 
     // Create the topology optimization problem
+    char prefix[128];
+    sprintf(prefix, "results/refine%d_", iter);
     TMRTopoOpt *problem = new TMRTopoOpt(NUM_LEVELS, tacs, filters,
-                                         mg, force);
+                                         mg, force, target_mass, f5, prefix);
+
+    // Set the initial design variable values
+    problem->setInitDesignVars(x_design);
 
     // Allocate the ParOpt object
-    int max_num_bfgs = 40;
-    ParOpt *opt = new ParOpt(problem, max_num_bfgs);
+    if (!opt){
+      int max_num_bfgs = 5;
+      opt = new ParOpt(problem, max_num_bfgs);
+      opt->setMaxMajorIterations(401);
+    }
+    else {
+      opt->resetProblemInstance(problem);
+      opt->setInitStartingPoint(0);
+      opt->setInitBarrierParameter(1e-3);
+      opt->setMaxMajorIterations(201);
+    }
     opt->checkGradients(1e-6);
-    opt->setMaxMajorIterations(20);
-
+    opt->setAbsOptimalityTol(1e-5);
     opt->optimize();
 
-    delete opt;
+    // Get the final optimized design variable values
+    ParOptVec *x_final;
+    opt->getOptimizedPoint(&x_final, NULL, NULL, NULL, NULL);
+    problem->setGlobalComponents(x_final, x_design);
+
+    // Free the optimization problem - now you can't touch ParOpt again
+    // until we reset the problem type at the next iteration
     delete problem;
 
-    // Perform a local refinement of the nodes based on the strain energy
-    // within each element
-    int nelems = tacs[0]->getNumElements();
-    TacsScalar *SE = new TacsScalar[ nelems ];
-    TacsScalar SE_proc_sum = 0.0;
-
-    for ( int i = 0; i < nelems; i++ ){
-      // Get the node locations and variables
-      TacsScalar Xpts[3*8], vars[3*8], dvars[3*8], ddvars[3*8];
-      TACSElement *elem = tacs[0]->getElement(i, Xpts, vars, dvars, ddvars);
-
-      // Evaluate the element residual
-      TacsScalar res[3*8];
-      elem->getResidual(res, Xpts, vars, dvars, ddvars);
-
-      // Take the inner product to get the strain energy
-      SE[i] = 0.0;
-      for ( int j = 0; j < 24; j++ ){
-	SE[i] += res[j]*vars[j];
-      }
-      SE_proc_sum += SE[i];
-    }
-
-    // Count up the total strain energy 
-    TacsScalar SE_sum = 0.0;
-    MPI_Reduce(&SE_proc_sum, &SE_sum, 1, TACS_MPI_TYPE, MPI_SUM, 0, comm);
-
-    // Count up the total number of elements
-    int nelems_total = 0;
-    MPI_Reduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, 0, comm);
-
-    // Gather the number of elements from each processor
-    int *elems_per_proc = NULL;
-    int *elem_proc_offset = NULL;
-    TacsScalar *all_SE = NULL;
-
-    if (mpi_rank == 0){
-      elems_per_proc = new int[ mpi_size ];
-      elem_proc_offset = new int[ mpi_size ];
-      all_SE = new TacsScalar[ nelems_total ];
-    }
-
-    // Gather the number of elements from each processor to the root
-    // processor
-    MPI_Gather(&nelems, 1, MPI_INT, elems_per_proc, 1, MPI_INT, 0, comm);
-
-    if (mpi_rank == 0){
-      elem_proc_offset[0] = 0;
-      for ( int i = 0; i < mpi_size-1; i++ ){
-	elem_proc_offset[i+1] = elem_proc_offset[i] + elems_per_proc[i];
-      }
-    }
-    
-    // Gather the element strain energy values to the root processor
-    MPI_Gatherv(SE, nelems, TACS_MPI_TYPE, 
-	       all_SE, elems_per_proc, elem_proc_offset, TACS_MPI_TYPE, 
-                0, comm);
-
-    // Free the element strain energy values for this processor
-    delete [] SE;
-
-    if (mpi_rank == 0){
-      // Set the cut-off strain energy value
-      TacsScalar SE_cut_off = 0.5*SE_sum/nelems_total;
-
-      // Set the refinement
-      int *refinement = new int[ nelems_total ];
-      memset(refinement, 0, nelems_total*sizeof(int));
-
-      // Get the element partition from the TACSCreator object
-      const int *partition;
-      creator[0]->getElementPartition(&partition);
-
-      for ( int i = 0; i < nelems_total; i++ ){
-	// Get the partition that this element is on
-	int proc = partition[i];
-
-	// Retrieve the offset from the 
-	int index = elem_proc_offset[proc];
-	elem_proc_offset[proc]++;
-
-	if (all_SE[index] > SE_cut_off){
-	  refinement[i] = 1;
-	}
-	else {
-	  refinement[i] = -1;
-	}
-      }
-
-      // Free the strain energy information and offset values
-      delete [] elems_per_proc;
-      delete [] elem_proc_offset;
-      delete [] all_SE;
-
-      // Refine the root tree
-      root_tree->refine(refinement, min_refine, max_refine);
-      
-      delete [] refinement;
-    }
-
-    // Free everything 
+    // Free all the analysis objects
     mg->decref();
   
     // Decrease the reference count to things
@@ -560,8 +644,76 @@ int main( int argc, char * argv[] ){
       interp[k]->decref();
       restrct[k]->decref();
     }
+
+    // Determine the refinement based on the design variables alone.
+    // Refine any element when it is contained within a region that
+    // has one design variable exceeding a cut-off value
+    if (mpi_rank == 0){
+      double x_cutoff = 0.75;
+
+      // Scan over the filter elements and label those that need to be
+      // refiend
+      int nelem_filter;
+      const int *filter_ptr, *filter_conn;
+      filters[0]->getMesh(NULL, &nelem_filter, &filter_ptr, &filter_conn);
+
+      int *filter_refine = new int[ nelem_filter ];
+      memset(filter_refine, 0, nelem_filter*sizeof(int));
+
+      for ( int i = 0; i < nelem_filter; i++ ){
+        for ( int jp = filter_ptr[i]; jp < filter_ptr[i+1]; jp++ ){
+          int node = filter_conn[jp];
+          
+          // Label the element for refinement if any one of its nodes
+          // is greater than the refinement cutoff
+          if (node >= 0 && x_design[node] > x_cutoff){
+            filter_refine[i] = 1;
+          }
+        }
+      }
+
+      // Get the array of filter octants
+      TMROctantArray *elements;
+      filters[0]->getElements(&elements);
+
+      // Now get the array of filter octants from the element list
+      TMROctant *filter_elems;
+      elements->getArray(&filter_elems, NULL);
+
+      // Create the refinement array for the analysis mesh
+      int nelems = 0;
+      root_tree->getMesh(NULL, &nelems, NULL, NULL);
+      int *refine = new int[ nelems ];
+      memset(refine, 0, nelems*sizeof(int));
+
+      for ( int i = 0; i < nelem_filter; i++ ){
+        // If the filter element has been labeled for refinement,
+        // refine the enclosing range of elements within the mesh.
+        if (filter_refine[i] > 0){
+          int low, high;
+          root_tree->findEnclosingRange(&filter_elems[i], &low, &high);
+          for ( int k = low; k < high; k++ ){
+            refine[k] = 1;
+          }
+        }
+        else if (filter_refine[i] < 0){
+          int low, high;
+          root_tree->findEnclosingRange(&filter_elems[i], &low, &high);
+          for ( int k = low; k < high; k++ ){
+            refine[k] = -1;
+          }
+        }
+      }
+
+      // Refine the root tree
+      root_tree->refine(refine, min_refine, max_refine);
+    
+      delete [] refine;
+      delete [] filter_refine;
+    }
   }
 
+  delete opt;
   if (root_tree){ delete root_tree; } 
 
   TMRFinalize();

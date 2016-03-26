@@ -4,7 +4,16 @@
   Refine the initial octree to the specified depth along all
   coordinate directions 
 */
-TMROctree::TMROctree( int refine_level ){
+TMROctree::TMROctree( int refine_level, 
+                      TMROctant *_domain, int _ndomain ){
+  // Set the domain level
+  ndomain = _ndomain;
+  domain = NULL;
+  if (ndomain > 0){
+    domain = new TMROctant[ ndomain ];
+    memcpy(domain, _domain, ndomain*sizeof(TMROctant));
+  }
+
   // Check that the refinement lies within legal bounds
   if (refine_level < 0){
     refine_level = 0;
@@ -13,30 +22,72 @@ TMROctree::TMROctree( int refine_level ){
     refine_level = TMR_MAX_LEVEL-1;
   }
 
-  // Compute the number of octants along each edge for
-  // the leaves
-  int32_t nx = 1 << refine_level;
-
-  // Set the number of octants created
-  int nocts = nx*nx*nx;
-
   // Compute the refinement level
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   const int32_t h = 1 << (TMR_MAX_LEVEL - refine_level);
 
-  // Create an array of the octants that will be stored
-  TMROctant *array = new TMROctant[ nocts ];
+  // Keep track of the octants and the length of the octant array
+  int nocts = 0;
+  TMROctant *array = NULL;
+  
+  if (domain){
+    // Loop over each octant in the domain
+    for ( int k = 0; k < ndomain; k++ ){
+      int d = refine_level - domain[k].level;
+      if (d >= 0){
+        int nx = 1 << d;
+        nocts += nx*nx*nx;
+      }
+    }
 
-  // Create all the octants required
-  int index = 0;
-  for ( int32_t z = 0; z < hmax; z += h ){
-    for ( int32_t y = 0; y < hmax; y += h ){
-      for ( int32_t x = 0; x < hmax; x += h ){
-	array[index].x = x;
-	array[index].y = y;
-	array[index].z = z;
-	array[index].level = refine_level;
-	index++;
+    // Create an array of the octants that will be stored
+    array = new TMROctant[ nocts ];
+
+    // Create all the octants required
+    int index = 0;
+    for ( int k = 0; k < ndomain; k++ ){
+      int d = refine_level - domain[k].level;
+      if (d >= 0){
+        const int32_t hk = 1 << (TMR_MAX_LEVEL - domain[k].level);
+        const int32_t xmax = domain[k].x + hk;
+        const int32_t ymax = domain[k].y + hk;
+        const int32_t zmax = domain[k].z + hk;
+
+        for ( int32_t z = domain[k].z; z < zmax; z += h ){
+          for ( int32_t y = domain[k].y; y < ymax; y += h ){
+            for ( int32_t x = domain[k].x; x < xmax; x += h ){
+              array[index].x = x;
+              array[index].y = y;
+              array[index].z = z;
+              array[index].level = refine_level;
+              index++;
+            }
+          }
+        }
+      }
+    }
+  }
+  else {
+    // Compute the number of octants along each edge
+    int32_t nx = 1 << refine_level;
+    
+    // Set the number of octants created
+    nocts = nx*nx*nx;
+
+    // Create an array of the octants that will be stored
+    array = new TMROctant[ nocts ];
+
+    // Create all the octants required
+    int index = 0;
+    for ( int32_t z = 0; z < hmax; z += h ){
+      for ( int32_t y = 0; y < hmax; y += h ){
+        for ( int32_t x = 0; x < hmax; x += h ){
+          array[index].x = x;
+          array[index].y = y;
+          array[index].z = z;
+          array[index].level = refine_level;
+          index++;
+        }
       }
     }
   }
@@ -90,6 +141,10 @@ TMROctree::TMROctree( int nrand, int min_level, int max_level ){
   // Zero the array of octant nodes
   nodes = NULL;
 
+  // Zero the domain
+  ndomain = 0;
+  domain = NULL;
+
   // Zero everything else
   order = 2;
   num_elements = 0;
@@ -107,9 +162,18 @@ TMROctree::TMROctree( int nrand, int min_level, int max_level ){
 /*
   Create the octree tree from the array
 */
-TMROctree::TMROctree( TMROctantArray *_elements ){
+TMROctree::TMROctree( TMROctantArray *_elements,
+                      TMROctant *_domain, int _ndomain ){
   elements = _elements;
   elements->sort();
+
+  // Set the domain level
+  ndomain = _ndomain;
+  domain = NULL;
+  if (ndomain > 0){
+    domain = new TMROctant[ ndomain ];
+    memcpy(domain, _domain, ndomain*sizeof(TMROctant));
+  }
 
   // Zero the array of octant nodes
   nodes = NULL;
@@ -136,12 +200,54 @@ TMROctree::~TMROctree(){
   if (elements){ delete elements; }
   if (nodes){ delete nodes; }
 
+  // Free the domain if it exists
+  if (domain){ delete [] domain; }
+
   // Free the connectivity information if it was allocated
   if (elem_ptr){ delete [] elem_ptr; }
   if (elem_conn){ delete [] elem_conn; }
   if (dep_ptr){ delete [] dep_ptr; }
   if (dep_conn){ delete [] dep_conn; }
   if (dep_weights){ delete [] dep_weights; }
+}
+
+/*
+  Check that the provided octant is within the domain
+*/
+int TMROctree::inDomain( TMROctant *p ){
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
+  // If no domain is specified, use the unit cube
+  // as the full domain
+  if (!domain){
+    if (p->x >= 0 && p->y >= 0 && p->z >= 0 && 
+        p->x < hmax && p->y < hmax && p->z < hmax){
+      return 1;
+    }
+    else {
+      return 0;
+    }
+  }
+  else {
+    // If a domain is specified, then search each element within
+    // the domain. Note that the domain list should be small.
+    for ( int k = 0; k < ndomain; k++ ){
+      const int h = 1 << (TMR_MAX_LEVEL - domain[k].level);
+      const int x1 = domain[k].x;
+      const int y1 = domain[k].y;
+      const int z1 = domain[k].z;
+      const int x2 = domain[k].x + h;
+      const int y2 = domain[k].y + h;
+      const int z2 = domain[k].z + h;
+      
+      if (p->x >= x1 && p->y >= y1 && p->z >= z1 &&
+          p->x < x2 && p->y < y2 && p->z < z2){
+        return 1;
+      }
+    }
+  }
+
+  return 0;
 }
 
 /*
@@ -229,8 +335,7 @@ void TMROctree::refine( int refinement[],
     for ( int j = 0; j < 8; j++ ){
       TMROctant q;
       array[i].getSibling(j, &q);
-      if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-          q.x < hmax && q.y < hmax && q.z < hmax){
+      if (inDomain(&q)){
         hash->addOctant(&q);
       }
     }
@@ -307,8 +412,7 @@ void TMROctree::balance( int balance_corner ){
 	neighbor.getSibling(0, &q);
 
 	// If we're in bounds, add the neighbor
-	if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-	    q.x < hmax && q.y < hmax && q.z < hmax){
+	if (inDomain(&q)){
 	  if (hash->addOctant(&q)){
 	    queue->push(&q);
 	  }
@@ -322,8 +426,7 @@ void TMROctree::balance( int balance_corner ){
         neighbor.getSibling(0, &q);
 	  
         // If we're in bounds, add the neighbor
-        if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-            q.x < hmax && q.y < hmax && q.z < hmax){
+	if (inDomain(&q)){
           if (hash->addOctant(&q)){
             queue->push(&q);
           }
@@ -337,8 +440,7 @@ void TMROctree::balance( int balance_corner ){
 	  neighbor.getSibling(0, &q);
 	  
 	  // If we're in bounds, add the neighbor
-	  if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-	      q.x < hmax && q.y < hmax && q.z < hmax){
+          if (inDomain(&q)){
 	    if (hash->addOctant(&q)){
 	      queue->push(&q);
 	    }
@@ -364,8 +466,7 @@ void TMROctree::balance( int balance_corner ){
 	neighbor.getSibling(0, &q);
 	
 	// If we're in bounds, add the neighbor
-	if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-	    q.x < hmax && q.y < hmax && q.z < hmax){
+        if (inDomain(&q)){
 	  if (hash->addOctant(&q)){
 	    queue->push(&q);
 	  }
@@ -378,8 +479,7 @@ void TMROctree::balance( int balance_corner ){
         neighbor.getSibling(0, &q);
 	
         // If we're in bounds, add the neighbor
-        if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-            q.x < hmax && q.y < hmax && q.z < hmax){
+        if (inDomain(&q)){
           if (hash->addOctant(&q)){
             queue->push(&q);
           }
@@ -393,8 +493,7 @@ void TMROctree::balance( int balance_corner ){
 	  neighbor.getSibling(0, &q);
 	  
 	  // If we're in bounds, add the neighbor
-	  if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-	      q.x < hmax && q.y < hmax && q.z < hmax){
+          if (inDomain(&q)){
 	    if (hash->addOctant(&q)){
 	      queue->push(&q);
 	    }
@@ -412,8 +511,7 @@ void TMROctree::balance( int balance_corner ){
   for ( int i = 0; i < size; i++ ){
     for ( int j = 0; j < 8; j++ ){
       array[i].getSibling(j, &q);
-      if (q.x >= 0 && q.y >= 0 && q.z >= 0 && 
-          q.x < hmax && q.y < hmax && q.z < hmax){
+      if (inDomain(&q)){
         hash->addOctant(&q);
       }
     }
@@ -483,7 +581,7 @@ TMROctree *TMROctree::coarsen(){
   }
 
   // Create the new octree from the queue
-  TMROctree *tree = new TMROctree(queue->toArray());
+  TMROctree *tree = new TMROctree(queue->toArray(), domain, ndomain);
   delete queue;
 
   return tree;

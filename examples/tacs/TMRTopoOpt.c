@@ -5,8 +5,14 @@
 TMRTopoOpt::TMRTopoOpt( int _nlevels, 
                         TACSAssembler *_tacs[],
                         TMROctree *_filter[], 
-                        TACSMg *_mg, BVec *_force ):
+                        TACSMg *_mg, BVec *_force,
+                        double _target_mass,
+                        TACSToFH5 *_f5,
+                        const char *_prefix ):
 ParOptProblem(_tacs[0]->getMPIComm()){
+  // Copy over the prefix - max of 128 characters
+  strncpy(prefix, _prefix, sizeof(prefix));
+  
   // Set the number of levels
   nlevels = _nlevels;
   if (nlevels > MAX_NUM_LEVELS){
@@ -58,12 +64,9 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   mass->incref();
 
   // Set the target mass
-  target_mass = 0.175;
+  target_mass = _target_mass;
 
-  // Create an TACSToFH5 object for writing output to files
-  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                             TACSElement::OUTPUT_EXTRAS);
-  f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
+  f5 = _f5;
   f5->incref();
 
   // Set the restriction operators
@@ -100,6 +103,10 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   const int ncon = 1;
   const int nwcon = 0, nwblock = 0;
   setProblemSizes(recvcount[mpi_rank], ncon, nwcon, nwblock);
+
+  // Create a vector
+  xinit = new ParOptVec(this->comm, this->nvars);
+  xinit->set(0.95);
 }
 
 /*
@@ -125,8 +132,16 @@ TMRTopoOpt::~TMRTopoOpt(){
   f5->decref();
   compliance->decref();
   mass->decref();
+  delete xinit;
   delete [] recvcount;
   delete [] recvdisp;
+}
+
+/*
+  Set the initial design variable components
+*/
+void TMRTopoOpt::setInitDesignVars( ParOptScalar x[] ){
+  setLocalComponents(x, xinit);
 }
 
 /*
@@ -142,8 +157,12 @@ int TMRTopoOpt::useUpperBounds(){ return 1; }
 */ 
 void TMRTopoOpt::getVarsAndBounds( ParOptVec *x, 
                                    ParOptVec *lb, 
-                                   ParOptVec *ub ){  
-  x->set(0.95);
+                                   ParOptVec *ub ){
+  // Get the values of the design variables from the inner-most
+  // version of TACS
+  x->copyValues(xinit);
+
+  // Set the lower and upper bounds on the design variables
   lb->set(0.0);
   ub->set(1.0);
 }
@@ -187,7 +206,7 @@ int TMRTopoOpt::evalObjCon( ParOptVec *x,
   
   // Set the compliance objective and the mass constraint
   *fobj = fvals[0];
-  cons[0] = target_mass - fvals[1];
+  cons[0] = 1.0 - fvals[1]/target_mass;
   
   return 0;
 }
@@ -203,7 +222,7 @@ int TMRTopoOpt::evalObjConGradient( ParOptVec *x,
   
   // Set the local components of the compliance gradient
   setLocalComponents(global, Ac[0]);
-  Ac[0]->scale(-1.0);
+  Ac[0]->scale(-1.0/target_mass);
 
   tacs[0]->evalAdjointResProducts(&vars, 1,
                                   global, num_design_vars[0]);
@@ -295,8 +314,7 @@ void TMRTopoOpt::restrictDesignVars( int lev,
 
 // Write the output file
 void TMRTopoOpt::writeOutput( int iter, ParOptVec *x ){
-  char filename[128];
-  const char *prefix = "results/";
-  sprintf(filename, "%s/octree_iter%d.f5", prefix, iter);
+  char filename[256];
+  sprintf(filename, "%soctree_iter%d.f5", prefix, iter);
   f5->writeToFile(filename);
 }
