@@ -33,6 +33,13 @@ class OctStiffness : public SolidStiffness {
   void addPointwiseMassDVSens( const double pt[], 
 			       const TacsScalar alpha[],
 			       TacsScalar dvSens[], int dvLen );
+
+  // Return the density as the design variable
+  // -----------------------------------------
+  TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
+    return rho; 
+  }
+
  private:
   static const int FILTER_ORDER = 2;
   static const int MAX_NUM_WEIGHTS = 

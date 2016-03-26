@@ -6,11 +6,37 @@
 #include "TACSMg.h"
 #include "TACSToFH5.h"
 #include "OctStiffness.h"
+#include "TMRTopoOpt.h"
+
+/*
+  TODOs:
+
+  Filter:
+  1) Create nested filter objects for each grid level 
+  2) Create the interpolation/restrictions between these levels
+
+  Design:
+  1) Test the design derivatives with the adjoint equations
+
+  Refinement: 
+  1) Choose a rational refinement criteria which depends on some
+  combination of the design and the solution.
+
+  - If compliance is the objective, refinement with a fixed design
+  should produce a design that is more compliant. This must be true
+  from finte-element theory. However, if the objective is to minimize
+  the compliance, and we want a more accurate result, some
+  adjoint-based mesh refinement criteria could be used.
+
+  Long term:
+  1) Implement parallel design variable operations. Need to think
+  about how these will be handled in TACS.
+*/
 
 /*
   Create the elements that are required based on the global filter
 */
-static TMROctree *global_element_filter;
+static TMROctree *global_filter;
 static TMROctant *global_octant_list;
 
 static TACSElement* create_element( int local_num, int id ){
@@ -18,7 +44,7 @@ static TACSElement* create_element( int local_num, int id ){
   TacsScalar E = 70e3;
   TacsScalar nu = 0.3;
   TacsScalar q = 5.0;  
-  SolidStiffness *stiff = new OctStiffness(global_element_filter, 
+  SolidStiffness *stiff = new OctStiffness(global_filter, 
                                            &global_octant_list[local_num],
                                            density, E, nu, q);
   Solid<2> *elem = new Solid<2>(stiff);
@@ -126,17 +152,31 @@ int main( int argc, char * argv[] ){
   // Set the levels
   const int NUM_LEVELS = 3;
 
-  const int min_refine = 3;
+  // Set the minimum and maximum refinement levels within the
+  // octree meshes
+  const int min_refine = 4;
   const int max_refine = 10;
+
+  // Create the filter octrees
+  TMROctree *filters[NUM_LEVELS];
+
+  // Create the finest octree for the design variables
+  filters[0] = new TMROctree(min_refine);
+  filters[0]->createMesh(order);
+
+  // Coarsen the octree filter
+  for ( int k = 1; k < NUM_LEVELS; k++ ){
+    filters[k] = filters[k-1]->coarsen();
+    filters[k]->balance(0);
+    filters[k]->createMesh(order);
+  }
+
+  // Set up the octree for the analysis
   TMROctree *root_tree = NULL;
   if (mpi_rank == 0){
     // Create a uniformly refined octree
-    root_tree = new TMROctree(4);
+    root_tree = new TMROctree(min_refine);
   }
-
-  // Create the uniform tree for the filter
-  TMROctree *filter_tree = new TMROctree(1);
-  filter_tree->createMesh(2);
 
   for ( int iter = 0; iter < 3; iter++ ){
     // Keep pointers to the octree, creator and assembler objects
@@ -215,7 +255,7 @@ int main( int argc, char * argv[] ){
         }
         
         // Set the elements and create TACS
-        global_element_filter = filter_tree;
+        global_filter = filters[k];
         global_octant_list = local;
         creator[k]->setElementCreator(create_element);
 
@@ -224,7 +264,7 @@ int main( int argc, char * argv[] ){
 	tacs[k]->incref();
 
         // Null the arrays so they are not use accidentally
-        global_element_filter = NULL;
+        global_filter = NULL;
         global_octant_list = NULL;
 
         // Free the local octant array
@@ -241,7 +281,7 @@ int main( int argc, char * argv[] ){
                  MPI_STATUS_IGNORE);
         
         // Set the elements and the callback object
-        global_element_filter = filter_tree;
+        global_filter = filters[k];
         global_octant_list = local;
         creator[k]->setElementCreator(create_element);
 
@@ -250,7 +290,7 @@ int main( int argc, char * argv[] ){
 	tacs[k]->incref();
 
         // Null the arrays so they are not use accidentally
-        global_element_filter = NULL;
+        global_filter = NULL;
         global_octant_list = NULL;
 
         // Free the local octant array
@@ -346,49 +386,65 @@ int main( int argc, char * argv[] ){
 	mg->setLevel(k, tacs[k], NULL, NULL);
       }
     }
-    
-    // Assemble the matrix
-    mg->assembleMatType();
-    mg->factor();
-    
-    // Create the preconditioner
-    BVec *res = tacs[0]->createVec();
-    BVec *ans = tacs[0]->createVec();
-    res->incref();
-    ans->incref();
 
-    int freq = 1;
+    // Set the KSM monitor
+    int freq = 10;
     mg->setMonitor(new KSMPrintStdout("MG", mpi_rank, freq));
-    
-    res->set(1.0);
-    res->applyBCs();
-    
-    // Now, set up the solver
-    int gmres_iters = 100; 
-    int nrestart = 2;
-    int is_flexible = 1;
-    GMRES * ksm = new GMRES(mg->getMat(0), mg, 
-			    gmres_iters, nrestart, is_flexible);
-    ksm->setTolerances(1e-8, 1e-30);
-    ksm->incref();
-    
-    ksm->setMonitor(new KSMPrintStdout("MG", mpi_rank, freq));
-    ksm->solve(res, ans);
-    
-    tacs[0]->setVariables(ans);
 
-    // Create an TACSToFH5 object for writing output to files
-    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                               TACSElement::OUTPUT_DISPLACEMENTS |
-                               TACSElement::OUTPUT_STRAINS |
-                               TACSElement::OUTPUT_STRESSES |
-                               TACSElement::OUTPUT_EXTRAS);
-    TACSToFH5 * f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
-    f5->incref();
-    
-    char filename[128];
-    sprintf(filename, "octree_iter%d.f5", iter);
-    f5->writeToFile(filename);
+    // Create the force vector
+    BVec *force = tacs[0]->createVec();
+
+    // Get the ownership range
+    const int *owners;
+    force->getOwnership(NULL, NULL, &owners);
+
+    // Determine the force node
+    int force_node = 0;
+    if (mpi_rank == 0){
+      // Set the point in the octant where we want to
+      // set the force vector
+      TMROctant p;
+      p.x = 1 << TMR_MAX_LEVEL;
+      p.y = 1 << TMR_MAX_LEVEL;
+      p.z = 1 << TMR_MAX_LEVEL;
+      
+      // Find the vector in the tree
+      const int use_nodes = 1;
+      TMROctantArray *nodes;
+      root_tree->getNodes(&nodes);
+      TMROctant *t = nodes->contains(&p, use_nodes);
+
+      // Set the force node
+      force_node = t->tag;
+    }
+
+    // Broadcast the node
+    MPI_Bcast(&force_node, 1, MPI_INT, 0, comm);
+
+    // Find the ownership range
+    if (force_node >= owners[mpi_rank] &&
+        force_node < owners[mpi_rank+1]){
+      TacsScalar *force_vals;
+      force->getArray(&force_vals);
+      int loc = force_node - owners[mpi_rank];
+      force_vals[3*loc+1] = 1e3;
+      force_vals[3*loc+2] = 1e3;
+    }
+
+    // Create the topology optimization problem
+    TMRTopoOpt *problem = new TMRTopoOpt(NUM_LEVELS, tacs, filters,
+                                         mg, force);
+
+    // Allocate the ParOpt object
+    int max_num_bfgs = 40;
+    ParOpt *opt = new ParOpt(problem, max_num_bfgs);
+    opt->checkGradients(1e-6);
+    opt->setMaxMajorIterations(20);
+
+    opt->optimize();
+
+    delete opt;
+    delete problem;
 
     // Perform a local refinement of the nodes based on the strain energy
     // within each element
@@ -432,7 +488,8 @@ int main( int argc, char * argv[] ){
       all_SE = new TacsScalar[ nelems_total ];
     }
 
-    // Gather the number of elements from each processor to the root processor
+    // Gather the number of elements from each processor to the root
+    // processor
     MPI_Gather(&nelems, 1, MPI_INT, elems_per_proc, 1, MPI_INT, 0, comm);
 
     if (mpi_rank == 0){
@@ -444,7 +501,8 @@ int main( int argc, char * argv[] ){
     
     // Gather the element strain energy values to the root processor
     MPI_Gatherv(SE, nelems, TACS_MPI_TYPE, 
-	       all_SE, elems_per_proc, elem_proc_offset, TACS_MPI_TYPE, 0, comm);
+	       all_SE, elems_per_proc, elem_proc_offset, TACS_MPI_TYPE, 
+                0, comm);
 
     // Free the element strain energy values for this processor
     delete [] SE;
@@ -490,11 +548,7 @@ int main( int argc, char * argv[] ){
 
     // Free everything 
     mg->decref();
-    f5->decref();
-    res->decref();
-    ans->decref();
-    ksm->decref();
-
+  
     // Decrease the reference count to things
     for ( int k = 0; k < NUM_LEVELS; k++ ){
       tacs[k]->decref();
