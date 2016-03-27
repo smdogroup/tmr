@@ -10,25 +10,6 @@
 
 /*
   TODOs:
-
-  Filter:
-  1) Create nested filter objects for each grid level 
-  2) Create the interpolation/restrictions between these levels
-
-  Design:
-  1) Test the design derivatives with the adjoint equations
-
-  Refinement: 
-  1) Choose a rational refinement criteria which depends on some
-  combination of the design and the solution.
-
-  - If compliance is the objective, refinement with a fixed design
-  should produce a design that is more compliant. This must be true
-  from finte-element theory. However, if the objective is to minimize
-  the compliance, and we want a more accurate result, some
-  adjoint-based mesh refinement criteria could be used.
-
-  Long term:
   1) Implement parallel design variable operations. Need to think
   about how these will be handled in TACS.
 */
@@ -241,7 +222,26 @@ void strain_energy_refinement( TACSAssembler *tacs,
 }
 
 /*
-  Run the main function
+  The following code sets up an adaptive refinement technique for
+  topology optimization problems on octree meshes.
+
+  The code automatically refines the mesh around the location where
+  the structure is present. The underlying filter is fixed (much like
+  a level-set type method). Nested meshes are formed by repeated
+  coarsening of the mesh.
+
+  Local length-scale control could be implemented by refining the
+  filter mesh in areas of interest - for instance around corners that
+  might have more-detailed features. The code uses a compliance
+  objective with a mass constraint.
+
+  Useage:
+
+  ./tmr_demo [min_refine=%d] [target_mass=%f] [problem_type]
+
+  where problem_type is one of: block, beam, bracket
+
+  which produce different problem domains.
 */
 int main( int argc, char * argv[] ){
   MPI_Init(&argc, &argv);
@@ -266,7 +266,7 @@ int main( int argc, char * argv[] ){
   // Set the minimum and maximum refinement levels within the
   // octree meshes
   int min_refine = 4;
-  int max_refine = 10;
+  int max_refine = 8;
 
   // Create the filter octrees
   TMROctree *filters[NUM_LEVELS];
@@ -278,31 +278,99 @@ int main( int argc, char * argv[] ){
   int ndomain = 0;
   TMROctant *domain = NULL;
 
-  double target_mass = 0.2;
+  // Set the default target mass
+  double target_mass = 0.15;
+
+  // Set the problem instance
+  int problem_index = 0;
+  const char *problem_type[] = 
+    {"block", "beam", "bracket"};
 
   // Set up the domain for the beam
   TMROctant beam[4];
   for ( int i = 0; i < 4; i++ ){
     beam[i].level = 2;
     int32_t hbeam = 1 << (TMR_MAX_LEVEL - beam[i].level);
-    beam[i].x = 3*hbeam;
-    beam[i].y = 3*hbeam;
+    beam[i].x = 0;
+    beam[i].y = 0;
     beam[i].z = i*hbeam;
+  }
+
+  // Set up the domain for the bracket
+  TMROctant bracket[4];
+  const int bracket_corner[][3] = 
+    {{0, 0, 0}, {0, 0, 1}, {0, 1, 1}, {1, 0, 1}};
+
+  for ( int i = 0; i < 4; i++ ){
+    bracket[i].level = 1;
+    int32_t hbracket = 1 << (TMR_MAX_LEVEL - bracket[0].level);
+    bracket[i].x = bracket_corner[i][0]*hbracket;
+    bracket[i].y = bracket_corner[i][1]*hbracket;
+    bracket[i].z = bracket_corner[i][2]*hbracket;
+  }
+
+  // Scan the input arguments to find the minimum refinement
+  for ( int k = 0; k < argc; k++ ){
+    int tmp = 0;
+    if (sscanf(argv[k], "min_refine=%d", &tmp) == 1){
+      // Let's not get crazy setting a really high refinement
+      if (tmp <= 6){ 
+        max_refine += (tmp - min_refine);
+        min_refine = tmp;
+      }
+    }
+    double tmass;
+    if (sscanf(argv[k], "target_mass=%lf", &tmass) == 1){
+      if (tmass > 0.05 && tmass < 1.0){
+        target_mass = tmass;
+      }
+    }
   }
 
   // Set the domain for the
   for ( int k = 0; k < argc; k++ ){
+    if (strcmp("block", argv[k]) == 0){ break; }
     if (strcmp("beam", argv[k]) == 0){
+      // Set the problem index
+      problem_index = 1;
+
+      // Set the domain
       ndomain = 4;
       domain = beam;
 
       // Set the new target mass
-      target_mass = 0.2*(0.25*0.25);
+      target_mass *= (0.25*0.25);
 
       // Change the minimum refinement level to match the
       // new domain
-      min_refine = 6;
+      min_refine += 2;
+      max_refine += 2;
+      break;
     }
+    if (strcmp("bracket", argv[k]) == 0){
+      // Set the problem index
+      problem_index = 2;
+
+      // Set the domain
+      ndomain = 4;
+      domain = bracket;
+
+      // Set the new target mass
+      target_mass *= 0.25;
+
+      // Change the minimum refinement level to match the
+      // new domain
+      min_refine += 1;
+      max_refine += 1;
+      break;      
+    }
+  }
+
+  // Write out the problem properties
+  if (mpi_rank == 0){
+    printf("Problem type:         %s\n", problem_type[problem_index]);
+    printf("Min refinement:       %d\n", min_refine);
+    printf("Target mass fraction: %f\n", target_mass);
   }
 
   // Create the finest octree for the design variables
@@ -525,6 +593,72 @@ int main( int argc, char * argv[] ){
       }
     }
     
+    // Create the force vector
+    BVec *force = tacs[0]->createVec();
+
+    // Get the ownership range
+    const int *owners;
+    force->getOwnership(NULL, NULL, &owners);
+
+    // Determine the nodes at which to apply forces
+    int force_nodes[2] = {0, 0};
+    if (mpi_rank == 0){     
+      // Get the nodes from the octree
+      const int use_nodes = 1;
+      TMROctantArray *nodes;
+      root_tree->getNodes(&nodes);
+
+      // Get the node corresponding to the numbering
+      const int *node_nums;
+      creator[0]->getNodeNums(&node_nums);
+
+      // Set the level depending on the problem type
+      int level = 0;
+      if (problem_index == 1){ // Beam-type problem
+        level = 2;
+      }
+
+      // Set the point in the octant where we want to
+      // set the force vector
+      TMROctant p, *t;
+      p.x = 0;
+      p.y = 1 << (TMR_MAX_LEVEL - level);
+      p.z = 1 << TMR_MAX_LEVEL;
+      t = nodes->contains(&p, use_nodes);
+      force_nodes[0] = node_nums[t->tag];
+
+      p.x = 1 << (TMR_MAX_LEVEL - level);
+      p.y = 0;
+      p.z = 1 << TMR_MAX_LEVEL;
+      t = nodes->contains(&p, use_nodes);
+      force_nodes[1] = node_nums[t->tag];
+    }
+
+    // Broadcast the node
+    MPI_Bcast(force_nodes, 2, MPI_INT, 0, comm);
+
+    // Find the ownership range
+    for ( int k = 0; k < 2; k++ ){
+      if (force_nodes[k] >= owners[mpi_rank] &&
+          force_nodes[k] < owners[mpi_rank+1]){
+        TacsScalar *force_vals;
+        force->getArray(&force_vals);
+        int loc = force_nodes[k] - owners[mpi_rank];
+        if (k == 0){
+          force_vals[3*loc] = -10.0;
+        }
+        else if (k == 1){
+          force_vals[3*loc+1] = 10.0;
+        }
+      }
+    }
+
+    // Decrease the reference count to the creator objects - they are
+    // not required anymore
+    for ( int k = 0; k < NUM_LEVELS; k++ ){
+      creator[k]->decref();
+    }
+
     // Set up the multigrid method
     double sor_omega = 1.2;
     int sor_iters = 1;
@@ -542,54 +676,6 @@ int main( int argc, char * argv[] ){
       }
     }
 
-    // Set the KSM monitor
-    int freq = 10;
-    mg->setMonitor(new KSMPrintStdout("MG", mpi_rank, freq));
-
-    // Create the force vector
-    BVec *force = tacs[0]->createVec();
-
-    // Get the ownership range
-    const int *owners;
-    force->getOwnership(NULL, NULL, &owners);
-
-    // Determine the force node
-    int force_node = 0;
-    if (mpi_rank == 0){
-      // Set the point in the octant where we want to
-      // set the force vector
-      TMROctant p;
-      p.x = 1 << TMR_MAX_LEVEL;
-      p.y = 1 << TMR_MAX_LEVEL;
-      p.z = 1 << TMR_MAX_LEVEL;
-      
-      // Find the vector in the tree
-      const int use_nodes = 1;
-      TMROctantArray *nodes;
-      root_tree->getNodes(&nodes);
-      TMROctant *t = nodes->contains(&p, use_nodes);
-
-      // Get the node corresponding to the numbering
-      const int *node_nums;
-      creator[0]->getNodeNums(&node_nums);
-
-      // Set the force node
-      force_node = node_nums[t->tag];
-    }
-
-    // Broadcast the node
-    MPI_Bcast(&force_node, 1, MPI_INT, 0, comm);
-
-    // Find the ownership range
-    if (force_node >= owners[mpi_rank] &&
-        force_node < owners[mpi_rank+1]){
-      TacsScalar *force_vals;
-      force->getArray(&force_vals);
-      int loc = force_node - owners[mpi_rank];
-      force_vals[3*loc] = 10.0;
-      force_vals[3*loc+1] = 10.0;
-    }
-
     // Create an TACSToFH5 object for writing output to files
     unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                TACSElement::OUTPUT_DISPLACEMENTS |
@@ -598,7 +684,8 @@ int main( int argc, char * argv[] ){
 
     // Create the topology optimization problem
     char prefix[128];
-    sprintf(prefix, "results/refine%d_", iter);
+    sprintf(prefix, "results/%s_refine%d_", 
+            problem_type[problem_index], iter);
     TMRTopoOpt *problem = new TMRTopoOpt(NUM_LEVELS, tacs, filters,
                                          mg, force, target_mass, f5, prefix);
 
@@ -607,14 +694,13 @@ int main( int argc, char * argv[] ){
 
     // Allocate the ParOpt object
     if (!opt){
-      int max_num_bfgs = 5;
+      int max_num_bfgs = 10;
       opt = new ParOpt(problem, max_num_bfgs);
       opt->setMaxMajorIterations(401);
     }
     else {
       opt->resetProblemInstance(problem);
       opt->setInitStartingPoint(0);
-      opt->setInitBarrierParameter(1e-3);
       opt->setMaxMajorIterations(201);
     }
     opt->checkGradients(1e-6);
@@ -636,7 +722,6 @@ int main( int argc, char * argv[] ){
     // Decrease the reference count to things
     for ( int k = 0; k < NUM_LEVELS; k++ ){
       tacs[k]->decref();
-      creator[k]->decref();
     }
 
     // Deallocate the interpolation and restriction operators

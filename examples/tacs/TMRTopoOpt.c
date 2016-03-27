@@ -51,7 +51,7 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   ksm = new GMRES(mg->getMat(0), mg, 
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
-  ksm->setTolerances(1e-8, 1e-30);
+  ksm->setTolerances(1e-10, 1e-30);
 
   // Allocate variables
   vars = tacs[0]->createVec();
