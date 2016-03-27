@@ -694,7 +694,7 @@ int main( int argc, char * argv[] ){
 
     // Allocate the ParOpt object
     if (!opt){
-      int max_num_bfgs = 10;
+      int max_num_bfgs = 5;
       opt = new ParOpt(problem, max_num_bfgs);
       opt->setMaxMajorIterations(401);
     }
@@ -703,6 +703,7 @@ int main( int argc, char * argv[] ){
       opt->setInitStartingPoint(0);
       opt->setMaxMajorIterations(201);
     }
+    opt->setOutputFrequency(5);
     opt->checkGradients(1e-6);
     opt->setAbsOptimalityTol(1e-5);
     opt->optimize();
