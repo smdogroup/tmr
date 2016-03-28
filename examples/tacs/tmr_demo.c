@@ -222,6 +222,344 @@ void strain_energy_refinement( TACSAssembler *tacs,
 }
 
 /*
+  Compute the triple product using the indices of the
+  base point and two vertices and a normal vector:
+
+  dot(n, cross(v1 - base, v2 - base))
+*/
+TacsScalar triple_product( const TacsScalar base[],
+                           const TacsScalar v1[],
+                           const TacsScalar v2[],
+                           const TacsScalar n[] ){
+  TacsScalar a[3], b[3];
+  a[0] = v1[0] - base[0];
+  a[1] = v1[1] - base[1];
+  a[2] = v1[2] - base[2];
+
+  b[0] = v2[0] - base[0];
+  b[1] = v2[1] - base[1];
+  b[2] = v2[2] - base[2];
+
+  // Compute the cross product 
+  TacsScalar c[3]; // c = a x b
+  c[0] = a[1]*b[2] - a[2]*b[1];
+  c[1] = a[2]*b[0] - a[0]*b[2];
+  c[2] = a[0]*b[1] - a[1]*b[0];
+
+  // Compute the dot product of c and the normal
+  return n[0]*c[0] + n[1]*c[1] + n[2]*c[2];
+}
+
+/*
+  Given the face normal and the points (and number of points),
+  wirite out the triangulation to the file
+*/
+void write_triangulation( FILE *fp, const TacsScalar n[],
+                          const TacsScalar *pts, int index ){
+  // Now for some brute-force - first, arrange the 
+  // group of the first three points such that they have
+  // a triple product that is positive
+  int indices[12];
+  indices[0] = 0;
+  indices[1] = 1;
+  indices[2] = 2;
+
+  if (triple_product(&pts[0], &pts[3], &pts[6], n) < 0.0){
+    indices[1] = 2;
+    indices[2] = 1;
+  }
+
+  // Determine an ordering for the indices such that
+  // all adjacent points have a positive triple product
+  for ( int ii = 3; ii < index; ii++ ){
+    int inserted = 0;
+    for ( int jj = 0; jj < ii-1; jj++ ){
+      
+      // Insert the point into the list of points such
+      // that it makes the triple product positive
+      if (triple_product(&pts[3*ii], 
+                         &pts[3*indices[jj+1]], 
+                         &pts[3*indices[jj]], n) > 0.0){
+        inserted = 1;
+        
+        // Insert the index here
+        for ( int kk = ii; kk > jj+1; kk-- ){
+          indices[kk] = indices[kk-1];
+        }
+        indices[jj+1] = ii;
+      }
+      
+      // Insert the point at the very end of the list
+      if (!inserted){
+        indices[ii] = ii;
+      }
+    }
+  }
+
+  // Now that the points have been ordered correctly, 
+  // go through and write out the results with the correct
+  // orientation
+  for ( int ii = 0; ii < index-2; ii++ ){
+    fprintf(fp, "facet normal %e %e %e\n", 
+            n[0], n[1], n[2]);
+    fprintf(fp, "outer loop\n");
+    fprintf(fp, "vertex %e %e %e\n", 
+            pts[3*indices[0]], pts[3*indices[0]+1], 
+            pts[3*indices[0]+2]);
+    fprintf(fp, "vertex %e %e %e\n", 
+            pts[3*indices[ii+1]], pts[3*indices[ii+1]+1], 
+            pts[3*indices[ii+1]+2]);
+    fprintf(fp, "vertex %e %e %e\n", 
+            pts[3*indices[ii+2]], pts[3*indices[ii+2]+1], 
+            pts[3*indices[ii+2]+2]);
+    fprintf(fp, "endloop\nendfacet\n");
+  }
+}
+ 
+/*
+  The following code generates an .STL file as output from the
+  topology optimization problem.
+*/
+void generate_stl_file( const char *filename,
+                        TacsScalar *x,
+                        TMROctree *filter,
+                        TacsScalar cutoff ){
+  FILE *fp = fopen(filename, "w");
+  if (!fp){
+    return;
+  }
+
+  fprintf(fp, "solid topology\n");
+
+  // Get the mesh from the filter
+  int nelem_filter; 
+  const int *filter_ptr, *filter_conn;
+  filter->getMesh(NULL, &nelem_filter, &filter_ptr, &filter_conn);
+
+  // Get the dependent nodes and weight values
+  const int *dep_ptr, *dep_conn;
+  const double *dep_weights;
+  filter->getDependentMesh(NULL, &dep_ptr, &dep_conn, &dep_weights);
+
+  // Get the mesh coordinates from the filter
+  for ( int i = 0; i < nelem_filter; i++ ){
+    // Check to see if there is a transition across this
+    // element
+    int above = 0, below = 0;
+    TacsScalar value[8];
+
+    // Set the value of the X/Y/Z locations of the nodes
+    TacsScalar X[8], Y[8], Z[8]; 
+
+    // Keep track of the boundary nodes
+    int on_boundary[8];
+
+    for ( int j = 0, jp = filter_ptr[i]; 
+          jp < filter_ptr[i+1]; j++, jp++ ){
+      int node = filter_conn[jp];
+      if (node >= 0){
+        // Set the value of the indepdnent design variable directly
+        value[j] = x[node];
+      }
+      else {
+        node = -node-1;
+        
+        // Evaluate the value of the dependent design variable
+        value[j] = 0.0;
+        for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
+          value[j] += dep_weights[kp]*x[dep_conn[kp]];
+        }
+      }
+      if (value[j] > cutoff){ above++; }
+      if (value[j] < cutoff){ below++; }
+    }
+
+    // These indices are used to more easily 
+    // index over a face of a cube in each
+    // coordinate direction
+    const int c[] = {1, 2, 4};
+    const int aj[] = {2, 1, 1};
+    const int ak[] = {4, 4, 2};
+
+    if (above){
+      // Retrieve the octant nodes for the list
+      TMROctantArray *elements;
+      filter->getElements(&elements);
+
+      // Get the array of octants
+      TMROctant *array;
+      elements->getArray(&array, NULL);
+
+      // Set the length of the cube
+      const double dh = 4.0/(1 << TMR_MAX_LEVEL);
+      const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+
+      // Find the X,Y,Z locations of the element nodes
+      for ( int kk = 0; kk < 2; kk++ ){
+        for ( int jj = 0; jj < 2; jj++ ){
+          for ( int ii = 0; ii < 2; ii++ ){
+            // Find the octant node (without level/tag)
+            TMROctant p;
+            p.x = array[i].x + ii*h;
+            p.y = array[i].y + jj*h;
+            p.z = array[i].z + kk*h;
+
+            // Store whether this node is on the boundary
+            on_boundary[ii + 2*jj + 4*kk] =
+              filter->onBoundary(&p);
+
+            // Set the node location
+            X[ii + 2*jj + 4*kk] = dh*p.x;
+            Y[ii + 2*jj + 4*kk] = dh*p.y;
+            Z[ii + 2*jj + 4*kk] = dh*p.z;
+          }
+        }
+      }
+
+      // Check if one or more of the faces is on the boundary
+      // and add it to the output. Scan through each coordinate
+      // direction
+      for ( int k = 0; k < 3; k++ ){
+        // Loop over the negative and positive faces
+        for ( int ii = 0; ii < 2; ii++ ){
+          // Check if this is actually a boundary
+          // or not
+          int is_boundary = 1;
+          for ( int kk = 0; kk < 2; kk++ ){
+            for ( int jj = 0; jj < 2; jj++ ){
+              int j = ii*c[k] + jj*aj[k] + kk*ak[k];
+              is_boundary = (is_boundary && on_boundary[j]);
+            }
+          }
+
+          if (is_boundary){
+            // Keep track of the points that are on
+            // the surface
+            int index = 0;
+            TacsScalar pts[8*3];
+            
+            TacsScalar n[3] = {0.0, 0.0, 0.0};
+            if (ii == 0){ n[k] = -1.0; }
+            else if (ii == 1){ n[k] = 1.0; }
+
+            for ( int kk = 0; kk < 2; kk++ ){
+              for ( int jj = 0; jj < 2; jj++ ){
+                // If the point is on the surface
+                int j = ii*c[k] + jj*aj[k] + kk*ak[k];
+                
+                if (value[j] > cutoff){
+                  pts[3*index] = X[j];
+                  pts[3*index+1] = Y[j];
+                  pts[3*index+2] = Z[j];
+                  index++;
+                }
+              }
+            }
+
+            for ( int kk = 0; kk < 2; kk++ ){
+              for ( int jj = 0; jj < 2; jj++ ){
+                // Find the indices for the two vertex end points
+                int i1, i2 = 0;
+                if (kk == 0){
+                  i1 = ii*c[k] + jj*aj[k];
+                  i2 = ii*c[k] + jj*aj[k] + ak[k];
+                }
+                else {
+                  i1 = ii*c[k] + jj*ak[k];
+                  i2 = ii*c[k] + aj[k] + jj*ak[k];
+                }
+                
+                // Find the value of the design variables at the 
+                // two vertex end points
+                double v1 = value[i1];
+                double v2 = value[i2];
+                
+                // Compute the point that intersects the vertex
+                if (v1 != v2){
+                  double u = (cutoff - v1)/(v2 - v1);
+                  if (u > 0.0 && u < 1.0){
+                    pts[3*index] = X[i1] + (X[i2] - X[i1])*u;
+                    pts[3*index+1] = Y[i1] + (Y[i2] - Y[i1])*u;
+                    pts[3*index+2] = Z[i1] + (Z[i2] - Z[i1])*u;
+                    index++;
+                  }
+                }
+              }
+            }
+          
+            if (index >= 3){
+              write_triangulation(fp, n, pts, index);
+            }
+          }
+        }
+      }
+    }
+
+    // This element is on a boundary - we're going to need to
+    // print out the intersection of the cut-off transition
+    if (above && below){
+      // Compute the gradient and normalize it
+      TacsScalar n[3] = {0.0, 0.0, 0.0};
+      for ( int k = 0; k < 3; k++ ){
+        for ( int kk = 0; kk < 2; kk++ ){
+          for ( int jj = 0; jj < 2; jj++ ){
+            // Find the indices for the two vertex end points
+            int i1 = jj*aj[k] + kk*ak[k];
+            int i2 = c[k] + jj*aj[k] + kk*ak[k];
+            n[k] += 0.25*(value[i2] - value[i1]);
+          }
+        }
+      }
+
+      // Normalize the normal vector
+      TacsScalar norm = sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
+      n[0] = n[0]/norm;
+      n[1] = n[1]/norm;
+      n[2] = n[2]/norm;
+
+      // Keep track of the number and location of the
+      // intersection points
+      int index = 0;
+      double pts[12*3];
+
+      // Scan through the coordinate directions
+      for ( int k = 0; k < 3; k++ ){
+        // Loop over each of the four edges aligned along the k-th
+        // coordinate direction
+        for ( int kk = 0; kk < 2; kk++ ){
+          for ( int jj = 0; jj < 2; jj++ ){
+            // Find the indices for the two vertex end points
+            int i1 = jj*aj[k] + kk*ak[k];
+            int i2 = c[k] + jj*aj[k] + kk*ak[k];
+            
+            // Find the value of the design variables at the 
+            // two vertex end points
+            double v1 = value[i1];
+            double v2 = value[i2];
+
+            // Compute the point that intersects the vertex
+            if (v1 != v2){
+              double u = (cutoff - v1)/(v2 - v1);
+              if (u > 0.0 && u < 1.0){
+                pts[3*index] = X[i1] + (X[i2] - X[i1])*u;
+                pts[3*index+1] = Y[i1] + (Y[i2] - Y[i1])*u;
+                pts[3*index+2] = Z[i1] + (Z[i2] - Z[i1])*u;
+                index++;
+              }
+            }
+          }
+        }
+      }
+
+      write_triangulation(fp, n, pts, index);
+    }
+  }
+
+  fprintf(fp, "endsolid topology\n");
+  fclose(fp);
+}
+                       
+/*
   The following code sets up an adaptive refinement technique for
   topology optimization problems on octree meshes.
 
@@ -303,7 +641,7 @@ int main( int argc, char * argv[] ){
 
   for ( int i = 0; i < 4; i++ ){
     bracket[i].level = 1;
-    int32_t hbracket = 1 << (TMR_MAX_LEVEL - bracket[0].level);
+    int32_t hbracket = 1 << (TMR_MAX_LEVEL - bracket[i].level);
     bracket[i].x = bracket_corner[i][0]*hbracket;
     bracket[i].y = bracket_corner[i][1]*hbracket;
     bracket[i].z = bracket_corner[i][2]*hbracket;
@@ -731,11 +1069,18 @@ int main( int argc, char * argv[] ){
       restrct[k]->decref();
     }
 
+    // Write out the STL file
+    if (mpi_rank == 0){
+      char filename[256];
+      sprintf(filename, "%siter%d.stl", prefix, iter);
+      generate_stl_file(filename, x_design, filters[0], 0.5);
+    }
+
     // Determine the refinement based on the design variables alone.
     // Refine any element when it is contained within a region that
     // has one design variable exceeding a cut-off value
     if (mpi_rank == 0){
-      double x_cutoff = 0.75;
+      double x_cutoff = 0.5;
 
       // Scan over the filter elements and label those that need to be
       // refiend

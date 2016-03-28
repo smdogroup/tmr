@@ -212,7 +212,7 @@ TMROctree::~TMROctree(){
 }
 
 /*
-  Check that the provided octant is within the domain
+  Check that the provided element octant is within the domain 
 */
 int TMROctree::inDomain( TMROctant *p ){
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
@@ -244,6 +244,83 @@ int TMROctree::inDomain( TMROctant *p ){
           p->x < x2 && p->y < y2 && p->z < z2){
         return 1;
       }
+    }
+  }
+
+  return 0;
+}
+
+/*
+  Check if the provided octant is on the domain boundary
+*/
+int TMROctree::onBoundary( TMROctant *p ){
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
+  // If no domain is specified, use the unit cube
+  // as the full domain and check whether the node
+  // provided is on the boundary
+  if (!domain){
+    if ((p->x == 0 || p->x == hmax) ||
+        (p->y == 0 || p->y == hmax) ||
+        (p->z == 0 || p->z == hmax)){
+      return 1;
+    }
+    else {
+      return 0;
+    }
+  }
+  else {
+    // If a domain is specified, then search each element within
+    // the domain and only return true if the node is on one
+    // and only one boundary.
+    int nbound = 0;
+    int corner = 0; // The node is on a corner
+    int edge = 0; // The node is on an edge
+    for ( int k = 0; k < ndomain; k++ ){
+      const int32_t h = 1 << (TMR_MAX_LEVEL - domain[k].level);
+      const int32_t x1 = domain[k].x;
+      const int32_t y1 = domain[k].y;
+      const int32_t z1 = domain[k].z;
+
+      const int32_t x2 = domain[k].x + h;
+      const int32_t y2 = domain[k].y + h;
+      const int32_t z2 = domain[k].z + h;
+      
+      // Compute the range
+      int rx = ((p->x >= x1) && (p->x <= x2));
+      int ry = ((p->y >= y1) && (p->y <= y2));
+      int rz = ((p->z >= z1) && (p->z <= z2));
+      
+      // Flag true if any of the nodes are on the bounds
+      int ax = ((p->x == x1) || (p->x == x2)) && (ry && rz);
+      int ay = ((p->y == y1) || (p->y == y2)) && (rx && rz);
+      int az = ((p->z == z1) || (p->z == z2)) && (rx && ry);
+
+      // Check if this is on any of the bounds
+      if ((ax || ay) || az){
+        nbound++;
+      }
+
+      // Check if this node is on a corner
+      corner = corner || ((ax && ay) && az);
+
+      // Check if this on an edge
+      edge = edge || (((ax && ay) || (ax && az)) || (ay && az));
+    }
+
+    // The node is on the true boundary only if it is only
+    // on one of the octants that define the boundary
+    if (nbound == 0){
+      return 0;
+    }
+    else if (corner){
+      return (nbound < 8);
+    }
+    else if (edge){
+      return (nbound < 4);
+    }
+    else {
+      return (nbound < 2);
     }
   }
 

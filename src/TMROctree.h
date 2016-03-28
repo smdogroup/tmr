@@ -104,6 +104,11 @@ class TMROctree {
              TMROctant *_domain=NULL, int ndomain=0 );
   ~TMROctree();
 
+  // Check if the provided octant is within the domain
+  // -------------------------------------------------
+  int inDomain( TMROctant *p );
+  int onBoundary( TMROctant *p );
+
   // Refine the octree
   // -----------------
   void refine( int refinement[],
@@ -173,9 +178,6 @@ class TMROctree {
   }
 
  private:
-  // Check if the provided octant is within the domain
-  int inDomain( TMROctant *p );
-
   // The list octants representing the elements
   TMROctantArray *elements; 
 
