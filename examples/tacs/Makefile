@@ -11,7 +11,8 @@ include ${PAROPT_DIR}/ParOpt_Common.mk
 
 OBJS = tmr_demo.o \
 	OctStiffness.o \
-	TMRTopoOpt.o
+	TMRTopoOpt.o \
+	generate_stl.o
 
 # Create a new rule for the code that requires both TACS and TMR
 %.o: %.c
