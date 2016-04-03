@@ -7,8 +7,11 @@
 include ../Makefile.in
 include ../TMR_Common.mk
 
-CXX_OBJS = TMROctant.o \
-	TMROctree.o
+CXX_OBJS = TMRBase.o \
+	TMROctant.o \
+	TMROctree.o \
+	TMRQuadrant.o \
+	TMRQuadtree.o
 
 DIR=${TMR_DIR}/src
 
