@@ -1,29 +1,8 @@
 #ifndef TMR_OCTANT_H
 #define TMR_OCTANT_H
 
-#include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include "mpi.h"
-
-/*
-  The following constants define the maximum octant depth and maximum
-  element order within the code.
-*/
-static const int TMR_MAX_NODE_LEVEL = 30;
-static const int TMR_LOG2_MAX_ELEMENT_ORDER = 3; 
-static const int TMR_MAX_LEVEL = 
-  TMR_MAX_NODE_LEVEL - TMR_LOG2_MAX_ELEMENT_ORDER;
-
-/*
-  The MPI TMROctant data type
-*/
-extern MPI_Datatype TMROctant_MPI_type;
-
-// Initialize and finalize the data type
-void TMRInitialize();
-void TMRFinalize();
+#include "TMRBase.h"
 
 /*
   The TMR Octant class

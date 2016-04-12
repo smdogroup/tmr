@@ -1,19 +1,19 @@
-#ifndef TMR_OCTANT_TREE_H
-#define TMR_OCTANT_TREE_H
+#ifndef TMR_QUADTREE_H
+#define TMR_QUADTREE_H
 
 #include <stdio.h>
-#include "TMROctant.h"
+#include "TMRQuadrant.h"
 
 /*
-  The main octree class. 
+  The main quadtree class. 
 
-  This is used to create, balance, and coarsen an octree as well as
-  create a mesh from the octree data. This data can be used to
-  construct meshes in TACS (or other finite-element codes). The octree
+  This is used to create, balance, and coarsen an quadtree as well as
+  create a mesh from the quadtree data. This data can be used to
+  construct meshes in TACS (or other finite-element codes). The quadtree
   is well-suited for creating adaptive meshes for topology
   optimization problems on regular domains.
 
-  The octree object provides a means to construct inter-grid
+  The quadtree object provides a means to construct inter-grid
   operators. The inter-grid operations are constructed from the nodes
   on the coarse mesh. For each node, we store the largest adjoining
   element level. Taking the next-nearest neighbours for the largest
@@ -46,21 +46,21 @@
   construction scheme could not be used. There will be at most a
   single level of refinement difference between adjacent cells.
 */
-class TMROctree {
+class TMRQuadtree {
  public:
-  TMROctree( int refine_level, 
-             TMROctant *_domain=NULL, int ndomain=0 );
-  TMROctree( int nrand, int min_level, int max_level );
-  TMROctree( TMROctantArray *_list,
-             TMROctant *_domain=NULL, int ndomain=0 );
-  ~TMROctree();
+  TMRQuadtree( int refine_level, 
+               TMRQuadrant *_domain=NULL, int ndomain=0 );
+  TMRQuadtree( int nrand, int min_level, int max_level );
+  TMRQuadtree( TMRQuadrantArray *_list,
+               TMRQuadrant *_domain=NULL, int ndomain=0 );
+  ~TMRQuadtree();
 
-  // Check if the provided octant is within the domain
-  // -------------------------------------------------
-  int inDomain( TMROctant *p );
-  int onBoundary( TMROctant *p );
+  // Check if the provided quadrant is within the domain
+  // ---------------------------------------------------
+  int inDomain( TMRQuadrant *p );
+  int onBoundary( TMRQuadrant *p );
 
-  // Refine the octree
+  // Refine the quadtree
   // -----------------
   void refine( int refinement[],
 	       int min_level=0, int max_level=TMR_MAX_LEVEL );
@@ -71,12 +71,12 @@ class TMROctree {
 
   // Coarsen the tree uniformly
   // --------------------------
-  TMROctree *coarsen();
+  TMRQuadtree *coarsen();
 
-  // Find an octant that completely encloses the provided octant
-  // -----------------------------------------------------------
-  TMROctant *findEnclosing( TMROctant *oct );
-  void findEnclosingRange( TMROctant *oct,
+  // Find an quadrant that completely encloses the provided quadrant
+  // ---------------------------------------------------------------
+  TMRQuadrant* findEnclosing( TMRQuadrant *oct );
+  void findEnclosingRange( TMRQuadrant *oct,
 			   int *low, int *high );
 
   // Create the connectivity information for the mesh
@@ -103,41 +103,41 @@ class TMROctree {
 
   // Create the interpolation from a coarser mesh
   // --------------------------------------------
-  void createInterpolation( TMROctree *coarse,
+  void createInterpolation( TMRQuadtree *coarse,
                             int **_interp_ptr,
                             int **_interp_conn,
                             double **_interp_weights );
-  void createRestriction( TMROctree *coarse,
+  void createRestriction( TMRQuadtree *coarse,
                           int **_interp_ptr,
                           int **_interp_conn,
                           double **_interp_weights );
 
   // Print a representation of the tree to a file
   // --------------------------------------------
-  void printOctree( const char *filename );
+  void printQuadtree( const char * filename );
 
-  // Retrieve the octree elements
-  // ----------------------------
-  void getElements( TMROctantArray **_elements ){
+  // Retrieve the quadtree elements
+  // ------------------------------
+  void getElements( TMRQuadrantArray **_elements ){
     if (_elements){ *_elements = elements; }
   }
 
-  // Retrieve the octree nodes
-  // -------------------------
-  void getNodes( TMROctantArray **_nodes ){
+  // Retrieve the quadtree nodes
+  // ---------------------------
+  void getNodes( TMRQuadrantArray **_nodes ){
     if (_nodes){ *_nodes = nodes; }
   }
 
  private:
-  // The list octants representing the elements
-  TMROctantArray *elements; 
+  // The list quadrants representing the elements
+  TMRQuadrantArray *elements; 
 
   // The nodes within the element mesh
-  TMROctantArray *nodes; 
+  TMRQuadrantArray *nodes; 
 
-  // A list of octants that define the domain
+  // A list of quadrants that define the domain
   int ndomain;
-  TMROctant *domain;
+  TMRQuadrant *domain;
 
   // Store the order of the mesh
   int order;
@@ -154,4 +154,4 @@ class TMROctree {
   double *dep_weights;
 };
 
-#endif // TMR_OCTANT_TREE_H
+#endif // TMR_QUADTREE_H
