@@ -113,6 +113,9 @@ TMRQuadtree::TMRQuadtree( int nrand, int min_level, int max_level ){
   // Create an array of the quadrants that will be stored
   TMRQuadrant *array = new TMRQuadrant[ nrand ];
 
+  // Set the maximum refinement level
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
   // Generate a random number of quadrants along random directions
   for ( int i = 0; i < nrand; i++ ){
     int32_t level = min_level + (rand() % (max_level - min_level + 1));
@@ -121,9 +124,11 @@ TMRQuadtree::TMRQuadtree( int nrand, int min_level, int max_level ){
     int32_t x = h*(rand() % (1 << level));
     int32_t y = h*(rand() % (1 << level));
 
-    array[i].x = x;
-    array[i].y = y;
-    array[i].level = level;
+    if (x >= 0 && x < hmax && y >= 0 && y < hmax){ 
+      array[i].x = x;
+      array[i].y = y;
+      array[i].level = level;
+    }
   }
 
   elements = new TMRQuadrantArray(array, nrand);
@@ -440,9 +445,6 @@ void TMRQuadtree::balance( int balance_corner ){
 
   // Create the queue of quadrants
   TMRQuadrantQueue *queue = new TMRQuadrantQueue();
-
-  // Get the max level
-  const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
   // Add the element
   for ( int i = 0; i < size; i++ ){
@@ -1433,7 +1435,7 @@ void TMRQuadtree::printQuadtree( const char *filename ){
 
     fprintf(fp, "Variables = X, Y\n");
     fprintf(fp, "ZONE T=TMR N=%d E=%d ", 4*size, size);
-    fprintf(fp, "DATAPACKING=POINT ZONETYPE=FEQUAD\n");
+    fprintf(fp, "DATAPACKING=POINT ZONETYPE=FEQUADRILATERAL\n");
 
     // Set the length of the cube
     double dh = 1.0/(1 << TMR_MAX_LEVEL);

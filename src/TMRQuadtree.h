@@ -121,11 +121,19 @@ class TMRQuadtree {
   void getElements( TMRQuadrantArray **_elements ){
     if (_elements){ *_elements = elements; }
   }
+  void setElements( TMRQuadrantArray *_elements ){
+    if (elements){ delete elements; }
+    elements = _elements;
+  }
 
   // Retrieve the quadtree nodes
   // ---------------------------
   void getNodes( TMRQuadrantArray **_nodes ){
     if (_nodes){ *_nodes = nodes; }
+  }
+  void setNodes( TMRQuadrantArray *_nodes ){
+    if (nodes){ delete nodes; }
+    nodes = _nodes;
   }
 
  private:

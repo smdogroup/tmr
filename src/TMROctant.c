@@ -427,6 +427,7 @@ TMROctant TMROctantQueue::pop(){
     OctQueueNode *tmp = root;
     root = root->next;
     delete tmp;
+    if (num_elems == 0){ tip = NULL; }
     return temp;
   }
 }
