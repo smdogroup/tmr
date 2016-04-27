@@ -11,7 +11,8 @@ CXX_OBJS = TMRBase.o \
 	TMROctant.o \
 	TMROctree.o \
 	TMRQuadrant.o \
-	TMRQuadtree.o
+	TMRQuadtree.o \
+	TMRForrest.o
 
 DIR=${TMR_DIR}/src
 

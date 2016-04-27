@@ -351,6 +351,7 @@ TMRQuadrant TMRQuadrantQueue::pop(){
     QuadQueueNode *tmp = root;
     root = root->next;
     delete tmp;
+    if (num_elems == 0){ tip = NULL; }
     return temp;
   }
 }

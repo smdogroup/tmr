@@ -222,8 +222,7 @@ void strain_energy_refinement( TACSAssembler *tacs,
     delete [] refinement;
   }
 }
-
-                       
+                      
 /*
   The following code sets up an adaptive refinement technique for
   topology optimization problems on octree meshes.
