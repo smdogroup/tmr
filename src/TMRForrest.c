@@ -635,7 +635,7 @@ void TMRQuadForrest::createNodes( int _order ){
   for ( int face = 0; face < num_faces; face++ ){
     quadtrees[face]->createNodes(_order);
   }
-
+  /*
   // Order the nodes
   if (order == 2){
     const int use_nodes = 1;
@@ -774,4 +774,5 @@ void TMRQuadForrest::createNodes( int _order ){
       }
     }
   }
+  */
 }
