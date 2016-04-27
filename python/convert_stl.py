@@ -3,6 +3,8 @@ Imports a STL file and applies a smoothing to it
 
 '''
 import numpy
+import time
+
 class smoothSTL:
     def __init__(self,fname):
         '''
@@ -43,7 +45,10 @@ class smoothSTL:
                 # Reading in the normal
                 if k % 7 == 0:
                     norm_str = line[13:-1].split()
-                    norm = numpy.append(norm,[float(x) for x in norm_str])
+                    try:
+                        norm = numpy.append(norm,[float(x) for x in norm_str])
+                    except:
+                        pass
                 # Reading in the 1st coordinate
                 elif k % 7 == 2:
                     p1_str = line[7:-1].split()
@@ -84,7 +89,7 @@ class smoothSTL:
         '''
         # Tolerance for uniqueness
         tol = 1e-7
-        conn = numpy.zeros([P1.shape[0],3])
+        conn = numpy.zeros([P1.shape[0],3],dtype="intc")
         unique_list = []
         # Initialize the connectivity matrix
         conn[0,:] = [0, 1, 2]
@@ -164,12 +169,80 @@ class smoothSTL:
             unique_list_new[k,:] = node_k + w*(x_bar-node_k)
         return unique_list_new
 
-    def outputSTL(self):
+    def outputSTL(self, unique_list, conn, fname):
+        '''
+        Output the new STL filename
+        '''
+        fp = open(fname,  "w")
+        fp.write("solid topology\n")
+        # Loop over all elements
+        for k in xrange(conn.shape[0]):
+            fp.write("facet normal ")
+            # Calculate the normal
+            pt1 = unique_list[conn[k,0],:]
+            pt2 = unique_list[conn[k,1],:]
+            pt3 = unique_list[conn[k,2],:]
+            # Find two edges of the triangle
+            u = pt2-pt1
+            v = pt3-pt1
+            Norm = numpy.array([u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]])
+            fp.write(str(Norm[0]))
+            fp.write(" ")
+            fp.write(str(Norm[1]))
+            fp.write(" ")
+            fp.write(str(Norm[2]))
+            fp.write("\n")
+            fp.write("outer loop\n")
+            # Write the three vertices
+            fp.write("vertex ")
+            fp.write(str(pt1[0]))
+            fp.write(" ")
+            fp.write(str(pt1[1]))
+            fp.write(" ")
+            fp.write(str(pt1[2]))
+            fp.write("\n")
 
+            fp.write("vertex ")
+            fp.write(str(pt2[0]))
+            fp.write(" ")
+            fp.write(str(pt2[1]))
+            fp.write(" ")
+            fp.write(str(pt2[2]))
+            fp.write("\n")
+
+            fp.write("vertex ")
+            fp.write(str(pt3[0]))
+            fp.write(" ")
+            fp.write(str(pt3[1]))
+            fp.write(" ")
+            fp.write(str(pt3[2]))
+            fp.write("\n")            
+            
+            fp.write("endloop\n")
+            fp.write("endfacet\n")
+
+        fp.write("endsolid topology\n")
+        fp.close()
         return 
     
-fname = "trial.stl"
+fname = "beam_trial.stl"
+#fname = "trial.stl"
 STL_new = smoothSTL(fname)
+t1 = time.time()
 norm, P1, P2, P3 = STL_new.readSTL(fname)
+print "Read nodes"
+t2 = time.time()
 unique_list, conn, node_conn = STL_new.createUniqueList(P1, P2, P3)
+print "List"
+t3 = time.time()
 x_new = STL_new.smoothMesh(unique_list, conn, node_conn)
+print "Smoothing"
+t4 = time.time()
+STL_new.outputSTL(x_new,conn,"beam_new.stl")
+print "Output STL"
+t5 = time.time()
+
+print "Time to extract nodes: "+str(round(t2-t1,3))+"s"
+print "Time to extract connectivity: "+str(round(t3-t2,3))+"s"
+print "Time to smooth mesh: "+str(round(t4-t3,3))+"s"
+print "Time to output STL: "+str(round(t5-t4,3))+"s"
