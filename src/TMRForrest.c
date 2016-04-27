@@ -634,5 +634,144 @@ void TMRQuadForrest::createNodes( int _order ){
   // Allocate all possible nodes on all of the trees
   for ( int face = 0; face < num_faces; face++ ){
     quadtrees[face]->createNodes(_order);
-  }  
+  }
+
+  // Order the nodes
+  if (order == 2){
+    const int use_nodes = 1;
+
+    // Set the dependent nodes for each face
+    for ( int face = 0; face < num_faces; face++ ){
+      TMRQuadrantArray *elements;
+      quadtrees[face]->getElements(&elements);
+
+      int size;
+      TMRQuadrant *array;
+      elements->getArray(&array, &size);
+    
+      // Now check for dependent nodes on each edge and face
+      for ( int i = 0; i < size; i++ ){
+        // Get the side length of the element
+        const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);      
+      
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // Get the size of the next finest level
+        const int32_t hc = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
+
+        // Check if the element across an edge exists
+        
+        for ( int k = 0; k < 2; k++ ){ // Each coordinate direction
+          for ( int ii = 0; ii < 2; ii++ ){
+            TMRQuadrant c;
+            if (k == 0){
+              c.x = array[i].x + ii*h;
+              c.y = array[i].y + hc;
+            }
+            else {
+              c.x = array[i].x + hc;
+              c.y = array[i].y + ii*h;
+            }
+
+            const int use_nodes = 1;
+            TMRQuadrant *t;
+            if (t = nodes->contains(&c, use_nodes)){
+              if (t->tag == 1){
+                // Push the dependent node from the edge
+                edge_queue->push(&c);
+            
+                // Create and push the independent nodes from the edge
+                TMRQuadrant n;
+                if (k == 0){
+                  n.x = array[i].x + ii*h;
+                  n.y = array[i].y;
+                }
+                else {
+                  n.x = array[i].x;
+                  n.y = array[i].y + ii*h;
+                }
+                edge_nodes->push(&n);
+             
+                // Set the other independent node
+                if (k == 0){
+                  n.x = array[i].x + ii*h;
+                  n.y = array[i].y + h;
+                }
+                else {
+                  n.x = array[i].x + h;
+                  n.y = array[i].y + ii*h;
+                }
+                edge_nodes->push(&n);
+              
+                // Set the node so it does not get added again
+                t->tag = -1;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  else if (order == 3){
+
+  }
+
+  int ndep_nodes = 0;
+  int nnodes = 0;
+
+  // Now, order the nodes and dependent nodes within
+  // the entire quadtree forrest
+  for ( int face = 0; face < num_faces; face++ ){
+    // First find the face owners for the edges on
+    // this block
+    int face_owners[4];
+    edge_owners[0] = edge_owners[1] = 
+      edge_owners[2] = edge_owners[3] = face;
+    
+    for ( int j = 0; j < 4; j++ ){
+      if (face_edge_conn[4*face+j] < edge_owners[j]){
+        edge_owners[j] = face_edge_conn[4*face+j];
+      }
+    }
+
+    // For each block, cycle through the nodes and
+    // assign them, if they are located on another tree,
+    // then transform
+    for ( int i = 0; i < size; i++ ){
+      if (node_array[i].x == 0){
+        
+      }
+      else if (node_array[i].y == 0){
+        
+      }
+      else if (node_array[i].x == hmax){
+        
+      }
+      else if (node_array[i].y == hmax){
+
+      }
+      else {
+        if (node_array[i].tag >= 0){
+          node_array[i].tag = nnodes;
+          nnodes++;
+        }
+        else {
+          node_array[i].tag = -(ndep_nodes+1);
+          ndep_nodes++;
+        }
+      }
+    }
+  }
 }
