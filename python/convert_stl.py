@@ -13,6 +13,15 @@ class smoothSTL:
     def readSTL(self, fname):
         '''
         Reads in the STL file
+
+        Input:
+        fname:    STL filename
+
+        Output:
+        norm:     Norm of triangle
+        P1:       Node 1 of triangle
+        P2:       Node 2 of triangle
+        P3:       Node 3 of triangle
         '''
         fp = open(fname,  'rb')
 
@@ -62,10 +71,20 @@ class smoothSTL:
     def createUniqueList(self, P1, P2, P3):
         '''
         Create unique list of nodes
+
+        Input:
+        P1:  Node 1 of triangle
+        P2:  Node 2 of triangle
+        P3:  Node 3 of triangle
+
+        Output:
+        unique_list: Unique list of nodes in structure
+        conn:        Elemental connectivity
+        node_conn:   Adjacency matrix
         '''
         # Tolerance for uniqueness
         tol = 1e-7
-        conn = numpy.zeros([P1.size,3])
+        conn = numpy.zeros([P1.shape[0],3])
         unique_list = []
         # Initialize the connectivity matrix
         conn[0,:] = [0, 1, 2]
@@ -81,9 +100,9 @@ class smoothSTL:
             # Loop over all the present unique nodes
             for k in xrange(unique_list.shape[0]):
                 # Not a unique node
-                print k, unique_list.shape[0]
                 if numpy.linalg.norm(pt1-unique_list[k,:]) <= tol:
                     conn[row,0] = k
+                    break
                 # Loop through all nodes and it is unique
                 elif k == unique_list.shape[0]-1:
                     conn[row,0] = unique_list.shape[0]
@@ -91,24 +110,66 @@ class smoothSTL:
             for k in xrange(unique_list.shape[0]):
                 # Not a unique node
                 if numpy.linalg.norm(pt2-unique_list[k,:]) <= tol:
-                    conn[row,0] = k
+                    conn[row,1] = k
+                    break
                 # Loop through all nodes and it is unique
                 elif k == unique_list.shape[0]-1:
-                    conn[row,0] = unique_list.shape[0]
+                    conn[row,1] = unique_list.shape[0]
                     unique_list = numpy.vstack((unique_list, pt2))
             for k in xrange(unique_list.shape[0]):
                 # Not a unique node
                 if numpy.linalg.norm(pt3-unique_list[k,:]) <= tol:
-                    conn[row,0] = k
+                    conn[row,2] = k
+                    break
                 # Loop through all nodes and it is unique
                 elif k == unique_list.shape[0]-1:
-                    conn[row,0] = unique_list.shape[0]
+                    conn[row,2] = unique_list.shape[0]
                     unique_list = numpy.vstack((unique_list, pt3))
-            
-        return unique_list, conn
 
+        # Return node connectivity (adjacency matrix)
+        node_conn = numpy.zeros([unique_list.shape[0],unique_list.shape[0]],dtype="intc")
+        for k in xrange(conn.shape[0]):
+            # Three edges in each triangle
+            u = conn[k,0]
+            v = conn[k,1]
+            w = conn[k,2]
+            node_conn[u][v] = 1
+            node_conn[v][w] = 1
+            node_conn[u][w] = 1
+        # Ensure that the matrix is symmetric    
+        node_conn = numpy.maximum(node_conn, node_conn.T)
+        return unique_list, conn, node_conn
+
+    def smoothMesh(self, unique_list, conn, node_conn, w = 0.5):
+        '''
+        Smooth out the mesh using Laplacian and returns the new nodal position
+        Input:
+
+        unique_list:     Unique list of nodes
+        conn:            Elemental connectivity
+        node_conn:       Nodal adjacency matrix
+        w:               Weighting ratio
+        '''
+        unique_list_new = numpy.zeros([unique_list.shape[0],3])
+        # Go through the adjacency matrix
+        for k in xrange(unique_list.shape[0]):
+            # Node k coordinates of interest
+            node_k = unique_list[k,:]
+            # Adjacent nodes coordinates to node k
+            nodes_adj = unique_list[numpy.nonzero(node_conn[k,:]),:]
+            # Number of adjacent nodes for node k
+            N = nodes_adj.shape[1]
+            # Perform Laplacian smoothing
+            x_bar = numpy.sum(nodes_adj,axis=1)/N
+            unique_list_new[k,:] = node_k + w*(x_bar-node_k)
+        return unique_list_new
+
+    def outputSTL(self):
+
+        return 
+    
 fname = "trial.stl"
 STL_new = smoothSTL(fname)
 norm, P1, P2, P3 = STL_new.readSTL(fname)
-unique_list, conn = STL_new.createUniqueList(P1, P2, P3)
-
+unique_list, conn, node_conn = STL_new.createUniqueList(P1, P2, P3)
+x_new = STL_new.smoothMesh(unique_list, conn, node_conn)
