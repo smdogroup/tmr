@@ -19,17 +19,6 @@ class TMRQuadForrest {
   // Create the forrest of quadrants
   // -------------------------------
   void createTrees( int refine_level );
-  
-  // Add the adjacent quadrant to the hash/queues
-  // --------------------------------------------
-  void addCornerNeighbors( int tree, int corner, 
-                           TMRQuadrant p,
-                           TMRQuadrantHash **hash,
-                           TMRQuadrantQueue **queue );
-  void addEdgeNeighbors( int tree, int edge, 
-                         TMRQuadrant p,
-                         TMRQuadrantHash **hash,
-                         TMRQuadrantQueue **queue );
 
   // Balance the quadrant meshes
   // ---------------------------
@@ -41,8 +30,12 @@ class TMRQuadForrest {
 
   // Create the mesh connectivity
   // ----------------------------
-  void createNodes( int _order );
-  void createMesh( int _order );
+  void createNodes( int order );
+
+  // Retrieve the mesh connectivity
+  // ------------------------------
+  void getMesh( int *nnodes, int *nelems,
+                int **_elem_ptr, int **_elem_conn );
 
   // Retrieve the individual quadtrees 
   // ---------------------------------
@@ -52,6 +45,22 @@ class TMRQuadForrest {
   }
 
  private:
+  // Add the adjacent quadrant to the hash/queues
+  // --------------------------------------------
+  void addCornerNeighbors( int tree, int corner, 
+                           TMRQuadrant p,
+                           TMRQuadrantHash **hash,
+                           TMRQuadrantQueue **queue );
+  void addEdgeNeighbors( int tree, int edge, 
+                         TMRQuadrant p,
+                         TMRQuadrantHash **hash,
+                         TMRQuadrantQueue **queue );
+
+  TMRQuadrant* getEdgeNodeNeighbor( int face, int adjacent,
+                                    int edge, TMRQuadrant p );
+
+  // Check if the adjacent face contains the given element
+  int edgeNeighborContains( int face, int edge, TMRQuadrant p );
   // The communicator
   MPI_Comm comm;
 
@@ -62,6 +71,12 @@ class TMRQuadForrest {
   int *face_conn, *face_edge_conn;
   int *node_face_ptr, *node_face_conn;
   int *edge_face_ptr, *edge_face_conn;
+
+  // Information about the mesh
+  int mesh_order;
+  int num_mesh_nodes;
+  int num_mesh_dep_nodes;
+  int num_mesh_elements;
 
   // Keep a pointer to the forrest of quadtrees
   TMRQuadtree **quadtrees; 

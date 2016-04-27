@@ -53,6 +53,14 @@ int main( int argc, char *argv[] ){
   // Balance the forrest
   forrest->balance(1);
 
+  int order = 2;
+  forrest->createNodes(order);
+
+  int nnodes, nelems;
+  int *elem_ptr, *elem_conn;
+  forrest->getMesh(&nnodes, &nelems,
+                   &elem_ptr, &elem_conn);
+
   TMRQuadtree **quad;
   forrest->getQuadtrees(&quad);
 
@@ -68,12 +76,13 @@ int main( int argc, char *argv[] ){
   }
 
   FILE * fp = fopen("forrest_test.dat", "w");
-  fprintf(fp, "Variables = X, Y\n");
+  fprintf(fp, "Variables = X, Y, node\n");
   fprintf(fp, "ZONE T=TMR N=%d E=%d ", 4*num_elements, num_elements);
   fprintf(fp, "DATAPACKING=POINT ZONETYPE=FEQUADRILATERAL\n");
 
   double dh = 1.0/(1 << TMR_MAX_LEVEL);
 
+  int elem = 0;
   for ( int face = 0; face < num_faces; face++ ){
     TMRQuadrantArray *elements;
     quad[face]->getElements(&elements);
@@ -92,9 +101,11 @@ int main( int argc, char *argv[] ){
           
           double x, y;
           get_location(face, u, v, &x, &y);
-          fprintf(fp, "%e %e\n", x, y);
+          fprintf(fp, "%e %e %d\n", x, y, elem_conn[4*elem + ii + 2*jj]);
         }
       }
+
+      elem++;
     }
   }
   
