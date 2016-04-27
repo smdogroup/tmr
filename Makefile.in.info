@@ -22,3 +22,11 @@ SO_LINK_FLAGS=-fPIC -shared
 # For MAC OS X, use the following settings:
 # SO_EXT=so
 # SO_LINK_FLAGS=-fPIC -dynamiclib -single_module -undefined dynamic_lookup -multiply_defined suppress
+
+# If using the python interface you'll need to include python and numpy 
+PYTHON_INCLUDE = ${shell python-config --includes}
+NUMPY_DIR=${shell python -c "import numpy; print numpy.get_include()"}
+
+# If you're going to use the python interface you'll also have to have
+# a working version of mpi4py
+MPI4PY_DIR=${shell python -c "import mpi4py; print mpi4py.get_include()"}

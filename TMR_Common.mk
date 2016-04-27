@@ -15,5 +15,3 @@ TMR_LD_FLAGS = -L${TMR_DIR}/lib/ -Wl,-rpath,${TMR_DIR}/lib -ltmr
 	@echo
 	@echo "        --- Compiled $*.c successfully ---"
 	@echo
-
-

@@ -1,9 +1,10 @@
 '''
 Imports a STL file and applies a smoothing to it 
-
 '''
 import numpy
-import time
+import time        
+import locate
+import argparse
 
 class smoothSTL:
     def __init__(self,fname):
@@ -87,49 +88,46 @@ class smoothSTL:
         conn:        Elemental connectivity
         node_conn:   Adjacency matrix
         '''
+
         # Tolerance for uniqueness
         tol = 1e-7
-        conn = numpy.zeros([P1.shape[0],3],dtype="intc")
-        unique_list = []
-        # Initialize the connectivity matrix
-        conn[0,:] = [0, 1, 2]
-        unique_list = P1[0,:]       
-        unique_list = numpy.vstack((unique_list,P2[0,:]))
-        unique_list = numpy.vstack((unique_list,P3[0,:]))
-        # Loop over all coordinates for each element to search for unique nodes
-        for row in xrange(1,P1.shape[0]):
-            pt1 = P1[row,:]
-            pt2 = P2[row,:]
-            pt3 = P3[row,:]
-            
-            # Loop over all the present unique nodes
-            for k in xrange(unique_list.shape[0]):
-                # Not a unique node
-                if numpy.linalg.norm(pt1-unique_list[k,:]) <= tol:
-                    conn[row,0] = k
-                    break
-                # Loop through all nodes and it is unique
-                elif k == unique_list.shape[0]-1:
-                    conn[row,0] = unique_list.shape[0]
-                    unique_list = numpy.vstack((unique_list, pt1))
-            for k in xrange(unique_list.shape[0]):
-                # Not a unique node
-                if numpy.linalg.norm(pt2-unique_list[k,:]) <= tol:
-                    conn[row,1] = k
-                    break
-                # Loop through all nodes and it is unique
-                elif k == unique_list.shape[0]-1:
-                    conn[row,1] = unique_list.shape[0]
-                    unique_list = numpy.vstack((unique_list, pt2))
-            for k in xrange(unique_list.shape[0]):
-                # Not a unique node
-                if numpy.linalg.norm(pt3-unique_list[k,:]) <= tol:
-                    conn[row,2] = k
-                    break
-                # Loop through all nodes and it is unique
-                elif k == unique_list.shape[0]-1:
-                    conn[row,2] = unique_list.shape[0]
-                    unique_list = numpy.vstack((unique_list, pt3))
+        Xpts = numpy.vstack((P1, P2, P3))
+        loc = locate.pylocate(Xpts)
+        node_nums = -numpy.ones(Xpts.shape[0], dtype='intc')
+
+        # Locate the closest K points
+        K = 15
+        index = numpy.zeros(K, dtype='intc')
+        dist = numpy.zeros(K)
+
+        unique_node = 0
+        for row in xrange(Xpts.shape[0]):
+            if node_nums[row] < 0:
+                # Locate the closest points and label them with 
+                # the same index
+                dist[:] = 1e20
+                loc.locateKClosest(Xpts[row,:], index, dist)                
+                for k in xrange(K):
+                    if dist[k] < tol:
+                        node_nums[index[k]] = unique_node
+                    else:
+                        break
+                
+                # If we ordered one node, increment the counter
+                if dist[0] < tol:
+                    unique_node += 1
+        
+        # Create the unique list of nodes
+        unique_list = numpy.zeros((unique_node, 3))
+        for row in xrange(Xpts.shape[0]):
+            unique_list[node_nums[row], :] = Xpts[row, :]
+
+        # Create the connectivity
+        conn = numpy.zeros((P1.shape[0], 3), dtype='intc')
+        for row in xrange(P1.shape[0]):
+            conn[row, 0] = node_nums[row]
+            conn[row, 1] = node_nums[row + P1.shape[0]]
+            conn[row, 2] = node_nums[row + 2*P1.shape[0]]
 
         # Return node connectivity (adjacency matrix)
         node_conn = numpy.zeros([unique_list.shape[0],unique_list.shape[0]],dtype="intc")
@@ -143,6 +141,7 @@ class smoothSTL:
             node_conn[u][w] = 1
         # Ensure that the matrix is symmetric    
         node_conn = numpy.maximum(node_conn, node_conn.T)
+
         return unique_list, conn, node_conn
 
     def smoothMesh(self, unique_list, conn, node_conn, w = 0.5):
@@ -164,9 +163,12 @@ class smoothSTL:
             nodes_adj = unique_list[numpy.nonzero(node_conn[k,:]),:]
             # Number of adjacent nodes for node k
             N = nodes_adj.shape[1]
-            # Perform Laplacian smoothing
-            x_bar = numpy.sum(nodes_adj,axis=1)/N
-            unique_list_new[k,:] = node_k + w*(x_bar-node_k)
+            if N > 0:
+                # Perform Laplacian smoothing
+                x_bar = numpy.sum(nodes_adj,axis=1)/N
+                unique_list_new[k,:] = node_k + w*(x_bar-node_k)
+            else:
+                unique_list_new[k,:] = node_k
         return unique_list_new
 
     def outputSTL(self, unique_list, conn, fname):
@@ -224,9 +226,20 @@ class smoothSTL:
         fp.write("endsolid topology\n")
         fp.close()
         return 
+
+# Define the performance profile objective function
+parser = argparse.ArgumentParser()
+parser.add_argument('--input', type=str, default='input.stl',
+                    help='Input stl file name')
+parser.add_argument('--output', type=str, default='output.stl',
+                    help='Output stl file name')
+args = parser.parse_args()
+
+# Assign the input and output names
+fname = args.input
+outfile = args.output 
     
-fname = "beam_trial.stl"
-#fname = "trial.stl"
+# Create the smoothing object
 STL_new = smoothSTL(fname)
 t1 = time.time()
 norm, P1, P2, P3 = STL_new.readSTL(fname)
@@ -238,7 +251,7 @@ t3 = time.time()
 x_new = STL_new.smoothMesh(unique_list, conn, node_conn)
 print "Smoothing"
 t4 = time.time()
-STL_new.outputSTL(x_new,conn,"beam_new.stl")
+STL_new.outputSTL(x_new,conn, outfile)
 print "Output STL"
 t5 = time.time()
 
