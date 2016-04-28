@@ -36,6 +36,10 @@ class TMRQuadForrest {
   // ------------------------------
   void getMesh( int *nnodes, int *nelems,
                 int **_elem_ptr, int **_elem_conn );
+  void getDependentNodes( int *num_dep_nodes,
+                          const int **_dep_ptr,
+                          const int **_dep_conn,
+                          const double **_dep_weights );  
 
   // Retrieve the individual quadtrees 
   // ---------------------------------
@@ -45,8 +49,7 @@ class TMRQuadForrest {
   }
 
  private:
-  // Add the adjacent quadrant to the hash/queues
-  // --------------------------------------------
+  // Add the adjacent quadrant to the hash/queues for balancing
   void addCornerNeighbors( int tree, int corner, 
                            TMRQuadrant p,
                            TMRQuadrantHash **hash,
@@ -56,11 +59,19 @@ class TMRQuadForrest {
                          TMRQuadrantHash **hash,
                          TMRQuadrantQueue **queue );
 
-  TMRQuadrant* getEdgeNodeNeighbor( int face, int adjacent,
-                                    int edge, TMRQuadrant p );
+  // Get the adjacent quadrant for node ordering
+  TMRQuadrant* getEdgeNodeNeighbor( int face, 
+                                    int adjacent,
+                                    int edge, 
+                                    TMRQuadrant p );
 
-  // Check if the adjacent face contains the given element
-  int edgeNeighborContains( int face, int edge, TMRQuadrant p );
+  // Label dependent nodes
+  void addEdgeDependentNodes( int face, int edge,
+                              TMRQuadrant p, 
+                              TMRQuadrant source,
+                              TMRQuadrantQueue **queue,
+                              TMRQuadrantQueue **indep );
+
   // The communicator
   MPI_Comm comm;
 
@@ -77,6 +88,11 @@ class TMRQuadForrest {
   int num_mesh_nodes;
   int num_mesh_dep_nodes;
   int num_mesh_elements;
+
+  // Keep the dependent weights stored locally
+  int *dep_ptr;
+  int *dep_conn;
+  double *dep_weights;
 
   // Keep a pointer to the forrest of quadtrees
   TMRQuadtree **quadtrees; 

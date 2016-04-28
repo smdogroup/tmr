@@ -463,68 +463,6 @@ void TMRQuadtree::createNodes( int _order ){
 }
 
 /*
-  // Covert the queues to arrays
-  TMRQuadrantArray *edge_array = edge_queue->toArray();
-
-  // Free the queue objects
-  delete edge_queue;
-
-  // Get the arrays of edges and faces
-  int nedges;
-  TMRQuadrant *edges;
-  edge_array->getArray(&edges, &nedges);
-  
-  // Free the dependent node information if it already exists
-  if (dep_ptr){ delete [] dep_ptr; }
-  if (dep_conn){ delete [] dep_conn; }
-  if (dep_weights){ delete [] dep_weights; }
-  
-  // Allocate the arrays for the dependent nodes
-  dep_ptr = new int[ num_dependent_nodes+1 ];
-  dep_conn = new int[ order*nedges ];
-  dep_weights = new double[ order*nedges ];
-
-  // Find the dependent variables and check them
-  memset(dep_ptr, 0, (num_dependent_nodes+1)*sizeof(int));
-
-  // Add the counts from the edge and face dependent node relationships
-  for ( int i = 0; i < nedges; i++ ){
-    const int use_nodes = 1;
-    TMRQuadrant *t = nodes->contains(&edges[i], use_nodes);
-    int node = -t->tag-1;
-    dep_ptr[node+1] = 2;
-  }
-
-  // Count up the totals so that dep_ptr points into the
-  // correct location in the dep_conn and dep_weight arrays
-  for ( int i = 0; i < num_dependent_nodes; i++ ){
-    dep_ptr[i+1] += dep_ptr[i];
-  }
-
-  // Loop over all the independent nodes in the queues in the
-  // same order as before
-  for ( int i = 0; i < nedges; i++ ){
-    // Get the dependent node number
-    const int use_nodes = 1;
-    TMRQuadrant *t = nodes->contains(&edges[i], use_nodes);
-    int node = -t->tag-1;
-
-    // Retrieve the independent nodes
-    for ( int k = 0; k < order; k++ ){
-      TMRQuadrant n = edge_nodes->pop();
-      TMRQuadrant *t = nodes->contains(&n, use_nodes);
-      dep_conn[dep_ptr[node]+k] = t->tag;
-      dep_weights[dep_ptr[node]+k] = 0.5;
-    }
-  }
-
-  // Free the remaining data
-  delete edge_array;
-  delete edge_nodes;
-}
-*/
-
-/*
   Add the portion of the mesh from this quadtree
 
   This cycles through all the elements within the local tree and adds
