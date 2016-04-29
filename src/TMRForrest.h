@@ -19,6 +19,9 @@ class TMRQuadForrest {
   // Create the forrest of quadrants
   // -------------------------------
   void createTrees( int refine_level );
+  void createRandomTrees( int nrand=10, 
+                          int min_level=0, int max_level=8 );
+
 
   // Balance the quadrant meshes
   // ---------------------------
