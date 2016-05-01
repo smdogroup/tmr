@@ -238,11 +238,38 @@ void TMRQuadForrest::setConnectivity( int _num_nodes,
   Create a forrest with the specified refinement level
 */
 void TMRQuadForrest::createTrees( int refine_level ){
+  if (quadtrees){ 
+    for ( int i = 0; i < num_faces; i++ ){
+      delete quadtrees[i];
+    }
+    delete [] quadtrees;
+  }
+
   // Create the quadtrees
   quadtrees = new TMRQuadtree*[ num_faces ];  
   for ( int i = 0; i < num_faces; i++ ){
-    // quadtrees[i] = new TMRQuadtree(refine_level);
-    quadtrees[i] = new TMRQuadtree(100, 0, 8);
+    quadtrees[i] = new TMRQuadtree(refine_level);
+  }
+}
+
+/*
+  Create a random set of trees
+
+  This function is usually used for testing purposes.
+*/
+void TMRQuadForrest::createRandomTrees( int nrand, 
+                                        int min_level, int max_level ){
+  if (quadtrees){ 
+    for ( int i = 0; i < num_faces; i++ ){
+      delete quadtrees[i];
+    }
+    delete [] quadtrees;
+  }
+
+  // Create a random set of quadtrees
+  quadtrees = new TMRQuadtree*[ num_faces ];  
+  for ( int i = 0; i < num_faces; i++ ){
+    quadtrees[i] = new TMRQuadtree(nrand, min_level, max_level);
   }
 }
 

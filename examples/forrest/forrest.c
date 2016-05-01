@@ -1,5 +1,6 @@
 #include "TMRForrest.h"
-// #include "MITCShell.h"
+#include "isoFSDTStiffness.h"
+#include "MITCShell.h"
 #include "TACSCreator.h"
 #include "TACSAssembler.h"
 #include "PlaneStressQuad.h"
@@ -61,7 +62,8 @@ int main( int argc, char *argv[] ){
   MPI_Comm_rank(comm, &rank);
 
   // Create the TACSCreator object
-  TACSCreator *creator = new TACSCreator(comm, 2);
+  int vars_per_node = 6;
+  TACSCreator *creator = new TACSCreator(comm, vars_per_node);
   creator->incref();
 
   if (rank == 0){
@@ -74,8 +76,10 @@ int main( int argc, char *argv[] ){
                              test_conn, num_faces);
     
     // Allocate the trees (random trees for now)
-    int refine_level = 3;
-    forrest->createTrees(refine_level);
+    int nrand = 25;
+    int min_refine = 0;
+    int max_refine = 5;
+    forrest->createRandomTrees(nrand, min_refine, max_refine);
     
     // Balance the forrest so that we can use it!
     forrest->balance(1);
@@ -125,7 +129,9 @@ int main( int argc, char *argv[] ){
           get_location(face, u, v, &Xpts[3*node]);
           
           // Set the boundary conditions based on the spatial location
-          if (Xpts[3*node] < 1e-6 && num_bcs < max_bcs){
+          if (((Xpts[3*node] < 1e-6 || Xpts[3*node] > 0.999999) ||
+               (Xpts[3*node+1] < 1e-6 || Xpts[3*node+1] > 0.999999))
+              && num_bcs < max_bcs){
             bc_nodes[num_bcs] = node;
             num_bcs++;
           }
@@ -161,8 +167,18 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the element
-  PlaneStressStiffness *stiff = new PlaneStressStiffness(1.0, 70e3, 0.3);
-  TACSElement *element = new PlaneStressQuad<ORDER>(stiff);    
+  // PlaneStressStiffness *stiff = new PlaneStressStiffness(1.0, 70e3, 0.3);
+  // TACSElement *element = new PlaneStressQuad<ORDER>(stiff);
+  isoFSDTStiffness *stiff = new isoFSDTStiffness(1.0, 70e9, 0.3,
+                                                 5.0/6.0, 350e6, 0.01);
+  TACSElement *element = new MITCShell<ORDER>(stiff);
+
+  TestElement *test = new TestElement(element);
+  test->setPrintLevel(2);
+  test->testResidual();
+  test->testJacobian();
+
+
   creator->setElements(&element, 1);
   
   // Create the TACSAssembler object
@@ -172,6 +188,7 @@ int main( int argc, char *argv[] ){
   // Create the preconditioner
   BVec *res = tacs->createVec();
   BVec *ans = tacs->createVec();
+  BVec *tmp = tacs->createVec();
   FEMat *mat = tacs->createFEMat();
 
   // Increment the reference count to the matrix/vectors
@@ -192,10 +209,23 @@ int main( int argc, char *argv[] ){
   mat->applyBCs();
   pc->factor();
 
-  res->set(1.0);
+  TacsScalar *array;
+  int size = res->getArray(&array);
+  for ( int k = 2; k < size; k += 6){
+    array[k] = 1.0;
+  }
   res->applyBCs();
   pc->applyFactor(res, ans);
   tacs->setVariables(ans);
+
+  mat->mult(ans, tmp);
+  tmp->axpy(-1.0, res);
+
+  // Print the solution norm
+  TacsScalar norm = tmp->norm()/res->norm();
+  if (rank == 0){
+    printf("Solution residual norm: %15.5e\n", norm);
+  }
 
   // Create an TACSToFH5 object for writing output to files
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
@@ -203,7 +233,8 @@ int main( int argc, char *argv[] ){
                              TACSElement::OUTPUT_STRAINS |
                              TACSElement::OUTPUT_STRESSES |
                              TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 * f5 = new TACSToFH5(tacs, PLANE_STRESS, write_flag);
+  // TACSToFH5 * f5 = new TACSToFH5(tacs, PLANE_STRESS, write_flag);
+  TACSToFH5 * f5 = new TACSToFH5(tacs, SHELL, write_flag);
   f5->incref();
   f5->writeToFile("forrest.f5");
 
