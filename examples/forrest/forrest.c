@@ -1,10 +1,12 @@
 #include "TMRForrest.h"
 #include "isoFSDTStiffness.h"
-#include "MITCShell.h"
 #include "TACSCreator.h"
 #include "TACSAssembler.h"
 #include "PlaneStressQuad.h"
 #include "TACSToFH5.h"
+#include "TACSShellTraction.h"
+#include "TensorToolbox.h"
+#include "MITCShell.h"
 
 // Create the nodal locations for the mesh
 const double test_Xpts[] = {0.0, 0.0, 0.0,
@@ -47,6 +49,290 @@ void get_location( int face, double u, double v,
           N[3]*test_Xpts[3*test_conn[4*face+3]+2]);
 }
 
+/*
+  The enriched shape functions for the tensor-product quadratic
+  Lagrange shape functions.
+*/
+void evalEnrichmentFuncs( double pt[],
+                          double N[], double Na[], double Nb[] ){
+  // Compute the cubic enrichment shape functions along the two
+  // coordinate directions
+  double ca = (1.0 + pt[0])*pt[0]*(1.0 - pt[0]);
+  double cb = (1.0 + pt[1])*pt[1]*(1.0 - pt[1]);
+
+  // Compute the derivative of the enrichment functions w.r.t. 
+  // the two coordinate directions
+  double da = 1.0 - 3*pt[0]*pt[0];
+  double db = 1.0 - 3*pt[1]*pt[1];
+
+  // Set the shape functions themselves
+  N[0] = ca;
+  N[1] = pt[1]*ca;
+  N[2] = pt[1]*pt[1]*ca;
+  N[3] = cb;
+  N[4] = pt[0]*cb;
+  N[5] = pt[0]*pt[0]*cb;
+  N[6] = ca*cb;
+
+  // Set the derivatives of the enrichment functions with respect to
+  // the first and second coordinate directions
+  Na[0] = da;
+  Na[1] = pt[1]*da;
+  Na[2] = pt[1]*pt[1]*da;
+  Na[3] = 0.0;
+  Na[4] = cb;
+  Na[5] = 2.0*pt[0]*cb;
+  Na[6] = da*cb;
+  
+  Nb[0] = 0.0;
+  Nb[1] = ca;
+  Nb[2] = 2.0*pt[1]*ca;
+  Nb[3] = db;
+  Nb[4] = pt[0]*db;
+  Nb[5] = pt[0]*pt[0]*db;
+  Nb[6] = ca*db;
+}
+
+/*
+  Given the values of the derivatives of one component of the
+  displacement or rotation field at the nodes, compute the
+  reconstruction over the element by solving a least-squares 
+  problem
+*/
+void computeReconn( const TacsScalar Xpts[],
+                    const TacsScalar uvals[],
+                    const TacsScalar ux[],
+                    const TacsScalar uy[],
+                    const TacsScalar uz[],
+                    TacsScalar ubar[] ){
+  // Set up the least squares problem at the nodes
+  TacsScalar A[18*7], b[18*6];
+  int nrhs = 6;
+
+  const double wvals[] = {0.5, 1.0, 0.5};
+
+  for ( int c = 0, jj = 0; jj < 3; jj++ ){
+    for ( int ii = 0; ii < 3; ii++, c += 2 ){
+      // Set the parametric location within the element
+      double pt[2];
+      pt[0] = -1.0 + 1.0*ii;
+      pt[1] = -1.0 + 1.0*jj;
+
+      // Compute the quadratic shape functions at this point
+      double N[9], Na[9], Nb[9];
+      FElibrary::biLagrangeSF(N, Na, Nb, pt, 3);
+      
+      // Evaluate the Jacobian transformation at this point
+      TacsScalar Xd[9];
+      memset(Xd, 0, sizeof(Xd));
+
+      // Compute the derivative along the coordinate directions
+      const double *na = Na, *nb = Nb;
+      const TacsScalar *X = Xpts;
+      for ( int i = 0; i < 9; i++ ){
+        Xd[0] += X[0]*na[0];
+        Xd[1] += X[1]*na[0];
+        Xd[2] += X[2]*na[0];
+
+        Xd[3] += X[0]*nb[0];
+        Xd[4] += X[1]*nb[0];
+        Xd[5] += X[2]*nb[0];
+
+        na++;  nb++;
+        X += 3;
+      }
+
+      // Compute the cross-product with the normal
+      Tensor::crossProduct3D(&Xd[6], &Xd[0], &Xd[3]);
+      Tensor::normalize3D(&Xd[6]);
+
+      // Compute the transpose of the Jacobian transformation
+      TacsScalar J[9];
+      FElibrary::jacobian3d(Xd, J);
+
+      // Normalize the first direction
+      TacsScalar d1[3], d2[3];
+      d1[0] = Xd[0];  d1[1] = Xd[1];  d2[2] = Xd[2];
+      Tensor::normalize3D(d1);
+
+      // Compute d2 = n x d1
+      Tensor::crossProduct3D(d2, &Xd[6], d1);
+
+      // First, compute the contributions to the righ-hand-side. The b
+      // vector contains the difference between the prescribed
+      // derivative and the contribution to the derivative from the
+      // quadratic shape function terms
+      for ( int k = 0; k < nrhs; k++ ){
+        b[18*k+c] = 
+          wvals[ii]*wvals[jj]*(d1[0]*ux[0] + d1[1]*uy[0] + d1[2]*uz[0]);
+        b[18*k+c+1] = 
+          wvals[ii]*wvals[jj]*(d2[0]*ux[0] + d2[1]*uy[0] + d2[2]*uz[0]);
+        ux++, uy++, uz++;
+      }
+
+      // Compute the derivatives from the interpolated solution
+      TacsScalar Ud[6*2];
+      memset(Ud, 0, sizeof(Ud));
+      for ( int i = 0; i < 9; i++ ){
+        for ( int k = 0; k < 6; k++ ){
+          Ud[2*k] += uvals[6*i + k]*Na[i];
+          Ud[2*k+1] += uvals[6*i + k]*Nb[i];
+        }
+      }
+      
+      // Set the right-hand side
+      for ( int k = 0; k < nrhs; k++ ){
+        TacsScalar d[3];
+        d[0] = Ud[2*k]*J[0] + Ud[2*k+1]*J[1];
+        d[1] = Ud[2*k]*J[3] + Ud[2*k+1]*J[4];
+        d[2] = Ud[2*k]*J[6] + Ud[2*k+1]*J[7];
+
+        b[18*k+c] -= 
+          wvals[ii]*wvals[jj]*(d1[0]*d[0] + d1[1]*d[1] + d1[2]*d[2]);
+        b[18*k+c+1] -= 
+          wvals[ii]*wvals[jj]*(d2[0]*d[0] + d2[1]*d[1] + d2[2]*d[2]);
+      }
+      
+      // Now, evaluate the terms for the left-hand-side
+      // that contribute to the
+      double Nr[7], Nar[7], Nbr[7];
+      evalEnrichmentFuncs(pt, Nr, Nar, Nbr);
+
+      // Add the contributions to the the enricment 
+      for ( int i = 0; i < 7; i++ ){
+        // Evaluate the
+        TacsScalar d[3];
+        d[0] = Nar[i]*J[0] + Nbr[i]*J[1];
+        d[0] = Nar[i]*J[3] + Nbr[i]*J[4];
+        d[0] = Nar[i]*J[6] + Nbr[i]*J[7];
+
+        A[18*i+c] = 
+          wvals[ii]*wvals[jj]*(d1[0]*d[0] + d1[1]*d[1] + d1[2]*d[2]);
+        A[18*i+c+1] = 
+          wvals[ii]*wvals[jj]*(d2[0]*d[0] + d2[1]*d[1] + d2[2]*d[2]);
+      }
+    }
+  }
+
+  // Singular values
+  TacsScalar s[7];
+  int m = 18, n = 7;
+  double rcond = -1.0;
+  int rank;
+  int lwork = 5*18;
+  TacsScalar work[5*18];
+
+  // Using LAPACK, compute the least squares solution
+  // ubar, res, rank, s = np.linalg.lstsq(A, b)  
+  // LAPACKgless(&m, &n, &nrhs, A, &m, b, &m, s, &rcond, &rank, work, &lwork);
+}
+
+/*
+  Compute reconstruction
+*/
+void compute( TACSAssembler *tacs, BVec *adj ){
+  int size = tacs->getNumNodes() + tacs->getNumDependentNodes();
+
+  
+  // Create the weight vector - the weights on the averages
+  // Set the weights on each of the nodes
+  BVec *weights = new BVec(tacs->getVarMap(), 1);
+
+  // Retrieve the distributed object from TACSAssembler
+  BVecDistribute *vecDist = tacs->getBVecDistribute();
+
+  // Allocate space for the local weights
+  TacsScalar *wlocal = new TacsScalar[ size ];
+  memset(wlocal, 0, size*sizeof(TacsScalar));
+
+  // Set the local element weights - this assumes that all the
+  // elements are bi-quadratic 9-noded elements
+  TacsScalar w[9]; 
+  for ( int i = 0; i < 9; i++ ){
+    w[i] = 1.0;
+  }
+
+  // Get the number of elements
+  int nelems = tacs->getNumElements();
+  for ( int i = 0; i < nelems; i++ ){
+    // Add all the values
+    tacs->addValues(1, i, w, wlocal);
+  }
+
+  // Add in the dependent weight values
+  tacs->addDependentResidual(1, wlocal);
+
+  // Add all the weigths together
+  vecDist->beginReverse(wlocal, weights, BVecDistribute::ADD);
+  vecDist->endReverse(wlocal, weights, BVecDistribute::ADD);
+
+  // Send the weights back
+  vecDist->beginForward(weights, wlocal);
+  vecDist->endForward(weights, wlocal);
+
+  // Set the weights
+  tacs->setDependentVariables(1, wlocal);
+  
+  // Set the local adjoint variables
+  TacsScalar *adjlocal = new TacsScalar[ 6*size ];
+  vecDist->beginForward(adj, adjlocal);
+  vecDist->endForward(adj, adjlocal);
+  tacs->setDependentVariables(6, adjlocal);
+
+  // Now allocate the derivative vectors
+  const int adj_per_node = 18;
+  BVec *deriv = new BVec(tacs->getVarMap(), adj_per_node);
+
+  // Allocate space for the local variables
+  TacsScalar *derivlocal = new TacsScalar[ adj_per_node*size ];
+  memset(derivlocal, 0, adj_per_node*size*sizeof(TacsScalar));
+
+  // Perform the reconstruction for the local
+  for ( int i = 0; i < nelems; i++ ){
+    // Get the local element adjoint variables
+    TacsScalar Xpts[3*9], advars[6*9];
+    tacs->getValues(vars_per_node, i, adjlocal, advars);
+
+    // Get the node locations for the element
+    tacs->getElement(i, Xpts, NULL, NULL, NULL);
+    
+    // Compute the derivative of the 6 components of the adjoint
+    // variables along the 3-coordinate directions
+    TacsScalar adjderiv[adj_per_node*9];
+
+    // Compute the contributions to the derivative from this side of
+    // the element    
+    for ( int jj = 0; jj < 3; jj++ ){
+      for ( int ii = 0; ii < 3; ii++ ){
+        double pt[2];
+        pt[0] = -1.0 + 1.0*ii;
+        pt[1] = -1.0 + 1.0*jj;
+
+        double N[9], Na[9], Nb[9];
+
+      }
+    }
+
+    // Add the values
+    tacs->addValues(adj_per_node, adjderiv, derivlocal);
+  }
+
+
+  tacs->addDependentResidual(adj_per_node, derivlocal);
+  
+  // Add all the weigths together
+  vecDist->beginReverse(derivlocal, , BVecDistribute::ADD);
+  vecDist->endReverse(wlocal, weights, BVecDistribute::ADD);
+
+  // Send the weights back
+  vecDist->beginForward(weights, wlocal);
+  vecDist->endForward(weights, wlocal);
+
+  // Now we can reconstruct the adjoint solution on the full set of nodes
+
+
+}
+
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
 
@@ -76,11 +362,12 @@ int main( int argc, char *argv[] ){
                              test_conn, num_faces);
     
     // Allocate the trees (random trees for now)
-    int nrand = 25;
+    int nrand = 50;
     int min_refine = 0;
-    int max_refine = 5;
-    forrest->createRandomTrees(nrand, min_refine, max_refine);
-    
+    int max_refine = 8;
+    // forrest->createRandomTrees(nrand, min_refine, max_refine);
+    forrest->createTrees(4);
+
     // Balance the forrest so that we can use it!
     forrest->balance(1);
     
@@ -166,24 +453,55 @@ int main( int argc, char *argv[] ){
     delete forrest;
   }
 
-  // Create the element
-  // PlaneStressStiffness *stiff = new PlaneStressStiffness(1.0, 70e3, 0.3);
-  // TACSElement *element = new PlaneStressQuad<ORDER>(stiff);
-  isoFSDTStiffness *stiff = new isoFSDTStiffness(1.0, 70e9, 0.3,
-                                                 5.0/6.0, 350e6, 0.01);
+  // Set the reference direction - this defines the local x-axis
+  TacsScalar axis[] = {1.0, 0.0, 0.0};
+
+  // Create the material properties
+  TacsScalar rho = 2700.0; 
+  TacsScalar E = 70e9;
+  TacsScalar nu = 0.3;
+  TacsScalar kcorr = 5.0/6.0;
+  TacsScalar ys = 350e6;
+  TacsScalar thickness = 0.0075;
+  isoFSDTStiffness *stiff = new isoFSDTStiffness(rho, E, nu, kcorr,
+                                                 ys, thickness);
+  stiff->setRefAxis(axis);
+
+  // Create the shell element
   TACSElement *element = new MITCShell<ORDER>(stiff);
+  element->incref();
 
-  TestElement *test = new TestElement(element);
-  test->setPrintLevel(2);
-  test->testResidual();
-  test->testJacobian();
+  // Test the element implementation on the root processor
+  if (rank == 0){
+    TestElement *test = new TestElement(element);
+    test->incref();
+    test->setPrintLevel(2);
+    test->testResidual();
+    test->testJacobian();
+    test->decref();
+  }
 
-
+  // Set the elements internally within TACS
   creator->setElements(&element, 1);
   
   // Create the TACSAssembler object
   TACSAssembler *tacs = creator->createTACS();
   tacs->incref();
+
+  // Dereference the element
+  element->decref();
+
+  // Create the traction class 
+  TacsScalar tx = 0.0, ty = 0.0, tz = 100.0e3;
+  TACSElement *trac = new TACSShellTraction<ORDER>(tx, ty, tz);
+
+  // Create the auxiliary element class
+  int nelems = tacs->getNumElements();
+  TACSAuxElements *aux = new TACSAuxElements(nelems);
+  for ( int i = 0; i < nelems; i++ ){
+    aux->addElement(i, trac);
+  }
+  tacs->setAuxElements(aux);
 
   // Create the preconditioner
   BVec *res = tacs->createVec();
@@ -206,15 +524,7 @@ int main( int argc, char *argv[] ){
   // Assemble and factor the stiffness/Jacobian matrix
   double alpha = 1.0, beta = 0.0, gamma = 0.0;
   tacs->assembleJacobian(res, mat, alpha, beta, gamma);
-  mat->applyBCs();
   pc->factor();
-
-  TacsScalar *array;
-  int size = res->getArray(&array);
-  for ( int k = 2; k < size; k += 6){
-    array[k] = 1.0;
-  }
-  res->applyBCs();
   pc->applyFactor(res, ans);
   tacs->setVariables(ans);
 
