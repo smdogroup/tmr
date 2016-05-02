@@ -50,6 +50,38 @@ void get_location( int face, double u, double v,
 }
 
 /*
+  Compute the Jacobian transformation at a point within the element
+*/
+void computeJacobianTrans( const TacsScalar Xpts[],
+                           const double Na[], const double Nb[], 
+                           TacsScalar Xd[], TacsScalar J[] ){
+  memset(Xd, 0, 9*sizeof(TacsScalar));
+
+  // Compute the derivative along the coordinate directions
+  const double *na = Na, *nb = Nb;
+  const TacsScalar *X = Xpts;
+  for ( int i = 0; i < 9; i++ ){
+    Xd[0] += X[0]*na[0];
+    Xd[1] += X[1]*na[0];
+    Xd[2] += X[2]*na[0];
+
+    Xd[3] += X[0]*nb[0];
+    Xd[4] += X[1]*nb[0];
+    Xd[5] += X[2]*nb[0];
+
+    na++;  nb++;
+    X += 3;
+  }
+
+  // Compute the cross-product with the normal
+  Tensor::crossProduct3D(&Xd[6], &Xd[0], &Xd[3]);
+  Tensor::normalize3D(&Xd[6]);
+
+  // Compute the transpose of the Jacobian transformation
+  FElibrary::jacobian3d(Xd, J);
+}
+
+/*
   The enriched shape functions for the tensor-product quadratic
   Lagrange shape functions.
 */
@@ -123,32 +155,8 @@ void computeReconn( const TacsScalar Xpts[],
       FElibrary::biLagrangeSF(N, Na, Nb, pt, 3);
       
       // Evaluate the Jacobian transformation at this point
-      TacsScalar Xd[9];
-      memset(Xd, 0, sizeof(Xd));
-
-      // Compute the derivative along the coordinate directions
-      const double *na = Na, *nb = Nb;
-      const TacsScalar *X = Xpts;
-      for ( int i = 0; i < 9; i++ ){
-        Xd[0] += X[0]*na[0];
-        Xd[1] += X[1]*na[0];
-        Xd[2] += X[2]*na[0];
-
-        Xd[3] += X[0]*nb[0];
-        Xd[4] += X[1]*nb[0];
-        Xd[5] += X[2]*nb[0];
-
-        na++;  nb++;
-        X += 3;
-      }
-
-      // Compute the cross-product with the normal
-      Tensor::crossProduct3D(&Xd[6], &Xd[0], &Xd[3]);
-      Tensor::normalize3D(&Xd[6]);
-
-      // Compute the transpose of the Jacobian transformation
-      TacsScalar J[9];
-      FElibrary::jacobian3d(Xd, J);
+      TacsScalar Xd[9], J[9];
+      computeJacobianTrans(Xpts, Na, Nb, Xd, J);
 
       // Normalize the first direction
       TacsScalar d1[3], d2[3];
@@ -228,35 +236,36 @@ void computeReconn( const TacsScalar Xpts[],
 }
 
 /*
-  Compute reconstruction
+  Compute the local derivative weights
 */
-void compute( TACSAssembler *tacs, BVec *adj ){
-  int size = tacs->getNumNodes() + tacs->getNumDependentNodes();
-
-  
+void computeLocalWeights( TACSAssembler *tacs, 
+                          TacsScalar **_wlocal ){
   // Create the weight vector - the weights on the averages
   // Set the weights on each of the nodes
   BVec *weights = new BVec(tacs->getVarMap(), 1);
+  weights->incref();
 
   // Retrieve the distributed object from TACSAssembler
   BVecDistribute *vecDist = tacs->getBVecDistribute();
 
-  // Allocate space for the local weights
+  // Allocate space for the local weights: The number of independent
+  // and dependent nodes
+  int size = tacs->getNumNodes() + tacs->getNumDependentNodes();
   TacsScalar *wlocal = new TacsScalar[ size ];
   memset(wlocal, 0, size*sizeof(TacsScalar));
 
   // Set the local element weights - this assumes that all the
   // elements are bi-quadratic 9-noded elements
-  TacsScalar w[9]; 
+  TacsScalar welem[9]; 
   for ( int i = 0; i < 9; i++ ){
-    w[i] = 1.0;
+    welem[i] = 1.0;
   }
 
-  // Get the number of elements
+  // Add unit weights to all the elements. This will sum up
+  // the number of times each node is referenced
   int nelems = tacs->getNumElements();
   for ( int i = 0; i < nelems; i++ ){
-    // Add all the values
-    tacs->addValues(1, i, w, wlocal);
+    tacs->addValues(1, i, welem, wlocal);
   }
 
   // Add in the dependent weight values
@@ -266,39 +275,78 @@ void compute( TACSAssembler *tacs, BVec *adj ){
   vecDist->beginReverse(wlocal, weights, BVecDistribute::ADD);
   vecDist->endReverse(wlocal, weights, BVecDistribute::ADD);
 
-  // Send the weights back
+  // Send the weights back to the local weights values
   vecDist->beginForward(weights, wlocal);
   vecDist->endForward(weights, wlocal);
 
-  // Set the weights
+  // Set the dependent values
   tacs->setDependentVariables(1, wlocal);
-  
+
+  // Free the BVec object
+  weights->decref();
+
+  // Return the local weight values
+  *_wlocal = wlocal;
+}
+
+
+/*
+  Given the input solution, compute and set the derivatives 
+  in the vector ux. Note that this vector must be 3*
+
+  input:
+  TACSAssembler:  the TACSAssembler object
+  uvec:           the solution vector
+  wlocal:         the local element-weight values
+
+  output:
+  uderiv:         the approximate derivatives at the nodes
+*/
+void computeNodeDeriv( TACSAssembler *tacs, BVec *uvec, 
+                       const TacsScalar *wlocal, BVec *uderiv ){
+  // The number of independent + dependent nodes
+  int size = tacs->getNumNodes() + tacs->getNumDependentNodes();
+
+  // The number of variables at each node
+  int vars_per_node = tacs->getVarsPerNode();
+  int deriv_per_node = 3*vars_per_node;
+
+  // Get the number of elements
+  int nelems = tacs->getNumElements();
+
+  // Retrieve the distributed object from TACSAssembler
+  BVecDistribute *vecDist = tacs->getBVecDistribute();
+
   // Set the local adjoint variables
-  TacsScalar *adjlocal = new TacsScalar[ 6*size ];
-  vecDist->beginForward(adj, adjlocal);
-  vecDist->endForward(adj, adjlocal);
-  tacs->setDependentVariables(6, adjlocal);
-
-  // Now allocate the derivative vectors
-  const int adj_per_node = 18;
-  BVec *deriv = new BVec(tacs->getVarMap(), adj_per_node);
-
+  TacsScalar *ulocal = new TacsScalar[ vars_per_node*size ];
+  vecDist->beginForward(uvec, ulocal);
+  vecDist->endForward(uvec, ulocal);
+  tacs->setDependentVariables(vars_per_node, ulocal);
+  
   // Allocate space for the local variables
-  TacsScalar *derivlocal = new TacsScalar[ adj_per_node*size ];
-  memset(derivlocal, 0, adj_per_node*size*sizeof(TacsScalar));
+  TacsScalar *dlocal = new TacsScalar[ deriv_per_node*size ];
+  memset(dlocal, 0, deriv_per_node*size*sizeof(TacsScalar));
+
+  // Allocate space for the element-wise values and derivatives
+  TacsScalar *uelem = new TacsScalar[ 9*vars_per_node ];
+  TacsScalar *delem = new TacsScalar[ 9*deriv_per_node ];
 
   // Perform the reconstruction for the local
-  for ( int i = 0; i < nelems; i++ ){
+  for ( int elem = 0; elem < nelems; elem++ ){
+    // Get the local weight values
+    TacsScalar welem[9];
+    tacs->getValues(1, elem, wlocal, welem);
+
     // Get the local element adjoint variables
-    TacsScalar Xpts[3*9], advars[6*9];
-    tacs->getValues(vars_per_node, i, adjlocal, advars);
+    tacs->getValues(vars_per_node, elem, ulocal, uelem);
 
     // Get the node locations for the element
-    tacs->getElement(i, Xpts, NULL, NULL, NULL);
+    TacsScalar Xpts[3*9];
+    tacs->getElement(elem, Xpts, NULL, NULL, NULL);
     
     // Compute the derivative of the 6 components of the adjoint
     // variables along the 3-coordinate directions
-    TacsScalar adjderiv[adj_per_node*9];
+    TacsScalar *d = delem;
 
     // Compute the contributions to the derivative from this side of
     // the element    
@@ -308,29 +356,54 @@ void compute( TACSAssembler *tacs, BVec *adj ){
         pt[0] = -1.0 + 1.0*ii;
         pt[1] = -1.0 + 1.0*jj;
 
+        // Evaluate the the quadratic shape functions at this point
         double N[9], Na[9], Nb[9];
+        FElibrary::biLagrangeSF(N, Na, Nb, pt, 3);
+      
+        // Evaluate the Jacobian transformation at this point
+        TacsScalar Xd[9], J[9];
+        computeJacobianTrans(Xpts, Na, Nb, Xd, J);
 
+        // Compute the derivatives from the interpolated solution
+        TacsScalar Ud[6*2];
+        memset(Ud, 0, sizeof(Ud));
+        for ( int i = 0; i < 9; i++ ){
+          for ( int k = 0; k < 6; k++ ){
+            Ud[2*k] += uelem[6*i + k]*Na[i];
+            Ud[2*k+1] += uelem[6*i + k]*Nb[i];
+          }
+        }
+
+        // Evaluate the x/y/z derivatives of each value at the
+        // coordinate locations
+        TacsScalar winv = 1.0/welem[3*jj + ii];
+        for ( int k = 0; k < vars_per_node; k++ ){
+          d[0] = winv*(Ud[2*k]*J[0] + Ud[2*k+1]*J[1]);
+          d[1] = winv*(Ud[2*k]*J[3] + Ud[2*k+1]*J[4]);
+          d[2] = winv*(Ud[2*k]*J[6] + Ud[2*k+1]*J[7]);
+          d += 3;
+        }
       }
     }
 
     // Add the values
-    tacs->addValues(adj_per_node, adjderiv, derivlocal);
+    tacs->addValues(deriv_per_node, elem, delem, dlocal);
   }
 
+  // Free the element values
+  delete [] uelem;
+  delete [] delem;
 
-  tacs->addDependentResidual(adj_per_node, derivlocal);
+  // Set the dependent residual values
+  tacs->addDependentResidual(deriv_per_node, dlocal);
   
   // Add all the weigths together
-  vecDist->beginReverse(derivlocal, , BVecDistribute::ADD);
-  vecDist->endReverse(wlocal, weights, BVecDistribute::ADD);
+  vecDist->beginReverse(dlocal, uderiv, BVecDistribute::ADD);
+  vecDist->endReverse(dlocal, uderiv, BVecDistribute::ADD);
 
-  // Send the weights back
-  vecDist->beginForward(weights, wlocal);
-  vecDist->endForward(weights, wlocal);
-
-  // Now we can reconstruct the adjoint solution on the full set of nodes
-
-
+  // Free any memory that is not required
+  delete [] ulocal;
+  delete [] dlocal;
 }
 
 int main( int argc, char *argv[] ){
@@ -526,16 +599,45 @@ int main( int argc, char *argv[] ){
   tacs->assembleJacobian(res, mat, alpha, beta, gamma);
   pc->factor();
   pc->applyFactor(res, ans);
+  ans->scale(-1.0);
   tacs->setVariables(ans);
 
   mat->mult(ans, tmp);
-  tmp->axpy(-1.0, res);
+  tmp->axpy(1.0, res);
 
   // Print the solution norm
   TacsScalar norm = tmp->norm()/res->norm();
   if (rank == 0){
     printf("Solution residual norm: %15.5e\n", norm);
   }
+
+  // Compute the reconstructed solution
+  TacsScalar *wlocal;
+  computeLocalWeights(tacs, &wlocal);
+  BVec *uderiv = new BVec(tacs->getVarMap(), 
+                          3*tacs->getVarsPerNode());
+  uderiv->incref();
+
+  // Compute the nodal derivatives
+  computeNodeDeriv(tacs, ans, wlocal, uderiv);  
+
+  // Convert the derivative array
+  BVec *ux = tacs->createVec();
+  TacsScalar *udarray, *uxarray;
+
+  uderiv->getArray(&udarray);
+  ux->getArray(&uxarray);
+
+  int nnodes = tacs->getNumNodes();
+  for ( int i = 0; i < nnodes; i++ ){
+    for ( int k = 0; k < 6; k++ ){
+      uxarray[6*i+k] = udarray[18*i + 3*k+1];
+    }
+  }
+
+  uderiv->decref();
+  delete [] wlocal;
+
 
   // Create an TACSToFH5 object for writing output to files
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
@@ -547,6 +649,9 @@ int main( int argc, char *argv[] ){
   TACSToFH5 * f5 = new TACSToFH5(tacs, SHELL, write_flag);
   f5->incref();
   f5->writeToFile("forrest.f5");
+
+  tacs->setVariables(ux);
+  f5->writeToFile("forrest_deriv.f5");
 
   // Free everything
   f5->decref();
