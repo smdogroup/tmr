@@ -1314,11 +1314,7 @@ void TMRQuadForrest::getMesh( int *nnodes,
                              &elem_conn[elem_ptr[elem_count]]);
 
     // Get the number of elements from the quadtree
-    int nelems;
-    TMRQuadrantArray *elements;
-    quadtrees[face]->getElements(&elements);
-    elements->getArray(NULL, &nelems);
-    elem_count += nelems;   
+    elem_count += quadtrees[face]->getNumElements();
   }
 
   // Set the output

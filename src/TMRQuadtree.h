@@ -74,8 +74,7 @@ class TMRQuadtree {
 
   // Retrieve the mesh information
   // -----------------------------
-  void addMesh( int *elem_ptr, 
-                int *elem_conn );
+  void addMesh( int *elem_ptr, int *elem_conn );
 
   // Create the interpolation from a coarser mesh
   // --------------------------------------------
@@ -114,6 +113,19 @@ class TMRQuadtree {
     nodes = _nodes;
   }
 
+  // Quickly retrieve the number of nodes/elements
+  // ---------------------------------------------
+  int getNumNodes(){
+    int size = 0;
+    if (nodes){ nodes->getArray(NULL, &size); }
+    return size; 
+  }
+  int getNumElements(){
+    int size = 0;
+    if (elements){ elements->getArray(NULL, &size); }
+    return size; 
+  }
+  
  private:
   // The list quadrants representing the elements
   TMRQuadrantArray *elements; 
