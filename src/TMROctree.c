@@ -364,41 +364,31 @@ void TMROctree::refine( int refinement[],
 
   // Add the element
   for ( int i = 0; i < size; i++ ){
-    // Try adding all of the children
-    TMROctant q;
-    array[i].getSibling(0, &q);
-
     if (refinement[i] == 0){
+      // Try adding the 0-sibling
+      TMROctant q;
+      array[i].getSibling(0, &q);
       hash->addOctant(&q);
     }
     else if (refinement[i] < 0){
-      if (q.level > min_level){
-	q.level = q.level-1;
+      if (array[i].level > min_level){
+	TMROctant q;
+        array[i].getSibling(0, &q);
+        q.level = q.level-1;
 	hash->addOctant(&q);
       }
       else {
-	hash->addOctant(&q);
+	hash->addOctant(&array[i]);
       }
     }
     else if (refinement[i] > 0){
-      if (q.level < max_level){
-	TMROctant c;
-	c.level = q.level + 1;
-	const int32_t h = 1 << (TMR_MAX_LEVEL - c.level);
-	
-	for ( int kk = 0; kk < 2; kk++ ){
-	  for ( int jj = 0; jj < 2; jj++ ){
-	    for ( int ii = 0; ii < 2; ii++ ){
-	      c.x = q.x + 2*h*ii;
-	      c.y = q.y + 2*h*jj;
-	      c.z = q.z + 2*h*kk;
-	      hash->addOctant(&c);
-	    }
-	  }
-	}
+      if (array[i].level < max_level){
+	TMROctant q = array[i];
+	q.level += 1;
+        hash->addOctant(&q);
       }
       else {
-	hash->addOctant(&q);
+	hash->addOctant(&array[i]);
       }
     }
   }

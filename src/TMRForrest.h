@@ -27,8 +27,9 @@ class TMRQuadForrest {
   // ---------------------------
   void balance( int balance_corner=0 );
 
-  // Coarsen the forrest
-  // -------------------
+  // Duplicate or coarsen the forrest
+  // --------------------------------
+  TMRQuadForrest* duplicate();
   TMRQuadForrest *coarsen();
 
   // Create the mesh connectivity

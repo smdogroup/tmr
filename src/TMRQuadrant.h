@@ -44,6 +44,7 @@ class TMRQuadrantArray {
   TMRQuadrantArray( TMRQuadrant *array, int size );
   ~TMRQuadrantArray();
 
+  TMRQuadrantArray* duplicate();
   void getArray( TMRQuadrant **_array, int *_size );
   void sort();
   TMRQuadrant* contains( TMRQuadrant *q, int use_nodes=0 );

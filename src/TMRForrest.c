@@ -904,6 +904,55 @@ void TMRQuadForrest::balance( int balance_corner ){
 }
 
 /*
+  Duplicate the forrest
+
+  This function creates a duplicate representation of the current
+  forrest. This function copies the global connectivity of the forrest
+  and copies each individual tree.
+*/
+TMRQuadForrest* TMRQuadForrest::duplicate(){
+  TMRQuadForrest *dup = new TMRQuadForrest(comm);
+  if (quadtrees){
+    // Copy over the connectivity data 
+    dup->num_nodes = num_nodes;
+    dup->num_edges = num_edges;
+    dup->num_faces = num_faces;
+    
+    // Allocate/copy the face connectivity
+    dup->face_conn = new int[ 4*num_faces ];
+    memcpy(dup->face_conn, face_conn, 4*num_faces*sizeof(int));
+
+    dup->face_edge_conn = new int[ 4*num_faces ];
+    memcpy(dup->face_edge_conn, face_edge_conn, 4*num_faces*sizeof(int));
+    
+    // Allocate the remaining data
+    dup->node_face_ptr = new int[ num_nodes+1 ];
+    memcpy(dup->node_face_ptr, node_face_ptr, (num_nodes+1)*sizeof(int));
+
+    dup->node_face_conn = new int[ node_face_ptr[num_nodes] ];
+    memcpy(dup->node_face_conn, node_face_conn, 
+           node_face_ptr[num_nodes]*sizeof(int));
+    
+    dup->edge_face_ptr = new int[ num_edges+1 ];
+    memcpy(dup->edge_face_ptr, edge_face_ptr, (num_edges+1)*sizeof(int));
+    
+    dup->edge_face_conn = new int[ edge_face_ptr[num_edges] ];
+    memcpy(dup->edge_face_conn, edge_face_conn,
+           edge_face_ptr[num_edges]*sizeof(int));
+
+    // Dupn all the quadtrees
+    dup->quadtrees = new TMRQuadtree*[ num_faces ];
+    for ( int i = 0; i < num_faces; i++ ){
+      TMRQuadrantArray *elements;
+      quadtrees[i]->getElements(&elements);
+      dup->quadtrees[i] = new TMRQuadtree(elements->duplicate());
+    }
+  }
+
+  return dup;
+}
+
+/*
   Coarsen the entire forrest
 
   This function creates a coarsened representation of the current
@@ -912,10 +961,8 @@ void TMRQuadForrest::balance( int balance_corner ){
   forrest is not necessarily balanced.
 */
 TMRQuadForrest* TMRQuadForrest::coarsen(){
-  TMRQuadForrest *coarse = NULL;
+  TMRQuadForrest *coarse = new TMRQuadForrest(comm);
   if (quadtrees){
-    coarse = new TMRQuadForrest(comm);
-
     // Copy over the connectivity data 
     coarse->num_nodes = num_nodes;
     coarse->num_edges = num_edges;

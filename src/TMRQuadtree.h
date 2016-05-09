@@ -58,8 +58,8 @@ class TMRQuadtree {
   void refine( int refinement[],
 	       int min_level=0, int max_level=TMR_MAX_LEVEL );
 
-  // Coarsen the tree uniformly
-  // --------------------------
+  // Duplicate or coarsen the tree
+  // -----------------------------
   TMRQuadtree *coarsen();
 
   // Find an quadrant that completely encloses the provided quadrant

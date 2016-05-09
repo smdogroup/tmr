@@ -79,7 +79,7 @@ TMRQuadtree::TMRQuadtree( int nrand, int min_level, int max_level ){
   // Zero the array of quadrant nodes
   nodes = NULL;
 
-  // Zero everything else
+  // Set the default order of the mesh
   order = 2;
 }
 
@@ -93,7 +93,7 @@ TMRQuadtree::TMRQuadtree( TMRQuadrantArray *_elements ){
   // Zero the array of quadrant nodes
   nodes = NULL;
 
-  // Zero everything else
+  // Set the default mesh order
   order = 2;
 }
 
@@ -110,10 +110,17 @@ TMRQuadtree::~TMRQuadtree(){
   Refine the quadtree by adding/subtracting elements
 
   This code takes in an array of integers that are either positive,
-  negative or zero. A positive value means that the cell is refined,
-  and all children are added. A negative index means that only the
-  parent of the quadrant is refined. A zero index indicates that the
-  quadrant is retained.
+  negative or zero. A positive value means that the cell is refined. A
+  negative index means that only the parent of the quadrant is
+  included. A zero index indicates that the quadrant is retained.
+
+  If a NULL array is passed in, all quadrants within the mesh are
+  refined.
+
+  input:
+  refinement:     the refinement level for each element (may be null)
+  min_level:      the minimum refinement level
+  max_level:      the maximum refinement level
 */
 void TMRQuadtree::refine( int refinement[], 
                           int min_level, int max_level ){
@@ -142,39 +149,48 @@ void TMRQuadtree::refine( int refinement[],
   elements->getArray(&array, &size);
 
   // Add the element
-  for ( int i = 0; i < size; i++ ){
-    // Try adding all of the children
-    TMRQuadrant q;
-    array[i].getSibling(0, &q);
-
-    if (refinement[i] == 0){
-      hash->addQuadrant(&q);
-    }
-    else if (refinement[i] < 0){
-      if (q.level > min_level){
-	q.level = q.level-1;
-	hash->addQuadrant(&q);
+  if (refinement){
+    for ( int i = 0; i < size; i++ ){
+      if (refinement[i] == 0){
+        // Try adding the 0-th sibling
+        TMRQuadrant q;
+        array[i].getSibling(0, &q);
+        hash->addQuadrant(&q);
       }
-      else {
-	hash->addQuadrant(&q);
-      }
-    }
-    else if (refinement[i] > 0){
-      if (q.level < max_level){
-	TMRQuadrant c;
-	c.level = q.level + 1;
-	const int32_t h = 1 << (TMR_MAX_LEVEL - c.level);
-	
-        for ( int jj = 0; jj < 2; jj++ ){
-          for ( int ii = 0; ii < 2; ii++ ){
-            c.x = q.x + 2*h*ii;
-            c.y = q.y + 2*h*jj;
-            hash->addQuadrant(&c);
-          }
+      else if (refinement[i] < 0){
+        // Try adding the 0-th sibling with next-lowest level
+        TMRQuadrant q;
+        array[i].getSibling(0, &q);
+        if (q.level > min_level){
+          q.level = q.level-1;
+          hash->addQuadrant(&q);
+        }
+        else {
+          hash->addQuadrant(&q);
         }
       }
+      else if (refinement[i] > 0){
+        if (array[i].level < max_level){
+          TMRQuadrant c = array[i];
+          c.level += 1;
+          hash->addQuadrant(&c);
+        }
+        else {
+          hash->addQuadrant(&array[i]);
+        }
+      }
+    }
+  }
+  else {
+    for ( int i = 0; i < size; i++ ){
+      // Try adding the 0-th sibling with next-lowest level
+      if (array[i].level < max_level){
+        TMRQuadrant c = array[i];
+        c.level += 1;
+        hash->addQuadrant(&c);
+      }
       else {
-	hash->addQuadrant(&q);
+        hash->addQuadrant(&array[i]);
       }
     }
   }

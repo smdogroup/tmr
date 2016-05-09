@@ -163,6 +163,19 @@ TMRQuadrantArray::~TMRQuadrantArray(){
 }
 
 /*
+  Duplicate the array and return the copy
+*/
+TMRQuadrantArray* TMRQuadrantArray::duplicate(){
+  TMRQuadrant *arr = new TMRQuadrant[ size ];
+  memcpy(arr, array, size*sizeof(TMRQuadrant));
+
+  TMRQuadrantArray *dup = new TMRQuadrantArray(arr, size);
+  dup->is_sorted = is_sorted;
+
+  return dup;
+}
+
+/*
   Sort the list and remove duplicates from the array of possible
   entries.
 */
