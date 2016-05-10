@@ -8,6 +8,7 @@
 #include "TensorToolbox.h"
 #include "MITCShell.h"
 #include "KSFailure.h"
+#include "KSDisplacement.h"
 #include "Compliance.h"
 #include "tacslapack.h"
 
@@ -15,56 +16,91 @@
 // Set the element order = 3rd order, quadratic elements
 const int ELEMENT_ORDER = 3;
 
+class ProblemGeometry {
+ public:
+  virtual void getConnectivity( int *num_nodes, 
+                                const int **conn, int *num_faces ) = 0;
+  virtual void getLocation( int face, int x, int y,
+                            TacsScalar *X ) = 0; 
+  virtual int isBoundary( int face, int x, int y ) = 0;
+};
 
-// Create the nodal locations for the mesh
-const double test_Xpts[] = {0.0, 0.0, 0.0,
-                            1.0, 0.0, 0.0,
-                            0.3, 0.7, 0.0,
-                            0.8, 0.25, 0.0,
-                            0.25, 0.2, 0.0,
-                            0.75, 0.6, 0.0,
-                            0.0, 1.0, 0.0,
-                            1.0, 1.0, 0.0};
+class SquarePlate : public ProblemGeometry {
+ public:
+  SquarePlate(){}
+
+  void getConnectivity( int *_num_nodes,
+                        const int **_conn,
+                        int *_num_faces ){
+    *_num_nodes = 8;
+    *_num_faces = 5;
+    *_conn = conn;
+  }
+  void getLocation( int face, int x, int y,
+                    TacsScalar *X ){
+    // Compute the u/v locations on the face
+    const double dh = 1.0/(1 << TMR_MAX_LEVEL);
+    double u = dh*x, v = dh*y;
+
+    // Evaluate the shape functions
+    double N[4];
+    N[0] = (1.0 - u)*(1.0 - v);
+    N[1] = u*(1.0 - v);
+    N[2] = (1.0 - u)*v;
+    N[3] = u*v;
+
+    // Compute the node location
+    X[0] = (N[0]*Xpts[3*conn[4*face]] +
+            N[1]*Xpts[3*conn[4*face+1]] +
+            N[2]*Xpts[3*conn[4*face+2]] +
+            N[3]*Xpts[3*conn[4*face+3]]);
+    X[1] = (N[0]*Xpts[3*conn[4*face]+1] +
+            N[1]*Xpts[3*conn[4*face+1]+1] +
+            N[2]*Xpts[3*conn[4*face+2]+1] +
+            N[3]*Xpts[3*conn[4*face+3]+1]);
+    X[2] = (N[0]*Xpts[3*conn[4*face]+2] +
+            N[1]*Xpts[3*conn[4*face+1]+2] +
+            N[2]*Xpts[3*conn[4*face+2]+2] +
+            N[3]*Xpts[3*conn[4*face+3]+2]);
+  }
+  int isBoundary( int face, int x, int y ){
+    const int hmax = 1 << TMR_MAX_LEVEL;
+    if (face == 0 && y == 0){ return 1; }
+    if (face == 2 && y == 0){ return 1; }
+    if (face == 3 && y == hmax){ return 1; }
+    if (face == 4 && x == hmax){ return 1; }
+    return 0;
+  }
+
+ private:
+  static const double Xpts[24];
+  static const int conn[20];
+};
+
+const double SquarePlate::Xpts[] = {0.0, 0.0, 0.0,
+                                    1.0, 0.0, 0.0,
+                                    0.3, 0.7, 0.0,
+                                    0.8, 0.25, 0.0,
+                                    0.25, 0.2, 0.0,
+                                    0.75, 0.6, 0.0,
+                                    0.0, 1.0, 0.0,
+                                    1.0, 1.0, 0.0};
+
+const int SquarePlate::conn[] = {0, 1, 4, 3,
+                                 2, 4, 5, 3, 
+                                 6, 0, 2, 4, 
+                                 2, 5, 6, 7,
+                                 3, 1, 5, 7};
+
 /*
-const double test_Xpts[] = {0.0, 0.0, 0.0,
-                            1.0, 0.0, 0.0,
-                            0.3, 0.7, 0.0,
-                            0.7, 0.3, 0.0,
-                            0.3, 0.3, 0.0,
-                            0.7, 0.7, 0.0,
-                            0.0, 1.0, 0.0,
-                            1.0, 1.0, 0.0};
+class Cylinder : public ProblemGeometry {
+ public:
+
+};
+
+class BDF : public ProblemGeometry {
+};
 */
-
-const int test_conn[] = {0, 1, 4, 3,
-                         2, 4, 5, 3, 
-                         6, 0, 2, 4, 
-                         2, 5, 6, 7,
-                         3, 1, 5, 7};
-
-/*
-  Retrieve the x/y location on the face based on the u/v coordinates
-*/
-void get_location( int face, double u, double v, double *X ){
-  double N[4];
-  N[0] = (1.0 - u)*(1.0 - v);
-  N[1] = u*(1.0 - v);
-  N[2] = (1.0 - u)*v;
-  N[3] = u*v;
-
-  X[0] = (N[0]*test_Xpts[3*test_conn[4*face]] +
-          N[1]*test_Xpts[3*test_conn[4*face+1]] +
-          N[2]*test_Xpts[3*test_conn[4*face+2]] +
-          N[3]*test_Xpts[3*test_conn[4*face+3]]);
-  X[1] = (N[0]*test_Xpts[3*test_conn[4*face]+1] +
-          N[1]*test_Xpts[3*test_conn[4*face+1]+1] +
-          N[2]*test_Xpts[3*test_conn[4*face+2]+1] +
-          N[3]*test_Xpts[3*test_conn[4*face+3]+1]);
-  X[2] = (N[0]*test_Xpts[3*test_conn[4*face]+2] +
-          N[1]*test_Xpts[3*test_conn[4*face+1]+2] +
-          N[2]*test_Xpts[3*test_conn[4*face+2]+2] +
-          N[3]*test_Xpts[3*test_conn[4*face+3]+2]);
-}
 
 /*
   Compute the Jacobian transformation at a point within the element
@@ -665,8 +701,8 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
     computeElemRecon(Xpts, uelem, delem, ubar);
 
     TacsScalar SE_refine = 0.0;
-    for ( int jj = 0; jj < 2; jj++ ){
-      for ( int ii = 0; ii < 2; ii++ ){
+    for ( int ii = 0; ii < 2; ii++ ){
+      for ( int jj = 0; jj < 2; jj++ ){
         TacsScalar rXpts[3*9], ruelem[6*9];
         memset(rXpts, 0, 3*9*sizeof(TacsScalar));
         memset(ruelem, 0, 6*9*sizeof(TacsScalar));
@@ -721,7 +757,7 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
       }
     }
     // SE_refine - SE_error should always be a positive quantity
-    SE_error[i] = fabs(SE_refine - SE_error[i]);
+    SE_error[i] = SE_refine - SE_error[i];
 
     // Add up th etotal error
     SE_total_error += SE_error[i];
@@ -740,7 +776,7 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
   int *refine_local = new int[ nelems ];
   memset(refine_local, 0, nelems*sizeof(int));
   for ( int i = 0; i < nelems; i++ ){
-    if (SE_error[i] >= target_err/ntotal){
+    if (SE_error[i] >= target_err){
       refine_local[i] = 1;
     }
   }
@@ -763,7 +799,6 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
 
 /*
   Refine the mesh using the original solution and the adjoint solution
-
 
   input:
   tacs:        the TACSAssembler object
@@ -1093,6 +1128,7 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
 TACSAssembler* createTACSAssembler( MPI_Comm comm, 
                                     TACSElement *element,
                                     TMRQuadForrest *forrest,
+                                    ProblemGeometry *problem,
                                     int **_partition, 
                                     int *_nelems, int *_nnodes,
                                     const int *part=NULL ){
@@ -1154,14 +1190,11 @@ TACSAssembler* createTACSAssembler( MPI_Comm comm,
       for ( int i = 0; i < size; i++ ){
         int node = array[i].tag;
         if (node >= 0){
-          double u = dh*array[i].x;
-          double v = dh*array[i].y;         
-          get_location(face, u, v, &Xpts[3*node]);
+          problem->getLocation(face, array[i].x, array[i].y, 
+                               &Xpts[3*node]);
           
           // Set the boundary conditions based on the spatial location
-          if (((Xpts[3*node] < 1e-6 || Xpts[3*node] > 0.999999) ||
-               (Xpts[3*node+1] < 1e-6 || Xpts[3*node+1] > 0.999999))
-              && num_bcs < max_bcs){
+          if (problem->isBoundary(face, array[i].x, array[i].y)){
             bc_nodes[num_bcs] = node;
             num_bcs++;
           }
@@ -1297,8 +1330,52 @@ int main( int argc, char *argv[] ){
   TACSElement *element = new MITCShell<ELEMENT_ORDER>(stiff);
   element->incref();
 
+  // Create the quadtree forrest
+  TMRQuadForrest *forrest = NULL;
+
+  // Set the refinement levels
+  int min_refine = 2;
+  int max_refine = TMR_MAX_LEVEL;
+
+  // Create the default problem 
+  ProblemGeometry *problem = new SquarePlate();
+  char problem_name[64];
+  sprintf(problem_name, "plate");
+  
+  // Set the initial function value
+  TacsScalar fval_init = 0.0;
+
+  // Set the target relative error for the functional
+  int test_element = 0;
+  double target_rel_err = 0.01;
+  int use_energy_norm = 0;
+  double ks_weight = 10.0;
+
+  for ( int k = 0; k < argc; k++ ){
+    if (strcmp(argv[k], "use_energy_norm") == 0){
+      target_rel_err = 0.001;
+      use_energy_norm = 1;
+    }
+    double rho = 0.0;
+    if (sscanf(argv[k], "ks_weight=%lf", &rho) == 1){
+      ks_weight = rho;
+    }
+    if (strcmp(argv[k], "test_element") == 0){
+      test_element = 1;
+    }
+  }
+
+  // Create a prefix for the type of problem we're running
+  char prefix[128];
+  if (use_energy_norm){
+    sprintf(prefix, "%s/energy_norm", problem_name);
+  }
+  else {
+    sprintf(prefix, "%s/ks%.0f", problem_name, ks_weight);
+  }
+
   // Test the element implementation on the root processor
-  if (rank == 0){
+  if (test_element){
     TestElement *test = new TestElement(element);
     test->incref();
     test->setPrintLevel(2);
@@ -1307,28 +1384,32 @@ int main( int argc, char *argv[] ){
     test->decref();
   }
 
-  // Create the quadtree forrest
-  TMRQuadForrest *forrest = NULL;
-
-  // Set the refinement
-  int min_refine = 2;
-  int max_refine = TMR_MAX_LEVEL;
+  // Print out the parameters to the screen
+  if (rank == 0){
+    printf("target_rel_err =  %f\n", target_rel_err);
+    printf("use_energy_norm = %d\n", use_energy_norm);
+    printf("ks_weight =       %f\n", ks_weight);
+  }
 
   if (rank == 0){
     forrest = new TMRQuadForrest(MPI_COMM_SELF);
     
     // Set the connectivity
-    int num_nodes = 8;
-    int num_faces = 5;
-    forrest->setConnectivity(num_nodes, test_conn, num_faces);
+    int num_nodes, num_faces;
+    const int *conn;
+    problem->getConnectivity(&num_nodes, &conn, &num_faces);
+    forrest->setConnectivity(num_nodes, conn, num_faces);
     
     // Allocate the trees
     forrest->createTrees(min_refine);
   }
 
+  // Create the problem file
   FILE *fp = NULL;
   if (rank == 0){
-    fp = fopen("error_history.dat", "w");
+    char filename[256];
+    sprintf(filename, "%serror_history.dat", prefix);
+    fp = fopen(filename, "w");
     fprintf(fp, "Variables = iter, nelems, nnodes, fval, fcorr, error\n");
   }
 
@@ -1340,20 +1421,27 @@ int main( int argc, char *argv[] ){
     
     int *partition = NULL, nelems = 0, nnodes = 0;
     TACSAssembler *tacs = 
-      createTACSAssembler(comm, element, forrest, 
+      createTACSAssembler(comm, element, forrest, problem,
                           &partition, &nelems, &nnodes);
     tacs->incref();
 
     // Create the KS function
-    double ks_weight = 50.0;
     KSFailure *ks_func = new KSFailure(tacs, ks_weight);
     ks_func->setKSFailureType(KSFailure::CONTINUOUS);
+
+    // Create the KS function for the displacement
+    TacsScalar dir[] = {0.0, 0.0, 1.0, 0.0, 0.0, 0.0};
+    KSDisplacement *ks_disp = new KSDisplacement(tacs, dir, ks_weight);
+    ks_disp->setKSDisplacementType(KSDisplacement::CONTINUOUS);
 
     // Allocate the compliance functional
     Compliance *comp_func = new Compliance(tacs);
   
     // Set the actual function to use
-    TACSFunction *functional = ks_func;  
+    TACSFunction *functional = ks_func;
+    if (use_energy_norm){
+      functional = comp_func;
+    }
         
     // Create the preconditioner
     BVec *res = tacs->createVec();
@@ -1402,20 +1490,15 @@ int main( int argc, char *argv[] ){
     TacsScalar fval;
     tacs->evalFunctions(&functional, 1, &fval);
 
+    if (iter == 0){
+      fval_init = fval;
+    }
+
     res->zeroEntries();
     tacs->evalSVSens(functional, res);
     pc->applyFactor(res, adjoint);
     adjoint->scale(-1.0);
-
-    /*
-    tacs->testConstitutive(0, 2);
-    double dh = 1e-1;
-    for ( int i = 0; i < 15; i++ ){
-      tacs->testFunction(functional, 0, dh);
-      dh *= 0.1;
-    }
-    */
-
+ 
     // Create an TACSToFH5 object for writing output to files
     unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                TACSElement::OUTPUT_DISPLACEMENTS |
@@ -1426,76 +1509,91 @@ int main( int argc, char *argv[] ){
     f5->incref();
 
     // Write the displacements
-    char filename[128];
-    sprintf(filename, "forrest%d.f5", iter);
-    f5->writeToFile(filename);
-
-    tacs->setVariables(adjoint);
-    sprintf(filename, "adjoint_forrest%d.f5", iter);
+    char filename[256];
+    sprintf(filename, "%s_solution%d.f5", prefix, iter);
     f5->writeToFile(filename);
 
     // Delete the viewer
     f5->decref();
 
-    // Compute the computable error contribution
-    TacsScalar error_total = 0.0;
-
-    // Perform the refinement
-    // error_total = strainEnergyRefine(tacs, ans, partition, forrest,
-    //                              min_refine, max_refine);
-
-    // Duplicate the forrest
-    TMRQuadForrest *dup = NULL;
-    int *new_part = NULL;
-    if (rank == 0){
-      dup = forrest->duplicate();
-      TMRQuadtree **trees;
-      int ntrees = dup->getQuadtrees(&trees);
-      for ( int i = 0; i < ntrees; i++ ){
-        trees[i]->refine(NULL, min_refine, max_refine);
-      }
-
-      // Create the refined TACSAssembler object
-      new_part = new int[ 4*nelems ];
-      for ( int i = 0; i < nelems; i++ ){
-        for ( int k = 0; k < 4; k++ ){
-          new_part[4*i+k] = partition[i];
-        }
-      }
-    }
-
-    TACSAssembler *refine = createTACSAssembler(comm, element, dup, 
-                                                NULL, NULL, NULL, 
-                                                new_part);
-    refine->incref();
-
-    if (rank == 0){
-      // Free the refined forrest and its partition
-      delete dup;
-      delete [] new_part;
-    }
-    
-    // Broadcast the number of elements to set the target refinement
-    // level properly
-    MPI_Bcast(&nelems, 1, MPI_INT, 0, comm);
-
-    // factor = 16/2**iter
+    // Set the target error using the factor: max(1.0, 16*(2**-iter))
     double factor = 16.0/(1 << iter);
     if (factor < 1.0){ factor = 1.0; }
 
-    double target_rel_err = 0.01;
+    // Set the absolute element-level error based on the relative
+    // error that is requested
     double target_abs_err = factor*target_rel_err*fval/nelems;
 
-    TacsScalar adjcorr;
-    error_total = adjointRefine(tacs, refine, 
-                                ans, adjoint, partition, forrest,
-                                target_abs_err,
-                                min_refine, max_refine, &adjcorr);
+    // Compute the computable error contribution
+    TacsScalar error_total = 0.0;
 
-    if (fp){
-      fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
-              iter, nelems, nnodes, fval, fval+adjcorr, error_total);
-      fflush(fp);
+    if (use_energy_norm){
+      // Perform the refinement
+      error_total = strainEnergyRefine(tacs, ans, partition, forrest,
+                                       target_abs_err,
+                                       min_refine, max_refine);
+      
+      if (fp){
+        fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
+                iter, nelems, nnodes, 
+                fval/fval_init, 
+                (fval+error_total)/fval_init, 
+                error_total/fval_init);
+        fflush(fp);
+      }
+    }
+    else {
+      // Duplicate the forrest
+      TMRQuadForrest *dup = NULL;
+      int *new_part = NULL;
+      if (rank == 0){
+        dup = forrest->duplicate();
+        TMRQuadtree **trees;
+        int ntrees = dup->getQuadtrees(&trees);
+        for ( int i = 0; i < ntrees; i++ ){
+          trees[i]->refine(NULL, min_refine, max_refine);
+        }
+        
+        // Create the refined TACSAssembler object
+        new_part = new int[ 4*nelems ];
+        for ( int i = 0; i < nelems; i++ ){
+          for ( int k = 0; k < 4; k++ ){
+            new_part[4*i+k] = partition[i];
+          }
+        }
+      }
+
+      // Create the uniformly refined TACSAssembler object
+      TACSAssembler *refine = 
+        createTACSAssembler(comm, element, dup, problem,
+                            NULL, NULL, NULL, new_part);
+      refine->incref();
+      
+      if (rank == 0){
+        // Free the refined forrest and its partition
+        delete dup;
+        delete [] new_part;
+      }
+      
+      // Broadcast the number of elements to set the target refinement
+      // level properly
+      MPI_Bcast(&nelems, 1, MPI_INT, 0, comm);
+      
+      // Perform the error assessment
+      TacsScalar adjcorr;
+      error_total = adjointRefine(tacs, refine, 
+                                  ans, adjoint, partition, forrest,
+                                  target_abs_err,
+                                  min_refine, max_refine, &adjcorr);
+      
+      if (fp){
+        fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
+                iter, nelems, nnodes, 
+                fval/fval_init, 
+                (fval+adjcorr)/fval_init, 
+                error_total/fval_init);
+        fflush(fp);
+      }
     }
 
     // Free everything
