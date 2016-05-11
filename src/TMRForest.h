@@ -5,10 +5,10 @@
 #include "TMRQuadtree.h"
 #include "TMROctree.h"
 
-class TMRQuadForrest {
+class TMRQuadForest {
  public:
-  TMRQuadForrest( MPI_Comm _comm );
-  ~TMRQuadForrest();
+  TMRQuadForest( MPI_Comm _comm );
+  ~TMRQuadForest();
 
   // Functions for setting the connecitivity
   // ---------------------------------------
@@ -29,8 +29,8 @@ class TMRQuadForrest {
 
   // Duplicate or coarsen the forrest
   // --------------------------------
-  TMRQuadForrest* duplicate();
-  TMRQuadForrest *coarsen();
+  TMRQuadForest* duplicate();
+  TMRQuadForest *coarsen();
 
   // Create the mesh connectivity
   // ----------------------------

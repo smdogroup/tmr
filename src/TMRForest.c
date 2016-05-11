@@ -1,4 +1,4 @@
-#include "TMRForrest.h"
+#include "TMRForest.h"
 
 const int face_to_edge_nodes[][2] = {{0, 2},
                                      {1, 3},
@@ -6,9 +6,9 @@ const int face_to_edge_nodes[][2] = {{0, 2},
                                      {2, 3}};
 
 /*
-  Create the TMRQuadForrest object
+  Create the TMRQuadForest object
 */
-TMRQuadForrest::TMRQuadForrest( MPI_Comm _comm ){
+TMRQuadForest::TMRQuadForest( MPI_Comm _comm ){
   // Set the MPI communicator
   comm = _comm;
 
@@ -38,9 +38,9 @@ TMRQuadForrest::TMRQuadForrest( MPI_Comm _comm ){
 }
 
 /*
-  Free the data allocated by the TMRQuadForrest object
+  Free the data allocated by the TMRQuadForest object
 */
-TMRQuadForrest::~TMRQuadForrest(){
+TMRQuadForest::~TMRQuadForest(){
   if (face_conn){ delete [] face_conn; }
   if (face_edge_conn){ delete [] face_edge_conn; }
   if (node_face_ptr){ delete [] node_face_ptr; }
@@ -72,9 +72,9 @@ TMRQuadForrest::~TMRQuadForrest(){
   This information is required for creating quadtree forrests on the
   unstructured mesh.
 */
-void TMRQuadForrest::setConnectivity( int _num_nodes,
-                                      const int *_face_conn,
-                                      int _num_faces ){
+void TMRQuadForest::setConnectivity( int _num_nodes,
+                                     const int *_face_conn,
+                                     int _num_faces ){
   // Free any data if it has already been allocated. 
   // This will erase everything internally.
   if (face_conn){ delete [] face_conn; }
@@ -237,7 +237,7 @@ void TMRQuadForrest::setConnectivity( int _num_nodes,
 /*
   Create a forrest with the specified refinement level
 */
-void TMRQuadForrest::createTrees( int refine_level ){
+void TMRQuadForest::createTrees( int refine_level ){
   if (quadtrees){ 
     for ( int i = 0; i < num_faces; i++ ){
       delete quadtrees[i];
@@ -257,8 +257,8 @@ void TMRQuadForrest::createTrees( int refine_level ){
 
   This function is usually used for testing purposes.
 */
-void TMRQuadForrest::createRandomTrees( int nrand, 
-                                        int min_level, int max_level ){
+void TMRQuadForest::createRandomTrees( int nrand, 
+                                       int min_level, int max_level ){
   if (quadtrees){ 
     for ( int i = 0; i < num_faces; i++ ){
       delete quadtrees[i];
@@ -290,11 +290,11 @@ void TMRQuadForrest::createRandomTrees( int nrand,
   hash:    the array of hash objects for each face
   queue:   the array of newly added qudrants for each face
 */
-void TMRQuadForrest::addEdgeNeighbors( int face,
-                                       int edge, 
-                                       TMRQuadrant p,
-                                       TMRQuadrantHash **hash,
-                                       TMRQuadrantQueue **queue ){
+void TMRQuadForest::addEdgeNeighbors( int face,
+                                      int edge, 
+                                      TMRQuadrant p,
+                                      TMRQuadrantHash **hash,
+                                      TMRQuadrantQueue **queue ){
   // First determine the global edge number 
   int edge_num = face_edge_conn[4*face + edge];
   
@@ -384,11 +384,11 @@ void TMRQuadForrest::addEdgeNeighbors( int face,
   hash:    the array of hash objects for each face
   queue:   the array of newly added qudrants for each face
 */
-void TMRQuadForrest::addCornerNeighbors( int face,
-                                         int corner, 
-                                         TMRQuadrant p,
-                                         TMRQuadrantHash **hash,
-                                         TMRQuadrantQueue **queue ){
+void TMRQuadForest::addCornerNeighbors( int face,
+                                        int corner, 
+                                        TMRQuadrant p,
+                                        TMRQuadrantHash **hash,
+                                        TMRQuadrantQueue **queue ){
   // First determine the global edge number 
   int node_num = face_conn[4*face + corner];
   
@@ -444,12 +444,12 @@ void TMRQuadForrest::addCornerNeighbors( int face,
   queue:   the array of queues containing the local dependent nodes
   indep:   the independent node queue - nodes for the dependent constraints
 */
-void TMRQuadForrest::addEdgeDependentNodes( int face,
-                                            int edge,
-                                            TMRQuadrant p,
-                                            TMRQuadrant source,
-                                            TMRQuadrantQueue **queue,
-                                            TMRQuadrantQueue **indep ){
+void TMRQuadForest::addEdgeDependentNodes( int face,
+                                           int edge,
+                                           TMRQuadrant p,
+                                           TMRQuadrant source,
+                                           TMRQuadrantQueue **queue,
+                                           TMRQuadrantQueue **indep ){
   // First determine the global edge number
   int edge_num = face_edge_conn[4*face + edge];
   
@@ -612,10 +612,10 @@ void TMRQuadForrest::addEdgeDependentNodes( int face,
 
   returns:   the quadrant associated with p on the adjacent face
 */
-TMRQuadrant* TMRQuadForrest::getEdgeNodeNeighbor( int face,
-                                                  int adjacent,
-                                                  int edge,
-                                                  TMRQuadrant p ){
+TMRQuadrant* TMRQuadForest::getEdgeNodeNeighbor( int face,
+                                                 int adjacent,
+                                                 int edge,
+                                                 TMRQuadrant p ){
   // Compute the edge length
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
@@ -702,7 +702,7 @@ TMRQuadrant* TMRQuadForrest::getEdgeNodeNeighbor( int face,
   balances faces and edges (so that there is at most one depdent node
   per edge) and balances across corners optionally.
 */
-void TMRQuadForrest::balance( int balance_corner ){
+void TMRQuadForest::balance( int balance_corner ){
   // Get the max level
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
@@ -910,8 +910,8 @@ void TMRQuadForrest::balance( int balance_corner ){
   forrest. This function copies the global connectivity of the forrest
   and copies each individual tree.
 */
-TMRQuadForrest* TMRQuadForrest::duplicate(){
-  TMRQuadForrest *dup = new TMRQuadForrest(comm);
+TMRQuadForest* TMRQuadForest::duplicate(){
+  TMRQuadForest *dup = new TMRQuadForest(comm);
   if (quadtrees){
     // Copy over the connectivity data 
     dup->num_nodes = num_nodes;
@@ -960,8 +960,8 @@ TMRQuadForrest* TMRQuadForrest::duplicate(){
   forrest and coarsening each individual tree. Note that the resulting
   forrest is not necessarily balanced.
 */
-TMRQuadForrest* TMRQuadForrest::coarsen(){
-  TMRQuadForrest *coarse = new TMRQuadForrest(comm);
+TMRQuadForest* TMRQuadForest::coarsen(){
+  TMRQuadForest *coarse = new TMRQuadForest(comm);
   if (quadtrees){
     // Copy over the connectivity data 
     coarse->num_nodes = num_nodes;
@@ -1012,7 +1012,7 @@ TMRQuadForrest* TMRQuadForrest::coarsen(){
   input:
   order:   the order of the mesh
 */
-void TMRQuadForrest::createNodes( int order ){
+void TMRQuadForest::createNodes( int order ){
   // Check that the order falls within allowable bounds
   mesh_order = order;
   if (order > 3){ mesh_order = 3; }
@@ -1340,10 +1340,10 @@ void TMRQuadForrest::createNodes( int order ){
 /*
   Retrieve the connectivity from the forrest
 */
-void TMRQuadForrest::getMesh( int *nnodes,
-                              int *nelems,
-                              int **_elem_ptr,
-                              int **_elem_conn ){
+void TMRQuadForest::getMesh( int *nnodes,
+                             int *nelems,
+                             int **_elem_ptr,
+                             int **_elem_conn ){
   // Allocate space for the mesh connectivity
   int *elem_ptr = new int[ num_mesh_elements+1 ];
   int *elem_conn = new int[ mesh_order*mesh_order*num_mesh_elements ];
@@ -1374,10 +1374,10 @@ void TMRQuadForrest::getMesh( int *nnodes,
 /*
   Retrieve the dependent nodes that are set internally
 */
-void TMRQuadForrest::getDependentNodes( int *num_dep_nodes,
-                                        const int **_dep_ptr,
-                                        const int **_dep_conn,
-                                        const double **_dep_weights ){
+void TMRQuadForest::getDependentNodes( int *num_dep_nodes,
+                                       const int **_dep_ptr,
+                                       const int **_dep_conn,
+                                       const double **_dep_weights ){
   if (num_dep_nodes){ *num_dep_nodes = num_mesh_dep_nodes; }
   if (_dep_ptr){ *_dep_ptr = dep_ptr; }
   if (_dep_conn){ *_dep_conn = dep_conn; }
