@@ -1,5 +1,5 @@
-#ifndef TMR_FORREST_H
-#define TMR_FORREST_H
+#ifndef TMR_FOREST_H
+#define TMR_FOREST_H
 
 #include "mpi.h"
 #include "TMRQuadtree.h"
@@ -16,8 +16,8 @@ class TMRQuadForest {
                         const int *_face_conn, 
                         int _num_faces );
 
-  // Create the forrest of quadrants
-  // -------------------------------
+  // Create the forest of quadrants
+  // ------------------------------
   void createTrees( int refine_level );
   void createRandomTrees( int nrand=10, 
                           int min_level=0, int max_level=8 );
@@ -27,8 +27,8 @@ class TMRQuadForest {
   // ---------------------------
   void balance( int balance_corner=0 );
 
-  // Duplicate or coarsen the forrest
-  // --------------------------------
+  // Duplicate or coarsen the forest
+  // -------------------------------
   TMRQuadForest* duplicate();
   TMRQuadForest *coarsen();
 
@@ -98,8 +98,8 @@ class TMRQuadForest {
   int *dep_conn;
   double *dep_weights;
 
-  // Keep a pointer to the forrest of quadtrees
+  // Keep a pointer to the forest of quadtrees
   TMRQuadtree **quadtrees; 
 };
 
-#endif // TMR_FORREST_H
+#endif // TMR_FOREST_H

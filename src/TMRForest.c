@@ -69,7 +69,7 @@ TMRQuadForest::~TMRQuadForest(){
   3. Unique edge ordering
   4. Face to edge and edge to face connectivity
 
-  This information is required for creating quadtree forrests on the
+  This information is required for creating quadtree forests on the
   unstructured mesh.
 */
 void TMRQuadForest::setConnectivity( int _num_nodes,
@@ -235,7 +235,7 @@ void TMRQuadForest::setConnectivity( int _num_nodes,
 }
 
 /*
-  Create a forrest with the specified refinement level
+  Create a forest with the specified refinement level
 */
 void TMRQuadForest::createTrees( int refine_level ){
   if (quadtrees){ 
@@ -276,7 +276,7 @@ void TMRQuadForest::createRandomTrees( int nrand,
 /*
   Add the edge neighbors for a adjacent trees
 
-  This function is called to balance the forrest across tree edges.
+  This function is called to balance the forest across tree edges.
   Given an quadrant p on the specified corner index, this code ensures
   a corner balanced tree, by adding the corresponding corner qudrant
   to all node-adjacent faces. If the quadrant is added to the hash
@@ -370,7 +370,7 @@ void TMRQuadForest::addEdgeNeighbors( int face,
 /*
   Add the corner neighbors for a given tree
 
-  This function is called to balance the forrest across tree corners.
+  This function is called to balance the forest across tree corners.
   Given an quadrant p on the specified corner index, this code ensures
   a corner balanced tree, by adding the corresponding corner qudrant
   to all node-adjacent faces. If the quadrant is added to the hash
@@ -683,7 +683,7 @@ TMRQuadrant* TMRQuadForest::getEdgeNodeNeighbor( int face,
 }
 
 /*
-  Balance the forrest of quadtrees
+  Balance the forest of quadtrees
 
   This algorithm uses a hash and a queue to balance the quadtree. For
   each element in the quadtree, we add the neighbors that are required
@@ -904,10 +904,10 @@ void TMRQuadForest::balance( int balance_corner ){
 }
 
 /*
-  Duplicate the forrest
+  Duplicate the forest
 
   This function creates a duplicate representation of the current
-  forrest. This function copies the global connectivity of the forrest
+  forest. This function copies the global connectivity of the forest
   and copies each individual tree.
 */
 TMRQuadForest* TMRQuadForest::duplicate(){
@@ -953,12 +953,12 @@ TMRQuadForest* TMRQuadForest::duplicate(){
 }
 
 /*
-  Coarsen the entire forrest
+  Coarsen the entire forest
 
   This function creates a coarsened representation of the current
-  forrest. This is done by copying the global connectivity of the
-  forrest and coarsening each individual tree. Note that the resulting
-  forrest is not necessarily balanced.
+  forest. This is done by copying the global connectivity of the
+  forest and coarsening each individual tree. Note that the resulting
+  forest is not necessarily balanced.
 */
 TMRQuadForest* TMRQuadForest::coarsen(){
   TMRQuadForest *coarse = new TMRQuadForest(comm);
@@ -1201,7 +1201,7 @@ void TMRQuadForest::createNodes( int order ){
   num_mesh_elements = 0;
   
   // Now, order the nodes and dependent nodes within the entire
-  // quadtree forrest
+  // quadtree forest
   for ( int face = 0; face < num_faces; face++ ){
     // Count up the number of elements
     int nelems;
@@ -1338,7 +1338,7 @@ void TMRQuadForest::createNodes( int order ){
 }
 
 /*
-  Retrieve the connectivity from the forrest
+  Retrieve the connectivity from the forest
 */
 void TMRQuadForest::getMesh( int *nnodes,
                              int *nelems,

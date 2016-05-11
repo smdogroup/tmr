@@ -1,4 +1,4 @@
-#include "TMRForrest.h"
+#include "TMRForest.h"
 #include "specialFSDTStiffness.h"
 #include "TACSCreator.h"
 #include "TACSAssembler.h"
@@ -572,19 +572,19 @@ void computeNodeDeriv( TACSAssembler *tacs, BVec *uvec,
   This function takes the relative refinement on each local processor,
   and reduces this to the root processor. The code then computes the
   local elements which need to be refined and then applies the
-  refinement to the quadtree forrest. This quadtree forrest can then
+  refinement to the quadtree forest. This quadtree forest can then
   be used for creating the next mesh.
 
   input:
   comm:        the MPI communicator
-  forrest:     the quadtree forrest
+  forest:      the quadtree forest
   nelems:      the local number of elements
   ntotal:      the total number of elements
   partition:   the element partition from the TACSCreator object
   min_refine:  the minimum quadrant refinement level
   max_refine:  the maximum quadrant refinement level
 */
-void refineQuadMesh( MPI_Comm comm, TMRQuadForrest *forrest,
+void refineQuadMesh( MPI_Comm comm, TMRQuadForest *forest,
                      int *refine_local,
                      int nelems, int ntotal,
                      const int *partition, 
@@ -648,7 +648,7 @@ void refineQuadMesh( MPI_Comm comm, TMRQuadForrest *forrest,
 
     // Set the refinement on each of the quadtrees
     TMRQuadtree **trees;
-    int ntrees = forrest->getQuadtrees(&trees);
+    int ntrees = forest->getQuadtrees(&trees);
     
     // Loop through all trees and refine them
     for ( int i = 0, offset = 0; i < ntrees; i++ ){
@@ -689,7 +689,7 @@ void refineQuadMesh( MPI_Comm comm, TMRQuadForrest *forrest,
   tacs:        the TACSAssembler object
   uvec:        the solution variables in the mesh
   partition:   the element partition
-  forrest:     the forrest of quadtrees 
+  forest:      the forest of quadtrees 
   target_err:  target absolute error value
   min_refine:  minimum refinement
   max_refnie:  maximum refinement
@@ -699,7 +699,7 @@ void refineQuadMesh( MPI_Comm comm, TMRQuadForrest *forrest,
 TacsScalar strainEnergyRefine( TACSAssembler *tacs,
                                BVec *uvec,
                                const int *partition,
-                               TMRQuadForrest *forrest,
+                               TMRQuadForest *forest,
                                double target_err,
                                int min_refine, int max_refine ){
   // Get the communicator
@@ -859,7 +859,7 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
   uderiv->decref();
 
   // refine the quadrant mesh based on the local refinement values
-  refineQuadMesh(comm, forrest, refine_local, nelems, ntotal,
+  refineQuadMesh(comm, forest, refine_local, nelems, ntotal,
                  partition, min_refine, max_refine);
 
   delete [] refine_local;
@@ -876,7 +876,7 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
   uvec:        the solution variables
   adj:         the adjoint solution variables
   partition:   the element partition
-  forrest:     the forrest of quadtrees 
+  forest:      the forest of quadtrees 
   target_err:  absolute value of the target error
   min_refine:  minimum refinement
   max_refnie:  maximum refinement
@@ -885,7 +885,7 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
                           TACSAssembler *refine,
                           BVec *uvec, BVec *adjvec,
                           const int *partition,
-                          TMRQuadForrest *forrest,
+                          TMRQuadForest *forest,
                           double target_err,
                           int min_refine, int max_refine,
                           TacsScalar *adj_corr ){
@@ -1178,7 +1178,7 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
   MPI_Allreduce(&nelems, &ntotal, 1, MPI_INT, MPI_SUM, comm);
 
   // refine the quadrant mesh based on the local refinement values
-  refineQuadMesh(comm, forrest, refine_local, nelems, ntotal,
+  refineQuadMesh(comm, forest, refine_local, nelems, ntotal,
                  partition, min_refine, max_refine);
 
   delete [] refine_local;
@@ -1192,14 +1192,14 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
 
 
 /*
-  Create the TACSAssembler object based on the TMR forrest that is
+  Create the TACSAssembler object based on the TMR forest that is
   supplied.
 
 */
 TACSAssembler* createTACSAssembler( MPI_Comm comm, 
                                     TACSElement *element,
                                     TACSElement *trac,
-                                    TMRQuadForrest *forrest,
+                                    TMRQuadForest *forest,
                                     ProblemGeometry *problem,
                                     int **_partition, 
                                     int *_nelems, int *_nnodes,
@@ -1219,12 +1219,12 @@ TACSAssembler* createTACSAssembler( MPI_Comm comm,
 
   if (mpi_rank == 0){    
     // Create the nodes
-    forrest->createNodes(ELEMENT_ORDER);
+    forest->createNodes(ELEMENT_ORDER);
       
     // Extract the mesh
     int nnodes, nelems;
     int *elem_ptr, *elem_conn;
-    forrest->getMesh(&nnodes, &nelems,
+    forest->getMesh(&nnodes, &nelems,
                      &elem_ptr, &elem_conn);
       
     // Set the number of elements
@@ -1240,13 +1240,13 @@ TACSAssembler* createTACSAssembler( MPI_Comm comm,
     
     // Fill in the positions
     TMRQuadtree **quad;
-    forrest->getQuadtrees(&quad);
+    forest->getQuadtrees(&quad);
       
     int num_bcs = 0;
     int max_bcs = 10000;
     int *bc_nodes = new int[ max_bcs ];
       
-    int num_faces = forrest->getQuadtrees(NULL);
+    int num_faces = forest->getQuadtrees(NULL);
     for ( int face = 0; face < num_faces; face++ ){
       // Retrieve the node quadrants
       TMRQuadrantArray *nodes;
@@ -1295,7 +1295,7 @@ TACSAssembler* createTACSAssembler( MPI_Comm comm,
     const int *dep_ptr;
     const int *dep_conn;
     const double *dep_weights;
-    forrest->getDependentNodes(&num_dep_nodes, &dep_ptr,
+    forest->getDependentNodes(&num_dep_nodes, &dep_ptr,
                                &dep_conn, &dep_weights);
     creator->setDependentNodes(num_dep_nodes, dep_ptr,
                                dep_conn, dep_weights);
@@ -1350,8 +1350,8 @@ int main( int argc, char *argv[] ){
   double t = 2.25e-3;
   int orthotropic_flag = 0;
 
-  // Create the quadtree forrest
-  TMRQuadForrest *forrest = NULL;
+  // Create the quadtree forest
+  TMRQuadForest *forest = NULL;
 
   // Set the refinement levels
   int min_refine = 2;
@@ -1386,6 +1386,12 @@ int main( int argc, char *argv[] ){
     }
     if (strcmp(argv[k], "test_element") == 0){
       test_element = 1;
+    }
+    int niter = 0;
+    if (sscanf(argv[k], "max_iters=%d", &niter) == 1){
+      if (niter > 0 && niter < 15){
+        max_iters = niter;
+      }
     }
     if (strcmp(argv[k], "wing") == 0){
       // Set the min refinement and maximum number of iterations
@@ -1462,8 +1468,6 @@ int main( int argc, char *argv[] ){
     printf("Using isotropic material properties: \n");
   }
 
-  ply->printProperties();
-
   // Create the stiffness relationship
   double kcorr = 5.0/6.0;
   FSDTStiffness * stiff = 
@@ -1471,10 +1475,15 @@ int main( int argc, char *argv[] ){
   
   TacsScalar axis[] = {1.0, 0.0, 0.0};
   stiff->setRefAxis(axis);
-  stiff->printStiffness();
+
+  if (rank == 0){
+    ply->printProperties();
+    stiff->printStiffness();
+  }
 
   // Create the traction class 
   TACSElement *trac = new TACSShellTraction<ELEMENT_ORDER>(tx, ty, tz);
+  trac->incref();
 
   // Create the shell element
   TACSElement *element = new MITCShell<ELEMENT_ORDER>(stiff);
@@ -1498,16 +1507,16 @@ int main( int argc, char *argv[] ){
   }
 
   if (rank == 0){
-    forrest = new TMRQuadForrest(MPI_COMM_SELF);
+    forest = new TMRQuadForest(MPI_COMM_SELF);
     
     // Set the connectivity
     int num_nodes, num_faces;
     const int *conn;
     problem->getConnectivity(&num_nodes, &conn, &num_faces);
-    forrest->setConnectivity(num_nodes, conn, num_faces);
+    forest->setConnectivity(num_nodes, conn, num_faces);
     
     // Allocate the trees
-    forrest->createTrees(min_refine);
+    forest->createTrees(min_refine);
   }
 
   // Create the problem file
@@ -1521,28 +1530,31 @@ int main( int argc, char *argv[] ){
 
   for ( int iter = 0; iter < max_iters; iter++ ){
     if (rank == 0){
-      // Balance the forrest so that we can use it!
-      forrest->balance(1);
+      // Balance the forest so that we can use it!
+      forest->balance(1);
     }
     
     int *partition = NULL, nelems = 0, nnodes = 0;
     TACSAssembler *tacs = 
-      createTACSAssembler(comm, element, trac, forrest, problem,
+      createTACSAssembler(comm, element, trac, forest, problem,
                           &partition, &nelems, &nnodes);
     tacs->incref();
 
     // Create the KS function
     KSFailure *ks_func = new KSFailure(tacs, ks_weight);
+    ks_func->incref();
     ks_func->setKSFailureType(KSFailure::CONTINUOUS);
 
     // Create the KS function for the displacement
     TacsScalar dir[] = {0.0, 0.0, 1.0, 0.0, 0.0, 0.0};
     KSDisplacement *ks_disp = new KSDisplacement(tacs, dir, ks_weight);
+    ks_disp->incref();
     ks_disp->setKSDisplacementType(KSDisplacement::CONTINUOUS);
 
     // Allocate the compliance functional
     Compliance *comp_func = new Compliance(tacs);
-  
+    comp_func->incref();
+
     // Set the actual function to use
     TACSFunction *functional = ks_func;
     if (use_energy_norm){
@@ -1552,8 +1564,8 @@ int main( int argc, char *argv[] ){
     // Create the preconditioner
     BVec *res = tacs->createVec();
     BVec *ans = tacs->createVec();
-    BVec *adjoint = tacs->createVec();
     BVec *tmp = tacs->createVec();
+    BVec *adjoint = tacs->createVec();
     FEMat *mat = tacs->createFEMat();
 
     // Increment the reference count to the matrix/vectors
@@ -1635,7 +1647,7 @@ int main( int argc, char *argv[] ){
 
     if (use_energy_norm){
       // Perform the refinement
-      error_total = strainEnergyRefine(tacs, ans, partition, forrest,
+      error_total = strainEnergyRefine(tacs, ans, partition, forest,
                                        target_abs_err,
                                        min_refine, max_refine);
       
@@ -1649,11 +1661,11 @@ int main( int argc, char *argv[] ){
       }
     }
     else {
-      // Duplicate the forrest
-      TMRQuadForrest *dup = NULL;
+      // Duplicate the forest
+      TMRQuadForest *dup = NULL;
       int *new_part = NULL;
       if (rank == 0){
-        dup = forrest->duplicate();
+        dup = forest->duplicate();
         TMRQuadtree **trees;
         int ntrees = dup->getQuadtrees(&trees);
         for ( int i = 0; i < ntrees; i++ ){
@@ -1676,7 +1688,7 @@ int main( int argc, char *argv[] ){
       refine->incref();
       
       if (rank == 0){
-        // Free the refined forrest and its partition
+        // Free the refined forest and its partition
         delete dup;
         delete [] new_part;
       }
@@ -1688,10 +1700,13 @@ int main( int argc, char *argv[] ){
       // Perform the error assessment
       TacsScalar adjcorr;
       error_total = adjointRefine(tacs, refine, 
-                                  ans, adjoint, partition, forrest,
+                                  ans, adjoint, partition, forest,
                                   target_abs_err,
                                   min_refine, max_refine, &adjcorr);
       
+      // Deallocate the refined object
+      refine->decref();
+
       if (fp){
         fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
                 iter, nelems, nnodes, 
@@ -1705,9 +1720,14 @@ int main( int argc, char *argv[] ){
     // Free everything
     delete [] partition;
     tacs->decref();
+    pc->decref();
+    ks_func->decref();
+    ks_disp->decref();
+    comp_func->decref();
     res->decref();
     ans->decref();
     tmp->decref();
+    adjoint->decref();
     mat->decref();
   }
 
@@ -1715,7 +1735,13 @@ int main( int argc, char *argv[] ){
     fclose(fp);
   }
 
+  if (rank == 0){
+    delete forest;
+  }
+
   element->decref();
+  trac->decref();
+  delete problem;
 
   MPI_Finalize();
   return (0);
