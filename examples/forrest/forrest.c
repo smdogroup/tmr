@@ -10,6 +10,7 @@
 #include "KSFailure.h"
 #include "KSDisplacement.h"
 #include "Compliance.h"
+#include "TACSMeshLoader.h"
 #include "tacslapack.h"
 
 
@@ -91,6 +92,76 @@ const int SquarePlate::conn[] = {0, 1, 4, 3,
                                  6, 0, 2, 4, 
                                  2, 5, 6, 7,
                                  3, 1, 5, 7};
+
+
+class MeshProblem : public ProblemGeometry {
+ public:
+  MeshProblem( int _num_nodes, int _num_faces,
+               const int *elem_conn, 
+               const TacsScalar *_Xpts ){
+    num_nodes = _num_nodes;
+    num_faces = _num_faces;
+
+    conn = new int[ 4*num_faces ];
+    memcpy(conn, elem_conn, 4*num_faces*sizeof(int));
+
+    Xpts = new TacsScalar[ 3*num_nodes ];
+    memcpy(Xpts, _Xpts, 3*num_nodes*sizeof(TacsScalar));
+  }
+  ~MeshProblem(){
+    delete [] conn;
+    delete [] Xpts;
+  }
+
+  void getConnectivity( int *_num_nodes,
+                        const int **_conn,
+                        int *_num_faces ){
+    *_num_nodes = num_nodes;
+    *_num_faces = num_faces;
+    *_conn = conn;
+  }
+  void getLocation( int face, int x, int y,
+                    TacsScalar *X ){
+    // Compute the u/v locations on the face
+    const double dh = 1.0/(1 << TMR_MAX_LEVEL);
+    double u = dh*x, v = dh*y;
+
+    // Evaluate the shape functions
+    double N[4];
+    N[0] = (1.0 - u)*(1.0 - v);
+    N[1] = u*(1.0 - v);
+    N[2] = (1.0 - u)*v;
+    N[3] = u*v;
+
+    // Compute the node location
+    X[0] = (N[0]*Xpts[3*conn[4*face]] +
+            N[1]*Xpts[3*conn[4*face+1]] +
+            N[2]*Xpts[3*conn[4*face+2]] +
+            N[3]*Xpts[3*conn[4*face+3]]);
+    X[1] = (N[0]*Xpts[3*conn[4*face]+1] +
+            N[1]*Xpts[3*conn[4*face+1]+1] +
+            N[2]*Xpts[3*conn[4*face+2]+1] +
+            N[3]*Xpts[3*conn[4*face+3]+1]);
+    X[2] = (N[0]*Xpts[3*conn[4*face]+2] +
+            N[1]*Xpts[3*conn[4*face+1]+2] +
+            N[2]*Xpts[3*conn[4*face+2]+2] +
+            N[3]*Xpts[3*conn[4*face+3]+2]);
+  }
+  int isBoundary( int face, int x, int y ){
+    TacsScalar X[3];
+    getLocation(face, x, y, X);
+    if (X[1] < 0.0015){
+      return 1;
+    }
+
+    return 0;
+  }
+
+ private:
+  TacsScalar *Xpts;
+  int *conn;
+  int num_faces, num_nodes;
+};
 
 /*
 class Cylinder : public ProblemGeometry {
@@ -1127,6 +1198,7 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
 */
 TACSAssembler* createTACSAssembler( MPI_Comm comm, 
                                     TACSElement *element,
+                                    TACSElement *trac,
                                     TMRQuadForrest *forrest,
                                     ProblemGeometry *problem,
                                     int **_partition, 
@@ -1249,10 +1321,6 @@ TACSAssembler* createTACSAssembler( MPI_Comm comm,
 
   // Free the creator object - it is not required anymore
   creator->decref();
-
-  // Create the traction class 
-  TacsScalar tx = 0.0, ty = 0.0, tz = 100.0e3;
-  TACSElement *trac = new TACSShellTraction<ELEMENT_ORDER>(tx, ty, tz);
   
   // Create the auxiliary element class
   int nelems = tacs->getNumElements();
@@ -1281,6 +1349,85 @@ int main( int argc, char *argv[] ){
   // Set the thickness to use in the calculation
   double t = 2.25e-3;
   int orthotropic_flag = 0;
+
+  // Create the quadtree forrest
+  TMRQuadForrest *forrest = NULL;
+
+  // Set the refinement levels
+  int min_refine = 2;
+  int max_refine = TMR_MAX_LEVEL;
+
+  // Create the default problem 
+  ProblemGeometry *problem = new SquarePlate();
+  char problem_name[64];
+  sprintf(problem_name, "plate");
+  
+  // Set the initial function value
+  TacsScalar fval_init = 0.0;
+
+  // Set the target relative error for the functional
+  int test_element = 0;
+  double target_rel_err = 0.01;
+  int use_energy_norm = 0;
+  double ks_weight = 10.0;
+  int max_iters = 8;
+
+  // Set the traction values
+  TacsScalar tx = 0.0, ty = 0.0, tz = 100.0e3;
+
+  for ( int k = 0; k < argc; k++ ){
+    if (strcmp(argv[k], "use_energy_norm") == 0){
+      target_rel_err = 0.001;
+      use_energy_norm = 1;
+    }
+    double rho = 0.0;
+    if (sscanf(argv[k], "ks_weight=%lf", &rho) == 1){
+      ks_weight = rho;
+    }
+    if (strcmp(argv[k], "test_element") == 0){
+      test_element = 1;
+    }
+    if (strcmp(argv[k], "wing") == 0){
+      // Set the min refinement and maximum number of iterations
+      max_iters = 3;
+      min_refine = 0;
+
+      // Set the thickness and traction values
+      t = 0.05;
+      tx = 0.0, ty = 0.0;
+      tz = 1000.0;
+      target_rel_err = 0.001;
+   
+      // Set the new problem name
+      sprintf(problem_name, "wing");
+
+      // Create the TACSMeshLoader class
+      TACSMeshLoader *mesh = new TACSMeshLoader(comm);
+      mesh->incref();
+      mesh->scanBDFFile("wing/CRM_box_2nd.bdf");
+      
+      // Extract the connectivity
+      int nnodes, nelems;
+      const int *elem_node_conn;
+      const double *Xpts;
+      mesh->getConnectivity(&nnodes, &nelems, NULL, 
+                            &elem_node_conn, &Xpts);
+      
+      delete problem;
+      problem = new MeshProblem(nnodes, nelems, 
+                                elem_node_conn, Xpts);
+      mesh->decref();
+    }
+  }
+
+  // Create a prefix for the type of problem we're running
+  char prefix[128];
+  if (use_energy_norm){
+    sprintf(prefix, "%s/energy_norm", problem_name);
+  }
+  else {
+    sprintf(prefix, "%s/ks%.0f", problem_name, ks_weight);
+  }
 
   OrthoPly * ply = NULL;
   if (orthotropic_flag){
@@ -1326,53 +1473,12 @@ int main( int argc, char *argv[] ){
   stiff->setRefAxis(axis);
   stiff->printStiffness();
 
+  // Create the traction class 
+  TACSElement *trac = new TACSShellTraction<ELEMENT_ORDER>(tx, ty, tz);
+
   // Create the shell element
   TACSElement *element = new MITCShell<ELEMENT_ORDER>(stiff);
   element->incref();
-
-  // Create the quadtree forrest
-  TMRQuadForrest *forrest = NULL;
-
-  // Set the refinement levels
-  int min_refine = 2;
-  int max_refine = TMR_MAX_LEVEL;
-
-  // Create the default problem 
-  ProblemGeometry *problem = new SquarePlate();
-  char problem_name[64];
-  sprintf(problem_name, "plate");
-  
-  // Set the initial function value
-  TacsScalar fval_init = 0.0;
-
-  // Set the target relative error for the functional
-  int test_element = 0;
-  double target_rel_err = 0.01;
-  int use_energy_norm = 0;
-  double ks_weight = 10.0;
-
-  for ( int k = 0; k < argc; k++ ){
-    if (strcmp(argv[k], "use_energy_norm") == 0){
-      target_rel_err = 0.001;
-      use_energy_norm = 1;
-    }
-    double rho = 0.0;
-    if (sscanf(argv[k], "ks_weight=%lf", &rho) == 1){
-      ks_weight = rho;
-    }
-    if (strcmp(argv[k], "test_element") == 0){
-      test_element = 1;
-    }
-  }
-
-  // Create a prefix for the type of problem we're running
-  char prefix[128];
-  if (use_energy_norm){
-    sprintf(prefix, "%s/energy_norm", problem_name);
-  }
-  else {
-    sprintf(prefix, "%s/ks%.0f", problem_name, ks_weight);
-  }
 
   // Test the element implementation on the root processor
   if (test_element){
@@ -1413,7 +1519,7 @@ int main( int argc, char *argv[] ){
     fprintf(fp, "Variables = iter, nelems, nnodes, fval, fcorr, error\n");
   }
 
-  for ( int iter = 0; iter < 8; iter++ ){
+  for ( int iter = 0; iter < max_iters; iter++ ){
     if (rank == 0){
       // Balance the forrest so that we can use it!
       forrest->balance(1);
@@ -1421,7 +1527,7 @@ int main( int argc, char *argv[] ){
     
     int *partition = NULL, nelems = 0, nnodes = 0;
     TACSAssembler *tacs = 
-      createTACSAssembler(comm, element, forrest, problem,
+      createTACSAssembler(comm, element, trac, forrest, problem,
                           &partition, &nelems, &nnodes);
     tacs->incref();
 
@@ -1565,7 +1671,7 @@ int main( int argc, char *argv[] ){
 
       // Create the uniformly refined TACSAssembler object
       TACSAssembler *refine = 
-        createTACSAssembler(comm, element, dup, problem,
+        createTACSAssembler(comm, element, trac, dup, problem,
                             NULL, NULL, NULL, new_part);
       refine->incref();
       

@@ -280,6 +280,20 @@ interp_err = np.zeros(num)
 recon_err = np.zeros(num)
 nx = np.arange(1,num+1)
 
+# Set some reasonable colours
+tableau20 = [(31, 119, 180), (174, 199, 232), (255, 127, 14), (255, 187, 120),    
+             (44, 160, 44), (152, 223, 138), (214, 39, 40), (255, 152, 150),    
+             (148, 103, 189), (197, 176, 213), (140, 86, 75), (196, 156, 148),    
+             (227, 119, 194), (247, 182, 210), (127, 127, 127), (199, 199, 199),    
+             (188, 189, 34), (219, 219, 141), (23, 190, 207), (158, 218, 229)] 
+
+
+# Scale the RGB values to the [0, 1] range, which is the format matplotlib accepts.    
+for i in range(len(tableau20)):    
+    r, g, b = tableau20[i]    
+    tableau20[i] = (r / 255., g / 255., b / 255.)    
+
+
 for i in xrange(num):
     print 'Computing error ', i
     interp_err[i], recon_err[i] =\
@@ -289,19 +303,20 @@ alpha = 0.15
 x = np.array([0.5, 0.025])
 
 plt.figure()
-plt.loglog(1.0/(2*nx+1), interp_err, '-o', 
+plt.loglog(1.0/(2*nx+1), interp_err, '-o', color=tableau20[0], 
            linewidth=2, label='interpolation')
-plt.loglog(1.0/(2*nx+1), recon_err, '-s', 
+plt.loglog(1.0/(2*nx+1), recon_err, '-s', color=tableau20[2],
            linewidth=2, label='reconstruction')
-plt.loglog(x, (x**3)/alpha, '-', 
+plt.loglog(x, (x**3)/alpha, '-', color=tableau20[6],
            linewidth=2, label='3rd order')
-plt.loglog(x, (x**4)/alpha, '-k', 
+plt.loglog(x, (x**4)/alpha, '-', color=tableau20[8],
            linewidth=2, label='4th order')
-plt.xlabel('$\\sf\\Delta x$', fontsize=18)
-plt.ylabel('Error', fontsize=18)
+plt.xlabel('Average $\\sf\\Delta x$', fontweight='bold', fontsize=18)
+plt.ylabel('Error', fontweight='bold', fontsize=18)
 
 plt.xticks(fontsize=15)
 plt.yticks(fontsize=15)
+plt.gcf().subplots_adjust(bottom=0.13)
 
 plt.legend(loc=0)
 plt.savefig('planar_reconstruction.pdf') 
