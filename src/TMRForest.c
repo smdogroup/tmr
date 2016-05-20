@@ -35,6 +35,9 @@ TMRQuadForest::TMRQuadForest( MPI_Comm _comm ){
   dep_ptr = NULL;
   dep_conn = NULL;
   dep_weights = NULL;
+
+  // The face partition
+  face_owners = NULL;
 }
 
 /*
@@ -56,10 +59,16 @@ TMRQuadForest::~TMRQuadForest(){
   if (dep_ptr){ delete [] dep_ptr; }
   if (dep_conn){ delete [] dep_conn; }
   if (dep_weights){ delete [] dep_weights; }
+  if (face_owners){ delete [] face_owners; }
 }
 
 /*
   Set the connectivity of the faces
+
+  This call is collective on all processors. Every processor must make
+  a call with the same connectivity information, otherwise the
+  inter-quadtree information will be inconsistent. This sets the
+  connectivity and then performs a partition of the mesh using METIS.
 
   This code sets the face connectivity and generates the following
   additional data that are required:
@@ -89,6 +98,7 @@ void TMRQuadForest::setConnectivity( int _num_nodes,
     }
     delete [] quadtrees;
   }
+  if (face_owners){ delete [] face_owners; }
 
   // Copy over the data locally
   num_nodes = _num_nodes;
@@ -98,6 +108,24 @@ void TMRQuadForest::setConnectivity( int _num_nodes,
   // Copy over the face connectivity
   face_conn = new int[ 4*num_faces ];
   memcpy(face_conn, _face_conn, 4*num_faces*sizeof(int));
+
+  // Set up the partition using metis
+  face_owners = new int[ num_faces ];
+
+  // Compute the partition on the root processor and
+  // broadcast the result to all other processors
+  int mpi_rank, mpi_size;
+  MPI_Comm_rank(comm, &mpi_rank);  
+  MPI_Comm_size(comm, &mpi_size);  
+  if (mpi_rank == 0){
+    // For now.. just perform an assignment
+    for ( int i = 0; i < num_faces; i++ ){
+      face_owners[i] = i % mpi_size;
+    }
+  }
+  
+  // Broadcast the face owners to all processors
+  MPI_Bcast(face_owners, num_faces, MPI_INT, 0, comm);
 
   // Create the data structure for the node to face connectivity
   node_face_ptr = new int[ num_nodes+1 ];
@@ -240,15 +268,20 @@ void TMRQuadForest::setConnectivity( int _num_nodes,
 void TMRQuadForest::createTrees( int refine_level ){
   if (quadtrees){ 
     for ( int i = 0; i < num_faces; i++ ){
-      delete quadtrees[i];
+      if (quadtrees[i]){ delete quadtrees[i]; }
     }
     delete [] quadtrees;
   }
 
   // Create the quadtrees
-  quadtrees = new TMRQuadtree*[ num_faces ];  
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+  quadtrees = new TMRQuadtree*[ num_faces ];
+  memset(quadtrees, 0, num_faces*sizeof(TMRQuadtree*));
   for ( int i = 0; i < num_faces; i++ ){
-    quadtrees[i] = new TMRQuadtree(refine_level);
+    if (face_owners[i] == mpi_rank){
+      quadtrees[i] = new TMRQuadtree(refine_level);
+    }
   }
 }
 
@@ -261,15 +294,20 @@ void TMRQuadForest::createRandomTrees( int nrand,
                                        int min_level, int max_level ){
   if (quadtrees){ 
     for ( int i = 0; i < num_faces; i++ ){
-      delete quadtrees[i];
+      if (quadtrees[i]){ delete quadtrees[i]; }
     }
     delete [] quadtrees;
   }
 
   // Create a random set of quadtrees
-  quadtrees = new TMRQuadtree*[ num_faces ];  
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+  quadtrees = new TMRQuadtree*[ num_faces ];
+  memset(quadtrees, 0, num_faces*sizeof(TMRQuadtree*));
   for ( int i = 0; i < num_faces; i++ ){
-    quadtrees[i] = new TMRQuadtree(nrand, min_level, max_level);
+    if (face_owners[i] == mpi_rank){
+      quadtrees[i] = new TMRQuadtree(nrand, min_level, max_level);
+    }
   }
 }
 
@@ -322,6 +360,11 @@ void TMRQuadForest::addEdgeNeighbors( int face,
     // Get the faces that are adjacent across this edge
     int adjacent = edge_face_conn[ip];
     if (adjacent != face){
+      if (!hash[adjacent]){
+        hash[adjacent] = new TMRQuadrantHash();
+        queue[adjacent] = new TMRQuadrantQueue();
+      }
+      
       for ( int j = 0; j < 4; j++ ){
         int nn1 = face_conn[4*adjacent + face_to_edge_nodes[j][0]];
         int nn2 = face_conn[4*adjacent + face_to_edge_nodes[j][1]];
@@ -331,12 +374,12 @@ void TMRQuadForest::addEdgeNeighbors( int face,
           TMRQuadrant neighbor;
           neighbor.level = p.level;
           if (j == 0 || j == 1){
-            neighbor.x = (hmax - h)*j;
+            neighbor.x = (hmax - 2*h)*j;
             neighbor.y = ucoord;
           }
           else if (j == 2 || j == 3){
             neighbor.x = ucoord;
-            neighbor.y = (hmax - h)*(j % 2); 
+            neighbor.y = (hmax - 2*h)*(j % 2); 
           }
          
           // Add the quadrant to the list
@@ -349,12 +392,12 @@ void TMRQuadForest::addEdgeNeighbors( int face,
           TMRQuadrant neighbor;
           neighbor.level = p.level;
           if (j == 0 || j == 1){
-            neighbor.x = (hmax - h)*j;
-            neighbor.y = hmax - h - ucoord;
+            neighbor.x = (hmax - 2*h)*j;
+            neighbor.y = hmax - 2*h - ucoord;
           }
           else if (j == 2 || j == 3){
-            neighbor.x = hmax - h - ucoord;
-            neighbor.y = (hmax - h)*(j % 2); 
+            neighbor.x = hmax - 2*h - ucoord;
+            neighbor.y = (hmax - 2*h)*(j % 2); 
           }
 
           // Add the quadrant to the list
@@ -405,11 +448,16 @@ void TMRQuadForest::addCornerNeighbors( int face,
     if (adjacent != face){
       for ( int j = 0; j < 4; j++ ){
         if (face_conn[4*adjacent+j] == node_num){
+          if (!hash[adjacent]){
+            hash[adjacent] = new TMRQuadrantHash();
+            queue[adjacent] = new TMRQuadrantQueue();
+          }
+
           // Add the corner node to the list
           TMRQuadrant neighbor;
           neighbor.level = p.level;
-          neighbor.x = (hmax - h)*(j%2);
-          neighbor.y = (hmax - h)*(j/2);
+          neighbor.x = (hmax - 2*h)*(j%2);
+          neighbor.y = (hmax - 2*h)*(j/2);
 
           // Add the quadrant to the list
           if (hash[adjacent]->addQuadrant(&neighbor)){
@@ -690,7 +738,7 @@ TMRQuadrant* TMRQuadForest::getEdgeNodeNeighbor( int face,
   to balance to the tree. If the element is not in the hash, we add
   them to a queue, which keeps track of recently added elements. After
   the first pass, the algorithm continues popping elements until the
-  queue is empty.
+  all the queues are empty.
 
   Note that only 0-th siblings are added/popped on the hash/queue.
   Then at the end, all neighboring siblings are added.
@@ -703,113 +751,61 @@ TMRQuadrant* TMRQuadForest::getEdgeNodeNeighbor( int face,
   per edge) and balances across corners optionally.
 */
 void TMRQuadForest::balance( int balance_corner ){
+  // Get the mpi rank
+  int mpi_rank, mpi_size;
+  MPI_Comm_rank(comm, &mpi_rank);
+  MPI_Comm_size(comm, &mpi_size);
+
   // Get the max level
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
   // Create a hash table for the balanced tree
   TMRQuadrantHash **hash = new TMRQuadrantHash*[ num_faces ];
   TMRQuadrantQueue **queue = new TMRQuadrantQueue*[ num_faces ];
+  
+  // Set the hash tables and queues to NULL
+  memset(hash, 0, num_faces*sizeof(TMRQuadrantHash*));
+  memset(queue, 0, num_faces*sizeof(TMRQuadrantQueue*));
 
   for ( int face = 0; face < num_faces; face++ ){
-    hash[face] = new TMRQuadrantHash();
-    queue[face] = new TMRQuadrantQueue();
-  }
-
-  for ( int face = 0; face < num_faces; face++ ){
-    // Go through the existing list of quadrants and add up everything
-    // for balancing
-    TMRQuadrant p, q, neighbor;
-
-    // Get the current array of quadrants
-    TMRQuadrantArray *elements;
-    quadtrees[face]->getElements(&elements);
-
-    // Get the array of elements
-    int size;
-    TMRQuadrant *array;
-    elements->getArray(&array, &size);
-    
-    // Add the element
-    for ( int i = 0; i < size; i++ ){
-      // Try adding all of the children
-      array[i].getSibling(0, &q);
-      hash[face]->addQuadrant(&q);
-      
-      // Get the parent of the quadrant, and add the their
-      // face-matched quadrants from each face, as long 
-      // as they fall within the bounds
-      if (q.level > 0){
-        q.parent(&p);
-        
-        // If we are balancing across edges
-        // add the edge-adjacent elements
-        for ( int edge = 0; edge < 4; edge++ ){
-          p.edgeNeighbor(edge, &neighbor);
-          neighbor.getSibling(0, &q);
-	  
-          // If we're in bounds, add the neighbor
-          if (q.x >= 0 && q.y >= 0 &&
-              q.x < hmax && q.y < hmax){
-            if (hash[face]->addQuadrant(&q)){
-              queue[face]->push(&q);
-            }
-          }
-          else {
-            // Add the quadrant to the other trees
-            addEdgeNeighbors(face, edge, q, hash, queue);
-          }
-        }
-        
-        // If we're balancing across edges and 
-        if (balance_corner){
-          for ( int corner = 0; corner < 4; corner++ ){
-            p.cornerNeighbor(corner, &neighbor);
-            neighbor.getSibling(0, &q);
-            
-            // If we're in bounds, add the neighbor
-            if (q.x >= 0 && q.y >= 0 &&
-                q.x < hmax && q.y < hmax){
-              if (hash[face]->addQuadrant(&q)){
-                queue[face]->push(&q);
-              }
-            }
-            else if ((q.x >= 0 && q.x < hmax) ||
-                     (q.y >= 0 && q.y < hmax)){
-              int edge = 0;
-              if (q.x >= hmax){ edge = 1; }
-              else if (q.y < 0){ edge = 2; }
-              else if (q.y >= hmax){ edge = 3; }
-              addEdgeNeighbors(face, edge, q, hash, queue);
-            }
-            else {
-              // Add the quadrant to the other trees
-              addCornerNeighbors(face, corner, neighbor, hash, queue);
-            }
-          }
-        }
+    if (face_owners[face] == mpi_rank){
+      // Allocate the hash and queue if they are not already
+      // allocated on this processor
+      if (!hash[face]){
+        hash[face] = new TMRQuadrantHash();
+        queue[face] = new TMRQuadrantQueue();
       }
-    }
-  }
 
-  int queue_length_flag = 1;
-  while (queue_length_flag){
-    // Now continue until the queue of added quadrants is
-    // empty. At each iteration, pop an quadrant and add 
-    // its neighbours until nothing new is added. This code
-    // handles the propagation of quadrants to adjacent quadrants.
-    for ( int face = 0; face < num_faces; face++ ){
-      while (queue[face]->length() > 0){
-        TMRQuadrant p, q, neighbor;    
-        q = queue[face]->pop();
+      // Local quadrant data
+      TMRQuadrant p, q, neighbor;
+
+      // Get the current array of quadrants
+      TMRQuadrantArray *elements;
+      quadtrees[face]->getElements(&elements);
+
+      // Get the array of elements
+      int size;
+      TMRQuadrant *array;
+      elements->getArray(&array, &size);
+    
+      // Add the element
+      for ( int i = 0; i < size; i++ ){
+        // Try adding all of the children
+        array[i].getSibling(0, &q);
+        hash[face]->addQuadrant(&q);
       
+        // Get the parent of the quadrant, and add the their
+        // face-matched quadrants from each face, as long 
+        // as they fall within the bounds
         if (q.level > 1){
           q.parent(&p);
-
-          // Add the quadrants across adjacent edges
+        
+          // If we are balancing across edges
+          // add the edge-adjacent elements
           for ( int edge = 0; edge < 4; edge++ ){
             p.edgeNeighbor(edge, &neighbor);
             neighbor.getSibling(0, &q);
-            
+	  
             // If we're in bounds, add the neighbor
             if (q.x >= 0 && q.y >= 0 &&
                 q.x < hmax && q.y < hmax){
@@ -822,8 +818,8 @@ void TMRQuadForest::balance( int balance_corner ){
               addEdgeNeighbors(face, edge, q, hash, queue);
             }
           }
-          
-          // Add the quadrants across corners
+        
+          // If we're balancing across edges and 
           if (balance_corner){
             for ( int corner = 0; corner < 4; corner++ ){
               p.cornerNeighbor(corner, &neighbor);
@@ -853,10 +849,77 @@ void TMRQuadForest::balance( int balance_corner ){
         }
       }
     }
+  }
 
+  int queue_length_flag = 1;
+  while (queue_length_flag){
+    // Now continue until the queue of added quadrants is
+    // empty. At each iteration, pop an quadrant and add 
+    // its neighbours until nothing new is added. This code
+    // handles the propagation of quadrants to adjacent quadrants.
+    for ( int face = 0; face < num_faces; face++ ){
+      if (queue[face]){
+        while (queue[face]->length() > 0){
+          TMRQuadrant p, q, neighbor;    
+          q = queue[face]->pop();
+          
+          if (q.level > 1){
+            q.parent(&p);
+            
+            // Add the quadrants across adjacent edges
+            for ( int edge = 0; edge < 4; edge++ ){
+              p.edgeNeighbor(edge, &neighbor);
+              neighbor.getSibling(0, &q);
+              
+              // If we're in bounds, add the neighbor
+              if (q.x >= 0 && q.y >= 0 &&
+                  q.x < hmax && q.y < hmax){
+                if (hash[face]->addQuadrant(&q)){
+                  queue[face]->push(&q);
+                }
+              }
+              else {
+                // Add the quadrant to the other trees
+                addEdgeNeighbors(face, edge, q, hash, queue);
+              }
+            }
+            
+            // Add the quadrants across corners
+            if (balance_corner){
+              for ( int corner = 0; corner < 4; corner++ ){
+                p.cornerNeighbor(corner, &neighbor);
+                neighbor.getSibling(0, &q);
+                
+                // If we're in bounds, add the neighbor
+                if (q.x >= 0 && q.y >= 0 &&
+                    q.x < hmax && q.y < hmax){
+                  if (hash[face]->addQuadrant(&q)){
+                    queue[face]->push(&q);
+                  }
+                }
+                else if ((q.x >= 0 && q.x < hmax) ||
+                         (q.y >= 0 && q.y < hmax)){
+                  int edge = 0;
+                  if (q.x >= hmax){ edge = 1; }
+                  else if (q.y < 0){ edge = 2; }
+                  else if (q.y >= hmax){ edge = 3; }
+                  addEdgeNeighbors(face, edge, q, hash, queue);
+                }
+                else {
+                  // Add the quadrant to the other trees
+                  addCornerNeighbors(face, corner, neighbor, hash, queue);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+      
     queue_length_flag = 0;
     for ( int face = 0; face < num_faces; face++ ){
-      if (queue[face]->length() > 0){
+      if (queue[face] &&
+          queue[face]->length() > 0){
         queue_length_flag = 1;
         break;
       }
@@ -865,41 +928,261 @@ void TMRQuadForest::balance( int balance_corner ){
 
   // Free the queues - they are no longer required
   for ( int face = 0; face < num_faces; face++ ){
-    delete queue[face];
+    if (face_owners[face] != mpi_rank && queue[face]){ 
+      delete queue[face];
+      queue[face] = NULL;
+    }
+  }
+
+  // Now everything is locally balanced - all the elements 
+  // on the current processor are balanced with all the other
+  // element on the current processor, but nothing is 
+  // inter-processor balanced yet.
+
+  // The number of quadrants that will be sent from this processor
+  // to all other processors in the communicator
+  int *quad_counts = new int[ mpi_size ];
+  memset(quad_counts, 0, mpi_size*sizeof(int));
+
+  // Create a list of new queues - these will only be allocated
+  // as required
+  TMRQuadrantQueue **send_queues = new TMRQuadrantQueue*[ mpi_size ];
+  memset(send_queues, 0, mpi_size*sizeof(TMRQuadrantQueue*));
+
+  for ( int face = 0; face < num_faces; face++ ){
+    if (hash[face] && face_owners[face] != mpi_rank){
+      // Create a sorted list of local the 0-child quadrants.
+      // This can be further reduced to limit the amount of 
+      // memory passed between processors
+      TMRQuadrantArray *elems0 = hash[face]->toArray();
+      elems0->sort();
+
+      // Get the array of 0-quadrants 
+      int size;
+      TMRQuadrant *array;
+      elems0->getArray(&array, &size);
+
+      // Check that the destination queue has been allocated
+      int dest_rank = face_owners[face];
+      if (!send_queues[dest_rank]){
+        send_queues[dest_rank] = new TMRQuadrantQueue();
+      }
+      
+      // Add the quadrants to their destination queue
+      TMRQuadrantQueue *dest = send_queues[dest_rank];
+      
+      if (size > 0){
+        // Get the parent of the quadrant
+        TMRQuadrant p, s = array[0];
+        s.parent(&p);
+
+        // Loop over all 
+        for ( int i = 0; i < size; i++ ){
+          if (!p.contains(&array[i])){
+            s.tag = face;
+            dest->push(&s);
+          }
+          // Get the next quadrant and find its parent
+          s = array[i];
+          s.parent(&p);
+        }
+
+        // Push the last quadrant onto the queue
+        s.tag = face;
+        dest->push(&s);
+      }
+      
+      // Update the number of quadrants
+      quad_counts[dest_rank] = dest->length();
+      
+      // Free the elements and the hash table
+      delete elems0;
+      delete hash[face];
+      hash[face] = NULL;
+    }
+  }
+
+  // Now distribute the quadrants to their destination quadtrees and
+  // balance the corresponding quadtrees including the new elements.
+  int *quad_recv_counts = new int[ mpi_size ];
+  MPI_Alltoall(quad_counts, 1, MPI_INT,
+               quad_recv_counts, 1, MPI_INT, comm);
+
+  // Add the recieved quadrants into the local queues
+  TMRQuadrantArray **send_arrays = new TMRQuadrantArray*[ mpi_size ];
+  TMRQuadrantArray **recv_arrays = new TMRQuadrantArray*[ mpi_size ];
+  memset(send_arrays, 0, mpi_size*sizeof(TMRQuadrantArray*));
+  memset(recv_arrays, 0, mpi_size*sizeof(TMRQuadrantArray*));
+
+  // Allocate space for the requests
+  MPI_Request *send_request = new MPI_Request[ mpi_size ];
+  MPI_Request *recv_request = new MPI_Request[ mpi_size ];
+
+  // Set the recv requests to NULL 
+  for ( int i = 0; i < mpi_size; i++ ){
+    recv_request[i] = MPI_REQUEST_NULL;
+  }
+
+  // Loop over all the ranks and send 
+  int nsend = 0;
+  for ( int i = 0; i < mpi_size; i++ ){
+    if (send_queues[i]){
+      // Conver the quadrant array to a list
+      send_arrays[i] = send_queues[i]->toArray();
+    
+      // Delete the send queue 
+      delete send_queues[i];
+
+      // Get the quadrant array
+      int size;
+      TMRQuadrant *array;
+      send_arrays[i]->getArray(&array, &size);
+
+      // Post the send to the destination
+      MPI_Isend(array, size, TMRQuadrant_MPI_type, 
+                i, 0, comm, &send_request[nsend]);
+      nsend++;
+    }
+  }
+
+  delete [] send_queues;
+
+  // Loop over the recieve calls
+  int nrecv = 0;
+  for ( int i = 0; i < mpi_size; i++ ){
+    if (quad_recv_counts[i] > 0){
+      int size = quad_recv_counts[i];
+      TMRQuadrant *array = new TMRQuadrant[ size ];
+      recv_arrays[i] = new TMRQuadrantArray(array, size);
+      
+      // Post the recieve
+      MPI_Irecv(array, size, TMRQuadrant_MPI_type,
+                i, 0, comm, &recv_request[i]);
+      nrecv++;
+    }
+  }
+
+  // Wait for any recieve to complete
+  for ( int i = 0; i < nrecv; i++ ){
+    int index = 0;
+    MPI_Waitany(mpi_size, recv_request, &index, MPI_STATUS_IGNORE);
+
+    // Push the quadrants on to their corresponding queues
+    int size;
+    TMRQuadrant *array;
+    recv_arrays[index]->getArray(&array, &size);
+    for ( int j = 0; j < size; j++ ){
+      int face = array[j].tag;
+      queue[face]->push(&array[j]);
+    }
+
+    // Free the data
+    delete recv_arrays[index];
+  }
+
+  delete [] recv_arrays;
+
+  // Wait for any remaining sends to complete
+  MPI_Waitall(nsend, send_request, MPI_STATUSES_IGNORE);
+
+  // Free the remaining send data
+  for ( int i = 0; i < mpi_size; i++ ){
+    if (send_arrays[i]){ delete send_arrays[i]; } 
+  }
+  delete [] send_arrays;
+
+  // Free other data associated with the parallel communication
+  delete [] quad_counts;
+  delete [] quad_recv_counts;
+  delete [] send_request;
+  delete [] recv_request;
+
+  // Now all the received quadrants will balance the tree locally
+  // without having to worry about off-processor quadrants.
+  for ( int face = 0; face < num_faces; face++ ){
+    if (queue[face]){
+      while (queue[face]->length() > 0){
+        TMRQuadrant p, q, neighbor;    
+        q = queue[face]->pop();
+          
+        if (q.level > 1){
+          q.parent(&p);
+            
+          // Add the quadrants across adjacent edges
+          for ( int edge = 0; edge < 4; edge++ ){
+            p.edgeNeighbor(edge, &neighbor);
+            neighbor.getSibling(0, &q);
+            
+            // If we're in bounds, add the neighbor
+            if (q.x >= 0 && q.y >= 0 &&
+                q.x < hmax && q.y < hmax){
+              if (hash[face]->addQuadrant(&q)){
+                queue[face]->push(&q);
+              }
+            }
+          }
+          
+          // Add the quadrants across corners
+          if (balance_corner){
+            for ( int corner = 0; corner < 4; corner++ ){
+              p.cornerNeighbor(corner, &neighbor);
+              neighbor.getSibling(0, &q);
+              
+              // If we're in bounds, add the neighbor
+              if (q.x >= 0 && q.y >= 0 &&
+                  q.x < hmax && q.y < hmax){
+                if (hash[face]->addQuadrant(&q)){
+                  queue[face]->push(&q);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Free the remaining queues - these will be the ones that are
+  // owned by this processor.
+  for ( int face = 0; face < num_faces; face++ ){
+    if (queue[face]){ delete queue[face]; }
   }
   delete [] queue;
 
   // Convert the hash tables back to the elements
   for ( int face = 0; face < num_faces; face++ ){
-    // Now convert the elements from child-0 elements to
-    // elements which cover the full mesh
-    TMRQuadrantArray *child0_elems = hash[face]->toArray();
-    int size;
-    TMRQuadrant *array;
-    child0_elems->getArray(&array, &size);
+    if (face_owners[face] == mpi_rank){
+      // Now convert the elements from child-0 elements to
+      // elements which cover the full mesh
+      TMRQuadrantArray *child0_elems = hash[face]->toArray();
+      int size;
+      TMRQuadrant *array;
+      child0_elems->getArray(&array, &size);
 
-    // Loop over all elements and add their siblings
-    for ( int i = 0; i < size; i++ ){
-      if (array[i].level > 0){
-        for ( int j = 0; j < 4; j++ ){
-          TMRQuadrant q;
-          array[i].getSibling(j, &q);
-          hash[face]->addQuadrant(&q);
+      // Loop over all elements and add their siblings
+      for ( int i = 0; i < size; i++ ){
+        if (array[i].level > 0){
+          for ( int j = 0; j < 4; j++ ){
+            TMRQuadrant q;
+            array[i].getSibling(j, &q);
+            hash[face]->addQuadrant(&q);
+          }
         }
       }
+
+      // Free the temporary elements
+      delete child0_elems;
+
+      // Set the elements into the quadtree
+      TMRQuadrantArray *elements = hash[face]->toArray();
+      elements->sort();
+      quadtrees[face]->setElements(elements);
+
+      // Free the corresponding hash
+      delete hash[face];
     }
-
-    // Free the temporary elements
-    delete child0_elems;
-
-    // Set the elements into the quadtree
-    TMRQuadrantArray *elements = hash[face]->toArray();
-    elements->sort();
-    quadtrees[face]->setElements(elements);
-
-    // Free the corresponding hash
-    delete hash[face];
   }
+
   delete [] hash;
 }
 
@@ -940,12 +1223,18 @@ TMRQuadForest* TMRQuadForest::duplicate(){
     memcpy(dup->edge_face_conn, edge_face_conn,
            edge_face_ptr[num_edges]*sizeof(int));
 
-    // Dupn all the quadtrees
+    dup->face_owners = new int[ num_faces ];
+    memcpy(dup->face_owners, face_owners, num_faces*sizeof(int));
+
+    // Duplicate all the quadtrees
     dup->quadtrees = new TMRQuadtree*[ num_faces ];
+    memset(dup->quadtrees, 0, num_faces*sizeof(TMRQuadtree*));
     for ( int i = 0; i < num_faces; i++ ){
-      TMRQuadrantArray *elements;
-      quadtrees[i]->getElements(&elements);
-      dup->quadtrees[i] = new TMRQuadtree(elements->duplicate());
+      if (quadtrees[i]){
+        TMRQuadrantArray *elements;
+        quadtrees[i]->getElements(&elements);
+        dup->quadtrees[i] = new TMRQuadtree(elements->duplicate());
+      }
     }
   }
 
@@ -990,10 +1279,17 @@ TMRQuadForest* TMRQuadForest::coarsen(){
     memcpy(coarse->edge_face_conn, edge_face_conn,
            edge_face_ptr[num_edges]*sizeof(int));
 
+    // Copy over the face ownership data
+    coarse->face_owners = new int[ num_faces ];
+    memcpy(coarse->face_owners, face_owners, num_faces*sizeof(int));
+
     // Coarsen all the quadtrees
     coarse->quadtrees = new TMRQuadtree*[ num_faces ];
+    memset(coarse->quadtrees, 0, num_faces*sizeof(TMRQuadtree*));
     for ( int i = 0; i < num_faces; i++ ){
-      coarse->quadtrees[i] = quadtrees[i]->coarsen();
+      if (quadtrees[i]){
+        coarse->quadtrees[i] = quadtrees[i]->coarsen();
+      }
     }
   }
 
@@ -1020,7 +1316,9 @@ void TMRQuadForest::createNodes( int order ){
 
   // Allocate all possible nodes on all of the trees
   for ( int face = 0; face < num_faces; face++ ){
-    quadtrees[face]->createNodes(mesh_order);
+    if (quadtrees[face]){
+      quadtrees[face]->createNodes(mesh_order);
+    }
   }
   
   // Allocate the space for the dependent node queues for each
@@ -1034,131 +1332,129 @@ void TMRQuadForest::createNodes( int order ){
   // Set the max element size
   const int hmax = 1 << TMR_MAX_LEVEL;
 
-  // Determine the dependent nodes
+  // Determine the dependent nodes for each face without labeling
+  // the dependent nodes on the edges yet.
   for ( int face = 0; face < num_faces; face++ ){
-    // Get the quadrant elements
-    TMRQuadrantArray *elements;
-    quadtrees[face]->getElements(&elements);
-
-    // Get the elements themselves
-    int size;
-    TMRQuadrant *array;
-    elements->getArray(&array, &size);
-    
-    for ( int i = 0; i < size; i++ ){
-      // Get the side length of the element
-      const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+    if (quadtrees[face]){
+      // Get the quadrant elements
+      TMRQuadrantArray *elements;
+      quadtrees[face]->getElements(&elements);
       
-      // Check the adjacent elements along each element edge
-      for ( int edge = 0; edge < 4; edge++ ){
-        // Look for the edge neighbor that is at the next level of
-        // refinement from the current element. If this element
-        // exists, then we have to use a dependent node.
-        TMRQuadrant p = array[i];
-        p.level += 1;
-        if (edge == 1 || edge == 3){
-          p.getSibling(3, &p);
-        }
-        p.edgeNeighbor(edge, &p);
+      // Get the elements themselves
+      int size;
+      TMRQuadrant *array;
+      elements->getArray(&array, &size);
+      
+      for ( int i = 0; i < size; i++ ){
+        // Get the side length of the element
+        const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
         
-        // Check if this element lies along an edge
-        if ((p.x < 0 || p.x >= hmax) ||
-            (p.y < 0 || p.y >= hmax)){
-          // If the element is on the edge of the tree, then we have
-          // to check adjacent trees to see if additional constraints
-          // areq required
-          addEdgeDependentNodes(face, edge, p, array[i], queue, indep);
-        }
-        else {
-          // If the more-refined element exists, then add the
-          // dependent nodes required for compatibility
-          const int use_nodes = 0;
-          if (elements->contains(&p, use_nodes)){
-            if (mesh_order == 2){
-              // Find the edge length of the more-refined element
-              const int32_t hp = 1 << (TMR_MAX_LEVEL - p.level);
-
-              // This is the one dependent node
-              TMRQuadrant node;
-              node.tag = -1;
-              node.level = p.level;
-              if (edge == 0 || edge == 1){
-                // Push the dependent node onto the queue
-                node.x = array[i].x + edge*h;
-                node.y = array[i].y + hp;
-                queue[face]->push(&node);
+        // Check the adjacent elements along each element edge
+        for ( int edge = 0; edge < 4; edge++ ){
+          // Look for the edge neighbor that is at the next level of
+          // refinement from the current element. If this element
+          // exists, then we have to use a dependent node.
+          TMRQuadrant p = array[i];
+          p.level += 1;
+          if (edge == 1 || edge == 3){
+            p.getSibling(3, &p);
+          }
+          p.edgeNeighbor(edge, &p);
+        
+          // Check if this the query element lies within
+          // the bounds of the current domain
+          if ((p.x >= 0 || p.x < hmax) ||
+              (p.y >= 0 || p.y < hmax)){
+            // If the more-refined element exists, then add the
+            // dependent nodes required for compatibility
+            const int use_nodes = 0;
+            if (elements->contains(&p, use_nodes)){
+              if (mesh_order == 2){
+                // Find the edge length of the more-refined element
+                const int32_t hp = 1 << (TMR_MAX_LEVEL - p.level);
+              
+                // This is the one dependent node
+                TMRQuadrant node;
+                node.tag = -1;
+                node.level = p.level;
+                if (edge == 0 || edge == 1){
+                  // Push the dependent node onto the queue
+                  node.x = array[i].x + edge*h;
+                  node.y = array[i].y + hp;
+                  queue[face]->push(&node);
                 
-                // Push the independent nodes onto the queue
-                node.y = array[i].y;
-                indep[face]->push(&node);
-                node.y = array[i].y + h;
-                indep[face]->push(&node);
-              }
-              else {
-                // Push the dependent node onto the queue
-                node.x = array[i].x + hp;                
-                node.y = array[i].y + (edge % 2)*h;
-                queue[face]->push(&node);
-
-                // Push the independent nodes onto the queue
-                node.x = array[i].x;
-                indep[face]->push(&node);
-                node.x = array[i].x + h;
-                indep[face]->push(&node);
-              }
-            }
-            else if (mesh_order == 3){
-              // Find the edge length of the most-refined level - this
-              // is one higher since we are working with the nodal
-              // mesh in which every element is refiend once.
-              const int32_t hp = 1 << (TMR_MAX_LEVEL - p.level);
-              const int32_t hr = 1 << (TMR_MAX_LEVEL - p.level - 1);
-
-              // This there are two dependent nodes for a 3rd order
-              // mesh. These correspond to the mid-side nodes of each
-              // of the finer two quadrants attached to the larger
-              // quadrant.
-              TMRQuadrant node;
-              node.tag = -1;
-              node.level = p.level;
-              if (edge == 0 || edge == 1){
-                // Push the two dependent nodes onto the queue
-                node.x = array[i].x + edge*h;
-                node.y = array[i].y + hr;
-                queue[face]->push(&node);
-                node.y = array[i].y + 3*hr;
-                queue[face]->push(&node);
-
-                // Push the nodes for the first constraint
-                for ( int k = 0; k < 3; k++ ){
-                  node.y = array[i].y + k*hp;
+                  // Push the independent nodes onto the queue
+                  node.y = array[i].y;
+                  indep[face]->push(&node);
+                  node.y = array[i].y + h;
                   indep[face]->push(&node);
                 }
-                
-                // Push the nodes for the second constraint
-                for ( int k = 2; k >= 0; k-- ){
-                  node.y = array[i].y + k*hp;
+                else {
+                  // Push the dependent node onto the queue
+                  node.x = array[i].x + hp;                
+                  node.y = array[i].y + (edge % 2)*h;
+                  queue[face]->push(&node);
+
+                  // Push the independent nodes onto the queue
+                  node.x = array[i].x;
+                  indep[face]->push(&node);
+                  node.x = array[i].x + h;
                   indep[face]->push(&node);
                 }
               }
-              else {
-                // Push the two dependent nodes onto the queue
-                node.x = array[i].x + hr;
-                node.y = array[i].y + (edge % 2)*h;
-                queue[face]->push(&node);
-                node.x = array[i].x + 3*hr;
-                queue[face]->push(&node);
+              else if (mesh_order == 3){
+                // Find the edge length of the most-refined level - this
+                // is one higher since we are working with the nodal
+                // mesh in which every element is refiend once.
+                const int32_t hp = 1 << (TMR_MAX_LEVEL - p.level);
+                const int32_t hr = 1 << (TMR_MAX_LEVEL - p.level - 1);
 
-                // Push the nodes for the first constraint
-                for ( int k = 0; k < 3; k++ ){
-                  node.x = array[i].x + k*hp;
-                  indep[face]->push(&node);
-                }
+                // This there are two dependent nodes for a 3rd order
+                // mesh. These correspond to the mid-side nodes of each
+                // of the finer two quadrants attached to the larger
+                // quadrant.
+                TMRQuadrant node;
+                node.tag = -1;
+                node.level = p.level;
+                if (edge == 0 || edge == 1){
+                  // Push the two dependent nodes onto the queue
+                  node.x = array[i].x + edge*h;
+                  node.y = array[i].y + hr;
+                  queue[face]->push(&node);
+                  node.y = array[i].y + 3*hr;
+                  queue[face]->push(&node);
+
+                  // Push the nodes for the first constraint
+                  for ( int k = 0; k < 3; k++ ){
+                    node.y = array[i].y + k*hp;
+                    indep[face]->push(&node);
+                  }
                 
-                // Push the nodes for the second constraint
-                for ( int k = 2; k >= 0; k-- ){
-                  node.x = array[i].x + k*hp;
-                  indep[face]->push(&node);
+                  // Push the nodes for the second constraint
+                  for ( int k = 2; k >= 0; k-- ){
+                    node.y = array[i].y + k*hp;
+                    indep[face]->push(&node);
+                  }
+                }
+                else {
+                  // Push the two dependent nodes onto the queue
+                  node.x = array[i].x + hr;
+                  node.y = array[i].y + (edge % 2)*h;
+                  queue[face]->push(&node);
+                  node.x = array[i].x + 3*hr;
+                  queue[face]->push(&node);
+
+                  // Push the nodes for the first constraint
+                  for ( int k = 0; k < 3; k++ ){
+                    node.x = array[i].x + k*hp;
+                    indep[face]->push(&node);
+                  }
+                
+                  // Push the nodes for the second constraint
+                  for ( int k = 2; k >= 0; k-- ){
+                    node.x = array[i].x + k*hp;
+                    indep[face]->push(&node);
+                  }
                 }
               }
             }
@@ -1167,6 +1463,82 @@ void TMRQuadForest::createNodes( int order ){
       }
     }
   }
+
+  // For each face that is owned by this processor, create an array of
+  // the nodes that lie along each edge. Store these in an array
+  // that will be passed to the edge owner.
+  TMRQuadrantArray **local_edge_nodes = new TMRQuadrantArray*[ 4*num_faces ];
+
+  for ( int face = 0; face < num_faces; face++ ){
+    if (quadtrees[face]){
+      // Create the queues
+      TMRQuadrantQueue *edge_queue[4];
+      for ( int edge = 0; edge < 4; edge++ ){
+        edge_queue[edge] = new TMRQuadrantQueue();
+      }
+
+      // Retrieve all the nodes from the faces
+      TMRQuadrantArray *nodes;
+      quadtrees[face]->getNodes(&nodes);
+
+      // Retrieve the array
+      int size;
+      TMRQuadrant *array;
+      nodes->getArray(&array, &size);
+
+      // Scan through the quadrants and add the ones that
+      // are on the edge to the queue
+      const int32_t hmax = 1 << TMR_MAX_LEVEL;
+      for ( int i = 0; i < size; i++ ){
+        if (array[i].x == 0){
+          edge_queue[0]->push(&array[i]);
+        }
+        if (array[i].x == hmax){
+          edge_queue[1]->push(&array[i]);
+        }
+        if (array[i].y == 0){
+          edge_queue[2]->push(&array[i]);
+        }
+        if (array[i].y == hmax){
+          edge_queue[3]->push(&array[i]);
+        } 
+      }
+
+      // Conver the queues to arrays and delete the queues
+      for ( int edge = 0; edge < 4; edge++ ){
+        local_edge_nodes[4*face + edge] = edge_queue[edge]->toArray();
+        delete edge_queue[edge];
+      }
+    }
+  }
+
+  // These are pointers to 
+  TMRQuadrantArray *recv_edge_nodes;
+
+
+  // Pass the edges to the edge owners
+  
+
+
+
+
+
+
+
+
+
+  // For each edge
+  for ( int face = 0; face < num_faces; face++ ){
+  recv_edge_nodes;
+
+
+
+
+
+
+
+
+
 
   // Now, go through and label the dependent nodes - first convert
   // all the queues into arrays for easier/consistent access

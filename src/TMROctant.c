@@ -614,11 +614,16 @@ int TMROctantHash::addOctant( TMROctant *oct ){
   mesh and then takes the remainder of the number of buckets.  
 */
 int TMROctantHash::getBucket( TMROctant *oct ){
-  int rx = oct->x >> (TMR_MAX_LEVEL - oct->level);
-  int ry = oct->y >> (TMR_MAX_LEVEL - oct->level);
-  int rz = oct->z >> (TMR_MAX_LEVEL - oct->level);
-
-  const int h = 1 << oct->level;
-
-  return (rx + (ry << oct->level) + (rz << 2*oct->level)) % num_buckets;
+  // Use the hash function: (x + hmax*y + hmax*hmax*z) % num_buckets
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  const int32_t hmod = hmax % num_buckets;
+  
+  // Compute the first and second coefficients
+  uint64_t px = oct->x % num_buckets;
+  uint64_t py = (oct->y % num_buckets)*hmod;
+  uint64_t pz = (oct->z % num_buckets)*hmod;
+  pz = (pz % num_buckets)*hmod;
+  
+  int bucket = (px + py + pz) % num_buckets;
+  return bucket;
 }

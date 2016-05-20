@@ -24,6 +24,7 @@ class TMRQuadrant {
   void cornerNeighbor( int corner, TMRQuadrant *neighbor );
   int compare( const TMRQuadrant *quadrant ) const;
   int compareEncoding( const TMRQuadrant *quadrant ) const;
+  int contains( TMRQuadrant *quad );
 
   int32_t x, y; // The x,y coordinates
   int32_t level; // The refinement level

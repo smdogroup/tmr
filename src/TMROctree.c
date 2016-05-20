@@ -359,9 +359,6 @@ void TMROctree::refine( int refinement[],
   TMROctant *array;
   elements->getArray(&array, &size);
 
-  // Get the max level
-  const int32_t hmax = 1 << TMR_MAX_LEVEL;
-
   // Add the element
   for ( int i = 0; i < size; i++ ){
     if (refinement[i] == 0){
@@ -456,9 +453,6 @@ void TMROctree::balance( int balance_corner ){
 
   // Create the queue of octants
   TMROctantQueue *queue = new TMROctantQueue();
-
-  // Get the max level
-  const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
   // Add the element
   for ( int i = 0; i < size; i++ ){
@@ -936,7 +930,7 @@ void TMROctree::createNodes( int _order ){
 	    c.z = array[i].z + hc*ec[2] + h*(ii*ie[2] + jj*je[2]);
 
 	    TMROctant *t;
-	    if (t = nodes->contains(&c, use_nodes)){
+	    if ((t = nodes->contains(&c, use_nodes))){
 	      if (t->tag == 1){
 		// Push the dependent node from the edge
 		edge_queue->push(&c);
@@ -983,7 +977,7 @@ void TMROctree::createNodes( int _order ){
 	  c.z = array[i].z + h*ii*ec[2] + hc*(ie[2] + je[2]);
 
 	  TMROctant *t;
-	  if (t = nodes->contains(&c, use_nodes)){
+	  if ((t = nodes->contains(&c, use_nodes))){
 	    if (t->tag == 1){
 	      // Push the dependent node from the face
 	      face_queue->push(&c);

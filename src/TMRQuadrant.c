@@ -38,6 +38,11 @@ void TMRQuadrant::parent( TMRQuadrant *p ){
     p->x = x & ~h;
     p->y = y & ~h;
   }
+  else {
+    p->level = 0;
+    p->x = x;
+    p->y = y;
+  }
 }
 
 /*
@@ -124,6 +129,25 @@ int TMRQuadrant::compareEncoding( const TMRQuadrant *quadrant ) const {
   }
   return 0;
 }
+
+/*
+  Determine whether the input quadrant is contained within the
+  quadrant itself. This can be used to determine whether the given
+  quadrant is a descendent of this object.
+*/
+int TMRQuadrant::contains( TMRQuadrant *quad ){
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
+
+  // Check whether the quadrant lies within this quadrant
+  if ((quad->x >= x && quad->x < x + h) &&
+      (quad->y >= y && quad->y < y + h)){
+    return 1;
+  }
+  
+  return 0;
+}
+
+
 
 /*
   Compare two quadrants within the same sub-tree
@@ -551,9 +575,13 @@ int TMRQuadrantHash::addQuadrant( TMRQuadrant *quad ){
   mesh and then takes the remainder of the number of buckets.  
 */
 int TMRQuadrantHash::getBucket( TMRQuadrant *quad ){
-  int rx = quad->x >> (TMR_MAX_LEVEL - quad->level);
-  int ry = quad->y >> (TMR_MAX_LEVEL - quad->level);
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
-  const int h = 1 << quad->level;
-  return (rx + (ry << quad->level)) % num_buckets;
+  // Use the hash function: x + hmax*y
+  uint64_t product = (quad->y % num_buckets)*(hmax % num_buckets);
+  
+  // Compute the bucket value
+  int bucket = (quad->x % num_buckets + product) % num_buckets;
+  
+  return bucket;
 }

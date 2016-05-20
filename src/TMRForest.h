@@ -100,6 +100,9 @@ class TMRQuadForest {
 
   // Keep a pointer to the forest of quadtrees
   TMRQuadtree **quadtrees; 
+
+  // The mpi rank of the face owner
+  int *face_owners;
 };
 
 #endif // TMR_FOREST_H
