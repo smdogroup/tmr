@@ -9,10 +9,7 @@
   The following constants define the maximum octant depth and maximum
   element order within the code.
 */
-static const int TMR_MAX_NODE_LEVEL = 30;
-static const int TMR_LOG2_MAX_ELEMENT_ORDER = 3; 
-static const int TMR_MAX_LEVEL = 
-  TMR_MAX_NODE_LEVEL - TMR_LOG2_MAX_ELEMENT_ORDER;
+static const int TMR_MAX_LEVEL = 30;
 
 /*
   The MPI TMROctant data type

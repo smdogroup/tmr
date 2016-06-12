@@ -1,7 +1,6 @@
 #ifndef TMR_QUADRANT_H
 #define TMR_QUADRANT_H
 
-#include <stdlib.h>
 #include "TMRBase.h"
 
 /*

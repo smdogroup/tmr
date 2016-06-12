@@ -1,7 +1,6 @@
 #ifndef TMR_FOREST_H
 #define TMR_FOREST_H
 
-#include "mpi.h"
 #include "TMRQuadtree.h"
 #include "TMROctree.h"
 
@@ -21,7 +20,6 @@ class TMRQuadForest {
   void createTrees( int refine_level );
   void createRandomTrees( int nrand=10, 
                           int min_level=0, int max_level=8 );
-
 
   // Balance the quadrant meshes
   // ---------------------------
@@ -62,19 +60,16 @@ class TMRQuadForest {
                          TMRQuadrant p,
                          TMRQuadrantHash **hash,
                          TMRQuadrantQueue **queue );
+  
+  // Label the dependent nodes on adjacent edges
+  int labelDependentNodes( int edge,
+                           TMRQuadrantArray **edge_nodes,
+                           int count );
 
-  // Get the adjacent quadrant for node ordering
-  TMRQuadrant* getEdgeNodeNeighbor( int face, 
-                                    int adjacent,
-                                    int edge, 
-                                    TMRQuadrant p );
-
-  // Label dependent nodes
-  void addEdgeDependentNodes( int face, int edge,
-                              TMRQuadrant p, 
-                              TMRQuadrant source,
-                              TMRQuadrantQueue **queue,
-                              TMRQuadrantQueue **indep );
+  // Get/set the node numbers from a specified edge
+  void getEdgeNodeNums( int face, int edge, int dest_face, 
+                        TMRQuadrantArray *edge_nodes );
+  void setEdgeNodeNums( int face, TMRQuadrantArray *edge_nodes );
 
   // The communicator
   MPI_Comm comm;
@@ -93,10 +88,8 @@ class TMRQuadForest {
   int num_mesh_dep_nodes;
   int num_mesh_elements;
 
-  // Keep the dependent weights stored locally
-  int *dep_ptr;
-  int *dep_conn;
-  double *dep_weights;
+  // Set the range of nodes owned by each processor
+  int *node_range;
 
   // Keep a pointer to the forest of quadtrees
   TMRQuadtree **quadtrees; 

@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "TMRQuadtree.h"
 
 /*
@@ -434,9 +435,9 @@ void TMRQuadtree::createNodes( int _order ){
       // Add all of the nodes to the hash
       for ( int jj = 0; jj < 2; jj++ ){
         for ( int ii = 0; ii < 2; ii++ ){
-          // Set the node level to the highest level - this will
-          // be updated when the nodes are assigned to the elements
-          all_nodes[index].level = 0;
+          // Set the node level to the level of the element
+          // that created it
+          all_nodes[index].level = array[i].level;
             
           // Set a positive tag, this will be replaced with a 
           // negative tag if the node is dependent
@@ -456,9 +457,9 @@ void TMRQuadtree::createNodes( int _order ){
       // Add all of the nodes to the hash
       for ( int jj = 0; jj < 3; jj++ ){
         for ( int ii = 0; ii < 3; ii++ ){
-          // Set the node level to the highest level - this will
-          // be updated when the nodes are assigned to the elements
-          all_nodes[index].level = 0;
+          // Set the node level to the level of the element
+          // that created it
+          all_nodes[index].level = array[i].level;
           
           // Set a positive tag, this will be replaced with a 
           // negative tag if the node is dependent

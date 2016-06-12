@@ -1440,7 +1440,7 @@ int main( int argc, char *argv[] ){
     // Set the material properties to use
     double rho = 1.0;
     double E1 = 100.0e9;
-    double E2 =   5.0e9;
+    double E2 = 5.0e9;
     double nu12 = 0.25;
     double G12 = 10.0e9;
     double G13 = 10.0e9;
