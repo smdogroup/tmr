@@ -36,12 +36,9 @@ class TMRQuadForest {
 
   // Retrieve the mesh connectivity
   // ------------------------------
-  void getMesh( int *nnodes, int *nelems,
-                int **_elem_ptr, int **_elem_conn );
-  void getDependentNodes( int *num_dep_nodes,
-                          const int **_dep_ptr,
-                          const int **_dep_conn,
-                          const double **_dep_weights );  
+  void getMesh( int *nnodes, int *ndep_nodes, int *nelems,
+                int **_elem_conn, int **_dep_conn,
+                double **_dep_weights );
 
   // Retrieve the individual quadtrees 
   // ---------------------------------
@@ -84,12 +81,11 @@ class TMRQuadForest {
 
   // Information about the mesh
   int mesh_order;
-  int num_mesh_nodes;
-  int num_mesh_dep_nodes;
-  int num_mesh_elements;
 
   // Set the range of nodes owned by each processor
   int *node_range;
+  int num_elements;
+  int num_dep_nodes;
 
   // Keep a pointer to the forest of quadtrees
   TMRQuadtree **quadtrees; 

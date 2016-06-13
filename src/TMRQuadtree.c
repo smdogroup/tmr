@@ -498,8 +498,9 @@ void TMRQuadtree::createNodes( int _order ){
   elem_ptr:   offset pointer into the element connectivity
   elem_conn:  element connectivity (including dependent nodes)
 */
-void TMRQuadtree::addMesh( int *elem_ptr, 
-                           int *elem_conn ){
+void TMRQuadtree::addMesh( int *elem_conn,
+                           int *dep_conn,
+                           double *dep_weights ){
   // Scan through and create the connectivity for all the
   // elements in the Morton order
   if (!nodes){
@@ -511,9 +512,6 @@ void TMRQuadtree::addMesh( int *elem_ptr,
   TMRQuadrant *array;
   elements->getArray(&array, &size);
   
-  // Set the connectivity pointer to the initial entry
-  int conn_size = 0;
-
   // Scan through all the elements
   for ( int i = 0; i < size; i++ ){
     TMRQuadrant p;
@@ -525,6 +523,9 @@ void TMRQuadtree::addMesh( int *elem_ptr,
       // Add all of the nodes from the adjacent elements
       const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
       p.level = array[i].level;
+      
+      // Get the element number
+      int num = array[i].tag;
 
       for ( int jj = 0; jj < 2; jj++ ){
         for ( int ii = 0; ii < 2; ii++ ){
@@ -534,14 +535,49 @@ void TMRQuadtree::addMesh( int *elem_ptr,
           // Get the index for the node
           TMRQuadrant *t = nodes->contains(&p, use_nodes);
           
-          // Reset the node level if the element level is smaller
-          if (array[i].level > t->level){
-            t->level = array[i].level;
-          }
-          
           // Set the node number in the element connectivity
-          elem_conn[conn_size] = t->tag;
-          conn_size++;
+          elem_conn[4*num + ii + 2*jj] = t->tag;
+          
+          // If this is a dependent node, add the connectivity
+          // to the dependent node list
+          if (t->tag < 0){
+            // Compute teh dependent node number
+            int dep = -t->tag-1;
+
+            // Check the child ID of the quadrant
+            if (array[i].childId() == 0){
+              if ((ii == 1 && jj == 0) ||
+                  (ii == 0 && jj == 1)){
+                p.x = array[i].x;
+                p.y = array[i].y;
+                t = nodes->contains(&p, use_nodes);
+                dep_conn[2*dep] = t->tag;
+                dep_weights[2*dep] = 0.5;
+
+                p.x = array[i].x + 2*h*ii;
+                p.y = array[i].y + 2*h*jj;
+                t = nodes->contains(&p, use_nodes);
+                dep_conn[2*dep+1] = t->tag;
+                dep_weights[2*dep+1] = 0.5;
+              }
+            }
+            else if (array[i].childId() == 3){
+              if ((ii == 1 && jj == 0) ||
+                  (ii == 0 && jj == 1)){
+                p.x = array[i].x + ii*h - jj*h;
+                p.y = array[i].y - ii*h + jj*h;
+                t = nodes->contains(&p, use_nodes);
+                dep_conn[2*dep] = t->tag;
+                dep_weights[2*dep] = 0.5;
+
+                p.x = array[i].x + h;
+                p.y = array[i].y + h;
+                t = nodes->contains(&p, use_nodes);
+                dep_conn[2*dep+1] = t->tag;
+                dep_weights[2*dep+1] = 0.5;
+              }
+            }
+          }
         }
       }
     }
@@ -566,16 +602,46 @@ void TMRQuadtree::addMesh( int *elem_ptr,
           if (array[i].level > t->level){
             t->level = array[i].level;
           }
+
+          // Get the element number
+          int num = array[i].tag;
           
           // Set the node number in the element connectivity
-          elem_conn[conn_size] = t->tag;
-          conn_size++;
+          elem_conn[9*num + ii + 3*jj] = t->tag;
+
+          /* // Add the connectivity from the  */
+          /* if (t->tag < 0){ */
+          /*   int n[3]; */
+          /*   double w[3]; */
+
+          /*   int id = array[i].childId(); */
+          /*   if (id == 0 || id == 1){ */
+          /*     if (ii == 1 && jj == 0){ */
+          /*       for ( int k = 0; k < 3; k++ ){ */
+          /*         p.x = array[i].x + 2*k*h; */
+          /*         p.y = array[i].y; */
+          /*         t = nodes->contains(&p, use_nodes); */
+          /*         n[k] = t->tag; */
+          /*       } */
+          /*     } */
+          /*     else if (jj == 1 && ii == 0){ */
+          /*       for ( int k = 0; k < 3; k++ ){ */
+          /*         p.x = array[i].x + 4*h*(id % 2); */
+          /*         p.y = array[i].y + 2*k*h; */
+          /*         t = nodes->contains(&p, use_nodes); */
+          /*         n[k] = t->tag; */
+          /*       } */
+          /*     } */
+          /*   } */
+
+          /*   for ( int k = 0; k < 3; k++, dep_size++ ){ */
+          /*     dep_conn[dep_size] = n[k]; */
+          /*     dep_weights[dep_size] = w[k]; */
+          /*   } */
+          /* } */
         }
       }
     }
-
-    // Set the connectivity pointer
-    elem_ptr[i+1] = elem_ptr[0] + conn_size;
   }
 }
 

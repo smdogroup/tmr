@@ -73,7 +73,8 @@ class TMRQuadtree {
 
   // Retrieve the mesh information
   // -----------------------------
-  void addMesh( int *elem_ptr, int *elem_conn );
+  void addMesh( int *elem_conn, 
+                int *dep_conn, double *dep_weights );
 
   // Create the interpolation from a coarser mesh
   // --------------------------------------------
