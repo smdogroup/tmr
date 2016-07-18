@@ -19,28 +19,7 @@
   element level. Taking the next-nearest neighbours for the largest
   adjoining element length gives an intermesh operator that is
   guaranteed to be the independent node set. The regular full
-  weighting multigrid scheme can be used. The fine and coarse meshes
-  are given as follows:
-
-  Fine:                         Coarse:
-
-  o -- o -- o -- o -- o         o ------- o ------- o
-  |    |    |    |    |         |         |         |
-  o -- o -- o -- o -- o         |         |         |
-  |    |    |    |    |         |         |         |
-  o -- o -- o -- o -- o         o ------- o ------- o
-  |         |    |    |         |         |         |
-  |         o -- o -- o         |         |         |
-  |         |    |    |         |         |         |
-  o ------- o -- o -- o         o ------- o ------- o
-  |         |         |         |                   |
-  |         |         |         |                   |
-  |         |         |         |                   |
-  o ------- o ------- o         |                   |
-  |         |         |         |                   |
-  |         |         |         |                   |
-  |         |         |         |                   |
-  o ------- o ------- o         o ----------------- o
+  weighting multigrid scheme can be used. 
 
   Note that these meshes are 2-1 balanced, otherwise this type of
   construction scheme could not be used. There will be at most a
@@ -48,17 +27,10 @@
 */
 class TMROctree {
  public:
-  TMROctree( int refine_level, 
-             TMROctant *_domain=NULL, int ndomain=0 );
+  TMROctree( int refine_level );
   TMROctree( int nrand, int min_level, int max_level );
-  TMROctree( TMROctantArray *_list,
-             TMROctant *_domain=NULL, int ndomain=0 );
+  TMROctree( TMROctantArray *_list );
   ~TMROctree();
-
-  // Check if the provided octant is within the domain
-  // -------------------------------------------------
-  int inDomain( TMROctant *p );
-  int onBoundary( TMROctant *p );
 
   // Refine the octree
   // -----------------
@@ -81,12 +53,13 @@ class TMROctree {
 
   // Create the connectivity information for the mesh
   // ------------------------------------------------
-  void createMesh( int _order );
+  // void createMesh( int _order );
 
   // Order the nodes but do not create the connectivity
   // --------------------------------------------------
-  void createNodes( int _order );
+  // void createNodes( int _order );
 
+  /*
   // Retrieve the mesh information
   // -----------------------------
   void getMesh( int *_num_nodes, 
@@ -111,7 +84,7 @@ class TMROctree {
                           int **_interp_ptr,
                           int **_interp_conn,
                           double **_interp_weights );
-
+  */
   // Print a representation of the tree to a file
   // --------------------------------------------
   void printOctree( const char *filename );
@@ -121,11 +94,32 @@ class TMROctree {
   void getElements( TMROctantArray **_elements ){
     if (_elements){ *_elements = elements; }
   }
+  void setElements( TMROctantArray *_elements ){
+    if (elements){ delete elements; }
+    elements = _elements;
+  }
 
-  // Retrieve the octree nodes
+  // Retrieve the octant nodes
   // -------------------------
   void getNodes( TMROctantArray **_nodes ){
     if (_nodes){ *_nodes = nodes; }
+  }
+  void setNodes( TMROctantArray *_nodes ){
+    if (nodes){ delete nodes; }
+    nodes = _nodes;
+  }
+
+  // Quickly retrieve the number of nodes/elements
+  // ---------------------------------------------
+  int getNumNodes(){
+    int size = 0;
+    if (nodes){ nodes->getArray(NULL, &size); }
+    return size; 
+  }
+  int getNumElements(){
+    int size = 0;
+    if (elements){ elements->getArray(NULL, &size); }
+    return size; 
   }
 
  private:
@@ -134,10 +128,6 @@ class TMROctree {
 
   // The nodes within the element mesh
   TMROctantArray *nodes; 
-
-  // A list of octants that define the domain
-  int ndomain;
-  TMROctant *domain;
 
   // Store the order of the mesh
   int order;

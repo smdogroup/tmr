@@ -9,10 +9,7 @@ import numpy as np
 import matplotlib.pylab as plt
 
 def func(x, y):
-    '''
-    This is the true function that we're trying to reconstruct over
-    the solution
-    '''
+    '''This is the true function'''
 
     return (x-1)**3 + (y-0.5)**5
 

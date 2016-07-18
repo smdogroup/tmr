@@ -4,16 +4,7 @@
   Refine the initial octree to the specified depth along all
   coordinate directions 
 */
-TMROctree::TMROctree( int refine_level, 
-                      TMROctant *_domain, int _ndomain ){
-  // Set the domain level
-  ndomain = _ndomain;
-  domain = NULL;
-  if (ndomain > 0){
-    domain = new TMROctant[ ndomain ];
-    memcpy(domain, _domain, ndomain*sizeof(TMROctant));
-  }
-
+TMROctree::TMROctree( int refine_level ){
   // Check that the refinement lies within legal bounds
   if (refine_level < 0){
     refine_level = 0;
@@ -30,64 +21,25 @@ TMROctree::TMROctree( int refine_level,
   int nocts = 0;
   TMROctant *array = NULL;
   
-  if (domain){
-    // Loop over each octant in the domain
-    for ( int k = 0; k < ndomain; k++ ){
-      int d = refine_level - domain[k].level;
-      if (d >= 0){
-        int nx = 1 << d;
-        nocts += nx*nx*nx;
-      }
-    }
-
-    // Create an array of the octants that will be stored
-    array = new TMROctant[ nocts ];
-
-    // Create all the octants required
-    int index = 0;
-    for ( int k = 0; k < ndomain; k++ ){
-      int d = refine_level - domain[k].level;
-      if (d >= 0){
-        const int32_t hk = 1 << (TMR_MAX_LEVEL - domain[k].level);
-        const int32_t xmax = domain[k].x + hk;
-        const int32_t ymax = domain[k].y + hk;
-        const int32_t zmax = domain[k].z + hk;
-
-        for ( int32_t z = domain[k].z; z < zmax; z += h ){
-          for ( int32_t y = domain[k].y; y < ymax; y += h ){
-            for ( int32_t x = domain[k].x; x < xmax; x += h ){
-              array[index].x = x;
-              array[index].y = y;
-              array[index].z = z;
-              array[index].level = refine_level;
-              index++;
-            }
-          }
-        }
-      }
-    }
-  }
-  else {
-    // Compute the number of octants along each edge
-    int32_t nx = 1 << refine_level;
+  // Compute the number of octants along each edge
+  int32_t nx = 1 << refine_level;
     
-    // Set the number of octants created
-    nocts = nx*nx*nx;
+  // Set the number of octants created
+  nocts = nx*nx*nx;
 
-    // Create an array of the octants that will be stored
-    array = new TMROctant[ nocts ];
+  // Create an array of the octants that will be stored
+  array = new TMROctant[ nocts ];
 
-    // Create all the octants required
-    int index = 0;
-    for ( int32_t z = 0; z < hmax; z += h ){
-      for ( int32_t y = 0; y < hmax; y += h ){
-        for ( int32_t x = 0; x < hmax; x += h ){
-          array[index].x = x;
-          array[index].y = y;
-          array[index].z = z;
-          array[index].level = refine_level;
-          index++;
-        }
+  // Create all the octants required
+  int index = 0;
+  for ( int32_t z = 0; z < hmax; z += h ){
+    for ( int32_t y = 0; y < hmax; y += h ){
+      for ( int32_t x = 0; x < hmax; x += h ){
+        array[index].x = x;
+        array[index].y = y;
+        array[index].z = z;
+        array[index].level = refine_level;
+        index++;
       }
     }
   }
@@ -99,18 +51,8 @@ TMROctree::TMROctree( int refine_level,
   // Zero the array of octant nodes
   nodes = NULL;
 
-  // Zero everything else
+  // Set the default order to 2
   order = 2;
-  num_elements = 0;
-  num_nodes = 0;
-  num_dependent_nodes = 0;
-
-  // Zero the mesh connectivity data
-  elem_ptr = NULL;
-  elem_conn = NULL;
-  dep_ptr = NULL;
-  dep_conn = NULL;
-  dep_weights = NULL;
 }
 
 /*
@@ -141,55 +83,22 @@ TMROctree::TMROctree( int nrand, int min_level, int max_level ){
   // Zero the array of octant nodes
   nodes = NULL;
 
-  // Zero the domain
-  ndomain = 0;
-  domain = NULL;
-
   // Zero everything else
   order = 2;
-  num_elements = 0;
-  num_nodes = 0;
-  num_dependent_nodes = 0;
-
-  // Zero the mesh connectivity data
-  elem_ptr = NULL;
-  elem_conn = NULL;
-  dep_ptr = NULL;
-  dep_conn = NULL;
-  dep_weights = NULL;
 }
 
 /*
   Create the octree tree from the array
 */
-TMROctree::TMROctree( TMROctantArray *_elements,
-                      TMROctant *_domain, int _ndomain ){
+TMROctree::TMROctree( TMROctantArray *_elements ){
   elements = _elements;
   elements->sort();
-
-  // Set the domain level
-  ndomain = _ndomain;
-  domain = NULL;
-  if (ndomain > 0){
-    domain = new TMROctant[ ndomain ];
-    memcpy(domain, _domain, ndomain*sizeof(TMROctant));
-  }
 
   // Zero the array of octant nodes
   nodes = NULL;
 
   // Zero everything else
   order = 2;
-  num_elements = 0;
-  num_nodes = 0;
-  num_dependent_nodes = 0;
-
-  // Zero the mesh connectivity data
-  elem_ptr = NULL;
-  elem_conn = NULL;
-  dep_ptr = NULL;
-  dep_conn = NULL;
-  dep_weights = NULL;
 }
 
 /*
@@ -199,132 +108,6 @@ TMROctree::~TMROctree(){
   // Free the elements and nodes
   if (elements){ delete elements; }
   if (nodes){ delete nodes; }
-
-  // Free the domain if it exists
-  if (domain){ delete [] domain; }
-
-  // Free the connectivity information if it was allocated
-  if (elem_ptr){ delete [] elem_ptr; }
-  if (elem_conn){ delete [] elem_conn; }
-  if (dep_ptr){ delete [] dep_ptr; }
-  if (dep_conn){ delete [] dep_conn; }
-  if (dep_weights){ delete [] dep_weights; }
-}
-
-/*
-  Check that the provided element octant is within the domain 
-*/
-int TMROctree::inDomain( TMROctant *p ){
-  const int32_t hmax = 1 << TMR_MAX_LEVEL;
-
-  // If no domain is specified, use the unit cube
-  // as the full domain
-  if (!domain){
-    if (p->x >= 0 && p->y >= 0 && p->z >= 0 && 
-        p->x < hmax && p->y < hmax && p->z < hmax){
-      return 1;
-    }
-    else {
-      return 0;
-    }
-  }
-  else {
-    // If a domain is specified, then search each element within
-    // the domain. Note that the domain list should be small.
-    for ( int k = 0; k < ndomain; k++ ){
-      const int h = 1 << (TMR_MAX_LEVEL - domain[k].level);
-      const int x1 = domain[k].x;
-      const int y1 = domain[k].y;
-      const int z1 = domain[k].z;
-      const int x2 = domain[k].x + h;
-      const int y2 = domain[k].y + h;
-      const int z2 = domain[k].z + h;
-      
-      if (p->x >= x1 && p->y >= y1 && p->z >= z1 &&
-          p->x < x2 && p->y < y2 && p->z < z2){
-        return 1;
-      }
-    }
-  }
-
-  return 0;
-}
-
-/*
-  Check if the provided octant is on the domain boundary
-*/
-int TMROctree::onBoundary( TMROctant *p ){
-  const int32_t hmax = 1 << TMR_MAX_LEVEL;
-
-  // If no domain is specified, use the unit cube
-  // as the full domain and check whether the node
-  // provided is on the boundary
-  if (!domain){
-    if ((p->x == 0 || p->x == hmax) ||
-        (p->y == 0 || p->y == hmax) ||
-        (p->z == 0 || p->z == hmax)){
-      return 1;
-    }
-    else {
-      return 0;
-    }
-  }
-  else {
-    // If a domain is specified, then search each element within
-    // the domain and only return true if the node is on one
-    // and only one boundary.
-    int nbound = 0;
-    int corner = 0; // The node is on a corner
-    int edge = 0; // The node is on an edge
-    for ( int k = 0; k < ndomain; k++ ){
-      const int32_t h = 1 << (TMR_MAX_LEVEL - domain[k].level);
-      const int32_t x1 = domain[k].x;
-      const int32_t y1 = domain[k].y;
-      const int32_t z1 = domain[k].z;
-
-      const int32_t x2 = domain[k].x + h;
-      const int32_t y2 = domain[k].y + h;
-      const int32_t z2 = domain[k].z + h;
-      
-      // Compute the range
-      int rx = ((p->x >= x1) && (p->x <= x2));
-      int ry = ((p->y >= y1) && (p->y <= y2));
-      int rz = ((p->z >= z1) && (p->z <= z2));
-      
-      // Flag true if any of the nodes are on the bounds
-      int ax = ((p->x == x1) || (p->x == x2)) && (ry && rz);
-      int ay = ((p->y == y1) || (p->y == y2)) && (rx && rz);
-      int az = ((p->z == z1) || (p->z == z2)) && (rx && ry);
-
-      // Check if this is on any of the bounds
-      if ((ax || ay) || az){
-        nbound++;
-      }
-
-      // Check if this node is on a corner
-      corner = corner || ((ax && ay) && az);
-
-      // Check if this on an edge
-      edge = edge || (((ax && ay) || (ax && az)) || (ay && az));
-    }
-
-    // The node is on the true boundary only if it is only
-    // on one of the octants that define the boundary
-    if (nbound == 0){
-      return 0;
-    }
-    else if (corner){
-      return (nbound < 8);
-    }
-    else if (edge){
-      return (nbound < 4);
-    }
-    else {
-      return (nbound < 2);
-    }
-  }
-
-  return 0;
 }
 
 /*
@@ -395,11 +178,14 @@ void TMROctree::refine( int refinement[],
   child0_elems->getArray(&array, &size);
 
   // Loop over all elements and add their siblings
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
   for ( int i = 0; i < size; i++ ){
     for ( int j = 0; j < 8; j++ ){
       TMROctant q;
       array[i].getSibling(j, &q);
-      if (inDomain(&q)){
+      if ((q.x >= 0 && q.x < hmax) &&
+          (q.y >= 0 && q.y < hmax) &&
+          (q.z >= 0 && q.z < hmax)){
         hash->addOctant(&q);
       }
     }
@@ -416,181 +202,6 @@ void TMROctree::refine( int refinement[],
   elements->sort();
 
   delete hash;
-}
-
-/*
-  Balance the octree in place
-
-  This algorithm uses a hash and a queue to balance the octree. For
-  each element in the octree, we add the neighbors that are required
-  to balance to the tree. If the element is not in the hash, we add
-  them to a queue, which keeps track of recently added elements. After
-  the first pass, the algorithm continues popping elements until the
-  queue is empty.
-
-  Note that only 0-th siblings are added/popped on the hash/queue.
-  Then at the end, all neighboring siblings are added.
-
-  The type of balancing - face/edge balanced or face/edge/corner
-  balanced is determined using the balance_corner flag. Face balancing
-  is balancing across faces, corner balances across corners of the
-  elements and corner balances across corners. The code always
-  balances faces and edges (so that there is at most one depdent node
-  per edge) and balances across corners optionally.
-*/
-void TMROctree::balance( int balance_corner ){
-  // Create a hash table for the balanced tree
-  TMROctantHash *hash = new TMROctantHash();
-
-  // Go through the existing list of octants and add up everything for
-  // balancing
-  TMROctant p, q, neighbor;
-
-  // Get the current array of octants
-  int size;
-  TMROctant *array;
-  elements->getArray(&array, &size);
-
-  // Create the queue of octants
-  TMROctantQueue *queue = new TMROctantQueue();
-
-  // Add the element
-  for ( int i = 0; i < size; i++ ){
-    // Try adding all of the children
-    array[i].getSibling(0, &q);
-    hash->addOctant(&q);
-    
-    // Get the parent of the octant, and add the their
-    // face-matched octants from each face, as long 
-    // as they fall within the bounds
-    if (q.level > 0){
-      q.parent(&p);
-
-      // For each face, get the neighbours along
-      // each face
-      for ( int face = 0; face < 6; face++ ){
-	p.faceNeighbor(face, &neighbor);
-	neighbor.getSibling(0, &q);
-
-	// If we're in bounds, add the neighbor
-	if (inDomain(&q)){
-	  if (hash->addOctant(&q)){
-	    queue->push(&q);
-	  }
-	}
-      }
-
-      // If we are balancing across edges, also 
-      // add the edge-adjacent elements
-      for ( int edge = 0; edge < 12; edge++ ){
-        p.edgeNeighbor(edge, &neighbor);
-        neighbor.getSibling(0, &q);
-	  
-        // If we're in bounds, add the neighbor
-	if (inDomain(&q)){
-          if (hash->addOctant(&q)){
-            queue->push(&q);
-          }
-        }
-      }
-
-      // If we're balancing across edges and 
-      if (balance_corner){
-	for ( int corner = 0; corner < 8; corner++ ){
-	  p.cornerNeighbor(corner, &neighbor);
-	  neighbor.getSibling(0, &q);
-	  
-	  // If we're in bounds, add the neighbor
-          if (inDomain(&q)){
-	    if (hash->addOctant(&q)){
-	      queue->push(&q);
-	    }
-	  }
-	}
-      }
-    }
-  }
-
-  // Now continue until the queue of added octants is
-  // empty. At each iteration, pop an octant and add 
-  // its neighbours until nothing new is added. This code
-  // handles the propagation of octants to adjacent octants.
-  while (queue->length() > 0){
-    q = queue->pop();
-   
-    if (q.level > 1){
-      q.parent(&p);
-
-      // Add the octants across faces
-      for ( int face = 0; face < 6; face++ ){
-	p.faceNeighbor(face, &neighbor);
-	neighbor.getSibling(0, &q);
-	
-	// If we're in bounds, add the neighbor
-        if (inDomain(&q)){
-	  if (hash->addOctant(&q)){
-	    queue->push(&q);
-	  }
-	}
-      }
-
-      // Add the octants across adjacent edges
-      for ( int edge = 0; edge < 12; edge++ ){
-        p.edgeNeighbor(edge, &neighbor);
-        neighbor.getSibling(0, &q);
-	
-        // If we're in bounds, add the neighbor
-        if (inDomain(&q)){
-          if (hash->addOctant(&q)){
-            queue->push(&q);
-          }
-        }
-      }
-
-      // Add the octants across corners
-      if (balance_corner){
-	for ( int corner = 0; corner < 8; corner++ ){
-	  p.cornerNeighbor(corner, &neighbor);
-	  neighbor.getSibling(0, &q);
-	  
-	  // If we're in bounds, add the neighbor
-          if (inDomain(&q)){
-	    if (hash->addOctant(&q)){
-	      queue->push(&q);
-	    }
-	  }
-	}
-      }
-    }
-  }
-
-  // Now convert the new hash
-  TMROctantArray *child0_elems = hash->toArray();
-  child0_elems->getArray(&array, &size);
-
-  // Loop over all elements and add their siblings
-  for ( int i = 0; i < size; i++ ){
-    for ( int j = 0; j < 8; j++ ){
-      array[i].getSibling(j, &q);
-      if (inDomain(&q)){
-        hash->addOctant(&q);
-      }
-    }
-  }
-
-  // Free the temporary elements
-  delete child0_elems;
-
-  // Free the old elements class
-  delete elements;
-
-  // Cover the hash table to a list and uniquely sort it
-  elements = hash->toArray();
-  elements->sort();
-
-  // Free the hash table and the queue
-  delete hash;
-  delete queue;
 }
 
 /*
@@ -642,7 +253,7 @@ TMROctree *TMROctree::coarsen(){
   }
 
   // Create the new octree from the queue
-  TMROctree *tree = new TMROctree(queue->toArray(), domain, ndomain);
+  TMROctree *tree = new TMROctree(queue->toArray());
   delete queue;
 
   return tree;
@@ -773,32 +384,6 @@ void TMROctree::findEnclosingRange( TMROctant *oct,
 }
 
 /*
-  Retrieve the mesh information
-*/
-void TMROctree::getMesh( int *_num_nodes, 
-                         int *_num_elements, 
-                         const int **_elem_ptr, 
-                         const int **_elem_conn ){
-  if (_num_nodes){ *_num_nodes = num_nodes; }
-  if (_num_elements){ *_num_elements = num_elements; }
-  if (_elem_ptr){ *_elem_ptr = elem_ptr; }
-  if (_elem_conn){ *_elem_conn = elem_conn; }
-}
-
-/*
-  Retrieve the depednent node information
-*/
-void TMROctree::getDependentMesh( int *_num_dep_nodes, 
-                                  const int **_dep_ptr,
-                                  const int **_dep_conn,
-                                  const double **_dep_weights ){
-  if (_num_dep_nodes){ *_num_dep_nodes = num_dependent_nodes; }
-  if (_dep_ptr){ *_dep_ptr = dep_ptr; }
-  if (_dep_conn){ *_dep_conn = dep_conn; }
-  if (_dep_weights){ *_dep_weights = dep_weights; }
-}
-
-/*
   Create the mesh using the internal octree data
 
   This algorithm first adds all the nodes from the element to a hash
@@ -806,6 +391,7 @@ void TMROctree::getDependentMesh( int *_num_dep_nodes,
   added, they are sorted and uniquified. Next, we go through the
   elements and label any possible dependent node.
 */
+/*
 void TMROctree::createNodes( int _order ){
   order = _order;
   if (order < 2){ order = 2; }
@@ -1116,10 +702,11 @@ void TMROctree::createNodes( int _order ){
   delete face_array;
   delete face_nodes;
 }
-
+*/
 /*
   Create the mesh connectivity
 */
+/*
 void TMROctree::createMesh( int _order ){
   // Scan through and create the connectivity for all the
   // elements in the Morton order
@@ -1215,10 +802,11 @@ void TMROctree::createMesh( int _order ){
     elem_ptr[i+1] = conn_size;
   }
 }
-
+*/
 /*
   Create the interpolation operator
 */
+/*
 void TMROctree::createInterpolation( TMROctree *coarse,
                                      int **_interp_ptr,
                                      int **_interp_conn,
@@ -1460,10 +1048,11 @@ void TMROctree::createInterpolation( TMROctree *coarse,
   *_interp_conn = interp_conn;
   *_interp_weights = interp_weights;
 }
-
+*/
 /*
   Create the restriction operator
 */
+/*
 void TMROctree::createRestriction( TMROctree *tree,
                                    int **_interp_ptr,
                                    int **_interp_conn,
@@ -1603,6 +1192,7 @@ void TMROctree::createRestriction( TMROctree *tree,
   *_interp_conn = interp_conn;
   *_interp_weights = interp_weights;
 }
+*/
 
 /*
   Print out the octree to a file for visualization

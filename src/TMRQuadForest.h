@@ -1,8 +1,7 @@
-#ifndef TMR_FOREST_H
-#define TMR_FOREST_H
+#ifndef TMR_QUADTREE_FOREST_H
+#define TMR_QUADTREE_FOREST_H
 
 #include "TMRQuadtree.h"
-#include "TMROctree.h"
 
 class TMRQuadForest {
  public:
@@ -68,6 +67,10 @@ class TMRQuadForest {
                         TMRQuadrantArray *edge_nodes );
   void setEdgeNodeNums( int face, TMRQuadrantArray *edge_nodes );
 
+  // Label the dependent edge nodes
+  void addEdgeDependentNodes( int face, int edge,
+                              TMRQuadrant p, TMRQuadrant source );
+
   // The communicator
   MPI_Comm comm;
 
@@ -94,4 +97,4 @@ class TMRQuadForest {
   int *face_owners;
 };
 
-#endif // TMR_FOREST_H
+#endif // TMR_QUADTREE_FOREST_H

@@ -25,6 +25,7 @@ class TMROctant {
   void cornerNeighbor( int corner, TMROctant *neighbor );
   int compare( const TMROctant *octant ) const;
   int compareEncoding( const TMROctant *octant ) const;
+  int contains( TMROctant *oct );
 
   int32_t x, y, z; // The x,y,z coordinates
   int32_t level; // The refinement level
@@ -45,6 +46,7 @@ class TMROctantArray {
   TMROctantArray( TMROctant *array, int size );
   ~TMROctantArray();
 
+  TMROctantArray* duplicate();
   void getArray( TMROctant **_array, int *_size );
   void sort();
   TMROctant* contains( TMROctant *q, int use_nodes=0 );

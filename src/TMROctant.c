@@ -202,6 +202,24 @@ int TMROctant::compareEncoding( const TMROctant *octant ) const {
 }
 
 /*
+  Determine whether the input octant is contained within the quadrant
+  itself. This can be used to determine whether the given octant is
+  a descendent of this object.  
+*/
+int TMROctant::contains( TMROctant *oct ){
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
+
+  // Check whether the octant lies within this octant
+  if ((oct->x >= x && oct->x < x + h) &&
+      (oct->y >= y && oct->y < y + h) && 
+      (oct->z >= z && oct->z < z + h)){
+    return 1;
+  }
+  
+  return 0;
+}
+
+/*
   Compare two octants within the same sub-tree
 */
 static int compare_octants( const void *a, const void *b ){
@@ -236,6 +254,19 @@ TMROctantArray::TMROctantArray( TMROctant *_array, int _size ){
 */
 TMROctantArray::~TMROctantArray(){
   delete [] array;
+}
+
+/*
+  Duplicate the array and return the copy
+*/
+TMROctantArray* TMROctantArray::duplicate(){
+  TMROctant *arr = new TMROctant[ size ];
+  memcpy(arr, array, size*sizeof(TMROctant));
+
+  TMROctantArray *dup = new TMROctantArray(arr, size);
+  dup->is_sorted = is_sorted;
+
+  return dup;
 }
 
 /*

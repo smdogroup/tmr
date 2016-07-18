@@ -147,8 +147,6 @@ int TMRQuadrant::contains( TMRQuadrant *quad ){
   return 0;
 }
 
-
-
 /*
   Compare two quadrants within the same sub-tree
 */
