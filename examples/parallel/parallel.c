@@ -1,4 +1,4 @@
-#include "TMRForest.h"
+#include "TMRQuadForest.h"
 
 const double Xpts[] = {0.0, 0.0, 0.0,
                        1.0, 0.0, 0.0,

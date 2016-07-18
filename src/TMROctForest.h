@@ -29,6 +29,13 @@ class TMROctForest {
   // -------------------------
   void balance( int balance_corner=0 );
 
+  // Get the array of Octrees
+  // ------------------------
+  int getOctrees( TMROctree ***_trees ){
+    if (_trees){ *_trees = octrees; }
+    return num_blocks;
+  }
+
  private:
   // Balance the octant across the local tree and the forest
   void balanceOctant( int block, TMROctant *oct,
@@ -61,6 +68,9 @@ class TMROctForest {
   int *node_block_ptr, *node_block_conn;
   int *edge_block_ptr, *edge_block_conn;
   int *face_block_ptr, *face_block_conn;
+
+  // Information to enable transformations between faces
+  int *block_face_ids;
 
   // Information about the mesh
   int mesh_order;

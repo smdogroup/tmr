@@ -10,12 +10,9 @@ const int block_to_edge_nodes[][2] = {{0,1}, {2,3}, {4,5}, {6,7},
 /*
   Map from the face number to the block number
 */
-const int block_to_face_nodes[][4] = {{0,1,2,3}, 
-                                      {4,5,6,7},
-                                      {0,1,4,5},
-                                      {2,3,6,7},
-                                      {0,2,4,6},
-                                      {1,3,5,7}};
+const int block_to_face_nodes[][4] = {{0,2,4,6}, {1,3,5,7},
+                                      {0,1,4,5}, {2,3,6,7},
+                                      {0,1,2,3}, {4,5,6,7}};
 
 /*
   All possible orientations for two connecting faces
@@ -26,60 +23,55 @@ const int face_orientations[][4] = {{0,1,2,3},
                                     {1,3,0,2}};
 
 /*
-  Given the integer face_index -- the index into the face_orientations
-  array -- return the relative x/y locations on this face.
-
-  2 --- 3 
-  |     |
-  0 --- 1
-    
-  The face can have any of the following orientations
-    
-  2 --- 3    3 --- 1    1 --- 0    0 --- 2
-  |     |    |     |    |     |    |     |  
-  0 --- 1    2 --- 0    3 --- 2    1 --- 3
-  
-  2 --- 0    0 --- 1    1 --- 3    3 --- 2
-  |     |    |     |    |     |    |     |  
-  3 --- 1    2 --- 3    0 --- 2    1 --- 0
+  Given the x/y locations on the face with orientation face_id,
+  find/return the corresponding u/v coordinates on the transformed
+  face.
 */
-inline void get_face_node_coords( const int face_id, 
-                                  const int32_t u, const int32_t v,
-                                  int32_t *x, int32_t *y ){
-  const int32_t hmax = 1 << TMR_MAX_LEVEL;
-  
-  // For these orientations, the normals are in the same direction
+inline void get_face_oct_coords( const int face_id, const int32_t h,
+                                 const int32_t x, const int32_t y,
+                                 int32_t *u, int32_t *v ){
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;  
   if (face_id == 0){
-    // {0,1,2,3} - the block is aligned with the face
-    //  2 --- 3
-    //  |     |
-    //  0 --- 1
+    *u = x;
+    *v = y;
+  }
+  else if (face_id == 1){
+    *u = hmax - h - y;
+    *v = x;
+  }
+  else if (face_id == 2){
+    *u = hmax - h - x;
+    *v = hmax - h - y;
+  }
+  else {
+    *u = y;
+    *v = hmax - h - x;
+  }
+}
+
+/*
+  Given the u/v locations on the root face, set the coordinates on the
+  destination face.
+*/
+inline void set_face_oct_coords( const int face_id, const int32_t h,
+                                 const int32_t u, const int32_t v,
+                                 int32_t *x, int32_t *y ){
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;  
+  if (face_id == 0){
     *x = u;
     *y = v;
   }
   else if (face_id == 1){
-    // {2,0,3,1} - block rotated to the right
-    // 3 --- 1
-    // |     |
-    // 2 --- 0 
-    *x = hmax - v;
-    *y = u;
+    *x = v;
+    *y = hmax - h - u;
   }
   else if (face_id == 2){
-    // {3,2,1,0}
-    // 1 --- 0
-    // |     |
-    // 3 --- 2
-    *x = hmax - u;
-    *y = hmax - v;
+    *x = hmax - h - u;
+    *y = hmax - h - v; 
   }
-  else if (face_id == 3){
-    // {1,3,0,2}
-    // 0 --- 2
-    // |     |
-    // 1 --- 3
-    *x = v;
-    *y = hmax - u;
+  else {
+    *x = hmax - h - v;
+    *y = u; 
   }
 }
 
@@ -102,6 +94,7 @@ TMROctForest::TMROctForest( MPI_Comm _comm ){
   // Set all the unallocated pointers to NULL
   block_conn = NULL;
   block_face_conn = NULL;
+  block_face_ids = NULL;
   block_edge_conn = NULL;
   node_block_ptr = NULL;
   node_block_conn = NULL;
@@ -123,6 +116,7 @@ TMROctForest::TMROctForest( MPI_Comm _comm ){
 TMROctForest::~TMROctForest(){
   if (block_conn){ delete [] block_conn; }
   if (block_face_conn){ delete [] block_face_conn; }
+  if (block_face_ids){ delete [] block_face_ids; }
   if (block_edge_conn){ delete [] block_edge_conn; }
   if (node_block_ptr){ delete [] node_block_ptr; }
   if (node_block_conn){ delete [] node_block_conn; }
@@ -168,6 +162,7 @@ void TMROctForest::setConnectivity( int _num_nodes,
   // This will erase everything internally.
   if (block_conn){ delete [] block_conn; }
   if (block_face_conn){ delete [] block_face_conn; }
+  if (block_face_ids){ delete [] block_face_ids; }
   if (block_edge_conn){ delete [] block_edge_conn; }
   if (node_block_ptr){ delete [] node_block_ptr; }
   if (node_block_conn){ delete [] node_block_conn; }
@@ -183,6 +178,7 @@ void TMROctForest::setConnectivity( int _num_nodes,
   }
   if (mpi_block_owners){ delete [] mpi_block_owners; }
   if (node_range){ delete [] node_range; }
+  node_range = NULL;
 
   // Copy over the data locally
   num_nodes = _num_nodes;
@@ -255,7 +251,7 @@ void TMROctForest::setConnectivity( int _num_nodes,
     for ( int j = 0; j < 12; j++ ){
       if (block_edge_conn[12*i + j] < 0){
         int n1 = block_conn[8*i + block_to_edge_nodes[j][0]];
-        int n2 = block_conn[7*i + block_to_edge_nodes[j][1]];
+        int n2 = block_conn[8*i + block_to_edge_nodes[j][1]];
 
         // Keep track of the number of edges found
         const int max_nedges = 128;
@@ -274,8 +270,8 @@ void TMROctForest::setConnectivity( int _num_nodes,
           
           // Loop over each edge in the new block
           for ( int jj = 0; jj < 12; jj++ ){
-            int nn1 = block_conn[12*ii + block_to_edge_nodes[jj][0]];
-            int nn2 = block_conn[12*ii + block_to_edge_nodes[jj][1]];
+            int nn1 = block_conn[8*ii + block_to_edge_nodes[jj][0]];
+            int nn2 = block_conn[8*ii + block_to_edge_nodes[jj][1]];
 
             // Check if the block matches
             if ((n1 == nn1 && n2 == nn2) ||
@@ -290,7 +286,7 @@ void TMROctForest::setConnectivity( int _num_nodes,
                 // to the unordered list if there is still room
                 // if not, we will detect and order it during
                 // a future iteration
-                edge_index[nedges] = 4*ii + jj;
+                edge_index[nedges] = 12*ii + jj;
                 nedges++;
               }
             }
@@ -441,7 +437,7 @@ void TMROctForest::setConnectivity( int _num_nodes,
   memset(face_block_ptr, 0, (num_faces+1)*sizeof(int));
 
   // Count the number of times each face is referred to
-  for ( int i = 0; i < 12*num_blocks; i++ ){
+  for ( int i = 0; i < 6*num_blocks; i++ ){
     face_block_ptr[block_face_conn[i]+1]++;
   }
 
@@ -465,6 +461,82 @@ void TMROctForest::setConnectivity( int _num_nodes,
     face_block_ptr[i] = face_block_ptr[i-1];
   }
   face_block_ptr[0] = 0;
+
+  // Compute the block face ids for each block face
+  block_face_ids = new int[ 6*num_blocks ];
+
+  // Determine the face block ids. These ids store both the
+  // orientation of the face relative to the face owner - the
+  // face owner is on the block with the lowest block index.
+  for ( int face = 0; face < num_faces; face++ ){
+    int block_owner = num_blocks;
+    int owner_index = 0;
+
+    // Scan through the blocks pointing to this face to determine
+    // the block owner - the block with the lowest index
+    for ( int ip = face_block_ptr[face]; 
+          ip < face_block_ptr[face+1]; ip++ ){
+      int block = face_block_conn[ip];
+      if (block < block_owner){
+        block_owner = block;
+
+        // Find the new owner index
+        owner_index = 0;
+        for ( int j = 0; j < 6; j++, owner_index++ ){
+          if (block_face_conn[6*block + j] == face){
+            break;
+          }
+        }
+      }
+    }
+
+    // Get the nodes for the owner face - these will be used 
+    // to establish the relative orientation between the owner
+    // and each subsequent block
+    int owner_nodes[4];
+    for ( int k = 0; k < 4; k++ ){
+      owner_nodes[k] = block_conn[8*block_owner + 
+                                  block_to_face_nodes[owner_index][k]];
+    }
+
+    // Now determine the relative orientations of the faces and store
+    // them in the index
+    for ( int ip = face_block_ptr[face]; 
+          ip < face_block_ptr[face+1]; ip++ ){
+      // Find the block index
+      int block = face_block_conn[ip];
+      for ( int j = 0; j < 6; j++ ){
+        if (face == block_face_conn[6*block + j]){
+          // Now, find the relative orientations between the two faces.
+          // First get the nodes corresponding to this face
+          int new_face_nodes[4];
+          for ( int k = 0; k < 4; k++ ){
+            new_face_nodes[k] = 
+              block_conn[8*block + block_to_face_nodes[j][k]];
+          }
+          
+          // Loop over the relative orientations between this block
+          // and the last block
+          for ( int ort = 0; ort < 4; ort++ ){
+            int face_equiv = 1;
+            for ( int k = 0; k < 4; k++ ){
+              if (owner_nodes[k] != 
+                  new_face_nodes[face_orientations[ort][k]]){
+                face_equiv = 0;
+                break;
+              }
+            }
+            
+            // Set the orientation and break out of this loop
+            if (face_equiv){
+              block_face_ids[6*block + j] = ort;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 /*
@@ -507,9 +579,9 @@ void TMROctForest::createRandomTrees( int nrand,
   // Create a random set of octrees
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
-  octrees = new TMROctree*[ num_faces ];
-  memset(octrees, 0, num_faces*sizeof(TMROctree*));
-  for ( int i = 0; i < num_faces; i++ ){
+  octrees = new TMROctree*[ num_blocks ];
+  memset(octrees, 0, num_blocks*sizeof(TMROctree*));
+  for ( int i = 0; i < num_blocks; i++ ){
     if (mpi_block_owners[i] == mpi_rank){
       octrees[i] = new TMROctree(nrand, min_level, max_level);
     }
@@ -535,9 +607,11 @@ TMROctForest* TMROctForest::duplicate(){
     // Allocate/copy the block connectivities
     dup->block_conn = new int[ 8*num_blocks ];
     dup->block_face_conn = new int[ 6*num_faces ];
+    dup->block_face_ids = new int[ 6*num_faces ];
     dup->block_edge_conn = new int[ 12*num_faces ];
     memcpy(dup->block_conn, block_conn, 8*num_blocks*sizeof(int));
     memcpy(dup->block_face_conn, block_face_conn, 6*num_blocks*sizeof(int));
+    memcpy(dup->block_face_ids, block_face_ids, 6*num_blocks*sizeof(int));
     memcpy(dup->block_edge_conn, block_edge_conn, 12*num_blocks*sizeof(int));
     
     // Allocate/copy the inverse relationships
@@ -598,9 +672,11 @@ TMROctForest* TMROctForest::coarsen(){
     // Allocate/copy the block connectivities
     coarse->block_conn = new int[ 8*num_blocks ];
     coarse->block_face_conn = new int[ 6*num_faces ];
+    coarse->block_face_ids = new int[ 6*num_faces ];
     coarse->block_edge_conn = new int[ 12*num_faces ];
     memcpy(coarse->block_conn, block_conn, 8*num_blocks*sizeof(int));
     memcpy(coarse->block_face_conn, block_face_conn, 6*num_blocks*sizeof(int));
+    memcpy(coarse->block_face_ids, block_face_ids, 6*num_blocks*sizeof(int));
     memcpy(coarse->block_edge_conn, block_edge_conn, 12*num_blocks*sizeof(int));
     
     // Allocate/copy the inverse relationships
@@ -652,26 +728,29 @@ void TMROctForest::addFaceNeighbors( int block,
                                      TMROctant p,
                                      TMROctantHash **hash,
                                      TMROctantQueue **queue ){
-  /*
   // Determine the global face number
   int face = block_face_conn[6*block + face_index];
+  int face_id = block_face_ids[6*block + face_index];
  
+  // Set the size of the side-length of the octant
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  const int32_t h = 1 << (TMR_MAX_LEVEL - p.level);
+
   // Get the u/v coordinates of this face
   int32_t u, v;
-  
   if (face_index < 2){ // x-face
-    get_face_node_coords(face_id, p.y, p.z, &u, &v);
+    get_face_oct_coords(face_id, 2*h, p.y, p.z, &u, &v);
   }
   else if (face_index < 4){ // y-face
-    get_face_node_coords(face_id, p.x, p.z, &u, &v);
+    get_face_oct_coords(face_id, 2*h, p.x, p.z, &u, &v);
   }
   else { // z-face
-    get_face_node_coords(face_id, p.x, p.y, &u, &v);
+    get_face_oct_coords(face_id, 2*h, p.x, p.y, &u, &v);
   }
 
   // Loop over all the adjacent faces and add the block
-  for ( int ip = face_block_ptr[face];
-        ip < _block_ptr[face+1]; ip++ ){
+  for ( int ip = face_block_ptr[face]; 
+        ip < face_block_ptr[face+1]; ip++ ){
 
     // Get the adjacent block
     int adjacent = face_block_conn[ip];
@@ -685,17 +764,26 @@ void TMROctForest::addFaceNeighbors( int block,
       for ( int j = 0; j < 6; j++ ){
         // Check whether this is the matching face
         if (block_face_conn[6*adjacent + j] == face){
-          TMROctant neighbor;
+          // Get the face id for the matching face
+          face_id = block_face_ids[6*adjacent + j];
 
-          // Set the element base
+          // Get the neighboring octant on the face
+          TMROctant neighbor;
+          neighbor.level = p.level;
           if (j < 2){
-            neighbor.x = hmax*(j % 2);
+            neighbor.x = (hmax - 2*h)*(j % 2);
+            set_face_oct_coords(face_id, h, u, v, 
+                                &neighbor.y, &neighbor.z);
           }
           else if (j < 4){
-            neighbor.y = hmax*(j % 2);
+            neighbor.y = (hmax - 2*h)*(j % 2);
+            set_face_oct_coords(face_id, h, u, v, 
+                                &neighbor.x, &neighbor.z);
           }
           else {
-            neighbor.z = hmax*(j % 2);
+            neighbor.z = (hmax - 2*h)*(j % 2);
+            set_face_oct_coords(face_id, h, u, v, 
+                                &neighbor.x, &neighbor.y);
           }
 
           // Add the octant to the list
@@ -706,7 +794,6 @@ void TMROctForest::addFaceNeighbors( int block,
       }
     }
   }
-  */
 }
 
 /*
@@ -785,17 +872,17 @@ void TMROctForest::addEdgeNeighbors( int block,
           neighbor.level = p.level;
           if (j < 4){
             neighbor.x = u;
-            neighbor.y = hmax*(j % 2);
-            neighbor.z = hmax*(j/2);
+            neighbor.y = (hmax - 2*h)*(j % 2);
+            neighbor.z = (hmax - 2*h)*(j/2);
           }
           else if (j < 8){
-            neighbor.x = hmax*(j % 2);
+            neighbor.x = (hmax - 2*h)*(j % 2);
             neighbor.y = u;
-            neighbor.z = hmax*((j-4)/2);
+            neighbor.z = (hmax - 2*h)*((j-4)/2);
           }
           else {
-            neighbor.x = hmax*(j % 2);
-            neighbor.y = hmax*((j-8)/2);
+            neighbor.x = (hmax - 2*h)*(j % 2);
+            neighbor.y = (hmax - 2*h)*((j-8)/2);
             neighbor.z = u;
           }
          
@@ -859,7 +946,7 @@ void TMROctForest::addCornerNeighbors( int block,
           TMROctant neighbor;
           neighbor.level = p.level;
           neighbor.x = (hmax - 2*h)*(j%2);
-          neighbor.y = (hmax - 2*h)*(j/2);
+          neighbor.y = (hmax - 2*h)*((j % 4)/2);
           neighbor.z = (hmax - 2*h)*(j/4);
 
           // Add the octant to the list

@@ -9,14 +9,16 @@ include ${TACS_DIR}/TACS_Common.mk
 include ${PAROPT_DIR}/Makefile.in
 include ${PAROPT_DIR}/ParOpt_Common.mk
 
-OBJS = parallel.o
+OBJS = parallel.o \
+	block_parallel.o
 
 # Create a new rule for the code that requires both TACS and TMR
 %.o: %.c
 	${CXX} ${TMR_CC_FLAGS} ${TACS_CC_FLAGS} ${PAROPT_CC_FLAGS} -c $< -o $*.o
 
 default: ${OBJS}
-	${CXX} ${OBJS} ${TACS_LD_FLAGS} ${PAROPT_LD_FLAGS} ${TMR_LD_FLAGS} -o parallel
+	${CXX} parallel.o ${TACS_LD_FLAGS} ${PAROPT_LD_FLAGS} ${TMR_LD_FLAGS} -o parallel
+	${CXX} block_parallel.o ${TACS_LD_FLAGS} ${PAROPT_LD_FLAGS} ${TMR_LD_FLAGS} -o block_parallel
 
 debug: TACS_CC_FLAGS=${TACS_DEBUG_CC_FLAGS}
 debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
