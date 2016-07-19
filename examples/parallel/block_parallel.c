@@ -51,10 +51,15 @@ int main( int argc, char *argv[] ){
   delete [] conn;
   
   // Create the random trees
-  forest->createRandomTrees(175, 0, 10);
-  forest->balance(1);
+  forest->createRandomTrees(250, 0, 15);
 
+  double tbal = MPI_Wtime();
+  forest->balance(1);
+  tbal = MPI_Wtime() - tbal;
+
+  double tnodes = MPI_Wtime();
   forest->createNodes(2);
+  tnodes = MPI_Wtime() - tnodes;
 
   // Get the octrees within the forest
   TMROctree **trees;
@@ -64,6 +69,13 @@ int main( int argc, char *argv[] ){
   int rank;
   MPI_Comm_rank(comm, &rank);
 
+  if (rank == 0){
+    printf("balance:  %15.5f s\n", tbal);
+    printf("nodes:    %15.5f s\n", tnodes);
+  }
+
+  /*
+
   // Write out a file for each processor - bad practice!
   char filename[128];
   sprintf(filename, "parallel%d.dat", rank);
@@ -72,6 +84,7 @@ int main( int argc, char *argv[] ){
   // Write the tecplot header
   fprintf(fp, "Variables = X, Y, Z\n");
 
+  int nelems = 0;
   for ( int i = 0; i < ntrees; i++ ){
     if (trees[i]){
       TMROctantArray *elements;
@@ -109,11 +122,15 @@ int main( int argc, char *argv[] ){
                 8*k+1, 8*k+2, 8*k+4, 8*k+3,
                 8*k+5, 8*k+6, 8*k+8, 8*k+7);
       }
+
+      nelems += size;
     }
   }
 
-  fclose(fp);
+  printf("[%d] nelems = %d\n", rank, nelems);
 
+  fclose(fp);
+  */
   delete forest;
 
   TMRFinalize();

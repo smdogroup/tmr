@@ -76,9 +76,38 @@ class TMROctForest {
                               TMROctantQueue **queues );
 
   // Exchange non-local octant neighbors
-  void exchangeOctNeighbors( const int *face_block_owners,
-                             const int *edge_block_owners );
+  void recvOctNeighbors( const int *face_block_owners,
+                         const int *edge_block_owners );
     
+  // Label the dependent nodes on the locally owned blocks
+  void labelDependentEdgeNode( const int order,
+                               const int edge_index,
+                               TMROctant *b,
+                               TMROctantArray *nodes );
+  void labelDependentFaceNode( const int order, 
+                               const int face_index,
+                               TMROctant *p, 
+                               TMROctantArray *nodes );
+  void labelDependentNodes( int order );
+
+  // Get the owner flags
+  void getOwnerFlags( int block, int mpi_rank,
+                      const int *face_block_owners,
+                      const int *edge_block_owners,
+                      const int *node_block_owners,
+                      int *is_face_owner, int *is_edge_owner, 
+                      int *is_node_owner );
+
+  // Order the global nodes
+  void orderGlobalNodes( const int *face_block_owners,
+                         const int *edge_block_owners,
+                         const int *node_block_owners );
+
+  // Send the ordered nodes back to their owners
+  void sendNodeNeighbors( const int *face_block_owners,
+                          const int *edge_block_owners,
+                          const int *node_block_owners );
+
   // The communicator
   MPI_Comm comm;
 
