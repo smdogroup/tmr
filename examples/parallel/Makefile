@@ -26,4 +26,4 @@ debug: PAROPT_CC_FLAGS=${PAROPT_DEBUG_CC_FLAGS}
 debug: default
 
 clean:
-	rm parallel *.o
+	rm -rf block_parallel parallel *.o

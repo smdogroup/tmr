@@ -51,13 +51,13 @@ class TMROctree {
   void findEnclosingRange( TMROctant *oct,
 			   int *low, int *high );
 
+  // Allocate the local nodes (but do not order them)
+  // ------------------------------------------------
+  void createNodes( int _order );
+
   // Create the connectivity information for the mesh
   // ------------------------------------------------
   // void createMesh( int _order );
-
-  // Order the nodes but do not create the connectivity
-  // --------------------------------------------------
-  // void createNodes( int _order );
 
   /*
   // Retrieve the mesh information

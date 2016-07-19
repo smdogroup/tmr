@@ -1113,20 +1113,20 @@ void TMROctForest::balanceOctant( int block,
 /*
   Balance the forest of quadtrees
 
-  This algorithm uses a hash and a queue to balance the quadtree. For
-  each element in the quadtree, we add the neighbors that are required
-  to balance to the tree. If the element is not in the hash, we add
-  them to a queue, which keeps track of recently added elements. After
-  the first pass, the algorithm continues popping elements until the
-  all the queues are empty.
+  This algorithm uses a hash and a queue to balance the forest of
+  octrees. For each element in the octree, we add the neighbors that
+  are required to balance to the tree. If the element is not in the
+  hash, we add them to a queue, which keeps track of recently added
+  elements. After the first pass, the algorithm continues popping
+  elements until the all the queues are empty.
 
   Note that only 0-th siblings are added/popped on the hash/queue.
   Then at the end, all neighboring siblings are added.
 
   The type of balancing - face/edge balanced or face/edge/corner
   balanced is determined using the balance_corner flag. Face balancing
-  is balancing across faces, corner balances across corners of the
-  elements and corner balances across corners. The code always
+  is balancing across faces, edge balancing is balancing across edges
+  of the elements and corner balances across corners. The code always
   balances faces and edges (so that there is at most one depdent node
   per edge) and balances across corners optionally.
 */
@@ -1433,4 +1433,854 @@ void TMROctForest::balance( int balance_corner ){
   }
 
   delete [] hash;
+}
+
+
+/*
+  Add the quadrant to the processor queues corresponding to the
+  non-local blocks that touch the given edge
+*/
+void TMROctForest::addEdgeOctantToQueues( const int edge, 
+                                          const int mpi_rank, 
+                                          TMROctant *q,
+                                          TMROctantQueue **queues ){
+  for ( int ip = edge_block_ptr[edge]; ip < edge_block_ptr[edge+1]; ip++ ){
+    int block = edge_block_conn[ip];
+    int rank = mpi_block_owners[block];
+    if (rank != mpi_rank){
+      queues[rank]->push(q);
+    }
+  }
+}
+
+/*
+  Add the quadrant to the processor queues corresponding to the
+  non-local blocks that touch the given face
+*/
+void TMROctForest::addFaceOctantToQueues( const int face,
+                                          const int mpi_rank,
+                                          TMROctant *q,
+                                          TMROctantQueue **queues ){
+  for ( int ip = face_block_ptr[face]; ip < face_block_ptr[face+1]; ip++ ){
+    int block = face_block_conn[ip];
+    int rank = mpi_block_owners[block];
+    if (rank != mpi_rank){
+      queues[rank]->push(q);
+    }
+  }
+}
+
+/*
+  The following code exchanges the neighboring octants for each
+  locally owned octree within the forest.
+
+  This code exchanges non-local octants across each local octree
+  information so that we can locally query octants on adjacent octrees
+  without having to perform parallel communication.
+
+  Note that this code creates partial non-local octrees that are
+  adjacent to the local octrees in the forest. These partial local
+  octrees should be freed after the nodal ordering has been computed.
+
+  input:
+  face_owners:   the index of the owning block for each face
+  edge_owners:   the index of the owning block for each edge
+*/
+void TMROctForest::exchangeOctNeighbors( const int *face_block_owners,
+                                         const int *edge_block_owners ){ 
+  // Get the MPI information
+  int mpi_rank, mpi_size;
+  MPI_Comm_rank(comm, &mpi_rank);
+  MPI_Comm_size(comm, &mpi_size);
+
+  // Allocate the queues that store the octants destined for each of
+  // the processors
+  TMROctantQueue **queues = new TMROctantQueue*[ mpi_size ];
+  for ( int k = 0; k < mpi_size; k++ ){
+    if (k != mpi_rank){
+      queues[k] = new TMROctantQueue();
+    }
+    else {
+      queues[k] = NULL;
+    }
+  }
+
+  // For each block, determine the edge, face and 
+  for ( int block = 0; block < num_blocks; block++ ){
+    if (mpi_block_owners[block] == mpi_rank){
+      // Flag to indicate whether any edge/face is non-local
+      int has_non_local = 0;
+
+      // Check if any of the edges has to be sent to another processor
+      for ( int k = 0; k < 12; k++ ){
+        int edge = block_edge_conn[12*block + k];
+        for ( int ip = edge_block_ptr[edge];
+              ip < edge_block_ptr[edge+1]; ip++ ){
+          int dest_block = edge_block_conn[ip];
+          if (dest_block != mpi_rank){
+            has_non_local = 1;
+            break;
+          }
+        }
+      }
+
+      if (!has_non_local){
+        // If necessary, check if any of the faces should be sent to
+        // another processor
+        for ( int k = 0; k < 6; k++ ){
+          int face = block_face_conn[6*block + k];
+          for ( int ip = face_block_ptr[face];
+                ip < face_block_ptr[face+1]; ip++ ){
+            int dest_block = face_block_conn[ip];
+            if (dest_block != mpi_rank){
+              has_non_local = 1;
+              break;
+            }
+          }
+        }
+      }
+
+      if (has_non_local){
+        // Get the element array
+        TMROctantArray *elements;
+        octrees[block]->getElements(&elements);
+        
+        // Get the actual octant array
+        int size;
+        TMROctant *array;
+        elements->getArray(&array, &size);
+        
+        // Loop over all the elements and check where we need to send
+        // the octants that are along each edge/face
+        for ( int i = 0; i < size; i++ ){
+          const int32_t hmax = 1 << TMR_MAX_LEVEL; 
+          const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+          
+          // Determine which faces the octant touches if any
+          int fx0 = (array[i].x == 0);
+          int fy0 = (array[i].y == 0);
+          int fz0 = (array[i].z == 0);
+          int fx = (fx0 || array[i].x + h == hmax);
+          int fy = (fy0 || array[i].y + h == hmax);
+          int fz = (fz0 || array[i].z + h == hmax);
+          
+          // Check whether the octant lies along an edge
+          if (fx || fy || fz){
+            // Copy the octant from the array and set its tag 
+            // to the source block index
+            TMROctant q = array[i];
+            q.tag = block;
+            
+            // Pass the block to any adjacent octrees
+            if (fy && fz){
+              int edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
+              int edge = block_edge_conn[12*block + edge_index];
+              addEdgeOctantToQueues(edge, mpi_rank, &q, queues);
+            }
+            if (fx && fz){
+              int edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
+              int edge = block_edge_conn[12*block + edge_index];
+              addEdgeOctantToQueues(edge, mpi_rank, &q, queues);
+            }
+            if (fx && fy){
+              int edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
+              int edge = block_edge_conn[12*block + edge_index];
+              addEdgeOctantToQueues(edge, mpi_rank, &q, queues);
+            }
+            if (fx){
+              int face_index = (fx0 ? 0 : 1);
+              int face = block_face_conn[6*block + face_index];
+              addFaceOctantToQueues(face, mpi_rank, &q, queues);
+            }
+            if (fy){
+              int face_index = (fy0 ? 2 : 3);
+              int face = block_face_conn[6*block + face_index];
+              addFaceOctantToQueues(face, mpi_rank, &q, queues);
+            }
+            if (fz){
+              int face_index = (fz0 ? 4 : 5);
+              int face = block_face_conn[6*block + face_index];
+              addFaceOctantToQueues(face, mpi_rank, &q, queues);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Allocate the requests
+  MPI_Request *send_requests = new MPI_Request[ mpi_size ];
+
+  // Send the octants to the other trees
+  int nsends = 0;
+  TMROctantArray **arrays = new TMROctantArray*[ mpi_size ];
+  for ( int k = 0; k < mpi_size; k++ ){
+    if (k != mpi_rank){
+      // Create the arrays
+      arrays[k] = queues[k]->toArray();
+      delete queues[k];
+
+      // Get the array of octants
+      int size;
+      TMROctant *array;
+      arrays[k]->getArray(&array, &size);
+
+      // Set the array of octants to their destination
+      MPI_Isend(array, size, TMROctant_MPI_type, 
+                k, 0, comm, &send_requests[nsends]);
+      nsends++;
+    }
+    else {
+      arrays[k] = NULL;
+    }
+  }
+  
+  // Free the array of queues
+  delete [] queues;
+
+  // Allocate the queues
+  TMROctantQueue **qtrees = new TMROctantQueue*[ num_blocks ];
+  memset(qtrees, 0, num_blocks*sizeof(TMROctantQueue*));
+
+  // Receive the arrays of incoming octants
+  for ( int k = 0; k < mpi_size-1; k++ ){
+    // Probe the recieved messages
+    MPI_Status status;
+    MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &status);
+
+    // Retrieve the size and information for the incoming message
+    int source = status.MPI_SOURCE;
+    int tag = status.MPI_TAG;
+    int size = 0;
+    MPI_Get_count(&status, TMROctant_MPI_type, &size);
+
+    // Allocate the incoming array
+    TMROctant *array = new TMROctant[ size ];
+    MPI_Recv(array, size, TMROctant_MPI_type,
+             source, tag, comm, MPI_STATUS_IGNORE);
+
+    // Push the octants into their corresponding trees
+    for ( int i = 0; i < size; i++ ){
+      int block = array[i].tag;
+      if (!qtrees[block]){
+        qtrees[block] = new TMROctantQueue();
+      }
+      qtrees[block]->push(&array[i]);
+    }
+
+    delete [] array;
+  }
+
+  // Now that the queues are completed allocate the faces
+  for ( int block = 0; block < num_blocks; block++ ){
+    if (qtrees[block]){
+      octrees[block] = new TMROctree(qtrees[block]->toArray());
+      delete qtrees[block];
+    }
+  }
+  delete [] qtrees;
+
+  // Wait for all the sends to complete
+  MPI_Waitall(nsends, send_requests, MPI_STATUSES_IGNORE);
+  delete [] send_requests;
+  
+  // Now free the arrays
+  for ( int k = 0; k < mpi_size; k++ ){
+    if (arrays[k]){
+      delete arrays[k];
+    }
+  }
+  delete [] arrays;
+}
+
+/*
+  Create the nodes from the element mesh
+
+  Note that the element mesh must be balanced before the nodes can be
+  ordered.
+
+  input:
+  order:   the order of the mesh
+*/
+void TMROctForest::createNodes( int order ){
+  // Check that the order falls within allowable bounds
+  mesh_order = order;
+  if (order > 3){ mesh_order = 3; }
+  if (order < 2){ mesh_order = 2; }
+
+  // Get the MPI information
+  int mpi_rank, mpi_size;
+  MPI_Comm_rank(comm, &mpi_rank);
+  MPI_Comm_size(comm, &mpi_size);
+
+  // Find the block numbers corresponding to the owner for each face,
+  // edge and corner so that we know who should be ordering what!
+  int *face_block_owners = new int[ num_faces ];
+  int *edge_block_owners = new int[ num_edges ];
+  int *node_block_owners = new int[ num_nodes ];
+
+  // Find the owners for the faces, edges and nodes. The owner is
+  // chosen as the connecting block with the lowest block number
+  for ( int face = 0; face < num_faces; face++ ){
+    face_block_owners[face] = num_blocks;
+
+    int ipend = face_block_ptr[face+1];
+    for ( int ip = face_block_ptr[face]; ip < ipend; ip++ ){
+      if (face_block_conn[ip] < face_block_owners[face]){
+        face_block_owners[face] = face_block_conn[ip];
+      }
+    }
+  }
+
+  // Find the edge owners
+  for ( int edge = 0; edge < num_edges; edge++ ){
+    edge_block_owners[edge] = num_blocks;
+
+    int ipend = edge_block_ptr[edge+1];
+    for ( int ip = edge_block_ptr[edge]; ip < ipend; ip++ ){
+      if (edge_block_conn[ip] < edge_block_owners[edge]){
+        edge_block_owners[edge] = edge_block_conn[ip];
+      }
+    }
+  }
+
+  // Find the node owners
+  for ( int node = 0; node < num_nodes; node++ ){
+    node_block_owners[node] = num_blocks;
+    
+    int ipend = node_block_ptr[node+1];
+    for ( int ip = node_block_ptr[node]; ip < ipend; ip++ ){
+      if (node_block_conn[ip] < node_block_owners[node]){
+        node_block_owners[node] = node_block_conn[ip];
+      }
+    }
+  }
+
+  // Compute the neighboring octants 
+  exchangeOctNeighbors(face_block_owners, edge_block_owners);
+
+  // Allocate all possible nodes on all of the trees, including the
+  // partial trees that have just been exchanged.
+  for ( int block = 0; block < num_blocks; block++ ){
+    if (octrees[block]){
+      octrees[block]->createNodes(mesh_order);
+    }
+  }
+
+
+  /*
+
+  // Determine the dependent nodes for each face without labeling
+  // the dependent nodes on the edges yet.
+  for ( int face = 0; face < num_faces; face++ ){
+    if (quadtrees[face]){
+      // Get the octant elements
+      TMROctantArray *elements, *nodes;
+      quadtrees[face]->getElements(&elements);
+      quadtrees[face]->getNodes(&nodes);
+      
+      // Get the elements themselves
+      int size;
+      TMROctant *array;
+      elements->getArray(&array, &size);
+
+      // Set flags to indicate whether this face owns
+      // each of its edges
+      int is_edge_owner[4] = {0, 0, 0, 0};
+      for ( int j = 0; j < 4; j++ ){
+        int edge = face_edge_conn[4*face + j];
+        if (mpi_rank == face_owners[edge_face_owners[edge]]){
+          is_edge_owner[j] = 1;
+        }
+      }
+
+      for ( int i = 0; i < size; i++ ){
+        // Get the side length of the element
+        const int32_t hmax = 1 << TMR_MAX_LEVEL;
+        const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+        
+        // Check the adjacent elements along each element edge
+        for ( int edge = 0; edge < 4; edge++ ){
+          // Look for the edge neighbor that is at the next level of
+          // refinement from the current element. If this element
+          // exists, then we have to use a dependent node.
+          TMROctant p = array[i];
+          p.level += 1;
+          if (edge == 1 || edge == 3){
+            p.getSibling(3, &p);
+          }
+          p.edgeNeighbor(edge, &p);
+
+          // Check if this element lies along an edge
+          if ((p.x < 0 && is_edge_owner[0]) || 
+              (p.x >= hmax && is_edge_owner[1]) ||
+              (p.y < 0 && is_edge_owner[2]) || 
+              (p.y >= hmax && is_edge_owner[3])){
+            // If the element is on the edge of the tree, then we have
+            // to check adjacent trees to see if additional constraints
+            // areq required
+            addEdgeDependentNodes(face, edge, p, array[i]);
+          }
+          else {
+            // If the more-refined element exists, then add the
+            // dependent nodes required for compatibility
+            const int use_nodes = 0;
+            if (elements->contains(&p, use_nodes)){
+              if (mesh_order == 2){
+                // Find the edge length of the more-refined element
+                const int32_t hp = 1 << (TMR_MAX_LEVEL - p.level);
+              
+                // This is the one dependent node
+                TMROctant node;
+                if (edge == 0 || edge == 1){
+                  node.tag = -1;
+                  node.x = array[i].x + edge*h;
+                  node.y = array[i].y + hp;
+                }
+                else {
+                  node.tag = -2;
+                  node.x = array[i].x + hp;                
+                  node.y = array[i].y + (edge % 2)*h;
+                }
+                
+                // Search for dependent node and label it
+                const int use_node_search = 1;
+                TMROctant *t = nodes->contains(&node, use_node_search);
+                t->tag = node.tag;
+              }
+              else if (mesh_order == 3){
+                // Find the edge length of the most-refined level - this
+                // is one higher since we are working with the nodal
+                // mesh in which every element is refiend once.
+                const int32_t hp = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
+                const int32_t hr = 1 << (TMR_MAX_LEVEL - array[i].level - 2);
+
+                // This there are two dependent nodes for a 3rd order
+                // mesh. These correspond to the mid-side nodes of each
+                // of the finer two octants attached to the larger
+                // octant.
+                TMROctant node1, node2;
+                if (edge == 0 || edge == 1){
+                  node1.tag = -1;
+                  node1.x = array[i].x + edge*h;
+                  node1.y = array[i].y + hr;
+                  
+                  node2.tag = -2;
+                  node2.x = array[i].x + edge*h;
+                  node2.y = array[i].y + 3*hr;
+                }
+                else {
+                  node1.tag = -3;
+                  node1.x = array[i].x + hr;
+                  node1.y = array[i].y + (edge % 2)*h;
+
+                  node2.tag = -4;
+                  node2.x = array[i].x + 3*hr;
+                  node2.y = array[i].y + (edge % 2)*h;
+                }
+
+                // Search for dependent node and label it
+                const int use_node_search = 1;
+                TMROctant *t;
+                t = nodes->contains(&node1, use_node_search);
+                t->tag = node1.tag;
+
+                t = nodes->contains(&node2, use_node_search);
+                t->tag = node2.tag;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Count up all the local variables
+  int nlocal = 0;
+
+  // Count up the number of nodes owned on each face
+  for ( int face = 0; face < num_faces; face++ ){
+    if (mpi_rank == face_owners[face]){
+      // Set flags to indicate whether this face owns
+      // each of its edges
+      int is_edge_owner[4] = {0, 0, 0, 0};
+      for ( int j = 0; j < 4; j++ ){
+        int edge = face_edge_conn[4*face + j];
+        int face = edge_face_owners[edge];
+        if (mpi_rank == face_owners[face]){
+          is_edge_owner[j] = 1;
+        }
+      }
+
+      // Count up the number of locally owned corner nodes
+      for ( int k = 0; k < 4; k++ ){
+        int node = face_conn[4*face + k];
+        if (node_face_owners[node] == face){
+          nlocal++;
+        }
+      }
+
+      // Get the octant array of nodes
+      TMROctantArray *nodes;
+      quadtrees[face]->getNodes(&nodes);
+
+      // Extract the array of octants
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+
+      // Count up the number of interior nodes
+      const int32_t hmax = 1 << TMR_MAX_LEVEL;
+      for ( int i = 0; i < size; i++ ){
+        if ((array[i].x > 0 && array[i].x < hmax) &&
+            (array[i].y > 0 && array[i].y < hmax) && 
+            array[i].tag >= 0){
+          nlocal++;
+        }
+        else if (((array[i].y > 0 && array[i].y < hmax && 
+                   (is_edge_owner[0] || is_edge_owner[1])) ||
+                  (array[i].x > 0 && array[i].x < hmax && 
+                   (is_edge_owner[2] || is_edge_owner[3]))) &&
+                 array[i].tag >= 0){
+          nlocal++;
+        }
+      }
+    }
+  }
+
+  // Gather the local variable counts from each processor
+  node_range = new int[ mpi_size+1 ];
+  memset(node_range, 0, (mpi_size+1)*sizeof(int));
+  MPI_Allgather(&nlocal, 1, MPI_INT, &node_range[1], 1, MPI_INT, comm);
+ 
+  // Create the offsets to each node
+  for ( int i = 0; i < mpi_size; i++ ){
+    node_range[i+1] += node_range[i];
+  }
+  
+
+  // Set the global ordering of the local faces, edges, and nodes
+  // using the offsets computed above
+  // Set the node number offset from the range of owned nodes
+  int node_num = node_range[mpi_rank];
+  for ( int face = 0; face < num_faces; face++ ){
+    if (face_owners[face] == mpi_rank){
+      // Set a flag to check if this processor owns each
+      // of the corner nodes
+      int corners[4];
+      for ( int k = 0; k < 4; k++ ){
+        int node = face_conn[4*face + k];
+        corners[k] = (node_face_owners[node] == face);
+      }
+
+      // Set a flag to check if this processor owns each
+      // of the edges
+      int edges[4];
+      for ( int k = 0; k < 4; k++ ){
+        int edge = face_edge_conn[4*face + k];
+        edges[k] = (edge_face_owners[edge] == face);
+      }
+
+      // Now order the face. Get the octant array of nodes
+      TMROctantArray *nodes;
+      quadtrees[face]->getNodes(&nodes);
+
+      // Extract the array of octants
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+
+      // Count up the number nodes that are locally owned
+      // in the interior, edges or corners
+      const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
+      for ( int i = 0; i < size; i++ ){
+        // Get the x/y coordinates for easier access
+        int32_t x = array[i].x;
+        int32_t y = array[i].y;
+
+        if (array[i].tag >= 0){
+          // Check whether the node is in the interior
+          if ((x > 0 && x < hmax) &&
+              (y > 0 && y < hmax)){
+            array[i].tag = node_num;
+            node_num++;
+          }
+          // Check if the node lies on an edge
+          else if ((edges[0] && (x == 0    && (y > 0 && y < hmax))) ||
+                   (edges[1] && (x == hmax && (y > 0 && y < hmax))) ||
+                   (edges[2] && (y == 0    && (x > 0 && x < hmax))) ||
+                   (edges[3] && (y == hmax && (x > 0 && x < hmax)))){
+            array[i].tag = node_num;
+            node_num++;
+          }
+          else if ((corners[0] && x == 0 && y == 0) ||
+                   (corners[1] && x == hmax && y == 0) ||
+                   (corners[2] && x == 0 && y == hmax) ||
+                   (corners[3] && x == hmax && y == hmax)){
+            array[i].tag = node_num;
+            node_num++;
+          }
+          else if (x == 0 || x == hmax){
+            // Label the node as a dependent node
+            array[i].tag = -1;
+          }
+          else if (y == 0 || y == hmax){
+            // Label the node as a dependent node
+            array[i].tag = -2;
+          }
+        }
+      }
+    }
+  }
+
+  // Send all the nodes that have a non-negative node number
+  queues = new TMROctantQueue*[ mpi_size ];
+  for ( int k = 0; k < mpi_size; k++ ){
+    if (k != mpi_rank){
+      queues[k] = new TMROctantQueue();
+    }
+    else {
+      queues[k] = NULL;
+    }
+  }
+
+  for ( int edge = 0, nsends = 0; edge < num_edges; edge++ ){
+    // Get the owner (destination) rank for this edge
+    int face = edge_face_owners[edge];
+    int edge_owner = face_owners[face];
+
+    // If this edge actually needs to be sent anywhere
+    if (mpi_rank == edge_owner){
+      // Find the local edge number for the source edge
+      int edge_num = 0;
+      for ( ; edge_num < 4; edge_num++ ){
+        if (face_edge_conn[4*face + edge_num] == edge){
+          break;
+        }
+      }
+
+      // Get the edge nodes to determine the edge orientation
+      int n1 = face_conn[4*face + face_to_edge_nodes[edge_num][0]];
+      int n2 = face_conn[4*face + face_to_edge_nodes[edge_num][1]];
+
+      // Loop over the edges 
+      int ipend = edge_face_ptr[edge+1];
+      for ( int ip = edge_face_ptr[edge]; ip < ipend; ip++ ){
+        // Get the destination face/numbers
+        int dest_face = edge_face_conn[ip];
+        int dest_face_owner = face_owners[dest_face];
+
+        // The destination face and the current face are the same
+        if (dest_face == face){ 
+          continue;
+        }
+
+        // Find the destination edge number
+        int dest_edge_num = 0;
+        for ( ; dest_edge_num < 4; dest_edge_num++ ){
+          if (face_edge_conn[4*dest_face + dest_edge_num] == edge){
+            break;
+          }
+        }
+
+        // Get the edge nodes to determine the edge orientation
+        int d1 = face_conn[4*dest_face + face_to_edge_nodes[dest_edge_num][0]];
+        int d2 = face_conn[4*dest_face + face_to_edge_nodes[dest_edge_num][1]];
+
+        // Loop over the nodes finding those on the edge
+        TMROctantArray *nodes;
+        quadtrees[face]->getNodes(&nodes);
+
+        // Get the octant arrays
+        int size;
+        TMROctant *array;
+        nodes->getArray(&array, &size);
+        
+        // Loop over all the nodes on the face and find those
+        // nodes that lie on the edge
+        for ( int i = 0; i < size; i++ ){
+          const int32_t hmax = 1 << TMR_MAX_LEVEL; 
+
+          int32_t u = -1;
+          if ((edge_num == 0 || edge_num == 1) &&
+              (array[i].x == edge_num*hmax) && 
+              array[i].tag >= 0){
+            u = array[i].y;
+          }
+          else if ((edge_num == 2 || edge_num == 3) &&
+                   (array[i].y == (edge_num % 2)*hmax) && 
+                   array[i].tag >= 0){
+            u = array[i].x;
+          }
+
+          // If the new node actually exists
+          if (u >= 0){
+            TMROctant q;
+
+            // Use the level to indicate the face number
+            q.level = dest_face;
+
+            // Set the node number on the destination face
+            q.tag = array[i].tag;
+              
+            // Transform the nodal coordinates to the new
+            // reference system on the opposite quadtree
+            if (dest_edge_num == 0 || dest_edge_num == 1){
+              q.x = hmax*dest_edge_num;
+              if (n1 == d1 && n2 == d2){
+                q.y = u;
+              }
+              else {
+                q.y = hmax - u; 
+              }
+            }
+            else if (dest_edge_num == 2 || dest_edge_num == 3){
+              q.y = hmax*(dest_edge_num % 2);
+              if (n1 == d1 && n2 == d2){
+                q.x = u;
+              }
+              else {
+                q.x = hmax - u; 
+              }
+            }
+
+            if (dest_face_owner == mpi_rank){
+              // Get the quadtree face
+              TMROctantArray *dest_nodes;
+              quadtrees[dest_face]->getNodes(&dest_nodes);
+              
+              // Get the node and set the tag value
+              const int use_nodes = 1;
+              TMROctant *t = dest_nodes->contains(&q, use_nodes);
+              t->tag = q.tag;
+            }
+            else {
+              // Push the face onto the queue to be sent later
+              queues[dest_face_owner]->push(&q);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Convert the queues to arrays and send them to their
+  // destinations
+  nsends = 0;
+  arrays = new TMROctantArray*[ mpi_size ];
+  for ( int k = 0; k < mpi_size; k++ ){
+    if (k != mpi_rank){
+      // Create the arrays
+      arrays[k] = queues[k]->toArray();
+      delete queues[k];
+
+      // Get the array of octants
+      int size;
+      TMROctant *array;
+      arrays[k]->getArray(&array, &size);
+
+      // Set the array of octants to their destination
+      MPI_Isend(array, size, TMROctant_MPI_type, 
+                k, 0, comm, &send_requests[nsends]);
+      nsends++;
+    }
+    else {
+      arrays[k] = NULL;
+    }
+  }
+
+  // Receive the arrays of incoming octants
+  for ( int k = 0; k < mpi_size-1; k++ ){
+    // Probe the recieved messages
+    MPI_Status status;
+    MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &status);
+
+    // Retrieve the size and information for the incoming message
+    int source = status.MPI_SOURCE;
+    int tag = status.MPI_TAG;
+    int size = 0;
+    MPI_Get_count(&status, TMROctant_MPI_type, &size);
+
+    // Allocate the incoming array
+    TMROctant *array = new TMROctant[ size ];
+    MPI_Recv(array, size, TMROctant_MPI_type,
+             source, tag, comm, MPI_STATUS_IGNORE);
+
+    // Push the octants into their corresponding trees
+    for ( int i = 0; i < size; i++ ){
+      int face = array[i].level;
+
+      // Get the face nodes
+      TMROctantArray *nodes;
+      quadtrees[face]->getNodes(&nodes);
+
+      // Search the nodes
+      const int use_nodes = 1;
+      TMROctant *t = nodes->contains(&array[i], use_nodes);
+      t->tag = array[i].tag;
+    }
+
+    delete [] array;
+  }
+
+  // Wait for all the sends to complete
+  MPI_Waitall(nsends, send_requests, MPI_STATUSES_IGNORE);
+  delete [] send_requests;
+  
+  // Free the quadtrees that are no longer required
+  for ( int face = 0; face < num_faces; face++ ){
+    if (quadtrees[face] && (face_owners[face] != mpi_rank)){
+      delete quadtrees[face];
+      quadtrees[face] = NULL;
+    }
+  }
+
+  // Now free the arrays
+  for ( int k = 0; k < mpi_size; k++ ){
+    if (arrays[k]){
+      delete arrays[k];
+    }
+  }
+  delete [] arrays;
+
+  // Label the dependent nodes
+  num_elements = 0;
+  num_dep_nodes = 0;
+  for ( int face = 0; face < num_faces; face++ ){
+    if (face_owners[face] == mpi_rank){
+      // Get the nodes octants
+      TMROctantArray *nodes;
+      quadtrees[face]->getNodes(&nodes);
+
+      // Get the node array
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+      
+      // Count up the number of dependent nodes
+      for ( int i = 0; i < size; i++ ){
+        if (array[i].tag < 0){
+          array[i].tag = -(num_dep_nodes+1);
+          num_dep_nodes++;
+        }
+      }
+      
+      // Order the elements for this octant
+      TMROctantArray *elements;
+      quadtrees[face]->getElements(&elements);
+      elements->getArray(&array, &size);
+      for ( int i = 0; i < size; i++ ){
+        array[i].tag = num_elements;
+        num_elements++;
+      }
+    }
+  }
+  */
+  
+  MPI_Barrier(comm);
+
+  delete [] face_block_owners;
+  delete [] edge_block_owners;
+  delete [] node_block_owners;
 }

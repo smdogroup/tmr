@@ -54,6 +54,8 @@ int main( int argc, char *argv[] ){
   forest->createRandomTrees(175, 0, 10);
   forest->balance(1);
 
+  forest->createNodes(2);
+
   // Get the octrees within the forest
   TMROctree **trees;
   int ntrees = forest->getOctrees(&trees);

@@ -29,6 +29,10 @@ class TMROctForest {
   // -------------------------
   void balance( int balance_corner=0 );
 
+  // Create the nodes
+  // ----------------
+  void createNodes( int order=2 );
+
   // Get the array of Octrees
   // ------------------------
   int getOctrees( TMROctree ***_trees ){
@@ -37,6 +41,8 @@ class TMROctForest {
   }
 
  private:
+  // Balance-related routines
+  // ------------------------
   // Balance the octant across the local tree and the forest
   void balanceOctant( int block, TMROctant *oct,
                       TMROctantHash **hash, TMROctantQueue **queue,
@@ -57,6 +63,22 @@ class TMROctForest {
                            TMROctantHash **hash,
                            TMROctantQueue **queue );
 
+  // Nodal ordering routines
+  // -----------------------
+  // Add octants to adjacent non-owner processor queues
+  void addEdgeOctantToQueues( const int edge, 
+                              const int mpi_rank, 
+                              TMROctant *q,
+                              TMROctantQueue **queues );
+  void addFaceOctantToQueues( const int face, 
+                              const int mpi_rank, 
+                              TMROctant *q,
+                              TMROctantQueue **queues );
+
+  // Exchange non-local octant neighbors
+  void exchangeOctNeighbors( const int *face_block_owners,
+                             const int *edge_block_owners );
+    
   // The communicator
   MPI_Comm comm;
 
