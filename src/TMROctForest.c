@@ -770,11 +770,6 @@ TMROctForest* TMROctForest::coarsen(){
 
 /*
   Add the face neighbors for an adjacent tree
-
-  input:
-  tree:   the block
-
-
 */
 void TMROctForest::addFaceNeighbors( int block,
                                      int face_index, 
@@ -825,17 +820,17 @@ void TMROctForest::addFaceNeighbors( int block,
           neighbor.level = p.level;
           if (j < 2){
             neighbor.x = (hmax - 2*h)*(j % 2);
-            set_face_oct_coords(face_id, h, u, v, 
+            set_face_oct_coords(face_id, 2*h, u, v, 
                                 &neighbor.y, &neighbor.z);
           }
           else if (j < 4){
             neighbor.y = (hmax - 2*h)*(j % 2);
-            set_face_oct_coords(face_id, h, u, v, 
+            set_face_oct_coords(face_id, 2*h, u, v, 
                                 &neighbor.x, &neighbor.z);
           }
           else {
             neighbor.z = (hmax - 2*h)*(j % 2);
-            set_face_oct_coords(face_id, h, u, v, 
+            set_face_oct_coords(face_id, 2*h, u, v, 
                                 &neighbor.x, &neighbor.y);
           }
 
@@ -998,7 +993,7 @@ void TMROctForest::addCornerNeighbors( int block,
           // Compute the octant location
           TMROctant neighbor;
           neighbor.level = p.level;
-          neighbor.x = (hmax - 2*h)*(j%2);
+          neighbor.x = (hmax - 2*h)*(j % 2);
           neighbor.y = (hmax - 2*h)*((j % 4)/2);
           neighbor.z = (hmax - 2*h)*(j/4);
 
@@ -1488,13 +1483,29 @@ void TMROctForest::balance( int balance_corner ){
   delete [] hash;
 }
 
+/*
+  Add the octant to the processor queues that correspond to 
+  the non-local blocks that touch the corner
+*/
+void TMROctForest::addCornerOctantToQueues( const int node,
+                                            const int mpi_rank,
+                                            TMROctant *q,
+                                            TMROctantQueue **queues ){
+  for ( int ip = node_block_ptr[node]; ip < node_block_ptr[node+1]; ip++ ){
+    int block = node_block_conn[ip];
+    int rank = mpi_block_owners[block];
+    if (rank != mpi_rank){
+      queues[rank]->push(q);
+    }
+  }
+}
 
 /*
-  Add the quadrant to the processor queues corresponding to the
+  Add the octant to the processor queues corresponding to the
   non-local blocks that touch the given edge
 */
-void TMROctForest::addEdgeOctantToQueues( const int edge, 
-                                          const int mpi_rank, 
+void TMROctForest::addEdgeOctantToQueues( const int edge,
+                                          const int mpi_rank,
                                           TMROctant *q,
                                           TMROctantQueue **queues ){
   for ( int ip = edge_block_ptr[edge]; ip < edge_block_ptr[edge+1]; ip++ ){
@@ -1534,13 +1545,8 @@ void TMROctForest::addFaceOctantToQueues( const int face,
   Note that this code creates partial non-local octrees that are
   adjacent to the local octrees in the forest. These partial local
   octrees should be freed after the nodal ordering has been computed.
-
-  input:
-  face_owners:   the index of the owning block for each face
-  edge_owners:   the index of the owning block for each edge
 */
-void TMROctForest::recvOctNeighbors( const int *face_block_owners,
-                                     const int *edge_block_owners ){ 
+void TMROctForest::recvOctNeighbors(){
   // Get the MPI information
   int mpi_rank, mpi_size;
   MPI_Comm_rank(comm, &mpi_rank);
@@ -1625,6 +1631,11 @@ void TMROctForest::recvOctNeighbors( const int *face_block_owners,
             q.tag = block;
             
             // Pass the block to any adjacent octrees
+            if (fx && fy && fz){
+              int node_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
+              int node = block_conn[8*block + node_index];
+              addCornerOctantToQueues(node, mpi_rank, &q, queues);
+            }
             if (fy && fz){
               int edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
               int edge = block_edge_conn[12*block + edge_index];
@@ -1809,21 +1820,21 @@ void TMROctForest::labelDependentFaceNode( const int order,
               
     // This is the one dependent node
     TMROctant node;
-    node.tag = -(13 + face_index);
+    node.tag = -(4 + face_index);
     if (face_index < 2){
-      node.x = b->x + face_index*h;
+      node.x = b->x + (face_index % 2)*h;
       node.y = b->y + hc;
       node.z = b->z + hc; 
     }
     else if (face_index < 4){
       node.x = b->x + hc;
-      node.y = b->y + face_index*h;
+      node.y = b->y + (face_index % 2)*h;
       node.z = b->z + hc; 
     }
     else {
       node.x = b->x + hc;
-      node.y = b->y + hc; 
-      node.z = b->z + face_index*h;
+      node.y = b->y + hc;
+      node.z = b->z + (face_index % 2)*h;
     }
                 
     // Search for dependent node and label it
@@ -1834,17 +1845,17 @@ void TMROctForest::labelDependentFaceNode( const int order,
 }
 
 /*
-  Given the
-
+  Label the dependent nodes (hanging edge/face nodes) on each block
+  and on the interfaces between adjacent blocks.
 
 */
-void TMROctForest::labelDependentNodes( int order ){
+void TMROctForest::labelDependentNodes( const int order ){
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Determine and label the dependent nodes on each processor 
   for ( int block = 0; block < num_blocks; block++ ){
-    if (mpi_block_owners[block] == mpi_rank){
+    if (octrees[block]){
       // Get the octant elements
       TMROctantArray *elements, *nodes;
       octrees[block]->getElements(&elements);
@@ -1860,10 +1871,12 @@ void TMROctForest::labelDependentNodes( int order ){
         // either child-0 or child-7
         int child_id = array[i].childId();
 
+        // Get the side length of the element
+        const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+        const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
         if (array[i].level > 0 && 
             (child_id == 0 || child_id == 7)){
-          // Get the side length of the element
-          const int32_t hmax = 1 << TMR_MAX_LEVEL;
         
           // Check the adjacent elements along each face
           int face_index = 0, edge_index = 0;
@@ -1895,52 +1908,60 @@ void TMROctForest::labelDependentNodes( int order ){
               // If the more-refined element exists then label the
               // corresponding nodes as dependent
               const int use_nodes = 0;
-              if (elements->contains(&p, use_nodes)){
+              if (elements->contains(&q, use_nodes)){
                 labelDependentFaceNode(order, face_index, &p, nodes);
               }
             }
           }
         }
-        /*
-        if (array[i].level > 0 && (child_id == 0)){
 
-          // Check the adjacent elements along each element edge
-          for ( int edge_index = 0; edge_index < 12; edge_index += 4 ){
-            // Look for the edge neighbor that is at the next level of
-            // refinement from the current element. If this element
-            // exists, then we have to use a dependent node.
-            TMROctant p = array[i];
-            p.level += 1;
-            if (edge == 1 || edge == 3){
-              p.getSibling(3, &p);
+        // Check if this element is at a face/edge
+        int fx0 = (array[i].x == 0);
+        int fy0 = (array[i].y == 0);
+        int fz0 = (array[i].z == 0);
+        int fx = (fx0 || array[i].x + h == hmax);
+        int fy = (fy0 || array[i].y + h == hmax);
+        int fz = (fz0 || array[i].z + h == hmax);
+
+        // Need to do something here to handle the off-proc coupling
+
+        // Search for the dependent nodes
+        if (order == 2){
+          // Find the edge length of the more-refined element
+          const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+          const int32_t hc = 1 << (TMR_MAX_LEVEL - array[i].level - 1);
+          
+          for ( int edge_index = 0; edge_index < 12; edge_index++ ){
+            // This is the one dependent node
+            TMROctant node;
+            if (edge_index < 4){ // x-aligned edges
+              node.x = array[i].x + hc;
+              node.y = array[i].y + h*(edge_index % 2);
+              node.z = array[i].z + h*(edge_index / 2);
             }
-            p.edgeNeighbor(edge, &p);
+            else if (edge_index < 8){ // y-aligned edges
+              node.x = array[i].x + h*(edge_index % 2);
+              node.y = array[i].y + hc;
+              node.z = array[i].z + h*((edge_index % 4)/2);
+            }
+            else { // z-aligned edges
+              node.x = array[i].x + h*(edge_index % 2);
+              node.y = array[i].y + h*((edge_index % 4)/2);
+              node.z = array[i].z + hc;
+            }
             
-            // Check if this element lies along an edge
-            if ((p.x < 0 && is_edge_owner[0]) || 
-                (p.x >= hmax && is_edge_owner[1]) ||
-                (p.y < 0 && is_edge_owner[2]) || 
-                (p.y >= hmax && is_edge_owner[3])){
-              // If the element is on the edge of the tree, then we have
-              // to check adjacent trees to see if additional constraints
-              // areq required
-              addEdgeDependentNodes(face, edge, p, array[i]);
-            }
-            else {
-              // If the more-refined element exists, then add the
-              // dependent nodes required for compatibility
-              const int use_nodes = 0;
-              if (elements->contains(&p, use_nodes)){
-              }
+            // Search for dependent node and label it
+            const int use_node_search = 1;
+            TMROctant *t = nodes->contains(&node, use_node_search);
+            if (t){
+              t->tag = -(1 + edge_index/4);
             }
           }
         }
-        */
       }
     }
   }
 }
-
 
 /*
   Return an array of flags to indicate whether the given block owns
@@ -2000,9 +2021,17 @@ void TMROctForest::getOwnerFlags( int block, int mpi_rank,
 }
 
 /*
-  Compute a global ordering for the nodes now that the
-  dependent nodes have been labeled with a negative index.
+  Find a global ordering for the nodes now that the dependent nodes
+  have been labeled with a negative index.
 
+  This code first counts up the number of nodes that are owned locally
+  and then performs an all gather to determine the offsets to the node
+  numbering on each local processor.
+
+  input:
+  face_owners:  the block index of the face owner
+  edge_owners:  the block index of the edge owner
+  node_owners:  the block index of the corner/node owner
 */
 void TMROctForest::orderGlobalNodes( const int *face_block_owners,
                                      const int *edge_block_owners,
@@ -2036,47 +2065,49 @@ void TMROctForest::orderGlobalNodes( const int *face_block_owners,
       // Count up the number of interior nodes
       const int32_t hmax = 1 << TMR_MAX_LEVEL;
       for ( int i = 0; i < size; i++ ){
-        // Determine which faces the octant touches if any
-        int fx0 = (array[i].x == 0);
-        int fy0 = (array[i].y == 0);
-        int fz0 = (array[i].z == 0);
-        int fx = (fx0 || array[i].x == hmax);
-        int fy = (fy0 || array[i].y == hmax);
-        int fz = (fz0 || array[i].z == hmax);
-
-        // Check whether this node is on the face, edge, corner or is
-        // an internal node and order it only if it is locally owned
-        if (fx && fy && fz){
-          int node_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz ? 0 : 4);
-          if (is_node_owner[node_index]){ nlocal++; }
+        if (array[i].tag >= 0){
+          // Determine which faces the octant touches if any
+          int fx0 = (array[i].x == 0);
+          int fy0 = (array[i].y == 0);
+          int fz0 = (array[i].z == 0);
+          int fx = (fx0 || array[i].x == hmax);
+          int fy = (fy0 || array[i].y == hmax);
+          int fz = (fz0 || array[i].z == hmax);
+          
+          // Check whether this node is on the face, edge, corner or is
+          // an internal node and order it only if it is locally owned
+          if (fx && fy && fz){
+            int node_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
+            if (is_node_owner[node_index]){ nlocal++; }
+          }
+          else if (fy && fz){
+            int edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
+            if (is_edge_owner[edge_index]){ nlocal++; }
+          }
+          else if (fx && fz){
+            int edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
+            if (is_edge_owner[edge_index]){ nlocal++; }
+          }
+          else if (fx && fy){
+            int edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
+            if (is_edge_owner[edge_index]){ nlocal++; }
+          }
+          else if (fx){
+            int face_index = (fx0 ? 0 : 1);
+            if (is_face_owner[face_index]){ nlocal++; }
+          }
+          else if (fy){
+            int face_index = (fy0 ? 2 : 3);
+            if (is_face_owner[face_index]){ nlocal++; }
+          }
+          else if (fz){
+            int face_index = (fz0 ? 4 : 5);
+            if (is_face_owner[face_index]){ nlocal++; }
+          }
+          else {
+            nlocal++;
+          } 
         }
-        else if (fy && fz){
-          int edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
-          if (is_edge_owner[edge_index]){ nlocal++; }
-        }
-        else if (fx && fz){
-          int edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
-          if (is_edge_owner[edge_index]){ nlocal++; }
-        }
-        else if (fx && fy){
-          int edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
-          if (is_edge_owner[edge_index]){ nlocal++; }
-        }
-        else if (fx){
-          int face_index = (fx0 ? 0 : 1);
-          if (is_face_owner[face_index]){ nlocal++; }
-        }
-        else if (fy){
-          int face_index = (fy0 ? 2 : 3);
-          if (is_face_owner[face_index]){ nlocal++; }
-        }
-        else if (fz){
-          int face_index = (fz0 ? 4 : 5);
-          if (is_face_owner[face_index]){ nlocal++; }
-        }
-        else {
-          nlocal++;
-        }      
       }
     }
   }
@@ -2117,66 +2148,380 @@ void TMROctForest::orderGlobalNodes( const int *face_block_owners,
       const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
       for ( int i = 0; i < size; i++ ){
-        // Determine which faces the octant touches if any
-        int fx0 = (array[i].x == 0);
-        int fy0 = (array[i].y == 0);
-        int fz0 = (array[i].z == 0);
-        int fx = (fx0 || array[i].x == hmax);
-        int fy = (fy0 || array[i].y == hmax);
-        int fz = (fz0 || array[i].z == hmax);
-
-        // Check whether this node is on the face, edge, corner or is
-        // an internal node and order it only if it is locally owned
-        if (fx && fy && fz){
-          int node_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz ? 0 : 4);
-          if (is_node_owner[node_index]){ 
-            array[i].tag = node_num; node_num++; 
+        if (array[i].tag >= 0){
+          // Determine which faces the octant touches if any
+          int fx0 = (array[i].x == 0);
+          int fy0 = (array[i].y == 0);
+          int fz0 = (array[i].z == 0);
+          int fx = (fx0 || array[i].x == hmax);
+          int fy = (fy0 || array[i].y == hmax);
+          int fz = (fz0 || array[i].z == hmax);
+          
+          // Check whether this node is on the face, edge, corner or is
+          // an internal node and order it only if it is locally owned
+          if (fx && fy && fz){
+            int node_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
+            if (is_node_owner[node_index]){ 
+              array[i].tag = node_num; node_num++; 
+            }
           }
-        }
-        else if (fy && fz){
-          int edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
-          if (is_edge_owner[edge_index]){ 
-            array[i].tag = node_num; node_num++; 
+          else if (fy && fz){
+            int edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
+            if (is_edge_owner[edge_index]){ 
+              array[i].tag = node_num; node_num++; 
+            }
           }
-        }
-        else if (fx && fz){
-          int edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
-          if (is_edge_owner[edge_index]){ 
-            array[i].tag = node_num; node_num++; 
+          else if (fx && fz){
+            int edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
+            if (is_edge_owner[edge_index]){ 
+              array[i].tag = node_num; node_num++; 
+            }
           }
-        }
-        else if (fx && fy){
-          int edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
-          if (is_edge_owner[edge_index]){ 
-            array[i].tag = node_num; node_num++; 
+          else if (fx && fy){
+            int edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
+            if (is_edge_owner[edge_index]){ 
+              array[i].tag = node_num; node_num++; 
+            }
           }
-        }
-        else if (fx){
-          int face_index = (fx0 ? 0 : 1);
-          if (is_face_owner[face_index]){ 
-            array[i].tag = node_num; node_num++; 
+          else if (fx){
+            int face_index = (fx0 ? 0 : 1);
+            if (is_face_owner[face_index]){ 
+              array[i].tag = node_num; node_num++; 
+            }
           }
-        }
-        else if (fy){
-          int face_index = (fy0 ? 2 : 3);
-          if (is_face_owner[face_index]){ 
-            array[i].tag = node_num; node_num++; 
+          else if (fy){
+            int face_index = (fy0 ? 2 : 3);
+            if (is_face_owner[face_index]){ 
+              array[i].tag = node_num; node_num++; 
+            }
           }
-        }
-        else if (fz){
-          int face_index = (fz0 ? 4 : 5);
-          if (is_face_owner[face_index]){ 
-            array[i].tag = node_num; node_num++; 
+          else if (fz){
+            int face_index = (fz0 ? 4 : 5);
+            if (is_face_owner[face_index]){ 
+              array[i].tag = node_num; node_num++; 
+            }
           }
-        }
-        else {
-          array[i].tag = node_num; node_num++;
+          else {
+            array[i].tag = node_num; node_num++;
+          }
         }
       }
     }
   }
 }
 
+/*
+  Copy the corner node variable number on the corner with the given corner
+  index to the adjacent corners.  These values are then communicated
+  back to their owners in a second parallel step.
+
+  input:
+  node:        the corner number that the node lies on
+  node_index:  the local index of the corner 0 <= node index < 12
+  block_owner: the block index that owns the node
+  p:           the octant with the correct tag value
+*/
+void TMROctForest::copyCornerNodes( int node,
+                                    int node_index,
+                                    int block_owner,
+                                    TMROctant *p ){
+  // Set the maximum octant side length
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
+  for ( int ip = node_block_ptr[node]; ip < node_block_ptr[node+1]; ip++ ){
+    int block = node_block_conn[ip];
+    if (block_owner != block){
+      // Find the corresponding node index for this block
+      for ( int j = 0; j < 8; j++ ){
+        if (node == block_conn[8*block + j]){
+          TMROctant oct;
+          oct.x = hmax*(j % 2);
+          oct.y = hmax*((j % 4)/2);
+          oct.z = hmax*(j/4);
+
+          // Get the node array
+          TMROctantArray *nodes;
+          octrees[block]->getNodes(&nodes);
+          
+          // Search the nodes and set the tag value
+          const int use_node_search = 1;
+          TMROctant *t = nodes->contains(&oct, use_node_search);
+          t->tag = p->tag;
+        }
+      }      
+    }
+  }
+}
+
+/*
+  Copy the edge node variable number on the edge with the given edge
+  index to the adjacent edges.  These values are then communicated
+  back to their owners in a second parallel step.
+
+  input:
+  edge:        the edge number that the node lies on
+  edge_index:  the local index of the edge 0 <= edge index < 12
+  block_owner: the block index that owns the edge
+  p:           the octant with the correct tag value
+*/
+void TMROctForest::copyEdgeNodes( int edge,
+                                  int edge_index,
+                                  int block_owner,
+                                  TMROctant *p ){
+  // Set the maximum octant side length
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
+  // Store the u coordinate along the edge
+  int32_t u = 0;
+  if (edge_index < 4){
+    u = p->x;
+  }
+  else if (edge_index < 8){
+    u = p->y;
+  }
+  else {
+    u = p->z;
+  }
+
+  // Retrieve the first and second node numbers to determine the
+  // relative orientation between this edge and each adjacent edge
+  int n1 = block_conn[8*block_owner + block_to_edge_nodes[edge_index][0]];
+  int n2 = block_conn[8*block_owner + block_to_edge_nodes[edge_index][1]];
+
+  for ( int ip = edge_block_ptr[edge]; ip < edge_block_ptr[edge+1]; ip++ ){
+    int block = edge_block_conn[ip];
+    if (block_owner != block){
+
+      for ( int j = 0; j < 12; j++ ){
+        if (block_edge_conn[12*block + j] == edge){
+          int nn1 = block_conn[8*block + block_to_edge_nodes[j][0]];
+          int nn2 = block_conn[8*block + block_to_edge_nodes[j][1]];
+
+          // Determine whether the edges are in the same direction or
+          // are reversed
+          int reverse = (n1 == nn2 && n2 == nn1);
+
+          // Set the u-coordinate along the edge
+          int32_t uoct = u;
+          if (reverse){
+            uoct = hmax - u;
+          }
+
+          // Transform the octant to the adjacent coordinate system
+          TMROctant oct;
+          if (j < 4){
+            oct.x = uoct;
+            oct.y = hmax*(j % 2);
+            oct.z = hmax*(j/2);
+          }
+          else if (j < 8){
+            oct.x = hmax*(j % 2);
+            oct.y = uoct;
+            oct.z = hmax*((j-4)/2);
+          }
+          else {
+            oct.x = hmax*(j % 2);
+            oct.y = hmax*((j-8)/2);
+            oct.z = uoct;
+          }
+
+          // Get the node array
+          TMROctantArray *nodes;
+          octrees[block]->getNodes(&nodes);
+          
+          // Search the nodes and set the tag value
+          const int use_node_search = 1;
+          TMROctant *t = nodes->contains(&oct, use_node_search);
+          t->tag = p->tag;          
+        }
+      }
+    }
+  }
+}
+
+/*
+  Copy the face node variable number on the given face with the
+  provided face index to all adjacent faces with the provided indices.
+  These values are then communicated back to their owners in a second
+  parallel step.
+
+  input:
+  face:        the face number that the node lies on
+  face_index:  the local index of the face 0 <= face index < 6
+  block_owner: the block index that owns the face
+  p:           the octant with the correct tag value
+*/
+void TMROctForest::copyFaceNodes( int face,
+                                  int face_index,
+                                  int block_owner, 
+                                  TMROctant *p ){
+  // Set the maximum octant side length
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
+  // Get the face id number
+  int face_id = block_face_conn[6*block_owner + face_index];
+
+  // Get the u/v coordinates for this node on the owner face
+  int32_t u, v;
+  if (face_index < 2){ // x-face
+    get_face_node_coords(face_id, p->y, p->z, &u, &v);
+  }
+  else if (face_index < 4){ // y-face
+    get_face_node_coords(face_id, p->x, p->z, &u, &v);
+  }
+  else { // z-face
+    get_face_node_coords(face_id, p->x, p->y, &u, &v);
+  }
+
+  // Loop over all adjacent faces and copy over the node numbers
+  // associated with each co-incident node on the adjacent face
+  for ( int ip = face_block_ptr[face]; ip < face_block_ptr[face+1]; ip++ ){
+    int block = face_block_conn[ip];
+    if (block_owner != block){
+      // Find the corresponding face index (= j) on the adjacent block
+      for ( int j = 0; j < 6; j++ ){
+        if (block_face_conn[6*block + j] == face){
+          // Get the face_id corresponding to the orientation of this
+          // adjacent face
+          face_id = block_face_ids[6*block + j];
+
+          // Transform the octant p to the local octant coordinates
+          TMROctant oct;
+          if (j < 2){
+            oct.x = hmax*(j % 2);
+            set_face_node_coords(face_id, u, v, &oct.y, &oct.z);
+          }
+          else if (j < 4){
+            oct.y = hmax*(j % 2);
+            set_face_node_coords(face_id, u, v, &oct.x, &oct.z);
+          }
+          else {
+            oct.z = hmax*(j % 2);
+            set_face_node_coords(face_id, u, v, &oct.x, &oct.y);
+          }
+      
+          // Search for the local octant in the list of nodes
+          TMROctantArray *nodes;
+          octrees[block]->getNodes(&nodes);
+          
+          // Search the nodes and set the tag value
+          const int use_node_search = 1;
+          TMROctant *t = nodes->contains(&oct, use_node_search);
+          t->tag = p->tag;
+        }
+      }
+    }
+  }
+}
+
+/*
+  Copy the nodes ordered on adjacent face to the locally owned
+  adjacent faces.
+
+  This code loops over all the nodes in all the blocks that are owned
+  by this processor. When a node on a face, edge or corner is
+  encountered that is owned by this processor, its node is copied to
+  the non-local interface nodes. These nodes are later communicated to
+  their source processors.
+
+  Note that the dependent nodes must be labeled correctly before this
+  function will work.
+
+  intput:
+  face_owners:  the block index of the face owner
+  edge_owners:  the block index of the edge owner
+  node_owners:  the block index of the corner/node owner
+*/
+void TMROctForest::copyAdjacentNodes( const int *face_block_owners,
+                                      const int *edge_block_owners,
+                                      const int *node_block_owners ){
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // Copy over the block node numbers
+  for ( int block = 0; block < num_blocks; block++ ){
+    // Check if this face is owned by a block on this processor
+    if (mpi_rank == mpi_block_owners[block]){
+      // Get the node array
+      TMROctantArray *nodes;
+      octrees[block]->getNodes(&nodes);
+        
+      // Get the actual octant array
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+        
+      // Loop over all the nodes and find the ones that are on the
+      // desired face
+      for ( int i = 0; i < size; i++ ){
+        const int32_t hmax = 1 << TMR_MAX_LEVEL; 
+
+        // Only copy those entries that have a non-negative tag
+        if (array[i].tag >= 0){        
+          // Determine which faces the octant touches if any
+          int fx0 = (array[i].x == 0);
+          int fy0 = (array[i].y == 0);
+          int fz0 = (array[i].z == 0);
+          int fx = (fx0 || array[i].x == hmax);
+          int fy = (fy0 || array[i].y == hmax);
+          int fz = (fz0 || array[i].z == hmax);
+          
+          if (fx && fy && fz){
+            int node_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
+            int node = block_conn[8*block + node_index];
+            if (node_block_owners[node] == block){
+              copyCornerNodes(node, node_index, block, &array[i]);
+            }
+          }
+          else if ((fy && fz) || (fx && fz) || (fx && fy)){
+            int edge_index = 0;
+            if (fy && fz){      
+              edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2); 
+            }
+            else if (fx && fz){ 
+              edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2); 
+            }
+            else {
+              edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2); 
+            }
+            int edge = block_edge_conn[12*block + edge_index];
+            if (edge_block_owners[edge] == block){
+              copyEdgeNodes(edge, edge_index, block, &array[i]);
+            }
+          }
+          else if (fx || fy || fz){
+            int face_index = 
+              fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3) + fz*(fz0 ? 4 : 5);
+            int face = block_face_conn[6*block + face_index];
+            if (face_block_owners[face] == block){
+              copyFaceNodes(face, face_index, block, &array[i]);
+            }
+          }    
+        }   
+      }
+    }
+  }
+}
+
+/*
+  The following code sends the node numbers back to the block owners.
+
+  This code sends the nodes that are owned by this processor but are
+  also on face, edge or corner of an adjacent octree. These nodes have
+  been ordered locally, but their node numbers have not yet been
+  passed back to the corresponding block owner (that does not own the
+  face/edge/node).
+
+  This code scans over blocks that are allocated locally, but are not
+  owned locally - these are the partial octrees allocated during the
+  recvOctNeighbors call. The nodes on edges/faces/corners of these
+  trees are in the local octree order.
+
+  input:
+  face_owners:  the block index of the face owner
+  edge_owners:  the block index of the edge owner
+  node_owners:  the block index of the corner/node owner
+*/
 void TMROctForest::sendNodeNeighbors( const int *face_block_owners,
                                       const int *edge_block_owners,
                                       const int *node_block_owners ){
@@ -2233,7 +2578,7 @@ void TMROctForest::sendNodeNeighbors( const int *face_block_owners,
           // Pass the block to any adjacent octrees
           int block_owner = -1;
           if (fx && fy && fz){
-            int node_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz ? 0 : 4);
+            int node_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
             int node = block_conn[8*block + node_index];
             block_owner = node_block_owners[node];
           }
@@ -2397,12 +2742,28 @@ void TMROctForest::sendNodeNeighbors( const int *face_block_owners,
   delete [] arrays;
 }
 
-
 /*
   Create the nodes from the element mesh
 
   Note that the element mesh must be balanced before the nodes can be
   ordered.
+
+  This function first computes the block that owns of each of the
+  faces, edges and corners(/nodes) within the super-mesh. Next, the
+  the non-local octants that border each octree are passed back to the
+  processors which own the octree. This creates a layer of octants
+  that are temporarily stored in a partial octree. The code then
+  creates nodes within each octant element for all of the octrees
+  (including the partial octrees). Next, the dependent nodes (that are
+  hanging on a face or an edge of an element)are labeled according to
+  whether they are on an edge or face.
+  
+  After the dependent nodes are labeled, the nodes are ordered on all
+  processors to form a complete global ordering. Next, the nodes are
+  communicated locally across octant and partial octant faces, edges
+  and corners. Finally, the new node numbers are returned to the
+  processors that border the octree owners. And lastly, the non-local
+  partial octrees are freed.  
 
   input:
   order:   the order of the mesh
@@ -2462,7 +2823,7 @@ void TMROctForest::createNodes( int order ){
   }
 
   // Compute the neighboring octants 
-  recvOctNeighbors(face_block_owners, edge_block_owners);
+  recvOctNeighbors();
 
   // Allocate all possible nodes on all of the trees, including the
   // partial trees that have just been exchanged.
@@ -2478,6 +2839,10 @@ void TMROctForest::createNodes( int order ){
   // Compute the global ordering of the nodes
   orderGlobalNodes(face_block_owners, edge_block_owners,
                    node_block_owners);
+
+  // Copy the adjacent node numbers between local blocks
+  // copyAdjacentNodes(face_block_owners, edge_block_owners,
+  //                    node_block_owners);
 
   // Send the nodes (complete with global number) back to whence they
   // came to finish the global ordering

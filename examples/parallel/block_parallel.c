@@ -51,7 +51,8 @@ int main( int argc, char *argv[] ){
   delete [] conn;
   
   // Create the random trees
-  forest->createRandomTrees(250, 0, 15);
+  forest->createRandomTrees(5, 0, 15);
+  // forest->createTrees(4);
 
   double tbal = MPI_Wtime();
   forest->balance(1);
@@ -74,20 +75,19 @@ int main( int argc, char *argv[] ){
     printf("nodes:    %15.5f s\n", tnodes);
   }
 
-  /*
-
   // Write out a file for each processor - bad practice!
   char filename[128];
   sprintf(filename, "parallel%d.dat", rank);
   FILE *fp = fopen(filename, "w");
 
   // Write the tecplot header
-  fprintf(fp, "Variables = X, Y, Z\n");
+  fprintf(fp, "Variables = X, Y, Z, dv\n");
 
   int nelems = 0;
   for ( int i = 0; i < ntrees; i++ ){
     if (trees[i]){
-      TMROctantArray *elements;
+      TMROctantArray *elements, *nodes;
+      trees[i]->getNodes(&nodes);
       trees[i]->getElements(&elements);
 
       // Get the elements
@@ -100,18 +100,25 @@ int main( int argc, char *argv[] ){
 
       // Write out this portion of the forrest
       for ( int k = 0; k < size; k++ ){
-        int h = 1 << (TMR_MAX_LEVEL - array[k].level);
-        int x = array[k].x;
-        int y = array[k].y;
-        int z = array[k].z;
+        int32_t h = 1 << (TMR_MAX_LEVEL - array[k].level);
+        int32_t x = array[k].x;
+        int32_t y = array[k].y;
+        int32_t z = array[k].z;
 
+        TMROctant node;
         double X[3];
         for ( int kz = 0; kz < 2; kz++ ){
           for ( int ky = 0; ky < 2; ky++ ){
             for ( int kx = 0; kx < 2; kx++ ){
+              node.x = x + h*kx;
+              node.y = y + h*ky;
+              node.z = z + h*kz;
+              const int use_node_search = 1;
+              TMROctant *t = nodes->contains(&node, use_node_search);
+
               getLocation(i, nx, ny, nz,
                           x + kx*h, y + ky*h, z + kz*h, X);
-              fprintf(fp, "%e %e %e\n", X[0], X[1], X[2]);
+              fprintf(fp, "%e %e %e %d\n", X[0], X[1], X[2], t->tag);
             }
           }
         }
@@ -127,10 +134,8 @@ int main( int argc, char *argv[] ){
     }
   }
 
-  printf("[%d] nelems = %d\n", rank, nelems);
-
   fclose(fp);
-  */
+
   delete forest;
 
   TMRFinalize();

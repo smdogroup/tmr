@@ -66,6 +66,10 @@ class TMROctForest {
   // Nodal ordering routines
   // -----------------------
   // Add octants to adjacent non-owner processor queues
+  void addCornerOctantToQueues( const int node, 
+                                const int mpi_rank, 
+                                TMROctant *q,
+                                TMROctantQueue **queues );
   void addEdgeOctantToQueues( const int edge, 
                               const int mpi_rank, 
                               TMROctant *q,
@@ -76,8 +80,7 @@ class TMROctForest {
                               TMROctantQueue **queues );
 
   // Exchange non-local octant neighbors
-  void recvOctNeighbors( const int *face_block_owners,
-                         const int *edge_block_owners );
+  void recvOctNeighbors();
     
   // Label the dependent nodes on the locally owned blocks
   void labelDependentEdgeNode( const int order,
@@ -88,7 +91,7 @@ class TMROctForest {
                                const int face_index,
                                TMROctant *p, 
                                TMROctantArray *nodes );
-  void labelDependentNodes( int order );
+  void labelDependentNodes( const int order );
 
   // Get the owner flags
   void getOwnerFlags( int block, int mpi_rank,
@@ -105,6 +108,17 @@ class TMROctForest {
 
   // Send the ordered nodes back to their owners
   void sendNodeNeighbors( const int *face_block_owners,
+                          const int *edge_block_owners,
+                          const int *node_block_owners );
+
+  // Copy the nodes numbers from one block to an adjacent block
+  void copyCornerNodes( int node, int node_index,
+                        int block_owner, TMROctant *p );
+  void copyEdgeNodes( int edge, int edge_index,
+                      int block_owner, TMROctant *p );
+  void copyFaceNodes( int face, int face_index,
+                      int block_owner, TMROctant *p );
+  void copyAdjacentNodes( const int *face_block_owners,
                           const int *edge_block_owners,
                           const int *node_block_owners );
 
