@@ -33,6 +33,10 @@ class TMROctForest {
   // ----------------
   void createNodes( int order=2 );
 
+  // Allocate and retrieve the mesh
+  // ------------------------------
+  void createMesh( int **_conn, int *_nelems );
+
   // Get the array of Octrees
   // ------------------------
   int getOctrees( TMROctree ***_trees ){
