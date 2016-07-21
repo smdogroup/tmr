@@ -164,16 +164,6 @@ class MeshProblem : public ProblemGeometry {
 };
 
 /*
-class Cylinder : public ProblemGeometry {
- public:
-
-};
-
-class BDF : public ProblemGeometry {
-};
-*/
-
-/*
   Compute the Jacobian transformation at a point within the element
 */
 void computeJacobianTrans( const TacsScalar Xpts[],

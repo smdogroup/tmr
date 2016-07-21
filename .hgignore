@@ -36,3 +36,7 @@ extern/
 *.snm
 *.toc
 *.stl
+*.tar
+*.avi
+*.mcr
+*.zip
