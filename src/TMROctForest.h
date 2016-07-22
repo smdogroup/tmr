@@ -153,7 +153,10 @@ class TMROctForest {
   int *node_range;
 
   // Keep a pointer to the forest of quadtrees
-  TMROctree **octrees; 
+  TMROctree **octrees;
+
+  // Pointers to the dependent faces/edges
+  TMROctantArray **dep_edges, **dep_faces;
 
   // The mpi rank of the face owner
   int *mpi_block_owners;
