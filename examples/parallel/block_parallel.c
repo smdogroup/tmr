@@ -52,7 +52,7 @@ int main( int argc, char *argv[] ){
 
   MPI_Comm comm = MPI_COMM_WORLD;
   TMROctForest *forest = new TMROctForest(comm);
-  
+
   // Create the TACSMeshLoader class
   TACSMeshLoader *mesh = new TACSMeshLoader(MPI_COMM_SELF);
   mesh->incref();
@@ -64,6 +64,7 @@ int main( int argc, char *argv[] ){
   const double *Xpts;
   mesh->getConnectivity(&nnodes, &nelems, NULL, 
                         &elem_node_conn, &Xpts);
+  forest->setConnectivity(nnodes, elem_node_conn, nelems);
 
   /*
   // Create a regular connectivity
@@ -94,11 +95,8 @@ int main( int argc, char *argv[] ){
   delete [] conn;
   */
 
-  forest->setConnectivity(nnodes, elem_node_conn, nelems);
-  
   // Create the random trees
-  forest->createRandomTrees(5, 0, 15);
-  // forest->createTrees(4);
+  forest->createRandomTrees(25, 0, 15);
 
   double tbal = MPI_Wtime();
   forest->balance(1);
@@ -112,6 +110,15 @@ int main( int argc, char *argv[] ){
   TMROctree **trees;
   int ntrees = forest->getOctrees(&trees);
 
+  // Create the mesh
+  double tmesh = MPI_Wtime();
+  int *conn, nfe = 0;
+  forest->createMesh(&conn, &nfe);
+  tmesh = MPI_Wtime() - tmesh;
+  
+  int ntotal = 0;
+  MPI_Allreduce(&nfe, &ntotal, 1, MPI_INT, MPI_SUM, comm);
+
   // Get the rank
   int rank;
   MPI_Comm_rank(comm, &rank);
@@ -119,6 +126,8 @@ int main( int argc, char *argv[] ){
   if (rank == 0){
     printf("balance:  %15.5f s\n", tbal);
     printf("nodes:    %15.5f s\n", tnodes);
+    printf("mesh:     %15.5f s\n", tmesh);
+    printf("nnodes:   %15d\n", ntotal);
   }
 
   // Write out a file for each processor - bad practice!
@@ -165,7 +174,6 @@ int main( int argc, char *argv[] ){
               //             x + kx*h, y + ky*h, z + kz*h, X);
               getLocation(i, elem_node_conn, Xpts,
                           x + kx*h, y + ky*h, z + kz*h, X);
-
               fprintf(fp, "%e %e %e %d\n", X[0], X[1], X[2], t->tag);
             }
           }

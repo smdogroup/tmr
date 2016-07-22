@@ -33,11 +33,17 @@ class TMROctForest {
   // ----------------
   void createNodes( int order=2 );
 
-  // Allocate and retrieve the mesh
-  // ------------------------------
+  // Retrieve the mesh
+  // -----------------
   void createMesh( int **_conn, int *_nelems );
 
-  // Get the array of Octrees
+  // Retrieve the dependent mesh nodes
+  // ---------------------------------
+  int createDependentNodes( int **_ptr, int **_conn,
+                            double **_weights );
+
+
+  // Get the array of octrees
   // ------------------------
   int getOctrees( TMROctree ***_trees ){
     if (_trees){ *_trees = octrees; }
@@ -87,17 +93,10 @@ class TMROctForest {
   void recvOctNeighbors();
     
   // Label the dependent nodes on the locally owned blocks
-  void labelDependentFaceNode( const int order, 
-                               const int face_index,
-                               TMROctant *p, 
-                               TMROctantArray *nodes );
-  void labelAdjacentDepEdges( int edge, int edge_index,
-                              int block_owner, TMROctant *p );
-  void labelAdjacentDepFaces( int face, int face_index,
-                              int block_owner, TMROctant *p );
+  void labelDependentFaceNodes( const int order );
   int checkAdjacentDepFaces( int face, int face_index,
                              int block_owner, TMROctant *b );
-  void labelDependentNodes( const int order );
+  void computeDependentFaces();
 
   // Get the owner flags
   void getOwnerFlags( int block, int mpi_rank,
@@ -146,8 +145,9 @@ class TMROctForest {
   // Information about the mesh
   int mesh_order;
 
-  // Set the elements
+  // Set the elements, nodes and dependent nodes
   int num_elements;
+  int num_dep_nodes;
 
   // Set the range of nodes owned by each processor
   int *node_range;
