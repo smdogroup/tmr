@@ -113,7 +113,7 @@ int main( int argc, char *argv[] ){
   // Create the mesh
   double tmesh = MPI_Wtime();
   int *conn, nfe = 0;
-  forest->createMesh(&conn, &nfe);
+  forest->createMeshConn(&conn, &nfe);
   tmesh = MPI_Wtime() - tmesh;
   
   int ntotal = 0;
@@ -127,7 +127,7 @@ int main( int argc, char *argv[] ){
     printf("balance:  %15.5f s\n", tbal);
     printf("nodes:    %15.5f s\n", tnodes);
     printf("mesh:     %15.5f s\n", tmesh);
-    printf("nnodes:   %15d\n", ntotal);
+    printf("nelems:   %15d\n", ntotal);
   }
 
   // Write out a file for each processor - bad practice!

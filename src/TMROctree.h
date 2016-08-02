@@ -55,36 +55,6 @@ class TMROctree {
   // ------------------------------------------------
   void createNodes( int _order );
 
-  // Create the connectivity information for the mesh
-  // ------------------------------------------------
-  // void createMesh( int _order );
-
-  /*
-  // Retrieve the mesh information
-  // -----------------------------
-  void getMesh( int *_num_nodes, 
-                int *_num_elements, 
-                const int **_elem_ptr, 
-                const int **_elem_conn );
-
-  // Retrieve the depednent node information
-  // ---------------------------------------
-  void getDependentMesh( int *_num_dep_nodes, 
-                         const int **_dep_ptr,
-                         const int **_dep_conn,
-                         const double **_dep_weights );
-
-  // Create the interpolation from a coarser mesh
-  // --------------------------------------------
-  void createInterpolation( TMROctree *coarse,
-                            int **_interp_ptr,
-                            int **_interp_conn,
-                            double **_interp_weights );
-  void createRestriction( TMROctree *coarse,
-                          int **_interp_ptr,
-                          int **_interp_conn,
-                          double **_interp_weights );
-  */
   // Print a representation of the tree to a file
   // --------------------------------------------
   void printOctree( const char *filename );

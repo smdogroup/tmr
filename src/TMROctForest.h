@@ -29,19 +29,18 @@ class TMROctForest {
   // -------------------------
   void balance( int balance_corner=0 );
 
-  // Create the nodes
-  // ----------------
+  // Create and order the nodes
+  // --------------------------
   void createNodes( int order=2 );
 
-  // Retrieve the mesh
-  // -----------------
-  void createMesh( int **_conn, int *_nelems );
+  // Create the mesh connectivity
+  // ----------------------------
+  void createMeshConn( int **_conn, int *_nelems );
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
   int createDependentNodes( int **_ptr, int **_conn,
                             double **_weights );
-
 
   // Get the array of octrees
   // ------------------------
@@ -158,8 +157,12 @@ class TMROctForest {
   // Pointers to the dependent faces/edges
   TMROctantArray **dep_edges, **dep_faces;
 
-  // The mpi rank of the face owner
+  // The mpi rank of the block owners
   int *mpi_block_owners;
+
+  // A short cut to the owned blocks
+  int num_owned_blocks;
+  int *owned_blocks;
 };
 
 #endif // TMR_OCTANT_FOREST_H
