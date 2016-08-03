@@ -3290,10 +3290,8 @@ int TMROctForest::createDependentNodes( int **_ptr, int **_conn,
 
 /*
   Collect all the edge nodes
-
-
-
 */
+/*
 void TMROctForest::collectEdgeFacePoints( ){
   
   for ( int owned = 0; owned < num_owned_blocks; owned++ ){
@@ -3302,7 +3300,7 @@ void TMROctForest::collectEdgeFacePoints( ){
 
   }
 }
-
+*/
 /*
   Create the interpolation operator
 */

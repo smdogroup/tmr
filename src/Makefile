@@ -13,7 +13,8 @@ CXX_OBJS = TMRBase.o \
 	TMRQuadrant.o \
 	TMRQuadtree.o \
 	TMRQuadForest.o \
-	TMROctForest.o
+	TMROctForest.o \
+	TMRGeometry.o
 
 DIR=${TMR_DIR}/src
 
