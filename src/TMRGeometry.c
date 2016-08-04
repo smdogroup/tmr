@@ -44,7 +44,6 @@ int compare_face_entries( const void *aobj, const void *bobj ){
   return 0;
 }
 
-
 /*
   Create the edge look up table
 */
@@ -309,7 +308,7 @@ int TMR_TFIVolume::evalPoint( int32_t u_int, int32_t v_int, int32_t w_int,
   // Convert the integer coordinates into real coordinates
   const double u = 1.0*u_int/(1 << TMR_MAX_LEVEL);
   const double v = 1.0*v_int/(1 << TMR_MAX_LEVEL);
-  const double w = 1.0*v_int/(1 << TMR_MAX_LEVEL);
+  const double w = 1.0*w_int/(1 << TMR_MAX_LEVEL);
 
   // Evaluate the point based on the values along the corners, edges and faces
   pt->x = (1.0-u)*f[0].x + u*f[1].x + (1.0-v)*f[2].x + v*f[3].x + (1.0-w)*f[4].x + w*f[5].x 

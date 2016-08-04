@@ -155,7 +155,7 @@ class TMROctForest {
   TMROctree **octrees;
 
   // Pointers to the dependent faces/edges
-  TMROctantArray **dep_edges, **dep_faces;
+  TMROctantArray **dep_faces;
 
   // The mpi rank of the block owners
   int *mpi_block_owners;
