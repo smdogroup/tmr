@@ -1,5 +1,10 @@
 #include "TMROctForest.h"
 
+// Include METIS
+extern "C" {
+#include "metis.h"
+}
+
 /*
   Map from a block edge number to the local node numbers
 */
@@ -136,6 +141,13 @@ inline void set_face_node_coords( const int face_id,
 }
 
 /*
+  Compare integers for sorting
+*/
+int compare_integers( const void *a, const void *b ){
+  return (*(int*)a - *(int*)b);
+}
+
+/*
   Create the TMROctForest object
 */
 TMROctForest::TMROctForest( MPI_Comm _comm ){
@@ -230,8 +242,9 @@ TMROctForest::~TMROctForest(){
   unstructured super mesh.
 */
 void TMROctForest::setConnectivity( int _num_nodes,
-                                     const int *_block_conn,
-                                     int _num_blocks ){
+                                    const int *_block_conn,
+                                    int _num_blocks,
+                                    int partition ){
   // Free any data if it has already been allocated. 
   // This will erase everything internally.
   if (block_conn){ delete [] block_conn; }
@@ -272,40 +285,6 @@ void TMROctForest::setConnectivity( int _num_nodes,
   block_conn = new int[ 8*num_blocks ];
   memcpy(block_conn, _block_conn, 8*num_blocks*sizeof(int));
 
-  // Set up the partition using metis
-  mpi_block_owners = new int[ num_blocks ];
-
-  // Compute the partition on the root processor and
-  // broadcast the result to all other processors
-  int mpi_rank, mpi_size;
-  MPI_Comm_rank(comm, &mpi_rank);  
-  MPI_Comm_size(comm, &mpi_size);  
-  if (mpi_rank == 0){
-    // For now.. just perform an assignment
-    for ( int i = 0; i < num_blocks; i++ ){
-      mpi_block_owners[i] = i % mpi_size;
-    }
-  }
-  
-  // Broadcast the face owners to all processors
-  MPI_Bcast(mpi_block_owners, num_blocks, MPI_INT, 0, comm);
-
-  // Determine the number of block owners
-  num_owned_blocks = 0;
-  for ( int i = 0; i < num_blocks; i++ ){
-    if (mpi_rank == mpi_block_owners[i]){
-      num_owned_blocks++;
-    }
-  }
-
-  owned_blocks = new int[ num_owned_blocks ];
-  for ( int i = 0, k = 0; i < num_blocks; i++ ){
-    if (mpi_rank == mpi_block_owners[i]){
-      owned_blocks[k] = i;
-      k++;
-    }
-  }
-
   // Create the data structure for the node to block connectivity
   node_block_ptr = new int[ num_nodes+1 ];
   memset(node_block_ptr, 0, (num_nodes+1)*sizeof(int));
@@ -335,6 +314,45 @@ void TMROctForest::setConnectivity( int _num_nodes,
     node_block_ptr[i] = node_block_ptr[i-1];
   }
   node_block_ptr[0] = 0;
+
+  // Set up the partition using metis
+  mpi_block_owners = new int[ num_blocks ];
+  memset(mpi_block_owners, 0, num_blocks*sizeof(int));
+
+  // Compute the partition on the root processor and
+  // broadcast the result to all other processors
+  int mpi_rank, mpi_size;
+  MPI_Comm_rank(comm, &mpi_rank);  
+  MPI_Comm_size(comm, &mpi_size);
+  if (mpi_rank == 0){
+    if (partition){
+      computePartition(mpi_size, NULL, mpi_block_owners);
+    }
+    else {
+      for ( int block = 0; block < num_blocks; block++ ){
+        mpi_block_owners[block] = block % mpi_size;
+      }
+    }
+  }
+  
+  // Broadcast the face owners to all processors
+  MPI_Bcast(mpi_block_owners, num_blocks, MPI_INT, 0, comm);
+
+  // Determine the number of block owners
+  num_owned_blocks = 0;
+  for ( int i = 0; i < num_blocks; i++ ){
+    if (mpi_rank == mpi_block_owners[i]){
+      num_owned_blocks++;
+    }
+  }
+
+  owned_blocks = new int[ num_owned_blocks ];
+  for ( int i = 0, k = 0; i < num_blocks; i++ ){
+    if (mpi_rank == mpi_block_owners[i]){
+      owned_blocks[k] = i;
+      k++;
+    }
+  }
 
   // Now establish a unique ordering of the edges along each block
   // -------------------------------------------------------------
@@ -709,13 +727,31 @@ void TMROctForest::createTrees( int refine_level ){
   }
 
   // Create the octrees
-  int mpi_rank;
-  MPI_Comm_rank(comm, &mpi_rank);
   octrees = new TMROctree*[ num_blocks ];
   memset(octrees, 0, num_blocks*sizeof(TMROctree*));
   for ( int i = 0; i < num_owned_blocks; i++ ){
     int block = owned_blocks[i];
     octrees[block] = new TMROctree(refine_level);
+  }
+}
+
+/*
+  Create a forest with the specified refinement levels
+*/
+void TMROctForest::createTrees( int refine_levels[] ){
+  if (octrees){ 
+    for ( int i = 0; i < num_blocks; i++ ){
+      if (octrees[i]){ delete octrees[i]; }
+    }
+    delete [] octrees;
+  }
+
+  // Create the octrees
+  octrees = new TMROctree*[ num_blocks ];
+  memset(octrees, 0, num_blocks*sizeof(TMROctree*));
+  for ( int i = 0; i < num_owned_blocks; i++ ){
+    int block = owned_blocks[i];
+    octrees[block] = new TMROctree(refine_levels[block]);
   }
 }
 
@@ -742,6 +778,302 @@ void TMROctForest::createRandomTrees( int nrand,
     int block = owned_blocks[i];
     octrees[block] = new TMROctree(nrand, min_level, max_level);
   }
+}
+
+/*
+  Repartition the mesh based on the number of elements per block
+*/
+void TMROctForest::repartition(){
+  // Get the communicator rank/size
+  int mpi_size, mpi_rank;
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // You can't repartition that which cannot be repartitioned
+  if (mpi_size <= 1){
+    return;
+  }
+
+  // First, this stores the number of elements on octrees owned on
+  // each processor
+  int *elem_counts = new int[ num_owned_blocks ];
+  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
+    int block = owned_blocks[owned];
+    elem_counts[owned] = octrees[block]->getNumElements();
+  }
+
+  // Allocate space for the new partition
+  int *new_part = new int[ num_blocks ];
+
+  // Gather the element counts to the root processor
+  if (mpi_rank != 0){
+    MPI_Gatherv(elem_counts, num_owned_blocks, MPI_INT,
+                NULL, NULL, NULL, MPI_INT, 0, comm);
+  }
+  else {
+    int *all_elem_counts = new int[ num_blocks ];
+    int *recv_counts = new int[ mpi_size ];
+    int *recv_displ = new int[ mpi_size ];
+
+    // Count up the recvs from each processor
+    memset(recv_counts, 0, mpi_size*sizeof(int));
+    for ( int block = 0; block < num_blocks; block++ ){
+      recv_counts[mpi_block_owners[block]]++;
+    }
+    
+    // Compute the displacement offsets
+    recv_displ[0] = 0;
+    for ( int k = 1; k < mpi_size; k++ ){
+      recv_displ[k] = recv_displ[k-1] + recv_counts[k-1];
+    }
+    
+    // Receive all the elements
+    MPI_Gatherv(elem_counts, num_owned_blocks, MPI_INT,
+                all_elem_counts, recv_counts, recv_displ, MPI_INT,
+                0, comm);
+
+    // Fill in the number of elements per processor back in the
+    // original order from the original blocks
+    int *nelems = new int[ num_blocks ];
+    for ( int block = 0; block < num_blocks; block++ ){
+      int mpi_owner = mpi_block_owners[block];
+      
+      nelems[block] = all_elem_counts[recv_displ[mpi_owner]];
+      recv_displ[mpi_owner]++;
+    }
+
+    // Free the offsets etc.
+    delete [] all_elem_counts;
+    delete [] recv_displ;
+    delete [] recv_counts;
+
+    // Compute the new partition on the root processor
+    computePartition(mpi_size, nelems, new_part);
+
+    // Free the number of elements per processor
+    delete [] nelems;
+  }
+
+  // Free the element counts from each processor
+  delete [] elem_counts;
+
+  // Broadcast the new partition
+  MPI_Bcast(new_part, num_blocks, MPI_INT, 0, comm);
+
+  // Now create the octrees array
+  TMROctree **new_octrees = new TMROctree*[ num_blocks ];
+  memset(new_octrees, 0, num_blocks*sizeof(TMROctree*));
+
+  // Only redistribute the elements, not the mesh
+  int send_count = 0;
+  MPI_Request *requests = new MPI_Request[ num_owned_blocks ];
+  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
+    int block = owned_blocks[owned];
+    int dest = new_part[block];
+
+    if (dest != mpi_rank){
+      // Get the element array
+      TMROctantArray *elements;
+      octrees[block]->getElements(&elements);
+      
+      // Get the actual octant array
+      int size;
+      TMROctant *array;
+      elements->getArray(&array, &size);
+
+      // Send the element array to the new owner
+      MPI_Isend(array, size, TMROctant_MPI_type,
+                dest, block, comm, &requests[send_count]);
+      send_count++;
+    }
+    else {
+      new_octrees[block] = octrees[block];
+      octrees[block] = NULL;
+    }
+  }
+
+  // Determine the new number of block owners based on the new
+  // partition and the number of expected incoming messages (octrees)
+  // from all processors
+  int num_owned = 0;
+  for ( int block = 0; block < num_blocks; block++ ){
+    if (mpi_rank == new_part[block]){
+      num_owned++;
+    }
+  }
+
+  int incoming_blocks = 0;
+  int *new_owned = new int[ num_owned ];
+  for ( int block = 0, k = 0; block < num_blocks; block++ ){
+    if (mpi_rank == new_part[block]){
+      new_owned[k] = block;
+      k++;
+
+      // Check if this block will need to be sent
+      if (mpi_block_owners[block] != mpi_rank){
+        incoming_blocks++;
+      }
+    }
+  }
+  
+  // Loop over the old senders
+  for ( int k = 0; k < incoming_blocks; k++ ){
+    MPI_Status status;
+    MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, comm, &status);
+
+    // Get the source, tag == block, and size of the message
+    int source = status.MPI_SOURCE;
+    int block = status.MPI_TAG;
+    int size = 0;
+    MPI_Get_count(&status, TMROctant_MPI_type, &size);
+
+    // Allocate the incoming array and receive it
+    TMROctant *array = new TMROctant[ size ];
+    MPI_Recv(array, size, TMROctant_MPI_type,
+             source, block, comm, MPI_STATUS_IGNORE);
+    
+    // Create the new local octree
+    TMROctantArray *list = new TMROctantArray(array, size);
+    new_octrees[block] = new TMROctree(list);
+  }
+
+  // Wait for all the sends to complete
+  MPI_Waitall(send_count, requests, MPI_STATUSES_IGNORE);
+
+  // Free the old octrees that were exchanged to another processor and
+  // assign the new octrees array
+  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
+    int block = owned_blocks[owned];
+    if (octrees[block]){ 
+      delete octrees[block]; 
+    }
+  }
+  delete [] octrees;
+  octrees = new_octrees;
+
+  // Reset local information associated with the nodal ordering
+  num_elements = 0;
+  num_dep_nodes = 0;
+  if (dep_faces){
+    for ( int owned = 0; owned < num_owned_blocks; owned++ ){
+      int block = owned_blocks[owned];
+      if (dep_faces[block]){ delete dep_faces[block]; }
+    }
+    delete [] dep_faces;
+  }
+  dep_faces = NULL;
+  
+  // Assign the new partition and the new owner list
+  delete [] owned_blocks;
+  owned_blocks = new_owned;
+  num_owned_blocks = num_owned;
+
+  delete [] mpi_block_owners;
+  mpi_block_owners = new_part;
+}
+
+/*
+  Partition the mesh based on the super mesh connectivity and
+  optionally vertex weights (typically the element count per block)
+
+  input:
+  num_part:     the number of partitions
+  vwgts:        the vertex weights
+
+  output:
+  part:         the block-processor assignment
+*/
+void TMROctForest::computePartition( int part_size, int *vwgts,
+                                     int *part ){
+  // Set the pointer to the block connectivity
+  int *ptr = new int[ num_blocks+1 ];
+  memset(ptr, 0, (num_blocks+1)*sizeof(int));
+
+  // Set the default size for the connectivity
+  int max_size = 27*num_blocks;
+  int *conn = new int[ max_size ];
+    
+  // Allocate space to store flags to indicate whether the block has
+  // been added to the array
+  int *cols = new int[ num_blocks ];
+  memset(cols, 0, num_blocks*sizeof(int));
+
+  // The adjacency node count
+  int min_adj_count = 4;
+  
+  for ( int block = 0; block < num_blocks; block++ ){
+    // Set the new pointer
+    ptr[block+1] = ptr[block];
+    
+    // Loop over all the blocks
+    for ( int j = 0; j < 8; j++ ){
+      int node = block_conn[8*block + j];
+      
+      // Loop over all of the nodes
+      for ( int ip = node_block_ptr[node]; ip < node_block_ptr[node+1]; ip++ ){
+        int adj_block = node_block_conn[ip];
+
+        if (cols[adj_block]+1 == min_adj_count*(block+1)){
+          // Extend the array
+          if (ptr[block+1] >= max_size){
+            max_size *= 2;
+            int *tmp = new int[ max_size ];
+            memcpy(tmp, conn, ptr[block+1]*sizeof(int));
+            delete [] conn;
+            conn = tmp;
+          }
+
+          // Set the new element into the connectivity
+          conn[ptr[block+1]] = adj_block;
+          ptr[block+1]++;
+
+          // Set the flag so that its not added again
+          cols[adj_block]++;
+        }
+        else if (cols[adj_block] <= min_adj_count*block){
+          // This is the first time this block has been encountered on
+          // this loop. Add it and increment the pointer
+          cols[adj_block] = min_adj_count*block+1;
+        }
+        else {
+          // This block has been encountered before
+          cols[adj_block]++;
+        }
+      }
+    }
+    
+    // Sort the array
+    int len = ptr[block+1] - ptr[block];
+    qsort(&conn[ptr[block]], len, sizeof(int), compare_integers);
+  }
+  
+  // use the default options
+  int options[5];
+  options[0] = 0; 
+  
+  // weights are on the verticies
+  int wgtflag = 0; 
+  int numflag = 0;
+  int edgecut = -1; 
+  
+  // Weights on vertices and edges
+  int *adjwgts = NULL;
+  
+  if (part_size < 8){
+    METIS_PartGraphRecursive(&num_blocks, ptr, conn, vwgts, adjwgts,
+                             &wgtflag, &numflag, &part_size,
+                             options, &edgecut, part);
+  }
+  else {
+    METIS_PartGraphKway(&num_blocks, ptr, conn, vwgts, adjwgts, 
+                        &wgtflag, &numflag, &part_size, 
+                        options, &edgecut, part);
+  }
+  
+  // Free the allocated data
+  delete [] cols;
+  delete [] conn;
+  delete [] ptr;
 }
 
 /*

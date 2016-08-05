@@ -12,11 +12,17 @@ class TMROctForest {
   // --------------------
   void setConnectivity( int _num_nodes,
                         const int *_block_conn,
-                        int _num_blocks );
+                        int _num_blocks,
+                        int partition=0 );
+
+  // Re-partition the mesh based on element count
+  // --------------------------------------------
+  void repartition();
 
   // Create the forest of octrees
   // ----------------------------
   void createTrees( int refine_level );
+  void createTrees( int refine_levels[] );
   void createRandomTrees( int nrand=10, 
                           int min_level=0, int max_level=8 );
 
@@ -50,6 +56,10 @@ class TMROctForest {
   }
 
  private:
+  // Compute the partition using METIS
+  // ---------------------------------
+  void computePartition( int part_size, int *vwgts, int *part );
+
   // Balance-related routines
   // ------------------------
   // Balance the octant across the local tree and the forest
@@ -129,6 +139,8 @@ class TMROctForest {
   // The communicator
   MPI_Comm comm;
 
+  // The following data is the same across all processors
+  // ----------------------------------------------------
   // Set the nodes/edges/faces/blocks
   int num_nodes, num_edges, num_faces, num_blocks;
 
@@ -144,21 +156,23 @@ class TMROctForest {
   // Information about the mesh
   int mesh_order;
 
+  // Set the range of nodes owned by each processor
+  int *node_range;
+
+  // The mpi rank of the block owners
+  int *mpi_block_owners;
+
+  // The following data is processor-local
+  // -------------------------------------
   // Set the elements, nodes and dependent nodes
   int num_elements;
   int num_dep_nodes;
-
-  // Set the range of nodes owned by each processor
-  int *node_range;
 
   // Keep a pointer to the forest of quadtrees
   TMROctree **octrees;
 
   // Pointers to the dependent faces/edges
   TMROctantArray **dep_faces;
-
-  // The mpi rank of the block owners
-  int *mpi_block_owners;
 
   // A short cut to the owned blocks
   int num_owned_blocks;

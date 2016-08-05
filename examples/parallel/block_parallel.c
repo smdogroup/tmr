@@ -50,8 +50,18 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
+  int partition = 0;
+  for ( int k = 0; k < argc; k++ ){
+    if (strcmp(argv[k], "partition") == 0){
+      partition = 1;
+    }
+  }
+
   MPI_Comm comm = MPI_COMM_WORLD;
   TMROctForest *forest = new TMROctForest(comm);
+
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
 
   // Create the TACSMeshLoader class
   TACSMeshLoader *mesh = new TACSMeshLoader(MPI_COMM_SELF);
@@ -64,44 +74,34 @@ int main( int argc, char *argv[] ){
   const double *Xpts;
   mesh->getConnectivity(&nnodes, &nelems, NULL, 
                         &elem_node_conn, &Xpts);
-  forest->setConnectivity(nnodes, elem_node_conn, nelems);
+  forest->setConnectivity(nnodes, elem_node_conn, 
+                          nelems, partition);
 
-  /*
-  // Create a regular connectivity
-  int nx = 3, ny = 2, nz = 4;
-  int num_nodes = (nx+1)*(ny+1)*(nz+1);
-  int num_blocks = nx*ny*nz;
+  // Set the refinement increasing out the wing
+  int *refine = new int[ nelems ];
+  memset(refine, 0, nelems*sizeof(int));
 
-  int *conn = new int[ 8*num_blocks ];
-
-  for ( int iz = 0; iz < nz; iz++ ){
-    for ( int iy = 0; iy < ny; iy++ ){
-      for ( int ix = 0; ix < nx; ix++ ){
-        int block = ix + nx*iy + nx*ny*iz;
-
-        for ( int kz = 0; kz < 2; kz++ ){
-          for ( int ky = 0; ky < 2; ky++ ){
-            for ( int kx = 0; kx < 2; kx++ ){
-              conn[8*block + kx + 2*ky + 4*kz] = 
-                (ix + kx) + (nx+1)*(iy + ky) + (nx+1)*(ny+1)*(iz + kz);
-            }
-          }
-        }
-      }
-    }
+  int max_refine = 5;
+  int min_refine = 2;
+  double y_max = 30.0;
+  for ( int k = 0; k < nelems; k++ ){
+    double y_ref = Xpts[3*elem_node_conn[8*k]+1];
+    refine[k] = min_refine + 
+      (max_refine - min_refine)*(1.0 - (y_ref/y_max));
   }
-  
-  forest->setConnectivity(num_nodes, conn, num_blocks);
-  delete [] conn;
-  */
+  forest->createTrees(refine);
+  delete [] refine;
 
-  // Create the random trees
-  forest->createRandomTrees(25, 0, 15);
+  // Repartition the octrees
+  printf("[%d] Repartition\n", mpi_rank);
+  forest->repartition();
 
+  printf("[%d] Balance\n", mpi_rank);
   double tbal = MPI_Wtime();
   forest->balance(1);
   tbal = MPI_Wtime() - tbal;
 
+  printf("[%d] Create nodes\n", mpi_rank);
   double tnodes = MPI_Wtime();
   forest->createNodes(2);
   tnodes = MPI_Wtime() - tnodes;
@@ -130,6 +130,23 @@ int main( int argc, char *argv[] ){
     printf("nelems:   %15d\n", ntotal);
   }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /*
   // Write out a file for each processor - bad practice!
   char filename[128];
   sprintf(filename, "parallel%d.dat", rank);
@@ -189,7 +206,7 @@ int main( int argc, char *argv[] ){
   }
 
   fclose(fp);
-
+  */
   delete forest;
 
   TMRFinalize();
