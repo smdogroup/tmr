@@ -3446,8 +3446,15 @@ void TMROctForest::createNodes( int order ){
 }
 
 /*
+  Create the local mesh connectivity for the portion of the
+  finite-element mesh stored on this processor.
+
   Before calling the create mesh function, you must have already
   allocated and ordered the nodes
+
+  output:
+  conn:    the connectivity (using global node numbers)
+  nelems:  the number of elements in the mesh
 */
 void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
   int mpi_rank;
@@ -3551,75 +3558,17 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
 }
 
 /*
-  For each block in the domain, project all the edges onto
-*/
-/*
-void TMROctForest::projectEdgeParamLocs(){
-  TMROctantHash **hash = new TMROctantHash*[ num_edges ];
+  Create the dependent mesh information for all local dependent
+  nodes. 
 
-  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
-    // Loop over all of the locally owned blocks
-    int block = owned_blocks[owned];
+  Currently this is only implemented for the second-order meshes.  The
+  dependent nodes in quadratic meshes have not been implemented
+  correctly (yet).
 
-    // Retrieve the element array and the node array
-    TMROctantArray *nodes;
-    octrees[block]->getNodes(&nodes);
-
-    // Get the current array of octants
-    int size;
-    TMROctant *array;
-    nodes->getArray(&array, &size);
-
-    // Loop over all the nodes in the mesh
-    for ( int i = 0; i < size; i++ ){
-      // Loop over each edge of the block
-      for ( int k = 0; k < 12; k++ ){
-        int edge = block_edge_conn[12*block + k];
-
-        // Project the coordinates of the octant onto the
-        // corresponding edge
-        TMROctant oct = array[i];
-        if (k < 4){
-          oct.y = hmax*(k % 2);
-          oct.z = hmax*(k/2);
-        }
-        else if (k < 8){
-          oct.x = hmax*(k % 2);
-          oct.z = hmax*((k-4)/2);
-        }
-        else {
-          oct.x = hmax*(k % 2);
-          oct.y = hmax*((k-8)/2);
-        }
-
-        // Add the octant to the hash
-        hash[edge]->addOctant(&oct); 
-      
-      }
-    }
-  }
-}
-//*/
-
-
-/*
-
-void TMROctForest::createEdgeNodes( const int *edge_owners ){
-  int mpi_rank;
-  MPI_Comm_rank(comm, &mpi_rank);
-
-  for ( int block = 0; block < num_blocks; block++ ){
-    if (mpi_rank == edge_owners[edge]){
-      geo->edges[edge]->eval(u, &X[]);
-    }
-  }
-}
-void TMROctForest::createFaceNodes( const int *face_owners ){}
-void TMROctForest::createMesh( ){}
-*/
-
-/*
-  Create the dependent mesh information
+  output:
+  ptr:      pointer for each dependent node number
+  conn:     connectivity to each (global) independent node
+  weights:  the weight values for each dependent node
 */
 int TMROctForest::createDependentNodes( int **_ptr, int **_conn, 
                                         double **_weights ){

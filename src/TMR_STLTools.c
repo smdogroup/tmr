@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include "generate_stl.h"
+#include "TMR_STLTools.h"
 
 const int edgeTable[256] = 
   {0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
