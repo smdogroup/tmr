@@ -15,14 +15,6 @@
 */
 
 /*
-  Base class for all point-evaluation algorithms
-*/
-class TMRPoint {
- public:
-  double x, y, z;
-};
-
-/*
   The parametrization for the edge
 */
 class TMRGeoEdge {
@@ -43,14 +35,6 @@ class TMRGeoSurface {
   virtual int invEvalPoint( const TMRPoint *X, 
                             double *u, double *v ) = 0;
 };
-
-  
-
-
-
-
-
-
 
 /*
   A searchable/sortable list of edge points
@@ -113,15 +97,6 @@ class TMR_SurfaceLookup {
   // The number of points
   int npts;
 };
-
-
-
-
-
-
-
-
-
 
 /*
   Transfinite interpolation edge class.

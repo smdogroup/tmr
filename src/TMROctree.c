@@ -50,6 +50,7 @@ TMROctree::TMROctree( int refine_level ){
 
   // Zero the array of octant nodes
   nodes = NULL;
+  X = NULL;
 
   // Set the default order to 2
   order = 2;
@@ -82,6 +83,7 @@ TMROctree::TMROctree( int nrand, int min_level, int max_level ){
 
   // Zero the array of octant nodes
   nodes = NULL;
+  X = NULL;
 
   // Zero everything else
   order = 2;
@@ -96,6 +98,7 @@ TMROctree::TMROctree( TMROctantArray *_elements ){
 
   // Zero the array of octant nodes
   nodes = NULL;
+  X = NULL;
 
   // Zero everything else
   order = 2;
@@ -108,6 +111,7 @@ TMROctree::~TMROctree(){
   // Free the elements and nodes
   if (elements){ delete elements; }
   if (nodes){ delete nodes; }
+  if (X){ delete [] X; }
 }
 
 /*
@@ -132,6 +136,10 @@ void TMROctree::refine( int refinement[],
   if (nodes){ 
     delete nodes; 
     nodes = NULL; 
+  }
+  if (X){
+    delete [] X;
+    X = NULL;
   }
 
   // Create a hash table for the refined  t
@@ -398,6 +406,7 @@ void TMROctree::createNodes( int _order ){
 
   // Free the existing node array
   if (nodes){ delete nodes; }
+  if (X){ delete [] X; }
 
   // Get the current array of octants
   int size;
@@ -465,6 +474,11 @@ void TMROctree::createNodes( int _order ){
   // Create an array of all the octants and uniquely sort it
   nodes = new TMROctantArray(all_nodes, index);
   nodes->sort();
+
+  // Allocate the nodes
+  nodes->getArray(NULL, &size);
+  X = new TMRPoint[ size ];
+  memset(X, 0, size*sizeof(TMRPoint));
 }
 
 /*

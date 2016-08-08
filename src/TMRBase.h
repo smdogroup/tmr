@@ -12,10 +12,19 @@
 static const int TMR_MAX_LEVEL = 30;
 
 /*
+  Base class for all point-evaluation algorithms
+*/
+class TMRPoint {
+ public:
+  double x, y, z;
+};
+
+/*
   The MPI TMROctant data type
 */
 extern MPI_Datatype TMROctant_MPI_type;
 extern MPI_Datatype TMRQuadrant_MPI_type;
+extern MPI_Datatype TMRPoint_MPI_type;
 
 // Initialize and finalize the data type
 void TMRInitialize();

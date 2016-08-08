@@ -3,6 +3,7 @@
 // The TMR data type for MPI useage
 MPI_Datatype TMROctant_MPI_type;
 MPI_Datatype TMRQuadrant_MPI_type;
+MPI_Datatype TMRPoint_MPI_type;
 
 /*
   Initialize TMR data type
@@ -22,6 +23,13 @@ void TMRInitialize(){
   MPI_Type_struct(1, &counts, &offset, &type, 
                   &TMRQuadrant_MPI_type);
   MPI_Type_commit(&TMRQuadrant_MPI_type);
+
+  // Create the TMRPoint data type
+  counts = 3;
+  type = MPI_DOUBLE;
+  MPI_Type_struct(1, &counts, &offset, &type, 
+                  &TMRPoint_MPI_type);
+  MPI_Type_commit(&TMRPoint_MPI_type);
 }
 
 /*
@@ -30,4 +38,5 @@ void TMRInitialize(){
 void TMRFinalize(){
   MPI_Type_free(&TMROctant_MPI_type);
   MPI_Type_free(&TMRQuadrant_MPI_type);
+  MPI_Type_free(&TMRPoint_MPI_type);
 }

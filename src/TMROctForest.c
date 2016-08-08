@@ -32,7 +32,11 @@ const int face_to_edge_index[][4] = {{4,6,8,10}, {5,7,9,11},
 const int face_orientations[][4] = {{0,1,2,3},
                                     {2,0,3,1},
                                     {3,2,1,0},
-                                    {1,3,0,2}};
+                                    {1,3,0,2},
+                                    {0,2,1,3},
+                                    {2,3,0,1},
+                                    {3,1,2,0},
+                                    {1,0,3,2}};
 
 /*
   Given the x/y locations on the face with orientation face_id,
@@ -55,9 +59,25 @@ inline void get_face_oct_coords( const int face_id, const int32_t h,
     *u = hmax - h - x;
     *v = hmax - h - y;
   }
-  else {
+  else if (face_id == 3){
     *u = y;
     *v = hmax - h - x;
+  }
+  else if (face_id == 4){
+    *u = y;
+    *v = x;
+  }
+  else if (face_id == 5){
+    *u = x;
+    *v = hmax - h - y;
+  }
+  else if (face_id == 6){
+    *u = hmax - h - y;
+    *v = hmax - h - x;
+  }
+  else {
+    *u = hmax - h - x;
+    *v = y;
   }
 }
 
@@ -81,9 +101,25 @@ inline void set_face_oct_coords( const int face_id, const int32_t h,
     *x = hmax - h - u;
     *y = hmax - h - v; 
   }
-  else {
+  else if (face_id == 3){
     *x = hmax - h - v;
     *y = u; 
+  }
+  else if (face_id == 4){
+    *x = v;
+    *y = u;
+  }
+  else if (face_id == 5){
+    *x = hmax - h - u;
+    *y = v;
+  }
+  else if (face_id == 6){
+    *x = hmax - h - v; 
+    *y = hmax - h - u;
+  }
+  else {
+    *x = u; 
+    *y = hmax - h - v;
   }
 }
 
@@ -108,9 +144,25 @@ inline void get_face_node_coords( const int face_id,
     *u = hmax - x;
     *v = hmax - y;
   }
-  else {
+  else if (face_id == 3){
     *u = y;
     *v = hmax - x;
+  }
+  else if (face_id == 4){
+    *u = y;
+    *v = x;
+  }
+  else if (face_id == 5){
+    *u = x;
+    *v = hmax - y;
+  }
+  else if (face_id == 6){
+    *u = hmax - y;
+    *v = hmax - x;
+  }
+  else {
+    *u = hmax - x;
+    *v = y;
   }
 }
 
@@ -134,9 +186,25 @@ inline void set_face_node_coords( const int face_id,
     *x = hmax - u;
     *y = hmax - v; 
   }
-  else {
+  else if (face_id == 3){
     *x = hmax - v;
     *y = u; 
+  }
+  else if (face_id == 4){
+    *x = v;
+    *y = u;
+  }
+  else if (face_id == 5){
+    *x = hmax - u;
+    *y = v;
+  }
+  else if (face_id == 6){
+    *x = hmax - v; 
+    *y = hmax - u;
+  }
+  else {
+    *x = u;
+    *y = hmax - v;
   }
 }
 
@@ -516,7 +584,7 @@ void TMROctForest::setConnectivity( int _num_nodes,
     // Loop over all the face for this block
     for ( int j = 0; j < 6; j++ ){
       if (block_face_conn[6*i + j] < 0){
-        // Get the face nodes for the j-th face
+        // Get the face nodes for the j-th face of the i-th block
         int face_nodes[4];
         for ( int k = 0; k < 4; k++ ){
           face_nodes[k] = block_conn[8*i + block_to_face_nodes[j][k]];
@@ -533,32 +601,33 @@ void TMROctForest::setConnectivity( int _num_nodes,
         
         // Scan through and find the blocks that share a common
         // node that is also on this face
-        int node = block_conn[8*i + block_to_face_nodes[j][0]];
+        int node = face_nodes[0];
         for ( int ip = node_block_ptr[node];
               ip < node_block_ptr[node+1]; ip++ ){
           int ii = node_block_conn[ip];
+
+          // Skip this if the blocks are the same
+          if (ii == i){ continue; }
 
           // Loop over all the faces for the ii-th block
           int face_equiv = 0;
           for ( int jj = 0; jj < 6; jj++ ){
             // Get the nodes corresponding to this face
-            int new_face_nodes[4];
+            int adj_face_nodes[4];
             for ( int k = 0; k < 4; k++ ){
-              new_face_nodes[k] = 
+              adj_face_nodes[k] = 
                 block_conn[8*ii + block_to_face_nodes[jj][k]];
             }
 
             // Loop over the relative orientations between this block
             // and the last block
-            for ( int ort = 0; ort < 4; ort++ ){
-              face_equiv = 1;
-              for ( int k = 0; k < 4; k++ ){
-                if (face_nodes[k] != 
-                    new_face_nodes[face_orientations[ort][k]]){
-                  face_equiv = 0;
-                  break;
-                }
-              }
+            for ( int ort = 0; ort < 8; ort++ ){
+              face_equiv = 
+                (face_nodes[0] == adj_face_nodes[face_orientations[ort][0]] &&
+                 face_nodes[1] == adj_face_nodes[face_orientations[ort][1]] &&
+                 face_nodes[2] == adj_face_nodes[face_orientations[ort][2]] &&
+                 face_nodes[3] == adj_face_nodes[face_orientations[ort][3]]);
+              // We've found a matching face
               if (face_equiv){
                 break;
               }
@@ -674,25 +743,21 @@ void TMROctForest::setConnectivity( int _num_nodes,
         if (face == block_face_conn[6*block + face_index]){
           // Now, find the relative orientations between the two faces.
           // First get the nodes corresponding to this face
-          int new_face_nodes[4];
+          int adj_face_nodes[4];
           for ( int k = 0; k < 4; k++ ){
-            new_face_nodes[k] = 
+            adj_face_nodes[k] = 
               block_conn[8*block + block_to_face_nodes[face_index][k]];
           }
           
           // Loop over the relative orientations between this block
           // and the last block
           int face_equiv = 0;
-          for ( int ort = 0; ort < 4; ort++ ){
-            face_equiv = 1;
-            for ( int k = 0; k < 4; k++ ){
-              if (owner_nodes[k] != 
-                  new_face_nodes[face_orientations[ort][k]]){
-                face_equiv = 0;
-                break;
-              }
-            }
-            
+          for ( int ort = 0; ort < 8; ort++ ){
+            face_equiv = 
+              (owner_nodes[0] == adj_face_nodes[face_orientations[ort][0]] &&
+               owner_nodes[1] == adj_face_nodes[face_orientations[ort][1]] &&
+               owner_nodes[2] == adj_face_nodes[face_orientations[ort][2]] &&
+               owner_nodes[3] == adj_face_nodes[face_orientations[ort][3]]);
             // Set the orientation and break out of this loop
             if (face_equiv){
               block_face_ids[6*block + face_index] = ort;
@@ -713,6 +778,26 @@ void TMROctForest::setConnectivity( int _num_nodes,
       face_block_conn[ip] = 6*block + face_index;
     }
   }
+}
+
+/*
+  Retrieve information about the connectivity between 
+  blocks, faces, edges and nodes
+*/
+void TMROctForest::getConnectivity( int *_nblocks, int *_nfaces, 
+                                    int *_nedges, int *_nnodes, 
+                                    const int **_block_conn, 
+                                    const int **_block_face_conn, 
+                                    const int **_block_edge_conn,
+                                    const int **_block_face_ids ){
+  if (_nblocks){ *_nblocks = num_blocks; }
+  if (_nfaces){ *_nfaces = num_faces; }
+  if (_nedges){ *_nedges = num_edges; }
+  if (_nnodes){ *_nnodes = num_nodes; }
+  if (_block_conn){ *_block_conn = block_conn; }
+  if (_block_face_conn){ *_block_face_conn = block_face_conn; }
+  if (_block_edge_conn){ *_block_edge_conn = block_edge_conn; }
+  if (_block_face_ids){ *_block_face_ids = block_face_ids; }
 }
 
 /*
@@ -990,7 +1075,7 @@ void TMROctForest::computePartition( int part_size, int *vwgts,
   memset(ptr, 0, (num_blocks+1)*sizeof(int));
 
   // Set the default size for the connectivity
-  int max_size = 27*num_blocks;
+  int max_size = 9*num_blocks;
   int *conn = new int[ max_size ];
     
   // Allocate space to store flags to indicate whether the block has

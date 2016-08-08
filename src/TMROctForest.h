@@ -54,6 +54,21 @@ class TMROctForest {
     if (_trees){ *_trees = octrees; }
     return num_blocks;
   }
+  
+  // Get mesh/ownership information
+  // ------------------------------
+  int getOwnedOctrees( const int **_owned_blocks ){
+    if (_owned_blocks){ 
+      *_owned_blocks = owned_blocks; 
+    }
+    return num_owned_blocks;
+  }
+  void getConnectivity( int *_nblocks, int *_nfaces, 
+                        int *_nedges, int *_nnodes, 
+                        const int **_block_conn, 
+                        const int **_block_face_conn, 
+                        const int **_block_edge_conn,
+                        const int **_block_face_ids );
 
  private:
   // Compute the partition using METIS

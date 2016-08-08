@@ -92,12 +92,26 @@ class TMROctree {
     return size; 
   }
 
+  // Retrieve the array of points - created concurrently with the nodes
+  // ------------------------------------------------------------------
+  int getPoints( TMRPoint **_X ){
+    int size = 0;
+    if (_X){
+      *_X = X;
+      if (nodes){ nodes->getArray(NULL, &size); }
+    }
+    return size;
+  }
+
  private:
   // The list octants representing the elements
   TMROctantArray *elements; 
 
   // The nodes within the element mesh
   TMROctantArray *nodes; 
+
+  // The node locations
+  TMRPoint *X;
 
   // Store the order of the mesh
   int order;
