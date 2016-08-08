@@ -40,10 +40,10 @@
   1 integer representing the number of triangles = ntri
   3*ntri doubles representing the cell-vertices in CCW ordering
 */
-extern void TMR_GenerateBinFile( const char *filename,
-                                 double *x, int x_step,
-                                 TMROctForest *filter,
-                                 double cutoff );
+extern int TMR_GenerateBinFile( const char *filename,
+                                double *x, int x_step,
+                                TMROctForest *filter,
+                                double cutoff );
 
 
 /*
@@ -53,7 +53,7 @@ extern void TMR_GenerateBinFile( const char *filename,
   Note that this is a serial code and should only be called by a
   single proc.
 */
-extern void TMR_ConvertBinToSTL( const char *binfile,
-                                 const char *stlfile );
+extern int TMR_ConvertBinToSTL( const char *binfile,
+                                const char *stlfile );
 
 #endif // TMR_STL_TOOLS_H

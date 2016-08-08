@@ -8,6 +8,10 @@ class TMROctForest {
   TMROctForest( MPI_Comm _comm );
   ~TMROctForest();
 
+  // Get the MPI communicator
+  // ------------------------
+  MPI_Comm getMPIComm(){ return comm; }
+
   // Set the connectivity
   // --------------------
   void setConnectivity( int _num_nodes,
@@ -45,31 +49,32 @@ class TMROctForest {
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
-  int createDependentNodes( int **_ptr, int **_conn,
-                            double **_weights );
+  int createDepNodeConn( int **_ptr, int **_conn,
+                         double **_weights );
 
-  // Get the array of octrees
-  // ------------------------
-  int getOctrees( TMROctree ***_trees ){
-    if (_trees){ *_trees = octrees; }
-    return num_blocks;
-  }
+  // Get the array of octrees - careful, many are NULL
+  // -------------------------------------------------
+  int getOctrees( TMROctree ***_trees );
   
-  // Get mesh/ownership information
-  // ------------------------------
-  int getOwnedOctrees( const int **_owned_blocks ){
-    if (_owned_blocks){ 
-      *_owned_blocks = owned_blocks; 
-    }
-    return num_owned_blocks;
-  }
+  // Get mesh/ownership information - short cut to the non-NULL octrees
+  // ------------------------------------------------------------------
+  int getOwnedOctrees( const int **_owned_blocks );
+
+  // Retrieve the connectivity information
+  // -------------------------------------
   void getConnectivity( int *_nblocks, int *_nfaces, 
                         int *_nedges, int *_nnodes, 
                         const int **_block_conn, 
                         const int **_block_face_conn, 
                         const int **_block_edge_conn,
                         const int **_block_face_ids );
-
+  void getInverseConnectivity( const int **_node_block_conn,
+                               const int **_node_block_ptr,
+                               const int **_edge_block_conn,
+                               const int **_edge_block_ptr,
+                               const int **_face_block_conn,
+                               const int **_face_block_ptr );
+  
  private:
   // Compute the partition using METIS
   // ---------------------------------

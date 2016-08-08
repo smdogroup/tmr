@@ -781,6 +781,24 @@ void TMROctForest::setConnectivity( int _num_nodes,
 }
 
 /*
+  Get the array of octrees 
+*/
+int TMROctForest::getOctrees( TMROctree ***_trees ){
+  if (_trees){ *_trees = octrees; }
+  return num_blocks;
+}
+
+/*
+  Get mesh/ownership information
+*/
+int TMROctForest::getOwnedOctrees( const int **_owned_blocks ){
+  if (_owned_blocks){ 
+    *_owned_blocks = owned_blocks; 
+  }
+  return num_owned_blocks;
+}
+
+/*
   Retrieve information about the connectivity between 
   blocks, faces, edges and nodes
 */
@@ -798,6 +816,23 @@ void TMROctForest::getConnectivity( int *_nblocks, int *_nfaces,
   if (_block_face_conn){ *_block_face_conn = block_face_conn; }
   if (_block_edge_conn){ *_block_edge_conn = block_edge_conn; }
   if (_block_face_ids){ *_block_face_ids = block_face_ids; }
+}
+
+/*
+  Retrieve the inverse of the connectivity
+*/
+void TMROctForest::getInverseConnectivity( const int **_node_block_conn,
+                                           const int **_node_block_ptr,
+                                           const int **_edge_block_conn,
+                                           const int **_edge_block_ptr,
+                                           const int **_face_block_conn,
+                                           const int **_face_block_ptr ){
+  if (_node_block_conn){ *_node_block_conn = node_block_conn; }
+  if (_node_block_ptr){ *_node_block_ptr = node_block_ptr; }
+  if (_edge_block_conn){ *_edge_block_conn = edge_block_conn; }
+  if (_edge_block_ptr){ *_edge_block_ptr = edge_block_ptr; }
+  if (_face_block_conn){ *_face_block_conn = face_block_conn; }
+  if (_face_block_ptr){ *_face_block_ptr = face_block_ptr; }
 }
 
 /*
@@ -3570,8 +3605,8 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
   conn:     connectivity to each (global) independent node
   weights:  the weight values for each dependent node
 */
-int TMROctForest::createDependentNodes( int **_ptr, int **_conn, 
-                                        double **_weights ){
+int TMROctForest::createDepNodeConn( int **_ptr, int **_conn, 
+                                     double **_weights ){
   // Get the MPI rank
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
@@ -3740,19 +3775,6 @@ int TMROctForest::createDependentNodes( int **_ptr, int **_conn,
   return num_dep_nodes;
 }
 
-/*
-  Collect all the edge nodes
-*/
-/*
-void TMROctForest::collectEdgeFacePoints( ){
-  
-  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
-    int block = owned_blocks[owned];
-
-
-  }
-}
-*/
 /*
   Create the interpolation operator
 */

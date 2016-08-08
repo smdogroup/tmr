@@ -332,18 +332,21 @@ const int faceTriTable[16][10] = {
 /*
   The data structures required for the marching cubes algorithm
 */
-typedef struct {
+class Point {
+ public:
   double x, y, z;
-} Point;
+};
 
-typedef struct {
+class Triangle {
+ public:
   Point p[3];
-} Triangle;
+};
 
-typedef struct {
+class Cell {
+ public:
   Point p[8];
   double val[8];
-} Cell;
+};
 
 /*
   Linearly interpolate the position where an isosurface cuts an edge
@@ -476,33 +479,6 @@ void compute_normal( Triangle tri, double n[] ){
 }
 
 /*
-  Write out the triangular volume elements within the STL file
-*/
-void write_volume( FILE *fp, Cell *grid, double cutoff ){
-  Triangle triangles[5];
-  int ntri = polygonise(*grid, cutoff, triangles);
-
-  for ( int i = 0; i < ntri; i++ ){
-    double n[3];
-    compute_normal(triangles[i], n);
-
-    // Write the facet normal
-    fprintf(fp, "facet normal %e %e %e\n", 
-            n[0], n[1], n[2]);
-
-    // Write the vertex loop
-    fprintf(fp, "outer loop\n");
-    for ( int k = 0; k < 3; k++ ){
-      fprintf(fp, "vertex %e %e %e\n", 
-              triangles[i].p[k].x, 
-              triangles[i].p[k].y,
-              triangles[i].p[k].z);
-    }
-    fprintf(fp, "endloop\nendfacet\n");
-  }
-}
-
-/*
   Store the vertices on a block that correspond to each face
 */
 const int face_vertex[6][4] = {
@@ -561,9 +537,102 @@ int face_polygonize( Point *p, double vals[], double cutoff,
 }
 
 /*
+  Keep a list of all the triangles
+*/
+class TriangleList {
+ public:
+  TriangleList( Triangle *tris, int ntris ){
+    triangles = tris;
+    len = ntris;
+    max_len = ntris;
+    len_incr = ntris;
+  }
+  TriangleList( int _max_len ){
+    len = 0;
+    max_len = _max_len;
+    if (max_len < 100){ max_len = 100; }
+    len_incr = max_len;
+    triangles = new Triangle[ max_len ];
+  }
+  ~TriangleList(){
+    delete [] triangles;
+  }
+
+  // Add a triangle to the list
+  void addTriangle( Triangle *tri ){
+    if (len >= max_len){
+      max_len += len_incr;
+      Triangle *temp = new Triangle[ max_len ];
+      memcpy(temp, triangles, len*sizeof(Triangle));
+      delete [] triangles;
+      triangles = temp;
+    }
+    triangles[len] = *tri;
+    len++;
+  }
+
+  // Get the list of triangles
+  void getTriangles( Triangle **tris, int *ntris ){
+    *tris = triangles;
+    *ntris = len;
+  }
+
+  // Write all the triangles to a list
+  int writeSTLFile( const char *filename ){
+    // Open the file and see if we were successful
+    FILE *fp = fopen(filename, "w");
+    if (!fp){
+      return 1;
+    }
+    
+    fprintf(fp, "solid topology\n");
+    for ( int i = 0; i < len; i++ ){
+      double n[3];
+      compute_normal(triangles[i], n);
+      
+      // Write the facet normal
+      fprintf(fp, "facet normal %e %e %e\n", 
+              n[0], n[1], n[2]);
+      
+      // Write the vertex loop
+      fprintf(fp, "outer loop\n");
+      for ( int k = 0; k < 3; k++ ){
+        fprintf(fp, "vertex %e %e %e\n", 
+                triangles[i].p[k].x, 
+                triangles[i].p[k].y,
+                triangles[i].p[k].z);
+      }
+      fprintf(fp, "endloop\nendfacet\n");
+    }
+    
+    fprintf(fp, "endsolid topology\n");
+    fclose(fp);
+
+    return 0;
+  }
+
+ private:
+  int len, max_len, len_incr;
+  Triangle *triangles;
+};
+
+/*
+  Write out the triangular volume elements within the STL file
+*/
+void add_volume( TriangleList *list, Cell *grid, double cutoff ){
+  Triangle triangles[5];
+  int ntri = polygonise(*grid, cutoff, triangles);
+
+  // Add the triangles to the list
+  for ( int k = 0; k < ntri; k++ ){
+    list->addTriangle(&triangles[k]);
+  }
+}
+
+/*
   Write out the intersection of the face with the boundaries
 */
-void write_faces( FILE *fp, Cell *grid, double cutoff, int bound[] ){
+void add_faces( TriangleList *list, Cell *grid, double cutoff, int bound[] ){
   // Loop over each of the faces
   for ( int face = 0; face < 6; face++ ){
     // Extract the points and values from the face
@@ -582,24 +651,9 @@ void write_faces( FILE *fp, Cell *grid, double cutoff, int bound[] ){
       Triangle triangles[3];
       int ntri = face_polygonize(p, vals, cutoff, triangles);
 
-      // Write out all the triangles
-      for ( int i = 0; i < ntri; i++ ){
-        double n[3];
-        compute_normal(triangles[i], n);
-        
-        // Write the facet normal
-        fprintf(fp, "facet normal %e %e %e\n", 
-                n[0], n[1], n[2]);
-        
-        // Write the vertex loop
-        fprintf(fp, "outer loop\n");
-        for ( int k = 0; k < 3; k++ ){
-          fprintf(fp, "vertex %e %e %e\n", 
-                  triangles[i].p[k].x, 
-                  triangles[i].p[k].y,
-                  triangles[i].p[k].z);
-        }
-        fprintf(fp, "endloop\nendfacet\n");
+      // Add the triangles to the list
+      for ( int k = 0; k < ntri; k++ ){
+        list->addTriangle(&triangles[k]);
       }
     }
   }
@@ -612,104 +666,209 @@ void write_faces( FILE *fp, Cell *grid, double cutoff, int bound[] ){
 
 const int ordering_transform[] = {0, 1, 3, 2, 4, 5, 7, 6};
 
-void generate_stl_file( const char *filename,
-                        double *x,
-                        TMROctree *filter,
-                        double cutoff ){
+int TMR_GenerateBinFile( const char *filename,
+                          double *x, int x_step,
+                          TMROctForest *filter,
+                          double cutoff ){
+  // Get the MPI communicator
+  MPI_Comm comm = filter->getMPIComm();
+
   // Get the mesh from the filter
-  int nelem_filter; 
-  const int *filter_ptr, *filter_conn;
-  filter->getMesh(NULL, &nelem_filter, &filter_ptr, &filter_conn);
+  int nelem_filter, *filter_conn;
+  filter->createMeshConn(&filter_conn, &nelem_filter);
 
   // Get the dependent nodes and weight values
-  const int *dep_ptr, *dep_conn;
-  const double *dep_weights;
-  filter->getDependentMesh(NULL, &dep_ptr, &dep_conn, &dep_weights);
+  int *dep_ptr, *dep_conn;
+  double *dep_weights;
+  filter->createDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
 
-  if (!filter_ptr || !dep_ptr){
-    return;
-  }  
+  // Get the information required 
+  TMROctree **octrees;
+  int ntrees = filter->getOctrees(&octrees);
 
-  // Open the file and see if we were successful
-  FILE *fp = fopen(filename, "w");
-  if (!fp){
-    return;
-  }
-  fprintf(fp, "solid topology\n");
+  // Get the ownership information
+  const int *owned;
+  int nowned = filter->getOwnedOctrees(&owned);
 
-  // Retrieve the octant nodes for the list
-  TMROctantArray *elements;
-  filter->getElements(&elements);
+  // Set the maximum length of any of the block sides
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
-  // Get the array of octants
-  TMROctant *element_array;
-  elements->getArray(&element_array, NULL);
+  // Create the list of Triangles
+  TriangleList *list = new TriangleList(5000);
 
-  // Get the mesh coordinates from the filter
-  for ( int i = 0; i < nelem_filter; i++ ){
-    // Set the length of the side of a cube cube
-    const double dh = 4.0/(1 << TMR_MAX_LEVEL);
-    const int32_t h = 1 << (TMR_MAX_LEVEL - element_array[i].level);
+  // Loop over all the owned blocks
+  for ( int k = 0; k < nowned; k++ ){
+    int block = owned[k];
 
-    // Set the value of the X/Y/Z locations of the nodes
-    Cell cell;
+    // Retrieve the octant nodes for the list
+    TMROctantArray *elements;
+    octrees[block]->getElements(&elements);
 
-    for ( int j = 0, jp = filter_ptr[i]; 
-          jp < filter_ptr[i+1]; j++, jp++ ){
-      int node = filter_conn[jp];
-      double val = 0.0;
-      if (node >= 0){
-        // Set the value of the indepdnent design variable directly
-        val = x[node];
+    // Get the array of octants
+    int nelems;
+    TMROctant *element_array, *node_array;
+    elements->getArray(&element_array, &nelems);
+
+    // Get the mesh coordinates from the filter
+    for ( int i = 0; i < nelems; i++ ){
+      // Compute the side-length of this element
+      const int32_t h = 1 << (TMR_MAX_LEVEL - element_array[i].level);
+
+      // Set the value of the X/Y/Z locations of the nodes
+      Cell cell;
+
+      /*
+      for ( int j = 0, jp = filter_ptr[i]; jp < filter_ptr[i+1]; j++, jp++ ){
+        int node = filter_conn[jp];
+        double val = 0.0;
+        if (node >= 0){
+          // Set the value of the indepdnent design variable directly
+          val = x[node];
+        }
+        else {
+          node = -node-1;
+          
+          // Evaluate the value of the dependent design variable
+          val = 0.0;
+          for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
+            val += dep_weights[kp]*x[dep_conn[kp]];
+          }
+        }
+        cell.val[ordering_transform[j]] = val;
       }
-      else {
-        node = -node-1;
-        
-        // Evaluate the value of the dependent design variable
-        val = 0.0;
-        for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
-          val += dep_weights[kp]*x[dep_conn[kp]];
+      */
+      
+      // Keep track if any of the nodes lies on a boundary surface
+      int on_boundary[8];
+      int bound = 0;
+
+      // Get the octant points and determine whether the point is on a
+      // boundary
+
+      /*
+      // Find the X,Y,Z locations of the element nodes
+      for ( int kk = 0; kk < 2; kk++ ){
+        for ( int jj = 0; jj < 2; jj++ ){
+          for ( int ii = 0; ii < 2; ii++ ){
+            // Find the octant node (without level/tag)
+            TMROctant p;
+            p.x = element_array[i].x + ii*h;
+            p.y = element_array[i].y + jj*h;
+            p.z = element_array[i].z + kk*h;
+            
+            // Set the node location
+            int index = ordering_transform[ii + 2*jj + 4*kk];
+            cell.p[index].x = dh*p.x;
+            cell.p[index].y = dh*p.y;
+            cell.p[index].z = dh*p.z;
+
+            // Store whether this node is on the boundary
+            on_boundary[index] = filter->onBoundary(&p);
+            bound = bound || on_boundary[index];
+          }
         }
       }
-      cell.val[ordering_transform[j]] = val;
-    }
+      */
 
-    // Keep track if any of the nodes lies on a boundary surface
-    int on_boundary[8];
-    int bound = 0;
-
-    // Find the X,Y,Z locations of the element nodes
-    for ( int kk = 0; kk < 2; kk++ ){
-      for ( int jj = 0; jj < 2; jj++ ){
-        for ( int ii = 0; ii < 2; ii++ ){
-          // Find the octant node (without level/tag)
-          TMROctant p;
-          p.x = element_array[i].x + ii*h;
-          p.y = element_array[i].y + jj*h;
-          p.z = element_array[i].z + kk*h;
-                    
-          // Set the node location
-          int index = ordering_transform[ii + 2*jj + 4*kk];
-          cell.p[index].x = dh*p.x;
-          cell.p[index].y = dh*p.y;
-          cell.p[index].z = dh*p.z;
-
-          // Store whether this node is on the boundary
-          on_boundary[index] = filter->onBoundary(&p);
-          bound = bound || on_boundary[index];
-        }
+      // Write out the surface
+      add_volume(list, &cell, cutoff);
+      
+      // Write out the faces if they are on the boundary
+      if (bound){
+        add_faces(list, &cell, cutoff, on_boundary);
       }
-    }
-
-    // Write out the surface
-    write_volume(fp, &cell, cutoff);
-
-    // Write out the faces if they are on the boundary
-    if (bound){
-      write_faces(fp, &cell, cutoff, on_boundary);
     }
   }
 
-  fprintf(fp, "endsolid topology\n");
-  fclose(fp);
+  // Create the triangle data type required for output
+  MPI_Datatype MPI_Point_type = NULL;
+  MPI_Datatype MPI_Triangle_type = NULL;
+  int counts = 3;
+  MPI_Datatype type = MPI_DOUBLE;
+  MPI_Aint offset = 0;
+  MPI_Type_struct(1, &counts, &offset, &type, 
+                  &MPI_Point_type);
+  MPI_Type_struct(1, &counts, &offset, &MPI_Point_type, 
+                  &MPI_Triangle_type);
+
+  // Now, write out the triangles
+  int mpi_size, mpi_rank;  
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // Get the local triangles
+  int ntris;
+  Triangle *tris;
+  list->getTriangles(&tris, &ntris);
+
+  // Copy the filename to a non-const array
+  char *fname = new char[ strlen(filename)+1 ];
+  strcpy(fname, filename);
+
+  int *range = new int[ mpi_size+1 ];
+  range[0] = 0;
+  MPI_Allgather(&ntris, 1, MPI_INT, &range[1], 1, MPI_INT, comm);
+  for ( int i = 0; i < mpi_size; i++ ){
+    range[i+1] += range[i];
+  }
+
+  // Create the file and write out the information
+  int fail = 0;
+  MPI_File fp = NULL;
+  MPI_File_open(comm, fname, MPI_MODE_WRONLY | MPI_MODE_CREATE, 
+                MPI_INFO_NULL, &fp);
+
+  if (fp){
+    // Write out the integer indicating how many triangles there are
+    if (mpi_rank == 0){
+      MPI_File_write(fp, &range[mpi_size], 1, MPI_INT, MPI_STATUS_IGNORE);
+    }
+
+    // Write out all the triangles to the file
+    char datarep[] = "native";
+    MPI_File_set_view(fp, sizeof(int), MPI_Triangle_type, MPI_Triangle_type,
+                      datarep, MPI_INFO_NULL);
+    MPI_File_write_at_all(fp, range[mpi_rank], tris, ntris, MPI_Triangle_type,
+                          MPI_STATUS_IGNORE);
+    MPI_File_close(&fp);
+  }
+  else {
+    fail = 1;
+  }
+
+  delete [] range;
+  delete [] fname;
+  delete list;
+
+  return fail;
+}
+
+/*
+  Take the binary file generated from above and convert to the .STL
+  data format (in ASCII).
+*/
+int TMR_ConvertBinToSTL( const char *binfile,
+                         const char *stlfile ){
+  FILE *fp = fopen(binfile, "rb");
+
+  if (!fp){ return 1; }
+
+  // Try to read in the number of triangles
+  int ntris;
+  if (fread(&ntris, sizeof(int), 1, fp) != 1){
+    return 1;
+  }
+
+  // Read in the triangles themselves
+  Triangle *tris = new Triangle[ ntris ];
+  if (fread(tris, sizeof(Triangle), ntris, fp) != ntris){
+    delete [] tris;
+    return 1;
+  }
+
+  TriangleList *list = new TriangleList(tris, ntris);
+  list->writeSTLFile(stlfile);
+  delete list;
+
+  return 0;
 }
