@@ -110,16 +110,16 @@ inline void set_face_oct_coords( const int face_id, const int32_t h,
     *y = u;
   }
   else if (face_id == 5){
-    *x = hmax - h - u;
-    *y = v;
+    *x = u;
+    *y = hmax - h - v;
   }
   else if (face_id == 6){
     *x = hmax - h - v; 
     *y = hmax - h - u;
   }
   else {
-    *x = u; 
-    *y = hmax - h - v;
+    *x = hmax - h - u; 
+    *y = v;
   }
 }
 
@@ -195,16 +195,16 @@ inline void set_face_node_coords( const int face_id,
     *y = u;
   }
   else if (face_id == 5){
-    *x = hmax - u;
-    *y = v;
+    *x = u;
+    *y = hmax - v;
   }
   else if (face_id == 6){
     *x = hmax - v; 
     *y = hmax - u;
   }
   else {
-    *x = u;
-    *y = hmax - v;
+    *x = hmax - u;
+    *y = v;
   }
 }
 
@@ -2424,11 +2424,10 @@ void TMROctForest::computeDependentFaces(){
       if (array[i].level > 0 && 
           (child_id == 0 || child_id == 7)){        
         // Check the adjacent elements along each face
-        int face_index = 0, edge_index = 0;
+        int face_index = 0;
         TMROctant p = array[i];
         if (child_id == 7){
           face_index = 1;
-          edge_index = 1;            
           p.getSibling(0, &p);
         }
         p.level = p.level - 1;
@@ -3657,7 +3656,7 @@ int TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
           // Find the independent corner nodes
           TMROctant node;
           node.x = b->x + h*(c % 2);
-          node.y = b->y + h*(c % 4)/2;
+          node.y = b->y + h*((c % 4)/2);
           node.z = b->z + h*(c/4);
 
           // Find the independent nodes
@@ -3778,11 +3777,10 @@ int TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
 /*
   Create the interpolation operator
 */
-/*
 void TMROctForest::createInterpolation( TMROctForest *coarse,
                                         const int *cdep_ptr,
                                         const int *cdep_conn,
-                                        const int *cdep_weights,
+                                        const double *cdep_weights,
                                         int **_interp_ptr,
                                         int **_interp_conn,
                                         double **_interp_weights ){
@@ -3793,14 +3791,14 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
 
   // Get the MPI rank
   int mpi_rank;
-  MPI_Comm_rank(comm, &rank);
+  MPI_Comm_rank(comm, &mpi_rank);
 
   // Determine the number of fine nodes
   int nnodes = node_range[mpi_rank+1] - node_range[mpi_rank];
   
   // Set the current and maximum lengths of the connectivity array
   int conn_len = 0;
-  int max_conn_len = order*order*order*nnodes;
+  int max_conn_len = mesh_order*mesh_order*mesh_order*nnodes;
 
   // Allocate the arrays that store the interpolation data/weights
   int *interp_ptr = new int[ nnodes+1 ];
@@ -3808,216 +3806,217 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   double *interp_weights = new double[ max_conn_len ];
 
   // Set the number of interpolated nodes that have been set
-  int nnodes = 0;
+  nnodes = 0;
   interp_ptr[0] = 0;
 
   // The maximum possible size of the array of weights. Note
   // that this is found if every node is a dependent node (which is
   // impossible) which points to a dependent face node (also
   // impossible). It is an upper bound.
-  int max_size = (order*order*order)*(order*order);
+  int max_size = (mesh_order*mesh_order*mesh_order)*(mesh_order*mesh_order);
   TMRIndexWeight *weights = new TMRIndexWeight[ max_size ];
 
   // Loop over all the blocks and compute the interpolation
-  for ( int block = 0; block < num_blocks; block++ ){
-    if (octrees[block]){
-      // Get the nodes from the fine mesh
-      TMROctantArray *nodes;
-      octree[block]->getNodes(&nodes);
+  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
+    int block = owned_blocks[owned];
 
-      // Get the size of the fine node array
-      int fine_size;
-      TMROctant *fine;
-      nodes->getArray(&fine, &fine_size);
+    // Get the nodes from the fine and coarse mesh
+    TMROctantArray *nodes, *coarse_nodes;
+    octrees[block]->getNodes(&nodes);
+    coarse->octrees[block]->getNodes(&coarse_nodes);
 
-      for ( int i = 0; i < fine_size; i++ ){
-        // Use a node-based search
-        const int use_nodes = 1;
+    // Get the size of the fine node array
+    int fine_size;
+    TMROctant *fine;
+    nodes->getArray(&fine, &fine_size);
 
-        // Keep track of the number of new weight elements
-        int nweights = 0;
+    for ( int i = 0; i < fine_size; i++ ){
+      // Use a node-based search
+      const int use_nodes = 1;
 
-        // Loop over all the adjacent nodes
-        if (fine[i].tag >= 0){
-          TMROctant *t = coarse->nodes->contains(&fine[i], use_nodes);
-          if (t){
+      // Keep track of the number of new weight elements
+      int nweights = 0;
+
+      // Loop over all the adjacent nodes
+      if (fine[i].tag >= 0){
+        TMROctant *t = coarse_nodes->contains(&fine[i], use_nodes);
+        if (t){
+          if (t->tag >= 0){
+            weights[nweights].index = t->tag;
+            weights[nweights].weight = 1.0;
+            nweights++;
+          }
+          else {
+            // Unravel the dependent node connectivity
+            int node = -t->tag-1;
+            for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+              weights[nweights].index = cdep_conn[jp];
+              weights[nweights].weight = cdep_weights[jp];
+              nweights++;
+            }
+          }
+        }
+        else {
+          // Find the child-id of the node. The node uses the
+          // local length scale of the element
+          int id = fine[i].childId();
+          
+          // Set the element level
+          const int32_t h = 1 << (TMR_MAX_LEVEL - fine[i].level);
+          
+          if (id == 1 || id == 2 || id == 4){
+            // Get the root sibling
+            TMROctant n;
+            fine[i].getSibling(0, &n);
+            
+            // Get the node number of the 0-th sibling
+            t = coarse_nodes->contains(&n, use_nodes);
             if (t->tag >= 0){
               weights[nweights].index = t->tag;
-              weights[nweights].weight = 1.0;
+              weights[nweights].weight = 0.5;
               nweights++;
             }
             else {
-              // Unravel the dependent node connectivity
               int node = -t->tag-1;
               for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
                 weights[nweights].index = cdep_conn[jp];
-                weights[nweights].weight = cdep_weights[jp];
+                weights[nweights].weight = 0.5*cdep_weights[jp];
+                nweights++;
+              }
+            }
+
+            if (id == 1){
+              n.x = n.x + 2*h;
+            }
+            else if (id == 2){
+              n.y = n.y + 2*h;
+            }
+            else if (id == 4){
+              n.z = n.z + 2*h;
+            }
+            
+            // Get the node number of the other node 
+            t = coarse_nodes->contains(&n, use_nodes);
+            if (t->tag >= 0){
+              weights[nweights].index = t->tag;
+              weights[nweights].weight = 0.5;
+              nweights++;
+            }
+            else {
+              int node = -t->tag-1;
+              for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+                weights[nweights].index = cdep_conn[jp];
+                weights[nweights].weight = 0.5*cdep_weights[jp];
                 nweights++;
               }
             }
           }
-          else {
-            // Find the child-id of the node. The node uses the
-            // local length scale of the element
-            int id = fine[i].childId();
+          else if (id == 3 || id == 5 || id == 6){
+            // Get the root sibling
+            TMROctant n;
+            fine[i].getSibling(0, &n);
 
-            // Set the element level
-            const int32_t h = 1 << (TMR_MAX_LEVEL - fine[i].level);
+            int ie[] = {0, 0, 0};
+            int je[] = {0, 0, 0};
+            if (id == 3){
+              ie[0] = 1;  je[1] = 1;
+            }
+            else if (id == 5){
+              ie[0] = 1;  je[2] = 1;
+            }
+            else if (id == 6){
+              ie[1] = 1;  je[2] = 1;
+            }
 
-            if (id == 1 || id == 2 || id == 4){
-              // Get the root sibling
-              TMROctant n;
-              fine[i].getSibling(0, &n);
+            for ( int jj = 0; jj < 2; jj++ ){
+              for ( int ii = 0; ii < 2; ii++ ){
+                TMROctant p;
+                p.x = n.x + 2*h*(ii*ie[0] + jj*je[0]);
+                p.y = n.y + 2*h*(ii*ie[1] + jj*je[1]);
+                p.z = n.z + 2*h*(ii*ie[2] + jj*je[2]);
 
-              // Get the node number of the 0-th sibling
-              t = coarse->nodes->contains(&n, use_nodes);
-              if (t->tag >= 0){
-                weights[nweights].index = t->tag;
-                weights[nweights].weight = 0.5;
-                nweights++;
-              }
-              else {
-                int node = -t->tag-1;
-                for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-                  weights[nweights].index = cdep_conn[jp];
-                  weights[nweights].weight = 0.5*cdep_weights[jp];
+                // Get the node number of the other node 
+                t = coarse_nodes->contains(&p, use_nodes);
+                if (t->tag >= 0){
+                  weights[nweights].index = t->tag;
+                  weights[nweights].weight = 0.25;
                   nweights++;
                 }
-              }
-
-              if (id == 1){
-                n.x = n.x + 2*h;
-              }
-              else if (id == 2){
-                n.y = n.y + 2*h;
-              }
-              else if (id == 4){
-                n.z = n.z + 2*h;
-              }
-
-              // Get the node number of the other node 
-              t = coarse->nodes->contains(&n, use_nodes);
-              if (t->tag >= 0){
-                weights[nweights].index = t->tag;
-                weights[nweights].weight = 0.5;
-                nweights++;
-              }
-              else {
-                int node = -t->tag-1;
-                for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-                  weights[nweights].index = cdep_conn[jp];
-                  weights[nweights].weight = 0.5*cdep_weights[jp];
-                  nweights++;
+                else {
+                  int node = -t->tag-1;
+                  for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+                    weights[nweights].index = cdep_conn[jp];
+                    weights[nweights].weight = 0.25*cdep_weights[jp];
+                    nweights++;
+                  }
                 }
               }
             }
-            else if (id == 3 || id == 5 || id == 6){
-              // Get the root sibling
-              TMROctant n;
-              fine[i].getSibling(0, &n);
+          }
+          else if (id == 7){
+            // Get the root sibling
+            TMROctant n;
+            fine[i].getSibling(0, &n);
 
-              int ie[] = {0, 0, 0};
-              int je[] = {0, 0, 0};
-              if (id == 3){
-                ie[0] = 1;  je[1] = 1;
-              }
-              else if (id == 5){
-                ie[0] = 1;  je[2] = 1;
-              }
-              else if (id == 6){
-                ie[1] = 1;  je[2] = 1;
-              }
-
+            // Add the remaining nodes
+            for ( int kk = 0; kk < 2; kk++ ){
               for ( int jj = 0; jj < 2; jj++ ){
                 for ( int ii = 0; ii < 2; ii++ ){
                   TMROctant p;
-                  p.x = n.x + 2*h*(ii*ie[0] + jj*je[0]);
-                  p.y = n.y + 2*h*(ii*ie[1] + jj*je[1]);
-                  p.z = n.z + 2*h*(ii*ie[2] + jj*je[2]);
+                  p.x = n.x + 2*h*ii;
+                  p.y = n.y + 2*h*jj;
+                  p.z = n.z + 2*h*kk;
 
                   // Get the node number of the other node 
-                  t = coarse->nodes->contains(&p, use_nodes);
+                  t = coarse_nodes->contains(&p, use_nodes);
                   if (t->tag >= 0){
                     weights[nweights].index = t->tag;
-                    weights[nweights].weight = 0.25;
+                    weights[nweights].weight = 0.125;
                     nweights++;
                   }
                   else {
                     int node = -t->tag-1;
                     for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
                       weights[nweights].index = cdep_conn[jp];
-                      weights[nweights].weight = 0.25*cdep_weights[jp];
+                      weights[nweights].weight = 0.125*cdep_weights[jp];
                       nweights++;
                     }
                   }
                 }
               }
             }
-            else if (id == 7){
-              // Get the root sibling
-              TMROctant n;
-              fine[i].getSibling(0, &n);
-
-              // Add the remaining nodes
-              for ( int kk = 0; kk < 2; kk++ ){
-                for ( int jj = 0; jj < 2; jj++ ){
-                  for ( int ii = 0; ii < 2; ii++ ){
-                    TMROctant p;
-                    p.x = n.x + 2*h*ii;
-                    p.y = n.y + 2*h*jj;
-                    p.z = n.z + 2*h*kk;
-
-                    // Get the node number of the other node 
-                    t = coarse->nodes->contains(&p, use_nodes);
-                    if (t->tag >= 0){
-                      weights[nweights].index = t->tag;
-                      weights[nweights].weight = 0.125;
-                      nweights++;
-                    }
-                    else {
-                      int node = -t->tag-1;
-                      for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-                        weights[nweights].index = cdep_conn[jp];
-                        weights[nweights].weight = 0.125*cdep_weights[jp];
-                        nweights++;
-                      }
-                    }
-                  }
-                }
-              }
-            }
           }
-
-          // Sort the dependent weight values
-          nweights = TMRIndexWeight::uniqueSort(weights, nweights);
-      
-          // Check whether adding these will exceed the size
-          // of the array
-          if (interp_ptr[nnodes] + nweights >= max_conn_len){
-            int estimate = ((2.0*interp_ptr[nnodes]/nnodes)*(num_nodes - nnodes));
-            max_conn_len += estimate;
-            int *temp = new int[ max_conn_len ];
-            memcpy(temp, interp_conn, conn_len*sizeof(int));
-            delete [] interp_conn;
-            interp_conn = temp;
-        
-            double *tempw = new double[ max_conn_len ];
-            memcpy(tempw, interp_weights, conn_len*sizeof(double));
-            delete [] interp_weights;
-            interp_weights = tempw;
-          }
-
-          // Extract the weights from the sorted list
-          for ( int k = 0; k < nweights; k++ ){
-            interp_conn[conn_len] = weights[k].index;
-            interp_weights[conn_len] = weights[k].weight;
-            conn_len++;
-          }
-
-          // Increment the pointer
-          interp_ptr[nnodes+1] = conn_len;
-          nnodes++;
         }
+
+        // Sort the dependent weight values
+        nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+      
+        // Check whether adding these will exceed the size
+        // of the array
+        if (interp_ptr[nnodes] + nweights >= max_conn_len){
+          int estimate = ((2.0*interp_ptr[nnodes]/nnodes)*(num_nodes - nnodes));
+          max_conn_len += estimate;
+          int *temp = new int[ max_conn_len ];
+          memcpy(temp, interp_conn, conn_len*sizeof(int));
+          delete [] interp_conn;
+          interp_conn = temp;
+        
+          double *tempw = new double[ max_conn_len ];
+          memcpy(tempw, interp_weights, conn_len*sizeof(double));
+          delete [] interp_weights;
+          interp_weights = tempw;
+        }
+
+        // Extract the weights from the sorted list
+        for ( int k = 0; k < nweights; k++ ){
+          interp_conn[conn_len] = weights[k].index;
+          interp_weights[conn_len] = weights[k].weight;
+          conn_len++;
+        }
+
+        // Increment the pointer
+        interp_ptr[nnodes+1] = conn_len;
+        nnodes++;
       }
     }
   }
@@ -4030,16 +4029,15 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   *_interp_conn = interp_conn;
   *_interp_weights = interp_weights;
 }
-*/
 
 /*
   Create the restriction operator
 */
 /*
-void TMROctree::createRestriction( TMROctree *tree,
-                                   int **_interp_ptr,
-                                   int **_interp_conn,
-                                   double **_interp_weights ){
+void TMROctForest::createRestriction( TMROctree *tree,
+                                      int **_interp_ptr,
+                                      int **_interp_conn,
+                                      double **_interp_weights ){
   // Set the pointers to NULL
   *_interp_ptr = NULL;
   *_interp_conn = NULL;
@@ -4175,4 +4173,4 @@ void TMROctree::createRestriction( TMROctree *tree,
   *_interp_conn = interp_conn;
   *_interp_weights = interp_weights;
 }
-*/
+//*/

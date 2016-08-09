@@ -52,6 +52,15 @@ class TMROctForest {
   int createDepNodeConn( int **_ptr, int **_conn,
                          double **_weights );
 
+  // Create interpolation/restriction operators
+  // ------------------------------------------
+  void createInterpolation( TMROctForest *coarse, 
+                            const int *cdep_ptr,
+                            const int *cdep_conn, 
+                            const double *cdep_weights,
+                            int **_interp_ptr, int **_interp_conn,
+                            double **_interp_weights );
+
   // Get the array of octrees - careful, many are NULL
   // -------------------------------------------------
   int getOctrees( TMROctree ***_trees );

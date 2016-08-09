@@ -161,9 +161,19 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
-  TMROctForest *forest = new TMROctForest(comm);
+  const int MAX_NUM_MESH = 5;
+  TMROctForest *forest[MAX_NUM_MESH];
 
+  // The dependent node information and the interpolation
+  int *cdep_ptr[MAX_NUM_MESH], *cdep_conn[MAX_NUM_MESH];
+  double *cdep_weights[MAX_NUM_MESH];
+
+  // Create the forests
+  forest[0] = new TMROctForest(comm);
+
+  // Get the MPI rank
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 
@@ -176,9 +186,9 @@ int main( int argc, char *argv[] ){
     Xpts = box_xpts;
     elem_node_conn = box_conn;
 
-    forest->setConnectivity(nnodes, box_conn,
-                            nelems, partition);
-    forest->createRandomTrees(50, 0, 10);
+    forest[0]->setConnectivity(nnodes, box_conn,
+                               nelems, partition);
+    forest[0]->createRandomTrees(50, 0, 10);
   }
   else {
     // Create the TACSMeshLoader class
@@ -190,8 +200,8 @@ int main( int argc, char *argv[] ){
     int nnodes, nelems;
     mesh->getConnectivity(&nnodes, &nelems, NULL, 
                           &elem_node_conn, &Xpts);
-    forest->setConnectivity(nnodes, elem_node_conn, 
-                            nelems, partition);
+    forest[0]->setConnectivity(nnodes, elem_node_conn, 
+                               nelems, partition);
     
     // Set the refinement increasing out the wing
     int *refine = new int[ nelems ];
@@ -206,7 +216,7 @@ int main( int argc, char *argv[] ){
         (max_refine - min_refine)*(1.0 - (y_ref/y_max));
     }
   
-    forest->createTrees(refine);
+    forest[0]->createTrees(refine);
     delete [] refine;
   }
 
@@ -215,8 +225,8 @@ int main( int argc, char *argv[] ){
     int nblocks, nfaces, nedges, nnodes;
     const int *face_ids;
     const int *block_faces;
-    forest->getConnectivity(&nblocks, &nfaces, &nedges, &nnodes,
-                            NULL, &block_faces, NULL, &face_ids);
+    forest[0]->getConnectivity(&nblocks, &nfaces, &nedges, &nnodes,
+                               NULL, &block_faces, NULL, &face_ids);
 
     // Check if any of the blocks have element
     for ( int i = 0; i < nblocks; i++ ){
@@ -252,70 +262,100 @@ int main( int argc, char *argv[] ){
 
   // Repartition the octrees
   printf("[%d] Repartition\n", mpi_rank);
-  forest->repartition();
+  forest[0]->repartition();
 
-  printf("[%d] Balance\n", mpi_rank);
-  double tbal = MPI_Wtime();
-  forest->balance(1);
-  tbal = MPI_Wtime() - tbal;
+  for ( int level = 0; level < MAX_NUM_MESH; level++ ){  
+    printf("[%d] Balance\n", mpi_rank);
+    double tbal = MPI_Wtime();
+    forest[level]->balance((level == 0));
+    tbal = MPI_Wtime() - tbal;
 
-  printf("[%d] Create nodes\n", mpi_rank);
-  double tnodes = MPI_Wtime();
-  forest->createNodes(2);
-  tnodes = MPI_Wtime() - tnodes;
+    printf("[%d] Create nodes\n", mpi_rank);
+    double tnodes = MPI_Wtime();
+    forest[level]->createNodes(2);
+    tnodes = MPI_Wtime() - tnodes;
 
-  // Create the mesh
-  double tmesh = MPI_Wtime();
-  int *conn, nfe = 0;
-  forest->createMeshConn(&conn, &nfe);
-  tmesh = MPI_Wtime() - tmesh;
+    // Create the mesh
+    double tmesh = MPI_Wtime();
+    int *conn, nfe = 0;
+    forest[level]->createMeshConn(&conn, &nfe);
+    tmesh = MPI_Wtime() - tmesh;
+
+    // Create the local dependent node information
+    forest[level]->createDepNodeConn(&cdep_ptr[level], &cdep_conn[level],
+                                     &cdep_weights[level]);
+
+
+    if (level > 0){
+      int *ptr, *conn;
+      double *weights;
+      forest[level-1]->createInterpolation(forest[level],
+                                           cdep_ptr[level], 
+                                           cdep_conn[level],
+                                           cdep_weights[level],
+                                           &ptr, &conn, &weights);
+      delete [] ptr;
+      delete [] conn;
+      delete [] weights;
+    }
+
+
+    int ntotal = 0;
+    MPI_Allreduce(&nfe, &ntotal, 1, MPI_INT, MPI_SUM, comm);
+
+    // Get the rank
+    if (mpi_rank == 0){
+      printf("balance:  %15.5f s\n", tbal);
+      printf("nodes:    %15.5f s\n", tnodes);
+      printf("mesh:     %15.5f s\n", tmesh);
+      printf("nelems:   %15d\n", ntotal);
+    }
   
-  // Get the octrees within the forest
-  TMROctree **octrees;
-  int ntrees = forest->getOctrees(&octrees);
+    // Get the octrees within the forest
+    TMROctree **octrees;
+    int ntrees = forest[level]->getOctrees(&octrees);
 
-  const int *owned;
-  int nowned = forest->getOwnedOctrees(&owned);
-  for ( int k = 0; k < nowned; k++ ){
-    int block = owned[k];
+    const int *owned;
+    int nowned = forest[level]->getOwnedOctrees(&owned);
+    for ( int k = 0; k < nowned; k++ ){
+      int block = owned[k];
 
-    // The list of points
-    TMRPoint *X;
-    octrees[block]->getPoints(&X);
+      // The list of points
+      TMRPoint *X;
+      octrees[block]->getPoints(&X);
     
-    // Get the octant nodes
-    TMROctantArray *nodes;
-    octrees[block]->getNodes(&nodes);
+      // Get the octant nodes
+      TMROctantArray *nodes;
+      octrees[block]->getNodes(&nodes);
+      
+      // Get the array
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
 
-    // Get the array
-    int size;
-    TMROctant *array;
-    nodes->getArray(&array, &size);
-
-    // Loop over all the nodes
-    for ( int i = 0; i < size; i++ ){
-      getLocation(block, elem_node_conn, Xpts,
-                  &array[i], &X[i]);
+      // Loop over all the nodes
+      for ( int i = 0; i < size; i++ ){
+        getLocation(block, elem_node_conn, Xpts,
+                    &array[i], &X[i]);
+      }
+    }
+    if (level+1 < MAX_NUM_MESH){
+      forest[level+1] = forest[level]->coarsen();
     }
   }
 
-  int ntotal = 0;
-  MPI_Allreduce(&nfe, &ntotal, 1, MPI_INT, MPI_SUM, comm);
-
-  // Get the rank
-  int rank;
-  MPI_Comm_rank(comm, &rank);
-
-  if (rank == 0){
-    printf("balance:  %15.5f s\n", tbal);
-    printf("nodes:    %15.5f s\n", tnodes);
-    printf("mesh:     %15.5f s\n", tmesh);
-    printf("nelems:   %15d\n", ntotal);
-  }
+  // Get the octrees within the forest
+  int print_level = MAX_NUM_MESH-1;
+  TMROctree **octrees;
+  int ntrees = forest[print_level]->getOctrees(&octrees);
+  
+  // Get the owned trees
+  const int *owned;
+  int nowned = forest[print_level]->getOwnedOctrees(&owned);
 
   // Write out a file for each processor - bad practice!
   char filename[128];
-  sprintf(filename, "parallel%d.dat", rank);
+  sprintf(filename, "parallel%d.dat", mpi_rank);
   FILE *fp = fopen(filename, "w");
 
   // Write the tecplot header
@@ -379,7 +419,9 @@ int main( int argc, char *argv[] ){
   }
   
   fclose(fp);
-  delete forest;
+  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
+    delete forest[level];
+  }
 
   TMRFinalize();
   MPI_Finalize();
