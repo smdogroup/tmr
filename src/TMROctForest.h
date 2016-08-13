@@ -49,15 +49,12 @@ class TMROctForest {
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
-  int createDepNodeConn( int **_ptr, int **_conn,
-                         double **_weights );
+  int getDepNodeConn( const int **_ptr, const int **_conn,
+                      const double **_weights );
 
   // Create interpolation/restriction operators
   // ------------------------------------------
   void createInterpolation( TMROctForest *coarse, 
-                            const int *cdep_ptr,
-                            const int *cdep_conn, 
-                            const double *cdep_weights,
                             int **_interp_ptr, int **_interp_conn,
                             double **_interp_weights );
 
@@ -131,7 +128,7 @@ class TMROctForest {
   void recvOctNeighbors();
     
   // Label the dependent nodes on the locally owned blocks
-  void labelDependentFaceNodes( const int order );
+  void labelDependentFaceNodes();
   int checkAdjacentDepFaces( int face, int face_index,
                              int block_owner, TMROctant *b );
   void computeDependentFaces();
@@ -165,6 +162,10 @@ class TMROctForest {
                           const int *edge_block_owners,
                           const int *node_block_owners );
 
+  // Create the dependent node connectivity
+  void createDepNodeConn( int **_ptr, int **_conn,
+                          double **_weights );
+
   // The communicator
   MPI_Comm comm;
 
@@ -193,9 +194,11 @@ class TMROctForest {
 
   // The following data is processor-local
   // -------------------------------------
-  // Set the elements, nodes and dependent nodes
+  // The number of elements and dependent nodes
   int num_elements;
   int num_dep_nodes;
+  int *dep_ptr, *dep_conn;
+  double *dep_weights;
 
   // Keep a pointer to the forest of quadtrees
   TMROctree **octrees;

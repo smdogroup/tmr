@@ -167,8 +167,8 @@ int main( int argc, char *argv[] ){
   TMROctForest *forest[MAX_NUM_MESH];
 
   // The dependent node information and the interpolation
-  int *cdep_ptr[MAX_NUM_MESH], *cdep_conn[MAX_NUM_MESH];
-  double *cdep_weights[MAX_NUM_MESH];
+  const int *cdep_ptr[MAX_NUM_MESH], *cdep_conn[MAX_NUM_MESH];
+  const double *cdep_weights[MAX_NUM_MESH];
 
   // Create the forests
   forest[0] = new TMROctForest(comm);
@@ -282,17 +282,14 @@ int main( int argc, char *argv[] ){
     tmesh = MPI_Wtime() - tmesh;
 
     // Create the local dependent node information
-    forest[level]->createDepNodeConn(&cdep_ptr[level], &cdep_conn[level],
-                                     &cdep_weights[level]);
+    forest[level]->getDepNodeConn(&cdep_ptr[level], &cdep_conn[level],
+                                  &cdep_weights[level]);
 
 
     if (level > 0){
       int *ptr, *conn;
       double *weights;
       forest[level-1]->createInterpolation(forest[level],
-                                           cdep_ptr[level], 
-                                           cdep_conn[level],
-                                           cdep_weights[level],
                                            &ptr, &conn, &weights);
       delete [] ptr;
       delete [] conn;

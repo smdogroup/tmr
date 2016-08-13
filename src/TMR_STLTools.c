@@ -678,9 +678,9 @@ int TMR_GenerateBinFile( const char *filename,
   filter->createMeshConn(&filter_conn, &nelem_filter);
 
   // Get the dependent nodes and weight values
-  int *dep_ptr, *dep_conn;
-  double *dep_weights;
-  filter->createDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+  const int *dep_ptr, *dep_conn;
+  const double *dep_weights;
+  filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
 
   // Get the information required 
   TMROctree **octrees;
