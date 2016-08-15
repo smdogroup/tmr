@@ -364,7 +364,6 @@ int main( int argc, char *argv[] ){
     forest[level]->createMeshConn(&conn, &nfe);
     tmesh = MPI_Wtime() - tmesh;
 
-    /*
     if (level > 0){
       int *ptr, *conn;
       double *weights;
@@ -374,7 +373,6 @@ int main( int argc, char *argv[] ){
       delete [] conn;
       delete [] weights;
     }
-    */
 
     int ntotal = 0;
     MPI_Allreduce(&nfe, &ntotal, 1, MPI_INT, MPI_SUM, comm);

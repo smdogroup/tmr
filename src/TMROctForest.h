@@ -168,6 +168,12 @@ class TMROctForest {
   void createDepNodeConn( int **_ptr, int **_conn,
                           double **_weights );
 
+  // Add the nodal weighting values to an interpolant
+  void addNodeWeights( TMROctant *t, double w,
+                       const int *cdep_ptr, const int *cdep_conn,
+                       const double *cdep_weights,
+                       TMRIndexWeight *weights, int *nweights );
+
   // The communicator
   MPI_Comm comm;
 

@@ -4048,6 +4048,32 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
 }
 
 /*
+  Add the node weights to the array. This eliminates dependent nodes
+  by unrolling the dependency information.
+*/
+void TMROctForest::addNodeWeights( TMROctant *t, double w,
+                                   const int *cdep_ptr,
+                                   const int *cdep_conn,
+                                   const double *cdep_weights,
+                                   TMRIndexWeight *weights, 
+                                   int *nweights ){
+  if (t->tag >= 0){
+    weights[*nweights].index = t->tag;
+    weights[*nweights].weight = w;
+    (*nweights)++;
+  }
+  else {
+    // Unravel the dependent node connectivity
+    int node = -t->tag-1;
+    for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+      weights[*nweights].index = cdep_conn[jp];
+      weights[*nweights].weight = w*cdep_weights[jp];
+      (*nweights)++;
+    }
+  }
+}
+
+/*
   Create the interpolation operator
 */
 void TMROctForest::createInterpolation( TMROctForest *coarse,
@@ -4058,6 +4084,19 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   *_interp_ptr = NULL;
   *_interp_conn = NULL;
   *_interp_weights = NULL;
+
+  // Set the node weights
+  const double wt2[] = {0.5, 0.5};
+  const double wt31[] = {0.375, 0.75, -0.125};
+  const double wt32[] = {-0.125, 0.75, 0.375};
+  const double *wt[2] = {NULL, NULL};
+  if (mesh_order == 2){
+    wt[0] = wt[1] = wt2;
+  }
+  else { // mesh_order == 3
+    wt[0] = wt31;
+    wt[1] = wt32;
+  }
 
   // Get the dependent node information
   const int *cdep_ptr, *cdep_conn;
@@ -4077,22 +4116,27 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
     mesh_order*mesh_order*mesh_order*nnodes;
 
   // Allocate the arrays that store the interpolation data/weights
-  int *interp_ptr = new int[ nnodes+1 ];
-  int *interp_conn = new int[ max_conn_len ];
-  double *interp_weights = new double[ max_conn_len ];
+  int *pos = new int[ nnodes ];
+  int *flags = new int[ nnodes ];
+  memset(flags, 0, nnodes*sizeof(int));
+
+  // Record the connectivity for these nodes
+  int *ptr = new int[ nnodes+1 ];
+  int *conn = new int[ max_conn_len ];
+  double *weights = new double[ max_conn_len ];
 
   // Set the number of interpolated nodes that have been set
-  nnodes = 0;
-  interp_ptr[0] = 0;
+  ptr[0] = 0;
 
   // The maximum possible size of the array of weights. Note
   // that this is found if every node is a dependent node (which is
   // impossible) which points to a dependent face node (also
   // impossible). It is an upper bound.
   int max_size = (mesh_order*mesh_order*mesh_order)*(mesh_order*mesh_order);
-  TMRIndexWeight *weights = new TMRIndexWeight[ max_size ];
+  TMRIndexWeight *wlist = new TMRIndexWeight[ max_size ];
 
   // Loop over all the blocks and compute the interpolation
+  int count = 0;
   for ( int owned = 0; owned < num_owned_blocks; owned++ ){
     int block = owned_blocks[owned];
 
@@ -4108,200 +4152,197 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
 
     for ( int i = 0; i < fine_size; i++ ){
       // Use a node-based search
-      const int use_nodes = 1;
+      const int use_node_search = 1;
 
       // Keep track of the number of new weight elements
       int nweights = 0;
-
+      
       // Get the node number
       int node_num = fine[i].tag;
+      int loc = node_num - node_range[mpi_rank];
 
       // Loop over all the adjacent nodes
       if (node_num >= node_range[mpi_rank] && 
-          node_num < node_range[mpi_rank+1]){
-        TMROctant *t = coarse_nodes->contains(&fine[i], use_nodes);
+          node_num < node_range[mpi_rank+1] && 
+          (flags[loc] == 0)){
+        // Flag that we've reached this node and store the true
+        // location of the interpolation based on the node number
+        flags[loc] = 1;
+        pos[count] = loc;
+
+        // Retrieve the octant pointer
+        TMROctant *t = coarse_nodes->contains(&fine[i], use_node_search);
         if (t){
-          if (t->tag >= 0){
-            weights[nweights].index = t->tag;
-            weights[nweights].weight = 1.0;
-            nweights++;
-          }
-          else {
-            // Unravel the dependent node connectivity
-            int node = -t->tag-1;
-            for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-              weights[nweights].index = cdep_conn[jp];
-              weights[nweights].weight = cdep_weights[jp];
-              nweights++;
-            }
-          }
+          addNodeWeights(t, 1.0, cdep_ptr, cdep_conn, cdep_weights,
+                         wlist, &nweights);
         }
         else {
-          // Find the child-id of the node. The node uses the
-          // local length scale of the element
-          int id = fine[i].childId();
-          
           // Set the element level
-          const int32_t h = 1 << (TMR_MAX_LEVEL - fine[i].level);
+          const int32_t h = 2*(mesh_order-1)*(1 << (TMR_MAX_LEVEL - fine[i].level));
+          const int32_t hc = 1 << (TMR_MAX_LEVEL - fine[i].level);
           
-          if (id == 1 || id == 2 || id == 4){
-            // Get the root sibling
-            TMROctant n;
-            fine[i].getSibling(0, &n);
-            
-            // Get the node number of the 0-th sibling
-            t = coarse_nodes->contains(&n, use_nodes);
-            if (t->tag >= 0){
-              weights[nweights].index = t->tag;
-              weights[nweights].weight = 0.5;
-              nweights++;
-            }
-            else {
-              int node = -t->tag-1;
-              for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-                weights[nweights].index = cdep_conn[jp];
-                weights[nweights].weight = 0.5*cdep_weights[jp];
-                nweights++;
-              }
-            }
+          // Compute the offsets to the node locations
+          int32_t px = fine[i].x % h;
+          int32_t py = fine[i].y % h;
+          int32_t pz = fine[i].z % h;
 
-            if (id == 1){
-              n.x = n.x + 2*h;
-            }
-            else if (id == 2){
-              n.y = n.y + 2*h;
-            }
-            else if (id == 4){
-              n.z = n.z + 2*h;
-            }
-            
-            // Get the node number of the other node 
-            t = coarse_nodes->contains(&n, use_nodes);
-            if (t->tag >= 0){
-              weights[nweights].index = t->tag;
-              weights[nweights].weight = 0.5;
-              nweights++;
-            }
-            else {
-              int node = -t->tag-1;
-              for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-                weights[nweights].index = cdep_conn[jp];
-                weights[nweights].weight = 0.5*cdep_weights[jp];
-                nweights++;
-              }
-            }
-          }
-          else if (id == 3 || id == 5 || id == 6){
-            // Get the root sibling
-            TMROctant n;
-            fine[i].getSibling(0, &n);
-
-            int ie[] = {0, 0, 0};
-            int je[] = {0, 0, 0};
-            if (id == 3){
-              ie[0] = 1;  je[1] = 1;
-            }
-            else if (id == 5){
-              ie[0] = 1;  je[2] = 1;
-            }
-            else if (id == 6){
-              ie[1] = 1;  je[2] = 1;
-            }
-
-            for ( int jj = 0; jj < 2; jj++ ){
-              for ( int ii = 0; ii < 2; ii++ ){
-                TMROctant p;
-                p.x = n.x + 2*h*(ii*ie[0] + jj*je[0]);
-                p.y = n.y + 2*h*(ii*ie[1] + jj*je[1]);
-                p.z = n.z + 2*h*(ii*ie[2] + jj*je[2]);
-
-                // Get the node number of the other node 
-                t = coarse_nodes->contains(&p, use_nodes);
-                if (t->tag >= 0){
-                  weights[nweights].index = t->tag;
-                  weights[nweights].weight = 0.25;
-                  nweights++;
-                }
-                else {
-                  int node = -t->tag-1;
-                  for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-                    weights[nweights].index = cdep_conn[jp];
-                    weights[nweights].weight = 0.25*cdep_weights[jp];
-                    nweights++;
-                  }
+          // Add to the interpolation depending on the values of px, py, and pz
+          if (px && py && pz){
+            for ( int kk = 0; kk < mesh_order; kk++ ){
+              for ( int jj = 0; jj < mesh_order; jj++ ){
+                for ( int ii = 0; ii < mesh_order; ii++ ){
+                  TMROctant node = fine[i];
+                  node.x = (fine[i].x - px) + h*ii;
+                  node.y = (fine[i].y - py) + h*jj;
+                  node.z = (fine[i].z - pz) + h*kk;
+                  t = coarse_nodes->contains(&node, use_node_search);
+                  double w = wt[px/hc][ii]*wt[py/hc][jj]*wt[pz/hc][kk];
+                  addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
+                                 wlist, &nweights);
                 }
               }
             }
           }
-          else if (id == 7){
-            // Get the root sibling
-            TMROctant n;
-            fine[i].getSibling(0, &n);
-
-            // Add the remaining nodes
-            for ( int kk = 0; kk < 2; kk++ ){
-              for ( int jj = 0; jj < 2; jj++ ){
-                for ( int ii = 0; ii < 2; ii++ ){
-                  TMROctant p;
-                  p.x = n.x + 2*h*ii;
-                  p.y = n.y + 2*h*jj;
-                  p.z = n.z + 2*h*kk;
-
-                  // Get the node number of the other node 
-                  t = coarse_nodes->contains(&p, use_nodes);
-                  if (t->tag >= 0){
-                    weights[nweights].index = t->tag;
-                    weights[nweights].weight = 0.125;
-                    nweights++;
-                  }
-                  else {
-                    int node = -t->tag-1;
-                    for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-                      weights[nweights].index = cdep_conn[jp];
-                      weights[nweights].weight = 0.125*cdep_weights[jp];
-                      nweights++;
-                    }
-                  }
-                }
+          else if (py && pz){
+            for ( int kk = 0; kk < mesh_order; kk++ ){
+              for ( int jj = 0; jj < mesh_order; jj++ ){
+                TMROctant node = fine[i];
+                node.y = (fine[i].y - py) + h*jj;
+                node.z = (fine[i].z - pz) + h*kk;
+                t = coarse_nodes->contains(&node, use_node_search);
+                double w = wt[py/hc][jj]*wt[pz/hc][kk];
+                addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
+                               wlist, &nweights);
               }
+            }          
+          }
+          else if (px && pz){
+            for ( int kk = 0; kk < mesh_order; kk++ ){
+              for ( int ii = 0; ii < mesh_order; ii++ ){
+                TMROctant node = fine[i];
+                node.x = (fine[i].x - px) + h*ii;
+                node.z = (fine[i].z - pz) + h*kk;
+                t = coarse_nodes->contains(&node, use_node_search);
+                double w = wt[px/hc][ii]*wt[pz/hc][kk];
+                addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
+                               wlist, &nweights);
+              }            
+            }
+          }
+          else if (px && py){
+            for ( int jj = 0; jj < mesh_order; jj++ ){
+              for ( int ii = 0; ii < mesh_order; ii++ ){
+                TMROctant node = fine[i];
+                node.x = (fine[i].x - px) + h*ii;
+                node.y = (fine[i].y - py) + h*jj;
+                t = coarse_nodes->contains(&node, use_node_search);
+                double w = wt[px/hc][ii]*wt[py/hc][jj];
+                addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
+                               wlist, &nweights);
+              }
+            }
+          }
+          else if (px){
+            for ( int ii = 0; ii < mesh_order; ii++ ){
+              TMROctant node = fine[i];
+              node.x = (fine[i].x - px) + h*ii;
+              t = coarse_nodes->contains(&node, use_node_search);
+              addNodeWeights(t, wt[px/hc][ii], cdep_ptr, cdep_conn, cdep_weights,
+                             wlist, &nweights);
+            }
+          }
+          else if (py){
+            for ( int jj = 0; jj < mesh_order; jj++ ){
+              TMROctant node = fine[i];
+              node.y = (fine[i].y - py) + h*jj;
+              t = coarse_nodes->contains(&node, use_node_search);
+              addNodeWeights(t, wt[py/hc][jj], cdep_ptr, cdep_conn, cdep_weights,
+                             wlist, &nweights);
+            }
+          }
+          else if (pz){
+            for ( int kk = 0; kk < mesh_order; kk++ ){
+              TMROctant node = fine[i];
+              node.z = (fine[i].z - pz) + h*kk;
+              t = coarse_nodes->contains(&node, use_node_search);
+              addNodeWeights(t, wt[pz/hc][kk], cdep_ptr, cdep_conn, cdep_weights,
+                             wlist, &nweights);
             }
           }
         }
 
         // Sort the dependent weight values
-        nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+        nweights = TMRIndexWeight::uniqueSort(wlist, nweights);
       
-        // Check whether adding these will exceed the size
-        // of the array
-        if (interp_ptr[nnodes] + nweights >= max_conn_len){
-          int estimate = ((2.0*interp_ptr[nnodes]/nnodes)*(num_nodes - nnodes));
+        // Check whether adding the new weights will exceed the size
+        // of the allocated array
+        if (ptr[count] + nweights >= max_conn_len){
+          // Estimate the final size of the array
+          int estimate = ptr[count] + (1 + 2*ptr[count]/count)*(nnodes - count);
           max_conn_len += estimate;
+
+          // Allocate a new array of the new estimated size
           int *temp = new int[ max_conn_len ];
-          memcpy(temp, interp_conn, conn_len*sizeof(int));
-          delete [] interp_conn;
-          interp_conn = temp;
+          memcpy(temp, conn, conn_len*sizeof(int));
+          delete [] conn;
+          conn = temp;
         
+          // Copy over the weight values as well
           double *tempw = new double[ max_conn_len ];
-          memcpy(tempw, interp_weights, conn_len*sizeof(double));
-          delete [] interp_weights;
-          interp_weights = tempw;
+          memcpy(tempw, weights, conn_len*sizeof(double));
+          delete [] weights;
+          weights = tempw;
         }
 
         // Extract the weights from the sorted list
         for ( int k = 0; k < nweights; k++ ){
-          interp_conn[conn_len] = weights[k].index;
-          interp_weights[conn_len] = weights[k].weight;
+          conn[conn_len] = wlist[k].index;
+          weights[conn_len] = wlist[k].weight;
           conn_len++;
         }
 
         // Increment the pointer
-        interp_ptr[nnodes+1] = conn_len;
-        nnodes++;
+        ptr[count+1] = conn_len;
+        count++;
       }
     }
   }
 
-  // Free the weights
+  printf("nnodes = %d\ncount = %d\n",
+         nnodes, count);
+
+  // Free the weights and flags
+  delete [] wlist;
+  delete [] flags;
+
+  // Allocate new interpolation arrays with tight bounds
+  int *interp_ptr = new int[ nnodes+1 ];
+  int *interp_conn = new int[ conn_len ];
+  double *interp_weights = new double[ conn_len ];
+
+  // Set the pointer array so that it offsets into the true global
+  // ordering of the nodes
+  interp_ptr[0] = 0;
+  for ( int k = 0; k < nnodes; k++ ){
+    interp_ptr[pos[k]+1] = ptr[k+1] - ptr[k];
+  }
+  for ( int k = 1; k < nnodes+1; k++ ){
+    interp_ptr[k] += interp_ptr[k-1];
+  }
+
+  // Set the new interpolation values
+  for ( int k = 0; k < nnodes; k++ ){
+    int node = pos[k];
+    int len = ptr[k+1] - ptr[k];
+    for ( int j = 0; j < len; j++ ){
+      interp_conn[interp_ptr[node] + j] = conn[ptr[k] + j];
+      interp_weights[interp_ptr[node] + j] = weights[ptr[k] + j];
+    }
+  }
+
+  delete [] pos;
+  delete [] ptr;
+  delete [] conn;
   delete [] weights;
 
   // Set the return arrays
