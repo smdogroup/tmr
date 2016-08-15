@@ -363,7 +363,7 @@ TMROctant* TMROctree::findEnclosing( TMROctant *oct ){
 void TMROctree::findEnclosingRange( TMROctant *oct,
 				    int *low, int *high ){
   *low = 0;
-  *high = num_elements;
+  elements->getArray(NULL, high);
 
   // Find the maximum level
   int32_t h = 1 << (TMR_MAX_LEVEL - oct->level);

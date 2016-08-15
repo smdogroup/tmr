@@ -128,10 +128,12 @@ class TMROctForest {
   void recvOctNeighbors();
     
   // Label the dependent nodes on the locally owned blocks
-  void labelDependentFaceNodes();
+  void labelDependentNodes();
   int checkAdjacentDepFaces( int face, int face_index,
                              int block_owner, TMROctant *b );
-  void computeDependentFaces();
+  int checkAdjacentDepEdges( int edge, int edge_index,
+                             int block_owner, TMROctant *b );
+  void computeDepFacesAndEdges();
 
   // Get the owner flags
   void getOwnerFlags( int block, int mpi_rank,
@@ -205,6 +207,7 @@ class TMROctForest {
 
   // Pointers to the dependent faces/edges
   TMROctantArray **dep_faces;
+  TMROctantArray **dep_edges;
 
   // A short cut to the owned blocks
   int num_owned_blocks;

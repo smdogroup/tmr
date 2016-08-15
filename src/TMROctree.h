@@ -115,17 +115,6 @@ class TMROctree {
 
   // Store the order of the mesh
   int order;
-
-  // The number of elements and independent and dependent nodes
-  int num_elements;
-  int num_nodes, num_dependent_nodes;
-
-  // The mesh connectivity
-  int *elem_ptr, *elem_conn;
-  
-  // The dependent mesh connectivity
-  int *dep_ptr, *dep_conn;
-  double *dep_weights;
 };
 
 #endif // TMR_OCTANT_TREE_H

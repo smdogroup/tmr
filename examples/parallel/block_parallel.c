@@ -2,6 +2,8 @@
 #include "TACSMeshLoader.h"
 
 /*
+  The box problem
+
   Bottom surface      Top surface
   12-------- 14       13 ------- 15
   | \      / |        | \      / |
@@ -11,6 +13,8 @@
   | /      \ |        | /      \ |
   8 -------- 10       9 -------- 11
 */
+const int box_npts = 16;
+const int box_nelems = 7;
 
 const double box_xpts[] = 
   {-.5, -.5, -.5,
@@ -38,6 +42,83 @@ const int box_conn[] =
    9, 13, 4, 6, 8, 12, 0, 2, 
    10, 14, 8, 12, 1, 3, 0, 2,
    4, 5, 6, 7, 9, 11, 13, 15};
+
+/*
+  Definitions for the connector problem
+*/
+const int connector_npts = 52;
+const int connector_nelems = 15;
+
+const double connector_xpts[] = 
+  {-0.375, -0.375, -0.125,
+   0.375, -0.375, -0.125,
+   -0.125, -0.125, -0.125,
+   0.125, -0.125, -0.125,
+   -0.125, 0.125, -0.125,
+   0.125, 0.125, -0.125,
+   -0.075, 0.25, -0.125,
+   0.075, 0.25, -0.125,
+   -0.375, 0.375, -0.125,
+   0.375, 0.375, -0.125,
+   -0.25, 0.475, -0.125,
+   0.25, 0.475, -0.125,
+   -0.25, 1.475, -0.125,
+   0.25, 1.475, -0.125,
+   -0.45, 1.675, -0.125,
+   0.45, 1.675, -0.125,
+   -0.3125, 1.875, -0.125,
+   0.3125, 1.875, -0.125,
+   -0.175, 1.825, -0.125,
+   0.175, 1.825, -0.125,
+   -0.45, 2.425, -0.125,
+   0.45, 2.425, -0.125,
+   -0.3125, 2.425, -0.125,
+   0.3125, 2.425, -0.125,
+   -0.175, 2.425, -0.125,
+   0.175, 2.425, -0.125,
+   -0.375, -0.375, 0.125,
+   0.375, -0.375, 0.125,
+   -0.125, -0.125, 0.125,
+   0.125, -0.125, 0.125,
+   -0.125, 0.125, 0.125,
+   0.125, 0.125, 0.125,
+   -0.075, 0.25, 0.125,
+   0.075, 0.25, 0.125,
+   -0.375, 0.375, 0.125,
+   0.375, 0.375, 0.125,
+   -0.25, 0.475, 0.125,
+   0.25, 0.475, 0.125,
+   -0.25, 1.475, 0.125,
+   0.25, 1.475, 0.125,
+   -0.45, 1.675, 0.125,
+   0.45, 1.675, 0.125,
+   -0.3125, 1.875, 0.125,
+   0.3125, 1.875, 0.125,
+   -0.175, 1.825, 0.125,
+   0.175, 1.825, 0.125,
+   -0.45, 2.425, 0.125,
+   0.45, 2.425, 0.125,
+   -0.3125, 2.425, 0.125,
+   0.3125, 2.425, 0.125,
+   -0.175, 2.425, 0.125,
+   0.175, 2.425, 0.125};
+
+const int connector_conn[] = 
+  {0, 1, 2, 3, 26, 27, 28, 29,
+   0, 2, 8, 4, 26, 28, 34, 30,
+   3, 1, 5, 9, 29, 27, 31, 35,
+   4, 5, 6, 7, 30, 31, 32, 33,
+   6, 7, 10, 11, 32, 33, 36, 37,
+   8, 4, 10, 6, 34, 30, 36, 32,
+   7, 5, 11, 9, 33, 31, 37, 35,
+   10, 11, 12, 13, 36, 37, 38, 39,
+   12, 13, 18, 19, 38, 39, 44, 45,
+   14, 12, 16, 18, 40, 38, 42, 44,
+   13, 15, 19, 17, 39, 41, 45, 43,
+   14, 16, 20, 22, 40, 42, 46, 48,
+   16, 18, 22, 24, 42, 44, 48, 50,
+   19, 17, 25, 23, 45, 43, 51, 49,
+   17, 15, 23, 21, 43, 41, 49, 47};
 
 /*
   Interpoalte from the connectivity/node locations
@@ -151,13 +232,28 @@ int main( int argc, char *argv[] ){
   TMRInitialize();
 
   int partition = 0;
-  int box_problem = 0;
+  
+  // The "super-node" locations
+  int npts = 0;
+  int nelems = 0;
+  const double *Xpts = NULL;
+  const int *elem_node_conn = NULL;
+
   for ( int k = 0; k < argc; k++ ){
     if (strcmp(argv[k], "partition") == 0){
       partition = 1;
     }
     if (strcmp(argv[k], "box") == 0){
-      box_problem = 1;
+      npts = box_npts;
+      nelems = box_nelems;
+      Xpts = box_xpts;
+      elem_node_conn = box_conn;
+    }
+    if (strcmp(argv[k], "connector") == 0){
+      npts = connector_npts;
+      nelems = connector_nelems;
+      Xpts = connector_xpts;
+      elem_node_conn = connector_conn;
     }
   }
 
@@ -166,10 +262,6 @@ int main( int argc, char *argv[] ){
   const int MAX_NUM_MESH = 5;
   TMROctForest *forest[MAX_NUM_MESH];
 
-  // The dependent node information and the interpolation
-  const int *cdep_ptr[MAX_NUM_MESH], *cdep_conn[MAX_NUM_MESH];
-  const double *cdep_weights[MAX_NUM_MESH];
-
   // Create the forests
   forest[0] = new TMROctForest(comm);
 
@@ -177,16 +269,8 @@ int main( int argc, char *argv[] ){
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 
-  // The "super-node" locations
-  const double *Xpts = NULL;
-  const int *elem_node_conn = NULL;
-  if (box_problem){
-    int nnodes = 16;
-    int nelems = 7;
-    Xpts = box_xpts;
-    elem_node_conn = box_conn;
-
-    forest[0]->setConnectivity(nnodes, box_conn,
+  if (Xpts && elem_node_conn){
+    forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
     forest[0]->createRandomTrees(50, 0, 10);
   }
@@ -197,10 +281,9 @@ int main( int argc, char *argv[] ){
     mesh->scanBDFFile("uCRM_3D_box_mesh.bdf");
     
     // Extract the connectivity
-    int nnodes, nelems;
-    mesh->getConnectivity(&nnodes, &nelems, NULL, 
+    mesh->getConnectivity(&npts, &nelems, NULL, 
                           &elem_node_conn, &Xpts);
-    forest[0]->setConnectivity(nnodes, elem_node_conn, 
+    forest[0]->setConnectivity(npts, elem_node_conn, 
                                nelems, partition);
     
     // Set the refinement increasing out the wing
@@ -281,11 +364,7 @@ int main( int argc, char *argv[] ){
     forest[level]->createMeshConn(&conn, &nfe);
     tmesh = MPI_Wtime() - tmesh;
 
-    // Create the local dependent node information
-    forest[level]->getDepNodeConn(&cdep_ptr[level], &cdep_conn[level],
-                                  &cdep_weights[level]);
-
-
+    /*
     if (level > 0){
       int *ptr, *conn;
       double *weights;
@@ -295,7 +374,7 @@ int main( int argc, char *argv[] ){
       delete [] conn;
       delete [] weights;
     }
-
+    */
 
     int ntotal = 0;
     MPI_Allreduce(&nfe, &ntotal, 1, MPI_INT, MPI_SUM, comm);
@@ -369,13 +448,13 @@ int main( int argc, char *argv[] ){
     // Get the points
     TMRPoint *X;
     int nnodes = octrees[block]->getPoints(&X);
-    int nelems = octrees[block]->getNumElements();
+    int ne = octrees[block]->getNumElements();
 
     // Get the node array
     TMROctant *array;
     nodes->getArray(&array, NULL);
 
-    fprintf(fp, "ZONE T=TMR%d N=%d E=%d ", block, nnodes, nelems);
+    fprintf(fp, "ZONE T=TMR%d N=%d E=%d ", block, nnodes, ne);
     fprintf(fp, "DATAPACKING=POINT ZONETYPE=FEBRICK\n");
 
     // Write out this portion of the forrest
@@ -385,12 +464,12 @@ int main( int argc, char *argv[] ){
     }
 
     // Get the elements
-    elements->getArray(&array, &nelems);
+    elements->getArray(&array, &ne);
 
     TMROctant *node_array;
     nodes->getArray(&node_array, NULL);
 
-    for ( int i = 0; i < nelems; i++ ){
+    for ( int i = 0; i < ne; i++ ){
       int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
       int index[8];
 
