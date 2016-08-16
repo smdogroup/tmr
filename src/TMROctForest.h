@@ -136,7 +136,7 @@ class TMROctForest {
   void computeDepFacesAndEdges();
 
   // Get the owner flags
-  void getOwnerFlags( int block, int mpi_rank,
+  void getOwnerFlags( int block,
                       const int *face_block_owners,
                       const int *edge_block_owners,
                       const int *node_block_owners,

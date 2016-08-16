@@ -2786,7 +2786,7 @@ void TMROctForest::labelDependentNodes(){
   Return an array of flags to indicate whether the given block owns
   each of the faces, edges and nodes
 */
-void TMROctForest::getOwnerFlags( int block, int mpi_rank,
+void TMROctForest::getOwnerFlags( int block,
                                   const int *face_block_owners,
                                   const int *edge_block_owners,
                                   const int *node_block_owners,
@@ -2794,17 +2794,10 @@ void TMROctForest::getOwnerFlags( int block, int mpi_rank,
                                   int *is_edge_owner, 
                                   int *is_node_owner ){
   // Check whether the block owns the node, edge or node
-  if (is_face_owner){
+  if (is_node_owner){
     for ( int k = 0; k < 8; k++ ){
       int node = block_conn[8*block + k];
-      int block = node_block_owners[node];
-      int owner = mpi_block_owners[block];
-      if (owner == mpi_rank){
-        is_node_owner[k] = 1;
-      }
-      else {
-        is_node_owner[k] = 0;
-      }
+      is_node_owner[k] = (node_block_owners[node] == block);
     }
   }
   
@@ -2812,14 +2805,7 @@ void TMROctForest::getOwnerFlags( int block, int mpi_rank,
   if (is_edge_owner){
     for ( int k = 0; k < 12; k++ ){
       int edge = block_edge_conn[12*block + k];
-      int block = edge_block_owners[edge];
-      int owner = mpi_block_owners[block];
-      if (owner == mpi_rank){
-        is_edge_owner[k] = 1;
-      }
-      else {
-        is_edge_owner[k] = 0;
-      }
+      is_edge_owner[k] = (edge_block_owners[edge] == block);
     }
   }
   
@@ -2827,14 +2813,7 @@ void TMROctForest::getOwnerFlags( int block, int mpi_rank,
   if (is_face_owner){
     for ( int k = 0; k < 6; k++ ){
       int face = block_face_conn[6*block + k];
-      int block = face_block_owners[face];
-      int owner = mpi_block_owners[block];
-      if (owner == mpi_rank){
-        is_face_owner[k] = 1;
-      }
-      else {
-        is_face_owner[k] = 0;
-      }
+      is_face_owner[k] = (face_block_owners[face] == block);
     }
   }
 }
@@ -2874,7 +2853,7 @@ void TMROctForest::orderGlobalNodes( const int *face_block_owners,
 
     // Check whether the block owns the nodes, edges or faces 
     int is_face_owner[6], is_edge_owner[12], is_node_owner[8];
-    getOwnerFlags(block, mpi_rank, face_block_owners, 
+    getOwnerFlags(block, face_block_owners, 
                   edge_block_owners, node_block_owners,
                   is_face_owner, is_edge_owner, is_node_owner);
 
@@ -2962,7 +2941,7 @@ void TMROctForest::orderGlobalNodes( const int *face_block_owners,
 
     // Check whether the block owns the nodes, edges or faces 
     int is_face_owner[6], is_edge_owner[12], is_node_owner[8];
-    getOwnerFlags(block, mpi_rank, face_block_owners, 
+    getOwnerFlags(block, face_block_owners, 
                   edge_block_owners, node_block_owners,
                   is_face_owner, is_edge_owner, is_node_owner);
 
@@ -4164,7 +4143,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
       // Loop over all the adjacent nodes
       if (node_num >= node_range[mpi_rank] && 
           node_num < node_range[mpi_rank+1] && 
-          (flags[loc] == 0)){
+          flags[loc] == 0){
         // Flag that we've reached this node and store the true
         // location of the interpolation based on the node number
         flags[loc] = 1;
@@ -4278,7 +4257,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
         // of the allocated array
         if (ptr[count] + nweights >= max_conn_len){
           // Estimate the final size of the array
-          int estimate = ptr[count] + (1 + 2*ptr[count]/count)*(nnodes - count);
+          int estimate = (1 + 2*ptr[count]/count)*(nnodes - count);
           max_conn_len += estimate;
 
           // Allocate a new array of the new estimated size
@@ -4295,15 +4274,14 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
         }
 
         // Extract the weights from the sorted list
-        for ( int k = 0; k < nweights; k++ ){
+        for ( int k = 0; k < nweights; k++, conn_len++ ){
           conn[conn_len] = wlist[k].index;
           weights[conn_len] = wlist[k].weight;
-          conn_len++;
         }
 
         // Increment the pointer
-        ptr[count+1] = conn_len;
         count++;
+        ptr[count] = conn_len;
       }
     }
   }
