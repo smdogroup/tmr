@@ -3,6 +3,7 @@
 #include "TACSAssembler.h"
 #include "TACSMg.h"
 #include "BVecInterp.h"
+#include "Solid.h"
 
 /*
   The box problem
@@ -237,6 +238,7 @@ int main( int argc, char *argv[] ){
   int partition = 0;
   
   // The "super-node" locations
+  int order = 2;
   int npts = 0;
   int nelems = 0;
   const double *Xpts = NULL;
@@ -258,6 +260,10 @@ int main( int argc, char *argv[] ){
       Xpts = connector_xpts;
       elem_node_conn = connector_conn;
     }
+    if (sscanf(argv[k], "order=%d", &order) == 1){
+      if (order < 2){ order = 2; }
+      if (order > 3){ order = 3; }
+    }
   }
 
   // Define the different forest levels
@@ -276,7 +282,7 @@ int main( int argc, char *argv[] ){
   if (Xpts && elem_node_conn){
     forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
-    forest[0]->createRandomTrees(50, 0, 10);
+    forest[0]->createRandomTrees(50, 0, 5);
   }
   else {
     // Create the TACSMeshLoader class
@@ -332,15 +338,10 @@ int main( int argc, char *argv[] ){
       }
     }
 
+    // Print out the number of blocks, faces, edges and nodes
     printf("nblocks = %d\nnfaces = %d\nnedges = %d\nnnodes = %d\n", 
            nblocks, nfaces, nedges, nnodes);
-    // Print out the face connectivity
-    for ( int k = 0; k < nblocks; k++ ){
-      printf("block[%d] = %d %d  %d %d  %d %d\n",
-             k, block_faces[6*k], block_faces[6*k+1], 
-             block_faces[6*k+2], block_faces[6*k+3], 
-             block_faces[6*k+4], block_faces[6*k+5]);
-    }
+
     // Print out the face id counts
     for ( int k = 0; k < 8; k++ ){
       printf("face_id_count[%d] = %d\n", k, face_id_count[k]);
@@ -358,7 +359,6 @@ int main( int argc, char *argv[] ){
     tbal = MPI_Wtime() - tbal;
 
     printf("[%d] Create nodes\n", mpi_rank);
-    int order = 2;
     double tnodes = MPI_Wtime();
     forest[level]->createNodes(order);
     tnodes = MPI_Wtime() - tnodes;
@@ -370,17 +370,19 @@ int main( int argc, char *argv[] ){
     tmesh = MPI_Wtime() - tmesh;
 
     // Find the number of nodes for this processor
-    int nnodes = range[mpi_rank+1] - range[mpi_rank];
     const int *range;
     forest[level]->getOwnedNodeRange(&range);
+    int num_nodes = range[mpi_rank+1] - range[mpi_rank];
 
     // Get the dependent node information
     const int *dep_ptr, *dep_conn;
     const double *dep_weights;
-    int ndep = forest[level]->getDepNodeConn(&dep_ptr, &dep_conn,
-                                             &dep_weights);
+    int num_dep_nodes = 
+      forest[level]->getDepNodeConn(&dep_ptr, &dep_conn,
+                                    &dep_weights);
 
     // Create the associated TACSAssembler object
+    int vars_per_node = 3;
     tacs[level] =
       new TACSAssembler(comm, vars_per_node,
                         num_nodes, num_elements,
@@ -405,15 +407,22 @@ int main( int argc, char *argv[] ){
     // ..................................
     // ..................................
 
+    TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
+    SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
+    TACSElement *solid = NULL;
+    if (order == 2){
+      solid = new Solid<2>(stiff);
+    }
+    else if (order == 3){
+      solid = new Solid<3>(stiff);
+    }
+
     // Create the elements
     TACSElement **elements = new TACSElement*[ num_elements ];
-
-
-    // Set the elements
+    for ( int i = 0; i < num_elements; i++ ){
+      elements[i] = solid;
+    }
     tacs[level]->setElements(elements);
-
-
-
 
     // Initialize
     tacs[level]->initialize();
@@ -463,6 +472,7 @@ int main( int argc, char *argv[] ){
                     &array[i], &X[i]);
       }
     }
+
     if (level+1 < MAX_NUM_MESH){
       forest[level+1] = forest[level]->coarsen();
     }

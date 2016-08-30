@@ -181,7 +181,6 @@ class TMROctForest {
                        const int *cdep_ptr, const int *cdep_conn,
                        const double *cdep_weights,
                        TMRIndexWeight *weights, int *nweights );
-
   // The communicator
   MPI_Comm comm;
 

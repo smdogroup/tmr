@@ -2681,10 +2681,6 @@ void TMROctForest::computeDepFacesAndEdges(){
     // Delete the queues
     delete dfaces;
     delete dedges;
-
-    // Sort the new arrays
-    dep_faces[owned]->sort();
-    dep_edges[owned]->sort();
   }
 }
 
@@ -3738,7 +3734,7 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
       // For all searches/comparisons, we use node numbers
       const int use_nodes = 1;
           
-      // Add all of the nodes from the adjacent elements
+      // Add all of the nodes from this element
       const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level - (mesh_order-2));
       TMROctant p;
       p.level = array[i].level;
@@ -3753,7 +3749,7 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
             // Get the index for the node
             TMROctant *t = nodes->contains(&p, use_nodes);
             
-            // Reset the node level if the element level is smaller
+            // Reset the node level if the element is smaller
             if (array[i].level > t->level){
               t->level = array[i].level;
             }
@@ -3998,20 +3994,20 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
         if ((ii % 2 == 1) && (jj % 2 == 1)){
           for ( int j = 0, kk = 0; j < mesh_order; j++ ){
             for ( int i = 0; i < mesh_order; kk++, i++ ){
-              conn[ptr[node] + kk] = fn[m*i + (m*j)*n];
+              conn[ptr[node] + kk] = fn[2*i + (2*j)*n];
               weights[ptr[node] + kk] = wt[ii/2][i]*wt[jj/2][j];
             }
           }
         }
         else if (ii % 2 == 1){
           for ( int i = 0; i < mesh_order; i++ ){
-            conn[ptr[node] + i] = fn[m*i + jj*n];
+            conn[ptr[node] + i] = fn[2*i + jj*n];
             weights[ptr[node] + i] = wt[ii/2][i];
           }
         }
         else if (jj % 2 == 1){
           for ( int j = 0; j < mesh_order; j++ ){
-            conn[ptr[node] + j] = fn[ii + (m*j)*n];
+            conn[ptr[node] + j] = fn[ii + (2*j)*n];
             weights[ptr[node] + j] = wt[jj/2][j];
           }
         }
@@ -4026,7 +4022,7 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
       int node = -en[ii]-1;
       if (ii % 2 == 1){
         for ( int i = 0; i < mesh_order; i++ ){
-          conn[ptr[node] + i] = en[(mesh_order-1)*i];
+          conn[ptr[node] + i] = en[2*i];
           weights[ptr[node] + i] = wt[ii/2][i];
         }
       }
@@ -4195,10 +4191,15 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
                          wlist, &nweights);
         }
         else {
-          // Set the element level
-          const int32_t h = 2*(mesh_order-1)*(1 << (TMR_MAX_LEVEL - fine[i].level));
-          const int32_t hc = 1 << (TMR_MAX_LEVEL - fine[i].level);
+          // Get the element size for the fine mesh
+          const int32_t h = 2*(1 << (TMR_MAX_LEVEL - fine[i].level));
+
+          // The finite-element spacing for the fine mesh
+          const int32_t hf = 1 << (TMR_MAX_LEVEL - fine[i].level - (mesh_order-2));
           
+          // The mesh size of the coarse mesh
+          const int32_t hc = 2*hf;
+
           // Compute the offsets to the node locations
           int32_t px = fine[i].x % h;
           int32_t py = fine[i].y % h;
@@ -4210,9 +4211,9 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
               for ( int jj = 0; jj < mesh_order; jj++ ){
                 for ( int ii = 0; ii < mesh_order; ii++ ){
                   TMROctant node = fine[i];
-                  node.x = (fine[i].x - px) + h*ii;
-                  node.y = (fine[i].y - py) + h*jj;
-                  node.z = (fine[i].z - pz) + h*kk;
+                  node.x = (fine[i].x - px) + hc*ii;
+                  node.y = (fine[i].y - py) + hc*jj;
+                  node.z = (fine[i].z - pz) + hc*kk;
                   t = coarse_nodes->contains(&node, use_node_search);
                   double w = wt[px/hc][ii]*wt[py/hc][jj]*wt[pz/hc][kk];
                   addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
@@ -4225,8 +4226,8 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
             for ( int kk = 0; kk < mesh_order; kk++ ){
               for ( int jj = 0; jj < mesh_order; jj++ ){
                 TMROctant node = fine[i];
-                node.y = (fine[i].y - py) + h*jj;
-                node.z = (fine[i].z - pz) + h*kk;
+                node.y = (fine[i].y - py) + hc*jj;
+                node.z = (fine[i].z - pz) + hc*kk;
                 t = coarse_nodes->contains(&node, use_node_search);
                 double w = wt[py/hc][jj]*wt[pz/hc][kk];
                 addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
@@ -4238,8 +4239,8 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
             for ( int kk = 0; kk < mesh_order; kk++ ){
               for ( int ii = 0; ii < mesh_order; ii++ ){
                 TMROctant node = fine[i];
-                node.x = (fine[i].x - px) + h*ii;
-                node.z = (fine[i].z - pz) + h*kk;
+                node.x = (fine[i].x - px) + hc*ii;
+                node.z = (fine[i].z - pz) + hc*kk;
                 t = coarse_nodes->contains(&node, use_node_search);
                 double w = wt[px/hc][ii]*wt[pz/hc][kk];
                 addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
@@ -4251,8 +4252,8 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
             for ( int jj = 0; jj < mesh_order; jj++ ){
               for ( int ii = 0; ii < mesh_order; ii++ ){
                 TMROctant node = fine[i];
-                node.x = (fine[i].x - px) + h*ii;
-                node.y = (fine[i].y - py) + h*jj;
+                node.x = (fine[i].x - px) + hc*ii;
+                node.y = (fine[i].y - py) + hc*jj;
                 t = coarse_nodes->contains(&node, use_node_search);
                 double w = wt[px/hc][ii]*wt[py/hc][jj];
                 addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
@@ -4263,7 +4264,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
           else if (px){
             for ( int ii = 0; ii < mesh_order; ii++ ){
               TMROctant node = fine[i];
-              node.x = (fine[i].x - px) + h*ii;
+              node.x = (fine[i].x - px) + hc*ii;
               t = coarse_nodes->contains(&node, use_node_search);
               addNodeWeights(t, wt[px/hc][ii], cdep_ptr, cdep_conn, cdep_weights,
                              wlist, &nweights);
@@ -4272,7 +4273,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
           else if (py){
             for ( int jj = 0; jj < mesh_order; jj++ ){
               TMROctant node = fine[i];
-              node.y = (fine[i].y - py) + h*jj;
+              node.y = (fine[i].y - py) + hc*jj;
               t = coarse_nodes->contains(&node, use_node_search);
               addNodeWeights(t, wt[py/hc][jj], cdep_ptr, cdep_conn, cdep_weights,
                              wlist, &nweights);
@@ -4281,7 +4282,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
           else if (pz){
             for ( int kk = 0; kk < mesh_order; kk++ ){
               TMROctant node = fine[i];
-              node.z = (fine[i].z - pz) + h*kk;
+              node.z = (fine[i].z - pz) + hc*kk;
               t = coarse_nodes->contains(&node, use_node_search);
               addNodeWeights(t, wt[pz/hc][kk], cdep_ptr, cdep_conn, cdep_weights,
                              wlist, &nweights);
