@@ -1,5 +1,8 @@
 #include "TMROctForest.h"
 #include "TACSMeshLoader.h"
+#include "TACSAssembler.h"
+#include "TACSMg.h"
+#include "BVecInterp.h"
 
 /*
   The box problem
@@ -261,6 +264,7 @@ int main( int argc, char *argv[] ){
   MPI_Comm comm = MPI_COMM_WORLD;
   const int MAX_NUM_MESH = 5;
   TMROctForest *forest[MAX_NUM_MESH];
+  TACSAssembler *tacs[MAX_NUM_MESH];
 
   // Create the forests
   forest[0] = new TMROctForest(comm);
@@ -354,15 +358,65 @@ int main( int argc, char *argv[] ){
     tbal = MPI_Wtime() - tbal;
 
     printf("[%d] Create nodes\n", mpi_rank);
+    int order = 2;
     double tnodes = MPI_Wtime();
-    forest[level]->createNodes(2);
+    forest[level]->createNodes(order);
     tnodes = MPI_Wtime() - tnodes;
 
     // Create the mesh
     double tmesh = MPI_Wtime();
-    int *conn, nfe = 0;
-    forest[level]->createMeshConn(&conn, &nfe);
+    int *conn, num_elements = 0;
+    forest[level]->createMeshConn(&conn, &num_elements);
     tmesh = MPI_Wtime() - tmesh;
+
+    // Find the number of nodes for this processor
+    int nnodes = range[mpi_rank+1] - range[mpi_rank];
+    const int *range;
+    forest[level]->getOwnedNodeRange(&range);
+
+    // Get the dependent node information
+    const int *dep_ptr, *dep_conn;
+    const double *dep_weights;
+    int ndep = forest[level]->getDepNodeConn(&dep_ptr, &dep_conn,
+                                             &dep_weights);
+
+    // Create the associated TACSAssembler object
+    tacs[level] =
+      new TACSAssembler(comm, vars_per_node,
+                        num_nodes, num_elements,
+                        num_dep_nodes);
+
+    // Set the element ptr
+    int *ptr = new int[ order*order*order*num_elements ];
+    for ( int i = 0; i < num_elements+1; i++ ){
+      ptr[i] = order*order*order*i;
+    }
+    
+    // Set the element connectivity into TACSAssembler
+    tacs[level]->setElementConnectivity(conn, ptr);
+    delete [] conn;
+    delete [] ptr;
+    
+    // Set the dependent node information
+    tacs[level]->setDependentNodes(dep_ptr, dep_conn,
+                                   dep_weights);
+
+    // Set the boundary conditions.......
+    // ..................................
+    // ..................................
+
+    // Create the elements
+    TACSElement **elements = new TACSElement*[ num_elements ];
+
+
+    // Set the elements
+    tacs[level]->setElements(elements);
+
+
+
+
+    // Initialize
+    tacs[level]->initialize();
 
     if (level > 0){
       int *ptr, *conn;
@@ -374,15 +428,11 @@ int main( int argc, char *argv[] ){
       delete [] weights;
     }
 
-    int ntotal = 0;
-    MPI_Allreduce(&nfe, &ntotal, 1, MPI_INT, MPI_SUM, comm);
-
     // Get the rank
     if (mpi_rank == 0){
       printf("balance:  %15.5f s\n", tbal);
       printf("nodes:    %15.5f s\n", tnodes);
       printf("mesh:     %15.5f s\n", tmesh);
-      printf("nelems:   %15d\n", ntotal);
     }
   
     // Get the octrees within the forest

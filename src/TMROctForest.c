@@ -2532,8 +2532,18 @@ int TMROctForest::checkAdjacentDepEdges( int edge,
 }
 
 /*
-  Label the dependent nodes (hanging edge/face nodes) on each block
+  Compute the dependent nodes (hanging edge/face nodes) on each block
   and on the interfaces between adjacent blocks.
+
+  The hanging face nodes may occur on any face within the block and
+  are associated with the 4 parallel hanging edge nodes.  Within this
+  code, we only store the corresponding face node and use the
+  associated edges. Edge nodes along block interfaces may be hanging
+  even if there is no associated hanging face node.
+
+  side effects:
+  dep_faces:   a list of the dependent faces
+  dep_edges:   a list of dependent edges (aligned with block edges)
 */
 void TMROctForest::computeDepFacesAndEdges(){
   int mpi_rank;
@@ -2667,8 +2677,14 @@ void TMROctForest::computeDepFacesAndEdges(){
     // Create the arrays of the dependent nodes/faces
     dep_faces[owned] = dfaces->toArray();
     dep_edges[owned] = dedges->toArray();
+
+    // Delete the queues
     delete dfaces;
     delete dedges;
+
+    // Sort the new arrays
+    dep_faces[owned]->sort();
+    dep_edges[owned]->sort();
   }
 }
 
@@ -2677,7 +2693,7 @@ void TMROctForest::computeDepFacesAndEdges(){
 
   This code is called after all the dependent faces have been
   computed.  Note that this relies on the mesh being edge-balanced
-  (which is required).
+  (which is required). 
 */
 void TMROctForest::labelDependentNodes(){
   int mpi_rank;
@@ -4029,6 +4045,17 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
 /*
   Add the node weights to the array. This eliminates dependent nodes
   by unrolling the dependency information.
+
+  input:
+  t:             the octant node
+  w:             the weight for this node
+  cdep_ptr:      the dependent node pointer for the coarse mesh
+  cdep_conn:     the dependent node connectivity for the coarse mesh
+  cdep_weights:  the dependent node weights for the coarse mesh
+
+  input/output: 
+  weights:       the list of index weights
+  nweights:      the number of weights in the list
 */
 void TMROctForest::addNodeWeights( TMROctant *t, double w,
                                    const int *cdep_ptr,
@@ -4053,7 +4080,19 @@ void TMROctForest::addNodeWeights( TMROctant *t, double w,
 }
 
 /*
-  Create the interpolation operator
+  Create the interpolation operator from the coarse to the fine mesh.
+
+  Each processor builds the interpolation for the locally owned nodes
+  in the mesh. This interpolation will refer to other nodes, but the
+  output is local.
+  
+  input:
+  coarse:   the coarse octree forest that has the same layout as this
+  
+  output:
+  ptr:      the pointer into the local rows
+  conn:     the connectivity using global numbers
+  weights:  the interpolation weights for each point
 */
 void TMROctForest::createInterpolation( TMROctForest *coarse,
                                         int **_interp_ptr,
@@ -4286,9 +4325,6 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
     }
   }
 
-  printf("nnodes = %d\ncount = %d\n",
-         nnodes, count);
-
   // Free the weights and flags
   delete [] wlist;
   delete [] flags;
@@ -4328,148 +4364,3 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   *_interp_conn = interp_conn;
   *_interp_weights = interp_weights;
 }
-
-/*
-  Create the restriction operator
-*/
-/*
-void TMROctForest::createRestriction( TMROctForest *coarse,
-                                      int **_interp_ptr,
-                                      int **_interp_conn,
-                                      double **_interp_weights ){
-  // Set the pointers to NULL
-  *_interp_ptr = NULL;
-  *_interp_conn = NULL;
-  *_interp_weights = NULL;
-
-  // If the nodes have not been allocated, then this function should
-  // not be called. Return no result.
-  if (!nodes || !tree->nodes){
-    return;
-  }
-
-  // Get the array of coarse nodes and the size of nodes
-  int coarse_size;
-  TMROctant *coarse;
-  tree->nodes->getArray(&coarse, &coarse_size);
- 
-  // Set the weights for the full-approximation
-  const double wvals[] = {0.5, 1.0, 0.5};
-
-  // Set the number of independent coarse nodes
-  int num_coarse_nodes = tree->num_nodes;
-
-  // Allocate the arrays
-  int conn_len = 0;
-  int max_conn_len = order*order*order*num_coarse_nodes;
-  int *interp_ptr = new int[ num_coarse_nodes+1 ];
-  int *interp_conn = new int[ max_conn_len ];
-  double *interp_weights = new double[ max_conn_len ];
-
-  // Set the initial pointer values
-  int nnodes = 0;
-  interp_ptr[0] = 0;
-
-  // The maximum possible size of the array of weights. Note
-  // that this is found if every node is a dependent node (which is
-  // impossible) which points to a dependent face node (also
-  // impossible). It is an upper bound.
-  int max_size = 27*(order*order);
-  TMRIndexWeight *weights = new TMRIndexWeight[ max_size ];
-
-  // Scan through the nodes of the coarse tree and
-  // find the next-to-adjacent nodes in the octree
-  for ( int i = 0; i < coarse_size; i++ ){
-    if (coarse[i].tag >= 0){
-      // Use node-based searching
-      const int use_nodes = 1;
-
-      // Keep track of the number of weights used
-      int nweights = 0;
-      double w = 0.0;
-
-      // Get the fine index number corresponding to the
-      // coarse index on this mesh
-      TMROctant *fine;
-      fine = nodes->contains(&coarse[i], use_nodes);
-
-      // Get the coarse node level
-      const int32_t h = 1 << (TMR_MAX_LEVEL - fine->level);
-      
-      // Scan through the node locations for the coarse mesh
-      for ( int kk = 0; kk < 3; kk++ ){
-        for ( int jj = 0; jj < 3; jj++ ){
-          for ( int ii = 0; ii < 3; ii++ ){
-            // Set the location for the adjacent nodes
-            TMROctant n;
-            n.x = coarse[i].x + h*(ii-1);
-            n.y = coarse[i].y + h*(jj-1);
-            n.z = coarse[i].z + h*(kk-1);
-
-            // Get the element level
-            TMROctant *t;
-            t = nodes->contains(&n, use_nodes);
-            if (t){
-              double wk = wvals[ii]*wvals[jj]*wvals[kk];
-              w += wk;
-
-              if (t->tag >= 0){
-                weights[nweights].index = t->tag;
-                weights[nweights].weight = wk;
-                nweights++;
-              }
-              else {
-                int node = -t->tag-1;
-                for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
-                  weights[nweights].index = dep_conn[jp];
-                  weights[nweights].weight = wk*dep_weights[jp];
-                  nweights++;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Sort the dependent weight values
-      nweights = TMRIndexWeight::uniqueSort(weights, nweights);
-      
-      // Check whether adding these will exceed the size
-      // of the array
-      if (interp_ptr[nnodes] + nweights >= max_conn_len){
-        int estimate = ((2.0*interp_ptr[nnodes]/nnodes)*(num_nodes - nnodes));
-        max_conn_len += estimate;
-        int *temp = new int[ max_conn_len ];
-        memcpy(temp, interp_conn, conn_len*sizeof(int));
-        delete [] interp_conn;
-        interp_conn = temp;
-        
-        double *tempw = new double[ max_conn_len ];
-        memcpy(tempw, interp_weights, conn_len*sizeof(double));
-        delete [] interp_weights;
-        interp_weights = tempw;
-      }
-
-      // Extract the weights from the sorted list. Normalize
-      // the weights by the total weights added at this node
-      for ( int k = 0; k < nweights; k++ ){
-        interp_conn[conn_len] = weights[k].index;
-        interp_weights[conn_len] = weights[k].weight/w;
-        conn_len++;
-      }
-
-      // Increment the pointer
-      interp_ptr[nnodes+1] = conn_len;
-      nnodes++;
-    }
-  }
-
-  // Free the weight used
-  delete [] weights;
-
-  // Set the return arrays
-  *_interp_ptr = interp_ptr;
-  *_interp_conn = interp_conn;
-  *_interp_weights = interp_weights;
-}
-*/

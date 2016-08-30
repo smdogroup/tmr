@@ -66,6 +66,14 @@ class TMROctForest {
   // ------------------------------------------------------------------
   int getOwnedOctrees( const int **_owned_blocks );
 
+  // Get the node-processor ownership range
+  // --------------------------------------
+  void getOwnedNodeRange( const int **_node_range ){
+    if (_node_range){
+      *_node_range = node_range;
+    }
+  }
+
   // Retrieve the connectivity information
   // -------------------------------------
   void getConnectivity( int *_nblocks, int *_nfaces, 

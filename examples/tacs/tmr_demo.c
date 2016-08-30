@@ -276,10 +276,6 @@ int main( int argc, char * argv[] ){
   // The ParOpt problem instance
   ParOpt *opt = NULL;
 
-  // Set up the domain - if any
-  int ndomain = 0;
-  TMROctant *domain = NULL;
-
   // Set the default target mass
   double target_mass = 0.15;
 
@@ -287,29 +283,6 @@ int main( int argc, char * argv[] ){
   int problem_index = 0;
   const char *problem_type[] = 
     {"block", "beam", "bracket"};
-
-  // Set up the domain for the beam
-  TMROctant beam[4];
-  for ( int i = 0; i < 4; i++ ){
-    beam[i].level = 2;
-    int32_t hbeam = 1 << (TMR_MAX_LEVEL - beam[i].level);
-    beam[i].x = 0;
-    beam[i].y = 0;
-    beam[i].z = i*hbeam;
-  }
-
-  // Set up the domain for the bracket
-  TMROctant bracket[4];
-  const int bracket_corner[][3] = 
-    {{0, 0, 0}, {0, 0, 1}, {0, 1, 1}, {1, 0, 1}};
-
-  for ( int i = 0; i < 4; i++ ){
-    bracket[i].level = 1;
-    int32_t hbracket = 1 << (TMR_MAX_LEVEL - bracket[i].level);
-    bracket[i].x = bracket_corner[i][0]*hbracket;
-    bracket[i].y = bracket_corner[i][1]*hbracket;
-    bracket[i].z = bracket_corner[i][2]*hbracket;
-  }
 
   // Scan the input arguments to find the minimum refinement
   for ( int k = 0; k < argc; k++ ){
@@ -336,10 +309,6 @@ int main( int argc, char * argv[] ){
       // Set the problem index
       problem_index = 1;
 
-      // Set the domain
-      ndomain = 4;
-      domain = beam;
-
       // Set the new target mass
       target_mass *= (0.25*0.25);
 
@@ -352,10 +321,6 @@ int main( int argc, char * argv[] ){
     if (strcmp("bracket", argv[k]) == 0){
       // Set the problem index
       problem_index = 2;
-
-      // Set the domain
-      ndomain = 4;
-      domain = bracket;
 
       // Set the new target mass
       target_mass *= 0.25;
