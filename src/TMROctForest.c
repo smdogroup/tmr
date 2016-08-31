@@ -4191,13 +4191,13 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
                          wlist, &nweights);
         }
         else {
-          // Get the element size for the fine mesh
+          // Get the element size for coarse element mesh
           const int32_t h = 2*(1 << (TMR_MAX_LEVEL - fine[i].level));
 
-          // The finite-element spacing for the fine mesh
+          // The node spacing for the fine mesh
           const int32_t hf = 1 << (TMR_MAX_LEVEL - fine[i].level - (mesh_order-2));
           
-          // The mesh size of the coarse mesh
+          // The node spacing for the coarse mesh
           const int32_t hc = 2*hf;
 
           // Compute the offsets to the node locations
