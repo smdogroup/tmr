@@ -129,7 +129,7 @@ const int connector_conn[] =
 */
 void getLocation( int i, const int *elem_node_conn, 
                   const double *Xpts,
-                  const TMROctant *oct, TMRPoint *pt ){
+                  const TMROctant *oct, TacsScalar x[] ){
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   double u = (1.0*oct->x)/hmax;
   double v = (1.0*oct->y)/hmax;
@@ -145,13 +145,13 @@ void getLocation( int i, const int *elem_node_conn,
   N[6] = (1.0 - u)*v*w;
   N[7] = u*v*w;
 
-  pt->x = pt->y = pt->z = 0.0;
+  x[0] = x[1] = x[2] = 0.0;
   for ( int k = 0; k < 8; k++ ){
     int node = elem_node_conn[8*i + k];
     
-    pt->x += Xpts[3*node]*N[k];
-    pt->y += Xpts[3*node+1]*N[k];
-    pt->z += Xpts[3*node+2]*N[k];
+    x[0] += Xpts[3*node]*N[k];
+    x[1] += Xpts[3*node+1]*N[k];
+    x[2] += Xpts[3*node+2]*N[k];
   }
 }
 
@@ -387,6 +387,7 @@ int main( int argc, char *argv[] ){
       new TACSAssembler(comm, vars_per_node,
                         num_nodes, num_elements,
                         num_dep_nodes);
+    tacs[level]->incref();
 
     // Set the element ptr
     int *ptr = new int[ order*order*order*num_elements ];
@@ -448,14 +449,18 @@ int main( int argc, char *argv[] ){
     TMROctree **octrees;
     int ntrees = forest[level]->getOctrees(&octrees);
 
+    // Create the nodal vector
+    TACSBVec *Xvec = tacs[level]->createNodeVec();
+    Xvec->incref();
+
+    TacsScalar *X = NULL;
+    Xvec->getArray(&X);
+
+    // Scan through the nodes
     const int *owned;
     int nowned = forest[level]->getOwnedOctrees(&owned);
     for ( int k = 0; k < nowned; k++ ){
       int block = owned[k];
-
-      // The list of points
-      TMRPoint *X;
-      octrees[block]->getPoints(&X);
     
       // Get the octant nodes
       TMROctantArray *nodes;
@@ -468,93 +473,36 @@ int main( int argc, char *argv[] ){
 
       // Loop over all the nodes
       for ( int i = 0; i < size; i++ ){
-        getLocation(block, elem_node_conn, Xpts,
-                    &array[i], &X[i]);
+        if (array[i].tag >= 0 && 
+            (array[i].tag >= range[mpi_rank] && 
+             array[i].tag < range[mpi_rank+1])){
+          int index = array[i].tag - range[mpi_rank];
+          getLocation(block, elem_node_conn, Xpts,
+                      &array[i], &X[3*index]);
+        }
       }
     }
+
+    // Set the nodal vector
+    tacs[level]->setNodes(Xvec);
+    Xvec->decref();
 
     if (level+1 < MAX_NUM_MESH){
       forest[level+1] = forest[level]->coarsen();
     }
   }
 
-  // Get the octrees within the forest
-  int print_level = MAX_NUM_MESH-1;
-  TMROctree **octrees;
-  int ntrees = forest[print_level]->getOctrees(&octrees);
-  
-  // Get the owned trees
-  const int *owned;
-  int nowned = forest[print_level]->getOwnedOctrees(&owned);
+  // Output for visualization
+  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                             TACSElement::OUTPUT_DISPLACEMENTS);
+  TACSToFH5 *f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
+  f5->incref();
+  f5->writeToFile("parallel_output.f5");
+  f5->decref();
 
-  // Write out a file for each processor - bad practice!
-  char filename[128];
-  sprintf(filename, "parallel%d.dat", mpi_rank);
-  FILE *fp = fopen(filename, "w");
-
-  // Write the tecplot header
-  fprintf(fp, "Variables = X, Y, Z, dv\n");
-
-  for ( int k = 0; k < nowned; k++ ){
-    int block = owned[k];
-
-    // Retrieve the node/element arrays
-    TMROctantArray *elements, *nodes;
-    octrees[block]->getNodes(&nodes);
-    octrees[block]->getElements(&elements);
-
-    // Get the points
-    TMRPoint *X;
-    int nnodes = octrees[block]->getPoints(&X);
-    int ne = octrees[block]->getNumElements();
-
-    // Get the node array
-    TMROctant *array;
-    nodes->getArray(&array, NULL);
-
-    fprintf(fp, "ZONE T=TMR%d N=%d E=%d ", block, nnodes, ne);
-    fprintf(fp, "DATAPACKING=POINT ZONETYPE=FEBRICK\n");
-
-    // Write out this portion of the forrest
-    for ( int i = 0; i < nnodes; i++ ){
-      fprintf(fp, "%e %e %e %d\n", X[i].x, X[i].y, X[i].z, 
-              array[i].tag);
-    }
-
-    // Get the elements
-    elements->getArray(&array, &ne);
-
-    TMROctant *node_array;
-    nodes->getArray(&node_array, NULL);
-
-    for ( int i = 0; i < ne; i++ ){
-      int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
-      int index[8];
-
-      for ( int kk = 0; kk < 2; kk++ ){
-        for ( int jj = 0; jj < 2; jj++ ){
-          for ( int ii = 0; ii < 2; ii++ ){
-            TMROctant oct;
-            oct.x = array[i].x + ii*h;
-            oct.y = array[i].y + jj*h;
-            oct.z = array[i].z + kk*h;
-            
-            const int use_nodes = 1;
-            TMROctant *t = nodes->contains(&oct, use_nodes);
-            index[ii + 2*jj + 4*kk] = (t - node_array) + 1;
-          }
-        }
-      }
-
-      fprintf(fp, "%d %d %d %d %d %d %d %d\n",
-              index[0], index[1], index[3], index[2],
-              index[4], index[5], index[7], index[6]);
-    }
-  }
-  
-  fclose(fp);
   for ( int level = 0; level < MAX_NUM_MESH; level++ ){
     delete forest[level];
+    tacs[level]->decref();
   }
 
   TMRFinalize();
