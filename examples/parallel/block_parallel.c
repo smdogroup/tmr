@@ -268,7 +268,7 @@ int main( int argc, char *argv[] ){
 
   // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
-  const int MAX_NUM_MESH = 5;
+  const int MAX_NUM_MESH = 3;
   TMROctForest *forest[MAX_NUM_MESH];
   TACSAssembler *tacs[MAX_NUM_MESH];
   TACSBVecInterp *interp[MAX_NUM_MESH-1];
@@ -283,7 +283,8 @@ int main( int argc, char *argv[] ){
   if (Xpts && elem_node_conn){
     forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
-    forest[0]->createRandomTrees(50, 0, 5);
+    // forest[0]->createRandomTrees(100, 0, 5);
+    forest[0]->createTrees(3);
   }
   else {
     // Create the TACSMeshLoader class
@@ -364,6 +365,10 @@ int main( int argc, char *argv[] ){
     forest[level]->createNodes(order);
     tnodes = MPI_Wtime() - tnodes;
 
+    // Get the octrees within the forest
+    TMROctree **octrees;
+    int ntrees = forest[level]->getOctrees(&octrees);
+
     // Create the mesh
     double tmesh = MPI_Wtime();
     int *conn, num_elements = 0;
@@ -406,8 +411,25 @@ int main( int argc, char *argv[] ){
                                    dep_weights);
 
     // Add nodes associated with the boundary conditions
+    if (octrees[0]){
+      // Get the octant nodes
+      TMROctantArray *nodes;
+      octrees[0]->getNodes(&nodes);
+      
+      // Get the array
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
 
-
+      for ( int i = 0; i < size; i++ ){
+        if (array[i].x == 0 && 
+            (array[i].tag >= range[mpi_rank] && 
+             array[i].tag < range[mpi_rank+1])){
+          int node = array[i].tag;
+          tacs[level]->addBCs(1, &node);
+        }
+      }
+    }
 
     TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
     SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
@@ -436,8 +458,8 @@ int main( int argc, char *argv[] ){
                                            &ptr, &conn, &weights);
 
       // Create the interpolation object
-      interp[level-1] = new TACSBVecInterp(tacs[level-1]->getVarMap(),
-                                           tacs[level]->getVarMap(),
+      interp[level-1] = new TACSBVecInterp(tacs[level]->getVarMap(),
+                                           tacs[level-1]->getVarMap(),
                                            tacs[level]->getVarsPerNode());
       interp[level-1]->incref();
 
@@ -463,10 +485,6 @@ int main( int argc, char *argv[] ){
       printf("mesh:     %15.5f s\n", tmesh);
     }
   
-    // Get the octrees within the forest
-    TMROctree **octrees;
-    int ntrees = forest[level]->getOctrees(&octrees);
-
     // Create the nodal vector
     TACSBVec *Xvec = tacs[level]->createNodeVec();
     Xvec->incref();
@@ -546,25 +564,51 @@ int main( int argc, char *argv[] ){
   // Assemble the Jacobian matrix for each level
   mg->assembleJacobian(1.0, 0.0, 0.0, res);
 
-  res->set(1.0);
-  
-  // "Factor" the preconditioner
-  mg->factor();
+  TACSBVec *X = tacs[0]->createNodeVec();
+  tacs[0]->getNodes(X);
 
-  // Compute the solution using GMRES
-  gmres->solve(res, ans);
+  ans->copyValues(X);
+  // ans->applyBCs();
   
-  // Set the variables into TACS
-  ans->scale(-1.0);
-  tacs[0]->setVariables(ans);
+  /* // "Factor" the preconditioner */
+  /* mg->factor(); */
 
-  // Output for visualization
-  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                             TACSElement::OUTPUT_DISPLACEMENTS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
-  f5->incref();
-  f5->writeToFile("parallel_output.f5");
-  f5->decref();
+  /* // Compute the solution using GMRES */
+  /* gmres->solve(res, ans); */
+  
+  /* // Set the variables into TACS */
+  /* ans->scale(-1.0); */
+
+  for ( int level = MAX_NUM_MESH-1; level >= 0; level-- ){
+    if (level == MAX_NUM_MESH-1){
+      ans = tacs[level]->createNodeVec();
+      ans->incref();
+      tacs[level]->getNodes(ans);
+    }
+    else {
+      TACSBVec *tmp = tacs[level]->createVec();
+      tmp->incref();
+      interp[level]->mult(ans, tmp);
+      ans->decref();
+      ans = tmp;
+    }
+    tacs[level]->setNodes(ans);
+    // tacs[level]->setVariables(ans);
+
+    // Output for visualization
+    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                               TACSElement::OUTPUT_DISPLACEMENTS);
+    TACSToFH5 *f5 = new TACSToFH5(tacs[level], SOLID, write_flag);
+    char zone[128];
+    sprintf(zone, "Comp %d", level);
+    f5->setComponentName(0, zone);
+
+    f5->incref();
+    char filename[128];
+    sprintf(filename, "parallel_output%d.f5", level);
+    f5->writeToFile(filename);
+    f5->decref();
+  }
 
   mg->decref();
 
