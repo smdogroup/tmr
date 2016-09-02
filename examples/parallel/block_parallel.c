@@ -271,6 +271,7 @@ int main( int argc, char *argv[] ){
   const int MAX_NUM_MESH = 5;
   TMROctForest *forest[MAX_NUM_MESH];
   TACSAssembler *tacs[MAX_NUM_MESH];
+  TACSBVecInterp *interp[MAX_NUM_MESH-1];
 
   // Create the forests
   forest[0] = new TMROctForest(comm);
@@ -404,9 +405,9 @@ int main( int argc, char *argv[] ){
     tacs[level]->setDependentNodes(dep_ptr, dep_conn,
                                    dep_weights);
 
-    // Set the boundary conditions.......
-    // ..................................
-    // ..................................
+    // Add nodes associated with the boundary conditions
+
+
 
     TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
     SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
@@ -433,6 +434,23 @@ int main( int argc, char *argv[] ){
       double *weights;
       forest[level-1]->createInterpolation(forest[level],
                                            &ptr, &conn, &weights);
+
+      // Create the interpolation object
+      interp[level-1] = new TACSBVecInterp(tacs[level-1]->getVarMap(),
+                                           tacs[level]->getVarMap(),
+                                           tacs[level]->getVarsPerNode());
+      interp[level-1]->incref();
+
+      // Add all the values in the interpolation
+      for ( int node = range[mpi_rank], k = 0;
+            node < range[mpi_rank+1]; node++, k++ ){
+        int len = ptr[k+1] - ptr[k];
+        interp[level-1]->addInterp(node, &weights[ptr[k]], 
+                                   &conn[ptr[k]], len);
+      }
+
+      interp[level-1]->initialize();
+
       delete [] ptr;
       delete [] conn;
       delete [] weights;
@@ -492,6 +510,54 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  // Create the multigrid object
+  double omega = 0.75;
+  int sor_iters = 1;
+  int sor_symm = 0;
+  TACSMg *mg = new TACSMg(comm, MAX_NUM_MESH, 
+                          omega, sor_iters, sor_symm);
+  mg->incref();
+
+  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
+    if (level < MAX_NUM_MESH-1){
+      mg->setLevel(level, tacs[level], interp[level], 2);
+    }
+    else {
+      mg->setLevel(level, tacs[level], NULL);
+    }
+  }
+
+  // Create the residual and solution vectors on the finest TACS mesh
+  TACSBVec *res = tacs[0]->createVec();  res->incref();
+  TACSBVec *ans = tacs[0]->createVec();  ans->incref();
+
+  // Allocate the GMRES solution method
+  int gmres_iters = 100;
+  int nrestart = 1;
+  int is_flexible = 0;
+  GMRES *gmres = new GMRES(mg->getMat(0), mg,
+                           gmres_iters, nrestart, is_flexible);
+  gmres->incref();
+
+  // Set a monitor to check on solution progress
+  int freq = 1;
+  gmres->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, freq));
+
+  // Assemble the Jacobian matrix for each level
+  mg->assembleJacobian(1.0, 0.0, 0.0, res);
+
+  res->set(1.0);
+  
+  // "Factor" the preconditioner
+  mg->factor();
+
+  // Compute the solution using GMRES
+  gmres->solve(res, ans);
+  
+  // Set the variables into TACS
+  ans->scale(-1.0);
+  tacs[0]->setVariables(ans);
+
   // Output for visualization
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_DISPLACEMENTS);
@@ -500,9 +566,15 @@ int main( int argc, char *argv[] ){
   f5->writeToFile("parallel_output.f5");
   f5->decref();
 
+  mg->decref();
+
   for ( int level = 0; level < MAX_NUM_MESH; level++ ){
     delete forest[level];
     tacs[level]->decref();
+  }
+
+  for ( int level = 0; level < MAX_NUM_MESH-1; level++ ){
+    interp[level]->decref();
   }
 
   TMRFinalize();
