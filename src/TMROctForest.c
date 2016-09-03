@@ -4176,8 +4176,8 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
       int loc = node_num - node_range[mpi_rank];
 
       // Loop over all the adjacent nodes
-      if (node_num >= node_range[mpi_rank] && 
-          node_num < node_range[mpi_rank+1] && 
+      if ((node_num >= node_range[mpi_rank] && 
+           node_num < node_range[mpi_rank+1]) && 
           flags[loc] == 0){
         // Flag that we've reached this node and store the true
         // location of the interpolation based on the node number
@@ -4195,7 +4195,8 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
           const int32_t h = 2*(1 << (TMR_MAX_LEVEL - fine[i].level));
 
           // The node spacing for the fine mesh
-          const int32_t hf = 1 << (TMR_MAX_LEVEL - fine[i].level - (mesh_order-2));
+          const int32_t hf = 
+            1 << (TMR_MAX_LEVEL - fine[i].level - (mesh_order-2));
           
           // The node spacing for the coarse mesh
           const int32_t hc = 2*hf;
@@ -4205,8 +4206,14 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
           int32_t py = fine[i].y % h;
           int32_t pz = fine[i].z % h;
 
-          // Add to the interpolation depending on the values of px, py, and pz
-          if (px && py && pz){
+          // Determine which interpolation to use
+          int32_t sx = fine[i].x % hc;
+          int32_t sy = fine[i].y % hc;
+          int32_t sz = fine[i].z % hc;
+
+          // Add to the interpolation depending on the values of px,
+          // py, and pz
+          if (sx && sy && sz){
             for ( int kk = 0; kk < mesh_order; kk++ ){
               for ( int jj = 0; jj < mesh_order; jj++ ){
                 for ( int ii = 0; ii < mesh_order; ii++ ){
@@ -4222,7 +4229,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
               }
             }
           }
-          else if (py && pz){
+          else if (sy && sz){
             for ( int kk = 0; kk < mesh_order; kk++ ){
               for ( int jj = 0; jj < mesh_order; jj++ ){
                 TMROctant node = fine[i];
@@ -4235,7 +4242,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
               }
             }          
           }
-          else if (px && pz){
+          else if (sx && sz){
             for ( int kk = 0; kk < mesh_order; kk++ ){
               for ( int ii = 0; ii < mesh_order; ii++ ){
                 TMROctant node = fine[i];
@@ -4248,7 +4255,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
               }            
             }
           }
-          else if (px && py){
+          else if (sx && sy){
             for ( int jj = 0; jj < mesh_order; jj++ ){
               for ( int ii = 0; ii < mesh_order; ii++ ){
                 TMROctant node = fine[i];
@@ -4261,7 +4268,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
               }
             }
           }
-          else if (px){
+          else if (sx){
             for ( int ii = 0; ii < mesh_order; ii++ ){
               TMROctant node = fine[i];
               node.x = (fine[i].x - px) + hc*ii;
@@ -4270,7 +4277,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
                              wlist, &nweights);
             }
           }
-          else if (py){
+          else if (sy){
             for ( int jj = 0; jj < mesh_order; jj++ ){
               TMROctant node = fine[i];
               node.y = (fine[i].y - py) + hc*jj;
@@ -4279,7 +4286,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
                              wlist, &nweights);
             }
           }
-          else if (pz){
+          else if (sz){
             for ( int kk = 0; kk < mesh_order; kk++ ){
               TMROctant node = fine[i];
               node.z = (fine[i].z - pz) + hc*kk;
@@ -4347,11 +4354,11 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
 
   // Set the new interpolation values
   for ( int k = 0; k < nnodes; k++ ){
-    int node = pos[k];
+    int loc = pos[k];
     int len = ptr[k+1] - ptr[k];
     for ( int j = 0; j < len; j++ ){
-      interp_conn[interp_ptr[node] + j] = conn[ptr[k] + j];
-      interp_weights[interp_ptr[node] + j] = weights[ptr[k] + j];
+      interp_conn[interp_ptr[loc] + j] = conn[ptr[k] + j];
+      interp_weights[interp_ptr[loc] + j] = weights[ptr[k] + j];
     }
   }
 

@@ -238,6 +238,7 @@ int main( int argc, char *argv[] ){
   int partition = 0;
   
   // The "super-node" locations
+  double omega = 1.0;
   int order = 2;
   int npts = 0;
   int nelems = 0;
@@ -264,11 +265,14 @@ int main( int argc, char *argv[] ){
       if (order < 2){ order = 2; }
       if (order > 3){ order = 3; }
     }
+    if (sscanf(argv[k], "omega=%lf", &omega) == 1){
+      if (omega < 0.05){ omega = 0.05; }
+    }
   }
 
   // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
-  const int MAX_NUM_MESH = 3;
+  const int MAX_NUM_MESH = 5;
   TMROctForest *forest[MAX_NUM_MESH];
   TACSAssembler *tacs[MAX_NUM_MESH];
   TACSBVecInterp *interp[MAX_NUM_MESH-1];
@@ -280,11 +284,16 @@ int main( int argc, char *argv[] ){
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 
+  if (mpi_rank == 0){
+    printf("order = %d\n", order);
+    printf("omega = %g\n", omega);
+  }
+
   if (Xpts && elem_node_conn){
     forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
-    // forest[0]->createRandomTrees(100, 0, 5);
-    forest[0]->createTrees(3);
+    forest[0]->createRandomTrees(100, 0, 10);
+    // forest[0]->createTrees(3);
   }
   else {
     // Create the TACSMeshLoader class
@@ -463,9 +472,13 @@ int main( int argc, char *argv[] ){
                                            tacs[level]->getVarsPerNode());
       interp[level-1]->incref();
 
+      // Get the range of nodes
+      const int *node_range;
+      forest[level-1]->getOwnedNodeRange(&node_range);
+
       // Add all the values in the interpolation
-      for ( int node = range[mpi_rank], k = 0;
-            node < range[mpi_rank+1]; node++, k++ ){
+      for ( int node = node_range[mpi_rank], k = 0;
+            node < node_range[mpi_rank+1]; node++, k++ ){
         int len = ptr[k+1] - ptr[k];
         interp[level-1]->addInterp(node, &weights[ptr[k]], 
                                    &conn[ptr[k]], len);
@@ -529,7 +542,6 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the multigrid object
-  double omega = 0.75;
   int sor_iters = 1;
   int sor_symm = 0;
   TACSMg *mg = new TACSMg(comm, MAX_NUM_MESH, 
@@ -563,46 +575,27 @@ int main( int argc, char *argv[] ){
 
   // Assemble the Jacobian matrix for each level
   mg->assembleJacobian(1.0, 0.0, 0.0, res);
+  tacs[0]->getNodes(res);
+  res->scale(1e3);
+  res->applyBCs();
 
-  TACSBVec *X = tacs[0]->createNodeVec();
-  tacs[0]->getNodes(X);
+  // "Factor" the preconditioner
+  mg->factor();
 
-  ans->copyValues(X);
-  // ans->applyBCs();
+  // Compute the solution using GMRES
+  gmres->solve(res, ans);
   
-  /* // "Factor" the preconditioner */
-  /* mg->factor(); */
+  // Set the variables into TACS
+  ans->scale(-1.0);
 
-  /* // Compute the solution using GMRES */
-  /* gmres->solve(res, ans); */
-  
-  /* // Set the variables into TACS */
-  /* ans->scale(-1.0); */
+  // Set the variables on all levels
+  mg->setVariables(ans);
 
-  for ( int level = MAX_NUM_MESH-1; level >= 0; level-- ){
-    if (level == MAX_NUM_MESH-1){
-      ans = tacs[level]->createNodeVec();
-      ans->incref();
-      tacs[level]->getNodes(ans);
-    }
-    else {
-      TACSBVec *tmp = tacs[level]->createVec();
-      tmp->incref();
-      interp[level]->mult(ans, tmp);
-      ans->decref();
-      ans = tmp;
-    }
-    tacs[level]->setNodes(ans);
-    // tacs[level]->setVariables(ans);
-
+  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
     // Output for visualization
     unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                TACSElement::OUTPUT_DISPLACEMENTS);
     TACSToFH5 *f5 = new TACSToFH5(tacs[level], SOLID, write_flag);
-    char zone[128];
-    sprintf(zone, "Comp %d", level);
-    f5->setComponentName(0, zone);
-
     f5->incref();
     char filename[128];
     sprintf(filename, "parallel_output%d.f5", level);
