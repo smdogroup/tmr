@@ -6,6 +6,10 @@ extern "C" {
 }
 
 /*
+  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
+*/
+
+/*
   Map from a block edge number to the local node numbers
 */
 const int block_to_edge_nodes[][2] = {{0,1}, {2,3}, {4,5}, {6,7}, 
@@ -211,7 +215,7 @@ inline void set_face_node_coords( const int face_id,
 /*
   Compare integers for sorting
 */
-int compare_integers( const void *a, const void *b ){
+static int compare_integers( const void *a, const void *b ){
   return (*(int*)a - *(int*)b);
 }
 
@@ -1236,7 +1240,7 @@ void TMROctForest::computePartition( int part_size, int *vwgts,
   forest. This function copies the global connectivity of the forest
   and copies each individual tree.
 */
-TMROctForest* TMROctForest::duplicate(){
+TMROctForest *TMROctForest::duplicate(){
   TMROctForest *dup = new TMROctForest(comm);
   if (octrees){
     // Copy over the connectivity data 
@@ -1304,7 +1308,7 @@ TMROctForest* TMROctForest::duplicate(){
   forest and coarsening each individual tree. Note that the resulting
   forest is not necessarily balanced.
 */
-TMROctForest* TMROctForest::coarsen(){
+TMROctForest *TMROctForest::coarsen(){
   TMROctForest *coarse = new TMROctForest(comm);
   if (octrees){
     // Copy over the connectivity data 
@@ -4030,6 +4034,7 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
   }
   
   // Free the temporary memory
+  delete [] edge_nodes;
   delete [] face_nodes;
 
   // Return the weights

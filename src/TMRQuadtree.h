@@ -1,6 +1,10 @@
 #ifndef TMR_QUADTREE_H
 #define TMR_QUADTREE_H
 
+/*
+  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
+*/
+
 #include "TMRQuadrant.h"
 
 /*
@@ -63,31 +67,13 @@ class TMRQuadtree {
 
   // Find an quadrant that completely encloses the provided quadrant
   // ---------------------------------------------------------------
-  TMRQuadrant* findEnclosing( TMRQuadrant *oct );
-  void findEnclosingRange( TMRQuadrant *oct,
+  TMRQuadrant *findEnclosing( TMRQuadrant *quad );
+  void findEnclosingRange( TMRQuadrant *quad,
 			   int *low, int *high );
 
   // Order the nodes but do not create the connectivity
   // --------------------------------------------------
   void createNodes( int _order );
-
-  // Retrieve the mesh information
-  // -----------------------------
-  void addMesh( int *elem_conn, 
-                int *dep_conn, double *dep_weights );
-
-  // Create the interpolation from a coarser mesh
-  // --------------------------------------------
-  /*
-  void createInterpolation( TMRQuadtree *coarse,
-                            int **_interp_ptr,
-                            int **_interp_conn,
-                            double **_interp_weights );
-  void createRestriction( TMRQuadtree *coarse,
-                          int **_interp_ptr,
-                          int **_interp_conn,
-                          double **_interp_weights );
-  */
 
   // Print a representation of the tree to a file
   // --------------------------------------------

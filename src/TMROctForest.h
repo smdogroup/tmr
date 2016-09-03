@@ -1,7 +1,29 @@
 #ifndef TMR_OCTANT_FOREST_H
 #define TMR_OCTANT_FOREST_H
 
+/*
+  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
+*/
+
 #include "TMROctree.h"
+
+/*
+  TMR Forest class
+
+  This class defines a forest of octrees. The octrees within the
+  forest can be distributed across processors. The connectivity
+  between octrees is defined on all processors by setting a octree to
+  node connectivity.
+  
+  The octrees can be redistributed across processors by using the
+  repartition function. This destroys the nodes that may have been
+  created (but can easily be recomputed).
+  
+  The duplicate() and coarsen() functions create a forest that is
+  aligned with the parallel distribution of octrees. This facilitates
+  the construction of the interpolation operators that can be used for
+  multigrid solution algorithms.
+*/
 
 class TMROctForest {
  public:
@@ -32,7 +54,7 @@ class TMROctForest {
 
   // Duplicate or coarsen the forest
   // -------------------------------
-  TMROctForest* duplicate();
+  TMROctForest *duplicate();
   TMROctForest *coarsen();
 
   // Balance the octree meshes

@@ -1,6 +1,10 @@
 #ifndef TMR_BASE_H
 #define TMR_BASE_H
 
+/*
+  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
+*/
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

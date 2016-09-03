@@ -1,5 +1,9 @@
 #include "TMRBase.h"
 
+/*
+  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
+*/
+
 // The TMR data type for MPI useage
 MPI_Datatype TMROctant_MPI_type;
 MPI_Datatype TMRQuadrant_MPI_type;
