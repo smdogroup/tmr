@@ -123,7 +123,7 @@ TMROctree::~TMROctree(){
   parent of the octant is refined. A zero index indicates that the
   octant is retained.
 */
-void TMROctree::refine( int refinement[], 
+void TMROctree::refine( const int refinement[], 
 			int min_level, int max_level ){
   // Adjust the min and max levels to ensure consistency
   if (min_level < 0){ min_level = 0; }
@@ -150,33 +150,46 @@ void TMROctree::refine( int refinement[],
   TMROctant *array;
   elements->getArray(&array, &size);
 
-  // Add the element
-  for ( int i = 0; i < size; i++ ){
-    if (refinement[i] == 0){
-      // Try adding the 0-sibling
-      TMROctant q;
-      array[i].getSibling(0, &q);
-      hash->addOctant(&q);
-    }
-    else if (refinement[i] < 0){
-      if (array[i].level > min_level){
-	TMROctant q;
+  if (refinement){
+    for ( int i = 0; i < size; i++ ){
+      if (refinement[i] == 0){
+        // Try adding the 0-sibling
+        TMROctant q;
         array[i].getSibling(0, &q);
-        q.level = q.level-1;
-	hash->addOctant(&q);
-      }
-      else {
-	hash->addOctant(&array[i]);
-      }
-    }
-    else if (refinement[i] > 0){
-      if (array[i].level < max_level){
-	TMROctant q = array[i];
-	q.level += 1;
         hash->addOctant(&q);
       }
+      else if (refinement[i] < 0){
+        if (array[i].level > min_level){
+          TMROctant q;
+          array[i].getSibling(0, &q);
+          q.level = q.level-1;
+          hash->addOctant(&q);
+        }
+        else {
+          hash->addOctant(&array[i]);
+        }
+      }
+      else if (refinement[i] > 0){
+        if (array[i].level < max_level){
+          TMROctant q = array[i];
+          q.level += 1;
+          hash->addOctant(&q);
+        }
+        else {
+          hash->addOctant(&array[i]);
+        }
+      }
+    }
+  }
+  else {
+    for ( int i = 0; i < size; i++ ){
+      if (array[i].level < max_level){
+        TMROctant c = array[i];
+        c.level += 1;
+        hash->addOctant(&c);
+      }
       else {
-	hash->addOctant(&array[i]);
+        hash->addOctant(&array[i]);
       }
     }
   }

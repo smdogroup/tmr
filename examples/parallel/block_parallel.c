@@ -456,6 +456,7 @@ int main( int argc, char *argv[] ){
       elements[i] = solid;
     }
     tacs[level]->setElements(elements);
+    delete [] elements;
 
     // Initialize
     tacs[level]->initialize();

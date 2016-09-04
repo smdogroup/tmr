@@ -747,22 +747,26 @@ TMRQuadForest *TMRQuadForest::duplicate(){
     // Allocate/copy the inverse relationships
     dup->node_face_ptr = new int[ num_nodes+1 ];
     dup->node_face_conn = new int[ node_face_ptr[num_nodes] ];
-    memcpy(dup->node_face_ptr, node_face_ptr, (num_nodes+1)*sizeof(int));
+    memcpy(dup->node_face_ptr, node_face_ptr, 
+           (num_nodes+1)*sizeof(int));
     memcpy(dup->node_face_conn, node_face_conn, 
            node_face_ptr[num_nodes]*sizeof(int));
 
     dup->edge_face_ptr = new int[ num_edges+1 ];
     dup->edge_face_conn = new int[ edge_face_ptr[num_edges] ];
-    memcpy(dup->edge_face_ptr, edge_face_ptr, (num_edges+1)*sizeof(int));
+    memcpy(dup->edge_face_ptr, edge_face_ptr, 
+           (num_edges+1)*sizeof(int));
     memcpy(dup->edge_face_conn, edge_face_conn, 
            edge_face_ptr[num_edges]*sizeof(int));
 
     // Allocate/copy the face ownership
     dup->mpi_face_owners = new int[ num_faces ];
-    memcpy(dup->mpi_face_owners, mpi_face_owners, num_faces*sizeof(int));
+    memcpy(dup->mpi_face_owners, mpi_face_owners, 
+           num_faces*sizeof(int));
 
     dup->owned_faces = new int[ num_owned_faces ];
-    memcpy(dup->owned_faces, owned_faces, num_owned_faces*sizeof(int));
+    memcpy(dup->owned_faces, owned_faces, 
+           num_owned_faces*sizeof(int));
 
     // Duplicate all the quadtrees
     dup->quadtrees = new TMRQuadtree*[ num_faces ];
@@ -784,7 +788,7 @@ TMRQuadForest *TMRQuadForest::duplicate(){
   This function creates a coarsened representation of the current
   forest. This is done by copying the global connectivity of the
   forest and coarsening each individual tree. Note that the resulting
-  forest is not necessarily balanced.
+  forest is not necessarily balanced.  
 */
 TMRQuadForest *TMRQuadForest::coarsen(){
   TMRQuadForest *coarse = new TMRQuadForest(comm);
@@ -804,22 +808,26 @@ TMRQuadForest *TMRQuadForest::coarsen(){
     // Allocate/copy the inverse relationships
     coarse->node_face_ptr = new int[ num_nodes+1 ];
     coarse->node_face_conn = new int[ node_face_ptr[num_nodes] ];
-    memcpy(coarse->node_face_ptr, node_face_ptr, (num_nodes+1)*sizeof(int));
+    memcpy(coarse->node_face_ptr, node_face_ptr, 
+           (num_nodes+1)*sizeof(int));
     memcpy(coarse->node_face_conn, node_face_conn, 
            node_face_ptr[num_nodes]*sizeof(int));
 
     coarse->edge_face_ptr = new int[ num_edges+1 ];
     coarse->edge_face_conn = new int[ edge_face_ptr[num_edges] ];
-    memcpy(coarse->edge_face_ptr, edge_face_ptr, (num_edges+1)*sizeof(int));
+    memcpy(coarse->edge_face_ptr, edge_face_ptr, 
+           (num_edges+1)*sizeof(int));
     memcpy(coarse->edge_face_conn, edge_face_conn, 
            edge_face_ptr[num_edges]*sizeof(int));
 
     // Allocate/copy the face ownership
     coarse->mpi_face_owners = new int[ num_faces ];
-    memcpy(coarse->mpi_face_owners, mpi_face_owners, num_faces*sizeof(int));
+    memcpy(coarse->mpi_face_owners, mpi_face_owners, 
+           num_faces*sizeof(int));
 
     coarse->owned_faces = new int[ num_owned_faces ];
-    memcpy(coarse->owned_faces, owned_faces, num_owned_faces*sizeof(int));
+    memcpy(coarse->owned_faces, owned_faces,
+           num_owned_faces*sizeof(int));
 
     // Coarsen all the quadtrees
     coarse->quadtrees = new TMRQuadtree*[ num_faces ];
@@ -1735,6 +1743,17 @@ int TMRQuadForest::checkAdjacentDepEdges( int edge,
   dep_edges:   a list of dependent edges (aligned with face edges)
 */
 void TMRQuadForest::computeDepEdges(){
+  if (dep_edges){ 
+    for ( int i = 0; i < num_owned_faces; i++ ){
+      if (dep_edges[i]){ delete dep_edges[i]; }
+    }
+    delete [] dep_edges;
+    dep_edges = NULL;
+  }
+  if (dep_ptr){ delete [] dep_ptr;  dep_ptr = NULL; }
+  if (dep_conn){ delete [] dep_conn;  dep_conn = NULL; }
+  if (dep_weights){ delete [] dep_weights;  dep_weights = NULL; }
+
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 
@@ -1890,10 +1909,10 @@ void TMRQuadForest::labelDependentNodes(){
   each of the edges and nodes 
 */
 void TMRQuadForest::getOwnerFlags( int face,
-                                  const int *edge_face_owners,
-                                  const int *node_face_owners,
-                                  int *is_edge_owner, 
-                                  int *is_node_owner ){
+                                   const int *edge_face_owners,
+                                   const int *node_face_owners,
+                                   int *is_edge_owner, 
+                                   int *is_node_owner ){
   // Check whether the face owns the node, edge or node
   if (is_node_owner){
     for ( int k = 0; k < 4; k++ ){
@@ -1972,7 +1991,7 @@ void TMRQuadForest::orderGlobalNodes( const int *edge_face_owners,
         // Check whether this node is on the face, edge, corner or is
         // an internal node and order it only if it is locally owned
         if (fx && fy){
-          int corner_index = (fx0 ? 0 : 1) + (fx0 ? 0 : 2);
+          int corner_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2);
           if (is_node_owner[corner_index]){ nlocal++; }
         }
         else if (fx){
@@ -2040,7 +2059,7 @@ void TMRQuadForest::orderGlobalNodes( const int *edge_face_owners,
         // Check whether this node is on the face, edge, corner or is
         // an internal node and order it only if it is locally owned
         if (fx && fy){
-          int corner_index = (fx0 ? 0 : 1) + (fx0 ? 0 : 2);
+          int corner_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2);
           if (is_node_owner[corner_index]){ 
             array[i].tag = node_num;  node_num++; 
           }
@@ -2148,7 +2167,7 @@ void TMRQuadForest::copyEdgeNodes( int edge,
       // Get the orientation 
       int nn1 = face_conn[4*face + face_to_edge_nodes[adj_index][0]];
       int nn2 = face_conn[4*face + face_to_edge_nodes[adj_index][1]];
-      
+
       // Determine whether the edges are in the same direction or
       // are reversed
       int reverse = (n1 == nn2 && n2 == nn1);
@@ -2756,11 +2775,9 @@ void TMRQuadForest::createDepNodeConn( int **_ptr, int **_conn,
   for ( int i = 0; i < ndep_edges; i++ ){
     // Loop over all the nodes on the dependent edges
     const int *en = &edge_nodes[nodes_per_edge*i];
-    for ( int ii = 0; ii < 2*mesh_order-1; ii++ ){
+    for ( int ii = 1; ii < 2*mesh_order-1; ii += 2 ){
       int node = -en[ii]-1;
-      if (ii % 2 == 1){
-        ptr[node+1] = mesh_order;
-      }
+      ptr[node+1] = mesh_order;
     }
   }
 
@@ -2789,13 +2806,11 @@ void TMRQuadForest::createDepNodeConn( int **_ptr, int **_conn,
   for ( int k = 0; k < ndep_edges; k++ ){
     // Loop over all the nodes on the dependent edges
     const int *en = &edge_nodes[nodes_per_edge*k];
-    for ( int ii = 0; ii < 2*mesh_order-1; ii++ ){
+    for ( int ii = 1; ii < 2*mesh_order-1; ii += 2 ){
       int node = -en[ii]-1;
-      if (ii % 2 == 1){
-        for ( int i = 0; i < mesh_order; i++ ){
-          conn[ptr[node] + i] = en[2*i];
-          weights[ptr[node] + i] = wt[ii/2][i];
-        }
+      for ( int i = 0; i < mesh_order; i++ ){
+        conn[ptr[node] + i] = en[2*i];
+        weights[ptr[node] + i] = wt[ii/2][i];
       }
     }
   }

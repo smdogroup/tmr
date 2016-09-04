@@ -82,22 +82,15 @@ class TMRQuadForest {
     }
   }
 
-  /*
   // Retrieve the connectivity information
   // -------------------------------------
-  void getConnectivity( int *_nblocks, int *_nfaces, 
-                        int *_nedges, int *_nnodes, 
-                        const int **_block_conn, 
-                        const int **_block_face_conn, 
-                        const int **_block_edge_conn,
-                        const int **_block_face_ids );
-  void getInverseConnectivity( const int **_node_block_conn,
-                               const int **_node_block_ptr,
-                               const int **_edge_block_conn,
-                               const int **_edge_block_ptr,
-                               const int **_face_block_conn,
-                               const int **_face_block_ptr );
-  */
+  void getConnectivity( int *_nfaces, int *_nedges, int *_nnodes, 
+                        const int **_face_conn, 
+                        const int **_face_edge_conn );
+  void getInverseConnectivity( const int **_node_face_conn,
+                               const int **_node_face_ptr,
+                               const int **_edge_face_conn,
+                               const int **_edge_face_ptr );
 
  private:
   // Compute the partition using METIS

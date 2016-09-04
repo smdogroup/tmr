@@ -1,5 +1,5 @@
 TMR_DIR=${HOME}/hg/tmr
-TACS_DIR=${HOME}/hg/tacs-dev
+TACS_DIR=${HOME}/hg/tacs
 PAROPT_DIR=${HOME}/hg/paropt
 
 include ${TMR_DIR}/Makefile.in

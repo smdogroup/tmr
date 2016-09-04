@@ -1167,7 +1167,8 @@ void TMROctForest::computePartition( int part_size, int *vwgts,
       int node = block_conn[8*block + j];
       
       // Loop over all of the nodes
-      for ( int ip = node_block_ptr[node]; ip < node_block_ptr[node+1]; ip++ ){
+      for ( int ip = node_block_ptr[node]; 
+            ip < node_block_ptr[node+1]; ip++ ){
         int adj_block = node_block_conn[ip];
 
         if (cols[adj_block]+1 == min_adj_count*(block+1)){
@@ -1256,35 +1257,43 @@ TMROctForest *TMROctForest::duplicate(){
     dup->block_face_ids = new int[ 6*num_faces ];
     dup->block_edge_conn = new int[ 12*num_faces ];
     memcpy(dup->block_conn, block_conn, 8*num_blocks*sizeof(int));
-    memcpy(dup->block_face_conn, block_face_conn, 6*num_blocks*sizeof(int));
-    memcpy(dup->block_face_ids, block_face_ids, 6*num_blocks*sizeof(int));
-    memcpy(dup->block_edge_conn, block_edge_conn, 12*num_blocks*sizeof(int));
+    memcpy(dup->block_face_conn, block_face_conn, 
+           6*num_blocks*sizeof(int));
+    memcpy(dup->block_face_ids, block_face_ids, 
+           6*num_blocks*sizeof(int));
+    memcpy(dup->block_edge_conn, block_edge_conn, 
+           12*num_blocks*sizeof(int));
     
     // Allocate/copy the inverse relationships
     dup->node_block_ptr = new int[ num_nodes+1 ];
     dup->node_block_conn = new int[ node_block_ptr[num_nodes] ];
-    memcpy(dup->node_block_ptr, node_block_ptr, (num_nodes+1)*sizeof(int));
+    memcpy(dup->node_block_ptr, node_block_ptr, 
+           (num_nodes+1)*sizeof(int));
     memcpy(dup->node_block_conn, node_block_conn, 
            node_block_ptr[num_nodes]*sizeof(int));
 
     dup->edge_block_ptr = new int[ num_edges+1 ];
     dup->edge_block_conn = new int[ edge_block_ptr[num_edges] ];
-    memcpy(dup->edge_block_ptr, edge_block_ptr, (num_edges+1)*sizeof(int));
+    memcpy(dup->edge_block_ptr, edge_block_ptr, 
+           (num_edges+1)*sizeof(int));
     memcpy(dup->edge_block_conn, edge_block_conn, 
            edge_block_ptr[num_edges]*sizeof(int));
 
     dup->face_block_ptr = new int[ num_faces+1 ];
     dup->face_block_conn = new int[ face_block_ptr[num_faces] ];
-    memcpy(dup->face_block_ptr, face_block_ptr, (num_faces+1)*sizeof(int));
+    memcpy(dup->face_block_ptr, face_block_ptr, 
+           (num_faces+1)*sizeof(int));
     memcpy(dup->face_block_conn, face_block_conn, 
            face_block_ptr[num_faces]*sizeof(int));
 
     // Allocate/copy the block ownership
     dup->mpi_block_owners = new int[ num_blocks ];
-    memcpy(dup->mpi_block_owners, mpi_block_owners, num_blocks*sizeof(int));
+    memcpy(dup->mpi_block_owners, mpi_block_owners, 
+           num_blocks*sizeof(int));
 
     dup->owned_blocks = new int[ num_owned_blocks ];
-    memcpy(dup->owned_blocks, owned_blocks, num_owned_blocks*sizeof(int));
+    memcpy(dup->owned_blocks, owned_blocks, 
+           num_owned_blocks*sizeof(int));
 
     // Duplicate all the octrees
     dup->octrees = new TMROctree*[ num_blocks ];
@@ -1324,35 +1333,43 @@ TMROctForest *TMROctForest::coarsen(){
     coarse->block_face_ids = new int[ 6*num_faces ];
     coarse->block_edge_conn = new int[ 12*num_faces ];
     memcpy(coarse->block_conn, block_conn, 8*num_blocks*sizeof(int));
-    memcpy(coarse->block_face_conn, block_face_conn, 6*num_blocks*sizeof(int));
-    memcpy(coarse->block_face_ids, block_face_ids, 6*num_blocks*sizeof(int));
-    memcpy(coarse->block_edge_conn, block_edge_conn, 12*num_blocks*sizeof(int));
+    memcpy(coarse->block_face_conn, block_face_conn, 
+           6*num_blocks*sizeof(int));
+    memcpy(coarse->block_face_ids, block_face_ids, 
+           6*num_blocks*sizeof(int));
+    memcpy(coarse->block_edge_conn, block_edge_conn, 
+           12*num_blocks*sizeof(int));
     
     // Allocate/copy the inverse relationships
     coarse->node_block_ptr = new int[ num_nodes+1 ];
     coarse->node_block_conn = new int[ node_block_ptr[num_nodes] ];
-    memcpy(coarse->node_block_ptr, node_block_ptr, (num_nodes+1)*sizeof(int));
+    memcpy(coarse->node_block_ptr, node_block_ptr, 
+           (num_nodes+1)*sizeof(int));
     memcpy(coarse->node_block_conn, node_block_conn, 
            node_block_ptr[num_nodes]*sizeof(int));
 
     coarse->edge_block_ptr = new int[ num_edges+1 ];
     coarse->edge_block_conn = new int[ edge_block_ptr[num_edges] ];
-    memcpy(coarse->edge_block_ptr, edge_block_ptr, (num_edges+1)*sizeof(int));
+    memcpy(coarse->edge_block_ptr, edge_block_ptr, 
+           (num_edges+1)*sizeof(int));
     memcpy(coarse->edge_block_conn, edge_block_conn, 
            edge_block_ptr[num_edges]*sizeof(int));
 
     coarse->face_block_ptr = new int[ num_faces+1 ];
     coarse->face_block_conn = new int[ face_block_ptr[num_faces] ];
-    memcpy(coarse->face_block_ptr, face_block_ptr, (num_faces+1)*sizeof(int));
+    memcpy(coarse->face_block_ptr, face_block_ptr, 
+           (num_faces+1)*sizeof(int));
     memcpy(coarse->face_block_conn, face_block_conn, 
            face_block_ptr[num_faces]*sizeof(int));
 
     // Allocate/copy the block ownership
     coarse->mpi_block_owners = new int[ num_blocks ];
-    memcpy(coarse->mpi_block_owners, mpi_block_owners, num_blocks*sizeof(int));
+    memcpy(coarse->mpi_block_owners, mpi_block_owners, 
+           num_blocks*sizeof(int));
 
     coarse->owned_blocks = new int[ num_owned_blocks ];
-    memcpy(coarse->owned_blocks, owned_blocks, num_owned_blocks*sizeof(int));
+    memcpy(coarse->owned_blocks, owned_blocks,
+           num_owned_blocks*sizeof(int));
 
     // Coarselicate all the octrees
     coarse->octrees = new TMROctree*[ num_blocks ];
@@ -2550,6 +2567,24 @@ int TMROctForest::checkAdjacentDepEdges( int edge,
   dep_edges:   a list of dependent edges (aligned with block edges)
 */
 void TMROctForest::computeDepFacesAndEdges(){
+  if (dep_edges){ 
+    for ( int i = 0; i < num_owned_blocks; i++ ){
+      if (dep_edges[i]){ delete dep_edges[i]; }
+    }
+    delete [] dep_edges;
+    dep_edges = NULL;
+  }
+  if (dep_faces){ 
+    for ( int i = 0; i < num_owned_blocks; i++ ){
+      if (dep_faces[i]){ delete dep_faces[i]; }
+    }
+    delete [] dep_faces;
+    dep_faces = NULL;
+  }
+  if (dep_ptr){ delete [] dep_ptr;  dep_ptr = NULL; }
+  if (dep_conn){ delete [] dep_conn;  dep_conn = NULL; }
+  if (dep_weights){ delete [] dep_weights;  dep_weights = NULL; }
+
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 

@@ -127,7 +127,7 @@ TMRQuadtree::~TMRQuadtree(){
   min_level:      the minimum refinement level
   max_level:      the maximum refinement level
 */
-void TMRQuadtree::refine( int refinement[], 
+void TMRQuadtree::refine( const int refinement[], 
                           int min_level, int max_level ){
   // Adjust the min and max levels to ensure consistency
   if (min_level < 0){ min_level = 0; }
@@ -157,21 +157,19 @@ void TMRQuadtree::refine( int refinement[],
   if (refinement){
     for ( int i = 0; i < size; i++ ){
       if (refinement[i] == 0){
-        // Try adding the 0-th sibling
         TMRQuadrant q;
         array[i].getSibling(0, &q);
         hash->addQuadrant(&q);
       }
       else if (refinement[i] < 0){
-        // Try adding the 0-th sibling with next-lowest level
-        TMRQuadrant q;
-        array[i].getSibling(0, &q);
-        if (q.level > min_level){
+        if (array[i].level > min_level){
+          TMRQuadrant q;
+          array[i].getSibling(0, &q);
           q.level = q.level-1;
           hash->addQuadrant(&q);
         }
         else {
-          hash->addQuadrant(&q);
+          hash->addQuadrant(&array[i]);
         }
       }
       else if (refinement[i] > 0){
@@ -188,7 +186,6 @@ void TMRQuadtree::refine( int refinement[],
   }
   else {
     for ( int i = 0; i < size; i++ ){
-      // Try adding the 0-th sibling with next-lowest level
       if (array[i].level < max_level){
         TMRQuadrant c = array[i];
         c.level += 1;
@@ -439,9 +436,9 @@ void TMRQuadtree::createNodes( int _order ){
       // Add all of the nodes to the hash
       for ( int jj = 0; jj < 2; jj++ ){
         for ( int ii = 0; ii < 2; ii++ ){
-          // Set the node level to the level of the element
-          // that created it
-          all_nodes[index].level = array[i].level;
+          // Set the node level to the highest level - this will
+          // be updated when the nodes are assigned to the elements
+          all_nodes[index].level = 0;
             
           // Set a positive tag, this will be replaced with a 
           // negative tag if the node is dependent
@@ -461,9 +458,9 @@ void TMRQuadtree::createNodes( int _order ){
       // Add all of the nodes to the hash
       for ( int jj = 0; jj < 3; jj++ ){
         for ( int ii = 0; ii < 3; ii++ ){
-          // Set the node level to the level of the element
-          // that created it
-          all_nodes[index].level = array[i].level;
+          // Set the node level to the highest level - this will
+          // be updated when the nodes are assigned to the elements
+          all_nodes[index].level = 0;
           
           // Set a positive tag, this will be replaced with a 
           // negative tag if the node is dependent

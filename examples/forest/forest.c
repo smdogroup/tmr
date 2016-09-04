@@ -1,6 +1,5 @@
-#include "TMRForest.h"
+#include "TMRQuadForest.h"
 #include "specialFSDTStiffness.h"
-#include "TACSCreator.h"
 #include "TACSAssembler.h"
 #include "PlaneStressQuad.h"
 #include "TACSToFH5.h"
@@ -8,7 +7,6 @@
 #include "TensorToolbox.h"
 #include "MITCShell.h"
 #include "KSFailure.h"
-#include "KSDisplacement.h"
 #include "Compliance.h"
 #include "TACSMeshLoader.h"
 #include "tacslapack.h"
@@ -389,20 +387,13 @@ void computeElemRecon( const TacsScalar Xpts[],
   Compute the local derivative weights
 */
 void computeLocalWeights( TACSAssembler *tacs, 
-                          TacsScalar **_wlocal ){
+                          TACSBVec **wlocal ){
   // Create the weight vector - the weights on the averages
   // Set the weights on each of the nodes
-  BVec *weights = new BVec(tacs->getVarMap(), 1);
+  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
+                                   NULL, tacs->getBVecDistribute(),
+                                   tacs->getBVecDepNodes());
   weights->incref();
-
-  // Retrieve the distributed object from TACSAssembler
-  BVecDistribute *vecDist = tacs->getBVecDistribute();
-
-  // Allocate space for the local weights: The number of independent
-  // and dependent nodes
-  int size = tacs->getNumNodes() + tacs->getNumDependentNodes();
-  TacsScalar *wlocal = new TacsScalar[ size ];
-  memset(wlocal, 0, size*sizeof(TacsScalar));
 
   // Set the local element weights - this assumes that all the
   // elements are bi-quadratic 9-noded elements
@@ -415,28 +406,22 @@ void computeLocalWeights( TACSAssembler *tacs,
   // the number of times each node is referenced
   int nelems = tacs->getNumElements();
   for ( int i = 0; i < nelems; i++ ){
-    tacs->addValues(1, i, welem, wlocal);
+    int len = 0;
+    const int *nodes;
+    tacs->getElement(i, &nodes, &len);
+    weights->setValues(len, nodes, welem, ADD_VALUES);
   }
 
-  // Add in the dependent weight values
-  tacs->addDependentResidual(1, wlocal);
+  // Finish setting all of the values
+  weights->beginSetValues(ADD_VALUES);
+  weights->endSetValues(ADD_VALUES);
 
-  // Add all the weigths together
-  vecDist->beginReverse(wlocal, weights, BVecDistribute::ADD);
-  vecDist->endReverse(wlocal, weights, BVecDistribute::ADD);
-
-  // Send the weights back to the local weights values
-  vecDist->beginForward(weights, wlocal);
-  vecDist->endForward(weights, wlocal);
-
-  // Set the dependent values
-  tacs->setDependentVariables(1, wlocal);
-
-  // Free the BVec object
-  weights->decref();
+  // Distribute the values
+  weights->beginDistributeValues();
+  weights->endDistributeValues();
 
   // Return the local weight values
-  *_wlocal = wlocal;
+  *wlocal = weights;
 }
 
 /*
@@ -451,10 +436,12 @@ void computeLocalWeights( TACSAssembler *tacs,
   output:
   uderiv:         the approximate derivatives at the nodes
 */
-void computeNodeDeriv( TACSAssembler *tacs, BVec *uvec, 
-                       const TacsScalar *wlocal, BVec *uderiv ){
-  // The number of independent + dependent nodes
-  int size = tacs->getNumNodes() + tacs->getNumDependentNodes();
+void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec, 
+                       TACSBVec *wlocal, TACSBVec **_uderiv ){
+  // Allocate a vector for the derivatives
+  TACSBVec *uderiv = 
+    new TACSBVec(tacs->getVarMap(), 3*tacs->getVarsPerNode(), NULL,
+                 tacs->getBVecDistribute(), tacs->getBVecDepNodes());
 
   // The number of variables at each node
   int vars_per_node = tacs->getVarsPerNode();
@@ -463,35 +450,27 @@ void computeNodeDeriv( TACSAssembler *tacs, BVec *uvec,
   // Get the number of elements
   int nelems = tacs->getNumElements();
 
-  // Retrieve the distributed object from TACSAssembler
-  BVecDistribute *vecDist = tacs->getBVecDistribute();
-
-  // Set the local adjoint variables
-  TacsScalar *ulocal = new TacsScalar[ vars_per_node*size ];
-  vecDist->beginForward(uvec, ulocal);
-  vecDist->endForward(uvec, ulocal);
-  tacs->setDependentVariables(vars_per_node, ulocal);
-  
-  // Allocate space for the local variables
-  TacsScalar *dlocal = new TacsScalar[ deriv_per_node*size ];
-  memset(dlocal, 0, deriv_per_node*size*sizeof(TacsScalar));
-
   // Allocate space for the element-wise values and derivatives
   TacsScalar *uelem = new TacsScalar[ 9*vars_per_node ];
   TacsScalar *delem = new TacsScalar[ 9*deriv_per_node ];
 
   // Perform the reconstruction for the local
   for ( int elem = 0; elem < nelems; elem++ ){
+    // Get the element nodes
+    int len = 0;
+    const int *nodes;
+    tacs->getElement(elem, &nodes, &len);
+
     // Get the local weight values
     TacsScalar welem[9];
-    tacs->getValues(1, elem, wlocal, welem);
+    wlocal->getValues(len, nodes, welem);
 
     // Get the local element adjoint variables
-    tacs->getValues(vars_per_node, elem, ulocal, uelem);
+    uvec->getValues(len, nodes, uelem);
 
     // Get the node locations for the element
     TacsScalar Xpts[3*9];
-    tacs->getElement(elem, Xpts, NULL, NULL, NULL);
+    tacs->getElement(elem, Xpts);
     
     // Compute the derivative of the 6 components of the adjoint
     // variables along the 3-coordinate directions
@@ -536,23 +515,22 @@ void computeNodeDeriv( TACSAssembler *tacs, BVec *uvec,
     }
 
     // Add the values
-    tacs->addValues(deriv_per_node, elem, delem, dlocal);
+    uderiv->setValues(len, nodes, delem, ADD_VALUES);
   }
 
   // Free the element values
   delete [] uelem;
   delete [] delem;
 
-  // Set the dependent residual values
-  tacs->addDependentResidual(deriv_per_node, dlocal);
-  
-  // Add all the weigths together
-  vecDist->beginReverse(dlocal, uderiv, BVecDistribute::ADD);
-  vecDist->endReverse(dlocal, uderiv, BVecDistribute::ADD);
+  // Add the values in parallel
+  uderiv->beginSetValues(ADD_VALUES);
+  uderiv->endSetValues(ADD_VALUES);
 
-  // Free any memory that is not required
-  delete [] ulocal;
-  delete [] dlocal;
+  // Distribute the values so that we can call getValues
+  uderiv->beginDistributeValues();
+  uderiv->endDistributeValues();
+
+  *_uderiv = uderiv;
 }
 
 /*
@@ -566,88 +544,24 @@ void computeNodeDeriv( TACSAssembler *tacs, BVec *uvec,
   be used for creating the next mesh.
 
   input:
-  comm:        the MPI communicator
   forest:      the quadtree forest
-  nelems:      the local number of elements
-  ntotal:      the total number of elements
-  partition:   the element partition from the TACSCreator object
+  refine:      the refinement flag for each element
   min_refine:  the minimum quadrant refinement level
   max_refine:  the maximum quadrant refinement level
 */
-void refineQuadMesh( MPI_Comm comm, TMRQuadForest *forest,
-                     int *refine_local,
-                     int nelems, int ntotal,
-                     const int *partition, 
+void refineQuadMesh( TMRQuadForest *forest, const int *refine,
                      const int min_refine, const int max_refine ){
-  // Set the rank and size
-  int mpi_rank, mpi_size;
-  MPI_Comm_rank(comm, &mpi_rank);
-  MPI_Comm_size(comm, &mpi_size);
-
-  // Gather the number of elements from each processor
-  int *refine = NULL;
-  int *elems_per_proc = NULL;
-  int *elem_proc_offset = NULL;
-  if (mpi_rank == 0){
-    elems_per_proc = new int[ mpi_size ];
-    elem_proc_offset = new int[ mpi_size ];
-    refine = new int[ ntotal ];
-  }
-  
-  // Gather the number of elements from each processor to the root
-  // processor
-  MPI_Gather(&nelems, 1, MPI_INT, elems_per_proc, 1, MPI_INT, 0, comm);
-
-  if (mpi_rank == 0){
-    elem_proc_offset[0] = 0;
-    for ( int i = 0; i < mpi_size-1; i++ ){
-      elem_proc_offset[i+1] = elem_proc_offset[i] + elems_per_proc[i];
-    }
-  }
-  
-  // Gather the element strain energy values to the root processor
-  MPI_Gatherv(refine_local, nelems, MPI_INT, 
-              refine, elems_per_proc, elem_proc_offset, MPI_INT, 
-              0, comm);
- 
-  if (mpi_rank == 0){    
-    // Set the refinement
-    int *refinement = new int[ ntotal ];
-    memset(refinement, 0, ntotal*sizeof(int));
-        
-    for ( int i = 0; i < ntotal; i++ ){
-      // Get the partition that this element is on
-      int proc = partition[i];
-      
-      // Retrieve the offset from the processor offset
-      int index = elem_proc_offset[proc];
-      elem_proc_offset[proc]++;
-      
-      if (refine[index] == 1){
-        refinement[i] = 1;
-      }
-      else {
-        refinement[i] = 0;
-      }
-    }
+  // Set the refinement on each of the quadtrees
+  TMRQuadtree **trees;
+  int ntrees = forest->getQuadtrees(&trees);
     
-    // Free the strain energy information and offset values
-    delete [] elems_per_proc;
-    delete [] elem_proc_offset;
-    delete [] refine;
-
-    // Set the refinement on each of the quadtrees
-    TMRQuadtree **trees;
-    int ntrees = forest->getQuadtrees(&trees);
-    
-    // Loop through all trees and refine them
-    for ( int i = 0, offset = 0; i < ntrees; i++ ){
+  // Loop through all trees and refine them
+  for ( int i = 0, offset = 0; i < ntrees; i++ ){
+    if (trees[i]){
       int nlocal = trees[i]->getNumElements();
-      trees[i]->refine(&refinement[offset], min_refine, max_refine);
+      trees[i]->refine(&refine[offset], min_refine, max_refine);
       offset += nlocal;
     }
-    
-    delete [] refinement;
   }
 }
 
@@ -687,8 +601,7 @@ void refineQuadMesh( MPI_Comm comm, TMRQuadForest *forest,
   returns:     the strain energy error
 */
 TacsScalar strainEnergyRefine( TACSAssembler *tacs,
-                               BVec *uvec,
-                               const int *partition,
+                               TACSBVec *uvec,
                                TMRQuadForest *forest,
                                double target_err,
                                int min_refine, int max_refine ){
@@ -704,26 +617,14 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
   TacsScalar *SE_error = new TacsScalar[ nelems ];
   
   // Compute the reconstructed solution
-  TacsScalar *wlocal;
+  TACSBVec *wlocal;
   computeLocalWeights(tacs, &wlocal);
-  BVec *uderiv = new BVec(tacs->getVarMap(), 
-                          3*tacs->getVarsPerNode());
-  uderiv->incref();
+  wlocal->incref();
 
   // Compute the nodal derivatives
-  computeNodeDeriv(tacs, uvec, wlocal, uderiv);
-
-  // Set the local values of the derivatives
-  int vars_per_node = tacs->getVarsPerNode();
-  int deriv_per_node = 3*vars_per_node;
-  int size = tacs->getNumNodes() + tacs->getNumDependentNodes();
-
-  // Distribute the components to the local vector
-  TacsScalar *dlocal = new TacsScalar[ deriv_per_node*size ];
-  BVecDistribute *vecDist = tacs->getBVecDistribute();
-  vecDist->beginForward(uderiv, dlocal);
-  vecDist->endForward(uderiv, dlocal);
-  tacs->setDependentVariables(deriv_per_node, dlocal);
+  TACSBVec *uderiv;
+  computeNodeDeriv(tacs, uvec, wlocal, &uderiv);
+  uderiv->incref();
 
   // Zero the time-derivatives: this assumes a steady-state
   TacsScalar dvars[6*9], ddvars[6*9];
@@ -742,6 +643,11 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
     TacsScalar Xpts[3*9], uelem[6*9];
     TACSElement *elem = tacs->getElement(i, Xpts, uelem, NULL, NULL);
     
+    // Get the nodes from TACSAssembler
+    int len;
+    const int *nodes;
+    tacs->getElement(i, &nodes, &len);
+
     // Evaluate the element residual
     TacsScalar res[6*9];
     memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
@@ -755,7 +661,7 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
 
     // Compute the solution on the refined mesh
     TacsScalar delem[18*9];
-    tacs->getValues(deriv_per_node, i, dlocal, delem);
+    uderiv->getValues(len, nodes, delem);
 
     // 7 enrichment functions for each degree of freedom
     TacsScalar ubar[7*6];
@@ -829,10 +735,6 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
   MPI_Allreduce(&SE_total_error, &SE_temp, 1, TACS_MPI_TYPE, MPI_SUM, comm);
   SE_total_error = SE_temp;
 
-  // Count up the total number of elements
-  int ntotal = 0;
-  MPI_Allreduce(&nelems, &ntotal, 1, MPI_INT, MPI_SUM, comm);
-
   // Go through and flag which element should be refined
   int *refine_local = new int[ nelems ];
   memset(refine_local, 0, nelems*sizeof(int));
@@ -844,14 +746,12 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
 
   // Free some of the data that is no longer required
   delete [] SE_error;
-  delete [] wlocal;
-  delete [] dlocal;
   uderiv->decref();
+  wlocal->decref();
 
   // refine the quadrant mesh based on the local refinement values
-  refineQuadMesh(comm, forest, refine_local, nelems, ntotal,
-                 partition, min_refine, max_refine);
-
+  refineQuadMesh(forest, refine_local,
+                 min_refine, max_refine);
   delete [] refine_local;
 
   // Return the error
@@ -865,7 +765,6 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
   tacs:        the TACSAssembler object
   uvec:        the solution variables
   adj:         the adjoint solution variables
-  partition:   the element partition
   forest:      the forest of quadtrees 
   target_err:  absolute value of the target error
   min_refine:  minimum refinement
@@ -873,8 +772,7 @@ TacsScalar strainEnergyRefine( TACSAssembler *tacs,
 */
 TacsScalar adjointRefine( TACSAssembler *tacs,
                           TACSAssembler *refine,
-                          BVec *uvec, BVec *adjvec,
-                          const int *partition,
+                          TACSBVec *uvec, TACSBVec *adjvec,
                           TMRQuadForest *forest,
                           double target_err,
                           int min_refine, int max_refine,
@@ -894,13 +792,8 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
   int vars_per_node = tacs->getVarsPerNode();
   int deriv_per_node = 3*vars_per_node;
   
-  // Create a vector for the residual on the refined mesh
-  int refine_size = refine->getNumNodes() + refine->getNumDependentNodes(); 
-  TacsScalar *reslocal = new TacsScalar[ vars_per_node*refine_size ];
-  memset(reslocal, 0, vars_per_node*refine_size*sizeof(TacsScalar));
-
-  // Create a vector for the refined residual vector
-  BVec *residual = refine->createVec();
+  // Create the refined residual vector
+  TACSBVec *residual = refine->createVec();
   residual->incref();
 
   // Get the auxiliary elements (surface tractions) associated with the
@@ -931,8 +824,7 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
 
         // The refined node locations and element variables
         TacsScalar Xpts[3*9];
-        TACSElement *elem = refine->getElement(elem_num, Xpts, 
-                                               NULL, NULL, NULL);
+        TACSElement *elem = refine->getElement(elem_num, Xpts);
 
         // Set the local element variables
         TacsScalar evars[6*9];
@@ -969,80 +861,73 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
                                            evars, dvars, ddvars);
           aux_count++;
         }
+
+        // Get refined element numbers
+        int len;
+        const int *nodes;
+        refine->getElement(elem_num, &nodes, &len);
         
         // Add the solution error to the residual
-        refine->addValues(vars_per_node, elem_num, res, reslocal);
+        residual->setValues(len, nodes, res, ADD_VALUES);
       }
     }
   }
 
-  // Add all the residual contributions from the refined mesh
-  BVecDistribute *refineDist = refine->getBVecDistribute();
-  refine->addDependentResidual(vars_per_node, reslocal);
-  refineDist->beginReverse(reslocal, residual, BVecDistribute::ADD);
-  refineDist->endReverse(reslocal, residual, BVecDistribute::ADD);
- 
-  // Transfer the residual on the refined mesh back onto the local variables
-  refineDist->beginForward(residual, reslocal);
-  refineDist->endForward(residual, reslocal);
-  refine->setDependentVariables(vars_per_node, reslocal);
+  // Add all the values together
+  residual->beginSetValues(ADD_VALUES);
+  residual->endSetValues(ADD_VALUES);
+
+  // Distribute the residual entries
+  residual->beginDistributeValues();
+  residual->endDistributeValues();
 
   // Compute the interpolated and reconstructed solution
-  TacsScalar *wlocal;
+  TACSBVec *wlocal;
   computeLocalWeights(tacs, &wlocal);
-  BVec *adjderiv = new BVec(tacs->getVarMap(), 
-                            3*tacs->getVarsPerNode());
+  wlocal->incref();
+
+  // Distribute the adjoint vector derivatives
+  adjvec->beginDistributeValues();
+  adjvec->endDistributeValues();
+
+  // Compute the nodal derivatives of the adjoint vector
+  TACSBVec *adjderiv;
+  computeNodeDeriv(tacs, adjvec, wlocal, &adjderiv);
   adjderiv->incref();
 
-  // Compute the nodal derivatives
-  computeNodeDeriv(tacs, adjvec, wlocal, adjderiv);
-  delete [] wlocal;
+  // Free the wlocal vector
+  wlocal->decref();  wlocal = NULL;
 
-  // Set the local values of the derivatives
-  int size = tacs->getNumNodes() + tacs->getNumDependentNodes();
-
-  // Distribute the components to the local vector
-  TacsScalar *adjlocal = new TacsScalar[ vars_per_node*size ];
-  TacsScalar *dadjlocal = new TacsScalar[ deriv_per_node*size ];
-
-  // Set the derivatives of the displacements
-  BVecDistribute *vecDist = tacs->getBVecDistribute();
-
-  // Transfer the variables for the adjoint and the derivative of the
-  // adjoint
-  vecDist->beginForward(adjvec, adjlocal);
-  vecDist->endForward(adjvec, adjlocal);
-  tacs->setDependentVariables(vars_per_node, adjlocal);
-
-  vecDist->beginForward(adjderiv, dadjlocal);
-  vecDist->endForward(adjderiv, dadjlocal);
-  tacs->setDependentVariables(deriv_per_node, dadjlocal);
-  
-  // Compute the local weights for the adjoint variables on the fine
-  // TACSAssembler mesh
-  computeLocalWeights(refine, &wlocal);
-  
   // Set local values for the quadratic and cubic adjoint
   // contributions
-  TacsScalar *qadjlocal = new TacsScalar[ vars_per_node*refine_size ];
-  memset(qadjlocal, 0, vars_per_node*refine_size*sizeof(TacsScalar));
-  
+  TACSBVec *qadjvec = refine->createVec();
+  qadjvec->incref();
+
+  // Compute the weights on the refined mesh
+  computeLocalWeights(refine, &wlocal);
+  wlocal->incref();
+
   // Allocate the refinement array - which elements will be refined
   int *refine_local = new int[ nelems ];
   memset(refine_local, 0, nelems*sizeof(int));
 
   for ( int i = 0; i < nelems; i++ ){
+    // Get the element node numbers
+    int len = 0;
+    const int *nodes;
+    tacs->getElement(i, &nodes, &len);
+        
     // Get the values of the adjoint
     TacsScalar aelem[6*9];
-    tacs->getValues(vars_per_node, i, adjlocal, aelem);
+    adjvec->getValues(len, nodes, aelem);
 
     // Get the derivative of the solution and the adjoint
     TacsScalar dadjelem[18*9];
-    tacs->getValues(deriv_per_node, i, dadjlocal, dadjelem);
+    adjderiv->getValues(len, nodes, dadjelem);
 
     // Retrieve the element node locations
     TacsScalar Xpts[3*9];
-    tacs->getElement(i, Xpts, NULL, NULL, NULL);
+    tacs->getElement(i, Xpts);
 
     // 7 enrichment functions for each degree of freedom
     TacsScalar adjbar[7*6];
@@ -1057,13 +942,15 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
         int elem_num = 4*i + jj + 2*ii;
 
         // Get the element object
-        TACSElement *elem = refine->getElement(elem_num, NULL, NULL,
-                                               NULL, NULL);
+        TACSElement *elem = refine->getElement(elem_num);
+
+        // Get the element node numbers
+        refine->getElement(elem_num, &nodes, &len);
 
         // Get the local part of the residual
         TacsScalar res[6*9], wvals[9];
-        refine->getValues(vars_per_node, elem_num, reslocal, res);
-        refine->getValues(1, elem_num, wlocal, wvals);
+        residual->getValues(len, nodes, res);
+        wlocal->getValues(len, nodes, wvals);
 
         // The quadratic and cubuic reconstruction of the adjoint
         TacsScalar qadjelem[6*9], cadjelem[6*9];
@@ -1116,7 +1003,8 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
           qadjelem[j] = wvals[j/6]*(cadjelem[j] - qadjelem[j]);
         }
 
-        refine->addValues(vars_per_node, elem_num, qadjelem, qadjlocal); 
+        // Add the local residual values
+        qadjvec->setValues(len, nodes, qadjelem, ADD_VALUES);
       }
     }
 
@@ -1127,20 +1015,18 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
     }
   }
 
-  // Set the local values
-  refine->setDependentVariables(vars_per_node, qadjlocal);
-
-  // Assemble the quadratic term into a single global vector
-  BVec *qadjvec = refine->createVec();
-  qadjvec->incref();
-  refineDist->beginReverse(qadjlocal, qadjvec, BVecDistribute::ADD);
-  refineDist->endReverse(qadjlocal, qadjvec, BVecDistribute::ADD);
+  qadjvec->beginSetValues(ADD_VALUES);
+  qadjvec->endSetValues(ADD_VALUES);
+  
+  qadjvec->beginDistributeValues();
+  qadjvec->endDistributeValues();
 
   // Set the total remaining error and correction
   TacsScalar *rvals, *avals;
   int vsize = qadjvec->getArray(&avals);
   residual->getArray(&rvals);
-  TacsScalar total_err_remain = 0.0;
+ 
+ TacsScalar total_err_remain = 0.0;
   for ( int i = 0; i < vsize; i++ ){
     total_err_remain += fabs(avals[i]*rvals[i]);
   }
@@ -1149,16 +1035,11 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
   MPI_Allreduce(MPI_IN_PLACE, &total_err_remain, 1,
                 TACS_MPI_TYPE, MPI_SUM, comm);
 
-
   // Compute the adjoint-based residual correction
   TacsScalar total_corr = qadjvec->dot(residual);
 
   // Free some of the data that is no longer required
-  delete [] reslocal;
-  delete [] qadjlocal;
-  delete [] adjlocal;
-  delete [] dadjlocal;
-  delete [] wlocal;
+  wlocal->decref();
   residual->decref();
   qadjvec->decref();
   adjderiv->decref();
@@ -1168,8 +1049,8 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
   MPI_Allreduce(&nelems, &ntotal, 1, MPI_INT, MPI_SUM, comm);
 
   // refine the quadrant mesh based on the local refinement values
-  refineQuadMesh(comm, forest, refine_local, nelems, ntotal,
-                 partition, min_refine, max_refine);
+  refineQuadMesh(forest, refine_local,
+                 min_refine, max_refine);
 
   delete [] refine_local;
 
@@ -1180,64 +1061,82 @@ TacsScalar adjointRefine( TACSAssembler *tacs,
   return total_err_remain;
 }
 
-
 /*
   Create the TACSAssembler object based on the TMR forest that is
   supplied.
-
 */
-TACSAssembler* createTACSAssembler( MPI_Comm comm, 
+TACSAssembler *createTACSAssembler( MPI_Comm comm, 
                                     TACSElement *element,
                                     TACSElement *trac,
                                     TMRQuadForest *forest,
-                                    ProblemGeometry *problem,
-                                    int **_partition, 
-                                    int *_nelems, int *_nnodes,
-                                    const int *part=NULL ){
-  int mpi_rank, mpi_size;
+                                    ProblemGeometry *problem ){
+  int mpi_size, mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
   MPI_Comm_size(comm, &mpi_size);
 
-  // Set the total number of elements
-  if (_nelems){ *_nelems = 0; }
-  if (_nnodes){ *_nnodes = 0; }
-
   // Create the TACSCreator object
   int vars_per_node = 6;
-  TACSCreator *creator = new TACSCreator(comm, vars_per_node);
-  creator->incref();
 
-  if (mpi_rank == 0){    
-    // Create the nodes
-    forest->createNodes(ELEMENT_ORDER);
-      
-    // Extract the mesh
-    int nnodes, nelems;
-    int *elem_ptr, *elem_conn;
-    forest->getMesh(&nnodes, &nelems,
-                     &elem_ptr, &elem_conn);
-      
-    // Set the number of elements
-    if (_nelems){ *_nelems = nelems; }
-    if (_nnodes){ *_nnodes = nnodes; }
+  // Create the nodes
+  forest->createNodes(ELEMENT_ORDER);
 
-    // Set the element id numbers
-    int *elem_id_nums = new int[ nelems ];
-    memset(elem_id_nums, 0, nelems*sizeof(int));
-      
-    // Create the Xpts array
-    double *Xpts = new double[ 3*nnodes ];
+  // Create the element mesh
+  int *conn, num_elements = 0;
+  forest->createMeshConn(&conn, &num_elements);
+
+  // Find the number of nodes for this processor
+  const int *range;
+  forest->getOwnedNodeRange(&range);
+  int num_nodes = range[mpi_rank+1] - range[mpi_rank];
+
+  // Get the dependent node information
+  const int *dep_ptr, *dep_conn;
+  const double *dep_weights;
+  int num_dep_nodes = 
+    forest->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+
+  // Create the associated TACSAssembler object
+  TACSAssembler *tacs = 
+    new TACSAssembler(comm, vars_per_node, num_nodes, 
+                      num_elements, num_dep_nodes);
+
+  // Set the element ptr
+  int nodes_per_elem = ELEMENT_ORDER*ELEMENT_ORDER;
+  int *ptr = new int[ nodes_per_elem*num_elements ];
+  for ( int i = 0; i < num_elements+1; i++ ){
+    ptr[i] = nodes_per_elem*i;
+  }
     
-    // Fill in the positions
-    TMRQuadtree **quad;
-    forest->getQuadtrees(&quad);
+  // Set the element connectivity into TACSAssembler
+  tacs->setElementConnectivity(conn, ptr);
+  delete [] conn;
+  delete [] ptr;
+  
+  // Set the dependent node information
+  tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
+  
+  // Create the elements
+  TACSElement **elements = new TACSElement*[ num_elements ];
+  for ( int i = 0; i < num_elements; i++ ){
+    elements[i] = element;
+  }
+  tacs->setElements(elements);
+  delete [] elements;
+
+  // Create the node vector
+  TACSBVec *X = tacs->createNodeVec();
+  X->incref();
+
+  // Get the node array
+  TacsScalar *Xpts;
+  X->getArray(&Xpts);
+    
+  // Fill in the positions
+  TMRQuadtree **quad;
+  int num_faces = forest->getQuadtrees(&quad);
       
-    int num_bcs = 0;
-    int max_bcs = 10000;
-    int *bc_nodes = new int[ max_bcs ];
-      
-    int num_faces = forest->getQuadtrees(NULL);
-    for ( int face = 0; face < num_faces; face++ ){
+  for ( int face = 0; face < num_faces; face++ ){
+    if (quad[face]){
       // Retrieve the node quadrants
       TMRQuadrantArray *nodes;
       quad[face]->getNodes(&nodes);
@@ -1246,71 +1145,30 @@ TACSAssembler* createTACSAssembler( MPI_Comm comm,
       int size;
       TMRQuadrant *array;
       nodes->getArray(&array, &size);
-        
-      // Iterate through and evaluate the x/y/z locations
-      const double dh = 1.0/(1 << TMR_MAX_LEVEL);
+      
+      // Set the node locations
       for ( int i = 0; i < size; i++ ){
         int node = array[i].tag;
-        if (node >= 0){
+        if (node >= range[mpi_rank] && node < range[mpi_rank+1]){
+          int index = node - range[mpi_rank];
           problem->getLocation(face, array[i].x, array[i].y, 
-                               &Xpts[3*node]);
+                               &Xpts[3*index]);
           
           // Set the boundary conditions based on the spatial location
           if (problem->isBoundary(face, array[i].x, array[i].y)){
-            bc_nodes[num_bcs] = node;
-            num_bcs++;
+            tacs->addBCs(1, &node);
           }
         }
       }
     }
-    
-    // Set the connectivity
-    creator->setGlobalConnectivity(nnodes, nelems,
-                                   elem_ptr, elem_conn,
-                                   elem_id_nums);
-    delete [] elem_id_nums;
-    delete [] elem_ptr; 
-    delete [] elem_conn;
-    
-    // Set the boundary conditions
-    creator->setBoundaryConditions(num_bcs, bc_nodes, NULL, NULL);
-    delete [] bc_nodes;
-    
-    // Set the nodal locations
-    creator->setNodes(Xpts);
-    delete [] Xpts;
-      
-    // Set the dependent nodes
-    int num_dep_nodes;
-    const int *dep_ptr;
-    const int *dep_conn;
-    const double *dep_weights;
-    forest->getDependentNodes(&num_dep_nodes, &dep_ptr,
-                               &dep_conn, &dep_weights);
-    creator->setDependentNodes(num_dep_nodes, dep_ptr,
-                               dep_conn, dep_weights);
-    
-    // Partition the mesh
-    creator->partitionMesh(mpi_size, part);
-
-    // Copy the element partition
-    if (_partition){
-      const int *part;
-      int *partition = new int[ nelems ];
-      creator->getElementPartition(&part);
-      memcpy(partition, part, nelems*sizeof(int));      
-      *_partition = partition;
-    }
   }
-    
-  // Set the elements internally within TACS
-  creator->setElements(&element, 1);
-    
-  // Create the TACSAssembler object
-  TACSAssembler *tacs = creator->createTACS();
 
-  // Free the creator object - it is not required anymore
-  creator->decref();
+  // Initialize TACS
+  tacs->initialize();
+
+  // Set the node locations
+  tacs->setNodes(X);
+  X->decref();
   
   // Create the auxiliary element class
   int nelems = tacs->getNumElements();
@@ -1328,6 +1186,7 @@ TACSAssembler* createTACSAssembler( MPI_Comm comm,
 */
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
+  TMRInitialize();
 
   // Set the communicator
   MPI_Comm comm = MPI_COMM_WORLD;
@@ -1340,11 +1199,8 @@ int main( int argc, char *argv[] ){
   double t = 2.25e-3;
   int orthotropic_flag = 0;
 
-  // Create the quadtree forest
-  TMRQuadForest *forest = NULL;
-
   // Set the refinement levels
-  int min_refine = 2;
+  int min_refine = 1;
   int max_refine = TMR_MAX_LEVEL;
 
   // Create the default problem 
@@ -1425,7 +1281,7 @@ int main( int argc, char *argv[] ){
     sprintf(prefix, "%s/ks%.0f", problem_name, ks_weight);
   }
 
-  OrthoPly * ply = NULL;
+  OrthoPly *ply = NULL;
   if (orthotropic_flag){
     // Set the material properties to use
     double rho = 1.0;
@@ -1460,7 +1316,7 @@ int main( int argc, char *argv[] ){
 
   // Create the stiffness relationship
   double kcorr = 5.0/6.0;
-  FSDTStiffness * stiff = 
+  FSDTStiffness *stiff = 
     new specialFSDTStiffness(ply, orthotropic_flag, t, kcorr);
   
   TacsScalar axis[] = {1.0, 0.0, 0.0};
@@ -1479,16 +1335,6 @@ int main( int argc, char *argv[] ){
   TACSElement *element = new MITCShell<ELEMENT_ORDER>(stiff);
   element->incref();
 
-  // Test the element implementation on the root processor
-  if (test_element){
-    TestElement *test = new TestElement(element);
-    test->incref();
-    test->setPrintLevel(2);
-    test->testResidual();
-    test->testJacobian();
-    test->decref();
-  }
-
   // Print out the parameters to the screen
   if (rank == 0){
     printf("target_rel_err =  %f\n", target_rel_err);
@@ -1496,18 +1342,16 @@ int main( int argc, char *argv[] ){
     printf("ks_weight =       %f\n", ks_weight);
   }
 
-  if (rank == 0){
-    forest = new TMRQuadForest(MPI_COMM_SELF);
+  TMRQuadForest *forest = new TMRQuadForest(comm);
     
-    // Set the connectivity
-    int num_nodes, num_faces;
-    const int *conn;
-    problem->getConnectivity(&num_nodes, &conn, &num_faces);
-    forest->setConnectivity(num_nodes, conn, num_faces);
+  // Set the connectivity
+  int num_nodes, num_faces;
+  const int *conn;
+  problem->getConnectivity(&num_nodes, &conn, &num_faces);
+  forest->setConnectivity(num_nodes, conn, num_faces);
     
-    // Allocate the trees
-    forest->createTrees(min_refine);
-  }
+  // Allocate the trees
+  forest->createTrees(min_refine);
 
   // Create the problem file
   FILE *fp = NULL;
@@ -1519,30 +1363,20 @@ int main( int argc, char *argv[] ){
   }
 
   for ( int iter = 0; iter < max_iters; iter++ ){
-    if (rank == 0){
-      // Balance the forest so that we can use it!
-      forest->balance(1);
-    }
+    // Balance the forest so that we can use it!
+    forest->balance(1);
     
-    int *partition = NULL, nelems = 0, nnodes = 0;
     TACSAssembler *tacs = 
-      createTACSAssembler(comm, element, trac, forest, problem,
-                          &partition, &nelems, &nnodes);
+      createTACSAssembler(comm, element, trac, forest, problem);
     tacs->incref();
 
     // Create the KS function
-    KSFailure *ks_func = new KSFailure(tacs, ks_weight);
+    TACSKSFailure *ks_func = new TACSKSFailure(tacs, ks_weight);
     ks_func->incref();
-    ks_func->setKSFailureType(KSFailure::CONTINUOUS);
-
-    // Create the KS function for the displacement
-    TacsScalar dir[] = {0.0, 0.0, 1.0, 0.0, 0.0, 0.0};
-    KSDisplacement *ks_disp = new KSDisplacement(tacs, dir, ks_weight);
-    ks_disp->incref();
-    ks_disp->setKSDisplacementType(KSDisplacement::CONTINUOUS);
+    ks_func->setKSFailureType(TACSKSFailure::CONTINUOUS);
 
     // Allocate the compliance functional
-    Compliance *comp_func = new Compliance(tacs);
+    TACSCompliance *comp_func = new TACSCompliance(tacs);
     comp_func->incref();
 
     // Set the actual function to use
@@ -1552,10 +1386,10 @@ int main( int argc, char *argv[] ){
     }
         
     // Create the preconditioner
-    BVec *res = tacs->createVec();
-    BVec *ans = tacs->createVec();
-    BVec *tmp = tacs->createVec();
-    BVec *adjoint = tacs->createVec();
+    TACSBVec *res = tacs->createVec();
+    TACSBVec *ans = tacs->createVec();
+    TACSBVec *tmp = tacs->createVec();
+    TACSBVec *adjoint = tacs->createVec();
     FEMat *mat = tacs->createFEMat();
 
     // Increment the reference count to the matrix/vectors
@@ -1571,14 +1405,21 @@ int main( int argc, char *argv[] ){
     int reorder_schur = 1;
     PcScMat *pc = new PcScMat(mat, lev, fill, reorder_schur);
     pc->incref();
+
+    // Create the GMRES object
+    int gmres_iters = 10; 
+    int nrestart = 2; // Number of allowed restarts
+    int is_flexible = 0; // Is a flexible preconditioner?
+    GMRES *gmres = new GMRES(mat, pc, gmres_iters, nrestart, is_flexible);
+    gmres->incref();
     
     // Assemble and factor the stiffness/Jacobian matrix
     double alpha = 1.0, beta = 0.0, gamma = 0.0;
-    tacs->assembleJacobian(res, mat, alpha, beta, gamma);
+    tacs->assembleJacobian(alpha, beta, gamma, res, mat);
 
     // Factor the Jacobian matrix
     pc->factor();
-    pc->applyFactor(res, ans);
+    gmres->solve(res, ans);
     ans->scale(-1.0);
 
     // Set the solution
@@ -1603,8 +1444,8 @@ int main( int argc, char *argv[] ){
     }
 
     res->zeroEntries();
-    tacs->evalSVSens(functional, res);
-    pc->applyFactor(res, adjoint);
+    tacs->addSVSens(alpha, beta, gamma, &functional, 1, &res);
+    gmres->solve(res, adjoint);
     adjoint->scale(-1.0);
  
     // Create an TACSToFH5 object for writing output to files
@@ -1613,7 +1454,7 @@ int main( int argc, char *argv[] ){
                                TACSElement::OUTPUT_STRAINS |
                                TACSElement::OUTPUT_STRESSES |
                                TACSElement::OUTPUT_EXTRAS);
-    TACSToFH5 * f5 = new TACSToFH5(tacs, SHELL, write_flag);
+    TACSToFH5 *f5 = new TACSToFH5(tacs, SHELL, write_flag);
     f5->incref();
 
     // Write the displacements
@@ -1628,6 +1469,14 @@ int main( int argc, char *argv[] ){
     double factor = 16.0/(1 << iter);
     if (factor < 1.0){ factor = 1.0; }
 
+    // Get the total number of elements
+    int nnodes = tacs->getNumNodes();
+    int nelems = tacs->getNumElements();
+    int totals[2] = {nnodes, nelems};
+    MPI_Allreduce(MPI_IN_PLACE, totals, 2, MPI_INT, MPI_SUM, comm);
+    nnodes = totals[0];
+    nelems = totals[1];
+    
     // Set the absolute element-level error based on the relative
     // error that is requested
     double target_abs_err = factor*target_rel_err*fval/nelems;
@@ -1637,10 +1486,10 @@ int main( int argc, char *argv[] ){
 
     if (use_energy_norm){
       // Perform the refinement
-      error_total = strainEnergyRefine(tacs, ans, partition, forest,
+      error_total = strainEnergyRefine(tacs, ans, forest,
                                        target_abs_err,
                                        min_refine, max_refine);
-      
+    
       if (fp){
         fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
                 iter, nelems, nnodes, 
@@ -1652,47 +1501,33 @@ int main( int argc, char *argv[] ){
     }
     else {
       // Duplicate the forest
-      TMRQuadForest *dup = NULL;
-      int *new_part = NULL;
-      if (rank == 0){
-        dup = forest->duplicate();
-        TMRQuadtree **trees;
-        int ntrees = dup->getQuadtrees(&trees);
-        for ( int i = 0; i < ntrees; i++ ){
-          trees[i]->refine(NULL, min_refine, max_refine);
-        }
-        
-        // Create the refined TACSAssembler object
-        new_part = new int[ 4*nelems ];
-        for ( int i = 0; i < nelems; i++ ){
-          for ( int k = 0; k < 4; k++ ){
-            new_part[4*i+k] = partition[i];
-          }
+      TMRQuadForest *dup = forest->duplicate();
+
+      // Refine the quadtrees uniformly
+      TMRQuadtree **trees;
+      int ntrees = dup->getQuadtrees(&trees);
+      for ( int i = 0; i < ntrees; i++ ){
+        if (trees[i]){
+          trees[i]->refine();
         }
       }
 
+      // Balance the tree
+      dup->balance(1);
+
       // Create the uniformly refined TACSAssembler object
       TACSAssembler *refine = 
-        createTACSAssembler(comm, element, trac, dup, problem,
-                            NULL, NULL, NULL, new_part);
+        createTACSAssembler(comm, element, trac, dup, problem);
       refine->incref();
       
-      if (rank == 0){
-        // Free the refined forest and its partition
-        delete dup;
-        delete [] new_part;
-      }
-      
-      // Broadcast the number of elements to set the target refinement
-      // level properly
-      MPI_Bcast(&nelems, 1, MPI_INT, 0, comm);
+      // Free the duplicated elements
+      delete dup;
       
       // Perform the error assessment
       TacsScalar adjcorr;
-      error_total = adjointRefine(tacs, refine, 
-                                  ans, adjoint, partition, forest,
-                                  target_abs_err,
-                                  min_refine, max_refine, &adjcorr);
+      error_total = 
+        adjointRefine(tacs, refine, ans, adjoint, forest,
+                      target_abs_err, min_refine, max_refine, &adjcorr);
       
       // Deallocate the refined object
       refine->decref();
@@ -1706,13 +1541,12 @@ int main( int argc, char *argv[] ){
         fflush(fp);
       }
     }
-
+    
     // Free everything
-    delete [] partition;
     tacs->decref();
+    gmres->decref();
     pc->decref();
     ks_func->decref();
-    ks_disp->decref();
     comp_func->decref();
     res->decref();
     ans->decref();
@@ -1733,6 +1567,7 @@ int main( int argc, char *argv[] ){
   trac->decref();
   delete problem;
 
+  TMRFinalize();
   MPI_Finalize();
   return (0);
 }
