@@ -390,7 +390,7 @@ void TMRQuadForest::createTrees( int refine_level[] ){
 */
 void TMRQuadForest::createRandomTrees( int nrand, 
                                        int min_level, int max_level ){
-  if (quadtrees){ 
+  if (quadtrees){
     for ( int i = 0; i < num_faces; i++ ){
       if (quadtrees[i]){ delete quadtrees[i]; }
     }
@@ -425,6 +425,34 @@ int TMRQuadForest::getOwnedQuadtrees( const int **_owned_faces ){
     *_owned_faces = owned_faces; 
   }
   return num_owned_faces;
+}
+
+/*
+  Retrieve information about the connectivity between faces, edges and
+  nodes
+*/
+void TMRQuadForest::getConnectivity( int *_nfaces, 
+                                     int *_nedges, int *_nnodes, 
+                                     const int **_face_conn, 
+                                     const int **_face_edge_conn ){
+  if (_nfaces){ *_nfaces = num_faces; }
+  if (_nedges){ *_nedges = num_edges; }
+  if (_nnodes){ *_nnodes = num_nodes; }
+  if (_face_conn){ *_face_conn = face_conn; }
+  if (_face_edge_conn){ *_face_edge_conn = face_edge_conn; }
+}
+
+/*
+  Retrieve the inverse of the connectivity
+*/
+void TMRQuadForest::getInverseConnectivity( const int **_node_face_conn,
+                                            const int **_node_face_ptr,
+                                            const int **_edge_face_conn,
+                                            const int **_edge_face_ptr ){
+  if (_node_face_conn){ *_node_face_conn = node_face_conn; }
+  if (_node_face_ptr){ *_node_face_ptr = node_face_ptr; }
+  if (_edge_face_conn){ *_edge_face_conn = edge_face_conn; }
+  if (_edge_face_ptr){ *_edge_face_ptr = edge_face_ptr; }
 }
 
 /*

@@ -272,7 +272,7 @@ int main( int argc, char *argv[] ){
 
   // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
-  const int MAX_NUM_MESH = 5;
+  const int MAX_NUM_MESH = 4;
   TMROctForest *forest[MAX_NUM_MESH];
   TACSAssembler *tacs[MAX_NUM_MESH];
   TACSBVecInterp *interp[MAX_NUM_MESH-1];
@@ -292,8 +292,8 @@ int main( int argc, char *argv[] ){
   if (Xpts && elem_node_conn){
     forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
-    forest[0]->createRandomTrees(100, 0, 10);
-    // forest[0]->createTrees(3);
+    // forest[0]->createRandomTrees(100, 0, 10);
+    forest[0]->createTrees(5);
   }
   else {
     // Create the TACSMeshLoader class
@@ -538,7 +538,14 @@ int main( int argc, char *argv[] ){
     Xvec->decref();
 
     if (level+1 < MAX_NUM_MESH){
-      forest[level+1] = forest[level]->coarsen();
+      if (order == 3){
+        // Duplicate the forest for a lower-order mesh
+        forest[level+1] = forest[level]->duplicate();
+        order = 2;
+      }
+      else {
+        forest[level+1] = forest[level]->coarsen();
+      }
     }
   }
 
@@ -591,7 +598,7 @@ int main( int argc, char *argv[] ){
 
   // Set the variables on all levels
   mg->setVariables(ans);
-
+  
   for ( int level = 0; level < MAX_NUM_MESH; level++ ){
     // Output for visualization
     unsigned int write_flag = (TACSElement::OUTPUT_NODES |
