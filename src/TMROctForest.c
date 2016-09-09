@@ -3744,7 +3744,7 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 
-  // First, count up the number of elements
+  // First, count up the number of elements on this processor
   int nelems = 0;
   for ( int block = 0; block < num_blocks; block++ ){
     if (mpi_rank == mpi_block_owners[block]){
@@ -3752,7 +3752,16 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
     }
   }
 
-  // Allocate the connectivity
+  // Create the element range information
+  int *elem_range = new int[ mpi_size+1 ];
+  MPI_Allgather(&nelems, 1, MPI_INT, &elem_range[1], 1, MPI_INT, comm);
+
+  elem_range[0] = 0;
+  for ( int i = 0; i < mpi_size; i++ ){
+    elem_range[i+1] += elem_range[i];
+  }
+
+  // Allocate the local contribution to the connectivity
   int conn_size = 0;
   int *elem_conn = new int[ mesh_order*mesh_order*mesh_order*nelems ];
 
@@ -3802,8 +3811,37 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
     }
   }
 
+  /*
+  // Prepare to distribute the mesh amongst the processors
+  int elems_per_proc = elem_range[mpi_size]/mpi_size;
+  int num_extra_elems = elem_range[mpi_size] % mpi_size;
+  int num_elems = elems_per_proc;
+  if (mpi_rank < num_extra_elems){
+    num_elems += 1;
+  }
+
+  // We know how many elements are going to which processors and which
+  // processors they are coming from based on the element connectivity
+  int *elems = new int[ mesh_order*mesh_order*mesh_order*num_elems ];
+  
+  // Make a conservative guess at the starting location
+  for ( int i = 0; i < mpi_size; i++ ){
+    if ( ){
+      MPI_Isend();
+    }
+  }  
+
+
+  // Recv the elements back into this array
+  for ( int i = 0; i < mpi_size; i++ ){
+    if (){
+      MPI_Irecv();
+    }
+  }
+  */
+
   // Set the output arrays
-  *_conn = elem_conn;
+  *_conn = elems;
   *_nelems = nelems;
 }
 

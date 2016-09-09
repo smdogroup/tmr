@@ -462,6 +462,7 @@ int main( int argc, char *argv[] ){
     tacs[level]->initialize();
 
     if (level > 0){
+      // Create the interpolation on the TMR side
       int *ptr, *conn;
       double *weights;
       forest[level-1]->createInterpolation(forest[level],

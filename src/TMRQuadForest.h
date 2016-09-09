@@ -27,8 +27,8 @@ class TMRQuadForest {
                         int _num_faces,
                         int partition=0 );
 
-  // Re-partition the mesh based on element count
-  // --------------------------------------------
+  // Re-partition the quadtrees based on element count
+  // -------------------------------------------------
   void repartition();
 
   // Create the forest of quadtrees

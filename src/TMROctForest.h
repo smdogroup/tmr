@@ -41,8 +41,8 @@ class TMROctForest {
                         int _num_blocks,
                         int partition=0 );
 
-  // Re-partition the mesh based on element count
-  // --------------------------------------------
+  // Re-partition the octrees based on element count
+  // -----------------------------------------------
   void repartition();
 
   // Create the forest of octrees
