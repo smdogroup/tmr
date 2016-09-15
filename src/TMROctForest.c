@@ -957,11 +957,7 @@ void TMROctForest::repartition(){
   int *new_part = new int[ num_blocks ];
 
   // Gather the element counts to the root processor
-  if (mpi_rank != 0){
-    MPI_Gatherv(elem_counts, num_owned_blocks, MPI_INT,
-                NULL, NULL, NULL, MPI_INT, 0, comm);
-  }
-  else {
+  if (mpi_rank == 0){
     int *all_elem_counts = new int[ num_blocks ];
     int *recv_counts = new int[ mpi_size ];
     int *recv_displ = new int[ mpi_size ];
@@ -1003,6 +999,10 @@ void TMROctForest::repartition(){
 
     // Free the number of elements per processor
     delete [] nelems;
+  }
+  else {
+    MPI_Gatherv(elem_counts, num_owned_blocks, MPI_INT,
+                NULL, NULL, NULL, MPI_INT, 0, comm);
   }
 
   // Free the element counts from each processor
@@ -1090,6 +1090,7 @@ void TMROctForest::repartition(){
 
   // Wait for all the sends to complete
   MPI_Waitall(send_count, requests, MPI_STATUSES_IGNORE);
+  delete [] requests;
 
   // Free the old octrees that were exchanged to another processor and
   // assign the new octrees array

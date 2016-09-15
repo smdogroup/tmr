@@ -311,8 +311,8 @@ int main( int argc, char *argv[] ){
     int *refine = new int[ nelems ];
     memset(refine, 0, nelems*sizeof(int));
     
-    int max_refine = 5;
-    int min_refine = 2;
+    int max_refine = 6;
+    int min_refine = 3;
     double y_max = 30.0;
     for ( int k = 0; k < nelems; k++ ){
       double y_ref = Xpts[3*elem_node_conn[8*k]+1];
@@ -592,11 +592,21 @@ int main( int argc, char *argv[] ){
   res->scale(1e3);
   res->applyBCs();
 
-  // "Factor" the preconditioner
-  mg->factor();
+  for ( int k = 0; k < 5; k++ ){
+    double t0 = MPI_Wtime();
+    // "Factor" the preconditioner
+    mg->factor();
+    t0 = MPI_Wtime() - t0;
 
-  // Compute the solution using GMRES
-  gmres->solve(res, ans);
+    // Compute the solution using GMRES
+    double t1 = MPI_Wtime();
+    gmres->solve(res, ans);
+    t1 = MPI_Wtime() - t1;
+    if (mpi_rank == 0){
+      printf("factor time: %g\n", t0);
+      printf("solve time:  %g\n", t1);
+    }
+  }
   
   // Set the variables into TACS
   ans->scale(-1.0);
