@@ -430,14 +430,18 @@ int main( int argc, char *argv[] ){
       TMROctant *array;
       nodes->getArray(&array, &size);
 
+      // Set the boundary conditions
+      int nbc = 0;
       for ( int i = 0; i < size; i++ ){
         if (array[i].x == 0 && 
             (array[i].tag >= range[mpi_rank] && 
              array[i].tag < range[mpi_rank+1])){
+          nbc++;
           int node = array[i].tag;
           tacs[level]->addBCs(1, &node);
         }
       }
+      printf("nbcs = %d\n", nbc);
     }
 
     TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
@@ -572,7 +576,7 @@ int main( int argc, char *argv[] ){
 
   // Allocate the GMRES solution method
   int gmres_iters = 100;
-  int nrestart = 1;
+  int nrestart = 0;
   int is_flexible = 0;
   GMRES *gmres = new GMRES(mg->getMat(0), mg,
                            gmres_iters, nrestart, is_flexible);

@@ -1210,7 +1210,10 @@ void TMROctForest::computePartition( int part_size, int *vwgts,
   options[0] = 0; 
   
   // weights are on the verticies
-  int wgtflag = 0; 
+  int wgtflag = 0;
+  if (vwgts){ 
+    wgtflag = 2; 
+  }
   int numflag = 0;
   int edgecut = -1; 
   
@@ -3752,15 +3755,6 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
     }
   }
 
-  // Create the element range information
-  int *elem_range = new int[ mpi_size+1 ];
-  MPI_Allgather(&nelems, 1, MPI_INT, &elem_range[1], 1, MPI_INT, comm);
-
-  elem_range[0] = 0;
-  for ( int i = 0; i < mpi_size; i++ ){
-    elem_range[i+1] += elem_range[i];
-  }
-
   // Allocate the local contribution to the connectivity
   int conn_size = 0;
   int *elem_conn = new int[ mesh_order*mesh_order*mesh_order*nelems ];
@@ -3811,37 +3805,8 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
     }
   }
 
-  /*
-  // Prepare to distribute the mesh amongst the processors
-  int elems_per_proc = elem_range[mpi_size]/mpi_size;
-  int num_extra_elems = elem_range[mpi_size] % mpi_size;
-  int num_elems = elems_per_proc;
-  if (mpi_rank < num_extra_elems){
-    num_elems += 1;
-  }
-
-  // We know how many elements are going to which processors and which
-  // processors they are coming from based on the element connectivity
-  int *elems = new int[ mesh_order*mesh_order*mesh_order*num_elems ];
-  
-  // Make a conservative guess at the starting location
-  for ( int i = 0; i < mpi_size; i++ ){
-    if ( ){
-      MPI_Isend();
-    }
-  }  
-
-
-  // Recv the elements back into this array
-  for ( int i = 0; i < mpi_size; i++ ){
-    if (){
-      MPI_Irecv();
-    }
-  }
-  */
-
   // Set the output arrays
-  *_conn = elems;
+  *_conn = elem_conn;
   *_nelems = nelems;
 }
 

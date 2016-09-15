@@ -726,7 +726,10 @@ void TMRQuadForest::computePartition( int part_size, int *vwgts,
   options[0] = 0; 
   
   // weights are on the verticies
-  int wgtflag = 0; 
+  int wgtflag = 0;
+  if (vwgts){ 
+    wgtflag = 2; 
+  }
   int numflag = 0;
   int edgecut = -1; 
   
