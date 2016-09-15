@@ -27,8 +27,8 @@ SO_LINK_FLAGS=-fPIC -shared
 # SO_LINK_FLAGS=-fPIC -dynamiclib -single_module -undefined dynamic_lookup -multiply_defined suppress
 
 # METIS is handy for partitioning graphs...
-METIS_INCLUDE = -I${HOME}/hg/tacs/extern/metis-4.0.3/Lib
-METIS_LIB = ${HOME}/hg/tacs/extern/metis-4.0.3/libmetis.a
+METIS_INCLUDE = -I${HOME}/hg/tacs/extern/metis/include
+METIS_LIB = ${HOME}/hg/tacs/extern/metis/lib/libmetis.a
 
 # If using the python interface you'll need to include python and numpy 
 PYTHON_INCLUDE = ${shell python-config --includes}

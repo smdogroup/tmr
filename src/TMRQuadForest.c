@@ -720,31 +720,29 @@ void TMRQuadForest::computePartition( int part_size, int *vwgts,
     int len = ptr[face+1] - ptr[face];
     qsort(&conn[ptr[face]], len, sizeof(int), compare_integers);
   }
+
+  // Prepare to partition the graph
+  int ncon = 1; // "It should be at least 1"??
+      
+  // Set the default options
+  int options[METIS_NOPTIONS];
+  METIS_SetDefaultOptions(options);
   
-  // use the default options
-  int options[5];
-  options[0] = 0; 
-  
-  // weights are on the verticies
-  int wgtflag = 0;
-  if (vwgts){ 
-    wgtflag = 2; 
-  }
-  int numflag = 0;
-  int edgecut = -1; 
-  
-  // Weights on vertices and edges
-  int *adjwgts = NULL;
-  
+  // Use 0-based numbering
+  options[METIS_OPTION_NUMBERING] = 0;
+        
+  // The objective value in METIS
+  int objval = 0;
+
   if (part_size < 8){
-    METIS_PartGraphRecursive(&num_faces, ptr, conn, vwgts, adjwgts,
-                             &wgtflag, &numflag, &part_size,
-                             options, &edgecut, part);
+    METIS_PartGraphRecursive(&num_faces, &ncon, 
+                             ptr, conn, vwgts, NULL, NULL, &part_size, 
+                             NULL, NULL, options, &objval, part);
   }
   else {
-    METIS_PartGraphKway(&num_faces, ptr, conn, vwgts, adjwgts, 
-                        &wgtflag, &numflag, &part_size, 
-                        options, &edgecut, part);
+    METIS_PartGraphKway(&num_faces, &ncon, 
+                        ptr, conn, vwgts, NULL, NULL, &part_size, 
+                        NULL, NULL, options, &objval, part);
   }
   
   // Free the allocated data
