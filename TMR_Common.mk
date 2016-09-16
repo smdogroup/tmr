@@ -1,13 +1,16 @@
+include ${TACS_DIR}/Makefile.in
+include ${TACS_DIR}/TACS_Common.mk
+
 TMR_LIB = ${TMR_DIR}/lib/libtmr.a
 
-TMR_INCLUDE = -I${TMR_DIR}/src
+TMR_INCLUDE = -I${TMR_DIR}/src ${TACS_INCLUDE}
 
 # Set the compiler flags for TMR
-TMR_CC_FLAGS = ${TMR_FLAGS} ${TMR_INCLUDE} ${METIS_INCLUDE}
-TMR_DEBUG_CC_FLAGS = ${TMR_DEBUG_FLAGS} ${TMR_INCLUDE} ${METIS_INCLUDE}
+TMR_CC_FLAGS = ${TMR_FLAGS} ${TMR_INCLUDE} ${METIS_INCLUDE} ${TACS_OPT_CC_FLAGS}
+TMR_DEBUG_CC_FLAGS = ${TMR_DEBUG_FLAGS} ${TMR_INCLUDE} ${METIS_INCLUDE} ${TACS_DEBUG_CC_FLAGS}
 
 # Set the compiler flags
-TMR_LD_FLAGS = -L${TMR_DIR}/lib/ -Wl,-rpath,${TMR_DIR}/lib -ltmr ${METIS_LIB}
+TMR_LD_FLAGS = -L${TMR_DIR}/lib/ -Wl,-rpath,${TMR_DIR}/lib -ltmr ${METIS_LIB} ${TACS_LD_FLAGS}
 
 # This is the one rule that is used to compile all the source
 %.o: %.c

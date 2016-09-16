@@ -4,6 +4,7 @@
 #include "TACSMg.h"
 #include "BVecInterp.h"
 #include "Solid.h"
+#include "TMR_STLTools.h"
 
 /*
   The box problem
@@ -363,7 +364,8 @@ int main( int argc, char *argv[] ){
   printf("[%d] Repartition\n", mpi_rank);
   forest[0]->repartition();
 
-  for ( int level = 0; level < MAX_NUM_MESH; level++ ){  
+  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
+    // Balance the
     printf("[%d] Balance\n", mpi_rank);
     double tbal = MPI_Wtime();
     forest[level]->balance((level == 0));
@@ -377,6 +379,36 @@ int main( int argc, char *argv[] ){
     // Get the octrees within the forest
     TMROctree **octrees;
     int ntrees = forest[level]->getOctrees(&octrees);
+
+    // Create the node locations
+    // Scan through the nodes
+    const int *owned;
+    int nowned = forest[level]->getOwnedOctrees(&owned);
+    for ( int k = 0; k < nowned; k++ ){
+      int block = owned[k];
+    
+      // Get the octant nodes
+      TMROctantArray *nodes;
+      octrees[block]->getNodes(&nodes);
+      
+      // Get the nodal array
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+
+      // Get the nodes
+      TMRPoint *X;
+      octrees[block]->getPoints(&X);
+
+      // Loop over all the nodes
+      for ( int i = 0; i < size; i++ ){
+        TacsScalar x[3];
+        getLocation(block, elem_node_conn, Xpts, &array[i], x);
+        X[i].x = x[0];
+        X[i].y = x[1];
+        X[i].z = x[2];
+      }
+    }
 
     // Create the mesh
     double tmesh = MPI_Wtime();
@@ -441,7 +473,6 @@ int main( int argc, char *argv[] ){
           tacs[level]->addBCs(1, &node);
         }
       }
-      printf("nbcs = %d\n", nbc);
     }
 
     TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
@@ -508,12 +539,10 @@ int main( int argc, char *argv[] ){
     TACSBVec *Xvec = tacs[level]->createNodeVec();
     Xvec->incref();
 
-    TacsScalar *X = NULL;
-    Xvec->getArray(&X);
+    TacsScalar *Xpts = NULL;
+    Xvec->getArray(&Xpts);
 
     // Scan through the nodes
-    const int *owned;
-    int nowned = forest[level]->getOwnedOctrees(&owned);
     for ( int k = 0; k < nowned; k++ ){
       int block = owned[k];
     
@@ -526,14 +555,19 @@ int main( int argc, char *argv[] ){
       TMROctant *array;
       nodes->getArray(&array, &size);
 
+      // Get the nodes
+      TMRPoint *X;
+      octrees[block]->getPoints(&X);
+
       // Loop over all the nodes
       for ( int i = 0; i < size; i++ ){
         if (array[i].tag >= 0 && 
             (array[i].tag >= range[mpi_rank] && 
              array[i].tag < range[mpi_rank+1])){
           int index = array[i].tag - range[mpi_rank];
-          getLocation(block, elem_node_conn, Xpts,
-                      &array[i], &X[3*index]);
+          Xpts[3*index] = X[i].x;
+          Xpts[3*index+1] = X[i].y;
+          Xpts[3*index+2] = X[i].z;
         }
       }
     }
@@ -616,6 +650,11 @@ int main( int argc, char *argv[] ){
     f5->decref();
   }
 
+  // Print out the binary STL file for later visualization
+  int var_offset = 2;
+  double cutoff = -0.001;
+  int fail = TMR_GenerateBinFile("output_contour.bstl", 
+                                 forest[0], ans, var_offset, cutoff);
   mg->decref();
 
   for ( int level = 0; level < MAX_NUM_MESH; level++ ){
@@ -625,6 +664,12 @@ int main( int argc, char *argv[] ){
 
   for ( int level = 0; level < MAX_NUM_MESH-1; level++ ){
     interp[level]->decref();
+  }
+
+  // Convert the bin file to an stl file
+  if (mpi_rank == 0){
+    TMR_ConvertBinToSTL("output_contour.bstl", 
+                        "output_contour.stl");
   }
 
   TMRFinalize();

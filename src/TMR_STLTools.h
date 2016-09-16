@@ -2,6 +2,7 @@
 #define TMR_STL_TOOLS_H
 
 #include "TMROctForest.h"
+#include "BVec.h"
 
 /*
   The following file contains the tools required to generate an STL
@@ -31,9 +32,9 @@
 
   input:
   filename:   the filename
-  x:          the vertex-values of the design variables
-  x_step:     the number of x values per vertex >= 1
   filter:     the octant forest
+  x:          the vertex-values of the design variables
+  x_offset:   the offset variable values
   cutoff      the level set design variable value 
 
   binary output data format:
@@ -41,8 +42,8 @@
   3*ntri doubles representing the cell-vertices in CCW ordering
 */
 extern int TMR_GenerateBinFile( const char *filename,
-                                double *x, int x_step,
                                 TMROctForest *filter,
+                                TACSBVec *x, int x_offset,
                                 double cutoff );
 
 
@@ -51,7 +52,7 @@ extern int TMR_GenerateBinFile( const char *filename,
   data format (in ASCII).
 
   Note that this is a serial code and should only be called by a
-  single proc.
+  single processor.
 */
 extern int TMR_ConvertBinToSTL( const char *binfile,
                                 const char *stlfile );
