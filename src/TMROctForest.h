@@ -80,6 +80,10 @@ class TMROctForest {
                             int **_interp_ptr, int **_interp_conn,
                             double **_interp_weights );
 
+  // Get the external node numbers
+  // -----------------------------
+  int getExtNodeNums( int **_extNodes );
+
   // Get the array of octrees - careful, many are NULL
   // -------------------------------------------------
   int getOctrees( TMROctree ***_trees );
@@ -87,6 +91,10 @@ class TMROctForest {
   // Get mesh/ownership information - short cut to the non-NULL octrees
   // ------------------------------------------------------------------
   int getOwnedOctrees( const int **_owned_blocks );
+
+  // Get the mesh order
+  // ------------------
+  int getMeshOrder(){ return mesh_order; }
 
   // Get the node-processor ownership range
   // --------------------------------------

@@ -275,6 +275,8 @@ int main( int argc, char *argv[] ){
   MPI_Comm comm = MPI_COMM_WORLD;
   const int MAX_NUM_MESH = 4;
   TMROctForest *forest[MAX_NUM_MESH];
+  TMROctForest *filter[MAX_NUM_MESH];
+
   TACSAssembler *tacs[MAX_NUM_MESH];
   TACSBVecInterp *interp[MAX_NUM_MESH-1];
 
@@ -293,8 +295,12 @@ int main( int argc, char *argv[] ){
   if (Xpts && elem_node_conn){
     forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
-    // forest[0]->createRandomTrees(100, 0, 10);
-    forest[0]->createTrees(5);
+    if (order == 3){
+      forest[0]->createTrees(4);
+    }
+    else {
+      forest[0]->createTrees(5);
+    }
   }
   else {
     // Create the TACSMeshLoader class
@@ -474,6 +480,19 @@ int main( int argc, char *argv[] ){
         }
       }
     }
+
+    // Set up the filter for the local ordering
+    filter[level] = forest[level]->coarsen();
+    filter[level]->balance();
+    filter[level]->createNodes(3);
+
+    // Get the external node numbers
+    int *ext_nodes;
+    int num_ext_nodes = filter[level]->getExtNodeNums(&ext_nodes);
+
+    
+
+
 
     TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
     SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
