@@ -11,8 +11,7 @@
 
 class TMROctStiffness : public SolidStiffness {
  public: 
-  static const int FILTER_ORDER = 3;
-  static const int MAX_NUM_WEIGHTS = 27;
+  static const int MAX_NUM_WEIGHTS = 8;
 
   TMROctStiffness( TMRIndexWeight *_weights, int _nweights,
                    TacsScalar _density, TacsScalar E, 

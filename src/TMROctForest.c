@@ -2671,7 +2671,7 @@ void TMROctForest::computeDepFacesAndEdges(){
         }
       }
 
-      // Determine which edges the octant touches if any
+      // Determine which edges the octant touches if any edge
       int fx0 = (array[i].x == 0);
       int fy0 = (array[i].y == 0);
       int fz0 = (array[i].z == 0);
@@ -3804,8 +3804,9 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
   }
 
   // Set the output arrays
-  *_conn = elem_conn;
-  *_nelems = nelems;
+  if (_conn){ *_conn = elem_conn; }
+  else { delete [] elem_conn; }
+  if (_nelems){ *_nelems = nelems; }
 }
 
 /*
@@ -4464,6 +4465,7 @@ int TMROctForest::getExtNodeNums( int **_ext_nodes ){
   int num_ext = 0;
   int *ext_nodes = new int[ max_ext_nodes ];
 
+  // Scan through and add any external, independent nodes
   for ( int owned = 0; owned < num_owned_blocks; owned++ ){
     int block = owned_blocks[owned];
     
@@ -4477,8 +4479,9 @@ int TMROctForest::getExtNodeNums( int **_ext_nodes ){
     nodes->getArray(&array, &size);
     
     for ( int i = 0; i < size; i++ ){
-      if (array[i].tag < node_range[mpi_rank] ||
-          array[i].tag >= node_range[mpi_rank+1]){
+      if (array[i].tag >= 0 &&
+          (array[i].tag < node_range[mpi_rank] ||
+           array[i].tag >= node_range[mpi_rank+1])){
         ext_nodes[num_ext] = array[i].tag;
         num_ext++;
       }
