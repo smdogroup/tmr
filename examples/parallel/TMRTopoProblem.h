@@ -110,6 +110,10 @@ class TMRTopoProblem : public ParOptProblem {
   void writeOutput( int iter, ParOptVec *x );
 
  private:
+  // Get/set values from the TACSBVec object
+  int getLocalValuesFromBVec( TACSBVec *vec, TacsScalar *xloc );
+  void setBVecFromLocalValues( const TacsScalar *xloc, TACSBVec *vec );
+
   // Store the prefix
   char prefix[256];
 

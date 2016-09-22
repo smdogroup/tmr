@@ -133,7 +133,12 @@ ParOptProblem(_tacs[0]->getMPIComm()){
     filter_indices[k]->incref();
 
     // Set the maximum local size
-    int size = filter_indices[k]->getNumIndices();
+    const int *range;
+    filter_maps[k]->getOwnerRange(&range);
+    int size = (range[mpi_rank+1] - range[mpi_rank]) +
+      filter_indices[k]->getNumIndices();
+
+    // Update the maximum local size
     if (size > max_local_size){
       max_local_size = size;
     }
@@ -147,7 +152,7 @@ ParOptProblem(_tacs[0]->getMPIComm()){
     filter_ctx[k]->incref();
 
     // Create the design variable vector for this level
-    x[k] = new TACSBVec(filter_maps[k], 1);
+    x[k] = new TACSBVec(filter_maps[k], 1, NULL, filter_dist[k]);
   }
 
   // Now create the interpolation between filter levels
@@ -196,7 +201,7 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   ksm = new GMRES(mg->getMat(0), mg, 
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
-  ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
+  // ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
   ksm->setTolerances(1e-10, 1e-30);
 
   // Allocate variables/residual
@@ -253,14 +258,14 @@ TMRTopoProblem::~TMRTopoProblem(){
   Create a design variable vector
 */
 ParOptVec *TMRTopoProblem::createDesignVec(){
-  return new ParOptBVecWrap(new TACSBVec(filter_maps[0], 1));
+  return new ParOptBVecWrap(new TACSBVec(filter_maps[0], 1, NULL, filter_dist[0]));
 }
 
 /*
   Set whether these should be considered sparse inequalities
 */
 int TMRTopoProblem::isSparseInequality(){ return 0; }
-int TMRTopoProblem::isDenseInequality(){ return 1; }
+int TMRTopoProblem::isDenseInequality(){ return 0; }
 int TMRTopoProblem::useLowerBounds(){ return 1; }
 int TMRTopoProblem::useUpperBounds(){ return 1; }
 
@@ -280,67 +285,107 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
 }
 
 /*
+  Get the local values of the design variables from the TACSBVec
+  object and set them in xlocal.
+
+  This function requires that the values already be distributed
+  between processors so that the external values (owned by other
+  processors) are correct.
+
+  input:
+  vec:     the design variable vector
+
+  output:
+  xlocal:  the local design variable array
+
+  returns: the number of design variables on this processor
+*/  
+int TMRTopoProblem::getLocalValuesFromBVec( TACSBVec *vec,
+                                            TacsScalar *xloc ){
+  TacsScalar *x_vals, *x_ext_vals;
+  int size = vec->getArray(&x_vals);
+  int ext_size = vec->getExtArray(&x_ext_vals);
+  memcpy(xloc, x_vals, size*sizeof(TacsScalar));
+  memcpy(&xloc[size], x_ext_vals, ext_size*sizeof(TacsScalar));
+}
+
+/*
+  Set the values into the TACSBVec object using the local
+  size
+*/
+void TMRTopoProblem::setBVecFromLocalValues( const TacsScalar *xloc,
+                                             TACSBVec *vec ){
+  TacsScalar *x_vals, *x_ext_vals;
+  int size = vec->getArray(&x_vals);
+  int ext_size = vec->getExtArray(&x_ext_vals);
+  memcpy(x_vals, xloc, size*sizeof(TacsScalar));
+  memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
+}
+
+/*
   Evaluate the objective and constraints
 */
 int TMRTopoProblem::evalObjCon( ParOptVec *pxvec, 
                                 ParOptScalar *fobj, 
                                 ParOptScalar *cons ){
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(pxvec);
-  TACSBVec *xvec = wrap->vec;
 
-  // Copy the values to the local design variable vector
-  x[0]->copyValues(xvec);
+  if (wrap){
+    TACSBVec *xvec = wrap->vec;
 
-  // Retrieve the design variable values
-  TacsScalar *xvals;
-  x[0]->getArray(&xvals);
+    // Copy the values to the local design variable vector
+    x[0]->copyValues(xvec);
   
-  // Set the design variable values
-  filter_dist[0]->beginForward(filter_ctx[0], xvals, xlocal);
-  filter_dist[0]->endForward(filter_ctx[0], xvals, xlocal);
-  
-  int size = filter_indices[0]->getNumIndices();
-  tacs[0]->setDesignVars(xlocal, size);
+    // Distribute the design variable values
+    x[0]->beginDistributeValues();
+    x[0]->endDistributeValues();
 
-  // Set the design variable values on all processors
-  for ( int k = 0; k < nlevels-1; k++ ){
-    filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
+    // Copy the values to the local array
+    int size = getLocalValuesFromBVec(x[0], xlocal);
+    tacs[0]->setDesignVars(xlocal, size);
 
-    // Get the local design variable values
-    x[k+1]->getArray(&xvals);
-    filter_dist[k+1]->beginForward(filter_ctx[k+1], xvals, xlocal);
-    filter_dist[k+1]->endForward(filter_ctx[k+1], xvals, xlocal);
+    // Set the design variable values on all processors
+    for ( int k = 0; k < nlevels-1; k++ ){
+      filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
 
-    // Set the design variable values
-    size = filter_indices[k+1]->getNumIndices();
-    tacs[k+1]->setDesignVars(xlocal, size);
-  }
+      // Distribute the design variable values
+      x[k+1]->beginDistributeValues();
+      x[k+1]->endDistributeValues();
 
-  // Assemble the Jacobian on each level
-  double alpha = 1.0, beta = 0.0, gamma = 0.0;
-  mg->assembleJacobian(alpha, beta, gamma, NULL);
-  mg->factor();
+      // Set the design variable values
+      size = getLocalValuesFromBVec(x[k+1], xlocal);
+      tacs[k+1]->setDesignVars(xlocal, size);
+    }
+
+    // Assemble the Jacobian on each level
+    double alpha = 1.0, beta = 0.0, gamma = 0.0;
+    mg->assembleJacobian(alpha, beta, gamma, NULL);
+    mg->factor();
     
-  // Solve the system: K(x)*u = force
-  ksm->solve(force, vars);
-  tacs[0]->setVariables(vars);
+    // Solve the system: K(x)*u = force
+    ksm->solve(force, vars);
+    tacs[0]->setVariables(vars);
   
-  // Evaluate the functions in parallel
-  TacsScalar fvals[2];
-  TACSFunction *funcs[2];
-  funcs[0] = compliance;
-  funcs[1] = mass;
-  tacs[0]->evalFunctions(funcs, 2, fvals);
+    // Evaluate the functions in parallel
+    TacsScalar fvals[2];
+    TACSFunction *funcs[2];
+    funcs[0] = compliance;
+    funcs[1] = mass;
+    tacs[0]->evalFunctions(funcs, 2, fvals);
   
-  // Set the scaling for the objective function
-  if (obj_scale < 0.0){
-    obj_scale = 1.0/fvals[0];
+    // Set the scaling for the objective function
+    if (obj_scale < 0.0){
+      obj_scale = 1.0/fvals[0];
+    }
+
+    // Set the compliance objective and the mass constraint
+    *fobj = obj_scale*fvals[0];
+    cons[0] = 1.0 - fvals[1]/target_mass;
+  }
+  else {
+    return 1;
   }
 
-  // Set the compliance objective and the mass constraint
-  *fobj = obj_scale*fvals[0];
-  cons[0] = 1.0 - fvals[1]/target_mass;
-  
   return 0;
 }
 
@@ -352,36 +397,34 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *x,
                                         ParOptVec **Ac ){
   // Evaluate the derivative of the mass and compliance with
   // respect to the design variables
-  int size = filter_indices[0]->getNumIndices();
-  
-  ParOptBVecWrap *wrap = NULL;
-
-  // Zero values
   g->zeroEntries();
   Ac[0]->zeroEntries();
 
-  // Compute the derivative w.r.t the design variables
-  wrap = dynamic_cast<ParOptBVecWrap*>(g);
-  if (wrap){
-    TacsScalar *deriv;
-    wrap->vec->getArray(&deriv);
+  // Compute the derivative of the mass and compliance w.r.t the design variables
+  ParOptBVecWrap *wrap1 = NULL, *wrap2 = NULL;
+  wrap1 = dynamic_cast<ParOptBVecWrap*>(g);
+  wrap2 = dynamic_cast<ParOptBVecWrap*>(Ac[0]);
+  if (wrap1 && wrap2){
+    TACSBVec *g_vec = wrap1->vec;
+    TACSBVec *m_vec = wrap2->vec;
+    int size = g_vec->getArray(NULL) + g_vec->getExtArray(NULL);
 
     memset(xlocal, 0, size*sizeof(TacsScalar));
     tacs[0]->addAdjointResProducts(-obj_scale, &vars, 1, xlocal, size);
-    filter_dist[0]->beginReverse(filter_ctx[0], xlocal, deriv, ADD_VALUES);
-    filter_dist[0]->endReverse(filter_ctx[0], xlocal, deriv, ADD_VALUES);
-  }
-
-  // Attemp to compute the derivative w.r.t. the mass
-  wrap = dynamic_cast<ParOptBVecWrap*>(Ac[0]);
-  if (wrap){
-    TacsScalar *deriv;
-    wrap->vec->getArray(&deriv);
+    setBVecFromLocalValues(xlocal, g_vec);
+    g_vec->beginSetValues(ADD_VALUES);
 
     memset(xlocal, 0, size*sizeof(TacsScalar));
     tacs[0]->addDVSens(-1.0/target_mass, &mass, 1, xlocal, size);
-    filter_dist[0]->beginReverse(filter_ctx[0], xlocal, deriv, ADD_VALUES);
-    filter_dist[0]->endReverse(filter_ctx[0], xlocal, deriv, ADD_VALUES);
+    setBVecFromLocalValues(xlocal, m_vec);
+    m_vec->beginSetValues(ADD_VALUES);
+
+    // Finsh adding the values
+    g_vec->endSetValues(ADD_VALUES);
+    m_vec->endSetValues(ADD_VALUES);
+  }
+  else {
+    return 1;
   }
 
   return 0;
@@ -425,7 +468,6 @@ void TMRTopoProblem::addSparseInnerProduct( double alpha,
 
 // Write the output file
 void TMRTopoProblem::writeOutput( int iter, ParOptVec *x ){
-  /*
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(x);
 
   if (wrap){
@@ -436,5 +478,4 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *x ){
     sprintf(filename, "%s/levelset%.2f_binary%04d.bstl", prefix, cutoff, iter);
     int fail = TMR_GenerateBinFile(filename, filter[0], wrap->vec, var_offset, cutoff);
   }
-  */
 }

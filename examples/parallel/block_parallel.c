@@ -298,7 +298,10 @@ int main( int argc, char *argv[] ){
   TMROctForest *forest[MAX_NUM_MESH];
   TMROctForest *filter[MAX_NUM_MESH];
 
+  // The TACSAssembler models at each level within the mesh
   TACSAssembler *tacs[MAX_NUM_MESH];
+
+  // The interpolation/restriction operator between solution levels
   TACSBVecInterp *interp[MAX_NUM_MESH-1];
 
   // Set up the variable map for the design variable numbers
@@ -393,8 +396,7 @@ int main( int argc, char *argv[] ){
     TMROctree **octrees;
     int ntrees = forest[level]->getOctrees(&octrees);
 
-    // Create the node locations
-    // Scan through the nodes
+    // Set the node locations
     const int *owned;
     int nowned = forest[level]->getOwnedOctrees(&owned);
     for ( int k = 0; k < nowned; k++ ){
@@ -509,30 +511,14 @@ int main( int argc, char *argv[] ){
     // Get a sorted list of the external node numbers
     int *ext_node_nums;
     int num_ext_nodes = filter[level]->getExtNodeNums(&ext_node_nums);
-    int num_filter_nodes = num_ext_nodes + 
-      filter_range[mpi_rank+1] - filter_range[mpi_rank];
-
-    // Set up a sorted list of all the node numbers
-    int *filter_nodes = new int[ num_filter_nodes ];
-    int len = 0, offset = 0;
-    for ( ; (offset < num_ext_nodes && 
-             ext_node_nums[offset] < filter_range[mpi_rank]); offset++, len++ ){
-      filter_nodes[len] = ext_node_nums[offset];
-    }
-    for ( int k = filter_range[mpi_rank]; k < filter_range[mpi_rank+1]; k++, len++ ){
-      filter_nodes[len] = k;
-    }
-    for ( ; offset < num_ext_nodes; offset++, len++ ){
-      filter_nodes[len] = ext_node_nums[offset];
-    }
-    delete [] ext_node_nums;
 
     // Set up the variable map for the design variable numbers
-    filter_maps[level] = new TACSVarMap(comm, num_filter_nodes);
+    int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
+    filter_maps[level] = new TACSVarMap(comm, num_filter_local);
 
     // Set the external filter indices
-    filter_indices[level] = new TACSBVecIndices(&filter_nodes, num_filter_nodes);
-    filter_nodes = NULL;
+    filter_indices[level] = new TACSBVecIndices(&ext_node_nums, num_ext_nodes);
+    ext_node_nums = NULL;
     filter_indices[level]->setUpInverse();
 
     // Get the filter octrees
@@ -540,6 +526,35 @@ int main( int argc, char *argv[] ){
     filter[level]->getOctrees(&filter_octrees);
     filter[level]->getDepNodeConn(&dep_ptr, &dep_conn,
                                   &dep_weights);
+
+    // Set the node locations in the filter
+    const int *filter_owned;
+    int filter_nowned = filter[level]->getOwnedOctrees(&filter_owned);
+    for ( int k = 0; k < filter_nowned; k++ ){
+      int block = filter_owned[k];
+    
+      // Get the octant nodes
+      TMROctantArray *nodes;
+      filter_octrees[block]->getNodes(&nodes);
+      
+      // Get the nodal array
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+
+      // Get the nodes
+      TMRPoint *X;
+      filter_octrees[block]->getPoints(&X);
+
+      // Loop over all the nodes
+      for ( int i = 0; i < size; i++ ){
+        TacsScalar x[3];
+        getLocation(block, elem_node_conn, Xpts, &array[i], x);
+        X[i].x = x[0];
+        X[i].y = x[1];
+        X[i].z = x[2];
+      }
+    }
 
     // Set the material properties to use
     double qval = 5.0;
@@ -605,14 +620,31 @@ int main( int argc, char *argv[] ){
 
               int node = t->tag;
               if (node >= 0){
-                weights[nweights].index = filter_indices[level]->findIndex(node);
+                if (node >= filter_range[mpi_rank] && 
+                    node < filter_range[mpi_rank+1]){
+                  node = node - filter_range[mpi_rank];
+                }
+                else {
+                  node = num_filter_local + 
+                    filter_indices[level]->findIndex(node);
+                }
+                weights[nweights].index = node;
                 weights[nweights].weight = wval;
                 nweights++;
               }
               else {
                 node = -node-1;
                 for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
-                  weights[nweights].index = filter_indices[level]->findIndex(dep_conn[jp]);
+                  int dep_node = dep_conn[jp];
+                  if (dep_node >= filter_range[mpi_rank] && 
+                      dep_node < filter_range[mpi_rank+1]){
+                    dep_node = dep_node - filter_range[mpi_rank];
+                  }
+                  else { 
+                    dep_node = num_filter_local + 
+                      filter_indices[level]->findIndex(dep_node);
+                  }
+                  weights[nweights].index = dep_node;
                   weights[nweights].weight = wval*dep_weights[jp];
                   nweights++;
                 }
@@ -762,7 +794,7 @@ int main( int argc, char *argv[] ){
   force->scale(1e3);
   force->applyBCs();
 
-  double target_mass = 5.0*rho;
+  double target_mass = 0.25*rho;
 
   TMRTopoProblem *prob = 
     new TMRTopoProblem(MAX_NUM_MESH, tacs, force, filter,
