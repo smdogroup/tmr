@@ -159,6 +159,9 @@ void getLocation( int i, const int *elem_node_conn,
   }
 }
 
+/*
+  Compute the shape functions and their derivatives
+*/
 void computeShapeDeriv( double u, double v, double w,
                         double Na[], double Nb[], double Nc[] ){
   Na[0] = -(1.0 - v)*(1.0 - w);
@@ -260,24 +263,50 @@ int main( int argc, char *argv[] ){
   const double *Xpts = NULL;
   const int *elem_node_conn = NULL;
 
+  int nx = 32, ny = 8, nz = 8;
+  nelems = nx*ny*nz;
+  npts = (nx+1)*(ny+1)*(nz+1);
+  TacsScalar *X = new TacsScalar[ 3*npts ];
+  int *conn = new int[ 8*nelems ];
+  
+  // Set the arrays
+  Xpts = X;
+  elem_node_conn = conn;
+  
+  for ( int iz = 0; iz < nz+1; iz++ ){
+    for ( int iy = 0; iy < ny+1; iy++ ){
+      for ( int ix = 0; ix < nx+1; ix++ ){
+        X[0] = 4.0*ix/nx;  X++;
+        X[0] = 1.0*iy/ny;  X++;
+        X[0] = 1.0*iz/nz;  X++;
+      }
+    }
+  }
+  
+  // Loop over all the elements in the mesh
+  for ( int iz = 0; iz < nz; iz++ ){
+    for ( int iy = 0; iy < ny; iy++ ){
+      for ( int ix = 0; ix < nx; ix++ ){
+        // Set the element-level connectivity
+        for ( int iiz = 0; iiz < 2; iiz++ ){
+          for ( int iiy = 0; iiy < 2; iiy++ ){
+            for ( int iix = 0; iix < 2; iix++ ){
+              conn[0] = 
+                ((ix+iix) + (iy+iiy)*(nx+1) + (iz+iiz)*(nx+1)*(ny+1));
+              conn++;
+            }
+          }
+        }
+      }
+    }
+  }
+
   char prefix[256];
   sprintf(prefix, "results/");
 
   for ( int k = 0; k < argc; k++ ){
     if (strcmp(argv[k], "partition") == 0){
       partition = 1;
-    }
-    if (strcmp(argv[k], "box") == 0){
-      npts = box_npts;
-      nelems = box_nelems;
-      Xpts = box_xpts;
-      elem_node_conn = box_conn;
-    }
-    if (strcmp(argv[k], "connector") == 0){
-      npts = connector_npts;
-      nelems = connector_nelems;
-      Xpts = connector_xpts;
-      elem_node_conn = connector_conn;
     }
     if (sscanf(argv[k], "order=%d", &order) == 1){
       if (order < 2){ order = 2; }
@@ -320,10 +349,10 @@ int main( int argc, char *argv[] ){
     forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
     if (order == 3){
-      forest[0]->createTrees(4);
+      forest[0]->createTrees(3);
     }
     else {
-      forest[0]->createTrees(5);
+      forest[0]->createTrees(3);
     }
   }
   else {
@@ -466,26 +495,32 @@ int main( int argc, char *argv[] ){
     tacs[level]->setDependentNodes(dep_ptr, dep_conn,
                                    dep_weights);
 
-    // Add nodes associated with the boundary conditions
-    if (octrees[0]){
-      // Get the octant nodes
-      TMROctantArray *nodes;
-      octrees[0]->getNodes(&nodes);
-      
-      // Get the array
-      int size;
-      TMROctant *array;
-      nodes->getArray(&array, &size);
+    for ( int iz = 0; iz < nz; iz++ ){
+      for ( int iy = 0; iy < ny; iy++ ){
+        int block = nx*iy + nx*ny*iz;
 
-      // Set the boundary conditions
-      int nbc = 0;
-      for ( int i = 0; i < size; i++ ){
-        if (array[i].x == 0 && 
-            (array[i].tag >= range[mpi_rank] && 
-             array[i].tag < range[mpi_rank+1])){
-          nbc++;
-          int node = array[i].tag;
-          tacs[level]->addBCs(1, &node);
+        // Add nodes associated with the boundary conditions
+        if (octrees[block]){
+          // Get the octant nodes
+          TMROctantArray *nodes;
+          octrees[block]->getNodes(&nodes);
+      
+          // Get the array
+          int size;
+          TMROctant *array;
+          nodes->getArray(&array, &size);
+          
+          // Set the boundary conditions
+          int nbc = 0;
+          for ( int i = 0; i < size; i++ ){
+            if (array[i].x == 0 && 
+                (array[i].tag >= range[mpi_rank] && 
+                 array[i].tag < range[mpi_rank+1])){
+              nbc++;
+              int node = array[i].tag;
+              tacs[level]->addBCs(1, &node);
+            }
+          }
         }
       }
     }
@@ -790,9 +825,42 @@ int main( int argc, char *argv[] ){
 
   // Create a force vector
   TACSBVec *force = tacs[0]->createVec();
-  tacs[0]->getNodes(force);
-  force->scale(1e3);
-  force->applyBCs();
+
+  // Get the octrees within the forest
+  TMROctree **octrees;
+  int ntrees = forest[0]->getOctrees(&octrees);
+  int block = nx-1;
+
+  // Find the far node associated with the block
+  if (octrees[block]){
+    // Get the octant nodes
+    TMROctantArray *nodes;
+    octrees[block]->getNodes(&nodes);
+    
+    const int *range;
+    forest[0]->getOwnedNodeRange(&range);
+    
+    // Get the array
+    int size;
+    TMROctant *array;
+    nodes->getArray(&array, &size);
+          
+    // Set the boundary conditions
+    int nbc = 0;
+    const int hmax = 1 << TMR_MAX_LEVEL;
+    for ( int i = 0; i < size; i++ ){
+      if (array[i].x == hmax &&
+          array[i].y == 0 &&
+          array[i].z == 0){
+        int index = 3*(array[i].tag - range[mpi_rank]);
+
+        TacsScalar *f;
+        force->getArray(&f);
+        f[index+1] = 1e4;
+        f[index+2] = 1e4;
+      }
+    }
+  }
 
   double target_mass = 0.25*rho;
 
