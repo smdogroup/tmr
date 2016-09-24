@@ -2672,7 +2672,7 @@ void TMROctForest::computeDepFacesAndEdges(){
         }
       }
 
-      // Determine which edges the octant touches if any
+      // Determine which edges the octant touches if any edge
       int fx0 = (array[i].x == 0);
       int fy0 = (array[i].y == 0);
       int fz0 = (array[i].z == 0);
@@ -3805,8 +3805,9 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
   }
 
   // Set the output arrays
-  *_conn = elem_conn;
-  *_nelems = nelems;
+  if (_conn){ *_conn = elem_conn; }
+  else { delete [] elem_conn; }
+  if (_nelems){ *_nelems = nelems; }
 }
 
 /*
@@ -4432,4 +4433,86 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   *_interp_ptr = interp_ptr;
   *_interp_conn = interp_conn;
   *_interp_weights = interp_weights;
+}
+
+/*
+  Create a sorted, unique array of the external node numbers that are
+  referenced on this processor, but are not local.
+
+  This function can be used to determine a local order for the nodes
+  on this processor.
+
+  in/out:
+  ext_nodes:   the external nodes
+  
+  returns:     the number of external nodes
+*/
+int TMROctForest::getExtNodeNums( int **_ext_nodes ){
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // Determine the number of fine nodes
+  int nnodes = node_range[mpi_rank+1] - node_range[mpi_rank];
+
+  // Loop over all the blocks and compute the interpolation
+  int ntotal = 0;
+  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
+    int block = owned_blocks[owned];
+    ntotal += octrees[block]->getNumNodes();
+  }
+    
+  // The maximum number of external nodes
+  int max_ext_nodes = ntotal - nnodes;
+  int num_ext = 0;
+  int *ext_nodes = new int[ max_ext_nodes ];
+
+  // Scan through and add any external, independent nodes
+  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
+    int block = owned_blocks[owned];
+    
+    // Get the node arrays
+    TMROctantArray *nodes;
+    octrees[block]->getNodes(&nodes);
+    
+    // Get the node numbers
+    int size;
+    TMROctant *array;
+    nodes->getArray(&array, &size);
+    
+    for ( int i = 0; i < size; i++ ){
+      if (array[i].tag >= 0 &&
+          (array[i].tag < node_range[mpi_rank] ||
+           array[i].tag >= node_range[mpi_rank+1])){
+        ext_nodes[num_ext] = array[i].tag;
+        num_ext++;
+      }
+    }
+  }
+
+  // Sort the array using quicksort
+  qsort(ext_nodes, num_ext, sizeof(int), compare_integers);
+
+  // Remove duplicates
+  int len = 0;
+  for ( int i = 0; i < num_ext; i++, len++ ){
+    // Continue increasing i until ext_nodes[i] != ext_nodes[i+1]
+    while ((i < num_ext-1) && 
+           (ext_nodes[i] == ext_nodes[i+1])){
+      i++;
+    }
+
+    // If we have to copy the array value
+    if (i != len){
+      ext_nodes[len] = ext_nodes[i];
+    }
+  }
+
+  // Create a smaller array to store the result
+  *_ext_nodes = new int[ len ];
+  memcpy(*_ext_nodes, ext_nodes, len*sizeof(int));
+
+  // Free the larger array
+  delete [] ext_nodes;
+
+  return len;
 }

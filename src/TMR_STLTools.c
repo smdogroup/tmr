@@ -669,15 +669,29 @@ void add_faces( TriangleList *list, Cell *grid, double cutoff, int bound[] ){
 const int ordering_transform[] = {0, 1, 3, 2, 4, 5, 7, 6};
 
 int TMR_GenerateBinFile( const char *filename,
-                          double *x, int x_step,
-                          TMROctForest *filter,
-                          double cutoff ){
+                         TMROctForest *filter,
+                         TACSBVec *x, int x_offset,
+                         double cutoff ){
+  // Set the return flag
+  int fail = 0;
+
   // Get the MPI communicator
   MPI_Comm comm = filter->getMPIComm();
 
-  // Get the mesh from the filter
-  int nelem_filter, *filter_conn;
-  filter->createMeshConn(&filter_conn, &nelem_filter);
+  // Retrieve the mesh order
+  int mesh_order = filter->getMeshOrder();
+
+  // The mesh has not been created for the filter; we have to
+  // quit since there's no information
+  if (mesh_order < 2){
+    fail = 1;
+    return fail;
+  }
+
+  // Ensure that the values are distributed so that we can access them
+  // directly
+  x->beginDistributeValues();
+  x->endDistributeValues();
 
   // Get the dependent nodes and weight values
   const int *dep_ptr, *dep_conn;
@@ -698,89 +712,151 @@ int TMR_GenerateBinFile( const char *filename,
   // Create the list of Triangles
   TriangleList *list = new TriangleList(5000);
 
+  // Get the values
+  TacsScalar *xvals = new TacsScalar[ x->getBlockSize() ];
+
+  // Get the block -> face information and the face -> block info.
+  // This will be used to determine which faces lie on the boundaries
+  // of the domain
+  const int *block_face_conn;
+  filter->getConnectivity(NULL, NULL, NULL, NULL,
+                          NULL, &block_face_conn, NULL, NULL);
+
+  const int *face_block_ptr;
+  filter->getInverseConnectivity(NULL, NULL, NULL, NULL,
+                                 NULL, &face_block_ptr);
+
   // Loop over all the owned blocks
   for ( int k = 0; k < nowned; k++ ){
     int block = owned[k];
 
     // Retrieve the octant nodes for the list
-    TMROctantArray *elements;
+    TMROctantArray *elements, *nodes;
     octrees[block]->getElements(&elements);
+    octrees[block]->getNodes(&nodes);
 
     // Get the array of octants
-    int nelems;
+    int nelems, nnodes;
     TMROctant *element_array, *node_array;
     elements->getArray(&element_array, &nelems);
+    nodes->getArray(&node_array, &nnodes);
+
+    // Get the nodal locations from the TMROctree object
+    TMRPoint *X;
+    octrees[block]->getPoints(&X);
+
+    // Check if the octree face lies on a boundary or not
+    int octree_face_boundary[6];
+    for ( int i = 0; i < 6; i++ ){
+      octree_face_boundary[i] = 0;
+
+      int face = block_face_conn[6*block + i];
+      int nblocks = face_block_ptr[face+1] - face_block_ptr[face];
+      if (nblocks == 1){
+        octree_face_boundary[i] = 1;
+      }
+    }
 
     // Get the mesh coordinates from the filter
     for ( int i = 0; i < nelems; i++ ){
       // Compute the side-length of this element
-      const int32_t h = 1 << (TMR_MAX_LEVEL - element_array[i].level);
-
-      // Set the value of the X/Y/Z locations of the nodes
-      Cell cell;
-
-      /*
-      for ( int j = 0, jp = filter_ptr[i]; jp < filter_ptr[i+1]; j++, jp++ ){
-        int node = filter_conn[jp];
-        double val = 0.0;
-        if (node >= 0){
-          // Set the value of the indepdnent design variable directly
-          val = x[node];
-        }
-        else {
-          node = -node-1;
-          
-          // Evaluate the value of the dependent design variable
-          val = 0.0;
-          for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
-            val += dep_weights[kp]*x[dep_conn[kp]];
-          }
-        }
-        cell.val[ordering_transform[j]] = val;
-      }
-      */
+      const int32_t h = 
+        1 << (TMR_MAX_LEVEL - element_array[i].level - (mesh_order-2));
       
-      // Keep track if any of the nodes lies on a boundary surface
-      int on_boundary[8];
-      int bound = 0;
+      // Loop over each sub-octant in the mesh 
+      for ( int iz = 0; iz < mesh_order-1; iz++ ){
+        for ( int iy = 0; iy < mesh_order-1; iy++ ){
+          for ( int ix = 0; ix < mesh_order-1; ix++ ){
 
-      // Get the octant points and determine whether the point is on a
-      // boundary
+            // Set the value of the X/Y/Z locations of the nodes
+            Cell cell;
 
-      /*
-      // Find the X,Y,Z locations of the element nodes
-      for ( int kk = 0; kk < 2; kk++ ){
-        for ( int jj = 0; jj < 2; jj++ ){
-          for ( int ii = 0; ii < 2; ii++ ){
-            // Find the octant node (without level/tag)
-            TMROctant p;
-            p.x = element_array[i].x + ii*h;
-            p.y = element_array[i].y + jj*h;
-            p.z = element_array[i].z + kk*h;
+            // Keep track if any of the nodes lies on a boundary
+            // surface
+            int on_boundary[8];
+            int bound = 0;
+
+            // Loop over the nodes within the element
+            for ( int kk = 0; kk < 2; kk++ ){
+              for ( int jj = 0; jj < 2; jj++ ){
+                for ( int ii = 0; ii < 2; ii++ ){
+                  // Find the octant node (without level/tag)
+                  TMROctant p;
+                  p.x = element_array[i].x + (ii + ix)*h;
+                  p.y = element_array[i].y + (jj + iy)*h;
+                  p.z = element_array[i].z + (kk + iz)*h;
+                  
+                  // Find the corresponding node
+                  const int use_nodes = 1;
+                  TMROctant *t = nodes->contains(&p, use_nodes);
+                  
+                  if (t){
+                    // Retrieve the global node number
+                    int node = t->tag;
+
+                    // Get the nodal design variable value
+                    double val = 0.0;
+                    if (node >= 0){
+                      // Set the value of the indepdnent design
+                      // variable directly
+                      x->getValues(1, &node, xvals);
+                      val = RealPart(xvals[x_offset]);
+                    }
+                    else {
+                      node = -node-1;
+                
+                      // Evaluate the value of the dependent design variable
+                      val = 0.0;
+                      for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
+                        // Get the independent node values
+                        int dep_node = dep_conn[kp];
+                        x->getValues(1, &dep_node, xvals);
+                        val += dep_weights[kp]*RealPart(xvals[x_offset]);
+                      }
+                    }
+              
+                    cell.val[ordering_transform[ii + 2*jj + 4*kk]] = val;
             
-            // Set the node location
-            int index = ordering_transform[ii + 2*jj + 4*kk];
-            cell.p[index].x = dh*p.x;
-            cell.p[index].y = dh*p.y;
-            cell.p[index].z = dh*p.z;
+                    // Get the nodal index
+                    int ptindex = t - node_array;
+            
+                    // Set the node location
+                    int index = ordering_transform[ii + 2*jj + 4*kk];
+                    cell.p[index].x = X[ptindex].x;
+                    cell.p[index].y = X[ptindex].y;
+                    cell.p[index].z = X[ptindex].z;
+            
+                    // Check if this node lies on a boundary
+                    on_boundary[index] = 
+                      ((octree_face_boundary[0] && p.x == 0) ||
+                       (octree_face_boundary[1] && p.x == hmax) ||
+                       (octree_face_boundary[2] && p.y == 0) ||
+                       (octree_face_boundary[3] && p.y == hmax) ||
+                       (octree_face_boundary[4] && p.z == 0) ||
+                       (octree_face_boundary[5] && p.z == hmax));
 
-            // Store whether this node is on the boundary
-            on_boundary[index] = filter->onBoundary(&p);
-            bound = bound || on_boundary[index];
+                    // Store whether this node is on the boundary
+                    bound = bound || on_boundary[index];
+                  }
+                }
+              }
+            }
+
+            // Write out the surface
+            add_volume(list, &cell, cutoff);
+            
+            // Write out the faces if they are on the boundary
+            if (bound){
+              add_faces(list, &cell, cutoff, on_boundary);
+            }
           }
         }
-      }
-      */
-
-      // Write out the surface
-      add_volume(list, &cell, cutoff);
-      
-      // Write out the faces if they are on the boundary
-      if (bound){
-        add_faces(list, &cell, cutoff, on_boundary);
       }
     }
   }
+
+  // Free xvals
+  delete [] xvals;
 
   // Create the triangle data type required for output
   MPI_Datatype MPI_Point_type = NULL;
@@ -790,8 +866,11 @@ int TMR_GenerateBinFile( const char *filename,
   MPI_Aint offset = 0;
   MPI_Type_struct(1, &counts, &offset, &type, 
                   &MPI_Point_type);
+  MPI_Type_commit(&MPI_Point_type);
+
   MPI_Type_struct(1, &counts, &offset, &MPI_Point_type, 
                   &MPI_Triangle_type);
+  MPI_Type_commit(&MPI_Triangle_type);
 
   // Now, write out the triangles
   int mpi_size, mpi_rank;  
@@ -815,7 +894,6 @@ int TMR_GenerateBinFile( const char *filename,
   }
 
   // Create the file and write out the information
-  int fail = 0;
   MPI_File fp = NULL;
   MPI_File_open(comm, fname, MPI_MODE_WRONLY | MPI_MODE_CREATE, 
                 MPI_INFO_NULL, &fp);
