@@ -1,9 +1,13 @@
 #include "TMROctForest.h"
+#include "TMROctStiffness.h"
 #include "TACSMeshLoader.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
 #include "BVecInterp.h"
 #include "Solid.h"
+#include "TMR_STLTools.h"
+#include "TMRTopoProblem.h"
+#include "ParOpt.h"
 
 /*
   The box problem
@@ -155,6 +159,9 @@ void getLocation( int i, const int *elem_node_conn,
   }
 }
 
+/*
+  Compute the shape functions and their derivatives
+*/
 void computeShapeDeriv( double u, double v, double w,
                         double Na[], double Nb[], double Nc[] ){
   Na[0] = -(1.0 - v)*(1.0 - w);
@@ -234,9 +241,20 @@ double computeVolume( int i, const int *elem_node_conn,
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
-
-  int partition = 0;
   
+  // Set the communicator
+  MPI_Comm comm = MPI_COMM_WORLD;
+
+  // Get the MPI rank
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // Repartition the mesh immediately
+  int partition = 0;
+
+  // The material properties
+  TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
+
   // The "super-node" locations
   double omega = 1.0;
   int order = 2;
@@ -245,21 +263,50 @@ int main( int argc, char *argv[] ){
   const double *Xpts = NULL;
   const int *elem_node_conn = NULL;
 
+  int nx = 32, ny = 8, nz = 8;
+  nelems = nx*ny*nz;
+  npts = (nx+1)*(ny+1)*(nz+1);
+  TacsScalar *X = new TacsScalar[ 3*npts ];
+  int *conn = new int[ 8*nelems ];
+  
+  // Set the arrays
+  Xpts = X;
+  elem_node_conn = conn;
+  
+  for ( int iz = 0; iz < nz+1; iz++ ){
+    for ( int iy = 0; iy < ny+1; iy++ ){
+      for ( int ix = 0; ix < nx+1; ix++ ){
+        X[0] = 4.0*ix/nx;  X++;
+        X[0] = 1.0*iy/ny;  X++;
+        X[0] = 1.0*iz/nz;  X++;
+      }
+    }
+  }
+  
+  // Loop over all the elements in the mesh
+  for ( int iz = 0; iz < nz; iz++ ){
+    for ( int iy = 0; iy < ny; iy++ ){
+      for ( int ix = 0; ix < nx; ix++ ){
+        // Set the element-level connectivity
+        for ( int iiz = 0; iiz < 2; iiz++ ){
+          for ( int iiy = 0; iiy < 2; iiy++ ){
+            for ( int iix = 0; iix < 2; iix++ ){
+              conn[0] = 
+                ((ix+iix) + (iy+iiy)*(nx+1) + (iz+iiz)*(nx+1)*(ny+1));
+              conn++;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  char prefix[256];
+  sprintf(prefix, "results/");
+
   for ( int k = 0; k < argc; k++ ){
     if (strcmp(argv[k], "partition") == 0){
       partition = 1;
-    }
-    if (strcmp(argv[k], "box") == 0){
-      npts = box_npts;
-      nelems = box_nelems;
-      Xpts = box_xpts;
-      elem_node_conn = box_conn;
-    }
-    if (strcmp(argv[k], "connector") == 0){
-      npts = connector_npts;
-      nelems = connector_nelems;
-      Xpts = connector_xpts;
-      elem_node_conn = connector_conn;
     }
     if (sscanf(argv[k], "order=%d", &order) == 1){
       if (order < 2){ order = 2; }
@@ -268,21 +315,30 @@ int main( int argc, char *argv[] ){
     if (sscanf(argv[k], "omega=%lf", &omega) == 1){
       if (omega < 0.05){ omega = 0.05; }
     }
+    if (sscanf(argv[k], "prefix=%s", prefix) == 1){
+      if (mpi_rank == 0){
+        printf("Using prefix = %s\n", prefix);
+      }
+    }
   }
 
   // Define the different forest levels
-  MPI_Comm comm = MPI_COMM_WORLD;
   const int MAX_NUM_MESH = 4;
   TMROctForest *forest[MAX_NUM_MESH];
+  TMROctForest *filter[MAX_NUM_MESH];
+
+  // The TACSAssembler models at each level within the mesh
   TACSAssembler *tacs[MAX_NUM_MESH];
+
+  // The interpolation/restriction operator between solution levels
   TACSBVecInterp *interp[MAX_NUM_MESH-1];
+
+  // Set up the variable map for the design variable numbers
+  TACSVarMap *filter_maps[MAX_NUM_MESH];
+  TACSBVecIndices *filter_indices[MAX_NUM_MESH];
 
   // Create the forests
   forest[0] = new TMROctForest(comm);
-
-  // Get the MPI rank
-  int mpi_rank;
-  MPI_Comm_rank(comm, &mpi_rank);
 
   if (mpi_rank == 0){
     printf("order = %d\n", order);
@@ -292,8 +348,12 @@ int main( int argc, char *argv[] ){
   if (Xpts && elem_node_conn){
     forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
-    // forest[0]->createRandomTrees(100, 0, 10);
-    forest[0]->createTrees(5);
+    if (order == 3){
+      forest[0]->createTrees(3);
+    }
+    else {
+      forest[0]->createTrees(3);
+    }
   }
   else {
     // Create the TACSMeshLoader class
@@ -311,8 +371,8 @@ int main( int argc, char *argv[] ){
     int *refine = new int[ nelems ];
     memset(refine, 0, nelems*sizeof(int));
     
-    int max_refine = 6;
-    int min_refine = 3;
+    int max_refine = 5;
+    int min_refine = 2;
     double y_max = 30.0;
     for ( int k = 0; k < nelems; k++ ){
       double y_ref = Xpts[3*elem_node_conn[8*k]+1];
@@ -340,30 +400,17 @@ int main( int argc, char *argv[] ){
       }
     }
 
-    // Count up the face ids
-    int face_id_count[8] = {0, 0, 0, 0, 
-                            0, 0, 0, 0};
-    for ( int k = 0; k < 6*nblocks; k++ ){
-      if (face_ids[k] >= 0){
-        face_id_count[face_ids[k]]++;
-      }
-    }
-
     // Print out the number of blocks, faces, edges and nodes
     printf("nblocks = %d\nnfaces = %d\nnedges = %d\nnnodes = %d\n", 
            nblocks, nfaces, nedges, nnodes);
-
-    // Print out the face id counts
-    for ( int k = 0; k < 8; k++ ){
-      printf("face_id_count[%d] = %d\n", k, face_id_count[k]);
-    }
   }
 
   // Repartition the octrees
   printf("[%d] Repartition\n", mpi_rank);
   forest[0]->repartition();
 
-  for ( int level = 0; level < MAX_NUM_MESH; level++ ){  
+  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
+    // Balance the
     printf("[%d] Balance\n", mpi_rank);
     double tbal = MPI_Wtime();
     forest[level]->balance((level == 0));
@@ -377,6 +424,35 @@ int main( int argc, char *argv[] ){
     // Get the octrees within the forest
     TMROctree **octrees;
     int ntrees = forest[level]->getOctrees(&octrees);
+
+    // Set the node locations
+    const int *owned;
+    int nowned = forest[level]->getOwnedOctrees(&owned);
+    for ( int k = 0; k < nowned; k++ ){
+      int block = owned[k];
+    
+      // Get the octant nodes
+      TMROctantArray *nodes;
+      octrees[block]->getNodes(&nodes);
+      
+      // Get the nodal array
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+
+      // Get the nodes
+      TMRPoint *X;
+      octrees[block]->getPoints(&X);
+
+      // Loop over all the nodes
+      for ( int i = 0; i < size; i++ ){
+        TacsScalar x[3];
+        getLocation(block, elem_node_conn, Xpts, &array[i], x);
+        X[i].x = x[0];
+        X[i].y = x[1];
+        X[i].z = x[2];
+      }
+    }
 
     // Create the mesh
     double tmesh = MPI_Wtime();
@@ -419,48 +495,222 @@ int main( int argc, char *argv[] ){
     tacs[level]->setDependentNodes(dep_ptr, dep_conn,
                                    dep_weights);
 
-    // Add nodes associated with the boundary conditions
-    if (octrees[0]){
+    for ( int iz = 0; iz < nz; iz++ ){
+      for ( int iy = 0; iy < ny; iy++ ){
+        int block = nx*iy + nx*ny*iz;
+
+        // Add nodes associated with the boundary conditions
+        if (octrees[block]){
+          // Get the octant nodes
+          TMROctantArray *nodes;
+          octrees[block]->getNodes(&nodes);
+      
+          // Get the array
+          int size;
+          TMROctant *array;
+          nodes->getArray(&array, &size);
+          
+          // Set the boundary conditions
+          int nbc = 0;
+          for ( int i = 0; i < size; i++ ){
+            if (array[i].x == 0 && 
+                (array[i].tag >= range[mpi_rank] && 
+                 array[i].tag < range[mpi_rank+1])){
+              nbc++;
+              int node = array[i].tag;
+              tacs[level]->addBCs(1, &node);
+            }
+          }
+        }
+      }
+    }
+
+    // Allocate the element array
+    TACSElement **elems = new TACSElement*[ num_elements ];
+
+    // Set up the filter for the local ordering
+    if (level == 0){
+      filter[level] = forest[level]->coarsen();
+    }
+    else {
+      filter[level] = filter[level-1]->coarsen();
+    }
+    filter[level]->balance();
+    filter[level]->createNodes(2);
+    filter[level]->createMeshConn(NULL, NULL);
+
+    // Get the node range for the filter
+    const int *filter_range;
+    filter[level]->getOwnedNodeRange(&filter_range);
+
+    // Get a sorted list of the external node numbers
+    int *ext_node_nums;
+    int num_ext_nodes = filter[level]->getExtNodeNums(&ext_node_nums);
+
+    // Set up the variable map for the design variable numbers
+    int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
+    filter_maps[level] = new TACSVarMap(comm, num_filter_local);
+
+    // Set the external filter indices
+    filter_indices[level] = new TACSBVecIndices(&ext_node_nums, num_ext_nodes);
+    ext_node_nums = NULL;
+    filter_indices[level]->setUpInverse();
+
+    // Get the filter octrees
+    TMROctree **filter_octrees;
+    filter[level]->getOctrees(&filter_octrees);
+    filter[level]->getDepNodeConn(&dep_ptr, &dep_conn,
+                                  &dep_weights);
+
+    // Set the node locations in the filter
+    const int *filter_owned;
+    int filter_nowned = filter[level]->getOwnedOctrees(&filter_owned);
+    for ( int k = 0; k < filter_nowned; k++ ){
+      int block = filter_owned[k];
+    
       // Get the octant nodes
       TMROctantArray *nodes;
-      octrees[0]->getNodes(&nodes);
+      filter_octrees[block]->getNodes(&nodes);
       
-      // Get the array
+      // Get the nodal array
       int size;
       TMROctant *array;
       nodes->getArray(&array, &size);
 
-      // Set the boundary conditions
-      int nbc = 0;
+      // Get the nodes
+      TMRPoint *X;
+      filter_octrees[block]->getPoints(&X);
+
+      // Loop over all the nodes
       for ( int i = 0; i < size; i++ ){
-        if (array[i].x == 0 && 
-            (array[i].tag >= range[mpi_rank] && 
-             array[i].tag < range[mpi_rank+1])){
-          nbc++;
-          int node = array[i].tag;
-          tacs[level]->addBCs(1, &node);
-        }
+        TacsScalar x[3];
+        getLocation(block, elem_node_conn, Xpts, &array[i], x);
+        X[i].x = x[0];
+        X[i].y = x[1];
+        X[i].z = x[2];
       }
-      printf("nbcs = %d\n", nbc);
     }
 
-    TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
-    SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
-    TACSElement *solid = NULL;
-    if (order == 2){
-      solid = new Solid<2>(stiff);
-    }
-    else if (order == 3){
-      solid = new Solid<3>(stiff);
+    // Set the material properties to use
+    double qval = 5.0;
+
+    // Loop over all of the elements within the array
+    for ( int k = 0, num = 0; k < nowned; k++ ){
+      int block = owned[k];
+    
+      // Get the filter nodes
+      TMROctantArray *filter_nodes;
+      filter_octrees[block]->getNodes(&filter_nodes);
+
+      // Get the elements from the mesh
+      TMROctantArray *elements;
+      octrees[block]->getElements(&elements);
+      
+      // Get the nodal array
+      int size;
+      TMROctant *array;
+      elements->getArray(&array, &size);
+
+      // Get the nodes
+      TMRPoint *X;
+      octrees[block]->getPoints(&X);
+
+      // Loop over all the elements
+      for ( int i = 0; i < size; i++, num++ ){
+        // Get the enclosing element within the filter
+        TMROctant *oct = filter_octrees[block]->findEnclosing(&array[i]);
+
+        // Get the side-length of the container
+        const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+        const int32_t hoct = 1 << (TMR_MAX_LEVEL - oct->level);
+    
+        // Get the u/v/w values within the filter octant
+        double pt[3];
+        pt[0] = -1.0 + 2.0*(array[i].x + 0.5*h - oct->x)/hoct;
+        pt[1] = -1.0 + 2.0*(array[i].y + 0.5*h - oct->y)/hoct;
+        pt[2] = -1.0 + 2.0*(array[i].z + 0.5*h - oct->z)/hoct;
+        
+        // Get the Lagrange shape functions
+        double N[8];
+        FElibrary::triLagrangeSF(N, pt, 2);
+  
+        int nweights = 0;
+        TMRIndexWeight weights[32];
+
+        // Loop over the adjacent nodes within the filter
+        for ( int kk = 0; kk < 2; kk++ ){
+          for ( int jj = 0; jj < 2; jj++ ){
+            for ( int ii = 0; ii < 2; ii++ ){
+              // Set the weights
+              double wval = N[ii + 2*jj + 4*kk];
+
+              // Compute the location of the node
+              TMROctant p;
+              p.x = oct->x + hoct*ii;
+              p.y = oct->y + hoct*jj;
+              p.z = oct->z + hoct*kk;
+
+              const int use_node_search = 1;
+              TMROctant *t = filter_nodes->contains(&p, use_node_search);
+
+              int node = t->tag;
+              if (node >= 0){
+                if (node >= filter_range[mpi_rank] && 
+                    node < filter_range[mpi_rank+1]){
+                  node = node - filter_range[mpi_rank];
+                }
+                else {
+                  node = num_filter_local + 
+                    filter_indices[level]->findIndex(node);
+                }
+                weights[nweights].index = node;
+                weights[nweights].weight = wval;
+                nweights++;
+              }
+              else {
+                node = -node-1;
+                for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
+                  int dep_node = dep_conn[jp];
+                  if (dep_node >= filter_range[mpi_rank] && 
+                      dep_node < filter_range[mpi_rank+1]){
+                    dep_node = dep_node - filter_range[mpi_rank];
+                  }
+                  else { 
+                    dep_node = num_filter_local + 
+                      filter_indices[level]->findIndex(dep_node);
+                  }
+                  weights[nweights].index = dep_node;
+                  weights[nweights].weight = wval*dep_weights[jp];
+                  nweights++;
+                }
+              }
+            }
+          }
+        }
+
+        // Sort and sum the array of weights
+        nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+        
+        // Allocate the stiffness object
+        SolidStiffness *stiff = new TMROctStiffness(weights, nweights,
+                                                    rho, E, nu, qval);
+
+        TACSElement *solid = NULL;
+        if (order == 2){
+          solid = new Solid<2>(stiff);
+        }
+        else if (order == 3){
+          solid = new Solid<3>(stiff);
+        }
+
+        // Set the element
+        elems[num] = solid;
+      }      
     }
 
-    // Create the elements
-    TACSElement **elements = new TACSElement*[ num_elements ];
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = solid;
-    }
-    tacs[level]->setElements(elements);
-    delete [] elements;
+    // Set the element array
+    tacs[level]->setElements(elems);
+    delete [] elems;
 
     // Initialize
     tacs[level]->initialize();
@@ -508,12 +758,10 @@ int main( int argc, char *argv[] ){
     TACSBVec *Xvec = tacs[level]->createNodeVec();
     Xvec->incref();
 
-    TacsScalar *X = NULL;
-    Xvec->getArray(&X);
+    TacsScalar *Xpts = NULL;
+    Xvec->getArray(&Xpts);
 
     // Scan through the nodes
-    const int *owned;
-    int nowned = forest[level]->getOwnedOctrees(&owned);
     for ( int k = 0; k < nowned; k++ ){
       int block = owned[k];
     
@@ -526,14 +774,19 @@ int main( int argc, char *argv[] ){
       TMROctant *array;
       nodes->getArray(&array, &size);
 
+      // Get the nodes
+      TMRPoint *X;
+      octrees[block]->getPoints(&X);
+
       // Loop over all the nodes
       for ( int i = 0; i < size; i++ ){
         if (array[i].tag >= 0 && 
             (array[i].tag >= range[mpi_rank] && 
              array[i].tag < range[mpi_rank+1])){
           int index = array[i].tag - range[mpi_rank];
-          getLocation(block, elem_node_conn, Xpts,
-                      &array[i], &X[3*index]);
+          Xpts[3*index] = X[i].x;
+          Xpts[3*index+1] = X[i].y;
+          Xpts[3*index+2] = X[i].z;
         }
       }
     }
@@ -570,61 +823,62 @@ int main( int argc, char *argv[] ){
     }
   }
 
-  // Create the residual and solution vectors on the finest TACS mesh
-  TACSBVec *res = tacs[0]->createVec();  res->incref();
-  TACSBVec *ans = tacs[0]->createVec();  ans->incref();
+  // Create a force vector
+  TACSBVec *force = tacs[0]->createVec();
 
-  // Allocate the GMRES solution method
-  int gmres_iters = 100;
-  int nrestart = 0;
-  int is_flexible = 0;
-  GMRES *gmres = new GMRES(mg->getMat(0), mg,
-                           gmres_iters, nrestart, is_flexible);
-  gmres->incref();
+  // Get the octrees within the forest
+  TMROctree **octrees;
+  int ntrees = forest[0]->getOctrees(&octrees);
+  int block = nx-1;
 
-  // Set a monitor to check on solution progress
-  int freq = 1;
-  gmres->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, freq));
+  // Find the far node associated with the block
+  if (octrees[block]){
+    // Get the octant nodes
+    TMROctantArray *nodes;
+    octrees[block]->getNodes(&nodes);
+    
+    const int *range;
+    forest[0]->getOwnedNodeRange(&range);
+    
+    // Get the array
+    int size;
+    TMROctant *array;
+    nodes->getArray(&array, &size);
+          
+    // Set the boundary conditions
+    int nbc = 0;
+    const int hmax = 1 << TMR_MAX_LEVEL;
+    for ( int i = 0; i < size; i++ ){
+      if (array[i].x == hmax &&
+          array[i].y == 0 &&
+          array[i].z == 0){
+        int index = 3*(array[i].tag - range[mpi_rank]);
 
-  // Assemble the Jacobian matrix for each level
-  mg->assembleJacobian(1.0, 0.0, 0.0, res);
-  tacs[0]->getNodes(res);
-  res->scale(1e3);
-  res->applyBCs();
-
-  for ( int k = 0; k < 5; k++ ){
-    double t0 = MPI_Wtime();
-    // "Factor" the preconditioner
-    mg->factor();
-    t0 = MPI_Wtime() - t0;
-
-    // Compute the solution using GMRES
-    double t1 = MPI_Wtime();
-    gmres->solve(res, ans);
-    t1 = MPI_Wtime() - t1;
-    if (mpi_rank == 0){
-      printf("factor time: %g\n", t0);
-      printf("solve time:  %g\n", t1);
+        TacsScalar *f;
+        force->getArray(&f);
+        f[index+1] = 1e4;
+        f[index+2] = 1e4;
+      }
     }
   }
-  
-  // Set the variables into TACS
-  ans->scale(-1.0);
 
-  // Set the variables on all levels
-  mg->setVariables(ans);
-  
-  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
-    // Output for visualization
-    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                               TACSElement::OUTPUT_DISPLACEMENTS);
-    TACSToFH5 *f5 = new TACSToFH5(tacs[level], SOLID, write_flag);
-    f5->incref();
-    char filename[128];
-    sprintf(filename, "parallel_output%d.f5", level);
-    f5->writeToFile(filename);
-    f5->decref();
-  }
+  double target_mass = 0.25*rho;
+
+  TMRTopoProblem *prob = 
+    new TMRTopoProblem(MAX_NUM_MESH, tacs, force, filter,
+                       filter_maps, filter_indices, mg,
+                       target_mass, prefix);
+
+  int max_num_bfgs = 2;
+  ParOpt *opt = new ParOpt(prob, max_num_bfgs);
+  opt->setMaxMajorIterations(1000);
+  opt->setOutputFrequency(1);
+  opt->checkGradients(1e-6);
+  opt->setAbsOptimalityTol(1e-5);
+  opt->optimize();
+
+  delete opt;
+  delete prob;
 
   mg->decref();
 
