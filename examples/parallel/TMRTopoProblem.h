@@ -51,7 +51,13 @@ class TMRTopoProblem : public ParOptProblem {
                   const char *_prefix );
   ~TMRTopoProblem();
 
+  // Set/get the objective scaling factor
+  // ------------------------------------
+  ParOptScalar getObjectiveScaling();
+  void setObjectiveScaling( ParOptScalar scale );
+
   // Create a design variable vector
+  // -------------------------------
   ParOptVec *createDesignVec();
 
   // Set the inequality flags

@@ -246,8 +246,9 @@ int main( int argc, char *argv[] ){
   MPI_Comm comm = MPI_COMM_WORLD;
 
   // Get the MPI rank
-  int mpi_rank;
+  int mpi_rank, mpi_size;
   MPI_Comm_rank(comm, &mpi_rank);
+  MPI_Comm_size(comm, &mpi_size);
 
   // Repartition the mesh immediately
   int partition = 0;
@@ -263,7 +264,7 @@ int main( int argc, char *argv[] ){
   const double *Xpts = NULL;
   const int *elem_node_conn = NULL;
 
-  int nx = 32, ny = 8, nz = 8;
+  int nx = 48, ny = 8, nz = 8;
   nelems = nx*ny*nz;
   npts = (nx+1)*(ny+1)*(nz+1);
   TacsScalar *X = new TacsScalar[ 3*npts ];
@@ -276,7 +277,7 @@ int main( int argc, char *argv[] ){
   for ( int iz = 0; iz < nz+1; iz++ ){
     for ( int iy = 0; iy < ny+1; iy++ ){
       for ( int ix = 0; ix < nx+1; ix++ ){
-        X[0] = 4.0*ix/nx;  X++;
+        X[0] = 6.0*ix/nx;  X++;
         X[0] = 1.0*iy/ny;  X++;
         X[0] = 1.0*iz/nz;  X++;
       }
@@ -304,9 +305,14 @@ int main( int argc, char *argv[] ){
   char prefix[256];
   sprintf(prefix, "results/");
 
+  int max_num_bfgs = 20;
+  int tree_depth = 3;
   for ( int k = 0; k < argc; k++ ){
     if (strcmp(argv[k], "partition") == 0){
       partition = 1;
+    }
+    if (sscanf(argv[k], "tree_depth=%d", &tree_depth) == 1){
+      if (tree_depth < 0){ tree_depth = 1; }
     }
     if (sscanf(argv[k], "order=%d", &order) == 1){
       if (order < 2){ order = 2; }
@@ -318,6 +324,11 @@ int main( int argc, char *argv[] ){
     if (sscanf(argv[k], "prefix=%s", prefix) == 1){
       if (mpi_rank == 0){
         printf("Using prefix = %s\n", prefix);
+      }
+    }
+    if (sscanf(argv[k], "max_num_bfgs=%d", max_num_bfgs) == 1){
+      if (max_num_bfgs < 0){
+	max_num_bfgs = 1;
       }
     }
   }
@@ -349,10 +360,10 @@ int main( int argc, char *argv[] ){
     forest[0]->setConnectivity(npts, elem_node_conn,
                                nelems, partition);
     if (order == 3){
-      forest[0]->createTrees(3);
+      forest[0]->createTrees(tree_depth);
     }
     else {
-      forest[0]->createTrees(3);
+      forest[0]->createTrees(tree_depth);
     }
   }
   else {
@@ -862,20 +873,61 @@ int main( int argc, char *argv[] ){
     }
   }
 
-  double target_mass = 0.25*rho;
+  // Set the log/output file
+  char outfile[256];
+  sprintf(outfile, "%s//paropt_output.out", prefix);
 
+  // Set the target mass
+  double target_mass = 0.5*rho;
+
+  // Create the ParOpt problem class
   TMRTopoProblem *prob = 
     new TMRTopoProblem(MAX_NUM_MESH, tacs, force, filter,
                        filter_maps, filter_indices, mg,
                        target_mass, prefix);
+  
+  // Allocate space for the design variables
+  ParOptVec *x = prob->createDesignVec();
+  ParOptVec *g = prob->createDesignVec();
+  ParOptVec *A = prob->createDesignVec();
 
-  int max_num_bfgs = 2;
+  // Evaluate the constrain and the constraint gradient
+  ParOptScalar fobj, con;
+  prob->getVarsAndBounds(x, NULL, NULL);
+  prob->evalObjCon(x, &fobj, &con);
+  prob->evalObjConGradient(x, g, &A);
+
+  // Evaluate the average gradient component and reset the scaling
+  ParOptScalar fobj_scale = prob->getObjectiveScaling();
+  
+  // Scale the objective by the norm of the gradient
+  const int *range;
+  filter[0]->getOwnedNodeRange(&range);
+  int num_design_vars = range[mpi_size];
+  fobj_scale *= (1.0*num_design_vars)/g->norm();
+
+  // Set the objective scaling
+  prob->setObjectiveScaling(fobj_scale);
+  
+  // Free the data that is not needed
+  delete x;
+  delete g;
+  delete A;
+
+  // Create the topology optimization object
   ParOpt *opt = new ParOpt(prob, max_num_bfgs);
-  opt->setMaxMajorIterations(1000);
+
+  // Set the optimization parameters
+  opt->setMaxMajorIterations(2000);
   opt->setOutputFrequency(1);
-  opt->checkGradients(1e-6);
   opt->setAbsOptimalityTol(1e-5);
-  opt->optimize();
+  opt->setOutputFile(outfile);
+
+  // Set the history/restart file
+  char restartfile[256];
+  sprintf(restartfile, "%s//paropt_restart.bin", prefix);
+  printf("%s\n", restartfile);
+  opt->optimize(restartfile);
 
   delete opt;
   delete prob;

@@ -201,7 +201,7 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   ksm = new GMRES(mg->getMat(0), mg, 
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
-  // ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
+  ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
   ksm->setTolerances(1e-10, 1e-30);
 
   // Allocate variables/residual
@@ -255,6 +255,20 @@ TMRTopoProblem::~TMRTopoProblem(){
 }
 
 /*
+  Get the objective scaling factor
+*/
+ParOptScalar TMRTopoProblem::getObjectiveScaling(){
+  return obj_scale;
+}
+
+/*
+  Set the objective scaling factor
+*/
+void TMRTopoProblem::setObjectiveScaling( ParOptScalar scale ){
+  obj_scale = scale;
+}
+
+/*
   Create a design variable vector
 */
 ParOptVec *TMRTopoProblem::createDesignVec(){
@@ -277,11 +291,11 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
                                        ParOptVec *ub ){
   // Get the values of the design variables from the inner-most
   // version of TACS
-  x->set(0.95);
+  if (x){ x->set(0.95); }
 
   // Set the lower and upper bounds on the design variables
-  lb->set(0.0);
-  ub->set(1.0);
+  if (lb){ lb->set(0.001); }
+  if (ub){ ub->set(1.0); }
 }
 
 /*
