@@ -68,7 +68,7 @@ void ParOptBVecWrap::mdot( ParOptVec **vecs, int nvecs, ParOptScalar *output ){
   }
   
   vec->mdot(tvecs, output, nvecs);
-  delete tvecs;
+  delete [] tvecs;
 }
 
 void ParOptBVecWrap::scale( ParOptScalar alpha ){ 

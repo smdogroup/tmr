@@ -326,7 +326,7 @@ int main( int argc, char *argv[] ){
         printf("Using prefix = %s\n", prefix);
       }
     }
-    if (sscanf(argv[k], "max_num_bfgs=%d", max_num_bfgs) == 1){
+    if (sscanf(argv[k], "max_num_bfgs=%d", &max_num_bfgs) == 1){
       if (max_num_bfgs < 0){
 	max_num_bfgs = 1;
       }
@@ -926,7 +926,6 @@ int main( int argc, char *argv[] ){
   // Set the history/restart file
   char restartfile[256];
   sprintf(restartfile, "%s//paropt_restart.bin", prefix);
-  printf("%s\n", restartfile);
   opt->optimize(restartfile);
 
   delete opt;

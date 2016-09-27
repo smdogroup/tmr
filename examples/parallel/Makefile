@@ -19,6 +19,7 @@ default: ${OBJS}
 	${CXX} block_parallel.o TMRTopoProblem.o ${PAROPT_LD_FLAGS} ${TMR_LD_FLAGS} -o block_parallel
 
 debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
+debug: PAROPT_CC_FLAGS=${PAROPT_DEBUG_CC_FLAGS}
 debug: default
 
 clean:
