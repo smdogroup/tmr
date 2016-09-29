@@ -264,12 +264,16 @@ int main( int argc, char *argv[] ){
   const double *Xpts = NULL;
   const int *elem_node_conn = NULL;
 
-  int nx = 48, ny = 8, nz = 8;
+  // Set up the model dimensions
+  int nx = 80, ny = 8, nz = 8;
   nelems = nx*ny*nz;
   npts = (nx+1)*(ny+1)*(nz+1);
   TacsScalar *X = new TacsScalar[ 3*npts ];
   int *conn = new int[ 8*nelems ];
   
+  // The length of the model
+  double xlen = (1.0*nx)/ny;
+
   // Set the arrays
   Xpts = X;
   elem_node_conn = conn;
@@ -277,7 +281,7 @@ int main( int argc, char *argv[] ){
   for ( int iz = 0; iz < nz+1; iz++ ){
     for ( int iy = 0; iy < ny+1; iy++ ){
       for ( int ix = 0; ix < nx+1; ix++ ){
-        X[0] = 6.0*ix/nx;  X++;
+        X[0] = xlen*ix/nx;  X++;
         X[0] = 1.0*iy/ny;  X++;
         X[0] = 1.0*iz/nz;  X++;
       }
@@ -305,6 +309,9 @@ int main( int argc, char *argv[] ){
   char prefix[256];
   sprintf(prefix, "results/");
 
+  int scale_objective = 0;
+  int use_inverse_vars = 0;
+  int use_linear_method = 0;
   int max_num_bfgs = 20;
   int tree_depth = 3;
   for ( int k = 0; k < argc; k++ ){
@@ -331,6 +338,15 @@ int main( int argc, char *argv[] ){
 	max_num_bfgs = 1;
       }
     }
+    if (strcmp(argv[k], "use_inverse_vars") == 0){
+      use_inverse_vars = 1;
+    }
+    if (strcmp(argv[k], "use_linear_method") == 0){
+      use_linear_method = 1;
+    }
+    if (strcmp(argv[k], "scale_objective") == 0){
+      scale_objective = 1;
+    }
   }
 
   // Define the different forest levels
@@ -354,6 +370,12 @@ int main( int argc, char *argv[] ){
   if (mpi_rank == 0){
     printf("order = %d\n", order);
     printf("omega = %g\n", omega);
+    printf("prefix = %s\n", prefix);
+    printf("use_inverse_vars = %d\n", use_inverse_vars);
+    printf("use_linear_method = %d\n", use_linear_method);
+    printf("scale_objective = %d\n", scale_objective);
+    printf("tree_depth = %d\n", tree_depth);
+    printf("max_num_bfgs = %d\n", max_num_bfgs);
   }
 
   if (Xpts && elem_node_conn){
@@ -819,8 +841,8 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the multigrid object
-  int sor_iters = 1;
-  int sor_symm = 0;
+  int sor_iters = 2;
+  int sor_symm = 1;
   TACSMg *mg = new TACSMg(comm, MAX_NUM_MESH, 
                           omega, sor_iters, sor_symm);
   mg->incref();
@@ -886,42 +908,61 @@ int main( int argc, char *argv[] ){
                        filter_maps, filter_indices, mg,
                        target_mass, prefix);
   
-  // Allocate space for the design variables
-  ParOptVec *x = prob->createDesignVec();
-  ParOptVec *g = prob->createDesignVec();
-  ParOptVec *A = prob->createDesignVec();
+  // Set the problem to use reciprocal variables
+  if (use_inverse_vars){
+    prob->setUseReciprocalVariables();
+  }
 
-  // Evaluate the constrain and the constraint gradient
-  ParOptScalar fobj, con;
-  prob->getVarsAndBounds(x, NULL, NULL);
-  prob->evalObjCon(x, &fobj, &con);
-  prob->evalObjConGradient(x, g, &A);
+  if (scale_objective){
+    // Allocate space for the design variables
+    ParOptVec *x = prob->createDesignVec();
+    ParOptVec *g = prob->createDesignVec();
+    ParOptVec *A = prob->createDesignVec();
+    
+    // Evaluate the constrain and the constraint gradient
+    ParOptScalar fobj, con;
+    prob->getVarsAndBounds(x, NULL, NULL);
+    prob->evalObjCon(x, &fobj, &con);
+    prob->evalObjConGradient(x, g, &A);  
+    
+    // Evaluate the average gradient component and reset the scaling
+    ParOptScalar fobj_scale = prob->getObjectiveScaling();
+    
+    // Scale the objective by the l1 norm of the gradient
+    fobj_scale *= 1.0/g->maxabs();
+    
+    // Set the objective scaling
+    prob->setObjectiveScaling(fobj_scale);
 
-  // Evaluate the average gradient component and reset the scaling
-  ParOptScalar fobj_scale = prob->getObjectiveScaling();
-  
-  // Scale the objective by the norm of the gradient
-  const int *range;
-  filter[0]->getOwnedNodeRange(&range);
-  int num_design_vars = range[mpi_size];
-  fobj_scale *= (1.0*num_design_vars)/g->norm();
-
-  // Set the objective scaling
-  prob->setObjectiveScaling(fobj_scale);
-  
-  // Free the data that is not needed
-  delete x;
-  delete g;
-  delete A;
+    // Free the data that is not needed
+    delete x;
+    delete g;
+    delete A;
+  }
 
   // Create the topology optimization object
   ParOpt *opt = new ParOpt(prob, max_num_bfgs);
+
+  // Use a sequential linear method
+  if (use_linear_method){
+    opt->setSequentialLinearMethod(1);
+  }
 
   // Set the optimization parameters
   opt->setMaxMajorIterations(2000);
   opt->setOutputFrequency(1);
   opt->setAbsOptimalityTol(1e-5);
   opt->setOutputFile(outfile);
+
+  // Set the Hessian reset frequency
+  opt->setBFGSUpdateType(LBFGS::DAMPED_UPDATE);
+
+  // Set the barrier parameter information
+  opt->setBarrierPower(1.5);
+  opt->setBarrierFraction(0.25);
+
+  // Check the gradients
+  opt->checkGradients(1e-6);
 
   // Set the history/restart file
   char restartfile[256];

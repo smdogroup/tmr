@@ -51,10 +51,18 @@ class TMRTopoProblem : public ParOptProblem {
                   const char *_prefix );
   ~TMRTopoProblem();
 
-  // Set/get the objective scaling factor
-  // ------------------------------------
+  // Set/get the objective and mass constraint scaling factors
+  // ---------------------------------------------------------
   ParOptScalar getObjectiveScaling();
   void setObjectiveScaling( ParOptScalar scale );
+  ParOptScalar getMassScaling();
+  void setMassScaling( ParOptScalar scale );
+
+  // Use the reciprocal variable values
+  // ----------------------------------
+  void setUseReciprocalVariables(){
+    use_inverse_vars = 1;
+  }
 
   // Create a design variable vector
   // -------------------------------
@@ -151,8 +159,12 @@ class TMRTopoProblem : public ParOptProblem {
   // The target mass
   double target_mass;
 
-  // The scaling for the objective
+  // The scaling for the objective and constraint
   double obj_scale;
+  double mass_scale;
+
+  // Flag to indicate whether to use inverse variables or not
+  int use_inverse_vars;
 
   // The load case information
   TACSBVec *res, *vars, *force;

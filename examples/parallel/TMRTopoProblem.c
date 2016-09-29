@@ -84,8 +84,12 @@ void ParOptBVecWrap::axpy( ParOptScalar alpha, ParOptVec *pvec ){
 
 int ParOptBVecWrap::getArray( ParOptScalar **array ){
   TacsScalar *_array;
-  vec->getArray(&_array);
-  *array = _array;    
+  int size = 0;
+  if (array){
+    size = vec->getArray(&_array);
+    *array = _array;
+  }
+  return size;
 }
 
 
@@ -204,6 +208,9 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
   ksm->setTolerances(1e-10, 1e-30);
 
+  // Do not use inverse variables by default
+  use_inverse_vars = 0;
+
   // Allocate variables/residual
   force = _force;
   force->incref();
@@ -220,6 +227,7 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   // Set the target mass
   target_mass = _target_mass;
   obj_scale = -1.0;
+  mass_scale = 1.0/target_mass;
 
   // Set the problem sizes
   int nvars = x[0]->getArray(NULL);
@@ -269,6 +277,20 @@ void TMRTopoProblem::setObjectiveScaling( ParOptScalar scale ){
 }
 
 /*
+  Get the mass scaling factor
+*/
+ParOptScalar TMRTopoProblem::getMassScaling(){
+  return mass_scale;
+}
+
+/*
+  Set the mass constraint scaling factor
+*/
+void TMRTopoProblem::setMassScaling( ParOptScalar scale ){
+  mass_scale = scale;
+}
+
+/*
   Create a design variable vector
 */
 ParOptVec *TMRTopoProblem::createDesignVec(){
@@ -289,13 +311,20 @@ int TMRTopoProblem::useUpperBounds(){ return 1; }
 void TMRTopoProblem::getVarsAndBounds( ParOptVec *x, 
                                        ParOptVec *lb, 
                                        ParOptVec *ub ){
-  // Get the values of the design variables from the inner-most
-  // version of TACS
-  if (x){ x->set(0.95); }
-
-  // Set the lower and upper bounds on the design variables
-  if (lb){ lb->set(0.001); }
-  if (ub){ ub->set(1.0); }
+  if (use_inverse_vars){
+    if (x){ x->set(2.0); }
+    if (lb){ lb->set(1.0); }
+    if (ub){ ub->set(1000.0); }
+  }
+  else {
+    // Get the values of the design variables from the inner-most
+    // version of TACS
+    if (x){ x->set(0.5); }
+    
+    // Set the lower and upper bounds on the design variables
+    if (lb){ lb->set(0.001); }
+    if (ub){ ub->set(1.0); }
+  }
 }
 
 /*
@@ -349,6 +378,16 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
     // Copy the values to the local design variable vector
     x[0]->copyValues(xvec);
+
+    // If we're using inverse variables, convert from the inverse
+    // variables to the usual variables
+    if (use_inverse_vars){
+      TacsScalar *xvals;
+      int size = x[0]->getArray(&xvals);
+      for ( int i = 0; i < size; i++ ){
+	xvals[i] = 1.0/xvals[i];
+      }
+    }
   
     // Distribute the design variable values
     x[0]->beginDistributeValues();
@@ -394,7 +433,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
     // Set the compliance objective and the mass constraint
     *fobj = obj_scale*fvals[0];
-    cons[0] = 1.0 - fvals[1]/target_mass;
+    cons[0] = (target_mass - fvals[1])*mass_scale;
   }
   else {
     return 1;
@@ -429,13 +468,26 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *x,
     g_vec->beginSetValues(ADD_VALUES);
 
     memset(xlocal, 0, size*sizeof(TacsScalar));
-    tacs[0]->addDVSens(-1.0/target_mass, &mass, 1, xlocal, size);
+    tacs[0]->addDVSens(-mass_scale, &mass, 1, xlocal, size);
     setBVecFromLocalValues(xlocal, m_vec);
     m_vec->beginSetValues(ADD_VALUES);
 
     // Finsh adding the values
     g_vec->endSetValues(ADD_VALUES);
     m_vec->endSetValues(ADD_VALUES);
+
+    // Check if we're using reciprocal variables
+    if (use_inverse_vars){
+      ParOptScalar *xvals;
+      TacsScalar *gvals, *mvals;
+      int xsize = x->getArray(&xvals);
+      g_vec->getArray(&gvals);
+      m_vec->getArray(&mvals);
+      for ( int i = 0; i < xsize; i++ ){
+	gvals[i] = -gvals[i]/(xvals[i]*xvals[i]);
+	mvals[i] = -mvals[i]/(xvals[i]*xvals[i]);
+      }
+    }
   }
   else {
     return 1;
@@ -481,15 +533,11 @@ void TMRTopoProblem::addSparseInnerProduct( double alpha,
                                             double *A ){}
 
 // Write the output file
-void TMRTopoProblem::writeOutput( int iter, ParOptVec *x ){
-  ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(x);
-
-  if (wrap){
-    // Print out the binary STL file for later visualization
-    int var_offset = 0;
-    double cutoff = 0.25;
-    char filename[256];
-    sprintf(filename, "%s/levelset%.2f_binary%04d.bstl", prefix, cutoff, iter);
-    int fail = TMR_GenerateBinFile(filename, filter[0], wrap->vec, var_offset, cutoff);
-  }
+void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
+  // Print out the binary STL file for later visualization
+  int var_offset = 0;
+  double cutoff = 0.25;
+  char filename[256];
+  sprintf(filename, "%s/levelset%.2f_binary%04d.bstl", prefix, cutoff, iter);
+  int fail = TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
 }
