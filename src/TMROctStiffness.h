@@ -15,7 +15,7 @@ class TMROctStiffness : public SolidStiffness {
 
   TMROctStiffness( TMRIndexWeight *_weights, int _nweights,
                    TacsScalar _density, TacsScalar E, 
-                   TacsScalar _nu, double _q );
+                   TacsScalar _nu, double _q, double _eps=1e-3 );
 
   // Set the design variable values in the object
   // --------------------------------------------
@@ -52,6 +52,7 @@ class TMROctStiffness : public SolidStiffness {
 
   // The RAMP penalization factor
   TacsScalar q;
+  double eps;
 
   // The value of the design-dependent density
   TacsScalar rho;

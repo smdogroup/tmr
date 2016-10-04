@@ -300,10 +300,31 @@ ParOptVec *TMRTopoProblem::createDesignVec(){
 /*
   Set whether these should be considered sparse inequalities
 */
-int TMRTopoProblem::isSparseInequality(){ return 0; }
-int TMRTopoProblem::isDenseInequality(){ return 0; }
-int TMRTopoProblem::useLowerBounds(){ return 1; }
-int TMRTopoProblem::useUpperBounds(){ return 1; }
+int TMRTopoProblem::isSparseInequality(){ 
+  return 0; 
+}
+
+/*
+  Use the inequality constraint - this seems to work better
+*/
+int TMRTopoProblem::isDenseInequality(){ 
+  return 1; 
+}
+
+/*
+  Always use the lower bound variables
+*/
+int TMRTopoProblem::useLowerBounds(){ 
+  return 1; 
+}
+
+/*
+  We impose an upper bound on the variables even though in the case
+  when we have reciprocal variables they are not really defeind.
+*/
+int TMRTopoProblem::useUpperBounds(){
+  return 1; 
+}
 
 /*
   Set the initial design variables
@@ -312,17 +333,17 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
                                        ParOptVec *lb, 
                                        ParOptVec *ub ){
   if (use_inverse_vars){
-    if (x){ x->set(2.0); }
+    if (x){ x->set(1.05); }
     if (lb){ lb->set(1.0); }
     if (ub){ ub->set(1000.0); }
   }
   else {
     // Get the values of the design variables from the inner-most
     // version of TACS
-    if (x){ x->set(0.5); }
+    if (x){ x->set(0.95); }
     
     // Set the lower and upper bounds on the design variables
-    if (lb){ lb->set(0.001); }
+    if (lb){ lb->set(0.0); }
     if (ub){ ub->set(1.0); }
   }
 }
@@ -445,7 +466,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 /*
   Evaluate the objective and constraint gradients
 */
-int TMRTopoProblem::evalObjConGradient( ParOptVec *x, 
+int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec, 
                                         ParOptVec *g, 
                                         ParOptVec **Ac ){
   // Evaluate the derivative of the mass and compliance with
@@ -480,7 +501,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *x,
     if (use_inverse_vars){
       ParOptScalar *xvals;
       TacsScalar *gvals, *mvals;
-      int xsize = x->getArray(&xvals);
+      int xsize = xvec->getArray(&xvals);
       g_vec->getArray(&gvals);
       m_vec->getArray(&mvals);
       for ( int i = 0; i < xsize; i++ ){

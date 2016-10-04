@@ -273,6 +273,8 @@ int main( int argc, char *argv[] ){
   
   // The length of the model
   double xlen = (1.0*nx)/ny;
+  double ylen = 1.0;
+  double zlen = 1.0;
 
   // Set the arrays
   Xpts = X;
@@ -282,8 +284,8 @@ int main( int argc, char *argv[] ){
     for ( int iy = 0; iy < ny+1; iy++ ){
       for ( int ix = 0; ix < nx+1; ix++ ){
         X[0] = xlen*ix/nx;  X++;
-        X[0] = 1.0*iy/ny;  X++;
-        X[0] = 1.0*iz/nz;  X++;
+        X[0] = ylen*iy/ny;  X++;
+        X[0] = zlen*iz/nz;  X++;
       }
     }
   }
@@ -306,9 +308,12 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  // Set the initial prefix for the output files
   char prefix[256];
   sprintf(prefix, "results/");
 
+  // Take command-line parameters as input
+  double mass_fraction = 0.05;
   int scale_objective = 0;
   int use_inverse_vars = 0;
   int use_linear_method = 0;
@@ -347,6 +352,14 @@ int main( int argc, char *argv[] ){
     if (strcmp(argv[k], "scale_objective") == 0){
       scale_objective = 1;
     }
+    if (sscanf(argv[k], "mass_fraction=%lf", &mass_fraction) == 1){
+      if (mass_fraction < 0.05){
+	mass_fraction = 0.05;
+      }
+      else if (mass_fraction > 0.5){
+	mass_fraction = 0.5;
+      }
+    }
   }
 
   // Define the different forest levels
@@ -371,6 +384,7 @@ int main( int argc, char *argv[] ){
     printf("order = %d\n", order);
     printf("omega = %g\n", omega);
     printf("prefix = %s\n", prefix);
+    printf("mass_fraction = %f\n", mass_fraction);
     printf("use_inverse_vars = %d\n", use_inverse_vars);
     printf("use_linear_method = %d\n", use_linear_method);
     printf("scale_objective = %d\n", scale_objective);
@@ -900,7 +914,7 @@ int main( int argc, char *argv[] ){
   sprintf(outfile, "%s//paropt_output.out", prefix);
 
   // Set the target mass
-  double target_mass = 0.5*rho;
+  double target_mass = rho*mass_fraction*xlen*ylen*zlen;
 
   // Create the ParOpt problem class
   TMRTopoProblem *prob = 

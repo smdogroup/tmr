@@ -8,13 +8,14 @@ TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
                                   int _nweights,
                                   TacsScalar _density,
                                   TacsScalar E, TacsScalar _nu,
-                                  double _q ){
+                                  double _q, double _eps ){
   // Record the density, Poisson ratio, D and the shear modulus
   density = _density;
   nu = _nu;
   D = E/((1.0 + nu)*(1.0 - 2.0*nu));
   G = 0.5*E/(1.0 + nu);
   q = _q;
+  eps = _eps;
 
   // Set the weights/local indices
   nweights = _nweights;
@@ -68,9 +69,6 @@ void TMROctStiffness::getDesignVarRange( TacsScalar lb[],
 void TMROctStiffness::calculateStress( const double pt[],
                                        const TacsScalar e[], 
                                        TacsScalar s[] ){
-  // Set the minimum relative stiffness value
-  const double eps = 1e-3;
-
   // Compute the penalized stiffness
   TacsScalar penalty = rho/(1.0 + q*(1.0 - rho));
   TacsScalar Dp = (penalty + eps)*D;
