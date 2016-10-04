@@ -33,7 +33,9 @@ class ParOptBVecWrap : public ParOptVec {
   TACSBVec *vec;
 };
 
-
+/*
+  The implementation of the ParOptProblem class
+*/
 class TMRTopoProblem : public ParOptProblem {
  public:
   static const int MAX_NUM_LEVELS = 5;

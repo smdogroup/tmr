@@ -739,8 +739,12 @@ int main( int argc, char *argv[] ){
         nweights = TMRIndexWeight::uniqueSort(weights, nweights);
         
         // Allocate the stiffness object
-        SolidStiffness *stiff = new TMROctStiffness(weights, nweights,
-                                                    rho, E, nu, qval);
+        /*
+          SolidStiffness *stiff = new TMROctStiffness(weights, nweights,
+          rho, E, nu, qval);
+        */
+        SolidStiffness *stiff = 
+          new TMRLinearOctStiffness(weights, nweights, rho, E, nu, qval);
 
         TACSElement *solid = NULL;
         if (order == 2){
@@ -967,6 +971,14 @@ int main( int argc, char *argv[] ){
   opt->setOutputFrequency(1);
   opt->setAbsOptimalityTol(1e-5);
   opt->setOutputFile(outfile);
+
+  // Set the problem up to use the Hessian-vector products
+  opt->setUseLineSearch(0);
+  opt->setUseHvecProduct(1);
+  opt->setGMRESSubspaceSize(50);
+  opt->setNKSwitchTolerance(1.0);
+  opt->setEisenstatWalkerParameters(0.5, 0.0);
+  opt->setGMRESTolerances(1.0, 1e-30);
 
   // Set the Hessian reset frequency
   opt->setBFGSUpdateType(LBFGS::DAMPED_UPDATE);

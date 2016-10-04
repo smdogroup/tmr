@@ -1,5 +1,7 @@
 #include "TMRTopoProblem.h"
+#include "TMROctStiffness.h"
 #include "TACSFunction.h"
+#include "Solid.h"
 #include "TMR_STLTools.h"
 
 ParOptBVecWrap::ParOptBVecWrap( TACSBVec *_vec ){
@@ -216,7 +218,9 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   force->incref();
 
   vars = tacs[0]->createVec();
+  res = tacs[0]->createVec();
   vars->incref();
+  res->incref();
 
   // Create the compliance and mass functions
   compliance = new TACSCompliance(tacs[0]);
@@ -257,6 +261,7 @@ TMRTopoProblem::~TMRTopoProblem(){
   ksm->decref();
   vars->decref();
   force->decref();
+  res->decref();
 
   compliance->decref();
   mass->decref();
@@ -294,7 +299,8 @@ void TMRTopoProblem::setMassScaling( ParOptScalar scale ){
   Create a design variable vector
 */
 ParOptVec *TMRTopoProblem::createDesignVec(){
-  return new ParOptBVecWrap(new TACSBVec(filter_maps[0], 1, NULL, filter_dist[0]));
+  return new ParOptBVecWrap(new TACSBVec(filter_maps[0], 1, 
+                                         NULL, filter_dist[0]));
 }
 
 /*
@@ -371,6 +377,7 @@ int TMRTopoProblem::getLocalValuesFromBVec( TACSBVec *vec,
   int ext_size = vec->getExtArray(&x_ext_vals);
   memcpy(xloc, x_vals, size*sizeof(TacsScalar));
   memcpy(&xloc[size], x_ext_vals, ext_size*sizeof(TacsScalar));
+  return size + ext_size;
 }
 
 /*
@@ -524,7 +531,140 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
                                      ParOptScalar *z, 
                                      ParOptVec *zw,
                                      ParOptVec *pxvec, 
-                                     ParOptVec *hvec ){}
+                                     ParOptVec *hvec ){
+  ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(pxvec);
+  ParOptBVecWrap *hwrap = dynamic_cast<ParOptBVecWrap*>(hvec);
+
+  if (wrap && hwrap){
+    TACSBVec *px = wrap->vec;
+
+    // Distribute the design variable values
+    px->beginDistributeValues();
+    px->endDistributeValues();
+
+    // Copy the values to the local array
+    int size = getLocalValuesFromBVec(px, xlocal);
+
+    // Zero the entries in the RHS
+    res->zeroEntries();
+
+    // Set the maximum number of nodes/variables/stresses
+    static const int NUM_NODES = 8;
+    static const int NUM_STRESSES = 6;
+    static const int NUM_VARIABLES = 3*NUM_NODES;
+  
+    // Get the res vector
+    int num_elements = tacs[0]->getNumElements();
+    for ( int k = 0; k < num_elements; k++ ){
+      TACSElement *element = tacs[0]->getElement(k, NULL, NULL, 
+                                                 NULL, NULL);
+      
+      // Dynamically cast the element to the 2D element type
+      TACS3DElement<NUM_NODES> *elem = 
+        dynamic_cast<TACS3DElement<NUM_NODES>*>(element);
+
+      if (elem){
+        // Get the element data
+        TacsScalar Xpts[3*NUM_NODES];
+        TacsScalar vars[NUM_VARIABLES], dvars[NUM_VARIABLES];
+        TacsScalar ddvars[NUM_VARIABLES];
+        tacs[0]->getElement(k, Xpts, vars, dvars, ddvars);
+        
+        // Get the constitutive object
+        TACSConstitutive *constitutive = elem->getConstitutive();
+      
+        TMRLinearOctStiffness *con =
+          dynamic_cast<TMRLinearOctStiffness*>(constitutive);
+
+        // Get the number of variables
+        int nvars = elem->numVariables();
+
+        if (con){
+          TacsScalar elemRes[NUM_VARIABLES];
+          memset(elemRes, 0, nvars*sizeof(TacsScalar));
+
+          // The shape functions associated with the element
+          double N[NUM_NODES];
+          double Na[NUM_NODES], Nb[NUM_NODES], Nc[NUM_NODES];
+          
+          // The derivative of the stress with respect to the strain
+          TacsScalar B[NUM_STRESSES*NUM_VARIABLES];
+        
+          // Get the number of quadrature points
+          int numGauss = elem->getNumGaussPts();
+
+          for ( int n = 0; n < numGauss; n++ ){
+            // Retrieve the quadrature points and weight
+            double pt[3];
+            double weight = elem->getGaussWtsPts(n, pt);
+
+            // Compute the element shape functions
+            elem->getShapeFunctions(pt, N, Na, Nb, Nc);
+
+            // Compute the derivative of X with respect to the
+            // coordinate directions
+            TacsScalar X[3], Xa[9];
+            elem->solidJacobian(X, Xa, N, Na, Nb, Nc, Xpts);
+
+            // Compute the determinant of Xa and the transformation
+            TacsScalar J[9];
+            TacsScalar h = FElibrary::jacobian3d(Xa, J);
+            h = h*weight;
+
+            // Compute the strain
+            TacsScalar strain[NUM_STRESSES];
+            elem->evalStrain(strain, J, Na, Nb, Nc, vars);
+ 
+            // Compute the corresponding stress
+            TacsScalar stress[NUM_STRESSES];
+            con->calcStressDVProject(pt, strain, xlocal, size, stress);
+       
+            // Get the derivative of the strain with respect to the
+            // nodal displacements
+            elem->getBmat(B, J, Na, Nb, Nc, vars);
+
+            TacsScalar *b = B;
+            for ( int i = 0; i < nvars; i++ ){
+              elemRes[i] += h*(b[0]*stress[0] + b[1]*stress[1] + b[2]*stress[2] +
+                               b[3]*stress[3] + b[4]*stress[4] + b[5]*stress[5]);
+              b += NUM_STRESSES;
+            }
+          }
+
+          // Get the local element ordering
+          int len;
+          const int *nodes;
+          tacs[0]->getElement(k, &nodes, &len);
+
+          // Add the residual values
+          res->setValues(len, nodes, elemRes, ADD_VALUES);
+        }
+      }
+    }
+
+    // Add the residual values
+    res->beginSetValues(ADD_VALUES);
+    res->endSetValues(ADD_VALUES);
+
+    // Set the boundary conditions
+    res->applyBCs();
+
+    // Solve the system: K(x)*u = force
+    ksm->solve(res, vars);
+
+    // Set the design variable values
+    memset(xlocal, 0, size*sizeof(TacsScalar));
+    tacs[0]->addAdjointResProducts(2.0*obj_scale, &vars, 1, xlocal, size);
+
+    // Set the variables from the product
+    hvec->zeroEntries();
+    setBVecFromLocalValues(xlocal, hwrap->vec);
+
+    // Begin setting the values
+    hwrap->vec->beginSetValues(ADD_VALUES);
+    hwrap->vec->endSetValues(ADD_VALUES);
+  }
+}
 
 // Evaluate the sparse constraints
 // ------------------------
