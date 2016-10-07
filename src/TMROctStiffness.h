@@ -77,11 +77,14 @@ class TMROctStiffness : public SolidStiffness {
 */
 class TMRLinearOctStiffness : public SolidStiffness {
  public: 
+  enum PenaltyType { SIMP, RAMP };
   static const int MAX_NUM_WEIGHTS = 8;
 
   TMRLinearOctStiffness( TMRIndexWeight *_weights, int _nweights,
+			 TacsScalar _x_init,
                          TacsScalar _density, TacsScalar E, 
-                         TacsScalar _nu, double _q, double _eps=1e-3);
+                         TacsScalar _nu, double _q, 
+			 PenaltyType _type=RAMP, double _eps=1e-3);
   
   // Set the linearization coefficients
   // ----------------------------------
@@ -129,6 +132,7 @@ class TMRLinearOctStiffness : public SolidStiffness {
   TacsScalar D, G, nu;
 
   // The RAMP penalization factor
+  static PenaltyType penalty_type;
   TacsScalar q;
   double eps;
 
@@ -136,7 +140,8 @@ class TMRLinearOctStiffness : public SolidStiffness {
   TacsScalar rho;
   TacsScalar rho_const, rho_linear;
 
-  // Set the lower bounds
+  // The lower bounds and design variable values
+  TacsScalar x_vals[MAX_NUM_WEIGHTS];
   TacsScalar x_lb[MAX_NUM_WEIGHTS];
 
   // The local density of the

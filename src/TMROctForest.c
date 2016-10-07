@@ -1134,6 +1134,8 @@ void TMROctForest::repartition(){
   Partition the mesh based on the super mesh connectivity and
   optionally vertex weights (typically the element count per block)
 
+  This builds a connectivity based on the adjacency across faces.
+
   input:
   num_part:     the number of partitions
   vwgts:        the vertex weights
@@ -1155,25 +1157,24 @@ void TMROctForest::computePartition( int part_size, int *vwgts,
   // been added to the array
   int *cols = new int[ num_blocks ];
   memset(cols, 0, num_blocks*sizeof(int));
-
-  // The adjacency node count
-  int min_adj_count = 4;
   
   for ( int block = 0; block < num_blocks; block++ ){
     // Set the new pointer
     ptr[block+1] = ptr[block];
     
-    // Loop over all the blocks
-    for ( int j = 0; j < 8; j++ ){
-      int node = block_conn[8*block + j];
+    // Loop over all the faces for this block
+    for ( int j = 0; j < 6; j++ ){
+      int face = block_face_conn[6*block + j];
       
-      // Loop over all of the nodes
-      for ( int ip = node_block_ptr[node]; 
-            ip < node_block_ptr[node+1]; ip++ ){
-        int adj_block = node_block_conn[ip];
+      // For each face, loop over all the connecting blocks
+      for ( int ip = face_block_ptr[face]; 
+            ip < face_block_ptr[face+1]; ip++ ){
+        int adj_block = face_block_conn[ip]/6;
 
-        if (cols[adj_block]+1 == min_adj_count*(block+1)){
-          // Extend the array
+	if (cols[adj_block] < block+1){
+	  cols[adj_block] = block+1;
+
+          // Extend the array to ensure that it is large enough
           if (ptr[block+1] >= max_size){
             max_size *= 2;
             int *tmp = new int[ max_size ];
@@ -1185,23 +1186,11 @@ void TMROctForest::computePartition( int part_size, int *vwgts,
           // Set the new element into the connectivity
           conn[ptr[block+1]] = adj_block;
           ptr[block+1]++;
-
-          // Set the flag so that its not added again
-          cols[adj_block]++;
-        }
-        else if (cols[adj_block] <= min_adj_count*block){
-          // This is the first time this block has been encountered on
-          // this loop. Add it and increment the pointer
-          cols[adj_block] = min_adj_count*block+1;
-        }
-        else {
-          // This block has been encountered before
-          cols[adj_block]++;
         }
       }
     }
     
-    // Sort the array
+    // Sort the connectivity
     int len = ptr[block+1] - ptr[block];
     qsort(&conn[ptr[block]], len, sizeof(int), compare_integers);
   }

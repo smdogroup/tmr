@@ -120,7 +120,7 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
   
   // Set the maximum number of indices
-  int max_local_size = 0;
+  max_local_size = 0;
   
   // Copy over the assembler objects and filters
   for ( int k = 0; k < nlevels; k++ ){
@@ -236,6 +236,9 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   // Set the problem sizes
   int nvars = x[0]->getArray(NULL);
   setProblemSizes(nvars, 1, 0, 0);
+
+  // Set the iteration count
+  iter_count = 0;
 }
 
 /*
@@ -314,7 +317,7 @@ int TMRTopoProblem::isSparseInequality(){
   Use the inequality constraint - this seems to work better
 */
 int TMRTopoProblem::isDenseInequality(){ 
-  return 1; 
+  return 0; 
 }
 
 /*
@@ -346,11 +349,74 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
   else {
     // Get the values of the design variables from the inner-most
     // version of TACS
-    if (x){ x->set(0.95); }
-    
-    // Set the lower and upper bounds on the design variables
-    if (lb){ lb->set(0.0); }
-    if (ub){ ub->set(1.0); }
+    if (x){ 
+      ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(x);
+      tacs[0]->getDesignVars(xlocal, max_local_size);
+
+      // Set the local values into the vector
+      if (wrap){
+	setBVecFromLocalValues(xlocal, wrap->vec);
+      }
+    }
+
+    if (lb || ub){
+      TacsScalar *upper = new TacsScalar[ max_local_size ];
+      tacs[0]->getDesignVarRange(xlocal, upper, max_local_size);
+
+      if (lb){
+	ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lb);
+	if (lbwrap){
+	  setBVecFromLocalValues(xlocal, lbwrap->vec);
+	}
+      }
+      if (ub){
+	ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ub);
+	if (ubwrap){
+	  setBVecFromLocalValues(upper, ubwrap->vec);
+	}
+      }
+      delete [] upper;
+    }
+  }
+}
+
+/*
+  Set the linearization point when the analysis/design problem uses
+  the TMRLinearOctStiffness class
+*/
+void TMRTopoProblem::setLinearization( double q, ParOptVec *xvec ){
+  ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvec);
+
+  // Set the design variable values
+  if (wrap){
+    // Copy the values to the local design variable vector
+    x[0]->copyValues(wrap->vec);
+  
+    // Distribute the design variable values
+    x[0]->beginDistributeValues();
+    x[0]->endDistributeValues();
+
+    // Copy the values to the local array
+    int size = getLocalValuesFromBVec(x[0], xlocal);
+
+    // Get the res vector
+    int num_elements = tacs[0]->getNumElements();
+    for ( int k = 0; k < num_elements; k++ ){
+      TACSElement *element = tacs[0]->getElement(k, NULL, NULL, 
+                                                 NULL, NULL);
+      
+      // Get the constitutive object
+      TACSConstitutive *constitutive = element->getConstitutive();
+      
+      if (constitutive){
+        TMRLinearOctStiffness *con =
+          dynamic_cast<TMRLinearOctStiffness*>(constitutive);
+
+	if (con){
+	  con->setLinearization(q, xlocal, size);
+	}
+      }
+    }
   }
 }
 
@@ -376,7 +442,9 @@ int TMRTopoProblem::getLocalValuesFromBVec( TACSBVec *vec,
   int size = vec->getArray(&x_vals);
   int ext_size = vec->getExtArray(&x_ext_vals);
   memcpy(xloc, x_vals, size*sizeof(TacsScalar));
-  memcpy(&xloc[size], x_ext_vals, ext_size*sizeof(TacsScalar));
+  if (x_ext_vals){
+    memcpy(&xloc[size], x_ext_vals, ext_size*sizeof(TacsScalar));
+  }
   return size + ext_size;
 }
 
@@ -390,7 +458,9 @@ void TMRTopoProblem::setBVecFromLocalValues( const TacsScalar *xloc,
   int size = vec->getArray(&x_vals);
   int ext_size = vec->getExtArray(&x_ext_vals);
   memcpy(x_vals, xloc, size*sizeof(TacsScalar));
-  memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
+  if (x_ext_vals){
+    memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
+  }
 }
 
 /*
@@ -699,6 +769,9 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
   int var_offset = 0;
   double cutoff = 0.25;
   char filename[256];
-  sprintf(filename, "%s/levelset%.2f_binary%04d.bstl", prefix, cutoff, iter);
+  sprintf(filename, "%s/levelset025_binary%04d.bstl", prefix, iter_count);
   int fail = TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
+
+  // Update the iteration count
+  iter_count++;
 }

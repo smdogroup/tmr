@@ -66,6 +66,16 @@ class TMRTopoProblem : public ParOptProblem {
     use_inverse_vars = 1;
   }
 
+  // Set the linearization point and penalty parameter
+  // -------------------------------------------------
+  void setLinearization( double q, ParOptVec *xvec );
+
+  // Set the iteration count
+  // -----------------------
+  void setIterationCount( int iter ){
+    iter_count = iter;
+  }
+
   // Create a design variable vector
   // -------------------------------
   ParOptVec *createDesignVec();
@@ -133,6 +143,9 @@ class TMRTopoProblem : public ParOptProblem {
   // Store the prefix
   char prefix[256];
 
+  // Set the iteration count for printing to the file
+  int iter_count;
+
   // Store the design variable info
   int nlevels;
   TACSAssembler *tacs[MAX_NUM_LEVELS];
@@ -149,6 +162,7 @@ class TMRTopoProblem : public ParOptProblem {
   TACSBVec *x[MAX_NUM_LEVELS];
 
   // The initial design variable values
+  int max_local_size;
   TacsScalar *xlocal;
 
   // Store the Krylov solver and the multigrid object 

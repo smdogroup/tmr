@@ -257,7 +257,6 @@ int main( int argc, char *argv[] ){
   TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
 
   // The "super-node" locations
-  double omega = 1.0;
   int order = 2;
   int npts = 0;
   int nelems = 0;
@@ -313,6 +312,7 @@ int main( int argc, char *argv[] ){
   sprintf(prefix, "results/");
 
   // Take command-line parameters as input
+  double omega = 1.0;
   double mass_fraction = 0.05;
   int scale_objective = 0;
   int use_inverse_vars = 0;
@@ -453,17 +453,17 @@ int main( int argc, char *argv[] ){
   }
 
   // Repartition the octrees
-  printf("[%d] Repartition\n", mpi_rank);
+  if (mpi_rank == 0){ printf("[%d] Repartition\n", mpi_rank); }
   forest[0]->repartition();
 
   for ( int level = 0; level < MAX_NUM_MESH; level++ ){
     // Balance the
-    printf("[%d] Balance\n", mpi_rank);
+    if (mpi_rank == 0){ printf("[%d] Balance\n", mpi_rank); }
     double tbal = MPI_Wtime();
     forest[level]->balance((level == 0));
     tbal = MPI_Wtime() - tbal;
 
-    printf("[%d] Create nodes\n", mpi_rank);
+    if (mpi_rank == 0){ printf("[%d] Create nodes\n", mpi_rank); }
     double tnodes = MPI_Wtime();
     forest[level]->createNodes(order);
     tnodes = MPI_Wtime() - tnodes;
@@ -739,12 +739,10 @@ int main( int argc, char *argv[] ){
         nweights = TMRIndexWeight::uniqueSort(weights, nweights);
         
         // Allocate the stiffness object
-        /*
-          SolidStiffness *stiff = new TMROctStiffness(weights, nweights,
-          rho, E, nu, qval);
-        */
         SolidStiffness *stiff = 
-          new TMRLinearOctStiffness(weights, nweights, rho, E, nu, qval);
+          new TMRLinearOctStiffness(weights, nweights, mass_fraction,
+				    rho, E, nu, qval);
+	// TMRLinearOctStiffness::SIMP);
 
         TACSElement *solid = NULL;
         if (order == 2){
@@ -859,7 +857,7 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the multigrid object
-  int sor_iters = 2;
+  int sor_iters = 1;
   int sor_symm = 1;
   TACSMg *mg = new TACSMg(comm, MAX_NUM_MESH, 
                           omega, sor_iters, sor_symm);
@@ -867,7 +865,7 @@ int main( int argc, char *argv[] ){
 
   for ( int level = 0; level < MAX_NUM_MESH; level++ ){
     if (level < MAX_NUM_MESH-1){
-      mg->setLevel(level, tacs[level], interp[level], 2);
+      mg->setLevel(level, tacs[level], interp[level], 1);
     }
     else {
       mg->setLevel(level, tacs[level], NULL);
@@ -913,10 +911,6 @@ int main( int argc, char *argv[] ){
     }
   }
 
-  // Set the log/output file
-  char outfile[256];
-  sprintf(outfile, "%s//paropt_output.out", prefix);
-
   // Set the target mass
   double target_mass = rho*mass_fraction*xlen*ylen*zlen;
 
@@ -945,18 +939,21 @@ int main( int argc, char *argv[] ){
     
     // Evaluate the average gradient component and reset the scaling
     ParOptScalar fobj_scale = prob->getObjectiveScaling();
-    
+    ParOptScalar mass_scale = prob->getMassScaling();
+
     // Scale the objective by the l1 norm of the gradient
     fobj_scale *= 1.0/g->maxabs();
+    mass_scale *= 1.0/A->maxabs();
     
     // Set the objective scaling
     prob->setObjectiveScaling(fobj_scale);
+    prob->setMassScaling(mass_scale);
 
     // Free the data that is not needed
     delete x;
     delete g;
     delete A;
-  }
+  }  
 
   // Create the topology optimization object
   ParOpt *opt = new ParOpt(prob, max_num_bfgs);
@@ -969,31 +966,78 @@ int main( int argc, char *argv[] ){
   // Set the optimization parameters
   opt->setMaxMajorIterations(2000);
   opt->setOutputFrequency(1);
-  opt->setAbsOptimalityTol(1e-5);
-  opt->setOutputFile(outfile);
 
   // Set the problem up to use the Hessian-vector products
-  opt->setUseLineSearch(0);
-  opt->setUseHvecProduct(1);
-  opt->setGMRESSubspaceSize(50);
-  opt->setNKSwitchTolerance(1.0);
-  opt->setEisenstatWalkerParameters(0.5, 0.0);
-  opt->setGMRESTolerances(1.0, 1e-30);
-
+  opt->setUseLineSearch(1);
+  
   // Set the Hessian reset frequency
   opt->setBFGSUpdateType(LBFGS::DAMPED_UPDATE);
-
+  
   // Set the barrier parameter information
-  opt->setBarrierPower(1.5);
+  opt->setBarrierPower(1.0);
   opt->setBarrierFraction(0.25);
 
-  // Check the gradients
-  opt->checkGradients(1e-6);
+  // The penality parameter
+  double q = 0.0;
+  double tol = 1e-3;
 
-  // Set the history/restart file
-  char restartfile[256];
-  sprintf(restartfile, "%s//paropt_restart.bin", prefix);
-  opt->optimize(restartfile);
+  int max_iters = 100;
+  for ( int k = 0; k < max_iters; k++ ){
+    if (mpi_rank == 0){ printf("[%d] New iteration %d with q = %g\n", mpi_rank, k, q); }
+    // Check the gradients -- this seems to be a waste to me...
+    // opt->checkGradients(1e-6);
+
+    // Set the barrier parameter if this is the second or greater
+    // time throught
+    opt->setAbsOptimalityTol(tol);    
+    if (k > 0){
+      opt->setInitBarrierParameter(tol);
+    }
+
+    // Scale the tolerance
+    tol *= 0.25;
+    if (tol < 1e-6){
+      tol = 1e-6;
+    }
+
+    // Set the log/output file
+    char outfile[256];
+    sprintf(outfile, "%s//paropt_output%d.out", prefix, k);
+    opt->setOutputFile(outfile);
+  
+    // Set the history/restart file
+    char restartfile[256];
+    sprintf(restartfile, "%s//paropt_restart%d.bin", prefix, k);
+    opt->optimize(restartfile);
+
+    // Set the new value of the penalization using an incremental approach.
+    // Note that this will destroy the value of thelinearization
+    q = 1.0 + 1.0*(k/2);
+    if (q > 5.0){
+      q = 5.0;
+    }
+
+    // Get the optimized design point and set the new linearized point
+    ParOptVec *x;
+    opt->getOptimizedPoint(&x, NULL, NULL, NULL, NULL);
+    prob->setLinearization(q, x);
+
+    // Do not re-initialize the starting point: Use the design variable
+    // and dual variable estimates.
+    opt->setInitStartingPoint(0);
+
+    // Create and write out an fh5 file
+    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+			       TACSElement::OUTPUT_DISPLACEMENTS |
+			       TACSElement::OUTPUT_EXTRAS);
+    TACSToFH5 *f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
+    f5->incref();
+    
+    // Write out the solution
+    sprintf(outfile, "%s//tacs_output%d.f5", prefix, k);
+    f5->writeToFile(outfile);
+    f5->decref();
+  }
 
   delete opt;
   delete prob;

@@ -137,10 +137,12 @@ void TMROctStiffness::addPointwiseMassDVSens( const double pt[],
 */
 TMRLinearOctStiffness::TMRLinearOctStiffness( TMRIndexWeight *_weights,
                                               int _nweights,
+					      TacsScalar _x_init,
                                               TacsScalar _density,
                                               TacsScalar E, 
                                               TacsScalar _nu,
                                               double _q,
+					      PenaltyType _type,
                                               double _eps ){
   // Record the density, Poisson ratio, D and the shear modulus
   density = _density;
@@ -148,6 +150,7 @@ TMRLinearOctStiffness::TMRLinearOctStiffness( TMRIndexWeight *_weights,
   D = E/((1.0 + nu)*(1.0 - 2.0*nu));
   G = 0.5*E/(1.0 + nu);
   q = _q;
+  penalty_type = _type;
   eps = _eps;
 
   // Set the initial values of the linearization
@@ -160,12 +163,17 @@ TMRLinearOctStiffness::TMRLinearOctStiffness( TMRIndexWeight *_weights,
 
   // Set the lower bound for the design variables
   for ( int i = 0; i < nweights; i++ ){
+    x_vals[i] = _x_init;
     x_lb[i] = 0.0;
   }
 
   // Set the initial value for the density
   rho = 0.95;
 }
+
+// Set the default penalty type
+TMRLinearOctStiffness::PenaltyType 
+TMRLinearOctStiffness::penalty_type = TMRLinearOctStiffness::SIMP;
 
 /*
   Loop over the design variable inputs and compute the local value of
@@ -175,6 +183,7 @@ void TMRLinearOctStiffness::setDesignVars( const TacsScalar x[],
                                            int numDVs ){
   rho = 0.0;
   for ( int i = 0; i < nweights; i++ ){
+    x_vals[i] = x[weights[i].index];
     rho += weights[i].weight*x[weights[i].index];
   }
 }
@@ -188,7 +197,7 @@ void TMRLinearOctStiffness::setDesignVars( const TacsScalar x[],
 void TMRLinearOctStiffness::getDesignVars( TacsScalar x[], int numDVs ){
   for ( int i = 0; i < nweights; i++ ){
     if (weights[i].index >= 0 && weights[i].index < numDVs){
-      x[weights[i].index] = 0.95;
+      x[weights[i].index] = x_vals[i];
     }
   }
 }
@@ -219,16 +228,51 @@ void TMRLinearOctStiffness::setLinearization( TacsScalar _q,
   // Compute the value of rho
   rho = 0.0;
   for ( int i = 0; i < nweights; i++ ){
+    x_vals[i] = x[weights[i].index];
     rho += weights[i].weight*x[weights[i].index];
   }
  
-  // Set the linearization for the material weights
-  rho_const = rho/(1.0 + q*(1.0 - rho)) + eps;
-  rho_linear = (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
+  if (penalty_type == SIMP){
+    // Set the linearization for the material weights
+    if (q > 1.0){
+      rho_const = pow(rho, q) + eps;
+      rho_linear = q*pow(rho, q-1.0);
+    
+      // Set the lower bound
+      for ( int i = 0; i < nweights; i++ ){
+	x_lb[i] = ((q - 1.0)/q)*x_vals[i];
+      }
+    }
+    else {
+      rho_const = eps;
+      rho_linear = 1.0;
 
-  // Set the lower bound
-  for ( int i = 0; i < nweights; i++ ){
-    x_lb[i] = (q/(1.0 + q))*x[weights[i].index];
+      // Set the lower bound
+      for ( int i = 0; i < nweights; i++ ){
+	x_lb[i] = 0.0;
+      }
+    }
+  }
+  else {
+    if (q > 0.0){
+      // Set the linearization for the material weights
+      rho_const = rho/(1.0 + q*(1.0 - rho)) + eps;
+      rho_linear = (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
+    
+      // Set the lower bound
+      for ( int i = 0; i < nweights; i++ ){
+	x_lb[i] = (q/(1.0 + q))*x_vals[i];
+      }
+    }
+    else {
+      rho_const = eps;
+      rho_linear = 1.0;
+
+      // Set the lower bound
+      for ( int i = 0; i < nweights; i++ ){
+	x_lb[i] = 0.0;
+      }
+    }
   }
 }
 
@@ -242,7 +286,6 @@ void TMRLinearOctStiffness::calculateStress( const double pt[],
   const double eps = 1e-3;
 
   // Compute the penalized stiffness
-  TacsScalar penalty = rho/(1.0 + q*(1.0 - rho));
   TacsScalar Dp = (rho_const + rho_linear*rho)*D;
   TacsScalar Gp = (rho_const + rho_linear*rho)*G;
   s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
