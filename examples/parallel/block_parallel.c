@@ -10,125 +10,6 @@
 #include "ParOpt.h"
 
 /*
-  The box problem
-
-  Bottom surface      Top surface
-  12-------- 14       13 ------- 15
-  | \      / |        | \      / |
-  |  2 -- 3  |        |  6 -- 7  |
-  |  |    |  |        |  |    |  |
-  |  0 -- 1  |        |  4 -- 5  |
-  | /      \ |        | /      \ |
-  8 -------- 10       9 -------- 11
-*/
-const int box_npts = 16;
-const int box_nelems = 7;
-
-const double box_xpts[] = 
-  {-.5, -.5, -.5,
-   .5, -.5, -.5,
-   -.5, .5, -.5,
-   .5, .5, -.5,
-   -.5, -.5, .5,
-   .5, -.5, .5,
-   -.5, .5, .5,
-   .5, .5, .5,
-   -1, -1, -1,
-   -1, -1, 1,
-   1, -1, -1,
-   1, -1, 1,
-   -1, 1, -1,
-   -1, 1, 1,
-   1, 1, -1,
-   1, 1, 1};
-
-const int box_conn[] =
-  {0, 1, 2, 3, 4, 5, 6, 7,
-   8, 10, 0, 1, 9, 11, 4, 5,
-   5, 11, 1, 10, 7, 15, 3, 14,
-   7, 15, 3, 14, 6, 13, 2, 12,
-   9, 13, 4, 6, 8, 12, 0, 2, 
-   10, 14, 8, 12, 1, 3, 0, 2,
-   4, 5, 6, 7, 9, 11, 13, 15};
-
-/*
-  Definitions for the connector problem
-*/
-const int connector_npts = 52;
-const int connector_nelems = 15;
-
-const double connector_xpts[] = 
-  {-0.375, -0.375, -0.125,
-   0.375, -0.375, -0.125,
-   -0.125, -0.125, -0.125,
-   0.125, -0.125, -0.125,
-   -0.125, 0.125, -0.125,
-   0.125, 0.125, -0.125,
-   -0.075, 0.25, -0.125,
-   0.075, 0.25, -0.125,
-   -0.375, 0.375, -0.125,
-   0.375, 0.375, -0.125,
-   -0.25, 0.475, -0.125,
-   0.25, 0.475, -0.125,
-   -0.25, 1.475, -0.125,
-   0.25, 1.475, -0.125,
-   -0.45, 1.675, -0.125,
-   0.45, 1.675, -0.125,
-   -0.3125, 1.875, -0.125,
-   0.3125, 1.875, -0.125,
-   -0.175, 1.825, -0.125,
-   0.175, 1.825, -0.125,
-   -0.45, 2.425, -0.125,
-   0.45, 2.425, -0.125,
-   -0.3125, 2.425, -0.125,
-   0.3125, 2.425, -0.125,
-   -0.175, 2.425, -0.125,
-   0.175, 2.425, -0.125,
-   -0.375, -0.375, 0.125,
-   0.375, -0.375, 0.125,
-   -0.125, -0.125, 0.125,
-   0.125, -0.125, 0.125,
-   -0.125, 0.125, 0.125,
-   0.125, 0.125, 0.125,
-   -0.075, 0.25, 0.125,
-   0.075, 0.25, 0.125,
-   -0.375, 0.375, 0.125,
-   0.375, 0.375, 0.125,
-   -0.25, 0.475, 0.125,
-   0.25, 0.475, 0.125,
-   -0.25, 1.475, 0.125,
-   0.25, 1.475, 0.125,
-   -0.45, 1.675, 0.125,
-   0.45, 1.675, 0.125,
-   -0.3125, 1.875, 0.125,
-   0.3125, 1.875, 0.125,
-   -0.175, 1.825, 0.125,
-   0.175, 1.825, 0.125,
-   -0.45, 2.425, 0.125,
-   0.45, 2.425, 0.125,
-   -0.3125, 2.425, 0.125,
-   0.3125, 2.425, 0.125,
-   -0.175, 2.425, 0.125,
-   0.175, 2.425, 0.125};
-
-const int connector_conn[] = 
-  {0, 1, 2, 3, 26, 27, 28, 29,
-   0, 2, 8, 4, 26, 28, 34, 30,
-   3, 1, 5, 9, 29, 27, 31, 35,
-   4, 5, 6, 7, 30, 31, 32, 33,
-   6, 7, 10, 11, 32, 33, 36, 37,
-   8, 4, 10, 6, 34, 30, 36, 32,
-   7, 5, 11, 9, 33, 31, 37, 35,
-   10, 11, 12, 13, 36, 37, 38, 39,
-   12, 13, 18, 19, 38, 39, 44, 45,
-   14, 12, 16, 18, 40, 38, 42, 44,
-   13, 15, 19, 17, 39, 41, 45, 43,
-   14, 16, 20, 22, 40, 42, 46, 48,
-   16, 18, 22, 24, 42, 44, 48, 50,
-   19, 17, 25, 23, 45, 43, 51, 49,
-   17, 15, 23, 21, 43, 41, 49, 47};
-
-/*
   Interpoalte from the connectivity/node locations
 */
 void getLocation( int i, const int *elem_node_conn, 
@@ -250,62 +131,14 @@ int main( int argc, char *argv[] ){
   MPI_Comm_rank(comm, &mpi_rank);
   MPI_Comm_size(comm, &mpi_size);
 
-  // Repartition the mesh immediately
-  int partition = 0;
-
   // The material properties
   TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
 
   // The "super-node" locations
   int order = 2;
-  int npts = 0;
-  int nelems = 0;
-  const double *Xpts = NULL;
-  const int *elem_node_conn = NULL;
 
-  // Set up the model dimensions
-  int nx = 80, ny = 8, nz = 8;
-  nelems = nx*ny*nz;
-  npts = (nx+1)*(ny+1)*(nz+1);
-  TacsScalar *X = new TacsScalar[ 3*npts ];
-  int *conn = new int[ 8*nelems ];
-  
-  // The length of the model
-  double xlen = (1.0*nx)/ny;
-  double ylen = 1.0;
-  double zlen = 1.0;
-
-  // Set the arrays
-  Xpts = X;
-  elem_node_conn = conn;
-  
-  for ( int iz = 0; iz < nz+1; iz++ ){
-    for ( int iy = 0; iy < ny+1; iy++ ){
-      for ( int ix = 0; ix < nx+1; ix++ ){
-        X[0] = xlen*ix/nx;  X++;
-        X[0] = ylen*iy/ny;  X++;
-        X[0] = zlen*iz/nz;  X++;
-      }
-    }
-  }
-  
-  // Loop over all the elements in the mesh
-  for ( int iz = 0; iz < nz; iz++ ){
-    for ( int iy = 0; iy < ny; iy++ ){
-      for ( int ix = 0; ix < nx; ix++ ){
-        // Set the element-level connectivity
-        for ( int iiz = 0; iiz < 2; iiz++ ){
-          for ( int iiy = 0; iiy < 2; iiy++ ){
-            for ( int iix = 0; iix < 2; iix++ ){
-              conn[0] = 
-                ((ix+iix) + (iy+iiy)*(nx+1) + (iz+iiz)*(nx+1)*(ny+1));
-              conn++;
-            }
-          }
-        }
-      }
-    }
-  }
+  // The BDF file
+  const char *bdf_file = "uCRM_3D_box_mesh.bdf";
 
   // Set the initial prefix for the output files
   char prefix[256];
@@ -319,12 +152,17 @@ int main( int argc, char *argv[] ){
   int use_linear_method = 0;
   int max_num_bfgs = 20;
   int tree_depth = 3;
+  
+  // Set the mesh
+  int use_mesh = 0;
+
+  // Read out the command line arguments
   for ( int k = 0; k < argc; k++ ){
-    if (strcmp(argv[k], "partition") == 0){
-      partition = 1;
+    if (strcmp(argv[k], "use_mesh") == 0){
+      use_mesh = 1;
     }
     if (sscanf(argv[k], "tree_depth=%d", &tree_depth) == 1){
-      if (tree_depth < 0){ tree_depth = 1; }
+      if (tree_depth < 0){ tree_depth = 0; }
     }
     if (sscanf(argv[k], "order=%d", &order) == 1){
       if (order < 2){ order = 2; }
@@ -362,6 +200,137 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  if (mpi_rank == 0){
+    printf("order = %d\n", order);
+    printf("omega = %g\n", omega);
+    printf("prefix = %s\n", prefix);
+    printf("mass_fraction = %f\n", mass_fraction);
+    printf("use_inverse_vars = %d\n", use_inverse_vars);
+    printf("use_linear_method = %d\n", use_linear_method);
+    printf("scale_objective = %d\n", scale_objective);
+    printf("tree_depth = %d\n", tree_depth);
+    printf("max_num_bfgs = %d\n", max_num_bfgs);
+  }
+
+  // Define the mesh information
+  int npts = 0;
+  int nelems = 0;
+  int num_bc_blocks = 0;
+  int *bc_blocks = NULL;
+  int *refine = NULL;
+  double *Xpts = NULL;
+  int *elem_node_conn = NULL;
+  double *nodal_forces = 0;
+
+  if (use_mesh){
+    // Create the TACSMeshLoader class
+    TACSMeshLoader *mesh = new TACSMeshLoader(MPI_COMM_SELF);
+    mesh->incref();
+    mesh->scanBDFFile(bdf_file);
+    
+    // Extract the connectivity
+    const int *conn;
+    const double *X;
+    mesh->getConnectivity(&npts, &nelems, NULL, 
+                          &conn, &X);
+
+    // Copy the element data
+    elem_node_conn = new int[ 8*nelems ];
+    Xpts = new double[ 3*npts ];
+    memcpy(elem_node_conn, conn, 8*nelems*sizeof(int));
+    memcpy(Xpts, X, 3*npts*sizeof(double));    
+
+    // Set the forces at each node
+    nodal_forces = new double[ 3*npts ];
+    memset(nodal_forces, 0, 3*npts*sizeof(double));
+    for ( int i = 0; i < npts; i++ ){
+      nodal_forces[3*i+2] = 1e3;
+    }
+
+    // Set the refinement increasing out the wing
+    refine = new int[ nelems ];
+    memset(refine, 0, nelems*sizeof(int));
+    
+    int max_refine = 2 + tree_depth;
+    int min_refine = tree_depth;
+    double y_max = 30.0;
+    for ( int k = 0; k < nelems; k++ ){
+      double y_ref = Xpts[3*elem_node_conn[8*k]+1];
+      refine[k] = min_refine + 
+        (max_refine - min_refine)*(1.0 - (y_ref/y_max));
+    }
+
+    // Deallocate the mesh
+    mesh->decref();
+  }
+  else {
+    // Allocate the data that is required to define the problem
+    int nx = 80, ny = 8, nz = 8;
+    nelems = nx*ny*nz;
+    npts = (nx+1)*(ny+1)*(nz+1);
+
+    refine = new int[ nelems ];
+    elem_node_conn = new int[ 8*nelems ];
+    Xpts = new double[ 3*npts ];
+    nodal_forces = new double[ 3*npts ];
+    
+    // The length of the model
+    double xlen = (1.0*nx)/ny;
+    double ylen = 1.0;
+    double zlen = 1.0;
+
+    // Set the boundary conditions
+    num_bc_blocks = ny*nz;
+    bc_blocks = new int[ num_bc_blocks ];
+    for ( int count = 0, iz = 0; iz < nz; iz++ ){
+      for ( int iy = 0; iy < ny; iy++, count++ ){
+        int block = nx*iy + nx*ny*iz;
+        bc_blocks[count] = 6*block;
+      }
+    }
+    
+    // Set the octree refinement
+    for ( int i = 0; i < nelems; i++ ){
+      refine[i] = tree_depth;
+    }
+    
+    // Set the node locations
+    TacsScalar *X = Xpts;
+    for ( int iz = 0; iz < nz+1; iz++ ){
+      for ( int iy = 0; iy < ny+1; iy++ ){
+        for ( int ix = 0; ix < nx+1; ix++ ){
+          X[0] = xlen*ix/nx;  X++;
+          X[0] = ylen*iy/ny;  X++;
+          X[0] = zlen*iz/nz;  X++;
+        }
+      }
+    }
+    
+    // Loop over all the elements in the mesh
+    int *conn = elem_node_conn;
+    for ( int iz = 0; iz < nz; iz++ ){
+      for ( int iy = 0; iy < ny; iy++ ){
+        for ( int ix = 0; ix < nx; ix++ ){
+          // Set the element-level connectivity
+          for ( int iiz = 0; iiz < 2; iiz++ ){
+            for ( int iiy = 0; iiy < 2; iiy++ ){
+              for ( int iix = 0; iix < 2; iix++ ){
+                conn[0] = 
+                  ((ix+iix) + (iy+iiy)*(nx+1) + (iz+iiz)*(nx+1)*(ny+1));
+                conn++;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Set the nodal forces
+    memset(nodal_forces, 0, 3*npts*sizeof(double));
+    nodal_forces[3*(nx+1)+1] = 1e4;
+    nodal_forces[3*(nx+1)+2] = 1e4;
+  }
+
   // Define the different forest levels
   const int MAX_NUM_MESH = 4;
   TMROctForest *forest[MAX_NUM_MESH];
@@ -379,57 +348,11 @@ int main( int argc, char *argv[] ){
 
   // Create the forests
   forest[0] = new TMROctForest(comm);
+  forest[0]->setConnectivity(npts, elem_node_conn, nelems);
+  forest[0]->createTrees(tree_depth);
 
-  if (mpi_rank == 0){
-    printf("order = %d\n", order);
-    printf("omega = %g\n", omega);
-    printf("prefix = %s\n", prefix);
-    printf("mass_fraction = %f\n", mass_fraction);
-    printf("use_inverse_vars = %d\n", use_inverse_vars);
-    printf("use_linear_method = %d\n", use_linear_method);
-    printf("scale_objective = %d\n", scale_objective);
-    printf("tree_depth = %d\n", tree_depth);
-    printf("max_num_bfgs = %d\n", max_num_bfgs);
-  }
-
-  if (Xpts && elem_node_conn){
-    forest[0]->setConnectivity(npts, elem_node_conn,
-                               nelems, partition);
-    if (order == 3){
-      forest[0]->createTrees(tree_depth);
-    }
-    else {
-      forest[0]->createTrees(tree_depth);
-    }
-  }
-  else {
-    // Create the TACSMeshLoader class
-    TACSMeshLoader *mesh = new TACSMeshLoader(MPI_COMM_SELF);
-    mesh->incref();
-    mesh->scanBDFFile("uCRM_3D_box_mesh.bdf");
-    
-    // Extract the connectivity
-    mesh->getConnectivity(&npts, &nelems, NULL, 
-                          &elem_node_conn, &Xpts);
-    forest[0]->setConnectivity(npts, elem_node_conn, 
-                               nelems, partition);
-    
-    // Set the refinement increasing out the wing
-    int *refine = new int[ nelems ];
-    memset(refine, 0, nelems*sizeof(int));
-    
-    int max_refine = 5;
-    int min_refine = 2;
-    double y_max = 30.0;
-    for ( int k = 0; k < nelems; k++ ){
-      double y_ref = Xpts[3*elem_node_conn[8*k]+1];
-      refine[k] = min_refine + 
-        (max_refine - min_refine)*(1.0 - (y_ref/y_max));
-    }
-  
-    forest[0]->createTrees(refine);
-    delete [] refine;
-  }
+  // Compute the volume of the super mesh
+  double volume = 0.0;
 
   if (mpi_rank == 0){
     // Get the face ids and count up how many of each we have
@@ -442,15 +365,15 @@ int main( int argc, char *argv[] ){
     // Check if any of the blocks have element
     for ( int i = 0; i < nblocks; i++ ){
       double V = computeVolume(i, elem_node_conn, Xpts);
+      volume += V;
       if (V < 0.0){
         printf("Negative volume in element %d\n", i);
       }
     }
-
-    // Print out the number of blocks, faces, edges and nodes
-    printf("nblocks = %d\nnfaces = %d\nnedges = %d\nnnodes = %d\n", 
-           nblocks, nfaces, nedges, nnodes);
   }
+
+  // Broadcast the volume
+  MPI_Bcast(&volume, 1, MPI_DOUBLE, 0, comm);
 
   // Repartition the octrees
   if (mpi_rank == 0){ printf("[%d] Repartition\n", mpi_rank); }
@@ -542,31 +465,40 @@ int main( int argc, char *argv[] ){
     tacs[level]->setDependentNodes(dep_ptr, dep_conn,
                                    dep_weights);
 
-    for ( int iz = 0; iz < nz; iz++ ){
-      for ( int iy = 0; iy < ny; iy++ ){
-        int block = nx*iy + nx*ny*iz;
+    for ( int k = 0; k < num_bc_blocks; k++ ){
+      // Get the boundary condition information
+      int block = bc_blocks[k]/6;
+      int face = bc_blocks[k] % 6;
 
-        // Add nodes associated with the boundary conditions
-        if (octrees[block]){
-          // Get the octant nodes
-          TMROctantArray *nodes;
-          octrees[block]->getNodes(&nodes);
+      if (octrees[block]){
+        // Get the octant nodes
+        TMROctantArray *nodes;
+        octrees[block]->getNodes(&nodes);
       
-          // Get the array
-          int size;
-          TMROctant *array;
-          nodes->getArray(&array, &size);
-          
-          // Set the boundary conditions
-          int nbc = 0;
-          for ( int i = 0; i < size; i++ ){
-            if (array[i].x == 0 && 
-                (array[i].tag >= range[mpi_rank] && 
-                 array[i].tag < range[mpi_rank+1])){
-              nbc++;
-              int node = array[i].tag;
-              tacs[level]->addBCs(1, &node);
-            }
+        // Get the array
+        int size;
+        TMROctant *array;
+        nodes->getArray(&array, &size);
+        
+        // Set the boundary conditions
+        for ( int i = 0; i < size; i++ ){
+          // Label the boundary conditions on the face
+          int node = -1;
+          const int32_t hmax = 1 << TMR_MAX_LEVEL;
+          if (face < 2 && array[i].x == (face % 2)*hmax){
+            node = array[i].tag;            
+          }
+          else if (face < 4 && array[i].y == (face % 2)*hmax){
+            node = array[i].tag;
+          }
+          else if (array[i].z == (face % 2)*hmax){
+            node = array[i].tag;
+          }
+
+          // Add the boundary condition if it is in range
+          if (array[i].tag >= range[mpi_rank] && 
+              array[i].tag < range[mpi_rank+1]){
+            tacs[level]->addBCs(1, &node);
           }
         }
       }
@@ -742,7 +674,6 @@ int main( int argc, char *argv[] ){
         SolidStiffness *stiff = 
           new TMRLinearOctStiffness(weights, nweights, mass_fraction,
 				    rho, E, nu, qval);
-	// TMRLinearOctStiffness::SIMP);
 
         TACSElement *solid = NULL;
         if (order == 2){
@@ -878,41 +809,68 @@ int main( int argc, char *argv[] ){
   // Get the octrees within the forest
   TMROctree **octrees;
   int ntrees = forest[0]->getOctrees(&octrees);
-  int block = nx-1;
 
-  // Find the far node associated with the block
-  if (octrees[block]){
-    // Get the octant nodes
-    TMROctantArray *nodes;
-    octrees[block]->getNodes(&nodes);
-    
-    const int *range;
-    forest[0]->getOwnedNodeRange(&range);
-    
-    // Get the array
-    int size;
-    TMROctant *array;
-    nodes->getArray(&array, &size);
-          
-    // Set the boundary conditions
-    int nbc = 0;
-    const int hmax = 1 << TMR_MAX_LEVEL;
-    for ( int i = 0; i < size; i++ ){
-      if (array[i].x == hmax &&
-          array[i].y == 0 &&
-          array[i].z == 0){
-        int index = 3*(array[i].tag - range[mpi_rank]);
+  // Get the connectivity and the inverse connectivity to enable easy
+  // node->block look up
+  const int *block_conn;
+  const int *node_block_conn, *node_block_ptr;
+  forest[0]->getConnectivity(NULL, NULL, NULL, NULL,
+                             &block_conn, NULL, NULL, NULL);
+  forest[0]->getInverseConnectivity(&node_block_conn, &node_block_ptr,
+                                    NULL, NULL, NULL, NULL);
 
-        TacsScalar *f;
-        force->getArray(&f);
-        f[index+1] = 1e4;
-        f[index+2] = 1e4;
+  // Get the inverse connectivity for each node
+  for ( int node = 0; node < npts; node++ ){
+    int ip = node_block_ptr[node];
+    int owner = node_block_conn[ip];
+    ip++;
+
+    // Find the block owner
+    for ( ; ip < node_block_ptr[node+1]; ip++ ){
+      int block = node_block_conn[ip];
+      if (block < owner){ owner = block; }
+    }
+
+    if (octrees[owner]){
+      // Find the corner that matches
+      int corner = 0;
+      for ( ; corner < 8; corner++ ){
+        if (block_conn[8*owner + corner] == node){
+          break;
+        }
       }
+
+      // Set the node location within the octant
+      const int32_t hmax = 1 << TMR_MAX_LEVEL;
+      TMROctant n;
+      n.x = hmax*(corner % 2);
+      n.y = hmax*((corner % 4)/2);
+      n.z = hmax*(corner/4);
+
+      // Get the octant nodes
+      TMROctantArray *nodes;
+      octrees[owner]->getNodes(&nodes);
+      
+      // Use the node search
+      const int use_node_search = 1;
+      TMROctant *t = nodes->contains(&n, use_node_search);
+
+      // Compute the index within the local array
+      const int *range;
+      forest[0]->getOwnedNodeRange(&range);    
+      int index = 3*(t->tag - range[mpi_rank]);
+
+      // Get the local force array and apply the nodal forces
+      TacsScalar *f;
+      force->getArray(&f);
+      f[index] = nodal_forces[3*node];
+      f[index+1] = nodal_forces[3*node+1];
+      f[index+2] = nodal_forces[3*node+2];
     }
   }
-
+  
   // Set the target mass
-  double target_mass = rho*mass_fraction*xlen*ylen*zlen;
+  double target_mass = rho*mass_fraction*volume;
 
   // Create the ParOpt problem class
   TMRTopoProblem *prob = 
@@ -983,9 +941,10 @@ int main( int argc, char *argv[] ){
 
   int max_iters = 100;
   for ( int k = 0; k < max_iters; k++ ){
-    if (mpi_rank == 0){ printf("[%d] New iteration %d with q = %g\n", mpi_rank, k, q); }
-    // Check the gradients -- this seems to be a waste to me...
-    // opt->checkGradients(1e-6);
+    // Print out the results at the current iterate
+    if (mpi_rank == 0){ 
+      printf("[%d] New iteration %d with q = %g\n", mpi_rank, k, q); 
+    }
 
     // Set the barrier parameter if this is the second or greater
     // time throught
