@@ -262,6 +262,36 @@ int main( int argc, char *argv[] ){
 
     // Deallocate the mesh
     mesh->decref();
+
+    // Set up the boundary condition information
+    num_bc_blocks = 0;
+    bc_blocks = new int[ nelems ];
+
+    // The face-> node connectivity
+    const int face_to_nodes[][4] = {{0,2,4,6}, {1,3,5,7},
+                                    {0,1,4,5}, {2,3,6,7},
+                                    {0,1,2,3}, {4,5,6,7}};
+
+    // Pull out the faces that lie on the symmetry axis
+    for ( int i = 0; i < nelems; i++ ){
+      for ( int face = 0; face < 6; face++ ){
+        int is_constrained = 1;
+        for ( int k = 0; k < 4; k++ ){
+          // Get the node associated with this face
+          int node = elem_node_conn[8*i + face_to_nodes[face][k]];
+          double y = Xpts[3*node+1];
+          if (y >= 0.01){
+            is_constrained = 0;
+            break;
+          }
+        }
+        if (is_constrained){
+          bc_blocks[num_bc_blocks] = 6*i + face;
+          num_bc_blocks++;
+          break;
+        }
+      }
+    }
   }
   else {
     // Allocate the data that is required to define the problem
@@ -868,6 +898,9 @@ int main( int argc, char *argv[] ){
       f[index+2] = nodal_forces[3*node+2];
     }
   }
+
+  // Apply the boundary conditions to the force vector
+  force->applyBCs();
   
   // Set the target mass
   double target_mass = rho*mass_fraction*volume;

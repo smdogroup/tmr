@@ -317,7 +317,7 @@ int TMRTopoProblem::isSparseInequality(){
   Use the inequality constraint - this seems to work better
 */
 int TMRTopoProblem::isDenseInequality(){ 
-  return 0; 
+  return 1;
 }
 
 /*
