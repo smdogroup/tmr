@@ -770,7 +770,11 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
   double cutoff = 0.25;
   char filename[256];
   sprintf(filename, "%s/levelset025_binary%04d.bstl", prefix, iter_count);
-  int fail = TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
+  TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
+
+  cutoff = 0.5;
+  sprintf(filename, "%s/levelset05_binary%04d.bstl", prefix, iter_count);
+  TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
 
   // Update the iteration count
   iter_count++;

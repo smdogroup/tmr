@@ -122,6 +122,10 @@ double computeVolume( int i, const int *elem_node_conn,
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
+
+  // Set the number of levels
+  int num_mesh_levels = 4;
+  const int MAX_NUM_MESH = 5;
   
   // Set the communicator
   MPI_Comm comm = MPI_COMM_WORLD;
@@ -138,10 +142,14 @@ int main( int argc, char *argv[] ){
   int order = 2;
 
   // The BDF file
-  const char *bdf_file = "uCRM_3D_box_mesh.bdf";
+  char bdf_buffer[512];
+  char restart_buffer[512];
+  const char *bdf_file = NULL;
+  const char *restart_file = NULL;
 
   // Set the initial prefix for the output files
   char prefix[256];
+  memset(prefix, 0, sizeof(prefix));
   sprintf(prefix, "results/");
 
   // Take command-line parameters as input
@@ -152,14 +160,56 @@ int main( int argc, char *argv[] ){
   int use_linear_method = 0;
   int max_num_bfgs = 20;
   int tree_depth = 3;
+  int mg_sor_iters = 1;
+  int mg_sor_symm = 1;
+  int mg_iters_per_level = 1;
+  int restart_iter = 0;
   
-  // Set the mesh
-  int use_mesh = 0;
-
   // Read out the command line arguments
   for ( int k = 0; k < argc; k++ ){
-    if (strcmp(argv[k], "use_mesh") == 0){
-      use_mesh = 1;
+    if (sscanf(argv[k], "bdf_file=%s", &bdf_buffer) == 1){
+      // Check if the BDF file exists...
+      FILE *fp = fopen(bdf_buffer, "r");
+      if (fp){
+	bdf_file = bdf_buffer;
+	fclose(fp);
+      }
+    }
+    if (sscanf(argv[k], "restart_file=%s", &restart_buffer) == 1){
+      FILE *fp = fopen(restart_buffer, "r");
+      if (fp){
+	restart_file = restart_buffer;
+	fclose(fp);
+      }
+      if (restart_file){
+	const char *ptr = strstr(restart_file, "restart");
+	char buff[512];
+	if (sscanf(ptr, "restart%d.bin", &restart_iter) == 1){
+	  if (restart_iter < 0){
+	    restart_iter = 0;
+	    restart_file = NULL;
+	  }
+	}
+      }
+    }
+    if (sscanf(argv[k], "num_mesh_levels=%d", &num_mesh_levels) == 1){
+      if (num_mesh_levels < 2){
+	num_mesh_levels = 2;
+      }
+      if (num_mesh_levels > MAX_NUM_MESH){
+	num_mesh_levels = MAX_NUM_MESH;
+      }
+    }
+    if (sscanf(argv[k], "mg_sor_iters=%d", &mg_sor_iters) == 1){
+      if (mg_sor_iters < 1){
+	mg_sor_iters = 1;
+      }
+    }
+    if (sscanf(argv[k], "mg_sor_symm=%d", &mg_sor_symm) == 1){}
+    if (sscanf(argv[k], "mg_iters_per_level=%d", &mg_iters_per_level) == 1){
+      if (mg_iters_per_level < 1){
+	mg_iters_per_level = 1;
+      }
     }
     if (sscanf(argv[k], "tree_depth=%d", &tree_depth) == 1){
       if (tree_depth < 0){ tree_depth = 0; }
@@ -200,16 +250,27 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  // Broadcast the prefix
+  MPI_Bcast(prefix, sizeof(prefix), MPI_CHAR, 0, comm);
+
   if (mpi_rank == 0){
     printf("order = %d\n", order);
     printf("omega = %g\n", omega);
     printf("prefix = %s\n", prefix);
     printf("mass_fraction = %f\n", mass_fraction);
+    if (restart_file){
+      printf("restart_file = %s\n", restart_file);
+      printf("restart_iter = %d\n", restart_iter);
+    }
     printf("use_inverse_vars = %d\n", use_inverse_vars);
     printf("use_linear_method = %d\n", use_linear_method);
     printf("scale_objective = %d\n", scale_objective);
     printf("tree_depth = %d\n", tree_depth);
     printf("max_num_bfgs = %d\n", max_num_bfgs);
+    printf("mg_sor_iters = %d\n", mg_sor_iters);
+    printf("mg_sor_symm = %d\n", mg_sor_symm);
+    printf("mg_iters_per_level = %d\n", mg_iters_per_level);
+    printf("num_mesh_levels = %d\n", num_mesh_levels);
   }
 
   // Define the mesh information
@@ -222,7 +283,7 @@ int main( int argc, char *argv[] ){
   int *elem_node_conn = NULL;
   double *nodal_forces = 0;
 
-  if (use_mesh){
+  if (bdf_file){
     // Create the TACSMeshLoader class
     TACSMeshLoader *mesh = new TACSMeshLoader(MPI_COMM_SELF);
     mesh->incref();
@@ -257,7 +318,7 @@ int main( int argc, char *argv[] ){
     for ( int k = 0; k < nelems; k++ ){
       double y_ref = Xpts[3*elem_node_conn[8*k]+1];
       refine[k] = min_refine + 
-        (max_refine - min_refine)*(1.0 - (y_ref/y_max));
+        (max_refine - min_refine)*(1.0 - (1.2*y_ref/y_max));
     }
 
     // Deallocate the mesh
@@ -357,12 +418,11 @@ int main( int argc, char *argv[] ){
 
     // Set the nodal forces
     memset(nodal_forces, 0, 3*npts*sizeof(double));
-    nodal_forces[3*(nx+1)+1] = 1e4;
-    nodal_forces[3*(nx+1)+2] = 1e4;
+    nodal_forces[3*nx+1] = 1e4;
+    nodal_forces[3*nx+2] = 1e4;
   }
 
   // Define the different forest levels
-  const int MAX_NUM_MESH = 4;
   TMROctForest *forest[MAX_NUM_MESH];
   TMROctForest *filter[MAX_NUM_MESH];
 
@@ -379,7 +439,8 @@ int main( int argc, char *argv[] ){
   // Create the forests
   forest[0] = new TMROctForest(comm);
   forest[0]->setConnectivity(npts, elem_node_conn, nelems);
-  forest[0]->createTrees(tree_depth);
+  forest[0]->createTrees(refine);
+  delete [] refine;
 
   // Compute the volume of the super mesh
   double volume = 0.0;
@@ -409,7 +470,7 @@ int main( int argc, char *argv[] ){
   if (mpi_rank == 0){ printf("[%d] Repartition\n", mpi_rank); }
   forest[0]->repartition();
 
-  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
+  for ( int level = 0; level < num_mesh_levels; level++ ){
     // Balance the
     if (mpi_rank == 0){ printf("[%d] Balance\n", mpi_rank); }
     double tbal = MPI_Wtime();
@@ -526,8 +587,8 @@ int main( int argc, char *argv[] ){
           }
 
           // Add the boundary condition if it is in range
-          if (array[i].tag >= range[mpi_rank] && 
-              array[i].tag < range[mpi_rank+1]){
+          if (node >= range[mpi_rank] &&
+              node < range[mpi_rank+1]){
             tacs[level]->addBCs(1, &node);
           }
         }
@@ -601,7 +662,7 @@ int main( int argc, char *argv[] ){
     }
 
     // Set the material properties to use
-    double qval = 5.0;
+    double qval = 1.0;
 
     // Loop over all of the elements within the array
     for ( int k = 0, num = 0; k < nowned; k++ ){
@@ -805,7 +866,7 @@ int main( int argc, char *argv[] ){
     tacs[level]->setNodes(Xvec);
     Xvec->decref();
 
-    if (level+1 < MAX_NUM_MESH){
+    if (level+1 < num_mesh_levels){
       if (order == 3){
         // Duplicate the forest for a lower-order mesh
         forest[level+1] = forest[level]->duplicate();
@@ -818,15 +879,13 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the multigrid object
-  int sor_iters = 1;
-  int sor_symm = 1;
-  TACSMg *mg = new TACSMg(comm, MAX_NUM_MESH, 
-                          omega, sor_iters, sor_symm);
+  TACSMg *mg = new TACSMg(comm, num_mesh_levels,
+                          omega, mg_sor_iters, mg_sor_symm);
   mg->incref();
 
-  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
-    if (level < MAX_NUM_MESH-1){
-      mg->setLevel(level, tacs[level], interp[level], 1);
+  for ( int level = 0; level < num_mesh_levels; level++ ){
+    if (level < num_mesh_levels-1){
+      mg->setLevel(level, tacs[level], interp[level], mg_iters_per_level);
     }
     else {
       mg->setLevel(level, tacs[level], NULL);
@@ -907,7 +966,7 @@ int main( int argc, char *argv[] ){
 
   // Create the ParOpt problem class
   TMRTopoProblem *prob = 
-    new TMRTopoProblem(MAX_NUM_MESH, tacs, force, filter,
+    new TMRTopoProblem(num_mesh_levels, tacs, force, filter,
                        filter_maps, filter_indices, mg,
                        target_mass, prefix);
   
@@ -916,6 +975,7 @@ int main( int argc, char *argv[] ){
     prob->setUseReciprocalVariables();
   }
 
+  /*
   if (scale_objective){
     // Allocate space for the design variables
     ParOptVec *x = prob->createDesignVec();
@@ -945,6 +1005,7 @@ int main( int argc, char *argv[] ){
     delete g;
     delete A;
   }  
+  */
 
   // Create the topology optimization object
   ParOpt *opt = new ParOpt(prob, max_num_bfgs);
@@ -963,17 +1024,19 @@ int main( int argc, char *argv[] ){
   
   // Set the Hessian reset frequency
   opt->setBFGSUpdateType(LBFGS::DAMPED_UPDATE);
-  
+  opt->setHessianResetFreq(max_num_bfgs);
+
   // Set the barrier parameter information
   opt->setBarrierPower(1.0);
   opt->setBarrierFraction(0.25);
 
   // The penality parameter
   double q = 0.0;
-  double tol = 1e-3;
+  double tol = 1e-6;
+  double func_tol = 5e-4;
 
   int max_iters = 100;
-  for ( int k = 0; k < max_iters; k++ ){
+  for ( int k = restart_iter; k < max_iters; k++ ){
     // Print out the results at the current iterate
     if (mpi_rank == 0){ 
       printf("[%d] New iteration %d with q = %g\n", mpi_rank, k, q); 
@@ -981,16 +1044,32 @@ int main( int argc, char *argv[] ){
 
     // Set the barrier parameter if this is the second or greater
     // time throught
-    opt->setAbsOptimalityTol(tol);    
+    opt->setAbsOptimalityTol(tol);
+    opt->setRelFunctionTol(func_tol);
     if (k > 0){
-      opt->setInitBarrierParameter(tol);
+      opt->setMaxMajorIterations(100);
+      opt->setInitBarrierParameter(10.0*tol);
     }
 
-    // Scale the tolerance
-    tol *= 0.25;
-    if (tol < 1e-6){
-      tol = 1e-6;
+    // Set the restart iteration/restart file
+    /*
+    if (restart_file && (k == restart_iter)){
+      opt->readSolutionFile(restart_file);
+      opt->setInitStartingPoint(0);
+
+      // Set the penalization
+      q = 1.0 + 1.0*(k/2);
+      if (q > 5.0){
+	q = 5.0;
+      }
+
+      // Get the optimized design point and set the new linearized
+      // point
+      ParOptVec *x;
+      opt->getOptimizedPoint(&x, NULL, NULL, NULL, NULL);
+      prob->setLinearization(q, x);
     }
+    */
 
     // Set the log/output file
     char outfile[256];
@@ -998,9 +1077,23 @@ int main( int argc, char *argv[] ){
     opt->setOutputFile(outfile);
   
     // Set the history/restart file
-    char restartfile[256];
-    sprintf(restartfile, "%s//paropt_restart%d.bin", prefix, k);
-    opt->optimize(restartfile);
+    char new_restart_file[256];
+    sprintf(new_restart_file, "%s//paropt_restart%d.bin", prefix, k);
+    // opt->optimize(); // (new_restart_file);
+
+    ParOptVec *xv;
+    ParOptScalar *xvals;
+    opt->getOptimizedPoint(&xv, NULL, NULL, NULL, NULL);
+    int xsize = xv->getArray(&xvals);
+    for ( int i = 0; i < xsize; i++ ){
+      xvals[i] = 1.0*rand()/RAND_MAX;
+    }
+
+    for ( int i = 0; i < 200; i++ ){
+      prob->writeOutput(i, xv);
+    }
+
+    printf("[%d] optimized\n", mpi_rank);
 
     // Set the new value of the penalization using an incremental approach.
     // Note that this will destroy the value of thelinearization
@@ -1027,8 +1120,10 @@ int main( int argc, char *argv[] ){
     
     // Write out the solution
     sprintf(outfile, "%s//tacs_output%d.f5", prefix, k);
+    printf("[%d] write %s\n", mpi_rank, outfile);
     f5->writeToFile(outfile);
     f5->decref();
+    printf("[%d] done %s\n", mpi_rank, outfile);
   }
 
   delete opt;
@@ -1036,12 +1131,12 @@ int main( int argc, char *argv[] ){
 
   mg->decref();
 
-  for ( int level = 0; level < MAX_NUM_MESH; level++ ){
+  for ( int level = 0; level < num_mesh_levels; level++ ){
     delete forest[level];
     tacs[level]->decref();
   }
 
-  for ( int level = 0; level < MAX_NUM_MESH-1; level++ ){
+  for ( int level = 0; level < num_mesh_levels-1; level++ ){
     interp[level]->decref();
   }
 
