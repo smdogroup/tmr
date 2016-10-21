@@ -138,7 +138,7 @@ int main( int argc, char *argv[] ){
   // The material properties
   TacsScalar rho = 2550.0, E = 70e9, nu = 0.3;
 
-  // The "super-node" locations
+  // Order of the mesh
   int order = 2;
 
   // The BDF file
@@ -167,7 +167,7 @@ int main( int argc, char *argv[] ){
   
   // Read out the command line arguments
   for ( int k = 0; k < argc; k++ ){
-    if (sscanf(argv[k], "bdf_file=%s", &bdf_buffer) == 1){
+    if (sscanf(argv[k], "bdf_file=%s", bdf_buffer) == 1){
       // Check if the BDF file exists...
       FILE *fp = fopen(bdf_buffer, "r");
       if (fp){
@@ -175,7 +175,7 @@ int main( int argc, char *argv[] ){
 	fclose(fp);
       }
     }
-    if (sscanf(argv[k], "restart_file=%s", &restart_buffer) == 1){
+    if (sscanf(argv[k], "restart_file=%s", restart_buffer) == 1){
       FILE *fp = fopen(restart_buffer, "r");
       if (fp){
 	restart_file = restart_buffer;
@@ -975,7 +975,6 @@ int main( int argc, char *argv[] ){
     prob->setUseReciprocalVariables();
   }
 
-  /*
   if (scale_objective){
     // Allocate space for the design variables
     ParOptVec *x = prob->createDesignVec();
@@ -1005,7 +1004,6 @@ int main( int argc, char *argv[] ){
     delete g;
     delete A;
   }  
-  */
 
   // Create the topology optimization object
   ParOpt *opt = new ParOpt(prob, max_num_bfgs);
@@ -1052,7 +1050,6 @@ int main( int argc, char *argv[] ){
     }
 
     // Set the restart iteration/restart file
-    /*
     if (restart_file && (k == restart_iter)){
       opt->readSolutionFile(restart_file);
       opt->setInitStartingPoint(0);
@@ -1069,7 +1066,6 @@ int main( int argc, char *argv[] ){
       opt->getOptimizedPoint(&x, NULL, NULL, NULL, NULL);
       prob->setLinearization(q, x);
     }
-    */
 
     // Set the log/output file
     char outfile[256];
@@ -1079,21 +1075,7 @@ int main( int argc, char *argv[] ){
     // Set the history/restart file
     char new_restart_file[256];
     sprintf(new_restart_file, "%s//paropt_restart%d.bin", prefix, k);
-    // opt->optimize(); // (new_restart_file);
-
-    ParOptVec *xv;
-    ParOptScalar *xvals;
-    opt->getOptimizedPoint(&xv, NULL, NULL, NULL, NULL);
-    int xsize = xv->getArray(&xvals);
-    for ( int i = 0; i < xsize; i++ ){
-      xvals[i] = 1.0*rand()/RAND_MAX;
-    }
-
-    for ( int i = 0; i < 200; i++ ){
-      prob->writeOutput(i, xv);
-    }
-
-    printf("[%d] optimized\n", mpi_rank);
+    opt->optimize(new_restart_file);
 
     // Set the new value of the penalization using an incremental approach.
     // Note that this will destroy the value of thelinearization
@@ -1120,10 +1102,8 @@ int main( int argc, char *argv[] ){
     
     // Write out the solution
     sprintf(outfile, "%s//tacs_output%d.f5", prefix, k);
-    printf("[%d] write %s\n", mpi_rank, outfile);
     f5->writeToFile(outfile);
     f5->decref();
-    printf("[%d] done %s\n", mpi_rank, outfile);
   }
 
   delete opt;
