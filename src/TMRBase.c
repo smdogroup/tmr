@@ -17,7 +17,7 @@ void TMRInitialize(){
   MPI_Datatype type = MPI_INT32_T;
 
   // Create the TMROctant data type
-  int counts = 5;
+  int counts = 6;
   MPI_Type_struct(1, &counts, &offset, &type, 
                   &TMROctant_MPI_type);
   MPI_Type_commit(&TMROctant_MPI_type);

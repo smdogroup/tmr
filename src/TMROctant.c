@@ -28,6 +28,7 @@ void TMROctant::getSibling( int id, TMROctant *sib ){
   int32_t yr = ((y & h) ? y-h : y);
   int32_t zr = ((z & h) ? z-h : z);
 
+  sib->block = block;
   sib->level = level;
   sib->x = ((id & 1) ? xr+h : xr);
   sib->y = ((id & 2) ? yr+h : yr);
@@ -39,6 +40,7 @@ void TMROctant::getSibling( int id, TMROctant *sib ){
 */
 void TMROctant::parent( TMROctant *p ){
   if (level > 0){
+    p->block = block;
     p->level = level-1;
     const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
@@ -52,6 +54,7 @@ void TMROctant::parent( TMROctant *p ){
   Get the face neighbour
 */
 void TMROctant::faceNeighbor( int face, TMROctant *neighbor ){
+  neighbor->block = block;
   neighbor->level = level;
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
@@ -65,6 +68,7 @@ void TMROctant::faceNeighbor( int face, TMROctant *neighbor ){
 */
 void TMROctant::edgeNeighbor( int edge, TMROctant *neighbor ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
+  neighbor->block = block;
   neighbor->level = level;
   
   if (edge < 4){
@@ -127,6 +131,7 @@ void TMROctant::edgeNeighbor( int edge, TMROctant *neighbor ){
 */
 void TMROctant::cornerNeighbor( int corner, TMROctant *neighbor ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
+  neighbor->block = block;
   neighbor->level = level;
 
   neighbor->x = x + (2*(corner & 1) - 1)*h;
@@ -142,6 +147,12 @@ void TMROctant::cornerNeighbor( int corner, TMROctant *neighbor ){
   that the octants will be sorted by location then level.
 */
 int TMROctant::compare( const TMROctant *octant ) const {
+  // If these octants are on different blocks, we're done...
+  if (block != octant->block){
+    return block - octant->block;
+  }
+
+  // Find the most significant bit
   uint32_t xxor = x ^ octant->x;
   uint32_t yxor = y ^ octant->y;
   uint32_t zxor = z ^ octant->z;
@@ -178,6 +189,12 @@ int TMROctant::compare( const TMROctant *octant ) const {
   encoding, but may be at different levels.
 */
 int TMROctant::compareEncoding( const TMROctant *octant ) const {
+  // If these octants are on different blocks, we're done...
+  if (block != octant->block){
+    return block - octant->block;
+  }
+
+  // Find the most-significant bit
   uint32_t xxor = x ^ octant->x;
   uint32_t yxor = y ^ octant->y;
   uint32_t zxor = z ^ octant->z;
@@ -214,7 +231,8 @@ int TMROctant::contains( TMROctant *oct ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
   // Check whether the octant lies within this octant
-  if ((oct->x >= x && oct->x < x + h) &&
+  if ((oct->block == block) &&
+      (oct->x >= x && oct->x < x + h) &&
       (oct->y >= y && oct->y < y + h) && 
       (oct->z >= z && oct->z < z + h)){
     return 1;
@@ -324,7 +342,7 @@ TMROctant* TMROctantArray::contains( TMROctant *q, int use_nodes ){
 /*
   Merge the entries of two arrays
 */
-void TMROctantArray::merge( TMROctantArray * list ){
+void TMROctantArray::merge( TMROctantArray *list ){
   if (!is_sorted){
     sort();
   }
@@ -398,7 +416,7 @@ void TMROctantArray::merge( TMROctantArray * list ){
 }
 
 /*
-  Get the array
+  Get the underlying array
 */
 void TMROctantArray::getArray( TMROctant **_array, int *_size ){
   if (_array){ *_array = array; }
@@ -523,7 +541,7 @@ TMROctantHash::~TMROctantHash(){
 /*
   Covert the hash table to an array
 */
-TMROctantArray * TMROctantHash::toArray(){
+TMROctantArray *TMROctantHash::toArray(){
   // Create an array of octants
   TMROctant *array = new TMROctant[ num_elems ];
 
@@ -654,11 +672,12 @@ int TMROctantHash::getBucket( TMROctant *oct ){
   const int32_t hmod = hmax % num_buckets;
   
   // Compute the first and second coefficients
+  uint64_t pb = oct->block % num_buckets;
   uint64_t px = oct->x % num_buckets;
   uint64_t py = (oct->y % num_buckets)*hmod;
   uint64_t pz = (oct->z % num_buckets)*hmod;
   pz = (pz % num_buckets)*hmod;
   
-  int bucket = (px + py + pz) % num_buckets;
+  int bucket = (pb + px + py + pz) % num_buckets;
   return bucket;
 }

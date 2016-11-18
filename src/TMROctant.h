@@ -33,7 +33,8 @@ class TMROctant {
 
   int32_t x, y, z; // The x,y,z coordinates
   int32_t level; // The refinement level
-  int32_t tag; // A tag to store additional data
+  int32_t block; // The block that owns this octant
+  int32_t tag;   // A tag to store additional data
 };
 
 /*
@@ -55,6 +56,7 @@ class TMROctantArray {
   void sort();
   TMROctant* contains( TMROctant *q, int use_nodes=0 );
   void merge( TMROctantArray * list );
+  TMROctant* findEnclosed( TMROctant *q );
 
  private:
   int is_sorted;

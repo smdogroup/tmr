@@ -291,7 +291,7 @@ TMROctree *TMROctree::coarsen(){
   input: 
   oct:     the candidate octant
 
-  returns: the occtant that was found or NULL if no such octant exists
+  returns: the octant that was found or NULL if no such octant exists
 */
 TMROctant* TMROctree::findEnclosing( TMROctant *oct ){
   // Retrieve the array of elements
