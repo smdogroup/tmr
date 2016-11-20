@@ -69,12 +69,12 @@ class TMROctForest {
 
   // Create the mesh connectivity
   // ----------------------------
-  // void createMeshConn( int **_conn, int *_nelems );
+  void createMeshConn( int **_conn, int *_nelems );
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
-  // int getDepNodeConn( const int **_ptr, const int **_conn,
-  //                    const double **_weights );
+  int getDepNodeConn( const int **_ptr, const int **_conn,
+                      const double **_weights );
  
   // Create interpolation/restriction operators
   // ------------------------------------------
@@ -88,24 +88,26 @@ class TMROctForest {
   
   // Get the mesh order
   // ------------------
-  // int getMeshOrder(){ return mesh_order; }
+  int getMeshOrder(){ return mesh_order; }
 
   // Get the node-processor ownership range
   // --------------------------------------
-  /*
-    void getOwnedNodeRange( const int **_node_range ){
+  void getOwnedNodeRange( const int **_node_range ){
     if (_node_range){
       *_node_range = node_range;
     }
   }
-  */
 
-  // Get the octants
-  // ---------------
+  // Get the octants and the nodes
+  // -----------------------------
   void getOctants( TMROctantArray **_octants ){
-    if (_octants){
-      *_octants = octants;
-    }
+    if (_octants){ *_octants = octants; }
+  }
+  void getNodes( TMROctantArray **_nodes ){
+    if (_nodes){ *_nodes = nodes; }
+  }
+  void getPoints( TMRPoint **_X ){
+    if (_X){ *_X = X; }
   }
 
   // Retrieve the connectivity information
@@ -123,7 +125,7 @@ class TMROctForest {
                                const int **_face_block_conn,
                                const int **_face_block_ptr );
   
-  // private:
+ private:
   // Compute the partition using METIS
   // ---------------------------------
   // void computePartition( int part_size, int *vwgts, int *part );
@@ -208,11 +210,11 @@ class TMROctForest {
   // Label the dependent nodes on the locally owned blocks
   void labelDependentNodes();
 
-  /*
   // Create the dependent node connectivity
   void createDepNodeConn( int **_ptr, int **_conn,
                           double **_weights );
 
+  /*
   // Add the nodal weighting values to an interpolant
   void addNodeWeights( TMROctant *t, double w,
                        const int *cdep_ptr, const int *cdep_conn,
@@ -260,6 +262,7 @@ class TMROctForest {
 
   // The array of all the nodes
   TMROctantArray *nodes;
+  TMRPoint *X;
 
   // The following data is processor-local
   // -------------------------------------

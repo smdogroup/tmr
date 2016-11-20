@@ -699,12 +699,9 @@ int TMR_GenerateBinFile( const char *filename,
   filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
 
   // Get the information required 
-  TMROctree **octrees;
-  int ntrees = filter->getOctrees(&octrees);
-
-  // Get the ownership information
-  const int *owned;
-  int nowned = filter->getOwnedOctrees(&owned);
+  TMROctantArray *octants, *nodes;
+  filter->getOctants(&octants);
+  filter->getNodes(&nodes);
 
   // Set the maximum length of any of the block sides
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
@@ -726,129 +723,121 @@ int TMR_GenerateBinFile( const char *filename,
   filter->getInverseConnectivity(NULL, NULL, NULL, NULL,
                                  NULL, &face_block_ptr);
 
-  // Loop over all the owned blocks
-  for ( int k = 0; k < nowned; k++ ){
-    int block = owned[k];
+  // Get the array of octants
+  int nelems, nnodes;
+  TMROctant *element_array, *node_array;
+  octants->getArray(&element_array, &nelems);
+  nodes->getArray(&node_array, &nnodes);
 
-    // Retrieve the octant nodes for the list
-    TMROctantArray *elements, *nodes;
-    octrees[block]->getElements(&elements);
-    octrees[block]->getNodes(&nodes);
+  // Get the nodal locations from the TMROctree object
+  TMRPoint *X;
+  filter->getPoints(&X);
 
-    // Get the array of octants
-    int nelems, nnodes;
-    TMROctant *element_array, *node_array;
-    elements->getArray(&element_array, &nelems);
-    nodes->getArray(&node_array, &nnodes);
-
-    // Get the nodal locations from the TMROctree object
-    TMRPoint *X;
-    octrees[block]->getPoints(&X);
+  // Get the mesh coordinates from the filter
+  for ( int i = 0; i < nelems; i++ ){
+    // Compute the side-length of this element
+    const int32_t h = 
+      1 << (TMR_MAX_LEVEL - element_array[i].level - (mesh_order-2));
+      
+    // Get the block id
+    int block = element_array[i].block;
 
     // Check if the octree face lies on a boundary or not
     int octree_face_boundary[6];
-    for ( int i = 0; i < 6; i++ ){
-      octree_face_boundary[i] = 0;
+    for ( int k = 0; k < 6; k++ ){
+      octree_face_boundary[k] = 0;
 
-      int face = block_face_conn[6*block + i];
+      int face = block_face_conn[6*block + k];
       int nblocks = face_block_ptr[face+1] - face_block_ptr[face];
       if (nblocks == 1){
-        octree_face_boundary[i] = 1;
+        octree_face_boundary[k] = 1;
       }
     }
 
-    // Get the mesh coordinates from the filter
-    for ( int i = 0; i < nelems; i++ ){
-      // Compute the side-length of this element
-      const int32_t h = 
-        1 << (TMR_MAX_LEVEL - element_array[i].level - (mesh_order-2));
-      
-      // Loop over each sub-octant in the mesh 
-      for ( int iz = 0; iz < mesh_order-1; iz++ ){
-        for ( int iy = 0; iy < mesh_order-1; iy++ ){
-          for ( int ix = 0; ix < mesh_order-1; ix++ ){
+    // Loop over each octant in the mesh (if the mesh is higher-order)
+    for ( int iz = 0; iz < mesh_order-1; iz++ ){
+      for ( int iy = 0; iy < mesh_order-1; iy++ ){
+        for ( int ix = 0; ix < mesh_order-1; ix++ ){
+          // Set the value of the X/Y/Z locations of the nodes
+          Cell cell;
 
-            // Set the value of the X/Y/Z locations of the nodes
-            Cell cell;
+          // Keep track if any of the nodes lies on a boundary
+          // surface
+          int on_boundary[8];
+          int bound = 0;
 
-            // Keep track if any of the nodes lies on a boundary
-            // surface
-            int on_boundary[8];
-            int bound = 0;
-
-            // Loop over the nodes within the element
-            for ( int kk = 0; kk < 2; kk++ ){
-              for ( int jj = 0; jj < 2; jj++ ){
-                for ( int ii = 0; ii < 2; ii++ ){
-                  // Find the octant node (without level/tag)
-                  TMROctant p;
-                  p.x = element_array[i].x + (ii + ix)*h;
-                  p.y = element_array[i].y + (jj + iy)*h;
-                  p.z = element_array[i].z + (kk + iz)*h;
+          // Loop over the nodes within the element
+          for ( int kk = 0; kk < 2; kk++ ){
+            for ( int jj = 0; jj < 2; jj++ ){
+              for ( int ii = 0; ii < 2; ii++ ){
+                // Find the octant node (without level/tag)
+                TMROctant p;
+                p.x = element_array[i].x + (ii + ix)*h;
+                p.y = element_array[i].y + (jj + iy)*h;
+                p.z = element_array[i].z + (kk + iz)*h;
                   
-                  // Find the corresponding node
-                  const int use_nodes = 1;
-                  TMROctant *t = nodes->contains(&p, use_nodes);
+                // Find the corresponding node
+                const int use_nodes = 1;
+                TMROctant *t = nodes->contains(&p, use_nodes);
                   
-                  if (t){
-                    // Retrieve the global node number
-                    int node = t->tag;
+                if (t){
+                  // Retrieve the global node number
+                  int node = t->tag;
 
-                    // Get the nodal design variable value
-                    double val = 0.0;
-                    if (node >= 0){
-                      // Set the value of the indepdnent design
-                      // variable directly
-                      x->getValues(1, &node, xvals);
-                      val = RealPart(xvals[x_offset]);
-                    }
-                    else {
-                      node = -node-1;
-                
-                      // Evaluate the value of the dependent design variable
-                      val = 0.0;
-                      for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
-                        // Get the independent node values
-                        int dep_node = dep_conn[kp];
-                        x->getValues(1, &dep_node, xvals);
-                        val += dep_weights[kp]*RealPart(xvals[x_offset]);
-                      }
-                    }
-              
-                    cell.val[ordering_transform[ii + 2*jj + 4*kk]] = val;
-            
-                    // Get the nodal index
-                    int ptindex = t - node_array;
-            
-                    // Set the node location
-                    int index = ordering_transform[ii + 2*jj + 4*kk];
-                    cell.p[index].x = X[ptindex].x;
-                    cell.p[index].y = X[ptindex].y;
-                    cell.p[index].z = X[ptindex].z;
-            
-                    // Check if this node lies on a boundary
-                    on_boundary[index] = 
-                      ((octree_face_boundary[0] && p.x == 0) ||
-                       (octree_face_boundary[1] && p.x == hmax) ||
-                       (octree_face_boundary[2] && p.y == 0) ||
-                       (octree_face_boundary[3] && p.y == hmax) ||
-                       (octree_face_boundary[4] && p.z == 0) ||
-                       (octree_face_boundary[5] && p.z == hmax));
-
-                    // Store whether this node is on the boundary
-                    bound = bound || on_boundary[index];
+                  // Get the nodal design variable value
+                  double val = 0.0;
+                  if (node >= 0){
+                    // Set the value of the indepdnent design
+                    // variable directly
+                    x->getValues(1, &node, xvals);
+                    val = RealPart(xvals[x_offset]);
                   }
+                  else {
+                    node = -node-1;
+                
+                    // Evaluate the value of the dependent design variable
+                    val = 0.0;
+                    for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
+                      // Get the independent node values
+                      int dep_node = dep_conn[kp];
+                      x->getValues(1, &dep_node, xvals);
+                      val += dep_weights[kp]*RealPart(xvals[x_offset]);
+                    }
+                  }
+              
+                  cell.val[ordering_transform[ii + 2*jj + 4*kk]] = val;
+            
+                  // Get the nodal index
+                  int ptindex = t - node_array;
+            
+                  // Set the node location
+                  int index = ordering_transform[ii + 2*jj + 4*kk];
+                  cell.p[index].x = X[ptindex].x;
+                  cell.p[index].y = X[ptindex].y;
+                  cell.p[index].z = X[ptindex].z;
+            
+                  // Check if this node lies on a boundary
+                  on_boundary[index] = 
+                    ((octree_face_boundary[0] && p.x == 0) ||
+                     (octree_face_boundary[1] && p.x == hmax) ||
+                     (octree_face_boundary[2] && p.y == 0) ||
+                     (octree_face_boundary[3] && p.y == hmax) ||
+                     (octree_face_boundary[4] && p.z == 0) ||
+                     (octree_face_boundary[5] && p.z == hmax));
+
+                  // Store whether this node is on the boundary
+                  bound = bound || on_boundary[index];
                 }
               }
             }
+          }
 
-            // Write out the surface
-            add_volume(list, &cell, cutoff);
+          // Write out the surface
+          add_volume(list, &cell, cutoff);
             
-            // Write out the faces if they are on the boundary
-            if (bound){
-              add_faces(list, &cell, cutoff, on_boundary);
-            }
+          // Write out the faces if they are on the boundary
+          if (bound){
+            add_faces(list, &cell, cutoff, on_boundary);
           }
         }
       }
