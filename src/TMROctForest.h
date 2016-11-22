@@ -125,7 +125,7 @@ class TMROctForest {
                                const int **_face_block_conn,
                                const int **_face_block_ptr );
   
- private:
+  // private:
   // Compute the partition using METIS
   // ---------------------------------
   // void computePartition( int part_size, int *vwgts, int *part );
