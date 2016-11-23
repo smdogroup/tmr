@@ -266,15 +266,29 @@ int main( int argc, char *argv[] ){
   tbal = MPI_Wtime() - tbal;
   printf("[%d] Balance: %f\n", mpi_rank, tbal);
   forest->repartition();
-  
+
+  double trefine = MPI_Wtime();
+  forest->refine(NULL, 0, 11);
+  trefine = MPI_Wtime() - trefine;
+  printf("[%d] Refine: %f\n", mpi_rank, trefine);
+
+  tbal = MPI_Wtime();
+  forest->balance(1);
+  tbal = MPI_Wtime() - tbal;
+  printf("[%d] Balance: %f\n", mpi_rank, tbal);
+
   // Create the nodes
+  double tnodes = MPI_Wtime();
   forest->createNodes(2);
+  tnodes = MPI_Wtime() - tnodes;
+  printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
 
   // Create the mesh
   double tmesh = MPI_Wtime();
   int *elem_conn, num_elements = 0;
   forest->createMeshConn(&elem_conn, &num_elements);
   tmesh = MPI_Wtime() - tmesh;
+  printf("[%d] Mesh: %f\n", mpi_rank, tmesh);
   
   // Find the number of nodes for this processor
   const int *range;
@@ -284,9 +298,13 @@ int main( int argc, char *argv[] ){
   // Get the dependent node information
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
+  
+  double tdep = MPI_Wtime();
   int num_dep_nodes = 
     forest->getDepNodeConn(&dep_ptr, &dep_conn,
                            &dep_weights);
+  tdep = MPI_Wtime() - tdep;
+  printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
 
   // Create the associated TACSAssembler object
   int vars_per_node = 3;

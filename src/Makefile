@@ -9,7 +9,6 @@ include ../TMR_Common.mk
 
 CXX_OBJS = TMRBase.o \
 	TMROctant.o \
-	TMROctree.o \
 	TMRQuadrant.o \
 	TMRQuadtree.o \
 	TMRQuadForest.o \

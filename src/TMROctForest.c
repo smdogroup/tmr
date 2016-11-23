@@ -268,6 +268,7 @@ TMROctForest::TMROctForest( MPI_Comm _comm ){
   nodes = NULL;
   dep_faces = NULL;
   dep_edges = NULL;
+  X = NULL;
 
   // Set the size of the mesh
   mesh_order = 0;
@@ -316,6 +317,7 @@ void TMROctForest::freeData(){
   if (nodes){ delete nodes; }
   if (dep_faces){ delete dep_faces; }
   if (dep_edges){ delete dep_edges; }
+  if (X){ delete X; }
 
   if (node_range){ delete [] node_range; }
   if (dep_ptr){ delete [] dep_ptr; }
@@ -1226,6 +1228,124 @@ TMROctForest *TMROctForest::coarsen(){
   }
 
   return coarse;
+}
+
+/*
+  Refine the octree mesh based on the input refinement levels
+*/
+void TMROctForest::refine( const int refinement[],
+                           int min_level, int max_level ){
+  // Adjust the min and max levels to ensure consistency
+  if (min_level < 0){ min_level = 0; }
+  if (max_level > TMR_MAX_LEVEL){ max_level = TMR_MAX_LEVEL; }
+
+  // This is just a sanity check
+  if (min_level > max_level){ min_level = max_level; }
+
+  // Free memory if it has been allocated
+  if (adjacent){ delete adjacent; }
+  if (nodes){ delete nodes; } 
+  if (dep_faces){ delete dep_faces; }
+  if (dep_edges){ delete dep_edges; }
+  if (X){ delete X; }
+  adjacent = NULL;
+  nodes = NULL;
+  dep_faces = NULL;
+  dep_edges = NULL;
+  X = NULL;
+  
+  // Create a hash table for the refined octants and the octants
+  // that are external (on other processors)
+  TMROctantHash *hash = new TMROctantHash();
+  TMROctantHash *ext_hash = new TMROctantHash();
+
+  // Get the current array of octants
+  int size;
+  TMROctant *array;
+  octants->getArray(&array, &size);
+
+  if (refinement){
+    for ( int i = 0; i < size; i++ ){
+      if (refinement[i] == 0){
+        // We know that this octant is locally owned
+        hash->addOctant(&array[i]);
+      }
+      else if (refinement[i] < 0){
+        // Coarsen this octant
+        if (array[i].level > min_level){
+          TMROctant q;
+          array[i].getSibling(0, &q);
+          q.level = q.level-1;
+          if (mpi_rank == getOctantMPIOwner(&q)){
+            hash->addOctant(&q);
+          }
+          else {
+            ext_hash->addOctant(&q);
+          }
+        }
+        else {
+          hash->addOctant(&array[i]);
+        }
+      }
+      else if (refinement[i] > 0){
+        if (array[i].level < max_level){
+          TMROctant q = array[i];
+          q.level += 1;
+          q.getSibling(0, &q);
+          if (mpi_rank == getOctantMPIOwner(&q)){
+            hash->addOctant(&q);
+          }
+          else {
+            ext_hash->addOctant(&q);
+          }
+        }
+        else {
+          hash->addOctant(&array[i]);
+        }
+      }
+    }
+  }
+  else {
+    for ( int i = 0; i < size; i++ ){
+      if (array[i].level < max_level){
+        TMROctant q = array[i];
+        q.level += 1;
+        q.getSibling(0, &q);
+        if (mpi_rank == getOctantMPIOwner(&q)){
+          hash->addOctant(&q);
+        }
+        else {
+          ext_hash->addOctant(&q);
+        }
+      }
+    }
+  }
+  
+  // Free the old octants class
+  delete octants;
+
+  // Sort the list of external octants
+  TMROctantArray *list = ext_hash->toArray();
+  list->sort();
+  delete ext_hash;
+
+  // Get the local list octants added from other processors
+  // and add them to the local hash table
+  TMROctantArray *local = distributeOctants(list);
+  delete list;
+
+  // Get the local octants and add them to the hash table
+  local->getArray(&array, &size);
+  for ( int i = 0; i < size; i++ ){
+    hash->addOctant(&array[i]);
+  }
+  delete local;
+
+  // Cover the hash table to a list and uniquely sort it
+  octants = hash->toArray();
+  octants->sort();
+
+  delete hash;
 }
 
 /*
