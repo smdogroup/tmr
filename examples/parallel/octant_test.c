@@ -412,13 +412,6 @@ int main( int argc, char *argv[] ){
     interp[level]->initialize();
   }
 
-  // Write out the STL file
-  TACSBVec *Xvec = tacs[0]->createVec();
-  tacs[0]->getNodes(Xvec);
-  double cutoff = 0.25;
-  int var_offset = 0;
-  TMR_GenerateBinFile("output.bstl", forest[0], Xvec, var_offset, cutoff);
-
   // Create the multigrid object
   double omega = 1.0;
   int mg_sor_iters = 1;

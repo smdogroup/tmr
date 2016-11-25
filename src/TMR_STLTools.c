@@ -698,11 +698,6 @@ int TMR_GenerateBinFile( const char *filename,
   const double *dep_weights;
   filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
 
-  // Get the information required 
-  TMROctantArray *octants, *nodes;
-  filter->getOctants(&octants);
-  filter->getNodes(&nodes);
-
   // Set the maximum length of any of the block sides
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
@@ -724,6 +719,10 @@ int TMR_GenerateBinFile( const char *filename,
                                  NULL, &face_block_ptr);
 
   // Get the array of octants
+  TMROctantArray *octants, *nodes;
+  filter->getOctants(&octants);
+  filter->getNodes(&nodes);
+
   int nelems, nnodes;
   TMROctant *element_array, *node_array;
   octants->getArray(&element_array, &nelems);
@@ -745,13 +744,9 @@ int TMR_GenerateBinFile( const char *filename,
     // Check if the octree face lies on a boundary or not
     int octree_face_boundary[6];
     for ( int k = 0; k < 6; k++ ){
-      octree_face_boundary[k] = 0;
-
       int face = block_face_conn[6*block + k];
       int nblocks = face_block_ptr[face+1] - face_block_ptr[face];
-      if (nblocks == 1){
-        octree_face_boundary[k] = 1;
-      }
+      octree_face_boundary[k] = (nblocks == 1);
     }
 
     // Loop over each octant in the mesh (if the mesh is higher-order)
@@ -771,17 +766,18 @@ int TMR_GenerateBinFile( const char *filename,
             for ( int jj = 0; jj < 2; jj++ ){
               for ( int ii = 0; ii < 2; ii++ ){
                 // Find the octant node (without level/tag)
-                TMROctant p;
+                TMROctant p, node;
                 p.block = block;
                 p.x = element_array[i].x + (ii + ix)*h;
                 p.y = element_array[i].y + (jj + iy)*h;
                 p.z = element_array[i].z + (kk + iz)*h;
                   
-                filter->transformNode(&p);
+                node = p;
+                filter->transformNode(&node);
 
                 // Find the corresponding node
                 const int use_nodes = 1;
-                TMROctant *t = nodes->contains(&p, use_nodes);
+                TMROctant *t = nodes->contains(&node, use_nodes);
                   
                 if (t){
                   // Retrieve the global node number
@@ -808,13 +804,13 @@ int TMR_GenerateBinFile( const char *filename,
                     }
                   }
               
-                  cell.val[ordering_transform[ii + 2*jj + 4*kk]] = val;
+                  int index = ordering_transform[ii + 2*jj + 4*kk];
+                  cell.val[index] = val;
             
                   // Get the nodal index
                   int ptindex = t - node_array;
             
                   // Set the node location
-                  int index = ordering_transform[ii + 2*jj + 4*kk];
                   cell.p[index].x = X[ptindex].x;
                   cell.p[index].y = X[ptindex].y;
                   cell.p[index].z = X[ptindex].z;
@@ -822,11 +818,11 @@ int TMR_GenerateBinFile( const char *filename,
                   // Check if this node lies on a boundary
                   on_boundary[index] = 
                     ((octree_face_boundary[0] && p.x == 0) ||
-                     (octree_face_boundary[1] && p.x == hmax-1) ||
+                     (octree_face_boundary[1] && p.x == hmax) ||
                      (octree_face_boundary[2] && p.y == 0) ||
-                     (octree_face_boundary[3] && p.y == hmax-1) ||
+                     (octree_face_boundary[3] && p.y == hmax) ||
                      (octree_face_boundary[4] && p.z == 0) ||
-                     (octree_face_boundary[5] && p.z == hmax-1));
+                     (octree_face_boundary[5] && p.z == hmax));
 
                   // Store whether this node is on the boundary
                   bound = bound || on_boundary[index];
