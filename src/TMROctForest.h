@@ -6,6 +6,7 @@
 */
 
 #include "TMROctant.h"
+#include "BVecInterp.h"
 
 /*
   TMR Forest class
@@ -83,9 +84,8 @@ class TMROctForest {
  
   // Create interpolation/restriction operators
   // ------------------------------------------
-  // void createInterpolation( TMROctForest *coarse, 
-  //                          int **_interp_ptr, int **_interp_conn,
-  //                          double **_interp_weights );
+  void createInterpolation( TMROctForest *coarse,
+                            TACSBVecInterp *interp );
 
   // Get the external node numbers
   // -----------------------------
@@ -130,6 +130,10 @@ class TMROctForest {
                                const int **_face_block_conn,
                                const int **_face_block_ptr );
   
+  // Transform the octant to the global order
+  // ----------------------------------------
+  void transformNode( TMROctant *oct );
+
  private:
   // Compute the partition using METIS
   // ---------------------------------
@@ -138,9 +142,6 @@ class TMROctForest {
   // Free/copy the allocated data
   void freeData();
   void copyData( TMROctForest *copy );
-
-  // Transform the octant to the global order
-  void transformNode( TMROctant *oct );
 
   // Get the octant owner
   int getOctantMPIOwner( TMROctant *oct );
@@ -219,13 +220,13 @@ class TMROctForest {
   void createDepNodeConn( int **_ptr, int **_conn,
                           double **_weights );
 
-  /*
-  // Add the nodal weighting values to an interpolant
-  void addNodeWeights( TMROctant *t, double w,
-                       const int *cdep_ptr, const int *cdep_conn,
-                       const double *cdep_weights,
-                       TMRIndexWeight *weights, int *nweights );
-  */
+  // Find the octant 
+  TMROctant* findEnclosing( TMROctant *node );
+
+  // Compute the interpolation weights
+  int computeInterpWeights( const int order,
+                            const int32_t u, const int32_t h,
+                            double Nu[] );
 
   // The communicator
   MPI_Comm comm;

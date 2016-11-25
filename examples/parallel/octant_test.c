@@ -2,6 +2,8 @@
 #include "TACSMeshLoader.h"
 #include "TACSAssembler.h"
 #include "Solid.h"
+#include "TACSMg.h"
+#include "TMR_STLTools.h"
 
 /*
   The box problem
@@ -255,136 +257,201 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the forests
-  TMROctForest *forest = new TMROctForest(comm);
-
-  forest->setConnectivity(npts, conn, nelems);
-  forest->createRandomTrees(50, 0, 10);
-  forest->repartition();
-
-  double tbal = MPI_Wtime();
-  forest->balance(1);
-  tbal = MPI_Wtime() - tbal;
-  printf("[%d] Balance: %f\n", mpi_rank, tbal);
-  forest->repartition();
-
-  double trefine = MPI_Wtime();
-  forest->refine(NULL, 0, 11);
-  trefine = MPI_Wtime() - trefine;
-  printf("[%d] Refine: %f\n", mpi_rank, trefine);
-
-  tbal = MPI_Wtime();
-  forest->balance(1);
-  tbal = MPI_Wtime() - tbal;
-  printf("[%d] Balance: %f\n", mpi_rank, tbal);
-
-  // Create the nodes
-  double tnodes = MPI_Wtime();
-  forest->createNodes(2);
-  tnodes = MPI_Wtime() - tnodes;
-  printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
-
-  // Create the mesh
-  double tmesh = MPI_Wtime();
-  int *elem_conn, num_elements = 0;
-  forest->createMeshConn(&elem_conn, &num_elements);
-  tmesh = MPI_Wtime() - tmesh;
-  printf("[%d] Mesh: %f\n", mpi_rank, tmesh);
+  TMROctForest *forest[3];
+  forest[0] = new TMROctForest(comm);
   
-  // Find the number of nodes for this processor
-  const int *range;
-  forest->getOwnedNodeRange(&range);
-  int num_nodes = range[mpi_rank+1] - range[mpi_rank];
+  forest[0]->setConnectivity(npts, conn, nelems);
+  forest[0]->createRandomTrees(50, 0, 10);
+  forest[0]->repartition();
 
-  // Get the dependent node information
-  const int *dep_ptr, *dep_conn;
-  const double *dep_weights;
+  for ( int level = 0; level < 3; level++ ){
+    double tbal = MPI_Wtime();
+    forest[level]->balance(1);
+    tbal = MPI_Wtime() - tbal;
+    printf("[%d] Balance: %f\n", mpi_rank, tbal);
+    forest[level]->repartition();
+
+    // Create the nodes
+    double tnodes = MPI_Wtime();
+    forest[level]->createNodes(2);
+    tnodes = MPI_Wtime() - tnodes;
+    printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
   
-  double tdep = MPI_Wtime();
-  int num_dep_nodes = 
-    forest->getDepNodeConn(&dep_ptr, &dep_conn,
-                           &dep_weights);
-  tdep = MPI_Wtime() - tdep;
-  printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
-
-  // Create the associated TACSAssembler object
-  int vars_per_node = 3;
-  TACSAssembler *tacs = 
-    new TACSAssembler(comm, vars_per_node,
-                      num_nodes, num_elements,
-                      num_dep_nodes);
-  tacs->incref();
-
-  // Set the element ptr
-  int *ptr = new int[ 8*num_elements ];
-  for ( int i = 0; i < num_elements+1; i++ ){
-    ptr[i] = 8*i;
+    // Create the coarse mesh
+    if (level < 2){
+      forest[level+1] = forest[level]->coarsen();
+    }
   }
-    
-  // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(elem_conn, ptr);
-  delete [] elem_conn;
-  delete [] ptr;
-    
-  // Set the dependent node information
-  tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
 
   // Allocate the stiffness object
   TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
   SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
 
-  // Set the elements
+  // Allocate the solid element class
   TACSElement *solid = new Solid<2>(stiff, LINEAR, mpi_rank);
-  TACSElement **elems = new TACSElement*[ num_elements ];
-  for ( int k = 0; k < num_elements; k++ ){
-    elems[k] = solid;
-    elems[k]->incref();
+  
+  // Create the TACSAssembler objects
+  TACSAssembler *tacs[3];
+
+  for ( int level = 0; level < 3; level++ ){
+    // Find the number of nodes for this processor
+    const int *range;
+    forest[level]->getOwnedNodeRange(&range);
+    int num_nodes = range[mpi_rank+1] - range[mpi_rank];
+
+    // Create the mesh
+    double tmesh = MPI_Wtime();
+    int *elem_conn, num_elements = 0;
+    forest[level]->createMeshConn(&elem_conn, &num_elements);
+    tmesh = MPI_Wtime() - tmesh;
+    printf("[%d] Mesh: %f\n", mpi_rank, tmesh);
+
+    // Get the dependent node information
+    const int *dep_ptr, *dep_conn;
+    const double *dep_weights;
+
+    // Create/retrieve the dependent node information
+    double tdep = MPI_Wtime();
+    int num_dep_nodes = 
+      forest[level]->getDepNodeConn(&dep_ptr, &dep_conn,
+                             &dep_weights);
+    tdep = MPI_Wtime() - tdep;
+    printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
+
+    // Create the associated TACSAssembler object
+    int vars_per_node = 3;
+    tacs[level] = new TACSAssembler(comm, vars_per_node,
+                                    num_nodes, num_elements,
+                                    num_dep_nodes);
+    tacs[level]->incref();
+
+    // Set the element ptr
+    int *ptr = new int[ 8*num_elements ];
+    for ( int i = 0; i < num_elements+1; i++ ){
+      ptr[i] = 8*i;
+    }
+    
+    // Set the element connectivity into TACSAssembler
+    tacs[level]->setElementConnectivity(elem_conn, ptr);
+    delete [] elem_conn;
+    delete [] ptr;
+    
+    // Set the dependent node information
+    tacs[level]->setDependentNodes(dep_ptr, dep_conn, dep_weights);
+
+    // Set the elements
+    TACSElement **elems = new TACSElement*[ num_elements ];
+    for ( int k = 0; k < num_elements; k++ ){
+      elems[k] = solid;
+      elems[k]->incref();
+    }
+    
+    // Set the element array
+    tacs[level]->setElements(elems);
+    delete [] elems;
+    
+    // Initialize the TACSAssembler object
+    tacs[level]->initialize();
+
+    // Create the node vector
+    TacsScalar *Xn;
+    TACSBVec *X = tacs[level]->createNodeVec();
+    X->getArray(&Xn);
+
+    // Get the nodes
+    TMROctantArray *nodes;
+    forest[level]->getNodes(&nodes);
+
+    // Get the points
+    TMRPoint *Xp;
+    forest[level]->getPoints(&Xp);
+
+    // Get the octants associated with the nodes
+    int size;
+    TMROctant *array;
+    nodes->getArray(&array, &size);
+
+    // Loop over all the nodes
+    for ( int i = 0; i < size; i++ ){
+      // Evaluate the point
+      TacsScalar Xpoint[3];
+      getLocation(conn, Xpts, &array[i], Xpoint);
+
+      // Set the point
+      Xp[i].x = Xpoint[0];
+      Xp[i].y = Xpoint[1];
+      Xp[i].z = Xpoint[2];
+
+      if (array[i].tag >= range[mpi_rank] &&
+          array[i].tag < range[mpi_rank+1]){
+        int loc = array[i].tag - range[mpi_rank];
+        Xn[3*loc] = Xpoint[0];
+        Xn[3*loc+1] = Xpoint[1];
+        Xn[3*loc+2] = Xpoint[2];
+      }
+    }
+    
+    // Set the node locations into TACSAssembler
+    tacs[level]->setNodes(X);
   }
 
-  // Set the element array
-  tacs->setElements(elems);
-  delete [] elems;
+  // Create the interpolation
+  TACSBVecInterp *interp[2];
 
-  // Initialize
-  tacs->initialize();
+  for ( int level = 0; level < 2; level++ ){
+    // Create the interpolation object
+    interp[level] = new TACSBVecInterp(tacs[level+1]->getVarMap(),
+                                       tacs[level]->getVarMap(),
+                                       tacs[level]->getVarsPerNode());
+    interp[level]->incref();
 
-  // Create the node vector
-  TacsScalar *Xn;
-  TACSBVec *X = tacs->createNodeVec();
-  X->getArray(&Xn);
+    // Set the interpolation
+    forest[level]->createInterpolation(forest[level+1], interp[level]);
+    
+    // Initialize the interpolation
+    interp[level]->initialize();
+  }
 
-  // Get the nodes
-  TMROctantArray *nodes;
-  forest->getNodes(&nodes);
+  // Write out the STL file
+  TACSBVec *Xvec = tacs[0]->createVec();
+  tacs[0]->getNodes(Xvec);
+  double cutoff = 0.25;
+  int var_offset = 0;
+  TMR_GenerateBinFile("output.bstl", forest[0], Xvec, var_offset, cutoff);
 
-  // Get the octants associated with the nodes
-  int size;
-  TMROctant *array;
-  nodes->getArray(&array, &size);
+  // Create the multigrid object
+  double omega = 1.0;
+  int mg_sor_iters = 1;
+  int mg_sor_symm = 1;
+  int mg_iters_per_level = 1;
+  TACSMg *mg = new TACSMg(comm, 3, omega, mg_sor_iters, mg_sor_symm);
+  mg->incref();
 
-  // Loop over all the nodes
-  for ( int i = 0; i < size; i++ ){
-    if (array[i].tag >= range[mpi_rank] &&
-        array[i].tag < range[mpi_rank+1]){
-      int loc = array[i].tag - range[mpi_rank];
-      getLocation(conn, Xpts, &array[i], &Xn[3*loc]);
+  for ( int level = 0; level < 3; level++ ){
+    if (level < 2){
+      mg->setLevel(level, tacs[level], interp[level], mg_iters_per_level);
+    }
+    else {
+      mg->setLevel(level, tacs[level], NULL);
     }
   }
-
-  tacs->setNodes(X);
 
   // Create and write out an fh5 file
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_DISPLACEMENTS |
                              TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs, SOLID, write_flag);
+  TACSToFH5 *f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
   f5->incref();
     
   // Write out the solution
   f5->writeToFile("output.f5");
   f5->decref();
 
-  tacs->decref();  
-  delete forest;
+  // Create the level
+  for ( int level = 0; level < 3; level++ ){
+    tacs[level]->decref();
+    delete forest[level];
+  }
 
   TMRFinalize();
   MPI_Finalize();

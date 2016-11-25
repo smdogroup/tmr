@@ -46,7 +46,8 @@ double ParOptBVecWrap::maxabs(){
   }
   
   double infty_norm = 0.0;
-  MPI_Allreduce(&res, &infty_norm, 1, MPI_DOUBLE, MPI_MAX, vec->getMPIComm());
+  MPI_Allreduce(&res, &infty_norm, 1, MPI_DOUBLE, MPI_MAX, 
+                vec->getMPIComm());
   
   return infty_norm;
 }
@@ -59,7 +60,8 @@ ParOptScalar ParOptBVecWrap::dot( ParOptVec *pvec ){
   return 0.0;
 }
 
-void ParOptBVecWrap::mdot( ParOptVec **vecs, int nvecs, ParOptScalar *output ){
+void ParOptBVecWrap::mdot( ParOptVec **vecs, int nvecs, 
+                           ParOptScalar *output ){
   TACSVec **tvecs = new TACSVec*[ nvecs ];
   for ( int k = 0; k < nvecs; k++ ){
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(vecs[k]);
@@ -150,7 +152,8 @@ ParOptProblem(_tacs[0]->getMPIComm()){
     }
 
     // Create the distribution object for the design variables
-    filter_dist[k] = new TACSBVecDistribute(filter_maps[k], filter_indices[k]);
+    filter_dist[k] = new TACSBVecDistribute(filter_maps[k], 
+                                            filter_indices[k]);
     filter_dist[k]->incref();
 
     // Create the transfer context
@@ -551,7 +554,8 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
   g->zeroEntries();
   Ac[0]->zeroEntries();
 
-  // Compute the derivative of the mass and compliance w.r.t the design variables
+  // Compute the derivative of the mass and compliance w.r.t the
+  // design variables
   ParOptBVecWrap *wrap1 = NULL, *wrap2 = NULL;
   wrap1 = dynamic_cast<ParOptBVecWrap*>(g);
   wrap2 = dynamic_cast<ParOptBVecWrap*>(Ac[0]);
@@ -695,8 +699,9 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
 
             TacsScalar *b = B;
             for ( int i = 0; i < nvars; i++ ){
-              elemRes[i] += h*(b[0]*stress[0] + b[1]*stress[1] + b[2]*stress[2] +
-                               b[3]*stress[3] + b[4]*stress[4] + b[5]*stress[5]);
+              elemRes[i] += h*(b[0]*stress[0] + b[1]*stress[1] + 
+                               b[2]*stress[2] + b[3]*stress[3] + 
+                               b[4]*stress[4] + b[5]*stress[5]);
               b += NUM_STRESSES;
             }
           }

@@ -355,6 +355,7 @@ void TMROctForest::freeData(){
   nodes = NULL;
   dep_faces = NULL;
   dep_edges = NULL;
+  X = NULL;
 
   // Set the size of the mesh
   mesh_order = 0;
@@ -1223,7 +1224,7 @@ TMROctForest *TMROctForest::coarsen(){
     // Set the owner array
     coarse->octants->getArray(&array, &size);
     coarse->owners = new TMROctant[ mpi_size ];
-    MPI_Allgather(&array[size-1], 1, TMROctant_MPI_type, 
+    MPI_Allgather(&array[0], 1, TMROctant_MPI_type, 
                   coarse->owners, 1, TMROctant_MPI_type, comm);
   }
 
@@ -1284,10 +1285,12 @@ void TMROctForest::refine( const int refinement[],
           }
         }
         else {
+          // If it is already at the min level, just add it
           hash->addOctant(&array[i]);
         }
       }
       else if (refinement[i] > 0){
+        // Refine this octant
         if (array[i].level < max_level){
           TMROctant q = array[i];
           q.level += 1;
@@ -1300,12 +1303,16 @@ void TMROctForest::refine( const int refinement[],
           }
         }
         else {
+          // If the octant is at the max level add it without
+          // refinement
           hash->addOctant(&array[i]);
         }
       }
     }
   }
   else {
+    // No refinement array is provided. Just go ahead and refine
+    // everything...
     for ( int i = 0; i < size; i++ ){
       if (array[i].level < max_level){
         TMROctant q = array[i];
@@ -3288,7 +3295,8 @@ void TMROctForest::createNodes( int order ){
   // Extract the array of nodes
   nodes->getArray(&array, &size);
 
-  int dep_count = 0;
+  // Allocate the point array
+  X = new TMRPoint[ size ]; 
 
   // Count up the number of nodes that are owned by this processor
   // and append the nodes that are not owned by this processor to
@@ -3300,9 +3308,6 @@ void TMROctForest::createNodes( int order ){
     // If this is the owner, then it is either dependent
     if (owner == mpi_rank && array[i].tag >= 0){
       nlocal++;
-    }
-    else if (array[i].tag < 0){
-      dep_count++;
     }
   }
 
@@ -3876,43 +3881,102 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
 }
 
 /*
-  Add the node weights to the array. This eliminates dependent nodes
-  by unrolling the dependency information.
+  Given a node, find the enclosing octant
 
-  input:
-  t:             the octant node
-  w:             the weight for this node
-  cdep_ptr:      the dependent node pointer for the coarse mesh
-  cdep_conn:     the dependent node connectivity for the coarse mesh
-  cdep_weights:  the dependent node weights for the coarse mesh
-
-  input/output:
-  weights:       the list of index weights
-  nweights:      the number of weights in the list
+  This code is used to find the octant in the octant array that
+  encloses the given node.
 */
+TMROctant* TMROctForest::findEnclosing( TMROctant *node ){
+  // Retrieve the array of elements
+  int size = 0;
+  TMROctant *array = NULL;
+  octants->getArray(&array, &size);
+
+  // Set the lower and upper bounds for the octant
+  const int32_t block = node->block;
+  const int32_t x = node->x;
+  const int32_t y = node->y;
+  const int32_t z = node->z;
+
+  // Set the low and high indices to the first and last
+  // element of the element array
+  int low = 0;
+  int high = size-1;
+  int mid = low + (int)((high - low)/2);
+
+  // Maintain values of low/high and mid such that the
+  // octant is between (elems[low], elems[high]).
+  // Note that if high-low=1, then mid = high
+  while (high != mid){
+    // Check if array[mid] contains the provided octant
+    const int32_t h = 1 << (TMR_MAX_LEVEL - array[mid].level);
+    if ((array[mid].block == block) &&
+        (array[mid].x <= x && x <= array[mid].x+h) &&
+	(array[mid].y <= y && y <= array[mid].y+h) &&
+	(array[mid].z <= z && z <= array[mid].z+h)){
+      return &array[mid];
+    }
+    
+    // Compare the ordering of the two octants - if the
+    // octant is less than the other, then adjust the mid point 
+    if (node->compareEncoding(&array[mid]) < 0){
+      high = mid-1;
+    } 
+    else {
+      low = mid+1;
+    }
+    
+    // Re compute the mid-point and repeat
+    mid = high - (int)((high - low)/2);
+  }
+
+  // Check if array[mid] contains the provided octant
+  const int32_t h1 = 1 << (TMR_MAX_LEVEL - array[mid].level);
+  if ((array[mid].block == block) &&
+      (array[mid].x <= x && x <= array[mid].x+h1) &&
+      (array[mid].y <= y && y <= array[mid].y+h1) &&
+      (array[mid].z <= z && z <= array[mid].z+h1)){
+    return &array[mid];
+  }
+
+  // Check if elems[mid] contains the provided octant
+  const int32_t h2 = 1 << (TMR_MAX_LEVEL - array[low].level);
+  if ((array[low].block == block) &&
+      (array[low].x <= x && x <= array[low].x+h2) &&
+      (array[low].y <= y && y <= array[low].y+h2) &&
+      (array[low].z <= z && z <= array[low].z+h2)){
+   return &array[low];
+ }
+
+ // No octant was found, return NULL
+ return NULL;
+}
+
 /*
-void TMROctForest::addNodeWeights( TMROctant *t, double w,
-                                   const int *cdep_ptr,
-                                   const int *cdep_conn,
-                                   const double *cdep_weights,
-                                   TMRIndexWeight *weights,
-                                   int *nweights ){
-  if (t->tag >= 0){
-    weights[*nweights].index = t->tag;
-    weights[*nweights].weight = w;
-    (*nweights)++;
+  Compute the interpolation
+*/
+int TMROctForest::computeInterpWeights( const int order,
+                                        const int32_t u, const int32_t h,
+                                        double Nu[] ){
+  if (u == 0 || u == h){
+    Nu[0] = 1.0;
+    return 1;
+  }
+  else if (order == 2){
+    double ud = 1.0*u/h;
+    Nu[0] = 1.0 - u;
+    Nu[1] = u;
+    return 2;
   }
   else {
-    // Unravel the dependent node connectivity
-    int node = -t->tag-1;
-    for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-      weights[*nweights].index = cdep_conn[jp];
-      weights[*nweights].weight = w*cdep_weights[jp];
-      (*nweights)++;
-    }
+    double ud = 1.0*u/h;
+    Nu[0] = 2.0*(0.5 - ud)*(1.0 - ud);
+    Nu[1] = 4.0*ud*(1.0 - ud);
+    Nu[2] = 2.0*ud*(ud - 0.5);
+    return 3;
   }
 }
-*/
+
 /*
   Create the interpolation operator from the coarse to the fine mesh.
 
@@ -3928,305 +3992,140 @@ void TMROctForest::addNodeWeights( TMROctant *t, double w,
   conn:     the connectivity using global numbers
   weights:  the interpolation weights for each point
 */
-/*
 void TMROctForest::createInterpolation( TMROctForest *coarse,
-                                        int **_interp_ptr,
-                                        int **_interp_conn,
-                                        double **_interp_weights ){
-  // Set the pointers to NULL
-  *_interp_ptr = NULL;
-  *_interp_conn = NULL;
-  *_interp_weights = NULL;
-
-  // The meshes cannot increase mesh order as they become coarser
-  if (coarse->mesh_order > mesh_order){
-    if (mpi_rank == 0){
-      fprintf(stderr,
-              "TMROctree: Cannot interpolate from high to low-order mesh\n");
-    }
-    return;
-  }
-
-  // Set the node weights
-  const double wt2[] = {0.5, 0.5};
-  const double wt31[] = {0.375, 0.75, -0.125};
-  const double wt32[] = {-0.125, 0.75, 0.375};
-  const double *wt[2] = {NULL, NULL};
-  if (coarse->mesh_order == 2){
-    wt[0] = wt[1] = wt2;
-  }
-  else { // mesh_order == 3
-    wt[0] = wt31;
-    wt[1] = wt32;
-  }
-
+                                        TACSBVecInterp *interp ){
   // Get the dependent node information
   const int *cdep_ptr, *cdep_conn;
   const double *cdep_weights;
   coarse->getDepNodeConn(&cdep_ptr, &cdep_conn, &cdep_weights);
 
-  // Determine the number of fine nodes
-  int nnodes = node_range[mpi_rank+1] - node_range[mpi_rank];
+  // Get the node array
+  int node_size;
+  TMROctant *node_array;
+  nodes->getArray(&node_array, &node_size);
   
-  // Set the current and maximum lengths of the connectivity array
-  int conn_len = 0;
-  int max_conn_len =
-    mesh_order*mesh_order*mesh_order*nnodes;
+  // Find the size of the local node array
+  int local_size = node_range[mpi_rank+1] - node_range[mpi_rank];
+  TMROctant *local_array = new TMROctant[ local_size ];
 
-  // Allocate the arrays that store the interpolation data/weights
-  int *pos = new int[ nnodes ];
-  int *flags = new int[ nnodes ];
-  memset(flags, 0, nnodes*sizeof(int));
-
-  // Record the connectivity for these nodes
-  int *ptr = new int[ nnodes+1 ];
-  int *conn = new int[ max_conn_len ];
-  double *weights = new double[ max_conn_len ];
-
-  // Set the number of interpolated nodes that have been set
-  ptr[0] = 0;
-
-  // Set the coarse factor: The factor needed to arrive at the
-  // difference in element sizes between the coarse and fine meshes.
-  // This factor is 2 when the meshes are of the same order and 1 when
-  // the coarse mesh is of lower order than the fine mesh.
-  int coarse_factor = 2;
-  if (coarse->mesh_order < mesh_order){
-    coarse_factor = 1;
+  // Read out the nodes that are locally owned
+  for ( int i = 0, j = 0; i < node_size; i++ ){
+    if (node_array[i].tag >= node_range[mpi_rank] &&
+        node_array[i].tag < node_range[mpi_rank+1]){
+      local_array[j] = node_array[i];
+      j++;
+    }
   }
 
-  // The maximum possible size of the array of weights. Note
-  // that this is found if every node is a dependent node (which is
-  // impossible) which points to a dependent face node (also
-  // impossible). It is an upper bound.
-  int max_size = (mesh_order*mesh_order*mesh_order)*(mesh_order*mesh_order);
-  TMRIndexWeight *wlist = new TMRIndexWeight[ max_size ];
+  // Copy the locally owned nodes to the allocated array
+  TMROctantArray *local = new TMROctantArray(local_array, local_size);
 
-  // Loop over all the blocks and compute the interpolation
-  int count = 0;
-  for ( int owned = 0; owned < num_owned_blocks; owned++ ){
-    int block = owned_blocks[owned];
+  // Distribute the octants to the owners
+  TMROctantArray *fine_nodes = coarse->distributeOctants(local);
+  delete local;
 
-    // Get the nodes from the fine and coarse mesh
-    TMROctantArray *nodes, *coarse_nodes;
-    octrees[block]->getNodes(&nodes);
-    coarse->octrees[block]->getNodes(&coarse_nodes);
+  // Get the number of locally owned nodes on this processor
+  int fine_size;
+  TMROctant *fine;
+  fine_nodes->getArray(&fine, &fine_size);
 
-    // Get the size of the fine node array
-    int fine_size;
-    TMROctant *fine;
-    nodes->getArray(&fine, &fine_size);
+  // Loop over the nodes in the fine mesh that are owned by octants
+  // on the coarse mesh stored on this processor
+  for ( int i = 0; i < fine_size; i++ ){
+    // Find an octant that encloses the node - this is not unique, but
+    // does produce a unique interpolation (since edges/face/corners
+    // will be treated the same when adjacent octants that both share
+    // a common node location touch)
+    TMROctant *oct = coarse->findEnclosing(&fine[i]);
+    
+    if (oct){
+      // The maximum possible size of the array of weights. Note
+      // that this is found if every node is a dependent node (which is
+      // impossible) which points to a dependent face node (also
+      // impossible). It is an upper bound.
+      const int max_size = (3*3*3)*(3*3);
+      TMRIndexWeight weights[max_size];
 
-    for ( int i = 0; i < fine_size; i++ ){
-      // Use a node-based search
-      const int use_node_search = 1;
+      // Get the element size for coarse element
+      const int32_t h = 1 << (TMR_MAX_LEVEL - oct->level);
+      const int32_t hc = 
+        1 << (TMR_MAX_LEVEL - oct->level - (coarse->mesh_order - 2));
 
-      // Keep track of the number of new weight elements
+      // Compute the parametric location
+      int32_t u = fine[i].x - oct->x;
+      int32_t v = fine[i].y - oct->y;
+      int32_t w = fine[i].z - oct->z;
+
+      // Set the base node location
+      int32_t x = oct->x + (u == h ? h : 0);
+      int32_t y = oct->y + (v == h ? h : 0);
+      int32_t z = oct->z + (w == h ? h : 0);
+
+      // Compute the interpolation weights
+      double Nu[3], Nv[3], Nw[3];
+      int nu = computeInterpWeights(coarse->mesh_order, u, h, Nu);
+      int nv = computeInterpWeights(coarse->mesh_order, v, h, Nv);
+      int nw = computeInterpWeights(coarse->mesh_order, w, h, Nw);
+    
+      // Loop over the nodes that are within this octant
       int nweights = 0;
-      
-      // Get the node number
-      int node_num = fine[i].tag;
-      int loc = node_num - node_range[mpi_rank];
+      for ( int kk = 0; kk < nw; kk++ ){
+        for ( int jj = 0; jj < nv; jj++ ){
+          for ( int ii = 0; ii < nu; ii++ ){
+            // Compute the interpolation weight
+            double weight = Nu[ii]*Nv[jj]*Nw[kk];
 
-      // Loop over all the adjacent nodes
-      if ((node_num >= node_range[mpi_rank] &&
-           node_num < node_range[mpi_rank+1]) &&
-          flags[loc] == 0){
-        // Flag that we've reached this node and store the true
-        // location of the interpolation based on the node number
-        flags[loc] = 1;
-        pos[count] = loc;
+            // Set the node locations
+            TMROctant node;
+            node.block = oct->block;
+            node.x = x + hc*ii;
+            node.y = y + hc*jj;
+            node.z = z + hc*kk;
+            
+            // Transform the node using the coarse transform
+            coarse->transformNode(&node);
 
-        // Retrieve the octant pointer
-        TMROctant *t = coarse_nodes->contains(&fine[i], use_node_search);
-        if (t){
-          addNodeWeights(t, 1.0, cdep_ptr, cdep_conn, cdep_weights,
-                         wlist, &nweights);
-        }
-        else {
-          // Get the element size for coarse element mesh
-          const int32_t h =
-            coarse_factor*(1 << (TMR_MAX_LEVEL - fine[i].level));
+            // Find the coarse mesh
+            int use_node_search = 1;
+            TMROctant *t = coarse->nodes->contains(&node, use_node_search);
 
-          // The node spacing for the fine mesh
-          const int32_t hf =
-            1 << (TMR_MAX_LEVEL - fine[i].level - (mesh_order-2));
-          
-          // The node spacing for the coarse mesh
-          const int32_t hc = 2*hf;
-
-          // Compute the offsets to the node locations
-          int32_t px = fine[i].x % h;
-          int32_t py = fine[i].y % h;
-          int32_t pz = fine[i].z % h;
-
-          // Determine which interpolation to use
-          int32_t sx = fine[i].x % hc;
-          int32_t sy = fine[i].y % hc;
-          int32_t sz = fine[i].z % hc;
-
-          // Add to the interpolation depending on the values of px,
-          // py, and pz
-          if (sx && sy && sz){
-            for ( int kk = 0; kk < coarse->mesh_order; kk++ ){
-              for ( int jj = 0; jj < coarse->mesh_order; jj++ ){
-                for ( int ii = 0; ii < coarse->mesh_order; ii++ ){
-                  TMROctant node = fine[i];
-                  node.x = (fine[i].x - px) + hc*ii;
-                  node.y = (fine[i].y - py) + hc*jj;
-                  node.z = (fine[i].z - pz) + hc*kk;
-                  t = coarse_nodes->contains(&node, use_node_search);
-                  double w = wt[px/hc][ii]*wt[py/hc][jj]*wt[pz/hc][kk];
-                  addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
-                                 wlist, &nweights);
-                }
+            if (t->tag >= 0){
+              weights[nweights].index = t->tag;
+              weights[nweights].weight = weight;
+              nweights++;
+            }
+            else {
+              // Unravel the dependent node connectivity
+              int node = -t->tag-1;
+              for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+                weights[nweights].index = cdep_conn[jp];
+                weights[nweights].weight = weight*cdep_weights[jp];
+                nweights++;
               }
             }
           }
-          else if (sy && sz){
-            for ( int kk = 0; kk < coarse->mesh_order; kk++ ){
-              for ( int jj = 0; jj < coarse->mesh_order; jj++ ){
-                TMROctant node = fine[i];
-                node.y = (fine[i].y - py) + hc*jj;
-                node.z = (fine[i].z - pz) + hc*kk;
-                t = coarse_nodes->contains(&node, use_node_search);
-                double w = wt[py/hc][jj]*wt[pz/hc][kk];
-                addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
-                               wlist, &nweights);
-              }
-            }
-          }
-          else if (sx && sz){
-            for ( int kk = 0; kk < coarse->mesh_order; kk++ ){
-              for ( int ii = 0; ii < coarse->mesh_order; ii++ ){
-                TMROctant node = fine[i];
-                node.x = (fine[i].x - px) + hc*ii;
-                node.z = (fine[i].z - pz) + hc*kk;
-                t = coarse_nodes->contains(&node, use_node_search);
-                double w = wt[px/hc][ii]*wt[pz/hc][kk];
-                addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
-                               wlist, &nweights);
-              }
-            }
-          }
-          else if (sx && sy){
-            for ( int jj = 0; jj < coarse->mesh_order; jj++ ){
-              for ( int ii = 0; ii < coarse->mesh_order; ii++ ){
-                TMROctant node = fine[i];
-                node.x = (fine[i].x - px) + hc*ii;
-                node.y = (fine[i].y - py) + hc*jj;
-                t = coarse_nodes->contains(&node, use_node_search);
-                double w = wt[px/hc][ii]*wt[py/hc][jj];
-                addNodeWeights(t, w, cdep_ptr, cdep_conn, cdep_weights,
-                               wlist, &nweights);
-              }
-            }
-          }
-          else if (sx){
-            for ( int ii = 0; ii < coarse->mesh_order; ii++ ){
-              TMROctant node = fine[i];
-              node.x = (fine[i].x - px) + hc*ii;
-              t = coarse_nodes->contains(&node, use_node_search);
-              addNodeWeights(t, wt[px/hc][ii], cdep_ptr, cdep_conn, cdep_weights,
-                             wlist, &nweights);
-            }
-          }
-          else if (sy){
-            for ( int jj = 0; jj < coarse->mesh_order; jj++ ){
-              TMROctant node = fine[i];
-              node.y = (fine[i].y - py) + hc*jj;
-              t = coarse_nodes->contains(&node, use_node_search);
-              addNodeWeights(t, wt[py/hc][jj], cdep_ptr, cdep_conn, cdep_weights,
-                             wlist, &nweights);
-            }
-          }
-          else if (sz){
-            for ( int kk = 0; kk < coarse->mesh_order; kk++ ){
-              TMROctant node = fine[i];
-              node.z = (fine[i].z - pz) + hc*kk;
-              t = coarse_nodes->contains(&node, use_node_search);
-              addNodeWeights(t, wt[pz/hc][kk], cdep_ptr, cdep_conn, cdep_weights,
-                             wlist, &nweights);
-            }
-          }
         }
-
-        // Sort the dependent weight values
-        nweights = TMRIndexWeight::uniqueSort(wlist, nweights);
-      
-        // Check whether adding the new weights will exceed the size
-        // of the allocated array
-        if (ptr[count] + nweights >= max_conn_len){
-          // Estimate the final size of the array
-          int estimate = (1 + 2*ptr[count]/count)*(nnodes - count);
-          max_conn_len += estimate;
-
-          // Allocate a new array of the new estimated size
-          int *temp = new int[ max_conn_len ];
-          memcpy(temp, conn, conn_len*sizeof(int));
-          delete [] conn;
-          conn = temp;
-        
-          // Copy over the weight values as well
-          double *tempw = new double[ max_conn_len ];
-          memcpy(tempw, weights, conn_len*sizeof(double));
-          delete [] weights;
-          weights = tempw;
-        }
-
-        // Extract the weights from the sorted list
-        for ( int k = 0; k < nweights; k++, conn_len++ ){
-          conn[conn_len] = wlist[k].index;
-          weights[conn_len] = wlist[k].weight;
-        }
-
-        // Increment the pointer
-        count++;
-        ptr[count] = conn_len;
       }
+
+      // Sort the dependent weight values
+      nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+
+      // The interpolation variables/weights on the coarse mesh
+      int vars[27];
+      double wvals[27];
+      for ( int k = 0; k < nweights; k++ ){
+        vars[k] = weights[k].index;
+        wvals[k] = weights[k].weight;
+      }
+
+      // Add the weights/indices to the interpolation object
+      interp->addInterp(fine[i].tag, wvals, vars, nweights);
     }
   }
 
-  // Free the weights and flags
-  delete [] wlist;
-  delete [] flags;
-
-  // Allocate new interpolation arrays with tight bounds
-  int *interp_ptr = new int[ nnodes+1 ];
-  int *interp_conn = new int[ conn_len ];
-  double *interp_weights = new double[ conn_len ];
-
-  // Set the pointer array so that it offsets into the true global
-  // ordering of the nodes
-  interp_ptr[0] = 0;
-  for ( int k = 0; k < nnodes; k++ ){
-    interp_ptr[pos[k]+1] = ptr[k+1] - ptr[k];
-  }
-  for ( int k = 1; k < nnodes+1; k++ ){
-    interp_ptr[k] += interp_ptr[k-1];
-  }
-
-  // Set the new interpolation values
-  for ( int k = 0; k < nnodes; k++ ){
-    int loc = pos[k];
-    int len = ptr[k+1] - ptr[k];
-    for ( int j = 0; j < len; j++ ){
-      interp_conn[interp_ptr[loc] + j] = conn[ptr[k] + j];
-      interp_weights[interp_ptr[loc] + j] = weights[ptr[k] + j];
-    }
-  }
-
-  delete [] pos;
-  delete [] ptr;
-  delete [] conn;
-  delete [] weights;
-
-  // Set the return arrays
-  *_interp_ptr = interp_ptr;
-  *_interp_conn = interp_conn;
-  *_interp_weights = interp_weights;
+  delete fine_nodes;
 }
-*/
+
 /*
   Create a sorted, unique array of the external node numbers that are
   referenced on this processor, but are not local.
