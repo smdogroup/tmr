@@ -25,7 +25,6 @@
   the construction of the interpolation operators that can be used for
   multigrid solution algorithms.
 */
-
 class TMROctForest {
  public:
   TMROctForest( MPI_Comm _comm );
@@ -89,7 +88,7 @@ class TMROctForest {
 
   // Get the external node numbers
   // -----------------------------
-  // int getExtNodeNums( int **_extNodes );
+  int getExtNodeNums( int **_extNodes );
   
   // Get the mesh order
   // ------------------
