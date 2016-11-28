@@ -14,14 +14,58 @@
   external geometry engine.
 */
 
+// Declaration of the basic geometric types
+class TMRGeoVertex;
+class TMRGeoEdge;
+class TMRGeoSurface;
+
+/*
+  The vertex class
+*/
+class TMRGeoVertex {
+ public:
+  TMRGeoVertex( TMRPoint *_x ){
+    x = x;
+  }
+
+  // The point associated with the object
+  TMRPoint *x;
+};
+
 /*
   The parametrization for the edge
 */
 class TMRGeoEdge {
  public:
+  // Get the parameter range for this edge
   virtual void getRange( double *tmin, double *tmax ) = 0;
+  
+  // Given the parametric point, evaluate the x,y,z location
   virtual int evalPoint( double t, TMRPoint *X ) = 0;
-  virtual int invEvalPoint( const TMRPoint *X, double *t ) = 0;
+
+  // Given the parametric point, evaluate the derivative 
+  virtual int evalDeriv( double t, TMRPoint *Xt ) = 0;
+
+  // Find the surface u,v coordinates of the curve p(t)
+  virtual int reparamOnSurface( TMRGeoSurface *surface, 
+                                double t, int dir,
+                                double *u, double *v ) = 0;
+
+  // Integrate along the edge and return an array containing
+  // the parametric locations to provide an even spacing
+  double integrate( double t1, double t2, double tol,
+                    double **tvals, double **dist, int *nvals );
+
+ private:
+  // The start and end vertices for this list
+  TMRGeoVertex *v1, *v2;
+  
+  // The list of faces that refer to this edge
+  class SurfaceList {
+  public:
+    TMRGeoSurface *surf;
+    SurfaceList *next;
+  } *faces;
 };
 
 /*
@@ -29,12 +73,41 @@ class TMRGeoEdge {
 */
 class TMRGeoSurface {
  public:
+  // Get the parameter range for this surface
   virtual void getRange( double *umin, double *vmin,
                          double *umax, double *vmax ) = 0;
+ 
+  // Given the parametric point, compute the x,y,z location
   virtual int evalPoint( double u, double v, TMRPoint *X ) = 0;
-  virtual int invEvalPoint( const TMRPoint *X, 
-                            double *u, double *v ) = 0;
+
+  // Given the parametric point, evaluate the first derivative 
+  virtual int evalDeriv( double u, double v, 
+                         TMRPoint *Xu, TMRPoint *Xv ) = 0;
+
+ private:
+
+  // The list of edges associated with the surface
+  class EdgeList {
+  public:
+    TMRGeoEdge *edge;
+    EdgeList *next;
+  } *edges;
 };
+
+/*
+  The geometric model container class
+*/
+class TMRGeoModel {
+ public:
+  TMRGeoModel(){}
+
+  // ....
+};
+
+
+
+
+
 
 /*
   A searchable/sortable list of edge points

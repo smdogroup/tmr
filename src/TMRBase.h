@@ -21,6 +21,13 @@ static const int TMR_MAX_LEVEL = 30;
 */
 class TMRPoint {
  public:
+  TMRPoint(){}
+  TMRPoint( const TMRPoint& p ){
+    x = p.x;  y = p.y;  z = p.z;
+  }
+  TMRPoint( double _x, double _y, double _z ){
+    x = _x;  y = _y;  z = _z;
+  }
   double x, y, z;
 };
 
@@ -42,6 +49,10 @@ void TMRFinalize();
 */
 class TMRIndexWeight {
  public:
+  TMRIndexWeight(){}
+  TMRIndexWeight( const TMRIndexWeight& in ){
+    index = in.index;  weight = in.weight;
+  }
   int index;
   double weight;
 

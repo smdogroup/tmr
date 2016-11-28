@@ -1,4 +1,146 @@
 #include "TMRGeometry.h"
+#include <math.h>
+
+/*
+  An integral entry for the linked list
+*/
+class IntegralPt {
+ public:
+  double t;
+  double dist;
+  IntegralPt *next;
+};
+
+/*
+  Evaluate the distance between two points
+*/
+double pointDist( TMRPoint *a, TMRPoint *b ){
+  return sqrt((a->x - b->x)*(a->x - b->x) + 
+              (a->y - b->y)*(a->y - b->y) + 
+              (a->z - b->z)*(a->z - b->z));
+}
+
+/*
+  Recursive integration on an edge with an adaptive error control to
+  ensure that the integral is computed with sufficient accuracy.
+
+  input:
+  t1, t2:  the limits of integration for this interval
+  tol:     the absolute error measure
+  ncalls:  the recursion depth
+  pt:      pointer into the linked list
+*/
+void integrateEdge( TMRGeoEdge *edge,
+                    double t1, TMRPoint p1, double t2, double tol,
+                    int ncalls, IntegralPt **_pt ){
+  // Dereference the pointer to the integral point
+  IntegralPt *pt = *_pt;
+
+  // Find the mid point of the interval
+  TMRPoint pmid;
+  double tmid = 0.5*(t1 + t2);
+  edge->evalPoint(tmid, &pmid);
+
+  // Evaluate the point at the end of the interval
+  TMRPoint p2; 
+  edge->evalPoint(t2, &p2);
+  
+  // Evaluate the approximate integral contributions
+  double int1 = (tmid - t1)*pointDist(&p1, &pmid);
+  double int2 = (t2 - tmid)*pointDist(&pmid, &p2);
+  double int3 = (tmid - t1)*pointDist(&p1, &p2);
+
+  // Compute the integration error
+  double error = fabs(int3 - int1 - int2);
+
+  if (((ncalls > 5) && (error < tol)) || (ncalls > 20)){
+    // Add the mid point
+    pt->next = new IntegralPt;
+    pt->next->dist = pt->dist + int1;
+    pt->next->t = tmid;
+    pt->next->next = NULL;
+    pt = pt->next;
+
+    // Add the final point p2
+    pt->next = new IntegralPt;
+    pt->next->dist = pt->dist + int2;
+    pt->next->t = t2;
+    pt->next->next = NULL;
+    pt = pt->next;
+
+    // Set the pointer to the end of the linked list
+    *_pt = pt;
+  }
+  else {
+    // Continue the recursive integration
+    integrateEdge(edge, t1, p1, tmid, tol, ncalls+1, _pt);
+    integrateEdge(edge, tmid, pmid, t2, tol, ncalls+1, _pt);
+  }
+}
+
+/*
+  Integrate along the edge adaptively, creating a list 
+*/
+double TMRGeoEdge::integrate( double t1, double t2, double tol,
+                              double **_tvals, double **_dist, 
+                              int *_nvals ){
+  *_tvals = NULL;
+  *_dist = NULL;
+  *_nvals = 0;
+
+  // Allocate the entry in the linked list
+  IntegralPt *root = new IntegralPt;
+  root->next = NULL;
+  root->dist = 0.0;
+  root->t = t1;
+
+  // Evaluate the first point
+  TMRPoint p1;
+  evalPoint(t1, &p1);
+
+  // Integrate over the edge
+  IntegralPt *pt = root;
+  integrateEdge(this, t1, p1, t2, tol, 0, &pt);
+
+  // Count up and allocate the num
+  int count = 1;
+  IntegralPt *curr = root;
+  while (curr->next){
+    curr = curr->next;
+    count++;
+  }
+
+  // Allocate arrays to store the parametric location/distance data
+  double *tvals = new double[ count ];
+  double *dist = new double[ count ];
+
+  // Scan through the linked list, read out the values of the
+  // parameter and its integral and delete the entries as we go...
+  count = 0;
+  curr = root;
+  tvals[count] = curr->t;
+  dist[count] = curr->dist;
+  count++;
+
+  while (curr->next){
+    IntegralPt *tmp = curr;
+    curr = curr->next;
+    tvals[count] = curr->t;
+    dist[count] = curr->dist;
+    count++;
+    delete tmp;
+  }
+
+  double len = curr->dist;
+  delete curr;
+
+  // Set the pointers for the output
+  *_nvals = count;
+  *_tvals = tvals;
+  *_dist = dist;
+
+  return len;
+}
 
 /*
   Compare two edge entries

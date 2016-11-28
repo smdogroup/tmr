@@ -38,8 +38,7 @@ class TMROctForest {
   // --------------------
   void setConnectivity( int _num_nodes,
                         const int *_block_conn,
-                        int _num_blocks,
-                        int partition=0 );
+                        int _num_blocks );
 
   // Re-partition the octrees based on element count
   // -----------------------------------------------
@@ -134,6 +133,17 @@ class TMROctForest {
   void transformNode( TMROctant *oct );
 
  private:
+  // Compute the connectivity information
+  void computeEdgesFromNodes();
+  void computeFacesFromNodes();
+
+  // Compute the inverse connectivities
+  void computeEdgesToBlocks();
+  void computeFacesToBlocks();
+  
+  // Set the owners - this determines how the mesh will be ordered
+  void computeBlockOwners();
+
   // Compute the partition using METIS
   // ---------------------------------
   // void computePartition( int part_size, int *vwgts, int *part );

@@ -429,6 +429,29 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  // Create a force vector
+  TACSBVec *force = tacs[0]->createVec();
+  force->incref();
+  force->set(1.0);
+  force->applyBCs();
+
+  TACSBVec *ans = tacs[0]->createVec();
+  ans->incref();
+  
+  // Set up the solver
+  int gmres_iters = 100; 
+  int nrestart = 2;
+  int is_flexible = 1;
+  GMRES *gmres = new GMRES(mg->getMat(0), mg, 
+                           gmres_iters, nrestart, is_flexible);
+  gmres->incref();
+  gmres->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
+  gmres->setTolerances(1e-10, 1e-30);
+
+  gmres->solve(force, ans);
+  ans->scale(-1.0);
+  tacs[0]->setVariables(ans);
+
   // Create and write out an fh5 file
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_DISPLACEMENTS |

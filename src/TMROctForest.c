@@ -431,8 +431,7 @@ void TMROctForest::copyData( TMROctForest *copy ){
 
   This call is collective on all processors. Every processor must make
   a call with the same connectivity information, otherwise the
-  inter-octree information will be inconsistent. This sets the
-  connectivity and then performs a partition of the mesh using METIS.
+  inter-octree information will be inconsistent.
 
   This code sets the block connectivity and generates the following
   additional data that are required:
@@ -449,8 +448,7 @@ void TMROctForest::copyData( TMROctForest *copy ){
 */
 void TMROctForest::setConnectivity( int _num_nodes,
                                     const int *_block_conn,
-                                    int _num_blocks,
-                                    int partition ){
+                                    int _num_blocks ){
   // Free any data if it has already been allocated. 
   freeData();
 
@@ -493,80 +491,41 @@ void TMROctForest::setConnectivity( int _num_nodes,
     node_block_ptr[i] = node_block_ptr[i-1];
   }
   node_block_ptr[0] = 0;
-  
-  // Now establish a unique ordering of the edges along each block
-  // -------------------------------------------------------------
-  block_edge_conn = new int[ 12*num_blocks ];
-  for ( int i = 0; i < 12*num_blocks; i++ ){
-    block_edge_conn[i] = -1;
-  }
 
-  int edge = 0;
-  for ( int i = 0; i < num_blocks; i++ ){
-    // Loop over each edge on this block
-    for ( int j = 0; j < 12; j++ ){
-      if (block_edge_conn[12*i + j] < 0){
-        int n1 = block_conn[8*i + block_to_edge_nodes[j][0]];
-        int n2 = block_conn[8*i + block_to_edge_nodes[j][1]];
-
-        // Keep track of the number of edges found
-        const int max_nedges = 128;
-        int edge_index[max_nedges];
-        int nedges = 1;
-        edge_index[0] = 12*i + j;
-
-        // Set the edge number - if any is found
-        int edge_num = -1;
-
-        // Scan through the blocks that share the same node and check
-        // if any of the edges are also shared 
-        for ( int ip = node_block_ptr[n1];
-              ip < node_block_ptr[n1+1]; ip++ ){
-          int ii = node_block_conn[ip];
-          
-          // Loop over each edge in the new block
-          for ( int jj = 0; jj < 12; jj++ ){
-            int nn1 = block_conn[8*ii + block_to_edge_nodes[jj][0]];
-            int nn2 = block_conn[8*ii + block_to_edge_nodes[jj][1]];
-
-            // Check if the block matches
-            if ((n1 == nn1 && n2 == nn2) ||
-                (n1 == nn2 && n2 == nn1)){
-              if (block_edge_conn[12*ii + jj] >= 0){
-                // If this edge has been ordered, copy over
-                // the edge number
-                edge_num = block_edge_conn[12*ii + jj];
-              }
-              else if (nedges < max_nedges){
-                // This edge has not yet been ordered, add it
-                // to the unordered list if there is still room
-                // if not, we will detect and order it during
-                // a future iteration
-                edge_index[nedges] = 12*ii + jj;
-                nedges++;
-              }
-            }
-          }
-        }
-
-        // If this edge does not have an edge number, assign
-        // a new one to the list
-        if (edge_num < 0){
-          edge_num = edge;
-          edge++;
-        }
-
-        // Set the edge numbers for all the edges that we found
-        for ( int ii = 0; ii < nedges; ii++ ){
-          block_edge_conn[edge_index[ii]] = edge_num;
+  // Loop over all the blocks and reset node->block connectivity
+  // to store both the adjacent block and the corresponding
+  // node index into that array
+  for ( int node = 0; node < num_nodes; node++ ){
+    for ( int ip = node_block_ptr[node];
+          ip < node_block_ptr[node+1]; ip++ ){
+      int adj = node_block_conn[ip];
+      int adj_index = 0;
+      for ( ; adj_index < 8; adj_index++ ){
+        if (block_conn[8*adj + adj_index] == node){
+          break;
         }
       }
+
+      node_block_conn[ip] = 8*adj + adj_index;
     }
   }
 
-  // Set the total number of edges
-  num_edges = edge;
- 
+  // Compute the edge connectivity from the block data
+  computeEdgesFromNodes();
+  computeEdgesToBlocks();
+
+  // Compute the face connectivity from the block data
+  computeFacesFromNodes();
+  computeFacesToBlocks();
+
+  // Compute the block owners based on the node, edge and face data
+  computeBlockOwners();  
+}
+
+/*
+  Compute the reverse relationship from the edges to the blocks
+*/
+void TMROctForest::computeEdgesToBlocks(){
   // Create the data structure for the edge to block connectivity
   edge_block_ptr = new int[ num_edges+1 ];
   memset(edge_block_ptr, 0, (num_edges+1)*sizeof(int));
@@ -642,9 +601,88 @@ void TMROctForest::setConnectivity( int _num_nodes,
       }
     }
   }
+}
 
-  // Now establish a unique ordering of the faces for each block
-  // -----------------------------------------------------------
+/*
+  Establish a unique ordering of the edges along each block
+*/
+void TMROctForest::computeEdgesFromNodes(){
+  block_edge_conn = new int[ 12*num_blocks ];
+  for ( int i = 0; i < 12*num_blocks; i++ ){
+    block_edge_conn[i] = -1;
+  }
+
+  int edge = 0;
+  for ( int i = 0; i < num_blocks; i++ ){
+    // Loop over each edge on this block
+    for ( int j = 0; j < 12; j++ ){
+      if (block_edge_conn[12*i + j] < 0){
+        int n1 = block_conn[8*i + block_to_edge_nodes[j][0]];
+        int n2 = block_conn[8*i + block_to_edge_nodes[j][1]];
+
+        // Keep track of the number of edges found
+        const int max_nedges = 128;
+        int edge_index[max_nedges];
+        int nedges = 1;
+        edge_index[0] = 12*i + j;
+
+        // Set the edge number - if any is found
+        int edge_num = -1;
+
+        // Scan through the blocks that share the same node and check
+        // if any of the edges are also shared 
+        for ( int ip = node_block_ptr[n1];
+              ip < node_block_ptr[n1+1]; ip++ ){
+          int ii = node_block_conn[ip]/8;
+          
+          // Loop over each edge in the new block
+          for ( int jj = 0; jj < 12; jj++ ){
+            int nn1 = block_conn[8*ii + block_to_edge_nodes[jj][0]];
+            int nn2 = block_conn[8*ii + block_to_edge_nodes[jj][1]];
+
+            // Check if the block matches
+            if ((n1 == nn1 && n2 == nn2) ||
+                (n1 == nn2 && n2 == nn1)){
+              if (block_edge_conn[12*ii + jj] >= 0){
+                // If this edge has been ordered, copy over
+                // the edge number
+                edge_num = block_edge_conn[12*ii + jj];
+              }
+              else if (nedges < max_nedges){
+                // This edge has not yet been ordered, add it
+                // to the unordered list if there is still room
+                // if not, we will detect and order it during
+                // a future iteration
+                edge_index[nedges] = 12*ii + jj;
+                nedges++;
+              }
+            }
+          }
+        }
+
+        // If this edge does not have an edge number, assign
+        // a new one to the list
+        if (edge_num < 0){
+          edge_num = edge;
+          edge++;
+        }
+
+        // Set the edge numbers for all the edges that we found
+        for ( int ii = 0; ii < nedges; ii++ ){
+          block_edge_conn[edge_index[ii]] = edge_num;
+        }
+      }
+    }
+  }
+
+  // Set the total number of edges
+  num_edges = edge;
+}
+
+/*
+  Establish a unique ordering of the faces for each block
+*/
+void TMROctForest::computeFacesFromNodes(){
   block_face_conn = new int[ 6*num_blocks ];
   for ( int i = 0; i < 6*num_blocks; i++ ){
     block_face_conn[i] = -1;
@@ -676,7 +714,7 @@ void TMROctForest::setConnectivity( int _num_nodes,
         int node = face_nodes[0];
         for ( int ip = node_block_ptr[node];
               ip < node_block_ptr[node+1]; ip++ ){
-          int ii = node_block_conn[ip];
+          int ii = node_block_conn[ip]/8;
 
           // Skip this if the blocks are the same
           if (ii == i){ continue; }
@@ -734,7 +772,12 @@ void TMROctForest::setConnectivity( int _num_nodes,
 
   // Set the number of faces
   num_faces = face;
+}
 
+/*
+  Compute the inverse connectivity from the faces to the blocks 
+*/
+void TMROctForest::computeFacesToBlocks(){
   // Create the data structure for the face to block connectivity
   face_block_ptr = new int[ num_faces+1 ];
   memset(face_block_ptr, 0, (num_faces+1)*sizeof(int));
@@ -851,25 +894,13 @@ void TMROctForest::setConnectivity( int _num_nodes,
       face_block_conn[ip] = 6*block + face_index;
     }
   }
+}
 
-  // Loop over all the blocks and reset node->block connectivity
-  // to store both the adjacent block and the corresponding
-  // node index into that array
-  for ( int node = 0; node < num_nodes; node++ ){
-    for ( int ip = node_block_ptr[node];
-          ip < node_block_ptr[node+1]; ip++ ){
-      int adj = node_block_conn[ip];
-      int adj_index = 0;
-      for ( ; adj_index < 8; adj_index++ ){
-        if (block_conn[8*adj + adj_index] == node){
-          break;
-        }
-      }
-
-      node_block_conn[ip] = 8*adj + adj_index;
-    }
-  }
-
+/*
+  Once the connectivity for the blocks/faces/edges have been set,
+  compute the owners of each object.  
+*/
+void TMROctForest::computeBlockOwners(){
   // Find the block numbers corresponding to the owner for each face,
   // edge and corner so that we know who should be ordering what!
   face_block_owners = new int[ num_faces ];
