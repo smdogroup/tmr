@@ -44,3 +44,40 @@ void TMRFinalize(){
   MPI_Type_free(&TMRQuadrant_MPI_type);
   MPI_Type_free(&TMRPoint_MPI_type);
 }
+
+/*
+  Increment the reference count
+*/
+void TMREntity::incref(){ 
+  ref_count++; 
+}
+
+/*
+  Decrease the reference count
+*/
+void TMREntity::decref(){ 
+  ref_count--;
+  if (ref_count == 0){
+    delete this;
+  }
+}
+
+// Set the default convergence criteria
+double TMREntity::eps_dist = 1e-6;
+double TMREntity::eps_cosine = 1e-6;
+
+/*
+  Set the geometric tolerances
+*/
+void TMREntity::setTolerances( double _eps_dist, double _eps_cosine ){
+  eps_dist = _eps_dist;
+  eps_cosine = _eps_cosine;
+}
+
+/*
+  Get the geometric tolerances
+*/
+void TMREntity::getTolerances( double *_eps_dist, double *_eps_cosine ){
+  *_eps_dist = eps_dist;
+  *_eps_cosine = eps_cosine;
+}

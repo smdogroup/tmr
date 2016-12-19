@@ -28,6 +28,13 @@ class TMRPoint {
   TMRPoint( double _x, double _y, double _z ){
     x = _x;  y = _y;  z = _z;
   }
+  inline void zero(){
+    x = y = z = 0.0;
+  }
+  inline double dot( const TMRPoint& p ) const {
+    return x*p.x + y*p.y + z*p.z;
+  }
+  
   double x, y, z;
 };
 
@@ -93,6 +100,34 @@ class TMRIndexWeight {
     
     return A->index - B->index;
   }
+};
+
+/*
+  Reference counted TMR entity
+*/
+class TMREntity {
+ public:
+  TMREntity(){
+    ref_count = 0;
+  }
+  virtual ~TMREntity(){}
+  
+  // Reference count the geometric entity objects
+  // --------------------------------------------
+  void incref();
+  void decref();
+
+  // Set/get the tolerances used within the geometric search algorithms
+  // ------------------------------------------------------------------
+  void setTolerances( double _eps_dist, double _eps_cosine );
+  void getTolerances( double *_eps_dist, double *_eps_cosine );
+
+ protected:
+  static double eps_dist;
+  static double eps_cosine;
+
+ private:
+  int ref_count;
 };
 
 #endif // TMR_BASE_H

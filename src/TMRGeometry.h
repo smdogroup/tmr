@@ -14,42 +14,55 @@
   external geometry engine.
 */
 
-// Declaration of the basic geometric types
-class TMRGeoVertex;
-class TMRGeoEdge;
-class TMRGeoSurface;
+// Declare all of the geometry base classes
+class TMRCurve;
+class TMRSurface;
 
 /*
-  The vertex class
+  The vertex class: Note that this is used to store both the
+  point and to represent the underlying geometry
 */
-class TMRGeoVertex {
+class TMRVertex : public TMREntity {
  public:
-  TMRGeoVertex( TMRPoint *_x ){
-    x = x;
-  }
+  TMRVertex(){}
+  virtual ~TMRVertex(){}
 
-  // The point associated with the object
-  TMRPoint *x;
+  // Evalue the point
+  virtual int evalPoint( TMRPoint *p ) = 0;
+
+ private:
+  // The topology information associated
+  class CurveList {
+  public:
+    TMRCurve *curve;
+    CurveList *next;
+  } *curves;
 };
 
 /*
-  The parametrization for the edge
+  The parametrization for a curve
 */
-class TMRGeoEdge {
+class TMRCurve : public TMREntity {
  public:
+  TMRCurve(){ v1 = v2 = NULL; faces = NULL; }
+  TMRCurve( TMRVertex *v1, TMRVertex *v2 );
+  virtual ~TMRCurve();
+
   // Get the parameter range for this edge
   virtual void getRange( double *tmin, double *tmax ) = 0;
   
   // Given the parametric point, evaluate the x,y,z location
   virtual int evalPoint( double t, TMRPoint *X ) = 0;
 
-  // Given the parametric point, evaluate the derivative 
-  virtual int evalDeriv( double t, TMRPoint *Xt ) = 0;
+  // Given the point, find the parametric location
+  virtual int invEvalPoint( TMRPoint X, double *t );
 
-  // Find the surface u,v coordinates of the curve p(t)
-  virtual int reparamOnSurface( TMRGeoSurface *surface, 
-                                double t, int dir,
-                                double *u, double *v ) = 0;
+  // Given the parametric point, evaluate the derivative 
+  virtual int evalDeriv( double t, TMRPoint *Xt );
+  
+  // Retrive the connectivity
+  void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
+  int addAdjSurface( TMRSurface *_surf );
 
   // Integrate along the edge and return an array containing
   // the parametric locations to provide an even spacing
@@ -57,21 +70,24 @@ class TMRGeoEdge {
                     double **tvals, double **dist, int *nvals );
 
  private:
-  // The start and end vertices for this list
-  TMRGeoVertex *v1, *v2;
+  // Set the step size
+  static double deriv_step_size;
+
+  // The start/end vertices of the curve
+  TMRVertex *v1, *v2;
   
-  // The list of faces that refer to this edge
+  // The list of adjacent surfaces referencing this curve
   class SurfaceList {
   public:
-    TMRGeoSurface *surf;
+    TMRSurface *surf;
     SurfaceList *next;
   } *faces;
 };
 
 /*
-  The parametrization for the surface
+  The parametrization of a surface
 */
-class TMRGeoSurface {
+class TMRSurface : public TMREntity {
  public:
   // Get the parameter range for this surface
   virtual void getRange( double *umin, double *vmin,
@@ -79,169 +95,73 @@ class TMRGeoSurface {
  
   // Given the parametric point, compute the x,y,z location
   virtual int evalPoint( double u, double v, TMRPoint *X ) = 0;
+  
+  // Perform the inverse evaluation
+  virtual int invEvalPoint( TMRPoint p, double *u, double *v ) = 0;
 
   // Given the parametric point, evaluate the first derivative 
   virtual int evalDeriv( double u, double v, 
                          TMRPoint *Xu, TMRPoint *Xv ) = 0;
 
  private:
+  // Set the step size
+  static double deriv_step_size;
 
-  // The list of edges associated with the surface
-  class EdgeList {
-  public:
-    TMRGeoEdge *edge;
-    EdgeList *next;
-  } *edges;
+  // The curves adjacent to this surface
+  class CurveList {
+    TMRCurve *curve;
+    CurveList *next;
+  } *curves;
 };
 
 /*
-  The geometric model container class
+  Set the TMRVertex location based on a parametric location along a
+  curve.  
+
+  This takes either a parametric point or does an inverse evaluation
+  first to determine the parametric location.
 */
-class TMRGeoModel {
+class TMRVertexFromCurve : public TMRVertex {
  public:
-  TMRGeoModel(){}
-
-  // ....
-};
-
-
-
-
-
-
-/*
-  A searchable/sortable list of edge points
-*/
-class EdgeEntry {
- public:
-  int32_t t;
-  double x, y, z;
-};
-
-/*
-  Class that stores e a searchable/sortable list of the face points
-*/
-class FaceEntry {
- public:
-  int32_t u, v;
-  double x, y, z;
-};
-
-/*
-  The following class implements a look up table for either edges or
-  faces. 
-
-  The index along the face is an integer (int32_t) that is on the same
-  interval used for the octants. The reason is that comparison between
-  integers is exact and the edge locations can be generated once using
-  either a TFI or by evaluating the points within the domain.
-*/
-class TMR_EdgeLookup {
- public:
-  TMR_EdgeLookup( int32_t *t, TMRPoint *pts, int npts );
-  ~TMR_EdgeLookup();
-
-  // Evaluate a point 
-  int evalPoint( int32_t t_int, TMRPoint *X );
+  TMRVertexFromCurve( TMRCurve *_curve, double _t );
+  TMRVertexFromCurve( TMRCurve *_curve, TMRPoint p );
+  ~TMRVertexFromCurve();
+  int evalPoint( TMRPoint *p );
 
  private:
-  // Set 
-  EdgeEntry *points;
-
-  // The number of points along this edge
-  int npts;
+  double t;
+  TMRCurve *curve;
 };
 
 /*
-  The following class implements a look up table for a face
+  Evaluate a vertex location based on its parametric location on
+  a surface.
 */
-class TMR_SurfaceLookup {
+class TMRVertexFromSurface : public TMRVertex {
  public:
-  TMR_SurfaceLookup( int32_t *u, int32_t *v, TMRPoint *pts, int npts );
-  ~TMR_SurfaceLookup();
-
-  // Evaluate a point on the surface
-  int evalPoint( int32_t u_int, int32_t v_int, TMRPoint *X );
-  
- private:  
-  // Store the points on this face
-  FaceEntry *points;
-  
-  // The number of points
-  int npts;
-};
-
-/*
-  Transfinite interpolation edge class.
-
-  This class is used to create a straight line interpolated between
-  the starting and end locations.
-*/
-class TMR_TFIEdge {
- public:
-  TMR_TFIEdge( TMRPoint *a, TMRPoint *b ); 
-  ~TMR_TFIEdge();
-  
-  // Evaluate the point on the edge
-  int evalPoint( int32_t t_int, TMRPoint *pt );
+  TMRVertexFromSurface( TMRSurface *_surface, double _u, double _v );
+  TMRVertexFromSurface( TMRSurface *_surface, TMRPoint p );
+  ~TMRVertexFromSurface();
+  int evalPoint( TMRPoint *p );
 
  private:
-  // The start and end locations of the edge
-  TMRPoint a, b;
+  double u, v;
+  TMRSurface *surface;
 };
 
 /*
-  Transfinite surface interpolation class
-
-  Perform a transfinite interpolation between the edges that form a
-  face. Note that the surface points are only defined at the look up
-  points that are provided along each edge. 
-
-  Note that this is not a continuous representation of a surface.
+  Project a curve onto a surface and evaluate the surface location
 */
-class TMR_TFISurface {
- public:
-  TMR_TFISurface( TMRPoint *corners, 
-                  TMR_EdgeLookup *edges[] );
-
-  // Evaluate a point on the surface determined using a transfinite
-  // interpolation from the edges
-  int evalPoint( int32_t u_int, int32_t v_int, TMRPoint *pt );
+class TMRCurveFromSurfaceProjection : public TMRCurve {
+  TMRCurveFromSurfaceProjection( TMRSurface *_surface, 
+                                 TMRCurve *_curve );
+  ~TMRCurveFromSurfaceProjection();  
+  void getRange( double *tmin, double *tmax );
+  int evalPoint( double t, TMRPoint *p );
 
  private:
-  // Store the corner points
-  TMRPoint c[4];
-
-  // Store pointer to the edges
-  TMR_EdgeLookup *edges[4];
-};
-
-/*
-  Transfinite interpolation class for the volumes/blocks
-
-  Perform a transfinite interpolation of the points within a volume.
-  In a similar manner to the surface, the interpolation is only
-  defined along points.
-*/
-class TMR_TFIVolume {
- public:
-  TMR_TFIVolume( TMRPoint *corners, 
-                 TMR_EdgeLookup *edges[], 
-                 TMR_SurfaceLookup *faces[] );
-
-  // Evaluate the point on this surface
-  int evalPoint( int32_t u_int, int32_t v_int, int32_t w_int,
-                 TMRPoint *pt );
-
- private:
-  // The corner points for this volume
-  TMRPoint c[8];
-
-  // The edge objects for this volume
-  TMR_EdgeLookup *edges[12];
-
-  // The face objects 
-  TMR_SurfaceLookup *faces[6];
+  TMRCurve *curve;
+  TMRSurface *surface;
 };
 
 #endif // TMR_GEOMETRY_H

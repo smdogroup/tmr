@@ -2,7 +2,7 @@
 #include "TMROctForest.h"
 
 /*
-  Create the primitive geometry classes required for this example 
+  Create the primitive geometry classes required for this example
 */
 class QuarterSphere : public TMRGeoSurface {
  public:

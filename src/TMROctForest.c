@@ -462,6 +462,70 @@ void TMROctForest::setConnectivity( int _num_nodes,
   block_conn = new int[ 8*num_blocks ];
   memcpy(block_conn, _block_conn, 8*num_blocks*sizeof(int));
 
+  // Compute the node to block information
+  computeNodesToBlocks();
+
+  // Compute the edge connectivity from the block data
+  computeEdgesFromNodes();
+  computeEdgesToBlocks();
+
+  // Compute the face connectivity from the block data
+  computeFacesFromNodes();
+  computeFacesToBlocks();
+
+  // Compute the block owners based on the node, edge and face data
+  computeBlockOwners();  
+}
+
+/*
+  Set the full connectivity, specifying the node, edge, face and block
+  numbers independently.
+*/
+void TMROctForest::setFullConnectivity( int _num_nodes, 
+                                        int _num_edges,
+                                        int _num_faces, 
+                                        int _num_blocks,
+                                        const int *_block_conn,
+                                        const int *_block_edge_conn,
+                                        const int *_block_face_conn ){
+  // Free any data allocated for other connectivities
+  freeData();
+
+  // Copy over the number of geometric entities
+  num_nodes = _num_nodes;
+  num_edges = _num_edges;
+  num_faces = _num_faces;
+  num_blocks = _num_blocks;
+
+  // Copy over the block connectivity
+  block_conn = new int[ 8*num_blocks ];
+  memcpy(block_conn, _block_conn, 8*num_blocks*sizeof(int));
+
+  // Compute the node to block information
+  computeNodesToBlocks();
+
+  // Copy over the edge information
+  block_edge_conn = new int[ 12*num_blocks ];
+  memcpy(block_edge_conn, _block_edge_conn, 12*num_blocks*sizeof(int));
+  
+  // Compute the edge to block information
+  computeEdgesToBlocks();
+
+  // Compute the face connectivity from the block data
+  block_face_conn = new int[ 6*num_blocks ];
+  memcpy(block_face_conn, _block_face_conn, 6*num_blocks*sizeof(int));
+
+  // Compute the face to block information
+  computeFacesToBlocks();
+
+  // Compute the block owners based on the node, edge and face data
+  computeBlockOwners();  
+}
+
+/*
+  Compute the connectivity storing the node to block information 
+*/
+void TMROctForest::computeNodesToBlocks(){
   // Create the data structure for the node to block connectivity
   node_block_ptr = new int[ num_nodes+1 ];
   memset(node_block_ptr, 0, (num_nodes+1)*sizeof(int));
@@ -509,17 +573,6 @@ void TMROctForest::setConnectivity( int _num_nodes,
       node_block_conn[ip] = 8*adj + adj_index;
     }
   }
-
-  // Compute the edge connectivity from the block data
-  computeEdgesFromNodes();
-  computeEdgesToBlocks();
-
-  // Compute the face connectivity from the block data
-  computeFacesFromNodes();
-  computeFacesToBlocks();
-
-  // Compute the block owners based on the node, edge and face data
-  computeBlockOwners();  
 }
 
 /*
@@ -983,6 +1036,82 @@ void TMROctForest::getInverseConnectivity( const int **_node_block_conn,
   if (_edge_block_ptr){ *_edge_block_ptr = edge_block_ptr; }
   if (_face_block_conn){ *_face_block_conn = face_block_conn; }
   if (_face_block_ptr){ *_face_block_ptr = face_block_ptr; }
+}
+
+/*
+  Allocate the trees for each element within the mesh
+*/
+void TMROctForest::createTrees( int refine_level ){
+  int32_t level = refine_level;
+  if (level < 0){
+    level = 0;
+  }
+  else if (level >= TMR_MAX_LEVEL){
+    level = TMR_MAX_LEVEL-1;
+  }
+
+  // Set who owns what blocks
+  int nblocks = num_blocks/mpi_size;
+  int remain = num_blocks % mpi_size;
+  int start = mpi_rank*nblocks;
+  int end = (mpi_rank+1)*nblocks;
+  if (mpi_rank < remain){
+    nblocks += 1;
+    start += mpi_rank;
+    end += mpi_rank+1;
+  }
+  else {
+    start += remain;
+    end += remain;
+  }
+  
+  // Create an array of the octants that will be stored
+  int nelems = 1 << (TMR_MAX_LEVEL - refine_level);
+  int size = nelems*nelems*nelems*nblocks;
+  TMROctant *array = new TMROctant[ size ];
+
+  // Generate all of the octants on the associated blocks
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
+  for ( int count = 0, block = start; block < end; block++ ){
+    for ( int32_t x = 0; x < hmax; x += h ){
+      for ( int32_t y = 0; y < hmax; y += h ){
+        for ( int32_t z = 0; z < hmax; z += h ){
+          array[count].tag = 0;
+          array[count].block = block;
+          array[count].level = level;
+          array[count].x = x;
+          array[count].y = y;
+          array[count].z = z;
+        }
+      }
+    }
+  }
+
+  // Create the array of octants
+  octants = new TMROctantArray(array, size);
+  octants->sort();
+
+  // Set the last octant
+  TMROctant p;
+  p.tag = -1;
+  p.block = num_blocks-1;
+  p.x = p.y = p.z = hmax;
+  if (size > 0){
+    p = array[0];
+  }
+
+  owners = new TMROctant[ mpi_size ];
+  MPI_Allgather(&p, 1, TMROctant_MPI_type, 
+                owners, 1, TMROctant_MPI_type, comm);
+
+  // Set the offsets if some of the processors have zero
+  // octants
+  for ( int k = 1; k < mpi_size; k++ ){
+    if (owners[k].tag == -1){
+      owners[k] = owners[k-1];
+    }
+  }
 }
 
 /*

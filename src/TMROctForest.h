@@ -25,7 +25,7 @@
   the construction of the interpolation operators that can be used for
   multigrid solution algorithms.
 */
-class TMROctForest {
+class TMROctForest : public TMREntity {
  public:
   TMROctForest( MPI_Comm _comm );
   ~TMROctForest();
@@ -39,17 +39,19 @@ class TMROctForest {
   void setConnectivity( int _num_nodes,
                         const int *_block_conn,
                         int _num_blocks );
+  void setFullConnectivity( int _num_nodes, int _num_edges,
+                            int _num_faces, int _num_blocks,
+                            const int *_block_conn,
+                            const int *_block_edge_conn,
+                            const int *_block_face_conn );
 
   // Re-partition the octrees based on element count
   // -----------------------------------------------
   void repartition();
   
-  /*
   // Create the forest of octrees
   // ----------------------------
   void createTrees( int refine_level );
-  void createTrees( int refine_levels[] );
-  */
   void createRandomTrees( int nrand=10, 
                           int min_level=0, int max_level=8 );
 
@@ -133,6 +135,9 @@ class TMROctForest {
   void transformNode( TMROctant *oct );
 
  private:
+  // Compute the node connectivity information
+  void computeNodesToBlocks();
+
   // Compute the connectivity information
   void computeEdgesFromNodes();
   void computeFacesFromNodes();
