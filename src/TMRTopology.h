@@ -2,7 +2,7 @@
 #define TMR_TOPOLOGY_H
 
 #include "TMRBase.h"
-#include "TMRTopology.h"
+#include "TMRGeometry.h"
 
 /*
   The following header file includes the definitions of the
@@ -20,10 +20,14 @@ class TMRBlock;
 
 /*
   Topological curve entity between two vertices
+
+  The vertices themselves are extracted from the curve. Note that the
+  vertices must be set in the curve.
 */
 class TMREdge : public TMREntity {
  public:
   TMREdge( TMRCurve *_curve );
+  TMREdge( TMRCurve *_curve, TMRVertex *_v1, TMRVertex *_v2 );
   ~TMREdge();
 
  private:
@@ -39,7 +43,28 @@ class TMREdge : public TMREntity {
 };
 
 /*
-  Topological surface entity bounded by four edges
+  Topological surface entity bounded by four non-degenerate edges
+
+  The TMRFace object represents the topology of a non-degenerate
+  quadrilateral surface with four edges. Since a general surface
+  object can be bounded by three or more edges, and we require a
+  specified edge ordering, the edge objects are required arguments.
+  
+  The edges are ordered as follows, where the orientation must match
+
+  \--------3--------\
+  |                 |
+  |      v ^        |
+  |        |        |
+  0        ----> u  1
+  |                 |
+  |                 |
+  |                 |
+  \--------2--------\
+
+  Where the normal of the surface is out of plane in this case. Note
+  that u/v locations are notional, and the edges need not run along
+  constant u/v values on the surface.
 */
 class TMRFace : public TMREntity {
  public:
@@ -60,7 +85,7 @@ class TMRFace : public TMREntity {
 };
 
 /*
-  Topological volume entity bounded by six faces
+  Topological volume entity bounded by six faces.
 */
 class TMRBlock : public TMREntity {
  public:
@@ -74,17 +99,20 @@ class TMRBlock : public TMREntity {
 
 /*
   The main topology class that contains the objects used to build the
-  underlying mesh.  
+  underlying mesh.
 */
 class TMRTopology : public TMREntity {
  public:
-  TMRTopology( MPI_Comm _comm ){}
-  ~TMRTopology(){}
+  TMRTopology( MPI_Comm _comm );
+  ~TMRTopology();
 
   void addBlock( TMRBlock *block );
   void buildTopology();
 
  private:
+  MPI_Comm comm;
+
+  // Set the block connectivity
   int num_blocks;
   TMRBlock *blocks;
 };

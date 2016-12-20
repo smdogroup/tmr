@@ -44,7 +44,7 @@ class TMRVertex : public TMREntity {
 */
 class TMRCurve : public TMREntity {
  public:
-  TMRCurve(){ v1 = v2 = NULL; faces = NULL; }
+  TMRCurve();
   TMRCurve( TMRVertex *v1, TMRVertex *v2 );
   virtual ~TMRCurve();
 
@@ -60,7 +60,9 @@ class TMRCurve : public TMREntity {
   // Given the parametric point, evaluate the derivative 
   virtual int evalDeriv( double t, TMRPoint *Xt );
   
-  // Retrive the connectivity
+  // Retrive the adjacent vertices/surfaces
+  // --------------------------------------
+  void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
   void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
   int addAdjSurface( TMRSurface *_surf );
 

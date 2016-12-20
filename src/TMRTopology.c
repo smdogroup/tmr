@@ -8,6 +8,12 @@ TMREdge::TMREdge( TMRCurve *_curve ){
   curve->incref();
 }
  
+TMREdge::TMREdge( TMRCurve *_curve, TMRVertex *v1, TMRVertex *v2 ){
+  curve = _curve;
+  curve->incref();
+  curve->setVertices(v1, v2);
+}
+
 TMREdge::~TMREdge(){
   curve->incref();
 }
@@ -22,7 +28,7 @@ TMRFace::TMRFace( TMRSurface *_surface,
   surface->incref();
 
   for ( int k = 0; k < 4; k++ ){
-    edges[k] = _edge[k];
+    edges[k] = _edges[k];
     edges[k]->incref();
   }
 }
@@ -63,8 +69,8 @@ TMRTopology::~TMRTopology(){
 
 }
 
-void TMRTopology::addBlock( TMRBlock *block ){
-
+void TMRTopology::addBlock( TMRBlock *_block ){
+   
 
 }
 
@@ -76,5 +82,4 @@ void TMRTopology::addBlock( TMRBlock *block ){
 */
 void TMRTopology::buildTopology(){
   
-
 }

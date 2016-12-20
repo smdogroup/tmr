@@ -2,6 +2,15 @@
 #include <math.h>
 
 /*
+  Build the curve without specifying the start/end vertices
+*/
+TMRCurve::TMRCurve(){
+  v1 = NULL;
+  v2 = NULL;
+  faces = NULL;
+}
+
+/*
   Build the curve the specified starting/ending vertices
 */
 TMRCurve::TMRCurve( TMRVertex *_v1, TMRVertex *_v2 ){
@@ -81,6 +90,18 @@ int TMRCurve::evalDeriv( double t, TMRPoint *Xt ){
   }
 
   return fail;
+}
+
+/*
+  Set the adjacent vertices
+*/
+void TMRCurve::setVertices( TMRVertex *_v1, TMRVertex *_v2 ){
+  _v1->incref();
+  _v2->incref();
+  if (v1){ v1->decref(); }
+  if (v2){ v2->decref(); }
+  v1 = _v1;
+  v2 = _v2;
 }
 
 /*
