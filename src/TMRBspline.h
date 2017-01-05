@@ -30,6 +30,16 @@ class TMRBsplineCurve : public TMRCurve {
 
   // Given the parametric point, evaluate the derivative 
   int evalDeriv( double t, TMRPoint *Xt );
+
+  // Retrieve the underlying data
+  void getData( int *_n, int *_k, const double **_Tu,
+                const double **_wts, const TMRPoint **_pts ){
+    if (_n){ *_n = nctl; }
+    if (_k){ *_k = ku; }
+    if (_Tu){ *_Tu = Tu; }
+    if (_wts){ *_wts = wts; }
+    if (_pts){ *_pts = pts; }
+  }
   
  private:
   // The number of control points and b-spline order
@@ -94,6 +104,57 @@ class TMRBsplineSurface : public TMRSurface {
   // Maximum number of newton iterations for the B-spline inverse
   // point code
   static int max_newton_iters;
+};
+
+/*
+  The TMRCurveInterpolation enables the creation of a b-spline curve
+  using a number of different interpolation strategies.
+
+  The object is created, then internal parameters/options can be set,
+  and finally, the interpolation b-spline object can be created.  
+*/
+class TMRCurveInterpolation : public TMREntity {
+ public:
+  TMRCurveInterpolation( TMRPoint *interp, int ninterp );
+  ~TMRCurveInterpolation();
+  
+  // Set the number of control points (must be < ninterp)
+  void setNumControlPoints( int _nctl ){
+    nctl = _nctl;
+  }
+
+  // Create the interpolation
+  TMRBsplineCurve *createCurve( int ku );
+
+ private:
+  // Get the interpolation points
+  void getInterpLoc( double *ubar );
+
+  int nctl;
+  int ninterp;
+  TMRPoint *interp;
+};
+
+/*
+  Create a b-spline surface by lofting a spline over b-spline curves
+ 
+  The loft requires 3 steps:
+  1. Converting the knot space to span the same to span the same 
+  2. Inserting knots to create a common knot space
+  3. Creating an interpolating spline to pass through all curves
+*/
+class TMRCurveLofter : public TMREntity {
+ public:
+  TMRCurveLofter( TMRCurve *_curves, int _num_curves );
+  ~TMRCurveLofter();
+
+  // Create the surface interpolation
+  TMRBsplineSurface *createSurface( int kv );
+
+ private:
+  // The curves used for surface lofting
+  int num_curves;
+  TMRCurve **curves;
 };
 
 #endif // TMR_BSPLINE_H

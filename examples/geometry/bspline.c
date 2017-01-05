@@ -122,6 +122,60 @@ int main( int argc, char *argv[] ){
   bspline->decref();
   nurbs->decref();
 
+  // Create the control points
+  int nctl = 150;
+  TMRPoint line_pts[150];
+  memset(line_pts, 0, nctl*sizeof(TMRPoint));
+  
+  for ( int i = 0; i < nctl; i++ ){
+    line_pts[i].x = -5.0 + 10.0*i/(nctl-1);
+    line_pts[i].y = 0.1*line_pts[i].x*line_pts[i].x + cos(M_PI*line_pts[i].x);
+  }
+
+  // Create the interpolation object
+  TMRCurveInterpolation *interper = 
+    new TMRCurveInterpolation(line_pts, nctl);
+  interper->incref();
+
+  // interper->setNumControlPoints(50);
+
+  // Create an interpolation
+  fp = fopen("line.dat", "w");
+  fprintf(fp, "Variables = X, Y, Z\n");
+
+  TMRBsplineCurve *curve = interper->createCurve(4);
+
+  // Get the parameter range
+  double tmin, tmax;
+  curve->getRange(&tmin, &tmax);
+
+  int nvals = 5*nctl;
+  fprintf(fp, "Zone T = curve I=%d\n", nvals);
+  for ( int i = 0; i < nvals; i++ ){
+    TMRPoint p;
+    double t = tmin + (tmax-tmin)*i/(nvals-1.0);
+    curve->evalPoint(t, &p);
+    fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+  }
+
+  int npts;
+  const TMRPoint *ctrl_pts;
+  curve->getData(&npts, NULL, NULL, NULL, &ctrl_pts);
+
+  fprintf(fp, "Zone T = pts I=%d\n", npts);
+  for ( int i = 0; i < npts; i++ ){
+    fprintf(fp, "%e %e %e\n", 
+            ctrl_pts[i].x, ctrl_pts[i].y, ctrl_pts[i].z); 
+  }
+
+  fprintf(fp, "Zone T = interpolation I=%d\n", nctl);
+  for ( int i = 0; i < nctl; i++ ){
+    fprintf(fp, "%e %e %e\n", 
+            line_pts[i].x, line_pts[i].y, line_pts[i].z); 
+  }
+
+  fclose(fp);
+
   TMRFinalize();
   MPI_Finalize();
   return (0);

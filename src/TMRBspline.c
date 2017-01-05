@@ -1,5 +1,6 @@
 #include "TMRBspline.h"
 #include <math.h>
+#include "tmrlapack.h"
 
 /*
   Set up a knot interval vector with uniform spacing
@@ -1100,4 +1101,289 @@ int TMRBsplineSurface::evalDeriv( double u, double v,
 
   // Success
   return 0;
+}
+
+/*
+  Create the interpolation curve generating object.
+
+  This is designed so that different parameters can be set internally
+  before the interpolated b-spline curve is created.
+
+  input:
+  interp:  the interpolation points
+  n:       the number of points
+*/
+TMRCurveInterpolation::TMRCurveInterpolation( TMRPoint *_interp,
+                                              int _ninterp ){
+  ninterp = _ninterp;
+  nctl = _ninterp;
+  interp = new TMRPoint[ ninterp ];
+  memcpy(interp, _interp, ninterp*sizeof(TMRPoint));
+}
+
+/*
+  Deallocate the interpolation object
+*/
+TMRCurveInterpolation::~TMRCurveInterpolation(){
+  delete [] interp;
+}
+
+/*
+  Determine the knot intervals at which we'll fit the data
+  points. This is based on the chord length between interpolation
+  points.
+*/
+void TMRCurveInterpolation::getInterpLoc( double *ubar ){
+  // First, find the chord length of the entire set of points
+  double d = 0.0;
+  for ( int i = 0; i < ninterp-1; i++ ){
+    TMRPoint p;
+    p.x = interp[i+1].x - interp[i].x;
+    p.y = interp[i+1].y - interp[i].y;
+    p.z = interp[i+1].z - interp[i].z;
+    d += sqrt(p.dot(p));
+  }
+
+  // Now compute ubar inteprolation points based on the 
+  // chord length distance between the control points
+  ubar[0] = 0.0;
+  for ( int i = 0; i < ninterp-1; i++ ){
+    TMRPoint p;
+    p.x = interp[i+1].x - interp[i].x;
+    p.y = interp[i+1].y - interp[i].y;
+    p.z = interp[i+1].z - interp[i].z;
+    ubar[i+1] = ubar[i] + sqrt(p.dot(p))/d;
+  }
+
+  // Ensure that the final interpolation point occurs at the end
+  // of the interval
+  ubar[ninterp-1] = 1.0;
+}
+
+/*
+  Create the interpolation and return the curve
+*/
+TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
+  if (ku < 2){ ku = 2; }
+  if (ku > 4){ ku = 4; }
+
+  // Pick the ubar values - the parametric locations on the b-spline
+  // where the specified values will be interpolated
+  double *ubar = new double[ ninterp ];
+  getInterpLoc(ubar);
+
+  // Set knot/point data that will be allocated
+  double *Tu = NULL;
+  TMRPoint *pts = NULL;
+
+  if (nctl < ninterp){
+    // Allocate the knot vector
+    Tu = new double[ nctl+ku ];
+    for ( int i = 0; i < ku; i++ ){
+      Tu[i] = 0.0;
+      Tu[nctl+ku-1-i] = 1.0;
+    }
+
+    // Specify the internal knot vectors
+    double d = 1.0*(ninterp-1)/(nctl-ku+1);
+    for ( int i = ku; i < nctl; i++ ){
+      int j = int(floor((i-ku+1)*d));
+      double alpha = (i-ku+1)*d - j;
+      Tu[i] = alpha*ubar[j+1] + (1.0 - alpha)*ubar[j];
+    }
+
+    // The bandwidth of the linear equation
+    int upp_bnd = ku-1, low_bnd = ku-1;
+    int bnd = upp_bnd + low_bnd + 1;
+    int lda = 2*low_bnd + upp_bnd + 1;
+    
+    // Allocate the banded matrix
+    double *A = new double[ lda*nctl ];
+    memset(A, 0, lda*nctl*sizeof(double));
+
+    double *rhs = new double[ 3*nctl ];
+    memset(rhs, 0, 3*nctl*sizeof(double));
+
+    // Set the values into the A matrix
+    for ( int p = 0; p < ninterp; p++ ){
+      // Evaluate the B-spline basis functions
+      double Nu[4], work[8];
+      
+      // Compute the b-spline interval
+      int intu = bspline_interval(ubar[p], Tu, nctl, ku);
+      
+      // Compute the b-spline basis
+      bspline_basis(Nu, intu, ubar[p], Tu, ku, work);
+      
+      // Convert to the initial control point
+      intu = intu - ku + 1;
+
+      // Add the contributions to the right-hand side
+      for ( int jp = 0; jp < ku; jp++ ){
+        int i = intu+jp;
+        rhs[i] += Nu[jp]*interp[p].x;
+        rhs[nctl+i] += Nu[jp]*interp[p].y;
+        rhs[2*nctl+i] += Nu[jp]*interp[p].z;
+      }
+      
+      // Add the contribution to the matrix
+      for ( int kp = 0; kp < ku; kp++ ){
+        int i = intu+kp;
+        for ( int jp = 0; jp < ku; jp++ ){
+          int j = intu+jp;
+          A[bnd-1+i-j + lda*j] += Nu[jp]*Nu[kp];
+        }
+      }
+    }
+    
+    // Set the first and last point to be fixed to the
+    // initial/final location
+    for ( int jp = 0; jp < ku; jp++ ){
+      double valu = 0.0;
+      if (jp == 0){ valu = 1.0; }
+
+      int i = 0;
+      int j = jp;
+      A[bnd-1+i-j + lda*j] = valu;
+
+      i = nctl-1;
+      j = nctl-1-jp;
+      A[bnd-1+i-j + lda*j] = valu;
+    }
+
+    // Set the right-hand side to fix the initial point
+    rhs[0] = interp[0].x;
+    rhs[nctl] = interp[0].y;
+    rhs[2*nctl] = interp[0].z;
+
+    // Fix the final location
+    rhs[nctl-1] = interp[ninterp-1].x;
+    rhs[2*nctl-1] = interp[ninterp-1].y;
+    rhs[3*nctl-1] = interp[ninterp-1].z;
+    
+    // Solve the linear system
+    int nrhs = 3;
+    int *ipiv = new int[ nctl ];
+    int info = 0;
+    LAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs, 
+                A, &lda, ipiv, rhs, &nctl, &info);
+    
+    if (info != 0){
+      fprintf(stderr, 
+              "TMRCurveInterpolation error failed with LAPACK error %d\n",
+              info);
+      return NULL;
+    }
+    
+    // Record/store the control point locations
+    pts = new TMRPoint[ nctl ];
+    for ( int i = 0; i < nctl; i++ ){
+      pts[i].x = rhs[i];
+      pts[i].y = rhs[nctl+i];
+      pts[i].z = rhs[2*nctl+i];
+    }
+    
+    // Free data associated with the linear system
+    delete [] A;
+    delete [] rhs;
+    delete [] ipiv;
+  }
+  else { // curve_type == INTERPOLATION){
+    nctl = ninterp;
+
+    // Allocate the knot vector
+    Tu = new double[ nctl+ku ];
+    for ( int i = 0; i < ku; i++ ){
+      Tu[i] = 0.0;
+      Tu[nctl+ku-1-i] = 1.0;
+    }
+    
+    // Specify the interior knot locations
+    for ( int i = ku; i < nctl; i++ ){
+      Tu[i] = 0.0;
+      
+      // Average the ubars to obtain the knot locations
+      for ( int j = i; j < i+ku-1; j++ ){
+        Tu[i] += ubar[j-ku+1];
+      }
+      Tu[i] = Tu[i]/(ku-1.0);
+    }
+
+    // The bandwidth of the linear equation
+    int upp_bnd = ku-1, low_bnd = ku-1;
+    int bnd = upp_bnd + low_bnd+1;
+    int lda = 2*low_bnd + upp_bnd + 1;
+    
+    // Allocate the banded matrix
+    double *A = new double[ lda*nctl ];
+    memset(A, 0, lda*nctl*sizeof(double));
+    
+    // Set the values into the A matrix
+    for ( int i = 0; i < nctl; i++ ){
+      // Evaluate the B-spline basis functions
+      double Nu[4], work[8];
+      
+      // Compute the b-spline interval
+      int intu = bspline_interval(ubar[i], Tu, nctl, ku);
+      
+      // Compute the b-spline basis
+      bspline_basis(Nu, intu, ubar[i], Tu, ku, work);
+      
+      // Convert to the initial control point
+      intu = intu - ku + 1;
+      
+      for ( int jp = 0; jp < ku; jp++ ){
+        // A(KL+KU+1+i-j,j) = A(i,j)
+        int j = intu+jp;
+        A[bnd-1+i-j + lda*j] = Nu[jp];
+      }
+    }
+    
+    // Compute the right-hand-side values - the x/y/z locations
+    // of the interpolation points
+    double *rhs = new double[ 3*nctl ];
+    for ( int i = 0; i < nctl; i++ ){
+      rhs[i] = interp[i].x;
+      rhs[nctl+i] = interp[i].y;
+      rhs[2*nctl+i] = interp[i].z;
+    }
+    
+    // Solve the linear system
+    int nrhs = 3;
+    int *ipiv = new int[ nctl ];
+    int info = 0;
+    LAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs, 
+                A, &lda, ipiv, rhs, &nctl, &info);
+    
+    if (info != 0){
+      fprintf(stderr, 
+              "TMRCurveInterpolation error failed with LAPACK error %d\n",
+              info);
+      return NULL;
+    }
+    
+    // Record/store the control point locations
+    pts = new TMRPoint[ nctl ];
+    for ( int i = 0; i < nctl; i++ ){
+      pts[i].x = rhs[i];
+      pts[i].y = rhs[nctl+i];
+      pts[i].z = rhs[2*nctl+i];
+    }
+
+    // Free data associated with the linear system
+    delete [] A;
+    delete [] rhs;
+    delete [] ipiv;
+  }
+
+  // Create the B-spline and return it
+  TMRBsplineCurve *curve = new TMRBsplineCurve(nctl, ku, Tu, pts);
+
+  // Free the data that was allocated
+  delete [] ubar;
+  delete [] Tu;
+  delete [] pts;
+
+  // Return the b-spline object
+  return curve;
 }
