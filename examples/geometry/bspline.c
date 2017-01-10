@@ -137,13 +137,17 @@ int main( int argc, char *argv[] ){
     new TMRCurveInterpolation(line_pts, nctl);
   interper->incref();
 
-  // interper->setNumControlPoints(50);
-
+  interper->setNumControlPoints(13);
+  
   // Create an interpolation
   fp = fopen("line.dat", "w");
   fprintf(fp, "Variables = X, Y, Z\n");
 
   TMRBsplineCurve *curve = interper->createCurve(4);
+
+  const double Tnew[] = { 0.1, 0.15, 0.2, 0.25, 0.3 };
+  int nnew = 5;
+  curve = curve->refineKnots(Tnew, nnew);
 
   // Get the parameter range
   double tmin, tmax;

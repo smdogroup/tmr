@@ -2,6 +2,16 @@
 #include <math.h>
 #include "tmrlapack.h"
 
+// The maximum order for the spline
+static const int MAX_BSPLINE_ORDER = 6;
+
+/*
+  Helper function for comparing integers for qsort/bsearch
+*/
+int comparator( const void *a, const void *b ){
+  return (*(int*)a - *(int*)b);
+}
+
 /*
   Set up a knot interval vector with uniform spacing
 
@@ -238,7 +248,11 @@ void bspline_basis_derivative( double *N, const int idx, const double u,
 TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
                                   TMRPoint *_pts ){
   nctl = _n;
+
+  // Check the bounds on the bspline order
   ku = _k;
+  if (ku < 2){ ku = 2; }
+  if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
 
   // Set a uniform spacing of the knot vector
   Tu = new double[ nctl+ku ];
@@ -264,7 +278,13 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
                                   const double *_Tu,
                                   TMRPoint *_pts ){
   nctl = _n;
+
+  // Check the bounds on the bspline order
   ku = _k;
+  if (ku < 2){ ku = 2; }
+  if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
+
+  // Allocate the knots and control points
   Tu = new double[ nctl+ku ];
   memcpy(Tu, _Tu, (nctl+ku)*sizeof(double));
 
@@ -288,7 +308,11 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
                                   const double *_wts, 
                                   TMRPoint *_pts ){
   nctl = _n;
+
+  // Check the bounds on the bspline order
   ku = _k;
+  if (ku < 2){ ku = 2; }
+  if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
 
   // Set the knots
   Tu = new double[ nctl+ku ];
@@ -327,8 +351,8 @@ void TMRBsplineCurve::getRange( double *tmin, double *tmax ){
   Given the parametric point, evaluate the x,y,z location
 */  
 int TMRBsplineCurve::evalPoint( double t, TMRPoint *X ){
-  double Nu[4];
-  double work[8];
+  double Nu[MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER];
 
   // Compute the knot span
   int intu = bspline_interval(t, Tu, nctl, ku);
@@ -385,8 +409,8 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
   *tf = 0.0;
 
   // Temporary internal data
-  double Nu[12];
-  double work[24];
+  double Nu[3*MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
   double t = 0.5*(Tu[0] + Tu[nctl+ku-1]);
 
   // Perform a newton iteration until convergence
@@ -540,8 +564,8 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
   Given the parametric point, evaluate the derivative 
 */  
 int TMRBsplineCurve::evalDeriv( double t, TMRPoint *Xt ){
-  double Nu[8];
-  double work[24];
+  double Nu[2*MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
 
   // Compute the knot span
   int intu = bspline_interval(t, Tu, nctl, ku);
@@ -602,6 +626,131 @@ int TMRBsplineCurve::evalDeriv( double t, TMRPoint *Xt ){
 }
 
 /*
+  Refine the knot vector by inserting the knots specified in the input
+  Tnew. This function returns a new, equivalent curve with the new
+  knots at the specified locations.  
+*/
+TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew, 
+                                               int nnew ){
+  // Allocate the new vectors 
+  int kbar = ku;
+  int nbar = nctl + nnew;
+  double *Tbar = new double[ nbar+ku ];
+  TMRPoint *pbar = new TMRPoint[ nbar ];
+
+  // Allocate the new Tnew and
+  double *Tnew = new double[ nnew ];
+  memcpy(Tnew, _Tnew, nnew*sizeof(double));
+  qsort(Tnew, nnew, sizeof(int), comparator);
+
+  // Allocate the control point weights
+  double *wbar = NULL;
+  if (wts){ wbar = new double[ nbar ]; }
+
+  // Locate the first/end interval
+  int a = bspline_interval(Tnew[0], Tu, nctl, ku);
+  int b = bspline_interval(Tnew[nnew-1], Tu, nctl, ku) + 1;
+
+  // Copy over the points that will not change
+  for ( int j = 0; j <= a-ku+1; j++ ){
+    pbar[j] = pts[j];
+  }
+  for ( int j = b-1; j < nctl; j++ ){
+    pbar[j+nnew] = pts[j];
+  }
+
+  if (wts){
+    // Copy over the NURBS weights which will not change
+    for ( int j = 0; j <= a-ku+1; j++ ){
+      wbar[j] = wts[j];
+    }
+    for ( int j = b-1; j < nctl; j++ ){
+      wbar[j+nnew] = wts[j];
+    }
+  }
+  
+  // Copy over the knots that do not change
+  for ( int j = 0; j <= a; j++ ){
+    Tbar[j] = Tu[j];
+  }
+  for ( int j = b+ku-1; j < nctl+ku; j++ ){
+    Tbar[j+nnew] = Tu[j];
+  }
+
+  // Add the new values
+  for ( int i = b+ku-2, j = nnew-1, k = b+ku+nnew-2; j >= 0; j-- ){
+    while (Tnew[j] <= Tu[i] && i > a){
+      // Read over points and weights
+      pbar[k-ku] = pts[i-ku];
+      if (wts){
+        wbar[k-ku] = wts[i-ku];
+      }
+      // Read in the new knots
+      Tbar[k] = Tu[i];
+      k--; 
+      i--;
+    }
+    // Read in the last pt/weight pair
+    pbar[k-ku] = pbar[k-ku+1];
+    if (wts){
+      wbar[k-ku] = wbar[k-ku+1];
+    }
+
+    // Form the linear combinations of the point/weight pairs
+    for ( int l = 1; l < ku; l++ ){
+      int ind = k-(ku-1)+l;     
+      double alpha = Tbar[k+l] - Tnew[j];
+     
+      if (alpha == 0.0){
+        pbar[ind-1] = pbar[ind];
+      }
+      else {
+        alpha = alpha/(Tbar[k+l] - Tu[i-ku+1+l]);       
+        if (wts){
+          pbar[ind-1].x = (alpha*wbar[ind-1]*pbar[ind-1].x + 
+                           (1.0 - alpha)*wbar[ind]*pbar[ind].x);
+          pbar[ind-1].y = (alpha*wbar[ind-1]*pbar[ind-1].y + 
+                           (1.0 - alpha)*wbar[ind]*pbar[ind].y);
+          pbar[ind-1].z = (alpha*wbar[ind-1]*pbar[ind-1].z + 
+                           (1.0 - alpha)*wbar[ind]*pbar[ind].z);
+          wbar[ind-1] = (alpha*wbar[ind-1] + (1.0 - alpha)*wbar[ind]);
+        }
+        else {
+          pbar[ind-1].x = alpha*pbar[ind-1].x + (1.0 - alpha)*pbar[ind].x;
+          pbar[ind-1].y = alpha*pbar[ind-1].y + (1.0 - alpha)*pbar[ind].y;
+          pbar[ind-1].z = alpha*pbar[ind-1].z + (1.0 - alpha)*pbar[ind].z;
+        }
+      }
+    }
+
+    // Copy over the knot
+    Tbar[k] = Tnew[j];
+    k--;
+  }
+
+  // Now we have the new inputs
+  TMRBsplineCurve *refined = NULL;
+
+  if (wbar){
+    refined = new TMRBsplineCurve(nbar, ku, Tbar, wbar, pbar);
+  }
+  else {
+    refined = new TMRBsplineCurve(nbar, ku, Tbar, pbar);
+  }
+
+  // Free the allocated data
+  delete [] Tnew;
+  delete [] Tbar;
+  delete [] pbar;
+  if (wbar){
+    delete [] wbar;
+  }
+
+  // return the new object
+  return refined;
+}
+
+/*
   Evaluate the TMRSurface
 */
 TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv, 
@@ -613,6 +762,12 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   ku = _ku;
   kv = _kv;
   
+  // Check the bounds on the bspline order
+  if (ku < 2){ ku = 2; }
+  if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
+  if (kv < 2){ kv = 2; }
+  if (kv > MAX_BSPLINE_ORDER){ kv = MAX_BSPLINE_ORDER; }
+
   // Allocate the knot vectors
   Tu = new double[ nu+ku ];
   Tv = new double[ nv+kv ];
@@ -640,6 +795,12 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   nv = _nv;
   ku = _ku;
   kv = _kv;
+
+  // Check the bounds on the bspline order
+  if (ku < 2){ ku = 2; }
+  if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
+  if (kv < 2){ kv = 2; }
+  if (kv > MAX_BSPLINE_ORDER){ kv = MAX_BSPLINE_ORDER; }
   
   // Allocate the knot vectors
   Tu = new double[ nu+ku ];
@@ -665,6 +826,12 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   nv = _nv;
   ku = _ku;
   kv = _kv;
+
+  // Check the bounds on the bspline order
+  if (ku < 2){ ku = 2; }
+  if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
+  if (kv < 2){ kv = 2; }
+  if (kv > MAX_BSPLINE_ORDER){ kv = MAX_BSPLINE_ORDER; }
   
   // Allocate the knot vectors
   Tu = new double[ nu+ku ];
@@ -712,8 +879,8 @@ void TMRBsplineSurface::getRange( double *umin, double *vmin,
 */
 int TMRBsplineSurface::evalPoint( double u, double v, TMRPoint *X ){
   // The basis functions/work arrays
-  double Nu[4], Nv[4];
-  double work[8];
+  double Nu[MAX_BSPLINE_ORDER], Nv[MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER];
 
   // Compute the knot intervals
   int intu = bspline_interval(u, Tu, nu, ku);
@@ -780,8 +947,8 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
   *uf = *vf = 0.0;
   
   // The basis functions/work arrays
-  double Nu[12], Nv[12];
-  double work[24];
+  double Nu[3*MAX_BSPLINE_ORDER], Nv[3*MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
   double u = 0.5*(Tu[0] + Tu[nu+ku-1]);
   double v = 0.5*(Tv[0] + Tv[nv+kv-1]);
 
@@ -1016,8 +1183,8 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
 int TMRBsplineSurface::evalDeriv( double u, double v, 
                                   TMRPoint *Xu, TMRPoint *Xv ){
   // The basis functions/work arrays
-  double Nu[8], Nv[8];
-  double work[24];
+  double Nu[2*MAX_BSPLINE_ORDER], Nv[2*MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
 
   // Compute the knot intervals
   int intu = bspline_interval(u, Tu, nu, ku);
@@ -1165,7 +1332,7 @@ void TMRCurveInterpolation::getInterpLoc( double *ubar ){
 */
 TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
   if (ku < 2){ ku = 2; }
-  if (ku > 4){ ku = 4; }
+  if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
 
   // Pick the ubar values - the parametric locations on the b-spline
   // where the specified values will be interpolated
@@ -1207,7 +1374,8 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
     // Set the values into the A matrix
     for ( int p = 0; p < ninterp; p++ ){
       // Evaluate the B-spline basis functions
-      double Nu[4], work[8];
+      double Nu[MAX_BSPLINE_ORDER];
+      double work[2*MAX_BSPLINE_ORDER];
       
       // Compute the b-spline interval
       int intu = bspline_interval(ubar[p], Tu, nctl, ku);
@@ -1321,7 +1489,8 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
     // Set the values into the A matrix
     for ( int i = 0; i < nctl; i++ ){
       // Evaluate the B-spline basis functions
-      double Nu[4], work[8];
+      double Nu[MAX_BSPLINE_ORDER];
+      double work[2*MAX_BSPLINE_ORDER];
       
       // Compute the b-spline interval
       int intu = bspline_interval(ubar[i], Tu, nctl, ku);

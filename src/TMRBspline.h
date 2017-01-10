@@ -31,6 +31,9 @@ class TMRBsplineCurve : public TMRCurve {
   // Given the parametric point, evaluate the derivative 
   int evalDeriv( double t, TMRPoint *Xt );
 
+  // Refine the knot vector using knot insertion
+  TMRBsplineCurve* refineKnots( const double *Tnew, int nnew );
+
   // Retrieve the underlying data
   void getData( int *_n, int *_k, const double **_Tu,
                 const double **_wts, const TMRPoint **_pts ){
