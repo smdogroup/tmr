@@ -9,10 +9,9 @@ include ../TMR_Common.mk
 
 CXX_OBJS = TMRBase.o \
 	TMROctant.o \
-	TMRQuadrant.o \
-	TMRQuadtree.o \
-	TMRQuadForest.o \
 	TMROctForest.o \
+	TMRQuadrant.o \
+	TMRQuadForest.o \
 	TMRGeometry.o \
 	TMR_STLTools.o \
 	TMROctStiffness.o \

@@ -56,7 +56,6 @@ class TMROctantArray {
   void sort();
   TMROctant* contains( TMROctant *q, int use_nodes=0 );
   void merge( TMROctantArray * list );
-  TMROctant* findEnclosed( TMROctant *q );
 
  private:
   int is_sorted;

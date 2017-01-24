@@ -27,6 +27,7 @@ class TMRQuadrant {
 
   int32_t x, y; // The x,y coordinates
   int32_t level; // The refinement level
+  int32_t face; // The face owner
   int32_t tag; // A tag to store additional data
 };
 

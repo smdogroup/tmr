@@ -8,8 +8,8 @@ static const int MAX_BSPLINE_ORDER = 6;
 /*
   Helper function for comparing integers for qsort/bsearch
 */
-int comparator( const void *a, const void *b ){
-  return (*(int*)a - *(int*)b);
+int compare_double( const void *a, const void *b ){
+  return (*(double*)a - *(double*)b);
 }
 
 /*
@@ -641,7 +641,7 @@ TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
   // Allocate the new Tnew and
   double *Tnew = new double[ nnew ];
   memcpy(Tnew, _Tnew, nnew*sizeof(double));
-  qsort(Tnew, nnew, sizeof(int), comparator);
+  qsort(Tnew, nnew, sizeof(double), compare_double);
 
   // Allocate the control point weights
   double *wbar = NULL;
@@ -1280,7 +1280,7 @@ int TMRBsplineSurface::evalDeriv( double u, double v,
   interp:  the interpolation points
   n:       the number of points
 */
-TMRCurveInterpolation::TMRCurveInterpolation( TMRPoint *_interp,
+TMRCurveInterpolation::TMRCurveInterpolation( const TMRPoint *_interp,
                                               int _ninterp ){
   ninterp = _ninterp;
   nctl = _ninterp;
@@ -1555,4 +1555,282 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
 
   // Return the b-spline object
   return curve;
+}
+
+/*
+  The following function defines a lofting operation
+*/
+TMRCurveLofter::TMRCurveLofter( TMRBsplineCurve **_curves, 
+                                int _num_curves ){
+  num_curves = _num_curves;
+  curves = new TMRBsplineCurve*[ num_curves ];
+  consist = NULL;
+
+  for ( int i = 0; i < num_curves; i++ ){
+    curves[i] = _curves[i];
+    curves[i]->incref();
+  }
+}
+
+/*
+  Free the curves
+*/
+TMRCurveLofter::~TMRCurveLofter(){
+  for ( int i = 0; i < num_curves; i++ ){
+    curves[i]->decref();
+  }
+  delete [] curves;
+
+  if (consist){
+    for ( int i = 0; i < num_curves; i++ ){
+      consist[i]->decref();
+    }
+    delete [] consist;
+  }
+}
+
+/*
+  Create the lofted surface
+*/
+TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
+  // Tuncate the kv value to the permissible range
+  if (kv < 2){ kv = 2; }
+  if (kv > MAX_BSPLINE_ORDER){ kv = MAX_BSPLINE_ORDER; }
+
+  // Allocate data to store the indices and  
+  int *index = new int[ num_curves ];
+  int *ptr = new int[ num_curves ];
+  int *curve_mult = new int[ num_curves ];
+
+  // Retrieve the underlying data from the curves
+  int max_size = 0;
+  for ( int i = 0; i < num_curves; i++ ){
+    int nu, ku;
+    curves[i]->getData(&nu, &ku, NULL, NULL, NULL);
+    ptr[i] = 0;
+    max_size += nu+ku;
+  }
+
+  // Set the values for the candidate smallest knot vector
+  int count = 0; // Number of knots on the "stack"
+  double tmin = 0.0;
+  int max_mult = 0;
+  
+  // Compute the initial curve multiplicities
+  for ( int i = 0; i < num_curves; i++ ){
+    int k = ptr[i];
+    int nu, ku;
+    const double *curve_Tu;
+    curves[i]->getData(&nu, &ku, &curve_Tu, NULL, NULL);
+    while (k < (nu+ku) && 
+           curve_Tu[ptr[i]] == curve_Tu[k]){
+      k++;
+    }
+
+    // Record the knot multiplicity
+    curve_mult[i] = k;
+
+    if (i == 0){
+      tmin = curve_Tu[0];
+      max_mult = curve_mult[i];
+      index[0] = 0;
+      count = 1;
+    }
+  }
+
+  // Allocate the maximum possible size for the knot vector
+  int len = 0;
+  double *Tu = new double[ max_size ];
+
+  // Find a unified knot vector across all input curves
+  int done = 0;
+  while (!done){
+    // Loop over all curves, finding the min knot value and its
+    // maximum multiplicity across all curves
+    for ( int i = 0; i < num_curves; i++ ){
+      // Skip the first entry - we've already add this guy..
+      if (i == index[0]){
+        continue;
+      }
+
+      // Extract the info for this curve
+      int nu, ku;
+      const double *curve_Tu;
+      curves[i]->getData(&nu, &ku, &curve_Tu, NULL, NULL);
+
+      if (ptr[i] < nu+ku){
+        if (curve_Tu[ptr[i]] == tmin){
+          // Check if we need to update the max multiplicity
+          if (max_mult < curve_mult[i]){
+            max_mult = curve_mult[i];
+          }
+          index[count] = i;
+          count++;
+        }
+        else if (curve_Tu[ptr[i]] < tmin){
+          tmin = curve_Tu[ptr[i]];
+          max_mult = curve_mult[i];
+          index[0] = i;
+          count = 1;
+        }
+      }
+    }
+
+    // Add the pointer to the unified knot vector
+    for ( int i = 0; i < max_mult; i++, len++ ){
+      Tu[len] = tmin;
+    }
+
+    // Update the pointers/curve multiplicities
+    for ( int j = 0; j < count; j++ ){
+      int i = index[j];
+      ptr[i] += curve_mult[i];
+
+      // Extract the knot information
+      int nu, ku;
+      const double *curve_Tu;
+      curves[i]->getData(&nu, &ku, &curve_Tu, NULL, NULL);
+
+      // Find the multiplicity of the new knot
+      int k = ptr[i];
+      while (k < nu+ku &&
+             curve_Tu[ptr[i]] == curve_Tu[k]){
+        k++;
+      }
+
+      // Record the curve multiplicity
+      curve_mult[i] = k - ptr[i];
+    }
+
+    // Check if we're all done or not
+    done = 1;
+    for ( int i = 0; i < num_curves; i++ ){
+      // Extract the knot information
+      int nu, ku;
+      const double *curve_Tu;
+      curves[i]->getData(&nu, &ku, &curve_Tu, NULL, NULL);
+
+      if (ptr[i] < nu+ku){
+        // Reset the data for the next candidate smallest knot value
+        tmin = curve_Tu[ptr[i]];
+        max_mult = curve_mult[i];
+        index[0] = i;
+        count = 1;
+
+        // We're not done yet...
+        done = 0;
+        break;
+      }
+    }
+  }
+
+  // Free the data that is no longer required
+  delete [] ptr;
+  delete [] index;
+  delete [] curve_mult;
+
+  // Now, traverse each curve, and match the difference between the
+  // unified knot vector and its derivative
+  double *Tnew = new double[ len ];
+  consist = new TMRBsplineCurve*[ num_curves ];
+
+  // Loop over all of the curves, determining the knots which need
+  // to be added to make it consistent with the unifed Tu knot vector
+  for ( int i = 0; i < num_curves; i++ ){
+    int nu, ku;
+    const double *curve_Tu;
+    curves[i]->getData(&nu, &ku, &curve_Tu, NULL, NULL);
+
+    // Keep track of the number of new knots required for each curve
+    int nnew = 0;
+    for ( int j = 0, k = 0; j < len; j++ ){
+      if (Tu[j] == curve_Tu[k]){
+        k++;
+      }
+      else {
+        Tnew[nnew] = Tu[j];
+        nnew++;
+      }
+    }
+
+    // Refine the knot vector for each curve to make it consistent
+    consist[i] = curves[i]->refineKnots(Tnew, nnew);
+    consist[i]->incref();
+  }
+
+  // Keep track of the maximum value of kv - this must be consistent
+  // with the number of specified curves
+  int nv = num_curves;
+  if (kv > num_curves){ kv = num_curves; }
+
+  // Create a knot vector for the v-direction
+  double *Tv = new double[ nv+kv ];
+  bspline_knots(nv, kv, 0.0, 1.0, Tv);
+
+  // Check whether any of the curves have the rational part
+  int is_nurbs = 0;
+  for ( int i = 0; i < num_curves; i++ ){
+    const double *curve_wts;
+    consist[i]->getData(NULL, NULL, NULL, &curve_wts, NULL);
+    if (curve_wts){
+      is_nurbs = 1;
+      break;
+    }
+  }
+
+  // Create a TMRPoint array containing all of the poitns
+  int ku = 4;
+  int nu = len-ku;
+  TMRPoint *pts = new TMRPoint[ nu*nv ];
+  double *wts = NULL;
+  if (is_nurbs){
+    wts = new double[ nu*nv ];
+  }
+
+  // Get the order of the curve
+  consist[0]->getData(NULL, &ku, NULL, NULL, NULL);
+
+  // Go through and extract the points
+  for ( int j = 0; j < num_curves; j++ ){
+    const double *curve_wts;
+    const TMRPoint *curve_pts;
+    consist[j]->getData(NULL, NULL, NULL, &curve_wts, &curve_pts);
+
+    // Copy over the weights - if any
+    if (wts){
+      if (curve_wts){
+        for ( int i = 0; i < nu; i++ ){
+          wts[j*nu + i] = curve_wts[i];
+        }
+      }
+      else {
+        for ( int i = 0; i < nu; i++ ){
+          wts[j*nu + i] = 1.0;
+        }
+      }
+    }
+
+    // Copy over the points
+    for ( int i = 0; i < nu; i++ ){
+      pts[j*nu + i] = curve_pts[i];
+    }
+  }
+
+  // Create the surface
+  TMRBsplineSurface *surf = NULL;
+  if (wts){
+    surf = new TMRBsplineSurface(nu, nv, ku, kv, Tu, Tv, wts, pts);
+  }
+  else {
+    surf = new TMRBsplineSurface(nu, nv, ku, kv, Tu, Tv, pts);
+  }
+
+  // Free the data that is no longer required
+  delete [] Tu;
+  delete [] Tv;
+  delete [] Tnew;
+  delete [] pts;
+  if (wts){ delete [] wts; }
+
+  return surf;
 }

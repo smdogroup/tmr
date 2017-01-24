@@ -317,7 +317,7 @@ void TMROctForest::freeData(){
   if (nodes){ delete nodes; }
   if (dep_faces){ delete dep_faces; }
   if (dep_edges){ delete dep_edges; }
-  if (X){ delete X; }
+  if (X){ delete [] X; }
 
   if (node_range){ delete [] node_range; }
   if (dep_ptr){ delete [] dep_ptr; }
@@ -1520,6 +1520,7 @@ void TMROctForest::refine( const int refinement[],
   node numbers 
 
   This transforms the given octant to the coordinate system of the
+  lowest octant touching this node if it is on an octree boundary.
 
   input/output:
   oct:  the octant representing a node in the local coordinate system
@@ -1830,9 +1831,6 @@ TMROctantArray *TMROctForest::distributeOctants( TMROctantArray *list,
 
 /*
   Send the octants to the processors designated by the pointer arrays
-
-  This is
-
 */
 TMROctantArray *TMROctForest::sendOctants( TMROctantArray *list,
                                            const int *oct_ptr,
@@ -3128,7 +3126,8 @@ void TMROctForest::computeDepFacesAndEdges(){
         }
       }
 
-      // Determine which edges the octant touches if any edge
+      // Enumerate the sibling-ids for each edge. Along each edge
+      // there are two siblings that touch the edge. 
       //
       //       /----7----/
       //      3|        2|
@@ -3141,6 +3140,7 @@ void TMROctForest::computeDepFacesAndEdges(){
       //                 /
       //        y ------/ 
 
+      // Edge->sibling id data...
       const int edge_ids[][2] =
         {{0, 1}, {2, 3}, {4, 5}, {6, 7},
          {0, 2}, {1, 3}, {4, 6}, {5, 7},

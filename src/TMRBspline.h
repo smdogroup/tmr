@@ -4,6 +4,25 @@
 #include "TMRGeometry.h"
 
 /*
+  Defines a general transformation: projection/translation/rotation
+  for a B-spline object.
+*/
+class TMRBsplineTransform : public TMREntity {
+ public:
+  TMRBsplineTransform();
+  ~TMRBsplineTransform();
+
+  // Apply the transformation
+  void applyTransform( TMRPoint *in, double *win,
+                       TMRPoint *out, double *wout,
+                       int npts );
+
+ private:
+  // Transformation coefficients
+  double C[16]; 
+};
+
+/*
   This file contains the TMRBsplineCurve and TMRBsplineSurface
   classes that define B-spline and NURBS curves/surfaces for 
   simple geometries. 
@@ -118,7 +137,7 @@ class TMRBsplineSurface : public TMRSurface {
 */
 class TMRCurveInterpolation : public TMREntity {
  public:
-  TMRCurveInterpolation( TMRPoint *interp, int ninterp );
+  TMRCurveInterpolation( const TMRPoint *interp, int ninterp );
   ~TMRCurveInterpolation();
   
   // Set the number of control points (must be < ninterp)
@@ -148,16 +167,17 @@ class TMRCurveInterpolation : public TMREntity {
 */
 class TMRCurveLofter : public TMREntity {
  public:
-  TMRCurveLofter( TMRCurve *_curves, int _num_curves );
+  TMRCurveLofter( TMRBsplineCurve **_curves, int _num_curves );
   ~TMRCurveLofter();
 
   // Create the surface interpolation
-  TMRBsplineSurface *createSurface( int kv );
+  TMRBsplineSurface* createSurface( int kv );
 
  private:
   // The curves used for surface lofting
   int num_curves;
-  TMRCurve **curves;
+  TMRBsplineCurve **curves;
+  TMRBsplineCurve **consist;
 };
 
 #endif // TMR_BSPLINE_H

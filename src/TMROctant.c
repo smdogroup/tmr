@@ -48,15 +48,22 @@ void TMROctant::parent( TMROctant *p ){
     p->y = y & ~h;
     p->z = z & ~h;
   }
+  else {
+    p->block = block;
+    p->level = 0;
+    p->x = x;
+    p->y = y;
+    p->z = z;
+  }
 }
 
 /*
   Get the face neighbour
 */
 void TMROctant::faceNeighbor( int face, TMROctant *neighbor ){
+  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->block = block;
   neighbor->level = level;
-  const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
   neighbor->x = x + ((face == 0) ? -h : (face == 1) ? h : 0);
   neighbor->y = y + ((face == 2) ? -h : (face == 3) ? h : 0);

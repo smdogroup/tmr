@@ -22,6 +22,7 @@ void TMRQuadrant::getSibling( int id, TMRQuadrant *sib ){
   int32_t xr = ((x & h) ? x-h : x);
   int32_t yr = ((y & h) ? y-h : y);
 
+  sib->face = face;
   sib->level = level;
   sib->x = ((id & 1) ? xr+h : xr);
   sib->y = ((id & 2) ? yr+h : yr);
@@ -32,6 +33,7 @@ void TMRQuadrant::getSibling( int id, TMRQuadrant *sib ){
 */
 void TMRQuadrant::parent( TMRQuadrant *p ){
   if (level > 0){
+    p->face = face;
     p->level = level-1;
     const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
@@ -39,6 +41,7 @@ void TMRQuadrant::parent( TMRQuadrant *p ){
     p->y = y & ~h;
   }
   else {
+    p->face = face;
     p->level = 0;
     p->x = x;
     p->y = y;
@@ -49,8 +52,9 @@ void TMRQuadrant::parent( TMRQuadrant *p ){
   Get the edge neighbour
 */
 void TMRQuadrant::edgeNeighbor( int edge, TMRQuadrant *neighbor ){
-  neighbor->level = level;
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
+  neighbor->face = face;
+  neighbor->level = level;
 
   neighbor->x = x + ((edge == 0) ? -h : (edge == 1) ? h : 0);
   neighbor->y = y + ((edge == 2) ? -h : (edge == 3) ? h : 0);
@@ -61,6 +65,7 @@ void TMRQuadrant::edgeNeighbor( int edge, TMRQuadrant *neighbor ){
 */
 void TMRQuadrant::cornerNeighbor( int corner, TMRQuadrant *neighbor ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
+  neighbor->face = face;
   neighbor->level = level;
 
   neighbor->x = x + (2*(corner & 1) - 1)*h;
@@ -75,6 +80,10 @@ void TMRQuadrant::cornerNeighbor( int corner, TMRQuadrant *neighbor ){
   that the quadrants will be sorted by location then level.
 */
 int TMRQuadrant::compare( const TMRQuadrant *quadrant ) const {
+  if (face != quadrant->face){
+    return face - quadrant->face;
+  }
+
   uint32_t xxor = x ^ quadrant->x;
   uint32_t yxor = y ^ quadrant->y;
   uint32_t sor = xxor | yxor;
@@ -107,6 +116,10 @@ int TMRQuadrant::compare( const TMRQuadrant *quadrant ) const {
   encoding, but may be at different levels.
 */
 int TMRQuadrant::compareEncoding( const TMRQuadrant *quadrant ) const {
+  if (face != quadrant->face){
+    return face - quadrant->face;
+  }
+
   uint32_t xxor = x ^ quadrant->x;
   uint32_t yxor = y ^ quadrant->y;
   uint32_t sor = xxor | yxor;
@@ -139,7 +152,8 @@ int TMRQuadrant::contains( TMRQuadrant *quad ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
   // Check whether the quadrant lies within this quadrant
-  if ((quad->x >= x && quad->x < x + h) &&
+  if ((quad->face == face) && 
+      (quad->x >= x && quad->x < x + h) &&
       (quad->y >= y && quad->y < y + h)){
     return 1;
   }

@@ -5,12 +5,21 @@
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
 */
 
-#include "TMRQuadtree.h"
+#include "TMRQuadrant.h"
+#include "BVecInterp.h"
 
 /*
   A parallel forest of quadtrees
-*/
 
+  This class defines a parallel forest of quadrtrees. The connectivity
+  between quadtrees is defined at a global level. The quadrants can
+  easily be redistributed across processors using the repartition()
+  call.
+
+  The duplicate() and coarsen() calls can be used to create a nested
+  sequence of meshes that can be used in conjunction with multigrid
+  methods.
+*/
 class TMRQuadForest {
  public:
   TMRQuadForest( MPI_Comm _comm );
@@ -24,8 +33,12 @@ class TMRQuadForest {
   // --------------------
   void setConnectivity( int _num_nodes,
                         const int *_face_conn,
-                        int _num_faces,
-                        int partition=0 );
+                        int _num_faces );
+  void setFullConnectivity( int _num_nodes, 
+                            int _num_edges,
+                            int _num_faces, 
+                            const int *_face_conn,
+                            const int *_face_edge_conn );
 
   // Re-partition the quadtrees based on element count
   // -------------------------------------------------
@@ -34,9 +47,13 @@ class TMRQuadForest {
   // Create the forest of quadtrees
   // ----------------------------
   void createTrees( int refine_level );
-  void createTrees( int refine_levels[] );
   void createRandomTrees( int nrand=10, 
                           int min_level=0, int max_level=8 );
+
+  // Refine the mesh
+  // ---------------
+  void refine( const int refinement[],
+               int min_level, int max_level );
 
   // Duplicate or coarsen the forest
   // -------------------------------
@@ -62,17 +79,16 @@ class TMRQuadForest {
 
   // Create interpolation/restriction operators
   // ------------------------------------------
-  void createInterpolation( TMRQuadForest *coarse, 
-                            int **_interp_ptr, int **_interp_conn,
-                            double **_interp_weights );
+  void createInterpolation( TMRQuadForest *coarse,
+                            TACSBVecInterp *interp );
 
-  // Get the array of quadtrees - careful, many are NULL
-  // -------------------------------------------------
-  int getQuadtrees( TMRQuadtree ***_trees );
+  // Get the external node numbers
+  // -----------------------------
+  int getExtNodeNums( int **_extNodes );
   
-  // Get mesh/ownership information - short cut to the non-NULL quadtrees
-  // ------------------------------------------------------------------
-  int getOwnedQuadtrees( const int **_owned_faces );
+  // Get the mesh order
+  // ------------------
+  int getMeshOrder(){ return mesh_order; }
 
   // Get the node-processor ownership range
   // --------------------------------------
@@ -80,6 +96,18 @@ class TMRQuadForest {
     if (_node_range){
       *_node_range = node_range;
     }
+  }
+
+  // Get the quadrants and the nodes
+  // -----------------------------
+  void getQuadrants( TMRQuadrantArray **_quadrants ){
+    if (_quadrants){ *_quadrants = quadrants; }
+  }
+  void getNodes( TMRQuadrantArray **_nodes ){
+    if (_nodes){ *_nodes = nodes; }
+  }
+  void getPoints( TMRPoint **_X ){
+    if (_X){ *_X = X; }
   }
 
   // Retrieve the connectivity information
@@ -92,84 +120,106 @@ class TMRQuadForest {
                                const int **_edge_face_conn,
                                const int **_edge_face_ptr );
 
+  // Transform the quadrant to the global order
+  // ------------------------------------------
+  void transformNode( TMRQuadrant *quad );
+
  private:
-  // Compute the partition using METIS
-  // ---------------------------------
-  void computePartition( int part_size, int *vwgts, int *part );
+  // Free the internally stored data and zero things
+  void freeData();
+  
+  // Duplicate data
+  void copyData( TMRQuadForest *copy );
+
+  // Set up the connectivity from nodes -> faces
+  void computeNodesToFaces();
+
+  // Set up the edge connectivity
+  void computeEdgesFromNodes();
+  void computeEdgesToFaces();
+
+  // Compute the faces that own the edges and nodes
+  void computeFaceOwners();
+
+  // Get the quadrant owner
+  int getQuadrantMPIOwner( TMRQuadrant *quad );
+
+  // match the ownership intervals
+  void matchQuadrantIntervals( TMRQuadrant *array,
+                               int size, int *ptr );
+  void matchMPIIntervals( TMRQuadrant *array,
+                          int size, int *ptr );
+
+  // Distribute the quadrant array
+  TMRQuadrantArray *distributeQuadrants( TMRQuadrantArray *list,
+                                         int use_tags=0,
+                                         int **quad_ptr=NULL, 
+                                         int **quad_recv_ptr=NULL );
+  TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
+                                   const int *quad_ptr,
+                                   const int *quad_recv_ptr );
 
   // Balance-related routines
   // ------------------------
   // Balance the quadrant across the local tree and the forest
-  void balanceQuadrant( int face, TMRQuadrant *quad,
-                        TMRQuadrantHash **hash, 
-                        TMRQuadrantQueue **queue,
+  void balanceQuadrant( TMRQuadrant *quad,
+                        TMRQuadrantHash *hash, TMRQuadrantHash *ext_hash,
+                        TMRQuadrantQueue *queue,
                         const int balance_corner,
                         const int balance_tree );
 
   // Add adjacent quadrants to the hashes/queues for balancing
-  void addEdgeNeighbors( int face, int edge_index, 
+  void addEdgeNeighbors( int edge_index, 
                          TMRQuadrant p,
-                         TMRQuadrantHash **hash,
-                         TMRQuadrantQueue **queue );
-  void addCornerNeighbors( int face, int corner, 
+                         TMRQuadrantHash *hash,
+                         TMRQuadrantHash *ext_hash,
+                         TMRQuadrantQueue *queue );
+  void addCornerNeighbors( int corner, 
                            TMRQuadrant p,
-                           TMRQuadrantHash **hash,
-                           TMRQuadrantQueue **queue );
+                           TMRQuadrantHash *hash,
+                           TMRQuadrantHash *ext_hash,
+                           TMRQuadrantQueue *queue );
 
   // Nodal ordering routines
   // -----------------------
   // Add quadrants to adjacent non-owner processor queues
-  void addCornerQuadrantToQueues( const int node, 
-                                  const int mpi_rank, 
-                                  TMRQuadrant *q,
-                                  TMRQuadrantQueue **queues );
-  void addEdgeQuadrantToQueues( const int edge, 
-                                const int mpi_rank, 
-                                TMRQuadrant *q,
-                                TMRQuadrantQueue **queues );
+  void addAdjacentEdgeToQueue( int edge_index,
+                               TMRQuadrant p,
+                               TMRQuadrantQueue *queue, 
+                               TMRQuadrant orig );
+  void addAdjacentCornerToQueue( int corner,
+                                 TMRQuadrant p,
+                                 TMRQuadrantQueue *queue, 
+                                 TMRQuadrant orig );
 
   // Exchange non-local quadrant neighbors
-  void recvQuadNeighbors();
-    
-  // Label the dependent nodes on the locally owned faces
-  void labelDependentNodes();
-  int checkAdjacentDepEdges( int edge, int edge_index,
-                             int face_owner, TMRQuadrant *b );
+  void computeAdjacentQuadrants();
+
+  // Find the dependent faces and edges in the mesh
   void computeDepEdges();
-
-  // Get the owner flags
-  void getOwnerFlags( int face,
-                      const int *edge_face_owners,
-                      const int *node_face_owners,
-                      int *is_edge_owner, int *is_node_owner );
-
-  // Order the global nodes
-  void orderGlobalNodes( const int *edge_face_owners,
-                         const int *node_face_owners );
-
-  // Send the ordered nodes back to their owners
-  void sendNodeNeighbors( const int *edge_face_owners,
-                          const int *node_face_owners );
-
-  // Copy the nodes numbers from one face to an adjacent face
-  void copyCornerNodes( int node, int node_index,
-                        int face_owner, TMRQuadrant *p );
-  void copyEdgeNodes( int edge, int edge_index,
-                      int face_owner, TMRQuadrant *p );
-  void copyAdjacentNodes( const int *edge_face_owners,
-                          const int *node_face_owners );
+  int checkAdjacentDepEdges( int edge_index, TMRQuadrant *b,
+                             TMRQuadrantArray *adjquads );
+  
+  // Label the dependent nodes on the locally owned blocks
+  void labelDependentNodes();
 
   // Create the dependent node connectivity
   void createDepNodeConn( int **_ptr, int **_conn,
                           double **_weights );
 
-  // Add the nodal weighting values to an interpolant
-  void addNodeWeights( TMRQuadrant *t, double w,
-                       const int *cdep_ptr, const int *cdep_conn,
-                       const double *cdep_weights,
-                       TMRIndexWeight *weights, int *nweights );
+  // Find the quadrant 
+  TMRQuadrant* findEnclosing( TMRQuadrant *node );
+
+  // Compute the interpolation weights
+  int computeInterpWeights( const int order,
+                            const int32_t u, const int32_t h,
+                            double Nu[] );
   // The communicator
   MPI_Comm comm;
+  int mpi_rank, mpi_size;
+
+  // The owner ranges
+  TMRQuadrant *owners;
 
   // The following data is the same across all processors
   // ----------------------------------------------------
@@ -181,14 +231,24 @@ class TMRQuadForest {
   int *node_face_ptr, *node_face_conn;
   int *edge_face_ptr, *edge_face_conn;
 
+  // Set the node/edge owners
+  int *node_face_owners, *edge_face_owners;
+
   // Information about the mesh
   int mesh_order;
 
   // Set the range of nodes owned by each processor
   int *node_range;
 
-  // The mpi rank of the face owners
-  int *mpi_face_owners;
+  // The array of all quadrants
+  TMRQuadrantArray *quadrants;
+  
+  // The quadrants that are adjacent to this processor
+  TMRQuadrantArray *adjacent;
+
+  // The array of all the nodes
+  TMRQuadrantArray *nodes;
+  TMRPoint *X;
 
   // The following data is processor-local
   // -------------------------------------
@@ -198,15 +258,8 @@ class TMRQuadForest {
   int *dep_ptr, *dep_conn;
   double *dep_weights;
 
-  // Keep a pointer to the forest of quadtrees
-  TMRQuadtree **quadtrees;
-
-  // Pointers to the dependent faces/edges
-  TMRQuadrantArray **dep_edges;
-
-  // A short cut to the owned faces
-  int num_owned_faces;
-  int *owned_faces;
+  // Pointers to the dependent edges
+  TMRQuadrantArray *dep_edges;
 };
 
 #endif // TMR_QUADTREE_FOREST_H
