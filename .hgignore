@@ -41,3 +41,4 @@ extern/
 *.avi
 *.mcr
 *.zip
+*.vtk
