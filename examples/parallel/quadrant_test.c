@@ -49,8 +49,11 @@ void getLocation( const int *cn,
                   const double *x,
                   const TMRQuadrant *quad, TacsScalar X[] ){
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
-  double u = (1.0*quad->x)/hmax;
-  double v = (1.0*quad->y)/hmax;
+  double u = 0.0, v = 0.0;
+  if (quad->x == hmax-1){ u = 1.0; }
+  else { u = 1.0*quad->x/hmax; }
+  if (quad->y == hmax-1){ v = 1.0; }
+  else { v = 1.0*quad->y/hmax; }
 
   double N[4];
   N[0] = (1.0 - u)*(1.0 - v);
@@ -159,7 +162,8 @@ int main( int argc, char *argv[] ){
   forest[0] = new TMRQuadForest(comm);
   
   forest[0]->setConnectivity(npts, conn, nfaces);
-  forest[0]->createRandomTrees(50, 0, 10);
+  forest[0]->createRandomTrees(250, 5, 15);
+  // forest[0]->createTrees(6);
   forest[0]->repartition();
 
   for ( int level = 0; level < 3; level++ ){

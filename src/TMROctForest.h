@@ -170,7 +170,8 @@ class TMROctForest : public TMREntity {
   TMROctantArray *distributeOctants( TMROctantArray *list,
                                      int use_tags=0,
                                      int **oct_ptr=NULL, 
-                                     int **oct_recv_ptr=NULL );
+                                     int **oct_recv_ptr=NULL,
+                                     int include_local=0 );
   TMROctantArray *sendOctants( TMROctantArray *list,
                                const int *oct_ptr,
                                const int *oct_recv_ptr );

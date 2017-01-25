@@ -1764,7 +1764,8 @@ void TMROctForest::matchMPIIntervals( TMROctant *array,
 TMROctantArray *TMROctForest::distributeOctants( TMROctantArray *list,
                                                  int use_tags,
                                                  int **_oct_ptr, 
-                                                 int **_oct_recv_ptr ){
+                                                 int **_oct_recv_ptr,
+                                                 int include_local ){
   // Get the array itself
   int size;
   TMROctant *array;
@@ -1787,11 +1788,11 @@ TMROctantArray *TMROctForest::distributeOctants( TMROctantArray *list,
   // Count up the number of octants
   int *oct_counts = new int[ mpi_size ];
   for ( int i = 0; i < mpi_size; i++ ){
-    if (i != mpi_rank){
-      oct_counts[i] = oct_ptr[i+1] - oct_ptr[i];
+    if (!include_local && i == mpi_rank){
+      oct_counts[i] = 0;
     }
     else {
-      oct_counts[i] = 0;
+      oct_counts[i] = oct_ptr[i+1] - oct_ptr[i];
     }
   }
 
@@ -1869,6 +1870,14 @@ TMROctantArray *TMROctForest::sendOctants( TMROctantArray *list,
       MPI_Isend(&array[oct_ptr[i]], count, TMROctant_MPI_type, 
                 i, 0, comm, &send_request[j]);
       j++;
+    }
+    else if (i == mpi_rank){
+      int count = oct_recv_ptr[i+1] - oct_recv_ptr[i];
+      if (count > 0 &&
+          (count == oct_ptr[i+1] - oct_ptr[i])){
+        memcpy(&recv_array[oct_recv_ptr[i]], 
+               &array[oct_ptr[i]], count*sizeof(TMROctant));
+      }
     }
   }
 
@@ -2490,7 +2499,7 @@ void TMROctForest::balance( int balance_corner ){
 }
 
 /*
-  Add the quadrant to the processor queues corresponding to the
+  Add the octant to the processor queues corresponding to the
   non-local blocks that touch the given face
 */
 void TMROctForest::addAdjacentFaceToQueue( int face_index, 
@@ -4125,8 +4134,8 @@ int TMROctForest::computeInterpWeights( const int order,
   }
   else if (order == 2){
     double ud = 1.0*u/h;
-    Nu[0] = 1.0 - u;
-    Nu[1] = u;
+    Nu[0] = 1.0 - ud;
+    Nu[1] = ud;
     return 2;
   }
   else {
@@ -4181,8 +4190,12 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   // Copy the locally owned nodes to the allocated array
   TMROctantArray *local = new TMROctantArray(local_array, local_size);
 
-  // Distribute the octants to the owners
-  TMROctantArray *fine_nodes = coarse->distributeOctants(local);
+  // Distribute the octants to the owners - include the local octants
+  // in the new array since everything has to be interpolated
+  int use_tags = 0; // Use the octant ownership to distribute (not the tags)
+  int include_local = 1; // Include the locally owned octants
+  TMROctantArray *fine_nodes = 
+    coarse->distributeOctants(local, use_tags, NULL, NULL, include_local);
   delete local;
 
   // Get the number of locally owned nodes on this processor

@@ -154,7 +154,8 @@ class TMRQuadForest {
   TMRQuadrantArray *distributeQuadrants( TMRQuadrantArray *list,
                                          int use_tags=0,
                                          int **quad_ptr=NULL, 
-                                         int **quad_recv_ptr=NULL );
+                                         int **quad_recv_ptr=NULL,
+                                         int include_local=0 );
   TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
                                    const int *quad_ptr,
                                    const int *quad_recv_ptr );

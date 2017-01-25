@@ -866,7 +866,7 @@ TMRQuadForest *TMRQuadForest::coarsen(){
     quadrants->getArray(&array, &size);
 
     // Set the offset to be 2**d-1
-    int offset = (1 << 3) - 1;
+    int offset = (1 << 2) - 1;
 
     // Create a new queue of quadrants
     TMRQuadrantQueue *queue = new TMRQuadrantQueue();
@@ -1199,7 +1199,8 @@ void TMRQuadForest::matchMPIIntervals( TMRQuadrant *array,
 TMRQuadrantArray *TMRQuadForest::distributeQuadrants( TMRQuadrantArray *list,
                                                       int use_tags,
                                                       int **_quad_ptr, 
-                                                      int **_quad_recv_ptr ){
+                                                      int **_quad_recv_ptr,
+                                                      int include_local ){
   // Get the array itself
   int size;
   TMRQuadrant *array;
@@ -1222,11 +1223,11 @@ TMRQuadrantArray *TMRQuadForest::distributeQuadrants( TMRQuadrantArray *list,
   // Count up the number of quadrants
   int *quad_counts = new int[ mpi_size ];
   for ( int i = 0; i < mpi_size; i++ ){
-    if (i != mpi_rank){
-      quad_counts[i] = quad_ptr[i+1] - quad_ptr[i];
+    if (!include_local && i == mpi_rank){
+      quad_counts[i] = 0;
     }
     else {
-      quad_counts[i] = 0;
+      quad_counts[i] = quad_ptr[i+1] - quad_ptr[i];
     }
   }
 
@@ -1304,6 +1305,14 @@ TMRQuadrantArray *TMRQuadForest::sendQuadrants( TMRQuadrantArray *list,
       MPI_Isend(&array[quad_ptr[i]], count, TMRQuadrant_MPI_type, 
                 i, 0, comm, &send_request[j]);
       j++;
+    }
+    else if (i == mpi_rank){
+      int count = quad_recv_ptr[i+1] - quad_recv_ptr[i];
+      if (count > 0 &&
+          (count == quad_ptr[i+1] - quad_ptr[i])){
+        memcpy(&recv_array[quad_recv_ptr[i]], 
+               &array[quad_ptr[i]], count*sizeof(TMRQuadrant));
+      }
     }
   }
 
@@ -2810,8 +2819,8 @@ int TMRQuadForest::computeInterpWeights( const int order,
   }
   else if (order == 2){
     double ud = 1.0*u/h;
-    Nu[0] = 1.0 - u;
-    Nu[1] = u;
+    Nu[0] = 1.0 - ud;
+    Nu[1] = ud;
     return 2;
   }
   else {
@@ -2866,8 +2875,13 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   // Copy the locally owned nodes to the allocated array
   TMRQuadrantArray *local = new TMRQuadrantArray(local_array, local_size);
 
-  // Distribute the quadrants to the owners
-  TMRQuadrantArray *fine_nodes = coarse->distributeQuadrants(local);
+  // Distribute the quadrants to the owners - include the local
+  // quadrants in the new array since everything has to be
+  // interpolated
+  int use_tags = 0; // Use the quadrant ownership to distribute (not the tags)
+  int include_local = 1; // Include the locally owned quadrants
+  TMRQuadrantArray *fine_nodes = 
+    coarse->distributeQuadrants(local, use_tags, NULL, NULL, include_local);
   delete local;
 
   // Get the number of locally owned nodes on this processor
