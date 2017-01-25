@@ -23,7 +23,7 @@ void TMRInitialize(){
   MPI_Type_commit(&TMROctant_MPI_type);
 
   // Create the TMRQudrant data type
-  counts = 4;
+  counts = 5;
   MPI_Type_struct(1, &counts, &offset, &type, 
                   &TMRQuadrant_MPI_type);
   MPI_Type_commit(&TMRQuadrant_MPI_type);

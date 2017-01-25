@@ -1083,6 +1083,7 @@ void TMROctForest::createTrees( int refine_level ){
           array[count].x = x;
           array[count].y = y;
           array[count].z = z;
+          count++;
         }
       }
     }
