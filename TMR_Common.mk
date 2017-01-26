@@ -10,7 +10,7 @@ TMR_CC_FLAGS = ${TMR_FLAGS} ${TMR_INCLUDE} ${METIS_INCLUDE} ${TACS_OPT_CC_FLAGS}
 TMR_DEBUG_CC_FLAGS = ${TMR_DEBUG_FLAGS} ${TMR_INCLUDE} ${METIS_INCLUDE} ${TACS_DEBUG_CC_FLAGS}
 
 # Set the compiler flags
-TMR_LD_FLAGS = -L${TMR_DIR}/lib/ -Wl,-rpath,${TMR_DIR}/lib -ltmr ${METIS_LIB} ${TACS_LD_FLAGS}
+TMR_LD_FLAGS = ${TMR_LD_CMD} ${METIS_LIB} ${TACS_LD_FLAGS}
 
 # This is the one rule that is used to compile all the source
 %.o: %.c

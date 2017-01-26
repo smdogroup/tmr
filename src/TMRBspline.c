@@ -1,5 +1,6 @@
 #include "TMRBspline.h"
 #include <math.h>
+#include <stdio.h>
 #include "tmrlapack.h"
 
 // The maximum order for the spline

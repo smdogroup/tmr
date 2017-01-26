@@ -18,21 +18,21 @@ void TMRInitialize(){
 
   // Create the TMROctant data type
   int counts = 6;
-  MPI_Type_struct(1, &counts, &offset, &type, 
-                  &TMROctant_MPI_type);
+  MPI_Type_create_struct(1, &counts, &offset, &type, 
+			 &TMROctant_MPI_type);
   MPI_Type_commit(&TMROctant_MPI_type);
 
   // Create the TMRQudrant data type
   counts = 5;
-  MPI_Type_struct(1, &counts, &offset, &type, 
-                  &TMRQuadrant_MPI_type);
+  MPI_Type_create_struct(1, &counts, &offset, &type, 
+			 &TMRQuadrant_MPI_type);
   MPI_Type_commit(&TMRQuadrant_MPI_type);
 
   // Create the TMRPoint data type
   counts = 3;
   type = MPI_DOUBLE;
-  MPI_Type_struct(1, &counts, &offset, &type, 
-                  &TMRPoint_MPI_type);
+  MPI_Type_create_struct(1, &counts, &offset, &type, 
+			 &TMRPoint_MPI_type);
   MPI_Type_commit(&TMRPoint_MPI_type);
 }
 

@@ -852,12 +852,12 @@ int TMR_GenerateBinFile( const char *filename,
   int counts = 3;
   MPI_Datatype type = MPI_DOUBLE;
   MPI_Aint offset = 0;
-  MPI_Type_struct(1, &counts, &offset, &type, 
-                  &MPI_Point_type);
+  MPI_Type_create_struct(1, &counts, &offset, &type, 
+			 &MPI_Point_type);
   MPI_Type_commit(&MPI_Point_type);
 
-  MPI_Type_struct(1, &counts, &offset, &MPI_Point_type, 
-                  &MPI_Triangle_type);
+  MPI_Type_create_struct(1, &counts, &offset, &MPI_Point_type, 
+			 &MPI_Triangle_type);
   MPI_Type_commit(&MPI_Triangle_type);
 
   // Now, write out the triangles
