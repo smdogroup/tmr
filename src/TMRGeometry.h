@@ -14,10 +14,6 @@
   external geometry engine.
 */
 
-// Declare all of the geometry base classes
-class TMRCurve;
-class TMRSurface;
-
 /*
   The vertex class: Note that this is used to store both the
   point and to represent the underlying geometry
@@ -29,14 +25,6 @@ class TMRVertex : public TMREntity {
 
   // Evalue the point
   virtual int evalPoint( TMRPoint *p ) = 0;
-
- private:
-  // The topology information associated
-  class CurveList {
-  public:
-    TMRCurve *curve;
-    CurveList *next;
-  } *curves;
 };
 
 /*
@@ -64,7 +52,6 @@ class TMRCurve : public TMREntity {
   // --------------------------------------
   void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
   void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
-  int addAdjSurface( TMRSurface *_surf );
 
   // Integrate along the edge and return an array containing
   // the parametric locations to provide an even spacing
@@ -77,13 +64,6 @@ class TMRCurve : public TMREntity {
 
   // The start/end vertices of the curve
   TMRVertex *v1, *v2;
-  
-  // The list of adjacent surfaces referencing this curve
-  class SurfaceList {
-  public:
-    TMRSurface *surf;
-    SurfaceList *next;
-  } *faces;
 };
 
 /*
@@ -108,12 +88,6 @@ class TMRSurface : public TMREntity {
  private:
   // Set the step size
   static double deriv_step_size;
-
-  // The curves adjacent to this surface
-  class CurveList {
-    TMRCurve *curve;
-    CurveList *next;
-  } *curves;
 };
 
 /*

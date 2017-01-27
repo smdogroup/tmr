@@ -75,15 +75,15 @@ class TMRIndexWeight {
     for ( int i = 0; i < size; i++, j++ ){
       // Copy over the newest weight/index data
       if (i != j){
-	array[j] = array[i];
+        array[j] = array[i];
       }
       
       // While the index is the same as the next, keep
       // adding the weight
       while ((i < size-1) && 
-	     (array[i].index == array[i+1].index)){
-	array[j].weight += array[i+1].weight;
-	i++;
+             (array[i].index == array[i+1].index)){
+        array[j].weight += array[i+1].weight;
+        i++;
       }
     }
     
@@ -127,6 +127,7 @@ class TMREntity {
   static double eps_cosine;
 
  private:
+  // Total reference count for this object
   int ref_count;
 };
 

@@ -13,11 +13,6 @@
   multi-block mesh.
 */
 
-// Declarations of the topology information
-class TMREdge;
-class TMRFace;
-class TMRBlock;
-
 /*
   Topological curve entity between two vertices
 
@@ -26,20 +21,26 @@ class TMRBlock;
 */
 class TMREdge : public TMREntity {
  public:
-  TMREdge( TMRCurve *_curve );
-  TMREdge( TMRCurve *_curve, TMRVertex *_v1, TMRVertex *_v2 );
+  TMREdge( MPI_Comm _comm, TMRCurve *_curve,
+           TMRVertex *_v1, TMRVertex *_v2 );
   ~TMREdge();
 
+  // Get the underlying curve associated with this edge
+  void getCurve( TMRCurve **_curve );
+
+  // Retrieve the vertices at the beginning/end of the curve
+  void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
+
  private:
+  // Record the communicator
+  MPI_Comm comm;
+
+  // The edge identifier - the combination of the edge
+  // identifier and the communicator are unique
+  int edge_id; 
+  
   // The underlying curve associated with this edge
   TMRCurve *curve;
-
-  // The list of faces that refer to this edge
-  class FaceList {
-  public:
-    TMRFace *surf;
-    FaceList *next;
-  } *faces;
 };
 
 /*
@@ -68,33 +69,25 @@ class TMREdge : public TMREntity {
 */
 class TMRFace : public TMREntity {
  public:
-  TMRFace( TMRSurface *_surface, TMREdge *_edges[] );
+  TMRFace( MPI_Comm comm, TMRSurface *_surface,
+           TMREdge *_edges[], int _edge_dir[] );
   ~TMRFace();
 
+  // Get the four edges that bound this face
+  void getEdges( TMREdge ***edges, const int **_edge_dir );
+
  private:
+  // The communicator
+  MPI_Comm comm;
+
+  // The face identifier -- unique identifier for the
+  // face
+  int face_id;
+
   // Pointers to the edges bounding this face
   TMRSurface *surface;
   TMREdge *edges[4];
-
-  // The list of faces that refer to this edge
-  class BlockList {
-  public:
-    TMRBlock *block;
-    BlockList *next;
-  } *blocks;
-};
-
-/*
-  Topological volume entity bounded by six faces.
-*/
-class TMRBlock : public TMREntity {
- public:
-  TMRBlock( TMRFace *_faces[] );
-  ~TMRBlock();
-
- private:
-  // Pointers to the faces bounding the volume
-  TMRFace *faces[6];
+  int edge_dir[4];
 };
 
 /*
@@ -103,26 +96,22 @@ class TMRBlock : public TMREntity {
 */
 class TMRTopology : public TMREntity {
  public:
-  TMRTopology( MPI_Comm _comm );
+  TMRTopology( MPI_Comm _comm,
+               TMRFace **_faces, int num_faces );
   ~TMRTopology();
-
-  // Set the geometric entities into the object
-  void setNodes( TMRVertex **_nodes, int num_nodes );
-  void setEdges( TMREdge **_edges, int num_edges );
-  void setFaces( TMRFace **_faces, int num_faces );
-
-  void buildConnectivity();
-
+  
   // Retrieve the face/edge/node information
-  void getNode( int node_num, TMRVertex **node );
-  void getEdge( int edge_num, TMREdge **edge, int *node1, int *node2 );
   void getFace( int face_num, TMRFace **face );
 
   void getConnectivity( int *nnodes, int *nedges, int *nfaces,
                         const int **face_nodes, const int **edge_nodes );
 
  private:
+  // The communicator associated 
   MPI_Comm comm;
+
+  // Build the underlying connectivity for the mesh topology
+  void buildConnectivity();
 
   // The face information
   int num_faces;

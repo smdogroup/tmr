@@ -7,7 +7,6 @@
 TMRCurve::TMRCurve(){
   v1 = NULL;
   v2 = NULL;
-  faces = NULL;
 }
 
 /*
@@ -16,7 +15,6 @@ TMRCurve::TMRCurve(){
 TMRCurve::TMRCurve( TMRVertex *_v1, TMRVertex *_v2 ){
   v1 = _v1;  v1->incref(); 
   v2 = _v2;  v2->incref();
-  faces = NULL;
 }
 
 /*
@@ -25,14 +23,6 @@ TMRCurve::TMRCurve( TMRVertex *_v1, TMRVertex *_v2 ){
 TMRCurve::~TMRCurve(){
   if (v1){ v1->decref(); }
   if (v2){ v2->decref(); }
-
-  TMRCurve::SurfaceList *node = faces;
-  while (node){
-    TMRCurve::SurfaceList *tmp = node;
-    node = node->next;
-    tmp->surf->decref();
-    delete tmp;
-  }
 }
 
 /*
@@ -110,43 +100,6 @@ void TMRCurve::setVertices( TMRVertex *_v1, TMRVertex *_v2 ){
 void TMRCurve::getVertices( TMRVertex **_v1, TMRVertex **_v2 ){
   if (_v1){ *_v1 = v1; }
   if (_v2){ *_v2 = v2; }
-}
-
-/*
-  Check if the edge
-*/
-int TMRCurve::addAdjSurface( TMRSurface *_surf ){
-  if (faces){
-    TMRCurve::SurfaceList *ptr = faces;
-
-    if (ptr->surf != _surf){
-      // Scan through the list to see if the pointer to this
-      // edge is already stored here
-      while (ptr->next){
-        ptr = ptr->next;
-        if (ptr->surf == _surf){
-          return 0;
-        }
-      }
-
-      // Add the adjacent candidate
-      ptr->next = new TMRCurve::SurfaceList;
-      ptr = ptr->next;
-      _surf->incref();
-      ptr->surf = _surf;
-      ptr->next = NULL;
-      return 1;
-    }
-  }
-  else {
-    faces = new TMRCurve::SurfaceList;
-      _surf->incref();
-    faces->surf = _surf;
-    faces->next = NULL;
-    return 1;
-  }
-
-  return 0;
 }
 
 /*

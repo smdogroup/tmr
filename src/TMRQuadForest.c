@@ -201,7 +201,9 @@ void TMRQuadForest::copyData( TMRQuadForest *copy ){
 
   // Copy over the topology object
   copy->topo = topo;
-  copy->topo->incref();
+  if (copy->topo){
+    copy->topo->incref();
+  }
 }
 
 /*
