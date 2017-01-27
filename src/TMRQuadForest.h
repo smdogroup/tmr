@@ -5,6 +5,7 @@
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
 */
 
+#include "TMRTopology.h"
 #include "TMRQuadrant.h"
 #include "BVecInterp.h"
 
@@ -20,7 +21,7 @@
   sequence of meshes that can be used in conjunction with multigrid
   methods.
 */
-class TMRQuadForest {
+class TMRQuadForest : public TMREntity {
  public:
   TMRQuadForest( MPI_Comm _comm );
   ~TMRQuadForest();
@@ -29,8 +30,12 @@ class TMRQuadForest {
   // ------------------------
   MPI_Comm getMPIComm(){ return comm; }
 
-  // Set the connectivity
-  // --------------------
+  // Set the topology (and determine the connectivity)
+  // -------------------------------------------------
+  void setTopology( TMRTopology *_topo );
+
+  // Set the connectivity directly
+  // -----------------------------
   void setConnectivity( int _num_nodes,
                         const int *_face_conn,
                         int _num_faces );
@@ -261,6 +266,9 @@ class TMRQuadForest {
 
   // Pointers to the dependent edges
   TMRQuadrantArray *dep_edges;
+
+  // The topology of the underlying model (if any)
+  TMRTopology *topo;
 };
 
 #endif // TMR_QUADTREE_FOREST_H

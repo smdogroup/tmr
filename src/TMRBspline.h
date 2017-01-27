@@ -4,25 +4,6 @@
 #include "TMRGeometry.h"
 
 /*
-  Defines a general transformation: projection/translation/rotation
-  for a B-spline object.
-*/
-class TMRBsplineTransform : public TMREntity {
- public:
-  TMRBsplineTransform();
-  ~TMRBsplineTransform();
-
-  // Apply the transformation
-  void applyTransform( TMRPoint *in, double *win,
-                       TMRPoint *out, double *wout,
-                       int npts );
-
- private:
-  // Transformation coefficients
-  double C[16]; 
-};
-
-/*
   This file contains the TMRBsplineCurve and TMRBsplineSurface
   classes that define B-spline and NURBS curves/surfaces for 
   simple geometries. 

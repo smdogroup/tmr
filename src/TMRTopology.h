@@ -106,15 +106,35 @@ class TMRTopology : public TMREntity {
   TMRTopology( MPI_Comm _comm );
   ~TMRTopology();
 
-  void addBlock( TMRBlock *block );
-  void buildTopology();
+  // Set the geometric entities into the object
+  void setNodes( TMRVertex **_nodes, int num_nodes );
+  void setEdges( TMREdge **_edges, int num_edges );
+  void setFaces( TMRFace **_faces, int num_faces );
+
+  void buildConnectivity();
+
+  // Retrieve the face/edge/node information
+  void getNode( int node_num, TMRVertex **node );
+  void getEdge( int edge_num, TMREdge **edge, int *node1, int *node2 );
+  void getFace( int face_num, TMRFace **face );
+
+  void getConnectivity( int *nnodes, int *nedges, int *nfaces,
+                        const int **face_nodes, const int **edge_nodes );
 
  private:
   MPI_Comm comm;
 
-  // Set the block connectivity
-  int num_blocks;
-  TMRBlock *blocks;
+  // The face information
+  int num_faces;
+  TMRFace **faces;
+
+  // The edge information
+  int num_edges;
+  TMREdge **edges;
+
+  // The node information
+  int num_nodes;
+  TMRVertex **nodes;
 };
 
 #endif // TMR_TOPOLOGY_H

@@ -42,6 +42,9 @@ TMRQuadForest::TMRQuadForest( MPI_Comm _comm ){
   MPI_Comm_rank(comm, &mpi_rank);
   MPI_Comm_size(comm, &mpi_size);
 
+  // Set the topology object to NULL
+  topo = NULL;
+
   // Set the range of nodes
   node_range = NULL;
 
@@ -115,6 +118,9 @@ void TMRQuadForest::freeData(){
   if (dep_ptr){ delete [] dep_ptr; }
   if (dep_conn){ delete [] dep_conn; }
   if (dep_weights){ delete [] dep_weights; }
+
+  // Free the topology object associated with this mesh (if any)
+  if (topo){ topo->decref(); }
 
   // Set the range of nodes
   node_range = NULL;
@@ -192,6 +198,37 @@ void TMRQuadForest::copyData( TMRQuadForest *copy ){
          num_edges*sizeof(int));
   memcpy(copy->node_face_owners, node_face_owners,
          num_nodes*sizeof(int));
+
+  // Copy over the topology object
+  copy->topo = topo;
+  copy->topo->incref();
+}
+
+/*
+  Set the mesh topology - this has the effect of resetting the
+  data and altering the topology of the mesh.
+*/
+void TMRQuadForest::setTopology( TMRTopology *_topo ){
+  if (_topo){
+    // Incref the topology object
+    _topo->incref();
+    
+    // Free the data
+    freeData();
+
+    // Set the topology object
+    topo = _topo;
+
+    // Compute the topology and set it internally
+    int _num_faces, _num_edges, _num_nodes;
+    const int *_face_conn, *_face_edge_conn;
+    topo->getConnectivity(&_num_nodes, &_num_edges, &_num_faces,
+                          &_face_conn, &_face_edge_conn);
+
+    // Set the full connectivity
+    setFullConnectivity(_num_nodes, _num_edges, _num_faces,
+                        _face_conn, _face_edge_conn);
+  }
 }
 
 /*
