@@ -55,6 +55,9 @@ class TMRTriangulation {
   int *tris;         // triangle vertices
   int *trineighbors; // Triangle neighbors
 
+  // Number of corners in the mesh
+  int ncorners;
+
   // Edges in the triangle mesh
   int nedges;       // number of edges
   int *edges;       // edges->vertices, 2*nedges

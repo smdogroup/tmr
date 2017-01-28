@@ -47,7 +47,7 @@ int main( int argc, char *argv[] ){
   const int segmarks[] =
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   
-  double area = 0.5*0.25*0.25;
+  double area = 0.45*0.25*0.25;
 
   int nholes = 0;
   double *holes = NULL;
@@ -69,6 +69,17 @@ int main( int argc, char *argv[] ){
   // Refine the areas
   printf("Refine\n");
   tri->refine(areas);
+  delete [] areas;
+
+  // Get the number of triangles
+  tri->getTriangulation(&ntris, NULL);
+  
+  areas = new double[ ntris ];
+  for ( int i = 0; i < ntris; i++ ){
+    areas[i] = area;
+  }
+  tri->refine(areas);
+  delete [] areas;
   tri->writeToVTK("triangle.vtk");
   
   TMRFinalize();

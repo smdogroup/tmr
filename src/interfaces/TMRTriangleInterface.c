@@ -39,6 +39,9 @@ TMRTriangulation::TMRTriangulation( int _npts,
   tris = NULL;
   trineighbors = NULL;
   
+  // Zero the number of corners in the mesh
+  ncorners = 0;
+
   // Set the edges in the triangle mesh
   nedges = 0;
   edges = NULL;
@@ -161,6 +164,9 @@ void TMRTriangulation::create(){
   out.pointmarkerlist = NULL;
   out.trianglelist = NULL;
   out.triangleattributelist = NULL;
+  out.neighborlist = NULL;
+  out.edgelist = NULL;
+  out.edgemarkerlist = NULL;
   out.segmentlist = NULL;
   out.segmentmarkerlist = NULL;
 
@@ -171,7 +177,7 @@ void TMRTriangulation::create(){
   vorout.normlist = NULL;
 
   // Perform an initial trianguarlization of the points
-  char opts[] = "pczvn";
+  char opts[] = "pczevn";
   triangulate(opts, &in, &out, &vorout);
 
   // Copy out things that have been created
@@ -181,6 +187,7 @@ void TMRTriangulation::create(){
   segments = out.segmentlist;
   segmarkers = out.segmentmarkerlist;
   ntris = out.numberoftriangles;
+  ncorners = out.numberofcorners;
   tris = out.trianglelist;
   trineighbors = out.neighborlist;
   edges = out.edgelist;
@@ -196,8 +203,7 @@ void TMRTriangulation::create(){
   free(in.regionlist);
   free(in.segmentlist);
   free(in.segmentmarkerlist);
-  free(out.triangleattributelist);
-  free(out.trianglearealist);
+  // free(out.triangleattributelist);
   free(vorout.pointlist);
   free(vorout.pointattributelist);
   free(vorout.normlist);
@@ -219,28 +225,14 @@ void TMRTriangulation::refine( const double areas[] ){
 
   // Set the triangles
   in.numberoftriangles = ntris;
+  in.numberofcorners = ncorners;
+  in.numberoftriangleattributes = 0;
   in.triangleattributelist = NULL;
   in.neighborlist = trineighbors;
   in.trianglelist = tris;
   in.trianglearealist = (double*)malloc(ntris*sizeof(double));
   memcpy(in.trianglearealist, areas, ntris*sizeof(double));
 
-  for ( int i = 0; i < 3*ntris; i++ ){
-    if (i > 0 && i % 3 == 0){
-      printf("\n");
-    }
-    printf("%d ", tris[i]);
-  }
-  printf("\nnpts = %d\n", npts);
-  printf("ntris = %d\n", ntris);
-
-  for ( int i = 0; i < 3*ntris; i++ ){
-    if (i > 0 && i % 3 == 0){
-      printf("\n");
-    }
-    printf("%d ", trineighbors[i]);
-  }
-  
   // The number of segments
   in.numberofsegments = nsegments;
   in.segmentlist = segments;
@@ -269,6 +261,8 @@ void TMRTriangulation::refine( const double areas[] ){
   out.pointmarkerlist = NULL;
   out.trianglelist = NULL;
   out.triangleattributelist = NULL;
+  out.edgelist = NULL;
+  out.edgemarkerlist = NULL;
   out.segmentlist = NULL;
   out.segmentmarkerlist = NULL;
 
@@ -306,8 +300,6 @@ void TMRTriangulation::refine( const double areas[] ){
   free(in.regionlist);
   free(in.segmentlist);
   free(in.segmentmarkerlist);
-  free(out.triangleattributelist);
-  free(out.trianglearealist);
   free(vorout.pointlist);
   free(vorout.pointattributelist);
   free(vorout.normlist);
