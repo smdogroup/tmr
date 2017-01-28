@@ -31,6 +31,10 @@ SO_LINK_FLAGS=-fPIC -shared
 # SO_EXT=so
 # SO_LINK_FLAGS=-fPIC -dynamiclib -single_module -undefined dynamic_lookup -multiply_defined suppress
 
+# Triangle include/linking information
+TRIANGLE_INCLUDE=-I${TMR_DIR}/extern/triangle
+TRIANGLE_LIB=${TMR_DIR}/extern/triangle/triangle.o
+
 # METIS is handy for partitioning graphs...
 METIS_INCLUDE = -I${HOME}/hg/tacs/extern/metis/include
 METIS_LIB = ${HOME}/hg/tacs/extern/metis/lib/libmetis.a
