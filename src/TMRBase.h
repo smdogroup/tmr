@@ -10,6 +10,9 @@
 #include <string.h>
 #include "mpi.h"
 
+#define TMR_EXTERN_C_BEGIN extern "C" {
+#define TMR_EXTERN_C_END }
+
 /*
   The following constants define the maximum octant depth and maximum
   element order within the code.

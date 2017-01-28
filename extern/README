@@ -1,1 +1,28 @@
-This directory contains the external dependencies required for TMR: Triangle
+This directory contains the external dependencies required for TMR
+
+There are two dependencies:
+
+1. Triangle: A code for creating planar triangularizations
+----------------------------------------------------------
+
+Triangle can be downloaded here:
+
+https://www.cs.cmu.edu/~quake/triangle.html
+
+Follow the standard installation. Call make trilibrary.
+
+For Linux installation, default options can be used. For MAC OSX,
+you should delete the -DLINUX option from the makefile.
+
+2. Blossom IV algorithm
+-----------------------
+
+http://www.math.uwaterloo.ca/~bico/blossom4/
+
+Two things are required
+
+1. The concorde library. This can be obtained at the web address above.
+I rename this under blossom/concorde. After calling make, the library
+generates a file blossom/concorde/concorde.h
+
+2. I put the actual matching code under blossom/MATCH.

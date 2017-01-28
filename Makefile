@@ -1,7 +1,8 @@
 include Makefile.in
 include TMR_Common.mk
 
-TMR_SUBDIRS = src
+TMR_SUBDIRS = src \
+	src/interfaces
 TMR_OBJS := $(addsuffix /*.o, ${TMR_SUBDIRS})
 
 default:

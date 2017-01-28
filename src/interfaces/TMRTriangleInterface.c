@@ -1,142 +1,349 @@
 #include "TMRTriangleInterface.h"
+#include <stdio.h>
 
 // Always use the double precision version of the code
 #define REAL double
+#define VOID void
+#define ANSI_DECLARATORS
 
-// extern "C" {
+TMR_EXTERN_C_BEGIN
 #include "triangle.h"
-// }
+TMR_EXTERN_C_END
 
 /*
-  This is fake - just print out an error and return an error code
+  The triangulation class
 */
-void TMR_TriangulateSegments( double *pts, int npts ){
-  in.numberofpoints = 4;
-  in.numberofpointattributes = 1;
-  in.pointlist = (REAL *) malloc(in.numberofpoints * 2 * sizeof(REAL));
-  in.pointlist[0] = 0.0;
-  in.pointlist[1] = 0.0;
-  in.pointlist[2] = 1.0;
-  in.pointlist[3] = 0.0;
-  in.pointlist[4] = 1.0;
-  in.pointlist[5] = 10.0;
-  in.pointlist[6] = 0.0;
-  in.pointlist[7] = 10.0;
-  in.pointattributelist = (REAL *) malloc(in.numberofpoints *
-                                          in.numberofpointattributes *
-                                          sizeof(REAL));
-  in.pointattributelist[0] = 0.0;
-  in.pointattributelist[1] = 1.0;
-  in.pointattributelist[2] = 11.0;
-  in.pointattributelist[3] = 10.0;
-  in.pointmarkerlist = (int *) malloc(in.numberofpoints * sizeof(int));
-  in.pointmarkerlist[0] = 0;
-  in.pointmarkerlist[1] = 2;
-  in.pointmarkerlist[2] = 0;
-  in.pointmarkerlist[3] = 0;
+TMRTriangulation::TMRTriangulation( int _npts,
+                                    const double *_pts,
+                                    const int *_ptmarkers ){
+  npts = _npts;
+  pts = (double*)malloc(2*npts*sizeof(double));
+  memcpy(pts, _pts, 2*npts*sizeof(double));
+  ptmarkers = NULL;
+  if (_ptmarkers){
+    ptmarkers = (int*)malloc(npts*sizeof(int));
+    memcpy(ptmarkers, _ptmarkers, npts*sizeof(int));
+  }
 
-  in.numberofsegments = 0;
-  in.numberofholes = 0;
+  // Set defaults for everything else
+  nsegments = 0;
+  segments = NULL;
+  segmarkers = NULL;
+
+  // Zero the holes
+  nholes = 0;
+  holes = NULL;
+
+  // Triangles/output
+  ntris = 0;
+  tris = NULL;
+  trineighbors = NULL;
+  
+  // Set the edges in the triangle mesh
+  nedges = 0;
+  edges = NULL;
+  edgemarkers = NULL;
+  
+  // The dual edges (from the Voronoi diagram)
+  dualedges = NULL;
+}
+
+/*
+  Free any allocated memory and delete the object
+*/
+TMRTriangulation::~TMRTriangulation(){
+  if (pts){ free(pts); }
+  if (segments){ free(segments); }
+  if (segmarkers){ free(segmarkers); }
+  if (holes){ free(holes); }
+  if (tris){ free(tris); }
+  if (trineighbors){ free(trineighbors); }
+  if (edges){ free(edges); }
+  if (edgemarkers){ free(edgemarkers); }
+  if (dualedges){ free(dualedges); }
+}
+
+/*
+  Set the segments within the domain. 
+
+  A segment is an impenetrable line within the x-y plane
+  that can be used to create boundaries/holes within the mesh.
+  Markers can be set so that the edges generated along the
+  segments inherit the marker value.
+*/
+void TMRTriangulation::setSegments( int _nsegments,
+                                    const int *_segments,
+                                    const int *_segmarkers ){
+  nsegments = _nsegments;
+  segments = (int*)malloc(2*nsegments*sizeof(int));
+  memcpy(segments, _segments, 2*nsegments*sizeof(int));
+
+  if (_segmarkers){
+    segmarkers = (int*)malloc(nsegments*sizeof(int));
+    memcpy(segmarkers, _segmarkers, nsegments*sizeof(int));
+  }
+}
+
+/*
+  Set points within a hole to indicate the presence of a hole
+  within the domain
+*/
+void TMRTriangulation::setHoles( int _nholes,
+                                 const double *_holes ){
+  nholes = _nholes;
+  holes = (double*)malloc(2*nholes*sizeof(double));;
+  memcpy(holes, _holes, 2*nholes*sizeof(double));
+}
+
+/*
+  Get the triangulation
+*/
+void TMRTriangulation::getTriangulation( int *_ntris,
+                                         const int **_tris ){
+  if (_ntris){ *_ntris = ntris; }
+  if (_tris){ *_tris = tris; }
+}
+
+/*
+  Get the edges
+*/
+void TMRTriangulation::getEdges( int *_nedges,
+                                 const int **_edges ){
+  if (_nedges){ *_nedges = nedges; }
+  if (_edges){ *_edges = edges; }
+}
+
+/*
+  Get the dual of the edges
+*/
+void TMRTriangulation::getDualEdges( int *_nedges,
+                                     const int **edgetotris ){
+  if (_nedges){ *_nedges = nedges; }
+  if (edgetotris){ *edgetotris = dualedges; }
+}
+
+/*
+  Triangulate the points within the mesh
+
+  This call does not modify the points/markers
+*/
+void TMRTriangulation::create(){
+  // Set up the Triangle data for input/output
+  struct triangulateio in, out, vorout;
+
+  // Set the points for input
+  in.numberofpoints = npts;
+  in.numberofpointattributes = 0;
+  in.pointlist = pts;
+  in.pointattributelist = NULL;
+  in.pointmarkerlist = ptmarkers;
+    
+  // The number of segments
+  in.numberofsegments = nsegments;
+  in.segmentlist = segments;
+  in.segmentmarkerlist = segmarkers;
+  
+  // Copy over the holes if any
+  in.numberofholes = nholes;
+  in.holelist = holes;
+
+  // Set the regions
   in.numberofregions = 1;
-  in.regionlist = (REAL *) malloc(in.numberofregions * 4 * sizeof(REAL));
-  in.regionlist[0] = 0.5;
-  in.regionlist[1] = 5.0;
-  in.regionlist[2] = 7.0;            /* Regional attribute (for whole mesh). */
-  in.regionlist[3] = 0.1;          /* Area constraint that will not be used. */
+  in.regionlist = (double*)malloc(4*sizeof(double));
+  in.regionlist[0] = 0.0;
+  in.regionlist[1] = 0.0;
+  in.regionlist[2] = 1.0; // Regional attribute for the whole mesh
+  in.regionlist[3] = 1.0; // Area constraint - unused
 
-  printf("Input point set:\n\n");
-  report(&in, 1, 0, 0, 0, 0, 0);
+  // Set output data that will be created
+  out.pointlist = NULL;
+  out.pointattributelist = NULL;
+  out.pointmarkerlist = NULL;
+  out.trianglelist = NULL;
+  out.triangleattributelist = NULL;
+  out.segmentlist = NULL;
+  out.segmentmarkerlist = NULL;
 
-  /* Make necessary initializations so that Triangle can return a */
-  /*   triangulation in `mid' and a voronoi diagram in `vorout'.  */
+  // NULL out things for the voronoi output
+  vorout.pointlist = NULL;
+  vorout.pointattributelist = NULL;
+  vorout.edgelist = NULL;
+  vorout.normlist = NULL;
 
-  mid.pointlist = (REAL *) NULL;            /* Not needed if -N switch used. */
-  /* Not needed if -N switch used or number of point attributes is zero: */
-  mid.pointattributelist = (REAL *) NULL;
-  mid.pointmarkerlist = (int *) NULL; /* Not needed if -N or -B switch used. */
-  mid.trianglelist = (int *) NULL;          /* Not needed if -E switch used. */
-  /* Not needed if -E switch used or number of triangle attributes is zero: */
-  mid.triangleattributelist = (REAL *) NULL;
-  mid.neighborlist = (int *) NULL;         /* Needed only if -n switch used. */
-  /* Needed only if segments are output (-p or -c) and -P not used: */
-  mid.segmentlist = (int *) NULL;
-  /* Needed only if segments are output (-p or -c) and -P and -B not used: */
-  mid.segmentmarkerlist = (int *) NULL;
-  mid.edgelist = (int *) NULL;             /* Needed only if -e switch used. */
-  mid.edgemarkerlist = (int *) NULL;   /* Needed if -e used and -B not used. */
+  // Perform an initial trianguarlization of the points
+  char opts[] = "pczvn";
+  triangulate(opts, &in, &out, &vorout);
 
-  vorout.pointlist = (REAL *) NULL;        /* Needed only if -v switch used. */
-  /* Needed only if -v switch used and number of attributes is not zero: */
-  vorout.pointattributelist = (REAL *) NULL;
-  vorout.edgelist = (int *) NULL;          /* Needed only if -v switch used. */
-  vorout.normlist = (REAL *) NULL;         /* Needed only if -v switch used. */
+  // Copy out things that have been created
+  npts = out.numberofpoints;
+  pts = out.pointlist;
+  nsegments = out.numberofsegments;
+  segments = out.segmentlist;
+  segmarkers = out.segmentmarkerlist;
+  ntris = out.numberoftriangles;
+  tris = out.trianglelist;
+  trineighbors = out.neighborlist;
+  edges = out.edgelist;
+  edgemarkers = out.edgemarkerlist;
 
-  /* Triangulate the points.  Switches are chosen to read and write a  */
-  /*   PSLG (p), preserve the convex hull (c), number everything from  */
-  /*   zero (z), assign a regional attribute to each element (A), and  */
-  /*   produce an edge list (e), a Voronoi diagram (v), and a triangle */
-  /*   neighbor list (n).                                              */
+  // Record the vorout data
+  dualedges = vorout.edgelist;
 
-  triangulate("pczAevn", &in, &mid, &vorout);
-
-  printf("Initial triangulation:\n\n");
-  report(&mid, 1, 1, 1, 1, 1, 0);
-  printf("Initial Voronoi diagram:\n\n");
-  report(&vorout, 0, 0, 0, 0, 1, 1);
-
-  /* Attach area constraints to the triangles in preparation for */
-  /*   refining the triangulation.                               */
-
-  /* Needed only if -r and -a switches used: */
-  mid.trianglearealist = (REAL *) malloc(mid.numberoftriangles * sizeof(REAL));
-  mid.trianglearealist[0] = 3.0;
-  mid.trianglearealist[1] = 1.0;
-
-  /* Make necessary initializations so that Triangle can return a */
-  /*   triangulation in `out'.                                    */
-
-  out.pointlist = (REAL *) NULL;            /* Not needed if -N switch used. */
-  /* Not needed if -N switch used or number of attributes is zero: */
-  out.pointattributelist = (REAL *) NULL;
-  out.trianglelist = (int *) NULL;          /* Not needed if -E switch used. */
-  /* Not needed if -E switch used or number of triangle attributes is zero: */
-  out.triangleattributelist = (REAL *) NULL;
-
-  /* Refine the triangulation according to the attached */
-  /*   triangle area constraints.                       */
-
-  triangulate("prazBP", &mid, &out, (struct triangulateio *) NULL);
-
-  printf("Refined triangulation:\n\n");
-  report(&out, 0, 1, 0, 0, 0, 0);
-
-  /* Free all allocated arrays, including those allocated by Triangle. */
-
+  // Free all of the remaining data
   free(in.pointlist);
   free(in.pointattributelist);
   free(in.pointmarkerlist);
   free(in.regionlist);
-  free(mid.pointlist);
-  free(mid.pointattributelist);
-  free(mid.pointmarkerlist);
-  free(mid.trianglelist);
-  free(mid.triangleattributelist);
-  free(mid.trianglearealist);
-  free(mid.neighborlist);
-  free(mid.segmentlist);
-  free(mid.segmentmarkerlist);
-  free(mid.edgelist);
-  free(mid.edgemarkerlist);
+  free(in.segmentlist);
+  free(in.segmentmarkerlist);
+  free(out.triangleattributelist);
+  free(out.trianglearealist);
   free(vorout.pointlist);
   free(vorout.pointattributelist);
-  free(vorout.edgelist);
   free(vorout.normlist);
-  free(out.pointlist);
-  free(out.pointattributelist);
-  free(out.trianglelist);
-  free(out.triangleattributelist);
-
-  return 0;                     
 }
 
-#endif // TMR_USE_TRIANGLE
+/*
+  Refine the mesh
+*/
+void TMRTriangulation::refine( const double areas[] ){
+  // Set up the Triangle data for input/output
+  struct triangulateio in, out, vorout;
+
+    // Set the points for input
+  in.numberofpoints = npts;
+  in.numberofpointattributes = 0;
+  in.pointlist = pts;
+  in.pointattributelist = NULL;
+  in.pointmarkerlist = ptmarkers;
+
+  // Set the triangles
+  in.numberoftriangles = ntris;
+  in.triangleattributelist = NULL;
+  in.neighborlist = trineighbors;
+  in.trianglelist = tris;
+  in.trianglearealist = (double*)malloc(ntris*sizeof(double));
+  memcpy(in.trianglearealist, areas, ntris*sizeof(double));
+
+  for ( int i = 0; i < 3*ntris; i++ ){
+    if (i > 0 && i % 3 == 0){
+      printf("\n");
+    }
+    printf("%d ", tris[i]);
+  }
+  printf("\nnpts = %d\n", npts);
+  printf("ntris = %d\n", ntris);
+
+  for ( int i = 0; i < 3*ntris; i++ ){
+    if (i > 0 && i % 3 == 0){
+      printf("\n");
+    }
+    printf("%d ", trineighbors[i]);
+  }
+  
+  // The number of segments
+  in.numberofsegments = nsegments;
+  in.segmentlist = segments;
+  in.segmentmarkerlist = segmarkers;
+  
+  // Copy over the holes if any
+  in.numberofholes = nholes;
+  in.holelist = holes;
+
+  // Set the regions
+  in.numberofregions = 1;
+  in.regionlist = (double*)malloc(4*sizeof(double));
+  in.regionlist[0] = 0.0;
+  in.regionlist[1] = 0.0;
+  in.regionlist[2] = 1.0; // Regional attribute for the whole mesh
+  in.regionlist[3] = 1.0; // Area constraint - unused
+
+  // Set the edges
+  in.numberofedges = nedges;
+  in.edgelist = edges;
+  in.edgemarkerlist = edgemarkers;
+  
+  // Set output data that will be created
+  out.pointlist = NULL;
+  out.pointattributelist = NULL;
+  out.pointmarkerlist = NULL;
+  out.trianglelist = NULL;
+  out.triangleattributelist = NULL;
+  out.segmentlist = NULL;
+  out.segmentmarkerlist = NULL;
+
+  // NULL out things for the voronoi output
+  vorout.pointlist = NULL;
+  vorout.pointattributelist = NULL;
+  vorout.edgelist = NULL;
+  vorout.normlist = NULL;
+
+  // Perform an initial trianguarlization of the points
+  char opts[] = "prazevYY";
+  triangulate(opts, &in, &out, &vorout);
+
+  // Copy out things that have been created
+  npts = out.numberofpoints;
+  pts = out.pointlist;
+  nsegments = out.numberofsegments;
+  segments = out.segmentlist;
+  segmarkers = out.segmentmarkerlist;
+  ntris = out.numberoftriangles;
+  tris = out.trianglelist;
+  trineighbors = out.neighborlist;
+  edges = out.edgelist;
+  edgemarkers = out.edgemarkerlist;
+
+  // Record the vorout data
+  dualedges = vorout.edgelist;
+
+  // Free all of the remaining data
+  free(in.trianglelist);
+  free(in.trianglearealist);
+  free(in.pointlist);
+  free(in.pointattributelist);
+  free(in.pointmarkerlist);
+  free(in.regionlist);
+  free(in.segmentlist);
+  free(in.segmentmarkerlist);
+  free(out.triangleattributelist);
+  free(out.trianglearealist);
+  free(vorout.pointlist);
+  free(vorout.pointattributelist);
+  free(vorout.normlist);
+}
+
+/*
+  Write the output to a VTK file
+*/
+void TMRTriangulation::writeToVTK( const char *filename ){
+  FILE *fp = fopen(filename, "w");
+  fprintf(fp, "# vtk DataFile Version 3.0\n");
+  fprintf(fp, "vtk output\nASCII\n");
+  fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+    
+  // Write out the points
+  fprintf(fp, "POINTS %d float\n", npts);
+  for ( int k = 0; k < npts; k++ ){
+    fprintf(fp, "%e %e %e\n", pts[2*k], pts[2*k+1], 0.0);
+  }
+  
+  // Write out the cell values
+  fprintf(fp, "\nCELLS %d %d\n",ntris, 4*ntris);
+  for ( int k = 0; k < ntris; k++ ){
+    fprintf(fp, "3 ");
+    for ( int j = 0; j < 3; j++ ){
+      int node = tris[3*k+j];
+      fprintf(fp, "%d ", node);
+    }
+    fprintf(fp, "\n");
+  }
+
+  // All quadrilaterals
+  fprintf(fp, "\nCELL_TYPES %d\n", ntris);
+  for ( int k = 0; k < ntris; k++ ){
+    fprintf(fp, "%d\n", 5);
+  }
+
+  fclose(fp);
+}
