@@ -50,6 +50,9 @@ void TMRFinalize(){
   Set the attribute/name associate with this object
 */
 void TMREntity::setAttribute( const char *_attr ){
+  if (attr){
+    delete [] attr;
+  }
   if (_attr){
     attr = new char[ strlen(_attr)+1 ];
     strcpy(attr, _attr);

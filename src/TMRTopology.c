@@ -216,6 +216,19 @@ void TMRTopology::getSurface( int face_num, TMRSurface **face ){
   }
 }
 
+/*
+  Retrieve the curve object associated with the given face/edge index
+*/
+void TMRTopology::getFaceCurve( int face_num, int edge_index, TMRCurve **curve ){
+  *curve = NULL;
+  if (faces && (face_num >= 0 && face_num < num_faces)){
+    TMREdge **edges;
+    faces[face_num]->getEdges(&edges, NULL);
+    if (edge_index >= 0 && edge_index < 4){
+      edges[edge_index]->getCurve(curve);
+    }
+  }
+}
 
 /*
   Retrieve the connectivity information

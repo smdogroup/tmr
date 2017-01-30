@@ -1804,6 +1804,12 @@ void TMRQuadForest::balance( int balance_corner ){
   quadrants = hash->toArray();
   quadrants->sort();
 
+  // Get the quadrants and order their labels
+  quadrants->getArray(&array, &size);
+  for ( int i = 0; i < size; i++ ){
+    array[i].tag = i;
+  }
+
   // Free the hash
   delete hash;
 }
@@ -2505,6 +2511,153 @@ void TMRQuadForest::createNodes( int order ){
       }
     }
   }
+}
+
+/*
+  Get the elements that either lie on a face or curve with a given attribute
+*/
+TMRQuadrantArray* TMRQuadForest::getElementsWithAttr( const char *attr ){
+  if (!topo){
+    return NULL;
+  }
+
+  // Create a queue to store the elements that we find
+  TMRQuadrantQueue *queue = new TMRQuadrantQueue();
+
+  // Get the quadrants
+  int size;
+  TMRQuadrant *array;
+  quadrants->getArray(&array, &size);
+
+  // Loop over the quadrants and find out whether it touches
+  // a face or edge with the prescribed attribute
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  for ( int i = 0; i < size; i++ ){
+    const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+
+    // Get the surface quadrant
+    TMRSurface *surf;
+    topo->getSurface(array[i].face, &surf);  
+    const char *face_attr = surf->getAttribute();
+    if (face_attr && strcmp(face_attr, attr) == 0){
+      queue->push(&array[i]);
+    }
+    else {
+      // If this quadrant was not added from a face
+      // attribute, check to see if it should be added
+      // as an edge/curve attribute
+      TMRCurve *curve;
+      if (array[i].x == 0){
+        topo->getFaceCurve(array[i].face, 0, &curve);
+        const char *curve_attr = curve->getAttribute();
+        if (curve_attr && strcmp(curve_attr, attr) == 0){
+          TMRQuadrant p = array[i];
+          p.tag = 0;
+          queue->push(&p);
+        }
+      }
+      if (array[i].x+h == hmax){
+        topo->getFaceCurve(array[i].face, 1, &curve);
+        const char *curve_attr = curve->getAttribute();
+        if (curve_attr && strcmp(curve_attr, attr) == 0){
+          TMRQuadrant p = array[i];
+          p.tag = 1;
+          queue->push(&p);
+        }
+      }
+      if (array[i].y == 0){
+        topo->getFaceCurve(array[i].face, 2, &curve);
+        const char *curve_attr = curve->getAttribute();
+        if (curve_attr && strcmp(curve_attr, attr) == 0){
+          TMRQuadrant p = array[i];
+          p.tag = 2;
+          queue->push(&p);
+        }
+      }
+      if (array[i].y+h == hmax){
+        topo->getFaceCurve(array[i].face, 3, &curve);
+        const char *curve_attr = curve->getAttribute();
+        if (curve_attr && strcmp(curve_attr, attr) == 0){
+          TMRQuadrant p = array[i];
+          p.tag = 3;
+          queue->push(&p);
+        }
+      }
+    }
+  }
+
+  TMRQuadrantArray *list = queue->toArray();
+  delete queue;
+  return list;
+}
+
+/*
+  Create an array of the nodes that are lie on a surface, edge or 
+  corner with a given attribute
+*/
+TMRQuadrantArray* TMRQuadForest::getNodesWithAttr( const char *attr ){
+  if (!topo){
+    return NULL;
+  }
+
+  // Create a queue to store the nodes that we find
+  TMRQuadrantQueue *queue = new TMRQuadrantQueue();
+
+  // Get the local nodal quadrants
+  int size;
+  TMRQuadrant *array;
+  nodes->getArray(&array, &size);
+
+  // Loop over the quadrants and find out whether it touches
+  // a face or edge with the prescribed attribute
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  for ( int i = 0; i < size; i++ ){
+    // Get the surface quadrant
+    TMRSurface *surf;
+    topo->getSurface(array[i].face, &surf);  
+    const char *face_attr = surf->getAttribute();
+    if (face_attr && strcmp(face_attr, attr) == 0){
+      queue->push(&array[i]);
+    }
+    else {
+      // If this quadrant was not added from a face
+      // attribute, check to see if it should be added
+      // as an edge/curve attribute
+      TMRCurve *curve;
+      if (array[i].x == 0){
+        topo->getFaceCurve(array[i].face, 0, &curve);
+        const char *curve_attr = curve->getAttribute();
+        if (curve_attr && strcmp(curve_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
+      }
+      if (array[i].x == hmax){
+        topo->getFaceCurve(array[i].face, 1, &curve);
+        const char *curve_attr = curve->getAttribute();
+        if (curve_attr && strcmp(curve_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
+      }
+      if (array[i].y == 0){
+        topo->getFaceCurve(array[i].face, 2, &curve);
+        const char *curve_attr = curve->getAttribute();
+        if (curve_attr && strcmp(curve_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
+      }
+      if (array[i].y == hmax){
+        topo->getFaceCurve(array[i].face, 3, &curve);
+        const char *curve_attr = curve->getAttribute();
+        if (curve_attr && strcmp(curve_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
+      }
+    }
+  }
+
+  TMRQuadrantArray *list = queue->toArray();
+  delete queue;
+  return list;
 }
 
 /*

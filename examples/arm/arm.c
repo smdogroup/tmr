@@ -541,6 +541,17 @@ int main( int argc, char *argv[] ){
   tacs->setElements(elems);
   delete [] elems;
 
+  // Set the boundary conditions  
+  int dim;
+  TMRQuadrant *bcs;
+  TMRQuadrantArray *inner1 = forest->getNodesWithAttr("inner1");
+  inner1->getArray(&bcs, &dim);
+  printf("dim = %d\n", dim);
+  for ( int i = 0; i < dim; i++ ){
+    int node = bcs[i].tag;
+    tacs->addBCs(1, &node);
+  }
+
   // Initialize the model
   tacs->initialize();
 
@@ -578,6 +589,11 @@ int main( int argc, char *argv[] ){
     
   // Set the node locations into TACSAssembler
   tacs->setNodes(X);
+
+  TACSBVec *ans = tacs->createVec();
+  ans->set(1.0);
+  ans->applyBCs();
+  tacs->setVariables(ans);
 
   // Create and write out an fh5 file
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |

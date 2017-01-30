@@ -73,6 +73,11 @@ class TMRQuadForest : public TMREntity {
   // --------------------------
   void createNodes( int order=2 );
 
+  // Get the nodes or elements with certain attributes
+  // -------------------------------------------------
+  TMRQuadrantArray* getElementsWithAttr( const char *attr );
+  TMRQuadrantArray* getNodesWithAttr( const char *attr );
+
   // Create the mesh connectivity
   // ----------------------------
   void createMeshConn( int **_conn, int *_nelems );
