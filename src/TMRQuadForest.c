@@ -2152,7 +2152,8 @@ void TMRQuadForest::computeDepEdges(){
     
       // Enumerate the sibling-ids for each edge
       const int edge_ids[][2] =
-        {{0, 2}, {1, 3}, {0, 2}, {2, 3}};
+        {{0, 2}, {1, 3}, 
+         {0, 1}, {2, 3}};
 
       // Check whether the next-level refined element exists over an
       // adjacent edge
@@ -2488,7 +2489,6 @@ void TMRQuadForest::createNodes( int order ){
 
   // Allocate the point array
   nodes->getArray(&array, &size);
-  printf("size = %d\n", size);
   X = new TMRPoint[ size ];
   memset(X, 0, size*sizeof(TMRPoint));
 

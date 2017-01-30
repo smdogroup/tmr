@@ -273,6 +273,10 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   TMRBsplineCurve *line1 = createLine(p3, p4);
   TMRBsplineCurve *line2 = createLine(p5, p6);
 
+  // Set the names of the curves
+  inner1->setAttribute("inner1");
+  inner2->setAttribute("inner2");
+
   // Write out the geometry
   if (write_vtk_files){
     inner1->writeToVTK("innerA.vtk");
@@ -323,7 +327,7 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   e[4] = new TMREdge(new TMRSplitCurve(inner2, 0.0, 0.25), v[4], v[5]);
   e[5] = new TMREdge(new TMRSplitCurve(inner2, 0.25, 0.5), v[5], v[6]);
   e[6] = new TMREdge(new TMRSplitCurve(inner2, 0.5, 0.75), v[6], v[7]);
-  e[7] = new TMREdge(new TMRSplitCurve(inner2, 0.75, 1.0), v[7], v[8]);
+  e[7] = new TMREdge(new TMRSplitCurve(inner2, 0.75, 1.0), v[7], v[4]);
 
   // Outer edges -- all the way around
   e[8] = new TMREdge(new TMRSplitCurve(outer1, 0.0, 0.5), v[8], v[9]);
@@ -468,7 +472,7 @@ int main( int argc, char *argv[] ){
   forest->incref();
 
   forest->setTopology(topo);
-  forest->createTrees(5);
+  forest->createRandomTrees(250, 0, 10);
   forest->repartition();
   forest->balance(1);
   forest->repartition();
@@ -524,6 +528,9 @@ int main( int argc, char *argv[] ){
   delete [] elem_conn;
   delete [] ptr;
 
+  // Set the dependent node information
+  tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
+
   // Set the elements
   TACSElement **elems = new TACSElement*[ num_elements ];
   for ( int k = 0; k < num_elements; k++ ){
@@ -533,6 +540,9 @@ int main( int argc, char *argv[] ){
   // Set the element array
   tacs->setElements(elems);
   delete [] elems;
+
+  // Initialize the model
+  tacs->initialize();
 
   // Get the nodes
   TMRQuadrantArray *nodes;
@@ -555,7 +565,6 @@ int main( int argc, char *argv[] ){
   TMRPoint *Xp;
   forest->getPoints(&Xp);
 
-  printf("size = %d\n", size);
   // Loop over all the nodes
   for ( int i = 0; i < size; i++ ){
     if (array[i].tag >= range[mpi_rank] &&

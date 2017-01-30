@@ -111,10 +111,17 @@ class TMRIndexWeight {
 class TMREntity {
  public:
   TMREntity(){
+    attr = NULL;
     ref_count = 0;
   }
-  virtual ~TMREntity(){}
+  virtual ~TMREntity(){
+    if (attr){ delete [] attr; }
+  }
   
+  // Set an attribute
+  void setAttribute( const char *attr );
+  const char* getAttribute() const;
+
   // Reference count the geometric entity objects
   // --------------------------------------------
   void incref();
@@ -132,6 +139,7 @@ class TMREntity {
  private:
   // Total reference count for this object
   int ref_count;
+  char *attr;
 };
 
 #endif // TMR_BASE_H

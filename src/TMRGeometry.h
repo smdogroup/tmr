@@ -164,40 +164,14 @@ class TMRCurveFromSurfaceProjection : public TMRCurve {
 */
 class TMRSplitCurve : public TMRCurve {
  public:
-  TMRSplitCurve( TMRCurve *_curve, double _t1, double _t2 ){
-    curve = _curve;
-    curve->incref();
-
-    // Set the parameter values
-    t1 = _t1;
-    t2 = _t2;
-
-    // Check the range
-    double tmin, tmax;
-    curve->getRange(&tmin, &tmax);
-    if (t1 < tmin){ t1 = tmin; }
-    else if (t1 > tmax){ t1 = tmax; }
-    if (t2 > tmax){ t2 = tmax; }
-    else if (t2 < tmin){ t2 = tmin; }
-  }
-  TMRSplitCurve(){
-    curve->decref();
-  }
+  TMRSplitCurve( TMRCurve *_curve, double _t1, double _t2 );
+  TMRSplitCurve();
 
   // Get the parameter range
-  void getRange( double *tmin, double *tmax ){
-    *tmin = 0.0;
-    *tmax = 1.0;
-  }
+  void getRange( double *tmin, double *tmax );
 
   // Evaluate the point
-  int evalPoint( double t, TMRPoint *X ){
-    int fail = 1;
-    if (t < 0.0){ return fail; }
-    if (t > 1.0){ return fail; }
-    t = (1.0 - t)*t1 + t*t2;
-    return curve->evalPoint(t, X);
-  }
+  int evalPoint( double t, TMRPoint *X );
 
  private:
   // Evaluate the bspline curve

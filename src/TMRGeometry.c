@@ -366,7 +366,8 @@ TMRVertexFromCurve::TMRVertexFromCurve( TMRCurve *_curve,
                                         double _t ){
   t = _t;
   curve = _curve;
-  curve->incref(); 
+  curve->incref();
+  setAttribute(curve->getAttribute());
 }
 
 /*
@@ -405,6 +406,7 @@ TMRVertexFromSurface::TMRVertexFromSurface( TMRSurface *_surface,
   surface->incref();
   u = _u;
   v = _v;
+  setAttribute(surface->getAttribute());
 }
 
 /*
@@ -438,6 +440,7 @@ TMRCurveFromSurfaceProjection::TMRCurveFromSurfaceProjection( TMRSurface *_surfa
   curve = _curve;
   surface->incref();
   curve->incref();
+  setAttribute(surface->getAttribute());
 }
 
 TMRCurveFromSurfaceProjection::~TMRCurveFromSurfaceProjection(){
@@ -469,3 +472,52 @@ int TMRCurveFromSurfaceProjection::evalPoint( double t, TMRPoint *p ){
 
   return fail;
 }
+
+/*
+  Split/segment the curve 
+*/
+TMRSplitCurve::TMRSplitCurve( TMRCurve *_curve, 
+                              double _t1, double _t2 ){
+  curve = _curve;
+  curve->incref();
+  setAttribute(curve->getAttribute());
+
+  // Set the parameter values
+  t1 = _t1;
+  t2 = _t2;
+
+  // Check the range
+  double tmin, tmax;
+  curve->getRange(&tmin, &tmax);
+  if (t1 < tmin){ t1 = tmin; }
+  else if (t1 > tmax){ t1 = tmax; }
+  if (t2 > tmax){ t2 = tmax; }
+  else if (t2 < tmin){ t2 = tmin; }
+}
+
+/*
+  Decrease the reference count
+*/
+TMRSplitCurve::TMRSplitCurve(){
+  curve->decref();
+}
+
+/*
+  Get the parameter range
+*/
+void TMRSplitCurve::getRange( double *tmin, double *tmax ){
+  *tmin = 0.0;
+  *tmax = 1.0;
+}
+
+/*
+  Evaluate the point
+*/
+int TMRSplitCurve::evalPoint( double t, TMRPoint *X ){
+  int fail = 1;
+  if (t < 0.0){ return fail; }
+  if (t > 1.0){ return fail; }
+  t = (1.0 - t)*t1 + t*t2;
+  return curve->evalPoint(t, X);
+}
+

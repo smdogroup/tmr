@@ -1,4 +1,5 @@
 #include "TMRBase.h"
+#include <string.h>
 
 /*
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
@@ -43,6 +44,23 @@ void TMRFinalize(){
   MPI_Type_free(&TMROctant_MPI_type);
   MPI_Type_free(&TMRQuadrant_MPI_type);
   MPI_Type_free(&TMRPoint_MPI_type);
+}
+
+/*
+  Set the attribute/name associate with this object
+*/
+void TMREntity::setAttribute( const char *_attr ){
+  if (_attr){
+    attr = new char[ strlen(_attr)+1 ];
+    strcpy(attr, _attr);
+  }
+}
+
+/*
+  Retrieve the attribute associated with this object
+*/
+const char* TMREntity::getAttribute() const {
+  return attr;
 }
 
 /*
