@@ -863,6 +863,12 @@ void TMRQuadForest::repartition(){
   owners = new TMRQuadrant[ mpi_size ];
   MPI_Allgather(&new_array[0], 1, TMRQuadrant_MPI_type, 
                 owners, 1, TMRQuadrant_MPI_type, comm);
+
+  // Set the local reordering for the elements
+  quadrants->getArray(&new_array, &new_size);
+  for ( int i = 0; i < new_size; i++ ){
+    new_array[i].tag = i;
+  }
 }
 
 /*

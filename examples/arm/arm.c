@@ -473,7 +473,7 @@ int main( int argc, char *argv[] ){
   forest->incref();
 
   forest->setTopology(topo);
-  forest->createRandomTrees(5, 0, 10);
+  forest->createTrees(5);
   forest->repartition();
   forest->balance(1);
   forest->repartition();
