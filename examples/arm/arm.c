@@ -4,6 +4,7 @@
 #include "TACSAssembler.h"
 #include "isoFSDTStiffness.h"
 #include "PlaneStressQuad.h"
+#include "PlaneStressTraction.h"
 #include "TACSToFH5.h"
 #include <stdio.h>
 #include <math.h>
@@ -472,7 +473,7 @@ int main( int argc, char *argv[] ){
   forest->incref();
 
   forest->setTopology(topo);
-  forest->createRandomTrees(250, 0, 10);
+  forest->createRandomTrees(5, 0, 10);
   forest->repartition();
   forest->balance(1);
   forest->repartition();
@@ -544,16 +545,47 @@ int main( int argc, char *argv[] ){
   // Set the boundary conditions  
   int dim;
   TMRQuadrant *bcs;
-  TMRQuadrantArray *inner1 = forest->getNodesWithAttr("inner1");
+  TMRQuadrantArray *inner1 = forest->getNodesWithAttribute("inner1");
   inner1->getArray(&bcs, &dim);
-  printf("dim = %d\n", dim);
   for ( int i = 0; i < dim; i++ ){
     int node = bcs[i].tag;
     tacs->addBCs(1, &node);
   }
+  delete inner1;
 
   // Initialize the model
   tacs->initialize();
+
+  // Get the quadrants from the forest
+  TMRQuadrantArray *quadrants;
+  forest->getQuadrants(&quadrants);
+
+  // Add the loads to the
+  TMRQuadrantArray *inner2 = forest->getQuadsWithAttribute("inner2");
+  inner2->getArray(&bcs, &dim);
+  TACSAuxElements *aux = new TACSAuxElements(dim);
+
+  double tx = 0.0;
+  double ty = 100.0;
+  PSQuadTraction<2> *trac[4];
+  for ( int k = 0; k < 4; k++ ){
+    trac[k] = new PSQuadTraction<2>(k, tx, ty);
+    trac[k]->incref();
+  }
+
+  // Set up the boundary tractions 
+  for ( int i = 0; i < dim; i++ ){
+    int face = bcs[i].tag;
+    if (face >= 0 && face < 4){
+      int use_node_search = 0;
+      TMRQuadrant *t = quadrants->contains(&bcs[i], use_node_search);
+      if (t){
+        aux->addElement(t->tag, trac[face]);
+      }
+    }
+  }
+  tacs->setAuxElements(aux);
+  delete inner2;
 
   // Get the nodes
   TMRQuadrantArray *nodes;
@@ -590,9 +622,38 @@ int main( int argc, char *argv[] ){
   // Set the node locations into TACSAssembler
   tacs->setNodes(X);
 
+  // Create the preconditioner
+  TACSBVec *res = tacs->createVec();
   TACSBVec *ans = tacs->createVec();
-  ans->set(1.0);
-  ans->applyBCs();
+  FEMat *mat = tacs->createFEMat();
+
+  // Increment the reference count to the matrix/vectors
+  res->incref();
+  ans->incref();
+  mat->incref();
+
+  // Allocate the factorization
+  int lev = 4500;
+  double fill = 10.0;
+  int reorder_schur = 1;
+  PcScMat *pc = new PcScMat(mat, lev, fill, reorder_schur);
+  pc->incref();
+
+  // Assemble and factor the stiffness/Jacobian matrix
+  double alpha = 1.0, beta = 0.0, gamma = 0.0;
+  tacs->assembleJacobian(alpha, beta, gamma, res, mat);
+  mat->applyBCs();
+  pc->factor();
+
+  int gmres_iters = 10; // Number of GMRES iterations 
+  int nrestart = 2; // Number of allowed restarts
+  int is_flexible = 1; // Is a flexible preconditioner?
+  GMRES *gmres = new GMRES(mat, pc, gmres_iters, 
+                           nrestart, is_flexible);
+
+  res->set(1.0);
+  res->applyBCs();
+  gmres->solve(res, ans);
   tacs->setVariables(ans);
 
   // Create and write out an fh5 file

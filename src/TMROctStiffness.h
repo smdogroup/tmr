@@ -33,18 +33,18 @@ class TMROctStiffness : public SolidStiffness {
   // Compute the stress
   // ------------------
   void calculateStress( const double pt[],
-			const TacsScalar e[], TacsScalar s[] );
+                        const TacsScalar e[], TacsScalar s[] );
   void addStressDVSens( const double pt[], const TacsScalar strain[], 
-			TacsScalar alpha, const TacsScalar psi[], 
-			TacsScalar dvSens[], int dvLen );
+                        TacsScalar alpha, const TacsScalar psi[], 
+                        TacsScalar dvSens[], int dvLen );
 
   // Evaluate the pointwise mass
   // ---------------------------
   void getPointwiseMass( const double pt[], 
-			 TacsScalar mass[] );
+                         TacsScalar mass[] );
   void addPointwiseMassDVSens( const double pt[], 
-			       const TacsScalar alpha[],
-			       TacsScalar dvSens[], int dvLen );
+                               const TacsScalar alpha[],
+                               TacsScalar dvSens[], int dvLen );
 
   // Return the density as the design variable
   // -----------------------------------------
@@ -81,7 +81,7 @@ class TMRLinearOctStiffness : public SolidStiffness {
   static const int MAX_NUM_WEIGHTS = 8;
 
   TMRLinearOctStiffness( TMRIndexWeight *_weights, int _nweights,
-			 TacsScalar _x_init,
+                         TacsScalar _x_init,
                          TacsScalar _density, TacsScalar E, 
                          TacsScalar _nu, double _q, 
 			 PenaltyType _type=RAMP, double _eps=1e-3);
@@ -100,10 +100,10 @@ class TMRLinearOctStiffness : public SolidStiffness {
   // Compute the stress
   // ------------------
   void calculateStress( const double pt[],
-			const TacsScalar e[], TacsScalar s[] );
+                        const TacsScalar e[], TacsScalar s[] );
   void addStressDVSens( const double pt[], const TacsScalar strain[], 
-			TacsScalar alpha, const TacsScalar psi[], 
-			TacsScalar dvSens[], int dvLen );
+                        TacsScalar alpha, const TacsScalar psi[], 
+                        TacsScalar dvSens[], int dvLen );
 
   // Compute the derivative of the stress
   // ------------------------------------
@@ -114,11 +114,10 @@ class TMRLinearOctStiffness : public SolidStiffness {
 
   // Evaluate the pointwise mass
   // ---------------------------
-  void getPointwiseMass( const double pt[], 
-			 TacsScalar mass[] );
+  void getPointwiseMass( const double pt[], TacsScalar mass[] );
   void addPointwiseMassDVSens( const double pt[], 
-			       const TacsScalar alpha[],
-			       TacsScalar dvSens[], int dvLen );
+                               const TacsScalar alpha[],
+                               TacsScalar dvSens[], int dvLen );
 
   // Return the density as the design variable
   // -----------------------------------------
