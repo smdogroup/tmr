@@ -58,6 +58,9 @@ class TMRCurve : public TMREntity {
   double integrate( double t1, double t2, double tol,
                     double **tvals, double **dist, int *nvals );
 
+  // Write the object to the VTK file
+  void writeToVTK( const char *filename );
+  
  private:
   // Set the step size
   static double deriv_step_size;
@@ -85,9 +88,24 @@ class TMRSurface : public TMREntity {
   virtual int evalDeriv( double u, double v, 
                          TMRPoint *Xu, TMRPoint *Xv ) = 0;
 
+  // Write the object to the VTK file
+  void writeToVTK( const char *filename );
+
  private:
   // Set the step size
   static double deriv_step_size;
+};
+
+/*
+  Set the TMRVertex from a point
+*/
+class TMRVertexFromPoint : public TMRVertex {
+ public:
+  TMRVertexFromPoint( TMRPoint p );
+  ~TMRVertexFromPoint(){}
+  int evalPoint( TMRPoint *p );
+ private:
+  TMRPoint pt;
 };
 
 /*
@@ -129,6 +147,7 @@ class TMRVertexFromSurface : public TMRVertex {
   Project a curve onto a surface and evaluate the surface location
 */
 class TMRCurveFromSurfaceProjection : public TMRCurve {
+ public:
   TMRCurveFromSurfaceProjection( TMRSurface *_surface, 
                                  TMRCurve *_curve );
   ~TMRCurveFromSurfaceProjection();  
@@ -138,6 +157,52 @@ class TMRCurveFromSurfaceProjection : public TMRCurve {
  private:
   TMRCurve *curve;
   TMRSurface *surface;
+};
+
+/*
+  Split the curve
+*/
+class TMRSplitCurve : public TMRCurve {
+ public:
+  TMRSplitCurve( TMRCurve *_curve, double _t1, double _t2 ){
+    curve = _curve;
+    curve->incref();
+
+    // Set the parameter values
+    t1 = _t1;
+    t2 = _t2;
+
+    // Check the range
+    double tmin, tmax;
+    curve->getRange(&tmin, &tmax);
+    if (t1 < tmin){ t1 = tmin; }
+    else if (t1 > tmax){ t1 = tmax; }
+    if (t2 > tmax){ t2 = tmax; }
+    else if (t2 < tmin){ t2 = tmin; }
+  }
+  TMRSplitCurve(){
+    curve->decref();
+  }
+
+  // Get the parameter range
+  void getRange( double *tmin, double *tmax ){
+    *tmin = 0.0;
+    *tmax = 1.0;
+  }
+
+  // Evaluate the point
+  int evalPoint( double t, TMRPoint *X ){
+    int fail = 1;
+    if (t < 0.0){ return fail; }
+    if (t > 1.0){ return fail; }
+    t = (1.0 - t)*t1 + t*t2;
+    return curve->evalPoint(t, X);
+  }
+
+ private:
+  // Evaluate the bspline curve
+  double t1, t2;
+  TMRCurve *curve;
 };
 
 #endif // TMR_GEOMETRY_H

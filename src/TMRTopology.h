@@ -21,7 +21,7 @@
 */
 class TMREdge : public TMREntity {
  public:
-  TMREdge( MPI_Comm _comm, TMRCurve *_curve,
+  TMREdge( TMRCurve *_curve,
            TMRVertex *_v1, TMRVertex *_v2 );
   ~TMREdge();
 
@@ -32,13 +32,9 @@ class TMREdge : public TMREntity {
   void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
 
  private:
-  // Record the communicator
-  MPI_Comm comm;
+  // Vertices indicating the starting/end vertex
+  TMRVertex *v1, *v2;
 
-  // The edge identifier - the combination of the edge
-  // identifier and the communicator are unique
-  int edge_id; 
-  
   // The underlying curve associated with this edge
   TMRCurve *curve;
 };
@@ -69,21 +65,17 @@ class TMREdge : public TMREntity {
 */
 class TMRFace : public TMREntity {
  public:
-  TMRFace( MPI_Comm comm, TMRSurface *_surface,
-           TMREdge *_edges[], int _edge_dir[] );
+  TMRFace( TMRSurface *_surface,
+           TMREdge *_edges[], const int _edge_dir[] );
   ~TMRFace();
+
+  // Get the underlying curve associated with this edge
+  void getSurface( TMRSurface **surf );
 
   // Get the four edges that bound this face
   void getEdges( TMREdge ***edges, const int **_edge_dir );
 
  private:
-  // The communicator
-  MPI_Comm comm;
-
-  // The face identifier -- unique identifier for the
-  // face
-  int face_id;
-
   // Pointers to the edges bounding this face
   TMRSurface *surface;
   TMREdge *edges[4];
@@ -97,21 +89,26 @@ class TMRFace : public TMREntity {
 class TMRTopology : public TMREntity {
  public:
   TMRTopology( MPI_Comm _comm,
+               TMRVertex **_vertices, int _num_vertices,
+               TMREdge **_edges, int _num_edges,
                TMRFace **_faces, int num_faces );
   ~TMRTopology();
   
   // Retrieve the face/edge/node information
-  void getFace( int face_num, TMRFace **face );
+  void getSurface( int face_num, TMRSurface **face );
 
+  // Retrive the connectivity from the topology object
   void getConnectivity( int *nnodes, int *nedges, int *nfaces,
-                        const int **face_nodes, const int **edge_nodes );
+                        const int **face_nodes, const int **face_edges );
 
  private:
   // The communicator associated 
   MPI_Comm comm;
 
-  // Build the underlying connectivity for the mesh topology
-  void buildConnectivity();
+  // The connectivity information
+  int *edge_to_vertices;
+  int *face_to_edges;
+  int *face_to_vertices;
 
   // The face information
   int num_faces;
@@ -122,8 +119,8 @@ class TMRTopology : public TMREntity {
   TMREdge **edges;
 
   // The node information
-  int num_nodes;
-  TMRVertex **nodes;
+  int num_vertices;
+  TMRVertex **vertices;
 };
 
 #endif // TMR_TOPOLOGY_H

@@ -2385,9 +2385,6 @@ void TMRQuadForest::createNodes( int order ){
   // Extract the array of nodes
   nodes->getArray(&array, &size);
 
-  // Allocate the point array
-  X = new TMRPoint[ size ]; 
-
   // Count up the number of nodes that are owned by this processor
   // and append the nodes that are not owned by this processor to
   // a series of queues destined for other processors.
@@ -2486,6 +2483,26 @@ void TMRQuadForest::createNodes( int order ){
     if (array[i].tag < 0){
       num_dep_nodes++;
       array[i].tag = -num_dep_nodes;
+    }
+  }
+
+  // Allocate the point array
+  nodes->getArray(&array, &size);
+  printf("size = %d\n", size);
+  X = new TMRPoint[ size ];
+  memset(X, 0, size*sizeof(TMRPoint));
+
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  if (topo){
+    for ( int i = 0; i < size; i++ ){
+      double u = 1.0*array[i].x/hmax;
+      double v = 1.0*array[i].y/hmax;
+
+      TMRSurface *surf;
+      topo->getSurface(array[i].face, &surf);
+      if (surf){
+        surf->evalPoint(u, v, &X[i]);
+      }
     }
   }
 }

@@ -287,8 +287,13 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
 
   // Allocate the knots and control points
   Tu = new double[ nctl+ku ];
-  memcpy(Tu, _Tu, (nctl+ku)*sizeof(double));
-
+  if (_Tu){
+    memcpy(Tu, _Tu, (nctl+ku)*sizeof(double));
+  }
+  else {
+    bspline_knots(nctl, ku, 0.0, 1.0, Tu);
+  }
+  
   pts = new TMRPoint[ nctl ];
   memcpy(pts, _pts, nctl*sizeof(TMRPoint));
   
@@ -317,8 +322,13 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
 
   // Set the knots
   Tu = new double[ nctl+ku ];
-  memcpy(Tu, _Tu, (nctl+ku)*sizeof(double));
-
+  if (_Tu){
+    memcpy(Tu, _Tu, (nctl+ku)*sizeof(double));
+  }
+  else {
+    bspline_knots(nctl, ku, 0.0, 1.0, Tu);
+  }
+  
   // Allocate the weights
   wts = new double[ nctl ];
   memcpy(wts, _wts, nctl*sizeof(double));
@@ -806,9 +816,19 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   // Allocate the knot vectors
   Tu = new double[ nu+ku ];
   Tv = new double[ nv+kv ];
-  memcpy(Tu, _Tu, (nu+ku)*sizeof(double));
-  memcpy(Tv, _Tv, (nv+kv)*sizeof(double));
-
+  if (_Tu){
+    memcpy(Tu, _Tu, (nu+ku)*sizeof(double));
+  }
+  else {
+    bspline_knots(nu, ku, 0.0, 1.0, Tu);
+  }
+  if (_Tv){
+    memcpy(Tv, _Tv, (nv+kv)*sizeof(double));
+  }
+  else {
+    bspline_knots(nv, kv, 0.0, 1.0, Tv);
+  }
+  
   // Set the wts = 1.0
   wts = NULL;
 
@@ -837,8 +857,18 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   // Allocate the knot vectors
   Tu = new double[ nu+ku ];
   Tv = new double[ nv+kv ];
-  memcpy(Tu, _Tu, (nu+ku)*sizeof(double));
-  memcpy(Tv, _Tv, (nv+kv)*sizeof(double));
+  if (_Tu){
+    memcpy(Tu, _Tu, (nu+ku)*sizeof(double));
+  }
+  else {
+    bspline_knots(nu, ku, 0.0, 1.0, Tu);
+  }
+  if (_Tv){
+    memcpy(Tv, _Tv, (nv+kv)*sizeof(double));
+  }
+  else {
+    bspline_knots(nv, kv, 0.0, 1.0, Tv);
+  }
 
   // Set the weights for the rational part of the NURBS
   wts = new double[ nu*nv ];

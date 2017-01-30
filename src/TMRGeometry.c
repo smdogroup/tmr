@@ -1,5 +1,6 @@
 #include "TMRGeometry.h"
 #include <math.h>
+#include <stdio.h>
 
 /*
   Build the curve without specifying the start/end vertices
@@ -241,6 +242,121 @@ double TMRCurve::integrate( double t1, double t2, double tol,
   *_dist = dist;
 
   return len;
+}
+
+/*
+  Write out a representation of the curve to a VTK file
+*/
+void TMRCurve::writeToVTK( const char *filename ){
+  double t1, t2;
+  getRange(&t1, &t2);
+
+  const int npts = 100;
+
+  // Write out the vtk file
+  FILE *fp = fopen(filename, "w");
+  if (fp){
+    fprintf(fp, "# vtk DataFile Version 3.0\n");
+    fprintf(fp, "vtk output\nASCII\n");
+    fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+    
+    // Write out the points
+    fprintf(fp, "POINTS %d float\n", npts);
+    for ( int k = 0; k < npts; k++ ){
+      double u = 1.0*k/(npts-1);
+      double t = (1.0-u)*t1 + u*t2;
+
+      // Evaluate the point
+      TMRPoint p;
+      evalPoint(t, &p);
+      
+      // Write out the point
+      fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+    }
+    
+    // Write out the cell values
+    fprintf(fp, "\nCELLS %d %d\n", npts-1, 3*(npts-1));
+    for ( int k = 0; k < npts-1; k++ ){
+      fprintf(fp, "2 %d %d\n", k, k+1);
+    }
+    
+    // Write out the cell types
+    fprintf(fp, "\nCELL_TYPES %d\n", npts-1);
+    for ( int k = 0; k < npts-1; k++ ){
+      fprintf(fp, "%d\n", 3);
+    }
+    
+    fclose(fp);
+  } 
+}
+
+/*
+  Write out a representation of the curve to a VTK file
+*/
+void TMRSurface::writeToVTK( const char *filename ){
+  double umin, vmin, umax, vmax;
+  getRange(&umin, &vmin, &umax, &vmax);
+
+  const int npts = 100;
+
+  // Write out the vtk file
+  FILE *fp = fopen(filename, "w");
+  if (fp){
+    fprintf(fp, "# vtk DataFile Version 3.0\n");
+    fprintf(fp, "vtk output\nASCII\n");
+    fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+    
+    // Write out the points
+    fprintf(fp, "POINTS %d float\n", npts*npts);
+    for ( int j = 0; j < npts; j++ ){
+      for ( int i = 0; i < npts; i++ ){
+        double u = 1.0*i/(npts-1);
+        double v = 1.0*j/(npts-1);
+        u = (1.0 - u)*umin + u*umax;
+        v = (1.0 - v)*vmin + v*vmax;
+
+        // Evaluate the point
+        TMRPoint p;
+        evalPoint(u, v, &p);
+        
+        // Write out the point
+        fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+      }
+    } 
+    
+    // Write out the cell values
+    fprintf(fp, "\nCELLS %d %d\n", (npts-1)*(npts-1), 5*(npts-1)*(npts-1));
+    for ( int j = 0; j < npts-1; j++ ){
+      for ( int i = 0; i < npts-1; i++ ){
+        fprintf(fp, "4 %d %d %d %d\n", 
+                i + j*npts, i+1 + j*npts, 
+                i+1 + (j+1)*npts, i + (j+1)*npts);
+      }
+    }
+    
+    // Write out the cell types
+    fprintf(fp, "\nCELL_TYPES %d\n", (npts-1)*(npts-1));
+    for ( int k = 0; k < (npts-1)*(npts-1); k++ ){
+      fprintf(fp, "%d\n", 9);
+    }
+    
+    fclose(fp);
+  } 
+}
+
+/*
+  Create a vertex from a point
+*/
+TMRVertexFromPoint::TMRVertexFromPoint( TMRPoint p ){
+  pt = p;
+}
+
+/*
+  Read out the point
+*/
+int TMRVertexFromPoint::evalPoint( TMRPoint *p ){
+  *p = pt;
+  return 0;
 }
 
 /*

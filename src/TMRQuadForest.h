@@ -58,7 +58,7 @@ class TMRQuadForest : public TMREntity {
   // Refine the mesh
   // ---------------
   void refine( const int refinement[],
-               int min_level, int max_level );
+               int min_level=0, int max_level=TMR_MAX_LEVEL );
 
   // Duplicate or coarsen the forest
   // -------------------------------
