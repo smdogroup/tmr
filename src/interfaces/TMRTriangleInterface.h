@@ -27,7 +27,14 @@ class TMRTriangulation {
   // Refine the triangulation - maximum area constraints
   void refine( const double areas[] ); 
 
+  // Smooth the mesh
+  void smooth( int nsmooth=5 );
+
+  // Recombine the mesh to a quadrilateral mesh based on Blossom
+  void recombine( const TMRPoint *p );
+
   // Get the triangulation
+  void getPoints( int *_npts, const double **_pts );
   void getTriangulation( int *_ntris, const int **_tris );
   void getEdges( int *_nedges, const int **_edges );
   void getDualEdges( int *_nedges, const int **edgetotris );
@@ -36,6 +43,10 @@ class TMRTriangulation {
   void writeToVTK( const char *filename );
   
  private:
+  int getRecombinedQuad( int t1, int t2, int quad[] );
+  double computeRecombinedQuality( int t1, int t2,
+                                   const TMRPoint *p ); 
+
   // Points
   int npts;       // number of points
   double *pts;    // x-y point locations, size: 2*npts
