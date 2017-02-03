@@ -35,6 +35,10 @@ SO_LINK_FLAGS=-fPIC -shared
 TRIANGLE_INCLUDE=-I${TMR_DIR}/extern/triangle
 TRIANGLE_LIB=${TMR_DIR}/extern/triangle/triangle.o
 
+# Set up the interface for the blossom recombination code
+BLOSSOM_INCLUDE=-I${TMR_DIR}/extern/blossom5-v2.05.src
+BLOSSOM_LIB=${TMR_DIR}/extern/blossom5-v2.05.src/libblossom5.a
+
 # METIS is handy for partitioning graphs...
 METIS_INCLUDE = -I${HOME}/hg/tacs/extern/metis/include
 METIS_LIB = ${HOME}/hg/tacs/extern/metis/lib/libmetis.a
