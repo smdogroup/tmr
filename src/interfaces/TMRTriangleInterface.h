@@ -3,6 +3,7 @@
 
 #include "TMRBase.h"
 #include "TMRGeometry.h"
+
 /*
   Triangle info class
 
@@ -61,6 +62,10 @@ class TMRTriangulation : public TMREntity {
   void springSmoothing( int nsmooth, double alpha,
                         int num_edges, const int *edge_list,
                         int num_pts, double *prm, TMRPoint *p );
+  void springQuadSmoothing( int nsmooth, double alpha,
+                            int num_quads, const int *quad_list,
+                            int num_edges, const int *edge_list,
+                            int num_pts, double *prm, TMRPoint *p );
 
   // Compute recombined triangle information
   int getRecombinedQuad( int t1, int t2, int quad[] );

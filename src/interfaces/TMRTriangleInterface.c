@@ -512,6 +512,138 @@ void TMRTriangulation::springSmoothing( int nsmooth,
 }
 
 /*
+  Perform spring smoothing specifically for a quadrilateral mesh.
+
+  This code also connects springs across the faces of quadrilateral
+  elements in an attempt to achieve higher mesh quality. This is 
+  not always successful.
+*/
+void TMRTriangulation::springQuadSmoothing( int nsmooth,
+                                            double alpha,
+                                            int num_quads,
+                                            const int *quad_list,
+                                            int num_edges,
+                                            const int *edge_list,
+                                            int num_pts,
+                                            double *prm,
+                                            TMRPoint *p ){
+  double *len = (double*)malloc(num_edges*sizeof(double));
+  double *new_params = (double*)malloc(2*num_pts*sizeof(double));
+  TMRPoint *Xu = (TMRPoint*)malloc(num_pts*sizeof(TMRPoint));
+  TMRPoint *Xv = (TMRPoint*)malloc(num_pts*sizeof(TMRPoint));
+
+  // Compute the squrare root of 2
+  const double sqrt2 = sqrt(2.0);
+
+  for ( int iter = 0; iter < nsmooth; iter++ ){
+    double sum = 0.0;
+    for ( int i = 0; i < num_edges; i++ ){
+      int n1 = edge_list[2*i];
+      int n2 = edge_list[2*i+1];
+
+      // Compute the difference between the points along the
+      // specified edge
+      TMRPoint d;
+      d.x = p[n2].x - p[n1].x;
+      d.y = p[n2].y - p[n1].y;
+      d.z = p[n2].z - p[n1].z;
+
+      len[i] = sqrt(d.dot(d));
+      sum += len[i];
+    }
+    double len0 = 0.8*sum/nedges;
+
+    // Evaluate the derivatives w.r.t. the parameter locations
+    for ( int i = 0; i < num_pts; i++ ){
+      if (ptmarkers[i] == 0){
+        surface->evalDeriv(prm[2*i], prm[2*i+1], &Xu[i], &Xv[i]);
+      }
+    }
+
+    memset(new_params, 0, 2*num_pts*sizeof(double));
+
+    for ( int i = 0; i < num_edges; i++ ){
+      int n1 = edge_list[2*i];
+      int n2 = edge_list[2*i+1];
+
+      // Compute the difference between the points along the
+      // specified edge
+      TMRPoint d;
+      d.x = p[n2].x - p[n1].x;
+      d.y = p[n2].y - p[n1].y;
+      d.z = p[n2].z - p[n1].z;
+
+      double scale = (len0 - len[i])/len[i];
+
+      // Add the movement of the node in parameter space
+      if (ptmarkers[n1] == 0){
+        addParamMovement(-scale, &Xu[n1], &Xv[n1], &d, 
+                         &new_params[2*n1]);
+      }
+
+      // Add the movement of the second node in parameter space
+      if (ptmarkers[n2] == 0){
+        addParamMovement(scale, &Xu[n2], &Xv[n2], &d, 
+                         &new_params[2*n2]);
+      }
+    }
+
+    for ( int i = 0; i < num_quads; i++ ){
+      // Add the contribution from the first cross-quad member
+      int n1 = quad_list[4*i];
+      int n2 = quad_list[4*i+2];
+
+      TMRPoint d;
+      d.x = p[n2].x - p[n1].x;
+      d.y = p[n2].y - p[n1].y;
+      d.z = p[n2].z - p[n1].z;
+      double ld = sqrt(d.dot(d));
+      double scale = (sqrt2*len0 - ld)/ld;
+      if (ptmarkers[n1] == 0){
+        addParamMovement(-scale, &Xu[n1], &Xv[n1], &d, 
+                         &new_params[2*n1]);
+      }
+      if (ptmarkers[n2] == 0){
+        addParamMovement(scale, &Xu[n2], &Xv[n2], &d, 
+                         &new_params[2*n2]);
+      }
+
+      // Add the contribution from the second cross-quad member
+      n1 = quad_list[4*i+1];
+      n2 = quad_list[4*i+3];
+
+      d.x = p[n2].x - p[n1].x;
+      d.y = p[n2].y - p[n1].y;
+      d.z = p[n2].z - p[n1].z;
+      ld = sqrt(d.dot(d));
+      scale = (sqrt2*len0 - ld)/ld;
+      if (ptmarkers[n1] == 0){
+        addParamMovement(-scale, &Xu[n1], &Xv[n1], &d, 
+                         &new_params[2*n1]);
+      }
+      if (ptmarkers[n2] == 0){
+        addParamMovement(scale, &Xu[n2], &Xv[n2], &d, 
+                         &new_params[2*n2]);
+      }
+    }
+
+    // Set the locations for the new points, keep in place
+    for ( int i = 0; i < npts; i++ ){
+      if (ptmarkers[i] == 0){
+        prm[2*i] += alpha*new_params[2*i];
+        prm[2*i+1] += alpha*new_params[2*i+1];
+        surface->evalPoint(prm[2*i], prm[2*i+1], &p[i]);
+      }
+    }
+  }
+
+  free(new_params);
+  free(len);
+  free(Xu);
+  free(Xv);
+}
+
+/*
   Apply smoothing to the triangular mesh
 */
 void TMRTriangulation::laplacianSmoothing( int nsmooth ){
@@ -538,7 +670,8 @@ void TMRTriangulation::laplacianQuadSmoothing( int nsmooth ){
 */
 void TMRTriangulation::springQuadSmoothing( int nsmooth ){
   double alpha = 0.1;
-  springSmoothing(nsmooth, alpha, nquadedges, quadedges, npts, params, pts);
+  springQuadSmoothing(nsmooth, alpha, nquads, quads,
+                      nquadedges, quadedges, npts, params, pts);
 }
 
 /*
@@ -872,7 +1005,7 @@ void TMRTriangulation::recombine(){
     if (t1 >= 0 && t2 >= 0){
       // Compute the weight for this recombination
       double quality = computeRecombinedQuality(t1, t2, pts);
-      double weight = 1000.0*(1.0 - quality)*(1.0 + 1.0/(quality + 0.1));
+      double weight = 100.0*(1.0 - quality)*(1.0 + 1.0/(quality + 0.1));
       graphedges[2*e] = t1;
       graphedges[2*e+1] = t2;
       weights[e] = weight;

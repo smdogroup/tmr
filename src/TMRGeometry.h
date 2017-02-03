@@ -48,8 +48,7 @@ class TMRCurve : public TMREntity {
   // Given the parametric point, evaluate the derivative 
   virtual int evalDeriv( double t, TMRPoint *Xt );
   
-  // Retrive the adjacent vertices/surfaces
-  // --------------------------------------
+  // Set/retrive the vertices at the beginning and end of the curve
   void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
   void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
 
@@ -74,6 +73,9 @@ class TMRCurve : public TMREntity {
 */
 class TMRSurface : public TMREntity {
  public:
+  TMRSurface();
+  virtual ~TMRSurface();
+
   // Get the parameter range for this surface
   virtual void getRange( double *umin, double *vmin,
                          double *umax, double *vmax ) = 0;
@@ -88,10 +90,26 @@ class TMRSurface : public TMREntity {
   virtual int evalDeriv( double u, double v, 
                          TMRPoint *Xu, TMRPoint *Xv ) = 0;
 
+  // Add a curve segment. The curve segments must form a closed
+  // loop which is checked by the code. The boundary must lie
+  // counterclockwise around the surface while holes/cutouts
+  // must run clockwise so that the domain always lies to the
+  // left of the curve.
+  int addCurveSegment( TMRCurve **_curves, 
+                       const int _dir[], int ncurves );
+  void getCurves( TMRCurve ***_curves, 
+                  const int **_dir, int *_num_curves );
+
   // Write the object to the VTK file
   void writeToVTK( const char *filename );
 
  private:
+  // Pointers to the curves that enclose the object. 
+  // Note  to the list of curves
+  int num_curves;
+  TMRCurve **curves;
+  int *dir;
+
   // Set the step size
   static double deriv_step_size;
 };
@@ -121,6 +139,8 @@ class TMRVertexFromCurve : public TMRVertex {
   TMRVertexFromCurve( TMRCurve *_curve, TMRPoint p );
   ~TMRVertexFromCurve();
   int evalPoint( TMRPoint *p );
+  TMRCurve* getCurve();
+  double getParamPoint();
 
  private:
   double t;
@@ -165,6 +185,8 @@ class TMRCurveFromSurfaceProjection : public TMRCurve {
 class TMRSplitCurve : public TMRCurve {
  public:
   TMRSplitCurve( TMRCurve *_curve, double _t1, double _t2 );
+  TMRSplitCurve( TMRCurve *_curve, TMRPoint *p1, TMRPoint *p2 );
+  TMRSplitCurve( TMRCurve *_curve, TMRVertex *p1, TMRVertex *p2 );
   TMRSplitCurve();
 
   // Get the parameter range

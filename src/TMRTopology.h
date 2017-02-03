@@ -21,8 +21,8 @@
 */
 class TMREdge : public TMREntity {
  public:
-  TMREdge( TMRCurve *_curve,
-           TMRVertex *_v1, TMRVertex *_v2 );
+  TMREdge( TMRCurve *_curve );
+  TMREdge( TMRCurve *_curve, TMRVertex *_v1, TMRVertex *_v2 );
   ~TMREdge();
 
   // Get the underlying curve associated with this edge
@@ -122,6 +122,28 @@ class TMRTopology : public TMREntity {
   // The node information
   int num_vertices;
   TMRVertex **vertices;
+};
+
+/*
+  Create a geometry from the vertex, edge and face primitives
+*/
+class TMRMeshTopology : public TMREntity {
+ public:
+  TMRMeshTopology( int _num_vertices, TMRVertex **_vertices,
+                   int _num_curves, TMRCurve **_curves,
+                   int _num_surfaces, TMRSurface *_surfaces );
+
+  // Verify the geometry makes sense the best we can....
+  // void verify();
+
+  // Create a mesh of the underlying geometry
+  
+ private:
+  int num_vertices, num_curves, num_surfaces;
+  TMRVertex **vertices;
+  TMRCurve **curves;
+  TMRSurface **surfaces;
+
 };
 
 #endif // TMR_TOPOLOGY_H

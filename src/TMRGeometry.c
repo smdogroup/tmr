@@ -291,7 +291,110 @@ void TMRCurve::writeToVTK( const char *filename ){
 }
 
 /*
-  Write out a representation of the curve to a VTK file
+  Initialize data within the TMRSurface object
+*/
+TMRSurface::TMRSurface(){
+  num_curves = 0;
+  curves = NULL;
+  dir = NULL;
+}
+
+/*
+  Deallocate the curve segments (if any)
+*/
+TMRSurface::~TMRSurface(){
+  if (curves){
+    for ( int i = 0; i < num_curves; i++ ){
+      curves[i]->decref();
+    }
+    delete [] curves;
+    delete [] dir;
+  }
+}
+
+/*
+  Add the curves that bound the surface
+*/
+int TMRSurface::addCurveSegment( TMRCurve **_curves, const int _dir[],
+                                 int _ncurves ){
+  int fail = 0;
+  if (_ncurves == 0){
+    fail = 1;
+    fprintf(stderr, "TMRSurface::addCurveSegment: Zero length segment\n");
+  }
+
+  // First, check whether the loop is closed
+  TMRVertex *vinit;
+  TMRVertex *vnext;
+  for ( int i = 0; i < _ncurves; i++ ){
+    TMRVertex *v1, *v2;
+    if (dir[i] > 0){
+      _curves[i]->getVertices(&v1, &v2);
+    }
+    else {
+      _curves[i]->getVertices(&v2, &v1);
+    }
+    if (i == 0){ vinit = v1; }
+    vnext = v2;
+    if (i == _ncurves-1){
+      if (vinit != vnext){
+        fprintf(stderr, "TMRSurface::addCurveSegment: Curve segment must be closed\n");
+        fail = 1;
+      }
+    }
+  }
+
+  // Return if the segment is not closed
+  if (fail){
+    return fail;
+  }
+  
+  // Add the curves
+  for ( int i = 0; i < _ncurves; i++ ){
+    _curves[i]->incref();
+  }
+
+  if (curves){
+    int size = num_curves + _ncurves;
+    int *new_dir = new int[ size ];
+    TMRCurve **new_curves = new TMRCurve*[ size ];
+
+    // Copy over the new curve segment
+    memcpy(new_dir, dir, num_curves*sizeof(int));
+    memcpy(&new_dir[num_curves], _dir, _ncurves*sizeof(int));
+
+    memcpy(new_curves, curves, num_curves*sizeof(TMRCurve*));
+    memcpy(&new_curves[num_curves], _curves, _ncurves*sizeof(TMRCurve*));
+    
+    // Free the old data and update the pointers to the newly
+    // allocated data 
+    delete [] curves;
+    delete [] dir;
+    curves = new_curves;
+    dir = new_dir;
+    num_curves = size;
+  }
+  else {
+    num_curves = _ncurves;
+    dir = new int[ num_curves ];
+    curves = new TMRCurve*[ num_curves ];
+    memcpy(dir, _dir, num_curves*sizeof(int));
+    memcpy(curves, _curves, num_curves*sizeof(TMRCurve*));
+  }
+}
+
+/*
+  Retrieve the curves associated with this surface (in the correct orientation)
+*/
+void TMRSurface::getCurves( TMRCurve ***_curves, const int **_dir, 
+                            int *_num_curves ){
+  *_curves = curves;
+  *_dir = dir;
+  *_num_curves = num_curves;
+}
+
+/*
+  Write out a representation of the surface to a VTK file
 */
 void TMRSurface::writeToVTK( const char *filename ){
   double umin, vmin, umax, vmax;
@@ -398,6 +501,20 @@ int TMRVertexFromCurve::evalPoint( TMRPoint *p ){
 }
 
 /*
+  Retrieve the underlying curve object
+*/
+TMRCurve* TMRVertexFromCurve::getCurve(){
+  return curve;
+}
+
+/*
+  Get the underlying parametric point
+*/
+double TMRVertexFromCurve::getParamPoint(){
+  return t;
+}
+
+/*
   Determine the vertex location based on a surface location
 */
 TMRVertexFromSurface::TMRVertexFromSurface( TMRSurface *_surface, 
@@ -493,6 +610,67 @@ TMRSplitCurve::TMRSplitCurve( TMRCurve *_curve,
   else if (t1 > tmax){ t1 = tmax; }
   if (t2 > tmax){ t2 = tmax; }
   else if (t2 < tmin){ t2 = tmin; }
+}
+
+/*
+  Split the curve to the nearest points
+*/
+TMRSplitCurve::TMRSplitCurve( TMRCurve *_curve, 
+                              TMRPoint *p1, TMRPoint *p2 ){
+  curve = _curve;
+  curve->incref();
+  setAttribute(curve->getAttribute());
+
+  // Perform the inverse evaluation
+  curve->invEvalPoint(*p1, &t1);
+  curve->invEvalPoint(*p2, &t2);
+
+  // Check the range
+  double tmin, tmax;
+  curve->getRange(&tmin, &tmax);
+  if (t1 < tmin){ t1 = tmin; }
+  else if (t1 > tmax){ t1 = tmax; }
+  if (t2 > tmax){ t2 = tmax; }
+  else if (t2 < tmin){ t2 = tmin; }
+}
+
+/*
+  Split the curve and check if the two vertices are evalauted from
+  this curve using a parametric location. Otherwise do the same as
+  before.
+*/
+TMRSplitCurve::TMRSplitCurve( TMRCurve *_curve, 
+                              TMRVertex *v1, TMRVertex *v2 ){
+  curve = _curve;
+  curve->incref();
+  setAttribute(curve->getAttribute());
+
+  TMRPoint p;
+  TMRVertexFromCurve *v1f = dynamic_cast<TMRVertexFromCurve*>(v1);
+  if (v1f && curve == v1f->getCurve()){
+    t1 = v1f->getParamPoint();
+  }
+  else {
+    v1->evalPoint(&p);
+    curve->invEvalPoint(p, &t1);
+  }
+
+  TMRVertexFromCurve *v2f = dynamic_cast<TMRVertexFromCurve*>(v2);
+  if (v2f && curve == v2f->getCurve()){
+    t2 = v2f->getParamPoint();
+  }
+  else {
+    v2->evalPoint(&p);
+    curve->invEvalPoint(p, &t2);
+  }
+
+  // Check the range
+  double tmin, tmax;
+  curve->getRange(&tmin, &tmax);
+  if (t1 < tmin){ t1 = tmin; }
+  else if (t1 > tmax){ t1 = tmax; }
+  if (t2 > tmax){ t2 = tmax; }
+  else if (t2 < tmin){ t2 = tmin; } 
 }
 
 /*

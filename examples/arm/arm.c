@@ -229,7 +229,9 @@ TMRBsplineCurve* createLine( TMRVertex *v1, TMRVertex *v2 ){
   TMRPoint p[2];
   v1->evalPoint(&p[0]);
   v2->evalPoint(&p[1]);
-  return new TMRBsplineCurve(2, 2, p);
+  TMRBsplineCurve *bspline = new TMRBsplineCurve(2, 2, p);
+  bspline->setVertices(v1, v2);
+  return bspline;
 }
 
 /*
@@ -319,52 +321,52 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   const int num_edges = 29;
   TMREdge *e[29];
   // First inner edges
-  e[0] = new TMREdge(new TMRSplitCurve(inner1, 0.0, 0.25), v[0], v[1]);
-  e[1] = new TMREdge(new TMRSplitCurve(inner1, 0.25, 0.5), v[1], v[2]);
-  e[2] = new TMREdge(new TMRSplitCurve(inner1, 0.5, 0.75), v[2], v[3]);
-  e[3] = new TMREdge(new TMRSplitCurve(inner1, 0.75, 1.0), v[3], v[0]);
+  e[0] = new TMREdge(new TMRSplitCurve(inner1, v[0], v[1]));
+  e[1] = new TMREdge(new TMRSplitCurve(inner1, v[1], v[2]));
+  e[2] = new TMREdge(new TMRSplitCurve(inner1, v[2], v[3]));
+  e[3] = new TMREdge(new TMRSplitCurve(inner1, v[3], v[0]));
 
   // Second set of inner edges
-  e[4] = new TMREdge(new TMRSplitCurve(inner2, 0.0, 0.25), v[4], v[5]);
-  e[5] = new TMREdge(new TMRSplitCurve(inner2, 0.25, 0.5), v[5], v[6]);
-  e[6] = new TMREdge(new TMRSplitCurve(inner2, 0.5, 0.75), v[6], v[7]);
-  e[7] = new TMREdge(new TMRSplitCurve(inner2, 0.75, 1.0), v[7], v[4]);
+  e[4] = new TMREdge(new TMRSplitCurve(inner2, v[4], v[5]));
+  e[5] = new TMREdge(new TMRSplitCurve(inner2, v[5], v[6]));
+  e[6] = new TMREdge(new TMRSplitCurve(inner2, v[6], v[7]));
+  e[7] = new TMREdge(new TMRSplitCurve(inner2, v[7], v[4]));
 
   // Outer edges -- all the way around
-  e[8] = new TMREdge(new TMRSplitCurve(outer1, 0.0, 0.5), v[8], v[9]);
-  e[9] = new TMREdge(new TMRSplitCurve(outer1, 0.5, 1.0), v[9], v[10]);
+  e[8] = new TMREdge(new TMRSplitCurve(outer1, v[8], v[9]));
+  e[9] = new TMREdge(new TMRSplitCurve(outer1, v[9], v[10]));
 
   // Lower line segment edges
-  e[10] = new TMREdge(new TMRSplitCurve(line2, 0.0, 0.45), v[10], v[16]);
-  e[11] = new TMREdge(new TMRSplitCurve(line2, 0.45, 0.7), v[16], v[17]);
-  e[12] = new TMREdge(new TMRSplitCurve(line2, 0.7, 1.0), v[17], v[11]);
+  e[10] = new TMREdge(new TMRSplitCurve(line2, v[10], v[16]));
+  e[11] = new TMREdge(new TMRSplitCurve(line2, v[16], v[17]));
+  e[12] = new TMREdge(new TMRSplitCurve(line2, v[17], v[11]));
 
   // Outer edges
-  e[13] = new TMREdge(new TMRSplitCurve(outer2, 0.0, 0.5), v[11], v[12]);
-  e[14] = new TMREdge(new TMRSplitCurve(outer2, 0.5, 1.0), v[12], v[13]);
+  e[13] = new TMREdge(new TMRSplitCurve(outer2, v[11], v[12]));
+  e[14] = new TMREdge(new TMRSplitCurve(outer2, v[12], v[13]));
 
   // Upper line segments  
-  e[15] = new TMREdge(new TMRSplitCurve(line1, 0.7, 1.0), v[15], v[13]);
-  e[16] = new TMREdge(new TMRSplitCurve(line1, 0.45, 0.7), v[14], v[15]);
-  e[17] = new TMREdge(new TMRSplitCurve(line1, 0.0, 0.45), v[8], v[14]);
+  e[15] = new TMREdge(new TMRSplitCurve(line1, v[15], v[13]));
+  e[16] = new TMREdge(new TMRSplitCurve(line1, v[14], v[15]));
+  e[17] = new TMREdge(new TMRSplitCurve(line1, v[8], v[14]));
 
   // The inner line segments - most of these requrie the creation of a new line
-  e[18] = new TMREdge(createLine(v[1], v[8]), v[1], v[8]);
-  e[19] = new TMREdge(createLine(v[2], v[9]), v[2], v[9]);
-  e[20] = new TMREdge(createLine(v[3], v[10]), v[3], v[10]);
+  e[18] = new TMREdge(createLine(v[1], v[8]));
+  e[19] = new TMREdge(createLine(v[2], v[9]));
+  e[20] = new TMREdge(createLine(v[3], v[10]));
 
-  e[21] = new TMREdge(createLine(v[0], v[16]), v[0], v[16]);
-  e[22] = new TMREdge(createLine(v[6], v[17]), v[6], v[17]);
+  e[21] = new TMREdge(createLine(v[0], v[16]));
+  e[22] = new TMREdge(createLine(v[6], v[17]));
 
-  e[23] = new TMREdge(createLine(v[7], v[11]), v[7], v[11]);
-  e[24] = new TMREdge(createLine(v[4], v[12]), v[4], v[12]);
-  e[25] = new TMREdge(createLine(v[5], v[13]), v[5], v[13]);
+  e[23] = new TMREdge(createLine(v[7], v[11]));
+  e[24] = new TMREdge(createLine(v[4], v[12]));
+  e[25] = new TMREdge(createLine(v[5], v[13]));
 
-  e[26] = new TMREdge(createLine(v[6], v[15]), v[6], v[15]);
-  e[27] = new TMREdge(createLine(v[0], v[14]), v[0], v[14]);
+  e[26] = new TMREdge(createLine(v[6], v[15]));
+  e[27] = new TMREdge(createLine(v[0], v[14]));
 
   // Create the last edge joining the two segments
-  e[28] = new TMREdge(createLine(v[0], v[6]), v[0], v[6]);
+  e[28] = new TMREdge(createLine(v[0], v[6]));
 
   if (write_vtk_files){
     for ( int i = 0; i < num_edges; i++ ){
