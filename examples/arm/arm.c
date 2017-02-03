@@ -324,13 +324,13 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   e[0] = new TMREdge(new TMRSplitCurve(inner1, v[0], v[1]));
   e[1] = new TMREdge(new TMRSplitCurve(inner1, v[1], v[2]));
   e[2] = new TMREdge(new TMRSplitCurve(inner1, v[2], v[3]));
-  e[3] = new TMREdge(new TMRSplitCurve(inner1, v[3], v[0]));
+  e[3] = new TMREdge(new TMRSplitCurve(inner1, 0.75, 1.0), v[3], v[0]);
 
   // Second set of inner edges
   e[4] = new TMREdge(new TMRSplitCurve(inner2, v[4], v[5]));
   e[5] = new TMREdge(new TMRSplitCurve(inner2, v[5], v[6]));
   e[6] = new TMREdge(new TMRSplitCurve(inner2, v[6], v[7]));
-  e[7] = new TMREdge(new TMRSplitCurve(inner2, v[7], v[4]));
+  e[7] = new TMREdge(new TMRSplitCurve(inner2, 0.75, 1.0), v[7], v[4]);
 
   // Outer edges -- all the way around
   e[8] = new TMREdge(new TMRSplitCurve(outer1, v[8], v[9]));
@@ -475,7 +475,8 @@ int main( int argc, char *argv[] ){
   forest->incref();
 
   forest->setTopology(topo);
-  forest->createTrees(5);
+  // forest->createTrees(5);
+  forest->createRandomTrees(150, 0, 10);
   forest->repartition();
   forest->balance(1);
   forest->repartition();

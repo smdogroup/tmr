@@ -251,9 +251,41 @@ void TMRTriangulation::create(){
 }
 
 /*
+  Compute the triangle area ratio: parametric area/physical area
+*/
+double TMRTriangulation::computeTriAreaRatio( int triangle ){
+  const int *t = &tris[3*triangle];
+  double x1 = params[2*t[0]], y1 = params[2*t[0]+1];
+  double x2 = params[2*t[1]], y2 = params[2*t[1]+1];
+  double x3 = params[2*t[2]], y3 = params[2*t[2]+1];
+
+  // | x1  x2  x3 |
+  // | y1  y2  y3 |
+  // | 1   1   1  |
+
+  double area = 0.5*fabs((x1 - x3)*(y2 - y1) - (x1 - x2)*(y3 - y1));
+
+  TMRPoint a, b, c;
+  a.x = pts[t[1]].x - pts[t[0]].x;
+  a.y = pts[t[1]].y - pts[t[0]].y;
+  a.z = pts[t[1]].z - pts[t[0]].z;
+
+  b.x = pts[t[2]].x - pts[t[0]].x;
+  b.y = pts[t[2]].y - pts[t[0]].y;
+  b.z = pts[t[2]].z - pts[t[0]].z;
+
+  c.x = a.y*b.z - a.z*b.y;
+  c.y = a.z*b.x - a.x*b.z;
+  c.z = a.x*b.y - a.y*b.x;
+  double Area = 0.5*sqrt(c.dot(c));
+
+  return area/Area;
+}
+
+/*
   Refine the mesh
 */
-void TMRTriangulation::refine( const double areas[] ){
+void TMRTriangulation::refine( double htarget ){
   // Set up the Triangle data for input/output
   struct triangulateio in, out, vorout;
   memset(&in, 0, sizeof(in));
@@ -273,7 +305,10 @@ void TMRTriangulation::refine( const double areas[] ){
 
   // Set the areas of the triangles as a constraint
   in.trianglearealist = (double*)malloc(ntris*sizeof(double));
-  memcpy(in.trianglearealist, areas, ntris*sizeof(double));
+  double area_target = 0.25*sqrt(3)*htarget*htarget;
+  for ( int i = 0; i < ntris; i++ ){
+    in.trianglearealist[i] = area_target*computeTriAreaRatio(i);
+  }
 
   // The number of segments
   in.numberofsegments = nsegments;

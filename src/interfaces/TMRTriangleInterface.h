@@ -25,7 +25,7 @@ class TMRTriangulation : public TMREntity {
   void create();
   
   // Refine the triangulation - maximum area constraints
-  void refine( const double areas[] ); 
+  void refine( double htarget ); 
 
   // Smooth the triangular mesh
   void laplacianSmoothing( int nsmooth );
@@ -66,6 +66,9 @@ class TMRTriangulation : public TMREntity {
                             int num_quads, const int *quad_list,
                             int num_edges, const int *edge_list,
                             int num_pts, double *prm, TMRPoint *p );
+
+  // Compute the triangle area ratio: parametric area/physical area
+  double computeTriAreaRatio( int t1 );
 
   // Compute recombined triangle information
   int getRecombinedQuad( int t1, int t2, int quad[] );

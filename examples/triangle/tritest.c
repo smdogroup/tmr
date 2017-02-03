@@ -56,34 +56,9 @@ int main( int argc, char *argv[] ){
   TMRTriangulation *tri = new TMRTriangulation(npts, prms, NULL, surf);
   tri->setSegments(nsegs, seg);
   tri->create();
+  tri->refine(length); 
 
-  // Get the number of triangles
-  int ntris;
-  tri->getTriangulation(&ntris, NULL);
-
-  double *areas = new double[ ntris ];
-  for ( int i = 0; i < ntris; i++ ){
-    areas[i] = 1.0*area;
-  }
-
-  // Set the area
-  area = area/(20*20);
-  
-  // Refine the areas
-  tri->refine(areas);
-  delete [] areas;
-
-  // Get the number of triangles
-  tri->getTriangulation(&ntris, NULL);
-  
-  areas = new double[ ntris ];
-  for ( int i = 0; i < ntris; i++ ){
-    areas[i] = area;
-  }
-  tri->refine(areas);
-  delete [] areas;
-
- for ( int k = 0; k < 5; k++ ){
+  for ( int k = 0; k < 5; k++ ){
     // tri->laplacianSmoothing(50);
     tri->springSmoothing(50);
     tri->remesh();

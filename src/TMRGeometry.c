@@ -148,9 +148,9 @@ void integrateEdge( TMRCurve *edge,
   edge->evalPoint(t2, &p2);
   
   // Evaluate the approximate integral contributions
-  double int1 = (tmid - t1)*pointDist(&p1, &pmid);
-  double int2 = (t2 - tmid)*pointDist(&pmid, &p2);
-  double int3 = (tmid - t1)*pointDist(&p1, &p2);
+  double int1 = pointDist(&p1, &pmid);
+  double int2 = pointDist(&pmid, &p2);
+  double int3 = pointDist(&p1, &p2);
 
   // Compute the integration error
   double error = fabs(int3 - int1 - int2);
@@ -663,6 +663,9 @@ TMRSplitCurve::TMRSplitCurve( TMRCurve *_curve,
     v2->evalPoint(&p);
     curve->invEvalPoint(p, &t2);
   }
+
+  // Set the vertices for this curve
+  setVertices(v1, v2);
 
   // Check the range
   double tmin, tmax;
