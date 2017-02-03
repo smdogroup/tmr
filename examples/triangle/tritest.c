@@ -1,51 +1,64 @@
 #include "TMRTriangleInterface.h"
+#include "TMRBspline.h"
 #include <stdio.h>
+#include <math.h>
 
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
-  int pts_per_side = 101;
-  int npts = 4*(pts_per_side-1);
-  double *pts = new double[ 2*(npts+1) ];
+  int nu = 2, ku = 2;
+  int nv = 2, kv = 2;
+  TMRPoint pts[4];
 
-  for ( int i = 0; i < pts_per_side; i++ ){
-    int node = i;
-    pts[2*node] = 1.0*i/(pts_per_side-1);
-    pts[2*node+1] = 0.0;
+  pts[0].x = -10.0;
+  pts[0].y = -10.0;
+  pts[0].z = 0.0;
 
-    node = i + pts_per_side-1;
-    pts[2*node] = 1.0;
-    pts[2*node+1] = 1.0*i/(pts_per_side-1);;
+  pts[1].x = 10.0;
+  pts[1].y = -10.0;
+  pts[1].z = 0.0;
 
-    node = i + 2*(pts_per_side-1);
-    pts[2*node] = 1.0 - 1.0*i/(pts_per_side-1);
-    pts[2*node+1] = 1.0;
+  pts[2].x = -10.0;
+  pts[2].y = 10.0;
+  pts[2].z = 0.0;
 
-    node = i + 3*(pts_per_side-1);
-    pts[2*node] = 0.0;
-    pts[2*node+1] = 1.0 - 1.0*i/(pts_per_side-1);
+  pts[3].x = 10.0;
+  pts[3].y = 10.0;
+  pts[3].z = 0.0;
+
+  TMRBsplineSurface *surf = new TMRBsplineSurface(nu, nv, ku, kv, pts);
+  surf->incref();
+
+  int npts = 350;
+  double *prms = new double[ 2*npts ];
+
+  for ( int i = 0; i < npts; i++ ){
+    TMRPoint P;
+    double u = 2.0*M_PI*1.0*i/npts;
+    P.x = cos(u);
+    P.y = sin(u);
+    P.z = 0.0;
+    surf->invEvalPoint(P, &prms[2*i], &prms[2*i+1]);
   }
 
   int nsegs = npts;
   int *seg = new int[ 2*nsegs ];
-  int *segmarks = new int[ nsegs ];
   for ( int i = 0; i < nsegs; i++ ){
     seg[2*i] = i;
     seg[2*i+1] = i+1;
-    segmarks[i] = 1;
   }
   seg[2*nsegs-2] = 0;
 
-  double length = 1.0/(pts_per_side-1);
+  double length = 2.0*M_PI/npts;
   double area = 0.5*length*length;
 
   int nholes = 0;
   double *holes = NULL;
 
   // Triangulate the region
-  TMRTriangulation *tri = new TMRTriangulation(npts, pts);
-  tri->setSegments(nsegs, seg, segmarks);
+  TMRTriangulation *tri = new TMRTriangulation(npts, prms, NULL, surf);
+  tri->setSegments(nsegs, seg);
   tri->create();
 
   // Get the number of triangles
@@ -54,38 +67,38 @@ int main( int argc, char *argv[] ){
 
   double *areas = new double[ ntris ];
   for ( int i = 0; i < ntris; i++ ){
-    areas[i] = area;
+    areas[i] = 1.1*area;
   }
   
   // Refine the areas
-  printf("Refine\n");
   tri->refine(areas);
   delete [] areas;
 
   // Get the number of triangles
   tri->getTriangulation(&ntris, NULL);
   
+  area = area/(20*20);
+
   areas = new double[ ntris ];
   for ( int i = 0; i < ntris; i++ ){
     areas[i] = area;
   }
   tri->refine(areas);
   delete [] areas;
-  tri->writeToVTK("triangle.vtk");
 
-  tri->smooth();
-
-  int new_npts;
-  const double *new_pts;
-  tri->getPoints(&new_npts, &new_pts);
-
-  TMRPoint *p = new TMRPoint[ new_npts ];
-  for ( int i = 0; i < new_npts; i++ ){
-    p[i].x = new_pts[2*i];
-    p[i].y = new_pts[2*i+1];
-    p[i].z = 0.0;
+ for ( int k = 0; k < 5; k++ ){
+    tri->laplacianSmoothing(100);
+    tri->remesh();
   }
-  tri->recombine(p);
+
+  tri->writeToVTK("triangle.vtk");
+  tri->recombine();
+  tri->printQuadQuality();
+
+  tri->writeQuadToVTK("match.vtk");
+  tri->laplacianQuadSmoothing(100);
+  tri->printQuadQuality();
+  tri->writeQuadToVTK("smoothed.vtk");
   
   TMRFinalize();
   MPI_Finalize();

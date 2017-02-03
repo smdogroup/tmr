@@ -37,6 +37,9 @@ class TMRPoint {
   inline double dot( const TMRPoint& p ) const {
     return x*p.x + y*p.y + z*p.z;
   }
+  inline double dot( const TMRPoint* p ) const {
+    return x*p->x + y*p->y + z*p->z;
+  }
   
   double x, y, z;
 };

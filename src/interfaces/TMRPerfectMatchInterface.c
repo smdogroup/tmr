@@ -5,8 +5,9 @@
 #define PERFECT_MATCHING_DOUBLE
 #include "PerfectMatching.h"
 
-int TMR_PerfectMatchGraph( int nnodes, int nedges, int *edges, double *weights,
-                           int **_match ){
+int TMR_PerfectMatchGraph( int nnodes, int nedges, 
+                           const int *edges, const double *weights,
+                           int *match ){
   if (nnodes % 2 == 1){
   	printf("Perfect matching does not exist\n");
   }
@@ -29,7 +30,6 @@ int TMR_PerfectMatchGraph( int nnodes, int nedges, int *edges, double *weights,
 
   // Allocate the match
   int nmatch = 0;
-  int *match = new int[ nnodes ];
   for ( int i = 0; i < nnodes; i++ ){
     int j = pm->GetMatch(i);
     if (i < j){
@@ -40,8 +40,6 @@ int TMR_PerfectMatchGraph( int nnodes, int nedges, int *edges, double *weights,
   }
   
   delete pm;
-
-  *_match = match;
 
   return 0;
 }
