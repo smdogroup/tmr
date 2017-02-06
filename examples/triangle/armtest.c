@@ -129,25 +129,22 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   // Create the planar surface
   const int nu = 2, ku = 2;
   const int nv = 2, kv = 2;
+  const double Tu[] = {-20.0, -20.0, 20.0, 20.0};
+  const double Tv[] = {-20.0, -20.0, 20.0, 20.0};
   TMRPoint pts[nu*nv];
 
-  // Set the max extent of the points
-  double rmax = r1+t;
-  if (r2+t > rmax){ rmax = r2+t; }
-
-  double len = (L + 2*rmax);
-
-  for ( int j = 0; j < nu; j++ ){
-    for ( int i = 0; i < nv; i++ ){
+  for ( int j = 0; j < nv; j++ ){
+    for ( int i = 0; i < nu; i++ ){
       double u = 1.0*i/(nu-1);
       double v = 1.0*j/(nv-1);
-      pts[nu*j+i].x = -rmax + len*u;
-      pts[nu*j+i].y = -rmax + len*v;
+      pts[nu*j+i].x = -20.0 + 40.0*u;
+      pts[nu*j+i].y = -20.0 + 40.0*v;
       pts[nu*j+i].z = 0.0;
     }
   }
 
-  TMRBsplineSurface *surf = new TMRBsplineSurface(nu, nv, ku, kv, pts);
+  TMRBsplineSurface *surf = 
+    new TMRBsplineSurface(nu, nv, ku, kv, Tu, Tv, pts);
   surf->incref();
 
   // Set the curves that form the outline of the bracket
@@ -187,8 +184,10 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   int curve_npts[4];
   double *curve_tpts[4];
 
+  TMREntity::setTolerances(1e-14, 1e-14);
+
   // Loop over all of the edges
-  double integration_eps = 1e-6; 
+  double integration_eps = 1e-8; 
   for ( int i = 0; i < num_curves; i++ ){
     double tmin, tmax;
     curves[i]->getRange(&tmin, &tmax);
@@ -265,39 +264,64 @@ TMRTopology* setUpTopology( MPI_Comm comm,
     pt++;
 
     // Find the point on the curve
-    for ( int j = 1; j < curve_npts[i]-1; j++ ){
-      double t = 0.0;
-      if (dir[i] > 0){
-        t = curve_tpts[i][j-1];
+    if (dir[i] > 0){
+      for ( int j = 1; j < curve_npts[i]-1; j++ ){
+        double t = curve_tpts[i][j-1];
+        curves[i]->evalPoint(t, &p);
+        surf->invEvalPoint(p, &params[2*pt], &params[2*pt+1]);
+        seg[2*pt] = pt;
+        seg[2*pt+1] = pt+1;
+        pt++;
       }
-      else {
-        t = curve_tpts[i][curve_npts[i]-2-j];
-      }
-      curves[i]->evalPoint(t, &p);
-      surf->invEvalPoint(p, &params[2*pt], &params[2*pt+1]);
-      seg[2*pt] = pt;
-      seg[2*pt+1] = pt+1;
-      pt++;
     }
-
-    // v1->evalPoint(&p);
-    // surf->invEvalPoint(p, &params[2*pt], &params[2*pt+1]);
-    // seg[2*pt] = pt;
-    // seg[2*pt+1] = pt+1;
-    // pt++;
+    else {
+      for ( int j = curve_npts[i]-2; j >= 1; j-- ){
+        double t = curve_tpts[i][j-1];
+        curves[i]->evalPoint(t, &p);
+        surf->invEvalPoint(p, &params[2*pt], &params[2*pt+1]);
+        seg[2*pt] = pt;
+        seg[2*pt+1] = pt+1;
+        pt++;
+      } 
+    }
   }
   seg[2*(pt-1)+1] = 0;
+
+  // First line: <# of vertices> <dimension (must be 2)> <# of attributes> <# of boundary markers (0 or 1)>
+  // Following lines: <vertex #> <x> <y> [attributes] [boundary marker]
+  // One line: <# of segments> <# of boundary markers (0 or 1)>
+  // Following lines: <segment #> <endpoint> <endpoint> [boundary marker]
+  // One line: <# of holes>s
+  // Following lines: <hole #> <x> <y>
+  // Optional line: <# of regional attributes and/or area constraints>
+  // Optional following lines: <region #> <x> <y> <attribute> <maximum area>
+
+  FILE *fp = fopen("triangle_seg.poly", "w");
+  if (fp){
+    fprintf(fp, "%d %d %d %d\n", npts, 2, 0, 0);
+    for ( int i = 0; i < npts; i++ ){
+      fprintf(fp, "%d %.16e %.16e\n", i, params[2*i], params[2*i+1]);
+    }
+    fprintf(fp, "%d %d\n", nseg, 0);
+    for ( int i = 0; i < nseg; i++ ){
+      fprintf(fp, "%d %d %d\n", i, seg[2*i], seg[2*i+1]);
+    }
+    fprintf(fp, "0\n");
+    fclose(fp);
+  }
 
   // Triangulate the region
   TMRTriangulation *tri = new TMRTriangulation(npts, params, NULL, surf);
   tri->setSegments(nseg, seg);
   tri->create();
   tri->refine(htarget);
-
   for ( int k = 0; k < 5; k++ ){
     tri->laplacianSmoothing(100);
     tri->remesh();
   }
+  tri->laplacianSmoothing(100);
+  tri->remesh();
+  tri->printTriQuality();
 
   tri->writeToVTK("triangle.vtk");
   tri->recombine();
@@ -323,12 +347,12 @@ int main( int argc, char *argv[] ){
 
   // Create the dimensions of the part
   double L = 10.0;
-  double t = 1.5;
+  double t = 2.0;
   double r1 = 2.0;
   double r2 = 1.0;
 
   // Create the topology
-  double htarget = 0.25;
+  double htarget = 1.5;
   TMRTopology *topo = setUpTopology(comm, r1, r2, L, t, htarget);
   // topo->incref();
 

@@ -132,8 +132,8 @@ class TMREntity {
 
   // Set/get the tolerances used within the geometric search algorithms
   // ------------------------------------------------------------------
-  void setTolerances( double _eps_dist, double _eps_cosine );
-  void getTolerances( double *_eps_dist, double *_eps_cosine );
+  static void setTolerances( double _eps_dist, double _eps_cosine );
+  static void getTolerances( double *_eps_dist, double *_eps_cosine );
 
  protected:
   static double eps_dist;

@@ -212,9 +212,14 @@ void TMRTriangulation::create(){
   in.regionlist[3] = 1.0; // Area constraint - unused
 
   // Perform an initial trianguarlization of the points
-  char opts[] = "pczevnYY";
-  triangulate(opts, &in, &out, &vorout);
-
+  if (in.segmentlist){
+    char opts[] = "pzevnYY";
+    triangulate(opts, &in, &out, &vorout);
+  }
+  else {
+    char opts[] = "czevn";
+    triangulate(opts, &in, &out, &vorout);
+  }
   // Copy out the point information
   npts = out.numberofpoints;
   params = out.pointlist;           out.pointlist = NULL;
@@ -248,6 +253,19 @@ void TMRTriangulation::create(){
   for ( int i = 0; i < npts; i++ ){
     surface->evalPoint(params[2*i], params[2*i+1], &pts[i]);
   }
+
+/*
+  for ( int i = 0; i < npts; i++ ){
+    double u = params[2*i];
+    double v = params[2*i+1];
+    if (u*u + v*v > 0.998){
+      ptmarkers[i] = 1;
+    }
+    else {
+      ptmarkers[i] = 0;
+    }
+  }
+  */
 }
 
 /*
@@ -331,7 +349,182 @@ void TMRTriangulation::refine( double htarget ){
   in.edgelist = edges;
   
   // Perform an initial trianguarlization of the points
-  char opts[] = "prazenvYY";
+  char opts[] = "prazenvYYq";
+  triangulate(opts, &in, &out, &vorout);
+
+  // Copy out the point information
+  npts = out.numberofpoints;
+  params = out.pointlist;           out.pointlist = NULL;
+  ptmarkers = out.pointmarkerlist;  out.pointmarkerlist = NULL;
+
+  // Copy out the segment information
+  nsegments = out.numberofsegments;
+  segments = out.segmentlist;       out.segmentlist = NULL;
+  
+  // Copy out the triangulation information
+  ntris = out.numberoftriangles;
+  ncorners = out.numberofcorners;
+  tris = out.trianglelist;          out.trianglelist = NULL;
+  trineighbors = out.neighborlist;  out.neighborlist = NULL;
+
+  // Copy out the edge and edge marker information
+  nedges = out.numberofedges;
+  edges = out.edgelist;             out.edgelist = NULL;
+
+  // Record the vorout data
+  dualedges = vorout.edgelist;      vorout.edgelist = NULL;
+
+  // Free all of the remaining data
+  freetriangleio(&in);
+  freetriangleio(&out);
+  freetriangleio(&vorout);
+
+  // Allocate a new array of points for the new connectivity
+  free(pts);
+  pts = (TMRPoint*)malloc(npts*sizeof(TMRPoint));
+  for ( int i = 0; i < npts; i++ ){
+    surface->evalPoint(params[2*i], params[2*i+1], &pts[i]);
+  }
+}
+
+/*
+  Prune from the triangular mesh any points with a connectivity
+  less than or equal to 4 or greater than or equal to 7
+*/
+void TMRTriangulation::prune(){
+  // Create a list of the nodes to remove from the tree
+  int *oldtonew = (int*)malloc(npts*sizeof(int));
+
+  // Count up the number of times a node is referenced
+  memset(oldtonew, 0, npts*sizeof(int));
+  for ( int i = 0; i < 3*ntris; i++ ){
+    oldtonew[tris[i]]++;
+  }
+
+  // Set the new set of points/markers etc.
+  int index = 0;
+  for ( int i = 0; i < npts; i++ ){
+    if (ptmarkers[i] == 0 && 
+        (oldtonew[i] > 4 && oldtonew[i] < 7)){
+      oldtonew[i] = index;
+      index++;
+    }
+    else if (ptmarkers[i] > 0){
+      oldtonew[i] = index;
+      index++;
+    }
+    else {
+      // This node will be deleted
+      oldtonew[i] = -1;
+    }
+  }
+
+  // There will be a total of index new points
+  double *new_params = (double*)malloc(2*index*sizeof(double));
+  TMRPoint *new_pts = (TMRPoint*)malloc(index*sizeof(TMRPoint));
+  int *new_ptmarkers = (int*)malloc(index*sizeof(int));
+
+  for ( int i = 0; i < npts; i++ ){
+    int k = oldtonew[i];
+    if (k >= 0){
+      new_params[2*k] = params[2*i];
+      new_params[2*k+1] = params[2*i+1];
+      new_pts[k] = pts[i];
+      new_ptmarkers[k] = ptmarkers[i];
+    }
+  }
+
+  // Set the new number of points
+  npts = index;
+
+  // Reorder the segments in place
+  for ( int i = 0; i < 2*nsegments; i++ ){
+    int k = oldtonew[segments[i]];
+    if (k >= 0){
+      segments[i] = k;
+    }
+    else {
+      printf("Negative boundary segment index\n");
+    }
+  }
+
+  // Compute the number of new triangles keeping the
+  // same amount of allocated memory
+  int n = 0;
+  const int *t = tris;
+  for ( int i = 0; i < ntris; i++ ){
+    int k0 = oldtonew[t[0]];
+    int k1 = oldtonew[t[1]];
+    int k2 = oldtonew[t[2]];
+    if (k0 >= 0 && k1 >= 0 && k2 >= 0){
+      tris[3*n] = k0;
+      tris[3*n+1] = k1;
+      tris[3*n+2] = k2;
+      n++;
+    }
+    t += 3;
+  }
+
+  // Set the new number of triangles
+  ntris = n;
+
+  // Deallocate and reassign the new parameters
+  free(pts);
+  free(params);
+  free(ptmarkers);
+  pts = new_pts;
+  params = new_params;
+  ptmarkers = new_ptmarkers;
+
+  // Free the data (if any) that is out of date
+  if (edges){ 
+    nedges = 0;
+    free(edges);  
+    edges = NULL; 
+  }
+  if (dualedges){ 
+    free(dualedges); 
+    dualedges = NULL; 
+  }
+  if (trineighbors){ 
+    free(trineighbors); 
+    trineighbors = NULL; 
+  }
+
+  // Set up the Triangle data for input/output
+  struct triangulateio in, out, vorout;
+  memset(&in, 0, sizeof(in));
+  memset(&out, 0, sizeof(out));
+  memset(&vorout, 0, sizeof(vorout));
+
+  // Set the points for input
+  in.numberofpoints = npts;
+  in.pointlist = params;
+  in.pointmarkerlist = ptmarkers;
+
+  // The number of segments
+  in.numberofsegments = nsegments;
+  in.segmentlist = segments;
+
+  // Set the triangles
+  in.numberoftriangles = ntris;
+  in.numberofcorners = ncorners;
+  in.trianglelist = tris;
+  
+  // Copy over the holes if any
+  in.numberofholes = nholes;
+  in.holelist = holes;
+
+  // Set the regions
+  in.numberofregions = 1;
+  in.regionlist = (double*)malloc(4*sizeof(double));
+  in.regionlist[0] = 0.0;
+  in.regionlist[1] = 0.0;
+  in.regionlist[2] = 1.0; // Regional attribute for the whole mesh
+  in.regionlist[3] = 1.0; // Area constraint - unused
+
+  // Perform an initial trianguarlization of the points
+  char opts[] = "rzenv";
   triangulate(opts, &in, &out, &vorout);
 
   // Copy out the point information
@@ -751,7 +944,7 @@ void TMRTriangulation::remesh(){
   in.edgelist = edges;
 
   // Perform an initial trianguarlization of the points
-  char opts[] = "zenv";
+  char opts[] = "rqzenvYY";
   triangulate(opts, &in, &out, &vorout);
 
   // Copy out the point information
@@ -1016,6 +1209,46 @@ double TMRTriangulation::computeQuadQuality( const int *quad,
 }
 
 /*
+  Compute the quality of a quadrilateral element
+*/
+double TMRTriangulation::computeTriQuality( const int *tri,
+                                            const TMRPoint *p ){
+  // Compute the maximum of fabs(0.5*M_PI - alpha)
+  double max_val = 0.0;
+
+  for ( int k = 0; k < 3; k++ ){
+    int prev = k-1;
+    if (prev < 0){ prev = 2; }
+    int next = k+1;
+    if (next > 2){ next = 0; }
+
+    TMRPoint a;
+    a.x = p[tri[k]].x - p[tri[prev]].x;
+    a.y = p[tri[k]].y - p[tri[prev]].y;
+    a.z = p[tri[k]].z - p[tri[prev]].z;  
+    
+    TMRPoint b;
+    b.x = p[tri[next]].x - p[tri[k]].x;
+    b.y = p[tri[next]].y - p[tri[k]].y;
+    b.z = p[tri[next]].z - p[tri[k]].z;
+   
+    // Compute the internal angle between the 
+    double alpha = M_PI - acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
+    double val = fabs(M_PI/3.0 - alpha);
+    if (val > max_val){
+      max_val = val;
+    }
+  }
+
+  // Compute the quality
+  double eta = 1.0 - (3.0/M_PI)*max_val;
+  if (eta < 0.0){ 
+    eta = 0.0; 
+  }
+
+  return eta;
+}
+/*
   Recombine the triangulation into a quadrilateral mesh
 */
 void TMRTriangulation::recombine(){
@@ -1040,7 +1273,7 @@ void TMRTriangulation::recombine(){
     if (t1 >= 0 && t2 >= 0){
       // Compute the weight for this recombination
       double quality = computeRecombinedQuality(t1, t2, pts);
-      double weight = 100.0*(1.0 - quality)*(1.0 + 1.0/(quality + 0.1));
+      double weight = (1.0 - quality)*(1.0 + 1.0/(quality + 0.01));
       graphedges[2*e] = t1;
       graphedges[2*e+1] = t2;
       weights[e] = weight;
@@ -1060,12 +1293,78 @@ void TMRTriangulation::recombine(){
 
   // Recombine the quads
   for ( int i = 0; i < nquads; i++ ){
-    getRecombinedQuad(match[2*i], match[2*i+1], &quads[4*i]);
+    int fail = getRecombinedQuad(match[2*i], match[2*i+1], &quads[4*i]);
+    if (fail){
+      printf("Recombined quadrilateral %d between triangles %d and %d failed\n", 
+             i, match[2*i], match[2*i+1]);
+    }
   }
   free(match);
 
   // Compute the quad edges 
   computeQuadEdges(npts, nquads, quads, &nquadedges, &quadedges);
+}
+
+/*
+  Print the quad quality
+*/
+void TMRTriangulation::printQuadQuality(){
+  const int nbins = 20;
+  int total = 0;
+  int bins[nbins];
+  memset(bins, 0, nbins*sizeof(int));
+  for ( int i = 0; i < nquads; i++ ){
+    double quality = computeQuadQuality(&quads[4*i], pts);
+
+    int k = 0;
+    for ( ; k < nbins; k++ ){
+      if (quality < 1.0*(k+1)/nbins){
+        break;
+      }
+    }
+    bins[k]++;
+  }
+
+  for ( int i = 0; i < nbins; i++ ){
+    total += bins[i];
+  }
+
+  printf("Quality   # elements   percentage\n");
+  for ( int k = 0; k < nbins; k++ ){
+    printf("< %.2f    %10d   %10.3f\n",
+           1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
+  }
+}
+
+/*
+  Print the triangle quality
+*/
+void TMRTriangulation::printTriQuality(){
+  const int nbins = 20;
+  int total = 0;
+  int bins[nbins];
+  memset(bins, 0, nbins*sizeof(int));
+  for ( int i = 0; i < ntris; i++ ){
+    double quality = computeTriQuality(&tris[3*i], pts);
+
+    int k = 0;
+    for ( ; k < nbins; k++ ){
+      if (quality < 1.0*(k+1)/nbins){
+        break;
+      }
+    }
+    bins[k]++;
+  }
+
+  for ( int i = 0; i < nbins; i++ ){
+    total += bins[i];
+  }
+
+  printf("Quality   # elements   percentage\n");
+  for ( int k = 0; k < nbins; k++ ){
+    printf("< %.2f    %10d   %10.3f\n",
+           1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
+  }
 }
 
 /*
@@ -1110,37 +1409,6 @@ void TMRTriangulation::writeQuadToVTK( const char *filename ){
 }
 
 /*
-  Print the quad quality
-*/
-void TMRTriangulation::printQuadQuality(){
-  const int nbins = 20;
-  int total = 0;
-  int bins[nbins];
-  memset(bins, 0, nbins*sizeof(int));
-  for ( int i = 0; i < nquads; i++ ){
-    double quality = computeQuadQuality(&quads[4*i], pts);
-
-    int k = 0;
-    for ( ; k < nbins; k++ ){
-      if (quality < 1.0*(k+1)/nbins){
-        break;
-      }
-    }
-    bins[k]++;
-  }
-
-  for ( int i = 0; i < nbins; i++ ){
-    total += bins[i];
-  }
-
-  printf("Quality   # elements   percentage\n");
-  for ( int k = 0; k < nbins; k++ ){
-    printf("< %.2f    %10d   %10.3f\n",
-           1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
-  }
-}
-
-/*
   Write the output to a VTK file
 */
 void TMRTriangulation::writeToVTK( const char *filename ){
@@ -1171,6 +1439,14 @@ void TMRTriangulation::writeToVTK( const char *filename ){
     fprintf(fp, "\nCELL_TYPES %d\n", ntris);
     for ( int k = 0; k < ntris; k++ ){
       fprintf(fp, "%d\n", 5);
+    }
+
+        // Print out the rest as fields one-by-one
+    fprintf(fp, "CELL_DATA %d\n", ntris);
+    fprintf(fp, "SCALARS quality float 1\n");
+    fprintf(fp, "LOOKUP_TABLE default\n");
+    for ( int k = 0; k < ntris; k++ ){
+      fprintf(fp, "%e\n", computeTriQuality(&tris[3*k], pts));
     }
 
     fclose(fp);

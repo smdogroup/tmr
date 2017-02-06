@@ -27,6 +27,10 @@ class TMRTriangulation : public TMREntity {
   // Refine the triangulation - maximum area constraints
   void refine( double htarget ); 
 
+  // Prune nodes that have fewer than 5 or greater than 7 
+  // connections
+  void prune();
+
   // Smooth the triangular mesh
   void laplacianSmoothing( int nsmooth );
   void springSmoothing( int nsmooth );
@@ -53,6 +57,7 @@ class TMRTriangulation : public TMREntity {
 
   // Print the quadrilateral quality
   void printQuadQuality();
+  void printTriQuality();
   
  private:
   // Apply the smoothing algorithm
@@ -77,6 +82,7 @@ class TMRTriangulation : public TMREntity {
 
   // Compute the quadrilateral quality
   double computeQuadQuality( const int *quad, const TMRPoint *p );
+  double computeTriQuality( const int *tri, const TMRPoint *p );
 
   // Compute the node to quad data structures
   void computeNodeToQuads( int nnodes, int **_ptr, int **_nodetoquads );
