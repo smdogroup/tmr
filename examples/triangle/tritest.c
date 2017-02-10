@@ -69,7 +69,7 @@ int main( int argc, char *argv[] ){
   tri->springSmoothing(50);
   tri->printTriQuality();
   tri->writeToVTK("triangle.vtk");
-  
+
   tri->recombine();
   tri->printQuadQuality();
   tri->writeQuadToVTK("match.vtk");

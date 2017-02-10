@@ -27,10 +27,6 @@ class TMRTriangulation : public TMREntity {
   // Refine the triangulation - maximum area constraints
   void refine( double htarget ); 
 
-  // Prune nodes that have fewer than 5 or greater than 7 
-  // connections
-  void prune();
-
   // Smooth the triangular mesh
   void laplacianSmoothing( int nsmooth );
   void springSmoothing( int nsmooth );
