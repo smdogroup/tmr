@@ -60,19 +60,18 @@ int main( int argc, char *argv[] ){
   TMRTriangulation *tri = new TMRTriangulation(npts, prms, NULL, surf);
   tri->setSegments(nsegs, seg);
   tri->create();
-  tri->refine(length); 
+  tri->refine(length);
 
   for ( int k = 0; k < 10; k++ ){
     tri->springSmoothing(100);
     tri->remesh();
   }
-  // tri->prune();
-  //  tri->springSmoothing(50);
+  tri->springSmoothing(50);
   tri->printTriQuality();
-
+  tri->writeToVTK("triangle.vtk");
+  
   tri->recombine();
   tri->printQuadQuality();
-
   tri->writeQuadToVTK("match.vtk");
   tri->springQuadSmoothing(100);
   tri->printQuadQuality();
