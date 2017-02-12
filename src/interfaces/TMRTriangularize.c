@@ -328,14 +328,16 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
 
   // Set the initial root/current location of the doubly-linked
   // triangle list structure. These are allocated as we add new triangles.
-  list_root = NULL;
-  list_current = NULL;
+  list_start = NULL;
+  list_end = NULL;
+  list_marker = NULL;
 
-  // Keep track of the number of triangles
+  // Keep track of the total number of triangles
   num_triangles = 0;
 
   // Set the initial number of points
-  num_points = 4+npts;
+  fixed_point_offset = 4;
+  num_points = fixed_point_offset + npts;
 
   // Set the initial for the maximum number of points
   max_num_points = 1024;
@@ -406,6 +408,31 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
   for ( int i = 0; i < npts; i++ ){
     addPointToMesh(&inpts[2*i]);
   }
+
+  // Free the point
+  TriListNode *node = list_start;
+
+  while (node){
+    TriListNode *next = node->next;
+    if (node->tri.u < fixed_point_offset ||
+        node->tri.v < fixed_point_offset ||
+        node->tri.w < fixed_point_offset){
+      if (node == list_start){
+        deleteTriangle(node->tri);
+        next = list_start;
+      }
+      else {
+        deleteTriangle(node->tri);
+      }
+    }
+    // Set the next node
+    node = next;
+  }
+
+  // Free the points from the quadtree
+  for ( uint32_t num = 0; num < fixed_point_offset; num++ ){
+    root->deleteNode(num, &pts[2*num]);
+  }
 }
 
 /*
@@ -430,9 +457,9 @@ TMRTriangularize::~TMRTriangularize(){
   }
 
   // Free the doubly linked edge list
-  while (list_root){
-    TriListNode *tmp = list_root;
-    list_root = list_root->next;
+  while (list_start){
+    TriListNode *tmp = list_start;
+    list_start = list_start->next;
     delete tmp;
   }
 }
@@ -457,7 +484,7 @@ void TMRTriangularize::writeToVTK( const char *filename ){
     fprintf(fp, "\nCELLS %d %d\n", 
             num_triangles, 4*num_triangles);
 
-    TriListNode *node = list_root;
+    TriListNode *node = list_start;
     while (node){
       fprintf(fp, "3 %d %d %d\n", node->tri.u, node->tri.v, node->tri.w);
       node = node->next;
@@ -495,26 +522,26 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
   int success = 1;
 
   // Add the triangle to the list of nodes
-  if (!list_root){
+  if (!list_start){
     // Create the root triangle node
-    list_root = new TriListNode();
-    list_root->tri = tri;
-    list_root->next = NULL;
-    list_root->prev = NULL;
+    list_start = new TriListNode();
+    list_start->tri = tri;
+    list_start->next = NULL;
+    list_start->prev = NULL;
 
     // Update the current node
-    list_current = list_root;
+    list_end = list_start;
   }
   else {
     // Create the new member in the triangle list
     TriListNode *next = new TriListNode();
     next->tri = tri;
     next->next = NULL;
-    next->prev = list_current;
+    next->prev = list_end;
 
     // Update the current member in the triangle list
-    list_current->next = next;
-    list_current = list_current->next;
+    list_end->next = next;
+    list_end = list_end->next;
   }
 
   // Redistribute the members in the hash table if required
@@ -564,15 +591,15 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
 
   // Set the combinations of edge pairs that will be added
   // to the hash table
-  uint32_t edge_pairs[] = {tri.u, tri.v,
-                           tri.v, tri.w,
-                           tri.w, tri.u};
-  
+  uint32_t edge_pairs[][2] = {{tri.u, tri.v},
+                              {tri.v, tri.w},
+                              {tri.w, tri.u}};
+                              
   // Add the triangle to the hash table
   for ( int k = 0; k < 3; k++ ){
     // Add a hash for each pair of edges around the triangle
-    uint32_t u = edge_pairs[2*k];
-    uint32_t v = edge_pairs[2*k+1];
+    uint32_t u = edge_pairs[k][0];
+    uint32_t v = edge_pairs[k][1];
     uint32_t value = getEdgeHash(u, v);
     uint32_t bucket = value % num_buckets;
     if (!buckets[bucket]){
@@ -580,7 +607,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
       buckets[bucket] = new EdgeHashNode();
       buckets[bucket]->u = u;
       buckets[bucket]->v = v;
-      buckets[bucket]->tri_node = list_current;
+      buckets[bucket]->tri_node = list_end;
       buckets[bucket]->next = NULL;
       num_hash_nodes++;
     }
@@ -596,7 +623,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
           success = 0;
 
           // Overwite the triangle
-          node->tri_node = list_current;
+          node->tri_node = list_end;
 
           // Set the pointer to NULL so that the new node will not be
           // created
@@ -621,7 +648,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
         // Set the data into the object
         node->u = u;
         node->v = v;
-        node->tri_node = list_current;
+        node->tri_node = list_end;
         node->next = NULL;
         num_hash_nodes++;
       }
@@ -648,9 +675,9 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
 
   // Set the combinations of edge pairs that will be added
   // to the hash table
-  uint32_t edge_pairs[] = {tri.u, tri.v,
-                          tri.v, tri.w,
-                          tri.w, tri.u};
+  uint32_t edge_pairs[][2] = {{tri.u, tri.v},
+                              {tri.v, tri.w},
+                              {tri.w, tri.u}};
 
   // Keep track if this is the first edge we find
   int first = 1;
@@ -658,8 +685,8 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
   // Add the triangle to the hash table
   for ( int k = 0; k < 3; k++ ){
     // Add a hash for each pair of edges around the triangle
-    uint32_t u = edge_pairs[2*k];
-    uint32_t v = edge_pairs[2*k+1];
+    uint32_t u = edge_pairs[k][0];
+    uint32_t v = edge_pairs[k][1];
 
     // Keep track of whether we've deleted this edge
     int edge_success = 0;
@@ -679,25 +706,34 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
           // Adjust the double linking so that when the node is
           // deleted, the pointers will still work
           TriListNode *ptr = node->tri_node;
-          if (ptr == list_root){
-            list_root = list_root->next;
-            if (list_root){
-              list_root->prev = NULL;
+          if (ptr == list_start){
+            list_start = list_start->next;
+            if (list_start){
+              list_start->prev = NULL;
             }
           }
-          else if (ptr == list_current){
-            list_current = list_current->prev;
-            if (list_current){
-              list_current->next = NULL;
+          else if (ptr == list_end){
+            list_end = list_end->prev;
+            if (list_end){
+              list_end->next = NULL;
             }
           }
           else {
+            // Set the pointers from the previous and next objects
+            // in the list so that they point past the ptr member
             if (ptr->prev){
               ptr->prev->next = ptr->next;
             }
             if (ptr->next){
               ptr->next->prev = ptr->prev;
             }
+          }
+
+          // Adjust the list marker if we're about to delete the triangle
+          // that the marker points to. Move the marker one triangle back
+          // (or set it to NULL if it's the beginning of the list)
+          if (list_marker && ptr == list_marker){
+            list_marker = ptr->prev;
           }
           delete ptr;
           first = 0;
@@ -774,10 +810,10 @@ void TMRTriangularize::setUpPSLGEdges( int nsegs, const int segs[] ){
   for ( int i = 0; i < nsegs; i++ ){
     uint32_t u = 0, v = 0;
     if (segs[2*i] >= 0){
-      u = segs[2*i];
+      u = segs[2*i] + fixed_point_offset;
     }
     if (segs[2*i+1] >= 0){
-      v = segs[2*i+1];
+      v = segs[2*i+1] + fixed_point_offset;
     }
 
     pslg_edges[4*i] = u;
@@ -819,8 +855,8 @@ inline int TMRTriangularize::enclosed( const double p[],
   Does the final given point lie within the circumcircle of the remaining
   points?
 */
-double TMRTriangularize::inCircle( uint32_t u, uint32_t v,\
-                                   uint32_t w, uint32_t x ){
+inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,\
+                                          uint32_t w, uint32_t x ){
   return incircle(&pts[2*u], &pts[2*v], &pts[2*w], &pts[2*x]);
 }
 
@@ -899,7 +935,7 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
 }
 
 /*
-  Add the vertex to the underlying Delaunay triangularization
+  Add the vertex to the underlying Delaunay triangularization.
 */
 void TMRTriangularize::addPointToMesh( const double pt[] ){
   // Find the enclosing triangle
@@ -924,7 +960,8 @@ void TMRTriangularize::addPointToMesh( const double pt[] ){
 }
 
 /*
-  Add the point to the mesh
+  Add the point to the mesh, given that we've already found the 
+  triangle that encloses the given point. 
 */
 void TMRTriangularize::addPointToMesh( const double pt[], 
                                        TMRTriangle *tri ){
@@ -936,7 +973,6 @@ void TMRTriangularize::addPointToMesh( const double pt[],
     uint32_t w = tri->v;
     uint32_t x = tri->w;
     deleteTriangle(*tri);
-    
     digCavity(u, v, w);
     digCavity(u, w, x);
     digCavity(u, x, v);
@@ -957,7 +993,7 @@ void TMRTriangularize::findEnclosing( const double pt[],
                                       TMRTriangle **tri ){
   // Scan through the mesh, using a linear search
   *tri = NULL;
-  TriListNode *node = list_root;
+  TriListNode *node = list_start;
   while (node){
     if (enclosed(pt, node->tri.u, node->tri.v, node->tri.w)){
       *tri = &(node->tri);
@@ -972,172 +1008,286 @@ void TMRTriangularize::findEnclosing( const double pt[],
   Compute the distance to the intersection of the line m + alpha*e
   with the two lines from u to w and v to w
 */
-void TMRTriangularize::computeIntersection( const double m[], 
-                                            const double e[], 
-                                            uint32_t u, uint32_t v, uint32_t w ){
+double TMRTriangularize::computeIntersection( const double m[], 
+                                              const double e[], 
+                                              uint32_t u, uint32_t v, uint32_t w ){
   // m + alpha*e = pts[u] + beta*(pts[w] - pts[u])
   // => alpha*e + beta*(pts[u] - pts[w]) = pts[u] - m
-  // a2 = [self.pts[u][i] - self.pts[w][i] for i in range(2)]
+  double a11 = e[0], a21 = e[1];
+  double a12 = pts[2*u] - pts[2*w];
+  double a22 = pts[2*u+1] - pts[2*w+1];
+  double det = a11*a22 - a12*a21;
 
   // Check if the line is orthogonal to this direction
-  /* if (e[0]*a2[1] - e[1]*a2[0] != 0.0){ */
-  /*   b = [self.pts[u][i] - m[i] for i in range(2)] */
-  /*     A = np.vstack((e, a2)).T */
-  /*           ans = np.linalg.solve(A, b) */
+  if (fabs(det) < 1e-12*fabs(a11*a22)){
+    double b1 = pts[2*u] - m[0];
+    double b2 = pts[2*u+1] - m[1];
+    double beta = (a11*b2 - a12*b1)/det;
 
-  /*           # If beta is on the interval [0,1], alpha is the distance */
-  /*           if ans[1] >= 0.0 and ans[1] <= 1.0: */
-  /*               return ans[0] */
+    if (beta >= 0.0 && beta <= 1.0){
+      double alpha = (a22*b1 - a21*b2)/det;
+      return alpha;
+    }
+  }
+  else {
+    a21 = pts[2*v] - pts[2*w];
+    a22 = pts[2*v+1] - pts[2*w+1];
+    det = a11*a22 - a12*a21;
 
-  /*       # If we get here and there's no solution, then we have a degenerate triangle */
-  /*       b = [self.pts[v][i] - m[i] for i in range(2)] */
-  /*       a2 = [self.pts[v][i] - self.pts[w][i] for i in range(2)] */
-  /*       A = np.vstack((e, a2)).T */
-  /*       ans = np.linalg.solve(A, b) */
-            
-  /*       # If beta is on the interval [0,1], alpha is the distance */
-  /*       if ans[1] >= 0.0 and ans[1] <= 1.0: */
-  /*           return ans[0] */
+    if (fabs(det) < 1e-12*fabs(a11*a22)){
+      double b1 = pts[2*v] - m[0];
+      double b2 = pts[2*v+1] - m[1];
+      double beta = (a11*b2 - a12*b1)/det;
 
-  /*       return -1.0 */
+      if (beta >= 0.0 && beta <= 1.0){
+        double alpha = (a22*b1 - a21*b2)/det;
+        return alpha;
+      }
+    }
+  }
+  
+  return -1.0;
 }
 
 /*
+  Compute the maximum edge length between any two points
+*/
+double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
+  double d1[2], D1;
+  d1[0] = pts[2*tri->v] - pts[2*tri->u];
+  d1[1] = pts[2*tri->v+1] - pts[2*tri->u+1];
+  D1 = d1[0]*d1[0] + d1[1]*d1[1];
+
+  double d2[2], D2;
+  d2[0] = pts[2*tri->w] - pts[2*tri->v];
+  d2[1] = pts[2*tri->w+1] - pts[2*tri->v+1];
+  D2 = d2[0]*d2[0] + d2[1]*d2[1];
+
+  double d3[2], D3;
+  d3[0] = pts[2*tri->u] - pts[2*tri->w];
+  d3[1] = pts[2*tri->u+1] - pts[2*tri->w+1];
+  D3 = d3[0]*d3[0] + d3[1]*d3[1];
+
+  double Dmax = D1;
+  if (D2 > Dmax){ Dmax = D2; }
+  if (D3 > Dmax){ Dmax = D3; }
+
+  return sqrt(Dmax);
+}
+
+/*
+  
+
+*/
 void TMRTriangularize::frontal( double h ){
   // The length of the edge of the triangle
   double de = 0.5*sqrt(3.0)*h;
 
+  // Set the status of the different 
+  const uint16_t WAITING = 1;
+  const uint16_t ACTIVE = 2;
+  const uint16_t ACCEPTED = 3;
+
   // Add the triangles to the active set that 
-  // status = {}
-  // circumcircles = {}
-  for key in self.tris:
-    status[key] = 'waiting'
-
-    // Check whether the triangle should be labeled as active
-    t = self.tris[key]
-    u, v, w = t
-    for e in [(u,v), (v,w), (w,u)]:
-      if e in self.pslg_edges:
-        status[key] = 'active'
-
-  // Compute the circumcircles
-  for key in self.tris:
-    circumcircles[key] = self.circumcircle(self.tris[key])
-
-  // Compute the circumcircle radii of all triangles
-  int itr = 0;
+  TriListNode *node = list_start;
+  while (node){
+    node->tri.status = WAITING;
   
-  while (num_active > 0){
-            
-            # Find the wors triangle    
-            rmax = 0.0
-            tri = -1
-            # If we maintained a sorted list of the worst offenders, this
-            # could be faster
-            for key in circumcircles:
-                if status[key] == 'active' and circumcircles[key] > rmax:
-                    rmax = circumcircles[key]
-                    tri = key
+    // If any of the triangles touches an edge in the planar
+    // straight line graph, change it to a waiting triangle
+    uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
+                                {node->tri.v, node->tri.w},
+                                {node->tri.w, node->tri.u}};
+    for ( int k = 0; k < 3; k++ ){
+      if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
+        node->tri.status = ACTIVE;
+        break;
+      }
+    }
 
-            # Now insert a new point based on the Voronoi criteria
-            # Determine the triangle's accepted or boundary edge
-            t = self.tris[tri]
+    // Go to the next triangle in the list
+    node = node->next;
+  }
+  
+  int iter = 0;
+  while (1){
+    if (iter % 50 == 0){
+      printf("Iteration %d\n", iter);
+    }
+    iter++;
 
-            # Check if we are along an edge of the PSLG
-            edge = None
-            u, v, w = t
-            for e in [(u,v), (v,w), (w,u)]:
-                if e in self.pslg_edges:
-                    edge = e
+    // Find the first triangle in the list that is tagged as
+    // being active
+    node = list_start;
+    while (node){
+      if (node->tri.status == ACTIVE){
+        break;
+      }
+      node = node->next;
+    }
+    if (!node){
+      break;
+    }
 
-            # Check whether one of the adjacent edges is done
-            if edge is None:
-                for e in [(u,v), (v,w), (w,u)]:
-                    index = self.get_triangle(e[1], e[0])
-                    if index is not None and status[index] == 'done':
-                        edge = e
-                        break
+    // Now insert a new point based on the Voronoi criteria.
+    int found = 0;
+    uint32_t edge[2] = {0, 0};
+    uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
+                                {node->tri.v, node->tri.w},
+                                {node->tri.w, node->tri.u}};
+    
+    // Check if the edge is on the PSLG
+    for ( int k = 0; k < 3; k++ ){
+      if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
+        edge[0] = edge_pairs[k][0];
+        edge[1] = edge_pairs[k][1];
+        found = 1;
+        break;
+      }
+    }
 
-            # Compute the location of the new point
-            # | i   j   k |
-            # | dx  dy  0 | = i*dy - j*dx
-            # | 0   0   1 |
-            u, v = edge
-            w = self.adjacent(u, v)
-            m = 0.5*np.array(
-                [self.pts[u][0] + self.pts[v][0],
-                 self.pts[u][1] + self.pts[v][1]])
-            e = -np.array(
-                [self.pts[v][1] - self.pts[u][1],
-                 self.pts[u][0] - self.pts[v][0]])
+    // Check if an adjacent triangle is accepted
+    if (!found){
+      for ( int k = 0; k < 3; k++ ){
+        TMRTriangle *tri;
+        completeMe(edge_pairs[k][1], edge_pairs[k][0], &tri);
+        if (tri){
+          if (tri->status == ACCEPTED){
+            edge[0] = edge_pairs[k][0];
+            edge[1] = edge_pairs[k][1];
+            found = 1;
+            break;
+          }
+        }
+      }
+    }
 
-            # Compute half the distance between the u and v points
-            p = 0.5*np.sqrt(np.sum(e**2))
-            e = 0.5*e/p
+    printf("Identified suspect triangle\n"); fflush(stdout);
 
-            # Try the size-optimal point first
-            pt = m + de*e
+    // Compute the location of the new point
+    // | i   j   k |
+    // | 0   0   1 | = - i*dy + j*dx
+    // | dx  dy  0 |
+    uint32_t u = edge[0], v = edge[1];
 
-            # Find the enclosing triangle for the 
-            if not self.enclosed(t[0], t[1], t[2], pt):
-                t = self.find_enclosing(pt)
+    // Compute
+    double m[2];
+    m[0] = 0.5*(pts[2*u] + pts[2*v]);
+    m[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
 
-                if t is None:
-                    # Pick a point that is actually in the current triangle
-                    q = self.computeIntersection(m, e, u, v, w)
-                    rho = 0.5*q
-                    pt = m + rho*e
-                    t = self.tris[tri]
+    // Compute the direction
+    double e[2];
+    e[0] = (pts[2*u+1] - pts[2*v+1]);
+    e[1] = (pts[2*v] - pts[2*u]);
 
-            # Use the edge for this triangle to determine where to insert
-            # the new point
-            old_tri = 1*self.tri_key
-            self.deleted_tris = []
-            self.add_vertex_frontal(pt, t)
-            new_tri = self.tri_key
+    // Compute half the distance between the u and v points
+    double p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
+    e[0] = 0.5*e[0]/p;
+    e[1] = 0.5*e[1]/p;
 
-            # Free the deleted triangles
-            for key in self.deleted_tris:
-                circumcircles.pop(key)
-                status.pop(key)
+    // Compute the new optimal point
+    double pt[2];
+    pt[0] = m[0] + de*e[0];
+    pt[1] = m[1] + de*e[1];
 
-            # Compute the circumcircles of the new triangles and check
-            # whether they belong in the done category or not...
-            for key in range(old_tri, new_tri):
-                circumcircles[key] = self.circumcircle(self.tris[key])
-                if circumcircles[key] <= 1.5*h:
-                    status[key] = 'done'
-                else:
-                    status[key] = 'waiting'
+    // Find the enclosing triangle for the 
+    TMRTriangle *pt_tri = &(node->tri);
+    if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
+      printf("Point not enclosed\n"); fflush(stdout);
+      findEnclosing(pt, &pt_tri);
 
-            # Mark the triangle with the edge that was just computed 
-            # as being done, regardless of whether it is or not... 
-            # Otherwise the same extrapolation point will be used which 
-            # will duplicate points within the domain leading to chaos!
-            if (u,v) in self.edge_to_tris:
-                tri = self.edge_to_tris[(u,v)]
-                status[tri] = 'done'
+      // We've tried a new point
+      // Pick a point that is actually in the current triangle
+      if (!pt_tri){
+        pt_tri = &(node->tri);
+        uint32_t w = 0;
+        if (edge[0] == pt_tri->u && edge[1] == pt_tri->v){
+          w = pt_tri->w;
+        }
+        else if (edge[0] == pt_tri->v && edge[1] == pt_tri->w){
+          w = pt_tri->u;
+        }
+        else if (edge[0] == pt_tri->w && edge[1] == pt_tri->u){
+          w = pt_tri->v;
+        }
 
-            # Label the new triangles with active status
-            for key in range(old_tri, new_tri):
-                if status[key] == 'done':
-                    continue
+        double q = computeIntersection(m, e, edge[0], edge[1], w);
+        double rho = 0.5*q;
+        pt[0] = m[0] + rho*e[0];
+        pt[1] = m[1] + rho*e[1];
+      }
+    }
 
-                # Extract the triangle
-                t = self.tris[key]
-                u, v, w = t
+    // Set the pointer to the last member in the list
+    list_marker = list_end; 
+    printf("addPointToMesh()\n"); fflush(stdout);
+    addPointToMesh(pt, pt_tri);
+    printf("donePointToMesh()\n"); fflush(stdout);
+    pt_tri = NULL;
 
-                # Check the adjacent triangles
-                for edge in [(u,v), (v,w), (w,u)]:
-                    index = self.get_triangle(edge[1], edge[0])
-                    if index is not None and status[index] == 'done':
-                        status[key] = 'active'
-                        break
-                    if edge in self.pslg_edges:
-                        status[key] = 'active'
-                        break
+    // Complete me with the newly created triangle with the
+    completeMe(edge[0], edge[1], &pt_tri);
+    if (pt_tri){
+      pt_tri->status = ACCEPTED;
+    }
 
-        self.status = status
+    // Compute the circumcircles of the new triangles and check
+    // whether they belong in the done category or not...
+    TriListNode *ptr = list_start;
+    if (list_marker){
+      ptr = list_marker->next;
+    }
+    while (ptr){
+      double hval = computeMaxEdgeLength(&ptr->tri);
+      if (hval < 1.5*h){
+        ptr->tri.status = ACCEPTED;
+      }
+      else {
+        ptr->tri.status = WAITING;
+      }
+      ptr = ptr->next;
+    }
 
-        return
-*/
+    // Scan through the list of the 
+    ptr = list_start;
+    if (list_marker){ 
+      ptr = list_marker->next;
+    }
+
+    while (ptr){
+      // If any of the triangles touches an edge in the planar
+      // straight line graph, change it to a waiting triangle
+      int flag = 0;
+      uint32_t edge_pairs[][2] = {{ptr->tri.u, ptr->tri.v},
+                                  {ptr->tri.v, ptr->tri.w},
+                                  {ptr->tri.w, ptr->tri.u}};
+
+      for ( int k = 0; k < 3; k++ ){
+        if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
+          ptr->tri.status = ACTIVE;
+          flag = 1;
+          break;
+        }
+      }
+
+      // If any triangle is adjacent to a triangle that is accepted,
+      // then change the status of the new triangle to be active
+      if (!flag){
+        for ( int k = 0; k < 3; k++ ){
+          TMRTriangle *adjacent;
+          completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
+          if (adjacent && adjacent->status == ACCEPTED){
+            adjacent->status = ACTIVE;
+            break;
+          }
+        }
+      }
+
+      // Increment the pointer to the next member of the list
+      ptr = ptr->next;
+    }
+ 
+    // Set the node to 
+    node = node->next;
+  }
+}

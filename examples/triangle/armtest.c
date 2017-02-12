@@ -337,6 +337,7 @@ TMRTopology* setUpTopology( MPI_Comm comm,
 
   TMRTriangularize *tri = 
     new TMRTriangularize(npts, params, nseg, seg);
+  tri->frontal(htarget);
 
 
   tri->writeToVTK("triangle.vtk");

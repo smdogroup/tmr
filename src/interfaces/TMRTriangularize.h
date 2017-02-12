@@ -92,7 +92,7 @@ class TMRTriangle {
   
   // Tag/info values (used to helpfully tag/label triangles)
   uint16_t tag;
-  uint16_t info;
+  uint16_t status;
 };
 
 /*
@@ -142,12 +142,19 @@ class TMRTriangularize : public TMREntity {
   // Find the enclosing triangle
   void findEnclosing( const double pt[], TMRTriangle **tri );
 
+  // Compute the maximum edge length of the triangle
+  double computeMaxEdgeLength( TMRTriangle *tri );
+
   // Compute the intersection
-  void computeIntersection( const double m[], const double e[], 
-                            uint32_t u, uint32_t v, uint32_t w );
+  double computeIntersection( const double m[], const double e[], 
+                              uint32_t u, uint32_t v, uint32_t w );
 
   // Get a hash value for the given edge
   inline uint32_t getEdgeHash( uint32_t u, uint32_t v );
+
+  // Offset to the points that will be removed from the mesh
+  // these are the original background mesh and the holes
+  uint32_t fixed_point_offset; 
 
   // Keep track of the points
   uint32_t num_points; // The current number of points
@@ -173,7 +180,8 @@ class TMRTriangularize : public TMREntity {
   };
 
   // Keep track of the current set of triangles
-  TriListNode *list_root, *list_current;
+  TriListNode *list_start, *list_end;
+  TriListNode *list_marker;
 
   // Keep track of the number of triangles
   uint32_t num_triangles;
