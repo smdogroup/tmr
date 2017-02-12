@@ -317,7 +317,11 @@ void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist 
 */
 TMRTriangularize::TMRTriangularize( int npts, const double inpts[], 
                                     int nsegs, const int segs[] ){
+  // Initialize the predicates code
+  exactinit();
+
   // Allocate and initialize/zero the hash table data for the edges
+  num_hash_nodes = 0;
   num_buckets = 100;
   buckets = new EdgeHashNode*[ num_buckets ];
   memset(buckets, 0, num_buckets*sizeof(EdgeHashNode*));
@@ -366,10 +370,6 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
   domain.xlow -= 1.0;
   domain.yhigh += 1.0;
   domain.ylow -= 1.0;
-
-  printf("npts = %d\n", npts);
-
-  printf("domain = %f %f %f %f\n", domain.xlow, domain.ylow, domain.xhigh, domain.yhigh);
 
   // Allocate the new root mode
   root = new TMRQuadNode(&domain);
@@ -459,10 +459,13 @@ void TMRTriangularize::writeToVTK( const char *filename ){
             num_triangles, 4*num_triangles);
 
     TriListNode *node = list_root;
+    int count = 0;
     while (node){
+      count++;
       fprintf(fp, "3 %d %d %d\n", node->tri.u, node->tri.v, node->tri.w);
       node = node->next;
     }
+    printf("count = %d  num_triangles = %d\n", count, num_triangles);
 
     // All quadrilaterals
     fprintf(fp, "\nCELL_TYPES %d\n", num_triangles);
@@ -485,7 +488,7 @@ void TMRTriangularize::writeToVTK( const char *filename ){
 /*
   Retrieve the edge hash
 */
-inline int TMRTriangularize::getEdgeHash( uint32_t x, uint32_t y ){
+inline uint32_t TMRTriangularize::getEdgeHash( uint32_t x, uint32_t y ){
   return (x * 0x1f1f1f1f) ^ y;
 }
 
@@ -520,6 +523,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
 
   // Redistribute the members in the hash table if required
   if (num_hash_nodes > 10*num_buckets){
+    printf("Rebucket hash tables\n");
     // Create a new array of buckets, twice the size of the old array
     // of buckets and re-insert the entries back into the new array
     int num_old_buckets = num_buckets;
@@ -565,8 +569,8 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
   // Set the combinations of edge pairs that will be added
   // to the hash table
   uint32_t edge_pairs[] = {tri.u, tri.v,
-                          tri.v, tri.w,
-                          tri.w, tri.u};
+                           tri.v, tri.w,
+                           tri.w, tri.u};
   
   // Add the triangle to the hash table
   for ( int k = 0; k < 3; k++ ){
@@ -582,6 +586,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
       buckets[bucket]->v = v;
       buckets[bucket]->tri_node = list_current;
       buckets[bucket]->next = NULL;
+      num_hash_nodes++;
     }
     else {
       // Scan through to the end of the array and set the pointer to
@@ -616,10 +621,16 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
         // Create the new hash node
         node->next = new EdgeHashNode();
         node = node->next;
+
+        // Set the data into the object
         node->u = u;
         node->v = v;
         node->tri_node = list_current;
         node->next = NULL;
+        num_hash_nodes++;
+      }
+      else {
+        success = 0;
       }
     }
   }
@@ -704,10 +715,12 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
         if (node == prev){
           buckets[bucket] = node->next;
           delete node;
+          num_hash_nodes--;
         }
         else {
           prev->next = node->next;
           delete node;
+          num_hash_nodes--;
         }
 
         edge_success = 1;
@@ -727,6 +740,8 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
   if (success){
     num_triangles--;
   }
+
+  printf("Done deleting triangle\n");
 
   return success;
 }
@@ -764,7 +779,7 @@ void TMRTriangularize::completeMe( uint32_t u, uint32_t v,
 */
 void TMRTriangularize::setUpPSLGEdges( int nsegs, const int segs[] ){
   num_pslg_edges = 2*nsegs;
-  pslg_edges = new uint32_t[ 4*nsegs ];
+  pslg_edges = new uint32_t[ 2*num_pslg_edges ];
 
   for ( int i = 0; i < nsegs; i++ ){
     uint32_t u = 0, v = 0;
@@ -791,8 +806,8 @@ int TMRTriangularize::edgeInPSLG( uint32_t u, uint32_t v ){
   uint32_t edge[2];
   edge[0] = u;  edge[1] = v;
 
- return (bsearch(edge, pslg_edges, num_pslg_edges, 2*sizeof(uint32_t),
-                 compare_edges) != NULL);
+  return (bsearch(edge, pslg_edges, num_pslg_edges, 2*sizeof(uint32_t),
+                  compare_edges) != NULL);
 }
 
 /*
@@ -801,9 +816,9 @@ int TMRTriangularize::edgeInPSLG( uint32_t u, uint32_t v ){
 inline int TMRTriangularize::enclosed( const double p[],
                                        uint32_t u, uint32_t v, uint32_t w ){
   double pt[2] = {p[0], p[1]};
-  if (orient2d(&pts[2*u], &pts[2*v], pt) &&
-      orient2d(&pts[2*v], &pts[2*w], pt) &&
-      orient2d(&pts[2*w], &pts[2*u], pt)){
+  if (orient2d(&pts[2*u], &pts[2*v], pt) >= 0.0 &&
+      orient2d(&pts[2*v], &pts[2*w], pt) >= 0.0 &&
+      orient2d(&pts[2*w], &pts[2*u], pt) >= 0.0){
     return 1;
   }
 
@@ -814,7 +829,7 @@ inline int TMRTriangularize::enclosed( const double p[],
   Does the final given point lie within the circumcircle of the remaining
   points?
 */
-double TMRTriangularize::inCircle( uint32_t u, uint32_t v, 
+double TMRTriangularize::inCircle( uint32_t u, uint32_t v,\
                                    uint32_t w, uint32_t x ){
   return incircle(&pts[2*u], &pts[2*v], &pts[2*w], &pts[2*x]);
 }
@@ -832,12 +847,14 @@ void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){
   // add the triangle as it exists and we're done, even though it may
   // not be Delaunay (it will be constrained Delaunay). We cannot
   // split a PSLG edge.
+  printf("Check if edge is PSLG\n"); fflush(stdout);
   if (edgeInPSLG(w, v)){
     TMRTriangle tri(u, v, w);
     addTriangle(tri);
     return; 
   }
 
+  printf("Complete me\n"); fflush(stdout);
   // Complete the triangle
   TMRTriangle *tri;
   completeMe(w, v, &tri);
@@ -855,12 +872,13 @@ void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){
       x = tri->v;
     }
 
-    printf("u: %d v: %d w: %d x: %d\n", u, v, w, x);
-
     // Check whether the point lies within the circumcircle or
     // exactly on its boundary
-    if (inCircle(u, w, v, x) >= 0.0){
+    printf("In circle test\n"); fflush(stdout);
+    if (inCircle(w, v, x, u) >= 0.0){
+      printf("delete triangle\n"); fflush(stdout);
       deleteTriangle(TMRTriangle(w, v, x));
+      printf("digCavity()\n"); fflush(stdout);
       digCavity(u, v, x);
       digCavity(u, x, w);
       return;
@@ -962,6 +980,7 @@ void TMRTriangularize::findEnclosing( const double pt[],
   while (node){
     if (enclosed(pt, node->tri.u, node->tri.v, node->tri.w)){
       *tri = &(node->tri);
+      return;
     }
     node = node->next;
   }

@@ -386,7 +386,7 @@ class triangluate:
 
     def dig_cavity(self, u, v, w):
         '''
-        u is the index of a new point to be inserted, is the
+        u is the index of a new point to be inserted. Is the
         oriented triangle (u,v,w) Delaunay or not?
         '''
         if (w,v) in self.pslg_edges:

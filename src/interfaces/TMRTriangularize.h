@@ -147,7 +147,7 @@ class TMRTriangularize : public TMREntity {
                             uint32_t u, uint32_t v, uint32_t w );
 
   // Get a hash value for the given edge
-  inline int getEdgeHash( uint32_t u, uint32_t v );
+  inline uint32_t getEdgeHash( uint32_t u, uint32_t v );
 
   // Keep track of the points
   uint32_t num_points; // The current number of points
