@@ -1,7 +1,7 @@
 #include "TMRTopology.h"
 #include "TMRBspline.h"
 #include "TMRQuadForest.h"
-#include "TMRTriangleInterface.h"
+// #include "TMRTriangleInterface.h"
 #include "TACSAssembler.h"
 #include "isoFSDTStiffness.h"
 #include "PlaneStressQuad.h"
@@ -9,6 +9,8 @@
 #include "TACSToFH5.h"
 #include <stdio.h>
 #include <math.h>
+
+#include "TMRTriangularize.h"
 
 
 TMRBsplineCurve* createSemiCircle( TMRPoint center, double r,
@@ -309,7 +311,7 @@ TMRTopology* setUpTopology( MPI_Comm comm,
     fprintf(fp, "0\n");
     fclose(fp);
   }
-
+  /*
   // Triangulate the region
   TMRTriangulation *tri = new TMRTriangulation(npts, params, NULL, surf);
   tri->setSegments(nseg, seg);
@@ -331,6 +333,15 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   tri->laplacianQuadSmoothing(100);
   tri->printQuadQuality();
   tri->writeQuadToVTK("smoothed.vtk");
+  */
+
+  TMRTriangularize *tri = 
+    new TMRTriangularize(npts, params, nseg, seg);
+
+
+  tri->writeToVTK("triangle.vtk");
+
+  delete tri;
 
   return NULL;
 }
