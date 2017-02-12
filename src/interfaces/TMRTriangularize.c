@@ -899,7 +899,7 @@ void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){
     // Check whether the point lies within the circumcircle or
     // exactly on its boundary
     if (inCircle(w, v, x, u) >= 0.0){
-      deleteTriangle(TMRTriangle(w, v, x));
+      deleteTriangle(*tri);
       digCavity(u, v, x);
       digCavity(u, x, w);
       return;
@@ -944,7 +944,6 @@ void TMRTriangularize::addPointToMesh( const double pt[] ){
 
   // Add the point to the quadtree
   uint32_t u = addPoint(pt);
-  root->addNode(u, pt);
 
   if (tri){
     uint32_t v = tri->u;
@@ -966,7 +965,6 @@ void TMRTriangularize::addPointToMesh( const double pt[] ){
 void TMRTriangularize::addPointToMesh( const double pt[], 
                                        TMRTriangle *tri ){
   uint32_t u = addPoint(pt);
-  root->addNode(u, pt);
 
   if (tri){
     uint32_t v = tri->u;
@@ -1045,7 +1043,7 @@ double TMRTriangularize::computeIntersection( const double m[],
       }
     }
   }
-  
+
   return -1.0;
 }
 
@@ -1162,8 +1160,6 @@ void TMRTriangularize::frontal( double h ){
       }
     }
 
-    printf("Identified suspect triangle\n"); fflush(stdout);
-
     // Compute the location of the new point
     // | i   j   k |
     // | 0   0   1 | = - i*dy + j*dx
@@ -1193,7 +1189,6 @@ void TMRTriangularize::frontal( double h ){
     // Find the enclosing triangle for the 
     TMRTriangle *pt_tri = &(node->tri);
     if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
-      printf("Point not enclosed\n"); fflush(stdout);
       findEnclosing(pt, &pt_tri);
 
       // We've tried a new point
@@ -1220,9 +1215,7 @@ void TMRTriangularize::frontal( double h ){
 
     // Set the pointer to the last member in the list
     list_marker = list_end; 
-    printf("addPointToMesh()\n"); fflush(stdout);
     addPointToMesh(pt, pt_tri);
-    printf("donePointToMesh()\n"); fflush(stdout);
     pt_tri = NULL;
 
     // Complete me with the newly created triangle with the
@@ -1286,8 +1279,5 @@ void TMRTriangularize::frontal( double h ){
       // Increment the pointer to the next member of the list
       ptr = ptr->next;
     }
- 
-    // Set the node to 
-    node = node->next;
   }
 }
