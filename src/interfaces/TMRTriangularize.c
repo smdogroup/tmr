@@ -347,8 +347,8 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
   pts = new double[ 2*max_num_points ];
 
   // Find the maximum domain size
-  domain.xlow = domain.xhigh = pts[0];
-  domain.ylow = domain.yhigh = pts[1];
+  domain.xlow = domain.xhigh = inpts[0];
+  domain.ylow = domain.yhigh = inpts[1];
   for ( int i = 1; i < npts; i++ ){
     if (inpts[2*i] < domain.xlow){
       domain.xlow = inpts[2*i];
@@ -404,7 +404,6 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
 
   // Add the points to the triangle
   for ( int i = 0; i < npts; i++ ){
-    printf("Adding point %d\n", i);
     addPointToMesh(&inpts[2*i]);
   }
 }
@@ -459,14 +458,11 @@ void TMRTriangularize::writeToVTK( const char *filename ){
             num_triangles, 4*num_triangles);
 
     TriListNode *node = list_root;
-    int count = 0;
     while (node){
-      count++;
       fprintf(fp, "3 %d %d %d\n", node->tri.u, node->tri.v, node->tri.w);
       node = node->next;
     }
-    printf("count = %d  num_triangles = %d\n", count, num_triangles);
-
+    
     // All quadrilaterals
     fprintf(fp, "\nCELL_TYPES %d\n", num_triangles);
     for ( int k = 0; k < num_triangles; k++ ){
@@ -523,7 +519,6 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
 
   // Redistribute the members in the hash table if required
   if (num_hash_nodes > 10*num_buckets){
-    printf("Rebucket hash tables\n");
     // Create a new array of buckets, twice the size of the old array
     // of buckets and re-insert the entries back into the new array
     int num_old_buckets = num_buckets;
@@ -543,13 +538,14 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
       while (node){
         // Get the new hash values
         EdgeHashNode *tmp = node->next;
-        int value = getEdgeHash(node->u, node->v);
-        int bucket = value % num_buckets;
+        uint32_t value = getEdgeHash(node->u, node->v);
+        uint32_t bucket = value % num_buckets;
         
         // If the new bucket linked list does not exist
         if (!new_buckets[bucket]){
           new_buckets[bucket] = node;
           end_buckets[bucket] = new_buckets[bucket];
+          node->next = NULL;
         }
         else {
           end_buckets[bucket]->next = node;
@@ -577,8 +573,8 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
     // Add a hash for each pair of edges around the triangle
     uint32_t u = edge_pairs[2*k];
     uint32_t v = edge_pairs[2*k+1];
-    int value = getEdgeHash(u, v);
-    int bucket = value % num_buckets;
+    uint32_t value = getEdgeHash(u, v);
+    uint32_t bucket = value % num_buckets;
     if (!buckets[bucket]){
       // Create the new buckets node and assign the values
       buckets[bucket] = new EdgeHashNode();
@@ -650,8 +646,6 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
   // just some of the edges (1 or 2 out of 3 is bad!)
   int success = 1;
 
-  printf("Deleting triangle (%d, %d, %d)\n", tri.u, tri.v, tri.w);
-
   // Set the combinations of edge pairs that will be added
   // to the hash table
   uint32_t edge_pairs[] = {tri.u, tri.v,
@@ -672,8 +666,8 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
 
     // Get the hash values and access the first entry of the bucket
     // it's listed under
-    int value = getEdgeHash(u, v);
-    int bucket = value % num_buckets;
+    uint32_t value = getEdgeHash(u, v);
+    uint32_t bucket = value % num_buckets;
     EdgeHashNode *node = buckets[bucket];
     EdgeHashNode *prev = node;
     while (node){
@@ -709,8 +703,6 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
           first = 0;
         }
 
-        printf("Deleting edge (%d, %d)\n", u, v);
-
         // Delete the edge from the hash table
         if (node == prev){
           buckets[bucket] = node->next;
@@ -741,8 +733,6 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
     num_triangles--;
   }
 
-  printf("Done deleting triangle\n");
-
   return success;
 }
 
@@ -758,8 +748,8 @@ void TMRTriangularize::completeMe( uint32_t u, uint32_t v,
   *tri = NULL;
 
   // Retrieve the hash value/bucket for this edge
-  int value = getEdgeHash(u, v);
-  int bucket = value % num_buckets;
+  uint32_t value = getEdgeHash(u, v);
+  uint32_t bucket = value % num_buckets;
   EdgeHashNode *node = buckets[bucket];
 
   // Loop over the edges until we find the matching triangle
@@ -847,14 +837,12 @@ void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){
   // add the triangle as it exists and we're done, even though it may
   // not be Delaunay (it will be constrained Delaunay). We cannot
   // split a PSLG edge.
-  printf("Check if edge is PSLG\n"); fflush(stdout);
   if (edgeInPSLG(w, v)){
     TMRTriangle tri(u, v, w);
     addTriangle(tri);
     return; 
   }
 
-  printf("Complete me\n"); fflush(stdout);
   // Complete the triangle
   TMRTriangle *tri;
   completeMe(w, v, &tri);
@@ -874,11 +862,8 @@ void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){
 
     // Check whether the point lies within the circumcircle or
     // exactly on its boundary
-    printf("In circle test\n"); fflush(stdout);
     if (inCircle(w, v, x, u) >= 0.0){
-      printf("delete triangle\n"); fflush(stdout);
       deleteTriangle(TMRTriangle(w, v, x));
-      printf("digCavity()\n"); fflush(stdout);
       digCavity(u, v, x);
       digCavity(u, x, w);
       return;
@@ -919,20 +904,16 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
 void TMRTriangularize::addPointToMesh( const double pt[] ){
   // Find the enclosing triangle
   TMRTriangle *tri;
-  printf("Find enclosing\n");
   findEnclosing(pt, &tri);
 
   // Add the point to the quadtree
-  printf("Adding point\n");
   uint32_t u = addPoint(pt);
-  printf("Adding node to quadtree\n");
   root->addNode(u, pt);
 
   if (tri){
     uint32_t v = tri->u;
     uint32_t w = tri->v;
     uint32_t x = tri->w;
-    printf("Triangle (%d, %d, %d)\n", v, w, x);
     deleteTriangle(*tri);
     digCavity(u, v, w);
     digCavity(u, w, x);

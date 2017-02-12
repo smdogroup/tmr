@@ -22,7 +22,7 @@ default: ${CXX_OBJS} predicates.o
 
 predicates.o: predicates.c
 	${CC} -fPIC -c predicates.c -o predicates.o
-	
+
 debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
 debug: default
 

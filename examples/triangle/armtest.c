@@ -363,7 +363,7 @@ int main( int argc, char *argv[] ){
   double r2 = 1.0;
 
   // Create the topology
-  double htarget = 1.5;
+  double htarget = 0.25;;
   TMRTopology *topo = setUpTopology(comm, r1, r2, L, t, htarget);
   // topo->incref();
 
