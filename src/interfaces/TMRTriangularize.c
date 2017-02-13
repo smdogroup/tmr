@@ -1,5 +1,6 @@
 #include "TMRTriangularize.h"
 #include <math.h>
+#include <limits.h>
 #include <stdio.h>
 
 #include "predicates.h"
@@ -173,8 +174,8 @@ void TMRQuadNode::addNode( uint32_t num, const double pt[] ){
   Delete a point from the quadtree.
 
   Note that the coordinate provided is used to match the point, but
-  needs to be used to scan through the quadtree hierarchy to find
-  the correct quadrant location.
+  needs to be used to scan through the quadtree hierarchy to find the
+  correct quadrant location.
 */
 int TMRQuadNode::deleteNode( uint32_t num, const double pt[] ){
   if (low_left){
@@ -242,9 +243,9 @@ uint32_t TMRQuadNode::findClosest( const double pt[], double *_dist ){
 /*
   The recursive call to find the closest point
 
-  This scans each quadrant, testing whether it will be necessary to scan
-  multiple quadrants to ensure that we have, in fact, located the closest
-  point to the provided point.
+  This scans each quadrant, testing whether it will be necessary to
+  scan multiple quadrants to ensure that we have, in fact, located the
+  closest point to the provided point.
 */
 void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist ){
   // Scan through the quadtree
@@ -347,6 +348,7 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
 
   // Allocate the initial set of points
   pts = new double[ 2*max_num_points ];
+  pts_to_tris = new TMRTriangle*[ max_num_points ];
 
   // Find the maximum domain size
   domain.xlow = domain.xhigh = inpts[0];
@@ -375,6 +377,7 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
 
   // Allocate the new root mode
   root = new TMRQuadNode(&domain);
+  search_tag = 0;
 
   // Set up the PSLG edges
   setUpPSLGEdges(nsegs, segs);
@@ -409,12 +412,12 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
     addPointToMesh(&inpts[2*i]);
   }
 
-  // Set the triangle tags 
+  // Set the triangle tags to zero
   setTriangleTags(0);
 
-  // Mark all the triangles in the list that contain or touch
-  // nodes that are in the fixed_point_offset list that are not
-  // separated by a PSLG edge. These triangles will be deleted.
+  // Mark all the triangles in the list that contain or touch nodes
+  // that are in the fixed_point_offset list that are not separated by
+  // a PSLG edge. These triangles will be deleted.
   int flag = 1;
   while (flag){
     flag = 0;
@@ -435,9 +438,8 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
   list_marker = NULL;
   TriListNode *node = list_start;
   while (node){
-    // Keep track of what node will be next, since we may
-    // be deleting 'node' itself, we cannot access this 
-    // afterwards
+    // Keep track of what node will be next, since we may be deleting
+    // 'node' itself, we cannot access this afterwards
     TriListNode *tmp = node->next;
 
     // Delete the triangle from the triangle list
@@ -485,9 +487,37 @@ TMRTriangularize::~TMRTriangularize(){
 }
 
 /*
+  Retrieve the underlying mesh
+*/
+void TMRTriangularize::getMesh( int *_num_triangles, 
+                                int **_conn, double **_pts ){
+  *_num_triangles = num_triangles;
+  *_conn = new int[ 3*num_triangles ];
+
+  int npts = (num_points - fixed_point_offset);
+  *_pts = new double[ 2*npts ];
+
+  // Set the points
+  memcpy(*_pts, &pts[2*fixed_point_offset], 2*npts*sizeof(double));
+
+  // Set the pointer into the connectivity array
+  int *t = *_conn;
+
+  // Determine the connectivity
+  TriListNode *node = list_start;
+  while (node){
+    t[0] = node->tri.u - fixed_point_offset;
+    t[1] = node->tri.v - fixed_point_offset;
+    t[2] = node->tri.w - fixed_point_offset;
+    t += 3;    
+    node = node->next;
+  }
+}
+
+/*
   Reset the tags of all the triangles within the list
 */
-void TMRTriangularize::setTriangleTags( uint16_t tag ){
+void TMRTriangularize::setTriangleTags( uint32_t tag ){
   TriListNode *node = list_start;
   while (node){
     TriListNode *next = node->next;
@@ -602,6 +632,15 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
     list_end = list_end->next;
   }
 
+  // Set the search tag to zero
+  list_end->tri.status = 0;
+  list_end->tri.tag = 0;
+
+  // Set the pointer to the list of triangles
+  pts_to_tris[tri.u] = &(list_end->tri);
+  pts_to_tris[tri.v] = &(list_end->tri);
+  pts_to_tris[tri.w] = &(list_end->tri);
+
   // Add the triangle to the triangle count
   num_triangles++;
 
@@ -631,14 +670,31 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
         
         // If the new bucket linked list does not exist
         if (!new_buckets[bucket]){
-          new_buckets[bucket] = node;
+          new_buckets[bucket] = new EdgeHashNode();
+          new_buckets[bucket]->next = NULL;
+          new_buckets[bucket]->u = node->u;
+          new_buckets[bucket]->v = node->v;
+          new_buckets[bucket]->tri_node = node->tri_node;
+          delete node;
+
           end_buckets[bucket] = new_buckets[bucket];
-          node->next = NULL;
+
+          // new_buckets[bucket] = node;
+          // node->next = NULL;
+          // end_buckets[bucket] = new_buckets[bucket];
         }
         else {
-          end_buckets[bucket]->next = node;
+          end_buckets[bucket]->next = new EdgeHashNode();
           end_buckets[bucket] = end_buckets[bucket]->next;
-          node->next = NULL;
+          end_buckets[bucket]->next = NULL;
+          end_buckets[bucket]->u = node->u;
+          end_buckets[bucket]->v = node->v;
+          end_buckets[bucket]->tri_node = node->tri_node;
+          delete node;
+
+          // end_buckets[bucket]->next = node;
+          // end_buckets[bucket] = end_buckets[bucket]->next;
+          // node->next = NULL;
         }
         
         node = tmp;
@@ -760,8 +816,8 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
         // If this is the first edge we've found, delete the
         // corresponding list entry as well.
         if (first){
-          // This triangle will be successfully deleted, adjust
-          // the triangle count
+          // This triangle will be successfully deleted, adjust the
+          // triangle count
           num_triangles--;
 
           // Adjust the double linking so that when the node is
@@ -790,9 +846,10 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
             }
           }
 
-          // Adjust the list marker if we're about to delete the triangle
-          // that the marker points to. Move the marker one triangle back
-          // (or set it to NULL if it's the beginning of the list)
+          // Adjust the list marker if we're about to delete the
+          // triangle that the marker points to. Move the marker one
+          // triangle back (or set it to NULL if it's the beginning of
+          // the list)
           if (list_marker && ptr == list_marker){
             list_marker = ptr->prev;
           }
@@ -926,6 +983,11 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
     memcpy(new_pts, pts, 2*num_points*sizeof(double));
     delete [] pts;
     pts = new_pts;
+
+    TMRTriangle **new_pts_to_tris = new TMRTriangle*[ 2*max_num_points ];
+    memcpy(new_pts_to_tris, pts_to_tris, num_points*sizeof(TMRTriangle*));
+    delete [] pts_to_tris;
+    pts_to_tris = new_pts_to_tris;
   }
 
   // Add the point to the quadtree
@@ -934,6 +996,7 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
   // Set the new point location
   pts[2*num_points] = pt[0];
   pts[2*num_points+1] = pt[1];
+  pts_to_tris[num_points] = NULL;
   num_points++;
 
   // Return the new point index
@@ -1034,21 +1097,41 @@ void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){
 /*
   Find the enclosing triangle within the mesh. 
 
-  This code uses the quadtree for geometric searching. First,
-  we find the node that is closest to the query point. This 
-  node is not necessarily connected with the enclosing triangle 
-  that we want. Next, we find one triangle associated with this
-  node. If this triangle does not contain the point, we march over
-  the mesh, marking the triangles that we have visited. 
+  This code uses a quadtree for geometric searching. First, we find
+  the node that is closest to the query point. This node is not
+  necessarily connected with the enclosing triangle that we
+  want. Next, we find one triangle associated with this node. If this
+  triangle does not contain the point, we march over the mesh, marking
+  the triangles that we have visited.
 */
 void TMRTriangularize::findEnclosing( const double pt[],
-                                      TMRTriangle **tri ){
+                                      TMRTriangle **ptr ){
+  if (search_tag == UINT_MAX){
+    search_tag = 0;
+    setTriangleTags(0);
+  }
+  search_tag++;
+
+  // Find the closest point to the given 
+  uint32_t u = root->findClosest(pt, NULL);
+
+  // Obtain the triangle associated with the node u. This triangle may
+  // not contain the node, but will hopefully be close to the node.
+  // We'll walk the mesh to nearby elements until we find the proper
+  // enclosing triangle.
+  TMRTriangle *tri = pts_to_tris[u];
+
+  if (enclosed(pt, tri->u, tri->v, tri->w)){
+    *ptr = tri;
+    return;
+  }
+
   // Scan through the mesh, using a linear search
-  *tri = NULL;
+  *ptr = NULL;
   TriListNode *node = list_start;
   while (node){
     if (enclosed(pt, node->tri.u, node->tri.v, node->tri.w)){
-      *tri = &(node->tri);
+      *ptr = &(node->tri);
       return;
     }
     node = node->next;
@@ -1058,6 +1141,10 @@ void TMRTriangularize::findEnclosing( const double pt[],
 /*
   Compute the distance to the intersection of the line m + alpha*e
   with the two lines from u to w and v to w
+
+  This code is used to ensure that a point will lie within the current
+  triangle if we've failed to pick a point that lies within the
+  domain.
 */
 double TMRTriangularize::computeIntersection( const double m[], 
                                               const double e[], 
@@ -1100,7 +1187,11 @@ double TMRTriangularize::computeIntersection( const double m[],
 }
 
 /*
-  Compute the maximum edge length between any two points
+  Compute the maximum edge length between any two points.
+
+  This edge length is used as a metric for quality, although having
+  the 'right' edge length doesn't imply that we've found a
+  high-quality triangle.
 */
 double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
   double d1[2], D1;
@@ -1126,6 +1217,13 @@ double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
 }
 
 /*
+  Perform a frontal mesh generation algorithm and simultaneously
+  create a constrained Delaunay triangularization of the generated
+  mesh.
+
+  The Delaunay triangularization based on the Bowyer-Watson mesh
+  generation algorithm. The frontal mesh generation technique is based
+  on Rebay's 1993 paper in JCP.
   
 
 */
@@ -1134,9 +1232,9 @@ void TMRTriangularize::frontal( double h ){
   double de = 0.5*sqrt(3.0)*h;
 
   // Set the status of the different 
-  const uint16_t WAITING = 1;
-  const uint16_t ACTIVE = 2;
-  const uint16_t ACCEPTED = 3;
+  const uint32_t WAITING = 1;
+  const uint32_t ACTIVE = 2;
+  const uint32_t ACCEPTED = 3;
 
   // Add the triangles to the active set that 
   TriListNode *node = list_start;
@@ -1166,16 +1264,16 @@ void TMRTriangularize::frontal( double h ){
     }
     iter++;
 
-    // Find the first triangle in the list that is tagged as
-    // being active
+    // Find the first triangle in the list that is tagged as being
+    // active. This search could be made more efficient by storing the
+    // active triangles separately.
     node = NULL;
     TriListNode *tmp = list_start;
     double hmax = 0.0;
     while (tmp){
       if (tmp->tri.status == ACTIVE){
-        double hval = computeMaxEdgeLength(&tmp->tri);
-        if (hval > hmax){
-          hmax = hval;
+        if (tmp->tri.quality > hmax){
+          hmax = tmp->tri.quality;
           node = tmp;
         }
       }
@@ -1292,6 +1390,7 @@ void TMRTriangularize::frontal( double h ){
     }
     while (ptr){
       double hval = computeMaxEdgeLength(&ptr->tri);
+      ptr->tri.quality = hval;
       if (hval < 1.5*h){
         ptr->tri.status = ACCEPTED;
       }

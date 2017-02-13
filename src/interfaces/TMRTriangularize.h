@@ -78,8 +78,11 @@ class TMRQuadNode {
 };
 
 /*
-  The basic TMR Triangle class that stores the node numbers associated with
-  this triangle
+  The basic Triangle class that stores the node numbers associated
+  with this triangle, tags and a metric for the triangle quality
+
+  This class is not designed to be externally visible to the user of
+  the TMRTriangularize class.
 */
 class TMRTriangle {
  public:
@@ -91,8 +94,11 @@ class TMRTriangle {
   uint32_t u, v, w;
   
   // Tag/info values (used to helpfully tag/label triangles)
-  uint16_t tag;
-  uint16_t status;
+  uint32_t tag;
+  uint32_t status;
+  
+  // Quality metric
+  float quality;
 };
 
 /*
@@ -104,8 +110,11 @@ class TMRTriangularize : public TMREntity {
                     int nsegs, const int segs[] );
   ~TMRTriangularize();
 
+  // Create the frontal mesh with the given mesh spacing
   void frontal( double h );
-  void getMesh( const int **conn, const int **pts );
+
+  // Retrieve the mesh connectivity from the object
+  void getMesh( int *_num_triangles, int **_conn, double **_pts );
   
   // Write the triangulation to an outputfile
   void writeToVTK( const char *filename );
@@ -125,7 +134,7 @@ class TMRTriangularize : public TMREntity {
   int deleteTriangle( TMRTriangle tri );
 
   // Mark all the triangles in the list
-  void setTriangleTags( uint16_t tag );
+  void setTriangleTags( uint32_t tag );
   void tagTriangles( TMRTriangle *tri );
 
   // Given the two ordered nodes, add the triangle to the list
@@ -164,8 +173,9 @@ class TMRTriangularize : public TMREntity {
   uint32_t num_points; // The current number of points
   uint32_t max_num_points; // The maximum number of points
 
-  // Allocate the number of points
+  // Array of the points that have been set
   double *pts;
+  TMRTriangle **pts_to_tris;
 
   // The PSLG edges
   uint32_t num_pslg_edges;
@@ -174,6 +184,7 @@ class TMRTriangularize : public TMREntity {
   // The root of the quadtree data structure
   TMRQuadDomain domain;
   TMRQuadNode *root;
+  uint32_t search_tag;
 
   // Keep a doubly-linked list to store the added triangles. The list
   // is doubly-linked facilitate deleting triangles from the list.
