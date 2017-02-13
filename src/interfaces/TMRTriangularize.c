@@ -409,27 +409,47 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
     addPointToMesh(&inpts[2*i]);
   }
 
-  // Free the point
-  TriListNode *node = list_start;
+  // Set the triangle tags 
+  setTriangleTags(0);
 
-  while (node){
-    TriListNode *next = node->next;
-    if (node->tri.u < fixed_point_offset ||
-        node->tri.v < fixed_point_offset ||
-        node->tri.w < fixed_point_offset){
-      if (node == list_start){
-        deleteTriangle(node->tri);
-        next = list_start;
+  // Mark all the triangles in the list that contain or touch
+  // nodes that are in the fixed_point_offset list that are not
+  // separated by a PSLG edge. These triangles will be deleted.
+  int flag = 1;
+  while (flag){
+    flag = 0;
+
+    TriListNode *node = list_start;
+    while (node){
+      if (node->tri.tag == 0 && 
+          (node->tri.u < fixed_point_offset ||
+           node->tri.v < fixed_point_offset ||
+           node->tri.w < fixed_point_offset)){
+        tagTriangles(&node->tri);
       }
-      else {
-        deleteTriangle(node->tri);
-      }
+      node = node->next;
     }
-    // Set the next node
-    node = next;
   }
 
-  // Free the points from the quadtree
+  // Free the triangles that we've found
+  list_marker = NULL;
+  TriListNode *node = list_start;
+  while (node){
+    // Keep track of what node will be next, since we may
+    // be deleting 'node' itself, we cannot access this 
+    // afterwards
+    TriListNode *tmp = node->next;
+
+    // Delete the triangle from the triangle list
+    if (node->tri.tag){
+      deleteTriangle(node->tri);
+    }
+
+    // Set the next node
+    node = tmp;
+  }
+
+  // Free the points and holes from the quadtree
   for ( uint32_t num = 0; num < fixed_point_offset; num++ ){
     root->deleteNode(num, &pts[2*num]);
   }
@@ -465,6 +485,42 @@ TMRTriangularize::~TMRTriangularize(){
 }
 
 /*
+  Reset the tags of all the triangles within the list
+*/
+void TMRTriangularize::setTriangleTags( uint16_t tag ){
+  TriListNode *node = list_start;
+  while (node){
+    TriListNode *next = node->next;
+    node->tri.tag = tag;
+    node = node->next;
+  }
+}
+
+/*
+  Mark triangles that should be deleted.
+
+  This is used to mark triangles that are in holes, or have points that
+  lie outside the
+*/
+void TMRTriangularize::tagTriangles( TMRTriangle *tri ){
+  // Set the combinations of edge pairs that will be added
+  // to the hash table
+  uint32_t edge_pairs[][2] = {{tri->u, tri->v},
+                              {tri->v, tri->w},
+                              {tri->w, tri->u}};
+  for ( int k = 0; k < 3; k++ ){
+    if (!edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
+      TMRTriangle *t;
+      completeMe(edge_pairs[k][1], edge_pairs[k][0], &t);
+      if (t && t->tag == 0){
+        t->tag = 1;
+        tagTriangles(t);
+      }
+    }
+  }                           
+}
+
+/*
   Write out the
 */
 void TMRTriangularize::writeToVTK( const char *filename ){
@@ -489,20 +545,22 @@ void TMRTriangularize::writeToVTK( const char *filename ){
       fprintf(fp, "3 %d %d %d\n", node->tri.u, node->tri.v, node->tri.w);
       node = node->next;
     }
-    
+
     // All quadrilaterals
     fprintf(fp, "\nCELL_TYPES %d\n", num_triangles);
     for ( int k = 0; k < num_triangles; k++ ){
       fprintf(fp, "%d\n", 5);
     }
 
-    //     // Print out the rest as fields one-by-one
-    // fprintf(fp, "CELL_DATA %d\n", num_triangles);
-    // fprintf(fp, "SCALARS quality float 1\n");
-    // fprintf(fp, "LOOKUP_TABLE default\n");
-    // for ( int k = 0; k < ntris; k++ ){
-    //   fprintf(fp, "%e\n", computeTriQuality(&tris[3*k], pts));
-    // }
+    // Print out the rest as fields one-by-one
+    fprintf(fp, "CELL_DATA %d\n", num_triangles);
+    fprintf(fp, "SCALARS status float 1\n");
+    fprintf(fp, "LOOKUP_TABLE default\n");
+    node = list_start;
+    while (node){
+      fprintf(fp, "%d\n", node->tri.status);
+      node = node->next;
+    }
 
     fclose(fp);
   }
@@ -543,6 +601,9 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
     list_end->next = next;
     list_end = list_end->next;
   }
+
+  // Add the triangle to the triangle count
+  num_triangles++;
 
   // Redistribute the members in the hash table if required
   if (num_hash_nodes > 10*num_buckets){
@@ -658,10 +719,6 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
     }
   }
 
-  if (success){
-    num_triangles++;
-  }
-
   return success;
 }
 
@@ -703,6 +760,10 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
         // If this is the first edge we've found, delete the
         // corresponding list entry as well.
         if (first){
+          // This triangle will be successfully deleted, adjust
+          // the triangle count
+          num_triangles--;
+
           // Adjust the double linking so that when the node is
           // deleted, the pointers will still work
           TriListNode *ptr = node->tri_node;
@@ -761,12 +822,6 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
 
     // Keep track of each individual edge
     success = success && edge_success;
-  }
-
-  // If this triangle was successfully deleted, adjust
-  // the triangle count
-  if (success){
-    num_triangles--;
   }
 
   return success;
@@ -855,58 +910,9 @@ inline int TMRTriangularize::enclosed( const double p[],
   Does the final given point lie within the circumcircle of the remaining
   points?
 */
-inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,\
+inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
                                           uint32_t w, uint32_t x ){
   return incircle(&pts[2*u], &pts[2*v], &pts[2*w], &pts[2*x]);
-}
-
-/*
-  The following code tests whether the triangle formed from the point
-  (u, v, w) is constrained Delaunay. 
-
-  If the edge (w, v) is in the PSLG, then the triangle is added immediately. 
-  If not, and if the point lies within the circumcircle of the triangle 
-  (u, w, v) with the directed edge (v, w).
- */
-void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){ 
-  // If the edge is along the polynomial straight line graph, then we
-  // add the triangle as it exists and we're done, even though it may
-  // not be Delaunay (it will be constrained Delaunay). We cannot
-  // split a PSLG edge.
-  if (edgeInPSLG(w, v)){
-    TMRTriangle tri(u, v, w);
-    addTriangle(tri);
-    return; 
-  }
-
-  // Complete the triangle
-  TMRTriangle *tri;
-  completeMe(w, v, &tri);
-
-  if (tri){
-    // Get the index of the final vertex
-    uint32_t x = 0;
-    if (tri->u == w && tri->v == v){
-      x = tri->w;
-    }
-    else if (tri->v == w && tri->w == v){
-      x = tri->u;
-    }
-    else if (tri->w == w && tri->u == v){
-      x = tri->v;
-    }
-
-    // Check whether the point lies within the circumcircle or
-    // exactly on its boundary
-    if (inCircle(w, v, x, u) >= 0.0){
-      deleteTriangle(*tri);
-      digCavity(u, v, x);
-      digCavity(u, x, w);
-      return;
-    }
-  }
-
-  addTriangle(TMRTriangle(u, v, w));
 }
 
 /*
@@ -978,6 +984,54 @@ void TMRTriangularize::addPointToMesh( const double pt[],
 }
 
 /*
+  The following code tests whether the triangle formed from the point
+  (u, v, w) is constrained Delaunay. 
+
+  If the edge (w, v) is in the PSLG, then the triangle is added immediately. 
+  If not, and if the point lies within the circumcircle of the triangle 
+  (u, w, v) with the directed edge (v, w).
+ */
+void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){ 
+  // If the edge is along the polynomial straight line graph, then we
+  // add the triangle as it exists and we're done, even though it may
+  // not be Delaunay (it will be constrained Delaunay). We cannot
+  // split a PSLG edge.
+  if (edgeInPSLG(w, v)){
+    addTriangle(TMRTriangle(u, v, w));
+    return; 
+  }
+
+  // Complete the triangle
+  TMRTriangle *tri;
+  completeMe(w, v, &tri);
+
+  if (tri){
+    // Get the index of the final vertex
+    uint32_t x = 0;
+    if (tri->u == w && tri->v == v){
+      x = tri->w;
+    }
+    else if (tri->v == w && tri->w == v){
+      x = tri->u;
+    }
+    else if (tri->w == w && tri->u == v){
+      x = tri->v;
+    }
+
+    // Check whether the point lies within the circumcircle or
+    // exactly on its boundary
+    if (inCircle(u, v, w, x) > 0.0){
+      deleteTriangle(*tri);
+      digCavity(u, v, x);
+      digCavity(u, x, w);
+      return;
+    }
+  }
+
+  addTriangle(TMRTriangle(u, v, w));
+}
+
+/*
   Find the enclosing triangle within the mesh. 
 
   This code uses the quadtree for geometric searching. First,
@@ -1001,7 +1055,6 @@ void TMRTriangularize::findEnclosing( const double pt[],
   }
 }
 
-
 /*
   Compute the distance to the intersection of the line m + alpha*e
   with the two lines from u to w and v to w
@@ -1017,30 +1070,29 @@ double TMRTriangularize::computeIntersection( const double m[],
   double det = a11*a22 - a12*a21;
 
   // Check if the line is orthogonal to this direction
-  if (fabs(det) < 1e-12*fabs(a11*a22)){
+  if (fabs(det) > 1e-12*fabs(a11*a22)){
     double b1 = pts[2*u] - m[0];
     double b2 = pts[2*u+1] - m[1];
-    double beta = (a11*b2 - a12*b1)/det;
+    double beta = (a11*b2 - a21*b1)/det;
 
     if (beta >= 0.0 && beta <= 1.0){
-      double alpha = (a22*b1 - a21*b2)/det;
+      double alpha = (a22*b1 - a12*b2)/det;
       return alpha;
     }
   }
-  else {
-    a21 = pts[2*v] - pts[2*w];
-    a22 = pts[2*v+1] - pts[2*w+1];
-    det = a11*a22 - a12*a21;
 
-    if (fabs(det) < 1e-12*fabs(a11*a22)){
-      double b1 = pts[2*v] - m[0];
-      double b2 = pts[2*v+1] - m[1];
-      double beta = (a11*b2 - a12*b1)/det;
+  a12 = pts[2*v] - pts[2*w];
+  a22 = pts[2*v+1] - pts[2*w+1];
+  det = a11*a22 - a12*a21;
 
-      if (beta >= 0.0 && beta <= 1.0){
-        double alpha = (a22*b1 - a21*b2)/det;
-        return alpha;
-      }
+  if (fabs(det) > 1e-12*fabs(a11*a22)){
+    double b1 = pts[2*v] - m[0];
+    double b2 = pts[2*v+1] - m[1];
+    double beta = (a11*b2 - a21*b1)/det;
+
+    if (beta >= 0.0 && beta <= 1.0){
+      double alpha = (a22*b1 - a12*b2)/det;
+      return alpha;
     }
   }
 
@@ -1109,19 +1161,25 @@ void TMRTriangularize::frontal( double h ){
   
   int iter = 0;
   while (1){
-    if (iter % 50 == 0){
-      printf("Iteration %d\n", iter);
+    if (iter % 250 == 0){
+      printf("Iteration %d  num_triangles %d\n", iter, num_triangles);
     }
     iter++;
 
     // Find the first triangle in the list that is tagged as
     // being active
-    node = list_start;
-    while (node){
-      if (node->tri.status == ACTIVE){
-        break;
+    node = NULL;
+    TriListNode *tmp = list_start;
+    double hmax = 0.0;
+    while (tmp){
+      if (tmp->tri.status == ACTIVE){
+        double hval = computeMaxEdgeLength(&tmp->tri);
+        if (hval > hmax){
+          hmax = hval;
+          node = tmp;
+        }
       }
-      node = node->next;
+      tmp = tmp->next;
     }
     if (!node){
       break;
@@ -1129,16 +1187,16 @@ void TMRTriangularize::frontal( double h ){
 
     // Now insert a new point based on the Voronoi criteria.
     int found = 0;
-    uint32_t edge[2] = {0, 0};
+    uint32_t u = 0, v = 0;
     uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
                                 {node->tri.v, node->tri.w},
                                 {node->tri.w, node->tri.u}};
     
     // Check if the edge is on the PSLG
     for ( int k = 0; k < 3; k++ ){
-      if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
-        edge[0] = edge_pairs[k][0];
-        edge[1] = edge_pairs[k][1];
+      u = edge_pairs[k][0];
+      v = edge_pairs[k][1];
+      if (edgeInPSLG(u, v)){
         found = 1;
         break;
       }
@@ -1147,15 +1205,15 @@ void TMRTriangularize::frontal( double h ){
     // Check if an adjacent triangle is accepted
     if (!found){
       for ( int k = 0; k < 3; k++ ){
+        u = edge_pairs[k][0];
+        v = edge_pairs[k][1];
+
+        // Compute the completed triangle
         TMRTriangle *tri;
-        completeMe(edge_pairs[k][1], edge_pairs[k][0], &tri);
-        if (tri){
-          if (tri->status == ACCEPTED){
-            edge[0] = edge_pairs[k][0];
-            edge[1] = edge_pairs[k][1];
-            found = 1;
-            break;
-          }
+        completeMe(v, u, &tri);
+        if (tri && tri->status == ACCEPTED){
+          found = 1;
+          break;
         }
       }
     }
@@ -1164,7 +1222,6 @@ void TMRTriangularize::frontal( double h ){
     // | i   j   k |
     // | 0   0   1 | = - i*dy + j*dx
     // | dx  dy  0 |
-    uint32_t u = edge[0], v = edge[1];
 
     // Compute
     double m[2];
@@ -1191,23 +1248,25 @@ void TMRTriangularize::frontal( double h ){
     if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
       findEnclosing(pt, &pt_tri);
 
-      // We've tried a new point
-      // Pick a point that is actually in the current triangle
+      // We've tried a new point and it was outside the domain.
+      // That is not allowed, so next we pick a point that is 
+      // actually in the current triangle and therefore within the
+      // allowed domain
       if (!pt_tri){
         pt_tri = &(node->tri);
         uint32_t w = 0;
-        if (edge[0] == pt_tri->u && edge[1] == pt_tri->v){
+        if (u == pt_tri->u && v == pt_tri->v){
           w = pt_tri->w;
         }
-        else if (edge[0] == pt_tri->v && edge[1] == pt_tri->w){
+        else if (u == pt_tri->v && v == pt_tri->w){
           w = pt_tri->u;
         }
-        else if (edge[0] == pt_tri->w && edge[1] == pt_tri->u){
+        else if (u == pt_tri->w && v == pt_tri->u){
           w = pt_tri->v;
         }
 
-        double q = computeIntersection(m, e, edge[0], edge[1], w);
-        double rho = 0.5*q;
+        double q = computeIntersection(m, e, u, v, w);
+        double rho = 0.5*(p*p + q*q)/q;
         pt[0] = m[0] + rho*e[0];
         pt[1] = m[1] + rho*e[1];
       }
@@ -1219,7 +1278,7 @@ void TMRTriangularize::frontal( double h ){
     pt_tri = NULL;
 
     // Complete me with the newly created triangle with the
-    completeMe(edge[0], edge[1], &pt_tri);
+    completeMe(u, v, &pt_tri);
     if (pt_tri){
       pt_tri->status = ACCEPTED;
     }
@@ -1227,6 +1286,7 @@ void TMRTriangularize::frontal( double h ){
     // Compute the circumcircles of the new triangles and check
     // whether they belong in the done category or not...
     TriListNode *ptr = list_start;
+    int count = 0;
     if (list_marker){
       ptr = list_marker->next;
     }
@@ -1239,6 +1299,7 @@ void TMRTriangularize::frontal( double h ){
         ptr->tri.status = WAITING;
       }
       ptr = ptr->next;
+      count++;
     }
 
     // Scan through the list of the 
@@ -1248,30 +1309,34 @@ void TMRTriangularize::frontal( double h ){
     }
 
     while (ptr){
-      // If any of the triangles touches an edge in the planar
-      // straight line graph, change it to a waiting triangle
-      int flag = 0;
-      uint32_t edge_pairs[][2] = {{ptr->tri.u, ptr->tri.v},
-                                  {ptr->tri.v, ptr->tri.w},
-                                  {ptr->tri.w, ptr->tri.u}};
+      if (ptr->tri.status != ACCEPTED){
+        // If any of the triangles touches an edge in the planar
+        // straight line graph, change it to a waiting triangle
+        int flag = 0;
+        uint32_t edge_pairs[][2] = {{ptr->tri.u, ptr->tri.v},
+                                    {ptr->tri.v, ptr->tri.w},
+                                    {ptr->tri.w, ptr->tri.u}};
 
-      for ( int k = 0; k < 3; k++ ){
-        if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
-          ptr->tri.status = ACTIVE;
-          flag = 1;
-          break;
-        }
-      }
-
-      // If any triangle is adjacent to a triangle that is accepted,
-      // then change the status of the new triangle to be active
-      if (!flag){
+        // Loop over all of the edges in the triangle and check
+        // whether they're in the PSLG 
         for ( int k = 0; k < 3; k++ ){
-          TMRTriangle *adjacent;
-          completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
-          if (adjacent && adjacent->status == ACCEPTED){
-            adjacent->status = ACTIVE;
+          if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
+            ptr->tri.status = ACTIVE;
+            flag = 1;
             break;
+          }
+        }
+
+        // If any triangle is adjacent to a triangle that is accepted,
+        // then change the status of the new triangle to be active
+        if (!flag){
+          for ( int k = 0; k < 3; k++ ){
+            TMRTriangle *adjacent;
+            completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
+            if (adjacent && adjacent->status == ACCEPTED){
+              ptr->tri.status = ACTIVE;
+              break;
+            }
           }
         }
       }

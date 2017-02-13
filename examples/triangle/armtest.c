@@ -289,28 +289,6 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   }
   seg[2*(pt-1)+1] = 0;
 
-  // First line: <# of vertices> <dimension (must be 2)> <# of attributes> <# of boundary markers (0 or 1)>
-  // Following lines: <vertex #> <x> <y> [attributes] [boundary marker]
-  // One line: <# of segments> <# of boundary markers (0 or 1)>
-  // Following lines: <segment #> <endpoint> <endpoint> [boundary marker]
-  // One line: <# of holes>s
-  // Following lines: <hole #> <x> <y>
-  // Optional line: <# of regional attributes and/or area constraints>
-  // Optional following lines: <region #> <x> <y> <attribute> <maximum area>
-
-  FILE *fp = fopen("triangle_seg.poly", "w");
-  if (fp){
-    fprintf(fp, "%d %d %d %d\n", npts, 2, 0, 0);
-    for ( int i = 0; i < npts; i++ ){
-      fprintf(fp, "%d %.16e %.16e\n", i, params[2*i], params[2*i+1]);
-    }
-    fprintf(fp, "%d %d\n", nseg, 0);
-    for ( int i = 0; i < nseg; i++ ){
-      fprintf(fp, "%d %d %d\n", i, seg[2*i], seg[2*i+1]);
-    }
-    fprintf(fp, "0\n");
-    fclose(fp);
-  }
   /*
   // Triangulate the region
   TMRTriangulation *tri = new TMRTriangulation(npts, params, NULL, surf);
@@ -335,13 +313,34 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   tri->writeQuadToVTK("smoothed.vtk");
   */
 
+  // First line: <# of vertices> <dimension (must be 2)> <# of attributes> <# of boundary markers (0 or 1)>
+  // Following lines: <vertex #> <x> <y> [attributes] [boundary marker]
+  // One line: <# of segments> <# of boundary markers (0 or 1)>
+  // Following lines: <segment #> <endpoint> <endpoint> [boundary marker]
+  // One line: <# of holes>s
+  // Following lines: <hole #> <x> <y>
+  // Optional line: <# of regional attributes and/or area constraints>
+  // Optional following lines: <region #> <x> <y> <attribute> <maximum area>
+
+  FILE *fp = fopen("triangle_seg.poly", "w");
+  if (fp){
+    fprintf(fp, "%d %d %d %d\n", npts, 2, 0, 0);
+    for ( int i = 0; i < npts; i++ ){
+      fprintf(fp, "%d %.16e %.16e\n", i, params[2*i], params[2*i+1]);
+    }
+    fprintf(fp, "%d %d\n", nseg, 0);
+    for ( int i = 0; i < nseg; i++ ){
+      fprintf(fp, "%d %d %d\n", i, seg[2*i], seg[2*i+1]);
+    }
+    fprintf(fp, "0\n");
+    fclose(fp);
+  }
+
+
   TMRTriangularize *tri = 
     new TMRTriangularize(npts, params, nseg, seg);
   tri->frontal(htarget);
-
-
   tri->writeToVTK("triangle.vtk");
-
   delete tri;
 
   return NULL;
@@ -364,7 +363,7 @@ int main( int argc, char *argv[] ){
   double r2 = 1.0;
 
   // Create the topology
-  double htarget = 0.25;;
+  double htarget = 0.1;
   TMRTopology *topo = setUpTopology(comm, r1, r2, L, t, htarget);
   // topo->incref();
 

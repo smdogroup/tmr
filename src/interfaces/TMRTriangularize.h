@@ -124,6 +124,10 @@ class TMRTriangularize : public TMREntity {
   int addTriangle( TMRTriangle tri );
   int deleteTriangle( TMRTriangle tri );
 
+  // Mark all the triangles in the list
+  void setTriangleTags( uint16_t tag );
+  void tagTriangles( TMRTriangle *tri );
+
   // Given the two ordered nodes, add the triangle to the list
   void completeMe( uint32_t u, uint32_t v, TMRTriangle **tri );
   void nodeToOneTriangle( uint32_t u, TMRTriangle *tri );
