@@ -10,7 +10,7 @@ OBJS = armtest.o
 
 default: ${OBJS}
 #	${CXX} tritest.o ${TMR_LD_FLAGS} -o tritest
-	${CXX} armtest.o ${TMR_LD_FLAGS} -o armtest
+	${CXX} armtest.o -pg ${TMR_LD_FLAGS} -o armtest
 
 debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
 debug: default

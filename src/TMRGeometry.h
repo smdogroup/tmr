@@ -2,6 +2,7 @@
 #define TMR_GEOMETRY_H
 
 #include "TMRBase.h"
+#include "TMRGeometry.h"
 
 /*
   The following header file contains the interface for the geometry/

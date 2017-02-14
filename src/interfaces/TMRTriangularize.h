@@ -2,6 +2,7 @@
 #define TMR_TRIANGULARIZE_H
 
 #include "TMRBase.h"
+#include "TMRGeometry.h"
 
 /*
   The rectangular domain used to define the upper/lower limits of the
@@ -86,9 +87,13 @@ class TMRQuadNode {
 */
 class TMRTriangle {
  public:
-  TMRTriangle(){}
+  TMRTriangle(){
+    u = v = w = 0;
+    tag = status = 0;
+  }
   TMRTriangle( uint32_t _u, uint32_t _v, uint32_t _w ){
     u = _u;  v = _v;  w = _w;
+    tag = status = 0;
   }
   // The indices of this triangle
   uint32_t u, v, w;
@@ -106,8 +111,9 @@ class TMRTriangle {
 */
 class TMRTriangularize : public TMREntity {
  public:
-  TMRTriangularize( int npts, const double *pts, 
-                    int nsegs, const int segs[] );
+  TMRTriangularize( int npts, const double inpts[], int nholes,
+                    int nsegs, const int segs[],
+                    TMRSurface *surf );
   ~TMRTriangularize();
 
   // Create the frontal mesh with the given mesh spacing
@@ -120,6 +126,13 @@ class TMRTriangularize : public TMREntity {
   void writeToVTK( const char *filename );
 
  private:
+  // TAGS for the triangles
+  static const uint32_t NO_STATUS = 0;
+  static const uint32_t WAITING = 1;
+  static const uint32_t ACTIVE = 2;
+  static const uint32_t ACCEPTED = 3;
+  static const uint32_t DELETE_ME = 4;
+
   // Add a point to the list -- this only adds a point to the list and 
   // returns the new point number, it does not add the point to the 
   uint32_t addPoint( const double pt[] );
@@ -165,6 +178,12 @@ class TMRTriangularize : public TMREntity {
   // Get a hash value for the given edge
   inline uint32_t getEdgeHash( uint32_t u, uint32_t v );
 
+  // The underlying surface
+  TMRSurface *surface;
+
+  // Initial number of boundary points
+  uint32_t init_boundary_points;
+
   // Offset to the points that will be removed from the mesh
   // these are the original background mesh and the holes
   uint32_t fixed_point_offset; 
@@ -175,6 +194,7 @@ class TMRTriangularize : public TMREntity {
 
   // Array of the points that have been set
   double *pts;
+  TMRPoint *X;
   TMRTriangle **pts_to_tris;
 
   // The PSLG edges
@@ -214,13 +234,6 @@ class TMRTriangularize : public TMREntity {
 
   // Create the array of hash buckets
   EdgeHashNode **buckets;
-
-  // Keep a priority queue of the elements - this is done for searching
-  class TriQueueNode {
-  public:
-    TMRTriangle *tri;
-    TriQueueNode *next;
-  };
 
   // The number of buckets
   int num_buckets;

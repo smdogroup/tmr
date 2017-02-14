@@ -42,6 +42,105 @@ int compare_edges( const void *avoid, const void *bvoid ){
 }
 
 /*
+  A light-weight queue for keeping track of groups of triangles
+*/
+class TriQueueNode {
+ public:
+  TMRTriangle *tri;
+  TriQueueNode *next;
+};
+
+/*
+  The triangle priority queue
+
+  This enables the storage of a list of triangles that can
+  be accessed 
+*/
+class TriQueue {
+ public:
+  // Initialize the priority queue without and data
+  TriQueue(){
+    start = end = NULL;
+    size = 0;
+  }
+
+  // Free all of the queue entries
+  ~TriQueue(){
+    while (start){
+      TriQueueNode *tmp = start->next;
+      delete start;
+      start = tmp;      
+    }
+  }
+
+  // Pop the first triangle pointer off the queue and delete its
+  // corresponding node. This is used to extract the first node in the
+  // list.
+  TMRTriangle *pop(){
+    TMRTriangle *t = NULL;
+    if (start){
+      t = start->tri;
+      TriQueueNode *tmp = start;
+      start = start->next;
+      delete tmp;
+      size--;
+    }
+    return t;
+  }
+
+  // Append the given triangle pointer to the end of the priority
+  // queue. If the size of the queue is zero, then readjust the
+  // start/end pointers and the size accordingly.
+  void append( TMRTriangle *t ){
+    if (size == 0){
+      end = new TriQueueNode();
+      end->tri = t;
+      end->next = NULL;
+      start = end;
+      size++;
+    }
+    else {
+      end->next = new TriQueueNode();
+      end = end->next;
+      end->tri = t;
+      end->next = NULL;
+      size++;
+    }
+  }
+  
+  // Delete the *next* entry in the list after the provided
+  // pointer. Note that this is required since we only have a pointer
+  // to the next entry in the list (and not the previous one). This
+  // function returns 1 for success and 0 for failure.
+  int deleteNext( TriQueueNode *node ){
+    if (node && node->next){
+      // Pointer to the entry to be deleted
+      TriQueueNode *next = node->next;
+      
+      // Adjust the 'next' pointer to point past the entry that will
+      // be deleted
+      node->next = next->next;
+
+      // Decrease the length of the queue
+      size--;
+
+      // Delete the entry
+      delete next;
+      return 1;
+    }
+
+    // The node cannot be deleted
+    return 0;
+  }
+
+  // Note that we grant public access to these members. Use this
+  // access wisely!
+  int size;
+  TriQueueNode *start;
+  TriQueueNode *end;
+};
+
+/*
   The following class implments a simple quadtree data structure for fast
   geometric searching queries.
 */
@@ -314,12 +413,26 @@ void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist 
 }
 
 /*
-  
+  Add the segments
+
+
+
+
+
+
+
 */
-TMRTriangularize::TMRTriangularize( int npts, const double inpts[], 
-                                    int nsegs, const int segs[] ){
+TMRTriangularize::TMRTriangularize( int npts, const double inpts[], int nholes,
+                                    int nsegs, const int segs[],
+                                    TMRSurface *surf ){
   // Initialize the predicates code
   exactinit();
+
+  // Set the surface location
+  surface = surf;
+  if (surface){
+    surface->incref();
+  }
 
   // Allocate and initialize/zero the hash table data for the edges
   num_hash_nodes = 0;
@@ -337,7 +450,8 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
   num_triangles = 0;
 
   // Set the initial number of points
-  fixed_point_offset = 4;
+  init_boundary_points = npts;
+  fixed_point_offset = 4 + nholes;
   num_points = fixed_point_offset + npts;
 
   // Set the initial for the maximum number of points
@@ -348,6 +462,7 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
 
   // Allocate the initial set of points
   pts = new double[ 2*max_num_points ];
+  X = new TMRPoint[ max_num_points ];
   pts_to_tris = new TMRTriangle*[ max_num_points ];
 
   // Find the maximum domain size
@@ -463,7 +578,13 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
 TMRTriangularize::~TMRTriangularize(){
   delete root;
   delete [] pts;
+  delete [] X;
+  delete [] pts_to_tris;
 
+  // Dereference the surface
+  surface->decref();
+
+  // Free the PSLG edges
   if (pslg_edges){
     delete [] pslg_edges;
   }
@@ -551,7 +672,7 @@ void TMRTriangularize::tagTriangles( TMRTriangle *tri ){
 }
 
 /*
-  Write out the
+  Write out the triangularization to a file
 */
 void TMRTriangularize::writeToVTK( const char *filename ){
   FILE *fp = fopen(filename, "w");
@@ -562,13 +683,19 @@ void TMRTriangularize::writeToVTK( const char *filename ){
       
     // Write out the points
     fprintf(fp, "POINTS %d float\n", num_points);
-    for ( int k = 0; k < num_points; k++ ){
-      fprintf(fp, "%e %e %e\n", pts[2*k], pts[2*k+1], 0.0);
+    if (surface){
+      for ( int k = 0; k < num_points; k++ ){
+        fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
+      }
+    }
+    else {
+      for ( int k = 0; k < num_points; k++ ){
+        fprintf(fp, "%e %e %e\n", pts[2*k], pts[2*k+1], 0.0);
+      }
     }
     
     // Write out the cell values
-    fprintf(fp, "\nCELLS %d %d\n", 
-            num_triangles, 4*num_triangles);
+    fprintf(fp, "\nCELLS %d %d\n", num_triangles, 4*num_triangles);
 
     TriListNode *node = list_start;
     while (node){
@@ -969,6 +1096,54 @@ inline int TMRTriangularize::enclosed( const double p[],
 */
 inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
                                           uint32_t w, uint32_t x ){
+
+  if (surface){
+    // Compute the mid-point of the triangle
+    double mpt[2];
+    const double frac = 1.0/3.0;
+    mpt[0] = frac*(pts[2*u] + pts[2*v] + pts[2*w]);
+    mpt[1] = frac*(pts[2*u+1] + pts[2*v+1] + pts[2*w+1]);
+
+    // Compute the metric components at the center of the triangle (u,v,w)
+    TMRPoint Xu, Xv;
+    surface->evalDeriv(mpt[0], mpt[1], &Xu, &Xv);
+    double g11 = Xu.dot(Xu);
+    double g12 = Xu.dot(Xv);
+    double g22 = Xv.dot(Xv);
+
+    // Compute a multiplicative decomposition such that G = L*L^{T}
+    // [l11    ][l11 l21] = [g11  g12]
+    // [l21 l22][    l22]   [g12  g22]
+    // l11 = sqrt(g11)
+    // l11*l21 = g12 => l21 = g12/l11
+    // l21*l21 + l22^2 = g22 => l22 = sqrt(g22 - l21*l21);
+    double l11 = sqrt(g11);
+    double l21 = g12/l11;
+    double l22 = sqrt(g22 - l21*l21);
+
+    // Compute L^{T}*p' = p to transform into the local coordinates
+    double inv11 = 1.0/l11;
+    double inv22 = 1.0/l22;
+
+    double pu[2];
+    pu[1] = inv22*pts[2*u+1];
+    pu[0] = inv11*(pts[2*u] - pu[1]*l21);
+
+    double pv[2];
+    pv[1] = inv22*pts[2*v+1];
+    pv[0] = inv11*(pts[2*v] - pv[1]*l21);
+
+    double pw[2];
+    pw[1] = inv22*pts[2*w+1];
+    pw[0] = inv11*(pts[2*w] - pw[1]*l21);
+
+    double px[2];
+    px[1] = inv22*pts[2*x+1];
+    px[0] = inv11*(pts[2*x] - px[1]*l21);
+
+    return incircle(pu, pv, pw, px);
+  }
+
   return incircle(&pts[2*u], &pts[2*v], &pts[2*w], &pts[2*x]);
 }
 
@@ -979,15 +1154,26 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
   // If the size of the array is exceeded, multiply it by 2
   if (num_points >= max_num_points){
     max_num_points *= 2;
+
+    // Allocate a new array for the parametric locations of all the
+    // points
     double *new_pts = new double[ 2*max_num_points ];
     memcpy(new_pts, pts, 2*num_points*sizeof(double));
     delete [] pts;
     pts = new_pts;
 
+    // Allocate a new array for the pointer from the triangle vertices
+    // to an attaching triangle
     TMRTriangle **new_pts_to_tris = new TMRTriangle*[ 2*max_num_points ];
     memcpy(new_pts_to_tris, pts_to_tris, num_points*sizeof(TMRTriangle*));
     delete [] pts_to_tris;
     pts_to_tris = new_pts_to_tris;
+    
+    // Allocate the space for the triangle vertices in physical space
+    TMRPoint *new_X = new TMRPoint[ max_num_points ];
+    memcpy(new_X, X, num_points*sizeof(TMRPoint));
+    delete [] X;
+    X = new_X;
   }
 
   // Add the point to the quadtree
@@ -996,7 +1182,14 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
   // Set the new point location
   pts[2*num_points] = pt[0];
   pts[2*num_points+1] = pt[1];
+
+  // No new triangle has been assigned yet
   pts_to_tris[num_points] = NULL;
+
+  // Evaluate the surface location
+  surface->evalPoint(pt[0], pt[1], &X[num_points]);
+  
+  // Increase the number of points by one
   num_points++;
 
   // Return the new point index
@@ -1131,28 +1324,12 @@ void TMRTriangularize::findEnclosing( const double pt[],
 
   // Members of the list do not enclose the point and have
   // been labeled that they are searched
-  int queue_size = 1;
-  TriQueueNode *queue_start = new TriQueueNode();
-  queue_start->tri = tri;
-  queue_start->next = NULL;
+  TriQueue queue;
+  queue.append(tri);
 
-  // Point to the end of the queue - the first member of the list
-  TriQueueNode *queue_end = queue_start;
-
-  while (queue_size > 0){
+  while (queue.size > 0){
     // Pop the top member from the queue
-    TMRTriangle *t = queue_start->tri;
-
-    // Delete the top member from the queue
-    TriQueueNode *tmp = queue_start->next;
-    delete queue_start;
-    queue_start = tmp;
-    queue_size--;
-
-    // If the queue size is zero, there's nothing to point to
-    if (queue_size == 0){
-      queue_end = NULL;
-    }
+    TMRTriangle *t = queue.pop();
 
     // Search the adjacent triangles across edges
     uint32_t edge_pairs[][2] = {{t->u, t->v},
@@ -1169,14 +1346,6 @@ void TMRTriangularize::findEnclosing( const double pt[],
         // Check whether the point is enclosed by t2
         if (enclosed(pt, t2->u, t2->v, t2->w)){
           *ptr = t2;
-
-          // Free all of the allocated queue
-          while (queue_start){
-            tmp = queue_start->next;
-            delete queue_start;
-            queue_start = tmp;
-          }
-
           return;
         }
 
@@ -1185,23 +1354,12 @@ void TMRTriangularize::findEnclosing( const double pt[],
         t2->tag = search_tag;
 
         // Append this guy as having been searched
-        if (queue_size == 0){
-          queue_end = new TriQueueNode();
-          queue_end->tri = t2;
-          queue_end->next = NULL;
-          queue_start = queue_end;
-          queue_size++;
-        }
-        else {
-          queue_end->next = new TriQueueNode();
-          queue_end = queue_end->next;
-          queue_end->tri = t2;
-          queue_end->next = NULL;
-          queue_size++;
-        }
+        queue.append(t2);
       }
     }
   }
+
+  return;
 }
 
 /*
@@ -1260,20 +1418,40 @@ double TMRTriangularize::computeIntersection( const double m[],
   high-quality triangle.
 */
 double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
-  double d1[2], D1;
-  d1[0] = pts[2*tri->v] - pts[2*tri->u];
-  d1[1] = pts[2*tri->v+1] - pts[2*tri->u+1];
-  D1 = d1[0]*d1[0] + d1[1]*d1[1];
+  double D1, D2, D3;
+  if (surface){
+    TMRPoint d;
+    d.x = X[tri->v].x - X[tri->u].x;
+    d.y = X[tri->v].y - X[tri->u].y;
+    d.z = X[tri->v].z - X[tri->u].z;
+    D1 = d.dot(d);
 
-  double d2[2], D2;
-  d2[0] = pts[2*tri->w] - pts[2*tri->v];
-  d2[1] = pts[2*tri->w+1] - pts[2*tri->v+1];
-  D2 = d2[0]*d2[0] + d2[1]*d2[1];
+    d.x = X[tri->w].x - X[tri->v].x;
+    d.y = X[tri->w].y - X[tri->v].y;
+    d.z = X[tri->w].z - X[tri->v].z;
+    D2 = d.dot(d);
 
-  double d3[2], D3;
-  d3[0] = pts[2*tri->u] - pts[2*tri->w];
-  d3[1] = pts[2*tri->u+1] - pts[2*tri->w+1];
-  D3 = d3[0]*d3[0] + d3[1]*d3[1];
+    d.x = X[tri->u].x - X[tri->w].x;
+    d.y = X[tri->u].y - X[tri->w].y;
+    d.z = X[tri->u].z - X[tri->w].z;
+    D3 = d.dot(d);
+  }
+  else {
+    double d1[2];
+    d1[0] = pts[2*tri->v] - pts[2*tri->u];
+    d1[1] = pts[2*tri->v+1] - pts[2*tri->u+1];
+    D1 = d1[0]*d1[0] + d1[1]*d1[1];
+    
+    double d2[2];
+    d2[0] = pts[2*tri->w] - pts[2*tri->v];
+    d2[1] = pts[2*tri->w+1] - pts[2*tri->v+1];
+    D2 = d2[0]*d2[0] + d2[1]*d2[1];
+    
+    double d3[2];
+    d3[0] = pts[2*tri->u] - pts[2*tri->w];
+    d3[1] = pts[2*tri->u+1] - pts[2*tri->w+1];
+    D3 = d3[0]*d3[0] + d3[1]*d3[1];
+  }
 
   double Dmax = D1;
   if (D2 > Dmax){ Dmax = D2; }
@@ -1297,15 +1475,14 @@ void TMRTriangularize::frontal( double h ){
   // The length of the edge of the triangle
   double de = 0.5*sqrt(3.0)*h;
 
-  // Set the status of the different 
-  const uint32_t WAITING = 1;
-  const uint32_t ACTIVE = 2;
-  const uint32_t ACCEPTED = 3;
-
   // Add the triangles to the active set that 
   TriListNode *node = list_start;
   while (node){
+    // Set the status by default as waiting
     node->tri.status = WAITING;
+    
+    // Compute the 'quality' indicator for this triangle
+    node->tri.quality = computeMaxEdgeLength(&node->tri);
   
     // If any of the triangles touches an edge in the planar
     // straight line graph, change it to a waiting triangle
@@ -1330,31 +1507,37 @@ void TMRTriangularize::frontal( double h ){
     }
     iter++;
 
+    // The pointer to the triangle that we're going to use next
+    TMRTriangle *tri = NULL;
+
     // Find the first triangle in the list that is tagged as being
     // active. This search could be made more efficient by storing the
     // active triangles separately.
-    node = NULL;
-    TriListNode *tmp = list_start;
-    double hmax = 0.0;
-    while (tmp){
-      if (tmp->tri.status == ACTIVE){
-        if (tmp->tri.quality > hmax){
-          hmax = tmp->tri.quality;
-          node = tmp;
+    TriListNode *start = list_start;
+    while (start){
+      if (start->tri.status == ACTIVE){
+        if (tri && start->tri.quality > tri->quality){
+          tri = &(start->tri);
+        }
+        else {
+          tri = &(start->tri);
         }
       }
-      tmp = tmp->next;
+      start = start->next;
     }
-    if (!node){
+
+    // We've failed to find any triangle in the active set of
+    // triangles
+    if (!tri){
       break;
-    }
+    }   
 
     // Now insert a new point based on the Voronoi criteria.
     int found = 0;
     uint32_t u = 0, v = 0;
-    uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
-                                {node->tri.v, node->tri.w},
-                                {node->tri.w, node->tri.u}};
+    uint32_t edge_pairs[][2] = {{tri->u, tri->v},
+                                {tri->v, tri->w},
+                                {tri->w, tri->u}};
     
     // Check if the edge is on the PSLG
     for ( int k = 0; k < 3; k++ ){
@@ -1373,9 +1556,9 @@ void TMRTriangularize::frontal( double h ){
         v = edge_pairs[k][1];
 
         // Compute the completed triangle
-        TMRTriangle *tri;
-        completeMe(v, u, &tri);
-        if (tri && tri->status == ACCEPTED){
+        TMRTriangle *t;
+        completeMe(v, u, &t);
+        if (t && t->status == ACCEPTED){
           found = 1;
           break;
         }
@@ -1387,37 +1570,45 @@ void TMRTriangularize::frontal( double h ){
     // | 0   0   1 | = - i*dy + j*dx
     // | dx  dy  0 |
 
-    // Compute
-    double m[2];
+    // Compute the parametric mid-point
+    double m[2], e[2];
     m[0] = 0.5*(pts[2*u] + pts[2*v]);
     m[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
 
-    // Compute the direction
-    double e[2];
-    e[0] = (pts[2*u+1] - pts[2*v+1]);
-    e[1] = (pts[2*v] - pts[2*u]);
-
-    // Compute half the distance between the u and v points
-    double p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
-    e[0] = 0.5*e[0]/p;
-    e[1] = 0.5*e[1]/p;
-
-    // Compute the new optimal point
     double pt[2];
-    pt[0] = m[0] + de*e[0];
-    pt[1] = m[1] + de*e[1];
+    if (surface){
+      TMRPoint Xu, Xv;
+      surface->evalDeriv(m[0], m[1], &Xu, &Xv);
+
+      
+      
+    }
+    else {
+      // Compute the direction perpendicular to the line from u to v
+      e[0] = (pts[2*u+1] - pts[2*v+1]);
+      e[1] = (pts[2*v] - pts[2*u]);
+      
+      // Compute half the distance between the u and v points
+      double p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
+      e[0] = 0.5*e[0]/p;
+      e[1] = 0.5*e[1]/p;
+      
+      // Compute the new optimal point
+      pt[0] = m[0] + de*e[0];
+      pt[1] = m[1] + de*e[1];
+    }
 
     // Find the enclosing triangle for the 
-    TMRTriangle *pt_tri = &(node->tri);
+    TMRTriangle *pt_tri = tri;
     if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
       findEnclosing(pt, &pt_tri);
-
+      
       // We've tried a new point and it was outside the domain.
       // That is not allowed, so next we pick a point that is 
       // actually in the current triangle and therefore within the
       // allowed domain
       if (!pt_tri){
-        pt_tri = &(node->tri);
+        pt_tri = tri;
         uint32_t w = 0;
         if (u == pt_tri->u && v == pt_tri->v){
           w = pt_tri->w;
@@ -1430,12 +1621,12 @@ void TMRTriangularize::frontal( double h ){
         }
 
         double q = computeIntersection(m, e, u, v, w);
-        double rho = 0.5*(p*p + q*q)/q;
+        double rho = 0.5*q; // (p*p + q*q)/q;
         pt[0] = m[0] + rho*e[0];
         pt[1] = m[1] + rho*e[1];
       }
     }
-
+  
     // Set the pointer to the last member in the list
     list_marker = list_end; 
     addPointToMesh(pt, pt_tri);
@@ -1467,7 +1658,8 @@ void TMRTriangularize::frontal( double h ){
       count++;
     }
 
-    // Scan through the list of the 
+    // Scan through the list of the added triangles and mark which
+    // ones are active/working/accepted.
     ptr = list_start;
     if (list_marker){ 
       ptr = list_marker->next;
