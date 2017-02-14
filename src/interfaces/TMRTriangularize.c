@@ -1125,16 +1125,82 @@ void TMRTriangularize::findEnclosing( const double pt[],
     *ptr = tri;
     return;
   }
+  else {
+    tri->tag = search_tag;
+  }
 
-  // Scan through the mesh, using a linear search
-  *ptr = NULL;
-  TriListNode *node = list_start;
-  while (node){
-    if (enclosed(pt, node->tri.u, node->tri.v, node->tri.w)){
-      *ptr = &(node->tri);
-      return;
+  // Members of the list do not enclose the point and have
+  // been labeled that they are searched
+  int queue_size = 1;
+  TriQueueNode *queue_start = new TriQueueNode();
+  queue_start->tri = tri;
+  queue_start->next = NULL;
+
+  // Point to the end of the queue - the first member of the list
+  TriQueueNode *queue_end = queue_start;
+
+  while (queue_size > 0){
+    // Pop the top member from the queue
+    TMRTriangle *t = queue_start->tri;
+
+    // Delete the top member from the queue
+    TriQueueNode *tmp = queue_start->next;
+    delete queue_start;
+    queue_start = tmp;
+    queue_size--;
+
+    // If the queue size is zero, there's nothing to point to
+    if (queue_size == 0){
+      queue_end = NULL;
     }
-    node = node->next;
+
+    // Search the adjacent triangles across edges
+    uint32_t edge_pairs[][2] = {{t->u, t->v},
+                                {t->v, t->w},
+                                {t->w, t->u}};
+
+    // Search the adjacent triangles and determine
+    // whether they have been tagged or not
+    
+    for ( int k = 0; k < 3; k++ ){
+      TMRTriangle *t2;
+      completeMe(edge_pairs[k][1], edge_pairs[k][0], &t2);
+      if (t2 && t2->tag != search_tag){
+        // Check whether the point is enclosed by t2
+        if (enclosed(pt, t2->u, t2->v, t2->w)){
+          *ptr = t2;
+
+          // Free all of the allocated queue
+          while (queue_start){
+            tmp = queue_start->next;
+            delete queue_start;
+            queue_start = tmp;
+          }
+
+          return;
+        }
+
+        // If the triangle does not enclose the point, label
+        // this guy as having been searched
+        t2->tag = search_tag;
+
+        // Append this guy as having been searched
+        if (queue_size == 0){
+          queue_end = new TriQueueNode();
+          queue_end->tri = t2;
+          queue_end->next = NULL;
+          queue_start = queue_end;
+          queue_size++;
+        }
+        else {
+          queue_end->next = new TriQueueNode();
+          queue_end = queue_end->next;
+          queue_end->tri = t2;
+          queue_end->next = NULL;
+          queue_size++;
+        }
+      }
+    }
   }
 }
 

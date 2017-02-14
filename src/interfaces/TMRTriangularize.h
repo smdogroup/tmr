@@ -215,6 +215,13 @@ class TMRTriangularize : public TMREntity {
   // Create the array of hash buckets
   EdgeHashNode **buckets;
 
+  // Keep a priority queue of the elements - this is done for searching
+  class TriQueueNode {
+  public:
+    TMRTriangle *tri;
+    TriQueueNode *next;
+  };
+
   // The number of buckets
   int num_buckets;
   int num_hash_nodes;
