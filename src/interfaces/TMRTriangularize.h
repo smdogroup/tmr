@@ -107,13 +107,18 @@ class TMRTriangle {
 };
 
 /*
-  Hash table to a list of triangles, organized by edge
+  Triangularize the domain/surface using a frontal method based on
+  Rebay's paper with Bowyer-Watson Delaunay triangularization
+  algorithm.
 */
 class TMRTriangularize : public TMREntity {
  public:
+  TMRTriangularize( int npts, const double inpts[],
+                    int nsegs, const int segs[],
+                    TMRSurface *surf=NULL );
   TMRTriangularize( int npts, const double inpts[], int nholes,
                     int nsegs, const int segs[],
-                    TMRSurface *surf );
+                    TMRSurface *surf=NULL );
   ~TMRTriangularize();
 
   // Create the frontal mesh with the given mesh spacing
@@ -132,6 +137,11 @@ class TMRTriangularize : public TMREntity {
   static const uint32_t ACTIVE = 2;
   static const uint32_t ACCEPTED = 3;
   static const uint32_t DELETE_ME = 4;
+
+  // Initialize the underlying data structures
+  void initialize( int npts, const double inpts[], int nholes,
+                   int nsegs, const int segs[],
+                   TMRSurface *surf );
 
   // Add a point to the list -- this only adds a point to the list and 
   // returns the new point number, it does not add the point to the 

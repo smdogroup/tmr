@@ -129,10 +129,8 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   p6.z = 0.0;
 
   // Create the planar surface
-  const int nu = 2, ku = 2;
-  const int nv = 2, kv = 2;
-  const double Tu[] = {-20.0, -20.0, 20.0, 20.0};
-  const double Tv[] = {-20.0, -20.0, 20.0, 20.0};
+  const int nu = 4, ku = 4;
+  const int nv = 4, kv = 4;
   TMRPoint pts[nu*nv];
 
   for ( int j = 0; j < nv; j++ ){
@@ -140,13 +138,13 @@ TMRTopology* setUpTopology( MPI_Comm comm,
       double u = 1.0*i/(nu-1);
       double v = 1.0*j/(nv-1);
       pts[nu*j+i].x = -20.0 + 40.0*u;
-      pts[nu*j+i].y = -20.0 + 40.0*v;
+      pts[nu*j+i].y = -10.0 + 20.0*v;
       pts[nu*j+i].z = 0.0;
     }
   }
 
   TMRBsplineSurface *surf = 
-    new TMRBsplineSurface(nu, nv, ku, kv, Tu, Tv, pts);
+    new TMRBsplineSurface(nu, nv, ku, kv, pts);
   surf->incref();
 
   // Set the curves that form the outline of the bracket
@@ -338,7 +336,7 @@ TMRTopology* setUpTopology( MPI_Comm comm,
 
 
   TMRTriangularize *tri = 
-    new TMRTriangularize(npts, params, nseg, seg);
+    new TMRTriangularize(npts, params, nseg, seg, surf);
   tri->frontal(htarget);
   tri->writeToVTK("triangle.vtk");
   delete tri;

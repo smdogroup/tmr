@@ -1,9 +1,9 @@
 #include "TMRTriangularize.h"
+#include "TMRPerfectMatchInterface.h"
+#include "predicates.h"
 #include <math.h>
 #include <limits.h>
 #include <stdio.h>
-
-#include "predicates.h"
 
 // Define the maximum distance
 const double MAX_QUAD_DISTANCE = 1e40;
@@ -413,18 +413,63 @@ void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist 
 }
 
 /*
-  Add the segments
+  Create the triangularization object. 
 
+  This code uses Schewchuk's geometric predicates for testing whether
+  points lie within a triangle's circumcircle or whether a point forms
+  a properly oriented triangle (orient2d).
 
+  This object takes in a series of points, a nuber of holes, and a
+  series of segments. The points are in parametric space while the
+  surface defines the mapping between parameter space and physical
+  space. Meshing is performed by using a local metric within each
+  triangle to define distance. The incircle operations that test
+  whether a point lies within the circumcircle of a triangle are
+  modified to reflect this local metric. (This is not completely
+  justified theoretically, but it works in practice.) The orient2d
+  operations still take place in parameter space, since their purpose
+  is to test whether the point lies within the triangle.
 
+  The holes in the domain must be specified so that the triangulation
+  does not cover them. The boundary of the hole itself must be
+  represented by the segments and must be closed. The points
+  indicating the location of the holes must be numbered first in the
+  point list and are not included in the segment edges.
 
+  If no surface object is provided, then the meshing takes place in
+  the parameter space directly.
 
+  input:
+  npts:   the number of points (including holes) in the domain
+  inpts:  the parametric input points
+  nholes: the number of holes that are specified
+  nsegs:  the number of segments
+  segs:   the segments: consecutive point numbers indicating edges
+  surf:   the optional surface
+*/
+TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
+                                    int nsegs, const int segs[],
+                                    TMRSurface *surf ){
+  initialize(npts, inpts, 0, nsegs, segs, surf);
+}
 
-
+/*
+  Alternate constructor: Triangularize with holes
 */
 TMRTriangularize::TMRTriangularize( int npts, const double inpts[], int nholes,
                                     int nsegs, const int segs[],
                                     TMRSurface *surf ){
+  initialize(npts, inpts, nholes, nsegs, segs, surf);
+}
+
+
+/*
+  The 'true' constructor. This is called, depending on which arguments
+  are provided.
+*/
+void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
+                                   int nsegs, const int segs[],
+                                   TMRSurface *surf ){
   // Initialize the predicates code
   exactinit();
 
@@ -462,8 +507,15 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[], int nholes,
 
   // Allocate the initial set of points
   pts = new double[ 2*max_num_points ];
-  X = new TMRPoint[ max_num_points ];
   pts_to_tris = new TMRTriangle*[ max_num_points ];
+
+  // If we have a surface object
+  if (surface){
+    X = new TMRPoint[ max_num_points ];
+  }
+  else {
+    X = NULL;
+  }
 
   // Find the maximum domain size
   domain.xlow = domain.xhigh = inpts[0];
@@ -512,6 +564,13 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[], int nholes,
   // Set the point (xhigh, yhigh)
   pts[6] = domain.xhigh;
   pts[7] = domain.yhigh;
+  
+  // Evaluate the points on the surface
+  if (surface){
+    for ( int i = 0; i < num_points; i++ ){
+      surface->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
+    }
+  }
 
   // Add the extreme points to the quadtree
   for ( int i = 0; i < 4; i++ ){
@@ -578,11 +637,13 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[], int nholes,
 TMRTriangularize::~TMRTriangularize(){
   delete root;
   delete [] pts;
-  delete [] X;
+  if (X){ delete [] X; }
   delete [] pts_to_tris;
 
   // Dereference the surface
-  surface->decref();
+  if (surface){
+    surface->decref();
+  }
 
   // Free the PSLG edges
   if (pslg_edges){
@@ -1118,28 +1179,26 @@ inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
     // l11*l21 = g12 => l21 = g12/l11
     // l21*l21 + l22^2 = g22 => l22 = sqrt(g22 - l21*l21);
     double l11 = sqrt(g11);
-    double l21 = g12/l11;
+    double inv11 = 1.0/l11;
+    double l21 = inv11*g12;
     double l22 = sqrt(g22 - l21*l21);
 
-    // Compute L^{T}*p' = p to transform into the local coordinates
-    double inv11 = 1.0/l11;
-    double inv22 = 1.0/l22;
-
+    // Compute p' = L^{T}*p to transform into the local coordinates
     double pu[2];
-    pu[1] = inv22*pts[2*u+1];
-    pu[0] = inv11*(pts[2*u] - pu[1]*l21);
+    pu[0] = l11*pts[2*u] + l21*pts[2*u+1];
+    pu[1] = l22*pts[2*u+1];
 
     double pv[2];
-    pv[1] = inv22*pts[2*v+1];
-    pv[0] = inv11*(pts[2*v] - pv[1]*l21);
+    pv[0] = l11*pts[2*v] + l21*pts[2*v+1];
+    pv[1] = l22*pts[2*v+1];
 
     double pw[2];
-    pw[1] = inv22*pts[2*w+1];
-    pw[0] = inv11*(pts[2*w] - pw[1]*l21);
+    pw[0] = l11*pts[2*w] + l21*pts[2*w+1];
+    pw[1] = l22*pts[2*w+1];
 
     double px[2];
-    px[1] = inv22*pts[2*x+1];
-    px[0] = inv11*(pts[2*x] - px[1]*l21);
+    px[0] = l11*pts[2*x] + l21*pts[2*x+1];
+    px[1] = l22*pts[2*x+1];
 
     return incircle(pu, pv, pw, px);
   }
@@ -1169,11 +1228,13 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
     delete [] pts_to_tris;
     pts_to_tris = new_pts_to_tris;
     
-    // Allocate the space for the triangle vertices in physical space
-    TMRPoint *new_X = new TMRPoint[ max_num_points ];
-    memcpy(new_X, X, num_points*sizeof(TMRPoint));
-    delete [] X;
-    X = new_X;
+    if (surface){
+      // Allocate the space for the triangle vertices in physical space
+      TMRPoint *new_X = new TMRPoint[ max_num_points ];
+      memcpy(new_X, X, num_points*sizeof(TMRPoint));
+      delete [] X;
+      X = new_X;
+    }
   }
 
   // Add the point to the quadtree
@@ -1187,7 +1248,9 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
   pts_to_tris[num_points] = NULL;
 
   // Evaluate the surface location
-  surface->evalPoint(pt[0], pt[1], &X[num_points]);
+  if (surface){
+    surface->evalPoint(pt[0], pt[1], &X[num_points]);
+  }
   
   // Increase the number of points by one
   num_points++;
@@ -1336,9 +1399,8 @@ void TMRTriangularize::findEnclosing( const double pt[],
                                 {t->v, t->w},
                                 {t->w, t->u}};
 
-    // Search the adjacent triangles and determine
-    // whether they have been tagged or not
-    
+    // Search the adjacent triangles and determine whether they have
+    // been tagged
     for ( int k = 0; k < 3; k++ ){
       TMRTriangle *t2;
       completeMe(edge_pairs[k][1], edge_pairs[k][0], &t2);
@@ -1349,11 +1411,11 @@ void TMRTriangularize::findEnclosing( const double pt[],
           return;
         }
 
-        // If the triangle does not enclose the point, label
-        // this guy as having been searched
+        // If the triangle does not enclose the point, label this guy
+        // as having been searched
         t2->tag = search_tag;
 
-        // Append this guy as having been searched
+        // Append this guy to the queue
         queue.append(t2);
       }
     }
@@ -1392,6 +1454,10 @@ double TMRTriangularize::computeIntersection( const double m[],
     }
   }
 
+  // If the line from u to w was orthogonal to the e direction in the
+  // previous case, it cannot be orthogonal in this case and still
+  // form a triangle. No check is performed here, but perhaps it
+  // should be.
   a12 = pts[2*v] - pts[2*w];
   a22 = pts[2*v+1] - pts[2*w+1];
   det = a11*a22 - a12*a21;
@@ -1406,7 +1472,9 @@ double TMRTriangularize::computeIntersection( const double m[],
       return alpha;
     }
   }
-
+ 
+  // If we get here, something really bad has happened. (u, v, w) do
+  // not form a triangle?
   return -1.0;
 }
 
@@ -1420,6 +1488,7 @@ double TMRTriangularize::computeIntersection( const double m[],
 double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
   double D1, D2, D3;
   if (surface){
+    // Compute the edge lengths in physical space
     TMRPoint d;
     d.x = X[tri->v].x - X[tri->u].x;
     d.y = X[tri->v].y - X[tri->u].y;
@@ -1437,6 +1506,7 @@ double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
     D3 = d.dot(d);
   }
   else {
+    // Compute the edge lengths in parameter space
     double d1[2];
     d1[0] = pts[2*tri->v] - pts[2*tri->u];
     d1[1] = pts[2*tri->v+1] - pts[2*tri->u+1];
@@ -1468,8 +1538,6 @@ double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
   The Delaunay triangularization based on the Bowyer-Watson mesh
   generation algorithm. The frontal mesh generation technique is based
   on Rebay's 1993 paper in JCP.
-  
-
 */
 void TMRTriangularize::frontal( double h ){
   // The length of the edge of the triangle
@@ -1502,7 +1570,7 @@ void TMRTriangularize::frontal( double h ){
   
   int iter = 0;
   while (1){
-    if (iter % 250 == 0){
+    if (iter % 500 == 0){
       printf("Iteration %d  num_triangles %d\n", iter, num_triangles);
     }
     iter++;
@@ -1575,13 +1643,47 @@ void TMRTriangularize::frontal( double h ){
     m[0] = 0.5*(pts[2*u] + pts[2*v]);
     m[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
 
+    // Half the parametric distance between the two edge points
+    double p = 0.0;
+
     double pt[2];
     if (surface){
       TMRPoint Xu, Xv;
       surface->evalDeriv(m[0], m[1], &Xu, &Xv);
 
-      
-      
+      // Compute the metric tensor components
+      double g11 = Xu.dot(Xu);
+      double g12 = Xu.dot(Xv);
+      double g22 = Xv.dot(Xv);
+
+      // Compute the inverse metric components
+      double invdet = 1.0/(g11*g22 - g12*g12);
+      double G11 = invdet*g22;
+      double G12 = -invdet*g12;
+      double G22 = invdet*g11;
+
+      // Compute the parametric direction along the curvilinear line
+      // connecting from u to v
+      double d[2];
+      d[0] = (pts[2*v] - pts[2*u]);
+      d[1] = (pts[2*v+1] - pts[2*u+1]);
+
+      // Compute the orthogonal coordinate contributions to the vector
+      e[0] = G12*d[0] - G11*d[1];
+      e[1] = G22*d[0] - G12*d[1];
+
+      // Compute the direction in physical space
+      TMRPoint dir;
+      dir.x = e[0]*Xu.x + e[1]*Xv.x;
+      dir.y = e[0]*Xu.y + e[1]*Xv.y;
+      dir.z = e[0]*Xu.z + e[1]*Xv.z;
+
+      // Compute the ratio between the desired distance in physical
+      // space and the length of the direction dir in physical space
+      // for a unit change in parameter space.
+      double f = de/sqrt(dir.dot(dir));
+      pt[0] = m[0] + f*e[0];
+      pt[1] = m[1] + f*e[1];
     }
     else {
       // Compute the direction perpendicular to the line from u to v
@@ -1589,7 +1691,7 @@ void TMRTriangularize::frontal( double h ){
       e[1] = (pts[2*v] - pts[2*u]);
       
       // Compute half the distance between the u and v points
-      double p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
+      p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
       e[0] = 0.5*e[0]/p;
       e[1] = 0.5*e[1]/p;
       
@@ -1603,27 +1705,36 @@ void TMRTriangularize::frontal( double h ){
     if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
       findEnclosing(pt, &pt_tri);
       
-      // We've tried a new point and it was outside the domain.
-      // That is not allowed, so next we pick a point that is 
-      // actually in the current triangle and therefore within the
-      // allowed domain
+      // We've tried a new point and it was outside the domain.  That
+      // is not allowed, so next we pick a point that is actually in
+      // the current triangle and therefore within the allowed domain
       if (!pt_tri){
         pt_tri = tri;
-        uint32_t w = 0;
-        if (u == pt_tri->u && v == pt_tri->v){
-          w = pt_tri->w;
-        }
-        else if (u == pt_tri->v && v == pt_tri->w){
-          w = pt_tri->u;
-        }
-        else if (u == pt_tri->w && v == pt_tri->u){
-          w = pt_tri->v;
-        }
 
-        double q = computeIntersection(m, e, u, v, w);
-        double rho = 0.5*q; // (p*p + q*q)/q;
-        pt[0] = m[0] + rho*e[0];
-        pt[1] = m[1] + rho*e[1];
+        if (surface){
+          // Pick a point at the middle of the current triangle
+          const double frac = 1.0/3.0;
+          pt[0] = frac*(pts[2*pt_tri->u] + pts[2*pt_tri->v] + pts[2*pt_tri->w]);
+          pt[1] = frac*(pts[2*pt_tri->u+1] + pts[2*pt_tri->v+1] + pts[2*pt_tri->w+1]);
+        }
+        else {
+          // Pick a point in the triangle
+          uint32_t w = 0;
+          if (u == pt_tri->u && v == pt_tri->v){
+            w = pt_tri->w;
+          }
+          else if (u == pt_tri->v && v == pt_tri->w){
+            w = pt_tri->u;
+          }
+          else if (u == pt_tri->w && v == pt_tri->u){
+            w = pt_tri->v;
+          }
+          
+          double q = computeIntersection(m, e, u, v, w);
+          double rho = (p*p + q*q)/q;
+          pt[0] = m[0] + rho*e[0];
+          pt[1] = m[1] + rho*e[1];
+        }
       }
     }
   
