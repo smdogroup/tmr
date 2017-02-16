@@ -148,10 +148,10 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   surf->incref();
 
   // Set the curves that form the outline of the bracket
-  /* TMRBsplineCurve *inner11 = createSemiCircle(p1, r1, 0.0); */
-  /* TMRBsplineCurve *inner12 = createSemiCircle(p1, r1, M_PI); */
-  /* TMRBsplineCurve *inner21 = createSemiCircle(p2, r2, 0.0); */
-  /* TMRBsplineCurve *inner22 = createSemiCircle(p2, r2, M_PI); */
+  TMRBsplineCurve *inner11 = createSemiCircle(p1, r1, 0.0);
+  TMRBsplineCurve *inner12 = createSemiCircle(p1, r1, M_PI);
+  TMRBsplineCurve *inner21 = createSemiCircle(p2, r2, 0.0);
+  TMRBsplineCurve *inner22 = createSemiCircle(p2, r2, M_PI);
 
   TMRBsplineCurve *outer1 = createSemiCircle(p1, r1+t, 0.5*M_PI);
   TMRBsplineCurve *outer2 = createSemiCircle(p2, r2+t, 1.5*M_PI);
@@ -159,12 +159,18 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   TMRBsplineCurve *line2 = createLine(p5, p6);
 
   // Create the vertices
-  int num_vertices = 4;
-  TMRVertex *v[4];
+  int num_vertices = 8;
+  TMRVertex *v[8];
   v[0] = new TMRVertexFromCurve(outer1, 0.0);
   v[1] = new TMRVertexFromCurve(outer1, 1.0);
   v[2] = new TMRVertexFromCurve(outer2, 0.0);
   v[3] = new TMRVertexFromCurve(outer2, 1.0);
+
+  // Create the start/end vertices for each curve
+  v[4] = new TMRVertexFromCurve(inner11, 0.0);
+  v[5] = new TMRVertexFromCurve(inner12, 0.0);
+  v[6] = new TMRVertexFromCurve(inner21, 0.0);
+  v[7] = new TMRVertexFromCurve(inner22, 0.0);
 
   // Set the vertices into the lines
   outer1->setVertices(v[0], v[1]);
@@ -172,6 +178,13 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   line1->setVertices(v[0], v[3]);
   line2->setVertices(v[1], v[2]);
 
+  // Set the vertices for the inner circles
+  inner11->setVertices(v[4], v[5]);
+  inner12->setVertices(v[5], v[4]);
+
+  inner21->setVertices(v[5], v[6]);
+  inner22->setVertices(v[6], v[7]);
+  
   // Create the curves
   int dir[4];
   int num_curves = 4;
@@ -181,8 +194,20 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   curves[2] = outer2;  dir[2] = 1;
   curves[3] = line1;   dir[3] =-1;
 
+  // Add the outer curve segments
   surf->addCurveSegment(num_curves, curves, dir);
 
+  // Add the inner curve segments
+  num_curves = 2;
+  curves[0] = inner12;  dir[0] = -1;
+  curves[1] = inner11;  dir[1] = -1;  
+  surf->addCurveSegment(num_curves, curves, dir);
+
+  // Add the inner curve segments
+  num_curves = 2;
+  curves[0] = inner21;  dir[0] = -1;
+  curves[1] = inner22;  dir[1] = -1;  
+  surf->addCurveSegment(num_curves, curves, dir);
 
   TMREntity::setTolerances(1e-14, 1e-14);
 
@@ -190,6 +215,7 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   TMRSurfaceMesh *mesh = new TMRSurfaceMesh(surf);
   mesh->incref();
   mesh->mesh(htarget);
+  mesh->writeToVTK("quads.vtk");
   mesh->decref();
 
   return NULL;
@@ -213,8 +239,16 @@ int main( int argc, char *argv[] ){
 
   // Create the topology
   double htarget = 0.1;
-  TMRTopology *topo = setUpTopology(comm, r1, r2, L, t, htarget);
-  // topo->incref();
+
+  for ( int i = 0; i < argc; i++ ){
+    if (sscanf(argv[i], "h=%lf", &htarget) == 1){
+      break;
+    }
+  }
+
+  printf("Target element length = %f\n", htarget);
+
+  setUpTopology(comm, r1, r2, L, t, htarget);
 
 
   TMRFinalize();

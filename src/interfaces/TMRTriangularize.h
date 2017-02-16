@@ -132,6 +132,8 @@ class TMRTriangularize : public TMREntity {
   void writeToVTK( const char *filename );
 
  private:
+  static const int FIXED_POINT_OFFSET = 4;
+
   // TAGS for the triangles
   static const uint32_t NO_STATUS = 0;
   static const uint32_t WAITING = 1;

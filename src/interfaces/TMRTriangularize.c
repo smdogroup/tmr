@@ -433,8 +433,8 @@ void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist 
   The holes in the domain must be specified so that the triangulation
   does not cover them. The boundary of the hole itself must be
   represented by the segments and must be closed. The points
-  indicating the location of the holes must be numbered first in the
-  point list and are not included in the segment edges.
+  indicating the location of the holes must be numbered last in the
+  point list and cannot be included in the segment edges.
 
   If no surface object is provided, then the meshing takes place in
   the parameter space directly.
@@ -495,9 +495,8 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   num_triangles = 0;
 
   // Set the initial number of points
-  init_boundary_points = npts;
-  fixed_point_offset = 4 + nholes;
-  num_points = fixed_point_offset + npts;
+  init_boundary_points = npts - nholes;
+  num_points = FIXED_POINT_OFFSET + npts;
 
   // Set the initial for the maximum number of points
   max_num_points = 1024;
@@ -535,8 +534,8 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
     }    
   }
 
-  // Re-adjust the domain boundary to ensure that it is
-  // sufficiently large
+  // Re-adjust the domain boundary to ensure that it is sufficiently
+  // large
   domain.xhigh += 1.0;
   domain.xlow -= 1.0;
   domain.yhigh += 1.0;
@@ -550,7 +549,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   setUpPSLGEdges(nsegs, segs);
 
   // Set the initial points
-  num_points = 4;
+  num_points = FIXED_POINT_OFFSET;
 
   // Set the point (xlow, ylow)
   pts[0] = domain.xlow;
@@ -573,7 +572,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   }
 
   // Add the extreme points to the quadtree
-  for ( int i = 0; i < 4; i++ ){
+  for ( int i = 0; i < FIXED_POINT_OFFSET; i++ ){
     root->addNode(i, &pts[2*i]);
   }
 
@@ -581,7 +580,8 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   addTriangle(TMRTriangle(0, 1, 2));
   addTriangle(TMRTriangle(2, 1, 3));
 
-  // Add the points to the triangle
+  // Add the points to the triangle. This creates a CDT of the
+  // original set of points.
   for ( int i = 0; i < npts; i++ ){
     addPointToMesh(&inpts[2*i]);
   }
@@ -590,34 +590,32 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   setTriangleTags(0);
 
   // Mark all the triangles in the list that contain or touch nodes
-  // that are in the fixed_point_offset list that are not separated by
+  // that are in the FIXED_POINT_OFFSET list that are not separated by
   // a PSLG edge. These triangles will be deleted.
-  int flag = 1;
-  while (flag){
-    flag = 0;
-
-    TriListNode *node = list_start;
-    while (node){
-      if (node->tri.tag == 0 && 
-          (node->tri.u < fixed_point_offset ||
-           node->tri.v < fixed_point_offset ||
-           node->tri.w < fixed_point_offset)){
-        tagTriangles(&node->tri);
-      }
-      node = node->next;
+  TriListNode *node = list_start;
+  while (node){
+    if (node->tri.tag == 0 && 
+        ((node->tri.u < FIXED_POINT_OFFSET ||
+          node->tri.v < FIXED_POINT_OFFSET ||
+          node->tri.w < FIXED_POINT_OFFSET) ||
+         (node->tri.u >= num_points - nholes ||
+          node->tri.v >= num_points - nholes ||
+          node->tri.w >= num_points - nholes))){
+      tagTriangles(&node->tri);
     }
+    node = node->next;
   }
 
   // Free the triangles that we've found
   list_marker = NULL;
-  TriListNode *node = list_start;
+  node = list_start;
   while (node){
     // Keep track of what node will be next, since we may be deleting
     // 'node' itself, we cannot access this afterwards
     TriListNode *tmp = node->next;
 
     // Delete the triangle from the triangle list
-    if (node->tri.tag){
+    if (node->tri.tag == 1){
       deleteTriangle(node->tri);
     }
 
@@ -626,8 +624,24 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   }
 
   // Free the points and holes from the quadtree
-  for ( uint32_t num = 0; num < fixed_point_offset; num++ ){
+  for ( uint32_t num = 0; num < FIXED_POINT_OFFSET; num++ ){
     root->deleteNode(num, &pts[2*num]);
+  }
+
+  // Free the points associated with the number of holes
+  for ( uint32_t num = num_points - nholes; num < num_points; num++ ){
+    root->deleteNode(num, &pts[2*num]);
+  }
+  num_points -= nholes;
+
+  // Reset the node->traingle pointers to avoid referring to a
+  // triangle that belonged to a hole and was deleted.
+  node = list_start;
+  while (node){
+    pts_to_tris[node->tri.u] = &(node->tri);
+    pts_to_tris[node->tri.v] = &(node->tri);
+    pts_to_tris[node->tri.w] = &(node->tri);
+    node = node->next;
   }
 }
 
@@ -675,7 +689,7 @@ void TMRTriangularize::getMesh( int *_num_points,
                                 int *_num_triangles, 
                                 int **_conn, double **_pts,
                                 TMRPoint **_X ){
-  int npts = (num_points - fixed_point_offset);
+  int npts = (num_points - FIXED_POINT_OFFSET);
   *_num_points = npts;
   *_num_triangles = num_triangles;
   *_conn = new int[ 3*num_triangles ];
@@ -685,9 +699,9 @@ void TMRTriangularize::getMesh( int *_num_points,
   }
 
   // Set the points
-  memcpy(*_pts, &pts[2*fixed_point_offset], 2*npts*sizeof(double));
+  memcpy(*_pts, &pts[2*FIXED_POINT_OFFSET], 2*npts*sizeof(double));
   if (surface){
-    memcpy(*_X, &X[fixed_point_offset], npts*sizeof(TMRPoint));
+    memcpy(*_X, &X[FIXED_POINT_OFFSET], npts*sizeof(TMRPoint));
   }
 
   // Set the pointer into the connectivity array
@@ -696,9 +710,9 @@ void TMRTriangularize::getMesh( int *_num_points,
   // Determine the connectivity
   TriListNode *node = list_start;
   while (node){
-    t[0] = node->tri.u - fixed_point_offset;
-    t[1] = node->tri.v - fixed_point_offset;
-    t[2] = node->tri.w - fixed_point_offset;
+    t[0] = node->tri.u - FIXED_POINT_OFFSET;
+    t[1] = node->tri.v - FIXED_POINT_OFFSET;
+    t[2] = node->tri.w - FIXED_POINT_OFFSET;
     t += 3;    
     node = node->next;
   }
@@ -1118,10 +1132,10 @@ void TMRTriangularize::setUpPSLGEdges( int nsegs, const int segs[] ){
   for ( int i = 0; i < nsegs; i++ ){
     uint32_t u = 0, v = 0;
     if (segs[2*i] >= 0){
-      u = segs[2*i] + fixed_point_offset;
+      u = segs[2*i] + FIXED_POINT_OFFSET;
     }
     if (segs[2*i+1] >= 0){
-      v = segs[2*i+1] + fixed_point_offset;
+      v = segs[2*i+1] + FIXED_POINT_OFFSET;
     }
 
     pslg_edges[4*i] = u;
@@ -1140,8 +1154,10 @@ int TMRTriangularize::edgeInPSLG( uint32_t u, uint32_t v ){
   uint32_t edge[2];
   edge[0] = u;  edge[1] = v;
 
-  return (bsearch(edge, pslg_edges, num_pslg_edges, 2*sizeof(uint32_t),
-                  compare_edges) != NULL);
+  int result = (bsearch(edge, pslg_edges, num_pslg_edges, 2*sizeof(uint32_t),
+                        compare_edges) != NULL);
+
+  return result;
 }
 
 /*
@@ -1317,7 +1333,7 @@ void TMRTriangularize::addPointToMesh( const double pt[],
   If the edge (w, v) is in the PSLG, then the triangle is added immediately. 
   If not, and if the point lies within the circumcircle of the triangle 
   (u, w, v) with the directed edge (v, w).
- */
+*/
 void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){ 
   // If the edge is along the polynomial straight line graph, then we
   // add the triangle as it exists and we're done, even though it may
@@ -1578,7 +1594,7 @@ void TMRTriangularize::frontal( double h ){
   
   int iter = 0;
   while (1){
-    if (iter % 500 == 0){
+    if (iter % 1000 == 0){
       printf("Iteration %d  num_triangles %d\n", iter, num_triangles);
     }
     iter++;
@@ -1821,4 +1837,6 @@ void TMRTriangularize::frontal( double h ){
       ptr = ptr->next;
     }
   }
+
+  printf("Iteration %d  num_triangles %d\n", iter, num_triangles);
 }

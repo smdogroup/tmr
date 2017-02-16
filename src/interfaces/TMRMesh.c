@@ -86,6 +86,10 @@ void TMRCurveMesh::mesh( double htarget ){
   npts = 1 + (int)(dist[nvals-1]/htarget);
   if (npts < 2){ npts = 2; }
 
+  // If we have an even number of points, increment by one to ensure
+  // that we have an even number of segments along the boundary
+  if (npts % 2 != 1){ npts++; }
+
   // The average distance between points
   double d = dist[nvals-1]/(npts-1);
 
@@ -105,7 +109,7 @@ void TMRCurveMesh::mesh( double htarget ){
       if (dist[j] > dist[j-1]){ 
         u = (d*k - dist[j-1])/(dist[j] - dist[j-1]);
       }
-      pts[k-1] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
+      pts[k] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
       k++;
     }
   }
@@ -224,19 +228,21 @@ void TMRSurfaceMesh::mesh( double htarget ){
   // Allocate the points and the number of segments based on the
   // number of holes
   double *params = new double[ 2*(total_num_pts + nholes) ];
-  int *seg = new int[ 2*nsegs ];
+  int *segments = new int[ 2*nsegs ];
 
   // Start entering the points from the end of the last hole entry in
   // the parameter points array.
-  int pt = nholes;
+  int seg = 0;
+  int pt = 0;
 
   int init_loop_pt = 0; // What point value did this loop start on? 
-  int hole_count = 0; // What hole are we on?
+  int init_loop_seg = 0; // What segment value did this loop start on?
+  int hole_pt = total_num_pts; // What hole are we on?
 
   // Keep track of where we last completed a loop
   vinit = NULL;
 
-  for ( int i = 0; i < num_curves; i++ ){
+  for ( int i = 0; i < ncurves; i++ ){
     // Retrieve the vertices associated with this curve
     TMRVertex *v1, *v2;
     if (dir[i] > 0){
@@ -246,11 +252,11 @@ void TMRSurfaceMesh::mesh( double htarget ){
       curves[i]->getVertices(&v2, &v1);
     }
 
-    // If this is the initial point for this closed curve, 
-    // set the init_loop_pt pointer to the initial point in
-    // this segment
+    // If this is the initial point for this closed curve, set the
+    // init_loop_pt pointer to the initial point in this segment
     if (!vinit){
       init_loop_pt = pt;
+      init_loop_seg = seg;
       vinit = v1;
     }
 
@@ -267,16 +273,18 @@ void TMRSurfaceMesh::mesh( double htarget ){
     if (dir[i] > 0){
       for ( int j = 0; j < npts-1; j++ ){
         surface->invEvalPoint(Xpts[j], &params[2*pt], &params[2*pt+1]);
-        seg[2*pt] = pt;
-        seg[2*pt+1] = pt+1;
+        segments[2*seg] = pt;
+        segments[2*seg+1] = pt+1;
+        seg++;
         pt++;
       }
     }
     else {
       for ( int j = npts-1; j >= 1; j-- ){
         surface->invEvalPoint(Xpts[j], &params[2*pt], &params[2*pt+1]);
-        seg[2*pt] = pt;
-        seg[2*pt+1] = pt+1;
+        segments[2*seg] = pt;
+        segments[2*seg+1] = pt+1;
+        seg++;
         pt++;
       }
     }
@@ -285,21 +293,23 @@ void TMRSurfaceMesh::mesh( double htarget ){
       // Set vinit back to NULL
       vinit = NULL;
 
-      // Close off the loop by connecting the segment back 
-      // to the initial loop point
-      seg[2*(pt-1)+1] = init_loop_pt;
+      // Close off the loop by connecting the segment back to the
+      // initial loop point
+      segments[2*(seg-1)+1] = init_loop_pt;
 
-      // Compute the area enclosed by the loop. If the area is positive, it
-      // is the domain boundary. If the area is negative, we have a hole!
-      // Note that this assumes that the polygon creating the hole is not
-      // self-intersecting. (In reality we compute twice the area since we
-      // omit the 1/2 factor.)
+      // Compute the area enclosed by the loop. If the area is
+      // positive, it is the domain boundary. If the area is negative,
+      // we have a hole!  Note that this assumes that the polygon
+      // creating the hole is not self-intersecting. (In reality we
+      // compute twice the area since we omit the 1/2 factor.)
       double Area = 0.0;
-      for ( int k = init_loop_pt; k < pt-1; k++ ){
-        const double x1 = params[2*k];
-        const double y1 = params[2*k+1];
-        const double x2 = params[2*(k+1)];
-        const double y2 = params[2*(k+1)+1];
+      for ( int k = init_loop_seg; k < seg; k++ ){
+        int s1 = segments[2*k];
+        int s2 = segments[2*k+1];
+        const double x1 = params[2*s1];
+        const double y1 = params[2*s1+1];
+        const double x2 = params[2*s2];
+        const double y2 = params[2*s2+1];
         Area += (x1*y2 - x2*y1);
       }
 
@@ -307,10 +317,12 @@ void TMRSurfaceMesh::mesh( double htarget ){
       if (Area < 0.0){
         // This is a hole! Compute an approximate position for the hole.
         // Note that this may not work in all cases so beware.
-        const double x1 = params[2*init_loop_pt];
-        const double y1 = params[2*init_loop_pt+1];
-        const double x2 = params[2*(init_loop_pt+1)];
-        const double y2 = params[2*(init_loop_pt+1)+1];
+        int s1 = segments[2*init_loop_seg];
+        int s2 = segments[2*init_loop_seg+1];
+        const double x1 = params[2*s1];
+        const double y1 = params[2*s1+1];
+        const double x2 = params[2*s2];
+        const double y2 = params[2*s2+1];
         const double dx = x2 - x1;
         const double dy = y2 - y1;
 
@@ -319,27 +331,30 @@ void TMRSurfaceMesh::mesh( double htarget ){
         double frac = 0.01;
 
         // Set the average location for the hole
-        params[2*hole_count] = 0.5*(x1 + x2) + frac*dy;
-        params[2*hole_count+1] = 0.5*(y1 + y2) - frac*dx;
+        params[2*hole_pt] = 0.5*(x1 + x2) + frac*dy;
+        params[2*hole_pt+1] = 0.5*(y1 + y2) - frac*dx;
 
         // Increment the hole pointer
-        hole_count++;
+        hole_pt++;
       }
     }
   }
 
   // Set the total number of fixed points. These are the points that
   // will not be smoothed and constitute the boundary nodes. Note that
-  // the Triangularize class removes the holes from the domain automatically.
-  // The boundary points are guaranteed to be ordered first.
+  // the Triangularize class removes the holes from the domain
+  // automatically.  The boundary points are guaranteed to be ordered
+  // first.
   num_fixed_pts = total_num_pts;
   int num_smoothing_steps = 10;
 
   // Create the triangularization class
   TMRTriangularize *tri = 
-    new TMRTriangularize(num_fixed_pts, params, nholes,
-                         nsegs, seg, surface);
+    new TMRTriangularize(total_num_pts + nholes, params, nholes,
+                         nsegs, segments, surface);
   tri->incref();
+
+  tri->writeToVTK("init_triangle.vtk");
 
   // Create the mesh using the frontal algorithm
   tri->frontal(htarget);
@@ -385,9 +400,17 @@ void TMRSurfaceMesh::mesh( double htarget ){
                    &num_quad_edges, &quad_edges);
 
   // Smooth the quadrilateral mesh
-  laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
-                     num_quad_edges, quad_edges,
-                     num_points, pts, X, surface);
+  /* laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,  */
+  /*                    num_quad_edges, quad_edges, */
+  /*                    num_points, pts, X, surface); */
+
+  double alpha = 0.1;
+  springQuadSmoothing(10*num_smoothing_steps, alpha, num_fixed_pts,
+                      num_quads, quads, num_quad_edges, quad_edges,
+                      num_points, pts, X, surface);
+
+  // Print the quadrilateral mesh quality
+  printQuadQuality();
 
   delete [] quad_edges;
 }
@@ -400,7 +423,7 @@ void TMRSurfaceMesh::computeNodeToElems( int nnodes, int nelems,
                                          const int conn[], 
                                          int **_ptr, int **_node_to_elems ){
   // Set the pointer
-  int *ptr = new int[ nnodes ];
+  int *ptr = new int[ nnodes+1 ];
   memset(ptr, 0, (nnodes+1)*sizeof(int));
 
   // Count up the references
@@ -518,7 +541,7 @@ void TMRSurfaceMesh::computeTriEdges( int nnodes, int ntris, const int tris[],
   }
 
   // Free the data that is no longer required
-  delete ptr;
+  delete [] ptr;
   delete [] node_to_tris;
 
   // Now we have a unique list of edge numbers and the total number of

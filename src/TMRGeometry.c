@@ -348,7 +348,7 @@ int TMRSurface::addCurveSegment( int _ncurves, TMRCurve **_curves,
   TMRVertex *vnext;
   for ( int i = 0; i < _ncurves; i++ ){
     TMRVertex *v1, *v2;
-    if (dir[i] > 0){
+    if (_dir[i] > 0){
       _curves[i]->getVertices(&v1, &v2);
     }
     else {

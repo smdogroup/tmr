@@ -86,10 +86,6 @@ class TMRSurfaceMesh : public TMREntity {
   // The underlying surface
   TMRSurface *surface;
 
-  // The 1d meshes that surround the surface
-  int num_curves;
-  TMRCurveMesh **curve_meshes;
-
   // Points
   int num_fixed_pts; // number of fixed points
   int num_points; // The number of point locations
