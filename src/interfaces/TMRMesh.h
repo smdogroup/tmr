@@ -1,6 +1,9 @@
 #ifndef TMR_MESH_H
 #define TMR_MESH_H
 
+#include "TMRBase.h"
+#include "TMRGeometry.h"
+
 /*
   The mesh for a geometric curve
 */
@@ -15,6 +18,9 @@ class TMRCurveMesh : public TMREntity {
   // Mesh the geometric object
   void mesh( double htarget );
 
+  // Retrieve the mesh points
+  void getMesh( int *_npts, double **_pts, TMRPoint **X );
+
  private:
   TMRCurve *curve;
 
@@ -22,6 +28,7 @@ class TMRCurveMesh : public TMREntity {
   // meshing the curve
   int npts;
   double *pts;
+  TMRPoint *X;
 };
 
 /*
@@ -31,8 +38,7 @@ class TMRCurveMesh : public TMREntity {
 */
 class TMRSurfaceMesh : public TMREntity {
  public:
-  TMRSurfaceMesh( int ncurves, TMRCurveMesh **curve_mesh,
-                  TMRSurface *surface );
+  TMRSurfaceMesh( TMRSurface *surface );
   ~TMRSurfaceMesh();
 
   // Retrieve the underlying surface
@@ -41,9 +47,8 @@ class TMRSurfaceMesh : public TMREntity {
   // Mesh the underlying geometric object
   void mesh( double htarget );
 
-  // Write the triangulation (if any) to VTK
+  // Write the quadrilateral mesh to a VTK format
   void writeToVTK( const char *filename );
-  void writeQuadToVTK( const char *filename );
 
   // Print the quadrilateral quality
   void printQuadQuality();
@@ -56,32 +61,23 @@ class TMRSurfaceMesh : public TMREntity {
 
   // Compute the edges in a triangular or quadrilateral mesh
   void computeTriEdges( int nnodes, int ntris, const int conn[],
-                        int *_numtriedges, int **_triedges,
-                        int **_trineighbors, int **_dualedges );
+                        int *_num_tri_edges, int **_tri_edges,
+                        int **_tri_neighbors, int **_dual_edges );
   void computeQuadEdges( int nnodes, int nquads, const int quads[],
-                         int *_nquadedges, int **_quadedges );
+                         int *_num_quad_edges, int **_quad_edges );
 
   // Recombine the mesh to a quadrilateral mesh based on the
   // quad-Blossom algorithm
-  void recombine();
-
-  // Apply the smoothing algorithm
-  void laplacianSmoothing( int nsmooth,
-                           int num_edges, const int *edge_list,
-                           int num_pts, double *prm, TMRPoint *p );
-  void springSmoothing( int nsmooth, double alpha,
-                        int num_edges, const int *edge_list,
-                        int num_pts, double *prm, TMRPoint *p );
-  void springQuadSmoothing( int nsmooth, double alpha,
-                            int num_quads, const int *quad_list,
-                            int num_edges, const int *edge_list,
-                            int num_pts, double *prm, TMRPoint *p );
+  void recombine( int ntris, const int tris[], const int tri_neighbors[],
+                  int num_edges, const int dual_edges[], const TMRPoint *p,
+                  int *_num_quads, int **_new_quads );
 
   // Compute recombined triangle information
   int getRecombinedQuad( const int tris[], const int trineighbors[],
                          int t1, int t2, int quad[] );
-  double computeRecombinedQuality( int t1, int t2,
-                                   const TMRPoint *p ); 
+  double computeRecombinedQuality( const int tris[], 
+                                   const int trineighbors[],
+                                   int t1, int t2, const TMRPoint *p ); 
 
   // Compute the quadrilateral quality
   double computeQuadQuality( const int *quad, const TMRPoint *p );
@@ -92,44 +88,17 @@ class TMRSurfaceMesh : public TMREntity {
 
   // The 1d meshes that surround the surface
   int num_curves;
-  TMRCurveMesh *curve_meshes;
+  TMRCurveMesh **curve_meshes;
 
   // Points
-  int npts;       // number of points
-  double *params; // parameter locations, size: 2*npts
-  TMRPoint *pts;  // physical node locations
-  int *ptmarkers; // point markers, size: npts
-  
-  // Segments
-  int nsegments;   // number of segments
-  int *segments;   // segment->points, size: 2*nsegments
-
-  // Holes
-  int nholes;     // number of holes within the domain
-  double *holes;  // a point within each hole
-
-  // Triangles
-  int ntris;         // number of triangles
-  int *tris;         // triangle vertices
-  int *trineighbors; // Triangle neighbors
-
-  // Number of corners in the mesh
-  int ncorners;
-
-  // Edges in the triangle mesh
-  int nedges;       // number of edges
-  int *edges;       // edges->vertices, 2*nedges
-
-  // Dual edges (edges->triangles)
-  int *dualedges;   // edges->tris, size: 2*nedges
+  int num_fixed_pts; // number of fixed points
+  int num_points; // The number of point locations
+  double *pts; // The parametric node locations
+  TMRPoint *X; // The physical node locations
 
   // Quadrilateral mesh information
-  int nquads;
+  int num_quads;
   int *quads;
-
-  // Edges of the quadrilateral
-  int nquadedges;
-  int *quadedges;
 };
 
 #endif // TMR_MESH_H

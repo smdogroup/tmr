@@ -125,7 +125,8 @@ class TMRTriangularize : public TMREntity {
   void frontal( double h );
 
   // Retrieve the mesh connectivity from the object
-  void getMesh( int *_num_triangles, int **_conn, double **_pts );
+  void getMesh( int *_num_points, int *_num_triangles, 
+                int **_conn, double **_pts, TMRPoint **_X );
   
   // Write the triangulation to an outputfile
   void writeToVTK( const char *filename );

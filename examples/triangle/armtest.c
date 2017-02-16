@@ -1,7 +1,7 @@
 #include "TMRTopology.h"
 #include "TMRBspline.h"
 #include "TMRQuadForest.h"
-// #include "TMRTriangleInterface.h"
+#include "TMRMesh.h"
 #include "TACSAssembler.h"
 #include "isoFSDTStiffness.h"
 #include "PlaneStressQuad.h"
@@ -181,165 +181,16 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   curves[2] = outer2;  dir[2] = 1;
   curves[3] = line1;   dir[3] =-1;
 
-  int curve_npts[4];
-  double *curve_tpts[4];
+  surf->addCurveSegment(num_curves, curves, dir);
+
 
   TMREntity::setTolerances(1e-14, 1e-14);
 
-  // Loop over all of the edges
-  double integration_eps = 1e-8; 
-  for ( int i = 0; i < num_curves; i++ ){
-    double tmin, tmax;
-    curves[i]->getRange(&tmin, &tmax);
-
-    // Integrate along the curve to obtain the distance function such that
-    // dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt 
-    int nvals;
-    double *dist, *tvals;
-    curves[i]->integrate(tmin, tmax, integration_eps, &tvals, &dist, &nvals);
-
-    // Compute the number of points along this curve
-    int npts = 1 + (int)(dist[nvals-1]/htarget);
-    if (npts < 2){ npts = 2; }
-
-    // The average distance between points
-    double d = dist[nvals-1]/(npts-1);
-
-    // Allocate the parametric points that will be used 
-    double *tpts = new double[ npts-2 ];
-
-    for ( int j = 1, k = 1; (j < nvals && k < npts-1); j++ ){
-      while ((k < npts-1) && 
-             (dist[j-1] <= d*k && d*k < dist[j])){
-        double u = 0.0;
-        if (dist[j] > dist[j-1]){ 
-          u = (d*k - dist[j-1])/(dist[j] - dist[j-1]);
-        }
-        tpts[k-1] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
-        k++;
-      }
-    }
-    
-    // Free the integration result
-    delete [] tvals;
-    delete [] dist;
-
-    // Set the number of points and node locations
-    curve_npts[i] = npts;
-    curve_tpts[i] = tpts;
-  }
-
-  // Find the closed surface
-  int nholes = 0;
-  double *holes = NULL;
-
-  // Compute the number of points
-  int nseg = 0;
-  int npts = num_vertices;
-  for ( int i = 0; i < num_curves; i++ ){
-    nseg += curve_npts[i]-1;
-    npts += curve_npts[i]-2;
-  }
-
-  double *params = new double[ 2*npts ];
-  int *seg = new int[ 2*(nseg+1) ];
-
-  int pt = 0;
-  for ( int i = 0; i < num_curves; i++ ){
-    // Retrieve the vertices associated with this curve
-    TMRVertex *v1, *v2;
-    if (dir[i] > 0){
-      curves[i]->getVertices(&v1, &v2);
-    }
-    else {
-      curves[i]->getVertices(&v2, &v1);
-    }
-
-    // Perform the inverse evaluation
-    TMRPoint p;
-    v1->evalPoint(&p);
-    surf->invEvalPoint(p, &params[2*pt], &params[2*pt+1]);
-    seg[2*pt] = pt;
-    seg[2*pt+1] = pt+1;
-    pt++;
-
-    // Find the point on the curve
-    if (dir[i] > 0){
-      for ( int j = 1; j < curve_npts[i]-1; j++ ){
-        double t = curve_tpts[i][j-1];
-        curves[i]->evalPoint(t, &p);
-        surf->invEvalPoint(p, &params[2*pt], &params[2*pt+1]);
-        seg[2*pt] = pt;
-        seg[2*pt+1] = pt+1;
-        pt++;
-      }
-    }
-    else {
-      for ( int j = curve_npts[i]-2; j >= 1; j-- ){
-        double t = curve_tpts[i][j-1];
-        curves[i]->evalPoint(t, &p);
-        surf->invEvalPoint(p, &params[2*pt], &params[2*pt+1]);
-        seg[2*pt] = pt;
-        seg[2*pt+1] = pt+1;
-        pt++;
-      } 
-    }
-  }
-  seg[2*(pt-1)+1] = 0;
-
-  /*
-  // Triangulate the region
-  TMRTriangulation *tri = new TMRTriangulation(npts, params, NULL, surf);
-  tri->setSegments(nseg, seg);
-  tri->create();
-  tri->refine(htarget);
-  for ( int k = 0; k < 5; k++ ){
-    tri->laplacianSmoothing(100);
-    tri->remesh();
-  }
-  tri->laplacianSmoothing(100);
-  tri->remesh();
-  tri->printTriQuality();
-
-  tri->writeToVTK("triangle.vtk");
-  tri->recombine();
-  tri->printQuadQuality();
-
-  tri->writeQuadToVTK("match.vtk");
-  tri->laplacianQuadSmoothing(100);
-  tri->printQuadQuality();
-  tri->writeQuadToVTK("smoothed.vtk");
-  */
-
-  // First line: <# of vertices> <dimension (must be 2)> <# of attributes> <# of boundary markers (0 or 1)>
-  // Following lines: <vertex #> <x> <y> [attributes] [boundary marker]
-  // One line: <# of segments> <# of boundary markers (0 or 1)>
-  // Following lines: <segment #> <endpoint> <endpoint> [boundary marker]
-  // One line: <# of holes>s
-  // Following lines: <hole #> <x> <y>
-  // Optional line: <# of regional attributes and/or area constraints>
-  // Optional following lines: <region #> <x> <y> <attribute> <maximum area>
-
-  FILE *fp = fopen("triangle_seg.poly", "w");
-  if (fp){
-    fprintf(fp, "%d %d %d %d\n", npts, 2, 0, 0);
-    for ( int i = 0; i < npts; i++ ){
-      fprintf(fp, "%d %.16e %.16e\n", i, params[2*i], params[2*i+1]);
-    }
-    fprintf(fp, "%d %d\n", nseg, 0);
-    for ( int i = 0; i < nseg; i++ ){
-      fprintf(fp, "%d %d %d\n", i, seg[2*i], seg[2*i+1]);
-    }
-    fprintf(fp, "0\n");
-    fclose(fp);
-  }
-
-
-  TMRTriangularize *tri = 
-    new TMRTriangularize(npts, params, nseg, seg, surf);
-  tri->frontal(htarget);
-  tri->writeToVTK("triangle.vtk");
-  delete tri;
+  // Create the mesh
+  TMRSurfaceMesh *mesh = new TMRSurfaceMesh(surf);
+  mesh->incref();
+  mesh->mesh(htarget);
+  mesh->decref();
 
   return NULL;
 }

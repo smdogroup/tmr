@@ -1,8 +1,6 @@
 #ifndef TMR_GEOMETRY_H
 #define TMR_GEOMETRY_H
 
-#include "TMRBase.h"
-
 /*
   The following header file contains the interface for the geometry/
   topology for the TMR objects. These vertex/edge/surface and volume
@@ -13,6 +11,11 @@
   the mesh. These interfaces are designed to be overriden with an
   external geometry engine.
 */
+
+#include "TMRBase.h"
+
+class TMRCurveMesh;
+class TMRSurfaceMesh;
 
 /*
   The vertex class: Note that this is used to store both the
@@ -57,6 +60,10 @@ class TMRCurve : public TMREntity {
   double integrate( double t1, double t2, double tol,
                     double **tvals, double **dist, int *nvals );
 
+  // Set/retrieve the mesh
+  void setMesh( TMRCurveMesh *_mesh );
+  void getMesh( TMRCurveMesh **_mesh );
+
   // Write the object to the VTK file
   void writeToVTK( const char *filename );
   
@@ -66,6 +73,9 @@ class TMRCurve : public TMREntity {
 
   // The start/end vertices of the curve
   TMRVertex *v1, *v2;
+
+  // The mesh for the curve - if it exists
+  TMRCurveMesh *mesh;
 };
 
 /*
@@ -95,10 +105,14 @@ class TMRSurface : public TMREntity {
   // counterclockwise around the surface while holes/cutouts
   // must run clockwise so that the domain always lies to the
   // left of the curve.
-  int addCurveSegment( TMRCurve **_curves, 
-                       const int _dir[], int ncurves );
-  void getCurves( TMRCurve ***_curves, 
-                  const int **_dir, int *_num_curves );
+  int addCurveSegment( int ncurves, TMRCurve **_curves, 
+                       const int _dir[] );
+  void getCurves( int *_num_curves, TMRCurve ***_curves, 
+                  const int **_dir );
+
+  // Set/retrieve the mesh
+  void setMesh( TMRSurfaceMesh *_mesh );
+  void getMesh( TMRSurfaceMesh **_mesh );
 
   // Write the object to the VTK file
   void writeToVTK( const char *filename );
@@ -109,6 +123,9 @@ class TMRSurface : public TMREntity {
   int num_curves;
   TMRCurve **curves;
   int *dir;
+
+  // The mesh for the curve - if it exists
+  TMRSurfaceMesh *mesh;
 
   // Set the step size
   static double deriv_step_size;

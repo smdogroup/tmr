@@ -671,16 +671,24 @@ TMRTriangularize::~TMRTriangularize(){
 /*
   Retrieve the underlying mesh
 */
-void TMRTriangularize::getMesh( int *_num_triangles, 
-                                int **_conn, double **_pts ){
+void TMRTriangularize::getMesh( int *_num_points,
+                                int *_num_triangles, 
+                                int **_conn, double **_pts,
+                                TMRPoint **_X ){
+  int npts = (num_points - fixed_point_offset);
+  *_num_points = npts;
   *_num_triangles = num_triangles;
   *_conn = new int[ 3*num_triangles ];
-
-  int npts = (num_points - fixed_point_offset);
   *_pts = new double[ 2*npts ];
+  if (surface){
+    *_X = new TMRPoint[ npts ];
+  }
 
   // Set the points
   memcpy(*_pts, &pts[2*fixed_point_offset], 2*npts*sizeof(double));
+  if (surface){
+    memcpy(*_X, &X[fixed_point_offset], npts*sizeof(TMRPoint));
+  }
 
   // Set the pointer into the connectivity array
   int *t = *_conn;

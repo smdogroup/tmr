@@ -1,4 +1,5 @@
 #include "TMRGeometry.h"
+#include "TMRMesh.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -8,6 +9,7 @@
 TMRCurve::TMRCurve(){
   v1 = NULL;
   v2 = NULL;
+  mesh = NULL;
 }
 
 /*
@@ -16,6 +18,7 @@ TMRCurve::TMRCurve(){
 TMRCurve::TMRCurve( TMRVertex *_v1, TMRVertex *_v2 ){
   v1 = _v1;  v1->incref(); 
   v2 = _v2;  v2->incref();
+  mesh = NULL;
 }
 
 /*
@@ -24,6 +27,7 @@ TMRCurve::TMRCurve( TMRVertex *_v1, TMRVertex *_v2 ){
 TMRCurve::~TMRCurve(){
   if (v1){ v1->decref(); }
   if (v2){ v2->decref(); }
+  if (mesh){ mesh->decref(); }
 }
 
 /*
@@ -245,6 +249,22 @@ double TMRCurve::integrate( double t1, double t2, double tol,
 }
 
 /*
+  Set the mesh into the array
+*/
+void TMRCurve::setMesh( TMRCurveMesh *_mesh ){
+  _mesh->incref();
+  if (mesh){ mesh->decref(); }
+  mesh = _mesh;
+}
+
+/*
+  Retrieve the mesh pointer
+*/
+void TMRCurve::getMesh( TMRCurveMesh **_mesh ){
+  *_mesh = mesh;
+}
+
+/*
   Write out a representation of the curve to a VTK file
 */
 void TMRCurve::writeToVTK( const char *filename ){
@@ -315,8 +335,8 @@ TMRSurface::~TMRSurface(){
 /*
   Add the curves that bound the surface
 */
-int TMRSurface::addCurveSegment( TMRCurve **_curves, const int _dir[],
-                                 int _ncurves ){
+int TMRSurface::addCurveSegment( int _ncurves, TMRCurve **_curves, 
+                                 const int _dir[] ){
   int fail = 0;
   if (_ncurves == 0){
     fail = 1;
@@ -386,11 +406,27 @@ int TMRSurface::addCurveSegment( TMRCurve **_curves, const int _dir[],
 /*
   Retrieve the curves associated with this surface (in the correct orientation)
 */
-void TMRSurface::getCurves( TMRCurve ***_curves, const int **_dir, 
-                            int *_num_curves ){
-  *_curves = curves;
-  *_dir = dir;
-  *_num_curves = num_curves;
+void TMRSurface::getCurves( int *_num_curves, TMRCurve ***_curves, 
+                            const int **_dir ){
+  if (_curves){ *_curves = curves; }
+  if (_dir){ *_dir = dir; }
+  if (_num_curves){ *_num_curves = num_curves; }
+}
+
+/*
+  Set the mesh into the array
+*/
+void TMRSurface::setMesh( TMRSurfaceMesh *_mesh ){
+  _mesh->incref();
+  if (mesh){ mesh->decref(); }
+  mesh = _mesh;
+}
+
+/*
+  Retrieve the mesh pointer
+*/
+void TMRSurface::getMesh( TMRSurfaceMesh **_mesh ){
+  *_mesh = mesh;
 }
 
 /*
