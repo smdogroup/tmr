@@ -31,10 +31,6 @@ SO_LINK_FLAGS=-fPIC -shared
 # SO_EXT=so
 # SO_LINK_FLAGS=-fPIC -dynamiclib -single_module -undefined dynamic_lookup -multiply_defined suppress
 
-# Triangle include/linking information
-TRIANGLE_INCLUDE=-I${TMR_DIR}/extern/triangle
-TRIANGLE_LIB=${TMR_DIR}/extern/triangle/triangle.o
-
 # Set up the interface for the blossom recombination code
 BLOSSOM_INCLUDE=-I${TMR_DIR}/extern/blossom5-v2.05.src
 BLOSSOM_LIB=${TMR_DIR}/extern/blossom5-v2.05.src/libblossom5.a

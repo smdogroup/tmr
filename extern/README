@@ -1,28 +1,22 @@
 This directory contains the external dependencies required for TMR
 
-There are two dependencies:
+(Note that TMR also uses Shewchuk's robust geometric predicates, but
+since these are in the public domain, they are placed directly in the
+repo for ease of use.)
 
-1. Triangle: A code for creating planar triangularizations
-----------------------------------------------------------
+Currently there is only one dependency:
 
-Triangle can be downloaded here:
+1. Blossom V algorithm
+----------------------
 
-https://www.cs.cmu.edu/~quake/triangle.html
+The code is available here:
 
-Follow the standard installation. Call make trilibrary.
+http://pub.ist.ac.at/~vnk/software.html
 
-For Linux installation, default options can be used. For MAC OSX,
-you should delete the -DLINUX option from the makefile.
+The rights/use of the software is subject to its own license.
 
-2. Blossom IV algorithm
------------------------
+Details of the implementation are described in:
 
-http://www.math.uwaterloo.ca/~bico/blossom4/
-
-Two things are required
-
-1. The concorde library. This can be obtained at the web address above.
-I rename this under blossom/concorde. After calling make, the library
-generates a file blossom/concorde/concorde.h
-
-2. I put the actual matching code under blossom/MATCH.
+Vladimir Kolmogorov. "Blossom V: A new implementation of a minimum
+cost perfect matching algorithm." In Mathematical Programming
+Computation (MPC), July 2009, 1(1):43-67.

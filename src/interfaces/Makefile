@@ -7,9 +7,6 @@
 include ../../Makefile.in
 include ../../TMR_Common.mk
 
-# CXX_OBJS = TMRTriangleInterface.o \
-# 	TMRTriangularize.o
-
 CXX_OBJS = TMRTriangularize.o \
 	TMRMesh.o \
 	TMRPerfectMatchInterface.o
