@@ -54,6 +54,11 @@ class TMRSurfaceMesh : public TMREntity {
   void printQuadQuality();
 
  private:
+  // Print the triangle quality
+  void printTriQuality( int ntris, const int tris[] );
+  void writeTrisToVTK( const char *filename,
+                       int ntris, const int tris[] );
+
   // Compute the connectivity between nodes to corresponding elements
   void computeNodeToElems( int nnodes, int nelems, int numelemnodes,
                            const int conn[], 

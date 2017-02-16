@@ -354,13 +354,8 @@ void TMRSurfaceMesh::mesh( double htarget ){
                          nsegs, segments, surface);
   tri->incref();
 
-  tri->writeToVTK("init_triangle.vtk");
-
   // Create the mesh using the frontal algorithm
   tri->frontal(htarget);
-
-  // Write the result to a file
-  tri->writeToVTK("triangle.vtk");
 
   // Extract the triangularization of the domain
   int ntris, *tris;
@@ -381,9 +376,14 @@ void TMRSurfaceMesh::mesh( double htarget ){
                      num_tri_edges, tri_edges,
                      num_points, pts, X, surface);
 
+  writeTrisToVTK("triangle.vtk", ntris, tris);
+  printTriQuality(ntris, tris);
+
   // Recombine the mesh into a quadrilateral mesh
   recombine(ntris, tris, tri_neighbors,
             num_tri_edges, dual_edges, X, &num_quads, &quads);
+
+  writeToVTK("init_quad.vtk");
 
   // Free the triangular mesh data
   delete [] tris;
@@ -1099,7 +1099,7 @@ void TMRSurfaceMesh::recombine( int ntris, const int tris[],
       double quality = computeRecombinedQuality(tris, tri_neighbors,
                                                 t1, t2, p);
 
-      double weight = (1.0 - quality)*(1.0 + 1.0/(quality + 0.01));
+      double weight = (1.0 - quality)*(1.0 + 1.0/(quality + 0.1));
       graph_edges[2*e] = t1;
       graph_edges[2*e+1] = t2;
       weights[e] = weight;
@@ -1169,14 +1169,14 @@ void TMRSurfaceMesh::printQuadQuality(){
 /*
   Print the triangle quality
 */
-/*
-void TMRSurfaceMesh::printTriQuality(){
+void TMRSurfaceMesh::printTriQuality( int ntris,
+                                      const int tris[] ){
   const int nbins = 20;
   int total = 0;
   int bins[nbins];
   memset(bins, 0, nbins*sizeof(int));
   for ( int i = 0; i < ntris; i++ ){
-    double quality = computeTriQuality(&tris[3*i], pts);
+    double quality = computeTriQuality(&tris[3*i], X);
 
     int k = 0;
     for ( ; k < nbins; k++ ){
@@ -1197,7 +1197,7 @@ void TMRSurfaceMesh::printTriQuality(){
            1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
   }
 }
-*/
+
 /*
   Write the quadrilateral mesh to a VTK file
 */
@@ -1242,8 +1242,8 @@ void TMRSurfaceMesh::writeToVTK( const char *filename ){
 /*
   Write the output to a VTK file
 */
-/*
-void TMRSurfaceMesh::writeToVTK( const char *filename ){
+void TMRSurfaceMesh::writeTrisToVTK( const char *filename,
+                                     int ntris, const int tris[] ){
   FILE *fp = fopen(filename, "w");
   if (fp){
     fprintf(fp, "# vtk DataFile Version 3.0\n");
@@ -1253,18 +1253,13 @@ void TMRSurfaceMesh::writeToVTK( const char *filename ){
     // Write out the points
     fprintf(fp, "POINTS %d float\n", num_points);
     for ( int k = 0; k < num_points; k++ ){
-      fprintf(fp, "%e %e %e\n", pts[k].x, pts[k].y, pts[k].z);
+      fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
     }
     
     // Write out the cell values
     fprintf(fp, "\nCELLS %d %d\n", ntris, 4*ntris);
     for ( int k = 0; k < ntris; k++ ){
-      fprintf(fp, "3 ");
-      for ( int j = 0; j < 3; j++ ){
-        int node = tris[3*k+j];
-        fprintf(fp, "%d ", node);
-      }
-      fprintf(fp, "\n");
+      fprintf(fp, "3 %d %d %d\n", tris[3*k], tris[3*k+1], tris[3*k+2]);
     }
 
     // All quadrilaterals
@@ -1278,10 +1273,9 @@ void TMRSurfaceMesh::writeToVTK( const char *filename ){
     fprintf(fp, "SCALARS quality float 1\n");
     fprintf(fp, "LOOKUP_TABLE default\n");
     for ( int k = 0; k < ntris; k++ ){
-      fprintf(fp, "%e\n", computeTriQuality(&tris[3*k], pts));
+      fprintf(fp, "%e\n", computeTriQuality(&tris[3*k], X));
     }
 
     fclose(fp);
   }
 }
-*/

@@ -1608,10 +1608,10 @@ void TMRTriangularize::frontal( double h ){
     TriListNode *start = list_start;
     while (start){
       if (start->tri.status == ACTIVE){
-        if (tri && start->tri.quality > tri->quality){
+        if (!tri){
           tri = &(start->tri);
         }
-        else {
+        else if (start->tri.quality > tri->quality){
           tri = &(start->tri);
         }
       }

@@ -7,8 +7,8 @@
 include ../../Makefile.in
 include ../../TMR_Common.mk
 
-CXX_OBJS = TMRTriangularize.o \
-	TMRMesh.o \
+CXX_OBJS = TMRMesh.o \
+	TMRTriangularize.o \
 	TMRPerfectMatchInterface.o
 
 DIR=${TMR_DIR}/src/interfaces
