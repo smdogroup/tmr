@@ -9,8 +9,18 @@ static const int MAX_BSPLINE_ORDER = 6;
 /*
   Helper function for comparing integers for qsort/bsearch
 */
-int compare_double( const void *a, const void *b ){
-  return (*(double*)a - *(double*)b);
+static int compare_double( const void *a, const void *b ){
+  const double *aa = static_cast<const double*>(a);
+  const double *bb = static_cast<const double*>(b);
+  if (*aa > *bb){
+    return 1;
+  }
+  else if (*aa < *bb){
+    return -1;
+  }
+  else {
+    return 0;
+  }
 }
 
 /*
