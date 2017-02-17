@@ -132,6 +132,22 @@ class TMRSurface : public TMREntity {
 };
 
 /*
+  Abstract base class for a pametric curve (u(t), v(t)) which can
+  be used to define a curve on a surface
+*/
+class TMRPcurve : public TMREntity {
+ public:
+  // Get the parameter range for this edge
+  virtual void getRange( double *tmin, double *tmax ) = 0;
+  
+  // Given the parametric point, evaluate the x,y,z location
+  virtual int evalPoint( double t, double *u, double *v ) = 0;
+
+  // Given the parametric point, evaluate the derivative 
+  virtual int evalDeriv( double t, double *ut, double *vt ) = 0;
+};
+
+/*
   Set the TMRVertex from a point
 */
 class TMRVertexFromPoint : public TMRVertex {

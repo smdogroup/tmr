@@ -110,6 +110,46 @@ class TMRBsplineSurface : public TMRSurface {
 };
 
 /*
+  TMRBsplinePcurve: Parametric curve
+
+  This class defines a parametric curve such that u(t) and v(t) are 
+  functions of the parameter t.
+*/
+class TMRBsplinePcurve : public TMRPcurve {
+ public:
+  TMRBsplinePcurve( int n, int k, const double *pts );
+  TMRBsplinePcurve( int n, int k, const double *Tu, const double *pts );
+  TMRBsplinePcurve( int n, int k, const double *Tu, const double *wts, 
+                    const double *pts );
+  ~TMRBsplinePcurve();
+
+  // Get the parameter range for this edge
+  void getRange( double *tmin, double *tmax );
+  
+  // Given the parametric point, evaluate the x,y,z location
+  int evalPoint( double t, double *u, double *v );
+
+  // Given the parametric point, evaluate the derivative 
+  int evalDeriv( double t, double *ut, double *vt );
+
+  // Refine the knot vector using knot insertion
+  TMRBsplinePcurve* refineKnots( const double *Tnew, int nnew );
+  
+ private:
+  // The number of control points and b-spline order
+  int nctl, ku;
+
+  // The knot locations
+  double *Tu;
+
+  // The control point locations
+  double *pts;
+
+  // The weighs (when it is a NURBS curve)
+  double *wts;
+};
+
+/*
   The TMRCurveInterpolation enables the creation of a b-spline curve
   using a number of different interpolation strategies.
 

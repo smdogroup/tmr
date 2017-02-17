@@ -381,14 +381,11 @@ void TMRSurfaceMesh::mesh( double htarget ){
                      num_tri_edges, tri_edges,
                      num_points, pts, X, surface);
 
-  writeTrisToVTK("triangle.vtk", ntris, tris);
   printTriQuality(ntris, tris);
 
   // Recombine the mesh into a quadrilateral mesh
   recombine(ntris, tris, tri_neighbors,
             num_tri_edges, dual_edges, X, &num_quads, &quads);
-
-  writeToVTK("init_quad.vtk");
 
   // Free the triangular mesh data
   delete [] tris;

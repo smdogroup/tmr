@@ -132,6 +132,9 @@ class TMRTriangularize : public TMREntity {
   void writeToVTK( const char *filename );
 
  private:
+  // The Bowyer-Watson algorithm is started with 4 points (2 triangles)
+  // that cover the entire domain. These are deleted at the end 
+  // of the algorithm.
   static const int FIXED_POINT_OFFSET = 4;
 
   // TAGS for the triangles
