@@ -7,8 +7,7 @@
   Build the curve without specifying the start/end vertices
 */
 TMRCurve::TMRCurve(){
-  v1 = NULL;
-  v2 = NULL;
+  v1 = v2 = NULL;
   mesh = NULL;
 }
 
@@ -314,49 +313,56 @@ void TMRCurve::writeToVTK( const char *filename ){
   Initialize data within the TMRSurface object
 */
 TMRSurface::TMRSurface(){
-  num_curves = 0;
-  curves = NULL;
-  dir = NULL;
+  max_num_segments = 0;
+  num_segments = 0;
+  segments = NULL;
+  mesh = NULL;
 }
 
 /*
   Deallocate the curve segments (if any)
 */
 TMRSurface::~TMRSurface(){
-  if (curves){
-    for ( int i = 0; i < num_curves; i++ ){
-      curves[i]->decref();
+  if (segments){
+    for ( int i = 0; i < num_segments; i++ ){
+      for ( int j = 0; j < segments[i]->num_curves; j++ ){
+        segments[i]->curves[j]->decref();
+      }
+      delete [] segments[i]->curves;
+      delete [] segments[i]->dir;
     }
-    delete [] curves;
-    delete [] dir;
+    delete [] segments;
+  }
+  if (mesh){
+    mesh->decref();
   }
 }
 
 /*
   Add the curves that bound the surface
 */
-int TMRSurface::addCurveSegment( int _ncurves, TMRCurve **_curves, 
-                                 const int _dir[] ){
+int TMRSurface::addCurveSegment( int ncurves, TMRCurve **curves, 
+                                 const int dir[] ){
   int fail = 0;
-  if (_ncurves == 0){
+  if (ncurves == 0){
     fail = 1;
     fprintf(stderr, "TMRSurface::addCurveSegment: Zero length segment\n");
   }
 
   // First, check whether the loop is closed
-  TMRVertex *vinit;
+  TMRVertex *vinit = NULL;
   TMRVertex *vnext;
-  for ( int i = 0; i < _ncurves; i++ ){
+  for ( int i = 0; i < ncurves; i++ ){
     TMRVertex *v1, *v2;
-    if (_dir[i] > 0){
-      _curves[i]->getVertices(&v1, &v2);
+    if (dir[i] > 0){
+      curves[i]->getVertices(&v1, &v2);
     }
     else {
-      _curves[i]->getVertices(&v2, &v1);
+      curves[i]->getVertices(&v2, &v1);
     }
     if (i == 0){ vinit = v1; }
     vnext = v2;
-    if (i == _ncurves-1){
+    if (i == ncurves-1){
       if (vinit != vnext){
         fprintf(stderr, "TMRSurface::addCurveSegment: Curve segment must be closed\n");
         fail = 1;
@@ -370,47 +376,67 @@ int TMRSurface::addCurveSegment( int _ncurves, TMRCurve **_curves,
   }
   
   // Add the curves
-  for ( int i = 0; i < _ncurves; i++ ){
-    _curves[i]->incref();
+  for ( int i = 0; i < ncurves; i++ ){
+    curves[i]->incref();
   }
 
-  if (curves){
-    int size = num_curves + _ncurves;
-    int *new_dir = new int[ size ];
-    TMRCurve **new_curves = new TMRCurve*[ size ];
+  if (num_segments >= max_num_segments){
+    // max_num_segments = max(2*num_segments, 10);
+    max_num_segments = (2*num_segments > 10 ? 2*num_segments : 10);
 
-    // Copy over the new curve segment
-    memcpy(new_dir, dir, num_curves*sizeof(int));
-    memcpy(&new_dir[num_curves], _dir, _ncurves*sizeof(int));
+    // Allocate the new segment array
+    TMRSegment **segs = new TMRSegment*[ max_num_segments ];
 
-    memcpy(new_curves, curves, num_curves*sizeof(TMRCurve*));
-    memcpy(&new_curves[num_curves], _curves, _ncurves*sizeof(TMRCurve*));
-    
-    // Free the old data and update the pointers to the newly
-    // allocated data 
-    delete [] curves;
-    delete [] dir;
-    curves = new_curves;
-    dir = new_dir;
-    num_curves = size;
-  }
-  else {
-    num_curves = _ncurves;
-    dir = new int[ num_curves ];
-    curves = new TMRCurve*[ num_curves ];
-    memcpy(dir, _dir, num_curves*sizeof(int));
-    memcpy(curves, _curves, num_curves*sizeof(TMRCurve*));
+    // Copy over any existing segments
+    if (num_segments > 0){
+      memcpy(segs, segments, num_segments*sizeof(TMRSegment*));
+      delete [] segments;
+    }
+
+    // Set the new segments array with the newly allocated/copied data
+    // (if any)
+    segments = segs;
+
+    // Set the new segment array
+    segments[num_segments] = new TMRSegment;
+    segments[num_segments]->num_curves = ncurves;
+    segments[num_segments]->curves = new TMRCurve*[ ncurves ];
+    segments[num_segments]->dir = new int[ ncurves ];
+    memcpy(segments[num_segments]->curves, curves, ncurves*sizeof(TMRCurve*));
+    memcpy(segments[num_segments]->dir, dir, ncurves*sizeof(int));
+    num_segments++;
   }
 }
 
 /*
-  Retrieve the curves associated with this surface (in the correct orientation)
+  Get the number of closed segments
 */
-void TMRSurface::getCurves( int *_num_curves, TMRCurve ***_curves, 
-                            const int **_dir ){
-  if (_curves){ *_curves = curves; }
-  if (_dir){ *_dir = dir; }
-  if (_num_curves){ *_num_curves = num_curves; }
+int TMRSurface::getNumSegments(){
+  return num_segments;
+}
+
+/*
+  Retrieve the information from the given segment number
+*/
+int TMRSurface::getCurveSegment( int k, int *ncurves, 
+                                 TMRCurve ***curves, 
+                                 const int **dir ){
+  int fail = 0;
+
+  if (k >= 0 && k < num_segments){
+    if (ncurves){ *ncurves = segments[k]->num_curves; }
+    if (curves){ *curves = segments[k]->curves; }
+    if (dir){ *dir = segments[k]->dir; }
+    return fail;
+  }
+
+  if (ncurves){ *ncurves = 0; }
+  if (curves){ *curves = NULL; }
+  if (dir){ *dir = NULL; }
+
+  // No curve found
+  fail = 1;
+  return fail;
 }
 
 /*

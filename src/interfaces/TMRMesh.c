@@ -168,57 +168,34 @@ void TMRSurfaceMesh::mesh( double htarget ){
   // Count up the number of points and segments from the curves that
   // bound the surface
 
-  // Retrieve the pointer to the curves that bound the surface
-  int ncurves = 0;
-  const int *dir = NULL;
-  TMRCurve **curves;
-  surface->getCurves(&ncurves, &curves, &dir);
-
   // Keep track of the number of points = the number of segments.
   int total_num_pts = 0;
 
   // Keep track of the number of closed loop cycles in the domain
-  int ncycles = 0;
+  int ncycles = surface->getNumSegments();
 
   // Get all of the meshes
-  TMRVertex *vinit = NULL;
-  for ( int i = 0; i < ncurves; i++ ){
-    TMRCurveMesh *mesh = NULL;
-    curves[i]->getMesh(&mesh);
-    if (!mesh){
-      mesh = new TMRCurveMesh(curves[i]);
-      mesh->mesh(htarget);
-      curves[i]->setMesh(mesh);
-    }
+  for ( int k = 0; k < surface->getNumSegments(); k++ ){
+    int ncurves;
+    TMRCurve **curves;
+    surface->getCurveSegment(k, &ncurves, &curves, NULL);
 
-    // Retrieve the vertices associated with this curve
-    TMRVertex *v1, *v2;
-    if (dir[i] > 0){
-      curves[i]->getVertices(&v1, &v2);
+    for ( int i = 0; i < ncurves; i++ ){
+      TMRCurveMesh *mesh = NULL;
+      curves[i]->getMesh(&mesh);
+      if (!mesh){
+        mesh = new TMRCurveMesh(curves[i]);
+        mesh->mesh(htarget);
+        curves[i]->setMesh(mesh);
+      }
+      
+      // Get the number of points associated with the curve
+      int npts;
+      mesh->getMesh(&npts, NULL, NULL);
+      
+      // Update the total number of points
+      total_num_pts += npts-1;
     }
-    else {
-      curves[i]->getVertices(&v2, &v1);
-    }
-
-    // This is the beginning of a new segment
-    if (!vinit){
-      vinit = v1;
-    }
-
-    // This is the final vertex in the loop. Note that these two
-    // conditions may be satisfifed within a single iteration, 
-    // corresponding with a closed curve with the same start/end vertex.
-    if (vinit == v2){
-      vinit = NULL;
-      ncycles++;
-    }
-
-    // Get the number of points associated with the curve
-    int npts;
-    mesh->getMesh(&npts, NULL, NULL);
-
-    // Update the total number of points
-    total_num_pts += npts-1;
   }
 
   // The number of holes is equal to the number of cycles-1. One loop
@@ -244,104 +221,91 @@ void TMRSurfaceMesh::mesh( double htarget ){
   int init_loop_seg = 0; // What segment value did this loop start on?
   int hole_pt = total_num_pts; // What hole are we on?
 
-  // Keep track of where we last completed a loop
-  vinit = NULL;
+  for ( int k = 0; k < surface->getNumSegments(); k++ ){
+    // Set the offset to the initial point/segment on this loop
+    init_loop_pt = pt;
+    init_loop_seg = seg;
 
-  for ( int i = 0; i < ncurves; i++ ){
-    // Retrieve the vertices associated with this curve
-    TMRVertex *v1, *v2;
-    if (dir[i] > 0){
-      curves[i]->getVertices(&v1, &v2);
-    }
-    else {
-      curves[i]->getVertices(&v2, &v1);
-    }
+    // Get the curve information for this loop segment
+    int ncurves;
+    TMRCurve **curves;
+    const int *dir;
+    surface->getCurveSegment(k, &ncurves, &curves, &dir);
 
-    // If this is the initial point for this closed curve, set the
-    // init_loop_pt pointer to the initial point in this segment
-    if (!vinit){
-      init_loop_pt = pt;
-      init_loop_seg = seg;
-      vinit = v1;
-    }
-
-    // Retrieve the underlying curve mesh
-    TMRCurveMesh *mesh = NULL;
-    curves[i]->getMesh(&mesh);
-
-    // Get the mesh points corresponding to this curve
-    int npts;
-    TMRPoint *Xpts;
-    mesh->getMesh(&npts, NULL, &Xpts);
-
-    // Find the point on the curve
-    if (dir[i] > 0){
-      for ( int j = 0; j < npts-1; j++ ){
-        surface->invEvalPoint(Xpts[j], &params[2*pt], &params[2*pt+1]);
-        segments[2*seg] = pt;
-        segments[2*seg+1] = pt+1;
-        seg++;
-        pt++;
+    for ( int i = 0; i < ncurves; i++ ){
+      // Retrieve the underlying curve mesh
+      TMRCurveMesh *mesh = NULL;
+      curves[i]->getMesh(&mesh);
+      
+      // Get the mesh points corresponding to this curve
+      int npts;
+      TMRPoint *Xpts;
+      mesh->getMesh(&npts, NULL, &Xpts);
+      
+      // Find the point on the curve
+      if (dir[i] > 0){
+        for ( int j = 0; j < npts-1; j++ ){
+          surface->invEvalPoint(Xpts[j], &params[2*pt], &params[2*pt+1]);
+          segments[2*seg] = pt;
+          segments[2*seg+1] = pt+1;
+          seg++;
+          pt++;
+        }
       }
-    }
-    else {
-      for ( int j = npts-1; j >= 1; j-- ){
-        surface->invEvalPoint(Xpts[j], &params[2*pt], &params[2*pt+1]);
-        segments[2*seg] = pt;
-        segments[2*seg+1] = pt+1;
-        seg++;
-        pt++;
+      else {
+        for ( int j = npts-1; j >= 1; j-- ){
+          surface->invEvalPoint(Xpts[j], &params[2*pt], &params[2*pt+1]);
+          segments[2*seg] = pt;
+          segments[2*seg+1] = pt+1;
+          seg++;
+          pt++;
+        }
       }
     }
 
-    if (vinit == v2){
-      // Set vinit back to NULL
-      vinit = NULL;
+    // Close off the loop by connecting the segment back to the
+    // initial loop point
+    segments[2*(seg-1)+1] = init_loop_pt;
 
-      // Close off the loop by connecting the segment back to the
-      // initial loop point
-      segments[2*(seg-1)+1] = init_loop_pt;
+    // Compute the area enclosed by the loop. If the area is
+    // positive, it is the domain boundary. If the area is negative,
+    // we have a hole!  Note that this assumes that the polygon
+    // creating the hole is not self-intersecting. (In reality we
+    // compute twice the area since we omit the 1/2 factor.)
+    double Area = 0.0;
+    for ( int i = init_loop_seg; i < seg; i++ ){
+      int s1 = segments[2*i];
+      int s2 = segments[2*i+1];
+      const double x1 = params[2*s1];
+      const double y1 = params[2*s1+1];
+      const double x2 = params[2*s2];
+      const double y2 = params[2*s2+1];
+      Area += (x1*y2 - x2*y1);
+    }
 
-      // Compute the area enclosed by the loop. If the area is
-      // positive, it is the domain boundary. If the area is negative,
-      // we have a hole!  Note that this assumes that the polygon
-      // creating the hole is not self-intersecting. (In reality we
-      // compute twice the area since we omit the 1/2 factor.)
-      double Area = 0.0;
-      for ( int k = init_loop_seg; k < seg; k++ ){
-        int s1 = segments[2*k];
-        int s2 = segments[2*k+1];
-        const double x1 = params[2*s1];
-        const double y1 = params[2*s1+1];
-        const double x2 = params[2*s2];
-        const double y2 = params[2*s2+1];
-        Area += (x1*y2 - x2*y1);
-      }
-
-      // Check if the area constraint
-      if (Area < 0.0){
-        // This is a hole! Compute an approximate position for the hole.
-        // Note that this may not work in all cases so beware.
-        int s1 = segments[2*init_loop_seg];
-        int s2 = segments[2*init_loop_seg+1];
-        const double x1 = params[2*s1];
-        const double y1 = params[2*s1+1];
-        const double x2 = params[2*s2];
-        const double y2 = params[2*s2+1];
-        const double dx = x2 - x1;
-        const double dy = y2 - y1;
-
-        // This is arbitrary and won't work in general if we have a very
-        // thin sliver for a hole...
-        double frac = 0.01;
-
-        // Set the average location for the hole
-        params[2*hole_pt] = 0.5*(x1 + x2) + frac*dy;
-        params[2*hole_pt+1] = 0.5*(y1 + y2) - frac*dx;
-
-        // Increment the hole pointer
-        hole_pt++;
-      }
+    // Check if the area constraint
+    if (Area < 0.0){
+      // This is a hole! Compute an approximate position for the hole.
+      // Note that this may not work in all cases so beware.
+      int s1 = segments[2*init_loop_seg];
+      int s2 = segments[2*init_loop_seg+1];
+      const double x1 = params[2*s1];
+      const double y1 = params[2*s1+1];
+      const double x2 = params[2*s2];
+      const double y2 = params[2*s2+1];
+      const double dx = x2 - x1;
+      const double dy = y2 - y1;
+      
+      // This is arbitrary and won't work in general if we have a very
+      // thin sliver for a hole...
+      double frac = 0.01;
+      
+      // Set the average location for the hole
+      params[2*hole_pt] = 0.5*(x1 + x2) + frac*dy;
+      params[2*hole_pt+1] = 0.5*(y1 + y2) - frac*dx;
+      
+      // Increment the hole pointer
+      hole_pt++;
     }
   }
 
@@ -1379,7 +1343,7 @@ void quadSmoothing( int nsmooth, int num_fixed_pts,
         double w1 = 1.0/(hbar*hbar);
         double w2 = 4.0/(bbar*bbar);
 
-        // Compute the parameter updates
+        // The parameters for the Jacobian/right-hand-side
         double s1 = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, s5 = 0.0;
 
         for ( int qp = ptr[i]; qp < ptr[i+1]; qp++ ){

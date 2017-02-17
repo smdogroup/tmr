@@ -1324,16 +1324,95 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
 
   // Set the default parameter values
   *uf = *vf = 0.0;
-  
+
   // The basis functions/work arrays
   double Nu[3*MAX_BSPLINE_ORDER], Nv[3*MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
-  double u = 0.5*(Tu[0] + Tu[nu+ku-1]);
-  double v = 0.5*(Tv[0] + Tv[nv+kv-1]);
-
   // Get the bounds
   double umin, vmin, umax, vmax;
   getRange(&umin, &vmin, &umax, &vmax);
+  double u = 0.0, v = 0.0;
+  double ubest = 0.0, vbest = 0.0;
+
+  // Set the number of trial points to use in the brute force method
+  // along each direction.
+  int nupts = 2*nu+1;
+  int nvpts = 2*nv+1;
+
+  // Using brute force, find the point that is closest to the input
+  // point by evaluating the surface at a series of locations.
+  double dist = 1e40;
+  for ( int jj = 0; jj < nvpts; jj++ ){
+    for ( int ii = 0; ii < nupts; ii++ ){
+      u = umin + (1.0*ii/(nupts - 1))*(umax - umin);
+      v = vmin + (1.0*jj/(nvpts - 1))*(vmax - vmin);
+      int intu = bspline_interval(u, Tu, nu, ku);
+      int intv = bspline_interval(v, Tv, nv, kv);
+
+      // Evaluate the basis functions
+      bspline_basis(Nu, intu, u, Tu, ku, work);
+      bspline_basis(Nv, intv, v, Tv, kv, work);
+
+      // Set the interval to the initial control point
+      intu = intu - ku + 1;
+      intv = intv - kv + 1;
+      
+      // Evaluate the point
+      TMRPoint X;
+      X.zero();
+
+      // If this is a NURBS surface add the effect of the weights
+      if (wts){
+        // Evaluate the b-spline
+        double w = 0.0;
+        for ( int j = 0; j < kv; j++ ){
+          for ( int i = 0; i < ku; i++ ){
+            int index = intu+i + (intv+j)*nu;
+            X.x += wts[index]*Nu[i]*Nv[j]*pts[index].x;
+            X.y += wts[index]*Nu[i]*Nv[j]*pts[index].y;
+            X.z += wts[index]*Nu[i]*Nv[j]*pts[index].z;
+            w += wts[index]*Nu[i]*Nv[j];
+          }
+        }
+        
+        // Divide through by the weights
+        if (w != 0.0){
+          w = 1.0/w;
+          X.x *= w;
+          X.y *= w;
+          X.z *= w;
+        }
+      }
+      else {
+        // Evaluate the b-spline
+        for ( int j = 0; j < kv; j++ ){
+          for ( int i = 0; i < ku; i++ ){
+            int index = intu+i + (intv+j)*nu;
+            X.x += Nu[i]*Nv[j]*pts[index].x;
+            X.y += Nu[i]*Nv[j]*pts[index].y;
+            X.z += Nu[i]*Nv[j]*pts[index].z;
+          }
+        }
+      }
+      
+      // Find the distance vector
+      X.x = point.x - X.x;
+      X.y = point.y - X.y;
+      X.z = point.z - X.z;
+
+      // Check whether the distance is closer
+      double d = X.dot(X);
+      if (d < dist){
+        dist = d;
+        ubest = u;
+        vbest = v;
+      }
+    }
+  }
+
+  // Set the new closest point
+  u = ubest;
+  v = vbest;
 
   // Perform a newton iteration until convergence
   for ( int k = 0; k < max_newton_iters; k++ ){
@@ -1553,7 +1632,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
   }
 
   // The newton method failed
-  return 0;
+  return fail;
 }
 
 /*
@@ -2133,7 +2212,12 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
     }
 
     // Refine the knot vector for each curve to make it consistent
-    consist[i] = curves[i]->refineKnots(Tnew, nnew);
+    if (nnew > 0){
+      consist[i] = curves[i]->refineKnots(Tnew, nnew);
+    }
+    else {
+      consist[i] = curves[i];
+    }
     consist[i]->incref();
   }
 
@@ -2157,17 +2241,17 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
     }
   }
 
+  // Get the order of the curve
+  int ku = 0;
+  consist[0]->getData(NULL, &ku, NULL, NULL, NULL);
+
   // Create a TMRPoint array containing all of the poitns
-  int ku = 4;
   int nu = len-ku;
   TMRPoint *pts = new TMRPoint[ nu*nv ];
   double *wts = NULL;
   if (is_nurbs){
     wts = new double[ nu*nv ];
   }
-
-  // Get the order of the curve
-  consist[0]->getData(NULL, &ku, NULL, NULL, NULL);
 
   // Go through and extract the points
   for ( int j = 0; j < num_curves; j++ ){

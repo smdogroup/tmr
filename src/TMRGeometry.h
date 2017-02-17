@@ -100,15 +100,16 @@ class TMRSurface : public TMREntity {
   virtual int evalDeriv( double u, double v, 
                          TMRPoint *Xu, TMRPoint *Xv ) = 0;
 
-  // Add a curve segment. The curve segments must form a closed
-  // loop which is checked by the code. The boundary must lie
-  // counterclockwise around the surface while holes/cutouts
-  // must run clockwise so that the domain always lies to the
-  // left of the curve.
+  // Add a curve segment. The curve segments must form a closed loop
+  // which is checked by the code. The boundary must lie
+  // counterclockwise around the surface while holes/cutouts must run
+  // clockwise so that the domain always lies to the left of the
+  // curve.
   int addCurveSegment( int ncurves, TMRCurve **_curves, 
                        const int _dir[] );
-  void getCurves( int *_num_curves, TMRCurve ***_curves, 
-                  const int **_dir );
+  int getNumSegments();
+  int getCurveSegment( int k, int *ncurves, 
+                       TMRCurve ***_curves, const int **_dir );
 
   // Set/retrieve the mesh
   void setMesh( TMRSurfaceMesh *_mesh );
@@ -120,9 +121,15 @@ class TMRSurface : public TMREntity {
  private:
   // Pointers to the curves that enclose the object. 
   // Note  to the list of curves
-  int num_curves;
-  TMRCurve **curves;
-  int *dir;
+  class TMRSegment {
+  public:
+    int num_curves;
+    TMRCurve **curves;
+    int *dir;
+  }; 
+  int max_num_segments;
+  int num_segments;
+  TMRSegment **segments;
 
   // The mesh for the curve - if it exists
   TMRSurfaceMesh *mesh;
