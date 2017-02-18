@@ -133,7 +133,8 @@ void TMRCurveMesh::mesh( double htarget ){
 /*
   Get the mesh points
 */
-void TMRCurveMesh::getMesh( int *_npts, double **_pts, TMRPoint **_X ){
+void TMRCurveMesh::getMesh( int *_npts, const double **_pts, 
+                            TMRPoint **_X ){
   if (_npts){ *_npts = npts; }
   if (_pts){ *_pts = pts; }
   if (_X){ *_X = X; }
@@ -239,13 +240,14 @@ void TMRSurfaceMesh::mesh( double htarget ){
       
       // Get the mesh points corresponding to this curve
       int npts;
-      TMRPoint *Xpts;
-      mesh->getMesh(&npts, NULL, &Xpts);
+      const double *tpts;
+      mesh->getMesh(&npts, &tpts, NULL);
       
       // Find the point on the curve
       if (dir[i] > 0){
         for ( int j = 0; j < npts-1; j++ ){
-          surface->invEvalPoint(Xpts[j], &params[2*pt], &params[2*pt+1]);
+          curves[i]->getParamsOnSurface(surface, tpts[j], dir[i],
+                                        &params[2*pt], &params[2*pt+1]);
           segments[2*seg] = pt;
           segments[2*seg+1] = pt+1;
           seg++;
@@ -254,7 +256,8 @@ void TMRSurfaceMesh::mesh( double htarget ){
       }
       else {
         for ( int j = npts-1; j >= 1; j-- ){
-          surface->invEvalPoint(Xpts[j], &params[2*pt], &params[2*pt+1]);
+          curves[i]->getParamsOnSurface(surface, tpts[j], dir[i],
+                                        &params[2*pt], &params[2*pt+1]);
           segments[2*seg] = pt;
           segments[2*seg+1] = pt+1;
           seg++;

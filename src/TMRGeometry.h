@@ -14,6 +14,7 @@
 
 #include "TMRBase.h"
 
+class TMRSurface;
 class TMRCurveMesh;
 class TMRSurfaceMesh;
 
@@ -44,6 +45,10 @@ class TMRCurve : public TMREntity {
   
   // Given the parametric point, evaluate the x,y,z location
   virtual int evalPoint( double t, TMRPoint *X ) = 0;
+
+  // Parametrize the curve on the given surface
+  virtual int getParamsOnSurface( TMRSurface *surface, double t, 
+                                  int dir, double *u, double *v );
 
   // Given the point, find the parametric location
   virtual int invEvalPoint( TMRPoint X, double *t );
@@ -201,6 +206,35 @@ class TMRVertexFromSurface : public TMRVertex {
  private:
   double u, v;
   TMRSurface *surface;
+};
+
+/*
+  The curve parametrized on the surface C(t) = S(u(t), v(t))
+*/
+class TMRCurveFromSurface : public TMRCurve {
+ public:
+  TMRCurveFromSurface( TMRSurface *_surface, TMRPcurve *_pcurve );
+  ~TMRCurveFromSurface();
+
+  // Get the parameter range for this edge
+  void getRange( double *tmin, double *tmax );
+  
+  // Given the parametric point, evaluate the x,y,z location
+  int evalPoint( double t, TMRPoint *X );
+
+  // Parametrize the curve on the given surface
+  int getParamsOnSurface( TMRSurface *surface, double t, 
+                          int dir, double *u, double *v );
+
+  // Given the point, find the parametric location
+  int invEvalPoint( TMRPoint X, double *t );
+
+  // Given the parametric point, evaluate the derivative 
+  int evalDeriv( double t, TMRPoint *Xt );
+
+ private:
+  TMRSurface *surface;
+  TMRPcurve *pcurve;
 };
 
 /*

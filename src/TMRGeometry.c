@@ -30,6 +30,17 @@ TMRCurve::~TMRCurve(){
 }
 
 /*
+  Perform the 
+*/
+int TMRCurve::getParamsOnSurface( TMRSurface *surface, double t, 
+                                  int dir, double *u, double *v ){
+  TMRPoint p;
+  int fail = evalPoint(t, &p);
+  fail = fail || surface->invEvalPoint(p, u, v);
+  return fail;
+}
+
+/*
   Compute the inverse: This is not always required. By default it is
   not implemented. Derived classes can implement it if needed.
 */
@@ -613,6 +624,82 @@ int TMRVertexFromSurface::evalPoint( TMRPoint *p ){
   return surface->evalPoint(u, v, p);
 }
 
+/*
+  Create the curve parametrized on the surface
+*/
+TMRCurveFromSurface::TMRCurveFromSurface( TMRSurface *_surface, 
+                                          TMRPcurve *_pcurve ){
+  surface = _surface;
+  surface->incref();
+  pcurve = _pcurve;
+  pcurve->incref();
+}
+
+TMRCurveFromSurface::~TMRCurveFromSurface(){
+  surface->decref();
+  pcurve->decref();
+}
+
+/*
+  Get the parameter range for this curve
+*/
+void TMRCurveFromSurface::getRange( double *tmin, double *tmax ){
+  pcurve->getRange(tmin, tmax);
+}  
+  
+/*
+  Given the parametric point, evaluate the x,y,z location
+*/
+int TMRCurveFromSurface::evalPoint( double t, TMRPoint *X ){
+  double u, v;
+  int fail = pcurve->evalPoint(t, &u, &v);
+  fail = fail || surface->evalPoint(u, v, X);
+  return fail;
+}
+
+/*
+  Parametrize the curve on the given surface
+*/
+int TMRCurveFromSurface::getParamsOnSurface( TMRSurface *surf, 
+                                             double t, int dir, 
+                                             double *u, double *v ){
+  if (surf == surface){
+    int fail = pcurve->evalPoint(t, u, v);
+    return fail;
+  }
+
+  TMRPoint p;
+  int fail = evalPoint(t, &p);
+  fail = fail || surface->invEvalPoint(p, u, v);
+  return fail;
+}
+
+/*
+  Given the point, find the parametric location
+*/
+int TMRCurveFromSurface::invEvalPoint( TMRPoint X, double *t ){
+  *t = 0.0;
+  int fail = 1;
+  return fail;
+}
+
+/*
+  Given the parametric point, evaluate the derivative 
+*/
+int TMRCurveFromSurface::evalDeriv( double t, TMRPoint *Xt ){
+  double u, v, ut, vt;
+  pcurve->evalPoint(t, &u, &v);
+  pcurve->evalDeriv(t, &ut, &vt);
+  TMRPoint Xu, Xv;
+  surface->evalDeriv(u, v, &Xu, &Xv);
+  Xt->x = ut*Xu.x + vt*Xv.x;
+  Xt->y = ut*Xu.y + vt*Xv.y;
+  Xt->z = ut*Xu.z + vt*Xv.z;
+}
+
+/*
+  Project the curve on to the surface
+*/
 TMRCurveFromSurfaceProjection::TMRCurveFromSurfaceProjection( TMRSurface *_surface, 
                                                               TMRCurve *_curve ){
   surface = _surface;
@@ -626,12 +713,18 @@ TMRCurveFromSurfaceProjection::~TMRCurveFromSurfaceProjection(){
   curve->decref();
   surface->decref();
 }
-  
+
+/*
+  Get the parameter range
+*/  
 void TMRCurveFromSurfaceProjection::getRange( double *tmin, 
                                               double *tmax ){
   curve->getRange(tmin, tmax);
 }
- 
+
+/*
+  Evaluate the point
+*/
 int TMRCurveFromSurfaceProjection::evalPoint( double t, TMRPoint *p ){
   // Evaluate the point on the curve
   TMRPoint pt;
