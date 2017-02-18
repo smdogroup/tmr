@@ -1,4 +1,6 @@
+#include "TMRGeometry.h"
 #include "TMRBspline.h"
+#include "TMRMesh.h"
 #include <stdio.h>
 #include <math.h>
 
@@ -134,7 +136,7 @@ const double rae2822_pts[] =
    0.9994, -0.00001,
    1.000, 0.0000 };
 
-void test_surface_lofter(){
+void test_surface_lofter( double htarget ){
   // Create the control points
   int nctl = rae2822_npts;
   TMRPoint line_pts[rae2822_npts];
@@ -142,7 +144,7 @@ void test_surface_lofter(){
   
   // Create a series of curves
   int num_curves = 5;
-  TMRBsplineCurve *curves[5];
+  TMRBsplineCurve *lofts[5];
   double chord[5] = {6.0, 4.0, 3.0,  2.0, 1.0};
   double twist[5] = {0, -1.0, -2.0, -4.0, -10.0};
   for ( int k = 0; k < num_curves; k++ ){
@@ -166,28 +168,83 @@ void test_surface_lofter(){
     interper->incref();
 
     interper->setNumControlPoints(13 + 2*k);
-    curves[k] = interper->createCurve(4);
-    curves[k]->incref();
+    lofts[k] = interper->createCurve(4);
+    lofts[k]->incref();
 
     // Free the interpolation object
     interper->decref();
   }  
 
   // Create the lofter object
-  TMRCurveLofter *lofter = new TMRCurveLofter(curves, num_curves);
+  TMRCurveLofter *lofter = new TMRCurveLofter(lofts, num_curves);
   lofter->incref();
 
   // Create the surface object from the lofted surface
-  TMRBsplineSurface *surf = lofter->createSurface(4);
-  surf->incref();
+  TMRBsplineSurface *surface = lofter->createSurface(4);
+  surface->incref();
   lofter->decref();
 
-  surf->writeToVTK("surface.vtk");
+  surface->writeToVTK("bspline_surface.vtk");
+
+  // (0,1) -- (1,1)
+  //   |        |
+  // (0,0) -- (1,0)
+  double pts1[] = {0.0, 0.0, 1.0, 0.0};
+  double pts2[] = {1.0, 0.0, 1.0, 1.0};
+  double pts3[] = {1.0, 1.0, 0.0, 1.0};
+  double pts4[] = {0.0, 1.0, 0.0, 0.0};
+  TMRBsplinePcurve *p1 = new TMRBsplinePcurve(2, 2, pts1);
+  TMRBsplinePcurve *p2 = new TMRBsplinePcurve(2, 2, pts2);
+  TMRBsplinePcurve *p3 = new TMRBsplinePcurve(2, 2, pts3);
+  TMRBsplinePcurve *p4 = new TMRBsplinePcurve(2, 2, pts4);
+
+  // Create the curves and add them to the surface
+  int ncurves = 4;
+  TMRCurve *curves[4];
+  curves[0] = new TMRCurveFromSurface(surface, p1);
+  curves[1] = new TMRCurveFromSurface(surface, p2);
+  curves[2] = new TMRCurveFromSurface(surface, p3);
+  curves[3] = new TMRCurveFromSurface(surface, p4);
+
+  // Create the boundary curves for the surface
+  TMRVertexFromCurve *v1 = new TMRVertexFromCurve(curves[0], 0.0);
+  TMRVertexFromCurve *v2 = new TMRVertexFromCurve(curves[1], 0.0);
+  TMRVertexFromCurve *v3 = new TMRVertexFromCurve(curves[2], 0.0);
+  TMRVertexFromCurve *v4 = new TMRVertexFromCurve(curves[3], 0.0);
+
+  // Set the vertices
+  curves[0]->setVertices(v1, v1);
+  curves[1]->setVertices(v2, v3);
+  curves[2]->setVertices(v3, v4);
+  curves[3]->setVertices(v4, v1);
+  
+  // Set the directions of the curves
+  int dir[4];
+  dir[0] = 1;
+  dir[1] = 1;
+  dir[2] = 1;
+  dir[3] = 1;
+
+  surface->addCurveSegment(ncurves, curves, dir);
+
+  // Write out the curves and cylindrical surface
+  for ( int k = 0; k < ncurves; k++ ){
+    char filename[128];
+    sprintf(filename, "curve%d.vtk", k);
+    curves[k]->writeToVTK(filename);
+  }
+
+  // Create the mesh
+  TMRSurfaceMesh *mesh = new TMRSurfaceMesh(surface);
+  mesh->incref();
+  mesh->mesh(htarget);
+  mesh->writeToVTK("bspline_quads.vtk");
+  mesh->decref();  
 
   // Free the objects
-  surf->decref();
+  surface->decref();
   for ( int k = 0; k < num_curves; k++ ){
-    curves[k]->decref();
+    lofts[k]->decref();
   }
 }
 
@@ -195,7 +252,15 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
-  test_surface_lofter();
+  double htarget = 0.1;
+  for ( int i = 0; i < argc; i++ ){
+    if (sscanf(argv[i], "h=%lf", &htarget) == 1){
+      if (htarget < 0.1){ htarget = 0.1; }
+      if (htarget > 1.0){ htarget = 1.0; }
+    }
+  }
+
+  test_surface_lofter(htarget);
 
   TMRFinalize();
   MPI_Finalize();

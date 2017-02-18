@@ -1,6 +1,7 @@
 #include "TMRGeometry.h"
 #include "TMRBspline.h"
 #include "TMRMesh.h"
+#include <stdio.h>
 #include <math.h>
 
 /*
@@ -78,7 +79,7 @@ int main( int argc, char *argv[] ){
   TMRPoint p;
   p.x = p.y = p.z = 0.0;
 
-  TMRBsplineCurve *loft[2];
+  TMRBsplineCurve *loft[4];
   loft[0] = createSemiCircle(p, r1);
   loft[0]->incref();
 
@@ -86,59 +87,61 @@ int main( int argc, char *argv[] ){
   loft[1] = createSemiCircle(p, r2);
   loft[1]->incref();
 
+  p.z = 2*h;
+  loft[2] = createSemiCircle(p, r2);
+  loft[2]->incref();
+
+  p.z = 3*h;
+  loft[3] = createSemiCircle(p, r1);
+  loft[3]->incref();
+
   // Loft the circles together to form a closed surface
-  TMRCurveLofter *lofter = new TMRCurveLofter(loft, 2);
+  TMRCurveLofter *lofter = new TMRCurveLofter(loft, 4);
   lofter->incref();
 
   // Create the surface object from the lofted surface
-  TMRBsplineSurface *surface = lofter->createSurface(2);
+  TMRBsplineSurface *surface = lofter->createSurface(3);
   surface->incref();
   lofter->decref();
 
-  // Create the boundary curves for the surface
-  TMRPoint pts[2];
-  pts[0].x = pts[0].y = pts[0].z = 0.0;
-  pts[0].x = r1;
-  pts[1].x = pts[1].y = pts[1].z = 0.0;
-  pts[1].x = r2;
-  pts[1].z = h;
-  TMRVertexFromPoint *v1 = new TMRVertexFromPoint(pts[0]);
-  TMRVertexFromPoint *v2 = new TMRVertexFromPoint(pts[1]);
-  TMRBsplineCurve *line1 = new TMRBsplineCurve(2, 2, pts);
-  line1->incref();
-
-  // Set the points for the second line connecting the semi-circular
-  // segments.
-  pts[0].x = pts[0].y = pts[0].z = 0.0;
-  pts[0].x = -r1;
-  pts[1].x = pts[1].y = pts[1].z = 0.0;
-  pts[1].x = -r2;
-  pts[1].z = h;
-  TMRVertexFromPoint *v3 = new TMRVertexFromPoint(pts[0]);
-  TMRVertexFromPoint *v4 = new TMRVertexFromPoint(pts[1]);
-  TMRBsplineCurve *line2 = new TMRBsplineCurve(2, 2, pts);
-  line2->incref();
+  // (0,1) -- (1,1)
+  //   |        |
+  // (0,0) -- (1,0)
+  double pts1[] = {0.0, 0.0, 1.0, 0.0};
+  double pts2[] = {1.0, 0.0, 1.0, 1.0};
+  double pts3[] = {1.0, 1.0, 0.0, 1.0};
+  double pts4[] = {0.0, 1.0, 0.0, 0.0};
+  TMRBsplinePcurve *p1 = new TMRBsplinePcurve(2, 2, pts1);
+  TMRBsplinePcurve *p2 = new TMRBsplinePcurve(2, 2, pts2);
+  TMRBsplinePcurve *p3 = new TMRBsplinePcurve(2, 2, pts3);
+  TMRBsplinePcurve *p4 = new TMRBsplinePcurve(2, 2, pts4);
 
   // Create the curves and add them to the surface
   int num_curves = 4;
   TMRCurve *curves[4];
-  curves[0] = loft[0];
-  curves[1] = line2;
-  curves[2] = loft[1];
-  curves[3] = line1;
+  curves[0] = new TMRCurveFromSurface(surface, p1);
+  curves[1] = new TMRCurveFromSurface(surface, p2);
+  curves[2] = new TMRCurveFromSurface(surface, p3);
+  curves[3] = new TMRCurveFromSurface(surface, p4);
+
+  // Create the boundary curves for the surface
+  TMRVertexFromCurve *v1 = new TMRVertexFromCurve(curves[0], 0.0);
+  TMRVertexFromCurve *v2 = new TMRVertexFromCurve(curves[1], 0.0);
+  TMRVertexFromCurve *v3 = new TMRVertexFromCurve(curves[2], 0.0);
+  TMRVertexFromCurve *v4 = new TMRVertexFromCurve(curves[3], 0.0);
 
   // Set the vertices
-  curves[0]->setVertices(v1, v3);
-  curves[1]->setVertices(v3, v4);
-  curves[2]->setVertices(v2, v4);
-  curves[3]->setVertices(v1, v2);
+  curves[0]->setVertices(v1, v1);
+  curves[1]->setVertices(v2, v3);
+  curves[2]->setVertices(v3, v4);
+  curves[3]->setVertices(v4, v1);
   
   // Set the directions of the curves
   int dir[4];
   dir[0] = 1;
   dir[1] = 1;
-  dir[2] = -1;
-  dir[3] = -1;
+  dir[2] = 1;
+  dir[3] = 1;
 
   surface->addCurveSegment(num_curves, curves, dir);
 
@@ -156,7 +159,6 @@ int main( int argc, char *argv[] ){
   mesh->mesh(htarget);
   mesh->writeToVTK("quads.vtk");
   mesh->decref();  
-
 
   TMRFinalize();
   MPI_Finalize();
