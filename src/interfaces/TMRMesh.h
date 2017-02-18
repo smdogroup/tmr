@@ -19,7 +19,7 @@ class TMRCurveMesh : public TMREntity {
   void mesh( double htarget );
 
   // Retrieve the mesh points
-  void getMesh( int *_npts, double **_pts, TMRPoint **X );
+  void getMesh( int *_npts, const double **_pts, TMRPoint **X );
 
  private:
   TMRCurve *curve;

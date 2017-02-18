@@ -737,9 +737,12 @@ TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
           wbar[ind-1] = (alpha*wbar[ind-1] + (1.0 - alpha)*wbar[ind]);
         }
         else {
-          pbar[ind-1].x = alpha*pbar[ind-1].x + (1.0 - alpha)*pbar[ind].x;
-          pbar[ind-1].y = alpha*pbar[ind-1].y + (1.0 - alpha)*pbar[ind].y;
-          pbar[ind-1].z = alpha*pbar[ind-1].z + (1.0 - alpha)*pbar[ind].z;
+          pbar[ind-1].x = 
+            alpha*pbar[ind-1].x + (1.0 - alpha)*pbar[ind].x;
+          pbar[ind-1].y = 
+            alpha*pbar[ind-1].y + (1.0 - alpha)*pbar[ind].y;
+          pbar[ind-1].z = 
+            alpha*pbar[ind-1].z + (1.0 - alpha)*pbar[ind].z;
         }
       }
     }
@@ -1076,8 +1079,10 @@ TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
           wbar[ind-1] = (alpha*wbar[ind-1] + (1.0 - alpha)*wbar[ind]);
         }
         else {
-          pbar[2*(ind-1)] = alpha*pbar[2*(ind-1)] + (1.0 - alpha)*pbar[2*ind];
-          pbar[2*(ind-1)+1] = alpha*pbar[2*(ind-1)+1] + (1.0 - alpha)*pbar[2*ind+1];
+          pbar[2*(ind-1)] = 
+            alpha*pbar[2*(ind-1)] + (1.0 - alpha)*pbar[2*ind];
+          pbar[2*(ind-1)+1] = 
+            alpha*pbar[2*(ind-1)+1] + (1.0 - alpha)*pbar[2*ind+1];
         }
       }
     }
