@@ -158,9 +158,19 @@ class TMRTriangularize : public TMREntity {
   void addPointToMesh( const double pt[] );
   void addPointToMesh( const double pt[], TMRTriangle *tri );
 
+  // Get a hash value for the given edge
+  inline uint32_t getEdgeHash( uint32_t u, uint32_t v );
+
   // Add/delete a triangle from the data structure
   int addTriangle( TMRTriangle tri );
   int deleteTriangle( TMRTriangle tri );
+
+  // Get a hash value for the given triangle
+  inline uint32_t getTriangleHash( TMRTriangle *tri );              
+
+  // Add/delete triangles from the active set of triangles
+  int addActiveTriangle( TMRTriangle *tri );
+  int deleteActiveTriangle( TMRTriangle *tri );
 
   // Mark all the triangles in the list
   void setTriangleTags( uint32_t tag );
@@ -190,9 +200,6 @@ class TMRTriangularize : public TMREntity {
   // Compute the intersection
   double computeIntersection( const double m[], const double e[], 
                               uint32_t u, uint32_t v, uint32_t w );
-
-  // Get a hash value for the given edge
-  inline uint32_t getEdgeHash( uint32_t u, uint32_t v );
 
   // The underlying surface
   TMRSurface *surface;
@@ -254,6 +261,21 @@ class TMRTriangularize : public TMREntity {
   // The number of buckets
   int num_buckets;
   int num_hash_nodes;
+
+  // Keep a hash table for the active triangles. This hash is based on the
+  // nodes in the triangle. 
+  class ActiveHashNode {
+  public:
+    TMRTriangle *tri;
+    ActiveHashNode *next;
+  };
+
+  // Active hash buckets
+  ActiveHashNode **active_buckets;
+
+  // The number of active buckets/triangles
+  int num_active_buckets;
+  int num_active_triangles;
 };
 
 #endif // TRIANGULARIZE_H

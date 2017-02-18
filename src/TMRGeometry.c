@@ -396,16 +396,16 @@ int TMRSurface::addCurveSegment( int ncurves, TMRCurve **curves,
     // Set the new segments array with the newly allocated/copied data
     // (if any)
     segments = segs;
-
-    // Set the new segment array
-    segments[num_segments] = new TMRSegment;
-    segments[num_segments]->num_curves = ncurves;
-    segments[num_segments]->curves = new TMRCurve*[ ncurves ];
-    segments[num_segments]->dir = new int[ ncurves ];
-    memcpy(segments[num_segments]->curves, curves, ncurves*sizeof(TMRCurve*));
-    memcpy(segments[num_segments]->dir, dir, ncurves*sizeof(int));
-    num_segments++;
   }
+
+  // Set the new segment array
+  segments[num_segments] = new TMRSegment;
+  segments[num_segments]->num_curves = ncurves;
+  segments[num_segments]->curves = new TMRCurve*[ ncurves ];
+  segments[num_segments]->dir = new int[ ncurves ];
+  memcpy(segments[num_segments]->curves, curves, ncurves*sizeof(TMRCurve*));
+  memcpy(segments[num_segments]->dir, dir, ncurves*sizeof(int));
+  num_segments++;
 }
 
 /*

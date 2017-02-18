@@ -1,5 +1,6 @@
 #include "TMRTriangularize.h"
 #include "TMRPerfectMatchInterface.h"
+#include "TMRHashFunction.h"
 #include "predicates.h"
 #include <math.h>
 #include <limits.h>
@@ -485,6 +486,12 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   buckets = new EdgeHashNode*[ num_buckets ];
   memset(buckets, 0, num_buckets*sizeof(EdgeHashNode*));
 
+  // Allocate and initialize/zero the hash table data for the edges
+  num_active_triangles = 0;
+  num_active_buckets = 100;
+  active_buckets = new ActiveHashNode*[ num_active_buckets ];
+  memset(active_buckets, 0, num_active_buckets*sizeof(ActiveHashNode*));
+
   // Set the initial root/current location of the doubly-linked
   // triangle list structure. These are allocated as we add new triangles.
   list_start = NULL;
@@ -674,6 +681,16 @@ TMRTriangularize::~TMRTriangularize(){
     }
   }
 
+  // Free the data for the active triangles
+  for ( int i = 0; i < num_active_buckets; i++ ){
+    ActiveHashNode *node = active_buckets[i];
+    while (node){
+      ActiveHashNode *tmp = node;
+      node = node->next;
+      delete tmp;
+    }
+  }
+
   // Free the doubly linked edge list
   while (list_start){
     TriListNode *tmp = list_start;
@@ -810,7 +827,7 @@ void TMRTriangularize::writeToVTK( const char *filename ){
   Retrieve the edge hash
 */
 inline uint32_t TMRTriangularize::getEdgeHash( uint32_t x, uint32_t y ){
-  return (x * 0x1f1f1f1f) ^ y;
+  return TMRIntegerPairHash(x, y);
 }
 
 /*
@@ -996,6 +1013,11 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
   // just some of the edges (1 or 2 out of 3 is bad!)
   int success = 1;
 
+  // Delete the triangle if the status is active
+  if (tri.status == ACTIVE){
+    deleteActiveTriangle(&tri);
+  }
+
   // Set the combinations of edge pairs that will be added
   // to the hash table
   uint32_t edge_pairs[][2] = {{tri.u, tri.v},
@@ -1089,6 +1111,172 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
 
     // Keep track of each individual edge
     success = success && edge_success;
+  }
+
+  return success;
+}
+
+/*
+  Retrieve the triangle hash
+*/
+inline uint32_t TMRTriangularize::getTriangleHash( TMRTriangle *tri ){
+  return TMRIntegerTripletHash(tri->u, tri->v, tri->w);
+}
+
+/*
+  Add a triangle to the mesh
+*/
+int TMRTriangularize::addActiveTriangle( TMRTriangle *tri ){
+  int success = 1;
+
+  // Redistribute the members in the hash table if required
+  if (num_active_triangles > 10*num_active_buckets){
+    // Create a new array of buckets, twice the size of the old array
+    // of buckets and re-insert the entries back into the new array
+    int num_old_buckets = num_active_buckets;
+    num_active_buckets *= 2;
+
+    // Create a new array pointing to the new buckets and the
+    // end of the bucket array
+    ActiveHashNode **new_buckets = new ActiveHashNode*[ num_active_buckets ];
+    ActiveHashNode **end_buckets = new ActiveHashNode*[ num_active_buckets ];
+    memset(new_buckets, 0, num_active_buckets*sizeof(ActiveHashNode*));
+    memset(end_buckets, 0, num_active_buckets*sizeof(ActiveHashNode*));
+
+    // Assign the new buckets
+    for ( int i = 0; i < num_old_buckets; i++ ){
+      ActiveHashNode *node = active_buckets[i];
+
+      while (node){
+        // Get the new hash values
+        ActiveHashNode *tmp = node->next;
+        uint32_t value = getTriangleHash(node->tri);
+        uint32_t bucket = value % num_active_buckets;
+        
+        // If the new bucket linked list does not exist
+        if (!new_buckets[bucket]){
+          new_buckets[bucket] = new ActiveHashNode();
+          new_buckets[bucket]->next = NULL;
+          new_buckets[bucket]->tri = node->tri;
+          delete node;
+          end_buckets[bucket] = new_buckets[bucket];
+        }
+        else {
+          end_buckets[bucket]->next = new ActiveHashNode();
+          end_buckets[bucket] = end_buckets[bucket]->next;
+          end_buckets[bucket]->next = NULL;
+          end_buckets[bucket]->tri = node->tri;
+          delete node;
+        }
+        
+        node = tmp;
+      }
+    }
+
+    delete [] end_buckets;
+    delete [] active_buckets;
+    active_buckets = new_buckets;
+  }
+
+  // Add the triangle to the hash table
+  uint32_t value = getTriangleHash(tri);
+  uint32_t bucket = value % num_active_buckets;
+  if (!active_buckets[bucket]){
+    // Create the node and assign the values
+    active_buckets[bucket] = new ActiveHashNode();
+    active_buckets[bucket]->tri = tri;
+    active_buckets[bucket]->next = NULL;
+
+    // Increase the number of active triangles
+    num_active_triangles++;
+  }
+  else {
+    // Scan through to the end of the array and set the pointer to
+    // the triangle node that contains the 
+    ActiveHashNode *node = active_buckets[bucket];
+    while (node){
+      // Check whether the edge is already in the hash table
+      if (node->tri->u == tri->u && 
+          node->tri->v == tri->v && 
+          node->tri->w == tri->w){
+        // The triangle already exists. Replace the pointer
+        // and quit. Call this a failure...
+        success = 0;
+
+        // Overwite the triangle
+        node->tri = tri;
+
+        // Set the pointer to NULL so that the new node will not be
+        // created
+        node = NULL;
+        break;
+      }
+
+      // If the next node does not exist, then break 
+      if (!node->next){
+        break;
+      }
+
+      // Increment the node to the next position
+      node = node->next;
+    }
+
+    if (node){
+      // Create the new hash node
+      node->next = new ActiveHashNode();
+      node = node->next;
+
+      // Set the data into the object
+      node->tri = tri;
+      node->next = NULL;
+
+      // Increase the number of active triangles
+      num_active_triangles++;
+    }
+    else {
+      success = 0;
+    }
+  }
+
+  return success;
+}
+
+/*
+  Delete a triangle from the mesh
+*/
+int TMRTriangularize::deleteActiveTriangle( TMRTriangle *tri ){
+  int success = 1;
+
+  // Get the hash values and access the first entry of the bucket
+  // it's listed under
+  uint32_t value = getTriangleHash(tri);
+  uint32_t bucket = value % num_active_buckets;
+  ActiveHashNode *node = active_buckets[bucket];
+  ActiveHashNode *prev = node;
+  
+  while (node){
+    // The edge matches, we have to delete this triangle
+    if (tri->u == node->tri->u && 
+        tri->v == node->tri->v && 
+        tri->w == node->tri->w){
+      // Delete the edge from the hash table
+      if (node == prev){
+        active_buckets[bucket] = node->next;
+        delete node;
+        num_active_triangles--;
+      }
+      else {
+        prev->next = node->next;
+        delete node;
+        num_active_triangles--;
+      }
+
+      success = 1;
+      break;
+    }
+
+    prev = node;
+    node = node->next;
   }
 
   return success;
@@ -1584,6 +1772,7 @@ void TMRTriangularize::frontal( double h ){
     for ( int k = 0; k < 3; k++ ){
       if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
         node->tri.status = ACTIVE;
+        addActiveTriangle(&node->tri);
         break;
       }
     }
@@ -1595,13 +1784,31 @@ void TMRTriangularize::frontal( double h ){
   int iter = 0;
   while (1){
     if (iter % 1000 == 0){
-      printf("Iteration %d  num_triangles %d\n", iter, num_triangles);
+      printf("Iteration %d  num_triangles %d  num_active = %d\n", 
+             iter, num_triangles, num_active_triangles);
     }
     iter++;
 
     // The pointer to the triangle that we're going to use next
     TMRTriangle *tri = NULL;
 
+    // Search through all active nodes
+    for ( int i = 0; i < num_active_buckets; i++ ){
+      ActiveHashNode *act = active_buckets[i];
+      while (act){
+        if (!tri){
+          tri = act->tri;
+        }
+        else if (act->tri->quality > tri->quality){
+          tri = act->tri;
+        }
+
+        // Increment the active node pointer
+        act = act->next;
+      }
+    }
+
+    /*
     // Find the first triangle in the list that is tagged as being
     // active. This search could be made more efficient by storing the
     // active triangles separately.
@@ -1617,6 +1824,7 @@ void TMRTriangularize::frontal( double h ){
       }
       start = start->next;
     }
+    */
 
     // We've failed to find any triangle in the active set of
     // triangles
@@ -1814,6 +2022,7 @@ void TMRTriangularize::frontal( double h ){
         for ( int k = 0; k < 3; k++ ){
           if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
             ptr->tri.status = ACTIVE;
+            addActiveTriangle(&ptr->tri);
             flag = 1;
             break;
           }
@@ -1827,6 +2036,7 @@ void TMRTriangularize::frontal( double h ){
             completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
             if (adjacent && adjacent->status == ACCEPTED){
               ptr->tri.status = ACTIVE;
+              addActiveTriangle(&ptr->tri);
               break;
             }
           }
