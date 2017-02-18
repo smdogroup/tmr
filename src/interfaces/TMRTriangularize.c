@@ -859,9 +859,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
     list_end = list_end->next;
   }
 
-  // Set the search tag to zero
-  list_end->tri.status = 0;
-  list_end->tri.tag = 0;
+  list_end->tri.status = NO_STATUS;
 
   // Set the pointer to the list of triangles
   pts_to_tris[tri.u] = &(list_end->tri);
@@ -1975,16 +1973,9 @@ void TMRTriangularize::frontal( double h ){
     addPointToMesh(pt, pt_tri);
     pt_tri = NULL;
 
-    // Complete me with the newly created triangle with the
-    completeMe(u, v, &pt_tri);
-    if (pt_tri){
-      pt_tri->status = ACCEPTED;
-    }
-
     // Compute the circumcircles of the new triangles and check
     // whether they belong in the done category or not...
     TriListNode *ptr = list_start;
-    int count = 0;
     if (list_marker){
       ptr = list_marker->next;
     }
@@ -1998,7 +1989,15 @@ void TMRTriangularize::frontal( double h ){
         ptr->tri.status = WAITING;
       }
       ptr = ptr->next;
-      count++;
+    }
+
+    // Complete me with the newly created triangle with the
+    completeMe(u, v, &pt_tri);
+    if (pt_tri){
+      if (pt_tri->status == ACTIVE){
+        deleteActiveTriangle(pt_tri);
+      }
+      pt_tri->status = ACCEPTED;
     }
 
     // Scan through the list of the added triangles and mark which
