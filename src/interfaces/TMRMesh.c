@@ -361,6 +361,9 @@ void TMRSurfaceMesh::mesh( double htarget ){
   delete [] tri_neighbors;
   delete [] dual_edges;
 
+  // Simplify the new quadrilateral mesh
+  simplifyQuads();
+
   // Print the quadrilateral mesh quality
   printQuadQuality();
 
@@ -387,6 +390,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
   computeNodeToElems(num_points, num_quads, 4, quads, &ptr, &pts_to_quads);
 
   // Smooth the mesh using a local optimization of node locations
+  num_smoothing_steps = 0;
   quadSmoothing(10*num_smoothing_steps, num_fixed_pts,
                 num_points, ptr, pts_to_quads, num_quads, quads, 
                 pts, X, surface);
@@ -791,10 +795,10 @@ double TMRSurfaceMesh::computeTriQuality( const int *tri,
   Recombine the triangulation into a quadrilateral mesh
 */
 void TMRSurfaceMesh::recombine( int ntris, const int tris[],
-                                  const int tri_neighbors[],
-                                  int num_edges, const int dual_edges[],
-                                  const TMRPoint *p, int *_num_quads, 
-                                  int **_new_quads ){
+                                const int tri_neighbors[],
+                                int num_edges, const int dual_edges[],
+                                const TMRPoint *p, int *_num_quads, 
+                                int **_new_quads ){
   // Count up the number of dual edges
   int num_dual_edges = 0;
   for ( int i = 0; i < num_edges; i++ ){
@@ -852,6 +856,170 @@ void TMRSurfaceMesh::recombine( int ntris, const int tris[],
   // Set the quads/output
   *_num_quads = num_new_quads;
   *_new_quads = new_quads;
+}
+
+/*
+  Identify and remove adjacent quadrilaterals that look like this:
+
+  x --- x             x ---- x
+  | \   |             |      |
+  |  x  |     ===>    |      |
+  |    \|             |      |
+  x --- x             x ---- x
+*/
+void TMRSurfaceMesh::simplifyQuads(){
+  // Compute the pointer -> quad information
+  int *ptr, *pts_to_quads;
+  computeNodeToElems(num_points, num_quads, 4, quads,
+                     &ptr, &pts_to_quads);
+
+  // First, remove the nodes that are only referred to twice,
+  // not on the boundary
+  int *new_pt_nums = new int[ num_points ];
+  memset(new_pt_nums, 0, num_points*sizeof(int));
+
+  for ( int i = num_fixed_pts; i < num_points; i++ ){
+    if (ptr[i+1]-ptr[i] == 2){
+      // Retrieve the pointers to the latest quadrilatral
+      int q1 = pts_to_quads[ptr[i]];
+      int q2 = pts_to_quads[ptr[i]+1];
+      int *quad1 = &quads[4*q1];
+      int *quad2 = &quads[4*q2];
+
+      // If any of the other points have been deleted, then
+      // skip combining this quadrilateral. This call could
+      // probably be repeated to remove this element, but this
+      // algorithm cannot handle it.
+      for ( int k = 0; k < 4; k++ ){
+        if (new_pt_nums[quad1[k]] < 0 || 
+            new_pt_nums[quad2[k]] < 0){
+          break;
+        }
+      }
+
+      // Reset the quadrilateral by removing the
+      int k1 = 0, k2 = 0;
+      while (quad1[k1] != i) k1++;
+      while (quad2[k2] != i) k2++;
+
+      // Adjust k2 so that it points to the node that
+      // will be inserted into the connectivity for the
+      // first quadrilateral
+      k2 += 2;
+      if (k2 >= 4){ k2 -= 4; }
+      quad1[k1] = quad2[k2];
+
+      // Set the point
+      quad2[0] = quad2[1] = quad2[2] = quad2[3] = -1;
+
+      // Set the points that we're going to eliminate
+      new_pt_nums[i] = -1;
+    }
+  }
+
+  // Remove the triangle quadrilaterals
+  for ( int i = 0; i < num_quads; i++ ){
+    for ( int j1 = 0; j1 < 2; j1++ ){
+      // Find the local node numbers that are on opposite
+      // sides of the quadrilateral
+      int j2 = j1 + 2;
+
+      // Compute the points that are on opposite sides
+      // of the quadrilateral
+      int p1 = quads[4*i+j1];
+      int p2 = quads[4*i+j2];
+      if (p1 >= 0 && p2 >= 0 &&
+          p1 >= num_fixed_pts &&
+          p2 >= num_fixed_pts &&
+          ptr[p1+1] - ptr[p1] == 3 &&
+          ptr[p2+1] - ptr[p2] == 3){
+        // Check whether any of the quadrilaterals which
+        // touch either p1 or p2 have negative indices
+        int flag = 0;
+        for ( int kp = ptr[p1]; kp < ptr[p1+1]; kp++ ){
+          int q = pts_to_quads[kp];
+          if (new_pt_nums[quads[4*q]] < 0 || 
+              new_pt_nums[quads[4*q+1]] < 0 ||
+              new_pt_nums[quads[4*q+2]] < 0 || 
+              new_pt_nums[quads[4*q+3]] < 0){
+            flag = 1;
+            break;
+          }
+        }
+        if (flag){ break; }
+        for ( int kp = ptr[p2]; kp < ptr[p2+1]; kp++ ){
+          int q = pts_to_quads[kp];
+          if (new_pt_nums[quads[4*q]] < 0 || 
+              new_pt_nums[quads[4*q+1]] < 0 ||
+              new_pt_nums[quads[4*q+2]] < 0 || 
+              new_pt_nums[quads[4*q+3]] < 0){
+            flag = 1;
+            break;
+          }
+        }
+        if (flag){ break; }
+
+        // Figure out which node to eliminate
+        new_pt_nums[p1] = -1;
+
+        // Set the quadrilaterals that refer to the node p1
+        // now instead to refer to the node p2
+        for ( int kp = ptr[p1]; kp < ptr[p1+1]; kp++ ){
+          int q = pts_to_quads[kp];
+          for ( int k = 0; k < 4; k++ ){
+            if (quads[4*q+k] == p1){
+              quads[4*q+k] = p2;
+            }
+          }
+        }
+
+        // Now eliminate the quad
+        quads[4*i] = quads[4*i+1] = quads[4*i+2] = quads[4*i+3] = -1;
+
+        // Quit this quadrilateral
+        break;
+      }
+    }
+  }
+
+  // Remove the points/parameters that have been eliminated
+  int j = 0;
+  for ( ; j < num_fixed_pts; j++ ){
+    new_pt_nums[j] = j;
+  }
+  for ( int i = num_fixed_pts; i < num_points; i++ ){
+    if (new_pt_nums[i] >= 0){
+      if (i != j){
+        // Copy over the points
+        pts[2*j] = pts[2*i];
+        pts[2*j+1] = pts[2*i+1];
+        X[j] = X[i];
+      }
+      new_pt_nums[i] = j;
+      j++;
+    }
+  }
+
+  // Set the new number of points
+  num_points = j;
+
+  // Set the new connectivity, overwriting the old connectivity 
+  j = 0;
+  for ( int i = 0; i < num_quads; i++ ){
+    if (quads[4*i] >= 0){
+      quads[4*j] = new_pt_nums[quads[4*i]];
+      quads[4*j+1] = new_pt_nums[quads[4*i+1]];
+      quads[4*j+2] = new_pt_nums[quads[4*i+2]];
+      quads[4*j+3] = new_pt_nums[quads[4*i+3]];
+      j++;
+    }
+  }
+
+  // Set the new number of quadrilaterals
+  num_quads = j;
+
+  // Free the new point numbers
+  delete [] new_pt_nums;
 }
 
 /*

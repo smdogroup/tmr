@@ -62,7 +62,7 @@ class TMRSurfaceMesh : public TMREntity {
   // Compute the connectivity between nodes to corresponding elements
   void computeNodeToElems( int nnodes, int nelems, int numelemnodes,
                            const int conn[], 
-                           int **_ptr, int **_nodetoelems );
+                           int **_ptr, int **_nodes_to_elems );
 
   // Compute the edges in a triangular or quadrilateral mesh
   void computeTriEdges( int nnodes, int ntris, const int conn[],
@@ -76,6 +76,10 @@ class TMRSurfaceMesh : public TMREntity {
   void recombine( int ntris, const int tris[], const int tri_neighbors[],
                   int num_edges, const int dual_edges[], const TMRPoint *p,
                   int *_num_quads, int **_new_quads );
+
+  // Simplify the quadrilateral mesh to remove points that make
+  // for a poor quadrilateral mesh
+  void simplifyQuads();
 
   // Compute recombined triangle information
   int getRecombinedQuad( const int tris[], const int trineighbors[],
