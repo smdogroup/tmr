@@ -390,7 +390,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
   computeNodeToElems(num_points, num_quads, 4, quads, &ptr, &pts_to_quads);
 
   // Smooth the mesh using a local optimization of node locations
-  num_smoothing_steps = 0;
+  num_smoothing_steps = 5;
   quadSmoothing(10*num_smoothing_steps, num_fixed_pts,
                 num_points, ptr, pts_to_quads, num_quads, quads, 
                 pts, X, surface);
@@ -938,7 +938,8 @@ void TMRSurfaceMesh::simplifyQuads(){
         int flag = 0;
         for ( int kp = ptr[p1]; kp < ptr[p1+1]; kp++ ){
           int q = pts_to_quads[kp];
-          if (new_pt_nums[quads[4*q]] < 0 || 
+          if (quads[4*q] < 0 ||
+              new_pt_nums[quads[4*q]] < 0 || 
               new_pt_nums[quads[4*q+1]] < 0 ||
               new_pt_nums[quads[4*q+2]] < 0 || 
               new_pt_nums[quads[4*q+3]] < 0){
@@ -949,7 +950,8 @@ void TMRSurfaceMesh::simplifyQuads(){
         if (flag){ break; }
         for ( int kp = ptr[p2]; kp < ptr[p2+1]; kp++ ){
           int q = pts_to_quads[kp];
-          if (new_pt_nums[quads[4*q]] < 0 || 
+          if (quads[4*q] < 0 ||
+              new_pt_nums[quads[4*q]] < 0 || 
               new_pt_nums[quads[4*q+1]] < 0 ||
               new_pt_nums[quads[4*q+2]] < 0 || 
               new_pt_nums[quads[4*q+3]] < 0){
