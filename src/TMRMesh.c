@@ -984,6 +984,10 @@ void TMRSurfaceMesh::simplifyQuads(){
     }
   }
 
+  // Free the pointer/quad pointer data
+  delete [] ptr;
+  delete [] pts_to_quads;
+
   // Remove the points/parameters that have been eliminated
   int j = 0;
   for ( ; j < num_fixed_pts; j++ ){

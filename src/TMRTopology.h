@@ -124,26 +124,4 @@ class TMRTopology : public TMREntity {
   TMRVertex **vertices;
 };
 
-/*
-  Create a geometry from the vertex, edge and face primitives
-*/
-class TMRMeshTopology : public TMREntity {
- public:
-  TMRMeshTopology( int _num_vertices, TMRVertex **_vertices,
-                   int _num_curves, TMRCurve **_curves,
-                   int _num_surfaces, TMRSurface *_surfaces );
-
-  // Verify the geometry makes sense the best we can....
-  // void verify();
-
-  // Create a mesh of the underlying geometry
-  
- private:
-  int num_vertices, num_curves, num_surfaces;
-  TMRVertex **vertices;
-  TMRCurve **curves;
-  TMRSurface **surfaces;
-
-};
-
 #endif // TMR_TOPOLOGY_H

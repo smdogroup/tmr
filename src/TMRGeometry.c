@@ -635,6 +635,9 @@ TMRCurveFromSurface::TMRCurveFromSurface( TMRSurface *_surface,
   pcurve->incref();
 }
 
+/*
+  Destroy the curve
+*/
 TMRCurveFromSurface::~TMRCurveFromSurface(){
   surface->decref();
   pcurve->decref();

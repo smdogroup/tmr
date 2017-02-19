@@ -13,6 +13,8 @@ CXX_OBJS = TMRBase.o \
 	TMRQuadrant.o \
 	TMRQuadForest.o \
 	TMRGeometry.o \
+	TMRTriangularize.o \
+	TMRMesh.o \
 	TMR_STLTools.o \
 	TMROctStiffness.o \
 	TMRBspline.o \
