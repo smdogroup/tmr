@@ -348,6 +348,8 @@ void TMRSurfaceMesh::mesh( double htarget ){
                      num_tri_edges, tri_edges,
                      num_points, pts, X, surface);
 
+  writeTrisToVTK("bspline_tris.vtk", ntris, tris);
+
   printTriQuality(ntris, tris);
 
   // Recombine the mesh into a quadrilateral mesh
@@ -492,7 +494,7 @@ void TMRSurfaceMesh::computeTriEdges( int nnodes, int ntris, const int tris[],
 
           // Flag to indicate that we have found the other edge (there
           // will only be at most one other match since this is
-          // planar)
+          // planar in parameter space)
           int quit = 0;
 
           // Search over all the edges on this quad, and see

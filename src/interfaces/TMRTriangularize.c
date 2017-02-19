@@ -859,6 +859,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
     list_end = list_end->next;
   }
 
+  list_end->tri.tag = 0;
   list_end->tri.status = NO_STATUS;
 
   // Set the pointer to the list of triangles
@@ -1805,24 +1806,6 @@ void TMRTriangularize::frontal( double h ){
         act = act->next;
       }
     }
-
-    /*
-    // Find the first triangle in the list that is tagged as being
-    // active. This search could be made more efficient by storing the
-    // active triangles separately.
-    TriListNode *start = list_start;
-    while (start){
-      if (start->tri.status == ACTIVE){
-        if (!tri){
-          tri = &(start->tri);
-        }
-        else if (start->tri.quality > tri->quality){
-          tri = &(start->tri);
-        }
-      }
-      start = start->next;
-    }
-    */
 
     // We've failed to find any triangle in the active set of
     // triangles

@@ -189,10 +189,10 @@ void test_surface_lofter( double htarget ){
   // (0,1) -- (1,1)
   //   |        |
   // (0,0) -- (1,0)
-  double pts1[] = {0.0, 0.0, 1.0, 0.0};
-  double pts2[] = {1.0, 0.0, 1.0, 1.0};
-  double pts3[] = {1.0, 1.0, 0.0, 1.0};
-  double pts4[] = {0.0, 1.0, 0.0, 0.0};
+  double pts1[] = {0.1, 0.0, 0.4, 0.0};
+  double pts2[] = {0.4, 0.0, 0.4, 1.0};
+  double pts3[] = {0.4, 1.0, 0.1, 1.0};
+  double pts4[] = {0.1, 1.0, 0.1, 0.0};
   TMRBsplinePcurve *p1 = new TMRBsplinePcurve(2, 2, pts1);
   TMRBsplinePcurve *p2 = new TMRBsplinePcurve(2, 2, pts2);
   TMRBsplinePcurve *p3 = new TMRBsplinePcurve(2, 2, pts3);
@@ -255,7 +255,7 @@ int main( int argc, char *argv[] ){
   double htarget = 0.1;
   for ( int i = 0; i < argc; i++ ){
     if (sscanf(argv[i], "h=%lf", &htarget) == 1){
-      if (htarget < 0.1){ htarget = 0.1; }
+      if (htarget < 0.01){ htarget = 0.01; }
       if (htarget > 1.0){ htarget = 1.0; }
     }
   }
