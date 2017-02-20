@@ -1174,6 +1174,51 @@ void TMRSurfaceMesh::writeTrisToVTK( const char *filename,
 }
 
 /*
+  Mesh the given geometry and retrieve either a regular mesh
+*/
+TMRMesh::TMRMesh( TMRGeometry *_geo ){
+  geo = _geo;
+  geo->incref();
+}
+
+TMRMesh::~TMRMesh(){
+  geo->decref();
+}
+
+/*
+  Mesh the underlying geometry
+*/
+void TMRMesh::mesh( double htarget ){
+  // Mesh the curves
+  int num_curves;
+  TMRCurve **curves;
+  geo->getCurves(&num_curves, &curves);
+  for ( int i = 0; i < num_curves; i++ ){
+    TMRCurveMesh *mesh = NULL;
+    curves[i]->getMesh(&mesh);
+    if (!mesh){
+      mesh = new TMRCurveMesh(curves[i]);
+      mesh->mesh(htarget);
+      curves[i]->setMesh(mesh);
+    }
+  }
+
+  // Mesh the surface
+  int num_surfaces;
+  TMRSurface **surfaces;
+  geo->getSurfaces(&num_surfaces, &surfaces);
+  for ( int i = 0; i < num_surfaces; i++ ){
+    TMRSurfaceMesh *mesh = NULL;
+    surfaces[i]->getMesh(&mesh);
+    if (!mesh){
+      mesh = new TMRSurfaceMesh(surfaces[i]);
+      mesh->mesh(htarget);
+      surfaces[i]->setMesh(mesh);
+    }
+  }
+}
+
+/*
   Apply Laplacian smoothing
 */
 void laplacianSmoothing( int nsmooth, int num_fixed_pts,

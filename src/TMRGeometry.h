@@ -275,4 +275,28 @@ class TMRSplitCurve : public TMRCurve {
   TMRCurve *curve;
 };
 
+/*
+  The TMR Geometry class. 
+
+  This contains the geometry objects -- vertices, curves and 
+  surfaces -- that are used to define the geometry of a model.
+*/
+class TMRGeometry : public TMREntity {
+ public:
+  TMRGeometry( int _num_vertices, TMRVertex **_vertices, 
+               int _num_curves, TMRCurve **_curves,
+               int _num_surfaces, TMRSurface **_surfaces );
+  ~TMRGeometry();
+
+  void getVertices( int *_num_vertices, TMRVertex ***_vertices );
+  void getCurves( int *_num_curves, TMRCurve ***_curves );
+  void getSurfaces( int *_num_surfaces, TMRSurface ***_surfaces );
+
+ private:
+  int num_vertices, num_curves, num_surfaces;
+  TMRVertex **vertices;
+  TMRCurve **curves;
+  TMRSurface **surfaces;
+};
+
 #endif // TMR_GEOMETRY_H

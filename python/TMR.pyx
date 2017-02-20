@@ -58,6 +58,18 @@ cdef class Surface:
             self.ptr.decref()
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
+    def addCurveSegment(self, curves, direct):
+        cdef int ncurves = len(curves)
+        cdef int *_dir = NULL
+        cdef TMRCurve **crvs = NULL
+        _dir = <int*>malloc(ncurves*sizeof(int))
+        crvs = <TMRCurve**>malloc(ncurves*sizeof(TMRCurve*))
+        for i in range(ncurves):
+            _dir[i] = direct[i]
+            crvs[i] = (<Curve>curves[i]).ptr
+        self.ptr.addCurveSegment(ncurves, crvs, _dir)
+        free(_dir)
+        free(crvs)
 
 cdef _init_Vertex(TMRVertex *ptr):
     vertex = Vertex()
@@ -170,3 +182,45 @@ cdef class CurveLofter:
     def createSurface(self, int kv):
         cdef TMRSurface *surf = self.ptr.createSurface(kv)
         return _init_Surface(surf)
+
+cdef class Geometry:
+    cdef TMRGeometry *ptr
+    def __cinit__(self, vertices, curves, surfaces):
+        cdef int nvertices = len(vertices)
+        cdef int ncurves = len(curves)
+        cdef int nsurfaces = len(surfaces)
+        cdef TMRVertex **verts = NULL
+        cdef TMRCurve **crvs = NULL
+        cdef TMRSurface **surfs = NULL
+        verts = <TMRVertex**>malloc(nvertices*sizeof(TMRVertex*))
+        crvs = <TMRCurve**>malloc(ncurves*sizeof(TMRCurve*))
+        surfs = <TMRSurface**>malloc(nsurfaces*sizeof(TMRSurface*))
+        for i in range(nvertices):
+            verts[i] = (<Vertex>vertices[i]).ptr
+        for i in range(ncurves):
+            crvs[i] = (<Curve>curves[i]).ptr
+        for i in range(nsurfaces):
+            surfs[i] = (<Surface>surfaces[i]).ptr
+        self.ptr = new TMRGeometry(nvertices, verts, ncurves, crvs, 
+                                   nsurfaces, surfs)
+        self.ptr.incref()
+        free(verts)
+        free(crvs)
+        free(surfs)
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+cdef class Mesh:
+    cdef TMRMesh *ptr
+    def __cinit__(self, Geometry geo):
+        self.ptr = new TMRMesh(geo.ptr)
+        self.ptr.incref()
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def mesh(self, double h):
+        self.ptr.mesh(h)

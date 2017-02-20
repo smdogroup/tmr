@@ -33,7 +33,7 @@ cdef extern from "TMRGeometry.h":
         void writeToVTK(char*)
 
     cdef cppclass TMRSurface(TMREntity):
-        void addCurveSegment(int, TMRCurve**, int**)
+        void addCurveSegment(int, TMRCurve**, int*)
         void writeToVTK(char*)
 
     cdef cppclass TMRPcurve(TMREntity):
@@ -56,6 +56,10 @@ cdef extern from "TMRGeometry.h":
     cdef cppclass TMRSplitCurve(TMRCurve):
         TMRSplitCurve(TMRCurve*, double, double)
         TMRSplitCurve(TMRCurve*, TMRVertex*, TMRVertex*)
+
+    cdef cppclass TMRGeometry(TMREntity):
+        TMRGeometry(int, TMRVertex**, int, TMRCurve**, 
+                    int, TMRSurface**)
 
 cdef extern from "TMRBspline.h":
     cdef cppclass TMRBsplineCurve(TMRCurve):
@@ -81,6 +85,11 @@ cdef extern from "TMRBspline.h":
     cdef cppclass TMRCurveLofter(TMREntity):
         TMRCurveLofter(TMRBsplineCurve**, int)
         TMRBsplineSurface* createSurface(int)
+
+cdef extern from "TMRMesh.h":
+    cdef cppclass TMRMesh(TMREntity):
+        TMRMesh(TMRGeometry*)
+        void mesh(double)
 
 cdef extern from "":
     TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)

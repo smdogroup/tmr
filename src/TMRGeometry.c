@@ -860,3 +860,78 @@ int TMRSplitCurve::evalPoint( double t, TMRPoint *X ){
   return curve->evalPoint(t, X);
 }
 
+/*
+  The TMRGeometry class containing all of the required geometry
+  objects.
+*/
+TMRGeometry::TMRGeometry( int _num_vertices, TMRVertex **_vertices, 
+                          int _num_curves, TMRCurve **_curves,
+                          int _num_surfaces, TMRSurface **_surfaces ){
+  num_vertices = _num_vertices;
+  num_curves = _num_curves;
+  num_surfaces = _num_surfaces;
+
+  vertices = new TMRVertex*[ num_vertices ];
+  curves = new TMRCurve*[ num_curves ];
+  surfaces = new TMRSurface*[ num_surfaces ];
+
+  for ( int i = 0; i < num_vertices; i++ ){
+    vertices[i] = _vertices[i];
+    vertices[i]->incref();
+  }
+
+  for ( int i = 0; i < num_curves; i++ ){
+    curves[i] = _curves[i];
+    curves[i]->incref();
+  }
+
+  for ( int i = 0; i < num_surfaces; i++ ){
+    surfaces[i] = _surfaces[i];
+    surfaces[i]->incref();
+  }
+}
+
+/*
+  Free the geometry objects
+*/
+TMRGeometry::~TMRGeometry(){
+  for ( int i = 0; i < num_vertices; i++ ){
+    vertices[i]->decref();
+  }
+  for ( int i = 0; i < num_curves; i++ ){
+    curves[i]->decref();
+  }
+  for ( int i = 0; i < num_surfaces; i++ ){
+    surfaces[i]->decref();
+  }
+  delete [] vertices;
+  delete [] curves;
+  delete [] surfaces;
+}
+
+/*
+  Retrieve the vertices
+*/
+void TMRGeometry::getVertices( int *_num_vertices, 
+                               TMRVertex ***_vertices ){
+  if (_num_vertices){ *_num_vertices = num_vertices; }
+  if (_vertices){ *_vertices = vertices; }
+}
+
+/*
+  Retrieve the curves
+*/
+void TMRGeometry::getCurves( int *_num_curves, 
+                             TMRCurve ***_curves ){
+  if (_num_curves){ *_num_curves = num_curves; }
+  if (_curves){ *_curves = curves; }
+}
+
+/*
+  Retrieve the surfaces
+*/
+void TMRGeometry::getSurfaces( int *_num_surfaces, 
+                               TMRSurface ***_surfaces ){
+  if (_num_surfaces){ *_num_surfaces = num_surfaces; }
+  if (_surfaces){ *_surfaces = surfaces; }
+}

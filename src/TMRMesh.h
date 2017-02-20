@@ -106,4 +106,24 @@ class TMRSurfaceMesh : public TMREntity {
   int *quads;
 };
 
+/*
+  Mesh the geometry
+*/
+class TMRMesh : public TMREntity {
+ public:
+  TMRMesh( TMRGeometry *_geo );
+  ~TMRMesh();
+
+  // Mesh the underlying geometry
+  void mesh( double htarget );
+
+  // Retrieve the ordered mesh
+
+  // Create a topology object (with underlying mesh geometry)
+
+ private:
+  // The underlying geometry object
+  TMRGeometry *geo;
+};
+
 #endif // TMR_MESH_H
