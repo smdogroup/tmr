@@ -82,5 +82,5 @@ cdef extern from "TMRBspline.h":
         TMRCurveLofter(TMRBsplineCurve**, int)
         TMRBsplineSurface* createSurface(int)
 
-
-
+cdef extern from "":
+    TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)

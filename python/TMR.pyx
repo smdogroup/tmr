@@ -19,6 +19,10 @@ from cpython cimport PyObject, Py_INCREF
 # Import the definitions
 from TMR cimport *
 
+# Include the mpi4py header
+cdef extern from "mpi-compat.h":
+   pass
+
 cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):
@@ -74,7 +78,6 @@ cdef _init_Surface(TMRSurface *ptr):
     return surface
 
 cdef class BsplineCurve(Curve):
-    cdef TMRBsplineCurve *cptr
     def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] pts, int k=4):
         cdef int nctl = pts.shape[0]
         cdef ku = k
@@ -85,8 +88,7 @@ cdef class BsplineCurve(Curve):
             p[i].x = pts[i,0]
             p[i].y = pts[i,1]
             p[i].z = pts[i,2]
-        self.cptr = new TMRBsplineCurve(nctl, ku, p)
-        self.ptr = self.cptr
+        self.ptr = new TMRBsplineCurve(nctl, ku, p)
         self.ptr.incref()
         free(p)
 
@@ -100,7 +102,6 @@ cdef class BsplinePcurve(Pcurve):
         self.ptr.incref()
 
 cdef class BsplineSurface(Surface):
-    cdef TMRBsplineSurface *bptr
     def __cinit__(self, np.ndarray[double, ndim=3, mode='c'] pts, int ku=4, int kv=4):
         cdef int nx = pts.shape[0]
         cdef int ny = pts.shape[1]
@@ -116,8 +117,7 @@ cdef class BsplineSurface(Surface):
                 p[i + j*nx].x = pts[i,j,0]
                 p[i + j*nx].y = pts[i,j,1]
                 p[i].z = pts[i,2]
-        self.bptr = new TMRBsplineSurface(nx, ny, kx, ky, p)
-        self.ptr = self.bptr
+        self.ptr = new TMRBsplineSurface(nx, ny, kx, ky, p)
         self.ptr.incref()
         free(p)
 
@@ -143,17 +143,22 @@ cdef class CurveInterpolation:
         return
 
     def createCurve(self, int ku):
-        '''Create the curve'''
-        cdef TMRCurve *curve = self.ptr.createCurve(ku)
+        cdef TMRBsplineCurve *curve = self.ptr.createCurve(ku)
         return _init_Curve(curve)
 
 cdef class CurveLofter:
     cdef TMRCurveLofter *ptr
     def __cinit__(self, curves):
         cdef int ncurves = len(curves)
-        cdef TMRBsplineCurve **crvs = <TMRBsplineCurve**>malloc(ncurves*sizeof(TMRBsplineCurve*))
+        cdef TMRBsplineCurve **crvs = NULL
+        cdef TMRBsplineCurve *bspline = NULL
+        crvs = <TMRBsplineCurve**>malloc(ncurves*sizeof(TMRBsplineCurve*))
         for i in range(ncurves):
-            crvs[i] = (<BsplineCurve>curves[i]).cptr
+            bspline =  _dynamicBsplineCurve((<Curve>curves[i]).ptr)
+            if bspline != NULL:
+               crvs[i] = bspline
+            else:
+               raise ValueError('All lofting curves must be of type BsplineCurve')
         self.ptr = new TMRCurveLofter(crvs, ncurves)
         self.ptr.incref()
         free(crvs)
