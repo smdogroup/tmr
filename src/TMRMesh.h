@@ -18,11 +18,12 @@ class TMRCurveMesh : public TMREntity {
   // Mesh the geometric object
   void mesh( double htarget );
 
-  // Order the unique mesh points uniquely
-  int orderMeshPts( int *num );
+  // Order the mesh points uniquely
+  int setNodeNums( int *num );
+  int getNodeNums( const int **_vars );
 
   // Retrieve the mesh points
-  void getMeshPts( int *_npts, const double **_pts, TMRPoint **X );
+  void getMeshPoints( int *_npts, const double **_pts, TMRPoint **X );
 
  private:
   TMRCurve *curve;
@@ -52,10 +53,14 @@ class TMRSurfaceMesh : public TMREntity {
   void mesh( double htarget );
 
   // Retrieve the mesh points
-  void getMeshPts( int *_npts, const double **_pts, TMRPoint **X );
+  void getMeshPoints( int *_npts, const double **_pts, TMRPoint **X );
 
-  // Order the unique mesh points uniquely
-  int orderMeshPts( int *num );
+  // Order the mesh points uniquely
+  int setNodeNums( int *num );
+  int getNodeNums( const int **_vars );
+
+  // Retrieve the local connectivity from this surface mesh
+  int getLocalConnectivity( const int **quads );
 
   // Write the quadrilateral mesh to a VTK format
   void writeToVTK( const char *filename );
@@ -128,13 +133,21 @@ class TMRMesh : public TMREntity {
   // Mesh the underlying geometry
   void mesh( double htarget );
 
-  // Retrieve the ordered mesh
+  // Retrieve the mesh components
+  int getMeshPoints( TMRPoint **_X );
+  int getMeshConnectivity( const int **_quads );
 
   // Create a topology object (with underlying mesh geometry)
 
  private:
   // The underlying geometry object
   TMRGeometry *geo;
+
+  // The number of nodes/quads in the mesh
+  int num_nodes;
+  int num_quads;
+  int *quads;
+  TMRPoint *X;  
 };
 
 #endif // TMR_MESH_H

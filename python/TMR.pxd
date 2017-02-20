@@ -90,6 +90,8 @@ cdef extern from "TMRMesh.h":
     cdef cppclass TMRMesh(TMREntity):
         TMRMesh(TMRGeometry*)
         void mesh(double)
+        int getMeshPoints(TMRPoint**)
+        int getMeshConnectivity(const int**)
 
 cdef extern from "":
     TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)

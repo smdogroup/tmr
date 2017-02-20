@@ -27,24 +27,49 @@ cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):
         self.ptr = NULL
+        
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+cdef _init_Vertex(TMRVertex *ptr):
+    vertex = Vertex()
+    vertex.ptr = ptr
+    vertex.ptr.incref()
+    return vertex
 
 cdef class Curve:
     cdef TMRCurve *ptr
     def __cinit__(self):
         self.ptr = NULL
+        
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def setVertices(self, Vertex v1, Vertex v2):
+       self.ptr.setVertices(v1.ptr, v2.ptr)
+
+    def getVertices(self):
+       cdef TMRVertex *v1 = NULL
+       cdef TMRVertex *v2 = NULL
+       self.ptr.getVertices(&v1, &v2)
+       return _init_Vertex(v1), _init_Vertex(v2)
+            
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
+
+cdef _init_Curve(TMRCurve *ptr):
+    curve = Curve()
+    curve.ptr = ptr
+    curve.ptr.incref()
+    return curve
 
 cdef class Pcurve:
     cdef TMRPcurve *ptr
     def __cinit__(self):
         self.ptr = NULL
+        
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
@@ -53,11 +78,14 @@ cdef class Surface:
     cdef TMRSurface *ptr
     def __cinit__(self):
         self.ptr = NULL
+        
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+            
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
+        
     def addCurveSegment(self, curves, direct):
         cdef int ncurves = len(curves)
         cdef int *_dir = NULL
@@ -70,18 +98,6 @@ cdef class Surface:
         self.ptr.addCurveSegment(ncurves, crvs, _dir)
         free(_dir)
         free(crvs)
-
-cdef _init_Vertex(TMRVertex *ptr):
-    vertex = Vertex()
-    vertex.ptr = ptr
-    vertex.ptr.incref()
-    return vertex
-
-cdef _init_Curve(TMRCurve *ptr):
-    curve = Curve()
-    curve.ptr = ptr
-    curve.ptr.incref()
-    return curve
 
 cdef _init_Surface(TMRSurface *ptr):
     surface = Surface()
@@ -114,7 +130,8 @@ cdef class BsplinePcurve(Pcurve):
         self.ptr.incref()
 
 cdef class BsplineSurface(Surface):
-    def __cinit__(self, np.ndarray[double, ndim=3, mode='c'] pts, int ku=4, int kv=4):
+    def __cinit__(self, np.ndarray[double, ndim=3, mode='c'] pts,
+                  int ku=4, int kv=4):
         cdef int nx = pts.shape[0]
         cdef int ny = pts.shape[1]
         cdef kx = ku
@@ -132,6 +149,30 @@ cdef class BsplineSurface(Surface):
         self.ptr = new TMRBsplineSurface(nx, ny, kx, ky, p)
         self.ptr.incref()
         free(p)
+
+cdef class VertexFromPoint(Vertex):
+   def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] pt):
+      cdef TMRPoint point
+      point.x = pt[0]
+      point.y = pt[1]
+      point.z = pt[2]
+      self.ptr = new TMRVertexFromPoint(point)
+      self.ptr.incref()
+
+cdef class VertexFromCurve(Vertex):
+   def __cinit__(self, Curve curve, double t):
+      self.ptr = new TMRVertexFromCurve(curve.ptr, t)
+      self.ptr.incref()
+
+cdef class VertexFromSurface(Vertex):
+   def __cinit__(self, Surface surf, double u, double v):
+      self.ptr = new TMRVertexFromSurface(surf.ptr, u, v)
+      self.ptr.incref()
+
+cdef class CurveFromSurface(Curve):
+   def __cinit__(self, Surface surf, Pcurve pcurve):
+      self.ptr = new TMRCurveFromSurface(surf.ptr, pcurve.ptr)
+      self.ptr.incref()
 
 cdef class CurveInterpolation:
     cdef TMRCurveInterpolation *ptr
@@ -170,7 +211,7 @@ cdef class CurveLofter:
             if bspline != NULL:
                crvs[i] = bspline
             else:
-               raise ValueError('All lofting curves must be of type BsplineCurve')
+               raise ValueError('CurveLofter: All lofting curves must be of type BsplineCurve')
         self.ptr = new TMRCurveLofter(crvs, ncurves)
         self.ptr.incref()
         free(crvs)
@@ -224,3 +265,26 @@ cdef class Mesh:
 
     def mesh(self, double h):
         self.ptr.mesh(h)
+
+    def getMeshPoints(self):
+       cdef TMRPoint *X
+       cdef int npts = 0
+       npts = self.ptr.getMeshPoints(&X)
+       Xp = np.zeros((npts, 3), dtype=np.double)
+       for i in range(npts):
+          Xp[i,0] = X[i].x
+          Xp[i,1] = X[i].y
+          Xp[i,2] = X[i].z
+       return Xp
+
+    def getMeshConnectivity(self):
+       cdef const int *quads = NULL
+       cdef int nquads = 0
+       nquads = self.ptr.getMeshConnectivity(&quads)
+       q = np.zeros((nquads, 4), dtype=np.int)
+       for i in range(nquads):
+          q[i,0] = quads[4*i]
+          q[i,1] = quads[4*i+1]
+          q[i,2] = quads[4*i+2]
+          q[i,3] = quads[4*i+3]          
+       return q

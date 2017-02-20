@@ -4,6 +4,30 @@
 #include <stdio.h>
 
 /*
+  Set/retrieve vertex numbers
+*/
+int TMRVertex::setNodeNum( int *num ){
+  if (var == -1){
+    var = *num;
+    (*num)++;
+    return 1;
+  }
+  return 0;
+}
+
+/*
+  Retrieve the vertex number
+*/
+int TMRVertex::getNodeNum( int *num ){
+  if (var != -1){
+    *num = var;
+    return 1;
+  }
+  return 0;
+}
+
+
+/*
   Build the curve without specifying the start/end vertices
 */
 TMRCurve::TMRCurve(){

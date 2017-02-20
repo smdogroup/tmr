@@ -136,31 +136,47 @@ void TMRCurveMesh::mesh( double htarget ){
   Order the internal mesh points and return the number of owned
   points that were ordered.
 */
-int TMRCurveMesh::orderMeshPts( int *num ){
+int TMRCurveMesh::setNodeNums( int *num ){
   if (!vars && pts){
+    // Retrieve the vertices
+    TMRVertex *v1, *v2;
+    curve->getVertices(&v1, &v2);
+
+    // Allocate/set the node numbers
     vars = new int[ npts ];
+
+    // Get the variable numbers 
+    v1->getNodeNum(&vars[0]);
+    v2->getNodeNum(&vars[npts-1]);
+
+    // Set the internal node numbers
     for ( int i = 1; i < npts-1; i++ ){
       vars[i] = *num;
       (*num)++;
     }
 
-    // Retrieve the vertices
-    TMRVertex *v1, *v2;
-    curve->getVertices(&v1, &v2);
-
-    // Get the variable numbers 
-
     return npts-1;
   }
 
   return 0;
-} 
+}
+
+/*
+  Retrieve the internal node numbers, associated with the same
+  set of points/same order as the getMeshPoints code
+*/
+int TMRCurveMesh::getNodeNums( const int **_vars ){
+  if (_vars){
+    *_vars = vars;
+  }
+  return npts;
+}
 
 /*
   Get the mesh points
 */
-void TMRCurveMesh::getMeshPts( int *_npts, const double **_pts, 
-                               TMRPoint **_X ){
+void TMRCurveMesh::getMeshPoints( int *_npts, const double **_pts, 
+                                  TMRPoint **_X ){
   if (_npts){ *_npts = npts; }
   if (_pts){ *_pts = pts; }
   if (_X){ *_X = X; }
@@ -179,6 +195,16 @@ void TMRCurveMesh::getMeshPts( int *_npts, const double **_pts,
 TMRSurfaceMesh::TMRSurfaceMesh( TMRSurface *surf ){
   surface = surf;
   surface->incref();
+
+  num_fixed_pts = 0;
+  num_points = 0;
+  num_quads = 0;
+
+  // NULL things that will be used later
+  pts = NULL;
+  X = NULL;
+  quads = NULL;
+  vars = NULL;
 }
 
 /*
@@ -186,6 +212,10 @@ TMRSurfaceMesh::TMRSurfaceMesh( TMRSurface *surf ){
 */
 TMRSurfaceMesh::~TMRSurfaceMesh(){
   surface->decref();
+  if (pts){ delete [] pts; }
+  if (X){ delete [] X; }
+  if (quads){ delete [] quads; }
+  if (vars){ delete [] vars; }
 }
 
 /*
@@ -218,7 +248,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
       
       // Get the number of points associated with the curve
       int npts;
-      mesh->getMeshPts(&npts, NULL, NULL);
+      mesh->getMeshPoints(&npts, NULL, NULL);
       
       // Update the total number of points
       total_num_pts += npts-1;
@@ -267,7 +297,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
       // Get the mesh points corresponding to this curve
       int npts;
       const double *tpts;
-      mesh->getMeshPts(&npts, &tpts, NULL);
+      mesh->getMeshPoints(&npts, &tpts, NULL);
       
       // Find the point on the curve
       if (dir[i] > 0){
@@ -427,6 +457,85 @@ void TMRSurfaceMesh::mesh( double htarget ){
 
   // Print the quadrilateral mesh quality
   printQuadQuality();
+}
+
+/*
+  Retrieve the mesh points and parametric locations
+*/
+void TMRSurfaceMesh::getMeshPoints( int *_npts, const double **_pts, 
+                                    TMRPoint **_X ){
+  if (_npts){ *_npts = num_points; }
+  if (_pts){ *_pts = pts; }
+  if (_X){ *_X = X; }
+}
+
+/*
+  Set the node numbers internally
+*/
+int TMRSurfaceMesh::setNodeNums( int *num ){
+  if (!vars){
+    vars = new int[ num_points ];
+
+    // Retrieve the boundary node numbers from the surface loops
+    int pt = 0;
+    for ( int k = 0; k < surface->getNumSegments(); k++ ){
+      // Get the curve information for this loop segment
+      int ncurves;
+      TMRCurve **curves;
+      const int *dir;
+      surface->getCurveSegment(k, &ncurves, &curves, &dir);
+
+      for ( int i = 0; i < ncurves; i++ ){
+        // Retrieve the underlying curve mesh
+        TMRCurveMesh *mesh = NULL;
+        curves[i]->getMesh(&mesh);
+
+        // Retrieve the variable numbers for this loop
+        const int *curve_vars;
+        int npts = mesh->getNodeNums(&curve_vars);
+      
+        // Find the point on the curve
+        if (dir[i] > 0){
+          for ( int j = 0; j < npts-1; j++, pt++ ){
+            vars[pt] = curve_vars[j];
+          }
+        }
+        else {
+          for ( int j = npts-1; j >= 1; j--, pt++ ){
+            vars[pt] = curve_vars[j];
+          }
+        }
+      }
+    }
+
+    // Now order the variables as they arrive
+    for ( ; pt < num_points; pt++ ){
+      vars[pt] = *num;
+      (*num)++;
+    }
+
+    // Return the number of points that have been allocated
+    return num_points - num_fixed_pts;
+  }
+
+  return 0;
+}
+
+/*
+  Retrieve the mapping between the local connectivity and the global
+  node numbers
+*/
+int TMRSurfaceMesh::getNodeNums( const int **_vars ){
+  if (_vars){ *_vars = vars; }
+  return num_points;  
+}
+
+/*
+  Get the local connectivity
+*/
+int TMRSurfaceMesh::getLocalConnectivity( const int **_quads ){
+  if (_quads){ *_quads = quads; }
+  return num_quads;
 }
 
 /*
@@ -1205,10 +1314,18 @@ void TMRSurfaceMesh::writeTrisToVTK( const char *filename,
 TMRMesh::TMRMesh( TMRGeometry *_geo ){
   geo = _geo;
   geo->incref();
+
+  // Set the mesh properties
+  num_nodes = 0;
+  num_quads = 0;
+  quads = NULL;
+  X = NULL;
 }
 
 TMRMesh::~TMRMesh(){
   geo->decref();
+  if (quads){ delete [] quads; }
+  if (X){ delete [] X; }
 }
 
 /*
@@ -1242,6 +1359,87 @@ void TMRMesh::mesh( double htarget ){
       surfaces[i]->setMesh(mesh);
     }
   }
+
+  // Now that we're done meshing, go ahead and uniquely order
+  // the nodes in the mesh
+  int num = 0;
+  int num_vertices;
+  TMRVertex **vertices;
+  geo->getVertices(&num_vertices, &vertices);
+  for ( int i = 0; i < num_vertices; i++ ){
+    vertices[i]->setNodeNum(&num);
+  }
+
+  // Order the curves
+  for ( int i = 0; i < num_curves; i++ ){
+    TMRCurveMesh *mesh = NULL;
+    curves[i]->getMesh(&mesh);
+    mesh->setNodeNums(&num);
+  }
+
+  // Order the surfaces
+  for ( int i = 0; i < num_surfaces; i++ ){
+    TMRSurfaceMesh *mesh = NULL;
+    surfaces[i]->getMesh(&mesh);
+    mesh->setNodeNums(&num);
+  }
+
+  // Set the number of nodes in the mesh
+  num_nodes = num; 
+
+  // Count up the number of quadrilaterals in the mesh
+  num_quads = 0;
+  for ( int i = 0; i < num_surfaces; i++ ){
+    TMRSurfaceMesh *mesh = NULL;
+    surfaces[i]->getMesh(&mesh);
+    num_quads += mesh->getLocalConnectivity(NULL);
+  }
+
+  // Allocate the global arrays
+  X = new TMRPoint[ num_nodes ];
+  quads = new int[ 4*num_quads ];
+
+  // Set the values into the global arrays
+  int *q = quads;
+  for ( int i = 0; i < num_surfaces; i++ ){
+    // Get the mesh
+    TMRSurfaceMesh *mesh = NULL;
+    surfaces[i]->getMesh(&mesh);
+
+    // Get the local mesh points
+    int npts;
+    TMRPoint *Xpts;
+    mesh->getMeshPoints(&npts, NULL, &Xpts);
+
+    // Get the local quadrilateral connectivity
+    const int *quad_local;
+    int nlocal = mesh->getLocalConnectivity(&quad_local);
+
+    // Get the local to global variable numbering
+    const int *vars;
+    mesh->getNodeNums(&vars);
+
+    // Set the quadrilateral connectivity
+    for ( int j = 0; j < 4*nlocal; j++ ){
+      q[0] = vars[quad_local[j]];
+      q++;
+    }
+
+    // Set the node locations
+    for ( int j = 0; j < npts; j++ ){
+      X[vars[j]] = Xpts[j];
+    }
+  }
+}
+
+int TMRMesh::getMeshPoints( TMRPoint **_X ){
+  if (_X){ *_X = X; }
+  return num_nodes;
+}
+
+int TMRMesh::getMeshConnectivity( const int **_quads ){
+  if (_quads){ *_quads = quads; }
+  return num_quads;
 }
 
 /*

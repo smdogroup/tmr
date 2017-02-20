@@ -157,22 +157,46 @@ surfaces = [surface]
 
 surface.writeToVTK('wing.vtk')
 
+# Create the parametric curves
 p1 = TMR.BsplinePcurve(np.array([[.1, 0.], [.4, .0]]))
 p2 = TMR.BsplinePcurve(np.array([[.4, 0.], [.4, 1.]]))
 p3 = TMR.BsplinePcurve(np.array([[.4, 1.], [.1, 1.]]))
 p4 = TMR.BsplinePcurve(np.array([[.1, 1.], [.1, .0]]))
 
+# Create the curves parametrically along the surface
 curves = []
 curves.append(TMR.CurveFromSurface(surface, p1))
 curves.append(TMR.CurveFromSurface(surface, p2))
 curves.append(TMR.CurveFromSurface(surface, p3))
 curves.append(TMR.CurveFromSurface(surface, p4))
 
+# Create the vertices from the curves
 v1 = TMR.VertexFromCurve(curves[0], 0.0)
 v2 = TMR.VertexFromCurve(curves[1], 0.0)
 v3 = TMR.VertexFromCurve(curves[2], 0.0)
 v4 = TMR.VertexFromCurve(curves[3], 0.0)
 vertices = [v1, v2, v3, v4]
 
+# Set the vertices in the curves
+curves[0].setVertices(v1, v2)
+curves[1].setVertices(v2, v3)
+curves[2].setVertices(v3, v4)
+curves[3].setVertices(v4, v1)
+
+# Set the curve segments around the surface
+direct = [1, 1, 1, 1]
+surface.addCurveSegment(curves, direct)
+
 geo = TMR.Geometry(vertices, curves, surfaces)
 mesh = TMR.Mesh(geo)
+
+# Mesh the geometry
+hval = 0.1
+mesh.mesh(hval)
+
+# Extract the quadrilaterals/points
+pts = mesh.getMeshPoints()
+quads = mesh.getMeshConnectivity()
+
+print pts
+print quads
