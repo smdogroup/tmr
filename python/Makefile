@@ -6,7 +6,8 @@ PY_INCLUDE = ${PYTHON_INCLUDE} -I${NUMPY_DIR} -I${MPI4PY_DIR}
 CYTHON_INCLUDE = -I${NUMPY_DIR} -I${MPI4PY_DIR}
 
 # locate shared objects
-CYTHON_SO = locate.${SO_EXT} 
+CYTHON_SO = locate.${SO_EXT} \
+	TMR.${SO_EXT}
 
 default: ${CYTHON_SO}
 
@@ -19,7 +20,10 @@ debug: default
 %.o:%.cpp
 	${CXX} ${TMR_CC_FLAGS} ${PY_INCLUDE} -c $< -o $@
 
-locate.${SO_EXT}:locate.o LocatePoint.o
+%.${SO_EXT}:%.o
+	${CXX} ${SO_LINK_FLAGS} $< ${TMR_LD_FLAGS} -o $@
+
+locate.${SO_EXT}: locate.o LocatePoint.o
 	${CXX} ${SO_LINK_FLAGS} $< LocatePoint.o -L/usr/lib -llapack ${TMR_LD_FLAGS} -o $@
 
 clean:
