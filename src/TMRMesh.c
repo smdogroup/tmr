@@ -60,6 +60,7 @@ TMRCurveMesh::TMRCurveMesh( TMRCurve *_curve ){
   npts = 0;
   pts = NULL;
   X = NULL;
+  vars = NULL;
 }
 
 /*
@@ -69,6 +70,7 @@ TMRCurveMesh::~TMRCurveMesh(){
   curve->decref();
   if (pts){ delete [] pts; }
   if (X){ delete [] X; }
+  if (vars){ delete [] vars; }
 }
 
 /*
@@ -131,10 +133,34 @@ void TMRCurveMesh::mesh( double htarget ){
 }
 
 /*
+  Order the internal mesh points and return the number of owned
+  points that were ordered.
+*/
+int TMRCurveMesh::orderMeshPts( int *num ){
+  if (!vars && pts){
+    vars = new int[ npts ];
+    for ( int i = 1; i < npts-1; i++ ){
+      vars[i] = *num;
+      (*num)++;
+    }
+
+    // Retrieve the vertices
+    TMRVertex *v1, *v2;
+    curve->getVertices(&v1, &v2);
+
+    // Get the variable numbers 
+
+    return npts-1;
+  }
+
+  return 0;
+} 
+
+/*
   Get the mesh points
 */
-void TMRCurveMesh::getMesh( int *_npts, const double **_pts, 
-                            TMRPoint **_X ){
+void TMRCurveMesh::getMeshPts( int *_npts, const double **_pts, 
+                               TMRPoint **_X ){
   if (_npts){ *_npts = npts; }
   if (_pts){ *_pts = pts; }
   if (_X){ *_X = X; }
@@ -192,7 +218,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
       
       // Get the number of points associated with the curve
       int npts;
-      mesh->getMesh(&npts, NULL, NULL);
+      mesh->getMeshPts(&npts, NULL, NULL);
       
       // Update the total number of points
       total_num_pts += npts-1;
@@ -241,7 +267,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
       // Get the mesh points corresponding to this curve
       int npts;
       const double *tpts;
-      mesh->getMesh(&npts, &tpts, NULL);
+      mesh->getMeshPts(&npts, &tpts, NULL);
       
       // Find the point on the curve
       if (dir[i] > 0){

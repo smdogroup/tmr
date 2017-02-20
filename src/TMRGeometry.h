@@ -24,11 +24,18 @@ class TMRSurfaceMesh;
 */
 class TMRVertex : public TMREntity {
  public:
-  TMRVertex(){}
+  TMRVertex(){ var = -1; }
   virtual ~TMRVertex(){}
 
   // Evalue the point
   virtual int evalPoint( TMRPoint *p ) = 0;
+
+  // Set/retrieve the node numbers
+  int setNodeNum( int *num );
+  int getNodeNum( int *num );
+
+ private:
+  int var;
 };
 
 /*

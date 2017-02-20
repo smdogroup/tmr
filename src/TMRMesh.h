@@ -18,17 +18,21 @@ class TMRCurveMesh : public TMREntity {
   // Mesh the geometric object
   void mesh( double htarget );
 
+  // Order the unique mesh points uniquely
+  int orderMeshPts( int *num );
+
   // Retrieve the mesh points
-  void getMesh( int *_npts, const double **_pts, TMRPoint **X );
+  void getMeshPts( int *_npts, const double **_pts, TMRPoint **X );
 
  private:
   TMRCurve *curve;
 
   // The parametric locations of the points that are obtained from
   // meshing the curve
-  int npts;
-  double *pts;
-  TMRPoint *X;
+  int npts; // number of points along the curve
+  double *pts; // Parametric node locations
+  TMRPoint *X; // Physical node locations
+  int *vars; // Global node variable numbers
 };
 
 /*
@@ -46,6 +50,12 @@ class TMRSurfaceMesh : public TMREntity {
   
   // Mesh the underlying geometric object
   void mesh( double htarget );
+
+  // Retrieve the mesh points
+  void getMeshPts( int *_npts, const double **_pts, TMRPoint **X );
+
+  // Order the unique mesh points uniquely
+  int orderMeshPts( int *num );
 
   // Write the quadrilateral mesh to a VTK format
   void writeToVTK( const char *filename );
@@ -95,11 +105,12 @@ class TMRSurfaceMesh : public TMREntity {
   // The underlying surface
   TMRSurface *surface;
 
-  // Points
+  // Points in the mesh
   int num_fixed_pts; // number of fixed points
   int num_points; // The number of point locations
   double *pts; // The parametric node locations
   TMRPoint *X; // The physical node locations
+  int *vars; // The global variable numbers
 
   // Quadrilateral mesh information
   int num_quads;

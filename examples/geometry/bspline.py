@@ -153,5 +153,26 @@ for i in xrange(5):
 kv = 4
 lofter = TMR.CurveLofter(lofts)
 surface = lofter.createSurface(kv)
+surfaces = [surface]
 
 surface.writeToVTK('wing.vtk')
+
+p1 = TMR.BsplinePcurve(np.array([[.1, 0.], [.4, .0]]))
+p2 = TMR.BsplinePcurve(np.array([[.4, 0.], [.4, 1.]]))
+p3 = TMR.BsplinePcurve(np.array([[.4, 1.], [.1, 1.]]))
+p4 = TMR.BsplinePcurve(np.array([[.1, 1.], [.1, .0]]))
+
+curves = []
+curves.append(TMR.CurveFromSurface(surface, p1))
+curves.append(TMR.CurveFromSurface(surface, p2))
+curves.append(TMR.CurveFromSurface(surface, p3))
+curves.append(TMR.CurveFromSurface(surface, p4))
+
+v1 = TMR.VertexFromCurve(curves[0], 0.0)
+v2 = TMR.VertexFromCurve(curves[1], 0.0)
+v3 = TMR.VertexFromCurve(curves[2], 0.0)
+v4 = TMR.VertexFromCurve(curves[3], 0.0)
+vertices = [v1, v2, v3, v4]
+
+geo = TMR.Geometry(vertices, curves, surfaces)
+mesh = TMR.Mesh(geo)
