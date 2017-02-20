@@ -1,5 +1,7 @@
 import numpy as np
+from mpi4py import MPI
 from tmr import TMR
+from tacs import TACS, elements, constitutive
 
 rae2822_pts = np.array([
    1.0000, 0.0000,
@@ -197,6 +199,57 @@ mesh.mesh(hval)
 # Extract the quadrilaterals/points
 pts = mesh.getMeshPoints()
 quads = mesh.getMeshConnectivity()
+npts = pts.shape[0]
+nquads = quads.shape[0]
 
-print pts
-print quads
+# Flip the quadrilateral ordering to 
+for i in xrange(nquads):
+    t = quads[i,2]
+    quads[i,2] = quads[i,3]
+    quads[i,3] = t
+
+# Flatten the arrays
+pts = pts.flatten()
+quads = (quads.flatten()).astype(np.intc)
+
+# Set the pointer to the connectivity array
+ptr = np.arange(0, 4*nquads+1, 4, dtype=np.intc)
+ids = np.arange(0, nquads, dtype=np.intc)
+
+# Create the tacs creator
+comm = MPI.COMM_WORLD
+vars_per_node = 6
+creator = TACS.Creator(comm, vars_per_node)
+creator.setGlobalConnectivity(npts, ptr, quads, ids)
+creator.setNodes(pts)
+
+# Set constitutive properties
+rho = 2500.0 # density, kg/m^3
+E = 70e9 # elastic modulus, Pa
+nu = 0.3 # poisson's ratio
+kcorr = 5.0 / 6.0 # shear correction factor
+ys = 350e6 # yield stress, Pa
+min_thickness = 0.002
+max_thickness = 0.20
+thickness = 0.02
+
+stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, thickness, 0,
+                             min_thickness, max_thickness)
+
+# Set the elements into TACS
+elems = []
+for i in xrange(nquads):
+    elems.append(elements.MITCShell(2, stiff))
+
+# Set the elements
+creator.setElements(elems)
+
+# Create the TACS object
+tacs = creator.createTACS()
+
+# Visualize it using FH5
+flag = (TACS.ToFH5.NODES |
+        TACS.ToFH5.DISPLACEMENTS |
+        TACS.ToFH5.STRAINS)
+f5 = TACS.ToFH5(tacs, TACS.PY_SHELL, flag)
+f5.writeToFile('mesh.f5')
