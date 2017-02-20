@@ -9,6 +9,9 @@ from libc.string cimport const_char
 cimport numpy as np
 import numpy as np
 
+cdef extern from "<stdint.h>":
+    ctypedef signed int int32_t
+
 cdef extern from "TMRBase.h":
     cdef cppclass TMREntity:
         void incref()
@@ -86,6 +89,13 @@ cdef extern from "TMRBspline.h":
         TMRCurveLofter(TMRBsplineCurve**, int)
         TMRBsplineSurface* createSurface(int)
 
+cdef extern from "":
+    TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
+
+cdef extern from "TMRTopology.h":
+    cdef cppclass TMRTopology(TMREntity):
+        pass
+
 cdef extern from "TMRMesh.h":
     cdef cppclass TMRMesh(TMREntity):
         TMRMesh(TMRGeometry*)
@@ -93,5 +103,47 @@ cdef extern from "TMRMesh.h":
         int getMeshPoints(TMRPoint**)
         int getMeshConnectivity(const int**)
 
-cdef extern from "":
-    TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
+cdef extern from "TMRQuadrant.h":
+    cdef cppclass TMRQuadrant:
+        int childId()
+        void getSibling(int, TMRQuadrant*)
+        void parent(TMRQuadrant*)
+        void edgeNeighbor(int, TMRQuadrant*)
+        void cornerNeighbor(int, TMRQuadrant*)
+        int contains(TMRQuadrant*)
+        int32_t x
+        int32_t y
+        int32_t level
+        int32_t face
+        int32_t tag
+
+    cdef cppclass TMRQuadrantArray:
+        TMRQuadrantArray(TMRQuadrant*, int)
+        TMRQuadrantArray* duplicate()
+        void getArray(TMRQuadrant**, int*)
+        void sort()
+        TMRQuadrant* contains(TMRQuadrant *q, int)
+
+cdef extern from "TMRQuadForest.h":
+    cdef cppclass TMRQuadForest(TMREntity):
+        TMRQuadForest(MPI_Comm)
+        MPI_Comm getMPIComm()
+        void setTopology(TMRTopology*)
+        void setConnectivity(int, const int*, int)
+        void setFullConnectivity(int, int, int, const int*, const int*)
+        void repartition()
+        void createTrees(int)
+        void createRandomTrees(int)
+        void refine(int*)
+        TMRQuadForest *duplicate()
+        TMRQuadForest *coarsen()
+        void balance(int)
+        void createNodes(int)
+        TMRQuadrantArray* getQuadsWithAttribute(const char*)
+        TMRQuadrantArray* getNodesWithAttribute(const char*)
+        void createMeshConn(const int**, const int*)
+        int getDepNodeConn(const int**, const int**, const double**)
+
+        # TACS-specific function that needs to be wrapped
+        # void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
+

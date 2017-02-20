@@ -3,6 +3,7 @@
 
 #include "TMRBase.h"
 #include "TMRGeometry.h"
+#include "TMRTopology.h"
 
 /*
   The mesh for a geometric curve
@@ -138,8 +139,12 @@ class TMRMesh : public TMREntity {
   int getMeshConnectivity( const int **_quads );
 
   // Create a topology object (with underlying mesh geometry)
+  TMRTopology* createTopology();
 
  private:
+  // Allocate and initialize the underlying mesh
+  void initMesh();
+
   // The underlying geometry object
   TMRGeometry *geo;
 

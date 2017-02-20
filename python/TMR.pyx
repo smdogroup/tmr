@@ -288,3 +288,82 @@ cdef class Mesh:
           q[i,2] = quads[4*i+2]
           q[i,3] = quads[4*i+3]          
        return q
+
+cdef class Topology:
+   cdef TMRTopology *ptr
+   def __cinit__(self):
+      self.ptr = NULL
+
+cdef class QuadrantArray:
+   cdef TMRQuadrantArray *ptr
+   def __cinit__(self):
+      self.ptr = NULL
+
+   def __dealloc__(self):
+      del self.ptr
+
+cdef _init_QuadrantArray(TMRQuadrantArray *array):
+   arr = QuadrantArray()
+   arr.ptr = array
+   return arr
+
+cdef class QuadForest:
+   cdef TMRQuadForest *ptr
+   def __cinit__(self, MPI.Comm comm=None):
+      cdef MPI_Comm c_comm = NULL
+      self.ptr = NULL
+      if comm is not None:
+         c_comm = comm.ob_mpi
+         self.ptr = new TMRQuadForest(c_comm)
+         self.ptr.incref()
+
+   def __dealloc__(self):
+      self.ptr.decref()
+
+   def setTopology(self, Topology topo):
+      self.ptr.setTopology(topo.ptr)
+
+   def repartition(self):
+      self.ptr.repartition()
+
+   def createTrees(self, int depth):
+      self.ptr.createRandomTrees(depth)
+
+   def refine(self, np.ndarray[ndim=1, dtype=np.int] refine):
+      self.ptr.refine(<int*>refine.data)
+
+   def duplicate(self):
+      cdef TMRQuadForest *dup = NULL
+      dup = self.ptr.duplicate()
+      return _init_QuadForest(dup)
+
+   def coarsen(self):
+      cdef TMRQuadForest *dup = NULL
+      dup = self.ptr.coarsen()
+      return _init_QuadForest(dup)
+
+   def balance(self, int btype):
+      self.ptr.balance(btype)
+
+   def createNodes(self, int order):
+      self.ptr.createNodes(order)
+
+   def getQuadsWithAttribute(self, char *attr):
+      cdef TMRQuadrantArray *array = NULL
+      array = self.ptr.getQuadsWithAttribute(attr)
+      return _init_QuadrantArray(array)
+
+   def getNodesWithAttribute(self, char *attr):
+      cdef TMRQuadrantArray *array = NULL
+      array = self.ptr.getNodesWithAttribute(attr)
+      return _init_QuadrantArray(array)
+
+      # void createMeshConn(const int**, const int*)
+      # int getDepNodeConn(const int**, const int**, const double**)
+   
+
+cdef _init_QuadForest(TMRQuadForest* ptr):
+    forest = QuadForest()
+    forest.ptr = ptr
+    forest.ptr.incref()
+    return forest

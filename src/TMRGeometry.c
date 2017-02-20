@@ -913,6 +913,8 @@ TMRGeometry::TMRGeometry( int _num_vertices, TMRVertex **_vertices,
     surfaces[i] = _surfaces[i];
     surfaces[i]->incref();
   }
+
+  verify();
 }
 
 /*
@@ -931,6 +933,62 @@ TMRGeometry::~TMRGeometry(){
   delete [] vertices;
   delete [] curves;
   delete [] surfaces;
+}
+
+/*
+  Verify that all objects that are referenced in the geometry have a
+  verifiable list name and that objects are referred to one or more
+  times (but not zero times!)
+*/
+int TMRGeometry::verify(){
+  int fail = 0;
+  int *verts = new int[ num_vertices ];
+  int *crvs = new int[ num_curves ];
+  memset(verts, 0, num_vertices*sizeof(int));
+  memset(crvs, 0, num_curves*sizeof(int));
+
+  for ( int face = 0; face < num_surfaces; face++ ){
+    int nseg = surfaces[face]->getNumSegments();
+    
+    for ( int k = 0; k < nseg; k++ ){
+      int ncurves;
+      TMRCurve **curves;
+      surfaces[face]->getCurveSegment(k, &ncurves, &curves, NULL);
+
+      // Loop over all of the curves and check whether the data exists
+      // or not
+      for ( int j = 0; j < ncurves; j++ ){
+        int cindex = getCurveIndex(curves[j]);
+        if (cindex < 0){
+          fail = 1;
+          fprintf(stderr, 
+                  "TMRGeometry error: Curve does not exist within curve list\n");
+        }
+
+        TMRVertex *v1, *v2;      
+        curves[j]->getVertices(&v1, &v2);
+        if (!v1 || !v2){
+          fail = 1;
+          fprintf(stderr, 
+                  "TMRGeometry error: Vertices not set for curve %d\n",
+                  cindex);
+        }
+
+        int v1index = getVertexIndex(v1);
+        int v2index = getVertexIndex(v2);
+        if (v1index < 0 || v2index < 0){
+          fail = 1;
+          fprintf(stderr, 
+                  "TMRGeometry error: Vertices do not exist within vertex list\n");
+        }
+      }
+    }
+  }
+
+  delete [] verts;
+  delete [] crvs;
+
+  return fail;
 }
 
 /*
@@ -958,4 +1016,41 @@ void TMRGeometry::getSurfaces( int *_num_surfaces,
                                TMRSurface ***_surfaces ){
   if (_num_surfaces){ *_num_surfaces = num_surfaces; }
   if (_surfaces){ *_surfaces = surfaces; }
+}
+
+/*
+  Retrieve the indices 
+*/
+int TMRGeometry::getVertexIndex( TMRVertex *vertex ){
+  int index = -1;
+  for ( int i = 0; i < num_vertices; i++ ){
+    if (vertices[i] == vertex){
+      index = i;
+      break;
+    }
+  }
+  return index;
+}
+
+int TMRGeometry::getCurveIndex( TMRCurve *curve ){
+  int index = -1;
+  for ( int i = 0; i < num_curves; i++ ){
+    if (curves[i] == curve){
+      index = i;
+      break;
+    }
+  }
+  return index;
+
+}
+
+int TMRGeometry::getSurfaceIndex( TMRSurface *surf ){
+  int index = -1;
+  for ( int i = 0; i < num_surfaces; i++ ){
+    if (surfaces[i] == surf){
+      index = i;
+      break;
+    }
+  }
+  return index;
 }

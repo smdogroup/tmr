@@ -53,6 +53,7 @@ extern MPI_Datatype TMRPoint_MPI_type;
 
 // Initialize and finalize the data type
 void TMRInitialize();
+int TMRIsInitialized();
 void TMRFinalize();
 
 /*

@@ -223,20 +223,11 @@ class TMRCurveFromSurface : public TMRCurve {
   TMRCurveFromSurface( TMRSurface *_surface, TMRPcurve *_pcurve );
   ~TMRCurveFromSurface();
 
-  // Get the parameter range for this edge
   void getRange( double *tmin, double *tmax );
-  
-  // Given the parametric point, evaluate the x,y,z location
   int evalPoint( double t, TMRPoint *X );
-
-  // Parametrize the curve on the given surface
   int getParamsOnSurface( TMRSurface *surface, double t, 
                           int dir, double *u, double *v );
-
-  // Given the point, find the parametric location
   int invEvalPoint( TMRPoint X, double *t );
-
-  // Given the parametric point, evaluate the derivative 
   int evalDeriv( double t, TMRPoint *Xt );
 
  private:
@@ -270,10 +261,7 @@ class TMRSplitCurve : public TMRCurve {
   TMRSplitCurve( TMRCurve *_curve, TMRVertex *p1, TMRVertex *p2 );
   TMRSplitCurve();
 
-  // Get the parameter range
   void getRange( double *tmin, double *tmax );
-
-  // Evaluate the point
   int evalPoint( double t, TMRPoint *X );
 
  private:
@@ -285,8 +273,8 @@ class TMRSplitCurve : public TMRCurve {
 /*
   The TMR Geometry class. 
 
-  This contains the geometry objects -- vertices, curves and 
-  surfaces -- that are used to define the geometry of a model.
+  This contains the geometry objects -- vertices, curves and surfaces
+  -- that are used to define the geometry of a model.
 */
 class TMRGeometry : public TMREntity {
  public:
@@ -299,7 +287,16 @@ class TMRGeometry : public TMREntity {
   void getCurves( int *_num_curves, TMRCurve ***_curves );
   void getSurfaces( int *_num_surfaces, TMRSurface ***_surfaces );
 
+  // Fast querying of geometric objects based on pointer values
+  int getVertexIndex( TMRVertex *vertex );
+  int getCurveIndex( TMRCurve *curve );
+  int getSurfaceIndex( TMRSurface *surf );
+
  private:
+  // Verify that everything is more-or-less well-defined
+  int verify();
+
+  // The verticies, curves and surfaces that define a BRep
   int num_vertices, num_curves, num_surfaces;
   TMRVertex **vertices;
   TMRCurve **curves;

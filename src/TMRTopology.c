@@ -83,12 +83,9 @@ void TMRFace::getEdges( TMREdge ***_edges, const int **_edge_dir ){
   The main topology class that contains the objects used to build the
   underlying mesh.  
 */
-TMRTopology::TMRTopology( MPI_Comm _comm,
-                          TMRVertex **_vertices, int _num_vertices,
+TMRTopology::TMRTopology( TMRVertex **_vertices, int _num_vertices,
                           TMREdge **_edges, int _num_edges,
                           TMRFace **_faces, int _num_faces ){
-  comm = _comm;
-
   // Record the nodes
   num_vertices = _num_vertices;
   vertices = new TMRVertex*[ num_vertices ];

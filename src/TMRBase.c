@@ -5,6 +5,9 @@
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
 */
 
+// Static flag to test if TMR is initialized or not
+static int TMR_is_initialized = 0;
+
 // The TMR data type for MPI useage
 MPI_Datatype TMROctant_MPI_type;
 MPI_Datatype TMRQuadrant_MPI_type;
@@ -14,27 +17,39 @@ MPI_Datatype TMRPoint_MPI_type;
   Initialize TMR data type
 */
 void TMRInitialize(){
-  MPI_Aint offset = 0;
-  MPI_Datatype type = MPI_INT32_T;
+  if (!TMR_is_initialized){
+    MPI_Aint offset = 0;
+    MPI_Datatype type = MPI_INT32_T;
 
-  // Create the TMROctant data type
-  int counts = 6;
-  MPI_Type_create_struct(1, &counts, &offset, &type, 
-			 &TMROctant_MPI_type);
-  MPI_Type_commit(&TMROctant_MPI_type);
+    // Create the TMROctant data type
+    int counts = 6;
+    MPI_Type_create_struct(1, &counts, &offset, &type, 
+                           &TMROctant_MPI_type);
+    MPI_Type_commit(&TMROctant_MPI_type);
 
-  // Create the TMRQudrant data type
-  counts = 5;
-  MPI_Type_create_struct(1, &counts, &offset, &type, 
-			 &TMRQuadrant_MPI_type);
-  MPI_Type_commit(&TMRQuadrant_MPI_type);
+    // Create the TMRQudrant data type
+    counts = 5;
+    MPI_Type_create_struct(1, &counts, &offset, &type, 
+                           &TMRQuadrant_MPI_type);
+    MPI_Type_commit(&TMRQuadrant_MPI_type);
 
-  // Create the TMRPoint data type
-  counts = 3;
-  type = MPI_DOUBLE;
-  MPI_Type_create_struct(1, &counts, &offset, &type, 
-			 &TMRPoint_MPI_type);
-  MPI_Type_commit(&TMRPoint_MPI_type);
+    // Create the TMRPoint data type
+    counts = 3;
+    type = MPI_DOUBLE;
+    MPI_Type_create_struct(1, &counts, &offset, &type, 
+                           &TMRPoint_MPI_type);
+    MPI_Type_commit(&TMRPoint_MPI_type);
+    
+    // Set the TMR initialization flag
+    TMR_is_initialized = 1;
+  }
+}
+
+/*
+  Check whether the TMR data types have been initialized or not
+*/
+int TMRIsInitialize(){
+  return TMR_is_initialized;
 }
 
 /*

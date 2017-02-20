@@ -232,6 +232,11 @@ static int compare_octant_tags( const void *a, const void *b ){
   Create the TMROctForest object
 */
 TMROctForest::TMROctForest( MPI_Comm _comm ){
+  // Initialize the TMR-specific MPI data types
+  if (!TMRIsInitialized){
+    TMRInitialize();
+  }
+
   // Set the MPI communicator
   comm = _comm;
   MPI_Comm_rank(comm, &mpi_rank);

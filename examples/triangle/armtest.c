@@ -148,15 +148,15 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   surf->incref();
 
   // Set the curves that form the outline of the bracket
-  TMRBsplineCurve *inner11 = createSemiCircle(p1, r1, 0.0);
-  TMRBsplineCurve *inner12 = createSemiCircle(p1, r1, M_PI);
-  TMRBsplineCurve *inner21 = createSemiCircle(p2, r2, 0.0);
-  TMRBsplineCurve *inner22 = createSemiCircle(p2, r2, M_PI);
-
   TMRBsplineCurve *outer1 = createSemiCircle(p1, r1+t, 0.5*M_PI);
   TMRBsplineCurve *outer2 = createSemiCircle(p2, r2+t, 1.5*M_PI);
   TMRBsplineCurve *line1 = createLine(p3, p4);
   TMRBsplineCurve *line2 = createLine(p5, p6);
+
+  TMRBsplineCurve *inner11 = createSemiCircle(p1, r1, 0.0);
+  TMRBsplineCurve *inner12 = createSemiCircle(p1, r1, M_PI);
+  TMRBsplineCurve *inner21 = createSemiCircle(p2, r2, 0.0);
+  TMRBsplineCurve *inner22 = createSemiCircle(p2, r2, M_PI);
 
   // Create the vertices
   int num_vertices = 8;
@@ -187,36 +187,50 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   
   // Create the curves
   int dir[4];
-  int num_curves = 4;
-  TMRCurve *curves[4];
+  int num_curves = 8;
+  TMRCurve *curves[8];
   curves[0] = outer1;  dir[0] = 1;
   curves[1] = line2;   dir[1] = 1;
   curves[2] = outer2;  dir[2] = 1;
   curves[3] = line1;   dir[3] =-1;
 
   // Add the outer curve segments
-  surf->addCurveSegment(num_curves, curves, dir);
+  surf->addCurveSegment(4, curves, dir);
 
   // Add the inner curve segments
-  num_curves = 2;
-  curves[0] = inner12;  dir[0] = -1;
-  curves[1] = inner11;  dir[1] = -1;  
-  surf->addCurveSegment(num_curves, curves, dir);
+  curves[4] = inner12;  dir[0] = -1;
+  curves[5] = inner11;  dir[1] = -1;  
+  surf->addCurveSegment(2, &curves[4], dir);
 
   // Add the inner curve segments
-  num_curves = 2;
-  curves[0] = inner21;  dir[0] = -1;
-  curves[1] = inner22;  dir[1] = -1;  
-  surf->addCurveSegment(num_curves, curves, dir);
+  curves[6] = inner21;  dir[0] = -1;
+  curves[7] = inner22;  dir[1] = -1;  
+  surf->addCurveSegment(2, &curves[6], dir);
 
   TMREntity::setTolerances(1e-14, 1e-14);
-
+  
+  // Create the geometry object
+  TMRSurface *surface = surf;
+  TMRGeometry *geo = new TMRGeometry(num_vertices, v, 
+                                     num_curves, curves, 
+                                     1, &surface);
+  geo->incref();
+  
   // Create the mesh
-  TMRSurfaceMesh *mesh = new TMRSurfaceMesh(surf);
+  TMRMesh *mesh = new TMRMesh(geo);
   mesh->incref();
+  
+  // Mesh the geometry
   mesh->mesh(htarget);
-  mesh->writeToVTK("quads.vtk");
+                                     
+  // Write the surface mesh to the VTK file
+  TMRSurfaceMesh *surf_mesh;
+  surf->getMesh(&surf_mesh);
+  surf_mesh->writeToVTK("quads.vtk");
+
+  // Free the objects
   mesh->decref();
+  geo->decref();
 
   return NULL;
 }

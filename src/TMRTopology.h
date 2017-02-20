@@ -88,8 +88,7 @@ class TMRFace : public TMREntity {
 */
 class TMRTopology : public TMREntity {
  public:
-  TMRTopology( MPI_Comm _comm,
-               TMRVertex **_vertices, int _num_vertices,
+  TMRTopology( TMRVertex **_vertices, int _num_vertices,
                TMREdge **_edges, int _num_edges,
                TMRFace **_faces, int num_faces );
   ~TMRTopology();
@@ -103,9 +102,6 @@ class TMRTopology : public TMREntity {
                         const int **face_nodes, const int **face_edges );
 
  private:
-  // The communicator associated 
-  MPI_Comm comm;
-
   // The connectivity information
   int *edge_to_vertices;
   int *face_to_edges;
