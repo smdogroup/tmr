@@ -6,6 +6,286 @@
 #include <stdio.h>
 
 /*
+  Compare coordinate pairs of points. This uses a Morton ordering
+  comparison to facilitate sorting/searching the list of edges.
+
+  This function can be used by the stdlib functions qsort and
+  bsearch to sort/search the edge pairs.
+*/
+static int compare_edges( const void *avoid, const void *bvoid ){
+  // Cast the input to uint32_t types
+  const int *a = static_cast<const int*>(avoid);
+  const int *b = static_cast<const int*>(bvoid);
+  
+  // Extract the x/y locations for the a and b points
+  int ax = a[0], ay = a[1];
+  int bx = b[0], by = b[1];
+
+  int xxor = ax ^ bx;
+  int yxor = ay ^ by;
+  int sor = xxor | yxor;
+
+  // Note that here we do not distinguish between levels
+  // Check for the most-significant bit
+  int discrim = 0;
+  if (xxor > (sor ^ xxor)){
+    discrim = ax - bx;
+  }
+  else {
+    discrim = ay - by;
+  }
+
+  return discrim;
+}
+
+/*
+  Compute a node to triangle or node to quad data structure
+*/
+static void computeNodeToElems( int nnodes, int nelems, 
+                                int num_elem_nodes, const int conn[], 
+                                int **_ptr, int **_node_to_elems ){
+  // Set the pointer
+  int *ptr = new int[ nnodes+1 ];
+  memset(ptr, 0, (nnodes+1)*sizeof(int));
+
+  // Count up the references
+  const int conn_size = nelems*num_elem_nodes;
+  for ( int i = 0; i < conn_size; i++ ){
+    if (conn[i] >= 0){
+      ptr[conn[i]+1]++;
+    }
+  }
+
+  // Set the pointer into the quad array
+  for ( int i = 0; i < nnodes; i++ ){
+    ptr[i+1] += ptr[i];
+  }
+
+  // Compute the node to quads
+  int *node_to_elems = new int[ ptr[nnodes] ];
+  const int *conn_ptr = conn;
+  for ( int i = 0; i < nelems; i++ ){
+    for ( int j = 0; j < num_elem_nodes; j++ ){
+      int node = conn_ptr[0];
+      if (node >= 0){
+        node_to_elems[ptr[node]] = i;
+        ptr[node]++;
+        conn_ptr++;
+      }
+    }
+  }
+
+  // Reset the pointer array
+  for ( int i = nnodes-1; i >= 0; i-- ){
+    ptr[i+1] = ptr[i];
+  }
+  ptr[0] = 0;
+
+  // Set the output points
+  *_ptr = ptr;
+  *_node_to_elems = node_to_elems;
+}
+
+/*
+  Compute all of the edges within the triangular mesh
+*/
+static void computeTriEdges( int nnodes, int ntris, const int tris[],
+                             int *num_tri_edges, int **_tri_edges,
+                             int **_tri_neighbors, int **_dual_edges ){
+  // Compute the edges in the triangular mesh
+  int *ptr;
+  int *node_to_tris;
+  computeNodeToElems(nnodes, ntris, 3, tris, &ptr, &node_to_tris);
+  
+  // Now compute the neighbors for each triangle
+  int *tri_edge_nums = new int[ 3*ntris ];
+  for ( int i = 0; i < 3*ntris; i++ ){
+    tri_edge_nums[i] = -1;
+  }
+
+  // Quck reference from the edge index to the local node numbering
+  const int enodes[3][2] = {{1, 2}, {2, 0}, {0, 1}};
+
+  // Allocate the array for the triangle neighbors
+  int *tri_neighbors = new int[ 3*ntris ];
+  
+  int count = 0;
+  int ne = 0;
+  for ( int i = 0; i < ntris; i++ ){
+    // Search through each edge of the each triangle
+    for ( int j = 0; j < 3; j++ ){
+      if (tri_edge_nums[3*i+j] < 0){
+        tri_edge_nums[3*i+j] = ne;
+
+        // Triangle edges that have no neighbors are labeled with a -1
+        tri_neighbors[3*i+j] = -1;
+
+        // Search for the neighboring quad that shares this edge
+        int kp = ptr[tris[3*i + enodes[j][0]]];
+        int kpend = ptr[tris[3*i + enodes[j][0]]+1];
+        for ( ; kp < kpend; kp++ ){
+          // Find the potential quad neighbor
+          int n = node_to_tris[kp];
+
+          // Don't count the same edge twice
+          if (n == i){ continue; }
+
+          // Flag to indicate that we have found the other edge (there
+          // will only be at most one other match since this is
+          // planar in parameter space)
+          int quit = 0;
+
+          // Search over all the edges on this quad, and see
+          // if they match
+          for ( int e = 0; e < 3; e++ ){  
+            // Check if the adjacent edge matches in either direction
+            if ((tris[3*i+enodes[j][0]] == tris[3*n+enodes[e][0]] &&
+                 tris[3*i+enodes[j][1]] == tris[3*n+enodes[e][1]]) ||
+                (tris[3*i+enodes[j][0]] == tris[3*n+enodes[e][1]] &&
+                 tris[3*i+enodes[j][1]] == tris[3*n+enodes[e][0]])){
+              // Label the other edge that shares this same node
+              tri_edge_nums[3*n+e] = ne;
+
+              // Set the triangle neighbors
+              tri_neighbors[3*n+e] = i;
+              tri_neighbors[3*i+j] = n;
+
+              quit = 1;
+            }
+          }
+          if (quit){ break; }
+        }
+
+        // Increment the edge number
+        ne++;
+      }
+    }
+  }
+
+  // Free the data that is no longer required
+  delete [] ptr;
+  delete [] node_to_tris;
+
+  // Now we have a unique list of edge numbers and the total number of
+  // edges, we can construct the unique edge list
+  int *tri_edges = new int[ 2*ne ];
+  int *dual_edges = new int[ 2*ne ];
+  for ( int i = 0; i < ntris; i++ ){
+    for ( int j = 0; j < 3; j++ ){
+      // Get the unique edge number
+      int n = tri_edge_nums[3*i+j];
+      tri_edges[2*n] = tris[3*i+enodes[j][0]];
+      tri_edges[2*n+1] = tris[3*i+enodes[j][1]];
+
+      // Set the dual edge numbers - connecting triangles to other
+      // triangles. Note that some elements of this array will be -1.
+      dual_edges[2*n] = i;
+      dual_edges[2*n+1] = tri_neighbors[3*i+j];
+    }
+  } 
+
+  delete [] tri_edge_nums;
+
+  // Set the number of triangle edges and the triangle edges themselves
+  *num_tri_edges = ne;
+  *_tri_edges = tri_edges; 
+  *_tri_neighbors = tri_neighbors;
+  *_dual_edges = dual_edges;
+}
+
+/*
+  Compute the connectivity between the edges
+*/
+static void computeQuadEdges( int nnodes, int nquads, const int quads[], 
+                              int *_num_quad_edges, int **_quad_edges,
+                              int **_quad_edge_nums=NULL ){
+  // Compute the edges in the quadrilateral mesh
+  int *ptr;
+  int *node_to_quads;
+  computeNodeToElems(nnodes, nquads, 4, quads, &ptr, &node_to_quads);
+  
+  // Now compute the neighbors for each quad
+  int *quad_edge_nums = new int[ 4*nquads ];
+  for ( int i = 0; i < 4*nquads; i++ ){
+    quad_edge_nums[i] = -1;
+  }
+
+  // Quck reference from the quad index to the edge
+  const int enodes[4][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
+
+  int count = 0;
+  int ne = 0;
+  for ( int i = 0; i < nquads; i++ ){
+    // Search through each edge of the each quadrilateral
+    for ( int j = 0; j < 4; j++ ){
+      if (quad_edge_nums[4*i+j] < 0){
+        quad_edge_nums[4*i+j] = ne;
+
+        // Search for the neighboring quad that shares this edge
+        int kp = ptr[quads[4*i + enodes[j][0]]];
+        int kpend = ptr[quads[4*i + enodes[j][0]]+1];
+        for ( ; kp < kpend; kp++ ){
+          // Find the potential quad neighbor
+          int n = node_to_quads[kp];
+
+          // Don't count the same edge twice
+          if (n == i){ continue; }
+
+          // Flag to indicate that we have found the other edge (there
+          // will only be at most one other match since this is planar)
+          int quit = 0;
+
+          // Search over all the edges on this quad, and see
+          // if they match
+          for ( int e = 0; e < 4; e++ ){  
+            // Check if the adjacent edge matches in either direction
+            if ((quads[4*i+enodes[j][0]] == quads[4*n+enodes[e][0]] &&
+                 quads[4*i+enodes[j][1]] == quads[4*n+enodes[e][1]]) ||
+                (quads[4*i+enodes[j][0]] == quads[4*n+enodes[e][1]] &&
+                 quads[4*i+enodes[j][1]] == quads[4*n+enodes[e][0]])){
+              // Label the other edge that shares this same node
+              quad_edge_nums[4*n+e] = ne;
+              quit = 1;
+            }
+          }
+          if (quit){ break; }
+        }
+
+        // Increment the edge number
+        ne++;
+      }
+    }
+  }
+
+  // Free the pointers
+  delete [] ptr;
+  delete [] node_to_quads;
+
+  // Now we have a unique list of edge numbers and the total number of
+  // edges, we can construct the unique edge list
+  int *quad_edges = new int[ 2*ne ];
+  for ( int i = 0; i < nquads; i++ ){
+    for ( int j = 0; j < 4; j++ ){
+      // Get the unique edge number
+      int n = quad_edge_nums[4*i+j];
+      quad_edges[2*n] = quads[4*i+enodes[j][0]];
+      quad_edges[2*n+1] = quads[4*i+enodes[j][1]];
+    }
+  } 
+
+  // Free the data
+  if (_quad_edge_nums){
+    *_quad_edge_nums = quad_edge_nums;
+  }
+  else {
+    delete [] quad_edge_nums;
+  }
+
+  *_num_quad_edges = ne;
+  *_quad_edges = quad_edges;
+}
+
+/*
   Mesh a curve
 */
 TMRCurveMesh::TMRCurveMesh( TMRCurve *_curve ){
@@ -491,250 +771,6 @@ int TMRSurfaceMesh::getNodeNums( const int **_vars ){
 int TMRSurfaceMesh::getLocalConnectivity( const int **_quads ){
   if (_quads){ *_quads = quads; }
   return num_quads;
-}
-
-/*
-  Compute a node to triangle or node to quad data structure
-*/
-void TMRSurfaceMesh::computeNodeToElems( int nnodes, int nelems, 
-                                         int num_elem_nodes,
-                                         const int conn[], 
-                                         int **_ptr, int **_node_to_elems ){
-  // Set the pointer
-  int *ptr = new int[ nnodes+1 ];
-  memset(ptr, 0, (nnodes+1)*sizeof(int));
-
-  // Count up the references
-  const int conn_size = nelems*num_elem_nodes;
-  for ( int i = 0; i < conn_size; i++ ){
-    if (conn[i] >= 0){
-      ptr[conn[i]+1]++;
-    }
-  }
-
-  // Set the pointer into the quad array
-  for ( int i = 0; i < nnodes; i++ ){
-    ptr[i+1] += ptr[i];
-  }
-
-  // Compute the node to quads
-  int *node_to_elems = new int[ ptr[nnodes] ];
-  const int *conn_ptr = conn;
-  for ( int i = 0; i < nelems; i++ ){
-    for ( int j = 0; j < num_elem_nodes; j++ ){
-      int node = conn_ptr[0];
-      if (node >= 0){
-        node_to_elems[ptr[node]] = i;
-        ptr[node]++;
-        conn_ptr++;
-      }
-    }
-  }
-
-  // Reset the pointer array
-  for ( int i = nnodes-1; i >= 0; i-- ){
-    ptr[i+1] = ptr[i];
-  }
-  ptr[0] = 0;
-
-  // Set the output points
-  *_ptr = ptr;
-  *_node_to_elems = node_to_elems;
-}
-
-/*
-  Compute all of the edges within the triangular mesh
-*/
-void TMRSurfaceMesh::computeTriEdges( int nnodes, int ntris, const int tris[],
-                                      int *num_tri_edges, int **_tri_edges,
-                                      int **_tri_neighbors, int **_dual_edges ){
-  // Compute the edges in the triangular mesh
-  int *ptr;
-  int *node_to_tris;
-  computeNodeToElems(nnodes, ntris, 3, tris, &ptr, &node_to_tris);
-  
-  // Now compute the neighbors for each triangle
-  int *tri_edge_nums = new int[ 3*ntris ];
-  for ( int i = 0; i < 3*ntris; i++ ){
-    tri_edge_nums[i] = -1;
-  }
-
-  // Quck reference from the edge index to the local node numbering
-  const int enodes[3][2] = {{1, 2}, {2, 0}, {0, 1}};
-
-  // Allocate the array for the triangle neighbors
-  int *tri_neighbors = new int[ 3*ntris ];
-  
-  int count = 0;
-  int ne = 0;
-  for ( int i = 0; i < ntris; i++ ){
-    // Search through each edge of the each triangle
-    for ( int j = 0; j < 3; j++ ){
-      if (tri_edge_nums[3*i+j] < 0){
-        tri_edge_nums[3*i+j] = ne;
-
-        // Triangle edges that have no neighbors are labeled with a -1
-        tri_neighbors[3*i+j] = -1;
-
-        // Search for the neighboring quad that shares this edge
-        int kp = ptr[tris[3*i + enodes[j][0]]];
-        int kpend = ptr[tris[3*i + enodes[j][0]]+1];
-        for ( ; kp < kpend; kp++ ){
-          // Find the potential quad neighbor
-          int n = node_to_tris[kp];
-
-          // Don't count the same edge twice
-          if (n == i){ continue; }
-
-          // Flag to indicate that we have found the other edge (there
-          // will only be at most one other match since this is
-          // planar in parameter space)
-          int quit = 0;
-
-          // Search over all the edges on this quad, and see
-          // if they match
-          for ( int e = 0; e < 3; e++ ){  
-            // Check if the adjacent edge matches in either direction
-            if ((tris[3*i+enodes[j][0]] == tris[3*n+enodes[e][0]] &&
-                 tris[3*i+enodes[j][1]] == tris[3*n+enodes[e][1]]) ||
-                (tris[3*i+enodes[j][0]] == tris[3*n+enodes[e][1]] &&
-                 tris[3*i+enodes[j][1]] == tris[3*n+enodes[e][0]])){
-              // Label the other edge that shares this same node
-              tri_edge_nums[3*n+e] = ne;
-
-              // Set the triangle neighbors
-              tri_neighbors[3*n+e] = i;
-              tri_neighbors[3*i+j] = n;
-
-              quit = 1;
-            }
-          }
-          if (quit){ break; }
-        }
-
-        // Increment the edge number
-        ne++;
-      }
-    }
-  }
-
-  // Free the data that is no longer required
-  delete [] ptr;
-  delete [] node_to_tris;
-
-  // Now we have a unique list of edge numbers and the total number of
-  // edges, we can construct the unique edge list
-  int *tri_edges = new int[ 2*ne ];
-  int *dual_edges = new int[ 2*ne ];
-  for ( int i = 0; i < ntris; i++ ){
-    for ( int j = 0; j < 3; j++ ){
-      // Get the unique edge number
-      int n = tri_edge_nums[3*i+j];
-      tri_edges[2*n] = tris[3*i+enodes[j][0]];
-      tri_edges[2*n+1] = tris[3*i+enodes[j][1]];
-
-      // Set the dual edge numbers - connecting triangles to other
-      // triangles. Note that some elements of this array will be -1.
-      dual_edges[2*n] = i;
-      dual_edges[2*n+1] = tri_neighbors[3*i+j];
-    }
-  } 
-
-  delete [] tri_edge_nums;
-
-  // Set the number of triangle edges and the triangle edges themselves
-  *num_tri_edges = ne;
-  *_tri_edges = tri_edges; 
-  *_tri_neighbors = tri_neighbors;
-  *_dual_edges = dual_edges;
-}
-
-/*
-  Compute the connectivity between the edges
-*/
-void TMRSurfaceMesh::computeQuadEdges( int nnodes, int nquads, 
-                                       const int quads[],
-                                       int *_num_quad_edges,
-                                       int **_quad_edges ){
-  // Compute the edges in the quadrilateral mesh
-  int *ptr;
-  int *node_to_quads;
-  computeNodeToElems(nnodes, nquads, 4, quads, &ptr, &node_to_quads);
-  
-  // Now compute the neighbors for each quad
-  int *quad_edge_nums = new int[ 4*nquads ];
-  for ( int i = 0; i < 4*nquads; i++ ){
-    quad_edge_nums[i] = -1;
-  }
-
-  // Quck reference from the quad index to the edge
-  const int enodes[4][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
-
-  int count = 0;
-  int ne = 0;
-  for ( int i = 0; i < nquads; i++ ){
-    // Search through each edge of the each quadrilateral
-    for ( int j = 0; j < 4; j++ ){
-      if (quad_edge_nums[4*i+j] < 0){
-        quad_edge_nums[4*i+j] = ne;
-
-        // Search for the neighboring quad that shares this edge
-        int kp = ptr[quads[4*i + enodes[j][0]]];
-        int kpend = ptr[quads[4*i + enodes[j][0]]+1];
-        for ( ; kp < kpend; kp++ ){
-          // Find the potential quad neighbor
-          int n = node_to_quads[kp];
-
-          // Don't count the same edge twice
-          if (n == i){ continue; }
-
-          // Flag to indicate that we have found the other edge (there
-          // will only be at most one other match since this is planar)
-          int quit = 0;
-
-          // Search over all the edges on this quad, and see
-          // if they match
-          for ( int e = 0; e < 4; e++ ){  
-            // Check if the adjacent edge matches in either direction
-            if ((quads[4*i+enodes[j][0]] == quads[4*n+enodes[e][0]] &&
-                 quads[4*i+enodes[j][1]] == quads[4*n+enodes[e][1]]) ||
-                (quads[4*i+enodes[j][0]] == quads[4*n+enodes[e][1]] &&
-                 quads[4*i+enodes[j][1]] == quads[4*n+enodes[e][0]])){
-              // Label the other edge that shares this same node
-              quad_edge_nums[4*n+e] = ne;
-              quit = 1;
-            }
-          }
-          if (quit){ break; }
-        }
-
-        // Increment the edge number
-        ne++;
-      }
-    }
-  }
-
-  // Free the pointers
-  delete [] ptr;
-  delete [] node_to_quads;
-
-  // Now we have a unique list of edge numbers and the total number of
-  // edges, we can construct the unique edge list
-  int *quad_edges = new int[ 2*ne ];
-  for ( int i = 0; i < nquads; i++ ){
-    for ( int j = 0; j < 4; j++ ){
-      // Get the unique edge number
-      int n = quad_edge_nums[4*i+j];
-      quad_edges[2*n] = quads[4*i+enodes[j][0]];
-      quad_edges[2*n+1] = quads[4*i+enodes[j][1]];
-    }
-  } 
-
-  // Free the data
-  delete [] quad_edge_nums;
-
-  *_num_quad_edges = ne;
-  *_quad_edges = quad_edges;
 }
 
 /*
@@ -1425,8 +1461,44 @@ int TMRMesh::getMeshConnectivity( const int **_quads ){
   surfaces for each element in the underlying mesh.
 */
 TMRTopology* TMRMesh::createTopology(){
-  // for ( int i = 0; i < num
+  // Initialize the mesh
+  initMesh();
+
+  // Compute the quadrilateral edges
+  int num_quad_edges;
+  int *quad_edges;
+  int *quad_edge_nums;
+  computeQuadEdges(num_nodes, num_quads, quads,
+                   &num_quad_edges, &quad_edges, &quad_edge_nums);
+
+  int *all_edges = new int[ 4*num_quad_edges ];
+  for ( int i = 0; i < num_quad_edges; i++ ){
+    all_edges[4*i] = quad_edges[2*i];
+    all_edges[4*i+1] = quad_edges[2*i+1];
+    all_edges[4*i+2] = quad_edges[2*i+1];
+    all_edges[4*i+3] = quad_edges[2*i];
+  }
+
+  qsort(all_edges, 2*num_quad_edges, 2*sizeof(int), compare_edges);
+
+  // Create edges 
+  TMRVertex **verts = new TMRVertex*[ num_nodes ];
+  // for ( int i = 0; num_vertices; i++ ){
+  //   verts[i] = new TMRVertexFromSurface(surfaces[i], u, v);
+  // }
+
+  // Create the curves
+  TMRCurve **curves = new TMRCurve*[ num_quad_edges ];
+
+  // Create the surface 
+  TMRSurface **surface = new TMRSurface*[ num_quads ];
+
+
   
+
+  delete [] all_edges;
+  delete [] quad_edges;
+  delete [] quad_edge_nums;
 
   return NULL;
 }

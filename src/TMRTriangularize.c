@@ -16,7 +16,7 @@ const double MAX_QUAD_DISTANCE = 1e40;
   This function can be used by the stdlib functions qsort and
   bsearch to sort/search the edge pairs.
 */
-int compare_edges( const void *avoid, const void *bvoid ){
+static int compare_edges( const void *avoid, const void *bvoid ){
   // Cast the input to uint32_t types
   const uint32_t *a = static_cast<const uint32_t*>(avoid);
   const uint32_t *b = static_cast<const uint32_t*>(bvoid);

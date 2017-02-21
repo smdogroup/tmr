@@ -14,6 +14,7 @@
 
 #include "TMRBase.h"
 
+class TMRCurve;
 class TMRSurface;
 class TMRCurveMesh;
 class TMRSurfaceMesh;
@@ -29,6 +30,11 @@ class TMRVertex : public TMREntity {
 
   // Evalue the point
   virtual int evalPoint( TMRPoint *p ) = 0;
+
+  // Get the parameters on the associated curve/surface
+  virtual int getParamsOnCurve( TMRCurve *curve, double *t );
+  virtual int getParamsOnSurface( TMRSurface *surface,
+                                  double *u, double *v );
 
   // Set/retrieve the node numbers
   int setNodeNum( int *num );
@@ -191,8 +197,8 @@ class TMRVertexFromCurve : public TMRVertex {
   TMRVertexFromCurve( TMRCurve *_curve, TMRPoint p );
   ~TMRVertexFromCurve();
   int evalPoint( TMRPoint *p );
+  int getParamsOnCurve( TMRCurve *curve, double *t );
   TMRCurve* getCurve();
-  double getParamPoint();
 
  private:
   double t;
@@ -209,6 +215,9 @@ class TMRVertexFromSurface : public TMRVertex {
   TMRVertexFromSurface( TMRSurface *_surface, TMRPoint p );
   ~TMRVertexFromSurface();
   int evalPoint( TMRPoint *p );
+  int getParamsOnSurface( TMRSurface *surf,
+                          double *u, double *v );
+  TMRSurface* getSurface();
 
  private:
   double u, v;
@@ -271,6 +280,48 @@ class TMRSplitCurve : public TMRCurve {
 };
 
 /*
+  Parametric TFI class
+
+  The parametric curves and the input vertices are used to define
+  a segment on the surface in parameter space that looks like this:
+
+
+  v2-------c3------v3
+  |                 |
+  |      v ^        |
+  |        |        |
+  c0       ----> u  c1
+  |                 |
+  |                 |
+  |                 |
+  v0-------c2------v1
+
+  All parameter curves must have the range [0, 1]. The vertices may
+  be supplied or can be inferred from the parameter curves.
+*/
+class TMRParametricTFISurface : public TMRSurface {
+ public:
+  TMRParametricTFISurface( TMRSurface *_surf, 
+                           TMRCurve *_curves[], const int dir[],
+                           TMRVertex *verts[] );
+  ~TMRParametricTFISurface();
+  void getRange( double *umin, double *vmin,
+                 double *umax, double *vmax ); 
+  int evalPoint( double u, double v, TMRPoint *X ); 
+  int invEvalPoint( TMRPoint p, double *u, double *v );
+  int evalDeriv( double u, double v, 
+                 TMRPoint *Xu, TMRPoint *Xv );
+
+ private:
+  TMRSurface *surf;
+  TMRCurve *curves[4];
+  int dir[4];
+
+  // Parametric coordinates of the vertex points on the surface
+  double vupt[4], vvpt[4];
+};
+
+/*
   The TMR Geometry class. 
 
   This contains the geometry objects -- vertices, curves and surfaces
@@ -283,11 +334,12 @@ class TMRGeometry : public TMREntity {
                int _num_surfaces, TMRSurface **_surfaces );
   ~TMRGeometry();
 
+  // Retrieve the underlying vertices/curves/surfaces
   void getVertices( int *_num_vertices, TMRVertex ***_vertices );
   void getCurves( int *_num_curves, TMRCurve ***_curves );
   void getSurfaces( int *_num_surfaces, TMRSurface ***_surfaces );
 
-  // Fast querying of geometric objects based on pointer values
+  // Query geometric objects based on pointer values
   int getVertexIndex( TMRVertex *vertex );
   int getCurveIndex( TMRCurve *curve );
   int getSurfaceIndex( TMRSurface *surf );

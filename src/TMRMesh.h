@@ -74,19 +74,7 @@ class TMRSurfaceMesh : public TMREntity {
   void printTriQuality( int ntris, const int tris[] );
   void writeTrisToVTK( const char *filename,
                        int ntris, const int tris[] );
-
-  // Compute the connectivity between nodes to corresponding elements
-  void computeNodeToElems( int nnodes, int nelems, int numelemnodes,
-                           const int conn[], 
-                           int **_ptr, int **_nodes_to_elems );
-
-  // Compute the edges in a triangular or quadrilateral mesh
-  void computeTriEdges( int nnodes, int ntris, const int conn[],
-                        int *_num_tri_edges, int **_tri_edges,
-                        int **_tri_neighbors, int **_dual_edges );
-  void computeQuadEdges( int nnodes, int nquads, const int quads[],
-                         int *_num_quad_edges, int **_quad_edges );
-
+  
   // Recombine the mesh to a quadrilateral mesh based on the
   // quad-Blossom algorithm
   void recombine( int ntris, const int tris[], const int tri_neighbors[],

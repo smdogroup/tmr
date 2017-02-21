@@ -4,6 +4,28 @@
 #include <stdio.h>
 
 /*
+  Perform an inverse evaluation by obtaining the underlying 
+  parametrization on the specified curve 
+*/
+int TMRVertex::getParamsOnCurve( TMRCurve *curve, double *t ){
+  TMRPoint p;
+  int fail = evalPoint(&p);
+  fail = fail || curve->invEvalPoint(p, t);
+  return fail;
+}
+
+/*
+  Same thing, except on the specified surface
+*/
+int TMRVertex::getParamsOnSurface( TMRSurface *surface,
+                                   double *u, double *v ){
+  TMRPoint p;
+  int fail = evalPoint(&p);
+  fail = fail || surface->invEvalPoint(p, u, v);
+  return fail;
+}
+
+/*
   Set/retrieve vertex numbers
 */
 int TMRVertex::setNodeNum( int *num ){
@@ -607,8 +629,14 @@ TMRCurve* TMRVertexFromCurve::getCurve(){
 /*
   Get the underlying parametric point
 */
-double TMRVertexFromCurve::getParamPoint(){
-  return t;
+int TMRVertexFromCurve::getParamsOnCurve( TMRCurve *_curve, 
+                                          double *_t ){
+  int fail = 0;
+  if (curve == _curve){
+    *_t = t;
+    return fail;
+  }
+  return TMRVertex::getParamsOnCurve(_curve, _t);
 }
 
 /*
@@ -827,24 +855,9 @@ TMRSplitCurve::TMRSplitCurve( TMRCurve *_curve,
   curve->incref();
   setAttribute(curve->getAttribute());
 
-  TMRPoint p;
-  TMRVertexFromCurve *v1f = dynamic_cast<TMRVertexFromCurve*>(v1);
-  if (v1f && curve == v1f->getCurve()){
-    t1 = v1f->getParamPoint();
-  }
-  else {
-    v1->evalPoint(&p);
-    curve->invEvalPoint(p, &t1);
-  }
-
-  TMRVertexFromCurve *v2f = dynamic_cast<TMRVertexFromCurve*>(v2);
-  if (v2f && curve == v2f->getCurve()){
-    t2 = v2f->getParamPoint();
-  }
-  else {
-    v2->evalPoint(&p);
-    curve->invEvalPoint(p, &t2);
-  }
+  // Get the parameters for this curve for the point v1/v2
+  v1->getParamsOnCurve(curve, &t1);
+  v2->getParamsOnCurve(curve, &t2);
 
   // Set the vertices for this curve
   setVertices(v1, v2);
@@ -882,6 +895,125 @@ int TMRSplitCurve::evalPoint( double t, TMRPoint *X ){
   if (t > 1.0){ return fail; }
   t = (1.0 - t)*t1 + t*t2;
   return curve->evalPoint(t, X);
+}
+
+/*
+  Create a parametric TFI
+
+  The transfinite interpolation is performed in the parameter space
+  and all points are obtained directly from the surface object
+  itself.
+*/
+TMRParametricTFISurface::TMRParametricTFISurface( TMRSurface *_surf, 
+                                                  TMRCurve *_curves[], 
+                                                  const int _dir[],
+                                                  TMRVertex *verts[] ){
+  surf = _surf;
+  surf->incref();
+
+  for ( int k = 0; k < 4; k++ ){
+    // Retrieve the parametric curves on the surface
+    curves[k] = _curves[k];
+    curves[k]->incref();
+    dir[k] = _dir[k];
+  
+    double tmin = 0.0, tmax = 0.0;
+    curves[k]->getRange(&tmin, &tmax);
+    if (tmin != 0.0 || tmax != 1.0){
+      fprintf(stderr, 
+              "TMRParametricTFISurface error: All curves must have t in [0, 1]\n");
+    }
+
+    // Reparametrize the vertices on the surface
+    verts[k]->getParamsOnSurface(surf, &vupt[k], &vvpt[k]);
+  }
+}
+
+/*
+  Destroy the parametric TFI object
+*/  
+TMRParametricTFISurface::~TMRParametricTFISurface(){
+  surf->decref();
+  for ( int k = 0; k < 4; k++ ){
+    curves[k]->decref();
+  }
+}
+
+/*
+  The range must always be between [0,1] for all curves
+*/
+void TMRParametricTFISurface::getRange( double *umin, double *vmin,
+                                        double *umax, double *vmax ){
+  *umin = 0.0;
+  *vmin = 0.0;
+  *umax = 1.0;
+  *umax = 1.0;
+}
+
+/*
+  Evaluate the surface at the specified parametric point (u,v)
+
+  This code uses a transfinite interpolation to obtain the 
+  parametric surface coordinates (us(u,v), vs(u,v)) in terms 
+  of the TFI parameter coordinates (u,v)
+*/
+int TMRParametricTFISurface::evalPoint( double u, double v, 
+                                        TMRPoint *X ){
+  // Evaluate the curves along the v-direction
+  int fail = 0;
+  double cupt[4], cvpt[4];
+  double params[4] = {v, v, u, u};
+
+  for ( int k = 0; k < 4; k++ ){
+    if (dir[k] > 0){
+      fail = fail || 
+        curves[k]->getParamsOnSurface(surf, params[k], dir[k],
+                                      &cupt[k], &cvpt[k]);
+    }
+    else {
+      fail = fail || 
+        curves[k]->getParamsOnSurface(surf, params[k], dir[k],
+                                      &cupt[k], &cvpt[k]);
+    }
+  }
+  
+  // Compute the parametric coordinates
+  double us, vs;
+  us = (1.0-u)*cupt[0] + u*cupt[1] + (1.0-v)*cupt[2] + v*cupt[3]
+    - ((1.0-u)*(1.0-v)*vupt[0] + u*(1.0-v)*vupt[1] + 
+       v*(1.0-u)*vupt[2] + u*v*vupt[3]);
+
+  vs = (1.0-u)*cvpt[0] + u*cvpt[1] + (1.0-v)*cvpt[2] + v*cvpt[3]
+    - ((1.0-u)*(1.0-v)*vvpt[0] + u*(1.0-v)*vvpt[1] + 
+       v*(1.0-u)*vvpt[2] + u*v*vvpt[3]);
+
+  fail = fail || surf->evalPoint(us, vs, X);
+  return fail;
+} 
+
+/*  
+  Inverse evaluation: This is not yet implemented
+*/
+int TMRParametricTFISurface::invEvalPoint( TMRPoint p, 
+                                           double *u, double *v ){
+  *u = 0.0; 
+  *v = 0.0;
+  int fail = 1;
+  return fail;
+}
+
+/*
+  Derivative evaluation: This is not yet implemented
+*/
+int TMRParametricTFISurface::evalDeriv( double u, double v, 
+                                        TMRPoint *Xu, TMRPoint *Xv ){
+
+  // Evaluate the curves along the v-direction
+  int fail = 1;
+  Xu->zero();
+  Xv->zero();
+
+  return fail;
 }
 
 /*
@@ -964,6 +1096,9 @@ int TMRGeometry::verify(){
           fprintf(stderr, 
                   "TMRGeometry error: Curve does not exist within curve list\n");
         }
+        else {
+          crvs[cindex]++;
+        }
 
         TMRVertex *v1, *v2;      
         curves[j]->getVertices(&v1, &v2);
@@ -981,7 +1116,27 @@ int TMRGeometry::verify(){
           fprintf(stderr, 
                   "TMRGeometry error: Vertices do not exist within vertex list\n");
         }
+        else {
+          verts[v1index]++;
+          verts[v2index]++;
+        }
       }
+    }
+  }
+
+  // Check if any of the counts are zero
+  for ( int i = 0; i < num_vertices; i++ ){
+    if (verts[i] == 0){
+      fprintf(stderr,
+              "TMRGeometry error: Vertex %d unreferenced\n", i);
+      fail = 1;
+    }
+  }
+  for ( int i = 0; i < num_curves; i++ ){
+    if (crvs[i] == 0){
+      fprintf(stderr,
+              "TMRGeometry error: Curve %d unreferenced\n", i);
+      fail = 1;
     }
   }
 
