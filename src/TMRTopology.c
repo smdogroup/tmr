@@ -2,113 +2,22 @@
 #include <stdio.h>
 
 /*
-  Topological curve entity between two vertices
-*/
-TMREdge::TMREdge( TMRCurve *_curve ){
-  curve = _curve;
-  curve->incref();
-  curve->getVertices(&v1, &v2);
-}
-
-TMREdge::TMREdge( TMRCurve *_curve,
-                  TMRVertex *_v1, TMRVertex *_v2 ){
-  curve = _curve;
-  curve->incref();
-  v1 = _v1;
-  v2 = _v2;
-}
-
-TMREdge::~TMREdge(){
-  curve->incref();
-}
-
-/*m
-  Retrive the curve
-*/
-void TMREdge::getCurve( TMRCurve **_curve ){
-  *_curve = curve;
-}
-
-/*
-  Retrieve the vertices
-*/
-void TMREdge::getVertices( TMRVertex **_v1, TMRVertex **_v2 ){
-  if (_v1){ *_v1 = v1; }
-  if (_v2){ *_v2 = v2; }
-}
-
-/*
-  Topological surface entity bounded by four edges
-*/
-TMRFace::TMRFace( TMRSurface *_surface, 
-                  TMREdge *_edges[], const int _edge_dir[] ){
-  // Set the surface object
-  surface = _surface;
-  surface->incref();
-
-  for ( int k = 0; k < 4; k++ ){
-    edges[k] = _edges[k];
-    edges[k]->incref();
-    edge_dir[k] = _edge_dir[k];
-  }
-}
-
-TMRFace::~TMRFace(){
-  surface->decref();
-  for ( int k = 0; k < 4; k++ ){
-    edges[k]->decref();
-  }
-}
-
-/*
-  Retrieve the underlying surface
-*/
-void TMRFace::getSurface( TMRSurface **surf ){
-  *surf = surface;
-}
-
-/*
-  Retrieve the connected edges and directions
-*/
-void TMRFace::getEdges( TMREdge ***_edges, const int **_edge_dir ){
-  if (_edges){
-    *_edges = edges;
-  }
-  if (_edge_dir){
-    *_edge_dir = edge_dir;
-  }
-}
-
-/*
   The main topology class that contains the objects used to build the
   underlying mesh.  
 */
-TMRTopology::TMRTopology( TMRVertex **_vertices, int _num_vertices,
-                          TMREdge **_edges, int _num_edges,
-                          TMRFace **_faces, int _num_faces ){
-  // Record the nodes
-  num_vertices = _num_vertices;
-  vertices = new TMRVertex*[ num_vertices ];
-  for ( int i = 0; i < num_vertices; i++ ){
-    vertices[i] = _vertices[i];
-    vertices[i]->incref();
-  }
+TMRTopology::TMRTopology( TMRGeometry *_geo ){
+  // Increase the ref. count to the geometry object
+  geo = _geo;
+  geo->incref();
 
-  // Record the edges
-  num_edges = _num_edges;
-  edges = new TMREdge*[ num_edges ];
-  for ( int i = 0; i < num_edges; i++ ){
-    edges[i] = _edges[i];
-    edges[i]->incref();
-  }
-
-  // Record the faces
-  num_faces = _num_faces;
-  faces = new TMRFace*[ num_faces ];
-  for ( int i = 0; i < num_faces; i++ ){
-    faces[i] = _faces[i];
-    faces[i]->incref();
-  }
+  // Get the geometry objects
+  int num_vertices, num_edges, num_faces;
+  TMRVertex **vertices;
+  TMRCurve **edges;
+  TMRSurface **faces;
+  geo->getVertices(&num_vertices, &vertices);
+  geo->getCurves(&num_edges, &edges);
+  geo->getSurfaces(&num_faces, &faces);
 
   // Build the topology information based on the inputs
   face_to_vertices = new int[ 4*num_faces ];
@@ -116,56 +25,42 @@ TMRTopology::TMRTopology( TMRVertex **_vertices, int _num_vertices,
   edge_to_vertices = new int[ 2*num_edges ];
 
   // Sort the addresses to make the array
-  for ( int i = 0; i < num_faces; i++ ){
-    TMREdge **e;
-    faces[i]->getEdges(&e, NULL);
+  const int coordinate_to_edge[] = {3, 1, 0, 2};
 
-    // Search for the faces
-    for ( int j = 0; j < 4; j++ ){
-      for ( int k = 0; k < num_edges; k++ ){
-        if (e[j] == edges[k]){
-          face_to_edges[4*i+j] = k;
-          break;
-        }
-      }
+  // Create the face -> edge information
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRCurve **e;
+    faces[i]->getCurveSegment(0, NULL, &e, NULL);
+
+    // Search for the face indices
+    for ( int jp = 0; jp < 4; jp++ ){
+      int j = coordinate_to_edge[jp];
+      face_to_edges[4*i+j] = geo->getCurveIndex(e[j]);
     }
   }
 
-  // Sort the addresses to make the array 
+  // Create the edge -> vertex information
   for ( int i = 0; i < num_edges; i++ ){
     TMRVertex *v1, *v2;
     edges[i]->getVertices(&v1, &v2);
-
-    // Search for the vertices
-    for ( int k = 0; k < num_vertices; k++ ){
-      if (v1 == vertices[k]){
-        edge_to_vertices[2*i] = k;
-        break;
-      }
-    }
-
-    // Search for the vertices
-    for ( int k = 0; k < num_vertices; k++ ){
-      if (v2 == vertices[k]){
-        edge_to_vertices[2*i+1] = k;
-        break;
-      }
-    }
+    
+    edge_to_vertices[2*i] = geo->getVertexIndex(v1);
+    edge_to_vertices[2*i+1] = geo->getVertexIndex(v2);
   }
 
-  // Get 
+  // Create the face -> vertex information
   for ( int i = 0; i < num_faces; i++ ){
     const int *edge_dir;
-    faces[i]->getEdges(NULL, &edge_dir);
+    faces[i]->getCurveSegment(0, NULL, NULL, &edge_dir);
 
     int edge = face_to_edges[4*i];
-    if (edge_dir[0] > 0){
-      face_to_vertices[4*i] = edge_to_vertices[2*edge];
-      face_to_vertices[4*i+2] = edge_to_vertices[2*edge+1];
-    }
-    else {
+    if (edge_dir[3] > 0){
       face_to_vertices[4*i] = edge_to_vertices[2*edge+1];
       face_to_vertices[4*i+2] = edge_to_vertices[2*edge];
+    }
+    else {
+      face_to_vertices[4*i] = edge_to_vertices[2*edge];
+      face_to_vertices[4*i+2] = edge_to_vertices[2*edge+1];
     }
 
     edge = face_to_edges[4*i+1];
@@ -184,26 +79,8 @@ TMRTopology::TMRTopology( TMRVertex **_vertices, int _num_vertices,
   Free the topology data
 */
 TMRTopology::~TMRTopology(){
-  // Free the faces, edges and nodes
-  if (faces){
-    for ( int i = 0; i < num_faces; i++ ){
-      faces[i]->decref();
-    }
-    delete [] faces;
-  }
-  if (edges){
-    for ( int i = 0; i < num_edges; i++ ){
-      edges[i]->decref();
-    }
-    delete [] edges;
-  }
-  if (vertices){
-    for ( int i = 0; i < num_vertices; i++ ){
-      vertices[i]->decref();
-    }
-    delete [] vertices;
-  }
-
+  // Free the geometry object
+  geo->decref();
   delete [] face_to_vertices;
   delete [] face_to_edges;
   delete [] edge_to_vertices;
@@ -213,9 +90,12 @@ TMRTopology::~TMRTopology(){
   Retrieve the face object
 */
 void TMRTopology::getSurface( int face_num, TMRSurface **face ){
+  int num_faces;
+  TMRSurface **faces;
+  geo->getSurfaces(&num_faces, &faces);
   *face = NULL;
   if (faces && (face_num >= 0 && face_num < num_faces)){
-    faces[face_num]->getSurface(face);
+    *face = faces[face_num];
   }
 }
 
@@ -223,12 +103,20 @@ void TMRTopology::getSurface( int face_num, TMRSurface **face ){
   Retrieve the curve object associated with the given face/edge index
 */
 void TMRTopology::getFaceCurve( int face_num, int edge_index, TMRCurve **curve ){
+  int num_faces;
+  TMRSurface **faces;
+  geo->getSurfaces(&num_faces, &faces);
+
+  // Coordinate edge number to actual edge number
+  const int coordinate_to_edge[] = {3, 1, 0, 2};
+
   *curve = NULL;
   if (faces && (face_num >= 0 && face_num < num_faces)){
-    TMREdge **edges;
-    faces[face_num]->getEdges(&edges, NULL);
+    TMRCurve **edges;
+    faces[face_num]->getCurveSegment(0, NULL, &edges, NULL);
     if (edge_index >= 0 && edge_index < 4){
-      edges[edge_index]->getCurve(curve);
+      edge_index = coordinate_to_edge[edge_index];
+      *curve = edges[edge_index];
     }
   }
 }
@@ -240,6 +128,10 @@ void TMRTopology::getConnectivity( int *nnodes,
                                    int *nedges, int *nfaces,
                                    const int **face_nodes,
                                    const int **face_edges ){
+  int num_vertices, num_edges, num_faces;
+  geo->getVertices(&num_vertices, NULL);
+  geo->getCurves(&num_edges, NULL);
+  geo->getSurfaces(&num_faces, NULL);
   *nnodes = num_vertices;
   *nedges = num_edges;
   *nfaces = num_faces;

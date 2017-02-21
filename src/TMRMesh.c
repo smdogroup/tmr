@@ -2,6 +2,7 @@
 #include "TMRTriangularize.h"
 #include "TMRMeshSmoothing.h"
 #include "TMRPerfectMatchInterface.h"
+#include "TMRBspline.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -639,8 +640,6 @@ void TMRSurfaceMesh::mesh( double htarget ){
                      num_tri_edges, tri_edges,
                      num_points, pts, X, surface);
 
-  writeTrisToVTK("bspline_tris.vtk", ntris, tris);
-
   printTriQuality(ntris, tris);
 
   // Recombine the mesh into a quadrilateral mesh
@@ -763,6 +762,14 @@ int TMRSurfaceMesh::setNodeNums( int *num ){
 int TMRSurfaceMesh::getNodeNums( const int **_vars ){
   if (_vars){ *_vars = vars; }
   return num_points;  
+}
+
+/*
+  Get the number of fixed points that are not ordered by this surface
+  mesh
+*/
+int TMRSurfaceMesh::getNumFixedPoints(){
+  return num_fixed_pts;
 }
 
 /*
@@ -1460,7 +1467,7 @@ int TMRMesh::getMeshConnectivity( const int **_quads ){
   Create the topology object, generating the vertices, curves and
   surfaces for each element in the underlying mesh.
 */
-TMRTopology* TMRMesh::createTopology(){
+TMRGeometry* TMRMesh::createMeshGeometry(){
   // Initialize the mesh
   initMesh();
 
@@ -1479,27 +1486,209 @@ TMRTopology* TMRMesh::createTopology(){
     all_edges[4*i+3] = quad_edges[2*i];
   }
 
+  // Sort all of the edges/nodes so that they a
   qsort(all_edges, 2*num_quad_edges, 2*sizeof(int), compare_edges);
 
-  // Create edges 
-  TMRVertex **verts = new TMRVertex*[ num_nodes ];
-  // for ( int i = 0; num_vertices; i++ ){
-  //   verts[i] = new TMRVertexFromSurface(surfaces[i], u, v);
-  // }
 
-  // Create the curves
-  TMRCurve **curves = new TMRCurve*[ num_quad_edges ];
+
+
+
+
+  // Create vertices
+  int vnum = 0;
+  TMRVertex **verts = new TMRVertex*[ num_nodes ];
+
+  // Copy over the vertices in the original geometry
+  int num_vertices;
+  TMRVertex **vertices;
+  geo->getVertices(&num_vertices, &vertices);
+  for ( int i = 0; i < num_vertices; i++, vnum++ ){
+    verts[vnum] = vertices[i];
+  }
+
+  // Create the vertices on the curves
+  int num_curves;
+  TMRCurve **curves;
+  geo->getCurves(&num_curves, &curves);
+  for ( int i = 0; i < num_curves; i++ ){
+    TMRCurveMesh *mesh = NULL;
+    curves[i]->getMesh(&mesh);
+
+    // Get the parametric points associated with the mesh
+    int npts;
+    const double *tpts;
+    mesh->getMeshPoints(&npts, &tpts, NULL);
+    for ( int j = 1; j < npts-1; j++, vnum++ ){
+      verts[vnum] = new TMRVertexFromCurve(curves[i], tpts[j]);
+    }
+  }
+
+  // Create the vertices from the surfaces
+  int num_surfaces;
+  TMRSurface **surfaces;
+  geo->getSurfaces(&num_surfaces, &surfaces);
+  for ( int i = 0; i < num_surfaces; i++ ){
+    TMRSurfaceMesh *mesh = NULL;
+    surfaces[i]->getMesh(&mesh);
+
+    // Get the mesh points
+    int npts;
+    const double *pts;
+    mesh->getMeshPoints(&npts, &pts, NULL);
+
+    // Get the point-offset for this surface
+    int offset = mesh->getNumFixedPoints();
+    for ( int j = offset; j < npts; j++, vnum++ ){
+      verts[vnum] = new TMRVertexFromSurface(surfaces[i], pts[2*j], pts[2*j+1]);
+    }
+  }
+
+  // Create the curves on the surface and on the edge
+  TMRCurve **edges = new TMRCurve*[ num_quad_edges ];
+  memset(edges, 0, num_quad_edges*sizeof(TMRCurve*));
+
+  // Create the curves for the mesh from the underlying curves
+  for ( int i = 0; i < num_curves; i++ ){
+    TMRCurveMesh *mesh = NULL;
+    curves[i]->getMesh(&mesh);
+
+    // Get the global variables associated with the local curve mesh
+    const int *vars;
+    mesh->getNodeNums(&vars);
+
+    // Get the parametric points associated with the mesh
+    int npts;
+    const double *tpts;
+    mesh->getMeshPoints(&npts, &tpts, NULL);
+    for ( int j = 0; j < npts-1; j++ ){
+      // Find the edge associated with this curve
+      int edge[2] = {vars[j], vars[j+1]};
+
+      // Find the associated edge number 
+      // bsearch(edge);
+
+      int edge_num = 0;
+
+      edges[edge_num] = new TMRSplitCurve(curves[i], tpts[j], tpts[j+1]);
+    }
+  }
+
+  // Set the local quad node to edge information
+  const int edge_to_nodes[][2] = {{0, 2}, {1, 3}, {0, 1}, {2, 3}};
+
+  // Create the curves on the surface using Pcurve/CurveFromSurface
+  for ( int i = 0; i < num_surfaces; i++ ){
+    TMRSurfaceMesh *mesh = NULL;
+    surfaces[i]->getMesh(&mesh);
+
+    // Get the parametric points associated with the surface mesh
+    int npts;
+    const double *pts;
+    mesh->getMeshPoints(&npts, &pts, NULL);
+
+    // Loop over all possible edges in the surface mesh
+    const int *quad_local;
+    int nlocal = mesh->getLocalConnectivity(&quad_local);
+    
+    // Get the global variables associated with the local mesh
+    const int *vars;
+    mesh->getNodeNums(&vars);
+
+    for ( int j = 0; j < nlocal; j++ ){
+      for ( int k = 0; k < 4; k++ ){
+        // The local variable numbers
+        int l1 = quad_local[4*j + edge_to_nodes[k][0]];
+        int l2 = quad_local[4*j + edge_to_nodes[k][1]];
+
+        // Get the global edge number
+        int edge[2] = {vars[l1], vars[l2]};
+
+        // Get the edge number
+        int edge_num = 0;
+        if (!curves[edge_num]){
+          // Create the TMRBsplinePcurve on this edge
+          double cpts[4];
+          cpts[0] = pts[2*l1];
+          cpts[1] = pts[2*l1+1];
+          cpts[2] = pts[2*l2];
+          cpts[3] = pts[2*l2+1];
+          TMRBsplinePcurve *pcurve = new TMRBsplinePcurve(2, 2, cpts);
+          edges[edge_num] = new TMRCurveFromSurface(surfaces[i], pcurve);
+        }
+      }
+    } 
+  }  
 
   // Create the surface 
-  TMRSurface **surface = new TMRSurface*[ num_quads ];
+  TMRSurface **surfs = new TMRSurface*[ num_quads ];
 
+  // Switch the ordering from right-handed to coordinate ordering of the
+  // vertices in a quadrilateral
+  const int quad_to_coordinate[] = {0, 1, 3, 2};
 
-  
+  // Create the TMRSurface objects
+  for ( int i = 0, q = 0; i < num_surfaces; i++ ){
+    TMRSurfaceMesh *mesh = NULL;
+    surfaces[i]->getMesh(&mesh);
 
+    // Get the parametric points associated with the surface mesh
+    int npts;
+    const double *pts;
+    mesh->getMeshPoints(&npts, &pts, NULL);
+
+    // Loop over all possible edges in the surface mesh
+    const int *quad_local;
+    int nlocal = mesh->getLocalConnectivity(&quad_local);
+    
+    // Get the global variables associated with the local mesh
+    const int *vars;
+    mesh->getNodeNums(&vars);
+    
+    // Iterate over all of the edges, creating the appropriate surfaces
+    for ( int j = 0; j < nlocal; j++, q++ ){
+      TMRCurve *c[4];
+      int dir[4];
+      TMRVertex *v[4];
+      for ( int k = 0; k < 4; k++ ){
+        // By default, assume that we're along the correction
+        // direction
+        dir[k] = 1;
+
+        // Set the vertex number
+        int l0 = quad_local[4*j + quad_to_coordinate[k]];
+        v[k] = verts[vars[l0]];
+
+        // The local variable numbers
+        int l1 = quad_local[4*j + edge_to_nodes[k][0]];
+        int l2 = quad_local[4*j + edge_to_nodes[k][1]];
+
+        // Get the global edge number
+        int edge[2] = {vars[l1], vars[l2]};
+
+        // Get the global edge number
+        int edge_num = 0;
+
+        c[k] = edges[edge_num];
+      }
+
+      // Create the parametric TFI surface
+      surfs[q] = new TMRParametricTFISurface(surfaces[i], c, dir, v);
+    }
+  } 
+
+  // Create the geometry object
+  TMRGeometry *geo = new TMRGeometry(num_nodes, verts,
+                                     num_quad_edges, edges,
+                                     num_quads, surfs);
+
+  // Free the data that was locally allocated
+  delete [] verts;
+  delete [] edges;
+  delete [] surfs;
   delete [] all_edges;
   delete [] quad_edges;
   delete [] quad_edge_nums;
 
-  return NULL;
+  return geo;
 }
 

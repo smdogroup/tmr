@@ -76,7 +76,7 @@ TMRCurve::~TMRCurve(){
 }
 
 /*
-  Perform the 
+  Find the point on the surface closest to the point C(t)
 */
 int TMRCurve::getParamsOnSurface( TMRSurface *surface, double t, 
                                   int dir, double *u, double *v ){
@@ -421,7 +421,8 @@ int TMRSurface::addCurveSegment( int ncurves, TMRCurve **curves,
     vnext = v2;
     if (i == ncurves-1){
       if (vinit != vnext){
-        fprintf(stderr, "TMRSurface::addCurveSegment: Curve segment must be closed\n");
+        fprintf(stderr, 
+                "TMRSurface::addCurveSegment: Curve segment must be closed\n");
         fail = 1;
       }
     }
@@ -640,6 +641,14 @@ int TMRVertexFromCurve::getParamsOnCurve( TMRCurve *_curve,
 }
 
 /*
+  Get the underlying parametric point (if any)
+*/
+int TMRVertexFromCurve::getParamsOnSurface( TMRSurface *surface,
+                                            double *u, double *v ){
+  curve->getParamsOnSurface(surface, t, 1, u, v);
+}
+
+/*
   Determine the vertex location based on a surface location
 */
 TMRVertexFromSurface::TMRVertexFromSurface( TMRSurface *_surface, 
@@ -674,6 +683,19 @@ TMRVertexFromSurface::~TMRVertexFromSurface(){
 */
 int TMRVertexFromSurface::evalPoint( TMRPoint *p ){
   return surface->evalPoint(u, v, p);
+}
+
+/*
+  Get the underlying parametric point (if any)
+*/
+int TMRVertexFromSurface::getParamsOnSurface( TMRSurface *_surface,
+                                              double *_u, double *_v ){
+  if (surface == _surface){
+    *_u = u;
+    *_v = v;
+    return 1;
+  }
+  return TMRVertex::getParamsOnSurface(surface, _u, _v);
 }
 
 /*
@@ -927,6 +949,45 @@ TMRParametricTFISurface::TMRParametricTFISurface( TMRSurface *_surf,
     // Reparametrize the vertices on the surface
     verts[k]->getParamsOnSurface(surf, &vupt[k], &vvpt[k]);
   }
+
+  // Set the vertices for this surface
+  if (dir[0] > 0){
+    curves[0]->setVertices(verts[0], verts[2]); 
+  }
+  else {
+    curves[0]->setVertices(verts[2], verts[0]);
+  }
+
+  if (dir[1] > 0){  
+    curves[1]->setVertices(verts[1], verts[3]);
+  }
+  else {
+    curves[1]->setVertices(verts[3], verts[1]);
+  }
+
+  if (dir[2] > 0){
+    curves[2]->setVertices(verts[0], verts[1]);
+  }
+  else {
+    curves[2]->setVertices(verts[1], verts[0]);
+  }
+
+  if (dir[3] > 0){
+    curves[3]->setVertices(verts[2], verts[3]);
+  }
+  else {
+    curves[3]->setVertices(verts[3], verts[2]);
+  }
+
+
+  // Set the curve segment into the curve
+  TMRCurve *c[4];
+  int d[4];
+  c[0] = curves[2];  d[0] = dir[2];
+  c[1] = curves[1];  d[1] = dir[1];
+  c[2] = curves[3];  d[2] = -dir[3];
+  c[3] = curves[0];  d[3] = -dir[0];
+  addCurveSegment(4, c, d);
 }
 
 /*

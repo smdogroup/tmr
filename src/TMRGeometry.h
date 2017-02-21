@@ -198,6 +198,8 @@ class TMRVertexFromCurve : public TMRVertex {
   ~TMRVertexFromCurve();
   int evalPoint( TMRPoint *p );
   int getParamsOnCurve( TMRCurve *curve, double *t );
+  int getParamsOnSurface( TMRSurface *surface,
+                          double *u, double *v );
   TMRCurve* getCurve();
 
  private:
@@ -282,9 +284,13 @@ class TMRSplitCurve : public TMRCurve {
 /*
   Parametric TFI class
 
-  The parametric curves and the input vertices are used to define
-  a segment on the surface in parameter space that looks like this:
+  This surface defines a segment of a surface, defined in parameter
+  space. This is used for creating a continuous geometry model of a
+  continuous surface. In particular, this is used by TMRMesh to create
+  a surface topology object needed for the TMRQuadForest object.
 
+  The parametric curves and the input vertices are used to define a
+  segment on the surface in parameter space that looks like this:
 
   v2-------c3------v3
   |                 |
@@ -296,8 +302,10 @@ class TMRSplitCurve : public TMRCurve {
   |                 |
   v0-------c2------v1
 
-  All parameter curves must have the range [0, 1]. The vertices may
-  be supplied or can be inferred from the parameter curves.
+  Note that all parameter curves must have the range [0,
+  1]. Furthermore, note that the constructor for this object
+  automatically sets the vertices into the curves and adds the curve
+  segments (using the TMRSurface::addCurveSegment) for convenience.
 */
 class TMRParametricTFISurface : public TMRSurface {
  public:

@@ -59,6 +59,7 @@ class TMRSurfaceMesh : public TMREntity {
   // Order the mesh points uniquely
   int setNodeNums( int *num );
   int getNodeNums( const int **_vars );
+  int getNumFixedPoints();
 
   // Retrieve the local connectivity from this surface mesh
   int getLocalConnectivity( const int **quads );
@@ -127,7 +128,7 @@ class TMRMesh : public TMREntity {
   int getMeshConnectivity( const int **_quads );
 
   // Create a topology object (with underlying mesh geometry)
-  TMRTopology* createTopology();
+  TMRGeometry* createMeshGeometry();
 
  private:
   // Allocate and initialize the underlying mesh
