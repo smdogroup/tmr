@@ -871,6 +871,18 @@ int TMRSplitCurve::evalPoint( double t, TMRPoint *X ){
 }
 
 /*
+  Get the parameter on the split curve
+*/
+int TMRSplitCurve::getParamsOnSurface( TMRSurface *surface, double t, 
+                                       int dir, double *u, double *v ){
+  int fail = 1;
+  if (t < 0.0){ return fail; }
+  if (t > 1.0){ return fail; }
+  t = (1.0 - t)*t1 + t*t2;
+  return curve->getParamsOnSurface(surface, t, dir, u, v);
+}
+
+/*
   Create a parametric TFI
 
   The transfinite interpolation is performed in the parameter space
@@ -959,7 +971,7 @@ void TMRParametricTFISurface::getRange( double *umin, double *vmin,
   *umin = 0.0;
   *vmin = 0.0;
   *umax = 1.0;
-  *umax = 1.0;
+  *vmax = 1.0;
 }
 
 /*

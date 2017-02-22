@@ -35,7 +35,7 @@ TMRTopology::TMRTopology( TMRGeometry *_geo ){
     // Search for the face indices
     for ( int jp = 0; jp < 4; jp++ ){
       int j = coordinate_to_edge[jp];
-      face_to_edges[4*i+j] = geo->getCurveIndex(e[j]);
+      face_to_edges[4*i+jp] = geo->getCurveIndex(e[j]);
     }
   }
 
@@ -48,11 +48,24 @@ TMRTopology::TMRTopology( TMRGeometry *_geo ){
     edge_to_vertices[2*i+1] = geo->getVertexIndex(v2);
   }
 
-  // Create the face -> vertex information
+  // Create the face -> vertex information. Within the TMR
+  // geometry routines, the ordering is as shown on the left.
+  // The quadrant/octree code uses the coordinate ordering shown
+  // on the right.
+  // 
+  //  From TMRSurface         Coordinate-ordering
+  //  v3---e2---v2            v2---e3---v3
+  //  |         |             |         |
+  //  e3        e1            e0        e1
+  //  |         |             |         |
+  //  v0---e0---v1            v0---e2---v1
+  //  C.C.W. direction        Coordinate direction
+  
   for ( int i = 0; i < num_faces; i++ ){
     const int *edge_dir;
     faces[i]->getCurveSegment(0, NULL, NULL, &edge_dir);
 
+    // Coordinate-ordered edge e0
     int edge = face_to_edges[4*i];
     if (edge_dir[3] > 0){
       face_to_vertices[4*i] = edge_to_vertices[2*edge+1];
@@ -63,6 +76,7 @@ TMRTopology::TMRTopology( TMRGeometry *_geo ){
       face_to_vertices[4*i+2] = edge_to_vertices[2*edge+1];
     }
 
+    // Coordinate-ordered edge e1
     edge = face_to_edges[4*i+1];
     if (edge_dir[1] > 0){
       face_to_vertices[4*i+1] = edge_to_vertices[2*edge];

@@ -258,6 +258,8 @@ class TMRSplitCurve : public TMRCurve {
 
   void getRange( double *tmin, double *tmax );
   int evalPoint( double t, TMRPoint *X );
+  int getParamsOnSurface( TMRSurface *surface, double t, 
+                          int dir, double *u, double *v );
 
  private:
   // Evaluate the bspline curve

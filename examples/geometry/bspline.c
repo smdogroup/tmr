@@ -250,12 +250,6 @@ void test_surface_lofter( double htarget ){
   TMRGeometry *geo_mesh = mesh->createMeshGeometry();
   geo_mesh->incref();
 
-  int nsurfs;
-  TMRSurface **surfs;
-  geo_mesh->getSurfaces(&nsurfs, &surfs);
-  surfs[0]->writeToVTK("surface_test.vtk");
-
-/*
   TMRTopology *topo = new TMRTopology(geo_mesh);
   topo->incref();
 
@@ -270,8 +264,8 @@ void test_surface_lofter( double htarget ){
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Create random trees
-  // forest->createRandomTrees(10, 0, 4);
-  forest->createTrees(3);
+  forest->createRandomTrees(10, 0, 4);
+  // forest->createTrees(3);
   double tbal = MPI_Wtime();
   forest->balance();
   tbal = MPI_Wtime() - tbal;
@@ -393,11 +387,15 @@ void test_surface_lofter( double htarget ){
   // Write out the solution
   f5->writeToFile("output.f5");
   f5->decref();
-*/
+
   // Deallocate the mesh
   forest->decref();
   topo->decref();
   geo_mesh->decref();
+
+
+
+
 
   // Free the objects
   surface->decref();
