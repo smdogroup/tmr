@@ -247,22 +247,6 @@ class TMRCurveFromSurface : public TMRCurve {
 };
 
 /*
-  Project a curve onto a surface and evaluate the surface location
-*/
-class TMRCurveFromSurfaceProjection : public TMRCurve {
- public:
-  TMRCurveFromSurfaceProjection( TMRSurface *_surface, 
-                                 TMRCurve *_curve );
-  ~TMRCurveFromSurfaceProjection();  
-  void getRange( double *tmin, double *tmax );
-  int evalPoint( double t, TMRPoint *p );
-
- private:
-  TMRCurve *curve;
-  TMRSurface *surface;
-};
-
-/*
   Split the curve
 */
 class TMRSplitCurve : public TMRCurve {

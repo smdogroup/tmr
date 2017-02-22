@@ -1474,9 +1474,8 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
   // Compute the quadrilateral edges
   int num_quad_edges;
   int *quad_edges;
-  int *quad_edge_nums;
   computeQuadEdges(num_nodes, num_quads, quads,
-                   &num_quad_edges, &quad_edges, &quad_edge_nums);
+                   &num_quad_edges, &quad_edges);
 
   int *all_edges = new int[ 3*num_quad_edges ];
   for ( int i = 0; i < num_quad_edges; i++ ){
@@ -1541,7 +1540,8 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
     // Get the point-offset for this surface
     int offset = mesh->getNumFixedPoints();
     for ( int j = offset; j < npts; j++, vnum++ ){
-      verts[vnum] = new TMRVertexFromSurface(surfaces[i], pts[2*j], pts[2*j+1]);
+      verts[vnum] = new TMRVertexFromSurface(surfaces[i], 
+                                             pts[2*j], pts[2*j+1]);
     }
   }
 
@@ -1581,6 +1581,12 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
 
       if (res){
         int edge_num = res[0];
+        // Tag the edge numbers as negative
+        if (quad_edges[2*edge_num] != vars[j] ||
+            quad_edges[2*edge_num+1] != vars[j+1]){
+          quad_edges[2*edge_num] *= -1;
+          quad_edges[2*edge_num+1] *= -1;
+        }
         edges[edge_num] = new TMRSplitCurve(curves[i], tpts[j], tpts[j+1]);
       }
     }
@@ -1635,10 +1641,19 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
           if (!edges[edge_num]){
             // Create the TMRBsplinePcurve on this edge
             double cpts[4];
-            cpts[0] = pts[2*l1];
-            cpts[1] = pts[2*l1+1];
-            cpts[2] = pts[2*l2];
-            cpts[3] = pts[2*l2+1];
+            if (vars[l1] == quad_edges[2*edge_num] && 
+                vars[l2] == quad_edges[2*edge_num+1]){
+              cpts[0] = pts[2*l1];
+              cpts[1] = pts[2*l1+1];
+              cpts[2] = pts[2*l2];
+              cpts[3] = pts[2*l2+1];
+            }
+            else {
+              cpts[0] = pts[2*l2];
+              cpts[1] = pts[2*l2+1];
+              cpts[2] = pts[2*l1];
+              cpts[3] = pts[2*l1+1];
+            }
             TMRBsplinePcurve *pcurve = new TMRBsplinePcurve(2, 2, cpts);
             edges[edge_num] = new TMRCurveFromSurface(surfaces[i], pcurve);
           }
@@ -1671,7 +1686,7 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
     // Get the global variables associated with the local mesh
     const int *vars;
     mesh->getNodeNums(&vars);
-    
+
     // Iterate over all of the edges, creating the appropriate surfaces
     for ( int j = 0; j < nlocal; j++, q++ ){
       TMRCurve *c[4];
@@ -1710,12 +1725,19 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
           c[k] = edges[edge_num];
 
           // Figure out the edge direction
-          if (vars[l1] == quad_edges[2*edge_num] &&
-              vars[l2] == quad_edges[2*edge_num+1]){
-            dir[k] = 1;
+          int dir_fact = 1;
+          int e1 = quad_edges[2*edge_num];
+          int e2 = quad_edges[2*edge_num+1];
+          if (e1 < 0 || e2 < 0){
+            e1 *= -1;
+            e2 *= -1;
+            dir_fact = -1;
+          }
+          if (vars[l1] == e1 && vars[l2] == e2){
+            dir[k] = dir_fact;
           }
           else {
-            dir[k] = -1;
+            dir[k] = -dir_fact;
           }
         }
       }
@@ -1736,7 +1758,6 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
   delete [] surfs;
   delete [] all_edges;
   delete [] quad_edges;
-  delete [] quad_edge_nums;
 
   return geo;
 }

@@ -250,6 +250,12 @@ void test_surface_lofter( double htarget ){
   TMRGeometry *geo_mesh = mesh->createMeshGeometry();
   geo_mesh->incref();
 
+  int nsurfs;
+  TMRSurface **surfs;
+  geo_mesh->getSurfaces(&nsurfs, &surfs);
+  surfs[0]->writeToVTK("surface_test.vtk");
+
+/*
   TMRTopology *topo = new TMRTopology(geo_mesh);
   topo->incref();
 
@@ -260,10 +266,20 @@ void test_surface_lofter( double htarget ){
   // Set up the forest 
   forest->setTopology(topo);
 
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
   // Create random trees
-  forest->createRandomTrees(10, 0, 5);
+  // forest->createRandomTrees(10, 0, 4);
+  forest->createTrees(3);
+  double tbal = MPI_Wtime();
   forest->balance();
+  tbal = MPI_Wtime() - tbal;
+  printf("[%d] Balance: %f\n", mpi_rank, tbal);
+  double tnodes = MPI_Wtime();
   forest->createNodes();
+  tnodes = MPI_Wtime() - tnodes;
+  printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
 
   // Allocate the stiffness object
   TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
@@ -275,8 +291,6 @@ void test_surface_lofter( double htarget ){
   
   // Create the TACSAssembler objects
   TACSAssembler *tacs = NULL;
-  int mpi_rank;
-  MPI_Comm_rank(comm, &mpi_rank);
 
   // Find the number of nodes for this processor
   const int *range;
@@ -379,7 +393,7 @@ void test_surface_lofter( double htarget ){
   // Write out the solution
   f5->writeToFile("output.f5");
   f5->decref();
-
+*/
   // Deallocate the mesh
   forest->decref();
   topo->decref();

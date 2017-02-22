@@ -741,8 +741,7 @@ int TMRCurveFromSurface::getParamsOnSurface( TMRSurface *surf,
                                              double t, int dir, 
                                              double *u, double *v ){
   if (surf == surface){
-    int fail = pcurve->evalPoint(t, u, v);
-    return fail;
+    return pcurve->evalPoint(t, u, v);
   }
 
   TMRPoint p;
@@ -772,54 +771,6 @@ int TMRCurveFromSurface::evalDeriv( double t, TMRPoint *Xt ){
   Xt->x = ut*Xu.x + vt*Xv.x;
   Xt->y = ut*Xu.y + vt*Xv.y;
   Xt->z = ut*Xu.z + vt*Xv.z;
-}
-
-/*
-  Project the curve on to the surface
-*/
-TMRCurveFromSurfaceProjection::TMRCurveFromSurfaceProjection( TMRSurface *_surface, 
-                                                              TMRCurve *_curve ){
-  surface = _surface;
-  curve = _curve;
-  surface->incref();
-  curve->incref();
-  setAttribute(surface->getAttribute());
-}
-
-TMRCurveFromSurfaceProjection::~TMRCurveFromSurfaceProjection(){
-  curve->decref();
-  surface->decref();
-}
-
-/*
-  Get the parameter range
-*/  
-void TMRCurveFromSurfaceProjection::getRange( double *tmin, 
-                                              double *tmax ){
-  curve->getRange(tmin, tmax);
-}
-
-/*
-  Evaluate the point
-*/
-int TMRCurveFromSurfaceProjection::evalPoint( double t, TMRPoint *p ){
-  // Evaluate the point on the curve
-  TMRPoint pt;
-  int fail = curve->evalPoint(t, &pt);
-  
-  if (!fail){
-    // Find the parameters that are closest to the
-    // point on the surface
-    double u, v;
-    fail = surface->invEvalPoint(pt, &u, &v);
-      
-    // Snap the point back to the surface
-    if (!fail){
-      fail = surface->evalPoint(u, v, p);
-    }
-  }
-
-  return fail;
 }
 
 /*
@@ -1033,7 +984,7 @@ int TMRParametricTFISurface::evalPoint( double u, double v,
     }
     else {
       fail = fail || 
-        curves[k]->getParamsOnSurface(surf, params[k], dir[k],
+        curves[k]->getParamsOnSurface(surf, 1.0 - params[k], dir[k],
                                       &cupt[k], &cvpt[k]);
     }
   }

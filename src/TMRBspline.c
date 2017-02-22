@@ -434,6 +434,77 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
   double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
   double t = 0.5*(Tu[0] + Tu[nctl+ku-1]);
 
+  // Get the bounds
+  double tmin, tmax;
+  getRange(&tmin, &tmax);
+  double tbest = 0.0;
+
+  // Set the number of trial points to use in the brute force method
+  // along each direction.
+  int nupts = 2*nctl+1;
+
+  // Using brute force, find the point that is closest to the input
+  // point by evaluating the surface at a series of locations.
+  double dist = 1e40;
+  for ( int ii = 0; ii < nupts; ii++ ){
+    t = tmin + (1.0*ii/(nupts - 1))*(tmax - tmin);
+    int intu = bspline_interval(t, Tu, nctl, ku);
+
+    // Evaluate the basis functions
+    bspline_basis(Nu, intu, t, Tu, ku, work);
+    
+    // Set the interval to the initial control point
+    intu = intu - ku + 1;
+      
+    // Evaluate the point
+    TMRPoint X;
+    X.zero();
+
+    // If this is a NURBS surface add the effect of the weights
+    if (wts){
+      // Evaluate the b-spline
+      double w = 0.0;
+      for ( int i = 0; i < ku; i++ ){
+        int index = intu+i;
+        X.x += wts[index]*Nu[i]*pts[index].x;
+        X.y += wts[index]*Nu[i]*pts[index].y;
+        X.z += wts[index]*Nu[i]*pts[index].z;
+        w += wts[index]*Nu[i];
+      }
+        
+      // Divide through by the weights
+      if (w != 0.0){
+        w = 1.0/w;
+        X.x *= w;
+        X.y *= w;
+        X.z *= w;
+      }
+    }
+    else {
+      for ( int i = 0; i < ku; i++ ){
+        int index = intu+i;
+        X.x += Nu[i]*pts[index].x;
+        X.y += Nu[i]*pts[index].y;
+        X.z += Nu[i]*pts[index].z;
+      }
+    }
+      
+    // Find the distance vector
+    X.x = point.x - X.x;
+    X.y = point.y - X.y;
+    X.z = point.z - X.z;
+
+    // Check whether the distance is closer
+    double d = X.dot(X);
+    if (d < dist){
+      dist = d;
+      tbest = t;
+    }
+  }
+
+  // Set the new closest point
+  t = tbest;
+  
   // Perform a newton iteration until convergence
   for ( int j = 0; j < max_newton_iters; j++ ){
     // Compute the knot span
