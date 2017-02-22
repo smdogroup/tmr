@@ -92,6 +92,9 @@ TMRQuadForest::TMRQuadForest( MPI_Comm _comm ){
   Free the data allocated by the TMRQuadForest object
 */
 TMRQuadForest::~TMRQuadForest(){
+  // Free the topology object associated with this mesh (if any)
+  if (topo){ topo->decref(); }
+
   freeData();
 }
 
@@ -123,9 +126,6 @@ void TMRQuadForest::freeData(){
   if (dep_ptr){ delete [] dep_ptr; }
   if (dep_conn){ delete [] dep_conn; }
   if (dep_weights){ delete [] dep_weights; }
-
-  // Free the topology object associated with this mesh (if any)
-  if (topo){ topo->decref(); }
 
   // Set the range of nodes
   node_range = NULL;
@@ -219,11 +219,7 @@ void TMRQuadForest::setTopology( TMRTopology *_topo ){
   if (_topo){
     // Incref the topology object
     _topo->incref();
-    
-    // Free the data
-    freeData();
-
-    // Set the topology object
+    if (topo){ topo->decref(); }
     topo = _topo;
 
     // Compute the topology and set it internally
@@ -260,7 +256,6 @@ void TMRQuadForest::setTopology( TMRTopology *_topo ){
 void TMRQuadForest::setConnectivity( int _num_nodes,
                                      const int *_face_conn,
                                      int _num_faces ){
-
   // Free any data if it has already been allocated. 
   freeData();
 

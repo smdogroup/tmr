@@ -1587,7 +1587,7 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
   }
 
   // Set the local quad node to edge information
-  const int edge_to_nodes[][2] = {{0, 2}, {1, 3}, {0, 1}, {2, 3}};
+  const int edge_to_nodes[][2] = {{0, 3}, {1, 2}, {0, 1}, {3, 2}};
 
   // Create the curves on the surface using Pcurve/CurveFromSurface
   for ( int i = 0; i < num_surfaces; i++ ){
@@ -1632,7 +1632,7 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
         if (res){
           // Get the edge number
           int edge_num = res[0];
-          if (!curves[edge_num]){
+          if (!edges[edge_num]){
             // Create the TMRBsplinePcurve on this edge
             double cpts[4];
             cpts[0] = pts[2*l1];
