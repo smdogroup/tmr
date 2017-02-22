@@ -1,6 +1,7 @@
 #include "TMRGeometry.h"
 #include "TMRBspline.h"
 #include "TMRMesh.h"
+#include "TMRQuadForest.h"
 #include <stdio.h>
 #include <math.h>
 
@@ -212,6 +213,9 @@ void test_surface_lofter( double htarget ){
   TMRVertexFromCurve *v3 = new TMRVertexFromCurve(curves[2], 0.0);
   TMRVertexFromCurve *v4 = new TMRVertexFromCurve(curves[3], 0.0);
 
+  int num_verts = 4;
+  TMRVertex *verts[] = {v1, v2, v3, v4};
+
   // Set the vertices
   curves[0]->setVertices(v1, v1);
   curves[1]->setVertices(v2, v3);
@@ -227,19 +231,35 @@ void test_surface_lofter( double htarget ){
 
   surface->addCurveSegment(ncurves, curves, dir);
 
-  // Write out the curves and cylindrical surface
-  for ( int k = 0; k < ncurves; k++ ){
-    char filename[128];
-    sprintf(filename, "curve%d.vtk", k);
-    curves[k]->writeToVTK(filename);
-  }
+  // Create the TMRGeometry
+  TMRSurface *surf = surface;
+  TMRGeometry *geo = new TMRGeometry(num_verts, verts,
+                                     num_curves, curves,
+                                     1, &surf);
+
+  // Allocate the new mesh
+  TMRMesh *mesh = new TMRMesh(geo);
+
+  // Mesh the geometry
+  mesh->mesh(htarget);
 
   // Create the mesh
-  TMRSurfaceMesh *mesh = new TMRSurfaceMesh(surface);
-  mesh->incref();
-  mesh->mesh(htarget);
-  mesh->writeToVTK("bspline_quads.vtk");
-  mesh->decref();  
+  TMRGeometry *geo_mesh = mesh->createMeshGeometry();
+  geo_mesh->incref();
+
+  TMRTopology *topo = new TMRTopology(geo_mesh);
+  topo->incref();
+
+  TMRQuadForest *forest = new TMRQuadForest(MPI_COMM_WORLD);
+  forest->incref();
+
+  // Set up the forest 
+  forest->setTopology(topo);
+
+
+  forest->decref();
+  topo->incref();
+  geo_mesh->decref();
 
   // Free the objects
   surface->decref();

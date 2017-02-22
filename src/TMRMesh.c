@@ -19,8 +19,8 @@ static int compare_edges( const void *avoid, const void *bvoid ){
   const int *b = static_cast<const int*>(bvoid);
   
   // Extract the x/y locations for the a and b points
-  int ax = a[0], ay = a[1];
-  int bx = b[0], by = b[1];
+  int ax = a[1], ay = a[2];
+  int bx = b[1], by = b[2];
 
   int xxor = ax ^ bx;
   int yxor = ay ^ by;
@@ -1478,21 +1478,23 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
   computeQuadEdges(num_nodes, num_quads, quads,
                    &num_quad_edges, &quad_edges, &quad_edge_nums);
 
-  int *all_edges = new int[ 4*num_quad_edges ];
+  int *all_edges = new int[ 3*num_quad_edges ];
   for ( int i = 0; i < num_quad_edges; i++ ){
-    all_edges[4*i] = quad_edges[2*i];
-    all_edges[4*i+1] = quad_edges[2*i+1];
-    all_edges[4*i+2] = quad_edges[2*i+1];
-    all_edges[4*i+3] = quad_edges[2*i];
+    all_edges[3*i] = i;
+
+    // Set the quad edge, setting the lower edge number first
+    if (quad_edges[2*i] < quad_edges[2*i+1]){
+      all_edges[3*i+1] = quad_edges[2*i];
+      all_edges[3*i+2] = quad_edges[2*i+1];
+    }
+    else {
+      all_edges[3*i+1] = quad_edges[2*i+1];
+      all_edges[3*i+2] = quad_edges[2*i];      
+    }
   }
 
-  // Sort all of the edges/nodes so that they a
-  qsort(all_edges, 2*num_quad_edges, 2*sizeof(int), compare_edges);
-
-
-
-
-
+  // Sort all of the edges/nodes so that they can be easily searched
+  qsort(all_edges, num_quad_edges, 3*sizeof(int), compare_edges);
 
   // Create vertices
   int vnum = 0;
@@ -1562,14 +1564,25 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
     mesh->getMeshPoints(&npts, &tpts, NULL);
     for ( int j = 0; j < npts-1; j++ ){
       // Find the edge associated with this curve
-      int edge[2] = {vars[j], vars[j+1]};
+      int edge[3];
+      edge[0] = 0;
+      if (vars[j] < vars[j+1]){
+        edge[1] = vars[j];
+        edge[2] = vars[j+1];
+      }
+      else {
+        edge[1] = vars[j+1];
+        edge[2] = vars[j];
+      }
 
       // Find the associated edge number 
-      // bsearch(edge);
+      int *res = (int*)bsearch(edge, all_edges, num_quad_edges,
+                               3*sizeof(int), compare_edges);
 
-      int edge_num = 0;
-
-      edges[edge_num] = new TMRSplitCurve(curves[i], tpts[j], tpts[j+1]);
+      if (res){
+        int edge_num = res[0];
+        edges[edge_num] = new TMRSplitCurve(curves[i], tpts[j], tpts[j+1]);
+      }
     }
   }
 
@@ -1601,19 +1614,34 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
         int l2 = quad_local[4*j + edge_to_nodes[k][1]];
 
         // Get the global edge number
-        int edge[2] = {vars[l1], vars[l2]};
+        int edge[3];
+        edge[0] = 0;
+        if (vars[l1] < vars[l2]){
+          edge[1] = vars[l1];
+          edge[2] = vars[l2];
+        }
+        else {
+          edge[1] = vars[l2];
+          edge[2] = vars[l1];
+        }
 
-        // Get the edge number
-        int edge_num = 0;
-        if (!curves[edge_num]){
-          // Create the TMRBsplinePcurve on this edge
-          double cpts[4];
-          cpts[0] = pts[2*l1];
-          cpts[1] = pts[2*l1+1];
-          cpts[2] = pts[2*l2];
-          cpts[3] = pts[2*l2+1];
-          TMRBsplinePcurve *pcurve = new TMRBsplinePcurve(2, 2, cpts);
-          edges[edge_num] = new TMRCurveFromSurface(surfaces[i], pcurve);
+        // Find the associated edge number 
+        int *res = (int*)bsearch(edge, all_edges, num_quad_edges,
+                                 3*sizeof(int), compare_edges);
+
+        if (res){
+          // Get the edge number
+          int edge_num = res[0];
+          if (!curves[edge_num]){
+            // Create the TMRBsplinePcurve on this edge
+            double cpts[4];
+            cpts[0] = pts[2*l1];
+            cpts[1] = pts[2*l1+1];
+            cpts[2] = pts[2*l2];
+            cpts[3] = pts[2*l2+1];
+            TMRBsplinePcurve *pcurve = new TMRBsplinePcurve(2, 2, cpts);
+            edges[edge_num] = new TMRCurveFromSurface(surfaces[i], pcurve);
+          }
         }
       }
     } 
@@ -1649,11 +1677,9 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
       TMRCurve *c[4];
       int dir[4];
       TMRVertex *v[4];
-      for ( int k = 0; k < 4; k++ ){
-        // By default, assume that we're along the correction
-        // direction
-        dir[k] = 1;
 
+      // Loop over all of the edges/nodes associated with this vertex
+      for ( int k = 0; k < 4; k++ ){
         // Set the vertex number
         int l0 = quad_local[4*j + quad_to_coordinate[k]];
         v[k] = verts[vars[l0]];
@@ -1663,12 +1689,35 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
         int l2 = quad_local[4*j + edge_to_nodes[k][1]];
 
         // Get the global edge number
-        int edge[2] = {vars[l1], vars[l2]};
+        int edge[3];
+        edge[0] = 0;
+        if (vars[l1] < vars[l2]){
+          edge[1] = vars[l1];
+          edge[2] = vars[l2];
+        }
+        else {
+          edge[1] = vars[l2];
+          edge[2] = vars[l1];
+        }
 
-        // Get the global edge number
-        int edge_num = 0;
+        // Find the associated edge number 
+        int *res = (int*)bsearch(edge, all_edges, num_quad_edges,
+                                 3*sizeof(int), compare_edges);
 
-        c[k] = edges[edge_num];
+        if (res){
+          // Get the global edge number
+          int edge_num = res[0];
+          c[k] = edges[edge_num];
+
+          // Figure out the edge direction
+          if (vars[l1] == quad_edges[2*edge_num] &&
+              vars[l2] == quad_edges[2*edge_num+1]){
+            dir[k] = 1;
+          }
+          else {
+            dir[k] = -1;
+          }
+        }
       }
 
       // Create the parametric TFI surface
