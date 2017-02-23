@@ -14,7 +14,6 @@
   bsearch to sort/search the edge pairs.
 */
 static int compare_edges( const void *avoid, const void *bvoid ){
-  // Cast the input to uint32_t types
   const int *a = static_cast<const int*>(avoid);
   const int *b = static_cast<const int*>(bvoid);
   

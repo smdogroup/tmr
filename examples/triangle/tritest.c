@@ -1,4 +1,4 @@
-#include "TMRTriangleInterface.h"
+#include "TMRTriangularize.h"
 #include "TMRBspline.h"
 #include <stdio.h>
 #include <math.h>
@@ -57,25 +57,12 @@ int main( int argc, char *argv[] ){
   double *holes = NULL;
 
   // Triangulate the region
-  TMRTriangulation *tri = new TMRTriangulation(npts, prms, NULL, surf);
-  tri->setSegments(nsegs, seg);
-  tri->create();
-  tri->refine(length);
+  TMRTriangularize *tri = 
+    new TMRTriangularize(npts, prms, nholes, nsegs, seg, surf);
+  tri->incref();
 
-  for ( int k = 0; k < 10; k++ ){
-    tri->springSmoothing(100);
-    tri->remesh();
-  }
-  tri->springSmoothing(50);
-  tri->printTriQuality();
+  tri->frontal(length);
   tri->writeToVTK("triangle.vtk");
-
-  tri->recombine();
-  tri->printQuadQuality();
-  tri->writeQuadToVTK("match.vtk");
-  tri->springQuadSmoothing(100);
-  tri->printQuadQuality();
-  tri->writeQuadToVTK("smoothed.vtk");
 
   TMRFinalize();
   MPI_Finalize();

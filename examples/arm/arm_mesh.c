@@ -10,9 +10,6 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "TMRTriangularize.h"
-
-
 TMRBsplineCurve* createSemiCircle( TMRPoint center, double r,
                                    double theta ){
   // Set the points and weights for the B-spline circle

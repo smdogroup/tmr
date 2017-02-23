@@ -86,14 +86,14 @@ class TMRCurve : public TMREntity {
   void writeToVTK( const char *filename );
   
  private:
-  // Set the step size
-  static double deriv_step_size;
-
   // The start/end vertices of the curve
   TMRVertex *v1, *v2;
 
   // The mesh for the curve - if it exists
   TMRCurveMesh *mesh;
+
+  // Set the step size
+  static double deriv_step_size;
 };
 
 /*
@@ -116,7 +116,7 @@ class TMRSurface : public TMREntity {
 
   // Given the parametric point, evaluate the first derivative 
   virtual int evalDeriv( double u, double v, 
-                         TMRPoint *Xu, TMRPoint *Xv ) = 0;
+                         TMRPoint *Xu, TMRPoint *Xv );
 
   // Add a curve segment. The curve segments must form a closed loop
   // which is checked by the code. The boundary must lie
@@ -268,6 +268,36 @@ class TMRSplitCurve : public TMRCurve {
 };
 
 /*
+  The parametrization of a surface
+*/
+class TMRDuplicateSurface : public TMRSurface {
+ public:
+  TMRDuplicateSurface( TMRSurface *_surf ){ 
+    surf = _surf; 
+    surf->incref();
+  }
+  ~TMRDuplicateSurface(){ 
+    surf->decref(); 
+  }
+  void getRange( double *umin, double *vmin,
+                 double *umax, double *vmax ){
+    surf->getRange(umin, vmin, umax, vmax);
+  }
+  int evalPoint( double u, double v, TMRPoint *X ){
+    return surf->evalPoint(u, v, X);
+  }
+  int invEvalPoint( TMRPoint p, double *u, double *v ){
+    return surf->invEvalPoint(p, u, v);
+  }
+  int evalDeriv( double u, double v, TMRPoint *Xu, TMRPoint *Xv ){
+    return surf->evalDeriv(u, v, Xu, Xv);
+  }
+
+ private:
+  TMRSurface *surf;
+};
+
+/*
   Parametric TFI class
 
   This surface defines a segment of a surface, defined in parameter
@@ -278,7 +308,7 @@ class TMRSplitCurve : public TMRCurve {
   The parametric curves and the input vertices are used to define a
   segment on the surface in parameter space that looks like this:
 
-  v2-------c3------v3
+  v2-------c3-------v3
   |                 |
   |      v ^        |
   |        |        |
@@ -286,7 +316,7 @@ class TMRSplitCurve : public TMRCurve {
   |                 |
   |                 |
   |                 |
-  v0-------c2------v1
+  v0-------c2-------v1
 
   Note that all parameter curves must have the range [0,
   1]. Furthermore, note that the constructor for this object
@@ -339,7 +369,8 @@ class TMRGeometry : public TMREntity {
   int getSurfaceIndex( TMRSurface *surf );
 
  private:
-  // Verify that everything is more-or-less well-defined
+  // Verify that everything is more or less well defined. Print
+  // out error messages if something doesn't make sense.
   int verify();
 
   // The verticies, curves and surfaces that define a BRep
@@ -347,6 +378,22 @@ class TMRGeometry : public TMREntity {
   TMRVertex **vertices;
   TMRCurve **curves;
   TMRSurface **surfaces;
+
+  // This keeps track of the ordering of the geometry objects and
+  // enables a fast object -> object index lookup
+  template <class ctype>
+  class OrderedPair {
+  public:
+    int num;
+    ctype *obj;
+  };
+
+  template <class ctype>
+  static int compare_ordered_pairs( const void *avoid, const void *bvoid );
+
+  OrderedPair<TMRVertex> *ordered_verts;
+  OrderedPair<TMRCurve> *ordered_curves;
+  OrderedPair<TMRSurface> *ordered_surfaces;
 };
 
 #endif // TMR_GEOMETRY_H

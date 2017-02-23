@@ -396,6 +396,77 @@ TMRSurface::~TMRSurface(){
 }
 
 /*
+  Set the step size for the derivative
+*/
+double TMRSurface::deriv_step_size = 1e-6;
+
+/*
+  Evaluate the derivative using a finite-difference step size
+*/
+int TMRSurface::evalDeriv( double u, double v, 
+                           TMRPoint *Xu, TMRPoint *Xv ){
+  int fail = 0;
+
+  // Retrieve the parameter bounds for the curve
+  double umin, vmin, umax, vmax;
+  getRange(&umin, &vmin, &umax, &vmax);
+
+  if (u >= umin && u <= umax &&
+      v >= vmin && v <= vmax){
+    // Evaluate the point at the original 
+    TMRPoint p;
+    fail = evalPoint(u, v, &p);
+
+    // Compute the approximate derivative using a forward
+    // difference or backward difference, depending on whether
+    // the step is within the domain
+    if (u + deriv_step_size <= umax){
+      TMRPoint p2;
+      fail = fail || evalPoint(u + deriv_step_size, v, &p2);
+
+      Xu->x = (p2.x - p.x)/deriv_step_size;
+      Xu->y = (p2.y - p.y)/deriv_step_size;
+      Xu->z = (p2.z - p.z)/deriv_step_size;
+    }
+    else if (u >= umin + deriv_step_size){
+      TMRPoint p2;
+      fail = fail || evalPoint(u - deriv_step_size, v, &p2);
+
+      Xu->x = (p.x - p2.x)/deriv_step_size;
+      Xu->y = (p.y - p2.y)/deriv_step_size;
+      Xu->z = (p.z - p2.z)/deriv_step_size;
+    }
+    else {
+      fail = 1;
+    }
+
+    // Compute the approximate derivative using a forward
+    // difference
+    if (v + deriv_step_size <= vmax){
+      TMRPoint p2;
+      fail = fail || evalPoint(u, v + deriv_step_size, &p2);
+
+      Xv->x = (p2.x - p.x)/deriv_step_size;
+      Xv->y = (p2.y - p.y)/deriv_step_size;
+      Xv->z = (p2.z - p.z)/deriv_step_size;
+    }
+    else if (v >= vmin + deriv_step_size){
+      TMRPoint p2;
+      fail = fail || evalPoint(u, v - deriv_step_size, &p2);
+
+      Xv->x = (p.x - p2.x)/deriv_step_size;
+      Xv->y = (p.y - p2.y)/deriv_step_size;
+      Xv->z = (p.z - p2.z)/deriv_step_size;
+    }
+    else {
+      fail = 1;
+    }
+  }
+
+  return fail;
+}
+
+/*
   Add the curves that bound the surface
 */
 int TMRSurface::addCurveSegment( int ncurves, TMRCurve **curves, 
@@ -600,6 +671,7 @@ TMRVertexFromCurve::TMRVertexFromCurve( TMRCurve *_curve,
                                         TMRPoint p ){
   curve = _curve;
   curve->incref();
+  setAttribute(curve->getAttribute());
   
   // Determine the parametric location of p using the initial
   // position
@@ -655,9 +727,9 @@ TMRVertexFromSurface::TMRVertexFromSurface( TMRSurface *_surface,
                                             double _u, double _v ){
   surface = _surface;
   surface->incref();
+  setAttribute(surface->getAttribute());
   u = _u;
   v = _v;
-  setAttribute(surface->getAttribute());
 }
 
 /*
@@ -668,6 +740,7 @@ TMRVertexFromSurface::TMRVertexFromSurface( TMRSurface *_surface,
                                             TMRPoint p ){
   surface = _surface;
   surface->incref();
+  setAttribute(surface->getAttribute());
   surface->invEvalPoint(p, &u, &v);
 }
 
@@ -705,6 +778,7 @@ TMRCurveFromSurface::TMRCurveFromSurface( TMRSurface *_surface,
                                           TMRPcurve *_pcurve ){
   surface = _surface;
   surface->incref();
+  setAttribute(surface->getAttribute());
   pcurve = _pcurve;
   pcurve->incref();
 }
@@ -714,6 +788,7 @@ TMRCurveFromSurface::TMRCurveFromSurface( TMRSurface *_surface,
 */
 TMRCurveFromSurface::~TMRCurveFromSurface(){
   surface->decref();
+  setAttribute(surface->getAttribute());
   pcurve->decref();
 }
 
@@ -895,6 +970,7 @@ TMRParametricTFISurface::TMRParametricTFISurface( TMRSurface *_surf,
                                                   TMRVertex *verts[] ){
   surf = _surf;
   surf->incref();
+  setAttribute(surf->getAttribute());
 
   for ( int k = 0; k < 4; k++ ){
     // Retrieve the parametric curves on the surface
@@ -1070,6 +1146,33 @@ TMRGeometry::TMRGeometry( int _num_vertices, TMRVertex **_vertices,
     surfaces[i]->incref();
   }
 
+  ordered_verts = new OrderedPair<TMRVertex>[ num_vertices ];
+  ordered_curves = new OrderedPair<TMRCurve>[ num_curves ];
+  ordered_surfaces = new OrderedPair<TMRSurface>[ num_surfaces ];
+
+  for ( int i = 0; i < num_vertices; i++ ){
+    ordered_verts[i].num = i;
+    ordered_verts[i].obj = vertices[i];
+  }
+
+  for ( int i = 0; i < num_curves; i++ ){
+    ordered_curves[i].num = i;
+    ordered_curves[i].obj = curves[i];
+  }
+
+  for ( int i = 0; i < num_surfaces; i++ ){
+    ordered_surfaces[i].num = i;
+    ordered_surfaces[i].obj = surfaces[i];
+  }
+
+  // Sort the vertices, curves and surfaces
+  qsort(ordered_verts, num_vertices, sizeof(OrderedPair<TMRVertex>),
+        compare_ordered_pairs<TMRVertex>);
+  qsort(ordered_curves, num_curves, sizeof(OrderedPair<TMRCurve>),
+        compare_ordered_pairs<TMRCurve>);
+  qsort(ordered_surfaces, num_surfaces, sizeof(OrderedPair<TMRSurface>),
+        compare_ordered_pairs<TMRSurface>);
+
   verify();
 }
 
@@ -1089,6 +1192,9 @@ TMRGeometry::~TMRGeometry(){
   delete [] vertices;
   delete [] curves;
   delete [] surfaces;
+  delete [] ordered_verts;
+  delete [] ordered_curves;
+  delete [] ordered_surfaces;
 }
 
 /*
@@ -1198,38 +1304,68 @@ void TMRGeometry::getSurfaces( int *_num_surfaces,
 }
 
 /*
-  Retrieve the indices 
+  Static member function for sorting the ordered pairs
+*/
+template <class ctype>
+int TMRGeometry::compare_ordered_pairs( const void *avoid, const void *bvoid ){
+  const OrderedPair<ctype> *a = static_cast<const OrderedPair<ctype>*>(avoid);
+  const OrderedPair<ctype> *b = static_cast<const OrderedPair<ctype>*>(bvoid);
+  return a->obj - b->obj; // Use pointer arithmetic to determine relative positions
+}
+
+/*
+  Retrieve the index given the vertex point
 */
 int TMRGeometry::getVertexIndex( TMRVertex *vertex ){
-  int index = -1;
-  for ( int i = 0; i < num_vertices; i++ ){
-    if (vertices[i] == vertex){
-      index = i;
-      break;
-    }
+  OrderedPair<TMRVertex> pair;
+  pair.num = -1;
+  pair.obj = vertex;
+
+  // Search for the ordered pair
+  OrderedPair<TMRVertex> *item = 
+    (OrderedPair<TMRVertex>*)bsearch(&pair, ordered_verts, num_vertices, 
+                                     sizeof(OrderedPair<TMRVertex>),
+                                     compare_ordered_pairs<TMRVertex>);
+  if (item){
+    return item->num;
   }
-  return index;
+  return -1;
 }
 
+/*
+  Retrieve the index given the pointer to the curve object
+*/
 int TMRGeometry::getCurveIndex( TMRCurve *curve ){
-  int index = -1;
-  for ( int i = 0; i < num_curves; i++ ){
-    if (curves[i] == curve){
-      index = i;
-      break;
-    }
-  }
-  return index;
+  OrderedPair<TMRCurve> pair;
+  pair.num = -1;
+  pair.obj = curve;
 
+  // Search for the ordered pair
+  OrderedPair<TMRCurve> *item = 
+    (OrderedPair<TMRCurve>*)bsearch(&pair, ordered_curves, num_curves,
+                                    sizeof(OrderedPair<TMRCurve>),
+                                    compare_ordered_pairs<TMRCurve>);
+  if (item){
+    return item->num;
+  }
+  return -1;
 }
 
+/*
+  Retrieve the index given the pointer to the surface object
+*/
 int TMRGeometry::getSurfaceIndex( TMRSurface *surf ){
-  int index = -1;
-  for ( int i = 0; i < num_surfaces; i++ ){
-    if (surfaces[i] == surf){
-      index = i;
-      break;
-    }
+  OrderedPair<TMRSurface> pair;
+  pair.num = -1;
+  pair.obj = surf;
+
+  // Search for the ordered pair
+  OrderedPair<TMRSurface> *item = 
+    (OrderedPair<TMRSurface>*)bsearch(&pair, ordered_surfaces, num_surfaces,
+                                      sizeof(OrderedPair<TMRSurface>),
+                                      compare_ordered_pairs<TMRSurface>);
+  if (item){
+    return item->num;
   }
-  return index;
+  return -1;
 }

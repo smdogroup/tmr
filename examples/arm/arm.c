@@ -1,5 +1,6 @@
 #include "TMRTopology.h"
 #include "TMRBspline.h"
+#include "TMRMesh.h"
 #include "TMRQuadForest.h"
 #include "TACSAssembler.h"
 #include "isoFSDTStiffness.h"
@@ -14,13 +15,24 @@
 */
 class TFIPlanar : public TMRSurface {
  public:
-  TFIPlanar( TMRVertex *v[], TMREdge *e[], const int edge_dir[] ){
+  TFIPlanar( TMRVertex *v[], TMRCurve *e[], const int edge_dir[] ){
     for ( int i = 0; i < 4; i++ ){
       v[i]->evalPoint(&pt[i]);
-      e[i]->getCurve(&curve[i]);
+      curve[i] = e[i];
       dir[i] = edge_dir[i];
     }
+
+    // Set the directions from the input. Note that the ordering
+    // must be counter-clockwise ordered.
+    int d[4];
+    TMRCurve *c[4];
+    c[0] = e[2]; d[0] = dir[2];
+    c[1] = e[1]; d[1] = dir[1];
+    c[2] = e[3]; d[2] = -dir[3];
+    c[3] = e[0]; d[3] = -dir[0];
+    addCurveSegment(4, c, d);
   }
+
   // Get the parameter range for this surface
   void getRange( double *umin, double *vmin,
                  double *umax, double *vmax ){
@@ -57,7 +69,7 @@ class TFIPlanar : public TMRSurface {
     X->z = (1.0-u)*c[0].z + u*c[1].z + (1.0-v)*c[2].z + v*c[3].z
       - ((1.0-u)*(1.0-v)*pt[0].z + u*(1.0-v)*pt[1].z + v*(1.0-u)*pt[2].z + u*v*pt[3].z); 
 
-    return 1;
+    return fail;
   }
   
   // Perform the inverse evaluation
@@ -65,11 +77,6 @@ class TFIPlanar : public TMRSurface {
     return 1;
   }
 
-  // Given the parametric point, evaluate the first derivative 
-  int evalDeriv( double u, double v, 
-                 TMRPoint *Xu, TMRPoint *Xv ){
-    return 1;
-  }
  private:
   int dir[4];
   TMRPoint pt[4];
@@ -319,134 +326,135 @@ TMRTopology* setUpTopology( MPI_Comm comm,
 
   // Create the edges within the model
   const int num_edges = 29;
-  TMREdge *e[29];
+  TMRCurve *e[29];
   // First inner edges
-  e[0] = new TMREdge(new TMRSplitCurve(inner1, v[0], v[1]));
-  e[1] = new TMREdge(new TMRSplitCurve(inner1, v[1], v[2]));
-  e[2] = new TMREdge(new TMRSplitCurve(inner1, v[2], v[3]));
-  e[3] = new TMREdge(new TMRSplitCurve(inner1, 0.75, 1.0), v[3], v[0]);
+  e[0] = new TMRSplitCurve(inner1, v[0], v[1]);
+  e[1] = new TMRSplitCurve(inner1, v[1], v[2]);
+  e[2] = new TMRSplitCurve(inner1, v[2], v[3]);
+  e[3] = new TMRSplitCurve(inner1, 0.75, 1.0);
+  e[3]->setVertices(v[3], v[0]);
 
   // Second set of inner edges
-  e[4] = new TMREdge(new TMRSplitCurve(inner2, v[4], v[5]));
-  e[5] = new TMREdge(new TMRSplitCurve(inner2, v[5], v[6]));
-  e[6] = new TMREdge(new TMRSplitCurve(inner2, v[6], v[7]));
-  e[7] = new TMREdge(new TMRSplitCurve(inner2, 0.75, 1.0), v[7], v[4]);
+  e[4] = new TMRSplitCurve(inner2, v[4], v[5]);
+  e[5] = new TMRSplitCurve(inner2, v[5], v[6]);
+  e[6] = new TMRSplitCurve(inner2, v[6], v[7]);
+  e[7] = new TMRSplitCurve(inner2, 0.75, 1.0);
+  e[7]->setVertices(v[7], v[4]);
 
   // Outer edges -- all the way around
-  e[8] = new TMREdge(new TMRSplitCurve(outer1, v[8], v[9]));
-  e[9] = new TMREdge(new TMRSplitCurve(outer1, v[9], v[10]));
+  e[8] = new TMRSplitCurve(outer1, v[8], v[9]);
+  e[9] = new TMRSplitCurve(outer1, v[9], v[10]);
 
   // Lower line segment edges
-  e[10] = new TMREdge(new TMRSplitCurve(line2, v[10], v[16]));
-  e[11] = new TMREdge(new TMRSplitCurve(line2, v[16], v[17]));
-  e[12] = new TMREdge(new TMRSplitCurve(line2, v[17], v[11]));
+  e[10] = new TMRSplitCurve(line2, v[10], v[16]);
+  e[11] = new TMRSplitCurve(line2, v[16], v[17]);
+  e[12] = new TMRSplitCurve(line2, v[17], v[11]);
 
   // Outer edges
-  e[13] = new TMREdge(new TMRSplitCurve(outer2, v[11], v[12]));
-  e[14] = new TMREdge(new TMRSplitCurve(outer2, v[12], v[13]));
+  e[13] = new TMRSplitCurve(outer2, v[11], v[12]);
+  e[14] = new TMRSplitCurve(outer2, v[12], v[13]);
 
   // Upper line segments  
-  e[15] = new TMREdge(new TMRSplitCurve(line1, v[15], v[13]));
-  e[16] = new TMREdge(new TMRSplitCurve(line1, v[14], v[15]));
-  e[17] = new TMREdge(new TMRSplitCurve(line1, v[8], v[14]));
+  e[15] = new TMRSplitCurve(line1, v[15], v[13]);
+  e[16] = new TMRSplitCurve(line1, v[14], v[15]);
+  e[17] = new TMRSplitCurve(line1, v[8], v[14]);
 
-  // The inner line segments - most of these requrie the creation of a new line
-  e[18] = new TMREdge(createLine(v[1], v[8]));
-  e[19] = new TMREdge(createLine(v[2], v[9]));
-  e[20] = new TMREdge(createLine(v[3], v[10]));
+  // The inner line segments - most of these requrie the creation of a line
+  e[18] = createLine(v[1], v[8]);
+  e[19] = createLine(v[2], v[9]);
+  e[20] = createLine(v[3], v[10]);
 
-  e[21] = new TMREdge(createLine(v[0], v[16]));
-  e[22] = new TMREdge(createLine(v[6], v[17]));
+  e[21] = createLine(v[0], v[16]);
+  e[22] = createLine(v[6], v[17]);
 
-  e[23] = new TMREdge(createLine(v[7], v[11]));
-  e[24] = new TMREdge(createLine(v[4], v[12]));
-  e[25] = new TMREdge(createLine(v[5], v[13]));
+  e[23] = createLine(v[7], v[11]);
+  e[24] = createLine(v[4], v[12]);
+  e[25] = createLine(v[5], v[13]);
 
-  e[26] = new TMREdge(createLine(v[6], v[15]));
-  e[27] = new TMREdge(createLine(v[0], v[14]));
+  e[26] = createLine(v[6], v[15]);
+  e[27] = createLine(v[0], v[14]);
 
   // Create the last edge joining the two segments
-  e[28] = new TMREdge(createLine(v[0], v[6]));
+  e[28] = createLine(v[0], v[6]);
 
   if (write_vtk_files){
     for ( int i = 0; i < num_edges; i++ ){
-      TMRCurve *curve;
-      e[i]->getCurve(&curve);
       char filename[128];
       sprintf(filename, "edge%d.vtk", i);
-      curve->writeToVTK(filename);
+      e[i]->writeToVTK(filename);
     }
   }
 
   // Now, create all of the faces
   const int num_faces = 10;
-  TMRFace *f[10];
+  TMRSurface *f[10];
   
   // Arrays to store the vertices/edges for each
   int dir0[4] = {1, -1, 1, 1};
   TMRVertex *v0[4] = {v[0], v[14], v[1], v[8]}; 
-  TMREdge *e0[4] = {e[0], e[17], e[27], e[18]};
-  f[0] = new TMRFace(new TFIPlanar(v0, e0, dir0), e0, dir0);
+  TMRCurve *e0[4] = {e[0], e[17], e[27], e[18]};
+  f[0] = new TFIPlanar(v0, e0, dir0);
 
   int dir1[4] = {1, 1, 1, 1};
   TMRVertex *v1[4] = {v[1], v[8], v[2], v[9]}; 
-  TMREdge *e1[4] = {e[1], e[8], e[18], e[19]};
-  f[1] = new TMRFace(new TFIPlanar(v1, e1, dir1), e1, dir1);
+  TMRCurve *e1[4] = {e[1], e[8], e[18], e[19]};
+  f[1] = new TFIPlanar(v1, e1, dir1);
 
   int dir2[4] = {1, 1, 1, 1};
   TMRVertex *v2[4] = {v[2], v[9], v[3], v[10]}; 
-  TMREdge *e2[4] = {e[2], e[9], e[19], e[20]};
-  f[2] = new TMRFace(new TFIPlanar(v2, e2, dir2), e2, dir2);
+  TMRCurve *e2[4] = {e[2], e[9], e[19], e[20]};
+  f[2] = new TFIPlanar(v2, e2, dir2);
 
   int dir3[4] = {1, 1, 1, 1};
   TMRVertex *v3[4] = {v[3], v[10], v[0], v[16]}; 
-  TMREdge *e3[4] = {e[3], e[10], e[20], e[21]};
-  f[3] = new TMRFace(new TFIPlanar(v3, e3, dir3), e3, dir3);
+  TMRCurve *e3[4] = {e[3], e[10], e[20], e[21]};
+  f[3] = new TFIPlanar(v3, e3, dir3);
 
   int dir4[4] = {1, 1, 1, 1};
   TMRVertex *v4[4] = {v[0], v[16], v[6], v[17]}; 
-  TMREdge *e4[4] = {e[28], e[11], e[21], e[22]};
-  f[4] = new TMRFace(new TFIPlanar(v4, e4, dir4), e4, dir4);
+  TMRCurve *e4[4] = {e[28], e[11], e[21], e[22]};
+  f[4] = new TFIPlanar(v4, e4, dir4);
 
   int dir5[4] = {1, 1, 1, 1};
   TMRVertex *v5[4] = {v[6], v[17], v[7], v[11]}; 
-  TMREdge *e5[4] = {e[6], e[12], e[22], e[23]};
-  f[5] = new TMRFace(new TFIPlanar(v5, e5, dir5), e5, dir5);
+  TMRCurve *e5[4] = {e[6], e[12], e[22], e[23]};
+  f[5] = new TFIPlanar(v5, e5, dir5);
 
   int dir6[4] = {1, 1, 1, 1};
   TMRVertex *v6[4] = {v[7], v[11], v[4], v[12]}; 
-  TMREdge *e6[4] = {e[7], e[13], e[23], e[24]};
-  f[6] = new TMRFace(new TFIPlanar(v6, e6, dir6), e6, dir6);
+  TMRCurve *e6[4] = {e[7], e[13], e[23], e[24]};
+  f[6] = new TFIPlanar(v6, e6, dir6);
 
   int dir7[4] = {1, 1, 1, 1};
   TMRVertex *v7[4] = {v[4], v[12], v[5], v[13]}; 
-  TMREdge *e7[4] = {e[4], e[14], e[24], e[25]};
-  f[7] = new TMRFace(new TFIPlanar(v7, e7, dir7), e7, dir7);
+  TMRCurve *e7[4] = {e[4], e[14], e[24], e[25]};
+  f[7] = new TFIPlanar(v7, e7, dir7);
 
   int dir8[4] = {1, -1, 1, 1};
   TMRVertex *v8[4] = {v[5], v[13], v[6], v[15]}; 
-  TMREdge *e8[4] = {e[5], e[15], e[25], e[26]};
-  f[8] = new TMRFace(new TFIPlanar(v8, e8, dir8), e8, dir8);
+  TMRCurve *e8[4] = {e[5], e[15], e[25], e[26]};
+  f[8] = new TFIPlanar(v8, e8, dir8);
 
   int dir9[4] = {1, 1, 1, 1};
   TMRVertex *v9[4] = {v[0], v[6], v[14], v[15]}; 
-  TMREdge *e9[4] = {e[27], e[26], e[28], e[16]};
-  f[9] = new TMRFace(new TFIPlanar(v9, e9, dir9), e9, dir9);
+  TMRCurve *e9[4] = {e[27], e[26], e[28], e[16]};
+  f[9] = new TFIPlanar(v9, e9, dir9);
 
   if (write_vtk_files){
     for ( int i = 0; i < num_faces; i++ ){
-      TMRSurface *surf;
-      f[i]->getSurface(&surf);
       char filename[128];
       sprintf(filename, "surf%d.vtk", i);
-      surf->writeToVTK(filename);
+      f[i]->writeToVTK(filename);
     }
   }
 
+  // Create the geometry from the planar faces
+  TMRGeometry *geo = new TMRGeometry(num_vertices, v,
+                                     num_edges, e,
+                                     num_faces, f);
+
   // Create the topology object with the vertices, faces and edge objects
-  TMRTopology *topo = 
-    new TMRTopology(comm, v, num_vertices, 
-                    e, num_edges, f, num_faces);
+  TMRTopology *topo = new TMRTopology(geo);
 
   return topo;
 }

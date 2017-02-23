@@ -11,7 +11,6 @@
 #include "TACSMeshLoader.h"
 #include "tacslapack.h"
 
-
 // Set the element order = 3rd order, quadratic elements
 const int ELEMENT_ORDER = 3;
 
