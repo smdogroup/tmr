@@ -393,10 +393,6 @@ void test_surface_lofter( double htarget ){
   topo->decref();
   geo_mesh->decref();
 
-
-
-
-
   // Free the objects
   surface->decref();
   for ( int k = 0; k < num_curves; k++ ){
