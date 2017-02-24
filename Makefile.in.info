@@ -14,8 +14,8 @@ TMR_DEBUG_FLAGS = -fPIC -g
 TMR_FLAGS = -fPIC -O3
 
 # Set the linking command - use either static/dynamic linking
-# TMR_LD_CMD=-L${TMR_DIR}/lib/ -Wl,-rpath,${TMR_DIR}/lib -ltmr
-TMR_LD_CMD=${TMR_DIR}/lib/libtmr.a
+# TMR_LD_CMD=${TMR_DIR}/lib/libtmr.a
+TMR_LD_CMD=-L${TMR_DIR}/lib/ -Wl,-rpath,${TMR_DIR}/lib -ltmr
 
 # Set up for parallel make
 MAKE = make -j 2

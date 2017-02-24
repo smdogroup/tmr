@@ -42,3 +42,6 @@ extern/
 *.mcr
 *.zip
 *.vtk
+*.txt
+tmr/*.so
+tmr/*.cpp
