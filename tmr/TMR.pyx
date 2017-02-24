@@ -145,7 +145,7 @@ cdef class BsplineSurface(Surface):
             for i in range(nx):
                 p[i + j*nx].x = pts[i,j,0]
                 p[i + j*nx].y = pts[i,j,1]
-                p[i].z = pts[i,2]
+                p[i + j*nx].z = pts[i,j,2]
         self.ptr = new TMRBsplineSurface(nx, ny, kx, ky, p)
         self.ptr.incref()
         free(p)
@@ -211,7 +211,7 @@ cdef class CurveLofter:
             if bspline != NULL:
                crvs[i] = bspline
             else:
-               raise ValueError('CurveLofter: All lofting curves must be of type BsplineCurve')
+               raise ValueError('CurveLofter: Lofting curves must be BsplineCurves')
         self.ptr = new TMRCurveLofter(crvs, ncurves)
         self.ptr.incref()
         free(crvs)
