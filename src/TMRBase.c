@@ -48,7 +48,7 @@ void TMRInitialize(){
 /*
   Check whether the TMR data types have been initialized or not
 */
-int TMRIsInitialize(){
+int TMRIsInitialized(){
   return TMR_is_initialized;
 }
 

@@ -38,7 +38,7 @@ static int compare_quadrant_tags( const void *a, const void *b ){
 */
 TMRQuadForest::TMRQuadForest( MPI_Comm _comm ){
   // Initialize the TMR-specific MPI data types
-  if (!TMRIsInitialized){
+  if (!TMRIsInitialized()){
     TMRInitialize();
   }
 
