@@ -9,6 +9,9 @@ from libc.string cimport const_char
 cimport numpy as np
 import numpy as np
 
+# Import TACS
+from tacs.TACS cimport *
+
 cdef extern from "<stdint.h>":
     ctypedef signed int int32_t
 
@@ -143,7 +146,5 @@ cdef extern from "TMRQuadForest.h":
         TMRQuadrantArray* getNodesWithAttribute(const char*)
         void createMeshConn(const int**, const int*)
         int getDepNodeConn(const int**, const int**, const double**)
-
-        # TACS-specific function that needs to be wrapped
-        # void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
+        void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
 

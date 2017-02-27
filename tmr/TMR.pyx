@@ -16,6 +16,9 @@ from libc.stdlib cimport malloc, free
 # Import C methods for python
 from cpython cimport PyObject, Py_INCREF
 
+# Import the TACS module
+from tacs.TACS cimport *
+
 # Import the definitions
 from TMR cimport *
 

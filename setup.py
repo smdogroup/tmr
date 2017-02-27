@@ -54,6 +54,7 @@ inc_dirs.extend(get_global_dir(default_ext_inc))
 # Add the numpy/mpi4py directories
 inc_dirs.extend([numpy.get_include(), mpi4py.get_include()])
 inc_dirs.extend(tacs.get_include())
+inc_dirs.extend(tacs.get_cython_include())
 
 # Add the TACS libraries
 tacs_lib_dirs, tacs_libs = tacs.get_libraries()
