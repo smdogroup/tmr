@@ -32,8 +32,8 @@ class TMRVertex : public TMREntity {
   virtual int evalPoint( TMRPoint *p ) = 0;
 
   // Get the parameters on the associated curve/surface
-  virtual int getParamsOnCurve( TMRCurve *curve, double *t );
-  virtual int getParamsOnSurface( TMRSurface *surface,
+  virtual int getParamOnEdge( TMREdge *edge, double *t );
+  virtual int getParamsOnSurface( TMRFace *face,
                                   double *u, double *v );
 
   // Set/retrieve the node numbers
@@ -59,38 +59,16 @@ class TMRCurve : public TMREntity {
   // Given the parametric point, evaluate the x,y,z location
   virtual int evalPoint( double t, TMRPoint *X ) = 0;
 
-  // Parametrize the curve on the given surface
-  virtual int getParamsOnSurface( TMRSurface *surface, double t, 
-                                  int dir, double *u, double *v );
-
   // Given the point, find the parametric location
   virtual int invEvalPoint( TMRPoint X, double *t );
 
   // Given the parametric point, evaluate the derivative 
   virtual int evalDeriv( double t, TMRPoint *Xt );
   
-  // Set/retrive the vertices at the beginning and end of the curve
-  void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
-  void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
-
-  // Integrate along the edge and return an array containing
-  // the parametric locations to provide an even spacing
-  double integrate( double t1, double t2, double tol,
-                    double **tvals, double **dist, int *nvals );
-
-  // Set/retrieve the mesh
-  void setMesh( TMRCurveMesh *_mesh );
-  void getMesh( TMRCurveMesh **_mesh );
-
   // Write the object to the VTK file
   void writeToVTK( const char *filename );
   
  private:
-  // The start/end vertices of the curve
-  TMRVertex *v1, *v2;
-
-  // The mesh for the curve - if it exists
-  TMRCurveMesh *mesh;
 
   // Set the step size
   static double deriv_step_size;
@@ -129,10 +107,6 @@ class TMRSurface : public TMREntity {
   int getCurveSegment( int k, int *ncurves, 
                        TMRCurve ***_curves, const int **_dir );
 
-  // Set/retrieve the mesh
-  void setMesh( TMRSurfaceMesh *_mesh );
-  void getMesh( TMRSurfaceMesh **_mesh );
-
   // Write the object to the VTK file
   void writeToVTK( const char *filename );
 
@@ -148,9 +122,6 @@ class TMRSurface : public TMREntity {
   int max_num_segments;
   int num_segments;
   TMRSegment **segments;
-
-  // The mesh for the curve - if it exists
-  TMRSurfaceMesh *mesh;
 
   // Set the step size
   static double deriv_step_size;
@@ -265,36 +236,6 @@ class TMRSplitCurve : public TMRCurve {
   // Evaluate the bspline curve
   double t1, t2;
   TMRCurve *curve;
-};
-
-/*
-  The parametrization of a surface
-*/
-class TMRDuplicateSurface : public TMRSurface {
- public:
-  TMRDuplicateSurface( TMRSurface *_surf ){ 
-    surf = _surf; 
-    surf->incref();
-  }
-  ~TMRDuplicateSurface(){ 
-    surf->decref(); 
-  }
-  void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax ){
-    surf->getRange(umin, vmin, umax, vmax);
-  }
-  int evalPoint( double u, double v, TMRPoint *X ){
-    return surf->evalPoint(u, v, X);
-  }
-  int invEvalPoint( TMRPoint p, double *u, double *v ){
-    return surf->invEvalPoint(p, u, v);
-  }
-  int evalDeriv( double u, double v, TMRPoint *Xu, TMRPoint *Xv ){
-    return surf->evalDeriv(u, v, Xu, Xv);
-  }
-
- private:
-  TMRSurface *surf;
 };
 
 /*

@@ -14,6 +14,68 @@
 */
 
 /*
+  The abstract edge class
+*/
+class TMREdge : public TMREntity {
+ public:
+  
+  // Parametrize the curve on the given surface
+  virtual int getParamsOnSurface( TMRSurface *surface, double t, 
+                                  int dir, double *u, double *v );
+
+  // Set/retrive the vertices at the beginning and end of the curve
+  void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
+  void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
+
+  // Integrate along the edge and return an array containing
+  // the parametric locations to provide an even spacing
+  double integrate( double t1, double t2, double tol,
+                    double **tvals, double **dist, int *nvals );
+
+  // Set/retrieve the mesh
+  void setMesh( TMRCurveMesh *_mesh );
+  void getMesh( TMRCurveMesh **_mesh );
+
+ private:
+  // The start/end vertices of the curve
+  TMRVertex *v1, *v2;
+
+  // The mesh for the curve - if it exists
+  TMRCurveMesh *mesh;
+
+};
+
+/*
+  The edge loop class
+*/
+class TMREdgeLoop : public TMREntity {
+ public:
+
+ private:
+
+};
+
+
+
+/*
+  The abstract face class
+*/
+class TMRFace : public TMREntity {
+ public:
+  
+  // Set/retrieve the mesh
+  void setMesh( TMRSurfaceMesh *_mesh );
+  void getMesh( TMRSurfaceMesh **_mesh );
+
+ private:
+
+  // The mesh for the curve - if it exists
+  TMRSurfaceMesh *mesh;
+
+};
+
+
+/*
   The main topology class that contains the objects used to build the
   underlying mesh.
 */
