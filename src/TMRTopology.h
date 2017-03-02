@@ -80,6 +80,8 @@ class TMREdge : public TMREntity {
   void setMesh( TMREdgeMesh *_mesh );
   void getMesh( TMREdgeMesh **_mesh );
 
+  // Write the object to the VTK file
+  void writeToVTK( const char *filename );
  private:
   // The start/end vertices of the curve
   TMRVertex *v1, *v2;
@@ -144,6 +146,9 @@ class TMRFace : public TMREntity {
   // Set/retrieve the mesh
   void setMesh( TMRFaceMesh *_mesh );
   void getMesh( TMRFaceMesh **_mesh );
+
+  // Write the object to the VTK file
+  void writeToVTK( const char *filename );
 
  private:
   // The mesh for the curve - if it exists

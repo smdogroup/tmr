@@ -5,20 +5,20 @@
 /*
   TMR interface to OpenCascade for the curve
 */
-TMR_OCCCurve::TMR_OCCCurve( Geom_Curve &c ){
+TMR_OCCCurve::TMR_OCCCurve( Handle(Geom_Curve) &c ){
   curve = c;
 }
 
 TMR_OCCCurve::~TMR_OCCCurve(){}
 
 void TMR_OCCCurve::getRange( double *tmin, double *tmax ){
-  *tmin = curve.FirstParameter();
-  *tmax = curve.LastParameter();
+  *tmin = curve->FirstParameter();
+  *tmax = curve->LastParameter();
 } 
  
 int TMR_OCCCurve::evalPoint( double t, TMRPoint *X ){
   gp_Pnt p;
-  curve.D0(t, p);
+  curve->D0(t, p);
   X->x = p.X();
   X->y = p.Y();
   X->z = p.Z();
@@ -40,7 +40,7 @@ int TMR_OCCCurve::invEvalPoint( TMRPoint X, double *t ){
 int TMR_OCCCurve::evalDeriv( double t, TMRPoint *Xt ){
   gp_Pnt p;
   gp_Vec v1;
-  curve.D1(t, p, v1);
+  curve->D1(t, p, v1);
   Xt->x = v1.X();
   Xt->y = v1.Y();
   Xt->z = v1.Z();
@@ -50,7 +50,7 @@ int TMR_OCCCurve::evalDeriv( double t, TMRPoint *Xt ){
 /*
   TMR interface to the OpenCascade geometry
 */
-TMR_OCCSurface::TMR_OCCSurface( Geom_Surface &s ){
+TMR_OCCSurface::TMR_OCCSurface( Handle(Geom_Surface) &s ){
   surf = s;
 }
 
@@ -58,10 +58,7 @@ TMR_OCCSurface::~TMR_OCCSurface(){}
 
 void TMR_OCCSurface::getRange( double *umin, double *vmin,
                                double *umax, double *vmax ){
-  *umin = surf.FirstUParameter();
-  *vmin = surf.FirstVParameter();
-  *umax = surf.LastUParameter();
-  *vmax = surf.LastVParameter();
+  surf->Bounds(*umin, *umax, *vmin, *vmax);
 }
  
 int TMR_OCCSurface::evalPoint( double u, double v, TMRPoint *X ){
@@ -89,7 +86,7 @@ int TMR_OCCSurface::evalDeriv( double u, double v,
                                TMRPoint *Xu, TMRPoint *Xv ){
   gp_Pnt p;
   gp_Vec pu, pv;
-  surf.D1(u, v, p, pu, pv);
+  surf->D1(u, v, p, pu, pv);
   Xu->x = pu.X();
   Xu->y = pu.Y();
   Xu->z = pu.Z();
@@ -124,7 +121,7 @@ int TMR_OCCVertex::getParamOnEdge( TMREdge *edge, double *t ){
     *t = BRep_Tool::Parameter(vert, occ_edge);
     return 0;
   }
-  return TMRVertex::getParamsOnCurve(edge, t);
+  return TMRVertex::getParamOnEdge(edge, t);
 }
 
 int TMR_OCCVertex::getParamsOnFace( TMRFace *face,
@@ -132,7 +129,7 @@ int TMR_OCCVertex::getParamsOnFace( TMRFace *face,
   TMR_OCCFace *f = dynamic_cast<TMR_OCCFace*>(face);  
   if (f){
     TopoDS_Face occ_face;
-    f->getSurfaceObject(occ_face);
+    f->getFaceObject(occ_face);
     gp_Pnt2d pt = BRep_Tool::Parameters(vert, occ_face);
     *u = pt.X();
     *v = pt.Y();
@@ -150,6 +147,8 @@ void TMR_OCCVertex::getVertexObject( TopoDS_Vertex &v ){
 */
 TMR_OCCEdge::TMR_OCCEdge( TopoDS_Edge &e ){
   edge = e;
+  reverse_edge = e;
+  reverse_edge.Reverse();
 }
 
 TMR_OCCEdge::~TMR_OCCEdge(){}
@@ -160,25 +159,23 @@ void TMR_OCCEdge::getRange( double *tmin, double *tmax ){
   *tmax = curve.LastParameter();
 }
 
-int TMR_OCCEdge::getParamsOnSurface( TMRFace *face, double t, 
-                                     int dir, double *u, double *v ){
-  TMR_OCCFace *f = dynamic_cast<TMR_OCCFace*>(face);
+int TMR_OCCEdge::getParamsOnFace( TMRFace *surface, double t, 
+                                  int dir, double *u, double *v ){
+  TMR_OCCFace *f = dynamic_cast<TMR_OCCFace*>(surface);
   if (f){
     // Get the face topology
     TopoDS_Face occ_face;
-    f->getSurfaceObject(occ_face);
-
-    // Get the min/max range
-    double *tmin, *tmax;
-    getRange(&tmin, &tmax);
+    f->getFaceObject(occ_face);
 
     // Get the pcurve on the surface
     Handle(Geom2d_Curve) pcurve;
     if (dir > 0){
-      pcurve = BRep_Tool::CurveOnSurface(edge, occ_face, tmin, tmax);
+      double t0, t1;
+      pcurve = BRep_Tool::CurveOnSurface(edge, occ_face, t0, t1);
     }
     else{
-      pcurve = BRep_Tool::CurveOnSurface(edge.Reverse(), occ_face, tmin, tmax);
+      double t0, t1;
+      pcurve = BRep_Tool::CurveOnSurface(reverse_edge, occ_face, t0, t1);
     }
 
     if (pcurve.IsNull()){
@@ -187,14 +184,14 @@ int TMR_OCCEdge::getParamsOnSurface( TMRFace *face, double t,
 
     // Evaluate the point on the curve
     gp_Pnt2d p;
-    pcurve.D0(t, p);
+    pcurve->D0(t, p);
     *u = p.X();
     *v = p.Y();
     return 0;
   }
 
   // Fall through to the underlying implementation
-  return TMREdge::getParamsOnFace(face, t, dir, u, v);
+  return TMREdge::getParamsOnFace(surface, t, dir, u, v);
 }
   
 int TMR_OCCEdge::evalPoint( double t, TMRPoint *X ){
@@ -208,7 +205,9 @@ int TMR_OCCEdge::evalPoint( double t, TMRPoint *X ){
 
 int TMR_OCCEdge::invEvalPoint( TMRPoint X, double *t ){
   gp_Pnt pt(X.x, X.y, X.z);
-  BRepAdaptor_Curve curve(edge);
+  double tmin, tmax;
+  getRange(&tmin, &tmax);
+  const Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, tmin, tmax);
   GeomAPI_ProjectPointOnCurve projection(pt, curve);
   if (projection.NbPoints() == 0){
     return 1;
@@ -244,28 +243,25 @@ TMR_OCCFace::~TMR_OCCFace(){}
 
 void TMR_OCCFace::getRange( double *umin, double *vmin,
                             double *umax, double *vmax ){
-  BRepAdaptor_Surface surf(face);
-  *umin = surf.FirstUParameter();
-  *vmin = surf.FirstVParameter();
-  *umax = surf.LastUParameter();
-  *vmax = surf.LastVParameter();
+  BRepTools::UVBounds(face, *umin, *umax, *vmin, *vmax);
 }
 
 int TMR_OCCFace::evalPoint( double u, double v, TMRPoint *X ){
-  BRepAdaptor_Surface surf(face);
+  const Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
   gp_Pnt p;
-  surf.D0(u, v, p);
+  surf->D0(u, v, p);
   X->x = p.X();
   X->y = p.Y();
   X->z = p.Z();
   return 0;
 }
 
-int TMR_OCCFace::invEvalPoint( TMRPoint p, double *u, double *v ){
+int TMR_OCCFace::invEvalPoint( TMRPoint X, double *u, double *v ){
   gp_Pnt pt(X.x, X.y, X.z);
-  BRepAdaptor_Surface surf(face);
+  const Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
   GeomAPI_ProjectPointOnSurf projection(pt, surf);
   if (projection.NbPoints() == 0){
+    *u = *v = 0.0;
     return 1;
   } 
   else {
@@ -276,10 +272,10 @@ int TMR_OCCFace::invEvalPoint( TMRPoint p, double *u, double *v ){
 
 int TMR_OCCFace::evalDeriv( double u, double v, 
                             TMRPoint *Xu, TMRPoint *Xv ){
-  BRepAdaptor_Surface surf(face);
+  const Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
   gp_Pnt p;
   gp_Vec pu, pv;
-  surf.D1(u, v, p, pu, pv);
+  surf->D1(u, v, p, pu, pv);
   Xu->x = pu.X();
   Xu->y = pu.Y();
   Xu->z = pu.Z();
@@ -293,11 +289,10 @@ void TMR_OCCFace::getFaceObject( TopoDS_Face &f ){
   f = face;
 }
 
-TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
+TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
   FILE *fp = fopen(filename, "r");
   if (!fp){
-    int fail = 1;
-    return fail;
+    return NULL;
   }
   fclose(fp);
   
@@ -312,7 +307,7 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
   for ( int k = 0; k < nroots; k++ ){
     Standard_Boolean ok = reader.TransferRoot(k+1);
     if (!ok){
-      printf("TMR Warning: Transfer %d not OK!\n", k+1);
+      fprintf(stderr, "TMR Warning: Transfer %d not OK!\n", k+1);
     }
   }
 
@@ -329,7 +324,6 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
   }
   
   // Create the index <--> geometry object
-  int nverts = 0, nedges = 0, nfaces = 0, nwires = 0;
   TopTools_IndexedMapOfShape verts, edges, faces, wires;
 
   // Get the faces, edges and  up the number of faces and a
@@ -338,33 +332,37 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
     verts.Add(shape);
-    nverts++;
   }
 
   Exp.Init(compound, TopAbs_EDGE);
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
     edges.Add(shape);
-    nedges++;
   }
 
   Exp.Init(compound, TopAbs_FACE);
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
     faces.Add(shape);
-    nfaces++;
   }
 
   Exp.Init(compound, TopAbs_WIRE);
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
     wires.Add(shape);
-    nwires++;
   }
+
+  int nverts = verts.Extent();
+  int nedges = edges.Extent();
+  int nwires = wires.Extent();
+  int nfaces = faces.Extent();
+  printf("nverts = %d nedges = %d nfaces = %d nwires = %d\n",
+         nverts, nedges, nfaces, nwires);
 
   // Re-iterate through the list and create the objects needed to
   // define the geometry in TMR
   TMRVertex **all_vertices = new TMRVertex*[ nverts ];
+  memset(all_vertices, 0, nverts*sizeof(TMRVertex*));
   Exp.Init(compound, TopAbs_VERTEX);
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
@@ -374,6 +372,7 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
   }
 
   TMREdge **all_edges = new TMREdge*[ nedges ];
+  memset(all_edges, 0, nedges*sizeof(TMREdge*));
   Exp.Init(compound, TopAbs_EDGE);
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
@@ -386,20 +385,22 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
     TopoDS_Vertex v2 = TopExp::LastVertex(e);
     int idx1 = verts.FindIndex(v1);
     int idx2 = verts.FindIndex(v2);
-    all_edges[index-1]->setVertices(all_vertices[idx1-1], all_vertices[idx2-1]);
+    all_edges[index-1]->setVertices(all_vertices[idx1-1], 
+                                    all_vertices[idx2-1]);
   }
 
   TMRFace **all_faces = new TMRFace*[ nfaces ];
+  memset(all_faces, 0, nfaces*sizeof(TMRFace*));
   Exp.Init(compound, TopAbs_FACE);
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
-    TopoDS_Edge f = TopoDS::Face(shape);
+    TopoDS_Face f = TopoDS::Face(shape);
     int index = faces.FindIndex(shape);
     all_faces[index-1] = new TMR_OCCFace(f);
   }
 
   // Loop over all of the wire objects in the model
-  TMREdgeLoop **all_loops = new TMREdgeLoop[ nwires ];
+  TMREdgeLoop **all_loops = new TMREdgeLoop*[ nwires ];
   Exp.Init(compound, TopAbs_WIRE);
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
@@ -407,6 +408,7 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
     int index = wires.FindIndex(shape);
 
     // Check if the wire is closed
+    TopoDS_Vertex v1, v2;
     TopExp::Vertices(wire, v1, v2);
     int closed = 0;
     if (!v1.IsNull() && !v2.IsNull()){
@@ -423,17 +425,18 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
     }
 
     // Create the edge list
-    TMREdge **edgs = new TMREdge[ ne ];
+    TMREdge **edgs = new TMREdge*[ ne ];
     int *dir = new int[ ne ];
-    wExp.Init(wire);
-    for ( int k = 0; wExp.More; wExp.Next(), k++ ){
-      TopoDS_Shape shape = wExp.Current()
+    int k = 0;
+    for ( wExp.Init(wire); wExp.More(); wExp.Next() ){
+      TopoDS_Shape shape = wExp.Current();
       dir[k] = 1;
       if (shape.Orientation() == TopAbs_REVERSED){
         dir[k] = -1;
       } 
       int index = edges.FindIndex(shape);
       edgs[k] = all_edges[index-1];
+      k++;
     }
 
     // Allocate the loop with the given edges/directions
@@ -454,11 +457,19 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
     TopTools_IndexedMapOfShape map;
     TopExp::MapShapes(face, TopAbs_WIRE, map);
     for ( int i = 1; i <= map.Extent(); i++ ){
-      TopoDS_Wire wire_shape = map(i);
+      TopoDS_Shape wire_shape = map(i);
       int loop_index = wires.FindIndex(wire_shape);
       all_faces[index-1]->addEdgeLoop(all_loops[loop_index-1]);
     }
   }
+
+  // Free the loop array
+  delete [] all_loops;
+
+  TMRModel *geo = new TMRModel(nverts, all_vertices,
+                               nedges, all_edges,
+                               nfaces, all_faces);
+  return geo;
 }
 
 #endif // TMR_HAS_OPENCASCADE

@@ -3,6 +3,15 @@
 
 #ifdef TMR_HAS_OPENCASCADE
 
+/*
+  Include the TMR files required
+*/
+#include "TMRGeometry.h"
+#include "TMRTopology.h"
+
+/*
+  Include all of the files required from OpenCASCADE
+*/
 #include <Standard.hxx>
 #include <Standard_Type.hxx>
 #include <Standard_Integer.hxx>
@@ -73,10 +82,7 @@
 #include <BRepGProp.hxx>
 #include <GProp_GProps.hxx>
 
-#include <Poly_Triangulation.hxx>
-#include <Poly_PolygonOnTriangulation.hxx>
-#include <Poly_Array1OfTriangle.hxx>
-
+#include <BRep_Builder.hxx>
 #include <ShapeBuild_ReShape.hxx>
 #include <ShapeUpgrade_ShapeDivideClosed.hxx>
 #include <ShapeFix.hxx>
@@ -96,7 +102,7 @@
 */
 class TMR_OCCCurve : public TMRCurve {
  public:
-  TMR_OCCCurve( Geom_Curve &c );
+  TMR_OCCCurve( Handle(Geom_Curve) &c );
   ~TMR_OCCCurve();
   void getRange( double *tmin, double *tmax );
   int evalPoint( double t, TMRPoint *X );
@@ -108,7 +114,7 @@ class TMR_OCCCurve : public TMRCurve {
 
 class TMR_OCCSurface : public TMRSurface {
  public:
-  TMR_OCCSurface( Geom_Surface &s );
+  TMR_OCCSurface( Handle(Geom_Surface) &s );
   ~TMR_OCCSurface();
   void getRange( double *umin, double *vmin,
                  double *umax, double *vmax ); 
@@ -124,7 +130,6 @@ class TMR_OCCSurface : public TMRSurface {
 
   TMR_OCCVertex
   TMR_OCCEdge
-  TMR_OCCEdgeLoop
   TMR_OCCFace
 */
 class TMR_OCCVertex : public TMRVertex {
@@ -132,8 +137,8 @@ class TMR_OCCVertex : public TMRVertex {
   TMR_OCCVertex( TopoDS_Vertex &v );
   ~TMR_OCCVertex();
   int evalPoint( TMRPoint *p );
-  int getParamsOnCurve( TMRCurve *curve, double *t );
-  int getParamsOnSurface( TMRSurface *surface, double *u, double *v );
+  int getParamOnEdge( TMREdge *edge, double *t );
+  int getParamsOnFace( TMRFace *face, double *u, double *v );
   void getVertexObject( TopoDS_Vertex &v );
  private:
   TopoDS_Vertex vert;
@@ -152,17 +157,8 @@ class TMR_OCCEdge : public TMREdge {
   void getEdgeObject( TopoDS_Edge &e );
  private:
   TopoDS_Edge edge;
+  TopoDS_Edge reverse_edge;
 };
-
-/*
-class TMR_OCCEdgeLoop : public TMREdgeLoop {
- public:
-
-
- private:
-  TopoDS_Wire loop;
-};
-*/
 
 class TMR_OCCFace : public TMRFace {
  public:
@@ -181,7 +177,7 @@ class TMR_OCCFace : public TMRFace {
 /*
   Initialization of the OpenCascade geometry from a STEP file
 */
-TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename );
+TMRModel* TMR_LoadModelFromSTEPFile( const char *filename );
 
 #endif // TMR_HAS_OPENCASCADE
 #endif // TMR_OPENCASCADE_H

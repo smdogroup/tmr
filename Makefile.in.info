@@ -29,7 +29,7 @@ SO_LINK_FLAGS=-fPIC -shared
 
 # For MAC OS X, use the following settings:
 # SO_EXT=so
-# SO_LINK_FLAGS=-fPIC -dynamiclib -single_module -undefined dynamic_lookup -multiply_defined suppress
+# SO_LINK_FLAGS=-fPIC -dynamiclib
 
 # Set up the interface for the blossom recombination code
 BLOSSOM_INCLUDE=-I${TMR_DIR}/extern/blossom5-v2.05.src

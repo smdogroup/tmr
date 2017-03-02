@@ -496,6 +496,7 @@ void TMRFaceMesh::mesh( double htarget ){
   // bounds the domain, the other loops cut out holes in the domain. 
   // Note that the domain must be contiguous.
   int nholes = nloops-1;
+  printf("nholes = %d\n", nholes);
 
   // All the boundary loops are closed, therefore, the total number
   // of segments is equal to the total number of points

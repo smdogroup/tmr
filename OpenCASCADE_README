@@ -1,0 +1,38 @@
+1. I downloaded the pre-compiled 64 bit version of OpenCASCADE for linux
+from Bob Haimes from this address:
+
+http://raphael.mit.edu/ESP/
+
+I got the following file for linux: OCC680lin64.tgz
+And the following file for OSX: OCC680osx64.tgz
+
+2. I untared/ziped with tar -xzf OCC680lin64.tgz in $HOME/packages/
+
+3. I move OpenCASCADE-6.8.0 to OpenCASCADE
+
+4. I added the following lines to my .bashrc file:
+
+# Export the OpenCASCADE root directory
+export CASROOT=$HOME/packages/OpenCASCADE
+export PATH=$CASROOT/bin:$PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CASROOT/lib
+
+5. I tried to use the draw command by typing: 
+
+sh ./draw.sh
+
+Once the command prompt appeared I typed:
+
+Draw[3]> source samples/tcl/bottle.tcl
+
+This showed an image of the bottle example from OpenCASCADE
+
+6. I added the following lines to the Makefile.in code:
+
+# Flags for debugging and regular compilation versions
+TMR_DEBUG_FLAGS = [...] -DTMR_HAS_OPENCASCADE
+TMR_FLAGS = [...] -DTMR_HAS_OPENCASCADE
+
+OPENCASCADE_INCLUDE = -I${CASROOT}/inc
+OPENCASCADE_LIB_PATH = -L${CASROOT}/${CASARCH}/lib -Wl,-rpath,${CASROOT}/${CASARCH}/lib
+OPENCASCADE_LIBS = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKPShape -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet -lPTKernel -ldl

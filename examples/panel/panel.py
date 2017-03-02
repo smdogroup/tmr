@@ -35,4 +35,9 @@ def create_panel(Lx, Ly, hz):
         blades.append(TMR.BsplineSurface(pts))
         blades[k].writeToVTK('blade%d_surface.vtk'%(k))
 
+
+    pts = np.zeros((npts
+
+    pcurve = TMR
+
 create_panel(1.0, 2.0, 0.1)

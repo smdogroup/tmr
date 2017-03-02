@@ -308,6 +308,52 @@ void TMREdge::getMesh( TMREdgeMesh **_mesh ){
 }
 
 /*
+  Write out a representation of the curve to a VTK file
+*/
+void TMREdge::writeToVTK( const char *filename ){
+  double t1, t2;
+  getRange(&t1, &t2);
+
+  const int npts = 100;
+
+  // Write out the vtk file
+  FILE *fp = fopen(filename, "w");
+  if (fp){
+    fprintf(fp, "# vtk DataFile Version 3.0\n");
+    fprintf(fp, "vtk output\nASCII\n");
+    fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+    
+    // Write out the points
+    fprintf(fp, "POINTS %d float\n", npts);
+    for ( int k = 0; k < npts; k++ ){
+      double u = 1.0*k/(npts-1);
+      double t = (1.0-u)*t1 + u*t2;
+
+      // Evaluate the point
+      TMRPoint p;
+      evalPoint(t, &p);
+      
+      // Write out the point
+      fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+    }
+    
+    // Write out the cell values
+    fprintf(fp, "\nCELLS %d %d\n", npts-1, 3*(npts-1));
+    for ( int k = 0; k < npts-1; k++ ){
+      fprintf(fp, "2 %d %d\n", k, k+1);
+    }
+    
+    // Write out the cell types
+    fprintf(fp, "\nCELL_TYPES %d\n", npts-1);
+    for ( int k = 0; k < npts-1; k++ ){
+      fprintf(fp, "%d\n", 3);
+    }
+    
+    fclose(fp);
+  } 
+}
+
+/*
   Create the edge loop object
 */
 TMREdgeLoop::TMREdgeLoop( int _nedges, TMREdge *_edges[], 
@@ -547,6 +593,60 @@ void TMRFace::getMesh( TMRFaceMesh **_mesh ){
 }
 
 /*
+  Write out a representation of the surface to a VTK file
+*/
+void TMRFace::writeToVTK( const char *filename ){
+  double umin, vmin, umax, vmax;
+  getRange(&umin, &vmin, &umax, &vmax);
+
+  const int npts = 100;
+
+  // Write out the vtk file
+  FILE *fp = fopen(filename, "w");
+  if (fp){
+    fprintf(fp, "# vtk DataFile Version 3.0\n");
+    fprintf(fp, "vtk output\nASCII\n");
+    fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+    
+    // Write out the points
+    fprintf(fp, "POINTS %d float\n", npts*npts);
+    for ( int j = 0; j < npts; j++ ){
+      for ( int i = 0; i < npts; i++ ){
+        double u = 1.0*i/(npts-1);
+        double v = 1.0*j/(npts-1);
+        u = (1.0 - u)*umin + u*umax;
+        v = (1.0 - v)*vmin + v*vmax;
+
+        // Evaluate the point
+        TMRPoint p;
+        evalPoint(u, v, &p);
+        
+        // Write out the point
+        fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+      }
+    } 
+    
+    // Write out the cell values
+    fprintf(fp, "\nCELLS %d %d\n", (npts-1)*(npts-1), 5*(npts-1)*(npts-1));
+    for ( int j = 0; j < npts-1; j++ ){
+      for ( int i = 0; i < npts-1; i++ ){
+        fprintf(fp, "4 %d %d %d %d\n", 
+                i + j*npts, i+1 + j*npts, 
+                i+1 + (j+1)*npts, i + (j+1)*npts);
+      }
+    }
+    
+    // Write out the cell types
+    fprintf(fp, "\nCELL_TYPES %d\n", (npts-1)*(npts-1));
+    for ( int k = 0; k < (npts-1)*(npts-1); k++ ){
+      fprintf(fp, "%d\n", 9);
+    }
+    
+    fclose(fp);
+  } 
+}
+
+/*
   The TMRModel class containing all of the required geometry
   objects.
 */
@@ -646,29 +746,29 @@ int TMRModel::verify(){
       TMREdgeLoop *loop;
       faces[face]->getEdgeLoop(k, &loop);
 
-      int ncurves;
-      TMREdge **curves;
-      loop->getEdgeLoop(&ncurves, &curves, NULL);
+      int nedges;
+      TMREdge **loop_edges;
+      loop->getEdgeLoop(&nedges, &loop_edges, NULL);
 
       // Loop over all of the curves and check whether the data exists
       // or not
-      for ( int j = 0; j < ncurves; j++ ){
-        int cindex = getEdgeIndex(curves[j]);
+      for ( int j = 0; j < nedges; j++ ){
+        int cindex = getEdgeIndex(loop_edges[j]);
         if (cindex < 0){
           fail = 1;
           fprintf(stderr, 
-                  "TMRGeometry error: Curve does not exist within curve list\n");
+                  "TMRGeometry error: Edge does not exist within edge list\n");
         }
         else {
           crvs[cindex]++;
         }
 
         TMRVertex *v1, *v2;      
-        curves[j]->getVertices(&v1, &v2);
+        loop_edges[j]->getVertices(&v1, &v2);
         if (!v1 || !v2){
           fail = 1;
           fprintf(stderr, 
-                  "TMRGeometry error: Vertices not set for curve %d\n",
+                  "TMRGeometry error: Vertices not set for edge %d\n",
                   cindex);
         }
 
@@ -698,7 +798,7 @@ int TMRModel::verify(){
   for ( int i = 0; i < num_edges; i++ ){
     if (crvs[i] == 0){
       fprintf(stderr,
-              "TMRGeometry error: Curve %d unreferenced\n", i);
+              "TMRGeometry error: Edge %d unreferenced\n", i);
       fail = 1;
     }
   }
