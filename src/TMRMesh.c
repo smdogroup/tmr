@@ -1,4 +1,5 @@
 #include "TMRMesh.h"
+#include "TMRNativeTopology.h"
 #include "TMRTriangularize.h"
 #include "TMRMeshSmoothing.h"
 #include "TMRPerfectMatchInterface.h"
@@ -288,9 +289,9 @@ static void computeQuadEdges( int nnodes, int nquads, const int quads[],
 /*
   Mesh a curve
 */
-TMRCurveMesh::TMRCurveMesh( TMRCurve *_curve ){
-  curve = _curve;
-  curve->incref();
+TMREdgeMesh::TMREdgeMesh( TMREdge *_edge ){
+  edge = _edge;
+  edge->incref();
 
   npts = 0;
   pts = NULL;
@@ -301,8 +302,8 @@ TMRCurveMesh::TMRCurveMesh( TMRCurve *_curve ){
 /*
   Destroy the mesh for this curve, and free the underlying data
 */
-TMRCurveMesh::~TMRCurveMesh(){
-  curve->decref();
+TMREdgeMesh::~TMREdgeMesh(){
+  edge->decref();
   if (pts){ delete [] pts; }
   if (X){ delete [] X; }
   if (vars){ delete [] vars; }
@@ -311,9 +312,9 @@ TMRCurveMesh::~TMRCurveMesh(){
 /*
   Create a mesh
 */
-void TMRCurveMesh::mesh( double htarget ){
+void TMREdgeMesh::mesh( double htarget ){
   double tmin, tmax;
-  curve->getRange(&tmin, &tmax);
+  edge->getRange(&tmin, &tmax);
 
   // Set the integration error tolerance
   double integration_eps = 1e-8;
@@ -322,7 +323,7 @@ void TMRCurveMesh::mesh( double htarget ){
   // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
   int nvals;
   double *dist, *tvals;
-  curve->integrate(tmin, tmax, integration_eps, &tvals, &dist, &nvals);
+  edge->integrate(tmin, tmax, integration_eps, &tvals, &dist, &nvals);
   
   // Compute the number of points along this curve
   npts = 1 + (int)(dist[nvals-1]/htarget);
@@ -363,7 +364,7 @@ void TMRCurveMesh::mesh( double htarget ){
   // Allocate the points
   X = new TMRPoint[ npts ];
   for ( int i = 0; i < npts; i++ ){
-    curve->evalPoint(pts[i], &X[i]);
+    edge->evalPoint(pts[i], &X[i]);
   }
 }
 
@@ -371,11 +372,11 @@ void TMRCurveMesh::mesh( double htarget ){
   Order the internal mesh points and return the number of owned
   points that were ordered.
 */
-int TMRCurveMesh::setNodeNums( int *num ){
+int TMREdgeMesh::setNodeNums( int *num ){
   if (!vars && pts){
     // Retrieve the vertices
     TMRVertex *v1, *v2;
-    curve->getVertices(&v1, &v2);
+    edge->getVertices(&v1, &v2);
 
     // Allocate/set the node numbers
     vars = new int[ npts ];
@@ -400,7 +401,7 @@ int TMRCurveMesh::setNodeNums( int *num ){
   Retrieve the internal node numbers, associated with the same
   set of points/same order as the getMeshPoints code
 */
-int TMRCurveMesh::getNodeNums( const int **_vars ){
+int TMREdgeMesh::getNodeNums( const int **_vars ){
   if (_vars){
     *_vars = vars;
   }
@@ -410,8 +411,8 @@ int TMRCurveMesh::getNodeNums( const int **_vars ){
 /*
   Get the mesh points
 */
-void TMRCurveMesh::getMeshPoints( int *_npts, const double **_pts, 
-                                  TMRPoint **_X ){
+void TMREdgeMesh::getMeshPoints( int *_npts, const double **_pts, 
+                                 TMRPoint **_X ){
   if (_npts){ *_npts = npts; }
   if (_pts){ *_pts = pts; }
   if (_X){ *_X = X; }
@@ -427,9 +428,9 @@ void TMRCurveMesh::getMeshPoints( int *_npts, const double **_pts,
   Note that the curve/edge meshes must be meshed before calling this
   object.
 */
-TMRSurfaceMesh::TMRSurfaceMesh( TMRSurface *surf ){
-  surface = surf;
-  surface->incref();
+TMRFaceMesh::TMRFaceMesh( TMRFace *_face ){
+  face = _face;
+  face->incref();
 
   num_fixed_pts = 0;
   num_points = 0;
@@ -445,8 +446,8 @@ TMRSurfaceMesh::TMRSurfaceMesh( TMRSurface *surf ){
 /*
   Free the data associated with the surface mesh
 */
-TMRSurfaceMesh::~TMRSurfaceMesh(){
-  surface->decref();
+TMRFaceMesh::~TMRFaceMesh(){
+  face->decref();
   if (pts){ delete [] pts; }
   if (X){ delete [] X; }
   if (quads){ delete [] quads; }
@@ -456,29 +457,30 @@ TMRSurfaceMesh::~TMRSurfaceMesh(){
 /*
   Create the surface mesh
 */
-void TMRSurfaceMesh::mesh( double htarget ){
-  // Count up the number of points and segments from the curves that
-  // bound the surface
-
-  // Keep track of the number of points = the number of segments.
+void TMRFaceMesh::mesh( double htarget ){
+  // Count up the number of points and segments from the 
+  // curves that bound the surface. Keep track of the number 
+  // of points = the number of segments.
   int total_num_pts = 0;
 
   // Keep track of the number of closed loop cycles in the domain
-  int ncycles = surface->getNumSegments();
+  int nloops = face->getNumEdgeLoops();
 
   // Get all of the meshes
-  for ( int k = 0; k < surface->getNumSegments(); k++ ){
-    int ncurves;
-    TMRCurve **curves;
-    surface->getCurveSegment(k, &ncurves, &curves, NULL);
+  for ( int k = 0; k < nloops; k++ ){
+    TMREdgeLoop *loop;
+    face->getEdgeLoop(k, &loop);
+    int nedges;
+    TMREdge **edges;
+    loop->getEdgeLoop(&nedges, &edges, NULL);
 
-    for ( int i = 0; i < ncurves; i++ ){
-      TMRCurveMesh *mesh = NULL;
-      curves[i]->getMesh(&mesh);
+    for ( int i = 0; i < nedges; i++ ){
+      TMREdgeMesh *mesh = NULL;
+      edges[i]->getMesh(&mesh);
       if (!mesh){
-        mesh = new TMRCurveMesh(curves[i]);
+        mesh = new TMREdgeMesh(edges[i]);
         mesh->mesh(htarget);
-        curves[i]->setMesh(mesh);
+        edges[i]->setMesh(mesh);
       }
       
       // Get the number of points associated with the curve
@@ -490,10 +492,10 @@ void TMRSurfaceMesh::mesh( double htarget ){
     }
   }
 
-  // The number of holes is equal to the number of cycles-1. One loop
+  // The number of holes is equal to the number of loops-1. One loop
   // bounds the domain, the other loops cut out holes in the domain. 
   // Note that the domain must be contiguous.
-  int nholes = ncycles-1;
+  int nholes = nloops-1;
 
   // All the boundary loops are closed, therefore, the total number
   // of segments is equal to the total number of points
@@ -513,21 +515,23 @@ void TMRSurfaceMesh::mesh( double htarget ){
   int init_loop_seg = 0; // What segment value did this loop start on?
   int hole_pt = total_num_pts; // What hole are we on?
 
-  for ( int k = 0; k < surface->getNumSegments(); k++ ){
+  for ( int k = 0; k < nloops; k++ ){
     // Set the offset to the initial point/segment on this loop
     init_loop_pt = pt;
     init_loop_seg = seg;
 
     // Get the curve information for this loop segment
-    int ncurves;
-    TMRCurve **curves;
+    TMREdgeLoop *loop;
+    face->getEdgeLoop(k, &loop);
+    int nedges;
+    TMREdge **edges;
     const int *dir;
-    surface->getCurveSegment(k, &ncurves, &curves, &dir);
+    loop->getEdgeLoop(&nedges, &edges, &dir);
 
-    for ( int i = 0; i < ncurves; i++ ){
+    for ( int i = 0; i < nedges; i++ ){
       // Retrieve the underlying curve mesh
-      TMRCurveMesh *mesh = NULL;
-      curves[i]->getMesh(&mesh);
+      TMREdgeMesh *mesh = NULL;
+      edges[i]->getMesh(&mesh);
       
       // Get the mesh points corresponding to this curve
       int npts;
@@ -537,8 +541,8 @@ void TMRSurfaceMesh::mesh( double htarget ){
       // Find the point on the curve
       if (dir[i] > 0){
         for ( int j = 0; j < npts-1; j++ ){
-          curves[i]->getParamsOnSurface(surface, tpts[j], dir[i],
-                                        &params[2*pt], &params[2*pt+1]);
+          edges[i]->getParamsOnFace(face, tpts[j], dir[i],
+                                    &params[2*pt], &params[2*pt+1]);
           segments[2*seg] = pt;
           segments[2*seg+1] = pt+1;
           seg++;
@@ -547,8 +551,8 @@ void TMRSurfaceMesh::mesh( double htarget ){
       }
       else {
         for ( int j = npts-1; j >= 1; j-- ){
-          curves[i]->getParamsOnSurface(surface, tpts[j], dir[i],
-                                        &params[2*pt], &params[2*pt+1]);
+          edges[i]->getParamsOnFace(face, tpts[j], dir[i],
+                                    &params[2*pt], &params[2*pt+1]);
           segments[2*seg] = pt;
           segments[2*seg+1] = pt+1;
           seg++;
@@ -614,7 +618,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
   // Create the triangularization class
   TMRTriangularize *tri = 
     new TMRTriangularize(total_num_pts + nholes, params, nholes,
-                         nsegs, segments, surface);
+                         nsegs, segments, face);
   tri->incref();
 
   // Create the mesh using the frontal algorithm
@@ -637,7 +641,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
   // Smooth the resulting triangular mesh
   laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
                      num_tri_edges, tri_edges,
-                     num_points, pts, X, surface);
+                     num_points, pts, X, face);
 
   printTriQuality(ntris, tris);
 
@@ -682,7 +686,7 @@ void TMRSurfaceMesh::mesh( double htarget ){
   num_smoothing_steps = 5;
   quadSmoothing(10*num_smoothing_steps, num_fixed_pts,
                 num_points, ptr, pts_to_quads, num_quads, quads, 
-                pts, X, surface);
+                pts, X, face);
 
   // Free the connectivity information
   delete [] ptr;
@@ -695,8 +699,8 @@ void TMRSurfaceMesh::mesh( double htarget ){
 /*
   Retrieve the mesh points and parametric locations
 */
-void TMRSurfaceMesh::getMeshPoints( int *_npts, const double **_pts, 
-                                    TMRPoint **_X ){
+void TMRFaceMesh::getMeshPoints( int *_npts, const double **_pts, 
+                                 TMRPoint **_X ){
   if (_npts){ *_npts = num_points; }
   if (_pts){ *_pts = pts; }
   if (_X){ *_X = X; }
@@ -705,37 +709,40 @@ void TMRSurfaceMesh::getMeshPoints( int *_npts, const double **_pts,
 /*
   Set the node numbers internally
 */
-int TMRSurfaceMesh::setNodeNums( int *num ){
+int TMRFaceMesh::setNodeNums( int *num ){
   if (!vars){
     vars = new int[ num_points ];
 
     // Retrieve the boundary node numbers from the surface loops
     int pt = 0;
-    for ( int k = 0; k < surface->getNumSegments(); k++ ){
+    for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
       // Get the curve information for this loop segment
-      int ncurves;
-      TMRCurve **curves;
-      const int *dir;
-      surface->getCurveSegment(k, &ncurves, &curves, &dir);
+      TMREdgeLoop *loop;
+      face->getEdgeLoop(k, &loop);
 
-      for ( int i = 0; i < ncurves; i++ ){
+      int nedges;
+      TMREdge **edges;
+      const int *dir;
+      loop->getEdgeLoop(&nedges, &edges, &dir);
+
+      for ( int i = 0; i < nedges; i++ ){
         // Retrieve the underlying curve mesh
-        TMRCurveMesh *mesh = NULL;
-        curves[i]->getMesh(&mesh);
+        TMREdgeMesh *mesh = NULL;
+        edges[i]->getMesh(&mesh);
 
         // Retrieve the variable numbers for this loop
-        const int *curve_vars;
-        int npts = mesh->getNodeNums(&curve_vars);
+        const int *edge_vars;
+        int npts = mesh->getNodeNums(&edge_vars);
       
         // Find the point on the curve
         if (dir[i] > 0){
           for ( int j = 0; j < npts-1; j++, pt++ ){
-            vars[pt] = curve_vars[j];
+            vars[pt] = edge_vars[j];
           }
         }
         else {
           for ( int j = npts-1; j >= 1; j--, pt++ ){
-            vars[pt] = curve_vars[j];
+            vars[pt] = edge_vars[j];
           }
         }
       }
@@ -758,7 +765,7 @@ int TMRSurfaceMesh::setNodeNums( int *num ){
   Retrieve the mapping between the local connectivity and the global
   node numbers
 */
-int TMRSurfaceMesh::getNodeNums( const int **_vars ){
+int TMRFaceMesh::getNodeNums( const int **_vars ){
   if (_vars){ *_vars = vars; }
   return num_points;  
 }
@@ -767,14 +774,14 @@ int TMRSurfaceMesh::getNodeNums( const int **_vars ){
   Get the number of fixed points that are not ordered by this surface
   mesh
 */
-int TMRSurfaceMesh::getNumFixedPoints(){
+int TMRFaceMesh::getNumFixedPoints(){
   return num_fixed_pts;
 }
 
 /*
   Get the local connectivity
 */
-int TMRSurfaceMesh::getLocalConnectivity( const int **_quads ){
+int TMRFaceMesh::getLocalConnectivity( const int **_quads ){
   if (_quads){ *_quads = quads; }
   return num_quads;
 }
@@ -788,10 +795,10 @@ int TMRSurfaceMesh::getLocalConnectivity( const int **_quads ){
     /   | /
   . --- . 
 */
-int TMRSurfaceMesh::getRecombinedQuad( const int tris[],
-                                       const int trineighbors[],
-                                       int t1, int t2,
-                                       int quad[] ){
+int TMRFaceMesh::getRecombinedQuad( const int tris[],
+                                    const int trineighbors[],
+                                    int t1, int t2,
+                                    int quad[] ){
   int fail = 0;
 
   // Find the common edge between the two tirangles
@@ -828,8 +835,8 @@ int TMRSurfaceMesh::getRecombinedQuad( const int tris[],
 /*
   Compute the quality of a quadrilateral element
 */
-double TMRSurfaceMesh::computeQuadQuality( const int *quad,
-                                           const TMRPoint *p ){
+double TMRFaceMesh::computeQuadQuality( const int *quad,
+                                        const TMRPoint *p ){
   // Compute the maximum of fabs(0.5*M_PI - alpha)
   double max_val = 0.0;
 
@@ -869,10 +876,10 @@ double TMRSurfaceMesh::computeQuadQuality( const int *quad,
 /*
   Compute the recombined quality
 */
-double TMRSurfaceMesh::computeRecombinedQuality( const int tris[], 
-                                                 const int tri_neighbors[],
-                                                 int t1, int t2,
-                                                 const TMRPoint *p ){
+double TMRFaceMesh::computeRecombinedQuality( const int tris[], 
+                                              const int tri_neighbors[],
+                                              int t1, int t2,
+                                              const TMRPoint *p ){
   // Find the combined quadrilateral from the two given triangles
   int quad[4];
   int fail = getRecombinedQuad(tris, tri_neighbors, t1, t2, quad);
@@ -886,7 +893,7 @@ double TMRSurfaceMesh::computeRecombinedQuality( const int tris[],
 /*
   Compute the quality of a quadrilateral element
 */
-double TMRSurfaceMesh::computeTriQuality( const int *tri,
+double TMRFaceMesh::computeTriQuality( const int *tri,
                                           const TMRPoint *p ){
   // Compute the maximum of fabs(M_PI/3 - alpha)
   double max_val = 0.0;
@@ -926,11 +933,11 @@ double TMRSurfaceMesh::computeTriQuality( const int *tri,
 /*
   Recombine the triangulation into a quadrilateral mesh
 */
-void TMRSurfaceMesh::recombine( int ntris, const int tris[],
-                                const int tri_neighbors[],
-                                int num_edges, const int dual_edges[],
-                                const TMRPoint *p, int *_num_quads, 
-                                int **_new_quads ){
+void TMRFaceMesh::recombine( int ntris, const int tris[],
+                             const int tri_neighbors[],
+                             int num_edges, const int dual_edges[],
+                             const TMRPoint *p, int *_num_quads, 
+                             int **_new_quads ){
   // Count up the number of dual edges
   int num_dual_edges = 0;
   for ( int i = 0; i < num_edges; i++ ){
@@ -951,8 +958,9 @@ void TMRSurfaceMesh::recombine( int ntris, const int tris[],
 
     if (t1 >= 0 && t2 >= 0){
       // Compute the weight for this recombination
-      double quality = computeRecombinedQuality(tris, tri_neighbors,
-                                                t1, t2, p);
+      double quality = 
+        computeRecombinedQuality(tris, tri_neighbors,
+                                 t1, t2, p);
 
       double weight = (1.0 - quality)*(1.0 + 1.0/(quality + 0.1));
       graph_edges[2*e] = t1;
@@ -963,7 +971,8 @@ void TMRSurfaceMesh::recombine( int ntris, const int tris[],
   }
 
   int *match = new int[ 2*ntris ];
-  TMR_PerfectMatchGraph(ntris, num_dual_edges, graph_edges, weights, match);
+  TMR_PerfectMatchGraph(ntris, num_dual_edges, 
+                        graph_edges, weights, match);
 
   delete [] weights;
   delete [] graph_edges;
@@ -976,7 +985,8 @@ void TMRSurfaceMesh::recombine( int ntris, const int tris[],
   // Recombine the quads
   for ( int i = 0; i < num_new_quads; i++ ){
     int fail = getRecombinedQuad(tris, tri_neighbors,
-                                 match[2*i], match[2*i+1], &new_quads[4*i]);
+                                 match[2*i], match[2*i+1],
+                                 &new_quads[4*i]);
     if (fail){
       printf("Recombined quadrilateral %d between triangles %d and %d failed\n", 
              i, match[2*i], match[2*i+1]);
@@ -999,7 +1009,7 @@ void TMRSurfaceMesh::recombine( int ntris, const int tris[],
   |    \|             |      |
   x --- x             x ---- x
 */
-void TMRSurfaceMesh::simplifyQuads(){
+void TMRFaceMesh::simplifyQuads(){
   // Compute the pointer -> quad information
   int *ptr, *pts_to_quads;
   computeNodeToElems(num_points, num_quads, 4, quads,
@@ -1163,7 +1173,7 @@ void TMRSurfaceMesh::simplifyQuads(){
 /*
   Print the quad quality
 */
-void TMRSurfaceMesh::printQuadQuality(){
+void TMRFaceMesh::printQuadQuality(){
   const int nbins = 20;
   int total = 0;
   int bins[nbins];
@@ -1194,7 +1204,7 @@ void TMRSurfaceMesh::printQuadQuality(){
 /*
   Print the triangle quality
 */
-void TMRSurfaceMesh::printTriQuality( int ntris,
+void TMRFaceMesh::printTriQuality( int ntris,
                                       const int tris[] ){
   const int nbins = 20;
   int total = 0;
@@ -1226,7 +1236,7 @@ void TMRSurfaceMesh::printTriQuality( int ntris,
 /*
   Write the quadrilateral mesh to a VTK file
 */
-void TMRSurfaceMesh::writeToVTK( const char *filename ){
+void TMRFaceMesh::writeToVTK( const char *filename ){
   FILE *fp = fopen(filename, "w");
   if (fp){
     fprintf(fp, "# vtk DataFile Version 3.0\n");
@@ -1267,7 +1277,7 @@ void TMRSurfaceMesh::writeToVTK( const char *filename ){
 /*
   Write the output to a VTK file
 */
-void TMRSurfaceMesh::writeTrisToVTK( const char *filename,
+void TMRFaceMesh::writeTrisToVTK( const char *filename,
                                      int ntris, const int tris[] ){
   FILE *fp = fopen(filename, "w");
   if (fp){
@@ -1308,7 +1318,7 @@ void TMRSurfaceMesh::writeTrisToVTK( const char *filename,
 /*
   Mesh the given geometry and retrieve either a regular mesh
 */
-TMRMesh::TMRMesh( TMRGeometry *_geo ){
+TMRMesh::TMRMesh( TMRModel *_geo ){
   geo = _geo;
   geo->incref();
 
@@ -1330,30 +1340,30 @@ TMRMesh::~TMRMesh(){
 */
 void TMRMesh::mesh( double htarget ){
   // Mesh the curves
-  int num_curves;
-  TMRCurve **curves;
-  geo->getCurves(&num_curves, &curves);
-  for ( int i = 0; i < num_curves; i++ ){
-    TMRCurveMesh *mesh = NULL;
-    curves[i]->getMesh(&mesh);
+  int num_edges;
+  TMREdge **edges;
+  geo->getEdges(&num_edges, &edges);
+  for ( int i = 0; i < num_edges; i++ ){
+    TMREdgeMesh *mesh = NULL;
+    edges[i]->getMesh(&mesh);
     if (!mesh){
-      mesh = new TMRCurveMesh(curves[i]);
+      mesh = new TMREdgeMesh(edges[i]);
       mesh->mesh(htarget);
-      curves[i]->setMesh(mesh);
+      edges[i]->setMesh(mesh);
     }
   }
 
   // Mesh the surface
-  int num_surfaces;
-  TMRSurface **surfaces;
-  geo->getSurfaces(&num_surfaces, &surfaces);
-  for ( int i = 0; i < num_surfaces; i++ ){
-    TMRSurfaceMesh *mesh = NULL;
-    surfaces[i]->getMesh(&mesh);
+  int num_faces;
+  TMRFace **faces;
+  geo->getFaces(&num_faces, &faces);
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
     if (!mesh){
-      mesh = new TMRSurfaceMesh(surfaces[i]);
+      mesh = new TMRFaceMesh(faces[i]);
       mesh->mesh(htarget);
-      surfaces[i]->setMesh(mesh);
+      faces[i]->setMesh(mesh);
     }
   }
 
@@ -1367,17 +1377,17 @@ void TMRMesh::mesh( double htarget ){
     vertices[i]->setNodeNum(&num);
   }
 
-  // Order the curves
-  for ( int i = 0; i < num_curves; i++ ){
-    TMRCurveMesh *mesh = NULL;
-    curves[i]->getMesh(&mesh);
+  // Order the edges
+  for ( int i = 0; i < num_edges; i++ ){
+    TMREdgeMesh *mesh = NULL;
+    edges[i]->getMesh(&mesh);
     mesh->setNodeNums(&num);
   }
 
-  // Order the surfaces
-  for ( int i = 0; i < num_surfaces; i++ ){
-    TMRSurfaceMesh *mesh = NULL;
-    surfaces[i]->getMesh(&mesh);
+  // Order the faces
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
     mesh->setNodeNums(&num);
   }
 
@@ -1386,9 +1396,9 @@ void TMRMesh::mesh( double htarget ){
 
   // Count up the number of quadrilaterals in the mesh
   num_quads = 0;
-  for ( int i = 0; i < num_surfaces; i++ ){
-    TMRSurfaceMesh *mesh = NULL;
-    surfaces[i]->getMesh(&mesh);
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
     num_quads += mesh->getLocalConnectivity(NULL);
   }
 }
@@ -1402,16 +1412,16 @@ void TMRMesh::initMesh(){
   quads = new int[ 4*num_quads ];
 
   // Retrieve the surface information
-  int num_surfaces;
-  TMRSurface **surfaces;
-  geo->getSurfaces(&num_surfaces, &surfaces);
+  int num_faces;
+  TMRFace **faces;
+  geo->getFaces(&num_faces, &faces);
 
   // Set the values into the global arrays
   int *q = quads;
-  for ( int i = 0; i < num_surfaces; i++ ){
+  for ( int i = 0; i < num_faces; i++ ){
     // Get the mesh
-    TMRSurfaceMesh *mesh = NULL;
-    surfaces[i]->getMesh(&mesh);
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
 
     // Get the local mesh points
     int npts;
@@ -1463,10 +1473,10 @@ int TMRMesh::getMeshConnectivity( const int **_quads ){
 }
 
 /*
-  Create the topology object, generating the vertices, curves and
-  surfaces for each element in the underlying mesh.
+  Create the topology object, generating the vertices, edges and
+  faces for each element in the underlying mesh.
 */
-TMRGeometry* TMRMesh::createMeshGeometry(){
+TMRModel* TMRMesh::createMeshGeometry(){
   // Initialize the mesh
   initMesh();
 
@@ -1506,30 +1516,30 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
     verts[vnum] = vertices[i];
   }
 
-  // Create the vertices on the curves
-  int num_curves;
-  TMRCurve **curves;
-  geo->getCurves(&num_curves, &curves);
-  for ( int i = 0; i < num_curves; i++ ){
-    TMRCurveMesh *mesh = NULL;
-    curves[i]->getMesh(&mesh);
+  // Create the vertices on the edges
+  int num_edges;
+  TMREdge **edges;
+  geo->getEdges(&num_edges, &edges);
+  for ( int i = 0; i < num_edges; i++ ){
+    TMREdgeMesh *mesh = NULL;
+    edges[i]->getMesh(&mesh);
 
     // Get the parametric points associated with the mesh
     int npts;
     const double *tpts;
     mesh->getMeshPoints(&npts, &tpts, NULL);
     for ( int j = 1; j < npts-1; j++, vnum++ ){
-      verts[vnum] = new TMRVertexFromCurve(curves[i], tpts[j]);
+      verts[vnum] = new TMRVertexFromEdge(edges[i], tpts[j]);
     }
   }
 
-  // Create the vertices from the surfaces
-  int num_surfaces;
-  TMRSurface **surfaces;
-  geo->getSurfaces(&num_surfaces, &surfaces);
-  for ( int i = 0; i < num_surfaces; i++ ){
-    TMRSurfaceMesh *mesh = NULL;
-    surfaces[i]->getMesh(&mesh);
+  // Create the vertices from the faces
+  int num_faces;
+  TMRFace **faces;
+  geo->getFaces(&num_faces, &faces);
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
 
     // Get the mesh points
     int npts;
@@ -1539,19 +1549,18 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
     // Get the point-offset for this surface
     int offset = mesh->getNumFixedPoints();
     for ( int j = offset; j < npts; j++, vnum++ ){
-      verts[vnum] = new TMRVertexFromSurface(surfaces[i], 
-                                             pts[2*j], pts[2*j+1]);
+      verts[vnum] = new TMRVertexFromFace(faces[i], pts[2*j], pts[2*j+1]);
     }
   }
 
-  // Create the curves on the surface and on the edge
-  TMRCurve **edges = new TMRCurve*[ num_quad_edges ];
-  memset(edges, 0, num_quad_edges*sizeof(TMRCurve*));
+  // Create the edges on the surface and on the edge
+  TMREdge **new_edges = new TMREdge*[ num_quad_edges ];
+  memset(new_edges, 0, num_quad_edges*sizeof(TMREdge*));
 
-  // Create the curves for the mesh from the underlying curves
-  for ( int i = 0; i < num_curves; i++ ){
-    TMRCurveMesh *mesh = NULL;
-    curves[i]->getMesh(&mesh);
+  // Create the edges for the mesh from the underlying edges
+  for ( int i = 0; i < num_edges; i++ ){
+    TMREdgeMesh *mesh = NULL;
+    edges[i]->getMesh(&mesh);
 
     // Get the global variables associated with the local curve mesh
     const int *vars;
@@ -1586,7 +1595,7 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
           quad_edges[2*edge_num] *= -1;
           quad_edges[2*edge_num+1] *= -1;
         }
-        edges[edge_num] = new TMRSplitCurve(curves[i], tpts[j], tpts[j+1]);
+        new_edges[edge_num] = new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
       }
     }
   }
@@ -1594,10 +1603,10 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
   // Set the local quad node to edge information
   const int edge_to_nodes[][2] = {{0, 3}, {1, 2}, {0, 1}, {3, 2}};
 
-  // Create the curves on the surface using Pcurve/CurveFromSurface
-  for ( int i = 0; i < num_surfaces; i++ ){
-    TMRSurfaceMesh *mesh = NULL;
-    surfaces[i]->getMesh(&mesh);
+  // Create the edges on the surface using Pcurve/CurveFromSurface
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
 
     // Get the parametric points associated with the surface mesh
     int npts;
@@ -1637,7 +1646,7 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
         if (res){
           // Get the edge number
           int edge_num = res[0];
-          if (!edges[edge_num]){
+          if (!new_edges[edge_num]){
             // Create the TMRBsplinePcurve on this edge
             double cpts[4];
             if (vars[l1] == quad_edges[2*edge_num] && 
@@ -1654,7 +1663,7 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
               cpts[3] = pts[2*l1+1];
             }
             TMRBsplinePcurve *pcurve = new TMRBsplinePcurve(2, 2, cpts);
-            edges[edge_num] = new TMRCurveFromSurface(surfaces[i], pcurve);
+            new_edges[edge_num] = new TMREdgeFromFace(faces[i], pcurve);
           }
         }
       }
@@ -1662,16 +1671,16 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
   }  
 
   // Create the surface 
-  TMRSurface **surfs = new TMRSurface*[ num_quads ];
+  TMRFace **surfs = new TMRFace*[ num_quads ];
 
   // Switch the ordering from right-handed to coordinate ordering of the
   // vertices in a quadrilateral
   const int quad_to_coordinate[] = {0, 1, 3, 2};
 
-  // Create the TMRSurface objects
-  for ( int i = 0, q = 0; i < num_surfaces; i++ ){
-    TMRSurfaceMesh *mesh = NULL;
-    surfaces[i]->getMesh(&mesh);
+  // Create the TMRFace objects
+  for ( int i = 0, q = 0; i < num_faces; i++ ){
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
 
     // Get the parametric points associated with the surface mesh
     int npts;
@@ -1686,9 +1695,9 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
     const int *vars;
     mesh->getNodeNums(&vars);
 
-    // Iterate over all of the edges, creating the appropriate surfaces
+    // Iterate over all of the edges, creating the appropriate faces
     for ( int j = 0; j < nlocal; j++, q++ ){
-      TMRCurve *c[4];
+      TMREdge *c[4];
       int dir[4];
       TMRVertex *v[4];
 
@@ -1721,7 +1730,7 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
         if (res){
           // Get the global edge number
           int edge_num = res[0];
-          c[k] = edges[edge_num];
+          c[k] = new_edges[edge_num];
 
           // Figure out the edge direction
           int dir_fact = 1;
@@ -1742,18 +1751,18 @@ TMRGeometry* TMRMesh::createMeshGeometry(){
       }
 
       // Create the parametric TFI surface
-      surfs[q] = new TMRParametricTFISurface(surfaces[i], c, dir, v);
+      surfs[q] = new TMRParametricTFIFace(faces[i], c, dir, v);
     }
   } 
 
   // Create the geometry object
-  TMRGeometry *geo = new TMRGeometry(num_nodes, verts,
-                                     num_quad_edges, edges,
-                                     num_quads, surfs);
+  TMRModel *geo = new TMRModel(num_nodes, verts,
+                               num_quad_edges, new_edges,
+                               num_quads, surfs);
 
   // Free the data that was locally allocated
   delete [] verts;
-  delete [] edges;
+  delete [] new_edges;
   delete [] surfs;
   delete [] all_edges;
   delete [] quad_edges;

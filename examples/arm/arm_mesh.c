@@ -1,4 +1,5 @@
 #include "TMRTopology.h"
+#include "TMRNativeTopology.h"
 #include "TMRBspline.h"
 #include "TMRQuadForest.h"
 #include "TMRMesh.h"
@@ -10,8 +11,8 @@
 #include <stdio.h>
 #include <math.h>
 
-TMRBsplineCurve* createSemiCircle( TMRPoint center, double r,
-                                   double theta ){
+TMREdge* createSemiCircle( TMRPoint center, double r,
+                           double theta ){
   // Set the points and weights for the B-spline circle
   const int nctl = 5;
   const int ku = 3;
@@ -69,29 +70,31 @@ TMRBsplineCurve* createSemiCircle( TMRPoint center, double r,
     new TMRBsplineCurve(nctl, ku, Tu, wts, p);
 
   // Return the curve
-  return curve;
+  return new TMREdgeFromCurve(curve);
 }
 
 /*
   Create a line between two points
 */
-TMRBsplineCurve* createLine( TMRPoint p1, TMRPoint p2 ){
+TMREdge* createLine( TMRPoint p1, TMRPoint p2 ){
   TMRPoint p[2];
   p[0] = p1;
   p[1] = p2;
-  return new TMRBsplineCurve(2, 2, p);
+  TMRCurve *bspline = new TMRBsplineCurve(2, 2, p);
+  return new TMREdgeFromCurve(bspline);
 }
 
 /*
   Create a line between two specified vertices
 */
-TMRBsplineCurve* createLine( TMRVertex *v1, TMRVertex *v2 ){
+TMREdge* createLine( TMRVertex *v1, TMRVertex *v2 ){
   TMRPoint p[2];
   v1->evalPoint(&p[0]);
   v2->evalPoint(&p[1]);
   TMRBsplineCurve *bspline = new TMRBsplineCurve(2, 2, p);
-  bspline->setVertices(v1, v2);
-  return bspline;
+  TMREdge *edge = new TMREdgeFromCurve(bspline);
+  edge->setVertices(v1, v2);
+  return edge;
 }
 
 TMRTopology* setUpTopology( MPI_Comm comm, 
@@ -142,32 +145,33 @@ TMRTopology* setUpTopology( MPI_Comm comm,
 
   TMRBsplineSurface *surf = 
     new TMRBsplineSurface(nu, nv, ku, kv, pts);
-  surf->incref();
+  TMRFace *face = new TMRFaceFromSurface(surf);
+  face->incref();
 
   // Set the curves that form the outline of the bracket
-  TMRBsplineCurve *outer1 = createSemiCircle(p1, r1+t, 0.5*M_PI);
-  TMRBsplineCurve *outer2 = createSemiCircle(p2, r2+t, 1.5*M_PI);
-  TMRBsplineCurve *line1 = createLine(p3, p4);
-  TMRBsplineCurve *line2 = createLine(p5, p6);
+  TMREdge *outer1 = createSemiCircle(p1, r1+t, 0.5*M_PI);
+  TMREdge *outer2 = createSemiCircle(p2, r2+t, 1.5*M_PI);
+  TMREdge *line1 = createLine(p3, p4);
+  TMREdge *line2 = createLine(p5, p6);
 
-  TMRBsplineCurve *inner11 = createSemiCircle(p1, r1, 0.0);
-  TMRBsplineCurve *inner12 = createSemiCircle(p1, r1, M_PI);
-  TMRBsplineCurve *inner21 = createSemiCircle(p2, r2, 0.0);
-  TMRBsplineCurve *inner22 = createSemiCircle(p2, r2, M_PI);
+  TMREdge *inner11 = createSemiCircle(p1, r1, 0.0);
+  TMREdge *inner12 = createSemiCircle(p1, r1, M_PI);
+  TMREdge *inner21 = createSemiCircle(p2, r2, 0.0);
+  TMREdge *inner22 = createSemiCircle(p2, r2, M_PI);
 
   // Create the vertices
   int num_vertices = 8;
   TMRVertex *v[8];
-  v[0] = new TMRVertexFromCurve(outer1, 0.0);
-  v[1] = new TMRVertexFromCurve(outer1, 1.0);
-  v[2] = new TMRVertexFromCurve(outer2, 0.0);
-  v[3] = new TMRVertexFromCurve(outer2, 1.0);
+  v[0] = new TMRVertexFromEdge(outer1, 0.0);
+  v[1] = new TMRVertexFromEdge(outer1, 1.0);
+  v[2] = new TMRVertexFromEdge(outer2, 0.0);
+  v[3] = new TMRVertexFromEdge(outer2, 1.0);
 
   // Create the start/end vertices for each curve
-  v[4] = new TMRVertexFromCurve(inner11, 0.0);
-  v[5] = new TMRVertexFromCurve(inner12, 0.0);
-  v[6] = new TMRVertexFromCurve(inner21, 0.0);
-  v[7] = new TMRVertexFromCurve(inner22, 0.0);
+  v[4] = new TMRVertexFromEdge(inner11, 0.0);
+  v[5] = new TMRVertexFromEdge(inner12, 0.0);
+  v[6] = new TMRVertexFromEdge(inner21, 0.0);
+  v[7] = new TMRVertexFromEdge(inner22, 0.0);
 
   // Set the vertices into the lines
   outer1->setVertices(v[0], v[1]);
@@ -184,33 +188,31 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   
   // Create the curves
   int dir[4];
-  int num_curves = 8;
-  TMRCurve *curves[8];
-  curves[0] = outer1;  dir[0] = 1;
-  curves[1] = line2;   dir[1] = 1;
-  curves[2] = outer2;  dir[2] = 1;
-  curves[3] = line1;   dir[3] =-1;
+  int num_edges = 8;
+  TMREdge *edges[8];
+  edges[0] = outer1;  dir[0] = 1;
+  edges[1] = line2;   dir[1] = 1;
+  edges[2] = outer2;  dir[2] = 1;
+  edges[3] = line1;   dir[3] =-1;
 
-  // Add the outer curve segments
-  surf->addCurveSegment(4, curves, dir);
-
-  // Add the inner curve segments
-  curves[4] = inner12;  dir[0] = -1;
-  curves[5] = inner11;  dir[1] = -1;  
-  surf->addCurveSegment(2, &curves[4], dir);
+  // Add the outer curve loop
+  face->addEdgeLoop(new TMREdgeLoop(4, edges, dir));
 
   // Add the inner curve segments
-  curves[6] = inner21;  dir[0] = -1;
-  curves[7] = inner22;  dir[1] = -1;  
-  surf->addCurveSegment(2, &curves[6], dir);
+  edges[4] = inner12;  dir[0] = -1;
+  edges[5] = inner11;  dir[1] = -1;  
+  face->addEdgeLoop(new TMREdgeLoop(2, &edges[4], dir));
+
+  // Add the inner curve segments
+  edges[6] = inner21;  dir[0] = -1;
+  edges[7] = inner22;  dir[1] = -1;  
+  face->addEdgeLoop(new TMREdgeLoop(2, &edges[6], dir));
 
   TMREntity::setTolerances(1e-14, 1e-14);
-  
+
   // Create the geometry object
-  TMRSurface *surface = surf;
-  TMRGeometry *geo = new TMRGeometry(num_vertices, v, 
-                                     num_curves, curves, 
-                                     1, &surface);
+  TMRModel *geo = new TMRModel(num_vertices, v, num_edges, 
+                               edges, 1, &face);
   geo->incref();
   
   // Create the mesh
@@ -221,8 +223,8 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   mesh->mesh(htarget);
                                      
   // Write the surface mesh to the VTK file
-  TMRSurfaceMesh *surf_mesh;
-  surf->getMesh(&surf_mesh);
+  TMRFaceMesh *surf_mesh;
+  face->getMesh(&surf_mesh);
   surf_mesh->writeToVTK("quads.vtk");
 
   // Free the objects

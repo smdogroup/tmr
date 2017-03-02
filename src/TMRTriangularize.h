@@ -2,7 +2,7 @@
 #define TMR_TRIANGULARIZE_H
 
 #include "TMRBase.h"
-#include "TMRGeometry.h"
+#include "TMRTopology.h"
 
 /*
   The rectangular domain used to define the upper/lower limits of the
@@ -115,10 +115,10 @@ class TMRTriangularize : public TMREntity {
  public:
   TMRTriangularize( int npts, const double inpts[],
                     int nsegs, const int segs[],
-                    TMRSurface *surf=NULL );
+                    TMRFace *surf=NULL );
   TMRTriangularize( int npts, const double inpts[], int nholes,
                     int nsegs, const int segs[],
-                    TMRSurface *surf=NULL );
+                    TMRFace *surf=NULL );
   ~TMRTriangularize();
 
   // Create the frontal mesh with the given mesh spacing
@@ -147,7 +147,7 @@ class TMRTriangularize : public TMREntity {
   // Initialize the underlying data structures
   void initialize( int npts, const double inpts[], int nholes,
                    int nsegs, const int segs[],
-                   TMRSurface *surf );
+                   TMRFace *surf );
 
   // Add a point to the list -- this only adds a point to the list and 
   // returns the new point number, it does not add the point to the 
@@ -202,7 +202,7 @@ class TMRTriangularize : public TMREntity {
                               uint32_t u, uint32_t v, uint32_t w );
 
   // The underlying surface
-  TMRSurface *surface;
+  TMRFace *face;
 
   // Initial number of boundary points
   uint32_t init_boundary_points;

@@ -422,7 +422,7 @@ void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist 
 
   This object takes in a series of points, a nuber of holes, and a
   series of segments. The points are in parametric space while the
-  surface defines the mapping between parameter space and physical
+  face defines the mapping between parameter space and physical
   space. Meshing is performed by using a local metric within each
   triangle to define distance. The incircle operations that test
   whether a point lies within the circumcircle of a triangle are
@@ -437,7 +437,7 @@ void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist 
   indicating the location of the holes must be numbered last in the
   point list and cannot be included in the segment edges.
 
-  If no surface object is provided, then the meshing takes place in
+  If no face object is provided, then the meshing takes place in
   the parameter space directly.
 
   input:
@@ -446,11 +446,11 @@ void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist 
   nholes: the number of holes that are specified
   nsegs:  the number of segments
   segs:   the segments: consecutive point numbers indicating edges
-  surf:   the optional surface
+  surf:   the optional face
 */
 TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
                                     int nsegs, const int segs[],
-                                    TMRSurface *surf ){
+                                    TMRFace *surf ){
   initialize(npts, inpts, 0, nsegs, segs, surf);
 }
 
@@ -459,7 +459,7 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
 */
 TMRTriangularize::TMRTriangularize( int npts, const double inpts[], int nholes,
                                     int nsegs, const int segs[],
-                                    TMRSurface *surf ){
+                                    TMRFace *surf ){
   initialize(npts, inpts, nholes, nsegs, segs, surf);
 }
 
@@ -470,14 +470,14 @@ TMRTriangularize::TMRTriangularize( int npts, const double inpts[], int nholes,
 */
 void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
                                    int nsegs, const int segs[],
-                                   TMRSurface *surf ){
+                                   TMRFace *surf ){
   // Initialize the predicates code
   exactinit();
 
-  // Set the surface location
-  surface = surf;
-  if (surface){
-    surface->incref();
+  // Set the surface
+  face = surf;
+  if (face){
+    face->incref();
   }
 
   // Allocate and initialize/zero the hash table data for the edges
@@ -515,8 +515,8 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   pts = new double[ 2*max_num_points ];
   pts_to_tris = new TMRTriangle*[ max_num_points ];
 
-  // If we have a surface object
-  if (surface){
+  // If we have a face object
+  if (face){
     X = new TMRPoint[ max_num_points ];
   }
   else {
@@ -571,10 +571,10 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   pts[6] = domain.xhigh;
   pts[7] = domain.yhigh;
   
-  // Evaluate the points on the surface
-  if (surface){
+  // Evaluate the points on the face
+  if (face){
     for ( int i = 0; i < num_points; i++ ){
-      surface->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
+      face->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
     }
   }
 
@@ -661,9 +661,9 @@ TMRTriangularize::~TMRTriangularize(){
   if (X){ delete [] X; }
   delete [] pts_to_tris;
 
-  // Dereference the surface
-  if (surface){
-    surface->decref();
+  // Dereference the face
+  if (face){
+    face->decref();
   }
 
   // Free the PSLG edges
@@ -711,13 +711,13 @@ void TMRTriangularize::getMesh( int *_num_points,
   *_num_triangles = num_triangles;
   *_conn = new int[ 3*num_triangles ];
   *_pts = new double[ 2*npts ];
-  if (surface){
+  if (face){
     *_X = new TMRPoint[ npts ];
   }
 
   // Set the points
   memcpy(*_pts, &pts[2*FIXED_POINT_OFFSET], 2*npts*sizeof(double));
-  if (surface){
+  if (face){
     memcpy(*_X, &X[FIXED_POINT_OFFSET], npts*sizeof(TMRPoint));
   }
 
@@ -783,7 +783,7 @@ void TMRTriangularize::writeToVTK( const char *filename ){
       
     // Write out the points
     fprintf(fp, "POINTS %d float\n", num_points);
-    if (surface){
+    if (face){
       for ( int k = 0; k < num_points; k++ ){
         fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
       }
@@ -1369,7 +1369,7 @@ inline int TMRTriangularize::enclosed( const double p[],
 inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
                                           uint32_t w, uint32_t x ){
 
-  if (surface){
+  if (face){
     // Compute the mid-point of the triangle
     double mpt[2];
     const double frac = 1.0/3.0;
@@ -1378,7 +1378,7 @@ inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
 
     // Compute the metric components at the center of the triangle (u,v,w)
     TMRPoint Xu, Xv;
-    surface->evalDeriv(mpt[0], mpt[1], &Xu, &Xv);
+    face->evalDeriv(mpt[0], mpt[1], &Xu, &Xv);
     double g11 = Xu.dot(Xu);
     double g12 = Xu.dot(Xv);
     double g22 = Xv.dot(Xv);
@@ -1439,7 +1439,7 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
     delete [] pts_to_tris;
     pts_to_tris = new_pts_to_tris;
     
-    if (surface){
+    if (face){
       // Allocate the space for the triangle vertices in physical space
       TMRPoint *new_X = new TMRPoint[ max_num_points ];
       memcpy(new_X, X, num_points*sizeof(TMRPoint));
@@ -1458,9 +1458,9 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
   // No new triangle has been assigned yet
   pts_to_tris[num_points] = NULL;
 
-  // Evaluate the surface location
-  if (surface){
-    surface->evalPoint(pt[0], pt[1], &X[num_points]);
+  // Evaluate the face location
+  if (face){
+    face->evalPoint(pt[0], pt[1], &X[num_points]);
   }
   
   // Increase the number of points by one
@@ -1698,7 +1698,7 @@ double TMRTriangularize::computeIntersection( const double m[],
 */
 double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
   double D1, D2, D3;
-  if (surface){
+  if (face){
     // Compute the edge lengths in physical space
     TMRPoint d;
     d.x = X[tri->v].x - X[tri->u].x;
@@ -1860,9 +1860,9 @@ void TMRTriangularize::frontal( double h ){
     double p = 0.0;
 
     double pt[2];
-    if (surface){
+    if (face){
       TMRPoint Xu, Xv;
-      surface->evalDeriv(m[0], m[1], &Xu, &Xv);
+      face->evalDeriv(m[0], m[1], &Xu, &Xv);
 
       // Compute the metric tensor components
       double g11 = Xu.dot(Xu);
@@ -1924,7 +1924,7 @@ void TMRTriangularize::frontal( double h ){
       if (!pt_tri){
         pt_tri = tri;
 
-        if (surface){
+        if (face){
           // Pick a point at the middle of the current triangle
           const double frac = 1.0/3.0;
           pt[0] = frac*(pts[2*pt_tri->u] + pts[2*pt_tri->v] + pts[2*pt_tri->w]);

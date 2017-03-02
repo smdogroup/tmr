@@ -19,7 +19,8 @@ CXX_OBJS = TMRBase.o \
 	TMR_STLTools.o \
 	TMROctStiffness.o \
 	TMRBspline.o \
-	TMRTopology.o
+	TMRTopology.o \
+	TMRNativeTopology.o
 
 DIR=${TMR_DIR}/src
 

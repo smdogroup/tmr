@@ -8,13 +8,13 @@
 /*
   The mesh for a geometric curve
 */
-class TMRCurveMesh : public TMREntity {
+class TMREdgeMesh : public TMREntity {
  public:
-  TMRCurveMesh( TMRCurve *curve );
-  ~TMRCurveMesh();
+  TMREdgeMesh( TMREdge *edge );
+  ~TMREdgeMesh();
 
   // Retrieve the underlying curve
-  void getCurve( TMRCurve **_curve );
+  void getEdge( TMREdge **_edge );
 
   // Mesh the geometric object
   void mesh( double htarget );
@@ -27,7 +27,7 @@ class TMRCurveMesh : public TMREntity {
   void getMeshPoints( int *_npts, const double **_pts, TMRPoint **X );
 
  private:
-  TMRCurve *curve;
+  TMREdge *edge;
 
   // The parametric locations of the points that are obtained from
   // meshing the curve
@@ -42,13 +42,13 @@ class TMRCurveMesh : public TMREntity {
 
   This class is used to generate a triangular mesh
 */
-class TMRSurfaceMesh : public TMREntity {
+class TMRFaceMesh : public TMREntity {
  public:
-  TMRSurfaceMesh( TMRSurface *surface );
-  ~TMRSurfaceMesh();
+  TMRFaceMesh( TMRFace *face );
+  ~TMRFaceMesh();
 
   // Retrieve the underlying surface
-  void getSurface( TMRSurface **_surface );
+  void getFace( TMRFace **_surface );
   
   // Mesh the underlying geometric object
   void mesh( double htarget );
@@ -98,7 +98,7 @@ class TMRSurfaceMesh : public TMREntity {
   double computeTriQuality( const int *tri, const TMRPoint *p );
 
   // The underlying surface
-  TMRSurface *surface;
+  TMRFace *face;
 
   // Points in the mesh
   int num_fixed_pts; // number of fixed points
@@ -117,7 +117,7 @@ class TMRSurfaceMesh : public TMREntity {
 */
 class TMRMesh : public TMREntity {
  public:
-  TMRMesh( TMRGeometry *_geo );
+  TMRMesh( TMRModel *_geo );
   ~TMRMesh();
 
   // Mesh the underlying geometry
@@ -128,14 +128,14 @@ class TMRMesh : public TMREntity {
   int getMeshConnectivity( const int **_quads );
 
   // Create a topology object (with underlying mesh geometry)
-  TMRGeometry* createMeshGeometry();
+  TMRModel* createMeshGeometry();
 
  private:
   // Allocate and initialize the underlying mesh
   void initMesh();
 
   // The underlying geometry object
-  TMRGeometry *geo;
+  TMRModel *geo;
 
   // The number of nodes/quads in the mesh
   int num_nodes;

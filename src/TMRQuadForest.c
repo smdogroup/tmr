@@ -2510,7 +2510,7 @@ void TMRQuadForest::createNodes( int order ){
       double u = 1.0*array[i].x/hmax;
       double v = 1.0*array[i].y/hmax;
 
-      TMRSurface *surf;
+      TMRFace *surf;
       topo->getSurface(array[i].face, &surf);
       if (surf){
         surf->evalPoint(u, v, &X[i]);
@@ -2554,7 +2554,7 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
     const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
 
     // Get the surface quadrant
-    TMRSurface *surf;
+    TMRFace *surf;
     topo->getSurface(array[i].face, &surf);  
     const char *face_attr = surf->getAttribute();
     if (face_attr && strcmp(face_attr, attr) == 0){
@@ -2564,7 +2564,7 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
       // If this quadrant was not added from a face
       // attribute, check to see if it should be added
       // as an edge/curve attribute
-      TMRCurve *curve;
+      TMREdge *curve;
       if (array[i].x == 0){
         topo->getFaceCurve(array[i].face, 0, &curve);
         const char *curve_attr = curve->getAttribute();
@@ -2640,7 +2640,7 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   for ( int i = 0; i < size; i++ ){
     // Get the surface quadrant
-    TMRSurface *surf;
+    TMRFace *surf;
     topo->getSurface(array[i].face, &surf);  
     const char *face_attr = surf->getAttribute();
     if (face_attr && strcmp(face_attr, attr) == 0){
@@ -2650,7 +2650,7 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
       // If this quadrant was not added from a face
       // attribute, check to see if it should be added
       // as an edge/curve attribute
-      TMRCurve *curve;
+      TMREdge *curve;
       if (array[i].x == 0){
         topo->getFaceCurve(array[i].face, 0, &curve);
         const char *curve_attr = curve->getAttribute();

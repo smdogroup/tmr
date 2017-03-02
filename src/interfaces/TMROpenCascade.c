@@ -45,7 +45,6 @@ int TMR_OCCCurve::evalDeriv( double t, TMRPoint *Xt ){
   return 0;
 }
 
-
 /*
   TMR interface to the OpenCascade geometry
 */
@@ -322,14 +321,14 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
   TopoDS_Compound compound;
   BRep_Builder builder;
   builder.MakeCompound(compound);
-  for (i = 1; i <= nbs; i++) {
+  for ( int i = 1; i <= nbs; i++ ){
     TopoDS_Shape shape = reader.Shape(i);
     builder.Add(compound, shape);
   }
   
   // Create the index <--> geometry object
-  int nverts = 0, nedges = 0, nfaces = 0;
-  TopTools_IndexedMapOfShape verts, edges, faces;
+  int nverts = 0, nedges = 0, nfaces = 0, nwires = 0;
+  TopTools_IndexedMapOfShape verts, edges, faces, wires;
 
   // Get the faces, edges and  up the number of faces and a
   TopExp_Explorer Exp;
@@ -352,6 +351,13 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
     TopoDS_Shape shape = Exp.Current();
     faces.Add(shape);
     nfaces++;
+  }
+
+  Exp.Init(compound, TopAbs_WIRE);
+  for ( ; Exp.More(); Exp.Next() ){
+    TopoDS_Shape shape = Exp.Current();
+    wires.Add(shape);
+    nwires++;
   }
 
   // Re-iterate through the list and create the objects needed to
@@ -390,9 +396,65 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
     all_faces[index-1] = new TMR_OCCFace(f);
   }
 
+  // Loop over all of the wire objects in the model
+  TMREdgeLoop **all_loops = new TMREdgeLoop[ nwires ];
+  Exp.Init(compound, TopAbs_WIRE);
+  for ( ; Exp.More(); Exp.Next() ){
+    TopoDS_Shape shape = Exp.Current();
+    TopoDS_Wire wire = TopoDS::Wire(shape);
+    int index = wires.FindIndex(shape);
 
+    // Check if the wire is closed
+    TopExp::Vertices(wire, v1, v2);
+    int closed = 0;
+    if (!v1.IsNull() && !v2.IsNull()){
+      if (v1.IsSame(v2)){
+        closed = 1;
+      }
+    }
 
+    // Count up th enumber of wires
+    BRepTools_WireExplorer wExp;
+    int ne = 0;
+    for ( wExp.Init(wire); wExp.More(); wExp.Next()){
+      ne++;
+    }
 
+    // Create the edge list
+    TMREdge **edgs = new TMREdge[ ne ];
+    int *dir = new int[ ne ];
+    wExp.Init(wire);
+    for ( int k = 0; wExp.More; wExp.Next(), k++ ){
+      TopoDS_Shape shape = wExp.Current()
+      dir[k] = 1;
+      if (shape.Orientation() == TopAbs_REVERSED){
+        dir[k] = -1;
+      } 
+      int index = edges.FindIndex(shape);
+      edgs[k] = all_edges[index-1];
+    }
 
+    // Allocate the loop with the given edges/directions
+    all_loops[index-1] = new TMREdgeLoop(ne, edgs, dir);
 
+    // Free the allocated data
+    delete [] edgs;
+    delete [] dir;
+  }
+
+  Exp.Init(compound, TopAbs_FACE);
+  for ( ; Exp.More(); Exp.Next() ){
+    TopoDS_Shape shape = Exp.Current();    
+    TopoDS_Shape face = TopoDS::Face(shape);
+    int index = faces.FindIndex(shape);
+
+    // Get the wires attached to this face
+    TopTools_IndexedMapOfShape map;
+    TopExp::MapShapes(face, TopAbs_WIRE, map);
+    for ( int i = 1; i <= map.Extent(); i++ ){
+      TopoDS_Wire wire_shape = map(i);
+      int loop_index = wires.FindIndex(wire_shape);
+      all_faces[index-1]->addEdgeLoop(all_loops[loop_index-1]);
+    }
+  }
 }
