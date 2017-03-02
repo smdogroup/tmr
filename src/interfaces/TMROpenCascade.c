@@ -1,5 +1,7 @@
 #include "TMROpenCascade.h"
 
+#ifdef TMR_HAS_OPENCASCADE
+
 /*
   TMR interface to OpenCascade for the curve
 */
@@ -458,3 +460,5 @@ TMRGeometry* TMR_LoadGeometryFromSTEPFile( const char *filename ){
     }
   }
 }
+
+#endif // TMR_HAS_OPENCASCADE

@@ -7,7 +7,8 @@
 include ../../Makefile.in
 include ../../TMR_Common.mk
 
-CXX_OBJS = TMRPerfectMatchInterface.o
+CXX_OBJS = TMRPerfectMatchInterface.o \
+	TMROpenCascade.o
 
 DIR=${TMR_DIR}/src/interfaces
 
