@@ -496,7 +496,6 @@ void TMRFaceMesh::mesh( double htarget ){
   // bounds the domain, the other loops cut out holes in the domain. 
   // Note that the domain must be contiguous.
   int nholes = nloops-1;
-  printf("nholes = %d\n", nholes);
 
   // All the boundary loops are closed, therefore, the total number
   // of segments is equal to the total number of points
@@ -583,6 +582,7 @@ void TMRFaceMesh::mesh( double htarget ){
     }
 
     // Check if the area constraint
+    /*
     if (Area < 0.0){
       // This is a hole! Compute an approximate position for the hole.
       // Note that this may not work in all cases so beware.
@@ -606,6 +606,7 @@ void TMRFaceMesh::mesh( double htarget ){
       // Increment the hole pointer
       hole_pt++;
     }
+    */
   }
 
   // Set the total number of fixed points. These are the points that
@@ -622,6 +623,8 @@ void TMRFaceMesh::mesh( double htarget ){
                          nsegs, segments, face);
   tri->incref();
 
+  tri->writeToVTK("init-triangle-mesh.vtk");
+
   // Create the mesh using the frontal algorithm
   tri->frontal(htarget);
 
@@ -629,72 +632,76 @@ void TMRFaceMesh::mesh( double htarget ){
   int ntris, *tris;
   tri->getMesh(&num_points, &ntris, &tris, &pts, &X);
 
+  tri->writeToVTK("pre-quad-triangle-mesh.vtk");
+
   // Free the triangle mesh
   tri->decref();
 
-  // Compute the triangle edges and neighbors in the dual mesh
-  int num_tri_edges;
-  int *tri_edges, *tri_neighbors, *dual_edges;
-  computeTriEdges(num_points, ntris, tris, 
-                  &num_tri_edges, &tri_edges,
-                  &tri_neighbors, &dual_edges);
+  if (ntris > 0){
+    // Compute the triangle edges and neighbors in the dual mesh
+    int num_tri_edges;
+    int *tri_edges, *tri_neighbors, *dual_edges;
+    computeTriEdges(num_points, ntris, tris, 
+                    &num_tri_edges, &tri_edges,
+                    &tri_neighbors, &dual_edges);
+    
+    // Smooth the resulting triangular mesh
+    laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
+                       num_tri_edges, tri_edges,
+                       num_points, pts, X, face);
+    
+    printTriQuality(ntris, tris);
+    
+    // Recombine the mesh into a quadrilateral mesh
+    recombine(ntris, tris, tri_neighbors,
+              num_tri_edges, dual_edges, X, &num_quads, &quads);
+    
+    // Free the triangular mesh data
+    delete [] tris;
+    delete [] tri_neighbors;
+    delete [] dual_edges;
 
-  // Smooth the resulting triangular mesh
-  laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
-                     num_tri_edges, tri_edges,
-                     num_points, pts, X, face);
+    // Simplify the new quadrilateral mesh
+    simplifyQuads();
+    
+    // Print the quadrilateral mesh quality
+    printQuadQuality();
+    
+    // Compute the quadrilateral mesh
+    // int num_quad_edges;
+    // int *quad_edges;
+    // computeQuadEdges(num_points, num_quads, quads,
+    //                  &num_quad_edges, &quad_edges);
+    //
+    // Smooth the quadrilateral mesh using Laplacian smoothing
+    // laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
+    //                    num_quad_edges, quad_edges,
+    //                    num_points, pts, X, surface);
+    //
+    // Smooth the quad mesh using a spring analogy
+    // double alpha = 0.1;
+    // springQuadSmoothing(10*num_smoothing_steps, alpha, num_fixed_pts,
+    //                     num_quads, quads, num_quad_edges, quad_edges,
+    //                     num_points, pts, X, surface);
+    // delete [] quad_edges;
 
-  printTriQuality(ntris, tris);
+    int *ptr;
+    int *pts_to_quads;
+    computeNodeToElems(num_points, num_quads, 4, quads, &ptr, &pts_to_quads);
 
-  // Recombine the mesh into a quadrilateral mesh
-  recombine(ntris, tris, tri_neighbors,
-            num_tri_edges, dual_edges, X, &num_quads, &quads);
+    // Smooth the mesh using a local optimization of node locations
+    num_smoothing_steps = 5;
+    quadSmoothing(10*num_smoothing_steps, num_fixed_pts,
+                  num_points, ptr, pts_to_quads, num_quads, quads, 
+                  pts, X, face);
 
-  // Free the triangular mesh data
-  delete [] tris;
-  delete [] tri_neighbors;
-  delete [] dual_edges;
+    // Free the connectivity information
+    delete [] ptr;
+    delete [] pts_to_quads;
 
-  // Simplify the new quadrilateral mesh
-  simplifyQuads();
-
-  // Print the quadrilateral mesh quality
-  printQuadQuality();
-
-  // Compute the quadrilateral mesh
-  // int num_quad_edges;
-  // int *quad_edges;
-  // computeQuadEdges(num_points, num_quads, quads,
-  //                  &num_quad_edges, &quad_edges);
-  //
-  // Smooth the quadrilateral mesh using Laplacian smoothing
-  // laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
-  //                    num_quad_edges, quad_edges,
-  //                    num_points, pts, X, surface);
-  //
-  // Smooth the quad mesh using a spring analogy
-  // double alpha = 0.1;
-  // springQuadSmoothing(10*num_smoothing_steps, alpha, num_fixed_pts,
-  //                     num_quads, quads, num_quad_edges, quad_edges,
-  //                     num_points, pts, X, surface);
-  // delete [] quad_edges;
-
-  int *ptr;
-  int *pts_to_quads;
-  computeNodeToElems(num_points, num_quads, 4, quads, &ptr, &pts_to_quads);
-
-  // Smooth the mesh using a local optimization of node locations
-  num_smoothing_steps = 5;
-  quadSmoothing(10*num_smoothing_steps, num_fixed_pts,
-                num_points, ptr, pts_to_quads, num_quads, quads, 
-                pts, X, face);
-
-  // Free the connectivity information
-  delete [] ptr;
-  delete [] pts_to_quads;
-
-  // Print the quadrilateral mesh quality
-  printQuadQuality();
+    // Print the quadrilateral mesh quality
+    printQuadQuality();
+  }
 }
 
 /*

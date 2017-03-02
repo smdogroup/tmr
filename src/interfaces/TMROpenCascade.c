@@ -169,14 +169,16 @@ int TMR_OCCEdge::getParamsOnFace( TMRFace *surface, double t,
 
     // Get the pcurve on the surface
     Handle(Geom2d_Curve) pcurve;
-    if (dir > 0){
-      double t0, t1;
-      pcurve = BRep_Tool::CurveOnSurface(edge, occ_face, t0, t1);
+    // if (dir > 0){
+    double t0, t1;
+    pcurve = BRep_Tool::CurveOnSurface(edge, occ_face, t0, t1);
+    /*
     }
     else{
       double t0, t1;
       pcurve = BRep_Tool::CurveOnSurface(reverse_edge, occ_face, t0, t1);
     }
+    */
 
     if (pcurve.IsNull()){
       return 1;
@@ -434,8 +436,8 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
       if (shape.Orientation() == TopAbs_REVERSED){
         dir[k] = -1;
       } 
-      int index = edges.FindIndex(shape);
-      edgs[k] = all_edges[index-1];
+      int edge_index = edges.FindIndex(shape);
+      edgs[k] = all_edges[edge_index-1];
       k++;
     }
 

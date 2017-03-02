@@ -13,7 +13,7 @@ int main( int argc, char *argv[] ){
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
   if (geo){
     geo->incref();
-    printf("Successful load\n");
+    printf("Successful loaded STEP file\n");
 
     // Get the faces that have been created - if any
     // and write them all to different VTK files
@@ -22,7 +22,7 @@ int main( int argc, char *argv[] ){
     geo->getFaces(&num_faces, &faces);
 
     // Allocate the new mesh
-    double htarget = 5.0;
+    double htarget = 3.0;
 
     TMRMesh *mesh = new TMRMesh(geo);
     mesh->incref();

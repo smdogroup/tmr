@@ -746,18 +746,19 @@ int TMRModel::verify(){
       TMREdgeLoop *loop;
       faces[face]->getEdgeLoop(k, &loop);
 
-      int nedges;
+      int ndgs;
       TMREdge **loop_edges;
-      loop->getEdgeLoop(&nedges, &loop_edges, NULL);
+      loop->getEdgeLoop(&ndgs, &loop_edges, NULL);
 
       // Loop over all of the curves and check whether the data exists
       // or not
-      for ( int j = 0; j < nedges; j++ ){
+      for ( int j = 0; j < ndgs; j++ ){
         int cindex = getEdgeIndex(loop_edges[j]);
         if (cindex < 0){
           fail = 1;
           fprintf(stderr, 
-                  "TMRGeometry error: Edge does not exist within edge list\n");
+                  "TMRGeometry error: Missing edge %d in edge loop %d for face %d\n",
+                  j, k, face);
         }
         else {
           crvs[cindex]++;
@@ -791,14 +792,14 @@ int TMRModel::verify(){
   for ( int i = 0; i < num_vertices; i++ ){
     if (verts[i] == 0){
       fprintf(stderr,
-              "TMRGeometry error: Vertex %d unreferenced\n", i);
+              "TMRGeometry warning: Vertex %d unreferenced\n", i);
       fail = 1;
     }
   }
   for ( int i = 0; i < num_edges; i++ ){
     if (crvs[i] == 0){
       fprintf(stderr,
-              "TMRGeometry error: Edge %d unreferenced\n", i);
+              "TMRGeometry warning: Edge %d unreferenced\n", i);
       fail = 1;
     }
   }
@@ -854,6 +855,11 @@ int TMRModel::getVertexIndex( TMRVertex *vertex ){
   pair.num = -1;
   pair.obj = vertex;
 
+  for ( int i = 0; i < num_vertices; i++ ){
+    if (ordered_verts[i].obj == vertex){
+      return ordered_verts[i].num;
+    }
+  }
   // Search for the ordered pair
   OrderedPair<TMRVertex> *item = 
     (OrderedPair<TMRVertex>*)bsearch(&pair, ordered_verts, num_vertices, 
@@ -873,6 +879,16 @@ int TMRModel::getEdgeIndex( TMREdge *edge ){
   pair.num = -1;
   pair.obj = edge;
 
+
+  for ( int i = 0; i < num_edges; i++ ){
+    if (ordered_edges[i].obj == edge){
+      return ordered_edges[i].num;
+    }
+  }
+
+  /*
+
+
   // Search for the ordered pair
   OrderedPair<TMREdge> *item = 
     (OrderedPair<TMREdge>*)bsearch(&pair, ordered_edges, num_edges,
@@ -881,6 +897,9 @@ int TMRModel::getEdgeIndex( TMREdge *edge ){
   if (item){
     return item->num;
   }
+  return -1;
+  */
+
   return -1;
 }
 

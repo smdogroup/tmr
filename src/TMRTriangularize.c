@@ -1573,6 +1573,7 @@ void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w ){
 */
 void TMRTriangularize::findEnclosing( const double pt[],
                                       TMRTriangle **ptr ){
+  *ptr = NULL;
   if (search_tag == UINT_MAX){
     search_tag = 0;
     setTriangleTags(0);
@@ -1761,25 +1762,56 @@ void TMRTriangularize::frontal( double h ){
     node->tri.status = WAITING;
     
     // Compute the 'quality' indicator for this triangle
-    node->tri.quality = computeMaxEdgeLength(&node->tri);
-  
-    // If any of the triangles touches an edge in the planar
-    // straight line graph, change it to a waiting triangle
-    uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
-                                {node->tri.v, node->tri.w},
-                                {node->tri.w, node->tri.u}};
-    for ( int k = 0; k < 3; k++ ){
-      if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
-        node->tri.status = ACTIVE;
-        addActiveTriangle(&node->tri);
-        break;
+    double hval = computeMaxEdgeLength(&node->tri);
+    node->tri.quality = hval;
+    if (hval < 1.5*h){
+      node->tri.status = ACCEPTED;
+    }
+    else {
+      // If any of the triangles touches an edge in the planar
+      // straight line graph, change it to a waiting triangle
+      uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
+                                  {node->tri.v, node->tri.w},
+                                  {node->tri.w, node->tri.u}};
+      for ( int k = 0; k < 3; k++ ){
+        if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
+          node->tri.status = ACTIVE;
+          addActiveTriangle(&node->tri);
+          break;
+        }
       }
     }
 
     // Go to the next triangle in the list
     node = node->next;
   }
-  
+
+  // Iterate over the list again and add any triangles that are
+  // adjacent to an ACCEPTED triangle to the ACTIVE set of triangles
+  node = list_start;
+  while (node){
+    if (node->tri.status == ACCEPTED){
+      // Check if any of the adjacent triangles are WAITING.  If so,
+      // change their status to ACTIVE
+      uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
+                                  {node->tri.v, node->tri.w},
+                                  {node->tri.w, node->tri.u}};
+
+      for ( int k = 0; k < 3; k++ ){
+        TMRTriangle *adjacent;
+        completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
+        if (adjacent && adjacent->status == WAITING){
+          node->tri.status = ACTIVE;
+          addActiveTriangle(&node->tri);
+          break;
+        }
+      }
+    }
+
+    // Increment the pointer to the next member of the list
+    node = node->next;
+  }
+ 
   int iter = 0;
   while (1){
     if (iter % 1000 == 0){
