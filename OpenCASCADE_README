@@ -17,6 +17,12 @@ export CASROOT=$HOME/packages/OpenCASCADE
 export PATH=$CASROOT/bin:$PATH
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CASROOT/lib
 
+For OSX I added the following lines
+export CASROOT=$HOME/packages/OpenCASCADE
+export CASARCH=i686
+export DYLD_LIBRARY_PATH=${CASROOT}/${CASARCH}/lib
+export PATH=$CASROOT/bin:$PATH
+
 5. I tried to use the draw command by typing: 
 
 sh ./draw.sh
@@ -27,12 +33,15 @@ Draw[3]> source samples/tcl/bottle.tcl
 
 This showed an image of the bottle example from OpenCASCADE
 
+(This step did not work under OSX, but the final step and compilation
+of the TMR library with OpenCASCADE enabled worked anyway.)
+
 6. I added the following lines to the Makefile.in code:
 
 # Flags for debugging and regular compilation versions
 TMR_DEBUG_FLAGS = [...] -DTMR_HAS_OPENCASCADE
 TMR_FLAGS = [...] -DTMR_HAS_OPENCASCADE
 
-OPENCASCADE_INCLUDE = -I${CASROOT}/inc
+OPENCASCADE_INCLUDE = -I${CASROOT}/${CASARCH}/inc
 OPENCASCADE_LIB_PATH = -L${CASROOT}/${CASARCH}/lib -Wl,-rpath,${CASROOT}/${CASARCH}/lib
 OPENCASCADE_LIBS = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKPShape -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet -lPTKernel -ldl

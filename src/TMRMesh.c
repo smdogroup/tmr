@@ -454,6 +454,8 @@ TMRFaceMesh::~TMRFaceMesh(){
   if (vars){ delete [] vars; }
 }
 
+static int tri_mesh_count = 0;
+
 /*
   Create the surface mesh
 */
@@ -530,8 +532,9 @@ void TMRFaceMesh::mesh( double htarget ){
 
     for ( int i = 0; i < nedges; i++ ){
       // Retrieve the underlying curve mesh
+      TMREdge *edge = edges[i];
       TMREdgeMesh *mesh = NULL;
-      edges[i]->getMesh(&mesh);
+      edge->getMesh(&mesh);
       
       // Get the mesh points corresponding to this curve
       int npts;
@@ -541,8 +544,8 @@ void TMRFaceMesh::mesh( double htarget ){
       // Find the point on the curve
       if (dir[i] > 0){
         for ( int j = 0; j < npts-1; j++ ){
-          edges[i]->getParamsOnFace(face, tpts[j], dir[i],
-                                    &params[2*pt], &params[2*pt+1]);
+          edge->getParamsOnFace(face, tpts[j], dir[i],
+                                &params[2*pt], &params[2*pt+1]);
           segments[2*seg] = pt;
           segments[2*seg+1] = pt+1;
           seg++;
@@ -550,9 +553,10 @@ void TMRFaceMesh::mesh( double htarget ){
         }
       }
       else {
+        // Reverse the parameter values on the edge
         for ( int j = npts-1; j >= 1; j-- ){
-          edges[i]->getParamsOnFace(face, tpts[j], dir[i],
-                                    &params[2*pt], &params[2*pt+1]);
+          edge->getParamsOnFace(face, tpts[j], dir[i],
+                                &params[2*pt], &params[2*pt+1]);
           segments[2*seg] = pt;
           segments[2*seg+1] = pt+1;
           seg++;
@@ -565,6 +569,7 @@ void TMRFaceMesh::mesh( double htarget ){
     // initial loop point
     segments[2*(seg-1)+1] = init_loop_pt;
 
+    /***************************************************************
     // Compute the area enclosed by the loop. If the area is
     // positive, it is the domain boundary. If the area is negative,
     // we have a hole!  Note that this assumes that the polygon
@@ -582,7 +587,6 @@ void TMRFaceMesh::mesh( double htarget ){
     }
 
     // Check if the area constraint
-    /*
     if (Area < 0.0){
       // This is a hole! Compute an approximate position for the hole.
       // Note that this may not work in all cases so beware.
@@ -606,7 +610,7 @@ void TMRFaceMesh::mesh( double htarget ){
       // Increment the hole pointer
       hole_pt++;
     }
-    */
+    ****************************************************************/
   }
 
   // Set the total number of fixed points. These are the points that
@@ -623,16 +627,12 @@ void TMRFaceMesh::mesh( double htarget ){
                          nsegs, segments, face);
   tri->incref();
 
-  tri->writeToVTK("init-triangle-mesh.vtk");
-
   // Create the mesh using the frontal algorithm
   tri->frontal(htarget);
 
   // Extract the triangularization of the domain
   int ntris, *tris;
   tri->getMesh(&num_points, &ntris, &tris, &pts, &X);
-
-  tri->writeToVTK("pre-quad-triangle-mesh.vtk");
 
   // Free the triangle mesh
   tri->decref();
@@ -650,8 +650,9 @@ void TMRFaceMesh::mesh( double htarget ){
                        num_tri_edges, tri_edges,
                        num_points, pts, X, face);
     
-    printTriQuality(ntris, tris);
-    
+    // printTriQuality(ntris, tris);
+
+    /*
     // Recombine the mesh into a quadrilateral mesh
     recombine(ntris, tris, tri_neighbors,
               num_tri_edges, dual_edges, X, &num_quads, &quads);
@@ -701,6 +702,7 @@ void TMRFaceMesh::mesh( double htarget ){
 
     // Print the quadrilateral mesh quality
     printQuadQuality();
+    */
   }
 }
 
@@ -1278,6 +1280,39 @@ void TMRFaceMesh::writeToVTK( const char *filename ){
       fprintf(fp, "%e\n", computeQuadQuality(&quads[4*k], X));
     }
 
+    fclose(fp);
+  }
+}
+
+/*
+  Write out the segments to a VTK file
+*/
+void TMRFaceMesh::writeSegmentsToVTK( const char *filename, 
+                                      int npts, const double *params, 
+                                      int nsegs, const int segs[] ){
+  FILE *fp = fopen(filename, "w");
+  if (fp){
+    fprintf(fp, "# vtk DataFile Version 3.0\n");
+    fprintf(fp, "vtk output\nASCII\n");
+    fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+    
+    // Write out the points
+    fprintf(fp, "POINTS %d float\n", npts);
+    for ( int k = 0; k < npts; k++ ){
+      fprintf(fp, "%e %e 0.0\n", params[2*k], params[2*k+1]);
+    }
+
+    // Write out the cell connectivity
+    fprintf(fp, "\nCELLS %d %d\n", nsegs, 3*nsegs);
+    for ( int k = 0; k < nsegs; k++ ){
+      fprintf(fp, "2 %d %d\n", segs[2*k], segs[2*k+1]);
+    }
+
+    // Write out the cell types
+    fprintf(fp, "\nCELL_TYPES %d\n", nsegs);
+    for ( int k = 0; k < nsegs; k++ ){
+      fprintf(fp, "%d\n", 3);
+    }
     fclose(fp);
   }
 }

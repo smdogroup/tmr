@@ -6,9 +6,6 @@ TACS_DIR = ${HOME}/hg/tacs
 CXX = mpicxx
 RM = rm -f
 
-# The cython command
-CYTHON = cython
-
 # Flags for debugging and regular compilation versions
 TMR_DEBUG_FLAGS = -fPIC -g 
 TMR_FLAGS = -fPIC -O3

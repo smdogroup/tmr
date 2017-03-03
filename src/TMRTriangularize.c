@@ -1811,11 +1811,13 @@ void TMRTriangularize::frontal( double h ){
     // Increment the pointer to the next member of the list
     node = node->next;
   }
+
+  printf("%10s %10s %10s\n", "Iteration", "Triangles", "Active");
  
   int iter = 0;
   while (1){
     if (iter % 1000 == 0){
-      printf("Iteration %d  num_triangles %d  num_active = %d\n", 
+      printf("%10d %10d %10d\n",
              iter, num_triangles, num_active_triangles);
     }
     iter++;
@@ -2062,5 +2064,6 @@ void TMRTriangularize::frontal( double h ){
     }
   }
 
-  printf("Iteration %d  num_triangles %d\n", iter, num_triangles);
+  printf("%10d %10d %10d\n",
+         iter, num_triangles, num_active_triangles);
 }

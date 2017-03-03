@@ -71,6 +71,11 @@ class TMRFaceMesh : public TMREntity {
   void printQuadQuality();
 
  private:
+  // Write the segments to a VTK file in parameter space
+  void writeSegmentsToVTK( const char *filename, 
+                           int npts, const double *params, 
+                           int nsegs, const int segs[] );
+
   // Print the triangle quality
   void printTriQuality( int ntris, const int tris[] );
   void writeTrisToVTK( const char *filename,
