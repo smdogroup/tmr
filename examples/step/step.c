@@ -7,6 +7,14 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
+  double htarget = 4.0;
+  for ( int k = 0; k < argc; k++ ){
+    if (sscanf(argv[k], "h=%lf", &htarget) == 1){
+      if (htarget < 0.1){ htarget = 0.1; }
+      if (htarget > 10.0){ htarget = 10.0; }
+    }
+  }
+
   const char *filename = "misc1.step";
 
   // Load in the geometry file
@@ -21,8 +29,6 @@ int main( int argc, char *argv[] ){
     geo->getFaces(&num_faces, &faces);
 
     // Allocate the new mesh
-    double htarget = 2.0;
-
     TMRMesh *mesh = new TMRMesh(geo);
     mesh->incref();
     mesh->mesh(htarget);

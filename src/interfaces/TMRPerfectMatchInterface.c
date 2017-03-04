@@ -1,4 +1,5 @@
 #include "TMRPerfectMatchInterface.h"
+#include <string.h>
 #include <stdio.h>
 
 // Include the perfect matching code
@@ -9,9 +10,41 @@ int TMR_PerfectMatchGraph( int nnodes, int nedges,
                            const int *edges, const double *weights,
                            int *match ){
   if (nnodes % 2 == 1){
-  	printf("Perfect matching does not exist\n");
+    fprintf(stderr,
+            "TMR_PerfectMatchGraph error: Perfect matching does not exist\n");
   }
   
+  // Check that all nodes are referenced
+  int *count = new int[ nnodes ];
+  memset(count, 0, nnodes*sizeof(int));
+  for ( int i = 0; i < nedges; i++ ){
+    if (edges[2*i] >= 0 && edges[2*i] < nnodes){
+      count[edges[2*i]]++;
+    }
+    else {
+      fprintf(stderr, 
+              "TMR_PerfectMatchGraph error: Edge %d, node %d out of range\n",
+              i, edges[2*i]);
+    }
+    if (edges[2*i+1] >= 0 && edges[2*i+1] < nnodes){
+      count[edges[2*i+1]]++;
+    }
+    else {
+      fprintf(stderr, 
+              "TMR_PerfectMatchGraph error: Edge %d, node %d out of range\n",
+              i, edges[2*i+1]);
+    }
+  }
+
+  for ( int i = 0; i < nnodes; i++ ){
+    if (count[i] == 0){
+      fprintf(stderr,
+              "TMR_PerfectMatchGraph error: Node %d not referenced\n", i);
+    }
+  }
+
+  delete [] count;
+
   // Allocate the perfect matching code
   PerfectMatching *pm = new PerfectMatching(nnodes, nedges);
 

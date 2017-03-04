@@ -652,7 +652,6 @@ void TMRFaceMesh::mesh( double htarget ){
     
     // printTriQuality(ntris, tris);
 
-    /*
     // Recombine the mesh into a quadrilateral mesh
     recombine(ntris, tris, tri_neighbors,
               num_tri_edges, dual_edges, X, &num_quads, &quads);
@@ -702,7 +701,6 @@ void TMRFaceMesh::mesh( double htarget ){
 
     // Print the quadrilateral mesh quality
     printQuadQuality();
-    */
   }
 }
 
@@ -972,7 +970,7 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
         computeRecombinedQuality(tris, tri_neighbors,
                                  t1, t2, p);
 
-      double weight = (1.0 - quality)*(1.0 + 1.0/(quality + 0.1));
+      double weight = (1.0 - quality); // *(1.0 + 1.0/(quality + 0.1));
       graph_edges[2*e] = t1;
       graph_edges[2*e+1] = t2;
       weights[e] = weight;
