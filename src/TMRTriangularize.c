@@ -1743,6 +1743,82 @@ double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
 }
 
 /*
+  Compute the circumcircle for the given triangle.
+
+  This can be used to evaluate an effective 'h' value (based on the 
+  equilateral radius length r_eq = h/sqrt(3)) which  is used as a
+  metric to determine whether to retain the triangle, or search for
+  a better one.
+*/
+double TMRTriangularize::computeCircumcircle( TMRTriangle *tri ){
+  double R = 0.0;
+  if (face){
+    // Compute the edge lengths in physical space
+    TMRPoint d1;
+    d1.x = X[tri->v].x - X[tri->u].x;
+    d1.y = X[tri->v].y - X[tri->u].y;
+    d1.z = X[tri->v].z - X[tri->u].z;
+    
+    TMRPoint d2;
+    d2.x = X[tri->w].x - X[tri->u].x;
+    d2.y = X[tri->w].y - X[tri->u].y;
+    d2.z = X[tri->w].z - X[tri->u].z;
+ 
+    double dot = d1.dot(d2)/d1.dot(d1);
+
+    // Compute the perpendicular component along the second
+    // direction that we'll use to determine the center point
+    TMRPoint n1;
+    n1.x = d2.x - dot*d1.x;
+    n1.y = d2.y - dot*d1.y;
+    n1.z = d2.z - dot*d1.z;
+
+    // Compute alpha = 0.5*(d2, d2 - d1)/(d2, n1)
+    double alpha = 0.5*(d2.x*(d2.x - d1.x) + 
+                        d2.y*(d2.y - d1.y) + 
+                        d2.z*(d2.z - d1.z));
+    alpha = alpha/d2.dot(n1);
+
+    // Compute the distance from the point
+    d1.x = 0.5*d1.x + alpha*n1.x;
+    d1.y = 0.5*d1.y + alpha*n1.y;
+    d1.z = 0.5*d1.z + alpha*n1.z;
+
+    // Compute the radius
+    R = sqrt(d1.dot(d1));
+  }
+  else {
+    double d1[2];
+    d1[0] = pts[2*tri->v] - pts[2*tri->u];
+    d1[1] = pts[2*tri->v+1] - pts[2*tri->u+1];
+    
+    double d2[2];
+    d2[0] = pts[2*tri->w] - pts[2*tri->v];
+    d2[1] = pts[2*tri->w+1] - pts[2*tri->v+1];
+
+    double b[2];
+    b[0] = 0.5*(pts[2*tri->w] - pts[2*tri->v]);
+    b[1] = 0.5*(pts[2*tri->w+1] - pts[2*tri->v+1]);
+
+    // Evaluate alpha
+    double invdet = 1.0/(d1[1]*d2[0] - d2[1]*d1[0]);
+    double alpha = -invdet*(d2[0]*b[0] + d2[1]*b[1]);
+
+    // Compute the point locations
+    double pt[2];
+    pt[0] = 0.5*(pts[2*tri->u] + pts[2*tri->v]) - alpha*d1[1];
+    pt[1] = 0.5*(pts[2*tri->u+1] + pts[2*tri->v+1]) + alpha*d1[0];
+
+    // Determine the radius
+    d1[0] = pts[2*tri->u] - pt[0];
+    d1[1] = pts[2*tri->u+1] - pt[1];
+    R = sqrt(d1[0]*d1[0] + d1[1]*d1[1]);
+  }
+
+  return R;
+}
+
+/*
   Perform a frontal mesh generation algorithm and simultaneously
   create a constrained Delaunay triangularization of the generated
   mesh.
@@ -1753,7 +1829,8 @@ double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
 */
 void TMRTriangularize::frontal( double h ){
   // The length of the edge of the triangle
-  double de = 0.5*sqrt(3.0)*h;
+  const double sqrt3 = sqrt(3.0);
+  const double de = 0.5*sqrt3*h;
 
   // Add the triangles to the active set that 
   TriListNode *node = list_start;
@@ -1762,7 +1839,7 @@ void TMRTriangularize::frontal( double h ){
     node->tri.status = WAITING;
     
     // Compute the 'quality' indicator for this triangle
-    double hval = computeMaxEdgeLength(&node->tri);
+    double hval = sqrt3*computeCircumcircle(&node->tri);
     node->tri.quality = hval;
     if (hval < 1.5*h){
       node->tri.status = ACCEPTED;
@@ -1997,7 +2074,7 @@ void TMRTriangularize::frontal( double h ){
       ptr = list_marker->next;
     }
     while (ptr){
-      double hval = computeMaxEdgeLength(&ptr->tri);
+      double hval = sqrt3*computeCircumcircle(&node->tri);
       ptr->tri.quality = hval;
       if (hval < 1.5*h){
         ptr->tri.status = ACCEPTED;

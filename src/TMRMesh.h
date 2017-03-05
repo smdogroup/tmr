@@ -81,6 +81,11 @@ class TMRFaceMesh : public TMREntity {
   void writeTrisToVTK( const char *filename,
                        int ntris, const int tris[] );
   
+  // Write the dual mesh - used for recombination - to a file
+  void writeDualToVTK( const char *filename, int ntris, const int tris[],
+                       int num_dual_edges, const int dual_edges[],
+                       const TMRPoint *p );
+
   // Recombine the mesh to a quadrilateral mesh based on the
   // quad-Blossom algorithm
   void recombine( int ntris, const int tris[], const int tri_neighbors[],

@@ -649,8 +649,6 @@ void TMRFaceMesh::mesh( double htarget ){
     laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
                        num_tri_edges, tri_edges,
                        num_points, pts, X, face);
-    
-    // printTriQuality(ntris, tris);
 
     // Recombine the mesh into a quadrilateral mesh
     recombine(ntris, tris, tri_neighbors,
@@ -665,7 +663,7 @@ void TMRFaceMesh::mesh( double htarget ){
     simplifyQuads();
     
     // Print the quadrilateral mesh quality
-    printQuadQuality();
+    // printQuadQuality();
     
     // Compute the quadrilateral mesh
     // int num_quad_edges;
@@ -977,6 +975,9 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
       e++;
     }
   }
+
+  writeDualToVTK("dual_mesh.vtk", ntris, tris,
+                 num_dual_edges, graph_edges, p);
 
   int *match = new int[ 2*ntris ];
   TMR_PerfectMatchGraph(ntris, num_dual_edges, 
@@ -1352,6 +1353,43 @@ void TMRFaceMesh::writeTrisToVTK( const char *filename,
       fprintf(fp, "%e\n", computeTriQuality(&tris[3*k], X));
     }
 
+    fclose(fp);
+  }
+}
+
+/*
+  Write out the dual mesh for visualization
+*/
+void TMRFaceMesh::writeDualToVTK( const char *filename, 
+                                  int ntris, const int tris[],
+                                  int num_dual_edges, const int dual_edges[],
+                                  const TMRPoint *p ){
+  FILE *fp = fopen(filename, "w");
+  if (fp){
+    fprintf(fp, "# vtk DataFile Version 3.0\n");
+    fprintf(fp, "vtk output\nASCII\n");
+    fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+    
+    // Write out the points
+    fprintf(fp, "POINTS %d float\n", ntris);
+    for ( int k = 0; k < ntris; k++ ){
+      fprintf(fp, "%e %e %e\n", 
+        1.0/3.0*(p[tris[3*k]].x + p[tris[3*k+1]].x + p[tris[3*k+2]].x),
+        1.0/3.0*(p[tris[3*k]].y + p[tris[3*k+1]].y + p[tris[3*k+2]].y),
+        1.0/3.0*(p[tris[3*k]].z + p[tris[3*k+1]].z + p[tris[3*k+2]].z));
+    }
+
+    // Write out the cell connectivity
+    fprintf(fp, "\nCELLS %d %d\n", num_dual_edges, 3*num_dual_edges);
+    for ( int k = 0; k < num_dual_edges; k++ ){
+      fprintf(fp, "2 %d %d\n", dual_edges[2*k], dual_edges[2*k+1]);
+    }
+
+    // Write out the cell types
+    fprintf(fp, "\nCELL_TYPES %d\n", num_dual_edges);
+    for ( int k = 0; k < num_dual_edges; k++ ){
+      fprintf(fp, "%d\n", 3);
+    }
     fclose(fp);
   }
 }

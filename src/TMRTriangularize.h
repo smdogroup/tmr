@@ -195,6 +195,7 @@ class TMRTriangularize : public TMREntity {
   void findEnclosing( const double pt[], TMRTriangle **tri );
 
   // Compute the maximum edge length of the triangle
+  double computeCircumcircle( TMRTriangle *tri );
   double computeMaxEdgeLength( TMRTriangle *tri );
 
   // Compute the intersection
