@@ -664,28 +664,11 @@ void TMRFaceMesh::mesh( double htarget ){
     
     // Print the quadrilateral mesh quality
     // printQuadQuality();
-    
-    // Compute the quadrilateral mesh
-    // int num_quad_edges;
-    // int *quad_edges;
-    // computeQuadEdges(num_points, num_quads, quads,
-    //                  &num_quad_edges, &quad_edges);
-    //
-    // Smooth the quadrilateral mesh using Laplacian smoothing
-    // laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
-    //                    num_quad_edges, quad_edges,
-    //                    num_points, pts, X, surface);
-    //
-    // Smooth the quad mesh using a spring analogy
-    // double alpha = 0.1;
-    // springQuadSmoothing(10*num_smoothing_steps, alpha, num_fixed_pts,
-    //                     num_quads, quads, num_quad_edges, quad_edges,
-    //                     num_points, pts, X, surface);
-    // delete [] quad_edges;
 
     int *ptr;
     int *pts_to_quads;
-    computeNodeToElems(num_points, num_quads, 4, quads, &ptr, &pts_to_quads);
+    computeNodeToElems(num_points, num_quads, 4, quads, 
+                       &ptr, &pts_to_quads);
 
     // Smooth the mesh using a local optimization of node locations
     num_smoothing_steps = 5;
@@ -975,9 +958,6 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
       e++;
     }
   }
-
-  writeDualToVTK("dual_mesh.vtk", ntris, tris,
-                 num_dual_edges, graph_edges, p);
 
   int *match = new int[ 2*ntris ];
   TMR_PerfectMatchGraph(ntris, num_dual_edges, 

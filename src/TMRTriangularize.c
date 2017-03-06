@@ -2074,7 +2074,7 @@ void TMRTriangularize::frontal( double h ){
       ptr = list_marker->next;
     }
     while (ptr){
-      double hval = sqrt3*computeCircumcircle(&node->tri);
+      double hval = sqrt3*computeCircumcircle(&ptr->tri);
       ptr->tri.quality = hval;
       if (hval < 1.5*h){
         ptr->tri.status = ACCEPTED;

@@ -49,7 +49,6 @@ int TMR_PerfectMatchGraph( int nnodes, int nedges,
   PerfectMatching *pm = new PerfectMatching(nnodes, nedges);
 
   // Set the edges in the graph and the weights
-  int max_int = 1 << 10;
   for ( int i = 0; i < nedges; i++ ){
     // Add the dual edge to the perfect matching code
     pm->AddEdge(edges[2*i], edges[2*i+1], weights[i]);
