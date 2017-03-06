@@ -89,7 +89,8 @@ class TMRFaceMesh : public TMREntity {
   // Recombine the mesh to a quadrilateral mesh based on the
   // quad-Blossom algorithm
   void recombine( int ntris, const int tris[], const int tri_neighbors[],
-                  int num_edges, const int dual_edges[], const TMRPoint *p,
+                  const int node_to_tri_ptr[], const int node_to_tris[],
+                  int num_edges, const int dual_edges[],
                   int *_num_quads, int **_new_quads );
 
   // Simplify the quadrilateral mesh to remove points that make

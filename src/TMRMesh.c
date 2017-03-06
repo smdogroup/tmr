@@ -92,7 +92,9 @@ static void computeNodeToElems( int nnodes, int nelems,
 */
 static void computeTriEdges( int nnodes, int ntris, const int tris[],
                              int *num_tri_edges, int **_tri_edges,
-                             int **_tri_neighbors, int **_dual_edges ){
+                             int **_tri_neighbors, int **_dual_edges,
+                             int **_node_to_tri_ptr=NULL, 
+                             int **_node_to_tris=NULL ){
   // Compute the edges in the triangular mesh
   int *ptr;
   int *node_to_tris;
@@ -164,8 +166,18 @@ static void computeTriEdges( int nnodes, int ntris, const int tris[],
   }
 
   // Free the data that is no longer required
-  delete [] ptr;
-  delete [] node_to_tris;
+  if (_node_to_tri_ptr){
+    *_node_to_tri_ptr = ptr;
+  }
+  else {
+    delete [] ptr;
+  }
+  if (_node_to_tris){
+    *_node_to_tris = node_to_tris;
+  }
+  else {
+    delete [] node_to_tris;
+  }
 
   // Now we have a unique list of edge numbers and the total number of
   // edges, we can construct the unique edge list
@@ -569,7 +581,6 @@ void TMRFaceMesh::mesh( double htarget ){
     // initial loop point
     segments[2*(seg-1)+1] = init_loop_pt;
 
-    /***************************************************************
     // Compute the area enclosed by the loop. If the area is
     // positive, it is the domain boundary. If the area is negative,
     // we have a hole!  Note that this assumes that the polygon
@@ -610,7 +621,6 @@ void TMRFaceMesh::mesh( double htarget ){
       // Increment the hole pointer
       hole_pt++;
     }
-    ****************************************************************/
   }
 
   // Set the total number of fixed points. These are the points that
@@ -641,9 +651,11 @@ void TMRFaceMesh::mesh( double htarget ){
     // Compute the triangle edges and neighbors in the dual mesh
     int num_tri_edges;
     int *tri_edges, *tri_neighbors, *dual_edges;
+    int *node_to_tri_ptr, *node_to_tris;
     computeTriEdges(num_points, ntris, tris, 
                     &num_tri_edges, &tri_edges,
-                    &tri_neighbors, &dual_edges);
+                    &tri_neighbors, &dual_edges,
+                    &node_to_tri_ptr, &node_to_tris);
     
     // Smooth the resulting triangular mesh
     laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
@@ -651,8 +663,8 @@ void TMRFaceMesh::mesh( double htarget ){
                        num_points, pts, X, face);
 
     // Recombine the mesh into a quadrilateral mesh
-    recombine(ntris, tris, tri_neighbors,
-              num_tri_edges, dual_edges, X, &num_quads, &quads);
+    recombine(ntris, tris, tri_neighbors, node_to_tri_ptr, node_to_tris,
+              num_tri_edges, dual_edges, &num_quads, &quads);
     
     // Free the triangular mesh data
     delete [] tris;
@@ -924,24 +936,21 @@ double TMRFaceMesh::computeTriQuality( const int *tri,
 */
 void TMRFaceMesh::recombine( int ntris, const int tris[],
                              const int tri_neighbors[],
+                             const int node_to_tri_ptr[],
+                             const int node_to_tris[],
                              int num_edges, const int dual_edges[],
-                             const TMRPoint *p, int *_num_quads, 
-                             int **_new_quads ){
-  // Count up the number of dual edges
-  int num_dual_edges = 0;
-  for ( int i = 0; i < num_edges; i++ ){
-    if (dual_edges[2*i] >= 0 && dual_edges[2*i+1] >= 0){
-      num_dual_edges++;
-    }
-  }
-
-  // Allocate the weights
-  double *weights = new double[ num_dual_edges ];
-  int *graph_edges = new int[ 2*num_dual_edges ];
+                             int *_num_quads, int **_new_quads ){
+  // Allocate the reduced graph weights
+  double *weights = new double[ num_edges ];
+  int *graph_edges = new int[ 2*num_edges ];
 
   // Compute the weight associated with each edge by combputing the
   // recombined quality
-  for ( int i = 0, e = 0; i < num_edges; i++ ){
+  const double eps = 0.1;
+  const double frac = eps/(1.0 + eps);
+
+  int edge_num = 0;
+  for ( int i = 0; i < num_edges; i++ ){
     int t1 = dual_edges[2*i];
     int t2 = dual_edges[2*i+1];
 
@@ -949,40 +958,232 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
       // Compute the weight for this recombination
       double quality = 
         computeRecombinedQuality(tris, tri_neighbors,
-                                 t1, t2, p);
+                                 t1, t2, X);
 
-      double weight = (1.0 - quality); // *(1.0 + 1.0/(quality + 0.1));
-      graph_edges[2*e] = t1;
-      graph_edges[2*e+1] = t2;
-      weights[e] = weight;
-      e++;
+      double weight = frac*(1.0 - quality)*(1.0 + 1.0/(quality + eps));
+      graph_edges[2*edge_num] = t1;
+      graph_edges[2*edge_num+1] = t2;
+      weights[edge_num] = weight;
+      edge_num++;
     }
   }
 
-  int *match = new int[ 2*ntris ];
-  TMR_PerfectMatchGraph(ntris, num_dual_edges, 
-                        graph_edges, weights, match);
+  // Keep track of the number of real edges in the graph
+  int num_real_edges = edge_num;
 
+  // Determine the extra edges that connect along the boundaries.
+  // between unique triangles that are not already adjacent to one
+  // another.
+  for ( int i = 0; i < ntris; i++ ){
+    if (tri_neighbors[3*i] < 0 ||
+        tri_neighbors[3*i+1] < 0 ||
+        tri_neighbors[3*i+2] < 0){
+      // Quck reference from the edge index to the local node numbering
+      const int enodes[3][2] = {{1, 2}, {2, 0}, {0, 1}};
+      const int node_edges[3][2] = {{1, 2}, {0, 2}, {0, 1}};
+
+      // Loop over the edges of the triangle
+      for ( int j = 0; j < 3; j++ ){
+        // We have a boundary triangle
+        if (tri_neighbors[3*i+j] < 0){
+          // The leading node that we are searching for
+          int ij = enodes[j][1]; 
+          int node = tris[3*i + ij];
+
+          // Search the triangles adjacent to node
+          const int kpend = node_to_tri_ptr[node+1];
+          for ( int kp = node_to_tri_ptr[node]; kp < kpend; kp++ ){
+            int k = node_to_tris[kp];
+          
+            // If this is the same triangle, continue
+            if (i == k){ 
+              continue; 
+            }
+
+            // If the triangles are actually also neighbors, continue
+            if (tri_neighbors[3*k] == i ||
+                tri_neighbors[3*k+1] == i ||
+                tri_neighbors[3*k+2] == i){
+              continue;
+            }
+
+            // Find the local node number shared between triangles k
+            // and triangle i
+            int kj = 0;
+            if (tris[3*k+1] == node){ kj = 1; }
+            else if (tris[3*k+2] == node){ kj = 2; }
+
+            // Track from the node to the possible edges
+            if (tri_neighbors[3*k + node_edges[kj][0]] < 0 ||
+                tri_neighbors[3*k + node_edges[kj][1]] < 0){
+              graph_edges[2*edge_num] = i;
+              graph_edges[2*edge_num+1] = k;
+              weights[edge_num] = 10.0;
+              edge_num++;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Set the number of edges within the modified dual mesh
+  int num_dual_edges = edge_num;
+
+  // Perform the perfect matching
+  int *match = new int[ ntris/2 ];
+  int num_match = TMR_PerfectMatchGraph(ntris, num_dual_edges,
+                                        graph_edges, weights, match);
   delete [] weights;
-  delete [] graph_edges;
 
-  // Set the number of quadrilateral elements created in the mesh and record
-  // the new quadrilateral element connectivity
-  int num_new_quads = ntris/2;
+  // The quads formed from the original triangles
+  int num_quads_from_tris = 0;
+
+  // The new number of quadrilaterals - after every new quad is added
+  int num_new_quads = 0;
+
+  // New points array
+  int num_new_points = 0;
+  double *new_pts = NULL;
+  TMRPoint *new_X = NULL;
+
+  for ( int i = 0; i < num_match; i++ ){
+    if (match[i] < num_real_edges){
+      num_quads_from_tris++;
+      num_new_quads++;
+    }
+    else {
+      // We'll add two extra quads for each extra edge
+      num_new_quads += 2;
+      num_new_points++;
+    }
+  }
+  
+  // We'll be adding new points so allocate new arrays to handle the
+  // new points that will be computed...
+  if (num_new_points > 0){
+    num_new_points += num_points;
+    new_pts = new double[ 2*num_new_points ];
+    new_X = new TMRPoint[ num_new_points ];
+    memcpy(new_pts, pts, 2*num_points*sizeof(double));
+    memcpy(new_X, X, num_points*sizeof(TMRPoint));
+  }
+  
+  // Set the number of quadrilateral elements created in the mesh and
+  // record the new quadrilateral element connectivity
   int *new_quads = new int[ 4*num_new_quads ];
 
-  // Recombine the quads
-  for ( int i = 0; i < num_new_quads; i++ ){
-    int fail = getRecombinedQuad(tris, tri_neighbors,
-                                 match[2*i], match[2*i+1],
-                                 &new_quads[4*i]);
-    if (fail){
-      printf("Recombined quadrilateral %d between triangles %d and %d failed\n", 
-             i, match[2*i], match[2*i+1]);
+  // Recombine the triangles into quadrilateral elements
+  num_new_quads = 0;
+  for ( int i = 0; i < num_match; i++ ){
+    if (match[i] < num_real_edges){
+      int t1 = graph_edges[2*match[i]];
+      int t2 = graph_edges[2*match[i]+1];
+
+      int fail = getRecombinedQuad(tris, tri_neighbors, t1, t2,
+                                   &new_quads[4*num_new_quads]);
+      num_new_quads++;
+      if (fail){
+        fprintf(stderr,
+                "TMRFaceMesh error: Quad %d from triangles %d and %d failed\n", 
+                i, t1, t2);
+      }
     }
   }
 
+  // Set the number of new points
+  num_new_points = num_points;
+
+  // Add the triangles from edges along the boundary. There should
+  // only be a handful of these guys...
+  for ( int i = 0; i < num_match; i++ ){
+    if (match[i] >= num_real_edges){
+      // These triangles can only share one common node - the node
+      // that we'll now duplicate and move to the interior of the
+      // domain. Find the local node index for this shared node in
+      // each triangle.
+      int t1 = graph_edges[2*match[i]];
+      int t2 = graph_edges[2*match[i]+1];
+
+      // j1, j2 are the local nodal indices of the shared node between
+      // triangles t1 and t2
+      int j1 = 0, j2 = 0;
+      for ( int flag = 0; !flag && j1 < 3; j1++ ){
+        for ( j2 = 0; j2 < 3; j2++ ){
+          if (tris[3*t1 + j1] == tris[3*t2 + j2]){
+            flag = 1;
+            break;
+          }
+        }
+        if (flag){
+          break; 
+        }
+      }
+
+      int boundary_pt = tris[3*t1 + j1];
+      
+      // Go through all previous quadrilaterals and adjust the
+      // ordering to reflect the duplicated node location
+      for ( int k = 0; k < 4*num_quads_from_tris; k++ ){
+        if (new_quads[k] == boundary_pt){
+          new_quads[k] = num_new_points;
+        }
+      }
+
+      // Add the first triangle t1 - this triangle is gauranteed to
+      // come first when circling the boundary in the CCW direction.
+      new_quads[4*num_new_quads] = tris[3*t1+((j1+1) % 3)];
+      new_quads[4*num_new_quads+1] = tris[3*t1+((j1+2) % 3)];
+      new_quads[4*num_new_quads+2] = boundary_pt;
+      new_quads[4*num_new_quads+3] = num_new_points;
+      num_new_quads++;
+      
+      // Add the connectivity from the second triangle t2. This
+      // triangle will always come second when circling the boundary.
+      new_quads[4*num_new_quads] = tris[3*t2+((j2+1) % 3)];
+      new_quads[4*num_new_quads+1] = tris[3*t2+((j2+2) % 3)];
+      new_quads[4*num_new_quads+2] = num_new_points;
+      new_quads[4*num_new_quads+3] = boundary_pt;
+      num_new_quads++;
+
+      // Compute the new parameter location by taking the average of
+      // the centroid locations for each triangle
+      new_pts[2*num_new_points] = 0.0;
+      new_pts[2*num_new_points+1] = 0.0;
+
+      int count = 0;
+      int kpend = node_to_tri_ptr[boundary_pt+1];
+      for ( int kp = node_to_tri_ptr[boundary_pt]; kp < kpend; kp++ ){
+        int k = node_to_tris[kp];
+        if (k != t1 && k != t2){
+          new_pts[2*num_new_points] += (pts[2*tris[3*k]] +
+                                        pts[2*tris[3*k+1]] +
+                                        pts[2*tris[3*k+2]])/3.0;
+          new_pts[2*num_new_points+1] += (pts[2*tris[3*k]+1] +
+                                          pts[2*tris[3*k+1]+1] +
+                                          pts[2*tris[3*k+2]]+1)/3.0;
+        }
+      }
+      if (count > 1){
+        new_pts[2*num_new_points] = new_pts[2*num_new_points]/count;
+        new_pts[2*num_new_points+1] = new_pts[2*num_new_points+1]/count;
+      }
+      face->evalPoint(new_pts[2*num_new_points],
+                      new_pts[2*num_new_points+1], &new_X[num_new_points]);
+      num_new_points++;
+    }
+  }
+
+  delete [] graph_edges;
   delete [] match;
+
+  if (new_pts){
+    num_points = num_new_points;
+    delete [] pts;
+    delete [] X;
+    pts = new_pts;
+    X = new_X;    
+  }
 
   // Set the quads/output
   *_num_quads = num_new_quads;

@@ -63,16 +63,14 @@ int TMR_PerfectMatchGraph( int nnodes, int nedges,
 
   // Allocate the match
   int nmatch = 0;
-  for ( int i = 0; i < nnodes; i++ ){
-    int j = pm->GetMatch(i);
-    if (i < j){
-      match[2*nmatch] = i;
-      match[2*nmatch+1] = j;
+  for ( int i = 0; i < nedges; i++ ){
+    if (pm->GetSolution(i)){
+      match[nmatch] = i;
       nmatch++;
     }
   }
   
   delete pm;
 
-  return 0;
+  return nmatch;
 }
