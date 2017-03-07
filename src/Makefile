@@ -16,11 +16,12 @@ CXX_OBJS = TMRBase.o \
 	TMRTriangularize.o \
 	TMRMesh.o \
 	TMRMeshSmoothing.o \
-	TMR_STLTools.o \
 	TMROctStiffness.o \
 	TMRBspline.o \
 	TMRTopology.o \
-	TMRNativeTopology.o
+	TMRNativeTopology.o \
+	TMR_STLTools.o \
+	TMR_RefinementTools.o
 
 DIR=${TMR_DIR}/src
 
