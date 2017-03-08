@@ -397,7 +397,7 @@ void TMREdgeMesh::mesh( double htarget ){
     }
 
     // Broadcast the parametric locations and points
-    MPI_Bcast(pts, npts, MPI_INT, 0, comm);
+    MPI_Bcast(pts, npts, MPI_DOUBLE, 0, comm);
     MPI_Bcast(X, npts, TMRPoint_MPI_type, 0, comm);
   }
 }
@@ -728,13 +728,13 @@ void TMRFaceMesh::mesh( double htarget ){
     num_fixed_pts = temp[2];
 
     if (mpi_rank != 0){
-      pts = new double[ num_points ];
+      pts = new double[ 2*num_points ];
       X = new TMRPoint[ num_points ];
       quads = new int[ 4*num_quads ];
     }
 
     // Broadcast the parametric locations and points
-    MPI_Bcast(pts, num_points, MPI_INT, 0, comm);
+    MPI_Bcast(pts, 2*num_points, MPI_DOUBLE, 0, comm);
     MPI_Bcast(X, num_points, TMRPoint_MPI_type, 0, comm);
     MPI_Bcast(quads, 4*num_quads, MPI_INT, 0, comm);
   } 
