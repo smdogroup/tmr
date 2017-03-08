@@ -301,7 +301,8 @@ static void computeQuadEdges( int nnodes, int nquads, const int quads[],
 /*
   Mesh a curve
 */
-TMREdgeMesh::TMREdgeMesh( TMREdge *_edge ){
+TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge ){
+  comm = _comm;
   edge = _edge;
   edge->incref();
 
@@ -325,58 +326,79 @@ TMREdgeMesh::~TMREdgeMesh(){
   Create a mesh
 */
 void TMREdgeMesh::mesh( double htarget ){
-  double tmin, tmax;
-  edge->getRange(&tmin, &tmax);
+  int mpi_rank, mpi_size;
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
 
-  // Set the integration error tolerance
-  double integration_eps = 1e-8;
+  if (mpi_rank == 0){
+    // Get the limits of integration that will be used
+    double tmin, tmax;
+    edge->getRange(&tmin, &tmax);
 
-  // Integrate along the curve to obtain the distance function such
-  // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
-  int nvals;
-  double *dist, *tvals;
-  edge->integrate(tmin, tmax, integration_eps, &tvals, &dist, &nvals);
-  
-  // Compute the number of points along this curve
-  npts = 1 + (int)(dist[nvals-1]/htarget);
-  if (npts < 2){ npts = 2; }
+    // Set the integration error tolerance
+    double integration_eps = 1e-8;
 
-  // If we have an even number of points, increment by one to ensure
-  // that we have an even number of segments along the boundary
-  if (npts % 2 != 1){ npts++; }
+    // Integrate along the curve to obtain the distance function such
+    // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
+    int nvals;
+    double *dist, *tvals;
+    edge->integrate(tmin, tmax, integration_eps, &tvals, &dist, &nvals);
+    
+    // Compute the number of points along this curve
+    npts = 1 + (int)(dist[nvals-1]/htarget);
+    if (npts < 2){ npts = 2; }
 
-  // The average distance between points
-  double d = dist[nvals-1]/(npts-1);
+    // If we have an even number of points, increment by one to ensure
+    // that we have an even number of segments along the boundary
+    if (npts % 2 != 1){ npts++; }
 
-  // Allocate the parametric points that will be used 
-  pts = new double[ npts ];
+    // The average distance between points
+    double d = dist[nvals-1]/(npts-1);
 
-  // Set the starting/end location of the points
-  pts[0] = tmin;
-  pts[npts-1] = tmax;
+    // Allocate the parametric points that will be used 
+    pts = new double[ npts ];
 
-  // Perform the integration so that the points are evenly spaced
-  // along the curve
-  for ( int j = 1, k = 1; (j < nvals && k < npts-1); j++ ){
-    while ((k < npts-1) && 
-           (dist[j-1] <= d*k && d*k < dist[j])){
-      double u = 0.0;
-      if (dist[j] > dist[j-1]){ 
-        u = (d*k - dist[j-1])/(dist[j] - dist[j-1]);
+    // Set the starting/end location of the points
+    pts[0] = tmin;
+    pts[npts-1] = tmax;
+
+    // Perform the integration so that the points are evenly spaced
+    // along the curve
+    for ( int j = 1, k = 1; (j < nvals && k < npts-1); j++ ){
+      while ((k < npts-1) && 
+             (dist[j-1] <= d*k && d*k < dist[j])){
+        double u = 0.0;
+        if (dist[j] > dist[j-1]){ 
+          u = (d*k - dist[j-1])/(dist[j] - dist[j-1]);
+        }
+        pts[k] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
+        k++;
       }
-      pts[k] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
-      k++;
+    }
+    
+    // Free the integration result
+    delete [] tvals;
+    delete [] dist;
+
+    // Allocate the points
+    X = new TMRPoint[ npts ];
+    for ( int i = 0; i < npts; i++ ){
+      edge->evalPoint(pts[i], &X[i]);
     }
   }
-  
-  // Free the integration result
-  delete [] tvals;
-  delete [] dist;
 
-  // Allocate the points
-  X = new TMRPoint[ npts ];
-  for ( int i = 0; i < npts; i++ ){
-    edge->evalPoint(pts[i], &X[i]);
+  if (mpi_size > 1){
+    // Broadcast the number of points to all the processors
+    MPI_Bcast(&npts, 1, MPI_INT, 0, comm);
+
+    if (mpi_rank != 0){
+      pts = new double[ npts ];
+      X = new TMRPoint[ npts ];
+    }
+
+    // Broadcast the parametric locations and points
+    MPI_Bcast(pts, npts, MPI_INT, 0, comm);
+    MPI_Bcast(X, npts, TMRPoint_MPI_type, 0, comm);
   }
 }
 
@@ -440,7 +462,8 @@ void TMREdgeMesh::getMeshPoints( int *_npts, const double **_pts,
   Note that the curve/edge meshes must be meshed before calling this
   object.
 */
-TMRFaceMesh::TMRFaceMesh( TMRFace *_face ){
+TMRFaceMesh::TMRFaceMesh( MPI_Comm _comm, TMRFace *_face ){
+  comm = _comm;
   face = _face;
   face->incref();
 
@@ -472,229 +495,249 @@ static int tri_mesh_count = 0;
   Create the surface mesh
 */
 void TMRFaceMesh::mesh( double htarget ){
-  // Count up the number of points and segments from the 
-  // curves that bound the surface. Keep track of the number 
-  // of points = the number of segments.
-  int total_num_pts = 0;
+  int mpi_rank, mpi_size;
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
 
-  // Keep track of the number of closed loop cycles in the domain
-  int nloops = face->getNumEdgeLoops();
+  if (mpi_rank == 0){
+    // Count up the number of points and segments from the 
+    // curves that bound the surface. Keep track of the number 
+    // of points = the number of segments.
+    int total_num_pts = 0;
 
-  // Get all of the meshes
-  for ( int k = 0; k < nloops; k++ ){
-    TMREdgeLoop *loop;
-    face->getEdgeLoop(k, &loop);
-    int nedges;
-    TMREdge **edges;
-    loop->getEdgeLoop(&nedges, &edges, NULL);
+    // Keep track of the number of closed loop cycles in the domain
+    int nloops = face->getNumEdgeLoops();
 
-    for ( int i = 0; i < nedges; i++ ){
-      TMREdgeMesh *mesh = NULL;
-      edges[i]->getMesh(&mesh);
-      if (!mesh){
-        mesh = new TMREdgeMesh(edges[i]);
-        mesh->mesh(htarget);
-        edges[i]->setMesh(mesh);
+    // Get all of the meshes
+    for ( int k = 0; k < nloops; k++ ){
+      TMREdgeLoop *loop;
+      face->getEdgeLoop(k, &loop);
+      int nedges;
+      TMREdge **edges;
+      loop->getEdgeLoop(&nedges, &edges, NULL);
+
+      for ( int i = 0; i < nedges; i++ ){
+        TMREdgeMesh *mesh = NULL;
+        edges[i]->getMesh(&mesh);
+        if (!mesh){
+          fprintf(stderr, "TMRFaceMesh error: Edge mesh does not exist\n");
+        }
+        
+        // Get the number of points associated with the curve
+        int npts;
+        mesh->getMeshPoints(&npts, NULL, NULL);
+        
+        // Update the total number of points
+        total_num_pts += npts-1;
       }
-      
-      // Get the number of points associated with the curve
-      int npts;
-      mesh->getMeshPoints(&npts, NULL, NULL);
-      
-      // Update the total number of points
-      total_num_pts += npts-1;
     }
-  }
 
-  // The number of holes is equal to the number of loops-1. One loop
-  // bounds the domain, the other loops cut out holes in the domain. 
-  // Note that the domain must be contiguous.
-  int nholes = nloops-1;
+    // The number of holes is equal to the number of loops-1. One loop
+    // bounds the domain, the other loops cut out holes in the domain. 
+    // Note that the domain must be contiguous.
+    int nholes = nloops-1;
 
-  // All the boundary loops are closed, therefore, the total number
-  // of segments is equal to the total number of points
-  int nsegs = total_num_pts;
+    // All the boundary loops are closed, therefore, the total number
+    // of segments is equal to the total number of points
+    int nsegs = total_num_pts;
 
-  // Allocate the points and the number of segments based on the
-  // number of holes
-  double *params = new double[ 2*(total_num_pts + nholes) ];
-  int *segments = new int[ 2*nsegs ];
+    // Allocate the points and the number of segments based on the
+    // number of holes
+    double *params = new double[ 2*(total_num_pts + nholes) ];
+    int *segments = new int[ 2*nsegs ];
 
-  // Start entering the points from the end of the last hole entry in
-  // the parameter points array.
-  int seg = 0;
-  int pt = 0;
+    // Start entering the points from the end of the last hole entry in
+    // the parameter points array.
+    int seg = 0;
+    int pt = 0;
 
-  int init_loop_pt = 0; // What point value did this loop start on? 
-  int init_loop_seg = 0; // What segment value did this loop start on?
-  int hole_pt = total_num_pts; // What hole are we on?
+    int init_loop_pt = 0; // What point value did this loop start on? 
+    int init_loop_seg = 0; // What segment value did this loop start on?
+    int hole_pt = total_num_pts; // What hole are we on?
 
-  for ( int k = 0; k < nloops; k++ ){
-    // Set the offset to the initial point/segment on this loop
-    init_loop_pt = pt;
-    init_loop_seg = seg;
+    for ( int k = 0; k < nloops; k++ ){
+      // Set the offset to the initial point/segment on this loop
+      init_loop_pt = pt;
+      init_loop_seg = seg;
 
-    // Get the curve information for this loop segment
-    TMREdgeLoop *loop;
-    face->getEdgeLoop(k, &loop);
-    int nedges;
-    TMREdge **edges;
-    const int *dir;
-    loop->getEdgeLoop(&nedges, &edges, &dir);
+      // Get the curve information for this loop segment
+      TMREdgeLoop *loop;
+      face->getEdgeLoop(k, &loop);
+      int nedges;
+      TMREdge **edges;
+      const int *dir;
+      loop->getEdgeLoop(&nedges, &edges, &dir);
 
-    for ( int i = 0; i < nedges; i++ ){
-      // Retrieve the underlying curve mesh
-      TMREdge *edge = edges[i];
-      TMREdgeMesh *mesh = NULL;
-      edge->getMesh(&mesh);
-      
-      // Get the mesh points corresponding to this curve
-      int npts;
-      const double *tpts;
-      mesh->getMeshPoints(&npts, &tpts, NULL);
-      
-      // Find the point on the curve
-      if (dir[i] > 0){
-        for ( int j = 0; j < npts-1; j++ ){
-          edge->getParamsOnFace(face, tpts[j], dir[i],
-                                &params[2*pt], &params[2*pt+1]);
-          segments[2*seg] = pt;
-          segments[2*seg+1] = pt+1;
-          seg++;
-          pt++;
+      for ( int i = 0; i < nedges; i++ ){
+        // Retrieve the underlying curve mesh
+        TMREdge *edge = edges[i];
+        TMREdgeMesh *mesh = NULL;
+        edge->getMesh(&mesh);
+        
+        // Get the mesh points corresponding to this curve
+        int npts;
+        const double *tpts;
+        mesh->getMeshPoints(&npts, &tpts, NULL);
+        
+        // Find the point on the curve
+        if (dir[i] > 0){
+          for ( int j = 0; j < npts-1; j++ ){
+            edge->getParamsOnFace(face, tpts[j], dir[i],
+                                  &params[2*pt], &params[2*pt+1]);
+            segments[2*seg] = pt;
+            segments[2*seg+1] = pt+1;
+            seg++;
+            pt++;
+          }
+        }
+        else {
+          // Reverse the parameter values on the edge
+          for ( int j = npts-1; j >= 1; j-- ){
+            edge->getParamsOnFace(face, tpts[j], dir[i],
+                                  &params[2*pt], &params[2*pt+1]);
+            segments[2*seg] = pt;
+            segments[2*seg+1] = pt+1;
+            seg++;
+            pt++;
+          }
         }
       }
-      else {
-        // Reverse the parameter values on the edge
-        for ( int j = npts-1; j >= 1; j-- ){
-          edge->getParamsOnFace(face, tpts[j], dir[i],
-                                &params[2*pt], &params[2*pt+1]);
-          segments[2*seg] = pt;
-          segments[2*seg+1] = pt+1;
-          seg++;
-          pt++;
-        }
+
+      // Close off the loop by connecting the segment back to the
+      // initial loop point
+      segments[2*(seg-1)+1] = init_loop_pt;
+
+      // Compute the area enclosed by the loop. If the area is
+      // positive, it is the domain boundary. If the area is negative,
+      // we have a hole!  Note that this assumes that the polygon
+      // creating the hole is not self-intersecting. (In reality we
+      // compute twice the area since we omit the 1/2 factor.)
+      double Area = 0.0;
+      for ( int i = init_loop_seg; i < seg; i++ ){
+        int s1 = segments[2*i];
+        int s2 = segments[2*i+1];
+        const double x1 = params[2*s1];
+        const double y1 = params[2*s1+1];
+        const double x2 = params[2*s2];
+        const double y2 = params[2*s2+1];
+        Area += (x1*y2 - x2*y1);
+      }
+
+      // Check if the area constraint
+      if (Area < 0.0){
+        // This is a hole! Compute an approximate position for the hole.
+        // Note that this may not work in all cases so beware.
+        int s1 = segments[2*init_loop_seg];
+        int s2 = segments[2*init_loop_seg+1];
+        const double x1 = params[2*s1];
+        const double y1 = params[2*s1+1];
+        const double x2 = params[2*s2];
+        const double y2 = params[2*s2+1];
+        const double dx = x2 - x1;
+        const double dy = y2 - y1;
+        
+        // This is arbitrary and won't work in general if we have a very
+        // thin sliver for a hole...
+        double frac = 0.01;
+        
+        // Set the average location for the hole
+        params[2*hole_pt] = 0.5*(x1 + x2) + frac*dy;
+        params[2*hole_pt+1] = 0.5*(y1 + y2) - frac*dx;
+        
+        // Increment the hole pointer
+        hole_pt++;
       }
     }
 
-    // Close off the loop by connecting the segment back to the
-    // initial loop point
-    segments[2*(seg-1)+1] = init_loop_pt;
+    // Set the total number of fixed points. These are the points that
+    // will not be smoothed and constitute the boundary nodes. Note that
+    // the Triangularize class removes the holes from the domain
+    // automatically.  The boundary points are guaranteed to be ordered
+    // first.
+    num_fixed_pts = total_num_pts;
+    int num_smoothing_steps = 5;
 
-    // Compute the area enclosed by the loop. If the area is
-    // positive, it is the domain boundary. If the area is negative,
-    // we have a hole!  Note that this assumes that the polygon
-    // creating the hole is not self-intersecting. (In reality we
-    // compute twice the area since we omit the 1/2 factor.)
-    double Area = 0.0;
-    for ( int i = init_loop_seg; i < seg; i++ ){
-      int s1 = segments[2*i];
-      int s2 = segments[2*i+1];
-      const double x1 = params[2*s1];
-      const double y1 = params[2*s1+1];
-      const double x2 = params[2*s2];
-      const double y2 = params[2*s2+1];
-      Area += (x1*y2 - x2*y1);
-    }
+    // Create the triangularization class
+    TMRTriangularize *tri = 
+      new TMRTriangularize(total_num_pts + nholes, params, nholes,
+                           nsegs, segments, face);
+    tri->incref();
 
-    // Check if the area constraint
-    if (Area < 0.0){
-      // This is a hole! Compute an approximate position for the hole.
-      // Note that this may not work in all cases so beware.
-      int s1 = segments[2*init_loop_seg];
-      int s2 = segments[2*init_loop_seg+1];
-      const double x1 = params[2*s1];
-      const double y1 = params[2*s1+1];
-      const double x2 = params[2*s2];
-      const double y2 = params[2*s2+1];
-      const double dx = x2 - x1;
-      const double dy = y2 - y1;
+    // Create the mesh using the frontal algorithm
+    tri->frontal(htarget);
+
+    // Extract the triangularization of the domain
+    int ntris, *tris;
+    tri->getMesh(&num_points, &ntris, &tris, &pts, &X);
+
+    // Free the triangle mesh
+    tri->decref();
+
+    if (ntris > 0){
+      // Compute the triangle edges and neighbors in the dual mesh
+      int num_tri_edges;
+      int *tri_edges, *tri_neighbors, *dual_edges;
+      int *node_to_tri_ptr, *node_to_tris;
+      computeTriEdges(num_points, ntris, tris, 
+                      &num_tri_edges, &tri_edges,
+                      &tri_neighbors, &dual_edges,
+                      &node_to_tri_ptr, &node_to_tris);
       
-      // This is arbitrary and won't work in general if we have a very
-      // thin sliver for a hole...
-      double frac = 0.01;
+      // Smooth the resulting triangular mesh
+      laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
+                         num_tri_edges, tri_edges,
+                         num_points, pts, X, face);
+
+      // Recombine the mesh into a quadrilateral mesh
+      recombine(ntris, tris, tri_neighbors, node_to_tri_ptr, node_to_tris,
+                num_tri_edges, dual_edges, &num_quads, &quads);
       
-      // Set the average location for the hole
-      params[2*hole_pt] = 0.5*(x1 + x2) + frac*dy;
-      params[2*hole_pt+1] = 0.5*(y1 + y2) - frac*dx;
+      // Free the triangular mesh data
+      delete [] tris;
+      delete [] tri_neighbors;
+      delete [] dual_edges;
+
+      // Simplify the new quadrilateral mesh
+      simplifyQuads();
       
-      // Increment the hole pointer
-      hole_pt++;
+      int *ptr;
+      int *pts_to_quads;
+      computeNodeToElems(num_points, num_quads, 4, quads, 
+                         &ptr, &pts_to_quads);
+
+      // Smooth the mesh using a local optimization of node locations
+      quadSmoothing(10*num_smoothing_steps, num_fixed_pts,
+                    num_points, ptr, pts_to_quads, num_quads, quads, 
+                    pts, X, face);
+
+      // Free the connectivity information
+      delete [] ptr;
+      delete [] pts_to_quads;
     }
   }
 
-  // Set the total number of fixed points. These are the points that
-  // will not be smoothed and constitute the boundary nodes. Note that
-  // the Triangularize class removes the holes from the domain
-  // automatically.  The boundary points are guaranteed to be ordered
-  // first.
-  num_fixed_pts = total_num_pts;
-  int num_smoothing_steps = 10;
+  if (mpi_size > 1){
+    // Broadcast the number of points to all the processors
+    int temp[3];
+    temp[0] = num_points;
+    temp[1] = num_quads;
+    temp[2] = num_fixed_pts;
+    MPI_Bcast(temp, 3, MPI_INT, 0, comm);
+    num_points = temp[0];
+    num_quads = temp[1];
+    num_fixed_pts = temp[2];
 
-  // Create the triangularization class
-  TMRTriangularize *tri = 
-    new TMRTriangularize(total_num_pts + nholes, params, nholes,
-                         nsegs, segments, face);
-  tri->incref();
+    if (mpi_rank != 0){
+      pts = new double[ num_points ];
+      X = new TMRPoint[ num_points ];
+      quads = new int[ 4*num_quads ];
+    }
 
-  // Create the mesh using the frontal algorithm
-  tri->frontal(htarget);
-
-  // Extract the triangularization of the domain
-  int ntris, *tris;
-  tri->getMesh(&num_points, &ntris, &tris, &pts, &X);
-
-  // Free the triangle mesh
-  tri->decref();
-
-  if (ntris > 0){
-    // Compute the triangle edges and neighbors in the dual mesh
-    int num_tri_edges;
-    int *tri_edges, *tri_neighbors, *dual_edges;
-    int *node_to_tri_ptr, *node_to_tris;
-    computeTriEdges(num_points, ntris, tris, 
-                    &num_tri_edges, &tri_edges,
-                    &tri_neighbors, &dual_edges,
-                    &node_to_tri_ptr, &node_to_tris);
-    
-    // Smooth the resulting triangular mesh
-    laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
-                       num_tri_edges, tri_edges,
-                       num_points, pts, X, face);
-
-    // Recombine the mesh into a quadrilateral mesh
-    recombine(ntris, tris, tri_neighbors, node_to_tri_ptr, node_to_tris,
-              num_tri_edges, dual_edges, &num_quads, &quads);
-    
-    // Free the triangular mesh data
-    delete [] tris;
-    delete [] tri_neighbors;
-    delete [] dual_edges;
-
-    // Simplify the new quadrilateral mesh
-    simplifyQuads();
-    
-    // Print the quadrilateral mesh quality
-    // printQuadQuality();
-
-    int *ptr;
-    int *pts_to_quads;
-    computeNodeToElems(num_points, num_quads, 4, quads, 
-                       &ptr, &pts_to_quads);
-
-    // Smooth the mesh using a local optimization of node locations
-    num_smoothing_steps = 5;
-    quadSmoothing(10*num_smoothing_steps, num_fixed_pts,
-                  num_points, ptr, pts_to_quads, num_quads, quads, 
-                  pts, X, face);
-
-    // Free the connectivity information
-    delete [] ptr;
-    delete [] pts_to_quads;
-
-    // Print the quadrilateral mesh quality
-    printQuadQuality();
-  }
+    // Broadcast the parametric locations and points
+    MPI_Bcast(pts, num_points, MPI_INT, 0, comm);
+    MPI_Bcast(X, num_points, TMRPoint_MPI_type, 0, comm);
+    MPI_Bcast(quads, 4*num_quads, MPI_INT, 0, comm);
+  } 
 }
 
 /*
@@ -1361,13 +1404,9 @@ void TMRFaceMesh::simplifyQuads(){
 }
 
 /*
-  Print the quad quality
+  Add the quad quality
 */
-void TMRFaceMesh::printQuadQuality(){
-  const int nbins = 20;
-  int total = 0;
-  int bins[nbins];
-  memset(bins, 0, nbins*sizeof(int));
+void TMRFaceMesh::addQuadQuality( int nbins, int bins[] ){
   for ( int i = 0; i < num_quads; i++ ){
     double quality = computeQuadQuality(&quads[4*i], X);
 
@@ -1379,6 +1418,17 @@ void TMRFaceMesh::printQuadQuality(){
     }
     bins[k]++;
   }
+}
+
+/*
+  Print the quadrilateral quality
+*/
+void TMRFaceMesh::printQuadQuality(){
+  const int nbins = 20;
+  int total = 0;
+  int bins[nbins];
+  memset(bins, 0, nbins*sizeof(int));
+  addQuadQuality(nbins, bins);
 
   for ( int i = 0; i < nbins; i++ ){
     total += bins[i];
@@ -1578,7 +1628,8 @@ void TMRFaceMesh::writeDualToVTK( const char *filename,
 /*
   Mesh the given geometry and retrieve either a regular mesh
 */
-TMRMesh::TMRMesh( TMRModel *_geo ){
+TMRMesh::TMRMesh( MPI_Comm _comm, TMRModel *_geo ){
+  comm = _comm;
   geo = _geo;
   geo->incref();
 
@@ -1607,7 +1658,7 @@ void TMRMesh::mesh( double htarget ){
     TMREdgeMesh *mesh = NULL;
     edges[i]->getMesh(&mesh);
     if (!mesh){
-      mesh = new TMREdgeMesh(edges[i]);
+      mesh = new TMREdgeMesh(comm, edges[i]);
       mesh->mesh(htarget);
       edges[i]->setMesh(mesh);
     }
@@ -1621,7 +1672,7 @@ void TMRMesh::mesh( double htarget ){
     TMRFaceMesh *mesh = NULL;
     faces[i]->getMesh(&mesh);
     if (!mesh){
-      mesh = new TMRFaceMesh(faces[i]);
+      mesh = new TMRFaceMesh(comm, faces[i]);
       mesh->mesh(htarget);
       faces[i]->setMesh(mesh);
     }
@@ -1661,6 +1712,29 @@ void TMRMesh::mesh( double htarget ){
     faces[i]->getMesh(&mesh);
     num_quads += mesh->getLocalConnectivity(NULL);
   }
+
+  // Add the quadrilateral quality to the bins from each mesh
+  const int nbins = 20;
+  int bins[nbins];
+  memset(bins, 0, nbins*sizeof(int));
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
+    mesh->addQuadQuality(nbins, bins);
+  }
+
+  // Sum up the total number of elements
+  int total = 0;
+  for ( int i = 0; i < nbins; i++ ){
+    total += bins[i];
+  }
+
+  printf("Quality   # elements   percentage\n");
+  for ( int k = 0; k < nbins; k++ ){
+    printf("< %.2f    %10d   %10.3f\n",
+           1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
+  }
+  printf("          %10d\n", total);
 }
 
 /*
@@ -1697,9 +1771,8 @@ void TMRMesh::initMesh(){
     mesh->getNodeNums(&vars);
 
     // Set the quadrilateral connectivity
-    for ( int j = 0; j < 4*nlocal; j++ ){
+    for ( int j = 0; j < 4*nlocal; j++, q++ ){
       q[0] = vars[quad_local[j]];
-      q++;
     }
 
     // Set the node locations
@@ -1733,10 +1806,46 @@ int TMRMesh::getMeshConnectivity( const int **_quads ){
 }
 
 /*
+  Print out the mesh to a VTK file
+*/
+void TMRMesh::writeToVTK( const char *filename ){
+  if (num_nodes > 0){
+    if (!X){ initMesh(); }
+    FILE *fp = fopen(filename, "w");
+    if (fp){
+      fprintf(fp, "# vtk DataFile Version 3.0\n");
+      fprintf(fp, "vtk output\nASCII\n");
+      fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+        
+      // Write out the points
+      fprintf(fp, "POINTS %d float\n", num_nodes);
+      for ( int k = 0; k < num_nodes; k++ ){
+        fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
+      }
+    
+      // Write out the cell values
+      fprintf(fp, "\nCELLS %d %d\n", num_quads, 5*num_quads);
+      for ( int k = 0; k < num_quads; k++ ){
+        fprintf(fp, "4 %d %d %d %d\n", quads[4*k], quads[4*k+1], 
+                quads[4*k+2], quads[4*k+3]);
+      }
+
+      // All quadrilaterals
+      fprintf(fp, "\nCELL_TYPES %d\n", num_quads);
+      for ( int k = 0; k < num_quads; k++ ){
+        fprintf(fp, "%d\n", 9);
+      }
+
+      fclose(fp);
+    }
+  }
+}
+
+/*
   Create the topology object, generating the vertices, edges and
   faces for each element in the underlying mesh.
 */
-TMRModel* TMRMesh::createMeshGeometry(){
+TMRModel* TMRMesh::createModelFromMesh(){
   // Initialize the mesh
   initMesh();
 
@@ -1817,6 +1926,11 @@ TMRModel* TMRMesh::createMeshGeometry(){
   TMREdge **new_edges = new TMREdge*[ num_quad_edges ];
   memset(new_edges, 0, num_quad_edges*sizeof(TMREdge*));
 
+  // Keep track of the orientation of the quadrilatral edges.
+  // edge_dir[i] > 0 means the vertices are in increasing
+  // order. edge_dir[i] < 0 means the opposite.
+  int *edge_dir = new int[ num_quad_edges ];
+
   // Create the edges for the mesh from the underlying edges
   for ( int i = 0; i < num_edges; i++ ){
     TMREdgeMesh *mesh = NULL;
@@ -1849,19 +1963,21 @@ TMRModel* TMRMesh::createMeshGeometry(){
 
       if (res){
         int edge_num = res[0];
-        // Tag the edge numbers as negative
-        if (quad_edges[2*edge_num] != vars[j] ||
-            quad_edges[2*edge_num+1] != vars[j+1]){
-          quad_edges[2*edge_num] *= -1;
-          quad_edges[2*edge_num+1] *= -1;
+        if (vars[j] < vars[j+1]){
+          edge_dir[edge_num] = 1;
         }
-        new_edges[edge_num] = new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
+        else {
+          edge_dir[edge_num] = -1;
+        }
+
+        new_edges[edge_num] = 
+          new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
       }
     }
   }
 
   // Set the local quad node to edge information
-  const int edge_to_nodes[][2] = {{0, 3}, {1, 2}, {0, 1}, {3, 2}};
+  const int edge_to_nodes[][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
 
   // Create the edges on the surface using Pcurve/CurveFromSurface
   for ( int i = 0; i < num_faces; i++ ){
@@ -1907,10 +2023,13 @@ TMRModel* TMRMesh::createMeshGeometry(){
           // Get the edge number
           int edge_num = res[0];
           if (!new_edges[edge_num]){
+            // These edges are constructed such that they are 
+            // always in the 'positive' orientation.
+
+            edge_dir[edge_num] = 1;
             // Create the TMRBsplinePcurve on this edge
             double cpts[4];
-            if (vars[l1] == quad_edges[2*edge_num] && 
-                vars[l2] == quad_edges[2*edge_num+1]){
+            if (vars[l1] < vars[l2]){
               cpts[0] = pts[2*l1];
               cpts[1] = pts[2*l1+1];
               cpts[2] = pts[2*l2];
@@ -1932,10 +2051,6 @@ TMRModel* TMRMesh::createMeshGeometry(){
 
   // Create the surface 
   TMRFace **surfs = new TMRFace*[ num_quads ];
-
-  // Switch the ordering from right-handed to coordinate ordering of the
-  // vertices in a quadrilateral
-  const int quad_to_coordinate[] = {0, 1, 3, 2};
 
   // Create the TMRFace objects
   for ( int i = 0, q = 0; i < num_faces; i++ ){
@@ -1961,13 +2076,13 @@ TMRModel* TMRMesh::createMeshGeometry(){
       int dir[4];
       TMRVertex *v[4];
 
-      // Loop over all of the edges/nodes associated with this vertex
+      // Loop over all of the edges/nodes associated with this quad
       for ( int k = 0; k < 4; k++ ){
         // Set the vertex number
-        int l0 = quad_local[4*j + quad_to_coordinate[k]];
+        int l0 = quad_local[4*j + k];
         v[k] = verts[vars[l0]];
 
-        // The local variable numbers
+        // The edge variable numbers
         int l1 = quad_local[4*j + edge_to_nodes[k][0]];
         int l2 = quad_local[4*j + edge_to_nodes[k][1]];
 
@@ -1992,21 +2107,13 @@ TMRModel* TMRMesh::createMeshGeometry(){
           int edge_num = res[0];
           c[k] = new_edges[edge_num];
 
-          // Figure out the edge direction
-          int dir_fact = 1;
-          int e1 = quad_edges[2*edge_num];
-          int e2 = quad_edges[2*edge_num+1];
-          if (e1 < 0 || e2 < 0){
-            e1 *= -1;
-            e2 *= -1;
-            dir_fact = -1;
-          }
-          if (vars[l1] == e1 && vars[l2] == e2){
-            dir[k] = dir_fact;
+          if (vars[l1] < vars[l2]){
+            dir[k] = 1;
           }
           else {
-            dir[k] = -dir_fact;
+            dir[k] = -1;
           }
+          dir[k] *= edge_dir[edge_num];
         }
       }
 
@@ -2014,6 +2121,8 @@ TMRModel* TMRMesh::createMeshGeometry(){
       surfs[q] = new TMRParametricTFIFace(faces[i], c, dir, v);
     }
   } 
+
+  delete [] edge_dir;
 
   // Create the geometry object
   TMRModel *geo = new TMRModel(num_nodes, verts,

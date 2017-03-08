@@ -10,7 +10,7 @@
 */
 class TMREdgeMesh : public TMREntity {
  public:
-  TMREdgeMesh( TMREdge *edge );
+  TMREdgeMesh( MPI_Comm _comm, TMREdge *edge );
   ~TMREdgeMesh();
 
   // Retrieve the underlying curve
@@ -27,6 +27,7 @@ class TMREdgeMesh : public TMREntity {
   void getMeshPoints( int *_npts, const double **_pts, TMRPoint **X );
 
  private:
+  MPI_Comm comm;
   TMREdge *edge;
 
   // The parametric locations of the points that are obtained from
@@ -44,7 +45,7 @@ class TMREdgeMesh : public TMREntity {
 */
 class TMRFaceMesh : public TMREntity {
  public:
-  TMRFaceMesh( TMRFace *face );
+  TMRFaceMesh( MPI_Comm _comm, TMRFace *face );
   ~TMRFaceMesh();
 
   // Retrieve the underlying surface
@@ -68,6 +69,7 @@ class TMRFaceMesh : public TMREntity {
   void writeToVTK( const char *filename );
 
   // Print the quadrilateral quality
+  void addQuadQuality( int nbins, int count[] );
   void printQuadQuality();
 
  private:
@@ -109,6 +111,7 @@ class TMRFaceMesh : public TMREntity {
   double computeTriQuality( const int *tri, const TMRPoint *p );
 
   // The underlying surface
+  MPI_Comm comm;
   TMRFace *face;
 
   // Points in the mesh
@@ -128,24 +131,28 @@ class TMRFaceMesh : public TMREntity {
 */
 class TMRMesh : public TMREntity {
  public:
-  TMRMesh( TMRModel *_geo );
+  TMRMesh( MPI_Comm _comm, TMRModel *_geo );
   ~TMRMesh();
 
   // Mesh the underlying geometry
   void mesh( double htarget );
+
+  // Write the mesh to a VTK file
+  void writeToVTK( const char *filename );
 
   // Retrieve the mesh components
   int getMeshPoints( TMRPoint **_X );
   int getMeshConnectivity( const int **_quads );
 
   // Create a topology object (with underlying mesh geometry)
-  TMRModel* createMeshGeometry();
+  TMRModel* createModelFromMesh();
 
  private:
   // Allocate and initialize the underlying mesh
   void initMesh();
 
   // The underlying geometry object
+  MPI_Comm comm;
   TMRModel *geo;
 
   // The number of nodes/quads in the mesh

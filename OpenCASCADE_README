@@ -20,8 +20,8 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CASROOT/lib
 For OSX I added the following lines
 export CASROOT=$HOME/packages/OpenCASCADE
 export CASARCH=i686
-export DYLD_LIBRARY_PATH=${CASROOT}/${CASARCH}/lib
-export PATH=$CASROOT/bin:$PATH
+DYLD_LIBRARY_PATH=${CASROOT}/${CASARCH}/lib
+PATH=$CASROOT/bin:$PATH
 
 5. I tried to use the draw command by typing: 
 

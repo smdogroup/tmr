@@ -295,8 +295,6 @@ double TMREdge::integrate( double t1, double t2, double tol,
   Set the mesh into the array
 */
 void TMREdge::setMesh( TMREdgeMesh *_mesh ){
-  _mesh->incref();
-  if (mesh){ mesh->decref(); }
   mesh = _mesh;
 }
 
@@ -445,9 +443,6 @@ TMRFace::~TMRFace(){
     }
     delete [] loops;
   }
-  if (mesh){
-    mesh->decref();
-  }
 }
 
 /*
@@ -580,8 +575,6 @@ void TMRFace::getEdgeLoop( int k, TMREdgeLoop **_loop ){
   Set the mesh into the array
 */
 void TMRFace::setMesh( TMRFaceMesh *_mesh ){
-  _mesh->incref();
-  if (mesh){ mesh->decref(); }
   mesh = _mesh;
 }
 
@@ -879,7 +872,6 @@ int TMRModel::getEdgeIndex( TMREdge *edge ){
   pair.num = -1;
   pair.obj = edge;
 
-
   for ( int i = 0; i < num_edges; i++ ){
     if (ordered_edges[i].obj == edge){
       return ordered_edges[i].num;
@@ -887,8 +879,6 @@ int TMRModel::getEdgeIndex( TMREdge *edge ){
   }
 
   /*
-
-
   // Search for the ordered pair
   OrderedPair<TMREdge> *item = 
     (OrderedPair<TMREdge>*)bsearch(&pair, ordered_edges, num_edges,
@@ -911,6 +901,13 @@ int TMRModel::getFaceIndex( TMRFace *face ){
   pair.num = -1;
   pair.obj = face;
 
+  for ( int i = 0; i < num_faces; i++ ){
+    if (ordered_faces[i].obj == face){
+      return ordered_faces[i].num;
+    }
+  }
+  
+  /*
   // Search for the ordered pair
   OrderedPair<TMRFace> *item = 
     (OrderedPair<TMRFace>*)bsearch(&pair, ordered_faces, num_faces,
@@ -919,6 +916,8 @@ int TMRModel::getFaceIndex( TMRFace *face ){
   if (item){
     return item->num;
   }
+  */
+  
   return -1;
 }
 

@@ -1,166 +1,187 @@
 #include "TMRGeometry.h"
 #include "TMRBspline.h"
 #include "TMRMesh.h"
+#include "TMRQuadForest.h"
+#include "TACSAssembler.h"
+#include "PlaneStressQuad.h"
+#include "TACSToFH5.h"
 #include <stdio.h>
 #include <math.h>
 
-/*
-  Create a circle centered at the point c with radius r in the (x,y)
-  plane.
-*/
-TMRBsplineCurve* createSemiCircle( TMRPoint c, double r ){
-  // Set the points and weights for the B-spline circle
-  const int nctl = 5;
-  const int ku = 3;
-  TMRPoint p[nctl];
-  double wts[nctl];
-  memset(p, 0, nctl*sizeof(TMRPoint));
+#ifdef TMR_HAS_OPENCASCADE
 
-  // Set the knot locations
-  double Tu[] = {
-    0.0, 0.0, 0.0,
-    0.5, 0.5,
-    1.0, 1.0, 1.0};
-  
-  for ( int k = 0; k < nctl; k++ ){
-    p[k] = c;
-  }
-
-  // Set the weights
-  double sqrt2 = 1.0/sqrt(2.0);
-
-  // c + (r,0)
-  p[0].x += r;
-  wts[0] = 1.0;
-
-  // c + (r,r)
-  p[1].x += r;
-  p[1].y += r;
-  wts[1] = sqrt2;
-
-  // c + (0,r)
-  p[2].y += r;
-  wts[2] = 1.0;
-  
-  // c + (-r,r)
-  p[3].x -= r;
-  p[3].y += r;
-  wts[3] = sqrt2;
-
-  // c + (-r,0)
-  p[4].x -= r;
-  wts[4] = 1.0;
-
-  // Create the circle
-  TMRBsplineCurve *curve =
-    new TMRBsplineCurve(nctl, ku, Tu, wts, p);
-
-  // Return the curve
-  return curve;
-}
+#include "TMROpenCascade.h"
+#include <BRepPrimAPI_MakeCylinder.hxx>
 
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
-  double htarget = 0.1;
+  MPI_Comm comm = MPI_COMM_WORLD;
+  int mpi_size, mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+  MPI_Comm_size(comm, &mpi_size);
+
+  double htarget = 10.0;
   for ( int i = 0; i < argc; i++ ){
     if (sscanf(argv[i], "h=%lf", &htarget) == 1){
-      if (htarget < 0.01){ htarget = 0.01; }
-      if (htarget > 0.5){ htarget = 0.5; }
+      printf("htarget = %f\n", htarget);
     }
   }
-  
-  // Set the radius and height of the circle
-  double r1 = 1.0;
-  double r2 = 0.15;
-  double h = 2.0;
 
-  TMRPoint p;
-  p.x = p.y = p.z = 0.0;
+  // Create the cylinder and load the compund and mesh it
+  double R = 100.0;
+  double H = 200.0;
+  BRepPrimAPI_MakeCylinder cylinder(R, H);
+  TopoDS_Compound compound;
+  BRep_Builder builder;
+  builder.MakeCompound(compound);
+  builder.Add(compound, cylinder.Shape());
 
-  TMRBsplineCurve *loft[4];
-  loft[0] = createSemiCircle(p, r1);
-  loft[0]->incref();
+  // Allocate the stiffness object
+  TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
+  PlaneStressStiffness *stiff = 
+    new PlaneStressStiffness(rho, E, nu);
 
-  p.z = h;
-  loft[1] = createSemiCircle(p, r2);
-  loft[1]->incref();
+  // Allocate the solid element class
+  TACSElement *elem = new PlaneStressQuad<3>(stiff, LINEAR, mpi_rank);
 
-  p.z = 2*h;
-  loft[2] = createSemiCircle(p, r2);
-  loft[2]->incref();
+  // Load in the geometry file
+  TMRModel *geo = TMR_LoadModelFromCompound(compound);
+  if (geo){
+    geo->incref();
 
-  p.z = 3*h;
-  loft[3] = createSemiCircle(p, r1);
-  loft[3]->incref();
+    // Get the faces that have been created - if any
+    // and write them all to different VTK files
+    int num_faces;
+    TMRFace **faces;
+    geo->getFaces(&num_faces, &faces);
 
-  // Loft the circles together to form a closed surface
-  TMRCurveLofter *lofter = new TMRCurveLofter(loft, 4);
-  lofter->incref();
+    // Allocate the new mesh
+    TMRMesh *mesh = new TMRMesh(comm, geo);
+    mesh->incref();
+    mesh->mesh(htarget);
+    mesh->writeToVTK("cylinder-mesh.vtk");
 
-  // Create the surface object from the lofted surface
-  TMRBsplineSurface *surface = lofter->createSurface(3);
-  surface->incref();
-  lofter->decref();
+    TMRModel *model = mesh->createModelFromMesh();
+    model->incref();
 
-  // (0,1) -- (1,1)
-  //   |        |
-  // (0,0) -- (1,0)
-  double pts1[] = {0.0, 0.0, 1.0, 0.0};
-  double pts2[] = {1.0, 0.0, 1.0, 1.0};
-  double pts3[] = {1.0, 1.0, 0.0, 1.0};
-  double pts4[] = {0.0, 1.0, 0.0, 0.0};
-  TMRBsplinePcurve *p1 = new TMRBsplinePcurve(2, 2, pts1);
-  TMRBsplinePcurve *p2 = new TMRBsplinePcurve(2, 2, pts2);
-  TMRBsplinePcurve *p3 = new TMRBsplinePcurve(2, 2, pts3);
-  TMRBsplinePcurve *p4 = new TMRBsplinePcurve(2, 2, pts4);
+    TMRQuadForest *forest = new TMRQuadForest(comm);
+    forest->incref();
 
-  // Create the curves and add them to the surface
-  int num_curves = 4;
-  TMRCurve *curves[4];
-  curves[0] = new TMRCurveFromSurface(surface, p1);
-  curves[1] = new TMRCurveFromSurface(surface, p2);
-  curves[2] = new TMRCurveFromSurface(surface, p3);
-  curves[3] = new TMRCurveFromSurface(surface, p4);
+    TMRTopology *topo = new TMRTopology(model);
+    forest->setTopology(topo);
+    // forest->createTrees(1);
+    forest->createRandomTrees(10, 0, 5);
+    forest->balance();
+    forest->createNodes(3);
 
-  // Create the boundary curves for the surface
-  TMRVertexFromCurve *v1 = new TMRVertexFromCurve(curves[0], 0.0);
-  TMRVertexFromCurve *v2 = new TMRVertexFromCurve(curves[1], 0.0);
-  TMRVertexFromCurve *v3 = new TMRVertexFromCurve(curves[2], 0.0);
-  TMRVertexFromCurve *v4 = new TMRVertexFromCurve(curves[3], 0.0);
+    // Find the number of nodes for this processor
+    const int *range;
+    forest->getOwnedNodeRange(&range);
+    int num_nodes = range[mpi_rank+1] - range[mpi_rank];
 
-  // Set the vertices
-  curves[0]->setVertices(v1, v1);
-  curves[1]->setVertices(v2, v3);
-  curves[2]->setVertices(v3, v4);
-  curves[3]->setVertices(v4, v1);
-  
-  // Set the directions of the curves
-  int dir[4];
-  dir[0] = 1;
-  dir[1] = 1;
-  dir[2] = 1;
-  dir[3] = 1;
+    // Create the mesh
+    double tmesh = MPI_Wtime();
+    int *elem_conn, num_elements = 0;
+    forest->createMeshConn(&elem_conn, &num_elements);
+    tmesh = MPI_Wtime() - tmesh;
+    printf("[%d] Mesh: %f\n", mpi_rank, tmesh);
 
-  surface->addCurveSegment(num_curves, curves, dir);
+    // Get the dependent node information
+    const int *dep_ptr, *dep_conn;
+    const double *dep_weights;
 
-  // Write out the curves and cylindrical surface
-  for ( int k = 0; k < num_curves; k++ ){
-    char filename[128];
-    sprintf(filename, "curve%d.vtk", k);
-    curves[k]->writeToVTK(filename);
+    // Create/retrieve the dependent node information
+    double tdep = MPI_Wtime();
+    int num_dep_nodes = 
+      forest->getDepNodeConn(&dep_ptr, &dep_conn,
+                             &dep_weights);
+    tdep = MPI_Wtime() - tdep;
+    printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
+
+    // Create the associated TACSAssembler object
+    int vars_per_node = 2;
+    TACSAssembler *tacs = 
+      new TACSAssembler(comm, vars_per_node,
+                        num_nodes, num_elements, num_dep_nodes);
+    tacs->incref();
+
+    // Set the element ptr
+    int *ptr = new int[ num_elements+1 ];
+    for ( int i = 0; i < num_elements+1; i++ ){
+      ptr[i] = 9*i;
+    }
+    
+    // Set the element connectivity into TACSAssembler
+    tacs->setElementConnectivity(elem_conn, ptr);
+    delete [] elem_conn;
+    delete [] ptr;
+    
+    // Set the dependent node information
+    tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
+
+    // Set the elements
+    TACSElement **elems = new TACSElement*[ num_elements ];
+    for ( int k = 0; k < num_elements; k++ ){
+      elems[k] = elem;
+    }
+    
+    // Set the element array
+    tacs->setElements(elems);
+    delete [] elems;
+
+    // Initialize the TACSAssembler object
+    tacs->initialize();
+
+    // Get the nodes
+    TMRQuadrantArray *nodes;
+    forest->getNodes(&nodes);
+
+    // Get the quadrants associated with the nodes
+    int size;
+    TMRQuadrant *array;
+    nodes->getArray(&array, &size);
+
+    // Get the points
+    TMRPoint *Xp;
+    forest->getPoints(&Xp);
+
+    TACSBVec *X = tacs->createNodeVec();
+    TacsScalar *Xn;
+    X->getArray(&Xn);
+
+    // Loop over all the nodes
+    for ( int i = 0; i < size; i++ ){
+      if (array[i].tag >= range[mpi_rank] &&
+          array[i].tag < range[mpi_rank+1]){
+        int loc = array[i].tag - range[mpi_rank];
+        Xn[3*loc] = Xp[i].x;
+        Xn[3*loc+1] = Xp[i].y;
+        Xn[3*loc+2] = Xp[i].z;
+      }
+    }
+
+    tacs->setNodes(X);
+
+    // Create and write out an fh5 file
+    unsigned int write_flag = TACSElement::OUTPUT_NODES;
+    TACSToFH5 *f5 = new TACSToFH5(tacs, PLANE_STRESS, write_flag);
+    f5->incref();
+      
+    // Write out the solution
+    f5->writeToFile("output.f5");
+    f5->decref();
+
+    forest->decref();
+    model->decref();
+    mesh->decref();
+    geo->decref();
   }
-  surface->writeToVTK("cylinder.vtk");
-
-  // Create the mesh
-  TMRSurfaceMesh *mesh = new TMRSurfaceMesh(surface);
-  mesh->incref();
-  mesh->mesh(htarget);
-  mesh->writeToVTK("quads.vtk");
-  mesh->decref();  
 
   TMRFinalize();
   MPI_Finalize();
   return (0);
 }
+
+#endif // TMR_HAS_OPENCASCADE

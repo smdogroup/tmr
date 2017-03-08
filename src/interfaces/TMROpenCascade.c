@@ -287,6 +287,9 @@ void TMR_OCCFace::getFaceObject( TopoDS_Face &f ){
   f = face;
 }
 
+/*
+  Create the TMRModel based on the STEP input file
+*/
 TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
   FILE *fp = fopen(filename, "r");
   if (!fp){
@@ -320,7 +323,14 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
     TopoDS_Shape shape = reader.Shape(i);
     builder.Add(compound, shape);
   }
-  
+
+  return TMR_LoadModelFromCompound(compound);
+}
+
+/*
+  Create the TMRModel based on the TopoDS_Compound object
+*/
+TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound ){
   // Create the index <--> geometry object
   TopTools_IndexedMapOfShape verts, edges, faces, wires;
 
@@ -354,6 +364,7 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
   int nedges = edges.Extent();
   int nwires = wires.Extent();
   int nfaces = faces.Extent();
+  printf("Compound loaded with:\n");
   printf("nverts = %d nedges = %d nfaces = %d nwires = %d\n",
          nverts, nedges, nfaces, nwires);
 

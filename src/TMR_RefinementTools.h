@@ -13,4 +13,15 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
                                    double target_err,
                                    int min_level=0, int max_level=TMR_MAX_LEVEL );
 
-#endif // TMR_REFINEMENT_TOOLS
+/*
+  Perform adjoint-based mesh refinement on the forest of quadtrees
+ */
+TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
+                              TACSAssembler *refine,
+                              TACSBVec *adjvec,
+                              TMRQuadForest *forest,
+                              double target_err,
+                              int min_level=0, int max_level=TMR_MAX_LEVEL,
+                              TacsScalar *adj_corr=NULL );
+
+#endif // TMR_REFINEMENT_TOOLS_H

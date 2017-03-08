@@ -178,6 +178,7 @@ class TMR_OCCFace : public TMRFace {
   Initialization of the OpenCascade geometry from a STEP file
 */
 TMRModel* TMR_LoadModelFromSTEPFile( const char *filename );
+TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound );
 
 #endif // TMR_HAS_OPENCASCADE
 #endif // TMR_OPENCASCADE_H

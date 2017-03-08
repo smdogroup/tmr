@@ -162,20 +162,20 @@ class TMRSplitEdge : public TMREdge {
   The parametric curves and the input vertices are used to define a
   segment on the surface in parameter space that looks like this:
 
-  v2-------c3-------v3
+  v3-------e2-------v2
   |                 |
   |      v ^        |
   |        |        |
-  c0       ----> u  c1
+  e3       ----> u  e1
   |                 |
   |                 |
   |                 |
-  v0-------c2-------v1
+  v0-------e0-------v1
 
   Note that all parameter curves must have the range [0,
   1]. Furthermore, note that the constructor for this object
   automatically sets the vertices into the curves and adds the curve
-  segments (using the TMRSurface::addCurveSegment) for convenience.
+  segments (using the TMRSurface::addEdgeLoop) for convenience.
 */
 class TMRParametricTFIFace : public TMRFace {
  public:

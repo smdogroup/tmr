@@ -321,7 +321,7 @@ int TMRSplitEdge::getParamsOnFace( TMRFace *face, double t,
 
 /*
   Create a parametric TFI
-
+  
   The transfinite interpolation is performed in the parameter space
   and all points are obtained directly from the surface object
   itself.
@@ -348,46 +348,47 @@ TMRParametricTFIFace::TMRParametricTFIFace( TMRFace *_face,
     }
 
     // Reparametrize the vertices on the surface
-    verts[k]->getParamsOnFace(face, &vupt[k], &vvpt[k]);
+    if (dir[k] > 0){
+      edges[k]->getParamsOnFace(face, 0.0, dir[k],
+                                &vupt[k], &vvpt[k]);
+    }
+    else {
+      edges[k]->getParamsOnFace(face, 1.0, dir[k],
+                                &vupt[k], &vvpt[k]);
+    }
   }
 
   // Set the vertices for this surface
   if (dir[0] > 0){
-    edges[0]->setVertices(verts[0], verts[2]); 
+    edges[0]->setVertices(verts[0], verts[1]); 
   }
   else {
-    edges[0]->setVertices(verts[2], verts[0]);
+    edges[0]->setVertices(verts[1], verts[0]);
   }
 
   if (dir[1] > 0){  
-    edges[1]->setVertices(verts[1], verts[3]);
+    edges[1]->setVertices(verts[1], verts[2]);
   }
   else {
-    edges[1]->setVertices(verts[3], verts[1]);
+    edges[1]->setVertices(verts[2], verts[1]);
   }
 
   if (dir[2] > 0){
-    edges[2]->setVertices(verts[0], verts[1]);
+    edges[2]->setVertices(verts[2], verts[3]);
   }
   else {
-    edges[2]->setVertices(verts[1], verts[0]);
+    edges[2]->setVertices(verts[3], verts[2]);
   }
 
   if (dir[3] > 0){
-    edges[3]->setVertices(verts[2], verts[3]);
+    edges[3]->setVertices(verts[3], verts[0]);
   }
   else {
-    edges[3]->setVertices(verts[3], verts[2]);
+    edges[3]->setVertices(verts[0], verts[3]);
   }
 
   // Set the curve segment into the curve
-  TMREdge *c[4];
-  int d[4];
-  c[0] = edges[2];  d[0] = dir[2];
-  c[1] = edges[1];  d[1] = dir[1];
-  c[2] = edges[3];  d[2] = -dir[3];
-  c[3] = edges[0];  d[3] = -dir[0];
-  TMREdgeLoop *loop = new TMREdgeLoop(4, c, d);
+  TMREdgeLoop *loop = new TMREdgeLoop(4, edges, dir);
   addEdgeLoop(loop);
 }
 
@@ -424,7 +425,7 @@ int TMRParametricTFIFace::evalPoint( double u, double v,
   // Evaluate the curves along the v-direction
   int fail = 0;
   double cupt[4], cvpt[4];
-  double params[4] = {v, v, u, u};
+  double params[4] = {u, v, 1.0-u, 1.0-v};
 
   for ( int k = 0; k < 4; k++ ){
     if (dir[k] > 0){
@@ -434,20 +435,20 @@ int TMRParametricTFIFace::evalPoint( double u, double v,
     }
     else {
       fail = fail || 
-        edges[k]->getParamsOnFace(face, 1.0 - params[k], dir[k],
+        edges[k]->getParamsOnFace(face, 1.0-params[k], dir[k],
                                   &cupt[k], &cvpt[k]);
     }
   }
-  
+    
   // Compute the parametric coordinates
   double us, vs;
-  us = (1.0-u)*cupt[0] + u*cupt[1] + (1.0-v)*cupt[2] + v*cupt[3]
+  us = (1.0-u)*cupt[3] + u*cupt[1] + (1.0-v)*cupt[0] + v*cupt[2]
     - ((1.0-u)*(1.0-v)*vupt[0] + u*(1.0-v)*vupt[1] + 
-       v*(1.0-u)*vupt[2] + u*v*vupt[3]);
+       u*v*vupt[2] + v*(1.0-u)*vupt[3]);
 
-  vs = (1.0-u)*cvpt[0] + u*cvpt[1] + (1.0-v)*cvpt[2] + v*cvpt[3]
+  vs = (1.0-u)*cvpt[3] + u*cvpt[1] + (1.0-v)*cvpt[0] + v*cvpt[2]
     - ((1.0-u)*(1.0-v)*vvpt[0] + u*(1.0-v)*vvpt[1] + 
-       v*(1.0-u)*vvpt[2] + u*v*vvpt[3]);
+       u*v*vvpt[2] + v*(1.0-u)*vvpt[3]);
 
   fail = fail || face->evalPoint(us, vs, X);
   return fail;
