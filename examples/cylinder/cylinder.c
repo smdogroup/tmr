@@ -69,7 +69,7 @@ int main( int argc, char *argv[] ){
     TMRQuadForest *forest = new TMRQuadForest(comm);
     forest->incref();
 
-    TMRTopology *topo = new TMRTopology(model);
+    TMRTopology *topo = new TMRTopology(comm, model);
     forest->setTopology(topo);
     // forest->createTrees(1);
     forest->createRandomTrees(10, 0, 5);

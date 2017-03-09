@@ -7,15 +7,19 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
+  char filename[256];
+  sprintf(filename, "misc1.step");
+
   double htarget = 4.0;
   for ( int k = 0; k < argc; k++ ){
     if (sscanf(argv[k], "h=%lf", &htarget) == 1){
       if (htarget < 0.1){ htarget = 0.1; }
       if (htarget > 10.0){ htarget = 10.0; }
     }
+    if (sscanf(argv[k], "file=%s", filename) == 1){
+      printf("file=%s\n", filename);
+    }
   }
-
-  const char *filename = "misc1.step";
 
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
@@ -29,19 +33,12 @@ int main( int argc, char *argv[] ){
     geo->getFaces(&num_faces, &faces);
 
     // Allocate the new mesh
-    TMRMesh *mesh = new TMRMesh(geo);
+    TMRMesh *mesh = new TMRMesh(MPI_COMM_WORLD, geo);
     mesh->incref();
     mesh->mesh(htarget);
-    
-    for ( int k = 0; k < num_faces; k++ ){
-      TMRFaceMesh *fmesh;
-      faces[k]->getMesh(&fmesh);
+    mesh->writeToVTK("surface-mesh.vtk");
 
-      char fname[128];
-      sprintf(fname, "face_mesh%02d.vtk", k);
-      fmesh->writeToVTK(fname);
-    }
-
+    mesh->decref();
     geo->decref();
   }
   

@@ -219,7 +219,7 @@ class TMRModel : public TMREntity {
 */
 class TMRTopology : public TMREntity {
  public:
-  TMRTopology( TMRModel *geo );
+  TMRTopology( MPI_Comm _comm, TMRModel *geo );
   ~TMRTopology();
   
   // Retrieve the face/edge/node information
@@ -231,10 +231,22 @@ class TMRTopology : public TMREntity {
                         const int **face_nodes, const int **face_edges );
 
  private:
+  // Compute the face connectivity
+  void computeFaceConn( int num_edges, int num_faces,
+                        const int ftoedges[],
+                        int **_face_to_face_ptr,
+                        int **_face_to_face );
+
+  // Get the MPI communicator
+  MPI_Comm comm;
+
   // The connectivity information
   int *edge_to_vertices;
   int *face_to_edges;
   int *face_to_vertices;
+
+  // The reordering for the faces
+  int *face_to_new_num, *new_num_to_face;
 
   // The geometry class
   TMRModel *geo;

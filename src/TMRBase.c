@@ -61,6 +61,18 @@ void TMRFinalize(){
   MPI_Type_free(&TMRPoint_MPI_type);
 }
 
+TMREntity::TMREntity(): entity_id(entity_id_count){
+  entity_id_count++;
+  attr = NULL;
+  ref_count = 0;
+}
+
+TMREntity::~TMREntity(){
+  if (attr){ delete [] attr; }
+}
+
+int TMREntity::entity_id_count = 0;
+
 /*
   Set the attribute/name associate with this object
 */

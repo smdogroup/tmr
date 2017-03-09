@@ -1841,7 +1841,7 @@ void TMRTriangularize::frontal( double h ){
     // Compute the 'quality' indicator for this triangle
     double hval = sqrt3*computeCircumcircle(&node->tri);
     node->tri.quality = hval;
-    if (hval < 1.5*h){
+    if (hval < 1.25*h){
       node->tri.status = ACCEPTED;
     }
     else {
@@ -2076,7 +2076,7 @@ void TMRTriangularize::frontal( double h ){
     while (ptr){
       double hval = sqrt3*computeCircumcircle(&ptr->tri);
       ptr->tri.quality = hval;
-      if (hval < 1.5*h){
+      if (hval < 1.25*h){
         ptr->tri.status = ACCEPTED;
       }
       else {

@@ -1003,7 +1003,8 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
         computeRecombinedQuality(tris, tri_neighbors,
                                  t1, t2, X);
 
-      double weight = frac*(1.0 - quality)*(1.0 + 1.0/(quality + eps));
+      // double weight = frac*(1.0 - quality)*(1.0 + 1.0/(quality + eps));
+      double weight = 1.0 - quality;
       graph_edges[2*edge_num] = t1;
       graph_edges[2*edge_num+1] = t2;
       weights[edge_num] = weight;
@@ -1061,7 +1062,7 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
                 tri_neighbors[3*k + node_edges[kj][1]] < 0){
               graph_edges[2*edge_num] = i;
               graph_edges[2*edge_num+1] = k;
-              weights[edge_num] = 10.0;
+              weights[edge_num] = 1.0;
               edge_num++;
             }
           }
@@ -1729,12 +1730,18 @@ void TMRMesh::mesh( double htarget ){
     total += bins[i];
   }
 
-  printf("Quality   # elements   percentage\n");
-  for ( int k = 0; k < nbins; k++ ){
-    printf("< %.2f    %10d   %10.3f\n",
-           1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
+  // Get the MPI rank and print out the quality on the root processor
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  if (mpi_rank == 0){
+    printf("Quality   # elements   percentage\n");
+    for ( int k = 0; k < nbins; k++ ){
+      printf("< %.2f    %10d   %10.3f\n",
+             1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
+    }
+    printf("          %10d\n", total);
   }
-  printf("          %10d\n", total);
 }
 
 /*
@@ -1809,7 +1816,9 @@ int TMRMesh::getMeshConnectivity( const int **_quads ){
   Print out the mesh to a VTK file
 */
 void TMRMesh::writeToVTK( const char *filename ){
-  if (num_nodes > 0){
+  int rank;
+  MPI_Comm_rank(comm, &rank);
+  if (rank == 0 && num_nodes > 0){
     if (!X){ initMesh(); }
     FILE *fp = fopen(filename, "w");
     if (fp){

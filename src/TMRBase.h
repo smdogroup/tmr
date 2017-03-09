@@ -114,13 +114,8 @@ class TMRIndexWeight {
 */
 class TMREntity {
  public:
-  TMREntity(){
-    attr = NULL;
-    ref_count = 0;
-  }
-  virtual ~TMREntity(){
-    if (attr){ delete [] attr; }
-  }
+  TMREntity();
+  virtual ~TMREntity();
   
   // Set an attribute
   void setAttribute( const char *attr );
@@ -136,6 +131,10 @@ class TMREntity {
   static void setTolerances( double _eps_dist, double _eps_cosine );
   static void getTolerances( double *_eps_dist, double *_eps_cosine );
 
+  // Retrieve the entity identification number
+  // -----------------------------------------
+  int getEntityId() const { return entity_id; }
+
  protected:
   static double eps_dist;
   static double eps_cosine;
@@ -143,7 +142,13 @@ class TMREntity {
  private:
   // Total reference count for this object
   int ref_count;
+
+  // Named attribute
   char *attr;
+
+  // The entity identification value
+  const int entity_id;
+  static int entity_id_count;
 };
 
 #endif // TMR_BASE_H
