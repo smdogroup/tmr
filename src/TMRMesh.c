@@ -325,7 +325,7 @@ TMREdgeMesh::~TMREdgeMesh(){
 /*
   Create a mesh
 */
-void TMREdgeMesh::mesh( double htarget ){
+void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
   int mpi_rank, mpi_size;
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
@@ -494,7 +494,8 @@ static int tri_mesh_count = 0;
 /*
   Create the surface mesh
 */
-void TMRFaceMesh::mesh( double htarget ){
+void TMRFaceMesh::mesh( TMRMeshOptions options,
+                        double htarget ){
   int mpi_rank, mpi_size;
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
@@ -655,13 +656,15 @@ void TMRFaceMesh::mesh( double htarget ){
     // automatically.  The boundary points are guaranteed to be ordered
     // first.
     num_fixed_pts = total_num_pts;
-    int num_smoothing_steps = 5;
 
     // Create the triangularization class
     TMRTriangularize *tri = 
       new TMRTriangularize(total_num_pts + nholes, params, nholes,
                            nsegs, segments, face);
     tri->incref();
+
+    // Set the frontal quality factor
+    tri->setFrontalQualityFactor(options.frontal_quality_factor);
 
     // Create the mesh using the frontal algorithm
     tri->frontal(htarget);
@@ -684,9 +687,17 @@ void TMRFaceMesh::mesh( double htarget ){
                       &node_to_tri_ptr, &node_to_tris);
       
       // Smooth the resulting triangular mesh
-      laplacianSmoothing(10*num_smoothing_steps, num_fixed_pts,
-                         num_tri_edges, tri_edges,
-                         num_points, pts, X, face);
+      if (options.tri_smoothing_type == TMRMeshOptions::LAPLACIAN){
+        laplacianSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                           num_tri_edges, tri_edges,
+                           num_points, pts, X, face);
+      }
+      else {
+        double alpha = 0.1;
+        springSmoothing(options.num_smoothing_steps, alpha, num_fixed_pts,
+                        num_tri_edges, tri_edges,
+                        num_points, pts, X, face);
+      }
 
       // Recombine the mesh into a quadrilateral mesh
       recombine(ntris, tris, tri_neighbors, node_to_tri_ptr, node_to_tris,
@@ -697,7 +708,11 @@ void TMRFaceMesh::mesh( double htarget ){
       delete [] tri_neighbors;
       delete [] dual_edges;
 
-      // Simplify the new quadrilateral mesh
+      // Simplify the new quadrilateral mesh by removing points/quads
+      // with poor quality/connectivity
+      simplifyQuads();
+
+      // Simplify a second time (for good measure)
       simplifyQuads();
       
       int *ptr;
@@ -706,8 +721,8 @@ void TMRFaceMesh::mesh( double htarget ){
                          &ptr, &pts_to_quads);
 
       // Smooth the mesh using a local optimization of node locations
-      quadSmoothing(10*num_smoothing_steps, num_fixed_pts,
-                    num_points, ptr, pts_to_quads, num_quads, quads, 
+      quadSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                    num_points, ptr, pts_to_quads, num_quads, quads,
                     pts, X, face);
 
       // Free the connectivity information
@@ -1192,10 +1207,10 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
 
       // Compute the new parameter location by taking the average of
       // the centroid locations for each triangle
-      new_pts[2*num_new_points] = 0.0;
-      new_pts[2*num_new_points+1] = 0.0;
+      int count = 1;
+      new_pts[2*num_new_points] = pts[2*boundary_pt];
+      new_pts[2*num_new_points+1] = pts[2*boundary_pt+1];
 
-      int count = 0;
       int kpend = node_to_tri_ptr[boundary_pt+1];
       for ( int kp = node_to_tri_ptr[boundary_pt]; kp < kpend; kp++ ){
         int k = node_to_tris[kp];
@@ -1205,7 +1220,8 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
                                         pts[2*tris[3*k+2]])/3.0;
           new_pts[2*num_new_points+1] += (pts[2*tris[3*k]+1] +
                                           pts[2*tris[3*k+1]+1] +
-                                          pts[2*tris[3*k+2]]+1)/3.0;
+                                          pts[2*tris[3*k+2]+1])/3.0;
+          count++;
         }
       }
       if (count > 1){
@@ -1648,9 +1664,17 @@ TMRMesh::~TMRMesh(){
 }
 
 /*
-  Mesh the underlying geometry
+  Call the underlying mesher with the default options
 */
 void TMRMesh::mesh( double htarget ){
+  TMRMeshOptions options;
+  mesh(options, htarget);
+}
+
+/*
+  Mesh the underlying geometry
+*/
+void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
   // Mesh the curves
   int num_edges;
   TMREdge **edges;
@@ -1660,7 +1684,7 @@ void TMRMesh::mesh( double htarget ){
     edges[i]->getMesh(&mesh);
     if (!mesh){
       mesh = new TMREdgeMesh(comm, edges[i]);
-      mesh->mesh(htarget);
+      mesh->mesh(options, htarget);
       edges[i]->setMesh(mesh);
     }
   }
@@ -1674,7 +1698,7 @@ void TMRMesh::mesh( double htarget ){
     faces[i]->getMesh(&mesh);
     if (!mesh){
       mesh = new TMRFaceMesh(comm, faces[i]);
-      mesh->mesh(htarget);
+      mesh->mesh(options, htarget);
       faces[i]->setMesh(mesh);
     }
   }

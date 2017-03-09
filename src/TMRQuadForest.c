@@ -566,6 +566,40 @@ void TMRQuadForest::computeFaceOwners(){
 }
 
 /*
+  Retrieve the element index
+*/
+int TMRQuadForest::getElementIndex( TMRQuadrant *element ){
+  if (quadrants){
+    int use_nodes = 0;
+    TMRQuadrant *t = quadrants->contains(element, use_nodes);
+    TMRQuadrant *array;
+    quadrants->getArray(&array, NULL);
+    if (t){
+      return t - array;
+    }
+  }
+
+  return -1;
+}
+
+/*
+  Retrieve the node index
+*/
+int TMRQuadForest::getNodeIndex( TMRQuadrant *node ){
+  if (nodes){
+    int use_nodes = 1;
+    TMRQuadrant *t = nodes->contains(node, use_nodes);
+    TMRQuadrant *array;
+    nodes->getArray(&array, NULL);
+    if (t){
+      return t - array;
+    }
+  }
+
+  return -1;
+}
+
+/*
   Retrieve information about the connectivity between faces, edges and
   nodes 
 */
@@ -2507,8 +2541,21 @@ void TMRQuadForest::createNodes( int order ){
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   if (topo){
     for ( int i = 0; i < size; i++ ){
-      double u = 1.0*array[i].x/hmax;
-      double v = 1.0*array[i].y/hmax;
+      double u = 0.0;
+      if (array[i].x == hmax-1){ 
+        u = 1.0;
+      }
+      else {
+        u = 1.0*array[i].x/hmax;
+      }
+
+      double v = 0.0;
+      if (array[i].y == hmax-1){
+        v = 1.0;
+      }
+      else {
+        v = 1.0*array[i].y/hmax;
+      }
 
       TMRFace *surf;
       topo->getSurface(array[i].face, &surf);
@@ -2520,16 +2567,18 @@ void TMRQuadForest::createNodes( int order ){
 }
 
 /*
-  Get the elements that either lie on a face or curve with a given attribute.
+  Get the elements that either lie on a face or curve with a given
+  attribute.
 
-  This code loops over all quadrants owned locally on this processor and 
-  checks if each quadrant lies on a face or boundary. If the face attribute 
-  matches, the quadrant is added without modification. If the quadrant lies
-  on an edge, the quadrant is modified so that the tag indicates which edge
-  the quadrant lies on using the regular edge ordering scheme.
+  This code loops over all quadrants owned locally on this processor
+  and checks if each quadrant lies on a face or boundary. If the face
+  attribute matches, the quadrant is added without modification. If
+  the quadrant lies on an edge, the quadrant is modified so that the
+  tag indicates which edge the quadrant lies on using the regular edge
+  ordering scheme.
 
   input:
-  attr:   the character string attribute associated with the geometric feature
+  attr:   string attribute associated with the geometric feature
 
   returns:
   list:   an array of quadrants satisfying the attribute
@@ -2610,11 +2659,11 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
 }
 
 /*
-  Create an array of the nodes that are lie on a surface, edge or 
+  Create an array of the nodes that are lie on a surface, edge or
   corner with a given attribute
 
-  This code loops over all nodes and check whether they lie on a 
-  geometric entity that has the given attribute. 
+  This code loops over all nodes and check whether they lie on a
+  geometric entity that has the given attribute.
 
   input:
   attr:   the string of the attribute to search

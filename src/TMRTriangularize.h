@@ -121,6 +121,9 @@ class TMRTriangularize : public TMREntity {
                     TMRFace *surf=NULL );
   ~TMRTriangularize();
 
+  // Set some options into the triangularization algorithm
+  void setFrontalQualityFactor( double factor );
+
   // Create the frontal mesh with the given mesh spacing
   void frontal( double h );
 
@@ -204,6 +207,9 @@ class TMRTriangularize : public TMREntity {
 
   // The underlying surface
   TMRFace *face;
+
+  // The quality factor
+  double frontal_quality_factor;
 
   // Initial number of boundary points
   uint32_t init_boundary_points;

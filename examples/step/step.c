@@ -26,16 +26,16 @@ int main( int argc, char *argv[] ){
   if (geo){
     geo->incref();
 
-    // Get the faces that have been created - if any
-    // and write them all to different VTK files
-    int num_faces;
-    TMRFace **faces;
-    geo->getFaces(&num_faces, &faces);
-
     // Allocate the new mesh
     TMRMesh *mesh = new TMRMesh(MPI_COMM_WORLD, geo);
     mesh->incref();
-    mesh->mesh(htarget);
+
+    // Adjust the quality factor
+    TMRMeshOptions options;
+    options.frontal_quality_factor = 1.25;
+
+    // Mesh the object of interest
+    mesh->mesh(options, htarget);
     mesh->writeToVTK("surface-mesh.vtk");
 
     mesh->decref();

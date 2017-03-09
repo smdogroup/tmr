@@ -120,6 +120,11 @@ class TMRQuadForest : public TMREntity {
     if (_X){ *_X = X; }
   }
 
+  // Get the index of the given element or node
+  // ------------------------------------------
+  int getElementIndex( TMRQuadrant *element );
+  int getNodeIndex( TMRQuadrant *node );
+
   // Retrieve the connectivity information
   // -------------------------------------
   void getConnectivity( int *_nfaces, int *_nedges, int *_nnodes, 

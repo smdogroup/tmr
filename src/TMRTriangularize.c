@@ -474,6 +474,9 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // Initialize the predicates code
   exactinit();
 
+  // Set the frontal quality acceptance factor
+  frontal_quality_factor = 1.5;
+
   // Set the surface
   face = surf;
   if (face){
@@ -696,6 +699,15 @@ TMRTriangularize::~TMRTriangularize(){
     TriListNode *tmp = list_start;
     list_start = list_start->next;
     delete tmp;
+  }
+}
+
+/*
+  Set the frontal quality acceptance factor
+*/
+void TMRTriangularize::setFrontalQualityFactor( double factor ){
+  if (factor >= 1.25 && factor <= 2.0){
+    frontal_quality_factor = factor;
   }
 }
 
@@ -1841,7 +1853,7 @@ void TMRTriangularize::frontal( double h ){
     // Compute the 'quality' indicator for this triangle
     double hval = sqrt3*computeCircumcircle(&node->tri);
     node->tri.quality = hval;
-    if (hval < 1.25*h){
+    if (hval < frontal_quality_factor*h){
       node->tri.status = ACCEPTED;
     }
     else {
@@ -2076,7 +2088,7 @@ void TMRTriangularize::frontal( double h ){
     while (ptr){
       double hval = sqrt3*computeCircumcircle(&ptr->tri);
       ptr->tri.quality = hval;
-      if (hval < 1.25*h){
+      if (hval < frontal_quality_factor*h){
         ptr->tri.status = ACCEPTED;
       }
       else {

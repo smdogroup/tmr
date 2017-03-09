@@ -6,6 +6,23 @@
 #include "TMRTopology.h"
 
 /*
+  Global options for meshing
+*/
+class TMRMeshOptions {
+ public:
+  enum TriangleSmoothingType { LAPLACIAN, SPRING };
+  TMRMeshOptions(){
+    num_smoothing_steps = 10;
+    tri_smoothing_type = LAPLACIAN;
+    frontal_quality_factor = 1.5;
+  }
+
+  int num_smoothing_steps;
+  TriangleSmoothingType tri_smoothing_type;
+  double frontal_quality_factor;
+};
+
+/*
   The mesh for a geometric curve
 */
 class TMREdgeMesh : public TMREntity {
@@ -17,7 +34,7 @@ class TMREdgeMesh : public TMREntity {
   void getEdge( TMREdge **_edge );
 
   // Mesh the geometric object
-  void mesh( double htarget );
+  void mesh( TMRMeshOptions options, double htarget );
 
   // Order the mesh points uniquely
   int setNodeNums( int *num );
@@ -52,7 +69,8 @@ class TMRFaceMesh : public TMREntity {
   void getFace( TMRFace **_surface );
   
   // Mesh the underlying geometric object
-  void mesh( double htarget );
+  void mesh( TMRMeshOptions options,
+             double htarget );
 
   // Retrieve the mesh points
   void getMeshPoints( int *_npts, const double **_pts, TMRPoint **X );
@@ -136,6 +154,7 @@ class TMRMesh : public TMREntity {
 
   // Mesh the underlying geometry
   void mesh( double htarget );
+  void mesh( TMRMeshOptions options, double htarget );
 
   // Write the mesh to a VTK file
   void writeToVTK( const char *filename );
