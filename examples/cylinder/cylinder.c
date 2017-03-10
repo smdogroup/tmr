@@ -3,6 +3,7 @@
 #include "TMR_TACSCreator.h"
 #include "TMRQuadForest.h"
 #include "TACSAssembler.h"
+#include "Compliance.h"
 #include "specialFSDTStiffness.h"
 #include "MITCShell.h"
 #include "TACSShellTraction.h"
@@ -304,8 +305,6 @@ int main( int argc, char *argv[] ){
                                                        load, stiff);
 
   // Create the geometry
-  // Geom_CylindricalSurface(ax3, R);
-
   BRepPrimAPI_MakeCylinder cylinder(R, L);
   TopoDS_Compound compound;
   BRep_Builder builder;
@@ -350,11 +349,13 @@ int main( int argc, char *argv[] ){
 
     TMRTopology *topo = new TMRTopology(comm, model);
     forest->setTopology(topo);
-    forest->createTrees(1);
+    forest->createTrees(0);
+    forest->repartition();
 
-    double target_err = 1e-4;
+    // The target relative error on the compliance
+    double target_rel_err = 1e-4;
 
-    for ( int k = 0; k < 3; k++ ){
+    for ( int iter = 0; iter < 4; iter++ ){
       // Create the TACSAssembler object associated with this forest
       TACSAssembler *tacs = creator->createTACS(3, forest);
       tacs->incref();
@@ -386,6 +387,17 @@ int main( int argc, char *argv[] ){
       ans->scale(-1.0);
       tacs->setVariables(ans);
 
+      // The compliance function
+      TACSFunction *func = new TACSCompliance(tacs);
+      func->incref();
+
+      // Evaluate the function of interest
+      TacsScalar fval = 0.0;
+      tacs->evalFunctions(&func, 1, &fval);
+
+      // Delete the compliance function
+      func->decref();
+
       // Create and write out an fh5 file
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                  TACSElement::OUTPUT_DISPLACEMENTS);
@@ -393,10 +405,40 @@ int main( int argc, char *argv[] ){
       f5->incref();
       
       // Write out the solution
-      f5->writeToFile("output.f5");
+      char outfile[128];
+      sprintf(outfile, "output%02d.f5", iter);
+      f5->writeToFile(outfile);
       f5->decref();
 
-      TMR_StrainEnergyRefine(tacs, forest, target_err);
+      // Set the target error using the factor: max(1.0, 16*(2**-iter))
+      double factor = 16.0/(1 << iter);
+      if (factor < 1.0){ factor = 1.0; }
+
+      // Determine the total number of elements across all processors
+      int nelems_total = 0;
+      int nelems = tacs->getNumElements();
+      MPI_Allreduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, comm);
+
+      // Set the absolute element-level error based on the relative
+      // error that is requested
+      double target_abs_err = factor*target_rel_err*fval/nelems_total;
+
+      // Perform the strain energy refinement
+      TacsScalar abs_err = TMR_StrainEnergyRefine(tacs, forest, 
+                                                  target_abs_err);
+      printf("Absolute error estimate = %e\n", abs_err);
+      
+      if (mpi_rank == 0){
+        const int *range;
+        forest->getOwnedNodeRange(&range);
+        int nnodes = range[mpi_size-1];
+        printf("%d %d %d %15.10e %15.10e %15.10e\n",
+               iter, nelems, nnodes, fval, 
+               (fval + abs_err)/fval, abs_err);
+      }
+
+      // repartition to balance the number of elements/proc
+      forest->repartition();
 
       tacs->decref();
       mat->decref();

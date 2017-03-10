@@ -229,8 +229,9 @@ static void computeElemRecon( const TacsScalar Xpts[],
 */
 static void computeLocalWeights( TACSAssembler *tacs, 
                                  TACSBVec **wlocal ){
-  // Create the weight vector - the weights on the averages
-  // Set the weights on each of the nodes
+  // Create the weight vector - the weights are the number of times
+  // each node is referenced by adjacent elements, including
+  // inter-process references.
   TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
                                    NULL, tacs->getBVecDistribute(),
                                    tacs->getBVecDepNodes());
@@ -243,8 +244,8 @@ static void computeLocalWeights( TACSAssembler *tacs,
     welem[i] = 1.0;
   }
 
-  // Add unit weights to all the elements. This will sum up
-  // the number of times each node is referenced
+  // Add unit weights to all the elements. This will sum up the number
+  // of times each node is referenced.
   int nelems = tacs->getNumElements();
   for ( int i = 0; i < nelems; i++ ){
     int len = 0;
@@ -281,13 +282,15 @@ static void computeLocalWeights( TACSAssembler *tacs,
 */
 static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec, 
                               TACSBVec *wlocal, TACSBVec **_uderiv ){
-  // Allocate a vector for the derivatives
-  TACSBVec *uderiv = 
-    new TACSBVec(tacs->getVarMap(), 3*tacs->getVarsPerNode(), NULL,
-                 tacs->getBVecDistribute(), tacs->getBVecDepNodes());
-
   // The number of variables at each node
   int vars_per_node = tacs->getVarsPerNode();
+
+  // Allocate a vector for the derivatives
+  TACSBVec *uderiv = 
+    new TACSBVec(tacs->getVarMap(), 3*vars_per_node, NULL,
+                 tacs->getBVecDistribute(), tacs->getBVecDepNodes());
+
+  // Number of derivatives per node - x,y,z derivatives
   int deriv_per_node = 3*vars_per_node;
 
   // Get the number of elements
@@ -304,19 +307,19 @@ static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec,
     const int *nodes;
     tacs->getElement(elem, &nodes, &len);
 
-    // Get the local weight values
+    // Get the local weight values for this element
     TacsScalar welem[9];
     wlocal->getValues(len, nodes, welem);
 
-    // Get the local element adjoint variables
+    // Get the local element variables
     uvec->getValues(len, nodes, uelem);
 
     // Get the node locations for the element
     TacsScalar Xpts[3*9];
     tacs->getElement(elem, Xpts);
     
-    // Compute the derivative of the 6 components of the adjoint
-    // variables along the 3-coordinate directions
+    // Compute the derivative of the 6 components of the variables
+    // along each of the 3-coordinate directions
     TacsScalar *d = delem;
 
     // Compute the contributions to the derivative from this side of
@@ -357,7 +360,7 @@ static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec,
       }
     }
 
-    // Add the values
+    // Add the values of the derivatives
     uderiv->setValues(len, nodes, delem, ADD_VALUES);
   }
 
@@ -420,13 +423,17 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   TACSBVec *uvec = tacs->createVec();
   tacs->getVariables(uvec);
   uvec->incref();
+  uvec->beginDistributeValues();
+  uvec->endDistributeValues();
 
-  // Perform a local refinement of the nodes based on the strain
-  // energy within each element
+  // Number of local elements
   int nelems = tacs->getNumElements();
+
+  // Compute the contribution to the error in the energy norm from
+  // each element
   TacsScalar *SE_error = new TacsScalar[ nelems ];
   
-  // Compute the reconstructed solution
+  // Compute the nodal weights for the derivatives
   TACSBVec *wlocal;
   computeLocalWeights(tacs, &wlocal);
   wlocal->incref();
@@ -436,7 +443,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   computeNodeDeriv(tacs, uvec, wlocal, &uderiv);
   uderiv->incref();
 
-  // Zero the time-derivatives: this assumes a steady-state
+  // Zero the time-derivatives: this code assumes a steady-state
   TacsScalar dvars[6*9], ddvars[6*9];
   memset(dvars, 0, sizeof(dvars));
   memset(ddvars, 0, sizeof(ddvars));
@@ -444,16 +451,15 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   // Keep track of the total error
   TacsScalar SE_total_error = 0.0;
 
-  // For each element in the mesh, compute the original strain energy
   for ( int i = 0; i < nelems; i++ ){
-    // Set the simulation time
+    // The simulation time -- we assume time-independent analysis
     double time = 0.0;
 
     // Get the node locations and variables
     TacsScalar Xpts[3*9], uelem[6*9];
     TACSElement *elem = tacs->getElement(i, Xpts, uelem, NULL, NULL);
     
-    // Get the nodes from TACSAssembler
+    // Get the node numbers for this element
     int len;
     const int *nodes;
     tacs->getElement(i, &nodes, &len);
@@ -536,7 +542,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     // SE_refine - SE_error should always be a positive quantity
     SE_error[i] = SE_refine - SE_error[i];
 
-    // Add up th etotal error
+    // Add up the total error
     SE_total_error += SE_error[i];
   }
   
