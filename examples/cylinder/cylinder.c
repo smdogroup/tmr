@@ -321,10 +321,10 @@ int main( int argc, char *argv[] ){
   edges[1]->setAttribute("Edge2");
   edges[2]->setAttribute("Edge3");
 
-
   // Set the boundary conditions
   int bcs[] = {0, 1, 2, 3, 4, 5};
   creator->addBoundaryCondition("Edge1", 6, bcs);
+  creator->addBoundaryCondition("Edge3", 6, bcs);
 
   if (geo){
     geo->incref();
@@ -349,7 +349,7 @@ int main( int argc, char *argv[] ){
 
     TMRTopology *topo = new TMRTopology(comm, model);
     forest->setTopology(topo);
-    forest->createTrees(0);
+    forest->createTrees(1);
 
     // Create the TACSAssembler object associated with this forest
     TACSAssembler *tacs = creator->createTACS(3, forest);

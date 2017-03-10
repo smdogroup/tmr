@@ -1219,8 +1219,8 @@ void TMRTopology::getSurface( int face_num, TMRFace **face ){
 /*
   Retrieve the curve object associated with the given face/edge index
 */
-void TMRTopology::getFaceCurve( int face_num, int edge_index, 
-                                TMREdge **edge ){
+void TMRTopology::getFaceEdge( int face_num, int edge_index, 
+                               TMREdge **edge ){
   int num_faces;
   TMRFace **faces;
   geo->getFaces(&num_faces, &faces);

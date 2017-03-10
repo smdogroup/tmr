@@ -2613,10 +2613,10 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
       // If this quadrant was not added from a face
       // attribute, check to see if it should be added
       // as an edge/curve attribute
-      TMREdge *curve;
+      TMREdge *edge;
       if (array[i].x == 0){
-        topo->getFaceCurve(array[i].face, 0, &curve);
-        const char *curve_attr = curve->getAttribute();
+        topo->getFaceEdge(array[i].face, 0, &edge);
+        const char *curve_attr = edge->getAttribute();
         if (curve_attr && strcmp(curve_attr, attr) == 0){
           TMRQuadrant p = array[i];
           p.tag = 0;
@@ -2624,8 +2624,8 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
         }
       }
       if (array[i].x+h == hmax){
-        topo->getFaceCurve(array[i].face, 1, &curve);
-        const char *curve_attr = curve->getAttribute();
+        topo->getFaceEdge(array[i].face, 1, &edge);
+        const char *curve_attr = edge->getAttribute();
         if (curve_attr && strcmp(curve_attr, attr) == 0){
           TMRQuadrant p = array[i];
           p.tag = 1;
@@ -2633,8 +2633,8 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
         }
       }
       if (array[i].y == 0){
-        topo->getFaceCurve(array[i].face, 2, &curve);
-        const char *curve_attr = curve->getAttribute();
+        topo->getFaceEdge(array[i].face, 2, &edge);
+        const char *curve_attr = edge->getAttribute();
         if (curve_attr && strcmp(curve_attr, attr) == 0){
           TMRQuadrant p = array[i];
           p.tag = 2;
@@ -2642,8 +2642,8 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
         }
       }
       if (array[i].y+h == hmax){
-        topo->getFaceCurve(array[i].face, 3, &curve);
-        const char *curve_attr = curve->getAttribute();
+        topo->getFaceEdge(array[i].face, 3, &edge);
+        const char *curve_attr = edge->getAttribute();
         if (curve_attr && strcmp(curve_attr, attr) == 0){
           TMRQuadrant p = array[i];
           p.tag = 3;
@@ -2699,33 +2699,38 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
       // If this quadrant was not added from a face
       // attribute, check to see if it should be added
       // as an edge/curve attribute
-      TMREdge *curve;
-      if (array[i].x == 0){
-        topo->getFaceCurve(array[i].face, 0, &curve);
-        const char *curve_attr = curve->getAttribute();
-        if (curve_attr && strcmp(curve_attr, attr) == 0){
-          queue->push(&array[i]);
+      int ex0 = (array[i].x == 0), ex1 = (array[i].x == hmax-1);
+      int ey0 = (array[i].y == 0), ey1 = (array[i].y == hmax-1);
+
+      if (ex0 || ex1 || ey0 || ey1){
+        TMREdge *edge;
+        if (ex0){
+          topo->getFaceEdge(array[i].face, 0, &edge);
+          const char *curve_attr = edge->getAttribute();
+          if (curve_attr && strcmp(curve_attr, attr) == 0){
+            queue->push(&array[i]);
+          }
         }
-      }
-      if (array[i].x == hmax){
-        topo->getFaceCurve(array[i].face, 1, &curve);
-        const char *curve_attr = curve->getAttribute();
-        if (curve_attr && strcmp(curve_attr, attr) == 0){
-          queue->push(&array[i]);
+        if (ex1){
+          topo->getFaceEdge(array[i].face, 1, &edge);
+          const char *curve_attr = edge->getAttribute();
+          if (curve_attr && strcmp(curve_attr, attr) == 0){
+            queue->push(&array[i]);
+          }
         }
-      }
-      if (array[i].y == 0){
-        topo->getFaceCurve(array[i].face, 2, &curve);
-        const char *curve_attr = curve->getAttribute();
-        if (curve_attr && strcmp(curve_attr, attr) == 0){
-          queue->push(&array[i]);
+        if (ey0){
+          topo->getFaceEdge(array[i].face, 2, &edge);
+          const char *curve_attr = edge->getAttribute();
+          if (curve_attr && strcmp(curve_attr, attr) == 0){
+            queue->push(&array[i]);
+          }
         }
-      }
-      if (array[i].y == hmax){
-        topo->getFaceCurve(array[i].face, 3, &curve);
-        const char *curve_attr = curve->getAttribute();
-        if (curve_attr && strcmp(curve_attr, attr) == 0){
-          queue->push(&array[i]);
+        if (ey1){
+          topo->getFaceEdge(array[i].face, 3, &edge);
+          const char *curve_attr = edge->getAttribute();
+          if (curve_attr && strcmp(curve_attr, attr) == 0){
+            queue->push(&array[i]);
+          }
         }
       }
     }
