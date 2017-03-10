@@ -418,6 +418,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   
   // Retrieve the variables from the TACSAssembler object
   TACSBVec *uvec = tacs->createVec();
+  tacs->getVariables(uvec);
   uvec->incref();
 
   // Perform a local refinement of the nodes based on the strain
@@ -538,7 +539,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     // Add up th etotal error
     SE_total_error += SE_error[i];
   }
-
+  
   uvec->decref();
   uderiv->decref();
   wlocal->decref();

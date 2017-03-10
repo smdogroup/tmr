@@ -10,6 +10,7 @@
 #include "tacslapack.h"
 #include <stdio.h>
 #include <math.h>
+#include "TMR_RefinementTools.h"
 
 #ifdef TMR_HAS_OPENCASCADE
 
@@ -253,7 +254,7 @@ int main( int argc, char *argv[] ){
   double beta = 3*M_PI/L;
 
   // Set the load parameter
-  double load = 1.0;
+  double load = 1.0e3;
 
   // Set the yield stress
   double ys = 350e6;
@@ -351,46 +352,58 @@ int main( int argc, char *argv[] ){
     forest->setTopology(topo);
     forest->createTrees(1);
 
-    // Create the TACSAssembler object associated with this forest
-    TACSAssembler *tacs = creator->createTACS(3, forest);
-    tacs->incref();
-    
-    // Create matrix and vectors 
-    TACSBVec *ans = tacs->createVec();
-    TACSBVec *res = tacs->createVec();
-    FEMat *mat = tacs->createFEMat(); // preconditioner
-    
-    // Increment reference count to the matrix/vectors
-    ans->incref();
-    res->incref();
-    mat->incref();
-    
-    // Allocate the factorization
-    int lev = 10000;
-    double fill = 10.0;
-    int reorder_schur = 1;
-    PcScMat *pc = new PcScMat(mat, lev, fill, reorder_schur); 
-    pc->incref();
-    
-    // Assemble and factor the stiffness/Jacobian matrix
-    double alpha = 1.0, beta = 0.0, gamma = 0.0;
-    tacs->assembleJacobian(alpha, beta, gamma, res, mat);
-    pc->factor();
+    double target_err = 1e-4;
 
-    // Get solution and store in ans
-    pc->applyFactor(res, ans);
-    ans->scale(-1.0);
-    tacs->setVariables(ans);
+    for ( int k = 0; k < 3; k++ ){
+      // Create the TACSAssembler object associated with this forest
+      TACSAssembler *tacs = creator->createTACS(3, forest);
+      tacs->incref();
+    
+      // Create matrix and vectors 
+      TACSBVec *ans = tacs->createVec();
+      TACSBVec *res = tacs->createVec();
+      FEMat *mat = tacs->createFEMat();
 
-    // Create and write out an fh5 file
-    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                               TACSElement::OUTPUT_DISPLACEMENTS);
-    TACSToFH5 *f5 = new TACSToFH5(tacs, SHELL, write_flag);
-    f5->incref();
+      // Increment reference count to the matrix/vectors
+      ans->incref();
+      res->incref();
+      mat->incref();
+    
+      // Allocate the factorization
+      int lev = 10000;
+      double fill = 10.0;
+      int reorder_schur = 1;
+      PcScMat *pc = new PcScMat(mat, lev, fill, reorder_schur); 
+      pc->incref();
+    
+      // Assemble and factor the stiffness/Jacobian matrix
+      double alpha = 1.0, beta = 0.0, gamma = 0.0;
+      tacs->assembleJacobian(alpha, beta, gamma, res, mat);
+      pc->factor();
+
+      // Get solution and store in ans
+      pc->applyFactor(res, ans);
+      ans->scale(-1.0);
+      tacs->setVariables(ans);
+
+      // Create and write out an fh5 file
+      unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                                 TACSElement::OUTPUT_DISPLACEMENTS);
+      TACSToFH5 *f5 = new TACSToFH5(tacs, SHELL, write_flag);
+      f5->incref();
       
-    // Write out the solution
-    f5->writeToFile("output.f5");
-    f5->decref();
+      // Write out the solution
+      f5->writeToFile("output.f5");
+      f5->decref();
+
+      TMR_StrainEnergyRefine(tacs, forest, target_err);
+
+      tacs->decref();
+      mat->decref();
+      res->decref();
+      ans->decref();
+      pc->decref();
+    }
 
     forest->decref();
     model->decref();
