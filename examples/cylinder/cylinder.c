@@ -8,6 +8,7 @@
 #include "MITCShell.h"
 #include "TACSShellTraction.h"
 #include "TACSToFH5.h"
+#include "TACSMg.h"
 #include "tacslapack.h"
 #include <stdio.h>
 #include <math.h>
@@ -344,56 +345,114 @@ int main( int argc, char *argv[] ){
     TMRModel *model = mesh->createModelFromMesh();
     model->incref();
 
-    TMRQuadForest *forest = new TMRQuadForest(comm);
-    forest->incref();
+    const int MAX_REFINE = 5;
+    TMRQuadForest *forest[MAX_REFINE+2];
+    forest[0] = new TMRQuadForest(comm);
+    forest[0]->incref();
 
     TMRTopology *topo = new TMRTopology(comm, model);
-    forest->setTopology(topo);
-    forest->createTrees(0);
-    forest->repartition();
+    forest[0]->setTopology(topo);
+    forest[0]->createTrees(0);
+    forest[0]->repartition();
 
     // The target relative error on the compliance
     double target_rel_err = 1e-4;
 
-    for ( int iter = 0; iter < 4; iter++ ){
-      // Create the TACSAssembler object associated with this forest
-      TACSAssembler *tacs = creator->createTACS(3, forest);
-      tacs->incref();
-    
-      // Create matrix and vectors 
-      TACSBVec *ans = tacs->createVec();
-      TACSBVec *res = tacs->createVec();
-      FEMat *mat = tacs->createFEMat();
+    FILE *fp = NULL;
+    if (mpi_rank == 0){
+      fp = fopen("cylinder_refine.dat", "w");
+    }
 
-      // Increment reference count to the matrix/vectors
+    for ( int iter = 0; iter < MAX_REFINE; iter++ ){
+      // Create the TACSAssembler object associated with this forest
+      TACSAssembler *tacs[MAX_REFINE+2];
+      tacs[0] = creator->createTACS(3, forest[0]);
+      tacs[0]->incref();
+
+      // Create the coarser versions of tacs
+      forest[1] = forest[0]->duplicate();
+      forest[1]->incref();
+      tacs[1] = creator->createTACS(2, forest[1]);
+      tacs[1]->incref();
+
+      // Set the number of levels: Cap it with a value of 4
+      int num_levels = 2 + iter;
+      if (num_levels > 4){ num_levels = 4; }
+
+      // Create all of the coarser levels
+      for ( int i = 2; i < num_levels; i++ ){
+        forest[i] = forest[i-1]->coarsen();
+        forest[i]->incref();
+        tacs[i] = creator->createTACS(2, forest[i]);
+        tacs[i]->incref();
+      }
+
+      // Create the interpolation
+      TACSBVecInterp *interp[MAX_REFINE+1];
+
+      for ( int level = 0; level < num_levels-1; level++ ){
+        // Create the interpolation object
+        interp[level] = new TACSBVecInterp(tacs[level+1]->getVarMap(),
+                                           tacs[level]->getVarMap(),
+                                           tacs[level]->getVarsPerNode());
+        interp[level]->incref();
+
+        // Set the interpolation
+        forest[level]->createInterpolation(forest[level+1], interp[level]);
+    
+        // Initialize the interpolation
+        interp[level]->initialize();
+      }
+
+      // Create the multigrid object
+      double omega = 1.0;
+      int mg_sor_iters = 1;
+      int mg_sor_symm = 1;
+      int mg_iters_per_level = 1;
+      TACSMg *mg = new TACSMg(comm, num_levels, omega, mg_sor_iters, mg_sor_symm);
+      mg->incref();
+
+      for ( int level = 0; level < num_levels; level++ ){
+        if (level < num_levels-1){
+          mg->setLevel(level, tacs[level], interp[level], mg_iters_per_level);
+        }
+        else {
+          mg->setLevel(level, tacs[level], NULL);
+        }
+      }
+      
+      // Create the vectors 
+      TACSBVec *ans = tacs[0]->createVec();
+      TACSBVec *res = tacs[0]->createVec();
       ans->incref();
       res->incref();
-      mat->incref();
+
+      // Assemble the matrix
+      mg->assembleJacobian(1.0, 0.0, 0.0, res);
+      mg->factor();    
     
-      // Allocate the factorization
-      int lev = 10000;
-      double fill = 10.0;
-      int reorder_schur = 1;
-      PcScMat *pc = new PcScMat(mat, lev, fill, reorder_schur); 
-      pc->incref();
-    
-      // Assemble and factor the stiffness/Jacobian matrix
-      double alpha = 1.0, beta = 0.0, gamma = 0.0;
-      tacs->assembleJacobian(alpha, beta, gamma, res, mat);
-      pc->factor();
+      // Set up the solver
+      int gmres_iters = 100; 
+      int nrestart = 1;
+      int is_flexible = 1;
+      GMRES *gmres = new GMRES(mg->getMat(0), mg, 
+                               gmres_iters, nrestart, is_flexible);
+      gmres->incref();
+      gmres->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
+      gmres->setTolerances(1e-10, 1e-30);
 
       // Get solution and store in ans
-      pc->applyFactor(res, ans);
+      gmres->solve(res, ans);
       ans->scale(-1.0);
-      tacs->setVariables(ans);
+      tacs[0]->setVariables(ans);
 
       // The compliance function
-      TACSFunction *func = new TACSCompliance(tacs);
+      TACSFunction *func = new TACSCompliance(tacs[0]);
       func->incref();
 
       // Evaluate the function of interest
       TacsScalar fval = 0.0;
-      tacs->evalFunctions(&func, 1, &fval);
+      tacs[0]->evalFunctions(&func, 1, &fval);
 
       // Delete the compliance function
       func->decref();
@@ -401,7 +460,7 @@ int main( int argc, char *argv[] ){
       // Create and write out an fh5 file
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                  TACSElement::OUTPUT_DISPLACEMENTS);
-      TACSToFH5 *f5 = new TACSToFH5(tacs, SHELL, write_flag);
+      TACSToFH5 *f5 = new TACSToFH5(tacs[0], SHELL, write_flag);
       f5->incref();
       
       // Write out the solution
@@ -411,12 +470,12 @@ int main( int argc, char *argv[] ){
       f5->decref();
 
       // Set the target error using the factor: max(1.0, 16*(2**-iter))
-      double factor = 16.0/(1 << iter);
+      double factor = 1.0; // 16.0/(1 << iter);
       if (factor < 1.0){ factor = 1.0; }
 
       // Determine the total number of elements across all processors
       int nelems_total = 0;
-      int nelems = tacs->getNumElements();
+      int nelems = tacs[0]->getNumElements();
       MPI_Allreduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, comm);
 
       // Set the absolute element-level error based on the relative
@@ -424,30 +483,36 @@ int main( int argc, char *argv[] ){
       double target_abs_err = factor*target_rel_err*fval/nelems_total;
 
       // Perform the strain energy refinement
-      TacsScalar abs_err = TMR_StrainEnergyRefine(tacs, forest, 
+      TacsScalar abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
                                                   target_abs_err);
-      printf("Absolute error estimate = %e\n", abs_err);
-      
+
       if (mpi_rank == 0){
+        printf("Absolute error estimate = %e\n", abs_err);
+
         const int *range;
-        forest->getOwnedNodeRange(&range);
+        forest[0]->getOwnedNodeRange(&range);
         int nnodes = range[mpi_size-1];
-        printf("%d %d %d %15.10e %15.10e %15.10e\n",
-               iter, nelems, nnodes, fval, 
-               (fval + abs_err)/fval, abs_err);
+        fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
+                iter, nelems, nnodes, fval, (fval + abs_err)/fval, abs_err);
       }
 
-      // repartition to balance the number of elements/proc
-      forest->repartition();
+      // Decrease the reference count
+      tacs[0]->decref();
+      for ( int i = 1; i < num_levels; i++ ){
+        forest[i]->decref();
+        tacs[i]->decref();
+        interp[i-1]->decref();
+      }
 
-      tacs->decref();
-      mat->decref();
       res->decref();
       ans->decref();
-      pc->decref();
+      mg->decref();
+      gmres->decref();
     }
 
-    forest->decref();
+    if (fp){ fclose(fp); }
+
+    forest[0]->decref();
     model->decref();
     mesh->decref();
     geo->decref();
