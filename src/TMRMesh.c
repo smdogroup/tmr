@@ -335,50 +335,57 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
     double tmin, tmax;
     edge->getRange(&tmin, &tmax);
 
-    // Set the integration error tolerance
-    double integration_eps = 1e-8;
+    if (!edge->isDegenerate()){
+      // Set the integration error tolerance
+      double integration_eps = 1e-8;
 
-    // Integrate along the curve to obtain the distance function such
-    // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
-    int nvals;
-    double *dist, *tvals;
-    edge->integrate(tmin, tmax, integration_eps, &tvals, &dist, &nvals);
-    
-    // Compute the number of points along this curve
-    npts = 1 + (int)(dist[nvals-1]/htarget);
-    if (npts < 2){ npts = 2; }
+      // Integrate along the curve to obtain the distance function such
+      // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
+      int nvals;
+      double *dist, *tvals;
+      edge->integrate(tmin, tmax, integration_eps, &tvals, &dist, &nvals);
+      
+      // Compute the number of points along this curve
+      npts = 1 + (int)(dist[nvals-1]/htarget);
+      if (npts < 2){ npts = 2; }
 
-    // If we have an even number of points, increment by one to ensure
-    // that we have an even number of segments along the boundary
-    if (npts % 2 != 1){ npts++; }
+      // If we have an even number of points, increment by one to ensure
+      // that we have an even number of segments along the boundary
+      if (npts % 2 != 1){ npts++; }
 
-    // The average distance between points
-    double d = dist[nvals-1]/(npts-1);
+      // The average distance between points
+      double d = dist[nvals-1]/(npts-1);
 
-    // Allocate the parametric points that will be used 
-    pts = new double[ npts ];
+      // Allocate the parametric points that will be used 
+      pts = new double[ npts ];
 
-    // Set the starting/end location of the points
-    pts[0] = tmin;
-    pts[npts-1] = tmax;
+      // Set the starting/end location of the points
+      pts[0] = tmin;
+      pts[npts-1] = tmax;
 
-    // Perform the integration so that the points are evenly spaced
-    // along the curve
-    for ( int j = 1, k = 1; (j < nvals && k < npts-1); j++ ){
-      while ((k < npts-1) && 
-             (dist[j-1] <= d*k && d*k < dist[j])){
-        double u = 0.0;
-        if (dist[j] > dist[j-1]){ 
-          u = (d*k - dist[j-1])/(dist[j] - dist[j-1]);
+      // Perform the integration so that the points are evenly spaced
+      // along the curve
+      for ( int j = 1, k = 1; (j < nvals && k < npts-1); j++ ){
+        while ((k < npts-1) && 
+               (dist[j-1] <= d*k && d*k < dist[j])){
+          double u = 0.0;
+          if (dist[j] > dist[j-1]){ 
+            u = (d*k - dist[j-1])/(dist[j] - dist[j-1]);
+          }
+          pts[k] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
+          k++;
         }
-        pts[k] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
-        k++;
       }
+      
+      // Free the integration result
+      delete [] tvals;
+      delete [] dist;
     }
-    
-    // Free the integration result
-    delete [] tvals;
-    delete [] dist;
+    else {
+      npts = 1;
+      pts = new double[ npts ];
+      pts[0] = tmin;
+    }
 
     // Allocate the points
     X = new TMRPoint[ npts ];
@@ -527,9 +534,12 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         // Get the number of points associated with the curve
         int npts;
         mesh->getMeshPoints(&npts, NULL, NULL);
-        
-        // Update the total number of points
-        total_num_pts += npts-1;
+    
+        // Skip degenerate edges    
+        if (!edges[i]->isDegenerate()){
+          // Update the total number of points
+          total_num_pts += npts-1;
+        }
       }
     }
 
@@ -574,6 +584,11 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         TMREdge *edge = edges[i];
         TMREdgeMesh *mesh = NULL;
         edge->getMesh(&mesh);
+
+        // Skip any degenerate edge
+        if (edge->isDegenerate()){
+          continue;
+        }
         
         // Get the mesh points corresponding to this curve
         int npts;

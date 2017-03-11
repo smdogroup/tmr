@@ -154,6 +154,7 @@ class TMR_OCCEdge : public TMREdge {
   int evalDeriv( double t, TMRPoint *Xt );
   int getParamsOnFace( TMRFace *face, double t, 
                        int dir, double *u, double *v );
+  int isDegenerate();
   void getEdgeObject( TopoDS_Edge &e );
  private:
   TopoDS_Edge edge;

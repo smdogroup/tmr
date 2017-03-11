@@ -226,6 +226,10 @@ int TMR_OCCEdge::evalDeriv( double t, TMRPoint *Xt ){
   Xt->z = pt.Z();
 }
 
+int TMR_OCCEdge::isDegenerate(){
+  return BRep_Tool::Degenerated(edge);
+}
+
 void TMR_OCCEdge::getEdgeObject( TopoDS_Edge &e ){
   e = edge;
 }

@@ -67,6 +67,9 @@ class TMREdge : public TMREntity {
   virtual int getParamsOnFace( TMRFace *face, double t, 
                                int dir, double *u, double *v );
 
+  // Is this edge degenerate
+  virtual int isDegenerate(){ return 0; }
+
   // Set/retrive the vertices at the beginning and end of the curve
   void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
   void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
