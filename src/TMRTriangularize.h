@@ -127,6 +127,9 @@ class TMRTriangularize : public TMREntity {
   // Create the frontal mesh with the given mesh spacing
   void frontal( double h );
 
+  // Remove degenerate edges/points and reorder things
+  void removeDegenerateEdges( int num_degen, int degen[] );
+  
   // Retrieve the mesh connectivity from the object
   void getMesh( int *_num_points, int *_num_triangles, 
                 int **_conn, double **_pts, TMRPoint **_X );
@@ -138,7 +141,7 @@ class TMRTriangularize : public TMREntity {
   // The Bowyer-Watson algorithm is started with 4 points (2 triangles)
   // that cover the entire domain. These are deleted at the end 
   // of the algorithm.
-  static const int FIXED_POINT_OFFSET = 4;
+  static const uint32_t FIXED_POINT_OFFSET = 4;
 
   // TAGS for the triangles
   static const uint32_t NO_STATUS = 0;

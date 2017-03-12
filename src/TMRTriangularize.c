@@ -621,7 +621,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   node = list_start;
   while (node){
     // Keep track of what node will be next, since we may be deleting
-    // 'node' itself, we cannot access this afterwards
+    // 'node' itself, we cannot access this pointer afterwards
     TriListNode *tmp = node->next;
 
     // Delete the triangle from the triangle list
@@ -659,7 +659,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   Free the triangularization object
 */
 TMRTriangularize::~TMRTriangularize(){
-  delete root;
+  if (root){ delete root; }
   delete [] pts;
   if (X){ delete [] X; }
   delete [] pts_to_tris;
@@ -708,6 +708,98 @@ TMRTriangularize::~TMRTriangularize(){
 void TMRTriangularize::setFrontalQualityFactor( double factor ){
   if (factor >= 1.25 && factor <= 2.0){
     frontal_quality_factor = factor;
+  }
+}
+
+/*
+  Compare the first component of the degenerate edge pairs
+*/
+static int compare_degen_edges( const void *avoid, const void *bvoid ){
+  // Cast the input to int types
+  const int *a = static_cast<const int*>(avoid);
+  const int *b = static_cast<const int*>(bvoid);
+  return *a - *b;
+}
+
+/*
+  Remove degenerate edges and extra nodes from the triangulation
+
+  Note that this code may adjust the degen[] array so it is not constant.
+  It sorts it so that the edge pairs are ordered from lowest to largest edge
+  and so that the edge list is sorted in increasing order acording to the
+  lowest node in each edge pair.
+*/
+void TMRTriangularize::removeDegenerateEdges( int num_degen, 
+                                              int degen[] ){
+  if (num_degen > 0){
+    for ( int i = 0; i < num_degen; i++ ){
+      uint32_t u = degen[2*i] + FIXED_POINT_OFFSET;
+      uint32_t v = degen[2*i+1] + FIXED_POINT_OFFSET;
+
+      // Keep track of whether we actually delete a triangle. If not,
+      // we may run into problems so we report an error.
+      int fail = 1;
+      
+      TMRTriangle *t;
+      completeMe(u, v, &t);
+      if (t){ 
+        deleteTriangle(*t);
+        fail = 0;
+      }
+      completeMe(v, u, &t);
+      if (t){ 
+        deleteTriangle(*t);
+        fail = 0;
+      }
+      if (fail){
+        fprintf(stderr, 
+                "TMRTriangularize error: Failed to find degenerate edge (%d, %d)\n",
+                degen[2*i], degen[2*i+1]);
+      }
+    }
+
+    // Keep track of the pairs of points that will be combined
+    // together since the degenerate edges collapse to a single point
+    for ( int i = 0; i < num_degen; i++ ){
+      // Flip the points such that the smaller node number 
+      // always comes first in the list
+      if (degen[2*i+1] < degen[2*i]){
+        int tmp = degen[2*i];
+        degen[2*i] = degen[2*i+1];
+        degen[2*i+1] = tmp;
+      }
+    }
+
+    // Sort the list - this sorts based on just the lower node number
+    qsort(degen, num_degen, 2*sizeof(int), compare_degen_edges);
+
+    // Construct the new ordering
+    uint32_t *new_from_old = new uint32_t[ num_points ];
+    memset(new_from_old, 0, num_points*sizeof(uint32_t));
+    for ( uint32_t i = 0, j = 0, k = 0; i < num_points; i++ ){
+      if (i == degen[2*k]){
+        new_from_old[i] = j;
+        new_from_old[degen[2*k+1]] = j;
+        j++; k++;
+      }
+      else if (new_from_old[i] == 0){
+        new_from_old[i] = j;
+        j++;
+      }
+    }
+
+    // Reset the ordering of the triangles
+    TriListNode *node = list_start;
+    while (node){
+      node->tri.u = new_from_old[node->tri.u];
+      node->tri.v = new_from_old[node->tri.v];
+      node->tri.w = new_from_old[node->tri.w];
+      node = node->next;
+    }
+
+    // Reset the number of nodes since we removed degenerate points
+    num_points = num_points - num_degen;
+    delete [] new_from_old;
   }
 }
 
@@ -762,8 +854,7 @@ void TMRTriangularize::setTriangleTags( uint32_t tag ){
 /*
   Mark triangles that should be deleted.
 
-  This is used to mark triangles that are in holes, or have points that
-  lie outside the
+  This is used to mark triangles that are in holes
 */
 void TMRTriangularize::tagTriangles( TMRTriangle *tri ){
   // Set the combinations of edge pairs that will be added

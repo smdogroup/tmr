@@ -12,6 +12,7 @@ class TMRMeshOptions {
  public:
   enum TriangleSmoothingType { LAPLACIAN, SPRING };
   TMRMeshOptions(){
+    // Set the default meshing options
     num_smoothing_steps = 10;
     tri_smoothing_type = LAPLACIAN;
     frontal_quality_factor = 1.5;
@@ -29,6 +30,9 @@ class TMREdgeMesh : public TMREntity {
  public:
   TMREdgeMesh( MPI_Comm _comm, TMREdge *edge );
   ~TMREdgeMesh();
+
+  // Is this edge mesh degenerate
+  int isDegenerate(){ return edge->isDegenerate(); }
 
   // Retrieve the underlying curve
   void getEdge( TMREdge **_edge );

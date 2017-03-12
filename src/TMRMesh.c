@@ -382,9 +382,11 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
       delete [] dist;
     }
     else {
-      npts = 1;
+      // This is a degenerate edge
+      npts = 2;
       pts = new double[ npts ];
       pts[0] = tmin;
+      pts[1] = tmax;
     }
 
     // Allocate the points
@@ -516,6 +518,9 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // Keep track of the number of closed loop cycles in the domain
     int nloops = face->getNumEdgeLoops();
 
+    // The number of degenerate edges
+    int num_degen = 0;
+
     // Get all of the meshes
     for ( int k = 0; k < nloops; k++ ){
       TMREdgeLoop *loop;
@@ -525,6 +530,12 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       loop->getEdgeLoop(&nedges, &edges, NULL);
 
       for ( int i = 0; i < nedges; i++ ){
+        // Count whether this edge is degenerate
+        if (edges[i]->isDegenerate()){
+          num_degen++;
+        }
+
+        // Check whether the edge mesh exists - it has to!
         TMREdgeMesh *mesh = NULL;
         edges[i]->getMesh(&mesh);
         if (!mesh){
@@ -534,12 +545,9 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         // Get the number of points associated with the curve
         int npts;
         mesh->getMeshPoints(&npts, NULL, NULL);
-    
-        // Skip degenerate edges    
-        if (!edges[i]->isDegenerate()){
-          // Update the total number of points
-          total_num_pts += npts-1;
-        }
+
+        // Update the total number of points
+        total_num_pts += npts-1;
       }
     }
 
@@ -559,17 +567,19 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
     // Start entering the points from the end of the last hole entry in
     // the parameter points array.
-    int seg = 0;
     int pt = 0;
 
     int init_loop_pt = 0; // What point value did this loop start on? 
     int init_loop_seg = 0; // What segment value did this loop start on?
     int hole_pt = total_num_pts; // What hole are we on?
 
+    // Set up the degenerate edges
+    int *degen = new int[ 2*num_degen ];
+    num_degen = 0;
+    
     for ( int k = 0; k < nloops; k++ ){
       // Set the offset to the initial point/segment on this loop
       init_loop_pt = pt;
-      init_loop_seg = seg;
 
       // Get the curve information for this loop segment
       TMREdgeLoop *loop;
@@ -584,25 +594,24 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         TMREdge *edge = edges[i];
         TMREdgeMesh *mesh = NULL;
         edge->getMesh(&mesh);
-
-        // Skip any degenerate edge
-        if (edge->isDegenerate()){
-          continue;
-        }
         
         // Get the mesh points corresponding to this curve
         int npts;
         const double *tpts;
         mesh->getMeshPoints(&npts, &tpts, NULL);
-        
+
         // Find the point on the curve
         if (dir[i] > 0){
           for ( int j = 0; j < npts-1; j++ ){
             edge->getParamsOnFace(face, tpts[j], dir[i],
                                   &params[2*pt], &params[2*pt+1]);
-            segments[2*seg] = pt;
-            segments[2*seg+1] = pt+1;
-            seg++;
+            segments[2*pt] = pt;
+            segments[2*pt+1] = pt+1;
+            if (edge->isDegenerate()){
+              degen[2*num_degen] = pt;
+              degen[2*num_degen+1] = pt+1;
+              num_degen++;
+            }
             pt++;
           }
         }
@@ -611,9 +620,13 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
           for ( int j = npts-1; j >= 1; j-- ){
             edge->getParamsOnFace(face, tpts[j], dir[i],
                                   &params[2*pt], &params[2*pt+1]);
-            segments[2*seg] = pt;
-            segments[2*seg+1] = pt+1;
-            seg++;
+            segments[2*pt] = pt;
+            segments[2*pt+1] = pt+1;
+            if (edge->isDegenerate()){
+              degen[2*num_degen] = pt;
+              degen[2*num_degen+1] = pt+1;
+              num_degen++;
+            }
             pt++;
           }
         }
@@ -621,7 +634,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
       // Close off the loop by connecting the segment back to the
       // initial loop point
-      segments[2*(seg-1)+1] = init_loop_pt;
+      segments[2*(pt-1)+1] = init_loop_pt;
 
       // Compute the area enclosed by the loop. If the area is
       // positive, it is the domain boundary. If the area is negative,
@@ -629,7 +642,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       // creating the hole is not self-intersecting. (In reality we
       // compute twice the area since we omit the 1/2 factor.)
       double Area = 0.0;
-      for ( int i = init_loop_seg; i < seg; i++ ){
+      for ( int i = init_loop_pt; i < pt; i++ ){
         int s1 = segments[2*i];
         int s2 = segments[2*i+1];
         const double x1 = params[2*s1];
@@ -643,8 +656,8 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       if (Area < 0.0){
         // This is a hole! Compute an approximate position for the hole.
         // Note that this may not work in all cases so beware.
-        int s1 = segments[2*init_loop_seg];
-        int s2 = segments[2*init_loop_seg+1];
+        int s1 = segments[2*init_loop_pt];
+        int s2 = segments[2*init_loop_pt+1];
         const double x1 = params[2*s1];
         const double y1 = params[2*s1+1];
         const double x2 = params[2*s2];
@@ -670,7 +683,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // the Triangularize class removes the holes from the domain
     // automatically.  The boundary points are guaranteed to be ordered
     // first.
-    num_fixed_pts = total_num_pts;
+    num_fixed_pts = total_num_pts - num_degen;
 
     // Create the triangularization class
     TMRTriangularize *tri = 
@@ -684,11 +697,14 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // Create the mesh using the frontal algorithm
     tri->frontal(htarget);
 
-    // Extract the triangularization of the domain
+    // Free the degenerate triangles and reorder the mesh
+    if (num_degen > 0){
+      tri->removeDegenerateEdges(num_degen, degen);
+    }
+
+    // Extract the triangularization
     int ntris, *tris;
     tri->getMesh(&num_points, &ntris, &tris, &pts, &X);
-
-    // Free the triangle mesh
     tri->decref();
 
     if (ntris > 0){
@@ -720,8 +736,11 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       
       // Free the triangular mesh data
       delete [] tris;
+      delete [] tri_edges;
       delete [] tri_neighbors;
       delete [] dual_edges;
+      delete [] node_to_tri_ptr;
+      delete [] node_to_tris;
 
       // Simplify the new quadrilateral mesh by removing points/quads
       // with poor quality/connectivity
@@ -730,18 +749,18 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       // Simplify a second time (for good measure)
       simplifyQuads();
       
-      int *ptr;
+      int *pts_to_quad_ptr;
       int *pts_to_quads;
       computeNodeToElems(num_points, num_quads, 4, quads, 
-                         &ptr, &pts_to_quads);
+                         &pts_to_quad_ptr, &pts_to_quads);
 
       // Smooth the mesh using a local optimization of node locations
       quadSmoothing(options.num_smoothing_steps, num_fixed_pts,
-                    num_points, ptr, pts_to_quads, num_quads, quads,
-                    pts, X, face);
+                    num_points, pts_to_quad_ptr, pts_to_quads, 
+                    num_quads, quads, pts, X, face);
 
       // Free the connectivity information
-      delete [] ptr;
+      delete [] pts_to_quad_ptr;
       delete [] pts_to_quads;
     }
   }
