@@ -16,11 +16,26 @@ class TMRMeshOptions {
     num_smoothing_steps = 10;
     tri_smoothing_type = LAPLACIAN;
     frontal_quality_factor = 1.5;
+
+    // By default, write nothing to any files
+    write_init_domain_triangle = 0;
+    write_pre_smooth_triangle = 0;
+    write_post_smooth_triangle = 0;
+    write_pre_smooth_quad = 0;
+    write_post_smooth_quad = 0;
   }
 
+  // Options to control the meshing algorithm
   int num_smoothing_steps;
   TriangleSmoothingType tri_smoothing_type;
   double frontal_quality_factor;
+
+  // Write intermediate surface meshes to file
+  int write_init_domain_triangle;
+  int write_pre_smooth_triangle;
+  int write_post_smooth_triangle;
+  int write_pre_smooth_quad;
+  int write_post_smooth_quad;
 };
 
 /*

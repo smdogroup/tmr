@@ -1120,7 +1120,7 @@ void TMRTopology::computeFaceConn( int num_edges, int num_faces,
                                    int **_face_to_face_ptr,
                                    int **_face_to_face ){
   // The edge to face pointer information
-  int *edge_to_face_ptr = new int[ num_edges ];
+  int *edge_to_face_ptr = new int[ num_edges+1 ];
   int *edge_to_face = new int[ 4*num_faces ];
   memset(edge_to_face_ptr, 0, (num_edges+1)*sizeof(int));
   for ( int i = 0; i < num_faces; i++ ){

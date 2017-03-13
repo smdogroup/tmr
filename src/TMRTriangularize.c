@@ -489,17 +489,10 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   buckets = new EdgeHashNode*[ num_buckets ];
   memset(buckets, 0, num_buckets*sizeof(EdgeHashNode*));
 
-  // Allocate and initialize/zero the hash table data for the edges
-  num_active_triangles = 0;
-  num_active_buckets = 100;
-  active_buckets = new ActiveHashNode*[ num_active_buckets ];
-  memset(active_buckets, 0, num_active_buckets*sizeof(ActiveHashNode*));
-
   // Set the initial root/current location of the doubly-linked
   // triangle list structure. These are allocated as we add new triangles.
   list_start = NULL;
   list_end = NULL;
-  list_marker = NULL;
 
   // Keep track of the total number of triangles
   num_triangles = 0;
@@ -546,10 +539,11 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
 
   // Re-adjust the domain boundary to ensure that it is sufficiently
   // large
-  domain.xhigh += 1.0;
-  domain.xlow -= 1.0;
-  domain.yhigh += 1.0;
-  domain.ylow -= 1.0;
+  double small = 1e-3;
+  domain.xhigh += small;
+  domain.xlow -= small;
+  domain.yhigh += small;
+  domain.ylow -= small;
 
   // Allocate the new root mode
   root = new TMRQuadNode(&domain);
@@ -604,7 +598,8 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // a PSLG edge. These triangles will be deleted.
   TriListNode *node = list_start;
   while (node){
-    if (node->tri.tag == 0 && 
+    if (node->tri.status != DELETE_ME &&
+        node->tri.tag == 0 && 
         ((node->tri.u < FIXED_POINT_OFFSET ||
           node->tri.v < FIXED_POINT_OFFSET ||
           node->tri.w < FIXED_POINT_OFFSET) ||
@@ -616,22 +611,17 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
     node = node->next;
   }
 
-  // Free the triangles that we've found
-  list_marker = NULL;
+  // Free the triangles that have been tagged
   node = list_start;
   while (node){
-    // Keep track of what node will be next, since we may be deleting
-    // 'node' itself, we cannot access this pointer afterwards
-    TriListNode *tmp = node->next;
-
-    // Delete the triangle from the triangle list
     if (node->tri.tag == 1){
       deleteTriangle(node->tri);
     }
-
-    // Set the next node
-    node = tmp;
+    node = node->next;
   }
+
+  // Free the trianlges marked for deletion from the list
+  deleteTrianglesFromList();
 
   // Free the points and holes from the quadtree
   for ( uint32_t num = 0; num < FIXED_POINT_OFFSET; num++ ){
@@ -679,16 +669,6 @@ TMRTriangularize::~TMRTriangularize(){
     EdgeHashNode *node = buckets[i];
     while (node){
       EdgeHashNode *tmp = node;
-      node = node->next;
-      delete tmp;
-    }
-  }
-
-  // Free the data for the active triangles
-  for ( int i = 0; i < num_active_buckets; i++ ){
-    ActiveHashNode *node = active_buckets[i];
-    while (node){
-      ActiveHashNode *tmp = node;
       node = node->next;
       delete tmp;
     }
@@ -760,49 +740,8 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
       }
     }
 
-    // Keep track of the pairs of points that will be combined
-    // together since the degenerate edges collapse to a single point
-    for ( int i = 0; i < num_degen; i++ ){
-      // Flip the points such that the smaller node number 
-      // always comes first in the list
-      if (degen[2*i+1] < degen[2*i]){
-        int tmp = degen[2*i];
-        degen[2*i] = degen[2*i+1];
-        degen[2*i+1] = tmp;
-      }
-    }
-
-    // Sort the list - this sorts based on just the lower node number
-    qsort(degen, num_degen, 2*sizeof(int), compare_degen_edges);
-
-    // Construct the new ordering
-    uint32_t *new_from_old = new uint32_t[ num_points ];
-    memset(new_from_old, 0, num_points*sizeof(uint32_t));
-    uint32_t j = 1;
-    for ( uint32_t i = 0, k = 0; i < num_points; i++ ){
-      if (k < num_degen && i == degen[2*k]){
-        new_from_old[i] = j;
-        new_from_old[degen[2*k+1]] = j;
-        j++; k++;
-      }
-      else if (new_from_old[i] == 0){
-        new_from_old[i] = j;
-        j++;
-      }
-    }
-
-    // Reset the ordering of the triangles
-    TriListNode *node = list_start;
-    while (node){
-      node->tri.u = new_from_old[node->tri.u]-1;
-      node->tri.v = new_from_old[node->tri.v]-1;
-      node->tri.w = new_from_old[node->tri.w]-1;
-      node = node->next;
-    }
-
-    // Reset the number of nodes since we removed degenerate points
-    num_points = num_points - num_degen;
-    delete [] new_from_old;
+    // Free the deleted triangles from the list
+    deleteTrianglesFromList();
   }
 }
 
@@ -905,7 +844,9 @@ void TMRTriangularize::writeToVTK( const char *filename ){
 
     TriListNode *node = list_start;
     while (node){
-      fprintf(fp, "3 %d %d %d\n", node->tri.u, node->tri.v, node->tri.w);
+      if (node->tri.status != DELETE_ME){
+        fprintf(fp, "3 %d %d %d\n", node->tri.u, node->tri.v, node->tri.w);
+      }
       node = node->next;
     }
 
@@ -921,7 +862,10 @@ void TMRTriangularize::writeToVTK( const char *filename ){
     fprintf(fp, "LOOKUP_TABLE default\n");
     node = list_start;
     while (node){
-      fprintf(fp, "%d\n", node->tri.status);
+      if (node->tri.status != DELETE_ME){
+        // fprintf(fp, "%d\n", node->tri.status);
+        fprintf(fp, "%d\n", node->tri.tag);
+      }
       node = node->next;
     }
 
@@ -934,6 +878,45 @@ void TMRTriangularize::writeToVTK( const char *filename ){
 */
 inline uint32_t TMRTriangularize::getEdgeHash( uint32_t x, uint32_t y ){
   return TMRIntegerPairHash(x, y);
+}
+
+/*
+  Remove/delete the deleted triangles from the list
+*/
+void TMRTriangularize::deleteTrianglesFromList(){
+  TriListNode *ptr = list_start;
+  while (ptr){
+    TriListNode *next = ptr->next;
+
+    if (ptr->tri.status == DELETE_ME){
+      if (ptr == list_start){
+        list_start = next;
+        if (list_start){
+          list_start->prev = NULL;
+        }
+      }
+      else {
+        // Set the pointers from the previous and next objects in the
+        // list so that they point past the ptr member
+        if (ptr->prev){
+          ptr->prev->next = ptr->next;
+        }
+        if (ptr->next){
+          ptr->next->prev = ptr->prev;
+        }
+      }
+
+      delete ptr;
+    }
+
+    ptr = next;
+  }
+
+  // Point the list back to the end of the list
+  list_end = list_start;
+  while (list_end && list_end->next){
+    list_end = list_end->next;
+  }
 }
 
 /*
@@ -1000,33 +983,17 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
         uint32_t value = getEdgeHash(node->u, node->v);
         uint32_t bucket = value % num_buckets;
         
-        // If the new bucket linked list does not exist
+        // If the new bucket linked list does not exist, create a new
+        // one and set the end_buckets pointer
         if (!new_buckets[bucket]){
-          new_buckets[bucket] = new EdgeHashNode();
-          new_buckets[bucket]->next = NULL;
-          new_buckets[bucket]->u = node->u;
-          new_buckets[bucket]->v = node->v;
-          new_buckets[bucket]->tri_node = node->tri_node;
-          delete node;
-
+          new_buckets[bucket] = node;
+          node->next = NULL;
           end_buckets[bucket] = new_buckets[bucket];
-
-          // new_buckets[bucket] = node;
-          // node->next = NULL;
-          // end_buckets[bucket] = new_buckets[bucket];
         }
         else {
-          end_buckets[bucket]->next = new EdgeHashNode();
+          end_buckets[bucket]->next = node;
           end_buckets[bucket] = end_buckets[bucket]->next;
-          end_buckets[bucket]->next = NULL;
-          end_buckets[bucket]->u = node->u;
-          end_buckets[bucket]->v = node->v;
-          end_buckets[bucket]->tri_node = node->tri_node;
-          delete node;
-
-          // end_buckets[bucket]->next = node;
-          // end_buckets[bucket] = end_buckets[bucket]->next;
-          // node->next = NULL;
+          node->next = NULL;
         }
         
         node = tmp;
@@ -1061,14 +1028,14 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
       num_hash_nodes++;
     }
     else {
-      // Scan through to the end of the array and set the pointer to
-      // the triangle node that contains the 
+      // Scan through to the end of the array and determine if the
+      // edge exists in the hash table already or not
       EdgeHashNode *node = buckets[bucket];
       while (node){
-        // Check whether the edge is already in the hash table
+        // The edge already exists -- overwrite it
         if (node->u == u && node->v == v){
-          // The edge already exists, it was overwritten, but we'll
-          // call this a failure...
+          // The edge already exists, it will be overwritten, but
+          // we'll call this a failure...
           success = 0;
 
           // Overwite the triangle
@@ -1111,17 +1078,14 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
 }
 
 /*
-  Delete a triangle from the mesh
+  Delete the triangle from the mesh. 
+
+  This deletes the triangle from the hash table but not the list.
 */
 int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
   // Keep track of whether we successfully delete all of the edges, or
-  // just some of the edges (1 or 2 out of 3 is bad!)
+  // just some of the edges (deleting only 1 or 2 out of 3 is bad!)
   int success = 1;
-
-  // Delete the triangle if the status is active
-  if (tri.status == ACTIVE){
-    deleteActiveTriangle(&tri);
-  }
 
   // Set the combinations of edge pairs that will be added
   // to the hash table
@@ -1132,7 +1096,7 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
   // Keep track if this is the first edge we find
   int first = 1;
   
-  // Add the triangle to the hash table
+  // Remove the triangle from the hash table
   for ( int k = 0; k < 3; k++ ){
     // Add a hash for each pair of edges around the triangle
     uint32_t u = edge_pairs[k][0];
@@ -1153,44 +1117,15 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
         // If this is the first edge we've found, delete the
         // corresponding list entry as well.
         if (first){
-          // This triangle will be successfully deleted, adjust the
-          // triangle count
+          // This triangle will be deleted. Adjust the triangle
+          // count to reflect this
           num_triangles--;
 
-          // Adjust the double linking so that when the node is
-          // deleted, the pointers will still work
-          TriListNode *ptr = node->tri_node;
-          if (ptr == list_start){
-            list_start = list_start->next;
-            if (list_start){
-              list_start->prev = NULL;
-            }
-          }
-          else if (ptr == list_end){
-            list_end = list_end->prev;
-            if (list_end){
-              list_end->next = NULL;
-            }
-          }
-          else {
-            // Set the pointers from the previous and next objects
-            // in the list so that they point past the ptr member
-            if (ptr->prev){
-              ptr->prev->next = ptr->next;
-            }
-            if (ptr->next){
-              ptr->next->prev = ptr->prev;
-            }
-          }
+          // Mark the triangle in the edge list so that it is
+          // 'deleted'. The memory is not freed at this point.
+          node->tri_node->tri.status = DELETE_ME;
 
-          // Adjust the list marker if we're about to delete the
-          // triangle that the marker points to. Move the marker one
-          // triangle back (or set it to NULL if it's the beginning of
-          // the list)
-          if (list_marker && ptr == list_marker){
-            list_marker = ptr->prev;
-          }
-          delete ptr;
+          // We've already encountered this triangle once.
           first = 0;
         }
 
@@ -1226,165 +1161,6 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
 */
 inline uint32_t TMRTriangularize::getTriangleHash( TMRTriangle *tri ){
   return TMRIntegerTripletHash(tri->u, tri->v, tri->w);
-}
-
-/*
-  Add a triangle to the mesh
-*/
-int TMRTriangularize::addActiveTriangle( TMRTriangle *tri ){
-  int success = 1;
-
-  // Redistribute the members in the hash table if required
-  if (num_active_triangles > 10*num_active_buckets){
-    // Create a new array of buckets, twice the size of the old array
-    // of buckets and re-insert the entries back into the new array
-    int num_old_buckets = num_active_buckets;
-    num_active_buckets *= 2;
-
-    // Create a new array pointing to the new buckets and the
-    // end of the bucket array
-    ActiveHashNode **new_buckets = new ActiveHashNode*[ num_active_buckets ];
-    ActiveHashNode **end_buckets = new ActiveHashNode*[ num_active_buckets ];
-    memset(new_buckets, 0, num_active_buckets*sizeof(ActiveHashNode*));
-    memset(end_buckets, 0, num_active_buckets*sizeof(ActiveHashNode*));
-
-    // Assign the new buckets
-    for ( int i = 0; i < num_old_buckets; i++ ){
-      ActiveHashNode *node = active_buckets[i];
-
-      while (node){
-        // Get the new hash values
-        ActiveHashNode *tmp = node->next;
-        uint32_t value = getTriangleHash(node->tri);
-        uint32_t bucket = value % num_active_buckets;
-        
-        // If the new bucket linked list does not exist
-        if (!new_buckets[bucket]){
-          new_buckets[bucket] = new ActiveHashNode();
-          new_buckets[bucket]->next = NULL;
-          new_buckets[bucket]->tri = node->tri;
-          delete node;
-          end_buckets[bucket] = new_buckets[bucket];
-        }
-        else {
-          end_buckets[bucket]->next = new ActiveHashNode();
-          end_buckets[bucket] = end_buckets[bucket]->next;
-          end_buckets[bucket]->next = NULL;
-          end_buckets[bucket]->tri = node->tri;
-          delete node;
-        }
-        
-        node = tmp;
-      }
-    }
-
-    delete [] end_buckets;
-    delete [] active_buckets;
-    active_buckets = new_buckets;
-  }
-
-  // Add the triangle to the hash table
-  uint32_t value = getTriangleHash(tri);
-  uint32_t bucket = value % num_active_buckets;
-  if (!active_buckets[bucket]){
-    // Create the node and assign the values
-    active_buckets[bucket] = new ActiveHashNode();
-    active_buckets[bucket]->tri = tri;
-    active_buckets[bucket]->next = NULL;
-
-    // Increase the number of active triangles
-    num_active_triangles++;
-  }
-  else {
-    // Scan through to the end of the array and set the pointer to
-    // the triangle node that contains the 
-    ActiveHashNode *node = active_buckets[bucket];
-    while (node){
-      // Check whether the edge is already in the hash table
-      if (node->tri->u == tri->u && 
-          node->tri->v == tri->v && 
-          node->tri->w == tri->w){
-        // The triangle already exists. Replace the pointer
-        // and quit. Call this a failure...
-        success = 0;
-
-        // Overwite the triangle
-        node->tri = tri;
-
-        // Set the pointer to NULL so that the new node will not be
-        // created
-        node = NULL;
-        break;
-      }
-
-      // If the next node does not exist, then break 
-      if (!node->next){
-        break;
-      }
-
-      // Increment the node to the next position
-      node = node->next;
-    }
-
-    if (node){
-      // Create the new hash node
-      node->next = new ActiveHashNode();
-      node = node->next;
-
-      // Set the data into the object
-      node->tri = tri;
-      node->next = NULL;
-
-      // Increase the number of active triangles
-      num_active_triangles++;
-    }
-    else {
-      success = 0;
-    }
-  }
-
-  return success;
-}
-
-/*
-  Delete a triangle from the mesh
-*/
-int TMRTriangularize::deleteActiveTriangle( TMRTriangle *tri ){
-  int success = 1;
-
-  // Get the hash values and access the first entry of the bucket
-  // it's listed under
-  uint32_t value = getTriangleHash(tri);
-  uint32_t bucket = value % num_active_buckets;
-  ActiveHashNode *node = active_buckets[bucket];
-  ActiveHashNode *prev = node;
-  
-  while (node){
-    // The edge matches, we have to delete this triangle
-    if (tri->u == node->tri->u && 
-        tri->v == node->tri->v && 
-        tri->w == node->tri->w){
-      // Delete the edge from the hash table
-      if (node == prev){
-        active_buckets[bucket] = node->next;
-        delete node;
-        num_active_triangles--;
-      }
-      else {
-        prev->next = node->next;
-        delete node;
-        num_active_triangles--;
-      }
-
-      success = 1;
-      break;
-    }
-
-    prev = node;
-    node = node->next;
-  }
-
-  return success;
 }
 
 /*
@@ -1476,7 +1252,7 @@ inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
                                           uint32_t w, uint32_t x ){
 
   if (face){
-    // Compute the mid-point of the triangle
+    // Compute the parametric mid-point of the triangle
     double mpt[2];
     const double frac = 1.0/3.0;
     mpt[0] = frac*(pts[2*u] + pts[2*v] + pts[2*w]);
@@ -1774,8 +1550,7 @@ double TMRTriangularize::computeIntersection( const double m[],
 
   // If the line from u to w was orthogonal to the e direction in the
   // previous case, it cannot be orthogonal in this case and still
-  // form a triangle. No check is performed here, but perhaps it
-  // should be.
+  // form a triangle.
   a12 = pts[2*v] - pts[2*w];
   a22 = pts[2*v+1] - pts[2*w+1];
   det = a11*a22 - a12*a21;
@@ -1925,9 +1700,8 @@ double TMRTriangularize::computeCircumcircle( TMRTriangle *tri ){
 }
 
 /*
-  Perform a frontal mesh generation algorithm and simultaneously
-  create a constrained Delaunay triangularization of the generated
-  mesh.
+  Perform a frontal mesh generation algorithm to create a constrained
+  Delaunay triangularization of the generated mesh.
 
   The Delaunay triangularization based on the Bowyer-Watson mesh
   generation algorithm. The frontal mesh generation technique is based
@@ -1938,29 +1712,34 @@ void TMRTriangularize::frontal( double h ){
   const double sqrt3 = sqrt(3.0);
   const double de = 0.5*sqrt3*h;
 
+  // The queue of active (and sometimes deleted) triangles
+  TriQueue active;
+
   // Add the triangles to the active set that 
   TriListNode *node = list_start;
   while (node){
-    // Set the status by default as waiting
-    node->tri.status = WAITING;
+    if (node->tri.status != DELETE_ME){
+      // Set the status by default as waiting
+      node->tri.status = WAITING;
     
-    // Compute the 'quality' indicator for this triangle
-    double hval = sqrt3*computeCircumcircle(&node->tri);
-    node->tri.quality = hval;
-    if (hval < frontal_quality_factor*h){
-      node->tri.status = ACCEPTED;
-    }
-    else {
-      // If any of the triangles touches an edge in the planar
-      // straight line graph, change it to a waiting triangle
-      uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
-                                  {node->tri.v, node->tri.w},
-                                  {node->tri.w, node->tri.u}};
-      for ( int k = 0; k < 3; k++ ){
-        if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
-          node->tri.status = ACTIVE;
-          addActiveTriangle(&node->tri);
-          break;
+      // Compute the 'quality' indicator for this triangle
+      double hval = sqrt3*computeCircumcircle(&node->tri);
+      node->tri.quality = hval;
+      if (hval < frontal_quality_factor*h){
+        node->tri.status = ACCEPTED;
+      }
+      else {
+        // If any of the triangles touches an edge in the planar
+        // straight line graph, change it to a waiting triangle
+        uint32_t edge_pairs[][2] = {{node->tri.u, node->tri.v},
+                                    {node->tri.v, node->tri.w},
+                                    {node->tri.w, node->tri.u}};
+        for ( int k = 0; k < 3; k++ ){
+          if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
+            node->tri.status = ACTIVE;
+            active.append(&node->tri);
+            break;
+          }
         }
       }
     }
@@ -1985,7 +1764,7 @@ void TMRTriangularize::frontal( double h ){
         completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
         if (adjacent && adjacent->status == WAITING){
           node->tri.status = ACTIVE;
-          addActiveTriangle(&node->tri);
+          active.append(&node->tri);
           break;
         }
       }
@@ -2000,37 +1779,26 @@ void TMRTriangularize::frontal( double h ){
   int iter = 0;
   while (1){
     if (iter % 1000 == 0){
-      printf("%10d %10d %10d\n",
-             iter, num_triangles, num_active_triangles);
+      printf("%10d %10d %10d\n", iter, num_triangles, active.size);
     }
     iter++;
 
     // The pointer to the triangle that we're going to use next
     TMRTriangle *tri = NULL;
 
-    // Search through all active nodes
-    for ( int i = 0; i < num_active_buckets; i++ ){
-      ActiveHashNode *act = active_buckets[i];
-      while (act){
-        if (!tri){
-          tri = act->tri;
-        }
-        else if (act->tri->quality > tri->quality){
-          tri = act->tri;
-        }
-
-        // Increment the active node pointer
-        act = act->next;
+    // Find the first active triangle that is not marked to be deleted
+    while (active.size > 0 && !tri){
+      tri = active.pop();
+      if (tri->status != ACTIVE){
+        tri = NULL;
       }
     }
 
-    // We've failed to find any triangle in the active set of
-    // triangles
+    // We've failed to find any active triangle. We're done
     if (!tri){
       break;
     }   
 
-    // Now insert a new point based on the Voronoi criteria.
     int found = 0;
     uint32_t u = 0, v = 0;
     uint32_t edge_pairs[][2] = {{tri->u, tri->v},
@@ -2131,7 +1899,7 @@ void TMRTriangularize::frontal( double h ){
       e[0] = 0.5*e[0]/p;
       e[1] = 0.5*e[1]/p;
       
-      // Compute the new optimal point
+      // Compute the new point
       pt[0] = m[0] + de*e[0];
       pt[1] = m[1] + de*e[1];
     }
@@ -2175,7 +1943,7 @@ void TMRTriangularize::frontal( double h ){
     }
   
     // Set the pointer to the last member in the list
-    list_marker = list_end; 
+    TriListNode *list_marker = list_end; 
     addPointToMesh(pt, pt_tri);
     pt_tri = NULL;
 
@@ -2200,9 +1968,6 @@ void TMRTriangularize::frontal( double h ){
     // Complete me with the newly created triangle with the
     completeMe(u, v, &pt_tri);
     if (pt_tri){
-      if (pt_tri->status == ACTIVE){
-        deleteActiveTriangle(pt_tri);
-      }
       pt_tri->status = ACCEPTED;
     }
 
@@ -2227,7 +1992,7 @@ void TMRTriangularize::frontal( double h ){
         for ( int k = 0; k < 3; k++ ){
           if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
             ptr->tri.status = ACTIVE;
-            addActiveTriangle(&ptr->tri);
+            active.append(&ptr->tri);
             flag = 1;
             break;
           }
@@ -2241,7 +2006,7 @@ void TMRTriangularize::frontal( double h ){
             completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
             if (adjacent && adjacent->status == ACCEPTED){
               ptr->tri.status = ACTIVE;
-              addActiveTriangle(&ptr->tri);
+              active.append(&ptr->tri);
               break;
             }
           }
@@ -2253,6 +2018,8 @@ void TMRTriangularize::frontal( double h ){
     }
   }
 
-  printf("%10d %10d %10d\n",
-         iter, num_triangles, num_active_triangles);
+  printf("%10d %10d\n", iter, num_triangles);
+
+  // Free the deleted trianlges from the doubly linked list
+  deleteTrianglesFromList();
 }

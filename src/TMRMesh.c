@@ -552,7 +552,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     }
 
     // The number of holes is equal to the number of loops-1. One loop
-    // bounds the domain, the other loops cut out holes in the domain. 
+    // bounds the domain, the other loops cut out holes in the domain.
     // Note that the domain must be contiguous.
     int nholes = nloops-1;
 
@@ -679,10 +679,10 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     }
 
     // Set the total number of fixed points. These are the points that
-    // will not be smoothed and constitute the boundary nodes. Note that
-    // the Triangularize class removes the holes from the domain
-    // automatically.  The boundary points are guaranteed to be ordered
-    // first.
+    // will not be smoothed and constitute the boundary nodes. Note
+    // that the Triangularize class removes the holes from the domain
+    // automatically.  The boundary points are guaranteed to be
+    // ordered first.
     num_fixed_pts = total_num_pts - num_degen;
 
     // Create the triangularization class
@@ -694,12 +694,26 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // Set the frontal quality factor
     tri->setFrontalQualityFactor(options.frontal_quality_factor);
 
+    if (options.write_init_domain_triangle){
+      char filename[256];
+      sprintf(filename, "init_domain_triangle%d.vtk",
+              face->getEntityId());
+      tri->writeToVTK(filename);
+    }
+
     // Create the mesh using the frontal algorithm
     tri->frontal(htarget);
 
     // Free the degenerate triangles and reorder the mesh
     if (num_degen > 0){
       tri->removeDegenerateEdges(num_degen, degen);
+    }
+
+    if (options.write_pre_smooth_triangle){
+      char filename[256];
+      sprintf(filename, "pre_smooth_triangle%d.vtk", 
+              face->getEntityId());
+      tri->writeToVTK(filename);
     }
 
     // Extract the triangularization
@@ -725,15 +739,30 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       }
       else {
         double alpha = 0.1;
-        springSmoothing(options.num_smoothing_steps, alpha, num_fixed_pts,
-                        num_tri_edges, tri_edges,
+        springSmoothing(options.num_smoothing_steps, alpha, 
+                        num_fixed_pts, num_tri_edges, tri_edges,
                         num_points, pts, X, face);
       }
 
+      if (options.write_post_smooth_triangle){
+        char filename[256];
+        sprintf(filename, "post_smooth_triangle%d.vtk",
+                face->getEntityId());
+        writeTrisToVTK(filename, ntris, tris);
+      }
+
       // Recombine the mesh into a quadrilateral mesh
-      recombine(ntris, tris, tri_neighbors, node_to_tri_ptr, node_to_tris,
+      recombine(ntris, tris, tri_neighbors, 
+                node_to_tri_ptr, node_to_tris,
                 num_tri_edges, dual_edges, &num_quads, &quads);
-      
+
+      if (options.write_pre_smooth_quad){
+        char filename[256];
+        sprintf(filename, "pre_smooth_quad%d.vtk",
+                face->getEntityId());
+        writeToVTK(filename);
+      }
+
       // Free the triangular mesh data
       delete [] tris;
       delete [] tri_edges;
@@ -762,6 +791,13 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       // Free the connectivity information
       delete [] pts_to_quad_ptr;
       delete [] pts_to_quads;
+
+      if (options.write_post_smooth_quad){
+        char filename[256];
+        sprintf(filename, "post_smooth_quad%d.vtk",
+                face->getEntityId());
+        writeToVTK(filename);
+      }
     }
   }
 

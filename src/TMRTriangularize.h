@@ -167,16 +167,15 @@ class TMRTriangularize : public TMREntity {
   // Get a hash value for the given edge
   inline uint32_t getEdgeHash( uint32_t u, uint32_t v );
 
+  // Delete the triangles marked for deletion
+  void deleteTrianglesFromList();
+
   // Add/delete a triangle from the data structure
   int addTriangle( TMRTriangle tri );
   int deleteTriangle( TMRTriangle tri );
 
   // Get a hash value for the given triangle
   inline uint32_t getTriangleHash( TMRTriangle *tri );              
-
-  // Add/delete triangles from the active set of triangles
-  int addActiveTriangle( TMRTriangle *tri );
-  int deleteActiveTriangle( TMRTriangle *tri );
 
   // Mark all the triangles in the list
   void setTriangleTags( uint32_t tag );
@@ -217,10 +216,6 @@ class TMRTriangularize : public TMREntity {
   // Initial number of boundary points
   uint32_t init_boundary_points;
 
-  // Offset to the points that will be removed from the mesh
-  // these are the original background mesh and the holes
-  uint32_t fixed_point_offset; 
-
   // Keep track of the points
   uint32_t num_points; // The current number of points
   uint32_t max_num_points; // The maximum number of points
@@ -249,7 +244,6 @@ class TMRTriangularize : public TMREntity {
 
   // Keep track of the current set of triangles
   TriListNode *list_start, *list_end;
-  TriListNode *list_marker;
 
   // Keep track of the number of triangles
   uint32_t num_triangles;
@@ -271,21 +265,6 @@ class TMRTriangularize : public TMREntity {
   // The number of buckets
   int num_buckets;
   int num_hash_nodes;
-
-  // Keep a hash table for the active triangles. This hash is based on the
-  // nodes in the triangle. 
-  class ActiveHashNode {
-  public:
-    TMRTriangle *tri;
-    ActiveHashNode *next;
-  };
-
-  // Active hash buckets
-  ActiveHashNode **active_buckets;
-
-  // The number of active buckets/triangles
-  int num_active_buckets;
-  int num_active_triangles;
 };
 
 #endif // TRIANGULARIZE_H

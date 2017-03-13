@@ -339,7 +339,10 @@ int main( int argc, char *argv[] ){
     // Allocate the new mesh
     TMRMesh *mesh = new TMRMesh(comm, geo);
     mesh->incref();
-    mesh->mesh(htarget);
+    
+    TMRMeshOptions options;
+    options.frontal_quality_factor = 1.25;
+    mesh->mesh(options, htarget);
     mesh->writeToVTK("cylinder-mesh.vtk");
 
     TMRModel *model = mesh->createModelFromMesh();
@@ -409,7 +412,8 @@ int main( int argc, char *argv[] ){
       int mg_sor_iters = 1;
       int mg_sor_symm = 1;
       int mg_iters_per_level = 1;
-      TACSMg *mg = new TACSMg(comm, num_levels, omega, mg_sor_iters, mg_sor_symm);
+      TACSMg *mg = new TACSMg(comm, num_levels, omega, 
+                              mg_sor_iters, mg_sor_symm);
       mg->incref();
 
       for ( int level = 0; level < num_levels; level++ ){
@@ -429,7 +433,7 @@ int main( int argc, char *argv[] ){
 
       // Assemble the matrix
       mg->assembleJacobian(1.0, 0.0, 0.0, res);
-      mg->factor();    
+      mg->factor();
     
       // Set up the solver
       int gmres_iters = 100; 

@@ -998,7 +998,7 @@ void TMRQuadForest::refine( const int refinement[],
   if (adjacent){ delete adjacent; }
   if (nodes){ delete nodes; } 
   if (dep_edges){ delete dep_edges; }
-  if (X){ delete X; }
+  if (X){ delete [] X; }
   adjacent = NULL;
   nodes = NULL;
   dep_edges = NULL;
