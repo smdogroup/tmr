@@ -178,6 +178,9 @@ class TMRMesh : public TMREntity {
   // Write the mesh to a VTK file
   void writeToVTK( const char *filename );
 
+  // Write the mesh to a BDF file
+  void writeToBDF( const char *filename );
+
   // Retrieve the mesh components
   int getMeshPoints( TMRPoint **_X );
   int getMeshConnectivity( const int **_quads );
