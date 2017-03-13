@@ -733,8 +733,10 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
                                               int degen[] ){
   if (num_degen > 0){
     for ( int i = 0; i < num_degen; i++ ){
-      uint32_t u = degen[2*i] + FIXED_POINT_OFFSET;
-      uint32_t v = degen[2*i+1] + FIXED_POINT_OFFSET;
+      degen[2*i] += FIXED_POINT_OFFSET;
+      degen[2*i+1] += FIXED_POINT_OFFSET;
+      uint32_t u = degen[2*i];
+      uint32_t v = degen[2*i+1];
 
       // Keep track of whether we actually delete a triangle. If not,
       // we may run into problems so we report an error.
@@ -776,8 +778,9 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
     // Construct the new ordering
     uint32_t *new_from_old = new uint32_t[ num_points ];
     memset(new_from_old, 0, num_points*sizeof(uint32_t));
-    for ( uint32_t i = 0, j = 0, k = 0; i < num_points; i++ ){
-      if (i == degen[2*k]){
+    uint32_t j = 1;
+    for ( uint32_t i = 0, k = 0; i < num_points; i++ ){
+      if (k < num_degen && i == degen[2*k]){
         new_from_old[i] = j;
         new_from_old[degen[2*k+1]] = j;
         j++; k++;
@@ -791,9 +794,9 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
     // Reset the ordering of the triangles
     TriListNode *node = list_start;
     while (node){
-      node->tri.u = new_from_old[node->tri.u];
-      node->tri.v = new_from_old[node->tri.v];
-      node->tri.w = new_from_old[node->tri.w];
+      node->tri.u = new_from_old[node->tri.u]-1;
+      node->tri.v = new_from_old[node->tri.v]-1;
+      node->tri.w = new_from_old[node->tri.w]-1;
       node = node->next;
     }
 
@@ -2075,8 +2078,14 @@ void TMRTriangularize::frontal( double h ){
 
     double pt[2];
     if (face){
+      // Evaluate the metric at the center of the active triangle
+      const double frac = 1.0/3.0;
+      double U = frac*(pts[2*tri->u] + pts[2*tri->v] + pts[2*tri->w]);
+      double V = frac*(pts[2*tri->u+1] + pts[2*tri->v+1] + pts[2*tri->w+1]);
+
+      // Get the derivatives of the surface
       TMRPoint Xu, Xv;
-      face->evalDeriv(m[0], m[1], &Xu, &Xv);
+      face->evalDeriv(U, V, &Xu, &Xv);
 
       // Compute the metric tensor components
       double g11 = Xu.dot(Xu);
