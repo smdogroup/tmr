@@ -644,19 +644,58 @@ void TMRFace::writeToVTK( const char *filename ){
 }
 
 /*
+  Container for faces bounding a volume
+*/
+TMRVolume::TMRVolume( int nfaces, TMRFace **_faces ){
+  num_faces = nfaces;
+  faces = new TMRFace*[ num_faces ];
+  for ( int i = 0; i < num_faces; i++ ){
+    faces[i] = _faces[i];
+    faces[i]->incref();
+  }
+}
+
+/*
+  Free the volume object
+*/
+TMRVolume::~TMRVolume(){
+  for ( int i = 0; i < num_faces; i++ ){
+    faces[i]->decref();
+  }
+  delete [] faces;
+}
+
+/*
+  Given the parametric point u,v,w compute the physical location x,y,z
+*/
+int TMRVolume::evalPoint( double u, double v, double w, TMRPoint *X ){
+  X->zero();
+  return 1;
+}
+
+// Get the faces that enclose this volume
+void TMRVolume::getFaces( int *_num_faces, TMRFace ***_faces ){
+  if (_num_faces){ *_num_faces = num_faces; }
+  if (_faces){ *_faces = faces; }
+}
+
+/*
   The TMRModel class containing all of the required geometry
   objects.
 */
 TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices, 
                     int _num_edges, TMREdge **_edges,
-                    int _num_faces, TMRFace **_faces ){
+                    int _num_faces, TMRFace **_faces,
+                    int _num_volumes, TMRVolume **_volumes ){
   num_vertices = _num_vertices;
   num_edges = _num_edges;
   num_faces = _num_faces;
+  num_volumes = _num_volumes;
 
   vertices = new TMRVertex*[ num_vertices ];
   edges = new TMREdge*[ num_edges ];
   faces = new TMRFace*[ num_faces ];
+  volumes = new TMRVolume*[ num_volumes ];
 
   for ( int i = 0; i < num_vertices; i++ ){
     vertices[i] = _vertices[i];
@@ -672,10 +711,16 @@ TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
     faces[i] = _faces[i];
     faces[i]->incref();
   }
+  
+  for ( int i = 0; i < num_volumes; i++ ){
+    volumes[i] = _volumes[i];
+    volumes[i]->incref();
+  }
 
   ordered_verts = new OrderedPair<TMRVertex>[ num_vertices ];
   ordered_edges = new OrderedPair<TMREdge>[ num_edges ];
   ordered_faces = new OrderedPair<TMRFace>[ num_faces ];
+  ordered_volumes = new OrderedPair<TMRVolume>[ num_volumes ];
 
   for ( int i = 0; i < num_vertices; i++ ){
     ordered_verts[i].num = i;
@@ -692,6 +737,11 @@ TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
     ordered_faces[i].obj = faces[i];
   }
 
+  for ( int i = 0; i < num_volumes; i++ ){
+    ordered_volumes[i].num = i;
+    ordered_volumes[i].obj = volumes[i];
+  }
+
   // Sort the vertices, curves and surfaces
   qsort(ordered_verts, num_vertices, sizeof(OrderedPair<TMRVertex>),
         compare_ordered_pairs<TMRVertex>);
@@ -699,7 +749,10 @@ TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
         compare_ordered_pairs<TMREdge>);
   qsort(ordered_faces, num_faces, sizeof(OrderedPair<TMRFace>),
         compare_ordered_pairs<TMRFace>);
+  qsort(ordered_volumes, num_volumes, sizeof(OrderedPair<TMRVolume>),
+        compare_ordered_pairs<TMRVolume>);
 
+  // Verify the edges/edge loops
   verify();
 }
 
@@ -716,12 +769,17 @@ TMRModel::~TMRModel(){
   for ( int i = 0; i < num_faces; i++ ){
     faces[i]->decref();
   }
+  for ( int i = 0; i < num_volumes; i++ ){
+    volumes[i]->decref();
+  }
   delete [] vertices;
   delete [] edges;
   delete [] faces;
+  delete [] volumes;
   delete [] ordered_verts;
   delete [] ordered_edges;
   delete [] ordered_faces;
+  delete [] ordered_volumes;
 }
 
 /*
@@ -835,6 +893,15 @@ void TMRModel::getFaces( int *_num_faces,
 }
 
 /*
+  Retrieve the volumes
+*/
+void TMRModel::getVolumes( int *_num_volumes,
+                           TMRVolume ***_volumes ){
+  if (_num_volumes){ *_num_volumes = num_volumes; }
+  if (_volumes){ *_volumes = volumes; }
+}
+
+/*
   Static member function for sorting the ordered pairs
 */
 template <class ctype>
@@ -903,6 +970,26 @@ int TMRModel::getFaceIndex( TMRFace *face ){
 }
 
 /*
+  Retrieve the index given the pointer to the volume
+*/
+int TMRModel::getVolumeIndex( TMRVolume *volume ){
+  OrderedPair<TMRVolume> pair;
+  pair.num = -1;
+  pair.obj = volume;
+
+  // Search for the ordered pair
+  OrderedPair<TMRVolume> *item = 
+    (OrderedPair<TMRVolume>*)bsearch(&pair, ordered_volumes, num_volumes,
+                                     sizeof(OrderedPair<TMRVolume>),
+                                     compare_ordered_pairs<TMRVolume>);
+  if (item){
+    return item->num;
+  }
+  
+  return -1;
+}
+
+/*
   The main topology class that contains the objects used to build the
   underlying mesh.  
 */
@@ -914,17 +1001,33 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
   geo = _geo;
   geo->incref();
 
+  // NULL all the data associated with either a mapped 2D or 3D
+  // topology
+  edge_to_vertices = NULL;
+  face_to_edges = NULL;
+  face_to_vertices = NULL;
+  volume_to_edges = NULL;
+  volume_to_faces = NULL;
+  volume_to_vertices = NULL;
+
+  // Reordering of the faces
   face_to_new_num = NULL;
   new_num_to_face = NULL;
 
+  // Reordering of the blocks/volumes
+  volume_to_new_num = NULL;
+  new_num_to_volume = NULL;
+
   // Get the geometry objects
-  int num_vertices, num_edges, num_faces;
+  int num_vertices, num_edges, num_faces, num_volumes;
   TMRVertex **vertices;
   TMREdge **edges;
   TMRFace **faces;
+  TMRVolume **volumes;
   geo->getVertices(&num_vertices, &vertices);
   geo->getEdges(&num_edges, &edges);
   geo->getFaces(&num_faces, &faces);
+  geo->getVolumes(&num_volumes, &volumes);
 
   // Sort the addresses to make the array
   const int coordinate_to_edge[] = {3, 1, 0, 2};
@@ -979,10 +1082,6 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
                                face_to_face_ptr, face_to_face,
                                NULL, NULL, NULL, &mpi_size, 
                                NULL, NULL, options, &objval, partition);
-      // METIS_PartGraphKway(&num_faces, &ncon, 
-      //                     face_to_face_ptr, face_to_face,
-      //                     NULL, NULL, NULL, &mpi_size, 
-      //                     NULL, NULL, options, &objval, partition);
 
       delete [] face_to_face_ptr;
       delete [] face_to_face;
@@ -1104,11 +1203,20 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
 TMRTopology::~TMRTopology(){
   // Free the geometry object
   geo->decref();
-  delete [] face_to_vertices;
-  delete [] face_to_edges;
-  delete [] edge_to_vertices;
-  delete [] face_to_new_num;
-  delete [] new_num_to_face;
+
+  // Free any face connectivity information
+  if (edge_to_vertices){ delete [] edge_to_vertices; }
+  if (face_to_vertices){ delete [] face_to_vertices; }
+  if (face_to_edges){ delete [] face_to_edges; }
+  if (volume_to_vertices){ delete [] volume_to_vertices; }
+  if (volume_to_edges){ delete [] volume_to_edges; }
+  if (volume_to_faces){ delete [] volume_to_faces; }
+
+  // Free the reordering data - if it exists
+  if (face_to_new_num){ delete [] face_to_new_num; }
+  if (new_num_to_face){ delete [] new_num_to_face; }
+  if (volume_to_new_num){ delete [] volume_to_new_num; }
+  if (new_num_to_volume){ delete [] new_num_to_volume; }
 }
 
 /*
@@ -1293,4 +1401,65 @@ void TMRTopology::getConnectivity( int *nnodes,
   *nfaces = num_faces;
   *face_nodes = face_to_vertices;
   *face_edges = face_to_edges;
+}
+
+/*
+  Get the volume associated with the given volume number
+*/
+void TMRTopology::getVolume( int vol_num, TMRVolume **volume ){
+  int num_volumes;
+  TMRVolume **volumes;
+  geo->getVolumes(&num_volumes, &volumes);
+  *volume = NULL;
+
+  int v = new_num_to_volume[vol_num];
+  if (volumes && (v >= 0 && v < num_volumes)){
+    *volume = volumes[v];
+  }
+}
+
+/*
+  Get the face associated with the given volume number
+*/
+void TMRTopology::getVolumeFace( int vol_num, 
+                                 int face_index, TMRFace **face ){
+
+}
+
+/*
+  Get the edge associated with the given volume
+*/
+void TMRTopology::getVolumeEdge( int vol_num, 
+                                 int edge_index, TMREdge **edge ){
+
+}
+
+/*
+  Get the vertex associated with the given volume
+*/
+void TMRTopology::getVolumeVertex( int vol_num, 
+                                   int vertex_index, TMRVertex **vertex ){
+
+}
+ 
+/*
+  Retrieve the connectivity for the underlying mesh
+*/
+void TMRTopology::getConnectivity( int *nnodes, int *nedges, 
+                                   int *nfaces, int *nvolumes,
+                                   const int **volume_nodes, 
+                                   const int **volume_edges,
+                                   const int **volume_faces ){
+  int num_vertices, num_edges, num_faces, num_volumes;
+  geo->getVertices(&num_vertices, NULL);
+  geo->getEdges(&num_edges, NULL);
+  geo->getFaces(&num_faces, NULL);
+  geo->getVolumes(&num_volumes, NULL);
+  *nnodes = num_vertices;
+  *nedges = num_edges;
+  *nfaces = num_faces;
+  *nvolumes = num_volumes;
+  *volume_nodes = volume_to_vertices;
+  *volume_edges = volume_to_edges;
+  *volume_faces = volume_to_faces;
 }

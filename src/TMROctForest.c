@@ -242,6 +242,9 @@ TMROctForest::TMROctForest( MPI_Comm _comm ){
   MPI_Comm_rank(comm, &mpi_rank);
   MPI_Comm_size(comm, &mpi_size);
 
+  // Set the topology object to NULL to begin with
+  topo = NULL;
+
   // Set the range of nodes
   node_range = NULL;
 
@@ -291,6 +294,9 @@ TMROctForest::TMROctForest( MPI_Comm _comm ){
   Free the data allocated by the TMROctForest object
 */
 TMROctForest::~TMROctForest(){
+  // Free the topology object (if one exists)
+  if (topo){ topo->decref(); }
+
   freeData();
 }
 
@@ -429,6 +435,41 @@ void TMROctForest::copyData( TMROctForest *copy ){
          num_edges*sizeof(int));
   memcpy(copy->node_block_owners, node_block_owners,
          num_nodes*sizeof(int));
+
+  // Copy over the topology object
+  copy->topo = topo;
+  if (copy->topo){
+    copy->topo->incref();
+  }
+}
+
+/*
+  Set the mesh topology object
+
+  This sets to internal topology object (used to define the geometry)
+  and resets the internal connectivity (if any has been defined).
+*/
+void TMROctForest::setTopology( TMRTopology *_topo ){
+  if (_topo){
+    _topo->incref();
+    if (topo){ topo->decref(); }
+    topo = _topo;
+
+    // Compute the connectivity
+    int _num_nodes, _num_edges, _num_faces, _num_blocks;
+    const int *_block_conn, *_block_edge_conn;
+    const int *_block_face_conn;
+    topo->getConnectivity(&_num_nodes, &_num_edges, 
+                          &_num_faces, &_num_blocks,
+                          &_block_conn, &_block_edge_conn,
+                          &_block_face_conn);
+
+    // Set the connectivity internally
+    setFullConnectivity(_num_nodes, _num_edges,
+                        _num_faces, _num_blocks,
+                        _block_conn, _block_edge_conn,
+                        _block_face_conn);
+  }
 }
 
 /*
@@ -3470,9 +3511,6 @@ void TMROctForest::createNodes( int order ){
   // Extract the array of nodes
   nodes->getArray(&array, &size);
 
-  // Allocate the point array
-  X = new TMRPoint[ size ]; 
-
   // Count up the number of nodes that are owned by this processor
   // and append the nodes that are not owned by this processor to
   // a series of queues destined for other processors.
@@ -3572,6 +3610,173 @@ void TMROctForest::createNodes( int order ){
       array[i].tag = -num_dep_nodes;
     }
   }
+
+  // Allocate the positions for all of the nodes within the mesh
+  nodes->getArray(&array, &size);
+  X = new TMRPoint[ size ];
+  memset(X, 0, size*sizeof(TMRPoint));
+
+  const int32_t hmax = 1<< TMR_MAX_LEVEL;
+  if (topo){    
+    for ( int i = 0; i < size; i++ ){
+      double u = 0.0, v = 0.0, w = 0.0;
+      if (array[i].x == hmax-1){ 
+        u = 1.0;
+      }
+      else {
+        u = 1.0*array[i].x/hmax;
+      }
+      if (array[i].y == hmax-1){
+        v = 1.0;
+      }
+      else {
+        v = 1.0*array[i].y/hmax;
+      }
+      if (array[i].z == hmax-1){
+        w = 1.0;
+      }
+      else {
+        w = 1.0*array[i].z/hmax;
+      }
+
+      TMRVolume *volume;
+      topo->getVolume(array[i].block, &volume);
+      if (volume){
+        volume->evalPoint(u, v, w, &X[i]);
+      }
+    }
+  }
+}
+
+/*
+  Get the elements that either lie in a volume, on a face or on a
+  curve with a given attribute.
+
+  This code loops over all octants that are locally owned on this
+  processor and checks the attribute of the underlying topological
+  entry. If the volume attribute matches, the octant is added
+  directly, otherwise the local face or volume index is set as the
+  tag. 
+
+  input:
+  attr:   string attribute associated with the geometric feature
+
+  returns:
+  list:   an array of octants satisfying the attribute
+*/
+TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
+  if (!topo){
+    return NULL;
+  }
+
+  // Create a queue to store the elements that we find
+  TMROctantQueue *queue = new TMROctantQueue();
+
+  // Get the quadrants
+  int size;
+  TMROctant *array;
+  octants->getArray(&array, &size);
+
+  // Loop over the quadrants and find out whether it touches
+  // a face or edge with the prescribed attribute
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  for ( int i = 0; i < size; i++ ){
+    const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+
+    // Get the surface quadrant
+    TMRVolume *vol;
+    topo->getVolume(array[i].block, &vol);  
+    const char *vol_attr = vol->getAttribute();
+    if (vol_attr && strcmp(vol_attr, attr) == 0){
+      queue->push(&array[i]);
+    }
+    else {
+      // Check if this octant lies on a face
+      int fx0 = (array[i].x == 0);
+      int fy0 = (array[i].y == 0);
+      int fz0 = (array[i].z == 0);
+      int fx = (fx0 || array[i].x + h == hmax);
+      int fy = (fy0 || array[i].y + h == hmax);
+      int fz = (fz0 || array[i].z + h == hmax);
+
+      if (fx || fy || fz){
+        TMRFace *face = NULL;
+        TMROctant oct = array[i];
+        if (fx){
+          int face_index = (fx0 ? 0 : 1);
+          topo->getVolumeFace(array[i].block, face_index, &face);
+          const char *face_attr = face->getAttribute();
+          if (face_attr && strcmp(face_attr, attr) == 0){
+            oct.tag = face_index;
+            queue->push(&oct);
+          }
+          continue;
+        }
+        if (fy){
+          int face_index = (fy0 ? 2 : 3);
+          topo->getVolumeFace(array[i].block, face_index, &face);
+          const char *face_attr = face->getAttribute();
+          if (face_attr && strcmp(face_attr, attr) == 0){
+            oct.tag = face_index;
+            queue->push(&oct);
+          }
+          continue;
+        }
+        if (fz){
+          int face_index = (fz0 ? 4 : 5);
+          topo->getVolumeFace(array[i].block, face_index, &face);
+          const char *face_attr = face->getAttribute();
+          if (face_attr && strcmp(face_attr, attr) == 0){
+            oct.tag = face_index;
+            queue->push(&oct);
+          }
+          continue;
+        }
+      }
+    }
+  }
+
+  TMROctantArray *list = queue->toArray();
+  delete queue;
+  return list;
+}
+
+/*
+  Create an array of the nodes that are lie on a surface, edge or
+  corner with a given attribute
+
+  This code loops over all nodes and check whether they lie on a
+  geometric entity that has the given attribute.
+
+  input:
+  attr:   the string of the attribute to search
+
+  returns:
+  list:   the nodes matching the specified attribute
+*/
+TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
+  if (!topo){
+    return NULL;
+  }
+
+  // Create a queue to store the nodes that we find
+  TMROctantQueue *queue = new TMROctantQueue();
+
+  // Get the local nodal quadrants
+  int size;
+  TMROctant *array;
+  nodes->getArray(&array, &size);
+
+  // Loop over the quadrants and find out whether it touches
+  // a face or edge with the prescribed attribute
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  for ( int i = 0; i < size; i++ ){
+    
+  }
+
+  TMROctantArray *list = queue->toArray();
+  delete queue;
+  return list;
 }
 
 /*

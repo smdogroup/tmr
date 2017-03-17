@@ -2,7 +2,9 @@ include Makefile.in
 include TMR_Common.mk
 
 TMR_SUBDIRS = src \
-	src/interfaces
+	src/interfaces \
+	src/topology
+
 TMR_OBJS := $(addsuffix /*.o, ${TMR_SUBDIRS})
 
 default:

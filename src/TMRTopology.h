@@ -110,6 +110,7 @@ class TMREdgeLoop : public TMREntity {
                const int _dir[] );
   ~TMREdgeLoop();
 
+  // Retrieve the edges in the loop and their orientations
   void getEdgeLoop( int *_ncurves, TMREdge **_edges[], 
                     const int *_dir[] );
 
@@ -166,6 +167,32 @@ class TMRFace : public TMREntity {
 };
 
 /*
+  The TMR volume object.
+
+  This object is used primarily as a container class and does not
+  parametrize a volume, except when using transfinite interpolation
+  from surfaces.
+
+  This transfinite-volume interpolation 
+*/
+class TMRVolume : public TMREntity {
+ public:
+  TMRVolume( int _nfaces, TMRFace **_faces );
+  virtual ~TMRVolume();
+
+  // Given the parametric point u,v,w compute the physical location x,y,z
+  virtual int evalPoint( double u, double v, double w, TMRPoint *X );
+
+  // Get the faces that enclose this volume
+  void getFaces( int *_num_faces, TMRFace ***_faces );
+
+ private:
+  // Store the face information
+  int num_faces;
+  TMRFace **faces;
+};
+
+/*
   The TMR Geometry class. 
 
   This contains the geometry objects -- vertices, curves and surfaces
@@ -175,29 +202,33 @@ class TMRModel : public TMREntity {
  public:
   TMRModel( int _num_vertices, TMRVertex **_vertices, 
             int _num_edges, TMREdge **_edges,
-            int _num_faces, TMRFace **_faces );
+            int _num_faces, TMRFace **_faces,
+            int _num_volumes=0, TMRVolume **_volumes=NULL );
   ~TMRModel();
 
   // Retrieve the underlying vertices/curves/surfaces
   void getVertices( int *_num_vertices, TMRVertex ***_vertices );
   void getEdges( int *_num_edges, TMREdge ***_edges );
   void getFaces( int *_num_faces, TMRFace ***_faces );
+  void getVolumes( int *_num_volumes, TMRVolume ***_volumes );
 
   // Query geometric objects based on pointer values
   int getVertexIndex( TMRVertex *vertex );
   int getEdgeIndex( TMREdge *edge );
   int getFaceIndex( TMRFace *face );
+  int getVolumeIndex( TMRVolume *volume );
 
  private:
-  // Verify that everything is more or less well defined. Print
-  // out error messages if something doesn't make sense.
+  // Verify that everything is more or less well defined. Print out
+  // error messages if something doesn't make sense.
   int verify();
 
   // The verticies, curves and surfaces that define a BRep
-  int num_vertices, num_edges, num_faces;
+  int num_vertices, num_edges, num_faces, num_volumes;
   TMRVertex **vertices;
   TMREdge **edges;
   TMRFace **faces;
+  TMRVolume **volumes;
 
   // This keeps track of the ordering of the geometry objects and
   // enables a fast object -> object index lookup
@@ -214,6 +245,7 @@ class TMRModel : public TMREntity {
   OrderedPair<TMRVertex> *ordered_verts;
   OrderedPair<TMREdge> *ordered_edges;
   OrderedPair<TMRFace> *ordered_faces;
+  OrderedPair<TMRVolume> *ordered_volumes;
 };
 
 /*
@@ -230,9 +262,20 @@ class TMRTopology : public TMREntity {
   void getFaceEdge( int face_num, int edge_index, TMREdge **curve );
   void getFaceVertex( int face_num, int vertex_index, TMRVertex **vertex );
 
-  // Retrive the connectivity from the topology object
+  // Retrive the quadtree connectivity from the topology object
   void getConnectivity( int *nnodes, int *nedges, int *nfaces,
                         const int **face_nodes, const int **face_edges );
+
+  // Retrieve the volume/face/edge/node information
+  void getVolume( int vol_num, TMRVolume **volume );
+  void getVolumeFace( int vol_num, int face_index, TMRFace **face );
+  void getVolumeEdge( int vol_num, int edge_index, TMREdge **edge );
+  void getVolumeVertex( int vol_num, int vertex_index, TMRVertex **vertex );
+
+  // Retrieve the octree connectivity from the topology object
+  void getConnectivity( int *nnodes, int *nedges, int *nfaces, int *nvolumes,
+                        const int **volume_nodes, const int **volume_edges,
+                        const int **volume_faces );
 
  private:
   // Compute the face connectivity
@@ -241,6 +284,9 @@ class TMRTopology : public TMREntity {
                         int **_face_to_face_ptr,
                         int **_face_to_face );
 
+  // Compute the volume connectivity
+  void computeVolumeConn();
+
   // Get the MPI communicator
   MPI_Comm comm;
 
@@ -248,9 +294,17 @@ class TMRTopology : public TMREntity {
   int *edge_to_vertices;
   int *face_to_edges;
   int *face_to_vertices;
+  int *volume_to_vertices;
+  int *volume_to_edges;
+  int *volume_to_faces;
 
   // The reordering for the faces
-  int *face_to_new_num, *new_num_to_face;
+  int *face_to_new_num;
+  int *new_num_to_face;
+
+  // Reordering of the volumes
+  int *volume_to_new_num;
+  int *new_num_to_volume;
 
   // The geometry class
   TMRModel *geo;

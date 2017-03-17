@@ -152,7 +152,7 @@ class TMRSplitEdge : public TMREdge {
 };
 
 /*
-  Parametric TFI class
+  Parametric TFI classes
 
   This surface defines a segment of a surface, defined in parameter
   space. This is used for creating a continuous geometry model of a
@@ -197,6 +197,30 @@ class TMRParametricTFIFace : public TMRFace {
 
   // Parametric coordinates of the vertex points on the surface
   double vupt[4], vvpt[4];
+};
+
+/*
+  
+ */
+class TMRTFIVolume : public TMRVolume {
+ public:
+  TMRTFIVolume( TMRFace *_faces[], const int orient[],
+                TMREdge *_edges[], const int dir[],
+                TMRVertex *verts[] );
+  ~TMRTFIVolume();
+  int evalPoint( double u, double v, double w, TMRPoint *X ); 
+
+ private:
+  // Faces surrounding the volume: coordinate ordered
+  TMRFace *faces[6];
+  int orient[6];
+
+  // Edges defining the volume intersections
+  TMREdge *edges[12];
+  int dir[12];
+  
+  // Locations of the vertices/corners
+  TMRPoint c[8];
 };
 
 #endif // TMR_NATIVE_TOPOLOGY_H

@@ -1,9 +1,12 @@
 include ${TACS_DIR}/Makefile.in
 include ${TACS_DIR}/TACS_Common.mk
+include ${PAROPT_DIR}/Makefile.in
+include ${PAROPT_DIR}/ParOpt_Common.mk
 
 TMR_LIB = ${TMR_DIR}/lib/libtmr.a
 
-TMR_INCLUDE = -I${TMR_DIR}/src -I${TMR_DIR}/src/interfaces ${TACS_INCLUDE} ${OPENCASCADE_INCLUDE}
+TMR_INCLUDE = -I${TMR_DIR}/src -I${TMR_DIR}/src/interfaces -I${TMR_DIR}/src/topology \
+	${TACS_INCLUDE} ${PAROPT_INCLUDE} ${OPENCASCADE_INCLUDE}
 
 # Set the compiler flags for TMR
 TMR_CC_FLAGS = ${TMR_FLAGS} ${TMR_INCLUDE} ${BLOSSOM_INCLUDE} ${TACS_OPT_CC_FLAGS}

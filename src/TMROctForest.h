@@ -5,6 +5,7 @@
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
 */
 
+#include "TMRTopology.h"
 #include "TMROctant.h"
 #include "BVecInterp.h"
 
@@ -33,6 +34,10 @@ class TMROctForest : public TMREntity {
   // Get the MPI communicator
   // ------------------------
   MPI_Comm getMPIComm(){ return comm; }
+
+  // Set the topology (and determine the connectivity)
+  // -------------------------------------------------
+  void setTopology( TMRTopology *_topo );
 
   // Set the connectivity
   // --------------------
@@ -72,6 +77,11 @@ class TMROctForest : public TMREntity {
   // Create and order the nodes
   // --------------------------
   void createNodes( int order=2 );
+
+  // Get the nodes or elements with certain attributes
+  // -------------------------------------------------
+  TMROctantArray* getOctsWithAttribute( const char *attr );
+  TMROctantArray* getNodesWithAttribute( const char *attr );
 
   // Create the mesh connectivity
   // ----------------------------
@@ -296,6 +306,9 @@ class TMROctForest : public TMREntity {
   // Pointers to the dependent faces/edges
   TMROctantArray *dep_faces;
   TMROctantArray *dep_edges;
+
+  // The topology of the underlying model (if any)
+  TMRTopology *topo;
 };
 
 #endif // TMR_OCTANT_FOREST_H

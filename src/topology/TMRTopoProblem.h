@@ -1,6 +1,8 @@
 #ifndef TMR_TOPO_PROBLEM_H
 #define TMR_TOPO_PROBLEM_H
 
+#ifdef TMR_HAS_PAROPT
+
 #include "ParOpt.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
@@ -186,4 +188,5 @@ class TMRTopoProblem : public ParOptProblem {
   TACSBVec *res, *vars, *force;
 };
 
+#endif // TMR_HAS_PAROPT
 #endif // TMR_TOPO_PROBLEM_H

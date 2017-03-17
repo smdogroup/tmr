@@ -1,3 +1,5 @@
+#ifdef TMR_HAS_PAROPT
+
 #include "TMRTopoProblem.h"
 #include "TMROctStiffness.h"
 #include "TACSFunction.h"
@@ -161,39 +163,19 @@ ParOptProblem(_tacs[0]->getMPIComm()){
     filter_ctx[k]->incref();
 
     // Create the design variable vector for this level
-    x[k] = new TACSBVec(filter_maps[k], 1, NULL, filter_dist[k]);
+    x[k] = new TACSBVec(filter_maps[k], 1, filter_dist[k]);
   }
 
   // Now create the interpolation between filter levels
   for ( int k = 1; k < nlevels; k++ ){
-    // Create the interpolation on the TMR side
-    int *ptr, *conn;
-    double *weights;
-    filter[k-1]->createInterpolation(filter[k],
-                                     &ptr, &conn, &weights);
-
     // Create the interpolation object
     filter_interp[k-1] = new TACSBVecInterp(filter_maps[k],
                                             filter_maps[k-1], 1);
     filter_interp[k-1]->incref();
 
-    // Get the range of nodes
-    const int *node_range;
-    filter[k-1]->getOwnedNodeRange(&node_range);
-
-    // Add all the values in the interpolation
-    for ( int node = node_range[mpi_rank], i = 0;
-          node < node_range[mpi_rank+1]; node++, i++ ){
-      int len = ptr[i+1] - ptr[i];
-      filter_interp[k-1]->addInterp(node, &weights[ptr[i]], 
-                                    &conn[ptr[i]], len);
-    }
-
+    // Create the interpolation on the TMR side
+    filter[k-1]->createInterpolation(filter[k], filter_interp[k-1]);
     filter_interp[k-1]->initialize();
-    
-    delete [] ptr;
-    delete [] conn;
-    delete [] weights;
   }
   
   // Set the maximum local size
@@ -306,7 +288,7 @@ void TMRTopoProblem::setMassScaling( ParOptScalar scale ){
 */
 ParOptVec *TMRTopoProblem::createDesignVec(){
   return new ParOptBVecWrap(new TACSBVec(filter_maps[0], 1, 
-                                         NULL, filter_dist[0]));
+                                         filter_dist[0]));
 }
 
 /*
@@ -722,7 +704,7 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
     res->endSetValues(ADD_VALUES);
 
     // Set the boundary conditions
-    res->applyBCs();
+    tacs[0]->applyBCs(res);
 
     // Solve the system: K(x)*u = force
     ksm->solve(res, vars);
@@ -784,3 +766,5 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
   // Update the iteration count
   iter_count++;
 }
+
+#endif // TMR_HAS_PAROPT

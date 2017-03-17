@@ -478,3 +478,133 @@ int TMRParametricTFIFace::evalDeriv( double u, double v,
 
   return fail;
 }
+
+/*
+  Create the TFI volume
+*/
+TMRTFIVolume::TMRTFIVolume( TMRFace *_faces[], const int _orient[],
+                            TMREdge *_edges[], const int _dir[],
+                            TMRVertex *verts[] ):
+TMRVolume(6, faces){
+  for ( int i = 0; i < 6; i++ ){
+    faces[i] = _faces[i];
+    faces[i]->incref();
+    orient[i] = _orient[i];
+  }
+  for ( int i = 0; i < 12; i++ ){
+    edges[i] = _edges[i];
+    edges[i]->incref();
+    dir[i] = _dir[i];
+  }
+  for ( int i = 0; i < 8; i++ ){
+    verts[i]->evalPoint(&c[i]);
+  }
+}
+
+/*
+  Destroy the TFI volume object
+*/
+TMRTFIVolume::~TMRTFIVolume(){
+  for ( int i = 0; i < 6; i++ ){
+    faces[i]->decref();
+  }
+  for ( int i = 0; i < 12; i++ ){
+    edges[i]->decref();
+  }
+}
+
+/*
+  Evaluate the point within the volume
+*/
+int TMRTFIVolume::evalPoint( double u, double v, double w,
+                             TMRPoint *X ){
+  int fail = 0;
+  TMRPoint f[6], e[12];
+
+  // Evaluate/retrieve the points on the surfaces
+  for ( int k = 0; k < 6; k++ ){
+    double x, y;
+    if (k < 2){
+      x = v;
+      y = w;
+    }
+    else if (k < 4){
+      x = u;
+      y = w;
+    }
+    else {
+      x = u;
+      y = v;
+    }
+
+    if (orient[k] == 0){
+      fail = fail || faces[k]->evalPoint(x, y, &f[k]);
+    }
+    else if (orient[k] == 1){
+      fail = fail || faces[k]->evalPoint(1.0-x, y, &f[k]);
+    }
+    else if (orient[k] == 2){
+      fail = fail || faces[k]->evalPoint(x, 1.0-y, &f[k]);
+    }
+    else if (orient[k] == 3){
+      fail = fail || faces[k]->evalPoint(1.0-x, 1.0-y, &f[k]);
+    }
+    else {
+      fail = 1;
+    }
+  }
+
+  // Evaluate/retrieve the points on the edges
+  for ( int k = 0; k < 12; k++ ){
+    double t;
+    if (k < 4){
+      t = u;
+    }
+    else if (k < 8){
+      t = v;
+    }
+    else {
+      t = w;
+    }
+
+    if (dir[k] > 0){
+      fail = fail || edges[k]->evalPoint(t, &e[k]);
+    }
+    else {
+      fail = fail || edges[k]->evalPoint(1.0-t, &e[k]);
+    }
+  }
+
+  // Evaluate the point based on the values along the corners, edges and faces
+  X->x = 
+    (1.0-u)*f[0].x + u*f[1].x + (1.0-v)*f[2].x + v*f[3].x + (1.0-w)*f[4].x + w*f[5].x 
+    - ((1.0-v)*(1.0-w)*e[0].x + v*(1.0-w)*e[1].x + (1.0-v)*w*e[2].x + v*w*e[3].x +
+       (1.0-u)*(1.0-w)*e[4].x + u*(1.0-w)*e[5].x + (1.0-u)*w*e[6].x + u*w*e[7].x +
+       (1.0-u)*(1.0-v)*e[8].x + u*(1.0-v)*e[9].x + (1.0-u)*v*e[10].x + u*v*e[11].x)
+    + ((1.0-u)*(1.0-v)*(1.0-w)*c[0].x + u*(1.0-v)*(1.0-w)*c[1].x + 
+       (1.0-u)*v*(1.0-w)*c[2].x + u*v*(1.0-w)*c[3].x + 
+       (1.0-u)*(1.0-v)*w*c[4].x + u*(1.0-v)*w*c[5].x + 
+       (1.0-u)*v*w*c[6].x + u*v*w*c[7].x);
+
+  X->y = 
+    (1.0-u)*f[0].y + u*f[1].y + (1.0-v)*f[2].y + v*f[3].y + (1.0-w)*f[4].y + w*f[5].y 
+    - ((1.0-v)*(1.0-w)*e[0].y + v*(1.0-w)*e[1].y + (1.0-v)*w*e[2].y + v*w*e[3].y +
+       (1.0-u)*(1.0-w)*e[4].y + u*(1.0-w)*e[5].y + (1.0-u)*w*e[6].y + u*w*e[7].y +
+       (1.0-u)*(1.0-v)*e[8].y + u*(1.0-v)*e[9].y + (1.0-u)*v*e[10].y + u*v*e[11].y)
+    + ((1.0-u)*(1.0-v)*(1.0-w)*c[0].y + u*(1.0-v)*(1.0-w)*c[1].y + 
+       (1.0-u)*v*(1.0-w)*c[2].y + u*v*(1.0-w)*c[3].y + 
+       (1.0-u)*(1.0-v)*w*c[4].y + u*(1.0-v)*w*c[5].y + 
+       (1.0-u)*v*w*c[6].y + u*v*w*c[7].y);
+
+  X->z = 
+    (1.0-u)*f[0].z + u*f[1].z + (1.0-v)*f[2].z + v*f[3].z + (1.0-w)*f[4].z + w*f[5].z 
+    - ((1.0-v)*(1.0-w)*e[0].z + v*(1.0-w)*e[1].z + (1.0-v)*w*e[2].z + v*w*e[3].z +
+       (1.0-u)*(1.0-w)*e[4].z + u*(1.0-w)*e[5].z + (1.0-u)*w*e[6].z + u*w*e[7].z +
+       (1.0-u)*(1.0-v)*e[8].z + u*(1.0-v)*e[9].z + (1.0-u)*v*e[10].z + u*v*e[11].z)
+    + ((1.0-u)*(1.0-v)*(1.0-w)*c[0].z + u*(1.0-v)*(1.0-w)*c[1].z + 
+       (1.0-u)*v*(1.0-w)*c[2].z + u*v*(1.0-w)*c[3].z + 
+       (1.0-u)*(1.0-v)*w*c[4].z + u*(1.0-v)*w*c[5].z + 
+       (1.0-u)*v*w*c[6].z + u*v*w*c[7].z);
+
+  return 1;
+}

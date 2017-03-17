@@ -16,7 +16,6 @@ CXX_OBJS = TMRBase.o \
 	TMRTriangularize.o \
 	TMRMesh.o \
 	TMRMeshSmoothing.o \
-	TMROctStiffness.o \
 	TMRBspline.o \
 	TMRTopology.o \
 	TMRNativeTopology.o \
