@@ -226,8 +226,9 @@ class TMRTopology : public TMREntity {
   ~TMRTopology();
   
   // Retrieve the face/edge/node information
-  void getSurface( int face_num, TMRFace **face );
+  void getFace( int face_num, TMRFace **face );
   void getFaceEdge( int face_num, int edge_index, TMREdge **curve );
+  void getFaceVertex( int face_num, int vertex_index, TMRVertex **vertex );
 
   // Retrive the connectivity from the topology object
   void getConnectivity( int *nnodes, int *nedges, int *nfaces,

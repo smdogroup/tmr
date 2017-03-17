@@ -2558,7 +2558,7 @@ void TMRQuadForest::createNodes( int order ){
       }
 
       TMRFace *surf;
-      topo->getSurface(array[i].face, &surf);
+      topo->getFace(array[i].face, &surf);
       if (surf){
         surf->evalPoint(u, v, &X[i]);
       }
@@ -2604,7 +2604,7 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
 
     // Get the surface quadrant
     TMRFace *surf;
-    topo->getSurface(array[i].face, &surf);  
+    topo->getFace(array[i].face, &surf);  
     const char *face_attr = surf->getAttribute();
     if (face_attr && strcmp(face_attr, attr) == 0){
       queue->push(&array[i]);
@@ -2690,7 +2690,7 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
   for ( int i = 0; i < size; i++ ){
     // Get the surface quadrant
     TMRFace *surf;
-    topo->getSurface(array[i].face, &surf);  
+    topo->getFace(array[i].face, &surf);  
     const char *face_attr = surf->getAttribute();
     if (face_attr && strcmp(face_attr, attr) == 0){
       queue->push(&array[i]);
@@ -2703,6 +2703,7 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
       int ey0 = (array[i].y == 0), ey1 = (array[i].y == hmax-1);
 
       if (ex0 || ex1 || ey0 || ey1){
+        // Add any edges with the matching attribute
         TMREdge *edge;
         if (ex0){
           topo->getFaceEdge(array[i].face, 0, &edge);
@@ -2729,6 +2730,37 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
           topo->getFaceEdge(array[i].face, 3, &edge);
           const char *curve_attr = edge->getAttribute();
           if (curve_attr && strcmp(curve_attr, attr) == 0){
+            queue->push(&array[i]);
+          }
+        }
+
+        // Add the vertex with the matching attribute
+        TMRVertex *vert;
+        if (ex0 && ey0){
+          topo->getFaceVertex(array[i].face, 0, &vert);
+          const char *vert_attr = vert->getAttribute();
+          if (vert_attr && strcmp(vert_attr, attr) == 0){
+            queue->push(&array[i]);
+          }
+        }
+        if (ex1 && ey0){
+          topo->getFaceVertex(array[i].face, 1, &vert);
+          const char *vert_attr = vert->getAttribute();
+          if (vert_attr && strcmp(vert_attr, attr) == 0){
+            queue->push(&array[i]);
+          }
+        }
+        if (ex0 && ey1){
+          topo->getFaceVertex(array[i].face, 2, &vert);
+          const char *vert_attr = vert->getAttribute();
+          if (vert_attr && strcmp(vert_attr, attr) == 0){
+            queue->push(&array[i]);
+          }
+        }
+        if (ex1 && ey1){
+          topo->getFaceVertex(array[i].face, 3, &vert);
+          const char *vert_attr = vert->getAttribute();
+          if (vert_attr && strcmp(vert_attr, attr) == 0){
             queue->push(&array[i]);
           }
         }

@@ -1204,7 +1204,7 @@ void TMRTopology::computeFaceConn( int num_edges, int num_faces,
 /*
   Retrieve the face object
 */
-void TMRTopology::getSurface( int face_num, TMRFace **face ){
+void TMRTopology::getFace( int face_num, TMRFace **face ){
   int num_faces;
   TMRFace **faces;
   geo->getFaces(&num_faces, &faces);
@@ -1240,6 +1240,39 @@ void TMRTopology::getFaceEdge( int face_num, int edge_index,
     if (edge_index >= 0 && edge_index < 4){
       edge_index = coordinate_to_edge[edge_index];
       *edge = edgs[edge_index];
+    }
+  }
+}
+
+/*
+  Retrieve the vertex object associated with the face/vertex index
+*/
+void TMRTopology::getFaceVertex( int face_num, int vertex_index, 
+                                 TMRVertex **vert ){
+  int num_faces;
+  TMRFace **faces;
+  geo->getFaces(&num_faces, &faces);
+
+  // Coordinate edge number to actual edge number
+  const int vert_to_edge[] = {0, 1, 3, 2};
+  const int coordinate_to_vert[] = {0, 1, 3, 2};
+
+  *vert = NULL;
+  int f = new_num_to_face[face_num];
+  if (faces && (f >= 0 && f < num_faces)){
+    TMREdgeLoop *loop;
+    faces[f]->getEdgeLoop(0, &loop);
+
+    // Get the edge loop
+    const int *dir;
+    TMREdge **edgs;
+    loop->getEdgeLoop(NULL, &edgs, &dir);
+    int edge_index = vert_to_edge[vertex_index];
+    if (dir[edge_index] > 0){
+      edgs[edge_index]->getVertices(vert, NULL);
+    }
+    else {
+      edgs[edge_index]->getVertices(NULL, vert);
     }
   }
 }
