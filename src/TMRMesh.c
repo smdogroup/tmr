@@ -1321,19 +1321,68 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
 }
 
 /*
-  Identify and remove adjacent quadrilaterals that look like this:
+  This code performs several topological improvements to try and avoid
+  poor mesh quality.
+
+  First, the code attempts to remove topological triangles on
+  boundaries where adjacent boundary edges are included in the same
+  quad. Adjacent boundary edges in the same quadrilaterla are not
+  always bad (for instance when a quad is at a corner), so we check
+  whether to adjust the connectivity based on the angle between the
+  two edges. Note that this will only work if the second quadrilateral
+  does not have an edge on the boundary and requires that the mesh be
+  smoothed afterwards.
+
+           x                            x
+         /   \                        / / \
+        /     \                     /  /   \
+       x       x                   x  /     x
+     /   \     /                  /   /     /
+    /     \   /         ===>     /   /     /
+   /       \ /                  /   /     /
+  x -- x -- x                  x -- x -- x
+
+  Next, the code identifies and removes adjacent quadrilaterals that
+  look like this:
 
   x --- x             x ---- x
   | \   |             |      |
   |  x  |     ===>    |      |
   |    \|             |      |
   x --- x             x ---- x
+
+  Finally, the code finds and removes quads that look like this:
+
+  x ---- x ---- x         x ---- x ---- x
+  |     / \     |         |      |      |
+  |    /   \    |         |      |      |
+  x - x     x - x   ===>  x ---- x ---- x
+  |    \   /    |         |      |      |
+  |     \ /     |         |      |      |
+  x ---- x ---- x         x ---- x ---- x
 */
 void TMRFaceMesh::simplifyQuads(){
   // Compute the pointer -> quad information
   int *ptr, *pts_to_quads;
   computeNodeToElems(num_points, num_quads, 4, quads,
                      &ptr, &pts_to_quads);
+
+  /*
+  // Determine whether there are three nodes or more on a boundary
+  for ( int i = 0; i < num_quads; i++ ){
+    int nbound = 0;
+    if (quads[4*i] < num_fixed_pts) nbound++;
+    if (quads[4*i+1] < num_fixed_pts) nbound++;
+    if (quads[4*i+2] < num_fixed_pts) nbound++;
+    if (quads[4*i+3] < num_fixed_pts) nbound++;
+
+    if (nbound >= 3){
+
+
+
+    }
+  }
+  */
 
   // First, remove the nodes that are only referred to twice,
   // not on the boundary
@@ -1359,7 +1408,7 @@ void TMRFaceMesh::simplifyQuads(){
         }
       }
 
-      // Reset the quadrilateral by removing the
+      // Find the common node between quads
       int k1 = 0, k2 = 0;
       while (quad1[k1] != i) k1++;
       while (quad2[k2] != i) k2++;

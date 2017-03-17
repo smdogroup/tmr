@@ -233,7 +233,7 @@ static void computeLocalWeights( TACSAssembler *tacs,
   // each node is referenced by adjacent elements, including
   // inter-process references.
   TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
-                                   NULL, tacs->getBVecDistribute(),
+                                   tacs->getBVecDistribute(),
                                    tacs->getBVecDepNodes());
   weights->incref();
 
@@ -287,7 +287,7 @@ static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec,
 
   // Allocate a vector for the derivatives
   TACSBVec *uderiv = 
-    new TACSBVec(tacs->getVarMap(), 3*vars_per_node, NULL,
+    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
                  tacs->getBVecDistribute(), tacs->getBVecDepNodes());
 
   // Number of derivatives per node - x,y,z derivatives

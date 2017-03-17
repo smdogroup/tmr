@@ -329,13 +329,6 @@ int main( int argc, char *argv[] ){
 
   if (geo){
     geo->incref();
-
-    // Get the faces that have been created - if any
-    // and write them all to different VTK files
-    int num_faces;
-    TMRFace **faces;
-    geo->getFaces(&num_faces, &faces);
-
     // Allocate the new mesh
     TMRMesh *mesh = new TMRMesh(comm, geo);
     mesh->incref();

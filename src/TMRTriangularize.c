@@ -863,8 +863,7 @@ void TMRTriangularize::writeToVTK( const char *filename ){
     node = list_start;
     while (node){
       if (node->tri.status != DELETE_ME){
-        // fprintf(fp, "%d\n", node->tri.status);
-        fprintf(fp, "%d\n", node->tri.tag);
+        fprintf(fp, "%d\n", node->tri.status);
       }
       node = node->next;
     }
