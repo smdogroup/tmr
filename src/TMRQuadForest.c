@@ -2711,7 +2711,6 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
       topo->getEdge(edge_num, &edge);
       const char *edge_attr = edge->getAttribute();
       if (edge_attr && strcmp(edge_attr, attr) == 0){
-        printf("edge_attr = %s\n", edge_attr);
         queue->push(&array[i]);
       }
     }

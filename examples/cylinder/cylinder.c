@@ -281,7 +281,6 @@ int main( int argc, char *argv[] ){
     ply = new OrthoPly(t, rho, E1, E2, nu12, 
                        G12, G23, G13, 
                        Xt, Xc, Yt, Yc, S12);
-    printf("Using orthotropic material properties: \n");
   }
   else {
     // Set the material properties to use
@@ -290,7 +289,6 @@ int main( int argc, char *argv[] ){
     double nu = 0.3;
   
     ply = new OrthoPly(t, rho, E, nu, ys);
-    printf("Using isotropic material properties: \n");
   }
 
   // Create the stiffness relationship
