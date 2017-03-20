@@ -159,10 +159,6 @@ class TMROctForest : public TMREntity {
   // Set the owners - this determines how the mesh will be ordered
   void computeBlockOwners();
 
-  // Compute the partition using METIS
-  // ---------------------------------
-  // void computePartition( int part_size, int *vwgts, int *part );
-
   // Free/copy the allocated data
   void freeData();
   void copyData( TMROctForest *copy );

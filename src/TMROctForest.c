@@ -1,10 +1,5 @@
 #include "TMROctForest.h"
 
-// Include METIS
-extern "C" {
-#include "metis.h"
-}
-
 /*
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
 */

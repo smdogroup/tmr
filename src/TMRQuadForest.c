@@ -1,10 +1,5 @@
 #include "TMRQuadForest.h"
 
-// Include METIS
-extern "C" {
-#include "metis.h"
-}
-
 /*
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
 */
@@ -239,11 +234,9 @@ void TMRQuadForest::setTopology( TMRTopology *_topo ){
 
   This call is collective on all processors. Every processor must make
   a call with the same connectivity information, otherwise the
-  inter-quadtree information will be inconsistent. This sets the
-  connectivity and then performs a partition of the mesh using METIS.
-
-  This code sets the face connectivity and generates the following
-  additional data that are required:
+  inter-quadtree information will be inconsistent.  This code sets the
+  face connectivity and generates the following additional data that
+  are required:
 
   1. Face to node connectivity (input)
   2. Node to face connectivity (required for corner balancing)
@@ -2688,16 +2681,16 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
   TMRQuadrant *array;
   nodes->getArray(&array, &size);
 
-  // Loop over the quadrants and find out whether it touches
-  // a face or edge with the prescribed attribute
+  // Loop over the quadrants and find out whether it touches a face or
+  // edge with the prescribed attribute
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   for ( int i = 0; i < size; i++ ){
     // Check if this node is on a corner, edge or face, and whether it
     // shares the appropriate attribute
     int fx0 = (array[i].x == 0);
     int fy0 = (array[i].y == 0);
-    int fx = (fx0 || array[i].x == hmax);
-    int fy = (fy0 || array[i].y == hmax);
+    int fx = (fx0 || array[i].x == hmax-1);
+    int fy = (fy0 || array[i].y == hmax-1);
 
     if (fx && fy){
       // This node lies on a corner
@@ -2718,6 +2711,7 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
       topo->getEdge(edge_num, &edge);
       const char *edge_attr = edge->getAttribute();
       if (edge_attr && strcmp(edge_attr, attr) == 0){
+        printf("edge_attr = %s\n", edge_attr);
         queue->push(&array[i]);
       }
     }

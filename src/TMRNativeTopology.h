@@ -200,8 +200,34 @@ class TMRParametricTFIFace : public TMRFace {
 };
 
 /*
+  The following class performs a transfinite interpolation over a
+  brick volume element. The arguments to the volume are arranged in a
+  coordinate ordering. This ordering is designed to be easily
+  compatible with the TMROctForest ordering. 
+
+  The input faces, edges, and vertices are ordered in the following
+  manner:
   
- */
+       v6----------e3----------v7
+      /|                       /|
+     e6|                      e7|
+    /  |                 f5--/  |
+   /   |                /   /   |
+  v4----------e2-----------v5   |
+  |   e11                  |   e10
+  |    |                   |f3--|
+  |    |                   ||   |
+  e8   v2---------e1-------e9--v3
+  |f0 /                    |f1 /
+  |/|e4                    |/|e5
+  | /--f4              f2--| /
+  |/  /                |   |/
+  v0----------e0----------v1
+  
+  The orient argument captures the root node information for each face
+  such that faces that have different orientations will enclose a
+  properly oriented volume. 
+*/
 class TMRTFIVolume : public TMRVolume {
  public:
   TMRTFIVolume( TMRFace *_faces[], const int orient[],
@@ -210,6 +236,10 @@ class TMRTFIVolume : public TMRVolume {
   ~TMRTFIVolume();
   int evalPoint( double u, double v, double w, TMRPoint *X ); 
 
+  // Get the underlying entities
+  void getEntities( TMRFace ***_faces, TMREdge ***_edges, 
+                    TMRVertex ***_verts );
+
  private:
   // Faces surrounding the volume: coordinate ordered
   TMRFace *faces[6];
@@ -217,9 +247,10 @@ class TMRTFIVolume : public TMRVolume {
 
   // Edges defining the volume intersections
   TMREdge *edges[12];
-  int dir[12];
+  int edge_dir[12];
   
   // Locations of the vertices/corners
+  TMRVertex *verts[8];
   TMRPoint c[8];
 };
 

@@ -466,6 +466,27 @@ int main( int argc, char *argv[] ){
       f5->writeToFile(outfile);
       f5->decref();
 
+      // Duplicate and refine the mesh
+      TMRQuadForest *dup = forest[0]->duplicate();
+      dup->incref();
+      dup->refine(NULL);
+      TACSAssembler *dup_tacs = creator->createTACS(3, dup);
+      dup_tacs->incref();
+      TMR_ComputeReconSolution(3, tacs[0], dup_tacs);
+
+      // Create and write out an fh5 file
+      TACSToFH5 *f5_dup = new TACSToFH5(dup_tacs, SHELL, write_flag);
+      f5_dup->incref();
+      
+      // Write out the solution
+      sprintf(outfile, "refined_output%02d.f5", iter);
+      f5_dup->writeToFile(outfile);
+      f5_dup->decref();
+
+      dup->decref();
+      dup_tacs->decref();
+
+
       // Set the target error using the factor: max(1.0, 16*(2**-iter))
       double factor = 1.0; // 16.0/(1 << iter);
       if (factor < 1.0){ factor = 1.0; }

@@ -2,7 +2,15 @@
 #define TMR_REFINEMENT_TOOLS_H
 
 #include "TMRQuadForest.h"
+#include "TMROctForest.h"
 #include "TACSAssembler.h"
+
+/*
+  Compute the reconstructed solution on a uniformly refined mesh
+*/
+void TMR_ComputeReconSolution( const int order,
+                               TACSAssembler *tacs,
+                               TACSAssembler *tacs_refined );
 
 /*
   Perform a mesh refinement based on the strain engery refinement

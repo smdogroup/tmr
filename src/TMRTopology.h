@@ -177,19 +177,20 @@ class TMRFace : public TMREntity {
 */
 class TMRVolume : public TMREntity {
  public:
-  TMRVolume( int _nfaces, TMRFace **_faces );
+  TMRVolume( int _nfaces, TMRFace **_faces, const int *_dir=NULL );
   virtual ~TMRVolume();
 
   // Given the parametric point u,v,w compute the physical location x,y,z
   virtual int evalPoint( double u, double v, double w, TMRPoint *X );
 
   // Get the faces that enclose this volume
-  void getFaces( int *_num_faces, TMRFace ***_faces );
+  void getFaces( int *_num_faces, TMRFace ***_faces, const int **_dir );
 
  private:
   // Store the face information
   int num_faces;
   TMRFace **faces;
+  int *dir;
 };
 
 /*
@@ -251,6 +252,42 @@ class TMRModel : public TMREntity {
 /*
   The main topology class that contains the objects used to build the
   underlying mesh.
+  
+  This class takes in a general TMRModel, but there are additional
+  requirements that are placed on the model to create a proper
+  topology object. These requirements are as follows:
+
+  1. No edge can degenerate to a vertex.
+  2. No face can degenerate to an edge or vertex.
+  3. All faces must be surrounded by a single edge loop with 4
+  (non-degenerate) edges.
+  4. All volumes must contain 6 (non-degenerate) faces that are
+  ordered in coordinate ordering as shown below. Furthermore, all
+  volumes must be of type TMRTFIVolume.
+
+  Coordinate ordering for the faces of a volume:
+
+       6 ---------------------- 7
+      /|                       /|
+     / |                      / |
+    /  |                 5-- /  |
+   /   |                /   /   |
+  4 ---------------------- 5    |
+  |    |                   |    |
+  |    |                   |3-- |
+  |    |                   ||   |
+  |    2 ------------------|--- 3
+  | 0 /                    | 1 /
+  |/|/                     |/|/
+  | /--4               2-- | /
+  |/  /                |   |/
+  0 ---------------------- 1
+  
+  w
+  |  / v
+  | /
+  |/
+  . --- u
 */
 class TMRTopology : public TMREntity {
  public:

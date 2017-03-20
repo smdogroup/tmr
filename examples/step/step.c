@@ -46,7 +46,7 @@ int main( int argc, char *argv[] ){
     // Mesh the object of interest
     mesh->mesh(options, htarget);
     mesh->writeToVTK("surface-mesh.vtk");
-
+    mesh->writeToBDF("surface-mesh.bdf");
     mesh->decref();
     geo->decref();
   }

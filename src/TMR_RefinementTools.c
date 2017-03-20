@@ -3,17 +3,19 @@
 #include "tacslapack.h"
 
 /*
-  Compute the Jacobian transformation at a point within the element
+  Compute the transpose of the Jacobian transformation at a point
+  within the element.
 */
-static void computeJacobianTrans( const TacsScalar Xpts[],
-                                  const double Na[], const double Nb[], 
-                                  TacsScalar Xd[], TacsScalar J[] ){
+static void computeJacobianTrans2D( const TacsScalar Xpts[],
+                                    const double Na[], const double Nb[], 
+                                    TacsScalar Xd[], TacsScalar J[],
+                                    const int num_nodes ){
   memset(Xd, 0, 9*sizeof(TacsScalar));
 
   // Compute the derivative along the coordinate directions
   const double *na = Na, *nb = Nb;
   const TacsScalar *X = Xpts;
-  for ( int i = 0; i < 9; i++ ){
+  for ( int i = 0; i < num_nodes; i++ ){
     Xd[0] += X[0]*na[0];
     Xd[1] += X[1]*na[0];
     Xd[2] += X[2]*na[0];
@@ -35,9 +37,98 @@ static void computeJacobianTrans( const TacsScalar Xpts[],
 }
 
 /*
-  Evaluate the enrichment functions
+  Compute the transpose of the 3D Jacobian transformation at a point
+  within the element
 */
-static void evalEnrichmentFuncs( const double pt[], double N[] ){
+static void computeJacobianTrans3D( const TacsScalar Xpts[],
+                                    const double Na[], 
+                                    const double Nb[], 
+                                    const double Nc[],
+                                    TacsScalar Xd[], TacsScalar J[],
+                                    const int num_nodes ){
+  memset(Xd, 0, 9*sizeof(TacsScalar));
+
+  // Compute the derivative along the coordinate directions
+  const double *na = Na, *nb = Nb, *nc = Nc;
+  const TacsScalar *X = Xpts;
+  for ( int i = 0; i < num_nodes; i++ ){
+    Xd[0] += X[0]*na[0];
+    Xd[1] += X[1]*na[0];
+    Xd[2] += X[2]*na[0];
+
+    Xd[3] += X[0]*nb[0];
+    Xd[4] += X[1]*nb[0];
+    Xd[5] += X[2]*nb[0];
+
+    Xd[6] += X[0]*nc[0];
+    Xd[7] += X[1]*nc[0];
+    Xd[8] += X[2]*nc[0];
+
+    na++;  nb++;  nc++;
+    X += 3;
+  }
+
+  // Compute the transpose of the Jacobian transformation
+  FElibrary::jacobian3d(Xd, J);
+}
+
+/*
+  Evaluate the enrichment function for a second-order shell problem
+*/
+static void eval2ndEnrichmentFuncs2D( const double pt[], double N[] ){
+  // Compute the cubic enrichment shape functions along the two
+  // coordinate directions
+  double ca = (1.0 + pt[0])*(1.0 - pt[0]);
+  double cb = (1.0 + pt[1])*(1.0 - pt[1]);
+
+  N[0] = ca;
+  N[1] = pt[1]*ca;
+  N[2] = cb;
+  N[3] = pt[0]*cb;
+  N[4] = ca*cb;
+}
+
+/*
+  Evaluate the derivative of the enrichment functions for a
+  second-order problem.
+*/
+static void eval2ndEnrichmentFuncs2D( const double pt[], 
+                                      double N[], double Na[], double Nb[] ){
+  
+  // Compute the cubic enrichment shape functions along the two
+  // coordinate directions
+  double ca = (1.0 + pt[0])*(1.0 - pt[0]);
+  double cb = (1.0 + pt[1])*(1.0 - pt[1]);
+
+  // Compute the derivatives
+  double da = -2.0*pt[0];
+  double db = -2.0*pt[1];
+
+  // Evaluate the shape functions
+  N[0] = ca;
+  N[1] = pt[1]*ca;
+  N[2] = cb;
+  N[3] = pt[0]*cb;
+  N[4] = ca*cb;
+
+  // Evaluate the derivatives of the shape functions
+  Na[0] = da;
+  Na[1] = pt[1]*da;
+  Na[2] = 0.0;
+  Na[3] = cb;
+  Na[4] = da*cb;
+
+  Nb[0] = 0.0;
+  Nb[1] = ca;
+  Nb[2] = db;
+  Nb[3] = pt[0]*db;
+  Nb[4] = ca*db;
+} 
+
+/*
+  Evaluate the enrichment functions for a third-order shell problem
+*/
+static void eval3rdEnrichmentFuncs2D( const double pt[], double N[] ){
   // Compute the cubic enrichment shape functions along the two
   // coordinate directions
   double ca = (1.0 + pt[0])*pt[0]*(1.0 - pt[0]);
@@ -57,8 +148,8 @@ static void evalEnrichmentFuncs( const double pt[], double N[] ){
   The enriched shape functions for the tensor-product quadratic
   Lagrange shape functions.
 */
-static void evalEnrichmentFuncs( const double pt[],
-                                 double N[], double Na[], double Nb[] ){
+static void eval3rdEnrichmentFuncs2D( const double pt[],
+                                      double N[], double Na[], double Nb[] ){
   // Compute the cubic enrichment shape functions along the two
   // coordinate directions
   double ca = (1.0 + pt[0])*pt[0]*(1.0 - pt[0]);
@@ -110,33 +201,53 @@ static void evalEnrichmentFuncs( const double pt[],
   output:
   ubar:    the values of the coefficients on the enrichment functions
 */
-static void computeElemRecon( const TacsScalar Xpts[],
-                              const TacsScalar uvals[],
-                              const TacsScalar uderiv[],
-                              TacsScalar ubar[] ){
+static void computeElemRecon2D( const int order,
+                                const int vars_per_node,
+                                const TacsScalar Xpts[],
+                                const TacsScalar uvals[],
+                                const TacsScalar uderiv[],
+                                TacsScalar ubar[],
+                                TacsScalar *tmp ){
+  // The number of enrichment functions: 5 if we have a second-order
+  // mesh 7 if we have a third-order mesh
+  const int nenrich = (order == 2 ? 5 : 7);
+
+  // The number of equations
+  const int neq = 2*order*order;
+
+  // The number of derivatives per node
+  const int deriv_per_node = 3*vars_per_node;  
+
   // Set up the least squares problem at the nodes
-  TacsScalar A[18*7], b[18*6];
-  int nrhs = 6;
+  int nrhs = vars_per_node;
 
-  memset(b, 0, sizeof(b));
-  memset(A, 0, sizeof(A));
+  TacsScalar *A = &tmp[0];
+  TacsScalar *b = &tmp[nenrich*neq];
 
-  const double wvals[] = {0.5, 1.0, 0.5};
+  // Set the weighs 
+  double wvals[3];
+  if (order == 2){
+    wvals[0] = wvals[1] = 1.0;
+  }
+  else if (order == 3){
+    wvals[0] = wvals[2] = 0.5;
+    wvals[1] = 1.0;
+  }
 
-  for ( int c = 0, jj = 0; jj < 3; jj++ ){
-    for ( int ii = 0; ii < 3; ii++, c += 2 ){
+  for ( int c = 0, jj = 0; jj < order; jj++ ){
+    for ( int ii = 0; ii < order; ii++, c += 2 ){
       // Set the parametric location within the element
       double pt[2];
-      pt[0] = -1.0 + 1.0*ii;
-      pt[1] = -1.0 + 1.0*jj;
+      pt[0] = -1.0 + (2.0*ii)/(order-1);
+      pt[1] = -1.0 + (2.0*jj)/(order-1);
 
-      // Compute the quadratic shape functions at this point
+      // Compute the element shape functions at this point
       double N[9], Na[9], Nb[9];
-      FElibrary::biLagrangeSF(N, Na, Nb, pt, 3);
+      FElibrary::biLagrangeSF(N, Na, Nb, pt, order);
       
       // Evaluate the Jacobian transformation at this point
       TacsScalar Xd[9], J[9];
-      computeJacobianTrans(Xpts, Na, Nb, Xd, J);
+      computeJacobianTrans2D(Xpts, Na, Nb, Xd, J, order*order);
 
       // Normalize the first direction
       TacsScalar d1[3], d2[3];
@@ -150,54 +261,58 @@ static void computeElemRecon( const TacsScalar Xpts[],
       // right vector contains the difference between the prescribed
       // derivative and the contribution to the derivative from the
       // quadratic shape function terms
-      const TacsScalar *ud = &uderiv[18*(ii + 3*jj)];
-      for ( int k = 0; k < nrhs; k++ ){
-        b[18*k+c] = 
+      const TacsScalar *ud = &uderiv[deriv_per_node*(ii + order*jj)];
+
+      for ( int k = 0; k < vars_per_node; k++ ){
+        b[neq*k+c] = 
           wvals[ii]*wvals[jj]*(d1[0]*ud[0] + d1[1]*ud[1] + d1[2]*ud[2]);
-        b[18*k+c+1] = 
+        b[neq*k+c+1] = 
           wvals[ii]*wvals[jj]*(d2[0]*ud[0] + d2[1]*ud[1] + d2[2]*ud[2]);
         ud += 3;
       }
-
-      // Compute the derivatives from the interpolated solution
-      TacsScalar Ud[6*2];
-      memset(Ud, 0, sizeof(Ud));
-      for ( int i = 0; i < 9; i++ ){
-        for ( int k = 0; k < 6; k++ ){
-          Ud[2*k] += uvals[6*i + k]*Na[i];
-          Ud[2*k+1] += uvals[6*i + k]*Nb[i];
-        }
-      }
       
-      // Set the right-hand side
-      for ( int k = 0; k < nrhs; k++ ){
-        TacsScalar d[3];
-        d[0] = Ud[2*k]*J[0] + Ud[2*k+1]*J[1];
-        d[1] = Ud[2*k]*J[3] + Ud[2*k+1]*J[4];
-        d[2] = Ud[2*k]*J[6] + Ud[2*k+1]*J[7];
+      // Add the contribution from the nodes
+      for ( int k = 0; k < vars_per_node; k++ ){
+        // Evaluate the derivatives along the parametric directions
+        TacsScalar Ua = 0.0, Ub = 0.0;
+        for ( int i = 0; i < order*order; i++ ){
+          Ua += uvals[vars_per_node*i + k]*Na[i];
+          Ub += uvals[vars_per_node*i + k]*Nb[i];
+        }
 
-        b[18*k+c] -= 
+        // Compute the derivative along the x,y,z directions
+        TacsScalar d[3];
+        d[0] = Ua*J[0] + Ub*J[1];
+        d[1] = Ua*J[3] + Ub*J[4];
+        d[2] = Ua*J[6] + Ub*J[7];
+
+        b[neq*k+c] -= 
           wvals[ii]*wvals[jj]*(d1[0]*d[0] + d1[1]*d[1] + d1[2]*d[2]);
-        b[18*k+c+1] -= 
+        b[neq*k+c+1] -= 
           wvals[ii]*wvals[jj]*(d2[0]*d[0] + d2[1]*d[1] + d2[2]*d[2]);
       }
       
       // Now, evaluate the terms for the left-hand-side
       // that contribute to the
       double Nr[7], Nar[7], Nbr[7];
-      evalEnrichmentFuncs(pt, Nr, Nar, Nbr);
+      if (order == 2){
+        eval2ndEnrichmentFuncs2D(pt, Nr, Nar, Nbr);
+      }
+      else {
+        eval3rdEnrichmentFuncs2D(pt, Nr, Nar, Nbr);
+      }
 
       // Add the contributions to the the enricment 
-      for ( int i = 0; i < 7; i++ ){
+      for ( int i = 0; i < nenrich; i++ ){
         // Evaluate the
         TacsScalar d[3];
         d[0] = Nar[i]*J[0] + Nbr[i]*J[1];
         d[1] = Nar[i]*J[3] + Nbr[i]*J[4];
         d[2] = Nar[i]*J[6] + Nbr[i]*J[7];
 
-        A[18*i+c] = 
+        A[neq*i+c] = 
           wvals[ii]*wvals[jj]*(d1[0]*d[0] + d1[1]*d[1] + d1[2]*d[2]);
-        A[18*i+c+1] = 
+        A[neq*i+c+1] = 
           wvals[ii]*wvals[jj]*(d2[0]*d[0] + d2[1]*d[1] + d2[2]*d[2]);
       }
     }
@@ -205,11 +320,15 @@ static void computeElemRecon( const TacsScalar Xpts[],
 
   // Singular values
   TacsScalar s[7];
-  int m = 18, n = 7;
+  int m = neq, n = nenrich;
   double rcond = -1.0;
   int rank;
+
+  // Length of the work array
   int lwork = 10*18;
   TacsScalar work[10*18];
+  
+  // LAPACK output status
   int info;
 
   // Using LAPACK, compute the least squares solution
@@ -217,9 +336,9 @@ static void computeElemRecon( const TacsScalar Xpts[],
                &rcond, &rank, work, &lwork, &info);
 
   // Copy over the ubar solution
-  for ( int i = 0; i < n; i++ ){
-    for ( int j = 0; j < nrhs; j++ ){
-      ubar[nrhs*i + j] = b[m*j + i];
+  for ( int i = 0; i < nenrich; i++ ){
+    for ( int j = 0; j < vars_per_node; j++ ){
+      ubar[vars_per_node*i + j] = b[m*j + i];
     }
   }
 }
@@ -280,8 +399,9 @@ static void computeLocalWeights( TACSAssembler *tacs,
   output:
   uderiv:         the approximate derivatives at the nodes
 */
-static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec, 
-                              TACSBVec *wlocal, TACSBVec **_uderiv ){
+static void computeNodeDeriv2D( const int order,
+                                TACSAssembler *tacs, TACSBVec *uvec, 
+                                TACSBVec *wlocal, TACSBVec **_uderiv ){
   // The number of variables at each node
   int vars_per_node = tacs->getVarsPerNode();
 
@@ -297,8 +417,9 @@ static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec,
   int nelems = tacs->getNumElements();
 
   // Allocate space for the element-wise values and derivatives
-  TacsScalar *uelem = new TacsScalar[ 9*vars_per_node ];
-  TacsScalar *delem = new TacsScalar[ 9*deriv_per_node ];
+  TacsScalar *Ud = new TacsScalar[ 2*vars_per_node ];
+  TacsScalar *uelem = new TacsScalar[ order*order*vars_per_node ];
+  TacsScalar *delem = new TacsScalar[ order*order*deriv_per_node ];
 
   // Perform the reconstruction for the local
   for ( int elem = 0; elem < nelems; elem++ ){
@@ -318,33 +439,34 @@ static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec,
     TacsScalar Xpts[3*9];
     tacs->getElement(elem, Xpts);
     
-    // Compute the derivative of the 6 components of the variables
-    // along each of the 3-coordinate directions
+    // Compute the derivative of the components of the variables along
+    // each of the 3-coordinate directions
     TacsScalar *d = delem;
 
     // Compute the contributions to the derivative from this side of
     // the element    
-    for ( int jj = 0; jj < 3; jj++ ){
-      for ( int ii = 0; ii < 3; ii++ ){
+    for ( int jj = 0; jj < order; jj++ ){
+      for ( int ii = 0; ii < order; ii++ ){
         double pt[2];
-        pt[0] = -1.0 + 1.0*ii;
-        pt[1] = -1.0 + 1.0*jj;
+        pt[0] = -1.0 + 2.0*ii/(order-1);
+        pt[1] = -1.0 + 1.0*jj/(order-1);
 
         // Evaluate the the quadratic shape functions at this point
         double N[9], Na[9], Nb[9];
-        FElibrary::biLagrangeSF(N, Na, Nb, pt, 3);
+        FElibrary::biLagrangeSF(N, Na, Nb, pt, order);
       
         // Evaluate the Jacobian transformation at this point
         TacsScalar Xd[9], J[9];
-        computeJacobianTrans(Xpts, Na, Nb, Xd, J);
+        computeJacobianTrans2D(Xpts, Na, Nb, Xd, J, order*order);
 
         // Compute the derivatives from the interpolated solution
-        TacsScalar Ud[6*2];
-        memset(Ud, 0, sizeof(Ud));
-        for ( int i = 0; i < 9; i++ ){
-          for ( int k = 0; k < 6; k++ ){
-            Ud[2*k] += uelem[6*i + k]*Na[i];
-            Ud[2*k+1] += uelem[6*i + k]*Nb[i];
+        memset(Ud, 0, 2*vars_per_node*sizeof(TacsScalar));
+        for ( int k = 0; k < vars_per_node; k++ ){
+          const TacsScalar *ue = &uelem[k];
+          for ( int i = 0; i < order*order; i++ ){
+            Ud[2*k] += ue[0]*Na[i];
+            Ud[2*k+1] += ue[0]*Nb[i];
+            ue += vars_per_node;
           }
         }
 
@@ -365,6 +487,7 @@ static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec,
   }
 
   // Free the element values
+  delete [] Ud;
   delete [] uelem;
   delete [] delem;
 
@@ -377,6 +500,188 @@ static void computeNodeDeriv( TACSAssembler *tacs, TACSBVec *uvec,
   uderiv->endDistributeValues();
 
   *_uderiv = uderiv;
+}
+
+/*
+  Reconstruct the solution on a more refined mesh
+*/
+void computeRefinedSolution( const int order,
+                             TACSAssembler *tacs,
+                             TACSAssembler *tacs_refine,
+                             TACSBVec *wref,
+                             TACSBVec *vec,
+                             TACSBVec *vecDeriv,
+                             TACSBVec *out ){  
+  // Number of local elements in the coarse version of TACS
+  const int nelems = tacs->getNumElements();
+
+  // Number of variables/derivatives per node
+  const int vars_per_node = tacs->getVarsPerNode();
+  const int deriv_per_node = 3*vars_per_node;
+
+  // The number of equations: 2 times the number of nodes for each element
+  const int neq = 2*order*order;
+
+  // The number of enrichment functions: 5 if we have a second-order
+  // mesh 7 if we have a third-order mesh
+  const int nenrich = (order == 2 ? 5 : 7);
+  
+  // Allocate space for the element reconstruction problem
+  TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
+ 
+  // Element solution on the coarse TACS mesh
+  TacsScalar *uelem = new TacsScalar[ vars_per_node*order*order ];
+  TacsScalar *delem = new TacsScalar[ deriv_per_node*order*order ];
+  TacsScalar *ubar = new TacsScalar[ vars_per_node*nenrich ];
+
+  // Refined element solution
+  TacsScalar *uref = new TacsScalar[ vars_per_node*order*order ];
+
+  // Derivative weights for this element
+  TacsScalar welem[9];
+
+  // The maximum number of nodes for any element
+  TacsScalar Xpts[3*9];
+
+  for ( int elem = 0; elem < nelems; elem++ ){
+    // Get the node numbers and node locations for this element
+    int len;
+    const int *nodes;
+    tacs->getElement(elem, &nodes, &len);
+    tacs->getElement(elem, Xpts, uelem);
+
+    // Get the derivatives at the nodes
+    vecDeriv->getValues(len, nodes, delem);
+
+    // Compute the reconstruction weights for the enrichment functions
+    computeElemRecon2D(order, vars_per_node,
+                       Xpts, uelem, delem, ubar, tmp);
+
+    // Loop over the refined elements
+    for ( int ii = 0; ii < 2; ii++ ){
+      for ( int jj = 0; jj < 2; jj++ ){
+        // Get the refined element nodes
+        const int *refine_nodes;
+        tacs_refine->getElement(4*elem + jj + 2*ii,
+                                &refine_nodes, NULL);
+
+        // Zero the refined element contribution
+        memset(uref, 0, vars_per_node*order*order*sizeof(TacsScalar));
+
+        // Compute the element order
+        for ( int m = 0; m < order; m++ ){
+          for ( int n = 0; n < order; n++ ){
+            // Set the new parameter point in the refined element
+            double pt[2];
+            pt[0] = -1.0 + (1.0*(2*ii + n))/(order-1);
+            pt[1] = -1.0 + (1.0*(2*jj + m))/(order-1);
+
+            // Evaluate the shape functions and the enrichment
+            // functions at the new parametric point
+            double N[9], Nr[7];
+            FElibrary::biLagrangeSF(N, pt, order);
+            if (order == 2){
+              eval2ndEnrichmentFuncs2D(pt, Nr);
+            }
+            else {
+              eval3rdEnrichmentFuncs2D(pt, Nr);
+            }
+            
+            // Set the values of the variables at this point
+            for ( int i = 0; i < vars_per_node; i++ ){
+              const TacsScalar *ue = &uelem[i];
+              TacsScalar *u = &uref[vars_per_node*(n + order*m) + i];
+
+              for ( int k = 0; k < order*order; k++ ){
+                u[0] += N[k]*ue[vars_per_node*k];
+              }
+            }
+
+            // Add the portion from the enrichment functions
+            for ( int i = 0; i < vars_per_node; i++ ){
+              const TacsScalar *ue = &ubar[i];
+              TacsScalar *u = &uref[vars_per_node*(n + order*m) + i];
+
+              for ( int k = 0; k < nenrich; k++ ){
+                u[0] += Nr[k]*ue[vars_per_node*k];
+              }
+            }
+          }
+        }
+
+        // Multiply the element contributions by their weights
+        TacsScalar welem[9];
+        wref->getValues(len, refine_nodes, welem);
+        for ( int i = 0; i < order*order; i++ ){
+          TacsScalar w = 1.0/welem[i];
+
+          // Add the contributions to the refined nodes
+          for ( int j = 0; j < vars_per_node; j++ ){
+            uref[vars_per_node*i + j] *= w;
+          }
+        }
+
+        // Add the contributions to the element
+        out->setValues(len, refine_nodes, uref, ADD_VALUES);
+      }
+    }
+  }
+
+  // Free allocated data
+  delete [] tmp;
+  delete [] uelem;
+  delete [] delem;
+  delete [] ubar;
+  delete [] uref;
+
+  // Add the values
+  out->beginSetValues(ADD_VALUES);
+  out->endSetValues(ADD_VALUES);
+}
+
+/*
+  Compute the reconstructed solution on the uniformly refined mesh.
+*/
+void TMR_ComputeReconSolution( const int order,
+                               TACSAssembler *tacs,
+                               TACSAssembler *tacs_refined ){
+  // Retrieve the variables from the TACSAssembler object
+  TACSBVec *uvec = tacs->createVec();
+  tacs->getVariables(uvec);
+  uvec->incref();
+  uvec->beginDistributeValues();
+  uvec->endDistributeValues();
+ 
+  // Compute the nodal weights for the derivatives
+  TACSBVec *wlocal;
+  computeLocalWeights(tacs, &wlocal);
+  wlocal->incref();
+
+  // Compute the nodal derivatives
+  TACSBVec *uderiv;
+  computeNodeDeriv2D(order, tacs, uvec, wlocal, &uderiv);
+  uderiv->incref();
+
+  // Free the local weights for the original solution
+  wlocal->decref();
+
+  // Compute the nodal weights for the refined mesh
+  computeLocalWeights(tacs_refined, &wlocal);
+  wlocal->incref();
+
+  // Create the new solution vector
+  TACSBVec *ans = tacs_refined->createVec();
+  ans->incref();
+
+  // Compute the refined solution
+  computeRefinedSolution(order, tacs, tacs_refined,
+                         wlocal, uvec, uderiv, ans);
+  wlocal->decref();
+  uvec->decref();
+  uderiv->decref();
+
+  tacs_refined->setVariables(ans);
+  ans->decref();
 }
 
 /*
@@ -416,6 +721,8 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
                                    TMRQuadForest *forest,
                                    double target_err,
                                    int min_level, int max_level ){
+  const int order = forest->getMeshOrder();
+
   // Get the communicator
   MPI_Comm comm = tacs->getMPIComm();
   
@@ -440,7 +747,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
 
   // Compute the nodal derivatives
   TACSBVec *uderiv;
-  computeNodeDeriv(tacs, uvec, wlocal, &uderiv);
+  computeNodeDeriv2D(order, tacs, uvec, wlocal, &uderiv);
   uderiv->incref();
 
   // Zero the time-derivatives: this code assumes a steady-state
@@ -480,8 +787,10 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     uderiv->getValues(len, nodes, delem);
 
     // 7 enrichment functions for each degree of freedom
+    TacsScalar tmp[18*(7 + 6)];
     TacsScalar ubar[7*6];
-    computeElemRecon(Xpts, uelem, delem, ubar);
+    computeElemRecon2D(order, 6,
+                       Xpts, uelem, delem, ubar, tmp);
 
     TacsScalar SE_refine = 0.0;
     for ( int ii = 0; ii < 2; ii++ ){
@@ -499,7 +808,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
             // Evaluate the locations of the new nodes
             double N[9], Nr[7];
             FElibrary::biLagrangeSF(N, pt, 3);
-            evalEnrichmentFuncs(pt, Nr);
+            eval3rdEnrichmentFuncs2D(pt, Nr);
             
             // Set the values of the variables at this point
             for ( int k = 0; k < 9; k++ ){
@@ -594,6 +903,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   returns: 
   absolute functional error estimate
 */
+/*
 TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
                               TACSAssembler *tacs_refine,
                               TACSBVec *adjvec,
@@ -877,4 +1187,4 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   // Return the error
   return total_err_remain;
 }
-
+*/
