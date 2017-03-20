@@ -6,6 +6,9 @@
 #include "Solid.h"
 #include "TMR_STLTools.h"
 
+/*
+  Wrap a TACSBVec object with the ParOpt vector interface
+*/
 ParOptBVecWrap::ParOptBVecWrap( TACSBVec *_vec ){
   vec = _vec;
   vec->incref();
@@ -16,7 +19,6 @@ ParOptBVecWrap::~ParOptBVecWrap(){
 }
 
 // Perform standard operations required for linear algebra
-// -------------------------------------------------------
 void ParOptBVecWrap::set( ParOptScalar alpha ){ 
   vec->set(alpha); 
 }
@@ -98,7 +100,9 @@ int ParOptBVecWrap::getArray( ParOptScalar **array ){
   return size;
 }
 
-
+/*
+  Create the topology optimization problem
+*/
 
 TMRTopoProblem::TMRTopoProblem( int _nlevels, 
                                 TACSAssembler *_tacs[],
@@ -340,7 +344,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
 
       // Set the local values into the vector
       if (wrap){
-	setBVecFromLocalValues(xlocal, wrap->vec);
+        setBVecFromLocalValues(xlocal, wrap->vec);
       }
     }
 
@@ -349,16 +353,16 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
       tacs[0]->getDesignVarRange(xlocal, upper, max_local_size);
 
       if (lb){
-	ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lb);
-	if (lbwrap){
-	  setBVecFromLocalValues(xlocal, lbwrap->vec);
-	}
+        ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lb);
+        if (lbwrap){
+          setBVecFromLocalValues(xlocal, lbwrap->vec);
+        }
       }
       if (ub){
-	ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ub);
-	if (ubwrap){
-	  setBVecFromLocalValues(upper, ubwrap->vec);
-	}
+        ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ub);
+        if (ubwrap){
+          setBVecFromLocalValues(upper, ubwrap->vec);
+        }
       }
       delete [] upper;
     }
@@ -397,9 +401,9 @@ void TMRTopoProblem::setLinearization( double q, ParOptVec *xvec ){
         TMRLinearOctStiffness *con =
           dynamic_cast<TMRLinearOctStiffness*>(constitutive);
 
-	if (con){
-	  con->setLinearization(q, xlocal, size);
-	}
+        if (con){
+          con->setLinearization(q, xlocal, size);
+        }
       }
     }
   }
@@ -468,7 +472,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       TacsScalar *xvals;
       int size = x[0]->getArray(&xvals);
       for ( int i = 0; i < size; i++ ){
-	xvals[i] = 1.0/xvals[i];
+        xvals[i] = 1.0/xvals[i];
       }
     }
   
@@ -568,8 +572,8 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       g_vec->getArray(&gvals);
       m_vec->getArray(&mvals);
       for ( int i = 0; i < xsize; i++ ){
-	gvals[i] = -gvals[i]/(xvals[i]*xvals[i]);
-	mvals[i] = -mvals[i]/(xvals[i]*xvals[i]);
+        gvals[i] = -gvals[i]/(xvals[i]*xvals[i]);
+        mvals[i] = -mvals[i]/(xvals[i]*xvals[i]);
       }
     }
   }

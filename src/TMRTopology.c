@@ -1029,101 +1029,163 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
   geo->getFaces(&num_faces, &faces);
   geo->getVolumes(&num_volumes, &volumes);
 
-  // Sort the addresses to make the array
-  const int coordinate_to_edge[] = {3, 1, 0, 2};
+  if (num_volumes > 0){
+    // Create the face -> edge information
+    int *volume_faces = new int[ 6*num_volumes ];
+    for ( int i = 0; i < num_volumes; i++ ){
+      TMRFace **f;
+      volumes[i]->getFaces(NULL, &f);
 
-  // Create the face -> edge information
-  face_to_edges = new int[ 4*num_faces ];
-  for ( int i = 0; i < num_faces; i++ ){
-    TMREdgeLoop *loop;
-    faces[i]->getEdgeLoop(0, &loop);
-    TMREdge **e;
-    loop->getEdgeLoop(NULL, &e, NULL);
-
-    // Search for the face indices
-    for ( int jp = 0; jp < 4; jp++ ){
-      int j = coordinate_to_edge[jp];
-      face_to_edges[4*i+jp] = geo->getEdgeIndex(e[j]);
-    }
-  }
-
-  // Face index to the new face number
-  face_to_new_num = new int[ num_faces ];
-  new_num_to_face = new int[ num_faces ];
-
-  // Get the mpi size
-  int mpi_rank, mpi_size;
-  MPI_Comm_rank(comm, &mpi_rank);
-  MPI_Comm_size(comm, &mpi_size);
-
-  if (mpi_size > 1 && num_faces > 4*mpi_size){
-    if (mpi_rank == 0){
-      // Compute the new ordering
-      int *face_to_face_ptr, *face_to_face;
-      computeFaceConn(num_edges, num_faces, face_to_edges,
-                      &face_to_face_ptr, &face_to_face);
-
-      // Allocate an array to store the partition information
-      int *partition = new_num_to_face;
-
-      // Set the default options
-      int options[METIS_NOPTIONS];
-      METIS_SetDefaultOptions(options);
-
-      // Use 0-based numbering
-      options[METIS_OPTION_NUMBERING] = 0;
-
-      // The objective value in METIS
-      int objval = 0;
-
-      // Partition based on the size of the mesh
-      int ncon = 1;
-      METIS_PartGraphRecursive(&num_faces, &ncon, 
-                               face_to_face_ptr, face_to_face,
-                               NULL, NULL, NULL, &mpi_size, 
-                               NULL, NULL, options, &objval, partition);
-
-      delete [] face_to_face_ptr;
-      delete [] face_to_face;
-
-      int *offset = new int[ mpi_size+1 ];
-      memset(offset, 0, (mpi_size+1)*sizeof(int));
-      for ( int i = 0; i < num_faces; i++ ){
-        offset[partition[i]+1]++;
+      // Search for the face indices
+      for ( int jp = 0; jp < 6; jp++ ){
+        volume_faces[6*i+jp] = geo->getFaceIndex(f[jp]);
       }
-      for ( int i = 0; i < mpi_size; i++ ){
-        offset[i+1] += offset[i];
-      }
-
-      // Order the faces according to their partition
-      for ( int i = 0; i < num_faces; i++ ){
-        face_to_new_num[i] = offset[partition[i]];
-        offset[partition[i]]++;
-      }
-
-      // Free the local offset data
-      delete [] offset;
     }
 
-    // Broadcast the new ordering
-    MPI_Bcast(face_to_new_num, num_faces, MPI_INT, 0, comm);
+    // Face index to the new face number
+    volume_to_new_num = new int[ num_volumes ];
+    new_num_to_volume = new int[ num_volumes ];
 
-    // Now overwrite the new_num_to_face == partition array
-    for ( int i = 0; i < num_faces; i++ ){
-      new_num_to_face[face_to_new_num[i]] = i;
-    }
+    reorderEntities(6, num_faces, num_volumes, volume_faces,
+                    volume_to_new_num, new_num_to_volume);
+
+    // Free the temporary volume to faces pointer
+    delete [] volume_faces;
   }
   else {
+    // From the edge loop number, get the edge in coordinate
+    // ordering
+    const int coordinate_to_edge[] = {3, 1, 0, 2};
+
+    // Create the face -> edge information
+    int *face_edges = new int[ 4*num_faces ];
     for ( int i = 0; i < num_faces; i++ ){
-      new_num_to_face[i] = i;
-      face_to_new_num[i] = i;
+      TMREdgeLoop *loop;
+      faces[i]->getEdgeLoop(0, &loop);
+      TMREdge **e;
+      loop->getEdgeLoop(NULL, &e, NULL);
+
+      // Search for the face indices
+      for ( int jp = 0; jp < 4; jp++ ){
+        int j = coordinate_to_edge[jp];
+        face_edges[4*i+jp] = geo->getEdgeIndex(e[j]);
+      }
+    }
+
+    // Face index to the new face number
+    face_to_new_num = new int[ num_faces ];
+    new_num_to_face = new int[ num_faces ];
+
+    reorderEntities(4, num_edges, num_faces, face_edges,
+                    face_to_new_num, new_num_to_face);
+
+    // Delete face edges
+    delete [] face_edges;
+
+    // Allocate the connectivity
+    computeFaceConn();
+  }
+}
+
+/*
+  Free the topology data
+*/
+TMRTopology::~TMRTopology(){
+  // Free the geometry object
+  geo->decref();
+
+  // Free any face connectivity information
+  if (edge_to_vertices){ delete [] edge_to_vertices; }
+  if (face_to_vertices){ delete [] face_to_vertices; }
+  if (face_to_edges){ delete [] face_to_edges; }
+  if (volume_to_vertices){ delete [] volume_to_vertices; }
+  if (volume_to_edges){ delete [] volume_to_edges; }
+  if (volume_to_faces){ delete [] volume_to_faces; }
+
+  // Free the reordering data - if it exists
+  if (face_to_new_num){ delete [] face_to_new_num; }
+  if (new_num_to_face){ delete [] new_num_to_face; }
+  if (volume_to_new_num){ delete [] volume_to_new_num; }
+  if (new_num_to_volume){ delete [] new_num_to_volume; }
+}
+
+/*
+  Compute the volume connectivity
+*/
+void TMRTopology::computeVolumeConn(){
+  // First compute the connectivity between faces/edges and vertices
+  computeFaceConn();
+
+  // Get the geometry objects
+  int num_vertices, num_edges, num_faces, num_volumes;
+  TMRVertex **vertices;
+  TMREdge **edges;
+  TMRFace **faces;
+  TMRVolume **volumes;
+  geo->getVertices(&num_vertices, &vertices);
+  geo->getEdges(&num_edges, &edges);
+  geo->getFaces(&num_faces, &faces);
+  geo->getVolumes(&num_volumes, &volumes);
+
+  // Allocate the data needed for the connectivity
+  volume_to_faces = new int[ 6*num_volumes ];
+  volume_to_edges = new int[ 12*num_volumes ];
+  volume_to_vertices = new int[ 8*num_vertices ];
+
+  for ( int i = 0; i < num_volumes; i++ ){
+    int v = i;
+    if (volume_to_new_num){
+      v = volume_to_new_num[i];
+    }
+
+    // Get the faces associated with the volume
+    int nfaces;
+    TMRFace **f;
+    volumes[v]->getFaces(&nfaces, &f);
+
+    // Set the volume -> face information
+    for ( int jp = 0; jp < 6; jp++ ){
+      volume_to_faces[6*v+jp] = geo->getFaceIndex(f[jp]);
+    }
+
+    // Set the volume -> edge information
+    for ( int jp = 0; jp < 12; jp++ ){
+      volume_to_edges[12*v+jp] = 0;
+    }
+
+    // Set the volume -> vertex information
+    for ( int jp = 0; jp < 8; jp++ ){
+      volume_to_vertices[8*v+jp] = 0;// geo->getVertexIndex(vert[jp]);
     }
   }
+}
+
+/*
+  Compute the face connectivity
+*/
+void TMRTopology::computeFaceConn(){
+  // Get the geometry objects
+  int num_vertices, num_edges, num_faces;
+  TMRVertex **vertices;
+  TMREdge **edges;
+  TMRFace **faces;
+  geo->getVertices(&num_vertices, &vertices);
+  geo->getEdges(&num_edges, &edges);
+  geo->getFaces(&num_faces, &faces);
+
+  // From the edge loop number, get the edge in coordinate ordering
+  const int coordinate_to_edge[] = {3, 1, 0, 2};
+
+  // Allocate the face to edges
+  face_to_edges = new int[ 4*num_faces ];
 
   // Post-process to get the new face ordering
   for ( int i = 0; i < num_faces; i++ ){
     // Get the new face number
-    int f = face_to_new_num[i];
+    int f = i;
+    if (face_to_new_num){
+      f = face_to_new_num[i];
+    }
 
     // Get the edge loop for the face
     TMREdgeLoop *loop;
@@ -1164,7 +1226,10 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
   face_to_vertices = new int[ 4*num_faces ];
   for ( int i = 0; i < num_faces; i++ ){
     // Get the new face number
-    int f = face_to_new_num[i];
+    int f = i;
+    if (face_to_new_num){
+      f = face_to_new_num[i];
+    }
 
     // Get the edge loop and direction
     TMREdgeLoop *loop;
@@ -1198,42 +1263,21 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
 }
 
 /*
-  Free the topology data
+  Compute the connectivity between faces or volumes given the 
+  connectivity between faces to edges or volumes to faces.
 */
-TMRTopology::~TMRTopology(){
-  // Free the geometry object
-  geo->decref();
-
-  // Free any face connectivity information
-  if (edge_to_vertices){ delete [] edge_to_vertices; }
-  if (face_to_vertices){ delete [] face_to_vertices; }
-  if (face_to_edges){ delete [] face_to_edges; }
-  if (volume_to_vertices){ delete [] volume_to_vertices; }
-  if (volume_to_edges){ delete [] volume_to_edges; }
-  if (volume_to_faces){ delete [] volume_to_faces; }
-
-  // Free the reordering data - if it exists
-  if (face_to_new_num){ delete [] face_to_new_num; }
-  if (new_num_to_face){ delete [] new_num_to_face; }
-  if (volume_to_new_num){ delete [] volume_to_new_num; }
-  if (new_num_to_volume){ delete [] new_num_to_volume; }
-}
-
-/*
-  Compute the connectivity between faces using the provided
-  face to edge connectivity
-*/
-void TMRTopology::computeFaceConn( int num_edges, int num_faces,
-                                   const int ftoedges[],
-                                   int **_face_to_face_ptr,
-                                   int **_face_to_face ){
+void TMRTopology::computeConnectivty( int num_entities,
+                                      int num_edges, int num_faces,
+                                      const int ftoedges[],
+                                      int **_face_to_face_ptr,
+                                      int **_face_to_face ){
   // The edge to face pointer information
   int *edge_to_face_ptr = new int[ num_edges+1 ];
-  int *edge_to_face = new int[ 4*num_faces ];
+  int *edge_to_face = new int[ num_entities*num_faces ];
   memset(edge_to_face_ptr, 0, (num_edges+1)*sizeof(int));
   for ( int i = 0; i < num_faces; i++ ){
-    for ( int j = 0; j < 4; j++ ){
-      edge_to_face_ptr[1+ftoedges[4*i+j]]++;
+    for ( int j = 0; j < num_entities; j++ ){
+      edge_to_face_ptr[1+ftoedges[num_entities*i+j]]++;
     }
   }
 
@@ -1245,8 +1289,8 @@ void TMRTopology::computeFaceConn( int num_edges, int num_faces,
 
   // Set the edge to face pointer
   for ( int i = 0; i < num_faces; i++ ){
-    for ( int j = 0; j < 4; j++ ){
-      int e = ftoedges[4*i+j];
+    for ( int j = 0; j < num_entities; j++ ){
+      int e = ftoedges[num_entities*i+j];
       edge_to_face[edge_to_face_ptr[e]] = i;
       edge_to_face_ptr[e]++;
     }
@@ -1261,8 +1305,8 @@ void TMRTopology::computeFaceConn( int num_edges, int num_faces,
   // Set the pointer from the face to face
   int max_face_to_face_size = 0;
   for ( int i = 0; i < num_faces; i++ ){
-    for ( int j = 0; j < 4; j++ ){
-      int e = ftoedges[4*i+j];
+    for ( int j = 0; j < num_entities; j++ ){
+      int e = ftoedges[num_entities*i+j];
       for ( int kp = edge_to_face_ptr[e]; kp < edge_to_face_ptr[e+1]; kp++ ){
         int f = edge_to_face[kp];
         if (i != f){
@@ -1279,8 +1323,8 @@ void TMRTopology::computeFaceConn( int num_edges, int num_faces,
   face_to_face_ptr[0] = 0;
   for ( int i = 0; i < num_faces; i++ ){
     face_to_face_ptr[i+1] = face_to_face_ptr[i];
-    for ( int j = 0; j < 4; j++ ){
-      int e = face_to_edges[4*i+j];
+    for ( int j = 0; j < num_entities; j++ ){
+      int e = face_to_edges[num_entities*i+j];
 
       for ( int kp = edge_to_face_ptr[e]; kp < edge_to_face_ptr[e+1]; kp++ ){
         int f = edge_to_face[kp];
@@ -1310,6 +1354,103 @@ void TMRTopology::computeFaceConn( int num_edges, int num_faces,
 }
 
 /*
+  Reorder volumes or faces to group things according to MPI rank
+*/
+void TMRTopology::reorderEntities( int num_entities, 
+                                   int num_edges, int num_faces,
+                                   const int *ftoedges,
+                                   int *entity_to_new_num,
+                                   int *new_num_to_entity ){
+  // Get the mpi size
+  int mpi_rank, mpi_size;
+  MPI_Comm_rank(comm, &mpi_rank);
+  MPI_Comm_size(comm, &mpi_size);
+
+  if (mpi_size > 1 && num_faces > 4*mpi_size){
+    if (mpi_rank == 0){
+      // Compute the new ordering
+      int *face_to_face_ptr, *face_to_face;
+      computeConnectivty(num_entities, num_edges, 
+                         num_faces, ftoedges,
+                         &face_to_face_ptr, &face_to_face);
+
+      // Allocate an array to store the partition information
+      int *partition = new_num_to_face;
+
+      // Set the default options
+      int options[METIS_NOPTIONS];
+      METIS_SetDefaultOptions(options);
+
+      // Use 0-based numbering
+      options[METIS_OPTION_NUMBERING] = 0;
+
+      // The objective value in METIS
+      int objval = 0;
+
+      // Partition based on the size of the mesh
+      int ncon = 1;
+      METIS_PartGraphRecursive(&num_faces, &ncon, 
+                               face_to_face_ptr, face_to_face,
+                               NULL, NULL, NULL, &mpi_size, 
+                               NULL, NULL, options, &objval, partition);
+
+      delete [] face_to_face_ptr;
+      delete [] face_to_face;
+
+      int *offset = new int[ mpi_size+1 ];
+      memset(offset, 0, (mpi_size+1)*sizeof(int));
+      for ( int i = 0; i < num_faces; i++ ){
+        offset[partition[i]+1]++;
+      }
+      for ( int i = 0; i < mpi_size; i++ ){
+        offset[i+1] += offset[i];
+      }
+
+      // Order the faces according to their partition
+      for ( int i = 0; i < num_faces; i++ ){
+        entity_to_new_num[i] = offset[partition[i]];
+        offset[partition[i]]++;
+      }
+
+      // Free the local offset data
+      delete [] offset;
+    }
+
+    // Broadcast the new ordering
+    MPI_Bcast(entity_to_new_num, num_faces, MPI_INT, 0, comm);
+
+    // Now overwrite the new_num_to_face == partition array
+    for ( int i = 0; i < num_faces; i++ ){
+      new_num_to_face[entity_to_new_num[i]] = i;
+    }
+  }
+  else {
+    for ( int i = 0; i < num_faces; i++ ){
+      new_num_to_face[i] = i;
+      entity_to_new_num[i] = i;
+    }
+  }
+}
+
+/*
+  Get the volume associated with the given volume number
+*/
+void TMRTopology::getVolume( int vol_num, TMRVolume **volume ){
+  int num_volumes;
+  TMRVolume **volumes;
+  geo->getVolumes(&num_volumes, &volumes);
+  *volume = NULL;
+
+  int v = vol_num;
+  if (new_num_to_volume){
+    v = new_num_to_volume[vol_num];
+  }
+  if (volumes && (v >= 0 && v < num_volumes)){
+    *volume = volumes[v];
+  }
+}
+
+/*
   Retrieve the face object
 */
 void TMRTopology::getFace( int face_num, TMRFace **face ){
@@ -1318,7 +1459,10 @@ void TMRTopology::getFace( int face_num, TMRFace **face ){
   geo->getFaces(&num_faces, &faces);
   *face = NULL;
 
-  int f = new_num_to_face[face_num];
+  int f = face_num;
+  if (new_num_to_face){
+    f = new_num_to_face[face_num];
+  }
   if (faces && (f >= 0 && f < num_faces)){
     *face = faces[f];
   }
@@ -1327,61 +1471,28 @@ void TMRTopology::getFace( int face_num, TMRFace **face ){
 /*
   Retrieve the curve object associated with the given face/edge index
 */
-void TMRTopology::getFaceEdge( int face_num, int edge_index, 
-                               TMREdge **edge ){
-  int num_faces;
-  TMRFace **faces;
-  geo->getFaces(&num_faces, &faces);
-
-  // Coordinate edge number to actual edge number
-  const int coordinate_to_edge[] = {3, 1, 0, 2};
-
+void TMRTopology::getEdge( int edge_num, TMREdge **edge ){
+  int num_edges;
+  TMREdge **edges;
+  geo->getEdges(&num_edges, &edges);
   *edge = NULL;
-  int f = new_num_to_face[face_num];
-  if (faces && (f >= 0 && f < num_faces)){
-    TMREdgeLoop *loop;
-    faces[f]->getEdgeLoop(0, &loop);
 
-    // Get the edge loop
-    TMREdge **edgs;
-    loop->getEdgeLoop(NULL, &edgs, NULL);
-    if (edge_index >= 0 && edge_index < 4){
-      edge_index = coordinate_to_edge[edge_index];
-      *edge = edgs[edge_index];
-    }
+  if (edges && (edge_num >= 0 && edge_num < num_edges)){
+    *edge = edges[edge_num];
   }
 }
 
 /*
   Retrieve the vertex object associated with the face/vertex index
 */
-void TMRTopology::getFaceVertex( int face_num, int vertex_index, 
-                                 TMRVertex **vert ){
-  int num_faces;
-  TMRFace **faces;
-  geo->getFaces(&num_faces, &faces);
-
-  // Coordinate edge number to actual edge number
-  const int vert_to_edge[] = {0, 1, 3, 2};
-  const int coordinate_to_vert[] = {0, 1, 3, 2};
-
+void TMRTopology::getVertex( int vert_num, TMRVertex **vert ){
+  int num_vertices;
+  TMRVertex **verts;
+  geo->getVertices(&num_vertices, &verts);
   *vert = NULL;
-  int f = new_num_to_face[face_num];
-  if (faces && (f >= 0 && f < num_faces)){
-    TMREdgeLoop *loop;
-    faces[f]->getEdgeLoop(0, &loop);
 
-    // Get the edge loop
-    const int *dir;
-    TMREdge **edgs;
-    loop->getEdgeLoop(NULL, &edgs, &dir);
-    int edge_index = vert_to_edge[vertex_index];
-    if (dir[edge_index] > 0){
-      edgs[edge_index]->getVertices(vert, NULL);
-    }
-    else {
-      edgs[edge_index]->getVertices(NULL, vert);
-    }
+  if (verts && (vert_num >= 0 && vert_num < num_vertices)){
+    *vert = verts[vert_num];
   }
 }
 
@@ -1403,45 +1514,6 @@ void TMRTopology::getConnectivity( int *nnodes,
   *face_edges = face_to_edges;
 }
 
-/*
-  Get the volume associated with the given volume number
-*/
-void TMRTopology::getVolume( int vol_num, TMRVolume **volume ){
-  int num_volumes;
-  TMRVolume **volumes;
-  geo->getVolumes(&num_volumes, &volumes);
-  *volume = NULL;
-
-  int v = new_num_to_volume[vol_num];
-  if (volumes && (v >= 0 && v < num_volumes)){
-    *volume = volumes[v];
-  }
-}
-
-/*
-  Get the face associated with the given volume number
-*/
-void TMRTopology::getVolumeFace( int vol_num, 
-                                 int face_index, TMRFace **face ){
-
-}
-
-/*
-  Get the edge associated with the given volume
-*/
-void TMRTopology::getVolumeEdge( int vol_num, 
-                                 int edge_index, TMREdge **edge ){
-
-}
-
-/*
-  Get the vertex associated with the given volume
-*/
-void TMRTopology::getVolumeVertex( int vol_num, 
-                                   int vertex_index, TMRVertex **vertex ){
-
-}
- 
 /*
   Retrieve the connectivity for the underlying mesh
 */

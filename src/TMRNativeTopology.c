@@ -537,6 +537,7 @@ int TMRTFIVolume::evalPoint( double u, double v, double w,
       y = v;
     }
 
+    // Check the orientation of the face relative to the volume
     if (orient[k] == 0){
       fail = fail || faces[k]->evalPoint(x, y, &f[k]);
     }

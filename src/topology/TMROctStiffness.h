@@ -84,7 +84,7 @@ class TMRLinearOctStiffness : public SolidStiffness {
                          TacsScalar _x_init,
                          TacsScalar _density, TacsScalar E, 
                          TacsScalar _nu, double _q, 
-			 PenaltyType _type=RAMP, double _eps=1e-3);
+                         PenaltyType _type=RAMP, double _eps=1e-3);
   
   // Set the linearization coefficients
   // ----------------------------------

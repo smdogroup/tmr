@@ -104,7 +104,7 @@ void TMROctStiffness::addStressDVSens( const double pt[],
   for ( int i = 0; i < nweights; i++ ){
     fdvSens[weights[i].index] += 
       weights[i].weight*(s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2] + 
-			 s[3]*psi[3] + s[4]*psi[4] + s[5]*psi[5]);
+                         s[3]*psi[3] + s[4]*psi[4] + s[5]*psi[5]);
   }
 }
 
@@ -137,12 +137,12 @@ void TMROctStiffness::addPointwiseMassDVSens( const double pt[],
 */
 TMRLinearOctStiffness::TMRLinearOctStiffness( TMRIndexWeight *_weights,
                                               int _nweights,
-					      TacsScalar _x_init,
+                                              TacsScalar _x_init,
                                               TacsScalar _density,
                                               TacsScalar E, 
                                               TacsScalar _nu,
                                               double _q,
-					      PenaltyType _type,
+                                              PenaltyType _type,
                                               double _eps ){
   // Record the density, Poisson ratio, D and the shear modulus
   density = _density;
@@ -240,7 +240,7 @@ void TMRLinearOctStiffness::setLinearization( TacsScalar _q,
     
       // Set the lower bound
       for ( int i = 0; i < nweights; i++ ){
-	x_lb[i] = ((q - 1.0)/q)*x_vals[i];
+        x_lb[i] = ((q - 1.0)/q)*x_vals[i];
       }
     }
     else {
@@ -249,7 +249,7 @@ void TMRLinearOctStiffness::setLinearization( TacsScalar _q,
 
       // Set the lower bound
       for ( int i = 0; i < nweights; i++ ){
-	x_lb[i] = 0.0;
+        x_lb[i] = 0.0;
       }
     }
   }
@@ -261,7 +261,7 @@ void TMRLinearOctStiffness::setLinearization( TacsScalar _q,
     
       // Set the lower bound
       for ( int i = 0; i < nweights; i++ ){
-	x_lb[i] = (q/(1.0 + q))*x_vals[i];
+        x_lb[i] = (q/(1.0 + q))*x_vals[i];
       }
     }
     else {
@@ -270,7 +270,7 @@ void TMRLinearOctStiffness::setLinearization( TacsScalar _q,
 
       // Set the lower bound
       for ( int i = 0; i < nweights; i++ ){
-	x_lb[i] = 0.0;
+        x_lb[i] = 0.0;
       }
     }
   }
@@ -319,7 +319,7 @@ void TMRLinearOctStiffness::addStressDVSens( const double pt[],
   for ( int i = 0; i < nweights; i++ ){
     fdvSens[weights[i].index] += 
       weights[i].weight*(s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2] + 
-			 s[3]*psi[3] + s[4]*psi[4] + s[5]*psi[5]);
+                         s[3]*psi[3] + s[4]*psi[4] + s[5]*psi[5]);
   }
 }
 

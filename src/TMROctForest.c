@@ -3704,33 +3704,33 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
         TMROctant oct = array[i];
         if (fx){
           int face_index = (fx0 ? 0 : 1);
-          topo->getVolumeFace(array[i].block, face_index, &face);
+          int face_num = block_face_conn[6*array[i].block + face_index];
+          topo->getFace(face_num, &face);
           const char *face_attr = face->getAttribute();
           if (face_attr && strcmp(face_attr, attr) == 0){
             oct.tag = face_index;
             queue->push(&oct);
           }
-          continue;
         }
         if (fy){
           int face_index = (fy0 ? 2 : 3);
-          topo->getVolumeFace(array[i].block, face_index, &face);
+          int face_num = block_face_conn[6*array[i].block + face_index];
+          topo->getFace(face_num, &face);
           const char *face_attr = face->getAttribute();
           if (face_attr && strcmp(face_attr, attr) == 0){
             oct.tag = face_index;
             queue->push(&oct);
           }
-          continue;
         }
         if (fz){
           int face_index = (fz0 ? 4 : 5);
-          topo->getVolumeFace(array[i].block, face_index, &face);
+          int face_num = block_face_conn[6*array[i].block + face_index];
+          topo->getFace(face_num, &face);
           const char *face_attr = face->getAttribute();
           if (face_attr && strcmp(face_attr, attr) == 0){
             oct.tag = face_index;
             queue->push(&oct);
           }
-          continue;
         }
       }
     }
@@ -3771,7 +3771,65 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
   // a face or edge with the prescribed attribute
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   for ( int i = 0; i < size; i++ ){
-    
+    // Check if this node lies on an octree boundary
+    int fx0 = (array[i].x == 0);
+    int fy0 = (array[i].y == 0);
+    int fz0 = (array[i].z == 0);
+    int fx = (fx0 || array[i].x == hmax);
+    int fy = (fy0 || array[i].y == hmax);
+    int fz = (fz0 || array[i].z == hmax);
+
+    if (fx && fy && fz){
+      // This node lies on a corner
+      TMRVertex *vert;
+      int vert_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
+      int vert_num = block_conn[8*array[i].block + vert_index];
+      topo->getVertex(vert_num, &vert);
+      const char *vert_attr = vert->getAttribute();
+      if (vert_attr && strcmp(vert_attr, attr) == 0){
+        queue->push(&array[i]);
+      }
+    }
+    else if ((fy && fz) || (fx && fz) || (fx && fy)){
+      // This node lies on an edge
+      TMREdge *edge;
+      int edge_index = 0;
+      if (fy && fz){
+        edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
+      }
+      else if (fx && fz){
+        edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
+      }
+      else {
+        edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
+      }
+      int edge_num = block_edge_conn[12*array[i].block + edge_index];
+      topo->getEdge(edge_num, &edge);
+      const char *edge_attr = edge->getAttribute();
+      if (edge_attr && strcmp(edge_attr, attr) == 0){
+        queue->push(&array[i]);
+      }
+    }
+    else if (fx || fy || fz){
+      // Which face index are we dealing with?
+      TMRFace *face;
+      int face_index =
+        fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3) + fz*(fz0 ? 4 : 5);
+      int face_num = block_face_conn[6*array[i].block + face_index];
+      topo->getFace(face_num, &face);  
+      const char *face_attr = face->getAttribute();
+      if (face_attr && strcmp(face_attr, attr) == 0){
+        queue->push(&array[i]);
+      }
+    }
+    else {
+      TMRVolume *volume;
+      topo->getVolume(array[i].block, &volume);
+      const char *volume_attr = volume->getAttribute();
+      if (volume_attr && strcmp(volume_attr, attr) == 0){
+        queue->push(&array[i]);
+      }
+    }
   }
 
   TMROctantArray *list = queue->toArray();

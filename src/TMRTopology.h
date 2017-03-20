@@ -258,19 +258,14 @@ class TMRTopology : public TMREntity {
   ~TMRTopology();
   
   // Retrieve the face/edge/node information
+  void getVolume( int vol_num, TMRVolume **volume );
   void getFace( int face_num, TMRFace **face );
-  void getFaceEdge( int face_num, int edge_index, TMREdge **curve );
-  void getFaceVertex( int face_num, int vertex_index, TMRVertex **vertex );
+  void getEdge( int edge_num, TMREdge **edge );
+  void getVertex( int vertex_num, TMRVertex **vertex );
 
   // Retrive the quadtree connectivity from the topology object
   void getConnectivity( int *nnodes, int *nedges, int *nfaces,
                         const int **face_nodes, const int **face_edges );
-
-  // Retrieve the volume/face/edge/node information
-  void getVolume( int vol_num, TMRVolume **volume );
-  void getVolumeFace( int vol_num, int face_index, TMRFace **face );
-  void getVolumeEdge( int vol_num, int edge_index, TMREdge **edge );
-  void getVolumeVertex( int vol_num, int vertex_index, TMRVertex **vertex );
 
   // Retrieve the octree connectivity from the topology object
   void getConnectivity( int *nnodes, int *nedges, int *nfaces, int *nvolumes,
@@ -279,12 +274,18 @@ class TMRTopology : public TMREntity {
 
  private:
   // Compute the face connectivity
-  void computeFaceConn( int num_edges, int num_faces,
-                        const int ftoedges[],
-                        int **_face_to_face_ptr,
-                        int **_face_to_face );
+  void computeConnectivty( int num_entities, int num_edges, 
+                           int num_faces, const int ftoedges[],
+                           int **_face_to_face_ptr,
+                           int **_face_to_face );
+  void reorderEntities( int num_entities, int num_edges, int num_faces,
+                        const int *ftoedges,
+                        int *entity_to_new_num, int *new_num_to_entity );
 
-  // Compute the volume connectivity
+  // Connectivity for face -> edge, face -> vertex and edge -> vertex
+  void computeFaceConn();
+
+  // Connectivity for volume -> face/edge/vertex
   void computeVolumeConn();
 
   // Get the MPI communicator
