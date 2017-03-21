@@ -360,11 +360,14 @@ int main( int argc, char *argv[] ){
     for ( int iter = 0; iter < MAX_REFINE; iter++ ){
       // Create the TACSAssembler object associated with this forest
       TACSAssembler *tacs[MAX_REFINE+2];
+      forest[0]->balance();
+      forest[0]->repartition();
       tacs[0] = creator->createTACS(3, forest[0]);
       tacs[0]->incref();
 
       // Create the coarser versions of tacs
       forest[1] = forest[0]->duplicate();
+      forest[1]->balance();
       forest[1]->incref();
       tacs[1] = creator->createTACS(2, forest[1]);
       tacs[1]->incref();
@@ -377,6 +380,7 @@ int main( int argc, char *argv[] ){
       for ( int i = 2; i < num_levels; i++ ){
         forest[i] = forest[i-1]->coarsen();
         forest[i]->incref();
+        forest[i]->balance();
         tacs[i] = creator->createTACS(2, forest[i]);
         tacs[i]->incref();
       }
@@ -468,6 +472,7 @@ int main( int argc, char *argv[] ){
       TMRQuadForest *dup = forest[0]->duplicate();
       dup->incref();
       dup->refine(NULL);
+      dup->balance();
       TACSAssembler *dup_tacs = creator->createTACS(3, dup);
       dup_tacs->incref();
       TMR_ComputeReconSolution(3, tacs[0], dup_tacs);
@@ -483,7 +488,6 @@ int main( int argc, char *argv[] ){
 
       dup->decref();
       dup_tacs->decref();
-
 
       // Set the target error using the factor: max(1.0, 16*(2**-iter))
       double factor = 1.0; // 16.0/(1 << iter);

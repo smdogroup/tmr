@@ -72,8 +72,6 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
     
   // Ensure that the forest is balanced, and create the nodes for
   // the underlying finite-element mesh
-  forest->balance();
-  forest->repartition();
   forest->createNodes(order);
 
   // Find the number of nodes for this processor
