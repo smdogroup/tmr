@@ -346,7 +346,7 @@ int main( int argc, char *argv[] ){
 
     TMRTopology *topo = new TMRTopology(comm, model);
     forest[0]->setTopology(topo);
-    forest[0]->createTrees(0);
+    forest[0]->createTrees(1);
     forest[0]->repartition();
 
     // The target relative error on the compliance
@@ -358,6 +358,7 @@ int main( int argc, char *argv[] ){
     }
 
     for ( int iter = 0; iter < MAX_REFINE; iter++ ){
+      /*
       // Create the TACSAssembler object associated with this forest
       TACSAssembler *tacs[MAX_REFINE+2];
       forest[0]->balance();
@@ -378,6 +379,26 @@ int main( int argc, char *argv[] ){
 
       // Create all of the coarser levels
       for ( int i = 2; i < num_levels; i++ ){
+        forest[i] = forest[i-1]->coarsen();
+        forest[i]->incref();
+        forest[i]->balance();
+        tacs[i] = creator->createTACS(2, forest[i]);
+        tacs[i]->incref();
+      }
+      */
+
+      TACSAssembler *tacs[MAX_REFINE+2];
+      forest[0]->balance();
+      forest[0]->repartition();
+      tacs[0] = creator->createTACS(2, forest[0]);
+      tacs[0]->incref();
+
+      // Set the number of levels: Cap it with a value of 4
+      int num_levels = 2 + iter;
+      if (num_levels > 4){ num_levels = 4; }
+
+      // Create all of the coarser levels
+      for ( int i = 1; i < num_levels; i++ ){
         forest[i] = forest[i-1]->coarsen();
         forest[i]->incref();
         forest[i]->balance();
@@ -461,6 +482,14 @@ int main( int argc, char *argv[] ){
                                  TACSElement::OUTPUT_DISPLACEMENTS);
       TACSToFH5 *f5 = new TACSToFH5(tacs[0], SHELL, write_flag);
       f5->incref();
+
+      TACSBVec *vec = tacs[0]->createVec();
+      TacsScalar *a;
+      int size = vec->getArray(&a);
+      for ( int i = 0; i < size; i++ ){
+        a[i] = i;
+      }
+      tacs[0]->setVariables(vec);
       
       // Write out the solution
       char outfile[128];
@@ -503,9 +532,22 @@ int main( int argc, char *argv[] ){
       double target_abs_err = factor*target_rel_err*fval/nelems_total;
 
       // Perform the strain energy refinement
-      TacsScalar abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
-                                                  target_abs_err);
+      // TacsScalar abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
+      //                                             target_abs_err);
+      
+      int *refine = new int[ nelems ];
+      for ( int i = 0; i < nelems; i++ ){
+        if (i % 7 == 0 || i % 13 == 0){
+          refine[i] = 1;
+        }
+        else {
+          refine[i] = 0;
+        }
+      }
+      forest[0]->refine(refine);
+      delete [] refine;
 
+      /*
       if (mpi_rank == 0){
         printf("Absolute error estimate = %e\n", abs_err);
 
@@ -515,6 +557,7 @@ int main( int argc, char *argv[] ){
         fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
                 iter, nelems, nnodes, fval, (fval + abs_err)/fval, abs_err);
       }
+      */
 
       // Decrease the reference count
       tacs[0]->decref();

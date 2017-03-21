@@ -2155,6 +2155,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
   // edge_dir[i] > 0 means the vertices are in increasing
   // order. edge_dir[i] < 0 means the opposite.
   int *edge_dir = new int[ num_quad_edges ];
+  memset(edge_dir, 0, num_quad_edges*sizeof(int));
 
   // Create the edges for the mesh from the underlying edges
   for ( int i = 0; i < num_edges; i++ ){
@@ -2197,6 +2198,10 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
         new_edges[edge_num] = 
           new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
+      }
+      else {
+        fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
+                edge[1], edge[2]);
       }
     }
   }
@@ -2270,6 +2275,10 @@ TMRModel* TMRMesh::createModelFromMesh(){
             new_edges[edge_num] = new TMREdgeFromFace(faces[i], pcurve);
           }
         }
+        else {
+          fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
+                  edge[1], edge[2]);
+        }
       }
     } 
   }  
@@ -2339,6 +2348,10 @@ TMRModel* TMRMesh::createModelFromMesh(){
             dir[k] = -1;
           }
           dir[k] *= edge_dir[edge_num];
+        } 
+        else {
+          fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
+                  edge[1], edge[2]);
         }
       }
 

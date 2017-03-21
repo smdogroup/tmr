@@ -948,6 +948,8 @@ int TMRModel::getVertexIndex( TMRVertex *vertex ){
   if (item){
     return item->num;
   }
+  
+  fprintf(stderr, "TMRModel error: Vertex index search failed\n");
   return -1;
 }
 
@@ -967,6 +969,8 @@ int TMRModel::getEdgeIndex( TMREdge *edge ){
   if (item){
     return item->num;
   }
+
+  fprintf(stderr, "TMRModel error: Edge index search failed\n");
   return -1;
 }
 
@@ -987,6 +991,7 @@ int TMRModel::getFaceIndex( TMRFace *face ){
     return item->num;
   }
   
+  fprintf(stderr, "TMRModel error: Face index search failed\n");
   return -1;
 }
 
@@ -1006,7 +1011,8 @@ int TMRModel::getVolumeIndex( TMRVolume *volume ){
   if (item){
     return item->num;
   }
-  
+
+  fprintf(stderr, "TMRModel error: Volume index search failed\n");
   return -1;
 }
 
