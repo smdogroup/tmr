@@ -211,6 +211,7 @@ static void computeTriEdges( int nnodes, int ntris, const int tris[],
 */
 static void computeQuadEdges( int nnodes, int nquads, const int quads[], 
                               int *_num_quad_edges, int **_quad_edges,
+                              int **_quad_neighbors=NULL, int **_dual_edges=NULL,
                               int **_quad_edge_nums=NULL ){
   // Compute the edges in the quadrilateral mesh
   int *ptr;
@@ -223,6 +224,12 @@ static void computeQuadEdges( int nnodes, int nquads, const int quads[],
     quad_edge_nums[i] = -1;
   }
 
+  // Allocate an array for the quad neighbors
+  int *quad_neighbors = NULL;
+  if (_quad_neighbors){
+    quad_neighbors = new int[ 4*nquads ];
+  }
+
   // Quck reference from the quad index to the edge
   const int enodes[4][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
 
@@ -233,6 +240,11 @@ static void computeQuadEdges( int nnodes, int nquads, const int quads[],
     for ( int j = 0; j < 4; j++ ){
       if (quad_edge_nums[4*i+j] < 0){
         quad_edge_nums[4*i+j] = ne;
+
+        // Set the quad neighbor index to -1
+        if (quad_neighbors){
+          quad_neighbors[4*i+j] = -1;
+        }
 
         // Search for the neighboring quad that shares this edge
         int kp = ptr[quads[4*i + enodes[j][0]]];
@@ -258,6 +270,13 @@ static void computeQuadEdges( int nnodes, int nquads, const int quads[],
                  quads[4*i+enodes[j][1]] == quads[4*n+enodes[e][0]])){
               // Label the other edge that shares this same node
               quad_edge_nums[4*n+e] = ne;
+
+              // Set the quad neighbors
+              if (quad_neighbors){
+                quad_neighbors[4*n+e] = i;
+                quad_neighbors[4*i+j] = n;              
+              }
+
               quit = 1;
             }
           }
@@ -277,12 +296,22 @@ static void computeQuadEdges( int nnodes, int nquads, const int quads[],
   // Now we have a unique list of edge numbers and the total number of
   // edges, we can construct the unique edge list
   int *quad_edges = new int[ 2*ne ];
+  int *dual_edges = NULL;
+  if (_dual_edges){
+    dual_edges = new int[ 2*ne ];
+  }
   for ( int i = 0; i < nquads; i++ ){
     for ( int j = 0; j < 4; j++ ){
       // Get the unique edge number
       int n = quad_edge_nums[4*i+j];
       quad_edges[2*n] = quads[4*i+enodes[j][0]];
       quad_edges[2*n+1] = quads[4*i+enodes[j][1]];
+
+      // Set the dual edges
+      if (dual_edges){
+        dual_edges[2*n] = i;
+        dual_edges[2*n+1] = quad_neighbors[4*i+j];
+      }
     }
   } 
 
@@ -296,6 +325,12 @@ static void computeQuadEdges( int nnodes, int nquads, const int quads[],
 
   *_num_quad_edges = ne;
   *_quad_edges = quad_edges;
+  if (_quad_neighbors){
+    *_quad_neighbors = quad_neighbors;
+  }
+  if (_dual_edges){
+    *_dual_edges = dual_edges;
+  }
 }
 
 /*
@@ -754,7 +789,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       // Recombine the mesh into a quadrilateral mesh
       recombine(ntris, tris, tri_neighbors, 
                 node_to_tri_ptr, node_to_tris,
-                num_tri_edges, dual_edges, &num_quads, &quads);
+                num_tri_edges, dual_edges, &num_quads, &quads, options);
 
       if (options.write_pre_smooth_quad){
         char filename[256];
@@ -797,6 +832,26 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         sprintf(filename, "post_smooth_quad%d.vtk",
                 face->getEntityId());
         writeToVTK(filename);
+      }
+
+      // Write out the dual of the final quadrilateral mesh
+      if (options.write_quad_dual){
+        int num_quad_edges;
+        int *quad_edges;
+        int *quad_neighbors, *quad_dual;
+        computeQuadEdges(num_points, num_quads, quads, 
+                         &num_quad_edges, &quad_edges,
+                         &quad_neighbors, &quad_dual);
+
+        char filename[256];
+        sprintf(filename, "quad_dual%d.vtk",
+                face->getEntityId());
+        writeDualToVTK(filename, 4, num_quads, quads, 
+                       num_quad_edges, quad_dual, X);
+
+        delete [] quad_edges;
+        delete [] quad_neighbors;
+        delete [] quad_dual;
       }
     }
   }
@@ -1067,7 +1122,8 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
                              const int node_to_tri_ptr[],
                              const int node_to_tris[],
                              int num_edges, const int dual_edges[],
-                             int *_num_quads, int **_new_quads ){
+                             int *_num_quads, int **_new_quads,
+                             TMRMeshOptions options ){
   // Allocate the reduced graph weights
   double *weights = new double[ num_edges ];
   int *graph_edges = new int[ 2*num_edges ];
@@ -1158,6 +1214,15 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
 
   // Set the number of edges within the modified dual mesh
   int num_dual_edges = edge_num;
+
+  // Write the dual mesh to a file
+  if (options.write_dual_recombine){
+    char filename[256];
+    sprintf(filename, "dual_recombine%d.vtk",
+            face->getEntityId());
+    writeDualToVTK(filename, 3, ntris, tris, num_dual_edges,
+                   graph_edges, X);
+  }
 
   // Perform the perfect matching
   int *match = new int[ ntris/2 ];
@@ -1727,8 +1792,8 @@ void TMRFaceMesh::writeTrisToVTK( const char *filename,
 /*
   Write out the dual mesh for visualization
 */
-void TMRFaceMesh::writeDualToVTK( const char *filename, 
-                                  int ntris, const int tris[],
+void TMRFaceMesh::writeDualToVTK( const char *filename, int nodes_per_elem, 
+                                  int nelems, const int elems[],
                                   int num_dual_edges, const int dual_edges[],
                                   const TMRPoint *p ){
   FILE *fp = fopen(filename, "w");
@@ -1738,23 +1803,46 @@ void TMRFaceMesh::writeDualToVTK( const char *filename,
     fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
     
     // Write out the points
-    fprintf(fp, "POINTS %d float\n", ntris);
-    for ( int k = 0; k < ntris; k++ ){
-      fprintf(fp, "%e %e %e\n", 
-        1.0/3.0*(p[tris[3*k]].x + p[tris[3*k+1]].x + p[tris[3*k+2]].x),
-        1.0/3.0*(p[tris[3*k]].y + p[tris[3*k+1]].y + p[tris[3*k+2]].y),
-        1.0/3.0*(p[tris[3*k]].z + p[tris[3*k+1]].z + p[tris[3*k+2]].z));
+    fprintf(fp, "POINTS %d float\n", nelems);
+    if (nodes_per_elem == 3){
+      for ( int k = 0; k < nelems; k++ ){
+        fprintf(fp, "%e %e %e\n", 
+                1.0/3.0*(p[elems[3*k]].x + p[elems[3*k+1]].x + p[elems[3*k+2]].x),
+                1.0/3.0*(p[elems[3*k]].y + p[elems[3*k+1]].y + p[elems[3*k+2]].y),
+                1.0/3.0*(p[elems[3*k]].z + p[elems[3*k+1]].z + p[elems[3*k+2]].z));
+      }
+    }
+    else { // nodes_per_elem == 4
+      for ( int k = 0; k < nelems; k++ ){
+        fprintf(fp, "%e %e %e\n", 
+                0.25*(p[elems[4*k]].x + p[elems[4*k+1]].x + 
+                      p[elems[4*k+2]].x + p[elems[4*k+3]].x),
+                0.25*(p[elems[4*k]].y + p[elems[4*k+1]].y + 
+                      p[elems[4*k+2]].y + p[elems[4*k+3]].y),
+                0.25*(p[elems[4*k]].z + p[elems[4*k+1]].z + 
+                      p[elems[4*k+2]].z + p[elems[4*k+3]].z));
+      }
+    }
+
+    // Count up the number of non-degenerate dual edges
+    int n = 0;
+    for ( int k = 0; k < num_dual_edges; k++ ){
+      if (dual_edges[2*k] >= 0 && dual_edges[2*k+1] >= 0){
+        n++;
+      }
     }
 
     // Write out the cell connectivity
-    fprintf(fp, "\nCELLS %d %d\n", num_dual_edges, 3*num_dual_edges);
+    fprintf(fp, "\nCELLS %d %d\n", n, 3*n);
     for ( int k = 0; k < num_dual_edges; k++ ){
-      fprintf(fp, "2 %d %d\n", dual_edges[2*k], dual_edges[2*k+1]);
+      if (dual_edges[2*k] >= 0 && dual_edges[2*k+1] >= 0){
+        fprintf(fp, "2 %d %d\n", dual_edges[2*k], dual_edges[2*k+1]);
+      }
     }
 
     // Write out the cell types
-    fprintf(fp, "\nCELL_TYPES %d\n", num_dual_edges);
-    for ( int k = 0; k < num_dual_edges; k++ ){
+    fprintf(fp, "\nCELL_TYPES %d\n", n);
+    for ( int k = 0; k < n; k++ ){
       fprintf(fp, "%d\n", 3);
     }
     fclose(fp);

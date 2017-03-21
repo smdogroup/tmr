@@ -24,14 +24,19 @@
 */
 class TMRCylinderCreator : public TMRQuadTACSCreator {
  public:
-  TMRCylinderCreator( double _alpha, double _beta, double _R,
+  TMRCylinderCreator( MPI_Comm comm,
+                      double _alpha, double _beta, double _R,
                       double _load, FSDTStiffness *stiff ){
+    int rank;
+    MPI_Comm_rank(comm, &rank);
     alpha = _alpha;
     beta = _beta;
     R = _R;
     load = _load;
     elem2 = new MITCShell<2>(stiff); elem2->incref();
     elem3 = new MITCShell<3>(stiff); elem3->incref();
+    elem2->setComponentNum(rank);
+    elem3->setComponentNum(rank);
   }
   ~TMRCylinderCreator(){
     elem2->decref();
@@ -238,11 +243,16 @@ int main( int argc, char *argv[] ){
   MPI_Comm_rank(comm, &mpi_rank);
   MPI_Comm_size(comm, &mpi_size);
 
+  int order = 2;
   int orthotropic_flag = 0;
   double htarget = 10.0;
   for ( int i = 0; i < argc; i++ ){
     if (sscanf(argv[i], "h=%lf", &htarget) == 1){
       printf("htarget = %f\n", htarget);
+    }
+    if (sscanf(argv[i], "order=%d", &order) == 1){
+      if (order < 2){ order = 2; }
+      if (order > 3){ order = 3; }
     }
   }
 
@@ -300,7 +310,7 @@ int main( int argc, char *argv[] ){
 
   // Set up the creator object - this facilitates creating the
   // TACSAssembler objects for different geometries
-  TMRCylinderCreator *creator = new TMRCylinderCreator(alpha, beta, R,
+  TMRCylinderCreator *creator = new TMRCylinderCreator(comm, alpha, beta, R,
                                                        load, stiff);
 
   // Create the geometry
@@ -348,7 +358,7 @@ int main( int argc, char *argv[] ){
     forest[0]->setTopology(topo);
     forest[0]->createTrees(1);
     forest[0]->repartition();
-
+    
     // The target relative error on the compliance
     double target_rel_err = 1e-4;
 
@@ -358,52 +368,66 @@ int main( int argc, char *argv[] ){
     }
 
     for ( int iter = 0; iter < MAX_REFINE; iter++ ){
-      /*
       // Create the TACSAssembler object associated with this forest
+      printf("Creating TACS %d\n", iter);
       TACSAssembler *tacs[MAX_REFINE+2];
       forest[0]->balance();
       forest[0]->repartition();
-      tacs[0] = creator->createTACS(3, forest[0]);
+      tacs[0] = creator->createTACS(order, forest[0]);
       tacs[0]->incref();
 
-      // Create the coarser versions of tacs
-      forest[1] = forest[0]->duplicate();
-      forest[1]->balance();
-      forest[1]->incref();
-      tacs[1] = creator->createTACS(2, forest[1]);
-      tacs[1]->incref();
+      // Create and write out an fh5 file
+      unsigned int write_flag = TACSElement::OUTPUT_NODES;
+      TACSToFH5 *f5 = new TACSToFH5(tacs[0], SHELL, write_flag);
+      f5->incref();
+
+      // Write out the solution
+      char outfile[256];
+      sprintf(outfile, "output%02d_level%d.f5", iter, 0);
+      f5->writeToFile(outfile);
+      f5->decref();
+
+
+
 
       // Set the number of levels: Cap it with a value of 4
       int num_levels = 2 + iter;
       if (num_levels > 4){ num_levels = 4; }
 
-      // Create all of the coarser levels
-      for ( int i = 2; i < num_levels; i++ ){
-        forest[i] = forest[i-1]->coarsen();
-        forest[i]->incref();
-        forest[i]->balance();
-        tacs[i] = creator->createTACS(2, forest[i]);
-        tacs[i]->incref();
+      if (order == 3){
+        // Create the coarser versions of tacs
+        forest[1] = forest[0]->duplicate();
+        forest[1]->incref();
+        forest[1]->balance();
+        tacs[1] = creator->createTACS(2, forest[1]);
+        tacs[1]->incref();
       }
-      */
-
-      TACSAssembler *tacs[MAX_REFINE+2];
-      forest[0]->balance();
-      forest[0]->repartition();
-      tacs[0] = creator->createTACS(2, forest[0]);
-      tacs[0]->incref();
-
-      // Set the number of levels: Cap it with a value of 4
-      int num_levels = 2 + iter;
-      if (num_levels > 4){ num_levels = 4; }
 
       // Create all of the coarser levels
-      for ( int i = 1; i < num_levels; i++ ){
+      for ( int i = order-1; i < num_levels; i++ ){
         forest[i] = forest[i-1]->coarsen();
         forest[i]->incref();
         forest[i]->balance();
+
+        
+        sprintf(outfile, "forest%d.vtk", mpi_rank);
+        forest[i]->writeForestToVTK(outfile);
+
+
         tacs[i] = creator->createTACS(2, forest[i]);
         tacs[i]->incref();
+
+
+        /*
+        f5 = new TACSToFH5(tacs[i], SHELL, write_flag);
+        f5->incref();
+
+        // Write out the solution
+        sprintf(outfile, "output%02d_level%d.f5", iter, i);
+        f5->writeToFile(outfile);
+        f5->decref();
+        */
+
       }
 
       // Create the interpolation
@@ -423,6 +447,7 @@ int main( int argc, char *argv[] ){
         interp[level]->initialize();
       }
 
+      /*
       // Create the multigrid object
       double omega = 1.0;
       int mg_sor_iters = 1;
@@ -483,28 +508,23 @@ int main( int argc, char *argv[] ){
       TACSToFH5 *f5 = new TACSToFH5(tacs[0], SHELL, write_flag);
       f5->incref();
 
-      TACSBVec *vec = tacs[0]->createVec();
-      TacsScalar *a;
-      int size = vec->getArray(&a);
-      for ( int i = 0; i < size; i++ ){
-        a[i] = i;
-      }
-      tacs[0]->setVariables(vec);
-      
       // Write out the solution
       char outfile[128];
       sprintf(outfile, "output%02d.f5", iter);
       f5->writeToFile(outfile);
       f5->decref();
+      */
 
+      // --------------------------------------------------
+      /*
       // Duplicate and refine the mesh
       TMRQuadForest *dup = forest[0]->duplicate();
       dup->incref();
       dup->refine(NULL);
       dup->balance();
-      TACSAssembler *dup_tacs = creator->createTACS(3, dup);
+      TACSAssembler *dup_tacs = creator->createTACS(order, dup);
       dup_tacs->incref();
-      TMR_ComputeReconSolution(3, tacs[0], dup_tacs);
+      TMR_ComputeReconSolution(order, tacs[0], dup_tacs);
 
       // Create and write out an fh5 file
       TACSToFH5 *f5_dup = new TACSToFH5(dup_tacs, SHELL, write_flag);
@@ -517,20 +537,24 @@ int main( int argc, char *argv[] ){
 
       dup->decref();
       dup_tacs->decref();
+      */
+      // --------------------------------------------------
 
+      int nelems = tacs[0]->getNumElements();
+
+      /*
       // Set the target error using the factor: max(1.0, 16*(2**-iter))
       double factor = 1.0; // 16.0/(1 << iter);
       if (factor < 1.0){ factor = 1.0; }
 
       // Determine the total number of elements across all processors
       int nelems_total = 0;
-      int nelems = tacs[0]->getNumElements();
       MPI_Allreduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, comm);
 
       // Set the absolute element-level error based on the relative
       // error that is requested
       double target_abs_err = factor*target_rel_err*fval/nelems_total;
-
+      */
       // Perform the strain energy refinement
       // TacsScalar abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
       //                                             target_abs_err);
@@ -567,10 +591,12 @@ int main( int argc, char *argv[] ){
         interp[i-1]->decref();
       }
 
+      /*
       res->decref();
       ans->decref();
       mg->decref();
       gmres->decref();
+      */
     }
 
     if (fp){ fclose(fp); }

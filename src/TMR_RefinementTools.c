@@ -472,7 +472,7 @@ static void computeNodeDeriv2D( const int order,
 
         // Evaluate the x/y/z derivatives of each value at the
         // coordinate locations
-        TacsScalar winv = 1.0/welem[3*jj + ii];
+        TacsScalar winv = 1.0/welem[order*jj + ii];
         for ( int k = 0; k < vars_per_node; k++ ){
           d[0] = winv*(Ud[2*k]*J[0] + Ud[2*k+1]*J[1]);
           d[1] = winv*(Ud[2*k]*J[3] + Ud[2*k+1]*J[4]);

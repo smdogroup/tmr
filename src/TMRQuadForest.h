@@ -139,6 +139,12 @@ class TMRQuadForest : public TMREntity {
   // ------------------------------------------
   void transformNode( TMRQuadrant *quad );
 
+  // Write out files showing the connectivity
+  // ----------------------------------------
+  void writeToVTK( const char *filename );
+  void writeToTecplot( const char *filename );
+  void writeForestToVTK( const char *filename );
+
  private:
   // Free the internally stored data and zero things
   void freeData();

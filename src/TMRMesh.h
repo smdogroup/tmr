@@ -21,8 +21,10 @@ class TMRMeshOptions {
     write_init_domain_triangle = 0;
     write_pre_smooth_triangle = 0;
     write_post_smooth_triangle = 0;
+    write_dual_recombine = 0;
     write_pre_smooth_quad = 0;
     write_post_smooth_quad = 0;
+    write_quad_dual = 0;
   }
 
   // Options to control the meshing algorithm
@@ -34,8 +36,10 @@ class TMRMeshOptions {
   int write_init_domain_triangle;
   int write_pre_smooth_triangle;
   int write_post_smooth_triangle;
+  int write_dual_recombine;
   int write_pre_smooth_quad;
   int write_post_smooth_quad;
+  int write_quad_dual;
 };
 
 /*
@@ -121,7 +125,8 @@ class TMRFaceMesh : public TMREntity {
                        int ntris, const int tris[] );
   
   // Write the dual mesh - used for recombination - to a file
-  void writeDualToVTK( const char *filename, int ntris, const int tris[],
+  void writeDualToVTK( const char *filename, int nodes_per_elem, 
+                       int nelems, const int elems[],
                        int num_dual_edges, const int dual_edges[],
                        const TMRPoint *p );
 
@@ -130,7 +135,8 @@ class TMRFaceMesh : public TMREntity {
   void recombine( int ntris, const int tris[], const int tri_neighbors[],
                   const int node_to_tri_ptr[], const int node_to_tris[],
                   int num_edges, const int dual_edges[],
-                  int *_num_quads, int **_new_quads );
+                  int *_num_quads, int **_new_quads,
+                  TMRMeshOptions options );
 
   // Simplify the quadrilateral mesh to remove points that make
   // for a poor quadrilateral mesh
