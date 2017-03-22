@@ -1432,23 +1432,6 @@ void TMRFaceMesh::simplifyQuads(){
   computeNodeToElems(num_points, num_quads, 4, quads,
                      &ptr, &pts_to_quads);
 
-  /*
-  // Determine whether there are three nodes or more on a boundary
-  for ( int i = 0; i < num_quads; i++ ){
-    int nbound = 0;
-    if (quads[4*i] < num_fixed_pts) nbound++;
-    if (quads[4*i+1] < num_fixed_pts) nbound++;
-    if (quads[4*i+2] < num_fixed_pts) nbound++;
-    if (quads[4*i+3] < num_fixed_pts) nbound++;
-
-    if (nbound >= 3){
-
-
-
-    }
-  }
-  */
-
   // First, remove the nodes that are only referred to twice,
   // not on the boundary
   int *new_pt_nums = new int[ num_points ];

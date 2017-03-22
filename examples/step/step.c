@@ -17,7 +17,6 @@ int main( int argc, char *argv[] ){
   for ( int k = 0; k < argc; k++ ){
     if (sscanf(argv[k], "h=%lf", &htarget) == 1){
       if (htarget < 0.1){ htarget = 0.1; }
-      if (htarget > 10.0){ htarget = 10.0; }
     }
     if (sscanf(argv[k], "file=%s", filename) == 1){
       printf("file=%s\n", filename);

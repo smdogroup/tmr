@@ -1452,22 +1452,87 @@ void TMRTopology::reorderEntities( int num_entities,
                                    int num_edges, int num_faces,
                                    const int *ftoedges,
                                    int *entity_to_new_num,
-                                   int *new_num_to_entity ){
+                                   int *new_num_to_entity,
+                                   int use_rcm ){
   // Get the mpi size
   int mpi_rank, mpi_size;
   MPI_Comm_rank(comm, &mpi_rank);
   MPI_Comm_size(comm, &mpi_size);
 
-  if (mpi_size > 1 && num_faces > 4*mpi_size){
-    if (mpi_rank == 0){
-      // Compute the new ordering
-      int *face_to_face_ptr, *face_to_face;
-      computeConnectivty(num_entities, num_edges, 
-                         num_faces, ftoedges,
-                         &face_to_face_ptr, &face_to_face);
+  if (mpi_rank == 0){
+    // Compute the new ordering
+    int *face_to_face_ptr, *face_to_face;
+    computeConnectivty(num_entities, num_edges, 
+                       num_faces, ftoedges,
+                       &face_to_face_ptr, &face_to_face);
+    
+    if (use_rcm){
+      // Set a pointer to the new numbers
+      int *vars = entity_to_new_num;
+      int *levset = new_num_to_entity;
+      
+      // Tag all the values to indicate that we have not yet visited
+      // these entities
+      for ( int i = 0; i < num_faces; i++ ){
+        vars[i] = -1; 
+      }
 
-      // Allocate an array to store the partition information
-      int *partition = new_num_to_face;
+      // Set the start and end location for each level set
+      int start = 0, end = 0;
+      
+      // The number of ordered entities
+      int n = 0;
+      
+      // Keep going until everything has been ordered
+      while (n < num_faces){
+        // Find the next root
+        int root = -1, max_degree = num_faces+1;
+        for ( int i = 0; i < num_faces; i++ ){
+          if (vars[i] < 0 && 
+              face_to_face_ptr[i+1] - face_to_face_ptr[i] < max_degree){
+            root = i;
+            max_degree = face_to_face_ptr[i+1] - face_to_face_ptr[i];
+          }
+        }
+
+        // Nothing is left to order
+        if (root < 0){
+          break;
+        }
+        
+        // Set the next root within the level set and continue
+        levset[end] = root;
+        vars[root] = n;
+        n++;
+        end++;
+
+        while (start < end){
+          int next = end;
+          // Iterate over the nodes added to the previous level set
+          for ( int current = start; current < end; current++ ){
+            int node = levset[current];
+
+            // Add all the nodes in the next level set
+            for ( int j = face_to_face_ptr[node]; j < face_to_face_ptr[node+1]; j++ ){
+              int next_node = face_to_face[j];
+	    
+              if (vars[next_node] < 0){
+                vars[next_node] = n;
+                levset[next] = next_node;
+                n++;
+                next++;
+              }
+            }
+          }
+
+          start = end;
+          end = next;
+        }
+      }
+    }
+    else {
+      // Set the pointer to the new entities array
+      int *partition = new_num_to_entity;
 
       // Set the default options
       int options[METIS_NOPTIONS];
@@ -1475,20 +1540,20 @@ void TMRTopology::reorderEntities( int num_entities,
 
       // Use 0-based numbering
       options[METIS_OPTION_NUMBERING] = 0;
-
+        
       // The objective value in METIS
       int objval = 0;
-
+        
       // Partition based on the size of the mesh
       int ncon = 1;
       METIS_PartGraphRecursive(&num_faces, &ncon, 
                                face_to_face_ptr, face_to_face,
                                NULL, NULL, NULL, &mpi_size, 
                                NULL, NULL, options, &objval, partition);
-
+        
       delete [] face_to_face_ptr;
       delete [] face_to_face;
-
+        
       int *offset = new int[ mpi_size+1 ];
       memset(offset, 0, (mpi_size+1)*sizeof(int));
       for ( int i = 0; i < num_faces; i++ ){
@@ -1497,7 +1562,7 @@ void TMRTopology::reorderEntities( int num_entities,
       for ( int i = 0; i < mpi_size; i++ ){
         offset[i+1] += offset[i];
       }
-
+        
       // Order the faces according to their partition
       for ( int i = 0; i < num_faces; i++ ){
         entity_to_new_num[i] = offset[partition[i]];
@@ -1507,20 +1572,14 @@ void TMRTopology::reorderEntities( int num_entities,
       // Free the local offset data
       delete [] offset;
     }
-
-    // Broadcast the new ordering
-    MPI_Bcast(entity_to_new_num, num_faces, MPI_INT, 0, comm);
-
-    // Now overwrite the new_num_to_face == partition array
-    for ( int i = 0; i < num_faces; i++ ){
-      new_num_to_face[entity_to_new_num[i]] = i;
-    }
   }
-  else {
-    for ( int i = 0; i < num_faces; i++ ){
-      new_num_to_face[i] = i;
-      entity_to_new_num[i] = i;
-    }
+  
+  // Broadcast the new ordering
+  MPI_Bcast(entity_to_new_num, num_faces, MPI_INT, 0, comm);
+
+  // Now overwrite the new_num_to_face == partition array
+  for ( int i = 0; i < num_faces; i++ ){
+    new_num_to_entity[entity_to_new_num[i]] = i;    
   }
 }
 

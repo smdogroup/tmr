@@ -170,8 +170,9 @@ class TMRFace : public TMREntity {
   The TMR volume object.
 
   This object is used primarily as a container class and does not
-  neccessarily parametrize a volume, except in some instances - for
-  instance when using transfinite interpolation from surfaces.
+  neccessarily parametrize the interior of a volume, except in some
+  instances - for instance when using transfinite interpolation from
+  surfaces.
 */
 class TMRVolume : public TMREntity {
  public:
@@ -258,8 +259,8 @@ class TMRModel : public TMREntity {
   1. No edge can degenerate to a vertex.
   2. No face can degenerate to an edge or vertex.
   3. All faces must be surrounded by a single edge loop with 4
-  (non-degenerate) edges.
-  4. All volumes must contain 6 (non-degenerate) faces that are
+  non-degenerate edges.
+  4. All volumes must contain 6 non-degenerate faces that are
   ordered in coordinate ordering as shown below. Furthermore, all
   volumes must be of type TMRTFIVolume.
 
@@ -314,8 +315,8 @@ class TMRTopology : public TMREntity {
                            int **_face_to_face_ptr,
                            int **_face_to_face );
   void reorderEntities( int num_entities, int num_edges, int num_faces,
-                        const int *ftoedges,
-                        int *entity_to_new_num, int *new_num_to_entity );
+                        const int *ftoedges, int *entity_to_new_num, 
+                        int *new_num_to_entity, int use_rcm=1 );
 
   // Connectivity for face -> edge, face -> vertex and edge -> vertex
   void computeFaceConn();
