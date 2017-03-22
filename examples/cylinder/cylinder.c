@@ -369,26 +369,11 @@ int main( int argc, char *argv[] ){
 
     for ( int iter = 0; iter < MAX_REFINE; iter++ ){
       // Create the TACSAssembler object associated with this forest
-      printf("Creating TACS %d\n", iter);
       TACSAssembler *tacs[MAX_REFINE+2];
       forest[0]->balance();
       forest[0]->repartition();
       tacs[0] = creator->createTACS(order, forest[0]);
       tacs[0]->incref();
-
-      // Create and write out an fh5 file
-      unsigned int write_flag = TACSElement::OUTPUT_NODES;
-      TACSToFH5 *f5 = new TACSToFH5(tacs[0], SHELL, write_flag);
-      f5->incref();
-
-      // Write out the solution
-      char outfile[256];
-      sprintf(outfile, "output%02d_level%d.f5", iter, 0);
-      f5->writeToFile(outfile);
-      f5->decref();
-
-
-
 
       // Set the number of levels: Cap it with a value of 4
       int num_levels = 2 + iter;
@@ -408,26 +393,8 @@ int main( int argc, char *argv[] ){
         forest[i] = forest[i-1]->coarsen();
         forest[i]->incref();
         forest[i]->balance();
-
-        
-        sprintf(outfile, "forest%d.vtk", mpi_rank);
-        forest[i]->writeForestToVTK(outfile);
-
-
         tacs[i] = creator->createTACS(2, forest[i]);
         tacs[i]->incref();
-
-
-        /*
-        f5 = new TACSToFH5(tacs[i], SHELL, write_flag);
-        f5->incref();
-
-        // Write out the solution
-        sprintf(outfile, "output%02d_level%d.f5", iter, i);
-        f5->writeToFile(outfile);
-        f5->decref();
-        */
-
       }
 
       // Create the interpolation
@@ -447,7 +414,6 @@ int main( int argc, char *argv[] ){
         interp[level]->initialize();
       }
 
-      /*
       // Create the multigrid object
       double omega = 1.0;
       int mg_sor_iters = 1;
@@ -513,7 +479,6 @@ int main( int argc, char *argv[] ){
       sprintf(outfile, "output%02d.f5", iter);
       f5->writeToFile(outfile);
       f5->decref();
-      */
 
       // --------------------------------------------------
       /*
@@ -591,12 +556,10 @@ int main( int argc, char *argv[] ){
         interp[i-1]->decref();
       }
 
-      /*
       res->decref();
       ans->decref();
       mg->decref();
       gmres->decref();
-      */
     }
 
     if (fp){ fclose(fp); }

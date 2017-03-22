@@ -755,6 +755,85 @@ void TMRQuadForest::writeForestToVTK( const char *filename ){
         fprintf(fp, "%d\n", 9);
       }
 
+      // Print out the rest as fields one-by-one
+      fprintf(fp, "CELL_DATA %d\n", size);
+      fprintf(fp, "SCALARS entity_index float 1\n");
+      fprintf(fp, "LOOKUP_TABLE default\n");
+      for ( int k = 0; k < size; k++ ){
+        fprintf(fp, "%e\n", 1.0*array[k].face);
+      }
+
+      fclose(fp);
+    }
+  }
+}
+
+/*
+  Write the entire forest to a VTK file
+*/
+void TMRQuadForest::writeAdjacentToVTK( const char *filename ){
+  if (!adjacent){
+    computeAdjacentQuadrants();
+  }
+  if (topo){
+    // Write out the vtk file
+    FILE *fp = fopen(filename, "w");
+    
+    if (fp){
+      fprintf(fp, "# vtk DataFile Version 3.0\n");
+      fprintf(fp, "vtk output\nASCII\n");
+      fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+      
+      // Get the quadrants
+      int size;
+      TMRQuadrant *array;
+      adjacent->getArray(&array, &size);
+      
+      // Write out the points
+      fprintf(fp, "POINTS %d float\n", 4*size);
+
+      // Set the edge length
+      const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
+      for ( int k = 0; k < size; k++ ){
+        const int32_t h = 1 << (TMR_MAX_LEVEL - array[k].level);
+                
+        // Get the surface object and evaluate the point
+        TMRFace *surf;
+        topo->getFace(array[k].face, &surf);
+
+        for ( int jj = 0; jj < 2; jj++ ){
+          for ( int ii = 0; ii < 2; ii++ ){
+            double u = 1.0*(array[k].x + ii*h)/hmax;
+            double v = 1.0*(array[k].y + jj*h)/hmax;
+
+            TMRPoint p;
+            surf->evalPoint(u, v, &p);
+            fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+          }
+        }
+      }
+  
+      // Write out the cell values
+      fprintf(fp, "\nCELLS %d %d\n", size, 5*size);
+      for ( int k = 0; k < size; k++ ){
+        fprintf(fp, "4 %d %d %d %d\n", 4*k, 4*k+1, 4*k+3, 4*k+2);
+      }
+
+      // All quadrilaterals
+      fprintf(fp, "\nCELL_TYPES %d\n", size);
+      for ( int k = 0; k < size; k++ ){
+        fprintf(fp, "%d\n", 9);
+      }
+
+      // Print out the rest as fields one-by-one
+      fprintf(fp, "CELL_DATA %d\n", size);
+      fprintf(fp, "SCALARS entity_index float 1\n");
+      fprintf(fp, "LOOKUP_TABLE default\n");
+      for ( int k = 0; k < size; k++ ){
+        fprintf(fp, "%e\n", 1.0*array[k].face);
+      }
+
       fclose(fp);
     }
   }
@@ -1163,9 +1242,11 @@ TMRQuadForest *TMRQuadForest::coarsen(){
     // Create the coarse quadrants
     coarse->quadrants = queue->toArray();
 
-    // Set the quadrant ownership
+    // Set the owner array
+    coarse->quadrants->getArray(&array, &size);
     coarse->owners = new TMRQuadrant[ mpi_size ];
-    memcpy(coarse->owners, owners, sizeof(TMRQuadrant)*mpi_size);
+    MPI_Allgather(&array[0], 1, TMRQuadrant_MPI_type, 
+                  coarse->owners, 1, TMRQuadrant_MPI_type, comm);
   }
 
   return coarse;
@@ -2236,7 +2317,8 @@ void TMRQuadForest::computeAdjacentQuadrants(){
 
       // Get the sibling
       TMRQuadrant q;
-      p.getSibling(corner, &q);       
+      p.getSibling(corner, &q);
+      q.cornerNeighbor(corner, &q);
 
       if ((q.x >= 0 && q.x < hmax) &&
           (q.y >= 0 && q.y < hmax)){

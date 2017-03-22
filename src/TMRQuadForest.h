@@ -144,6 +144,7 @@ class TMRQuadForest : public TMREntity {
   void writeToVTK( const char *filename );
   void writeToTecplot( const char *filename );
   void writeForestToVTK( const char *filename );
+  void writeAdjacentToVTK( const char *filename );
 
  private:
   // Free the internally stored data and zero things
