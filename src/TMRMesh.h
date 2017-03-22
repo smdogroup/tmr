@@ -170,7 +170,10 @@ class TMRFaceMesh : public TMREntity {
 };
 
 /*
-  Mesh the geometry
+  Mesh the geometry model.
+
+  This class handles the meshing for surface objects without any
+  additional information. For hexahedral meshes, the model must
 */
 class TMRMesh : public TMREntity {
  public:

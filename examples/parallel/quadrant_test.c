@@ -357,7 +357,7 @@ int main( int argc, char *argv[] ){
   TACSBVec *force = tacs[0]->createVec();
   force->incref();
   force->set(1.0);
-  force->applyBCs();
+  tacs[0]->applyBCs(force);
 
   TACSBVec *ans = tacs[0]->createVec();
   ans->incref();

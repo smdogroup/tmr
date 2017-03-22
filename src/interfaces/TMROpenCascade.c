@@ -352,23 +352,24 @@ TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound ){
     edges.Add(shape);
   }
 
-  Exp.Init(compound, TopAbs_FACE);
-  for ( ; Exp.More(); Exp.Next() ){
-    TopoDS_Shape shape = Exp.Current();
-    faces.Add(shape);
-  }
-
   Exp.Init(compound, TopAbs_WIRE);
   for ( ; Exp.More(); Exp.Next() ){
     TopoDS_Shape shape = Exp.Current();
     wires.Add(shape);
   }
 
+  Exp.Init(compound, TopAbs_FACE);
+  for ( ; Exp.More(); Exp.Next() ){
+    TopoDS_Shape shape = Exp.Current();
+    faces.Add(shape);
+  }
+
   int nverts = verts.Extent();
   int nedges = edges.Extent();
   int nwires = wires.Extent();
   int nfaces = faces.Extent();
-  printf("Compound loaded with:\nnverts = %d nedges = %d nfaces = %d nwires = %d\n",
+  printf("Compound loaded with:\nnverts = %d nedges = %d \
+nfaces = %d nwires = %d\n",
          nverts, nedges, nfaces, nwires);
 
   // Re-iterate through the list and create the objects needed to

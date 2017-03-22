@@ -481,7 +481,6 @@ int main( int argc, char *argv[] ){
       f5->decref();
 
       // --------------------------------------------------
-      /*
       // Duplicate and refine the mesh
       TMRQuadForest *dup = forest[0]->duplicate();
       dup->incref();
@@ -502,7 +501,6 @@ int main( int argc, char *argv[] ){
 
       dup->decref();
       dup_tacs->decref();
-      */
       // --------------------------------------------------
 
       int nelems = tacs[0]->getNumElements();

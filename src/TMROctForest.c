@@ -1401,19 +1401,15 @@ TMROctForest *TMROctForest::coarsen(){
     // Create a new queue of octants
     TMROctantQueue *queue = new TMROctantQueue();
  
-    // Scan through the list, if we have offset octants which
-    // all share the same parent, then coarsen the parent
+    // Scan through the list and add the coarse 0-child of each octant
+    // to the new queue of octants
     for ( int i = 0; i < size; i++ ){
-      if (array[i].level > 0 && 
-          array[i].childId() == 0 && 
-          i+offset < size &&
-          array[i].block == array[i+offset].block &&
-          array[i+offset].childId() == offset){
-        // Test to see if the children have the same parent
-        TMROctant p;
-        array[i].parent(&p);
-        queue->push(&p);
-        i += offset;
+      if (array[i].level > 0){
+        if (array[i].childId() == 0){
+          TMROctant p;
+          array[i].parent(&p);
+          queue->push(&p);
+        }
       }
       else {
         queue->push(&array[i]);
@@ -2755,7 +2751,18 @@ void TMROctForest::computeAdjacentOctants(){
   int size;
   TMROctant *array;
   octants->getArray(&array, &size);
-    
+
+  // Sibling ids adjacent to each local face index
+  const int face_ids[][4] = {{0,2,4,6}, {1,3,5,7},
+                             {0,1,4,5}, {2,3,6,7},
+                             {0,1,2,3}, {4,5,6,7}};
+
+  // Sibling ids adjacet to each local edge index
+  const int edge_ids[][2] =
+    {{0,1}, {2,3}, {4,5}, {6,7},
+     {0,2}, {1,3}, {4,6}, {5,7},
+     {0,4}, {1,5}, {2,6}, {3,7}};
+  
   // Loop over all the elements and check where we need to send
   // the octants that are along each edge/face
   for ( int i = 0; i < size; i++ ){
@@ -2763,79 +2770,90 @@ void TMROctForest::computeAdjacentOctants(){
     const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
     
     // Look across each face
-    for ( int face = 0; face < 6; face++ ){
-      // Get the neighbor across each face and check if the
-      // neighboring octant is locally owned. If not, add array[i]
-      // to queue destined for the adjacent processor.
-      TMROctant q;
-      array[i].faceNeighbor(face, &q);
+    for ( int face_index = 0; face_index < 6; face_index++ ){
+      for ( int k = 0; k < 4; k++ ){
+        // Get the neighbor across each face and check if the
+        // neighboring octant is locally owned. If not, add array[i]
+        // to queue destined for the adjacent processor.
+        TMROctant q = array[i];
+        q.level += 1;
+        q.getSibling(face_ids[face_index][k], &q);
+        q.faceNeighbor(face_index, &q);
 
-      if ((q.x >= 0 && q.x < hmax) &&
-          (q.y >= 0 && q.y < hmax) &&
-          (q.z >= 0 && q.z < hmax)){
-        // Get the MPI rank of the octant owner
-        int owner = getOctantMPIOwner(&q);
-        if (owner != mpi_rank){
-          TMROctant p = array[i];
-          p.tag = owner;
-          queue->push(&p);
+        if ((q.x >= 0 && q.x < hmax) &&
+            (q.y >= 0 && q.y < hmax) &&
+            (q.z >= 0 && q.z < hmax)){
+          // Get the MPI rank of the octant owner
+          int owner = getOctantMPIOwner(&q);
+          if (owner != mpi_rank){
+            TMROctant p = array[i];
+            p.tag = owner;
+            queue->push(&p);
+          }
         }
-      }
-      else {
-        // Transform the octant across the boundary
-        // and perform the same check on each
-        addAdjacentFaceToQueue(face, q, queue, array[i]);
+        else {
+          // Transform the octant across the boundary
+          // and perform the same check on each
+          addAdjacentFaceToQueue(face_index, q, queue, array[i]);
+        }
       }
     }
 
     // Add the edge-adjacent octant across the boundary
-    for ( int edge = 0; edge < 12; edge++ ){
-      TMROctant q;
-      array[i].edgeNeighbor(edge, &q);
+    for ( int edge_index = 0; edge_index < 12; edge_index++ ){
+      for ( int k = 0; k < 2; k++ ){
+        // Get the next-lowest level octant
+        TMROctant q = array[i];
+        q.level += 1;
+        q.getSibling(edge_ids[edge_index][k], &q);
+        q.edgeNeighbor(edge_index, &q);
 	  
-      // If we're in bounds, add the neighbor
-      if ((q.x >= 0 && q.x < hmax) &&
-          (q.y >= 0 && q.y < hmax) &&
-          (q.z >= 0 && q.z < hmax)){
-        // Get the MPI rank of the octant owner
-        int owner = getOctantMPIOwner(&q);
-        if (owner != mpi_rank){
-          TMROctant p = array[i];
-          p.tag = owner;
-          queue->push(&p);
-        }
-      }
-      else {
-        // The node may lie across an edge or face
-        int ex = (q.x < 0 || q.x >= hmax);
-        int ey = (q.y < 0 || q.y >= hmax);
-        int ez = (q.z < 0 || q.z >= hmax);
-        
-        if ((ex && ey) || (ex && ez) || (ey && ez)){
-          // The octant lies along a true edge
-          addAdjacentEdgeToQueue(edge, q, queue, array[i]);
+        // If we're in bounds, add the neighbor
+        if ((q.x >= 0 && q.x < hmax) &&
+            (q.y >= 0 && q.y < hmax) &&
+            (q.z >= 0 && q.z < hmax)){
+          // Get the MPI rank of the octant owner
+          int owner = getOctantMPIOwner(&q);
+          if (owner != mpi_rank){
+            TMROctant p = array[i];
+            p.tag = owner;
+            queue->push(&p);
+          }
         }
         else {
-          // The octant actually lies along a face 
-          int face = 0;
-          if (ex){ // This is an x-face
-            face = (q.x < 0 ? 0 : 1);
+          // The node may lie across an edge or face
+          int ex = (q.x < 0 || q.x >= hmax);
+          int ey = (q.y < 0 || q.y >= hmax);
+          int ez = (q.z < 0 || q.z >= hmax);
+          
+          if ((ex && ey) || (ex && ez) || (ey && ez)){
+            // The octant lies along a true edge
+            addAdjacentEdgeToQueue(edge_index, q, queue, array[i]);
+        }
+          else {
+            // The octant actually lies along a face 
+            int face_index = 0;
+            if (ex){ // This is an x-face
+              face_index = (q.x < 0 ? 0 : 1);
+            }
+            else if (ey){ // This is a y-face
+              face_index = (q.y < 0 ? 2 : 3);
+            }
+            else { // This is a z-face
+              face_index = (q.z < 0 ? 4 : 5);
+            }
+            addAdjacentFaceToQueue(face_index, q, queue, array[i]);
           }
-          else if (ey){ // This is a y-face
-            face = (q.y < 0 ? 2 : 3);
-          }
-          else { // This is a z-face
-            face = (q.z < 0 ? 4 : 5);
-          }
-          addAdjacentFaceToQueue(face, q, queue, array[i]);
         }
       }
     }
 
     // Add corner-adjacent octants
     for ( int corner = 0; corner < 8; corner++ ){
-      TMROctant q;
-      array[i].cornerNeighbor(corner, &q);
+      TMROctant q = array[i];
+      q.level += 1;
+      q.getSibling(corner, &q);
+      q.cornerNeighbor(corner, &q);
         
       if ((q.x >= 0 && q.x < hmax) &&
           (q.y >= 0 && q.y < hmax) &&
@@ -2860,31 +2878,31 @@ void TMROctForest::computeAdjacentOctants(){
         }
         else if ((ex && ey) || (ex && ez) || (ey && ez)){
           // The octant lies along a true edge
-          int edge = 0;
+          int edge_index = 0;
           if (ey && ez){
-            edge = (q.y < 0 ? 0 : 1) + (q.z < 0 ? 0 : 2);
+            edge_index = (q.y < 0 ? 0 : 1) + (q.z < 0 ? 0 : 2);
           }
           else if (ex && ez){
-            edge = (q.x < 0 ? 4 : 5) + (q.z < 0 ? 0 : 2);
+            edge_index = (q.x < 0 ? 4 : 5) + (q.z < 0 ? 0 : 2);
           }
           else { // (ex && ey)
-            edge = (q.x < 0 ? 8 : 9) + (q.y < 0 ? 0 : 2);
+            edge_index = (q.x < 0 ? 8 : 9) + (q.y < 0 ? 0 : 2);
           }
-          addAdjacentEdgeToQueue(edge, q, queue, array[i]);
+          addAdjacentEdgeToQueue(edge_index, q, queue, array[i]);
         }
         else {
           // The octant actually lies along a face 
-          int face = 0;
+          int face_index = 0;
           if (ex){ // This is an x-face
-            face = (q.x < 0 ? 0 : 1);
+            face_index = (q.x < 0 ? 0 : 1);
           }
           else if (ey){ // This is a y-face
-            face = (q.y < 0 ? 2 : 3);
+            face_index = (q.y < 0 ? 2 : 3);
           }
           else { // This is a z-face
-            face = (q.z < 0 ? 4 : 5);
+            face_index = (q.z < 0 ? 4 : 5);
           }
-          addAdjacentFaceToQueue(face, q, queue, array[i]);
+          addAdjacentFaceToQueue(face_index, q, queue, array[i]);
         }
       }
     }
@@ -3118,14 +3136,15 @@ void TMROctForest::computeDepFacesAndEdges(){
       adjocts = NULL;
     }
 
+    // Face sibling ids for each face index
+    const int face_ids[][4] = {{0,2,4,6}, {1,3,5,7},
+                               {0,1,4,5}, {2,3,6,7},
+                               {0,1,2,3}, {4,5,6,7}};
+
     for ( int i = 0; i < size; i++ ){
       // Get the side length of the element
       const int32_t hmax = 1 << TMR_MAX_LEVEL;
     
-      const int face_ids[][4] = {{0, 2, 4, 6}, {1, 3, 5, 7},
-                                 {0, 1, 4, 5}, {2, 3, 6, 7},
-                                 {0, 1, 2, 3}, {4, 5, 6, 7}};
-
       // Check the adjacent elements along each face
       for ( int face_index = 0; face_index < 6; face_index++ ){
         // Scan through the adjacent octants
@@ -3193,9 +3212,9 @@ void TMROctForest::computeDepFacesAndEdges(){
 
       // Edge->sibling id data...
       const int edge_ids[][2] =
-        {{0, 1}, {2, 3}, {4, 5}, {6, 7},
-         {0, 2}, {1, 3}, {4, 6}, {5, 7},
-         {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+        {{0,1}, {2,3}, {4,5}, {6,7},
+         {0,2}, {1,3}, {4,6}, {5,7},
+         {0,4}, {1,5}, {2,6}, {3,7}};
 
       // Check whether the next-level refined element exists over an
       // adjacent edge

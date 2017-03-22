@@ -234,6 +234,8 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
+  const int NUM_LEVELS = 5;
+
   // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
   
@@ -257,14 +259,14 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the forests
-  TMROctForest *forest[3];
+  TMROctForest *forest[NUM_LEVELS];
   forest[0] = new TMROctForest(comm);
   
   forest[0]->setConnectivity(npts, conn, nelems);
   forest[0]->createRandomTrees(50, 0, 10);
   forest[0]->repartition();
 
-  for ( int level = 0; level < 3; level++ ){
+  for ( int level = 0; level < NUM_LEVELS; level++ ){
     double tbal = MPI_Wtime();
     forest[level]->balance(1);
     tbal = MPI_Wtime() - tbal;
@@ -278,7 +280,7 @@ int main( int argc, char *argv[] ){
     printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
   
     // Create the coarse mesh
-    if (level < 2){
+    if (level < NUM_LEVELS-1){
       forest[level+1] = forest[level]->coarsen();
     }
   }
@@ -291,9 +293,9 @@ int main( int argc, char *argv[] ){
   TACSElement *solid = new Solid<2>(stiff, LINEAR, mpi_rank);
   
   // Create the TACSAssembler objects
-  TACSAssembler *tacs[3];
+  TACSAssembler *tacs[NUM_LEVELS];
 
-  for ( int level = 0; level < 3; level++ ){
+  for ( int level = 0; level < NUM_LEVELS; level++ ){
     // Find the number of nodes for this processor
     const int *range;
     forest[level]->getOwnedNodeRange(&range);
@@ -349,7 +351,27 @@ int main( int argc, char *argv[] ){
     // Set the element array
     tacs[level]->setElements(elems);
     delete [] elems;
+
+    // Get the nodes
+    TMROctantArray *nodes;
+    forest[level]->getNodes(&nodes);
     
+    // Get the octants associated with the nodes
+    int size;
+    TMROctant *array;
+    nodes->getArray(&array, &size);
+
+    // Loop over all the nodes
+    for ( int i = 0; i < size; i++ ){
+      // Evaluate the point
+      TacsScalar Xpoint[3];
+      getLocation(conn, Xpts, &array[i], Xpoint);
+
+      if (Xpoint[2] < 1e-12){
+        tacs[level]->addBCs(1, &array[i].tag);
+      }
+    }
+
     // Initialize the TACSAssembler object
     tacs[level]->initialize();
 
@@ -358,18 +380,9 @@ int main( int argc, char *argv[] ){
     TACSBVec *X = tacs[level]->createNodeVec();
     X->getArray(&Xn);
 
-    // Get the nodes
-    TMROctantArray *nodes;
-    forest[level]->getNodes(&nodes);
-
     // Get the points
     TMRPoint *Xp;
     forest[level]->getPoints(&Xp);
-
-    // Get the octants associated with the nodes
-    int size;
-    TMROctant *array;
-    nodes->getArray(&array, &size);
 
     // Loop over all the nodes
     for ( int i = 0; i < size; i++ ){
@@ -396,9 +409,9 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the interpolation
-  TACSBVecInterp *interp[2];
+  TACSBVecInterp *interp[NUM_LEVELS-1];
 
-  for ( int level = 0; level < 2; level++ ){
+  for ( int level = 0; level < NUM_LEVELS-1; level++ ){
     // Create the interpolation object
     interp[level] = new TACSBVecInterp(tacs[level+1]->getVarMap(),
                                        tacs[level]->getVarMap(),
@@ -417,11 +430,11 @@ int main( int argc, char *argv[] ){
   int mg_sor_iters = 1;
   int mg_sor_symm = 1;
   int mg_iters_per_level = 1;
-  TACSMg *mg = new TACSMg(comm, 3, omega, mg_sor_iters, mg_sor_symm);
+  TACSMg *mg = new TACSMg(comm, NUM_LEVELS, omega, mg_sor_iters, mg_sor_symm);
   mg->incref();
 
-  for ( int level = 0; level < 3; level++ ){
-    if (level < 2){
+  for ( int level = 0; level < NUM_LEVELS; level++ ){
+    if (level < NUM_LEVELS-1){
       mg->setLevel(level, tacs[level], interp[level], mg_iters_per_level);
     }
     else {
@@ -429,11 +442,15 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  // Assemble the matrix
+  mg->assembleJacobian(1.0, 0.0, 0.0);
+  mg->factor();
+
   // Create a force vector
   TACSBVec *force = tacs[0]->createVec();
   force->incref();
   force->set(1.0);
-  force->applyBCs();
+  tacs[0]->applyBCs(force);
 
   TACSBVec *ans = tacs[0]->createVec();
   ans->incref();
@@ -464,7 +481,7 @@ int main( int argc, char *argv[] ){
   f5->decref();
 
   // Create the level
-  for ( int level = 0; level < 3; level++ ){
+  for ( int level = 0; level < NUM_LEVELS; level++ ){
     tacs[level]->decref();
     delete forest[level];
   }

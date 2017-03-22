@@ -170,10 +170,8 @@ class TMRFace : public TMREntity {
   The TMR volume object.
 
   This object is used primarily as a container class and does not
-  parametrize a volume, except when using transfinite interpolation
-  from surfaces.
-
-  This transfinite-volume interpolation 
+  neccessarily parametrize a volume, except in some instances - for
+  instance when using transfinite interpolation from surfaces.
 */
 class TMRVolume : public TMREntity {
  public:
