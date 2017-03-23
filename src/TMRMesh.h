@@ -47,8 +47,7 @@ class TMRMeshOptions {
 */
 class TMREdgeMesh : public TMREntity {
  public:
-  TMREdgeMesh( MPI_Comm _comm, TMREdge *edge,
-               TMREdge *_master_edge=NULL );
+  TMREdgeMesh( MPI_Comm _comm, TMREdge *edge );
   ~TMREdgeMesh();
 
   // Is this edge mesh degenerate
@@ -70,7 +69,6 @@ class TMREdgeMesh : public TMREntity {
  private:
   MPI_Comm comm;
   TMREdge *edge;
-  TMREdge *master_edge;
 
   // The parametric locations of the points that are obtained from
   // meshing the curve
@@ -87,6 +85,7 @@ class TMREdgeMesh : public TMREntity {
 */
 class TMRFaceMesh : public TMREntity {
  public:
+  enum TMRFaceMeshType { NO_MESH, STRUCTURED, UNSTRUCTURED };
   TMRFaceMesh( MPI_Comm _comm, TMRFace *face );
   ~TMRFaceMesh();
 
@@ -94,8 +93,13 @@ class TMRFaceMesh : public TMREntity {
   void getFace( TMRFace **_surface );
   
   // Mesh the underlying geometric object
-  void mesh( TMRMeshOptions options,
-             double htarget, int structured=0 );
+  void mesh( TMRMeshOptions options, double htarget, 
+             TMRFaceMeshType _type=STRUCTURED );
+
+  // Return the type of the underlying mesh
+  TMRFaceMeshType getMeshType(){
+    return mesh_type;
+  }
 
   // Retrieve the mesh points
   void getMeshPoints( int *_npts, const double **_pts, TMRPoint **X );
@@ -159,6 +163,9 @@ class TMRFaceMesh : public TMREntity {
   MPI_Comm comm;
   TMRFace *face;
 
+  // The actual type of mesh used to mesh the structure
+  TMRFaceMeshType mesh_type;
+
   // Points in the mesh
   int num_fixed_pts; // number of fixed points
   int num_points; // The number of point locations
@@ -169,6 +176,41 @@ class TMRFaceMesh : public TMREntity {
   // Quadrilateral mesh information
   int num_quads;
   int *quads;
+};
+
+/*
+  TMRVolumeMesh class
+
+  This is the class that contains the volume mesh. This mesh 
+  takes in the arguments needed to form a volume mesh
+*/
+class TMRVolumeMesh : public TMREntity {
+ public:
+  TMRVolumeMesh( MPI_Comm _comm, TMRVolume *volume );
+  ~TMRVolumeMesh();
+
+  int mesh( TMRMeshOptions options );
+
+  // Order the mesh points uniquely
+  int setNodeNums( int *num );
+  int getNodeNums( const int **_vars );
+
+ private:
+  // The underlying volume
+  MPI_Comm comm;
+  TMRVolume *volume;
+
+  // Keep the bottom/top surfaces (master/slave) in the
+  // mesh for future reference
+  TMRFace *bottom, *top;
+
+  int num_points; // The number of points
+  TMRPoint *X; // The physical node locations
+  int *vars; // The global variable numbers
+
+  // Hexahedral mesh information
+  int num_hexes;
+  int *hexes;
 };
 
 /*
@@ -207,11 +249,17 @@ class TMRMesh : public TMREntity {
   MPI_Comm comm;
   TMRModel *geo;
 
-  // The number of nodes/quads in the mesh
+  // The number of nodes/positions in the mesh
   int num_nodes;
+  TMRPoint *X;  
+
+  // The number of quads
   int num_quads;
   int *quads;
-  TMRPoint *X;  
+
+  // The number of hexes
+  int num_hexes;
+  int *hexes;
 };
 
 #endif // TMR_MESH_H

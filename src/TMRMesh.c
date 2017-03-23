@@ -336,15 +336,10 @@ static void computeQuadEdges( int nnodes, int nquads, const int quads[],
 /*
   Mesh a curve
 */
-TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge,
-                          TMREdge *_master_edge ){
+TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge ){
   comm = _comm;
   edge = _edge;
   edge->incref();
-  master_edge = _master_edge;
-  if (master_edge){
-    master_edge->incref();
-  }
 
   npts = 0;
   pts = NULL;
@@ -357,7 +352,6 @@ TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge,
 */
 TMREdgeMesh::~TMREdgeMesh(){
   edge->decref();
-  if (master_edge){ master_edge->decref(); }
   if (pts){ delete [] pts; }
   if (X){ delete [] X; }
   if (vars){ delete [] vars; }
@@ -371,16 +365,20 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
 
+  // Get the master edge
+  TMREdge *master;
+  edge->getMaster(&master);
+
   // Figure out if there is a master edge and whether or not it has
   // been meshed.
   npts = -1;
-  if (master_edge && master_edge != edge){
+  if (master && master != edge){
     TMREdgeMesh *mesh;
-    master_edge->getMesh(&mesh);
+    master->getMesh(&mesh);
     if (!mesh){
-      mesh = new TMREdgeMesh(comm, master_edge);
+      mesh = new TMREdgeMesh(comm, master);
       mesh->mesh(options, htarget);
-      master_edge->setMesh(mesh);
+      master->setMesh(mesh);
     }
 
     // Retrieve the number of points along the master edge
@@ -535,6 +533,7 @@ TMRFaceMesh::TMRFaceMesh( MPI_Comm _comm, TMRFace *_face ){
   comm = _comm;
   face = _face;
   face->incref();
+  mesh_type = NO_MESH;
 
   num_fixed_pts = 0;
   num_points = 0;
@@ -558,22 +557,40 @@ TMRFaceMesh::~TMRFaceMesh(){
   if (vars){ delete [] vars; }
 }
 
-static int tri_mesh_count = 0;
-
 /*
   Create the surface mesh
 */
 void TMRFaceMesh::mesh( TMRMeshOptions options,
-                        double htarget, int structured ){
+                        double htarget, 
+                        TMRFaceMeshType _mesh_type ){
   int mpi_rank, mpi_size;
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
+
+  if (_mesh_type == NO_MESH){
+    _mesh_type = STRUCTURED;
+  }
   
+  // Get the master face - if any
+  TMRFace *master;
+  face->getMaster(&master);
+
+  if (master){
+    // If the face mesh for the master does not yet exist, create it...    
+    TMRFaceMesh *face_mesh;
+    master->getMesh(&face_mesh);
+    if (!face_mesh){
+      face_mesh = new TMRFaceMesh(comm, master);
+      face_mesh->mesh(options, htarget);
+      master->setMesh(face_mesh);
+    }
+  }
+
   // First check if the conditions for a structured mesh are satisfied
-  if (structured){
+  if (_mesh_type == STRUCTURED){
     int nloops = face->getNumEdgeLoops();
     if (nloops != 1){
-      structured = 0;
+      _mesh_type = UNSTRUCTURED;
     }
 
     // Get the first edge loop and the edges in the loop
@@ -583,11 +600,11 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     TMREdge **edges;
     loop->getEdgeLoop(&nedges, &edges, NULL);
     if (nedges != 4){
-      structured = 0;
+      _mesh_type = UNSTRUCTURED;
     }
     for ( int k = 0; k < nedges; k++ ){
       if (edges[k]->isDegenerate()){
-        structured = 0;
+        _mesh_type = UNSTRUCTURED;
       }
     }
 
@@ -607,9 +624,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       edges[2]->getMesh(&mesh);
       mesh->getMeshPoints(&nx2, NULL, NULL);
       if (nx1 != nx2){
-        fprintf(stderr, 
-                "TMRFaceMesh warning: Parallel edges do not have the same number of nodes\n");
-        structured = 0;
+        _mesh_type = UNSTRUCTURED;
       }
 
       edges[1]->getMesh(&mesh);
@@ -617,17 +632,13 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       edges[3]->getMesh(&mesh);
       mesh->getMeshPoints(&ny2, NULL, NULL);
       if (ny1 != ny2){
-        fprintf(stderr, 
-                "TMRFaceMesh warning: Parallel edges do not have the same number of nodes\n");
-        structured = 0;
+        _mesh_type = UNSTRUCTURED;
       }
     }
-
-    if (mpi_rank == 0 && !structured){
-      fprintf(stderr, 
-              "TMRFaceMesh warning: Structured mesh switched to unstructured\n");
-    }
   }
+
+  // Record the mesh type
+  mesh_type = _mesh_type;
 
   if (mpi_rank == 0){
     // Count up the number of points and segments from the curves that
@@ -805,7 +816,28 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // ordered first.
     num_fixed_pts = total_num_pts - num_degen;
 
-    if (structured){
+    if (master){
+      TMRFaceMesh *face_mesh;
+      master->getMesh(&face_mesh);
+
+      // Compute the total number of points
+      mesh_type = face_mesh->mesh_type;
+      num_points = face_mesh->num_points;
+      num_fixed_pts = face_mesh->num_fixed_pts;
+      num_quads = face_mesh->num_quads;
+
+      quads = new int[ 4*num_quads ];
+      memcpy(quads, face_mesh->quads, 4*num_quads*sizeof(int));
+
+      pts = new double[ 2*num_points ];
+      memcpy(pts, face_mesh->pts, 2*num_points*sizeof(double));
+
+      X = new TMRPoint[ num_points ];
+      for ( int i = 0; i < num_points; i++ ){
+        face->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
+      }
+    }
+    else if (mesh_type == STRUCTURED){
       // Use a straightforward interpolation technique to obtain the
       // structured parametric locations in terms of the boundary
       // point parametric locations. We do not perform checks here
@@ -1271,7 +1303,7 @@ double TMRFaceMesh::computeRecombinedQuality( const int tris[],
   Compute the quality of a quadrilateral element
 */
 double TMRFaceMesh::computeTriQuality( const int *tri,
-                                          const TMRPoint *p ){
+                                       const TMRPoint *p ){
   // Compute the maximum of fabs(M_PI/3 - alpha)
   double max_val = 0.0;
 
@@ -1822,7 +1854,7 @@ void TMRFaceMesh::printQuadQuality(){
   Print the triangle quality
 */
 void TMRFaceMesh::printTriQuality( int ntris,
-                                      const int tris[] ){
+                                   const int tris[] ){
   const int nbins = 20;
   int total = 0;
   int bins[nbins];
@@ -1928,7 +1960,7 @@ void TMRFaceMesh::writeSegmentsToVTK( const char *filename,
   Write the output to a VTK file
 */
 void TMRFaceMesh::writeTrisToVTK( const char *filename,
-                                     int ntris, const int tris[] ){
+                                  int ntris, const int tris[] ){
   FILE *fp = fopen(filename, "w");
   if (fp){
     fprintf(fp, "# vtk DataFile Version 3.0\n");
@@ -1968,9 +2000,11 @@ void TMRFaceMesh::writeTrisToVTK( const char *filename,
 /*
   Write out the dual mesh for visualization
 */
-void TMRFaceMesh::writeDualToVTK( const char *filename, int nodes_per_elem, 
+void TMRFaceMesh::writeDualToVTK( const char *filename, 
+                                  int nodes_per_elem, 
                                   int nelems, const int elems[],
-                                  int num_dual_edges, const int dual_edges[],
+                                  int num_dual_edges, 
+                                  const int dual_edges[],
                                   const TMRPoint *p ){
   FILE *fp = fopen(filename, "w");
   if (fp){
@@ -2023,6 +2057,211 @@ void TMRFaceMesh::writeDualToVTK( const char *filename, int nodes_per_elem,
     }
     fclose(fp);
   }
+}
+
+/*
+  Try to create a volume mesh based on the structured/unstructured
+  surface meshes
+*/
+TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm, 
+                              TMRVolume *_volume ){
+  comm = _comm;
+  volume = _volume;
+  volume->incref();
+
+  // Set the points in the mesh
+  num_points = 0;
+  num_hexes = 0;
+
+  // Set all the pointer to null
+  X = NULL;
+  hexes = NULL;
+  vars = NULL;
+}
+
+TMRVolumeMesh::~TMRVolumeMesh(){
+  volume->decref();
+  if (X){ delete [] X; }
+  if (hexes){ delete [] hexes; }
+  if (vars){ delete [] vars; }
+}
+
+/*
+  Mesh the volume
+*/
+int TMRVolumeMesh::mesh( TMRMeshOptions options ){
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // Keep track of whether the mesh has failed at any time.
+  // Try and print out a helpful message.
+  int mesh_fail = 0;
+
+  if (mpi_rank == 0){
+    // Get the faces associated with the volume
+    int num_faces;
+    TMRFace **faces;
+    volume->getFaces(&num_faces, &faces, NULL);
+
+    // Set integers for each face to determine whether it is
+    // a master or a slave face or it is connected to one of them
+    // or whether it is structured
+    int *f = new int[ num_faces ];
+    memset(f, 0, num_faces*sizeof(int));
+
+    // Determine if the faces are all referenced
+    top = NULL;
+    bottom = NULL;
+
+    for ( int i = 0; i < num_faces; i++ ){
+      TMRFace *master;
+      faces[i]->getMaster(&master);
+      if (master){
+        bottom = master;
+        top = faces[i];
+
+        // Set the remaining flags
+        f[i] = 1;
+        for ( int j = 0; j < num_faces; j++ ){
+          if (faces[j] == master){
+            f[j] = 1;
+          }
+        }
+
+        // Break - there should only be one master/slave
+        // face pair per volume (that is useful)
+        break;
+      }
+    }
+
+    // Check if the remaining surface meshes are structured
+    for ( int i = 0; i < num_faces; i++ ){
+      if (!f[i]){
+        TMRFaceMesh *mesh;
+        faces[i]->getMesh(&mesh);
+        if (!mesh){
+          fprintf(stderr,
+                  "TMRVolumeMesh error: No mesh associated with face %d\n",
+                  faces[i]->getEntityId());
+          mesh_fail = 1;
+        }
+        else if (mesh->getMeshType() != TMRFaceMesh::STRUCTURED){
+          fprintf(stderr,
+                  "TMRVolumeMesh error: Through-thickness meshes must be structured\n");
+          fprintf(stderr,
+                  "Try setting master-slave relations on edges and surfaces\n");
+          mesh_fail = 1;
+        }
+      }
+    }
+
+    printf("Meshed to this point...");
+    fflush(stdout);
+
+    // Free the f pointer
+    delete [] f;
+
+    // Search the edges connecting the top and the bottom surfaces
+
+
+
+    // Set the pointer to the quads
+    int num_depth_pts = 0;
+
+    // Get information for the top surface
+    TMRFaceMesh *mesh;
+    top->getMesh(&mesh);
+    
+    // Points on the top surface
+    TMRPoint *Xtop;
+    mesh->getMeshPoints(NULL, NULL, &Xtop);
+
+    // Get information from the bottom surface mesh
+    bottom->getMesh(&mesh);
+
+    // Number of points in the quadrilateral mesh on the surface
+    int num_quad_pts = 0;
+    TMRPoint *Xbot;
+    mesh->getMeshPoints(&num_quad_pts, NULL, &Xbot);
+
+    // Get the connectivity on the bottom surface
+    const int *quads;
+    int num_quads = mesh->getLocalConnectivity(&quads);
+
+    // The number of hexahedral elements in the mesh
+    num_hexes = (num_depth_pts-1)*num_quads;
+    num_points = num_depth_pts*num_quad_pts;
+    hexes = new int[ 8*num_hexes ];
+    X = new TMRPoint[ num_points ];
+
+    // Pointer to the hexahedral elements
+    int *hex = hexes;
+    for ( int j = 0; j < num_depth_pts-1; j++ ){
+      for ( int i = 0; i < num_quads; i++ ){
+        // Set the quadrilateral points in the base layer
+        for ( int k = 0; k < 4; k++ ){
+          hex[k] = j*num_quad_pts + quads[4*i+k];
+        }
+        for ( int k = 0; k < 4; k++ ){
+          hex[k] = (j+1)*num_quad_pts + quads[4*i+k];
+        }
+        hex += 8;
+      }
+    }
+
+    // Set the new coordinates within the hexahedral mesh
+    TMRPoint *x = X;
+    for ( int j = 0; j < num_depth_pts; j++ ){
+      double u = 1.0*j/(num_depth_pts-1);
+      for ( int i = 0; i < num_quad_pts; i++ ){
+        x[0].x = (1.0 - u)*Xbot[i].x + u*Xtop[i].x;
+        x[0].y = (1.0 - u)*Xbot[i].y + u*Xtop[i].y;
+        x[0].z = (1.0 - u)*Xbot[i].z + u*Xtop[i].z;
+        x += 1;
+      }
+    }
+  }
+
+  // Get the MPI size
+  int mpi_size;
+  MPI_Comm_size(comm, &mpi_size);
+
+  if (mpi_size > 1){
+    // Broadcast the number of points to all the processors
+    int temp[3];
+    temp[0] = mesh_fail;
+    temp[1] = num_points;
+    temp[2] = num_hexes;
+    MPI_Bcast(temp, 3, MPI_INT, 0, comm);
+    mesh_fail = temp[0];
+    num_points = temp[1];
+    num_hexes = temp[2];
+
+    if (mpi_rank != 0){
+      X = new TMRPoint[ num_points ];
+      hexes = new int[ 8*num_hexes ];
+    }
+
+    // Broadcast the parametric locations and points
+    MPI_Bcast(X, num_points, TMRPoint_MPI_type, 0, comm);
+    MPI_Bcast(hexes, 8*num_hexes, MPI_INT, 0, comm);
+  }
+
+  return mesh_fail;
+}
+
+/*
+  Order the mesh points uniquely
+*/
+int TMRVolumeMesh::setNodeNums( int *num ){
+
+}
+
+/*
+  Retrieve the global node numbers for the mesh
+*/
+int TMRVolumeMesh::getNodeNums( const int **_vars ){
+
 }
 
 /*
@@ -2080,10 +2319,30 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
     TMRFaceMesh *mesh = NULL;
     faces[i]->getMesh(&mesh);
     if (!mesh){
-      int structured = 1;
       mesh = new TMRFaceMesh(comm, faces[i]);
-      mesh->mesh(options, htarget, structured);
+      mesh->mesh(options, htarget);
       faces[i]->setMesh(mesh);
+    }
+  }
+
+  // Check if we can mesh the volume - if any
+  int num_volumes;
+  TMRVolume **volumes;
+  geo->getVolumes(&num_volumes, &volumes);
+  for ( int i = 0; i < num_volumes; i++ ){
+    TMRVolumeMesh *mesh = NULL;
+    volumes[i]->getMesh(&mesh);
+    if (!mesh){
+      mesh = new TMRVolumeMesh(comm, volumes[i]);
+      if (!mesh->mesh(options)){
+        const char *attr = volumes[i]->getAttribute();
+        if (attr){
+          fprintf(stderr, "TMRMesh: Volume meshing failed for object %s\n", attr);
+        }
+        else {
+          fprintf(stderr, "TMRMesh: Volume meshing failed for object %s\n", attr);
+        }
+      }
     }
   }
 
@@ -2111,44 +2370,62 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
     mesh->setNodeNums(&num);
   }
 
+  // Order the volumes
+  for ( int i = 0; i < num_volumes; i++ ){
+    TMRVolumeMesh *mesh = NULL;
+    volumes[i]->getMesh(&mesh);
+    mesh->setNodeNums(&num);
+  }
+
   // Set the number of nodes in the mesh
   num_nodes = num; 
 
-  // Count up the number of quadrilaterals in the mesh
+  // Count up the number of quadrilaterals or hexes in the mesh
   num_quads = 0;
-  for ( int i = 0; i < num_faces; i++ ){
-    TMRFaceMesh *mesh = NULL;
-    faces[i]->getMesh(&mesh);
-    num_quads += mesh->getLocalConnectivity(NULL);
-  }
+  num_hexes = 0;
 
-  // Add the quadrilateral quality to the bins from each mesh
-  const int nbins = 20;
-  int bins[nbins];
-  memset(bins, 0, nbins*sizeof(int));
-  for ( int i = 0; i < num_faces; i++ ){
-    TMRFaceMesh *mesh = NULL;
-    faces[i]->getMesh(&mesh);
-    mesh->addQuadQuality(nbins, bins);
-  }
-
-  // Sum up the total number of elements
-  int total = 0;
-  for ( int i = 0; i < nbins; i++ ){
-    total += bins[i];
-  }
-
-  // Get the MPI rank and print out the quality on the root processor
-  int mpi_rank;
-  MPI_Comm_rank(comm, &mpi_rank);
-
-  if (mpi_rank == 0){
-    printf("Quality   # elements   percentage\n");
-    for ( int k = 0; k < nbins; k++ ){
-      printf("< %.2f    %10d   %10.3f\n",
-             1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
+  if (num_volumes > 0){
+    for ( int i = 0; i < num_volumes; i++ ){
+      TMRVolumeMesh *mesh = NULL;
+      volumes[i]->getMesh(&mesh);
+      // num_hexes += mesh->getLocalConnectivity(NULL);
     }
-    printf("          %10d\n", total);
+  }
+  else {
+    for ( int i = 0; i < num_faces; i++ ){
+      TMRFaceMesh *mesh = NULL;
+      faces[i]->getMesh(&mesh);
+      num_quads += mesh->getLocalConnectivity(NULL);
+    }
+
+    // Add the quadrilateral quality to the bins from each mesh
+    const int nbins = 20;
+    int bins[nbins];
+    memset(bins, 0, nbins*sizeof(int));
+    for ( int i = 0; i < num_faces; i++ ){
+      TMRFaceMesh *mesh = NULL;
+      faces[i]->getMesh(&mesh);
+      mesh->addQuadQuality(nbins, bins);
+    }
+
+    // Sum up the total number of elements
+    int total = 0;
+    for ( int i = 0; i < nbins; i++ ){
+      total += bins[i];
+    }
+
+    // Get the MPI rank and print out the quality on the root processor
+    int mpi_rank;
+    MPI_Comm_rank(comm, &mpi_rank);
+
+    if (mpi_rank == 0){
+      printf("Quality   # elements   percentage\n");
+      for ( int k = 0; k < nbins; k++ ){
+        printf("< %.2f    %10d   %10.3f\n",
+               1.0*(k+1)/nbins, bins[k], 100.0*bins[k]/total);
+      }
+      printf("          %10d\n", total);
+    }
   }
 }
 
@@ -2158,41 +2435,50 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
 void TMRMesh::initMesh(){
   // Allocate the global arrays
   X = new TMRPoint[ num_nodes ];
-  quads = new int[ 4*num_quads ];
 
-  // Retrieve the surface information
-  int num_faces;
-  TMRFace **faces;
-  geo->getFaces(&num_faces, &faces);
+  if (num_hexes > 0){
+    hexes = new int[ 8*num_hexes ];
 
-  // Set the values into the global arrays
-  int *q = quads;
-  for ( int i = 0; i < num_faces; i++ ){
-    // Get the mesh
-    TMRFaceMesh *mesh = NULL;
-    faces[i]->getMesh(&mesh);
 
-    // Get the local mesh points
-    int npts;
-    TMRPoint *Xpts;
-    mesh->getMeshPoints(&npts, NULL, &Xpts);
 
-    // Get the local quadrilateral connectivity
-    const int *quad_local;
-    int nlocal = mesh->getLocalConnectivity(&quad_local);
+  }
+  else {
+    quads = new int[ 4*num_quads ];
 
-    // Get the local to global variable numbering
-    const int *vars;
-    mesh->getNodeNums(&vars);
+    // Retrieve the surface information
+    int num_faces;
+    TMRFace **faces;
+    geo->getFaces(&num_faces, &faces);
 
-    // Set the quadrilateral connectivity
-    for ( int j = 0; j < 4*nlocal; j++, q++ ){
-      q[0] = vars[quad_local[j]];
-    }
+    // Set the values into the global arrays
+    int *q = quads;
+    for ( int i = 0; i < num_faces; i++ ){
+      // Get the mesh
+      TMRFaceMesh *mesh = NULL;
+      faces[i]->getMesh(&mesh);
 
-    // Set the node locations
-    for ( int j = 0; j < npts; j++ ){
-      X[vars[j]] = Xpts[j];
+      // Get the local mesh points
+      int npts;
+      TMRPoint *Xpts;
+      mesh->getMeshPoints(&npts, NULL, &Xpts);
+
+      // Get the local quadrilateral connectivity
+      const int *quad_local;
+      int nlocal = mesh->getLocalConnectivity(&quad_local);
+
+      // Get the local to global variable numbering
+      const int *vars;
+      mesh->getNodeNums(&vars);
+
+      // Set the quadrilateral connectivity
+      for ( int j = 0; j < 4*nlocal; j++, q++ ){
+        q[0] = vars[quad_local[j]];
+      }
+
+      // Set the node locations
+      for ( int j = 0; j < npts; j++ ){
+        X[vars[j]] = Xpts[j];
+      }
     }
   }
 }

@@ -28,6 +28,16 @@ int main( int argc, char *argv[] ){
   if (geo){
     geo->incref();
 
+    // Get the vertices
+    int num_verts;
+    TMRVertex **verts;
+    geo->getVertices(&num_verts, &verts);
+
+    // Get the edges
+    int num_edges;
+    TMREdge **edges;
+    geo->getEdges(&num_edges, &edges);
+
     // Now, separate and plot the different surfaces
     int num_faces;
     TMRFace **faces;
@@ -51,22 +61,28 @@ int main( int argc, char *argv[] ){
     int upper_face_num = 1;
     TMRFace *lower = faces[lower_face_num];
     TMRFace *upper = faces[upper_face_num];
+    upper->setMaster(lower);
 
-    int topo_equivalent = 1;
+    // Create the volumes
+    int num_vols = 1;
+    TMRVolume* vol = new TMRVolume(num_faces, faces);
 
-    // Check that the topology of the two surfaces are equivalent
-    if (lower[i]->getNumEdgeLoops() !=
-        upper[i]->getNumEdgeLoops()){
-      topo_equivalent = 0;
-    }
+    TMRModel *model = new TMRModel(num_verts, verts,
+                                   num_edges, edges, 
+                                   num_faces, faces, 
+                                   num_vols, &vol);
+    model->incref();
+
+    TMRMesh *mesh = new TMRMesh(comm, model);
+    mesh->incref();
+
+    double h = 4.0;
+    TMRMeshOptions options;
+    mesh->mesh(options, h);
 
 
-    // Mesh the lower surface
-    
-
-
-
-
+    mesh->decref();
+    model->decref();
     geo->decref();
   }
   

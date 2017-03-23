@@ -17,6 +17,7 @@ class TMREdge;
 class TMRFace;
 class TMREdgeMesh;
 class TMRFaceMesh;
+class TMRVolumeMesh;
 
 /*
   The vertex class: Note that this is used to store both the
@@ -70,9 +71,13 @@ class TMREdge : public TMREntity {
   // Is this edge degenerate
   virtual int isDegenerate(){ return 0; }
 
-  // Set/retrive the vertices at the beginning and end of the curve
+  // Set/retrieve the vertices at the beginning and end of the curve
   void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
   void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
+
+  // Set/retrieve the master edge
+  void setMaster( TMREdge *_edge );
+  void getMaster( TMREdge **_edge );
 
   // Integrate along the edge and return an array containing
   // the parametric locations to provide an even spacing
@@ -91,6 +96,7 @@ class TMREdge : public TMREntity {
 
   // The mesh for the curve - if it exists
   TMREdgeMesh *mesh;
+  TMREdge *master; // Master edge (may be NULL)
 
   // Derivative step size
   static double deriv_step_size;
@@ -147,6 +153,10 @@ class TMRFace : public TMREntity {
   void addEdgeLoop( TMREdgeLoop *loop );
   void getEdgeLoop( int k, TMREdgeLoop **loop );
 
+  // Set/retrieve the master face
+  void setMaster( TMRFace *_face );
+  void getMaster( TMRFace **_face );
+
   // Set/retrieve the mesh
   void setMesh( TMRFaceMesh *_mesh );
   void getMesh( TMRFaceMesh **_mesh );
@@ -157,6 +167,7 @@ class TMRFace : public TMREntity {
  private:
   // The mesh for the curve - if it exists
   TMRFaceMesh *mesh;
+  TMRFace *master; // Master face (may be NULL)
 
   // Store the loop information
   int num_loops, max_num_loops;
@@ -185,11 +196,18 @@ class TMRVolume : public TMREntity {
   // Get the faces that enclose this volume
   void getFaces( int *_num_faces, TMRFace ***_faces, const int **_dir );
 
+  // Set/retrieve the mesh
+  void setMesh( TMRVolumeMesh *_mesh );
+  void getMesh( TMRVolumeMesh **_mesh );
+
  private:
   // Store the face information
   int num_faces;
   TMRFace **faces;
   int *dir;
+
+  // Set the volume mesh
+  TMRVolumeMesh *mesh;
 };
 
 /*

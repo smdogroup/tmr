@@ -59,6 +59,7 @@ int TMRVertex::getNodeNum( int *num ){
 TMREdge::TMREdge(){
   v1 = v2 = NULL;
   mesh = NULL;
+  master = NULL;
 }
 
 /*
@@ -67,6 +68,7 @@ TMREdge::TMREdge(){
 TMREdge::~TMREdge(){
   if (v1){ v1->decref(); }
   if (v2){ v2->decref(); }
+  if (master){ master->decref(); }
 }
 
 /*
@@ -311,6 +313,24 @@ void TMREdge::getMesh( TMREdgeMesh **_mesh ){
 }
 
 /*
+  Set the master edge
+*/
+void TMREdge::setMaster( TMREdge *edge ){
+  if (edge && edge != this){
+    edge->incref();
+    if (master){ master->decref(); }
+    master = edge;
+  }
+}
+
+/*
+  Retrieve the master edge
+*/
+void TMREdge::getMaster( TMREdge **edge ){
+  if (edge){ *edge = master; }
+}
+
+/*
   Write out a representation of the curve to a VTK file
 */
 void TMREdge::writeToVTK( const char *filename ){
@@ -436,6 +456,7 @@ TMRFace::TMRFace(){
   num_loops = 0;
   loops = NULL;
   mesh = NULL;
+  master = NULL;
 }
 
 /*
@@ -448,6 +469,7 @@ TMRFace::~TMRFace(){
     }
     delete [] loops;
   }
+  if (master){ master->decref(); }
 }
 
 /*
@@ -591,6 +613,45 @@ void TMRFace::getMesh( TMRFaceMesh **_mesh ){
 }
 
 /*
+  Set the master face
+*/
+void TMRFace::setMaster( TMRFace *face ){
+  if (face && face != this){
+    int nloops = getNumEdgeLoops();
+    if (nloops != face->getNumEdgeLoops()){
+      fprintf(stderr, "TMRFace error: Topology not equivalent. \
+Number of loops not equal. Could not set master face\n");
+      return;
+    }
+
+    TMREdgeLoop *l1, *l2;
+    for ( int i = 0; i < nloops; i++ ){
+      getEdgeLoop(i, &l1);
+      face->getEdgeLoop(i, &l2);
+      int n1, n2;
+      l1->getEdgeLoop(&n1, NULL, NULL);
+      l2->getEdgeLoop(&n2, NULL, NULL);
+      if (n1 != n2){
+        fprintf(stderr, "TMRFace error: Topology not equivalent. \
+Number of edges in edge loop %d not equal. Could not set master face\n", i);
+        return;
+      }
+    }
+
+    face->incref();
+    if (master){ master->decref(); }
+    master = face;
+  }
+}
+
+/*
+  Retrieve the master edge
+*/
+void TMRFace::getMaster( TMRFace **face ){
+  if (face){ *face = master; }
+}
+
+/*
   Write out a representation of the surface to a VTK file
 */
 void TMRFace::writeToVTK( const char *filename ){
@@ -667,6 +728,7 @@ TMRVolume::TMRVolume( int nfaces, TMRFace **_faces,
       dir[i] = 1;
     }
   }
+  mesh = NULL;
 }
 
 /*
@@ -696,6 +758,20 @@ void TMRVolume::getFaces( int *_num_faces, TMRFace ***_faces,
   if (_num_faces){ *_num_faces = num_faces; }
   if (_faces){ *_faces = faces; }
   if (_dir){ *_dir = dir; }
+}
+
+/*
+  Set the mesh into the array
+*/
+void TMRVolume::setMesh( TMRVolumeMesh *_mesh ){
+  mesh = _mesh;
+}
+
+/*
+  Retrieve the mesh pointer
+*/
+void TMRVolume::getMesh( TMRVolumeMesh **_mesh ){
+  *_mesh = mesh;
 }
 
 /*
