@@ -47,7 +47,8 @@ class TMRMeshOptions {
 */
 class TMREdgeMesh : public TMREntity {
  public:
-  TMREdgeMesh( MPI_Comm _comm, TMREdge *edge );
+  TMREdgeMesh( MPI_Comm _comm, TMREdge *edge,
+               TMREdge *_master_edge=NULL );
   ~TMREdgeMesh();
 
   // Is this edge mesh degenerate
@@ -69,6 +70,7 @@ class TMREdgeMesh : public TMREntity {
  private:
   MPI_Comm comm;
   TMREdge *edge;
+  TMREdge *master_edge;
 
   // The parametric locations of the points that are obtained from
   // meshing the curve
@@ -93,7 +95,7 @@ class TMRFaceMesh : public TMREntity {
   
   // Mesh the underlying geometric object
   void mesh( TMRMeshOptions options,
-             double htarget );
+             double htarget, int structured=0 );
 
   // Retrieve the mesh points
   void getMeshPoints( int *_npts, const double **_pts, TMRPoint **X );
