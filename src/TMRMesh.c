@@ -2155,8 +2155,13 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
       }
     }
 
-    printf("Meshed to this point...");
-    fflush(stdout);
+    // ---
+
+
+
+
+
+
 
     // Free the f pointer
     delete [] f;
@@ -2166,7 +2171,7 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
 
 
     // Set the pointer to the quads
-    int num_depth_pts = 0;
+    int num_depth_pts = 8;
 
     // Get information for the top surface
     TMRFaceMesh *mesh;
@@ -2334,7 +2339,8 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
     volumes[i]->getMesh(&mesh);
     if (!mesh){
       mesh = new TMRVolumeMesh(comm, volumes[i]);
-      if (!mesh->mesh(options)){
+      int fail = mesh->mesh(options);
+      if (fail){
         const char *attr = volumes[i]->getAttribute();
         if (attr){
           fprintf(stderr, "TMRMesh: Volume meshing failed for object %s\n", attr);
@@ -2342,6 +2348,9 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
         else {
           fprintf(stderr, "TMRMesh: Volume meshing failed for object %s\n", attr);
         }
+      }
+      else {
+        volumes[i]->setMesh(mesh);
       }
     }
   }

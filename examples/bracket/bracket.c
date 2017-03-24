@@ -21,7 +21,7 @@ int main( int argc, char *argv[] ){
 
   // This is all tied to this STEP file
   const char *filename = "bracket_shell.stp";
-  double htarget = 4.0;
+  double htarget = 10.0;
 
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
@@ -76,9 +76,8 @@ int main( int argc, char *argv[] ){
     TMRMesh *mesh = new TMRMesh(comm, model);
     mesh->incref();
 
-    double h = 4.0;
     TMRMeshOptions options;
-    mesh->mesh(options, h);
+    mesh->mesh(options, htarget);
 
 
     mesh->decref();
