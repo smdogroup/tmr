@@ -188,12 +188,19 @@ class TMRVolumeMesh : public TMREntity {
  public:
   TMRVolumeMesh( MPI_Comm _comm, TMRVolume *volume );
   ~TMRVolumeMesh();
-
+  
+  // Create the volume mesh
   int mesh( TMRMeshOptions options );
+
+  // Retrieve the local connectivity from this volume mesh
+  int getLocalConnectivity( const int **quads );
 
   // Order the mesh points uniquely
   int setNodeNums( int *num );
   int getNodeNums( const int **_vars );
+
+  // Write the volume mesh to a VTK file
+  void writeToVTK( const char *filename );
 
  private:
   // The underlying volume

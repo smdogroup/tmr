@@ -907,17 +907,24 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         pts[2*i+1] = params[2*i+1];
       }
 
-      // Approximately evaluate the points on the interior
+      // Use a transfinite interpolation to determine the parametric
+      // points where the interior nodes should be placed.
       for ( int j = 1; j < ny-1; j++ ){
         for ( int i = 1; i < nx-1; i++ ){
           double u = 1.0*i/(nx-1);
           double v = 1.0*j/(ny-1);
 
-          // Compute the weights on the parametric points
-          double w1 = 0.5*(1.0 - v);
-          double w2 = 0.5*u;
-          double w3 = 0.5*v;
-          double w4 = 0.5*(1.0 - u);
+          // Compute the weights on the corners
+          double c1 = (1.0 - u)*(1.0 - v);
+          double c2 = u*(1.0 - v);
+          double c3 = u*v;
+          double c4 = (1.0 - u)*v;
+
+          // Compute the weights on the curves
+          double w1 = (1.0 - v);
+          double w2 = u;
+          double w3 = v;
+          double w4 = (1.0 - u);
 
           // New parametric point
           int p = num_fixed_pts + i-1 + (j-1)*(nx-2);
@@ -928,9 +935,20 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
           int p3 = 2*nx + ny - 3 - i;
           int p4 = 2*nx + 2*ny - 4 - j;
 
-          pts[2*p] = w1*pts[2*p1] + w2*pts[2*p2] + w3*pts[2*p3] + w4*pts[2*p4];
-          pts[2*p+1] = w1*pts[2*p1+1] + w2*pts[2*p2+1] + w3*pts[2*p3+1] + w4*pts[2*p4+1];
-        }
+          // Evaluate the parametric points based on the transfinite
+          // interpolation
+          pts[2*p] = 
+            ((w1*pts[2*p1] + w2*pts[2*p2] + 
+              w3*pts[2*p3] + w4*pts[2*p4]) -
+             (c1*pts[0] + c2*pts[2*(nx-1)] +
+              c3*pts[2*(nx+ny-2)] + c4*pts[2*(2*nx+ny-3)]));
+
+          pts[2*p+1] = 
+            ((w1*pts[2*p1+1] + w2*pts[2*p2+1] + 
+              w3*pts[2*p3+1] + w4*pts[2*p4+1]) -
+             (c1*pts[1] + c2*pts[2*(nx-1)+1] +
+              c3*pts[2*(nx+ny-2)+1] + c4*pts[2*(2*nx+ny-3)+1]));
+          }
       }
 
       // Allocate and evaluate the new physical point locations
@@ -2077,6 +2095,10 @@ TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm,
   X = NULL;
   hexes = NULL;
   vars = NULL;
+
+  // Set the additional connectivity information that is required for
+  // the volume mesh.
+  bottom = top = NULL;
 }
 
 TMRVolumeMesh::~TMRVolumeMesh(){
@@ -2128,8 +2150,8 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
           }
         }
 
-        // Break - there should only be one master/slave
-        // face pair per volume (that is useful)
+        // Break here. The meshing algorithm only works with one
+        // master/slave face pair per volume.
         break;
       }
     }
@@ -2147,7 +2169,8 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
         }
         else if (mesh->getMeshType() != TMRFaceMesh::STRUCTURED){
           fprintf(stderr,
-                  "TMRVolumeMesh error: Through-thickness meshes must be structured\n");
+                  "TMRVolumeMesh error: \
+Through-thickness meshes must be structured\n");
           fprintf(stderr,
                   "Try setting master-slave relations on edges and surfaces\n");
           mesh_fail = 1;
@@ -2155,23 +2178,104 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
       }
     }
 
-    // ---
-
-
-
-
-
-
+    if (mesh_fail){
+      return mesh_fail;
+    }
 
     // Free the f pointer
     delete [] f;
 
-    // Search the edges connecting the top and the bottom surfaces
+    // Given the first face that is not either the top or the bottom,
+    // scan through and determine the connecting edges. Two of these
+    // parallel edges should touch the top and bottom face,
+    // respectively, and the remaining edge must be parallel and have
+    // the same number of nodes. Furthermore, the next parallel edge
+    // will be shared by the next face. From the first edge, there are
+    // two ways that we can iterate over the faces
 
+    // Get the number of edge loops
+    int nloops = bottom->getNumEdgeLoops();
 
+    // Set the number of points through the depth
+    int num_depth_pts = -1;
 
-    // Set the pointer to the quads
-    int num_depth_pts = 8;
+    for ( int k = 0; k < nloops; k++ ){
+      // The top and bottom edge loops
+      TMREdgeLoop *bottom_loop;
+      bottom->getEdgeLoop(k, &bottom_loop);
+
+      // Get the edges associated with the bottom loop
+      int nedges;
+      TMREdge **edges;
+      bottom_loop->getEdgeLoop(&nedges, &edges, NULL);
+
+      for ( int j = 0; j < nedges; j++ ){
+        // Search for the other face object that shares the edge
+        // object edges[j] with the bottom face object
+        TMRFace *face = NULL;
+        for ( int i = 0; i < num_faces; i++ ){
+          if (!(faces[i] == top || faces[i] == bottom)){
+            // Get the edge loop associated with the face
+            TMREdgeLoop *loop;
+            faces[i]->getEdgeLoop(0, &loop);
+          
+            // Get the edge loops associated with face i
+            int n;
+            TMREdge **e;
+            loop->getEdgeLoop(&n, &e, NULL);
+            
+            // Does this edge loop contain edges[j]
+            for ( int ii = 0; ii < n; ii++ ){
+              if (e[ii] == edges[j]){
+                face = faces[i];
+              }
+            }
+
+            if (face){
+              break;
+            }
+          }
+        }
+
+        // This face is not the top or bottom face and therefore must
+        // be structured.
+        TMREdgeLoop *loop;
+        face->getEdgeLoop(0, &loop);
+
+        // Get the edge loop for this face
+        TMREdge **face_edges;
+        loop->getEdgeLoop(NULL, &face_edges, NULL);
+        
+        TMREdgeMesh *mesh = NULL;
+        if (face_edges[0] == edges[j] || 
+            face_edges[2] == edges[j]){
+          face_edges[1]->getMesh(&mesh);
+        }
+        else if (face_edges[1] == edges[j] || 
+                 face_edges[3] == edges[j]){
+          face_edges[0]->getMesh(&mesh);
+        }
+        
+        // Get the number of mesh points
+        int npts = -1;
+        mesh->getMeshPoints(&npts, NULL, NULL);
+        
+        // If this is the first time finding the number of points
+        // along the depth of this volume, record the number of
+        // points.  Otherwise, verify that the number of points
+        // through the depth of the volume is consistent.
+        if (num_depth_pts < 0){
+          num_depth_pts = npts;
+        }
+        else if (num_depth_pts != npts){
+          fprintf(stderr, 
+                  "TMRVolumeMesh error: \
+Inconsistent number of edge points through-thickness %d != %d\n",
+                  num_depth_pts, npts);
+          mesh_fail = 1;
+        }
+      }
+    }
 
     // Get information for the top surface
     TMRFaceMesh *mesh;
@@ -2208,7 +2312,7 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
           hex[k] = j*num_quad_pts + quads[4*i+k];
         }
         for ( int k = 0; k < 4; k++ ){
-          hex[k] = (j+1)*num_quad_pts + quads[4*i+k];
+          hex[4+k] = (j+1)*num_quad_pts + quads[4*i+k];
         }
         hex += 8;
       }
@@ -2256,17 +2360,90 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
 }
 
 /*
+  Retrieve the local connectivity for this volume mesh
+*/
+int TMRVolumeMesh::getLocalConnectivity( const int **_hexes ){
+  *_hexes = hexes;
+  return num_hexes;
+}
+
+/*
+  Write the volume mesh to a VTK file
+*/
+void TMRVolumeMesh::writeToVTK( const char *filename ){
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  if (mpi_rank == 0 && hexes){
+    // Write out the connectivity of the mesh to a temp vtk file
+    FILE *fp = fopen("volume-mesh.vtk", "w");
+    if (fp){
+      fprintf(fp, "# vtk DataFile Version 3.0\n");
+      fprintf(fp, "vtk output\nASCII\n");
+      fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+      
+      // Write out the points
+      fprintf(fp, "POINTS %d float\n", num_points);
+      for ( int k = 0; k < num_points; k++ ){
+        fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
+      }
+    
+      // Write out the cell values
+      fprintf(fp, "\nCELLS %d %d\n", num_hexes, 9*num_hexes);
+      for ( int k = 0; k < num_hexes; k++ ){
+        fprintf(fp, "8 %d %d %d %d %d %d %d %d\n", 
+                hexes[8*k], hexes[8*k+1], hexes[8*k+2], hexes[8*k+3],
+                hexes[8*k+4], hexes[8*k+5], hexes[8*k+6], hexes[8*k+7]);
+      }
+
+      // All hexes
+      fprintf(fp, "\nCELL_TYPES %d\n", num_hexes);
+      for ( int k = 0; k < num_hexes; k++ ){
+        fprintf(fp, "%d\n", 12);
+      }
+      fclose(fp);
+    }
+  }
+}
+
+/*
   Order the mesh points uniquely
 */
 int TMRVolumeMesh::setNodeNums( int *num ){
+  if (!vars){
+    // Initially, set all of the nodes to zero
+    vars = new int[ num_points ];
+    for ( int k = 0; k < num_points; k++ ){
+      vars[k] = -1;
+    }
 
+    // Loop over the nodes that are on surfaces...
+
+
+
+    // Now order the variables as they arrive
+    int start = *num;
+    for ( int k = 0; k < num_points; k++ ){
+      if (vars[k] < 0){
+        vars[k] = *num;
+        (*num)++;
+      }
+    }
+
+    // Return the number of points that have been allocated
+    return *num - start;
+  }
+
+  return 0;
 }
 
 /*
   Retrieve the global node numbers for the mesh
 */
 int TMRVolumeMesh::getNodeNums( const int **_vars ){
-
+  if (_vars){
+    *_vars = vars;
+  }
 }
 
 /*
@@ -2346,7 +2523,7 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
           fprintf(stderr, "TMRMesh: Volume meshing failed for object %s\n", attr);
         }
         else {
-          fprintf(stderr, "TMRMesh: Volume meshing failed for object %s\n", attr);
+          fprintf(stderr, "TMRMesh: Volume meshing failed for volume %d\n", i);
         }
       }
       else {

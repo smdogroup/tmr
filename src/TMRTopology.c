@@ -1589,7 +1589,8 @@ void TMRTopology::reorderEntities( int num_entities,
             int node = levset[current];
 
             // Add all the nodes in the next level set
-            for ( int j = face_to_face_ptr[node]; j < face_to_face_ptr[node+1]; j++ ){
+            for ( int j = face_to_face_ptr[node]; 
+                  j < face_to_face_ptr[node+1]; j++ ){
               int next_node = face_to_face[j];
 	    
               if (vars[next_node] < 0){
