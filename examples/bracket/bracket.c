@@ -81,6 +81,7 @@ int main( int argc, char *argv[] ){
 
     // Write the volume mesh
     mesh->writeToVTK("volume-mesh.vtk");
+    mesh->writeToBDF("volume-mesh.bdf");
 
     mesh->decref();
     model->decref();

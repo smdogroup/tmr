@@ -2356,7 +2356,7 @@ Inconsistent number of edge points through-thickness %d != %d\n",
     TMRPoint *Xbot;
     mesh->getMeshPoints(&num_quad_pts, NULL, &Xbot);
 
-    // Get the connectivity on the bottom surface
+    // Get the local connectivity on the bottom surface
     const int *quads;
     int num_quads = mesh->getLocalConnectivity(&quads);
 
@@ -2559,8 +2559,18 @@ int TMRVolumeMesh::setNodeNums( int *num ){
 
     // Loop over the nodes that are on surfaces...
     for ( int k = 0; k < num_face_loops; k++ ){
+      // Get the bottom edge loop and bottom edges
+      TMREdgeLoop *bottom_loop;
+      bottom->getEdgeLoop(k, &bottom_loop);
+
+      // Get the number of bottom edges
+      int nedges;
+      TMREdge **edges;
+      bottom_loop->getEdgeLoop(&nedges, &edges, NULL);
+
       // If the face loop
-      for ( int ptr = face_loop_ptr[k]; ptr < face_loop_ptr[k]; ptr++ ){
+      for ( int ii = 0, ptr = face_loop_ptr[k]; 
+              ptr < face_loop_ptr[k+1]; ii++, ptr++ ){
         TMRFace *face = face_loops[ptr];
 
         // Get the face variables
@@ -2568,18 +2578,57 @@ int TMRVolumeMesh::setNodeNums( int *num ){
         face->getMesh(&mesh);
         mesh->getNodeNums(&face_vars);
 
-        int nx = face_loop_edge_count[ptr];
-        int ny = num_depth_pts;
+        // Get the edges associated with the face
+        TMREdgeLoop *face_loop;
+        face->getEdgeLoop(0, &face_loop);
+
+        int num_face_edges;
+        TMREdge **face_edges;
+        face_loop->getEdgeLoop(&num_face_edges, &face_edges, NULL);
+
+        // Check which loop is which
+        int orient = 0;
+        for ( ; orient < 4; orient++ ){
+          if (edges[ii] == face_edges[orient]){
+            break;
+          }
+        }
+        if (orient == 4){
+          fprintf(stderr, "Edge not found!!!\n");
+        }
+
+        int nx = 0, ny = 0;
+        if (orient == 0 || orient == 2){
+          nx = face_loop_edge_count[ptr];
+          ny = num_depth_pts;
+        }
+        else {
+          nx = num_depth_pts;
+          ny = face_loop_edge_count[ptr];
+        }
+
+        printf("orient = %d (%d, %d)\n", orient, nx, ny);
 
         // Scan through the depth points
         for ( int j = 0; j < num_depth_pts; j++ ){
           for ( int i = 0; i < face_loop_edge_count[ptr]; i++ ){
             int local = j*num_quad_pts + i + ioffset;
 
-            int ix = i;
-            int jy = j;
+            int x = i, y = j;
+            if (orient == 1){
+              x = j;
+              y = nx - 1 - i;
+            }
+            else if (orient == 2){
+              x = nx - 1 - i;
+              y = ny - 1 - j;
+            }
+            else if (orient == 3){
+              x = ny - 1 - j;
+              y = i;
+            }
 
-            int index = get_structured_index(nx, ny, ix, jy);
+            int index = get_structured_index(nx, ny, x, y);
             vars[local] = face_vars[index];
           }
         }
@@ -2793,6 +2842,9 @@ void TMRMesh::initMesh(){
   if (num_hexes > 0){
     hexes = new int[ 8*num_hexes ];
 
+    int *count = new int[ num_nodes ];
+    memset(count, 0, num_nodes*sizeof(int));
+
     // Retrieve the surface information
     int num_volumes;
     TMRVolume **volumes;
@@ -2826,8 +2878,16 @@ void TMRMesh::initMesh(){
       // Set the node locations
       for ( int j = 0; j < npts; j++ ){
         X[vars[j]] = Xpts[j];
+        count[vars[j]]++;
       }
     }
+
+    // Set the count to the number of variables
+    for ( int j = 0; j < num_nodes; j++ ){
+      if (count[j] == 0){ printf("Node %d not referenced\n", j); }
+      if (count[j] >= 2){ printf("Node %d referenced more than once %d\n", j, count[j]); }
+    }
+
   }
   else {
     quads = new int[ 4*num_quads ];
