@@ -2434,7 +2434,7 @@ void TMRVolumeMesh::getMeshPoints( int *_npts, TMRPoint **_X ){
   Retrieve the local connectivity for this volume mesh
 */
 int TMRVolumeMesh::getLocalConnectivity( const int **_hexes ){
-  *_hexes = hexes;
+  if (_hexes){ *_hexes = hexes; }
   return num_hexes;
 }
 
