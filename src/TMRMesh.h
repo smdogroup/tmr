@@ -192,6 +192,9 @@ class TMRVolumeMesh : public TMREntity {
   // Create the volume mesh
   int mesh( TMRMeshOptions options );
 
+  // Retrieve the mesh points
+  void getMeshPoints( int *_npts, TMRPoint **X );
+
   // Retrieve the local connectivity from this volume mesh
   int getLocalConnectivity( const int **quads );
 

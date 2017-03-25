@@ -79,10 +79,8 @@ int main( int argc, char *argv[] ){
     TMRMeshOptions options;
     mesh->mesh(options, htarget);
 
-    // Get the volume mesh
-    TMRVolumeMesh *vol_mesh;
-    vol->getMesh(&vol_mesh);
-    vol_mesh->writeToVTK("volume-mesh.vtk");
+    // Write the volume mesh
+    mesh->writeToVTK("volume-mesh.vtk");
 
     mesh->decref();
     model->decref();
