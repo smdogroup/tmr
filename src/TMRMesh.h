@@ -207,6 +207,15 @@ class TMRVolumeMesh : public TMREntity {
   MPI_Comm comm;
   TMRVolume *volume;
 
+  // Set the number of face loops
+  int num_face_loops;
+  int *face_loop_ptr;
+  TMRFace **face_loops;
+  int *face_loop_edge_count;
+
+  // Number of points through-thickness
+  int num_depth_pts;
+
   // Keep the bottom/top surfaces (master/slave) in the
   // mesh for future reference
   TMRFace *bottom, *top;

@@ -2087,6 +2087,14 @@ TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm,
   volume = _volume;
   volume->incref();
 
+  // Set the number of loops on the bottom face
+  num_face_loops = 0;
+  face_loop_ptr = NULL;
+  face_loop_edge_count = NULL;
+
+  // Set the number of points through-thickness
+  num_depth_pts = -1;
+
   // Set the points in the mesh
   num_points = 0;
   num_hexes = 0;
@@ -2185,21 +2193,32 @@ Through-thickness meshes must be structured\n");
     // Free the f pointer
     delete [] f;
 
-    // Given the first face that is not either the top or the bottom,
-    // scan through and determine the connecting edges. Two of these
-    // parallel edges should touch the top and bottom face,
-    // respectively, and the remaining edge must be parallel and have
-    // the same number of nodes. Furthermore, the next parallel edge
-    // will be shared by the next face. From the first edge, there are
-    // two ways that we can iterate over the faces
+    // Each face that is not either the top or the bottom, must
+    // have only four edges and must be structured. Two of the
+    // parallel edges associated with these faces should touch the top 
+    // and bottom face, while remaining edges must be parallel and have
+    // the same number of nodes. Furthermore, the one parallel edge
+    // will be shared by the next face. We loop over the bottom edge
+    // loops and find the connecting faces.
 
     // Get the number of edge loops
-    int nloops = bottom->getNumEdgeLoops();
+    num_face_loops = bottom->getNumEdgeLoops();
+
+    // Count up the total number of faces that 
+    face_loop_ptr = new int[ num_face_loops+1 ];
+    face_loops = new TMRFace*[ num_face_loops ];
+    face_loop_edge_count = new int[ num_face_loops ];
 
     // Set the number of points through the depth
-    int num_depth_pts = -1;
+    num_depth_pts = -1;
 
-    for ( int k = 0; k < nloops; k++ ){
+    // Set the first entry in the loop pointer
+    face_loop_ptr[0] = 0;
+
+    for ( int k = 0; k < num_face_loops; k++ ){
+      // Set the next entry in the loop pointer
+      face_loop_ptr[k+1] = face_loop_ptr[k];
+
       // The top and bottom edge loops
       TMREdgeLoop *bottom_loop;
       bottom->getEdgeLoop(k, &bottom_loop);
@@ -2274,6 +2293,29 @@ Inconsistent number of edge points through-thickness %d != %d\n",
                   num_depth_pts, npts);
           mesh_fail = 1;
         }
+
+        // Find the number of nodes on the edges that are parallel
+        // to the edge loops surrounding the face
+        if (face_edges[0] == edges[j] || 
+            face_edges[2] == edges[j]){
+          face_edges[0]->getMesh(&mesh);
+        }
+        else if (face_edges[1] == edges[j] || 
+                 face_edges[3] == edges[j]){
+          face_edges[1]->getMesh(&mesh);
+        }
+
+        // Get the number of mesh points from the parallel edge
+        mesh->getMeshPoints(&npts, NULL, NULL);
+
+        // Set the number of points 
+        face_loop_edge_count[face_loop_ptr[k+1]] = npts;
+
+        // Record the face object for later use (during ordering)
+        // and incref the face object
+        face_loops[face_loop_ptr[k+1]] = face;
+        face->incref();
+        face_loop_ptr[k+1]++;
       }
     }
 
@@ -2407,6 +2449,41 @@ void TMRVolumeMesh::writeToVTK( const char *filename ){
 }
 
 /*
+  Returns the index number for the (i, j) node location along 
+  the structured edge.
+
+  This the structured face nodes are ordered by first counting around 
+  the edges of the face counter-clockwise. After these nodes are 
+  counted, the interior face nodes are ordered in a cartesian order.
+  For nx = 5, and ny = 4, this produces the following face numbering:
+
+  11-- 10-- 9 -- 8 -- 7
+  |    |    |    |    |  
+  12-- 17-- 18-- 19-- 6
+  |    |    |    |    |
+  13-- 14-- 15-- 16-- 5
+  |    |    |    |    |
+  0 -- 1 -- 2 -- 3 -- 4
+*/
+static int get_structured_index( const int nx, const int ny,
+                                 const int i, const int j ){
+  if (j == 0){
+    return i;
+  }
+  else if (i == nx-1){
+    return nx - 1 + j;
+  }
+  else if (j == ny-1){
+    return 2*nx + ny - 3 - i;
+  }
+  else if (i == 0){
+    return 2*nx + 2*ny - 4 - j;
+  }
+
+  return 2*nx + 2*ny - 4 + (i-1) + (j-1)*(nx-2);
+}
+
+/*
   Order the mesh points uniquely
 */
 int TMRVolumeMesh::setNodeNums( int *num ){
@@ -2417,10 +2494,72 @@ int TMRVolumeMesh::setNodeNums( int *num ){
       vars[k] = -1;
     }
 
+    // Get information from the bottom surface mesh
+    TMRFaceMesh *mesh;
+    bottom->getMesh(&mesh);
+
+    // Number of points in the quadrilateral mesh on the surface
+    int num_quad_pts = 0;
+    mesh->getMeshPoints(&num_quad_pts, NULL, NULL);
+
+    // Set the nodes on the bottom face
+    const int *face_vars;
+    mesh->getNodeNums(&face_vars);
+
+    // Get the face variable numbers
+    for ( int i = 0; i < num_quad_pts; i++ ){
+      vars[i] = face_vars[i];
+    }
+
+    // Get the top surface mesh and top surface mesh points
+    top->getMesh(&mesh);
+    mesh->getNodeNums(&face_vars);
+
+    // Set the top surface variable numbers
+    for ( int i = 0; i < num_quad_pts; i++ ){
+      vars[i + num_quad_pts*(num_depth_pts-1)] = face_vars[i];
+    }
+
+    // Now the top and bottom surfaces of the volume have the correct
+    // ordering, but the sides are not ordered correctly. Scan through
+    // the structured sides (with the same ordering as defined by the
+    // edge loops on the bottom surface) and determine 
+
+    // Keep track of the total number of nodes encountered
+    int ioffset = 0;
+
     // Loop over the nodes that are on surfaces...
+    for ( int k = 0; k < num_face_loops; k++ ){
+      // If the face loop
+      for ( int ptr = face_loop_ptr[k]; ptr < face_loop_ptr[k]; ptr++ ){
+        TMRFace *face = face_loops[ptr];
 
+        // Get the face variables
+        const int *face_vars;
+        face->getMesh(&mesh);
+        mesh->getNodeNums(&face_vars);
 
+        int nx = face_loop_edge_count[ptr];
+        int ny = num_depth_pts;
 
+        // Scan through the depth points
+        for ( int j = 0; j < num_depth_pts; j++ ){
+          for ( int i = 0; i < face_loop_edge_count[ptr]; i++ ){
+            int local = j*num_quad_pts + i + ioffset;
+
+            int ix = i;
+            int jy = j;
+
+            int index = get_structured_index(nx, ny, ix, jy);
+            vars[local] = face_vars[index];
+          }
+        }
+
+        // Update the pointer to the offset
+        ioffset += face_loop_edge_count[ptr]-1;
+      }
+    }
+    
     // Now order the variables as they arrive
     int start = *num;
     for ( int k = 0; k < num_points; k++ ){
