@@ -336,9 +336,10 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
 */
 TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound ){
   // Create the index <--> geometry object
-  TopTools_IndexedMapOfShape verts, edges, faces, wires;
+  TopTools_IndexedMapOfShape verts, edges, faces, wires, shells, solids;
 
-  // Get the faces, edges and  up the number of faces and a
+  // Extract the vertices, edges, faces, wires etc. from the
+  // compound
   TopExp_Explorer Exp;
   Exp.Init(compound, TopAbs_VERTEX);
   for ( ; Exp.More(); Exp.Next() ){
@@ -364,33 +365,41 @@ TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound ){
     faces.Add(shape);
   }
 
+  Exp.Init(compound, TopAbs_SHELL);
+  for ( ; Exp.More(); Exp.Next() ){
+    TopoDS_Shape shape = Exp.Current();
+    shells.Add(shape);
+  }
+
+  Exp.Init(compound, TopAbs_SOLID);
+  for ( ; Exp.More(); Exp.Next() ){
+    TopoDS_Shape shape = Exp.Current();
+    solids.Add(shape);
+  }
+
   int nverts = verts.Extent();
   int nedges = edges.Extent();
   int nwires = wires.Extent();
   int nfaces = faces.Extent();
+  int nshells = shells.Extent();
+  int nsolids = solids.Extent();
   printf("Compound loaded with:\nnverts = %d nedges = %d \
-nfaces = %d nwires = %d\n",
-         nverts, nedges, nfaces, nwires);
+nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
+         nverts, nedges, nfaces, nwires, nshells, nsolids);
 
   // Re-iterate through the list and create the objects needed to
   // define the geometry in TMR
   TMRVertex **all_vertices = new TMRVertex*[ nverts ];
   memset(all_vertices, 0, nverts*sizeof(TMRVertex*));
-  Exp.Init(compound, TopAbs_VERTEX);
-  for ( ; Exp.More(); Exp.Next() ){
-    TopoDS_Shape shape = Exp.Current();
-    TopoDS_Vertex v = TopoDS::Vertex(shape);
-    int index = verts.FindIndex(shape);
+  for ( int index = 1; index <= verts.Extent(); index++ ){
+    TopoDS_Vertex v = TopoDS::Vertex(verts(index));
     all_vertices[index-1] = new TMR_OCCVertex(v);
   }
 
   TMREdge **all_edges = new TMREdge*[ nedges ];
   memset(all_edges, 0, nedges*sizeof(TMREdge*));
-  Exp.Init(compound, TopAbs_EDGE);
-  for ( ; Exp.More(); Exp.Next() ){
-    TopoDS_Shape shape = Exp.Current();
-    TopoDS_Edge e = TopoDS::Edge(shape.Oriented(TopAbs_FORWARD));
-    int index = edges.FindIndex(shape);
+  for ( int index = 1; index <= edges.Extent(); index++ ){
+    TopoDS_Edge e = TopoDS::Edge(edges(index).Oriented(TopAbs_FORWARD));
     all_edges[index-1] = new TMR_OCCEdge(e);
 
     // Set the vertices belonging to this edge
@@ -406,15 +415,15 @@ nfaces = %d nwires = %d\n",
 
   TMRFace **all_faces = new TMRFace*[ nfaces ];
   memset(all_faces, 0, nfaces*sizeof(TMRFace*));
-  Exp.Init(compound, TopAbs_FACE);
-  for ( ; Exp.More(); Exp.Next() ){
-    TopoDS_Shape shape = Exp.Current();
-    TopoDS_Face face = TopoDS::Face(shape.Oriented(TopAbs_FORWARD));
-    int index = faces.FindIndex(shape);
+  for ( int index = 1; index <= faces.Extent(); index++ ){
+    TopoDS_Face face = TopoDS::Face(faces(index));
     all_faces[index-1] = new TMR_OCCFace(face);
 
+    // Get the face with the normal orientation
+    TopoDS_Face face_norm = TopoDS::Face(faces(index).Oriented(TopAbs_FORWARD));
+
     TopTools_IndexedMapOfShape map;
-    TopExp::MapShapes(face, TopAbs_WIRE, map);
+    TopExp::MapShapes(face_norm, TopAbs_WIRE, map);
     for ( int i = 1; i <= map.Extent(); i++ ){
       TopoDS_Wire wire = TopoDS::Wire(map(i));
 
@@ -429,7 +438,7 @@ nfaces = %d nwires = %d\n",
       TMREdge **edgs = new TMREdge*[ ne ];
       int *dir = new int[ ne ];
       int k = 0;
-      for ( wExp.Init(wire, face); wExp.More(); wExp.Next(), k++ ){
+      for ( wExp.Init(wire, face_norm); wExp.More(); wExp.Next(), k++ ){
         TopoDS_Edge edge = wExp.Current();
         dir[k] = 1;
         if (edge.Orientation() == TopAbs_REVERSED){
@@ -439,8 +448,32 @@ nfaces = %d nwires = %d\n",
         edgs[k] = all_edges[edge_index-1];
       }
 
-      // Allocate the loop with the given edges/directions
-      all_faces[index-1]->addEdgeLoop(new TMREdgeLoop(ne, edgs, dir));
+      if (face.IsEqual(face_norm)){
+        // Allocate the loop with the given edges/directions
+        all_faces[index-1]->addEdgeLoop(new TMREdgeLoop(ne, edgs, dir));
+      }
+      else {
+        // The face is reversed
+        for ( int j = 0; j < ne/2; j++ ){
+          // swap edges 
+          TMREdge *etmp = edgs[j];
+          edgs[j] = edgs[ne-1-j];
+          edgs[ne-1-j] = etmp;
+          
+          // swap the edge directions
+          int tmp = dir[j];
+          dir[j] = dir[ne-1-j];
+          dir[ne-1-j] = tmp;
+        }
+
+        // Multiply all the directions by -1
+        for ( int j = 0; j < ne; j++ ){
+          dir[j] *= -1;
+        }
+
+        // Allocate the reverse loop
+        all_faces[index-1]->addEdgeLoop(new TMREdgeLoop(ne, edgs, dir));
+      }
 
       // Free the allocated data
       delete [] edgs;
@@ -448,9 +481,68 @@ nfaces = %d nwires = %d\n",
     }
   }
 
+  // Create the volumes
+  TMRVolume **all_vols = new TMRVolume*[ nsolids ];
+  memset(all_vols, 0, nsolids*sizeof(TMRVolume*));
+  Exp.Init(compound, TopAbs_SOLID);
+  for ( ; Exp.More(); Exp.Next() ){
+    TopoDS_Shape shape = Exp.Current();
+    TopoDS_Solid solid = TopoDS::Solid(shape);
+    int vol_index = solids.FindIndex(shape);
+
+    // Count up the number of faces
+    int nvol_faces = 0;
+    TopTools_IndexedMapOfShape shell_map;
+    TopExp::MapShapes(solid, TopAbs_SHELL, shell_map);
+    for ( int i = 1; i <= shell_map.Extent(); i++ ){
+      TopoDS_Shell shell = TopoDS::Shell(shell_map(i));
+
+      // Find the number of faces associated with this shell
+      TopTools_IndexedMapOfShape face_map;
+      TopExp::MapShapes(shell, TopAbs_FACE, face_map);
+      nvol_faces += face_map.Extent();
+    }
+
+    // Allocate the faces arrays/directions
+    TMRFace **vol_faces = new TMRFace*[ nvol_faces ];
+    int *dir = new int[ nvol_faces ];
+
+    // Now, extract the faces from the underlying shell(s)
+    nvol_faces = 0;
+    TopExp::MapShapes(solid, TopAbs_SHELL, shell_map);
+    for ( int i = 1; i <= shell_map.Extent(); i++ ){
+      TopoDS_Shell shell = TopoDS::Shell(shell_map(i));
+
+      TopTools_IndexedMapOfShape face_map;
+      TopExp::MapShapes(shell, TopAbs_FACE, face_map);
+      for ( int j = 1; j <= face_map.Extent(); j++ ){
+        TopoDS_Face face = TopoDS::Face(face_map(j));
+
+        dir[nvol_faces] = 1;
+        int index = faces.FindIndex(face);
+        if (faces(index).IsEqual(face)){
+          dir[nvol_faces] = 1;
+        }
+        else {
+          dir[nvol_faces] = -1;
+        }
+
+        // Assign the face pointer
+        vol_faces[nvol_faces] = all_faces[index-1];
+        nvol_faces++;
+      }
+    }
+
+    // Create the volume object
+    all_vols[vol_index-1] = new TMRVolume(nvol_faces, vol_faces, dir);
+    delete [] vol_faces;
+    delete [] dir;
+  }
+
   TMRModel *geo = new TMRModel(nverts, all_vertices,
                                nedges, all_edges,
-                               nfaces, all_faces);
+                               nfaces, all_faces,
+                               nsolids, all_vols);
   return geo;
 }
 

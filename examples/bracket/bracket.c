@@ -20,7 +20,7 @@ int main( int argc, char *argv[] ){
   MPI_Comm comm = MPI_COMM_WORLD;
 
   // This is all tied to this STEP file
-  const char *filename = "bracket_shell.stp";
+  const char *filename = "bracket_solid.stp";
   double htarget = 4.0;
 
   // Load in the geometry file
@@ -28,20 +28,15 @@ int main( int argc, char *argv[] ){
   if (geo){
     geo->incref();
 
-    // Get the vertices
-    int num_verts;
-    TMRVertex **verts;
-    geo->getVertices(&num_verts, &verts);
+    // Get the volume
+    TMRVolume *volume;
+    geo->getVolumes(NULL, &volume);
 
-    // Get the edges
-    int num_edges;
-    TMREdge **edges;
-    geo->getEdges(&num_edges, &edges);
-
-    // Now, separate and plot the different surfaces
+    // Get the faces from the volume
     int num_faces;
     TMRFace **faces;
-    geo->getFaces(&num_faces, &faces);
+    const int *dir;
+    volume->getFaces(&num_faces, &faces, &dir);
 
     // Write the surfaces files out, if needed
     int rank = 0;
@@ -61,19 +56,9 @@ int main( int argc, char *argv[] ){
     int upper_face_num = 1;
     TMRFace *lower = faces[lower_face_num];
     TMRFace *upper = faces[upper_face_num];
-    upper->setMaster(lower);
+    lower->setMaster(upper);
 
-    // Create the volumes
-    int num_vols = 1;
-    TMRVolume* vol = new TMRVolume(num_faces, faces);
-
-    TMRModel *model = new TMRModel(num_verts, verts,
-                                   num_edges, edges, 
-                                   num_faces, faces, 
-                                   num_vols, &vol);
-    model->incref();
-
-    TMRMesh *mesh = new TMRMesh(comm, model);
+    TMRMesh *mesh = new TMRMesh(comm, geo);
     mesh->incref();
 
     TMRMeshOptions options;

@@ -28,8 +28,27 @@ int main( int argc, char *argv[] ){
   if (geo){
     geo->incref();
 
+    // Get the vertices
+    int num_verts;
+    TMRVertex **verts;
+    geo->getVertices(&num_verts, &verts);
+
+    // Get the edges
+    int num_edges;
+    TMREdge **edges;
+    geo->getEdges(&num_edges, &edges);
+
+    // Separate and plot the different surfaces
+    int num_faces;
+    TMRFace **faces;
+    geo->getFaces(&num_faces, &faces);
+
+    TMRModel *model = new TMRModel(num_verts, verts,
+                                   num_edges, edges, 
+                                   num_faces, faces);
+
     // Allocate the new mesh
-    TMRMesh *mesh = new TMRMesh(MPI_COMM_WORLD, geo);
+    TMRMesh *mesh = new TMRMesh(MPI_COMM_WORLD, model);
     mesh->incref();
 
     // Adjust the quality factor
@@ -41,6 +60,8 @@ int main( int argc, char *argv[] ){
     mesh->mesh(options, htarget);
     mesh->writeToVTK("surface-mesh.vtk");
     mesh->writeToBDF("surface-mesh.bdf");
+
+    // Decref the objects
     mesh->decref();
     geo->decref();
   }

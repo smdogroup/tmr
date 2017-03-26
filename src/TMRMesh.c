@@ -43,8 +43,10 @@ static int compare_edges( const void *avoid, const void *bvoid ){
   Compute a node to triangle or node to quad data structure
 */
 static void computeNodeToElems( int nnodes, int nelems, 
-                                int num_elem_nodes, const int conn[], 
-                                int **_ptr, int **_node_to_elems ){
+                                int num_elem_nodes, 
+                                const int conn[], 
+                                int **_ptr, 
+                                int **_node_to_elems ){
   // Set the pointer
   int *ptr = new int[ nnodes+1 ];
   memset(ptr, 0, (nnodes+1)*sizeof(int));
@@ -90,9 +92,12 @@ static void computeNodeToElems( int nnodes, int nelems,
 /*
   Compute all of the edges within the triangular mesh
 */
-static void computeTriEdges( int nnodes, int ntris, const int tris[],
-                             int *num_tri_edges, int **_tri_edges,
-                             int **_tri_neighbors, int **_dual_edges,
+static void computeTriEdges( int nnodes, int ntris, 
+                             const int tris[],
+                             int *num_tri_edges, 
+                             int **_tri_edges,
+                             int **_tri_neighbors, 
+                             int **_dual_edges,
                              int **_node_to_tri_ptr=NULL, 
                              int **_node_to_tris=NULL ){
   // Compute the edges in the triangular mesh
@@ -209,9 +214,12 @@ static void computeTriEdges( int nnodes, int ntris, const int tris[],
 /*
   Compute the connectivity between the edges
 */
-static void computeQuadEdges( int nnodes, int nquads, const int quads[], 
-                              int *_num_quad_edges, int **_quad_edges,
-                              int **_quad_neighbors=NULL, int **_dual_edges=NULL,
+static void computeQuadEdges( int nnodes, int nquads, 
+                              const int quads[], 
+                              int *_num_quad_edges, 
+                              int **_quad_edges,
+                              int **_quad_neighbors=NULL, 
+                              int **_dual_edges=NULL,
                               int **_quad_edge_nums=NULL ){
   // Compute the edges in the quadrilateral mesh
   int *ptr;
@@ -2566,7 +2574,11 @@ int TMRVolumeMesh::setNodeNums( int *num ){
       // Get the number of bottom edges
       int nedges;
       TMREdge **edges;
-      bottom_loop->getEdgeLoop(&nedges, &edges, NULL);
+      const int *edge_dir;
+      bottom_loop->getEdgeLoop(&nedges, &edges, &edge_dir);
+
+      // Set the original ioffset number
+      int ioffset_start = ioffset;
 
       // If the face loop
       for ( int ii = 0, ptr = face_loop_ptr[k]; 
@@ -2584,7 +2596,9 @@ int TMRVolumeMesh::setNodeNums( int *num ){
 
         int num_face_edges;
         TMREdge **face_edges;
-        face_loop->getEdgeLoop(&num_face_edges, &face_edges, NULL);
+        const int *face_edge_dir;
+        face_loop->getEdgeLoop(&num_face_edges, &face_edges,
+                               &face_edge_dir);
 
         // Check which loop is which
         int orient = 0;
@@ -2593,10 +2607,9 @@ int TMRVolumeMesh::setNodeNums( int *num ){
             break;
           }
         }
-        if (orient == 4){
-          fprintf(stderr, "Edge not found!!!\n");
-        }
 
+        // Find out the relative orientation of the two
+        // faces.
         int nx = 0, ny = 0;
         if (orient == 0 || orient == 2){
           nx = face_loop_edge_count[ptr];
@@ -2607,25 +2620,63 @@ int TMRVolumeMesh::setNodeNums( int *num ){
           ny = face_loop_edge_count[ptr];
         }
 
-        printf("orient = %d (%d, %d)\n", orient, nx, ny);
+        // Determine whether the directions are consistent
+        int dir = 1;
+        if (edge_dir[ii] != face_edge_dir[orient]){
+          dir = -1;
+        }
+
+        printf("orient = %d edge dir = %d\n", orient, dir);
 
         // Scan through the depth points
         for ( int j = 0; j < num_depth_pts; j++ ){
           for ( int i = 0; i < face_loop_edge_count[ptr]; i++ ){
-            int local = j*num_quad_pts + i + ioffset;
+            int local = 0;
+            if (i == face_loop_edge_count[ptr]-1 &&
+                ptr == face_loop_ptr[k+1]-1){
+              local = j*num_quad_pts + ioffset_start;
+              printf("loop = %d local = %d\n", k, local);
+            }
+            else {
+              local = j*num_quad_pts + i + ioffset;
+            }
 
             int x = i, y = j;
-            if (orient == 1){
-              x = j;
-              y = nx - 1 - i;
+            if (orient == 0){
+              if (dir < 0){
+                x = nx - 1 - i;
+                y = j;
+              }
+            }
+            else if (orient == 1){
+              if (dir < 0){
+                x = nx - 1 - j;
+                y = ny - 1 - i;
+              }
+              else {
+                x = j;
+                y = ny - 1 - i;
+              }
             }
             else if (orient == 2){
-              x = nx - 1 - i;
-              y = ny - 1 - j;
+              if (dir < 0){
+                x = i;
+                y = ny - 1 - j;
+              }
+              else {
+                x = nx - 1 - i;
+                y = ny - 1 - j;
+              }
             }
             else if (orient == 3){
-              x = ny - 1 - j;
-              y = i;
+              if (dir < 0){
+                x = j;
+                y = i;
+              }
+              else {
+                x = nx - 1 - j;
+                y = i;
+              }
             }
 
             int index = get_structured_index(nx, ny, x, y);
@@ -2794,7 +2845,7 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
       num_hexes += mesh->getLocalConnectivity(NULL);
     }
   }
-  else {
+  if (num_faces > 0){
     for ( int i = 0; i < num_faces; i++ ){
       TMRFaceMesh *mesh = NULL;
       faces[i]->getMesh(&mesh);
@@ -2839,6 +2890,46 @@ void TMRMesh::initMesh(){
   // Allocate the global arrays
   X = new TMRPoint[ num_nodes ];
 
+  if (num_quads > 0){
+    quads = new int[ 4*num_quads ];
+
+    // Retrieve the surface information
+    int num_faces;
+    TMRFace **faces;
+    geo->getFaces(&num_faces, &faces);
+
+    // Set the values into the global arrays
+    int *q = quads;
+    for ( int i = 0; i < num_faces; i++ ){
+      // Get the mesh
+      TMRFaceMesh *mesh = NULL;
+      faces[i]->getMesh(&mesh);
+
+      // Get the local mesh points
+      int npts;
+      TMRPoint *Xpts;
+      mesh->getMeshPoints(&npts, NULL, &Xpts);
+
+      // Get the local quadrilateral connectivity
+      const int *quad_local;
+      int nlocal = mesh->getLocalConnectivity(&quad_local);
+
+      // Get the local to global variable numbering
+      const int *vars;
+      mesh->getNodeNums(&vars);
+
+      // Set the quadrilateral connectivity
+      for ( int j = 0; j < 4*nlocal; j++, q++ ){
+        q[0] = vars[quad_local[j]];
+      }
+
+      // Set the node locations
+      for ( int j = 0; j < npts; j++ ){
+        X[vars[j]] = Xpts[j];
+      }
+    }
+  }
+  /*
   if (num_hexes > 0){
     hexes = new int[ 8*num_hexes ];
 
@@ -2887,47 +2978,9 @@ void TMRMesh::initMesh(){
       if (count[j] == 0){ printf("Node %d not referenced\n", j); }
       if (count[j] >= 2){ printf("Node %d referenced more than once %d\n", j, count[j]); }
     }
-
+    delete [] count;
   }
-  else {
-    quads = new int[ 4*num_quads ];
-
-    // Retrieve the surface information
-    int num_faces;
-    TMRFace **faces;
-    geo->getFaces(&num_faces, &faces);
-
-    // Set the values into the global arrays
-    int *q = quads;
-    for ( int i = 0; i < num_faces; i++ ){
-      // Get the mesh
-      TMRFaceMesh *mesh = NULL;
-      faces[i]->getMesh(&mesh);
-
-      // Get the local mesh points
-      int npts;
-      TMRPoint *Xpts;
-      mesh->getMeshPoints(&npts, NULL, &Xpts);
-
-      // Get the local quadrilateral connectivity
-      const int *quad_local;
-      int nlocal = mesh->getLocalConnectivity(&quad_local);
-
-      // Get the local to global variable numbering
-      const int *vars;
-      mesh->getNodeNums(&vars);
-
-      // Set the quadrilateral connectivity
-      for ( int j = 0; j < 4*nlocal; j++, q++ ){
-        q[0] = vars[quad_local[j]];
-      }
-
-      // Set the node locations
-      for ( int j = 0; j < npts; j++ ){
-        X[vars[j]] = Xpts[j];
-      }
-    }
-  }
+  */
 }
 
 /*
@@ -2967,6 +3020,8 @@ void TMRMesh::writeToVTK( const char *filename ){
       fprintf(fp, "vtk output\nASCII\n");
       fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
         
+      num_hexes = 0;
+
       // Write out the points
       fprintf(fp, "POINTS %d float\n", num_nodes);
       for ( int k = 0; k < num_nodes; k++ ){
