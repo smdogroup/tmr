@@ -237,7 +237,8 @@ void TMR_OCCEdge::getEdgeObject( TopoDS_Edge &e ){
 /*
   TMR interface to the underlying OpenCascade TopoDS_Face object
 */
-TMR_OCCFace::TMR_OCCFace( TopoDS_Face &f ){
+TMR_OCCFace::TMR_OCCFace( int _normal_dir, TopoDS_Face &f ):
+TMRFace(_normal_dir){
   face = f;
 }
 
@@ -416,14 +417,19 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
   TMRFace **all_faces = new TMRFace*[ nfaces ];
   memset(all_faces, 0, nfaces*sizeof(TMRFace*));
   for ( int index = 1; index <= faces.Extent(); index++ ){
-    TopoDS_Face face = TopoDS::Face(faces(index));
-    all_faces[index-1] = new TMR_OCCFace(face);
+    TopoDS_Face face_orig = TopoDS::Face(faces(index));
+    TopoDS_Face face = TopoDS::Face(faces(index).Oriented(TopAbs_FORWARD));
 
-    // Get the face with the normal orientation
-    TopoDS_Face face_norm = TopoDS::Face(faces(index).Oriented(TopAbs_FORWARD));
+    // Check if the orientation of the face is flipped relative 
+    // to the natural orientation of the surface
+    int orient = 1;
+    if (!face_orig.IsEqual(face)){
+      orient = -1;
+    }
+    all_faces[index-1] = new TMR_OCCFace(orient, face);
 
     TopTools_IndexedMapOfShape map;
-    TopExp::MapShapes(face_norm, TopAbs_WIRE, map);
+    TopExp::MapShapes(face, TopAbs_WIRE, map);
     for ( int i = 1; i <= map.Extent(); i++ ){
       TopoDS_Wire wire = TopoDS::Wire(map(i));
 
@@ -438,7 +444,7 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
       TMREdge **edgs = new TMREdge*[ ne ];
       int *dir = new int[ ne ];
       int k = 0;
-      for ( wExp.Init(wire, face_norm); wExp.More(); wExp.Next(), k++ ){
+      for ( wExp.Init(wire, face); wExp.More(); wExp.Next(), k++ ){
         TopoDS_Edge edge = wExp.Current();
         dir[k] = 1;
         if (edge.Orientation() == TopAbs_REVERSED){
@@ -448,32 +454,8 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
         edgs[k] = all_edges[edge_index-1];
       }
 
-      if (face.IsEqual(face_norm)){
-        // Allocate the loop with the given edges/directions
-        all_faces[index-1]->addEdgeLoop(new TMREdgeLoop(ne, edgs, dir));
-      }
-      else {
-        // The face is reversed
-        for ( int j = 0; j < ne/2; j++ ){
-          // swap edges 
-          TMREdge *etmp = edgs[j];
-          edgs[j] = edgs[ne-1-j];
-          edgs[ne-1-j] = etmp;
-          
-          // swap the edge directions
-          int tmp = dir[j];
-          dir[j] = dir[ne-1-j];
-          dir[ne-1-j] = tmp;
-        }
-
-        // Multiply all the directions by -1
-        for ( int j = 0; j < ne; j++ ){
-          dir[j] *= -1;
-        }
-
-        // Allocate the reverse loop
-        all_faces[index-1]->addEdgeLoop(new TMREdgeLoop(ne, edgs, dir));
-      }
+      // Allocate the loop with the given edges/directions
+      all_faces[index-1]->addEdgeLoop(new TMREdgeLoop(ne, edgs, dir));
 
       // Free the allocated data
       delete [] edgs;

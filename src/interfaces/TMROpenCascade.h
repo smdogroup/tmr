@@ -163,7 +163,7 @@ class TMR_OCCEdge : public TMREdge {
 
 class TMR_OCCFace : public TMRFace {
  public:
-  TMR_OCCFace( TopoDS_Face &f );
+  TMR_OCCFace( int _normal_dir, TopoDS_Face &f );
   ~TMR_OCCFace();
   void getRange( double *umin, double *vmin,
                  double *umax, double *vmax ); 

@@ -29,14 +29,14 @@ int main( int argc, char *argv[] ){
     geo->incref();
 
     // Get the volume
-    TMRVolume *volume;
+    TMRVolume **volume;
     geo->getVolumes(NULL, &volume);
 
     // Get the faces from the volume
     int num_faces;
     TMRFace **faces;
     const int *dir;
-    volume->getFaces(&num_faces, &faces, &dir);
+    volume[0]->getFaces(&num_faces, &faces, &dir);
 
     // Write the surfaces files out, if needed
     int rank = 0;
@@ -69,7 +69,6 @@ int main( int argc, char *argv[] ){
     mesh->writeToBDF("volume-mesh.bdf");
 
     mesh->decref();
-    model->decref();
     geo->decref();
   }
   

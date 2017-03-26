@@ -451,7 +451,8 @@ void TMREdgeLoop::getEdgeLoop( int *_nedges, TMREdge **_edges[],
 /*
   Initialize data within the TMRSurface object
 */
-TMRFace::TMRFace(){
+TMRFace::TMRFace( int _normal_dir ):
+normal_dir(_normal_dir){
   max_num_loops = 0;
   num_loops = 0;
   loops = NULL;
@@ -476,6 +477,18 @@ TMRFace::~TMRFace(){
   Set the step size for the derivative
 */
 double TMRFace::deriv_step_size = 1e-6;
+
+/*
+  Get the flag indicating the relative orientation of the
+  parametric space and the underlying surface normal.
+
+  normal_dir > 0 indicates that the parameter space and
+  the surface normal are consistent. normal_dir < 0 indicates
+  that the surface normal is flipped.
+*/
+int TMRFace::getNormalDirection(){
+  return normal_dir;
+}
 
 /*
   Evaluate the derivative using a finite-difference step size
@@ -687,12 +700,23 @@ void TMRFace::writeToVTK( const char *filename ){
     
     // Write out the cell values
     fprintf(fp, "\nCELLS %d %d\n", (npts-1)*(npts-1), 5*(npts-1)*(npts-1));
-    for ( int j = 0; j < npts-1; j++ ){
-      for ( int i = 0; i < npts-1; i++ ){
-        fprintf(fp, "4 %d %d %d %d\n", 
-                i + j*npts, i+1 + j*npts, 
-                i+1 + (j+1)*npts, i + (j+1)*npts);
+    if (getNormalDirection() > 0){
+      for ( int j = 0; j < npts-1; j++ ){
+        for ( int i = 0; i < npts-1; i++ ){
+          fprintf(fp, "4 %d %d %d %d\n", 
+                  i + j*npts, i+1 + j*npts, 
+                  i+1 + (j+1)*npts, i + (j+1)*npts);
+        }
       }
+    }
+    else {
+      for ( int j = 0; j < npts-1; j++ ){
+        for ( int i = 0; i < npts-1; i++ ){
+          fprintf(fp, "4 %d %d %d %d\n", 
+                  i + j*npts, i+1 + (j+1)*npts, 
+                  i+1 + j*npts, i + (j+1)*npts);
+        }
+      }      
     }
     
     // Write out the cell types

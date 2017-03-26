@@ -678,7 +678,8 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         TMREdgeMesh *mesh = NULL;
         edges[i]->getMesh(&mesh);
         if (!mesh){
-          fprintf(stderr, "TMRFaceMesh error: Edge mesh does not exist\n");
+          fprintf(stderr, 
+                  "TMRFaceMesh error: Edge mesh does not exist\n");
         }
         
         // Get the number of points associated with the curve
@@ -1105,6 +1106,16 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // Free the parameter/segment information
     delete [] params;
     delete [] segments;
+
+    // Flip the orientation of the face so that the normal
+    // directions are consistent
+    if (face->getNormalDirection() < 0){
+      for ( int i = 0; i < num_quads; i++ ){
+        int tmp = quads[4*i+1];
+        quads[4*i+1] = quads[4*i+3];
+        quads[4*i+3] = tmp;
+      }
+    }
   }
 
   if (mpi_size > 1){
@@ -2148,7 +2159,8 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
     // Get the faces associated with the volume
     int num_faces;
     TMRFace **faces;
-    volume->getFaces(&num_faces, &faces, NULL);
+    const int *face_dir;
+    volume->getFaces(&num_faces, &faces, &face_dir);
 
     // Set integers for each face to determine whether it is
     // a master or a slave face or it is connected to one of them
@@ -2158,7 +2170,9 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
 
     // Determine if the faces are all referenced
     top = NULL;
+    top_dir = 1;
     bottom = NULL;
+    bottom_dir = 1;
 
     for ( int i = 0; i < num_faces; i++ ){
       TMRFace *master;
@@ -2166,12 +2180,14 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
       if (master){
         bottom = master;
         top = faces[i];
+        top_dir = face_dir[i];
 
         // Set the remaining flags
         f[i] = 1;
         for ( int j = 0; j < num_faces; j++ ){
           if (faces[j] == master){
             f[j] = 1;
+            bottom_dir = face_dir[j];
           }
         }
 
@@ -2285,8 +2301,8 @@ Through-thickness meshes must be structured\n");
           }
         }
 
-        // This face is not the top or bottom face and therefore must
-        // be structured.
+        // This face is not the top or bottom face and 
+        // therefore must be structured.
         TMREdgeLoop *loop;
         face->getEdgeLoop(0, &loop);
 
@@ -2348,21 +2364,21 @@ Inconsistent number of edge points through-thickness %d != %d\n",
       }
     }
 
-    // Get information for the top surface
+    // Get information for the bottom surface
     TMRFaceMesh *mesh;
-    top->getMesh(&mesh);
+    bottom->getMesh(&mesh);
     
     // Points on the top surface
-    TMRPoint *Xtop;
-    mesh->getMeshPoints(NULL, NULL, &Xtop);
+    TMRPoint *Xbot;
+    mesh->getMeshPoints(NULL, NULL, &Xbot);
 
-    // Get information from the bottom surface mesh
-    bottom->getMesh(&mesh);
+    // Get the information for the top surface
+    top->getMesh(&mesh);
 
     // Number of points in the quadrilateral mesh on the surface
     int num_quad_pts = 0;
-    TMRPoint *Xbot;
-    mesh->getMeshPoints(&num_quad_pts, NULL, &Xbot);
+    TMRPoint *Xtop;
+    mesh->getMeshPoints(&num_quad_pts, NULL, &Xtop);
 
     // Get the local connectivity on the bottom surface
     const int *quads;
@@ -2376,16 +2392,33 @@ Inconsistent number of edge points through-thickness %d != %d\n",
 
     // Pointer to the hexahedral elements
     int *hex = hexes;
-    for ( int j = 0; j < num_depth_pts-1; j++ ){
-      for ( int i = 0; i < num_quads; i++ ){
-        // Set the quadrilateral points in the base layer
-        for ( int k = 0; k < 4; k++ ){
-          hex[k] = j*num_quad_pts + quads[4*i+k];
+    if (top_dir > 0){
+      for ( int j = 0; j < num_depth_pts-1; j++ ){
+        for ( int i = 0; i < num_quads; i++ ){
+          // Set the quadrilateral points in the base layer
+          for ( int k = 0; k < 4; k++ ){
+            hex[k] = j*num_quad_pts + quads[4*i+k];
+          }
+          for ( int k = 0; k < 4; k++ ){
+            hex[4+k] = (j+1)*num_quad_pts + quads[4*i+k];
+          }
+          hex += 8;
         }
-        for ( int k = 0; k < 4; k++ ){
-          hex[4+k] = (j+1)*num_quad_pts + quads[4*i+k];
+      }
+    }
+    else {
+      const int flip[] = {0, 3, 2, 1};
+      for ( int j = 0; j < num_depth_pts-1; j++ ){
+        for ( int i = 0; i < num_quads; i++ ){
+          // Set the quadrilateral points in the base layer
+          for ( int k = 0; k < 4; k++ ){
+            hex[k] = j*num_quad_pts + quads[4*i+flip[k]];
+          }
+          for ( int k = 0; k < 4; k++ ){
+            hex[4+k] = (j+1)*num_quad_pts + quads[4*i+flip[k]];
+          }
+          hex += 8;
         }
-        hex += 8;
       }
     }
 
@@ -2533,7 +2566,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
 
     // Get information from the bottom surface mesh
     TMRFaceMesh *mesh;
-    bottom->getMesh(&mesh);
+    top->getMesh(&mesh);
 
     // Number of points in the quadrilateral mesh on the surface
     int num_quad_pts = 0;
@@ -2635,7 +2668,6 @@ int TMRVolumeMesh::setNodeNums( int *num ){
             if (i == face_loop_edge_count[ptr]-1 &&
                 ptr == face_loop_ptr[k+1]-1){
               local = j*num_quad_pts + ioffset_start;
-              printf("loop = %d local = %d\n", k, local);
             }
             else {
               local = j*num_quad_pts + i + ioffset;
@@ -3019,8 +3051,8 @@ void TMRMesh::writeToVTK( const char *filename ){
       fprintf(fp, "# vtk DataFile Version 3.0\n");
       fprintf(fp, "vtk output\nASCII\n");
       fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
-        
-      num_hexes = 0;
+
+      num_quads = 0;
 
       // Write out the points
       fprintf(fp, "POINTS %d float\n", num_nodes);

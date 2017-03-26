@@ -222,6 +222,7 @@ class TMRVolumeMesh : public TMREntity {
   // Keep the bottom/top surfaces (master/slave) in the
   // mesh for future reference
   TMRFace *bottom, *top;
+  int bottom_dir, top_dir;
 
   int num_points; // The number of points
   TMRPoint *X; // The physical node locations

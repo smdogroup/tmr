@@ -131,8 +131,11 @@ class TMREdgeLoop : public TMREntity {
 */
 class TMRFace : public TMREntity {
  public:
-  TMRFace();
+  TMRFace( int _normal_dir=1 );
   virtual ~TMRFace();
+
+  // Get the underlying normal direction
+  int getNormalDirection();
 
   // Get the parameter range for this surface
   virtual void getRange( double *umin, double *vmin,
@@ -165,6 +168,10 @@ class TMRFace : public TMREntity {
   void writeToVTK( const char *filename );
 
  private:
+  // Relative orientation of the normal direction and
+  // the parametric normal direction
+  const int normal_dir;
+
   // The mesh for the curve - if it exists
   TMRFaceMesh *mesh;
   TMRFace *master; // Master face (may be NULL)
