@@ -242,6 +242,9 @@ class TMRVolumeMesh : public TMREntity {
 */
 class TMRMesh : public TMREntity {
  public:
+  static const int TMR_QUADS = 1;
+  static const int TMR_HEXES = 2;
+
   TMRMesh( MPI_Comm _comm, TMRModel *_geo );
   ~TMRMesh();
 
@@ -250,14 +253,17 @@ class TMRMesh : public TMREntity {
   void mesh( TMRMeshOptions options, double htarget );
 
   // Write the mesh to a VTK file
-  void writeToVTK( const char *filename );
+  void writeToVTK( const char *filename, 
+                   int flag=(TMRMesh::TMR_QUADS | TMRMesh::TMR_HEXES) );
 
   // Write the mesh to a BDF file
-  void writeToBDF( const char *filename );
+  void writeToBDF( const char *filename,
+                   int flag=(TMRMesh::TMR_QUADS | TMRMesh::TMR_HEXES) );
 
   // Retrieve the mesh components
   int getMeshPoints( TMRPoint **_X );
-  int getMeshConnectivity( const int **_quads );
+  void getMeshConnectivity( int *_nquads, const int **_quads,
+                            int *_nhexes, const int **_hexes );
 
   // Create a topology object (with underlying mesh geometry)
   TMRModel* createModelFromMesh();

@@ -2241,13 +2241,13 @@ Through-thickness meshes must be structured\n");
   // Free the f pointer
   delete [] f;
 
-  // Each face that is not either the top or the bottom, must
-  // have only four edges and must be structured. Two of the
-  // parallel edges associated with these faces should touch the top 
-  // and bottom face, while remaining edges must be parallel and have
-  // the same number of nodes. Furthermore, the one parallel edge
-  // will be shared by the next face. We loop over the bottom edge
-  // loops and find the connecting faces.
+  // Each face that is not either the top or the bottom, must have
+  // only four edges and must be structured. Two of the parallel edges
+  // associated with these faces should touch the top and bottom face,
+  // while remaining edges must be parallel and have the same number
+  // of nodes. Furthermore, the one parallel edge will be shared by
+  // the next face. We loop over the bottom edge loops and find the
+  // connecting faces.
 
   // Get the number of edge loops
   num_face_loops = bottom->getNumEdgeLoops();
@@ -2343,10 +2343,10 @@ Through-thickness meshes must be structured\n");
       int npts = -1;
       mesh->getMeshPoints(&npts, NULL, NULL);
         
-      // If this is the first time finding the number of points
-      // along the depth of this volume, record the number of
-      // points.  Otherwise, verify that the number of points
-      // through the depth of the volume is consistent.
+      // If this is the first time finding the number of points along
+      // the depth of this volume, record the number of points.
+      // Otherwise, verify that the number of points through the depth
+      // of the volume is consistent.
       if (num_depth_pts < 0){
         num_depth_pts = npts;
       }
@@ -2511,8 +2511,8 @@ void TMRVolumeMesh::writeToVTK( const char *filename ){
   Returns the index number for the (i, j) node location along 
   the structured edge.
 
-  This the structured face nodes are ordered by first counting around 
-  the edges of the face counter-clockwise. After these nodes are 
+  This the structured face nodes are ordered by first counting around
+  the edges of the face counter-clockwise. After these nodes are
   counted, the interior face nodes are ordered in a cartesian order.
   For nx = 5, and ny = 4, this produces the following face numbering:
 
@@ -2544,6 +2544,13 @@ static int get_structured_index( const int nx, const int ny,
 
 /*
   Order the mesh points uniquely
+
+  This code first copies the mesh locations from the top and bottom
+  surfaces and then the surrounding surfaces that are structured. The
+  code takes into account the orientations of the surrounding surfaces
+  by computing the absolute orientations of the surface meshes. The
+  orientation of the bottom/top surfaces is already accounted for
+  within the connectivity.
 */
 int TMRVolumeMesh::setNodeNums( int *num ){
   if (!vars){
@@ -3061,21 +3068,34 @@ int TMRMesh::getMeshPoints( TMRPoint **_X ){
   Retrieve the underlying mesh connectivity (allocate it if it does
   not already exist)
 */
-int TMRMesh::getMeshConnectivity( const int **_quads ){
-  if (_quads){ 
-    if (!quads){ initMesh(); }
-    *_quads = quads; 
+void TMRMesh::getMeshConnectivity( int *_nquads, const int **_quads,
+                                   int *_nhexes, const int **_hexes ){
+  if (_quads || _hexes){ 
+    if (!X){ initMesh(); }
+    if (_nquads){ *_nquads = num_quads; }
+    if (_quads){ *_quads = quads; }
+    if (_nhexes){ *_nhexes = num_hexes; }
+    if (_hexes){ *_hexes = hexes; }    
   }
-  return num_quads;
 }
 
 /*
   Print out the mesh to a VTK file
 */
-void TMRMesh::writeToVTK( const char *filename ){
+void TMRMesh::writeToVTK( const char *filename, int flag ){
   int rank;
   MPI_Comm_rank(comm, &rank);
   if (rank == 0 && num_nodes > 0){
+    // Check whether to print out just quads or hexes or both
+    int nquad = num_quads;
+    int nhex = num_hexes;
+    if (!(flag & TMR_QUADS)){
+      nquad = 0;
+    }
+    if (!(flag & TMR_HEXES)){
+      nhex = 0;
+    }
+
     if (!X){ initMesh(); }
     FILE *fp = fopen(filename, "w");
     if (fp){
@@ -3089,27 +3109,26 @@ void TMRMesh::writeToVTK( const char *filename ){
         fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
       }
 
-      fprintf(fp, "\nCELLS %d %d\n", num_quads + num_hexes, 
-              5*num_quads + 9*num_hexes);
+      fprintf(fp, "\nCELLS %d %d\n", nquad + nhex, 5*nquad + 9*nhex);
     
       // Write out the cell connectivities
-      for ( int k = 0; k < num_quads; k++ ){
+      for ( int k = 0; k < nquad; k++ ){
         fprintf(fp, "4 %d %d %d %d\n", 
                 quads[4*k], quads[4*k+1], 
                 quads[4*k+2], quads[4*k+3]);
       }
-      for ( int k = 0; k < num_hexes; k++ ){
+      for ( int k = 0; k < nhex; k++ ){
         fprintf(fp, "8 %d %d %d %d %d %d %d %d\n", 
                 hexes[8*k], hexes[8*k+1], hexes[8*k+2], hexes[8*k+3],
                 hexes[8*k+4], hexes[8*k+5], hexes[8*k+6], hexes[8*k+7]);
       }
 
       // All quadrilaterals
-      fprintf(fp, "\nCELL_TYPES %d\n", num_quads + num_hexes);
-      for ( int k = 0; k < num_quads; k++ ){
+      fprintf(fp, "\nCELL_TYPES %d\n", nquad + nhex);
+      for ( int k = 0; k < nquad; k++ ){
         fprintf(fp, "%d\n", 9);
       }
-      for ( int k = 0; k < num_hexes; k++ ){
+      for ( int k = 0; k < nhex; k++ ){
         fprintf(fp, "%d\n", 12);
       }
 
@@ -3121,7 +3140,7 @@ void TMRMesh::writeToVTK( const char *filename ){
 /*
   Write the bulk data file with material properties
 */
-void TMRMesh::writeToBDF( const char *filename ){
+void TMRMesh::writeToBDF( const char *filename, int flag ){
   // Static string for the beginning of the file
   const char nastran_file_header[] =
     "$ Generated by TMR\n$ NASTRAN input deck\nSOL 101\nBEGIN BULK\n";
@@ -3146,7 +3165,7 @@ void TMRMesh::writeToBDF( const char *filename ){
   	      i+1, X[i].z, coord_disp, " ", seid);
       }
 
-      if (num_quads > 0){
+      if (num_quads > 0 && (flag & TMR_QUADS)){
         int num_faces;
         TMRFace **faces;
         geo->getFaces(&num_faces, &faces);
@@ -3187,7 +3206,7 @@ void TMRMesh::writeToBDF( const char *filename ){
           }
         }
       }
-      if (num_hexes > 0){
+      if (num_hexes > 0 && (flag & TMR_HEXES)){
         int num_volumes;
         TMRVolume **volumes;
         geo->getVolumes(&num_volumes, &volumes);
@@ -3216,22 +3235,23 @@ void TMRMesh::writeToBDF( const char *filename ){
 
           // Print a local description of the face - use the entity
           // data if it exists, otherwise use the id value
+          int part = i+1;
           fprintf(fp, "%-41s","$       Volume element data");
           fprintf(fp, "%s\n", descript);
+          // fprintf(fp, "%-8s%8d%8d%8d\n", "PSOLID", part, part, 0);
 
           for ( int k = 0; k < nlocal; k++, j++ ){
-            int part = i+1;
-            fprintf(fp, "%-8s%8d%8d%8d%8d%8d%8d%8d\n", "CHEXA", 
-                    j+1, part, vars[hex_local[4*k]]+1, 
-                    vars[hex_local[4*k+1]]+1, 
-                    vars[hex_local[4*k+2]]+1, 
-                    vars[hex_local[4*k+3]]+1,
-                    vars[hex_local[4*k+4]]+1);
-            fprintf(fp, "%-8s%8d%8d%8d%8d\n", "*", 
-                    vars[hex_local[4*k+5]]+1, 
-                    vars[hex_local[4*k+6]]+1, 
-                    vars[hex_local[4*k+7]]+1, 
-                    part);
+            fprintf(fp, "%-8s%8d%8d%8d%8d%8d%8d%8d%8d*\n", "CHEXA", 
+                    j+1, part, 
+                    vars[hex_local[8*k]]+1, 
+                    vars[hex_local[8*k+1]]+1, 
+                    vars[hex_local[8*k+2]]+1, 
+                    vars[hex_local[8*k+3]]+1,
+                    vars[hex_local[8*k+4]]+1,
+                    vars[hex_local[8*k+5]]+1);
+            fprintf(fp, "%-8s%8d%8d\n", "*", 
+                    vars[hex_local[8*k+6]]+1, 
+                    vars[hex_local[8*k+7]]+1);
           }
         }
       }

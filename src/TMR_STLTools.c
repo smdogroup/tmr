@@ -789,7 +789,7 @@ int TMR_GenerateBinFile( const char *filename,
                     // Set the value of the indepdnent design
                     // variable directly
                     x->getValues(1, &node, xvals);
-                    val = RealPart(xvals[x_offset]);
+                    val = TacsRealPart(xvals[x_offset]);
                   }
                   else {
                     node = -node-1;
@@ -800,7 +800,7 @@ int TMR_GenerateBinFile( const char *filename,
                       // Get the independent node values
                       int dep_node = dep_conn[kp];
                       x->getValues(1, &dep_node, xvals);
-                      val += dep_weights[kp]*RealPart(xvals[x_offset]);
+                      val += dep_weights[kp]*TacsRealPart(xvals[x_offset]);
                     }
                   }
               

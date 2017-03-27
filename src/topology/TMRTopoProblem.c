@@ -44,8 +44,8 @@ double ParOptBVecWrap::maxabs(){
   
   double res = 0.0;
   for ( int i = 0; i < size; i++ ){
-    if (fabs(RealPart(x[i])) > res){
-      res = fabs(RealPart(x[i]));
+    if (fabs(TacsRealPart(x[i])) > res){
+      res = fabs(TacsRealPart(x[i]));
     }
   }
   

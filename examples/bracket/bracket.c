@@ -2,6 +2,8 @@
 
 #include "TMROpenCascade.h"
 #include "TMRMesh.h"
+#include "TACSMeshLoader.h"
+#include "Solid.h"
 
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
@@ -10,9 +12,13 @@ int main( int argc, char *argv[] ){
   // Don't write anything to a file, unless a flag is 
   // set on the command line
   int write_faces_to_vtk = 0;
+  int test_bdf_file = 0;
   for ( int k = 0; k < argc; k++ ){
     if (strcmp(argv[k], "--write_faces") == 0){
       write_faces_to_vtk = 1;
+    }
+    if (strcmp(argv[k], "--test_bdf") == 0){
+      test_bdf_file = 1;
     }
   }
 
@@ -66,16 +72,35 @@ int main( int argc, char *argv[] ){
 
     // Write the volume mesh
     mesh->writeToVTK("volume-mesh.vtk");
-    mesh->writeToBDF("volume-mesh.bdf");
-
-    // TMRVolumeMesh* volmesh;
-    // volume[0]->getMesh(&volmesh);
-    // volmesh->writeToVTK("volume-mesh.vtk");
+    mesh->writeToBDF("volume-mesh.bdf", TMRMesh::TMR_HEXES);
 
     mesh->decref();
     geo->decref();
   }
-  
+
+
+  if (test_bdf_file){
+    TACSMeshLoader *loader = new TACSMeshLoader(comm);
+    loader->incref();
+
+    loader->scanBDFFile("volume-mesh.bdf");
+
+    // Create the solid stiffness object
+    SolidStiffness *stiff = new SolidStiffness(1.0, 1.0, 0.3);
+    Solid<2> *elem = new Solid<2>(stiff);
+    loader->setElement(0, elem);
+    
+    // Create the TACSAssembler object
+    TACSAssembler *tacs = loader->createTACS(3);
+    tacs->incref();
+
+    // Create the f5 visualization object
+    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, SOLID, 
+                                            TACSElement::OUTPUT_NODES);
+    f5->incref();
+    f5->writeToFile("volume-mesh.f5");
+  }
+
   TMRFinalize();
   MPI_Finalize();
 
