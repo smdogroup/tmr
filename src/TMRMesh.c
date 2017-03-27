@@ -221,7 +221,7 @@ static void computeQuadEdges( int nnodes, int nquads,
                               int **_quad_neighbors=NULL, 
                               int **_dual_edges=NULL,
                               int **_quad_edge_nums=NULL ){
-  // Compute the edges in the quadrilateral mesh
+  // Compute the connectivity from nodes to quads
   int *ptr;
   int *node_to_quads;
   computeNodeToElems(nnodes, nquads, 4, quads, &ptr, &node_to_quads);
@@ -339,6 +339,157 @@ static void computeQuadEdges( int nnodes, int nquads,
   if (_dual_edges){
     *_dual_edges = dual_edges;
   }
+}
+
+/*
+  Compute the connectivity between edges within a hexahedral mesh
+*/
+static void computeHexEdgesAndFaces( int nnodes, int nhexes,
+                                     const int hexes[],
+                                     int *_num_hex_edges,
+                                     int **_hex_edges ){
+  // Compute the connectivity from nodes to hexes
+  int *ptr;
+  int *node_to_hexes;
+  computeNodeToElems(nnodes, nhexes, 8, hexes, &ptr, &node_to_hexes);
+
+  // Comput the neighbors for each hex
+  int *hex_edge_nums = new int[ 12*nhexes ];
+  int *hex_face_nums = new int[ 6*nhexes ];
+  for ( int i = 0; i < 12*nhexes; i++ ){
+    hex_edge_nums[i] = -1;
+  }
+  for ( int i = 0; i < 6*nhexes; i++ ){
+    hex_face_nums[i] = -1;
+  }
+
+
+  // The nodes in this hexahedral element are ordered as follows:
+  // 
+  //      7 ---------- 6
+  //     /|           /|
+  //    / |          / |
+  //   /  |         /  |
+  //  4 ---------- 5   |
+  //  |   |        |   |
+  //  |   3 -------|-- 2
+  //  |  /         |  /
+  //  | /          | /
+  //  |/           |/
+  //  0 ---------- 1
+  
+  // The edge -> node info
+  const int edge_nodes[12][2] =
+    {{0,1}, {3,2}, {4,5}, {7,6},  // x-aligned edges
+     {0,3}, {1,2}, {4,7}, {5,6},  // y-aligned edges
+     {0,4}, {1,5}, {2,6}, {3,7}}; // z-aligned edges
+
+  // The face -> node info
+  const int face_nodes[6][4] =
+    {{0,3,4,7}, {1,2,5,6},  // x-faces
+     {0,1,4,5}, {3,2,7,6},  // y-faces
+     {0,1,3,2}, {4,5,7,8}}; // z-faces
+
+  // Possible orientations for two connecting faces
+  const int face_orient[8][4] = 
+    {{0,1,2,3}, {2,0,3,1},
+     {3,2,1,0}, {1,3,0,2},
+     {0,2,1,3}, {2,3,0,1},
+     {3,1,2,0}, {1,0,3,2}};
+
+  int edge_num = 0, face_num = 0;
+  for ( int i = 0; i < nhexes; i++ ){
+    // Search through each hexahedral element for the edge
+    for ( int j = 0; j < 12; j++ ){
+      if (hex_edge_nums[12*i+j] < 0){
+        hex_edge_nums[12*i+j] = edge_num;
+
+        // Find the edge nodes for the new edge
+        int e[2];
+        e[0] = hexes[8*i + edge_nodes[j][0]];
+        e[1] = hexes[8*i + edge_nodes[j][1]];
+
+        // Find the node that shares the edge
+        int kp = ptr[e[0]];
+        int kpend =ptr[e[0]+1];
+
+        for ( ; kp < kpend; kp++ ){
+          // Find the potential hex neighbor
+          int hex = node_to_hexes[kp];
+          if (i == hex){
+            continue;
+          }
+
+          // Search over all the edges on this hex, and see if any of
+          // the edges match
+          for ( int k = 0; k < 12; k++ ){
+            int e2[2];
+            e2[0] = hexes[8*hex + edge_nodes[k][0]];
+            e2[1] = hexes[8*hex + edge_nodes[k][1]];
+
+            // Check if the adjacent edge matches in either direction
+            if ((e[0] == e2[0] && e[1] == e2[1]) ||
+                (e[0] == e2[1] && e[1] == e2[0])){
+              hex_edge_nums[12*hex + k] = edge_num;
+            }
+          }
+        }
+
+        // Increment the edge number
+        edge_num++;
+      }
+    }
+
+    // Search through adjacent hexahedral elements for the faces
+    for ( int j = 0; j < 6; j++ ){
+      if (hex_face_nums[6*i+j] < 0){
+        hex_face_nums[6*i+j] = face_num;
+        
+        // Find the nodes associated with face j
+        int f[4];
+        f[0] = hexes[8*i + face_nodes[j][0]];
+        f[1] = hexes[8*i + face_nodes[j][1]];
+        f[2] = hexes[8*i + face_nodes[j][2]];
+        f[3] = hexes[8*i + face_nodes[j][3]];
+        
+        // Find a node that shares the face
+        int kp = ptr[f[0]];
+        int kpend =ptr[f[0]+1];
+
+        for ( ; kp < kpend; kp++ ){
+          // Find the potential hex neighbor
+          int hex = node_to_hexes[kp];
+          if (i == hex){
+            continue;
+          }
+
+          // Search over all the faces on this hex, and see if any of
+          // the edges match
+          for ( int k = 0; k < 6; k++ ){
+            int f2[4];
+            f2[0] = hexes[8*hex + face_nodes[k][0]];
+            f2[1] = hexes[8*hex + face_nodes[k][1]];
+            f2[2] = hexes[8*hex + face_nodes[k][2]];
+            f2[3] = hexes[8*hex + face_nodes[k][3]];
+
+            // Check if the adjacent edge matches in either direction
+            for ( int ort = 0; ort < 8; ort++ ){
+              if (f[0] == f2[face_orient[ort][0]] &&
+                  f[1] == f2[face_orient[ort][1]] &&
+                  f[2] == f2[face_orient[ort][2]] &&
+                  f[3] == f2[face_orient[ort][3]]){
+                hex_face_nums[6*hex + k] = face_num;
+                break;
+              }
+            }
+          }
+        }
+
+        // Increment the face number
+        face_num++;
+      }
+    }
+  }   
 }
 
 /*
@@ -3264,8 +3415,8 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
 }
 
 /*
-  Create the topology object, generating the vertices, edges and
-  faces for each element in the underlying mesh.
+  Create the topology object, generating the vertices, edges and faces
+  for each element in the underlying mesh.
 */
 TMRModel* TMRMesh::createModelFromMesh(){
   // Initialize the mesh
@@ -3480,10 +3631,9 @@ TMRModel* TMRMesh::createModelFromMesh(){
     } 
   }  
 
-  // Create the surface 
+  // Create the TMRFace objects
   TMRFace **surfs = new TMRFace*[ num_quads ];
 
-  // Create the TMRFace objects
   for ( int i = 0, q = 0; i < num_faces; i++ ){
     TMRFaceMesh *mesh = NULL;
     faces[i]->getMesh(&mesh);
