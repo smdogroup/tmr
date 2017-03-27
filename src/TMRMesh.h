@@ -214,6 +214,7 @@ class TMRVolumeMesh : public TMREntity {
   int num_face_loops;
   int *face_loop_ptr;
   TMRFace **face_loops;
+  int *face_loop_dir;
   int *face_loop_edge_count;
 
   // Number of points through-thickness

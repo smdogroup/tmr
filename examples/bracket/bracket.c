@@ -56,7 +56,7 @@ int main( int argc, char *argv[] ){
     int upper_face_num = 4;
     TMRFace *lower = faces[lower_face_num];
     TMRFace *upper = faces[upper_face_num];
-    lower->setMaster(upper);
+    upper->setMaster(lower);
 
     TMRMesh *mesh = new TMRMesh(comm, geo);
     mesh->incref();
