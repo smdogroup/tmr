@@ -52,8 +52,8 @@ int main( int argc, char *argv[] ){
     // Set the upper/lower face numbers. These are based on the
     // ordering in the STEP file. This will hopefully be preserved
     // independent of how the STEP file is loaded.
-    int lower_face_num = 4;
-    int upper_face_num = 1;
+    int lower_face_num = 1;
+    int upper_face_num = 4;
     TMRFace *lower = faces[lower_face_num];
     TMRFace *upper = faces[upper_face_num];
     lower->setMaster(upper);
@@ -67,6 +67,10 @@ int main( int argc, char *argv[] ){
     // Write the volume mesh
     mesh->writeToVTK("volume-mesh.vtk");
     mesh->writeToBDF("volume-mesh.bdf");
+
+    // TMRVolumeMesh* volmesh;
+    // volume[0]->getMesh(&volmesh);
+    // volmesh->writeToVTK("volume-mesh.vtk");
 
     mesh->decref();
     geo->decref();

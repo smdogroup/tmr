@@ -713,8 +713,8 @@ void TMRFace::writeToVTK( const char *filename ){
       for ( int j = 0; j < npts-1; j++ ){
         for ( int i = 0; i < npts-1; i++ ){
           fprintf(fp, "4 %d %d %d %d\n", 
-                  i + j*npts, i+1 + (j+1)*npts, 
-                  i+1 + j*npts, i + (j+1)*npts);
+                  i + j*npts, i + (j+1)*npts,
+                  i+1 + (j+1)*npts, i+1 + j*npts);
         }
       }      
     }

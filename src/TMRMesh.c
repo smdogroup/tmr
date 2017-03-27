@@ -406,7 +406,8 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
       // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
       int nvals;
       double *dist, *tvals;
-      edge->integrate(tmin, tmax, integration_eps, &tvals, &dist, &nvals);
+      edge->integrate(tmin, tmax, integration_eps, 
+                      &tvals, &dist, &nvals);
       
       // Only compute the number of points if there is no master edge
       if (npts < 0){
@@ -623,7 +624,8 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       for ( int k = 0; k < 4; k++ ){
         edges[k]->getMesh(&mesh);
         if (!mesh){
-          fprintf(stderr, "TMRFaceMesh error: Edge mesh does not exist\n");
+          fprintf(stderr, 
+                  "TMRFaceMesh error: Edge mesh does not exist\n");
         }
       }
 
@@ -837,6 +839,13 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
       quads = new int[ 4*num_quads ];
       memcpy(quads, face_mesh->quads, 4*num_quads*sizeof(int));
+
+      // If the senses are the same, then flip the edges
+      for ( int i = 0; i < num_quads; i++ ){
+        int tmp = quads[4*i+1];
+        quads[4*i+1] = quads[4*i+3];
+        quads[4*i+3] = tmp;
+      }
 
       pts = new double[ 2*num_points ];
       memcpy(pts, face_mesh->pts, 2*num_points*sizeof(double));
@@ -1541,7 +1550,8 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
       num_new_quads++;
       if (fail){
         fprintf(stderr,
-                "TMRFaceMesh error: Quad %d from triangles %d and %d failed\n", 
+                "TMRFaceMesh error: \
+Quad %d from triangles %d and %d failed\n", 
                 i, t1, t2);
       }
     }
@@ -2178,16 +2188,16 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
       TMRFace *master;
       faces[i]->getMaster(&master);
       if (master){
-        bottom = master;
-        top = faces[i];
-        top_dir = face_dir[i];
+        top = master;
+        bottom = faces[i];
+        bottom_dir = face_dir[i];
 
         // Set the remaining flags
         f[i] = 1;
         for ( int j = 0; j < num_faces; j++ ){
           if (faces[j] == master){
             f[j] = 1;
-            bottom_dir = face_dir[j];
+            top_dir = face_dir[j];
           }
         }
 
@@ -2390,35 +2400,30 @@ Inconsistent number of edge points through-thickness %d != %d\n",
     hexes = new int[ 8*num_hexes ];
     X = new TMRPoint[ num_points ];
 
-    // Pointer to the hexahedral elements
+    // Flip the  to the hexahedral elements
+    const int flip[] = {0, 3, 2, 1};
+
     int *hex = hexes;
-    if (top_dir > 0){
-      for ( int j = 0; j < num_depth_pts-1; j++ ){
-        for ( int i = 0; i < num_quads; i++ ){
-          // Set the quadrilateral points in the base layer
+    for ( int j = 0; j < num_depth_pts-1; j++ ){
+      for ( int i = 0; i < num_quads; i++ ){
+        // Set the quadrilateral points in the base layer
+        if (top_dir > 0){
           for ( int k = 0; k < 4; k++ ){
             hex[k] = j*num_quad_pts + quads[4*i+k];
           }
           for ( int k = 0; k < 4; k++ ){
             hex[4+k] = (j+1)*num_quad_pts + quads[4*i+k];
           }
-          hex += 8;
         }
-      }
-    }
-    else {
-      const int flip[] = {0, 3, 2, 1};
-      for ( int j = 0; j < num_depth_pts-1; j++ ){
-        for ( int i = 0; i < num_quads; i++ ){
-          // Set the quadrilateral points in the base layer
+        else {
           for ( int k = 0; k < 4; k++ ){
             hex[k] = j*num_quad_pts + quads[4*i+flip[k]];
           }
           for ( int k = 0; k < 4; k++ ){
             hex[4+k] = (j+1)*num_quad_pts + quads[4*i+flip[k]];
           }
-          hex += 8;
         }
+        hex += 8;
       }
     }
 
@@ -2566,7 +2571,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
 
     // Get information from the bottom surface mesh
     TMRFaceMesh *mesh;
-    top->getMesh(&mesh);
+    bottom->getMesh(&mesh);
 
     // Number of points in the quadrilateral mesh on the surface
     int num_quad_pts = 0;
@@ -2820,10 +2825,13 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
       if (fail){
         const char *attr = volumes[i]->getAttribute();
         if (attr){
-          fprintf(stderr, "TMRMesh: Volume meshing failed for object %s\n", attr);
+          fprintf(stderr, 
+                  "TMRMesh: Volume meshing failed for object %s\n", 
+                  attr);
         }
         else {
-          fprintf(stderr, "TMRMesh: Volume meshing failed for volume %d\n", i);
+          fprintf(stderr, 
+                  "TMRMesh: Volume meshing failed for volume %d\n", i);
         }
       }
       else {
@@ -2922,46 +2930,6 @@ void TMRMesh::initMesh(){
   // Allocate the global arrays
   X = new TMRPoint[ num_nodes ];
 
-  if (num_quads > 0){
-    quads = new int[ 4*num_quads ];
-
-    // Retrieve the surface information
-    int num_faces;
-    TMRFace **faces;
-    geo->getFaces(&num_faces, &faces);
-
-    // Set the values into the global arrays
-    int *q = quads;
-    for ( int i = 0; i < num_faces; i++ ){
-      // Get the mesh
-      TMRFaceMesh *mesh = NULL;
-      faces[i]->getMesh(&mesh);
-
-      // Get the local mesh points
-      int npts;
-      TMRPoint *Xpts;
-      mesh->getMeshPoints(&npts, NULL, &Xpts);
-
-      // Get the local quadrilateral connectivity
-      const int *quad_local;
-      int nlocal = mesh->getLocalConnectivity(&quad_local);
-
-      // Get the local to global variable numbering
-      const int *vars;
-      mesh->getNodeNums(&vars);
-
-      // Set the quadrilateral connectivity
-      for ( int j = 0; j < 4*nlocal; j++, q++ ){
-        q[0] = vars[quad_local[j]];
-      }
-
-      // Set the node locations
-      for ( int j = 0; j < npts; j++ ){
-        X[vars[j]] = Xpts[j];
-      }
-    }
-  }
-  /*
   if (num_hexes > 0){
     hexes = new int[ 8*num_hexes ];
 
@@ -3012,7 +2980,45 @@ void TMRMesh::initMesh(){
     }
     delete [] count;
   }
-  */
+  if (num_quads > 0){
+    quads = new int[ 4*num_quads ];
+
+    // Retrieve the surface information
+    int num_faces;
+    TMRFace **faces;
+    geo->getFaces(&num_faces, &faces);
+
+    // Set the values into the global arrays
+    int *q = quads;
+    for ( int i = 0; i < num_faces; i++ ){
+      // Get the mesh
+      TMRFaceMesh *mesh = NULL;
+      faces[i]->getMesh(&mesh);
+
+      // Get the local mesh points
+      int npts;
+      TMRPoint *Xpts;
+      mesh->getMeshPoints(&npts, NULL, &Xpts);
+
+      // Get the local quadrilateral connectivity
+      const int *quad_local;
+      int nlocal = mesh->getLocalConnectivity(&quad_local);
+
+      // Get the local to global variable numbering
+      const int *vars;
+      mesh->getNodeNums(&vars);
+
+      // Set the quadrilateral connectivity
+      for ( int j = 0; j < 4*nlocal; j++, q++ ){
+        q[0] = vars[quad_local[j]];
+      }
+
+      // Set the node locations
+      for ( int j = 0; j < npts; j++ ){
+        X[vars[j]] = Xpts[j];
+      }
+    }
+  }
 }
 
 /*
