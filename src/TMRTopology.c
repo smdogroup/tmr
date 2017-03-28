@@ -766,33 +766,6 @@ TMRVolume::TMRVolume( int nfaces, TMRFace **_faces,
     }
   }
 
-  // Set the relative directions on the different master
-  // faces within the volume
-  for ( int i = 0; i < num_faces; i++ ){
-    TMRFace *master;
-    faces[i]->getMaster(NULL, &master);
-    
-    // Get the relative orientations of the two faces
-    int master_dir = 
-      faces[i]->getNormalDirection()*master->getNormalDirection();
-
-    // Find the orientation of the master face within
-    // this volume
-    int mface_dir = 0;
-    for ( int j = 0; j < num_faces; j++ ){
-      if (faces[j] == master){
-        mface_dir == dir[j]; 
-      }
-    }
-    
-    // Multiply by the relative orientations of the two faces
-    // within the present volume
-    master_dir *= dir[i]*mface_dir;
-
-    // Set the master face and its direction
-    faces[i]->setMaster(master_dir, master);
-  }
-
   mesh = NULL;
 }
 
@@ -805,6 +778,42 @@ TMRVolume::~TMRVolume(){
   }
   delete [] faces;
   delete [] dir;
+}
+
+/*
+  Set the absolute orientations of any master/slave relationships
+  using the information in the volume mesh
+*/
+void TMRVolume::updateOrientation(){
+  // Set the relative directions on the different master faces within
+  // the volume
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFace *master;
+    faces[i]->getMaster(NULL, &master);
+
+    if (master){
+      // Get the relative orientations of the two faces
+      int master_dir = 
+        faces[i]->getNormalDirection()*master->getNormalDirection();
+
+      // Find the orientation of the master face within
+      // this volume
+      int mface_dir = 0;
+      for ( int j = 0; j < num_faces; j++ ){
+        if (faces[j] == master){
+          mface_dir = dir[j]; 
+          break;
+        }
+      }
+      
+      // Multiply by the relative orientations of the two faces
+      // within the present volume
+      master_dir *= -dir[i]*mface_dir;
+      
+      // Set the master face and its direction
+      faces[i]->setMaster(master_dir, master);
+    }
+  }
 }
 
 /*

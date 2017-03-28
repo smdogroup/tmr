@@ -865,9 +865,12 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     _mesh_type = STRUCTURED;
   }
   
-  // Get the master face - if any
+  // Get the master face and its orientation relative to this
+  // face. Note that the master face may be NULL in which case the
+  // master orientation is meaningless.
+  int master_dir;
   TMRFace *master;
-  face->getMaster(NULL, &master);
+  face->getMaster(&master_dir, &master);
 
   if (master){
     // If the face mesh for the master does not yet exist, create it...    
@@ -1134,15 +1137,17 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         pts[2*i+1] = params[2*i+1];
       }
 
-      // If the senses are different, then flip the quads
-      if (master->getNormalDirection() !=
-          face->getNormalDirection()){          
+      // If the sense of the master face is opposite to the
+      // orientation of this face, then reverse the quads
+      /*
+      if (master_dir < 0){
         for ( int i = 0; i < num_quads; i++ ){
           int tmp = quads[4*i+1];
           quads[4*i+1] = quads[4*i+3];
           quads[4*i+3] = tmp;
         }
       }
+      */
 
       // Copy the interior point locations
       memcpy(&pts[2*num_fixed_pts], &(face_mesh->pts[2*num_fixed_pts]),

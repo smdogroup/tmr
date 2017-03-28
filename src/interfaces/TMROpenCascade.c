@@ -423,7 +423,7 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
     // Check if the orientation of the face is flipped relative 
     // to the natural orientation of the surface
     int orient = 1;
-    if (!face_orig.IsEqual(face)){
+    if (face_orig.Orientation() == TopAbs_REVERSED){
       orient = -1;
     }
     all_faces[index-1] = new TMR_OCCFace(orient, face);

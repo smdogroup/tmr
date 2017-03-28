@@ -200,6 +200,9 @@ class TMRVolume : public TMREntity {
   TMRVolume( int _nfaces, TMRFace **_faces, const int *_dir=NULL );
   virtual ~TMRVolume();
 
+  // Update the orientation within the master pairs
+  void updateOrientation();
+
   // Given the parametric point u,v,w compute the physical location x,y,z
   virtual int evalPoint( double u, double v, double w, TMRPoint *X );
 
