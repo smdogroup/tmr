@@ -1137,12 +1137,38 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
       // Copy the parametric locations
       pts = new double[ 2*num_points ];
-      memcpy(pts, face_mesh->pts, 2*num_points*sizeof(double));
 
+      // Copy the points from around the boundaries
+      for ( int i = 0; i < num_fixed_pts; i++ ){
+        pts[2*i] = params[2*i];
+        pts[2*i+1] = params[2*i+1];
+      }
+
+      // Copy the interior point locations
+      memcpy(&pts[2*num_fixed_pts], &(face_mesh->pts[2*num_fixed_pts]),
+             2*(num_points - num_fixed_pts)*sizeof(double));
+
+      // Evaluate the points
       X = new TMRPoint[ num_points ];
       for ( int i = 0; i < num_points; i++ ){
         face->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
       }
+
+
+      int *pts_to_quad_ptr;
+      int *pts_to_quads;
+      computeNodeToElems(num_points, num_quads, 4, quads, 
+                         &pts_to_quad_ptr, &pts_to_quads);
+      
+      // Smooth the mesh using a local optimization of node locations
+      quadSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                    num_points, pts_to_quad_ptr, pts_to_quads, 
+                    num_quads, quads, pts, X, face);
+      
+      // Free the connectivity information
+      delete [] pts_to_quad_ptr;
+      delete [] pts_to_quads;
+
     }
     else if (mesh_type == STRUCTURED){
       // Use a straightforward interpolation technique to obtain the
