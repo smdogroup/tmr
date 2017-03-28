@@ -867,7 +867,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
   
   // Get the master face - if any
   TMRFace *master;
-  face->getMaster(&master);
+  face->getMaster(NULL, &master);
 
   if (master){
     // If the face mesh for the master does not yet exist, create it...    
@@ -1125,6 +1125,15 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       quads = new int[ 4*num_quads ];
       memcpy(quads, face_mesh->quads, 4*num_quads*sizeof(int));
 
+      // Allocate the array for the parametric locations
+      pts = new double[ 2*num_points ];
+
+      // Copy the points from around the boundaries
+      for ( int i = 0; i < num_fixed_pts; i++ ){
+        pts[2*i] = params[2*i];
+        pts[2*i+1] = params[2*i+1];
+      }
+
       // If the senses are different, then flip the quads
       if (master->getNormalDirection() !=
           face->getNormalDirection()){          
@@ -1133,15 +1142,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
           quads[4*i+1] = quads[4*i+3];
           quads[4*i+3] = tmp;
         }
-      }
-
-      // Copy the parametric locations
-      pts = new double[ 2*num_points ];
-
-      // Copy the points from around the boundaries
-      for ( int i = 0; i < num_fixed_pts; i++ ){
-        pts[2*i] = params[2*i];
-        pts[2*i+1] = params[2*i+1];
       }
 
       // Copy the interior point locations
@@ -1154,7 +1154,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         face->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
       }
 
-
+      // Smooth the copied mesh on the new surface
       int *pts_to_quad_ptr;
       int *pts_to_quads;
       computeNodeToElems(num_points, num_quads, 4, quads, 
@@ -2502,7 +2502,7 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
 
   for ( int i = 0; i < num_faces; i++ ){
     TMRFace *master;
-    faces[i]->getMaster(&master);
+    faces[i]->getMaster(NULL, &master);
     if (master){
       top = master;
       bottom = faces[i];

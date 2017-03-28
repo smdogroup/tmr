@@ -158,7 +158,8 @@ class TMRFace : public TMREntity {
 
   // Set/retrieve the master face
   void setMaster( TMRFace *_face );
-  void getMaster( TMRFace **_face );
+  void setMaster( int dir, TMRFace *_face );
+  void getMaster( int *dir, TMRFace **_face );
 
   // Set/retrieve the mesh
   void setMesh( TMRFaceMesh *_mesh );
@@ -174,6 +175,8 @@ class TMRFace : public TMREntity {
 
   // The mesh for the curve - if it exists
   TMRFaceMesh *mesh;
+
+  int master_dir;  // The relative master face direction
   TMRFace *master; // Master face (may be NULL)
 
   // Store the loop information

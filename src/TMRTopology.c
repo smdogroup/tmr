@@ -458,6 +458,7 @@ normal_dir(_normal_dir){
   loops = NULL;
   mesh = NULL;
   master = NULL;
+  master_dir = 0;
 }
 
 /*
@@ -626,9 +627,16 @@ void TMRFace::getMesh( TMRFaceMesh **_mesh ){
 }
 
 /*
-  Set the master face
+  Set the master face with a default relative orientation
 */
 void TMRFace::setMaster( TMRFace *face ){
+  setMaster(1, face);
+}
+
+/*
+  Set the master face with a relative direction
+*/
+void TMRFace::setMaster( int dir, TMRFace *face ){
   if (face && face != this){
     int nloops = getNumEdgeLoops();
     if (nloops != face->getNumEdgeLoops()){
@@ -651,6 +659,10 @@ Number of edges in edge loop %d not equal. Could not set master face\n", i);
       }
     }
 
+    // Set the relative master face direction
+    master_dir = dir;
+
+    // Set the master face
     face->incref();
     if (master){ master->decref(); }
     master = face;
@@ -660,8 +672,9 @@ Number of edges in edge loop %d not equal. Could not set master face\n", i);
 /*
   Retrieve the master edge
 */
-void TMRFace::getMaster( TMRFace **face ){
+void TMRFace::getMaster( int *_master_dir, TMRFace **face ){
   if (face){ *face = master; }
+  if (_master_dir){ *_master_dir = master_dir; }
 }
 
 /*
@@ -752,6 +765,34 @@ TMRVolume::TMRVolume( int nfaces, TMRFace **_faces,
       dir[i] = 1;
     }
   }
+
+  // Set the relative directions on the different master
+  // faces within the volume
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFace *master;
+    faces[i]->getMaster(NULL, &master);
+    
+    // Get the relative orientations of the two faces
+    int master_dir = 
+      faces[i]->getNormalDirection()*master->getNormalDirection();
+
+    // Find the orientation of the master face within
+    // this volume
+    int mface_dir = 0;
+    for ( int j = 0; j < num_faces; j++ ){
+      if (faces[j] == master){
+        mface_dir == dir[j]; 
+      }
+    }
+    
+    // Multiply by the relative orientations of the two faces
+    // within the present volume
+    master_dir *= dir[i]*mface_dir;
+
+    // Set the master face and its direction
+    faces[i]->setMaster(master_dir, master);
+  }
+
   mesh = NULL;
 }
 
