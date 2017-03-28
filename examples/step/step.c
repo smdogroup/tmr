@@ -2,6 +2,9 @@
 
 #include "TMROpenCascade.h"
 #include "TMRMesh.h"
+#include "TACSMeshLoader.h"
+#include "MITCShell.h"
+#include "isoFSDTStiffness.h"
 
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
@@ -64,6 +67,31 @@ int main( int argc, char *argv[] ){
     // Decref the objects
     mesh->decref();
     geo->decref();
+  }
+
+  if (1){ // if (test_bdf_file){
+    TACSMeshLoader *loader = new TACSMeshLoader(comm);
+    loader->incref();
+
+    loader->scanBDFFile("surface-mesh.bdf");
+
+    // Create the solid stiffness object
+    isoFSDTStiffness *stiff = new isoFSDTStiffness(1.0, 1.0, 0.3, 0.833, 1.0, 1.0);
+    MITCShell<2> *elem = new MITCShell<2>(stiff);
+
+    for ( int i = 0; i < loader->getNumComponents(); i++ ){ 
+      loader->setElement(i, elem);
+    }
+    
+    // Create the TACSAssembler object
+    TACSAssembler *tacs = loader->createTACS(6);
+    tacs->incref();
+
+    // Create the f5 visualization object
+    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, SHELL, 
+                                            TACSElement::OUTPUT_NODES);
+    f5->incref();
+    f5->writeToFile("surface-mesh.f5");
   }
   
   TMRFinalize();

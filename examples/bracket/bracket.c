@@ -78,7 +78,6 @@ int main( int argc, char *argv[] ){
     geo->decref();
   }
 
-
   if (test_bdf_file){
     TACSMeshLoader *loader = new TACSMeshLoader(comm);
     loader->incref();
