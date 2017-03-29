@@ -1041,6 +1041,225 @@ void TMROctForest::computeBlockOwners(){
     }
   }
 }
+/*
+  Write a representation of the connectivity of the forest out to a
+  VTK file.
+*/
+void TMROctForest::writeToVTK( const char *filename ){
+  if (mpi_rank == 0 && topo){
+    FILE *fp = fopen(filename, "w");
+    if (fp){
+      fprintf(fp, "# vtk DataFile Version 3.0\n");
+      fprintf(fp, "vtk output\nASCII\n");
+      fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+
+      // Write out the points
+      fprintf(fp, "POINTS %d float\n", num_nodes);
+      for ( int k = 0; k < num_nodes; k++ ){
+        // Get the owner of this node
+        int block = node_block_owners[k];
+
+        // Check where the node is located
+        int corner = 0;
+        for ( ; corner < 8; corner++ ){
+          if (block_conn[8*block  + corner] == k){
+            break;
+          }
+        }
+
+        // Determine the parametric location of the point p
+        double u = 0.0, v = 0.0, w = 0.0;
+        if (corner & 1){ u = 1.0; }
+        if (corner & 2){ v = 1.0; }
+        if (corner & 4){ w = 1.0; }
+        
+        // Get the volume object and evaluate the point
+        TMRVolume *vol;
+        topo->getVolume(block, &vol);
+
+        TMRPoint p;
+        if (vol){
+          vol->evalPoint(u, v, w, &p);
+        }
+
+        // Write the point to the file
+        fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+      }
+        
+      // Write out the cells
+      fprintf(fp, "\nCELLS %d %d\n", num_blocks, 9*num_blocks);
+      for ( int k = 0; k < num_blocks; k++ ){
+        fprintf(fp, "8 %d %d %d %d %d %d %d %d\n", 
+                block_conn[8*k], block_conn[8*k+1],
+                block_conn[8*k+3], block_conn[8*k+2],
+                block_conn[8*k+4], block_conn[8*k+5],
+                block_conn[8*k+7], block_conn[8*k+6]);
+      }
+
+      // All quadrilaterals
+      fprintf(fp, "\nCELL_TYPES %d\n", num_blocks);
+      for ( int k = 0; k < num_blocks; k++ ){
+        fprintf(fp, "12\n");
+      }
+
+      // Print out the rest as fields one-by-one
+      fprintf(fp, "CELL_DATA %d\n", num_blocks);
+      fprintf(fp, "SCALARS entity_index float 1\n");
+      fprintf(fp, "LOOKUP_TABLE default\n");
+      for ( int k = 0; k < num_blocks; k++ ){
+        fprintf(fp, "%e\n", 1.0*k);
+      }
+      fclose(fp);
+    }
+  }
+}
+
+/*
+  Write a representation of the connectivity of the forest out to a
+  VTK file.
+*/
+void TMROctForest::writeToTecplot( const char *filename ){
+  if (mpi_rank == 0 && topo){
+    FILE *fp = fopen(filename, "w");
+    if (fp){
+      fprintf(fp, "Variables = X,Y,Z,block\n");
+      fprintf(fp, "Zone N = %d E = %d ", num_nodes, num_blocks);
+      fprintf(fp, "DATAPACKING=BLOCK, ZONETYPE=FEBRICK\n");
+      fprintf(fp, "VARLOCATION = ([4]=CELLCENTERED)\n");
+
+      // Allocate temporary data for the vertices
+      TMRPoint *Xtmp = new TMRPoint[ num_nodes ];
+
+      // Write out the points
+      for ( int k = 0; k < num_nodes; k++ ){
+        // Get the owner of this node
+        int block = node_block_owners[k];
+
+        // Check where the node is located
+        int corner = 0;
+        for ( ; corner < 8; corner++ ){
+          if (block_conn[8*block  + corner] == k){
+            break;
+          }
+        }
+
+        // Determine the parametric location of the point p
+        double u = 0.0, v = 0.0, w = 0.0;
+        if (corner & 1){ u = 1.0; }
+        if (corner & 2){ v = 1.0; }
+        if (corner & 4){ w = 1.0; }
+        
+        // Get the surface object and evaluate the point
+        TMRVolume *vol;
+        topo->getVolume(block, &vol);
+
+        if (vol){
+          vol->evalPoint(u, v, w, &Xtmp[k]);
+        }
+      }
+
+      // Write out the nodes
+      for ( int k = 0; k < num_nodes; k++ ){
+        fprintf(fp, "%e\n", Xtmp[k].x);
+      }
+      for ( int k = 0; k < num_nodes; k++ ){
+        fprintf(fp, "%e\n", Xtmp[k].y);
+      }
+      for ( int k = 0; k < num_nodes; k++ ){
+        fprintf(fp, "%e\n", Xtmp[k].z);
+      }
+      delete [] Xtmp;
+        
+      // Write out the cell values
+      for ( int k = 0; k < num_blocks; k++ ){
+        fprintf(fp, "%e\n", 1.0*k);
+      }
+
+      // Write out the connectivity
+      for ( int k = 0; k < num_blocks; k++ ){
+        fprintf(fp, "%d %d %d %d %d %d %d %d\n", 
+                block_conn[8*k]+1, block_conn[8*k+1]+1,
+                block_conn[8*k+3]+1, block_conn[8*k+2]+1,
+                block_conn[8*k+4]+1, block_conn[8*k+5]+1,
+                block_conn[8*k+7]+1, block_conn[8*k+6]+1);
+      }
+      fclose(fp);
+    }
+  }
+}
+
+/*
+  Write the entire forest to a VTK file
+*/
+void TMROctForest::writeForestToVTK( const char *filename ){
+  if (octants && topo){
+    // Write out the vtk file
+    FILE *fp = fopen(filename, "w");
+    
+    if (fp){
+      fprintf(fp, "# vtk DataFile Version 3.0\n");
+      fprintf(fp, "vtk output\nASCII\n");
+      fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+      
+      // Get the quadrants
+      int size;
+      TMROctant *array;
+      octants->getArray(&array, &size);
+      
+      // Write out the points
+      fprintf(fp, "POINTS %d float\n", 8*size);
+
+      // Set the edge length
+      const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
+      for ( int k = 0; k < size; k++ ){
+        const int32_t h = 1 << (TMR_MAX_LEVEL - array[k].level);
+                
+        // Get the surface object and evaluate the point
+        TMRVolume *vol;
+        topo->getVolume(array[k].block, &vol);
+
+        for ( int kk = 0; kk < 2; kk++ ){
+          for ( int jj = 0; jj < 2; jj++ ){
+            for ( int ii = 0; ii < 2; ii++ ){
+              double u = 1.0*(array[k].x + ii*h)/hmax;
+              double v = 1.0*(array[k].y + jj*h)/hmax;
+              double w = 1.0*(array[k].z + kk*h)/hmax;
+
+              TMRPoint p;
+              vol->evalPoint(u, v, w, &p);
+              fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+            }
+          }
+        }
+      }
+  
+      // Write out the cell values
+      fprintf(fp, "\nCELLS %d %d\n", size, 9*size);
+      for ( int k = 0; k < size; k++ ){
+        fprintf(fp, "8 %d %d %d %d %d %d %d %d\n", 
+                8*k, 8*k+1, 8*k+3, 8*k+2,
+                8*k+4, 8*k+5, 8*k+7, 8*k+6);
+      }
+
+      // All quadrilaterals
+      fprintf(fp, "\nCELL_TYPES %d\n", size);
+      for ( int k = 0; k < size; k++ ){
+        fprintf(fp, "12\n");
+      }
+
+      // Print out the rest as fields one-by-one
+      fprintf(fp, "CELL_DATA %d\n", size);
+      fprintf(fp, "SCALARS entity_index float 1\n");
+      fprintf(fp, "LOOKUP_TABLE default\n");
+      for ( int k = 0; k < size; k++ ){
+        fprintf(fp, "%e\n", 1.0*array[k].block);
+      }
+
+      fclose(fp);
+    }
+  }
+}
 
 /*
   Retrieve information about the connectivity between 
@@ -2425,6 +2644,7 @@ void TMROctForest::balance( int balance_corner ){
   // further reduced to limit the amount of memory passed between
   // processors
   TMROctantArray *elems0 = ext_hash->toArray();
+  delete ext_hash;
   elems0->sort();
 
   // Get the array of 0-octants 
@@ -2473,6 +2693,7 @@ void TMROctForest::balance( int balance_corner ){
       queue->push(&array[i]);
     }
   }
+  delete local;
 
   // Now all the received octants will balance the tree locally
   // without having to worry about off-processor octants.
@@ -2910,6 +3131,8 @@ void TMROctForest::computeAdjacentOctants(){
 
   // Convert the local adjacency non-local list of octants
   TMROctantArray *list = queue->toArray();
+  delete queue;
+
   list->getArray(&array, &size);
   qsort(array, size, sizeof(TMROctant), compare_octant_tags);
 

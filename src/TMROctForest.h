@@ -144,6 +144,12 @@ class TMROctForest : public TMREntity {
   // ----------------------------------------
   void transformNode( TMROctant *oct );
 
+  // Write out files showing the connectivity
+  // ----------------------------------------
+  void writeToVTK( const char *filename );
+  void writeToTecplot( const char *filename );
+  void writeForestToVTK( const char *filename );
+
  private:
   // Compute the node connectivity information
   void computeNodesToBlocks();

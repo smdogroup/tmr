@@ -525,6 +525,13 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
                                nedges, all_edges,
                                nfaces, all_faces,
                                nsolids, all_vols);
+
+  // Free the arrays
+  delete [] all_vertices;
+  delete [] all_edges;
+  delete [] all_faces;
+  delete [] all_vols;
+
   return geo;
 }
 

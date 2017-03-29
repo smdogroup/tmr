@@ -4,6 +4,7 @@
 #include "TMRMesh.h"
 #include "TACSMeshLoader.h"
 #include "Solid.h"
+#include "TMROctForest.h"
 
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
@@ -64,16 +65,52 @@ int main( int argc, char *argv[] ){
     TMRFace *upper = faces[upper_face_num];
     upper->setMaster(lower);
 
+    // Reset the master orientations
+    volume[0]->updateOrientation();
+
     TMRMesh *mesh = new TMRMesh(comm, geo);
     mesh->incref();
 
+    // Mesh the geometry
     TMRMeshOptions options;
+    options.num_smoothing_steps = 5;
     mesh->mesh(options, htarget);
 
+    TMRModel *model = mesh->createModelFromMesh();
+    model->incref();
+
+    // Create the topology object from the geo-mesh
+    TMRTopology *topo = new TMRTopology(comm, model);
+    topo->incref();
+
+    // Set the topology
+    TMROctForest *forest = new TMROctForest(comm);
+    forest->incref();
+
+    printf("Set topology\n");
+    forest->setTopology(topo);
+    printf("Create random trees\n");
+    forest->createRandomTrees(2, 0, 3);
+    printf("Balance\n");
+    forest->balance();
+
+    // Write to forest
+    forest->writeToTecplot("all_forest.dat");    
+
+    printf("Create nodes\n");
+    forest->createNodes();
+
+    char outname[128];
+    sprintf(outname, "forest%d.vtk", rank);
+    forest->writeForestToVTK(outname);
+   
     // Write the volume mesh
-    mesh->writeToVTK("volume-mesh.vtk");
+    mesh->writeToVTK("volume-mesh.vtk", TMRMesh::TMR_HEXES);
     mesh->writeToBDF("volume-mesh.bdf", TMRMesh::TMR_HEXES);
 
+    topo->decref();
+    forest->decref();
+    model->decref();
     mesh->decref();
     geo->decref();
   }

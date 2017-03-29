@@ -1041,7 +1041,7 @@ int main( int argc, char *argv[] ){
     }
 
     // Set the barrier parameter if this is the second or greater
-    // time throught
+    // time through
     opt->setAbsOptimalityTol(tol);
     opt->setRelFunctionTol(func_tol);
     if (k > 0){

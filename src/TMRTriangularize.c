@@ -673,6 +673,7 @@ TMRTriangularize::~TMRTriangularize(){
       delete tmp;
     }
   }
+  delete [] buckets;
 
   // Free the doubly linked edge list
   while (list_start){

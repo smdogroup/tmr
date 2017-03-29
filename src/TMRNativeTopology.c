@@ -320,11 +320,193 @@ int TMRSplitEdge::getParamsOnFace( TMRFace *face, double t,
 }
 
 /*
+  Create a transfinite interpolation edge
+*/
+TMRTFIEdge::TMRTFIEdge( TMRVertex *_v1, TMRVertex *_v2 ){
+  setVertices(_v1, _v2);
+}
+
+TMRTFIEdge::~TMRTFIEdge(){}
+ 
+/*
+  Set the parameter range
+*/
+void TMRTFIEdge::getRange( double *tmin, double *tmax ){
+  *tmin = 0.0;
+  *tmax = 1.0;
+} 
+
+/*
+  Evaluate the point based on the vertex locations
+*/
+int TMRTFIEdge::evalPoint( double t, TMRPoint *X ){
+  int fail = 0;
+  TMRVertex *_v1, *_v2;
+  getVertices(&_v1, &_v2);
+
+  // Evaluate the points
+  TMRPoint p;
+  fail = fail || _v1->evalPoint(X);
+  fail = fail || _v2->evalPoint(&p);
+
+  // Interpolate between the start/end locations
+  X->x = (1.0 - t)*X->x + t*p.x;
+  X->y = (1.0 - t)*X->y + t*p.y;
+  X->z = (1.0 - t)*X->z + t*p.z;
+
+  return fail;
+}
+
+
+/*
+  Create a transfinite-interpolation (TFI) face from the given set of
+  edges and vertices
+*/
+TMRTFIFace::TMRTFIFace( TMREdge *_edges[],
+                        const int _dir[],
+                        TMRVertex *verts[] ){
+  for ( int k = 0; k < 4; k++ ){
+    // Set the edge
+    edges[k] = _edges[k];
+    edges[k]->incref();
+    dir[k] = _dir[k];
+
+    // Evaluate the vertex points
+    verts[k]->evalPoint(&c[k]);
+  
+    // Check that the edge range is as expected
+    double tmin = 0.0, tmax = 0.0;
+    edges[k]->getRange(&tmin, &tmax);
+    if (tmin != 0.0 || tmax != 1.0){
+      fprintf(stderr, 
+              "TMRTFIFace error: All edges must have t in [0, 1]\n");
+    }
+  }
+
+  // Set the vertices for this surface
+  if (dir[0] > 0){
+    edges[0]->setVertices(verts[0], verts[1]); 
+  }
+  else {
+    edges[0]->setVertices(verts[1], verts[0]);
+  }
+
+  if (dir[1] > 0){  
+    edges[1]->setVertices(verts[1], verts[2]);
+  }
+  else {
+    edges[1]->setVertices(verts[2], verts[1]);
+  }
+
+  if (dir[2] > 0){
+    edges[2]->setVertices(verts[2], verts[3]);
+  }
+  else {
+    edges[2]->setVertices(verts[3], verts[2]);
+  }
+
+  if (dir[3] > 0){
+    edges[3]->setVertices(verts[3], verts[0]);
+  }
+  else {
+    edges[3]->setVertices(verts[0], verts[3]);
+  }
+
+  // Set the curve segment into the curve
+  TMREdgeLoop *loop = new TMREdgeLoop(4, edges, dir);
+  addEdgeLoop(loop);
+}
+
+/*
+  Destroy the parametric TFI object
+*/  
+TMRTFIFace::~TMRTFIFace(){
+  for ( int k = 0; k < 4; k++ ){
+    edges[k]->decref();
+  }
+}
+
+/*
+  The range must always be between [0,1] for all curves
+*/
+void TMRTFIFace::getRange( double *umin, double *vmin,
+                           double *umax, double *vmax ){
+  *umin = 0.0;
+  *vmin = 0.0;
+  *umax = 1.0;
+  *vmax = 1.0;
+}
+
+/*
+  Evaluate the surface at the specified parametric point (u,v)
+
+  This code uses a transfinite interpolation to obtain the 
+  parametric surface coordinates (us(u,v), vs(u,v)) in terms 
+  of the TFI parameter coordinates (u,v)
+*/
+int TMRTFIFace::evalPoint( double u, double v, 
+                           TMRPoint *X ){
+  int fail = 0;
+
+  // Evaluate the points on the edges
+  TMRPoint e[4];
+  double params[4] = {u, v, 1.0-u, 1.0-v};
+
+  for ( int k = 0; k < 4; k++ ){
+    if (dir[k] > 0){
+      fail = fail || edges[k]->evalPoint(params[k], &e[k]);
+    }
+    else {
+      fail = fail || edges[k]->evalPoint(1.0-params[k], &e[k]);
+    }
+  }
+    
+  // Evaluate the point on the surface
+  X->x = (1.0-u)*e[3].x + u*e[1].x + (1.0-v)*e[0].x + v*e[2].x
+    - ((1.0-u)*(1.0-v)*c[0].x + u*(1.0-v)*c[1].x + 
+       u*v*c[2].x + v*(1.0-u)*c[3].x);
+
+  X->y = (1.0-u)*e[3].y + u*e[1].y + (1.0-v)*e[0].y + v*e[2].y
+    - ((1.0-u)*(1.0-v)*c[0].y + u*(1.0-v)*c[1].y + 
+       u*v*c[2].y + v*(1.0-u)*c[3].y);
+
+  X->z = (1.0-u)*e[3].z + u*e[1].z + (1.0-v)*e[0].z + v*e[2].z
+    - ((1.0-u)*(1.0-v)*c[0].z + u*(1.0-v)*c[1].z + 
+       u*v*c[2].z + v*(1.0-u)*c[3].z);
+
+  return fail;
+} 
+
+/*  
+  Inverse evaluation: This is not yet implemented
+*/
+int TMRTFIFace::invEvalPoint( TMRPoint p, 
+                              double *u, double *v ){
+  *u = 0.0; 
+  *v = 0.0;
+  int fail = 1;
+  return fail;
+}
+
+/*
+  Derivative evaluation: This is not yet implemented
+*/
+int TMRTFIFace::evalDeriv( double u, double v, 
+                           TMRPoint *Xu, TMRPoint *Xv ){
+
+  // Evaluate the curves along the v-direction
+  int fail = 1;
+  Xu->zero();
+  Xv->zero();
+
+  return fail;
+}
+
+/*
   Create a parametric TFI
   
   The transfinite interpolation is performed in the parameter space
-  and all points are obtained directly from the surface object
-  itself.
+  and all points are obtained directly from the surface object itself.
 */
 TMRParametricTFIFace::TMRParametricTFIFace( TMRFace *_face, 
                                             TMREdge *_edges[], 
@@ -422,7 +604,6 @@ void TMRParametricTFIFace::getRange( double *umin, double *vmin,
 */
 int TMRParametricTFIFace::evalPoint( double u, double v, 
                                      TMRPoint *X ){
-  // Evaluate the curves along the v-direction
   int fail = 0;
   double cupt[4], cvpt[4];
   double params[4] = {u, v, 1.0-u, 1.0-v};
@@ -485,7 +666,7 @@ int TMRParametricTFIFace::evalDeriv( double u, double v,
 TMRTFIVolume::TMRTFIVolume( TMRFace *_faces[], const int _orient[],
                             TMREdge *_edges[], const int _dir[],
                             TMRVertex *_verts[] ):
-TMRVolume(6, faces, _orient){
+TMRVolume(6, _faces, _orient){
   for ( int i = 0; i < 6; i++ ){
     faces[i] = _faces[i];
     faces[i]->incref();
@@ -516,6 +697,15 @@ TMRTFIVolume::~TMRTFIVolume(){
   for ( int i = 0; i < 8; i++ ){
     verts[i]->decref();
   }
+}
+
+/*
+  Get the parameter range for this volume
+*/
+void TMRTFIVolume::getRange( double *umin, double *vmin, double *wmin,
+                             double *umax, double *vmax, double *wmax ){
+  *umin = *vmin = *wmin = 0.0;
+  *umax = *vmax = *wmax = 1.0;
 }
 
 /*
@@ -581,6 +771,7 @@ int TMRTFIVolume::evalPoint( double u, double v, double w,
     }
   }
 
+  /*
   // Evaluate the point based on the values along the corners, edges
   // and faces
   X->x = 
@@ -624,6 +815,41 @@ int TMRTFIVolume::evalPoint( double u, double v, double w,
        (1.0-u)*v*(1.0-w)*c[2].z + u*v*(1.0-w)*c[3].z + 
        (1.0-u)*(1.0-v)*w*c[4].z + u*(1.0-v)*w*c[5].z + 
        (1.0-u)*v*w*c[6].z + u*v*w*c[7].z);
+  */
+
+  
+  X->x = ((1.0-v)*(1.0-w)*e[0].x + v*(1.0-w)*e[1].x + 
+       (1.0-v)*w*e[2].x + v*w*e[3].x +
+       (1.0-u)*(1.0-w)*e[4].x + u*(1.0-w)*e[5].x + 
+       (1.0-u)*w*e[6].x + u*w*e[7].x +
+       (1.0-u)*(1.0-v)*e[8].x + u*(1.0-v)*e[9].x + 
+       (1.0-u)*v*e[10].x + u*v*e[11].x)
+    - 2.0*((1.0-u)*(1.0-v)*(1.0-w)*c[0].x + u*(1.0-v)*(1.0-w)*c[1].x + 
+           (1.0-u)*v*(1.0-w)*c[2].x + u*v*(1.0-w)*c[3].x + 
+           (1.0-u)*(1.0-v)*w*c[4].x + u*(1.0-v)*w*c[5].x + 
+           (1.0-u)*v*w*c[6].x + u*v*w*c[7].x);
+
+  X->y = ((1.0-v)*(1.0-w)*e[0].y + v*(1.0-w)*e[1].y + 
+       (1.0-v)*w*e[2].y + v*w*e[3].y +
+       (1.0-u)*(1.0-w)*e[4].y + u*(1.0-w)*e[5].y + 
+       (1.0-u)*w*e[6].y + u*w*e[7].y +
+       (1.0-u)*(1.0-v)*e[8].y + u*(1.0-v)*e[9].y + 
+       (1.0-u)*v*e[10].y + u*v*e[11].y)
+    - 2.0*((1.0-u)*(1.0-v)*(1.0-w)*c[0].y + u*(1.0-v)*(1.0-w)*c[1].y + 
+           (1.0-u)*v*(1.0-w)*c[2].y + u*v*(1.0-w)*c[3].y + 
+           (1.0-u)*(1.0-v)*w*c[4].y + u*(1.0-v)*w*c[5].y + 
+           (1.0-u)*v*w*c[6].y + u*v*w*c[7].y);
+
+  X->z = ((1.0-v)*(1.0-w)*e[0].z + v*(1.0-w)*e[1].z + 
+       (1.0-v)*w*e[2].z + v*w*e[3].z +
+       (1.0-u)*(1.0-w)*e[4].z + u*(1.0-w)*e[5].z + 
+       (1.0-u)*w*e[6].z + u*w*e[7].z +
+       (1.0-u)*(1.0-v)*e[8].z + u*(1.0-v)*e[9].z + 
+       (1.0-u)*v*e[10].z + u*v*e[11].z)
+    - 2.0*((1.0-u)*(1.0-v)*(1.0-w)*c[0].z + u*(1.0-v)*(1.0-w)*c[1].z + 
+           (1.0-u)*v*(1.0-w)*c[2].z + u*v*(1.0-w)*c[3].z + 
+           (1.0-u)*(1.0-v)*w*c[4].z + u*(1.0-v)*w*c[5].z + 
+           (1.0-u)*v*w*c[6].z + u*v*w*c[7].z);
 
   return 1;
 }

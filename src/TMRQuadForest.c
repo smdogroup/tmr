@@ -617,7 +617,7 @@ void TMRQuadForest::writeToVTK( const char *filename ){
       }
 
       // Print out the rest as fields one-by-one
-      fprintf(fp, "CELL_DATA %d\n", num_faces + num_edges);
+      fprintf(fp, "CELL_DATA %d\n", num_faces);
       fprintf(fp, "SCALARS entity_index float 1\n");
       fprintf(fp, "LOOKUP_TABLE default\n");
       for ( int k = 0; k < num_faces; k++ ){

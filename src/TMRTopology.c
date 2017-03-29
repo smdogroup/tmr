@@ -817,6 +817,15 @@ void TMRVolume::updateOrientation(){
 }
 
 /*
+  Get the parameter range for this volume
+*/
+void TMRVolume::getRange( double *umin, double *vmin, double *wmin,
+                          double *umax, double *vmax, double *wmax ){
+  *umin = *vmin = *wmin = 0.0;
+  *umax = *vmax = *wmax = 0.0;
+}
+
+/*
   Given the parametric point u,v,w compute the physical location x,y,z
 */
 int TMRVolume::evalPoint( double u, double v, double w, TMRPoint *X ){
@@ -846,6 +855,74 @@ void TMRVolume::setMesh( TMRVolumeMesh *_mesh ){
 */
 void TMRVolume::getMesh( TMRVolumeMesh **_mesh ){
   *_mesh = mesh;
+}
+
+/*
+  Write out a representation of the volume to a VTK file
+*/
+void TMRVolume::writeToVTK( const char *filename ){
+  double umin, vmin, wmin, umax, vmax, wmax;
+  getRange(&umin, &vmin, &wmin,
+           &umax, &vmax, &wmax);
+
+  const int npts = 5;
+
+  // Write out the vtk file
+  FILE *fp = fopen(filename, "w");
+  if (fp){
+    fprintf(fp, "# vtk DataFile Version 3.0\n");
+    fprintf(fp, "vtk output\nASCII\n");
+    fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+    
+    // Write out the points
+    fprintf(fp, "POINTS %d float\n", npts*npts*npts);
+    for ( int k = 0; k < npts; k++ ){
+      for ( int j = 0; j < npts; j++ ){
+        for ( int i = 0; i < npts; i++ ){
+          double u = 1.0*i/(npts-1);
+          double v = 1.0*j/(npts-1);
+          double w = 1.0*k/(npts-1);
+          u = (1.0 - u)*umin + u*umax;
+          v = (1.0 - v)*vmin + v*vmax;
+          w = (1.0 - w)*wmin + w*wmax;
+
+          // Evaluate the point
+          TMRPoint p;
+          evalPoint(u, v, w, &p);
+        
+          // Write out the point
+          fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
+        }
+      }
+    } 
+    
+    // Write out the cell values
+    fprintf(fp, "\nCELLS %d %d\n", (npts-1)*(npts-1)*(npts-1), 
+            9*(npts-1)*(npts-1)*(npts-1));
+    for ( int k = 0; k < npts-1; k++ ){
+      for ( int j = 0; j < npts-1; j++ ){
+        for ( int i = 0; i < npts-1; i++ ){
+          fprintf(fp, "8 %d %d %d %d  %d %d %d %d\n", 
+                  i + j*npts + k*npts*npts, 
+                  i+1 + j*npts + k*npts*npts, 
+                  i+1 + (j+1)*npts + k*npts*npts, 
+                  i + (j+1)*npts + k*npts*npts,
+                  i + j*npts + (k+1)*npts*npts, 
+                  i+1 + j*npts + (k+1)*npts*npts, 
+                  i+1 + (j+1)*npts + (k+1)*npts*npts, 
+                  i + (j+1)*npts + (k+1)*npts*npts);
+        }
+      }
+    }
+    
+    // Write out the cell types
+    fprintf(fp, "\nCELL_TYPES %d\n", (npts-1)*(npts-1)*(npts-1));
+    for ( int k = 0; k < (npts-1)*(npts-1)*(npts-1); k++ ){
+      fprintf(fp, "%d\n", 12);
+    }
+    
+    fclose(fp);
+  } 
 }
 
 /*
@@ -1368,7 +1445,7 @@ void TMRTopology::computeVolumeConn(){
     }
     
     // Dynamic cast to a TMRTFIVolume
-    TMRTFIVolume *vol = dynamic_cast<TMRTFIVolume*>(volumes[n]);
+    TMRTFIVolume *vol = dynamic_cast<TMRTFIVolume*>(volumes[i]);
     
     if (vol){
       // Get the faces associated with the volume
@@ -1723,6 +1800,9 @@ void TMRTopology::reorderEntities( int num_entities,
       // Free the local offset data
       delete [] offset;
     }
+    
+    delete [] face_to_face_ptr;
+    delete [] face_to_face;
   }
   
   // Broadcast the new ordering

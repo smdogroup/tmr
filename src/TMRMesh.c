@@ -7,10 +7,46 @@
 #include <math.h>
 #include <stdio.h>
 
+/*
+  The triangle nodes and edges are ordered locally as follows. Note
+  that the edges are ordered based on the node across the triangle.
+
+       2
+      / \
+   e1/   \e0
+    /     \
+   /       \
+  0 ------- 1 
+       e2
+ 
+  The edge nodes for a given edge index in a triangle
+*/
+const int tri_edge_nodes[][2] = {{1, 2}, {2, 0}, {0, 1}};
+
+/*
+  The edges that are connected to a given node
+*/
+const int tri_node_edges[][2] = {{1, 2}, {0, 2}, {0, 1}};
 
 
 /*
-  The nodes in this hexahedral element are ordered as follows:
+  The nodes in a quadrilateral element are ordered locally as follows:
+
+  3 --------- 2 
+  |           |
+  |           |
+  |           |
+  |           |
+  0 --------- 1
+*/
+
+/*
+  The local node numbers for each edge in the quadrilateral
+*/
+const int quad_edge_nodes[][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
+
+/*
+  The nodes in a hexahedral element are ordered as follows:
   
        7 ---------- 6
       /|           /|
@@ -32,26 +68,32 @@
 const int hex_edge_nodes[12][2] =
   {{0,1}, {3,2}, {4,5}, {7,6},  // x-aligned edges
    {0,3}, {1,2}, {4,7}, {5,6},  // y-aligned edges
-   {0,4}, {1,5}, {2,6}, {3,7}}; // z-aligned edges
+   {0,4}, {1,5}, {3,7}, {2,6}}; // z-aligned edges
 
 /*
   The nodes corresponding to each face in a hexahedral
   element
 */
 const int hex_face_nodes[6][4] =
-  {{0,3,4,7}, {1,2,5,6},  // x-faces
-   {0,1,4,5}, {3,2,7,6},  // y-faces
-   {0,1,3,2}, {4,5,7,8}}; // z-faces
+  {{0,3,7,4}, {1,2,6,5},  // x-faces
+   {0,4,5,1}, {3,7,6,2},  // y-faces
+   {0,1,2,3}, {4,5,6,7}}; // z-faces
 
 /*
   Possible orientations for two connecting faces
 */
 const int face_orient[8][4] = 
-  {{0,1,2,3}, {2,0,3,1},
-   {3,2,1,0}, {1,3,0,2},
-   {0,2,1,3}, {2,3,0,1},
-   {3,1,2,0}, {1,0,3,2}};
+  {{0,1,2,3}, {1,2,3,0},
+   {2,3,0,1}, {3,0,1,2},
+   {3,2,1,0}, {0,3,2,1}, 
+   {1,0,3,2}, {2,1,0,3}};
 
+/*
+  Hexahedral local node to local coordinate ordering transformation
+*/
+const int hex_coordinate_order[] =
+  {0, 1, 3, 2, 4, 5, 7, 6};
+   
 /*
   Compare coordinate pairs of points. This uses a Morton ordering
   comparison to facilitate sorting/searching the list of edges.
@@ -145,8 +187,9 @@ static inline void sort_face_nodes( int *node ){
       node[k] = tmp[j];
       j++;
     }
-    else if (j >= 2){
+    else if (j >= 4){
       node[k] = tmp[i];
+      i++;
     }
     else if (tmp[i] <= tmp[j]){
       node[k] = tmp[i];
@@ -231,9 +274,6 @@ static void computeTriEdges( int nnodes, int ntris,
     tri_edge_nums[i] = -1;
   }
 
-  // Quck reference from the edge index to the local node numbering
-  const int enodes[3][2] = {{1, 2}, {2, 0}, {0, 1}};
-
   // Allocate the array for the triangle neighbors
   int *tri_neighbors = new int[ 3*ntris ];
   
@@ -248,9 +288,13 @@ static void computeTriEdges( int nnodes, int ntris,
         // Triangle edges that have no neighbors are labeled with a -1
         tri_neighbors[3*i+j] = -1;
 
+        int e0[2];
+        e0[0] = tris[3*i + tri_edge_nodes[j][0]];
+        e0[1] = tris[3*i + tri_edge_nodes[j][1]];
+
         // Search for the neighboring quad that shares this edge
-        int kp = ptr[tris[3*i + enodes[j][0]]];
-        int kpend = ptr[tris[3*i + enodes[j][0]]+1];
+        int kp = ptr[e0[0]];
+        int kpend = ptr[e0[0]+1];
         for ( ; kp < kpend; kp++ ){
           // Find the potential quad neighbor
           int n = node_to_tris[kp];
@@ -266,11 +310,13 @@ static void computeTriEdges( int nnodes, int ntris,
           // Search over all the edges on this quad, and see
           // if they match
           for ( int e = 0; e < 3; e++ ){  
+            int e1[2];
+            e1[0] = tris[3*n + tri_edge_nodes[e][0]];
+            e1[1] = tris[3*n + tri_edge_nodes[e][1]];
+
             // Check if the adjacent edge matches in either direction
-            if ((tris[3*i+enodes[j][0]] == tris[3*n+enodes[e][0]] &&
-                 tris[3*i+enodes[j][1]] == tris[3*n+enodes[e][1]]) ||
-                (tris[3*i+enodes[j][0]] == tris[3*n+enodes[e][1]] &&
-                 tris[3*i+enodes[j][1]] == tris[3*n+enodes[e][0]])){
+            if ((e0[0] == e1[0] && e0[1] == e1[1]) ||
+                (e0[0] == e1[1] && e0[1] == e1[0])){
               // Label the other edge that shares this same node
               tri_edge_nums[3*n+e] = ne;
 
@@ -312,8 +358,8 @@ static void computeTriEdges( int nnodes, int ntris,
     for ( int j = 0; j < 3; j++ ){
       // Get the unique edge number
       int n = tri_edge_nums[3*i+j];
-      tri_edges[2*n] = tris[3*i+enodes[j][0]];
-      tri_edges[2*n+1] = tris[3*i+enodes[j][1]];
+      tri_edges[2*n] = tris[3*i + tri_edge_nodes[j][0]];
+      tri_edges[2*n+1] = tris[3*i + tri_edge_nodes[j][1]];
 
       // Set the dual edge numbers - connecting triangles to other
       // triangles. Note that some elements of this array will be -1.
@@ -358,9 +404,6 @@ static void computeQuadEdges( int nnodes, int nquads,
     quad_neighbors = new int[ 4*nquads ];
   }
 
-  // Quck reference from the quad index to the edge
-  const int enodes[4][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
-
   int count = 0;
   int ne = 0;
   for ( int i = 0; i < nquads; i++ ){
@@ -374,9 +417,15 @@ static void computeQuadEdges( int nnodes, int nquads,
           quad_neighbors[4*i+j] = -1;
         }
 
+        // Extract the edge nodes for the j-th edge
+        int e0[2];
+        e0[0] = quads[4*i + quad_edge_nodes[j][0]];
+        e0[1] = quads[4*i + quad_edge_nodes[j][1]];
+
         // Search for the neighboring quad that shares this edge
-        int kp = ptr[quads[4*i + enodes[j][0]]];
-        int kpend = ptr[quads[4*i + enodes[j][0]]+1];
+        int kp = ptr[e0[0]];
+        int kpend = ptr[e0[0]+1];
+
         for ( ; kp < kpend; kp++ ){
           // Find the potential quad neighbor
           int n = node_to_quads[kp];
@@ -390,12 +439,15 @@ static void computeQuadEdges( int nnodes, int nquads,
 
           // Search over all the edges on this quad, and see
           // if they match
-          for ( int e = 0; e < 4; e++ ){  
+          for ( int e = 0; e < 4; e++ ){
+            // Extract the edge nodes for the e-th edge
+            int e1[2];
+            e1[0] = quads[4*n + quad_edge_nodes[e][0]];
+            e1[1] = quads[4*n + quad_edge_nodes[e][1]];          
+
             // Check if the adjacent edge matches in either direction
-            if ((quads[4*i+enodes[j][0]] == quads[4*n+enodes[e][0]] &&
-                 quads[4*i+enodes[j][1]] == quads[4*n+enodes[e][1]]) ||
-                (quads[4*i+enodes[j][0]] == quads[4*n+enodes[e][1]] &&
-                 quads[4*i+enodes[j][1]] == quads[4*n+enodes[e][0]])){
+            if ((e0[0] == e1[0] && e0[1] == e1[1]) ||
+                (e0[0] == e1[1] && e0[1] == e1[0])){
               // Label the other edge that shares this same node
               quad_edge_nums[4*n+e] = ne;
 
@@ -432,8 +484,8 @@ static void computeQuadEdges( int nnodes, int nquads,
     for ( int j = 0; j < 4; j++ ){
       // Get the unique edge number
       int n = quad_edge_nums[4*i+j];
-      quad_edges[2*n] = quads[4*i+enodes[j][0]];
-      quad_edges[2*n+1] = quads[4*i+enodes[j][1]];
+      quad_edges[2*n] = quads[4*i + quad_edge_nodes[j][0]];
+      quad_edges[2*n+1] = quads[4*i + quad_edge_nodes[j][1]];
 
       // Set the dual edges
       if (dual_edges){
@@ -544,7 +596,7 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
         
         // Find a node that shares the face
         int kp = ptr[f[0]];
-        int kpend =ptr[f[0]+1];
+        int kpend = ptr[f[0]+1];
 
         for ( ; kp < kpend; kp++ ){
           // Find the potential hex neighbor
@@ -580,6 +632,10 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
       }
     }
   }
+
+  // Free the node->hex data
+  delete [] ptr;
+  delete [] node_to_hexes;
 
   if (_num_hex_edges){
     *_num_hex_edges = edge_num;
@@ -1015,7 +1071,10 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     int hole_pt = total_num_pts; // What hole are we on?
 
     // Set up the degenerate edges
-    int *degen = new int[ 2*num_degen ];
+    int *degen = NULL;
+    if (num_degen > 0){
+      degen = new int[ 2*num_degen ];
+    }
     num_degen = 0;
     
     for ( int k = 0; k < nloops; k++ ){
@@ -1139,6 +1198,13 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       quads = new int[ 4*num_quads ];
       memcpy(quads, face_mesh->quads, 4*num_quads*sizeof(int));
 
+      // Flip the quadrilateral face
+      for ( int i = 0; i < num_quads; i++ ){
+        int tmp = quads[4*i+1];
+        quads[4*i+1] = quads[4*i+3];
+        quads[4*i+3] = tmp;
+      }
+
       // Allocate the array for the parametric locations
       pts = new double[ 2*num_points ];
 
@@ -1147,18 +1213,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         pts[2*i] = params[2*i];
         pts[2*i+1] = params[2*i+1];
       }
-
-      // If the sense of the master face is opposite to the
-      // orientation of this face, then reverse the quads
-      /*
-      if (master_dir < 0){
-        for ( int i = 0; i < num_quads; i++ ){
-          int tmp = quads[4*i+1];
-          quads[4*i+1] = quads[4*i+3];
-          quads[4*i+3] = tmp;
-        }
-      }
-      */
 
       // Copy the interior point locations
       memcpy(&pts[2*num_fixed_pts], &(face_mesh->pts[2*num_fixed_pts]),
@@ -1329,6 +1383,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       // Free the degenerate triangles and reorder the mesh
       if (num_degen > 0){
         tri->removeDegenerateEdges(num_degen, degen);
+        delete [] degen;
       }
 
       if (options.write_pre_smooth_triangle){
@@ -1767,16 +1822,12 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
     if (tri_neighbors[3*i] < 0 ||
         tri_neighbors[3*i+1] < 0 ||
         tri_neighbors[3*i+2] < 0){
-      // Quck reference from the edge index to the local node numbering
-      const int enodes[3][2] = {{1, 2}, {2, 0}, {0, 1}};
-      const int node_edges[3][2] = {{1, 2}, {0, 2}, {0, 1}};
-
       // Loop over the edges of the triangle
       for ( int j = 0; j < 3; j++ ){
         // We have a boundary triangle
         if (tri_neighbors[3*i+j] < 0){
           // The leading node that we are searching for
-          int ij = enodes[j][1]; 
+          int ij = tri_edge_nodes[j][1]; 
           int node = tris[3*i + ij];
 
           // Search the triangles adjacent to node
@@ -1803,8 +1854,8 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
             else if (tris[3*k+2] == node){ kj = 2; }
 
             // Track from the node to the possible edges
-            if (tri_neighbors[3*k + node_edges[kj][0]] < 0 ||
-                tri_neighbors[3*k + node_edges[kj][1]] < 0){
+            if (tri_neighbors[3*k + tri_node_edges[kj][0]] < 0 ||
+                tri_neighbors[3*k + tri_node_edges[kj][1]] < 0){
               graph_edges[2*edge_num] = i;
               graph_edges[2*edge_num+1] = k;
               weights[edge_num] = 1.0;
@@ -2397,9 +2448,12 @@ void TMRFaceMesh::writeDualToVTK( const char *filename,
     if (nodes_per_elem == 3){
       for ( int k = 0; k < nelems; k++ ){
         fprintf(fp, "%e %e %e\n", 
-                1.0/3.0*(p[elems[3*k]].x + p[elems[3*k+1]].x + p[elems[3*k+2]].x),
-                1.0/3.0*(p[elems[3*k]].y + p[elems[3*k+1]].y + p[elems[3*k+2]].y),
-                1.0/3.0*(p[elems[3*k]].z + p[elems[3*k+1]].z + p[elems[3*k+2]].z));
+                1.0/3.0*(p[elems[3*k]].x + p[elems[3*k+1]].x + 
+                         p[elems[3*k+2]].x),
+                1.0/3.0*(p[elems[3*k]].y + p[elems[3*k+1]].y + 
+                         p[elems[3*k+2]].y),
+                1.0/3.0*(p[elems[3*k]].z + p[elems[3*k+1]].z + 
+                         p[elems[3*k+2]].z));
       }
     }
     else { // nodes_per_elem == 4
@@ -2453,6 +2507,7 @@ TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm,
   num_face_loops = 0;
   face_loops = NULL;
   face_loop_ptr = NULL;
+  face_loop_dir = NULL;
   face_loop_edge_count = NULL;
 
   // Set the number of points through-thickness
@@ -2483,6 +2538,7 @@ TMRVolumeMesh::~TMRVolumeMesh(){
     }
     delete [] face_loop_ptr;
     delete [] face_loops;
+    delete [] face_loop_dir;
     delete [] face_loop_edge_count;
   }
 }
@@ -3117,13 +3173,47 @@ TMRMesh::TMRMesh( MPI_Comm _comm, TMRModel *_geo ){
   // Set the mesh properties
   num_nodes = 0;
   num_quads = 0;
+  num_hexes = 0;
   quads = NULL;
+  hexes = NULL;
   X = NULL;
 }
 
 TMRMesh::~TMRMesh(){
+  // Free the meshes created here...
+  int num_edges;
+  TMREdge **edges;
+  geo->getEdges(&num_edges, &edges);
+  for ( int i = 0; i < num_edges; i++ ){
+    TMREdgeMesh *mesh = NULL;
+    edges[i]->getMesh(&mesh);
+    if (mesh){ delete mesh; }
+    edges[i]->setMesh(NULL);
+  }
+
+  int num_faces;
+  TMRFace **faces;
+  geo->getFaces(&num_faces, &faces);
+  for ( int i = 0; i < num_faces; i++ ){
+    TMRFaceMesh *mesh = NULL;
+    faces[i]->getMesh(&mesh);
+    if (mesh){ delete mesh; }
+    faces[i]->setMesh(NULL);
+  }
+
+  int num_volumes;
+  TMRVolume **volumes;
+  geo->getVolumes(&num_volumes, &volumes);
+  for ( int i = 0; i < num_volumes; i++ ){
+    TMRVolumeMesh *mesh = NULL;
+    volumes[i]->getMesh(&mesh);
+    if (mesh){ delete mesh; }
+    volumes[i]->setMesh(NULL);
+  }
+
   geo->decref();
   if (quads){ delete [] quads; }
+  if (hexes){ delete [] hexes; }
   if (X){ delete [] X; }
 }
 
@@ -3568,7 +3658,7 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
           // fprintf(fp, "%-8s%8d%8d%8d\n", "PSOLID", part, part, 0);
 
           for ( int k = 0; k < nlocal; k++, j++ ){
-            fprintf(fp, "%-8s%8d%8d%8d%8d%8d%8d%8d%8d*\n", "CHEXA", 
+            fprintf(fp, "%-8s%8d%8d%8d%8d%8d%8d%8d%8d\n", "CHEXA", 
                     j+1, part, 
                     vars[hex_local[8*k]]+1, 
                     vars[hex_local[8*k+1]]+1, 
@@ -3576,7 +3666,7 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
                     vars[hex_local[8*k+3]]+1,
                     vars[hex_local[8*k+4]]+1,
                     vars[hex_local[8*k+5]]+1);
-            fprintf(fp, "%-8s%8d%8d\n", "*", 
+            fprintf(fp, "%-8s%8d%8d\n", " ", 
                     vars[hex_local[8*k+6]]+1, 
                     vars[hex_local[8*k+7]]+1);
           }
@@ -3644,7 +3734,8 @@ TMRModel* TMRMesh::createModelFromMesh(){
     // Get the point-offset for this surface
     int offset = mesh->getNumFixedPoints();
     for ( int j = offset; j < npts; j++, vnum++ ){
-      new_verts[vnum] = new TMRVertexFromFace(faces[i], pts[2*j], pts[2*j+1]);
+      new_verts[vnum] = new TMRVertexFromFace(faces[i], 
+                                              pts[2*j], pts[2*j+1]);
     }
   }
 
@@ -3660,7 +3751,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   // The edges within the quadrilateral mesh
   int num_quad_edges = 0;
-  int *quad_edges = NULL;
+  int *quad_edges = NULL, *quad_edge_nums = NULL;
 
   // The edges within the hexahedral mesh
   int num_hex_edges = 0, num_hex_faces = 0;
@@ -3696,37 +3787,36 @@ TMRModel* TMRMesh::createModelFromMesh(){
     mesh_faces = hex_faces;
   }
 
-  // Create a searchable array that stores the edge number
-  // and the two connecting node numbers. The node numbers
-  // are sorted such that the lowest one comes first. This
-  // enables fast sorting/searching (based on a Morton ordering).
-  int *all_edges = new int[ 3*num_mesh_edges ];
+  // Create a searchable array that stores the edge number and the two
+  // connecting node numbers. The node numbers are sorted such that
+  // the lowest one comes first. This enables fast sorting/searching
+  // (based on a Morton ordering).
+  int *sorted_edges = new int[ 3*num_mesh_edges ];
 
-  // Populate the all_edges array, sorting each edge as we go...
+  // Populate the sorted_edges array, sorting each edge as we go...
   for ( int i = 0; i < num_mesh_edges; i++ ){
-    all_edges[3*i] = i;
+    sorted_edges[3*i] = i;
 
     // Set the quad edge, setting the lower edge number first
     if (mesh_edges[2*i] < mesh_edges[2*i+1]){
-      all_edges[3*i+1] = mesh_edges[2*i];
-      all_edges[3*i+2] = mesh_edges[2*i+1];
+      sorted_edges[3*i+1] = mesh_edges[2*i];
+      sorted_edges[3*i+2] = mesh_edges[2*i+1];
     }
     else {
-      all_edges[3*i+1] = mesh_edges[2*i+1];
-      all_edges[3*i+2] = mesh_edges[2*i];      
+      sorted_edges[3*i+1] = mesh_edges[2*i+1];
+      sorted_edges[3*i+2] = mesh_edges[2*i];      
     }
   }
 
   // Sort all of the edges/nodes so that they can be easily searched
-  qsort(all_edges, num_mesh_edges, 3*sizeof(int), compare_edges);
+  qsort(sorted_edges, num_mesh_edges, 3*sizeof(int), compare_edges);
 
-  // Keep track of the orientation of the mesh edges.
-  // all_edge_dir[i] > 0 means that the ordering of the vertices 
-  // in the all_edges array is consistent with the orientation
-  // in the mesh. edge_dir[i] < 0 means the edge is flipped 
-  // relative to the all_edges array.
-  int *all_edge_dir = new int[ num_mesh_edges ];
-  memset(all_edge_dir, 0, num_mesh_edges*sizeof(int));
+  // Keep track of the orientation of the mesh edges.  edge_dir[i]
+  // > 0 means that the ordering of the vertices in the sorted_edges
+  // array is consistent with the orientation in the mesh. edge_dir[i]
+  // < 0 means the edge is flipped relative to the sorted_edges array.
+  int *edge_dir = new int[ num_mesh_edges ];
+  memset(edge_dir, 0, num_mesh_edges*sizeof(int));
 
   // Create the edges for the faces/hexahedral elements for the 
   // mesh from the underlying edges
@@ -3760,7 +3850,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
       }
 
       // Find the associated edge number 
-      int *res = (int*)bsearch(edge, all_edges, num_mesh_edges,
+      int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
                                3*sizeof(int), compare_edges);
 
       if (res){
@@ -3769,10 +3859,10 @@ TMRModel* TMRMesh::createModelFromMesh(){
         // Check whether the node ordering is consistent with the
         // edge orientation. If not, tag this edge as reversed.
         if (vars[j] < vars[j+1]){
-          all_edge_dir[edge_num] = 1;
+          edge_dir[edge_num] = 1;
         }
         else {
-          all_edge_dir[edge_num] = -1;
+          edge_dir[edge_num] = -1;
         }
 
         new_edges[edge_num] = 
@@ -3784,10 +3874,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
       }
     }
   }
-
-  // Set the local quad node to edge information
-  const int face_edge_to_nodes[][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
-
+  
   // Create the edges on the surface using Pcurve/CurveFromSurface
   for ( int i = 0; i < num_faces; i++ ){
     TMRFaceMesh *mesh = NULL;
@@ -3809,8 +3896,8 @@ TMRModel* TMRMesh::createModelFromMesh(){
     for ( int j = 0; j < nlocal; j++ ){
       for ( int k = 0; k < 4; k++ ){
         // The local variable numbers
-        int l1 = quad_local[4*j + face_edge_to_nodes[k][0]];
-        int l2 = quad_local[4*j + face_edge_to_nodes[k][1]];
+        int l1 = quad_local[4*j + quad_edge_nodes[k][0]];
+        int l2 = quad_local[4*j + quad_edge_nodes[k][1]];
 
         // Get the global edge number
         int edge[3];
@@ -3825,7 +3912,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
         }
 
         // Find the associated edge number 
-        int *res = (int*)bsearch(edge, all_edges, num_mesh_edges,
+        int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
                                  3*sizeof(int), compare_edges);
 
         if (res){
@@ -3834,7 +3921,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
           if (!new_edges[edge_num]){
             // These edges are constructed such that they are 
             // always in the 'positive' orientation.
-            all_edge_dir[edge_num] = 1;
+            edge_dir[edge_num] = 1;
 
             // Create the TMRBsplinePcurve on this edge
             double cpts[4];
@@ -3867,12 +3954,19 @@ TMRModel* TMRMesh::createModelFromMesh(){
     for ( int i = 0; i < num_mesh_edges; i++ ){
       if (!new_edges[i]){
         // Get the edges
-        int v1 = all_edges[3*i+1];
-        int v2 = all_edges[3*i+2];
+        int v1 = mesh_edges[2*i];
+        int v2 = mesh_edges[2*i+1];
 
-        // Set the edge direction
-        all_edge_dir[i] = 1;
-        new_edges[i] = NULL; // new TMRLinearEdge(new_verts[v1], new_verts[v2]);
+        // Set the edge direction and create the edge. Note that the
+        // edge is always created in the positive orientation so that
+        // edge_dir[i] = 1.
+        edge_dir[i] = 1;
+        if (v1 < v2){
+          new_edges[i] = new TMRTFIEdge(new_verts[v1], new_verts[v2]);
+        }
+        else {
+          new_edges[i] = new TMRTFIEdge(new_verts[v2], new_verts[v1]);
+        }
       }
     }
   }
@@ -3882,26 +3976,27 @@ TMRModel* TMRMesh::createModelFromMesh(){
   memset(new_faces, 0, num_mesh_faces*sizeof(TMRFace*));
 
   // Create the face array
-  int *all_faces = NULL;
+  int *sorted_faces = NULL;
 
   if (num_hexes > 0){
     // Allocate an array to store the searchable array that
     // stores the face nodes
-    all_faces = new int[ 5*num_hex_faces ];
+    sorted_faces = new int[ 5*num_hex_faces ];
 
     for ( int i = 0; i < num_hex_faces; i++ ){
-      all_faces[5*i] = i;
+      sorted_faces[5*i] = i;
       for ( int k = 0; k < 4; k++ ){
-        all_faces[5*i+1+k] = hex_faces[4*i+k];
+        sorted_faces[5*i+1+k] = hex_faces[4*i+k];
       }
-      sort_face_nodes(&all_faces[5*i+1]);
+      sort_face_nodes(&sorted_faces[5*i+1]);
     }
 
     // Sort all of the faces so that they can be easily searched
-    qsort(all_faces, num_mesh_faces, 
+    qsort(sorted_faces, num_mesh_faces, 
           5*sizeof(int), compare_faces);
   }
 
+  // Allocate the faces
   int face_num = 0;
   for ( int i = 0; i < num_faces; i++ ){
     TMRFaceMesh *mesh = NULL;
@@ -3933,8 +4028,8 @@ TMRModel* TMRMesh::createModelFromMesh(){
         v[k] = new_verts[vars[l0]];
 
         // The edge variable numbers
-        int l1 = quad_local[4*j + face_edge_to_nodes[k][0]];
-        int l2 = quad_local[4*j + face_edge_to_nodes[k][1]];
+        int l1 = quad_local[4*j + quad_edge_nodes[k][0]];
+        int l2 = quad_local[4*j + quad_edge_nodes[k][1]];
 
         // Get the global edge number
         int edge[3];
@@ -3949,7 +4044,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
         }
 
         // Find the associated edge number 
-        int *res = (int*)bsearch(edge, all_edges, num_mesh_edges,
+        int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
                                  3*sizeof(int), compare_edges);
 
         if (res){
@@ -3963,7 +4058,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
           else {
             dir[k] = -1;
           }
-          dir[k] *= all_edge_dir[edge_num];
+          dir[k] *= edge_dir[edge_num];
         } 
         else {
           fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
@@ -3973,9 +4068,9 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
       // If this is a hexahedral mesh, then we need to be consistent
       // with how the faces are ordered. This code searches for the
-      // face number within the all_faces array to obtain the required
+      // face number within the sorted_faces array to obtain the required
       // face number
-      if (all_faces){
+      if (sorted_faces){
         // Set the nodes associated with this face and sort them
         int face[5];
         face[0] = 0;
@@ -3985,7 +4080,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
         sort_face_nodes(&face[1]);
 
         // Search for the face
-        int *res = (int*)bsearch(face, all_faces, num_mesh_faces,
+        int *res = (int*)bsearch(face, sorted_faces, num_mesh_faces,
                                  5*sizeof(int), compare_faces);
 
         // Set the face number
@@ -4000,23 +4095,66 @@ TMRModel* TMRMesh::createModelFromMesh(){
     }
   }
 
-  // Array to store the new volume elements
-  TMRVolume **new_volumes = NULL;
-
+  // Create the remaining faces
   if (num_hexes > 0){
-    // Create the remaining faces from the mesh
     for ( int i = 0; i < num_mesh_faces; i++ ){
       if (!new_faces[i]){
-        // new_faces[i] = new TMRTFIFace();
+        // The edge, direction and vertex information
+        TMREdge *c[4];
+        int dir[4];
+        TMRVertex *v[4];
+
+        // Loop over all of the edges/nodes associated with
+        // this hexahedral face
+        for ( int k = 0; k < 4; k++ ){
+          v[k] = new_verts[mesh_faces[4*i + k]];
+
+          // Get the edge numbers associated with this edge
+          int e0 = mesh_faces[4*i + quad_edge_nodes[k][0]];
+          int e1 = mesh_faces[4*i + quad_edge_nodes[k][1]];
+
+          // Get the global edge number
+          int edge[3];
+          edge[0] = 0;
+          dir[k] = 1;
+          if (e0 < e1){
+            edge[1] = e0;
+            edge[2] = e1;
+          }
+          else {
+            dir[k] = -1;
+            edge[1] = e1;
+            edge[2] = e0;
+          }
+
+          // Find the associated edge number 
+          int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
+                                   3*sizeof(int), compare_edges);
+
+          if (res){
+            // Get the global edge number
+            int edge_num = res[0];
+            c[k] = new_edges[edge_num];
+            dir[k] *= edge_dir[edge_num];
+          } 
+          else {
+            fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
+                    edge[1], edge[2]);
+          }
+        }
+                
+        new_faces[i] = new TMRTFIFace(c, dir, v);
       }
     }
   }
 
   // Free all of the edge search information
-  delete [] all_edges;
-  if (all_faces){
-    delete [] all_faces;
+  delete [] sorted_edges;
+  if (sorted_faces){
+    delete [] sorted_faces;
   }
+
+  TMRVolume **new_volumes = NULL;
 
   if (num_hexes > 0){
     // Create the new volume array
@@ -4031,7 +4169,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
       // Get the vertices
       for ( int j = 0; j < 8; j++ ){
-        v[j] = new_verts[hexes[8*i + j]];
+        v[j] = new_verts[hexes[8*i + hex_coordinate_order[j]]];
       }
 
       // Get the edges and their directions
@@ -4042,15 +4180,14 @@ TMRModel* TMRMesh::createModelFromMesh(){
             hexes[8*i + hex_edge_nodes[j][1]]){
           edir[j] = -1;
         }
-        edir[j] *= all_edge_dir[edge_num];
+        edir[j] *= edge_dir[edge_num];
         e[j] = new_edges[edge_num];
       }
 
       // Get the faces and their orientation
       for ( int j = 0; j < 6; j++ ){
         int face_num = hex_face_nums[6*i + j];
-        fdir[j] = 1;
-        
+        fdir[j] = 1;        
         f[j] = new_faces[face_num];
       }
 
@@ -4058,6 +4195,9 @@ TMRModel* TMRMesh::createModelFromMesh(){
       new_volumes[i] = new TMRTFIVolume(f, fdir, e, edir, v);
     }
   }
+
+  // Free the edge directions
+  delete [] edge_dir;
 
   // Free all the auxiliary connectivity data
   if (quad_edges){
@@ -4089,6 +4229,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
   delete [] new_verts;
   delete [] new_edges;
   delete [] new_faces;
+  delete [] new_volumes;
 
   return geo;
 }

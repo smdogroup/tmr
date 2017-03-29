@@ -152,12 +152,60 @@ class TMRSplitEdge : public TMREdge {
 };
 
 /*
-  Parametric TFI classes
+  Transfinite-interpolation edge
 
-  This surface defines a segment of a surface, defined in parameter
-  space. This is used for creating a continuous geometry model of a
-  continuous surface. In particular, this is used by TMRMesh to create
-  a surface topology object needed for the TMRQuadForest object.
+  This is just a line between the vertices v1 and v2
+*/
+class TMRTFIEdge : public TMREdge {
+ public:
+  TMRTFIEdge( TMRVertex *_v1, TMRVertex *_v2 );
+  ~TMRTFIEdge();
+  void getRange( double *tmin, double *tmax );
+  int evalPoint( double t, TMRPoint *X );
+};
+
+/*
+  Transfinite-interpolation surface
+
+  v3-------e2-------v2
+  |                 |
+  |      v ^        |
+  |        |        |
+  e3       ----> u  e1
+  |                 |
+  |                 |
+  |                 |
+  v0-------e0-------v1
+*/
+class TMRTFIFace : public TMRFace {
+ public:
+  TMRTFIFace( TMREdge *_edges[], const int dir[],
+              TMRVertex *verts[] );
+  ~TMRTFIFace();
+
+  void getRange( double *umin, double *vmin,
+                 double *umax, double *vmax ); 
+  int evalPoint( double u, double v, TMRPoint *X ); 
+  int invEvalPoint( TMRPoint p, double *u, double *v );
+  int evalDeriv( double u, double v, 
+                 TMRPoint *Xu, TMRPoint *Xv );
+
+ private:
+  // The edges within the transfinite-interpolation
+  TMREdge *edges[4];
+  int dir[4];
+
+  // The vertex locations
+  TMRPoint c[4];
+};
+
+/*
+  Parametric TFI class
+
+  This face class defines a segment of a surface defined in parameter
+  space. This class is used to create a surface-conforming patch. This
+  class is used by TMRMesh to create a surface topology object needed
+  for TMRQuadForest.
 
   The parametric curves and the input vertices are used to define a
   segment on the surface in parameter space that looks like this:
@@ -179,7 +227,7 @@ class TMRSplitEdge : public TMREdge {
 */
 class TMRParametricTFIFace : public TMRFace {
  public:
-  TMRParametricTFIFace( TMRFace *_surf, 
+  TMRParametricTFIFace( TMRFace *_face, 
                         TMREdge *_edges[], const int dir[],
                         TMRVertex *verts[] );
   ~TMRParametricTFIFace();
@@ -234,9 +282,9 @@ class TMRTFIVolume : public TMRVolume {
                 TMREdge *_edges[], const int dir[],
                 TMRVertex *verts[] );
   ~TMRTFIVolume();
+  void getRange( double *umin, double *vmin, double *wmin,
+                 double *umax, double *vmax, double *wmax );
   int evalPoint( double u, double v, double w, TMRPoint *X ); 
-
-  // Get the underlying entities
   void getEntities( TMRFace ***_faces, TMREdge ***_edges, 
                     TMRVertex ***_verts );
 

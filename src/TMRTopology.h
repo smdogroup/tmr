@@ -203,6 +203,10 @@ class TMRVolume : public TMREntity {
   // Update the orientation within the master pairs
   void updateOrientation();
 
+  // Get the parameter range for this volume
+  virtual void getRange( double *umin, double *vmin, double *wmin,
+                         double *umax, double *vmax, double *wmax );
+
   // Given the parametric point u,v,w compute the physical location x,y,z
   virtual int evalPoint( double u, double v, double w, TMRPoint *X );
 
@@ -212,6 +216,9 @@ class TMRVolume : public TMREntity {
   // Set/retrieve the mesh
   void setMesh( TMRVolumeMesh *_mesh );
   void getMesh( TMRVolumeMesh **_mesh );
+
+  // Write the object to the VTK file
+  void writeToVTK( const char *filename );
 
  private:
   // Store the face information
