@@ -7,6 +7,51 @@
 #include <math.h>
 #include <stdio.h>
 
+
+
+/*
+  The nodes in this hexahedral element are ordered as follows:
+  
+       7 ---------- 6
+      /|           /|
+     / |          / |
+    /  |         /  |
+   4 ---------- 5   |
+   |   |        |   |
+   |   3 -------|-- 2
+   |  /         |  /
+   | /          | /
+   |/           |/
+   0 ---------- 1
+*/
+
+/*
+  The start/end nodes corresponding to each edge in a
+  hexahedral elements
+*/
+const int hex_edge_nodes[12][2] =
+  {{0,1}, {3,2}, {4,5}, {7,6},  // x-aligned edges
+   {0,3}, {1,2}, {4,7}, {5,6},  // y-aligned edges
+   {0,4}, {1,5}, {2,6}, {3,7}}; // z-aligned edges
+
+/*
+  The nodes corresponding to each face in a hexahedral
+  element
+*/
+const int hex_face_nodes[6][4] =
+  {{0,3,4,7}, {1,2,5,6},  // x-faces
+   {0,1,4,5}, {3,2,7,6},  // y-faces
+   {0,1,3,2}, {4,5,7,8}}; // z-faces
+
+/*
+  Possible orientations for two connecting faces
+*/
+const int face_orient[8][4] = 
+  {{0,1,2,3}, {2,0,3,1},
+   {3,2,1,0}, {1,3,0,2},
+   {0,2,1,3}, {2,3,0,1},
+   {3,1,2,0}, {1,0,3,2}};
+
 /*
   Compare coordinate pairs of points. This uses a Morton ordering
   comparison to facilitate sorting/searching the list of edges.
@@ -442,40 +487,6 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
     hex_face_nums[i] = -1;
   }
 
-
-  // The nodes in this hexahedral element are ordered as follows:
-  // 
-  //      7 ---------- 6
-  //     /|           /|
-  //    / |          / |
-  //   /  |         /  |
-  //  4 ---------- 5   |
-  //  |   |        |   |
-  //  |   3 -------|-- 2
-  //  |  /         |  /
-  //  | /          | /
-  //  |/           |/
-  //  0 ---------- 1
-  
-  // The edge -> node info
-  const int edge_nodes[12][2] =
-    {{0,1}, {3,2}, {4,5}, {7,6},  // x-aligned edges
-     {0,3}, {1,2}, {4,7}, {5,6},  // y-aligned edges
-     {0,4}, {1,5}, {2,6}, {3,7}}; // z-aligned edges
-
-  // The face -> node info
-  const int face_nodes[6][4] =
-    {{0,3,4,7}, {1,2,5,6},  // x-faces
-     {0,1,4,5}, {3,2,7,6},  // y-faces
-     {0,1,3,2}, {4,5,7,8}}; // z-faces
-
-  // Possible orientations for two connecting faces
-  const int face_orient[8][4] = 
-    {{0,1,2,3}, {2,0,3,1},
-     {3,2,1,0}, {1,3,0,2},
-     {0,2,1,3}, {2,3,0,1},
-     {3,1,2,0}, {1,0,3,2}};
-
   int edge_num = 0, face_num = 0;
   for ( int i = 0; i < nhexes; i++ ){
     // Search through each hexahedral element for the edge
@@ -485,8 +496,8 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
 
         // Find the edge nodes for the new edge
         int e[2];
-        e[0] = hexes[8*i + edge_nodes[j][0]];
-        e[1] = hexes[8*i + edge_nodes[j][1]];
+        e[0] = hexes[8*i + hex_edge_nodes[j][0]];
+        e[1] = hexes[8*i + hex_edge_nodes[j][1]];
 
         // Find the node that shares the edge
         int kp = ptr[e[0]];
@@ -503,8 +514,8 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
           // the edges match
           for ( int k = 0; k < 12; k++ ){
             int e2[2];
-            e2[0] = hexes[8*hex + edge_nodes[k][0]];
-            e2[1] = hexes[8*hex + edge_nodes[k][1]];
+            e2[0] = hexes[8*hex + hex_edge_nodes[k][0]];
+            e2[1] = hexes[8*hex + hex_edge_nodes[k][1]];
 
             // Check if the adjacent edge matches in either direction
             if ((e[0] == e2[0] && e[1] == e2[1]) ||
@@ -526,10 +537,10 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
         
         // Find the nodes associated with face j
         int f[4];
-        f[0] = hexes[8*i + face_nodes[j][0]];
-        f[1] = hexes[8*i + face_nodes[j][1]];
-        f[2] = hexes[8*i + face_nodes[j][2]];
-        f[3] = hexes[8*i + face_nodes[j][3]];
+        f[0] = hexes[8*i + hex_face_nodes[j][0]];
+        f[1] = hexes[8*i + hex_face_nodes[j][1]];
+        f[2] = hexes[8*i + hex_face_nodes[j][2]];
+        f[3] = hexes[8*i + hex_face_nodes[j][3]];
         
         // Find a node that shares the face
         int kp = ptr[f[0]];
@@ -546,10 +557,10 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
           // the edges match
           for ( int k = 0; k < 6; k++ ){
             int f2[4];
-            f2[0] = hexes[8*hex + face_nodes[k][0]];
-            f2[1] = hexes[8*hex + face_nodes[k][1]];
-            f2[2] = hexes[8*hex + face_nodes[k][2]];
-            f2[3] = hexes[8*hex + face_nodes[k][3]];
+            f2[0] = hexes[8*hex + hex_face_nodes[k][0]];
+            f2[1] = hexes[8*hex + hex_face_nodes[k][1]];
+            f2[2] = hexes[8*hex + hex_face_nodes[k][2]];
+            f2[3] = hexes[8*hex + hex_face_nodes[k][3]];
 
             // Check if the adjacent edge matches in either direction
             for ( int ort = 0; ort < 8; ort++ ){
@@ -583,16 +594,16 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
   for ( int i = 0; i < nhexes; i++ ){
     for ( int j = 0; j < 12; j++ ){
       int e = hex_edge_nums[12*i+j];
-      hex_edges[2*e] = hexes[8*i + edge_nodes[j][0]];
-      hex_edges[2*e+1] = hexes[8*i + edge_nodes[j][1]];
+      hex_edges[2*e] = hexes[8*i + hex_edge_nodes[j][0]];
+      hex_edges[2*e+1] = hexes[8*i + hex_edge_nodes[j][1]];
     }
 
     for ( int j = 0; j < 6; j++ ){
       int f = hex_face_nums[6*i+j];
-      hex_faces[4*f] = hexes[8*i + face_nodes[j][0]];
-      hex_faces[4*f+1] = hexes[8*i + face_nodes[j][1]];
-      hex_faces[4*f+2] = hexes[8*i + face_nodes[j][2]];
-      hex_faces[4*f+3] = hexes[8*i + face_nodes[j][3]];
+      hex_faces[4*f] = hexes[8*i + hex_face_nodes[j][0]];
+      hex_faces[4*f+1] = hexes[8*i + hex_face_nodes[j][1]];
+      hex_faces[4*f+2] = hexes[8*i + hex_face_nodes[j][2]];
+      hex_faces[4*f+3] = hexes[8*i + hex_face_nodes[j][3]];
     }
   }
 
@@ -3853,12 +3864,6 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   // Create the hexahedral elements
   if (num_hexes > 0){
-    // The edge -> node info
-    const int hex_edge_nodes[12][2] =
-      {{0,1}, {3,2}, {4,5}, {7,6},  // x-aligned edges
-       {0,3}, {1,2}, {4,7}, {5,6},  // y-aligned edges
-       {0,4}, {1,5}, {2,6}, {3,7}}; // z-aligned edges
-
     for ( int i = 0; i < num_mesh_edges; i++ ){
       if (!new_edges[i]){
         // Get the edges
@@ -3891,6 +3896,10 @@ TMRModel* TMRMesh::createModelFromMesh(){
       }
       sort_face_nodes(&all_faces[5*i+1]);
     }
+
+    // Sort all of the faces so that they can be easily searched
+    qsort(all_faces, num_mesh_faces, 
+          5*sizeof(int), compare_faces);
   }
 
   int face_num = 0;
@@ -4010,11 +4019,43 @@ TMRModel* TMRMesh::createModelFromMesh(){
   }
 
   if (num_hexes > 0){
+    // Create the new volume array
     new_volumes = new TMRVolume*[ num_hexes ];
 
     for ( int i = 0; i < num_hexes; i++ ){
-      new_volumes[i] = NULL;
-      // new_volumes[i] = new TMRTFIVolume();
+      // Get the edges
+      TMRVertex *v[8];
+      TMREdge *e[12];
+      TMRFace *f[6];
+      int edir[12], fdir[6];
+
+      // Get the vertices
+      for ( int j = 0; j < 8; j++ ){
+        v[j] = new_verts[hexes[8*i + j]];
+      }
+
+      // Get the edges and their directions
+      for ( int j = 0; j < 12; j++ ){
+        int edge_num = hex_edge_nums[12*i + j];
+        edir[j] = 1;
+        if (hexes[8*i + hex_edge_nodes[j][0]] >
+            hexes[8*i + hex_edge_nodes[j][1]]){
+          edir[j] = -1;
+        }
+        edir[j] *= all_edge_dir[edge_num];
+        e[j] = new_edges[edge_num];
+      }
+
+      // Get the faces and their orientation
+      for ( int j = 0; j < 6; j++ ){
+        int face_num = hex_face_nums[6*i + j];
+        fdir[j] = 1;
+        
+        f[j] = new_faces[face_num];
+      }
+
+      // Allocate the new transfinite interpolation face
+      new_volumes[i] = new TMRTFIVolume(f, fdir, e, edir, v);
     }
   }
 
