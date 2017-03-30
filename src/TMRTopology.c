@@ -1153,9 +1153,12 @@ void TMRModel::getVolumes( int *_num_volumes,
   Static member function for sorting the ordered pairs
 */
 template <class ctype>
-int TMRModel::compare_ordered_pairs( const void *avoid, const void *bvoid ){
-  const OrderedPair<ctype> *a = static_cast<const OrderedPair<ctype>*>(avoid);
-  const OrderedPair<ctype> *b = static_cast<const OrderedPair<ctype>*>(bvoid);
+int TMRModel::compare_ordered_pairs( const void *avoid, 
+                                     const void *bvoid ){
+  const OrderedPair<ctype> *a = 
+    static_cast<const OrderedPair<ctype>*>(avoid);
+  const OrderedPair<ctype> *b = 
+    static_cast<const OrderedPair<ctype>*>(bvoid);
   return a->obj->getEntityId() - b->obj->getEntityId();
 }
 
@@ -1341,7 +1344,8 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
       int nloops = faces[i]->getNumEdgeLoops();
       if (nloops != 1){
         fprintf(stderr,
-                "TMRTopology error: TMRFace %d contains %d loops\n", i, nloops);
+                "TMRTopology error: TMRFace %d contains %d loops\n", 
+                i, nloops);
       }
       if (nloops >= 1){
         // Get the first loop
@@ -1355,7 +1359,8 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
         
         if (nedges != 4){
           fprintf(stderr, 
-                  "TMRTopology error: TMRFace %d does not contain 4 edges\n", i);
+                  "TMRTopology error: TMRFace %d does not contain 4 edges\n", 
+                  i);
         }
         
         // Search for the face indices

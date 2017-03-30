@@ -347,7 +347,8 @@ uint32_t TMRQuadNode::findClosest( const double pt[], double *_dist ){
   scan multiple quadrants to ensure that we have, in fact, located the
   closest point to the provided point.
 */
-void TMRQuadNode::findClosest( const double pt[], uint32_t *index, double *dist ){
+void TMRQuadNode::findClosest( const double pt[], 
+                               uint32_t *index, double *dist ){
   // Scan through the quadtree
   if (low_left){
     if (pt[0] < x && pt[1] < y){
@@ -736,7 +737,8 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
       }
       if (fail){
         fprintf(stderr, 
-                "TMRTriangularize error: Failed to find degenerate edge (%d, %d)\n",
+                "TMRTriangularize error: \
+Failed to find degenerate edge (%d, %d)\n",
                 degen[2*i], degen[2*i+1]);
       }
     }
@@ -1528,7 +1530,9 @@ void TMRTriangularize::findEnclosing( const double pt[],
 */
 double TMRTriangularize::computeIntersection( const double m[], 
                                               const double e[], 
-                                              uint32_t u, uint32_t v, uint32_t w ){
+                                              uint32_t u, 
+                                              uint32_t v, 
+                                              uint32_t w ){
   // m + alpha*e = pts[u] + beta*(pts[w] - pts[u])
   // => alpha*e + beta*(pts[u] - pts[w]) = pts[u] - m
   double a11 = e[0], a21 = e[1];
@@ -1918,8 +1922,12 @@ void TMRTriangularize::frontal( double h ){
         if (face){
           // Pick a point at the middle of the current triangle
           const double frac = 1.0/3.0;
-          pt[0] = frac*(pts[2*pt_tri->u] + pts[2*pt_tri->v] + pts[2*pt_tri->w]);
-          pt[1] = frac*(pts[2*pt_tri->u+1] + pts[2*pt_tri->v+1] + pts[2*pt_tri->w+1]);
+          pt[0] = frac*(pts[2*pt_tri->u] + 
+                        pts[2*pt_tri->v] + 
+                        pts[2*pt_tri->w]);
+          pt[1] = frac*(pts[2*pt_tri->u+1] + 
+                        pts[2*pt_tri->v+1] + 
+                        pts[2*pt_tri->w+1]);
         }
         else {
           // Pick a point in the triangle
