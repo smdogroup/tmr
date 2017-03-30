@@ -45,3 +45,37 @@ TMR_FLAGS = [...] -DTMR_HAS_OPENCASCADE
 OPENCASCADE_INCLUDE = -I${CASROOT}/${CASARCH}/inc
 OPENCASCADE_LIB_PATH = -L${CASROOT}/${CASARCH}/lib -Wl,-rpath,${CASROOT}/${CASARCH}/lib
 OPENCASCADE_LIBS = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKPShape -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet -lPTKernel -ldl
+
+
+If using OpenCASCADE Community Edition (OCE) if not using compiled version
+1. Clone from git repository https://github.com/tpaviot/oce to $HOME/packages/
+2. Create an empty directory $HOME/packages/OpenCASCADE
+3. Get to $HOME/packages/oce
+4. Use the following commands in the directory $HOME/packages/oce
+   
+   cmake -DOCE_INSTALL_PREFIX:PATH=$HOME/packages/OpenCASCADE
+   
+This will build the libraries in $HOME/packages/OpenCASCADE
+
+5. Once cmake is done, a Makefile should be created in $HOME/packages/oce
+   Run the commands in $HOME/packages/oce:
+       1) make
+       2) make install
+6. Once completed, the build files should show up in $HOME/packages/OpenCASCADE
+7. Add the following lines to my .bashrc file:
+
+   # Export the OpenCASCADE root directory
+   export CASROOT=$HOME/packages/OpenCASCADE
+   export PATH=$CASROOT/bin:$PATH
+   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CASROOT/lib
+
+8. Added the following lines to the tmr/Makefile.in code:
+
+   # Flags for debugging and regular compilation versions
+   TMR_DEBUG_FLAGS = [...] -DTMR_HAS_OPENCASCADE
+   TMR_FLAGS = [...] -DTMR_HAS_OPENCASCADE
+
+   OPENCASCADE_INCLUDE = -I${CASROOT}/${CASARCH}/include/oce
+   OPENCASCADE_LIB_PATH = -L${CASROOT}/${CASARCH}/lib -Wl,-rpath,${CASROOT}/${CASARCH}/lib
+   OPENCASCADE_LIBS = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKPShape -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet -lPTKernel -ldl
+
