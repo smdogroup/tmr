@@ -46,7 +46,6 @@ class TMRTopoProblem : public ParOptProblem {
   // ---------------------------------------
   TMRTopoProblem( int _nlevels, 
                   TACSAssembler *_tacs[],
-                  TACSBVec *force,
                   TMROctForest *_filter[], 
                   TACSVarMap *_filter_maps[],
                   TACSBVecIndices *_filter_indices[],

@@ -1241,6 +1241,7 @@ TMRQuadForest *TMRQuadForest::coarsen(){
 
     // Create the coarse quadrants
     coarse->quadrants = queue->toArray();
+    delete queue;
 
     // Set the owner array
     coarse->quadrants->getArray(&array, &size);
@@ -2007,6 +2008,7 @@ void TMRQuadForest::balance( int balance_corner ){
   // further reduced to limit the amount of memory passed between
   // processors
   TMRQuadrantArray *elems0 = ext_hash->toArray();
+  delete ext_hash;
   elems0->sort();
 
   // Get the array of 0-quadrants 
@@ -2055,6 +2057,7 @@ void TMRQuadForest::balance( int balance_corner ){
       queue->push(&array[i]);
     }
   }
+  delete local;
 
   // Now all the received quadrants will balance the tree locally
   // without having to worry about off-processor quadrants.
@@ -2776,11 +2779,6 @@ void TMRQuadForest::createNodes( int order ){
     if (array[i].tag >= 0){
       const int use_node_search = 1;
       TMRQuadrant *t = nodes->contains(&array[i], use_node_search);
-      if (!t){  
-        printf("[%d] Not found: face: %d  x: %d  y: %d  tag: %d  owner: %d\n",
-               mpi_rank, array[i].face, array[i].x, array[i].y, array[i].tag,
-               getQuadrantMPIOwner(&array[i]));
-      }
       array[i].tag = t->tag;
     }
   }
@@ -3092,6 +3090,16 @@ void TMRQuadForest::createMeshConn( int **_conn, int *_nelems ){
 }
 
 /*
+  Create the dependent node connectivity if it has not already been
+  created
+*/
+void TMRQuadForest::createDepNodeConn(){
+  if (!dep_ptr){
+    createDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+  }
+}
+
+/*
   Get the dependent connectivity information (create it if it has not
   been allocated previously).
 
@@ -3101,14 +3109,7 @@ void TMRQuadForest::createMeshConn( int **_conn, int *_nelems ){
   weights:  the weight values for each dependent node
 */
 int TMRQuadForest::getDepNodeConn( const int **ptr, const int **conn,
-                                  const double **weights ){
-  if (!dep_ptr){
-    if (dep_ptr){ delete [] dep_ptr; }
-    if (dep_conn){ delete [] dep_conn; }
-    if (dep_weights){ delete [] dep_weights; }
-    createDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
-  }
-
+                                   const double **weights ){
   if (ptr){ *ptr = dep_ptr; }
   if (conn){ *conn = dep_conn; }
   if (weights){ *weights = dep_weights; }
@@ -3125,7 +3126,7 @@ int TMRQuadForest::getDepNodeConn( const int **ptr, const int **conn,
   weights:  the weight values for each dependent node
 */
 void TMRQuadForest::createDepNodeConn( int **_ptr, int **_conn,
-                                      double **_weights ){
+                                       double **_weights ){
   // Go through and label the dependent edges/nodes
   int ndep_edges;
   TMRQuadrant *edge_array;
@@ -3430,6 +3431,9 @@ int TMRQuadForest::computeInterpWeights( const int order,
 */
 void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
                                          TACSBVecInterp *interp ){
+  // Create the dependent node connectivity on the coarse mesh
+  coarse->createDepNodeConn();
+
   // Get the dependent node information
   const int *cdep_ptr, *cdep_conn;
   const double *cdep_weights;

@@ -25,8 +25,10 @@
 class TMRCylinderCreator : public TMRQuadTACSCreator {
  public:
   TMRCylinderCreator( MPI_Comm comm,
+                      TMRBoundaryConditions *_bcs,
                       double _alpha, double _beta, double _R,
-                      double _load, FSDTStiffness *stiff ){
+                      double _load, FSDTStiffness *stiff ):
+  TMRQuadTACSCreator(_bcs){
     int rank;
     MPI_Comm_rank(comm, &rank);
     alpha = _alpha;
@@ -308,9 +310,15 @@ int main( int argc, char *argv[] ){
   stiff->incref();
   ply->incref();
 
+  // Set the boundary conditions
+  int bc_nums[] = {0, 1, 2, 3, 4, 5};
+  TMRBoundaryConditions *bcs = new TMRBoundaryConditions();
+  bcs->addBoundaryCondition("Edge1", 6, bc_nums);
+  bcs->addBoundaryCondition("Edge3", 6, bc_nums);
+
   // Set up the creator object - this facilitates creating the
   // TACSAssembler objects for different geometries
-  TMRCylinderCreator *creator = new TMRCylinderCreator(comm, alpha, beta, R,
+  TMRCylinderCreator *creator = new TMRCylinderCreator(comm, bcs, alpha, beta, R,
                                                        load, stiff);
 
   // Create the geometry
@@ -323,22 +331,30 @@ int main( int argc, char *argv[] ){
   // Load in the geometry
   TMRModel *geo = TMR_LoadModelFromCompound(compound);
 
-  int num_edges;
-  TMREdge **edges;
-  geo->getEdges(&num_edges, &edges);
-  edges[0]->setAttribute("Edge1");
-  edges[1]->setAttribute("Edge2");
-  edges[2]->setAttribute("Edge3");
-
-  // Set the boundary conditions
-  int bcs[] = {0, 1, 2, 3, 4, 5};
-  creator->addBoundaryCondition("Edge1", 6, bcs);
-  creator->addBoundaryCondition("Edge3", 6, bcs);
-
   if (geo){
     geo->incref();
+
+    int num_verts;
+    TMRVertex **verts;
+    geo->getVertices(&num_verts, &verts);
+
+    int num_edges;
+    TMREdge **edges;
+    geo->getEdges(&num_edges, &edges);
+    edges[0]->setAttribute("Edge1");
+    edges[1]->setAttribute("Edge2");
+    edges[2]->setAttribute("Edge3");
+
+    int num_faces;
+    TMRFace **faces;
+    geo->getFaces(&num_faces, &faces);
+
+    TMRModel *face_geo = new TMRModel(num_verts, verts,
+                                      num_edges, edges,
+                                      num_faces, faces);
+
     // Allocate the new mesh
-    TMRMesh *mesh = new TMRMesh(comm, geo);
+    TMRMesh *mesh = new TMRMesh(comm, face_geo);
     mesh->incref();
     
     TMRMeshOptions options;
@@ -397,40 +413,10 @@ int main( int argc, char *argv[] ){
         tacs[i]->incref();
       }
 
-      // Create the interpolation
-      TACSBVecInterp *interp[MAX_REFINE+1];
-
-      for ( int level = 0; level < num_levels-1; level++ ){
-        // Create the interpolation object
-        interp[level] = new TACSBVecInterp(tacs[level+1]->getVarMap(),
-                                           tacs[level]->getVarMap(),
-                                           tacs[level]->getVarsPerNode());
-        interp[level]->incref();
-
-        // Set the interpolation
-        forest[level]->createInterpolation(forest[level+1], interp[level]);
-    
-        // Initialize the interpolation
-        interp[level]->initialize();
-      }
-
-      // Create the multigrid object
-      double omega = 1.0;
-      int mg_sor_iters = 1;
-      int mg_sor_symm = 1;
-      int mg_iters_per_level = 1;
-      TACSMg *mg = new TACSMg(comm, num_levels, omega, 
-                              mg_sor_iters, mg_sor_symm);
+      // Create the multigrid object for TACS
+      TACSMg *mg;
+      TMR_CreateTACSMg(num_levels, tacs, forest, &mg);
       mg->incref();
-
-      for ( int level = 0; level < num_levels; level++ ){
-        if (level < num_levels-1){
-          mg->setLevel(level, tacs[level], interp[level], mg_iters_per_level);
-        }
-        else {
-          mg->setLevel(level, tacs[level], NULL);
-        }
-      }
       
       // Create the vectors 
       TACSBVec *ans = tacs[0]->createVec();
@@ -551,7 +537,6 @@ int main( int argc, char *argv[] ){
       for ( int i = 1; i < num_levels; i++ ){
         forest[i]->decref();
         tacs[i]->decref();
-        interp[i-1]->decref();
       }
 
       res->decref();

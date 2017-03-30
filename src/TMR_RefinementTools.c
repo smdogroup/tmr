@@ -3,6 +3,92 @@
 #include "tacslapack.h"
 
 /*
+  Create a multgrid object for a forest of octrees
+*/
+void TMR_CreateTACSMg( int num_levels, 
+                       TACSAssembler *tacs[],
+                       TMROctForest *forest[],
+                       TACSMg **_mg ){
+  // Get the communicator
+  MPI_Comm comm = tacs[0]->getMPIComm();
+
+  // Create the multigrid object
+  double omega = 1.0;
+  int mg_sor_iters = 1;
+  int mg_sor_symm = 1;
+  int mg_iters_per_level = 1;
+  TACSMg *mg = new TACSMg(comm, num_levels, omega, 
+                          mg_sor_iters, mg_sor_symm);
+  
+  // Create the intepolation/restriction objects between mesh levels
+  for ( int level = 0; level < num_levels-1; level++ ){
+    // Create the interpolation object
+    TACSBVecInterp *interp = 
+      new TACSBVecInterp(tacs[level+1]->getVarMap(),
+                         tacs[level]->getVarMap(),
+                         tacs[level]->getVarsPerNode());
+
+    // Set the interpolation
+    forest[level]->createInterpolation(forest[level+1], interp);
+    
+    // Initialize the interpolation
+    interp->initialize();
+
+    // Set the interpolation and TACS object within the multigrid object
+    mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
+  }
+
+  // Set the lowest level - with no interpolation object
+  mg->setLevel(num_levels-1, tacs[num_levels-1], NULL);
+
+  // Return the multigrid object
+  *_mg = mg;
+} 
+
+/*
+  Create the TACS multigrid objects for the quadrilateral case
+*/
+void TMR_CreateTACSMg( int num_levels, 
+                       TACSAssembler *tacs[],
+                       TMRQuadForest *forest[],
+                       TACSMg **_mg ){
+  // Get the communicator
+  MPI_Comm comm = tacs[0]->getMPIComm();
+
+  // Create the multigrid object
+  double omega = 1.0;
+  int mg_sor_iters = 1;
+  int mg_sor_symm = 1;
+  int mg_iters_per_level = 1;
+  TACSMg *mg = new TACSMg(comm, num_levels, omega, 
+                          mg_sor_iters, mg_sor_symm);
+  
+  // Create the intepolation/restriction objects between mesh levels
+  for ( int level = 0; level < num_levels-1; level++ ){
+    // Create the interpolation object
+    TACSBVecInterp *interp = 
+      new TACSBVecInterp(tacs[level+1]->getVarMap(),
+                         tacs[level]->getVarMap(),
+                         tacs[level]->getVarsPerNode());
+
+    // Set the interpolation
+    forest[level]->createInterpolation(forest[level+1], interp);
+    
+    // Initialize the interpolation
+    interp->initialize();
+
+    // Set the interpolation and TACS object within the multigrid object
+    mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
+  }
+
+  // Set the lowest level - with no interpolation object
+  mg->setLevel(num_levels-1, tacs[num_levels-1], NULL);
+
+  // Return the multigrid object
+  *_mg = mg;
+} 
+
+/*
   Compute the transpose of the Jacobian transformation at a point
   within the element.
 */

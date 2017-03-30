@@ -67,8 +67,8 @@ class TMROctForest : public TMREntity {
 
   // Refine the mesh
   // ---------------
-  void refine( const int refinement[],
-               int min_level, int max_level );
+  void refine( const int refinement[]=NULL,
+               int min_level=0, int max_level=TMR_MAX_LEVEL );
 
   // Balance the octree meshes
   // -------------------------
@@ -89,6 +89,7 @@ class TMROctForest : public TMREntity {
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
+  void createDepNodeConn();
   int getDepNodeConn( const int **_ptr, const int **_conn,
                       const double **_weights );
  
@@ -139,7 +140,11 @@ class TMROctForest : public TMREntity {
                                const int **_edge_block_ptr,
                                const int **_face_block_conn,
                                const int **_face_block_ptr );
-  
+
+  // Find the octant enclosing the given node
+  // ----------------------------------------
+  TMROctant* findEnclosing( TMROctant *node );
+
   // Transform the octant to the global order
   // ----------------------------------------
   void transformNode( TMROctant *oct );
@@ -246,9 +251,6 @@ class TMROctForest : public TMREntity {
   // Create the dependent node connectivity
   void createDepNodeConn( int **_ptr, int **_conn,
                           double **_weights );
-
-  // Find the octant 
-  TMROctant* findEnclosing( TMROctant *node );
 
   // Compute the interpolation weights
   int computeInterpWeights( const int order,

@@ -1324,8 +1324,10 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
     volume_to_new_num = new int[ num_volumes ];
     new_num_to_volume = new int[ num_volumes ];
 
+    // Do not use the RCM reordering for the volumes
+    int use_rcm = 0;
     reorderEntities(6, num_faces, num_volumes, volume_faces,
-                    volume_to_new_num, new_num_to_volume);
+                    volume_to_new_num, new_num_to_volume, use_rcm);
 
     // Free the temporary volume to faces pointer
     delete [] volume_faces;
@@ -1783,9 +1785,6 @@ void TMRTopology::reorderEntities( int num_entities,
                                face_to_face_ptr, face_to_face,
                                NULL, NULL, NULL, &mpi_size, 
                                NULL, NULL, options, &objval, partition);
-        
-      delete [] face_to_face_ptr;
-      delete [] face_to_face;
         
       int *offset = new int[ mpi_size+1 ];
       memset(offset, 0, (mpi_size+1)*sizeof(int));

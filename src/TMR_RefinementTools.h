@@ -4,6 +4,17 @@
 #include "TMRQuadForest.h"
 #include "TMROctForest.h"
 #include "TACSAssembler.h"
+#include "TACSMg.h"
+
+/*
+  Create a TACS multigrid object
+*/
+void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
+                       TMROctForest *forest[],
+                       TACSMg **_mg );
+void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
+                       TMRQuadForest *forest[],
+                       TACSMg **_mg );
 
 /*
   Compute the reconstructed solution on a uniformly refined mesh
@@ -24,7 +35,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
 
 /*
   Perform adjoint-based mesh refinement on the forest of quadtrees
- */
+*/
 TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
                               TACSAssembler *refine,
                               TACSBVec *adjvec,

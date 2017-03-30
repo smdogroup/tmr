@@ -12,7 +12,8 @@ include ${PAROPT_DIR}/ParOpt_Common.mk
 endif
 
 CXX_OBJS = TMRTopoProblem.o \
-	TMROctStiffness.o
+	TMROctStiffness.o \
+	TMR_TACSTopoCreator.o
 
 DIR=${TMR_DIR}/src/topology
 

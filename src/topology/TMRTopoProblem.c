@@ -106,7 +106,6 @@ int ParOptBVecWrap::getArray( ParOptScalar **array ){
 
 TMRTopoProblem::TMRTopoProblem( int _nlevels, 
                                 TACSAssembler *_tacs[],
-                                TACSBVec *_force,
                                 TMROctForest *_filter[], 
                                 TACSVarMap *_filter_maps[],
                                 TACSBVecIndices *_filter_indices[],
@@ -202,10 +201,7 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   // Do not use inverse variables by default
   use_inverse_vars = 0;
 
-  // Allocate variables/residual
-  force = _force;
-  force->incref();
-
+  // Allocate the variables/residual
   vars = tacs[0]->createVec();
   res = tacs[0]->createVec();
   vars->incref();
@@ -252,7 +248,6 @@ TMRTopoProblem::~TMRTopoProblem(){
   mg->decref();
   ksm->decref();
   vars->decref();
-  force->decref();
   res->decref();
 
   compliance->decref();
@@ -499,11 +494,12 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
     // Assemble the Jacobian on each level
     double alpha = 1.0, beta = 0.0, gamma = 0.0;
-    mg->assembleJacobian(alpha, beta, gamma, NULL);
+    mg->assembleJacobian(alpha, beta, gamma, res);
     mg->factor();
     
-    // Solve the system: K(x)*u = force
-    ksm->solve(force, vars);
+    // Solve the system: K(x)*u = -res
+    ksm->solve(res, vars);
+    vars->scale(-1.0);
     tacs[0]->setVariables(vars);
   
     // Evaluate the functions in parallel
@@ -710,7 +706,7 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
     // Set the boundary conditions
     tacs[0]->applyBCs(res);
 
-    // Solve the system: K(x)*u = force
+    // Solve the system: K(x)*u = res
     ksm->solve(res, vars);
 
     // Set the design variable values

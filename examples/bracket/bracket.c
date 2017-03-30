@@ -94,6 +94,11 @@ int main( int argc, char *argv[] ){
     printf("Balance\n");
     forest->balance();
 
+    TMROctForest *coarser = forest->coarsen();
+    coarser->incref();
+    coarser->balance();
+    coarser->decref();
+
     // Write to forest
     forest->writeToTecplot("all_forest.dat");    
 

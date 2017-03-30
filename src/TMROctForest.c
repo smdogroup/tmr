@@ -1326,7 +1326,7 @@ void TMROctForest::createTrees( int refine_level ){
   }
   
   // Create an array of the octants that will be stored
-  int nelems = 1 << (TMR_MAX_LEVEL - refine_level);
+  int nelems = 1 << refine_level;
   int size = nelems*nelems*nelems*nblocks;
   TMROctant *array = new TMROctant[ size ];
 
@@ -1637,6 +1637,7 @@ TMROctForest *TMROctForest::coarsen(){
 
     // Create the coarse octants
     coarse->octants = queue->toArray();
+    delete queue;
 
     // Set the owner array
     coarse->octants->getArray(&array, &size);
@@ -3928,45 +3929,63 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
       queue->push(&array[i]);
     }
     else {
-      // Check if this octant lies on a face
-      int fx0 = (array[i].x == 0);
-      int fy0 = (array[i].y == 0);
-      int fz0 = (array[i].z == 0);
-      int fx = (fx0 || array[i].x + h == hmax);
-      int fy = (fy0 || array[i].y + h == hmax);
-      int fz = (fz0 || array[i].z + h == hmax);
+      // If this is a root octant, then we should check all of the
+      // sides, otherwise we will only check a maximum of three of the
+      // sides to see if the face attribute matches
+      if (array[i].level == 0){
+        for ( int face_index = 0; face_index < 6; face_index++ ){
+          TMROctant oct = array[i];
+          int face_num = block_face_conn[6*array[i].block + face_index];
+          TMRFace *face;
+          topo->getFace(face_num, &face);
+          const char *face_attr = face->getAttribute();
+          if (face_attr && strcmp(face_attr, attr) == 0){
+            oct.tag = face_index;
+            queue->push(&oct);
+          }
+        }
+      }
+      else {
+        // Check if this octant lies on one or more face
+        int fx0 = (array[i].x == 0);
+        int fy0 = (array[i].y == 0);
+        int fz0 = (array[i].z == 0);
+        int fx = (fx0 || array[i].x + h == hmax);
+        int fy = (fy0 || array[i].y + h == hmax);
+        int fz = (fz0 || array[i].z + h == hmax);
 
-      if (fx || fy || fz){
-        TMRFace *face = NULL;
-        TMROctant oct = array[i];
-        if (fx){
-          int face_index = (fx0 ? 0 : 1);
-          int face_num = block_face_conn[6*array[i].block + face_index];
-          topo->getFace(face_num, &face);
-          const char *face_attr = face->getAttribute();
-          if (face_attr && strcmp(face_attr, attr) == 0){
-            oct.tag = face_index;
-            queue->push(&oct);
+        if (fx || fy || fz){
+          TMRFace *face = NULL;
+          TMROctant oct = array[i];
+          if (fx){
+            int face_index = (fx0 ? 0 : 1);
+            int face_num = block_face_conn[6*array[i].block + face_index];
+            topo->getFace(face_num, &face);
+            const char *face_attr = face->getAttribute();
+            if (face_attr && strcmp(face_attr, attr) == 0){
+              oct.tag = face_index;
+              queue->push(&oct);
+            }
           }
-        }
-        if (fy){
-          int face_index = (fy0 ? 2 : 3);
-          int face_num = block_face_conn[6*array[i].block + face_index];
-          topo->getFace(face_num, &face);
-          const char *face_attr = face->getAttribute();
-          if (face_attr && strcmp(face_attr, attr) == 0){
-            oct.tag = face_index;
-            queue->push(&oct);
+          if (fy){
+            int face_index = (fy0 ? 2 : 3);
+            int face_num = block_face_conn[6*array[i].block + face_index];
+            topo->getFace(face_num, &face);
+            const char *face_attr = face->getAttribute();
+            if (face_attr && strcmp(face_attr, attr) == 0){
+              oct.tag = face_index;
+              queue->push(&oct);
+            }
           }
-        }
-        if (fz){
-          int face_index = (fz0 ? 4 : 5);
-          int face_num = block_face_conn[6*array[i].block + face_index];
-          topo->getFace(face_num, &face);
-          const char *face_attr = face->getAttribute();
-          if (face_attr && strcmp(face_attr, attr) == 0){
-            oct.tag = face_index;
-            queue->push(&oct);
+          if (fz){
+            int face_index = (fz0 ? 4 : 5);
+            int face_num = block_face_conn[6*array[i].block + face_index];
+            topo->getFace(face_num, &face);
+            const char *face_attr = face->getAttribute();
+            if (face_attr && strcmp(face_attr, attr) == 0){
+              oct.tag = face_index;
+              queue->push(&oct);
+            }
           }
         }
       }
@@ -4012,9 +4031,9 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
     int fx0 = (array[i].x == 0);
     int fy0 = (array[i].y == 0);
     int fz0 = (array[i].z == 0);
-    int fx = (fx0 || array[i].x == hmax);
-    int fy = (fy0 || array[i].y == hmax);
-    int fz = (fz0 || array[i].z == hmax);
+    int fx = (fx0 || array[i].x == hmax-1);
+    int fy = (fy0 || array[i].y == hmax-1);
+    int fz = (fz0 || array[i].z == hmax-1);
 
     if (fx && fy && fz){
       // This node lies on a corner
@@ -4137,8 +4156,19 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
 }
 
 /*
-  Get the dependent connectivity information (create it if it has not
-  been allocated previously).
+  Create the dependent node connectivity
+*/
+void TMROctForest::createDepNodeConn(){
+  if (!dep_ptr){
+    createDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+  }
+}
+
+/* 
+  Get the dependent connectivity information. Note that this call is
+  not collective.
+
+  This relies on a previous call to createDepNodeConn().
 
   output:
   ptr:      pointer for each dependent node number
@@ -4147,13 +4177,6 @@ void TMROctForest::createMeshConn( int **_conn, int *_nelems ){
 */
 int TMROctForest::getDepNodeConn( const int **ptr, const int **conn,
                                   const double **weights ){
-  if (!dep_ptr){
-    if (dep_ptr){ delete [] dep_ptr; }
-    if (dep_conn){ delete [] dep_conn; }
-    if (dep_weights){ delete [] dep_weights; }
-    createDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
-  }
-
   if (ptr){ *ptr = dep_ptr; }
   if (conn){ *conn = dep_conn; }
   if (weights){ *weights = dep_weights; }
@@ -4669,6 +4692,9 @@ int TMROctForest::computeInterpWeights( const int order,
 */
 void TMROctForest::createInterpolation( TMROctForest *coarse,
                                         TACSBVecInterp *interp ){
+  // Create the dependent node connectivity
+  coarse->createDepNodeConn();
+
   // Get the dependent node information
   const int *cdep_ptr, *cdep_conn;
   const double *cdep_weights;

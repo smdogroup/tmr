@@ -84,6 +84,7 @@ class TMRQuadForest : public TMREntity {
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
+  void createDepNodeConn();
   int getDepNodeConn( const int **_ptr, const int **_conn,
                       const double **_weights );
 

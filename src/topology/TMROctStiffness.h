@@ -10,6 +10,25 @@
 #include "SolidStiffness.h"
 
 /*
+  Stiffness properties object
+*/
+class TMRStiffnessProperties {
+ public:
+  // Initialize the properties so that they have some value
+  TMRStiffnessProperties(){
+    rho = 1.0;
+    E = 1.0;
+    nu = 0.3;
+    q = 1.0;
+  }
+
+  TacsScalar rho; // Material density
+  TacsScalar E; // Young's modulus
+  TacsScalar nu; // Poisson ratio
+  TacsScalar q; // RAMP penalty parameter
+};
+
+/*
   The TMROctStiffness class
 
   This defines the TMROctStiffness class which takes the weights from

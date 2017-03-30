@@ -1,9 +1,10 @@
 #include "TMR_TACSCreator.h"
 
 /*
-  Initialize the TMRQuadTACSCreator data in the abstract base class
+  Allocate a new boundary condition set
 */
-TMRQuadTACSCreator::TMRQuadTACSCreator(){
+TMRBoundaryConditions::TMRBoundaryConditions(){
+  num_bcs = 0;
   bc_root = NULL;
   bc_current = NULL;
 }
@@ -11,7 +12,7 @@ TMRQuadTACSCreator::TMRQuadTACSCreator(){
 /*
   Free the data - including the boundary condition information
 */
-TMRQuadTACSCreator::~TMRQuadTACSCreator(){
+TMRBoundaryConditions::~TMRBoundaryConditions(){
   // Free the boundary condition information
   while (bc_root){
     bc_current = bc_root->next;
@@ -23,9 +24,9 @@ TMRQuadTACSCreator::~TMRQuadTACSCreator(){
 /*
   Constructor for the BCNode sub-class
 */
-TMRQuadTACSCreator::BCNode::BCNode( const char *_attr,
-                                    int _num_bcs, 
-                                    const int *_bc_nums ){
+TMRBoundaryConditions::BCNode::BCNode( const char *_attr,
+                                       int _num_bcs, 
+                                       const int *_bc_nums ){
   next = NULL;
   attr = new char[ strlen(_attr)+1 ];
   strcpy(attr, _attr);
@@ -37,7 +38,7 @@ TMRQuadTACSCreator::BCNode::BCNode( const char *_attr,
 /*
   Destructor for the BCNode sub-class
 */
-TMRQuadTACSCreator::BCNode::~BCNode(){
+TMRBoundaryConditions::BCNode::~BCNode(){
   delete [] attr;
   delete [] bc_nums;
 }
@@ -46,10 +47,11 @@ TMRQuadTACSCreator::BCNode::~BCNode(){
   Add the boundary conditions that will be associated with the
   specified attribute to the boundary condition linked list.
 */
-void TMRQuadTACSCreator::addBoundaryCondition( const char *attr, 
-                                               int num_bcs, 
-                                               const int bc_nums[] ){
-  BCNode *node = new BCNode(attr, num_bcs, bc_nums);
+void TMRBoundaryConditions::addBoundaryCondition( const char *attribute, 
+                                                  int num_bc_nums,
+                                                  const int bc_nums[] ){
+  num_bcs++;
+  BCNode *node = new BCNode(attribute, num_bc_nums, bc_nums);
   if (!bc_root){
     bc_root = node;
     bc_current = node;
@@ -58,6 +60,55 @@ void TMRQuadTACSCreator::addBoundaryCondition( const char *attr,
     bc_current->next = node;
     bc_current = bc_current->next;
   }
+}
+
+/*
+  Get the number of boundary conditions
+*/
+int TMRBoundaryConditions::getNumBoundaryConditions(){
+  return num_bcs;
+}
+
+/*
+  Retrieve the boundary conditions
+*/
+void TMRBoundaryConditions::getBoundaryCondition( int bc, const char **_attr, 
+                                                  int *_num_bcs,
+                                                  const int **_bc_nums ){
+  *_attr = NULL;
+  *_num_bcs = 0;
+  *_bc_nums = NULL;
+
+  // Increment until we've found the boundary condition or the end of
+  // the linked list
+  int count = 0;
+  BCNode *node = bc_root;
+  while (node && count < bc){
+    node = node->next;
+    count++;
+  }
+
+  // If the node exists, write out the node
+  if (node){
+    *_attr = node->attr;
+    *_num_bcs = node->num_bcs;
+    *_bc_nums = node->bc_nums;
+  }
+}
+
+/*
+  Initialize the TMRQuadTACSCreator data in the abstract base class
+*/
+TMRQuadTACSCreator::TMRQuadTACSCreator( TMRBoundaryConditions *_bcs ){
+  bcs = _bcs;
+  if (bcs){ bcs->incref(); }
+}
+
+/*
+  Free the data - including the boundary condition information
+*/
+TMRQuadTACSCreator::~TMRQuadTACSCreator(){
+  if (bcs){ bcs->decref(); }
 }
 
 /*
@@ -82,6 +133,9 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
   // Create the mesh
   int *elem_conn, num_elements = 0;
   forest->createMeshConn(&elem_conn, &num_elements);
+
+  // Create the dependent node connectivity
+  forest->createDepNodeConn();
 
   // Create/retrieve the dependent node information
   const int *dep_ptr, *dep_conn;
@@ -119,7 +173,6 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
     
   // Set the dependent node information
   tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
-
     
   // Set the elements
   TACSAuxElements *aux = new TACSAuxElements(num_elements);
@@ -174,31 +227,35 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
   const int *range;
   forest->getOwnedNodeRange(&range);
 
-  BCNode *bc = bc_root;   
-  while (bc){
-    // Retrieve the nodes associated with the specified attribute
-    TMRQuadrantArray *nodes = forest->getNodesWithAttribute(bc->attr);
-    int size;
-    TMRQuadrant *array;
-    nodes->getArray(&array, &size);
+  if (bcs){
+    for ( int k = 0; k < bcs->getNumBoundaryConditions(); k++ ){
+      // Retrieve the boundary condition
+      const char *attribute;
+      int num_bcs;
+      const int *bc_nums;
+      bcs->getBoundaryCondition(k, &attribute, &num_bcs, &bc_nums);
 
-    // Allocate the array of the node numbers associated with the BC
-    int num = 0;
-    int *vars = new int[ size ];
-    for ( int i = 0; i < size; i++ ){
-      if (array[i].tag >= range[mpi_rank] &&
-          array[i].tag < range[mpi_rank+1]){
-        vars[num] = array[i].tag;
-        num++;
+      // Retrieve the nodes associated with the specified attribute
+      TMRQuadrantArray *nodes = forest->getNodesWithAttribute(attribute);
+      int size;
+      TMRQuadrant *array;
+      nodes->getArray(&array, &size);
+
+      // Allocate the array of the node numbers associated with the BC
+      int num = 0;
+      int *vars = new int[ size ];
+      for ( int i = 0; i < size; i++ ){
+        if (array[i].tag >= range[mpi_rank] &&
+            array[i].tag < range[mpi_rank+1]){
+          vars[num] = array[i].tag;
+          num++;
+        }
       }
+
+      // Add the boundary conditions to TACSAssembler
+      tacs->addBCs(num, vars, num_bcs, bc_nums);
+      delete [] vars;
     }
-
-    // Add the boundary conditions to TACSAssembler
-    tacs->addBCs(num, vars, bc->num_bcs, bc->bc_nums);
-    delete [] vars;
-
-    // Go to the next boundary condition
-    bc = bc->next;
   }
 }
 
@@ -224,6 +281,220 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
   // Get the quadrants associated with the nodes
   int size;
   TMRQuadrant *array;
+  nodes->getArray(&array, &size);
+
+  // Get the points
+  TMRPoint *Xp;
+  forest->getPoints(&Xp);
+
+  TACSBVec *X = tacs->createNodeVec();
+  X->incref();
+
+  // Get the node array from the TACSBVec object
+  TacsScalar *Xn;
+  X->getArray(&Xn);
+
+  // Loop over all the nodes
+  for ( int i = 0; i < size; i++ ){
+    if (array[i].tag >= range[mpi_rank] &&
+        array[i].tag < range[mpi_rank+1]){
+      int loc = array[i].tag - range[mpi_rank];
+      Xn[3*loc] = Xp[i].x;
+      Xn[3*loc+1] = Xp[i].y;
+      Xn[3*loc+2] = Xp[i].z;
+    }
+  }
+
+  tacs->setNodes(X);
+  X->decref();
+}
+
+
+/*
+  Initialize the TMROctTACSCreator data in the abstract base class
+*/
+TMROctTACSCreator::TMROctTACSCreator( TMRBoundaryConditions *_bcs ){
+  bcs = _bcs;
+  if (bcs){ bcs->incref(); }
+}
+
+/*
+  Free the data - including the boundary condition information
+*/
+TMROctTACSCreator::~TMROctTACSCreator(){
+  if (bcs){ bcs->decref(); }
+}
+
+/*
+  Create the TACSAssembler object
+*/
+TACSAssembler* TMROctTACSCreator::createTACS( int order, 
+                                              TMROctForest *forest ){
+  // Get the communicator and the rank
+  MPI_Comm comm = forest->getMPIComm();
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+    
+  // Ensure that the forest is balanced, and create the nodes for
+  // the underlying finite-element mesh
+  forest->createNodes(order);
+
+  // Find the number of nodes for this processor
+  const int *range;
+  forest->getOwnedNodeRange(&range);
+  int num_nodes = range[mpi_rank+1] - range[mpi_rank];
+
+  // Create the mesh
+  int *elem_conn, num_elements = 0;
+  forest->createMeshConn(&elem_conn, &num_elements);
+
+  // Create the dependent node connectivity
+  forest->createDepNodeConn();
+
+  // Create/retrieve the dependent node information
+  const int *dep_ptr, *dep_conn;
+  const double *dep_weights;
+  int num_dep_nodes = forest->getDepNodeConn(&dep_ptr, &dep_conn,
+                                             &dep_weights);
+
+  // Get the octant array associated with this element
+  TMROctantArray *octants;
+  forest->getOctants(&octants);
+  int size;
+  TMROctant *array;
+  octants->getArray(&array, &size);
+  
+  // Create the first element - and read out the number of
+  // variables-per-node
+  TACSElement *first = createElement(order, forest, array[0]);
+  int vars_per_node = first->numDisplacements();
+
+  // Create the associated TACSAssembler object
+  TACSAssembler *tacs = 
+    new TACSAssembler(forest->getMPIComm(), vars_per_node,
+                      num_nodes, num_elements, num_dep_nodes);
+
+  // Set the element ptr
+  int *ptr = new int[ num_elements+1 ];
+  for ( int i = 0; i < num_elements+1; i++ ){
+    ptr[i] = order*order*order*i;
+  }
+    
+  // Set the element connectivity into TACSAssembler
+  tacs->setElementConnectivity(elem_conn, ptr);
+  delete [] elem_conn;
+  delete [] ptr;
+    
+  // Set the dependent node information
+  tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
+    
+  // Set the elements
+  TACSAuxElements *aux = new TACSAuxElements(num_elements);
+  TACSElement **elements = new TACSElement*[ num_elements ];
+  for ( int k = 0; k < num_elements; k++ ){
+    if (k == 0){
+      elements[0] = first;
+    }
+    else {
+      elements[k] = createElement(order, forest, array[k]);
+    }
+
+    // Create the auxiliary elements - if any
+    TACSElement *elem = createAuxElement(order, forest, array[k]);
+    if (elem){
+      aux->addElement(k, elem);
+    }
+  }
+    
+  // Set the element array
+  tacs->setElements(elements);
+  delete [] elements;
+
+  // Specify the boundary conditions
+  setBoundaryConditions(forest, tacs);
+    
+  // Initialize the TACSAssembler object
+  tacs->initialize();
+
+  // Set the auxiliary elements
+  tacs->setAuxElements(aux);
+
+  // Set the node locations
+  setNodeLocations(forest, tacs);
+
+  return tacs;
+}
+
+/*
+  Set the boundary condtiions into the TACSAssembler object
+
+  This must be called before the TACSAssembler object is initialized
+*/
+void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
+                                               TACSAssembler *tacs ){
+  // Get the communicator and the rank
+  MPI_Comm comm = forest->getMPIComm();
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+    
+  // Find the number of nodes for this processor
+  const int *range;
+  forest->getOwnedNodeRange(&range);
+
+  if (bcs){
+    for ( int k = 0; k < bcs->getNumBoundaryConditions(); k++ ){
+      // Retrieve the boundary condition
+      const char *attribute;
+      int num_bcs;
+      const int *bc_nums;
+      bcs->getBoundaryCondition(k, &attribute, &num_bcs, &bc_nums);
+
+      // Retrieve the nodes associated with the specified attribute
+      TMROctantArray *nodes = forest->getNodesWithAttribute(attribute);
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+
+      // Allocate the array of the node numbers associated with the BC
+      int num = 0;
+      int *vars = new int[ size ];
+      for ( int i = 0; i < size; i++ ){
+        if (array[i].tag >= range[mpi_rank] &&
+            array[i].tag < range[mpi_rank+1]){
+          vars[num] = array[i].tag;
+          num++;
+        }
+      }
+
+      // Add the boundary conditions to TACSAssembler
+      tacs->addBCs(num, vars, num_bcs, bc_nums);
+      delete [] vars;
+    }
+  }
+}
+
+/*
+  Set the node locations from the TMROctForest into the TACSAssembler
+  object
+*/
+void TMROctTACSCreator::setNodeLocations( TMROctForest *forest, 
+                                          TACSAssembler *tacs ){
+  // Get the communicator and the rank
+  MPI_Comm comm = forest->getMPIComm();
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+    
+  // Find the number of nodes for this processor
+  const int *range;
+  forest->getOwnedNodeRange(&range);
+
+  // Get the nodes
+  TMROctantArray *nodes;
+  forest->getNodes(&nodes);
+
+  // Get the octants associated with the nodes
+  int size;
+  TMROctant *array;
   nodes->getArray(&array, &size);
 
   // Get the points
