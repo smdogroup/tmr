@@ -143,17 +143,13 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
   int num_dep_nodes = forest->getDepNodeConn(&dep_ptr, &dep_conn,
                                              &dep_weights);
 
-  // Get the quadrant array associated with this element
-  TMRQuadrantArray *quadrants;
-  forest->getQuadrants(&quadrants);
-  int size;
-  TMRQuadrant *array;
-  quadrants->getArray(&array, &size);
-  
+  // Create the elements using the virtual call
+  TACSElement **elements = new TACSElement*[ num_elements ];
+  createElements(order, forest, num_elements, elements);
+
   // Create the first element - and read out the number of
   // variables-per-node
-  TACSElement *first = createElement(order, forest, array[0]);
-  int vars_per_node = first->numDisplacements();
+  int vars_per_node = elements[0]->numDisplacements();
 
   // Create the associated TACSAssembler object
   TACSAssembler *tacs = 
@@ -173,25 +169,7 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
     
   // Set the dependent node information
   tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
-    
-  // Set the elements
-  TACSAuxElements *aux = new TACSAuxElements(num_elements);
-  TACSElement **elements = new TACSElement*[ num_elements ];
-  for ( int k = 0; k < num_elements; k++ ){
-    if (k == 0){
-      elements[0] = first;
-    }
-    else {
-      elements[k] = createElement(order, forest, array[k]);
-    }
 
-    // Create the auxiliary elements - if any
-    TACSElement *elem = createAuxElement(order, forest, array[k]);
-    if (elem){
-      aux->addElement(k, elem);
-    }
-  }
-    
   // Set the element array
   tacs->setElements(elements);
   delete [] elements;
@@ -202,8 +180,11 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
   // Initialize the TACSAssembler object
   tacs->initialize();
 
-  // Set the auxiliary elements
-  tacs->setAuxElements(aux);
+  // Create the auxiliary elements
+  TACSAuxElements *aux = createAuxElements(order, forest);
+  if (aux){
+    tacs->setAuxElements(aux);
+  }
 
   // Set the node locations
   setNodeLocations(forest, tacs);
@@ -357,17 +338,13 @@ TACSAssembler* TMROctTACSCreator::createTACS( int order,
   int num_dep_nodes = forest->getDepNodeConn(&dep_ptr, &dep_conn,
                                              &dep_weights);
 
-  // Get the octant array associated with this element
-  TMROctantArray *octants;
-  forest->getOctants(&octants);
-  int size;
-  TMROctant *array;
-  octants->getArray(&array, &size);
-  
+  // Create the elements using the virtual call
+  TACSElement **elements = new TACSElement*[ num_elements ];
+  createElements(order, forest, num_elements, elements);
+
   // Create the first element - and read out the number of
   // variables-per-node
-  TACSElement *first = createElement(order, forest, array[0]);
-  int vars_per_node = first->numDisplacements();
+  int vars_per_node = elements[0]->numDisplacements();
 
   // Create the associated TACSAssembler object
   TACSAssembler *tacs = 
@@ -387,25 +364,7 @@ TACSAssembler* TMROctTACSCreator::createTACS( int order,
     
   // Set the dependent node information
   tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
-    
-  // Set the elements
-  TACSAuxElements *aux = new TACSAuxElements(num_elements);
-  TACSElement **elements = new TACSElement*[ num_elements ];
-  for ( int k = 0; k < num_elements; k++ ){
-    if (k == 0){
-      elements[0] = first;
-    }
-    else {
-      elements[k] = createElement(order, forest, array[k]);
-    }
 
-    // Create the auxiliary elements - if any
-    TACSElement *elem = createAuxElement(order, forest, array[k]);
-    if (elem){
-      aux->addElement(k, elem);
-    }
-  }
-    
   // Set the element array
   tacs->setElements(elements);
   delete [] elements;
@@ -416,8 +375,11 @@ TACSAssembler* TMROctTACSCreator::createTACS( int order,
   // Initialize the TACSAssembler object
   tacs->initialize();
 
-  // Set the auxiliary elements
-  tacs->setAuxElements(aux);
+  // Create the auxiliary elements
+  TACSAuxElements *aux = createAuxElements(order, forest);
+  if (aux){
+    tacs->setAuxElements(aux);
+  }
 
   // Set the node locations
   setNodeLocations(forest, tacs);

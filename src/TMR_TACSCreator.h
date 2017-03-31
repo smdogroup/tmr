@@ -62,15 +62,15 @@ class TMRQuadTACSCreator : public TMREntity {
   TMRQuadTACSCreator( TMRBoundaryConditions *_bcs );
   virtual ~TMRQuadTACSCreator();
 
-  // Create an element for the given quadrant
-  virtual TACSElement *createElement( int order,
-                                      TMRQuadForest *forest,
-                                      TMRQuadrant quad ) = 0;
+  // Create an array of elements for the given forest
+  virtual void createElements( int order,
+                               TMRQuadForest *forest,
+                               int num_elements,
+                               TACSElement **elements ) = 0;
 
   // Create any auxiliary element for the given quadrant
-  virtual TACSElement *createAuxElement( int order,
-                                         TMRQuadForest *forest,
-                                         TMRQuadrant quad ){
+  virtual TACSAuxElements *createAuxElements( int order,
+                                              TMRQuadForest *forest ){
     return NULL;
   }
 
@@ -99,15 +99,15 @@ class TMROctTACSCreator : public TMREntity {
   TMROctTACSCreator( TMRBoundaryConditions *_bcs );
   virtual ~TMROctTACSCreator();
 
-  // Create an element for the given octant
-  virtual TACSElement *createElement( int order,
-                                      TMROctForest *forest,
-                                      TMROctant oct ) = 0;
+  // Create an array of elements for the given forest
+  virtual void createElements( int order,
+                               TMROctForest *forest,
+                               int num_elements,
+                               TACSElement **elements ) = 0;
 
-  // Create any auxiliary element for the given octant
-  virtual TACSElement *createAuxElement( int order,
-                                         TMROctForest *forest,
-                                         TMROctant oct ){
+  // Create any auxiliary element for the given quadrant
+  virtual TACSAuxElements *createAuxElements( int order,
+                                              TMROctForest *forest ){
     return NULL;
   }
 

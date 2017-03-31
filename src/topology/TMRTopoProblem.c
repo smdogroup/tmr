@@ -335,28 +335,37 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
     // version of TACS
     if (x){ 
       ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(x);
+      memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
       tacs[0]->getDesignVars(xlocal, max_local_size);
 
       // Set the local values into the vector
       if (wrap){
         setBVecFromLocalValues(xlocal, wrap->vec);
+        wrap->vec->beginSetValues(INSERT_NONZERO_VALUES);
+        wrap->vec->endSetValues(INSERT_NONZERO_VALUES);
       }
     }
 
     if (lb || ub){
       TacsScalar *upper = new TacsScalar[ max_local_size ];
+      memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
+      memset(upper, 0, max_local_size*sizeof(TacsScalar));
       tacs[0]->getDesignVarRange(xlocal, upper, max_local_size);
 
       if (lb){
         ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lb);
         if (lbwrap){
           setBVecFromLocalValues(xlocal, lbwrap->vec);
+          lbwrap->vec->beginSetValues(INSERT_NONZERO_VALUES);
+          lbwrap->vec->endSetValues(INSERT_NONZERO_VALUES);
         }
       }
       if (ub){
         ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ub);
         if (ubwrap){
           setBVecFromLocalValues(upper, ubwrap->vec);
+          ubwrap->vec->beginSetValues(INSERT_NONZERO_VALUES);
+          ubwrap->vec->endSetValues(INSERT_NONZERO_VALUES);
         }
       }
       delete [] upper;
@@ -491,6 +500,8 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       size = getLocalValuesFromBVec(x[k+1], xlocal);
       tacs[k+1]->setDesignVars(xlocal, size);
     }
+
+    tacs[0]->zeroVariables();
 
     // Assemble the Jacobian on each level
     double alpha = 1.0, beta = 0.0, gamma = 0.0;

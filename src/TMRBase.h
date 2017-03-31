@@ -50,6 +50,7 @@ class TMRPoint {
 extern MPI_Datatype TMROctant_MPI_type;
 extern MPI_Datatype TMRQuadrant_MPI_type;
 extern MPI_Datatype TMRPoint_MPI_type;
+extern MPI_Datatype TMRIndexWeight_MPI_type;
 
 // Initialize and finalize the data type
 void TMRInitialize();

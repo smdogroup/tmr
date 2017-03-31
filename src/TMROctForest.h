@@ -149,6 +149,20 @@ class TMROctForest : public TMREntity {
   // ----------------------------------------
   void transformNode( TMROctant *oct );
 
+  // Distribute the octant array in parallel to other processors
+  // -----------------------------------------------------------
+  TMROctantArray *distributeOctants( TMROctantArray *list,
+                                     int use_tags=0,
+                                     int **oct_ptr=NULL, 
+                                     int **oct_recv_ptr=NULL,
+                                     int include_local=0 );
+
+  // Send the octants back to their original processors (dual of distribute)
+  // -----------------------------------------------------------------------
+  TMROctantArray *sendOctants( TMROctantArray *list,
+                               const int *oct_ptr,
+                               const int *oct_recv_ptr );
+
   // Write out files showing the connectivity
   // ----------------------------------------
   void writeToVTK( const char *filename );
@@ -182,16 +196,6 @@ class TMROctForest : public TMREntity {
                              int size, int *ptr );
   void matchMPIIntervals( TMROctant *array,
                           int size, int *ptr );
-
-  // Distribute the octant array
-  TMROctantArray *distributeOctants( TMROctantArray *list,
-                                     int use_tags=0,
-                                     int **oct_ptr=NULL, 
-                                     int **oct_recv_ptr=NULL,
-                                     int include_local=0 );
-  TMROctantArray *sendOctants( TMROctantArray *list,
-                               const int *oct_ptr,
-                               const int *oct_recv_ptr );
 
   // Balance-related routines
   // ------------------------

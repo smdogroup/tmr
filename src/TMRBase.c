@@ -1,4 +1,5 @@
 #include "TMRBase.h"
+#include <stddef.h>
 #include <string.h>
 
 /*
@@ -12,6 +13,7 @@ static int TMR_is_initialized = 0;
 MPI_Datatype TMROctant_MPI_type;
 MPI_Datatype TMRQuadrant_MPI_type;
 MPI_Datatype TMRPoint_MPI_type;
+MPI_Datatype TMRIndexWeight_MPI_type;
 
 /*
   Initialize TMR data type
@@ -39,6 +41,19 @@ void TMRInitialize(){
     MPI_Type_create_struct(1, &counts, &offset, &type, 
                            &TMRPoint_MPI_type);
     MPI_Type_commit(&TMRPoint_MPI_type);
+
+    // Create the weight type
+    TMRIndexWeight w;
+
+    // Create the index/weight pair data
+    int len[2] = {1, 1};
+    MPI_Aint disp[2];
+    disp[0] = offsetof(TMRIndexWeight, index);
+    disp[1] = offsetof(TMRIndexWeight, weight);
+    MPI_Datatype types[2] = {MPI_INT, MPI_DOUBLE};
+    MPI_Type_create_struct(2, len, disp, types, 
+                           &TMRIndexWeight_MPI_type);
+    MPI_Type_commit(&TMRIndexWeight_MPI_type);
     
     // Set the TMR initialization flag
     TMR_is_initialized = 1;
@@ -59,6 +74,7 @@ void TMRFinalize(){
   MPI_Type_free(&TMROctant_MPI_type);
   MPI_Type_free(&TMRQuadrant_MPI_type);
   MPI_Type_free(&TMRPoint_MPI_type);
+  MPI_Type_free(&TMRIndexWeight_MPI_type);
 }
 
 TMREntity::TMREntity(): entity_id(entity_id_count){

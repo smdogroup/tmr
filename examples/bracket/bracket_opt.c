@@ -8,6 +8,7 @@
 #include "TACS3DTraction.h"
 #include "TMR_TACSTopoCreator.h"
 #include "TMR_RefinementTools.h"
+#include "TMRTopoProblem.h"
 
 /*
   Add the 3D traction
@@ -71,6 +72,102 @@ void addFaceTractions( int order,
   }
 }
 
+/*
+  Based on the forest, create a filter and a hierarchy of
+  TACSAssembler functions
+*/
+void createTopoProblem( int num_levels,
+                        TMRBoundaryConditions *bcs,
+                        TMRStiffnessProperties *props,
+                        TMROctForest *forest,
+                        TMROctForest *filter,
+                        double target_mass,
+                        const char *prefix,
+                        TMRTopoProblem **_prob ){
+  // Just use 2nd order meshes throughout
+  const int order = 2;
+
+  // Allocate the arrays to store the different levels
+  TMROctForest **forest_levs = new TMROctForest*[ num_levels ];
+  TMROctForest **filter_levs = new TMROctForest*[ num_levels ];
+  TACSAssembler **tacs = new TACSAssembler*[ num_levels ];
+
+  // Store the design variable mapping information
+  TACSVarMap **filter_maps = new TACSVarMap*[ num_levels ];
+  TACSBVecIndices **filter_ext_indices = new TACSBVecIndices*[ num_levels ];
+
+  // Set the forest/filter for the most refined mesh  
+  forest_levs[0] = forest;
+  filter_levs[0] = filter; 
+
+  for ( int level = 0; level < num_levels; level++ ){
+    if (level > 0){
+      forest_levs[level] = forest_levs[level-1]->coarsen();
+      filter_levs[level] = filter_levs[level-1]->coarsen();
+    }
+
+    // Set the current forest/filter
+    forest = forest_levs[level];
+    filter = filter_levs[level];
+
+    forest->incref();
+    filter->incref();
+     
+    // Balance and repartition the forest and filter and create nodes
+    forest->balance();
+    forest->repartition();
+
+    filter->balance();
+    filter->repartition();
+
+    TMROctTACSTopoCreator *creator = 
+      new TMROctTACSTopoCreator(bcs, *props, filter);
+    creator->incref();
+
+    // Create tacs
+    tacs[level] = creator->createTACS(order, forest);
+
+    // Extract the filter indices/node maps from the creator class
+    creator->getMap(&filter_maps[level]);
+    creator->getIndices(&filter_ext_indices[level]);
+    filter_maps[level]->incref();
+    filter_ext_indices[level]->incref();   
+
+    // Delete the creator class
+    creator->decref();
+    
+    if (level == 0){
+      // Create the tractions on the face
+      TacsScalar Tr[] = {100.0, 0.0, 0.0};
+      addFaceTractions(order, forest, "Load", tacs[0], Tr);
+    }
+  }
+
+  // Create the multigrid object for TACS
+  TACSMg *mg;
+  TMR_CreateTACSMg(num_levels, tacs, forest_levs, &mg);
+  mg->incref();
+  
+  // Create the topology optimization problem
+  TMRTopoProblem *prob = 
+    new TMRTopoProblem(num_levels, tacs, filter_levs,
+                       filter_maps, filter_ext_indices, mg,
+                       target_mass, prefix);
+  *_prob = prob;
+
+  // Free the filter maps
+  for ( int level = 0; level < num_levels; level++ ){
+    forest_levs[level]->decref();
+    filter_levs[level]->decref();
+    filter_maps[level]->decref();
+    filter_ext_indices[level]->decref(); 
+  }
+}
+
+
+/*
+  Main function for the bracket optimization problem
+*/
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
@@ -81,6 +178,34 @@ int main( int argc, char *argv[] ){
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 
+  // Compute the approximate volume of the part
+  double r = 7.5;
+  double a = 50.0;
+  double t = 25.0;
+  double volume = 3*a*a*t - 3*M_PI*r*r*t;
+
+  // Set the target mass fraction
+  double target_mass_fraction = 0.2;
+
+  char prefix[256];
+  sprintf(prefix, "results/");
+
+  for ( int k = 0; k < argc; k++ ){
+    if (sscanf(argv[k], "prefix=%s", prefix) == 0){
+      if (mpi_rank == 0){
+        printf("Using prefix = %s\n", prefix);
+      }
+    }
+  }
+
+  // Compute the target mass
+  double target_mass = target_mass_fraction*volume;
+
+  if (mpi_rank == 0){
+    printf("Approximate volume = %f\n", volume);
+    printf("Target mass        = %f\n", target_mass);
+  }
+
   // This is all tied to this STEP file
   const char *filename = "bracket_solid.stp";
   double htarget = 5.0;
@@ -88,10 +213,15 @@ int main( int argc, char *argv[] ){
   // Create the boundary conditions 
   int bc_nums[] = {0, 1, 2};
   TMRBoundaryConditions *bcs = new TMRBoundaryConditions();
+  bcs->incref();
   bcs->addBoundaryCondition("Fixed", 3, bc_nums);
 
   // Material properties
   TMRStiffnessProperties properties;
+  properties.rho = 1.0;
+  properties.E = 70e9;
+  properties.nu = 0.3;
+  properties.q = 5.0;
 
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
@@ -144,108 +274,99 @@ int main( int argc, char *argv[] ){
     TMRTopology *topo = new TMRTopology(comm, model);
     topo->incref();
 
-    // Set the topology
-    static const int MAX_NUM_LEVELS = 5;
-    TMROctForest *forest[MAX_NUM_LEVELS];
-    TMROctForest *filter[MAX_NUM_LEVELS];
-    TMROctTACSTopoCreator *creator[MAX_NUM_LEVELS];
-    TACSAssembler *tacs[MAX_NUM_LEVELS];
-
-    int order = 2;
+    // The forest used to represent the mesh and the filter
+    // respectively
+    TMROctForest *forest;
 
     // Create the filter
-    filter[0] = new TMROctForest(comm);
-    filter[0]->incref();
+    forest = new TMROctForest(comm);
+    forest->incref();
 
-    filter[0]->setTopology(topo);
-    filter[0]->createTrees(2);
-    filter[0]->balance();
-    filter[0]->repartition();
+    // Set the geometry and create the trees for the mesh
+    forest->setTopology(topo);   
+    forest->createTrees(1);
+    forest->balance();
 
-    // Duplicate and refine the filter so that the quadrants are
-    // aligned locally on this processor
-    forest[0] = new TMROctForest(comm);
-    forest[0]->incref();
+    // Create the new filter and possibly interpolate from the old to
+    // the new filter
+    TMROctForest *filter = forest->coarsen();
+    filter->incref();
 
-    forest[0]->setTopology(topo);
-    forest[0]->createRandomTrees(10, 0, 5);
-    forest[0]->balance();
-    forest[0]->repartition();
-
-    // Create the levels of refinement
-    creator[0] = new TMROctTACSTopoCreator(bcs, properties, filter[0]);
-    tacs[0] = creator[0]->createTACS(order, forest[0]);   
-
-    int num_levels = 4;
-    // Create all of the coarser levels
-    for ( int i = 1; i < num_levels; i++ ){
-      forest[i] = forest[i-1]->coarsen();
-      forest[i]->incref();
-      forest[i]->balance();
-      forest[i]->repartition();
-      tacs[i] = creator[0]->createTACS(order, forest[i]);
-      tacs[i]->incref();
-    }
-
-    // Create the multigrid object for TACS
-    TACSMg *mg;
-    TMR_CreateTACSMg(num_levels, tacs, forest, &mg);
-    mg->incref();
-
-    // Create the tractions on the face
-    TacsScalar Tr[] = {100.0, 0.0, 0.0};
-    addFaceTractions(order, forest[0], "Load", tacs[0], Tr);
-
-    /*
-      TMRTopoProblem *prob = new TMRTopoProblem( int _nlevels, 
-                    TACSAssembler *_tacs[],
-                    TMROctForest *_filter[], 
-                    TACSVarMap *_filter_maps[],
-                    TACSBVecIndices *_filter_indices[],
-                    TACSMg *_mg,
-                    double _target_mass,
-                    const char *_prefix );
+    int num_levels = 2;
 
     // Create the topology optimization object
+    TMRTopoProblem *prob;
+    createTopoProblem(num_levels, bcs, &properties,
+                      forest, filter, target_mass,
+                      prefix, &prob);
+
+    // Create the topology optimization object
+    int max_num_bfgs = 2;
     ParOpt *opt = new ParOpt(prob, max_num_bfgs);
 
+    // check the gradients
+    opt->checkGradients(1e-6);
+    
     // Set the optimization parameters
-    opt->setMaxMajorIterations(2000);
+    opt->setMaxMajorIterations(100);
     opt->setOutputFrequency(1);
-  
+      
     // Set the Hessian reset frequency
-    int max_num_bfgs = 20;
     opt->setBFGSUpdateType(LBFGS::DAMPED_UPDATE);
     opt->setHessianResetFreq(max_num_bfgs);
-
+    
     // Set the barrier parameter information
     opt->setBarrierPower(1.0);
     opt->setBarrierFraction(0.25);
-
+    
     // Set the log/output file
     char outfile[256];
-    sprintf(outfile, "%s//paropt_output%d.out", prefix, k);
+    sprintf(outfile, "%s//paropt_output.out", prefix);
     opt->setOutputFile(outfile);
-  
+    
     // Set the history/restart file
     char new_restart_file[256];
-    sprintf(new_restart_file, "%s//paropt_restart%d.bin", prefix, k);
+    sprintf(new_restart_file, "%s//paropt_restart.bin", prefix);
     opt->optimize(new_restart_file);
-
+    
     // Free the optimization problem data
     delete opt;
     delete prob;
+ 
+    /*
+    // Create the refinement array
+    int num_elements = tacs->getNumElements();
+    int *refine = new int[ num_elements ];
+    memset(refine, 0, num_elements*sizeof(int));
+    
+    // Refine based solely on the value of the density variable
+    TACSElement **elements = tacs->getElements();
+    for ( int i = 0; i < num_elements; i++ ){
+      TacsScalar rho = 0.25;
+      // TacsScalar rho = elements[i]->getDesignVariable(....);
+      if (rho > 0.5){
+        refine[i] = 1;
+      }
+      else if (rho < 0.1){
+        refine[i] = -1;
+      }
+    }
+    
+    forest->refine(refine);
+    */
+ 
 
     // Free the analysis/mesh data
     forest->decref();
     filter->decref();
-    */
 
     topo->decref();
     model->decref();
     mesh->decref();
     geo->decref();
   }
+
+  bcs->decref();
 
   TMRFinalize();
   MPI_Finalize();

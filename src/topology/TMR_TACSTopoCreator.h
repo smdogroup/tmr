@@ -12,10 +12,11 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
                          TMROctForest *_filter );
   ~TMROctTACSTopoCreator();
 
-  // Create the element
-  TACSElement *createElement( int order, 
-                              TMROctForest *_forest,
-                              TMROctant octant );
+  // Create the elements
+  void createElements( int order,
+                       TMROctForest *forest,
+                       int num_elements,
+                       TACSElement **elements );
 
   // Get the underlying objects that define the filter
   void getForest( TMROctForest **filter );
@@ -23,8 +24,9 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
   void getIndices( TACSBVecIndices **_indices );  
 
  private:
-  // The MPI rank
-  int mpi_rank;
+  // Compute the weights for a given point
+  void computeWeights( TMROctant *oct, TMROctant *node,
+                       TMRIndexWeight *welem );
 
   // The stiffness properties
   TMRStiffnessProperties properties;
