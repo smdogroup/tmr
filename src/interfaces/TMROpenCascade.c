@@ -199,6 +199,7 @@ int TMR_OCCEdge::evalPoint( double t, TMRPoint *X ){
   X->x = p.X();
   X->y = p.Y();
   X->z = p.Z();
+  return 0;
 }
 
 int TMR_OCCEdge::invEvalPoint( TMRPoint X, double *t ){

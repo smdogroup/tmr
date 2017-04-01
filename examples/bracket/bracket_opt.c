@@ -285,10 +285,6 @@ int main( int argc, char *argv[] ){
     // Set the geometry 
     forest->setTopology(topo);
 
-    // Write it out to a vtk file
-    forest->writeToVTK("bracket_forest.vtk");
-
-    /*
     // create the trees for the mesh
     forest->createTrees(3);
     forest->balance();
@@ -339,6 +335,7 @@ int main( int argc, char *argv[] ){
     delete opt;
     delete prob;
  
+    /*
     // Create the refinement array
     int num_elements = tacs->getNumElements();
     int *refine = new int[ num_elements ];
@@ -362,7 +359,7 @@ int main( int argc, char *argv[] ){
  
     // Free the analysis/mesh data
     forest->decref();
-    // filter->decref();
+    filter->decref();
 
     topo->decref();
     model->decref();

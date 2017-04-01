@@ -5,7 +5,7 @@
   Create a vertex from a point
 */
 TMRVertexFromPoint::TMRVertexFromPoint( TMRPoint p ){
-  pt = p;;
+  pt = p;
 }
 
 /*
@@ -334,23 +334,21 @@ void TMRTFIEdge::getRange( double *tmin, double *tmax ){
   Evaluate the point based on the vertex locations
 */
 int TMRTFIEdge::evalPoint( double t, TMRPoint *X ){
-  int fail = 0;
   TMRVertex *_v1, *_v2;
   getVertices(&_v1, &_v2);
 
   // Evaluate the points
-  TMRPoint p;
-  fail = fail || _v1->evalPoint(X);
-  fail = fail || _v2->evalPoint(&p);
+  TMRPoint p1, p2;;
+  int f1 = _v1->evalPoint(&p1);
+  int f2 = _v2->evalPoint(&p2);
 
   // Interpolate between the start/end locations
-  X->x = (1.0 - t)*X->x + t*p.x;
-  X->y = (1.0 - t)*X->y + t*p.y;
-  X->z = (1.0 - t)*X->z + t*p.z;
+  X->x = (1.0 - t)*p1.x + t*p2.x;
+  X->y = (1.0 - t)*p1.y + t*p2.y;
+  X->z = (1.0 - t)*p1.z + t*p2.z;
 
-  return fail;
+  return f1 || f2;
 }
-
 
 /*
   Create a transfinite-interpolation (TFI) face from the given set of
