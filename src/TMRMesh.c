@@ -2256,6 +2256,9 @@ void TMRFaceMesh::addQuadQuality( int nbins, int bins[] ){
         break;
       }
     }
+    if (k == nbins){
+      k = nbins-1;
+    }
     bins[k]++;
   }
 }
@@ -2298,6 +2301,9 @@ void TMRFaceMesh::printTriQuality( int ntris,
       if (quality < 1.0*(k+1)/nbins){
         break;
       }
+    }
+    if (k == nbins){
+      k = nbins-1;
     }
     bins[k]++;
   }

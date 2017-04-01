@@ -16,6 +16,9 @@ int main( int argc, char *argv[] ){
   char filename[256];
   sprintf(filename, "misc1.step");
 
+  // Flag to indicate whether to write/test a BDF file
+  int test_bdf_file = 0;
+
   double htarget = 4.0;
   for ( int k = 0; k < argc; k++ ){
     if (sscanf(argv[k], "h=%lf", &htarget) == 1){
@@ -23,6 +26,9 @@ int main( int argc, char *argv[] ){
     }
     if (sscanf(argv[k], "file=%s", filename) == 1){
       printf("file=%s\n", filename);
+    }
+    if (strcmp(argv[k], "--test_bdf") == 0){
+      test_bdf_file = 1;
     }
   }
 
@@ -57,19 +63,22 @@ int main( int argc, char *argv[] ){
     // Adjust the quality factor
     TMRMeshOptions options;
     options.frontal_quality_factor = 1.5;
-    options.num_smoothing_steps = 0;
+    options.num_smoothing_steps = 25;
 
     // Mesh the object of interest
     mesh->mesh(options, htarget);
     mesh->writeToVTK("surface-mesh.vtk");
-    mesh->writeToBDF("surface-mesh.bdf");
+
+    if (test_bdf_file){
+      mesh->writeToBDF("surface-mesh.bdf");
+    }
 
     // Decref the objects
     mesh->decref();
     geo->decref();
   }
 
-  if (1){ // if (test_bdf_file){
+  if (test_bdf_file){
     TACSMeshLoader *loader = new TACSMeshLoader(comm);
     loader->incref();
 

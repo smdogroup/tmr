@@ -115,7 +115,7 @@ void createTopoProblem( int num_levels,
      
     // Balance and repartition the forest and filter and create nodes
     forest->balance();
-    forest->repartition();
+    forest->repartition();    
 
     filter->balance();
     filter->repartition();
@@ -264,7 +264,7 @@ int main( int argc, char *argv[] ){
 
     // Mesh the geometry
     TMRMeshOptions options;
-    options.num_smoothing_steps = 0;
+    options.num_smoothing_steps = 50;
     mesh->mesh(options, htarget);
 
     TMRModel *model = mesh->createModelFromMesh();
@@ -282,13 +282,16 @@ int main( int argc, char *argv[] ){
     forest = new TMROctForest(comm);
     forest->incref();
 
-    // Set the geometry and create the trees for the mesh
-    forest->setTopology(topo);   
-    forest->createTrees(3);
-    forest->balance();
+    // Set the geometry 
+    forest->setTopology(topo);
 
     // Write it out to a vtk file
     forest->writeToVTK("bracket_forest.vtk");
+
+    /*
+    // create the trees for the mesh
+    forest->createTrees(3);
+    forest->balance();
 
     // Create the new filter and possibly interpolate from the old to
     // the new filter
@@ -336,7 +339,6 @@ int main( int argc, char *argv[] ){
     delete opt;
     delete prob;
  
-    /*
     // Create the refinement array
     int num_elements = tacs->getNumElements();
     int *refine = new int[ num_elements ];
@@ -358,10 +360,9 @@ int main( int argc, char *argv[] ){
     forest->refine(refine);
     */
  
-
     // Free the analysis/mesh data
     forest->decref();
-    filter->decref();
+    // filter->decref();
 
     topo->decref();
     model->decref();

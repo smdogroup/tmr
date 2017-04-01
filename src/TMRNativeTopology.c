@@ -5,7 +5,7 @@
   Create a vertex from a point
 */
 TMRVertexFromPoint::TMRVertexFromPoint( TMRPoint p ){
-  pt = p;
+  pt = p;;
 }
 
 /*
@@ -300,9 +300,6 @@ void TMRSplitEdge::getRange( double *tmin, double *tmax ){
   Evaluate the point
 */
 int TMRSplitEdge::evalPoint( double t, TMRPoint *X ){
-  int fail = 1;
-  if (t < 0.0){ return fail; }
-  if (t > 1.0){ return fail; }
   t = (1.0 - t)*t1 + t*t2;
   return edge->evalPoint(t, X);
 }
@@ -312,9 +309,6 @@ int TMRSplitEdge::evalPoint( double t, TMRPoint *X ){
 */
 int TMRSplitEdge::getParamsOnFace( TMRFace *face, double t, 
                                    int dir, double *u, double *v ){
-  int fail = 1;
-  if (t < 0.0){ return fail; }
-  if (t > 1.0){ return fail; }
   t = (1.0 - t)*t1 + t*t2;
   return edge->getParamsOnFace(face, t, dir, u, v);
 }
@@ -714,8 +708,9 @@ void TMRTFIVolume::getRange( double *umin, double *vmin, double *wmin,
 int TMRTFIVolume::evalPoint( double u, double v, double w,
                              TMRPoint *X ){
   int fail = 0;
-  TMRPoint f[6], e[12];
 
+  /*
+  TMRPoint f[6];
   // Evaluate/retrieve the points on the surfaces
   for ( int k = 0; k < 6; k++ ){
     double x, y;
@@ -749,8 +744,10 @@ int TMRTFIVolume::evalPoint( double u, double v, double w,
       fail = 1;
     }
   }
+  */
 
   // Evaluate/retrieve the points on the edges
+  TMRPoint e[12];
   for ( int k = 0; k < 12; k++ ){
     double t;
     if (k < 4){
