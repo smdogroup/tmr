@@ -264,7 +264,7 @@ int main( int argc, char *argv[] ){
 
     // Mesh the geometry
     TMRMeshOptions options;
-    options.num_smoothing_steps = 50;
+    options.num_smoothing_steps = 0;
     mesh->mesh(options, htarget);
 
     TMRModel *model = mesh->createModelFromMesh();
@@ -284,15 +284,18 @@ int main( int argc, char *argv[] ){
 
     // Set the geometry and create the trees for the mesh
     forest->setTopology(topo);   
-    forest->createTrees(1);
+    forest->createTrees(3);
     forest->balance();
+
+    // Write it out to a vtk file
+    forest->writeToVTK("bracket_forest.vtk");
 
     // Create the new filter and possibly interpolate from the old to
     // the new filter
     TMROctForest *filter = forest->coarsen();
     filter->incref();
 
-    int num_levels = 2;
+    int num_levels = 3;
 
     // Create the topology optimization object
     TMRTopoProblem *prob;

@@ -100,7 +100,7 @@ int main( int argc, char *argv[] ){
     coarser->decref();
 
     // Write to forest
-    forest->writeToTecplot("all_forest.dat");    
+    forest->writeToVTK("all_forest.vtk");    
 
     printf("Create nodes\n");
     forest->createNodes();

@@ -3346,7 +3346,7 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
       faces[i]->getMesh(&mesh);
       mesh->addQuadQuality(nbins, bins);
     }
-
+    
     // Sum up the total number of elements
     int total = 0;
     for ( int i = 0; i < nbins; i++ ){

@@ -1328,7 +1328,7 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
     int use_rcm = 0;
     reorderEntities(6, num_faces, num_volumes, volume_faces,
                     volume_to_new_num, new_num_to_volume, use_rcm);
-
+ 
     // Free the temporary volume to faces pointer
     delete [] volume_faces;
 
@@ -1700,7 +1700,7 @@ void TMRTopology::reorderEntities( int num_entities,
                        num_faces, ftoedges,
                        &face_to_face_ptr, &face_to_face);
     
-    if (use_rcm){
+    if (mpi_size == 0 || use_rcm){
       // Set a pointer to the new numbers
       int *vars = entity_to_new_num;
       int *levset = new_num_to_entity;

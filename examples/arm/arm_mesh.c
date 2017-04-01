@@ -216,7 +216,7 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   geo->incref();
   
   // Create the mesh
-  TMRMesh *mesh = new TMRMesh(geo);
+  TMRMesh *mesh = new TMRMesh(comm, geo);
   mesh->incref();
   
   // Mesh the geometry

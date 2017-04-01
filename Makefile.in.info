@@ -3,6 +3,7 @@
 # the full path to the root directory
 TMR_DIR = ${HOME}/hg/tmr
 TACS_DIR = ${HOME}/hg/tacs
+PAROPT_DIR = ${HOME}/hg/paropt
 CXX = mpicxx
 RM = rm -f
 
