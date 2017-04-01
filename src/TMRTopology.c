@@ -1700,7 +1700,7 @@ void TMRTopology::reorderEntities( int num_entities,
                        num_faces, ftoedges,
                        &face_to_face_ptr, &face_to_face);
     
-    if (mpi_size == 0 || use_rcm){
+    if (mpi_size == 1 || use_rcm){
       // Set a pointer to the new numbers
       int *vars = entity_to_new_num;
       int *levset = new_num_to_entity;
@@ -1778,7 +1778,7 @@ void TMRTopology::reorderEntities( int num_entities,
         
       // The objective value in METIS
       int objval = 0;
-        
+
       // Partition based on the size of the mesh
       int ncon = 1;
       METIS_PartGraphRecursive(&num_faces, &ncon, 
