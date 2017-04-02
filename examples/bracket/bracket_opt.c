@@ -296,6 +296,8 @@ int main( int argc, char *argv[] ){
     forest->setTopology(topo);
 
     // create the trees for the mesh
+    int min_level = 1; // The minimum level of refinement
+    int max_level = 4; // The maximum level of refinement
     forest->createTrees(2);
     forest->balance();
 
@@ -303,7 +305,8 @@ int main( int argc, char *argv[] ){
     TACSVarMap *old_filter_map = NULL;
     TMROctForest *old_filter = NULL;
 
-    for ( int iter = 0; iter < 3; iter++ ){
+    int max_iterations = 5;
+    for ( int iter = 0; iter < max_iterations; iter++ ){
       // Create the new filter and possibly interpolate from the old to
       // the new filter
       TACSVarMap *filter_map = NULL;
@@ -312,6 +315,9 @@ int main( int argc, char *argv[] ){
 
       // Set the number of levels of multigrid to use
       int num_levels = 3 + iter;
+      if (num_levels > max_level+1){
+        num_levels = max_level+1;
+      }
 
       // Create the topology optimization object
       TACSAssembler *tacs;
@@ -367,9 +373,9 @@ int main( int argc, char *argv[] ){
       opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_iters = 50;
-      opt->setMaxMajorIterations(max_iters);
-      prob->setIterationCounter(max_iters*iter);
+      int max_opt_iters = 250;
+      opt->setMaxMajorIterations(max_opt_iters);
+      prob->setIterationCounter(max_opt_iters*iter);
       opt->setOutputFrequency(1);
         
       // Set the Hessian reset frequency
@@ -403,7 +409,19 @@ int main( int argc, char *argv[] ){
       // Free the optimization problem data
       delete opt;
       delete prob;
-     
+
+      // Create the visualization for the object
+      unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                                 TACSElement::OUTPUT_DISPLACEMENTS |
+                                 TACSElement::OUTPUT_STRAINS |
+                                 TACSElement::OUTPUT_STRESSES |
+                                 TACSElement::OUTPUT_EXTRAS); 
+      TACSToFH5 *f5 = new TACSToFH5(tacs, SOLID, write_flag);
+      f5->incref();
+      sprintf(outfile, "%s//tacs_output%d.f5", iter);
+      f5->writeToFile(outfile);
+      f5->decref();
+
       // Create the refinement array
       int num_elements = tacs->getNumElements();
       int *refine = new int[ num_elements ];
@@ -430,7 +448,8 @@ int main( int argc, char *argv[] ){
         }
       }
       
-      forest->refine(refine);
+      // Refine the forest
+      forest->refine(refine, min_level, max_level);
       delete [] refine;
 
       // Free tacs and the filter map
