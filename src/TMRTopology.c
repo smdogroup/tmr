@@ -1328,7 +1328,7 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
     int use_rcm = 0;
     reorderEntities(6, num_faces, num_volumes, volume_faces,
                     volume_to_new_num, new_num_to_volume, use_rcm);
- 
+
     // Free the temporary volume to faces pointer
     delete [] volume_faces;
 
@@ -1778,7 +1778,7 @@ void TMRTopology::reorderEntities( int num_entities,
         
       // The objective value in METIS
       int objval = 0;
-
+        
       // Partition based on the size of the mesh
       int ncon = 1;
       METIS_PartGraphRecursive(&num_faces, &ncon, 

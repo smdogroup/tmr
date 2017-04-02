@@ -14,7 +14,7 @@ static int compare_integers( const void *a, const void *b ){
   Set up a creator class for the given filter problem
 */
 TMROctTACSTopoCreator::TMROctTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                              TMRStiffnessProperties _properties,
+                                              TMRStiffnessProperties _props,
                                               TMROctForest *_filter ):
 TMROctTACSCreator(_bcs){
   // Reference the filter
@@ -26,7 +26,7 @@ TMROctTACSCreator(_bcs){
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Set the material properties
-  properties = _properties;
+  properties = _props;
 
   // Create the nodes within the filter
   filter->createNodes(2);
