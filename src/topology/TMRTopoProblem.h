@@ -58,6 +58,10 @@ class TMRTopoProblem : public ParOptProblem {
   // --------------------------------------
   void setInitDesignVars( ParOptVec *vars );
 
+  // Set the output iteration counter
+  // --------------------------------
+  void setIterationCounter( int iter );
+
   // Set/get the objective and mass constraint scaling factors
   // ---------------------------------------------------------
   ParOptScalar getObjectiveScaling();

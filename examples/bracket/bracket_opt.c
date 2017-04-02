@@ -296,7 +296,7 @@ int main( int argc, char *argv[] ){
     forest->setTopology(topo);
 
     // create the trees for the mesh
-    forest->createTrees(3);
+    forest->createTrees(2);
     forest->balance();
 
     ParOptBVecWrap *old_design_vars = NULL;
@@ -366,7 +366,9 @@ int main( int argc, char *argv[] ){
       opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      opt->setMaxMajorIterations(100);
+      int max_iters = 250;
+      opt->setMaxMajorIterations(max_iters);
+      prob->setIterationCounter(max_iters*iter);
       opt->setOutputFrequency(1);
         
       // Set the Hessian reset frequency
@@ -418,7 +420,7 @@ int main( int argc, char *argv[] ){
         TacsScalar rho = c->getDVOutputValue(0, pt);
 
         // Refine things differently depending on whether
-        // the are
+        // the density is above or below a threshold
         if (rho > 0.5){
           refine[i] = 1;
         }

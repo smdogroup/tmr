@@ -271,6 +271,13 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *vars ){
 }
 
 /*
+  Set the iteration count
+*/
+void TMRTopoProblem::setIterationCounter( int iter ){
+  iter_count = iter;
+}
+
+/*
   Get the objective scaling factor
 */
 ParOptScalar TMRTopoProblem::getObjectiveScaling(){
