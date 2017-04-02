@@ -128,6 +128,9 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   
   // Set the maximum number of indices
   max_local_size = 0;
+
+  // The initial design variable values (may not be set)
+  xinit = NULL;
   
   // Copy over the assembler objects and filters
   for ( int k = 0; k < nlevels; k++ ){
@@ -255,6 +258,19 @@ TMRTopoProblem::~TMRTopoProblem(){
 }
 
 /*
+  Set the initial design variable values
+*/
+void TMRTopoProblem::setInitDesignVars( ParOptVec *vars ){
+  if (vars){
+    ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(vars);
+    if (wrap){
+      xinit = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
+      xinit->copyValues(wrap->vec);
+    }
+  }
+}
+
+/*
   Get the objective scaling factor
 */
 ParOptScalar TMRTopoProblem::getObjectiveScaling(){
@@ -335,14 +351,19 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
     // version of TACS
     if (x){ 
       ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(x);
-      memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
-      tacs[0]->getDesignVars(xlocal, max_local_size);
-
-      // Set the local values into the vector
       if (wrap){
-        setBVecFromLocalValues(xlocal, wrap->vec);
-        wrap->vec->beginSetValues(INSERT_NONZERO_VALUES);
-        wrap->vec->endSetValues(INSERT_NONZERO_VALUES);
+        if (xinit){
+          wrap->vec->copyValues(xinit);
+        }
+        else {
+          memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
+          tacs[0]->getDesignVars(xlocal, max_local_size);
+
+          // Set the local values into the vector
+          setBVecFromLocalValues(xlocal, wrap->vec);
+          wrap->vec->beginSetValues(INSERT_NONZERO_VALUES);
+          wrap->vec->endSetValues(INSERT_NONZERO_VALUES);
+        }
       }
     }
 

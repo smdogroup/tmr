@@ -40,7 +40,7 @@ class ParOptBVecWrap : public ParOptVec {
 */
 class TMRTopoProblem : public ParOptProblem {
  public:
-  static const int MAX_NUM_LEVELS = 5;
+  static const int MAX_NUM_LEVELS = 10;
 
   // Create the topology optimization object
   // ---------------------------------------
@@ -53,6 +53,10 @@ class TMRTopoProblem : public ParOptProblem {
                   double _target_mass,
                   const char *_prefix );
   ~TMRTopoProblem();
+
+  // Set the initial design variable values
+  // --------------------------------------
+  void setInitDesignVars( ParOptVec *vars );
 
   // Set/get the objective and mass constraint scaling factors
   // ---------------------------------------------------------
@@ -172,6 +176,9 @@ class TMRTopoProblem : public ParOptProblem {
 
   // The compliance and mass functions
   TACSFunction *compliance, *mass;
+
+  // The initial design variable values
+  TACSBVec *xinit;
 
   // The target mass
   double target_mass;

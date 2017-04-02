@@ -83,6 +83,8 @@ void createTopoProblem( int num_levels,
                         TMROctForest *filter,
                         double target_mass,
                         const char *prefix,
+                        TACSAssembler **_tacs,
+                        TACSVarMap **_filter_map,
                         TMRTopoProblem **_prob ){
   // Just use 2nd order meshes throughout
   const int order = 2;
@@ -131,7 +133,15 @@ void createTopoProblem( int num_levels,
     creator->getMap(&filter_maps[level]);
     creator->getIndices(&filter_ext_indices[level]);
     filter_maps[level]->incref();
-    filter_ext_indices[level]->incref();   
+    filter_ext_indices[level]->incref();
+
+    // Set the filter map for the most refined filter
+    if (_filter_map && level == 0){
+      *_filter_map = filter_maps[level];
+    }
+    if (_tacs && level == 0){
+      *_tacs = tacs[level];
+    }
 
     // Delete the creator class
     creator->decref();
@@ -289,78 +299,140 @@ int main( int argc, char *argv[] ){
     forest->createTrees(3);
     forest->balance();
 
-    // Create the new filter and possibly interpolate from the old to
-    // the new filter
-    TMROctForest *filter = forest->coarsen();
-    filter->incref();
+    ParOptBVecWrap *old_design_vars = NULL;
+    TACSVarMap *old_filter_map = NULL;
+    TMROctForest *old_filter = NULL;
 
-    int num_levels = 3;
+    for ( int iter = 0; iter < 3; iter++ ){
+      // Create the new filter and possibly interpolate from the old to
+      // the new filter
+      TACSVarMap *filter_map = NULL;
+      TMROctForest *filter = forest->coarsen();
+      filter->incref();
 
-    // Create the topology optimization object
-    TMRTopoProblem *prob;
-    createTopoProblem(num_levels, bcs, &properties,
-                      forest, filter, target_mass,
-                      prefix, &prob);
+      // Set the number of levels of multigrid to use
+      int num_levels = 3 + iter;
 
-    // Create the topology optimization object
-    int max_num_bfgs = 2;
-    ParOpt *opt = new ParOpt(prob, max_num_bfgs);
+      // Create the topology optimization object
+      TACSAssembler *tacs;
+      TMRTopoProblem *prob;
+      createTopoProblem(num_levels, bcs, &properties,
+                        forest, filter, target_mass,
+                        prefix, &tacs, &filter_map, &prob);
+      filter_map->incref();
 
-    // check the gradients
-    opt->checkGradients(1e-6);
-    
-    // Set the optimization parameters
-    opt->setMaxMajorIterations(100);
-    opt->setOutputFrequency(1);
+      // Create the topology optimization object
+      int max_num_bfgs = 10;
+      ParOpt *opt = new ParOpt(prob, max_num_bfgs);
+
+      // THe new design variable values
+      ParOptBVecWrap *new_design_vars = 
+        dynamic_cast<ParOptBVecWrap*>(prob->createDesignVec());
+
+      // Set the design variables using the old design
+      // variable values interpolated from the old filter
+      if (old_filter){
+        // Create the interpolation object
+        TACSBVecInterp *interp = new TACSBVecInterp(old_filter_map,
+                                                    filter_map, 1);
+        interp->incref();
+
+        // Create the interpolation between the two filter
+        filter->createInterpolation(old_filter, interp);
+        interp->initialize();
+
+        // Decrease the reference counts to the data that is
+        // no longer required
+        old_filter_map->decref();
+        old_filter->decref();
+
+        // Perform the interpolation from the old set of values to the
+        // new set of values
+        TACSBVec *old_vec = old_design_vars->vec;
+        TACSBVec *new_vec = new_design_vars->vec;
+        interp->mult(old_vec, new_vec);
+        prob->setInitDesignVars(new_design_vars);
+        interp->decref();
+
+        // Free the old design variable values and reset the pointer
+        delete old_design_vars;
+      }
+
+      // Set the old design variable vector to what was once
+      // the new design variable values
+      old_design_vars = new_design_vars;
+
+      // check the gradients
+      opt->checkGradients(1e-6);
       
-    // Set the Hessian reset frequency
-    opt->setBFGSUpdateType(LBFGS::DAMPED_UPDATE);
-    opt->setHessianResetFreq(max_num_bfgs);
-    
-    // Set the barrier parameter information
-    opt->setBarrierPower(1.0);
-    opt->setBarrierFraction(0.25);
-    
-    // Set the log/output file
-    char outfile[256];
-    sprintf(outfile, "%s//paropt_output.out", prefix);
-    opt->setOutputFile(outfile);
-    
-    // Set the history/restart file
-    char new_restart_file[256];
-    sprintf(new_restart_file, "%s//paropt_restart.bin", prefix);
-    opt->optimize(new_restart_file);
-    
-    // Free the optimization problem data
-    delete opt;
-    delete prob;
- 
-    /*
-    // Create the refinement array
-    int num_elements = tacs->getNumElements();
-    int *refine = new int[ num_elements ];
-    memset(refine, 0, num_elements*sizeof(int));
-    
-    // Refine based solely on the value of the density variable
-    TACSElement **elements = tacs->getElements();
-    for ( int i = 0; i < num_elements; i++ ){
-      TacsScalar rho = 0.25;
-      // TacsScalar rho = elements[i]->getDesignVariable(....);
-      if (rho > 0.5){
-        refine[i] = 1;
+      // Set the optimization parameters
+      opt->setMaxMajorIterations(100);
+      opt->setOutputFrequency(1);
+        
+      // Set the Hessian reset frequency
+      opt->setBFGSUpdateType(LBFGS::DAMPED_UPDATE);
+      opt->setHessianResetFreq(max_num_bfgs);
+      
+      // Set the barrier parameter information
+      opt->setBarrierPower(1.0);
+      opt->setBarrierFraction(0.25);
+      
+      // Set the log/output file
+      char outfile[256];
+      sprintf(outfile, "%s//paropt_output%d.out", prefix, iter);
+      opt->setOutputFile(outfile);
+      
+      // Set the history/restart file
+      char new_restart_file[256];
+      sprintf(new_restart_file, "%s//paropt_restart%d.bin", prefix, iter);
+      opt->optimize(new_restart_file);
+
+      // Get the final values of the design variables
+      ParOptVec *old;
+      opt->getOptimizedPoint(&old, NULL, NULL, NULL, NULL);
+      old_design_vars->copyValues(old);
+
+      // Set the old filter/variable map for the next time through the
+      // loop so that we can interpolate design variable values
+      old_filter_map = filter_map;
+      old_filter = filter;
+      
+      // Free the optimization problem data
+      delete opt;
+      delete prob;
+     
+      // Create the refinement array
+      int num_elements = tacs->getNumElements();
+      int *refine = new int[ num_elements ];
+      memset(refine, 0, num_elements*sizeof(int));
+      
+      // Refine based solely on the value of the density variable
+      TACSElement **elements = tacs->getElements();
+      for ( int i = 0; i < num_elements; i++ ){
+        TACSConstitutive *c = elements[i]->getConstitutive();
+
+        // In the case of the oct stiffness objects, they always return
+        // the density as the first design variable, regardless of the
+        // parameter point used in the element
+        double pt[3] = {0.0, 0.0, 0.0};
+        TacsScalar rho = c->getDVOutputValue(0, pt);
+
+        // Refine things differently depending on whether
+        // the are
+        if (rho > 0.5){
+          refine[i] = 1;
+        }
+        else if (rho < 0.05){
+          refine[i] = -1;
+        }
       }
-      else if (rho < 0.1){
-        refine[i] = -1;
-      }
+      
+      forest->refine(refine);
+      delete [] refine;
     }
-    
-    forest->refine(refine);
-    */
  
     // Free the analysis/mesh data
     forest->decref();
-    filter->decref();
-
     topo->decref();
     model->decref();
     mesh->decref();
