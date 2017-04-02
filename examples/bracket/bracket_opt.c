@@ -319,6 +319,7 @@ int main( int argc, char *argv[] ){
       createTopoProblem(num_levels, bcs, &properties,
                         forest, filter, target_mass,
                         prefix, &tacs, &filter_map, &prob);
+      tacs->incref();
       filter_map->incref();
 
       // Create the topology optimization object
@@ -366,7 +367,7 @@ int main( int argc, char *argv[] ){
       opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_iters = 250;
+      int max_iters = 50;
       opt->setMaxMajorIterations(max_iters);
       prob->setIterationCounter(max_iters*iter);
       opt->setOutputFrequency(1);
@@ -431,6 +432,10 @@ int main( int argc, char *argv[] ){
       
       forest->refine(refine);
       delete [] refine;
+
+      // Free tacs and the filter map
+      filter_map->decref();
+      tacs->decref();
     }
  
     // Free the analysis/mesh data
