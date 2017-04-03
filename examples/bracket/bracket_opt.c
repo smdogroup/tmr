@@ -216,7 +216,7 @@ int main( int argc, char *argv[] ){
 
   // This is all tied to this STEP file
   const char *filename = "bracket_solid.stp";
-  double htarget = 5.0;
+  double htarget = 4.0;
 
   // Create the boundary conditions 
   int bc_nums[] = {0, 1, 2};
@@ -444,9 +444,6 @@ int main( int argc, char *argv[] ){
         else if (rho < 0.05){
           refine[i] = -1;
         }
-	if (i % 15 == 0){
-	  refine[i] = 1;
-	}
       }
       
       // Refine the forest
