@@ -1666,7 +1666,7 @@ void TMROctForest::refine( const int refinement[],
   if (nodes){ delete nodes; } 
   if (dep_faces){ delete dep_faces; }
   if (dep_edges){ delete dep_edges; }
-  if (X){ delete X; }
+  if (X){ delete [] X; }
   adjacent = NULL;
   nodes = NULL;
   dep_faces = NULL;

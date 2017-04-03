@@ -312,7 +312,7 @@ int main( int argc, char *argv[] ){
       filter->incref();
 
       // Set the number of levels of multigrid to use
-      int num_levels = 3 + iter;
+      int num_levels = 2 + iter;
       if (num_levels > max_level+1){
         num_levels = max_level+1;
       }
@@ -371,7 +371,7 @@ int main( int argc, char *argv[] ){
       opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_opt_iters = 1;
+      int max_opt_iters = 250;
       opt->setMaxMajorIterations(max_opt_iters);
       prob->setIterationCounter(max_opt_iters*iter);
       opt->setOutputFrequency(1);
@@ -444,7 +444,6 @@ int main( int argc, char *argv[] ){
         else if (rho < 0.05){
           refine[i] = -1;
         }
-
 	if (i % 15 == 0){
 	  refine[i] = 1;
 	}
