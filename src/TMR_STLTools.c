@@ -766,13 +766,13 @@ int TMR_GenerateBinFile( const char *filename,
             for ( int jj = 0; jj < 2; jj++ ){
               for ( int ii = 0; ii < 2; ii++ ){
                 // Find the octant node (without level/tag)
-                TMROctant p, node;
+                TMROctant p;
                 p.block = block;
                 p.x = element_array[i].x + (ii + ix)*h;
                 p.y = element_array[i].y + (jj + iy)*h;
                 p.z = element_array[i].z + (kk + iz)*h;
                   
-                node = p;
+                TMROctant node = p;
                 filter->transformNode(&node);
 
                 // Find the corresponding node

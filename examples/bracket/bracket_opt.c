@@ -156,7 +156,6 @@ void createTopoProblem( int num_levels,
   // Create the multigrid object for TACS
   TACSMg *mg;
   TMR_CreateTACSMg(num_levels, tacs, forest_levs, &mg);
-  mg->incref();
   
   // Create the topology optimization problem
   TMRTopoProblem *prob = 
@@ -173,7 +172,6 @@ void createTopoProblem( int num_levels,
     filter_ext_indices[level]->decref(); 
   }
 }
-
 
 /*
   Main function for the bracket optimization problem
@@ -298,7 +296,7 @@ int main( int argc, char *argv[] ){
     // create the trees for the mesh
     int min_level = 1; // The minimum level of refinement
     int max_level = 4; // The maximum level of refinement
-    forest->createTrees(2);
+    forest->createTrees(1);
     forest->balance();
 
     ParOptBVecWrap *old_design_vars = NULL;
@@ -373,7 +371,7 @@ int main( int argc, char *argv[] ){
       opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_opt_iters = 250;
+      int max_opt_iters = 1;
       opt->setMaxMajorIterations(max_opt_iters);
       prob->setIterationCounter(max_opt_iters*iter);
       opt->setOutputFrequency(1);
@@ -418,7 +416,7 @@ int main( int argc, char *argv[] ){
                                  TACSElement::OUTPUT_EXTRAS); 
       TACSToFH5 *f5 = new TACSToFH5(tacs, SOLID, write_flag);
       f5->incref();
-      sprintf(outfile, "%s//tacs_output%d.f5", iter);
+      sprintf(outfile, "%s//tacs_output%d.f5", prefix, iter);
       f5->writeToFile(outfile);
       f5->decref();
 
@@ -446,6 +444,10 @@ int main( int argc, char *argv[] ){
         else if (rho < 0.05){
           refine[i] = -1;
         }
+
+	if (i % 15 == 0){
+	  refine[i] = 1;
+	}
       }
       
       // Refine the forest

@@ -247,12 +247,19 @@ TMRTopoProblem::~TMRTopoProblem(){
     filter_interp[k]->decref();
   }
 
+  // Free the initial design variable values (if allocated)
+  if (xinit){ xinit->decref(); }
+
+  // Free the local temp array
   delete [] xlocal;
+
+  // Free the solver/multigrid information
   mg->decref();
   ksm->decref();
   vars->decref();
   res->decref();
 
+  // Free the function information
   compliance->decref();
   mass->decref();
 }
@@ -265,6 +272,7 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *vars ){
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(vars);
     if (wrap){
       xinit = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
+      xinit->incref();
       xinit->copyValues(wrap->vec);
     }
   }
