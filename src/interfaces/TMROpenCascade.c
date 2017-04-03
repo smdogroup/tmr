@@ -293,6 +293,178 @@ void TMR_OCCFace::getFaceObject( TopoDS_Face &f ){
   f = face;
 }
 
+
+/*
+  Remove from a compound, those objects that are not referenced by the
+  given TopoAbs type
+*/
+void TMR_RemoveFloatingShapes( TopoDS_Compound &compound, 
+                               TopAbs_ShapeEnum shape_type ){
+  // Keep track of what we have already added to the new compound
+  TopTools_IndexedMapOfShape shapes;
+
+  TopExp_Explorer solidExp(compound, TopAbs_SOLID);
+  for ( ; solidExp.More(); solidExp.Next() ){
+    TopoDS_Shape solid = solidExp.Current();
+    if (!shapes.Contains(solid)){
+      shapes.Add(solid);
+
+      TopExp_Explorer shellExp(solid, TopAbs_SHELL);
+      for ( ; shellExp.More(); shellExp.Next() ){
+        TopoDS_Shape shell = shellExp.Current();
+        if (!shapes.Contains(shell)){
+          shapes.Add(shell);
+
+          TopExp_Explorer faceExp(shell, TopAbs_FACE);
+          for ( ; faceExp.More(); faceExp.Next() ){
+            TopoDS_Shape face = faceExp.Current();
+            if (!shapes.Contains(face)){
+              shapes.Add(face);
+
+              TopExp_Explorer wireExp(face, TopAbs_WIRE);
+              for ( ; wireExp.More(); wireExp.Next() ){
+                TopoDS_Shape wire = wireExp.Current();
+                if (!shapes.Contains(wire)){
+                  shapes.Add(wire);
+
+                  TopExp_Explorer edgeExp(wire, TopAbs_EDGE);
+                  for ( ; edgeExp.More(); edgeExp.Next() ){
+                    TopoDS_Shape edge = edgeExp.Current();
+                    if (!shapes.Contains(edge)){
+                      shapes.Add(edge);
+
+                      TopExp_Explorer vertexExp(edge, TopAbs_VERTEX);
+                      for ( ; vertexExp.More(); vertexExp.Next() ){
+                        TopoDS_Shape vertex = vertexExp.Current();
+                        if (!shapes.Contains(vertex)){
+                          shapes.Add(vertex);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (shape_type != TopAbs_SHELL){ 
+    TopExp_Explorer shellExp(compound, TopAbs_SHELL);
+    for ( ; shellExp.More(); shellExp.Next() ){
+      TopoDS_Shape shell = shellExp.Current();
+      if (!shapes.Contains(shell)){
+        shapes.Add(shell);
+
+        TopExp_Explorer faceExp(shell, TopAbs_FACE);
+        for ( ; faceExp.More(); faceExp.Next() ){
+          TopoDS_Shape face = faceExp.Current();
+          if (!shapes.Contains(face)){
+            shapes.Add(face);
+
+            TopExp_Explorer wireExp(face, TopAbs_WIRE);
+            for ( ; wireExp.More(); wireExp.Next() ){
+              TopoDS_Shape wire = wireExp.Current();
+              if (!shapes.Contains(wire)){
+                shapes.Add(wire);
+
+                TopExp_Explorer edgeExp(wire, TopAbs_EDGE);
+                for ( ; edgeExp.More(); edgeExp.Next() ){
+                  TopoDS_Shape edge = edgeExp.Current();
+                  if (!shapes.Contains(edge)){
+                    shapes.Add(edge);
+
+                    TopExp_Explorer vertexExp(edge, TopAbs_VERTEX);
+                    for ( ; vertexExp.More(); vertexExp.Next() ){
+                      TopoDS_Shape vertex = vertexExp.Current();
+                      if (!shapes.Contains(vertex)){
+                        shapes.Add(vertex);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  
+    if (shape_type != TopAbs_FACE){
+      TopExp_Explorer faceExp(compound, TopAbs_FACE);
+      for ( ; faceExp.More(); faceExp.Next() ){
+        TopoDS_Shape face = faceExp.Current();
+        if (!shapes.Contains(face)){
+          shapes.Add(face);
+
+          TopExp_Explorer wireExp(face, TopAbs_WIRE);
+          for ( ; wireExp.More(); wireExp.Next() ){
+            TopoDS_Shape wire = wireExp.Current();
+            if (!shapes.Contains(wire)){
+              shapes.Add(wire);
+
+              TopExp_Explorer edgeExp(wire, TopAbs_EDGE);
+              for ( ; edgeExp.More(); edgeExp.Next() ){
+                TopoDS_Shape edge = edgeExp.Current();
+                if (!shapes.Contains(edge)){
+                  shapes.Add(edge);
+
+                  TopExp_Explorer vertexExp(edge, TopAbs_VERTEX);
+                  for ( ; vertexExp.More(); vertexExp.Next() ){
+                    TopoDS_Shape vertex = vertexExp.Current();
+                    if (!shapes.Contains(vertex)){
+                      shapes.Add(vertex);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (shape_type != TopAbs_EDGE){
+        TopExp_Explorer wireExp(compound, TopAbs_WIRE);
+        for ( ; wireExp.More(); wireExp.Next() ){
+          TopoDS_Shape wire = wireExp.Current();
+          if (!shapes.Contains(wire)){
+            shapes.Add(wire);
+
+            TopExp_Explorer edgeExp(wire, TopAbs_EDGE);
+            for ( ; edgeExp.More(); edgeExp.Next() ){
+              TopoDS_Shape edge = edgeExp.Current();
+              if (!shapes.Contains(edge)){
+                shapes.Add(edge);
+
+                TopExp_Explorer vertexExp(edge, TopAbs_VERTEX);
+                for ( ; vertexExp.More(); vertexExp.Next() ){
+                  TopoDS_Shape vertex = vertexExp.Current();
+                  if (!shapes.Contains(vertex)){
+                    shapes.Add(vertex);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Build the new compound
+  TopoDS_Compound new_compound;
+  BRep_Builder builder;
+  builder.MakeCompound(new_compound);
+  for ( int i = 1; i <= shapes.Extent(); i++ ){
+    TopoDS_Shape shape = shapes(i);
+    builder.Add(new_compound, shape);
+  }
+
+  compound = new_compound;
+}
+
 /*
   Create the TMRModel based on the STEP input file
 */
@@ -329,6 +501,8 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
     TopoDS_Shape shape = reader.Shape(i);
     builder.Add(compound, shape);
   }
+
+  TMR_RemoveFloatingShapes(compound, TopAbs_FACE);
 
   return TMR_LoadModelFromCompound(compound);
 }
