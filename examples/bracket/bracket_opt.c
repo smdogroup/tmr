@@ -9,6 +9,7 @@
 #include "TMR_TACSTopoCreator.h"
 #include "TMR_RefinementTools.h"
 #include "TMRTopoProblem.h"
+#include "TMR_STLTools.h"
 
 /*
   Add the 3D traction
@@ -411,8 +412,6 @@ int main( int argc, char *argv[] ){
       // Create the visualization for the object
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                  TACSElement::OUTPUT_DISPLACEMENTS |
-                                 TACSElement::OUTPUT_STRAINS |
-                                 TACSElement::OUTPUT_STRESSES |
                                  TACSElement::OUTPUT_EXTRAS); 
       TACSToFH5 *f5 = new TACSToFH5(tacs, SOLID, write_flag);
       f5->incref();

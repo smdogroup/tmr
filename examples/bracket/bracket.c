@@ -5,6 +5,87 @@
 #include "TACSMeshLoader.h"
 #include "Solid.h"
 #include "TMROctForest.h"
+#include "TMR_TACSTopoCreator.h"
+#include "TMR_STLTools.h"
+
+void test_stl_output( const char *filename, TMROctForest *forest ){
+  // Create the forest and balance it
+  TMROctForest *filter = forest->coarsen();
+  filter->incref();
+  filter->balance();
+
+  // Create an empty set of boundary conditions and default material
+  // properties
+  TMRBoundaryConditions *bcs = new TMRBoundaryConditions();
+  TMRStiffnessProperties props;
+  
+  // Allocate a creator object
+  TMROctTACSTopoCreator *creator = 
+    new TMROctTACSTopoCreator(bcs, props, filter);
+  creator->incref();
+  
+  // Create TACS
+  TACSAssembler *tacs = creator->createTACS(2, forest);
+  tacs->incref();
+
+  // Get the underlying objects
+  TACSVarMap *var_map;
+  TACSBVecIndices *indices;
+  creator->getMap(&var_map);
+  creator->getIndices(&indices);
+
+  // Create the distributor
+  TACSBVecDistribute *dist = new TACSBVecDistribute(var_map, indices);
+
+  // Create the design vector
+  TACSBVec *vars = new TACSBVec(var_map, 1, dist);
+  vars->incref();
+
+  // Get the range of variables
+  const int *range;
+  filter->getOwnedNodeRange(&range);
+
+  // Get the communicator rank
+  int mpi_rank;
+  MPI_Comm_rank(forest->getMPIComm(), &mpi_rank);
+  
+  // Get the nodes from the filter
+  TMROctantArray *nodes;
+  filter->getNodes(&nodes);
+
+  // Get the array of nodes
+  int size;
+  TMROctant *array;
+  nodes->getArray(&array, &size);
+
+  // Get the filter points
+  TMRPoint *X;
+  filter->getPoints(&X);
+
+  // Get the design vector
+  TacsScalar *x;
+  vars->getArray(&x);
+
+  for ( int i = 0; i < size; i++ ){
+    if (array[i].tag >= range[mpi_rank] &&
+        array[i].tag < range[mpi_rank+1]){
+      int var = array[i].tag - range[mpi_rank];
+      double xval = X[i].x - 30.0;
+      double yval = X[i].y - 40.0;
+      x[var] = 0.01*(xval*xval + yval*yval);
+    }    
+  }
+
+  double cutoff = 10.0;
+  int var_offset = 0;
+  TMR_GenerateBinFile(filename, filter, vars, var_offset, cutoff);
+
+  // Free the objects
+  vars->decref();
+  filter->decref();
+  creator->decref();
+  tacs->decref();
+}
 
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
@@ -14,12 +95,16 @@ int main( int argc, char *argv[] ){
   // set on the command line
   int write_faces_to_vtk = 0;
   int test_bdf_file = 0;
+  int test_stl_file = 0;
   for ( int k = 0; k < argc; k++ ){
     if (strcmp(argv[k], "--write_faces") == 0){
       write_faces_to_vtk = 1;
     }
     if (strcmp(argv[k], "--test_bdf") == 0){
       test_bdf_file = 1;
+    }
+    if (strcmp(argv[k], "--test_stl") == 0){
+      test_stl_file = 1;
     }
   }
 
@@ -89,9 +174,12 @@ int main( int argc, char *argv[] ){
 
     // Create the random trees
     forest->setTopology(topo);
-    forest->createRandomTrees(2, 0, 3);
+    forest->createRandomTrees(10, 0, 4);
     forest->balance();
     forest->createNodes();
+
+    // Test the output file
+    test_stl_output("level_set_test.bstl", forest);
 
     // Write the volume mesh
     mesh->writeToBDF("volume-mesh.bdf", TMRMesh::TMR_HEXES);

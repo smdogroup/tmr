@@ -145,7 +145,6 @@ void TMROctTACSTopoCreator::computeWeights( TMROctant *oct,
   // Sort and sum the array of weights - there are only 8 nodes
   // per filter point at most
   nweights = TMRIndexWeight::uniqueSort(weights, nweights);
-
   memcpy(welem, weights, nweights*sizeof(TMRIndexWeight));
 }
 
@@ -305,13 +304,32 @@ void TMROctTACSTopoCreator::createElements( int order,
   // The number of local nodes
   int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
 
+  // Get the dependent node information for this mesh
+  const int *dep_ptr, *dep_conn;
+  const double *dep_weights;
+  int num_dep_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
+                                             &dep_weights);
+
   // Count up all the external nodes
   int num_ext = 0;
-  int max_ext_nodes = 8*num_elements;
+  int max_ext_nodes = 8*num_elements + dep_ptr[num_dep_nodes];
   int *ext_nodes = new int[ max_ext_nodes ];
+
+  // Add the external nodes from the dependent connectivity
+  for ( int i = 0; i < dep_ptr[num_dep_nodes]; i++ ){
+    int node = dep_conn[i];
+    if (node < filter_range[mpi_rank] || 
+        node >= filter_range[mpi_rank+1]){
+      ext_nodes[num_ext] = node;
+      num_ext++;
+    }    
+  }
+
+  // Add the external nodes from the element-level connectivity
   for ( int i = 0; i < 8*num_elements; i++ ){
     int node = weights[i].index;
-    if (node < filter_range[mpi_rank] || node >= filter_range[mpi_rank+1]){
+    if (node < filter_range[mpi_rank] || 
+        node >= filter_range[mpi_rank+1]){
       ext_nodes[num_ext] = node;
       num_ext++;
     }

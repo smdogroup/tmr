@@ -678,6 +678,10 @@ int TMR_GenerateBinFile( const char *filename,
   // Get the MPI communicator
   MPI_Comm comm = filter->getMPIComm();
 
+  int mpi_size, mpi_rank;  
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
+
   // Retrieve the mesh order
   int mesh_order = filter->getMeshOrder();
 
@@ -778,16 +782,22 @@ int TMR_GenerateBinFile( const char *filename,
                 // Find the corresponding node
                 const int use_nodes = 1;
                 TMROctant *t = nodes->contains(&node, use_nodes);
+
+                // The parametric point
+                TMRPoint pt;
+                pt.x = pt.y = pt.z = 0.0;
                   
                 if (t){
                   // Retrieve the global node number
                   int node = t->tag;
 
+                  // Get the point location
+                  pt = X[t - node_array];
+
                   // Get the nodal design variable value
                   double val = 0.0;
                   if (node >= 0){
-                    // Set the value of the indepdnent design
-                    // variable directly
+                    // Set the independent variable values directly
                     x->getValues(1, &node, xvals);
                     val = TacsRealPart(xvals[x_offset]);
                   }
@@ -799,21 +809,25 @@ int TMR_GenerateBinFile( const char *filename,
                     for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
                       // Get the independent node values
                       int dep_node = dep_conn[kp];
-                      x->getValues(1, &dep_node, xvals);
-                      val += dep_weights[kp]*TacsRealPart(xvals[x_offset]);
+                      int fail = x->getValues(1, &dep_node, xvals);
+                      if (!fail){
+                        val += dep_weights[kp]*TacsRealPart(xvals[x_offset]);
+                      }
+                      else {
+                        fprintf(stderr, "[%d] Failed to get value for node %d\n",
+                                mpi_rank, dep_node);
+                      }
                     }
                   }
               
+                  // Compute the index
                   int index = ordering_transform[ii + 2*jj + 4*kk];
                   cell.val[index] = val;
-            
-                  // Get the nodal index
-                  int ptindex = t - node_array;
-            
+                        
                   // Set the node location
-                  cell.p[index].x = X[ptindex].x;
-                  cell.p[index].y = X[ptindex].y;
-                  cell.p[index].z = X[ptindex].z;
+                  cell.p[index].x = pt.x;
+                  cell.p[index].y = pt.y;
+                  cell.p[index].z = pt.z;
             
                   // Check if this node lies on a boundary
                   on_boundary[index] = 
@@ -859,11 +873,6 @@ int TMR_GenerateBinFile( const char *filename,
   MPI_Type_create_struct(1, &counts, &offset, &MPI_Point_type, 
 			 &MPI_Triangle_type);
   MPI_Type_commit(&MPI_Triangle_type);
-
-  // Now, write out the triangles
-  int mpi_size, mpi_rank;  
-  MPI_Comm_size(comm, &mpi_size);
-  MPI_Comm_rank(comm, &mpi_rank);
 
   // Get the local triangles
   int ntris;
