@@ -4488,8 +4488,8 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
 
     // Loop over the dependent nodes on this face and set the
     // number of associated independent nodes
-    for ( int jj = 1; jj < (2*mesh_order-1); jj++ ){
-      for ( int ii = 1; ii < (2*mesh_order-1); ii++ ){
+    for ( int jj = 0; jj < (2*mesh_order-1); jj++ ){
+      for ( int ii = 0; ii < (2*mesh_order-1); ii++ ){
         // Get the node location corresponding to this face
         TMROctant node;
         node.block = face_array[i].block;
