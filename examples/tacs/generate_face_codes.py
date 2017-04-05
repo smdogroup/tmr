@@ -57,12 +57,12 @@ vert.append(v)
 
 # Corners opposite one another are active
 b = [0, 1, 0, 1]
-v = [0, 4, 7, 2, 6, 5]
+v = [0, 4, 7, 2, 6, 5, 4, 5, 7, 7, 5, 6]
 binary.append(b)
 vert.append(v)
 
 b = [1, 0, 1, 0]
-v = [1, 5, 4, 3, 7, 6] 
+v = [1, 5, 4, 3, 7, 6, 4, 5, 7, 7, 5, 6]
 binary.append(b)
 vert.append(v)
 
@@ -114,9 +114,11 @@ for k in xrange(len(binary)):
 
     x[:, 0] += 1.25
 
+print x
+
 # Create the vertex and edge tables
 edge_table = np.zeros(16, dtype=np.intc)
-vert_table = -np.ones((16, 10), dtype=np.intc)
+vert_table = -np.ones((16, 13), dtype=np.intc)
 
 for k in xrange(len(binary)):
     b = binary[k]
@@ -144,10 +146,10 @@ for k in xrange(1, len(binary)):
     s += ', %d'%(edge_table[k])
 s += '};\n'
 
-s += 'const int faceTriTable[16][10] = {'
+s += 'const int faceTriTable[16][13] = {'
 for i in xrange(16):
     s += '\n  {%d'%(vert_table[i, 0])
-    for j in xrange(1, 10):
+    for j in xrange(1, 13):
         s += ', %d'%(vert_table[i, j])
     s += '},'
 s += '};'

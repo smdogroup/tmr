@@ -178,13 +178,14 @@ int main( int argc, char *argv[] ){
 
     // Create the random trees
     forest->setTopology(topo);
-    forest->createRandomTrees(10, 0, 2);
+    forest->createRandomTrees(2, 0, 2);
     forest->balance();
     forest->createNodes();
 
     // Test the output file
     if (test_stl_file){
       test_stl_output("level_set_test.bstl", forest);
+      forest->writeForestToVTK("full_forest.vtk");
     }
 
     // Write the volume mesh

@@ -249,6 +249,9 @@ class TMROctForest : public TMREntity {
   int checkAdjacentDepEdges( int edge_index, TMROctant *b,
                              TMROctantArray *adjocts );
   
+  // Set the dependent node locations
+  void setDepNodeLocations();
+
   // Label the dependent nodes on the locally owned blocks
   void labelDependentNodes();
 

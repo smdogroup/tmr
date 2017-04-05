@@ -313,23 +313,23 @@ const int faceEdgeTable[16] =
   {15, 158, 61, 172, 107, 250, 89, 200, 
    199, 86, 245, 100, 163, 50, 145, 0};
 
-const int faceTriTable[16][10] = {
-  {0, 1, 2, 0, 2, 3, -1, -1, -1, -1},
-  {2, 3, 7, 2, 7, 4, 2, 4, 1, -1},
-  {3, 0, 4, 3, 4, 5, 3, 5, 2, -1},
-  {2, 3, 7, 2, 7, 5, -1, -1, -1, -1},
-  {0, 1, 5, 0, 5, 6, 0, 6, 3, -1},
-  {1, 5, 4, 3, 7, 6, -1, -1, -1, -1},
-  {0, 4, 3, 3, 4, 6, -1, -1, -1, -1},
-  {3, 7, 6, -1, -1, -1, -1, -1, -1, -1},
-  {1, 2, 6, 1, 6, 7, 1, 7, 0, -1},
-  {1, 6, 4, 1, 2, 6, -1, -1, -1, -1},
-  {0, 4, 7, 2, 6, 5, -1, -1, -1, -1},
-  {2, 6, 5, -1, -1, -1, -1, -1, -1, -1},
-  {0, 1, 5, 0, 5, 7, -1, -1, -1, -1},
-  {1, 5, 4, -1, -1, -1, -1, -1, -1, -1},
-  {0, 4, 7, -1, -1, -1, -1, -1, -1, -1},
-  {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1}};
+const int faceTriTable[16][13] = {
+  {0, 1, 2, 0, 2, 3, -1, -1, -1, -1, -1, -1, -1},
+  {2, 3, 7, 2, 7, 4, 2, 4, 1, -1, -1, -1, -1},
+  {3, 0, 4, 3, 4, 5, 3, 5, 2, -1, -1, -1, -1},
+  {2, 3, 7, 2, 7, 5, -1, -1, -1, -1, -1, -1, -1},
+  {0, 1, 5, 0, 5, 6, 0, 6, 3, -1, -1, -1, -1},
+  {1, 5, 4, 3, 7, 6, 4, 5, 7, 7, 5, 6, -1},
+  {0, 4, 3, 3, 4, 6, -1, -1, -1, -1, -1, -1, -1},
+  {3, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+  {1, 2, 6, 1, 6, 7, 1, 7, 0, -1, -1, -1, -1},
+  {1, 6, 4, 1, 2, 6, -1, -1, -1, -1, -1, -1, -1},
+  {0, 4, 7, 2, 6, 5, 4, 5, 7, 7, 5, 6, -1},
+  {2, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+  {0, 1, 5, 0, 5, 7, -1, -1, -1, -1, -1, -1, -1},
+  {1, 5, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+  {0, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+  {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},};
 
 /*
   The data structures required for the marching cubes algorithm
@@ -650,7 +650,7 @@ void add_faces( TriangleList *list, Cell *grid, double cutoff, int bound[] ){
 
     // Check whether this face is actually on a boundary
     if (b[0] && b[1] && b[2] && b[3]){
-      Triangle triangles[3];
+      Triangle triangles[4];
       int ntri = face_polygonize(p, vals, cutoff, triangles);
 
       // Add the triangles to the list
@@ -767,7 +767,7 @@ int TMR_GenerateBinFile( const char *filename,
       octree_face_boundary[5] && (array[i].z + h == hmax);
 
     // Get the values at the corners of the element
-    TacsScalar xvals[8];
+    TacsScalar levelvals[8];
 
     // Get the corner nodes
     TMRPoint Xe[8];
@@ -802,18 +802,18 @@ int TMR_GenerateBinFile( const char *filename,
             if (node >= 0){
               // Set the independent variable values directly
               x->getValues(1, &node, xvals);
-              xvals[index] = TacsRealPart(xvals[x_offset]);
+              levelvals[index] = TacsRealPart(xvals[x_offset]);
             }
             else {
               node = -node-1;
            
               // Evaluate the value of the dependent design variable
-              xvals[index] = 0.0;
+              levelvals[index] = 0.0;
               for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
                 // Get the independent node values
                 int dep_node = dep_conn[kp];
                 int fail = x->getValues(1, &dep_node, xvals);
-                xvals[index] += dep_weights[kp]*TacsRealPart(xvals[x_offset]);
+                levelvals[index] += dep_weights[kp]*TacsRealPart(xvals[x_offset]);
               }
             }
           }
@@ -854,10 +854,10 @@ int TMR_GenerateBinFile( const char *filename,
                 // Compute the index
                 int index = ordering_transform[ii + 2*jj + 4*kk];
                 cell.val[index] =
-                  (N[0]*xvals[0] + N[1]*xvals[1] + 
-                   N[2]*xvals[2] + N[3]*xvals[3] +
-                   N[4]*xvals[4] + N[5]*xvals[5] +
-                   N[6]*xvals[6] + N[7]*xvals[7]);
+                  (N[0]*levelvals[0] + N[1]*levelvals[1] + 
+                   N[2]*levelvals[2] + N[3]*levelvals[3] +
+                   N[4]*levelvals[4] + N[5]*levelvals[5] +
+                   N[6]*levelvals[6] + N[7]*levelvals[7]);
                       
                 // Set the node location
                 cell.p[index].x =
