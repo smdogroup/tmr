@@ -8,6 +8,9 @@
 #include "TMR_TACSTopoCreator.h"
 #include "TMR_STLTools.h"
 
+/*
+  Test the STL output generator using the bracket example
+*/
 void test_stl_output( const char *filename, TMROctForest *forest ){
   // Create the forest and balance it
   TMROctForest *filter = forest->coarsen();
@@ -72,11 +75,12 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
       int var = array[i].tag - range[mpi_rank];
       double xval = X[i].x - 30.0;
       double yval = X[i].y - 40.0;
-      x[var] = 0.01*(xval*xval + yval*yval);
+      double d = sqrt(xval*xval + yval*yval);
+      x[var] = cos(0.5*d);
     }    
   }
 
-  double cutoff = 10.0;
+  double cutoff = 0.5;
   int var_offset = 0;
   TMR_GenerateBinFile(filename, filter, vars, var_offset, cutoff);
 
@@ -174,15 +178,19 @@ int main( int argc, char *argv[] ){
 
     // Create the random trees
     forest->setTopology(topo);
-    forest->createRandomTrees(10, 0, 4);
+    forest->createRandomTrees(10, 0, 2);
     forest->balance();
     forest->createNodes();
 
     // Test the output file
-    test_stl_output("level_set_test.bstl", forest);
+    if (test_stl_file){
+      test_stl_output("level_set_test.bstl", forest);
+    }
 
     // Write the volume mesh
-    mesh->writeToBDF("volume-mesh.bdf", TMRMesh::TMR_HEXES);
+    if (test_bdf_file){
+      mesh->writeToBDF("volume-mesh.bdf", TMRMesh::TMR_HEXES);
+    }
 
     topo->decref();
     forest->decref();
@@ -203,7 +211,8 @@ int main( int argc, char *argv[] ){
     loader->setElement(0, elem);
     
     // Create the TACSAssembler object
-    TACSAssembler *tacs = loader->createTACS(3);
+    int vars_per_node = 3;
+    TACSAssembler *tacs = loader->createTACS(vars_per_node);
     tacs->incref();
 
     // Create the f5 visualization object
