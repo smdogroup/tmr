@@ -817,6 +817,11 @@ int TMR_GenerateBinFile( const char *filename,
               }
             }
           }
+          else {
+            printf("TMR_GenerateBinFile: \
+Failed to find node with block: %d x %d y: %d z: %d\n",
+                   node.block, node.x, node.y, node.z);
+          }
         }
       }
     }

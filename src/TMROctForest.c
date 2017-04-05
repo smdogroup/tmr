@@ -3992,47 +3992,65 @@ void TMROctForest::setDepNodeLocations(){
       }
 
       // Compute the dependent node locations
-      for ( int jj = 1; jj < 2*mesh_order-1; jj += 2 ){
-        for ( int ii = 1; ii < 2*mesh_order-1; ii += 2 ){
-          // Get the node location
-          TMROctant node;
-          node.block = face_array[i].block;
+      for ( int jj = 0; jj < 2*mesh_order-1; jj++ ){
+        for ( int ii = 0; ii < 2*mesh_order-1; ii++ ){
+          if ((ii % 2 == 1) || (jj % 2 == 1)){
+            // Get the node location
+            TMROctant node;
+            node.block = face_array[i].block;
 
-          if (face_index < 2){
-            node.x = face_array[i].x + (face_index % 2)*h;
-            node.y = face_array[i].y + ii*hc;
-            node.z = face_array[i].z + jj*hc;
-          }
-          else if (face_index < 4){
-            node.x = face_array[i].x + ii*hc;
-            node.y = face_array[i].y + (face_index % 2)*h;
-            node.z = face_array[i].z + jj*hc;
-          }
-          else {
-            node.x = face_array[i].x + ii*hc;
-            node.y = face_array[i].y + jj*hc;
-            node.z = face_array[i].z + (face_index % 2)*h;
-          }
- 
-          // Convert the node to the global encoding
-          transformNode(&node);
-
-          // Search the node list
-          const int use_node_search = 1;
-          TMROctant *t = nodes->contains(&node, use_node_search);
-
-          if (t){
-            // Get the index into the node array
-            int index = t - array;
-
-            X[index].x = X[index].y = X[index].z = 0.0;
-            for ( int iy = 0; iy < mesh_order; iy++ ){
-              for ( int ix = 0; ix < mesh_order; ix++ ){
-                X[index].x += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].x;
-                X[index].y += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].y;
-                X[index].z += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].z;
-              }
+            if (face_index < 2){
+              node.x = face_array[i].x + (face_index % 2)*h;
+              node.y = face_array[i].y + ii*hc;
+              node.z = face_array[i].z + jj*hc;
             }
+            else if (face_index < 4){
+              node.x = face_array[i].x + ii*hc;
+              node.y = face_array[i].y + (face_index % 2)*h;
+              node.z = face_array[i].z + jj*hc;
+            }
+            else {
+              node.x = face_array[i].x + ii*hc;
+              node.y = face_array[i].y + jj*hc;
+              node.z = face_array[i].z + (face_index % 2)*h;
+            }
+ 
+            // Convert the node to the global encoding
+            transformNode(&node);
+
+            // Search the node list
+            const int use_node_search = 1;
+            TMROctant *t = nodes->contains(&node, use_node_search);
+
+            if (t){
+              // Get the index into the node array
+              int index = t - array;
+
+              X[index].x = X[index].y = X[index].z = 0.0;
+              if ((ii % 2 == 1) && (jj % 2 == 1)){
+                for ( int iy = 0; iy < mesh_order; iy++ ){
+                  for ( int ix = 0; ix < mesh_order; ix++ ){
+                    X[index].x += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].x;
+                    X[index].y += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].y;
+                    X[index].z += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].z;
+                  }
+                }
+              }
+              else if (ii % 2 == 1){
+                for ( int ix = 0; ix < mesh_order; ix++ ){
+                  X[index].x += wt[ii/2][ix]*fn[ix + mesh_order*(jj/2)].x;
+                  X[index].y += wt[ii/2][ix]*fn[ix + mesh_order*(jj/2)].y;
+                  X[index].z += wt[ii/2][ix]*fn[ix + mesh_order*(jj/2)].z;
+                }
+              }
+              else if (jj % 2 == 1){
+                for ( int iy = 0; iy < mesh_order; iy++ ){
+                  X[index].x += wt[jj/2][iy]*fn[ii/2 + mesh_order*iy].x;
+                  X[index].y += wt[jj/2][iy]*fn[ii/2 + mesh_order*iy].y;
+                  X[index].z += wt[jj/2][iy]*fn[ii/2 + mesh_order*iy].z;
+                }
+              }
+            }            
           }
         }
       }

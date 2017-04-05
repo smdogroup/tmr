@@ -75,7 +75,8 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
       int var = array[i].tag - range[mpi_rank];
       double xval = X[i].x - 30.0;
       double yval = X[i].y - 40.0;
-      double d = sqrt(xval*xval + yval*yval);
+      double zval = X[i].z;
+      double d = sqrt(xval*xval + yval*yval + 4.0*zval*zval);
       x[var] = cos(0.5*d);
     }    
   }
@@ -178,7 +179,7 @@ int main( int argc, char *argv[] ){
 
     // Create the random trees
     forest->setTopology(topo);
-    forest->createRandomTrees(2, 0, 2);
+    forest->createRandomTrees(10, 0, 4);
     forest->balance();
     forest->createNodes();
 
