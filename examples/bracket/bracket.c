@@ -16,6 +16,7 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   TMROctForest *filter = forest->coarsen();
   filter->incref();
   filter->balance();
+  filter->repartition();
 
   // Create an empty set of boundary conditions and default material
   // properties

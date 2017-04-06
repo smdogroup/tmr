@@ -661,6 +661,27 @@ void add_faces( TriangleList *list, Cell *grid, double cutoff, int bound[] ){
   }
 }
  
+// Static data for the MPI data types
+static MPI_Datatype MPI_Point_type = NULL;
+static MPI_Datatype MPI_Triangle_type = NULL;
+
+/*
+  Commit the data types
+*/
+void TMR_MPICommitSTLTypes(){
+  // Create the triangle data type required for output
+  int counts = 3;
+  MPI_Datatype type = MPI_DOUBLE;
+  MPI_Aint offset = 0;
+  MPI_Type_create_struct(1, &counts, &offset, &type, 
+			 &MPI_Point_type);
+  MPI_Type_commit(&MPI_Point_type);
+
+  MPI_Type_create_struct(1, &counts, &offset, &MPI_Point_type, 
+			 &MPI_Triangle_type);
+  MPI_Type_commit(&MPI_Triangle_type);
+}
+
 /*
   The following code generates an .STL file as output from the
   topology optimization problem.
@@ -767,7 +788,7 @@ int TMR_GenerateBinFile( const char *filename,
       octree_face_boundary[5] && (array[i].z + h == hmax);
 
     // Get the values at the corners of the element
-    TacsScalar levelvals[8];
+    double levelvals[8];
 
     // Get the corner nodes
     TMRPoint Xe[8];
@@ -791,6 +812,7 @@ int TMR_GenerateBinFile( const char *filename,
           const int use_nodes = 1;
           TMROctant *t = nodes->contains(&node, use_nodes);
              
+          int fail = 0;
           if (t){
             // Retrieve the global node number
             int node = t->tag;
@@ -801,7 +823,7 @@ int TMR_GenerateBinFile( const char *filename,
             // Get the nodal design variable value
             if (node >= 0){
               // Set the independent variable values directly
-              x->getValues(1, &node, xvals);
+              fail = fail || x->getValues(1, &node, xvals);
               levelvals[index] = TacsRealPart(xvals[x_offset]);
             }
             else {
@@ -812,14 +834,14 @@ int TMR_GenerateBinFile( const char *filename,
               for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
                 // Get the independent node values
                 int dep_node = dep_conn[kp];
-                int fail = x->getValues(1, &dep_node, xvals);
+                fail = fail || x->getValues(1, &dep_node, xvals);
                 levelvals[index] += dep_weights[kp]*TacsRealPart(xvals[x_offset]);
               }
             }
           }
-          else {
+          if (fail){
             printf("TMR_GenerateBinFile: \
-Failed to find node with block: %d x %d y: %d z: %d\n",
+Failed at node with block: %d x %d y: %d z: %d\n",
                    node.block, node.x, node.y, node.z);
           }
         }
@@ -911,20 +933,11 @@ Failed to find node with block: %d x %d y: %d z: %d\n",
   // Free xvals
   delete [] xvals;
 
-  // Create the triangle data type required for output
-  MPI_Datatype MPI_Point_type = NULL;
-  MPI_Datatype MPI_Triangle_type = NULL;
-  int counts = 3;
-  MPI_Datatype type = MPI_DOUBLE;
-  MPI_Aint offset = 0;
-  MPI_Type_create_struct(1, &counts, &offset, &type, 
-			 &MPI_Point_type);
-  MPI_Type_commit(&MPI_Point_type);
-
-  MPI_Type_create_struct(1, &counts, &offset, &MPI_Point_type, 
-			 &MPI_Triangle_type);
-  MPI_Type_commit(&MPI_Triangle_type);
-
+  // Commit the types if they are not defined
+  if (!MPI_Point_type){
+    TMR_MPICommitSTLTypes();
+  }
+   
   // Get the local triangles
   int ntris;
   Triangle *tris;

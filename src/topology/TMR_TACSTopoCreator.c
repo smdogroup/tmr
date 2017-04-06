@@ -310,10 +310,21 @@ void TMROctTACSTopoCreator::createElements( int order,
   int num_dep_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
                                              &dep_weights);
 
+  // Get the external numbers from the filter itself
+  int *filter_ext;
+  int num_filter_ext = filter->getExtNodeNums(&filter_ext);
+
   // Count up all the external nodes
   int num_ext = 0;
-  int max_ext_nodes = 8*num_elements + dep_ptr[num_dep_nodes];
+  int max_ext_nodes = 8*num_elements + dep_ptr[num_dep_nodes] + num_filter_ext;
   int *ext_nodes = new int[ max_ext_nodes ];
+
+  // Add the external nodes from the filter
+  for ( int i = 0; i < num_filter_ext; i++ ){
+    ext_nodes[num_ext] = filter_ext[i];
+    num_ext++;
+  }
+  delete [] filter_ext;
 
   // Add the external nodes from the dependent connectivity
   for ( int i = 0; i < dep_ptr[num_dep_nodes]; i++ ){
