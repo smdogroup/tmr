@@ -37,63 +37,93 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
     load = _load;
     elem2 = new MITCShell<2>(stiff); elem2->incref();
     elem3 = new MITCShell<3>(stiff); elem3->incref();
-    elem2->setComponentNum(rank);
-    elem3->setComponentNum(rank);
+    // elem2->setComponentNum(rank);
+    // elem3->setComponentNum(rank);
   }
   ~TMRCylinderCreator(){
     elem2->decref();
     elem3->decref();
   }
 
-  TACSElement *createElement( int order,
-                              TMRQuadForest *forest,
-                              TMRQuadrant quad ){
-    if (order == 2){ return elem2; }
-    if (order == 3){ return elem3; }
+  /*
+    Create/set all of the elements within the new TACSAssembler object
+  */
+  void createElements( int order,
+                       TMRQuadForest *forest,
+                       int num_elements,
+                       TACSElement **elements ){
+    if (order == 2){
+      for ( int i = 0; i < num_elements; i++ ){
+        elements[i] = elem2;
+      }
+    }
+    else if (order == 3){
+      for ( int i = 0; i < num_elements; i++ ){
+        elements[i] = elem3;
+      }
+    }
   }
-  TACSElement *createAuxElement( int order,
-                                 TMRQuadForest *forest,
-                                 TMRQuadrant quad ){
+
+  /*
+    Create all of the auxiliary elements within TACS
+  */ 
+  TACSAuxElements *createAuxElements( int order,
+                                      TMRQuadForest *forest ){
+    TACSAuxElements *aux = new TACSAuxElements();
+    
+    // Get the quadrants
+    TMRQuadrantArray *quadrants;
+    forest->getQuadrants(&quadrants);
+
+    // get the quadrant array
+    int size; 
+    TMRQuadrant *quads;
+    quadrants->getArray(&quads, &size);
+
     // Get the points from the forest
     TMRPoint *Xp;
     forest->getPoints(&Xp);
 
-    // Get the side-length of the quadrant
-    const int32_t h = 1 << (TMR_MAX_LEVEL - quad.level - (order-2));
+    for ( int i = 0; i < size; i++ ){
+      // Get the side-length of the quadrant
+      const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level - (order-2));
 
-    // Set the tractions based on the node location
-    TacsScalar tx[9], ty[9], tz[9];
-    for ( int j = 0, n = 0; j < order; j++ ){
-      for ( int i = 0; i < order; i++, n++ ){
-        // Find the nodal index and determine the (x,y,z) location
-        TMRQuadrant node;
-        node.x = quad.x + h*i;
-        node.y = quad.y + h*j;
-        node.face = quad.face;
-        forest->transformNode(&node);
-        int index = forest->getNodeIndex(&node);
+      // Set the tractions based on the node location
+      TacsScalar tx[9], ty[9], tz[9];
+      for ( int jj = 0, n = 0; jj < order; jj++ ){
+        for ( int ii = 0; ii < order; ii++, n++ ){
+          // Find the nodal index and determine the (x,y,z) location
+          TMRQuadrant node;
+          node.face = quads[i].face;
+          node.x = quads[i].x + h*ii;
+          node.y = quads[i].y + h*jj;
+          forest->transformNode(&node);
+          int index = forest->getNodeIndex(&node);
         
-        // Set the pressure load
-        double z = Xp[index].z;
-        double theta =-R*atan2(Xp[index].y, Xp[index].x);
-        double p = -load*sin(beta*z)*sin(alpha*theta);
+          // Set the pressure load
+          double z = Xp[index].z;
+          double theta =-R*atan2(Xp[index].y, Xp[index].x);
+          double p = -load*sin(beta*z)*sin(alpha*theta);
 
-        tx[n] = p*Xp[index].x/R;
-        ty[n] = p*Xp[index].y/R;
-        tz[n] = 0.0;
+          tx[n] = p*Xp[index].x/R;
+          ty[n] = p*Xp[index].y/R;
+          tz[n] = 0.0;
+        }
       }
+      
+      // Create the traction class 
+      TACSElement *trac = NULL;
+      if (order == 2){
+        trac = new TACSShellTraction<2>(tx, ty, tz);
+      }
+      else {
+        trac = new TACSShellTraction<3>(tx, ty, tz);
+      }
+
+      aux->addElement(i, trac);
     }
 
-    // Create the traction class 
-    TACSElement *trac = NULL;
-    if (order == 2){
-      trac = new TACSShellTraction<2>(tx, ty, tz);
-    }
-    else {
-      trac = new TACSShellTraction<3>(tx, ty, tz);
-    }
-
-    return trac;
+    return aux;
   }
 
  private:
@@ -386,7 +416,7 @@ int main( int argc, char *argv[] ){
     for ( int iter = 0; iter < MAX_REFINE; iter++ ){
       // Create the TACSAssembler object associated with this forest
       TACSAssembler *tacs[MAX_REFINE+2];
-      forest[0]->balance();
+      forest[0]->balance(1);
       forest[0]->repartition();
       tacs[0] = creator->createTACS(order, forest[0]);
       tacs[0]->incref();

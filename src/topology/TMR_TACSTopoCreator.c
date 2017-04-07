@@ -15,7 +15,9 @@ static int compare_integers( const void *a, const void *b ){
 */
 TMROctTACSTopoCreator::TMROctTACSTopoCreator( TMRBoundaryConditions *_bcs,
                                               TMRStiffnessProperties _props,
-                                              TMROctForest *_filter ):
+                                              TMROctForest *_filter,
+                                              const char *_shell_attr,
+                                              SolidShellWrapper *_shell ):
 TMROctTACSCreator(_bcs){
   // Reference the filter
   filter = _filter;
@@ -43,8 +45,18 @@ TMROctTACSCreator(_bcs){
   filter_map = new TACSVarMap(comm, num_filter_local);
   filter_map->incref();
 
-  /// Set the filter indices to NULL
+  // Set the filter indices to NULL
   filter_indices = NULL;
+
+  // Set shell attributes if they exist 
+  shell_attr = NULL;
+  shell = NULL;
+  if (_shell_attr && _shell){
+    shell_attr = new char[ strlen(_shell_attr)+1 ];
+    strcpy(shell_attr, _shell_attr);
+    shell = _shell;
+    shell->incref();
+  }
 }
 
 /*
@@ -69,6 +81,88 @@ void TMROctTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
   *_indices = filter_indices;
 }
 
+/*
+  If order != 2, this is not going to work.....
+*/
+void TMROctTACSTopoCreator::createConnectivity( int order,
+                                                TMROctForest *forest,
+                                                int **_conn, int **_ptr,
+                                                int *_num_elements ){
+  // Create the mesh
+  int *elem_conn, num_octs;
+  forest->createMeshConn(&elem_conn, &num_octs);
+
+  // Set the default attributes
+  int num_elements = num_octs;
+
+  // Get the octants from the top and bottom surface
+  if (shell){
+    TMROctantArray *nodes;
+    forest->getNodes(&nodes);
+
+    TMROctantArray *shell_octs = forest->getOctsWithAttribute(shell_attr);
+    
+    // Get the top and bottom surface octants
+    int nshell;
+    TMROctant *octs;
+    shell_octs->getArray(&octs, &nshell);
+
+    num_elements = num_octs + nshell;
+    int *conn = new int[ 8*num_elements ];
+    memcpy(conn, elem_conn, 8*num_octs*sizeof(int));
+    delete [] elem_conn;
+
+    int index = 8*num_octs;
+
+    // Add the connectivity from the nodes
+    for ( int i = 0; i < nshell; i++ ){
+      const int32_t h = 1 << (TMR_MAX_LEVEL - octs[i].level);
+      for ( int jj = 0; jj < 2; jj++ ){
+        for ( int ii = 0; ii < 2; i++ ){
+          int face_index = octs[i].tag;
+
+          TMROctant node;
+          node.block = octs[i].block;
+
+          if (face_index < 2){
+            node.x = octs[i].x + (face_index % 2)*h;
+            node.y = octs[i].y + ii*h;
+            node.z = octs[i].z + jj*h;
+          }
+          else if (face_index < 4){
+            node.x = octs[i].x + ii*h;
+            node.y = octs[i].y + (face_index % 2)*h;
+            node.z = octs[i].z + jj*h;
+          }
+          else {
+            node.x = octs[i].x + ii*h;
+            node.y = octs[i].y + jj*h;
+            node.z = octs[i].z + (face_index % 2)*h;
+          }
+        
+          const int use_node_search = 1;
+          TMROctant *t = nodes->contains(&node, use_node_search);
+          conn[index] = t->tag;  index++;
+          conn[index] = t->tag+1; index++;
+        }
+      }
+    }
+
+    // Free the bottom octants
+    delete shell_octs;
+    elem_conn = conn;    
+  }
+
+  // Set the element ptr
+  int *ptr = new int[ num_elements+1 ];
+  for ( int i = 0; i < num_elements+1; i++ ){
+    ptr[i] = order*order*order*i;
+  }
+
+  *_conn = elem_conn;
+  *_ptr = ptr;
+  *_num_elements = num_elements;
+}
 
 void TMROctTACSTopoCreator::computeWeights( TMROctant *oct,
                                             TMROctant *node,
@@ -166,22 +260,25 @@ void TMROctTACSTopoCreator::createElements( int order,
   forest->getOctants(&octants);
 
   // Get the array of octants from the forest
-  int size;
-  TMROctant *array;
-  octants->getArray(&array, &size);
+  int num_octs;
+  TMROctant *octs;
+  octants->getArray(&octs, &num_octs);
 
   // Create a queue for the external octants
   TMROctantQueue *queue = new TMROctantQueue();
 
-  // Allocate the weights for all of the local elements 
-  TMRIndexWeight *weights = new TMRIndexWeight[ 8*num_elements ];
+  // The number of weights/element
+  const int nweights = 8;
 
-  for ( int i = 0; i < size; i++ ){
+  // Allocate the weights for all of the local elements 
+  TMRIndexWeight *weights = new TMRIndexWeight[ nweights*num_octs ];
+
+  for ( int i = 0; i < num_octs; i++ ){
     // Get the original octant from the forest    
-    TMROctant node = array[i];
+    TMROctant node = octs[i];
 
     // Compute the half the edge length of the octant
-    const int32_t h_half = 1 << (TMR_MAX_LEVEL - (array[i].level + 1));
+    const int32_t h_half = 1 << (TMR_MAX_LEVEL - (octs[i].level + 1));
 
     // Place the octant node at the element mid-point location
     node.x += h_half;
@@ -198,10 +295,10 @@ void TMROctTACSTopoCreator::createElements( int order,
       // Push the octant to the external queue. We will handle these
       // cases seperately after a collective communication.
       queue->push(&node);
-      weights[8*i].index = -1;
+      weights[nweights*i].index = -1;
     }
     else {
-      computeWeights(oct, &node, &weights[8*i]);
+      computeWeights(oct, &node, &weights[nweights*i]);
     }
   }
 
@@ -223,11 +320,11 @@ void TMROctTACSTopoCreator::createElements( int order,
   dist_nodes->getArray(&dist_array, &dist_size);
 
   // Create the distributed weights
-  TMRIndexWeight *dist_weights = new TMRIndexWeight[ 8*dist_size ];
+  TMRIndexWeight *dist_weights = new TMRIndexWeight[ nweights*dist_size ];
   for ( int i = 0; i < dist_size; i++ ){
     TMROctant *oct = filter->findEnclosing(&dist_array[i]);
     if (oct){
-      computeWeights(oct, &dist_array[i], &dist_weights[8*i]);
+      computeWeights(oct, &dist_array[i], &dist_weights[nweights*i]);
     }
   }
 
@@ -253,15 +350,16 @@ void TMROctTACSTopoCreator::createElements( int order,
   MPI_Request *send_request = new MPI_Request[ nrecvs ];
 
   // Allocate space for the new weights
-  TMRIndexWeight *new_weights = new TMRIndexWeight[ 8*send_ptr[mpi_size] ];
+  TMRIndexWeight *new_weights = new TMRIndexWeight[ nweights*send_ptr[mpi_size] ];
 
   // Loop over all the ranks and send 
   for ( int i = 0, j = 0; i < mpi_size; i++ ){
     if (i != mpi_rank && 
         recv_ptr[i+1] - recv_ptr[i] > 0){
       // Post the send to the destination
-      int count = 8*(recv_ptr[i+1] - recv_ptr[i]);
-      MPI_Isend(&dist_weights[8*recv_ptr[i]], count, TMRIndexWeight_MPI_type,
+      int count = nweights*(recv_ptr[i+1] - recv_ptr[i]);
+      MPI_Isend(&dist_weights[nweights*recv_ptr[i]], count, 
+                TMRIndexWeight_MPI_type,
                 i, 0, comm, &send_request[j]);
       j++;
     }
@@ -271,8 +369,9 @@ void TMROctTACSTopoCreator::createElements( int order,
   for ( int i = 0; i < mpi_size; i++ ){
     if (i != mpi_rank && 
         send_ptr[i+1] > send_ptr[i]){
-      int count = 8*(send_ptr[i+1] - send_ptr[i]);
-      MPI_Recv(&new_weights[8*send_ptr[i]], count, TMRIndexWeight_MPI_type,
+      int count = nweights*(send_ptr[i+1] - send_ptr[i]);
+      MPI_Recv(&new_weights[nweights*send_ptr[i]], count, 
+               TMRIndexWeight_MPI_type,
                i, 0, comm, MPI_STATUS_IGNORE);
     }
   }
@@ -281,9 +380,10 @@ void TMROctTACSTopoCreator::createElements( int order,
   MPI_Waitall(nrecvs, send_request, MPI_STATUSES_IGNORE);
 
   // Now place the weights back into their original locations
-  for ( int i = 0, j = 0; i < num_elements && j < send_ptr[mpi_size]; i++ ){
-    if (weights[8*i].index == -1){
-      memcpy(&weights[8*i], &new_weights[8*j], 8*sizeof(TMRIndexWeight));
+  for ( int i = 0, j = 0; i < num_octs && j < send_ptr[mpi_size]; i++ ){
+    if (weights[nweights*i].index == -1){
+      memcpy(&weights[nweights*i], &new_weights[nweights*j], 
+             nweights*sizeof(TMRIndexWeight));
       j++;
     }
   }
@@ -316,7 +416,7 @@ void TMROctTACSTopoCreator::createElements( int order,
 
   // Count up all the external nodes
   int num_ext = 0;
-  int max_ext_nodes = 8*num_elements + dep_ptr[num_dep_nodes] + num_filter_ext;
+  int max_ext_nodes = nweights*num_octs + dep_ptr[num_dep_nodes] + num_filter_ext;
   int *ext_nodes = new int[ max_ext_nodes ];
 
   // Add the external nodes from the filter
@@ -337,7 +437,7 @@ void TMROctTACSTopoCreator::createElements( int order,
   }
 
   // Add the external nodes from the element-level connectivity
-  for ( int i = 0; i < 8*num_elements; i++ ){
+  for ( int i = 0; i < nweights*num_octs; i++ ){
     int node = weights[i].index;
     if (node < filter_range[mpi_rank] || 
         node >= filter_range[mpi_rank+1]){
@@ -374,7 +474,7 @@ void TMROctTACSTopoCreator::createElements( int order,
 
   // Scan through all of the weights and convert them to the local
   // ordering
-  for ( int i = 0; i < 8*num_elements; i++ ){
+  for ( int i = 0; i < nweights*num_octs; i++ ){
     int node = weights[i].index;
     if (node >= filter_range[mpi_rank] && node < filter_range[mpi_rank+1]){
       node = node - filter_range[mpi_rank];
@@ -385,13 +485,10 @@ void TMROctTACSTopoCreator::createElements( int order,
     weights[i].index = node;
   }
 
-  // The number of weights/element
-  int nweights = 8;
-
-  for ( int i = 0; i < num_elements; i++ ){
+  for ( int i = 0; i < num_octs; i++ ){
     // Allocate the stiffness object
     SolidStiffness *stiff = 
-      new TMROctStiffness(&weights[8*i], nweights, 
+      new TMROctStiffness(&weights[nweights*i], nweights, 
                           properties.rho, properties.E, properties.nu, 
                           properties.q);
     
@@ -401,6 +498,10 @@ void TMROctTACSTopoCreator::createElements( int order,
     else {
       elements[i] = new Solid<3>(stiff);
     }
+  }
+
+  for ( int i = num_octs; i < num_elements; i++ ){
+    elements[i] = shell;
   }
 
   delete [] weights;

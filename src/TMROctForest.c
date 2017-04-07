@@ -3646,9 +3646,27 @@ void TMROctForest::labelDependentNodes(){
   partial octrees are freed.
 
   input:
-  order:   the order of the mesh
+  order:   the order of the mesh (must be 2 or 3)
 */
 void TMROctForest::createNodes( int order ){
+  allocateNodes(order);
+  orderNodes();
+}
+
+/*
+  Allocate the nodes and label those nodes that are dependent
+  
+  This function first computes the adjacent octants that touch octants
+  on this processor. Then it computes the dependent faces and edges so
+  that they can be labeled. Next, it allocates an array of all the
+  possible nodes and then sorts them uniquely. Finally, if a topology
+  object is defined, it allocates an array of the node locations and
+  sets those locations.
+
+  intput:
+  order:   the order of the mesh (must be 2 or 3)
+*/
+void TMROctForest::allocateNodes( int order ){
   // Check that the order falls within allowable bounds
   mesh_order = order;
   if (order > 3){ mesh_order = 3; }
@@ -3683,10 +3701,12 @@ void TMROctForest::createNodes( int order ){
       for ( int kk = 0; kk < 2; kk++ ){
         for ( int jj = 0; jj < 2; jj++ ){
           for ( int ii = 0; ii < 2; ii++ ){
-            // Set the node level to the highest level - this will
-            // be updated when the nodes are assigned to the elements
+            // Set the block
             all_nodes[index].block = array[i].block;
-            all_nodes[index].level = 0;
+
+            // The level for nodes indicates the number of degrees of
+            // freedom per node. This is set to 1 by default.
+            all_nodes[index].level = 1;
             
             // Set a positive tag, this will be replaced with a 
             // negative tag if the node is dependent
@@ -3712,10 +3732,12 @@ void TMROctForest::createNodes( int order ){
       for ( int kk = 0; kk < 3; kk++ ){
         for ( int jj = 0; jj < 3; jj++ ){
           for ( int ii = 0; ii < 3; ii++ ){
-            // Set the node level to the highest level - this will
-            // be updated when the nodes are assigned to the elements
+            // Set the node block owner (may be changed by the
+            // transform node code)
             all_nodes[index].block = array[i].block;
-            all_nodes[index].level = 0;
+
+            // Set the number of degrees of freedom per node
+            all_nodes[index].level = 1;
             
             // Set a positive tag, this will be replaced with a 
             // negative tag if the node is dependent
@@ -3739,14 +3761,78 @@ void TMROctForest::createNodes( int order ){
   nodes = new TMROctantArray(all_nodes, index);
   nodes->sort();
 
+  // Label the dependent nodes
+  labelDependentNodes();
+
+  // Get the nodes from the mesh
+  nodes->getArray(&array, &size);
+
+  // Allocate the positions for all of the nodes within the mesh
+  X = new TMRPoint[ size ];
+  memset(X, 0, size*sizeof(TMRPoint));
+
+  const int32_t hmax = 1<< TMR_MAX_LEVEL;
+  if (topo){    
+    for ( int i = 0; i < size; i++ ){
+      if (array[i].tag >= 0){
+        double u = 0.0, v = 0.0, w = 0.0;
+        if (array[i].x == hmax-1){ 
+          u = 1.0;
+        }
+        else {
+          u = 1.0*array[i].x/hmax;
+        }
+        if (array[i].y == hmax-1){
+          v = 1.0;
+        }
+        else {
+          v = 1.0*array[i].y/hmax;
+        }
+        if (array[i].z == hmax-1){
+          w = 1.0;
+        }
+        else {
+          w = 1.0*array[i].z/hmax;
+        }
+
+        TMRVolume *volume;
+        topo->getVolume(array[i].block, &volume);
+        if (volume){
+          volume->evalPoint(u, v, w, &X[i]);
+        }
+      }
+    }
+    
+    // Set the dependent node locations
+    setDepNodeLocations();
+  }
+}
+
+/*
+  Order the nodes in the mesh
+
+  This code orders the distributed nodes uniquely and passes the node
+  numbering between processors so that it is consistent. First, the
+  code counts the nodes that are locally owned on this
+  processor. Next, the code determines the offset from the global
+  order using a collective communication. Then it sends the nodes to
+  their owners and recieves back the node number. Finally, the
+  dependent nodes are ordered locally.
+*/
+void TMROctForest::orderNodes(){
+  if (!nodes){
+    fprintf(stderr, "TMROctForest error: Must call allocateNodes() \
+before calling orderNodes()\n");
+    return;
+  }
+
   // Count up all the locally owned, global variables and the number
   // of dependent variables
   int nlocal = 0;
 
-  // Label the dependent nodes
-  labelDependentNodes();
-
-  // Extract the array of nodes
+  // Extract the array of nodes. These are locally owned
+  int size;
+  TMROctant *array;
   nodes->getArray(&array, &size);
 
   // Count up the number of nodes that are owned by this processor
@@ -3758,7 +3844,7 @@ void TMROctForest::createNodes( int order ){
 
     // If this is the owner, then it is either dependent
     if (owner == mpi_rank && array[i].tag >= 0){
-      nlocal++;
+      nlocal += array[i].level;
     }
   }
 
@@ -3786,7 +3872,7 @@ void TMROctForest::createNodes( int order ){
     // If this is the owner, set the node number
     if (owner == mpi_rank && array[i].tag >= 0){
       array[i].tag = node_num;
-      node_num++;
+      node_num += array[i].level;
     }
   }
 
@@ -3844,50 +3930,9 @@ void TMROctForest::createNodes( int order ){
   num_dep_nodes = 0;
   for ( int i = 0; i < size; i++ ){
     if (array[i].tag < 0){
-      num_dep_nodes++;
+      num_dep_nodes += array[i].level;
       array[i].tag = -num_dep_nodes;
     }
-  }
-
-  // Allocate the positions for all of the nodes within the mesh
-  nodes->getArray(&array, &size);
-  X = new TMRPoint[ size ];
-  memset(X, 0, size*sizeof(TMRPoint));
-
-  const int32_t hmax = 1<< TMR_MAX_LEVEL;
-  if (topo){    
-    for ( int i = 0; i < size; i++ ){
-      if (array[i].tag >= 0){
-        double u = 0.0, v = 0.0, w = 0.0;
-        if (array[i].x == hmax-1){ 
-          u = 1.0;
-        }
-        else {
-          u = 1.0*array[i].x/hmax;
-        }
-        if (array[i].y == hmax-1){
-          v = 1.0;
-        }
-        else {
-          v = 1.0*array[i].y/hmax;
-        }
-        if (array[i].z == hmax-1){
-          w = 1.0;
-        }
-        else {
-          w = 1.0*array[i].z/hmax;
-        }
-
-        TMRVolume *volume;
-        topo->getVolume(array[i].block, &volume);
-        if (volume){
-          volume->evalPoint(u, v, w, &X[i]);
-        }
-      }
-    }
-    
-    // Set the dependent node locations
-    setDepNodeLocations();
   }
 }
 
@@ -4283,15 +4328,22 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
   corner with a given attribute
 
   This code loops over all nodes and check whether they lie on a
-  geometric entity that has the given attribute.
+  geometric entity that has the given attribute. If the intersect flag
+  is active (which is the default), then only the owner is checked,
+  e.g. if the node lies on a corner, only the attribute of the vertex
+  is checked. If intersect is false then the edge, face and volume
+  attributes are also check and the node is added if any of them
+  match.  
 
   input:
-  attr:   the string of the attribute to search
+  attr:       the string of the attribute to search
+  intersect:  only check the immediate owner
 
   returns:
   list:   the nodes matching the specified attribute
 */
-TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
+TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr,
+                                                     int intersect ){
   if (!topo){
     return NULL;
   }
@@ -4316,56 +4368,148 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
     int fy = (fy0 || array[i].y == hmax-1);
     int fz = (fz0 || array[i].z == hmax-1);
 
-    if (fx && fy && fz){
-      // This node lies on a corner
-      TMRVertex *vert;
-      int vert_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
-      int vert_num = block_conn[8*array[i].block + vert_index];
-      topo->getVertex(vert_num, &vert);
-      const char *vert_attr = vert->getAttribute();
-      if (vert_attr && strcmp(vert_attr, attr) == 0){
-        queue->push(&array[i]);
+    if (intersect){
+      if (fx && fy && fz){
+        // This node lies on a corner
+        TMRVertex *vert;
+        int vert_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
+        int vert_num = block_conn[8*array[i].block + vert_index];
+        topo->getVertex(vert_num, &vert);
+        const char *vert_attr = vert->getAttribute();
+        if (vert_attr && strcmp(vert_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
       }
-    }
-    else if ((fy && fz) || (fx && fz) || (fx && fy)){
-      // This node lies on an edge
-      TMREdge *edge;
-      int edge_index = 0;
-      if (fy && fz){
-        edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
+      else if ((fy && fz) || (fx && fz) || (fx && fy)){
+        // This node lies on an edge
+        TMREdge *edge;
+        int edge_index = 0;
+        if (fy && fz){
+          edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
+        }
+        else if (fx && fz){
+          edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
+        }
+        else {
+          edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
+        }
+        int edge_num = block_edge_conn[12*array[i].block + edge_index];
+        topo->getEdge(edge_num, &edge);
+        const char *edge_attr = edge->getAttribute();
+        if (edge_attr && strcmp(edge_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
       }
-      else if (fx && fz){
-        edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
+      else if (fx || fy || fz){
+        // Which face index are we dealing with?
+        TMRFace *face;
+        int face_index =
+          fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3) + fz*(fz0 ? 4 : 5);
+        int face_num = block_face_conn[6*array[i].block + face_index];
+        topo->getFace(face_num, &face);  
+        const char *face_attr = face->getAttribute();
+        if (face_attr && strcmp(face_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
       }
       else {
-        edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
-      }
-      int edge_num = block_edge_conn[12*array[i].block + edge_index];
-      topo->getEdge(edge_num, &edge);
-      const char *edge_attr = edge->getAttribute();
-      if (edge_attr && strcmp(edge_attr, attr) == 0){
-        queue->push(&array[i]);
-      }
-    }
-    else if (fx || fy || fz){
-      // Which face index are we dealing with?
-      TMRFace *face;
-      int face_index =
-        fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3) + fz*(fz0 ? 4 : 5);
-      int face_num = block_face_conn[6*array[i].block + face_index];
-      topo->getFace(face_num, &face);  
-      const char *face_attr = face->getAttribute();
-      if (face_attr && strcmp(face_attr, attr) == 0){
-        queue->push(&array[i]);
+        TMRVolume *volume;
+        topo->getVolume(array[i].block, &volume);
+        const char *volume_attr = volume->getAttribute();
+        if (volume_attr && strcmp(volume_attr, attr) == 0){
+          queue->push(&array[i]);    
+        }
       }
     }
     else {
+      if (fx && fy && fz){
+        // This node lies on a corner
+        TMRVertex *vert;
+        int vert_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
+        int vert_num = block_conn[8*array[i].block + vert_index];
+        topo->getVertex(vert_num, &vert);
+        const char *vert_attr = vert->getAttribute();
+        if (vert_attr && strcmp(vert_attr, attr) == 0){
+          queue->push(&array[i]);
+          continue;
+        }
+      }
+      if ((fy && fz) || (fx && fz) || (fx && fy)){
+        // This node lies on an edge
+        TMREdge *edge;
+        int edge_index = 0;
+        if (fy && fz){
+          edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
+          int edge_num = block_edge_conn[12*array[i].block + edge_index];
+          topo->getEdge(edge_num, &edge);
+          const char *edge_attr = edge->getAttribute();
+          if (edge_attr && strcmp(edge_attr, attr) == 0){
+            queue->push(&array[i]);
+            continue;
+          }
+        }
+        if (fx && fz){
+          edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
+          int edge_num = block_edge_conn[12*array[i].block + edge_index];
+          topo->getEdge(edge_num, &edge);
+          const char *edge_attr = edge->getAttribute();
+          if (edge_attr && strcmp(edge_attr, attr) == 0){
+            queue->push(&array[i]);
+            continue;
+          }
+        }
+        if (fx && fy){
+          edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
+          int edge_num = block_edge_conn[12*array[i].block + edge_index];
+          topo->getEdge(edge_num, &edge);
+          const char *edge_attr = edge->getAttribute();
+          if (edge_attr && strcmp(edge_attr, attr) == 0){
+            queue->push(&array[i]);
+            continue;
+          }
+        }
+      }
+      if (fx || fy || fz){
+        // Which face index are we dealing with?
+        TMRFace *face;
+        if (fx){
+          int face_index = (fx0 ? 0 : 1);
+          int face_num = block_face_conn[6*array[i].block + face_index];
+          topo->getFace(face_num, &face);  
+          const char *face_attr = face->getAttribute();
+          if (face_attr && strcmp(face_attr, attr) == 0){
+            queue->push(&array[i]);
+            continue;
+          }
+        }
+        if (fy){
+          int face_index = (fy0 ? 2 : 3);
+          int face_num = block_face_conn[6*array[i].block + face_index];
+          topo->getFace(face_num, &face);  
+          const char *face_attr = face->getAttribute();
+          if (face_attr && strcmp(face_attr, attr) == 0){
+            queue->push(&array[i]);
+            continue;
+          }
+        }
+        if (fz){
+          int face_index = (fz0 ? 4 : 5);
+          int face_num = block_face_conn[6*array[i].block + face_index];
+          topo->getFace(face_num, &face);  
+          const char *face_attr = face->getAttribute();
+          if (face_attr && strcmp(face_attr, attr) == 0){
+            queue->push(&array[i]);
+            continue;
+          }
+        }
+      }
+      
       TMRVolume *volume;
       topo->getVolume(array[i].block, &volume);
       const char *volume_attr = volume->getAttribute();
       if (volume_attr && strcmp(volume_attr, attr) == 0){
-        queue->push(&array[i]);
-      }
+        queue->push(&array[i]);    
+      }    
     }
   }
 
@@ -4375,7 +4519,7 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
 }
 
 /*
-  Create the local mesh connectivity for the portion of the
+  Create the raw local mesh connectivity for the portion of the
   finite-element mesh stored on this processor.
 
   Before calling the create mesh function, you must have already
@@ -4504,8 +4648,8 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
     // Get the constraint face index
     int face_index = face_array[i].tag;
 
-    // Loop over the dependent nodes on this face and set the
-    // number of associated independent nodes
+    // Loop over the dependent nodes on this face and set the number
+    // of associated independent nodes
     for ( int jj = 0; jj < (2*mesh_order-1); jj++ ){
       for ( int ii = 0; ii < (2*mesh_order-1); ii++ ){
         // Get the node location corresponding to this face
@@ -4547,9 +4691,14 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
         TMROctant *t = nodes->contains(&node, use_node_search);
         if (conn_size > 0){
           if (t){
-            // Get the dependent node number
+            int dof_per_node = t->level;
             int dep_node = -t->tag-1;
-            ptr[dep_node+1] = conn_size;
+
+            // Get the dependent node number
+            for ( int k = 0; k < dof_per_node; k++ ){
+              ptr[dep_node+1] = conn_size;
+              dep_node++;
+            }
           }
         }
         else if (!t){
@@ -4607,9 +4756,16 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
       TMROctant *t = nodes->contains(&node, use_node_search);
       if (ii % 2 == 1){
         if (t){
-          // Get the dependent node number
+          // Get the number of degrees of freedom per node and the
+          // node number
+          int dof_per_node = t->level;
           int dep_node = -t->tag-1;
-          ptr[dep_node+1] = mesh_order;
+
+          // Get the dependent node number
+          for ( int k = 0; k < dof_per_node; k++ ){
+            ptr[dep_node+1] = mesh_order;
+            dep_node++;
+          }
         }
       }
       else if (!t){
@@ -4647,6 +4803,7 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
     const int use_node_search = 1;
     TMROctant *t = nodes->contains(&array[i], use_node_search);
     array[i].tag = t->tag;
+    array[i].level = t->level;
   }
 
   // Send the nodes back to the original processors
@@ -4674,8 +4831,9 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
 
   // Go through and assign the connectivity and weights
   for ( int i = 0; i < ndep_faces; i++ ){
-    // Get the face node numbers
-    int fn[25];
+    // Get the face node numbers and the number of degrees of freedom
+    // for each of the nodes
+    int fn[25], ndof[25];
 
     // Find the edge length of the element octant
     const int32_t h = 1 << (TMR_MAX_LEVEL - face_array[i].level);
@@ -4716,7 +4874,7 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
         // Convert the node to the global encoding
         transformNode(&node);
 
-        // Determine if this is a dependent or independent ndoe
+        // Determine if this is a dependent or independent node
         int conn_size = 0;
         if ((ii % 2 == 1) && (jj % 2 == 1)){
           conn_size = mesh_order*mesh_order;
@@ -4733,10 +4891,12 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
         fn[ii + (2*mesh_order-1)*jj] = -num_dep_nodes-1;
         if (t){
           fn[ii + (2*mesh_order-1)*jj] = t->tag;
+          ndof[ii + (2*mesh_order-1)*jj] = t->level;
         }
         else if ((conn_size == 0) && !t){
           t = ext_nodes->contains(&node, use_node_search);
           fn[ii + (2*mesh_order-1)*jj] = t->tag;
+          ndof[ii + (2*mesh_order-1)*jj] = t->level;
         }
       }
     }
@@ -4745,32 +4905,84 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
     const int n = 2*mesh_order-1;
     const int m = mesh_order-1;
 
+    int dof_fail = 0;
     for ( int jj = 0; jj < n; jj++ ){
       for ( int ii = 0; ii < n; ii++ ){        
         // Get the dependent node number
         int node = -fn[ii + n*jj]-1;
+        int dof_per_node = ndof[ii + n*jj];
+        int dof_fail = 0;
 
         if (node != num_dep_nodes){
           if ((ii % 2 == 1) && (jj % 2 == 1)){
-            for ( int jk = 0, kk = 0; jk < mesh_order; jk++ ){
-              for ( int ik = 0; ik < mesh_order; ik++, kk++ ){
-                conn[ptr[node] + kk] = fn[2*ik + (2*jk)*n];
-                weights[ptr[node] + kk] = wt[ii/2][ik]*wt[jj/2][jk];
+            // Check that the number of degrees of freedom are
+            // consistent across all nodes. Otherwise this won't get
+            // added to the connectivity
+            for ( int jk = 0; jk < mesh_order; jk++ ){
+              for ( int ik = 0; ik < mesh_order; ik++ ){
+                if (ndof[2*ik + (2*jk)*n] < dof_per_node){
+                  dof_fail = 1;
+                  break;
+                }
+              }
+              if (dof_fail){
+                break;
+              }
+            }
+
+            // Set the connectivity and weights: the number of degrees
+            // of freedom per node are consistent
+            if (!dof_fail){
+              for ( int dof = 0; dof < dof_per_node; dof++, node++ ){
+                for ( int jk = 0, kk = 0; jk < mesh_order; jk++ ){
+                  for ( int ik = 0; ik < mesh_order; ik++, kk++ ){
+                    conn[ptr[node] + kk] = fn[2*ik + (2*jk)*n] + dof;
+                    weights[ptr[node] + kk] = wt[ii/2][ik]*wt[jj/2][jk];
+                  }
+                }
               }
             }
           }
           else if (ii % 2 == 1){
             for ( int ik = 0; ik < mesh_order; ik++ ){
-              conn[ptr[node] + ik] = fn[2*ik + jj*n];
-              weights[ptr[node] + ik] = wt[jj/2][ik];
+              if (ndof[2*ik + jj*n] < dof_per_node){
+                dof_fail = 1;
+                break;
+              }
+            }
+
+            // Set the connectivity and weights
+            if (!dof_fail){
+              for ( int dof = 0; dof < dof_per_node; dof++, node++ ){
+                for ( int ik = 0; ik < mesh_order; ik++ ){
+                  conn[ptr[node] + ik] = fn[2*ik + jj*n] + dof;
+                  weights[ptr[node] + ik] = wt[jj/2][ik];
+                }
+              }
             }
           }
           else if (jj % 2 == 1){
             for ( int jk = 0; jk < mesh_order; jk++ ){
-              conn[ptr[node] + jk] = fn[ii + (2*jk)*n];
-              weights[ptr[node] + jk] = wt[ii/2][jk];
+              if (ndof[ii + (2*jk)*n] < dof_per_node){
+                dof_fail = 1;
+                break;
+              } 
+            }
+
+            // Set the connectivity and weights
+            if (!dof_fail){
+              for ( int dof = 0; dof < dof_per_node; dof++, node++ ){
+                for ( int jk = 0; jk < mesh_order; jk++ ){
+                  conn[ptr[node] + jk] = fn[ii + (2*jk)*n] + dof;
+                  weights[ptr[node] + jk] = wt[ii/2][jk];
+                }
+              }
             }
           }
+        }
+      
+        if (dof_fail){
+          fprintf(stderr, "TMROctForest: Inconsistent number of face dof per node\n");
         }
       }
     }
@@ -4778,8 +4990,9 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
 
   // Loop over the dependent edges
   for ( int i = 0; i < ndep_edges; i++ ){
-    // The edge node numbers
-    int en[5];
+    // The edge node numbers and number of degrees of freedom per node
+    // for each of the nodes
+    int en[5], ndof[5];
 
     // Find the edge length of the element octant
     const int32_t h = 1 << (TMR_MAX_LEVEL - edge_array[i].level);
@@ -4829,23 +5042,42 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
       en[ii] = -num_dep_nodes-1;
       if (t){
         en[ii] = t->tag;
+        ndof[ii] = t->level;
       }
       else if ((conn_size == 0) && !t){
         t = ext_nodes->contains(&node, use_node_search);
         en[ii] = t->tag;
+        ndof[ii] = t->level;
       }
     }
 
     // Loop over all the nodes on the dependent edges
     for ( int jj = 1; jj < 2*mesh_order-1; jj += 2 ){
       int node = -en[jj]-1;
+      int dof_per_node = ndof[jj];
+      int dof_fail = 0;
+
       if (node != num_dep_nodes){
         if (jj % 2 == 1){
           for ( int j = 0; j < mesh_order; j++ ){
-            conn[ptr[node] + j] = en[2*j];
-            weights[ptr[node] + j] = wt[jj/2][j];
+            if (ndof[2*j] < dof_per_node){
+              dof_fail = 1;
+              break;
+            }
+          }
+
+          if (!dof_fail){
+            for ( int dof = 0; dof < dof_per_node; dof++, node++ ){
+              for ( int j = 0; j < mesh_order; j++ ){
+                conn[ptr[node] + j] = en[2*j];
+                weights[ptr[node] + j] = wt[jj/2][j];
+              }
+            }
           }
         }
+      }
+      if (dof_fail){
+        fprintf(stderr, "TMROctForest: Inconsistent number of edge dof per node\n");
       }
     }
   }
@@ -5053,6 +5285,13 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
       int nv = computeInterpWeights(coarse->mesh_order, v, h, Nv);
       int nw = computeInterpWeights(coarse->mesh_order, w, h, Nw);
     
+      // Compute the number of degrees of freedom per node
+      int dof_per_node = fine[i].level;
+
+      // Keep track of whether the number of degrees of freedom are
+      // consistent
+      int dof_fail = 0;
+
       // Loop over the nodes that are within this octant
       int nweights = 0;
       for ( int kk = 0; kk < nw; kk++ ){
@@ -5075,6 +5314,12 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
             int use_node_search = 1;
             TMROctant *t = coarse->nodes->contains(&node, use_node_search);
 
+            // The number of degrees of freedom per node are inconsistent
+            if (t->level < dof_per_node){
+              dof_fail = 1;
+            }
+
+            // Get the tag number
             if (t->tag >= 0){
               weights[nweights].index = t->tag;
               weights[nweights].weight = weight;
@@ -5106,6 +5351,18 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
 
       // Add the weights/indices to the interpolation object
       interp->addInterp(fine[i].tag, wvals, vars, nweights);
+
+      // Add the extra interpolations to the extra dof per node
+      if (dof_per_node > 1){
+        int var = fine[i].tag;
+        for ( int dof = 1; dof < dof_per_node; dof++ ){
+          var++;
+          for ( int j = 0; j < nweights; j++ ){
+            vars[j]++;
+          }
+          interp->addInterp(var, wvals, vars, nweights);
+        }
+      }
     }
   }
 

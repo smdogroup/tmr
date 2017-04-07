@@ -78,10 +78,17 @@ class TMROctForest : public TMREntity {
   // --------------------------
   void createNodes( int order=2 );
 
+  // Expert routines for first allocating then ordering nodes (needed
+  // when the nodes have non-uniform dof/node)
+  // ----------------------------------------------------------------
+  void allocateNodes( int order=2 );
+  void orderNodes();
+
   // Get the nodes or elements with certain attributes
   // -------------------------------------------------
   TMROctantArray* getOctsWithAttribute( const char *attr );
-  TMROctantArray* getNodesWithAttribute( const char *attr );
+  TMROctantArray* getNodesWithAttribute( const char *attr, 
+                                         int intersect=1 );
 
   // Create the mesh connectivity
   // ----------------------------

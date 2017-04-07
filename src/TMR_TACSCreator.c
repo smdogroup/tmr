@@ -112,6 +112,29 @@ TMRQuadTACSCreator::~TMRQuadTACSCreator(){
 }
 
 /*
+  Create the TACS element connectivity -- default
+*/
+void TMRQuadTACSCreator::createConnectivity( int order,
+                                             TMRQuadForest *forest,
+                                             int **_conn, int **_ptr,
+                                             int *_num_elements ){
+  // Create the mesh
+  int *elem_conn, num_elements = 0;
+  forest->createMeshConn(&elem_conn, &num_elements);
+
+  // Set the element ptr
+  int *ptr = new int[ num_elements+1 ];
+  for ( int i = 0; i < num_elements+1; i++ ){
+    ptr[i] = order*order*i;
+  }
+
+  *_conn = elem_conn;
+  *_ptr = ptr;
+  *_num_elements = num_elements;
+}
+
+
+/*
   Create the TACSAssembler object
 */
 TACSAssembler* TMRQuadTACSCreator::createTACS( int order, 
@@ -121,18 +144,24 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
     
-  // Ensure that the forest is balanced, and create the nodes for
-  // the underlying finite-element mesh
-  forest->createNodes(order);
+  // Ceate the nodes for the underlying finite-element mesh if they
+  // don't exist
+  TMRQuadrantArray *nodes;
+  forest->getNodes(&nodes);
+  if (!nodes){
+    forest->createNodes(order);
+  }
 
   // Find the number of nodes for this processor
   const int *range;
   forest->getOwnedNodeRange(&range);
   int num_nodes = range[mpi_rank+1] - range[mpi_rank];
 
-  // Create the mesh
-  int *elem_conn, num_elements = 0;
-  forest->createMeshConn(&elem_conn, &num_elements);
+  // Create the connectivity
+  int num_elements;
+  int *elem_conn, *ptr;
+  createConnectivity(order, forest, 
+                     &elem_conn, &ptr, &num_elements);
 
   // Create the dependent node connectivity
   forest->createDepNodeConn();
@@ -156,11 +185,6 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
     new TACSAssembler(forest->getMPIComm(), vars_per_node,
                       num_nodes, num_elements, num_dep_nodes);
 
-  // Set the element ptr
-  int *ptr = new int[ num_elements+1 ];
-  for ( int i = 0; i < num_elements+1; i++ ){
-    ptr[i] = order*order*i;
-  }
     
   // Set the element connectivity into TACSAssembler
   tacs->setElementConnectivity(elem_conn, ptr);
@@ -282,7 +306,14 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
       int loc = array[i].tag - range[mpi_rank];
       Xn[3*loc] = Xp[i].x;
       Xn[3*loc+1] = Xp[i].y;
-      Xn[3*loc+2] = Xp[i].z;
+      Xn[3*loc+2] = Xp[i].z;   
+
+      for ( int k = 1; k < array[i].level; k++ ){
+        loc++;
+        Xn[3*loc] = Xp[i].x;
+        Xn[3*loc+1] = Xp[i].y;
+        Xn[3*loc+2] = Xp[i].z;
+      }
     }
   }
 
@@ -307,6 +338,28 @@ TMROctTACSCreator::~TMROctTACSCreator(){
 }
 
 /*
+  Create the TACS element connectivity -- default
+*/
+void TMROctTACSCreator::createConnectivity( int order,
+                                             TMROctForest *forest,
+                                             int **_conn, int **_ptr,
+                                             int *_num_elements ){
+  // Create the mesh
+  int *elem_conn, num_elements = 0;
+  forest->createMeshConn(&elem_conn, &num_elements);
+
+  // Set the element ptr
+  int *ptr = new int[ num_elements+1 ];
+  for ( int i = 0; i < num_elements+1; i++ ){
+    ptr[i] = order*order*order*i;
+  }
+
+  *_conn = elem_conn;
+  *_ptr = ptr;
+  *_num_elements = num_elements;
+}
+
+/*
   Create the TACSAssembler object
 */
 TACSAssembler* TMROctTACSCreator::createTACS( int order, 
@@ -316,18 +369,24 @@ TACSAssembler* TMROctTACSCreator::createTACS( int order,
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
     
-  // Ensure that the forest is balanced, and create the nodes for
-  // the underlying finite-element mesh
-  forest->createNodes(order);
+  // Ceate the nodes for the underlying finite-element mesh if they
+  // don't exist
+  TMROctantArray *nodes;
+  forest->getNodes(&nodes);
+  if (!nodes){
+    forest->createNodes(order);
+  }
 
   // Find the number of nodes for this processor
   const int *range;
   forest->getOwnedNodeRange(&range);
   int num_nodes = range[mpi_rank+1] - range[mpi_rank];
 
-  // Create the mesh
-  int *elem_conn, num_elements = 0;
-  forest->createMeshConn(&elem_conn, &num_elements);
+  // Create the connectivity
+  int num_elements;
+  int *elem_conn, *ptr;
+  createConnectivity(order, forest, 
+                     &elem_conn, &ptr, &num_elements);
 
   // Create the dependent node connectivity
   forest->createDepNodeConn();
@@ -350,12 +409,6 @@ TACSAssembler* TMROctTACSCreator::createTACS( int order,
   TACSAssembler *tacs = 
     new TACSAssembler(forest->getMPIComm(), vars_per_node,
                       num_nodes, num_elements, num_dep_nodes);
-
-  // Set the element ptr
-  int *ptr = new int[ num_elements+1 ];
-  for ( int i = 0; i < num_elements+1; i++ ){
-    ptr[i] = order*order*order*i;
-  }
     
   // Set the element connectivity into TACSAssembler
   tacs->setElementConnectivity(elem_conn, ptr);
@@ -478,6 +531,13 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
       Xn[3*loc] = Xp[i].x;
       Xn[3*loc+1] = Xp[i].y;
       Xn[3*loc+2] = Xp[i].z;
+
+      for ( int k = 1; k < array[i].level; k++ ){
+        loc++;
+        Xn[3*loc] = Xp[i].x;
+        Xn[3*loc+1] = Xp[i].y;
+        Xn[3*loc+2] = Xp[i].z;
+      }
     }
   }
 

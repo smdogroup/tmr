@@ -187,7 +187,10 @@ int main( int argc, char *argv[] ){
     // Test the output file
     if (test_stl_file){
       test_stl_output("level_set_test.bstl", forest);
-      forest->writeForestToVTK("full_forest.vtk");
+
+      char fname[128];
+      sprintf(fname, "full_forest%d.vtk", rank);
+      forest->writeForestToVTK(fname);
     }
 
     // Write the volume mesh

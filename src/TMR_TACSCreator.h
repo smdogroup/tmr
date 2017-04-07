@@ -62,6 +62,12 @@ class TMRQuadTACSCreator : public TMREntity {
   TMRQuadTACSCreator( TMRBoundaryConditions *_bcs );
   virtual ~TMRQuadTACSCreator();
 
+  // Vritual function to create the connectivity (default is usually fine)
+  virtual void createConnectivity( int order,
+                                   TMRQuadForest *forest,
+                                   int **_conn, int **_ptr,
+                                   int *_num_elements );
+
   // Create an array of elements for the given forest
   virtual void createElements( int order,
                                TMRQuadForest *forest,
@@ -98,6 +104,12 @@ class TMROctTACSCreator : public TMREntity {
  public:
   TMROctTACSCreator( TMRBoundaryConditions *_bcs );
   virtual ~TMROctTACSCreator();
+
+  // Vritual function to create the connectivity (default is usually fine)
+  virtual void createConnectivity( int order,
+                                   TMROctForest *forest,
+                                   int **_conn, int **_ptr,
+                                   int *_num_elements );
 
   // Create an array of elements for the given forest
   virtual void createElements( int order,

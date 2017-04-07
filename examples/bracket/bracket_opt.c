@@ -10,6 +10,7 @@
 #include "TMR_RefinementTools.h"
 #include "TMRTopoProblem.h"
 #include "TMR_STLTools.h"
+#include "isoFSDTStiffness.h"
 
 /*
   Add the 3D traction
@@ -103,6 +104,17 @@ void createTopoProblem( int num_levels,
   forest_levs[0] = forest;
   filter_levs[0] = filter; 
 
+  TacsScalar rho = props->rho;
+  TacsScalar E = props->E;
+  TacsScalar nu = props->nu;
+  TacsScalar kcorr = 5.0/6.0;
+  TacsScalar ys = 400.0e6;
+  TacsScalar t = 0.01;
+  isoFSDTStiffness *stiff = new isoFSDTStiffness(1.0, E, nu, kcorr, 
+                                                 ys, t);
+  MITCShell<2> *mitc4 = new MITCShell<2>(stiff);
+  SolidShellWrapper *shell = new SolidShellWrapper(mitc4);
+
   for ( int level = 0; level < num_levels; level++ ){
     if (level > 0){
       forest_levs[level] = forest_levs[level-1]->coarsen();
@@ -118,13 +130,40 @@ void createTopoProblem( int num_levels,
      
     // Balance and repartition the forest and filter and create nodes
     forest->balance();
-    forest->repartition();    
+    forest->repartition();
+
+    // Create the extra nodes associated with the shell element
+    forest->allocateNodes(2);
+    
+    // Get the octants nodes 
+    int intersect = 0;
+    TMROctantArray *face_nodes = 
+      forest->getNodesWithAttribute("Shell", intersect);
+
+    // Get the nodes in the forest
+    TMROctantArray *nodes;
+    forest->getNodes(&nodes);
+
+    // Get all the nodes in the array
+    int size;
+    TMROctant *array;
+    face_nodes->getArray(&array, &size);
+
+    for ( int i = 0; i < size; i++ ){
+      int use_node_search = 1;
+      TMROctant *t = nodes->contains(&array[i], use_node_search);
+      t->level = 2;
+    }
+
+    // Order the nodes with the new attributes
+    forest->orderNodes();
 
     filter->balance();
     filter->repartition();
 
     TMROctTACSTopoCreator *creator = 
-      new TMROctTACSTopoCreator(bcs, *props, filter);
+      new TMROctTACSTopoCreator(bcs, *props, filter, 
+                                "Shell", shell);
     creator->incref();
 
     // Create tacs
@@ -253,6 +292,8 @@ int main( int argc, char *argv[] ){
     TMRFace *lower = faces[lower_face_num];
     TMRFace *upper = faces[upper_face_num];
     upper->setMaster(lower);
+    faces[lower_face_num]->setAttribute("Shell");
+    faces[upper_face_num]->setAttribute("Shell");    
 
     // Reset the master orientations based on the volume object
     volume[0]->updateOrientation();
