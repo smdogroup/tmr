@@ -454,7 +454,7 @@ int main( int argc, char *argv[] ){
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                  TACSElement::OUTPUT_DISPLACEMENTS);
       //                           TACSElement::OUTPUT_EXTRAS); 
-      TACSToFH5 *f5 = new TACSToFH5(tacs, SHELL, write_flag);
+      TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_SHELL, write_flag);
       f5->incref();
       sprintf(outfile, "%s//tacs_output%d.f5", prefix, iter);
       f5->writeToFile(outfile);

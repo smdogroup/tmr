@@ -9,17 +9,15 @@ SolidShellWrapper::~SolidShellWrapper(){
   shell->decref();
 }
 
-const char * SolidShellWrapper::displacementName( int i ){
-  if (i == 0){ return "u0"; }
-  else if (i == 1){ return "v0"; }
-  else if (i == 2){ return "w0"; }
-  else if (i == 3){ return "rotx"; }
-  else if (i == 4){ return "roty"; }
-  else if (i == 5){ return "rotz"; }
+const char * SolidShellWrapper::dispNames[] =
+  {"u0", "v0", "w0", "rotx", "roty", "rotz"};
+
+const char* SolidShellWrapper::displacementName( int i ){
+  return dispNames[i];
 }
 
 ElementType SolidShellWrapper::getElementType(){
-  SHELL; 
+  TACS_SHELL; 
 }
 
 int SolidShellWrapper::numDisplacements(){ return 3; }

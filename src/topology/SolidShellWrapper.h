@@ -40,6 +40,8 @@ class SolidShellWrapper : public TACSElement {
   void getOutputConnectivity( int *con, int node );
 
  private:
+  static const char *dispNames[6];
+
   MITCShell<2> *shell;
 };
 

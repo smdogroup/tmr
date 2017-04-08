@@ -222,7 +222,7 @@ int main( int argc, char *argv[] ){
     tacs->incref();
 
     // Create the f5 visualization object
-    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, SOLID, 
+    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, TACS_SOLID, 
                                             TACSElement::OUTPUT_NODES);
     f5->incref();
     f5->writeToFile("volume-mesh.f5");
