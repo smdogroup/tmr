@@ -4,66 +4,7 @@
 #include "TMR_TACSCreator.h"
 #include "TACSAssembler.h"
 #include "TMROctStiffness.h"
-#include "TACSElement.h"
-#include "MITCShell.h"
-
-class SolidShellWrapper : public TACSElement {
- public:
-  SolidShellWrapper( MITCShell<2> *_shell ){
-    shell = _shell;
-    shell->incref();
-  }
-  ~SolidShellWrapper(){
-    shell->decref();
-  }
-  int numDisplacements(){ return 3; }
-  int numNodes(){ return 8; }
-  void addResidual( double time, TacsScalar res[],
-                    const TacsScalar Xpts[],
-                    const TacsScalar vars[],
-                    const TacsScalar dvars[],
-                    const TacsScalar ddvars[] ){
-    TacsScalar X[3*4];
-    X[0] = Xpts[0];   X[1] = Xpts[1];   X[2] = Xpts[2];
-    X[3] = Xpts[6];   X[4] = Xpts[7];   X[5] = Xpts[8];
-    X[6] = Xpts[12];  X[7] = Xpts[13];  X[8] = Xpts[14];
-    X[9] = Xpts[18];  X[10] = Xpts[19]; X[11] = Xpts[20];
-    shell->addResidual(time, res, X, vars, dvars, ddvars);
-  }
-  virtual void addJacobian( double time, TacsScalar J[],
-                            double alpha, double beta, double gamma,
-                            const TacsScalar Xpts[],
-                            const TacsScalar vars[],
-                            const TacsScalar dvars[],
-                            const TacsScalar ddvars[] ){
-    TacsScalar X[3*4];
-    X[0] = Xpts[0];   X[1] = Xpts[1];   X[2] = Xpts[2];
-    X[3] = Xpts[6];   X[4] = Xpts[7];   X[5] = Xpts[8];
-    X[6] = Xpts[12];  X[7] = Xpts[13];  X[8] = Xpts[14];
-    X[9] = Xpts[18];  X[10] = Xpts[19]; X[11] = Xpts[20];
-    shell->addJacobian(time, J, alpha, beta, gamma, 
-                       X, vars, dvars, ddvars);
-  }
-  void addAdjResProduct( double time, double scale,
-                         TacsScalar dvSens[], int dvLen,
-                         const TacsScalar psi[],
-                         const TacsScalar Xpts[],
-                         const TacsScalar vars[],
-                         const TacsScalar dvars[],
-                         const TacsScalar ddvars[] ){
-    TacsScalar X[3*4];
-    X[0] = Xpts[0];   X[1] = Xpts[1];   X[2] = Xpts[2];
-    X[3] = Xpts[6];   X[4] = Xpts[7];   X[5] = Xpts[8];
-    X[6] = Xpts[12];  X[7] = Xpts[13];  X[8] = Xpts[14];
-    X[9] = Xpts[18];  X[10] = Xpts[19]; X[11] = Xpts[20];
-    shell->addAdjResProduct(time, scale, dvSens, dvLen,
-                            psi, X, vars, dvars, ddvars);
-  }
-  
- private:
-  MITCShell<2> *shell;
-};
-
+#include "SolidShellWrapper.h"
 
 class TMROctTACSTopoCreator : public TMROctTACSCreator {
  public:

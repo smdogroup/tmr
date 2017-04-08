@@ -109,7 +109,7 @@ void createTopoProblem( int num_levels,
   TacsScalar nu = props->nu;
   TacsScalar kcorr = 5.0/6.0;
   TacsScalar ys = 400.0e6;
-  TacsScalar t = 0.01;
+  TacsScalar t = 0.05;
   isoFSDTStiffness *stiff = new isoFSDTStiffness(1.0, E, nu, kcorr, 
                                                  ys, t);
   MITCShell<2> *mitc4 = new MITCShell<2>(stiff);
@@ -293,7 +293,7 @@ int main( int argc, char *argv[] ){
     TMRFace *upper = faces[upper_face_num];
     upper->setMaster(lower);
     faces[lower_face_num]->setAttribute("Shell");
-    faces[upper_face_num]->setAttribute("Shell");    
+    // faces[upper_face_num]->setAttribute("Shell");    
 
     // Reset the master orientations based on the volume object
     volume[0]->updateOrientation();
@@ -410,10 +410,10 @@ int main( int argc, char *argv[] ){
       old_design_vars = new_design_vars;
 
       // check the gradients
-      opt->checkGradients(1e-6);
+      // opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_opt_iters = 250;
+      int max_opt_iters = 1;
       opt->setMaxMajorIterations(max_opt_iters);
       prob->setIterationCounter(max_opt_iters*iter);
       opt->setOutputFrequency(1);
@@ -452,9 +452,9 @@ int main( int argc, char *argv[] ){
 
       // Create the visualization for the object
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                                 TACSElement::OUTPUT_DISPLACEMENTS |
-                                 TACSElement::OUTPUT_EXTRAS); 
-      TACSToFH5 *f5 = new TACSToFH5(tacs, SOLID, write_flag);
+                                 TACSElement::OUTPUT_DISPLACEMENTS);
+      //                           TACSElement::OUTPUT_EXTRAS); 
+      TACSToFH5 *f5 = new TACSToFH5(tacs, SHELL, write_flag);
       f5->incref();
       sprintf(outfile, "%s//tacs_output%d.f5", prefix, iter);
       f5->writeToFile(outfile);
@@ -470,19 +470,21 @@ int main( int argc, char *argv[] ){
       for ( int i = 0; i < num_elements; i++ ){
         TACSConstitutive *c = elements[i]->getConstitutive();
 
-        // In the case of the oct stiffness objects, they always return
-        // the density as the first design variable, regardless of the
-        // parameter point used in the element
-        double pt[3] = {0.0, 0.0, 0.0};
-        TacsScalar rho = c->getDVOutputValue(0, pt);
+        if (c){
+          // In the case of the oct stiffness objects, they always return
+          // the density as the first design variable, regardless of the
+          // parameter point used in the element
+          double pt[3] = {0.0, 0.0, 0.0};
+          TacsScalar rho = c->getDVOutputValue(0, pt);
 
-        // Refine things differently depending on whether
-        // the density is above or below a threshold
-        if (rho > 0.5){
-          refine[i] = 1;
-        }
-        else if (rho < 0.05){
-          refine[i] = -1;
+          // Refine things differently depending on whether
+          // the density is above or below a threshold
+          if (rho > 0.5){
+            refine[i] = 1;
+          }
+          else if (rho < 0.05){
+            refine[i] = -1;
+          }
         }
       }
       
