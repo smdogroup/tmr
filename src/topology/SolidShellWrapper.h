@@ -10,7 +10,7 @@ class SolidShellWrapper : public TACSElement {
   ~SolidShellWrapper();
   
   const char * displacementName( int i );
-  enum ElementType getElementType();
+  ElementType getElementType();
   int numDisplacements();
   int numNodes();
   void addResidual( double time, TacsScalar res[],

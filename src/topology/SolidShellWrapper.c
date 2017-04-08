@@ -17,7 +17,7 @@ const char* SolidShellWrapper::displacementName( int i ){
 }
 
 ElementType SolidShellWrapper::getElementType(){
-  TACS_SHELL; 
+  return TACS_SHELL; 
 }
 
 int SolidShellWrapper::numDisplacements(){ return 3; }
@@ -90,7 +90,7 @@ void SolidShellWrapper::getOutputData( unsigned int out_type,
       }
       if (out_type & TACSElement::OUTPUT_DISPLACEMENTS){
         for ( int k = 0; k < 3; k++ ){
-          data[index+k] = TacsRealPart(vars[6*node+k]);
+          data[index+k] = TacsRealPart(vars[6*node+3+k]);
         }
         index += 3;
       }

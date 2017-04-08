@@ -5248,6 +5248,9 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   TMROctant *fine;
   fine_nodes->getArray(&fine, &fine_size);
 
+  // The maximum octant edge length
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
   // Loop over the nodes in the fine mesh that are owned by octants
   // on the coarse mesh stored on this processor
   for ( int i = 0; i < fine_size; i++ ){
@@ -5271,9 +5274,9 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
         1 << (TMR_MAX_LEVEL - oct->level - (coarse->mesh_order - 2));
 
       // Compute the parametric location
-      int32_t u = fine[i].x - oct->x;
-      int32_t v = fine[i].y - oct->y;
-      int32_t w = fine[i].z - oct->z;
+      int32_t u = (fine[i].x == hmax-1 ? hmax : fine[i].x) - oct->x;
+      int32_t v = (fine[i].y == hmax-1 ? hmax : fine[i].y) - oct->y;
+      int32_t w = (fine[i].z == hmax-1 ? hmax : fine[i].z) - oct->z;
 
       // Set the base node location
       int32_t x = oct->x + (u == h ? h : 0);

@@ -110,7 +110,7 @@ void createTopoProblem( int num_levels,
   TacsScalar kcorr = 5.0/6.0;
   TacsScalar ys = 400.0e6;
   TacsScalar t = 0.05;
-  isoFSDTStiffness *stiff = new isoFSDTStiffness(1.0, E, nu, kcorr, 
+  isoFSDTStiffness *stiff = new isoFSDTStiffness(rho, E, nu, kcorr, 
                                                  ys, t);
   MITCShell<2> *mitc4 = new MITCShell<2>(stiff);
   SolidShellWrapper *shell = new SolidShellWrapper(mitc4);
@@ -293,7 +293,7 @@ int main( int argc, char *argv[] ){
     TMRFace *upper = faces[upper_face_num];
     upper->setMaster(lower);
     faces[lower_face_num]->setAttribute("Shell");
-    // faces[upper_face_num]->setAttribute("Shell");    
+    faces[upper_face_num]->setAttribute("Shell");    
 
     // Reset the master orientations based on the volume object
     volume[0]->updateOrientation();
