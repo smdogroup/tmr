@@ -118,7 +118,7 @@ void TMROctTACSTopoCreator::createConnectivity( int order,
     for ( int i = 0; i < nshell; i++ ){
       const int32_t h = 1 << (TMR_MAX_LEVEL - octs[i].level);
       for ( int jj = 0; jj < 2; jj++ ){
-        for ( int ii = 0; ii < 2; i++ ){
+        for ( int ii = 0; ii < 2; ii++ ){
           int face_index = octs[i].tag;
 
           TMROctant node;
@@ -139,6 +139,9 @@ void TMROctTACSTopoCreator::createConnectivity( int order,
             node.y = octs[i].y + jj*h;
             node.z = octs[i].z + (face_index % 2)*h;
           }
+
+          // Transform the node to the global ordering
+          forest->transformNode(&node);
         
           const int use_node_search = 1;
           TMROctant *t = nodes->contains(&node, use_node_search);

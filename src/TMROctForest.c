@@ -5069,7 +5069,7 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
           if (!dof_fail){
             for ( int dof = 0; dof < dof_per_node; dof++, node++ ){
               for ( int j = 0; j < mesh_order; j++ ){
-                conn[ptr[node] + j] = en[2*j];
+                conn[ptr[node] + j] = en[2*j] + dof;
                 weights[ptr[node] + j] = wt[jj/2][j];
               }
             }
@@ -5223,11 +5223,12 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   TMROctant *local_array = new TMROctant[ local_size ];
 
   // Read out the nodes that are locally owned
-  for ( int i = 0, j = 0; i < node_size; i++ ){
+  local_size = 0;
+  for ( int i = 0; i < node_size; i++ ){
     if (node_array[i].tag >= node_range[mpi_rank] &&
         node_array[i].tag < node_range[mpi_rank+1]){
-      local_array[j] = node_array[i];
-      j++;
+      local_array[local_size] = node_array[i];
+      local_size++;
     }
   }
 
@@ -5357,8 +5358,8 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
         int var = fine[i].tag;
         for ( int dof = 1; dof < dof_per_node; dof++ ){
           var++;
-          for ( int j = 0; j < nweights; j++ ){
-            vars[j]++;
+          for ( int k = 0; k < nweights; k++ ){
+            vars[k]++;
           }
           interp->addInterp(var, wvals, vars, nweights);
         }
