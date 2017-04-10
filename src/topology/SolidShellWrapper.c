@@ -10,7 +10,7 @@ SolidShellWrapper::~SolidShellWrapper(){
 }
 
 const char * SolidShellWrapper::dispNames[] =
-  {"u0", "v0", "w0", "rotx", "roty", "rotz"};
+  {"u", "v", "w", "rotx", "roty", "rotz"};
 
 const char* SolidShellWrapper::displacementName( int i ){
   return dispNames[i];
@@ -90,7 +90,7 @@ void SolidShellWrapper::getOutputData( unsigned int out_type,
       }
       if (out_type & TACSElement::OUTPUT_DISPLACEMENTS){
         for ( int k = 0; k < 3; k++ ){
-          data[index+k] = TacsRealPart(vars[6*node+3+k]);
+          data[index+k] = TacsRealPart(vars[6*node+k]);
         }
         index += 3;
       }

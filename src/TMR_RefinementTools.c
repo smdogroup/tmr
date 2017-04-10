@@ -8,17 +8,17 @@
 void TMR_CreateTACSMg( int num_levels, 
                        TACSAssembler *tacs[],
                        TMROctForest *forest[],
-                       TACSMg **_mg ){
+                       TACSMg **_mg, int use_pairs ){
   // Get the communicator
   MPI_Comm comm = tacs[0]->getMPIComm();
 
   // Create the multigrid object
+  int zero_guess = 0;
   double omega = 1.0;
   int mg_sor_iters = 1;
   int mg_sor_symm = 1;
   int mg_iters_per_level = 1;
-  TACSMg *mg = new TACSMg(comm, num_levels, omega, 
-                          mg_sor_iters, mg_sor_symm);
+  TACSMg *mg = new TACSMg(comm, num_levels);
   
   // Create the intepolation/restriction objects between mesh levels
   for ( int level = 0; level < num_levels-1; level++ ){
@@ -34,8 +34,45 @@ void TMR_CreateTACSMg( int num_levels,
     // Initialize the interpolation
     interp->initialize();
 
+    // If we're using pairs, then identify the nodes that have
+    // multiple dof/node in the octree
+    int npairs = 0;
+    int *pairs = NULL;
+    if (use_pairs){
+      TMROctantArray *nodes;
+      forest[level]->getNodes(&nodes);
+      
+      // Get the nodes
+      int size;
+      TMROctant *array;
+      nodes->getArray(&array, &size);
+      for ( int i = 0; i < size; i++ ){
+        if (array[i].level == 2){
+          npairs++;
+        }
+      }
+
+      // Set the DOF associted with the pairs
+      pairs = new int[ npairs ];
+      npairs = 0;
+      for ( int i = 0; i < size; i++ ){
+        if (array[i].level == 2){
+          pairs[npairs] = array[i].tag;
+          npairs++;
+        }
+      }
+    }
+
+    // Create the matrix
+    PMat *mat = tacs[level]->createMat();
+    PSOR *pc = new PSOR(mat, zero_guess, omega, 
+                        mg_sor_iters, mg_sor_symm, pairs, npairs);
+
     // Set the interpolation and TACS object within the multigrid object
-    mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
+    mg->setLevel(level, tacs[level], interp, mg_iters_per_level,
+                 mat, pc);
+
+    if (pairs){ delete [] pairs; }
   }
 
   // Set the lowest level - with no interpolation object

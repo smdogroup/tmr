@@ -109,7 +109,7 @@ void createTopoProblem( int num_levels,
   TacsScalar nu = props->nu;
   TacsScalar kcorr = 5.0/6.0;
   TacsScalar ys = 400.0e6;
-  TacsScalar t = 0.05;
+  TacsScalar t = 1.0;
   isoFSDTStiffness *stiff = new isoFSDTStiffness(rho, E, nu, kcorr, 
                                                  ys, t);
   MITCShell<2> *mitc4 = new MITCShell<2>(stiff);
@@ -188,15 +188,16 @@ void createTopoProblem( int num_levels,
     
     if (level == 0){
       // Create the tractions on the face
-      TacsScalar Tr[] = {100.0, 0.0, 0.0};
+      TacsScalar Tr[] = {100.0, 0.0, -1000.0};
       addFaceTractions(order, forest, "Load", tacs[0], Tr);
     }
   }
 
   // Create the multigrid object for TACS
   TACSMg *mg;
-  TMR_CreateTACSMg(num_levels, tacs, forest_levs, &mg);
-  
+  int use_pairs = 1;
+  TMR_CreateTACSMg(num_levels, tacs, forest_levs, &mg, use_pairs);
+
   // Create the topology optimization problem
   TMRTopoProblem *prob = 
     new TMRTopoProblem(num_levels, tacs, filter_levs,
@@ -410,10 +411,10 @@ int main( int argc, char *argv[] ){
       old_design_vars = new_design_vars;
 
       // check the gradients
-      // opt->checkGradients(1e-6);
+      opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_opt_iters = 1;
+      int max_opt_iters = 250;
       opt->setMaxMajorIterations(max_opt_iters);
       prob->setIterationCounter(max_opt_iters*iter);
       opt->setOutputFrequency(1);
@@ -453,8 +454,13 @@ int main( int argc, char *argv[] ){
       // Create the visualization for the object
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                  TACSElement::OUTPUT_DISPLACEMENTS);
-      //                           TACSElement::OUTPUT_EXTRAS); 
       TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_SHELL, write_flag);
+      f5->incref();
+      sprintf(outfile, "%s//tacs_output_shell%d.f5", prefix, iter);
+      f5->writeToFile(outfile);
+      f5->decref();
+
+      f5 = new TACSToFH5(tacs, TACS_SOLID, write_flag);
       f5->incref();
       sprintf(outfile, "%s//tacs_output%d.f5", prefix, iter);
       f5->writeToFile(outfile);

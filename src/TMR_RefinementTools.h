@@ -11,7 +11,7 @@
 */
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMROctForest *forest[],
-                       TACSMg **_mg );
+                       TACSMg **_mg, int use_pairs=0 );
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMRQuadForest *forest[],
                        TACSMg **_mg );
