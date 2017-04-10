@@ -24,6 +24,8 @@ int SolidShellWrapper::numDisplacements(){ return 3; }
 
 int SolidShellWrapper::numNodes(){ return 8; }
 
+int SolidShellWrapper::numStresses(){ return 8; }
+
 void SolidShellWrapper::addResidual( double time, TacsScalar res[],
                                      const TacsScalar Xpts[],
                                      const TacsScalar vars[],
@@ -66,6 +68,56 @@ void SolidShellWrapper::addAdjResProduct( double time, double scale,
   X[9] = Xpts[18];  X[10] = Xpts[19]; X[11] = Xpts[20];
   shell->addAdjResProduct(time, scale, dvSens, dvLen,
                           psi, X, vars, dvars, ddvars);
+}
+
+
+
+TACSConstitutive *SolidShellWrapper::getConstitutive(){
+  return shell->getConstitutive();
+}
+
+int SolidShellWrapper::getNumGaussPts(){
+  return shell->getNumGaussPts();
+}
+
+double SolidShellWrapper::getGaussWtsPts( const int num, double pt[] ){
+  return shell->getGaussWtsPts(num, pt);
+}
+
+TacsScalar SolidShellWrapper::getDetJacobian( const double pt[], 
+                                              const TacsScalar Xpts[] ){
+  TacsScalar X[3*4];
+  X[0] = Xpts[0];   X[1] = Xpts[1];   X[2] = Xpts[2];
+  X[3] = Xpts[6];   X[4] = Xpts[7];   X[5] = Xpts[8];
+  X[6] = Xpts[12];  X[7] = Xpts[13];  X[8] = Xpts[14];
+  X[9] = Xpts[18];  X[10] = Xpts[19]; X[11] = Xpts[20];
+  return shell->getDetJacobian(pt, X);
+}
+
+void SolidShellWrapper::getStrain( TacsScalar strain[], 
+                                   const double pt[], 
+                                   const TacsScalar Xpts[],
+                                   const TacsScalar vars[] ){
+  TacsScalar X[3*4];
+  X[0] = Xpts[0];   X[1] = Xpts[1];   X[2] = Xpts[2];
+  X[3] = Xpts[6];   X[4] = Xpts[7];   X[5] = Xpts[8];
+  X[6] = Xpts[12];  X[7] = Xpts[13];  X[8] = Xpts[14];
+  X[9] = Xpts[18];  X[10] = Xpts[19]; X[11] = Xpts[20];
+  shell->getStrain(strain, pt, X, vars);
+}
+
+void SolidShellWrapper::addStrainSVSens( TacsScalar strainSVSens[], 
+                                         const double pt[], 
+                                         const TacsScalar scale,
+                                         const TacsScalar strainSens[], 
+                                         const TacsScalar Xpts[],
+                                         const TacsScalar vars[] ){  
+  TacsScalar X[3*4];
+  X[0] = Xpts[0];   X[1] = Xpts[1];   X[2] = Xpts[2];
+  X[3] = Xpts[6];   X[4] = Xpts[7];   X[5] = Xpts[8];
+  X[6] = Xpts[12];  X[7] = Xpts[13];  X[8] = Xpts[14];
+  X[9] = Xpts[18];  X[10] = Xpts[19]; X[11] = Xpts[20];
+  shell->addStrainSVSens(strainSVSens, pt, scale, strainSens, X, vars);
 }
 
 void SolidShellWrapper::addOutputCount( int *nelems, int *nnodes, int *ncsr ){

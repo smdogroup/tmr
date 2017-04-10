@@ -13,6 +13,8 @@ class SolidShellWrapper : public TACSElement {
   ElementType getElementType();
   int numDisplacements();
   int numNodes();
+  int numStresses();
+
   void addResidual( double time, TacsScalar res[],
                     const TacsScalar Xpts[],
                     const TacsScalar vars[],
@@ -31,6 +33,23 @@ class SolidShellWrapper : public TACSElement {
                          const TacsScalar vars[],
                          const TacsScalar dvars[],
                          const TacsScalar ddvars[] );
+
+  TACSConstitutive * getConstitutive();
+  int getNumGaussPts();
+  double getGaussWtsPts( const int num, double * pt );
+  TacsScalar getDetJacobian( const double * pt, 
+                             const TacsScalar Xpts[] );
+  void getStrain( TacsScalar strain[], 
+                  const double pt[], 
+                  const TacsScalar Xpts[],
+                  const TacsScalar vars[] );
+  void addStrainSVSens( TacsScalar strainSVSens[], 
+                        const double pt[], 
+                        const TacsScalar scale,
+                        const TacsScalar strainSens[], 
+                        const TacsScalar Xpts[],
+                        const TacsScalar vars[] );
+
 
   void addOutputCount( int *nelems, int *nnodes, int *ncsr );
   void getOutputData( unsigned int out_type, 
