@@ -3474,6 +3474,9 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   TMRQuadrant *fine;
   fine_nodes->getArray(&fine, &fine_size);
 
+  // Maximum edge length
+  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+
   // Loop over the nodes in the fine mesh that are owned by quadrants
   // on the coarse mesh stored on this processor
   for ( int i = 0; i < fine_size; i++ ){
@@ -3497,8 +3500,8 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
         1 << (TMR_MAX_LEVEL - quad->level - (coarse->mesh_order - 2));
 
       // Compute the parametric location
-      int32_t u = fine[i].x - quad->x;
-      int32_t v = fine[i].y - quad->y;
+      int32_t u = (fine[i].x == hmax-1 ? hmax : fine[i].x) - quad->x;
+      int32_t v = (fine[i].y == hmax-1 ? hmax : fine[i].y) - quad->y;
 
       // Set the base node location
       int32_t x = quad->x + (u == h ? h : 0);
