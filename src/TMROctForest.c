@@ -3930,8 +3930,8 @@ before calling orderNodes()\n");
   num_dep_nodes = 0;
   for ( int i = 0; i < size; i++ ){
     if (array[i].tag < 0){
+      array[i].tag = -num_dep_nodes-1;
       num_dep_nodes += array[i].level;
-      array[i].tag = -num_dep_nodes;
     }
   }
 }

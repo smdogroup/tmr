@@ -70,8 +70,6 @@ void SolidShellWrapper::addAdjResProduct( double time, double scale,
                           psi, X, vars, dvars, ddvars);
 }
 
-
-
 TACSConstitutive *SolidShellWrapper::getConstitutive(){
   return shell->getConstitutive();
 }
