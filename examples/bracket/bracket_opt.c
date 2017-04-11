@@ -190,8 +190,11 @@ void createTopoProblem( int num_levels,
     
     if (level == 0){
       // Create the tractions on the face
-      TacsScalar Tr[] = {100.0, 0.0, -1000.0};
-      addFaceTractions(order, forest, "Load", tacs[0], Tr);
+      TacsScalar Tr1[] = {1000.0, 0.0, -1000.0};
+      addFaceTractions(order, forest, "Load1", tacs[0], Tr1);
+
+      TacsScalar Tr2[] = {0.0, -1000.0, 1000.0};
+      addFaceTractions(order, forest, "Load2", tacs[0], Tr2);
     }
   }
 
@@ -311,13 +314,14 @@ int main( int argc, char *argv[] ){
 
     // Set the attributes associated with the boundary conditions and
     // the loading condition
-    int fixed_face_one = 15;
-    int fixed_face_two = 16;
-    faces[fixed_face_one]->setAttribute("Fixed");
-    faces[fixed_face_two]->setAttribute("Fixed");
+    int fixed_face = 15;
+    faces[fixed_face]->setAttribute("Fixed");
 
-    int load_applied_on_face = 14;
-    faces[load_applied_on_face]->setAttribute("Load");
+    int load_applied_on_face_one = 14;
+    faces[load_applied_on_face_one]->setAttribute("Load1");
+
+    int load_applied_on_face_two = 16; 
+    faces[load_applied_on_face_two]->setAttribute("Load2");
 
     // Mesh the bracket
     TMRMesh *mesh = new TMRMesh(comm, geo);
@@ -352,11 +356,19 @@ int main( int argc, char *argv[] ){
     forest->createTrees(1);
     forest->balance();
 
+    // Set the optimality tolerance
+    double opt_tol = 1e-4;
+
+    // Keep track of the parameters between subsequent optimization
+    // calls to save computational time.
+    double barrier = 0.0;
+    ParOptScalar z_old = 0.0;
     ParOptBVecWrap *old_design_vars = NULL;
+    ParOptBVecWrap *old_zl = NULL, *old_zu = NULL;
     TACSVarMap *old_filter_map = NULL;
     TMROctForest *old_filter = NULL;
 
-    int max_iterations = 2;
+    int max_iterations = 5;
     for ( int iter = 0; iter < max_iterations; iter++ ){
       // Create the new filter and possibly interpolate from the old to
       // the new filter
@@ -386,6 +398,10 @@ int main( int argc, char *argv[] ){
       // THe new design variable values
       ParOptBVecWrap *new_design_vars = 
         dynamic_cast<ParOptBVecWrap*>(prob->createDesignVec());
+      ParOptBVecWrap *new_zl = 
+        dynamic_cast<ParOptBVecWrap*>(prob->createDesignVec());
+      ParOptBVecWrap *new_zu = 
+        dynamic_cast<ParOptBVecWrap*>(prob->createDesignVec());
 
       // Set the design variables using the old design
       // variable values interpolated from the old filter
@@ -408,27 +424,34 @@ int main( int argc, char *argv[] ){
         // new set of values
         TACSBVec *old_vec = old_design_vars->vec;
         TACSBVec *new_vec = new_design_vars->vec;
-        interp->mult(old_vec, new_vec);
+        interp->mult(old_design_vars->vec, new_design_vars->vec);
+	interp->mult(old_zl->vec, new_zl->vec);
+	interp->mult(old_zu->vec, new_zu->vec);
+	interp->decref();
+
+	// Set the new design variable values	
         prob->setInitDesignVars(new_design_vars);
-        interp->decref();
 
         // Free the old design variable values and reset the pointer
         delete old_design_vars;
       }
 
-      // Set the old design variable vector to what was once
-      // the new design variable values
-      old_design_vars = new_design_vars;
-
       // check the gradients
       opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_opt_iters = 1;
+      int max_opt_iters = 300;
       opt->setMaxMajorIterations(max_opt_iters);
       prob->setIterationCounter(max_opt_iters*iter);
       opt->setOutputFrequency(1);
         
+      // Set the optimization tolerance
+      opt->setAbsOptimalityTol(opt_tol);
+      opt_tol = 0.1*opt_tol;
+      if (opt_tol <= 1e-6){
+	opt_tol = 1e-6;
+      }
+
       // Set the Hessian reset frequency
       opt->setBFGSUpdateType(LBFGS::DAMPED_UPDATE);
       opt->setHessianResetFreq(max_num_bfgs);
@@ -436,6 +459,21 @@ int main( int argc, char *argv[] ){
       // Set the barrier parameter information
       opt->setBarrierPower(1.0);
       opt->setBarrierFraction(0.25);
+      
+      if (iter >= 1){
+	// Set the new barrier parameter
+	opt->setInitBarrierParameter(barrier);
+
+	// Get the multipliers to set their new values
+	ParOptScalar *z;
+	ParOptVec *zl, *zu;              
+	opt->getInitMultipliers(&z, NULL, &zl, &zu);
+
+	// Set the values of the new multipliers
+	z[0] = z_old;
+	zl->copyValues(new_zl);
+	zu->copyValues(new_zu);
+      }
       
       // Set the log/output file
       char outfile[256];
@@ -447,10 +485,25 @@ int main( int argc, char *argv[] ){
       sprintf(new_restart_file, "%s//paropt_restart%d.bin", prefix, iter);
       opt->optimize(new_restart_file);
 
+      // Record the barrier parameter
+      barrier = opt->getBarrierParameter();
+
       // Get the final values of the design variables
-      ParOptVec *old;
-      opt->getOptimizedPoint(&old, NULL, NULL, NULL, NULL);
-      old_design_vars->copyValues(old);
+      const ParOptScalar *z;
+      ParOptVec *x_old, *zl, *zu;
+      opt->getOptimizedPoint(&x_old, &z, NULL, &zl, &zu);
+      
+      // Set the old design variable vector to what was once
+      // the new design variable values
+      old_design_vars = new_design_vars;
+      old_zl = new_zl;
+      old_zu = new_zu;
+
+      // Copy the values 
+      z_old = z[0];
+      old_design_vars->copyValues(x_old);
+      old_zl->copyValues(zl);
+      old_zu->copyValues(zu);
 
       // Set the old filter/variable map for the next time through the
       // loop so that we can interpolate design variable values
@@ -464,13 +517,7 @@ int main( int argc, char *argv[] ){
       // Create the visualization for the object
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                  TACSElement::OUTPUT_DISPLACEMENTS);
-      TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_SHELL, write_flag);
-      f5->incref();
-      sprintf(outfile, "%s//tacs_output_shell%d.f5", prefix, iter);
-      f5->writeToFile(outfile);
-      f5->decref();
-
-      f5 = new TACSToFH5(tacs, TACS_SOLID, write_flag);
+      TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_SOLID, write_flag);
       f5->incref();
       sprintf(outfile, "%s//tacs_output%d.f5", prefix, iter);
       f5->writeToFile(outfile);
