@@ -5,6 +5,7 @@
 #include "TACSFunction.h"
 #include "Solid.h"
 #include "TMR_STLTools.h"
+#include "TACSToFH5.h"
 
 /*
   Wrap a TACSBVec object with the ParOpt vector interface
@@ -547,23 +548,25 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     // Solve the system: K(x)*u = -res
     ksm->solve(res, vars);
     vars->scale(-1.0);
+
+    tacs[0]->applyBCs(vars);
     tacs[0]->setVariables(vars);
+    
+    // Evaluate the compliance
+    TacsScalar compliance_value = -vars->dot(res);
   
-    // Evaluate the functions in parallel
-    TacsScalar fvals[2];
-    TACSFunction *funcs[2];
-    funcs[0] = compliance;
-    funcs[1] = mass;
-    tacs[0]->evalFunctions(funcs, 2, fvals);
-  
+    // Evaluate the mass
+    TacsScalar mass_value;
+    tacs[0]->evalFunctions(&mass, 1, &mass_value);
+    
     // Set the scaling for the objective function
     if (obj_scale < 0.0){
-      obj_scale = 1.0/fvals[0];
+      obj_scale = 1.0/compliance_value;
     }
 
     // Set the compliance objective and the mass constraint
-    *fobj = obj_scale*fvals[0];
-    cons[0] = (target_mass - fvals[1])*mass_scale;
+    *fobj = obj_scale*compliance_value;
+    cons[0] = (target_mass - mass_value)*mass_scale;
   }
   else {
     return 1;
