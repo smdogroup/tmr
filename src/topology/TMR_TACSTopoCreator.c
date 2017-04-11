@@ -66,6 +66,7 @@ TMROctTACSTopoCreator::~TMROctTACSTopoCreator(){
   filter->decref();
   filter_map->decref();
   if (filter_indices){ filter_indices->decref(); }
+  if (shell_attr){ delete [] shell_attr; }
 }
 
   // Get the underlying information about the

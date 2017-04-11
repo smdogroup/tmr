@@ -154,6 +154,7 @@ void createTopoProblem( int num_levels,
       TMROctant *t = nodes->contains(&array[i], use_node_search);
       t->level = 2;
     }
+    delete face_nodes;
 
     // Order the nodes with the new attributes
     forest->orderNodes();
@@ -168,6 +169,7 @@ void createTopoProblem( int num_levels,
 
     // Create tacs
     tacs[level] = creator->createTACS(order, forest);
+    tacs[level]->incref();
 
     // Extract the filter indices/node maps from the creator class
     creator->getMap(&filter_maps[level]);
@@ -207,11 +209,19 @@ void createTopoProblem( int num_levels,
 
   // Free the filter maps
   for ( int level = 0; level < num_levels; level++ ){
+    tacs[level]->decref();
     forest_levs[level]->decref();
     filter_levs[level]->decref();
     filter_maps[level]->decref();
     filter_ext_indices[level]->decref(); 
   }
+  
+  // Free the allocated arrays
+  delete [] forest_levs;
+  delete [] filter_levs;
+  delete [] tacs;
+  delete [] filter_maps;
+  delete [] filter_ext_indices;
 }
 
 /*
@@ -346,7 +356,7 @@ int main( int argc, char *argv[] ){
     TACSVarMap *old_filter_map = NULL;
     TMROctForest *old_filter = NULL;
 
-    int max_iterations = 5;
+    int max_iterations = 2;
     for ( int iter = 0; iter < max_iterations; iter++ ){
       // Create the new filter and possibly interpolate from the old to
       // the new filter
@@ -414,7 +424,7 @@ int main( int argc, char *argv[] ){
       opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_opt_iters = 250;
+      int max_opt_iters = 1;
       opt->setMaxMajorIterations(max_opt_iters);
       prob->setIterationCounter(max_opt_iters*iter);
       opt->setOutputFrequency(1);
@@ -498,8 +508,7 @@ int main( int argc, char *argv[] ){
       forest->refine(refine, min_level, max_level);
       delete [] refine;
 
-      // Free tacs and the filter map
-      filter_map->decref();
+      // Free tacs
       tacs->decref();
     }
  

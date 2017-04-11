@@ -171,6 +171,7 @@ ParOptProblem(_tacs[0]->getMPIComm()){
 
     // Create the design variable vector for this level
     x[k] = new TACSBVec(filter_maps[k], 1, filter_dist[k]);
+    x[k]->incref();
   }
 
   // Now create the interpolation between filter levels
@@ -242,6 +243,7 @@ TMRTopoProblem::~TMRTopoProblem(){
     filter_indices[k]->decref();
     filter_dist[k]->decref();
     filter_ctx[k]->decref();
+    x[k]->decref();
   }
 
   for ( int k = 0; k < nlevels-1; k++ ){

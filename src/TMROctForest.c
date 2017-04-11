@@ -330,9 +330,6 @@ void TMROctForest::freeData(){
   if (dep_conn){ delete [] dep_conn; }
   if (dep_weights){ delete [] dep_weights; }
 
-  // Set the range of nodes
-  node_range = NULL;
-
   // Zero out the nodes/edges/faces and all data
   num_nodes = 0;
   num_edges = 0;
@@ -1362,6 +1359,7 @@ void TMROctForest::createTrees( int refine_level ){
     p = array[0];
   }
 
+  if (owners){ delete [] owners; }
   owners = new TMROctant[ mpi_size ];
   MPI_Allgather(&p, 1, TMROctant_MPI_type, 
                 owners, 1, TMROctant_MPI_type, comm);
@@ -1431,6 +1429,7 @@ void TMROctForest::createRandomTrees( int nrand,
     p = array[0];
   }
 
+  if (owners){ delete [] owners; }
   owners = new TMROctant[ mpi_size ];
   MPI_Allgather(&p, 1, TMROctant_MPI_type, 
                 owners, 1, TMROctant_MPI_type, comm);
@@ -1570,6 +1569,7 @@ void TMROctForest::repartition(){
   delete octants;
   octants = new TMROctantArray(new_array, new_size);
 
+  if (owners){ delete [] owners; }
   owners = new TMROctant[ mpi_size ];
   MPI_Allgather(&new_array[0], 1, TMROctant_MPI_type, 
                 owners, 1, TMROctant_MPI_type, comm);
@@ -4632,8 +4632,6 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
   // Allocate the pointer into the dependent edges
   int *ptr = new int[ num_dep_nodes+1 ];
   memset(ptr, 0, (num_dep_nodes+1)*sizeof(int));
-
-  TMROctantQueue *queue = new TMROctantQueue();
 
   // Go through the dependent faces and determine the dependent
   // node information

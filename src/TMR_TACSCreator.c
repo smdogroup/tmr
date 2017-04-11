@@ -260,6 +260,7 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
       // Add the boundary conditions to TACSAssembler
       tacs->addBCs(num, vars, num_bcs, bc_nums);
       delete [] vars;
+      delete nodes;
     }
   }
 }
@@ -484,6 +485,7 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
       // Add the boundary conditions to TACSAssembler
       tacs->addBCs(num, vars, num_bcs, bc_nums);
       delete [] vars;
+      delete nodes;
     }
   }
 }
