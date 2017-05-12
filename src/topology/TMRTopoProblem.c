@@ -379,8 +379,8 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
 
           // Set the local values into the vector
           setBVecFromLocalValues(xlocal, wrap->vec);
-          wrap->vec->beginSetValues(INSERT_NONZERO_VALUES);
-          wrap->vec->endSetValues(INSERT_NONZERO_VALUES);
+          wrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
+          wrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
         }
       }
     }
@@ -395,16 +395,16 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
         ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lb);
         if (lbwrap){
           setBVecFromLocalValues(xlocal, lbwrap->vec);
-          lbwrap->vec->beginSetValues(INSERT_NONZERO_VALUES);
-          lbwrap->vec->endSetValues(INSERT_NONZERO_VALUES);
+          lbwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
+          lbwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
         }
       }
       if (ub){
         ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ub);
         if (ubwrap){
           setBVecFromLocalValues(upper, ubwrap->vec);
-          ubwrap->vec->beginSetValues(INSERT_NONZERO_VALUES);
-          ubwrap->vec->endSetValues(INSERT_NONZERO_VALUES);
+          ubwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
+          ubwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
         }
       }
       delete [] upper;
@@ -601,16 +601,16 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     memset(xlocal, 0, size*sizeof(TacsScalar));
     tacs[0]->addAdjointResProducts(-obj_scale, &vars, 1, xlocal, size);
     setBVecFromLocalValues(xlocal, g_vec);
-    g_vec->beginSetValues(ADD_VALUES);
+    g_vec->beginSetValues(TACS_ADD_VALUES);
 
     memset(xlocal, 0, size*sizeof(TacsScalar));
     tacs[0]->addDVSens(-mass_scale, &mass, 1, xlocal, size);
     setBVecFromLocalValues(xlocal, m_vec);
-    m_vec->beginSetValues(ADD_VALUES);
+    m_vec->beginSetValues(TACS_ADD_VALUES);
 
     // Finsh adding the values
-    g_vec->endSetValues(ADD_VALUES);
-    m_vec->endSetValues(ADD_VALUES);
+    g_vec->endSetValues(TACS_ADD_VALUES);
+    m_vec->endSetValues(TACS_ADD_VALUES);
 
     // Check if we're using reciprocal variables
     if (use_inverse_vars){
@@ -746,14 +746,14 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
           tacs[0]->getElement(k, &nodes, &len);
 
           // Add the residual values
-          res->setValues(len, nodes, elemRes, ADD_VALUES);
+          res->setValues(len, nodes, elemRes, TACS_ADD_VALUES);
         }
       }
     }
 
     // Add the residual values
-    res->beginSetValues(ADD_VALUES);
-    res->endSetValues(ADD_VALUES);
+    res->beginSetValues(TACS_ADD_VALUES);
+    res->endSetValues(TACS_ADD_VALUES);
 
     // Set the boundary conditions
     tacs[0]->applyBCs(res);
@@ -770,8 +770,8 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
     setBVecFromLocalValues(xlocal, hwrap->vec);
 
     // Begin setting the values
-    hwrap->vec->beginSetValues(ADD_VALUES);
-    hwrap->vec->endSetValues(ADD_VALUES);
+    hwrap->vec->beginSetValues(TACS_ADD_VALUES);
+    hwrap->vec->endSetValues(TACS_ADD_VALUES);
   }
 }
 
