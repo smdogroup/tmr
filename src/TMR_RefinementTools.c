@@ -844,6 +844,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
                                    double target_err,
                                    int min_level, int max_level ){
   const int order = forest->getMeshOrder();
+  const int nenrich = (order == 2 ? 5 : 7);
 
   // Get the communicator
   MPI_Comm comm = tacs->getMPIComm();
@@ -921,41 +922,46 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
         memset(rXpts, 0, 3*9*sizeof(TacsScalar));
         memset(ruelem, 0, 6*9*sizeof(TacsScalar));
 
-        for ( int m = 0; m < 3; m++ ){
-          for ( int n = 0; n < 3; n++ ){
+        for ( int m = 0; m < order; m++ ){
+          for ( int n = 0; n < order; n++ ){
             double pt[2];
-            pt[0] = -1.0 + 0.5*(2*ii + n);
-            pt[1] = -1.0 + 0.5*(2*jj + m);
+            pt[0] = ii - 1.0 + 1.0*n/(order-1);
+            pt[1] = jj - 1.0 + 1.0*m/(order-1);
 
             // Evaluate the locations of the new nodes
             double N[9], Nr[7];
-            FElibrary::biLagrangeSF(N, pt, 3);
-            eval3rdEnrichmentFuncs2D(pt, Nr);
+            FElibrary::biLagrangeSF(N, pt, order);
+            if (order == 2){
+              eval2ndEnrichmentFuncs2D(pt, Nr);
+            }
+            else {
+              eval3rdEnrichmentFuncs2D(pt, Nr);
+            }
             
             // Set the values of the variables at this point
-            for ( int k = 0; k < 9; k++ ){
-              rXpts[3*(n + 3*m)] += Xpts[3*k]*N[k];
-              rXpts[3*(n + 3*m)+1] += Xpts[3*k+1]*N[k];
-              rXpts[3*(n + 3*m)+2] += Xpts[3*k+2]*N[k];
+            for ( int k = 0; k < order*order; k++ ){
+              rXpts[3*(n + order*m)] += Xpts[3*k]*N[k];
+              rXpts[3*(n + order*m)+1] += Xpts[3*k+1]*N[k];
+              rXpts[3*(n + order*m)+2] += Xpts[3*k+2]*N[k];
 
               // Evaluate the interpolation part of the reconstruction
-              ruelem[6*(n + 3*m)] += uelem[6*k]*N[k];
-              ruelem[6*(n + 3*m)+1] += uelem[6*k+1]*N[k];
-              ruelem[6*(n + 3*m)+2] += uelem[6*k+2]*N[k];
-              ruelem[6*(n + 3*m)+3] += uelem[6*k+3]*N[k];
-              ruelem[6*(n + 3*m)+4] += uelem[6*k+4]*N[k];
-              ruelem[6*(n + 3*m)+5] += uelem[6*k+5]*N[k];
+              ruelem[6*(n + order*m)] += uelem[6*k]*N[k];
+              ruelem[6*(n + order*m)+1] += uelem[6*k+1]*N[k];
+              ruelem[6*(n + order*m)+2] += uelem[6*k+2]*N[k];
+              ruelem[6*(n + order*m)+3] += uelem[6*k+3]*N[k];
+              ruelem[6*(n + order*m)+4] += uelem[6*k+4]*N[k];
+              ruelem[6*(n + order*m)+5] += uelem[6*k+5]*N[k];
             }
 
             // Add the portion from the enrichment functions
-            for ( int k = 0; k < 7; k++ ){
+            for ( int k = 0; k < nenrich; k++ ){
               // Evaluate the interpolation part of the reconstruction
-              ruelem[6*(n + 3*m)] += ubar[6*k]*Nr[k];
-              ruelem[6*(n + 3*m)+1] += ubar[6*k+1]*Nr[k];
-              ruelem[6*(n + 3*m)+2] += ubar[6*k+2]*Nr[k];
-              ruelem[6*(n + 3*m)+3] += ubar[6*k+3]*Nr[k];
-              ruelem[6*(n + 3*m)+4] += ubar[6*k+4]*Nr[k];
-              ruelem[6*(n + 3*m)+5] += ubar[6*k+5]*Nr[k];
+              ruelem[6*(n + order*m)] += ubar[6*k]*Nr[k];
+              ruelem[6*(n + order*m)+1] += ubar[6*k+1]*Nr[k];
+              ruelem[6*(n + order*m)+2] += ubar[6*k+2]*Nr[k];
+              ruelem[6*(n + order*m)+3] += ubar[6*k+3]*Nr[k];
+              ruelem[6*(n + order*m)+4] += ubar[6*k+4]*Nr[k];
+              ruelem[6*(n + order*m)+5] += ubar[6*k+5]*Nr[k];
             }
           }
         }

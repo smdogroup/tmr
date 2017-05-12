@@ -356,7 +356,7 @@ int main( int argc, char *argv[] ){
     TACSVarMap *old_filter_map = NULL;
     TMROctForest *old_filter = NULL;
 
-    int max_iterations = 2;
+    int max_iterations = 5;
     for ( int iter = 0; iter < max_iterations; iter++ ){
       // Create the new filter and possibly interpolate from the old to
       // the new filter
@@ -424,7 +424,7 @@ int main( int argc, char *argv[] ){
       opt->checkGradients(1e-6);
       
       // Set the optimization parameters
-      int max_opt_iters = 1;
+      int max_opt_iters = 250;
       opt->setMaxMajorIterations(max_opt_iters);
       prob->setIterationCounter(max_opt_iters*iter);
       opt->setOutputFrequency(1);

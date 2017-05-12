@@ -343,8 +343,7 @@ int main( int argc, char *argv[] ){
   // Set the boundary conditions
   int bc_nums[] = {0, 1, 2, 3, 4, 5};
   TMRBoundaryConditions *bcs = new TMRBoundaryConditions();
-  bcs->addBoundaryCondition("Edge1", 6, bc_nums);
-  bcs->addBoundaryCondition("Edge3", 6, bc_nums);
+  bcs->addBoundaryCondition("Clamped", 6, bc_nums);
 
   // Set up the creator object - this facilitates creating the
   // TACSAssembler objects for different geometries
@@ -367,21 +366,24 @@ int main( int argc, char *argv[] ){
     int num_verts;
     TMRVertex **verts;
     geo->getVertices(&num_verts, &verts);
+    verts[0]->setAttribute("Clamped");
+    verts[1]->setAttribute("Clamped");
 
     int num_edges;
     TMREdge **edges;
     geo->getEdges(&num_edges, &edges);
-    edges[0]->setAttribute("Edge1");
-    edges[1]->setAttribute("Edge2");
-    edges[2]->setAttribute("Edge3");
+    edges[0]->setAttribute("Clamped");
+    edges[2]->setAttribute("Clamped");
 
+    // Only include the cylinder face
     int num_faces;
     TMRFace **faces;
     geo->getFaces(&num_faces, &faces);
+    num_faces = 1;
 
     TMRModel *face_geo = new TMRModel(num_verts, verts,
                                       num_edges, edges,
-                                      num_faces, faces);
+                                      num_faces, &faces[0]);
 
     // Allocate the new mesh
     TMRMesh *mesh = new TMRMesh(comm, face_geo);
@@ -406,7 +408,7 @@ int main( int argc, char *argv[] ){
     forest[0]->repartition();
     
     // The target relative error on the compliance
-    double target_rel_err = 1e-4;
+    double target_rel_err = 1e-6;
 
     FILE *fp = NULL;
     if (mpi_rank == 0){
@@ -487,7 +489,7 @@ int main( int argc, char *argv[] ){
       // Create and write out an fh5 file
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                  TACSElement::OUTPUT_DISPLACEMENTS);
-      TACSToFH5 *f5 = new TACSToFH5(tacs[0], SHELL, write_flag);
+      TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
       f5->incref();
 
       // Write out the solution
@@ -496,32 +498,8 @@ int main( int argc, char *argv[] ){
       f5->writeToFile(outfile);
       f5->decref();
 
-      // --------------------------------------------------
-      // Duplicate and refine the mesh
-      TMRQuadForest *dup = forest[0]->duplicate();
-      dup->incref();
-      dup->refine(NULL);
-      dup->balance();
-      TACSAssembler *dup_tacs = creator->createTACS(order, dup);
-      dup_tacs->incref();
-      TMR_ComputeReconSolution(order, tacs[0], dup_tacs);
-
-      // Create and write out an fh5 file
-      TACSToFH5 *f5_dup = new TACSToFH5(dup_tacs, SHELL, write_flag);
-      f5_dup->incref();
-      
-      // Write out the solution
-      sprintf(outfile, "refined_output%02d.f5", iter);
-      f5_dup->writeToFile(outfile);
-      f5_dup->decref();
-
-      dup->decref();
-      dup_tacs->decref();
-      // --------------------------------------------------
-
       int nelems = tacs[0]->getNumElements();
 
-      /*
       // Set the target error using the factor: max(1.0, 16*(2**-iter))
       double factor = 1.0; // 16.0/(1 << iter);
       if (factor < 1.0){ factor = 1.0; }
@@ -533,24 +511,11 @@ int main( int argc, char *argv[] ){
       // Set the absolute element-level error based on the relative
       // error that is requested
       double target_abs_err = factor*target_rel_err*fval/nelems_total;
-      */
-      // Perform the strain energy refinement
-      // TacsScalar abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
-      //                                             target_abs_err);
-      
-      int *refine = new int[ nelems ];
-      for ( int i = 0; i < nelems; i++ ){
-        if (i % 7 == 0 || i % 13 == 0){
-          refine[i] = 1;
-        }
-        else {
-          refine[i] = 0;
-        }
-      }
-      forest[0]->refine(refine);
-      delete [] refine;
 
-      /*
+      // Perform the strain energy refinement
+      TacsScalar abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
+                                                  target_abs_err);
+      
       if (mpi_rank == 0){
         printf("Absolute error estimate = %e\n", abs_err);
 
@@ -560,7 +525,6 @@ int main( int argc, char *argv[] ){
         fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
                 iter, nelems, nnodes, fval, (fval + abs_err)/fval, abs_err);
       }
-      */
 
       // Decrease the reference count
       tacs[0]->decref();
