@@ -50,12 +50,10 @@ class specialFSDTStiffness : public FSDTStiffness {
     TacsScalar t1 = 0.5*t;
 
     TacsScalar a = (t1 - t0);
-    TacsScalar b = 0.5*(t1*t1 - t0*t0);
     TacsScalar d = 1.0/3.0*(t1*t1*t1 - t0*t0*t0);
     
     for ( int i = 0; i < 6; i++ ){
       A[i] += a*Qbar[i];
-      B[i] += b*Qbar[i];
       D[i] += d*Qbar[i];
     }
     
