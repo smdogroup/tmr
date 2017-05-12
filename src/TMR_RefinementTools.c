@@ -493,14 +493,14 @@ static void computeLocalWeights( TACSAssembler *tacs,
     int len = 0;
     const int *nodes;
     tacs->getElement(i, &nodes, &len);
-    weights->setValues(len, nodes, welem, ADD_VALUES);
+    weights->setValues(len, nodes, welem, TACS_ADD_VALUES);
   }
 
   delete [] welem;
 
   // Finish setting all of the values
-  weights->beginSetValues(ADD_VALUES);
-  weights->endSetValues(ADD_VALUES);
+  weights->beginSetValues(TACS_ADD_VALUES);
+  weights->endSetValues(TACS_ADD_VALUES);
 
   // Distribute the values
   weights->beginDistributeValues();
@@ -605,7 +605,7 @@ static void computeNodeDeriv2D( const int order,
     }
 
     // Add the values of the derivatives
-    uderiv->setValues(len, nodes, delem, ADD_VALUES);
+    uderiv->setValues(len, nodes, delem, TACS_ADD_VALUES);
   }
 
   // Free the element values
@@ -614,8 +614,8 @@ static void computeNodeDeriv2D( const int order,
   delete [] delem;
 
   // Add the values in parallel
-  uderiv->beginSetValues(ADD_VALUES);
-  uderiv->endSetValues(ADD_VALUES);
+  uderiv->beginSetValues(TACS_ADD_VALUES);
+  uderiv->endSetValues(TACS_ADD_VALUES);
 
   // Distribute the values so that we can call getValues
   uderiv->beginDistributeValues();
@@ -744,7 +744,7 @@ void computeRefinedSolution( const int order,
         }
 
         // Add the contributions to the element
-        out->setValues(len, refine_nodes, uref, ADD_VALUES);
+        out->setValues(len, refine_nodes, uref, TACS_ADD_VALUES);
       }
     }
   }
@@ -757,8 +757,8 @@ void computeRefinedSolution( const int order,
   delete [] uref;
 
   // Add the values
-  out->beginSetValues(ADD_VALUES);
-  out->endSetValues(ADD_VALUES);
+  out->beginSetValues(TACS_ADD_VALUES);
+  out->endSetValues(TACS_ADD_VALUES);
 }
 
 /*
@@ -1127,14 +1127,14 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
         tacs_refine->getElement(elem_num, &nodes, &len);
         
         // Add the solution error to the residual
-        residual->setValues(len, nodes, res, ADD_VALUES);
+        residual->setValues(len, nodes, res, TACS_ADD_VALUES);
       }
     }
   }
 
   // Add all the values together
-  residual->beginSetValues(ADD_VALUES);
-  residual->endSetValues(ADD_VALUES);
+  residual->beginSetValues(TACS_ADD_VALUES);
+  residual->endSetValues(TACS_ADD_VALUES);
 
   // Distribute the residual entries
   residual->beginDistributeValues();
@@ -1263,7 +1263,7 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
         }
 
         // Add the local residual values
-        qadjvec->setValues(len, nodes, qadjelem, ADD_VALUES);
+        qadjvec->setValues(len, nodes, qadjelem, TACS_ADD_VALUES);
       }
     }
 
@@ -1274,8 +1274,8 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
     }
   }
 
-  qadjvec->beginSetValues(ADD_VALUES);
-  qadjvec->endSetValues(ADD_VALUES);
+  qadjvec->beginSetValues(TACS_ADD_VALUES);
+  qadjvec->endSetValues(TACS_ADD_VALUES);
   
   qadjvec->beginDistributeValues();
   qadjvec->endDistributeValues();
