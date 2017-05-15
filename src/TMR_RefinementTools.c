@@ -414,9 +414,12 @@ static void computeElemRecon2D( const int order,
         b[neq*k+c+1] -= 
           wvals[ii]*wvals[jj]*(d2[0]*d[0] + d2[1]*d[1] + d2[2]*d[2]);
       }
+
+      // xi,X = [X,xi]^{-1}
+      // U,X = U,xi*xi,X = U,xi*J^{T}
       
       // Now, evaluate the terms for the left-hand-side
-      // that contribute to the
+      // that contribute to the derivative
       double Nr[7], Nar[7], Nbr[7];
       if (order == 2){
         eval2ndEnrichmentFuncs2D(pt, Nr, Nar, Nbr);
@@ -427,7 +430,6 @@ static void computeElemRecon2D( const int order,
 
       // Add the contributions to the the enricment 
       for ( int i = 0; i < nenrich; i++ ){
-        // Evaluate the
         TacsScalar d[3];
         d[0] = Nar[i]*J[0] + Nbr[i]*J[1];
         d[1] = Nar[i]*J[3] + Nbr[i]*J[4];
@@ -572,7 +574,7 @@ static void computeNodeDeriv2D( const int order,
       for ( int ii = 0; ii < order; ii++ ){
         double pt[2];
         pt[0] = -1.0 + 2.0*ii/(order-1);
-        pt[1] = -1.0 + 1.0*jj/(order-1);
+        pt[1] = -1.0 + 2.0*jj/(order-1);
 
         // Evaluate the the quadratic shape functions at this point
         double N[9], Na[9], Nb[9];
@@ -658,9 +660,6 @@ void computeRefinedSolution( const int order,
 
   // Refined element solution
   TacsScalar *uref = new TacsScalar[ vars_per_node*order*order ];
-
-  // Derivative weights for this element
-  TacsScalar welem[9];
 
   // The maximum number of nodes for any element
   TacsScalar Xpts[3*9];
@@ -806,6 +805,8 @@ void TMR_ComputeReconSolution( const int order,
   ans->decref();
 }
 
+static int file_iter = 0;
+
 /*
   The following function performs a mesh refinement based on a strain
   energy criteria. It is based on the following relationship for
@@ -909,15 +910,15 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     TacsScalar delem[18*9];
     uderiv->getValues(len, nodes, delem);
 
-    // 7 enrichment functions for each degree of freedom
+    // Compute the enrichment functions for each degree of freedom
     TacsScalar tmp[18*(7 + 6)];
     TacsScalar ubar[7*6];
     computeElemRecon2D(order, 6,
                        Xpts, uelem, delem, ubar, tmp);
 
     TacsScalar SE_refine = 0.0;
+    for ( int jj = 0; jj < 2; jj++ ){
     for ( int ii = 0; ii < 2; ii++ ){
-      for ( int jj = 0; jj < 2; jj++ ){
         TacsScalar rXpts[3*9], ruelem[6*9];
         memset(rXpts, 0, 3*9*sizeof(TacsScalar));
         memset(ruelem, 0, 6*9*sizeof(TacsScalar));
@@ -940,28 +941,30 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
             
             // Set the values of the variables at this point
             for ( int k = 0; k < order*order; k++ ){
-              rXpts[3*(n + order*m)] += Xpts[3*k]*N[k];
-              rXpts[3*(n + order*m)+1] += Xpts[3*k+1]*N[k];
-              rXpts[3*(n + order*m)+2] += Xpts[3*k+2]*N[k];
+              rXpts[3*(n + m*order)] += Xpts[3*k]*N[k];
+              rXpts[3*(n + m*order)+1] += Xpts[3*k+1]*N[k];
+              rXpts[3*(n + m*order)+2] += Xpts[3*k+2]*N[k];
+            }
 
-              // Evaluate the interpolation part of the reconstruction
-              ruelem[6*(n + order*m)] += uelem[6*k]*N[k];
-              ruelem[6*(n + order*m)+1] += uelem[6*k+1]*N[k];
-              ruelem[6*(n + order*m)+2] += uelem[6*k+2]*N[k];
-              ruelem[6*(n + order*m)+3] += uelem[6*k+3]*N[k];
-              ruelem[6*(n + order*m)+4] += uelem[6*k+4]*N[k];
-              ruelem[6*(n + order*m)+5] += uelem[6*k+5]*N[k];
+            // Evaluate the interpolation part of the reconstruction
+            for ( int k = 0; k < order*order; k++ ){
+              ruelem[6*(n + m*order)] += uelem[6*k]*N[k];
+              ruelem[6*(n + m*order)+1] += uelem[6*k+1]*N[k];
+              ruelem[6*(n + m*order)+2] += uelem[6*k+2]*N[k];
+              ruelem[6*(n + m*order)+3] += uelem[6*k+3]*N[k];
+              ruelem[6*(n + m*order)+4] += uelem[6*k+4]*N[k];
+              ruelem[6*(n + m*order)+5] += uelem[6*k+5]*N[k];
             }
 
             // Add the portion from the enrichment functions
             for ( int k = 0; k < nenrich; k++ ){
               // Evaluate the interpolation part of the reconstruction
-              ruelem[6*(n + order*m)] += ubar[6*k]*Nr[k];
-              ruelem[6*(n + order*m)+1] += ubar[6*k+1]*Nr[k];
-              ruelem[6*(n + order*m)+2] += ubar[6*k+2]*Nr[k];
-              ruelem[6*(n + order*m)+3] += ubar[6*k+3]*Nr[k];
-              ruelem[6*(n + order*m)+4] += ubar[6*k+4]*Nr[k];
-              ruelem[6*(n + order*m)+5] += ubar[6*k+5]*Nr[k];
+              ruelem[6*(n + m*order)] += ubar[6*k]*Nr[k];
+              ruelem[6*(n + m*order)+1] += ubar[6*k+1]*Nr[k];
+              ruelem[6*(n + m*order)+2] += ubar[6*k+2]*Nr[k];
+              ruelem[6*(n + m*order)+3] += ubar[6*k+3]*Nr[k];
+              ruelem[6*(n + m*order)+4] += ubar[6*k+4]*Nr[k];
+              ruelem[6*(n + m*order)+5] += ubar[6*k+5]*Nr[k];
             }
           }
         }
@@ -976,6 +979,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
         }
       }
     }
+
     // SE_refine - SE_error should always be a positive quantity
     SE_error[i] = SE_refine - SE_error[i];
 

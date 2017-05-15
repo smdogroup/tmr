@@ -408,7 +408,7 @@ int main( int argc, char *argv[] ){
     forest[0]->repartition();
     
     // The target relative error on the compliance
-    double target_rel_err = 1e-6;
+    double target_rel_err = 1e-3;
 
     FILE *fp = NULL;
     if (mpi_rank == 0){
@@ -501,7 +501,7 @@ int main( int argc, char *argv[] ){
       int nelems = tacs[0]->getNumElements();
 
       // Set the target error using the factor: max(1.0, 16*(2**-iter))
-      double factor = 1.0; // 16.0/(1 << iter);
+      double factor = 8.0/(1 << iter);
       if (factor < 1.0){ factor = 1.0; }
 
       // Determine the total number of elements across all processors
@@ -510,18 +510,22 @@ int main( int argc, char *argv[] ){
 
       // Set the absolute element-level error based on the relative
       // error that is requested
-      double target_abs_err = factor*target_rel_err*fval/nelems_total;
+      double target_abs_err = factor*target_rel_err*fabs(fval)/nelems_total;
 
       // Perform the strain energy refinement
       TacsScalar abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
                                                   target_abs_err);
       
       if (mpi_rank == 0){
+        printf("Relative factor         = %e\n", factor);
+        printf("Function value          = %e\n", fval);
+        printf("Target element error    = %e\n", target_abs_err);
         printf("Absolute error estimate = %e\n", abs_err);
+        printf("Relative error estimate = %e\n", fabs(abs_err/fval));
 
         const int *range;
         forest[0]->getOwnedNodeRange(&range);
-        int nnodes = range[mpi_size-1];
+        int nnodes = range[mpi_size];
         fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
                 iter, nelems, nnodes, fval, (fval + abs_err)/fval, abs_err);
       }
