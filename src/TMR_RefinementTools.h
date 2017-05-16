@@ -21,7 +21,9 @@ void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
 */
 void TMR_ComputeReconSolution( const int order,
                                TACSAssembler *tacs,
-                               TACSAssembler *tacs_refined );
+                               TACSAssembler *tacs_refined,
+                               TACSBVec *_uvec=NULL,
+                               TACSBVec *_uvec_refined=NULL );
 
 /*
   Perform a mesh refinement based on the strain engery refinement

@@ -10,6 +10,7 @@
 #include "TACSToFH5.h"
 #include "TACSMg.h"
 #include "tacslapack.h"
+#include "KSFailure.h"
 #include <stdio.h>
 #include <math.h>
 #include "TMR_RefinementTools.h"
@@ -102,8 +103,8 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
         
           // Set the pressure load
           double z = Xp[index].z;
-          double theta =-R*atan2(Xp[index].y, Xp[index].x);
-          double p = -load*sin(beta*z)*sin(alpha*theta);
+          double y = -R*atan2(Xp[index].y, Xp[index].x);
+          double p = -load*sin(beta*z)*sin(alpha*y);
 
           tx[n] = p*Xp[index].x/R;
           ty[n] = p*Xp[index].y/R;
@@ -278,6 +279,7 @@ int main( int argc, char *argv[] ){
   int order = 2;
   int orthotropic_flag = 0;
   double htarget = 10.0;
+  int strain_energy_refine = 0;
   for ( int i = 0; i < argc; i++ ){
     if (sscanf(argv[i], "h=%lf", &htarget) == 1){
       printf("htarget = %f\n", htarget);
@@ -298,7 +300,7 @@ int main( int argc, char *argv[] ){
   double beta = 3*M_PI/L;
 
   // Set the load parameter
-  double load = 1.0e3;
+  double load = 3e6;
 
   // Set the yield stress
   double ys = 350e6;
@@ -341,9 +343,11 @@ int main( int argc, char *argv[] ){
   ply->incref();
 
   // Set the boundary conditions
-  int bc_nums[] = {0, 1, 2, 3, 4, 5};
+  int clamped_bc_nums[] = {0, 1, 2, 5};
+  int restrained_bc_nums[] = {0, 1, 5};
   TMRBoundaryConditions *bcs = new TMRBoundaryConditions();
-  bcs->addBoundaryCondition("Clamped", 6, bc_nums);
+  bcs->addBoundaryCondition("Clamped", 4, clamped_bc_nums);
+  bcs->addBoundaryCondition("Restrained", 3, restrained_bc_nums);
 
   // Set up the creator object - this facilitates creating the
   // TACSAssembler objects for different geometries
@@ -367,13 +371,13 @@ int main( int argc, char *argv[] ){
     TMRVertex **verts;
     geo->getVertices(&num_verts, &verts);
     verts[0]->setAttribute("Clamped");
-    verts[1]->setAttribute("Clamped");
+    verts[1]->setAttribute("Restrained");
 
     int num_edges;
     TMREdge **edges;
     geo->getEdges(&num_edges, &edges);
-    edges[0]->setAttribute("Clamped");
-    edges[2]->setAttribute("Clamped");
+    edges[0]->setAttribute("Restrained");
+    edges[2]->setAttribute("Restrained");
 
     // Only include the cylinder face
     int num_faces;
@@ -413,6 +417,8 @@ int main( int argc, char *argv[] ){
     FILE *fp = NULL;
     if (mpi_rank == 0){
       fp = fopen("cylinder_refine.dat", "w");
+      fprintf(fp, "Variables = \"%s\" \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"\n",
+              "iter", "nelems", "nnodes", "fval", "fval corr", "abs_err");
     }
 
     for ( int iter = 0; iter < MAX_REFINE; iter++ ){
@@ -475,20 +481,13 @@ int main( int argc, char *argv[] ){
       ans->scale(-1.0);
       tacs[0]->setVariables(ans);
 
-      // The compliance function
-      TACSFunction *func = new TACSCompliance(tacs[0]);
-      func->incref();
-
       // Evaluate the function of interest
-      TacsScalar fval = 0.0;
-      tacs[0]->evalFunctions(&func, 1, &fval);
-
-      // Delete the compliance function
-      func->decref();
+      TacsScalar fval = -res->dot(ans);
 
       // Create and write out an fh5 file
       unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                                 TACSElement::OUTPUT_DISPLACEMENTS);
+                                 TACSElement::OUTPUT_DISPLACEMENTS |
+                                 TACSElement::OUTPUT_EXTRAS);
       TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
       f5->incref();
 
@@ -501,21 +500,88 @@ int main( int argc, char *argv[] ){
       int nelems = tacs[0]->getNumElements();
 
       // Set the target error using the factor: max(1.0, 16*(2**-iter))
-      double factor = 8.0/(1 << iter);
+      double factor = 1.0; // 8.0/(1 << iter);
       if (factor < 1.0){ factor = 1.0; }
 
       // Determine the total number of elements across all processors
       int nelems_total = 0;
       MPI_Allreduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, comm);
 
-      // Set the absolute element-level error based on the relative
-      // error that is requested
-      double target_abs_err = factor*target_rel_err*fabs(fval)/nelems_total;
+      // The target absolute error per element
+      double target_abs_err = 0.0;
 
-      // Perform the strain energy refinement
-      TacsScalar abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
-                                                  target_abs_err);
-      
+      // The absolute error estimate and the corrected function value
+      // estimate with the adjoint error correction
+      TacsScalar abs_err = 0.0, fval_est = 0.0;
+
+      if (strain_energy_refine){
+        // Set the absolute element-level error based on the relative
+        // error that is requested
+        target_abs_err = factor*target_rel_err*fabs(fval)/nelems_total;
+
+        // Perform the strain energy refinement
+        abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
+                                         target_abs_err);
+        fval_est = fval + abs_err;
+      }
+      else {
+        double ks_weight = 100;
+        TACSKSFailure *ks_func = new TACSKSFailure(tacs[0], ks_weight);
+        ks_func->setKSFailureType(TACSKSFailure::CONTINUOUS);
+        ks_func->incref();
+
+        // Set the pointer to the TACS function
+        TACSFunction *func = ks_func;
+
+        // Evaluate the function of interest
+        tacs[0]->evalFunctions(&func, 1, &fval);
+
+        // Set the absolute element-level error based on the relative
+        // error that is requested
+        target_abs_err = factor*target_rel_err*fabs(fval)/nelems_total;
+
+        // Create the adjoint vector
+        TACSBVec *adjvec = tacs[0]->createVec();
+        adjvec->incref();
+
+        // Compute the derivative df/du
+        res->zeroEntries();
+        tacs[0]->addSVSens(1.0, 0.0, 0.0, &func, 1, &res);
+
+        // Solve for the adjoint vector
+        gmres->solve(res, adjvec);
+        adjvec->scale(-1.0);
+
+        // Duplicate the forest
+        int min_level = 0, max_level = TMR_MAX_LEVEL;
+        TMRQuadForest *forest_refine = forest[0]->duplicate();
+        forest_refine->incref();
+
+        // Uniformly refine the mesh everywhere
+        forest_refine->refine();
+        forest_refine->balance();
+
+        // Create the new, refined version of TACS
+        TACSAssembler *tacs_refine = creator->createTACS(order, forest_refine);
+        tacs_refine->incref();
+
+        // Perform the adjoint refinement
+        TacsScalar adj_corr;
+        abs_err = TMR_AdjointRefine(tacs[0], tacs_refine,
+                                    adjvec, forest[0],
+                                    target_abs_err, min_level, max_level,
+                                    &adj_corr);
+
+        // Compute the function estimate
+        fval_est = fval + adj_corr;
+
+        // Delete all the info that is no longer needed
+        tacs_refine->decref();
+        forest_refine->decref();
+        adjvec->decref();
+        func->decref();
+      }
+
       if (mpi_rank == 0){
         printf("Relative factor         = %e\n", factor);
         printf("Function value          = %e\n", fval);
@@ -527,7 +593,7 @@ int main( int argc, char *argv[] ){
         forest[0]->getOwnedNodeRange(&range);
         int nnodes = range[mpi_size];
         fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
-                iter, nelems, nnodes, fval, (fval + abs_err)/fval, abs_err);
+                iter, nelems, nnodes, fval, fval_est, abs_err);
       }
 
       // Decrease the reference count
