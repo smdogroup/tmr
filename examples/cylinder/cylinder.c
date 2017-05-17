@@ -395,24 +395,25 @@ int main( int argc, char *argv[] ){
     
     TMRMeshOptions options;
     options.frontal_quality_factor = 1.25;
+    options.mesh_type_default = TMR_UNSTRUCTURED;
     mesh->mesh(options, htarget);
     mesh->writeToVTK("cylinder-mesh.vtk");
 
     TMRModel *model = mesh->createModelFromMesh();
     model->incref();
 
-    const int MAX_REFINE = 5;
+    const int MAX_REFINE = 7;
     TMRQuadForest *forest[MAX_REFINE+2];
     forest[0] = new TMRQuadForest(comm);
     forest[0]->incref();
 
     TMRTopology *topo = new TMRTopology(comm, model);
     forest[0]->setTopology(topo);
-    forest[0]->createTrees(1);
+    forest[0]->createTrees(0);
     forest[0]->repartition();
     
     // The target relative error on the compliance
-    double target_rel_err = 1e-3;
+    double target_rel_err = 1e-6;
 
     FILE *fp = NULL;
     if (mpi_rank == 0){
@@ -500,8 +501,7 @@ int main( int argc, char *argv[] ){
       int nelems = tacs[0]->getNumElements();
 
       // Set the target error using the factor: max(1.0, 16*(2**-iter))
-      double factor = 1.0; // 8.0/(1 << iter);
-      if (factor < 1.0){ factor = 1.0; }
+      double factor = 1.0;
 
       // Determine the total number of elements across all processors
       int nelems_total = 0;

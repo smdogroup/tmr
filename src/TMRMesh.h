@@ -6,15 +6,27 @@
 #include "TMRTopology.h"
 
 /*
+  The type of face mesh algorithm to apply
+*/
+enum TMRFaceMeshType { TMR_NO_MESH, 
+                       TMR_STRUCTURED, 
+                       TMR_UNSTRUCTURED };
+
+/*
   Global options for meshing
 */
 class TMRMeshOptions {
  public:
-  enum TriangleSmoothingType { LAPLACIAN, SPRING };
+  enum TriangleSmoothingType { TMR_LAPLACIAN, TMR_SPRING };
+
+  /*
+    Create the mesh options objects with the default settings
+  */
   TMRMeshOptions(){
     // Set the default meshing options
+    mesh_type_default = TMR_STRUCTURED;
     num_smoothing_steps = 10;
-    tri_smoothing_type = LAPLACIAN;
+    tri_smoothing_type = TMR_LAPLACIAN;
     frontal_quality_factor = 1.5;
 
     // By default, write nothing to any files
@@ -28,6 +40,7 @@ class TMRMeshOptions {
   }
 
   // Options to control the meshing algorithm
+  TMRFaceMeshType mesh_type_default;
   int num_smoothing_steps;
   TriangleSmoothingType tri_smoothing_type;
   double frontal_quality_factor;
@@ -85,7 +98,6 @@ class TMREdgeMesh : public TMREntity {
 */
 class TMRFaceMesh : public TMREntity {
  public:
-  enum TMRFaceMeshType { NO_MESH, STRUCTURED, UNSTRUCTURED };
   TMRFaceMesh( MPI_Comm _comm, TMRFace *face );
   ~TMRFaceMesh();
 
@@ -93,8 +105,7 @@ class TMRFaceMesh : public TMREntity {
   void getFace( TMRFace **_surface );
   
   // Mesh the underlying geometric object
-  void mesh( TMRMeshOptions options, double htarget, 
-             TMRFaceMeshType _type=STRUCTURED );
+  void mesh( TMRMeshOptions options, double htarget );
 
   // Return the type of the underlying mesh
   TMRFaceMeshType getMeshType(){

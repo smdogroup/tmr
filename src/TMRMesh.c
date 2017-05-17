@@ -894,7 +894,7 @@ TMRFaceMesh::TMRFaceMesh( MPI_Comm _comm, TMRFace *_face ){
   comm = _comm;
   face = _face;
   face->incref();
-  mesh_type = NO_MESH;
+  mesh_type = TMR_NO_MESH;
 
   num_fixed_pts = 0;
   num_points = 0;
@@ -922,14 +922,15 @@ TMRFaceMesh::~TMRFaceMesh(){
   Create the surface mesh
 */
 void TMRFaceMesh::mesh( TMRMeshOptions options,
-                        double htarget, 
-                        TMRFaceMeshType _mesh_type ){
+                        double htarget ){
   int mpi_rank, mpi_size;
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
 
-  if (_mesh_type == NO_MESH){
-    _mesh_type = STRUCTURED;
+  // Set the default mesh type
+  TMRFaceMeshType _mesh_type = options.mesh_type_default;
+  if (_mesh_type == TMR_NO_MESH){
+    _mesh_type = TMR_STRUCTURED;
   }
   
   // Get the master face and its orientation relative to this
@@ -951,10 +952,10 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
   }
 
   // First check if the conditions for a structured mesh are satisfied
-  if (_mesh_type == STRUCTURED){
+  if (_mesh_type == TMR_STRUCTURED){
     int nloops = face->getNumEdgeLoops();
     if (nloops != 1){
-      _mesh_type = UNSTRUCTURED;
+      _mesh_type = TMR_UNSTRUCTURED;
     }
 
     // Get the first edge loop and the edges in the loop
@@ -964,11 +965,11 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     TMREdge **edges;
     loop->getEdgeLoop(&nedges, &edges, NULL);
     if (nedges != 4){
-      _mesh_type = UNSTRUCTURED;
+      _mesh_type = TMR_UNSTRUCTURED;
     }
     for ( int k = 0; k < nedges; k++ ){
       if (edges[k]->isDegenerate()){
-        _mesh_type = UNSTRUCTURED;
+        _mesh_type = TMR_UNSTRUCTURED;
       }
     }
 
@@ -989,7 +990,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       edges[2]->getMesh(&mesh);
       mesh->getMeshPoints(&nx2, NULL, NULL);
       if (nx1 != nx2){
-        _mesh_type = UNSTRUCTURED;
+        _mesh_type = TMR_UNSTRUCTURED;
       }
 
       edges[1]->getMesh(&mesh);
@@ -997,7 +998,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       edges[3]->getMesh(&mesh);
       mesh->getMeshPoints(&ny2, NULL, NULL);
       if (ny1 != ny2){
-        _mesh_type = UNSTRUCTURED;
+        _mesh_type = TMR_UNSTRUCTURED;
       }
     }
   }
@@ -1240,7 +1241,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       delete [] pts_to_quads;
 
     }
-    else if (mesh_type == STRUCTURED){
+    else if (mesh_type == TMR_STRUCTURED){
       // Use a straightforward interpolation technique to obtain the
       // structured parametric locations in terms of the boundary
       // point parametric locations. We do not perform checks here
@@ -1409,7 +1410,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
                         &node_to_tri_ptr, &node_to_tris);
       
         // Smooth the resulting triangular mesh
-        if (options.tri_smoothing_type == TMRMeshOptions::LAPLACIAN){
+        if (options.tri_smoothing_type == TMRMeshOptions::TMR_LAPLACIAN){
           laplacianSmoothing(options.num_smoothing_steps, num_fixed_pts,
                              num_tri_edges, tri_edges,
                              num_points, pts, X, face);
@@ -2612,7 +2613,7 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
                 faces[i]->getEntityId());
         mesh_fail = 1;
       }
-      else if (mesh->getMeshType() != TMRFaceMesh::STRUCTURED){
+      else if (mesh->getMeshType() != TMR_STRUCTURED){
         fprintf(stderr,
                 "TMRVolumeMesh error: \
 Through-thickness meshes must be structured\n");
@@ -2978,7 +2979,8 @@ int TMRVolumeMesh::setNodeNums( int *num ){
     // Now the top and bottom surfaces of the volume have the correct
     // ordering, but the sides are not ordered correctly. Scan through
     // the structured sides (with the same ordering as defined by the
-    // edge loops on the bottom surface) and determine 
+    // edge loops on the bottom surface) and determine the node
+    // ordering.
 
     // The internal ordering is relative to the bottom face with its
     // normal direction pointing in to the volume. If the bottom face
