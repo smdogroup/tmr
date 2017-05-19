@@ -461,18 +461,23 @@ int main( int argc, char *argv[] ){
       opt->setBarrierFraction(0.25);
       
       if (iter >= 1){
-	// Set the new barrier parameter
-	opt->setInitBarrierParameter(barrier);
-
-	// Get the multipliers to set their new values
+        // Get the multipliers to set their new values
 	ParOptScalar *z;
 	ParOptVec *zl, *zu;              
 	opt->getInitMultipliers(&z, NULL, &zl, &zu);
-
+        
 	// Set the values of the new multipliers
 	z[0] = z_old;
-	zl->copyValues(new_zl);
-	zu->copyValues(new_zu);
+	zl->copyValues(new_zl);        
+        zu->copyValues(new_zu);
+        // -----------------------------
+        opt->resetDesignAndBounds();
+        ParOptScalar new_barrier = opt->getComplementarity();
+
+        // Set the new barrier parameter with new mu
+	opt->setInitBarrierParameter(new_barrier);
+        // ------------------------------
+          
       }
       
       // Set the log/output file
