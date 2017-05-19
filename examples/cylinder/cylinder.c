@@ -288,6 +288,9 @@ int main( int argc, char *argv[] ){
       if (order < 2){ order = 2; }
       if (order > 3){ order = 3; }
     }
+    if (strcmp(argv[i], "strain_energy") == 0){
+      strain_energy_refine = 1;
+    }
   }
 
   // Set the shell geometry parameters
@@ -395,14 +398,13 @@ int main( int argc, char *argv[] ){
     
     TMRMeshOptions options;
     options.frontal_quality_factor = 1.25;
-    options.mesh_type_default = TMR_UNSTRUCTURED;
+    options.mesh_type_default = TMR_STRUCTURED;
     mesh->mesh(options, htarget);
-    mesh->writeToVTK("cylinder-mesh.vtk");
 
     TMRModel *model = mesh->createModelFromMesh();
     model->incref();
 
-    const int MAX_REFINE = 4;
+    const int MAX_REFINE = 5;
     TMRQuadForest *forest[MAX_REFINE+2];
     forest[0] = new TMRQuadForest(comm);
     forest[0]->incref();
@@ -525,7 +527,7 @@ int main( int argc, char *argv[] ){
         fval_est = fval + abs_err;
       }
       else {
-        double ks_weight = 100;
+        double ks_weight = 10;
         TACSKSFailure *ks_func = new TACSKSFailure(tacs[0], ks_weight);
         ks_func->setKSFailureType(TACSKSFailure::CONTINUOUS);
         ks_func->incref();
@@ -573,7 +575,14 @@ int main( int argc, char *argv[] ){
                                     &adj_corr);
 
         // Compute the function estimate
-        fval_est = fval + adj_corr;
+        fval_est = fval + adj_corr; 
+
+        // Write out the adjoint solution
+        f5 = new TACSToFH5(tacs_refine, TACS_SHELL, write_flag);
+        f5->incref();
+        sprintf(outfile, "adjoint_reconstruction%02d.f5", iter);
+        f5->writeToFile(outfile);
+        f5->decref();
 
         // Delete all the info that is no longer needed
         tacs_refine->decref();
@@ -607,6 +616,10 @@ int main( int argc, char *argv[] ){
       ans->decref();
       mg->decref();
       gmres->decref();
+
+      if (abs_err < fabs(fval)*target_rel_err){
+        break;
+      }
     }
 
     if (fp){ fclose(fp); }

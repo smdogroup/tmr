@@ -496,7 +496,7 @@ static void computeLocalWeights( TACSAssembler *tacs,
   for ( int i = 0; i < nelems; i++ ){
     int len = 0;
     const int *nodes;
-    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, &nodes, &len);   
 
     // Compute the local weights
     for ( int j = 0; j < len; j++ ){
@@ -505,6 +505,7 @@ static void computeLocalWeights( TACSAssembler *tacs,
         welem[j] = 0.0;
       }
     }
+
     weights->setValues(len, nodes, welem, TACS_ADD_VALUES);
   }
 
@@ -608,11 +609,19 @@ static void computeNodeDeriv2D( const int order,
         // Evaluate the x/y/z derivatives of each value at the
         // independent nodes
         TacsScalar winv = 1.0/welem[ii + jj*order];
-        for ( int k = 0; k < vars_per_node; k++ ){
-          d[0] = winv*(Ud[2*k]*J[0] + Ud[2*k+1]*J[1]);
-          d[1] = winv*(Ud[2*k]*J[3] + Ud[2*k+1]*J[4]);
-          d[2] = winv*(Ud[2*k]*J[6] + Ud[2*k+1]*J[7]);
-          d += 3;          
+        if (nodes[ii + jj*order] >= 0){
+          for ( int k = 0; k < vars_per_node; k++ ){
+            d[0] = winv*(Ud[2*k]*J[0] + Ud[2*k+1]*J[1]);
+            d[1] = winv*(Ud[2*k]*J[3] + Ud[2*k+1]*J[4]);
+            d[2] = winv*(Ud[2*k]*J[6] + Ud[2*k+1]*J[7]);
+            d += 3;
+          }
+        }
+        else {
+          for ( int k = 0; k < vars_per_node; k++ ){
+            d[0] = d[1] = d[2] = 0.0;
+            d += 3;
+          }
         }
       }
     }
@@ -706,8 +715,8 @@ void computeRefinedSolution( const int order,
           for ( int n = 0; n < order; n++ ){
             // Set the new parameter point in the refined element
             double pt[2];
-            pt[0] = -1.0 + (1.0*(2*ii + n))/(order-1);
-            pt[1] = -1.0 + (1.0*(2*jj + m))/(order-1);
+            pt[0] = ii - 1.0 + 1.0*n/(order-1);
+            pt[1] = jj - 1.0 + 1.0*m/(order-1);
 
             // Evaluate the shape functions and the enrichment
             // functions at the new parametric point
@@ -746,14 +755,14 @@ void computeRefinedSolution( const int order,
         TacsScalar welem[9];
         wref->getValues(len, refine_nodes, welem);
         for ( int i = 0; i < order*order; i++ ){
-          TacsScalar w = 0.0;
+          TacsScalar winv = 0.0;
           if (refine_nodes[i] >= 0){
-            w = 1.0/welem[i];
+            winv = 1.0/welem[i];
           }
 
           // Add the contributions to the refined nodes
           for ( int j = 0; j < vars_per_node; j++ ){
-            uref[vars_per_node*i + j] *= w;
+            uref[vars_per_node*i + j] *= winv;
           }
         }
 
@@ -876,6 +885,10 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
                                    TMRQuadForest *forest,
                                    double target_err,
                                    int min_level, int max_level ){
+  // The maximum number of nodes
+  const int max_num_nodes = 9;
+
+  // Set the order of the mesh and the number of enrichment shape functions
   const int order = forest->getMeshOrder();
   const int nenrich = (order == 2 ? 5 : 7);
 
@@ -890,7 +903,14 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   uvec->endDistributeValues();
 
   // Number of local elements
-  int nelems = tacs->getNumElements();
+  const int nelems = tacs->getNumElements();
+
+  // Get the number of variables per node
+  const int vars_per_node = tacs->getVarsPerNode();
+  const int deriv_per_node = 3*vars_per_node;
+
+  // The number of equations: 2 times the number of nodes for each element
+  const int neq = 2*order*order;
 
   // Compute the contribution to the error in the energy norm from
   // each element
@@ -906,10 +926,21 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   computeNodeDeriv2D(order, tacs, uvec, wlocal, &uderiv);
   uderiv->incref();
 
-  // Zero the time-derivatives: this code assumes a steady-state
-  TacsScalar dvars[6*9], ddvars[6*9];
-  memset(dvars, 0, sizeof(dvars));
-  memset(ddvars, 0, sizeof(ddvars));
+  // Allocate space for the element reconstruction problem
+  TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
+  TacsScalar *ubar = new TacsScalar[ vars_per_node*nenrich ];
+  TacsScalar *delem = new TacsScalar[ deriv_per_node*order*order ];
+
+  // Allocate arrays needed for the reconstruction
+  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // The interpolated variables on the refined mesh
+  TacsScalar *dvars = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *ddvars = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // Allocate the element residual array
+  TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
 
   // Keep track of the total error
   TacsScalar SE_total_error = 0.0;
@@ -919,8 +950,8 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     double time = 0.0;
 
     // Get the node locations and variables
-    TacsScalar Xpts[3*9], uelem[6*9];
-    TACSElement *elem = tacs->getElement(i, Xpts, uelem, NULL, NULL);
+    TacsScalar Xpts[3*max_num_nodes];
+    TACSElement *elem = tacs->getElement(i, Xpts, vars_elem, dvars, ddvars);
     
     // Get the node numbers for this element
     int len;
@@ -928,32 +959,31 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     tacs->getElement(i, &nodes, &len);
 
     // Evaluate the element residual
-    TacsScalar res[6*9];
     memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
-    elem->addResidual(time, res, Xpts, uelem, dvars, ddvars);
+    elem->addResidual(time, res, Xpts, vars_elem, dvars, ddvars);
     
     // Take the inner product to get the strain energy
     SE_error[i] = 0.0;
     for ( int j = 0; j < elem->numVariables(); j++ ){
-      SE_error[i] += res[j]*uelem[j];
+      SE_error[i] += res[j]*vars_elem[j];
     }
 
     // Compute the solution on the refined mesh
-    TacsScalar delem[18*9];
     uderiv->getValues(len, nodes, delem);
 
     // Compute the enrichment functions for each degree of freedom
-    TacsScalar tmp[18*(7 + 6)];
-    TacsScalar ubar[7*6];
-    computeElemRecon2D(order, 6,
-                       Xpts, uelem, delem, ubar, tmp);
+    computeElemRecon2D(order, vars_per_node,
+                       Xpts, vars_elem, delem, ubar, tmp);
 
     TacsScalar SE_refine = 0.0;
     for ( int jj = 0; jj < 2; jj++ ){
       for ( int ii = 0; ii < 2; ii++ ){
-        TacsScalar rXpts[3*9], ruelem[6*9];
-        memset(rXpts, 0, 3*9*sizeof(TacsScalar));
-        memset(ruelem, 0, 6*9*sizeof(TacsScalar));
+        // Retrieve the refined element
+        TacsScalar rXpts[3*max_num_nodes];
+        memset(rXpts, 0, 3*order*order*sizeof(TacsScalar));
+
+        // Set the variables to zero
+        memset(vars_interp, 0, vars_per_node*order*order*sizeof(TacsScalar));
 
         for ( int m = 0; m < order; m++ ){
           for ( int n = 0; n < order; n++ ){
@@ -980,34 +1010,31 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
 
             // Evaluate the interpolation part of the reconstruction
             for ( int k = 0; k < order*order; k++ ){
-              ruelem[6*(n + m*order)] += uelem[6*k]*N[k];
-              ruelem[6*(n + m*order)+1] += uelem[6*k+1]*N[k];
-              ruelem[6*(n + m*order)+2] += uelem[6*k+2]*N[k];
-              ruelem[6*(n + m*order)+3] += uelem[6*k+3]*N[k];
-              ruelem[6*(n + m*order)+4] += uelem[6*k+4]*N[k];
-              ruelem[6*(n + m*order)+5] += uelem[6*k+5]*N[k];
+              for ( int kk = 0; kk < vars_per_node; kk++ ){
+                vars_interp[vars_per_node*(n + m*order)+kk] += 
+                  vars_elem[vars_per_node*k+kk]*N[k];
+              }
             }
 
             // Add the portion from the enrichment functions
             for ( int k = 0; k < nenrich; k++ ){
               // Evaluate the interpolation part of the reconstruction
-              ruelem[6*(n + m*order)] += ubar[6*k]*Nr[k];
-              ruelem[6*(n + m*order)+1] += ubar[6*k+1]*Nr[k];
-              ruelem[6*(n + m*order)+2] += ubar[6*k+2]*Nr[k];
-              ruelem[6*(n + m*order)+3] += ubar[6*k+3]*Nr[k];
-              ruelem[6*(n + m*order)+4] += ubar[6*k+4]*Nr[k];
-              ruelem[6*(n + m*order)+5] += ubar[6*k+5]*Nr[k];
+              for ( int kk = 0; kk < vars_per_node; kk++ ){
+                vars_interp[vars_per_node*(n + m*order)+kk] += 
+                  ubar[vars_per_node*k+kk]*Nr[k];
+              }
             }
           }
         }
 
         // Compute the element residual
         memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
-        elem->addResidual(time, res, rXpts, ruelem, dvars, ddvars);
+        elem->addResidual(time, res, rXpts, 
+                          vars_interp, dvars, ddvars);
         
         // Take the inner product to get the strain energy
         for ( int j = 0; j < elem->numVariables(); j++ ){
-          SE_refine += res[j]*ruelem[j];
+          SE_refine += res[j]*vars_interp[j];
         }
       }
     }
@@ -1019,9 +1046,20 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     SE_total_error += SE_error[i];
   }
   
+  // Free the global vectors
   uvec->decref();
   uderiv->decref();
   wlocal->decref();
+
+  // Free the element-related data
+  delete [] tmp;
+  delete [] ubar;
+  delete [] delem;
+  delete [] vars_elem;
+  delete [] dvars;
+  delete [] ddvars;
+  delete [] vars_interp;
+  delete [] res;
 
   // Count up the total strain energy 
   TacsScalar SE_temp = 0.0;
@@ -1039,7 +1077,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
 
   forest->refine(refine, min_level, max_level);
 
-  // Free some of the data that is no longer required
+  // Free the data that is no longer required
   delete [] SE_error;
 
   // refine the quadrant mesh based on the local refinement values
@@ -1071,9 +1109,13 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
                               TACSAssembler *tacs_refine,
                               TACSBVec *adjoint,
                               TMRQuadForest *forest,
-                              double target_err,
+                              double target_error,
                               int min_level, int max_level,
                               TacsScalar *adj_corr ){
+  // The maximum number of nodes
+  const int max_num_nodes = 9;
+
+  // Get the order of the mesh and the number of enrichment shape functions
   const int order = forest->getMeshOrder();
   const int nenrich = (order == 2 ? 5 : 7);
 
@@ -1082,28 +1124,51 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   
   // Perform a local refinement of the nodes based on the strain energy
   // within each element
-  int nelems = tacs->getNumElements();
+  const int nelems = tacs->getNumElements();
 
-  // Get the number of variables per node (and the number of
-  // derivatives per node required for the reconstruction)
-  int vars_per_node = tacs->getVarsPerNode();
-  int deriv_per_node = 3*vars_per_node;
+  // Get the number of variables per node 
+  const int vars_per_node = tacs->getVarsPerNode();
   
   // Create the refined residual vector
-  TACSBVec *ans_interp = tacs_refine->createVec();
-  TACSBVec *res_refine = tacs_refine->createVec();
   TACSBVec *adjoint_refine = tacs_refine->createVec();
-  ans_interp->incref();
-  res_refine->incref();
   adjoint_refine->incref();
 
   // Reconstruct the adjoint solution on the finer mesh
   TMR_ComputeReconSolution(order, tacs, tacs_refine,
                            adjoint, adjoint_refine);
 
-  // Distribute the refined adjoint values
-  adjoint_refine->beginDistributeValues();
-  adjoint_refine->endDistributeValues();
+  // Allocate the refinement array - which elements will be refined
+  int *refine = new int[ nelems ];
+  memset(refine, 0, nelems*sizeof(int));
+
+  // Get the auxiliary elements (surface tractions) associated with the
+  // element class
+  TACSAuxElements *aux_elements = tacs_refine->getAuxElements();
+  int naux = 0, aux_count = 0;
+  TACSAuxElem *aux = NULL;
+  if (aux_elements){
+    aux_elements->sort();
+    naux = aux_elements->getAuxElements(&aux);
+  }
+
+  // Keep track of the total error remaining from each element
+  // indicator and the adjoint error correction
+  TacsScalar total_error_remain = 0.0;
+  TacsScalar total_adjoint_corr = 0.0;
+
+  // Allocate arrays needed for the reconstruction
+  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *adj_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // The interpolated variables on the refined mesh
+  TacsScalar *dvars = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *ddvars = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *adj_elem_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *adj_elem_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // Allocate the element residual array
+  TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
 
   // For each element in the mesh, compute the residual on the refined
   // mesh based on its and store its value in the global solution
@@ -1111,20 +1176,30 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
     // Set the simulation time
     double time = 0.0;
 
-    // Get the variable values
-    TacsScalar vars[6*9];
-    tacs->getElement(i, NULL, vars);
+    // Get the element variable values on the coarse mesh
+    tacs->getElement(i, NULL, vars_elem);
 
-    // For each element on the refined mesh, retrieve the local
-    // element residual and the element
+    // Get the element node numbers
+    int elem_len = 0;
+    const int *elem_nodes;
+    tacs->getElement(i, &elem_nodes, &elem_len);
+        
+    // Get the values of the adjoint on the coarse mesh
+    adjoint->getValues(elem_len, elem_nodes, adj_elem);
+
+    // Keep track of the remaining error from this element
+    TacsScalar elem_error_remain = 0.0;
+
+    // For each element on the refined mesh, compute the interpolated
+    // solution and sum up the local contribution to the adjoint
     for ( int ii = 0; ii < 2; ii++ ){
       for ( int jj = 0; jj < 2; jj++ ){
         // Set the element number on the refined mesh
         int elem_num = 4*i + jj + 2*ii;
 
-        // Set the local element variables
-        TacsScalar vars_interp[6*9];
-        memset(vars_interp, 0, sizeof(vars_interp));
+        // Zero the interpolations
+        memset(vars_interp, 0, vars_per_node*order*order*sizeof(TacsScalar));
+        memset(adj_elem_interp, 0, vars_per_node*order*order*sizeof(TacsScalar));
 
         // Perform the interpolation
         for ( int m = 0; m < order; m++ ){
@@ -1134,153 +1209,86 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
             pt[1] = jj - 1.0 + 1.0*m/(order-1);
 
             // Evaluate the locations of the new nodes
-            double N[9];
+            double N[max_num_nodes];
             FElibrary::biLagrangeSF(N, pt, order);
            
             // Evaluate the interpolation part of the reconstruction
             for ( int k = 0; k < order*order; k++ ){
-              for ( int kk = 0; kk < 6; kk++ ){
-                vars_interp[6*(n + m*order)+kk] += vars[6*k+kk]*N[k];
+              for ( int kk = 0; kk < vars_per_node; kk++ ){
+                vars_interp[vars_per_node*(n + m*order)+kk] += 
+                  vars_elem[vars_per_node*k+kk]*N[k];
+              }
+              for ( int kk = 0; kk < vars_per_node; kk++ ){
+                adj_elem_interp[vars_per_node*(n + m*order)+kk] += 
+                  adj_elem[vars_per_node*k+kk]*N[k];
               }
             }
           }
         }
 
-        // Get the element node numbers and set the interpolated
-        // solution in to the vector
+        // Get the node locations and the velocity/acceleration
+        // variables (these shuold be zero and are not used...)
+        TacsScalar Xpts[3*max_num_nodes];
+        TACSElement *elem = tacs_refine->getElement(elem_num, Xpts,
+                                                    NULL, dvars, ddvars);
+
+        // Compute the residual for this element on the refined mesh
+        memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
+        elem->addResidual(time, res, Xpts, 
+                          vars_interp, dvars, ddvars);
+
+        while (aux_count < naux && aux[aux_count].num == elem_num){
+          aux[aux_count].elem->addResidual(time, res, Xpts, 
+                                           vars_interp, dvars, ddvars);
+          aux_count++;
+        }
+
+        // Get the element and node numbers for the refined mesh
         int len = 0;
         const int *nodes;
         tacs_refine->getElement(elem_num, &nodes, &len);
-        ans_interp->setValues(len, nodes, vars_interp, TACS_INSERT_VALUES);
-      }
-    }
-  }
 
-  // Set all the values into the vector
-  ans_interp->beginSetValues(TACS_INSERT_VALUES);
-  ans_interp->endSetValues(TACS_INSERT_VALUES);
-
-  // Assemble the residual on the refined mesh
-  tacs_refine->setVariables(ans_interp);
-  tacs_refine->assembleRes(res_refine);
-
-  // Distribute the residual entries
-  res_refine->beginDistributeValues();
-  res_refine->endDistributeValues();
-
-  // Allocate the refinement array - which elements will be refined
-  int *refine = new int[ nelems ];
-  memset(refine, 0, nelems*sizeof(int));
-
-  // Now store in the variable ans_interp the difference between the
-  // reconstructed adjoint solution and the interpolated adjoint
-  // solution
-  ans_interp->zeroEntries();
-
-  for ( int i = 0; i < nelems; i++ ){
-    // Get the element node numbers
-    int len = 0;
-    const int *nodes;
-    tacs->getElement(i, &nodes, &len);
-        
-    // Get the values of the adjoint on the coarse mesh
-    TacsScalar adj_elem[6*9];
-    adjoint->getValues(len, nodes, adj_elem);
-
-    // Retrieve the element node locations
-    TacsScalar Xpts[3*9];
-    tacs->getElement(i, Xpts);
-
-    // Keep track of the remaining error for this element
-    TacsScalar elem_remain = 0.0;
-
-    for ( int ii = 0; ii < 2; ii++ ){
-      for ( int jj = 0; jj < 2; jj++ ){
-        // Get the values from the residual
-        int elem_num = 4*i + jj + 2*ii;
-
-        // Get the element node numbers
-        TACSElement *elem = tacs_refine->getElement(elem_num, &nodes, &len);
-
-        // Get the local part of the residual
-        TacsScalar res[6*9];
-        res_refine->getValues(len, nodes, res);
-
-        // Get the reconstructed adjoint
-        TacsScalar adj_elem_refine[6*9];
+        // Get the adjoint variables for the refined mesh
         adjoint_refine->getValues(len, nodes, adj_elem_refine);
-
-        // Compute the interpolated adjoint solution
-        TacsScalar adj_elem_interp[6*9];
-        memset(adj_elem_interp, 0, elem->numVariables()*sizeof(TacsScalar));
-        for ( int m = 0; m < order; m++ ){
-          for ( int n = 0; n < order; n++ ){
-            double pt[2];
-            pt[0] = ii - 1.0 + 1.0*n/(order-1);
-            pt[1] = jj - 1.0 + 1.0*m/(order-1);
-
-            // Evaluate the locations of the new nodes
-            double N[9];
-            FElibrary::biLagrangeSF(N, pt, order);
-           
-            // Set the values of the variables at this point
-            for ( int k = 0; k < order*order; k++ ){
-              // Evaluate the interpolation part of the reconstruction
-              for ( int kk = 0; kk < 6; kk++ ){
-                adj_elem_interp[6*(n + m*order)+kk] += adj_elem[6*k+kk]*N[k];
-              }
-            }
-          }
-        }
-
-        // Compute the difference between the adjoint solution
+        
+        // Add in the contribution to the error from this element
         for ( int j = 0; j < elem->numVariables(); j++ ){
-          adj_elem_refine[j] = adj_elem_refine[j] - adj_elem_interp[j];
-          if (nodes[j/6] >= 0){            
-            elem_remain += fabs(adj_elem_refine[j]*res[j]);
-          }
+          elem_error_remain += (adj_elem_refine[j] - adj_elem_interp[j])*res[j];
         }
-       
-        // Get the element node numbers and set the difference between
-        // the adjoint values into the vector
-        int len = 0;
-        const int *nodes;
-        tacs_refine->getElement(elem_num, &nodes, &len);
-        ans_interp->setValues(len, nodes, adj_elem_refine, TACS_INSERT_VALUES);
       }
     }
 
-    // If the predicted element error exceeds the target element
-    // error, then refine this element
-    if (elem_remain >= target_err){
+    // Add the contribution to the total remaining error and the
+    // adjoint correction.
+    total_error_remain += fabs(elem_error_remain);
+    total_adjoint_corr += elem_error_remain;
+
+    // Refine the element if the element error exceeds the target error
+    if (fabs(elem_error_remain) > target_error){
       refine[i] = 1;
     }
   }
 
-  // Set all the values into the vector
-  ans_interp->beginSetValues(TACS_INSERT_VALUES);
-  ans_interp->endSetValues(TACS_INSERT_VALUES);
+  // Sum up the contributions across all processors
+  TacsScalar temp[2];
+  temp[0] = total_error_remain;
+  temp[1] = total_adjoint_corr;
+  MPI_Allreduce(MPI_IN_PLACE, temp, 2, TACS_MPI_TYPE, MPI_SUM, comm);
+  total_error_remain = temp[0];
+  total_adjoint_corr = temp[1];
 
-  // Set the total remaining error and correction
-  TacsScalar *rvals, *avals;
-  int vsize = ans_interp->getArray(&avals);
-  res_refine->getArray(&rvals);
- 
-  TacsScalar total_err_remain = 0.0;
-  for ( int i = 0; i < vsize; i++ ){
-    total_err_remain += fabs(avals[i]*rvals[i]);
-  }
+  // Set the adjoint reconstruction as the variables
+  tacs_refine->setVariables(adjoint_refine);
 
-  // Sum up the total error contribution
-  MPI_Allreduce(MPI_IN_PLACE, &total_err_remain, 1,
-                TACS_MPI_TYPE, MPI_SUM, comm);
-
-  // Compute the adjoint-based residual correction
-  TacsScalar total_corr = ans_interp->dot(res_refine);
-
-  // Free some of the data that is no longer required
-  ans_interp->decref();
-  res_refine->decref();
+  // Free the data that is no longer required
+  delete [] vars_elem;
+  delete [] adj_elem;
+  delete [] dvars;
+  delete [] ddvars;
+  delete [] vars_interp;
+  delete [] adj_elem_interp;
+  delete [] adj_elem_refine;
+  delete [] res;
   adjoint_refine->decref();
 
   // refine the quadrant mesh based on the local refinement values
@@ -1289,9 +1297,9 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
 
   // Set the adjoint residual correction
   if (adj_corr){
-    *adj_corr = total_corr;
+    *adj_corr = total_adjoint_corr;
   }
 
   // Return the error
-  return total_err_remain;
+  return total_error_remain;
 }
