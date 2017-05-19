@@ -402,7 +402,7 @@ int main( int argc, char *argv[] ){
     TMRModel *model = mesh->createModelFromMesh();
     model->incref();
 
-    const int MAX_REFINE = 7;
+    const int MAX_REFINE = 4;
     TMRQuadForest *forest[MAX_REFINE+2];
     forest[0] = new TMRQuadForest(comm);
     forest[0]->incref();
@@ -413,7 +413,7 @@ int main( int argc, char *argv[] ){
     forest[0]->repartition();
     
     // The target relative error on the compliance
-    double target_rel_err = 1e-6;
+    double target_rel_err = 1e-4;
 
     FILE *fp = NULL;
     if (mpi_rank == 0){

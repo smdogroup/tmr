@@ -497,6 +497,14 @@ static void computeLocalWeights( TACSAssembler *tacs,
     int len = 0;
     const int *nodes;
     tacs->getElement(i, &nodes, &len);
+
+    // Compute the local weights
+    for ( int j = 0; j < len; j++ ){
+      welem[j] = 1.0;
+      if (nodes[j] < 0){
+        welem[j] = 0.0;
+      }
+    }
     weights->setValues(len, nodes, welem, TACS_ADD_VALUES);
   }
 
@@ -598,12 +606,13 @@ static void computeNodeDeriv2D( const int order,
         }
 
         // Evaluate the x/y/z derivatives of each value at the
-        TacsScalar winv = 1.0/welem[order*jj + ii];
+        // independent nodes
+        TacsScalar winv = 1.0/welem[ii + jj*order];
         for ( int k = 0; k < vars_per_node; k++ ){
           d[0] = winv*(Ud[2*k]*J[0] + Ud[2*k+1]*J[1]);
           d[1] = winv*(Ud[2*k]*J[3] + Ud[2*k+1]*J[4]);
           d[2] = winv*(Ud[2*k]*J[6] + Ud[2*k+1]*J[7]);
-          d += 3;
+          d += 3;          
         }
       }
     }
@@ -737,7 +746,10 @@ void computeRefinedSolution( const int order,
         TacsScalar welem[9];
         wref->getValues(len, refine_nodes, welem);
         for ( int i = 0; i < order*order; i++ ){
-          TacsScalar w = 1.0/welem[i];
+          TacsScalar w = 0.0;
+          if (refine_nodes[i] >= 0){
+            w = 1.0/welem[i];
+          }
 
           // Add the contributions to the refined nodes
           for ( int j = 0; j < vars_per_node; j++ ){
@@ -761,6 +773,10 @@ void computeRefinedSolution( const int order,
   // Add the values
   out->beginSetValues(TACS_ADD_VALUES);
   out->endSetValues(TACS_ADD_VALUES);
+
+  // Distribute the values
+  out->beginDistributeValues();
+  out->endDistributeValues();
 }
 
 /*
@@ -1220,7 +1236,9 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
         // Compute the difference between the adjoint solution
         for ( int j = 0; j < elem->numVariables(); j++ ){
           adj_elem_refine[j] = adj_elem_refine[j] - adj_elem_interp[j];
-          elem_remain += fabs(adj_elem_refine[j]*res[j]);
+          if (nodes[j/6] >= 0){            
+            elem_remain += fabs(adj_elem_refine[j]*res[j]);
+          }
         }
        
         // Get the element node numbers and set the difference between
