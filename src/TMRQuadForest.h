@@ -147,6 +147,21 @@ class TMRQuadForest : public TMREntity {
   void writeForestToVTK( const char *filename );
   void writeAdjacentToVTK( const char *filename );
 
+  // Distribute the quadrant array
+  // -------------------------------------------------------------------
+  TMRQuadrantArray *distributeQuadrants( TMRQuadrantArray *list,
+                                         int use_tags=0,
+                                         int **quad_ptr=NULL, 
+                                         int **quad_recv_ptr=NULL,
+                                         int include_local=0 );
+  TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
+                                   const int *quad_ptr,
+                                   const int *quad_recv_ptr );
+
+  // Find the quadrant 
+  // --------------------------------------------------------------
+  TMRQuadrant* findEnclosing( TMRQuadrant *node );
+
  private:
   // Free the internally stored data and zero things
   void freeData();
@@ -173,16 +188,7 @@ class TMRQuadForest : public TMREntity {
   void matchMPIIntervals( TMRQuadrant *array,
                           int size, int *ptr );
 
-  // Distribute the quadrant array
-  TMRQuadrantArray *distributeQuadrants( TMRQuadrantArray *list,
-                                         int use_tags=0,
-                                         int **quad_ptr=NULL, 
-                                         int **quad_recv_ptr=NULL,
-                                         int include_local=0 );
-  TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
-                                   const int *quad_ptr,
-                                   const int *quad_recv_ptr );
-
+ 
   // Balance-related routines
   // ------------------------
   // Balance the quadrant across the local tree and the forest
@@ -230,10 +236,7 @@ class TMRQuadForest : public TMREntity {
   // Create the dependent node connectivity
   void createDepNodeConn( int **_ptr, int **_conn,
                           double **_weights );
-
-  // Find the quadrant 
-  TMRQuadrant* findEnclosing( TMRQuadrant *node );
-
+  
   // Compute the interpolation weights
   int computeInterpWeights( const int order,
                             const int32_t u, const int32_t h,
