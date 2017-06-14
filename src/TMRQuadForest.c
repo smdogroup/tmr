@@ -1295,34 +1295,35 @@ void TMRQuadForest::refine( const int refinement[],
       else if (refinement[i] < 0){
         // Coarsen this quadrant
         if (array[i].level > min_level){
-          TMRQuadrant q;
-          array[i].getSibling(0, &q);
+          TMRQuadrant q = array[i]; ;
           q.level = q.level-1;
+          q.getSibling(0, &q);
           if (mpi_rank == getQuadrantMPIOwner(&q)){
             hash->addQuadrant(&q);
           }
           else {
             ext_hash->addQuadrant(&q);
           }
-          // If more than one level of refinement is desired
-          if (num_level_ref > 1){
-            // Remove additional level of refinement
-            for (int k = 0; k < 4; k++){
-              int32_t h = 1 << TMR_MAX_LEVEL-q.level;
-              q.getSibling(k, &q);
-              TMRQuadrant qq = q;
-              qq.level -= 1;
-              if (qq.level > min_level){
-                qq.getSibling(0, &qq);
-                if (mpi_rank == getQuadrantMPIOwner(&qq)){
-                  hash->addQuadrant(&qq);
-                }
-                else {
-                  ext_hash->addQuadrant(&qq);
-                }
-              } // end if qq.level < max_level
-            } // end for int k = 0; k < 4;
-          } // if num_level > 1
+          /* // If more than one level of refinement is desired */
+          /* if (num_level_ref > 1){ */
+          /*   // Remove additional level of refinement */
+          /*   for (int k = 0; k < 4; k++){ */
+          /*     q = array[i]; */
+          /*     q.level -= 1; */
+          /*     q.getSibling(k, &q); */
+          /*     TMRQuadrant qq = q; */
+          /*     qq.level -= 1; */
+          /*     if (qq.level > min_level){ */
+          /*       qq.getSibling(0, &qq); */
+          /*       if (mpi_rank == getQuadrantMPIOwner(&qq)){ */
+          /*         hash->addQuadrant(&qq); */
+          /*       } */
+          /*       else { */
+          /*         ext_hash->addQuadrant(&qq); */
+          /*       } */
+          /*     } // end if qq.level > min_level */
+          /*   } // end for int k = 0; k < 4; */
+          /* } // if num_level > 1 */
         }
         else {
           // If it is already at the min level, just add it
@@ -1345,7 +1346,8 @@ void TMRQuadForest::refine( const int refinement[],
           if (num_level_ref > 1){
             // Add additional level of refinement
             for (int k = 0; k < 4; k++){
-              int32_t h = 1 << TMR_MAX_LEVEL-q.level;
+              q = array[i];
+              q.level += 1;
               q.getSibling(k, &q);
               TMRQuadrant qq = q;
               qq.level += 1;
