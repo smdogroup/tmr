@@ -81,7 +81,8 @@ class TMRQuadTACSCreator : public TMREntity {
   }
 
   // Create the TACSAssembler object with the given order for this forest
-  TACSAssembler *createTACS( int order, TMRQuadForest *forest );
+  TACSAssembler *createTACS( int order, TMRQuadForest *forest,
+                             TacsScalar _scale=1.0);
 
  private:
   // Set the boundary conditions
@@ -90,7 +91,8 @@ class TMRQuadTACSCreator : public TMREntity {
 
   // Set the node locations
   void setNodeLocations( TMRQuadForest *forest, 
-                         TACSAssembler *tacs );
+                         TACSAssembler *tacs,
+                         TacsScalar _scale=1.0);
   
   TMRBoundaryConditions *bcs;
 };

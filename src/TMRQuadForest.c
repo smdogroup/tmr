@@ -1254,7 +1254,8 @@ TMRQuadForest *TMRQuadForest::coarsen(){
   Refine the quadrant mesh based on the input refinement level
 */
 void TMRQuadForest::refine( const int refinement[],
-                            int min_level, int max_level ){
+                            int min_level, int max_level,
+                            int num_level_ref){
   // Adjust the min and max levels to ensure consistency
   if (min_level < 0){ min_level = 0; }
   if (max_level > TMR_MAX_LEVEL){ max_level = TMR_MAX_LEVEL; }
@@ -1291,15 +1292,35 @@ void TMRQuadForest::refine( const int refinement[],
       else if (refinement[i] < 0){
         // Coarsen this quadrant
         if (array[i].level > min_level){
-          TMRQuadrant q;
-          array[i].getSibling(0, &q);
+          TMRQuadrant q = array[i]; ;
           q.level = q.level-1;
+          q.getSibling(0, &q);
           if (mpi_rank == getQuadrantMPIOwner(&q)){
             hash->addQuadrant(&q);
           }
           else {
             ext_hash->addQuadrant(&q);
           }
+          /* // If more than one level of refinement is desired */
+          /* if (num_level_ref > 1){ */
+          /*   // Remove additional level of refinement */
+          /*   for (int k = 0; k < 4; k++){ */
+          /*     q = array[i]; */
+          /*     q.level -= 1; */
+          /*     q.getSibling(k, &q); */
+          /*     TMRQuadrant qq = q; */
+          /*     qq.level -= 1; */
+          /*     if (qq.level > min_level){ */
+          /*       qq.getSibling(0, &qq); */
+          /*       if (mpi_rank == getQuadrantMPIOwner(&qq)){ */
+          /*         hash->addQuadrant(&qq); */
+          /*       } */
+          /*       else { */
+          /*         ext_hash->addQuadrant(&qq); */
+          /*       } */
+          /*     } // end if qq.level > min_level */
+          /*   } // end for int k = 0; k < 4; */
+          /* } // if num_level > 1 */
         }
         else {
           // If it is already at the min level, just add it
@@ -1318,15 +1339,35 @@ void TMRQuadForest::refine( const int refinement[],
           else {
             ext_hash->addQuadrant(&q);
           }
-        }
+          // If more than one level of refinement is desired
+          if (num_level_ref > 1){
+            // Add additional level of refinement
+            for (int k = 0; k < 4; k++){
+              q = array[i];
+              q.level += 1;
+              q.getSibling(k, &q);
+              TMRQuadrant qq = q;
+              qq.level += 1;
+              if (qq.level < max_level){
+                qq.getSibling(0, &qq);
+                if (mpi_rank == getQuadrantMPIOwner(&qq)){
+                  hash->addQuadrant(&qq);
+                }
+                else {
+                  ext_hash->addQuadrant(&qq);
+                }
+              } // end if qq.level < max_level
+            } // end for int k = 0; k < 4; 
+          } // if num_level > 1
+        } // end if array[i].level < max_level
         else {
           // If the quadrant is at the max level add it without
           // refinement
           hash->addQuadrant(&array[i]);
         }
-      }
-    }
-  }
+      } // end else if (refinement[i] > 0)
+    } // end for int i = 0; i < size; i++
+  } // end if refinement
   else {
     // No refinement array is provided. Just go ahead and refine
     // everything...
@@ -1344,6 +1385,68 @@ void TMRQuadForest::refine( const int refinement[],
       }
     }
   }
+  /* if (refinement){ */
+  /*   for ( int i = 0; i < size; i++ ){ */
+  /*     if (refinement[i] == 0){ */
+  /*       // We know that this quadrant is locally owned */
+  /*       hash->addQuadrant(&array[i]); */
+  /*     } */
+  /*     else if (refinement[i] < 0){ */
+  /*       // Coarsen this quadrant */
+  /*       if (array[i].level > min_level){ */
+  /*         TMRQuadrant q; */
+  /*         array[i].getSibling(0, &q); */
+  /*         q.level = q.level-1; */
+  /*         if (mpi_rank == getQuadrantMPIOwner(&q)){ */
+  /*           hash->addQuadrant(&q); */
+  /*         } */
+  /*         else { */
+  /*           ext_hash->addQuadrant(&q); */
+  /*         } */
+  /*       } */
+  /*       else { */
+  /*         // If it is already at the min level, just add it */
+  /*         hash->addQuadrant(&array[i]); */
+  /*       } */
+  /*     } */
+  /*     else if (refinement[i] > 0){ */
+  /*       // Refine this quadrant */
+  /*       if (array[i].level < max_level){ */
+  /*         TMRQuadrant q = array[i]; */
+  /*         q.level += 1; */
+  /*         q.getSibling(0, &q); */
+  /*         if (mpi_rank == getQuadrantMPIOwner(&q)){ */
+  /*           hash->addQuadrant(&q); */
+  /*         } */
+  /*         else { */
+  /*           ext_hash->addQuadrant(&q); */
+  /*         } */
+  /*       } */
+  /*       else { */
+  /*         // If the quadrant is at the max level add it without */
+  /*         // refinement */
+  /*         hash->addQuadrant(&array[i]); */
+  /*       } */
+  /*     } */
+  /*   } */
+  /* } */
+  /* else { */
+  /*   // No refinement array is provided. Just go ahead and refine */
+  /*   // everything... */
+  /*   for ( int i = 0; i < size; i++ ){ */
+  /*     if (array[i].level < max_level){ */
+  /*       TMRQuadrant q = array[i]; */
+  /*       q.level += 1; */
+  /*       q.getSibling(0, &q); */
+  /*       if (mpi_rank == getQuadrantMPIOwner(&q)){ */
+  /*         hash->addQuadrant(&q); */
+  /*       } */
+  /*       else { */
+  /*         ext_hash->addQuadrant(&q); */
+  /*       } */
+  /*     } */
+  /*   } */
+  /* } */
   
   // Free the old quadrants class
   delete quadrants;
