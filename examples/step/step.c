@@ -62,6 +62,7 @@ int main( int argc, char *argv[] ){
 
     // Adjust the quality factor
     TMRMeshOptions options;
+    options.triangularize_print_level = 10;
     options.frontal_quality_factor = 1.5;
     options.num_smoothing_steps = 25;
 
@@ -97,7 +98,7 @@ int main( int argc, char *argv[] ){
     tacs->incref();
 
     // Create the f5 visualization object
-    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, SHELL, 
+    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, TACS_SHELL, 
                                             TACSElement::OUTPUT_NODES);
     f5->incref();
     f5->writeToFile("surface-mesh.f5");

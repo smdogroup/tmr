@@ -23,6 +23,9 @@ class TMRMeshOptions {
     Create the mesh options objects with the default settings
   */
   TMRMeshOptions(){
+    // Set the default print level
+    triangularize_print_level = 0;
+    
     // Set the default meshing options
     mesh_type_default = TMR_STRUCTURED;
     num_smoothing_steps = 10;
@@ -38,6 +41,9 @@ class TMRMeshOptions {
     write_post_smooth_quad = 0;
     write_quad_dual = 0;
   }
+
+  // Set the print level for the triangularize code
+  int triangularize_print_level;
 
   // Options to control the meshing algorithm
   TMRFaceMeshType mesh_type_default;

@@ -218,6 +218,7 @@ int TMR_OCCEdge::invEvalPoint( TMRPoint X, double *t ){
 }
 
 int TMR_OCCEdge::evalDeriv( double t, TMRPoint *Xt ){
+  int fail = 0;
   gp_Pnt p;
   gp_Vec pt;
   BRepAdaptor_Curve curve(edge);
@@ -225,6 +226,7 @@ int TMR_OCCEdge::evalDeriv( double t, TMRPoint *Xt ){
   Xt->x = pt.X();
   Xt->y = pt.Y();
   Xt->z = pt.Z();
+  return fail;
 }
 
 int TMR_OCCEdge::isDegenerate(){
@@ -292,7 +294,6 @@ int TMR_OCCFace::evalDeriv( double u, double v,
 void TMR_OCCFace::getFaceObject( TopoDS_Face &f ){
   f = face;
 }
-
 
 /*
   Remove from a compound, those objects that are not referenced by the
@@ -477,6 +478,9 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
   
   STEPControl_Reader reader;
   IFSelect_ReturnStatus status = reader.ReadFile(filename);
+  if (status != IFSelect_RetDone){
+    fprintf(stderr, "TMR Warning: STEP file reader failed\n");
+  }
 
   // inspect the root transfers
   reader.PrintCheckLoad(Standard_False, IFSelect_ItemsByEntity);

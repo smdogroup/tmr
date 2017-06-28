@@ -570,8 +570,6 @@ int TMRFace::invEvalPoint( TMRPoint p, double *u, double *v ){
   Add the curves that bound the surface
 */
 void TMRFace::addEdgeLoop( TMREdgeLoop *loop ){
-  int fail = 0;
-  
   // Increase the reference count
   loop->incref();
 

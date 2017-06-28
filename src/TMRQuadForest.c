@@ -1218,9 +1218,6 @@ TMRQuadForest *TMRQuadForest::coarsen(){
     TMRQuadrant *array;
     quadrants->getArray(&array, &size);
 
-    // Set the offset to be 2**d-1
-    int offset = (1 << 2) - 1;
-
     // Create a new queue of quadrants
     TMRQuadrantQueue *queue = new TMRQuadrantQueue();
  
@@ -2267,7 +2264,6 @@ void TMRQuadForest::computeAdjacentQuadrants(){
   // the quadrants that are along each edge/face
   for ( int i = 0; i < size; i++ ){
     const int32_t hmax = 1 << TMR_MAX_LEVEL;
-    const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
     
     // Enumerate the sibling-ids for each edge
     const int edge_ids[][2] =
@@ -3139,8 +3135,6 @@ void TMRQuadForest::createDepNodeConn( int **_ptr, int **_conn,
   // Allocate the pointer into the dependent edges
   int *ptr = new int[ num_dep_nodes+1 ];
   memset(ptr, 0, (num_dep_nodes+1)*sizeof(int));
-
-  TMRQuadrantQueue *queue = new TMRQuadrantQueue();
 
   // Go through the dependent edges and determine the dependent
   // node information

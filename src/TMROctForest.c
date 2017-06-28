@@ -228,7 +228,7 @@ static int compare_octant_tags( const void *a, const void *b ){
 */
 TMROctForest::TMROctForest( MPI_Comm _comm ){
   // Initialize the TMR-specific MPI data types
-  if (!TMRIsInitialized){
+  if (!TMRIsInitialized()){
     TMRInitialize();
   }
 
@@ -1614,9 +1614,6 @@ TMROctForest *TMROctForest::coarsen(){
     TMROctant *array;
     octants->getArray(&array, &size);
 
-    // Set the offset to be 2**d-1
-    int offset = (1 << 3) - 1;
-
     // Create a new queue of octants
     TMROctantQueue *queue = new TMROctantQueue();
  
@@ -2989,7 +2986,6 @@ void TMROctForest::computeAdjacentOctants(){
   // the octants that are along each edge/face
   for ( int i = 0; i < size; i++ ){
     const int32_t hmax = 1 << TMR_MAX_LEVEL;
-    const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
     
     // Look across each face
     for ( int face_index = 0; face_index < 6; face_index++ ){
@@ -4901,9 +4897,7 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
  
     // Loop over all the nodes on the dependent face
     const int n = 2*mesh_order-1;
-    const int m = mesh_order-1;
 
-    int dof_fail = 0;
     for ( int jj = 0; jj < n; jj++ ){
       for ( int ii = 0; ii < n; ii++ ){        
         // Get the dependent node number
@@ -5338,6 +5332,11 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
             }
           }
         }
+      }
+
+      // Print out an error message
+      if (dof_fail){
+        fprintf(stderr, "TMROctForest: Inconsistent number of dof per node\n");
       }
 
       // Sort the dependent weight values

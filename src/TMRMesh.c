@@ -277,7 +277,6 @@ static void computeTriEdges( int nnodes, int ntris,
   // Allocate the array for the triangle neighbors
   int *tri_neighbors = new int[ 3*ntris ];
   
-  int count = 0;
   int ne = 0;
   for ( int i = 0; i < ntris; i++ ){
     // Search through each edge of the each triangle
@@ -404,7 +403,6 @@ static void computeQuadEdges( int nnodes, int nquads,
     quad_neighbors = new int[ 4*nquads ];
   }
 
-  int count = 0;
   int ne = 0;
   for ( int i = 0; i < nquads; i++ ){
     // Search through each edge of the each quadrilateral
@@ -1068,7 +1066,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     int pt = 0;
 
     int init_loop_pt = 0; // What point value did this loop start on? 
-    int init_loop_seg = 0; // What segment value did this loop start on?
     int hole_pt = total_num_pts; // What hole are we on?
 
     // Set up the degenerate edges
@@ -1379,7 +1376,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       }
 
       // Create the mesh using the frontal algorithm
-      tri->frontal(htarget);
+      tri->frontal(htarget, options.triangularize_print_level);
 
       // Free the degenerate triangles and reorder the mesh
       if (num_degen > 0){
@@ -1398,6 +1395,12 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       int ntris, *tris;
       tri->getMesh(&num_points, &ntris, &tris, &pts, &X);
       tri->decref();
+
+      if (ntris == 0){
+        fprintf(stderr,
+                "TMRTriangularize warning: No triangles for mesh id %d\n", 
+                face->getEntityId());
+      }
 
       if (ntris > 0){
         // Compute the triangle edges and neighbors in the dual mesh
@@ -3168,6 +3171,7 @@ int TMRVolumeMesh::getNodeNums( const int **_vars ){
   if (_vars){
     *_vars = vars;
   }
+  return num_points;
 }
 
 /*
@@ -3759,7 +3763,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   // The edges within the quadrilateral mesh
   int num_quad_edges = 0;
-  int *quad_edges = NULL, *quad_edge_nums = NULL;
+  int *quad_edges = NULL;
 
   // The edges within the hexahedral mesh
   int num_hex_edges = 0, num_hex_faces = 0;

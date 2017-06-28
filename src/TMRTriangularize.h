@@ -73,7 +73,7 @@ class TMRQuadNode {
   double x, y;
 
   // The point numbers and arrays
-  uint32_t num_points;
+  int num_points;
   uint32_t *pt_nums;
   double *pts;
 };
@@ -125,7 +125,7 @@ class TMRTriangularize : public TMREntity {
   void setFrontalQualityFactor( double factor );
 
   // Create the frontal mesh with the given mesh spacing
-  void frontal( double h );
+  void frontal( double h, int print_level=0 );
 
   // Remove degenerate edges/points and reorder things
   void removeDegenerateEdges( int num_degen, int degen[] );
@@ -141,7 +141,7 @@ class TMRTriangularize : public TMREntity {
   // The Bowyer-Watson algorithm is started with 4 points (2 triangles)
   // that cover the entire domain. These are deleted at the end 
   // of the algorithm.
-  static const uint32_t FIXED_POINT_OFFSET = 4;
+  static const int FIXED_POINT_OFFSET = 4;
 
   // TAGS for the triangles
   static const uint32_t NO_STATUS = 0;
@@ -214,11 +214,11 @@ class TMRTriangularize : public TMREntity {
   double frontal_quality_factor;
 
   // Initial number of boundary points
-  uint32_t init_boundary_points;
+  int init_boundary_points;
 
   // Keep track of the points
-  uint32_t num_points; // The current number of points
-  uint32_t max_num_points; // The maximum number of points
+  int num_points; // The current number of points
+  int max_num_points; // The maximum number of points
 
   // Array of the points that have been set
   double *pts;
@@ -226,7 +226,7 @@ class TMRTriangularize : public TMREntity {
   TMRTriangle **pts_to_tris;
 
   // The PSLG edges
-  uint32_t num_pslg_edges;
+  int num_pslg_edges;
   uint32_t *pslg_edges;
 
   // The root of the quadtree data structure
@@ -246,7 +246,7 @@ class TMRTriangularize : public TMREntity {
   TriListNode *list_start, *list_end;
 
   // Keep track of the number of triangles
-  uint32_t num_triangles;
+  int num_triangles;
 
   // Keep a hash tabled based on the ordered edges of the triangular
   // mesh. The order must match the counter clockwise ordering of the
