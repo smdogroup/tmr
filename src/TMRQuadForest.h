@@ -58,8 +58,7 @@ class TMRQuadForest : public TMREntity {
   // Refine the mesh
   // ---------------
   void refine( const int refinement[]=NULL,
-               int min_level=0, int max_level=TMR_MAX_LEVEL,
-               int num_level_ref=1);
+               int min_level=0, int max_level=TMR_MAX_LEVEL );
 
   // Duplicate or coarsen the forest
   // -------------------------------
@@ -149,7 +148,7 @@ class TMRQuadForest : public TMREntity {
   void writeAdjacentToVTK( const char *filename );
 
   // Distribute the quadrant array
-  // -------------------------------------------------------------------
+  // -----------------------------
   TMRQuadrantArray *distributeQuadrants( TMRQuadrantArray *list,
                                          int use_tags=0,
                                          int **quad_ptr=NULL, 
@@ -160,7 +159,7 @@ class TMRQuadForest : public TMREntity {
                                    const int *quad_recv_ptr );
 
   // Find the quadrant 
-  // --------------------------------------------------------------
+  // -----------------
   TMRQuadrant* findEnclosing( TMRQuadrant *node );
 
  private:

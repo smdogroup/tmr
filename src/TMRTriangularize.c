@@ -1714,6 +1714,18 @@ double TMRTriangularize::computeCircumcircle( TMRTriangle *tri ){
 }
 
 /*
+  Class for comparing triangle quality that is used within the frontal
+  code.
+*/
+class TMRTriangleCompare {
+ public:
+  bool operator()(TMRTriangle* const& A, 
+                  TMRTriangle* const& B){
+    return A->quality < B->quality;
+  }
+};
+
+/*
   Perform a frontal mesh generation algorithm to create a constrained
   Delaunay triangularization of the generated mesh.
 
@@ -1727,12 +1739,8 @@ void TMRTriangularize::frontal( double h, int print_level ){
   const double de = 0.5*sqrt3*h;
 
   // The queue of active (and sometimes deleted) triangles
-  // TriQueue active;
-  auto compare_tri_quality = [](TMRTriangle *a, TMRTriangle *b){
-    return a->quality < b->quality; 
-  };
-  std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>, 
-    decltype(compare_tri_quality)> active(compare_tri_quality);
+  std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
+    TMRTriangleCompare> active;
 
   // Add the triangles to the active set that 
   TriListNode *node = list_start;
