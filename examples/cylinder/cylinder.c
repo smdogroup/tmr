@@ -398,7 +398,8 @@ int main( int argc, char *argv[] ){
     
     TMRMeshOptions options;
     options.frontal_quality_factor = 1.25;
-    options.mesh_type_default = TMR_STRUCTURED;
+    // options.mesh_type_default = TMR_STRUCTURED;
+    options.mesh_type_default = TMR_UNSTRUCTURED;
     mesh->mesh(options, htarget);
 
     TMRModel *model = mesh->createModelFromMesh();

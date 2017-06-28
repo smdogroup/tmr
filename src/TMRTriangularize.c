@@ -595,13 +595,6 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
     addPointToMesh(&inpts[2*i]);
   }
 
-  if (face->getEntityId() == 2620){
-    TMRFace *temp = face;
-    face = NULL;
-    writeToVTK("triangle_pre_mesh.vtk");
-    face = temp;
-  }
-
   // Set the triangle tags to zero
   setTriangleTags(0);
 
@@ -656,15 +649,6 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
     pts_to_tris[node->tri.w] = &(node->tri);
     node = node->next;
   }
-
-  if (face->getEntityId() == 2620){
-    TMRFace *temp = face;
-    face = NULL;
-    writeToVTK("triangle_post_mesh.vtk");
-    face = temp;
-  }
-
-
 }
 
 /*
@@ -790,7 +774,7 @@ void TMRTriangularize::getMesh( int *_num_points,
     t[0] = node->tri.u - FIXED_POINT_OFFSET;
     t[1] = node->tri.v - FIXED_POINT_OFFSET;
     t[2] = node->tri.w - FIXED_POINT_OFFSET;
-    t += 3;    
+    t += 3;
     node = node->next;
   }
 }
@@ -1882,6 +1866,7 @@ void TMRTriangularize::frontal( double h, int print_level ){
     // Half the parametric distance between the two edge points
     double p = 0.0;
 
+    // New parametric point - to be computed
     double pt[2];
     if (face){
       // Evaluate the metric at the center of the active triangle
@@ -1933,7 +1918,7 @@ void TMRTriangularize::frontal( double h, int print_level ){
       e[1] = (pts[2*v] - pts[2*u]);
       
       // Compute half the distance between the u and v points
-      p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
+      double p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
       e[0] = 0.5*e[0]/p;
       e[1] = 0.5*e[1]/p;
       
@@ -2060,10 +2045,53 @@ void TMRTriangularize::frontal( double h, int print_level ){
     }
   }
 
-  if (print_level > 0){
-    printf("%10d %10d\n", iter, num_triangles);
+  // Ensure that we do not have isolated triangles on the boundary
+  // which will cause problems when (if) we do conversion to a
+  // quadrilateral mesh. This will not do "good" things to the
+  // triangularization.
+  node = list_start;
+  while (node){
+    if (node->tri.status == ACCEPTED){
+      const uint32_t u = node->tri.u;
+      const uint32_t v = node->tri.v;
+      const uint32_t w = node->tri.w;
+
+      if ((u - FIXED_POINT_OFFSET < init_boundary_points) &&
+          (v - FIXED_POINT_OFFSET < init_boundary_points) &&
+          (w - FIXED_POINT_OFFSET < init_boundary_points)){
+        // Check that only one adjacent triangle exists
+        TMRTriangle *t1, *t2, *t3;
+        completeMe(v, u, &t1);
+        completeMe(w, v, &t2);
+        completeMe(u, w, &t3);
+
+        if ((!t1 && !t2)){
+          double pt[2];
+          pt[0] = 0.5*(pts[2*u] + pts[2*w]);
+          pt[1] = 0.5*(pts[2*u+1] + pts[2*w+1]);
+          addPointToMesh(pt);          
+        }
+        else if (!t2 && !t3){
+          double pt[2];
+          pt[0] = 0.5*(pts[2*u] + pts[2*v]);
+          pt[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
+          addPointToMesh(pt);          
+        }
+        else if (!t1 && !t3){
+          double pt[2];
+          pt[0] = 0.5*(pts[2*v] + pts[2*w]);
+          pt[1] = 0.5*(pts[2*v+1] + pts[2*w+1]);
+          addPointToMesh(pt);          
+        }
+      }      
+    }
+    node = node->next;
   }
 
   // Free the deleted trianlges from the doubly linked list
   deleteTrianglesFromList();
+
+  if (print_level > 0){
+    printf("%10d %10d\n", iter, num_triangles);
+  }
 }

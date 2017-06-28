@@ -62,9 +62,9 @@ int main( int argc, char *argv[] ){
 
     // Adjust the quality factor
     TMRMeshOptions options;
-    options.triangularize_print_level = 10;
-    options.frontal_quality_factor = 1.5;
-    options.num_smoothing_steps = 25;
+    options.triangularize_print_level = 1;
+    options.frontal_quality_factor = 1.25;
+    options.num_smoothing_steps = 10;
 
     // Mesh the object of interest
     mesh->mesh(options, htarget);
@@ -86,7 +86,8 @@ int main( int argc, char *argv[] ){
     loader->scanBDFFile("surface-mesh.bdf");
 
     // Create the solid stiffness object
-    isoFSDTStiffness *stiff = new isoFSDTStiffness(1.0, 1.0, 0.3, 0.833, 1.0, 1.0);
+    isoFSDTStiffness *stiff = 
+      new isoFSDTStiffness(1.0, 1.0, 0.3, 0.833, 1.0, 1.0);
     MITCShell<2> *elem = new MITCShell<2>(stiff);
 
     for ( int i = 0; i < loader->getNumComponents(); i++ ){ 
