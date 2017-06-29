@@ -332,6 +332,10 @@ class TMRTopology : public TMREntity {
   ~TMRTopology();
   
   // Retrieve the face/edge/node information
+  int getNumVolumes();
+  int getNumFaces();
+  int getNumEdges();
+  int getNumVertices();
   void getVolume( int vol_num, TMRVolume **volume );
   void getFace( int face_num, TMRFace **face );
   void getEdge( int edge_num, TMREdge **edge );

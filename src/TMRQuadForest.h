@@ -33,6 +33,7 @@ class TMRQuadForest : public TMREntity {
   // Set the topology (and determine the connectivity)
   // -------------------------------------------------
   void setTopology( TMRTopology *_topo );
+  TMRTopology *getTopology();
 
   // Set the connectivity directly
   // -----------------------------
@@ -75,6 +76,7 @@ class TMRQuadForest : public TMREntity {
 
   // Get the nodes or elements with certain attributes
   // -------------------------------------------------
+  TMRQuadrantArray* getQuadsOnFace( int face_num );
   TMRQuadrantArray* getQuadsWithAttribute( const char *attr );
   TMRQuadrantArray* getNodesWithAttribute( const char *attr );
 

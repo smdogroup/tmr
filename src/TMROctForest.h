@@ -38,6 +38,7 @@ class TMROctForest : public TMREntity {
   // Set the topology (and determine the connectivity)
   // -------------------------------------------------
   void setTopology( TMRTopology *_topo );
+  TMRTopology *getTopology();
 
   // Set the connectivity
   // --------------------

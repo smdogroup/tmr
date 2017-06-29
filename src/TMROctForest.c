@@ -465,6 +465,15 @@ void TMROctForest::setTopology( TMRTopology *_topo ){
 }
 
 /*
+  Retrieve the topology object from the TMROctForest 
+  
+  Note that this may return NULL if no topology is defined.
+*/
+TMRTopology *TMROctForest::getTopology(){
+  return topo;
+}
+
+/*
   Set the connectivity of the blocks
 
   This call is collective on all processors. Every processor must make
@@ -2749,6 +2758,12 @@ void TMROctForest::balance( int balance_corner ){
   // Set the elements into the octree
   octants = hash->toArray();
   octants->sort();
+
+  // Get the octants and order their labels
+  octants->getArray(&array, &size);
+  for ( int i = 0; i < size; i++ ){
+    array[i].tag = i;
+  }
 
   // Free the hash
   delete hash;
