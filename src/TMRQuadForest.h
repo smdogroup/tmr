@@ -76,7 +76,6 @@ class TMRQuadForest : public TMREntity {
 
   // Get the nodes or elements with certain attributes
   // -------------------------------------------------
-  TMRQuadrantArray* getQuadsOnFace( int face_num );
   TMRQuadrantArray* getQuadsWithAttribute( const char *attr );
   TMRQuadrantArray* getNodesWithAttribute( const char *attr );
 

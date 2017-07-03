@@ -2888,42 +2888,6 @@ void TMRQuadForest::createNodes( int order ){
 }
 
 /*
-  This function creates an array of the quadrants that lie on a given
-  face with the specified face number.
-
-  This is different than the getQuadsWithAttribute(), since multiple
-  faces may share the same attribute. 
-
-  input:
-  face_num:   the face number in the topology class 
-
-  returns:
-  list:       an array object containing the desired quadrants
-*/
-TMRQuadrantArray* TMRQuadForest::getQuadsOnFace( int face_num ){
-  if (!topo){
-    return NULL;
-  }
-
-  // Create a queue to store the elements that we find
-  TMRQuadrantQueue *queue = new TMRQuadrantQueue();
-
-  // Get the quadrants that share the given face number
-  int size;
-  TMRQuadrant *array;
-  quadrants->getArray(&array, &size);
-  for ( int i = 0; i < size; i++ ){
-    if (array[i].face == face_num){
-      queue->push(&array[i]);
-    }
-  }
-
-  TMRQuadrantArray *list = queue->toArray();
-  delete queue;
-  return list;
-}
-
-/*
   Get the elements that either lie on a face or curve with a given
   attribute.
 
