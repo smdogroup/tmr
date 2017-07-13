@@ -200,6 +200,7 @@ int TMREdgeFromFace::invEvalPoint( TMRPoint X, double *t ){
   Given the parametric point, evaluate the derivative 
 */
 int TMREdgeFromFace::evalDeriv( double t, TMRPoint *Xt ){
+  int fail = 0;
   double u, v, ut, vt;
   pcurve->evalPoint(t, &u, &v);
   pcurve->evalDeriv(t, &ut, &vt);
@@ -208,6 +209,7 @@ int TMREdgeFromFace::evalDeriv( double t, TMRPoint *Xt ){
   Xt->x = ut*Xu.x + vt*Xv.x;
   Xt->y = ut*Xu.y + vt*Xv.y;
   Xt->z = ut*Xu.z + vt*Xv.z;
+  return fail;
 }
 
 /*

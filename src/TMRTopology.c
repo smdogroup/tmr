@@ -570,8 +570,6 @@ int TMRFace::invEvalPoint( TMRPoint p, double *u, double *v ){
   Add the curves that bound the surface
 */
 void TMRFace::addEdgeLoop( TMREdgeLoop *loop ){
-  int fail = 0;
-  
   // Increase the reference count
   loop->incref();
 
@@ -1835,6 +1833,43 @@ void TMRTopology::getVolume( int vol_num, TMRVolume **volume ){
     *volume = volumes[v];
   }
 }
+
+/*
+  Get the number of volumes
+*/
+int TMRTopology::getNumVolumes(){
+  int nvol;
+  geo->getVolumes(&nvol, NULL);
+  return nvol;
+}
+
+/*
+  Get the number of faces
+*/
+int TMRTopology::getNumFaces(){
+  int nfaces;
+  geo->getFaces(&nfaces, NULL);
+  return nfaces;
+}
+ 
+/*
+  Get the number of edges
+*/
+int TMRTopology::getNumEdges(){
+  int nedges;
+  geo->getEdges(&nedges, NULL);
+  return nedges;
+}
+
+/*
+  Get the number of vertices
+*/
+int TMRTopology::getNumVertices(){
+  int nverts;
+  geo->getVertices(&nverts, NULL);
+  return nverts;
+}
+
 
 /*
   Retrieve the face object

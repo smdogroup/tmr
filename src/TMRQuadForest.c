@@ -230,6 +230,15 @@ void TMRQuadForest::setTopology( TMRTopology *_topo ){
 }
 
 /*
+  Retrieve the topology object from the TMRQuadForest 
+  
+  Note that this may return NULL if no topology is defined.
+*/
+TMRTopology *TMRQuadForest::getTopology(){
+  return topo;
+}
+
+/*
   Set the connectivity of the faces
 
   This call is collective on all processors. Every processor must make
@@ -1218,9 +1227,6 @@ TMRQuadForest *TMRQuadForest::coarsen(){
     TMRQuadrant *array;
     quadrants->getArray(&array, &size);
 
-    // Set the offset to be 2**d-1
-    int offset = (1 << 2) - 1;
-
     // Create a new queue of quadrants
     TMRQuadrantQueue *queue = new TMRQuadrantQueue();
  
@@ -1257,8 +1263,7 @@ TMRQuadForest *TMRQuadForest::coarsen(){
   Refine the quadrant mesh based on the input refinement level
 */
 void TMRQuadForest::refine( const int refinement[],
-                            int min_level, int max_level,
-                            int num_level_ref){
+                            int min_level, int max_level ){
   // Adjust the min and max levels to ensure consistency
   if (min_level < 0){ min_level = 0; }
   if (max_level > TMR_MAX_LEVEL){ max_level = TMR_MAX_LEVEL; }
@@ -1295,35 +1300,26 @@ void TMRQuadForest::refine( const int refinement[],
       else if (refinement[i] < 0){
         // Coarsen this quadrant
         if (array[i].level > min_level){
-          TMRQuadrant q = array[i]; ;
-          q.level = q.level-1;
-          q.getSibling(0, &q);
+          // Compute the new refinement level
+          int new_level = array[i].level + refinement[i];
+          if (new_level < min_level){
+            new_level = min_level;
+          }
+
+          // Copy over the quadrant
+          TMRQuadrant q = array[i];
+          q.level = new_level;
+          
+          // Compute the new side-length of the quadrant
+          const int32_t h = 1 << (TMR_MAX_LEVEL - q.level);
+          q.x = q.x - (q.x % h);
+          q.y = q.y - (q.y % h);
           if (mpi_rank == getQuadrantMPIOwner(&q)){
             hash->addQuadrant(&q);
           }
           else {
             ext_hash->addQuadrant(&q);
           }
-          /* // If more than one level of refinement is desired */
-          /* if (num_level_ref > 1){ */
-          /*   // Remove additional level of refinement */
-          /*   for (int k = 0; k < 4; k++){ */
-          /*     q = array[i]; */
-          /*     q.level -= 1; */
-          /*     q.getSibling(k, &q); */
-          /*     TMRQuadrant qq = q; */
-          /*     qq.level -= 1; */
-          /*     if (qq.level > min_level){ */
-          /*       qq.getSibling(0, &qq); */
-          /*       if (mpi_rank == getQuadrantMPIOwner(&qq)){ */
-          /*         hash->addQuadrant(&qq); */
-          /*       } */
-          /*       else { */
-          /*         ext_hash->addQuadrant(&qq); */
-          /*       } */
-          /*     } // end if qq.level > min_level */
-          /*   } // end for int k = 0; k < 4; */
-          /* } // if num_level > 1 */
         }
         else {
           // If it is already at the min level, just add it
@@ -1333,15 +1329,28 @@ void TMRQuadForest::refine( const int refinement[],
       else if (refinement[i] > 0){
         // Refine this quadrant
         if (array[i].level < max_level){
+          // Compute the new refinement level
+          int new_level = array[i].level + refinement[i];
+          if (new_level > max_level){
+            new_level = max_level;
+          }
+
+          // Copy the quadrant and set the new level
           TMRQuadrant q = array[i];
-          q.level += 1;
-          q.getSibling(0, &q);
+          q.level = new_level;
+
+          // Compute the new side-length of the quadrant
+          const int32_t h = 1 << (TMR_MAX_LEVEL - q.level);
+          q.x = q.x - (q.x % h);
+          q.y = q.y - (q.y % h);
+
           if (mpi_rank == getQuadrantMPIOwner(&q)){
             hash->addQuadrant(&q);
           }
           else {
             ext_hash->addQuadrant(&q);
           }
+<<<<<<< local
           // If more than one level of refinement is desired
           if (num_level_ref > 1){
             // Add additional level of refinement
@@ -1363,6 +1372,9 @@ void TMRQuadForest::refine( const int refinement[],
             } // end for int k = 0; k < 4; 
           } // if num_level > 1
         } // end if array[i].level < max_level
+=======
+        }
+>>>>>>> other
         else {
           // If the quadrant is at the max level add it without
           // refinement
@@ -1373,7 +1385,7 @@ void TMRQuadForest::refine( const int refinement[],
   } // end if refinement
   else {
     // No refinement array is provided. Just go ahead and refine
-    // everything...
+    // everything one level
     for ( int i = 0; i < size; i++ ){
       if (array[i].level < max_level){
         TMRQuadrant q = array[i];
@@ -1388,68 +1400,6 @@ void TMRQuadForest::refine( const int refinement[],
       }
     }
   }
-  /* if (refinement){ */
-  /*   for ( int i = 0; i < size; i++ ){ */
-  /*     if (refinement[i] == 0){ */
-  /*       // We know that this quadrant is locally owned */
-  /*       hash->addQuadrant(&array[i]); */
-  /*     } */
-  /*     else if (refinement[i] < 0){ */
-  /*       // Coarsen this quadrant */
-  /*       if (array[i].level > min_level){ */
-  /*         TMRQuadrant q; */
-  /*         array[i].getSibling(0, &q); */
-  /*         q.level = q.level-1; */
-  /*         if (mpi_rank == getQuadrantMPIOwner(&q)){ */
-  /*           hash->addQuadrant(&q); */
-  /*         } */
-  /*         else { */
-  /*           ext_hash->addQuadrant(&q); */
-  /*         } */
-  /*       } */
-  /*       else { */
-  /*         // If it is already at the min level, just add it */
-  /*         hash->addQuadrant(&array[i]); */
-  /*       } */
-  /*     } */
-  /*     else if (refinement[i] > 0){ */
-  /*       // Refine this quadrant */
-  /*       if (array[i].level < max_level){ */
-  /*         TMRQuadrant q = array[i]; */
-  /*         q.level += 1; */
-  /*         q.getSibling(0, &q); */
-  /*         if (mpi_rank == getQuadrantMPIOwner(&q)){ */
-  /*           hash->addQuadrant(&q); */
-  /*         } */
-  /*         else { */
-  /*           ext_hash->addQuadrant(&q); */
-  /*         } */
-  /*       } */
-  /*       else { */
-  /*         // If the quadrant is at the max level add it without */
-  /*         // refinement */
-  /*         hash->addQuadrant(&array[i]); */
-  /*       } */
-  /*     } */
-  /*   } */
-  /* } */
-  /* else { */
-  /*   // No refinement array is provided. Just go ahead and refine */
-  /*   // everything... */
-  /*   for ( int i = 0; i < size; i++ ){ */
-  /*     if (array[i].level < max_level){ */
-  /*       TMRQuadrant q = array[i]; */
-  /*       q.level += 1; */
-  /*       q.getSibling(0, &q); */
-  /*       if (mpi_rank == getQuadrantMPIOwner(&q)){ */
-  /*         hash->addQuadrant(&q); */
-  /*       } */
-  /*       else { */
-  /*         ext_hash->addQuadrant(&q); */
-  /*       } */
-  /*     } */
-  /*   } */
-  /* } */
   
   // Free the old quadrants class
   delete quadrants;
@@ -2370,7 +2320,6 @@ void TMRQuadForest::computeAdjacentQuadrants(){
   // the quadrants that are along each edge/face
   for ( int i = 0; i < size; i++ ){
     const int32_t hmax = 1 << TMR_MAX_LEVEL;
-    const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
     
     // Enumerate the sibling-ids for each edge
     const int edge_ids[][2] =
@@ -3002,7 +2951,8 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
     TMRFace *surf;
     topo->getFace(array[i].face, &surf);  
     const char *face_attr = surf->getAttribute();
-    if (face_attr && strcmp(face_attr, attr) == 0){
+    if ((!attr && !face_attr) ||
+        face_attr && strcmp(face_attr, attr) == 0){
       queue->push(&array[i]);
     }
     else {
@@ -3242,8 +3192,6 @@ void TMRQuadForest::createDepNodeConn( int **_ptr, int **_conn,
   // Allocate the pointer into the dependent edges
   int *ptr = new int[ num_dep_nodes+1 ];
   memset(ptr, 0, (num_dep_nodes+1)*sizeof(int));
-
-  TMRQuadrantQueue *queue = new TMRQuadrantQueue();
 
   // Go through the dependent edges and determine the dependent
   // node information

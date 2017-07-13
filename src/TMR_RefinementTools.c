@@ -2,7 +2,9 @@
 #include "TensorToolbox.h"
 #include "tacslapack.h"
 
-#include "TACSToFH5.h"
+// Include the stdlib set/string classes
+#include <string>
+#include <set>
 
 /*
   Create a multgrid object for a forest of octrees
@@ -474,14 +476,11 @@ static void computeElemRecon2D( const int order,
   Compute the local derivative weights
 */
 static void computeLocalWeights( TACSAssembler *tacs, 
-                                 TACSBVec **wlocal ){
-  // Create the weight vector - the weights are the number of times
-  // each node is referenced by adjacent elements, including
-  // inter-process references.
-  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
-                                   tacs->getBVecDistribute(),
-                                   tacs->getBVecDepNodes());
-  weights->incref();
+                                 TACSBVec *weights,
+                                 const int *element_nums=NULL,
+                                 int num_elements=-1 ){
+  // Zero the entries in the array
+  weights->zeroEntries();
 
   // Set the local element weights
   int max_nodes = tacs->getMaxElementNodes();
@@ -490,23 +489,46 @@ static void computeLocalWeights( TACSAssembler *tacs,
     welem[i] = 1.0;
   }
 
-  // Add unit weights to all the elements. This will sum up the number
-  // of times each node is referenced.
-  int nelems = tacs->getNumElements();
-  for ( int i = 0; i < nelems; i++ ){
-    int len = 0;
-    const int *nodes;
-    tacs->getElement(i, &nodes, &len);   
-
-    // Compute the local weights
-    for ( int j = 0; j < len; j++ ){
-      welem[j] = 1.0;
-      if (nodes[j] < 0){
-        welem[j] = 0.0;
+  if (num_elements < 0){
+    // Add unit weights to all the elements. This will sum up the
+    // number of times each node is referenced.
+    int nelems = tacs->getNumElements();
+    for ( int i = 0; i < nelems; i++ ){
+      int len = 0;
+      const int *nodes;
+      tacs->getElement(i, &nodes, &len);   
+      
+      // Compute the local weights
+      for ( int j = 0; j < len; j++ ){
+        welem[j] = 1.0;
+        if (nodes[j] < 0){
+          welem[j] = 0.0;
+        }
       }
+      
+      weights->setValues(len, nodes, welem, TACS_ADD_VALUES);
     }
+  }
+  else {
+    // Add up the weights for only those elements in the list
+    for ( int i = 0; i < num_elements; i++ ){
+      int elem = element_nums[i];
 
-    weights->setValues(len, nodes, welem, TACS_ADD_VALUES);
+      // Get the node numbers for this elements
+      int len = 0;
+      const int *nodes;
+      tacs->getElement(elem, &nodes, &len);
+      
+      // Compute the local weights
+      for ( int j = 0; j < len; j++ ){
+        welem[j] = 1.0;
+        if (nodes[j] < 0){
+          welem[j] = 0.0;
+        }
+      }
+      
+      weights->setValues(len, nodes, welem, TACS_ADD_VALUES);
+    }
   }
 
   delete [] welem;
@@ -518,9 +540,6 @@ static void computeLocalWeights( TACSAssembler *tacs,
   // Distribute the values
   weights->beginDistributeValues();
   weights->endDistributeValues();
-
-  // Return the local weight values
-  *wlocal = weights;
 }
 
 /*
@@ -537,14 +556,14 @@ static void computeLocalWeights( TACSAssembler *tacs,
 */
 static void computeNodeDeriv2D( const int order,
                                 TACSAssembler *tacs, TACSBVec *uvec, 
-                                TACSBVec *wlocal, TACSBVec **_uderiv ){
+                                TACSBVec *weights, TACSBVec *uderiv,
+                                const int *element_nums=NULL,
+                                int num_elements=-1 ){
+  // Zero the nodal derivatives
+  uderiv->zeroEntries();
+
   // The number of variables at each node
   int vars_per_node = tacs->getVarsPerNode();
-
-  // Allocate a vector for the derivatives
-  TACSBVec *uderiv = 
-    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
-                 tacs->getBVecDistribute(), tacs->getBVecDepNodes());
 
   // Number of derivatives per node - x,y,z derivatives
   int deriv_per_node = 3*vars_per_node;
@@ -557,8 +576,21 @@ static void computeNodeDeriv2D( const int order,
   TacsScalar *uelem = new TacsScalar[ order*order*vars_per_node ];
   TacsScalar *delem = new TacsScalar[ order*order*deriv_per_node ];
 
+  // We're only going to iterate over the elements in the list, not
+  // the entire array
+  if (element_nums){
+    nelems = num_elements;
+  }
+
   // Perform the reconstruction for the local
-  for ( int elem = 0; elem < nelems; elem++ ){
+  for ( int index = 0; index < nelems; index++ ){
+    // Set the element number, depending on whether we're using the
+    // full set of elements, or only a subset of the elements
+    int elem = index;
+    if (element_nums){
+      elem = element_nums[index];      
+    }
+
     // Get the element nodes
     int len = 0;
     const int *nodes;
@@ -566,7 +598,7 @@ static void computeNodeDeriv2D( const int order,
 
     // Get the local weight values for this element
     TacsScalar welem[9];
-    wlocal->getValues(len, nodes, welem);
+    weights->getValues(len, nodes, welem);
 
     // Get the local element variables
     uvec->getValues(len, nodes, uelem);
@@ -642,23 +674,19 @@ static void computeNodeDeriv2D( const int order,
   // Distribute the values so that we can call getValues
   uderiv->beginDistributeValues();
   uderiv->endDistributeValues();
-
-  *_uderiv = uderiv;
 }
 
 /*
   Reconstruct the solution on a more refined mesh
 */
-void computeRefinedSolution( const int order,
-                             TACSAssembler *tacs,
-                             TACSAssembler *tacs_refine,
-                             TACSBVec *wref,
-                             TACSBVec *vec,
-                             TACSBVec *vecDeriv,
-                             TACSBVec *out ){  
-  // Number of local elements in the coarse version of TACS
-  const int nelems = tacs->getNumElements();
-
+void addRefinedSolution( const int order,
+                         TACSAssembler *tacs,
+                         TACSAssembler *tacs_refine,
+                         TACSBVec *vec,
+                         TACSBVec *vecDeriv,
+                         TACSBVec *vec_refine,
+                         const int *element_nums=NULL,
+                         int num_elements=-1  ){  
   // Number of variables/derivatives per node
   const int vars_per_node = tacs->getVarsPerNode();
   const int deriv_per_node = 3*vars_per_node;
@@ -684,7 +712,19 @@ void computeRefinedSolution( const int order,
   // The maximum number of nodes for any element
   TacsScalar Xpts[3*9];
 
-  for ( int elem = 0; elem < nelems; elem++ ){
+  // Number of local elements in the coarse version of TACS
+  int nelems = tacs->getNumElements();
+  if (element_nums){
+    nelems = num_elements;
+  }
+
+  for ( int index = 0; index < nelems; index++ ){
+    // Get the element number
+    int elem = index;
+    if (element_nums){
+      elem = element_nums[index];
+    }
+    
     // Get the node numbers and node locations for this element
     int len;
     const int *nodes;
@@ -751,23 +791,17 @@ void computeRefinedSolution( const int order,
           }
         }
 
-        // Multiply the element contributions by their weights
-        TacsScalar welem[9];
-        wref->getValues(len, refine_nodes, welem);
+        // Zero the contribution if it goes to a dependent node
         for ( int i = 0; i < order*order; i++ ){
-          TacsScalar winv = 0.0;
-          if (refine_nodes[i] >= 0){
-            winv = 1.0/welem[i];
-          }
-
-          // Add the contributions to the refined nodes
-          for ( int j = 0; j < vars_per_node; j++ ){
-            uref[vars_per_node*i + j] *= winv;
+          if (refine_nodes[i] < 0){
+            for ( int j = 0; j < vars_per_node; j++ ){
+              uref[vars_per_node*i + j] = 0.0;
+            }
           }
         }
 
         // Add the contributions to the element
-        out->setValues(len, refine_nodes, uref, TACS_ADD_VALUES);
+        vec_refine->setValues(len, refine_nodes, uref, TACS_ADD_VALUES);
       }
     }
   }
@@ -778,63 +812,150 @@ void computeRefinedSolution( const int order,
   delete [] delem;
   delete [] ubar;
   delete [] uref;
-
-  // Add the values
-  out->beginSetValues(TACS_ADD_VALUES);
-  out->endSetValues(TACS_ADD_VALUES);
-
-  // Distribute the values
-  out->beginDistributeValues();
-  out->endDistributeValues();
 }
 
 /*
   Compute the reconstructed solution on the uniformly refined mesh.
 */
-void TMR_ComputeReconSolution( const int order,
+void TMR_ComputeReconSolution( TMRQuadForest *forest,
                                TACSAssembler *tacs,
                                TACSAssembler *tacs_refined,
                                TACSBVec *_uvec,
                                TACSBVec *_uvec_refined ){
+  // Get the mesh order
+  const int order = forest->getMeshOrder();
+
   // Retrieve the variables from the TACSAssembler object
   TACSBVec *uvec = _uvec; 
-  if (!_uvec){
+  if (!uvec){
     uvec = tacs->createVec();
     uvec->incref();
     tacs->getVariables(uvec);
   }
-  uvec->beginDistributeValues();
-  uvec->endDistributeValues();
- 
-  // Compute the nodal weights for the derivatives
-  TACSBVec *wlocal;
-  computeLocalWeights(tacs, &wlocal);
-  wlocal->incref();
-
-  // Compute the nodal derivatives
-  TACSBVec *uderiv;
-  computeNodeDeriv2D(order, tacs, uvec, wlocal, &uderiv);
-  uderiv->incref();
-
-  // Free the local weights for the original solution
-  wlocal->decref();
-
-  // Compute the nodal weights for the refined mesh
-  computeLocalWeights(tacs_refined, &wlocal);
-  wlocal->incref();
-
-  // Create the new solution vector
   TACSBVec *uvec_refined = _uvec_refined;
-  if (!_uvec_refined){
+  if (!uvec_refined){
     uvec_refined = tacs_refined->createVec();
     uvec_refined->incref();
   }
 
-  // Compute the refined solution
-  computeRefinedSolution(order, tacs, tacs_refined,
-                         wlocal, uvec, uderiv, uvec_refined);
-  wlocal->decref();
-  uderiv->decref();
+  // Distribute the solution vector answer
+  uvec->beginDistributeValues();
+  uvec->endDistributeValues();
+
+  // Allocate a vector for the derivatives
+  int vars_per_node = tacs->getVarsPerNode();
+  TACSBVec *uderiv = 
+    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
+                 tacs->getBVecDistribute(), tacs->getBVecDepNodes());
+  uderiv->incref();
+
+  // Create the weight vector - the weights are the number of times
+  // each node is referenced by adjacent elements, including
+  // inter-process references.
+  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
+                                   tacs->getBVecDistribute(),
+                                   tacs->getBVecDepNodes());
+  weights->incref();
+
+  // Get the underlying topology object
+  TMRTopology *topo = forest->getTopology();
+
+  // Compute the max size of the element array
+  int nelems = tacs->getNumElements();
+  int *face_elem_nums = new int[ nelems ];
+
+
+  // Loop over all of the faces and uniquely sort the faces
+  int num_faces = topo->getNumFaces();
+  std::set<std::string> face_attr_set;
+  for ( int face_num = 0; face_num < num_faces; face_num++ ){
+    TMRFace *face;
+    topo->getFace(face_num, &face);
+    const char *attr = face->getAttribute();
+    if (attr){
+      std::string str(attr);
+      face_attr_set.insert(str);
+    }
+    else {
+      std::string str("");
+      face_attr_set.insert(str);
+    }
+  }
+
+  // Loop over all of the faces
+  std::set<std::string>::iterator it;
+  for ( it = face_attr_set.begin(); it != face_attr_set.end(); it++ ){
+    // Get the quads with the given face number
+    const char *attr = NULL;
+    if (!(*it).empty()){
+      attr = (*it).c_str();
+    }
+    TMRQuadrantArray *quad_array = forest->getQuadsWithAttribute(attr);
+
+    // Get the quadrants for this face
+    int num_face_elems;
+    TMRQuadrant *array;
+    quad_array->getArray(&array, &num_face_elems);
+
+    // Create an array of the element numbers for this face
+    for ( int i = 0; i < num_face_elems; i++ ){
+      face_elem_nums[i] = array[i].tag;
+    }
+    
+    // Free the quadrant array - it is no longer required
+    delete quad_array;
+
+    // Compute the nodal weights for the derivatives
+    computeLocalWeights(tacs, weights, 
+                        face_elem_nums, num_face_elems);
+
+    // Compute the nodal derivatives
+    computeNodeDeriv2D(order, tacs, uvec, weights, uderiv,
+                       face_elem_nums, num_face_elems);
+
+    // Compute the refined solution
+    addRefinedSolution(order, tacs, tacs_refined,
+                       uvec, uderiv, uvec_refined,
+                       face_elem_nums, num_face_elems);
+  }
+
+  // Free the temp array
+  delete [] face_elem_nums;
+
+  // Free the weights on the coarse mesh
+  weights->decref();
+
+  // Add the values
+  uvec_refined->beginSetValues(TACS_ADD_VALUES);
+  uvec_refined->endSetValues(TACS_ADD_VALUES);
+
+  // Create a vector for the refined weights
+  TACSBVec *weights_refined = new TACSBVec(tacs_refined->getVarMap(), 1,
+                                           tacs_refined->getBVecDistribute(),
+                                           tacs_refined->getBVecDepNodes());
+  weights_refined->incref();
+
+  // Compute the nodal weights for the refined mesh
+  computeLocalWeights(tacs_refined, weights_refined);
+
+  TacsScalar *u, *w;
+  uvec_refined->getArray(&u);
+  int size = weights_refined->getArray(&w);
+  
+  for ( int i = 0; i < size; i++ ){
+    TacsScalar winv = 1.0/w[i];
+    for ( int j = 0; j < vars_per_node; j++ ){
+      u[j] *= winv;
+    }
+    u += vars_per_node; 
+  }
+
+  // Free the refined weights
+  weights_refined->decref();
+
+  // Distribute the values
+  uvec_refined->beginDistributeValues();
+  uvec_refined->endDistributeValues();
 
   // The solution was not passed as an argument
   if (!_uvec){
@@ -916,15 +1037,22 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   // each element
   TacsScalar *SE_error = new TacsScalar[ nelems ];
   
-  // Compute the nodal weights for the derivatives
-  TACSBVec *wlocal;
-  computeLocalWeights(tacs, &wlocal);
-  wlocal->incref();
+  // Create the weight vector - the weights are the number of times
+  // each node is referenced by adjacent elements, including
+  // inter-process references.
+  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
+                                   tacs->getBVecDistribute(),
+                                   tacs->getBVecDepNodes());
+  weights->incref();
+  computeLocalWeights(tacs, weights);
 
   // Compute the nodal derivatives
-  TACSBVec *uderiv;
-  computeNodeDeriv2D(order, tacs, uvec, wlocal, &uderiv);
+  TACSBVec *uderiv = 
+    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
+                 tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   uderiv->incref();
+  computeNodeDeriv2D(order, tacs, uvec, weights, uderiv);
+  weights->decref();
 
   // Allocate space for the element reconstruction problem
   TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
@@ -1049,7 +1177,6 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   // Free the global vectors
   uvec->decref();
   uderiv->decref();
-  wlocal->decref();
 
   // Free the element-related data
   delete [] tmp;
@@ -1133,23 +1260,9 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   TACSBVec *adjoint_refine = tacs_refine->createVec();
   adjoint_refine->incref();
 
-  // Reconstruct the adjoint solution on the finer mesh
-  TMR_ComputeReconSolution(order, tacs, tacs_refine,
-                           adjoint, adjoint_refine);
-
   // Allocate the refinement array - which elements will be refined
   int *refine = new int[ nelems ];
   memset(refine, 0, nelems*sizeof(int));
-
-  // Get the auxiliary elements (surface tractions) associated with the
-  // element class
-  TACSAuxElements *aux_elements = tacs_refine->getAuxElements();
-  int naux = 0, aux_count = 0;
-  TACSAuxElem *aux = NULL;
-  if (aux_elements){
-    aux_elements->sort();
-    naux = aux_elements->getAuxElements(&aux);
-  }
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
@@ -1170,19 +1283,34 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   // Allocate the element residual array
   TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
 
+  // Get the auxiliary elements (surface tractions) associated with the
+  // element class
+  TACSAuxElements *aux_elements = tacs_refine->getAuxElements();
+  int num_aux_elems = 0;
+  TACSAuxElem *aux = NULL;
+  if (aux_elements){
+    aux_elements->sort();
+    num_aux_elems = aux_elements->getAuxElements(&aux);
+  }
+
+  // Reconstruct the adjoint solution on the finer mesh
+  TMR_ComputeReconSolution(forest, tacs, tacs_refine,
+                           adjoint, adjoint_refine);
+  
   // For each element in the mesh, compute the residual on the refined
   // mesh based on its and store its value in the global solution
-  for ( int i = 0; i < nelems; i++ ){
+  int aux_count = 0;
+  for ( int elem = 0; elem < nelems; elem++ ){
     // Set the simulation time
     double time = 0.0;
 
     // Get the element variable values on the coarse mesh
-    tacs->getElement(i, NULL, vars_elem);
+    tacs->getElement(elem, NULL, vars_elem);
 
     // Get the element node numbers
     int elem_len = 0;
     const int *elem_nodes;
-    tacs->getElement(i, &elem_nodes, &elem_len);
+    tacs->getElement(elem, &elem_nodes, &elem_len);
         
     // Get the values of the adjoint on the coarse mesh
     adjoint->getValues(elem_len, elem_nodes, adj_elem);
@@ -1195,7 +1323,7 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
     for ( int ii = 0; ii < 2; ii++ ){
       for ( int jj = 0; jj < 2; jj++ ){
         // Set the element number on the refined mesh
-        int elem_num = 4*i + jj + 2*ii;
+        int elem_num = 4*elem + jj + 2*ii;
 
         // Zero the interpolations
         memset(vars_interp, 0, vars_per_node*order*order*sizeof(TacsScalar));
@@ -1237,7 +1365,7 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
         elem->addResidual(time, res, Xpts, 
                           vars_interp, dvars, ddvars);
 
-        while (aux_count < naux && aux[aux_count].num == elem_num){
+        while (aux_count < num_aux_elems && aux[aux_count].num == elem_num){
           aux[aux_count].elem->addResidual(time, res, Xpts, 
                                            vars_interp, dvars, ddvars);
           aux_count++;
@@ -1265,7 +1393,7 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
 
     // Refine the element if the element error exceeds the target error
     if (fabs(elem_error_remain) > target_error){
-      refine[i] = 1;
+      refine[elem] = 1;
     }
   }
 

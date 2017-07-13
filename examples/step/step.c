@@ -62,8 +62,11 @@ int main( int argc, char *argv[] ){
 
     // Adjust the quality factor
     TMRMeshOptions options;
+    options.triangularize_print_level = 0;
+    options.write_pre_smooth_triangle = 1;
+    options.write_post_smooth_triangle = 1;
     options.frontal_quality_factor = 1.5;
-    options.num_smoothing_steps = 25;
+    options.num_smoothing_steps = 10;
 
     // Mesh the object of interest
     mesh->mesh(options, htarget);
@@ -85,7 +88,8 @@ int main( int argc, char *argv[] ){
     loader->scanBDFFile("surface-mesh.bdf");
 
     // Create the solid stiffness object
-    isoFSDTStiffness *stiff = new isoFSDTStiffness(1.0, 1.0, 0.3, 0.833, 1.0, 1.0);
+    isoFSDTStiffness *stiff = 
+      new isoFSDTStiffness(1.0, 1.0, 0.3, 0.833, 1.0, 1.0);
     MITCShell<2> *elem = new MITCShell<2>(stiff);
 
     for ( int i = 0; i < loader->getNumComponents(); i++ ){ 
@@ -97,7 +101,7 @@ int main( int argc, char *argv[] ){
     tacs->incref();
 
     // Create the f5 visualization object
-    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, SHELL, 
+    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, TACS_SHELL, 
                                             TACSElement::OUTPUT_NODES);
     f5->incref();
     f5->writeToFile("surface-mesh.f5");

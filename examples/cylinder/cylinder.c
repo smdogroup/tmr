@@ -220,7 +220,8 @@ void compute_coefficients( double *U, double *V, double *W,
   }
 
   // The first equation for u
-  A[0]  = -(A11*beta*beta + A33*alpha*alpha) - D33*ainv*ainv*alpha*alpha;
+  A[0]  = -(A11*beta*beta + A33*alpha*alpha + 
+            D33*ainv*ainv*alpha*alpha);
   A[5]  = -(A33 + A12)*alpha*beta;
   A[10] = A12*beta*ainv;
   A[15] = D33*ainv*alpha*alpha;
@@ -228,7 +229,8 @@ void compute_coefficients( double *U, double *V, double *W,
 
   // The second equation for v
   A[1]  = -(A12 + A33)*alpha*beta;
-  A[6]  = -(A33*beta*beta + A22*alpha*alpha) - ainv*ainv*bA11 - D22*ainv*ainv*alpha*alpha;
+  A[6]  = -(A33*beta*beta + A22*alpha*alpha + ainv*ainv*bA11 + 
+            D22*ainv*ainv*alpha*alpha);
   A[11] = (A22 + bA11)*ainv*alpha + D22*alpha*ainv*ainv*ainv;
   A[16] = D12*ainv*alpha*beta;
   A[21] = bA11*ainv + D22*ainv*alpha*alpha;
@@ -236,7 +238,8 @@ void compute_coefficients( double *U, double *V, double *W,
   // The third equation for w
   A[2]  = A12*beta*ainv;
   A[7]  = (bA11 + A22)*alpha*ainv + D22*alpha*ainv*ainv*ainv;
-  A[12] = -(bA11*alpha*alpha + bA22*beta*beta) - A22*ainv*ainv - D22*ainv*ainv*ainv*ainv;
+  A[12] = -(bA11*alpha*alpha + bA22*beta*beta + A22*ainv*ainv + 
+            D22*ainv*ainv*ainv*ainv);
   A[17] = -bA22*beta - D12*beta*ainv*ainv;
   A[22] = -bA11*alpha - D22*alpha*ainv*ainv;
 
@@ -354,8 +357,8 @@ int main( int argc, char *argv[] ){
 
   // Set up the creator object - this facilitates creating the
   // TACSAssembler objects for different geometries
-  TMRCylinderCreator *creator = new TMRCylinderCreator(comm, bcs, alpha, beta, R,
-                                                       load, stiff);
+  TMRCylinderCreator *creator = 
+    new TMRCylinderCreator(comm, bcs, alpha, beta, R, load, stiff);
 
   // Create the geometry
   BRepPrimAPI_MakeCylinder cylinder(R, L);
@@ -399,6 +402,7 @@ int main( int argc, char *argv[] ){
     TMRMeshOptions options;
     options.frontal_quality_factor = 1.25;
     options.mesh_type_default = TMR_STRUCTURED;
+    // options.mesh_type_default = TMR_UNSTRUCTURED;
     mesh->mesh(options, htarget);
 
     TMRModel *model = mesh->createModelFromMesh();
@@ -576,6 +580,22 @@ int main( int argc, char *argv[] ){
 
         // Compute the function estimate
         fval_est = fval + adj_corr; 
+
+        // Write out the adjoint solution
+        tacs[0]->setVariables(adjvec);
+        f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
+        f5->incref();
+        sprintf(outfile, "adjoint%02d.f5", iter);
+        f5->writeToFile(outfile);
+        f5->decref();
+
+        // Create the refined vector
+        TACSBVec *adjvec_refine = tacs_refine->createVec();
+        adjvec_refine->incref();
+        TMR_ComputeReconSolution(forest[0], tacs[0], tacs_refine,
+                                 adjvec, adjvec_refine);
+        tacs_refine->setVariables(adjvec_refine);
+        adjvec_refine->decref();
 
         // Write out the adjoint solution
         f5 = new TACSToFH5(tacs_refine, TACS_SHELL, write_flag);

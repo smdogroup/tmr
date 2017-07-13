@@ -277,7 +277,6 @@ static void computeTriEdges( int nnodes, int ntris,
   // Allocate the array for the triangle neighbors
   int *tri_neighbors = new int[ 3*ntris ];
   
-  int count = 0;
   int ne = 0;
   for ( int i = 0; i < ntris; i++ ){
     // Search through each edge of the each triangle
@@ -404,7 +403,6 @@ static void computeQuadEdges( int nnodes, int nquads,
     quad_neighbors = new int[ 4*nquads ];
   }
 
-  int count = 0;
   int ne = 0;
   for ( int i = 0; i < nquads; i++ ){
     // Search through each edge of the each quadrilateral
@@ -853,7 +851,7 @@ int TMREdgeMesh::setNodeNums( int *num ){
       (*num)++;
     }
 
-    return npts-1;
+    return npts-2;
   }
 
   return 0;
@@ -1068,7 +1066,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     int pt = 0;
 
     int init_loop_pt = 0; // What point value did this loop start on? 
-    int init_loop_seg = 0; // What segment value did this loop start on?
     int hole_pt = total_num_pts; // What hole are we on?
 
     // Set up the degenerate edges
@@ -1239,7 +1236,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       // Free the connectivity information
       delete [] pts_to_quad_ptr;
       delete [] pts_to_quads;
-
     }
     else if (mesh_type == TMR_STRUCTURED){
       // Use a straightforward interpolation technique to obtain the
@@ -1379,7 +1375,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       }
 
       // Create the mesh using the frontal algorithm
-      tri->frontal(htarget);
+      tri->frontal(htarget, options.triangularize_print_level);
 
       // Free the degenerate triangles and reorder the mesh
       if (num_degen > 0){
@@ -1398,6 +1394,12 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       int ntris, *tris;
       tri->getMesh(&num_points, &ntris, &tris, &pts, &X);
       tri->decref();
+
+      if (ntris == 0){
+        fprintf(stderr,
+                "TMRTriangularize warning: No triangles for mesh id %d\n", 
+                face->getEntityId());
+      }
 
       if (ntris > 0){
         // Compute the triangle edges and neighbors in the dual mesh
@@ -1577,16 +1579,21 @@ int TMRFaceMesh::setNodeNums( int *num ){
         // Retrieve the variable numbers for this loop
         const int *edge_vars;
         int npts = mesh->getNodeNums(&edge_vars);
-      
-        // Find the point on the curve
-        if (dir[i] > 0){
-          for ( int j = 0; j < npts-1; j++, pt++ ){
-            vars[pt] = edge_vars[j];
-          }
+
+        if (edges[i]->isDegenerate()){
+          vars[pt] = edge_vars[0];
         }
         else {
-          for ( int j = npts-1; j >= 1; j--, pt++ ){
-            vars[pt] = edge_vars[j];
+          // Find the point on the curve
+          if (dir[i] > 0){
+            for ( int j = 0; j < npts-1; j++, pt++ ){
+              vars[pt] = edge_vars[j];
+            }
+          }
+          else {
+            for ( int j = npts-1; j >= 1; j--, pt++ ){
+              vars[pt] = edge_vars[j];
+            }
           }
         }
       }
@@ -1791,7 +1798,7 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
   // Compute the weight associated with each edge by combputing the
   // recombined quality
   const double eps = 0.1;
-  const double frac = eps/(1.0 + eps);
+  const double frac = 1.0/(1.0 + eps);
 
   int edge_num = 0;
   for ( int i = 0; i < num_edges; i++ ){
@@ -1804,8 +1811,7 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
         computeRecombinedQuality(tris, tri_neighbors,
                                  t1, t2, X);
 
-      // double weight = frac*(1.0 - quality)*(1.0 + 1.0/(quality + eps));
-      double weight = 1.0 - quality;
+      double weight = frac*(1.0 - quality)*(1.0 + 1.0/(quality + eps));
       graph_edges[2*edge_num] = t1;
       graph_edges[2*edge_num+1] = t2;
       weights[edge_num] = weight;
@@ -2084,7 +2090,7 @@ Quad %d from triangles %d and %d failed\n",
   x ---- x ---- x         x ---- x ---- x
 */
 void TMRFaceMesh::simplifyQuads(){
-  // Compute the pointer -> quad information
+  // Compute the node -> quad information
   int *ptr, *pts_to_quads;
   computeNodeToElems(num_points, num_quads, 4, quads,
                      &ptr, &pts_to_quads);
@@ -2106,30 +2112,36 @@ void TMRFaceMesh::simplifyQuads(){
       // skip combining this quadrilateral. This call could
       // probably be repeated to remove this element, but this
       // algorithm cannot handle it.
+      int skip_me = 0;
       for ( int k = 0; k < 4; k++ ){
-        if (new_pt_nums[quad1[k]] < 0 || 
+        if (quad1[k] < 0 || 
+            quad2[k] < 0 ||
+            new_pt_nums[quad1[k]] < 0 || 
             new_pt_nums[quad2[k]] < 0){
+          skip_me = 1;
           break;
         }
       }
 
-      // Find the common node between quads
-      int k1 = 0, k2 = 0;
-      while (quad1[k1] != i) k1++;
-      while (quad2[k2] != i) k2++;
-
-      // Adjust k2 so that it points to the node that
-      // will be inserted into the connectivity for the
-      // first quadrilateral
-      k2 += 2;
-      if (k2 >= 4){ k2 -= 4; }
-      quad1[k1] = quad2[k2];
-
-      // Set the point
-      quad2[0] = quad2[1] = quad2[2] = quad2[3] = -1;
-
-      // Set the points that we're going to eliminate
-      new_pt_nums[i] = -1;
+      if (!skip_me){
+        // Find the common node between quads
+        int k1 = 0, k2 = 0;
+        while (quad1[k1] != i) k1++;
+        while (quad2[k2] != i) k2++;
+        
+        // Adjust k2 so that it points to the node that
+        // will be inserted into the connectivity for the
+        // first quadrilateral
+        k2 += 2;
+        if (k2 >= 4){ k2 -= 4; }
+        quad1[k1] = quad2[k2];
+        
+        // Set the point
+        quad2[0] = quad2[1] = quad2[2] = quad2[3] = -1;
+        
+        // Set the points that we're going to eliminate
+        new_pt_nums[i] = -1;
+      }
     }
   }
 
@@ -2205,40 +2217,40 @@ void TMRFaceMesh::simplifyQuads(){
   delete [] pts_to_quads;
 
   // Remove the points/parameters that have been eliminated
-  int j = 0;
-  for ( ; j < num_fixed_pts; j++ ){
-    new_pt_nums[j] = j;
+  int pt_num = 0;
+  for ( ; pt_num < num_fixed_pts; pt_num++ ){
+    new_pt_nums[pt_num] = pt_num;
   }
   for ( int i = num_fixed_pts; i < num_points; i++ ){
     if (new_pt_nums[i] >= 0){
-      if (i != j){
+      if (i != pt_num){
         // Copy over the points
-        pts[2*j] = pts[2*i];
-        pts[2*j+1] = pts[2*i+1];
-        X[j] = X[i];
+        pts[2*pt_num] = pts[2*i];
+        pts[2*pt_num+1] = pts[2*i+1];
+        X[pt_num] = X[i];
       }
-      new_pt_nums[i] = j;
-      j++;
+      new_pt_nums[i] = pt_num;
+      pt_num++;
     }
   }
 
   // Set the new number of points
-  num_points = j;
+  num_points = pt_num;
 
   // Set the new connectivity, overwriting the old connectivity 
-  j = 0;
+  int quad_num = 0;
   for ( int i = 0; i < num_quads; i++ ){
     if (quads[4*i] >= 0){
-      quads[4*j] = new_pt_nums[quads[4*i]];
-      quads[4*j+1] = new_pt_nums[quads[4*i+1]];
-      quads[4*j+2] = new_pt_nums[quads[4*i+2]];
-      quads[4*j+3] = new_pt_nums[quads[4*i+3]];
-      j++;
+      quads[4*quad_num] = new_pt_nums[quads[4*i]];
+      quads[4*quad_num+1] = new_pt_nums[quads[4*i+1]];
+      quads[4*quad_num+2] = new_pt_nums[quads[4*i+2]];
+      quads[4*quad_num+3] = new_pt_nums[quads[4*i+3]];
+      quad_num++;
     }
   }
 
   // Set the new number of quadrilaterals
-  num_quads = j;
+  num_quads = quad_num;
 
   // Free the new point numbers
   delete [] new_pt_nums;
@@ -3168,6 +3180,7 @@ int TMRVolumeMesh::getNodeNums( const int **_vars ){
   if (_vars){
     *_vars = vars;
   }
+  return num_points;
 }
 
 /*
@@ -3759,7 +3772,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   // The edges within the quadrilateral mesh
   int num_quad_edges = 0;
-  int *quad_edges = NULL, *quad_edge_nums = NULL;
+  int *quad_edges = NULL;
 
   // The edges within the hexahedral mesh
   int num_hex_edges = 0, num_hex_faces = 0;

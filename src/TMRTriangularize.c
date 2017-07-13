@@ -6,6 +6,10 @@
 #include <limits.h>
 #include <stdio.h>
 
+// Include C++ stdlib for priority queue
+#include <queue>
+#include <vector>
+
 // Define the maximum distance
 const double MAX_QUAD_DISTANCE = 1e40;
 
@@ -540,7 +544,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
 
   // Re-adjust the domain boundary to ensure that it is sufficiently
   // large
-  double small = 1e-3;
+  double small = 1e3;
   domain.xhigh += small;
   domain.xlow -= small;
   domain.yhigh += small;
@@ -572,7 +576,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // Evaluate the points on the face
   if (face){
     for ( int i = 0; i < num_points; i++ ){
-      face->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
+      X[i].x = X[i].y = X[i].z = 0.0;
     }
   }
 
@@ -598,15 +602,16 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // that are in the FIXED_POINT_OFFSET list that are not separated by
   // a PSLG edge. These triangles will be deleted.
   TriListNode *node = list_start;
+  uint32_t max_node_num = num_points - nholes;
   while (node){
     if (node->tri.status != DELETE_ME &&
         node->tri.tag == 0 && 
         ((node->tri.u < FIXED_POINT_OFFSET ||
           node->tri.v < FIXED_POINT_OFFSET ||
           node->tri.w < FIXED_POINT_OFFSET) ||
-         (node->tri.u >= num_points - nholes ||
-          node->tri.v >= num_points - nholes ||
-          node->tri.w >= num_points - nholes))){
+         (node->tri.u >= max_node_num ||
+          node->tri.v >= max_node_num ||
+          node->tri.w >= max_node_num))){
       tagTriangles(&node->tri);
     }
     node = node->next;
@@ -625,12 +630,12 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   deleteTrianglesFromList();
 
   // Free the points and holes from the quadtree
-  for ( uint32_t num = 0; num < FIXED_POINT_OFFSET; num++ ){
+  for ( int num = 0; num < FIXED_POINT_OFFSET; num++ ){
     root->deleteNode(num, &pts[2*num]);
   }
 
   // Free the points associated with the number of holes
-  for ( uint32_t num = num_points - nholes; num < num_points; num++ ){
+  for ( int num = num_points - nholes; num < num_points; num++ ){
     root->deleteNode(num, &pts[2*num]);
   }
   num_points -= nholes;
@@ -691,16 +696,6 @@ void TMRTriangularize::setFrontalQualityFactor( double factor ){
   if (factor >= 1.25 && factor <= 2.0){
     frontal_quality_factor = factor;
   }
-}
-
-/*
-  Compare the first component of the degenerate edge pairs
-*/
-static int compare_degen_edges( const void *avoid, const void *bvoid ){
-  // Cast the input to int types
-  const int *a = static_cast<const int*>(avoid);
-  const int *b = static_cast<const int*>(bvoid);
-  return *a - *b;
 }
 
 /*
@@ -779,7 +774,7 @@ void TMRTriangularize::getMesh( int *_num_points,
     t[0] = node->tri.u - FIXED_POINT_OFFSET;
     t[1] = node->tri.v - FIXED_POINT_OFFSET;
     t[2] = node->tri.w - FIXED_POINT_OFFSET;
-    t += 3;    
+    t += 3;
     node = node->next;
   }
 }
@@ -790,7 +785,6 @@ void TMRTriangularize::getMesh( int *_num_points,
 void TMRTriangularize::setTriangleTags( uint32_t tag ){
   TriListNode *node = list_start;
   while (node){
-    TriListNode *next = node->next;
     node->tri.tag = tag;
     node = node->next;
   }
@@ -1704,6 +1698,18 @@ double TMRTriangularize::computeCircumcircle( TMRTriangle *tri ){
 }
 
 /*
+  Class for comparing triangle quality that is used within the frontal
+  code.
+*/
+class TMRTriangleCompare {
+ public:
+  bool operator()(TMRTriangle* const& A, 
+                  TMRTriangle* const& B){
+    return A->quality < B->quality;
+  }
+};
+
+/*
   Perform a frontal mesh generation algorithm to create a constrained
   Delaunay triangularization of the generated mesh.
 
@@ -1711,13 +1717,14 @@ double TMRTriangularize::computeCircumcircle( TMRTriangle *tri ){
   generation algorithm. The frontal mesh generation technique is based
   on Rebay's 1993 paper in JCP.
 */
-void TMRTriangularize::frontal( double h ){
+void TMRTriangularize::frontal( double h, int print_level ){
   // The length of the edge of the triangle
   const double sqrt3 = sqrt(3.0);
   const double de = 0.5*sqrt3*h;
 
   // The queue of active (and sometimes deleted) triangles
-  TriQueue active;
+  std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
+    TMRTriangleCompare> active;
 
   // Add the triangles to the active set that 
   TriListNode *node = list_start;
@@ -1741,7 +1748,7 @@ void TMRTriangularize::frontal( double h ){
         for ( int k = 0; k < 3; k++ ){
           if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
             node->tri.status = ACTIVE;
-            active.append(&node->tri);
+            active.push(&node->tri);
             break;
           }
         }
@@ -1768,7 +1775,7 @@ void TMRTriangularize::frontal( double h ){
         completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
         if (adjacent && adjacent->status == WAITING){
           node->tri.status = ACTIVE;
-          active.append(&node->tri);
+          active.push(&node->tri);
           break;
         }
       }
@@ -1778,12 +1785,15 @@ void TMRTriangularize::frontal( double h ){
     node = node->next;
   }
 
-  printf("%10s %10s %10s\n", "Iteration", "Triangles", "Active");
- 
+  if (print_level > 0){
+    printf("%10s %10s %10s\n", "Iteration", "Triangles", "Active");
+  }
+
   int iter = 0;
   while (1){
-    if (iter % 1000 == 0){
-      printf("%10d %10d %10d\n", iter, num_triangles, active.size);
+    if (print_level > 0 && iter % 1000 == 0){
+      int queue_size = active.size();
+      printf("%10d %10d %10d\n", iter, num_triangles, queue_size);
     }
     iter++;
 
@@ -1791,8 +1801,16 @@ void TMRTriangularize::frontal( double h ){
     TMRTriangle *tri = NULL;
 
     // Find the first active triangle that is not marked to be deleted
-    while (active.size > 0 && !tri){
-      tri = active.pop();
+    while (active.size() > 0 && !tri){
+      // This wonderful syntax brought to you by C++! Constant reference
+      // to a pointer, which we can just copy to a non-constant pointer.
+      TMRTriangle* const& tri_ptr = active.top();
+      tri = tri_ptr;
+
+      // Pop the top member of the priority queue, but only use it if
+      // the triangle is still active (note: the queue can contain non-active
+      // triangles)
+      active.pop();
       if (tri->status != ACTIVE){
         tri = NULL;
       }
@@ -1848,6 +1866,7 @@ void TMRTriangularize::frontal( double h ){
     // Half the parametric distance between the two edge points
     double p = 0.0;
 
+    // New parametric point - to be computed
     double pt[2];
     if (face){
       // Evaluate the metric at the center of the active triangle
@@ -1899,7 +1918,7 @@ void TMRTriangularize::frontal( double h ){
       e[1] = (pts[2*v] - pts[2*u]);
       
       // Compute half the distance between the u and v points
-      p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
+      double p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
       e[0] = 0.5*e[0]/p;
       e[1] = 0.5*e[1]/p;
       
@@ -2000,7 +2019,7 @@ void TMRTriangularize::frontal( double h ){
         for ( int k = 0; k < 3; k++ ){
           if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
             ptr->tri.status = ACTIVE;
-            active.append(&ptr->tri);
+            active.push(&ptr->tri);
             flag = 1;
             break;
           }
@@ -2014,7 +2033,7 @@ void TMRTriangularize::frontal( double h ){
             completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
             if (adjacent && adjacent->status == ACCEPTED){
               ptr->tri.status = ACTIVE;
-              active.append(&ptr->tri);
+              active.push(&ptr->tri);
               break;
             }
           }
@@ -2026,8 +2045,53 @@ void TMRTriangularize::frontal( double h ){
     }
   }
 
-  printf("%10d %10d\n", iter, num_triangles);
+  // Ensure that we do not have isolated triangles on the boundary
+  // which will cause problems when (if) we do conversion to a
+  // quadrilateral mesh. This will not do "good" things to the
+  // triangularization.
+  node = list_start;
+  while (node){
+    if (node->tri.status == ACCEPTED){
+      const uint32_t u = node->tri.u;
+      const uint32_t v = node->tri.v;
+      const uint32_t w = node->tri.w;
+
+      if ((u - FIXED_POINT_OFFSET < init_boundary_points) &&
+          (v - FIXED_POINT_OFFSET < init_boundary_points) &&
+          (w - FIXED_POINT_OFFSET < init_boundary_points)){
+        // Check that only one adjacent triangle exists
+        TMRTriangle *t1, *t2, *t3;
+        completeMe(v, u, &t1);
+        completeMe(w, v, &t2);
+        completeMe(u, w, &t3);
+
+        if ((!t1 && !t2)){
+          double pt[2];
+          pt[0] = 0.5*(pts[2*u] + pts[2*w]);
+          pt[1] = 0.5*(pts[2*u+1] + pts[2*w+1]);
+          addPointToMesh(pt);          
+        }
+        else if (!t2 && !t3){
+          double pt[2];
+          pt[0] = 0.5*(pts[2*u] + pts[2*v]);
+          pt[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
+          addPointToMesh(pt);          
+        }
+        else if (!t1 && !t3){
+          double pt[2];
+          pt[0] = 0.5*(pts[2*v] + pts[2*w]);
+          pt[1] = 0.5*(pts[2*v+1] + pts[2*w+1]);
+          addPointToMesh(pt);          
+        }
+      }      
+    }
+    node = node->next;
+  }
 
   // Free the deleted trianlges from the doubly linked list
   deleteTrianglesFromList();
+
+  if (print_level > 0){
+    printf("%10d %10d\n", iter, num_triangles);
+  }
 }
