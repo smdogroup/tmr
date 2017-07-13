@@ -274,6 +274,7 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *vars ){
   if (vars){
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(vars);
     if (wrap){
+      if (xinit){ xinit->decref(); }
       xinit = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
       xinit->incref();
       xinit->copyValues(wrap->vec);
@@ -335,7 +336,7 @@ int TMRTopoProblem::isSparseInequality(){
   Use the inequality constraint - this seems to work better
 */
 int TMRTopoProblem::isDenseInequality(){ 
-  return 1;
+  return 0;
 }
 
 /*
@@ -569,6 +570,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     // Set the compliance objective and the mass constraint
     *fobj = obj_scale*compliance_value;
     cons[0] = (target_mass - mass_value)*mass_scale;
+    
   }
   else {
     return 1;

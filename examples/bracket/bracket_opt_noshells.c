@@ -218,7 +218,7 @@ int main( int argc, char *argv[] ){
   double target_mass_fraction = 0.2;
 
   char prefix[256];
-  sprintf(prefix, "results/");
+  sprintf(prefix, "results_bracket_noshell/");
 
   for ( int k = 0; k < argc; k++ ){
     if (sscanf(argv[k], "prefix=%s", prefix) == 0){
@@ -397,6 +397,7 @@ int main( int argc, char *argv[] ){
 
 	// Set the new design variable values	
         prob->setInitDesignVars(new_design_vars);
+        opt->resetDesignAndBounds();
 
         // Free the old design variable values and reset the pointer
         delete old_design_vars;

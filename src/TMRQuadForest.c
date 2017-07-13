@@ -1351,7 +1351,7 @@ void TMRQuadForest::refine( const int refinement[],
               q.getSibling(k, &q);
               TMRQuadrant qq = q;
               qq.level += 1;
-              if (qq.level < max_level){
+              if (qq.level <= max_level){
                 qq.getSibling(0, &qq);
                 if (mpi_rank == getQuadrantMPIOwner(&qq)){
                   hash->addQuadrant(&qq);

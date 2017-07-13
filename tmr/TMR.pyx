@@ -360,7 +360,7 @@ cdef class QuadForest:
       cdef TMRQuadrantArray *array = NULL
       array = self.ptr.getNodesWithAttribute(attr)
       return _init_QuadrantArray(array)
-
+   
       # void createMeshConn(const int**, const int*)
       # int getDepNodeConn(const int**, const int**, const double**)
    

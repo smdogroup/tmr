@@ -69,7 +69,7 @@ TMROctTACSTopoCreator::~TMROctTACSTopoCreator(){
   if (shell_attr){ delete [] shell_attr; }
 }
 
-  // Get the underlying information about the
+// Get the underlying information about the
 void TMROctTACSTopoCreator::getForest( TMROctForest **_filter ){
   *_filter = filter;
 }

@@ -55,16 +55,16 @@ void addFaceTractions( int order,
   for ( int i = 0; i < size; i++ ){
     // Get the face index
     int face_index = array[i].tag;
-
+    
     // Get the local octant index in the array
     int use_node_search = 0;
     TMROctant *me = octants->contains(&array[i], use_node_search);
     int element_num = me - first;
-
+    printf("element num: %d %d\n",face_index, element_num);
     // Add the element to the auxiliary elements
     aux->addElement(element_num, trac[face_index]);
   }
-
+  exit(0);
   // Set the auxiliary elements into TACS
   tacs->setAuxElements(aux);
 
