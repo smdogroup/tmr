@@ -1335,46 +1335,31 @@ void TMRQuadForest::refine( const int refinement[],
             new_level = max_level;
           }
 
+          // Compute the relative level of refinement
+          int ref = new_level - array[i].level;
+          if (ref <= 0){ ref = 1; }
+          
           // Copy the quadrant and set the new level
           TMRQuadrant q = array[i];
           q.level = new_level;
 
           // Compute the new side-length of the quadrant
           const int32_t h = 1 << (TMR_MAX_LEVEL - q.level);
-          q.x = q.x - (q.x % h);
-          q.y = q.y - (q.y % h);
-
-          if (mpi_rank == getQuadrantMPIOwner(&q)){
-            hash->addQuadrant(&q);
+          int32_t x = q.x - (q.x % h);
+          int32_t y = q.y - (q.y % h);
+          for ( int ii = 0; ii < ref; ii++ ){
+            for ( int jj = 0; jj < ref; jj++ ){
+              q.x = x + 2*ii*h;
+              q.y = y + 2*jj*h;
+              if (mpi_rank == getQuadrantMPIOwner(&q)){
+                hash->addQuadrant(&q);
+              }
+              else {
+                ext_hash->addQuadrant(&q);
+              }
+            }
           }
-          else {
-            ext_hash->addQuadrant(&q);
-          }
-<<<<<<< local
-          // If more than one level of refinement is desired
-          if (num_level_ref > 1){
-            // Add additional level of refinement
-            for (int k = 0; k < 4; k++){
-              q = array[i];
-              q.level += 1;
-              q.getSibling(k, &q);
-              TMRQuadrant qq = q;
-              qq.level += 1;
-              if (qq.level <= max_level){
-                qq.getSibling(0, &qq);
-                if (mpi_rank == getQuadrantMPIOwner(&qq)){
-                  hash->addQuadrant(&qq);
-                }
-                else {
-                  ext_hash->addQuadrant(&qq);
-                }
-              } // end if qq.level < max_level
-            } // end for int k = 0; k < 4; 
-          } // if num_level > 1
-        } // end if array[i].level < max_level
-=======
         }
->>>>>>> other
         else {
           // If the quadrant is at the max level add it without
           // refinement
@@ -1948,7 +1933,7 @@ void TMRQuadForest::balanceQuadrant( TMRQuadrant *quad,
       }
     }
 
-    // If we're balancing across edges and 
+    // If we're balancing across edges and corners
     if (balance_corner){
       for ( int corner = 0; corner < 4; corner++ ){
         p.cornerNeighbor(corner, &neighbor);
@@ -1974,7 +1959,7 @@ void TMRQuadForest::balanceQuadrant( TMRQuadrant *quad,
 
           if (ex && ey){
             // Add the quadrant to the other trees
-            addCornerNeighbors(corner, neighbor, hash, ext_hash, queue);
+            addCornerNeighbors(corner, q, hash, ext_hash, queue);
           }
           else {
             // The quadrant lies along a true edge
