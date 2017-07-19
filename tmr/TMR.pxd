@@ -34,8 +34,8 @@ cdef extern from "TMRGeometry.h":
         pass
 
     cdef cppclass TMRCurve(TMREntity):
-        void setVertices(TMRVertex*, TMRVertex*)
-        void getVertices(TMRVertex**, TMRVertex**)
+        # void setVertices(TMRVertex*, TMRVertex*)
+        # void getVertices(TMRVertex**, TMRVertex**)
         void writeToVTK(char*)
 
     cdef cppclass TMRSurface(TMREntity):
@@ -98,13 +98,43 @@ cdef extern from "":
 cdef extern from "TMRTopology.h":
     cdef cppclass TMRTopology(TMREntity):
         pass
-
+    cdef cppclass TMRVertex(TMREntity):
+        pass
+    cdef cppclass TMREdge(TMREntity):
+        TMREdge()
+        void setVertices(TMRVertex*,TMRVertex*)
+        void getVertices(TMRVertex**, TMRVertex**)
+        void writeToVTK(char*)
+        
+    cdef cppclass TMRFace(TMREntity):
+        TMRFace(int)
+        int getNumEdgeLoops()
+        void setMaster(TMRFace*)
+    cdef cppclass TMRVolume(TMREntity):
+        TMRVolume(int, TMRFace**,const int*)
+        void getFaces(int*,TMRFace***,const int**)
+        void writeToVTK(char*)
+        void updateOrientation()
+    cdef cppclass TMRModel(TMREntity):
+        TMRModel(int, TMRVertex**,
+                 int, TMREdge**,
+                 int, TMRFace**,
+                 int, TMRVolume**)
+        void getVertices(int*,TMRVertex***)
+        void getEdges(int*,TMREdge***)
+        void getFaces(int*,TMRFace***)
+        void getVolumes(int*,TMRVolume***)
+ 
 cdef extern from "TMRMesh.h":
     cdef cppclass TMRMesh(TMREntity):
-        TMRMesh(TMRGeometry*)
+        TMRMesh(MPI_Comm,TMRModel*)
         void mesh(double)
         int getMeshPoints(TMRPoint**)
-        int getMeshConnectivity(const int**)
+        int getMeshConnectivity(int*,const int**,
+                                int*,const int**)
+        TMRModel *createModelFromMesh()
+    cdef cppclass TMRMeshOptions:
+        TMRMeshOptions()
 
 cdef extern from "TMRQuadrant.h":
     cdef cppclass TMRQuadrant:
@@ -148,3 +178,47 @@ cdef extern from "TMRQuadForest.h":
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
 
+
+cdef extern from "TMROctant.h":
+    cdef cppclass TMROctant:
+        int childId()
+        void getSibling(int, TMROctant*)
+        void parent(TMROctant*)
+        void edgeNeighbor(int, TMROctant*)
+        void cornerNeighbor(int, TMROctant*)
+        void faceNeighbor(int, TMROctant)
+        int contains(TMROctant*)
+        int32_t x
+        int32_t y
+        int32_t z
+        int32_t level
+        int32_t block
+        int32_t tag
+
+    cdef cppclass TMROctantArray:
+        TMROctantArray(TMROctant*, int)
+        TMROctantArray* duplicate()
+        void getArray(TMROctant**, int*)
+        void sort()
+        TMROctant* contains(TMROctant *q, int)
+        
+cdef extern from "TMROctForest.h":
+    cdef cppclass TMROctForest(TMREntity):
+        TMROctForest(MPI_Comm)
+        MPI_Comm getMPIComm()
+        void setTopology(TMRTopology*)
+        void setConnectivity(int, const int*, int)
+        void setFullConnectivity(int, int, int, const int*, const int*)
+        void repartition()
+        void createTrees(int)
+        void createRandomTrees(int)
+        void refine(int*)
+        TMROctForest *duplicate()
+        TMROctForest *coarsen()
+        void balance(int)
+        void createNodes(int)
+        TMROctantArray* getOctsWithAttribute(const char*)
+        TMROctantArray* getNodesWithAttribute(const char*)
+        void createMeshConn(const int**, const int*)
+        int getDepNodeConn(const int**, const int**, const double**)
+        void createInterpolation(TMROctForest*, TACSBVecInterp*)

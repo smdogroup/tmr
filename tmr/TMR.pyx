@@ -41,6 +41,88 @@ cdef _init_Vertex(TMRVertex *ptr):
     vertex.ptr.incref()
     return vertex
 
+cdef class Edge:
+   cdef TMREdge *ptr
+   def __cinit__(self):
+      self.ptr = NULL
+      
+   def __dealloc__(self):
+      if self.ptr:
+         self.ptr.decref()
+   def setVertices(self, Vertex v1, Vertex v2):
+      self.ptr.setVertices(v1.ptr, v2.ptr)
+
+   def getVertices(self):
+      cdef TMRVertex *v1 = NULL
+      cdef TMRVertex *v2 = NULL
+      self.ptr.getVertices(&v1, &v2)
+      return _init_Vertex(v1), _init_Vertex(v2)
+   
+   def writeToVTK(self, char* filename):
+      self.ptr.writeToVTK(filename)
+      
+cdef _init_Edge(TMREdge *ptr):
+   edge = Edge()
+   edge.ptr = ptr
+   edge.ptr.incref()
+   return edge
+
+cdef class Face:
+   cdef TMRFace *ptr
+   def __cinit__(self):
+      self.ptr = NULL
+      
+   def __dealloc__(self):
+      if self.ptr:
+         self.ptr.decref()
+         
+   def getNumEdgeLoops(self):
+      return self.ptr.getNumEdgeLoops()
+   
+   def setMaster(self, Face f):
+      self.ptr.setMaster(f.ptr)
+      
+cdef _init_Face(TMRFace *ptr):
+   face = Face()
+   face.ptr = ptr
+   face.ptr.incref()
+   return face
+
+cdef class Volume:
+   cdef TMRVolume *ptr
+   def __cinit__(self):
+      self.ptr = NULL
+      # cdef int nfaces = len(faces)
+      # cdef TMRFace **fce
+      # fce = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
+      # for i in range(nfaces):
+      #    fce[i] = (<Face>faces[i]).ptr
+      # self.ptr = new TMRVolume(nfaces, fce, NULL)
+      # self.ptr.incref()
+      
+   def __dealloc__(self):
+      if self.ptr:
+         self.ptr.decref()
+         
+   # def getFaces(self):
+   #    cdef TMRFace **f
+   #    cdef int num_faces
+   #    self.ptr.getFaces(&num_faces, &f, NULL)
+      
+   #    return num_faces
+   
+   def writeToVTK(self, char* filename):
+      self.ptr.writeToVTK(filename)
+      
+   def updateOrientation(self):
+      self.ptr.updateOrientation()
+
+cdef _init_Volume(TMRVolume *ptr):
+   vol = Volume()
+   vol.ptr = ptr
+   vol.ptr.incref()
+   return vol
+
 cdef class Curve:
     cdef TMRCurve *ptr
     def __cinit__(self):
@@ -50,14 +132,14 @@ cdef class Curve:
         if self.ptr:
             self.ptr.decref()
 
-    def setVertices(self, Vertex v1, Vertex v2):
-       self.ptr.setVertices(v1.ptr, v2.ptr)
+    # def setVertices(self, Vertex v1, Vertex v2):
+    #    self.ptr.setVertices(v1.ptr, v2.ptr)
 
-    def getVertices(self):
-       cdef TMRVertex *v1 = NULL
-       cdef TMRVertex *v2 = NULL
-       self.ptr.getVertices(&v1, &v2)
-       return _init_Vertex(v1), _init_Vertex(v2)
+    # def getVertices(self):
+    #    cdef TMRVertex *v1 = NULL
+    #    cdef TMRVertex *v2 = NULL
+    #    self.ptr.getVertices(&v1, &v2)
+    #    return _init_Vertex(v1), _init_Vertex(v2)
             
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
@@ -89,18 +171,18 @@ cdef class Surface:
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
         
-    def addCurveSegment(self, curves, direct):
-        cdef int ncurves = len(curves)
-        cdef int *_dir = NULL
-        cdef TMRCurve **crvs = NULL
-        _dir = <int*>malloc(ncurves*sizeof(int))
-        crvs = <TMRCurve**>malloc(ncurves*sizeof(TMRCurve*))
-        for i in range(ncurves):
-            _dir[i] = direct[i]
-            crvs[i] = (<Curve>curves[i]).ptr
-        self.ptr.addCurveSegment(ncurves, crvs, _dir)
-        free(_dir)
-        free(crvs)
+    # def addCurveSegment(self, curves, direct):
+    #     cdef int ncurves = len(curves)
+    #     cdef int *_dir = NULL
+    #     cdef TMRCurve **crvs = NULL
+    #     _dir = <int*>malloc(ncurves*sizeof(int))
+    #     crvs = <TMRCurve**>malloc(ncurves*sizeof(TMRCurve*))
+    #     for i in range(ncurves):
+    #         _dir[i] = direct[i]
+    #         crvs[i] = (<Curve>curves[i]).ptr
+    #     self.ptr.addCurveSegment(ncurves, crvs, _dir)
+    #     free(_dir)
+    #     free(crvs)
 
 cdef _init_Surface(TMRSurface *ptr):
     surface = Surface()
@@ -153,118 +235,182 @@ cdef class BsplineSurface(Surface):
         self.ptr.incref()
         free(p)
 
-cdef class VertexFromPoint(Vertex):
-   def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] pt):
-      cdef TMRPoint point
-      point.x = pt[0]
-      point.y = pt[1]
-      point.z = pt[2]
-      self.ptr = new TMRVertexFromPoint(point)
-      self.ptr.incref()
+# cdef class VertexFromPoint(Vertex):
+#    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] pt):
+#       cdef TMRPoint point
+#       point.x = pt[0]
+#       point.y = pt[1]
+#       point.z = pt[2]
+#       self.ptr = new TMRVertexFromPoint(point)
+#       self.ptr.incref()
 
-cdef class VertexFromCurve(Vertex):
-   def __cinit__(self, Curve curve, double t):
-      self.ptr = new TMRVertexFromCurve(curve.ptr, t)
-      self.ptr.incref()
+# cdef class VertexFromCurve(Vertex):
+#    def __cinit__(self, Curve curve, double t):
+#       self.ptr = new TMRVertexFromCurve(curve.ptr, t)
+#       self.ptr.incref()
 
-cdef class VertexFromSurface(Vertex):
-   def __cinit__(self, Surface surf, double u, double v):
-      self.ptr = new TMRVertexFromSurface(surf.ptr, u, v)
-      self.ptr.incref()
+# cdef class VertexFromSurface(Vertex):
+#    def __cinit__(self, Surface surf, double u, double v):
+#       self.ptr = new TMRVertexFromSurface(surf.ptr, u, v)
+#       self.ptr.incref()
 
-cdef class CurveFromSurface(Curve):
-   def __cinit__(self, Surface surf, Pcurve pcurve):
-      self.ptr = new TMRCurveFromSurface(surf.ptr, pcurve.ptr)
-      self.ptr.incref()
+# cdef class CurveFromSurface(Curve):
+#    def __cinit__(self, Surface surf, Pcurve pcurve):
+#       self.ptr = new TMRCurveFromSurface(surf.ptr, pcurve.ptr)
+#       self.ptr.incref()
 
-cdef class CurveInterpolation:
-    cdef TMRCurveInterpolation *ptr
-    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] pts):
-        cdef int nctl = pts.shape[0]
-        cdef TMRPoint* p = <TMRPoint*>malloc(nctl*sizeof(TMRPoint))
-        for i in range(nctl):
-            p[i].x = pts[i,0]
-            p[i].y = pts[i,1]
-            p[i].z = pts[i,2]
-        self.ptr = new TMRCurveInterpolation(p, nctl)
-        self.ptr.incref()
-        free(p)
+# cdef class CurveInterpolation:
+#     cdef TMRCurveInterpolation *ptr
+#     def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] pts):
+#         cdef int nctl = pts.shape[0]
+#         cdef TMRPoint* p = <TMRPoint*>malloc(nctl*sizeof(TMRPoint))
+#         for i in range(nctl):
+#             p[i].x = pts[i,0]
+#             p[i].y = pts[i,1]
+#             p[i].z = pts[i,2]
+#         self.ptr = new TMRCurveInterpolation(p, nctl)
+#         self.ptr.incref()
+#         free(p)
 
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
+#     def __dealloc__(self):
+#         if self.ptr:
+#             self.ptr.decref()
 
-    def setNumControlPoints(self, int nctl):
-        self.ptr.setNumControlPoints(nctl)
-        return
+#     def setNumControlPoints(self, int nctl):
+#         self.ptr.setNumControlPoints(nctl)
+#         return
 
-    def createCurve(self, int ku):
-        cdef TMRBsplineCurve *curve = self.ptr.createCurve(ku)
-        return _init_Curve(curve)
+#     def createCurve(self, int ku):
+#         cdef TMRBsplineCurve *curve = self.ptr.createCurve(ku)
+#         return _init_Curve(curve)
 
-cdef class CurveLofter:
-    cdef TMRCurveLofter *ptr
-    def __cinit__(self, curves):
-        cdef int ncurves = len(curves)
-        cdef TMRBsplineCurve **crvs = NULL
-        cdef TMRBsplineCurve *bspline = NULL
-        crvs = <TMRBsplineCurve**>malloc(ncurves*sizeof(TMRBsplineCurve*))
-        for i in range(ncurves):
-            bspline =  _dynamicBsplineCurve((<Curve>curves[i]).ptr)
-            if bspline != NULL:
-               crvs[i] = bspline
-            else:
-               raise ValueError('CurveLofter: Lofting curves must be BsplineCurves')
-        self.ptr = new TMRCurveLofter(crvs, ncurves)
-        self.ptr.incref()
-        free(crvs)
+# cdef class CurveLofter:
+#     cdef TMRCurveLofter *ptr
+#     def __cinit__(self, curves):
+#         cdef int ncurves = len(curves)
+#         cdef TMRBsplineCurve **crvs = NULL
+#         cdef TMRBsplineCurve *bspline = NULL
+#         crvs = <TMRBsplineCurve**>malloc(ncurves*sizeof(TMRBsplineCurve*))
+#         for i in range(ncurves):
+#             bspline =  _dynamicBsplineCurve((<Curve>curves[i]).ptr)
+#             if bspline != NULL:
+#                crvs[i] = bspline
+#             else:
+#                raise ValueError('CurveLofter: Lofting curves must be BsplineCurves')
+#         self.ptr = new TMRCurveLofter(crvs, ncurves)
+#         self.ptr.incref()
+#         free(crvs)
 
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
+#     def __dealloc__(self):
+#         if self.ptr:
+#             self.ptr.decref()
 
-    def createSurface(self, int kv):
-        cdef TMRSurface *surf = self.ptr.createSurface(kv)
-        return _init_Surface(surf)
+#     def createSurface(self, int kv):
+#         cdef TMRSurface *surf = self.ptr.createSurface(kv)
+#         return _init_Surface(surf)
 
-cdef class Geometry:
-    cdef TMRGeometry *ptr
-    def __cinit__(self, vertices, curves, surfaces):
-        cdef int nvertices = len(vertices)
-        cdef int ncurves = len(curves)
-        cdef int nsurfaces = len(surfaces)
-        cdef TMRVertex **verts = NULL
-        cdef TMRCurve **crvs = NULL
-        cdef TMRSurface **surfs = NULL
-        verts = <TMRVertex**>malloc(nvertices*sizeof(TMRVertex*))
-        crvs = <TMRCurve**>malloc(ncurves*sizeof(TMRCurve*))
-        surfs = <TMRSurface**>malloc(nsurfaces*sizeof(TMRSurface*))
-        for i in range(nvertices):
-            verts[i] = (<Vertex>vertices[i]).ptr
-        for i in range(ncurves):
-            crvs[i] = (<Curve>curves[i]).ptr
-        for i in range(nsurfaces):
-            surfs[i] = (<Surface>surfaces[i]).ptr
-        self.ptr = new TMRGeometry(nvertices, verts, ncurves, crvs, 
-                                   nsurfaces, surfs)
-        self.ptr.incref()
-        free(verts)
-        free(crvs)
-        free(surfs)
+# cdef class Geometry:
+#     cdef TMRGeometry *ptr
+#     def __cinit__(self, vertices, curves, surfaces):
+#         cdef int nvertices = len(vertices)
+#         cdef int ncurves = len(curves)
+#         cdef int nsurfaces = len(surfaces)
+#         cdef TMRVertex **verts = NULL
+#         cdef TMRCurve **crvs = NULL
+#         cdef TMRSurface **surfs = NULL
+#         verts = <TMRVertex**>malloc(nvertices*sizeof(TMRVertex*))
+#         crvs = <TMRCurve**>malloc(ncurves*sizeof(TMRCurve*))
+#         surfs = <TMRSurface**>malloc(nsurfaces*sizeof(TMRSurface*))
+#         for i in range(nvertices):
+#             verts[i] = (<Vertex>vertices[i]).ptr
+#         for i in range(ncurves):
+#             crvs[i] = (<Curve>curves[i]).ptr
+#         for i in range(nsurfaces):
+#             surfs[i] = (<Surface>surfaces[i]).ptr
+#         self.ptr = new TMRGeometry(nvertices, verts, ncurves, crvs, 
+#                                    nsurfaces, surfs)
+#         self.ptr.incref()
+#         free(verts)
+#         free(crvs)
+#         free(surfs)
 
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
+#     def __dealloc__(self):
+#         if self.ptr:
+#             self.ptr.decref()
 
+cdef class Model:
+   cdef TMRModel *ptr
+   def __cinit__(self):
+      self.ptr = NULL
+   # def __cinit__(self,vertices, edges, faces,volume):
+   #    cdef int nvertices = len(vertices)
+   #    cdef int nedges = len(edges)
+   #    cdef int nfaces = len(faces)
+   #    cdef int nvols = len(volume)
+   #    cdef TMRVertex **verts = NULL
+   #    cdef TMREdge **edg = NULL
+   #    cdef TMRFace **fce = NULL
+   #    cdef TMRVolume **vol = NULL
+   #    verts = <TMRVertex**>malloc(nvertices*sizeof(TMRVertex*))
+   #    edg = <TMREdge**>malloc(nedges*sizeof(TMREdge*))
+   #    fce = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
+   #    if nvols > 0:
+   #       vol = <TMRVolume**>malloc(nvols*sizeof(TMRVolume*))
+   #    for i in range(nvertices):
+   #       verts[i] = (<Vertex>vertices[i]).ptr
+   #    for i in range(nedges):
+   #       edg[i] = (<Edge>edges[i]).ptr
+   #    for i in range(nfaces):
+   #       fce[i] = (<Face>faces[i]).ptr
+   #    for i in range(nvols):
+   #       vol[i] = (<Volume>volume[i]).ptr
+   #    if nvols > 0:
+   #       self.ptr = new TMRModel(nvertices, verts, nedges, edg,
+   #                               nfaces, fce, nvols,vol)
+   #    else:
+   #       self.ptr = new TMRModel(nvertices, verts, nedges, edg,
+   #                               nfaces, fce, 0, NULL)
+   #    self.ptr.incref()
+   #    free(verts)
+   #    free(edg)
+   #    free(fce)
+   #    if nvols > 0:
+   #       free(vol)
+   def __dealloc__(self):
+      if self.ptr:
+         self.ptr.decref()
+   
+   def getVolumes(self):
+      cdef TMRVolume **vol
+      cdef int num_vol = 0
+      self.ptr.getVolumes(&num_vol, &vol)
+      
+      return _init_Volume(vol[0])
+   
+cdef _init_Model(TMRModel* ptr):
+   model = Model()
+   model.ptr = ptr
+   return model
+
+cdef class MeshOptions:
+   cdef TMRMeshOptions ptr
+   def __cinit__(self):
+      self.ptr = TMRMeshOptions()
+      
+   def __dealloc__(self):
+      return
 cdef class Mesh:
     cdef TMRMesh *ptr
-    def __cinit__(self, Geometry geo):
-        self.ptr = new TMRMesh(geo.ptr)
-        self.ptr.incref()
+    def __cinit__(self, MPI.Comm comm, Model geo):
+       cdef MPI_Comm c_comm = NULL
+       if comm is not None:
+          c_comm = comm.ob_mpi
+          self.ptr = new TMRMesh(c_comm,geo.ptr)
+          self.ptr.incref()
 
     def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
+       if self.ptr:
+          self.ptr.decref()
 
     def mesh(self, double h):
         self.ptr.mesh(h)
@@ -282,15 +428,36 @@ cdef class Mesh:
 
     def getMeshConnectivity(self):
        cdef const int *quads = NULL
+       cdef const int *hexes = NULL
        cdef int nquads = 0
-       nquads = self.ptr.getMeshConnectivity(&quads)
+       cdef int nhexes = 0
+       self.ptr.getMeshConnectivity(&nquads,&quads,
+                                    &nhexes,&hexes)
        q = np.zeros((nquads, 4), dtype=np.int)
        for i in range(nquads):
           q[i,0] = quads[4*i]
           q[i,1] = quads[4*i+1]
           q[i,2] = quads[4*i+2]
-          q[i,3] = quads[4*i+3]          
-       return q
+          q[i,3] = quads[4*i+3]
+       he = np.zeros((nhexes,8),dtype=np.int)
+       for i in range(nhexes):
+          he[i,0] = hexes[8*i]
+          he[i,1] = hexes[8*i+1]
+          he[i,2] = hexes[8*i+2]
+          he[i,3] = hexes[8*i+3]
+          he[i,4] = hexes[8*i+4]
+          he[i,5] = hexes[8*i+5]
+          he[i,6] = hexes[8*i+6]
+          he[i,7] = hexes[8*i+7]
+          
+       return q, he
+
+    def createModelFromMesh(self):
+       cdef TMRModel *model = NULL
+       model = self.ptr.createModelFromMesh()
+       return _init_Model(model) 
+
+
 
 cdef class Topology:
    cdef TMRTopology *ptr
@@ -360,13 +527,80 @@ cdef class QuadForest:
       cdef TMRQuadrantArray *array = NULL
       array = self.ptr.getNodesWithAttribute(attr)
       return _init_QuadrantArray(array)
-   
-      # void createMeshConn(const int**, const int*)
-      # int getDepNodeConn(const int**, const int**, const double**)
-   
 
 cdef _init_QuadForest(TMRQuadForest* ptr):
     forest = QuadForest()
+    forest.ptr = ptr
+    forest.ptr.incref()
+    return forest
+
+
+cdef class OctantArray:
+   cdef TMROctantArray *ptr
+   def __cinit__(self):
+      self.ptr = NULL
+
+   def __dealloc__(self):
+      del self.ptr
+
+cdef _init_OctantArray(TMROctantArray *array):
+   arr = OctantArray()
+   arr.ptr = array
+   return arr
+
+cdef class OctForest:
+   cdef TMROctForest *ptr
+   def __cinit__(self, MPI.Comm comm=None):
+      cdef MPI_Comm c_comm = NULL
+      self.ptr = NULL
+      if comm is not None:
+         c_comm = comm.ob_mpi
+         self.ptr = new TMROctForest(c_comm)
+         self.ptr.incref()
+
+   def __dealloc__(self):
+      self.ptr.decref()
+
+   def setTopology(self, Topology topo):
+      self.ptr.setTopology(topo.ptr)
+
+   def repartition(self):
+      self.ptr.repartition()
+
+   def createTrees(self, int depth):
+      self.ptr.createRandomTrees(depth)
+
+   def refine(self, np.ndarray[ndim=1, dtype=np.int] refine):
+      self.ptr.refine(<int*>refine.data)
+
+   def duplicate(self):
+      cdef TMROctForest *dup = NULL
+      dup = self.ptr.duplicate()
+      return _init_OctForest(dup)
+
+   def coarsen(self):
+      cdef TMROctForest *dup = NULL
+      dup = self.ptr.coarsen()
+      return _init_OctForest(dup)
+
+   def balance(self, int btype):
+      self.ptr.balance(btype)
+
+   def createNodes(self, int order):
+      self.ptr.createNodes(order)
+
+   def getOctsWithAttribute(self, char *attr):
+      cdef TMROctantArray *array = NULL
+      array = self.ptr.getOctsWithAttribute(attr)
+      return _init_OctantArray(array)
+
+   def getNodesWithAttribute(self, char *attr):
+      cdef TMROctantArray *array = NULL
+      array = self.ptr.getNodesWithAttribute(attr)
+      return _init_OctantArray(array)
+   
+cdef _init_OctForest(TMROctForest* ptr):
+    forest = OctForest()
     forest.ptr = ptr
     forest.ptr.incref()
     return forest
