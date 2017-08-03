@@ -601,4 +601,30 @@ def LoadModel(char *filename):
    cdef TMRModel *model = TMR_LoadModelFromSTEPFile(filename)
    return _init_Model(model)
    
+cdef class BoundaryConditions:
+   cdef TMRBoundaryConditions* ptr
+
+   def __cinit__(self):
+      self.ptr = new TMRBoundaryConditions()
+      self.ptr.incref()
+
+   def __dealloc__(self):
+      self.ptr.decref()
+
+   def getNumBoundaryConditions(self):
+      return self.ptr.getNumBoundaryConditions()
    
+   def addBoundaryCondition(self,  char* attr,
+                            int num_bc,
+                            np.ndarray[int, ndim=1, mode='c'] bc_nums,
+                            np.ndarray[TacsScalar, ndim=1, mode='c'] bc_vals ):
+      if bc_vals is None:
+         self.ptr.addBoundaryCondition(attr, num_bc,
+                                       <int*>bc_nums.data,
+                                       NULL)
+                                       
+      else:
+         self.ptr.addBoundaryCondition(attr, num_bc,
+                                       <int*>bc_nums.data,
+                                       <TacsScalar*>bc_vals.data)
+      return
