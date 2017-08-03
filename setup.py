@@ -38,7 +38,7 @@ def get_mpi_flags():
 inc_dirs, lib_dirs, libs = get_mpi_flags()
 
 # Relative paths for the include/library directories
-rel_inc_dirs = ['src', 'src/interface']
+rel_inc_dirs = ['src', 'src/interfaces', 'src/topology']
 rel_lib_dirs = ['lib']
 libs.extend(['tmr'])
 
@@ -78,4 +78,4 @@ setup(name='tmr',
       author='Graeme J. Kennedy',
       author_email='graeme.kennedy@ae.gatech.edu',
       ext_modules=cythonize(exts, language='c++', 
-        include_path=inc_dirs))
+                            include_path=inc_dirs))
