@@ -222,3 +222,34 @@ cdef extern from "TMROctForest.h":
         void createMeshConn(const int**, const int*)
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMROctForest*, TACSBVecInterp*)
+
+cdef extern from "TMR_TACSCreator.h":
+    cdef cppclass TMRBoundaryConditions(TMREntity):
+        TMRBoundaryConditions()
+        void addBoundaryCondition(const char*,int,const int*,
+                                  const TacsScalar*)
+        int getNumBoundaryConditions()
+
+    cdef cppclass TMRQuadTACSCreator(TMREntity):
+        TMRQuadTACSCreator(TMRBoundaryConditions*)
+
+    cdef cppclass TMROctTACSCreator(TMREntity):
+        TMROctTACSCreator(TMRBoundaryConditions*)
+
+cdef extern from "TMROctStiffness.h":
+    cdef cppclass TMRStiffnessProperties:
+        TMRStiffnessProperties()
+    
+# cdef extern from "TMR_TACSTopoCreator.c":
+#     cdef cppclass TMROctTACSTopoCreator(TMROctTACSCreator):
+#         TMROctTACSTopoCreator(TMRBoundaryConditions*,
+#                               TMRStiffnessProperties,
+#                               TMROctForest*,const char*,
+#                               SolidShellWrapper*)
+
+cdef extern from "SolidShellWrapper.h":
+    cdef cppclass SolidShellWrapper(TACSElement):
+        pass
+    
+cdef extern from "TMROpenCascade.h":
+    cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*) 

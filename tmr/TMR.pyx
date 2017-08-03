@@ -26,6 +26,29 @@ from TMR cimport *
 cdef extern from "mpi-compat.h":
    pass
 
+# This wraps a C++ array with a numpy array for later useage
+cdef inplace_array_1d(int nptype, int dim1, void *data_ptr,
+                      PyObject *ptr):
+   '''Return a numpy version of the array'''
+   # Set the shape of the array
+   cdef int size = 1
+   cdef np.npy_intp shape[1]
+   cdef np.ndarray ndarray
+
+   # Set the first entry of the shape array
+   shape[0] = <np.npy_intp>dim1
+      
+   # Create the array itself - Note that this function will not
+   # delete the data once the ndarray goes out of scope
+   ndarray = np.PyArray_SimpleNewFromData(size, shape,
+                                          nptype, data_ptr)
+
+   # Set the base class who owns the memory
+   if ptr != NULL:
+      ndarray.base = ptr
+
+   return ndarray
+
 cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):
@@ -104,12 +127,13 @@ cdef class Volume:
       if self.ptr:
          self.ptr.decref()
          
-   # def getFaces(self):
-   #    cdef TMRFace **f
-   #    cdef int num_faces
-   #    self.ptr.getFaces(&num_faces, &f, NULL)
-      
-   #    return num_faces
+   def getFaces(self):
+      cdef TMRFace **f
+      cdef int num_faces = 0
+      self.ptr.getFaces(&num_faces, &f, NULL)
+      fce = inplace_array_1d(np.dtype(object), num_faces,
+                             <void**>f, <PyObject*>self)
+      return fce
    
    def writeToVTK(self, char* filename):
       self.ptr.writeToVTK(filename)
@@ -342,40 +366,7 @@ cdef class Model:
    cdef TMRModel *ptr
    def __cinit__(self):
       self.ptr = NULL
-   # def __cinit__(self,vertices, edges, faces,volume):
-   #    cdef int nvertices = len(vertices)
-   #    cdef int nedges = len(edges)
-   #    cdef int nfaces = len(faces)
-   #    cdef int nvols = len(volume)
-   #    cdef TMRVertex **verts = NULL
-   #    cdef TMREdge **edg = NULL
-   #    cdef TMRFace **fce = NULL
-   #    cdef TMRVolume **vol = NULL
-   #    verts = <TMRVertex**>malloc(nvertices*sizeof(TMRVertex*))
-   #    edg = <TMREdge**>malloc(nedges*sizeof(TMREdge*))
-   #    fce = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
-   #    if nvols > 0:
-   #       vol = <TMRVolume**>malloc(nvols*sizeof(TMRVolume*))
-   #    for i in range(nvertices):
-   #       verts[i] = (<Vertex>vertices[i]).ptr
-   #    for i in range(nedges):
-   #       edg[i] = (<Edge>edges[i]).ptr
-   #    for i in range(nfaces):
-   #       fce[i] = (<Face>faces[i]).ptr
-   #    for i in range(nvols):
-   #       vol[i] = (<Volume>volume[i]).ptr
-   #    if nvols > 0:
-   #       self.ptr = new TMRModel(nvertices, verts, nedges, edg,
-   #                               nfaces, fce, nvols,vol)
-   #    else:
-   #       self.ptr = new TMRModel(nvertices, verts, nedges, edg,
-   #                               nfaces, fce, 0, NULL)
-   #    self.ptr.incref()
-   #    free(verts)
-   #    free(edg)
-   #    free(fce)
-   #    if nvols > 0:
-   #       free(vol)
+  
    def __dealloc__(self):
       if self.ptr:
          self.ptr.decref()
@@ -384,8 +375,9 @@ cdef class Model:
       cdef TMRVolume **vol
       cdef int num_vol = 0
       self.ptr.getVolumes(&num_vol, &vol)
-      
-      return _init_Volume(vol[0])
+      volm = inplace_array_1d(np.dtype(object), num_vol,
+                              <void**>vol, <PyObject*>self)
+      return volm
    
 cdef _init_Model(TMRModel* ptr):
    model = Model()
@@ -570,8 +562,8 @@ cdef class OctForest:
    def createTrees(self, int depth):
       self.ptr.createRandomTrees(depth)
 
-   def refine(self, np.ndarray[ndim=1, dtype=np.int] refine):
-      self.ptr.refine(<int*>refine.data)
+   # def refine(self, np.ndarray[ndim=1, dtype=np.int] _refine):
+   #    self.ptr.refine(<int*>_refine.data)
 
    def duplicate(self):
       cdef TMROctForest *dup = NULL
@@ -604,3 +596,9 @@ cdef _init_OctForest(TMROctForest* ptr):
     forest.ptr = ptr
     forest.ptr.incref()
     return forest
+
+def LoadModel(char *filename):
+   cdef TMRModel *model = TMR_LoadModelFromSTEPFile(filename)
+   return _init_Model(model)
+   
+   
