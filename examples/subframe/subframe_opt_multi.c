@@ -400,7 +400,7 @@ int main( int argc, char *argv[] ){
 
   // This is all tied to this STEP file
   const char *filename = "subframe1.stp";
-  double htarget = 12.5;
+  double htarget = 8.5;
 
   // Create the boundary conditions 
   int bc_nums[] = {0, 1, 2};

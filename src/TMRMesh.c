@@ -748,6 +748,10 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
     double tmin, tmax;
     edge->getRange(&tmin, &tmax);
 
+    // Get the associated vertices
+    TMRVertex *v1, *v2;
+    edge->getVertices(&v1, &v2);
+
     if (!edge->isDegenerate()){
       // Set the integration error tolerance
       double integration_eps = 1e-8;
@@ -768,6 +772,12 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
         // If we have an even number of points, increment by one to ensure
         // that we have an even number of segments along the boundary
         if (npts % 2 != 1){ npts++; }
+      
+        // If the start/end vertex are the same, then the minimum number
+        // of points is 5
+        if ((v1 == v2) && npts < 5){
+          npts = 5;
+        }
       }
 
       // The average distance between points
