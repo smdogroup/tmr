@@ -34,8 +34,6 @@ cdef extern from "TMRGeometry.h":
         pass
 
     cdef cppclass TMRCurve(TMREntity):
-        void setVertices(TMRVertex*, TMRVertex*)
-        void getVertices(TMRVertex**, TMRVertex**)
         void writeToVTK(char*)
 
     cdef cppclass TMRSurface(TMREntity):

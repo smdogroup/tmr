@@ -72,6 +72,7 @@ cdef class Edge:
    def __dealloc__(self):
       if self.ptr:
          self.ptr.decref()
+
    def setVertices(self, Vertex v1, Vertex v2):
       self.ptr.setVertices(v1.ptr, v2.ptr)
 
@@ -115,13 +116,6 @@ cdef class Volume:
    cdef TMRVolume *ptr
    def __cinit__(self):
       self.ptr = NULL
-      # cdef int nfaces = len(faces)
-      # cdef TMRFace **fce
-      # fce = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
-      # for i in range(nfaces):
-      #    fce[i] = (<Face>faces[i]).ptr
-      # self.ptr = new TMRVolume(nfaces, fce, NULL)
-      # self.ptr.incref()
       
    def __dealloc__(self):
       if self.ptr:
@@ -131,9 +125,10 @@ cdef class Volume:
       cdef TMRFace **f
       cdef int num_faces = 0
       self.ptr.getFaces(&num_faces, &f, NULL)
-      fce = inplace_array_1d(np.dtype(object), num_faces,
-                             <void**>f, <PyObject*>self)
-      return fce
+      faces = []
+      for i in xrange(num_faces):
+         faces.append(_init_Face(f[i]))
+      return faces
    
    def writeToVTK(self, char* filename):
       self.ptr.writeToVTK(filename)
@@ -155,15 +150,6 @@ cdef class Curve:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-
-    # def setVertices(self, Vertex v1, Vertex v2):
-    #    self.ptr.setVertices(v1.ptr, v2.ptr)
-
-    # def getVertices(self):
-    #    cdef TMRVertex *v1 = NULL
-    #    cdef TMRVertex *v2 = NULL
-    #    self.ptr.getVertices(&v1, &v2)
-    #    return _init_Vertex(v1), _init_Vertex(v2)
             
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
@@ -375,9 +361,10 @@ cdef class Model:
       cdef TMRVolume **vol
       cdef int num_vol = 0
       self.ptr.getVolumes(&num_vol, &vol)
-      volm = inplace_array_1d(np.dtype(object), num_vol,
-                              <void**>vol, <PyObject*>self)
-      return volm
+      volumes = []
+      for i in xrange(num_vol):
+         volumes.append(_init_Volume(vol[i]))
+      return volumes
    
 cdef _init_Model(TMRModel* ptr):
    model = Model()
