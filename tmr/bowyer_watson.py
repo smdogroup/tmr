@@ -666,7 +666,7 @@ class triangluate:
         return
 
 # Create a list of points that forms
-h = 0.05
+h = 0.75
 r1 = 1.5
 r2 = 0.75
 r3 = 0.2
@@ -763,7 +763,8 @@ else:
 
 # Create the triangularization
 tri = triangluate(pts, segs, hole=hole)
-cProfile.run('tri.frontal(h)')
+# cProfile.run('tri.frontal(h)')
+tri.frontal(h)
 
 tri.plot()
 plt.savefig('bowyer_watson.pdf')

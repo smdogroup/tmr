@@ -491,7 +491,7 @@ cdef class QuadForest:
    def createTrees(self, int depth):
       self.ptr.createRandomTrees(depth)
 
-   def refine(self, np.ndarray[ndim=1, dtype=np.int] refine):
+   def refine(self, np.ndarray[int, ndim=1, mode='c'] refine):
       self.ptr.refine(<int*>refine.data)
 
    def duplicate(self):
@@ -562,8 +562,8 @@ cdef class OctForest:
    def createTrees(self, int depth):
       self.ptr.createRandomTrees(depth)
 
-   # def refine(self, np.ndarray[ndim=1, dtype=np.int] _refine):
-   #    self.ptr.refine(<int*>_refine.data)
+   def refine(self, np.ndarray[int, ndim=1, mode='c'] _refine):
+      self.ptr.refine(<int*>_refine.data)
 
    def duplicate(self):
       cdef TMROctForest *dup = NULL
