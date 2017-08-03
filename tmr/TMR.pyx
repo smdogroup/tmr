@@ -124,7 +124,8 @@ cdef class Volume:
    def getFaces(self):
       cdef TMRFace **f
       cdef int num_faces = 0
-      self.ptr.getFaces(&num_faces, &f, NULL)
+      if self.ptr:
+         self.ptr.getFaces(&num_faces, &f, NULL)
       faces = []
       for i in xrange(num_faces):
          faces.append(_init_Face(f[i]))
@@ -360,7 +361,8 @@ cdef class Model:
    def getVolumes(self):
       cdef TMRVolume **vol
       cdef int num_vol = 0
-      self.ptr.getVolumes(&num_vol, &vol)
+      if self.ptr:
+         self.ptr.getVolumes(&num_vol, &vol)
       volumes = []
       for i in xrange(num_vol):
          volumes.append(_init_Volume(vol[i]))
