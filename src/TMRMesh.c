@@ -3890,7 +3890,8 @@ TMRModel* TMRMesh::createModelFromMesh(){
           new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
       }
       else {
-        fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
+        fprintf(stderr, 
+                "TMRMesh error: Could not find edge (%d, %d) to split\n",
                 edge[1], edge[2]);
       }
     }
@@ -3963,7 +3964,8 @@ TMRModel* TMRMesh::createModelFromMesh(){
           }
         }
         else {
-          fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
+          fprintf(stderr, 
+                  "TMRMesh error: Could not find edge (%d, %d) for Pcurve\n",
                   edge[1], edge[2]);
         }
       }
@@ -4082,7 +4084,8 @@ TMRModel* TMRMesh::createModelFromMesh(){
           dir[k] *= edge_dir[edge_num];
         } 
         else {
-          fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
+          fprintf(stderr, 
+                  "TMRMesh error: Could not find edge (%d, %d) for surface\n",
                   edge[1], edge[2]);
         }
       }
@@ -4159,7 +4162,8 @@ TMRModel* TMRMesh::createModelFromMesh(){
             dir[k] *= edge_dir[edge_num];
           } 
           else {
-            fprintf(stderr, "TMRMesh error: Could not find edge (%d, %d)\n",
+            fprintf(stderr, 
+                    "TMRMesh error: Could not find edge (%d, %d) for hex\n",
                     edge[1], edge[2]);
           }
         }
