@@ -135,6 +135,8 @@ cdef extern from "TMRMesh.h":
         TMRModel *createModelFromMesh()
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
+        int num_smoothing_steps
+        double frontal_quality_factor
 
 cdef extern from "TMRQuadrant.h":
     cdef cppclass TMRQuadrant:
@@ -239,7 +241,7 @@ cdef extern from "TMR_TACSCreator.h":
 cdef extern from "TMROctStiffness.h":
     cdef cppclass TMRStiffnessProperties:
         TMRStiffnessProperties()
-    
+        TacsScalar rho, E, nu, q
 # cdef extern from "TMR_TACSTopoCreator.c":
 #     cdef cppclass TMROctTACSTopoCreator(TMROctTACSCreator):
 #         TMROctTACSTopoCreator(TMRBoundaryConditions*,

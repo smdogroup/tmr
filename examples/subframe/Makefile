@@ -17,4 +17,4 @@ debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
 debug: default
 
 clean:
-	rm -rf subframe_opt subframe_multi *.o
+	rm -rf subframe_multi *.o

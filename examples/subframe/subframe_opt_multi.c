@@ -304,6 +304,7 @@ void createTopoProblem( int num_levels,
 
       for (int i = 0; i < nloads; i++){
         for (int j = 0; j < load_case_number[i]; i++){
+	  printf("i,j: %d %d\n", i,j);
           sprintf(load_name,"case%d_load%d",i,j);
           addFaceTractions(order, forest, load_name, &aux[i], 
                            tacs[0],&Tr[3*j+3*16*i]);    
@@ -450,19 +451,18 @@ int main( int argc, char *argv[] ){
     }
     
     int face_load[] = {30,29,16,15,28,27,18,17,
-                       26,24,25,23,22,21,20,19};
-
-    /* for (int k = 0; k < nloads; k++){       */
-    /*   for (int p = 0; p < 16; p++){ */
-    /*     char load_name[256]; */
-    /*     sprintf(load_name, "case%d_load%d",k,p); */
-    /*     faces[face_load[p]]->setAttribute(load_name); */
-    /*   } */
-    /* } */
+		       26,24,25,23,22,21,20,19};
+    for (int k = 0; k < nloads; k++){
+      for (int p = 0; p < 16; p++){
+        char load_name[256];
+        sprintf(load_name, "case%d_load%d",k,p);
+        faces[face_load[p]]->setAttribute(load_name);
+      }
+    }
     // Mesh the bracket
     TMRMesh *mesh = new TMRMesh(comm, geo);
     mesh->incref();
-
+    
     // Mesh the geometry
     TMRMeshOptions options;
     options.num_smoothing_steps = 50;
@@ -477,8 +477,6 @@ int main( int argc, char *argv[] ){
     // Create the topology object from the geo-mesh
     TMRTopology *topo = new TMRTopology(comm, model);
     topo->incref();
-
-    exit(0);
 
     // The forest used to represent the mesh and the filter
     // respectively

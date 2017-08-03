@@ -391,6 +391,24 @@ cdef class MeshOptions:
       
    def __dealloc__(self):
       return
+   
+   property num_smoothing_steps:
+      def __get__(self):
+         return self.ptr.num_smoothing_steps
+      def __set__(self,value):
+         self.ptr.num_smoothing_steps=value
+   property frontal_quality_factor:
+      def __get__(self):
+         return self.ptr.frontal_quality_factor
+      def __set__(self,value):
+         self.ptr.frontal_quality_factor = value
+   # @property for cython 0.26 and above
+   # def num_smoothing_steps(self):
+   #    return self.ptr.num_smoothing_steps
+   # @num_smoothing_steps.setter
+   # def num_smoothing_steps(self,value):
+   #    self.ptr.num_smoothing_steps = value
+      
 cdef class Mesh:
     cdef TMRMesh *ptr
     def __cinit__(self, MPI.Comm comm, Model geo):
@@ -628,3 +646,36 @@ cdef class BoundaryConditions:
                                        <int*>bc_nums.data,
                                        <TacsScalar*>bc_vals.data)
       return
+
+cdef class OctStiffnessProperties:
+   cdef TMRStiffnessProperties ptr
+   def __cinit__(self):
+      self.ptr = TMRStiffnessProperties()
+      
+   def __dealloc__(self):
+      return
+   property rho:
+      def __get__(self):
+         return self.ptr.rho
+
+      def __set__(self,value):
+         self.ptr.rho = value
+
+   property E:
+      def __get__(self):
+         return self.ptr.E
+      def __set__(self,value):
+         self.ptr.E = value
+
+   property nu:
+      def __get__(self):
+         return self.ptr.nu
+      def __set__(self,value):
+         self.ptr.nu = value
+
+   property q:
+      def __get__(self):
+         return self.ptr.q
+
+      def __set__(self,value):
+         self.ptr.q = value
