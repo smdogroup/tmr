@@ -1659,8 +1659,7 @@ TMROctForest *TMROctForest::coarsen(){
   Refine the octree mesh based on the input refinement levels
 */
 void TMROctForest::refine( const int refinement[],
-                           int min_level, int max_level,
-                           int num_level_ref ){
+                           int min_level, int max_level){
   // Adjust the min and max levels to ensure consistency
   if (min_level < 0){ min_level = 0; }
   if (max_level > TMR_MAX_LEVEL){ max_level = TMR_MAX_LEVEL; }
