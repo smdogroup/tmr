@@ -10,68 +10,6 @@
 #include "TMR_RefinementTools.h"
 #include "TMRMultiLoadTopoProblem.h"
 
-/* /\* */
-/*   Add the 3D traction */
-/* *\/ */
-/* void addFaceTractions( int order, */
-/*                        TMROctForest *forest, */
-/*                        const char *attr,  */
-/*                        TACSAssembler *tacs, */
-/*                        TacsScalar Tr[3] ){ */
-/*   // Create the tractions on each surface */
-/*   TACSElement *trac[6]; */
-/*   for ( int face = 0; face < 6; face++ ){ */
-/*     if (order == 2){ */
-/*       trac[face] = new TACS3DTraction<2>(face, Tr[0], Tr[1], Tr[2]); */
-/*     } */
-/*     else { */
-/*       trac[face] = new TACS3DTraction<3>(face, Tr[0], Tr[1], Tr[2]); */
-/*     } */
-/*     trac[face]->incref(); */
-/*   } */
-
-/*   // Retrieve the array of octants from the array */
-/*   TMROctantArray *octants; */
-/*   forest->getOctants(&octants); */
-/*   TMROctant *first; */
-/*   octants->getArray(&first, NULL); */
-  
-/*   // Get the octants with the specified attribute */
-/*   TMROctantArray *octs = forest->getOctsWithAttribute(attr); */
-
-/*   // Get the octant  */
-/*   int size; */
-/*   TMROctant *array; */
-/*   octs->getArray(&array, &size); */
-
-/*   // Get the auxilary elements from TACS */
-/*   TACSAuxElements *aux = tacs->getAuxElements(); */
-/*   if (!aux){ */
-/*     aux = new TACSAuxElements(); */
-/*   } */
-
-/*   for ( int i = 0; i < size; i++ ){ */
-/*     // Get the face index */
-/*     int face_index = array[i].tag; */
-
-/*     // Get the local octant index in the array */
-/*     int use_node_search = 0; */
-/*     TMROctant *me = octants->contains(&array[i], use_node_search); */
-/*     int element_num = me - first; */
-
-/*     // Add the element to the auxiliary elements */
-/*     aux->addElement(element_num, trac[face_index]); */
-/*   } */
-
-/*   // Set the auxiliary elements into TACS */
-/*   tacs->setAuxElements(aux); */
-
-/*   delete octs; */
-/*   for ( int face = 0; face < 6; face++ ){ */
-/*     trac[face]->decref(); */
-/*   } */
-/* } */
-
 void addFaceTractions( int order,
                        TMROctForest *forest,
                        const char *attr, 
@@ -105,23 +43,11 @@ void addFaceTractions( int order,
   int size;
   TMROctant *array;
   octs->getArray(&array, &size);
-
   
-  //-------------------------------------------
   if (case_num == 0){
     aux[0] = new TACSAuxElements();
     aux[0]->incref();
   }
-  
-  /* // Get the auxilary elements from TACS */
-  
-  /* TACSAuxElements *_aux = tacs->getAuxElements(); */
-  
-
-  /* if (!_aux){ */
-  /*   printf("load_n: %d %d\n", load_num,case_num); */
-  /*   _aux = new TACSAuxElements(); */
-  /* } */
 
   for ( int i = 0; i < size; i++ ){
     // Get the face index
@@ -136,9 +62,6 @@ void addFaceTractions( int order,
     aux[0]->addElement(element_num, trac[face_index]);
   }
 
-  /* // Set the auxiliary elements into TACS */
-  /* tacs->setAuxElements(aux); */
-  //*aux = _aux;
   delete octs;
   for ( int face = 0; face < 6; face++ ){
     trac[face]->decref();
@@ -301,23 +224,6 @@ void createTopoProblem( int num_levels,
     			   i,j);
         }
       }
-      /* //TacsScalar Tr[] = {100.0, 0.0, 0.0}; */
-      
-      /* TacsScalar Tr[] = {-.294, .440, .015, */
-      /*                         .198, .094, .042, */
-      /*                    -.020, 0.0, -.003, */
-      /*                    -.218, .599, .020, */
-      /*                    -.059, -.426, .019, */
-      /*                         .198, -.438, -.069, */
-      /*                         .001, .004, -.038, */
-      /*                         -.002, -.003, .047}; */
-      /* for (int p = 0; p < num_load_case; p++){ */
-      /*        for (int j = 0; j < load_case_number[p]; j++){ */
-      /*          sprintf(load_name,"Load%d",j); */
-      /*          addFaceTractions(order, forest, load_name, tacs[0], &Tr[3*j]); */
-      /*        } */
-      /* } */
-        //addFaceTractions(order, forest, "Load", tacs[0], Tr);
     }
   }
 
@@ -405,7 +311,7 @@ int main( int argc, char *argv[] ){
   properties.nu = 0.3;
   properties.q = 5.0;
   
-  int nloads = 2;
+  int nloads = 5;
     
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
@@ -554,8 +460,8 @@ int main( int argc, char *argv[] ){
       old_design_vars = new_design_vars;
       
       // check the gradients
-      opt->checkGradients(1e-6);
-      exit(0);
+      /* opt->checkGradients(1e-6); */
+      /* exit(0); */
       //printf("Here\n");
       
       //opt->setGradientCheckFrequency(100,1e-6);

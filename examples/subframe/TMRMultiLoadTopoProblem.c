@@ -573,22 +573,7 @@ int TMRMultiLoadTopoProblem::evalObjCon( ParOptVec *pxvec,
       //TacsScalar compliance_value = -vars->dot(res);
       average_compliance += (1.0/nloads)*(-vars->dot(res));
     }
-
-    /* // Assemble the Jacobian on each level */
-    /* double alpha = 1.0, beta = 0.0, gamma = 0.0; */
-    /* mg->assembleJacobian(alpha, beta, gamma, res); */
-    /* mg->factor(); */
-    
-    /* // Solve the system: K(x)*u = -res */
-    /* ksm->solve(res, vars); */
-    /* vars->scale(-1.0); */
-
-    /* tacs[0]->applyBCs(vars); */
-    /* tacs[0]->setVariables(vars); */
-    
-    /* // Evaluate the compliance */
-    /* TacsScalar compliance_value = -vars->dot(res); */
-  
+ 
     // Evaluate the mass
     TacsScalar mass_value;
     tacs[0]->evalFunctions(&mass, 1, &mass_value);
@@ -637,15 +622,6 @@ int TMRMultiLoadTopoProblem::evalObjConGradient( ParOptVec *xvec,
     
     for (int k = 0; k < nloads; k++){
       tacs[0]->zeroVariables();
-      /* TACSAuxElem *aux_elems; */
-      /* int naux; */
-      /* printf("ref count: %d\n", aux[k]->refcount()); */
-      /* naux = aux[k]->getAuxElements(&aux_elems); */
-      /* for (int p = 0; p < naux; p++){ */
-      /*   if (mpi_rank == 0){ */
-      /*     printf("elem[%d %d]: %d\n", k,p,aux_elems[p].num); */
-      /*   } */
-      /* }       */
       tacs[0]->setAuxElements(aux[k]);
       // Assemble the Jacobian on each level
       double alpha = 1.0, beta = 0.0, gamma = 0.0;
@@ -656,18 +632,11 @@ int TMRMultiLoadTopoProblem::evalObjConGradient( ParOptVec *xvec,
       vars->scale(-1.0);
             
       tacs[0]->setVariables(vars);
-      //printf("gradient vars: %e res: %e \n", vars->norm(), res->norm());
       // Compute the full derivative for compliance
-      memset(xlocal, 0, size*sizeof(TacsScalar));
-      tacs[0]->addAdjointResProducts(-obj_scale/nloads, &vars, 1, xlocal, size);      
+      tacs[0]->addAdjointResProducts(-1.0, &vars, 1, xlocal, size);      
     }
     setBVecFromLocalValues(xlocal, g_vec);
     g_vec->beginSetValues(TACS_ADD_VALUES);
-
-    
-    /* tacs[0]->addAdjointResProducts(-obj_scale, &vars, 1, xlocal, size); */
-    /* setBVecFromLocalValues(xlocal, g_vec); */
-    /* g_vec->beginSetValues(TACS_ADD_VALUES); */
 
     memset(xlocal, 0, size*sizeof(TacsScalar));
     tacs[0]->addDVSens(-mass_scale, &mass, 1, xlocal, size);
@@ -689,7 +658,8 @@ int TMRMultiLoadTopoProblem::evalObjConGradient( ParOptVec *xvec,
         gvals[i] = -gvals[i]/(xvals[i]*xvals[i]);
         mvals[i] = -mvals[i]/(xvals[i]*xvals[i]);
       }
-    }    
+    }
+    g->scale(obj_scale/nloads);
   }
   else {
     return 1;
