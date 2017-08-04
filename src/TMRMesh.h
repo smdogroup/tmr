@@ -241,8 +241,8 @@ class TMRVolumeMesh : public TMREntity {
   // Number of points through-thickness
   int num_depth_pts;
 
-  // Keep the bottom/top surfaces (master/slave) in the
-  // mesh for future reference
+  // Keep the bottom/top surfaces (master/target) in the mesh for
+  // future reference
   TMRFace *bottom, *top;
   int bottom_dir, top_dir;
 

@@ -4,6 +4,7 @@
 #include "TMRMeshSmoothing.h"
 #include "TMRPerfectMatchInterface.h"
 #include "TMRBspline.h"
+#include "tmrlapack.h"
 #include <math.h>
 #include <stdio.h>
 
@@ -945,8 +946,9 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
   // face. Note that the master face may be NULL in which case the
   // master orientation is meaningless.
   int master_dir;
+  TMRVolume *master_volume;
   TMRFace *master;
-  face->getMaster(&master_dir, &master);
+  face->getMaster(&master_dir, &master_volume, &master);
 
   if (master){
     // If the face mesh for the master does not yet exist, create it...    
@@ -1206,13 +1208,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       quads = new int[ 4*num_quads ];
       memcpy(quads, face_mesh->quads, 4*num_quads*sizeof(int));
 
-      // Flip the quadrilateral face
-      for ( int i = 0; i < num_quads; i++ ){
-        int tmp = quads[4*i+1];
-        quads[4*i+1] = quads[4*i+3];
-        quads[4*i+3] = tmp;
-      }
-
       // Allocate the array for the parametric locations
       pts = new double[ 2*num_points ];
 
@@ -1222,9 +1217,91 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         pts[2*i+1] = params[2*i+1];
       }
 
-      // Copy the interior point locations
-      memcpy(&pts[2*num_fixed_pts], &(face_mesh->pts[2*num_fixed_pts]),
-             2*(num_points - num_fixed_pts)*sizeof(double));
+      // Compute the centroid of the edge points for the source and
+      // target surfaces
+      double sc[2], tc[3];
+      sc[0] = sc[1] = 0.0;
+      tc[0] = tc[1] = 0.0;
+      
+      for ( int i = 0; i < num_fixed_pts; i++ ){
+        sc[0] += face_mesh->pts[2*i];
+        sc[1] += face_mesh->pts[2*i+1];
+        tc[0] += pts[2*i];
+        tc[1] += pts[2*i+1];
+      }
+      sc[0] = sc[0]/num_fixed_pts;
+      sc[1] = sc[1]/num_fixed_pts;
+      tc[0] = tc[0]/num_fixed_pts;
+      tc[1] = tc[1]/num_fixed_pts;
+
+      // Compute a least squares transformation between the two
+      // surfaces
+      double N[16], A[4];
+      memset(N, 0, 16*sizeof(double));
+      memset(A, 0, 4*sizeof(double));
+      if (master_dir > 0){
+        for ( int k = 0; k < num_fixed_pts; k++ ){
+          for ( int i = 0; i < 4; i++ ){
+            for ( int j = 0; j < 4; j++ ){
+              double B = face_mesh->pts[2*k+(i%2)]*face_mesh->pts[2*k+(j%2)];
+              if (i/2 == j/2){
+                N[i + 4*j] += B;
+              }
+            }
+            A[i] += face_mesh->pts[2*k+(i%2)]*pts[2*k+(i/2)];
+          }
+        }
+      }
+      else {
+        // Flip the quad numbering
+        for ( int i = 0; i < 4*num_quads; i++ ){
+          if (quads[i] < num_fixed_pts && quads[i] > 0){
+            quads[i] = num_fixed_pts - quads[i];
+          }
+        }
+
+        // Flip the orientation of the quads to match the orientation
+        // of the face
+        for ( int i = 0; i < num_quads; i++ ){
+          int tmp = quads[4*i+1];
+          quads[4*i+1] = quads[4*i+3];
+          quads[4*i+3] = tmp;
+        }
+
+        for ( int k = 0; k < num_fixed_pts; k++ ){
+          int k1 = k;
+          if (k > 0){
+            k1 = num_fixed_pts - k;
+          }
+          for ( int i = 0; i < 4; i++ ){
+            for ( int j = 0; j < 4; j++ ){
+              double B = face_mesh->pts[2*k+(i%2)]*face_mesh->pts[2*k+(j%2)];
+              if (i/2 == j/2){
+                N[i + 4*j] += B;
+              }
+            }
+            A[i] += face_mesh->pts[2*k+(i%2)]*pts[2*k1+(i/2)];
+          }
+        }
+      }
+
+      // Factor the least-squares matrix and perform the transformation
+      int ipiv[4];
+      int n = 4, one = 1, info;
+      TmrLAPACKdgetrf(&n, &n, N, &n, ipiv, &info);
+      TmrLAPACKdgetrs("N", &n, &one, N, &n, ipiv, A, &n, &info);
+
+      printf("A = %15.5e  %15.5e  %15.5e  %15.5e\n",
+             A[0], A[1], A[2], A[3]);
+
+      // Set the interior points based on the linear transformation
+      for ( int k = num_fixed_pts; k < num_points; k++ ){
+        double uS = face_mesh->pts[2*k] - sc[0];
+        double vS = face_mesh->pts[2*k+1] - sc[1];
+
+        pts[2*k] = A[0]*uS + A[1]*vS + tc[0];
+        pts[2*k+1] = A[2]*uS + A[3]*vS + tc[1];
+      }
 
       // Evaluate the points
       X = new TMRPoint[ num_points ];
@@ -1514,18 +1591,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // Free the parameter/segment information
     delete [] params;
     delete [] segments;
-
-    // Flip the orientation of the face so that the normal directions
-    // are consistent. If a master face was used to define this face,
-    // then the normal direction is already consistent and no
-    // quad-flip is performed.
-    if (!master && face->getNormalDirection() < 0){
-      for ( int i = 0; i < num_quads; i++ ){
-        int tmp = quads[4*i+1];
-        quads[4*i+1] = quads[4*i+3];
-        quads[4*i+3] = tmp;
-      }
-    }
   }
 
   if (mpi_size > 1){
@@ -1775,7 +1840,7 @@ double TMRFaceMesh::computeTriQuality( const int *tri,
     b.y = p[tri[next]].y - p[tri[k]].y;
     b.z = p[tri[next]].z - p[tri[k]].z;
    
-    // Compute the internal angle between the 
+    // Compute the internal angle
     double alpha = M_PI - acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
     double val = fabs(M_PI/3.0 - alpha);
     if (val > max_val){
@@ -2573,6 +2638,61 @@ TMRVolumeMesh::~TMRVolumeMesh(){
 }
 
 /*
+  Retrieve the mesh points
+*/
+void TMRVolumeMesh::getMeshPoints( int *_npts, TMRPoint **_X ){
+  if (_npts){ *_npts = num_points; }
+  if (_X){ *_X = X; }
+}
+
+/*
+  Retrieve the local connectivity for this volume mesh
+*/
+int TMRVolumeMesh::getLocalConnectivity( const int **_hexes ){
+  if (_hexes){ *_hexes = hexes; }
+  return num_hexes;
+}
+
+/*
+  Write the volume mesh to a VTK file
+*/
+void TMRVolumeMesh::writeToVTK( const char *filename ){
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  if (mpi_rank == 0 && hexes){
+    // Write out the connectivity of the mesh to a temp vtk file
+    FILE *fp = fopen("volume-mesh.vtk", "w");
+    if (fp){
+      fprintf(fp, "# vtk DataFile Version 3.0\n");
+      fprintf(fp, "vtk output\nASCII\n");
+      fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+      
+      // Write out the points
+      fprintf(fp, "POINTS %d float\n", num_points);
+      for ( int k = 0; k < num_points; k++ ){
+        fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
+      }
+    
+      // Write out the cell values
+      fprintf(fp, "\nCELLS %d %d\n", num_hexes, 9*num_hexes);
+      for ( int k = 0; k < num_hexes; k++ ){
+        fprintf(fp, "8 %d %d %d %d %d %d %d %d\n", 
+                hexes[8*k], hexes[8*k+1], hexes[8*k+2], hexes[8*k+3],
+                hexes[8*k+4], hexes[8*k+5], hexes[8*k+6], hexes[8*k+7]);
+      }
+
+      // All hexes
+      fprintf(fp, "\nCELL_TYPES %d\n", num_hexes);
+      for ( int k = 0; k < num_hexes; k++ ){
+        fprintf(fp, "%d\n", 12);
+      }
+      fclose(fp);
+    }
+  }
+}
+
+/*
   Mesh the volume
 */
 int TMRVolumeMesh::mesh( TMRMeshOptions options ){
@@ -2589,40 +2709,50 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
   const int *face_dir;
   volume->getFaces(&num_faces, &faces, &face_dir);
 
-  // Set integers for each face to determine whether it is
-  // a master or a slave face or it is connected to one of them
-  // or whether it is structured
+  // Set integers for each face to determine whether it is a master or
+  // a target face or it is connected to one of them or whether it is
+  // structured.
   int *f = new int[ num_faces ];
   memset(f, 0, num_faces*sizeof(int));
 
-  // Determine if the faces are all referenced
+  // Set the pointers for the top/bottom faces and their directions 
+  // relative to the interior of the hexahedral volume
   top = NULL;
   top_dir = 1;
   bottom = NULL;
   bottom_dir = 1;
 
+  // Loop over all the
   for ( int i = 0; i < num_faces; i++ ){
     TMRFace *master;
-    faces[i]->getMaster(NULL, &master);
+    faces[i]->getMaster(NULL, NULL, &master);
     if (master){
-      top = master;
+      // The natural bottom orientation should point in to the volume,
+      // otherwise its orientation must be flipped.
       bottom = faces[i];
-      bottom_dir = face_dir[i];
+      bottom_dir = -bottom->getNormalDirection()*face_dir[i];
 
-      // Set the remaining flags
+      // Find the master face
+      top = master;
       f[i] = 1;
       for ( int j = 0; j < num_faces; j++ ){
         if (faces[j] == master){
           f[j] = 1;
-          top_dir = face_dir[j];
+
+          // The natural orientation for the top face should point out
+          // of the volume, otherwise its orientation must be flipped.
+          top_dir = master->getNormalDirection()*face_dir[j];
         }
       }
 
       // Break here. The meshing algorithm only works with one
-      // master/slave face pair per volume.
+      // master/target face pair per volume.
       break;
     }
   }
+
+  printf("top_dir = %d\n", top_dir);
+  printf("bottom_dir = %d\n", bottom_dir);
 
   // Check if the remaining surface meshes are structured
   for ( int i = 0; i < num_faces; i++ ){
@@ -2640,18 +2770,18 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
                 "TMRVolumeMesh error: \
 Through-thickness meshes must be structured\n");
         fprintf(stderr,
-                "Try setting master-slave relations on edges and surfaces\n");
+                "Try setting master-target relations on edges and surfaces\n");
         mesh_fail = 1;
       }
     }
   }
 
+  // Free the f pointer
+  delete [] f;
+
   if (mesh_fail){
     return mesh_fail;
   }
-
-  // Free the f pointer
-  delete [] f;
 
   // Each face that is not either the top or the bottom, must have
   // only four edges and must be structured. Two of the parallel edges
@@ -2664,7 +2794,7 @@ Through-thickness meshes must be structured\n");
   // Get the number of edge loops
   num_face_loops = bottom->getNumEdgeLoops();
 
-  // Count up the total number of faces that 
+  // Count up the total number of faces 
   face_loop_ptr = new int[ num_face_loops+1 ];
 
   int count = 0;
@@ -2822,7 +2952,7 @@ Inconsistent number of edge points through-thickness %d != %d\n",
   hexes = new int[ 8*num_hexes ];
   X = new TMRPoint[ num_points ];
 
-  // Flip the  to the hexahedral elements
+  // Flip the ordering in the hexahedral elements
   const int flip[] = {0, 3, 2, 1};
 
   int *hex = hexes;
@@ -2862,61 +2992,6 @@ Inconsistent number of edge points through-thickness %d != %d\n",
   }
 
   return mesh_fail;
-}
-
-/*
-  Retrieve the mesh points
-*/
-void TMRVolumeMesh::getMeshPoints( int *_npts, TMRPoint **_X ){
-  if (_npts){ *_npts = num_points; }
-  if (_X){ *_X = X; }
-}
-
-/*
-  Retrieve the local connectivity for this volume mesh
-*/
-int TMRVolumeMesh::getLocalConnectivity( const int **_hexes ){
-  if (_hexes){ *_hexes = hexes; }
-  return num_hexes;
-}
-
-/*
-  Write the volume mesh to a VTK file
-*/
-void TMRVolumeMesh::writeToVTK( const char *filename ){
-  int mpi_rank;
-  MPI_Comm_rank(comm, &mpi_rank);
-
-  if (mpi_rank == 0 && hexes){
-    // Write out the connectivity of the mesh to a temp vtk file
-    FILE *fp = fopen("volume-mesh.vtk", "w");
-    if (fp){
-      fprintf(fp, "# vtk DataFile Version 3.0\n");
-      fprintf(fp, "vtk output\nASCII\n");
-      fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
-      
-      // Write out the points
-      fprintf(fp, "POINTS %d float\n", num_points);
-      for ( int k = 0; k < num_points; k++ ){
-        fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
-      }
-    
-      // Write out the cell values
-      fprintf(fp, "\nCELLS %d %d\n", num_hexes, 9*num_hexes);
-      for ( int k = 0; k < num_hexes; k++ ){
-        fprintf(fp, "8 %d %d %d %d %d %d %d %d\n", 
-                hexes[8*k], hexes[8*k+1], hexes[8*k+2], hexes[8*k+3],
-                hexes[8*k+4], hexes[8*k+5], hexes[8*k+6], hexes[8*k+7]);
-      }
-
-      // All hexes
-      fprintf(fp, "\nCELL_TYPES %d\n", num_hexes);
-      for ( int k = 0; k < num_hexes; k++ ){
-        fprintf(fp, "%d\n", 12);
-      }
-      fclose(fp);
-    }
-  }
 }
 
 /*
@@ -3288,7 +3363,7 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
     }
   }
 
-  // Check if we can mesh the volume - if any
+  // Update target/master relationships
   int num_volumes;
   TMRVolume **volumes;
   geo->getVolumes(&num_volumes, &volumes);
@@ -3452,10 +3527,10 @@ void TMRMesh::initMesh(){
     // Set the count to the number of variables
     for ( int j = 0; j < num_nodes; j++ ){
       if (count[j] == 0){ 
-        printf("Node %d not referenced\n", j); 
+        printf("TMRMesh error: Node %d not referenced\n", j); 
       }
       if (count[j] >= 2){ 
-        printf("Node %d referenced more than once %d\n", j, count[j]); 
+        printf("TMRMesh error: Node %d referenced more than once %d\n", j, count[j]); 
       }
     }
     delete [] count;
@@ -3489,8 +3564,23 @@ void TMRMesh::initMesh(){
       mesh->getNodeNums(&vars);
 
       // Set the quadrilateral connectivity
-      for ( int j = 0; j < 4*nlocal; j++, q++ ){
-        q[0] = vars[quad_local[j]];
+      if (faces[i]->getNormalDirection() > 0){
+        for ( int j = 0; j < 4*nlocal; j++, q++ ){
+          q[0] = vars[quad_local[j]];
+        }
+      }
+      else {
+        for ( int j = 0; j < nlocal; j++ ){
+          for ( int k = 0; k < 4; k++ ){
+            q[k] = vars[quad_local[4*j + k]];
+          }
+
+          // Flip the orientation of the quad
+          int t = q[1];
+          q[1] = q[3];
+          q[3] = t;
+          q += 4;
+        }
       }
 
       // Set the node locations
@@ -3644,13 +3734,26 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
           fprintf(fp, "%-41s","$       Shell element data");
           fprintf(fp, "%s\n", descript);
 
-          for ( int k = 0; k < nlocal; k++, j++ ){
-            int part = i+1;
-            fprintf(fp, "%-8s%8d%8d%8d%8d%8d%8d%8d\n", "CQUADR", 
-                    j+1, part, vars[quad_local[4*k]]+1, 
-                    vars[quad_local[4*k+1]]+1, 
-                    vars[quad_local[4*k+2]]+1, 
-                    vars[quad_local[4*k+3]]+1, part);
+          if (faces[i]->getNormalDirection() > 0){
+            for ( int k = 0; k < nlocal; k++, j++ ){
+              int part = i+1;
+              fprintf(fp, "%-8s%8d%8d%8d%8d%8d%8d%8d\n", "CQUADR", 
+                      j+1, part, vars[quad_local[4*k]]+1, 
+                      vars[quad_local[4*k+1]]+1, 
+                      vars[quad_local[4*k+2]]+1, 
+                      vars[quad_local[4*k+3]]+1, part);
+            }
+          }
+          else {
+            // Print out the nodes in the reversed orientation
+            for ( int k = 0; k < nlocal; k++, j++ ){
+              int part = i+1;
+              fprintf(fp, "%-8s%8d%8d%8d%8d%8d%8d%8d\n", "CQUADR", 
+                      j+1, part, vars[quad_local[4*k]]+1, 
+                      vars[quad_local[4*k+3]]+1, 
+                      vars[quad_local[4*k+2]]+1, 
+                      vars[quad_local[4*k+1]]+1, part);
+            }
           }
         }
       }

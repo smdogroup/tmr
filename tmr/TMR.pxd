@@ -46,15 +46,15 @@ cdef extern from "TMRTopology.h":
         
     cdef cppclass TMRFace(TMREntity):
         TMRFace(int)
-        void setMaster(TMRFace*)
-        void getMaster(int*, TMRFace**)
+        void setMaster(TMRVolume*, TMRFace*)
+        void getMaster(int*, TMRVolume**, TMRFace**)
         int getNumEdgeLoops()
+        void writeToVTK(char*)
         
     cdef cppclass TMRVolume(TMREntity):
         TMRVolume(int, TMRFace**, const int*)
         void getFaces(int*, TMRFace***, const int**)
         void writeToVTK(char*)
-        void updateOrientation()
         
     cdef cppclass TMRModel(TMREntity):
         TMRModel(int, TMRVertex**,

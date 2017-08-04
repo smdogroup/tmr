@@ -15,6 +15,7 @@
 
 class TMREdge;
 class TMRFace;
+class TMRVolume;
 class TMREdgeMesh;
 class TMRFaceMesh;
 class TMRVolumeMesh;
@@ -157,9 +158,8 @@ class TMRFace : public TMREntity {
   void getEdgeLoop( int k, TMREdgeLoop **loop );
 
   // Set/retrieve the master face
-  void setMaster( TMRFace *_face );
-  void setMaster( int dir, TMRFace *_face );
-  void getMaster( int *dir, TMRFace **_face );
+  void setMaster( TMRVolume *_volume, TMRFace *_face );
+  void getMaster( int *dir, TMRVolume **_volume, TMRFace **_face );
 
   // Set/retrieve the mesh
   void setMesh( TMRFaceMesh *_mesh );
@@ -177,6 +177,7 @@ class TMRFace : public TMREntity {
   TMRFaceMesh *mesh;
 
   int master_dir;  // The relative master face direction
+  TMRVolume *master_volume; // Master volume
   TMRFace *master; // Master face (may be NULL)
 
   // Store the loop information
@@ -199,9 +200,6 @@ class TMRVolume : public TMREntity {
  public:
   TMRVolume( int _nfaces, TMRFace **_faces, const int *_dir=NULL );
   virtual ~TMRVolume();
-
-  // Update the orientation within the master pairs
-  void updateOrientation();
 
   // Get the parameter range for this volume
   virtual void getRange( double *umin, double *vmin, double *wmin,

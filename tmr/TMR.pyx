@@ -92,7 +92,10 @@ cdef class Edge:
       cdef TMREdge *e
       self.ptr.getMaster(&e)
       return _init_Edge(e)
-      
+
+   def writeToVTK(self, char *filename):
+      self.ptr.writeToVTK(filename)
+
 cdef _init_Edge(TMREdge *ptr):
    edge = Edge()
    edge.ptr = ptr
@@ -111,14 +114,18 @@ cdef class Face:
    def getNumEdgeLoops(self):
       return self.ptr.getNumEdgeLoops()
    
-   def setMaster(self, Face f):
-      self.ptr.setMaster(f.ptr)
+   def setMaster(self, Volume v, Face f):
+      self.ptr.setMaster(v.ptr, f.ptr)
 
    def getMaster(self):
       cdef TMRFace *f
+      cdef TMRVolume *v
       cdef int d
-      self.ptr.getMaster(&d, &f)
-      return d, _init_Face(f)
+      self.ptr.getMaster(&d, &v, &f)
+      return d, _init_Volume(v), _init_Face(f)
+
+   def writeToVTK(self, char *filename):
+      self.ptr.writeToVTK(filename)
       
 cdef _init_Face(TMRFace *ptr):
    face = Face()
@@ -147,9 +154,6 @@ cdef class Volume:
    
    def writeToVTK(self, char* filename):
       self.ptr.writeToVTK(filename)
-      
-   def updateOrientation(self):
-      self.ptr.updateOrientation()
 
 cdef _init_Volume(TMRVolume *ptr):
    vol = Volume()
@@ -386,6 +390,7 @@ cdef class Model:
 cdef _init_Model(TMRModel* ptr):
    model = Model()
    model.ptr = ptr
+   model.ptr.incref()
    return model
 
 cdef class MeshOptions:
@@ -490,14 +495,26 @@ cdef class Mesh:
        model = self.ptr.createModelFromMesh()
        return _init_Model(model) 
 
-    def writeToBDF(self, char *filename):
+    def writeToBDF(self, char *filename, outtype=None):
        # Write both quads and hexes
        cdef int flag = 3
+       if outtype is None:
+          flag = 3
+       elif outtype == 'quads':
+          flag = 1
+       elif outtype == 'hexes':
+          flag = 2
        self.ptr.writeToBDF(filename, flag)
 
-    def writeToVTK(self, char *filename):
+    def writeToVTK(self, char *filename, outtype=None):
        # Write both quads and hexes
        cdef int flag = 3
+       if outtype is None:
+          flag = 3
+       elif outtype == 'quads':
+          flag = 1
+       elif outtype == 'hexes':
+          flag = 2
        self.ptr.writeToVTK(filename, flag)
 
 cdef class Topology:
@@ -687,7 +704,6 @@ cdef class OctStiffnessProperties:
    property rho:
       def __get__(self):
          return self.ptr.rho
-
       def __set__(self,value):
          self.ptr.rho = value
 
@@ -706,6 +722,5 @@ cdef class OctStiffnessProperties:
    property q:
       def __get__(self):
          return self.ptr.q
-
       def __set__(self,value):
          self.ptr.q = value

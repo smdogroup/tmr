@@ -625,17 +625,10 @@ void TMRFace::getMesh( TMRFaceMesh **_mesh ){
 }
 
 /*
-  Set the master face with a default relative orientation
-*/
-void TMRFace::setMaster( TMRFace *face ){
-  setMaster(1, face);
-}
-
-/*
   Set the master face with a relative direction
 */
-void TMRFace::setMaster( int dir, TMRFace *face ){
-  if (face && face != this){
+void TMRFace::setMaster( TMRVolume *volume, TMRFace *face ){
+  if (volume && face && face != this){
     int nloops = getNumEdgeLoops();
     if (nloops != face->getNumEdgeLoops()){
       fprintf(stderr, "TMRFace error: Topology not equivalent. \
@@ -657,21 +650,50 @@ Number of edges in edge loop %d not equal. Could not set master face\n", i);
       }
     }
 
-    // Set the relative master face direction
-    master_dir = dir;
+    // Check that both the face and the master are contained with the
+    // proposed master volume
+    int this_index = -1, master_index = -1;
+    int num_faces;
+    TMRFace **faces;
+    const int *dir;
+    volume->getFaces(&num_faces, &faces, &dir);
+    
+    // Find the indices of this face and the master - if they exist
+    for ( int i = 0; i < num_faces; i++ ){
+      if (faces[i] == face){ master_index = i; }
+      if (faces[i] == this){ this_index = i; }
+    }
 
-    // Set the master face
-    face->incref();
-    if (master){ master->decref(); }
-    master = face;
+    if (this_index >= 0 && master_index >= 0){
+      // Set the master face
+      face->incref();
+      volume->incref();
+      if (master){ master->decref(); }
+      if (master_volume){ master_volume->decref(); }
+      master = face;
+      master_volume = volume;
+
+      // Set the relative directions on the different master faces
+      // within the volume
+
+      // Get the relative orientations of the two faces 
+      master_dir = getNormalDirection()*master->getNormalDirection();
+      
+      // Multiply the relative orientations of the two faces within
+      // the volume
+      master_dir *= -dir[this_index]*dir[master_index];
+    }
   }
 }
 
 /*
   Retrieve the master edge
 */
-void TMRFace::getMaster( int *_master_dir, TMRFace **face ){
+void TMRFace::getMaster( int *_master_dir, 
+                         TMRVolume **volume, 
+                         TMRFace **face ){
   if (face){ *face = master; }
+  if (volume){ *volume = master_volume; }
   if (_master_dir){ *_master_dir = master_dir; }
 }
 
@@ -711,23 +733,12 @@ void TMRFace::writeToVTK( const char *filename ){
     
     // Write out the cell values
     fprintf(fp, "\nCELLS %d %d\n", (npts-1)*(npts-1), 5*(npts-1)*(npts-1));
-    if (getNormalDirection() > 0){
-      for ( int j = 0; j < npts-1; j++ ){
-        for ( int i = 0; i < npts-1; i++ ){
-          fprintf(fp, "4 %d %d %d %d\n", 
-                  i + j*npts, i+1 + j*npts, 
-                  i+1 + (j+1)*npts, i + (j+1)*npts);
-        }
+    for ( int j = 0; j < npts-1; j++ ){
+      for ( int i = 0; i < npts-1; i++ ){
+        fprintf(fp, "4 %d %d %d %d\n", 
+                i + j*npts, i+1 + j*npts, 
+                i+1 + (j+1)*npts, i + (j+1)*npts);
       }
-    }
-    else {
-      for ( int j = 0; j < npts-1; j++ ){
-        for ( int i = 0; i < npts-1; i++ ){
-          fprintf(fp, "4 %d %d %d %d\n", 
-                  i + j*npts, i + (j+1)*npts,
-                  i+1 + (j+1)*npts, i+1 + j*npts);
-        }
-      }      
     }
     
     // Write out the cell types
@@ -776,42 +787,6 @@ TMRVolume::~TMRVolume(){
   }
   delete [] faces;
   delete [] dir;
-}
-
-/*
-  Set the absolute orientations of any master/slave relationships
-  using the information in the volume mesh
-*/
-void TMRVolume::updateOrientation(){
-  // Set the relative directions on the different master faces within
-  // the volume
-  for ( int i = 0; i < num_faces; i++ ){
-    TMRFace *master;
-    faces[i]->getMaster(NULL, &master);
-
-    if (master){
-      // Get the relative orientations of the two faces
-      int master_dir = 
-        faces[i]->getNormalDirection()*master->getNormalDirection();
-
-      // Find the orientation of the master face within
-      // this volume
-      int mface_dir = 0;
-      for ( int j = 0; j < num_faces; j++ ){
-        if (faces[j] == master){
-          mface_dir = dir[j]; 
-          break;
-        }
-      }
-      
-      // Multiply by the relative orientations of the two faces
-      // within the present volume
-      master_dir *= -dir[i]*mface_dir;
-      
-      // Set the master face and its direction
-      faces[i]->setMaster(master_dir, master);
-    }
-  }
 }
 
 /*

@@ -1967,8 +1967,8 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
     int nrhs = 3;
     int *ipiv = new int[ nctl ];
     int info = 0;
-    LAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs, 
-                A, &lda, ipiv, rhs, &nctl, &info);
+    TmrLAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs, 
+                   A, &lda, ipiv, rhs, &nctl, &info);
     
     if (info != 0){
       fprintf(stderr, 
@@ -2055,8 +2055,8 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
     int nrhs = 3;
     int *ipiv = new int[ nctl ];
     int info = 0;
-    LAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs, 
-                A, &lda, ipiv, rhs, &nctl, &info);
+    TmrLAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs, 
+                   A, &lda, ipiv, rhs, &nctl, &info);
     
     if (info != 0){
       fprintf(stderr, 
