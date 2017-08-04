@@ -301,17 +301,14 @@ void createTopoProblem( int num_levels,
                          -0.050061,-0.000289,0.769152,
                          -0.050061,-0.000289,0.769152};
         
-
       for (int i = 0; i < nloads; i++){
-        for (int j = 0; j < load_case_number[i]; i++){
-	  printf("i,j: %d %d\n", i,j);
-          sprintf(load_name,"case%d_load%d",i,j);
+        for (int j = 0; j < load_case_number[i]; j++){
+          printf("i,j: %d %d\n", i,j);
+          sprintf(load_name,"Load%d",j);
           addFaceTractions(order, forest, load_name, &aux[i], 
                            tacs[0],&Tr[3*j+3*16*i]);    
         }
       }
-
-
       /* //TacsScalar Tr[] = {100.0, 0.0, 0.0}; */
       
       /* TacsScalar Tr[] = {-.294, .440, .015, */
@@ -452,12 +449,18 @@ int main( int argc, char *argv[] ){
     
     int face_load[] = {30,29,16,15,28,27,18,17,
 		       26,24,25,23,22,21,20,19};
-    for (int k = 0; k < nloads; k++){
-      for (int p = 0; p < 16; p++){
-        char load_name[256];
-        sprintf(load_name, "case%d_load%d",k,p);
-        faces[face_load[p]]->setAttribute(load_name);
-      }
+    /* for (int k = 0; k < nloads; k++){ */
+    /*   for (int p = 0; p < 16; p++){ */
+    /*     char load_name[256]; */
+    /*     sprintf(load_name, "case%d_load%d",k,p); */
+    /*     faces[face_load[p]]->setAttribute(load_name); */
+    /*   } */
+    /* } */
+
+    for (int p = 0; p < 16; p++){
+      char load_name[256];
+      sprintf(load_name, "Load%d",p);
+      faces[face_load[p]]->setAttribute(load_name);
     }
     // Mesh the bracket
     TMRMesh *mesh = new TMRMesh(comm, geo);
