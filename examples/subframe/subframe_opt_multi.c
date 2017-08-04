@@ -77,7 +77,9 @@ void addFaceTractions( int order,
                        const char *attr, 
                        TACSAuxElements **aux,
                        TACSAssembler *tacs,
-                       TacsScalar Tr[3] ){
+                       TacsScalar Tr[3],
+		       int load_num,
+		       int case_num){
   // Create the tractions on each surface
   TACSElement *trac[6];
   for ( int face = 0; face < 6; face++ ){
@@ -104,11 +106,22 @@ void addFaceTractions( int order,
   TMROctant *array;
   octs->getArray(&array, &size);
 
-  // Get the auxilary elements from TACS
-  TACSAuxElements *_aux = tacs->getAuxElements();
-  if (!_aux){
-    _aux = new TACSAuxElements();
+  
+  //-------------------------------------------
+  if (case_num == 0){
+    aux[0] = new TACSAuxElements();
+    aux[0]->incref();
   }
+  
+  /* // Get the auxilary elements from TACS */
+  
+  /* TACSAuxElements *_aux = tacs->getAuxElements(); */
+  
+
+  /* if (!_aux){ */
+  /*   printf("load_n: %d %d\n", load_num,case_num); */
+  /*   _aux = new TACSAuxElements(); */
+  /* } */
 
   for ( int i = 0; i < size; i++ ){
     // Get the face index
@@ -120,12 +133,12 @@ void addFaceTractions( int order,
     int element_num = me - first;
 
     // Add the element to the auxiliary elements
-    _aux->addElement(element_num, trac[face_index]);
+    aux[0]->addElement(element_num, trac[face_index]);
   }
 
   /* // Set the auxiliary elements into TACS */
   /* tacs->setAuxElements(aux); */
-  *aux = _aux;
+  //*aux = _aux;
   delete octs;
   for ( int face = 0; face < 6; face++ ){
     trac[face]->decref();
@@ -214,7 +227,6 @@ void createTopoProblem( int num_levels,
     int load_case_number[] = {12,12,12,12,12};
     char load_name[256];
     if (level == 0){
-      
       // Create the aux elements on the face
       TacsScalar Tr[] = { 0.040673,-0.009505,0.015694,
                          -0.034705,-7.636785,-0.337983,
@@ -280,12 +292,13 @@ void createTopoProblem( int num_levels,
                          0.038776,-0.003762,-0.684945,
                          -0.050061,-0.000289,0.769152,
                          -0.050061,-0.000289,0.769152};
-        
+      
       for (int i = 0; i < nloads; i++){
         for (int j = 0; j < load_case_number[i]; j++){
           sprintf(load_name,"Load%d",j);
-          addFaceTractions(order, forest, load_name, &aux[i], 
-                           tacs[0],&Tr[3*j+3*12*i]);    
+          addFaceTractions(order, forest, load_name, &aux[i],
+                           tacs[0],&Tr[3*j+3*12*(i)],
+    			   i,j);
         }
       }
       /* //TacsScalar Tr[] = {100.0, 0.0, 0.0}; */
@@ -392,7 +405,7 @@ int main( int argc, char *argv[] ){
   properties.nu = 0.3;
   properties.q = 5.0;
   
-  int nloads = 1;
+  int nloads = 2;
     
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);

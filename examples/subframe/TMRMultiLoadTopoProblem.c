@@ -138,10 +138,9 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   // Copy over the number of load cases
   nloads = _nloads;
   aux = new TACSAuxElements*[nloads];
-  for ( int k = 0; k < nloads; k++ ){
-    aux[k] = _aux[k];
+  for (int n = 0; n < nloads; n++){
+    aux[n] = _aux[n];
   }
-  
   // Copy over the assembler objects and filters
   for ( int k = 0; k < nlevels; k++ ){
     // Set the TACSAssembler objects for each level
@@ -550,8 +549,12 @@ int TMRMultiLoadTopoProblem::evalObjCon( ParOptVec *pxvec,
 
     tacs[0]->zeroVariables();
     TacsScalar average_compliance = 0.0;
+    int mpi_rank;
+    MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
+    
     for (int k = 0; k < nloads; k++){
-      // Add the auxillary elements for different load cases
+      tacs[0]->zeroVariables();
+      
       tacs[0]->setAuxElements(aux[k]);
       
       // Assemble the Jacobian on each level
@@ -616,33 +619,42 @@ int TMRMultiLoadTopoProblem::evalObjConGradient( ParOptVec *xvec,
   // respect to the design variables
   g->zeroEntries();
   Ac[0]->zeroEntries();
-
+  
   // Compute the derivative of the mass and compliance w.r.t the
   // design variables
   ParOptBVecWrap *wrap1 = NULL, *wrap2 = NULL;
   wrap1 = dynamic_cast<ParOptBVecWrap*>(g);
   wrap2 = dynamic_cast<ParOptBVecWrap*>(Ac[0]);
+  
+  int mpi_rank;
+  MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
+    
   if (wrap1 && wrap2){
     TACSBVec *g_vec = wrap1->vec;
     TACSBVec *m_vec = wrap2->vec;
     int size = g_vec->getArray(NULL) + g_vec->getExtArray(NULL);
     memset(xlocal, 0, size*sizeof(TacsScalar));
-   
+    
     for (int k = 0; k < nloads; k++){
       tacs[0]->zeroVariables();
-      // Add the auxillary elements for different load cases
+      /* TACSAuxElem *aux_elems; */
+      /* int naux; */
+      /* printf("ref count: %d\n", aux[k]->refcount()); */
+      /* naux = aux[k]->getAuxElements(&aux_elems); */
+      /* for (int p = 0; p < naux; p++){ */
+      /*   if (mpi_rank == 0){ */
+      /*     printf("elem[%d %d]: %d\n", k,p,aux_elems[p].num); */
+      /*   } */
+      /* }       */
       tacs[0]->setAuxElements(aux[k]);
-      
       // Assemble the Jacobian on each level
       double alpha = 1.0, beta = 0.0, gamma = 0.0;
       mg->assembleJacobian(alpha, beta, gamma, res);
       mg->factor();
-      
       // Solve the system: K(x)*u = -res
       ksm->solve(res, vars);
       vars->scale(-1.0);
-      
-      tacs[0]->applyBCs(vars);
+            
       tacs[0]->setVariables(vars);
       //printf("gradient vars: %e res: %e \n", vars->norm(), res->norm());
       // Compute the full derivative for compliance
