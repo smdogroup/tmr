@@ -469,7 +469,8 @@ void TMR_RemoveFloatingShapes( TopoDS_Compound &compound,
 /*
   Create the TMRModel based on the STEP input file
 */
-TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
+TMRModel* TMR_LoadModelFromSTEPFile( const char *filename,
+                                     int print_level ){
   FILE *fp = fopen(filename, "r");
   if (!fp){
     return NULL;
@@ -508,13 +509,14 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename ){
 
   TMR_RemoveFloatingShapes(compound, TopAbs_FACE);
 
-  return TMR_LoadModelFromCompound(compound);
+  return TMR_LoadModelFromCompound(compound, print_level);
 }
 
 /*
   Create the TMRModel based on the TopoDS_Compound object
 */
-TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound ){
+TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound,
+                                     int print_level ){
   // Create the index <--> geometry object
   TopTools_IndexedMapOfShape verts, edges, faces, wires, shells, solids;
 
@@ -563,9 +565,12 @@ TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound ){
   int nfaces = faces.Extent();
   int nshells = shells.Extent();
   int nsolids = solids.Extent();
-  printf("Compound loaded with:\nnverts = %d nedges = %d \
+
+  if (print_level > 0){
+    printf("Compound loaded with:\nnverts = %d nedges = %d \
 nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
-         nverts, nedges, nfaces, nwires, nshells, nsolids);
+           nverts, nedges, nfaces, nwires, nshells, nsolids);
+  }
 
   // Re-iterate through the list and create the objects needed to
   // define the geometry in TMR

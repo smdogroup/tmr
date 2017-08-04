@@ -73,8 +73,10 @@ cdef extern from "TMRBspline.h":
 
     cdef cppclass TMRBsplineSurface(TMRSurface):
         TMRBsplineSurface(int, int, int, int, TMRPoint*)
-        TMRBsplineSurface(int, int, int, int, double*, double*, TMRPoint*)
-        TMRBsplineSurface(int, int, int, int, double*, double*, double*, TMRPoint*)
+        TMRBsplineSurface(int, int, int, int,
+                          double*, double*, TMRPoint*)
+        TMRBsplineSurface(int, int, int, int,
+                          double*, double*, double*, TMRPoint*)
 
     cdef cppclass TMRBsplinePcurve(TMRPcurve):
         TMRBsplinePcurve(int, int, double*)
@@ -96,23 +98,30 @@ cdef extern from "":
 cdef extern from "TMRTopology.h":
     cdef cppclass TMRTopology(TMREntity):
         pass
+    
     cdef cppclass TMRVertex(TMREntity):
         pass
+    
     cdef cppclass TMREdge(TMREntity):
         TMREdge()
-        void setVertices(TMRVertex*,TMRVertex*)
+        void setMaster(TMREdge*)
+        void getMaster(TMREdge**)
+        void setVertices(TMRVertex*, TMRVertex*)
         void getVertices(TMRVertex**, TMRVertex**)
         void writeToVTK(char*)
         
     cdef cppclass TMRFace(TMREntity):
         TMRFace(int)
-        int getNumEdgeLoops()
         void setMaster(TMRFace*)
+        void getMaster(int*, TMRFace**)
+        int getNumEdgeLoops()
+        
     cdef cppclass TMRVolume(TMREntity):
-        TMRVolume(int, TMRFace**,const int*)
-        void getFaces(int*,TMRFace***,const int**)
+        TMRVolume(int, TMRFace**, const int*)
+        void getFaces(int*, TMRFace***, const int**)
         void writeToVTK(char*)
         void updateOrientation()
+        
     cdef cppclass TMRModel(TMREntity):
         TMRModel(int, TMRVertex**,
                  int, TMREdge**,
@@ -123,16 +132,22 @@ cdef extern from "TMRTopology.h":
         void getFaces(int*,TMRFace***)
         void getVolumes(int*,TMRVolume***)
  
-cdef extern from "TMRMesh.h":
-    cdef cppclass TMRMesh(TMREntity):
-        TMRMesh(MPI_Comm,TMRModel*)
+cdef extern from "TMRMesh.h":    
+    cdef cppclass TMRMesh(TMREntity):     
+        TMRMesh(MPI_Comm, TMRModel*)
         void mesh(double)
+        void mesh(TMRMeshOptions, double)
         int getMeshPoints(TMRPoint**)
-        int getMeshConnectivity(int*,const int**,
-                                int*,const int**)
+        int getMeshConnectivity(int*, const int**,
+                                int*, const int**)
         TMRModel *createModelFromMesh()
+        void writeToVTK(const char*, int)
+        void writeToBDF(const char*, int)
+        
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
+        int triangularize_print_level
+        int write_mesh_quality_histogram
         int num_smoothing_steps
         double frontal_quality_factor
 
@@ -177,7 +192,6 @@ cdef extern from "TMRQuadForest.h":
         void createMeshConn(const int**, const int*)
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
-
 
 cdef extern from "TMROctant.h":
     cdef cppclass TMROctant:
@@ -240,6 +254,7 @@ cdef extern from "TMROctStiffness.h":
     cdef cppclass TMRStiffnessProperties:
         TMRStiffnessProperties()
         TacsScalar rho, E, nu, q
+        
 # cdef extern from "TMR_TACSTopoCreator.c":
 #     cdef cppclass TMROctTACSTopoCreator(TMROctTACSCreator):
 #         TMROctTACSTopoCreator(TMRBoundaryConditions*,

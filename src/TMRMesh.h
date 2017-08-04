@@ -25,6 +25,7 @@ class TMRMeshOptions {
   TMRMeshOptions(){
     // Set the default print level
     triangularize_print_level = 0;
+    write_mesh_quality_histogram = 0;
     
     // Set the default meshing options
     mesh_type_default = TMR_STRUCTURED;
@@ -44,6 +45,9 @@ class TMRMeshOptions {
 
   // Set the print level for the triangularize code
   int triangularize_print_level;
+
+  // Set the write level for the quality histogram
+  int write_mesh_quality_histogram;
 
   // Options to control the meshing algorithm
   TMRFaceMeshType mesh_type_default;

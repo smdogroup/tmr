@@ -3388,7 +3388,7 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
     int mpi_rank;
     MPI_Comm_rank(comm, &mpi_rank);
 
-    if (mpi_rank == 0){
+    if (options.write_mesh_quality_histogram && mpi_rank == 0){
       printf("Quality   # elements   percentage\n");
       for ( int k = 0; k < nbins; k++ ){
         printf("< %.2f    %10d   %10.3f\n",

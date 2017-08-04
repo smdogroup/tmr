@@ -84,6 +84,14 @@ cdef class Edge:
    
    def writeToVTK(self, char* filename):
       self.ptr.writeToVTK(filename)
+
+   def setMaster(self, Edge e):
+      self.ptr.setMaster(e.ptr)
+
+   def getMaster(self):
+      cdef TMREdge *e
+      self.ptr.getMaster(&e)
+      return _init_Edge(e)
       
 cdef _init_Edge(TMREdge *ptr):
    edge = Edge()
@@ -105,6 +113,12 @@ cdef class Face:
    
    def setMaster(self, Face f):
       self.ptr.setMaster(f.ptr)
+
+   def getMaster(self):
+      cdef TMRFace *f
+      cdef int d
+      self.ptr.getMaster(&d, &f)
+      return d, _init_Face(f)
       
 cdef _init_Face(TMRFace *ptr):
    face = Face()
@@ -367,7 +381,37 @@ cdef class Model:
       for i in xrange(num_vol):
          volumes.append(_init_Volume(vol[i]))
       return volumes
-   
+
+   def getFaces(self):
+      cdef TMRFace **f
+      cdef int num_faces = 0
+      if self.ptr:
+         self.ptr.getFaces(&num_faces, &f)
+      faces = []
+      for i in xrange(num_faces):
+         faces.append(_init_Face(f[i]))
+      return faces
+
+   def getEdges(self):
+      cdef TMREdge **e
+      cdef int num_edges = 0
+      if self.ptr:
+         self.ptr.getEdges(&num_edges, &e)
+      edges = []
+      for i in xrange(num_edges):
+         edges.append(_init_Edge(e[i]))
+      return edges
+
+   def getVertices(self):
+      cdef TMRVertex **v
+      cdef int num_verts = 0
+      if self.ptr:
+         self.ptr.getVertices(&num_verts, &v)
+      verts = []
+      for i in xrange(num_verts):
+         verts.append(_init_Vertex(v[i]))
+      return verts
+
 cdef _init_Model(TMRModel* ptr):
    model = Model()
    model.ptr = ptr
@@ -384,13 +428,27 @@ cdef class MeshOptions:
    property num_smoothing_steps:
       def __get__(self):
          return self.ptr.num_smoothing_steps
-      def __set__(self,value):
+      def __set__(self, value):
          self.ptr.num_smoothing_steps=value
+
    property frontal_quality_factor:
       def __get__(self):
          return self.ptr.frontal_quality_factor
-      def __set__(self,value):
+      def __set__(self, value):
          self.ptr.frontal_quality_factor = value
+
+   property triangularize_print_level:
+      def __get__(self):
+         return self.ptr.triangularize_print_level
+      def __set__(self, value):
+         self.ptr.triangularize_print_level = value
+
+   property write_mesh_quality_histogram:
+      def __get__(self):
+         return self.write_mesh_quality_histogram
+      def __set__(self, value):
+         self.ptr.write_mesh_quality_histogram = value
+
    # @property for cython 0.26 and above
    # def num_smoothing_steps(self):
    #    return self.ptr.num_smoothing_steps
@@ -404,15 +462,18 @@ cdef class Mesh:
        cdef MPI_Comm c_comm = NULL
        if comm is not None:
           c_comm = comm.ob_mpi
-          self.ptr = new TMRMesh(c_comm,geo.ptr)
+          self.ptr = new TMRMesh(c_comm, geo.ptr)
           self.ptr.incref()
 
     def __dealloc__(self):
        if self.ptr:
           self.ptr.decref()
 
-    def mesh(self, double h):
-        self.ptr.mesh(h)
+    def mesh(self, double h, MeshOptions opts=None):
+       if opts is None:
+          self.ptr.mesh(h)
+       else:
+          self.ptr.mesh(opts.ptr, h)
 
     def getMeshPoints(self):
        cdef TMRPoint *X
@@ -432,13 +493,15 @@ cdef class Mesh:
        cdef int nhexes = 0
        self.ptr.getMeshConnectivity(&nquads,&quads,
                                     &nhexes,&hexes)
+       
        q = np.zeros((nquads, 4), dtype=np.int)
        for i in range(nquads):
           q[i,0] = quads[4*i]
           q[i,1] = quads[4*i+1]
           q[i,2] = quads[4*i+2]
           q[i,3] = quads[4*i+3]
-       he = np.zeros((nhexes,8),dtype=np.int)
+          
+       he = np.zeros((nhexes,8), dtype=np.int)
        for i in range(nhexes):
           he[i,0] = hexes[8*i]
           he[i,1] = hexes[8*i+1]
@@ -456,7 +519,15 @@ cdef class Mesh:
        model = self.ptr.createModelFromMesh()
        return _init_Model(model) 
 
+    def writeToBDF(self, char *filename):
+       # Write both quads and hexes
+       cdef int flag = 3
+       self.ptr.writeToBDF(filename, flag)
 
+    def writeToVTK(self, char *filename):
+       # Write both quads and hexes
+       cdef int flag = 3
+       self.ptr.writeToVTK(filename, flag)
 
 cdef class Topology:
    cdef TMRTopology *ptr
