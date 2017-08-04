@@ -31,6 +31,9 @@ class TMREdgeFromCurve : public TMREdge {
   TMRCurve *curve;
 };
 
+/*
+  TMRFace object from a surface class
+*/
 class TMRFaceFromSurface : public TMRFace {
  public:
   TMRFaceFromSurface( TMRSurface *_surf ){

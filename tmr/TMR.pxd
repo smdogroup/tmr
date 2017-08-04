@@ -29,72 +29,6 @@ cdef extern from "TMRBase.h":
     void TMRInitialize()
     void TMRFinalize()
 
-cdef extern from "TMRGeometry.h":
-    cdef cppclass TMRVertex(TMREntity):
-        pass
-
-    cdef cppclass TMRCurve(TMREntity):
-        void writeToVTK(char*)
-
-    cdef cppclass TMRSurface(TMREntity):
-        void addCurveSegment(int, TMRCurve**, int*)
-        void writeToVTK(char*)
-
-    cdef cppclass TMRPcurve(TMREntity):
-        pass
-
-    cdef cppclass TMRVertexFromPoint(TMRVertex):
-        TMRVertexFromPoint(TMRPoint)
-
-    cdef cppclass TMRVertexFromCurve(TMRVertex):
-        TMRVertexFromCurve(TMRCurve*, double)
-        TMRVertexFromCurve(TMRCurve*, TMRPoint)
-
-    cdef cppclass TMRVertexFromSurface(TMRVertex):
-        TMRVertexFromSurface(TMRSurface*, double, double)
-        TMRVertexFromSurface(TMRSurface*, TMRPoint)
-
-    cdef cppclass TMRCurveFromSurface(TMRCurve):
-        TMRCurveFromSurface(TMRSurface*, TMRPcurve*)
-
-    cdef cppclass TMRSplitCurve(TMRCurve):
-        TMRSplitCurve(TMRCurve*, double, double)
-        TMRSplitCurve(TMRCurve*, TMRVertex*, TMRVertex*)
-
-    cdef cppclass TMRGeometry(TMREntity):
-        TMRGeometry(int, TMRVertex**, int, TMRCurve**, 
-                    int, TMRSurface**)
-
-cdef extern from "TMRBspline.h":
-    cdef cppclass TMRBsplineCurve(TMRCurve):
-        TMRBsplineCurve(int, int, TMRPoint*)
-        TMRBsplineCurve(int, int, double*, TMRPoint*)
-        TMRBsplineCurve(int, int, double*, double*, TMRPoint*)
-
-    cdef cppclass TMRBsplineSurface(TMRSurface):
-        TMRBsplineSurface(int, int, int, int, TMRPoint*)
-        TMRBsplineSurface(int, int, int, int,
-                          double*, double*, TMRPoint*)
-        TMRBsplineSurface(int, int, int, int,
-                          double*, double*, double*, TMRPoint*)
-
-    cdef cppclass TMRBsplinePcurve(TMRPcurve):
-        TMRBsplinePcurve(int, int, double*)
-        TMRBsplinePcurve(int, int, double*, double*)
-        TMRBsplinePcurve(int, int, double*, double*, double*)
-
-    cdef cppclass TMRCurveInterpolation(TMREntity):
-        TMRCurveInterpolation(TMRPoint*, int)
-        void setNumControlPoints(int)
-        TMRBsplineCurve *createCurve(int)
-        
-    cdef cppclass TMRCurveLofter(TMREntity):
-        TMRCurveLofter(TMRBsplineCurve**, int)
-        TMRBsplineSurface* createSurface(int)
-
-cdef extern from "":
-    TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
-
 cdef extern from "TMRTopology.h":
     cdef cppclass TMRTopology(TMREntity):
         pass
@@ -131,6 +65,70 @@ cdef extern from "TMRTopology.h":
         void getEdges(int*,TMREdge***)
         void getFaces(int*,TMRFace***)
         void getVolumes(int*,TMRVolume***)
+        
+cdef extern from "TMRGeometry.h":
+    cdef cppclass TMRCurve(TMREntity):
+        void writeToVTK(char*)
+
+    cdef cppclass TMRSurface(TMREntity):
+        void addCurveSegment(int, TMRCurve**, int*)
+        void writeToVTK(char*)
+
+    cdef cppclass TMRPcurve(TMREntity):
+        pass
+
+cdef extern from "TMRNativeTopology.h":
+    cdef cppclass TMRVertexFromPoint(TMRVertex):
+        TMRVertexFromPoint(TMRPoint)
+
+    cdef cppclass TMRVertexFromEdge(TMRVertex):
+        TMRVertexFromEdge(TMREdge*, double)
+        TMRVertexFromEdge(TMREdge*, TMRPoint)
+
+    cdef cppclass TMRVertexFromFace(TMRVertex):
+        TMRVertexFromFace(TMRFace*, double, double)
+        TMRVertexFromFace(TMRFace*, TMRPoint)
+
+    cdef cppclass TMREdgeFromFace(TMREdge):
+        TMREdgeFromFace(TMRFace*, TMRPcurve*)
+
+    cdef cppclass TMRSplitEdge(TMREdge):
+        TMRSplitEdge(TMREdge*, double, double)
+        TMRSplitEdge(TMREdge*, TMRVertex*, TMRVertex*)
+
+    cdef cppclass TMRGeometry(TMREntity):
+        TMRGeometry(int, TMRVertex**, int, TMREdge**, 
+                    int, TMRFace**)
+
+cdef extern from "TMRBspline.h":
+    cdef cppclass TMRBsplineCurve(TMRCurve):
+        TMRBsplineCurve(int, int, TMRPoint*)
+        TMRBsplineCurve(int, int, double*, TMRPoint*)
+        TMRBsplineCurve(int, int, double*, double*, TMRPoint*)
+
+    cdef cppclass TMRBsplineSurface(TMRSurface):
+        TMRBsplineSurface(int, int, int, int, TMRPoint*)
+        TMRBsplineSurface(int, int, int, int,
+                          double*, double*, TMRPoint*)
+        TMRBsplineSurface(int, int, int, int,
+                          double*, double*, double*, TMRPoint*)
+
+    cdef cppclass TMRBsplinePcurve(TMRPcurve):
+        TMRBsplinePcurve(int, int, double*)
+        TMRBsplinePcurve(int, int, double*, double*)
+        TMRBsplinePcurve(int, int, double*, double*, double*)
+
+    cdef cppclass TMRCurveInterpolation(TMREntity):
+        TMRCurveInterpolation(TMRPoint*, int)
+        void setNumControlPoints(int)
+        TMRBsplineCurve *createCurve(int)
+        
+    cdef cppclass TMRCurveLofter(TMREntity):
+        TMRCurveLofter(TMRBsplineCurve**, int)
+        TMRBsplineSurface* createSurface(int)
+
+cdef extern from "":
+    TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
  
 cdef extern from "TMRMesh.h":    
     cdef cppclass TMRMesh(TMREntity):     
