@@ -138,10 +138,9 @@ ParOptProblem(_tacs[0]->getMPIComm()){
   // Copy over the number of load cases
   nloads = _nloads;
   aux = new TACSAuxElements*[nloads];
-  for ( int k = 0; k < nloads; k++ ){
-    aux[k] = _aux[k];
+  for (int n = 0; n < nloads; n++){
+    aux[n] = _aux[n];
   }
-  
   // Copy over the assembler objects and filters
   for ( int k = 0; k < nlevels; k++ ){
     // Set the TACSAssembler objects for each level
@@ -503,70 +502,6 @@ void TMRMultiLoadTopoProblem::setBVecFromLocalValues( const TacsScalar *xloc,
     memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
   }
 }
-
-/* /\* */
-/*   Add the 3D traction for the different load cases */
-/* *\/ */
-
-/* void TMRMultiLoadTopoProblem::addFaceTractions( int order, */
-/* 						TMROctForest *forest, */
-/* 						const char *attr,  */
-/* 						TACSAssembler *tacs, */
-/* 						TacsScalar Tr[3] ){ */
-/*   // Create the tractions on each surface */
-/*   TACSElement *trac[6]; */
-/*   for ( int face = 0; face < 6; face++ ){ */
-/*     if (order == 2){ */
-/*       trac[face] = new TACS3DTraction<2>(face, Tr[0], Tr[1], Tr[2]); */
-/*     } */
-/*     else { */
-/*       trac[face] = new TACS3DTraction<3>(face, Tr[0], Tr[1], Tr[2]); */
-/*     } */
-/*     trac[face]->incref(); */
-/*   } */
-
-/*   // Retrieve the array of octants from the array */
-/*   TMROctantArray *octants; */
-/*   forest->getOctants(&octants); */
-/*   TMROctant *first; */
-/*   octants->getArray(&first, NULL); */
-  
-/*   // Get the octants with the specified attribute */
-/*   TMROctantArray *octs = forest->getOctsWithAttribute(attr); */
-
-/*   // Get the octant  */
-/*   int size; */
-/*   TMROctant *array; */
-/*   octs->getArray(&array, &size); */
-
-/*   // Get the auxilary elements from TACS */
-/*   TACSAuxElements *aux = tacs->getAuxElements(); */
-/*   if (!aux){ */
-/*     aux = new TACSAuxElements(); */
-/*   } */
-
-/*   for ( int i = 0; i < size; i++ ){ */
-/*     // Get the face index */
-/*     int face_index = array[i].tag; */
-
-/*     // Get the local octant index in the array */
-/*     int use_node_search = 0; */
-/*     TMROctant *me = octants->contains(&array[i], use_node_search); */
-/*     int element_num = me - first; */
-
-/*     // Add the element to the auxiliary elements */
-/*     aux->addElement(element_num, trac[face_index]); */
-/*   } */
-
-/*   // Set the auxiliary elements into TACS */
-/*   tacs->setAuxElements(aux); */
-
-/*   delete octs; */
-/*   for ( int face = 0; face < 6; face++ ){ */
-/*     trac[face]->decref(); */
-/*   } */
-/* } */
-
 /*
   Evaluate the objective and constraints
 */
@@ -614,8 +549,12 @@ int TMRMultiLoadTopoProblem::evalObjCon( ParOptVec *pxvec,
 
     tacs[0]->zeroVariables();
     TacsScalar average_compliance = 0.0;
+    int mpi_rank;
+    MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
+    
     for (int k = 0; k < nloads; k++){
-      // Add the auxillary elements for different load cases
+      tacs[0]->zeroVariables();
+      
       tacs[0]->setAuxElements(aux[k]);
       
       // Assemble the Jacobian on each level
@@ -634,22 +573,7 @@ int TMRMultiLoadTopoProblem::evalObjCon( ParOptVec *pxvec,
       //TacsScalar compliance_value = -vars->dot(res);
       average_compliance += (1.0/nloads)*(-vars->dot(res));
     }
-
-    /* // Assemble the Jacobian on each level */
-    /* double alpha = 1.0, beta = 0.0, gamma = 0.0; */
-    /* mg->assembleJacobian(alpha, beta, gamma, res); */
-    /* mg->factor(); */
-    
-    /* // Solve the system: K(x)*u = -res */
-    /* ksm->solve(res, vars); */
-    /* vars->scale(-1.0); */
-
-    /* tacs[0]->applyBCs(vars); */
-    /* tacs[0]->setVariables(vars); */
-    
-    /* // Evaluate the compliance */
-    /* TacsScalar compliance_value = -vars->dot(res); */
-  
+ 
     // Evaluate the mass
     TacsScalar mass_value;
     tacs[0]->evalFunctions(&mass, 1, &mass_value);
@@ -680,46 +604,39 @@ int TMRMultiLoadTopoProblem::evalObjConGradient( ParOptVec *xvec,
   // respect to the design variables
   g->zeroEntries();
   Ac[0]->zeroEntries();
-
+  
   // Compute the derivative of the mass and compliance w.r.t the
   // design variables
   ParOptBVecWrap *wrap1 = NULL, *wrap2 = NULL;
   wrap1 = dynamic_cast<ParOptBVecWrap*>(g);
   wrap2 = dynamic_cast<ParOptBVecWrap*>(Ac[0]);
+  
+  int mpi_rank;
+  MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
+    
   if (wrap1 && wrap2){
     TACSBVec *g_vec = wrap1->vec;
     TACSBVec *m_vec = wrap2->vec;
     int size = g_vec->getArray(NULL) + g_vec->getExtArray(NULL);
     memset(xlocal, 0, size*sizeof(TacsScalar));
-   
+    
     for (int k = 0; k < nloads; k++){
       tacs[0]->zeroVariables();
-      // Add the auxillary elements for different load cases
       tacs[0]->setAuxElements(aux[k]);
-      
       // Assemble the Jacobian on each level
       double alpha = 1.0, beta = 0.0, gamma = 0.0;
       mg->assembleJacobian(alpha, beta, gamma, res);
       mg->factor();
-      
       // Solve the system: K(x)*u = -res
       ksm->solve(res, vars);
       vars->scale(-1.0);
-      
-      tacs[0]->applyBCs(vars);
+            
       tacs[0]->setVariables(vars);
-      //printf("gradient vars: %e res: %e \n", vars->norm(), res->norm());
       // Compute the full derivative for compliance
-      memset(xlocal, 0, size*sizeof(TacsScalar));
-      tacs[0]->addAdjointResProducts(-obj_scale/nloads, &vars, 1, xlocal, size);      
+      tacs[0]->addAdjointResProducts(-1.0, &vars, 1, xlocal, size);      
     }
     setBVecFromLocalValues(xlocal, g_vec);
     g_vec->beginSetValues(TACS_ADD_VALUES);
-
-    
-    /* tacs[0]->addAdjointResProducts(-obj_scale, &vars, 1, xlocal, size); */
-    /* setBVecFromLocalValues(xlocal, g_vec); */
-    /* g_vec->beginSetValues(TACS_ADD_VALUES); */
 
     memset(xlocal, 0, size*sizeof(TacsScalar));
     tacs[0]->addDVSens(-mass_scale, &mass, 1, xlocal, size);
@@ -741,7 +658,8 @@ int TMRMultiLoadTopoProblem::evalObjConGradient( ParOptVec *xvec,
         gvals[i] = -gvals[i]/(xvals[i]*xvals[i]);
         mvals[i] = -mvals[i]/(xvals[i]*xvals[i]);
       }
-    }    
+    }
+    g->scale(obj_scale/nloads);
   }
   else {
     return 1;

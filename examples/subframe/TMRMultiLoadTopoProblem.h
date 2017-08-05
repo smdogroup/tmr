@@ -9,7 +9,7 @@
 #include "TMROctForest.h"
 #include "StructuralMass.h"
 #include "Compliance.h"
-
+#include "TACS3DTraction.h"
 /*
   Wrap a TACSBVec object with the ParOptVec interface
 */
@@ -151,15 +151,9 @@ class TMRMultiLoadTopoProblem : public ParOptProblem {
   int getLocalValuesFromBVec( TACSBVec *vec, TacsScalar *xloc );
   void setBVecFromLocalValues( const TacsScalar *xloc, TACSBVec *vec );
 
-  /* void addFaceTractions( int order, */
-  /* 			 TMROctForest *forest, */
-  /* 			 const char *attr,  */
-  /* 			 TACSAssembler *tacs, */
-  /* 			 TacsScalar Tr[3] ); */
-
   // Store the prefix
   char prefix[256];
-
+  char load_name[256];
   // Set the iteration count for printing to the file
   int iter_count;
 
@@ -204,8 +198,7 @@ class TMRMultiLoadTopoProblem : public ParOptProblem {
 
   // The load case information
   TACSBVec *res, *vars, *force;
-  int nloads, order;
-  TMROctForest *forest;
+  int nloads;
   TACSAuxElements **aux;
 };
 

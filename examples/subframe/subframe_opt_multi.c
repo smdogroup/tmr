@@ -10,74 +10,14 @@
 #include "TMR_RefinementTools.h"
 #include "TMRMultiLoadTopoProblem.h"
 
-/* /\* */
-/*   Add the 3D traction */
-/* *\/ */
-/* void addFaceTractions( int order, */
-/*                        TMROctForest *forest, */
-/*                        const char *attr,  */
-/*                        TACSAssembler *tacs, */
-/*                        TacsScalar Tr[3] ){ */
-/*   // Create the tractions on each surface */
-/*   TACSElement *trac[6]; */
-/*   for ( int face = 0; face < 6; face++ ){ */
-/*     if (order == 2){ */
-/*       trac[face] = new TACS3DTraction<2>(face, Tr[0], Tr[1], Tr[2]); */
-/*     } */
-/*     else { */
-/*       trac[face] = new TACS3DTraction<3>(face, Tr[0], Tr[1], Tr[2]); */
-/*     } */
-/*     trac[face]->incref(); */
-/*   } */
-
-/*   // Retrieve the array of octants from the array */
-/*   TMROctantArray *octants; */
-/*   forest->getOctants(&octants); */
-/*   TMROctant *first; */
-/*   octants->getArray(&first, NULL); */
-  
-/*   // Get the octants with the specified attribute */
-/*   TMROctantArray *octs = forest->getOctsWithAttribute(attr); */
-
-/*   // Get the octant  */
-/*   int size; */
-/*   TMROctant *array; */
-/*   octs->getArray(&array, &size); */
-
-/*   // Get the auxilary elements from TACS */
-/*   TACSAuxElements *aux = tacs->getAuxElements(); */
-/*   if (!aux){ */
-/*     aux = new TACSAuxElements(); */
-/*   } */
-
-/*   for ( int i = 0; i < size; i++ ){ */
-/*     // Get the face index */
-/*     int face_index = array[i].tag; */
-
-/*     // Get the local octant index in the array */
-/*     int use_node_search = 0; */
-/*     TMROctant *me = octants->contains(&array[i], use_node_search); */
-/*     int element_num = me - first; */
-
-/*     // Add the element to the auxiliary elements */
-/*     aux->addElement(element_num, trac[face_index]); */
-/*   } */
-
-/*   // Set the auxiliary elements into TACS */
-/*   tacs->setAuxElements(aux); */
-
-/*   delete octs; */
-/*   for ( int face = 0; face < 6; face++ ){ */
-/*     trac[face]->decref(); */
-/*   } */
-/* } */
-
 void addFaceTractions( int order,
                        TMROctForest *forest,
                        const char *attr, 
                        TACSAuxElements **aux,
                        TACSAssembler *tacs,
-                       TacsScalar Tr[3] ){
+                       TacsScalar Tr[3],
+		       int load_num,
+		       int case_num){
   // Create the tractions on each surface
   TACSElement *trac[6];
   for ( int face = 0; face < 6; face++ ){
@@ -103,11 +43,10 @@ void addFaceTractions( int order,
   int size;
   TMROctant *array;
   octs->getArray(&array, &size);
-
-  // Get the auxilary elements from TACS
-  TACSAuxElements *_aux = tacs->getAuxElements();
-  if (!_aux){
-    _aux = new TACSAuxElements();
+  
+  if (case_num == 0){
+    aux[0] = new TACSAuxElements();
+    aux[0]->incref();
   }
 
   for ( int i = 0; i < size; i++ ){
@@ -120,12 +59,9 @@ void addFaceTractions( int order,
     int element_num = me - first;
 
     // Add the element to the auxiliary elements
-    _aux->addElement(element_num, trac[face_index]);
+    aux[0]->addElement(element_num, trac[face_index]);
   }
 
-  /* // Set the auxiliary elements into TACS */
-  /* tacs->setAuxElements(aux); */
-  *aux = _aux;
   delete octs;
   for ( int face = 0; face < 6; face++ ){
     trac[face]->decref();
@@ -211,16 +147,11 @@ void createTopoProblem( int num_levels,
 
     // Delete the creator class
     creator->decref();
-    int load_case_number[] = {16};
+    int load_case_number[] = {12,12,12,12,12};
     char load_name[256];
     if (level == 0){
-      
       // Create the aux elements on the face
-      TacsScalar Tr[] = {-0.143357,0.519788,-0.245806,
-                         0.295144,1.102826,0.284887,
-                         -0.317544,0.475520,0.016623,
-                         0.214093,0.101388,0.045507,
-                         0.040673,-0.009505,0.015694,
+      TacsScalar Tr[] = { 0.040673,-0.009505,0.015694,
                          -0.034705,-7.636785,-0.337983,
                          -0.040452,0.000000,-0.006853,
                          -0.435466,1.197862,0.040010,
@@ -233,11 +164,7 @@ void createTopoProblem( int num_levels,
                          -0.004341,-0.005498,0.094046,
                          -0.004341,-0.005498,0.094046,
 
-                         0.043443,-0.167879,0.076571,
-                         -0.084411,-0.344069,-0.094019,
-                         0.100798,-0.157387,-0.003006,
-                         -0.054348,-0.053759,-0.013263,
-                         -0.012379,0.002874,0.007295,
+                          -0.012379,0.002874,0.007295,
                          0.010610,2.416503,0.087093,
                          0.012821,0.001105,0.001547,
                          0.017463,-0.122240,-0.004642,
@@ -250,10 +177,6 @@ void createTopoProblem( int num_levels,
                          0.000868,0.002604,-0.009549,
                          0.000868,0.002604,-0.009549,
                                
-                         0.157328,-0.353383,0.276281,
-                         -0.857315,-0.639626,-0.087535,
-                         0.096200,0.212501,-0.035545,
-                         -0.749148,0.960589,-0.194641,
                          -0.023873,-0.028073,0.003537,
                          2.586931,8.661345,0.372025,
                          0.019010,-0.002653,0.006410,
@@ -267,11 +190,7 @@ void createTopoProblem( int num_levels,
                          0.000000,0.024597,-0.023439,
                          0.000000,0.024597,-0.023439,
 
-                         -0.059477,0.123080,-0.103038,
-                         0.274277,0.219339,0.031359,
-                         -0.035898,-0.083822,0.015385,
-                         0.275397,-0.285713,0.060774,
-                         0.009063,0.011273,0.011273,
+                          0.009063,0.011273,0.011273,
                          -0.714208,-2.947903,-0.119366,
                          -0.007295,0.001547,-0.003095,
                          -0.841090,2.104161,0.036915,
@@ -284,10 +203,6 @@ void createTopoProblem( int num_levels,
                          -0.000579,-0.007524,0.004341,
                          -0.000579,-0.007524,0.004341,
 
-                         0.002240,-0.074154,0.081641,
-                         0.036488,-0.271742,-0.297089,
-                         0.078634,-0.109640,0.038787,
-                         0.080580,-0.091426,-0.039140,
                          -0.036694,-0.185902,0.042662,
                          -0.271227,1.323418,0.405845,
                          -0.035810,-0.074935,0.007958,
@@ -300,32 +215,15 @@ void createTopoProblem( int num_levels,
                          0.038776,-0.003762,-0.684945,
                          -0.050061,-0.000289,0.769152,
                          -0.050061,-0.000289,0.769152};
-        
+      
       for (int i = 0; i < nloads; i++){
         for (int j = 0; j < load_case_number[i]; j++){
-          printf("i,j: %d %d\n", i,j);
           sprintf(load_name,"Load%d",j);
-          addFaceTractions(order, forest, load_name, &aux[i], 
-                           tacs[0],&Tr[3*j+3*16*i]);    
+          addFaceTractions(order, forest, load_name, &aux[i],
+                           tacs[0],&Tr[3*j+3*12*(i)],
+    			   i,j);
         }
       }
-      /* //TacsScalar Tr[] = {100.0, 0.0, 0.0}; */
-      
-      /* TacsScalar Tr[] = {-.294, .440, .015, */
-      /*                         .198, .094, .042, */
-      /*                    -.020, 0.0, -.003, */
-      /*                    -.218, .599, .020, */
-      /*                    -.059, -.426, .019, */
-      /*                         .198, -.438, -.069, */
-      /*                         .001, .004, -.038, */
-      /*                         -.002, -.003, .047}; */
-      /* for (int p = 0; p < num_load_case; p++){ */
-      /*        for (int j = 0; j < load_case_number[p]; j++){ */
-      /*          sprintf(load_name,"Load%d",j); */
-      /*          addFaceTractions(order, forest, load_name, tacs[0], &Tr[3*j]); */
-      /*        } */
-      /* } */
-        //addFaceTractions(order, forest, "Load", tacs[0], Tr);
     }
   }
 
@@ -413,7 +311,7 @@ int main( int argc, char *argv[] ){
   properties.nu = 0.3;
   properties.q = 5.0;
   
-  int nloads = 1;
+  int nloads = 5;
     
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
@@ -447,17 +345,10 @@ int main( int argc, char *argv[] ){
       faces[face_fixed[p]]->setAttribute("Fixed");
     }
     
-    int face_load[] = {30,29,16,15,28,27,18,17,
+    int face_load[] = {28,27,18,17,
 		       26,24,25,23,22,21,20,19};
-    /* for (int k = 0; k < nloads; k++){ */
-    /*   for (int p = 0; p < 16; p++){ */
-    /*     char load_name[256]; */
-    /*     sprintf(load_name, "case%d_load%d",k,p); */
-    /*     faces[face_load[p]]->setAttribute(load_name); */
-    /*   } */
-    /* } */
-
-    for (int p = 0; p < 16; p++){
+  
+    for (int p = 0; p < 12; p++){
       char load_name[256];
       sprintf(load_name, "Load%d",p);
       faces[face_load[p]]->setAttribute(load_name);
@@ -569,8 +460,8 @@ int main( int argc, char *argv[] ){
       old_design_vars = new_design_vars;
       
       // check the gradients
-      opt->checkGradients(1e-6);
-      exit(0);
+      /* opt->checkGradients(1e-6); */
+      /* exit(0); */
       //printf("Here\n");
       
       //opt->setGradientCheckFrequency(100,1e-6);
