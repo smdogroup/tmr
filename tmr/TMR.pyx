@@ -24,30 +24,30 @@ from TMR cimport *
 
 # Include the mpi4py header
 cdef extern from "mpi-compat.h":
-   pass
+    pass
 
 # This wraps a C++ array with a numpy array for later useage
 cdef inplace_array_1d(int nptype, int dim1, void *data_ptr,
                       PyObject *ptr):
-   '''Return a numpy version of the array'''
-   # Set the shape of the array
-   cdef int size = 1
-   cdef np.npy_intp shape[1]
-   cdef np.ndarray ndarray
+    '''Return a numpy version of the array'''
+    # Set the shape of the array
+    cdef int size = 1
+    cdef np.npy_intp shape[1]
+    cdef np.ndarray ndarray
 
-   # Set the first entry of the shape array
-   shape[0] = <np.npy_intp>dim1
+    # Set the first entry of the shape array
+    shape[0] = <np.npy_intp>dim1
       
-   # Create the array itself - Note that this function will not
-   # delete the data once the ndarray goes out of scope
-   ndarray = np.PyArray_SimpleNewFromData(size, shape,
-                                          nptype, data_ptr)
+    # Create the array itself - Note that this function will not
+    # delete the data once the ndarray goes out of scope
+    ndarray = np.PyArray_SimpleNewFromData(size, shape,
+                                           nptype, data_ptr)
 
-   # Set the base class who owns the memory
-   if ptr != NULL:
-      ndarray.base = ptr
+    # Set the base class who owns the memory
+    if ptr != NULL:
+        ndarray.base = ptr
 
-   return ndarray
+    return ndarray
 
 cdef class Vertex:
     cdef TMRVertex *ptr
@@ -65,101 +65,101 @@ cdef _init_Vertex(TMRVertex *ptr):
     return vertex
 
 cdef class Edge:
-   cdef TMREdge *ptr
-   def __cinit__(self):
-      self.ptr = NULL
+    cdef TMREdge *ptr
+    def __cinit__(self):
+        self.ptr = NULL
       
-   def __dealloc__(self):
-      if self.ptr:
-         self.ptr.decref()
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
 
-   def setVertices(self, Vertex v1, Vertex v2):
-      self.ptr.setVertices(v1.ptr, v2.ptr)
+    def setVertices(self, Vertex v1, Vertex v2):
+        self.ptr.setVertices(v1.ptr, v2.ptr)
 
-   def getVertices(self):
-      cdef TMRVertex *v1 = NULL
-      cdef TMRVertex *v2 = NULL
-      self.ptr.getVertices(&v1, &v2)
-      return _init_Vertex(v1), _init_Vertex(v2)
+    def getVertices(self):
+        cdef TMRVertex *v1 = NULL
+        cdef TMRVertex *v2 = NULL
+        self.ptr.getVertices(&v1, &v2)
+        return _init_Vertex(v1), _init_Vertex(v2)
    
-   def writeToVTK(self, char* filename):
-      self.ptr.writeToVTK(filename)
+    def writeToVTK(self, char* filename):
+        self.ptr.writeToVTK(filename)
 
-   def setMaster(self, Edge e):
-      self.ptr.setMaster(e.ptr)
+    def setMaster(self, Edge e):
+        self.ptr.setMaster(e.ptr)
 
-   def getMaster(self):
-      cdef TMREdge *e
-      self.ptr.getMaster(&e)
-      return _init_Edge(e)
+    def getMaster(self):
+        cdef TMREdge *e
+        self.ptr.getMaster(&e)
+        return _init_Edge(e)
 
-   def writeToVTK(self, char *filename):
-      self.ptr.writeToVTK(filename)
+    def writeToVTK(self, char *filename):
+        self.ptr.writeToVTK(filename)
 
 cdef _init_Edge(TMREdge *ptr):
-   edge = Edge()
-   edge.ptr = ptr
-   edge.ptr.incref()
-   return edge
+    edge = Edge()
+    edge.ptr = ptr
+    edge.ptr.incref()
+    return edge
 
 cdef class Face:
-   cdef TMRFace *ptr
-   def __cinit__(self):
-      self.ptr = NULL
+    cdef TMRFace *ptr
+    def __cinit__(self):
+        self.ptr = NULL
       
-   def __dealloc__(self):
-      if self.ptr:
-         self.ptr.decref()
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
          
-   def getNumEdgeLoops(self):
-      return self.ptr.getNumEdgeLoops()
+    def getNumEdgeLoops(self):
+        return self.ptr.getNumEdgeLoops()
    
-   def setMaster(self, Volume v, Face f):
-      self.ptr.setMaster(v.ptr, f.ptr)
+    def setMaster(self, Volume v, Face f):
+        self.ptr.setMaster(v.ptr, f.ptr)
 
-   def getMaster(self):
-      cdef TMRFace *f
-      cdef TMRVolume *v
-      cdef int d
-      self.ptr.getMaster(&d, &v, &f)
-      return d, _init_Volume(v), _init_Face(f)
+    def getMaster(self):
+        cdef TMRFace *f
+        cdef TMRVolume *v
+        cdef int d
+        self.ptr.getMaster(&d, &v, &f)
+        return d, _init_Volume(v), _init_Face(f)
 
-   def writeToVTK(self, char *filename):
-      self.ptr.writeToVTK(filename)
+    def writeToVTK(self, char *filename):
+        self.ptr.writeToVTK(filename)
       
 cdef _init_Face(TMRFace *ptr):
-   face = Face()
-   face.ptr = ptr
-   face.ptr.incref()
-   return face
+    face = Face()
+    face.ptr = ptr
+    face.ptr.incref()
+    return face
 
 cdef class Volume:
-   cdef TMRVolume *ptr
-   def __cinit__(self):
-      self.ptr = NULL
+    cdef TMRVolume *ptr
+    def __cinit__(self):
+        self.ptr = NULL
       
-   def __dealloc__(self):
-      if self.ptr:
-         self.ptr.decref()
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
          
-   def getFaces(self):
-      cdef TMRFace **f
-      cdef int num_faces = 0
-      if self.ptr:
-         self.ptr.getFaces(&num_faces, &f, NULL)
-      faces = []
-      for i in xrange(num_faces):
-         faces.append(_init_Face(f[i]))
-      return faces
+    def getFaces(self):
+        cdef TMRFace **f
+        cdef int num_faces = 0
+        if self.ptr:
+            self.ptr.getFaces(&num_faces, &f, NULL)
+        faces = []
+        for i in xrange(num_faces):
+            faces.append(_init_Face(f[i]))
+        return faces
    
-   def writeToVTK(self, char* filename):
-      self.ptr.writeToVTK(filename)
+    def writeToVTK(self, char* filename):
+        self.ptr.writeToVTK(filename)
 
 cdef _init_Volume(TMRVolume *ptr):
-   vol = Volume()
-   vol.ptr = ptr
-   vol.ptr.incref()
-   return vol
+    vol = Volume()
+    vol.ptr = ptr
+    vol.ptr.incref()
+    return vol
 
 cdef class Curve:
     cdef TMRCurve *ptr
@@ -199,19 +199,6 @@ cdef class Surface:
             
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
-        
-    # def addCurveSegment(self, curves, direct):
-    #     cdef int ncurves = len(curves)
-    #     cdef int *_dir = NULL
-    #     cdef TMRCurve **crvs = NULL
-    #     _dir = <int*>malloc(ncurves*sizeof(int))
-    #     crvs = <TMRCurve**>malloc(ncurves*sizeof(TMRCurve*))
-    #     for i in range(ncurves):
-    #         _dir[i] = direct[i]
-    #         crvs[i] = (<Curve>curves[i]).ptr
-    #     self.ptr.addCurveSegment(ncurves, crvs, _dir)
-    #     free(_dir)
-    #     free(crvs)
 
 cdef _init_Surface(TMRSurface *ptr):
     surface = Surface()
@@ -265,28 +252,28 @@ cdef class BsplineSurface(Surface):
         free(p)
 
 cdef class VertexFromPoint(Vertex):
-   def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] pt):
-      cdef TMRPoint point
-      point.x = pt[0]
-      point.y = pt[1]
-      point.z = pt[2]
-      self.ptr = new TMRVertexFromPoint(point)
-      self.ptr.incref()
+    def __cinit__(self, np.ndarray[double, ndim=1, mode='c'] pt):
+        cdef TMRPoint point
+        point.x = pt[0]
+        point.y = pt[1]
+        point.z = pt[2]
+        self.ptr = new TMRVertexFromPoint(point)
+        self.ptr.incref()
 
 cdef class VertexFromCurve(Vertex):
-   def __cinit__(self, Edge edge, double t):
-      self.ptr = new TMRVertexFromEdge(edge.ptr, t)
-      self.ptr.incref()
+    def __cinit__(self, Edge edge, double t):
+        self.ptr = new TMRVertexFromEdge(edge.ptr, t)
+        self.ptr.incref()
 
 cdef class VertexFromFace(Vertex):
-   def __cinit__(self, Face face, double u, double v):
-      self.ptr = new TMRVertexFromFace(face.ptr, u, v)
-      self.ptr.incref()
+    def __cinit__(self, Face face, double u, double v):
+        self.ptr = new TMRVertexFromFace(face.ptr, u, v)
+        self.ptr.incref()
 
 cdef class EdgeFromFace(Edge):
-   def __cinit__(self, Face face, Pcurve pcurve):
-      self.ptr = new TMREdgeFromFace(face.ptr, pcurve.ptr)
-      self.ptr.incref()
+    def __cinit__(self, Face face, Pcurve pcurve):
+        self.ptr = new TMREdgeFromFace(face.ptr, pcurve.ptr)
+        self.ptr.incref()
 
 cdef class CurveInterpolation:
     cdef TMRCurveInterpolation *ptr
@@ -339,91 +326,91 @@ cdef class CurveLofter:
         return _init_Surface(surf)
 
 cdef class Model:
-   cdef TMRModel *ptr
-   def __cinit__(self):
-      self.ptr = NULL
+    cdef TMRModel *ptr
+    def __cinit__(self):
+        self.ptr = NULL
   
-   def __dealloc__(self):
-      if self.ptr:
-         self.ptr.decref()
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
    
-   def getVolumes(self):
-      cdef TMRVolume **vol
-      cdef int num_vol = 0
-      if self.ptr:
-         self.ptr.getVolumes(&num_vol, &vol)
-      volumes = []
-      for i in xrange(num_vol):
-         volumes.append(_init_Volume(vol[i]))
-      return volumes
+    def getVolumes(self):
+        cdef TMRVolume **vol
+        cdef int num_vol = 0
+        if self.ptr:
+            self.ptr.getVolumes(&num_vol, &vol)
+        volumes = []
+        for i in xrange(num_vol):
+            volumes.append(_init_Volume(vol[i]))
+        return volumes
 
-   def getFaces(self):
-      cdef TMRFace **f
-      cdef int num_faces = 0
-      if self.ptr:
-         self.ptr.getFaces(&num_faces, &f)
-      faces = []
-      for i in xrange(num_faces):
-         faces.append(_init_Face(f[i]))
-      return faces
+    def getFaces(self):
+        cdef TMRFace **f
+        cdef int num_faces = 0
+        if self.ptr:
+            self.ptr.getFaces(&num_faces, &f)
+        faces = []
+        for i in xrange(num_faces):
+            faces.append(_init_Face(f[i]))
+        return faces
 
-   def getEdges(self):
-      cdef TMREdge **e
-      cdef int num_edges = 0
-      if self.ptr:
-         self.ptr.getEdges(&num_edges, &e)
-      edges = []
-      for i in xrange(num_edges):
-         edges.append(_init_Edge(e[i]))
-      return edges
+    def getEdges(self):
+        cdef TMREdge **e
+        cdef int num_edges = 0
+        if self.ptr:
+            self.ptr.getEdges(&num_edges, &e)
+        edges = []
+        for i in xrange(num_edges):
+            edges.append(_init_Edge(e[i]))
+        return edges
 
-   def getVertices(self):
-      cdef TMRVertex **v
-      cdef int num_verts = 0
-      if self.ptr:
-         self.ptr.getVertices(&num_verts, &v)
-      verts = []
-      for i in xrange(num_verts):
-         verts.append(_init_Vertex(v[i]))
-      return verts
+    def getVertices(self):
+        cdef TMRVertex **v
+        cdef int num_verts = 0
+        if self.ptr:
+            self.ptr.getVertices(&num_verts, &v)
+        verts = []
+        for i in xrange(num_verts):
+            verts.append(_init_Vertex(v[i]))
+        return verts
 
 cdef _init_Model(TMRModel* ptr):
-   model = Model()
-   model.ptr = ptr
-   model.ptr.incref()
-   return model
+    model = Model()
+    model.ptr = ptr
+    model.ptr.incref()
+    return model
 
 cdef class MeshOptions:
-   cdef TMRMeshOptions ptr
-   def __cinit__(self):
-      self.ptr = TMRMeshOptions()
+    cdef TMRMeshOptions ptr
+    def __cinit__(self):
+        self.ptr = TMRMeshOptions()
       
-   def __dealloc__(self):
-      return
+    def __dealloc__(self):
+        return
    
-   property num_smoothing_steps:
-      def __get__(self):
-         return self.ptr.num_smoothing_steps
-      def __set__(self, value):
-         self.ptr.num_smoothing_steps=value
+    property num_smoothing_steps:
+        def __get__(self):
+            return self.ptr.num_smoothing_steps
+        def __set__(self, value):
+            self.ptr.num_smoothing_steps=value
 
-   property frontal_quality_factor:
-      def __get__(self):
-         return self.ptr.frontal_quality_factor
-      def __set__(self, value):
-         self.ptr.frontal_quality_factor = value
+    property frontal_quality_factor:
+        def __get__(self):
+            return self.ptr.frontal_quality_factor
+        def __set__(self, value):
+            self.ptr.frontal_quality_factor = value
 
-   property triangularize_print_level:
-      def __get__(self):
-         return self.ptr.triangularize_print_level
-      def __set__(self, value):
-         self.ptr.triangularize_print_level = value
+    property triangularize_print_level:
+        def __get__(self):
+            return self.ptr.triangularize_print_level
+        def __set__(self, value):
+            self.ptr.triangularize_print_level = value
 
-   property write_mesh_quality_histogram:
-      def __get__(self):
-         return self.write_mesh_quality_histogram
-      def __set__(self, value):
-         self.ptr.write_mesh_quality_histogram = value
+    property write_mesh_quality_histogram:
+        def __get__(self):
+            return self.write_mesh_quality_histogram
+        def __set__(self, value):
+            self.ptr.write_mesh_quality_histogram = value
 
    # @property for cython 0.26 and above
    # def num_smoothing_steps(self):
@@ -435,156 +422,156 @@ cdef class MeshOptions:
 cdef class Mesh:
     cdef TMRMesh *ptr
     def __cinit__(self, MPI.Comm comm, Model geo):
-       cdef MPI_Comm c_comm = NULL
-       if comm is not None:
-          c_comm = comm.ob_mpi
-          self.ptr = new TMRMesh(c_comm, geo.ptr)
-          self.ptr.incref()
+        cdef MPI_Comm c_comm = NULL
+        if comm is not None:
+            c_comm = comm.ob_mpi
+            self.ptr = new TMRMesh(c_comm, geo.ptr)
+            self.ptr.incref()
 
     def __dealloc__(self):
-       if self.ptr:
-          self.ptr.decref()
+        if self.ptr:
+            self.ptr.decref()
 
     def mesh(self, double h, MeshOptions opts=None):
-       if opts is None:
-          self.ptr.mesh(h)
-       else:
-          self.ptr.mesh(opts.ptr, h)
+        if opts is None:
+            self.ptr.mesh(h)
+        else:
+            self.ptr.mesh(opts.ptr, h)
 
     def getMeshPoints(self):
-       cdef TMRPoint *X
-       cdef int npts = 0
-       npts = self.ptr.getMeshPoints(&X)
-       Xp = np.zeros((npts, 3), dtype=np.double)
-       for i in range(npts):
-          Xp[i,0] = X[i].x
-          Xp[i,1] = X[i].y
-          Xp[i,2] = X[i].z
-       return Xp
+        cdef TMRPoint *X
+        cdef int npts = 0
+        npts = self.ptr.getMeshPoints(&X)
+        Xp = np.zeros((npts, 3), dtype=np.double)
+        for i in range(npts):
+            Xp[i,0] = X[i].x
+            Xp[i,1] = X[i].y
+            Xp[i,2] = X[i].z
+        return Xp
 
     def getMeshConnectivity(self):
-       cdef const int *quads = NULL
-       cdef const int *hexes = NULL
-       cdef int nquads = 0
-       cdef int nhexes = 0
-       self.ptr.getMeshConnectivity(&nquads,&quads,
-                                    &nhexes,&hexes)
+        cdef const int *quads = NULL
+        cdef const int *hexes = NULL
+        cdef int nquads = 0
+        cdef int nhexes = 0
+        self.ptr.getMeshConnectivity(&nquads,&quads,
+                                     &nhexes,&hexes)
        
-       q = np.zeros((nquads, 4), dtype=np.int)
-       for i in range(nquads):
-          q[i,0] = quads[4*i]
-          q[i,1] = quads[4*i+1]
-          q[i,2] = quads[4*i+2]
-          q[i,3] = quads[4*i+3]
+        q = np.zeros((nquads, 4), dtype=np.int)
+        for i in range(nquads):
+            q[i,0] = quads[4*i]
+            q[i,1] = quads[4*i+1]
+            q[i,2] = quads[4*i+2]
+            q[i,3] = quads[4*i+3]
           
-       he = np.zeros((nhexes,8), dtype=np.int)
-       for i in range(nhexes):
-          he[i,0] = hexes[8*i]
-          he[i,1] = hexes[8*i+1]
-          he[i,2] = hexes[8*i+2]
-          he[i,3] = hexes[8*i+3]
-          he[i,4] = hexes[8*i+4]
-          he[i,5] = hexes[8*i+5]
-          he[i,6] = hexes[8*i+6]
-          he[i,7] = hexes[8*i+7]
+        he = np.zeros((nhexes,8), dtype=np.int)
+        for i in range(nhexes):
+            he[i,0] = hexes[8*i]
+            he[i,1] = hexes[8*i+1]
+            he[i,2] = hexes[8*i+2]
+            he[i,3] = hexes[8*i+3]
+            he[i,4] = hexes[8*i+4]
+            he[i,5] = hexes[8*i+5]
+            he[i,6] = hexes[8*i+6]
+            he[i,7] = hexes[8*i+7]
           
-       return q, he
+        return q, he
 
     def createModelFromMesh(self):
-       cdef TMRModel *model = NULL
-       model = self.ptr.createModelFromMesh()
-       return _init_Model(model) 
+        cdef TMRModel *model = NULL
+        model = self.ptr.createModelFromMesh()
+        return _init_Model(model) 
 
     def writeToBDF(self, char *filename, outtype=None):
-       # Write both quads and hexes
-       cdef int flag = 3
-       if outtype is None:
-          flag = 3
-       elif outtype == 'quads':
-          flag = 1
-       elif outtype == 'hexes':
-          flag = 2
-       self.ptr.writeToBDF(filename, flag)
+        # Write both quads and hexes
+        cdef int flag = 3
+        if outtype is None:
+            flag = 3
+        elif outtype == 'quads':
+            flag = 1
+        elif outtype == 'hexes':
+            flag = 2
+        self.ptr.writeToBDF(filename, flag)
 
     def writeToVTK(self, char *filename, outtype=None):
-       # Write both quads and hexes
-       cdef int flag = 3
-       if outtype is None:
-          flag = 3
-       elif outtype == 'quads':
-          flag = 1
-       elif outtype == 'hexes':
-          flag = 2
-       self.ptr.writeToVTK(filename, flag)
+        # Write both quads and hexes
+        cdef int flag = 3
+        if outtype is None:
+            flag = 3
+        elif outtype == 'quads':
+            flag = 1
+        elif outtype == 'hexes':
+            flag = 2
+        self.ptr.writeToVTK(filename, flag)
 
 cdef class Topology:
-   cdef TMRTopology *ptr
-   def __cinit__(self):
-      self.ptr = NULL
+    cdef TMRTopology *ptr
+    def __cinit__(self):
+        self.ptr = NULL
 
 cdef class QuadrantArray:
-   cdef TMRQuadrantArray *ptr
-   def __cinit__(self):
-      self.ptr = NULL
+    cdef TMRQuadrantArray *ptr
+    def __cinit__(self):
+        self.ptr = NULL
 
-   def __dealloc__(self):
-      del self.ptr
+    def __dealloc__(self):
+        del self.ptr
 
 cdef _init_QuadrantArray(TMRQuadrantArray *array):
-   arr = QuadrantArray()
-   arr.ptr = array
-   return arr
+    arr = QuadrantArray()
+    arr.ptr = array
+    return arr
 
 cdef class QuadForest:
-   cdef TMRQuadForest *ptr
-   def __cinit__(self, MPI.Comm comm=None):
-      cdef MPI_Comm c_comm = NULL
-      self.ptr = NULL
-      if comm is not None:
-         c_comm = comm.ob_mpi
-         self.ptr = new TMRQuadForest(c_comm)
-         self.ptr.incref()
+    cdef TMRQuadForest *ptr
+    def __cinit__(self, MPI.Comm comm=None):
+        cdef MPI_Comm c_comm = NULL
+        self.ptr = NULL
+        if comm is not None:
+            c_comm = comm.ob_mpi
+            self.ptr = new TMRQuadForest(c_comm)
+            self.ptr.incref()
 
-   def __dealloc__(self):
-      self.ptr.decref()
+    def __dealloc__(self):
+        self.ptr.decref()
 
-   def setTopology(self, Topology topo):
-      self.ptr.setTopology(topo.ptr)
+    def setTopology(self, Topology topo):
+        self.ptr.setTopology(topo.ptr)
 
-   def repartition(self):
-      self.ptr.repartition()
+    def repartition(self):
+        self.ptr.repartition()
 
-   def createTrees(self, int depth):
-      self.ptr.createRandomTrees(depth)
+    def createTrees(self, int depth):
+        self.ptr.createRandomTrees(depth)
 
-   def refine(self, np.ndarray[int, ndim=1, mode='c'] refine):
-      self.ptr.refine(<int*>refine.data)
+    def refine(self, np.ndarray[int, ndim=1, mode='c'] refine):
+        self.ptr.refine(<int*>refine.data)
 
-   def duplicate(self):
-      cdef TMRQuadForest *dup = NULL
-      dup = self.ptr.duplicate()
-      return _init_QuadForest(dup)
+    def duplicate(self):
+        cdef TMRQuadForest *dup = NULL
+        dup = self.ptr.duplicate()
+        return _init_QuadForest(dup)
 
-   def coarsen(self):
-      cdef TMRQuadForest *dup = NULL
-      dup = self.ptr.coarsen()
-      return _init_QuadForest(dup)
+    def coarsen(self):
+        cdef TMRQuadForest *dup = NULL
+        dup = self.ptr.coarsen()
+        return _init_QuadForest(dup)
 
-   def balance(self, int btype):
-      self.ptr.balance(btype)
+    def balance(self, int btype):
+        self.ptr.balance(btype)
 
-   def createNodes(self, int order):
-      self.ptr.createNodes(order)
+    def createNodes(self, int order):
+        self.ptr.createNodes(order)
 
-   def getQuadsWithAttribute(self, char *attr):
-      cdef TMRQuadrantArray *array = NULL
-      array = self.ptr.getQuadsWithAttribute(attr)
-      return _init_QuadrantArray(array)
+    def getQuadsWithAttribute(self, char *attr):
+        cdef TMRQuadrantArray *array = NULL
+        array = self.ptr.getQuadsWithAttribute(attr)
+        return _init_QuadrantArray(array)
 
-   def getNodesWithAttribute(self, char *attr):
-      cdef TMRQuadrantArray *array = NULL
-      array = self.ptr.getNodesWithAttribute(attr)
-      return _init_QuadrantArray(array)
+    def getNodesWithAttribute(self, char *attr):
+        cdef TMRQuadrantArray *array = NULL
+        array = self.ptr.getNodesWithAttribute(attr)
+        return _init_QuadrantArray(array)
 
 cdef _init_QuadForest(TMRQuadForest* ptr):
     forest = QuadForest()
@@ -593,68 +580,68 @@ cdef _init_QuadForest(TMRQuadForest* ptr):
     return forest
  
 cdef class OctantArray:
-   cdef TMROctantArray *ptr
-   def __cinit__(self):
-      self.ptr = NULL
+    cdef TMROctantArray *ptr
+    def __cinit__(self):
+        self.ptr = NULL
 
-   def __dealloc__(self):
-      del self.ptr
+    def __dealloc__(self):
+        del self.ptr
 
 cdef _init_OctantArray(TMROctantArray *array):
-   arr = OctantArray()
-   arr.ptr = array
-   return arr
+    arr = OctantArray()
+    arr.ptr = array
+    return arr
 
 cdef class OctForest:
-   cdef TMROctForest *ptr
-   def __cinit__(self, MPI.Comm comm=None):
-      cdef MPI_Comm c_comm = NULL
-      self.ptr = NULL
-      if comm is not None:
-         c_comm = comm.ob_mpi
-         self.ptr = new TMROctForest(c_comm)
-         self.ptr.incref()
+    cdef TMROctForest *ptr
+    def __cinit__(self, MPI.Comm comm=None):
+        cdef MPI_Comm c_comm = NULL
+        self.ptr = NULL
+        if comm is not None:
+            c_comm = comm.ob_mpi
+            self.ptr = new TMROctForest(c_comm)
+            self.ptr.incref()
 
-   def __dealloc__(self):
-      self.ptr.decref()
+    def __dealloc__(self):
+        self.ptr.decref()
 
-   def setTopology(self, Topology topo):
-      self.ptr.setTopology(topo.ptr)
+    def setTopology(self, Topology topo):
+        self.ptr.setTopology(topo.ptr)
 
-   def repartition(self):
-      self.ptr.repartition()
+    def repartition(self):
+        self.ptr.repartition()
 
-   def createTrees(self, int depth):
-      self.ptr.createRandomTrees(depth)
+    def createTrees(self, int depth):
+        self.ptr.createRandomTrees(depth)
 
-   def refine(self, np.ndarray[int, ndim=1, mode='c'] _refine):
-      self.ptr.refine(<int*>_refine.data)
+    def refine(self, np.ndarray[int, ndim=1, mode='c'] _refine):
+        self.ptr.refine(<int*>_refine.data)
 
-   def duplicate(self):
-      cdef TMROctForest *dup = NULL
-      dup = self.ptr.duplicate()
-      return _init_OctForest(dup)
+    def duplicate(self):
+        cdef TMROctForest *dup = NULL
+        dup = self.ptr.duplicate()
+        return _init_OctForest(dup)
 
-   def coarsen(self):
-      cdef TMROctForest *dup = NULL
-      dup = self.ptr.coarsen()
-      return _init_OctForest(dup)
+    def coarsen(self):
+        cdef TMROctForest *dup = NULL
+        dup = self.ptr.coarsen()
+        return _init_OctForest(dup)
 
-   def balance(self, int btype):
-      self.ptr.balance(btype)
+    def balance(self, int btype):
+        self.ptr.balance(btype)
 
-   def createNodes(self, int order):
-      self.ptr.createNodes(order)
+    def createNodes(self, int order):
+        self.ptr.createNodes(order)
 
-   def getOctsWithAttribute(self, char *attr):
-      cdef TMROctantArray *array = NULL
-      array = self.ptr.getOctsWithAttribute(attr)
-      return _init_OctantArray(array)
+    def getOctsWithAttribute(self, char *attr):
+        cdef TMROctantArray *array = NULL
+        array = self.ptr.getOctsWithAttribute(attr)
+        return _init_OctantArray(array)
 
-   def getNodesWithAttribute(self, char *attr):
-      cdef TMROctantArray *array = NULL
-      array = self.ptr.getNodesWithAttribute(attr)
-      return _init_OctantArray(array)
+    def getNodesWithAttribute(self, char *attr):
+        cdef TMROctantArray *array = NULL
+        array = self.ptr.getNodesWithAttribute(attr)
+        return _init_OctantArray(array)
    
 cdef _init_OctForest(TMROctForest* ptr):
     forest = OctForest()
@@ -663,64 +650,65 @@ cdef _init_OctForest(TMROctForest* ptr):
     return forest
 
 def LoadModel(char *filename):
-   cdef TMRModel *model = TMR_LoadModelFromSTEPFile(filename)
-   return _init_Model(model)
+    cdef TMRModel *model = TMR_LoadModelFromSTEPFile(filename)
+    return _init_Model(model)
    
 cdef class BoundaryConditions:
-   cdef TMRBoundaryConditions* ptr
+    cdef TMRBoundaryConditions* ptr
 
-   def __cinit__(self):
-      self.ptr = new TMRBoundaryConditions()
-      self.ptr.incref()
+    def __cinit__(self):
+        self.ptr = new TMRBoundaryConditions()
+        self.ptr.incref()
 
-   def __dealloc__(self):
-      self.ptr.decref()
+    def __dealloc__(self):
+        self.ptr.decref()
 
-   def getNumBoundaryConditions(self):
-      return self.ptr.getNumBoundaryConditions()
+    def getNumBoundaryConditions(self):
+        return self.ptr.getNumBoundaryConditions()
    
-   def addBoundaryCondition(self,  char* attr,
-                            int num_bc,
-                            np.ndarray[int, ndim=1, mode='c'] bc_nums,
-                            np.ndarray[TacsScalar, ndim=1, mode='c'] bc_vals):
-      if bc_vals is None:
-         self.ptr.addBoundaryCondition(attr, num_bc,
-                                       <int*>bc_nums.data,
-                                       NULL)
+    def addBoundaryCondition(self,  char* attr,
+                             int num_bc,
+                             np.ndarray[int, ndim=1, mode='c'] bc_nums,
+                             np.ndarray[TacsScalar, ndim=1, mode='c'] bc_vals):
+        if bc_vals is None:
+            self.ptr.addBoundaryCondition(attr, num_bc,
+                                          <int*>bc_nums.data,
+                                          NULL)
                                        
-      else:
-         self.ptr.addBoundaryCondition(attr, num_bc,
-                                       <int*>bc_nums.data,
-                                       <TacsScalar*>bc_vals.data)
-      return
+        else:
+            self.ptr.addBoundaryCondition(attr, num_bc,
+                                          <int*>bc_nums.data,
+                                          <TacsScalar*>bc_vals.data)
+        return
 
 cdef class OctStiffnessProperties:
-   cdef TMRStiffnessProperties ptr
-   def __cinit__(self):
-      self.ptr = TMRStiffnessProperties()
+    cdef TMRStiffnessProperties ptr
+    def __cinit__(self):
+        self.ptr = TMRStiffnessProperties()
       
-   def __dealloc__(self):
-      return
-   property rho:
-      def __get__(self):
-         return self.ptr.rho
-      def __set__(self,value):
-         self.ptr.rho = value
+    def __dealloc__(self):
+        return
+   
+    property rho:
+        def __get__(self):
+            return self.ptr.rho
+        def __set__(self,value):
+            self.ptr.rho = value
 
-   property E:
-      def __get__(self):
-         return self.ptr.E
-      def __set__(self,value):
-         self.ptr.E = value
+    property E:
+        def __get__(self):
+            return self.ptr.E
+        def __set__(self,value):
+            self.ptr.E = value
 
-   property nu:
-      def __get__(self):
-         return self.ptr.nu
-      def __set__(self,value):
-         self.ptr.nu = value
+    property nu:
+        def __get__(self):
+            return self.ptr.nu
+        def __set__(self,value):
+            self.ptr.nu = value
 
-   property q:
-      def __get__(self):
-         return self.ptr.q
-      def __set__(self,value):
-         self.ptr.q = value
+    property q:
+        def __get__(self):
+            return self.ptr.q
+        def __set__(self,value):
+            self.ptr.q = value
