@@ -2751,9 +2751,6 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
     }
   }
 
-  printf("top_dir = %d\n", top_dir);
-  printf("bottom_dir = %d\n", bottom_dir);
-
   // Check if the remaining surface meshes are structured
   for ( int i = 0; i < num_faces; i++ ){
     if (!f[i]){
@@ -3530,7 +3527,8 @@ void TMRMesh::initMesh(){
         printf("TMRMesh error: Node %d not referenced\n", j); 
       }
       if (count[j] >= 2){ 
-        printf("TMRMesh error: Node %d referenced more than once %d\n", j, count[j]); 
+        printf("TMRMesh error: Node %d referenced more than once %d\n", 
+               j, count[j]); 
       }
     }
     delete [] count;

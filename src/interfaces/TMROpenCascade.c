@@ -610,7 +610,6 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
     if (face_orig.Orientation() == TopAbs_REVERSED){
       orient = -1;
     }
-    printf("Face[%d] orientation = %d\n", index-1, orient);
     all_faces[index-1] = new TMR_OCCFace(orient, face);
 
     TopTools_IndexedMapOfShape map;
@@ -693,9 +692,6 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
         else {
           dir[nvol_faces] = -1;
         }
-
-        printf("Face %d orientation in solid %d\n",
-               index-1, dir[nvol_faces]);
 
         // Assign the face pointer
         vol_faces[nvol_faces] = all_faces[index-1];
