@@ -727,7 +727,7 @@ TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
   // Allocate the new vectors 
   int kbar = ku;
   int nbar = nctl + nnew;
-  double *Tbar = new double[ nbar+ku ];
+  double *Tbar = new double[ nbar+kbar ];
   TMRPoint *pbar = new TMRPoint[ nbar ];
 
   // Allocate the new Tnew and
@@ -827,10 +827,10 @@ TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
   TMRBsplineCurve *refined = NULL;
 
   if (wbar){
-    refined = new TMRBsplineCurve(nbar, ku, Tbar, wbar, pbar);
+    refined = new TMRBsplineCurve(nbar, kbar, Tbar, wbar, pbar);
   }
   else {
-    refined = new TMRBsplineCurve(nbar, ku, Tbar, pbar);
+    refined = new TMRBsplineCurve(nbar, kbar, Tbar, pbar);
   }
 
   // Free the allocated data
@@ -1071,7 +1071,7 @@ TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
   // Allocate the new vectors 
   int kbar = ku;
   int nbar = nctl + nnew;
-  double *Tbar = new double[ nbar+ku ];
+  double *Tbar = new double[ nbar+kbar ];
   double *pbar = new double[ 2*nbar ];
 
   // Allocate the new Tnew and
@@ -1167,10 +1167,10 @@ TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
   TMRBsplinePcurve *refined = NULL;
 
   if (wbar){
-    refined = new TMRBsplinePcurve(nbar, ku, Tbar, wbar, pbar);
+    refined = new TMRBsplinePcurve(nbar, kbar, Tbar, wbar, pbar);
   }
   else {
-    refined = new TMRBsplinePcurve(nbar, ku, Tbar, pbar);
+    refined = new TMRBsplinePcurve(nbar, kbar, Tbar, pbar);
   }
 
   // Free the allocated data

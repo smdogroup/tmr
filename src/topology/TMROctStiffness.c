@@ -282,9 +282,6 @@ void TMRLinearOctStiffness::setLinearization( TacsScalar _q,
 void TMRLinearOctStiffness::calculateStress( const double pt[],
                                              const TacsScalar e[], 
                                              TacsScalar s[] ){
-  // Set the minimum relative stiffness value
-  const double eps = 1e-3;
-
   // Compute the penalized stiffness
   TacsScalar Dp = (rho_const + rho_linear*rho)*D;
   TacsScalar Gp = (rho_const + rho_linear*rho)*G;

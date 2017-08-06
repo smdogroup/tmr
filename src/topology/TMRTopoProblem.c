@@ -775,6 +775,8 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
     hwrap->vec->beginSetValues(TACS_ADD_VALUES);
     hwrap->vec->endSetValues(TACS_ADD_VALUES);
   }
+
+  return 0;
 }
 
 // Evaluate the sparse constraints

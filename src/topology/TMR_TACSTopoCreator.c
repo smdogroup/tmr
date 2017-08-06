@@ -188,8 +188,8 @@ void TMROctTACSTopoCreator::computeWeights( TMROctant *oct,
   // Get the dependent node information for this mesh
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
-  int num_dep_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
-                                             &dep_weights);
+  filter->getDepNodeConn(&dep_ptr, &dep_conn,
+                         &dep_weights);
 
   // Get the octant array for the nodes
   TMROctantArray *filter_nodes;

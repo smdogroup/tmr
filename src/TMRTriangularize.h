@@ -214,7 +214,7 @@ class TMRTriangularize : public TMREntity {
   double frontal_quality_factor;
 
   // Initial number of boundary points
-  int init_boundary_points;
+  uint32_t init_boundary_points;
 
   // Keep track of the points
   int num_points; // The current number of points

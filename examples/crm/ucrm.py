@@ -14,11 +14,8 @@ vols = geo.getVolumes()
 faces = geo.getFaces()
 edges = geo.getEdges()
 
-# Set the master relations
-for i in xrange(len(faces)):
-    faces[i].writeToVTK('face%d.vtk'%(i))
-
-faces[4].setMaster(faces[5])
+# Set the master/target relationships
+faces[4].setMaster(vols[0], faces[5])
 edges[8].setMaster(edges[5])
 
 # Create the geometry
@@ -33,5 +30,4 @@ htarget = 4.0
 mesh.mesh(htarget, opts=opts)
 
 # Write the mesh to a bdf file
-mesh.writeToBDF("volume-mesh.bdf", 'quads')
-mesh.writeToVTK("volume-mesh.vtk", 'quads')
+mesh.writeToVTK("volume-mesh.vtk")

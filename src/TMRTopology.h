@@ -176,9 +176,7 @@ class TMRFace : public TMREntity {
   // The mesh for the curve - if it exists
   TMRFaceMesh *mesh;
 
-  // Object which stores information about master/target
-  // surfaces 
-  int master_dir;  // The relative master face direction
+  int master_dir; // The relative master face direction
   TMRVolume *master_volume; // Master volume
   TMRFace *master; // Master face (may be NULL)
 

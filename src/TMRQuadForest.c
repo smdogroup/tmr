@@ -2937,7 +2937,7 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
     topo->getFace(array[i].face, &surf);  
     const char *face_attr = surf->getAttribute();
     if ((!attr && !face_attr) ||
-        face_attr && strcmp(face_attr, attr) == 0){
+        (face_attr && strcmp(face_attr, attr) == 0)){
       queue->push(&array[i]);
     }
     else {
