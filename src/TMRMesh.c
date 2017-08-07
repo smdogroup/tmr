@@ -1196,6 +1196,71 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     num_fixed_pts = total_num_pts - num_degen;
 
     if (master){
+      // First determine the relative mapping from the fixed-point ordering
+      // on the master face to the fixed-point ordering around the edges
+      // on this face. This is performed using the topology of the faces and
+      // edges within the volume
+      int *master_to_target = new int[ num_fixed_pts ];
+      int *target_to_master = new int[ num_fixed_pts ];
+
+      // Find the mapping between master and target edge loops
+      for ( int k = 0; k < nloops; k++ ){
+        TMREdgeLoop *loop;
+        master->getEdgeLoop(k, &loop);
+
+        // Get the master edges for this loop
+        int me;
+        TMREdge **medges;
+        const int *mdir;
+        loop->getEdgeLoop(&me, &medges, &mdir);
+
+        // Loop over the edges in the master loop
+        for ( int m = 0; m < me; m++ ){
+          // Find the face that contains the edge, but is not
+          // the master or target face - note the target face
+          // should not contain the edge anyways. 
+          int nfaces;
+          TMRFace **faces;
+          master_volume->getFaces(&nfaces, &faces, NULL);
+
+          int ed = 0;
+          TMRFace *f = NULL;
+          for ( int i = 0; i < nfaces; i++ ){
+            if (faces[i] != master && faces[i] != face){
+              // Loop over all the loops and edges in the face
+              // and deterine which face references the 
+              // given master edge
+              for ( int ii = 0; ii < faces[i]->getNumEdgeLoops(); ii++ ){
+                TMREdgeLoop *lp;
+                faces[i]->getEdgeLoop(ii, &lp);
+                
+                int ne;
+                TMREdge **fedges;
+                const int *fdir;
+                lp->getEdgeLoop(&ne, &fedges, &fdir);
+                for ( int j = 0; j < ne; j++ ){
+                  if (fedges[j] == medges[m]){
+                    ed = fdir[m];
+                    f = faces[i];
+                  }
+                }
+                if (f){ break; }
+              }
+              if (f){ break; }
+            }
+          }
+
+          // If the face has been found, then we can search
+          // for the corresponding edge in the target edge
+          // list
+          if (f){
+            // Compute the target edge list
+
+          }
+        }      
+      }
+
+      // Create the face mesh
       TMRFaceMesh *face_mesh;
       master->getMesh(&face_mesh);
 
@@ -1222,7 +1287,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       double sc[2], tc[3];
       sc[0] = sc[1] = 0.0;
       tc[0] = tc[1] = 0.0;
-      
       for ( int i = 0; i < num_fixed_pts; i++ ){
         sc[0] += face_mesh->pts[2*i];
         sc[1] += face_mesh->pts[2*i+1];
@@ -1239,49 +1303,34 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       double N[16], A[4];
       memset(N, 0, 16*sizeof(double));
       memset(A, 0, 4*sizeof(double));
-      if (master_dir > 0){
-        for ( int k = 0; k < num_fixed_pts; k++ ){
-          for ( int i = 0; i < 4; i++ ){
-            for ( int j = 0; j < 4; j++ ){
-              double B = face_mesh->pts[2*k+(i%2)]*face_mesh->pts[2*k+(j%2)];
-              if (i/2 == j/2){
-                N[i + 4*j] += B;
-              }
+      
+      for ( int k = 0; k < num_fixed_pts; k++ ){
+        for ( int i = 0; i < 4; i++ ){
+          for ( int j = 0; j < 4; j++ ){
+            double B = face_mesh->pts[2*k+(i%2)]*face_mesh->pts[2*k+(j%2)];
+            if (i/2 == j/2){
+              N[i + 4*j] += B;
             }
-            A[i] += face_mesh->pts[2*k+(i%2)]*pts[2*k+(i/2)];
           }
+          int kt = master_to_target[k];
+          A[i] += face_mesh->pts[2*k+(i%2)]*pts[2*kt+(i/2)];
         }
       }
-      else {
-        // Flip the quad numbering
-        for ( int i = 0; i < 4*num_quads; i++ ){
-          if (quads[i] < num_fixed_pts && quads[i] > 0){
-            quads[i] = num_fixed_pts - quads[i];
-          }
-        }
 
-        // Flip the orientation of the quads to match the orientation
-        // of the face
+      // Flip the quad numbering
+      for ( int i = 0; i < 4*num_quads; i++ ){
+        if (quads[i] < num_fixed_pts && quads[i] > 0){
+          quads[i] = num_fixed_pts - quads[i];
+        }
+      }
+
+      // Flip the orientation of the quads to match the orientation
+      // of the face
+      if (master_dir < 0){
         for ( int i = 0; i < num_quads; i++ ){
           int tmp = quads[4*i+1];
           quads[4*i+1] = quads[4*i+3];
           quads[4*i+3] = tmp;
-        }
-
-        for ( int k = 0; k < num_fixed_pts; k++ ){
-          int k1 = k;
-          if (k > 0){
-            k1 = num_fixed_pts - k;
-          }
-          for ( int i = 0; i < 4; i++ ){
-            for ( int j = 0; j < 4; j++ ){
-              double B = face_mesh->pts[2*k+(i%2)]*face_mesh->pts[2*k+(j%2)];
-              if (i/2 == j/2){
-                N[i + 4*j] += B;
-              }
-            }
-            A[i] += face_mesh->pts[2*k+(i%2)]*pts[2*k1+(i/2)];
-          }
         }
       }
 
@@ -1291,17 +1340,18 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       TmrLAPACKdgetrf(&n, &n, N, &n, ipiv, &info);
       TmrLAPACKdgetrs("N", &n, &one, N, &n, ipiv, A, &n, &info);
 
-      printf("A = %15.5e  %15.5e  %15.5e  %15.5e\n",
-             A[0], A[1], A[2], A[3]);
-
       // Set the interior points based on the linear transformation
       for ( int k = num_fixed_pts; k < num_points; k++ ){
+        int kt = master_to_target[k];
         double uS = face_mesh->pts[2*k] - sc[0];
         double vS = face_mesh->pts[2*k+1] - sc[1];
-
-        pts[2*k] = A[0]*uS + A[1]*vS + tc[0];
-        pts[2*k+1] = A[2]*uS + A[3]*vS + tc[1];
+        pts[2*kt] = A[0]*uS + A[1]*vS + tc[0];
+        pts[2*kt+1] = A[2]*uS + A[3]*vS + tc[1];
       }
+
+      // Free the data
+      delete [] master_to_target;
+      delete [] target_to_master;
 
       // Evaluate the points
       X = new TMRPoint[ num_points ];
