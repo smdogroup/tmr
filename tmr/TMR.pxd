@@ -31,23 +31,23 @@ cdef extern from "TMRBase.h":
 
 cdef extern from "TMRTopology.h":
     cdef cppclass TMRTopology(TMREntity):
-        pass
-    
+        TMRTopology(MPI_Comm, TMRModel*)
+            
     cdef cppclass TMRVertex(TMREntity):
         pass
     
     cdef cppclass TMREdge(TMREntity):
         TMREdge()
-        void setMaster(TMREdge*)
-        void getMaster(TMREdge**)
+        void setSource(TMREdge*)
+        void getSource(TMREdge**)
         void setVertices(TMRVertex*, TMRVertex*)
         void getVertices(TMRVertex**, TMRVertex**)
         void writeToVTK(char*)
         
     cdef cppclass TMRFace(TMREntity):
         TMRFace(int)
-        void setMaster(TMRVolume*, TMRFace*)
-        void getMaster(int*, TMRVolume**, TMRFace**)
+        void setSource(TMRVolume*, TMRFace*)
+        void getSource(int*, TMRVolume**, TMRFace**)
         int getNumEdgeLoops()
         void writeToVTK(char*)
         

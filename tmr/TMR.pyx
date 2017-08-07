@@ -85,12 +85,12 @@ cdef class Edge:
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
 
-    def setMaster(self, Edge e):
-        self.ptr.setMaster(e.ptr)
+    def setSource(self, Edge e):
+        self.ptr.setSource(e.ptr)
 
-    def getMaster(self):
+    def getSource(self):
         cdef TMREdge *e
-        self.ptr.getMaster(&e)
+        self.ptr.getSource(&e)
         return _init_Edge(e)
 
     def writeToVTK(self, char *filename):
@@ -114,14 +114,14 @@ cdef class Face:
     def getNumEdgeLoops(self):
         return self.ptr.getNumEdgeLoops()
    
-    def setMaster(self, Volume v, Face f):
-        self.ptr.setMaster(v.ptr, f.ptr)
+    def setSource(self, Volume v, Face f):
+        self.ptr.setSource(v.ptr, f.ptr)
 
-    def getMaster(self):
+    def getSource(self):
         cdef TMRFace *f
         cdef TMRVolume *v
         cdef int d
-        self.ptr.getMaster(&d, &v, &f)
+        self.ptr.getSource(&d, &v, &f)
         return d, _init_Volume(v), _init_Face(f)
 
     def writeToVTK(self, char *filename):

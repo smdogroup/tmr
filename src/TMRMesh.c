@@ -724,23 +724,23 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
 
-  // Get the master edge
-  TMREdge *master;
-  edge->getMaster(&master);
+  // Get the source edge
+  TMREdge *source;
+  edge->getSource(&source);
 
-  // Figure out if there is a master edge and whether or not it has
+  // Figure out if there is a source edge and whether or not it has
   // been meshed.
   npts = -1;
-  if (master && master != edge){
+  if (source && source != edge){
     TMREdgeMesh *mesh;
-    master->getMesh(&mesh);
+    source->getMesh(&mesh);
     if (!mesh){
-      mesh = new TMREdgeMesh(comm, master);
+      mesh = new TMREdgeMesh(comm, source);
       mesh->mesh(options, htarget);
-      master->setMesh(mesh);
+      source->setMesh(mesh);
     }
 
-    // Retrieve the number of points along the master edge
+    // Retrieve the number of points along the source edge
     mesh->getMeshPoints(&npts, NULL, NULL);
   }
 
@@ -764,7 +764,7 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
       edge->integrate(tmin, tmax, integration_eps, 
                       &tvals, &dist, &nvals);
       
-      // Only compute the number of points if there is no master edge
+      // Only compute the number of points if there is no source edge
       if (npts < 0){
         // Compute the number of points along this curve
         npts = 1 + (int)(dist[nvals-1]/htarget);
@@ -942,22 +942,22 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     _mesh_type = TMR_STRUCTURED;
   }
   
-  // Get the master face and its orientation relative to this
-  // face. Note that the master face may be NULL in which case the
-  // master orientation is meaningless.
-  int master_dir;
-  TMRVolume *master_volume;
-  TMRFace *master;
-  face->getMaster(&master_dir, &master_volume, &master);
+  // Get the source face and its orientation relative to this
+  // face. Note that the source face may be NULL in which case the
+  // source orientation is meaningless.
+  int source_dir;
+  TMRVolume *source_volume;
+  TMRFace *source;
+  face->getSource(&source_dir, &source_volume, &source);
 
-  if (master){
-    // If the face mesh for the master does not yet exist, create it...    
+  if (source){
+    // If the face mesh for the source does not yet exist, create it...    
     TMRFaceMesh *face_mesh;
-    master->getMesh(&face_mesh);
+    source->getMesh(&face_mesh);
     if (!face_mesh){
-      face_mesh = new TMRFaceMesh(comm, master);
+      face_mesh = new TMRFaceMesh(comm, source);
       face_mesh->mesh(options, htarget);
-      master->setMesh(face_mesh);
+      source->setMesh(face_mesh);
     }
   }
 
@@ -1027,14 +1027,21 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
     // The number of degenerate edges
     int num_degen = 0;
+
+    // The total number of edges in the model
+    int total_nedges = 0;
     
-    // Get all of the meshes
+    // Get all of the edges and count up the mesh points
     for ( int k = 0; k < nloops; k++ ){
       TMREdgeLoop *loop;
       face->getEdgeLoop(k, &loop);
       int nedges;
       TMREdge **edges;
       loop->getEdgeLoop(&nedges, &edges, NULL);
+
+      // Keep track of the total number of edges attached to this
+      // surface object
+      total_nedges += nedges;
       
       for ( int i = 0; i < nedges; i++ ){
         // Count whether this edge is degenerate
@@ -1058,7 +1065,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         total_num_pts += npts-1;
       }
     }
-    
+        
     // The number of holes is equal to the number of loops-1. One loop
     // bounds the domain, the other loops cut out holes in the domain.
     // Note that the domain must be contiguous.
@@ -1087,7 +1094,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     }
     num_degen = 0;
     
-    for ( int k = 0; k < nloops; k++ ){
+    for ( int k = 0, kt = 0; k < nloops; k++ ){
       // Set the offset to the initial point/segment on this loop
       init_loop_pt = pt;
       
@@ -1099,7 +1106,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       const int *dir;
       loop->getEdgeLoop(&nedges, &edges, &dir);
       
-      for ( int i = 0; i < nedges; i++ ){
+      for ( int i = 0; i < nedges; i++, kt++ ){
         // Retrieve the underlying curve mesh
         TMREdge *edge = edges[i];
         TMREdgeMesh *mesh = NULL;
@@ -1162,7 +1169,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         Area += (x1*y2 - x2*y1);
       }
 
-      // Check if the area constraint
+      // Check the area constraint
       if (Area < 0.0){
         // This is a hole! Compute an approximate position for the hole.
         // Note that this may not work in all cases so beware.
@@ -1195,74 +1202,18 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // ordered first.
     num_fixed_pts = total_num_pts - num_degen;
 
-    if (master){
+    if (source){
       // First determine the relative mapping from the fixed-point ordering
-      // on the master face to the fixed-point ordering around the edges
+      // on the source face to the fixed-point ordering around the edges
       // on this face. This is performed using the topology of the faces and
       // edges within the volume
-      int *master_to_target = new int[ num_fixed_pts ];
-      int *target_to_master = new int[ num_fixed_pts ];
+      int *source_to_target = new int[ num_fixed_pts ];
+      int *target_to_source = new int[ num_fixed_pts ];
 
-      // Find the mapping between master and target edge loops
-      for ( int k = 0; k < nloops; k++ ){
-        TMREdgeLoop *loop;
-        master->getEdgeLoop(k, &loop);
-
-        // Get the master edges for this loop
-        int me;
-        TMREdge **medges;
-        const int *mdir;
-        loop->getEdgeLoop(&me, &medges, &mdir);
-
-        // Loop over the edges in the master loop
-        for ( int m = 0; m < me; m++ ){
-          // Find the face that contains the edge, but is not
-          // the master or target face - note the target face
-          // should not contain the edge anyways. 
-          int nfaces;
-          TMRFace **faces;
-          master_volume->getFaces(&nfaces, &faces, NULL);
-
-          int ed = 0;
-          TMRFace *f = NULL;
-          for ( int i = 0; i < nfaces; i++ ){
-            if (faces[i] != master && faces[i] != face){
-              // Loop over all the loops and edges in the face
-              // and deterine which face references the 
-              // given master edge
-              for ( int ii = 0; ii < faces[i]->getNumEdgeLoops(); ii++ ){
-                TMREdgeLoop *lp;
-                faces[i]->getEdgeLoop(ii, &lp);
-                
-                int ne;
-                TMREdge **fedges;
-                const int *fdir;
-                lp->getEdgeLoop(&ne, &fedges, &fdir);
-                for ( int j = 0; j < ne; j++ ){
-                  if (fedges[j] == medges[m]){
-                    ed = fdir[m];
-                    f = faces[i];
-                  }
-                }
-                if (f){ break; }
-              }
-              if (f){ break; }
-            }
-          }
-
-          // If the face has been found, then we can search
-          // for the corresponding edge in the target edge
-          // list
-          if (f){
-            // Compute the target edge list
-
-          }
-        }      
-      }
 
       // Create the face mesh
       TMRFaceMesh *face_mesh;
-      master->getMesh(&face_mesh);
+      source->getMesh(&face_mesh);
 
       // Compute the total number of points
       mesh_type = face_mesh->mesh_type;
@@ -1312,7 +1263,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
               N[i + 4*j] += B;
             }
           }
-          int kt = master_to_target[k];
+          int kt = source_to_target[k];
           A[i] += face_mesh->pts[2*k+(i%2)]*pts[2*kt+(i/2)];
         }
       }
@@ -1326,7 +1277,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
       // Flip the orientation of the quads to match the orientation
       // of the face
-      if (master_dir < 0){
+      if (source_dir < 0){
         for ( int i = 0; i < num_quads; i++ ){
           int tmp = quads[4*i+1];
           quads[4*i+1] = quads[4*i+3];
@@ -1342,7 +1293,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
       // Set the interior points based on the linear transformation
       for ( int k = num_fixed_pts; k < num_points; k++ ){
-        int kt = master_to_target[k];
+        int kt = source_to_target[k];
         double uS = face_mesh->pts[2*k] - sc[0];
         double vS = face_mesh->pts[2*k+1] - sc[1];
         pts[2*kt] = A[0]*uS + A[1]*vS + tc[0];
@@ -1350,8 +1301,8 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       }
 
       // Free the data
-      delete [] master_to_target;
-      delete [] target_to_master;
+      delete [] source_to_target;
+      delete [] target_to_source;
 
       // Evaluate the points
       X = new TMRPoint[ num_points ];
@@ -2759,7 +2710,7 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
   const int *face_dir;
   volume->getFaces(&num_faces, &faces, &face_dir);
 
-  // Set integers for each face to determine whether it is a master or
+  // Set integers for each face to determine whether it is a source or
   // a target face or it is connected to one of them or whether it is
   // structured.
   int *f = new int[ num_faces ];
@@ -2774,29 +2725,29 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
 
   // Loop over all the
   for ( int i = 0; i < num_faces; i++ ){
-    TMRFace *master;
-    faces[i]->getMaster(NULL, NULL, &master);
-    if (master){
+    TMRFace *source;
+    faces[i]->getSource(NULL, NULL, &source);
+    if (source){
       // The natural bottom orientation should point in to the volume,
       // otherwise its orientation must be flipped.
       bottom = faces[i];
-      bottom_dir = -bottom->getNormalDirection()*face_dir[i];
+      bottom_dir = -face_dir[i];
 
-      // Find the master face
-      top = master;
+      // Find the source face
+      top = source;
       f[i] = 1;
       for ( int j = 0; j < num_faces; j++ ){
-        if (faces[j] == master){
+        if (faces[j] == source){
           f[j] = 1;
 
           // The natural orientation for the top face should point out
           // of the volume, otherwise its orientation must be flipped.
-          top_dir = master->getNormalDirection()*face_dir[j];
+          top_dir = face_dir[j];
         }
       }
 
       // Break here. The meshing algorithm only works with one
-      // master/target face pair per volume.
+      // source/target face pair per volume.
       break;
     }
   }
@@ -2817,7 +2768,7 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
                 "TMRVolumeMesh error: \
 Through-thickness meshes must be structured\n");
         fprintf(stderr,
-                "Try setting master-target relations on edges and surfaces\n");
+                "Try setting source-target relations on edges and surfaces\n");
         mesh_fail = 1;
       }
     }
@@ -3126,19 +3077,6 @@ int TMRVolumeMesh::setNodeNums( int *num ){
     // edge loops on the bottom surface) and determine the node
     // ordering.
 
-    // The internal ordering is relative to the bottom face with its
-    // normal direction pointing in to the volume. If the bottom face
-    // is oriented with the normal facing outwards, then we have to
-    // flip the internal ordering of the boundary nodes to make them
-    // consistent with the faces.
-    int abs_bottom_dir = 0;
-    if (bottom_dir*bottom->getNormalDirection() < 0){
-      abs_bottom_dir = -1;      
-    }
-    else {
-      abs_bottom_dir = 1;
-    }
-
     // Keep track of the total number of nodes encountered around the
     // edge of the bottom face.
     int ioffset = 0;
@@ -3199,7 +3137,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
 
         // Determine whether the directions are consistent
         int abs_face_dir = 0;
-        if (face_loop_dir[ptr]*face->getNormalDirection() < 0){
+        if (face_loop_dir[ptr] < 0){
           abs_face_dir = -1;
         }
         else {
@@ -3214,7 +3152,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
             // Determine the local number for the node on the boundary
             // of the face connecting the top and bottom surfaces
             // based on the orientation of the bottom face mesh.
-            if (abs_bottom_dir < 0){
+            if (bottom_dir < 0){
               // When this is the last node in the loop, then the
               // ordering must loop back on itself.
               if (i == face_loop_edge_count[ptr]-1 &&
@@ -3410,7 +3348,7 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
     }
   }
 
-  // Update target/master relationships
+  // Update target/source relationships
   int num_volumes;
   TMRVolume **volumes;
   geo->getVolumes(&num_volumes, &volumes);
@@ -3612,7 +3550,7 @@ void TMRMesh::initMesh(){
       mesh->getNodeNums(&vars);
 
       // Set the quadrilateral connectivity
-      if (faces[i]->getNormalDirection() > 0){
+      if (faces[i]->getOrientation() > 0){
         for ( int j = 0; j < 4*nlocal; j++, q++ ){
           q[0] = vars[quad_local[j]];
         }
@@ -3782,7 +3720,7 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
           fprintf(fp, "%-41s","$       Shell element data");
           fprintf(fp, "%s\n", descript);
 
-          if (faces[i]->getNormalDirection() > 0){
+          if (faces[i]->getOrientation() > 0){
             for ( int k = 0; k < nlocal; k++, j++ ){
               int part = i+1;
               fprintf(fp, "%-8s%8d%8d%8d%8d%8d%8d%8d\n", "CQUADR", 

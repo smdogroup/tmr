@@ -76,9 +76,9 @@ class TMREdge : public TMREntity {
   void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
   void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
 
-  // Set/retrieve the master edge
-  void setMaster( TMREdge *_edge );
-  void getMaster( TMREdge **_edge );
+  // Set/retrieve the source edge
+  void setSource( TMREdge *_edge );
+  void getSource( TMREdge **_edge );
 
   // Integrate along the edge and return an array containing
   // the parametric locations to provide an even spacing
@@ -97,7 +97,7 @@ class TMREdge : public TMREntity {
 
   // The mesh for the curve - if it exists
   TMREdgeMesh *mesh;
-  TMREdge *master; // Master edge (may be NULL)
+  TMREdge *source; // Source edge (may be NULL)
 
   // Derivative step size
   static double deriv_step_size;
@@ -132,11 +132,11 @@ class TMREdgeLoop : public TMREntity {
 */
 class TMRFace : public TMREntity {
  public:
-  TMRFace( int _normal_dir=1 );
+  TMRFace( int _normal_orient=1 );
   virtual ~TMRFace();
 
   // Get the underlying normal direction
-  int getNormalDirection();
+  int getOrientation();
 
   // Get the parameter range for this surface
   virtual void getRange( double *umin, double *vmin,
@@ -157,9 +157,9 @@ class TMRFace : public TMREntity {
   void addEdgeLoop( TMREdgeLoop *loop );
   void getEdgeLoop( int k, TMREdgeLoop **loop );
 
-  // Set/retrieve the master face
-  void setMaster( TMRVolume *_volume, TMRFace *_face );
-  void getMaster( int *dir, TMRVolume **_volume, TMRFace **_face );
+  // Set/retrieve the source face
+  void setSource( TMRVolume *_volume, TMRFace *_face );
+  void getSource( int *dir, TMRVolume **_volume, TMRFace **_face );
 
   // Set/retrieve the mesh
   void setMesh( TMRFaceMesh *_mesh );
@@ -171,14 +171,14 @@ class TMRFace : public TMREntity {
  private:
   // Relative orientation of the normal direction and
   // the parametric normal direction
-  const int normal_dir;
+  const int normal_orient;
 
   // The mesh for the curve - if it exists
   TMRFaceMesh *mesh;
 
-  int master_dir; // The relative master face direction
-  TMRVolume *master_volume; // Master volume
-  TMRFace *master; // Master face (may be NULL)
+  int source_dir; // The relative source face direction
+  TMRVolume *source_volume; // Source volume
+  TMRFace *source; // Source face (may be NULL)
 
   // Store the loop information
   int num_loops, max_num_loops;

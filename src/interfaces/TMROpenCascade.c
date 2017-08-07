@@ -684,6 +684,9 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
       for ( int j = 1; j <= face_map.Extent(); j++ ){
         TopoDS_Face face = TopoDS::Face(face_map(j));
 
+        // Find the index of the face and set its direction relative
+        // to the face stored in the OCC file. If the direction is
+        // reversed, store an orientation of -1.
         dir[nvol_faces] = 1;
         int index = faces.FindIndex(face);
         if (faces(index).IsEqual(face)){
@@ -692,6 +695,10 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
         else {
           dir[nvol_faces] = -1;
         }
+
+        // Modify the face orientation relative to the natural
+        // orientation of faces that are stored in TMRFace
+        dir[nvol_faces] *= all_faces[index-1]->getOrientation();
 
         // Assign the face pointer
         vol_faces[nvol_faces] = all_faces[index-1];

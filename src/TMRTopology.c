@@ -59,7 +59,7 @@ int TMRVertex::getNodeNum( int *num ){
 TMREdge::TMREdge(){
   v1 = v2 = NULL;
   mesh = NULL;
-  master = NULL;
+  source = NULL;
 }
 
 /*
@@ -68,7 +68,7 @@ TMREdge::TMREdge(){
 TMREdge::~TMREdge(){
   if (v1){ v1->decref(); }
   if (v2){ v2->decref(); }
-  if (master){ master->decref(); }
+  if (source){ source->decref(); }
 }
 
 /*
@@ -313,21 +313,21 @@ void TMREdge::getMesh( TMREdgeMesh **_mesh ){
 }
 
 /*
-  Set the master edge
+  Set the source edge
 */
-void TMREdge::setMaster( TMREdge *edge ){
+void TMREdge::setSource( TMREdge *edge ){
   if (edge && edge != this){
     edge->incref();
-    if (master){ master->decref(); }
-    master = edge;
+    if (source){ source->decref(); }
+    source = edge;
   }
 }
 
 /*
-  Retrieve the master edge
+  Retrieve the source edge
 */
-void TMREdge::getMaster( TMREdge **edge ){
-  if (edge){ *edge = master; }
+void TMREdge::getSource( TMREdge **edge ){
+  if (edge){ *edge = source; }
 }
 
 /*
@@ -451,14 +451,14 @@ void TMREdgeLoop::getEdgeLoop( int *_nedges, TMREdge **_edges[],
 /*
   Initialize data within the TMRSurface object
 */
-TMRFace::TMRFace( int _normal_dir ):
-normal_dir(_normal_dir){
+TMRFace::TMRFace( int _normal_orient ):
+normal_orient(_normal_orient){
   max_num_loops = 0;
   num_loops = 0;
   loops = NULL;
   mesh = NULL;
-  master = NULL;
-  master_dir = 0;
+  source = NULL;
+  source_dir = 0;
 }
 
 /*
@@ -471,7 +471,7 @@ TMRFace::~TMRFace(){
     }
     delete [] loops;
   }
-  if (master){ master->decref(); }
+  if (source){ source->decref(); }
 }
 
 /*
@@ -480,15 +480,15 @@ TMRFace::~TMRFace(){
 double TMRFace::deriv_step_size = 1e-6;
 
 /*
-  Get the flag indicating the relative orientation of the
-  parametric space and the underlying surface normal.
+  Get the flag indicating the relative orientation of the parametric
+  space and the underlying surface normal.
 
-  normal_dir > 0 indicates that the parameter space and
-  the surface normal are consistent. normal_dir < 0 indicates
-  that the surface normal is flipped.
+  normal_orient > 0 indicates that the parameter space and the surface
+  normal are consistent. normal_orient < 0 indicates that the surface
+  normal is flipped.
 */
-int TMRFace::getNormalDirection(){
-  return normal_dir;
+int TMRFace::getOrientation(){
+  return normal_orient;
 }
 
 /*
@@ -625,14 +625,14 @@ void TMRFace::getMesh( TMRFaceMesh **_mesh ){
 }
 
 /*
-  Set the master face with a relative direction
+  Set the source face with a relative direction
 */
-void TMRFace::setMaster( TMRVolume *volume, TMRFace *face ){
+void TMRFace::setSource( TMRVolume *volume, TMRFace *face ){
   if (volume && face && face != this){
     int nloops = getNumEdgeLoops();
     if (nloops != face->getNumEdgeLoops()){
       fprintf(stderr, "TMRFace error: Topology not equivalent. \
-Number of loops not equal. Could not set master face\n");
+Number of loops not equal. Could not set source face\n");
       return;
     }
 
@@ -645,56 +645,50 @@ Number of loops not equal. Could not set master face\n");
       l2->getEdgeLoop(&n2, NULL, NULL);
       if (n1 != n2){
         fprintf(stderr, "TMRFace error: Topology not equivalent. \
-Number of edges in edge loop %d not equal. Could not set master face\n", i);
+Number of edges in edge loop %d not equal. Could not set source face\n", i);
         return;
       }
     }
 
-    // Check that both the face and the master are contained with the
-    // proposed master volume
-    int this_index = -1, master_index = -1;
+    // Check that both the face and the source are contained with the
+    // proposed source volume
+    int this_index = -1, source_index = -1;
     int num_faces;
     TMRFace **faces;
     const int *dir;
     volume->getFaces(&num_faces, &faces, &dir);
     
-    // Find the indices of this face and the master - if they exist
+    // Find the indices of this face and the source - if they exist
     for ( int i = 0; i < num_faces; i++ ){
-      if (faces[i] == face){ master_index = i; }
+      if (faces[i] == face){ source_index = i; }
       if (faces[i] == this){ this_index = i; }
     }
 
-    if (this_index >= 0 && master_index >= 0){
-      // Set the master face
+    if (this_index >= 0 && source_index >= 0){
+      // Set the source face
       face->incref();
       volume->incref();
-      if (master){ master->decref(); }
-      if (master_volume){ master_volume->decref(); }
-      master = face;
-      master_volume = volume;
+      if (source){ source->decref(); }
+      if (source_volume){ source_volume->decref(); }
+      source = face;
+      source_volume = volume;
 
-      // Set the relative directions on the different master faces
-      // within the volume
-
-      // Get the relative orientations of the two faces 
-      master_dir = getNormalDirection()*master->getNormalDirection();
-      
       // Multiply the relative orientations of the two faces within
       // the volume
-      master_dir *= -dir[this_index]*dir[master_index];
+      source_dir *= -dir[this_index]*dir[source_index];
     }
   }
 }
 
 /*
-  Retrieve the master edge
+  Retrieve the source edge
 */
-void TMRFace::getMaster( int *_master_dir, 
+void TMRFace::getSource( int *_source_dir, 
                          TMRVolume **volume, 
                          TMRFace **face ){
-  if (face){ *face = master; }
-  if (volume){ *volume = master_volume; }
-  if (_master_dir){ *_master_dir = master_dir; }
+  if (face){ *face = source; }
+  if (volume){ *volume = source_volume; }
+  if (_source_dir){ *_source_dir = source_dir; }
 }
 
 /*

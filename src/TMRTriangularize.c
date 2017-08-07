@@ -701,10 +701,7 @@ void TMRTriangularize::setFrontalQualityFactor( double factor ){
 /*
   Remove degenerate edges and extra nodes from the triangulation
 
-  Note that this code may adjust the degen[] array so it is not constant.
-  It sorts it so that the edge pairs are ordered from lowest to largest edge
-  and so that the edge list is sorted in increasing order acording to the
-  lowest node in each edge pair.
+  Note that this code adjusts the degen[] array so it is not constant.
 */
 void TMRTriangularize::removeDegenerateEdges( int num_degen, 
                                               int degen[] ){
