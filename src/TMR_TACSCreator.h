@@ -135,7 +135,8 @@ class TMROctTACSCreator : public TMREntity {
                              int num_bcs, const int bc_nums[] );
 
   // Create the TACSAssembler object with the given order for this forest
-  TACSAssembler *createTACS( int order, TMROctForest *forest );
+  TACSAssembler *createTACS( int order, TMROctForest *forest,
+                             TacsScalar _scale=1.0);
 
  private:
   // Set the boundary conditions
@@ -144,7 +145,8 @@ class TMROctTACSCreator : public TMREntity {
 
   // Set the node locations
   void setNodeLocations( TMROctForest *forest, 
-                         TACSAssembler *tacs );
+                         TACSAssembler *tacs,
+                         TacsScalar _scale=1.0);
 
   TMRBoundaryConditions *bcs;
 };
