@@ -327,8 +327,57 @@ cdef class CurveLofter:
 
 cdef class Model:
     cdef TMRModel *ptr
-    def __cinit__(self):
+    def __cinit__(self, verts=None, edges=None, faces=None, vols=None):
+        # Set the pointer to NULL
         self.ptr = NULL
+
+        cdef int nverts = 0
+        cdef TMRVertex **v = NULL
+        if verts is not None:
+            nverts = len(verts)
+            v = <TMRVertex**>malloc(nverts*sizeof(TMRVertex*))
+            for i in xrange(len(verts)):
+                v[i] = (<Vertex>verts[i]).ptr
+
+        cdef int nedges = 0
+        cdef TMREdge **e = NULL
+        if edges is not None:
+            nedges = len(edges)
+            e = <TMREdge**>malloc(nedges*sizeof(TMREdge*))
+            for i in xrange(len(edges)):
+                e[i] = (<Edge>edges[i]).ptr
+
+        cdef int nfaces = 0
+        cdef TMRFace **f = NULL
+        if faces is not None:
+            nfaces = len(faces)
+            f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
+            for i in xrange(len(faces)):
+                f[i] = (<Face>faces[i]).ptr
+
+        cdef int nvols = 0
+        cdef TMRVolume **b = NULL
+        if vols is not None:
+            nvols = len(vols)
+            b = <TMRVolume**>malloc(nvols*sizeof(TMRVolume*))
+            for i in xrange(len(vols)):
+                b[i] = (<Volume>vols[i]).ptr
+
+        if v and e and f and b:
+            self.ptr = new TMRModel(nverts, v, nedges, e, nfaces, f, nvols, b)
+        elif v and e and f:
+            self.ptr = new TMRModel(nverts, v, nedges, e, nfaces, f, 0, NULL)
+        elif v and e and f:
+            self.ptr = new TMRModel(nverts, v, nedges, e, 0, NULL, 0, NULL)
+
+        if self.ptr:
+            self.ptr.incref()
+
+        if v: free(v)
+        if e: free(e)
+        if f: free(f)
+        if b: free(b)
+        return
   
     def __dealloc__(self):
         if self.ptr:
@@ -674,7 +723,6 @@ cdef class BoundaryConditions:
             self.ptr.addBoundaryCondition(attr, num_bc,
                                           <int*>bc_nums.data,
                                           NULL)
-                                       
         else:
             self.ptr.addBoundaryCondition(attr, num_bc,
                                           <int*>bc_nums.data,
