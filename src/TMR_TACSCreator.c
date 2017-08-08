@@ -382,7 +382,8 @@ void TMROctTACSCreator::createConnectivity( int order,
   Create the TACSAssembler object
 */
 TACSAssembler* TMROctTACSCreator::createTACS( int order, 
-                                              TMROctForest *forest ){
+                                              TMROctForest *forest,
+                                              TacsScalar _scale){
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -454,7 +455,7 @@ TACSAssembler* TMROctTACSCreator::createTACS( int order,
   }
 
   // Set the node locations
-  setNodeLocations(forest, tacs);
+  setNodeLocations(forest, tacs, _scale);
 
   return tacs;
 }
@@ -515,7 +516,9 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
   object
 */
 void TMROctTACSCreator::setNodeLocations( TMROctForest *forest, 
-                                          TACSAssembler *tacs ){
+                                          TACSAssembler *tacs,
+                                          TacsScalar _scale){
+  TacsScalar scale = _scale;
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -550,15 +553,15 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
     if (array[i].tag >= range[mpi_rank] &&
         array[i].tag < range[mpi_rank+1]){
       int loc = array[i].tag - range[mpi_rank];
-      Xn[3*loc] = Xp[i].x;
-      Xn[3*loc+1] = Xp[i].y;
-      Xn[3*loc+2] = Xp[i].z;
+      Xn[3*loc] = Xp[i].x*scale;
+      Xn[3*loc+1] = Xp[i].y*scale;
+      Xn[3*loc+2] = Xp[i].z*scale;
 
       for ( int k = 1; k < array[i].level; k++ ){
         loc++;
-        Xn[3*loc] = Xp[i].x;
-        Xn[3*loc+1] = Xp[i].y;
-        Xn[3*loc+2] = Xp[i].z;
+        Xn[3*loc] = Xp[i].x*scale;
+        Xn[3*loc+1] = Xp[i].y*scale;
+        Xn[3*loc+2] = Xp[i].z*scale;
       }
     }
   }
