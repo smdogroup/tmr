@@ -18,28 +18,28 @@ filecolor=black, urlcolor=blue]{hyperref}
 
 \section{Introduction}
 
-TMR is a tool for creating meshes for 2D, mapped 2D, and 3D geometries which can then be refined using a forest of quadtrees/octrees.
+TMR is a tool for creating meshes for 2D, mapped 2D, and 3D geometries which can then be refined using a forest of quadtrees in 2D or octrees in 3D.
 The quadrilateral or hexahedral meshes created by TMR can be either second- or third-order.
-TMR is well-suited to create a hierarchical series of meshes for multigrid methods.
-The refinement algorithms within TMR can be used with either on solution or design-based refinement or adjoint-based refinement.
-The geometry interface within TMR is designed to be an abstract interface to a general CAD package that provides both geometry and topology information.
+TMR is designed to facilitate the creation of a hierarchical series of meshes for multigrid methods.
+The refinement algorithms within TMR can be used with solution or design-based refinement or adjoint-based refinement techniques.
+The interface to the underlying geometry kernel within TMR is an abstract layer that provides both geometry and topology information available from CAD.
 This abstract interface has been implemented using OpenCascade so that STEP files can be loaded.
 
 The meshing capabilities in TMR are build around two steps:
 %
 \begin{enumerate}
-  \item The creation of moderate size quadrilateral and hexahedral meshes in serial using a combination of the blossom-quad algorithm for 2D meshes and sweep methods for 3D meshes.
-  \item Adaptive quadtreee and octree meshing and partitioning in parallel based on the input connectivity from the moderate size 2D and 3D meshes.
+\item The creation of moderate size quadrilateral and hexahedral meshes in serial using a combination of the blossom-quad algorithm for 2D meshes and swept-mesh methods for 3D meshes.
+\item Adaptive quadtreee and octree meshing and partitioning in parallel based on the input connectivity from the moderate size 2D and 3D meshes.
 \end{enumerate}
 %
 These capabilities can be used to analyze and optimize large-scale problems efficiently on high-performance computing resources. 
 
-This document describes the essential internal workings of TMR and its interface.
-It is divided between a high-level description of the algorithms and a more-detailed description of the interface in TMR that are
+This document describes the algorithms and methods used in TMR and its interface.
+It is divided between a high-level description of the algorithms and a detailed description of the interface in TMR.
 
 \section{Algorithms}
 
-The following sections describe at a high-level the algorithms implemented with TMR.
+The following sections describe the algorithms that are implemented with TMR at a high-level.
 More detailed descriptions can be found within the comments in the code.
 
 \subsection{Serial meshing capabilities}
@@ -50,9 +50,10 @@ The maximum mesh size is approximately 1/2 the minimum geometric feature size or
 This requirement arises because there is a minimum of 2 elements per edge or 4 elements around a hole.
 Sharp corners with small acute angles limit local mesh quality and lead to the introduction of local kite elements. 
 
-Blossom-quad first builds a triangular surface mesh and then converts the mesh to a quadrilateral mesh through an optimal weighted matching using the blossom algorithm.
-TMR uses a generalization of Rebay's algorithm for efficient unstructured triangular mesh generation~\citep{Rebay:1993:unstructured-triangle}. This algorithm generates a triangular surface mesh using a frontal algorithm and keeps a Delaunay triangularization based on the Bowyer--Watson algorithm~\citep{Shewchuk:2012:Delaunay-notes}.
-Once the triangular mesh is generated, it is smoothed using a Laplacian smoothing technique.
+Blossom-quad first builds a triangular surface mesh which is then converted to a quadrilateral mesh through an optimal weighted matching using the blossom algorithm.
+TMR uses a generalization of Rebay's algorithm for efficient unstructured triangular mesh generation~\citep{Rebay:1993:unstructured-triangle}. 
+This algorithm generates a triangular surface mesh using a frontal method that updates a Delaunay triangularization based on the Bowyer--Watson algorithm~\citep{Shewchuk:2012:Delaunay-notes}.
+Once the triangular mesh is generated, it is smoothed using a Laplacian technique.
 The recombination of the triangular mesh into a quad mesh is then performed using the weighted matching algorithm. 
 The weights between adjacent triangles are computed based on a combined quad quality, which is a function of the maximum interior angle in the quadrilateral.
 The weights are a nonlinear function of this quality metric, where angles close to $180^{\circ}$ are most heavily penalized.
@@ -60,19 +61,19 @@ Adjacent triangular elements along the boundary are also linked with imaginary q
 
 The matching algorithm selects which quads to combine in order to create the mesh with the best overall quality based on the weights. 
 The quad mesh is then post-processed to remove poor quality quadrilateral elements with specific topologies.
-Finally, the resulting quad mesh is smoothed using a quad-specific algorithm by~\citet{Giuliani:1982:quad-smoothing}. The smoothing algorithm minimizes a combination of the squeeze and distortion in a mesh. 
+Finally, the resulting quad mesh is smoothed using a quad-specific algorithm by~\citet{Giuliani:1982:quad-smoothing}. 
+The smoothing algorithm minimizes a combination of the squeeze and distortion in the mesh. 
 
 \subsection{Mapped Quadtree and octree meshing}
 
 Quadtree and octree meshing techniques provide an intermediate step between fully structured meshes and unstructured meshes. 
 There are several ways that an quadtree or octree can be stored.
 The most natural way is to store the data in a tree structure where the leaves of the tree represent elements in the mesh.
-However, this type of data structure method requires extra overhead and memory compared to scan through the depth of the tree.
+However, this type of data structure method requires extra overhead and memory needed to traverse through the depth of the tree.
 
 In TMR, the leaves of the quadtree or octree are stored in an array data structure directly, without referencing the nodes within the tree hierarchy. 
-This approach is based on the work of~\citet{BursteddeWilcoxGhattas11} and 
-\citet{IsaacBursteddeWilcoxEtAl15}.
-Within this data structure the leaves represent either elements or nodes within the mesh.
+This approach is based on the work of~\citet{BursteddeWilcoxGhattas11} and \citet{IsaacBursteddeWilcoxEtAl15}.
+Within this data structure, the leaves represent either elements or nodes within the mesh.
 To mesh realistic geometries, the method employs a semi-structured approach in which a global unstructured quadrilateral or hexahedral super-mesh defines the connections between quadtree or octrees.
 Each quadtree or octree is then parametrically mapped to the geometry using an abstract geometry layer described below.
 
@@ -82,18 +83,16 @@ This length can be used to determine the local coordinates of neighboring elemen
 The tree can be traversed by creating parent or child quadrants. 
 
 To enable local changes in the mesh refinement, adjacent quadrants may have different levels, producing elements with different side-lengths.
-Dependent or hanging nodes must be added when the mesh refinement level changes between adjacent
-quadrants. 
+Dependent or hanging nodes must be added when the mesh refinement level changes between adjacent quadrants. 
 To ensure finite-element compatibility between adjacent elements, dependent nodes must be constrained along an edge.  
 To ensure compatibility, TMR imposes that the relative difference in levels between two adjacent quadrants cannot exceed one. 
 This is referred to as 2:1 balancing. 
-After a refinement step, we balance the full global mesh so that both intra- and inter-quadtree quadrants are 2:1 balanced. 
+After a refinement step, the global mesh must be balanced so that both intra- and inter-quadtree quadrants are 2:1 balanced. 
 Inter-quadtree operations are performed by mapping the quadrants from their locally-aligned coordinate system to the coordinate system of an adjacent quadtree along common shared edges or corners.
 
-In addition to the element mesh, the semi-structure method must also create and uniquely order the nodes. 
+In addition to the element mesh, the semi-structured method must also create and uniquely order the nodes. 
 A local Morton encoding on each tree to facilitate these operations. 
-The order of the quadrilaterals within the global quadtree mesh is based on the
-unstructured global mesh. 
+The order of the quadrilaterals within the global quadtree mesh is based on the unstructured global mesh. 
 The ownership of shared corners, edges, and faces is determined in advance to avoid duplicating node numbers. 
 During the node ordering process, hanging nodes are labeled and their corresponding independent neighbors are determined so that they can be eliminated using compatibility constraints during finite-element analysis.
 
@@ -101,11 +100,11 @@ During the node ordering process, hanging nodes are labeled and their correspond
 
 The interface to CAD geometry is provided through an intermediate interface in TMR. 
 An implementation of this interface is provided for OpenCascade which enables models to be loaded directly from OpenCascade or intermediate tools. 
-For instance, OpenCascade can load geometry from other CAD tools that has been exported in a STEP format. 
+For instance, OpenCascade can load geometry that has been exported in a STEP format. 
 
 TMR has internal definitions for both geometry and topological entities.
-The geometric entities include a node, curve, and surface objects, while the topological entities include a vertex, edge, edge loop, face, and volume objects.
-The topological entities describe the logical relationships between their underlying physical geometric representations.
+The geometric entities include nodes, curves, and surfaces, while the topological entities include vertex, edge, edge loop, face, and volume objects.
+The topological entities describe the logical relationships between their underlying geometric representations.
 Each vertex is associated with a node, each edge with a curve, and each face with surface.
 Each edge contains a first and second vertex denoting the start and end point of the underlying curve.
 An edge loop contains a series of edges that are connected together to form a closed loop on a surface.
@@ -122,9 +121,8 @@ Faces in TMR are defined in their natural orientation.
 This means that the parametric areas computed are positive such that the parametric system is right-handed.
 The orientation of an edge loop on a face is always defined such that the material lies to the left of an edge within an edge loop when walking the loop in its positive orientation (taking into account the relative orientation in the edge loop object). 
 The natural orientation may vary from the orientation used within the CAD package and so TMR stores a flag to indicate whether the orientation of the surface is flipped.
-
-Finally, the surfaces that create a volume have an orientation, defined with an outward normal direction.
-The volume contains a list of surfaces and their orientations relative to the natural surface orientation stored in TMR that indicates whether the surface is outward facing.
+The surfaces that create a volume have an orientation, defined with an outward normal direction.
+The volume object contains a list of surfaces and their orientations relative to the natural surface orientation stored in TMR that indicates whether the surface is outward facing.
 
 The meshes within TMR are generated and stored on a component-level basis.
 Meshing proceeds through the hierarchy of topological entities from vertices, edges, faces to volumes.
@@ -139,9 +137,9 @@ The Python-level interface wraps the most important classes and functions, but d
 
 There are three primary types of classes within TMR:
 \begin{enumerate}
-\item Geometry/topology-level classes which interface with the underlying geometry kernel 
-\item Serial mesh-level classes which are used to create moderate-size quadrilateral and hexahedral meshes based on the input geometry
-\item Quadtree and Octree-level classes which are used to create, modify, refine and extract information from the quad/octrees
+\item Geometry and topology-level classes which interface with the underlying geometry kernell
+\item Serial mesh-level classes which are used to create moderate-size quadrilateral and hexahedral meshes based on the input geometry; and
+\item Quadtree and Octree-level classes which are used to create, modify, refine and extract information from the quad/octrees.
 \end{enumerate}
 %
 The methods and data stored in each of these types of classes will be described below.
@@ -149,41 +147,39 @@ The methods and data stored in each of these types of classes will be described 
 Almost all classes in TMR inherit from \texttt{TMREntity}. 
 Those that do not are low-level data structures that are used within higher-level operations.
 The \texttt{TMREntity} base class defines a reference counting scheme for all objects allocated on the heap. 
-Once an object is allocated, you must call \texttt{obj->incref()} and if it goes out of scope you should call \texttt{obj->decref()}.
-These calls are handled automatically from within the Python interface.
+Once an object is allocated, you must call \texttt{obj->incref()} and if it goes out of scope you must call \texttt{obj->decref()}.
+These calls are handled automatically by the Python interface.
 
 \subsection{Geometry-level classes}
 
 The primary geometry-level classes used within TMR consist of entity-level classes and container-level classes. The abstract interface classes to the underlying geometry consist of:
 \begin{itemize}
-\item \texttt{TMRVertex}: Evaluate a node location, contains a node number and a way to evaluate the node locations
-\item \texttt{TMREdge}: Evaluate a node location on a curve with a single parametric argument $t$. Provides access to the first and second vertices that begin/end the edge. Given parametric location $t$ and a face, returns $(u,v)$ location on the face.
-\item \texttt{TMRFace}: Evaluate a node location given a parametric location $(u,v)$. Access to edge loops that bound the face.
+\item \texttt{TMRVertex}: Evaluate a node location
+\item \texttt{TMREdge}: Evaluate a node location on a curve with a single parametric argument $t$. Provides access to the first and second vertices that begin/end the edge. Given a parametric location $t$ and a face, return the $(u,v)$ location on the face.
+\item \texttt{TMRFace}: Evaluate a node location given a parametric location $(u,v)$. Access the edge loops that bound the face.
 \end{itemize}
 
-The other set of objects define collections of objects
+The other objects define collections of geometric entities:
 %
 \begin{itemize}
-\item \texttt{TMREdgeLoop}: Contains an oriented set of edges that enclose a surface. Provides edge list and their relative orientations in the loop.
+\item \texttt{TMREdgeLoop}: Contains an oriented set of edges that enclose a surface. Provides the edge list and their relative orientations in the loop.
 \item \texttt{TMRVolume}: Contains an oriented collection of surfaces that enclose a volume. Provides a list of surfaces and their relative orientations in the volume.
-\item \texttt{TMRModel}: Contains an ordered collection of vertices, edges, faces and volumes that define a model geometry.
+\item \texttt{TMRModel}: Contains an ordered collection of vertices, edges, faces, and volumes that define a model geometry.
 \end{itemize}
 
-The \texttt{TMRModel} class is often created from a call to \texttt{TMR\_LoadModelFromSTEPFile( const char* )}. 
+The \texttt{TMRModel} class is often created by a call to \texttt{TMR\_LoadModelFromSTEPFile( const char* )}. 
 This function loads the model data from the STEP file and creates the OpenCascade versions of the geometric entities and containers that define the model.
 This call attempts to remove any extraneous geometry defined in the STEP file but not contained within the model.
-This call creates and initializes the internal topology of the model, which can then be used in subsequent meshing operations.
+This function creates and initializes the internal topology of the model, which can then be used in subsequent meshing operations.
 
-A direct connection between the geometry and octree/quadtree levels is provided through the \texttt{TMRTopology} class that defines the topology for mapped-quadrilateral and hexahedral geometries. 
+A direct connection between the geometry and octree or quadtree levels is provided through the \texttt{TMRTopology} class that defines the topology for mapped-quadrilateral and hexahedral geometries. 
 This class can be created directly, but it is most common to create this using the mesh-level classes described below.
 
 The class \texttt{TMRPoint}, which does not inherit from \texttt{TMREntity} contains the $x$, $y$, $z$ location of a point.
 
 \subsection{Mesh generation-level classes}
 
-\texttt{TMRMesh} provides the primary interface to the meshing functionality in TMR.
-It is used to create quadrilateral and hexahedral meshes within TMR.
-The mesh operations are serial, but create a duplicate mesh on all processors.
+\texttt{TMRMesh} provides the primary interface to the meshing functionality in TMR and is used to create quadrilateral and hexahedral meshes.
 The actual meshing operations are performed on the root processor with rank 0, but all connectivity and location information is broadcast to all processors.
 The primary functions in \texttt{TMRMesh} are:
 \begin{itemize}
@@ -217,16 +213,16 @@ These meshes are stored in the following classes
 \end{itemize}
 
 TMR only supports swept volume mesh generation.
-This requires the specification of additional information to the model to indicate what surfaces should be set and what direction should be swept.
-This information is provided by indicating source and target geometry entities by setting the source of a target.
-When a source/target pair are set, the mesh connectivity is copied from the source to the target. 
+This requires the specification of additional information to indicate what surfaces should be linked and what direction should be swept.
+This information is provided by indicating source and target geometry entities.
+When a source/target pair is set, the mesh connectivity is copied from the source to the target. 
 A swept volume can only be created if:
 \begin{enumerate}
-\item The \texttt{TMRVolume} object contains a source/target \texttt{TMRFace} object pair that share the same number of edge loops and edges in those shared loops with the same number of nodes, and
-\item All other \texttt{TMRFace} objects are structured with the same number of nodes along the swept direction
+\item The \texttt{TMRVolume} object contains a source/target \texttt{TMRFace} object pair that share the same number of edge loops and each source/target edge pair has the same number of nodes; and
+\item All other \texttt{TMRFace} objects are structured with the same number of nodes along the swept direction.
 \end{enumerate}
 %
-To ensure these conditions apply, it is often necessary to set source/target pairs for faces and edges to ensure that the mesh is properly copied.
+To ensure these conditions apply, it is often necessary to set source/target pairs for faces and edges.
 
 The \texttt{TMREdgeMesh} object is created by first computing the number of nodes along its length, and then globally ordering the nodes. The number of nodes is determined based on the following criteria:
 \begin{itemize}
@@ -235,12 +231,12 @@ The \texttt{TMREdgeMesh} object is created by first computing the number of node
 \item If the edge is a target edge, the number of nodes is taken from the source edge.
 \item Otherwise, the number of nodes is selected as an odd number that most closely matches the spacing requested along the edge.
 \end{itemize}
-Note that an odd number of nodes are required so that an even number of elements are created along the edge, which is needed to ensure the proper functioning of the blossom-quad algorithm.
+Note that an odd number of nodes are required so that an even number of elements are created along the edge which is needed to ensure the proper functioning of the blossom-quad algorithm.
 
 \subsection{Quad/octree-level classes}
 
-The quadtree/octree level classes are used to create, refine and manipulate the semi-structured mesh in parallel.
-The quadrants/octants are distributed across processors and all operations are performed in parallel.
+The quadtree and octree level classes are used to create, refine and manipulate the semi-structured mesh in parallel.
+The quadrants or octants are stored in a distributed manner across processors.
 The following section describes the functions for the forest of octree operations.
 Analogous functionality is defined for the forest of quadtree object as well.
 The first step in creating a \texttt{TMROctForest} object is typically creating a \texttt{TMRTopology} object which defines a model with mapped 2D and 3D geometry that consists entirely of non-degenerate quadrilateral surfaces with four non-degenerate edges and hexahedral volumes with 6 enclosing surfaces.
@@ -272,14 +268,13 @@ Once the topology object has been created, the \texttt{TMROctForest} object can 
 
 The typical usage for a \texttt{TMROctForest} object would consist of the following:
 \begin{enumerate}
-\item Create the object and call \texttt{setTopology()} to set the mesh
+\item Create the object and call \texttt{setTopology()} to set the super-mesh
 \item Create an initial element mesh by calling \texttt{createTrees()}
-\item Create a refined mesh by duplicate and refining the object by calling \texttt{duplicate()} followed by \texttt{refine()}. Note that the length of the integer array passed to \texttt{refine} must be equal to the number of elements in the original mesh.
+\item Create a refined mesh by duplicating and refining the octree forest by calling \texttt{duplicate()} followed by \texttt{refine()}. Note that the length of the integer array passed to \texttt{refine} must be equal to the number of elements in the original mesh.
 \item Balance the mesh and create nodes by calling \texttt{balance()} then \texttt{createNodes()}
 \item Create a sequence of coarser lower-order meshes by repeated calling \texttt{duplicate()} and \texttt{coarsen()}.
 \item Create interpolants between meshes for multigrid methods by calling \texttt{createInterpolation()}
 \end{enumerate}
-
 
 \subsection{Python-level}
 
@@ -322,7 +317,7 @@ mesh.mesh(htarget, opts=opts)
 
 \subsection{Mesh refinement algorithms}
 
-There are two mesh refinement strategies that are implemented in TMR: one based on the strain energy norm, while the second is an adjoint-based refinement technique.
+There are two mesh refinement strategies that are implemented in TMR: the first is based on the strain energy norm, while the second is an adjoint-based refinement technique.
 Currently, both strategies are implemented only for 2D and mapped 2D meshes.
 The strain energy based refinement method is designed to reduce the solution error in the natural strain energy norm.
 This call takes the form:
@@ -337,7 +332,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
 %
 The forest is automatically refined based on the requested target error and the solution set in TACS.
 
-The adjoint-based refinement method requires a \texttt{TACSAssembler} object for both the current level of refinement and a uniformly refined version of the object. 
+The adjoint-based refinement method requires a \texttt{TACSAssembler} object for both the current level of refinement and a uniformly refined version of the model. 
 The adjoint-based mesh refinement call takes the form
 \begin{verbatim}
 TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
