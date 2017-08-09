@@ -457,9 +457,51 @@ cdef class MeshOptions:
 
     property write_mesh_quality_histogram:
         def __get__(self):
-            return self.write_mesh_quality_histogram
+            return self.ptr.write_mesh_quality_histogram
         def __set__(self, value):
             self.ptr.write_mesh_quality_histogram = value
+
+    property write_init_domain_triangle:
+        def __get__(self):
+            return self.ptr.write_init_domain_triangle
+        def __set__(self, value):
+            self.ptr.write_init_domain_triangle = value
+
+    property write_pre_smooth_triangle:
+        def __get__(self):
+            return self.ptr.write_pre_smooth_triangle
+        def __set__(self, value):
+            self.ptr.write_pre_smooth_triangle = value
+
+    property write_post_smooth_triangle:
+        def __get__(self):
+            return self.ptr.write_post_smooth_triangle
+        def __set__(self, value):
+            self.ptr.write_post_smooth_triangle = value
+
+    property write_dual_recombine:
+        def __get__(self):
+            return self.ptr.write_dual_recombine
+        def __set__(self, value):
+            self.ptr.write_dual_recombine = value
+
+    property write_pre_smooth_quad:
+        def __get__(self):
+            return self.ptr.write_pre_smooth_quad
+        def __set__(self, value):
+            self.ptr.write_pre_smooth_quad = value
+
+    property write_post_smooth_quad:
+        def __get__(self):
+            return self.ptr.write_post_smooth_quad
+        def __set__(self, value):
+            self.ptr.write_post_smooth_quad = value
+
+    property write_quad_dual:
+        def __get__(self):
+            return self.ptr.write_quad_dual
+        def __set__(self, value):
+            self.ptr.write_quad_dual = value
 
    # @property for cython 0.26 and above
    # def num_smoothing_steps(self):

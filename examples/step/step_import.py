@@ -15,7 +15,7 @@ args = p.parse_args()
 # Get the value of the filename
 filename = args.filename
 if not os.path.isfile(filename):
-    raise ValueError('%s does not exist'%(filename))
+    raise ValueError('File %s does not exist'%(filename))
 
 # Set the value of the target length scale in the mesh
 htarget = args.htarget
@@ -34,7 +34,7 @@ mesh = TMR.Mesh(comm, geo_new)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
-opts.frontal_quality_factor = 1.0
+opts.frontal_quality_factor = 1.25
 opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 
@@ -42,4 +42,4 @@ opts.write_mesh_quality_histogram = 1
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToBDF('surface-mesh.bdf')
+mesh.writeToVTK('surface-mesh.vtk')

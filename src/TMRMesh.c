@@ -1360,7 +1360,8 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       // edges within the volume
       int *target_to_source = new int[ num_fixed_pts ];
 
-      // Loop over the source edge 
+
+
 
 
       // Create the face mesh
@@ -2012,7 +2013,7 @@ double TMRFaceMesh::computeTriQuality( const int *tri,
 /*
   Recombine the triangulation into a quadrilateral mesh
 */
-void TMRFaceMesh::recombine( int ntris, const int tris[],
+void TMRFaceMesh::recombine( int ntris, int tris[],
                              const int tri_neighbors[],
                              const int node_to_tri_ptr[],
                              const int node_to_tris[],
@@ -2179,6 +2180,8 @@ Quad %d from triangles %d and %d failed\n",
   // Set the number of new points
   num_new_points = num_points;
 
+  std::map<int, int> new_point_nums;
+
   // Add the triangles from edges along the boundary. There should
   // only be a handful of these guys...
   for ( int i = 0; i < num_match; i++ ){
@@ -2209,7 +2212,7 @@ Quad %d from triangles %d and %d failed\n",
       
       // Go through all previous quadrilaterals and adjust the
       // ordering to reflect the duplicated node location
-      for ( int k = 0; k < 4*num_quads_from_tris; k++ ){
+      for ( int k = 0; k < 4*num_new_quads; k++ ){
         if (new_quads[k] == boundary_pt){
           new_quads[k] = num_new_points;
         }
@@ -2217,19 +2220,38 @@ Quad %d from triangles %d and %d failed\n",
 
       // Add the first triangle t1 - this triangle is gauranteed to
       // come first when circling the boundary in the CCW direction.
-      new_quads[4*num_new_quads] = tris[3*t1+((j1+1) % 3)];
-      new_quads[4*num_new_quads+1] = tris[3*t1+((j1+2) % 3)];
+      int n1 = tris[3*t1+((j1+1) % 3)];
+      int n2 = tris[3*t1+((j1+2) % 3)];
+      if (new_point_nums.count(n1)){
+        n1 = new_point_nums[n1];
+      }
+      if (new_point_nums.count(n2)){
+        n2 = new_point_nums[n2];
+      }
+      new_quads[4*num_new_quads] = n1;
+      new_quads[4*num_new_quads+1] = n2;
       new_quads[4*num_new_quads+2] = boundary_pt;
       new_quads[4*num_new_quads+3] = num_new_points;
       num_new_quads++;
       
       // Add the connectivity from the second triangle t2. This
       // triangle will always come second when circling the boundary.
-      new_quads[4*num_new_quads] = tris[3*t2+((j2+1) % 3)];
-      new_quads[4*num_new_quads+1] = tris[3*t2+((j2+2) % 3)];
+      n1 = tris[3*t2+((j2+1) % 3)];
+      n2 = tris[3*t2+((j2+2) % 3)];
+      if (new_point_nums.count(n1)){
+        n1 = new_point_nums[n1];
+      }
+      if (new_point_nums.count(n2)){
+        n2 = new_point_nums[n2];
+      }
+      new_quads[4*num_new_quads] = n1;
+      new_quads[4*num_new_quads+1] = n2;
       new_quads[4*num_new_quads+2] = num_new_points;
       new_quads[4*num_new_quads+3] = boundary_pt;
       num_new_quads++;
+
+      // Add the new boundary points to the map
+      new_point_nums[boundary_pt] = num_new_points;
 
       // Compute the new parameter location by taking the average of
       // the centroid locations for each triangle
@@ -2256,6 +2278,8 @@ Quad %d from triangles %d and %d failed\n",
       }
       face->evalPoint(new_pts[2*num_new_points],
                       new_pts[2*num_new_points+1], &new_X[num_new_points]);
+
+      // Increment the number of new points
       num_new_points++;
     }
   }

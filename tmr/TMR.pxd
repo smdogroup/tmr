@@ -149,6 +149,15 @@ cdef extern from "TMRMesh.h":
         int num_smoothing_steps
         double frontal_quality_factor
 
+        # Write intermediate surface meshes to file
+        int write_init_domain_triangle
+        int write_pre_smooth_triangle
+        int write_post_smooth_triangle
+        int write_dual_recombine
+        int write_pre_smooth_quad
+        int write_post_smooth_quad
+        int write_quad_dual
+
 cdef extern from "TMRQuadrant.h":
     cdef cppclass TMRQuadrant:
         int childId()
