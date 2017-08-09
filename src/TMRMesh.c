@@ -7,6 +7,7 @@
 #include "tmrlapack.h"
 #include <math.h>
 #include <stdio.h>
+#include <map>
 
 /*
   The triangle nodes and edges are ordered locally as follows. Note
@@ -1094,7 +1095,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     }
     num_degen = 0;
     
-    for ( int k = 0, kt = 0; k < nloops; k++ ){
+    for ( int k = 0; k < nloops; k++ ){
       // Set the offset to the initial point/segment on this loop
       init_loop_pt = pt;
       
@@ -1106,7 +1107,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       const int *dir;
       loop->getEdgeLoop(&nedges, &edges, &dir);
       
-      for ( int i = 0; i < nedges; i++, kt++ ){
+      for ( int i = 0; i < nedges; i++ ){
         // Retrieve the underlying curve mesh
         TMREdge *edge = edges[i];
         TMREdgeMesh *mesh = NULL;
@@ -1203,12 +1204,163 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     num_fixed_pts = total_num_pts - num_degen;
 
     if (source){
-      // First determine the relative mapping from the fixed-point ordering
+      // Create the source map of edges and keep track of their local
+      // directions relative to the source surface
+      std::map<TMREdge*, int> source_edges;
+      for ( int k = 0; k < source->getNumEdgeLoops(); k++ ){
+        TMREdgeLoop *loop;
+        source->getEdgeLoop(k, &loop);
+
+        // Get the number of edges/edges from the source loop
+        int nedges;
+        TMREdge **edges;
+        const int *dir;
+        loop->getEdgeLoop(&nedges, &edges, &dir);
+        for ( int j = 0; j < nedges; j++ ){
+          source_edges[edges[j]] = dir[j];
+        }
+      }
+
+      // Create the target map of edges and keep track of their local
+      // directions relative to the target surface
+      std::map<TMREdge*, int> target_edges;
+      for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+        TMREdgeLoop *loop;
+        face->getEdgeLoop(k, &loop);
+
+        // Get the number of edges/edges from the source loop
+        int nedges;
+        TMREdge **edges;
+        const int *dir;
+        loop->getEdgeLoop(&nedges, &edges, &dir);
+        for ( int j = 0; j < nedges; j++ ){
+          target_edges[edges[j]] = dir[j];
+        }
+      }
+
+      // Keep track of the source to target edge and target to 
+      // source edge mappings as well as their relative orientations
+      std::map<TMREdge*, int> target_edge_dir; 
+      std::map<TMREdge*, TMREdge*> source_to_target_edge;
+      std::map<TMREdge*, TMREdge*> target_to_source_edge;
+
+      // Loop over the faces that are within the source volume
+      int num_faces;
+      TMRFace **faces;
+      source_volume->getFaces(&num_faces, &faces, NULL);
+
+      for ( int i = 0; i < num_faces; i++ ){
+        // Check that this is not a target or source face
+        if (faces[i] != source && faces[i] != face){
+          // Find the source and target edge shared by the 
+          TMREdge *sedge = NULL, *tedge = NULL;
+          int sdir = 0, tdir = 0;
+          for ( int k = 0; k < faces[i]->getNumEdgeLoops(); k++ ){
+            sedge = tedge = NULL;
+            sdir = tdir = 0;
+
+            // Get the edge loop
+            TMREdgeLoop *loop;
+            face->getEdgeLoop(k, &loop);
+
+            // Get the number of edges/edges from the source loop
+            int nedges;
+            TMREdge **edges;
+            const int *dir;
+            loop->getEdgeLoop(&nedges, &edges, &dir);
+
+            // Determine which edge is shared
+            for ( int j = 0; j < nedges; j++ ){
+              if (target_edges.count(edges[j]) > 0){
+                tedge = edges[j];
+                tdir = dir[j];
+              }
+              if (source_edges.count(edges[j]) > 0){
+                sedge = edges[j];
+                sdir = dir[j];
+              }
+            }
+
+            if (sedge && tedge){
+              break;
+            }
+          }
+
+          // Compute the relative source-to-target directions
+          int tmp = source_edges[sedge]*target_edges[tedge];
+          target_edge_dir[tedge] = -sdir*tdir*tmp;
+
+          // Source to target and target to source edges
+          source_to_target_edge[sedge] = tedge;
+          target_to_source_edge[tedge] = sedge;
+        }
+      }
+
+      // Now, count up the number of nodes that the target index
+      // must be offset
+      for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+        TMREdgeLoop *loop;
+        face->getEdgeLoop(k, &loop);
+
+        // Get the edges within this loop
+        int nedges;
+        TMREdge **edges;
+        const int *dir;
+        loop->getEdgeLoop(&nedges, &edges, &dir);
+      
+        for ( int i = 0; i < nedges; i++ ){
+          // Retrieve the underlying curve mesh
+          TMREdge *edge = edges[i];
+          TMREdgeMesh *mesh = NULL;
+          edge->getMesh(&mesh);
+        
+          // Get the mesh points corresponding to this curve
+          int npts;
+          const double *tpts;
+          mesh->getMeshPoints(&npts, &tpts, NULL);
+
+        }
+      }
+
+      // March through the sources loops
+      int *source_to_target = new int[ num_fixed_pts ];
+
+      for ( int k = 0; k < source->getNumEdgeLoops(); k++ ){
+        TMREdgeLoop *loop;
+        source->getEdgeLoop(k, &loop);
+
+        // Get the edges within this loop
+        int nedges;
+        TMREdge **edges;
+        const int *dir;
+        loop->getEdgeLoop(&nedges, &edges, &dir);
+      
+        for ( int i = 0; i < nedges; i++ ){
+          // Retrieve the underlying mesh
+          TMREdge *edge = edges[i];
+          TMREdge *tedge = source_to_target_edge[edge];
+
+          // Get the offset for the target edge
+          // int offset = target_edges[tedge];
+
+          // Retrieve the source mesh
+          TMREdgeMesh *mesh = NULL;
+          edge->getMesh(&mesh);
+        
+          // Get the mesh points corresponding to this curve
+          int npts;
+          const double *tpts;
+          mesh->getMeshPoints(&npts, &tpts, NULL);
+        }
+      }
+
+      // Determine the relative mapping from the fixed-point ordering
       // on the source face to the fixed-point ordering around the edges
       // on this face. This is performed using the topology of the faces and
       // edges within the volume
-      int *source_to_target = new int[ num_fixed_pts ];
       int *target_to_source = new int[ num_fixed_pts ];
+
+      // Loop over the source edge 
 
 
       // Create the face mesh
