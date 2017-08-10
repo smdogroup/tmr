@@ -777,9 +777,10 @@ Failed to find degenerate edge (%d, %d)\n",
     // Find a mapping between the old node numbers and the new
     // condensed node number list
     uint32_t *old_to_new = new uint32_t[ num_points ];
-    uint32_t count = 0;
-    for ( uint32_t i = 0, j = 0; i < num_points; i++ ){
-      if (sorted_degen[2*j] == i){
+    int count = 0;
+    for ( int i = 0, j = 0; i < num_points; i++ ){
+      uint32_t num = i;
+      if (j < num_degen && sorted_degen[2*j] == num){
         old_to_new[i] = old_to_new[sorted_degen[2*j+1]];
         j++;
       }
