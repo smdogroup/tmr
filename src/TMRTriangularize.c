@@ -2037,23 +2037,26 @@ void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
 
         if (npslg_edges >= 2){
           // Adjust the status of the triangle
-          pt_tri->status = ACCEPTED;
-
-          // Search from adjacent triangles
-          for ( int k = 0; k < 3; k++ ){
-            TMRTriangle *adjacent;
-            completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
-            if (adjacent && adjacent->status == WAITING){
-              adjacent->status = ACTIVE;
-              active.push(adjacent);
+          if (pt_tri->status == WAITING ||
+              pt_tri->status == ACTIVE){
+            pt_tri->status = ACCEPTED;
+        
+            // Search from adjacent triangles
+            for ( int k = 0; k < 3; k++ ){
+              TMRTriangle *adjacent;
+              completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
+              if (adjacent && adjacent->status == WAITING){
+                adjacent->status = ACTIVE;
+                active.push(adjacent);
+              }
             }
-          }
 
-          // NULL out the pointer to indicate that we've already
-          // accepted the triangle
-          pt_tri = NULL;
+            // NULL out the pointer to indicate that we've already
+            // accepted the triangle
+            pt_tri = NULL;
+          }
         }
-        else {
+        if (pt_tri){
           if (face){
             // Pick a point at the middle of the current triangle
             const double frac = 1.0/3.0;

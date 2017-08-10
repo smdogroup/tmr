@@ -37,8 +37,7 @@ opts = TMR.MeshOptions()
 opts.frontal_quality_factor = 1.25
 opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
-opts.triangularize_print_level = 2
-opts.write_post_smooth_quad = 1
+opts.triangularize_print_level = 1
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)
