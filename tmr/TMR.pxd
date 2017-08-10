@@ -145,12 +145,14 @@ cdef extern from "TMRMesh.h":
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
         int triangularize_print_level
+        int triangularize_print_iter
         int write_mesh_quality_histogram
         int num_smoothing_steps
         double frontal_quality_factor
 
         # Write intermediate surface meshes to file
         int write_init_domain_triangle
+        int write_triangularize_intermediate
         int write_pre_smooth_triangle
         int write_post_smooth_triangle
         int write_dual_recombine

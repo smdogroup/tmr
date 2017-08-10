@@ -455,6 +455,13 @@ cdef class MeshOptions:
         def __set__(self, value):
             self.ptr.triangularize_print_level = value
 
+    property triangularize_print_iter:
+        def __get__(self):
+            return self.ptr.triangularize_print_iter
+        def __set__(self, value):
+            if value >= 1:
+                self.ptr.triangularize_print_iter = value
+
     property write_mesh_quality_histogram:
         def __get__(self):
             return self.ptr.write_mesh_quality_histogram
@@ -466,6 +473,12 @@ cdef class MeshOptions:
             return self.ptr.write_init_domain_triangle
         def __set__(self, value):
             self.ptr.write_init_domain_triangle = value
+
+    property write_triangularize_intermediate:
+        def __get__(self):
+            return self.ptr.write_triangularize_intermediate
+        def __set__(self, value):
+            self.ptr.write_triangularize_intermediate = value
 
     property write_pre_smooth_triangle:
         def __get__(self):

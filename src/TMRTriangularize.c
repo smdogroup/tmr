@@ -1787,10 +1787,10 @@ class TMRTriangleCompare {
   generation algorithm. The frontal mesh generation technique is based
   on Rebay's 1993 paper in JCP.
 */
-void TMRTriangularize::frontal( double h, int print_level ){
+void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
   // The length of the edge of the triangle
   const double sqrt3 = sqrt(3.0);
-  const double de = 0.5*sqrt3*h;
+  const double de = 0.5*sqrt3*htarget;
 
   // The queue of active (and sometimes deleted) triangles
   std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
@@ -1806,7 +1806,7 @@ void TMRTriangularize::frontal( double h, int print_level ){
       // Compute the 'quality' indicator for this triangle
       double hval = sqrt3*computeCircumcircle(&node->tri);
       node->tri.quality = hval;
-      if (hval < frontal_quality_factor*h){
+      if (hval < frontal_quality_factor*htarget){
         node->tri.status = ACCEPTED;
       }
       else {
@@ -1855,7 +1855,7 @@ void TMRTriangularize::frontal( double h, int print_level ){
     node = node->next;
   }
 
-  if (print_level > 0){
+  if (options.triangularize_print_level > 0){
     printf("%10s %10s %10s\n", "Iteration", "Triangles", "Active");
   }
 
@@ -1865,9 +1865,21 @@ void TMRTriangularize::frontal( double h, int print_level ){
 
   int iter = 0;
   while (1){
-    if (print_level > 0 && iter % 1000 == 0){
+    if (options.triangularize_print_level > 0 && 
+        iter % options.triangularize_print_iter == 0){
       int queue_size = active.size();
       printf("%10d %10d %10d\n", iter, num_triangles, queue_size);
+      if (options.write_triangularize_intermediate){
+        char filename[256];
+        if (face){
+          sprintf(filename, "intermediate_triangle%d_iter%d.vtk",
+                  face->getEntityId(), iter);
+        }
+        else {
+          sprintf(filename, "intermediate_triangle_iter%d.vtk", iter);
+        }
+        writeToVTK(filename);
+      }
     }
     iter++;
 
@@ -2062,7 +2074,7 @@ void TMRTriangularize::frontal( double h, int print_level ){
     while (ptr){
       double hval = sqrt3*computeCircumcircle(&ptr->tri);
       ptr->tri.quality = hval;
-      if (hval < frontal_quality_factor*h){
+      if (hval < frontal_quality_factor*htarget){
         ptr->tri.status = ACCEPTED;
       }
       else {
@@ -2173,10 +2185,10 @@ void TMRTriangularize::frontal( double h, int print_level ){
   // Free the deleted trianlges from the doubly linked list
   deleteTrianglesFromList();
 
-  if (print_level > 0){
+  if (options.triangularize_print_level > 0){
     printf("%10d %10d\n", iter, num_triangles);
   }
-  if (print_level > 1){
+  if (options.triangularize_print_level > 1){
     printf("Time breakdown\n");
     printf("findEnclosing: %15.4e s\n", t1_enclose - t0_enclose);
     printf("update:        %15.4e s\n", t1_update - t0_update);

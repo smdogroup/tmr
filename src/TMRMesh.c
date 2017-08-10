@@ -1616,7 +1616,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       }
 
       // Create the mesh using the frontal algorithm
-      tri->frontal(htarget, options.triangularize_print_level);
+      tri->frontal(options, htarget);
 
       // Free the degenerate triangles and reorder the mesh
       if (num_degen > 0){

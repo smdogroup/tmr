@@ -9,7 +9,7 @@ OBJS = step_import.o
 	${CXX} ${TMR_CC_FLAGS} -c $< -o $*.o
 
 default: ${OBJS}
-	${CXX} step_import.o ${TMR_LD_FLAGS} -o step
+	${CXX} step_import.o ${TMR_LD_FLAGS} -o step_import
 
 debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
 debug: default

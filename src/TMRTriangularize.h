@@ -3,6 +3,7 @@
 
 #include "TMRBase.h"
 #include "TMRTopology.h"
+#include "TMRMesh.h"
 
 /*
   The rectangular domain used to define the upper/lower limits of the
@@ -125,7 +126,7 @@ class TMRTriangularize : public TMREntity {
   void setFrontalQualityFactor( double factor );
 
   // Create the frontal mesh with the given mesh spacing
-  void frontal( double h, int print_level=0 );
+  void frontal( TMRMeshOptions options, double htarget );
 
   // Remove degenerate edges/points and reorder things
   void removeDegenerateEdges( int num_degen, const int degen[] );

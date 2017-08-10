@@ -25,6 +25,7 @@ class TMRMeshOptions {
   TMRMeshOptions(){
     // Set the default print level
     triangularize_print_level = 0;
+    triangularize_print_iter = 1000;
     write_mesh_quality_histogram = 0;
     
     // Set the default meshing options
@@ -35,6 +36,7 @@ class TMRMeshOptions {
 
     // By default, write nothing to any files
     write_init_domain_triangle = 0;
+    write_triangularize_intermediate = 0;
     write_pre_smooth_triangle = 0;
     write_post_smooth_triangle = 0;
     write_dual_recombine = 0;
@@ -45,6 +47,7 @@ class TMRMeshOptions {
 
   // Set the print level for the triangularize code
   int triangularize_print_level;
+  int triangularize_print_iter;
 
   // Set the write level for the quality histogram
   int write_mesh_quality_histogram;
@@ -57,6 +60,7 @@ class TMRMeshOptions {
 
   // Write intermediate surface meshes to file
   int write_init_domain_triangle;
+  int write_triangularize_intermediate;
   int write_pre_smooth_triangle;
   int write_post_smooth_triangle;
   int write_dual_recombine;
