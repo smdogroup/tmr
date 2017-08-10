@@ -432,16 +432,19 @@ void quadSmoothing( int nsmooth, int num_fixed_pts,
           ly = det*(s1*s5 - s2*s3);
         }
 
-        // Add up the displacements along the local coordinate directions
-        TMRPoint dir;
-        dir.x = lx*xdir.x + ly*ydir.x;
-        dir.y = lx*xdir.y + ly*ydir.y;
-        dir.z = lx*xdir.z + ly*ydir.z;
+        // Check that the requested move direction is well-defined
+        if (lx == lx && ly == ly){
+          // Add up the displacements along the local coordinate directions
+          TMRPoint dir;
+          dir.x = lx*xdir.x + ly*ydir.x;
+          dir.y = lx*xdir.y + ly*ydir.y;
+          dir.z = lx*xdir.z + ly*ydir.z;
 
-        // Add the parameter movement along the specified direction
-        // and compute the update
-        addParamMovement(1.0, &Xu, &Xv, &dir, &prm[2*i]);
-        face->evalPoint(prm[2*i], prm[2*i+1], &p[i]);
+          // Add the parameter movement along the specified direction
+          // and compute the update
+          addParamMovement(1.0, &Xu, &Xv, &dir, &prm[2*i]);
+          face->evalPoint(prm[2*i], prm[2*i+1], &p[i]);
+        }
       }
     }
   }
