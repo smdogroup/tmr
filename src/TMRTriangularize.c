@@ -2013,7 +2013,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
       pt[1] = m[1] + de*e[1];
     }
 
-    // Find the enclosing triangle for the 
+    // Find the enclosing triangle for the new point
     TMRTriangle *pt_tri = tri;
     if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
       t0_enclose += MPI_Wtime();
@@ -2021,120 +2021,151 @@ void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
       t1_enclose += MPI_Wtime();
 
       // We've tried a new point and it was outside the domain.  That
-      // is not allowed, so next we pick a point that is actually in
+      // is not allowed, so next, we check if the triangle has two edges on
+      // the PSLG. If so, we quit and mark the triangle as accepted.
+      // Otherwise, we pick a point that is actually in
       // the current triangle and therefore within the allowed domain
       if (!pt_tri){
         pt_tri = tri;
-
-        if (face){
-          // Pick a point at the middle of the current triangle
-          const double frac = 1.0/3.0;
-          pt[0] = frac*(pts[2*pt_tri->u] + 
-                        pts[2*pt_tri->v] + 
-                        pts[2*pt_tri->w]);
-          pt[1] = frac*(pts[2*pt_tri->u+1] + 
-                        pts[2*pt_tri->v+1] + 
-                        pts[2*pt_tri->w+1]);
-        }
-        else {
-          // Pick a point in the triangle
-          uint32_t w = 0;
-          if (u == pt_tri->u && v == pt_tri->v){
-            w = pt_tri->w;
-          }
-          else if (u == pt_tri->v && v == pt_tri->w){
-            w = pt_tri->u;
-          }
-          else if (u == pt_tri->w && v == pt_tri->u){
-            w = pt_tri->v;
-          }
-          
-          double q = computeIntersection(m, e, u, v, w);
-          double rho = (p*p + q*q)/q;
-          pt[0] = m[0] + rho*e[0];
-          pt[1] = m[1] + rho*e[1];
-        }
-      }
-    }
-
-    // Add up the update time
-    t0_update += MPI_Wtime();
-  
-    // Set the pointer to the last member in the list
-    TriListNode *list_marker = list_end; 
-    addPointToMesh(pt, pt_tri);
-    pt_tri = NULL;
-
-    // Compute the circumcircles of the new triangles and check
-    // whether they belong in the done category or not...
-    TriListNode *ptr = list_start;
-    if (list_marker){
-      ptr = list_marker->next;
-    }
-    while (ptr){
-      double hval = sqrt3*computeCircumcircle(&ptr->tri);
-      ptr->tri.quality = hval;
-      if (hval < frontal_quality_factor*htarget){
-        ptr->tri.status = ACCEPTED;
-      }
-      else {
-        ptr->tri.status = WAITING;
-      }
-      ptr = ptr->next;
-    }
-
-    // Complete me with the newly created triangle with the
-    completeMe(u, v, &pt_tri);
-    if (pt_tri){
-      pt_tri->status = ACCEPTED;
-    }
-
-    // Scan through the list of the added triangles and mark which
-    // ones are active/working/accepted.
-    ptr = list_start;
-    if (list_marker){ 
-      ptr = list_marker->next;
-    }
-
-    while (ptr){
-      if (ptr->tri.status != ACCEPTED){
-        // If any of the triangles touches an edge in the planar
-        // straight line graph, change it to a waiting triangle
-        int flag = 0;
-        uint32_t edge_pairs[][2] = {{ptr->tri.u, ptr->tri.v},
-                                    {ptr->tri.v, ptr->tri.w},
-                                    {ptr->tri.w, ptr->tri.u}};
-
-        // Loop over all of the edges in the triangle and check
-        // whether they're in the PSLG 
+      
+        int npslg_edges = 0;
         for ( int k = 0; k < 3; k++ ){
           if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
-            ptr->tri.status = ACTIVE;
-            active.push(&ptr->tri);
-            flag = 1;
-            break;
+            npslg_edges++;
           }
         }
 
-        // If any triangle is adjacent to a triangle that is accepted,
-        // then change the status of the new triangle to be active
-        if (!flag){
+        if (npslg_edges >= 2){
+          // Adjust the status of the triangle
+          pt_tri->status = ACCEPTED;
+
+          // Search from adjacent triangles
           for ( int k = 0; k < 3; k++ ){
             TMRTriangle *adjacent;
             completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
-            if (adjacent && adjacent->status == ACCEPTED){
-              ptr->tri.status = ACTIVE;
-              active.push(&ptr->tri);
-              break;
+            if (adjacent && adjacent->status == WAITING){
+              adjacent->status = ACTIVE;
+              active.push(adjacent);
             }
+          }
+
+          // NULL out the pointer to indicate that we've already
+          // accepted the triangle
+          pt_tri = NULL;
+        }
+        else {
+          if (face){
+            // Pick a point at the middle of the current triangle
+            const double frac = 1.0/3.0;
+            pt[0] = frac*(pts[2*pt_tri->u] + 
+                          pts[2*pt_tri->v] + 
+                          pts[2*pt_tri->w]);
+            pt[1] = frac*(pts[2*pt_tri->u+1] + 
+                          pts[2*pt_tri->v+1] + 
+                          pts[2*pt_tri->w+1]);
+          }
+          else {
+            // Pick a point in the triangle
+            uint32_t w = 0;
+            if (u == pt_tri->u && v == pt_tri->v){
+              w = pt_tri->w;
+            }
+            else if (u == pt_tri->v && v == pt_tri->w){
+              w = pt_tri->u;
+            }
+            else if (u == pt_tri->w && v == pt_tri->u){
+              w = pt_tri->v;
+            }
+            
+            double q = computeIntersection(m, e, u, v, w);
+            double rho = (p*p + q*q)/q;
+            pt[0] = m[0] + rho*e[0];
+            pt[1] = m[1] + rho*e[1];
           }
         }
       }
-
-      // Increment the pointer to the next member of the list
-      ptr = ptr->next;
     }
-    t1_update += MPI_Wtime();
+
+    if (pt_tri){
+      // Add up the update time
+      t0_update += MPI_Wtime();
+    
+      // Set the pointer to the last member in the list
+      TriListNode *list_marker = list_end; 
+      addPointToMesh(pt, pt_tri);
+      pt_tri = NULL;
+
+      // Compute the circumcircles of the new triangles and check
+      // whether they belong in the done category or not...
+      TriListNode *ptr = list_start;
+      if (list_marker){
+        ptr = list_marker->next;
+      }
+      while (ptr){
+        double hval = sqrt3*computeCircumcircle(&ptr->tri);
+        ptr->tri.quality = hval;
+        if (hval < frontal_quality_factor*htarget){
+          ptr->tri.status = ACCEPTED;
+        }
+        else {
+          ptr->tri.status = WAITING;
+        }
+        ptr = ptr->next;
+      }
+
+      // Complete me with the newly created triangle with the
+      completeMe(u, v, &pt_tri);
+      if (pt_tri){
+        pt_tri->status = ACCEPTED;
+      }
+
+      // Scan through the list of the added triangles and mark which
+      // ones are active/working/accepted.
+      ptr = list_start;
+      if (list_marker){ 
+        ptr = list_marker->next;
+      }
+
+      while (ptr){
+        if (ptr->tri.status != ACCEPTED){
+          // If any of the triangles touches an edge in the planar
+          // straight line graph, change it to a waiting triangle
+          int flag = 0;
+          uint32_t edge_pairs[][2] = {{ptr->tri.u, ptr->tri.v},
+                                      {ptr->tri.v, ptr->tri.w},
+                                      {ptr->tri.w, ptr->tri.u}};
+
+          // Loop over all of the edges in the triangle and check
+          // whether they're in the PSLG 
+          for ( int k = 0; k < 3; k++ ){
+            if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
+              ptr->tri.status = ACTIVE;
+              active.push(&ptr->tri);
+              flag = 1;
+              break;
+            }
+          }
+
+          // If any triangle is adjacent to a triangle that is accepted,
+          // then change the status of the new triangle to be active
+          if (!flag){
+            for ( int k = 0; k < 3; k++ ){
+              TMRTriangle *adjacent;
+              completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
+              if (adjacent && adjacent->status == ACCEPTED){
+                ptr->tri.status = ACTIVE;
+                active.push(&ptr->tri);
+                break;
+              }
+            }
+          }
+        }
+
+        // Increment the pointer to the next member of the list
+        ptr = ptr->next;
+      }
+      t1_update += MPI_Wtime();
+    }
   }
 
   t0 = MPI_Wtime() - t0;
