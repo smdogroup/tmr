@@ -699,18 +699,54 @@ void TMRTriangularize::setFrontalQualityFactor( double factor ){
 }
 
 /*
+  Compare sorted edges
+
+  This code compares two edges together. This relies on the edges being
+  pre-modified such that the lowest edge number appears first. The first
+  index in the edge is compared first, and the second edge number second.
+*/
+static int compare_degen_edges( const void *avoid, const void *bvoid ){
+  // Cast the input to uint32_t types
+  const uint32_t *a = static_cast<const uint32_t*>(avoid);
+  const uint32_t *b = static_cast<const uint32_t*>(bvoid);
+  
+  // Extract the x/y locations for the a and b points
+  uint32_t ax = a[0], ay = a[1];
+  uint32_t bx = b[0], by = b[1];
+
+  if (ax == bx){
+    return ax - bx;
+  }
+  return ay - by;
+}
+
+/*
   Remove degenerate edges and extra nodes from the triangulation
 
   Note that this code adjusts the degen[] array so it is not constant.
 */
 void TMRTriangularize::removeDegenerateEdges( int num_degen, 
-                                              int degen[] ){
+                                              const int degen[] ){
   if (num_degen > 0){
+    // Sort the degenerate edges
+    uint32_t *sorted_degen = new uint32_t[ num_degen ];
     for ( int i = 0; i < num_degen; i++ ){
-      degen[2*i] += FIXED_POINT_OFFSET;
-      degen[2*i+1] += FIXED_POINT_OFFSET;
-      uint32_t u = degen[2*i];
-      uint32_t v = degen[2*i+1];
+      sorted_degen[2*i] = degen[2*i] + FIXED_POINT_OFFSET;
+      sorted_degen[2*i+1] = degen[2*i+1] + FIXED_POINT_OFFSET;
+
+      // Flip the degenerate edge order so that the larger number appears
+      // first in the edge list
+      if (sorted_degen[2*i+1] > sorted_degen[2*i]){
+        uint32_t tmp = sorted_degen[2*i];
+        sorted_degen[2*i] = sorted_degen[2*i+1];
+        sorted_degen[2*i+1] = tmp;
+      }
+    }
+    qsort(sorted_degen, num_degen, 2*sizeof(uint32_t), compare_degen_edges);
+
+    for ( int i = 0; i < num_degen; i++ ){
+      uint32_t u = sorted_degen[2*i];
+      uint32_t v = sorted_degen[2*i+1];
 
       // Keep track of whether we actually delete a triangle. If not,
       // we may run into problems so we report an error.
@@ -737,6 +773,42 @@ Failed to find degenerate edge (%d, %d)\n",
 
     // Free the deleted triangles from the list
     deleteTrianglesFromList();
+
+    // Find a mapping between the old node numbers and the new
+    // condensed node number list
+    uint32_t *old_to_new = new uint32_t[ num_points ];
+    uint32_t count = 0;
+    for ( uint32_t i = 0, j = 0; i < num_points; i++ ){
+      if (sorted_degen[2*j] == i){
+        old_to_new[i] = old_to_new[sorted_degen[2*j+1]];
+        j++;
+      }
+      else {
+        old_to_new[i] = count;
+        if (count != i){
+          X[count] = X[i];
+          pts[2*count] = pts[2*i];
+          pts[2*count+1] = pts[2*i+1];
+        }
+        count++;
+      }
+    }
+
+    // Readjust the number of points
+    num_points = count;
+
+    // Now, readjust the node numbers in the triangle
+    TriListNode *node = list_start;
+    while (node){
+      node->tri.u = old_to_new[node->tri.u];
+      node->tri.v = old_to_new[node->tri.v];
+      node->tri.w = old_to_new[node->tri.w];
+      node = node->next;
+    }
+
+    // Free the data
+    delete [] old_to_new;
+    delete [] sorted_degen;
   }
 }
 
@@ -1786,6 +1858,10 @@ void TMRTriangularize::frontal( double h, int print_level ){
     printf("%10s %10s %10s\n", "Iteration", "Triangles", "Active");
   }
 
+  double t0 = MPI_Wtime();
+  double t0_enclose = 0.0, t1_enclose = 0.0;
+  double t0_update = 0.0, t1_update = 0.0;
+
   int iter = 0;
   while (1){
     if (print_level > 0 && iter % 1000 == 0){
@@ -1927,8 +2003,10 @@ void TMRTriangularize::frontal( double h, int print_level ){
     // Find the enclosing triangle for the 
     TMRTriangle *pt_tri = tri;
     if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
+      t0_enclose += MPI_Wtime();
       findEnclosing(pt, &pt_tri);
-      
+      t1_enclose += MPI_Wtime();
+
       // We've tried a new point and it was outside the domain.  That
       // is not allowed, so next we pick a point that is actually in
       // the current triangle and therefore within the allowed domain
@@ -1965,6 +2043,9 @@ void TMRTriangularize::frontal( double h, int print_level ){
         }
       }
     }
+
+    // Add up the update time
+    t0_update += MPI_Wtime();
   
     // Set the pointer to the last member in the list
     TriListNode *list_marker = list_end; 
@@ -2040,7 +2121,10 @@ void TMRTriangularize::frontal( double h, int print_level ){
       // Increment the pointer to the next member of the list
       ptr = ptr->next;
     }
+    t1_update += MPI_Wtime();
   }
+
+  t0 = MPI_Wtime() - t0;
 
   // Ensure that we do not have isolated triangles on the boundary
   // which will cause problems when (if) we do conversion to a
@@ -2090,5 +2174,11 @@ void TMRTriangularize::frontal( double h, int print_level ){
 
   if (print_level > 0){
     printf("%10d %10d\n", iter, num_triangles);
+  }
+  if (print_level > 1){
+    printf("Time breakdown\n");
+    printf("findEnclosing: %15.4e s\n", t1_enclose - t0_enclose);
+    printf("update:        %15.4e s\n", t1_update - t0_update);
+    printf("total:         %15.4e s\n", t0);
   }
 }

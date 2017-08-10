@@ -2013,7 +2013,7 @@ double TMRFaceMesh::computeTriQuality( const int *tri,
 /*
   Recombine the triangulation into a quadrilateral mesh
 */
-void TMRFaceMesh::recombine( int ntris, int tris[],
+void TMRFaceMesh::recombine( int ntris, const int tris[],
                              const int tri_neighbors[],
                              const int node_to_tri_ptr[],
                              const int node_to_tris[],

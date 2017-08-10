@@ -34,9 +34,12 @@ mesh = TMR.Mesh(comm, geo_new)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
-opts.frontal_quality_factor = 1.25
-opts.num_smoothing_steps = 10
+# opts.frontal_quality_factor = 1.25
+opts.num_smoothing_steps = 2
 opts.write_mesh_quality_histogram = 1
+opts.write_post_smooth_triangle = 1
+opts.write_pre_smooth_quad = 1
+opts.write_post_smooth_quad = 1
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)

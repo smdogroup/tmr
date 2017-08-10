@@ -128,7 +128,7 @@ class TMRTriangularize : public TMREntity {
   void frontal( double h, int print_level=0 );
 
   // Remove degenerate edges/points and reorder things
-  void removeDegenerateEdges( int num_degen, int degen[] );
+  void removeDegenerateEdges( int num_degen, const int degen[] );
   
   // Retrieve the mesh connectivity from the object
   void getMesh( int *_num_points, int *_num_triangles, 
