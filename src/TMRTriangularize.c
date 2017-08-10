@@ -729,7 +729,7 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
                                               const int degen[] ){
   if (num_degen > 0){
     // Sort the degenerate edges
-    uint32_t *sorted_degen = new uint32_t[ num_degen ];
+    uint32_t *sorted_degen = new uint32_t[ 2*num_degen ];
     for ( int i = 0; i < num_degen; i++ ){
       sorted_degen[2*i] = degen[2*i] + FIXED_POINT_OFFSET;
       sorted_degen[2*i+1] = degen[2*i+1] + FIXED_POINT_OFFSET;
