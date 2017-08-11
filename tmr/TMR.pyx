@@ -58,6 +58,10 @@ cdef class Vertex:
         if self.ptr:
             self.ptr.decref()
 
+    def setAttribute(self, char *name):
+        if self.ptr:
+            self.ptr.setAttribute(name)
+
 cdef _init_Vertex(TMRVertex *ptr):
     vertex = Vertex()
     vertex.ptr = ptr
@@ -72,6 +76,10 @@ cdef class Edge:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def setAttribute(self, char *name):
+        if self.ptr:
+            self.ptr.setAttribute(name)
 
     def setVertices(self, Vertex v1, Vertex v2):
         self.ptr.setVertices(v1.ptr, v2.ptr)
@@ -111,6 +119,10 @@ cdef class Face:
         if self.ptr:
             self.ptr.decref()
          
+    def setAttribute(self, char *name):
+        if self.ptr:
+            self.ptr.setAttribute(name)
+
     def getNumEdgeLoops(self):
         return self.ptr.getNumEdgeLoops()
    
@@ -141,7 +153,11 @@ cdef class Volume:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-         
+
+    def setAttribute(self, char *name):
+        if self.ptr:
+            self.ptr.setAttribute(name)
+
     def getFaces(self):
         cdef TMRFace **f
         cdef int num_faces = 0
@@ -169,6 +185,10 @@ cdef class Curve:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def setAttribute(self, char *name):
+        if self.ptr:
+            self.ptr.setAttribute(name)
             
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
@@ -188,6 +208,10 @@ cdef class Pcurve:
         if self.ptr:
             self.ptr.decref()
 
+    def setAttribute(self, char *name):
+        if self.ptr:
+            self.ptr.setAttribute(name)
+
 cdef class Surface:
     cdef TMRSurface *ptr
     def __cinit__(self):
@@ -197,6 +221,10 @@ cdef class Surface:
         if self.ptr:
             self.ptr.decref()
             
+    def setAttribute(self, char *name):
+        if self.ptr:
+            self.ptr.setAttribute(name)
+
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
 
@@ -367,7 +395,7 @@ cdef class Model:
             self.ptr = new TMRModel(nverts, v, nedges, e, nfaces, f, nvols, b)
         elif v and e and f:
             self.ptr = new TMRModel(nverts, v, nedges, e, nfaces, f, 0, NULL)
-        elif v and e and f:
+        elif v and e:
             self.ptr = new TMRModel(nverts, v, nedges, e, 0, NULL, 0, NULL)
 
         if self.ptr:
@@ -607,6 +635,42 @@ cdef class Mesh:
         elif outtype == 'hexes':
             flag = 2
         self.ptr.writeToVTK(filename, flag)
+
+cdef class EdgeMesh:
+    cdef TMREdgeMesh *ptr
+    def __cinit__(self, MPI.Comm comm, Edge e):
+        cdef MPI_Comm c_comm = comm.ob_mpi        
+        self.ptr = new TMREdgeMesh(c_comm, e.ptr)
+        self.ptr.incref()
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def mesh(self, double h, MeshOptions opts=None):
+        cdef TMRMeshOptions options
+        if opts is None:            
+            self.ptr.mesh(options, h)
+        else:
+            self.ptr.mesh(opts.ptr, h)
+
+cdef class FaceMesh:
+    cdef TMRFaceMesh *ptr
+    def __cinit__(self, MPI.Comm comm, Face f):
+        cdef MPI_Comm c_comm = comm.ob_mpi        
+        self.ptr = new TMRFaceMesh(c_comm, f.ptr)
+        self.ptr.incref()
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def mesh(self, double h, MeshOptions opts=None):
+        cdef TMRMeshOptions options
+        if opts is None:            
+            self.ptr.mesh(options, h)
+        else:
+            self.ptr.mesh(opts.ptr, h)
 
 cdef class Topology:
     cdef TMRTopology *ptr

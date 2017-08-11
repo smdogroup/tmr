@@ -62,8 +62,10 @@ int main( int argc, char *argv[] ){
 
     // Adjust the quality factor
     TMRMeshOptions options;
-    options.frontal_quality_factor = 1.5;
+    options.frontal_quality_factor = 1.25;
     options.num_smoothing_steps = 10;
+    options.write_mesh_quality_histogram = 1;
+    options.triangularize_print_level = 1;
 
     // Mesh the object of interest
     mesh->mesh(options, htarget);

@@ -2021,69 +2021,21 @@ void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
       t1_enclose += MPI_Wtime();
 
       // We've tried a new point and it was outside the domain.  That
-      // is not allowed, so next, we check if the triangle has two edges on
-      // the PSLG. If so, we quit and mark the triangle as accepted.
-      // Otherwise, we pick a point that is actually in
-      // the current triangle and therefore within the allowed domain
+      // is not allowed, so, we quit and mark the triangle as accepted.
       if (!pt_tri){
-        pt_tri = tri;
-      
-        int npslg_edges = 0;
-        for ( int k = 0; k < 3; k++ ){
-          if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
-            npslg_edges++;
-          }
-        }
-
-        if (npslg_edges >= 2){
-          // Adjust the status of the triangle
-          if (pt_tri->status == WAITING ||
-              pt_tri->status == ACTIVE){
-            pt_tri->status = ACCEPTED;
+        // Adjust the status of the triangle
+        if (tri->status == WAITING ||
+            tri->status == ACTIVE){
+          tri->status = ACCEPTED;
         
-            // Search from adjacent triangles
-            for ( int k = 0; k < 3; k++ ){
-              TMRTriangle *adjacent;
-              completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
-              if (adjacent && adjacent->status == WAITING){
-                adjacent->status = ACTIVE;
-                active.push(adjacent);
-              }
+          // Search from adjacent triangles
+          for ( int k = 0; k < 3; k++ ){
+            TMRTriangle *adjacent;
+            completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
+            if (adjacent && adjacent->status == WAITING){
+              adjacent->status = ACTIVE;
+              active.push(adjacent);
             }
-
-            // NULL out the pointer to indicate that we've already
-            // accepted the triangle
-            pt_tri = NULL;
-          }
-        }
-        if (pt_tri){
-          if (face){
-            // Pick a point at the middle of the current triangle
-            const double frac = 1.0/3.0;
-            pt[0] = frac*(pts[2*pt_tri->u] + 
-                          pts[2*pt_tri->v] + 
-                          pts[2*pt_tri->w]);
-            pt[1] = frac*(pts[2*pt_tri->u+1] + 
-                          pts[2*pt_tri->v+1] + 
-                          pts[2*pt_tri->w+1]);
-          }
-          else {
-            // Pick a point in the triangle
-            uint32_t w = 0;
-            if (u == pt_tri->u && v == pt_tri->v){
-              w = pt_tri->w;
-            }
-            else if (u == pt_tri->v && v == pt_tri->w){
-              w = pt_tri->u;
-            }
-            else if (u == pt_tri->w && v == pt_tri->u){
-              w = pt_tri->v;
-            }
-            
-            double q = computeIntersection(m, e, u, v, w);
-            double rho = (p*p + q*q)/q;
-            pt[0] = m[0] + rho*e[0];
-            pt[1] = m[1] + rho*e[1];
           }
         }
       }

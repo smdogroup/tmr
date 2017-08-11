@@ -141,7 +141,15 @@ cdef extern from "TMRMesh.h":
         TMRModel *createModelFromMesh()
         void writeToVTK(const char*, int)
         void writeToBDF(const char*, int)
-        
+
+    cdef cppclass TMREdgeMesh(TMREntity):
+        TMREdgeMesh(MPI_Comm, TMREdge*)
+        void mesh(TMRMeshOptions, double)
+
+    cdef cppclass TMRFaceMesh(TMREntity):
+        TMRFaceMesh(MPI_Comm, TMRFace*)
+        void mesh(TMRMeshOptions, double)
+
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
         int triangularize_print_level

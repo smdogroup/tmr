@@ -13,10 +13,14 @@ vols = geo.getVolumes()
 # Get the edges/faces from the geometry
 faces = geo.getFaces()
 edges = geo.getEdges()
+verts = geo.getVertices()
+
+# Create the model again, this time without volumes
+geo = TMR.Model(verts, edges, faces)
 
 # Set the master/target relationships
-faces[4].setMaster(vols[0], faces[5])
-edges[8].setMaster(edges[5])
+faces[4].setSource(vols[0], faces[5])
+edges[8].setSource(edges[5])
 
 # Create the geometry
 mesh = TMR.Mesh(comm, geo)

@@ -1238,8 +1238,8 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         }
       }
 
-      // Keep track of the source to target edge and target to 
-      // source edge mappings as well as their relative orientations
+      // Keep track of the source-to-target edge and target-to-source
+      // edge mappings as well as their relative orientations
       std::map<TMREdge*, int> target_edge_dir; 
       std::map<TMREdge*, TMREdge*> source_to_target_edge;
       std::map<TMREdge*, TMREdge*> target_to_source_edge;
@@ -1261,7 +1261,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
             // Get the edge loop
             TMREdgeLoop *loop;
-            face->getEdgeLoop(k, &loop);
+            faces[i]->getEdgeLoop(k, &loop);
 
             // Get the number of edges/edges from the source loop
             int nedges;
@@ -1296,8 +1296,10 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         }
       }
 
-      // Now, count up the number of nodes that the target index
-      // must be offset
+      // Now, count up the number of nodes that the target index must
+      // be offset
+      int target_offset = 0;
+      std::map<TMREdge*, int> target_edge_offset;
       for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
         TMREdgeLoop *loop;
         face->getEdgeLoop(k, &loop);
@@ -1319,12 +1321,17 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
           const double *tpts;
           mesh->getMeshPoints(&npts, &tpts, NULL);
 
+          target_edge_offset[edge] = target_offset;          
+          if (!edge->isDegenerate()){
+            target_offset += npts-1;
+          }
         }
       }
 
-      // March through the sources loops
+      // March through the sources loop, and compute the source
+      // to target ordering
       int *source_to_target = new int[ num_fixed_pts ];
-
+      int source_offset = 0;
       for ( int k = 0; k < source->getNumEdgeLoops(); k++ ){
         TMREdgeLoop *loop;
         source->getEdgeLoop(k, &loop);
@@ -1341,7 +1348,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
           TMREdge *tedge = source_to_target_edge[edge];
 
           // Get the offset for the target edge
-          // int offset = target_edges[tedge];
+          int offset = target_edge_offset[tedge];
 
           // Retrieve the source mesh
           TMREdgeMesh *mesh = NULL;
@@ -1351,18 +1358,23 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
           int npts;
           const double *tpts;
           mesh->getMeshPoints(&npts, &tpts, NULL);
+
+          if (!edge->isDegenerate()){
+            if (target_edge_dir[tedge] > 0){
+              for ( int j = 0; j < npts-1; j++ ){
+                source_to_target[source_offset] = offset + j;
+                source_offset++;
+              }
+            }
+            else {
+              for ( int j = 0; j < npts-1; j++ ){
+                source_to_target[source_offset] = offset + npts-1 - j;
+                source_offset++;
+              }
+            }
+          }
         }
       }
-
-      // Determine the relative mapping from the fixed-point ordering
-      // on the source face to the fixed-point ordering around the edges
-      // on this face. This is performed using the topology of the faces and
-      // edges within the volume
-      int *target_to_source = new int[ num_fixed_pts ];
-
-
-
-
 
       // Create the face mesh
       TMRFaceMesh *face_mesh;
@@ -1374,9 +1386,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       num_fixed_pts = face_mesh->num_fixed_pts;
       num_quads = face_mesh->num_quads;
 
-      quads = new int[ 4*num_quads ];
-      memcpy(quads, face_mesh->quads, 4*num_quads*sizeof(int));
-
       // Allocate the array for the parametric locations
       pts = new double[ 2*num_points ];
 
@@ -1386,55 +1395,45 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         pts[2*i+1] = params[2*i+1];
       }
 
-      // Compute the centroid of the edge points for the source and
-      // target surfaces
+      // Compute a least squares transformation between the two
+      // surfaces
+      double N[16], A[4];
       double sc[2], tc[3];
+      memset(N, 0, 16*sizeof(double));
+      memset(A, 0, 4*sizeof(double));
       sc[0] = sc[1] = 0.0;
       tc[0] = tc[1] = 0.0;
-      for ( int i = 0; i < num_fixed_pts; i++ ){
-        sc[0] += face_mesh->pts[2*i];
-        sc[1] += face_mesh->pts[2*i+1];
-        tc[0] += pts[2*i];
-        tc[1] += pts[2*i+1];
+
+      for ( int k = 0; k < num_fixed_pts; k++ ){       
+        sc[0] += face_mesh->pts[2*k];
+        sc[1] += face_mesh->pts[2*k+1];
+        tc[0] += pts[2*k];
+        tc[1] += pts[2*k+1];
       }
       sc[0] = sc[0]/num_fixed_pts;
       sc[1] = sc[1]/num_fixed_pts;
       tc[0] = tc[0]/num_fixed_pts;
       tc[1] = tc[1]/num_fixed_pts;
 
-      // Compute a least squares transformation between the two
-      // surfaces
-      double N[16], A[4];
-      memset(N, 0, 16*sizeof(double));
-      memset(A, 0, 4*sizeof(double));
-      
       for ( int k = 0; k < num_fixed_pts; k++ ){
+        double uS[2], uT[2];
+        uS[0] = face_mesh->pts[2*k] - sc[0];
+        uS[1] = face_mesh->pts[2*k+1] - sc[1];
+
+        // Compute the source->target index number
+        int kt = source_to_target[k];
+        uT[0] = pts[2*kt] - tc[0];
+        uT[1] = pts[2*kt+1] - tc[1];
+
+        // Add the terms to the matrix/right-hand-side
         for ( int i = 0; i < 4; i++ ){
           for ( int j = 0; j < 4; j++ ){
-            double B = face_mesh->pts[2*k+(i%2)]*face_mesh->pts[2*k+(j%2)];
-            if (i/2 == j/2){
+            double B = uS[i % 2]*uS[j % 2];
+            if ((i/2) == (j/2)){
               N[i + 4*j] += B;
             }
           }
-          int kt = source_to_target[k];
-          A[i] += face_mesh->pts[2*k+(i%2)]*pts[2*kt+(i/2)];
-        }
-      }
-
-      // Flip the quad numbering
-      for ( int i = 0; i < 4*num_quads; i++ ){
-        if (quads[i] < num_fixed_pts && quads[i] > 0){
-          quads[i] = num_fixed_pts - quads[i];
-        }
-      }
-
-      // Flip the orientation of the quads to match the orientation
-      // of the face
-      if (source_dir < 0){
-        for ( int i = 0; i < num_quads; i++ ){
-          int tmp = quads[4*i+1];
-          quads[4*i+1] = quads[4*i+3];
-          quads[4*i+3] = tmp;
+          A[i] += uS[i % 2]*uT[i/2];
         }
       }
 
@@ -1446,16 +1445,35 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
       // Set the interior points based on the linear transformation
       for ( int k = num_fixed_pts; k < num_points; k++ ){
-        int kt = source_to_target[k];
         double uS = face_mesh->pts[2*k] - sc[0];
         double vS = face_mesh->pts[2*k+1] - sc[1];
-        pts[2*kt] = A[0]*uS + A[1]*vS + tc[0];
-        pts[2*kt+1] = A[2]*uS + A[3]*vS + tc[1];
+        pts[2*k] = A[0]*uS + A[1]*vS + tc[0];
+        pts[2*k+1] = A[2]*uS + A[3]*vS + tc[1];
+      }
+
+      // Copy the quadrilateral mesh
+      quads = new int[ 4*num_quads ];
+      memcpy(quads, face_mesh->quads, 4*num_quads*sizeof(int));
+
+      // Adjust the quadrilateral ordering at the boundary
+      for ( int i = 0; i < 4*num_quads; i++ ){
+        if (quads[i] < num_fixed_pts){
+          quads[i] = source_to_target[quads[i]];
+        }
+      }      
+
+      // Flip the orientation of the quads to match the orientation of
+      // the face
+      if (source_dir < 0){
+        for ( int i = 0; i < num_quads; i++ ){
+          int tmp = quads[4*i+1];
+          quads[4*i+1] = quads[4*i+3];
+          quads[4*i+3] = tmp;
+        }
       }
 
       // Free the data
       delete [] source_to_target;
-      delete [] target_to_source;
 
       // Evaluate the points
       X = new TMRPoint[ num_points ];
@@ -1673,9 +1691,15 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         }
 
         // Recombine the mesh into a quadrilateral mesh
-        recombine(ntris, tris, tri_neighbors, 
-                  node_to_tri_ptr, node_to_tris,
-                  num_tri_edges, dual_edges, &num_quads, &quads, options);
+        if (ntris % 2 == 0){
+          recombine(ntris, tris, tri_neighbors, 
+                    node_to_tri_ptr, node_to_tris,
+                    num_tri_edges, dual_edges, &num_quads, &quads, options);
+        }
+        else {
+          fprintf(stderr, "TMRFaceMesh error: Odd number of triangles, \
+cannot perform recombination\n");
+        }
 
         // Free the triangular mesh data
         delete [] tris;
@@ -2027,7 +2051,6 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
   // Compute the weight associated with each edge by combputing the
   // recombined quality
   const double eps = 0.1;
-  const double frac = 1.0/(1.0 + eps);
 
   int edge_num = 0;
   for ( int i = 0; i < num_edges; i++ ){
@@ -2040,7 +2063,7 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
         computeRecombinedQuality(tris, tri_neighbors,
                                  t1, t2, X);
 
-      double weight = frac*(1.0 - quality)*(1.0 + 1.0/(quality + eps));
+      double weight = (1.0 - quality)*(1.0 + 1.0/(quality + eps));
       graph_edges[2*edge_num] = t1;
       graph_edges[2*edge_num+1] = t2;
       weights[edge_num] = weight;
@@ -2094,7 +2117,7 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
                 tri_neighbors[3*k + tri_node_edges[kj][1]] < 0){
               graph_edges[2*edge_num] = i;
               graph_edges[2*edge_num+1] = k;
-              weights[edge_num] = 1.0;
+              weights[edge_num] = 10.0;
               edge_num++;
             }
           }

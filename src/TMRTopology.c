@@ -458,6 +458,7 @@ normal_orient(_normal_orient){
   loops = NULL;
   mesh = NULL;
   source = NULL;
+  source_volume = NULL;
   source_dir = 0;
 }
 
@@ -675,7 +676,7 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
 
       // Multiply the relative orientations of the two faces within
       // the volume
-      source_dir *= -dir[this_index]*dir[source_index];
+      source_dir = -dir[this_index]*dir[source_index];
     }
   }
 }

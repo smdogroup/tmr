@@ -10,6 +10,8 @@ comm = MPI.COMM_WORLD
 p = argparse.ArgumentParser()
 p.add_argument('--htarget', type=float, default=4.0)
 p.add_argument('--filename', type=str, default=None, help='STEP file name')
+p.add_argument('--output', type=str, default='surface-mesh.vtk',
+               help='output file name')
 args = p.parse_args()
 
 # Get the value of the filename
@@ -38,9 +40,10 @@ opts.frontal_quality_factor = 1.25
 opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_level = 1
+opts.triangularize_print_iter = 50000
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('surface-mesh.vtk')
+mesh.writeToVTK(args.output)
