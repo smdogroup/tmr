@@ -27,7 +27,7 @@ mesh = TMR.Mesh(comm, geo)
 
 # Mesh the part
 opts = TMR.MeshOptions()
-opts.num_smoothing_steps = 0
+opts.num_smoothing_steps = 10
 
 # Mesh the geometry with the given target size
 htarget = 4.0

@@ -1242,7 +1242,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       // edge mappings as well as their relative orientations
       std::map<TMREdge*, int> target_edge_dir; 
       std::map<TMREdge*, TMREdge*> source_to_target_edge;
-      std::map<TMREdge*, TMREdge*> target_to_source_edge;
 
       // Loop over the faces that are within the source volume
       int num_faces;
@@ -1292,7 +1291,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
           // Source to target and target to source edges
           source_to_target_edge[sedge] = tedge;
-          target_to_source_edge[tedge] = sedge;
         }
       }
 
@@ -1356,22 +1354,40 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         
           // Get the mesh points corresponding to this curve
           int npts;
-          const double *tpts;
-          mesh->getMeshPoints(&npts, &tpts, NULL);
+          mesh->getMeshPoints(&npts, NULL, NULL);
+
+          // source:       target:
+          // 0 -- 1 -> 2   6 <- 5 -- 4
+          // |         |   |         |
+          // 7         3   7         3
+          // |         |   |         |
+          // 6 <- 5 -- 4   0 -- 1 -> 2
 
           if (!edge->isDegenerate()){
             if (target_edge_dir[tedge] > 0){
               for ( int j = 0; j < npts-1; j++ ){
-                source_to_target[source_offset] = offset + j;
-                source_offset++;
+                source_to_target[source_offset + j] = offset + j;
               }
             }
             else {
               for ( int j = 0; j < npts-1; j++ ){
-                source_to_target[source_offset] = offset + npts-1 - j;
-                source_offset++;
+                source_to_target[source_offset + j] = offset + npts-1 - j;
               }
+
+              // Get the previous target edge in the loop. This will give
+              // the first number from the last edge loop. 
+              TMREdge *init_edge = NULL;
+              if (i == 0){
+                init_edge = source_to_target_edge[edges[nedges-1]];
+              }
+              else {
+                init_edge = source_to_target_edge[edges[i-1]];
+              }
+              int init_offset = target_edge_offset[init_edge];
+              source_to_target[source_offset] = init_offset;
             }
+            // Increment the offset to the source
+            source_offset += npts-1;
           }
         }
       }
