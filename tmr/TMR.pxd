@@ -288,4 +288,4 @@ cdef extern from "SolidShellWrapper.h":
         pass
     
 cdef extern from "TMROpenCascade.h":
-    cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*) 
+    cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*, int)

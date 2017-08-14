@@ -48,6 +48,11 @@ const int tri_node_edges[][2] = {{1, 2}, {0, 2}, {0, 1}};
 const int quad_edge_nodes[][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
 
 /*
+  The local node numbers for each edge in a flipped quadrilateral
+*/
+const int flipped_quad_edge_nodes[][2] = {{0, 3}, {3, 2}, {2, 1}, {1, 0}};
+
+/*
   The nodes in a hexahedral element are ordered as follows:
   
        7 ---------- 6
@@ -3473,6 +3478,12 @@ int TMRVolumeMesh::getNodeNums( const int **_vars ){
   Mesh the given geometry and retrieve either a regular mesh
 */
 TMRMesh::TMRMesh( MPI_Comm _comm, TMRModel *_geo ){
+  // Initialize the TMR-specific MPI data types
+  if (!TMRIsInitialized()){
+    TMRInitialize();
+  }
+
+  // Copy the communicator
   comm = _comm;
   geo = _geo;
   geo->incref();
@@ -4233,8 +4244,15 @@ TMRModel* TMRMesh::createModelFromMesh(){
     for ( int j = 0; j < nlocal; j++ ){
       for ( int k = 0; k < 4; k++ ){
         // The local variable numbers
-        int l1 = quad_local[4*j + quad_edge_nodes[k][0]];
-        int l2 = quad_local[4*j + quad_edge_nodes[k][1]];
+        int l1 = 0, l2 = 0;        
+        if (faces[i]->getOrientation() > 0){
+          l1 = quad_local[4*j + quad_edge_nodes[k][0]];
+          l2 = quad_local[4*j + quad_edge_nodes[k][1]];
+        }
+        else {
+          l1 = quad_local[4*j + flipped_quad_edge_nodes[k][0]];
+          l2 = quad_local[4*j + flipped_quad_edge_nodes[k][1]];
+        }
 
         // Get the global edge number
         int edge[3];
@@ -4284,7 +4302,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
                   edge[1], edge[2]);
         }
       }
-    } 
+    }
   }
 
   // Create the hexahedral elements
@@ -4359,15 +4377,32 @@ TMRModel* TMRMesh::createModelFromMesh(){
       int dir[4];
       TMRVertex *v[4];
 
-      // Loop over all of the edges/nodes associated with this quad
-      for ( int k = 0; k < 4; k++ ){
-        // Set the vertex number
-        int l0 = quad_local[4*j + k];
-        v[k] = new_verts[vars[l0]];
+      // Set the nodes for this quad
+      if (faces[i]->getOrientation() > 0){
+        v[0] = new_verts[vars[quad_local[4*j]]];
+        v[1] = new_verts[vars[quad_local[4*j+1]]];
+        v[2] = new_verts[vars[quad_local[4*j+2]]];
+        v[3] = new_verts[vars[quad_local[4*j+3]]];
+      }
+      else {
+        v[0] = new_verts[vars[quad_local[4*j]]];
+        v[1] = new_verts[vars[quad_local[4*j+3]]];
+        v[2] = new_verts[vars[quad_local[4*j+2]]];
+        v[3] = new_verts[vars[quad_local[4*j+1]]];
+      }
 
+      // Loop over and search for the edges associated with this quad
+      for ( int k = 0; k < 4; k++ ){
         // The edge variable numbers
-        int l1 = quad_local[4*j + quad_edge_nodes[k][0]];
-        int l2 = quad_local[4*j + quad_edge_nodes[k][1]];
+        int l1 = 0, l2 = 0;
+        if (faces[i]->getOrientation() > 0){
+          l1 = quad_local[4*j + quad_edge_nodes[k][0]];
+          l2 = quad_local[4*j + quad_edge_nodes[k][1]];
+        }
+        else {
+          l1 = quad_local[4*j + flipped_quad_edge_nodes[k][0]];
+          l2 = quad_local[4*j + flipped_quad_edge_nodes[k][1]];
+        }
 
         // Get the global edge number
         int edge[3];

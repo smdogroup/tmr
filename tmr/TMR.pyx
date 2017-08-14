@@ -846,8 +846,8 @@ cdef _init_OctForest(TMROctForest* ptr):
     forest.ptr.incref()
     return forest
 
-def LoadModel(char *filename):
-    cdef TMRModel *model = TMR_LoadModelFromSTEPFile(filename)
+def LoadModel(char *filename, int print_lev=0):
+    cdef TMRModel *model = TMR_LoadModelFromSTEPFile(filename, print_lev)
     return _init_Model(model)
    
 cdef class BoundaryConditions:
