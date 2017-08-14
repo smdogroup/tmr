@@ -586,8 +586,8 @@ cdef class Mesh:
         cdef const int *hexes = NULL
         cdef int nquads = 0
         cdef int nhexes = 0
-        self.ptr.getMeshConnectivity(&nquads,&quads,
-                                     &nhexes,&hexes)
+        self.ptr.getMeshConnectivity(&nquads, &quads,
+                                     &nhexes, &hexes)
        
         q = np.zeros((nquads, 4), dtype=np.int)
         for i in range(nquads):
@@ -619,9 +619,9 @@ cdef class Mesh:
         cdef int flag = 3
         if outtype is None:
             flag = 3
-        elif outtype == 'quads':
+        elif outtype == 'quad':
             flag = 1
-        elif outtype == 'hexes':
+        elif outtype == 'hex':
             flag = 2
         self.ptr.writeToBDF(filename, flag)
 
@@ -630,9 +630,9 @@ cdef class Mesh:
         cdef int flag = 3
         if outtype is None:
             flag = 3
-        elif outtype == 'quads':
+        elif outtype == 'quad':
             flag = 1
-        elif outtype == 'hexes':
+        elif outtype == 'hex':
             flag = 2
         self.ptr.writeToVTK(filename, flag)
 
@@ -674,8 +674,19 @@ cdef class FaceMesh:
 
 cdef class Topology:
     cdef TMRTopology *ptr
-    def __cinit__(self):
+    def __cinit__(self, MPI.Comm comm=None, Model m=None):
+        cdef MPI_Comm c_comm = NULL
+        cdef TMRModel *model = NULL
         self.ptr = NULL
+        if comm is not None and m is not None:
+            c_comm = comm.ob_mpi
+            model = m.ptr
+            self.ptr = new TMRTopology(c_comm, model)
+            self.ptr.incref()
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
 
 cdef class QuadrantArray:
     cdef TMRQuadrantArray *ptr
@@ -710,7 +721,10 @@ cdef class QuadForest:
         self.ptr.repartition()
 
     def createTrees(self, int depth):
-        self.ptr.createRandomTrees(depth)
+        self.ptr.createTrees(depth)
+
+    def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
+        self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
     def refine(self, np.ndarray[int, ndim=1, mode='c'] refine):
         self.ptr.refine(<int*>refine.data)
@@ -740,6 +754,12 @@ cdef class QuadForest:
         cdef TMRQuadrantArray *array = NULL
         array = self.ptr.getNodesWithAttribute(attr)
         return _init_QuadrantArray(array)
+
+    def writeToVTK(self, char *filename):
+        self.ptr.writeToVTK(filename)
+
+    def writeForestToVTK(self, char *filename):
+        self.ptr.writeForestToVTK(filename)
 
 cdef _init_QuadForest(TMRQuadForest* ptr):
     forest = QuadForest()
@@ -780,7 +800,10 @@ cdef class OctForest:
         self.ptr.repartition()
 
     def createTrees(self, int depth):
-        self.ptr.createRandomTrees(depth)
+        self.ptr.createTrees(depth)
+
+    def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
+        self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
     def refine(self, np.ndarray[int, ndim=1, mode='c'] _refine):
         self.ptr.refine(<int*>_refine.data)
@@ -810,7 +833,13 @@ cdef class OctForest:
         cdef TMROctantArray *array = NULL
         array = self.ptr.getNodesWithAttribute(attr)
         return _init_OctantArray(array)
-   
+
+    def writeToVTK(self, char *filename):
+        self.ptr.writeToVTK(filename)
+
+    def writeForestToVTK(self, char *filename):
+        self.ptr.writeForestToVTK(filename)
+
 cdef _init_OctForest(TMROctForest* ptr):
     forest = OctForest()
     forest.ptr = ptr

@@ -198,7 +198,7 @@ cdef extern from "TMRQuadForest.h":
         void setFullConnectivity(int, int, int, const int*, const int*)
         void repartition()
         void createTrees(int)
-        void createRandomTrees(int)
+        void createRandomTrees(int, int, int)
         void refine(int*)
         TMRQuadForest *duplicate()
         TMRQuadForest *coarsen()
@@ -209,6 +209,8 @@ cdef extern from "TMRQuadForest.h":
         void createMeshConn(const int**, const int*)
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
+        void writeToVTK(const char*)
+        void writeForestToVTK(const char*)
 
 cdef extern from "TMROctant.h":
     cdef cppclass TMROctant:
@@ -242,7 +244,7 @@ cdef extern from "TMROctForest.h":
         void setFullConnectivity(int, int, int, const int*, const int*)
         void repartition()
         void createTrees(int)
-        void createRandomTrees(int)
+        void createRandomTrees(int, int, int)
         void refine(int*)
         TMROctForest *duplicate()
         TMROctForest *coarsen()
@@ -253,6 +255,8 @@ cdef extern from "TMROctForest.h":
         void createMeshConn(const int**, const int*)
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMROctForest*, TACSBVecInterp*)
+        void writeToVTK(const char*)
+        void writeForestToVTK(const char*)
 
 cdef extern from "TMR_TACSCreator.h":
     cdef cppclass TMRBoundaryConditions(TMREntity):

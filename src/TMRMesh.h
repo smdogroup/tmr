@@ -247,16 +247,16 @@ class TMRVolumeMesh : public TMREntity {
 
   // Keep the bottom/top surfaces (master/target) in the mesh for
   // future reference
-  TMRFace *bottom, *top;
-  int bottom_dir, top_dir;
+  TMRFace *target, *source;
+  int target_dir, source_dir;
 
   int num_points; // The number of points
   TMRPoint *X; // The physical node locations
   int *vars; // The global variable numbers
 
   // Hexahedral mesh information
-  int num_hexes;
-  int *hexes;
+  int num_hex;
+  int *hex;
 };
 
 /*
@@ -267,8 +267,8 @@ class TMRVolumeMesh : public TMREntity {
 */
 class TMRMesh : public TMREntity {
  public:
-  static const int TMR_QUADS = 1;
-  static const int TMR_HEXES = 2;
+  static const int TMR_QUAD = 1;
+  static const int TMR_HEX = 2;
 
   TMRMesh( MPI_Comm _comm, TMRModel *_geo );
   ~TMRMesh();
@@ -279,11 +279,11 @@ class TMRMesh : public TMREntity {
 
   // Write the mesh to a VTK file
   void writeToVTK( const char *filename, 
-                   int flag=(TMRMesh::TMR_QUADS | TMRMesh::TMR_HEXES) );
+                   int flag=(TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX) );
 
   // Write the mesh to a BDF file
   void writeToBDF( const char *filename,
-                   int flag=(TMRMesh::TMR_QUADS | TMRMesh::TMR_HEXES) );
+                   int flag=(TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX) );
 
   // Retrieve the mesh components
   int getMeshPoints( TMRPoint **_X );
@@ -309,9 +309,9 @@ class TMRMesh : public TMREntity {
   int num_quads;
   int *quads;
 
-  // The number of hexes
-  int num_hexes;
-  int *hexes;
+  // The number of hexahedral elements in the mesh
+  int num_hex;
+  int *hex;
 };
 
 #endif // TMR_MESH_H

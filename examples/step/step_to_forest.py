@@ -12,6 +12,8 @@ p.add_argument('--htarget', type=float, default=4.0)
 p.add_argument('--filename', type=str, default=None, help='STEP file name')
 p.add_argument('--output', type=str, default='surface-mesh.vtk',
                help='output file name')
+p.add_argument('--forest_output', type=str, default='forest-mesh.vtk',
+               help='forest output file name')
 args = p.parse_args()
 
 # Get the value of the filename
@@ -46,3 +48,19 @@ mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
 mesh.writeToVTK(args.output)
+
+# Create a model from the mesh
+model = mesh.createModelFromMesh()
+
+# Create the corresponding mesh topology from the mesh-model 
+topo = TMR.Topology(comm, model)
+
+# Create the quad forest and set the topology of the forest
+forest = TMR.QuadForest(comm)
+forest.setTopology(topo)
+
+# Create random trees and balance the mesh. Print the output file
+forest.createRandomTrees()
+forest.balance(1)
+filename = os.path.splitext(args.forest_output)[0] + '%d.vtk'%(comm.rank)
+forest.writeForestToVTK(filename)

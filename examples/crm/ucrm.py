@@ -1,8 +1,14 @@
 from mpi4py import MPI
 from tmr import TMR
+import argparse
 
 # Create the communicator
 comm = MPI.COMM_WORLD
+
+# Create an argument parser to read in command-line arguments
+p = argparse.ArgumentParser()
+p.add_argument('--reverse', default=False, action='store_true')
+args = p.parse_args()
 
 # Load the model from the STEP file
 geo = TMR.LoadModel('first-section.stp')
@@ -13,13 +19,12 @@ vols = geo.getVolumes()
 # Get the edges/faces from the geometry
 faces = geo.getFaces()
 edges = geo.getEdges()
-verts = geo.getVertices()
 
-# Create the model again, this time without volumes
-geo = TMR.Model(verts, edges, faces)
-
-# Set the master/target relationships
-faces[4].setSource(vols[0], faces[5])
+# Set the source/target relationships
+if args.reverse:
+    faces[4].setSource(vols[0], faces[5])
+else:
+    faces[5].setSource(vols[0], faces[4])
 edges[8].setSource(edges[5])
 
 # Create the geometry
@@ -34,4 +39,4 @@ htarget = 4.0
 mesh.mesh(htarget, opts=opts)
 
 # Write the mesh to a bdf file
-mesh.writeToVTK("volume-mesh.vtk")
+mesh.writeToBDF('volume-mesh.bdf', 'hex')

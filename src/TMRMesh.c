@@ -516,31 +516,31 @@ static void computeQuadEdges( int nnodes, int nquads,
 /*
   Compute the connectivity between edges within a hexahedral mesh
 */
-static void computeHexEdgesAndFaces( int nnodes, int nhexes,
-                                     const int hexes[],
+static void computeHexEdgesAndFaces( int nnodes, int nhex,
+                                     const int hex[],
                                      int *_num_hex_edges,
                                      int **_hex_edges,
                                      int **_hex_edge_nums,
                                      int *_num_hex_faces,
                                      int **_hex_faces,
                                      int **_hex_face_nums ){
-  // Compute the connectivity from nodes to hexes
+  // Compute the connectivity from nodes to hex
   int *ptr;
-  int *node_to_hexes;
-  computeNodeToElems(nnodes, nhexes, 8, hexes, &ptr, &node_to_hexes);
+  int *node_to_hex;
+  computeNodeToElems(nnodes, nhex, 8, hex, &ptr, &node_to_hex);
 
   // Comput the neighbors for each hex
-  int *hex_edge_nums = new int[ 12*nhexes ];
-  int *hex_face_nums = new int[ 6*nhexes ];
-  for ( int i = 0; i < 12*nhexes; i++ ){
+  int *hex_edge_nums = new int[ 12*nhex ];
+  int *hex_face_nums = new int[ 6*nhex ];
+  for ( int i = 0; i < 12*nhex; i++ ){
     hex_edge_nums[i] = -1;
   }
-  for ( int i = 0; i < 6*nhexes; i++ ){
+  for ( int i = 0; i < 6*nhex; i++ ){
     hex_face_nums[i] = -1;
   }
 
   int edge_num = 0, face_num = 0;
-  for ( int i = 0; i < nhexes; i++ ){
+  for ( int i = 0; i < nhex; i++ ){
     // Search through each hexahedral element for the edge
     for ( int j = 0; j < 12; j++ ){
       if (hex_edge_nums[12*i+j] < 0){
@@ -548,8 +548,8 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
 
         // Find the edge nodes for the new edge
         int e[2];
-        e[0] = hexes[8*i + hex_edge_nodes[j][0]];
-        e[1] = hexes[8*i + hex_edge_nodes[j][1]];
+        e[0] = hex[8*i + hex_edge_nodes[j][0]];
+        e[1] = hex[8*i + hex_edge_nodes[j][1]];
 
         // Find the node that shares the edge
         int kp = ptr[e[0]];
@@ -557,8 +557,8 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
 
         for ( ; kp < kpend; kp++ ){
           // Find the potential hex neighbor
-          int hex = node_to_hexes[kp];
-          if (i == hex){
+          int ihex = node_to_hex[kp];
+          if (i == ihex){
             continue;
           }
 
@@ -566,13 +566,13 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
           // the edges match
           for ( int k = 0; k < 12; k++ ){
             int e2[2];
-            e2[0] = hexes[8*hex + hex_edge_nodes[k][0]];
-            e2[1] = hexes[8*hex + hex_edge_nodes[k][1]];
+            e2[0] = hex[8*ihex + hex_edge_nodes[k][0]];
+            e2[1] = hex[8*ihex + hex_edge_nodes[k][1]];
 
             // Check if the adjacent edge matches in either direction
             if ((e[0] == e2[0] && e[1] == e2[1]) ||
                 (e[0] == e2[1] && e[1] == e2[0])){
-              hex_edge_nums[12*hex + k] = edge_num;
+              hex_edge_nums[12*ihex + k] = edge_num;
             }
           }
         }
@@ -589,10 +589,10 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
         
         // Find the nodes associated with face j
         int f[4];
-        f[0] = hexes[8*i + hex_face_nodes[j][0]];
-        f[1] = hexes[8*i + hex_face_nodes[j][1]];
-        f[2] = hexes[8*i + hex_face_nodes[j][2]];
-        f[3] = hexes[8*i + hex_face_nodes[j][3]];
+        f[0] = hex[8*i + hex_face_nodes[j][0]];
+        f[1] = hex[8*i + hex_face_nodes[j][1]];
+        f[2] = hex[8*i + hex_face_nodes[j][2]];
+        f[3] = hex[8*i + hex_face_nodes[j][3]];
         
         // Find a node that shares the face
         int kp = ptr[f[0]];
@@ -600,8 +600,8 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
 
         for ( ; kp < kpend; kp++ ){
           // Find the potential hex neighbor
-          int hex = node_to_hexes[kp];
-          if (i == hex){
+          int ihex = node_to_hex[kp];
+          if (i == ihex){
             continue;
           }
 
@@ -609,10 +609,10 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
           // the edges match
           for ( int k = 0; k < 6; k++ ){
             int f2[4];
-            f2[0] = hexes[8*hex + hex_face_nodes[k][0]];
-            f2[1] = hexes[8*hex + hex_face_nodes[k][1]];
-            f2[2] = hexes[8*hex + hex_face_nodes[k][2]];
-            f2[3] = hexes[8*hex + hex_face_nodes[k][3]];
+            f2[0] = hex[8*ihex + hex_face_nodes[k][0]];
+            f2[1] = hex[8*ihex + hex_face_nodes[k][1]];
+            f2[2] = hex[8*ihex + hex_face_nodes[k][2]];
+            f2[3] = hex[8*ihex + hex_face_nodes[k][3]];
 
             // Check if the adjacent edge matches in either direction
             for ( int ort = 0; ort < 8; ort++ ){
@@ -620,7 +620,7 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
                   f[1] == f2[face_orient[ort][1]] &&
                   f[2] == f2[face_orient[ort][2]] &&
                   f[3] == f2[face_orient[ort][3]]){
-                hex_face_nums[6*hex + k] = face_num;
+                hex_face_nums[6*ihex + k] = face_num;
                 break;
               }
             }
@@ -635,7 +635,7 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
 
   // Free the node->hex data
   delete [] ptr;
-  delete [] node_to_hexes;
+  delete [] node_to_hex;
 
   if (_num_hex_edges){
     *_num_hex_edges = edge_num;
@@ -647,19 +647,19 @@ static void computeHexEdgesAndFaces( int nnodes, int nhexes,
   // Create the hex edges/faces
   int *hex_edges = new int[ 2*edge_num ];
   int *hex_faces = new int[ 4*face_num ];
-  for ( int i = 0; i < nhexes; i++ ){
+  for ( int i = 0; i < nhex; i++ ){
     for ( int j = 0; j < 12; j++ ){
       int e = hex_edge_nums[12*i+j];
-      hex_edges[2*e] = hexes[8*i + hex_edge_nodes[j][0]];
-      hex_edges[2*e+1] = hexes[8*i + hex_edge_nodes[j][1]];
+      hex_edges[2*e] = hex[8*i + hex_edge_nodes[j][0]];
+      hex_edges[2*e+1] = hex[8*i + hex_edge_nodes[j][1]];
     }
 
     for ( int j = 0; j < 6; j++ ){
       int f = hex_face_nums[6*i+j];
-      hex_faces[4*f] = hexes[8*i + hex_face_nodes[j][0]];
-      hex_faces[4*f+1] = hexes[8*i + hex_face_nodes[j][1]];
-      hex_faces[4*f+2] = hexes[8*i + hex_face_nodes[j][2]];
-      hex_faces[4*f+3] = hexes[8*i + hex_face_nodes[j][3]];
+      hex_faces[4*f] = hex[8*i + hex_face_nodes[j][0]];
+      hex_faces[4*f+1] = hex[8*i + hex_face_nodes[j][1]];
+      hex_faces[4*f+2] = hex[8*i + hex_face_nodes[j][2]];
+      hex_faces[4*f+3] = hex[8*i + hex_face_nodes[j][3]];
     }
   }
 
@@ -1623,7 +1623,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
               w3*pts[2*p3+1] + w4*pts[2*p4+1]) -
              (c1*pts[1] + c2*pts[2*(nx-1)+1] +
               c3*pts[2*(nx+ny-2)+1] + c4*pts[2*(2*nx+ny-3)+1]));
-          }
+        }
       }
 
       // Allocate and evaluate the new physical point locations
@@ -2813,7 +2813,7 @@ TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm,
   volume = _volume;
   volume->incref();
 
-  // Set the number of loops on the bottom face
+  // Set the number of loops on the source face
   num_face_loops = 0;
   face_loops = NULL;
   face_loop_ptr = NULL;
@@ -2825,22 +2825,23 @@ TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm,
 
   // Set the points in the mesh
   num_points = 0;
-  num_hexes = 0;
+  num_hex = 0;
 
   // Set all the pointer to null
   X = NULL;
-  hexes = NULL;
+  hex = NULL;
   vars = NULL;
 
   // Set the additional connectivity information that is required for
   // the volume mesh.
-  bottom = top = NULL;
+  source = target = NULL;
+  source_dir = target_dir = 0;
 }
 
 TMRVolumeMesh::~TMRVolumeMesh(){
   volume->decref();
   if (X){ delete [] X; }
-  if (hexes){ delete [] hexes; }
+  if (hex){ delete [] hex; }
   if (vars){ delete [] vars; }
   if (face_loops){
     for ( int k = 0; k < face_loop_ptr[num_face_loops]; k++ ){
@@ -2864,9 +2865,9 @@ void TMRVolumeMesh::getMeshPoints( int *_npts, TMRPoint **_X ){
 /*
   Retrieve the local connectivity for this volume mesh
 */
-int TMRVolumeMesh::getLocalConnectivity( const int **_hexes ){
-  if (_hexes){ *_hexes = hexes; }
-  return num_hexes;
+int TMRVolumeMesh::getLocalConnectivity( const int **_hex ){
+  if (_hex){ *_hex = hex; }
+  return num_hex;
 }
 
 /*
@@ -2876,7 +2877,7 @@ void TMRVolumeMesh::writeToVTK( const char *filename ){
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
 
-  if (mpi_rank == 0 && hexes){
+  if (mpi_rank == 0 && hex){
     // Write out the connectivity of the mesh to a temp vtk file
     FILE *fp = fopen("volume-mesh.vtk", "w");
     if (fp){
@@ -2891,16 +2892,16 @@ void TMRVolumeMesh::writeToVTK( const char *filename ){
       }
     
       // Write out the cell values
-      fprintf(fp, "\nCELLS %d %d\n", num_hexes, 9*num_hexes);
-      for ( int k = 0; k < num_hexes; k++ ){
+      fprintf(fp, "\nCELLS %d %d\n", num_hex, 9*num_hex);
+      for ( int k = 0; k < num_hex; k++ ){
         fprintf(fp, "8 %d %d %d %d %d %d %d %d\n", 
-                hexes[8*k], hexes[8*k+1], hexes[8*k+2], hexes[8*k+3],
-                hexes[8*k+4], hexes[8*k+5], hexes[8*k+6], hexes[8*k+7]);
+                hex[8*k], hex[8*k+1], hex[8*k+2], hex[8*k+3],
+                hex[8*k+4], hex[8*k+5], hex[8*k+6], hex[8*k+7]);
       }
 
-      // All hexes
-      fprintf(fp, "\nCELL_TYPES %d\n", num_hexes);
-      for ( int k = 0; k < num_hexes; k++ ){
+      // All hex
+      fprintf(fp, "\nCELL_TYPES %d\n", num_hex);
+      for ( int k = 0; k < num_hex; k++ ){
         fprintf(fp, "%d\n", 12);
       }
       fclose(fp);
@@ -2931,33 +2932,33 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
   int *f = new int[ num_faces ];
   memset(f, 0, num_faces*sizeof(int));
 
-  // Set the pointers for the top/bottom faces and their directions 
+  // Set the pointers for the target/source faces and their directions 
   // relative to the interior of the hexahedral volume
-  top = NULL;
-  top_dir = 1;
-  bottom = NULL;
-  bottom_dir = 1;
+  target = NULL;
+  target_dir = 1;
+  source = NULL;
+  source_dir = 1;
 
   // Loop over all the
   for ( int i = 0; i < num_faces; i++ ){
-    TMRFace *source;
-    faces[i]->getSource(NULL, NULL, &source);
-    if (source){
-      // The natural bottom orientation should point in to the volume,
+    TMRFace *src;
+    faces[i]->getSource(NULL, NULL, &src);
+    if (src){
+      // The natural source orientation should point in to the volume,
       // otherwise its orientation must be flipped.
-      bottom = faces[i];
-      bottom_dir = -face_dir[i];
+      target = faces[i];
+      target_dir = -face_dir[i];
 
       // Find the source face
-      top = source;
+      source = src;
       f[i] = 1;
       for ( int j = 0; j < num_faces; j++ ){
         if (faces[j] == source){
           f[j] = 1;
 
-          // The natural orientation for the top face should point out
+          // The natural orientation for the target face should point out
           // of the volume, otherwise its orientation must be flipped.
-          top_dir = face_dir[j];
+          source_dir = face_dir[j];
         }
       }
 
@@ -2996,28 +2997,28 @@ Through-thickness meshes must be structured\n");
     return mesh_fail;
   }
 
-  // Each face that is not either the top or the bottom, must have
+  // Each face that is not either the target or the source, must have
   // only four edges and must be structured. Two of the parallel edges
-  // associated with these faces should touch the top and bottom face,
+  // associated with these faces should touch the target and source face,
   // while remaining edges must be parallel and have the same number
   // of nodes. Furthermore, the one parallel edge will be shared by
-  // the next face. We loop over the bottom edge loops and find the
+  // the next face. We loop over the source edge loops and find the
   // connecting faces.
 
   // Get the number of edge loops
-  num_face_loops = bottom->getNumEdgeLoops();
+  num_face_loops = source->getNumEdgeLoops();
 
   // Count up the total number of faces 
   face_loop_ptr = new int[ num_face_loops+1 ];
 
   int count = 0;
   for ( int k = 0; k < num_face_loops; k++ ){
-    TMREdgeLoop *bottom_loop;
-    bottom->getEdgeLoop(k, &bottom_loop);
+    TMREdgeLoop *source_loop;
+    source->getEdgeLoop(k, &source_loop);
 
     // Get the number of edges for this loop
     int nedges;
-    bottom_loop->getEdgeLoop(&nedges, NULL, NULL);
+    source_loop->getEdgeLoop(&nedges, NULL, NULL);
     count += nedges;
   }
 
@@ -3035,22 +3036,22 @@ Through-thickness meshes must be structured\n");
     // Set the next entry in the loop pointer
     face_loop_ptr[k+1] = face_loop_ptr[k];
 
-    // The top and bottom edge loops
-    TMREdgeLoop *bottom_loop;
-    bottom->getEdgeLoop(k, &bottom_loop);
+    // The target and source edge loops
+    TMREdgeLoop *source_loop;
+    source->getEdgeLoop(k, &source_loop);
 
-    // Get the edges associated with the bottom loop
+    // Get the edges associated with the source loop
     int nedges;
     TMREdge **edges;
-    bottom_loop->getEdgeLoop(&nedges, &edges, NULL);
+    source_loop->getEdgeLoop(&nedges, &edges, NULL);
 
     for ( int j = 0; j < nedges; j++ ){
       // Search for the other face object that shares the edge
-      // object edges[j] with the bottom face object
+      // object edges[j] with the source face object
       TMRFace *face = NULL;
       int fdir = 0;
       for ( int i = 0; i < num_faces; i++ ){
-        if (!(faces[i] == top || faces[i] == bottom)){
+        if (!(faces[i] == target || faces[i] == source)){
           // Get the edge loop associated with the face
           TMREdgeLoop *loop;
           faces[i]->getEdgeLoop(0, &loop);
@@ -3075,7 +3076,7 @@ Through-thickness meshes must be structured\n");
         }
       }
 
-      // This face is not the top or bottom face and therefore must
+      // This face is not the target or source face and therefore must
       // be structured.
       TMREdgeLoop *loop;
       face->getEdgeLoop(0, &loop);
@@ -3139,56 +3140,56 @@ Inconsistent number of edge points through-thickness %d != %d\n",
     }
   }
 
-  // Get the information for the top surface
+  // Get the information for the target surface
   TMRFaceMesh *mesh;
-  top->getMesh(&mesh);
+  target->getMesh(&mesh);
 
   // Number of points in the quadrilateral mesh on the surface
   int num_quad_pts = 0;
-  TMRPoint *Xtop;
-  mesh->getMeshPoints(&num_quad_pts, NULL, &Xtop);
+  TMRPoint *Xtarget;
+  mesh->getMeshPoints(&num_quad_pts, NULL, &Xtarget);
 
-  // Get information for the bottom surface
-  bottom->getMesh(&mesh);
+  // Get information for the source surface
+  source->getMesh(&mesh);
     
-  // Points on the top surface
+  // Points on the target surface
   TMRPoint *Xbot;
   mesh->getMeshPoints(NULL, NULL, &Xbot);
 
-  // Get the local connectivity on the bottom surface
+  // Get the local connectivity on the source surface
   const int *quads;
   int num_quads = mesh->getLocalConnectivity(&quads);
 
   // The number of hexahedral elements in the mesh
-  num_hexes = (num_depth_pts-1)*num_quads;
+  num_hex = (num_depth_pts-1)*num_quads;
   num_points = num_depth_pts*num_quad_pts;
-  hexes = new int[ 8*num_hexes ];
+  hex = new int[ 8*num_hex ];
   X = new TMRPoint[ num_points ];
 
   // Flip the ordering in the hexahedral elements
   const int flip[] = {0, 3, 2, 1};
 
-  int *hex = hexes;
+  int *h = hex;
   for ( int j = 0; j < num_depth_pts-1; j++ ){
     for ( int i = 0; i < num_quads; i++ ){
       // Set the quadrilateral points in the base layer
-      if (bottom_dir > 0){
+      if (source_dir > 0){
         for ( int k = 0; k < 4; k++ ){
-          hex[k] = j*num_quad_pts + quads[4*i+flip[k]];
+          h[k] = j*num_quad_pts + quads[4*i+flip[k]];
         }
         for ( int k = 0; k < 4; k++ ){
-          hex[4+k] = (j+1)*num_quad_pts + quads[4*i+flip[k]];
+          h[4+k] = (j+1)*num_quad_pts + quads[4*i+flip[k]];
         }
       }
       else {
         for ( int k = 0; k < 4; k++ ){
-          hex[k] = j*num_quad_pts + quads[4*i+k];
+          h[k] = j*num_quad_pts + quads[4*i+k];
         }
         for ( int k = 0; k < 4; k++ ){
-          hex[4+k] = (j+1)*num_quad_pts + quads[4*i+k];
+          h[4+k] = (j+1)*num_quad_pts + quads[4*i+k];
         }
       }
-      hex += 8;
+      h += 8;
     }
   }
 
@@ -3197,9 +3198,9 @@ Inconsistent number of edge points through-thickness %d != %d\n",
   for ( int j = 0; j < num_depth_pts; j++ ){
     double u = 1.0*j/(num_depth_pts-1);
     for ( int i = 0; i < num_quad_pts; i++ ){
-      x[0].x = (1.0 - u)*Xbot[i].x + u*Xtop[i].x;
-      x[0].y = (1.0 - u)*Xbot[i].y + u*Xtop[i].y;
-      x[0].z = (1.0 - u)*Xbot[i].z + u*Xtop[i].z;
+      x[0].x = (1.0 - u)*Xbot[i].x + u*Xtarget[i].x;
+      x[0].y = (1.0 - u)*Xbot[i].y + u*Xtarget[i].y;
+      x[0].z = (1.0 - u)*Xbot[i].z + u*Xtarget[i].z;
       x += 1;
     }
   }
@@ -3245,11 +3246,11 @@ static int get_structured_index( const int nx, const int ny,
 /*
   Order the mesh points uniquely
 
-  This code first copies the mesh locations from the top and bottom
+  This code first copies the mesh locations from the target and source
   surfaces and then the surrounding surfaces that are structured. The
   code takes into account the orientations of the surrounding surfaces
   by computing the absolute orientations of the surface meshes. The
-  orientation of the bottom/top surfaces is already accounted for
+  orientation of the source/target surfaces is already accounted for
   within the connectivity.
 */
 int TMRVolumeMesh::setNodeNums( int *num ){
@@ -3260,52 +3261,52 @@ int TMRVolumeMesh::setNodeNums( int *num ){
       vars[k] = -1;
     }
 
-    // Get the top surface mesh and top surface mesh points
+    // Get the target surface mesh and target surface mesh points
     TMRFaceMesh *mesh;
-    top->getMesh(&mesh);
+    target->getMesh(&mesh);
 
     // Number of points in the quadrilateral mesh on the surface
     int num_quad_pts = 0;
     mesh->getMeshPoints(&num_quad_pts, NULL, NULL);
 
-    // Set the nodes on the bottom face
+    // Set the nodes on the source face
     const int *face_vars;
     mesh->getNodeNums(&face_vars);
 
-    // Set the top surface variable numbers
+    // Set the target surface variable numbers
     for ( int i = 0; i < num_quad_pts; i++ ){
       vars[i + num_quad_pts*(num_depth_pts-1)] = face_vars[i];
     }
 
-    // Get information from the bottom surface mesh
-    bottom->getMesh(&mesh);
+    // Get information from the source surface mesh
+    source->getMesh(&mesh);
     mesh->getNodeNums(&face_vars);
 
-    // Set the bottom face variable numbers
+    // Set the source face variable numbers
     for ( int i = 0; i < num_quad_pts; i++ ){
       vars[i] = face_vars[i];
     }
 
-    // Now the top and bottom surfaces of the volume have the correct
+    // Now the target and source surfaces of the volume have the correct
     // ordering, but the sides are not ordered correctly. Scan through
     // the structured sides (with the same ordering as defined by the
-    // edge loops on the bottom surface) and determine the node
+    // edge loops on the source surface) and determine the node
     // ordering.
 
     // Keep track of the total number of nodes encountered around the
-    // edge of the bottom face.
+    // edge of the source face.
     int ioffset = 0;
 
     // Loop over the nodes that are on surfaces...
     for ( int k = 0; k < num_face_loops; k++ ){
-      // Get the bottom edge loop and bottom edges
-      TMREdgeLoop *bottom_loop;
-      bottom->getEdgeLoop(k, &bottom_loop);
+      // Get the source edge loop and source edges
+      TMREdgeLoop *source_loop;
+      source->getEdgeLoop(k, &source_loop);
 
-      // Get the number of bottom edges
+      // Get the number of source edges
       int nedges;
       TMREdge **edges;
-      bottom_loop->getEdgeLoop(&nedges, &edges, NULL);
+      source_loop->getEdgeLoop(&nedges, &edges, NULL);
 
       // Set the original ioffset number
       int ioffset_start = ioffset;
@@ -3328,7 +3329,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
         TMREdge **face_edges;
         face_loop->getEdgeLoop(&num_face_edges, &face_edges, NULL);
 
-        // Determine where the bottom edge appears in the face_edge
+        // Determine where the source edge appears in the face_edge
         // list. This determines the origin location for the local
         // face ordering.
         int orient = 0;
@@ -3365,9 +3366,9 @@ int TMRVolumeMesh::setNodeNums( int *num ){
             int local = 0;
             
             // Determine the local number for the node on the boundary
-            // of the face connecting the top and bottom surfaces
-            // based on the orientation of the bottom face mesh.
-            if (bottom_dir < 0){
+            // of the face connecting the target and source surfaces
+            // based on the orientation of the source face mesh.
+            if (source_dir < 0){
               // When this is the last node in the loop, then the
               // ordering must loop back on itself.
               if (i == face_loop_edge_count[ptr]-1 &&
@@ -3379,7 +3380,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
               }
             }
             else {
-              // The bottom direction is reversed, so we order each
+              // The source direction is reversed, so we order each
               // face in reverse as well
               if (i == 0 && ptr == face_loop_ptr[k+1]-1){
                 local = j*num_quad_pts + ioffset_start;
@@ -3479,9 +3480,9 @@ TMRMesh::TMRMesh( MPI_Comm _comm, TMRModel *_geo ){
   // Set the mesh properties
   num_nodes = 0;
   num_quads = 0;
-  num_hexes = 0;
+  num_hex = 0;
   quads = NULL;
-  hexes = NULL;
+  hex = NULL;
   X = NULL;
 }
 
@@ -3519,7 +3520,7 @@ TMRMesh::~TMRMesh(){
 
   geo->decref();
   if (quads){ delete [] quads; }
-  if (hexes){ delete [] hexes; }
+  if (hex){ delete [] hex; }
   if (X){ delete [] X; }
 }
 
@@ -3625,15 +3626,15 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
   // Set the number of nodes in the mesh
   num_nodes = num; 
 
-  // Count up the number of quadrilaterals or hexes in the mesh
+  // Count up the number of quadrilaterals or hex in the mesh
   num_quads = 0;
-  num_hexes = 0;
+  num_hex = 0;
 
   if (num_volumes > 0){
     for ( int i = 0; i < num_volumes; i++ ){
       TMRVolumeMesh *mesh = NULL;
       volumes[i]->getMesh(&mesh);
-      num_hexes += mesh->getLocalConnectivity(NULL);
+      num_hex += mesh->getLocalConnectivity(NULL);
     }
   }
   if (num_faces > 0){
@@ -3681,8 +3682,8 @@ void TMRMesh::initMesh(){
   // Allocate the global arrays
   X = new TMRPoint[ num_nodes ];
 
-  if (num_hexes > 0){
-    hexes = new int[ 8*num_hexes ];
+  if (num_hex > 0){
+    hex = new int[ 8*num_hex ];
 
     int *count = new int[ num_nodes ];
     memset(count, 0, num_nodes*sizeof(int));
@@ -3693,7 +3694,7 @@ void TMRMesh::initMesh(){
     geo->getVolumes(&num_volumes, &volumes);
 
     // Set the values into the global arrays
-    int *h = hexes;
+    int *h = hex;
     for ( int i = 0; i < num_volumes; i++ ){
       // Get the mesh
       TMRVolumeMesh *mesh = NULL;
@@ -3808,13 +3809,13 @@ int TMRMesh::getMeshPoints( TMRPoint **_X ){
   not already exist)
 */
 void TMRMesh::getMeshConnectivity( int *_nquads, const int **_quads,
-                                   int *_nhexes, const int **_hexes ){
-  if (_quads || _hexes){ 
+                                   int *_nhex, const int **_hex ){
+  if (_quads || _hex){ 
     if (!X){ initMesh(); }
     if (_nquads){ *_nquads = num_quads; }
     if (_quads){ *_quads = quads; }
-    if (_nhexes){ *_nhexes = num_hexes; }
-    if (_hexes){ *_hexes = hexes; }    
+    if (_nhex){ *_nhex = num_hex; }
+    if (_hex){ *_hex = hex; }    
   }
 }
 
@@ -3825,13 +3826,13 @@ void TMRMesh::writeToVTK( const char *filename, int flag ){
   int rank;
   MPI_Comm_rank(comm, &rank);
   if (rank == 0 && num_nodes > 0){
-    // Check whether to print out just quads or hexes or both
+    // Check whether to print out just quads or hex or both
     int nquad = num_quads;
-    int nhex = num_hexes;
-    if (!(flag & TMR_QUADS)){
+    int nhex = num_hex;
+    if (!(flag & TMR_QUAD)){
       nquad = 0;
     }
-    if (!(flag & TMR_HEXES)){
+    if (!(flag & TMR_HEX)){
       nhex = 0;
     }
 
@@ -3858,8 +3859,8 @@ void TMRMesh::writeToVTK( const char *filename, int flag ){
       }
       for ( int k = 0; k < nhex; k++ ){
         fprintf(fp, "8 %d %d %d %d %d %d %d %d\n", 
-                hexes[8*k], hexes[8*k+1], hexes[8*k+2], hexes[8*k+3],
-                hexes[8*k+4], hexes[8*k+5], hexes[8*k+6], hexes[8*k+7]);
+                hex[8*k], hex[8*k+1], hex[8*k+2], hex[8*k+3],
+                hex[8*k+4], hex[8*k+5], hex[8*k+6], hex[8*k+7]);
       }
 
       // All quadrilaterals
@@ -3904,7 +3905,7 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
   	      i+1, X[i].z, coord_disp, " ", seid);
       }
 
-      if (num_quads > 0 && (flag & TMR_QUADS)){
+      if (num_quads > 0 && (flag & TMR_QUAD)){
         int num_faces;
         TMRFace **faces;
         geo->getFaces(&num_faces, &faces);
@@ -3958,7 +3959,7 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
           }
         }
       }
-      if (num_hexes > 0 && (flag & TMR_HEXES)){
+      if (num_hex > 0 && (flag & TMR_HEX)){
         int num_volumes;
         TMRVolume **volumes;
         geo->getVolumes(&num_volumes, &volumes);
@@ -4076,7 +4077,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   // Create all the remaining nodes. These are associated with the
   // TMRVolumeMesh since they do not lie on an edge or face
-  if (num_hexes > 0){
+  if (num_hex > 0){
     for ( int i = 0; i < num_nodes; i++ ){
       if (!new_verts[i]){
         new_verts[i] = new TMRVertexFromPoint(X[i]);
@@ -4093,9 +4094,9 @@ TMRModel* TMRMesh::createModelFromMesh(){
   int *hex_edges = NULL, *hex_faces = NULL;
   int *hex_edge_nums = NULL, *hex_face_nums = NULL;
 
-  if (num_hexes > 0){
+  if (num_hex > 0){
     // Compute the hexahedral edges and surfaces
-    computeHexEdgesAndFaces(num_nodes, num_hexes, hexes,
+    computeHexEdgesAndFaces(num_nodes, num_hex, hex,
                             &num_hex_edges, &hex_edges, &hex_edge_nums,
                             &num_hex_faces, &hex_faces, &hex_face_nums);
   }
@@ -4287,7 +4288,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
   }
 
   // Create the hexahedral elements
-  if (num_hexes > 0){
+  if (num_hex > 0){
     for ( int i = 0; i < num_mesh_edges; i++ ){
       if (!new_edges[i]){
         // Get the edges
@@ -4315,7 +4316,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
   // Create the face array
   int *sorted_faces = NULL;
 
-  if (num_hexes > 0){
+  if (num_hex > 0){
     // Allocate an array to store the searchable array that
     // stores the face nodes
     sorted_faces = new int[ 5*num_hex_faces ];
@@ -4434,7 +4435,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
   }
 
   // Create the remaining faces
-  if (num_hexes > 0){
+  if (num_hex > 0){
     for ( int i = 0; i < num_mesh_faces; i++ ){
       if (!new_faces[i]){
         // The edge, direction and vertex information
@@ -4495,11 +4496,11 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   TMRVolume **new_volumes = NULL;
 
-  if (num_hexes > 0){
+  if (num_hex > 0){
     // Create the new volume array
-    new_volumes = new TMRVolume*[ num_hexes ];
+    new_volumes = new TMRVolume*[ num_hex ];
 
-    for ( int i = 0; i < num_hexes; i++ ){
+    for ( int i = 0; i < num_hex; i++ ){
       // Get the edges
       TMRVertex *v[8];
       TMREdge *e[12];
@@ -4508,15 +4509,15 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
       // Get the vertices
       for ( int j = 0; j < 8; j++ ){
-        v[j] = new_verts[hexes[8*i + hex_coordinate_order[j]]];
+        v[j] = new_verts[hex[8*i + hex_coordinate_order[j]]];
       }
 
       // Get the edges and their directions
       for ( int j = 0; j < 12; j++ ){
         int edge_num = hex_edge_nums[12*i + j];
         edir[j] = 1;
-        if (hexes[8*i + hex_edge_nodes[j][0]] >
-            hexes[8*i + hex_edge_nodes[j][1]]){
+        if (hex[8*i + hex_edge_nodes[j][0]] >
+            hex[8*i + hex_edge_nodes[j][1]]){
           edir[j] = -1;
         }
         edir[j] *= edge_dir[edge_num];
@@ -4552,11 +4553,11 @@ TMRModel* TMRMesh::createModelFromMesh(){
   // Create the geometry object
   TMRModel *geo = NULL;
 
-  if (num_hexes > 0){
+  if (num_hex > 0){
     geo = new TMRModel(num_nodes, new_verts,
                        num_mesh_edges, new_edges,
                        num_mesh_faces, new_faces,
-                       num_hexes, new_volumes);
+                       num_hex, new_volumes);
   }
   else {
     geo = new TMRModel(num_nodes, new_verts,
