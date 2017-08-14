@@ -1,5 +1,6 @@
 #include "TMRTriangularize.h"
 #include "TMRBspline.h"
+#include "TMRNativeTopology.h"
 #include <stdio.h>
 #include <math.h>
 
@@ -22,8 +23,10 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  // Create the face object
   TMRBsplineSurface *surf = new TMRBsplineSurface(nu, nv, ku, kv, pts);
-  surf->incref();
+  TMRFace *face = new TMRFaceFromSurface(surf);
+  face->incref();
 
   int npts = 100;
   double *prms = new double[ 2*npts ];
@@ -58,11 +61,15 @@ int main( int argc, char *argv[] ){
 
   // Triangulate the region
   TMRTriangularize *tri = 
-    new TMRTriangularize(npts, prms, nholes, nsegs, seg, surf);
+    new TMRTriangularize(npts, prms, nholes, nsegs, seg, face);
   tri->incref();
 
-  tri->frontal(length);
+  TMRMeshOptions opts;
+  tri->frontal(opts, length);
   tri->writeToVTK("triangle.vtk");
+
+  tri->decref();
+  face->decref();
 
   TMRFinalize();
   MPI_Finalize();

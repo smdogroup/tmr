@@ -45,3 +45,6 @@ extern/
 *.txt
 tmr/*.so
 tmr/*.cpp
+*.STEP
+*.stp
+*.step
