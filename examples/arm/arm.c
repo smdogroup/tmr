@@ -495,6 +495,7 @@ int main( int argc, char *argv[] ){
 
   // Create/retrieve the dependent node information
   double tdep = MPI_Wtime();
+  forest->createDepNodeConn();
   int num_dep_nodes = 
     forest->getDepNodeConn(&dep_ptr, &dep_conn,
                            &dep_weights);
@@ -650,7 +651,7 @@ int main( int argc, char *argv[] ){
                              TACSElement::OUTPUT_DISPLACEMENTS |
                              TACSElement::OUTPUT_STRESSES |
                              TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs, PLANE_STRESS, write_flag);
+  TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_PLANE_STRESS, write_flag);
   f5->incref();
     
   // Write out the solution

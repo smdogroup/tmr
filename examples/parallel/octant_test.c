@@ -314,9 +314,10 @@ int main( int argc, char *argv[] ){
 
     // Create/retrieve the dependent node information
     double tdep = MPI_Wtime();
+    forest[level]->createDepNodeConn();
     int num_dep_nodes = 
       forest[level]->getDepNodeConn(&dep_ptr, &dep_conn,
-                             &dep_weights);
+                                    &dep_weights);
     tdep = MPI_Wtime() - tdep;
     printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
 
@@ -430,7 +431,8 @@ int main( int argc, char *argv[] ){
   int mg_sor_iters = 1;
   int mg_sor_symm = 1;
   int mg_iters_per_level = 1;
-  TACSMg *mg = new TACSMg(comm, NUM_LEVELS, omega, mg_sor_iters, mg_sor_symm);
+  TACSMg *mg = new TACSMg(comm, NUM_LEVELS, 
+                          omega, mg_sor_iters, mg_sor_symm);
   mg->incref();
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){
@@ -473,7 +475,7 @@ int main( int argc, char *argv[] ){
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_DISPLACEMENTS |
                              TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs[0], SOLID, write_flag);
+  TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID, write_flag);
   f5->incref();
     
   // Write out the solution

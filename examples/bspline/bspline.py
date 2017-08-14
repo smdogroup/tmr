@@ -155,7 +155,8 @@ for i in xrange(5):
 kv = 4
 lofter = TMR.CurveLofter(lofts)
 surface = lofter.createSurface(kv)
-surfaces = [surface]
+face = TMR.FaceFromSurface(surface)
+faces = [face]
 
 surface.writeToVTK('wing.vtk')
 
@@ -167,16 +168,16 @@ p4 = TMR.BsplinePcurve(np.array([[.1, 1.], [.1, .0]]))
 
 # Create the curves parametrically along the surface
 curves = []
-curves.append(TMR.CurveFromSurface(surface, p1))
-curves.append(TMR.CurveFromSurface(surface, p2))
-curves.append(TMR.CurveFromSurface(surface, p3))
-curves.append(TMR.CurveFromSurface(surface, p4))
+curves.append(TMR.EdgeFromFace(face, p1))
+curves.append(TMR.EdgeFromFace(face, p2))
+curves.append(TMR.EdgeFromFace(face, p3))
+curves.append(TMR.EdgeFromFace(face, p4))
 
 # Create the vertices from the curves
-v1 = TMR.VertexFromCurve(curves[0], 0.0)
-v2 = TMR.VertexFromCurve(curves[1], 0.0)
-v3 = TMR.VertexFromCurve(curves[2], 0.0)
-v4 = TMR.VertexFromCurve(curves[3], 0.0)
+v1 = TMR.VertexFromEdge(curves[0], 0.0)
+v2 = TMR.VertexFromEdge(curves[1], 0.0)
+v3 = TMR.VertexFromEdge(curves[2], 0.0)
+v4 = TMR.VertexFromEdge(curves[3], 0.0)
 vertices = [v1, v2, v3, v4]
 
 # Set the vertices in the curves
@@ -187,18 +188,21 @@ curves[3].setVertices(v4, v1)
 
 # Set the curve segments around the surface
 direct = [1, 1, 1, 1]
-surface.addCurveSegment(curves, direct)
+loop = TMR.EdgeLoop(curves, direct)
+face.addEdgeLoop(loop)
 
-geo = TMR.Geometry(vertices, curves, surfaces)
-mesh = TMR.Mesh(geo)
+# Create the model object
+geo = TMR.Model(vertices, curves, faces)
 
 # Mesh the geometry
+comm = MPI.COMM_WORLD
+mesh = TMR.Mesh(comm, geo)
 hval = 0.1
 mesh.mesh(hval)
 
 # Extract the quadrilaterals/points
 pts = mesh.getMeshPoints()
-quads = mesh.getMeshConnectivity()
+quads, hexa = mesh.getMeshConnectivity()
 npts = pts.shape[0]
 nquads = quads.shape[0]
 
@@ -217,7 +221,6 @@ ptr = np.arange(0, 4*nquads+1, 4, dtype=np.intc)
 ids = np.arange(0, nquads, dtype=np.intc)
 
 # Create the tacs creator
-comm = MPI.COMM_WORLD
 vars_per_node = 6
 creator = TACS.Creator(comm, vars_per_node)
 creator.setGlobalConnectivity(npts, ptr, quads, ids)

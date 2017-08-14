@@ -1,5 +1,5 @@
-#include "TMRGeometry.h"
 #include "TMRBspline.h"
+#include "TMRNativeTopology.h"
 #include "TMRMesh.h"
 #include "TMRQuadForest.h"
 #include "TACSAssembler.h"
@@ -187,6 +187,8 @@ void test_surface_lofter( double htarget ){
   TMRBsplineSurface *surface = lofter->createSurface(4);
   surface->incref();
   lofter->decref();
+  TMRFace *face = new TMRFaceFromSurface(surface);
+  face->incref();
 
   surface->writeToVTK("bspline_surface.vtk");
 
@@ -204,17 +206,17 @@ void test_surface_lofter( double htarget ){
 
   // Create the curves and add them to the surface
   int ncurves = 4;
-  TMRCurve *curves[4];
-  curves[0] = new TMRCurveFromSurface(surface, p1);
-  curves[1] = new TMRCurveFromSurface(surface, p2);
-  curves[2] = new TMRCurveFromSurface(surface, p3);
-  curves[3] = new TMRCurveFromSurface(surface, p4);
+  TMREdge *curves[4];
+  curves[0] = new TMREdgeFromFace(face, p1);
+  curves[1] = new TMREdgeFromFace(face, p2);
+  curves[2] = new TMREdgeFromFace(face, p3);
+  curves[3] = new TMREdgeFromFace(face, p4);
 
   // Create the boundary curves for the surface
-  TMRVertexFromCurve *v1 = new TMRVertexFromCurve(curves[0], 0.0);
-  TMRVertexFromCurve *v2 = new TMRVertexFromCurve(curves[1], 0.0);
-  TMRVertexFromCurve *v3 = new TMRVertexFromCurve(curves[2], 0.0);
-  TMRVertexFromCurve *v4 = new TMRVertexFromCurve(curves[3], 0.0);
+  TMRVertexFromEdge *v1 = new TMRVertexFromEdge(curves[0], 0.0);
+  TMRVertexFromEdge *v2 = new TMRVertexFromEdge(curves[1], 0.0);
+  TMRVertexFromEdge *v3 = new TMRVertexFromEdge(curves[2], 0.0);
+  TMRVertexFromEdge *v4 = new TMRVertexFromEdge(curves[3], 0.0);
 
   int num_verts = 4;
   TMRVertex *verts[] = {v1, v2, v3, v4};
@@ -231,29 +233,31 @@ void test_surface_lofter( double htarget ){
   dir[1] = 1;
   dir[2] = 1;
   dir[3] = 1;
+  TMREdgeLoop *loop = new TMREdgeLoop(ncurves, curves, dir);
+  face->addEdgeLoop(loop);
 
-  surface->addCurveSegment(ncurves, curves, dir);
+  // Set the communicator
+  MPI_Comm comm = MPI_COMM_WORLD;
 
-  // Create the TMRGeometry
-  TMRSurface *surf = surface;
-  TMRGeometry *geo = new TMRGeometry(num_verts, verts,
-                                     ncurves, curves,
-                                     1, &surf);
+  // Create the model
+  TMRModel *geo = new TMRModel(num_verts, verts,
+                               ncurves, curves,
+                               1, &face);
 
   // Allocate the new mesh
-  TMRMesh *mesh = new TMRMesh(geo);
+  TMRMesh *mesh = new TMRMesh(comm, geo);
 
   // Mesh the geometry
   mesh->mesh(htarget);
+  mesh->writeToVTK("mesh.vtk");
 
   // Create the mesh
-  TMRGeometry *geo_mesh = mesh->createMeshGeometry();
+  TMRModel *geo_mesh = mesh->createModelFromMesh();
   geo_mesh->incref();
 
-  TMRTopology *topo = new TMRTopology(geo_mesh);
+  TMRTopology *topo = new TMRTopology(comm, geo_mesh);
   topo->incref();
 
-  MPI_Comm comm = MPI_COMM_WORLD;
   TMRQuadForest *forest = new TMRQuadForest(comm);
   forest->incref();
 
@@ -304,6 +308,7 @@ void test_surface_lofter( double htarget ){
   
   // Create/retrieve the dependent node information
   double tdep = MPI_Wtime();
+  forest->createDepNodeConn();
   int num_dep_nodes = 
     forest->getDepNodeConn(&dep_ptr, &dep_conn,
                             &dep_weights);
@@ -381,7 +386,7 @@ void test_surface_lofter( double htarget ){
                              TACSElement::OUTPUT_DISPLACEMENTS |
                              TACSElement::OUTPUT_STRESSES |
                              TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs, PLANE_STRESS, write_flag);
+  TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_PLANE_STRESS, write_flag);
   f5->incref();
     
   // Write out the solution

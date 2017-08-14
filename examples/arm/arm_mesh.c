@@ -263,7 +263,6 @@ int main( int argc, char *argv[] ){
 
   setUpTopology(comm, r1, r2, L, t, htarget);
 
-
   TMRFinalize();
   MPI_Finalize();
   

@@ -45,11 +45,16 @@ cdef extern from "TMRTopology.h":
         void writeToVTK(char*)
         
     cdef cppclass TMRFace(TMREntity):
+        TMRFace()
         TMRFace(int)
         void setSource(TMRVolume*, TMRFace*)
         void getSource(int*, TMRVolume**, TMRFace**)
         int getNumEdgeLoops()
+        void addEdgeLoop(TMREdgeLoop*)
         void writeToVTK(char*)
+
+    cdef cppclass TMREdgeLoop(TMREntity):
+        TMREdgeLoop(int, TMREdge**, const int*)
         
     cdef cppclass TMRVolume(TMREntity):
         TMRVolume(int, TMRFace**, const int*)
@@ -96,9 +101,11 @@ cdef extern from "TMRNativeTopology.h":
         TMRSplitEdge(TMREdge*, double, double)
         TMRSplitEdge(TMREdge*, TMRVertex*, TMRVertex*)
 
-    cdef cppclass TMRGeometry(TMREntity):
-        TMRGeometry(int, TMRVertex**, int, TMREdge**, 
-                    int, TMRFace**)
+    cdef cppclass TMREdgeFromCurve(TMREdge):
+        TMREdgeFromCurve(TMRCurve*)
+
+    cdef cppclass TMRFaceFromSurface(TMRFace):
+        TMRFaceFromSurface(TMRSurface*)
 
 cdef extern from "TMRBspline.h":
     cdef cppclass TMRBsplineCurve(TMRCurve):

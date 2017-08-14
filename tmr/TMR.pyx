@@ -110,6 +110,31 @@ cdef _init_Edge(TMREdge *ptr):
     edge.ptr.incref()
     return edge
 
+cdef class EdgeLoop:
+    cdef TMREdgeLoop *ptr
+    def __cinit__(self, list edges, list dirs):
+        cdef int nedges = 0
+        cdef TMREdge **e = NULL
+        cdef int *d = NULL
+        self.ptr = NULL
+
+        if len(edges) == len(dirs):
+            nedges = len(edges)
+            e = <TMREdge**>malloc(nedges*sizeof(TMREdge*))
+            d = <int*>malloc(nedges*sizeof(int))
+            for i in range(nedges):
+                e[i] = (<Edge>edges[i]).ptr
+                d[i] = <int>dirs[i]
+            
+            self.ptr = new TMREdgeLoop(nedges, e, d)
+            self.ptr.incref()
+            free(e)
+            free(d)
+
+    def __decalloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
 cdef class Face:
     cdef TMRFace *ptr
     def __cinit__(self):
@@ -125,6 +150,9 @@ cdef class Face:
 
     def getNumEdgeLoops(self):
         return self.ptr.getNumEdgeLoops()
+
+    def addEdgeLoop(self, EdgeLoop loop):
+        self.ptr.addEdgeLoop(loop.ptr)
    
     def setSource(self, Volume v, Face f):
         self.ptr.setSource(v.ptr, f.ptr)
@@ -288,7 +316,7 @@ cdef class VertexFromPoint(Vertex):
         self.ptr = new TMRVertexFromPoint(point)
         self.ptr.incref()
 
-cdef class VertexFromCurve(Vertex):
+cdef class VertexFromEdge(Vertex):
     def __cinit__(self, Edge edge, double t):
         self.ptr = new TMRVertexFromEdge(edge.ptr, t)
         self.ptr.incref()
@@ -302,6 +330,14 @@ cdef class EdgeFromFace(Edge):
     def __cinit__(self, Face face, Pcurve pcurve):
         self.ptr = new TMREdgeFromFace(face.ptr, pcurve.ptr)
         self.ptr.incref()
+
+cdef class EdgeFromCurve(Edge):
+    def __cinit__(self, Curve curve):
+        self.ptr = new TMREdgeFromCurve(curve.ptr)
+
+cdef class FaceFromSurface(Face):
+    def __cinit__(self, Surface surf):
+        self.ptr = new TMRFaceFromSurface(surf.ptr)
 
 cdef class CurveInterpolation:
     cdef TMRCurveInterpolation *ptr
