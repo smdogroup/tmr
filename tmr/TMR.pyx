@@ -334,10 +334,12 @@ cdef class EdgeFromFace(Edge):
 cdef class EdgeFromCurve(Edge):
     def __cinit__(self, Curve curve):
         self.ptr = new TMREdgeFromCurve(curve.ptr)
+        self.ptr.incref()
 
 cdef class FaceFromSurface(Face):
     def __cinit__(self, Surface surf):
         self.ptr = new TMRFaceFromSurface(surf.ptr)
+        self.ptr.incref()
 
 cdef class CurveInterpolation:
     cdef TMRCurveInterpolation *ptr
@@ -591,6 +593,7 @@ cdef class Mesh:
     cdef TMRMesh *ptr
     def __cinit__(self, MPI.Comm comm, Model geo):
         cdef MPI_Comm c_comm = NULL
+        self.ptr = NULL
         if comm is not None:
             c_comm = comm.ob_mpi
             self.ptr = new TMRMesh(c_comm, geo.ptr)
@@ -748,7 +751,8 @@ cdef class QuadForest:
             self.ptr.incref()
 
     def __dealloc__(self):
-        self.ptr.decref()
+        if self.ptr:
+            self.ptr.decref()
 
     def setTopology(self, Topology topo):
         self.ptr.setTopology(topo.ptr)
@@ -809,7 +813,8 @@ cdef class OctantArray:
         self.ptr = NULL
 
     def __dealloc__(self):
-        del self.ptr
+        if self.ptr:
+            del self.ptr
 
 cdef _init_OctantArray(TMROctantArray *array):
     arr = OctantArray()
@@ -827,7 +832,8 @@ cdef class OctForest:
             self.ptr.incref()
 
     def __dealloc__(self):
-        self.ptr.decref()
+        if self.ptr:
+            self.ptr.decref()
 
     def setTopology(self, Topology topo):
         self.ptr.setTopology(topo.ptr)

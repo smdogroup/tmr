@@ -261,6 +261,10 @@ def geomach_to_tmr(bse):
                 edges[index] = TMR.EdgeFromFace(faces[i], pcurve)
                 edges[index].setVertices(vert1, vert2)
 
+    for i in range(nedges):
+        if edges[i] is None:
+            raise ValueError('Edge %d was not initialized in conversion to TMR\n'%(i))
+
     # After all of the edges are created, create the edge loops
     # for each face. Account for the CCW orientation.
     ccw_order = [1, 1, -1, -1]
@@ -300,20 +304,20 @@ opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 
 # Mesh the geometry with the given target size
-htarget = 20.0
+htarget = 0.25
 mesh.mesh(htarget, opts=opts)
 
-# Create a model from the mesh
-model = mesh.createModelFromMesh()
+# # Create a model from the mesh
+# model = mesh.createModelFromMesh()
 
-# Create the corresponding mesh topology from the mesh-model 
-topo = TMR.Topology(comm, model)
+# # Create the corresponding mesh topology from the mesh-model 
+# topo = TMR.Topology(comm, model)
 
-# Create the quad forest and set the topology of the forest
-forest = TMR.QuadForest(comm)
-forest.setTopology(topo)
+# # Create the quad forest and set the topology of the forest
+# forest = TMR.QuadForest(comm)
+# forest.setTopology(topo)
 
-# Create random trees and balance the mesh. Print the output file
-forest.createRandomTrees(nrand=3, max_lev=3)
-forest.balance(1)
-forest.writeForestToVTK('surface-mesh%d.vtk'%(comm.rank))
+# # Create random trees and balance the mesh. Print the output file
+# forest.createRandomTrees(nrand=3, max_lev=3)
+# forest.balance(1)
+# forest.writeForestToVTK('surface-mesh%d.vtk'%(comm.rank))
