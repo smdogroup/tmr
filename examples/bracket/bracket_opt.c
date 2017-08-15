@@ -305,12 +305,9 @@ int main( int argc, char *argv[] ){
     int upper_face_num = 4;
     TMRFace *lower = faces[lower_face_num];
     TMRFace *upper = faces[upper_face_num];
-    upper->setMaster(lower);
+    upper->setSource(volume[0], lower);
     faces[lower_face_num]->setAttribute("Shell");
     faces[upper_face_num]->setAttribute("Shell");    
-
-    // Reset the master orientations based on the volume object
-    volume[0]->updateOrientation();
 
     // Set the attributes associated with the boundary conditions and
     // the loading condition

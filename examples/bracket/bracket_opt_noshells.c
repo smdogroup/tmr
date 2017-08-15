@@ -104,13 +104,6 @@ void createTopoProblem( int num_levels,
   forest_levs[0] = forest;
   filter_levs[0] = filter; 
 
-  TacsScalar rho = props->rho;
-  TacsScalar E = props->E;
-  TacsScalar nu = props->nu;
-  TacsScalar kcorr = 5.0/6.0;
-  TacsScalar ys = 400.0e6;
-  TacsScalar t = 1.0;
-
   for ( int level = 0; level < num_levels; level++ ){
     if (level > 0){
       forest_levs[level] = forest_levs[level-1]->coarsen();
@@ -273,10 +266,7 @@ int main( int argc, char *argv[] ){
     int upper_face_num = 4;
     TMRFace *lower = faces[lower_face_num];
     TMRFace *upper = faces[upper_face_num];
-    upper->setMaster(lower);
-   
-    // Reset the master orientations based on the volume object
-    volume[0]->updateOrientation();
+    upper->setSource(volume[0], lower);
 
     // Set the attributes associated with the boundary conditions and
     // the loading condition
@@ -391,11 +381,11 @@ int main( int argc, char *argv[] ){
         TACSBVec *old_vec = old_design_vars->vec;
         TACSBVec *new_vec = new_design_vars->vec;
         interp->mult(old_design_vars->vec, new_design_vars->vec);
-	interp->mult(old_zl->vec, new_zl->vec);
-	interp->mult(old_zu->vec, new_zu->vec);
-	interp->decref();
+        interp->mult(old_zl->vec, new_zl->vec);
+        interp->mult(old_zu->vec, new_zu->vec);
+        interp->decref();
 
-	// Set the new design variable values	
+        // Set the new design variable values   
         prob->setInitDesignVars(new_design_vars);
         opt->resetDesignAndBounds();
 
@@ -416,7 +406,7 @@ int main( int argc, char *argv[] ){
       opt->setAbsOptimalityTol(opt_tol);
       opt_tol = 0.1*opt_tol;
       if (opt_tol <= 1e-6){
-	opt_tol = 1e-6;
+        opt_tol = 1e-6;
       }
 
       // Set the Hessian reset frequency
@@ -430,19 +420,19 @@ int main( int argc, char *argv[] ){
       if (iter >= 1){
         // Get the multipliers to set their new values
         ParOptScalar *z;
-	ParOptVec *zl, *zu;              
-	opt->getInitMultipliers(&z, NULL, &zl, &zu);
+        ParOptVec *zl, *zu;              
+        opt->getInitMultipliers(&z, NULL, &zl, &zu);
         
-	// Set the values of the new multipliers
-	z[0] = z_old;
-	zl->copyValues(new_zl);        
+        // Set the values of the new multipliers
+        z[0] = z_old;
+        zl->copyValues(new_zl);        
         zu->copyValues(new_zu);
         // -----------------------------
         opt->resetDesignAndBounds();
         ParOptScalar new_barrier = opt->getComplementarity();
 
         // Set the new barrier parameter with new mu
-	opt->setInitBarrierParameter(new_barrier);
+        opt->setInitBarrierParameter(new_barrier);
         // ------------------------------
           
       }

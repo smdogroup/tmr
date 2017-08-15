@@ -154,10 +154,7 @@ int main( int argc, char *argv[] ){
     int upper_face_num = 4;
     TMRFace *lower = faces[lower_face_num];
     TMRFace *upper = faces[upper_face_num];
-    upper->setMaster(lower);
-
-    // Reset the master orientations
-    volume[0]->updateOrientation();
+    upper->setSource(volume[0], lower);
 
     TMRMesh *mesh = new TMRMesh(comm, geo);
     mesh->incref();
@@ -196,7 +193,7 @@ int main( int argc, char *argv[] ){
 
     // Write the volume mesh
     if (test_bdf_file){
-      mesh->writeToBDF("volume-mesh.bdf", TMRMesh::TMR_HEXES);
+      mesh->writeToBDF("volume-mesh.bdf", TMRMesh::TMR_HEX);
     }
 
     topo->decref();
@@ -206,28 +203,28 @@ int main( int argc, char *argv[] ){
     geo->decref();
   }
 
-  /* if (test_bdf_file){ */
-  /*   TACSMeshLoader *loader = new TACSMeshLoader(comm); */
-  /*   loader->incref(); */
+  if (test_bdf_file){
+    TACSMeshLoader *loader = new TACSMeshLoader(comm);
+    loader->incref();
 
-  /*   loader->scanBDFFile("volume-mesh.bdf"); */
+    loader->scanBDFFile("volume-mesh.bdf");
 
-  /*   // Create the solid stiffness object */
-  /*   SolidStiffness *stiff = new SolidStiffness(1.0, 1.0, 0.3); */
-  /*   Solid<2> *elem = new Solid<2>(stiff); */
-  /*   loader->setElement(0, elem); */
+    // Create the solid stiffness object
+    SolidStiffness *stiff = new SolidStiffness(1.0, 1.0, 0.3);
+    Solid<2> *elem = new Solid<2>(stiff);
+    loader->setElement(0, elem);
     
-  /*   // Create the TACSAssembler object */
-  /*   int vars_per_node = 3; */
-  /*   TACSAssembler *tacs = loader->createTACS(vars_per_node); */
-  /*   tacs->incref(); */
+    // Create the TACSAssembler object
+    int vars_per_node = 3;
+    TACSAssembler *tacs = loader->createTACS(vars_per_node);
+    tacs->incref();
 
-  /*   // Create the f5 visualization object */
-  /*   TACSToFH5 *f5 = loader->createTACSToFH5(tacs, TACS_SOLID,  */
-  /*                                           TACSElement::OUTPUT_NODES); */
-  /*   f5->incref(); */
-  /*   f5->writeToFile("volume-mesh.f5"); */
-  /* } */
+    // Create the f5 visualization object
+    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, TACS_SOLID,
+                                            TACSElement::OUTPUT_NODES);
+    f5->incref();
+    f5->writeToFile("volume-mesh.f5");
+  }
 
   TMRFinalize();
   MPI_Finalize();
