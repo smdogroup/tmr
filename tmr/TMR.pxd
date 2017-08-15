@@ -96,6 +96,7 @@ cdef extern from "TMRNativeTopology.h":
 
     cdef cppclass TMREdgeFromFace(TMREdge):
         TMREdgeFromFace(TMRFace*, TMRPcurve*)
+        TMREdgeFromFace(TMRFace*, TMRPcurve*, int)
 
     cdef cppclass TMRSplitEdge(TMREdge):
         TMRSplitEdge(TMREdge*, double, double)

@@ -138,12 +138,14 @@ int TMRVertexFromFace::getParamsOnFace( TMRFace *_face,
   Create the curve parametrized on the surface
 */
 TMREdgeFromFace::TMREdgeFromFace( TMRFace *_face, 
-                                  TMRPcurve *_pcurve ){
+                                  TMRPcurve *_pcurve,
+                                  int _is_degen ){
   face = _face;
   face->incref();
   setAttribute(face->getAttribute());
   pcurve = _pcurve;
   pcurve->incref();
+  is_degen = _is_degen;
 }
 
 /*

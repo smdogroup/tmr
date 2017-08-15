@@ -183,7 +183,7 @@ def geomach_to_tmr(bse):
         [[0, 2], [2, 2]],
         [[0, 0], [0, 2]]]
 
-    # Create the vertices
+    # Create the surfaces
     surf_ptrs = topo['surf_ptrs']
     edge_ptrs = topo['edge_ptrs']
     for i in range(nfaces):
@@ -192,20 +192,6 @@ def geomach_to_tmr(bse):
         kv = bspline['order'][topo['surf_group'][i,1]-1]
         nu = bspline['num_cp'][topo['surf_group'][i,0]-1]
         nv = bspline['num_cp'][topo['surf_group'][i,1]-1]
-
-        for jj in range(2):
-            for ii in range(2):
-                # Get the vertex index
-                index = surf_ptrs[i, 2*ii, 2*jj]-1
-
-                # If the vertex has not be allocated, create it now
-                if verts[index] is None:
-                    # Find the corner corresponding to the vertex location
-                    i1 = ii*(nu-1)
-                    j1 = jj*(nv-1)
-                    cp_index = cp_offset + i1 + j1*nu
-                    pt = cp_str[cp_index]
-                    verts[index] = TMR.VertexFromPoint(pt)
 
         # Extract and create the b-spline surfaces
         cp = np.zeros((nu, nv, 3), dtype=np.double)
@@ -216,6 +202,22 @@ def geomach_to_tmr(bse):
 
         surfs[i] = TMR.BsplineSurface(cp, ku=ku, kv=kv)
         faces[i] = TMR.FaceFromSurface(surfs[i])
+
+    # Create the vertices from the faces
+    for i in range(nfaces):
+        for jj in range(2):
+            for ii in range(2):
+                # Get the vertex index
+                index = surf_ptrs[i, 2*ii, 2*jj]-1
+                # If the vertex has not be allocated, create it now
+                if verts[index] is None:
+                    u = 1.0*ii
+                    v = 1.0*jj
+                    verts[index] = TMR.VertexFromFace(faces[i], u, v)
+
+    for i in range(nverts):
+        if verts[i] is None:
+            raise ValueError('TMRVertex %d was not initialized\n'%(i))
 
     # Create the edges
     for i in range(nfaces):
@@ -256,14 +258,19 @@ def geomach_to_tmr(bse):
                                     face_to_edge_verts[ii][0]], dtype=np.double)
                 pts = pts/2.0
 
+                # Check whether this is a degenerate edge
+                is_degen = 0
+                if v1 == v2:
+                    is_degen = 1
+
                 # Create the parametric curve
                 pcurve = TMR.BsplinePcurve(pts)
-                edges[index] = TMR.EdgeFromFace(faces[i], pcurve)
+                edges[index] = TMR.EdgeFromFace(faces[i], pcurve, is_degen)
                 edges[index].setVertices(vert1, vert2)
 
     for i in range(nedges):
         if edges[i] is None:
-            raise ValueError('Edge %d was not initialized in conversion to TMR\n'%(i))
+            raise ValueError('TMREdge %d was not initialized\n'%(i))
 
     # After all of the edges are created, create the edge loops
     # for each face. Account for the CCW orientation.
@@ -304,8 +311,10 @@ opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 
 # Mesh the geometry with the given target size
-htarget = 0.25
+htarget = 0.05
 mesh.mesh(htarget, opts=opts)
+
+mesh.writeToVTK('surface-mesh.vtk')
 
 # # Create a model from the mesh
 # model = mesh.createModelFromMesh()

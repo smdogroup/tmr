@@ -119,7 +119,7 @@ class TMRVertexFromFace : public TMRVertex {
 */
 class TMREdgeFromFace : public TMREdge {
  public:
-  TMREdgeFromFace( TMRFace *_face, TMRPcurve *_pcurve );
+  TMREdgeFromFace( TMRFace *_face, TMRPcurve *_pcurve, int _is_degen=0 );
   ~TMREdgeFromFace();
   void getRange( double *tmin, double *tmax );
   int evalPoint( double t, TMRPoint *X );
@@ -127,8 +127,9 @@ class TMREdgeFromFace : public TMREdge {
                        int dir, double *u, double *v );
   int invEvalPoint( TMRPoint X, double *t );
   int evalDeriv( double t, TMRPoint *Xt );
-
+  int isDegenerate(){ return is_degen; }
  private:
+  int is_degen;
   TMRFace *face;
   TMRPcurve *pcurve;
 };

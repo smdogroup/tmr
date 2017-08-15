@@ -327,8 +327,8 @@ cdef class VertexFromFace(Vertex):
         self.ptr.incref()
 
 cdef class EdgeFromFace(Edge):
-    def __cinit__(self, Face face, Pcurve pcurve):
-        self.ptr = new TMREdgeFromFace(face.ptr, pcurve.ptr)
+    def __cinit__(self, Face face, Pcurve pcurve, int degen=0):
+        self.ptr = new TMREdgeFromFace(face.ptr, pcurve.ptr, degen)
         self.ptr.incref()
 
 cdef class EdgeFromCurve(Edge):
