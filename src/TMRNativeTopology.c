@@ -413,30 +413,38 @@ TMRTFIFace::TMRTFIFace( TMREdge *_edges[],
   // Set the vertices for this surface
   if (dir[0] > 0){
     edges[0]->setVertices(verts[0], verts[1]); 
+    edges[0]->getRange(&tmin[0], &tmax[0]);
   }
   else {
     edges[0]->setVertices(verts[1], verts[0]);
+    edges[0]->getRange(&tmax[0], &tmin[0]);
   }
 
   if (dir[1] > 0){  
     edges[1]->setVertices(verts[1], verts[2]);
+    edges[1]->getRange(&tmin[1], &tmax[1]);
   }
   else {
     edges[1]->setVertices(verts[2], verts[1]);
+    edges[1]->getRange(&tmax[1], &tmin[1]);
   }
 
   if (dir[2] > 0){
     edges[2]->setVertices(verts[2], verts[3]);
+    edges[2]->getRange(&tmin[2], &tmax[2]);
   }
   else {
     edges[2]->setVertices(verts[3], verts[2]);
+    edges[2]->getRange(&tmax[2], &tmin[2]);
   }
 
   if (dir[3] > 0){
     edges[3]->setVertices(verts[3], verts[0]);
+    edges[3]->getRange(&tmin[3], &tmax[3]);
   }
   else {
     edges[3]->setVertices(verts[0], verts[3]);
+    edges[3]->getRange(&tmax[3], &tmin[3]);
   }
 
   // Set the curve segment into the curve
@@ -480,12 +488,8 @@ int TMRTFIFace::evalPoint( double u, double v,
   double params[4] = {u, v, 1.0-u, 1.0-v};
 
   for ( int k = 0; k < 4; k++ ){
-    if (dir[k] > 0){
-      fail = fail || edges[k]->evalPoint(params[k], &e[k]);
-    }
-    else {
-      fail = fail || edges[k]->evalPoint(1.0-params[k], &e[k]);
-    }
+    double p = (1.0 - params[k])*tmin[k] + params[k]*tmax[k];
+    fail = fail || edges[k]->evalPoint(params[k], &e[k]);
   }
     
   // Evaluate the point on the surface
@@ -525,7 +529,6 @@ int TMRTFIFace::evalDeriv( double u, double v,
   int fail = 1;
   Xu->zero();
   Xv->zero();
-
   return fail;
 }
 

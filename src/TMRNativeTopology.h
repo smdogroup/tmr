@@ -197,6 +197,10 @@ class TMRTFIFace : public TMRFace {
                  TMRPoint *Xu, TMRPoint *Xv );
 
  private:
+  // Set the min/max parameter value for each edge. This
+  // accounts for edge direction
+  double tmin[4], tmax[4];
+
   // The edges within the transfinite-interpolation
   TMREdge *edges[4];
   int dir[4];

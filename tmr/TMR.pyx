@@ -232,8 +232,20 @@ cdef _init_Face(TMRFace *ptr):
 
 cdef class Volume:
     cdef TMRVolume *ptr
-    def __cinit__(self):
+    def __cinit__(self, list faces=None, list dirs=None):
+        cdef int nfaces = 0
+        cdef int *d = NULL
+        cdef TMRFace **f = NULL
         self.ptr = NULL
+        if (faces is not None and dirs is not None and
+            len(faces) == len(dirs)):
+            nvols = len(faces)
+            d = <int*>malloc(nvols*sizeof(int))
+            f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
+            self.ptr = new TMRVolume(nfaces, f, d)
+            self.ptr.incref()
+            free(d)
+            free(f)
       
     def __dealloc__(self):
         if self.ptr:
