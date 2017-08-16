@@ -544,11 +544,13 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
 
   // Re-adjust the domain boundary to ensure that it is sufficiently
   // large
-  double small = 1e3;
-  domain.xhigh += small;
-  domain.xlow -= small;
-  domain.yhigh += small;
-  domain.ylow -= small;
+  double xsmall = 0.01*(domain.xhigh - domain.xlow);
+  domain.xhigh += xsmall;
+  domain.xlow -= xsmall;
+
+  double ysmall = 0.01*(domain.yhigh - domain.ylow);
+  domain.yhigh += ysmall;
+  domain.ylow -= ysmall;
 
   // Allocate the new root mode
   root = new TMRQuadNode(&domain);

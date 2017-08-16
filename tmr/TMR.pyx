@@ -62,6 +62,16 @@ cdef class Vertex:
         if self.ptr:
             self.ptr.setAttribute(name)
 
+    def getEntityId(self):
+        if self.ptr:
+            return self.ptr.getEntityId()
+        return -1
+
+    def setNodeNum(self, num):
+        cdef int n = num
+        self.ptr.setNodeNum(&n)
+        return n
+
 cdef _init_Vertex(TMRVertex *ptr):
     vertex = Vertex()
     vertex.ptr = ptr
@@ -80,6 +90,11 @@ cdef class Edge:
     def setAttribute(self, char *name):
         if self.ptr:
             self.ptr.setAttribute(name)
+
+    def getEntityId(self):
+        if self.ptr:
+            return self.ptr.getEntityId()
+        return -1
 
     def setVertices(self, Vertex v1, Vertex v2):
         self.ptr.setVertices(v1.ptr, v2.ptr)
@@ -100,6 +115,9 @@ cdef class Edge:
         cdef TMREdge *e
         self.ptr.getSource(&e)
         return _init_Edge(e)
+    
+    def setMesh(self, EdgeMesh mesh):
+        self.ptr.setMesh(mesh.ptr)
 
     def writeToVTK(self, char *filename):
         self.ptr.writeToVTK(filename)
@@ -112,13 +130,14 @@ cdef _init_Edge(TMREdge *ptr):
 
 cdef class EdgeLoop:
     cdef TMREdgeLoop *ptr
-    def __cinit__(self, list edges, list dirs):
+    def __cinit__(self, list edges=None, list dirs=None):
         cdef int nedges = 0
         cdef TMREdge **e = NULL
         cdef int *d = NULL
         self.ptr = NULL
 
-        if len(edges) == len(dirs):
+        if (edges is not None and dirs is not None and
+            len(edges) == len(dirs)):
             nedges = len(edges)
             e = <TMREdge**>malloc(nedges*sizeof(TMREdge*))
             d = <int*>malloc(nedges*sizeof(int))
@@ -135,6 +154,29 @@ cdef class EdgeLoop:
         if self.ptr:
             self.ptr.decref()
 
+    def getEntityId(self):
+        if self.ptr:
+            return self.ptr.getEntityId()
+        return -1
+
+    def getEdgeLoop(self):
+        cdef int nedges = 0
+        cdef TMREdge **edges = NULL
+        cdef const int *dirs = NULL
+        self.ptr.getEdgeLoop(&nedges, &edges, &dirs)
+        e = []
+        d = []
+        for i in range(nedges):
+            e.append(_init_Edge(edges[i]))
+            d.append(dirs[i])
+        return e, d        
+
+cdef _init_EdgeLoop(TMREdgeLoop *ptr):
+    loop = EdgeLoop()
+    loop.ptr = ptr
+    loop.ptr.incref()
+    return loop
+
 cdef class Face:
     cdef TMRFace *ptr
     def __cinit__(self):
@@ -148,12 +190,24 @@ cdef class Face:
         if self.ptr:
             self.ptr.setAttribute(name)
 
+    def getEntityId(self):
+        if self.ptr:
+            return self.ptr.getEntityId()
+        return -1
+
     def getNumEdgeLoops(self):
         return self.ptr.getNumEdgeLoops()
 
     def addEdgeLoop(self, EdgeLoop loop):
         self.ptr.addEdgeLoop(loop.ptr)
-   
+
+    def getEdgeLoop(self, k):
+        cdef TMREdgeLoop *loop = NULL
+        self.ptr.getEdgeLoop(k, &loop)
+        if loop:
+            return _init_EdgeLoop(loop)
+        return None
+    
     def setSource(self, Volume v, Face f):
         self.ptr.setSource(v.ptr, f.ptr)
 
@@ -163,6 +217,9 @@ cdef class Face:
         cdef int d
         self.ptr.getSource(&d, &v, &f)
         return d, _init_Volume(v), _init_Face(f)
+
+    def setMesh(self, FaceMesh mesh):
+        self.ptr.setMesh(mesh.ptr)
 
     def writeToVTK(self, char *filename):
         self.ptr.writeToVTK(filename)
@@ -185,6 +242,11 @@ cdef class Volume:
     def setAttribute(self, char *name):
         if self.ptr:
             self.ptr.setAttribute(name)
+
+    def getEntityId(self):
+        if self.ptr:
+            return self.ptr.getEntityId()
+        return -1
 
     def getFaces(self):
         cdef TMRFace **f
@@ -218,6 +280,11 @@ cdef class Curve:
         if self.ptr:
             self.ptr.setAttribute(name)
             
+    def getEntityId(self):
+        if self.ptr:
+            return self.ptr.getEntityId()
+        return -1
+
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
 
@@ -239,6 +306,11 @@ cdef class Pcurve:
     def setAttribute(self, char *name):
         if self.ptr:
             self.ptr.setAttribute(name)
+
+    def getEntityId(self):
+        if self.ptr:
+            return self.ptr.getEntityId()
+        return -1
 
 cdef class Surface:
     cdef TMRSurface *ptr
@@ -330,6 +402,12 @@ cdef class EdgeFromFace(Edge):
     def __cinit__(self, Face face, Pcurve pcurve, int degen=0):
         self.ptr = new TMREdgeFromFace(face.ptr, pcurve.ptr, degen)
         self.ptr.incref()
+
+    def addEdgeFromFace(self, Face face, Pcurve pcurve):
+        cdef TMREdgeFromFace *ef = NULL
+        ef = _dynamicEdgeFromFace(self.ptr)
+        if ef:
+            ef.addEdgeFromFace(face.ptr, pcurve.ptr)
 
 cdef class EdgeFromCurve(Edge):
     def __cinit__(self, Curve curve):

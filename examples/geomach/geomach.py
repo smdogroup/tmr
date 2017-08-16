@@ -11,17 +11,44 @@ from __future__ import division
 from mpi4py import MPI
 from tmr import TMR
 import numpy as np
+import argparse
 
 from GeoMACH.PGM.core import PGMconfiguration, PGMparameter, PGMdv
 from GeoMACH.PGM.components import PGMwing, PGMbody, PGMshell
 from GeoMACH.PGM.components import PGMjunction, PGMtip, PGMcone
+
+
+class Wing(PGMconfiguration):
+
+    def _define_comps(self):
+        self.comps['wing'] = PGMwing(num_x=1, num_z=1, left_closed=True)
+        self.comps['tip'] = PGMtip(self, 'wing', 'left', 0.1)
+
+    def _define_params(self):
+        wing = self.comps['wing'].props
+        wing['pos'].params[''] = PGMparameter(3, 3, pos_u=[0,0.37,1.0])
+        wing['scl'].params[''] = PGMparameter(3, 1, pos_u=[0,0.37,1.0])
+
+    def _compute_params(self):
+        wing = self.comps['wing'].props
+        wing['pos'].params[''].data[0, :] = [904.294, 174.126, 0.0]
+        wing['pos'].params[''].data[1, :] = [1225.82, 181.071, 427.999]
+        wing['pos'].params[''].data[2, :] = [1780.737, 263.827, 1156.753]
+        wing['scl'].params[''].data[:, 0] = [536.181, 285.782, 107.4]
+        return [], [], []
+
+    def _set_bspline_options(self):
+        wing = self.comps['wing'].faces
+        wing['upp'].set_option('num_cp', 'u', [40])
+        wing['upp'].set_option('num_cp', 'v', [40])
 
 class Trussbraced(PGMconfiguration):
 
     def _define_comps(self):
         self.comps['fuse'] = PGMbody(num_x=17, num_y=6, num_z=4)
         self.comps['lwing'] = PGMwing(num_x=7, num_z=7, left_closed=True)
-        self.comps['lstrut'] = PGMwing(num_x=4, num_z=4, left_closed=True, right_closed=True)
+        self.comps['lstrut'] = PGMwing(num_x=4, num_z=4,
+                                       left_closed=True, right_closed=True)
         self.comps['lv'] = PGMwing(num_z=4)
         self.comps['ltail'] = PGMwing(left_closed=True)
         self.comps['vtail'] = PGMwing(num_x=5, num_z=4, left_closed=True)
@@ -31,13 +58,22 @@ class Trussbraced(PGMconfiguration):
         self.comps['lwing_t'] = PGMtip(self, 'lwing', 'left', 0.1)
         self.comps['ltail_t'] = PGMtip(self, 'ltail', 'left', 0.1)
         self.comps['vtail_t'] = PGMtip(self, 'vtail', 'left', 0.1)
-        self.comps['lwing_fuse'] = PGMjunction(self, 'fuse', 'lft', 'E', [0,1], 'lwing', 'right', fweight=4, mweight=2)
-        self.comps['lstrut_fuse'] = PGMjunction(self, 'fuse', 'lft', 'E', [4,2], 'lstrut', 'right')
-        self.comps['lstrut_lwing'] = PGMjunction(self, 'lwing', 'low', 'S', [4,1], 'lstrut', 'left', fweight=3, mweight=3)
-        self.comps['lv_lwing'] = PGMjunction(self, 'lwing', 'low', 'S', [1,3], 'lv', 'left')
-        self.comps['lv_lstrut'] = PGMjunction(self, 'lstrut', 'upp', 'S', [1,0], 'lv', 'right')
-        self.comps['vtail_fuse'] = PGMjunction(self, 'fuse', 'top', 'E', [1,10], 'vtail', 'right')
-        self.comps['ltail_vtail'] = PGMjunction(self, 'vtail', 'low', 'N', [0,1], 'ltail', 'right')
+        self.comps['lwing_fuse'] = PGMjunction(self, 'fuse', 'lft', 'E',
+                                               [0,1], 'lwing', 'right',
+                                               fweight=4, mweight=2)
+        self.comps['lstrut_fuse'] = PGMjunction(self, 'fuse', 'lft', 'E',
+                                                [4,2], 'lstrut', 'right')
+        self.comps['lstrut_lwing'] = PGMjunction(self, 'lwing', 'low', 'S',
+                                                 [4,1], 'lstrut', 'left',
+                                                 fweight=3, mweight=3)
+        self.comps['lv_lwing'] = PGMjunction(self, 'lwing', 'low', 'S',
+                                             [1,3], 'lv', 'left')
+        self.comps['lv_lstrut'] = PGMjunction(self, 'lstrut', 'upp', 'S',
+                                              [1,0], 'lv', 'right')
+        self.comps['vtail_fuse'] = PGMjunction(self, 'fuse', 'top', 'E',
+                                               [1,10], 'vtail', 'right')
+        self.comps['ltail_vtail'] = PGMjunction(self, 'vtail', 'low', 'N',
+                                                [0,1], 'ltail', 'right')
 
     def _define_params(self):
         fuse = self.comps['fuse'].props
@@ -45,16 +81,31 @@ class Trussbraced(PGMconfiguration):
         fuse['pos'].params[''] = PGMparameter(2, 3)
         fuse['pos'].params['nose'] = PGMparameter(2, 3, pos_u=[0,0.12])
         fuse['pos'].params['tail'] = PGMparameter(2, 3, pos_u=[0.76,1.0])
-        fuse['scl'].params['rad1'] = PGMparameter(4, 1, pos_u=[0,0.01,0.05,0.12], order_u=4)
+        fuse['scl'].params['rad1'] = PGMparameter(4, 1, order_u=4,
+                                                  pos_u=[0,0.01,0.05,0.12])
+                                                  
         fuse['scl'].params['rad2'] = PGMparameter(2, 1, pos_u=[0.12,0.76])
-        fuse['scl'].params['rad3'] = PGMparameter(4, 1, pos_u=[0.76,0.83,0.99,1], order_u=4)
+        fuse['scl'].params['rad3'] = PGMparameter(4, 1, order_u=4,
+                                                  pos_u=[0.76,0.83,0.99,1])
         fuse['scl'].params['tail'] = PGMparameter(2, 3, pos_u=[0.76,1.0])
-        fuse['flt'].params['flt1a'] = PGMparameter(4, 2, pos_u=[0.24,0.27,0.33,0.36], pos_v=[0.5,1], order_u=4)
-        fuse['flt'].params['flt1b'] = PGMparameter(2, 2, pos_u=[0.36,0.41], pos_v=[0.5,1])
-        fuse['flt'].params['flt1c'] = PGMparameter(4, 2, pos_u=[0.41,0.44,0.49,0.52], pos_v=[0.5,1], order_u=4)
-        fuse['flt'].params['flt2a'] = PGMparameter(4, 2, pos_u=[0.24,0.27,0.33,0.36], pos_v=[0,0.5], order_u=4)
-        fuse['flt'].params['flt2b'] = PGMparameter(2, 2, pos_u=[0.36,0.41], pos_v=[0,0.5])
-        fuse['flt'].params['flt2c'] = PGMparameter(4, 2, pos_u=[0.41,0.44,0.49,0.52], pos_v=[0,0.5], order_u=4)
+        fuse['flt'].params['flt1a'] = PGMparameter(4, 2, order_u=4,
+                                                   pos_u=[0.24,0.27,0.33,0.36],
+                                                   pos_v=[0.5,1])
+        fuse['flt'].params['flt1b'] = PGMparameter(2, 2,
+                                                   pos_u=[0.36,0.41],
+                                                   pos_v=[0.5,1])
+        fuse['flt'].params['flt1c'] = PGMparameter(4, 2, order_u=4,
+                                                   pos_u=[0.41,0.44,0.49,0.52],
+                                                   pos_v=[0.5,1])
+        fuse['flt'].params['flt2a'] = PGMparameter(4, 2, order_u=4,
+                                                   pos_u=[0.24,0.27,0.33,0.36],
+                                                   pos_v=[0,0.5])
+        fuse['flt'].params['flt2b'] = PGMparameter(2, 2,
+                                                   pos_u=[0.36,0.41],
+                                                   pos_v=[0,0.5])
+        fuse['flt'].params['flt2c'] = PGMparameter(4, 2, order_u=4,
+                                                   pos_u=[0.41,0.44,0.49,0.52],
+                                                   pos_v=[0,0.5])
 
         lwing = self.comps['lwing'].props
         lwing['pos'].params[''] = PGMparameter(1, 3)
@@ -137,11 +188,14 @@ class Trussbraced(PGMconfiguration):
         comps = self.comps
 
         comps['fuse'].faces['lft'].set_option('num_cp', 'u', [4,4,14,14,4,4])
-        comps['fuse'].faces['rgt'].set_option('num_cp', 'v', [85,4,4,4,4,4,4,4,4,4,102,4,4,16,8,4,6])
+        comps['fuse'].faces['rgt'].set_option(
+            'num_cp', 'v', [85,4,4,4,4,4,4,4,4,4,102,4,4,16,8,4,6])
         comps['vtail'].faces['low'].set_option('num_cp', 'u', [6,4,30,4,4])
         comps['vtail'].faces['low'].set_option('num_cp', 'v', [10,10,10,4])
-        comps['lwing'].faces['upp'].set_option('num_cp', 'v', [20,4,4,20,5,4,31])
-        comps['lwing'].faces['low'].set_option('num_cp', 'u', [12,12,20,4,4,4,4])
+        comps['lwing'].faces['upp'].set_option(
+            'num_cp', 'v', [20,4,4,20,5,4,31])
+        comps['lwing'].faces['low'].set_option(
+            'num_cp', 'u', [12,12,20,4,4,4,4])
         comps['lstrut'].faces['upp'].set_option('num_cp', 'u', [4,8,12,4])
         comps['lstrut'].faces['upp'].set_option('num_cp', 'v', [4,5,4,4])
         
@@ -229,45 +283,47 @@ def geomach_to_tmr(bse):
             edge_num = surf_ptrs[i, i1, j1]
             index = abs(edge_num)-1
 
+            # Find the vertex numbers
+            v1 = edge_ptrs[index, 0]-1
+            v2 = edge_ptrs[index, 1]-1
+
+            # The start/end vertex location
+            vert1 = None
+            vert2 = None
+
+            # Get the indices of the vertices within the surf_ptrs array
+            i1 = face_to_edge_verts[ii][0][0]
+            j1 = face_to_edge_verts[ii][0][1]
+            i2 = face_to_edge_verts[ii][1][0]
+            j2 = face_to_edge_verts[ii][1][1]
+
+            if (v1 == surf_ptrs[i, i1, j1]-1 and
+                v2 == surf_ptrs[i, i2, j2]-1):
+                vert1 = verts[v1]
+                vert2 = verts[v2]
+                pts = np.array([face_to_edge_verts[ii][0],
+                                face_to_edge_verts[ii][1]], dtype=np.double)
+            elif (v2 == surf_ptrs[i, i1, j1]-1 and
+                  v1 == surf_ptrs[i, i2, j2]-1):
+                vert1 = verts[v2]
+                vert2 = verts[v1]
+                pts = np.array([face_to_edge_verts[ii][1],
+                                face_to_edge_verts[ii][0]], dtype=np.double)
+            pts = pts/2.0
+
+            # Check whether this is a degenerate edge
+            is_degen = 0
+            if v1 == v2:
+                is_degen = 1
+                
+            # Create the parametric curve
+            pcurve = TMR.BsplinePcurve(pts)
             if edges[index] is None:
-                # Find the vertex numbers
-                v1 = edge_ptrs[index, 0]-1
-                v2 = edge_ptrs[index, 1]-1
-
-                # The start/end vertex location
-                vert1 = None
-                vert2 = None
-
-                # Get the indices of the vertices within the surf_ptrs array
-                i1 = face_to_edge_verts[ii][0][0]
-                j1 = face_to_edge_verts[ii][0][1]
-                i2 = face_to_edge_verts[ii][1][0]
-                j2 = face_to_edge_verts[ii][1][1]
-
-                if (v1 == surf_ptrs[i, i1, j1]-1 and
-                    v2 == surf_ptrs[i, i2, j2]-1):
-                    vert1 = verts[v1]
-                    vert2 = verts[v2]
-                    pts = np.array([face_to_edge_verts[ii][0],
-                                    face_to_edge_verts[ii][1]], dtype=np.double)
-                elif (v2 == surf_ptrs[i, i1, j1]-1 and
-                      v1 == surf_ptrs[i, i2, j2]-1):
-                    vert1 = verts[v2]
-                    vert2 = verts[v1]
-                    pts = np.array([face_to_edge_verts[ii][1],
-                                    face_to_edge_verts[ii][0]], dtype=np.double)
-                pts = pts/2.0
-
-                # Check whether this is a degenerate edge
-                is_degen = 0
-                if v1 == v2:
-                    is_degen = 1
-
-                # Create the parametric curve
-                pcurve = TMR.BsplinePcurve(pts)
                 edges[index] = TMR.EdgeFromFace(faces[i], pcurve, is_degen)
                 edges[index].setVertices(vert1, vert2)
-
+            else:
+                edges[index].addEdgeFromFace(faces[i], pcurve)
+                
     for i in range(nedges):
         if edges[i] is None:
             raise ValueError('TMREdge %d was not initialized\n'%(i))
@@ -294,14 +350,26 @@ def geomach_to_tmr(bse):
     geo = TMR.Model(verts, edges, faces)
     return geo
 
-# Create the truss braced wing model
-pgm = Trussbraced()
+# Create an argument parser to read in arguments from the commnad line
+p = argparse.ArgumentParser()
+p.add_argument('--htarget', type=float, default=10.0)
+p.add_argument('--model_type', type=str, default='wing')
+args = p.parse_args()
+
+# Create the GeoMACH model
+print 'Loading GeoMACH model...'
+if args.model_type == 'wing':
+    pgm = Wing()
+elif args.model_type == 'trussbraced':
+    pgm = Trussbraced()
 bse = pgm.initialize()
 
 # Convert from GeoMACH to TMR
+print 'Converting GeoMACH model to TMR model...'
 geo = geomach_to_tmr(bse)
 
 # Create the mesh
+print 'Meshing TMR model...'
 comm = MPI.COMM_WORLD
 mesh = TMR.Mesh(comm, geo)
 
@@ -311,22 +379,24 @@ opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 
 # Mesh the geometry with the given target size
-htarget = 0.05
+htarget = args.htarget
 mesh.mesh(htarget, opts=opts)
 
 mesh.writeToVTK('surface-mesh.vtk')
 
-# # Create a model from the mesh
-# model = mesh.createModelFromMesh()
+# Create a model from the mesh
+print 'Creating model from mesh...'
+model = mesh.createModelFromMesh()
 
-# # Create the corresponding mesh topology from the mesh-model 
-# topo = TMR.Topology(comm, model)
+# Create the corresponding mesh topology from the mesh-model 
+topo = TMR.Topology(comm, model)
 
-# # Create the quad forest and set the topology of the forest
-# forest = TMR.QuadForest(comm)
-# forest.setTopology(topo)
+# Create the quad forest and set the topology of the forest
+print 'Creating TMRQuadForest...'
+forest = TMR.QuadForest(comm)
+forest.setTopology(topo)
 
-# # Create random trees and balance the mesh. Print the output file
-# forest.createRandomTrees(nrand=3, max_lev=3)
-# forest.balance(1)
-# forest.writeForestToVTK('surface-mesh%d.vtk'%(comm.rank))
+# Create random trees and balance the mesh. Print the output file
+forest.createRandomTrees(nrand=3, max_lev=3)
+forest.balance(1)
+forest.writeForestToVTK('forest-mesh%d.vtk'%(comm.rank))

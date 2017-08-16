@@ -128,10 +128,12 @@ class TMREdgeFromFace : public TMREdge {
   int invEvalPoint( TMRPoint X, double *t );
   int evalDeriv( double t, TMRPoint *Xt );
   int isDegenerate(){ return is_degen; }
+  void addEdgeFromFace( TMRFace *_face, TMRPcurve *_pcurve );
  private:
   int is_degen;
-  TMRFace *face;
-  TMRPcurve *pcurve;
+  int nfaces;
+  TMRFace **faces;
+  TMRPcurve **pcurves;
 };
 
 /*

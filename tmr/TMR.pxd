@@ -19,8 +19,9 @@ cdef extern from "TMRBase.h":
     cdef cppclass TMREntity:
         void incref()
         void decref()
-        void setAttribute(char *)
-
+        void setAttribute(char*)
+        int getEntityId()
+        
     cdef cppclass TMRPoint:
         double x
         double y
@@ -34,7 +35,9 @@ cdef extern from "TMRTopology.h":
         TMRTopology(MPI_Comm, TMRModel*)
             
     cdef cppclass TMRVertex(TMREntity):
-        pass
+        TMRVertex()
+        int setNodeNum(int*)
+        int getNodeNum(int*)
     
     cdef cppclass TMREdge(TMREntity):
         TMREdge()
@@ -42,6 +45,8 @@ cdef extern from "TMRTopology.h":
         void getSource(TMREdge**)
         void setVertices(TMRVertex*, TMRVertex*)
         void getVertices(TMRVertex**, TMRVertex**)
+        void setMesh(TMREdgeMesh*)
+        void getMesh(TMREdgeMesh**)
         void writeToVTK(char*)
         
     cdef cppclass TMRFace(TMREntity):
@@ -51,11 +56,15 @@ cdef extern from "TMRTopology.h":
         void getSource(int*, TMRVolume**, TMRFace**)
         int getNumEdgeLoops()
         void addEdgeLoop(TMREdgeLoop*)
+        void getEdgeLoop(int, TMREdgeLoop**)
+        void setMesh(TMRFaceMesh*)
+        void getMesh(TMRFaceMesh**)
         void writeToVTK(char*)
 
     cdef cppclass TMREdgeLoop(TMREntity):
         TMREdgeLoop(int, TMREdge**, const int*)
-        
+        void getEdgeLoop(int*, TMREdge***, const int**)
+
     cdef cppclass TMRVolume(TMREntity):
         TMRVolume(int, TMRFace**, const int*)
         void getFaces(int*, TMRFace***, const int**)
@@ -97,6 +106,7 @@ cdef extern from "TMRNativeTopology.h":
     cdef cppclass TMREdgeFromFace(TMREdge):
         TMREdgeFromFace(TMRFace*, TMRPcurve*)
         TMREdgeFromFace(TMRFace*, TMRPcurve*, int)
+        void addEdgeFromFace(TMRFace*, TMRPcurve*)
 
     cdef cppclass TMRSplitEdge(TMREdge):
         TMRSplitEdge(TMREdge*, double, double)
@@ -137,6 +147,7 @@ cdef extern from "TMRBspline.h":
 
 cdef extern from "":
     TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
+    TMREdgeFromFace* _dynamicEdgeFromFace "dynamic_cast<TMREdgeFromFace*>"(TMREdge*)
  
 cdef extern from "TMRMesh.h":    
     cdef cppclass TMRMesh(TMREntity):     

@@ -140,11 +140,14 @@ int TMRVertexFromFace::getParamsOnFace( TMRFace *_face,
 TMREdgeFromFace::TMREdgeFromFace( TMRFace *_face, 
                                   TMRPcurve *_pcurve,
                                   int _is_degen ){
-  face = _face;
-  face->incref();
-  setAttribute(face->getAttribute());
-  pcurve = _pcurve;
-  pcurve->incref();
+  nfaces = 1;
+  faces = new TMRFace*[ nfaces ];
+  pcurves = new TMRPcurve*[ nfaces ];
+  faces[0] = _face;
+  faces[0]->incref();
+  pcurves[0] = _pcurve;
+  pcurves[0]->incref();
+  setAttribute(faces[0]->getAttribute());
   is_degen = _is_degen;
 }
 
@@ -152,15 +155,19 @@ TMREdgeFromFace::TMREdgeFromFace( TMRFace *_face,
   Destroy the curve
 */
 TMREdgeFromFace::~TMREdgeFromFace(){
-  face->decref();
-  pcurve->decref();
+  for ( int i = 0; i < nfaces; i++ ){
+    faces[i]->decref();
+    pcurves[i]->decref();
+  }
+  delete [] faces;
+  delete [] pcurves;
 }
 
 /*
   Get the parameter range for this curve
 */
 void TMREdgeFromFace::getRange( double *tmin, double *tmax ){
-  pcurve->getRange(tmin, tmax);
+  pcurves[0]->getRange(tmin, tmax);
 }  
   
 /*
@@ -168,8 +175,8 @@ void TMREdgeFromFace::getRange( double *tmin, double *tmax ){
 */
 int TMREdgeFromFace::evalPoint( double t, TMRPoint *X ){
   double u, v;
-  int fail = pcurve->evalPoint(t, &u, &v);
-  fail = fail || face->evalPoint(u, v, X);
+  int fail = pcurves[0]->evalPoint(t, &u, &v);
+  fail = fail || faces[0]->evalPoint(u, v, X);
   return fail;
 }
 
@@ -179,8 +186,10 @@ int TMREdgeFromFace::evalPoint( double t, TMRPoint *X ){
 int TMREdgeFromFace::getParamsOnFace( TMRFace *surf, 
                                       double t, int dir, 
                                       double *u, double *v ){
-  if (surf == face){
-    return pcurve->evalPoint(t, u, v);
+  for ( int i = 0; i < nfaces; i++ ){
+    if (surf == faces[i]){
+      return pcurves[i]->evalPoint(t, u, v);
+    }
   }
 
   TMRPoint p;
@@ -204,14 +213,36 @@ int TMREdgeFromFace::invEvalPoint( TMRPoint X, double *t ){
 int TMREdgeFromFace::evalDeriv( double t, TMRPoint *Xt ){
   int fail = 0;
   double u, v, ut, vt;
-  pcurve->evalPoint(t, &u, &v);
-  pcurve->evalDeriv(t, &ut, &vt);
+  pcurves[0]->evalPoint(t, &u, &v);
+  pcurves[0]->evalDeriv(t, &ut, &vt);
   TMRPoint Xu, Xv;
-  face->evalDeriv(u, v, &Xu, &Xv);
+  faces[0]->evalDeriv(u, v, &Xu, &Xv);
   Xt->x = ut*Xu.x + vt*Xv.x;
   Xt->y = ut*Xu.y + vt*Xv.y;
   Xt->z = ut*Xu.z + vt*Xv.z;
   return fail;
+}
+
+/*
+  Add an additional parametrization of the edge along the face
+*/
+void TMREdgeFromFace::addEdgeFromFace( TMRFace *_face, 
+                                       TMRPcurve *_pcurve ){
+  nfaces++;
+  TMRFace **_faces = new TMRFace*[ nfaces ];
+  TMRPcurve **_pcurves = new TMRPcurve*[ nfaces ];
+  for ( int i = 0; i < nfaces-1; i++ ){
+    _faces[i] = faces[i];
+    _pcurves[i] = pcurves[i];
+  }
+  _face->incref();
+  _pcurve->incref();
+  _faces[nfaces-1] = _face;
+  _pcurves[nfaces-1] = _pcurve;
+  delete [] faces;
+  delete [] pcurves;
+  faces = _faces;
+  pcurves = _pcurves;
 }
 
 /*
