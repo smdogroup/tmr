@@ -419,6 +419,19 @@ cdef class FaceFromSurface(Face):
         self.ptr = new TMRFaceFromSurface(surf.ptr)
         self.ptr.incref()
 
+cdef class TFIFace(Face):
+    def __cinit__(self, list edges, list dirs, list verts):
+        cdef TMREdge *e[4]
+        cdef int d[4]
+        cdef TMRVertex *v[4]
+        assert(len(edges) == 4 and len(dirs) == 4 and len(verts) == 4)
+        for i in range(4):
+            e[i] = (<Edge>edges[i]).ptr
+            v[i] = (<Vertex>verts[i]).ptr
+            d[i] = <int>dirs[i]
+            self.ptr = new TMRTFIFace(e, d, v)
+            self.ptr.incref()
+
 cdef class CurveInterpolation:
     cdef TMRCurveInterpolation *ptr
     def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] pts):

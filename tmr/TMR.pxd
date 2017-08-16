@@ -118,6 +118,9 @@ cdef extern from "TMRNativeTopology.h":
     cdef cppclass TMRFaceFromSurface(TMRFace):
         TMRFaceFromSurface(TMRSurface*)
 
+    cdef cppclass TMRTFIFace(TMRFace):
+        TMRTFIFace(TMREdge**, const int*, TMRVertex**)
+
 cdef extern from "TMRBspline.h":
     cdef cppclass TMRBsplineCurve(TMRCurve):
         TMRBsplineCurve(int, int, TMRPoint*)
