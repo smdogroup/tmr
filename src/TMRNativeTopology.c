@@ -400,14 +400,6 @@ TMRTFIFace::TMRTFIFace( TMREdge *_edges[],
 
     // Evaluate the vertex points
     verts[k]->evalPoint(&c[k]);
-  
-    // Check that the edge range is as expected
-    double tmin = 0.0, tmax = 0.0;
-    edges[k]->getRange(&tmin, &tmax);
-    if (tmin != 0.0 || tmax != 1.0){
-      fprintf(stderr, 
-              "TMRTFIFace error: All edges must have t in [0, 1]\n");
-    }
   }
 
   // Set the vertices for this surface
@@ -489,7 +481,7 @@ int TMRTFIFace::evalPoint( double u, double v,
 
   for ( int k = 0; k < 4; k++ ){
     double p = (1.0 - params[k])*tmin[k] + params[k]*tmax[k];
-    fail = fail || edges[k]->evalPoint(params[k], &e[k]);
+    fail = fail || edges[k]->evalPoint(p, &e[k]);
   }
     
   // Evaluate the point on the surface

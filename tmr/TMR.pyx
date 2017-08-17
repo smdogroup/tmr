@@ -441,8 +441,8 @@ cdef class TFIFace(Face):
             e[i] = (<Edge>edges[i]).ptr
             v[i] = (<Vertex>verts[i]).ptr
             d[i] = <int>dirs[i]
-            self.ptr = new TMRTFIFace(e, d, v)
-            self.ptr.incref()
+        self.ptr = new TMRTFIFace(e, d, v)
+        self.ptr.incref()
 
 cdef class CurveInterpolation:
     cdef TMRCurveInterpolation *ptr
