@@ -58,6 +58,11 @@ cdef class Vertex:
         if self.ptr:
             self.ptr.decref()
 
+    def evalPoint(self):
+        cdef TMRPoint pt
+        self.ptr.evalPoint(&pt)
+        return np.array([pt.x, pt.y, pt.z])
+
     def setAttribute(self, char *name):
         if self.ptr:
             self.ptr.setAttribute(name)
@@ -239,9 +244,12 @@ cdef class Volume:
         self.ptr = NULL
         if (faces is not None and dirs is not None and
             len(faces) == len(dirs)):
-            nvols = len(faces)
-            d = <int*>malloc(nvols*sizeof(int))
+            nfaces = len(faces)
+            d = <int*>malloc(nfaces*sizeof(int))
             f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
+            for i in range(nfaces):
+                f[i] = (<Face>faces[i]).ptr
+                d[i] = <int>dirs[i]
             self.ptr = new TMRVolume(nfaces, f, d)
             self.ptr.incref()
             free(d)

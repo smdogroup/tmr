@@ -1,5 +1,6 @@
 #include "TMRNativeTopology.h"
 #include <stdio.h>
+#include <math.h>
 
 /*
   Create a vertex from a point
@@ -454,6 +455,11 @@ TMRTFIFace::~TMRTFIFace(){
 }
 
 /*
+  Set the maximum number of Newton iterations
+*/
+int TMRTFIFace::max_newton_iters = 25;
+
+/*
   The range must always be between [0,1] for all curves
 */
 void TMRTFIFace::getRange( double *umin, double *vmin,
@@ -503,11 +509,110 @@ int TMRTFIFace::evalPoint( double u, double v,
 /*  
   Inverse evaluation: This is not yet implemented
 */
-int TMRTFIFace::invEvalPoint( TMRPoint p, 
-                              double *u, double *v ){
-  *u = 0.0; 
-  *v = 0.0;
-  int fail = 1;
+int TMRTFIFace::invEvalPoint( TMRPoint point, 
+                              double *uf, double *vf ){
+  int fail = 0;
+  *uf = 0.0; 
+  *vf = 0.0;
+
+  // Get the bounds
+  double umin, vmin, umax, vmax;
+  getRange(&umin, &vmin, &umax, &vmax);
+
+  // Set the initial guess
+  double u = 0.5, v = 0.5;
+
+  // Perform a newton iteration until convergence
+  for ( int k = 0; k < max_newton_iters; k++ ){
+    // Set the point and their derivatives
+    TMRPoint X, Xu, Xv;
+    fail = fail || evalPoint(u, v, &X);
+    fail = fail || evalDeriv(u, v, &Xu, &Xv);
+
+   // Compute the difference between the position on the surface
+    // and the point
+    TMRPoint r;
+    r.x = (X.x - point.x);
+    r.y = (X.y - point.y);
+    r.z = (X.z - point.z);
+
+    // Compute the residual
+    double ru = Xu.dot(r);
+    double rv = Xv.dot(r);
+
+    // Compute the elements of the Jacobian matrix
+    double Juu = Xu.dot(Xu);
+    double Juv = Xu.dot(Xv);
+    double Jvv = Xv.dot(Xv);
+
+    double du = 0.0, dv = 0.0;
+
+    // Check for the bounds on u
+    if (u <= umin && ru >= 0.0){
+      ru = 0.0;
+      Juu = 1.0; 
+      Juv = 0.0;
+    }
+    else if (u >= umax && ru <= 0.0){
+      ru = 0.0;
+      Juu = 1.0;
+      Juv = 0.0;
+    }
+    
+    // Check for the bounds on v
+    if (v <= vmin && rv >= 0.0){
+      rv = 0.0;
+      Jvv = 1.0;
+      Juv = 0.0;
+    }
+    else if (v >= vmax && rv <= 0.0){
+      rv = 0.0;
+      Jvv = 1.0;
+      Juv = 0.0;
+    }
+                  
+    // Solve the 2x2 system
+    double det = Juu*Jvv - Juv*Juv;
+    if (det != 0.0){
+      du = (Jvv*ru - Juv*rv)/det;
+      dv = (Juu*rv - Juv*ru)/det;
+    }
+    
+    // Compute the updates
+    double unew = u - du;
+    double vnew = v - dv;
+
+    // Truncate the u/v values to the bounds
+    if (unew < umin){ unew = umin; }
+    else if (unew > umax){ unew = umax; }
+    if (vnew < vmin){ vnew = vmin; }
+    else if (vnew > vmax){ vnew = vmax; }
+
+    // Check if the convergence test is satisfied
+    if (fabs(r.x) < eps_dist && 
+        fabs(r.y) < eps_dist && 
+        fabs(r.z) < eps_dist){
+      *uf = u;
+      *vf = v;
+      return 0;
+    }
+
+    // Perform the cosine check
+    double dotr = r.dot(r);
+    double dotu = Xu.dot(Xu);
+    double dotv = Xv.dot(Xv);
+    if (ru*ru < eps_cosine*eps_cosine*dotu*dotr && 
+        rv*rv < eps_cosine*eps_cosine*dotv*dotr){
+      *uf = u;
+      *vf = v;
+      return 0;
+    }
+
+    // Update the new parameter values
+    u = unew;
+    v = vnew;
+  }
+
   return fail;
 }
 
@@ -516,11 +621,45 @@ int TMRTFIFace::invEvalPoint( TMRPoint p,
 */
 int TMRTFIFace::evalDeriv( double u, double v, 
                            TMRPoint *Xu, TMRPoint *Xv ){
+  int fail = 0;
+
+  // Evaluate the points on the edges
+  TMRPoint e[4], ed[4];
+  double params[4] = {u, v, 1.0-u, 1.0-v};
+  int d[4] = {1, 1, -1, -1};
 
   // Evaluate the curves along the v-direction
-  int fail = 1;
-  Xu->zero();
-  Xv->zero();
+  for ( int k = 0; k < 4; k++ ){
+    double p = (1.0 - params[k])*tmin[k] + params[k]*tmax[k];
+    fail = fail || edges[k]->evalPoint(p, &e[k]);
+    fail = fail || edges[k]->evalDeriv(p, &ed[k]);
+
+    // Evaluate the derivative w.r.t. u/v
+    ed[k].x *= d[k]*(tmax[k] - tmin[k]);
+    ed[k].y *= d[k]*(tmax[k] - tmin[k]);
+    ed[k].z *= d[k]*(tmax[k] - tmin[k]);
+  }
+    
+  // Evaluate the point on the surface
+  Xu->x = e[1].x - e[3].x + (1.0-v)*ed[0].x + v*ed[2].x
+    - ((1.0-v)*(c[1].x - c[0].x) + v*(c[2].x - c[3].x));
+
+  Xu->y = e[1].y - e[3].y + (1.0-v)*ed[0].y + v*ed[2].y
+    - ((1.0-v)*(c[1].y - c[0].y) + v*(c[2].y - c[3].y));
+
+  Xu->z = e[1].z - e[3].z + (1.0-v)*ed[0].z + v*ed[2].z
+    - ((1.0-v)*(c[1].z - c[0].z) + v*(c[2].z - c[3].z));
+
+  // Evaluate the point on the surface
+  Xv->x = (1.0-u)*ed[3].x + u*ed[1].x + e[2].x - e[0].x + 
+    - ((1.0-u)*(c[3].x - c[0].x) + u*(c[2].x - c[1].x));
+
+  Xv->y = (1.0-u)*ed[3].y + u*ed[1].y + e[2].y - e[0].y + 
+    - ((1.0-u)*(c[3].y - c[0].y) + u*(c[2].y - c[1].y));
+
+  Xv->z = (1.0-u)*ed[3].z + u*ed[1].z + e[2].z - e[0].z + 
+    - ((1.0-u)*(c[3].z - c[0].z) + u*(c[2].z - c[1].z));
+
   return fail;
 }
 
@@ -737,43 +876,6 @@ int TMRTFIVolume::evalPoint( double u, double v, double w,
                              TMRPoint *X ){
   int fail = 0;
 
-  /*
-  TMRPoint f[6];
-  // Evaluate/retrieve the points on the surfaces
-  for ( int k = 0; k < 6; k++ ){
-    double x, y;
-    if (k < 2){
-      x = v;
-      y = w;
-    }
-    else if (k < 4){
-      x = u;
-      y = w;
-    }
-    else {
-      x = u;
-      y = v;
-    }
-
-    // Check the orientation of the face relative to the volume
-    if (orient[k] == 0){
-      fail = fail || faces[k]->evalPoint(x, y, &f[k]);
-    }
-    else if (orient[k] == 1){
-      fail = fail || faces[k]->evalPoint(1.0-x, y, &f[k]);
-    }
-    else if (orient[k] == 2){
-      fail = fail || faces[k]->evalPoint(x, 1.0-y, &f[k]);
-    }
-    else if (orient[k] == 3){
-      fail = fail || faces[k]->evalPoint(1.0-x, 1.0-y, &f[k]);
-    }
-    else {
-      fail = 1;
-    }
-  }
-  */
-
   // Evaluate/retrieve the points on the edges
   TMRPoint e[12];
   for ( int k = 0; k < 12; k++ ){
@@ -796,53 +898,6 @@ int TMRTFIVolume::evalPoint( double u, double v, double w,
     }
   }
 
-  /*
-  // Evaluate the point based on the values along the corners, edges
-  // and faces
-  X->x = 
-    (1.0-u)*f[0].x + u*f[1].x + (1.0-v)*f[2].x + 
-    v*f[3].x + (1.0-w)*f[4].x + w*f[5].x 
-    - ((1.0-v)*(1.0-w)*e[0].x + v*(1.0-w)*e[1].x + 
-       (1.0-v)*w*e[2].x + v*w*e[3].x +
-       (1.0-u)*(1.0-w)*e[4].x + u*(1.0-w)*e[5].x + 
-       (1.0-u)*w*e[6].x + u*w*e[7].x +
-       (1.0-u)*(1.0-v)*e[8].x + u*(1.0-v)*e[9].x + 
-       (1.0-u)*v*e[10].x + u*v*e[11].x)
-    + ((1.0-u)*(1.0-v)*(1.0-w)*c[0].x + u*(1.0-v)*(1.0-w)*c[1].x + 
-       (1.0-u)*v*(1.0-w)*c[2].x + u*v*(1.0-w)*c[3].x + 
-       (1.0-u)*(1.0-v)*w*c[4].x + u*(1.0-v)*w*c[5].x + 
-       (1.0-u)*v*w*c[6].x + u*v*w*c[7].x);
-
-  X->y = 
-    (1.0-u)*f[0].y + u*f[1].y + (1.0-v)*f[2].y + 
-    v*f[3].y + (1.0-w)*f[4].y + w*f[5].y 
-    - ((1.0-v)*(1.0-w)*e[0].y + v*(1.0-w)*e[1].y + 
-       (1.0-v)*w*e[2].y + v*w*e[3].y +
-       (1.0-u)*(1.0-w)*e[4].y + u*(1.0-w)*e[5].y + 
-       (1.0-u)*w*e[6].y + u*w*e[7].y +
-       (1.0-u)*(1.0-v)*e[8].y + u*(1.0-v)*e[9].y + 
-       (1.0-u)*v*e[10].y + u*v*e[11].y)
-    + ((1.0-u)*(1.0-v)*(1.0-w)*c[0].y + u*(1.0-v)*(1.0-w)*c[1].y + 
-       (1.0-u)*v*(1.0-w)*c[2].y + u*v*(1.0-w)*c[3].y + 
-       (1.0-u)*(1.0-v)*w*c[4].y + u*(1.0-v)*w*c[5].y + 
-       (1.0-u)*v*w*c[6].y + u*v*w*c[7].y);
-
-  X->z = 
-    (1.0-u)*f[0].z + u*f[1].z + (1.0-v)*f[2].z + 
-    v*f[3].z + (1.0-w)*f[4].z + w*f[5].z 
-    - ((1.0-v)*(1.0-w)*e[0].z + v*(1.0-w)*e[1].z + 
-       (1.0-v)*w*e[2].z + v*w*e[3].z +
-       (1.0-u)*(1.0-w)*e[4].z + u*(1.0-w)*e[5].z + 
-       (1.0-u)*w*e[6].z + u*w*e[7].z +
-       (1.0-u)*(1.0-v)*e[8].z + u*(1.0-v)*e[9].z + 
-       (1.0-u)*v*e[10].z + u*v*e[11].z)
-    + ((1.0-u)*(1.0-v)*(1.0-w)*c[0].z + u*(1.0-v)*(1.0-w)*c[1].z + 
-       (1.0-u)*v*(1.0-w)*c[2].z + u*v*(1.0-w)*c[3].z + 
-       (1.0-u)*(1.0-v)*w*c[4].z + u*(1.0-v)*w*c[5].z + 
-       (1.0-u)*v*w*c[6].z + u*v*w*c[7].z);
-  */
-
-  
   X->x = ((1.0-v)*(1.0-w)*e[0].x + v*(1.0-w)*e[1].x + 
        (1.0-v)*w*e[2].x + v*w*e[3].x +
        (1.0-u)*(1.0-w)*e[4].x + u*(1.0-w)*e[5].x + 

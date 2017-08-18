@@ -1404,6 +1404,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
   // The basis functions/work arrays
   double Nu[3*MAX_BSPLINE_ORDER], Nv[3*MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
+  
   // Get the bounds
   double umin, vmin, umax, vmax;
   getRange(&umin, &vmin, &umax, &vmax);

@@ -36,6 +36,7 @@ cdef extern from "TMRTopology.h":
             
     cdef cppclass TMRVertex(TMREntity):
         TMRVertex()
+        int evalPoint(TMRPoint*)
         int setNodeNum(int*)
         int getNodeNum(int*)
     
