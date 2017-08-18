@@ -327,7 +327,7 @@ class TMRMesh : public TMREntity {
 
  private:
   // Allocate and initialize the underlying mesh
-  void initMesh();
+  void initMesh( int count_nodes=0 );
 
   // The underlying geometry object
   MPI_Comm comm;

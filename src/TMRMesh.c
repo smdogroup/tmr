@@ -1477,12 +1477,14 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
             }
           }
 
-          // Compute the relative source-to-target directions
-          int tmp = source_edges[sedge]*target_edges[tedge];
-          target_edge_dir[tedge] = -sdir*tdir*tmp;
+          if (sedge && tedge){
+            // Compute the relative source-to-target directions
+            int tmp = source_edges[sedge]*target_edges[tedge];
+            target_edge_dir[tedge] = -sdir*tdir*tmp;
 
-          // Source to target and target to source edges
-          source_to_target_edge[sedge] = tedge;
+            // Source to target and target to source edges
+            source_to_target_edge[sedge] = tedge;
+          }
         }
       }
 
@@ -3172,6 +3174,7 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
         mesh_fail = 1;
       }
       else if (mesh->getMeshType() != TMR_STRUCTURED){
+        printf("face[%d] \n", i);
         fprintf(stderr,
                 "TMRVolumeMesh error: \
 Through-thickness meshes must be structured\n");
@@ -3879,16 +3882,19 @@ void TMRMesh::mesh( TMRMeshOptions options,
 /*
   Allocate and initialize the global mesh using the global ordering
 */
-void TMRMesh::initMesh(){
+void TMRMesh::initMesh( int count_nodes ){
   // Allocate the global arrays
   X = new TMRPoint[ num_nodes ];
 
   if (num_hex > 0){
     hex = new int[ 8*num_hex ];
 
-    int *count = new int[ num_nodes ];
-    memset(count, 0, num_nodes*sizeof(int));
-
+    int *count = NULL;
+    if (count_nodes){
+      count = new int[ num_nodes ];
+      memset(count, 0, num_nodes*sizeof(int));
+    }
+    
     // Retrieve the surface information
     int num_volumes;
     TMRVolume **volumes;
@@ -3922,21 +3928,28 @@ void TMRMesh::initMesh(){
       // Set the node locations
       for ( int j = 0; j < npts; j++ ){
         X[vars[j]] = Xpts[j];
-        count[vars[j]]++;
+      }
+
+      if (count_nodes){
+        for ( int j = 0; j < npts; j++ ){
+          count[vars[j]]++;
+        }
       }
     }
 
-    // Set the count to the number of variables
-    for ( int j = 0; j < num_nodes; j++ ){
-      if (count[j] == 0){ 
-        printf("TMRMesh error: Node %d not referenced\n", j); 
+    if (count_nodes){
+      // Set the count to the number of variables
+      for ( int j = 0; j < num_nodes; j++ ){
+        if (count[j] == 0){ 
+          printf("TMRMesh error: Node %d not referenced\n", j); 
+        }
+        if (count[j] >= 2){ 
+          printf("TMRMesh error: Node %d referenced more than once %d\n", 
+                 j, count[j]); 
+        }
       }
-      if (count[j] >= 2){ 
-        printf("TMRMesh error: Node %d referenced more than once %d\n", 
-               j, count[j]); 
-      }
+      delete [] count;
     }
-    delete [] count;
   }
   if (num_quads > 0){
     quads = new int[ 4*num_quads ];
