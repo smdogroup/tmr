@@ -80,11 +80,6 @@ class TMREdge : public TMREntity {
   void setSource( TMREdge *_edge );
   void getSource( TMREdge **_edge );
 
-  // Integrate along the edge and return an array containing
-  // the parametric locations to provide an even spacing
-  double integrate( double t1, double t2, double tol,
-                    double **tvals, double **dist, int *nvals );
-
   // Set/retrieve the mesh
   void setMesh( TMREdgeMesh *_mesh );
   void getMesh( TMREdgeMesh **_mesh );

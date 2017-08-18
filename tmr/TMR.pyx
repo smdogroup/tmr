@@ -699,7 +699,27 @@ cdef class MeshOptions:
    # @num_smoothing_steps.setter
    # def num_smoothing_steps(self,value):
    #    self.ptr.num_smoothing_steps = value
-      
+
+cdef class ElementFeatureSize:
+    cdef TMRElementFeatureSize *ptr
+    def __cinit__(self, *args, **kwargs):
+        self.ptr = NULL
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+cdef class ConstElementSize(ElementFeatureSize):
+    def __cinit__(self, double h):
+        self.ptr = new TMRElementFeatureSize(h)
+        self.ptr.incref()
+
+cdef class LinearElementSize(ElementFeatureSize):
+    def __cinit__(self, double hmin, double hmax,
+                  double c=0.0, double ax=0.0, double ay=0.0, double az=0.0):
+        self.ptr = new TMRLinearElementSize(hmin, hmax, c, ax, ay, az)
+        self.ptr.incref()
+        
 cdef class Mesh:
     cdef TMRMesh *ptr
     def __cinit__(self, MPI.Comm comm, Model geo):
@@ -714,11 +734,19 @@ cdef class Mesh:
         if self.ptr:
             self.ptr.decref()
 
-    def mesh(self, double h, MeshOptions opts=None):
-        if opts is None:
-            self.ptr.mesh(h)
+    def mesh(self, double h=1.0, MeshOptions opts=None,
+             ElementFeatureSize fs=None):
+        cdef TMRMeshOptions default
+        if fs is not None:
+            if opts is None:
+                self.ptr.mesh(default, fs.ptr)
+            else:
+                self.ptr.mesh(opts.ptr, fs.ptr)
         else:
-            self.ptr.mesh(opts.ptr, h)
+            if opts is None:
+                self.ptr.mesh(default, h)
+            else:
+                self.ptr.mesh(opts.ptr, h)
 
     def getMeshPoints(self):
         cdef TMRPoint *X
@@ -799,10 +827,14 @@ cdef class EdgeMesh:
 
     def mesh(self, double h, MeshOptions opts=None):
         cdef TMRMeshOptions options
+        cdef TMRElementFeatureSize *fs = NULL
+        fs = new TMRElementFeatureSize(h)
+        fs.incref()
         if opts is None:            
-            self.ptr.mesh(options, h)
+            self.ptr.mesh(options, fs)
         else:
-            self.ptr.mesh(opts.ptr, h)
+            self.ptr.mesh(opts.ptr, fs)
+        fs.decref()
 
 cdef class FaceMesh:
     cdef TMRFaceMesh *ptr
@@ -817,10 +849,14 @@ cdef class FaceMesh:
 
     def mesh(self, double h, MeshOptions opts=None):
         cdef TMRMeshOptions options
+        cdef TMRElementFeatureSize *fs = NULL
+        fs = new TMRElementFeatureSize(h)
+        fs.incref()
         if opts is None:            
-            self.ptr.mesh(options, h)
+            self.ptr.mesh(options, fs)
         else:
-            self.ptr.mesh(opts.ptr, h)
+            self.ptr.mesh(opts.ptr, fs)
+        fs.decref()
 
 cdef class Topology:
     cdef TMRTopology *ptr

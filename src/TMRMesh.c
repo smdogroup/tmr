@@ -699,7 +699,192 @@ static void computeHexEdgesAndFaces( int nnodes, int nhex,
 }
 
 /*
-  Mesh a curve
+  An integral entry for the linked list
+*/
+class IntegralPt {
+ public:
+  double t;
+  double dist;
+  IntegralPt *next;
+};
+
+/*
+  Evaluate the distance between two points
+*/
+double pointDist( TMRPoint *a, TMRPoint *b ){
+  return sqrt((a->x - b->x)*(a->x - b->x) + 
+              (a->y - b->y)*(a->y - b->y) + 
+              (a->z - b->z)*(a->z - b->z));
+}
+
+/*
+  Recursive integration on an edge with an adaptive error control to
+  ensure that the integral is computed with sufficient accuracy.
+
+  input:
+  t1, t2:  the limits of integration for this interval
+  tol:     the absolute error measure
+  ncalls:  the recursion depth
+  pt:      pointer into the linked list
+*/
+void integrateEdge( TMREdge *edge, TMRElementFeatureSize *fs,
+                    double t1, double h1, TMRPoint p1, 
+                    double t2, double tol,
+                    int ncalls, IntegralPt **_pt ){
+  // Dereference the pointer to the integral point
+  IntegralPt *pt = *_pt;
+
+  // Find the mid point of the interval
+  TMRPoint pmid;
+  double tmid = 0.5*(t1 + t2);
+  edge->evalPoint(tmid, &pmid);
+  double hmid = fs->getFeatureSize(pmid);
+
+  // Evaluate the point at the end of the interval
+  TMRPoint p2; 
+  edge->evalPoint(t2, &p2);
+  double h2 = fs->getFeatureSize(p2);
+    
+  // Evaluate the approximate integral contributions
+  double int1 = 2.0*pointDist(&p1, &pmid)/(h1 + hmid);
+  double int2 = 4.0*pointDist(&pmid, &p2)/(h1 + 2.0*hmid + h2);
+  double int3 = 2.0*pointDist(&p1, &p2)/(hmid + h2);
+
+  // Compute the integration error
+  double error = fabs(int3 - int1 - int2);
+
+  if (((ncalls > 6) && (error < tol)) || (ncalls > 20)){
+    // Add the mid point
+    pt->next = new IntegralPt;
+    pt->next->dist = pt->dist + int1;
+    pt->next->t = tmid;
+    pt->next->next = NULL;
+    pt = pt->next;
+
+    // Add the final point p2
+    pt->next = new IntegralPt;
+    pt->next->dist = pt->dist + int2;
+    pt->next->t = t2;
+    pt->next->next = NULL;
+    pt = pt->next;
+
+    // Set the pointer to the end of the linked list
+    *_pt = pt;
+  }
+  else {
+    // Continue the recursive integration
+    integrateEdge(edge, fs, t1, h1, p1, tmid, tol, ncalls+1, _pt);
+    integrateEdge(edge, fs, tmid, hmid, pmid, t2, tol, ncalls+1, _pt);
+  }
+}
+
+/*
+  Integrate along the edge adaptively, creating a list 
+*/
+double integrateEdge( TMREdge *edge, TMRElementFeatureSize *fs,
+                      double t1, double t2, double tol,
+                      double **_tvals, double **_dist, 
+                      int *_nvals ){
+  *_tvals = NULL;
+  *_dist = NULL;
+  *_nvals = 0;
+
+  // Allocate the entry in the linked list
+  IntegralPt *root = new IntegralPt;
+  root->next = NULL;
+  root->dist = 0.0;
+  root->t = t1;
+
+  // Evaluate the first point
+  TMRPoint p1;
+  edge->evalPoint(t1, &p1);
+  double h1 = fs->getFeatureSize(p1);
+
+  // Integrate over the edge
+  IntegralPt *pt = root;
+  integrateEdge(edge, fs, t1, h1, p1, t2, tol, 0, &pt);
+
+  // Count up and allocate the num
+  int count = 1;
+  IntegralPt *curr = root;
+  while (curr->next){
+    curr = curr->next;
+    count++;
+  }
+
+  // Allocate arrays to store the parametric location/distance data
+  double *tvals = new double[ count ];
+  double *dist = new double[ count ];
+
+  // Scan through the linked list, read out the values of the
+  // parameter and its integral and delete the entries as we go...
+  count = 0;
+  curr = root;
+  tvals[count] = curr->t;
+  dist[count] = curr->dist;
+  count++;
+
+  while (curr->next){
+    IntegralPt *tmp = curr;
+    curr = curr->next;
+    tvals[count] = curr->t;
+    dist[count] = curr->dist;
+    count++;
+    delete tmp;
+  }
+
+  double len = curr->dist;
+  delete curr;
+
+  // Set the pointers for the output
+  *_nvals = count;
+  *_tvals = tvals;
+  *_dist = dist;
+
+  return len;
+}
+
+/*
+  Create the element feature size.
+
+  This corresponds to a constant feature size across the entire
+  domain. Element grading can be implemented by overriding this class
+  to modify the feature size as a function of position.
+*/
+TMRElementFeatureSize::TMRElementFeatureSize( double _hmin ){
+  hmin = _hmin;
+}
+
+TMRElementFeatureSize::~TMRElementFeatureSize(){}
+
+double TMRElementFeatureSize::getFeatureSize( TMRPoint pt ){
+  return hmin;
+}
+
+
+TMRLinearElementSize::TMRLinearElementSize( double _hmin, double _hmax,
+                                            double _c, 
+                                            double _ax, double _ay, double _az ):
+TMRElementFeatureSize(_hmin){
+  hmax = _hmax;
+  c = _c;
+  ax = _ax;
+  ay = _ay;
+  az = _az;
+}
+
+TMRLinearElementSize::~TMRLinearElementSize(){}
+
+double TMRLinearElementSize::getFeatureSize( TMRPoint pt ){
+  double h = c + ax*pt.x + ay*pt.y + az*pt.z;
+  if (h < hmin){ h = hmin; }
+  if (h > hmax){ h = hmax; }
+  return h;
+}
+
+
+/*
+  Create a mesh along curve
 */
 TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge ){
   comm = _comm;
@@ -725,7 +910,8 @@ TMREdgeMesh::~TMREdgeMesh(){
 /*
   Find the points along the edge for the mesh
 */
-void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
+void TMREdgeMesh::mesh( TMRMeshOptions options, 
+                        TMRElementFeatureSize *fs ){
   int mpi_rank, mpi_size;
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
@@ -742,7 +928,7 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
     source->getMesh(&mesh);
     if (!mesh){
       mesh = new TMREdgeMesh(comm, source);
-      mesh->mesh(options, htarget);
+      mesh->mesh(options, fs);
       source->setMesh(mesh);
     }
 
@@ -767,13 +953,13 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
       // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
       int nvals;
       double *dist, *tvals;
-      edge->integrate(tmin, tmax, integration_eps, 
-                      &tvals, &dist, &nvals);
+      integrateEdge(edge, fs, tmin, tmax, integration_eps, 
+                    &tvals, &dist, &nvals);
       
       // Only compute the number of points if there is no source edge
       if (npts < 0){
         // Compute the number of points along this curve
-        npts = 1 + (int)(dist[nvals-1]/htarget);
+        npts = (int)(ceil(dist[nvals-1]));
         if (npts < 2){ npts = 2; }
 
         // If we have an even number of points, increment by one to ensure
@@ -787,7 +973,7 @@ void TMREdgeMesh::mesh( TMRMeshOptions options, double htarget ){
         }
       }
 
-      // The average distance between points
+      // The average non-dimensional distance between points
       double d = dist[nvals-1]/(npts-1);
 
       // Allocate the parametric points that will be used 
@@ -888,7 +1074,8 @@ int TMREdgeMesh::getNodeNums( const int **_vars ){
 /*
   Get the mesh points
 */
-void TMREdgeMesh::getMeshPoints( int *_npts, const double **_pts, 
+void TMREdgeMesh::getMeshPoints( int *_npts, 
+                                 const double **_pts, 
                                  TMRPoint **_X ){
   if (_npts){ *_npts = npts; }
   if (_pts){ *_pts = pts; }
@@ -937,7 +1124,7 @@ TMRFaceMesh::~TMRFaceMesh(){
   Create the surface mesh
 */
 void TMRFaceMesh::mesh( TMRMeshOptions options,
-                        double htarget ){
+                        TMRElementFeatureSize *fs ){
   int mpi_rank, mpi_size;
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
@@ -962,7 +1149,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     source->getMesh(&face_mesh);
     if (!face_mesh){
       face_mesh = new TMRFaceMesh(comm, source);
-      face_mesh->mesh(options, htarget);
+      face_mesh->mesh(options, fs);
       source->setMesh(face_mesh);
     }
   }
@@ -1655,7 +1842,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
       }
 
       // Create the mesh using the frontal algorithm
-      tri->frontal(options, htarget);
+      tri->frontal(options, fs);
 
       // Free the degenerate triangles and reorder the mesh
       if (num_degen > 0){
@@ -3538,15 +3725,18 @@ TMRMesh::~TMRMesh(){
 /*
   Call the underlying mesher with the default options
 */
-void TMRMesh::mesh( double htarget ){
-  TMRMeshOptions options;
-  mesh(options, htarget);
+void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
+  TMRElementFeatureSize *fs = new TMRElementFeatureSize(htarget);
+  fs->incref();
+  mesh(options, fs);
+  fs->decref();
 }
 
 /*
   Mesh the underlying geometry
 */
-void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
+void TMRMesh::mesh( TMRMeshOptions options, 
+                    TMRElementFeatureSize *fs ){
   // Mesh the curves
   int num_edges;
   TMREdge **edges;
@@ -3556,7 +3746,7 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
     edges[i]->getMesh(&mesh);
     if (!mesh){
       mesh = new TMREdgeMesh(comm, edges[i]);
-      mesh->mesh(options, htarget);
+      mesh->mesh(options, fs);
       edges[i]->setMesh(mesh);
     }
   }
@@ -3570,7 +3760,7 @@ void TMRMesh::mesh( TMRMeshOptions options, double htarget ){
     faces[i]->getMesh(&mesh);
     if (!mesh){
       mesh = new TMRFaceMesh(comm, faces[i]);
-      mesh->mesh(options, htarget);
+      mesh->mesh(options, fs);
       faces[i]->setMesh(mesh);
     }
   }

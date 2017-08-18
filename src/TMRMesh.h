@@ -70,6 +70,35 @@ class TMRMeshOptions {
 };
 
 /*
+  The element feature size class
+*/
+class TMRElementFeatureSize : public TMREntity {
+ public:
+  TMRElementFeatureSize( double _hmin );
+  virtual ~TMRElementFeatureSize();
+  virtual double getFeatureSize( TMRPoint pt );
+
+ protected:
+  // The min local feature size
+  double hmin;
+};
+
+/*
+  Set a min/max element feature size
+*/
+class TMRLinearElementSize : public TMRElementFeatureSize {
+ public:
+  TMRLinearElementSize( double _hmin, double _hmax,
+                        double c, double _ax, double _ay, double _az );
+  ~TMRLinearElementSize();
+  double getFeatureSize( TMRPoint pt );
+
+ private:
+  double hmax;
+  double c, ax, ay, az;
+};
+
+/*
   The mesh for a geometric curve
 */
 class TMREdgeMesh : public TMREntity {
@@ -84,7 +113,8 @@ class TMREdgeMesh : public TMREntity {
   void getEdge( TMREdge **_edge );
 
   // Mesh the geometric object
-  void mesh( TMRMeshOptions options, double htarget );
+  void mesh( TMRMeshOptions options, 
+             TMRElementFeatureSize *fs );
 
   // Order the mesh points uniquely
   int setNodeNums( int *num );
@@ -119,7 +149,8 @@ class TMRFaceMesh : public TMREntity {
   void getFace( TMRFace **_surface );
   
   // Mesh the underlying geometric object
-  void mesh( TMRMeshOptions options, double htarget );
+  void mesh( TMRMeshOptions options, 
+             TMRElementFeatureSize *fs );
 
   // Return the type of the underlying mesh
   TMRFaceMeshType getMeshType(){
@@ -274,8 +305,9 @@ class TMRMesh : public TMREntity {
   ~TMRMesh();
 
   // Mesh the underlying geometry
-  void mesh( double htarget );
   void mesh( TMRMeshOptions options, double htarget );
+  void mesh( TMRMeshOptions options, 
+             TMRElementFeatureSize *fs );
 
   // Write the mesh to a VTK file
   void writeToVTK( const char *filename, 

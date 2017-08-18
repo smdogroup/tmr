@@ -65,7 +65,8 @@ int main( int argc, char *argv[] ){
   tri->incref();
 
   TMRMeshOptions opts;
-  tri->frontal(opts, length);
+  TMRElementFeatureSize *fs = new TMRElementFeatureSize(length);
+  tri->frontal(opts, fs);
   tri->writeToVTK("triangle.vtk");
 
   tri->decref();

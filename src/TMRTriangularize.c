@@ -451,7 +451,7 @@ void TMRQuadNode::findClosest( const double pt[],
   nholes: the number of holes that are specified
   nsegs:  the number of segments
   segs:   the segments: consecutive point numbers indicating edges
-  surf:   the optional face
+  surf:   the non-optional face
 */
 TMRTriangularize::TMRTriangularize( int npts, const double inpts[],
                                     int nsegs, const int segs[],
@@ -484,9 +484,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
 
   // Set the surface
   face = surf;
-  if (face){
-    face->incref();
-  }
+  face->incref();
 
   // Allocate and initialize/zero the hash table data for the edges
   num_hash_nodes = 0;
@@ -517,12 +515,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   pts_to_tris = new TMRTriangle*[ max_num_points ];
 
   // If we have a face object
-  if (face){
-    X = new TMRPoint[ max_num_points ];
-  }
-  else {
-    X = NULL;
-  }
+  X = new TMRPoint[ max_num_points ];
 
   // Find the maximum domain size
   domain.xlow = domain.xhigh = inpts[0];
@@ -576,12 +569,10 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   pts[7] = domain.yhigh;
   
   // Evaluate the points on the face
-  if (face){
-    for ( int i = 0; i < num_points; i++ ){
-      X[i].x = X[i].y = X[i].z = 0.0;
-    }
+  for ( int i = 0; i < num_points; i++ ){
+    X[i].x = X[i].y = X[i].z = 0.0;
   }
-
+  
   // Add the extreme points to the quadtree
   for ( int i = 0; i < FIXED_POINT_OFFSET; i++ ){
     root->addNode(i, &pts[2*i]);
@@ -659,14 +650,12 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
 TMRTriangularize::~TMRTriangularize(){
   if (root){ delete root; }
   delete [] pts;
-  if (X){ delete [] X; }
+  delete [] X;
   delete [] pts_to_tris;
 
   // Dereference the face
-  if (face){
-    face->decref();
-  }
-
+  face->decref();
+  
   // Free the PSLG edges
   if (pslg_edges){
     delete [] pslg_edges;
@@ -827,15 +816,11 @@ void TMRTriangularize::getMesh( int *_num_points,
   *_num_triangles = num_triangles;
   *_conn = new int[ 3*num_triangles ];
   *_pts = new double[ 2*npts ];
-  if (face){
-    *_X = new TMRPoint[ npts ];
-  }
-
+  *_X = new TMRPoint[ npts ];
+  
   // Set the points
   memcpy(*_pts, &pts[2*FIXED_POINT_OFFSET], 2*npts*sizeof(double));
-  if (face){
-    memcpy(*_X, &X[FIXED_POINT_OFFSET], npts*sizeof(TMRPoint));
-  }
+  memcpy(*_X, &X[FIXED_POINT_OFFSET], npts*sizeof(TMRPoint));
 
   // Set the pointer into the connectivity array
   int *t = *_conn;
@@ -897,15 +882,8 @@ void TMRTriangularize::writeToVTK( const char *filename ){
       
     // Write out the points
     fprintf(fp, "POINTS %d float\n", num_points);
-    if (face){
-      for ( int k = 0; k < num_points; k++ ){
-        fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
-      }
-    }
-    else {
-      for ( int k = 0; k < num_points; k++ ){
-        fprintf(fp, "%e %e %e\n", pts[2*k], pts[2*k+1], 0.0);
-      }
+    for ( int k = 0; k < num_points; k++ ){
+      fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
     }
     
     // Write out the cell values
@@ -932,7 +910,8 @@ void TMRTriangularize::writeToVTK( const char *filename ){
     node = list_start;
     while (node){
       if (node->tri.status != DELETE_ME){
-        fprintf(fp, "%d\n", node->tri.status);
+        // fprintf(fp, "%d\n", node->tri.status);
+        fprintf(fp, "%e\n", node->tri.quality);
       }
       node = node->next;
     }
@@ -1313,58 +1292,53 @@ inline int TMRTriangularize::enclosed( const double p[],
 }
 
 /*
-  Does the final given point lie within the circumcircle of the remaining
-  points?
+  Does the final given point lie within the circumcircle of the
+  remaining points?
 */
 inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
                                           uint32_t w, uint32_t x ){
+  // Compute the parametric mid-point of the triangle
+  double mpt[2];
+  const double frac = 1.0/3.0;
+  mpt[0] = frac*(pts[2*u] + pts[2*v] + pts[2*w]);
+  mpt[1] = frac*(pts[2*u+1] + pts[2*v+1] + pts[2*w+1]);
 
-  if (face){
-    // Compute the parametric mid-point of the triangle
-    double mpt[2];
-    const double frac = 1.0/3.0;
-    mpt[0] = frac*(pts[2*u] + pts[2*v] + pts[2*w]);
-    mpt[1] = frac*(pts[2*u+1] + pts[2*v+1] + pts[2*w+1]);
+  // Compute the metric components at the center of the triangle (u,v,w)
+  TMRPoint Xu, Xv;
+  face->evalDeriv(mpt[0], mpt[1], &Xu, &Xv);
+  double g11 = Xu.dot(Xu);
+  double g12 = Xu.dot(Xv);
+  double g22 = Xv.dot(Xv);
 
-    // Compute the metric components at the center of the triangle (u,v,w)
-    TMRPoint Xu, Xv;
-    face->evalDeriv(mpt[0], mpt[1], &Xu, &Xv);
-    double g11 = Xu.dot(Xu);
-    double g12 = Xu.dot(Xv);
-    double g22 = Xv.dot(Xv);
+  // Compute a multiplicative decomposition such that G = L*L^{T}
+  // [l11    ][l11 l21] = [g11  g12]
+  // [l21 l22][    l22]   [g12  g22]
+  // l11 = sqrt(g11)
+  // l11*l21 = g12 => l21 = g12/l11
+  // l21*l21 + l22^2 = g22 => l22 = sqrt(g22 - l21*l21);
+  double l11 = sqrt(g11);
+  double inv11 = 1.0/l11;
+  double l21 = inv11*g12;
+  double l22 = sqrt(g22 - l21*l21);
 
-    // Compute a multiplicative decomposition such that G = L*L^{T}
-    // [l11    ][l11 l21] = [g11  g12]
-    // [l21 l22][    l22]   [g12  g22]
-    // l11 = sqrt(g11)
-    // l11*l21 = g12 => l21 = g12/l11
-    // l21*l21 + l22^2 = g22 => l22 = sqrt(g22 - l21*l21);
-    double l11 = sqrt(g11);
-    double inv11 = 1.0/l11;
-    double l21 = inv11*g12;
-    double l22 = sqrt(g22 - l21*l21);
+  // Compute p' = L^{T}*p to transform into the local coordinates
+  double pu[2];
+  pu[0] = l11*pts[2*u] + l21*pts[2*u+1];
+  pu[1] = l22*pts[2*u+1];
 
-    // Compute p' = L^{T}*p to transform into the local coordinates
-    double pu[2];
-    pu[0] = l11*pts[2*u] + l21*pts[2*u+1];
-    pu[1] = l22*pts[2*u+1];
+  double pv[2];
+  pv[0] = l11*pts[2*v] + l21*pts[2*v+1];
+  pv[1] = l22*pts[2*v+1];
 
-    double pv[2];
-    pv[0] = l11*pts[2*v] + l21*pts[2*v+1];
-    pv[1] = l22*pts[2*v+1];
+  double pw[2];
+  pw[0] = l11*pts[2*w] + l21*pts[2*w+1];
+  pw[1] = l22*pts[2*w+1];
 
-    double pw[2];
-    pw[0] = l11*pts[2*w] + l21*pts[2*w+1];
-    pw[1] = l22*pts[2*w+1];
+  double px[2];
+  px[0] = l11*pts[2*x] + l21*pts[2*x+1];
+  px[1] = l22*pts[2*x+1];
 
-    double px[2];
-    px[0] = l11*pts[2*x] + l21*pts[2*x+1];
-    px[1] = l22*pts[2*x+1];
-
-    return incircle(pu, pv, pw, px);
-  }
-
-  return incircle(&pts[2*u], &pts[2*v], &pts[2*w], &pts[2*x]);
+  return incircle(pu, pv, pw, px);
 }
 
 /*
@@ -1389,13 +1363,11 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
     delete [] pts_to_tris;
     pts_to_tris = new_pts_to_tris;
     
-    if (face){
-      // Allocate the space for the triangle vertices in physical space
-      TMRPoint *new_X = new TMRPoint[ max_num_points ];
-      memcpy(new_X, X, num_points*sizeof(TMRPoint));
-      delete [] X;
-      X = new_X;
-    }
+    // Allocate the space for the triangle vertices in physical space
+    TMRPoint *new_X = new TMRPoint[ max_num_points ];
+    memcpy(new_X, X, num_points*sizeof(TMRPoint));
+    delete [] X;
+    X = new_X;    
   }
 
   // Add the point to the quadtree
@@ -1409,9 +1381,7 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
   pts_to_tris[num_points] = NULL;
 
   // Evaluate the face location
-  if (face){
-    face->evalPoint(pt[0], pt[1], &X[num_points]);
-  }
+  face->evalPoint(pt[0], pt[1], &X[num_points]);
   
   // Increase the number of points by one
   num_points++;
@@ -1650,41 +1620,22 @@ double TMRTriangularize::computeIntersection( const double m[],
 */
 double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
   double D1, D2, D3;
-  if (face){
-    // Compute the edge lengths in physical space
-    TMRPoint d;
-    d.x = X[tri->v].x - X[tri->u].x;
-    d.y = X[tri->v].y - X[tri->u].y;
-    d.z = X[tri->v].z - X[tri->u].z;
-    D1 = d.dot(d);
-
-    d.x = X[tri->w].x - X[tri->v].x;
-    d.y = X[tri->w].y - X[tri->v].y;
-    d.z = X[tri->w].z - X[tri->v].z;
-    D2 = d.dot(d);
-
-    d.x = X[tri->u].x - X[tri->w].x;
-    d.y = X[tri->u].y - X[tri->w].y;
-    d.z = X[tri->u].z - X[tri->w].z;
-    D3 = d.dot(d);
-  }
-  else {
-    // Compute the edge lengths in parameter space
-    double d1[2];
-    d1[0] = pts[2*tri->v] - pts[2*tri->u];
-    d1[1] = pts[2*tri->v+1] - pts[2*tri->u+1];
-    D1 = d1[0]*d1[0] + d1[1]*d1[1];
-    
-    double d2[2];
-    d2[0] = pts[2*tri->w] - pts[2*tri->v];
-    d2[1] = pts[2*tri->w+1] - pts[2*tri->v+1];
-    D2 = d2[0]*d2[0] + d2[1]*d2[1];
-    
-    double d3[2];
-    d3[0] = pts[2*tri->u] - pts[2*tri->w];
-    d3[1] = pts[2*tri->u+1] - pts[2*tri->w+1];
-    D3 = d3[0]*d3[0] + d3[1]*d3[1];
-  }
+  // Compute the edge lengths in physical space
+  TMRPoint d;
+  d.x = X[tri->v].x - X[tri->u].x;
+  d.y = X[tri->v].y - X[tri->u].y;
+  d.z = X[tri->v].z - X[tri->u].z;
+  D1 = d.dot(d);
+  
+  d.x = X[tri->w].x - X[tri->v].x;
+  d.y = X[tri->w].y - X[tri->v].y;
+  d.z = X[tri->w].z - X[tri->v].z;
+  D2 = d.dot(d);
+  
+  d.x = X[tri->u].x - X[tri->w].x;
+  d.y = X[tri->u].y - X[tri->w].y;
+  d.z = X[tri->u].z - X[tri->w].z;
+  D3 = d.dot(d);
 
   double Dmax = D1;
   if (D2 > Dmax){ Dmax = D2; }
@@ -1701,72 +1652,53 @@ double TMRTriangularize::computeMaxEdgeLength( TMRTriangle *tri ){
   metric to determine whether to retain the triangle, or search for
   a better one.
 */
-double TMRTriangularize::computeCircumcircle( TMRTriangle *tri ){
-  double R = 0.0;
-  if (face){
-    // Compute the edge lengths in physical space
-    TMRPoint d1;
-    d1.x = X[tri->v].x - X[tri->u].x;
-    d1.y = X[tri->v].y - X[tri->u].y;
-    d1.z = X[tri->v].z - X[tri->u].z;
+double TMRTriangularize::computeSizeRatio( TMRTriangle *tri,
+                                           TMRElementFeatureSize *fs ){
+  // The circumcircle of an equilateral triangle is sqrt(3)*h where h
+  // is the side-length of the triangle
+  const double sqrt3 = 1.73205080757;
+
+  // Compute the edge lengths in physical space
+  TMRPoint d1;
+  d1.x = X[tri->v].x - X[tri->u].x;
+  d1.y = X[tri->v].y - X[tri->u].y;
+  d1.z = X[tri->v].z - X[tri->u].z;
     
-    TMRPoint d2;
-    d2.x = X[tri->w].x - X[tri->u].x;
-    d2.y = X[tri->w].y - X[tri->u].y;
-    d2.z = X[tri->w].z - X[tri->u].z;
+  TMRPoint d2;
+  d2.x = X[tri->w].x - X[tri->u].x;
+  d2.y = X[tri->w].y - X[tri->u].y;
+  d2.z = X[tri->w].z - X[tri->u].z;
  
-    double dot = d1.dot(d2)/d1.dot(d1);
+  double dot = d1.dot(d2)/d1.dot(d1);
 
-    // Compute the perpendicular component along the second
-    // direction that we'll use to determine the center point
-    TMRPoint n1;
-    n1.x = d2.x - dot*d1.x;
-    n1.y = d2.y - dot*d1.y;
-    n1.z = d2.z - dot*d1.z;
+  // Compute the perpendicular component along the second direction
+  // that we'll use to determine the center point
+  TMRPoint n1;
+  n1.x = d2.x - dot*d1.x;
+  n1.y = d2.y - dot*d1.y;
+  n1.z = d2.z - dot*d1.z;
 
-    // Compute alpha = 0.5*(d2, d2 - d1)/(d2, n1)
-    double alpha = 0.5*(d2.x*(d2.x - d1.x) + 
-                        d2.y*(d2.y - d1.y) + 
-                        d2.z*(d2.z - d1.z));
-    alpha = alpha/d2.dot(n1);
+  // Compute alpha = 0.5*(d2, d2 - d1)/(d2, n1)
+  double alpha = 0.5*(d2.x*(d2.x - d1.x) + 
+                      d2.y*(d2.y - d1.y) + 
+                      d2.z*(d2.z - d1.z));
+  alpha = alpha/d2.dot(n1);
 
-    // Compute the distance from the point
-    d1.x = 0.5*d1.x + alpha*n1.x;
-    d1.y = 0.5*d1.y + alpha*n1.y;
-    d1.z = 0.5*d1.z + alpha*n1.z;
+  // Compute the distance from the point
+  d1.x = 0.5*d1.x + alpha*n1.x;
+  d1.y = 0.5*d1.y + alpha*n1.y;
+  d1.z = 0.5*d1.z + alpha*n1.z;
 
-    // Compute the radius
-    R = sqrt(d1.dot(d1));
-  }
-  else {
-    double d1[2];
-    d1[0] = pts[2*tri->v] - pts[2*tri->u];
-    d1[1] = pts[2*tri->v+1] - pts[2*tri->u+1];
-    
-    double d2[2];
-    d2[0] = pts[2*tri->w] - pts[2*tri->v];
-    d2[1] = pts[2*tri->w+1] - pts[2*tri->v+1];
+  // Compute the radius
+  double R = sqrt(d1.dot(d1));
 
-    double b[2];
-    b[0] = 0.5*(pts[2*tri->w] - pts[2*tri->v]);
-    b[1] = 0.5*(pts[2*tri->w+1] - pts[2*tri->v+1]);
+  // Compute the center of the triangle
+  d1.x = (X[tri->u].x + X[tri->v].x + X[tri->w].x)/3.0;
+  d1.y = (X[tri->u].y + X[tri->v].y + X[tri->w].y)/3.0;
+  d1.z = (X[tri->u].z + X[tri->v].z + X[tri->w].z)/3.0;
+  double h = fs->getFeatureSize(d1);
 
-    // Evaluate alpha
-    double invdet = 1.0/(d1[1]*d2[0] - d2[1]*d1[0]);
-    double alpha = -invdet*(d2[0]*b[0] + d2[1]*b[1]);
-
-    // Compute the point locations
-    double pt[2];
-    pt[0] = 0.5*(pts[2*tri->u] + pts[2*tri->v]) - alpha*d1[1];
-    pt[1] = 0.5*(pts[2*tri->u+1] + pts[2*tri->v+1]) + alpha*d1[0];
-
-    // Determine the radius
-    d1[0] = pts[2*tri->u] - pt[0];
-    d1[1] = pts[2*tri->u+1] - pt[1];
-    R = sqrt(d1[0]*d1[0] + d1[1]*d1[1]);
-  }
-
-  return R;
+  return sqrt3*R/h;
 }
 
 /*
@@ -1789,11 +1721,8 @@ class TMRTriangleCompare {
   generation algorithm. The frontal mesh generation technique is based
   on Rebay's 1993 paper in JCP.
 */
-void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
-  // The length of the edge of the triangle
-  const double sqrt3 = sqrt(3.0);
-  const double de = 0.5*sqrt3*htarget;
-
+void TMRTriangularize::frontal( TMRMeshOptions options, 
+                                TMRElementFeatureSize *fs ){
   // The queue of active (and sometimes deleted) triangles
   std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
     TMRTriangleCompare> active;
@@ -1806,9 +1735,8 @@ void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
       node->tri.status = WAITING;
     
       // Compute the 'quality' indicator for this triangle
-      double hval = sqrt3*computeCircumcircle(&node->tri);
-      node->tri.quality = hval;
-      if (hval < frontal_quality_factor*htarget){
+      node->tri.quality = computeSizeRatio(&node->tri, fs);
+      if (node->tri.quality < frontal_quality_factor){
         node->tri.status = ACCEPTED;
       }
       else {
@@ -1947,73 +1875,55 @@ void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
     // | dx  dy  0 |
 
     // Compute the parametric mid-point
-    double m[2], e[2];
+    double m[2];
     m[0] = 0.5*(pts[2*u] + pts[2*v]);
     m[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
 
-    // Half the parametric distance between the two edge points
-    double p = 0.0;
+    // Get the derivatives of the surface
+    TMRPoint Xpt, Xu, Xv;
+    face->evalPoint(m[0], m[1], &Xpt);
+    face->evalDeriv(m[0], m[1], &Xu, &Xv);
 
-    // New parametric point - to be computed
+    // Compute the physical location along the parameter direction
+    // based on the local feature size
+    const double sqrt3 = 1.73205080757;
+    double de = 0.5*sqrt3*fs->getFeatureSize(Xpt);
+
+    // Compute the metric tensor components
+    double g11 = Xu.dot(Xu);
+    double g12 = Xu.dot(Xv);
+    double g22 = Xv.dot(Xv);
+    
+    // Compute the inverse metric components
+    double invdet = 1.0/(g11*g22 - g12*g12);
+    double G11 = invdet*g22;
+    double G12 = -invdet*g12;
+    double G22 = invdet*g11;
+    
+    // Compute the parametric direction along the curvilinear line
+    // connecting from u to v
+    double d[2];
+    d[0] = (pts[2*v] - pts[2*u]);
+    d[1] = (pts[2*v+1] - pts[2*u+1]);
+    
+    // Compute the orthogonal coordinate contributions to the vector
+    double e[2];
+    e[0] = G12*d[0] - G11*d[1];
+    e[1] = G22*d[0] - G12*d[1];
+
+    // Compute the direction in physical space
+    TMRPoint dir;
+    dir.x = e[0]*Xu.x + e[1]*Xv.x;
+    dir.y = e[0]*Xu.y + e[1]*Xv.y;
+    dir.z = e[0]*Xu.z + e[1]*Xv.z;
+    
+    // Compute the ratio between the desired distance in physical
+    // space and the length of the direction dir in physical space
+    // for a unit change in parameter space.
+    double f = de/sqrt(dir.dot(dir));
     double pt[2];
-    if (face){
-      // Evaluate the metric at the center of the active triangle
-      const double frac = 1.0/3.0;
-      double U = frac*(pts[2*tri->u] + pts[2*tri->v] + pts[2*tri->w]);
-      double V = frac*(pts[2*tri->u+1] + pts[2*tri->v+1] + pts[2*tri->w+1]);
-
-      // Get the derivatives of the surface
-      TMRPoint Xu, Xv;
-      face->evalDeriv(U, V, &Xu, &Xv);
-
-      // Compute the metric tensor components
-      double g11 = Xu.dot(Xu);
-      double g12 = Xu.dot(Xv);
-      double g22 = Xv.dot(Xv);
-
-      // Compute the inverse metric components
-      double invdet = 1.0/(g11*g22 - g12*g12);
-      double G11 = invdet*g22;
-      double G12 = -invdet*g12;
-      double G22 = invdet*g11;
-
-      // Compute the parametric direction along the curvilinear line
-      // connecting from u to v
-      double d[2];
-      d[0] = (pts[2*v] - pts[2*u]);
-      d[1] = (pts[2*v+1] - pts[2*u+1]);
-
-      // Compute the orthogonal coordinate contributions to the vector
-      e[0] = G12*d[0] - G11*d[1];
-      e[1] = G22*d[0] - G12*d[1];
-
-      // Compute the direction in physical space
-      TMRPoint dir;
-      dir.x = e[0]*Xu.x + e[1]*Xv.x;
-      dir.y = e[0]*Xu.y + e[1]*Xv.y;
-      dir.z = e[0]*Xu.z + e[1]*Xv.z;
-
-      // Compute the ratio between the desired distance in physical
-      // space and the length of the direction dir in physical space
-      // for a unit change in parameter space.
-      double f = de/sqrt(dir.dot(dir));
-      pt[0] = m[0] + f*e[0];
-      pt[1] = m[1] + f*e[1];
-    }
-    else {
-      // Compute the direction perpendicular to the line from u to v
-      e[0] = (pts[2*u+1] - pts[2*v+1]);
-      e[1] = (pts[2*v] - pts[2*u]);
-      
-      // Compute half the distance between the u and v points
-      double p = 0.5*sqrt(e[0]*e[0] + e[1]*e[1]);
-      e[0] = 0.5*e[0]/p;
-      e[1] = 0.5*e[1]/p;
-      
-      // Compute the new point
-      pt[0] = m[0] + de*e[0];
-      pt[1] = m[1] + de*e[1];
-    }
+    pt[0] = m[0] + f*e[0];
+    pt[1] = m[1] + f*e[1];
 
     // Find the enclosing triangle for the new point
     TMRTriangle *pt_tri = tri;
@@ -2052,16 +1962,15 @@ void TMRTriangularize::frontal( TMRMeshOptions options, double htarget ){
       addPointToMesh(pt, pt_tri);
       pt_tri = NULL;
 
-      // Compute the circumcircles of the new triangles and check
-      // whether they belong in the done category or not...
+      // Compute the size ratio of the new triangles and check whether
+      // they belong in the accepted category or not...
       TriListNode *ptr = list_start;
       if (list_marker){
         ptr = list_marker->next;
       }
       while (ptr){
-        double hval = sqrt3*computeCircumcircle(&ptr->tri);
-        ptr->tri.quality = hval;
-        if (hval < frontal_quality_factor*htarget){
+        ptr->tri.quality = computeSizeRatio(&ptr->tri, fs);
+        if (ptr->tri.quality < frontal_quality_factor){
           ptr->tri.status = ACCEPTED;
         }
         else {

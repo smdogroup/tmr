@@ -116,17 +116,18 @@ class TMRTriangularize : public TMREntity {
  public:
   TMRTriangularize( int npts, const double inpts[],
                     int nsegs, const int segs[],
-                    TMRFace *surf=NULL );
+                    TMRFace *surf );
   TMRTriangularize( int npts, const double inpts[], int nholes,
                     int nsegs, const int segs[],
-                    TMRFace *surf=NULL );
+                    TMRFace *surf );
   ~TMRTriangularize();
 
   // Set some options into the triangularization algorithm
   void setFrontalQualityFactor( double factor );
 
   // Create the frontal mesh with the given mesh spacing
-  void frontal( TMRMeshOptions options, double htarget );
+  void frontal( TMRMeshOptions options, 
+                TMRElementFeatureSize *fs );
 
   // Remove degenerate edges/points and reorder things
   void removeDegenerateEdges( int num_degen, const int degen[] );
@@ -201,7 +202,8 @@ class TMRTriangularize : public TMREntity {
   void findEnclosing( const double pt[], TMRTriangle **tri );
 
   // Compute the maximum edge length of the triangle
-  double computeCircumcircle( TMRTriangle *tri );
+  double computeSizeRatio( TMRTriangle *tri, 
+                           TMRElementFeatureSize *fs );
   double computeMaxEdgeLength( TMRTriangle *tri );
 
   // Compute the intersection

@@ -153,11 +153,19 @@ cdef extern from "":
     TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
     TMREdgeFromFace* _dynamicEdgeFromFace "dynamic_cast<TMREdgeFromFace*>"(TMREdge*)
  
-cdef extern from "TMRMesh.h":    
+cdef extern from "TMRMesh.h":
+    cdef cppclass TMRElementFeatureSize(TMREntity):
+        TMRElementFeatureSize()
+        TMRElementFeatureSize(double)
+
+    cdef cppclass TMRLinearElementSize(TMRElementFeatureSize):
+        TMRLinearElementSize(double, double,
+                             double, double, double, double)
+
     cdef cppclass TMRMesh(TMREntity):     
         TMRMesh(MPI_Comm, TMRModel*)
-        void mesh(double)
         void mesh(TMRMeshOptions, double)
+        void mesh(TMRMeshOptions, TMRElementFeatureSize*)
         int getMeshPoints(TMRPoint**)
         int getMeshConnectivity(int*, const int**,
                                 int*, const int**)
@@ -167,11 +175,11 @@ cdef extern from "TMRMesh.h":
 
     cdef cppclass TMREdgeMesh(TMREntity):
         TMREdgeMesh(MPI_Comm, TMREdge*)
-        void mesh(TMRMeshOptions, double)
+        void mesh(TMRMeshOptions, TMRElementFeatureSize*)
 
     cdef cppclass TMRFaceMesh(TMREntity):
         TMRFaceMesh(MPI_Comm, TMRFace*)
-        void mesh(TMRMeshOptions, double)
+        void mesh(TMRMeshOptions, TMRElementFeatureSize*)
 
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()

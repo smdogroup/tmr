@@ -220,7 +220,8 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   mesh->incref();
   
   // Mesh the geometry
-  mesh->mesh(htarget);
+  TMRMeshOptions options;
+  mesh->mesh(options, htarget);
                                      
   // Write the surface mesh to the VTK file
   TMRFaceMesh *surf_mesh;
