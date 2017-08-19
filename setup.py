@@ -49,9 +49,9 @@ lib_dirs.extend(get_global_dir(rel_lib_dirs))
 # Add the include directories from OpenCascade
 if 'CASARCH' in os.environ:
     inc_dirs.append(os.path.join(os.environ['CASROOT'], 
-                                 os.environ['CASARCH'], 'inc'))
+                                 os.environ['CASARCH'], 'include/oce'))
 else:
-    inc_dirs.append(os.path.join(os.environ['CASROOT'], 'inc'))
+    inc_dirs.append(os.path.join(os.environ['CASROOT'], 'include/oce'))
     
 # This should be made more general so that you can specify
 # alternate locations for the installation of AMD/METIS
