@@ -48,11 +48,19 @@ lib_dirs.extend(get_global_dir(rel_lib_dirs))
 
 # Add the include directories from OpenCascade
 if 'CASARCH' in os.environ:
-    inc_dirs.append(os.path.join(os.environ['CASROOT'], 
-                                 os.environ['CASARCH'], 'include/oce'))
+    for sufix in ['include/oce', 'inc', 'include']:
+      cas_inc = os.path.join(os.environ['CASROOT'], 
+                             os.environ['CASARCH'], sufix)
+      if os.path.isdir(cas_inc):
+        inc_dirs.append(cas_inc)
+        break
 else:
-    inc_dirs.append(os.path.join(os.environ['CASROOT'], 'include/oce'))
-    
+    for sufix in ['include/oce', 'inc', 'include']:
+      cas_inc = os.path.join(os.environ['CASROOT'], sufix)
+      if os.path.isdir(cas_inc):
+        inc_dirs.append(cas_inc)
+        break
+
 # This should be made more general so that you can specify
 # alternate locations for the installation of AMD/METIS
 default_ext_inc = ['extern/blossom5-v2.05.src']
