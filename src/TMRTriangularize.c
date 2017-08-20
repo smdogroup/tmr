@@ -910,7 +910,16 @@ void TMRTriangularize::writeToVTK( const char *filename ){
     node = list_start;
     while (node){
       if (node->tri.status != DELETE_ME){
-        // fprintf(fp, "%d\n", node->tri.status);
+        fprintf(fp, "%e\n", node->tri.quality);
+      }
+      node = node->next;
+    }
+
+    fprintf(fp, "SCALARS quality float 1\n");
+    fprintf(fp, "LOOKUP_TABLE default\n");
+    node = list_start;
+    while (node){
+      if (node->tri.status != DELETE_ME){
         fprintf(fp, "%e\n", node->tri.quality);
       }
       node = node->next;

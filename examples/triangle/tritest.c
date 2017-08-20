@@ -65,6 +65,9 @@ int main( int argc, char *argv[] ){
   tri->incref();
 
   TMRMeshOptions opts;
+  opts.triangularize_print_level = 1;
+  opts.write_triangularize_intermediate = 1;
+  opts.triangularize_print_iter = 10;
   TMRElementFeatureSize *fs = new TMRElementFeatureSize(length);
   tri->frontal(opts, fs);
   tri->writeToVTK("triangle.vtk");
