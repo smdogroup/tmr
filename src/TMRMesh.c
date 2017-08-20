@@ -269,7 +269,8 @@ static void computeTriEdges( int nnodes, int ntris,
                              int **_tri_neighbors, 
                              int **_dual_edges,
                              int **_node_to_tri_ptr=NULL, 
-                             int **_node_to_tris=NULL ){
+                             int **_node_to_tris=NULL,
+                             int **_tri_edge_nums=NULL ){
   // Compute the edges in the triangular mesh
   int *ptr;
   int *node_to_tris;
@@ -374,7 +375,13 @@ static void computeTriEdges( int nnodes, int ntris,
     }
   } 
 
-  delete [] tri_edge_nums;
+  // Free the edge numbers or delete them
+  if (_tri_edge_nums){
+    *_tri_edge_nums = tri_edge_nums;
+  }
+  else {
+    delete [] tri_edge_nums;
+  }
 
   // Set the number of triangle edges and the triangle edges themselves
   *num_tri_edges = ne;
@@ -1902,7 +1909,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
         // Recombine the mesh into a quadrilateral mesh
         if (ntris % 2 == 0){
-          recombine(ntris, tris, tri_neighbors, 
+          recombine(ntris, tris, tri_neighbors,
                     node_to_tri_ptr, node_to_tris,
                     num_tri_edges, dual_edges, &num_quads, &quads, options);
         }
@@ -2327,7 +2334,7 @@ void TMRFaceMesh::recombine( int ntris, const int tris[],
                 tri_neighbors[3*k + tri_node_edges[kj][1]] < 0){
               graph_edges[2*edge_num] = i;
               graph_edges[2*edge_num+1] = k;
-              weights[edge_num] = 10.0;
+              weights[edge_num] = 1.0;
               edge_num++;
             }
           }

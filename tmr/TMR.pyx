@@ -600,6 +600,43 @@ cdef class Model:
             verts.append(_init_Vertex(v[i]))
         return verts
 
+    def writeEdgeLoopsToTecplot(self, char *fname):
+        '''Write a representation of the edge loops to a file'''
+        fp = open(fname, 'w')
+        fp.write('Variables = x, y, z, tx, ty, tz\n')
+
+        faces = self.getFaces()
+        index = 0
+        for f in faces:
+            for k in range(f.getNumEdgeLoops()):
+                fp.write('Zone T = \"Face %d Loop %d\"\n'%(index, k))
+
+                loop = f.getEdgeLoop(k)
+                e, dirs = loop.getEdgeLoop()
+                pts = np.zeros((len(e)+1, 3))
+                tx = np.zeros((len(e)+1, 3))
+                for i in range(len(e)):
+                    v1, v2 = e[i].getVertices()
+                    if dirs[i] > 0:
+                        pt1 = v1.evalPoint()
+                        pt2 = v2.evalPoint()
+                    else:
+                        pt1 = v2.evalPoint()
+                        pt2 = v1.evalPoint()
+                    if i == 0:
+                        pts[0,:] = pt1[:]
+                    pts[i+1,:] = pt2[:]
+
+                for i in xrange(len(e)):
+                    tx[i,:] = pts[i+1,:] - pts[i,:]
+                
+                for i in xrange(len(e)+1):
+                    fp.write('%e %e %e %e %e %e\n'%(
+                        pts[i,0], pts[i,1], pts[i,2], 
+                        tx[i,0], tx[i,1], tx[i,2]))
+            index += 1
+        return
+        
 cdef _init_Model(TMRModel* ptr):
     model = Model()
     model.ptr = ptr
