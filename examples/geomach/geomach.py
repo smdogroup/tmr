@@ -382,17 +382,7 @@ opts.write_mesh_quality_histogram = 1
 htarget = args.htarget
 mesh.mesh(htarget, opts=opts)
 
-faces = geo.getFaces()
-for face in faces:
-    if face.getEntityId() == 1251:
-        m = TMR.FaceMesh(comm, face)
-        loop = face.getEdgeLoop(0)
-        print loop.getEdgeLoop()
-        face.writeToVTK('face_output.vtk')
-        opts.write_init_domain_triangle = 1
-        m.mesh(htarget, opts=opts)
-
-# mesh.writeToVTK('surface-mesh.vtk')
+mesh.writeToVTK('surface-mesh.vtk')
 
 # # Create a model from the mesh
 # print 'Creating model from mesh...'

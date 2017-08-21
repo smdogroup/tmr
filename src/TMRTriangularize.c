@@ -640,9 +640,6 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
     }
   }
 
-  // Free the trianlges marked for deletion from the list - if any
-  deleteTrianglesFromList();
-
   // Set the triangle tags to zero
   setTriangleTags(0);
 
@@ -973,7 +970,7 @@ void TMRTriangularize::writeToVTK( const char *filename,
     node = list_start;
     while (node){
       if (node->tri.status != DELETE_ME){
-        fprintf(fp, "%e\n", node->tri.quality);
+        fprintf(fp, "%d\n", node->tri.status);
       }
       node = node->next;
     }
