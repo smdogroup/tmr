@@ -382,21 +382,31 @@ opts.write_mesh_quality_histogram = 1
 htarget = args.htarget
 mesh.mesh(htarget, opts=opts)
 
-mesh.writeToVTK('surface-mesh.vtk')
+faces = geo.getFaces()
+for face in faces:
+    if face.getEntityId() == 1251:
+        m = TMR.FaceMesh(comm, face)
+        loop = face.getEdgeLoop(0)
+        print loop.getEdgeLoop()
+        face.writeToVTK('face_output.vtk')
+        opts.write_init_domain_triangle = 1
+        m.mesh(htarget, opts=opts)
 
-# Create a model from the mesh
-print 'Creating model from mesh...'
-model = mesh.createModelFromMesh()
+# mesh.writeToVTK('surface-mesh.vtk')
 
-# Create the corresponding mesh topology from the mesh-model 
-topo = TMR.Topology(comm, model)
+# # Create a model from the mesh
+# print 'Creating model from mesh...'
+# model = mesh.createModelFromMesh()
 
-# Create the quad forest and set the topology of the forest
-print 'Creating TMRQuadForest...'
-forest = TMR.QuadForest(comm)
-forest.setTopology(topo)
+# # Create the corresponding mesh topology from the mesh-model 
+# topo = TMR.Topology(comm, model)
 
-# Create random trees and balance the mesh. Print the output file
-forest.createRandomTrees(nrand=3, max_lev=3)
-forest.balance(1)
-forest.writeForestToVTK('forest-mesh%d.vtk'%(comm.rank))
+# # Create the quad forest and set the topology of the forest
+# print 'Creating TMRQuadForest...'
+# forest = TMR.QuadForest(comm)
+# forest.setTopology(topo)
+
+# # Create random trees and balance the mesh. Print the output file
+# forest.createRandomTrees(nrand=3, max_lev=3)
+# forest.balance(1)
+# forest.writeForestToVTK('forest-mesh%d.vtk'%(comm.rank))

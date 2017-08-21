@@ -537,11 +537,11 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
 
   // Re-adjust the domain boundary to ensure that it is sufficiently
   // large
-  double xsmall = 0.01*(domain.xhigh - domain.xlow);
+  double xsmall = 0.1*(domain.xhigh - domain.xlow);
   domain.xhigh += xsmall;
   domain.xlow -= xsmall;
 
-  double ysmall = 0.01*(domain.yhigh - domain.ylow);
+  double ysmall = 0.1*(domain.yhigh - domain.ylow);
   domain.yhigh += ysmall;
   domain.ylow -= ysmall;
 
@@ -587,6 +587,61 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   for ( int i = 0; i < npts; i++ ){
     addPointToMesh(&inpts[2*i]);
   }
+
+  // Make sure that all of the edges in the PSLG are in the
+  // list, otherwise, we'll have to add them by flipping edges
+  for ( int k = 0; k < nsegs; k++ ){
+    uint32_t u = segs[2*k] + FIXED_POINT_OFFSET;
+    uint32_t w = segs[2*k+1] + FIXED_POINT_OFFSET;
+
+    TMRTriangle *tri;
+    completeMe(u, w, &tri);
+
+    // The triangle does not exist in the triangulation. Fix this
+    // by performing an edge swap between two adjacent triangles.
+    if (!tri){
+      // The triangles with the u/v nodes
+      TMRTriangle *tu = NULL, *tw = NULL;
+
+      // Loop over possible twins
+      tu = pts_to_tris[u];
+
+      uint32_t v = 0, x = 0;
+      while (tu && !tw){
+        if (u == tu->u){
+          v = tu->v;
+          x = tu->w;
+        }
+        else if (u == tu->v){
+          v = tu->w;
+          x = tu->u;
+        }
+        else if (u == tu->w){
+          v = tu->u;
+          x = tu->v;
+        }
+
+        // Find the next triangle
+        completeMe(v, w, &tw);
+        if (!tw){
+          completeMe(u, x, &tu);
+        }
+      }
+
+      if (tu && tw){
+        // Delete the existing triangles
+        deleteTriangle(*tu);
+        deleteTriangle(*tw);
+
+        // Flip the edges
+        addTriangle(TMRTriangle(u, v, w));
+        addTriangle(TMRTriangle(u, w, x));
+      }
+    }
+  }
+
+  // Free the trianlges marked for deletion from the list - if any
+  deleteTrianglesFromList();
 
   // Set the triangle tags to zero
   setTriangleTags(0);
@@ -873,7 +928,8 @@ void TMRTriangularize::tagTriangles( TMRTriangle *tri ){
 /*
   Write out the triangularization to a file
 */
-void TMRTriangularize::writeToVTK( const char *filename ){
+void TMRTriangularize::writeToVTK( const char *filename,
+                                   const int param_space ){
   FILE *fp = fopen(filename, "w");
   if (fp){
     fprintf(fp, "# vtk DataFile Version 3.0\n");
@@ -882,10 +938,17 @@ void TMRTriangularize::writeToVTK( const char *filename ){
       
     // Write out the points
     fprintf(fp, "POINTS %d float\n", num_points);
-    for ( int k = 0; k < num_points; k++ ){
-      fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
+    if (param_space){
+      for ( int k = 0; k < num_points; k++ ){
+        fprintf(fp, "%e %e 0\n", pts[2*k], pts[2*k+1]);
+      }    
     }
-    
+    else {
+      for ( int k = 0; k < num_points; k++ ){
+        fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
+      }
+    }
+
     // Write out the cell values
     fprintf(fp, "\nCELLS %d %d\n", num_triangles, 4*num_triangles);
 

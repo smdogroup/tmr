@@ -137,7 +137,7 @@ class TMRTriangularize : public TMREntity {
                 int **_conn, double **_pts, TMRPoint **_X );
   
   // Write the triangulation to an outputfile
-  void writeToVTK( const char *filename );
+  void writeToVTK( const char *filename, const int param_space=0 );
 
  private:
   // The Bowyer-Watson algorithm is started with 4 points (2 triangles)

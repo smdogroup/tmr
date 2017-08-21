@@ -871,7 +871,9 @@ double TMRElementFeatureSize::getFeatureSize( TMRPoint pt ){
 
 TMRLinearElementSize::TMRLinearElementSize( double _hmin, double _hmax,
                                             double _c, 
-                                            double _ax, double _ay, double _az ):
+                                            double _ax, 
+                                            double _ay, 
+                                            double _az ):
 TMRElementFeatureSize(_hmin){
   hmax = _hmax;
   c = _c;
