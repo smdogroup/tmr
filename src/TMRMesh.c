@@ -3183,7 +3183,6 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
         mesh_fail = 1;
       }
       else if (mesh->getMeshType() != TMR_STRUCTURED){
-        printf("face[%d] \n", i);
         fprintf(stderr,
                 "TMRVolumeMesh error: \
 Through-thickness meshes must be structured\n");
