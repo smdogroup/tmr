@@ -163,8 +163,9 @@ class TMRTriangularize : public TMREntity {
 
   // Add a point to the mesh and re-triangularize the mesh
   // to account for the new point.
-  void addPointToMesh( const double pt[] );
-  void addPointToMesh( const double pt[], TMRTriangle *tri );
+  void addPointToMesh( const double pt[], TMRFace *metric );
+  void addPointToMesh( const double pt[], TMRTriangle *tri,
+                       TMRFace *metric );
 
   // Get a hash value for the given edge
   inline uint32_t getEdgeHash( uint32_t u, uint32_t v );
@@ -185,10 +186,10 @@ class TMRTriangularize : public TMREntity {
 
   // Given the two ordered nodes, add the triangle to the list
   void completeMe( uint32_t u, uint32_t v, TMRTriangle **tri );
-  void nodeToOneTriangle( uint32_t u, TMRTriangle *tri );
 
   // Dig cavity: Function a la Shewchuk
-  void digCavity( uint32_t u, uint32_t v, uint32_t w );
+  void digCavity( uint32_t u, uint32_t v, uint32_t w, 
+                  TMRFace *metric=NULL );
 
   // Determine whether this edge is in the PSLG edge list
   void setUpPSLGEdges( int nsegs, const int segs[] ); 
@@ -196,7 +197,8 @@ class TMRTriangularize : public TMREntity {
 
   // Does this triangle enclose the point
   int enclosed( const double pt[], uint32_t u, uint32_t v, uint32_t w );
-  double inCircle( uint32_t u, uint32_t v, uint32_t w, uint32_t x );
+  double inCircle( uint32_t u, uint32_t v, uint32_t w, uint32_t x,
+                   TMRFace *metric=NULL);
 
   // Find the enclosing triangle
   void findEnclosing( const double pt[], TMRTriangle **tri );
@@ -204,11 +206,9 @@ class TMRTriangularize : public TMREntity {
   // Compute the maximum edge length of the triangle
   double computeSizeRatio( TMRTriangle *tri, 
                            TMRElementFeatureSize *fs );
-  double computeMaxEdgeLength( TMRTriangle *tri );
 
-  // Compute the intersection
-  double computeIntersection( const double m[], const double e[], 
-                              uint32_t u, uint32_t v, uint32_t w );
+  // Form the Delaunay triangularization using an edge-flip algorithm
+  void delaunayEdgeFlip();
 
   // The underlying surface
   TMRFace *face;
@@ -268,6 +268,17 @@ class TMRTriangularize : public TMREntity {
   // The number of buckets
   int num_buckets;
   int num_hash_nodes;
+
+  // Class to store the edges in a triangle
+  class TriEdge {
+  public:
+    TriEdge( uint32_t _u, uint32_t _v ){
+      u = _u;
+      v = _v;
+    }
+    uint32_t u, v;
+  };
+
 };
 
 #endif // TRIANGULARIZE_H

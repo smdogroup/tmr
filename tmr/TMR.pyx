@@ -859,9 +859,8 @@ cdef class EdgeMesh:
         self.ptr.incref()
 
     def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
+        pass
+    
     def mesh(self, double h, MeshOptions opts=None):
         cdef TMRMeshOptions options
         cdef TMRElementFeatureSize *fs = NULL
@@ -881,8 +880,7 @@ cdef class FaceMesh:
         self.ptr.incref()
 
     def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
+        pass
 
     def mesh(self, double h, MeshOptions opts=None):
         cdef TMRMeshOptions options
