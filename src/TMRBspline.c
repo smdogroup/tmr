@@ -718,6 +718,84 @@ int TMRBsplineCurve::evalDeriv( double t, TMRPoint *Xt ){
 }
 
 /*
+  Given the parametric point, evaluate the second derivative
+*/
+int TMRBsplineCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
+
+  double Nu[2*MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
+
+  // Compute the knot span
+  int intu = bspline_interval(t, Tu, nctl, ku);
+
+  // Compute the basis functions
+  int idu = 2;
+  bspline_basis_derivative(Nu, intu, t, idu, Tu, ku, work);
+
+  // Set the interval to the initial control point
+  intu = intu - ku + 1;
+
+  // Evaluate the b-spline
+  Xtt->x = 0.0;
+  Xtt->y = 0.0;
+  Xtt->z = 0.0;
+
+  if (wts){
+    // Evaluate the weighted b-spline
+    TMRPoint p, pt, ptt;
+    p.zero();  pt.zero();  ptt.zero();
+    
+    double w = 0.0, wt = 0.0, wtt = 0.0;
+    for ( int i = 0; i < ku; i++ ){
+      // Evaluate the numerator and its derivative
+      p.x += wts[intu + i]*Nu[i]*pts[intu + i].x;
+      p.y += wts[intu + i]*Nu[i]*pts[intu + i].y;
+      p.z += wts[intu + i]*Nu[i]*pts[intu + i].z;
+      
+      pt.x += wts[intu + i]*Nu[ku + i]*pts[intu + i].x;
+      pt.y += wts[intu + i]*Nu[ku + i]*pts[intu + i].y;
+      pt.z += wts[intu + i]*Nu[ku + i]*pts[intu + i].z;
+      
+      ptt.x += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].x;
+      ptt.y += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].y;
+      ptt.z += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].z;
+      
+      // Compute the weights and their derivatives
+      w += Nu[i]*wts[intu + i];
+      wt += Nu[ku + i]*wts[intu + i];
+      wtt += Nu[2*ku + i]*wts[intu + i];
+    }
+    
+    // Divide through by the weights
+    if (w != 0.0){
+      // Compute the first and second derivatives of the inverse of
+      // the weights
+      w = 1.0/w;
+      wtt = 2.0*w*w*w*wt*wt - w*w*wtt;
+      wt = -w*w*wt;
+      
+      // Evaluate the derivatives 
+      Xtt->x = 2.0*wt*pt.x + w*ptt.x + wtt*p.x;
+      Xtt->y = 2.0*wt*pt.y + w*ptt.y + wtt*p.y;
+      Xtt->z = 2.0*wt*pt.z + w*ptt.z + wtt*p.z;
+    }
+    else {
+      // The evaluation has failed
+      return 1;
+    }
+  }
+  else {
+    for ( int i = 0; i < ku; i++ ){
+      Xtt->x += Nu[2*ku + i]*pts[intu + i].x;
+      Xtt->y += Nu[2*ku + i]*pts[intu + i].y;
+      Xtt->z += Nu[2*ku + i]*pts[intu + i].z;
+    }
+  }
+
+  return 0;
+}
+
+/*
   Refine the knot vector by inserting the knots specified in the input
   Tnew. This function returns a new, equivalent curve with the new
   knots at the specified locations.  
@@ -1057,6 +1135,73 @@ int TMRBsplinePcurve::evalDeriv( double t, double *ut, double *vt ){
       *vt += Nu[ku + i]*pts[2*(intu + i)+1];
     }
   }
+
+  return 0;
+}
+
+/*
+  Given the parametric point, evaluate the second derivative 
+*/  
+int TMRBsplinePcurve::eval2ndDeriv( double t, double *_utt, double *_vtt ){
+  double Nu[2*MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
+
+  // Compute the knot span
+  int intu = bspline_interval(t, Tu, nctl, ku);
+
+  // Compute the basis functions
+  int idu = 2;
+  bspline_basis_derivative(Nu, intu, t, idu, Tu, ku, work);
+
+  // Set the interval to the initial control point
+  intu = intu - ku + 1;
+
+  // Evaluate the b-spline
+  *_utt = *_vtt = 0.0;
+  
+  double utt = 0.0, vtt = 0.0;
+  if (wts){
+    // Evaluate the weighted b-spline
+    double u = 0.0, v = 0.0;
+    double ut = 0.0, vt = 0.0;
+    double w = 0.0, wt = 0.0, wtt = 0.0;
+    for ( int i = 0; i < ku; i++ ){
+      // Evaluate the numerator and its derivative
+      u += wts[intu + i]*Nu[i]*pts[2*(intu + i)];
+      v += wts[intu + i]*Nu[i]*pts[2*(intu + i)+1];
+      
+      ut += wts[intu + i]*Nu[ku + i]*pts[2*(intu + i)];
+      vt += wts[intu + i]*Nu[ku + i]*pts[2*(intu + i)+1];
+      
+      utt += wts[intu + i]*Nu[2*ku + i]*pts[2*(intu + i)];
+      vtt += wts[intu + i]*Nu[2*ku + i]*pts[2*(intu + i)+1];
+      
+      // Compute the weights
+      w += Nu[i]*wts[intu + i];
+      wt += Nu[i + ku]*wts[intu + i];
+      wtt += Nu[i + 2*ku]*wts[intu + i];
+    }
+
+    // Divide through by the weights
+    if (w != 0.0){
+      w = 1.0/w;
+      wtt = 2.0*w*w*w*wt*wt - w*w*wtt;
+      wt = -w*w*wt;
+      
+      utt = w*utt + 2.0*wt*ut + wtt*u;
+      vtt = w*vtt + 2.0*wt*vt + wtt*v;
+    }
+  }
+  else {
+    // Evaluate the b-spline
+    for ( int i = 0; i < ku; i++ ){
+      utt += Nu[2*ku + i]*pts[2*(intu + i)];
+      vtt += Nu[2*ku + i]*pts[2*(intu + i)+1];
+    }
+  }
+
+  *_utt = utt;
+  *_vtt = vtt;
 
   return 0;
 }
@@ -1802,6 +1947,132 @@ int TMRBsplineSurface::evalDeriv( double u, double v,
   }
 
   // Success
+  return 0;
+}
+
+
+/*
+  Evaluate the second derivatives of the bspline surface
+*/
+int TMRBsplineSurface::eval2ndDeriv( double u, double v,
+                                     TMRPoint *Xuu,
+                                     TMRPoint *Xuv, 
+                                     TMRPoint *Xvv ){
+  // The basis functions/work arrays
+  double Nu[2*MAX_BSPLINE_ORDER], Nv[2*MAX_BSPLINE_ORDER];
+  double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
+
+  // Compute the knot intervals
+  int intu = bspline_interval(u, Tu, nu, ku);
+  int intv = bspline_interval(v, Tv, nv, kv);
+
+  // Evaluate the basis functions
+  int idu = 2, idv = 2;
+  bspline_basis_derivative(Nu, intu, u, idu, Tu, ku, work);
+  bspline_basis_derivative(Nv, intv, v, idv, Tv, kv, work);
+  
+  // Set the interval to the initial control point
+  intu = intu - ku + 1;
+  intv = intv - kv + 1;
+  
+  // Zero the derivatives
+  Xuu->zero();
+  Xuv->zero();
+  Xvv->zero();
+
+  // If this is a NURBS surface add the effect of the weights
+  if (wts){
+    // Evaluate the weighted b-spline
+    TMRPoint p, pu, pv, puu, puv, pvv;
+    p.zero();  pu.zero();  pv.zero();
+    puu.zero();  puv.zero();  pvv.zero();
+    
+    double w = 0.0, wu = 0.0, wv = 0.0;
+    double wuu = 0.0, wuv = 0.0, wvv = 0.0;
+    for ( int j = 0; j < kv; j++ ){
+      for ( int i = 0; i < ku; i++ ){
+        // Evaluate the numerator and its derivative
+        int index = intu+i + (intv+j)*nu;
+        p.x += wts[index]*Nu[i]*Nv[j]*pts[index].x;
+        p.y += wts[index]*Nu[i]*Nv[j]*pts[index].y;
+        p.z += wts[index]*Nu[i]*Nv[j]*pts[index].z;
+        
+        pu.x += wts[index]*Nu[ku+i]*Nv[j]*pts[index].x;
+        pu.y += wts[index]*Nu[ku+i]*Nv[j]*pts[index].y;
+        pu.z += wts[index]*Nu[ku+i]*Nv[j]*pts[index].z;
+        
+        pv.x += wts[index]*Nu[i]*Nv[kv+j]*pts[index].x;
+        pv.y += wts[index]*Nu[i]*Nv[kv+j]*pts[index].y;
+        pv.z += wts[index]*Nu[i]*Nv[kv+j]*pts[index].z;
+        
+        puu.x += wts[index]*Nu[2*ku+i]*Nv[j]*pts[index].x;
+        puu.y += wts[index]*Nu[2*ku+i]*Nv[j]*pts[index].y;
+        puu.z += wts[index]*Nu[2*ku+i]*Nv[j]*pts[index].z;
+        
+        puv.x += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].x;
+        puv.y += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].y;
+        puv.z += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].z;
+        
+        pvv.x += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].x;
+        pvv.y += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].y;
+        pvv.z += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].z;
+        
+        // Compute the weights and the derivatives of weights
+        w += wts[index]*Nu[i]*Nv[j];
+        wu += wts[index]*Nu[ku+i]*Nv[j];
+        wv += wts[index]*Nu[i]*Nv[kv+j];
+        wuu += wts[index]*Nu[2*ku+i]*Nv[j];
+        wuv += wts[index]*Nu[ku+i]*Nv[kv+j];
+        wvv += wts[index]*Nu[i]*Nv[2*kv+j];
+      }
+    }
+    
+    // Divide through by the weights
+    if (w != 0.0){
+      w = 1.0/w;
+      wuu = 2.0*w*w*w*wu*wu - w*w*wuu;
+      wuv = 2.0*w*w*w*wu*wv - w*w*wuv;
+      wvv = 2.0*w*w*w*wv*wv - w*w*wvv;
+      wu = -w*w*wu;
+      wv = -w*w*wv;
+           
+      Xuu->x = 2.0*wu*pu.x + w*puu.x + wuu*p.x;
+      Xuu->y = 2.0*wu*pu.y + w*puu.y + wuu*p.y;
+      Xuu->z = 2.0*wu*pu.z + w*puu.z + wuu*p.z;
+      
+      Xuv->x = wu*pv.x + w*puv.x + wuv*p.x + wv*pu.x;
+      Xuv->y = wu*pv.y + w*puv.y + wuv*p.y + wv*pu.y;
+      Xuv->z = wu*pv.z + w*puv.z + wuv*p.z + wv*pu.z;
+      
+      Xvv->x = 2.0*wv*pv.x + w*pvv.x + wvv*p.x;
+      Xvv->y = 2.0*wv*pv.y + w*pvv.y + wvv*p.y;
+      Xvv->z = 2.0*wv*pv.z + w*pvv.z + wvv*p.z;
+    }
+    else {
+      // We've failed - the weight is zero
+      return 1;
+    }
+  }
+  else {
+    for ( int j = 0; j < kv; j++ ){
+      for ( int i = 0; i < ku; i++ ){
+        // Evaluate the numerator and its derivative
+        int index = intu+i + (intv+j)*nu;
+        Xuu->x += Nu[2*ku+i]*Nv[j]*pts[index].x;
+        Xuu->y += Nu[2*ku+i]*Nv[j]*pts[index].y;
+        Xuu->z += Nu[2*ku+i]*Nv[j]*pts[index].z;
+        
+        Xuv->x += Nu[ku+i]*Nv[kv+j]*pts[index].x;
+        Xuv->y += Nu[ku+i]*Nv[kv+j]*pts[index].y;
+        Xuv->z += Nu[ku+i]*Nv[kv+j]*pts[index].z;
+
+        Xvv->x += Nu[i]*Nv[2*kv+j]*pts[index].x;
+        Xvv->y += Nu[i]*Nv[2*kv+j]*pts[index].y;
+        Xvv->z += Nu[i]*Nv[2*kv+j]*pts[index].z;
+      }
+    }
+  }
+
   return 0;
 }
 

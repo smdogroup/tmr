@@ -47,6 +47,16 @@ int TMR_OCCCurve::evalDeriv( double t, TMRPoint *Xt ){
   return 0;
 }
 
+int TMR_OCCCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
+  gp_Pnt p;
+  gp_Vec v1, v2;
+  curve->D2(t, p, v1, v2);
+  Xtt->x = v2.X();
+  Xtt->y = v2.Y();
+  Xtt->z = v2.Z();
+  return 0;
+}
+
 /*
   TMR interface to the OpenCascade geometry
 */
@@ -93,6 +103,28 @@ int TMR_OCCSurface::evalDeriv( double u, double v,
   Xv->x = pv.X();
   Xv->y = pv.Y();
   Xv->z = pv.Z();
+  return 0;
+}
+
+int TMR_OCCSurface::eval2ndDeriv( double u, double v, 
+                                  TMRPoint *Xuu, 
+                                  TMRPoint *Xuv,
+                                  TMRPoint *Xvv ){
+  gp_Pnt p;
+  gp_Vec pu, pv;
+  gp_Vec puu, puv, pvv;
+  surf->D2(u, v, p, pu, pv, puu, pvv, puv);
+  Xuu->x = puu.X();
+  Xuu->y = puu.Y();
+  Xuu->z = puu.Z();
+
+  Xvv->x = pvv.X();
+  Xvv->y = pvv.Y();
+  Xvv->z = pvv.Z();
+
+  Xuv->x = puv.X();
+  Xuv->y = puv.Y();
+  Xuv->z = puv.Z();
   return 0;
 }
 
@@ -229,6 +261,18 @@ int TMR_OCCEdge::evalDeriv( double t, TMRPoint *Xt ){
   return fail;
 }
 
+int TMR_OCCEdge::eval2ndDeriv( double t, TMRPoint *Xtt ){
+  int fail = 0;
+  gp_Pnt p;
+  gp_Vec v1, v2;
+  BRepAdaptor_Curve curve(edge);
+  curve.D2(t, p, v1, v2);
+  Xtt->x = v2.X();
+  Xtt->y = v2.Y();
+  Xtt->z = v2.Z();
+  return fail;
+}
+
 int TMR_OCCEdge::isDegenerate(){
   return BRep_Tool::Degenerated(edge);
 }
@@ -288,6 +332,29 @@ int TMR_OCCFace::evalDeriv( double u, double v,
   Xv->x = pv.X();
   Xv->y = pv.Y();
   Xv->z = pv.Z();
+  return 0;
+}
+
+int TMR_OCCFace::eval2ndDeriv( double u, double v, 
+                               TMRPoint *Xuu,
+                               TMRPoint *Xuv,
+                               TMRPoint *Xvv ){
+  const Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
+  gp_Pnt p;
+  gp_Vec pu, pv;
+  gp_Vec puu, puv, pvv;
+  surf->D2(u, v, p, pu, pv, puu, pvv, puv);
+  Xuu->x = puu.X();
+  Xuu->y = puu.Y();
+  Xuu->z = puu.Z();
+
+  Xvv->x = pvv.X();
+  Xvv->y = pvv.Y();
+  Xvv->z = pvv.Z();
+
+  Xuv->x = puv.X();
+  Xuv->y = puv.Y();
+  Xuv->z = puv.Z();
   return 0;
 }
 

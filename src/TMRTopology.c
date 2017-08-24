@@ -127,6 +127,47 @@ int TMREdge::evalDeriv( double t, TMRPoint *Xt ){
 }
 
 /*
+  Evaluate the second derivative using a finite-difference step size
+*/
+int TMREdge::eval2ndDeriv( double t, TMRPoint *Xtt ){
+  int fail = 1;
+
+  // Retrieve the parameter bounds for the curve
+  double tmin, tmax; 
+  getRange(&tmin, &tmax);
+
+  if (t >= tmin && t <= tmax){
+    // Evaluate the point at the original 
+    TMRPoint p;
+    fail = evalDeriv(t, &p);
+    if (fail){ return fail; }
+    
+    // Compute the approximate derivative using a forward
+    // difference
+    if (t + deriv_step_size <= tmax){
+      TMRPoint p2;
+      fail = evalDeriv(t + deriv_step_size, &p2);
+      if (fail){ return fail; }
+      
+      Xtt->x = (p2.x - p.x)/deriv_step_size;
+      Xtt->y = (p2.y - p.y)/deriv_step_size;
+      Xtt->z = (p2.z - p.z)/deriv_step_size;
+    }
+    else if (t >= tmin + deriv_step_size){
+      TMRPoint p2;
+      fail = evalDeriv(t - deriv_step_size, &p2);
+      if (fail){ return fail; }
+
+      Xtt->x = (p.x - p2.x)/deriv_step_size;
+      Xtt->y = (p.y - p2.y)/deriv_step_size;
+      Xtt->z = (p.z - p2.z)/deriv_step_size;
+    }
+  }
+
+  return fail;
+}
+
+/*
   Find the point on the surface closest to the point C(t)
 */
 int TMREdge::getParamsOnFace( TMRFace *face, double t, 
@@ -408,6 +449,80 @@ int TMRFace::evalDeriv( double u, double v,
       Xv->x = (p.x - p2.x)/deriv_step_size;
       Xv->y = (p.y - p2.y)/deriv_step_size;
       Xv->z = (p.z - p2.z)/deriv_step_size;
+    }
+    else {
+      fail = 1;
+    }
+  }
+
+  return fail;
+}
+
+/*
+  Evaluate the second derivative using a finite-difference step size
+*/
+int TMRFace::eval2ndDeriv( double u, double v, 
+                           TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv ){
+  int fail = 0;
+
+  // Retrieve the parameter bounds for the curve
+  double umin, vmin, umax, vmax;
+  getRange(&umin, &vmin, &umax, &vmax);
+
+  if (u >= umin && u <= umax &&
+      v >= vmin && v <= vmax){
+    // Evaluate the point at the original 
+    TMRPoint pu, pv;
+    fail = evalDeriv(u, v, &pu, &pv);
+
+    // Compute the approximate derivative using a forward
+    // difference or backward difference, depending on whether
+    // the step is within the domain
+    if (u + deriv_step_size <= umax){
+      TMRPoint p2u, p2v;
+      fail = fail || evalDeriv(u + deriv_step_size, v, &p2u, &p2v);
+
+      Xuu->x = (p2u.x - pu.x)/deriv_step_size;
+      Xuu->y = (p2u.y - pu.y)/deriv_step_size;
+      Xuu->z = (p2u.z - pu.z)/deriv_step_size;
+
+      Xuv->x = (p2v.x - pv.x)/deriv_step_size;
+      Xuv->y = (p2v.y - pv.y)/deriv_step_size;
+      Xuv->z = (p2v.z - pv.z)/deriv_step_size;
+    }
+    else if (u >= umin + deriv_step_size){
+      TMRPoint p2u, p2v;
+      fail = fail || evalDeriv(u - deriv_step_size, v, &p2u, &p2v);
+
+      Xuu->x = (pu.x - p2u.x)/deriv_step_size;
+      Xuu->y = (pu.y - p2u.y)/deriv_step_size;
+      Xuu->z = (pu.z - p2u.z)/deriv_step_size;
+
+      Xuv->x = (pv.x - p2v.x)/deriv_step_size;
+      Xuv->y = (pv.y - p2v.y)/deriv_step_size;
+      Xuv->z = (pv.z - p2v.z)/deriv_step_size;
+    }
+    else {
+      fail = 1;
+    }
+
+    // Compute the approximate derivative using a forward
+    // difference
+    if (v + deriv_step_size <= vmax){
+      TMRPoint p2u, p2v;
+      fail = fail || evalDeriv(u, v + deriv_step_size, &p2u, &p2v);
+
+      Xvv->x = (p2v.x - pv.x)/deriv_step_size;
+      Xvv->y = (p2v.y - pv.y)/deriv_step_size;
+      Xvv->z = (p2v.z - pv.z)/deriv_step_size;
+    }
+    else if (v >= vmin + deriv_step_size){
+      TMRPoint p2u, p2v;
+      fail = fail || evalDeriv(u, v - deriv_step_size, &p2u, &p2v);
+
+      Xvv->x = (pv.x - p2v.x)/deriv_step_size;
+      Xvv->y = (pv.y - p2v.y)/deriv_step_size;
+      Xvv->z = (pv.z - p2v.z)/deriv_step_size;
     }
     else {
       fail = 1;

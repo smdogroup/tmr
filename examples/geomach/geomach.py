@@ -375,44 +375,15 @@ mesh = TMR.Mesh(comm, geo)
 
 # Mesh the part
 opts = TMR.MeshOptions()
-opts.num_smoothing_steps = 10
+opts.num_smoothing_steps = 5
 opts.triangularize_print_level = 1
 opts.triangularize_print_iter = 10000
-opts.write_post_smooth_triangle = 1
-# opts.write_triangularize_intermediate = 1
 opts.write_mesh_quality_histogram = 1
 
 # Mesh the geometry with the given target size
 htarget = args.htarget
 mesh.mesh(htarget, opts=opts)
 mesh.writeToVTK('surface-mesh.vtk')
-
-# faces = geo.getFaces()
-# face = None
-# for f in faces:
-#     if f.getEntityId() == 1249:
-#         face = f
-#         break
-
-# loop = face.getEdgeLoop(0)
-# e, d = loop.getEdgeLoop()
-# meshes = []
-# for edge in e:
-#     em = TMR.EdgeMesh(comm, edge)
-#     em.mesh(htarget, opts=opts)
-#     edge.setMesh(em)
-#     meshes.append(em)
-
-# fm = TMR.FaceMesh(comm, face)
-# fm.mesh(htarget, opts=opts)
-
-
-
-
-
-
-
-
 
 # # Create a model from the mesh
 # print 'Creating model from mesh...'

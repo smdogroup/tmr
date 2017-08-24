@@ -42,7 +42,7 @@ class TMRQuadNode {
 
   // Find the closest indexed point to the provided (x,y) location
   // -------------------------------------------------------------
-  uint32_t findClosest( const double pt[], double *_dist );
+  uint32_t findClosest( const double pt[], double *_dist=NULL );
 
  private:
   // This is only for creating children
@@ -187,7 +187,7 @@ class TMRTriangularize : public TMREntity {
   // Given the two ordered nodes, add the triangle to the list
   void completeMe( uint32_t u, uint32_t v, TMRTriangle **tri );
 
-  // Dig cavity: Function a la Shewchuk
+  // Dig cavity
   void digCavity( uint32_t u, uint32_t v, uint32_t w, 
                   TMRFace *metric=NULL );
 
@@ -204,7 +204,7 @@ class TMRTriangularize : public TMREntity {
   void findEnclosing( const double pt[], TMRTriangle **tri );
 
   // Compute the maximum edge length of the triangle
-  double computeSizeRatio( TMRTriangle *tri, 
+  double computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
                            TMRElementFeatureSize *fs );
 
   // Form the Delaunay triangularization using an edge-flip algorithm
@@ -269,7 +269,7 @@ class TMRTriangularize : public TMREntity {
   int num_buckets;
   int num_hash_nodes;
 
-  // Class to store the edges in a triangle
+  // Class to store an edge in a triangle
   class TriEdge {
   public:
     TriEdge( uint32_t _u, uint32_t _v ){
@@ -278,7 +278,6 @@ class TMRTriangularize : public TMREntity {
     }
     uint32_t u, v;
   };
-
 };
 
 #endif // TRIANGULARIZE_H

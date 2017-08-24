@@ -64,6 +64,9 @@ class TMREdge : public TMREntity {
 
   // Given the parametric point, evaluate the first derivative 
   virtual int evalDeriv( double t, TMRPoint *Xt );
+
+  // Given the parametric point, evaluate the second derivative
+  virtual int eval2ndDeriv( double t, TMRPoint *Xtt );
   
   // Parametrize the curve on the given surface
   virtual int getParamsOnFace( TMRFace *face, double t, 
@@ -146,6 +149,10 @@ class TMRFace : public TMREntity {
   // Given the parametric point, evaluate the first derivative 
   virtual int evalDeriv( double u, double v, 
                          TMRPoint *Xu, TMRPoint *Xv );
+
+  // Given the parametric point, evaluate the second derivatives
+  virtual int eval2ndDeriv( double u, double v,
+                            TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
 
   // Add an edge loop to the face
   int getNumEdgeLoops();

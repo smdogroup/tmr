@@ -31,6 +31,9 @@ class TMRBsplineCurve : public TMRCurve {
   // Given the parametric point, evaluate the derivative 
   int evalDeriv( double t, TMRPoint *Xt );
 
+  // Given the parametric point, evaluate the second derivative 
+  int eval2ndDeriv( double t, TMRPoint *Xt );
+
   // Refine the knot vector using knot insertion
   TMRBsplineCurve* refineKnots( const double *Tnew, int nnew );
 
@@ -90,6 +93,10 @@ class TMRBsplineSurface : public TMRSurface {
   // Given the parametric point, evaluate the first derivative 
   int evalDeriv( double u, double v, 
                  TMRPoint *Xu, TMRPoint *Xv );
+
+  // Given the parametric point, evaluate the second derivatives
+  int eval2ndDeriv( double u, double v,
+                    TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
  private:
   // The number of control points and b-spline order
   int ku, kv;
@@ -131,6 +138,9 @@ class TMRBsplinePcurve : public TMRPcurve {
 
   // Given the parametric point, evaluate the derivative 
   int evalDeriv( double t, double *ut, double *vt );
+
+  // Evaluate the second derivative
+  int eval2ndDeriv( double t, double *utt, double *vtt );
 
   // Refine the knot vector using knot insertion
   TMRBsplinePcurve* refineKnots( const double *Tnew, int nnew );

@@ -30,6 +30,9 @@ class TMRCurve : public TMREntity {
 
   // Given the parametric point, evaluate the derivative 
   virtual int evalDeriv( double t, TMRPoint *Xt );
+
+  // Given the parametric point, evaluate the second derivative
+  virtual int eval2ndDeriv( double t, TMRPoint *Xtt );
   
   // Write the object to the VTK file
   void writeToVTK( const char *filename );
@@ -58,6 +61,10 @@ class TMRSurface : public TMREntity {
   virtual int evalDeriv( double u, double v, 
                          TMRPoint *Xu, TMRPoint *Xv );
 
+  // Given the parametric point, evaluate the second derivatives
+  virtual int eval2ndDeriv( double u, double v,
+                            TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
+
   // Write the object to the VTK file
   void writeToVTK( const char *filename );
 
@@ -80,6 +87,9 @@ class TMRPcurve : public TMREntity {
 
   // Given the parametric point, evaluate the derivative 
   virtual int evalDeriv( double t, double *ut, double *vt ) = 0;
+
+  // Given the parametric point, evaluate the derivative 
+  virtual int eval2ndDeriv( double t, double *utt, double *vtt ) = 0;
 };
 
 #endif // TMR_GEOMETRY_H

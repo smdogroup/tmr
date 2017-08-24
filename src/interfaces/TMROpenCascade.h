@@ -108,6 +108,7 @@ class TMR_OCCCurve : public TMRCurve {
   int evalPoint( double t, TMRPoint *X );
   int invEvalPoint( TMRPoint X, double *t );
   int evalDeriv( double t, TMRPoint *Xt );
+  int eval2ndDeriv( double t, TMRPoint *Xtt );
  private:
   Handle(Geom_Curve) curve;
 };
@@ -121,6 +122,8 @@ class TMR_OCCSurface : public TMRSurface {
   int evalPoint( double u, double v, TMRPoint *X ); 
   int invEvalPoint( TMRPoint p, double *u, double *v );
   int evalDeriv( double u, double v, TMRPoint *Xu, TMRPoint *Xv );
+  int eval2ndDeriv( double u, double v, 
+                    TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
  private:
   Handle(Geom_Surface) surf;
 };
@@ -152,6 +155,7 @@ class TMR_OCCEdge : public TMREdge {
   int evalPoint( double t, TMRPoint *X );
   int invEvalPoint( TMRPoint X, double *t );
   int evalDeriv( double t, TMRPoint *Xt );
+  int eval2ndDeriv( double t, TMRPoint *Xtt );
   int getParamsOnFace( TMRFace *face, double t, 
                        int dir, double *u, double *v );
   int isDegenerate();
@@ -170,6 +174,8 @@ class TMR_OCCFace : public TMRFace {
   int evalPoint( double u, double v, TMRPoint *X ); 
   int invEvalPoint( TMRPoint p, double *u, double *v );
   int evalDeriv( double u, double v, TMRPoint *Xu, TMRPoint *Xv );
+  int eval2ndDeriv( double u, double v, 
+                    TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
   void getFaceObject( TopoDS_Face &f );
  private:
   TopoDS_Face face;

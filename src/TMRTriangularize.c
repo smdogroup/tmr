@@ -2,6 +2,7 @@
 #include "TMRPerfectMatchInterface.h"
 #include "TMRHashFunction.h"
 #include "predicates.h"
+#include "tmrlapack.h"
 #include <math.h>
 #include <limits.h>
 #include <stdio.h>
@@ -227,13 +228,13 @@ void TMRQuadNode::addNode( uint32_t num, const double pt[] ){
   // If any of the children have been allocated, searh them for
   // the place where the node should be added
   if (low_left){    
-    if (pt[0] < x && pt[1] < y){
+    if (pt[0] <= x && pt[1] <= y){
       low_left->addNode(num, pt);
     }
-    else if (pt[0] < x){
+    else if (pt[0] <= x){
       up_left->addNode(num, pt);
     }
-    else if (pt[1] < y){
+    else if (pt[1] <= y){
       low_right->addNode(num, pt);
     }
     else {
@@ -264,6 +265,7 @@ void TMRQuadNode::addNode( uint32_t num, const double pt[] ){
     for ( int k = 0; k < NODES_PER_LEVEL; k++ ){
       addNode(pt_nums[k], &pts[2*k]);
     }
+    addNode(num, pt);
 
     // Free the space that was allocated
     delete [] pt_nums;
@@ -283,13 +285,13 @@ void TMRQuadNode::addNode( uint32_t num, const double pt[] ){
 */
 int TMRQuadNode::deleteNode( uint32_t num, const double pt[] ){
   if (low_left){
-    if (pt[0] < x && pt[1] < y){
+    if (pt[0] <= x && pt[1] <= y){
       return low_left->deleteNode(num, pt);
     }
-    else if (pt[0] < x){
+    else if (pt[0] <= x){
       return up_left->deleteNode(num, pt);
     }
-    else if (pt[1] < y){
+    else if (pt[1] <= y){
       return low_right->deleteNode(num, pt);
     }
     else {
@@ -355,7 +357,7 @@ void TMRQuadNode::findClosest( const double pt[],
                                uint32_t *index, double *dist ){
   // Scan through the quadtree
   if (low_left){
-    if (pt[0] < x && pt[1] < y){
+    if (pt[0] <= x && pt[1] <= y){
       low_left->findClosest(pt, index, dist);
       if (x - pt[0] <= *dist){
         low_right->findClosest(pt, index, dist);
@@ -363,11 +365,11 @@ void TMRQuadNode::findClosest( const double pt[],
       if (y - pt[1] <= *dist){
         up_left->findClosest(pt, index, dist);
       }
-      if (x - pt[0] <= *dist || y - pt[1] <= *dist){
+      if (x - pt[0] <= *dist && y - pt[1] <= *dist){
         up_right->findClosest(pt, index, dist);
       }
     }
-    else if (pt[0] < x){
+    else if (pt[0] <= x){
       up_left->findClosest(pt, index, dist);
       if (x - pt[0] <= *dist){
         up_right->findClosest(pt, index, dist);
@@ -375,11 +377,11 @@ void TMRQuadNode::findClosest( const double pt[],
       if (pt[1] - y <= *dist){
         low_left->findClosest(pt, index, dist);
       }
-      if (x - pt[0] <= *dist || pt[1] - y <= *dist){
+      if (x - pt[0] <= *dist && pt[1] - y <= *dist){
         low_right->findClosest(pt, index, dist);
       }
     }
-    else if (pt[1] < y){
+    else if (pt[1] <= y){
       low_right->findClosest(pt, index, dist);
       if (pt[0] - x <= *dist){
         low_left->findClosest(pt, index, dist);
@@ -387,7 +389,7 @@ void TMRQuadNode::findClosest( const double pt[],
       if (y - pt[1] <= *dist){
         up_right->findClosest(pt, index, dist);
       }
-      if (pt[0] - x <= *dist || y - pt[1] <= *dist){
+      if (pt[0] - x <= *dist && y - pt[1] <= *dist){
         up_left->findClosest(pt, index, dist);
       }
     }
@@ -399,7 +401,7 @@ void TMRQuadNode::findClosest( const double pt[],
       if (pt[1] - y <= *dist){
         low_right->findClosest(pt, index, dist);
       }
-      if (pt[0] - x <= *dist || pt[1] - y <= *dist){
+      if (pt[0] - x <= *dist && pt[1] - y <= *dist){
         low_left->findClosest(pt, index, dist);
       }
     }
@@ -636,9 +638,13 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // Perform the delaunay edge flip algorithm
   delaunayEdgeFlip();
 
+  // Free the trianlges marked for deletion from the list
+  deleteTrianglesFromList();
+
   // Reset the node->traingle pointers to avoid referring to a
   // triangle that belonged to a hole and was deleted.
   node = list_start;
+  memset(pts_to_tris, 0, num_points*sizeof(TMRTriangle*));
   while (node){
     pts_to_tris[node->tri.u] = &(node->tri);
     pts_to_tris[node->tri.v] = &(node->tri);
@@ -705,19 +711,20 @@ void TMRTriangularize::delaunayEdgeFlip(){
     uint32_t v = node->tri.v;
     uint32_t w = node->tri.w;
 
+    // Push only the internal edges that have the first node number
+    // less than the second node number
     if (!edgeInPSLG(u, v)){
-      q.push(TriEdge(u, v));
+      if (u < v){ q.push(TriEdge(u, v)); }
     }
     if (!edgeInPSLG(v, w)){
-      q.push(TriEdge(v, w));
+      if (v < w){ q.push(TriEdge(v, w)); }
     }
     if (!edgeInPSLG(w, u)){
-      q.push(TriEdge(w, u));
+      if (w < u){ q.push(TriEdge(w, u)); }
     }
     node = node->next;
   }
 
-  int itr = 0;
   while (!q.empty()){
     // Pop the front edge object off the queue and extract the (u, v)
     // node numbers for the edge
@@ -1038,7 +1045,11 @@ void TMRTriangularize::writeToVTK( const char *filename,
     node = list_start;
     while (node){
       if (node->tri.status != DELETE_ME){
-        fprintf(fp, "%e\n", node->tri.quality);
+        double quality = node->tri.quality;
+        if (quality != quality){
+          quality = -1e20;
+        }
+        fprintf(fp, "%e\n", quality);
       }
       node = node->next;
     }
@@ -1421,25 +1432,85 @@ inline int TMRTriangularize::enclosed( const double p[],
 /*
   Does the final given point lie within the circumcircle of the
   remaining points?
+
+  This function returns a positive value if the point lies within the
+  circumdisk of the triangle formed by u, v, w. A negative value is
+  returned if the point lies outside the circumdisk. If the point lies
+  on the circumdisk, zero is returned.
 */
 inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
                                           uint32_t w, uint32_t x,
                                           TMRFace *metric ){
-  double l11 = 1.0, l22 = 1.0;
-  double l21 = 0.0;
+  double pu[2];
+  pu[0] = pts[2*u];
+  pu[1] = pts[2*u+1];
+
+  double pv[2];
+  pv[0] = pts[2*v];
+  pv[1] = pts[2*v+1];
+
+  double pw[2];
+  pw[0] = pts[2*w];
+  pw[1] = pts[2*w+1];
+
+  double px[2];
+  px[0] = pts[2*x];
+  px[1] = pts[2*x+1];
+
+  /*
+  // Evaluate the metric tensor at the point x
+  if (metric){
+    // Compute the metric components at the center of the triangle
+    // (u,v,w)
+    TMRPoint Xu, Xv;
+    metric->evalDeriv(px[0], px[1], &Xu, &Xv);
+    double g11 = Xu.dot(Xu);
+    double g12 = Xu.dot(Xv);
+    double g22 = Xv.dot(Xv);
+
+    // Assemble a linear system of equations to determine the location
+    // of the origin
+    double p0[2];
+    p0[0] = 0.5*((pu[0]*pu[0]*g11 + pu[1]*pu[1]*g22 + 2.0*pu[0]*pu[1]*g12) - 
+                 (pv[0]*pv[0]*g11 + pv[1]*pv[1]*g22 + 2.0*pv[0]*pv[1]*g12));
+    p0[1] = 0.5*((pu[0]*pu[0]*g11 + pu[1]*pu[1]*g22 + 2.0*pu[0]*pu[1]*g12) - 
+                 (pw[0]*pw[0]*g11 + pw[1]*pw[1]*g22 + 2.0*pw[0]*pw[1]*g12));
+
+    double A[4];
+    // Assemble the first row of the matrix
+    A[0] = (pu[0] - pv[0])*g11 + (pu[1] - pv[1])*g12;
+    A[2] = (pu[0] - pv[0])*g12 + (pu[1] - pv[1])*g22;
+
+    // Assemble the second row of the matrix
+    A[1] = (pu[0] - pw[0])*g11 + (pu[1] - pw[1])*g12;
+    A[3] = (pu[0] - pw[0])*g12 + (pu[1] - pw[1])*g22;
+
+    // Solve the system of equations
+    int n = 2, one = 1, ipiv[2], info = 0;
+    TmrLAPACKdgetrf(&n, &n, A, &n, ipiv, &info);
+    TmrLAPACKdgetrs("N", &n, &one, A, &n, ipiv, p0, &n, &info);
+
+    // p0 is now the origin, compute the circum radius in the metric
+    double r2u = (g11*(pu[0] - p0[0])*(pu[0] - p0[0]) + 
+                  2.0*g12*(pu[0] - p0[0])*(pu[1] - p0[1]) +
+                  g22*(pu[1] - p0[1])*(pu[1] - p0[1]));
+
+    // Compute the distance in the metric to the or
+    double r2x = (g11*(px[0] - p0[0])*(px[0] - p0[0]) + 
+                  2.0*g12*(px[0] - p0[0])*(px[1] - p0[1]) +
+                  g22*(px[1] - p0[1])*(px[1] - p0[1]));
+
+    // Return the incircle condition. If rx2 < r2, the value is
+    // positive. If rx2 = r2 then the value is zero, and if rx2 > r2,
+    // the value is negative.
+    return 1.0 - r2x/r2u;
+  }
+  */
 
   if (metric){
-    // Compute the parametric mid-point of the triangle
-    double mpt[2];
-    // const double frac = 1.0/3.0;
-    // mpt[0] = frac*(pts[2*u] + pts[2*v] + pts[2*w]);
-    // mpt[1] = frac*(pts[2*u+1] + pts[2*v+1] + pts[2*w+1]);
-    mpt[0] = pts[2*x];
-    mpt[1] = pts[2*x+1];
-
     // Compute the metric components at the center of the triangle (u,v,w)
     TMRPoint Xu, Xv;
-    metric->evalDeriv(mpt[0], mpt[1], &Xu, &Xv);
+    metric->evalDeriv(px[0], px[1], &Xu, &Xv);
     double g11 = Xu.dot(Xu);
     double g12 = Xu.dot(Xv);
     double g22 = Xv.dot(Xv);
@@ -1450,29 +1521,27 @@ inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
     // l11 = sqrt(g11)
     // l11*l21 = g12 => l21 = g12/l11
     // l21*l21 + l22^2 = g22 => l22 = sqrt(g22 - l21*l21);
-    l11 = sqrt(g11);
+    double l11 = sqrt(g11);
     double inv11 = 1.0/l11;
-    l21 = inv11*g12;
-    l22 = sqrt(g22 - l21*l21);
+    double l21 = inv11*g12;
+    double l22 = sqrt(g22 - l21*l21);
+
+    // Compute p' = L^{T}*p to transform into the local coordinates
+    pu[0] = l11*pts[2*u] + l21*pts[2*u+1];
+    pu[1] = l22*pts[2*u+1];
+
+    pv[0] = l11*pts[2*v] + l21*pts[2*v+1];
+    pv[1] = l22*pts[2*v+1];
+
+    pw[0] = l11*pts[2*w] + l21*pts[2*w+1];
+    pw[1] = l22*pts[2*w+1];
+    
+    px[0] = l11*pts[2*x] + l21*pts[2*x+1];
+    px[1] = l22*pts[2*x+1];
   }
 
-  // Compute p' = L^{T}*p to transform into the local coordinates
-  double pu[2];
-  pu[0] = l11*pts[2*u] + l21*pts[2*u+1];
-  pu[1] = l22*pts[2*u+1];
-
-  double pv[2];
-  pv[0] = l11*pts[2*v] + l21*pts[2*v+1];
-  pv[1] = l22*pts[2*v+1];
-
-  double pw[2];
-  pw[0] = l11*pts[2*w] + l21*pts[2*w+1];
-  pw[1] = l22*pts[2*w+1];
-
-  double px[2];
-  px[0] = l11*pts[2*x] + l21*pts[2*x+1];
-  px[1] = l22*pts[2*x+1];
-
+  // No metric is defined, so simply take the circumcircle check from
+  // Shewchuk's geometric predicates
   return incircle(pu, pv, pw, px);
 }
 
@@ -1638,7 +1707,7 @@ void TMRTriangularize::findEnclosing( const double pt[],
   search_tag++;
 
   // Find the closest point to the given 
-  uint32_t u = root->findClosest(pt, NULL);
+  uint32_t u = root->findClosest(pt);
 
   // Obtain the triangle associated with the node u. This triangle may
   // not contain the node, but will hopefully be close to the node.
@@ -1699,7 +1768,7 @@ void TMRTriangularize::findEnclosing( const double pt[],
   metric to determine whether to retain the triangle, or search for
   a better one.
 */
-double TMRTriangularize::computeSizeRatio( TMRTriangle *tri,
+double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
                                            TMRElementFeatureSize *fs ){
   // The circumcircle of an equilateral triangle is sqrt(3)*h where h
   // is the side-length of the triangle
@@ -1707,15 +1776,15 @@ double TMRTriangularize::computeSizeRatio( TMRTriangle *tri,
 
   // Compute the edge lengths in physical space
   TMRPoint d1;
-  d1.x = X[tri->v].x - X[tri->u].x;
-  d1.y = X[tri->v].y - X[tri->u].y;
-  d1.z = X[tri->v].z - X[tri->u].z;
+  d1.x = X[v].x - X[u].x;
+  d1.y = X[v].y - X[u].y;
+  d1.z = X[v].z - X[u].z;
     
   TMRPoint d2;
-  d2.x = X[tri->w].x - X[tri->u].x;
-  d2.y = X[tri->w].y - X[tri->u].y;
-  d2.z = X[tri->w].z - X[tri->u].z;
- 
+  d2.x = X[w].x - X[u].x;
+  d2.y = X[w].y - X[u].y;
+  d2.z = X[w].z - X[u].z;
+  
   double dot = d1.dot(d2)/d1.dot(d1);
 
   // Compute the perpendicular component along the second direction
@@ -1740,9 +1809,9 @@ double TMRTriangularize::computeSizeRatio( TMRTriangle *tri,
   double R = sqrt(d1.dot(d1));
 
   // Compute the center of the triangle
-  d1.x = (X[tri->u].x + X[tri->v].x + X[tri->w].x)/3.0;
-  d1.y = (X[tri->u].y + X[tri->v].y + X[tri->w].y)/3.0;
-  d1.z = (X[tri->u].z + X[tri->v].z + X[tri->w].z)/3.0;
+  d1.x = (X[u].x + X[v].x + X[w].x)/3.0;
+  d1.y = (X[u].y + X[v].y + X[w].y)/3.0;
+  d1.z = (X[u].z + X[v].z + X[w].z)/3.0;
   double h = fs->getFeatureSize(d1);
 
   return sqrt3*R/h;
@@ -1782,7 +1851,8 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       node->tri.status = WAITING;
     
       // Compute the 'quality' indicator for this triangle
-      node->tri.quality = computeSizeRatio(&node->tri, fs);
+      TMRTriangle t = node->tri;
+      node->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs);
       if (node->tri.quality < frontal_quality_factor){
         node->tri.status = ACCEPTED;
       }
@@ -1926,15 +1996,10 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     m[0] = 0.5*(pts[2*u] + pts[2*v]);
     m[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
 
-    // Get the derivatives of the surface
+    // Get the derivatives of the surface at the mid-point
     TMRPoint Xpt, Xu, Xv;
     face->evalPoint(m[0], m[1], &Xpt);
     face->evalDeriv(m[0], m[1], &Xu, &Xv);
-
-    // Compute the physical location along the parameter direction
-    // based on the local feature size
-    const double sqrt3 = 1.73205080757;
-    double de = 0.5*sqrt3*fs->getFeatureSize(Xpt);
 
     // Compute the metric tensor components
     double g11 = Xu.dot(Xu);
@@ -1946,7 +2011,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     double G11 = invdet*g22;
     double G12 = -invdet*g12;
     double G22 = invdet*g11;
-    
+       
     // Compute the parametric direction along the curvilinear line
     // connecting from u to v
     double d[2];
@@ -1963,44 +2028,164 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     dir.x = e[0]*Xu.x + e[1]*Xv.x;
     dir.y = e[0]*Xu.y + e[1]*Xv.y;
     dir.z = e[0]*Xu.z + e[1]*Xv.z;
-    
-    // Compute the ratio between the desired distance in physical
-    // space and the length of the direction dir in physical space
-    // for a unit change in parameter space.
-    double f = de/sqrt(dir.dot(dir));
-    double pt[2];
-    pt[0] = m[0] + f*e[0];
-    pt[1] = m[1] + f*e[1];
 
-    // Find the enclosing triangle for the new point
-    TMRTriangle *pt_tri = tri;
-    if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
-      t0_enclose += MPI_Wtime();
-      findEnclosing(pt, &pt_tri);
-      t1_enclose += MPI_Wtime();
+    // Compute the physical location along the parameter direction
+    // based on the local feature size
+    const double sqrt3 = 1.73205080757;
+    double h = fs->getFeatureSize(Xpt);
 
-      // We've tried a new point and it was outside the domain.  That
-      // is not allowed, so, we quit and mark the triangle as accepted.
-      if (!pt_tri){
-        // Adjust the status of the triangle
-        if (tri->status == WAITING ||
-            tri->status == ACTIVE){
-          tri->status = ACCEPTED;
+    // The new point that will be added into the mesh (potentially)
+    double param_dist = 0.0;
+    TMRTriangle *pt_tri = NULL;
+    double pt[2] = {0.0, 0.0};
+    double htrial = h;
+
+
+    for ( int trial = 0; trial < 2; trial++ ){
+      // Compute the side-edge length, given the prescribed mesh
+      // spacing at this point in the domain.
+      double de = 0.5*sqrt3*htrial;
+   
+      // Compute the ratio between the desired distance in physical
+      // space and the length of the direction dir in physical space
+      // for a unit change in parameter space.
+      double f = de/sqrt(dir.dot(dir));
+      pt[0] = m[0] + f*e[0];
+      pt[1] = m[1] + f*e[1];
+
+      param_dist = de;
+
+      /*
+      int newton_fail = 1;
+      const double rtol = 1e-5;
+      const int max_newton_iters = 25;
+      
+      for ( int k = 0; k < max_newton_iters; k++ ){
+        // Solve for the problem 
+        face->evalPoint(pt[0], pt[1], &Xpt);
+        face->evalDeriv(pt[0], pt[1], &Xu, &Xv);
+
+        // Solve for the surface location that satisfies
+        // ||X - X[u]||_{2} = de and 
+        // ||X - X[v]||_{2} = de
+        TMRPoint du, dv;
+        du.x = Xpt.x - X[u].x;
+        du.y = Xpt.y - X[u].y;
+        du.z = Xpt.z - X[u].z;
+
+        dv.x = Xpt.x - X[v].x;
+        dv.y = Xpt.y - X[v].y;
+        dv.z = Xpt.z - X[v].z;
+
+        double r[2];
+        r[0] = de*de - du.dot(du);
+        r[1] = de*de - dv.dot(dv);
+
+        if (fabs(r[0]) < rtol*de*de && 
+            fabs(r[1]) < rtol*de*de){
+          newton_fail = 0;
+          break;
+        }
+
+        // Compute the Jacobian of the system of equations
+        double A[4];
+        A[0] = 2.0*Xu.dot(du);
+        A[2] = 2.0*Xv.dot(du);
+
+        A[1] = 2.0*Xu.dot(dv);
+        A[3] = 2.0*Xv.dot(dv);
         
-          // Search from adjacent triangles
-          for ( int k = 0; k < 3; k++ ){
-            TMRTriangle *adjacent;
-            completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
-            if (adjacent && adjacent->status == WAITING){
-              adjacent->status = ACTIVE;
-              active.push(adjacent);
-            }
+        // Solve the system of equations
+        int n = 2, one = 1, ipiv[2], info = 0;
+        TmrLAPACKdgetrf(&n, &n, A, &n, ipiv, &info);
+        TmrLAPACKdgetrs("N", &n, &one, A, &n, ipiv, r, &n, &info);
+        
+        // Guard against moving the u/v coordinates outside the domain
+        // of the problem
+        double umin, umax, vmin, vmax;
+        face->getRange(&umin, &vmin, &umax, &vmax);
+        if (pt[0] + r[0] > umax){
+          pt[0] = umax;
+        }
+        else if (pt[0] + r[0] < umin){
+          pt[0] = umin;
+        }
+        else {
+          pt[0] += r[0];
+        }
+        if (pt[1] + r[1] > vmax){
+          pt[1] = vmax;
+        }
+        else if (pt[1] + r[1] < vmin){
+          pt[1] = vmin;
+        }
+        else {
+          pt[1] += r[1];
+        }
+      }
+      */      
+
+      // Find the enclosing triangle for the new point
+      pt_tri = tri;
+      if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
+        t0_enclose += MPI_Wtime();
+        findEnclosing(pt, &pt_tri);
+        t1_enclose += MPI_Wtime();
+      }
+
+      // If no triangle is found, then we quit an mark the source
+      // triangle as accepted. If a triangle is found and it is not
+      // accepted, then we add the point. Otherwise, we try a new
+      // point in the domain.
+      if (!pt_tri ||
+          (pt_tri && pt_tri->status != ACCEPTED)){
+        break;
+      }
+      else { // (pt_tri && pt_tri->status == ACCEPTED){
+        // We've inserted a point at a location where the triangle has
+        // already been accepted. This is not permitted, so we
+        // continue...
+        pt_tri = NULL;
+        htrial *= 0.5;
+      }
+    }
+
+    // Find the closest node to the point
+    double dist = 0.0;
+    uint32_t w = root->findClosest(pt);
+
+    // Evalute the point
+    TMRPoint dpt;
+    face->evalPoint(pt[0], pt[1], &dpt);
+    dpt.x = dpt.x - X[w].x;
+    dpt.y = dpt.y - X[w].y;
+    dpt.z = dpt.z - X[w].z;
+
+    double beta = 0.6;
+    if (dpt.dot(dpt) < beta*h*h){
+      pt_tri = NULL;
+    }
+
+    if (!pt_tri){
+      // We've tried a new point and it was outside the domain.
+      // That is not allowed, so, we quit and mark the triangle as
+      // accepted.
+      if (tri->status == WAITING ||
+          tri->status == ACTIVE){
+        tri->status = ACCEPTED;
+        
+        // Search from adjacent triangles
+        for ( int k = 0; k < 3; k++ ){
+          TMRTriangle *adjacent;
+          completeMe(edge_pairs[k][1], edge_pairs[k][0], &adjacent);
+          if (adjacent && adjacent->status == WAITING){
+            adjacent->status = ACTIVE;
+            active.push(adjacent);
           }
         }
       }
     }
-
-    if (pt_tri){
+    else { // (pt_tri){
       // Add up the update time
       t0_update += MPI_Wtime();
     
@@ -2016,7 +2201,8 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
         ptr = list_marker->next;
       }
       while (ptr){
-        ptr->tri.quality = computeSizeRatio(&ptr->tri, fs);
+        TMRTriangle t = ptr->tri;
+        ptr->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs);
         if (ptr->tri.quality < frontal_quality_factor){
           ptr->tri.status = ACCEPTED;
         }
@@ -2075,7 +2261,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
             }
           }
         }
-
+        
         // Increment the pointer to the next member of the list
         ptr = ptr->next;
       }
