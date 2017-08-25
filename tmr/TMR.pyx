@@ -804,14 +804,14 @@ cdef class Mesh:
         self.ptr.getMeshConnectivity(&nquads, &quads,
                                      &nhexes, &hexes)
        
-        q = np.zeros((nquads, 4), dtype=np.int)
+        q = np.zeros((nquads, 4), dtype=np.intc)
         for i in range(nquads):
             q[i,0] = quads[4*i]
             q[i,1] = quads[4*i+1]
             q[i,2] = quads[4*i+2]
             q[i,3] = quads[4*i+3]
           
-        he = np.zeros((nhexes,8), dtype=np.int)
+        he = np.zeros((nhexes,8), dtype=np.intc)
         for i in range(nhexes):
             he[i,0] = hexes[8*i]
             he[i,1] = hexes[8*i+1]
@@ -977,6 +977,60 @@ cdef class QuadForest:
         array = self.ptr.getNodesWithAttribute(attr)
         return _init_QuadrantArray(array)
 
+    def getNodeRange(self):
+        cdef int size = 0
+        cdef const int *node_range = NULL
+        size = self.ptr.getOwnedNodeRange(&node_range)
+        r = np.zeros(size+1, dtype=np.intc)
+        for i in range(size+1):
+            r[i] = node_range[i]
+        return r
+
+    def createMeshConn(self):
+        cdef int *conn
+        cdef int nelems
+        cdef int order = self.ptr.getMeshOrder()
+        self.ptr.createMeshConn(&conn, &nelems)
+        quads = np.zeros((nelems, order*order), dtype=np.intc)
+        if order == 2:
+            for i in range(nelems):
+                quads[i,0] = conn[4*i]
+                quads[i,1] = conn[4*i+1]
+                quads[i,2] = conn[4*i+2]
+                quads[i,3] = conn[4*i+3]
+        elif order == 3:
+            for i in range(nelems):
+                quads[i,0] = conn[4*i]
+                quads[i,1] = conn[4*i+1]
+                quads[i,2] = conn[4*i+2]
+                quads[i,3] = conn[4*i+3]
+                quads[i,4] = conn[4*i+4]
+                quads[i,5] = conn[4*i+5]
+                quads[i,6] = conn[4*i+6]
+                quads[i,7] = conn[4*i+7]
+                quads[i,8] = conn[4*i+8]            
+        _deleteMe(conn)
+        return quads
+
+    def createDepNodeConn(self):
+        self.ptr.createDepNodeConn()
+
+    def getDepNodeConn(self):
+        cdef int ndep = 0
+        cdef const int *_ptr = NULL
+        cdef const int *_conn = NULL
+        cdef const double *_weights = NULL
+        ndep = self.ptr.getDepNodeConn(&_ptr, &_conn, &_weights)
+        ptr = np.zeros(ndep+1, dtype=np.intc)
+        conn = np.zeros(_ptr[ndep], dtype=np.intc)
+        weights = np.zeros(_ptr[ndep], dtype=np.double)
+        for i in range(ndep+1):
+            ptr[i] = _ptr[i]
+        for i in xrange(ptr[ndep]):
+            conn[i] = _conn[i]
+            weights[i] = _weights[i]
+        return ptr, conn, weights
+            
     def writeToVTK(self, char *filename):
         self.ptr.writeToVTK(filename)
 
@@ -1132,3 +1186,47 @@ cdef class OctStiffnessProperties:
             return self.ptr.q
         def __set__(self,value):
             self.ptr.q = value
+
+def createMg(list assemblers, list forests):
+    cdef int nlevels = 0
+    cdef TACSAssembler **assm = NULL
+    cdef TMRQuadForest **forst = NULL
+    cdef TACSMg *mg = NULL
+    
+    assert(len(assemblers) == len(forests))
+    nlevels = len(assemblers)
+    assm = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
+    forst = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))    
+    for i in range(nlevels):
+        assm[i] = (<Assembler>assemblers[i]).ptr
+        forst[i] = (<QuadForest>forests[i]).ptr
+    TMR_CreateTACSMg(nlevels, assm, forst, &mg)
+    free(assm)
+    free(forst)
+    return _init_Pc(mg)
+
+def strainEnergyRefine(Assembler assembler,
+                       QuadForest forest,
+                       double target_err,
+                       int min_refine=0, int max_refine=30):
+    cdef TACSAssembler *assm = NULL
+    cdef TMRQuadForest *forst = NULL
+    cdef TacsScalar ans = 0.0
+    assm = assembler.ptr
+    forst = forest.ptr   
+    ans = TMR_StrainEnergyRefine(assm, forst, target_err,
+                                 min_refine, max_refine)
+    return ans
+
+def adjointRefine(Assembler coarse,
+                  Assembler fine,
+                  Vec adjoint,
+                  QuadForest forest,
+                  double target_err,
+                  int min_refine=0, int max_refine=30):
+    cdef TacsScalar ans = 0.0
+    cdef TacsScalar adj_corr
+    ans = TMR_AdjointRefine(coarse.ptr, fine.ptr,
+                            adjoint.ptr, forest.ptr, target_err,
+                            min_refine, max_refine, &adj_corr)
+    return ans, adj_corr

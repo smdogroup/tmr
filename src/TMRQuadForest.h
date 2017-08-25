@@ -104,10 +104,11 @@ class TMRQuadForest : public TMREntity {
 
   // Get the node-processor ownership range
   // --------------------------------------
-  void getOwnedNodeRange( const int **_node_range ){
+  int getOwnedNodeRange( const int **_node_range ){
     if (_node_range){
       *_node_range = node_range;
     }
+    return mpi_size;
   }
 
   // Get the quadrants and the nodes

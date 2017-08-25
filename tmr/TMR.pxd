@@ -150,6 +150,7 @@ cdef extern from "TMRBspline.h":
         TMRBsplineSurface* createSurface(int)
 
 cdef extern from "":
+    void _deleteMe "delete [] "(int *array)
     TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
     TMREdgeFromFace* _dynamicEdgeFromFace "dynamic_cast<TMREdgeFromFace*>"(TMREdge*)
  
@@ -237,9 +238,12 @@ cdef extern from "TMRQuadForest.h":
         void createNodes(int)
         TMRQuadrantArray* getQuadsWithAttribute(const char*)
         TMRQuadrantArray* getNodesWithAttribute(const char*)
+        int getMeshOrder()
         void createMeshConn(const int**, const int*)
+        void createDepNodeConn()
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
+        int getOwnedNodeRange(const int**)
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
 
@@ -286,6 +290,7 @@ cdef extern from "TMROctForest.h":
         void createMeshConn(const int**, const int*)
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMROctForest*, TACSBVecInterp*)
+        int getOwnedNodeRange(const int**)
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
 
@@ -320,3 +325,20 @@ cdef extern from "SolidShellWrapper.h":
     
 cdef extern from "TMROpenCascade.h":
     cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*, int)
+
+cdef extern from "TMR_RefinementTools.h":
+    void TMR_CreateTACSMg(int, TACSAssembler**,
+                          TMROctForest**,
+                          TACSMg**)
+    void TMR_CreateTACSMg(int, TACSAssembler**,
+                          TMRQuadForest**,
+                          TACSMg**)
+    TacsScalar TMR_StrainEnergyRefine(TACSAssembler*,
+                                      TMRQuadForest*,
+                                      double, int, int)
+    TacsScalar TMR_AdjointRefine(TACSAssembler*,
+                                 TACSAssembler*,
+                                 TACSBVec*,
+                                 TMRQuadForest*,
+                                 double target_err,
+                                 int, int, TacsScalar*)
