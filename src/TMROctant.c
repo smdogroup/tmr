@@ -1,4 +1,5 @@
 #include "TMROctant.h"
+#include "TMRHashFunction.h"
 
 /*
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
@@ -674,17 +675,32 @@ int TMROctantHash::addOctant( TMROctant *oct ){
   mesh and then takes the remainder of the number of buckets.  
 */
 int TMROctantHash::getBucket( TMROctant *oct ){
-  // Use the hash function: (x + hmax*y + hmax*hmax*z) % num_buckets
-  const int32_t hmax = 1 << TMR_MAX_LEVEL;
-  const int32_t hmod = hmax % num_buckets;
-  
-  // Compute the first and second coefficients
-  uint64_t pb = oct->block % num_buckets;
-  uint64_t px = oct->x % num_buckets;
-  uint64_t py = (oct->y % num_buckets)*hmod;
-  uint64_t pz = (oct->z % num_buckets)*hmod;
-  pz = (pz % num_buckets)*hmod;
-  
-  int bucket = (pb + px + py + pz) % num_buckets;
+  uint32_t u = 0, v = 0, w = 0, x = 0;
+  u = oct->block;
+  if (oct->x >= 0){
+    v = oct->x;
+  }
+  else {
+    v = (1 << (TMR_MAX_LEVEL + 1)) - oct->x;
+  }
+  if (oct->y >= 0){
+    w = oct->y;
+  }
+  else {
+    w = (1 << (TMR_MAX_LEVEL + 1)) - oct->y;
+  }
+  if (oct->z >= 0){
+    x = oct->z;
+  }
+  else {
+    x = (1 << (TMR_MAX_LEVEL + 1)) - oct->z;
+  }
+
+  // Compute the hash value
+  uint32_t val = TMRIntegerFourTupleHash(u, v, w, x);
+
+  // Compute the bucket value
+  int bucket = val % num_buckets;
+
   return bucket;
 }

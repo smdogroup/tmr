@@ -1,4 +1,5 @@
 #include "TMRQuadrant.h"
+#include "TMRHashFunction.h"
 
 /*
   Get the child id of the quadrant
@@ -224,7 +225,7 @@ void TMRQuadrantArray::sort(){
   
   for ( ; i < size; i++, j++ ){
     while ((i < size-1) && 
-	   (array[i].compareEncoding(&array[i+1]) == 0)){
+           (array[i].compareEncoding(&array[i+1]) == 0)){
       i++;
     }
 
@@ -278,7 +279,7 @@ void TMRQuadrantArray::merge( TMRQuadrantArray * list ){
   int j = 0, i = 0;
   for ( ; i < size; i++ ){
     while ((j < list->size) && 
-	   (list->array[j].compare(&array[i]) < 0)){
+           (list->array[j].compare(&array[i]) < 0)){
       j++;
     }
     if (j >= list->size){
@@ -559,14 +560,14 @@ int TMRQuadrantHash::addQuadrant( TMRQuadrant *quad ){
     while (node){
       // The quadrant is in the list, quit now and return false
       if (node->quad.compare(quad) == 0){
-	return 0;
+        return 0;
       }
       
       // If the next node does not exist, quit
       // while node is the last node in the linked
       // list
       if (!node->next){
-	break;
+        break;
       }
       node = node->next;
     }
@@ -587,13 +588,26 @@ int TMRQuadrantHash::addQuadrant( TMRQuadrant *quad ){
   mesh and then takes the remainder of the number of buckets.  
 */
 int TMRQuadrantHash::getBucket( TMRQuadrant *quad ){
-  const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  uint32_t u = 0, v = 0, w = 0;
+  u = quad->face;
+  if (quad->x >= 0){
+    v = quad->x;
+  }
+  else {
+    v = (1 << (TMR_MAX_LEVEL + 1)) - quad->x;
+  }
+  if (quad->y >= 0){
+    w = quad->y;
+  }
+  else {
+    w = (1 << (TMR_MAX_LEVEL + 1)) - quad->y;
+  }
 
-  // Use the hash function: x + hmax*y
-  uint64_t product = (quad->y % num_buckets)*(hmax % num_buckets);
-  
+  // Compute the hash value
+  uint32_t val = TMRIntegerTripletHash(u, v, w);
+
   // Compute the bucket value
-  int bucket = (quad->x % num_buckets + product) % num_buckets;
+  int bucket = val % num_buckets;
   
   return bucket;
 }
