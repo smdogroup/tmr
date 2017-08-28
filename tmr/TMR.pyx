@@ -28,8 +28,8 @@ cdef extern from "mpi-compat.h":
     pass
 
 # Wrap interface for TACSTopoCreator
-cdef void _createelements( void *_self, int order, TMROctForest *forest,
-                           int num_elements, TACSElement** elements ):
+cdef void _ocreateelements( void *_self, int order, TMROctForest *forest,
+                            int num_elements, TACSElement** elements ):
     pf = _init_OctForest(forest)
     e = []
     for i in range(num_elements):
@@ -51,7 +51,7 @@ cdef class pyTMROctTACSTopoCreator:
         self.this_ptr = new CyTMROctTACSTopoCreator(bcs.ptr,props.ptr, filter.ptr,
                                                     shell_attr, cshell)
         self.this_ptr.setSelfPointer(<void*>self)
-        self.this_ptr.setCreateElements(_createelements)
+        self.this_ptr.setCreateElements(_ocreateelements)
         return
 
     def __dealloc__(self):
@@ -61,7 +61,35 @@ cdef class pyTMROctTACSTopoCreator:
 
 cdef class SolidShell:
     cdef SolidShellWrapper *ptr
-                 
+        
+# Wrap interface for TACSTopoCreator
+cdef void _qcreateelements( void *_self, int order, TMRQuadForest *forest,
+                            int num_elements, TACSElement** elements ):
+    pf = _init_QuadForest(forest)
+    e = []
+    for i in range(num_elements):
+        e.append(_init_Element(elements[i]))
+    (<object>_self).createElements(order,pf,num_elements, e)
+    
+    return
+
+# Wrap the creator class
+cdef class pyTMRQuadTACSTopoCreator:
+    cdef CyTMRQuadTACSTopoCreator *this_ptr
+    def __init__(self, BoundaryConditions bcs,
+                 QuadStiffnessProperties props, QuadForest filter):
+    
+        self.this_ptr = new CyTMRQuadTACSTopoCreator(bcs.ptr,props.ptr,
+                                                     filter.ptr)
+                                       
+        self.this_ptr.setSelfPointer(<void*>self)
+        self.this_ptr.setCreateElements(_qcreateelements)
+        return
+
+    def __dealloc__(self):
+        if (self.this_ptr):
+            del self.this_ptr
+        return
 
 # This wraps a C++ array with a numpy array for later useage
 cdef inplace_array_1d(int nptype, int dim1, void *data_ptr,
@@ -1193,9 +1221,9 @@ cdef class BoundaryConditions:
         return
 
 cdef class OctStiffnessProperties:
-    cdef TMRStiffnessProperties ptr
+    cdef TMROctStiffnessProperties ptr
     def __cinit__(self):
-        self.ptr = TMRStiffnessProperties()
+        self.ptr = TMROctStiffnessProperties()
       
     def __dealloc__(self):
         return
@@ -1223,7 +1251,45 @@ cdef class OctStiffnessProperties:
             return self.ptr.q
         def __set__(self,value):
             self.ptr.q = value
+            
+cdef class QuadStiffnessProperties:
+    cdef TMRQuadStiffnessProperties ptr
+    def __cinit__(self):
+        self.ptr = TMRQuadStiffnessProperties()
+      
+    def __dealloc__(self):
+        return
+   
+    property rho:
+        def __get__(self):
+            return self.ptr.rho
+        def __set__(self,value):
+            self.ptr.rho = value
 
+    property E:
+        def __get__(self):
+            return self.ptr.E
+        def __set__(self,value):
+            self.ptr.E = value
+
+    property nu:
+        def __get__(self):
+            return self.ptr.nu
+        def __set__(self,value):
+            self.ptr.nu = value
+
+    property q:
+        def __get__(self):
+            return self.ptr.q
+        def __set__(self,value):
+            self.ptr.q = value
+    
+    property ys:
+        def __get__(self):
+            return self.ptr.ys
+        def __set__(self,value):
+            self.ptr.ys = value
+            
 def createMg(list assemblers, list forests):
     cdef int nlevels = 0
     cdef TACSAssembler **assm = NULL

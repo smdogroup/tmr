@@ -308,22 +308,36 @@ cdef extern from "TMR_TACSCreator.h":
         TMROctTACSCreator(TMRBoundaryConditions*)
 
 cdef extern from "TMROctStiffness.h":
-    cdef cppclass TMRStiffnessProperties:
-        TMRStiffnessProperties()
+    cdef cppclass TMROctStiffnessProperties:
+        TMROctStiffnessProperties()
         TacsScalar rho, E, nu, q
+cdef extern from "TMRQuadStiffness.h":
+    cdef cppclass TMRQuadStiffnessProperties:
+        TMRQuadStiffnessProperties()
+        TacsScalar rho, E, nu, q, ys
 
 cdef extern from "CyTMR_TACSTopoCreator.h":
     # Define the callback types
-    ctypedef void (*createelements)(void *_self, int, TMROctForest*,
-                                    int, TACSElement**)
+    ctypedef void (*ocreateelements)(void *_self, int, TMROctForest*,
+                                     int, TACSElement**)
+    ctypedef void (*qcreateelements)(void *_self, int, TMROctForest*,
+                                     int, TACSElement**)
     cppclass CyTMROctTACSTopoCreator:
         CyTMROctTACSTopoCreator(TMRBoundaryConditions *,
-                                TMRStiffnessProperties,
+                                TMROctStiffnessProperties,
                                 TMROctForest *,
                                 const char *,SolidShellWrapper * )
         # Set the callback functions
         void setSelfPointer(void *_self)
-        void setCreateElements(createelements usr_func)
+        void setCreateElements(ocreateelements usr_func)
+
+    cppclass CyTMRQuadTACSTopoCreator:
+        CyTMRQuadTACSTopoCreator(TMRBoundaryConditions *,
+                                 TMRQuadStiffnessProperties,
+                                 TMRQuadForest * )
+        # Set the callback functions
+        void setSelfPointer(void *_self)
+        void setCreateElements(qcreateelements usr_func)
 
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):
