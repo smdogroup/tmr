@@ -354,7 +354,8 @@ void TMROctTACSTopoCreator::createElements( int order,
   MPI_Request *send_request = new MPI_Request[ nrecvs ];
 
   // Allocate space for the new weights
-  TMRIndexWeight *new_weights = new TMRIndexWeight[ nweights*send_ptr[mpi_size] ];
+  TMRIndexWeight *new_weights = 
+    new TMRIndexWeight[ nweights*send_ptr[mpi_size] ];
 
   // Loop over all the ranks and send 
   for ( int i = 0, j = 0; i < mpi_size; i++ ){
@@ -420,7 +421,8 @@ void TMROctTACSTopoCreator::createElements( int order,
 
   // Count up all the external nodes
   int num_ext = 0;
-  int max_ext_nodes = nweights*num_octs + dep_ptr[num_dep_nodes] + num_filter_ext;
+  int max_ext_nodes = nweights*num_octs + 
+    dep_ptr[num_dep_nodes] + num_filter_ext;
   int *ext_nodes = new int[ max_ext_nodes ];
 
   // Add the external nodes from the filter

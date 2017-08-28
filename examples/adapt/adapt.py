@@ -135,20 +135,25 @@ if comm.rank == 0:
 filename = os.path.splitext(args.forest_output)[0] + '%d.vtk'%(comm.rank)
 forest.writeForestToVTK(filename)
 
-# # Create the forests
-# forests = [ forest ]
-# t0 = MPI.Wtime()
-# assemblers = [ createTACS(comm, forest) ]
-# if comm.rank == 0:
-#     print 'TACS creation time ', MPI.Wtime() - t0
+# Create the forests
+forests = [ forest ]
+t0 = MPI.Wtime()
+assemblers = [ createTACS(comm, forest) ]
+if comm.rank == 0:
+    print 'TACS creation time ', MPI.Wtime() - t0
 
-# for i in xrange(nlevels):
-#     forests.append(forests[-1].coarsen())
-#     t0 = MPI.Wtime()
-#     forests[-1].balance(1)
-#     if comm.rank == 0:
-#         print 'Coarse balance time ', MPI.Wtime() - t0
-#     assemblers.append(createTACS(comm, forests[-1]))
+for i in xrange(nlevels):
+    forests.append(forests[-1].coarsen())
+    t0 = MPI.Wtime()
+    forests[-1].balance(1)
+    if comm.rank == 0:
+        print 'Coarse balance time ', MPI.Wtime() - t0
+    assemblers.append(createTACS(comm, forests[-1]))
 
-# # Create the multigrid object
-# mg = TMR.createMg(assemblers, forests)
+# Create the multigrid object
+mg = TMR.createMg(assemblers, forests)
+mat = mg.getMat()
+
+
+
+

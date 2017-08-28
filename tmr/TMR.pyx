@@ -489,7 +489,8 @@ cdef class CurveLofter:
             if bspline != NULL:
                crvs[i] = bspline
             else:
-               raise ValueError('CurveLofter: Lofting curves must be BsplineCurves')
+                errstr = 'CurveLofter: Lofting curves must be BsplineCurves'
+                raise ValueError(errstr)
         self.ptr = new TMRCurveLofter(crvs, ncurves)
         self.ptr.incref()
         free(crvs)
@@ -600,14 +601,26 @@ cdef class Model:
             verts.append(_init_Vertex(v[i]))
         return verts
 
-    def writeEdgeLoopsToTecplot(self, char *fname):
+    def writeModelToTecplot(self, char *fname):
         '''Write a representation of the edge loops to a file'''
         fp = open(fname, 'w')
         fp.write('Variables = x, y, z, tx, ty, tz\n')
 
+        verts = self.getVertices()
+        index = 0
+        for v in verts:
+            pt = v.evalPoint()
+            fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Vertex %d\"'%(
+                pt[0], pt[1], pt[2], index))
+            fp.write('Zone T = \"Vertex %d\"\n'%(index))
+            fp.write('%e %e %e 0 0 0\n'%(pt[0], pt[1], pt[2]))
+            index += 1
+
         faces = self.getFaces()
         index = 0
         for f in faces:
+            xav = np.zeros(3)
+            count = 0
             for k in range(f.getNumEdgeLoops()):
                 fp.write('Zone T = \"Face %d Loop %d\"\n'%(index, k))
 
@@ -629,11 +642,19 @@ cdef class Model:
 
                 for i in xrange(len(e)):
                     tx[i,:] = pts[i+1,:] - pts[i,:]
+                    xav[:] += 0.5*(pts[i+1,:] + pts[i,:])
+                    count += 1
                 
                 for i in xrange(len(e)+1):
                     fp.write('%e %e %e %e %e %e\n'%(
                         pts[i,0], pts[i,1], pts[i,2], 
                         tx[i,0], tx[i,1], tx[i,2]))
+
+            if count != 0:
+                xav /= count
+                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Face %d\"'%(
+                    xav[0], xav[1], xav[2], index))
+
             index += 1
         return
         
@@ -1130,7 +1151,6 @@ def LoadModel(char *filename, int print_lev=0):
    
 cdef class BoundaryConditions:
     cdef TMRBoundaryConditions* ptr
-
     def __cinit__(self):
         self.ptr = new TMRBoundaryConditions()
         self.ptr.incref()
@@ -1192,8 +1212,10 @@ def createMg(list assemblers, list forests):
     cdef TACSAssembler **assm = NULL
     cdef TMRQuadForest **forst = NULL
     cdef TACSMg *mg = NULL
-    
-    assert(len(assemblers) == len(forests))
+
+    if len(assemblers) != len(forests):
+        errstr = 'Number of Assembler and Forest objects must be equal'
+        raise ValueError(errstr)
     nlevels = len(assemblers)
     assm = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
     forst = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))    
