@@ -18,6 +18,7 @@ from cpython cimport PyObject, Py_INCREF
 
 # Import the TACS module
 from tacs.TACS cimport *
+from tacs.elements cimport *
 
 # Import the definitions
 from TMR cimport *
@@ -25,6 +26,42 @@ from TMR cimport *
 # Include the mpi4py header
 cdef extern from "mpi-compat.h":
     pass
+
+# Wrap interface for TACSTopoCreator
+cdef void _createelements( void *_self, int order, TMROctForest *forest,
+                           int num_elements, TACSElement** elements ):
+    pf = _init_OctForest(forest)
+    e = []
+    for i in range(num_elements):
+        e.append(_init_Element(elements[i]))
+    (<object>_self).createElements(order,pf,num_elements, e)
+    
+    return
+
+# Wrap the creator class
+cdef class pyTMROctTACSTopoCreator:
+    cdef CyTMROctTACSTopoCreator *this_ptr
+    def __init__(self, BoundaryConditions bcs,
+                 OctStiffnessProperties props, OctForest  filter,
+                 char* shell_attr=None, SolidShell shell=None):
+        cdef SolidShellWrapper *cshell = NULL
+        if shell:
+            cshell = shell.ptr
+        
+        self.this_ptr = new CyTMROctTACSTopoCreator(bcs.ptr,props.ptr, filter.ptr,
+                                                    shell_attr, cshell)
+        self.this_ptr.setSelfPointer(<void*>self)
+        self.this_ptr.setCreateElements(_createelements)
+        return
+
+    def __dealloc__(self):
+        if (self.this_ptr):
+            del self.this_ptr
+        return
+
+cdef class SolidShell:
+    cdef SolidShellWrapper *ptr
+                 
 
 # This wraps a C++ array with a numpy array for later useage
 cdef inplace_array_1d(int nptype, int dim1, void *data_ptr,

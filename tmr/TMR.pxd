@@ -311,13 +311,19 @@ cdef extern from "TMROctStiffness.h":
     cdef cppclass TMRStiffnessProperties:
         TMRStiffnessProperties()
         TacsScalar rho, E, nu, q
-        
-# cdef extern from "TMR_TACSTopoCreator.c":
-#     cdef cppclass TMROctTACSTopoCreator(TMROctTACSCreator):
-#         TMROctTACSTopoCreator(TMRBoundaryConditions*,
-#                               TMRStiffnessProperties,
-#                               TMROctForest*,const char*,
-#                               SolidShellWrapper*)
+
+cdef extern from "CyTMR_TACSTopoCreator.h":
+    # Define the callback types
+    ctypedef void (*createelements)(void *_self, int, TMROctForest*,
+                                    int, TACSElement**)
+    cppclass CyTMROctTACSTopoCreator:
+        CyTMROctTACSTopoCreator(TMRBoundaryConditions *,
+                                TMRStiffnessProperties,
+                                TMROctForest *,
+                                const char *,SolidShellWrapper * )
+        # Set the callback functions
+        void setSelfPointer(void *_self)
+        void setCreateElements(createelements usr_func)
 
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):
