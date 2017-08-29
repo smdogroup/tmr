@@ -14,7 +14,9 @@ endif
 CXX_OBJS = TMRTopoProblem.o \
 	TMROctStiffness.o \
 	TMR_TACSTopoCreator.o \
-	SolidShellWrapper.o
+	SolidShellWrapper.o \
+	CyTMR_TACSTopoCreator.o \
+	TMRQuadStiffness.o
 
 DIR=${TMR_DIR}/src/topology
 
