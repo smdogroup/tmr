@@ -5,43 +5,11 @@ import numpy as np
 import argparse
 import os
 
-def createTACS(comm, forest, order=2):
-    '''Create the TACSAssembler object from the forest'''
+class CreateMe(TMR.QuadCreator):
+    def __init__(self, bcs):
+        TMR.QuadCreator.__init__(bcs)
 
-    # Create the nodes
-    forest.createNodes(order)
-    forest.createDepNodeConn()
-
-    # Create the connectivity
-    quads = forest.createMeshConn()
-
-    # Set the connectivity
-    num_elems = quads.shape[0]
-
-    # Get the dependent node connectivity
-    ptr, conn, weights = forest.getDepNodeConn()
-    ndep = len(ptr)-1
-
-    # Get the owned node range
-    r = forest.getNodeRange()
-    owned_nodes = r[comm.rank+1] - r[comm.rank]
-    
-    # Create the TACS assembler object   
-    per_node = 6
-    assembler = TACS.Assembler.create(comm, per_node,
-                                      owned_nodes, num_elems, ndep)
-
-    # Set the connectivity
-    quad_ptr = np.arange(0, order*order*num_elems+1, order*order,
-                         dtype=np.intc)
-    assembler.setElementConnectivity(quads.flatten(), quad_ptr)
-
-    # Set the dependent node connectivity
-    assembler.setDependentNodes(ptr, conn, weights)
-
-    # Create the elements
-    elems = []
-    for i in xrange(num_elems):
+    def createElement(self, order, quad):
         # Set constitutive properties
         rho = 2500.0 # density, kg/m^3
         E = 70e9 # elastic modulus, Pa
@@ -52,21 +20,16 @@ def createTACS(comm, forest, order=2):
         max_thickness = 0.20
         thickness = 0.02
         
-        stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, thickness, i,
+        stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, 
+                                     thickness, quad.face,
                                      min_thickness, max_thickness)
+        element = None
         if order == 2:
             element = elements.MITCShell(2, stiff)
         elif order == 3:
             element = elements.MITCShell(3, stiff)
-        elems.append(element)
 
-    # Set the elements
-    assembler.setElements(elems)
-
-    # Initialize the assembler object
-    assembler.initialize()
-
-    return assembler
+        return element
 
 # Set the communicator
 comm = MPI.COMM_WORLD
@@ -135,10 +98,16 @@ if comm.rank == 0:
 filename = os.path.splitext(args.forest_output)[0] + '%d.vtk'%(comm.rank)
 forest.writeForestToVTK(filename)
 
+# Make the creator class
+bcs = TMR.BoundaryConditions()
+creator = CreateMe(bcs)
+
+order = 2
+
 # Create the forests
 forests = [ forest ]
 t0 = MPI.Wtime()
-assemblers = [ createTACS(comm, forest) ]
+assemblers = [ creator.createTACS(order, forest) ]
 if comm.rank == 0:
     print 'TACS creation time ', MPI.Wtime() - t0
 
@@ -148,11 +117,18 @@ for i in xrange(nlevels):
     forests[-1].balance(1)
     if comm.rank == 0:
         print 'Coarse balance time ', MPI.Wtime() - t0
-    assemblers.append(createTACS(comm, forests[-1]))
+    assemblers = [ creator.createTACS(order, forests[-1]) ]
 
 # Create the multigrid object
 mg = TMR.createMg(assemblers, forests)
 mat = mg.getMat()
+
+# Output for visualization 
+flag = (TACS.ToFH5.NODES |
+        TACS.ToFH5.DISPLACEMENTS |
+        TACS.ToFH5.STRAINS)
+f5 = TACS.ToFH5(assemblers[0], TACS.PY_SHELL, flag)
+f5.writeToFile('visualization.f5')
 
 
 

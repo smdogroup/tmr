@@ -943,6 +943,45 @@ cdef _init_QuadrantArray(TMRQuadrantArray *array):
     arr.ptr = array
     return arr
 
+cdef class Quadrant:
+    cdef TMRQuadrant quad
+    def __cinit__(self):
+        self.quad.x = 0
+        self.quad.y = 0
+        self.quad.level = 0
+        self.quad.face = 0
+        self.quad.tag = 0
+
+    property x:
+        def __get__(self):
+            return self.quad.x
+        def __set__(self, value):
+            self.quad.x = value
+
+    property y:
+        def __get__(self):
+            return self.quad.y
+        def __set__(self, value):
+            self.quad.y = value
+
+    property level:
+        def __get__(self):
+            return self.quad.level
+        def __set__(self, value):
+            self.quad.level = value
+
+    property face:
+        def __get__(self):
+            return self.quad.face
+        def __set__(self, value):
+            self.quad.face = value
+
+    property tag:
+        def __get__(self):
+            return self.quad.tag
+        def __set__(self, value):
+            self.quad.tag = value
+
 cdef class QuadForest:
     cdef TMRQuadForest *ptr
     def __cinit__(self, MPI.Comm comm=None):
@@ -1175,6 +1214,32 @@ cdef class BoundaryConditions:
                                           <TacsScalar*>bc_vals.data)
         return
 
+cdef TACSElement* _createQuadElement(void *_self, int order, 
+                                     TMRQuadrant *quad):
+    cdef TACSElement *elem = NULL
+    q = Quadrant()
+    q.quad.x = quad.x
+    q.quad.y = quad.y
+    q.quad.level = quad.level
+    q.quad.face = quad.face
+    q.quad.tag = quad.tag
+    e = (<object>_self).createElement(order, q)
+    elem = (<Element>e).ptr
+    return elem
+
+cdef class QuadCreator:
+    cdef TMRCyQuadCreator *ptr
+    def __cinit__(self, BoundaryConditions bcs):
+        self.ptr = new TMRCyQuadCreator(bcs.ptr)
+        self.ptr.setSelfPointer(<void*>self)
+        self.ptr.setCreateQuadElement(_createQuadElement)
+        return
+
+    def createTACS(self, int order, QuadForest forest):
+        cdef TACSAssembler *assembler = NULL
+        assembler = self.ptr.createTACS(order, forest.ptr)
+        return _init_Assembler(assembler)
+
 cdef class OctStiffnessProperties:
     cdef TMRStiffnessProperties ptr
     def __cinit__(self):
@@ -1212,7 +1277,6 @@ def createMg(list assemblers, list forests):
     cdef TACSAssembler **assm = NULL
     cdef TMRQuadForest **forst = NULL
     cdef TACSMg *mg = NULL
-
     if len(assemblers) != len(forests):
         errstr = 'Number of Assembler and Forest objects must be equal'
         raise ValueError(errstr)
@@ -1252,3 +1316,6 @@ def adjointRefine(Assembler coarse,
                             adjoint.ptr, forest.ptr, target_err,
                             min_refine, max_refine, &adj_corr)
     return ans, adj_corr
+
+
+

@@ -385,19 +385,19 @@ htarget = args.htarget
 mesh.mesh(htarget, opts=opts)
 mesh.writeToVTK('surface-mesh.vtk')
 
-# # Create a model from the mesh
-# print 'Creating model from mesh...'
-# model = mesh.createModelFromMesh()
+# Create a model from the mesh
+print 'Creating model from mesh...'
+model = mesh.createModelFromMesh()
 
-# # Create the corresponding mesh topology from the mesh-model 
-# topo = TMR.Topology(comm, model)
+# Create the corresponding mesh topology from the mesh-model 
+topo = TMR.Topology(comm, model)
 
-# # Create the quad forest and set the topology of the forest
-# print 'Creating TMRQuadForest...'
-# forest = TMR.QuadForest(comm)
-# forest.setTopology(topo)
+# Create the quad forest and set the topology of the forest
+print 'Creating TMRQuadForest...'
+forest = TMR.QuadForest(comm)
+forest.setTopology(topo)
 
-# # Create random trees and balance the mesh. Print the output file
-# forest.createRandomTrees(nrand=3, max_lev=3)
-# forest.balance(1)
-# forest.writeForestToVTK('forest-mesh%d.vtk'%(comm.rank))
+# Create random trees and balance the mesh. Print the output file
+forest.createRandomTrees(nrand=3, max_lev=3)
+forest.balance(1)
+forest.writeForestToVTK('forest-mesh%d.vtk'%(comm.rank))

@@ -24,6 +24,7 @@ htarget = args.htarget
 
 # Load the geometry model
 geo = TMR.LoadModel(filename)
+geo.writeModelToTecplot('tecplot_surfaces.dat')
 
 # Create a model by discarding the volumes
 verts = geo.getVertices()
