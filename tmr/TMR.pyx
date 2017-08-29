@@ -1117,6 +1117,53 @@ cdef _init_OctantArray(TMROctantArray *array):
     arr.ptr = array
     return arr
 
+cdef class Octant:
+    cdef TMROctant octant
+    def __cinit__(self):
+        self.octant.x = 0
+        self.octant.y = 0
+        self.octant.z = 0
+        self.octant.level = 0
+        self.octant.block = 0
+        self.octant.tag = 0
+
+    property x:
+        def __get__(self):
+            return self.octant.x
+        def __set__(self, value):
+            self.octant.x = value
+
+    property y:
+        def __get__(self):
+            return self.octant.y
+        def __set__(self, value):
+            self.octant.y = value
+
+    property z:
+        def __get__(self):
+            return self.octant.z
+        def __set__(self, value):
+            self.octant.z = value
+
+    property level:
+        def __get__(self):
+            return self.octant.level
+        def __set__(self, value):
+            self.octant.level = value
+
+    property block:
+        def __get__(self):
+            return self.octant.block
+        def __set__(self, value):
+            self.octant.block = value
+
+    property tag:
+        def __get__(self):
+            return self.octant.tag
+        def __set__(self, value):
+            self.octant.tag = value
+
+
 cdef class OctForest:
     cdef TMROctForest *ptr
     def __cinit__(self, MPI.Comm comm=None):
@@ -1224,8 +1271,11 @@ cdef TACSElement* _createQuadElement(void *_self, int order,
     q.quad.face = quad.face
     q.quad.tag = quad.tag
     e = (<object>_self).createElement(order, q)
-    elem = (<Element>e).ptr
-    return elem
+    if e is not None:
+        (<Element>e).ptr.incref()
+        elem = (<Element>e).ptr
+        return elem
+    return NULL
 
 cdef class QuadCreator:
     cdef TMRCyQuadCreator *ptr
@@ -1236,6 +1286,36 @@ cdef class QuadCreator:
         return
 
     def createTACS(self, int order, QuadForest forest):
+        cdef TACSAssembler *assembler = NULL
+        assembler = self.ptr.createTACS(order, forest.ptr)
+        return _init_Assembler(assembler)
+
+cdef TACSElement* _createOctElement(void *_self, int order, 
+                                    TMROctant *octant):
+    cdef TACSElement *elem = NULL
+    q = Octant()
+    q.octant.x = octant.x
+    q.octant.y = octant.y
+    q.octant.z = octant.z
+    q.octant.level = octant.level
+    q.octant.block = octant.block
+    q.octant.tag = octant.tag
+    e = (<object>_self).createElement(order, q)
+    if e is not None:
+        (<Element>e).ptr.incref()
+        elem = (<Element>e).ptr
+        return elem
+    return NULL
+
+cdef class OctCreator:
+    cdef TMRCyOctCreator *ptr
+    def __cinit__(self, BoundaryConditions bcs):
+        self.ptr = new TMRCyOctCreator(bcs.ptr)
+        self.ptr.setSelfPointer(<void*>self)
+        self.ptr.setCreateOctElement(_createOctElement)
+        return
+
+    def createTACS(self, int order, OctForest forest):
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(order, forest.ptr)
         return _init_Assembler(assembler)

@@ -89,6 +89,7 @@ forest.setTopology(topo)
 
 # Create random trees and balance the mesh. Print the output file
 nlevels = 2
+
 # forest.createTrees(nlevels)
 forest.createRandomTrees(nrand=10, min_lev=0, max_lev=7)
 t0 = MPI.Wtime()
@@ -102,6 +103,7 @@ forest.writeForestToVTK(filename)
 bcs = TMR.BoundaryConditions()
 creator = CreateMe(bcs)
 
+# Set the element order
 order = 2
 
 # Create the forests
@@ -117,7 +119,7 @@ for i in xrange(nlevels):
     forests[-1].balance(1)
     if comm.rank == 0:
         print 'Coarse balance time ', MPI.Wtime() - t0
-    assemblers = [ creator.createTACS(order, forests[-1]) ]
+    assemblers.append(creator.createTACS(order, forests[-1]))
 
 # Create the multigrid object
 mg = TMR.createMg(assemblers, forests)

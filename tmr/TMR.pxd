@@ -343,8 +343,9 @@ cdef extern from "TMR_RefinementTools.h":
                                  double target_err,
                                  int, int, TacsScalar*)
 
-cdef extern from "TMRCyQuadCreator.h":
+cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
+    ctypedef TACSElement* (*createoctelements)(void*, int, TMROctant*)
 
     cdef cppclass TMRCyQuadCreator(TMREntity):
         TMRCyQuadCreator(TMRBoundaryConditions*)
@@ -352,3 +353,10 @@ cdef extern from "TMRCyQuadCreator.h":
         void setCreateQuadElement( 
             TACSElement* (*createquadelements)(void*, int, TMRQuadrant*) )
         TACSAssembler *createTACS(int, TMRQuadForest*)
+
+    cdef cppclass TMRCyOctCreator(TMREntity):
+        TMRCyOctCreator(TMRBoundaryConditions*)
+        void setSelfPointer(void*)
+        void setCreateOctElement( 
+            TACSElement* (*createoctelements)(void*, int, TMROctant*) )
+        TACSAssembler *createTACS(int, TMROctForest*)
