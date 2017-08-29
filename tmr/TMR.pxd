@@ -320,7 +320,7 @@ cdef extern from "CyTMR_TACSTopoCreator.h":
     # Define the callback types
     ctypedef void (*ocreateelements)(void *_self, int, TMROctForest*,
                                      int, TACSElement**)
-    ctypedef void (*qcreateelements)(void *_self, int, TMROctForest*,
+    ctypedef void (*qcreateelements)(void *_self, int, TMRQuadForest*,
                                      int, TACSElement**)
     cppclass CyTMROctTACSTopoCreator:
         CyTMROctTACSTopoCreator(TMRBoundaryConditions *,

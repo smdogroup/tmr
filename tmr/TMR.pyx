@@ -55,7 +55,7 @@ cdef class pyTMROctTACSTopoCreator:
         return
 
     def __dealloc__(self):
-        if (self.this_ptr):
+        if self.this_ptr:
             del self.this_ptr
         return
 
@@ -87,7 +87,7 @@ cdef class pyTMRQuadTACSTopoCreator:
         return
 
     def __dealloc__(self):
-        if (self.this_ptr):
+        if self.this_ptr:
             del self.this_ptr
         return
 
