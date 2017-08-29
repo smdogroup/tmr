@@ -1163,7 +1163,6 @@ cdef class Octant:
         def __set__(self, value):
             self.octant.tag = value
 
-
 cdef class OctForest:
     cdef TMROctForest *ptr
     def __cinit__(self, MPI.Comm comm=None):
@@ -1281,9 +1280,13 @@ cdef class QuadCreator:
     cdef TMRCyQuadCreator *ptr
     def __cinit__(self, BoundaryConditions bcs):
         self.ptr = new TMRCyQuadCreator(bcs.ptr)
+        self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateQuadElement(_createQuadElement)
         return
+
+    def __dealloc__(self):
+        self.ptr.decref()
 
     def createTACS(self, int order, QuadForest forest):
         cdef TACSAssembler *assembler = NULL
@@ -1311,9 +1314,54 @@ cdef class OctCreator:
     cdef TMRCyOctCreator *ptr
     def __cinit__(self, BoundaryConditions bcs):
         self.ptr = new TMRCyOctCreator(bcs.ptr)
+        self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateOctElement(_createOctElement)
         return
+
+    def __dealloc__(self):
+        self.ptr.decref()
+
+    def createTACS(self, int order, OctForest forest):
+        cdef TACSAssembler *assembler = NULL
+        assembler = self.ptr.createTACS(order, forest.ptr)
+        return _init_Assembler(assembler)
+
+cdef TACSElement* _createOctTopoElement(void *_self, int order, 
+                                        TMROctant *octant,
+                                        TMRIndexWeight *weights,
+                                        int nweights):
+    cdef TACSElement *elem = NULL
+    q = Octant()
+    q.octant.x = octant.x
+    q.octant.y = octant.y
+    q.octant.z = octant.z
+    q.octant.level = octant.level
+    q.octant.block = octant.block
+    q.octant.tag = octant.tag
+    idx = []
+    wvals = []
+    for i in range(nweights):
+        idx.append(weights[i].index)
+        wvals.append(weights[i].weight)
+    e = (<object>_self).createElement(order, q, idx, wvals)
+    if e is not None:
+        (<Element>e).ptr.incref()
+        elem = (<Element>e).ptr
+        return elem
+    return NULL
+
+cdef class OctTopoCreator:
+    cdef TMRCyTopoOctCreator *ptr
+    def __cinit__(self, BoundaryConditions bcs, OctForest filt):
+        self.ptr = new TMRCyTopoOctCreator(bcs.ptr, filt.ptr)
+        self.ptr.incref()
+        self.ptr.setSelfPointer(<void*>self)
+        self.ptr.setCreateOctTopoElement(_createOctTopoElement)
+        return
+
+    def __dealloc__(self):
+        self.ptr.decref()
 
     def createTACS(self, int order, OctForest forest):
         cdef TACSAssembler *assembler = NULL

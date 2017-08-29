@@ -9,7 +9,6 @@
 class TMROctTACSTopoCreator : public TMROctTACSCreator {
  public:
   TMROctTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                         TMRStiffnessProperties _properties,
                          TMROctForest *_filter,
                          const char *shell_attr=NULL, 
                          SolidShellWrapper *_shell=NULL );
@@ -27,6 +26,12 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
                        int num_elements,
                        TACSElement **elements );
 
+  // Create the element
+  virtual TACSElement *createElement( int order, 
+                                      TMROctant *oct,
+                                      TMRIndexWeight *weights, 
+                                      int nweights ) = 0;
+
   // Get the underlying objects that define the filter
   void getForest( TMROctForest **filter );
   void getMap( TACSVarMap **_map );
@@ -36,9 +41,6 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
   // Compute the weights for a given point
   void computeWeights( TMROctant *oct, TMROctant *node,
                        TMRIndexWeight *welem );
-
-  // The stiffness properties
-  TMRStiffnessProperties properties;
 
   // The forest that defines the filter
   TMROctForest *filter;

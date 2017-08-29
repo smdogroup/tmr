@@ -96,8 +96,6 @@ t0 = MPI.Wtime()
 forest.balance(1)
 if comm.rank == 0:
     print 'Balance time ', MPI.Wtime() - t0
-filename = os.path.splitext(args.forest_output)[0] + '%d.vtk'%(comm.rank)
-forest.writeForestToVTK(filename)
 
 # Make the creator class
 bcs = TMR.BoundaryConditions()

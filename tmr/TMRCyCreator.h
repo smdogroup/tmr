@@ -2,6 +2,7 @@
 #define TMR_CY_CREATOR_H
 
 #include "TMR_TACSCreator.h"
+#include "TMR_TACSTopoCreator.h"
 
 /*
   This is a light-weight wrapper for creating elements in python
@@ -91,6 +92,39 @@ class TMRCyOctCreator : public TMROctTACSCreator {
  private:
   void *self;
   TACSElement* (*createoctelement)( void*, int, TMROctant* );
+};
+
+/*
+  Create a wrapper for topology optimization with a filter
+*/
+class TMRCyTopoOctCreator : public TMROctTACSTopoCreator {
+ public:
+  TMRCyTopoOctCreator( TMRBoundaryConditions *_bcs,
+                       TMROctForest *_filter ):
+  TMROctTACSTopoCreator(_bcs, _filter){}
+
+  void setSelfPointer( void *_self ){
+    self = _self;
+  }
+  void setCreateOctTopoElement( 
+    TACSElement* (*func)(void*, int, TMROctant*, TMRIndexWeight*, int) ){
+    createocttopoelement = func;
+  }
+
+  // Create the element
+  TACSElement *createElement( int order, 
+                              TMROctant *oct,
+                              TMRIndexWeight *weights, 
+                              int nweights ){
+    TACSElement *elem =
+      createocttopoelement(self, order, oct, weights, nweights);
+    return elem;
+  }
+
+ private:
+  void *self; // Pointer to the python-level object
+  TACSElement* (*createocttopoelement)( 
+    void*, int, TMROctant*, TMRIndexWeight *weights, int nweights );
 };
 
 #endif // TMR_CY_CREATOR_H

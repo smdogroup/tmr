@@ -14,7 +14,6 @@ static int compare_integers( const void *a, const void *b ){
   Set up a creator class for the given filter problem
 */
 TMROctTACSTopoCreator::TMROctTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                              TMRStiffnessProperties _props,
                                               TMROctForest *_filter,
                                               const char *_shell_attr,
                                               SolidShellWrapper *_shell ):
@@ -26,9 +25,6 @@ TMROctTACSCreator(_bcs){
   int mpi_rank;
   MPI_Comm comm = filter->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
-
-  // Set the material properties
-  properties = _props;
 
   // Create the nodes within the filter
   filter->createNodes(2);
@@ -491,19 +487,12 @@ void TMROctTACSTopoCreator::createElements( int order,
     weights[i].index = node;
   }
 
+  // Loop over the octants
+  octants->getArray(&octs, &num_octs);
   for ( int i = 0; i < num_octs; i++ ){
     // Allocate the stiffness object
-    SolidStiffness *stiff = 
-      new TMROctStiffness(&weights[nweights*i], nweights, 
-                          properties.rho, properties.E, properties.nu, 
-                          properties.q);
-    
-    if (order == 2){
-      elements[i] = new Solid<2>(stiff);
-    }
-    else {
-      elements[i] = new Solid<3>(stiff);
-    }
+    elements[i] = createElement(order, &octs[i], 
+                                &weights[nweights*i], nweights);
   }
 
   for ( int i = num_octs; i < num_elements; i++ ){

@@ -27,6 +27,10 @@ cdef extern from "TMRBase.h":
         double y
         double z
 
+    cdef cppclass TMRIndexWeight:
+        int index
+        double weight
+
     void TMRInitialize()
     void TMRFinalize()
 
@@ -311,13 +315,6 @@ cdef extern from "TMROctStiffness.h":
     cdef cppclass TMRStiffnessProperties:
         TMRStiffnessProperties()
         TacsScalar rho, E, nu, q
-        
-# cdef extern from "TMR_TACSTopoCreator.c":
-#     cdef cppclass TMROctTACSTopoCreator(TMROctTACSCreator):
-#         TMROctTACSTopoCreator(TMRBoundaryConditions*,
-#                               TMRStiffnessProperties,
-#                               TMROctForest*,const char*,
-#                               SolidShellWrapper*)
 
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):
@@ -346,6 +343,8 @@ cdef extern from "TMR_RefinementTools.h":
 cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
     ctypedef TACSElement* (*createoctelements)(void*, int, TMROctant*)
+    ctypedef TACSElement* (*createocttopoelements)(
+        void*, int, TMROctant*, TMRIndexWeight*, int)
 
     cdef cppclass TMRCyQuadCreator(TMREntity):
         TMRCyQuadCreator(TMRBoundaryConditions*)
@@ -359,4 +358,12 @@ cdef extern from "TMRCyCreator.h":
         void setSelfPointer(void*)
         void setCreateOctElement( 
             TACSElement* (*createoctelements)(void*, int, TMROctant*) )
+        TACSAssembler *createTACS(int, TMROctForest*)
+
+    cdef cppclass TMRCyTopoOctCreator(TMREntity):
+        TMRCyTopoOctCreator(TMRBoundaryConditions*, TMROctForest*)
+        void setSelfPointer(void*)
+        void setCreateOctTopoElement( 
+            TACSElement* (*createocttopoelements)(
+                void*, int, TMROctant*, TMRIndexWeight*, int))
         TACSAssembler *createTACS(int, TMROctForest*)
