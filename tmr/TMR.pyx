@@ -601,21 +601,42 @@ cdef class Model:
             verts.append(_init_Vertex(v[i]))
         return verts
 
-    def writeModelToTecplot(self, char *fname):
+    def writeModelToTecplot(self, char *fname, 
+                            vlabels=True, elabels=True, flabels=True):
         '''Write a representation of the edge loops to a file'''
         fp = open(fname, 'w')
         fp.write('Variables = x, y, z, tx, ty, tz\n')
 
+        # Write out the vertices
         verts = self.getVertices()
         index = 0
         for v in verts:
             pt = v.evalPoint()
-            fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Vertex %d\"'%(
-                pt[0], pt[1], pt[2], index))
+            if vlabels:
+                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Vertex %d\"\n'%(
+                    pt[0], pt[1], pt[2], index))
             fp.write('Zone T = \"Vertex %d\"\n'%(index))
             fp.write('%e %e %e 0 0 0\n'%(pt[0], pt[1], pt[2]))
             index += 1
 
+        # Write out the edges
+        edges = self.getEdges()
+        index = 0
+        for e in edges:
+            v1, v2 = e.getVertices()
+            pt1 = v1.evalPoint()
+            pt2 = v2.evalPoint()
+            if elabels:
+                pt = 0.5*(pt1 + pt2)
+                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Edge %d\"\n'%(
+                    pt[0], pt[1], pt[2], index))
+            fp.write('Zone T = \"Edge %d\"\n'%(index))
+            fp.write('%e %e %e  %e %e %e\n'%(pt1[0], pt1[1], pt1[2],
+                pt2[0] - pt1[0], pt2[1] - pt1[1], pt2[2] - pt1[2]))
+            fp.write('%e %e %e 0 0 0\n'%(pt2[0], pt2[1], pt2[2]))
+            index += 1
+
+        # Write out the faces
         faces = self.getFaces()
         index = 0
         for f in faces:
@@ -650,9 +671,9 @@ cdef class Model:
                         pts[i,0], pts[i,1], pts[i,2], 
                         tx[i,0], tx[i,1], tx[i,2]))
 
-            if count != 0:
+            if count != 0 and flabels:
                 xav /= count
-                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Face %d\"'%(
+                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Face %d\"\n'%(
                     xav[0], xav[1], xav[2], index))
 
             index += 1
@@ -1246,18 +1267,33 @@ cdef class BoundaryConditions:
     def getNumBoundaryConditions(self):
         return self.ptr.getNumBoundaryConditions()
    
-    def addBoundaryCondition(self,  char* attr,
-                             int num_bc,
-                             np.ndarray[int, ndim=1, mode='c'] bc_nums,
-                             np.ndarray[TacsScalar, ndim=1, mode='c'] bc_vals):
-        if bc_vals is None:
-            self.ptr.addBoundaryCondition(attr, num_bc,
-                                          <int*>bc_nums.data,
-                                          NULL)
+    def addBoundaryCondition(self, char* attr, 
+                             list bc_nums=None, list bc_vals=None):
+        cdef int *nums = NULL
+        cdef double *vals = NULL
+        cdef int num_bcs = 0
+        if bc_nums is not None and bc_vals is not None:
+            if len(bc_nums) != len(bc_vals):
+                errstr = 'Boundary condition lists must be the same length'
+                raise ValueError(errstr)
+            num_bcs = len(bc_nums)
+            nums = <int*>malloc(num_bcs*sizeof(int))
+            vals = <double*>malloc(num_bcs*sizeof(double))
+            for i in range(len(bc_nums)):
+                nums[i] = <int>bc_nums[i]
+                vals[i] = <double>bc_vals[i]
+            self.ptr.addBoundaryCondition(attr, num_bcs, nums, vals)
+            free(nums)
+            free(vals)
+        elif bc_nums is not None:
+            num_bcs = len(bc_nums)
+            nums = <int*>malloc(num_bcs*sizeof(int))
+            for i in range(len(bc_nums)):
+                nums[i] = <int>bc_nums[i]
+            self.ptr.addBoundaryCondition(attr, num_bcs, nums, NULL)
+            free(nums)
         else:
-            self.ptr.addBoundaryCondition(attr, num_bc,
-                                          <int*>bc_nums.data,
-                                          <TacsScalar*>bc_vals.data)
+            self.ptr.addBoundaryCondition(attr, 0, NULL, NULL)
         return
 
 cdef TACSElement* _createQuadElement(void *_self, int order, 

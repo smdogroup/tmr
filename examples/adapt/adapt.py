@@ -16,9 +16,9 @@ class CreateMe(TMR.QuadCreator):
         nu = 0.3 # poisson's ratio
         kcorr = 5.0 / 6.0 # shear correction factor
         ys = 350e6 # yield stress, Pa
-        min_thickness = 0.002
-        max_thickness = 0.20
-        thickness = 0.02
+        min_thickness = 0.2
+        max_thickness = 1.0
+        thickness = 10.0
         
         stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, 
                                      thickness, quad.face,
@@ -37,11 +37,13 @@ comm = MPI.COMM_WORLD
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--htarget', type=float, default=10.0)
-p.add_argument('--filename', type=str, default=None, help='STEP file name')
+p.add_argument('--filename', type=str, default='wingbox_solid1.stp', 
+               help='STEP file name')
 p.add_argument('--output', type=str, default='surface-mesh.vtk',
                help='output file name')
 p.add_argument('--forest_output', type=str, default='forest-mesh.vtk',
                help='forest output file name')
+p.add_argument('--order', type=int, default=3, help='mesh order = 2 or 3')
 args = p.parse_args()
 
 # Get the value of the filename
@@ -60,6 +62,15 @@ verts = geo.getVertices()
 edges = geo.getEdges()
 faces = geo.getFaces()
 geo = TMR.Model(verts, edges, faces)
+
+geo.writeModelToTecplot('model.dat')
+
+# Set the names of the geometric objects that will be fixed
+faces[28].setAttribute('fixed')
+for index in [67, 72, 74, 75]:
+    edges[index].setAttribute('fixed')
+for index in [44, 46, 47, 45]:
+    verts[index].setAttribute('fixed')
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -87,41 +98,63 @@ topo = TMR.Topology(comm, model)
 forest = TMR.QuadForest(comm)
 forest.setTopology(topo)
 
-# Create random trees and balance the mesh. Print the output file
-nlevels = 2
+# Set the element order
+order = args.order
 
-# forest.createTrees(nlevels)
-forest.createRandomTrees(nrand=10, min_lev=0, max_lev=7)
-t0 = MPI.Wtime()
+# Create random trees and balance the mesh. Print the output file
+if order == 3:
+    nlevels = 3
+elif order == 2:
+    nlevels = 4
+
+# Create the forest
+forest.createTrees(nlevels)
 forest.balance(1)
-if comm.rank == 0:
-    print 'Balance time ', MPI.Wtime() - t0
 
 # Make the creator class
 bcs = TMR.BoundaryConditions()
+bcs.addBoundaryCondition('fixed')
 creator = CreateMe(bcs)
-
-# Set the element order
-order = 2
 
 # Create the forests
 forests = [ forest ]
-t0 = MPI.Wtime()
 assemblers = [ creator.createTACS(order, forest) ]
-if comm.rank == 0:
-    print 'TACS creation time ', MPI.Wtime() - t0
+
+if order == 3:
+    order = 2
+    forests.append(forests[-1].duplicate())
+    forests[-1].balance(1)
+    assemblers.append(creator.createTACS(order, forests[-1]))
 
 for i in xrange(nlevels):
     forests.append(forests[-1].coarsen())
-    t0 = MPI.Wtime()
     forests[-1].balance(1)
-    if comm.rank == 0:
-        print 'Coarse balance time ', MPI.Wtime() - t0
     assemblers.append(creator.createTACS(order, forests[-1]))
 
 # Create the multigrid object
 mg = TMR.createMg(assemblers, forests)
-mat = mg.getMat()
+
+# Create a solution vector
+ans = assemblers[0].createVec()
+res = assemblers[0].createVec()
+alpha = 1.0
+beta = 0.0
+gamma = 0.0
+mg.assembleJacobian(alpha, beta, gamma, res)
+
+# Factor the preconditioner
+mg.factor()
+
+# Set up a arbitrary load
+v = res.getArray()
+v[2::6] += 1.0
+assemblers[0].applyBCs(res)
+
+subspace = 100
+gmres = TACS.KSM(mg.getMat(), mg, subspace)
+gmres.setMonitor(comm, 'GMRES', 1)
+gmres.solve(res, ans)
+assemblers[0].setVariables(ans)
 
 # Output for visualization 
 flag = (TACS.ToFH5.NODES |

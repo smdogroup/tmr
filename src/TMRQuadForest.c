@@ -3006,7 +3006,8 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
   returns:
   list:   the nodes matching the specified attribute
 */
-TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
+TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr,
+                                                        int intersect ){
   if (!topo){
     return NULL;
   }
@@ -3030,29 +3031,65 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr ){
     int fx = (fx0 || array[i].x == hmax-1);
     int fy = (fy0 || array[i].y == hmax-1);
 
-    if (fx && fy){
-      // This node lies on a corner
-      TMRVertex *vert;
-      int corner_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2);
-      int vert_num = face_conn[4*array[i].face + corner_index];
-      topo->getVertex(vert_num, &vert);
-      const char *vert_attr = vert->getAttribute();
-      if (vert_attr && strcmp(vert_attr, attr) == 0){
-        queue->push(&array[i]);
+    if (intersect){
+      if (fx && fy){
+        // This node lies on a corner
+        TMRVertex *vert;
+        int corner_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2);
+        int vert_num = face_conn[4*array[i].face + corner_index];
+        topo->getVertex(vert_num, &vert);
+        const char *vert_attr = vert->getAttribute();
+        if (vert_attr && strcmp(vert_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
       }
-    }
-    else if (fx || fy){
-      // This node lies on an edge
-      TMREdge *edge;
-      int edge_index = fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3);
-      int edge_num = face_edge_conn[4*array[i].face + edge_index];
-      topo->getEdge(edge_num, &edge);
-      const char *edge_attr = edge->getAttribute();
-      if (edge_attr && strcmp(edge_attr, attr) == 0){
-        queue->push(&array[i]);
+      else if (fx || fy){
+        // This node lies on an edge
+        TMREdge *edge;
+        int edge_index = fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3);
+        int edge_num = face_edge_conn[4*array[i].face + edge_index];
+        topo->getEdge(edge_num, &edge);
+        const char *edge_attr = edge->getAttribute();
+        if (edge_attr && strcmp(edge_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
+      }
+      else {
+        // This node lies on the face
+        TMRFace *face;
+        topo->getFace(array[i].face, &face);  
+        const char *face_attr = face->getAttribute();
+        if (face_attr && strcmp(face_attr, attr) == 0){
+          queue->push(&array[i]);
+        }
       }
     }
     else {
+      if (fx && fy){
+        // This node lies on a corner
+        TMRVertex *vert;
+        int corner_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2);
+        int vert_num = face_conn[4*array[i].face + corner_index];
+        topo->getVertex(vert_num, &vert);
+        const char *vert_attr = vert->getAttribute();
+        if (vert_attr && strcmp(vert_attr, attr) == 0){
+          queue->push(&array[i]);
+          continue;
+        }
+      }
+      if (fx || fy){
+        // This node lies on an edge
+        TMREdge *edge;
+        int edge_index = fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3);
+        int edge_num = face_edge_conn[4*array[i].face + edge_index];
+        topo->getEdge(edge_num, &edge);
+        const char *edge_attr = edge->getAttribute();
+        if (edge_attr && strcmp(edge_attr, attr) == 0){
+          queue->push(&array[i]);
+          continue;
+        }
+      }
+      
       // This node lies on the face
       TMRFace *face;
       topo->getFace(array[i].face, &face);  
