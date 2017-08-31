@@ -1456,7 +1456,7 @@ cdef class OctStiffnessProperties:
 
 cdef class OctStiffness(SolidStiff):
     def __cinit__(self, TacsScalar rho, TacsScalar E, TacsScalar nu,
-                  list weights=None, list index=None, double q=5.0):
+                  list index=None, list weights=None, double q=5.0):
         cdef TMRIndexWeight *w = NULL
         cdef int nw = 0
         self.ptr = NULL
@@ -1488,21 +1488,40 @@ cdef class OctStiffness(SolidStiff):
 def createMg(list assemblers, list forests):
     cdef int nlevels = 0
     cdef TACSAssembler **assm = NULL
-    cdef TMRQuadForest **forst = NULL
+    cdef TMRQuadForest **qforest = NULL
+    cdef TMROctForest **oforest = NULL
     cdef TACSMg *mg = NULL
+    cdef int isqforest = 0
     if len(assemblers) != len(forests):
         errstr = 'Number of Assembler and Forest objects must be equal'
         raise ValueError(errstr)
     nlevels = len(assemblers)
-    assm = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
-    forst = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))    
+
     for i in range(nlevels):
-        assm[i] = (<Assembler>assemblers[i]).ptr
-        forst[i] = (<QuadForest>forests[i]).ptr
-    TMR_CreateTACSMg(nlevels, assm, forst, &mg)
+        if isinstance(forests[i], QuadForest):
+            isqforest = 1
+        elif isinstance(forests[i], OctForest):
+            isqforest = 0
+
+    assm = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))    
+    if isqforest:
+        qforest = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))    
+        for i in range(nlevels):
+            assm[i] = (<Assembler>assemblers[i]).ptr
+            qforest[i] = (<QuadForest>forests[i]).ptr
+        TMR_CreateTACSMg(nlevels, assm, qforest, &mg)
+        free(qforest)
+    else:
+        oforest = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))    
+        for i in range(nlevels):
+            assm[i] = (<Assembler>assemblers[i]).ptr
+            oforest[i] = (<OctForest>forests[i]).ptr
+        TMR_CreateTACSMg(nlevels, assm, oforest, &mg)
+        free(oforest)
     free(assm)
-    free(forst)
-    return _init_Pc(mg)
+    if mg != NULL:
+        return _init_Pc(mg)
+    return None
 
 def strainEnergyRefine(Assembler assembler,
                        QuadForest forest,
@@ -1671,7 +1690,4 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.setIterationCounter(count)
         return
-
-    #    void setInitDesignVars(ParOptVec*)
-    #    ParOptVec* createDesignVec()
 
