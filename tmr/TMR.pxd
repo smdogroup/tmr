@@ -380,10 +380,6 @@ cdef extern from "TMRCyCreator.h":
 
 
 cdef extern from "TMRTopoProblem.h":
-    cdef cppclass ParOptBVecWrap(ParOptVec):
-        ParOptBVecWrap( TACSBVec *_vec )
-        TACSBVec *vec
-
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(int, TACSAssembler**, TMROctForest**, 
                        TACSVarMap**, TACSBVecIndices**, TACSMg*)

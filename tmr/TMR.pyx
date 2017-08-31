@@ -1457,7 +1457,7 @@ cdef class OctStiffnessProperties:
 cdef class OctStiffness(SolidStiff):
     def __cinit__(self, TacsScalar rho, TacsScalar E, TacsScalar nu,
                   list weights=None, list index=None, double q=5.0):
-        cdef TMRIndexWeight w[8]
+        cdef TMRIndexWeight *w = NULL
         cdef int nw = 0
         self.ptr = NULL
         if weights is None or index is None:
@@ -1474,6 +1474,7 @@ cdef class OctStiffness(SolidStiff):
 
         # Extract the weights
         nw = len(weights)
+        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
         for i in range(nw):
             w[i].weight = <double>weights[i]
             w[i].index = <int>index[i]
@@ -1481,6 +1482,8 @@ cdef class OctStiffness(SolidStiff):
         # Create the constitutive object
         self.ptr = new TMROctStiffness(w, nw, rho, E, nu, q)
         self.ptr.incref()
+        free(w)
+        return
 
 def createMg(list assemblers, list forests):
     cdef int nlevels = 0
