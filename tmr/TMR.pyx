@@ -1568,7 +1568,7 @@ cdef class TopoProblem(pyParOptProblemBase):
 
         # Check for a multigrid preconditioner
         mg = _dynamicTACSMg(pc.ptr)
-        if mg != NULL:
+        if mg == NULL:
             raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
         nlevels = len(assemblers)

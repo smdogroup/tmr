@@ -1,7 +1,7 @@
 from mpi4py import MPI
 from tmr import TMR
 from paropt import ParOpt
-from tacs import TACS, elements, constitutive
+from tacs import TACS, elements, constitutive, functions
 import numpy as np
 import argparse
 import os
@@ -15,7 +15,8 @@ class CreateMe(TMR.OctTopoCreator):
         rho = 2600.0
         E = 70e9
         nu = 0.3
-        elem = TMR.OctStiffness(rho, E, nu, index, weights, q=5.0)
+        stiff = TMR.OctStiffness(rho, E, nu, index, weights, q=5.0)
+        elem = elements.Solid(2, stiff)
         return elem
 
 comm = MPI.COMM_WORLD
@@ -67,7 +68,7 @@ varmaps = []
 vecindices = []
 
 # Create the trees, rebalance the elements and repartition
-nlevels = 2
+nlevels = 1
 order = 2
 forest.createTrees(nlevels)
 forest.balance(1)
@@ -106,4 +107,21 @@ for i in xrange(nlevels):
 mg = TMR.createMg(assemblers, forests)
 
 # Create the topology optimization problem
-problem = TopoProblem(assemblers, filters, varmaps, vecindices, mg)
+problem = TMR.TopoProblem(assemblers, filters, varmaps, vecindices, mg)
+
+force = assemblers[0].createVec()
+force.getArray()[::] = 1.0
+assemblers[0].applyBCs(force)
+forces = [force]
+
+problem.setLoadCases(forces)
+funcs = [functions.StructuralMass(assemblers[0])]
+m_fixed = 10.0
+problem.addConstraints(0, funcs, [-m_fixed], [1.0])
+problem.setObjective([1.0])
+problem.initialize()
+problem.setPrefix('')
+
+max_bfgs = 20
+opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
+opt.optimize()

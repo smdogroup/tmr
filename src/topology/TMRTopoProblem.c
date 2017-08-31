@@ -322,6 +322,7 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
 
   num_load_cases = _num_load_cases;
   forces = new TACSBVec*[ num_load_cases ];
+  vars = new TACSBVec*[ num_load_cases ];
   for ( int i = 0; i < num_load_cases; i++ ){
     forces[i] = _forces[i];
     vars[i] = tacs[0]->createVec();
@@ -954,16 +955,18 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
   int var_offset = 0;
   double cutoff = 0.25;
 
-  // Write out the file at a cut off of 0.25
-  char *filename = new char[ strlen(prefix) + 100 ];
-  sprintf(filename, "%s/levelset025_binary%04d.bstl", prefix, iter_count);
-  TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
-
-  // Write out the file at a cutoff of 0.5
-  cutoff = 0.5;
-  sprintf(filename, "%s/levelset05_binary%04d.bstl", prefix, iter_count);
-  TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
-  delete [] filename;
+  if (prefix){
+    // Write out the file at a cut off of 0.25
+    char *filename = new char[ strlen(prefix) + 100 ];
+    sprintf(filename, "%s/levelset025_binary%04d.bstl", prefix, iter_count);
+    TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
+    
+    // Write out the file at a cutoff of 0.5
+    cutoff = 0.5;
+    sprintf(filename, "%s/levelset05_binary%04d.bstl", prefix, iter_count);
+    TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
+    delete [] filename;
+  }
 
   // Update the iteration count
   iter_count++;
