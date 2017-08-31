@@ -5,6 +5,7 @@ from subprocess import check_output
 import numpy
 import mpi4py
 import tacs
+import paropt
 
 # Import distutils
 from setuptools import setup
@@ -66,15 +67,22 @@ else:
 default_ext_inc = ['extern/blossom5-v2.05.src']
 inc_dirs.extend(get_global_dir(default_ext_inc))
 
-# Add the numpy/mpi4py directories
+# Add the numpy/mpi4py/tacs/paropt include directories
 inc_dirs.extend([numpy.get_include(), mpi4py.get_include()])
 inc_dirs.extend(tacs.get_include())
 inc_dirs.extend(tacs.get_cython_include())
+inc_dirs.extend(paropt.get_include())
+inc_dirs.extend(paropt.get_cython_include())
 
 # Add the TACS libraries
 tacs_lib_dirs, tacs_libs = tacs.get_libraries()
 lib_dirs.extend(tacs_lib_dirs)
 libs.extend(tacs_libs)
+
+# Add the ParOpt libraries
+paropt_lib_dirs, paropt_libs = paropt.get_libraries()
+lib_dirs.extend(paropt_lib_dirs)
+libs.extend(paropt_libs)
 
 # Add tmr/lib as a runtime directory
 runtime_lib_dirs = get_global_dir(['lib'])
