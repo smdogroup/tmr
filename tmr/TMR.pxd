@@ -10,7 +10,9 @@ cimport numpy as np
 import numpy as np
 
 # Import TACS
+from paropt.ParOpt cimport *
 from tacs.TACS cimport *
+from tacs.constitutive cimport *
 
 cdef extern from "<stdint.h>":
     ctypedef signed int int32_t
@@ -157,6 +159,7 @@ cdef extern from "":
     void _deleteMe "delete [] "(int *array)
     TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
     TMREdgeFromFace* _dynamicEdgeFromFace "dynamic_cast<TMREdgeFromFace*>"(TMREdge*)
+    TMRTopoProblem* _dynamicTopoProblem "dynamic_cast<TMRTopoProblem*>"(ParOptProblem*)
  
 cdef extern from "TMRMesh.h":
     cdef cppclass TMRElementFeatureSize(TMREntity):
@@ -316,6 +319,10 @@ cdef extern from "TMROctStiffness.h":
         TMRStiffnessProperties()
         TacsScalar rho, E, nu, q
 
+    cdef cppclass TMROctStiffness(SolidStiffness):
+        TMROctStiffness(TMRIndexWeight*, int, TacsScalar, TacsScalar,
+                        TacsScalar, double)
+
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):
         pass
@@ -367,3 +374,27 @@ cdef extern from "TMRCyCreator.h":
             TACSElement* (*createocttopoelements)(
                 void*, int, TMROctant*, TMRIndexWeight*, int))
         TACSAssembler *createTACS(int, TMROctForest*)
+        void getFilter(TMROctForest**)
+        void getMap(TACSVarMap**)
+        void getIndices(TACSBVecIndices**)
+
+
+cdef extern from "TMRTopoProblem.h":
+    cdef cppclass ParOptBVecWrap(ParOptVec):
+        ParOptBVecWrap( TACSBVec *_vec )
+        TACSBVec *vec
+
+    cdef cppclass TMRTopoProblem(ParOptProblem):
+        TMRTopoProblem(int, TACSAssembler**, TMROctForest**, 
+                       TACSVarMap**, TACSBVecIndices**, TACSMg*)
+        void setLoadCases(TACSBVec**, int)
+        int getNumLoadCases()
+        void addConstraints(int, TACSFunction**,
+                            const TacsScalar*, const TacsScalar*, int)
+        void setObjective(const TacsScalar*)
+        void initialize()
+        void setPrefix(const char*)
+        void setInitDesignVars(ParOptVec*)
+        void setIterationCounter(int)
+        ParOptVec* createDesignVec()
+

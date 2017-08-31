@@ -66,7 +66,7 @@ TMROctTACSTopoCreator::~TMROctTACSTopoCreator(){
 }
 
 // Get the underlying information about the
-void TMROctTACSTopoCreator::getForest( TMROctForest **_filter ){
+void TMROctTACSTopoCreator::getFilter( TMROctForest **_filter ){
   *_filter = filter;
 }
 

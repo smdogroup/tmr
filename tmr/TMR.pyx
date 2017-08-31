@@ -16,8 +16,11 @@ from libc.stdlib cimport malloc, free
 # Import C methods for python
 from cpython cimport PyObject, Py_INCREF
 
-# Import the TACS module
+# Import TACS and ParOpt
 from tacs.TACS cimport *
+from tacs.constitutive cimport *
+from tacs.functions cimport *
+from paropt.ParOpt cimport *
 
 # Import the definitions
 from TMR cimport *
@@ -1404,6 +1407,21 @@ cdef class OctTopoCreator:
         assembler = self.ptr.createTACS(order, forest.ptr)
         return _init_Assembler(assembler)
 
+    def getFilter(self):
+        cdef TMROctForest *filtr = NULL
+        self.ptr.getFilter(&filtr)
+        return _init_OctForest(filtr)
+
+    def getMap(self):
+        cdef TACSVarMap *vmap = NULL
+        self.ptr.getMap(&vmap)
+        return _init_VarMap(vmap)
+
+    def getIndices(self):
+        cdef TACSBVecIndices *indices = NULL
+        self.ptr.getIndices(&indices)
+        return _init_VecIndices(indices)
+
 cdef class OctStiffnessProperties:
     cdef TMRStiffnessProperties ptr
     def __cinit__(self):
@@ -1435,6 +1453,34 @@ cdef class OctStiffnessProperties:
             return self.ptr.q
         def __set__(self,value):
             self.ptr.q = value
+
+cdef class OctStiffness(SolidStiff):
+    def __cinit__(self, TacsScalar rho, TacsScalar E, TacsScalar nu,
+                  list weights=None, list index=None, double q=5.0):
+        cdef TMRIndexWeight w[8]
+        cdef int nw = 0
+        self.ptr = NULL
+        if weights is None or index is None:
+            errmsg = 'Must define weights and indices'
+            raise ValueError(errmsg)
+        if len(weights) != len(index):
+            errmsg = 'Weights and index list lengths must be the same'
+            raise ValueError(errmsg)
+
+        # Check that the lengths are less than 8
+        if len(weights) > 8:
+            errmsg = 'Weight/index lists too long > 8'
+            raise ValueError(errmsg)
+
+        # Extract the weights
+        nw = len(weights)
+        for i in range(nw):
+            w[i].weight = <double>weights[i]
+            w[i].index = <int>index[i]
+
+        # Create the constitutive object
+        self.ptr = new TMROctStiffness(w, nw, rho, E, nu, q)
+        self.ptr.incref()
 
 def createMg(list assemblers, list forests):
     cdef int nlevels = 0
@@ -1481,5 +1527,148 @@ def adjointRefine(Assembler coarse,
                             min_refine, max_refine, &adj_corr)
     return ans, adj_corr
 
+cdef class TopoProblem(pyParOptProblemBase):
+    def __cinit__(self, list assemblers, list filters, 
+                  list varmaps, list varindices, Pc pc):
+        cdef int nlevels = 0
+        cdef TACSAssembler **assemb = NULL
+        cdef TMROctForest **filtr = NULL
+        cdef TACSVarMap **vmaps = NULL
+        cdef TACSBVecIndices **vindex = NULL
+        cdef TACSMg *mg = NULL
 
+        # Check for the sizes of the arrays
+        if (len(assemblers) != len(filters) or 
+            len(assemblers) != len(varmaps) or
+            len(assemblers) != len(varindices)):
+            errmsg = 'TopoProblem must have equal number of objects in lists'
+            raise ValueError(errmsg)
+
+        # Check for a multigrid preconditioner
+        mg = _dynamicTACSMg(pc.ptr)
+        if mg != NULL:
+            raise ValueError('TopoProblem requires a TACSMg preconditioner')
+
+        nlevels = len(assemblers)
+        assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
+        filtr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
+        vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
+        vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
+
+        for i in range(nlevels):
+            assemb[i] = (<Assembler>assemblers[i]).ptr
+            filtr[i] = (<OctForest>filters[i]).ptr
+            vmaps[i] = (<VarMap>varmaps[i]).ptr
+            vindex[i] = (<VecIndices>varindices[i]).ptr
+
+        self.ptr = new TMRTopoProblem(nlevels, assemb, filtr, 
+                                      vmaps, vindex, mg)
+        free(assemb)
+        free(filtr)
+        free(vmaps)
+        free(vindex)
+        return
+
+    def setLoadCases(self, list forces):
+        cdef TACSBVec **f = NULL
+        cdef int nforces = len(forces)
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        f = <TACSBVec**>malloc(nforces*sizeof(TACSBVec*))
+        for i in range(nforces):
+            f[i] = (<Vec>forces[i]).ptr
+        prob.setLoadCases(f, nforces)
+        free(f)
+        return
+
+    def getNumLoadCases(self):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        return prob.getNumLoadCases()
+
+    def addConstraints(self, int case, list funcs, list offset, list scale):
+        cdef int nfuncs = 0
+        cdef TacsScalar *_offset = NULL
+        cdef TacsScalar *_scale = NULL
+        cdef TACSFunction **f = NULL
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        if case < 0 or case >= prob.getNumLoadCases():
+            errmsg = 'Load case out of expected range'
+            raise ValueError(errmsg)
+        if len(funcs) != len(offset) or len(funcs) != len(scale):
+            errmsg = 'Expected equal function, offset and scale counts'
+            raise ValueError(errmsg)
+
+        nfuncs = len(funcs)
+        f = <TACSFunction**>malloc(nfuncs*sizeof(TACSFunction*))
+        _offset = <TacsScalar*>malloc(nfuncs*sizeof(TacsScalar))
+        _scale = <TacsScalar*>malloc(nfuncs*sizeof(TacsScalar))
+        for i in range(nfuncs):
+            f[i] = (<Function>funcs[i]).ptr
+            _offset[i] = <TacsScalar>offset[i]
+            _scale[i] = <TacsScalar>scale[i]
+        prob.addConstraints(case, f, _offset, _scale, nfuncs)
+        free(f)
+        free(_offset)
+        free(_scale)
+        return
+
+    def setObjective(self, list weights):
+        cdef int lenw = 0
+        cdef TacsScalar *w = NULL
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        lenw = len(weights)
+        if lenw != prob.getNumLoadCases():
+            errmsg = 'Incorrect number of weights'
+            raise ValueError(errmsg)
+        w = <TacsScalar*>malloc(lenw*sizeof(TacsScalar))
+        for i in range(lenw):
+            w[i] = weights[i]
+        prob.setObjective(w)
+        free(w)
+        return
+
+    def initialize(self):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.initialize()
+        return
+
+    def setPrefix(self, char *prefix):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.setPrefix(prefix)
+        return
+
+    def setIterationCounter(self, int count):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.setIterationCounter(count)
+        return
+
+    #    void setInitDesignVars(ParOptVec*)
+    #    ParOptVec* createDesignVec()
 

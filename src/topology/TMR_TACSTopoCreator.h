@@ -33,7 +33,7 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
                                       int nweights ) = 0;
 
   // Get the underlying objects that define the filter
-  void getForest( TMROctForest **filter );
+  void getFilter( TMROctForest **filter );
   void getMap( TACSVarMap **_map );
   void getIndices( TACSBVecIndices **_indices );  
 

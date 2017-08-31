@@ -1,8 +1,6 @@
 #ifndef TMR_TOPO_PROBLEM_H
 #define TMR_TOPO_PROBLEM_H
 
-#ifdef TMR_HAS_PAROPT
-
 #include "ParOpt.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
@@ -40,8 +38,6 @@ class ParOptBVecWrap : public ParOptVec {
 */
 class TMRTopoProblem : public ParOptProblem {
  public:
-  static const int MAX_NUM_LEVELS = 10;
-
   // Create the topology optimization object
   // ---------------------------------------
   TMRTopoProblem( int _nlevels, 
@@ -49,10 +45,35 @@ class TMRTopoProblem : public ParOptProblem {
                   TMROctForest *_filter[], 
                   TACSVarMap *_filter_maps[],
                   TACSBVecIndices *_filter_indices[],
-                  TACSMg *_mg,
-                  double _target_mass,
-                  const char *_prefix );
+                  TACSMg *_mg );
   ~TMRTopoProblem();
+
+  // Set the load cases - note that this destroys internal information stored
+  // in the load case data associated with the constraints.
+  // ------------------------------------------------------------------------
+  void setLoadCases( TACSBVec **_forces, int _num_load_cases );
+  int getNumLoadCases();
+
+  // Add constraints associated with one of the load cases
+  // -----------------------------------------------------
+  void addConstraints( int _load_case, TACSFunction **_funcs,
+                       const TacsScalar *_func_offset, 
+                       const TacsScalar *_func_scale,
+                       int num_funcs );
+
+  // Set the objective - in this case either compliance or a function
+  // for one of the load cases
+  // ----------------------------------------------------------------------
+  void setObjective( const TacsScalar *_obj_weights );
+
+  // Finish the initialization tasks - assign the number of constraints
+  // and variables in the problem. Allocate arrays etc.
+  // ------------------------------------------------------------------
+  void initialize();
+
+  // Set the output prefix for files
+  // -------------------------------
+  void setPrefix( const char *prefix );
 
   // Set the initial design variable values
   // --------------------------------------
@@ -62,28 +83,9 @@ class TMRTopoProblem : public ParOptProblem {
   // --------------------------------
   void setIterationCounter( int iter );
 
-  // Set/get the objective and mass constraint scaling factors
-  // ---------------------------------------------------------
-  ParOptScalar getObjectiveScaling();
-  void setObjectiveScaling( ParOptScalar scale );
-  ParOptScalar getMassScaling();
-  void setMassScaling( ParOptScalar scale );
-
-  // Use the reciprocal variable values
-  // ----------------------------------
-  void setUseReciprocalVariables(){
-    use_inverse_vars = 1;
-  }
-
   // Set the linearization point and penalty parameter
   // -------------------------------------------------
   void setLinearization( double q, ParOptVec *xvec );
-
-  // Set the iteration count
-  // -----------------------
-  void setIterationCount( int iter ){
-    iter_count = iter;
-  }
 
   // Create a design variable vector
   // -------------------------------
@@ -150,25 +152,45 @@ class TMRTopoProblem : public ParOptProblem {
   void setBVecFromLocalValues( const TacsScalar *xloc, TACSBVec *vec );
 
   // Store the prefix
-  char prefix[256];
+  char *prefix;
 
   // Set the iteration count for printing to the file
   int iter_count;
 
+  // Set the load case information. In this case, these are force
+  // vectors for each load case
+  int num_load_cases;
+  TACSBVec **vars, **forces;
+
+  // The derivative of f(x,u) w.r.t. u and the adjoint variables
+  TACSBVec *dfdu, *adjoint;
+
+  // The objective weights
+  TacsScalar *obj_weights;
+
+  // Set the constraint information for each load case
+  class LoadCaseInfo {
+   public:
+    int num_funcs;
+    TacsScalar *offset;
+    TacsScalar *scale;
+    TACSFunction **funcs;
+  } *load_case_info;
+
   // Store the design variable info
   int nlevels;
-  TACSAssembler *tacs[MAX_NUM_LEVELS];
+  TACSAssembler **tacs;
 
   // Set the information about the filter at each level
-  TMROctForest *filter[MAX_NUM_LEVELS];
-  TACSVarMap *filter_maps[MAX_NUM_LEVELS];
-  TACSBVecIndices *filter_indices[MAX_NUM_LEVELS];
-  TACSBVecDistribute *filter_dist[MAX_NUM_LEVELS];
-  TACSBVecDistCtx *filter_ctx[MAX_NUM_LEVELS];
-  TACSBVecInterp *filter_interp[MAX_NUM_LEVELS-1];
+  TMROctForest **filter;
+  TACSVarMap **filter_maps;
+  TACSBVecIndices **filter_indices;
+  TACSBVecDistribute **filter_dist;
+  TACSBVecDistCtx **filter_ctx;
+  TACSBVecInterp **filter_interp;
 
   // Create the design variable values at each level
-  TACSBVec *x[MAX_NUM_LEVELS];
+  TACSBVec **x;
 
   // The initial design variable values
   int max_local_size;
@@ -178,25 +200,8 @@ class TMRTopoProblem : public ParOptProblem {
   TACSKsm *ksm;
   TACSMg *mg;
 
-  // The compliance and mass functions
-  TACSFunction *compliance, *mass;
-
   // The initial design variable values
   TACSBVec *xinit;
-
-  // The target mass
-  double target_mass;
-
-  // The scaling for the objective and constraint
-  double obj_scale;
-  double mass_scale;
-
-  // Flag to indicate whether to use inverse variables or not
-  int use_inverse_vars;
-
-  // The load case information
-  TACSBVec *res, *vars, *force;
 };
 
-#endif // TMR_HAS_PAROPT
 #endif // TMR_TOPO_PROBLEM_H
