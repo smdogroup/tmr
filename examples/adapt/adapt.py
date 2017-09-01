@@ -126,7 +126,7 @@ if order == 3:
     forests[-1].balance(1)
     assemblers.append(creator.createTACS(order, forests[-1]))
 
-for i in xrange(nlevels):
+for i in xrange(nlevels-1):
     forests.append(forests[-1].coarsen())
     forests[-1].balance(1)
     assemblers.append(creator.createTACS(order, forests[-1]))
@@ -151,7 +151,7 @@ v[2::6] += 1.0
 assemblers[0].applyBCs(res)
 
 subspace = 100
-gmres = TACS.KSM(mg.getMat(), mg, subspace)
+gmres = TACS.KSM(mg.getMat(), mg, subspace, isFlexible=1)
 gmres.setMonitor(comm, 'GMRES', 1)
 gmres.solve(res, ans)
 assemblers[0].setVariables(ans)

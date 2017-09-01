@@ -701,7 +701,9 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(gvec);
   if (wrap){
     TACSBVec *g = wrap->vec;
-    
+
+    // Evaluate the gradient of the objective - weighted sum of 
+    // compliances
     memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
     for ( int i = 0; i < num_load_cases; i++ ){
       tacs[0]->setVariables(vars[i]);
