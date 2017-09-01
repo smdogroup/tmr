@@ -44,7 +44,7 @@ class TMRQuadStiffness : public PlaneStressStiffness {
   TMRQuadStiffness( TMRIndexWeight *_weights, int _nweights,
                     TacsScalar _density, TacsScalar _E, 
                     TacsScalar _nu, TacsScalar _ys,
-                    double _q, double _eps=1e-3);
+                    double _q, double _eps=1e-3 );
   
   // Set the design variable values in the object
   // --------------------------------------------
@@ -78,9 +78,9 @@ class TMRQuadStiffness : public PlaneStressStiffness {
                          const TacsScalar strain[],
                          TacsScalar alpha,
                          TacsScalar dvSens[], int dvLen );
-  void failureStrainSens(const double pt[],
-                         const TacsScalar strain[],
-                         TacsScalar sens[]);
+  void failureStrainSens( const double pt[],
+                          const TacsScalar strain[],
+                          TacsScalar sens[] );
 
   // Return the density as the design variable
   // -----------------------------------------
@@ -102,4 +102,4 @@ class TMRQuadStiffness : public PlaneStressStiffness {
   TMRIndexWeight weights[MAX_NUM_WEIGHTS];
 };
 
-#endif // TMR_THERMO_QUADRANT_STIFFNESS_H
+#endif // TMR_QUADRANT_STIFFNESS_H

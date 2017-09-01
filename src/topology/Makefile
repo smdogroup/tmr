@@ -13,8 +13,10 @@ endif
 
 CXX_OBJS = TMRTopoProblem.o \
 	TMROctStiffness.o \
+	TMRQuadStiffness.o \
 	TMR_TACSTopoCreator.o \
-	SolidShellWrapper.o 
+	SolidShellWrapper.o
+
 DIR=${TMR_DIR}/src/topology
 
 CXX_OBJS := $(CXX_OBJS:%=$(DIR)/%)

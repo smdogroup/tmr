@@ -145,6 +145,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
     // Set the filter object
     filter[k] = _filter[k];
+    filter[k]->incref();
 
     // Copy over the filter information
     filter_maps[k] = _filter_maps[k];
@@ -236,20 +237,28 @@ TMRTopoProblem::~TMRTopoProblem(){
     delete [] prefix;
   }
 
+  // Decrease the reference counts
   for ( int k = 0; k < nlevels; k++ ){
     tacs[k]->decref();
-   
-    // Decrease the reference counts
+    filter[k]->decref();
     filter_maps[k]->decref();
     filter_indices[k]->decref();
     filter_dist[k]->decref();
     filter_ctx[k]->decref();
     x[k]->decref();
   }
+  delete [] tacs;
+  delete [] filter;
+  delete [] filter_maps;
+  delete [] filter_indices;
+  delete [] filter_dist;
+  delete [] filter_ctx;
+  delete [] x;
 
   for ( int k = 0; k < nlevels-1; k++ ){
     filter_interp[k]->decref();
   }
+  delete [] filter_interp;
 
   // Free the initial design variable values (if allocated)
   if (xinit){ xinit->decref(); }
@@ -380,15 +389,22 @@ void TMRTopoProblem::addConstraints( int load_case,
 
   // Allocate the data
   load_case_info[load_case].num_funcs = num_funcs;
-  load_case_info[load_case].funcs = new TACSFunction*[ num_funcs ];
-  load_case_info[load_case].offset = new TacsScalar[ num_funcs ];
-  load_case_info[load_case].scale = new TacsScalar[ num_funcs ];
-
-  // Copy over the values
-  for ( int i = 0; i < num_funcs; i++ ){
-    load_case_info[load_case].funcs[i] = funcs[i];
-    load_case_info[load_case].offset[i] = offset[i];
-    load_case_info[load_case].scale[i] = scale[i];
+  if (num_funcs > 0){
+    load_case_info[load_case].funcs = new TACSFunction*[ num_funcs ];
+    load_case_info[load_case].offset = new TacsScalar[ num_funcs ];
+    load_case_info[load_case].scale = new TacsScalar[ num_funcs ];
+    
+    // Copy over the values
+    for ( int i = 0; i < num_funcs; i++ ){
+      load_case_info[load_case].funcs[i] = funcs[i];
+      load_case_info[load_case].offset[i] = offset[i];
+      load_case_info[load_case].scale[i] = scale[i];
+    }
+  }
+  else {
+    load_case_info[load_case].funcs = NULL;
+    load_case_info[load_case].offset = NULL;
+    load_case_info[load_case].scale = NULL;
   }
 }
 

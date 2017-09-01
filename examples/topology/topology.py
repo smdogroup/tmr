@@ -128,12 +128,11 @@ forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 
 # Create the trees, rebalance the elements and repartition
-nlevels = 1
+nlevels = 2
 order = 2
 forest.createTrees(nlevels)
-
-assembler, problem = createTopoProblem(forest, nlevels=2)
-
+assembler, problem = createTopoProblem(forest,
+                                       nlevels=nlevels)
 aux1 = addFaceTraction(order, forest, 'surface', assembler,
                        [1.0, 1.0, 1.0])
 aux2 = addFaceTraction(order, forest, 'surface', assembler,
