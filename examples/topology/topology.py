@@ -36,6 +36,55 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     return aux
 
+def createTopoProblem(forest, order=2, nlevels=2):
+    # Create the forest
+    forests = []
+    filters = []
+    assemblers = []
+    varmaps = []
+    vecindices = []
+
+    # Create the trees, rebalance the elements and repartition
+    forest.balance(1)
+    forest.repartition()
+    forests.append(forest)
+
+    # Create the filter
+    filtr = forest.coarsen()
+    filtr.balance(1)
+    filters.append(filtr)
+
+    # Make the creator class
+    creator = CreateMe(bcs, filters[-1])
+    assemblers.append(creator.createTACS(order, forest))
+    varmaps.append(creator.getMap())
+    vecindices.append(creator.getIndices())
+
+    for i in xrange(nlevels):
+        forest = forests[-1].coarsen()
+        forest.balance(1)
+        forest.repartition()
+        forests.append(forest)
+
+        # Create the filter
+        filtr = forest.coarsen()
+        filtr.balance(1)
+        filters.append(filtr)
+
+        # Make the creator class
+        creator = CreateMe(bcs, filters[-1])
+        assemblers.append(creator.createTACS(order, forest))
+        varmaps.append(creator.getMap())
+        vecindices.append(creator.getIndices())
+
+    # Create the multigrid object
+    mg = TMR.createMg(assemblers, forests)
+
+    # Create the topology optimization problem
+    problem = TMR.TopoProblem(assemblers, filters, varmaps, vecindices, mg)
+
+    return assemblers[0], problem
+
 comm = MPI.COMM_WORLD
 
 # Load the geometry model
@@ -78,72 +127,44 @@ topo = TMR.Topology(comm, model)
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 
-# Create the forest
-forests = []
-filters = []
-assemblers = []
-varmaps = []
-vecindices = []
-
 # Create the trees, rebalance the elements and repartition
 nlevels = 1
 order = 2
 forest.createTrees(nlevels)
-forest.balance(1)
-forest.repartition()
-forests.append(forest)
 
-# Create the filter
-filtr = forest.coarsen()
-filtr.balance(1)
-filters.append(filtr)
+assembler, problem = createTopoProblem(forest, nlevels=2)
 
-# Make the creator class
-creator = CreateMe(bcs, filters[-1])
-assemblers.append(creator.createTACS(order, forest))
-varmaps.append(creator.getMap())
-vecindices.append(creator.getIndices())
+aux1 = addFaceTraction(order, forest, 'surface', assembler,
+                       [1.0, 1.0, 1.0])
+aux2 = addFaceTraction(order, forest, 'surface', assembler,
+                       [0.0, 0.0, 1.0])
 
-for i in xrange(nlevels):
-    forest = forests[-1].coarsen()
-    forest.balance(1)
-    forest.repartition()
-    forests.append(forest)
+assembler.zeroVariables()
+force1 = assembler.createVec()
+assembler.setAuxElements(aux1)
+assembler.assembleRes(force1)
+force1.scale(-1.0)
 
-    # Create the filter
-    filtr = forest.coarsen()
-    filtr.balance(1)
-    filters.append(filtr)
+assembler.zeroVariables()
+force2 = assembler.createVec()
+assembler.setAuxElements(aux2)
+assembler.assembleRes(force2)
+force2.scale(-1.0)
 
-    # Make the creator class
-    creator = CreateMe(bcs, filters[-1])
-    assemblers.append(creator.createTACS(order, forest))
-    varmaps.append(creator.getMap())
-    vecindices.append(creator.getIndices())
-
-# Create the multigrid object
-mg = TMR.createMg(assemblers, forests)
-
-# Create the topology optimization problem
-problem = TMR.TopoProblem(assemblers, filters, varmaps, vecindices, mg)
-
-# addFaceTraction(order, forest, attr, assembler, tr):
-aux = addFaceTraction(order, forests[0], 'surface', assemblers[0],
-                      [1.0, 1.0, 1.0])
-
-force = assemblers[0].createVec()
-assemblers[0].setAuxElements(aux)
-assemblers[0].assembleRes(force)
-force.scale(-1.0)
-forces = [force]
-
+# Set the load cases
+forces = [force1, force2]
 problem.setLoadCases(forces)
-funcs = [functions.StructuralMass(assemblers[0])]
+
+# Set the constraints
 m_fixed = 10.0
+funcs = [functions.StructuralMass(assembler)]
 problem.addConstraints(0, funcs, [-m_fixed], [1.0])
-problem.setObjective([1.0])
+problem.addConstraints(1, [], [], [])
+problem.setObjective([1.0, 1.0])
+
+# Initialize the problem and set the prefix
 problem.initialize()
-problem.setPrefix('./')
+problem.setPrefix('./results/')
 
 max_bfgs = 20
 opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
