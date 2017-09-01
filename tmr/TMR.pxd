@@ -317,8 +317,8 @@ cdef extern from "TMR_TACSCreator.h":
         TMROctTACSCreator(TMRBoundaryConditions*)
 
 cdef extern from "TMROctStiffness.h":
-    cdef cppclass TMRStiffnessProperties:
-        TMRStiffnessProperties()
+    cdef cppclass TMROctStiffnessProperties:
+        TMROctStiffnessProperties()
         TacsScalar rho, E, nu, q
 
     cdef cppclass TMROctStiffness(SolidStiffness):

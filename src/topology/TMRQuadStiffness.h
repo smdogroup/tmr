@@ -91,7 +91,7 @@ class TMRQuadStiffness : public PlaneStressStiffness {
  private:
   // The density and stiffness properties
   double E, nu, ys, epsilon;
-  TacsScalar rho, alpha, xw,density;
+  TacsScalar rho, alpha, xw, density;
 
   // The RAMP penalization factor
   TacsScalar q;

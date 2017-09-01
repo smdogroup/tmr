@@ -155,10 +155,19 @@ force2.scale(-1.0)
 forces = [force1, force2]
 problem.setLoadCases(forces)
 
+# Compute the volume of the bracket
+r = 7.5
+a = 50.0
+t = 25.0
+vol = (3*a*a*t - 3*np.pi*r*r*t)*2600
+vol_frac = 0.2
+
 # Set the constraints
-m_fixed = 10.0
 funcs = [functions.StructuralMass(assembler)]
-problem.addConstraints(0, funcs, [-m_fixed], [1.0])
+initial_mass = assembler.evalFunctions(funcs)
+m_fixed =  vol_frac*vol
+
+problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
 problem.addConstraints(1, [], [], [])
 problem.setObjective([1.0, 1.0])
 
@@ -171,7 +180,9 @@ opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
 opt.setOutputFrequency(1)
 opt.setOutputFile("paropt_output.out")
 opt.optimize()
-print assemblers[0].evalFunctions(funcs)/initial_mass
+
+print assemblers.evalFunctions(funcs)/initial_mass
+
 # Output for visualization
 flag = (TACS.ToFH5.NODES |
         TACS.ToFH5.DISPLACEMENTS |

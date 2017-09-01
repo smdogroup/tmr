@@ -1487,9 +1487,9 @@ cdef class OctTopoCreator:
         return _init_VecIndices(indices)
 
 cdef class OctStiffnessProperties:
-    cdef TMRStiffnessProperties ptr
+    cdef TMROctStiffnessProperties ptr
     def __cinit__(self):
-        self.ptr = TMRStiffnessProperties()
+        self.ptr = TMROctStiffnessProperties()
       
     def __dealloc__(self):
         return
