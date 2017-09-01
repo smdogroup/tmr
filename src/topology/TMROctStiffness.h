@@ -12,10 +12,10 @@
 /*
   Stiffness properties object
 */
-class TMROctStiffnessProperties {
+class TMRStiffnessProperties {
  public:
   // Initialize the properties so that they have some value
-  TMROctStiffnessProperties(){
+  TMRStiffnessProperties(){
     rho = 1.0;
     E = 1.0;
     nu = 0.3;
