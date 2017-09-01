@@ -19,6 +19,23 @@ class CreateMe(TMR.OctTopoCreator):
         elem = elements.Solid(2, stiff)
         return elem
 
+def addFaceTraction(order, forest, attr, assembler, tr):
+    trac = []
+    for findex in range(6):
+        trac.append(elements.Traction3D(order, findex, tr[0], tr[1], tr[2]))
+
+    # Retrieve octants from the forest
+    octants = forest.getOctants()
+    face_octs = forest.getOctsWithAttribute(attr)
+    aux = TACS.AuxElements()
+
+    for i in range(len(face_octs)):
+        index = octants.findIndex(face_octs[i])
+        if index is not None:
+            aux.addElement(index, trac[face_octs[i].tag])
+
+    return aux
+
 comm = MPI.COMM_WORLD
 
 # Load the geometry model
@@ -29,6 +46,7 @@ faces = geo.getFaces()
 volumes = geo.getVolumes()
 faces[15].setAttribute('fixed')
 faces[4].setSource(volumes[0], faces[1])
+faces[4].setAttribute('surface')
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
@@ -109,9 +127,14 @@ mg = TMR.createMg(assemblers, forests)
 # Create the topology optimization problem
 problem = TMR.TopoProblem(assemblers, filters, varmaps, vecindices, mg)
 
+# addFaceTraction(order, forest, attr, assembler, tr):
+aux = addFaceTraction(order, forests[0], 'surface', assemblers[0],
+                      [1.0, 1.0, 1.0])
+
 force = assemblers[0].createVec()
-force.getArray()[::] = 1.0
-assemblers[0].applyBCs(force)
+assemblers[0].setAuxElements(aux)
+assemblers[0].assembleRes(force)
+force.scale(-1.0)
 forces = [force]
 
 problem.setLoadCases(forces)
@@ -120,7 +143,7 @@ m_fixed = 10.0
 problem.addConstraints(0, funcs, [-m_fixed], [1.0])
 problem.setObjective([1.0])
 problem.initialize()
-problem.setPrefix('')
+problem.setPrefix('./')
 
 max_bfgs = 20
 opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)

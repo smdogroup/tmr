@@ -275,7 +275,7 @@ cdef extern from "TMROctant.h":
         TMROctantArray* duplicate()
         void getArray(TMROctant**, int*)
         void sort()
-        TMROctant* contains(TMROctant *q, int)
+        TMROctant* contains(TMROctant*, int)
         
 cdef extern from "TMROctForest.h":
     cdef cppclass TMROctForest(TMREntity):
@@ -298,6 +298,8 @@ cdef extern from "TMROctForest.h":
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMROctForest*, TACSBVecInterp*)
         int getOwnedNodeRange(const int**)
+        void getOctants(TMROctantArray**)
+        void getNodes(TMROctantArray**)
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
 

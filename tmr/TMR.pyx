@@ -1129,16 +1129,70 @@ cdef _init_QuadForest(TMRQuadForest* ptr):
  
 cdef class OctantArray:
     cdef TMROctantArray *ptr
+    cdef int self_owned
     def __cinit__(self):
+        self.self_owned = 0
         self.ptr = NULL
 
     def __dealloc__(self):
-        if self.ptr:
+        if self.ptr and self.self_owned:
             del self.ptr
 
-cdef _init_OctantArray(TMROctantArray *array):
+    def __len__(self):
+        cdef int size = 0
+        self.ptr.getArray(NULL, &size)
+        return size
+
+    def __getitem__(self, int k):
+        cdef int size = 0
+        cdef TMROctant *array
+        self.ptr.getArray(&array, &size)
+        if k < 0 or k >= size:
+            errmsg = 'Octant array index %d out of range [0,%d)'%(k, size)
+            raise IndexError(errmsg)
+        oc = Octant()
+        oc.x = array[k].x
+        oc.y = array[k].y
+        oc.z = array[k].z
+        oc.level = array[k].level
+        oc.block = array[k].block
+        oc.tag = array[k].tag
+        return oc
+
+    def __setitem__(self, int k, Octant oc):
+        cdef int size = 0
+        cdef TMROctant *array
+        self.ptr.getArray(&array, &size)
+        if k < 0 or k >= size:
+            errmsg = 'Octant array index %d out of range [0,%d)'%(k, size)
+            raise IndexError(errmsg)
+        array[k].x = oc.x
+        array[k].y = oc.y
+        array[k].z = oc.z
+        array[k].level = oc.level
+        array[k].block = oc.block
+        array[k].tag = oc.tag
+        return
+
+    def findIndex(self, Octant oc, use_nodes=False):
+        cdef int size = 0
+        cdef TMROctant *array
+        cdef TMROctant *t
+        cdef int index = 0
+        cdef int _use_nodes = 0
+        if use_nodes:
+            _use_nodes = 1
+        self.ptr.getArray(&array, &size)
+        t = self.ptr.contains(&oc.octant, _use_nodes)
+        if t == NULL:
+            return None
+        index = t - array
+        return index
+
+cdef _init_OctantArray(TMROctantArray *array, int self_owned):
     arr = OctantArray()
     arr.ptr = array
+    arr.self_owned = self_owned
     return arr
 
 cdef class Octant:
@@ -1235,12 +1289,22 @@ cdef class OctForest:
     def getOctsWithAttribute(self, char *attr):
         cdef TMROctantArray *array = NULL
         array = self.ptr.getOctsWithAttribute(attr)
-        return _init_OctantArray(array)
+        return _init_OctantArray(array, 1)
 
     def getNodesWithAttribute(self, char *attr):
         cdef TMROctantArray *array = NULL
         array = self.ptr.getNodesWithAttribute(attr)
-        return _init_OctantArray(array)
+        return _init_OctantArray(array, 1)
+
+    def getOctants(self):
+        cdef TMROctantArray *array = NULL
+        self.ptr.getOctants(&array)
+        return _init_OctantArray(array, 0)
+
+    def getNodes(self):
+        cdef TMROctantArray *array = NULL
+        self.ptr.getOctants(&array)
+        return _init_OctantArray(array, 0)
 
     def writeToVTK(self, char *filename):
         self.ptr.writeToVTK(filename)
@@ -1433,25 +1497,25 @@ cdef class OctStiffnessProperties:
     property rho:
         def __get__(self):
             return self.ptr.rho
-        def __set__(self,value):
+        def __set__(self, value):
             self.ptr.rho = value
 
     property E:
         def __get__(self):
             return self.ptr.E
-        def __set__(self,value):
+        def __set__(self, value):
             self.ptr.E = value
 
     property nu:
         def __get__(self):
             return self.ptr.nu
-        def __set__(self,value):
+        def __set__(self, value):
             self.ptr.nu = value
 
     property q:
         def __get__(self):
             return self.ptr.q
-        def __set__(self,value):
+        def __set__(self, value):
             self.ptr.q = value
 
 cdef class OctStiffness(SolidStiff):
