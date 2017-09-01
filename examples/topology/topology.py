@@ -15,7 +15,7 @@ class CreateMe(TMR.OctTopoCreator):
         rho = 2600.0
         E = 70e9
         nu = 0.3
-        stiff = TMR.OctStiffness(rho, E, nu, index, weights, q=5.0)
+        stiff = TMR.OctStiffness(rho, E, nu, index, weights, q=8.0)
         elem = elements.Solid(2, stiff)
         return elem
 
@@ -129,7 +129,8 @@ problem = TMR.TopoProblem(assemblers, filters, varmaps, vecindices, mg)
 
 # addFaceTraction(order, forest, attr, assembler, tr):
 aux = addFaceTraction(order, forests[0], 'surface', assemblers[0],
-                      [1.0, 1.0, 1.0])
+                      [1.0, 0.0, -2.0])
+
 
 force = assemblers[0].createVec()
 assemblers[0].setAuxElements(aux)
@@ -137,14 +138,33 @@ assemblers[0].assembleRes(force)
 force.scale(-1.0)
 forces = [force]
 
+# Compute the volume of the bracket
+r = 7.5
+a = 50.0
+t = 25.0
+vol = (3*a*a*t - 3*np.pi*r*r*t)*2600
+vol_frac = 0.2
+
 problem.setLoadCases(forces)
 funcs = [functions.StructuralMass(assemblers[0])]
-m_fixed = 10.0
-problem.addConstraints(0, funcs, [-m_fixed], [1.0])
+initial_mass = assemblers[0].evalFunctions(funcs)
+m_fixed =  vol_frac*vol
+problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
 problem.setObjective([1.0])
 problem.initialize()
 problem.setPrefix('./')
 
 max_bfgs = 20
 opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
+opt.setOutputFrequency(1)
+opt.setOutputFile("paropt_output.out")
 opt.optimize()
+print assemblers[0].evalFunctions(funcs)/initial_mass
+# Output for visualization
+flag = (TACS.ToFH5.NODES |
+        TACS.ToFH5.DISPLACEMENTS |
+        TACS.ToFH5.STRAINS |
+        TACS.ToFH5.STRESSES |
+        TACS.ToFH5.EXTRAS)
+f5 = TACS.ToFH5(assemblers[0], TACS.PY_SOLID, flag)
+f5.writeToFile('bracket.f5')
