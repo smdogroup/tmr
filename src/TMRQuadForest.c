@@ -3080,13 +3080,25 @@ TMRQuadrantArray* TMRQuadForest::getNodesWithAttribute( const char *attr,
       if (fx || fy){
         // This node lies on an edge
         TMREdge *edge;
-        int edge_index = fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3);
-        int edge_num = face_edge_conn[4*array[i].face + edge_index];
-        topo->getEdge(edge_num, &edge);
-        const char *edge_attr = edge->getAttribute();
-        if (edge_attr && strcmp(edge_attr, attr) == 0){
-          queue->push(&array[i]);
-          continue;
+        if (fx){
+          int edge_index = (fx0 ? 0 : 1);
+          int edge_num = face_edge_conn[4*array[i].face + edge_index];
+          topo->getEdge(edge_num, &edge);
+          const char *edge_attr = edge->getAttribute();
+          if (edge_attr && strcmp(edge_attr, attr) == 0){
+            queue->push(&array[i]);
+            continue;
+          }
+        }
+        if (fy){
+          int edge_index = (fy0 ? 2 : 3);
+          int edge_num = face_edge_conn[4*array[i].face + edge_index];
+          topo->getEdge(edge_num, &edge);
+          const char *edge_attr = edge->getAttribute();
+          if (edge_attr && strcmp(edge_attr, attr) == 0){
+            queue->push(&array[i]);
+            continue;
+          }
         }
       }
       

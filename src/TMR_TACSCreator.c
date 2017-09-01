@@ -27,7 +27,8 @@ TMRBoundaryConditions::~TMRBoundaryConditions(){
 TMRBoundaryConditions::BCNode::BCNode( const char *_attr,
                                        int _num_bcs, 
                                        const int *_bc_nums,
-                                       const TacsScalar *_bc_vals ){
+                                       const TacsScalar *_bc_vals,
+                                       int _intersect ){
   next = NULL;
   attr = new char[ strlen(_attr)+1 ];
   strcpy(attr, _attr);
@@ -43,11 +44,13 @@ TMRBoundaryConditions::BCNode::BCNode( const char *_attr,
     else {
       memset(bc_vals, 0.0, num_bcs*sizeof(TacsScalar));
     }
+    intersect = _intersect;
   }
   else {
     num_bcs = -1;
     bc_nums = NULL;
-    bc_vals = NULL;
+    bc_vals = NULL;  
+    intersect = _intersect;
   }
 }
 
@@ -67,9 +70,11 @@ TMRBoundaryConditions::BCNode::~BCNode(){
 void TMRBoundaryConditions::addBoundaryCondition( const char *attribute, 
                                                   int num_bc_nums,
                                                   const int bc_nums[],
-                                                  const TacsScalar *bc_vals ){
+                                                  const TacsScalar *bc_vals,
+                                                  int intersect ){
   num_bcs++;
-  BCNode *node = new BCNode(attribute, num_bc_nums, bc_nums, bc_vals);
+  BCNode *node = new BCNode(attribute, num_bc_nums, bc_nums, bc_vals,
+                            intersect);
   if (!bc_root){
     bc_root = node;
     bc_current = node;
@@ -93,12 +98,14 @@ int TMRBoundaryConditions::getNumBoundaryConditions(){
 void TMRBoundaryConditions::getBoundaryCondition( int bc, const char **_attr, 
                                                   int *_num_bcs,
                                                   const int **_bc_nums, 
-                                                  const TacsScalar **_bc_vals){
+                                                  const TacsScalar **_bc_vals,
+                                                  int *_intersect ){
   *_attr = NULL;
   *_num_bcs = -1;
   *_bc_nums = NULL;
   *_bc_vals = NULL;
-
+  *_intersect = 1;
+  
   // Increment until we've found the boundary condition or the end of
   // the linked list
   int count = 0;
@@ -114,6 +121,7 @@ void TMRBoundaryConditions::getBoundaryCondition( int bc, const char **_attr,
     *_num_bcs = node->num_bcs;
     *_bc_nums = node->bc_nums;
     *_bc_vals = node->bc_vals;
+    *_intersect = node->intersect;
   }
 }
 
@@ -261,12 +269,14 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
       int num_bcs;
       const int *bc_nums;
       const TacsScalar *bc_vals;
+      int intersect;
       bcs->getBoundaryCondition(k, &attribute, &num_bcs, 
-                                &bc_nums, &bc_vals);
+                                &bc_nums, &bc_vals, &intersect);
 
       if (attribute){
         // Retrieve the nodes associated with the specified attribute
-        TMRQuadrantArray *nodes = forest->getNodesWithAttribute(attribute);
+        TMRQuadrantArray *nodes = forest->getNodesWithAttribute(attribute,
+                                                                intersect);
         int size;
         TMRQuadrant *array;
         nodes->getArray(&array, &size);
@@ -494,11 +504,12 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
       int num_bcs;
       const int *bc_nums;
       const TacsScalar *bc_vals;
+      int intersect;
       bcs->getBoundaryCondition(k, &attribute, &num_bcs, &bc_nums,
-                                &bc_vals);
+                                &bc_vals, &intersect);
 
       // Retrieve the nodes associated with the specified attribute
-      TMROctantArray *nodes = forest->getNodesWithAttribute(attribute);
+      TMROctantArray *nodes = forest->getNodesWithAttribute(attribute,intersect);
       int size;
       TMROctant *array;
       nodes->getArray(&array, &size);

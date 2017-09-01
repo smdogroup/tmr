@@ -15,7 +15,7 @@ class CreateMe(TMR.OctTopoCreator):
         rho = 2600.0
         E = 70e9
         nu = 0.3
-        stiff = TMR.OctStiffness(rho, E, nu, index, weights, q=5.0)
+        stiff = TMR.OctStiffness(rho, E, nu, index, weights, q=8.0)
         elem = elements.Solid(2, stiff)
         return elem
 
@@ -168,4 +168,15 @@ problem.setPrefix('./results/')
 
 max_bfgs = 20
 opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
+opt.setOutputFrequency(1)
+opt.setOutputFile("paropt_output.out")
 opt.optimize()
+print assemblers[0].evalFunctions(funcs)/initial_mass
+# Output for visualization
+flag = (TACS.ToFH5.NODES |
+        TACS.ToFH5.DISPLACEMENTS |
+        TACS.ToFH5.STRAINS |
+        TACS.ToFH5.STRESSES |
+        TACS.ToFH5.EXTRAS)
+f5 = TACS.ToFH5(assemblers[0], TACS.PY_SOLID, flag)
+f5.writeToFile('bracket.f5')
