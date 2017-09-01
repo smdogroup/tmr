@@ -180,7 +180,7 @@ opt.setOutputFrequency(1)
 opt.setOutputFile("paropt_output.out")
 opt.optimize()
 
-print assemblers.evalFunctions(funcs)/initial_mass
+print assembler.evalFunctions(funcs)/initial_mass
 
 # Output for visualization
 flag = (TACS.ToFH5.NODES |
@@ -188,5 +188,5 @@ flag = (TACS.ToFH5.NODES |
         TACS.ToFH5.STRAINS |
         TACS.ToFH5.STRESSES |
         TACS.ToFH5.EXTRAS)
-f5 = TACS.ToFH5(assemblers[0], TACS.PY_SOLID, flag)
+f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
 f5.writeToFile('bracket.f5')
