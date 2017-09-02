@@ -60,7 +60,7 @@ def createTopoProblem(forest, order=2, nlevels=2):
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 
-    for i in xrange(nlevels):
+    for i in xrange(nlevels-1):
         forest = forests[-1].coarsen()
         forest.balance(1)
         forest.repartition()
@@ -130,7 +130,7 @@ forest.setTopology(topo)
 # Create the trees, rebalance the elements and repartition
 nlevels = 2
 order = 2
-forest.createTrees(nlevels)
+forest.createTrees(nlevels-1)
 assembler, problem = createTopoProblem(forest,
                                        nlevels=nlevels)
 aux1 = addFaceTraction(order, forest, 'surface', assembler,

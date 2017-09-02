@@ -438,9 +438,9 @@ void TMRTopoProblem::initialize(){
 /*
   Set the initial design variable values
 */
-void TMRTopoProblem::setInitDesignVars( ParOptVec *vars ){
-  if (vars){
-    ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(vars);
+void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars ){
+  if (xvars){
+    ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvars);
     if (wrap){
       if (xinit){ xinit->decref(); }
       xinit = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
@@ -497,13 +497,13 @@ int TMRTopoProblem::useUpperBounds(){
 /*
   Set the initial design variables
 */ 
-void TMRTopoProblem::getVarsAndBounds( ParOptVec *x, 
-                                       ParOptVec *lb, 
-                                       ParOptVec *ub ){
+void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec, 
+                                       ParOptVec *lbvec, 
+                                       ParOptVec *ubvec ){
   // Get the values of the design variables from the inner-most
   // version of TACS
-  if (x){ 
-    ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(x);
+  if (xvec){ 
+    ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvec);
     if (wrap){
       if (xinit){
         wrap->vec->copyValues(xinit);
@@ -520,22 +520,22 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *x,
     }
   }
 
-  if (lb || ub){
+  if (lbvec || ubvec){
     TacsScalar *upper = new TacsScalar[ max_local_size ];
     memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
     memset(upper, 0, max_local_size*sizeof(TacsScalar));
     tacs[0]->getDesignVarRange(xlocal, upper, max_local_size);
 
-    if (lb){
-      ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lb);
+    if (lbvec){
+      ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lbvec);
       if (lbwrap){
         setBVecFromLocalValues(xlocal, lbwrap->vec);
         lbwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
         lbwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
       }
     }
-    if (ub){
-      ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ub);
+    if (ubvec){
+      ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ubvec);
       if (ubwrap){
         setBVecFromLocalValues(upper, ubwrap->vec);
         ubwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
