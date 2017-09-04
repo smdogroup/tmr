@@ -308,8 +308,8 @@ cdef extern from "TMROctForest.h":
 cdef extern from "TMR_TACSCreator.h":
     cdef cppclass TMRBoundaryConditions(TMREntity):
         TMRBoundaryConditions()
-        void addBoundaryCondition(const char*,int,const int*,
-                                  const TacsScalar*)
+        void addBoundaryCondition(const char*, int, const int*,
+                                  const TacsScalar*, int)
         int getNumBoundaryConditions()
 
     cdef cppclass TMRQuadTACSCreator(TMREntity):

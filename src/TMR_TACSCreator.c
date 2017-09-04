@@ -162,7 +162,6 @@ void TMRQuadTACSCreator::createConnectivity( int order,
   *_num_elements = num_elements;
 }
 
-
 /*
   Create the TACSAssembler object
 */
@@ -361,7 +360,6 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
   X->decref();
 }
 
-
 /*
   Initialize the TMROctTACSCreator data in the abstract base class
 */
@@ -509,7 +507,8 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
                                 &bc_vals, &intersect);
 
       // Retrieve the nodes associated with the specified attribute
-      TMROctantArray *nodes = forest->getNodesWithAttribute(attribute,intersect);
+      TMROctantArray *nodes = 
+        forest->getNodesWithAttribute(attribute,intersect);
       int size;
       TMROctant *array;
       nodes->getArray(&array, &size);

@@ -30,7 +30,7 @@ class TMRBoundaryConditions : public TMREntity {
   void addBoundaryCondition( const char *attr, 
                              int num_bcs, const int bc_nums[],
                              const TacsScalar *_bc_vals=NULL,
-                             int _intersect=1);
+                             int _intersect=1 );
 
   // Get the number of boundary conditions
   int getNumBoundaryConditions();
@@ -38,7 +38,7 @@ class TMRBoundaryConditions : public TMREntity {
                              int *_num_bcs,
                              const int **_bcs_nums,
                              const TacsScalar **_bc_vals,
-                             int *_intersect);
+                             int *_intersect );
 
  public:
   // The number of boundary conditions
@@ -49,7 +49,7 @@ class TMRBoundaryConditions : public TMREntity {
   class BCNode {
   public:
     BCNode( const char *_attr, int _num_bcs, const int *_bc_nums,
-            const TacsScalar *_bc_vals, const int _intersect);
+            const TacsScalar *_bc_vals, const int _intersect );
     ~BCNode();
     BCNode *next;
     char *attr;

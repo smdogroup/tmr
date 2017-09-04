@@ -1403,10 +1403,14 @@ cdef class BoundaryConditions:
         return self.ptr.getNumBoundaryConditions()
    
     def addBoundaryCondition(self, char* attr, 
-                             list bc_nums=None, list bc_vals=None):
+                             list bc_nums=None, list bc_vals=None,
+                             intersect=True):
         cdef int *nums = NULL
         cdef double *vals = NULL
         cdef int num_bcs = 0
+        cdef int _intersect = 0
+        if intersect:
+            _intersect = 1
         if bc_nums is not None and bc_vals is not None:
             if len(bc_nums) != len(bc_vals):
                 errstr = 'Boundary condition lists must be the same length'
@@ -1417,7 +1421,8 @@ cdef class BoundaryConditions:
             for i in range(len(bc_nums)):
                 nums[i] = <int>bc_nums[i]
                 vals[i] = <double>bc_vals[i]
-            self.ptr.addBoundaryCondition(attr, num_bcs, nums, vals)
+            self.ptr.addBoundaryCondition(attr, num_bcs, nums, vals,
+                                          _intersect)
             free(nums)
             free(vals)
         elif bc_nums is not None:
@@ -1425,10 +1430,12 @@ cdef class BoundaryConditions:
             nums = <int*>malloc(num_bcs*sizeof(int))
             for i in range(len(bc_nums)):
                 nums[i] = <int>bc_nums[i]
-            self.ptr.addBoundaryCondition(attr, num_bcs, nums, NULL)
+            self.ptr.addBoundaryCondition(attr, num_bcs, nums, NULL,
+                                          _intersect)
             free(nums)
         else:
-            self.ptr.addBoundaryCondition(attr, 0, NULL, NULL)
+            self.ptr.addBoundaryCondition(attr, 0, NULL, NULL,
+                                          _intersect)
         return
 
 cdef TACSElement* _createQuadElement(void *_self, int order, 
