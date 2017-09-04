@@ -2035,11 +2035,9 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     double h = fs->getFeatureSize(Xpt);
 
     // The new point that will be added into the mesh (potentially)
-    double param_dist = 0.0;
     TMRTriangle *pt_tri = NULL;
     double pt[2] = {0.0, 0.0};
     double htrial = h;
-
 
     for ( int trial = 0; trial < 2; trial++ ){
       // Compute the side-edge length, given the prescribed mesh
@@ -2052,8 +2050,6 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       double f = de/sqrt(dir.dot(dir));
       pt[0] = m[0] + f*e[0];
       pt[1] = m[1] + f*e[1];
-
-      param_dist = de;
 
       /*
       int newton_fail = 1;
@@ -2151,7 +2147,6 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     }
 
     // Find the closest node to the point
-    double dist = 0.0;
     uint32_t w = root->findClosest(pt);
 
     // Evalute the point
