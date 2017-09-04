@@ -1375,13 +1375,15 @@ void TMRQuadForest::refine( const int refinement[],
       if (array[i].level < max_level){
         TMRQuadrant q = array[i];
         q.level += 1;
-        q.getSibling(0, &q);
         if (mpi_rank == getQuadrantMPIOwner(&q)){
           hash->addQuadrant(&q);
         }
         else {
           ext_hash->addQuadrant(&q);
         }
+      }
+      else {
+        ext_hash->addQuadrant(&array[i]);
       }
     }
   }
