@@ -817,8 +817,8 @@ void addRefinedSolution( const int order,
 /*
   Compute the reconstructed solution on the uniformly refined mesh.
 */
-void TMR_ComputeReconSolution( TMRQuadForest *forest,
-                               TACSAssembler *tacs,
+void TMR_ComputeReconSolution( TACSAssembler *tacs,
+                               TMRQuadForest *forest,
                                TACSAssembler *tacs_refined,
                                TACSBVec *_uvec,
                                TACSBVec *_uvec_refined ){
@@ -863,7 +863,6 @@ void TMR_ComputeReconSolution( TMRQuadForest *forest,
   // Compute the max size of the element array
   int nelems = tacs->getNumElements();
   int *face_elem_nums = new int[ nelems ];
-
 
   // Loop over all of the faces and uniquely sort the faces
   int num_faces = topo->getNumFaces();
@@ -1018,8 +1017,9 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   
   // Retrieve the variables from the TACSAssembler object
   TACSBVec *uvec = tacs->createVec();
-  tacs->getVariables(uvec);
   uvec->incref();
+
+  tacs->getVariables(uvec);
   uvec->beginDistributeValues();
   uvec->endDistributeValues();
 
@@ -1168,7 +1168,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     }
 
     // SE_refine - SE_error should always be a positive quantity
-    SE_error[i] = SE_refine - SE_error[i];
+    SE_error[i] = fabs(SE_refine - SE_error[i]);
 
     // Add up the total error
     SE_total_error += SE_error[i];
@@ -1244,7 +1244,6 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
 
   // Get the order of the mesh and the number of enrichment shape functions
   const int order = forest->getMeshOrder();
-  const int nenrich = (order == 2 ? 5 : 7);
 
   // Get the communicator
   MPI_Comm comm = tacs->getMPIComm();
@@ -1294,7 +1293,7 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   }
 
   // Reconstruct the adjoint solution on the finer mesh
-  TMR_ComputeReconSolution(forest, tacs, tacs_refine,
+  TMR_ComputeReconSolution(tacs, forest, tacs_refine,
                            adjoint, adjoint_refine);
   
   // For each element in the mesh, compute the residual on the refined

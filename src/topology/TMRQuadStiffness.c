@@ -79,9 +79,9 @@ void TMRQuadStiffness::getPointwiseMass( const double pt[],
   variable values
 */
 void TMRQuadStiffness::addPointwiseMassDVSens( const double pt[], 
-                                                     const TacsScalar alpha[],
-                                                     TacsScalar dvSens[], 
-                                                     int dvLen ){
+                                               const TacsScalar alpha[],
+                                               TacsScalar dvSens[], 
+                                               int dvLen ){
   TacsScalar scale = density*alpha[0];
   for ( int i = 0; i < nweights; i++ ){
     dvSens[weights[i].index] += scale*weights[i].weight;
@@ -91,9 +91,9 @@ void TMRQuadStiffness::addPointwiseMassDVSens( const double pt[],
 /*
   Compute the matrix vector product of D*e
 */
-void TMRQuadStiffness::calculateStress(const double pt[],
-                                       const TacsScalar e[], 
-                                       TacsScalar s[]){
+void TMRQuadStiffness::calculateStress( const double pt[],
+                                        const TacsScalar e[], 
+                                        TacsScalar s[] ){
   // Compute the penalized stiffness
   TacsScalar w = xw/(1.0 + q*(1.0 - xw));
   TacsScalar D = E/(1.0-nu*nu)*w;
@@ -103,9 +103,10 @@ void TMRQuadStiffness::calculateStress(const double pt[],
   s[1] = nu*D*e[0]+D*e[1];
   s[2] = 0.5*(1.0-nu)*D*e[2];
 }
-void TMRQuadStiffness::calculateThermalStress(const double pt[],
-                                              const TacsScalar e[], 
-                                              TacsScalar s[]){
+
+void TMRQuadStiffness::calculateThermalStress( const double pt[],
+                                               const TacsScalar e[], 
+                                               TacsScalar s[] ){
   // Compute the penalized stiffness
   TacsScalar w = xw*1.0;
   TacsScalar D = E/(1.0-nu*nu)*w;
@@ -115,6 +116,7 @@ void TMRQuadStiffness::calculateThermalStress(const double pt[],
   s[1] = nu*D*e[0]+D*e[1];
   s[2] = 0.5*(1.0-nu)*D*e[2];
 }
+
 /*
   Add the derivative of the product of the stress with the vector psi
   times alpha to the design variable array dvSens
@@ -165,6 +167,7 @@ void TMRQuadStiffness::failure( const double pt[],
  
   *fail = r_factor*VonMisesFailurePlaneStress(s,ys);
 }
+
 // Evaluate the failure criteria w.r.t. design variables
 void TMRQuadStiffness::addFailureDVSens( const double pt[], 
                                          const TacsScalar e[],
@@ -195,9 +198,10 @@ void TMRQuadStiffness::addFailureDVSens( const double pt[],
     dvSens[weights[i].index] += weights[i].weight*inner;
   } 
 }
+
 void TMRQuadStiffness::failureStrainSens( const double pt[], 
                                           const TacsScalar e[],
-                                          TacsScalar sens[]){
+                                          TacsScalar sens[] ){
  
   TacsScalar s[3], ps_sens[3];
   // Use the von Mises failure criterion
@@ -217,11 +221,10 @@ void TMRQuadStiffness::failureStrainSens( const double pt[],
   s[0] = D*e[0]+nu*D*e[1];
   s[1] = nu*D*e[0]+D*e[1];
   s[2] = 0.5*(1.0-nu)*D*e[2];
-  
-  TacsScalar fail = VonMisesFailurePlaneStressSens(ps_sens, s, ys);
+   
+  VonMisesFailurePlaneStressSens(ps_sens, s, ys);
   sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
   sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
   sens[2] = r_factor*0.5*(1.0-nu)*D*ps_sens[2];
-  
 }
 

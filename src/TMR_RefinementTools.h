@@ -19,8 +19,8 @@ void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
 /*
   Compute the reconstructed solution on a uniformly refined mesh
 */
-void TMR_ComputeReconSolution( TMRQuadForest *forest,
-                               TACSAssembler *tacs,
+void TMR_ComputeReconSolution( TACSAssembler *tacs,
+                               TMRQuadForest *forest,
                                TACSAssembler *tacs_refined,
                                TACSBVec *_uvec=NULL,
                                TACSBVec *_uvec_refined=NULL );

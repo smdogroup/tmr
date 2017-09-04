@@ -373,13 +373,34 @@ cdef class BsplineCurve(Curve):
         free(p)
 
 cdef class BsplinePcurve(Pcurve):
-    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] pts, int k=4):
+    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] pts, 
+                  np.ndarray[double, ndim=1, mode='c'] tu=None, 
+                  np.ndarray[double, ndim=1, mode='c'] wts=None, int k=4):
         cdef int nctl = pts.shape[0]
         cdef ku = k
+        cdef double *ctu = NULL
+        cdef double *cwts = NULL
         if ku > nctl:
             ku = nctl
-        self.ptr = new TMRBsplinePcurve(nctl, ku, <double*>pts.data)
+        self.ptr = NULL
+        if tu is not None and wts is not None:
+            if len(tu) != nctl+ku:
+                errmsg = 'Incorrect BsplinePcurve knot length'
+                raise ValueError(errmsg)
+            self.ptr = new TMRBsplinePcurve(nctl, ku, <double*>tu.data,
+                                            <double*>wts.data, 
+                                            <double*>pts.data)
+        elif tu is not None and wts is None:
+            self.ptr = new TMRBsplinePcurve(nctl, ku, <double*>tu.data,
+                                            <double*>pts.data)
+        elif tu is None and wts is None:
+            self.ptr = new TMRBsplinePcurve(nctl, ku, <double*>pts.data)
+        else:
+            errmsg = 'BsplinePcurve: must supply knots and weights'
+            raise ValueError(errmsg)
+
         self.ptr.incref()
+        return
 
 cdef class BsplineSurface(Surface):
     def __cinit__(self, np.ndarray[double, ndim=3, mode='c'] pts,
@@ -798,7 +819,8 @@ cdef class ConstElementSize(ElementFeatureSize):
 
 cdef class LinearElementSize(ElementFeatureSize):
     def __cinit__(self, double hmin, double hmax,
-                  double c=0.0, double ax=0.0, double ay=0.0, double az=0.0):
+                  double c=0.0, double ax=0.0, 
+                  double ay=0.0, double az=0.0):
         self.ptr = new TMRLinearElementSize(hmin, hmax, c, ax, ay, az)
         self.ptr.incref()
         
@@ -956,15 +978,66 @@ cdef class Topology:
 
 cdef class QuadrantArray:
     cdef TMRQuadrantArray *ptr
+    cdef int self_owned 
     def __cinit__(self):
         self.ptr = NULL
 
     def __dealloc__(self):
         del self.ptr
 
-cdef _init_QuadrantArray(TMRQuadrantArray *array):
+    def __len__(self):
+        cdef int size = 0
+        self.ptr.getArray(NULL, &size)
+        return size
+
+    def __getitem__(self, int k):
+        cdef int size = 0
+        cdef TMRQuadrant *array
+        self.ptr.getArray(&array, &size)
+        if k < 0 or k >= size:
+            errmsg = 'Quadrant array index %d out of range [0,%d)'%(k, size)
+            raise IndexError(errmsg)
+        quad = Quadrant()
+        quad.x = array[k].x
+        quad.y = array[k].y
+        quad.level = array[k].level
+        quad.face = array[k].face
+        quad.tag = array[k].tag
+        return quad
+
+    def __setitem__(self, int k, Quadrant quad):
+        cdef int size = 0
+        cdef TMRQuadrant *array
+        self.ptr.getArray(&array, &size)
+        if k < 0 or k >= size:
+            errmsg = 'Quadrant array index %d out of range [0,%d)'%(k, size)
+            raise IndexError(errmsg)
+        array[k].x = quad.x
+        array[k].y = quad.y
+        array[k].level = quad.level
+        array[k].face = quad.face
+        array[k].tag = quad.tag
+        return
+
+    def findIndex(self, Quadrant quad, use_nodes=False):
+        cdef int size = 0
+        cdef TMRQuadrant *array
+        cdef TMRQuadrant *t
+        cdef int index = 0
+        cdef int _use_nodes = 0
+        if use_nodes:
+            _use_nodes = 1
+        self.ptr.getArray(&array, &size)
+        t = self.ptr.contains(&quad.quad, _use_nodes)
+        if t == NULL:
+            return None
+        index = t - array
+        return index
+
+cdef _init_QuadrantArray(TMRQuadrantArray *array, int self_owned):
     arr = QuadrantArray()
     arr.ptr = array
+    arr.self_owned = self_owned
     return arr
 
 cdef class Quadrant:
@@ -1032,8 +1105,12 @@ cdef class QuadForest:
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
         self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
-    def refine(self, np.ndarray[int, ndim=1, mode='c'] refine):
-        self.ptr.refine(<int*>refine.data)
+    def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None):
+        if refine is not None:
+            self.ptr.refine(<int*>refine.data)
+        else:
+            self.ptr.refine(NULL)
+        return
 
     def duplicate(self):
         cdef TMRQuadForest *dup = NULL
@@ -1054,12 +1131,22 @@ cdef class QuadForest:
     def getQuadsWithAttribute(self, char *attr):
         cdef TMRQuadrantArray *array = NULL
         array = self.ptr.getQuadsWithAttribute(attr)
-        return _init_QuadrantArray(array)
+        return _init_QuadrantArray(array, 1)
 
     def getNodesWithAttribute(self, char *attr):
         cdef TMRQuadrantArray *array = NULL
         array = self.ptr.getNodesWithAttribute(attr)
-        return _init_QuadrantArray(array)
+        return _init_QuadrantArray(array, 1)
+
+    def getQuadrants(self):
+        cdef TMRQuadrantArray *array = NULL
+        self.ptr.getQuadrants(&array)
+        return _init_QuadrantArray(array, 0)
+
+    def getNodes(self):
+        cdef TMRQuadrantArray *array = NULL
+        self.ptr.getNodes(&array)
+        return _init_QuadrantArray(array, 0)
 
     def getNodeRange(self):
         cdef int size = 0
@@ -1267,8 +1354,12 @@ cdef class OctForest:
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
         self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
-    def refine(self, np.ndarray[int, ndim=1, mode='c'] _refine):
-        self.ptr.refine(<int*>_refine.data)
+    def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None):
+        if refine is not None:
+            self.ptr.refine(<int*>refine.data)
+        else:
+            self.ptr.refine(NULL)
+        return
 
     def duplicate(self):
         cdef TMROctForest *dup = NULL
@@ -1303,7 +1394,7 @@ cdef class OctForest:
 
     def getNodes(self):
         cdef TMROctantArray *array = NULL
-        self.ptr.getOctants(&array)
+        self.ptr.getNodes(&array)
         return _init_OctantArray(array, 0)
 
     def writeToVTK(self, char *filename):
@@ -1612,6 +1703,14 @@ def adjointRefine(Assembler coarse,
                             adjoint.ptr, forest.ptr, target_err,
                             min_refine, max_refine, &adj_corr)
     return ans, adj_corr
+
+def computeReconSolution(Assembler assembler, 
+                         QuadForest forest,
+                         Assembler refined,
+                         Vec uvec, Vec uvec_refined):
+    TMR_ComputeReconSolution(assembler.ptr, forest.ptr, refined.ptr,
+                             uvec.ptr, uvec_refined.ptr)
+    return
 
 cdef class TopoProblem(pyParOptProblemBase):
     def __cinit__(self, list assemblers, list filters, 

@@ -65,11 +65,14 @@ class TFIPlanar : public TMRFace {
 
     // Set the points
     X->x = (1.0-u)*c[0].x + u*c[1].x + (1.0-v)*c[2].x + v*c[3].x
-      - ((1.0-u)*(1.0-v)*pt[0].x + u*(1.0-v)*pt[1].x + v*(1.0-u)*pt[2].x + u*v*pt[3].x);
+      - ((1.0-u)*(1.0-v)*pt[0].x + u*(1.0-v)*pt[1].x + 
+         v*(1.0-u)*pt[2].x + u*v*pt[3].x);
     X->y = (1.0-u)*c[0].y + u*c[1].y + (1.0-v)*c[2].y + v*c[3].y
-      - ((1.0-u)*(1.0-v)*pt[0].y + u*(1.0-v)*pt[1].y + v*(1.0-u)*pt[2].y + u*v*pt[3].y);
+      - ((1.0-u)*(1.0-v)*pt[0].y + u*(1.0-v)*pt[1].y + 
+         v*(1.0-u)*pt[2].y + u*v*pt[3].y);
     X->z = (1.0-u)*c[0].z + u*c[1].z + (1.0-v)*c[2].z + v*c[3].z
-      - ((1.0-u)*(1.0-v)*pt[0].z + u*(1.0-v)*pt[1].z + v*(1.0-u)*pt[2].z + u*v*pt[3].z); 
+      - ((1.0-u)*(1.0-v)*pt[0].z + u*(1.0-v)*pt[1].z + 
+         v*(1.0-u)*pt[2].z + u*v*pt[3].z); 
 
     return fail;
   }

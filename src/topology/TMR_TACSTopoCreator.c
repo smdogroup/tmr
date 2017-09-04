@@ -604,8 +604,7 @@ void TMRQuadTACSTopoCreator::computeWeights( TMRQuadrant *quad,
   // Get the dependent node information for this mesh
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
-  int num_dep_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
-                                             &dep_weights);
+  filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
 
   // Get the octant array for the nodes
   TMRQuadrantArray *filter_nodes;
@@ -679,18 +678,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   int num_quads;
   TMRQuadrant *quads;
   quadrants->getArray(&quads, &num_quads);
-  // Get quadrants with specified attribute
-  char attr[256];
-  sprintf(attr, "Fixed");
-  TMRQuadrantArray *attr_quadrants =
-    forest->getQuadsWithAttribute(attr);
 
-  /* TMRQuadrant *attr_quads; */
-  /* int num_attr; */
-  /* attr_quadrants->getArray(&attr_quads, &num_attr); */
-  /* for (int i = 0; i < num_attr; i++){ */
-  /*   printf("attr[%d]: %d %d\n", i,attr_quads[i].tag); */
-  /* } */
   // Create a queue for the external quadrants
   TMRQuadrantQueue *queue = new TMRQuadrantQueue();
 
@@ -904,10 +892,9 @@ void TMRQuadTACSTopoCreator::createElements( int order,
     }
     weights[i].index = node;
   }
-  int attr_index = 0;
+  
   for ( int i = 0; i < num_quads; i++ ){
     // Allocate the stiffness object
-    TacsScalar lower = 1e-6;
     PlaneStressStiffness *stiff = 
       new TMRQuadStiffness(&weights[nweights*i], nweights, 
                            properties.rho, properties.E, properties.nu, 

@@ -1002,7 +1002,8 @@ int TMR_ConvertBinToSTL( const char *binfile,
 
   // Read in the triangles themselves
   Triangle *tris = new Triangle[ ntris ];
-  if (fread(tris, sizeof(Triangle), ntris, fp) != ntris){
+  unsigned int unsigned_ntris = ntris;
+  if (fread(tris, sizeof(Triangle), ntris, fp) != unsigned_ntris){
     delete [] tris;
     return 1;
   }

@@ -251,6 +251,8 @@ cdef extern from "TMRQuadForest.h":
         int getDepNodeConn(const int**, const int**, const double**)
         void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
         int getOwnedNodeRange(const int**)
+        void getQuadrants(TMRQuadrantArray**)
+        void getNodes(TMRQuadrantArray**)
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
 
@@ -339,6 +341,10 @@ cdef extern from "TMR_RefinementTools.h":
     void TMR_CreateTACSMg(int, TACSAssembler**,
                           TMRQuadForest**,
                           TACSMg**)
+    void TMR_ComputeReconSolution(TACSAssembler*,
+                                  TMRQuadForest*,
+                                  TACSAssembler*,
+                                  TACSBVec*, TACSBVec*)
     TacsScalar TMR_StrainEnergyRefine(TACSAssembler*,
                                       TMRQuadForest*,
                                       double, int, int)
