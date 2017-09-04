@@ -4,6 +4,7 @@
 #include "FElibrary.h"
 #include "Solid.h"
 #include "PlaneStressQuad.h"
+
 /*
   Compare integers for sorting
 */
@@ -507,7 +508,6 @@ void TMROctTACSTopoCreator::createElements( int order,
   Set up a creator class for the given filter problem
 */
 TMRQuadTACSTopoCreator::TMRQuadTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                                TMRQuadStiffnessProperties _props,
                                                 TMRQuadForest *_filter ):
 TMRQuadTACSCreator(_bcs){
   // Reference the filter
@@ -517,9 +517,6 @@ TMRQuadTACSCreator(_bcs){
   int mpi_rank;
   MPI_Comm comm = filter->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
-
-  // Set the material properties
-  properties = _props;
 
   // Create the nodes within the filter
   filter->createNodes(2);
@@ -539,6 +536,7 @@ TMRQuadTACSCreator(_bcs){
   // Set the filter indices to NULL
   filter_indices = NULL;
 }
+
 /*
   Free the creator object
 */
@@ -547,8 +545,9 @@ TMRQuadTACSTopoCreator::~TMRQuadTACSTopoCreator(){
   filter_map->decref();
   if (filter_indices){ filter_indices->decref(); }
 }
-// Get the underlying information about the
-void TMRQuadTACSTopoCreator::getForest( TMRQuadForest **_filter ){
+
+// Get the underlying information about the problem
+void TMRQuadTACSTopoCreator::getFilter( TMRQuadForest **_filter ){
   *_filter = filter;
 }
 
@@ -559,6 +558,7 @@ void TMRQuadTACSTopoCreator::getMap( TACSVarMap **_map ){
 void TMRQuadTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
   *_indices = filter_indices;
 }
+
 /*
   Create the connectivity
 */
@@ -585,6 +585,9 @@ void TMRQuadTACSTopoCreator::createConnectivity( int order,
   *_num_elements = num_elements;  
 }
 
+/*
+  Compute the weights associated with the given quadrant
+*/
 void TMRQuadTACSTopoCreator::computeWeights( TMRQuadrant *quad,
                                              TMRQuadrant *node,
                                              TMRIndexWeight *welem ){
@@ -674,6 +677,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   // Get the quadrants associated with the forest
   TMRQuadrantArray *quadrants;
   forest->getQuadrants(&quadrants);
+
   // Get the array of quadrants from the forest
   int num_quads;
   TMRQuadrant *quads;
@@ -721,8 +725,8 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   // Distribute the nodes to the processors that own them
   int use_tags = 0;
   int *send_ptr, *recv_ptr;
-  TMRQuadrantArray *dist_nodes = filter->distributeQuadrants(nodes, use_tags,
-                                                             &send_ptr, &recv_ptr);
+  TMRQuadrantArray *dist_nodes = 
+    filter->distributeQuadrants(nodes, use_tags, &send_ptr, &recv_ptr);
   delete nodes;
   
   // Get the external nodes that are local to this processor and
@@ -761,7 +765,8 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   MPI_Request *send_request = new MPI_Request[ nrecvs ];
 
   // Allocate space for the new weights
-  TMRIndexWeight *new_weights = new TMRIndexWeight[ nweights*send_ptr[mpi_size] ];
+  TMRIndexWeight *new_weights = 
+    new TMRIndexWeight[ nweights*send_ptr[mpi_size] ];
 
   // Loop over all the ranks and send 
   for ( int i = 0, j = 0; i < mpi_size; i++ ){
@@ -798,11 +803,13 @@ void TMRQuadTACSTopoCreator::createElements( int order,
       j++;
     }
   }
+
   delete [] new_weights;
   delete [] send_request;
   delete [] send_ptr;
   delete [] recv_ptr;
   delete [] dist_weights;
+  
   // The node numbers within the weights are global. Convert them into
   // a local node ordering and create a list of the external node
   // numbers referenced by the weights.
@@ -826,7 +833,8 @@ void TMRQuadTACSTopoCreator::createElements( int order,
 
   // Count up all the external nodes
   int num_ext = 0;
-  int max_ext_nodes = nweights*num_quads + dep_ptr[num_dep_nodes] + num_filter_ext;
+  int max_ext_nodes = nweights*num_quads + 
+    dep_ptr[num_dep_nodes] + num_filter_ext;
   int *ext_nodes = new int[ max_ext_nodes ];
 
   // Add the external nodes from the filter
@@ -892,20 +900,15 @@ void TMRQuadTACSTopoCreator::createElements( int order,
     }
     weights[i].index = node;
   }
-  
+
+  // Loop over the octants
+  quadrants->getArray(&quads, &num_quads);
   for ( int i = 0; i < num_quads; i++ ){
     // Allocate the stiffness object
-    PlaneStressStiffness *stiff = 
-      new TMRQuadStiffness(&weights[nweights*i], nweights, 
-                           properties.rho, properties.E, properties.nu, 
-                           properties.ys, properties.q);
-    if (order == 2){
-      elements[i] = new PlaneStressQuad<2>(stiff);
-    }
-    else {
-      elements[i] = new PlaneStressQuad<3>(stiff);
-    }
+    elements[i] = createElement(order, &quads[i], 
+                                &weights[nweights*i], nweights);
   }
 
+  // Free the weights
   delete [] weights;  
 }

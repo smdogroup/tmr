@@ -97,6 +97,39 @@ class TMRCyOctCreator : public TMROctTACSCreator {
 /*
   Create a wrapper for topology optimization with a filter
 */
+class TMRCyTopoQuadCreator : public TMRQuadTACSTopoCreator {
+ public:
+  TMRCyTopoQuadCreator( TMRBoundaryConditions *_bcs,
+                        TMRQuadForest *_filter ):
+  TMRQuadTACSTopoCreator(_bcs, _filter){}
+
+  void setSelfPointer( void *_self ){
+    self = _self;
+  }
+  void setCreateQuadTopoElement( 
+    TACSElement* (*func)(void*, int, TMRQuadrant*, TMRIndexWeight*, int) ){
+    createquadtopoelement = func;
+  }
+
+  // Create the element
+  TACSElement *createElement( int order, 
+                              TMRQuadrant *quad,
+                              TMRIndexWeight *weights, 
+                              int nweights ){
+    TACSElement *elem =
+      createquadtopoelement(self, order, quad, weights, nweights);
+    return elem;
+  }
+
+ private:
+  void *self; // Pointer to the python-level object
+  TACSElement* (*createquadtopoelement)( 
+    void*, int, TMRQuadrant*, TMRIndexWeight *weights, int nweights );
+};
+
+/*
+  Create a wrapper for topology optimization with a filter
+*/
 class TMRCyTopoOctCreator : public TMROctTACSTopoCreator {
  public:
   TMRCyTopoOctCreator( TMRBoundaryConditions *_bcs,

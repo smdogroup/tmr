@@ -9,26 +9,6 @@
 #include "TMRBase.h"
 #include "PlaneStressStiffness.h"
 #include "TACSConstitutive.h"
-/*
-  Stiffness properties object
-*/
-class TMRQuadStiffnessProperties {
- public:
-  // Initialize the properties so that they have some value
-  TMRQuadStiffnessProperties(){
-    rho = 1.0;
-    E = 70.0e9;
-    nu = 0.3;
-    q = 1.0;
-    ys = 280.e3;
-  }
-
-  TacsScalar rho; // Material density
-  TacsScalar E; // Young's modulus
-  TacsScalar nu; // Poisson ratio
-  TacsScalar q; // RAMP penalty parameter
-  TacsScalar ys; // Yield stress
-};
 
 /*
   The TMRQuadStiffness class

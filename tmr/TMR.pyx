@@ -29,29 +29,6 @@ from TMR cimport *
 cdef extern from "mpi-compat.h":
     pass
 
-# This wraps a C++ array with a numpy array for later useage
-cdef inplace_array_1d(int nptype, int dim1, void *data_ptr,
-                      PyObject *ptr):
-    '''Return a numpy version of the array'''
-    # Set the shape of the array
-    cdef int size = 1
-    cdef np.npy_intp shape[1]
-    cdef np.ndarray ndarray
-
-    # Set the first entry of the shape array
-    shape[0] = <np.npy_intp>dim1
-      
-    # Create the array itself - Note that this function will not
-    # delete the data once the ndarray goes out of scope
-    ndarray = np.PyArray_SimpleNewFromData(size, shape,
-                                           nptype, data_ptr)
-
-    # Set the base class who owns the memory
-    if ptr != NULL:
-        ndarray.base = ptr
-
-    return ndarray
-
 cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):
@@ -1521,6 +1498,61 @@ cdef class OctCreator:
         assembler = self.ptr.createTACS(order, forest.ptr)
         return _init_Assembler(assembler)
 
+cdef TACSElement* _createQuadTopoElement(void *_self, int order, 
+                                         TMRQuadrant *quad,
+                                         TMRIndexWeight *weights,
+                                         int nweights):
+    cdef TACSElement *elem = NULL
+    q = Quadrant()
+    q.quad.x = quad.x
+    q.quad.y = quad.y
+    q.quad.level = quad.level
+    q.quad.face = quad.face
+    q.quad.tag = quad.tag
+    idx = []
+    wvals = []
+    for i in range(nweights):
+        idx.append(weights[i].index)
+        wvals.append(weights[i].weight)
+    e = (<object>_self).createElement(order, q, idx, wvals)
+    if e is not None:
+        (<Element>e).ptr.incref()
+        elem = (<Element>e).ptr
+        return elem
+    return NULL
+
+cdef class QuadTopoCreator:
+    cdef TMRCyTopoQuadCreator *ptr
+    def __cinit__(self, BoundaryConditions bcs, QuadForest filt):
+        self.ptr = new TMRCyTopoQuadCreator(bcs.ptr, filt.ptr)
+        self.ptr.incref()
+        self.ptr.setSelfPointer(<void*>self)
+        self.ptr.setCreateQuadTopoElement(_createQuadTopoElement)
+        return
+
+    def __dealloc__(self):
+        self.ptr.decref()
+
+    def createTACS(self, int order, QuadForest forest):
+        cdef TACSAssembler *assembler = NULL
+        assembler = self.ptr.createTACS(order, forest.ptr)
+        return _init_Assembler(assembler)
+
+    def getFilter(self):
+        cdef TMRQuadForest *filtr = NULL
+        self.ptr.getFilter(&filtr)
+        return _init_QuadForest(filtr)
+
+    def getMap(self):
+        cdef TACSVarMap *vmap = NULL
+        self.ptr.getMap(&vmap)
+        return _init_VarMap(vmap)
+
+    def getIndices(self):
+        cdef TACSBVecIndices *indices = NULL
+        self.ptr.getIndices(&indices)
+        return _init_VecIndices(indices)
+
 cdef TACSElement* _createOctTopoElement(void *_self, int order, 
                                         TMROctant *octant,
                                         TMRIndexWeight *weights,
@@ -1576,38 +1608,6 @@ cdef class OctTopoCreator:
         cdef TACSBVecIndices *indices = NULL
         self.ptr.getIndices(&indices)
         return _init_VecIndices(indices)
-
-cdef class OctStiffnessProperties:
-    cdef TMROctStiffnessProperties ptr
-    def __cinit__(self):
-        self.ptr = TMROctStiffnessProperties()
-      
-    def __dealloc__(self):
-        return
-   
-    property rho:
-        def __get__(self):
-            return self.ptr.rho
-        def __set__(self, value):
-            self.ptr.rho = value
-
-    property E:
-        def __get__(self):
-            return self.ptr.E
-        def __set__(self, value):
-            self.ptr.E = value
-
-    property nu:
-        def __get__(self):
-            return self.ptr.nu
-        def __set__(self, value):
-            self.ptr.nu = value
-
-    property q:
-        def __get__(self):
-            return self.ptr.q
-        def __set__(self, value):
-            self.ptr.q = value
 
 cdef class OctStiffness(SolidStiff):
     def __cinit__(self, TacsScalar rho, TacsScalar E, TacsScalar nu,

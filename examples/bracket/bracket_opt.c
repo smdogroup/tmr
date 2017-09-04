@@ -12,6 +12,42 @@
 #include "TMR_STLTools.h"
 #include "isoFSDTStiffness.h"
 
+class TMRStiffnessProperties {
+ public:
+  TacsScalar rho, E, nu;
+  double q;
+};
+
+class CreateTopo : public TMROctTACSTopoCreator {
+ public:
+  CreateTopo( TMRBoundaryConditions *_bcs,
+              TMROctForest *_filter,
+              TMRStiffnessProperties _props ):
+  TMROctTACSTopoCreator(_bcs, _filter){
+    props = _props;
+  }
+
+  // Create an element for the mesh
+  TACSElement *createElement( int order, 
+                              TMROctant *oct,
+                              TMRIndexWeight *weights, 
+                              int nweights ){
+    SolidStiffness *stiff = 
+      new TMROctStiffness(weights, nweights, 
+                          props.rho, props.E, props.nu, props.q);
+    if (order == 2){
+      return new Solid<2>(stiff);
+    }
+    else {
+      return new Solid<3>(stiff);
+    }
+    return NULL;
+  }
+
+ private:
+  TMRStiffnessProperties props;
+};
+
 /*
   Add the 3D traction
 */
@@ -60,7 +96,7 @@ void addFaceTractions( int order,
     int use_node_search = 0;
     TMROctant *me = octants->contains(&array[i], use_node_search);
     int element_num = me - first;
-    printf("element num: %d %d\n",face_index, element_num);
+
     // Add the element to the auxiliary elements
     aux->addElement(element_num, trac[face_index]);
   }
@@ -102,18 +138,7 @@ void createTopoProblem( int num_levels,
 
   // Set the forest/filter for the most refined mesh  
   forest_levs[0] = forest;
-  filter_levs[0] = filter; 
-
-  TacsScalar rho = props->rho;
-  TacsScalar E = props->E;
-  TacsScalar nu = props->nu;
-  TacsScalar kcorr = 5.0/6.0;
-  TacsScalar ys = 400.0e6;
-  TacsScalar t = 1.0;
-  isoFSDTStiffness *stiff = new isoFSDTStiffness(rho, E, nu, kcorr, 
-                                                 ys, t);
-  MITCShell<2> *mitc4 = new MITCShell<2>(stiff);
-  SolidShellWrapper *shell = new SolidShellWrapper(mitc4);
+  filter_levs[0] = filter;
 
   for ( int level = 0; level < num_levels; level++ ){
     if (level > 0){
@@ -134,27 +159,10 @@ void createTopoProblem( int num_levels,
 
     // Create the extra nodes associated with the shell element
     forest->allocateNodes(2);
-    
-    // Get the octants nodes 
-    int intersect = 0;
-    TMROctantArray *face_nodes = 
-      forest->getNodesWithAttribute("Shell", intersect);
 
     // Get the nodes in the forest
     TMROctantArray *nodes;
     forest->getNodes(&nodes);
-
-    // Get all the nodes in the array
-    int size;
-    TMROctant *array;
-    face_nodes->getArray(&array, &size);
-
-    for ( int i = 0; i < size; i++ ){
-      int use_node_search = 1;
-      TMROctant *t = nodes->contains(&array[i], use_node_search);
-      t->level = 2;
-    }
-    delete face_nodes;
 
     // Order the nodes with the new attributes
     forest->orderNodes();
@@ -162,9 +170,7 @@ void createTopoProblem( int num_levels,
     filter->balance();
     filter->repartition();
 
-    TMROctTACSTopoCreator *creator = 
-      new TMROctTACSTopoCreator(bcs, *props, filter, 
-                                "Shell", shell);
+    TMROctTACSTopoCreator *creator = new CreateTopo(bcs, filter, *props);
     creator->incref();
 
     // Create tacs
@@ -206,8 +212,8 @@ void createTopoProblem( int num_levels,
   // Create the topology optimization problem
   TMRTopoProblem *prob = 
     new TMRTopoProblem(num_levels, tacs, filter_levs,
-                       filter_maps, filter_ext_indices, mg,
-                       target_mass, prefix);
+                       filter_maps, filter_ext_indices, mg);
+  prob->setPrefix(prefix);
   *_prob = prob;
 
   // Free the filter maps

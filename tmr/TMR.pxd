@@ -319,10 +319,6 @@ cdef extern from "TMR_TACSCreator.h":
         TMROctTACSCreator(TMRBoundaryConditions*)
 
 cdef extern from "TMROctStiffness.h":
-    cdef cppclass TMROctStiffnessProperties:
-        TMROctStiffnessProperties()
-        TacsScalar rho, E, nu, q
-
     cdef cppclass TMROctStiffness(SolidStiffness):
         TMROctStiffness(TMRIndexWeight*, int, TacsScalar, TacsScalar,
                         TacsScalar, double)
@@ -358,6 +354,8 @@ cdef extern from "TMR_RefinementTools.h":
 cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
     ctypedef TACSElement* (*createoctelements)(void*, int, TMROctant*)
+    ctypedef TACSElement* (*createquadtopoelements)(
+        void*, int, TMRQuadrant*, TMRIndexWeight*, int)
     ctypedef TACSElement* (*createocttopoelements)(
         void*, int, TMROctant*, TMRIndexWeight*, int)
 
@@ -375,6 +373,17 @@ cdef extern from "TMRCyCreator.h":
             TACSElement* (*createoctelements)(void*, int, TMROctant*) )
         TACSAssembler *createTACS(int, TMROctForest*)
 
+    cdef cppclass TMRCyTopoQuadCreator(TMREntity):
+        TMRCyTopoQuadCreator(TMRBoundaryConditions*, TMRQuadForest*)
+        void setSelfPointer(void*)
+        void setCreateQuadTopoElement( 
+            TACSElement* (*createquadtopoelements)(
+                void*, int, TMRQuadrant*, TMRIndexWeight*, int))
+        TACSAssembler *createTACS(int, TMRQuadForest*)
+        void getFilter(TMRQuadForest**)
+        void getMap(TACSVarMap**)
+        void getIndices(TACSBVecIndices**)
+
     cdef cppclass TMRCyTopoOctCreator(TMREntity):
         TMRCyTopoOctCreator(TMRBoundaryConditions*, TMROctForest*)
         void setSelfPointer(void*)
@@ -385,7 +394,6 @@ cdef extern from "TMRCyCreator.h":
         void getFilter(TMROctForest**)
         void getMap(TACSVarMap**)
         void getIndices(TACSBVecIndices**)
-
 
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
