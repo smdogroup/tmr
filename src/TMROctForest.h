@@ -88,8 +88,7 @@ class TMROctForest : public TMREntity {
   // Get the nodes or elements with certain attributes
   // -------------------------------------------------
   TMROctantArray* getOctsWithAttribute( const char *attr );
-  TMROctantArray* getNodesWithAttribute( const char *attr, 
-                                         int intersect=1 );
+  TMROctantArray* getNodesWithAttribute( const char *attr );
 
   // Create the mesh connectivity
   // ----------------------------

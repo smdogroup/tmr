@@ -159,7 +159,7 @@ def create_panel(Lx, Ly, use_hole=True):
     geo = TMR.Model(verts, edges, faces)
     return geo
 
-geo = create_panel(100.0, 100.0, use_hole=False)
+geo = create_panel(100.0, 100.0, use_hole=True)
 
 # Create the mesh
 comm = MPI.COMM_WORLD
@@ -189,8 +189,8 @@ forest.setTopology(topo)
 bcs = TMR.BoundaryConditions()
 bcs.addBoundaryCondition('x+')
 bcs.addBoundaryCondition('x-')
-# bcs.addBoundaryCondition('y+')
-# bcs.addBoundaryCondition('y-')
+bcs.addBoundaryCondition('y+')
+bcs.addBoundaryCondition('y-')
 
 # Allocate the creator class
 creator = CreateMe(bcs)
