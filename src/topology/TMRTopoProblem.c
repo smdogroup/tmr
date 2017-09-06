@@ -375,6 +375,7 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
   buckling = new TACSLinearBuckling*[num_load_cases];
   freq = new TACSFrequencyAnalysis*[num_load_cases];
   // Array of KS aggregation for each load case
+  ks_a = new TacsScalar[num_load_cases];
   memset(ks_a, 0.0, num_load_cases*sizeof(TacsScalar));
   for ( int i = 0; i < num_load_cases; i++ ){
     buckling[i] = NULL;
