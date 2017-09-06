@@ -1808,6 +1808,26 @@ cdef class TopoProblem(pyParOptProblemBase):
         free(_scale)
         return
 
+    def addConstraints(self, int case, int buckling,
+                       int frequency, double sigma, int num_eigvals,
+                       TacsScalar offset, TacsScalar scale):
+        '''
+        Add buckling/natural frequency constraints
+        '''
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        if case < 0 or case >= prob.getNumLoadCases():
+            errmsg = 'Load case out of expected range'
+            raise ValueError(errmsg)
+        if (buckling == frequency) and buckling == 1:
+            errmsg = 'Cannot add both buckling and natural frequency constraints'
+            raise ValueError(errmsg)
+        prob.addConstraints(case,buckling, frequency, sigma, num_eigvals,
+                            offset, scale) 
+        return
+
     def setObjective(self, list weights):
         cdef int lenw = 0
         cdef TacsScalar *w = NULL
@@ -1826,7 +1846,38 @@ cdef class TopoProblem(pyParOptProblemBase):
         prob.setObjective(w)
         free(w)
         return
-
+    
+    def setObjective(self, list weights, list funcs):
+        '''
+        For non-compliance objectives
+        '''
+        cdef int nfuncs = 0
+        cdef TACSFunction **f = NULL
+        cdef int lenw = 0
+        cdef TacsScalar *w = NULL
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        # Assign the weights associated with each load case
+        lenw = len(weights)
+        if lenw != prob.getNumLoadCases():
+            errmsg = 'Incorrect number of weights'
+            raise ValueError(errmsg)
+        w = <TacsScalar*>malloc(lenw*sizeof(TacsScalar))
+        for i in range(lenw):
+            w[i] = weights[i]
+        # Get the objective function associated with each load case
+        nfuncs = len(funcs)
+        f = <TACSFunction**>malloc(nfuncs*sizeof(TACSFunction*))
+        for i in range(nfuncs):
+            f[i] = (<Function>funcs[i]).ptr
+        prob.setObjective(w,f)
+        free(f)
+        free(w)
+        return
+        
     def initialize(self):
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
