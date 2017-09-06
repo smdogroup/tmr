@@ -64,6 +64,7 @@ class TMRTopoProblem : public ParOptProblem {
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
   // ----------------------------------------------------------------------
+  void setObjective( const TacsScalar *_obj_weights, TACSFunction **funcs );
   void setObjective( const TacsScalar *_obj_weights );
 
   // Finish the initialization tasks - assign the number of constraints
@@ -167,6 +168,7 @@ class TMRTopoProblem : public ParOptProblem {
 
   // The objective weights
   TacsScalar *obj_weights;
+  TACSFunction **obj_funcs;
 
   // Set the constraint information for each load case
   class LoadCaseInfo {

@@ -227,6 +227,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // Set the objective weight information
   obj_weights = NULL;
+  obj_funcs = NULL;
 }
 
 /*
@@ -275,7 +276,7 @@ TMRTopoProblem::~TMRTopoProblem(){
 
   // Free the variables/forces
   for ( int i = 0; i < num_load_cases; i++ ){
-    forces[i]->decref();
+    if (forces[i]){ forces[i]->decref(); }
     vars[i]->decref();
   }
 
@@ -299,6 +300,11 @@ TMRTopoProblem::~TMRTopoProblem(){
   if (obj_weights){
     delete [] obj_weights;
   }
+  if (obj_funcs){
+    for ( int i = 0; i < num_load_cases; i++ ){
+      if (obj_funcs[i]){ obj_funcs[i]->decref(); }
+    }
+  }
 }
 
 /*
@@ -316,13 +322,17 @@ void TMRTopoProblem::setPrefix( const char *_prefix ){
 void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
   // Pre-incref the input forces
   for ( int i = 0; i < _num_load_cases; i++ ){
-    _forces[i]->incref();
+    if (_forces[i]){
+      _forces[i]->incref();
+    }
   }
 
   // Free the forces/variables if any exist
   if (forces){
     for ( int i = 0; i < num_load_cases; i++ ){
-      forces[i]->decref();
+      if (forces[i]){
+        forces[i]->decref();
+      }
       vars[i]->decref();
     }
     delete [] forces;
@@ -409,14 +419,44 @@ void TMRTopoProblem::addConstraints( int load_case,
 }
 
 /*
-  Set the objective weight values - for now just the compliance
+  Set the objective weight values - this indicates a compliance objective
 */
 void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights ){
   if (!obj_weights){
     obj_weights = new TacsScalar[ num_load_cases ];
   }
+  if (obj_funcs){
+    for ( int i = 0; i < num_load_cases; i++ ){
+      if (obj_funcs[i]){ obj_funcs[i]->decref(); }
+    }
+  }
   for ( int i = 0; i < num_load_cases; i++ ){
     obj_weights[i] = _obj_weights[i];
+  }
+}
+
+/*
+  Set the objective weight values - this indicates a compliance objective
+*/
+void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights,
+                                   TACSFunction **_obj_funcs ){
+  for ( int i = 0; i < num_load_cases; i++ ){
+    if (_obj_funcs[i]){ obj_funcs[i]->incref(); }
+  }
+  if (!obj_weights){
+    obj_weights = new TacsScalar[ num_load_cases ];
+  }
+  if (!obj_funcs){
+    obj_funcs = new TACSFunction*[ num_load_cases ];
+  }
+  else {
+    for ( int i = 0; i < num_load_cases; i++ ){
+      if (obj_funcs[i]){ obj_funcs[i]->decref(); }
+    }
+  }
+  for ( int i = 0; i < num_load_cases; i++ ){
+    obj_weights[i] = _obj_weights[i];
+    obj_funcs[i] = _obj_funcs[i];
   }
 }
 
@@ -678,24 +718,37 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     // Solve the system: K(x)*u = forces
     int count = 0;
     for ( int i = 0; i < num_load_cases; i++ ){
-      ksm->solve(forces[i], vars[i]);
-      tacs[0]->applyBCs(vars[i]);
+      if (forces[i]){
+        ksm->solve(forces[i], vars[i]);
+        tacs[0]->applyBCs(vars[i]);
+      
+        // Set the variables into TACSAssembler
+        tacs[0]->setVariables(vars[i]);
 
-      // Add the contribution to the objective
-      *fobj += obj_weights[i]*vars[i]->dot(forces[i]);
+        // Add the contribution to the objective
+        if (obj_funcs){
+          if (obj_funcs[i]){
+            TacsScalar fobj_val;
+            tacs[0]->evalFunctions(&obj_funcs[i], 1, &fobj_val);
+            *fobj += obj_weights[i]*fobj_val;
+          }
+        }
+        else {
+          *fobj += obj_weights[i]*vars[i]->dot(forces[i]);
+        }
 
-      // Set the variables and evaluate the constraints
-      tacs[0]->setVariables(vars[i]);
-      int num_funcs = load_case_info[i].num_funcs;
-      tacs[0]->evalFunctions(load_case_info[i].funcs, num_funcs, &cons[count]);
+        // Evaluate the constraints
+        int num_funcs = load_case_info[i].num_funcs;
+        tacs[0]->evalFunctions(load_case_info[i].funcs, num_funcs, &cons[count]);
 
-      // Scale and offset the constraints that we just evaluated
-      for ( int j = 0; j < num_funcs; j++ ){
-        TacsScalar offset = load_case_info[i].offset[j];
-        TacsScalar scale = load_case_info[i].scale[j];
-        cons[count + j] = scale*(cons[count+j] + offset);
+        // Scale and offset the constraints that we just evaluated
+        for ( int j = 0; j < num_funcs; j++ ){
+          TacsScalar offset = load_case_info[i].offset[j];
+          TacsScalar scale = load_case_info[i].scale[j];
+          cons[count + j] = scale*(cons[count+j] + offset);
+        }
+        count += num_funcs;
       }
-      count += num_funcs;
     }
   }
   else {
