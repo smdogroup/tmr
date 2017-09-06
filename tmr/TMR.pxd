@@ -13,7 +13,6 @@ import numpy as np
 from paropt.ParOpt cimport *
 from tacs.TACS cimport *
 from tacs.constitutive cimport *
-from ParOpt cimport ParOptVec
 
 cdef extern from "<stdint.h>":
     ctypedef signed int int32_t
@@ -413,3 +412,7 @@ cdef extern from "TMRTopoProblem.h":
         void setInitDesignVars(ParOptVec*)
         void setIterationCounter(int)
         ParOptVec* createDesignVec()
+
+    cdef cppclass ParOptBVecWrap(ParOptVec):
+        ParOptBVecWrap(TACSBVec*)
+        TACSBVec *vec

@@ -1905,3 +1905,17 @@ cdef class TopoProblem(pyParOptProblemBase):
         prob.setIterationCounter(count)
         return
 
+cdef class VecWrap:
+    cdef ParOptBVecWrap *ptr
+    def __cinit__(self, Vec vec):
+        self.ptr = new ParOptBVecWrap(vec.ptr)
+        return
+
+    def __malloc__(self):
+        if (self.ptr):
+            del self.ptr
+
+    property vec:
+        def __get__(self):
+            return _init_Vec(self.ptr.vec)
+        
