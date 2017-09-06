@@ -7,7 +7,8 @@
 #include "TMROctForest.h"
 #include "StructuralMass.h"
 #include "Compliance.h"
-
+#include "KSFailure.h"
+#include "TACSBuckling.h"
 /*
   Wrap a TACSBVec object with the ParOptVec interface
 */
@@ -60,6 +61,11 @@ class TMRTopoProblem : public ParOptProblem {
                        const TacsScalar *_func_offset, 
                        const TacsScalar *_func_scale,
                        int num_funcs );
+  
+  void addConstraints( int _load_case, int _buckling,
+                       int _freq, double sigma, int _num_eigvals,
+                       const TacsScalar _func_offset,
+                       const TacsScalar _func_scale );
 
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
@@ -163,6 +169,11 @@ class TMRTopoProblem : public ParOptProblem {
   int num_load_cases;
   TACSBVec **vars, **forces;
 
+  // The buckling and natural frequency TACS object
+  TACSLinearBuckling **buckling;
+  TACSFrequencyAnalysis **freq;
+  int reset_count;
+  TacsScalar *ks_a;
   // The derivative of f(x,u) w.r.t. u and the adjoint variables
   TACSBVec *dfdu, *adjoint;
 
@@ -177,6 +188,8 @@ class TMRTopoProblem : public ParOptProblem {
     TacsScalar *offset;
     TacsScalar *scale;
     TACSFunction **funcs;
+    int num_eigvals;
+    TacsScalar bf_offset, bf_scale;
   } *load_case_info;
 
   // Store the design variable info
