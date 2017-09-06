@@ -451,8 +451,8 @@ void TMRTopoProblem::addConstraints( int load_case,
 void TMRTopoProblem::addConstraints( int load_case, 
                                      int _buckling, int _freq,
                                      double sigma, int _num_eigvals,
-                                     const TacsScalar offset, 
-                                     const TacsScalar scale ){
+                                     TacsScalar offset, 
+                                     TacsScalar scale ){
   if (!load_case_info){
     fprintf(stderr, "TMRTopoProblem error: Must call setLoadCases() \
       before adding constraints\n");

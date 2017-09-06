@@ -64,8 +64,8 @@ class TMRTopoProblem : public ParOptProblem {
   
   void addConstraints( int _load_case, int _buckling,
                        int _freq, double sigma, int _num_eigvals,
-                       const TacsScalar _func_offset,
-                       const TacsScalar _func_scale );
+                       TacsScalar _func_offset,
+                       TacsScalar _func_scale );
 
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
