@@ -1318,7 +1318,7 @@ cdef class OctForest:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-
+        
     def setTopology(self, Topology topo):
         self.ptr.setTopology(topo.ptr)
 
@@ -1373,6 +1373,15 @@ cdef class OctForest:
         cdef TMROctantArray *array = NULL
         self.ptr.getNodes(&array)
         return _init_OctantArray(array, 0)
+
+    def getNodeRange(self):
+        cdef int size = 0
+        cdef const int *node_range = NULL
+        size = self.ptr.getOwnedNodeRange(&node_range)
+        r = np.zeros(size+1, dtype=np.intc)
+        for i in range(size+1):
+            r[i] = node_range[i]
+        return r
 
     def writeToVTK(self, char *filename):
         self.ptr.writeToVTK(filename)
@@ -1808,9 +1817,9 @@ cdef class TopoProblem(pyParOptProblemBase):
         free(_scale)
         return
 
-    def addConstraints(self, int case, int buckling,
-                       int frequency, double sigma, int num_eigvals,
-                       TacsScalar offset, TacsScalar scale):
+    def addBucklingConstraints(self, int case, int buckling,
+                               int frequency, double sigma, int num_eigvals,
+                               TacsScalar offset, TacsScalar scale):
         '''
         Add buckling/natural frequency constraints
         '''
@@ -1828,7 +1837,7 @@ cdef class TopoProblem(pyParOptProblemBase):
                             offset, scale) 
         return
 
-    def setObjective(self, list weights):
+    def setObjective(self, list weights, list funcs=None):
         cdef int lenw = 0
         cdef TacsScalar *w = NULL
         cdef TMRTopoProblem *prob = NULL
@@ -1843,41 +1852,23 @@ cdef class TopoProblem(pyParOptProblemBase):
         w = <TacsScalar*>malloc(lenw*sizeof(TacsScalar))
         for i in range(lenw):
             w[i] = weights[i]
-        prob.setObjective(w)
-        free(w)
-        return
-    
-    def setObjective(self, list weights, list funcs):
-        '''
-        For non-compliance objectives
-        '''
+        # Check if list of functions are provided
         cdef int nfuncs = 0
         cdef TACSFunction **f = NULL
-        cdef int lenw = 0
-        cdef TacsScalar *w = NULL
-        cdef TMRTopoProblem *prob = NULL
-        prob = _dynamicTopoProblem(self.ptr)
-        if prob == NULL:
-            errmsg = 'Expected TMRTopoProblem got other type'
-            raise ValueError(errmsg)
-        # Assign the weights associated with each load case
-        lenw = len(weights)
-        if lenw != prob.getNumLoadCases():
-            errmsg = 'Incorrect number of weights'
-            raise ValueError(errmsg)
-        w = <TacsScalar*>malloc(lenw*sizeof(TacsScalar))
-        for i in range(lenw):
-            w[i] = weights[i]
-        # Get the objective function associated with each load case
-        nfuncs = len(funcs)
-        f = <TACSFunction**>malloc(nfuncs*sizeof(TACSFunction*))
-        for i in range(nfuncs):
-            f[i] = (<Function>funcs[i]).ptr
-        prob.setObjective(w,f)
-        free(f)
+        if funcs:
+            # Get the objective function associated with each load case
+            nfuncs = len(funcs)
+            f = <TACSFunction**>malloc(nfuncs*sizeof(TACSFunction*))
+            for i in range(nfuncs):
+                f[i] = (<Function>funcs[i]).ptr
+            prob.setObjective(w,f)
+        else:
+            prob.setObjective(w)
         free(w)
+        if (f):
+            free(f)
         return
-        
+          
     def initialize(self):
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
@@ -1921,3 +1912,11 @@ cdef class TopoProblem(pyParOptProblemBase):
             errmsg = 'Expected ParOptBVecWrap got other type'
             raise ValueError(errmsg)
         return _init_Vec(new_vec.vec)
+    
+    def setInitDesignVars(self, PVec pvec):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.setInitDesignVars(pvec.ptr)
