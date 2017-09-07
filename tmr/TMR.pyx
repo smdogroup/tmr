@@ -386,11 +386,11 @@ cdef class BsplineSurface(Surface):
         cdef int ny = pts.shape[1]
         cdef kx = ku
         cdef ky = kv
+        cdef TMRPoint* p = <TMRPoint*>malloc(nx*ny*sizeof(TMRPoint))
         if kx > nx:
             kx = nx
         if ky > ny:
             ky = ny
-        cdef TMRPoint* p = <TMRPoint*>malloc(nx*ny*sizeof(TMRPoint))
         for j in range(ny):
             for i in range(nx):
                 p[i + j*nx].x = pts[i,j,0]
@@ -777,7 +777,7 @@ cdef class MeshOptions:
    # def num_smoothing_steps(self):
    #    return self.ptr.num_smoothing_steps
    # @num_smoothing_steps.setter
-   # def num_smoothing_steps(self,value):
+   # def num_smoothing_steps(self, value):
    #    self.ptr.num_smoothing_steps = value
 
 cdef class ElementFeatureSize:

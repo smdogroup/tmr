@@ -5036,8 +5036,8 @@ TMROctant* TMROctForest::findEnclosing( TMROctant *node ){
     const int32_t h = 1 << (TMR_MAX_LEVEL - array[mid].level);
     if ((array[mid].block == block) &&
         (array[mid].x <= x && x <= array[mid].x+h) &&
-	(array[mid].y <= y && y <= array[mid].y+h) &&
-	(array[mid].z <= z && z <= array[mid].z+h)){
+        (array[mid].y <= y && y <= array[mid].y+h) &&
+        (array[mid].z <= z && z <= array[mid].z+h)){
       return &array[mid];
     }
     
