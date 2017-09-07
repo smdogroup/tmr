@@ -1911,7 +1911,7 @@ cdef class VecWrap:
         self.ptr = new ParOptBVecWrap(vec.ptr)
         return
 
-    def __malloc__(self):
+    def __dealloc__(self):
         if (self.ptr):
             del self.ptr
 
