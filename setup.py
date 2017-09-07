@@ -87,6 +87,7 @@ libs.extend(paropt_libs)
 # Add tmr/lib as a runtime directory
 runtime_lib_dirs = get_global_dir(['lib'])
 runtime_lib_dirs.extend(tacs_lib_dirs)
+runtime_lib_dirs.extend(paropt_lib_dirs)
 
 exts = []
 mod = 'TMR'
@@ -94,7 +95,6 @@ exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],
                 language='c++',
                 include_dirs=inc_dirs, libraries=libs, 
                 library_dirs=lib_dirs, runtime_library_dirs=runtime_lib_dirs))
-
 setup(name='tmr',
       version=0.1,
       description='Parallel mesh generation utilities',
