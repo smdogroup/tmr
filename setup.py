@@ -87,6 +87,7 @@ libs.extend(paropt_libs)
 # Add tmr/lib as a runtime directory
 runtime_lib_dirs = get_global_dir(['lib'])
 runtime_lib_dirs.extend(tacs_lib_dirs)
+runtime_lib_dirs.extend(paropt_lib_dirs)
 
 exts = []
 mod = 'TMR'
