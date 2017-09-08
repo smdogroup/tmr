@@ -492,7 +492,7 @@ void TMRTopoProblem::addConstraints( int load_case,
     double eig_tol = 1e-12;
     freq[load_case] = new TACSFrequencyAnalysis(tacs[0], sigma, mmat, kmat,
                                                 ksm, max_lanczos,
-                                                _mum_eigvals, eig_tol); 
+                                                _num_eigvals, eig_tol); 
     freq[load_case]->incref();
     // Add offset, scale
     load_case_info[load_case].bf_offset = offset;
