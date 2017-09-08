@@ -468,7 +468,7 @@ void TMRTopoProblem::addConstraints( int load_case,
       frequency analysis but not both \n");
     return;
   }
-  if ( _buckling ){
+  if (_buckling){
     FEMat *aux_mat = tacs[0]->createFEMat();
     FEMat *gmat = tacs[0]->createFEMat();
     FEMat *kmat = tacs[0]->createFEMat();
@@ -477,8 +477,7 @@ void TMRTopoProblem::addConstraints( int load_case,
     double eig_tol = 1e-12;
     buckling[load_case] = new TACSLinearBuckling(tacs[0], sigma, gmat, kmat,
                                                  aux_mat, ksm, max_lanczos,
-                                                 load_case_info[load_case].num_eigvals, 
-                                                 eig_tol);
+                                                 _num_eigvals, eig_tol);
     buckling[load_case]->incref();
     // Add offset, scale
     load_case_info[load_case].bf_offset = offset;
@@ -493,8 +492,7 @@ void TMRTopoProblem::addConstraints( int load_case,
     double eig_tol = 1e-12;
     freq[load_case] = new TACSFrequencyAnalysis(tacs[0], sigma, mmat, kmat,
                                                 ksm, max_lanczos,
-                                                load_case_info[load_case].num_eigvals,
-                                                eig_tol); 
+                                                _mum_eigvals, eig_tol); 
     freq[load_case]->incref();
     // Add offset, scale
     load_case_info[load_case].bf_offset = offset;
@@ -831,7 +829,8 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
         // Evaluate the constraints
         int num_funcs = load_case_info[i].num_funcs;
-        tacs[0]->evalFunctions(load_case_info[i].funcs, num_funcs, &cons[count]);
+        tacs[0]->evalFunctions(load_case_info[i].funcs, 
+                               num_funcs, &cons[count]);
 
         // Scale and offset the constraints that we just evaluated
         for ( int j = 0; j < num_funcs; j++ ){
@@ -841,6 +840,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         }
         count += num_funcs;
       }
+
       // Solve the linear buckling system;
       if (buckling[i]){
         // Evaluate the eigenvalues (K(x) + lambda*G(x))u = 0
@@ -978,7 +978,8 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
           tacs[0]->applyBCs(dfdu);
           // Solve the system of equations
           ksm->solve(dfdu, adjoint);
-          tacs[0]->addDVSens(obj_weights[i], &obj_funcs[i], 1, xlocal, max_local_size);
+          tacs[0]->addDVSens(obj_weights[i], &obj_funcs[i], 
+                             1, xlocal, max_local_size);
           tacs[0]->addAdjointResProducts(-obj_weights[i], &adjoint, 
                                          1, xlocal, max_local_size);
         }
@@ -1050,6 +1051,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
                                          1, xlocal, max_local_size);
         }
         else {
+          memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
           tacs[0]->addDVSens(scale, &func, 1, xlocal, max_local_size);          
         }
 
