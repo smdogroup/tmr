@@ -1389,6 +1389,9 @@ cdef class OctForest:
     def writeForestToVTK(self, char *filename):
         self.ptr.writeForestToVTK(filename)
 
+    def createInterpolation(self, OctForest forest, VecInterp vec):
+        self.ptr.createInterpolation(forest.ptr, vec.ptr)
+
 cdef _init_OctForest(TMROctForest* ptr):
     forest = OctForest()
     forest.ptr = ptr
