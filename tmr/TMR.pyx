@@ -1898,16 +1898,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.setIterationCounter(count)
         return
-
-    def createDesignVec(self):
-        cdef TMRTopoProblem *prob = NULL
-        prob = _dynamicTopoProblem(self.ptr)
-        if prob == NULL:
-            errmsg = 'Expected TMRTopoProblem got other type'
-            raise ValueError(errmsg)
-        
-        return _init_PVec(prob.createDesignVec())
-
+    
     def convertPVecToVec(self, PVec pvec):
         cdef ParOptBVecWrap *new_vec = NULL
         new_vec = _dynamicParOptBVecWrap(pvec.ptr)
