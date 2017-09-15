@@ -401,8 +401,8 @@ int main( int argc, char *argv[] ){
     
     TMRMeshOptions options;
     options.frontal_quality_factor = 1.25;
-    options.mesh_type_default = TMR_STRUCTURED;
-    // options.mesh_type_default = TMR_UNSTRUCTURED;
+    // options.mesh_type_default = TMR_STRUCTURED;
+    options.mesh_type_default = TMR_UNSTRUCTURED;
     mesh->mesh(options, htarget);
 
     TMRModel *model = mesh->createModelFromMesh();
@@ -419,7 +419,7 @@ int main( int argc, char *argv[] ){
     forest[0]->repartition();
     
     // The target relative error on the compliance
-    double target_rel_err = 1e-4;
+    double target_rel_err = 5e-5;
 
     FILE *fp = NULL;
     if (mpi_rank == 0){
@@ -592,7 +592,7 @@ int main( int argc, char *argv[] ){
         // Create the refined vector
         TACSBVec *adjvec_refine = tacs_refine->createVec();
         adjvec_refine->incref();
-        TMR_ComputeReconSolution(forest[0], tacs[0], tacs_refine,
+        TMR_ComputeReconSolution(tacs[0], forest[0], tacs_refine,
                                  adjvec, adjvec_refine);
         tacs_refine->setVariables(adjvec_refine);
         adjvec_refine->decref();

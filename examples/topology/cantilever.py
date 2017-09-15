@@ -157,26 +157,35 @@ vol_frac = 0.15
 initial_mass = vol*2600
 m_fixed =  vol_frac*initial_mass
 
-max_iterations = 1
+# Set the max nmber of iterations
+max_iterations = 4
+
+# Set parameters for later usage
 min_level = 1
 max_level = 9
-nlevels = 4
+nlevels = 3
 order = 2
-forest.createTrees(nlevels-1)
+forest.createTrees(nlevels)
 
-old_filter = None
+# The old filter/map classes
+old_filtr = None
 old_varmap = None
-# Vec objects
-old_dvs = ParOpt.PVec()
-old_zl = ParOpt.PVec()
-old_zu = ParOpt.PVec()
-# Scalar values
-barrier = 0.0
-z_old = 0.0
-for ite in xrange(max_iterations):    
+
+# Values from the previuos iteration
+old_dvs = None
+old_zl = None
+old_zu = None
+old_z = 0.0
+
+# Set the values of the objective array
+obj_array = [1.0e3]
+
+for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
-    assembler, problem, filter0, varmap0 = createTopoProblem(forest,
-                                                             nlevels=nlevels-1)
+    if ite == 1:
+        nlevels += 1
+    assembler, problem, filtr, varmap = createTopoProblem(forest,
+                                                          nlevels=nlevels-1)
     
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
@@ -188,19 +197,21 @@ for ite in xrange(max_iterations):
     
     force1.axpy(1.0, force2)
     force1.scale(-1.0)
+    
     # Set the load cases
     forces = [force1]
     problem.setLoadCases(forces)
-
-    # PVec objects
-    new_dvs = problem.createDesignVec()
-    new_zl = problem.createDesignVec()
-    new_zu = problem.createDesignVec()
+    
     # Do the interpolation
-    if old_filter:
-        interp = TACS.VecInterp(old_varmap, varmap0)
-        filter0.createInterpolation(old_filter, interp)
+    if old_filtr:
+        interp = TACS.VecInterp(old_varmap, varmap)
+        filtr.createInterpolation(old_filtr, interp)
         interp.initialize()
+
+        # PVec objects
+        new_dvs = problem.createDesignVec()
+        new_zl = problem.createDesignVec()
+        new_zu = problem.createDesignVec()
         
         # Do the interpolation
         new_dvs_vec = problem.convertPVecToVec(new_dvs)
@@ -210,6 +221,7 @@ for ite in xrange(max_iterations):
         old_dvs_vec = problem.convertPVecToVec(old_dvs)
         old_zl_vec = problem.convertPVecToVec(old_zl)
         old_zu_vec = problem.convertPVecToVec(old_zu)
+
         # Interpolate the design variables, lagrange multipliers
         interp.mult(old_dvs_vec, new_dvs_vec)
         interp.mult(old_zl_vec, new_zl_vec)
@@ -219,7 +231,7 @@ for ite in xrange(max_iterations):
         problem.setInitDesignVars(new_dvs)
     
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
-    problem.setObjective([1.0])
+    problem.setObjective(obj_array)
     
     # Initialize the problem and set the prefix
     problem.initialize()
@@ -232,51 +244,40 @@ for ite in xrange(max_iterations):
     problem.setIterationCounter(max_opt_iters*ite)
     opt.setAbsOptimalityTol(1e-6)
     opt.setOutputFrequency(1)
-    opt.setOutputFile("./results_mem/paropt_output%d.out"%(ite))
+    opt.setOutputFile('./results_mem/paropt_output%d.out'%(ite))
         
     # Get new barrier parameters
     if ite > 0:
         # Do the interpolation
-        z = np.array([0.0], dtype=float)
-        zl = ParOpt.PVec()
-        zu = ParOpt.PVec()
         x_old, z, zw, zl, zu = opt.getOptimizedPoint()
+        
         # Set the values of the new multipliers
         opt.setInitStartingPoint(0)
-        z[0] = z_old
+        z[0] = old_z
         zl.copyValues(new_zl)
         zu.copyValues(new_zu)
         
         # Reset the bounds and input the new barrier parameter
-        opt.resetDesignAndBounds()
         new_barrier = opt.getComplementarity()
         opt.setInitBarrierParameter(new_barrier)
 
-    #opt.checkGradients(1e-6)    
+    # Optimize the new point
     opt.optimize()
-    #print assembler.evalFunctions(funcs)/initial_mass
     
     # Get the final values of the design variables
-    x_old = ParOpt.PVec()
-    zl = ParOpt.PVec()
-    zu = ParOpt.PVec()
-    z = np.array([0.0], dtype=float)
-    x_old, z, zw, zl ,zu = opt.getOptimizedPoint()
-    # Set the old design variable vector to what was once
-    # the new design variable values. Copy the values from getOptimizedPoint
-    z_old = z[0]
-    old_dvs = new_dvs
-    old_zl = new_zl
-    old_zu = new_zu
+    x_old, z, zw, zl, zu = opt.getOptimizedPoint()
     
-    old_dvs.copyValues(x_old)
-    old_zl.copyValues(zl)
-    old_zu.copyValues(zu)
+    # Set the old design variable vector to what was once the new
+    # design variable values. Copy the values from getOptimizedPoint
+    old_z = z[0]
+    old_dvs = x_old
+    old_zl = zl
+    old_zu = zu
     
     # Set the old filter/variable map for the next time through the
     # loop so that we can interpolate design variable values
-    old_varmap = varmap0
-    old_filter = filter0
+    old_varmap = varmap
+    old_filtr = filtr
 
     # Output for visualization
     flag = (TACS.ToFH5.NODES |
@@ -287,6 +288,7 @@ for ite in xrange(max_iterations):
     # Create refinement array
     num_elems = assembler.getNumElements()
     refine = np.ones(num_elems, dtype=np.int32)
+
     # Refine based solely on the value of the density variable
     elems = assembler.getElements()
     
@@ -300,6 +302,7 @@ for ite in xrange(max_iterations):
                 refine[i] = int(1)
             elif rho < 0.05:
                 refine[i] = int(-1)
+                
     # Refine the forest
     forest.refine(refine)
 
