@@ -103,11 +103,17 @@ def createTopoProblem(forest, order=2, nlevels=2):
 
     return assemblers[0], problem, filters[0], varmaps[0]
 
+# Create an argument parser to read in arguments from the commnad line
+p = argparse.ArgumentParser()
+p.add_argument('--prefix', type=str, default='./results')
+p.add_argument('--vol_frac', type=float, default=0.15)
+args = p.parse_args()
+
+# The communicator
 comm = MPI.COMM_WORLD
 
 # Load the geometry model
 geo = TMR.LoadModel('beam.stp')
-geo.writeModelToTecplot('model.dat')
 
 # Mark the boundary condition faces
 verts = geo.getVertices()
@@ -135,9 +141,6 @@ opts.write_mesh_quality_histogram = 1
 htarget = 4.0
 mesh.mesh(htarget, opts)
 
-# Write the surface mesh to a file
-mesh.writeToVTK('beam_mesh.vtk')
-
 # Create a model from the mesh
 model = mesh.createModelFromMesh()
 
@@ -152,7 +155,7 @@ forest.setTopology(topo)
 r = 10.0
 a = 50.0
 vol = r*r*a
-vol_frac = 0.15
+vol_frac = args.vol_frac
 
 initial_mass = vol*2600
 m_fixed =  vol_frac*initial_mass
@@ -173,9 +176,9 @@ old_varmap = None
 
 # Values from the previuos iteration
 old_dvs = None
-old_zl = None
-old_zu = None
 old_z = 0.0
+olz_zl = None
+old_zu = None
 
 # Set the values of the objective array
 obj_array = [1.0e3]
@@ -201,63 +204,63 @@ for ite in xrange(max_iterations):
     # Set the load cases
     forces = [force1]
     problem.setLoadCases(forces)
-    
-    # Do the interpolation
-    if old_filtr:
-        interp = TACS.VecInterp(old_varmap, varmap)
-        filtr.createInterpolation(old_filtr, interp)
-        interp.initialize()
 
-        # PVec objects
-        new_dvs = problem.createDesignVec()
-        new_zl = problem.createDesignVec()
-        new_zu = problem.createDesignVec()
-        
-        # Do the interpolation
-        new_dvs_vec = problem.convertPVecToVec(new_dvs)
-        new_zl_vec = problem.convertPVecToVec(new_zl)
-        new_zu_vec = problem.convertPVecToVec(new_zu)
-
-        old_dvs_vec = problem.convertPVecToVec(old_dvs)
-        old_zl_vec = problem.convertPVecToVec(old_zl)
-        old_zu_vec = problem.convertPVecToVec(old_zu)
-
-        # Interpolate the design variables, lagrange multipliers
-        interp.mult(old_dvs_vec, new_dvs_vec)
-        interp.mult(old_zl_vec, new_zl_vec)
-        interp.mult(old_zu_vec, new_zu_vec)
-
-        # Set the new design variables
-        problem.setInitDesignVars(new_dvs)
-    
+    # Set the mass constraint
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
     problem.setObjective(obj_array)
     
     # Initialize the problem and set the prefix
     problem.initialize()
-    problem.setPrefix('./results_mem/')
+    problem.setPrefix(args.prefix)
     
+    # ParOpt parameters
     max_bfgs = 20
+    max_opt_iters = 150
+    opt_abs_tol = 1e-6
+
+    # Create the ParOpt problem
     opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
-    max_opt_iters = 250
     opt.setMaxMajorIterations(max_opt_iters)
     problem.setIterationCounter(max_opt_iters*ite)
-    opt.setAbsOptimalityTol(1e-6)
+    opt.setAbsOptimalityTol(opt_abs_tol)
     opt.setOutputFrequency(1)
-    opt.setOutputFile('./results_mem/paropt_output%d.out'%(ite))
+    opt.setOutputFile(os.path.join(args.prefix, 'paropt_output%d.out'%(ite)))
         
-    # Get new barrier parameters
-    if ite > 0:
-        # Do the interpolation
-        x_old, z, zw, zl, zu = opt.getOptimizedPoint()
+    # If the old filter exists, we're on the second iteration
+    if old_filtr:
+        # Create the interpolation
+        interp = TACS.VecInterp(old_varmap, varmap)
+        filtr.createInterpolation(old_filtr, interp)
+        interp.initialize()
         
-        # Set the values of the new multipliers
+        # Get the optimization variables for the new optimizer
+        x, z, zw, zl, zu = opt.getOptimizedPoint()
+
+        # Do not try to estimate the new multipliers
         opt.setInitStartingPoint(0)
-        z[0] = old_z
-        zl.copyValues(new_zl)
-        zu.copyValues(new_zu)
         
-        # Reset the bounds and input the new barrier parameter
+        # Set the values of the new mass constraint multipliers
+        z[0] = old_z
+
+        # Do the interpolation
+        old_vec = problem.convertPVecToVec(old_dvs)
+        x_vec = problem.convertPVecToVec(x)
+        interp.mult(old_vec, x_vec)
+
+        # Set the new design variables
+        problem.setInitDesignVars(x)
+
+        # Do the interpolation of the multipliers
+        old_vec = problem.convertPVecToVec(old_zl)
+        zl_vec = problem.convertPVecToVec(zl)
+        interp.mult(old_vec, zl_vec)
+
+        # Do the interpolation
+        old_vec = problem.convertPVecToVec(old_zu)
+        zu_vec = problem.convertPVecToVec(zu)
+        interp.mult(old_vec, zu_vec)
+        
+        # Reset the complementarity
         new_barrier = opt.getComplementarity()
         opt.setInitBarrierParameter(new_barrier)
 
@@ -265,12 +268,12 @@ for ite in xrange(max_iterations):
     opt.optimize()
     
     # Get the final values of the design variables
-    x_old, z, zw, zl, zu = opt.getOptimizedPoint()
+    x, z, zw, zl, zu = opt.getOptimizedPoint()
     
     # Set the old design variable vector to what was once the new
     # design variable values. Copy the values from getOptimizedPoint
     old_z = z[0]
-    old_dvs = x_old
+    old_dvs = x
     old_zl = zl
     old_zu = zu
     
@@ -283,7 +286,7 @@ for ite in xrange(max_iterations):
     flag = (TACS.ToFH5.NODES |
             TACS.ToFH5.EXTRAS)
     f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
-    f5.writeToFile('./results_mem/beam%d.f5'%(ite))
+    f5.writeToFile(os.path.join(args.prefix, 'beam%d.f5'%(ite)))
 
     # Create refinement array
     num_elems = assembler.getNumElements()
@@ -295,9 +298,9 @@ for ite in xrange(max_iterations):
     for i in xrange(num_elems):        
         c = elems[i].getConstitutive()
         if c is not None:
-            rho = c.getDVOutputValue(0, np.zeros(3,dtype=float))
-            # Refine things differently depending on whether
-            # the density is above or below a threshold
+            rho = c.getDVOutputValue(0, np.zeros(3, dtype=float))
+            # Refine things differently depending on whether the
+            # density is above or below a threshold
             if rho > 0.5:
                 refine[i] = int(1)
             elif rho < 0.05:
