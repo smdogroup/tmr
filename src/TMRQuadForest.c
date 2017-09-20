@@ -1337,7 +1337,12 @@ void TMRQuadForest::refine( const int refinement[],
 
           // Compute the relative level of refinement
           int ref = new_level - array[i].level;
-          if (ref <= 0){ ref = 1; }
+          if (ref <= 0){ 
+            ref = 1; 
+          }
+          else {
+            ref = 1 << (ref - 1);
+          }
           
           // Copy the quadrant and set the new level
           TMRQuadrant q = array[i];
@@ -1383,7 +1388,7 @@ void TMRQuadForest::refine( const int refinement[],
         }
       }
       else {
-        ext_hash->addQuadrant(&array[i]);
+        hash->addQuadrant(&array[i]);
       }
     }
   }

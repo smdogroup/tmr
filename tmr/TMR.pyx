@@ -89,9 +89,6 @@ cdef class Edge:
         cdef TMRVertex *v2 = NULL
         self.ptr.getVertices(&v1, &v2)
         return _init_Vertex(v1), _init_Vertex(v2)
-   
-    def writeToVTK(self, char* filename):
-        self.ptr.writeToVTK(filename)
 
     def setSource(self, Edge e):
         self.ptr.setSource(e.ptr)
@@ -952,6 +949,26 @@ cdef class Topology:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def getVolume(self, int index):
+        cdef TMRVolume *volume
+        self.ptr.getVolume(index, &volume)
+        return _init_Volume(volume)
+
+    def getFace(self, int index):
+        cdef TMRFace *face
+        self.ptr.getFace(index, &face)
+        return _init_Face(face)
+
+    def getEdge(self, int index):
+        cdef TMREdge *edge
+        self.ptr.getEdge(index, &edge)
+        return _init_Edge(edge)
+
+    def getvertex(self, int index):
+        cdef TMRVertex *vert
+        self.ptr.getVertex(index, &vert)
+        return _init_Vertex(vert)
 
 cdef class QuadrantArray:
     cdef TMRQuadrantArray *ptr

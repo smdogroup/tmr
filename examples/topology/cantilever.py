@@ -107,6 +107,7 @@ def createTopoProblem(forest, order=2, nlevels=2):
 p = argparse.ArgumentParser()
 p.add_argument('--prefix', type=str, default='./results')
 p.add_argument('--vol_frac', type=float, default=0.15)
+p.add_argument('--htarget', type=float, default=4.0)
 args = p.parse_args()
 
 # The communicator
@@ -138,8 +139,7 @@ opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 
 # Create the surface mesh
-htarget = 4.0
-mesh.mesh(htarget, opts)
+mesh.mesh(args.htarget, opts)
 
 # Create a model from the mesh
 model = mesh.createModelFromMesh()
@@ -161,12 +161,10 @@ initial_mass = vol*2600
 m_fixed =  vol_frac*initial_mass
 
 # Set the max nmber of iterations
-max_iterations = 4
+max_iterations = 2
 
 # Set parameters for later usage
-min_level = 1
-max_level = 9
-nlevels = 3
+nlevels = 2
 order = 2
 forest.createTrees(nlevels)
 
@@ -188,14 +186,14 @@ for ite in xrange(max_iterations):
     if ite == 1:
         nlevels += 1
     assembler, problem, filtr, varmap = createTopoProblem(forest,
-                                                          nlevels=nlevels-1)
+                                                          nlevels=nlevels)
     
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
     # Add the point loads to the vertices
-    force1 = addVertexLoad(comm,order, forest, 'pt1', assembler,
+    force1 = addVertexLoad(comm, order, forest, 'pt1', assembler,
                            [0.0, -1000., 0.0])
-    force2 = addVertexLoad(comm,order, forest, 'pt2', assembler,
+    force2 = addVertexLoad(comm, order, forest, 'pt2', assembler,
                            [0.0, 0.0, -1000.])
     
     force1.axpy(1.0, force2)
@@ -215,7 +213,7 @@ for ite in xrange(max_iterations):
     
     # ParOpt parameters
     max_bfgs = 20
-    max_opt_iters = 150
+    max_opt_iters = 10
     opt_abs_tol = 1e-6
 
     # Create the ParOpt problem
@@ -254,11 +252,13 @@ for ite in xrange(max_iterations):
         old_vec = problem.convertPVecToVec(old_zl)
         zl_vec = problem.convertPVecToVec(zl)
         interp.mult(old_vec, zl_vec)
+        zl[:] *= 0.125
 
         # Do the interpolation
         old_vec = problem.convertPVecToVec(old_zu)
         zu_vec = problem.convertPVecToVec(zu)
         interp.mult(old_vec, zu_vec)
+        zu[:] *= 0.125        
         
         # Reset the complementarity
         new_barrier = opt.getComplementarity()

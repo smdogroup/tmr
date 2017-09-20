@@ -39,6 +39,11 @@ cdef extern from "TMRBase.h":
 cdef extern from "TMRTopology.h":
     cdef cppclass TMRTopology(TMREntity):
         TMRTopology(MPI_Comm, TMRModel*)
+        void getVolume(int, TMRVolume**)
+        void getFace(int, TMRFace**)
+        void getEdge(int, TMREdge**)
+        void getVertex(int, TMRVertex**)
+
             
     cdef cppclass TMRVertex(TMREntity):
         TMRVertex()

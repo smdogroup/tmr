@@ -232,7 +232,6 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   reset_count = 0;
   ks_a = NULL;
   obj_funcs = NULL;
-
 }
 
 /*
@@ -280,9 +279,13 @@ TMRTopoProblem::~TMRTopoProblem(){
   adjoint->decref();
 
   // Free the variables/forces
-  for ( int i = 0; i < num_load_cases; i++ ){
-    if (forces[i]){ forces[i]->decref(); }
-    vars[i]->decref();
+  if (forces){
+    for ( int i = 0; i < num_load_cases; i++ ){
+      if (forces[i]){ forces[i]->decref(); }
+      vars[i]->decref();
+    }
+    delete [] forces;
+    delete [] vars;
   }
 
   // Free the load case data
@@ -307,14 +310,28 @@ TMRTopoProblem::~TMRTopoProblem(){
   }
 
   // Delete the buckling and frequency TACS object
-  for ( int i = 0; i < num_load_cases; i++ ){
-    if (buckling[i]){
-      buckling[i]->decref();
+  if (buckling){
+    for ( int i = 0; i < num_load_cases; i++ ){
+      if (buckling[i]){
+        buckling[i]->decref();
+      }
     }
-    if (freq[i]){
-      freq[i]->decref();
-    }
+    delete [] buckling;
   }
+  if (freq){
+    for ( int i = 0; i < num_load_cases; i++ ){
+      if (freq[i]){
+        freq[i]->decref();
+      }
+    }
+    delete [] freq;
+  }
+
+  // Free the array of KS weights
+  if (ks_a){
+    delete [] ks_a;
+  }
+
   if (obj_funcs){
     for ( int i = 0; i < num_load_cases; i++ ){
       if (obj_funcs[i]){ obj_funcs[i]->decref(); }
@@ -371,9 +388,11 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
     load_case_info[i].offset = NULL;
     load_case_info[i].scale = NULL;
   }
+
   // Allocate the buckling objects
   buckling = new TACSLinearBuckling*[num_load_cases];
   freq = new TACSFrequencyAnalysis*[num_load_cases];
+
   // Array of KS aggregation for each load case
   ks_a = new TacsScalar[num_load_cases];
   memset(ks_a, 0.0, num_load_cases*sizeof(TacsScalar));

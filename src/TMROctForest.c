@@ -240,9 +240,6 @@ TMROctForest::TMROctForest( MPI_Comm _comm ){
   // Set the topology object to NULL to begin with
   topo = NULL;
 
-  // Set the range of nodes
-  node_range = NULL;
-
   // Zero out the nodes/edges/faces and all data
   num_nodes = 0;
   num_edges = 0;
@@ -1659,7 +1656,7 @@ TMROctForest *TMROctForest::coarsen(){
   Refine the octree mesh based on the input refinement levels
 */
 void TMROctForest::refine( const int refinement[],
-                           int min_level, int max_level){
+                           int min_level, int max_level ){
   // Adjust the min and max levels to ensure consistency
   if (min_level < 0){ min_level = 0; }
   if (max_level > TMR_MAX_LEVEL){ max_level = TMR_MAX_LEVEL; }
@@ -1696,16 +1693,28 @@ void TMROctForest::refine( const int refinement[],
         hash->addOctant(&array[i]);
       }
       else if (refinement[i] < 0){
-        // Coarsen this octant
+        // Coarsen this quadrant
         if (array[i].level > min_level){
-          TMROctant q;
-          array[i].getSibling(0, &q);
-          q.level = q.level-1;
-          if (mpi_rank == getOctantMPIOwner(&q)){
-            hash->addOctant(&q);
+          // Compute the new refinement level
+          int new_level = array[i].level + refinement[i];
+          if (new_level < min_level){
+            new_level = min_level;
+          }
+
+          // Copy over the quadrant
+          TMROctant oct = array[i];
+          oct.level = new_level;
+          
+          // Compute the new side-length of the quadrant
+          const int32_t h = 1 << (TMR_MAX_LEVEL - oct.level);
+          oct.x = oct.x - (oct.x % h);
+          oct.y = oct.y - (oct.y % h);
+          oct.z = oct.z - (oct.z % h);
+          if (mpi_rank == getOctantMPIOwner(&oct)){
+            hash->addOctant(&oct);
           }
           else {
-            ext_hash->addOctant(&q);
+            ext_hash->addOctant(&oct);
           }
         }
         else {
@@ -1714,16 +1723,46 @@ void TMROctForest::refine( const int refinement[],
         }
       }
       else if (refinement[i] > 0){
-        // Refine this octant
+        // Refine this quadrant
         if (array[i].level < max_level){
-          TMROctant q = array[i];
-          q.level += 1;
-          q.getSibling(0, &q);
-          if (mpi_rank == getOctantMPIOwner(&q)){
-            hash->addOctant(&q);
+          // Compute the new refinement level
+          int new_level = array[i].level + refinement[i];
+          if (new_level > max_level){
+            new_level = max_level;
+          }
+
+          // Compute the relative level of refinement
+          int ref = new_level - array[i].level;
+          if (ref <= 0){
+            ref = 1;
           }
           else {
-            ext_hash->addOctant(&q);
+            ref = 1 << (ref - 1);
+          }
+          
+          // Copy the octant and set the new level
+          TMROctant oct = array[i];
+          oct.level = new_level;
+
+          // Compute the new side-length of the octant
+          const int32_t h = 1 << (TMR_MAX_LEVEL - oct.level);
+          int32_t x = oct.x - (oct.x % h);
+          int32_t y = oct.y - (oct.y % h);
+          int32_t z = oct.z - (oct.z % h);
+          for ( int ii = 0; ii < ref; ii++ ){
+            for ( int jj = 0; jj < ref; jj++ ){
+              for ( int kk = 0; kk < ref; kk++ ){
+                oct.x = x + 2*ii*h;
+                oct.y = y + 2*jj*h;
+                oct.z = z + 2*kk*h;
+                if (mpi_rank == getOctantMPIOwner(&oct)){
+                  hash->addOctant(&oct);
+                }
+                else {
+                  ext_hash->addOctant(&oct);
+                }
+              }
+            }
           }
         }
         else {
@@ -1739,15 +1778,18 @@ void TMROctForest::refine( const int refinement[],
     // everything...
     for ( int i = 0; i < size; i++ ){
       if (array[i].level < max_level){
-        TMROctant q = array[i];
-        q.level += 1;
-        q.getSibling(0, &q);
-        if (mpi_rank == getOctantMPIOwner(&q)){
-          hash->addOctant(&q);
+        TMROctant oct = array[i];
+        oct.level += 1;
+        oct.getSibling(0, &oct);
+        if (mpi_rank == getOctantMPIOwner(&oct)){
+          hash->addOctant(&oct);
         }
         else {
-          ext_hash->addOctant(&q);
+          ext_hash->addOctant(&oct);
         }
+      }
+      else {
+        hash->addOctant(&array[i]);
       }
     }
   }
