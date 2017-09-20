@@ -2,6 +2,8 @@ from mpi4py import MPI
 from tmr import TMR
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 
 # Set the communicator
 comm = MPI.COMM_WORLD
@@ -80,6 +82,7 @@ edges[50].setSource(edges[52])
 edges[52].setSource(edges[54])
 edges[54].setSource(edges[56])
 
+# Create new surfaces with TFI
 new_edges_1 = [edges[36], edges[73], edges[59], edges[70]]
 dir1 = [1, 1, 1, -1]
 new_verts_1 = [verts[32], verts[33], verts[41], verts[42]]
@@ -193,6 +196,7 @@ for f in faces:
 # Close the file
 fp.close()
 
+# Define new volumes from faces
 vol_faces_1 = [faces[20], faces[28], faces[31], faces[32], faces[29], faces[30]]
 dir1 = [1, 1, -1, -1, -1, -1]
 vol_faces_2 = [faces[5], faces[19], faces[32], faces[33], faces[21], faces[23],
@@ -222,9 +226,7 @@ opts = TMR.MeshOptions()
 opts.num_smoothing_steps = 10
 #opts.write_post_smooth_quad = 1
 
-# Mesh the geometry with the given target size
-htarget = 5.0
-
+# Taper elements in the spanwise direction
 ymax = 914.0
 hmin = 2.0
 hmax = 20.0
@@ -245,12 +247,147 @@ model = mesh.createModelFromMesh()
 # Create the corresponding mesh topology from the mesh-model 
 topo = TMR.Topology(comm, model)
 
+#topo_mesh = topo.getMesh()
+
 # Create the quad forest and set the topology of the forest
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 
 # Create random trees and balance the mesh. Print the output file
 forest.createRandomTrees(nrand=3, min_lev=0, max_lev=3)
+forest.createTrees(1)
 forest.balance(1)
 filename = 'forest-mesh%d.vtk'%(comm.rank)
 forest.writeForestToVTK(filename)
+'''
+Create histogram of hex element mesh quality 
+'''
+X = mesh.getMeshPoints()
+quads, hexes = mesh.getMeshConnectivity()
+
+forest.createNodes(2)
+conn = forest.createMeshConn()
+
+def dist(x1, x2):
+    d = ((x2[0]-x1[0])**2 + (x2[1]-x1[1])**2 + (x2[2]-x1[2])**2)**0.5
+    return d
+
+# compute aspect ratio of each hex
+AR = np.zeros(len(hexes))
+index = 0
+for h in hexes:
+    # get side lengths
+    sides = np.zeros(12)
+    for i in range(3):
+        sides[i] = dist(X[h[i]], X[h[i+1]])
+    sides[3] = dist(X[h[3]], X[h[0]])
+    for i in range(4, 7):
+        sides[i] = dist(X[h[i]], X[h[i+1]])
+    sides[7] = dist(X[h[7]], X[h[4]])
+    for i in range(4):
+        sides[i+8] = dist(X[h[i]], X[h[i+4]])
+    AR[index] = np.amax(sides)/np.amin(sides)
+    index += 1
+
+
+# Compute min angle of each element
+def computeAngle(v1, v2, d1, d2):
+    angle = np.arccos(np.dot(v1, v2)/(d1*d2))
+    angle *= 180.0/np.pi
+
+    return angle
+
+edge_angles = [[0, 3], [0, 8 ], [3, 8 ],
+               [0, 1], [0, 9 ], [1, 9 ],
+               [1, 2], [1, 10], [2, 10],
+               [2, 3], [2, 11], [3, 11],
+               [4, 7], [4, 8 ], [7, 8 ],
+               [4, 5], [4, 9 ], [5, 9 ],
+               [5, 6], [5, 10], [6, 10],
+               [6, 7], [6, 11], [7, 11]]
+min_angles = np.zeros(len(hexes))
+index = 0
+for h in hexes:
+    # get side lengths
+    sides = np.zeros(12)
+    vectors = np.zeros((12, 3))
+    angles = np.zeros(24)
+    for i in range(3):
+        sides[i] = dist(X[h[i]], X[h[i+1]])
+        vectors[i, :] = X[h[i+1]] - X[h[i]]
+    sides[3] = dist(X[h[3]], X[h[0]])
+    vectors[3, :] = X[h[0]] - X[h[3]]
+    for i in range(4, 7):
+        sides[i] = dist(X[h[i]], X[h[i+1]])
+        vectors[i, :] = X[h[i+1]] - X[h[i]]
+    sides[7] = dist(X[h[7]], X[h[4]])
+    vectors[7, :] = X[h[4]] - X[h[7]]
+    for i in range(4):
+        sides[i+8] = dist(X[h[i]], X[h[i+4]])
+        vectors[i+8, :] = X[h[i+4]] - X[h[i]]
+    for i, ea in enumerate(edge_angles):
+        v1 = vectors[ea[0], :]
+        v2 = vectors[ea[1], :]
+        d1 = sides[ea[0]]
+        d2 = sides[ea[1]]
+        angles[i] = computeAngle(v1, v2, d1, d2)
+
+    min_angles[index] = np.amin(angles)
+    index += 1
+
+''' Plot the histogram of aspect ratio '''    
+    
+hist_min = 0.0
+hist_max = np.ceil(max(AR))
+nbins = 2*hist_max
+cutoffs = np.linspace(hist_min, hist_max, nbins+1)
+AR_hist, bin_edges = np.histogram(AR, bins=cutoffs)  
+
+AR_hist_percent = 100.0*AR_hist/(len(AR)+1)
+# plot the histogram
+
+fig, ax = plt.subplots()
+n, bins, pathches = plt.hist(AR, bins=nbins, range=(hist_min, hist_max), align='mid', color=(0.1176, 0.5647, 1.0, 1.0), normed=False)
+# width = 0.2 
+# xlocs = np.arrange(range(len(AR_hist)))#+width#/2.0
+# rects = ax.bar(xlocs, AR_hist_percent)#, width=width)
+#plt.xticks(width*cutoffs+width, cutoffs)
+plt.title('Aspect Ratio of Hexahedral Elements')
+plt.xlabel('Aspect Ratio')
+plt.ylabel('Number of Elements')
+
+majorLocator = MultipleLocator(2)
+majorFormatter = FormatStrFormatter('%d')
+minorLocator = MultipleLocator(1)
+
+ax.xaxis.set_major_locator(majorLocator)
+ax.xaxis.set_major_formatter(majorFormatter)
+ax.xaxis.set_minor_locator(minorLocator)
+#ax.yaxis.set_major_formatter(plt.FuncFormatter('{:.0f}%'.format))
+ax.tick_params(which='both', direction='out', top='off', right='off')
+plt.tight_layout()
+plt.show()
+
+''' Plot the histogram of minimum angle '''    
+hist_min = 0.0
+hist_max = 90.0
+nbins = 1*hist_max
+
+fig, ax = plt.subplots()
+n, bins, pathches = plt.hist(min_angles, bins=nbins, range=(hist_min, hist_max), align='mid', color=(0.1176, 0.5647, 1.0, 1.0), normed=False)
+#plt.xticks(width*cutoffs+width, cutoffs)
+plt.title('Minimum Angle of Hexahedral Elements')
+plt.xlabel('Minimum Angle [degrees]')
+plt.ylabel('Number of Elements')
+
+majorLocator = MultipleLocator(5)
+majorFormatter = FormatStrFormatter('%d')
+minorLocator = MultipleLocator(1)
+
+ax.xaxis.set_major_locator(majorLocator)
+ax.xaxis.set_major_formatter(majorFormatter)
+ax.xaxis.set_minor_locator(minorLocator)
+#ax.yaxis.set_major_formatter(plt.FuncFormatter('{:.0f}%'.format))
+ax.tick_params(which='both', direction='out', top='off', right='off')
+plt.tight_layout()
+plt.show()
