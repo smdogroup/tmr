@@ -1760,11 +1760,16 @@ cdef class TopoProblem(pyParOptProblemBase):
 
         self.ptr = new TMRTopoProblem(nlevels, assemb, filtr, 
                                       vmaps, vindex, mg)
+        self.ptr.incref()
         free(assemb)
         free(filtr)
         free(vmaps)
         free(vindex)
         return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
 
     def setLoadCases(self, list forces):
         cdef TACSBVec **f = NULL

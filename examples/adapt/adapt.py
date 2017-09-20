@@ -11,18 +11,21 @@ class CreateMe(TMR.QuadCreator):
 
     def createElement(self, order, quad):
         # Set constitutive properties
-        rho = 2500.0 # density, kg/m^3
-        E = 70e9 # elastic modulus, Pa
+        rho = 0.102 # density, lb/in^3
+        E = 10e6 # elastic modulus, psi
         nu = 0.3 # poisson's ratio
-        kcorr = 5.0 / 6.0 # shear correction factor
-        ys = 350e6 # yield stress, Pa
+        kcorr = 5.0/6.0 # shear correction factor
+        ys = 73e3 # yield stress, psi
         min_thickness = 0.2
         max_thickness = 1.0
-        thickness = 10.0
+        thickness = 0.5 # in
         
         stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, 
                                      thickness, quad.face,
                                      min_thickness, max_thickness)
+        
+        theta = 30.0*np.pi/180.0
+        stiff.setRefAxis(np.array([np.sin(theta), np.cos(theta), 0.0]))
         element = None
         if order == 2:
             element = elements.MITCShell(2, stiff)
@@ -103,12 +106,12 @@ order = args.order
 
 # Create random trees and balance the mesh. Print the output file
 if order == 3:
-    nlevels = 3
+    nlevels = 2
 elif order == 2:
-    nlevels = 4
+    nlevels = 3
 
 # Create the forest
-forest.createTrees(nlevels)
+forest.createTrees(nlevels+1)
 forest.balance(1)
 
 # Make the creator class
