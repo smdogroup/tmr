@@ -607,8 +607,129 @@ void TMRTopoProblem::setIterationCounter( int iter ){
   Create a design variable vector
 */
 ParOptVec *TMRTopoProblem::createDesignVec(){
-  return new ParOptBVecWrap(new TACSBVec(filter_maps[0], 1, 
+  return new ParOptBVecWrap(new TACSBVec(filter_maps[0], 1,
                                          filter_dist[0]));
+}
+
+/*
+  Compute the volume corresponding to each node within the filter
+*/
+TACSBVec* TMRTopoProblem::createVolumeVec(){
+  TACSBVec *vec = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
+  vec->zeroEntries();
+
+  // Get the octants
+  TMROctantArray *octants;
+  filter[0]->getOctants(&octants);
+  
+  // Get the array of octants
+  int size;
+  TMROctant *array;
+  octants->getArray(&array, &size);
+
+  // Get the nodes
+  TMROctantArray *nodes;
+  filter[0]->getNodes(&nodes);
+  int node_size;
+  TMROctant *node_array;
+  nodes->getArray(&node_array, &node_size);  
+
+  // Get the node locations from the filter
+  TMRPoint *X;
+  filter[0]->getPoints(&X);
+  
+  // Loop over the elements 
+  for ( int i = 0; i < size; i++ ){
+    int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+
+    // Retrieve the node numbers and x/y/z locations for element i
+    // within the mesh
+    int node_nums[8];
+    TMRPoint Xpts[8];
+    for ( int kk = 0; kk < 2; kk++ ){
+      for ( int jj = 0; jj < 2; jj++ ){
+        for ( int ii = 0; ii < 2; ii++ ){
+          // Find the octant node (without level/tag)
+          TMROctant node;
+          node.block = array[i].block;
+          node.x = array[i].x + ii*h;
+          node.y = array[i].y + jj*h;
+          node.z = array[i].z + kk*h;
+          filter[0]->transformNode(&node);
+          
+          // Find the corresponding node
+          const int use_nodes = 1;
+          TMROctant *t = nodes->contains(&node, use_nodes);
+          
+          if (t){
+            // Copy the node location
+            Xpts[ii + 2*jj + 4*kk] = X[t - node_array];
+            
+            // Copy the node number
+            node_nums[ii + 2*jj + 4*kk] = t->tag;
+          }
+        }
+      }
+    }
+    
+    // Compute the element area
+    TacsScalar Area = 0.0;
+    
+    // The quadrature points
+    const double gaussPts[] = {-0.577350269189626, 0.577350269189626};
+
+    for ( int kk = 0; kk < 2; kk++ ){
+      for ( int jj = 0; jj < 2; jj++ ){
+        for ( int ii = 0; ii < 2; ii++ ){
+          double pt[3];
+          pt[0] = gaussPts[ii];
+          pt[1] = gaussPts[jj];
+          pt[2] = gaussPts[kk];
+
+          // Evaluate the derivative of the shape functions
+          double N[8], Na[8], Nb[8], Nc[8];
+          FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, 2);
+
+          // Compute the Jacobian transformation
+          TacsScalar J[9];
+          memset(J, 0, 9*sizeof(TacsScalar));
+          for ( int j = 0; j < 8; j++ ){
+            J[0] += Na[j]*Xpts[j].x;
+            J[1] += Nb[j]*Xpts[j].x;
+            J[2] += Nc[j]*Xpts[j].x;
+            
+            J[3] += Na[j]*Xpts[j].y;
+            J[4] += Nb[j]*Xpts[j].y;
+            J[5] += Nc[j]*Xpts[j].y;
+
+            J[6] += Na[j]*Xpts[j].z;
+            J[7] += Nb[j]*Xpts[j].z;
+            J[8] += Nc[j]*Xpts[j].z;
+          }
+
+          // Add the determinant to the area - the weights in this
+          // case are just = 1.0
+          TacsScalar det = FElibrary::jacobian3d(J);
+          Area += det;
+        }
+      }
+    }
+  
+    // Distribute the element area equally to all nodes in the
+    // element
+    TacsScalar a[8];
+    for ( int k = 0; k < 8; k++ ){
+      a[k] = 0.125*Area;
+    }
+    
+    // Add the values to the vector
+    vec->setValues(8, node_nums, a, TACS_ADD_VALUES);
+  }
+
+  vec->beginSetValues(TACS_ADD_VALUES);
+  vec->endSetValues(TACS_ADD_VALUES);
+
+  return vec;
 }
 
 /*

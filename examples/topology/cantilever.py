@@ -178,6 +178,9 @@ old_z = 0.0
 olz_zl = None
 old_zu = None
 
+# The volumes of
+filt_vols = None
+
 # Set the values of the objective array
 obj_array = [1.0e3]
 
@@ -248,21 +251,27 @@ for ite in xrange(max_iterations):
         # Set the new design variables
         problem.setInitDesignVars(x)
 
+        # Compute the new filter volumes
+        filtr_volumes = problem.createVolumeVec()
+        vols = filtr_volumes.getArray()
+        
         # Do the interpolation of the multipliers
         old_vec = problem.convertPVecToVec(old_zl)
         zl_vec = problem.convertPVecToVec(zl)
         interp.mult(old_vec, zl_vec)
-        zl[:] *= 0.125
+        zl[:] *= vols
 
         # Do the interpolation
         old_vec = problem.convertPVecToVec(old_zu)
         zu_vec = problem.convertPVecToVec(zu)
         interp.mult(old_vec, zu_vec)
-        zu[:] *= 0.125        
+        zu[:] *= vols
         
         # Reset the complementarity
         new_barrier = opt.getComplementarity()
         opt.setInitBarrierParameter(new_barrier)
+    else:
+        filtr_volumes = problem.createVolumeVec()
 
     # Optimize the new point
     opt.optimize()
@@ -276,6 +285,11 @@ for ite in xrange(max_iterations):
     old_dvs = x
     old_zl = zl
     old_zu = zu
+
+    # Divide the bound multipliers by their associated volumes
+    vols = filtr_volumes.getArray()
+    zl[:] = zl[:]/vols
+    zu[:] = zu[:]/vols
     
     # Set the old filter/variable map for the next time through the
     # loop so that we can interpolate design variable values

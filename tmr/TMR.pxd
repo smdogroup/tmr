@@ -417,6 +417,7 @@ cdef extern from "TMRTopoProblem.h":
         void setPrefix(const char*)
         void setInitDesignVars(ParOptVec*)
         void setIterationCounter(int)
+        TACSBVec* createVolumeVec()
         ParOptVec* createDesignVec()
 
     cdef cppclass ParOptBVecWrap(ParOptVec):
