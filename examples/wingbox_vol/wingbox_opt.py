@@ -1,5 +1,7 @@
 from mpi4py import MPI
 from tmr import TMR
+from tacs import TACS, elements, constitutive, functions
+from paropt import ParOpt
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -52,10 +54,10 @@ def createTopoProblem(forest, order=2, nlevels=2):
     filtr = forest.coarsen()
     filtr.balance(1)
     filters.append(filtr)
-
+    
     # Make the creator class
     creator = CreateMe(bcs, filters[-1])
-    assemblers.append(creator.createTACS(order, forest))
+    assemblers.append(creator.createTACS(order, forest)) # here
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 
@@ -185,7 +187,7 @@ opts = TMR.MeshOptions()
 
 # Taper elements in the spanwise direction
 ymax = 914.0
-hmin = 1.0
+hmin = 2.0
 hmax = 10.0
 c = hmax
 ay = -(hmax - hmin)/ymax
@@ -197,44 +199,44 @@ mesh.writeToVTK('wingbox_vol.vtk', 'hex')
 # Create a model from the mesh
 model = mesh.createModelFromMesh()
 
-# Create the corresponding mesh topology from the mesh-model 
-topo = TMR.Topology(comm, model)
-
-#sys.exit(0)
-
-# Create the quad forest and set the topology of the forest
+# Create the corresponding mesh topology from the mesh-model
+topo = TMR.Topology(comm, model) # Create the quad forest and set the topology of the forest
 forest = TMR.OctForest(comm)
-forest.setTopology(topo)
-
-# Create the trees, rebalance the elements and repartition
-nlevels = 2
-order = 2
-#forest.createTrees(nlevels-1)
-
-forest.createTrees(1) #nlevels-1)
-octs = forest.getOctants()
-q, he = mesh.getMeshConnectivity()
-Xp = mesh.getMeshPoints()
-refine_array = np.zeros(np.shape(octs))
-
-# linear refinement in the y-direction
+forest.setTopology(topo) # Create the forest -- create trees with level 0
+forest.createTrees(1)
+octs = forest.getOctants() # Get the mesh connectivity
+refine_array = np.zeros(len(octs), dtype=np.intc) # linear refinement in the y-direction
 max_level = 3
 min_level = 1
-span = 100
+span = 914.0
+#vols = model.getVolumes()
 
-index = 0
-#for i in range(len(octs)):
-    # oc = octs[i]
-    # y = ((min_level-max_level)/span)*y + mex_level
-    # i += 1
-    
-sys.exit(0)
+for i in range(len(octs)):
+   # Get the block
+   vol = topo.getVolume(octs[i].block)
+   faces = vol.getFaces()
+   y = 0.0
+   for face in faces:
+       loop = face.getEdgeLoop(0)
+       edges, d = loop.getEdgeLoop()
+       for edge in edges:
+           v1, v2 = edge.getVertices()
+           pt = v1.evalPoint()
+           y += pt[1]
+   y /= 24.0    # Set the refinement level
+   refine_array[i] = int((min_level - max_level)*(y/span) + max_level)# Refine the mesh and print it out
+   
+forest.refine(refine_array)
+forest.balance(1)
+forest.writeForestToVTK('forest.vtk')
 
+order = 2
+nlevels = 2
 assembler, problem = createTopoProblem(forest,
                                        nlevels=nlevels)
+
 aux = addFaceTraction(order, forest, 'surface', assembler,
                       [0.0, 0.0, 1.0])
-
 
 assembler.zeroVariables()
 force = assembler.createVec()
@@ -244,10 +246,11 @@ force.scale(-1.0)
 forces = [force]
 
 problem.setLoadCases(forces)
-funcs = [functions.StructuralMass(assemblers[0])]
-m_fixed = 10.0
-problem.addConstraints(0, funcs, [-m_fixed], [1.0])
-problem.setObjective([1.0])
+funcs = [functions.StructuralMass(assembler)]
+initial_mass = assembler.evalFunctions(funcs)
+m_fixed = 0.15*initial_mass/0.95
+problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
+problem.setObjective([1.0/1e5])
 problem.initialize()
 problem.setPrefix('./')
 
@@ -262,4 +265,4 @@ flag = (TACS.ToFH5.NODES |
         TACS.ToFH5.STRESSES |
         TACS.ToFH5.EXTRAS)
 f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
-f5.writeToFile('bracket.f5')
+f5.writeToFile('ucrm.f5')
