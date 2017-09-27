@@ -2428,7 +2428,7 @@ void TMROctForest::addCornerNeighbors( int corner,
 
       // Compute the octant location
       TMROctant neighbor;
-      neighbor.block = p.block;
+      neighbor.block = adjacent;
       neighbor.level = p.level;
       neighbor.x = (hmax - 2*h)*(adj_index % 2);
       neighbor.y = (hmax - 2*h)*((adj_index % 4)/2);
@@ -2583,7 +2583,7 @@ void TMROctForest::balanceOctant( TMROctant *oct,
 
           if (ex && ey && ez){
             // Add the octant to the other trees
-            addCornerNeighbors(corner, neighbor, hash, ext_hash, queue);
+            addCornerNeighbors(corner, q, hash, ext_hash, queue);
           }
           else if ((ex && ey) || (ex && ez) || (ey && ez)){
             // The octant lies along a true edge

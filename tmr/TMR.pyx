@@ -29,6 +29,8 @@ from TMR cimport *
 cdef extern from "mpi-compat.h":
     pass
 
+MAX_LEVEL = TMR_MAX_LEVEL
+
 cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):

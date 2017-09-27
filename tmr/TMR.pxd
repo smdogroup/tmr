@@ -18,6 +18,9 @@ cdef extern from "<stdint.h>":
     ctypedef signed int int32_t
 
 cdef extern from "TMRBase.h":
+    enum:
+        TMR_MAX_LEVEL"TMR_MAX_LEVEL"
+        
     cdef cppclass TMREntity:
         void incref()
         void decref()
