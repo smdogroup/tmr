@@ -615,7 +615,22 @@ ParOptVec *TMRTopoProblem::createDesignVec(){
   Compute the volume corresponding to each node within the filter
 */
 TACSBVec* TMRTopoProblem::createVolumeVec(){
-  TACSBVec *vec = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
+  // Get the dependent nodes and weight values
+  const int *dep_ptr, *dep_conn;
+  const double *dep_weights;
+  int ndep = filter[0]->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+
+  // Copy over the data
+  int *dptr = new int[ ndep+1 ];
+  int *dconn = new int[ dep_ptr[ndep] ];
+  double *dweights = new double[ dep_ptr[ndep] ];
+  memcpy(dptr, dep_ptr, (ndep+1)*sizeof(int));
+  memcpy(dconn, dep_conn, dep_ptr[ndep]*sizeof(int));
+  memcpy(dweights, dep_weights, dep_ptr[ndep]*sizeof(double));
+  TACSBVecDepNodes *dep_nodes = new TACSBVecDepNodes(ndep, &dptr, 
+						     &dconn, &dweights);
+
+  TACSBVec *vec = new TACSBVec(filter_maps[0], 1, filter_dist[0], dep_nodes);
   vec->zeroEntries();
 
   // Get the octants
