@@ -1098,10 +1098,10 @@ cdef class QuadForest:
         cdef TMRQuadForest *dup = NULL
         dup = self.ptr.coarsen()
         return _init_QuadForest(dup)
-
+    
     def balance(self, int btype):
         self.ptr.balance(btype)
-
+    
     def createNodes(self, int order):
         self.ptr.createNodes(order)
 
@@ -1347,9 +1347,9 @@ cdef class OctForest:
         cdef TMROctForest *dup = NULL
         dup = self.ptr.coarsen()
         return _init_OctForest(dup)
-
-    def balance(self, int btype):
-        self.ptr.balance(btype)
+    
+    def balance(self, int btype, int tingwei=1):
+        self.ptr.balance(btype, tingwei)
 
     def createNodes(self, int order):
         self.ptr.createNodes(order)

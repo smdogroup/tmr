@@ -73,7 +73,7 @@ class TMROctForest : public TMREntity {
 
   // Balance the octree meshes
   // -------------------------
-  void balance( int balance_corner=0 );
+  void balance( int balance_corner=0, int tingwei=1 );
 
   // Create and order the nodes
   // --------------------------

@@ -293,7 +293,7 @@ cdef extern from "TMROctForest.h":
         void refine(int*)
         TMROctForest *duplicate()
         TMROctForest *coarsen()
-        void balance(int)
+        void balance(int, int)
         void createNodes(int)
         TMROctantArray* getOctsWithAttribute(const char*)
         TMROctantArray* getNodesWithAttribute(const char*)
