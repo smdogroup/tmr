@@ -2583,7 +2583,7 @@ void TMROctForest::balanceOctant( TMROctant *oct,
 
           if (ex && ey && ez){
             // Add the octant to the other trees
-            addCornerNeighbors(corner, neighbor, hash, ext_hash, queue);
+            addCornerNeighbors(corner, q, hash, ext_hash, queue);
           }
           else if ((ex && ey) || (ex && ez) || (ey && ez)){
             // The octant lies along a true edge
@@ -2639,7 +2639,8 @@ void TMROctForest::balanceOctant( TMROctant *oct,
   balances faces and edges (so that there is at most one depdent node
   per edge) and balances across corners optionally.
 */
-void TMROctForest::balance( int balance_corner ){
+void TMROctForest::balance( int balance_corner,
+                            int tingwei ){
   // Create a hash table for the balanced tree
   TMROctantHash *hash = new TMROctantHash();
   TMROctantHash *ext_hash = new TMROctantHash();
@@ -2686,6 +2687,7 @@ void TMROctForest::balance( int balance_corner ){
                   balance_corner, balance_tree);
   }
 
+  if (tingwei){
   // Now everything is locally balanced - all the elements on the
   // current processor are balanced with all the other elements on the
   // current processor, but nothing is inter-processor balanced yet.
@@ -2796,12 +2798,14 @@ void TMROctForest::balance( int balance_corner ){
     hash->addOctant(&array[i]);
   }
   delete local;
-  
+}
   // Set the elements into the octree
   octants = hash->toArray();
   octants->sort();
 
   // Get the octants and order their labels
+  int size;
+  TMROctant *array;
   octants->getArray(&array, &size);
   for ( int i = 0; i < size; i++ ){
     array[i].tag = i;
