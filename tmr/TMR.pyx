@@ -29,6 +29,8 @@ from TMR cimport *
 cdef extern from "mpi-compat.h":
     pass
 
+MAX_LEVEL = TMR_MAX_LEVEL
+
 cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):
@@ -1920,6 +1922,16 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.setIterationCounter(count)
         return
+
+    def createVolumeVec(self):
+        cdef TACSBVec *vec
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        vec = prob.createVolumeVec()
+        return _init_Vec(vec)
     
     def convertPVecToVec(self, PVec pvec):
         cdef ParOptBVecWrap *new_vec = NULL

@@ -108,6 +108,10 @@ p = argparse.ArgumentParser()
 p.add_argument('--prefix', type=str, default='./results')
 p.add_argument('--vol_frac', type=float, default=0.15)
 p.add_argument('--htarget', type=float, default=4.0)
+p.add_argument('--max_opt_iters', type=int, default=250)
+p.add_argument('--opt_abs_tol', type=float, default=1e-6)
+p.add_argument('--opt_barrier_frac', type=float, default=0.25)
+p.add_argument('--opt_barrier_power', type=float, default=1.0)
 args = p.parse_args()
 
 # The communicator
@@ -161,12 +165,12 @@ initial_mass = vol*2600
 m_fixed =  vol_frac*initial_mass
 
 # Set the max nmber of iterations
-max_iterations = 2
+max_iterations = 5
+mg_levels = [2, 2, 2, 3, 3]
 
 # Set parameters for later usage
-nlevels = 2
 order = 2
-forest.createTrees(nlevels)
+forest.createTrees(3)
 
 # The old filter/map classes
 old_filtr = None
@@ -178,15 +182,16 @@ old_z = 0.0
 olz_zl = None
 old_zu = None
 
+# The volumes of the elements in the filter mesh
+filtr_volumes = None
+
 # Set the values of the objective array
 obj_array = [1.0e3]
 
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
-    if ite == 1:
-        nlevels += 1
     assembler, problem, filtr, varmap = createTopoProblem(forest,
-                                                          nlevels=nlevels)
+                                                          nlevels=mg_levels[ite])
     
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
@@ -218,9 +223,11 @@ for ite in xrange(max_iterations):
 
     # Create the ParOpt problem
     opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
-    opt.setMaxMajorIterations(max_opt_iters)
-    problem.setIterationCounter(max_opt_iters*ite)
-    opt.setAbsOptimalityTol(opt_abs_tol)
+    opt.setMaxMajorIterations(args.max_opt_iters)
+    problem.setIterationCounter(args.max_opt_iters*ite)
+    opt.setAbsOptimalityTol(args.opt_abs_tol)
+    opt.setBarrierFraction(args.opt_barrier_frac)
+    opt.setBarrierPower(args.opt_barrier_power)
     opt.setOutputFrequency(1)
     opt.setOutputFile(os.path.join(args.prefix, 'paropt_output%d.out'%(ite)))
         
@@ -248,21 +255,27 @@ for ite in xrange(max_iterations):
         # Set the new design variables
         problem.setInitDesignVars(x)
 
+        # Compute the new filter volumes
+        filtr_volumes = problem.createVolumeVec()
+        vols = filtr_volumes.getArray()
+        
         # Do the interpolation of the multipliers
         old_vec = problem.convertPVecToVec(old_zl)
         zl_vec = problem.convertPVecToVec(zl)
         interp.mult(old_vec, zl_vec)
-        zl[:] *= 0.125
+        zl[:] *= vols
 
         # Do the interpolation
         old_vec = problem.convertPVecToVec(old_zu)
         zu_vec = problem.convertPVecToVec(zu)
         interp.mult(old_vec, zu_vec)
-        zu[:] *= 0.125        
+        zu[:] *= vols
         
         # Reset the complementarity
         new_barrier = opt.getComplementarity()
         opt.setInitBarrierParameter(new_barrier)
+    else:
+        filtr_volumes = problem.createVolumeVec()
 
     # Optimize the new point
     opt.optimize()
@@ -276,6 +289,11 @@ for ite in xrange(max_iterations):
     old_dvs = x
     old_zl = zl
     old_zu = zu
+
+    # Divide the bound multipliers by their associated volumes
+    vols = filtr_volumes.getArray()
+    zl[:] = zl[:]/vols
+    zu[:] = zu[:]/vols
     
     # Set the old filter/variable map for the next time through the
     # loop so that we can interpolate design variable values
@@ -301,11 +319,18 @@ for ite in xrange(max_iterations):
             rho = c.getDVOutputValue(0, np.zeros(3, dtype=float))
             # Refine things differently depending on whether the
             # density is above or below a threshold
-            if rho > 0.5:
+            if rho > 0.25:
                 refine[i] = int(1)
             elif rho < 0.05:
                 refine[i] = int(-1)
-                
+    
+    # Write the filter to disk
+    np.savetxt(os.path.join(args.prefix, 'refine_array%d_iter%d.vtk'%(comm.rank, ite)),
+               refine)
+
     # Refine the forest
     forest.refine(refine)
+
+    # Write the filter to disk
+    forest.writeForestToVTK(os.path.join(args.prefix, 'forest%d_iter%d.vtk'%(comm.rank, ite)))
 

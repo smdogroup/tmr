@@ -94,6 +94,10 @@ class TMRTopoProblem : public ParOptProblem {
   // -------------------------------------------------
   void setLinearization( double q, ParOptVec *xvec );
 
+  // Create a TACSBVec object containing the filter element volumes
+  // --------------------------------------------------------------
+  TACSBVec* createVolumeVec();
+
   // Create a design variable vector
   // -------------------------------
   ParOptVec *createDesignVec();

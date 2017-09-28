@@ -18,6 +18,9 @@ cdef extern from "<stdint.h>":
     ctypedef signed int int32_t
 
 cdef extern from "TMRBase.h":
+    enum:
+        TMR_MAX_LEVEL"TMR_MAX_LEVEL"
+        
     cdef cppclass TMREntity:
         void incref()
         void decref()
@@ -417,6 +420,7 @@ cdef extern from "TMRTopoProblem.h":
         void setPrefix(const char*)
         void setInitDesignVars(ParOptVec*)
         void setIterationCounter(int)
+        TACSBVec* createVolumeVec()
         ParOptVec* createDesignVec()
 
     cdef cppclass ParOptBVecWrap(ParOptVec):
