@@ -112,6 +112,7 @@ p.add_argument('--max_opt_iters', type=int, default=250)
 p.add_argument('--opt_abs_tol', type=float, default=1e-6)
 p.add_argument('--opt_barrier_frac', type=float, default=0.25)
 p.add_argument('--opt_barrier_power', type=float, default=1.0)
+p.add_argument('--output_freq', type=int, default=1)
 args = p.parse_args()
 
 # The communicator
@@ -138,9 +139,6 @@ mesh = TMR.Mesh(comm, geo)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
-opts.frontal_quality_factor = 1.25
-opts.num_smoothing_steps = 10
-opts.write_mesh_quality_histogram = 1
 
 # Create the surface mesh
 mesh.mesh(args.htarget, opts)
@@ -165,12 +163,12 @@ initial_mass = vol*2600
 m_fixed =  vol_frac*initial_mass
 
 # Set the max nmber of iterations
-max_iterations = 5
-mg_levels = [2, 2, 2, 3, 3]
+max_iterations = 4
+mg_levels = [2, 2, 3, 3]
 
 # Set parameters for later usage
 order = 2
-forest.createTrees(3)
+forest.createTrees(4)
 
 # The old filter/map classes
 old_filtr = None
@@ -190,8 +188,9 @@ obj_array = [1.0e3]
 
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
-    assembler, problem, filtr, varmap = createTopoProblem(forest,
-                                                          nlevels=mg_levels[ite])
+    nlevs = mg_levels[ite]
+    assembler, problem, filtr, varmap = createTopoProblem(forest, 
+                                                          nlevels=nlevs)
     
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
@@ -217,18 +216,17 @@ for ite in xrange(max_iterations):
     problem.setPrefix(args.prefix)
     
     # ParOpt parameters
-    max_bfgs = 20
-    max_opt_iters = 10
-    opt_abs_tol = 1e-6
+    max_bfgs = 10
 
     # Create the ParOpt problem
     opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
     opt.setMaxMajorIterations(args.max_opt_iters)
+    opt.setHessianResetFreq(max_bfgs)
     problem.setIterationCounter(args.max_opt_iters*ite)
     opt.setAbsOptimalityTol(args.opt_abs_tol)
     opt.setBarrierFraction(args.opt_barrier_frac)
     opt.setBarrierPower(args.opt_barrier_power)
-    opt.setOutputFrequency(1)
+    opt.setOutputFrequency(args.output_freq)
     opt.setOutputFile(os.path.join(args.prefix, 'paropt_output%d.out'%(ite)))
         
     # If the old filter exists, we're on the second iteration
@@ -271,9 +269,10 @@ for ite in xrange(max_iterations):
         interp.mult(old_vec, zu_vec)
         zu[:] *= vols
         
-        # Reset the complementarity
+        # Reset the complementarity 
+        barrier_factor = 10.0
         new_barrier = opt.getComplementarity()
-        opt.setInitBarrierParameter(new_barrier)
+        opt.setInitBarrierParameter(barrier_factor*new_barrier)
     else:
         filtr_volumes = problem.createVolumeVec()
 
@@ -324,13 +323,6 @@ for ite in xrange(max_iterations):
             elif rho < 0.05:
                 refine[i] = int(-1)
     
-    # Write the filter to disk
-    np.savetxt(os.path.join(args.prefix, 'refine_array%d_iter%d.vtk'%(comm.rank, ite)),
-               refine)
-
     # Refine the forest
     forest.refine(refine)
-
-    # Write the filter to disk
-    forest.writeForestToVTK(os.path.join(args.prefix, 'forest%d_iter%d.vtk'%(comm.rank, ite)))
 
