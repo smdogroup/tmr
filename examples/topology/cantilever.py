@@ -113,6 +113,10 @@ p.add_argument('--opt_abs_tol', type=float, default=1e-6)
 p.add_argument('--opt_barrier_frac', type=float, default=0.25)
 p.add_argument('--opt_barrier_power', type=float, default=1.0)
 p.add_argument('--output_freq', type=int, default=1)
+p.add_argument('--init_depth', type=int, default=3)
+p.add_argument('--mg_levels', type=int, nargs='+', default=[2, 2, 3, 3])
+p.add_argument('--max_lbfgs', type=int, default=10)
+p.add_argument('--hessian_reset', type=int, default=10)
 args = p.parse_args()
 
 # The communicator
@@ -158,17 +162,16 @@ r = 10.0
 a = 50.0
 vol = r*r*a
 vol_frac = args.vol_frac
-
 initial_mass = vol*2600
 m_fixed =  vol_frac*initial_mass
 
 # Set the max nmber of iterations
-max_iterations = 4
-mg_levels = [2, 2, 3, 3]
+mg_levels = args.mg_levels
+max_iterations = len(mg_levels)
 
 # Set parameters for later usage
 order = 2
-forest.createTrees(4)
+forest.createTrees(args.init_depth)
 
 # The old filter/map classes
 old_filtr = None
@@ -184,7 +187,7 @@ old_zu = None
 filtr_volumes = None
 
 # Set the values of the objective array
-obj_array = [1.0e3]
+obj_array = [(1.0e3*(1 << 3)**3)/(1 << args.init_depth)**3]
 
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
@@ -192,6 +195,11 @@ for ite in xrange(max_iterations):
     assembler, problem, filtr, varmap = createTopoProblem(forest, 
                                                           nlevels=nlevs)
     
+    # Write out just the mesh - for visualization
+    flag = TACS.ToFH5.NODES
+    f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
+    f5.writeToFile(os.path.join(args.prefix, 'beam_mesh%d.f5'%(ite)))
+
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
     # Add the point loads to the vertices
@@ -214,14 +222,16 @@ for ite in xrange(max_iterations):
     # Initialize the problem and set the prefix
     problem.initialize()
     problem.setPrefix(args.prefix)
-    
-    # ParOpt parameters
-    max_bfgs = 10
 
     # Create the ParOpt problem
-    opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
+    opt = ParOpt.pyParOpt(problem, args.max_lbfgs, ParOpt.BFGS)
+
+    # Set the norm type to use
+    opt.setNormType(ParOpt.L1_NORM)
+
+    # Set parameters
     opt.setMaxMajorIterations(args.max_opt_iters)
-    opt.setHessianResetFreq(max_bfgs)
+    opt.setHessianResetFreq(args.hessian_reset)
     problem.setIterationCounter(args.max_opt_iters*ite)
     opt.setAbsOptimalityTol(args.opt_abs_tol)
     opt.setBarrierFraction(args.opt_barrier_frac)
@@ -270,9 +280,8 @@ for ite in xrange(max_iterations):
         zu[:] *= vols
         
         # Reset the complementarity 
-        barrier_factor = 10.0
         new_barrier = opt.getComplementarity()
-        opt.setInitBarrierParameter(barrier_factor*new_barrier)
+        opt.setInitBarrierParameter(new_barrier)
     else:
         filtr_volumes = problem.createVolumeVec()
 

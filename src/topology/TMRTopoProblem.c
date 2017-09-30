@@ -55,6 +55,22 @@ double ParOptBVecWrap::maxabs(){
   return infty_norm;
 }
 
+double ParOptBVecWrap::l1norm(){
+  TacsScalar *x = NULL;
+  int size = vec->getArray(&x);
+  
+  double res = 0.0;
+  for ( int i = 0; i < size; i++ ){
+    res += fabs(TacsRealPart(x[i]));
+  }
+  
+  double l1_norm = 0.0;
+  MPI_Allreduce(&res, &l1_norm, 1, MPI_DOUBLE, MPI_SUM,
+                vec->getMPIComm());
+  
+  return l1_norm;
+}
+
 ParOptScalar ParOptBVecWrap::dot( ParOptVec *pvec ){
   ParOptBVecWrap *avec = dynamic_cast<ParOptBVecWrap*>(pvec);
   if (avec){
