@@ -426,3 +426,7 @@ cdef extern from "TMRTopoProblem.h":
     cdef cppclass ParOptBVecWrap(ParOptVec):
         ParOptBVecWrap(TACSBVec*)
         TACSBVec *vec
+
+cdef extern from "TMR_STLTools.h":
+    int TMR_GenerateBinFile(const char*, TMROctForest*,
+                            TACSBVec*, int, double)

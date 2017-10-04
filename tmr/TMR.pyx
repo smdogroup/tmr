@@ -1743,6 +1743,11 @@ def computeReconSolution(Assembler assembler,
                              uvec.ptr, uvec_refined.ptr)
     return
 
+def writeSTLToBin(char *filename, OctForest forest,
+                  Vec x, int offset=0, double cutoff=0.5):
+    TMR_GenerateBinFile(filename, forest.ptr, x.ptr, offset, cutoff)
+    return
+
 cdef class TopoProblem(pyParOptProblemBase):
     def __cinit__(self, list assemblers, list filters, 
                   list varmaps, list varindices, Pc pc):
