@@ -979,7 +979,8 @@ cdef class QuadrantArray:
         self.ptr = NULL
 
     def __dealloc__(self):
-        del self.ptr
+        if self.ptr and self.self_owned:
+            del self.ptr
 
     def __len__(self):
         cdef int size = 0
@@ -1810,6 +1811,7 @@ cdef class TopoProblem(pyParOptProblemBase):
         vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
         vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
         
+        isqforest = 0
         for i in range(nlevels):
             if isinstance(filters[i], QuadForest):
                 isqforest = 1
