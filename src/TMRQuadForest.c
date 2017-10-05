@@ -1856,7 +1856,7 @@ void TMRQuadForest::addCornerNeighbors( int corner,
 
       // Compute the quadrant location
       TMRQuadrant neighbor;
-      neighbor.face = p.face;
+      neighbor.face = adj;
       neighbor.level = p.level;
       neighbor.x = (hmax - 2*h)*(adj_index % 2);
       neighbor.y = (hmax - 2*h)*(adj_index/2);

@@ -112,7 +112,15 @@ p.add_argument('--max_opt_iters', type=int, default=250)
 p.add_argument('--opt_abs_tol', type=float, default=1e-6)
 p.add_argument('--opt_barrier_frac', type=float, default=0.25)
 p.add_argument('--opt_barrier_power', type=float, default=1.0)
+p.add_argument('--output_freq', type=int, default=1)
+p.add_argument('--init_depth', type=int, default=3)
+p.add_argument('--mg_levels', type=int, nargs='+', default=[2, 2, 3, 3])
+p.add_argument('--max_lbfgs', type=int, default=10)
+p.add_argument('--hessian_reset', type=int, default=10)
 args = p.parse_args()
+
+# Set the parameter to use paropt or MMA
+use_paropt = False
 
 # The communicator
 comm = MPI.COMM_WORLD
@@ -138,9 +146,6 @@ mesh = TMR.Mesh(comm, geo)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
-opts.frontal_quality_factor = 1.25
-opts.num_smoothing_steps = 10
-opts.write_mesh_quality_histogram = 1
 
 # Create the surface mesh
 mesh.mesh(args.htarget, opts)
@@ -161,16 +166,18 @@ a = 50.0
 vol = r*r*a
 vol_frac = args.vol_frac
 
-initial_mass = vol*2600
+# Set the fixed mass
+density = 2600.0
+initial_mass = vol*density
 m_fixed =  vol_frac*initial_mass
 
 # Set the max nmber of iterations
-max_iterations = 5
-mg_levels = [2, 2, 2, 3, 3]
+mg_levels = args.mg_levels
+max_iterations = len(mg_levels)
 
 # Set parameters for later usage
 order = 2
-forest.createTrees(3)
+forest.createTrees(args.init_depth)
 
 # The old filter/map classes
 old_filtr = None
@@ -186,13 +193,19 @@ old_zu = None
 filtr_volumes = None
 
 # Set the values of the objective array
-obj_array = [1.0e3]
+obj_array = [(1.0e3*(1 << 3)**3)/(1 << args.init_depth)**3]
 
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
-    assembler, problem, filtr, varmap = createTopoProblem(forest,
-                                                          nlevels=mg_levels[ite])
+    nlevs = mg_levels[ite]
+    assembler, problem, filtr, varmap = createTopoProblem(forest, 
+                                                          nlevels=nlevs)
     
+    # Write out just the mesh - for visualization
+    flag = TACS.ToFH5.NODES
+    f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
+    f5.writeToFile(os.path.join(args.prefix, 'beam_mesh%d.f5'%(ite)))
+
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
     # Add the point loads to the vertices
@@ -215,86 +228,146 @@ for ite in xrange(max_iterations):
     # Initialize the problem and set the prefix
     problem.initialize()
     problem.setPrefix(args.prefix)
-    
-    # ParOpt parameters
-    max_bfgs = 20
-    max_opt_iters = 10
-    opt_abs_tol = 1e-6
 
-    # Create the ParOpt problem
-    opt = ParOpt.pyParOpt(problem, max_bfgs, ParOpt.BFGS)
-    opt.setMaxMajorIterations(args.max_opt_iters)
-    problem.setIterationCounter(args.max_opt_iters*ite)
-    opt.setAbsOptimalityTol(args.opt_abs_tol)
-    opt.setBarrierFraction(args.opt_barrier_frac)
-    opt.setBarrierPower(args.opt_barrier_power)
-    opt.setOutputFrequency(1)
-    opt.setOutputFile(os.path.join(args.prefix, 'paropt_output%d.out'%(ite)))
+    if use_paropt:
+        # Create the ParOpt problem
+        opt = ParOpt.pyParOpt(problem, args.max_lbfgs, ParOpt.BFGS)
+
+        # Set the norm type to use
+        opt.setNormType(ParOpt.L1_NORM)
+
+        # Set parameters
+        opt.setMaxMajorIterations(args.max_opt_iters)
+        opt.setHessianResetFreq(args.hessian_reset)
+        problem.setIterationCounter(args.max_opt_iters*ite)
+        opt.setAbsOptimalityTol(args.opt_abs_tol)
+        opt.setBarrierFraction(args.opt_barrier_frac)
+        opt.setBarrierPower(args.opt_barrier_power)
+        opt.setOutputFrequency(args.output_freq)
+        opt.setOutputFile(os.path.join(args.prefix, 
+                                       'paropt_output%d.out'%(ite)))
         
-    # If the old filter exists, we're on the second iteration
-    if old_filtr:
-        # Create the interpolation
-        interp = TACS.VecInterp(old_varmap, varmap)
-        filtr.createInterpolation(old_filtr, interp)
-        interp.initialize()
+        # If the old filter exists, we're on the second iteration
+        if old_filtr:
+            # Create the interpolation
+            interp = TACS.VecInterp(old_varmap, varmap)
+            filtr.createInterpolation(old_filtr, interp)
+            interp.initialize()
         
-        # Get the optimization variables for the new optimizer
+            # Get the optimization variables for the new optimizer
+            x, z, zw, zl, zu = opt.getOptimizedPoint()
+
+            # Do not try to estimate the new multipliers
+            opt.setInitStartingPoint(0)
+        
+            # Set the values of the new mass constraint multipliers
+            z[0] = old_z
+
+            # Do the interpolation
+            old_vec = problem.convertPVecToVec(old_dvs)
+            x_vec = problem.convertPVecToVec(x)
+            interp.mult(old_vec, x_vec)
+
+            # Set the new design variables
+            problem.setInitDesignVars(x)
+
+            # Compute the new filter volumes
+            filtr_volumes = problem.createVolumeVec()
+            vols = filtr_volumes.getArray()
+        
+            # Do the interpolation of the multipliers
+            old_vec = problem.convertPVecToVec(old_zl)
+            zl_vec = problem.convertPVecToVec(zl)
+            interp.mult(old_vec, zl_vec)
+            zl[:] *= vols
+
+            # Do the interpolation
+            old_vec = problem.convertPVecToVec(old_zu)
+            zu_vec = problem.convertPVecToVec(zu)
+            interp.mult(old_vec, zu_vec)
+            zu[:] *= vols
+        
+            # Reset the complementarity 
+            new_barrier = opt.getComplementarity()
+            opt.setInitBarrierParameter(new_barrier)
+        else:
+            filtr_volumes = problem.createVolumeVec()
+
+        # Optimize the new point
+        opt.optimize()
+    
+        # Get the final values of the design variables
         x, z, zw, zl, zu = opt.getOptimizedPoint()
-
-        # Do not try to estimate the new multipliers
-        opt.setInitStartingPoint(0)
+    
+        # Set the old design variable vector to what was once the new
+        # design variable values. Copy the values from
+        # getOptimizedPoint
+        old_z = z[0]
+        old_dvs = x
+        old_zl = zl
+        old_zu = zu
         
-        # Set the values of the new mass constraint multipliers
-        z[0] = old_z
-
-        # Do the interpolation
-        old_vec = problem.convertPVecToVec(old_dvs)
-        x_vec = problem.convertPVecToVec(x)
-        interp.mult(old_vec, x_vec)
-
-        # Set the new design variables
-        problem.setInitDesignVars(x)
-
-        # Compute the new filter volumes
-        filtr_volumes = problem.createVolumeVec()
+        # Divide the bound multipliers by their associated volumes
         vols = filtr_volumes.getArray()
-        
-        # Do the interpolation of the multipliers
-        old_vec = problem.convertPVecToVec(old_zl)
-        zl_vec = problem.convertPVecToVec(zl)
-        interp.mult(old_vec, zl_vec)
-        zl[:] *= vols
-
-        # Do the interpolation
-        old_vec = problem.convertPVecToVec(old_zu)
-        zu_vec = problem.convertPVecToVec(zu)
-        interp.mult(old_vec, zu_vec)
-        zu[:] *= vols
-        
-        # Reset the complementarity
-        new_barrier = opt.getComplementarity()
-        opt.setInitBarrierParameter(new_barrier)
+        zl[:] = zl[:]/vols
+        zu[:] = zu[:]/vols
     else:
-        filtr_volumes = problem.createVolumeVec()
+        # Here we use MMA, and only worry about interpolating the
+        # variables
+        max_mma_iters = 500
 
-    # Optimize the new point
-    opt.optimize()
-    
-    # Get the final values of the design variables
-    x, z, zw, zl, zu = opt.getOptimizedPoint()
-    
-    # Set the old design variable vector to what was once the new
-    # design variable values. Copy the values from getOptimizedPoint
-    old_z = z[0]
-    old_dvs = x
-    old_zl = zl
-    old_zu = zu
+        # Set the ParOpt problem into MMA
+        mma = ParOpt.pyMMA(problem)
+        mma.setPrintLevel(2)
+        mma.setOutputFile(os.path.join(args.prefix, 
+                                       'mma_output%d.out'%(ite)))
 
-    # Divide the bound multipliers by their associated volumes
-    vols = filtr_volumes.getArray()
-    zl[:] = zl[:]/vols
-    zu[:] = zu[:]/vols
-    
+        if ite == 0:
+            # Set the starting point using the mass fraction
+            x = mma.getOptimizedPoint()
+            x[:] = 0.5
+            problem.setInitDesignVars(x)
+
+        # If the old filter exists, we're on the second iteration
+        if old_filtr:
+            # Create the interpolation
+            interp = TACS.VecInterp(old_varmap, varmap)
+            filtr.createInterpolation(old_filtr, interp)
+            interp.initialize()
+        
+            # Get the optimization variables for the new optimizer
+            x = mma.getOptimizedPoint()
+
+            # Do the interpolation
+            old_vec = problem.convertPVecToVec(old_dvs)
+            x_vec = problem.convertPVecToVec(x)
+            interp.mult(old_vec, x_vec)
+
+            # Set the initial design variable values
+            problem.setInitDesignVars(x)
+            
+        # Enter the optimization loop
+        for i in range (max_mma_iters):
+            mma.update()
+
+            # Write the solution out to a file
+            if i % args.output_freq == 0:
+                itr = max_mma_iters*ite + i
+                filename = os.path.join(args.prefix, 
+                                        'levelset05_binary%04d.bstl'%(itr))
+
+                # Get the vector and convert it
+                vec = problem.convertPVecToVec(mma.getOptimizedPoint())
+                TMR.writeSTLToBin(filename, filtr, vec)
+
+            # Test for optimality
+            l1, linfty, infeas = mma.getOptimality()
+            if l1 < 1e-3 and infeas < 1e-3:
+                break          
+
+        # Set the old values of the variables
+        old_dvs = mma.getOptimizedPoint()
+            
     # Set the old filter/variable map for the next time through the
     # loop so that we can interpolate design variable values
     old_varmap = varmap
@@ -324,13 +397,6 @@ for ite in xrange(max_iterations):
             elif rho < 0.05:
                 refine[i] = int(-1)
     
-    # Write the filter to disk
-    np.savetxt(os.path.join(args.prefix, 'refine_array%d_iter%d.vtk'%(comm.rank, ite)),
-               refine)
-
     # Refine the forest
     forest.refine(refine)
-
-    # Write the filter to disk
-    forest.writeForestToVTK(os.path.join(args.prefix, 'forest%d_iter%d.vtk'%(comm.rank, ite)))
 

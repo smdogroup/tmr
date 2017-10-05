@@ -24,6 +24,7 @@ class ParOptBVecWrap : public ParOptVec {
   void copyValues( ParOptVec *pvec );
   double norm();
   double maxabs();
+  double l1norm();
   ParOptScalar dot( ParOptVec *pvec );
   void mdot( ParOptVec **vecs, int nvecs, ParOptScalar *output );
   void scale( ParOptScalar alpha );

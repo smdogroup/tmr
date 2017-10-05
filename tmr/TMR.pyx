@@ -29,6 +29,8 @@ from TMR cimport *
 cdef extern from "mpi-compat.h":
     pass
 
+MAX_LEVEL = TMR_MAX_LEVEL
+
 cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):
@@ -1739,6 +1741,11 @@ def computeReconSolution(Assembler assembler,
                          Vec uvec, Vec uvec_refined):
     TMR_ComputeReconSolution(assembler.ptr, forest.ptr, refined.ptr,
                              uvec.ptr, uvec_refined.ptr)
+    return
+
+def writeSTLToBin(char *filename, OctForest forest,
+                  Vec x, int offset=0, double cutoff=0.5):
+    TMR_GenerateBinFile(filename, forest.ptr, x.ptr, offset, cutoff)
     return
 
 cdef class TopoProblem(pyParOptProblemBase):
