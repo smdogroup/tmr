@@ -104,7 +104,11 @@ class TMRTopoProblem : public ParOptProblem {
   // Create a TACSBVec object containing the filter element volumes
   // --------------------------------------------------------------
   TACSBVec* createVolumeVec();
-
+  
+  // Create a TACSBVec object containing the filter element area
+  // --------------------------------------------------------------
+  TACSBVec* createAreaVec();
+  
   // Create a design variable vector
   // -------------------------------
   ParOptVec *createDesignVec();

@@ -914,6 +914,133 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
 }
 
 /*
+  Compute the volume corresponding to each node within the filter
+*/
+TACSBVec* TMRTopoProblem::createAreaVec(){
+  // Get the dependent nodes and weight values
+  const int *dep_ptr, *dep_conn;
+  const double *dep_weights;
+  int ndep = quad_filter[0]->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+
+  // Copy over the data
+  int *dptr = new int[ ndep+1 ];
+  int *dconn = new int[ dep_ptr[ndep] ];
+  double *dweights = new double[ dep_ptr[ndep] ];
+  memcpy(dptr, dep_ptr, (ndep+1)*sizeof(int));
+  memcpy(dconn, dep_conn, dep_ptr[ndep]*sizeof(int));
+  memcpy(dweights, dep_weights, dep_ptr[ndep]*sizeof(double));
+  TACSBVecDepNodes *dep_nodes = new TACSBVecDepNodes(ndep, &dptr, 
+						     &dconn, &dweights);
+
+  TACSBVec *vec = new TACSBVec(filter_maps[0], 1, filter_dist[0], dep_nodes);
+  vec->zeroEntries();
+
+  // Get the quadrants
+  TMRQuadrantArray *quadrants;
+  quad_filter[0]->getQuadrants(&quadrants);
+  
+  // Get the array of quadrants
+  int size;
+  TMRQuadrant *array;
+  quadrants->getArray(&array, &size);
+
+  // Get the nodes
+  TMRQuadrantArray *nodes;
+  quad_filter[0]->getNodes(&nodes);
+  int node_size;
+  TMRQuadrant *node_array;
+  nodes->getArray(&node_array, &node_size);  
+
+  // Get the node locations from the filter
+  TMRPoint *X;
+  quad_filter[0]->getPoints(&X);
+  
+  // Loop over the elements 
+  for ( int i = 0; i < size; i++ ){
+    int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+
+    // Retrieve the node numbers and x/y/z locations for element i
+    // within the mesh
+    int node_nums[4];
+    TMRPoint Xpts[4];
+    
+    for ( int jj = 0; jj < 2; jj++ ){
+      for ( int ii = 0; ii < 2; ii++ ){
+        // Find the quadrant node (without level/tag)
+        TMRQuadrant node;
+        node.face = array[i].face;
+        node.x = array[i].x + ii*h;
+        node.y = array[i].y + jj*h;
+        quad_filter[0]->transformNode(&node);
+          
+        // Find the corresponding node
+        const int use_nodes = 1;
+        TMRQuadrant *t = nodes->contains(&node, use_nodes);
+          
+        if (t){
+          // Copy the node location
+          Xpts[ii + 2*jj] = X[t - node_array];
+            
+          // Copy the node number
+          node_nums[ii + 2*jj] = t->tag;
+        }
+      }
+    }
+    
+    
+    // Compute the element area
+    TacsScalar Area = 0.0;
+    
+    // The quadrature points
+    const double gaussPts[] = {-0.577350269189626, 0.577350269189626};
+
+    
+    for ( int jj = 0; jj < 2; jj++ ){
+      for ( int ii = 0; ii < 2; ii++ ){
+        double pt[2];
+        pt[0] = gaussPts[ii];
+        pt[1] = gaussPts[jj];
+        
+        // Evaluate the derivative of the shape functions
+        double N[4], Na[4], Nb[4];
+        FElibrary::biLagrangeSF(N, Na, Nb, pt, 2);
+
+        // Compute the Jacobian transformation
+        TacsScalar J[4];
+        memset(J, 0, 4*sizeof(TacsScalar));
+        for ( int j = 0; j < 4; j++ ){
+          J[0] += Na[j]*Xpts[j].x;
+          J[1] += Nb[j]*Xpts[j].x;
+          
+          J[2] += Na[j]*Xpts[j].y;
+          J[3] += Nb[j]*Xpts[j].y;
+        }
+        // Add the determinant to the area - the weights in this
+        // case are just = 1.0
+        TacsScalar det = FElibrary::jacobian2d(J);
+        Area += det;
+      }
+    }
+    
+  
+    // Distribute the element area equally to all nodes in the
+    // element
+    TacsScalar a[4];
+    for ( int k = 0; k < 4; k++ ){
+      a[k] = 0.25*Area;
+    }
+    
+    // Add the values to the vector
+    vec->setValues(4, node_nums, a, TACS_ADD_VALUES);
+  }
+
+  vec->beginSetValues(TACS_ADD_VALUES);
+  vec->endSetValues(TACS_ADD_VALUES);
+
+  return vec;
+}
+
+/*
   Set whether these should be considered sparse inequalities
 */
 int TMRTopoProblem::isSparseInequality(){ 
