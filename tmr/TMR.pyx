@@ -1203,7 +1203,10 @@ cdef class QuadForest:
 
     def writeForestToVTK(self, char *filename):
         self.ptr.writeForestToVTK(filename)
-
+        
+    def createInterpolation(self, QuadForest forest, VecInterp vec):
+        self.ptr.createInterpolation(forest.ptr, vec.ptr)
+        
 cdef _init_QuadForest(TMRQuadForest* ptr):
     forest = QuadForest()
     forest.ptr = ptr
@@ -1806,33 +1809,37 @@ cdef class TopoProblem(pyParOptProblemBase):
         assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
         vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
         vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
-        ofiltr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
-        qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
-
         
         for i in range(nlevels):
-            assemb[i] = (<Assembler>assemblers[i]).ptr
-            vmaps[i] = (<VarMap>varmaps[i]).ptr
-            vindex[i] = (<VecIndices>varindices[i]).ptr
-            if isinstance(filters[i], OctForest):
-                ofiltr[i] = (<OctForest>filters[i]).ptr
-            elif isinstance(filters[i], QuadForest):
-                qfiltr[i] = (<QuadForest>filters[i]).ptr
-                
+            if isinstance(filters[i], QuadForest):
+                isqforest = 1
+            elif isinstance(filters[i], OctForest):
+                isqforest = 0
 
-        if ofiltr:
-            self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr, 
-                                          vmaps, vindex, mg)
-        elif qfiltr:
+        if isqforest:
+            qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
+            for i in range(nlevels):
+                qfiltr[i] = (<QuadForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+                vmaps[i] = (<VarMap>varmaps[i]).ptr
+                vindex[i] = (<VecIndices>varindices[i]).ptr
             self.ptr = new TMRTopoProblem(nlevels, assemb, qfiltr, 
                                           vmaps, vindex, mg)
-        
-        self.ptr.incref()
-        free(assemb)
-        if ofiltr:
-            free(ofiltr)
-        if qfiltr:
+            self.ptr.incref()
             free(qfiltr)
+        else:
+            ofiltr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
+            for i in range(nlevels):
+                ofiltr[i] = (<OctForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+                vmaps[i] = (<VarMap>varmaps[i]).ptr
+                vindex[i] = (<VecIndices>varindices[i]).ptr
+                
+            self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr, 
+                                          vmaps, vindex, mg)
+            self.ptr.incref()
+            free(ofiltr)
+        free(assemb)
         free(vmaps)
         free(vindex)
         return

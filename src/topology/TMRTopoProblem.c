@@ -280,6 +280,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   // Allocate the arrays
   tacs = new TACSAssembler*[ nlevels ];
   quad_filter = new TMRQuadForest*[ nlevels ];
+  oct_filter = NULL;
   filter_maps = new TACSVarMap*[ nlevels ];
   filter_indices = new TACSBVecIndices*[ nlevels ];
   filter_dist = new TACSBVecDistribute*[ nlevels ];
@@ -1780,7 +1781,7 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
     // Write out the file at a cut off of 0.25
     char *filename = new char[ strlen(prefix) + 100 ];
     sprintf(filename, "%s/levelset025_binary%04d.bstl", prefix, iter_count);
-    if (oct_filter[0]){
+    if (oct_filter){
       TMR_GenerateBinFile(filename, oct_filter[0], x[0], var_offset, cutoff);
     
       // Write out the file at a cutoff of 0.5
