@@ -2,13 +2,12 @@
 #define TMR_QUADRANT_STIFFNESS_H
 
 /*
-  The following class defines a SolidStiffness base class for topology
+  The following class defines a PlaneStressQuadStiffness base class for topology
   optimization using TACS.  
 */
 
 #include "TMRBase.h"
 #include "PlaneStressStiffness.h"
-#include "TACSConstitutive.h"
 
 /*
   The TMRQuadStiffness class
@@ -22,10 +21,9 @@ class TMRQuadStiffness : public PlaneStressStiffness {
   static const int MAX_NUM_WEIGHTS = 4;
 
   TMRQuadStiffness( TMRIndexWeight *_weights, int _nweights,
-                    TacsScalar _density, TacsScalar _E, 
-                    TacsScalar _nu, TacsScalar _ys,
-                    double _q, double _eps=1e-3 );
-  
+                   TacsScalar _density, TacsScalar E, 
+                   TacsScalar _nu, double _q, double _eps=1e-3 );
+
   // Set the design variable values in the object
   // --------------------------------------------
   void setDesignVars( const TacsScalar x[], int numDVs );
@@ -39,8 +37,7 @@ class TMRQuadStiffness : public PlaneStressStiffness {
   void addStressDVSens( const double pt[], const TacsScalar strain[], 
                         TacsScalar alpha, const TacsScalar psi[], 
                         TacsScalar dvSens[], int dvLen );
-  void calculateThermalStress( const double pt[],
-                               const TacsScalar e[], TacsScalar s[] );
+
   // Evaluate the pointwise mass
   // ---------------------------
   void getPointwiseMass( const double pt[], 
@@ -49,37 +46,27 @@ class TMRQuadStiffness : public PlaneStressStiffness {
                                const TacsScalar alpha[],
                                TacsScalar dvSens[], int dvLen );
 
-  // Return the failure
-  // -------------------
-  void failure( const double pt[], 
-                const TacsScalar strain[],
-                TacsScalar * fail );
-  void addFailureDVSens( const double pt[], 
-                         const TacsScalar strain[],
-                         TacsScalar alpha,
-                         TacsScalar dvSens[], int dvLen );
-  void failureStrainSens( const double pt[],
-                          const TacsScalar strain[],
-                          TacsScalar sens[] );
-
   // Return the density as the design variable
   // -----------------------------------------
   TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
-    return xw*density; 
+    return rho; 
   }
-  
+
  private:
   // The density and stiffness properties
-  double E, nu, ys, epsilon;
-  TacsScalar rho, alpha, xw, density;
+  TacsScalar density;
+  TacsScalar E, nu;
 
   // The RAMP penalization factor
   TacsScalar q;
   double eps;
+
+  // The value of the design-dependent density
+  TacsScalar rho;
 
   // The local density of the
   int nweights;
   TMRIndexWeight weights[MAX_NUM_WEIGHTS];
 };
 
-#endif // TMR_QUADRANT_STIFFNESS_H
+#endif // TMR_QUADRANT_STIFFNESS

@@ -1,10 +1,10 @@
 #ifndef TMR_TOPO_PROBLEM_H
 #define TMR_TOPO_PROBLEM_H
-
 #include "ParOpt.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
 #include "TMROctForest.h"
+#include "TMRQuadForest.h"
 #include "StructuralMass.h"
 #include "Compliance.h"
 #include "KSFailure.h"
@@ -45,6 +45,12 @@ class TMRTopoProblem : public ParOptProblem {
   TMRTopoProblem( int _nlevels, 
                   TACSAssembler *_tacs[],
                   TMROctForest *_filter[], 
+                  TACSVarMap *_filter_maps[],
+                  TACSBVecIndices *_filter_indices[],
+                  TACSMg *_mg );
+  TMRTopoProblem( int _nlevels, 
+                  TACSAssembler *_tacs[],
+                  TMRQuadForest *_filter[], 
                   TACSVarMap *_filter_maps[],
                   TACSBVecIndices *_filter_indices[],
                   TACSMg *_mg );
@@ -202,7 +208,8 @@ class TMRTopoProblem : public ParOptProblem {
   TACSAssembler **tacs;
 
   // Set the information about the filter at each level
-  TMROctForest **filter;
+  TMROctForest **oct_filter;
+  TMRQuadForest **quad_filter;
   TACSVarMap **filter_maps;
   TACSBVecIndices **filter_indices;
   TACSBVecDistribute **filter_dist;

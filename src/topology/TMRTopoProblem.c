@@ -143,7 +143,8 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // Allocate the arrays
   tacs = new TACSAssembler*[ nlevels ];
-  filter = new TMROctForest*[ nlevels ];
+  oct_filter = new TMROctForest*[ nlevels ];
+  quad_filter = NULL;
   filter_maps = new TACSVarMap*[ nlevels ];
   filter_indices = new TACSBVecIndices*[ nlevels ];
   filter_dist = new TACSBVecDistribute*[ nlevels ];
@@ -160,8 +161,143 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     tacs[k]->incref();
 
     // Set the filter object
-    filter[k] = _filter[k];
-    filter[k]->incref();
+    oct_filter[k] = _filter[k];
+    oct_filter[k]->incref();
+ 
+    // Copy over the filter information
+    filter_maps[k] = _filter_maps[k];
+    filter_maps[k]->incref();
+
+    filter_indices[k] = _filter_indices[k];
+    filter_indices[k]->incref();
+
+    // Set the maximum local size
+    const int *range;
+    filter_maps[k]->getOwnerRange(&range);
+    int size = (range[mpi_rank+1] - range[mpi_rank]) +
+      filter_indices[k]->getNumIndices();
+
+    // Update the maximum local size
+    if (size > max_local_size){
+      max_local_size = size;
+    }
+
+    // Create the distribution object for the design variables
+    filter_dist[k] = new TACSBVecDistribute(filter_maps[k], 
+                                            filter_indices[k]);
+    filter_dist[k]->incref();
+
+    // Create the transfer context
+    filter_ctx[k] = filter_dist[k]->createCtx(1);
+    filter_ctx[k]->incref();
+
+    // Create the design variable vector for this level
+    x[k] = new TACSBVec(filter_maps[k], 1, filter_dist[k]);
+    x[k]->incref();
+  }
+
+  // Now create the interpolation between filter levels
+  for ( int k = 1; k < nlevels; k++ ){
+    // Create the interpolation object
+    filter_interp[k-1] = new TACSBVecInterp(filter_maps[k],
+                                            filter_maps[k-1], 1);
+    filter_interp[k-1]->incref();
+
+    // Create the interpolation on the TMR side
+    oct_filter[k-1]->createInterpolation(oct_filter[k], filter_interp[k-1]);
+    filter_interp[k-1]->initialize();
+  }
+  
+  // Set the maximum local size
+  xlocal = new TacsScalar[ max_local_size ];
+
+  // The multigrid object
+  mg = _mg;
+  mg->incref();
+
+  // Allocate an adjoint and df/du vector
+  dfdu = tacs[0]->createVec();
+  adjoint = tacs[0]->createVec();
+  dfdu->incref();
+  adjoint->incref();
+
+  // Set up the solver
+  int gmres_iters = 100; 
+  int nrestart = 2;
+  int is_flexible = 1;
+  ksm = new GMRES(mg->getMat(0), mg, 
+                  gmres_iters, nrestart, is_flexible);
+  ksm->incref();
+  ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
+  ksm->setTolerances(1e-10, 1e-30);
+
+  // Set the iteration count
+  iter_count = 0;
+
+  // Set the load case information
+  num_load_cases = 0;
+  forces = NULL;
+  vars = NULL;
+
+  // Set the load case information
+  load_case_info = NULL;
+
+  // Set the objective weight information
+  obj_weights = NULL;
+  
+  // Set the number of times the buckling system has been reset
+  reset_count = 0;
+  ks_a = NULL;
+  obj_funcs = NULL;
+}
+
+/*
+  Create the topology optimization problem for 2D quad meshes
+*/
+TMRTopoProblem::TMRTopoProblem( int _nlevels, 
+                                TACSAssembler *_tacs[],
+                                TMRQuadForest *_filter[], 
+                                TACSVarMap *_filter_maps[],
+                                TACSBVecIndices *_filter_indices[],
+                                TACSMg *_mg ):
+ ParOptProblem(_tacs[0]->getMPIComm()){
+  // Set the prefix to NULL
+  prefix = NULL;
+  
+  // Get the processor rank
+  int mpi_rank;
+  MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
+  
+  // Set the maximum number of indices
+  max_local_size = 0;
+
+  // The initial design variable values (may not be set)
+  xinit = NULL;
+
+  // Set the number of levels
+  nlevels = _nlevels;
+
+  // Allocate the arrays
+  tacs = new TACSAssembler*[ nlevels ];
+  quad_filter = new TMRQuadForest*[ nlevels ];
+  filter_maps = new TACSVarMap*[ nlevels ];
+  filter_indices = new TACSBVecIndices*[ nlevels ];
+  filter_dist = new TACSBVecDistribute*[ nlevels ];
+  filter_ctx = new TACSBVecDistCtx*[ nlevels ];
+  filter_interp = new TACSBVecInterp*[ nlevels-1 ];
+
+  // The design variable vector for each level
+  x = new TACSBVec*[ nlevels ];
+
+  // Copy over the assembler objects and filters
+  for ( int k = 0; k < nlevels; k++ ){
+    // Set the TACSAssembler objects for each level
+    tacs[k] = _tacs[k];
+    tacs[k]->incref();
+
+    // Set the filter object
+    quad_filter[k] = _filter[k];
+    quad_filter[k]->incref();
 
     // Copy over the filter information
     filter_maps[k] = _filter_maps[k];
@@ -203,7 +339,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     filter_interp[k-1]->incref();
 
     // Create the interpolation on the TMR side
-    filter[k-1]->createInterpolation(filter[k], filter_interp[k-1]);
+    quad_filter[k-1]->createInterpolation(quad_filter[k], filter_interp[k-1]);
     filter_interp[k-1]->initialize();
   }
   
@@ -261,7 +397,16 @@ TMRTopoProblem::~TMRTopoProblem(){
   // Decrease the reference counts
   for ( int k = 0; k < nlevels; k++ ){
     tacs[k]->decref();
-    filter[k]->decref();
+    if (quad_filter){
+      if (quad_filter[k]){
+        quad_filter[k]->decref();
+      }
+    }
+    if (oct_filter){
+      if (oct_filter[k]){
+        oct_filter[k]->decref();
+      }
+    }
     filter_maps[k]->decref();
     filter_indices[k]->decref();
     filter_dist[k]->decref();
@@ -269,7 +414,12 @@ TMRTopoProblem::~TMRTopoProblem(){
     x[k]->decref();
   }
   delete [] tacs;
-  delete [] filter;
+  if (quad_filter){
+    delete [] quad_filter;
+  }
+  if (oct_filter){
+    delete [] oct_filter;
+  }
   delete [] filter_maps;
   delete [] filter_indices;
   delete [] filter_dist;
@@ -634,7 +784,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   // Get the dependent nodes and weight values
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
-  int ndep = filter[0]->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+  int ndep = oct_filter[0]->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
 
   // Copy over the data
   int *dptr = new int[ ndep+1 ];
@@ -651,7 +801,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
 
   // Get the octants
   TMROctantArray *octants;
-  filter[0]->getOctants(&octants);
+  oct_filter[0]->getOctants(&octants);
   
   // Get the array of octants
   int size;
@@ -660,14 +810,14 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
 
   // Get the nodes
   TMROctantArray *nodes;
-  filter[0]->getNodes(&nodes);
+  oct_filter[0]->getNodes(&nodes);
   int node_size;
   TMROctant *node_array;
   nodes->getArray(&node_array, &node_size);  
 
   // Get the node locations from the filter
   TMRPoint *X;
-  filter[0]->getPoints(&X);
+  oct_filter[0]->getPoints(&X);
   
   // Loop over the elements 
   for ( int i = 0; i < size; i++ ){
@@ -686,7 +836,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
           node.x = array[i].x + ii*h;
           node.y = array[i].y + jj*h;
           node.z = array[i].z + kk*h;
-          filter[0]->transformNode(&node);
+          oct_filter[0]->transformNode(&node);
           
           // Find the corresponding node
           const int use_nodes = 1;
@@ -1503,12 +1653,15 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
     // Write out the file at a cut off of 0.25
     char *filename = new char[ strlen(prefix) + 100 ];
     sprintf(filename, "%s/levelset025_binary%04d.bstl", prefix, iter_count);
-    TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
+    if (oct_filter[0]){
+      TMR_GenerateBinFile(filename, oct_filter[0], x[0], var_offset, cutoff);
     
-    // Write out the file at a cutoff of 0.5
-    cutoff = 0.5;
-    sprintf(filename, "%s/levelset05_binary%04d.bstl", prefix, iter_count);
-    TMR_GenerateBinFile(filename, filter[0], x[0], var_offset, cutoff);
+      // Write out the file at a cutoff of 0.5
+      cutoff = 0.5;
+      sprintf(filename, "%s/levelset05_binary%04d.bstl", prefix, iter_count);
+      TMR_GenerateBinFile(filename, oct_filter[0], x[0], var_offset, cutoff);
+    }
+    
     delete [] filename;
   }
 
