@@ -169,7 +169,7 @@ cdef extern from "":
     TMREdgeFromFace* _dynamicEdgeFromFace "dynamic_cast<TMREdgeFromFace*>"(TMREdge*)
     TMRTopoProblem* _dynamicTopoProblem "dynamic_cast<TMRTopoProblem*>"(ParOptProblem*)
     ParOptBVecWrap* _dynamicParOptBVecWrap "dynamic_cast<ParOptBVecWrap*>"(ParOptVec*)
- 
+
 cdef extern from "TMRMesh.h":
     cdef cppclass TMRElementFeatureSize(TMREntity):
         TMRElementFeatureSize()
@@ -331,6 +331,10 @@ cdef extern from "TMROctStiffness.h":
     cdef cppclass TMROctStiffness(SolidStiffness):
         TMROctStiffness(TMRIndexWeight*, int, TacsScalar, TacsScalar,
                         TacsScalar, double)
+cdef extern from "TMRQuadStiffness.h":
+    cdef cppclass TMRQuadStiffness(PlaneStressStiffness):
+        TMRQuadStiffness(TMRIndexWeight*, int, TacsScalar, TacsScalar,
+                         TacsScalar, double)
 
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):
@@ -408,6 +412,8 @@ cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(int, TACSAssembler**, TMROctForest**, 
                        TACSVarMap**, TACSBVecIndices**, TACSMg*)
+        TMRTopoProblem(int, TACSAssembler**, TMRQuadForest**, 
+                       TACSVarMap**, TACSBVecIndices**, TACSMg*)
         void setLoadCases(TACSBVec**, int)
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,
@@ -421,6 +427,7 @@ cdef extern from "TMRTopoProblem.h":
         void setInitDesignVars(ParOptVec*)
         void setIterationCounter(int)
         TACSBVec* createVolumeVec()
+        TACSBVec* createAreaVec()
         ParOptVec* createDesignVec()
 
     cdef cppclass ParOptBVecWrap(ParOptVec):
