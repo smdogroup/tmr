@@ -2484,8 +2484,8 @@ void TMROctForest::balanceOctant( TMROctant *oct,
     oct->parent(&p);
         
     // Balance across each face
-    for ( int face = 0; face < 6; face++ ){
-      p.faceNeighbor(face, &neighbor);
+    for ( int face_index = 0; face_index < 6; face_index++ ){
+      p.faceNeighbor(face_index, &neighbor);
       neighbor.getSibling(0, &q);
 
       // If we are within bounds, add the neighbor
@@ -2504,7 +2504,7 @@ void TMROctForest::balanceOctant( TMROctant *oct,
         }
       }
       else if (balance_tree){
-        addFaceNeighbors(face, q, hash, ext_hash, queue);
+        addFaceNeighbors(face_index, q, hash, ext_hash, queue);
       }
     }
 
@@ -2796,7 +2796,7 @@ void TMROctForest::balance( int balance_corner ){
     hash->addOctant(&array[i]);
   }
   delete local;
-  
+
   // Set the elements into the octree
   octants = hash->toArray();
   octants->sort();
@@ -4128,9 +4128,12 @@ void TMROctForest::setDepNodeLocations(){
               if ((ii % 2 == 1) && (jj % 2 == 1)){
                 for ( int iy = 0; iy < mesh_order; iy++ ){
                   for ( int ix = 0; ix < mesh_order; ix++ ){
-                    X[index].x += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].x;
-                    X[index].y += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].y;
-                    X[index].z += wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].z;
+                    X[index].x += 
+                      wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].x;
+                    X[index].y += 
+                      wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].y;
+                    X[index].z += 
+                      wt[ii/2][ix]*wt[jj/2][iy]*fn[ix + mesh_order*iy].z;
                   }
                 }
               }
@@ -4937,7 +4940,8 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
         }
       
         if (dof_fail){
-          fprintf(stderr, "TMROctForest: Inconsistent number of face dof per node\n");
+          fprintf(stderr, 
+                  "TMROctForest: Inconsistent number of face dof per node\n");
         }
       }
     }
@@ -5032,7 +5036,8 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
         }
       }
       if (dof_fail){
-        fprintf(stderr, "TMROctForest: Inconsistent number of edge dof per node\n");
+        fprintf(stderr, 
+                "TMROctForest: Inconsistent number of edge dof per node\n");
       }
     }
   }
@@ -5299,7 +5304,8 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
 
       // Print out an error message
       if (dof_fail){
-        fprintf(stderr, "TMROctForest: Inconsistent number of dof per node\n");
+        fprintf(stderr, 
+                "TMROctForest: Inconsistent number of dof per node\n");
       }
 
       // Sort the dependent weight values
