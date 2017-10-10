@@ -117,10 +117,14 @@ p.add_argument('--init_depth', type=int, default=3)
 p.add_argument('--mg_levels', type=int, nargs='+', default=[2, 2, 3, 3])
 p.add_argument('--max_lbfgs', type=int, default=10)
 p.add_argument('--hessian_reset', type=int, default=10)
+p.add_argument('--use_paropt', action='store_true', default=True)
+p.add_argument('--use_mma', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the parameter to use paropt or MMA
-use_paropt = False
+use_paropt = True
+if args.use_mma:
+    use_paropt = False
 
 # The communicator
 comm = MPI.COMM_WORLD
@@ -169,7 +173,7 @@ vol_frac = args.vol_frac
 # Set the fixed mass
 density = 2600.0
 initial_mass = vol*density
-m_fixed =  vol_frac*initial_mass
+m_fixed = vol_frac*initial_mass
 
 # Set the max nmber of iterations
 mg_levels = args.mg_levels
@@ -193,7 +197,7 @@ old_zu = None
 filtr_volumes = None
 
 # Set the values of the objective array
-obj_array = [(1.0e3*(1 << 3)**3)/(1 << args.init_depth)**3]
+obj_array = [ 1e3 ]
 
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
@@ -222,6 +226,7 @@ for ite in xrange(max_iterations):
     problem.setLoadCases(forces)
 
     # Set the mass constraint
+    # (m_fixed - m(x))/m_fixed >= 0.0
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
     problem.setObjective(obj_array)
     
@@ -234,7 +239,7 @@ for ite in xrange(max_iterations):
         opt = ParOpt.pyParOpt(problem, args.max_lbfgs, ParOpt.BFGS)
 
         # Set the norm type to use
-        opt.setNormType(ParOpt.L1_NORM)
+        # opt.setNormType(ParOpt.INFTY_NORM)
 
         # Set parameters
         opt.setMaxMajorIterations(args.max_opt_iters)
@@ -314,18 +319,32 @@ for ite in xrange(max_iterations):
     else:
         # Here we use MMA, and only worry about interpolating the
         # variables
-        max_mma_iters = 500
+        max_mma_iters = args.max_opt_iters
 
         # Set the ParOpt problem into MMA
-        mma = ParOpt.pyMMA(problem)
+        mma = ParOpt.pyMMA(problem, use_mma=False)
         mma.setPrintLevel(2)
+        mma.setInitAsymptoteOffset(0.05)
+        mma.setMinAsymptoteOffset(1e-3)
         mma.setOutputFile(os.path.join(args.prefix, 
                                        'mma_output%d.out'%(ite)))
+
+        # Create the ParOpt problem
+        opt = ParOpt.pyParOpt(mma, args.max_lbfgs, ParOpt.BFGS)
+
+        # Set parameters
+        opt.setMaxMajorIterations(args.max_opt_iters)
+        opt.setHessianResetFreq(args.hessian_reset)
+        opt.setAbsOptimalityTol(args.opt_abs_tol)
+        opt.setBarrierFraction(args.opt_barrier_frac)
+        opt.setBarrierPower(args.opt_barrier_power)
+        opt.setOutputFrequency(args.output_freq)
+        opt.setUseDiagHessian(1)
 
         if ite == 0:
             # Set the starting point using the mass fraction
             x = mma.getOptimizedPoint()
-            x[:] = 0.5
+            x[:] = vol_frac
             problem.setInitDesignVars(x)
 
         # If the old filter exists, we're on the second iteration
@@ -345,10 +364,17 @@ for ite in xrange(max_iterations):
 
             # Set the initial design variable values
             problem.setInitDesignVars(x)
+
+        # Initialize the subproblem
+        mma.initializeSubProblem()
+        opt.resetDesignAndBounds()
             
         # Enter the optimization loop
         for i in range (max_mma_iters):
-            mma.update()
+            filename = os.path.join(args.prefix, 'paropt%04d.out'%(i))
+            opt.setOutputFile(filename)
+            opt.setInitBarrierParameter(0.1)
+            opt.optimize()
 
             # Write the solution out to a file
             if i % args.output_freq == 0:
@@ -360,10 +386,10 @@ for ite in xrange(max_iterations):
                 vec = problem.convertPVecToVec(mma.getOptimizedPoint())
                 TMR.writeSTLToBin(filename, filtr, vec)
 
-            # Test for optimality
-            l1, linfty, infeas = mma.getOptimality()
-            if l1 < 1e-3 and infeas < 1e-3:
-                break          
+            # Get the optimized point
+            x, z, zw, zl, zu = opt.getOptimizedPoint()
+            mma.initializeSubProblem(x)
+            opt.resetDesignAndBounds()
 
         # Set the old values of the variables
         old_dvs = mma.getOptimizedPoint()
