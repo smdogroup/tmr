@@ -979,7 +979,8 @@ cdef class QuadrantArray:
         self.ptr = NULL
 
     def __dealloc__(self):
-        del self.ptr
+        if self.ptr and self.self_owned:
+            del self.ptr
 
     def __len__(self):
         cdef int size = 0
@@ -1203,7 +1204,10 @@ cdef class QuadForest:
 
     def writeForestToVTK(self, char *filename):
         self.ptr.writeForestToVTK(filename)
-
+        
+    def createInterpolation(self, QuadForest forest, VecInterp vec):
+        self.ptr.createInterpolation(forest.ptr, vec.ptr)
+        
 cdef _init_QuadForest(TMRQuadForest* ptr):
     forest = QuadForest()
     forest.ptr = ptr
@@ -1671,6 +1675,37 @@ cdef class OctStiffness(SolidStiff):
         free(w)
         return
 
+cdef class QuadStiffness(PlaneStress):
+    def __cinit__(self, TacsScalar rho, TacsScalar E, TacsScalar nu,
+                  list index=None, list weights=None, double q=5.0):
+        cdef TMRIndexWeight *w = NULL
+        cdef int nw = 0
+        self.ptr = NULL
+        if weights is None or index is None:
+            errmsg = 'Must define weights and indices'
+            raise ValueError(errmsg)
+        if len(weights) != len(index):
+            errmsg = 'Weights and index list lengths must be the same'
+            raise ValueError(errmsg)
+
+        # Check that the lengths are less than 4
+        if len(weights) > 4:
+            errmsg = 'Weight/index lists too long > 4'
+            raise ValueError(errmsg)
+
+        # Extract the weights
+        nw = len(weights)
+        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
+        for i in range(nw):
+            w[i].weight = <double>weights[i]
+            w[i].index = <int>index[i]
+
+        # Create the constitutive object
+        self.ptr = new TMRQuadStiffness(w, nw, rho, E, nu, q)
+        self.ptr.incref()
+        free(w)
+        return
+
 def createMg(list assemblers, list forests):
     cdef int nlevels = 0
     cdef TACSAssembler **assm = NULL
@@ -1753,7 +1788,8 @@ cdef class TopoProblem(pyParOptProblemBase):
                   list varmaps, list varindices, Pc pc):
         cdef int nlevels = 0
         cdef TACSAssembler **assemb = NULL
-        cdef TMROctForest **filtr = NULL
+        cdef TMROctForest **ofiltr = NULL
+        cdef TMRQuadForest **qfiltr = NULL
         cdef TACSVarMap **vmaps = NULL
         cdef TACSBVecIndices **vindex = NULL
         cdef TACSMg *mg = NULL
@@ -1772,21 +1808,40 @@ cdef class TopoProblem(pyParOptProblemBase):
 
         nlevels = len(assemblers)
         assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
-        filtr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
         vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
         vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
-
+        
+        isqforest = 0
         for i in range(nlevels):
-            assemb[i] = (<Assembler>assemblers[i]).ptr
-            filtr[i] = (<OctForest>filters[i]).ptr
-            vmaps[i] = (<VarMap>varmaps[i]).ptr
-            vindex[i] = (<VecIndices>varindices[i]).ptr
+            if isinstance(filters[i], QuadForest):
+                isqforest = 1
+            elif isinstance(filters[i], OctForest):
+                isqforest = 0
 
-        self.ptr = new TMRTopoProblem(nlevels, assemb, filtr, 
-                                      vmaps, vindex, mg)
-        self.ptr.incref()
+        if isqforest:
+            qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
+            for i in range(nlevels):
+                qfiltr[i] = (<QuadForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+                vmaps[i] = (<VarMap>varmaps[i]).ptr
+                vindex[i] = (<VecIndices>varindices[i]).ptr
+            self.ptr = new TMRTopoProblem(nlevels, assemb, qfiltr, 
+                                          vmaps, vindex, mg)
+            self.ptr.incref()
+            free(qfiltr)
+        else:
+            ofiltr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
+            for i in range(nlevels):
+                ofiltr[i] = (<OctForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+                vmaps[i] = (<VarMap>varmaps[i]).ptr
+                vindex[i] = (<VecIndices>varindices[i]).ptr
+                
+            self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr, 
+                                          vmaps, vindex, mg)
+            self.ptr.incref()
+            free(ofiltr)
         free(assemb)
-        free(filtr)
         free(vmaps)
         free(vindex)
         return
@@ -1936,6 +1991,16 @@ cdef class TopoProblem(pyParOptProblemBase):
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
         vec = prob.createVolumeVec()
+        return _init_Vec(vec)
+    
+    def createAreaVec(self):
+        cdef TACSBVec *vec
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        vec = prob.createAreaVec()
         return _init_Vec(vec)
     
     def convertPVecToVec(self, PVec pvec):
