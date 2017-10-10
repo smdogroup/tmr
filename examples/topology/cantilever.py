@@ -322,10 +322,11 @@ for ite in xrange(max_iterations):
         max_mma_iters = args.max_opt_iters
 
         # Set the ParOpt problem into MMA
-        mma = ParOpt.pyMMA(problem, use_mma=False)
-        mma.setPrintLevel(2)
+        mma = ParOpt.pyMMA(problem, use_mma=True)
         mma.setInitAsymptoteOffset(0.05)
-        mma.setMinAsymptoteOffset(1e-3)
+        # mma.setMinAsymptoteOffset(1e-5)
+        mma.setBoundRelax(1e-4)
+
         mma.setOutputFile(os.path.join(args.prefix, 
                                        'mma_output%d.out'%(ite)))
 
@@ -388,8 +389,19 @@ for ite in xrange(max_iterations):
 
             # Get the optimized point
             x, z, zw, zl, zu = opt.getOptimizedPoint()
+            mma.setMultipliers(z, zw)
             mma.initializeSubProblem(x)
             opt.resetDesignAndBounds()
+
+            # Compute the KKT error
+            l1_norm, linfty_norm, infeas = mma.computeKKTError()
+            if comm.rank == 0:
+                print 'z = ', z
+                print 'l1_norm = ', l1_norm
+                print 'infeas = ', infeas
+
+            if l1_norm < 1e-3 and infeas < 1e-6:
+                break
 
         # Set the old values of the variables
         old_dvs = mma.getOptimizedPoint()
