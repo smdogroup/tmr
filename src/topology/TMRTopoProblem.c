@@ -123,7 +123,8 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
                                 TMROctForest *_filter[], 
                                 TACSVarMap *_filter_maps[],
                                 TACSBVecIndices *_filter_indices[],
-                                TACSMg *_mg ):
+                                TACSMg *_mg,
+                                int _vars_per_node ):
  ParOptProblem(_tacs[0]->getMPIComm()){
   // Set the prefix to NULL
   prefix = NULL;
@@ -132,6 +133,9 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   int mpi_rank;
   MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
   
+  // Set the number of variables per node
+  vars_per_node = _vars_per_node;
+
   // Set the maximum number of indices
   max_local_size = 0;
 
@@ -259,7 +263,8 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
                                 TMRQuadForest *_filter[], 
                                 TACSVarMap *_filter_maps[],
                                 TACSBVecIndices *_filter_indices[],
-                                TACSMg *_mg ):
+                                TACSMg *_mg,
+                                int _vars_per_node ):
  ParOptProblem(_tacs[0]->getMPIComm()){
   // Set the prefix to NULL
   prefix = NULL;
@@ -268,6 +273,9 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   int mpi_rank;
   MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
   
+  // Set the number of variables per node
+  vars_per_node = _vars_per_node;
+
   // Set the maximum number of indices
   max_local_size = 0;
 
@@ -745,7 +753,13 @@ void TMRTopoProblem::initialize(){
 
   // Set the problem sizes
   int nvars = x[0]->getArray(NULL);
-  setProblemSizes(nvars, num_constraints, 0, 0);
+  int nw = 0;
+  int nwblock = 0;
+  if (vars_per_node > 1){
+    nw = nvars/vars_per_node;
+    nwblock = vars_per_node;
+  }
+  setProblemSizes(nvars, num_constraints, nw, nwblock);
 }
 
 /*
@@ -774,7 +788,8 @@ void TMRTopoProblem::setIterationCounter( int iter ){
   Create a design variable vector
 */
 ParOptVec *TMRTopoProblem::createDesignVec(){
-  return new ParOptBVecWrap(new TACSBVec(filter_maps[0], 1,
+  return new ParOptBVecWrap(new TACSBVec(filter_maps[0],
+                                         vars_per_node,
                                          filter_dist[0]));
 }
 
@@ -1747,21 +1762,50 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
 // Evaluate the sparse constraints
 // ------------------------
 void TMRTopoProblem::evalSparseCon( ParOptVec *x, 
-                                    ParOptVec *out ){}
+                                    ParOptVec *out ){
+  if (vars_per_node > 1){
+    int n = size/vars_per_node;
+    for ( int i = 0; i < n; i++ ){
+      // Add the weighting constraints
+      out[i] = -1.0;
+      for ( int j = 0; j < vars_per_node; j++ ){
+        out[i] += x[vars_per_node*i + j];
+      }
+    }
+  }
+}
 
 // Compute the Jacobian-vector product out = J(x)*px
 // --------------------------------------------------
 void TMRTopoProblem::addSparseJacobian( double alpha, 
                                         ParOptVec *x,
                                         ParOptVec *px, 
-                                        ParOptVec *out ){}
+                                        ParOptVec *out ){
+  if (vars_per_node > 1){
+    int n = size/vars_per_node;
+    for ( int i = 0; i < n; i++ ){
+      for ( int j = 0; j < vars_per_node; j++ ){
+        out[i] += px[vars_per_node*i + j];
+      }
+    }
+  }
+}
 
 // Compute the transpose Jacobian-vector product out = J(x)^{T}*pzw
 // -----------------------------------------------------------------
 void TMRTopoProblem::addSparseJacobianTranspose( double alpha, 
                                                  ParOptVec *x,
                                                  ParOptVec *pzw, 
-                                                 ParOptVec *out ){}
+                                                 ParOptVec *out ){
+  if (vars_per_node > 1){
+    int n = size/vars_per_node;
+    for ( int i = 0; i < n; i++ ){
+      for ( int j = 0; j < vars_per_node; j++ ){
+        out[vars_per_node*i + j] += pzw[i];
+      }
+    }
+  }
+}
 
 // Add the inner product of the constraints to the matrix such 
 // that A += J(x)*cvec*J(x)^{T} where cvec is a diagonal matrix
@@ -1769,7 +1813,17 @@ void TMRTopoProblem::addSparseJacobianTranspose( double alpha,
 void TMRTopoProblem::addSparseInnerProduct( double alpha, 
                                             ParOptVec *x,
                                             ParOptVec *cvec, 
-                                            double *A ){}
+                                            double *A ){
+  if (vars_per_node > 1){
+    int n = size/vars_per_node;
+    for ( int i = 0; i < n; i++ ){
+      A[i] = 0.0;
+      for ( int j = 0; j < vars_per_node; j++ ){
+        A[i] += c[vars_per_node*i + j];
+      }
+    }
+  }
+}
 
 // Write the output file
 void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){

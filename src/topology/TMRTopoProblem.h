@@ -1,5 +1,6 @@
 #ifndef TMR_TOPO_PROBLEM_H
 #define TMR_TOPO_PROBLEM_H
+
 #include "ParOpt.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
@@ -9,6 +10,7 @@
 #include "Compliance.h"
 #include "KSFailure.h"
 #include "TACSBuckling.h"
+
 /*
   Wrap a TACSBVec object with the ParOptVec interface
 */
@@ -47,18 +49,20 @@ class TMRTopoProblem : public ParOptProblem {
                   TMROctForest *_filter[], 
                   TACSVarMap *_filter_maps[],
                   TACSBVecIndices *_filter_indices[],
-                  TACSMg *_mg );
+                  TACSMg *_mg,
+                  int _vars_per_node=1 );
   TMRTopoProblem( int _nlevels, 
                   TACSAssembler *_tacs[],
                   TMRQuadForest *_filter[], 
                   TACSVarMap *_filter_maps[],
                   TACSBVecIndices *_filter_indices[],
-                  TACSMg *_mg );
+                  TACSMg *_mg,
+                  int _vars_per_node=1 );
   ~TMRTopoProblem();
 
-  // Set the load cases - note that this destroys internal information stored
-  // in the load case data associated with the constraints.
-  // ------------------------------------------------------------------------
+  // Set the load cases - note that this destroys internal information
+  // stored in the load case data associated with the constraints.
+  // -----------------------------------------------------------------
   void setLoadCases( TACSBVec **_forces, int _num_load_cases );
   int getNumLoadCases();
 
@@ -76,13 +80,13 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
-  // ----------------------------------------------------------------------
+  // ----------------------------------------------------------------
   void setObjective( const TacsScalar *_obj_weights, TACSFunction **funcs );
   void setObjective( const TacsScalar *_obj_weights );
 
-  // Finish the initialization tasks - assign the number of constraints
-  // and variables in the problem. Allocate arrays etc.
-  // ------------------------------------------------------------------
+  // Finish the initialization tasks - assign the number of
+  // constraints and variables in the problem. Allocate arrays etc.
+  // --------------------------------------------------------------
   void initialize();
 
   // Set the output prefix for files
@@ -178,6 +182,9 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Set the iteration count for printing to the file
   int iter_count;
+
+  // Set the number of variables per node (defaults to 1)
+  int vars_per_node;
 
   // Set the load case information. In this case, these are force
   // vectors for each load case
