@@ -72,11 +72,10 @@ class TMRTopoProblem : public ParOptProblem {
                        const TacsScalar *_func_offset, 
                        const TacsScalar *_func_scale,
                        int num_funcs );
-  
-  void addConstraints( int _load_case, int _buckling,
-                       int _freq, double sigma, int _num_eigvals,
-                       TacsScalar _func_offset,
-                       TacsScalar _func_scale );
+  void addFrequencyConstraint( double sigma, int num_eigvals,
+                               TacsScalar ks_weight,
+                               TacsScalar offset, TacsScalar scale,
+                               int max_lanczos, double eigtol );
 
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
@@ -191,11 +190,16 @@ class TMRTopoProblem : public ParOptProblem {
   int num_load_cases;
   TACSBVec **vars, **forces;
 
-  // The buckling and natural frequency TACS object
-  TACSLinearBuckling **buckling;
-  TACSFrequencyAnalysis **freq;
-  int reset_count;
-  TacsScalar *ks_a;
+  // The natural frequency TACS object
+  TACSFrequencyAnalysis *freq;
+  
+  // Set parameters used to control the frequency constraint
+  double freq_eig_tol;
+  int num_freq_eigvals;
+  TacsScalar freq_ks_sum;
+  TacsScalar freq_ks_weight;
+  TacsScalar freq_offset, freq_scale;
+
   // The derivative of f(x,u) w.r.t. u and the adjoint variables
   TACSBVec *dfdu, *adjoint;
 
@@ -206,12 +210,11 @@ class TMRTopoProblem : public ParOptProblem {
   // Set the constraint information for each load case
   class LoadCaseInfo {
    public:
+    // Information for the TACSFunction constraints
     int num_funcs;
     TacsScalar *offset;
     TacsScalar *scale;
     TACSFunction **funcs;
-    int num_eigvals;
-    TacsScalar bf_offset, bf_scale;
   } *load_case_info;
 
   // Store the design variable info

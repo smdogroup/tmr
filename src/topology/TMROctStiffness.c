@@ -6,14 +6,11 @@
 */
 TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
                                   int _nweights,
-                                  TacsScalar _density,
-                                  TacsScalar E, TacsScalar _nu,
+                                  TMRStiffnessProperties *_props,
                                   double _q, double _eps ){
   // Record the density, Poisson ratio, D and the shear modulus
-  density = _density;
-  nu = _nu;
-  D = E/((1.0 + nu)*(1.0 - 2.0*nu));
-  G = 0.5*E/(1.0 + nu);
+  props = _props;
+  props->incref();
   q = _q;
   eps = _eps;
 
@@ -22,7 +19,22 @@ TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
   memcpy(weights, _weights, nweights*sizeof(TMRIndexWeight));
   
   // Set the initial value for the densities
-  rho = 0.95;
+  nvars = 1;
+  rho[0] = 0.95;
+  if (props->nmats > 1){
+    nvars = props->nmats+1;
+    rho[0] = 1.0;
+    for ( int j = 1; j < nvars; j++ ){
+      rho[j] = 1.0/(nvars-1);
+    }
+  }  
+}
+
+/*
+  Decref the props
+*/
+TMROctStiffness::~TMROctStiffness(){
+  props->decref();
 }
 
 /*
@@ -30,9 +42,11 @@ TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
   the density
 */
 void TMROctStiffness::setDesignVars( const TacsScalar x[], int numDVs ){
-  rho = 0.0;
-  for ( int i = 0; i < nweights; i++ ){
-    rho += weights[i].weight*x[weights[i].index];
+  for ( int j = 0; j < nvars; j++ ){
+    rho[j] = 0.0;
+    for ( int i = 0; i < nweights; i++ ){
+      rho[j] += weights[i].weight*x[nvars*weights[i].index + j];
+    }
   }
 }
 
@@ -43,9 +57,24 @@ void TMROctStiffness::setDesignVars( const TacsScalar x[], int numDVs ){
   instead we use a constant value of 0.95 as the output.
 */
 void TMROctStiffness::getDesignVars( TacsScalar x[], int numDVs ){
-  for ( int i = 0; i < nweights; i++ ){
-    if (weights[i].index >= 0 && weights[i].index < numDVs){
-      x[weights[i].index] = 0.95;
+  if (nvars == 1){
+    for ( int i = 0; i < nweights; i++ ){
+      if (weights[i].index >= 0 && weights[i].index < numDVs){
+        x[weights[i].index] = 0.95;
+      }
+    }
+  }
+  else {
+    for ( int j = 0; j < nvars; j++ ){
+      TacsScalar value = 1.0;
+      if (j > 1){
+        value = 1.0/(nvars-1);
+      }
+      for ( int i = 0; i < nweights; i++ ){
+        if (weights[i].index >= 0 && weights[i].index < numDVs){
+          x[nvars*weights[i].index + j] = value;
+        }
+      }
     }
   }
 }
@@ -55,10 +84,22 @@ void TMROctStiffness::getDesignVars( TacsScalar x[], int numDVs ){
 */
 void TMROctStiffness::getDesignVarRange( TacsScalar lb[], 
                                          TacsScalar ub[], int numDVs ){
-  for ( int i = 0; i < nweights; i++ ){
-    if (weights[i].index >= 0 && weights[i].index < numDVs){
-      lb[weights[i].index] = 0.0;
-      ub[weights[i].index] = 1.0;
+  if (nvars == 1){
+    for ( int i = 0; i < nweights; i++ ){
+      if (weights[i].index >= 0 && weights[i].index < numDVs){
+        lb[weights[i].index] = 0.0;
+        ub[weights[i].index] = 1.0;
+      }
+    }
+  }
+  else {
+    for ( int j = 0; j < nvars; j++ ){
+      for ( int i = 0; i < nweights; i++ ){
+        if (weights[i].index >= 0 && weights[i].index < numDVs){
+          lb[nvars*weights[i].index + j] = 0.0;
+          ub[nvars*weights[i].index + j] = 1e30;
+        }
+      }
     }
   }
 }
@@ -69,16 +110,47 @@ void TMROctStiffness::getDesignVarRange( TacsScalar lb[],
 void TMROctStiffness::calculateStress( const double pt[],
                                        const TacsScalar e[], 
                                        TacsScalar s[] ){
-  // Compute the penalized stiffness
-  TacsScalar penalty = rho/(1.0 + q*(1.0 - rho));
-  TacsScalar Dp = (penalty + eps)*D;
-  TacsScalar Gp = (penalty + eps)*G;
-  s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
-  s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
-  s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
-  s[3] = Gp*e[3];
-  s[4] = Gp*e[4];
-  s[5] = Gp*e[5];
+  if (nvars == 1){
+    // Compute the penalized stiffness
+    TacsScalar penalty = rho[0]/(1.0 + q*(1.0 - rho[0]));
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+
+    TacsScalar Dp = (penalty + eps)*D;
+    TacsScalar Gp = (penalty + eps)*G;
+    s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
+    s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
+    s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
+    s[3] = Gp*e[3];
+    s[4] = Gp*e[4];
+    s[5] = Gp*e[5];
+  }
+  else {
+    // Compute the penalized stiffness
+    s[0] = s[1] = s[2] = s[3] = s[4] = s[5] = 0.0;
+    for ( int j = 1; j < nvars; j++ ){
+      // Compute the penalty
+      TacsScalar penalty = rho[j]/(1.0 + q*(1.0 - rho[j]));
+
+      // Extract the properties
+      TacsScalar nu = props->nu[j-1];
+      TacsScalar D = props->D[j-1];
+      TacsScalar G = props->G[j-1];
+
+      // Add the penalized value
+      TacsScalar Dp = (penalty + eps)*D;
+      TacsScalar Gp = (penalty + eps)*G;
+      s[0] += Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
+      s[1] += Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
+      s[2] += Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
+      s[3] += Gp*e[3];
+      s[4] += Gp*e[4];
+      s[5] += Gp*e[5];
+    }
+  }
 }
 
 /*
@@ -90,21 +162,60 @@ void TMROctStiffness::addStressDVSens( const double pt[],
                                        TacsScalar alpha, 
                                        const TacsScalar psi[], 
                                        TacsScalar fdvSens[], int dvLen ){
-  TacsScalar penalty = (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
-  TacsScalar Dp = alpha*penalty*D;
-  TacsScalar Gp = alpha*penalty*G;
-  TacsScalar s[6];
-  s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
-  s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
-  s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
-  s[3] = Gp*e[3];
-  s[4] = Gp*e[4];
-  s[5] = Gp*e[5];
+  if (nvars == 1){
+    // Compute the derivative of the penalty
+    TacsScalar penalty = 
+      (q + 1.0)/((1.0 + q*(1.0 - rho[0]))*(1.0 + q*(1.0 - rho[0])));
 
-  for ( int i = 0; i < nweights; i++ ){
-    fdvSens[weights[i].index] += 
-      weights[i].weight*(s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2] + 
-                         s[3]*psi[3] + s[4]*psi[4] + s[5]*psi[5]);
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+
+    TacsScalar Dp = alpha*penalty*D;
+    TacsScalar Gp = alpha*penalty*G;
+    TacsScalar s[6];
+    s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
+    s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
+    s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
+    s[3] = Gp*e[3];
+    s[4] = Gp*e[4];
+    s[5] = Gp*e[5];
+    
+    for ( int i = 0; i < nweights; i++ ){
+      fdvSens[weights[i].index] += 
+        weights[i].weight*(s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2] + 
+                           s[3]*psi[3] + s[4]*psi[4] + s[5]*psi[5]);
+    }
+  }
+  else {
+    for ( int j = 1; j < nvars; j++ ){
+      // Compute the penalty
+      TacsScalar penalty = 
+        (q + 1.0)/((1.0 + q*(1.0 - rho[j]))*(1.0 + q*(1.0 - rho[j])));
+
+      // Extract the properties
+      TacsScalar nu = props->nu[j-1];
+      TacsScalar D = props->D[j-1];
+      TacsScalar G = props->G[j-1];
+
+      // Add the result to the derivative
+      TacsScalar Dp = alpha*penalty*D;
+      TacsScalar Gp = alpha*penalty*G;
+      TacsScalar s[6];
+      s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
+      s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
+      s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
+      s[3] = Gp*e[3];
+      s[4] = Gp*e[4];
+      s[5] = Gp*e[5];
+    
+      for ( int i = 0; i < nweights; i++ ){
+        fdvSens[nvars*weights[i].index + j] += 
+          weights[i].weight*(s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2] + 
+                             s[3]*psi[3] + s[4]*psi[4] + s[5]*psi[5]);
+      }
+    }
   }
 }
 
@@ -114,7 +225,15 @@ void TMROctStiffness::addStressDVSens( const double pt[],
 */
 void TMROctStiffness::getPointwiseMass( const double pt[], 
                                         TacsScalar mass[] ){
-  mass[0] = rho*density;
+  if (nvars == 1){
+    mass[0] = rho[0]*props->density[0];
+  }
+  else {
+    mass[0] = 0.0;
+    for ( int j = 1; j < nvars; j++ ){
+      mass[0] += rho[j]*props->density[j-1];
+    }
+  }
 }
 
 /*
@@ -125,9 +244,19 @@ void TMROctStiffness::addPointwiseMassDVSens( const double pt[],
                                               const TacsScalar alpha[],
                                               TacsScalar dvSens[], 
                                               int dvLen ){
-  TacsScalar scale = density*alpha[0];
-  for ( int i = 0; i < nweights; i++ ){
-    dvSens[weights[i].index] += scale*weights[i].weight;
+  if (nvars == 1){
+    TacsScalar scale = props->density[0]*alpha[0];
+    for ( int i = 0; i < nweights; i++ ){
+      dvSens[weights[i].index] += scale*weights[i].weight;
+    }
+  }
+  else {
+    for ( int j = 1; j < nvars; j++ ){
+      TacsScalar scale = props->density[j-1]*alpha[0];
+      for ( int i = 0; i < nweights; i++ ){
+        dvSens[nvars*weights[i].index + j] += scale*weights[i].weight;
+      }
+    }
   }
 }
 

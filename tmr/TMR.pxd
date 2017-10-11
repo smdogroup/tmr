@@ -328,9 +328,14 @@ cdef extern from "TMR_TACSCreator.h":
         TMROctTACSCreator(TMRBoundaryConditions*)
 
 cdef extern from "TMROctStiffness.h":
+    cdef cppclass TMRStiffnessProperties(TMREntity):
+        TMRStiffnessProperties(int, TacsScalar*, TacsScalar*, TacsScalar*)
+        int nmats
+        
     cdef cppclass TMROctStiffness(SolidStiffness):
-        TMROctStiffness(TMRIndexWeight*, int, TacsScalar, TacsScalar,
-                        TacsScalar, double)
+        TMROctStiffness(TMRIndexWeight*, int, TMRStiffnessProperties*,
+                        double, double)
+        
 cdef extern from "TMRQuadStiffness.h":
     cdef cppclass TMRQuadStiffness(PlaneStressStiffness):
         TMRQuadStiffness(TMRIndexWeight*, int, TacsScalar, TacsScalar,
@@ -411,15 +416,15 @@ cdef extern from "TMRCyCreator.h":
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(int, TACSAssembler**, TMROctForest**, 
-                       TACSVarMap**, TACSBVecIndices**, TACSMg*)
+                       TACSVarMap**, TACSBVecIndices**, TACSMg*, int)
         TMRTopoProblem(int, TACSAssembler**, TMRQuadForest**, 
-                       TACSVarMap**, TACSBVecIndices**, TACSMg*)
+                       TACSVarMap**, TACSBVecIndices**, TACSMg*, int)
         void setLoadCases(TACSBVec**, int)
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,
                             const TacsScalar*, const TacsScalar*, int)
-        void addConstraints(int, int, int, double, int,
-                            TacsScalar, TacsScalar)
+        void addFrequencyConstraint(double, int, TacsScalar,
+                                    TacsScalar, TacsScalar, int, double)
         void setObjective(const TacsScalar*)
         void setObjective(const TacsScalar*, TACSFunction**)
         void initialize()

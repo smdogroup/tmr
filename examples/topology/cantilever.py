@@ -7,15 +7,13 @@ import argparse
 import os
 
 class CreateMe(TMR.OctTopoCreator):
-    def __init__(self, bcs, filt):
+    def __init__(self, bcs, filt, props):
         TMR.OctTopoCreator.__init__(bcs, filt)
+        self.props = props
 
     def createElement(self, order, octant, index, weights):
         '''Create the element'''
-        rho = 2600.0
-        E = 70e9
-        nu = 0.3
-        stiff = TMR.OctStiffness(rho, E, nu, index, weights, q=5.0)
+        stiff = TMR.OctStiffness(props, index, weights, q=5.0, eps=1e-6)
         elem = elements.Solid(2, stiff)
         return elem
 
@@ -54,7 +52,7 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     return aux
 
-def createTopoProblem(forest, order=2, nlevels=2):
+def createTopoProblem(props, forest, order=2, nlevels=2):
     # Create the forest
     forests = []
     filters = []
@@ -73,7 +71,7 @@ def createTopoProblem(forest, order=2, nlevels=2):
     filters.append(filtr)
 
     # Make the creator class
-    creator = CreateMe(bcs, filters[-1])
+    creator = CreateMe(bcs, filters[-1], props)
     assemblers.append(creator.createTACS(order, forest))
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
@@ -90,7 +88,7 @@ def createTopoProblem(forest, order=2, nlevels=2):
         filters.append(filtr)
 
         # Make the creator class
-        creator = CreateMe(bcs, filters[-1])
+        creator = CreateMe(bcs, filters[-1], props)
         assemblers.append(creator.createTACS(order, forest))
         varmaps.append(creator.getMap())
         vecindices.append(creator.getIndices())
@@ -99,7 +97,14 @@ def createTopoProblem(forest, order=2, nlevels=2):
     mg = TMR.createMg(assemblers, forests)
 
     # Create the topology optimization problem
-    problem = TMR.TopoProblem(assemblers, filters, varmaps, vecindices, mg)
+    vars_per_node = 1
+    nmats = props.getNumMaterials()
+    if nmats > 1:
+        vars_per_node = nmats+1
+    
+        
+    problem = TMR.TopoProblem(assemblers, filters, varmaps, vecindices, mg,
+                              vars_per_node)
 
     return assemblers[0], problem, filters[0], varmaps[0]
 
@@ -199,10 +204,23 @@ filtr_volumes = None
 # Set the values of the objective array
 obj_array = [ 1e3 ]
 
+# Create the array of properties
+rho = [2600.0, 1300.0, 600.0]
+E = [70e9, 35e9, 10e9]
+nu = [0.3, 0.3, 0.3]
+vars_per_node = len(rho)+1
+
+# Create the stiffness properties object
+props = TMR.StiffnessProperties(rho, E, nu)
+
+index = [282, 283, 284, 285, 290, 291, 294, 295]
+weights = [0.140625, 0.046875, 0.421875, 0.140625, 0.046875, 0.015625, 0.140625, 0.046875]
+stiff = TMR.OctStiffness(props, index, weights, q=5.0, eps=1e-6)
+
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
     nlevs = mg_levels[ite]
-    assembler, problem, filtr, varmap = createTopoProblem(forest, 
+    assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
                                                           nlevels=nlevs)
     
     # Write out just the mesh - for visualization
@@ -238,9 +256,6 @@ for ite in xrange(max_iterations):
         # Create the ParOpt problem
         opt = ParOpt.pyParOpt(problem, args.max_lbfgs, ParOpt.BFGS)
 
-        # Set the norm type to use
-        # opt.setNormType(ParOpt.INFTY_NORM)
-
         # Set parameters
         opt.setMaxMajorIterations(args.max_opt_iters)
         opt.setHessianResetFreq(args.hessian_reset)
@@ -251,11 +266,13 @@ for ite in xrange(max_iterations):
         opt.setOutputFrequency(args.output_freq)
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
+
+        opt.checkGradients(1e-6)
         
         # If the old filter exists, we're on the second iteration
         if old_filtr:
             # Create the interpolation
-            interp = TACS.VecInterp(old_varmap, varmap)
+            interp = TACS.VecInterp(old_varmap, varmap, vars_per_node)
             filtr.createInterpolation(old_filtr, interp)
             interp.initialize()
         
@@ -322,11 +339,9 @@ for ite in xrange(max_iterations):
         max_mma_iters = args.max_opt_iters
 
         # Set the ParOpt problem into MMA
-        mma = ParOpt.pyMMA(problem, use_mma=True)
+        mma = ParOpt.pyMMA(problem, use_mma=False)
         mma.setInitAsymptoteOffset(0.05)
-        # mma.setMinAsymptoteOffset(1e-5)
         mma.setBoundRelax(1e-4)
-
         mma.setOutputFile(os.path.join(args.prefix, 
                                        'mma_output%d.out'%(ite)))
 
@@ -352,7 +367,7 @@ for ite in xrange(max_iterations):
         if old_filtr:
             # Create the interpolation
             interp = TACS.VecInterp(old_varmap, varmap)
-            filtr.createInterpolation(old_filtr, interp)
+            filtr.createInterpolation(old_filtr, interp, vars_per_node)
             interp.initialize()
         
             # Get the optimization variables for the new optimizer

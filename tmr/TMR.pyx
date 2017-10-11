@@ -1518,7 +1518,7 @@ cdef TACSElement* _createOctElement(void *_self, int order,
 
 cdef class OctCreator:
     cdef TMRCyOctCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs):
+    def __cinit__(self, BoundaryConditions bcs, *args, **kwargs):
         self.ptr = new TMRCyOctCreator(bcs.ptr)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
@@ -1558,7 +1558,7 @@ cdef TACSElement* _createQuadTopoElement(void *_self, int order,
 
 cdef class QuadTopoCreator:
     cdef TMRCyTopoQuadCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, QuadForest filt):
+    def __cinit__(self, BoundaryConditions bcs, QuadForest filt, *args, **kwargs):
         self.ptr = new TMRCyTopoQuadCreator(bcs.ptr, filt.ptr)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
@@ -1593,19 +1593,19 @@ cdef TACSElement* _createOctTopoElement(void *_self, int order,
                                         TMRIndexWeight *weights,
                                         int nweights):
     cdef TACSElement *elem = NULL
-    q = Octant()
-    q.octant.x = octant.x
-    q.octant.y = octant.y
-    q.octant.z = octant.z
-    q.octant.level = octant.level
-    q.octant.block = octant.block
-    q.octant.tag = octant.tag
+    oct = Octant()
+    oct.octant.x = octant.x
+    oct.octant.y = octant.y
+    oct.octant.z = octant.z
+    oct.octant.level = octant.level
+    oct.octant.block = octant.block
+    oct.octant.tag = octant.tag
     idx = []
     wvals = []
     for i in range(nweights):
         idx.append(weights[i].index)
         wvals.append(weights[i].weight)
-    e = (<object>_self).createElement(order, q, idx, wvals)
+    e = (<object>_self).createElement(order, oct, idx, wvals)
     if e is not None:
         (<Element>e).ptr.incref()
         elem = (<Element>e).ptr
@@ -1614,7 +1614,8 @@ cdef TACSElement* _createOctTopoElement(void *_self, int order,
 
 cdef class OctTopoCreator:
     cdef TMRCyTopoOctCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, OctForest filt):
+    def __cinit__(self, BoundaryConditions bcs, OctForest filt, *args, **kwargs):
+        self.ptr = NULL
         self.ptr = new TMRCyTopoOctCreator(bcs.ptr, filt.ptr)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
@@ -1622,7 +1623,8 @@ cdef class OctTopoCreator:
         return
 
     def __dealloc__(self):
-        self.ptr.decref()
+        if self.ptr:
+            self.ptr.decref()
 
     def createTACS(self, int order, OctForest forest):
         cdef TACSAssembler *assembler = NULL
@@ -1644,9 +1646,41 @@ cdef class OctTopoCreator:
         self.ptr.getIndices(&indices)
         return _init_VecIndices(indices)
 
+cdef class StiffnessProperties:
+    cdef TMRStiffnessProperties *ptr
+    def __cinit__(self, list _rho, list _E, list _nu):
+        cdef TacsScalar *rho = NULL
+        cdef TacsScalar *E = NULL
+        cdef TacsScalar *nu = NULL
+        cdef int nmats = 0
+        if len(_rho) != len(_E) or len(_rho) != len(_nu):
+            errmsg = 'Must specify the same number of properties'
+            raise ValueError(errmsg)
+        nmats = len(_E)
+        rho = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        E = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        nu = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        for i in range(nmats):
+            rho[i] = <TacsScalar>_rho[i]
+            E[i] = <TacsScalar>_E[i]
+            nu[i] = <TacsScalar>_nu[i]
+        self.ptr = new TMRStiffnessProperties(nmats, rho, E, nu)
+        self.ptr.incref()
+        free(rho)
+        free(E)
+        free(nu)
+        return
+
+    def __dealloc__(self):
+        self.ptr.decref()
+
+    def getNumMaterials(self):
+        return self.ptr.nmats
+
 cdef class OctStiffness(SolidStiff):
-    def __cinit__(self, TacsScalar rho, TacsScalar E, TacsScalar nu,
-                  list index=None, list weights=None, double q=5.0):
+    def __cinit__(self, StiffnessProperties props,
+                  list index=None, list weights=None,
+                  double q=5.0, double eps=1e-6):
         cdef TMRIndexWeight *w = NULL
         cdef int nw = 0
         self.ptr = NULL
@@ -1670,7 +1704,7 @@ cdef class OctStiffness(SolidStiff):
             w[i].index = <int>index[i]
 
         # Create the constitutive object
-        self.ptr = new TMROctStiffness(w, nw, rho, E, nu, q)
+        self.ptr = new TMROctStiffness(w, nw, props.ptr, q, eps)
         self.ptr.incref()
         free(w)
         return
@@ -1785,7 +1819,7 @@ def writeSTLToBin(char *filename, OctForest forest,
 
 cdef class TopoProblem(pyParOptProblemBase):
     def __cinit__(self, list assemblers, list filters, 
-                  list varmaps, list varindices, Pc pc):
+                  list varmaps, list varindices, Pc pc, int vars_per_node=1):
         cdef int nlevels = 0
         cdef TACSAssembler **assemb = NULL
         cdef TMROctForest **ofiltr = NULL
@@ -1826,7 +1860,7 @@ cdef class TopoProblem(pyParOptProblemBase):
                 vmaps[i] = (<VarMap>varmaps[i]).ptr
                 vindex[i] = (<VecIndices>varindices[i]).ptr
             self.ptr = new TMRTopoProblem(nlevels, assemb, qfiltr, 
-                                          vmaps, vindex, mg)
+                                          vmaps, vindex, mg, vars_per_node)
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -1838,7 +1872,7 @@ cdef class TopoProblem(pyParOptProblemBase):
                 vindex[i] = (<VecIndices>varindices[i]).ptr
                 
             self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr, 
-                                          vmaps, vindex, mg)
+                                          vmaps, vindex, mg, vars_per_node)
             self.ptr.incref()
             free(ofiltr)
         free(assemb)
@@ -1904,9 +1938,10 @@ cdef class TopoProblem(pyParOptProblemBase):
         free(_scale)
         return
 
-    def addBucklingConstraints(self, int case, int buckling,
-                               int frequency, double sigma, int num_eigvals,
-                               TacsScalar offset, TacsScalar scale):
+    def addFrequencyConstraint(self, double sigma, int num_eigvals,
+                               TacsScalar ks_weight=30.0,
+                               TacsScalar offset=0.0, TacsScalar scale=0.0,
+                               int max_lanczos=100, double eigtol=1e-8):
         '''
         Add buckling/natural frequency constraints
         '''
@@ -1914,14 +1949,8 @@ cdef class TopoProblem(pyParOptProblemBase):
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        if case < 0 or case >= prob.getNumLoadCases():
-            errmsg = 'Load case out of expected range'
-            raise ValueError(errmsg)
-        if (buckling == frequency) and buckling == 1:
-            errmsg = 'Cannot add both buckling and natural frequency constraints'
-            raise ValueError(errmsg)
-        prob.addConstraints(case,buckling, frequency, sigma, num_eigvals,
-                            offset, scale) 
+        prob.addFrequencyConstraint(sigma, num_eigvals, ks_weight,
+                                    offset, scale, max_lanczos, eigtol)
         return
 
     def setObjective(self, list weights, list funcs=None):
