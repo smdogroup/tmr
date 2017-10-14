@@ -1938,6 +1938,30 @@ cdef class TopoProblem(pyParOptProblemBase):
         free(_scale)
         return
 
+    def addLinearConstraints(self, list vecs, list offset):
+        cdef int nvecs
+        cdef TacsScalar *_offset = NULL
+        cdef ParOptVec **_vecs = NULL
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        if len(vecs) != len(offset):
+            errmsg = 'Expected equal vector and offset counts'
+            raise ValueError(errmsg)
+
+        nvecs = len(vecs)
+        _offset = <TacsScalar*>malloc(nvecs*sizeof(TacsScalar))
+        _vecs = <ParOptVec**>malloc(nvecs*sizeof(ParOptVec*))
+        for i in range(nvecs):
+            _offset[i] = <TacsScalar>offset[i]
+            _vecs[i] = (<PVec>vecs[i]).ptr
+        prob.addLinearConstraints(_vecs, _offset, nvecs)
+        free(_offset)
+        free(_vecs)
+        return
+
     def addFrequencyConstraint(self, double sigma, int num_eigvals,
                                TacsScalar ks_weight=30.0,
                                TacsScalar offset=0.0, TacsScalar scale=0.0,

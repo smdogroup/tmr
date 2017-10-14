@@ -140,8 +140,8 @@ void ParOptBVecWrap::axpy( ParOptScalar alpha, ParOptVec *pvec ){
 int ParOptBVecWrap::getArray( ParOptScalar **array ){
   TacsScalar *_array;
   int size = 0;
+  size = vec->getArray(&_array);
   if (array){
-    size = vec->getArray(&_array);
     *array = _array;
   }
   return size;
@@ -277,6 +277,11 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // Set the load case information
   load_case_info = NULL;
+
+  // Set the linear constraint info to NULL
+  num_linear_con = 0;
+  Alinear = NULL;
+  linear_offset = NULL;
 
   // Set the objective weight information
   obj_weights = NULL;
@@ -423,6 +428,11 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   // Set the load case information
   load_case_info = NULL;
 
+  // Set the linear constraint info to NULL
+  num_linear_con = 0;
+  Alinear = NULL;
+  linear_offset = NULL;
+
   // Set the objective weight information
   obj_weights = NULL;
   obj_funcs = NULL;
@@ -514,6 +524,16 @@ TMRTopoProblem::~TMRTopoProblem(){
     }
     if (load_case_info[i].scale){
       delete [] load_case_info[i].scale;
+    }
+  }
+
+  // Free data for the linear constraint
+  if (linear_offset){
+    delete [] linear_offset;
+  }
+  if (Alinear){
+    for ( int i = 0; i < num_linear_con; i++ ){
+      if (Alinear[i]){ Alinear[i]->decref(); }
     }
   }
 
@@ -648,6 +668,36 @@ void TMRTopoProblem::addConstraints( int load_case,
 }
 
 /*
+  Add linear constraints to the problem.
+*/
+void TMRTopoProblem::addLinearConstraints( ParOptVec **vecs,
+                                           TacsScalar *offset,
+                                           int _ncon ){
+  for ( int i = 0; i < _ncon; i++ ){
+    vecs[i]->incref();
+  }
+
+  if (linear_offset){
+    delete [] linear_offset;
+  }
+  if (Alinear){
+    for ( int i = 0; i < num_linear_con; i++ ){
+      Alinear[i]->decref();
+    }
+    delete [] Alinear;
+  }
+
+  // Allocate the new space
+  num_linear_con = _ncon;
+  linear_offset = new TacsScalar[ num_linear_con ];
+  Alinear = new ParOptVec*[ num_linear_con ];
+  for ( int i = 0; i < num_linear_con; i++ ){
+    linear_offset[i] = offset[i];
+    Alinear[i] = vecs[i];
+  }
+}
+
+/*
   Add a natural frequency constraint
 */
 void TMRTopoProblem::addFrequencyConstraint( double sigma, 
@@ -725,7 +775,7 @@ void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights,
 */ 
 void TMRTopoProblem::initialize(){
   // Add up the total number of constraints
-  int num_constraints = 0;
+  int num_constraints = num_linear_con;
   for ( int i = 0; i < num_load_cases; i++ ){
     num_constraints += load_case_info[i].num_funcs;
   }
@@ -1048,8 +1098,8 @@ int TMRTopoProblem::isSparseInequality(){
   Use the inequality constraint - this seems to work better
 */
 int TMRTopoProblem::isDenseInequality(){
-  // These are sparse 
-  return 0;
+  // These are sparse inequality constraints
+  return 1;
 }
 
 /*
@@ -1208,7 +1258,7 @@ void TMRTopoProblem::setBVecFromLocalValues( const TacsScalar *xloc,
 /*
   Evaluate the objective and constraints
 */
-int TMRTopoProblem::evalObjCon( ParOptVec *pxvec, 
+int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
                                 ParOptScalar *fobj, 
                                 ParOptScalar *cons ){
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(pxvec);
@@ -1255,10 +1305,17 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     int mpi_rank;
     MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
 
-    // Solve the system: K(x)*u = forces
+    // Keep track of the constraint number
     int count = 0;
+    
+    // Compute the linear constraint
+    for ( int i = 0; i < num_linear_con; i++, count++ ){
+      cons[count] = linear_offset[i] + Alinear[i]->dot(pxvec);
+    }
+
     for ( int i = 0; i < num_load_cases; i++ ){
       if (forces[i]){
+        // Solve the system: K(x)*u = forces
         ksm->solve(forces[i], vars[i]);
         tacs[0]->applyBCs(vars[i]);
       
@@ -1420,8 +1477,15 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     return 1;
   }
 
-  // Compute the derivative of the constraint functions
+  // Keep track of the constraint gradient number
   int count = 0;
+
+  // Set the linear constraint
+  for ( int i = 0; i < num_linear_con; i++, count++ ){
+    Acvec[count]->copyValues(Alinear[i]);
+  }
+
+  // Compute the derivative of the constraint functions
   for ( int i = 0; i < num_load_cases; i++ ){
     tacs[0]->setVariables(vars[i]);
     

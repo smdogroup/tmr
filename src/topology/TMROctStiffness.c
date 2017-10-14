@@ -66,7 +66,7 @@ void TMROctStiffness::getDesignVars( TacsScalar x[], int numDVs ){
   }
   else {
     for ( int j = 0; j < nvars; j++ ){
-      TacsScalar value = 1.0;
+      TacsScalar value = 0.95;
       if (j > 1){
         value = 1.0/(nvars-1);
       }

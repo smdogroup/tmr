@@ -72,6 +72,9 @@ class TMRTopoProblem : public ParOptProblem {
                        const TacsScalar *_func_offset, 
                        const TacsScalar *_func_scale,
                        int num_funcs );
+  void addLinearConstraints( ParOptVec **vecs,
+                             TacsScalar *offset,
+                             int _ncon );
   void addFrequencyConstraint( double sigma, int num_eigvals,
                                TacsScalar ks_weight,
                                TacsScalar offset, TacsScalar scale,
@@ -189,6 +192,11 @@ class TMRTopoProblem : public ParOptProblem {
   // vectors for each load case
   int num_load_cases;
   TACSBVec **vars, **forces;
+
+  // The linear constraints -- independent of load case
+  int num_linear_con;
+  ParOptVec **Alinear;
+  TacsScalar *linear_offset;
 
   // The natural frequency TACS object
   TACSFrequencyAnalysis *freq;

@@ -423,6 +423,7 @@ cdef extern from "TMRTopoProblem.h":
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,
                             const TacsScalar*, const TacsScalar*, int)
+        void addLinearConstraints(ParOptVec**, TacsScalar*, int)
         void addFrequencyConstraint(double, int, TacsScalar,
                                     TacsScalar, TacsScalar, int, double)
         void setObjective(const TacsScalar*)
