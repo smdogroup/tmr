@@ -1829,20 +1829,14 @@ void TMRTopoProblem::addSparseInnerProduct( double alpha,
 // Write the output file
 void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
   // Print out the binary STL file for later visualization
-  int var_offset = 0;
-  double cutoff = 0.25;
-
-  if (prefix){
+  if (prefix && oct_filter){
     // Write out the file at a cut off of 0.25
     char *filename = new char[ strlen(prefix) + 100 ];
-    sprintf(filename, "%s/levelset025_binary%04d.bstl", prefix, iter_count);
-    if (oct_filter){
-      TMR_GenerateBinFile(filename, oct_filter[0], x[0], var_offset, cutoff);
-    
-      // Write out the file at a cutoff of 0.5
-      cutoff = 0.5;
-      sprintf(filename, "%s/levelset05_binary%04d.bstl", prefix, iter_count);
-      TMR_GenerateBinFile(filename, oct_filter[0], x[0], var_offset, cutoff);
+
+    for ( int k = 0; k < vars_per_node; k++ ){
+      double cutoff = 0.5;
+      sprintf(filename, "%s/levelset05_var%d_binary%04d.bstl", prefix, k, iter_count);
+      TMR_GenerateBinFile(filename, oct_filter[0], x[0], k, cutoff);
     }
     
     delete [] filename;

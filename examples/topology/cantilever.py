@@ -13,7 +13,7 @@ class CreateMe(TMR.OctTopoCreator):
 
     def createElement(self, order, octant, index, weights):
         '''Create the element'''
-        stiff = TMR.OctStiffness(props, index, weights, q=5.0, eps=1e-6)
+        stiff = TMR.OctStiffness(self.props, index, weights, q=5.0, eps=1e-6)
         elem = elements.Solid(2, stiff)
         return elem
 
@@ -101,8 +101,6 @@ def createTopoProblem(props, forest, order=2, nlevels=2):
     nmats = props.getNumMaterials()
     if nmats > 1:
         vars_per_node = nmats+1
-    
-        
     problem = TMR.TopoProblem(assemblers, filters, varmaps, vecindices, mg,
                               vars_per_node)
 
@@ -212,10 +210,6 @@ vars_per_node = len(rho)+1
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(rho, E, nu)
-
-index = [282, 283, 284, 285, 290, 291, 294, 295]
-weights = [0.140625, 0.046875, 0.421875, 0.140625, 0.046875, 0.015625, 0.140625, 0.046875]
-stiff = TMR.OctStiffness(props, index, weights, q=5.0, eps=1e-6)
 
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance

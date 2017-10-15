@@ -159,7 +159,7 @@ void TMRQuadTACSCreator::createConnectivity( int order,
 */
 TACSAssembler* TMRQuadTACSCreator::createTACS( int order, 
                                                TMRQuadForest *forest,
-                                               TacsScalar _scale){
+                                               TacsScalar _scale ){
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -392,7 +392,7 @@ void TMROctTACSCreator::createConnectivity( int order,
 */
 TACSAssembler* TMROctTACSCreator::createTACS( int order, 
                                               TMROctForest *forest,
-                                              TacsScalar _scale){
+                                              TacsScalar _scale ){
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
