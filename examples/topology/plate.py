@@ -309,16 +309,33 @@ for ite in xrange(max_iterations):
         zl[:] = zl[:]/areas
         zu[:] = zu[:]/areas
     else:
-        
         # Here we use MMA, and only worry about interpolating the
         # variables
-        max_mma_iters = 500
+        max_mma_iters = 5
 
         # Set the ParOpt problem into MMA
         mma = ParOpt.pyMMA(problem)
         mma.setPrintLevel(2)
         mma.setOutputFile(os.path.join(args.prefix, 
                                        'mma_output%d.out'%(ite)))
+
+        # Create the ParOpt problem
+        opt = ParOpt.pyParOpt(mma, args.max_lbfgs,
+                              ParOpt.NO_HESSIAN_APPROX)
+
+        # Set parameters
+        opt.setMaxMajorIterations(args.max_opt_iters)
+        opt.setHessianResetFreq(args.hessian_reset)
+        opt.setAbsOptimalityTol(args.opt_abs_tol)
+        opt.setBarrierFraction(args.opt_barrier_frac)
+        opt.setBarrierPower(args.opt_barrier_power)
+        opt.setOutputFrequency(args.output_freq)
+        opt.setUseDiagHessian(1)
+        opt.setMajorIterStepCheck(1)
+
+        # Set the output file name
+        filename = os.path.join(args.prefix, 'paropt%04d.out'%(ite))
+        opt.setOutputFile(filename)
 
         if ite == 0:
             # Set the starting point using the mass fraction
@@ -344,9 +361,14 @@ for ite in xrange(max_iterations):
             # Set the initial design variable values
             problem.setInitDesignVars(x)
             
+        # Initialize the subproblem
+        mma.initializeSubProblem()
+        opt.resetDesignAndBounds()
+        
         # Enter the optimization loop
         for i in range (max_mma_iters):
-            mma.update()
+            opt.setInitBarrierParameter(10.0)
+            opt.optimize()
 
             # Write the solution out to a file
             if i % args.output_freq == 0:
@@ -357,11 +379,24 @@ for ite in xrange(max_iterations):
                         TACS.ToFH5.EXTRAS)
                 f5 = TACS.ToFH5(assembler, TACS.PY_PLANE_STRESS, flag)
                 f5.writeToFile(filename)
+
+            opt.checkGradients(1e-7)
             
-            # Test for optimality
-            l1, linfty, infeas = mma.getOptimality()
-            if l1 < 1e-3 and infeas < 1e-3:
-                break          
+            # Get the optimized point
+            x, z, zw, zl, zu = opt.getOptimizedPoint()           
+            mma.setMultipliers(z, zw)
+            mma.initializeSubProblem(x)
+            opt.resetDesignAndBounds()
+            
+            # Compute the KKT error
+            l1_norm, linfty_norm, infeas = mma.computeKKTError()
+            if comm.rank == 0:
+                print 'z = ', z
+                print 'l1_norm = ', l1_norm
+                print 'infeas = ', infeas
+
+            if l1_norm < 1e-3 and infeas < 1e-6:
+                break
 
         # Set the old values of the variables
         old_dvs = mma.getOptimizedPoint()
