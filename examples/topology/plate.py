@@ -116,7 +116,7 @@ p.add_argument('--opt_barrier_frac', type=float, default=0.25)
 p.add_argument('--opt_barrier_power', type=float, default=1.0)
 p.add_argument('--output_freq', type=int, default=1)
 p.add_argument('--init_depth', type=int, default=2)
-p.add_argument('--mg_levels', type=int, nargs='+', default=[2, 2, 3, 3])
+p.add_argument('--mg_levels', type=int, nargs='+', default=[2, 3])
 p.add_argument('--max_lbfgs', type=int, default=10)
 p.add_argument('--hessian_reset', type=int, default=10)
 args = p.parse_args()
@@ -174,7 +174,7 @@ m_fixed = vol_frac*initial_mass
 
 # Set the max nmber of iterations
 mg_levels = args.mg_levels
-max_iterations = 2#len(mg_levels)
+max_iterations = len(mg_levels)
 
 # Set parameters for later usage
 order = 2
@@ -311,11 +311,13 @@ for ite in xrange(max_iterations):
     else:
         # Here we use MMA, and only worry about interpolating the
         # variables
-        max_mma_iters = 5
+        max_mma_iters = args.max_opt_iters
 
         # Set the ParOpt problem into MMA
-        mma = ParOpt.pyMMA(problem)
+        mma = ParOpt.pyMMA(problem, 0)
         mma.setPrintLevel(2)
+        mma.setMinAsymptoteOffset(0.01)
+        mma.setMaxAsymptoteOffset(100.0)
         mma.setOutputFile(os.path.join(args.prefix, 
                                        'mma_output%d.out'%(ite)))
 
@@ -331,10 +333,9 @@ for ite in xrange(max_iterations):
         opt.setBarrierPower(args.opt_barrier_power)
         opt.setOutputFrequency(args.output_freq)
         opt.setUseDiagHessian(1)
-        opt.setMajorIterStepCheck(1)
 
         # Set the output file name
-        filename = os.path.join(args.prefix, 'paropt%04d.out'%(ite))
+        filename = os.path.join(args.prefix, 'paropt%d.out'%(ite))
         opt.setOutputFile(filename)
 
         if ite == 0:
@@ -380,8 +381,6 @@ for ite in xrange(max_iterations):
                 f5 = TACS.ToFH5(assembler, TACS.PY_PLANE_STRESS, flag)
                 f5.writeToFile(filename)
 
-            opt.checkGradients(1e-7)
-            
             # Get the optimized point
             x, z, zw, zl, zu = opt.getOptimizedPoint()           
             mma.setMultipliers(z, zw)
@@ -411,15 +410,18 @@ for ite in xrange(max_iterations):
             TACS.ToFH5.EXTRAS)
     f5 = TACS.ToFH5(assembler, TACS.PY_PLANE_STRESS, flag)
     f5.writeToFile(os.path.join(args.prefix, 'tacs_output%d.f5'%(ite)))
+
     # Create refinement array
     num_elems = assembler.getNumElements()
     refine = np.ones(num_elems, dtype=np.int32)
+
     # Refine based solely on the value of the density variable
     elems = assembler.getElements()
     for i in xrange(num_elems):        
         c = elems[i].getConstitutive()
         if c is not None:
             rho = c.getDVOutputValue(0, np.zeros(2, dtype=float))
+
             # Refine things differently depending on whether the
             # density is above or below a threshold
             if rho > 0.25:
