@@ -21,8 +21,8 @@ class TMRQuadStiffness : public PlaneStressStiffness {
   static const int MAX_NUM_WEIGHTS = 4;
 
   TMRQuadStiffness( TMRIndexWeight *_weights, int _nweights,
-                   TacsScalar _density, TacsScalar E, 
-                   TacsScalar _nu, double _q, double _eps=1e-3 );
+                    TacsScalar _density, TacsScalar E, 
+                    TacsScalar _nu, double _q, double _eps=1e-3 );
 
   // Set the design variable values in the object
   // --------------------------------------------

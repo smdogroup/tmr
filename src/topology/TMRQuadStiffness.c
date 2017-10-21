@@ -69,7 +69,7 @@ void TMRQuadStiffness::calculateStress( const double pt[],
                                         TacsScalar s[] ){
   // Compute the penalized stiffness
   TacsScalar w = rho/(1.0 + q*(1.0 - rho));
-  TacsScalar D = E/(1.0-nu*nu)*w;
+  TacsScalar D = E/(1.0-nu*nu)*(w + eps);
   
   s[0] = D*e[0]+nu*D*e[1];
   s[1] = nu*D*e[0]+D*e[1];
@@ -87,13 +87,14 @@ void TMRQuadStiffness::addStressDVSens( const double pt[],
                                         TacsScalar fdvSens[], int dvLen ){
   TacsScalar dxw = 1.0+q*(1.0-rho);
   TacsScalar w = ((1.0+q)/(dxw*dxw));
-  TacsScalar s[3];
   TacsScalar D = E/(1.0-nu*nu)*w;
 
   // Compute the product dD/dx*(B*u)
-  s[0] = D*e[0]+nu*D*e[1];
-  s[1] = nu*D*e[0]+D*e[1];
+  TacsScalar s[3];
+  s[0] = D*e[0] + nu*D*e[1];
+  s[1] = nu*D*e[0] + D*e[1];
   s[2] = 0.5*(1.0-nu)*D*e[2];
+  
   // Compute the term psi^{T}*B^{T}*dD/dx*B*u
   for ( int i = 0; i < nweights; i++ ){
     fdvSens[weights[i].index] += 
