@@ -97,7 +97,8 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Set the initial design variable values
   // --------------------------------------
-  void setInitDesignVars( ParOptVec *vars );
+  void setInitDesignVars( ParOptVec *vars, ParOptVec *lb = NULL,
+                          ParOptVec *ub = NULL );
 
   // Set the output iteration counter
   // --------------------------------
@@ -251,6 +252,7 @@ class TMRTopoProblem : public ParOptProblem {
 
   // The initial design variable values
   TACSBVec *xinit;
+  TACSBVec *xlb, *xub;
 };
 
 #endif // TMR_TOPO_PROBLEM_H

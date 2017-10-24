@@ -165,7 +165,8 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   int mpi_rank;
   MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
   
-  // Set the number of variables per node
+  // Set the number of design variables per node i.e. multi-material or single
+  // material 
   vars_per_node = _vars_per_node;
 
   // Set the maximum number of indices
@@ -173,6 +174,8 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // The initial design variable values (may not be set)
   xinit = NULL;
+  xlb = NULL;
+  xub = NULL;
 
   // Set the number of levels
   nlevels = _nlevels;
@@ -323,7 +326,9 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // The initial design variable values (may not be set)
   xinit = NULL;
-
+  xlb = NULL;
+  xub = NULL;
+  
   // Set the number of levels
   nlevels = _nlevels;
 
@@ -490,7 +495,8 @@ TMRTopoProblem::~TMRTopoProblem(){
 
   // Free the initial design variable values (if allocated)
   if (xinit){ xinit->decref(); }
-
+  if (xlb){ xlb->decref(); }
+  if (xub){ xub->decref(); }
   // Free the local temp array
   delete [] xlocal;
 
@@ -798,7 +804,9 @@ void TMRTopoProblem::initialize(){
 /*
   Set the initial design variable values
 */
-void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars ){
+void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars,
+                                        ParOptVec *lb,
+                                        ParOptVec *ub ){
   if (xvars){
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvars);
     if (wrap){
@@ -807,6 +815,24 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars ){
                            vars_per_node, filter_dist[0]);
       xinit->incref();
       xinit->copyValues(wrap->vec);
+    }
+  }
+  if (lb){
+    ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(lb);
+    if (wrap){
+      if (xlb){ xlb->decref(); }
+      xlb = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
+      xlb->incref();
+      xlb->copyValues(wrap->vec);
+    }
+  }
+  if (ub){
+    ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(ub);
+    if (wrap){
+      if (xub){ xub->decref(); }
+      xub = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
+      xub->incref();
+      xub->copyValues(wrap->vec);
     }
   }
 }
@@ -1155,17 +1181,27 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
     if (lbvec){
       ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lbvec);
       if (lbwrap){
-        setBVecFromLocalValues(xlocal, lbwrap->vec);
-        lbwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
-        lbwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
+        if (xlb){
+          lbwrap->vec->copyValues(xlb);
+        }
+        else{
+          setBVecFromLocalValues(xlocal, lbwrap->vec);
+          lbwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
+          lbwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
+        }
       }
     }
     if (ubvec){
       ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ubvec);
       if (ubwrap){
-        setBVecFromLocalValues(upper, ubwrap->vec);
-        ubwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
-        ubwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
+        if (xub){
+          ubwrap->vec->copyValues(xub);
+        }
+        else{
+          setBVecFromLocalValues(upper, ubwrap->vec);
+          ubwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
+          ubwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
+        }
       }
     }
     delete [] upper;

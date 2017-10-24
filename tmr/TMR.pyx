@@ -2064,10 +2064,17 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         return _init_Vec(new_vec.vec)
     
-    def setInitDesignVars(self, PVec pvec):
+    def setInitDesignVars(self, PVec pvec, PVec lbvec=None,
+                          PVec ubvec=None):
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        prob.setInitDesignVars(pvec.ptr)
+        cdef ParOptVec *lb =NULL
+        cdef ParOptVec *ub = NULL
+        if lbvec is not None:
+            lb = lbvec.ptr
+        if ubvec is not None:
+            ub = ubvec.ptr
+        prob.setInitDesignVars(pvec.ptr,lb,ub)

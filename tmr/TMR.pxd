@@ -430,7 +430,7 @@ cdef extern from "TMRTopoProblem.h":
         void setObjective(const TacsScalar*, TACSFunction**)
         void initialize()
         void setPrefix(const char*)
-        void setInitDesignVars(ParOptVec*)
+        void setInitDesignVars(ParOptVec*,ParOptVec*,ParOptVec*)
         void setIterationCounter(int)
         TACSBVec* createVolumeVec()
         TACSBVec* createAreaVec()
