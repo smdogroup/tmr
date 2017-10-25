@@ -408,7 +408,7 @@ cdef extern from "TMRCyCreator.h":
         void setCreateOctTopoElement( 
             TACSElement* (*createocttopoelements)(
                 void*, int, TMROctant*, TMRIndexWeight*, int))
-        TACSAssembler *createTACS(int, TMROctForest*)
+        TACSAssembler *createTACS(int, TMROctForest*,double)
         void getFilter(TMROctForest**)
         void getMap(TACSVarMap**)
         void getIndices(TACSBVecIndices**)
