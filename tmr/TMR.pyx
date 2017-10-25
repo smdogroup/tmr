@@ -1626,9 +1626,9 @@ cdef class OctTopoCreator:
         if self.ptr:
             self.ptr.decref()
 
-    def createTACS(self, int order, OctForest forest):
+    def createTACS(self, int order, OctForest forest, double Xscale=1.0):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr)
+        assembler = self.ptr.createTACS(order, forest.ptr, Xscale)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -2055,7 +2055,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         vec = prob.createAreaVec()
         return _init_Vec(vec)
-    
+            
     def convertPVecToVec(self, PVec pvec):
         cdef ParOptBVecWrap *new_vec = NULL
         new_vec = _dynamicParOptBVecWrap(pvec.ptr)
