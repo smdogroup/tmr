@@ -821,7 +821,8 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars,
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(lb);
     if (wrap){
       if (xlb){ xlb->decref(); }
-      xlb = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
+      xlb = new TACSBVec(filter_maps[0], vars_per_node,
+                         filter_dist[0]);
       xlb->incref();
       xlb->copyValues(wrap->vec);
     }
@@ -830,7 +831,8 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars,
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(ub);
     if (wrap){
       if (xub){ xub->decref(); }
-      xub = new TACSBVec(filter_maps[0], 1, filter_dist[0]);
+      xub = new TACSBVec(filter_maps[0], vars_per_node,
+                         filter_dist[0]);
       xub->incref();
       xub->copyValues(wrap->vec);
     }
