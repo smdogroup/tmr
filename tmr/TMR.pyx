@@ -1102,11 +1102,12 @@ cdef class QuadForest:
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
         self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
-    def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None):
+    def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None,
+               int min_lev=0, int max_lev=MAX_LEVEL):
         if refine is not None:
-            self.ptr.refine(<int*>refine.data)
+            self.ptr.refine(<int*>refine.data, min_lev, max_lev)
         else:
-            self.ptr.refine(NULL)
+            self.ptr.refine(NULL, min_lev, max_lev)
         return
 
     def duplicate(self):
@@ -1354,11 +1355,12 @@ cdef class OctForest:
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
         self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
-    def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None):
+    def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None,
+               int min_lev=0, int max_lev=MAX_LEVEL):
         if refine is not None:
-            self.ptr.refine(<int*>refine.data)
+            self.ptr.refine(<int*>refine.data, min_lev, max_lev)
         else:
-            self.ptr.refine(NULL)
+            self.ptr.refine(NULL, min_lev, max_lev)
         return
 
     def duplicate(self):
@@ -1804,12 +1806,25 @@ def adjointRefine(Assembler coarse,
                             min_refine, max_refine, &adj_corr)
     return ans, adj_corr
 
-def computeReconSolution(Assembler assembler, 
-                         QuadForest forest,
-                         Assembler refined,
-                         Vec uvec, Vec uvec_refined):
-    TMR_ComputeReconSolution(assembler.ptr, forest.ptr, refined.ptr,
-                             uvec.ptr, uvec_refined.ptr)
+def computeReconSolution(Assembler assembler, forest,
+                         Assembler refined, Vec uvec=None,
+                         Vec uvec_refined=None):
+    cdef TMRQuadForest *quad_ptr = NULL
+    cdef TMROctForest *oct_ptr = NULL
+    cdef TACSBVec *uvec_ptr = NULL
+    cdef TACSBVec *refined_ptr = NULL
+    if uvec is not None:
+        uvec_ptr = uvec.ptr
+    if uvec_refined is not None:
+        refined_ptr = uvec_refined.ptr
+    if isinstance(forest, OctForest):
+        oct_ptr = (<OctForest>forest).ptr
+        TMR_ComputeReconSolution(assembler.ptr, oct_ptr, refined.ptr,
+                                 uvec_ptr, refined_ptr)
+    elif isinstance(forest, QuadForest):
+        quad_ptr = (<QuadForest>forest).ptr
+        TMR_ComputeReconSolution(assembler.ptr, quad_ptr, refined.ptr,
+                                 uvec_ptr, refined_ptr)
     return
 
 def writeSTLToBin(char *filename, OctForest forest,

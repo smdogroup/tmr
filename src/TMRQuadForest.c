@@ -1418,6 +1418,12 @@ void TMRQuadForest::refine( const int refinement[],
   quadrants->sort();
 
   delete hash;
+
+  // Get the octants and order their labels
+  quadrants->getArray(&array, &size);
+  for ( int i = 0; i < size; i++ ){
+    array[i].tag = i;
+  }
 }
 
 /*

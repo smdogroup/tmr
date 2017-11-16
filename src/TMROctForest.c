@@ -1579,6 +1579,12 @@ void TMROctForest::repartition(){
   owners = new TMROctant[ mpi_size ];
   MPI_Allgather(&new_array[0], 1, TMROctant_MPI_type, 
                 owners, 1, TMROctant_MPI_type, comm);
+
+  // Set the local reordering for the elements
+  octants->getArray(&array, &size);
+  for ( int i = 0; i < size; i++ ){
+    array[i].tag = i;
+  }
 }
 
 /*
@@ -1819,6 +1825,12 @@ void TMROctForest::refine( const int refinement[],
   octants->sort();
 
   delete hash;
+
+  // Get the octants and order their labels
+  octants->getArray(&array, &size);
+  for ( int i = 0; i < size; i++ ){
+    array[i].tag = i;
+  }
 }
 
 /*
@@ -4289,6 +4301,12 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
     return NULL;
   }
 
+  // Set the flag if the attribute is NULL
+  int attr_is_null = 1;
+  if (attr){
+    attr_is_null = 0;
+  }
+
   // Create a queue to store the elements that we find
   TMROctantQueue *queue = new TMROctantQueue();
 
@@ -4307,7 +4325,8 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
     TMRVolume *vol;
     topo->getVolume(array[i].block, &vol);  
     const char *vol_attr = vol->getAttribute();
-    if (vol_attr && strcmp(vol_attr, attr) == 0){
+    if ((attr_is_null && !vol_attr) ||
+        (vol_attr && strcmp(vol_attr, attr) == 0)){
       queue->push(&array[i]);
     }
     else {
@@ -4321,7 +4340,8 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
           TMRFace *face;
           topo->getFace(face_num, &face);
           const char *face_attr = face->getAttribute();
-          if (face_attr && strcmp(face_attr, attr) == 0){
+          if ((attr_is_null && !face_attr) ||
+              (face_attr && strcmp(face_attr, attr) == 0)){
             oct.tag = face_index;
             queue->push(&oct);
           }
@@ -4344,7 +4364,8 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
             int face_num = block_face_conn[6*array[i].block + face_index];
             topo->getFace(face_num, &face);
             const char *face_attr = face->getAttribute();
-            if (face_attr && strcmp(face_attr, attr) == 0){
+            if ((attr_is_null && !face_attr) ||
+                (face_attr && strcmp(face_attr, attr) == 0)){
               oct.tag = face_index;
               queue->push(&oct);
             }
@@ -4354,7 +4375,8 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
             int face_num = block_face_conn[6*array[i].block + face_index];
             topo->getFace(face_num, &face);
             const char *face_attr = face->getAttribute();
-            if (face_attr && strcmp(face_attr, attr) == 0){
+            if ((attr_is_null && !face_attr) ||
+                (face_attr && strcmp(face_attr, attr) == 0)){
               oct.tag = face_index;
               queue->push(&oct);
             }
@@ -4364,7 +4386,8 @@ TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
             int face_num = block_face_conn[6*array[i].block + face_index];
             topo->getFace(face_num, &face);
             const char *face_attr = face->getAttribute();
-            if (face_attr && strcmp(face_attr, attr) == 0){
+            if ((attr_is_null && !face_attr) ||
+                (face_attr && strcmp(face_attr, attr) == 0)){
               oct.tag = face_index;
               queue->push(&oct);
             }
@@ -4402,6 +4425,12 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
     return NULL;
   }
 
+  // Set the flag if the attribute is NULL
+  int attr_is_null = 1;
+  if (attr){
+    attr_is_null = 0;
+  }
+
   // Create a queue to store the nodes that we find
   TMROctantQueue *queue = new TMROctantQueue();
 
@@ -4429,7 +4458,8 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
       int vert_num = block_conn[8*array[i].block + vert_index];
       topo->getVertex(vert_num, &vert);
       const char *vert_attr = vert->getAttribute();
-      if (vert_attr && strcmp(vert_attr, attr) == 0){
+      if ((attr_is_null && !vert_attr) ||
+          (vert_attr && strcmp(vert_attr, attr) == 0)){
         queue->push(&array[i]);
       }
     }
@@ -4449,7 +4479,8 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
       int edge_num = block_edge_conn[12*array[i].block + edge_index];
       topo->getEdge(edge_num, &edge);
       const char *edge_attr = edge->getAttribute();
-      if (edge_attr && strcmp(edge_attr, attr) == 0){
+      if ((attr_is_null && !edge_attr) ||
+          (edge_attr && strcmp(edge_attr, attr) == 0)){
         queue->push(&array[i]);
       }
     }
@@ -4461,7 +4492,8 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
       int face_num = block_face_conn[6*array[i].block + face_index];
       topo->getFace(face_num, &face);  
       const char *face_attr = face->getAttribute();
-      if (face_attr && strcmp(face_attr, attr) == 0){
+      if ((attr_is_null && !face_attr) ||
+          (face_attr && strcmp(face_attr, attr) == 0)){
         queue->push(&array[i]);
       }
     }
@@ -4469,7 +4501,8 @@ TMROctantArray* TMROctForest::getNodesWithAttribute( const char *attr ){
       TMRVolume *volume;
       topo->getVolume(array[i].block, &volume);
       const char *volume_attr = volume->getAttribute();
-      if (volume_attr && strcmp(volume_attr, attr) == 0){
+      if ((attr_is_null && !volume_attr) ||
+          (volume_attr && strcmp(volume_attr, attr) == 0)){
         queue->push(&array[i]);    
       }
     }

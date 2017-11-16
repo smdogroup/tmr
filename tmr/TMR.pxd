@@ -247,7 +247,7 @@ cdef extern from "TMRQuadForest.h":
         void repartition()
         void createTrees(int)
         void createRandomTrees(int, int, int)
-        void refine(int*)
+        void refine(int*, int, int)
         TMRQuadForest *duplicate()
         TMRQuadForest *coarsen()
         void balance(int)
@@ -298,7 +298,7 @@ cdef extern from "TMROctForest.h":
         void repartition()
         void createTrees(int)
         void createRandomTrees(int, int, int)
-        void refine(int*)
+        void refine(int*, int, int)
         TMROctForest *duplicate()
         TMROctForest *coarsen()
         void balance(int)
@@ -355,10 +355,10 @@ cdef extern from "TMR_RefinementTools.h":
     void TMR_CreateTACSMg(int, TACSAssembler**,
                           TMRQuadForest**,
                           TACSMg**)
-    void TMR_ComputeReconSolution(TACSAssembler*,
-                                  TMRQuadForest*,
-                                  TACSAssembler*,
-                                  TACSBVec*, TACSBVec*)
+    void TMR_ComputeReconSolution(TACSAssembler*, TMRQuadForest*,
+                                  TACSAssembler*, TACSBVec*, TACSBVec*)
+    void TMR_ComputeReconSolution(TACSAssembler*, TMROctForest*,
+                                  TACSAssembler*, TACSBVec*, TACSBVec*)
     TacsScalar TMR_StrainEnergyRefine(TACSAssembler*,
                                       TMRQuadForest*,
                                       double, int, int)

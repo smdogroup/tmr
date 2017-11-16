@@ -383,7 +383,7 @@ for ite in xrange(max_iterations):
 
             # Get the optimized point
             x, z, zw, zl, zu = opt.getOptimizedPoint()           
-            mma.setMultipliers(z, zw)
+            mma.setMultipliers(z, zw, zl, zu)
             mma.initializeSubProblem(x)
             opt.resetDesignAndBounds()
             
