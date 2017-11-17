@@ -31,6 +31,13 @@ int TMRVertex::getParamsOnFace( TMRFace *face,
 }
 
 /*
+  Reset the node number to -1
+*/
+void TMRVertex::resetNodeNum(){
+  var = -1;
+}
+
+/*
   Set/retrieve vertex numbers
 */
 int TMRVertex::setNodeNum( int *num ){

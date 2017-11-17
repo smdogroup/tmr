@@ -184,8 +184,11 @@ cdef extern from "TMRMesh.h":
         void mesh(TMRMeshOptions, double)
         void mesh(TMRMeshOptions, TMRElementFeatureSize*)
         int getMeshPoints(TMRPoint**)
-        int getMeshConnectivity(int*, const int**,
-                                int*, const int**)
+        int getQuadConnectivity(int*, const int**)
+        int getTriConnectivity(int*, const int**)
+        int getHexConnectivity(int*, const int**)
+        int getTetConnectivity(int*, const int**)
+
         TMRModel *createModelFromMesh()
         void writeToVTK(const char*, int)
         void writeToBDF(const char*, int)

@@ -38,6 +38,7 @@ class TMRVertex : public TMREntity {
                                double *u, double *v );
 
   // Set/retrieve the node numbers
+  void resetNodeNum();
   int setNodeNum( int *num );
   int getNodeNum( int *num );
 

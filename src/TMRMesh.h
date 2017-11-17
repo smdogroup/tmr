@@ -10,7 +10,8 @@
 */
 enum TMRFaceMeshType { TMR_NO_MESH, 
                        TMR_STRUCTURED, 
-                       TMR_UNSTRUCTURED };
+                       TMR_UNSTRUCTURED,
+                       TMR_TRIANGLE };
 
 /*
   Global options for meshing
@@ -166,14 +167,15 @@ class TMRFaceMesh : public TMREntity {
   int getNumFixedPoints();
 
   // Retrieve the local connectivity from this surface mesh
-  int getLocalConnectivity( const int **quads );
+  int getQuadConnectivity( const int **_quads );
+  int getTriConnectivity( const int **_tris );
 
   // Write the quadrilateral mesh to a VTK format
   void writeToVTK( const char *filename );
 
   // Print the quadrilateral quality
-  void addQuadQuality( int nbins, int count[] );
-  void printQuadQuality();
+  void addMeshQuality( int nbins, int count[] );
+  void printMeshQuality();
 
  private:
   // Write the segments to a VTK file in parameter space
@@ -229,9 +231,13 @@ class TMRFaceMesh : public TMREntity {
   TMRPoint *X; // The physical node locations
   int *vars; // The global variable numbers
 
-  // Quadrilateral mesh information
+  // Quadrilateral surface mesh information
   int num_quads;
   int *quads;
+
+  // Triangle mesh surface information
+  int num_tris;
+  int *tris;
 };
 
 /*
@@ -252,7 +258,8 @@ class TMRVolumeMesh : public TMREntity {
   void getMeshPoints( int *_npts, TMRPoint **X );
 
   // Retrieve the local connectivity from this volume mesh
-  int getLocalConnectivity( const int **quads );
+  int getHexConnectivity( const int **hex );
+  int getTetConnectivity( const int **tets );
 
   // Order the mesh points uniquely
   int setNodeNums( int *num );
@@ -262,6 +269,9 @@ class TMRVolumeMesh : public TMREntity {
   void writeToVTK( const char *filename );
 
  private:
+  // Create a tetrahedral mesh (if possible)
+  int tetMesh( TMRMeshOptions options );
+
   // The underlying volume
   MPI_Comm comm;
   TMRVolume *volume;
@@ -288,6 +298,10 @@ class TMRVolumeMesh : public TMREntity {
   // Hexahedral mesh information
   int num_hex;
   int *hex;
+
+  // Tetrahedral mesh information
+  int num_tet;
+  int *tet;
 };
 
 /*
@@ -319,8 +333,10 @@ class TMRMesh : public TMREntity {
 
   // Retrieve the mesh components
   int getMeshPoints( TMRPoint **_X );
-  void getMeshConnectivity( int *_nquads, const int **_quads,
-                            int *_nhexes, const int **_hexes );
+  void getQuadConnectivity( int *_nquads, const int **_quads );
+  void getTriConnectivity( int *_ntris, const int **_tris );
+  void getHexConnectivity( int *_nhex, const int **_hex );
+  // void getQuadConnectivity( int *_nquads, const int **_quads );
 
   // Create a topology object (with underlying mesh geometry)
   TMRModel* createModelFromMesh();
@@ -328,6 +344,9 @@ class TMRMesh : public TMREntity {
  private:
   // Allocate and initialize the underlying mesh
   void initMesh( int count_nodes=0 );
+
+  // Reset the mesh
+  void resetMesh();
 
   // The underlying geometry object
   MPI_Comm comm;
@@ -341,9 +360,17 @@ class TMRMesh : public TMREntity {
   int num_quads;
   int *quads;
 
+  // The number of triangles
+  int num_tris;
+  int *tris;
+
   // The number of hexahedral elements in the mesh
   int num_hex;
   int *hex;
+
+  // The number of tetrahedral elements
+  int num_tet;
+  int *tet;
 };
 
 #endif // TMR_MESH_H

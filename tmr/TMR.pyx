@@ -839,33 +839,47 @@ cdef class Mesh:
             Xp[i,2] = X[i].z
         return Xp
 
-    def getMeshConnectivity(self):
+    def getQuadConnectivity(self):
         cdef const int *quads = NULL
-        cdef const int *hexes = NULL
         cdef int nquads = 0
-        cdef int nhexes = 0
-        self.ptr.getMeshConnectivity(&nquads, &quads,
-                                     &nhexes, &hexes)
-       
+        
+        self.ptr.getQuadConnectivity(&nquads, &quads)
         q = np.zeros((nquads, 4), dtype=np.intc)
         for i in range(nquads):
             q[i,0] = quads[4*i]
             q[i,1] = quads[4*i+1]
             q[i,2] = quads[4*i+2]
             q[i,3] = quads[4*i+3]
-          
-        he = np.zeros((nhexes,8), dtype=np.intc)
-        for i in range(nhexes):
-            he[i,0] = hexes[8*i]
-            he[i,1] = hexes[8*i+1]
-            he[i,2] = hexes[8*i+2]
-            he[i,3] = hexes[8*i+3]
-            he[i,4] = hexes[8*i+4]
-            he[i,5] = hexes[8*i+5]
-            he[i,6] = hexes[8*i+6]
-            he[i,7] = hexes[8*i+7]
-          
-        return q, he
+        return q
+
+    def getTriConnectivity(self):
+        cdef const int *tris = NULL
+        cdef int ntris = 0
+        
+        self.ptr.getTriConnectivity(&ntris, &tris)       
+        t = np.zeros((ntris, 3), dtype=np.intc)
+        for i in range(ntris):
+            t[i,0] = tris[3*i]
+            t[i,1] = tris[3*i+1]
+            t[i,2] = tris[3*i+2]
+        return t
+
+    def getHexConnectivity(self):
+        cdef const int *hex = NULL
+        cdef int nhex = 0
+
+        self.ptr.getHexConnectivity(&nhex, &hex)
+        he = np.zeros((nhex,8), dtype=np.intc)
+        for i in range(nhex):
+            he[i,0] = hex[8*i]
+            he[i,1] = hex[8*i+1]
+            he[i,2] = hex[8*i+2]
+            he[i,3] = hex[8*i+3]
+            he[i,4] = hex[8*i+4]
+            he[i,5] = hex[8*i+5]
+            he[i,6] = hex[8*i+6]
+            he[i,7] = hex[8*i+7]
+        return he
 
     def createModelFromMesh(self):
         cdef TMRModel *model = NULL
@@ -873,7 +887,7 @@ cdef class Mesh:
         return _init_Model(model) 
 
     def writeToBDF(self, char *filename, outtype=None):
-        # Write both quads and hexes
+        # Write both quads and hexahedral elements
         cdef int flag = 3
         if outtype is None:
             flag = 3
@@ -884,7 +898,7 @@ cdef class Mesh:
         self.ptr.writeToBDF(filename, flag)
 
     def writeToVTK(self, char *filename, outtype=None):
-        # Write both quads and hexes
+        # Write both quads and hexahedral elements
         cdef int flag = 3
         if outtype is None:
             flag = 3
