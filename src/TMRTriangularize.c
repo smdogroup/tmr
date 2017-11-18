@@ -539,11 +539,11 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
 
   // Re-adjust the domain boundary to ensure that it is sufficiently
   // large
-  double xsmall = 0.1*(domain.xhigh - domain.xlow);
+  double xsmall = 10.0*(domain.xhigh - domain.xlow);
   domain.xhigh += xsmall;
   domain.xlow -= xsmall;
 
-  double ysmall = 0.1*(domain.yhigh - domain.ylow);
+  double ysmall = 10.0*(domain.yhigh - domain.ylow);
   domain.yhigh += ysmall;
   domain.ylow -= ysmall;
 
@@ -588,6 +588,25 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // original set of points.
   for ( int i = 0; i < npts; i++ ){
     addPointToMesh(&inpts[2*i], NULL);
+  }
+
+  // Ensure that all the segments are in the triangulation to 
+  // recover a CDT
+  for ( int i = 0; i < nsegs; i++ ){
+    uint32_t u = 0, v = 0;
+    if (segs[2*i] >= 0){
+      u = segs[2*i] + FIXED_POINT_OFFSET;
+    }
+    if (segs[2*i+1] >= 0){
+      v = segs[2*i+1] + FIXED_POINT_OFFSET;
+    }
+
+    // Check to see if the corresponding triangle exists
+    TMRTriangle *tri;
+    completeMe(u, v, &tri);
+    if (!tri){
+      insertSegment(u, v);
+    }
   }
 
   // Set the triangle tags to zero
@@ -1457,56 +1476,6 @@ inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
   px[0] = pts[2*x];
   px[1] = pts[2*x+1];
 
-  /*
-  // Evaluate the metric tensor at the point x
-  if (metric){
-    // Compute the metric components at the center of the triangle
-    // (u,v,w)
-    TMRPoint Xu, Xv;
-    metric->evalDeriv(px[0], px[1], &Xu, &Xv);
-    double g11 = Xu.dot(Xu);
-    double g12 = Xu.dot(Xv);
-    double g22 = Xv.dot(Xv);
-
-    // Assemble a linear system of equations to determine the location
-    // of the origin
-    double p0[2];
-    p0[0] = 0.5*((pu[0]*pu[0]*g11 + pu[1]*pu[1]*g22 + 2.0*pu[0]*pu[1]*g12) - 
-                 (pv[0]*pv[0]*g11 + pv[1]*pv[1]*g22 + 2.0*pv[0]*pv[1]*g12));
-    p0[1] = 0.5*((pu[0]*pu[0]*g11 + pu[1]*pu[1]*g22 + 2.0*pu[0]*pu[1]*g12) - 
-                 (pw[0]*pw[0]*g11 + pw[1]*pw[1]*g22 + 2.0*pw[0]*pw[1]*g12));
-
-    double A[4];
-    // Assemble the first row of the matrix
-    A[0] = (pu[0] - pv[0])*g11 + (pu[1] - pv[1])*g12;
-    A[2] = (pu[0] - pv[0])*g12 + (pu[1] - pv[1])*g22;
-
-    // Assemble the second row of the matrix
-    A[1] = (pu[0] - pw[0])*g11 + (pu[1] - pw[1])*g12;
-    A[3] = (pu[0] - pw[0])*g12 + (pu[1] - pw[1])*g22;
-
-    // Solve the system of equations
-    int n = 2, one = 1, ipiv[2], info = 0;
-    TmrLAPACKdgetrf(&n, &n, A, &n, ipiv, &info);
-    TmrLAPACKdgetrs("N", &n, &one, A, &n, ipiv, p0, &n, &info);
-
-    // p0 is now the origin, compute the circum radius in the metric
-    double r2u = (g11*(pu[0] - p0[0])*(pu[0] - p0[0]) + 
-                  2.0*g12*(pu[0] - p0[0])*(pu[1] - p0[1]) +
-                  g22*(pu[1] - p0[1])*(pu[1] - p0[1]));
-
-    // Compute the distance in the metric to the or
-    double r2x = (g11*(px[0] - p0[0])*(px[0] - p0[0]) + 
-                  2.0*g12*(px[0] - p0[0])*(px[1] - p0[1]) +
-                  g22*(px[1] - p0[1])*(px[1] - p0[1]));
-
-    // Return the incircle condition. If rx2 < r2, the value is
-    // positive. If rx2 = r2 then the value is zero, and if rx2 > r2,
-    // the value is negative.
-    return 1.0 - r2x/r2u;
-  }
-  */
-
   if (metric){
     // Compute the metric components at the center of the triangle (u,v,w)
     TMRPoint Xu, Xv;
@@ -1685,6 +1654,176 @@ void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w,
   }
 
   addTriangle(TMRTriangle(u, v, w));
+}
+
+/*
+  Inser the segment on the PSLG into the triangulation
+*/
+void TMRTriangularize::insertSegment( uint32_t u, uint32_t v ){
+  // Identify and delete all the triangles between u and v
+  TMRTriangle *t = pts_to_tris[u];
+  TMRTriangle *tri = NULL;
+
+  // Find the triangle that the point intersects
+  uint32_t w = 0; // The node on the negative side of (u, v)
+  uint32_t x = 0; // The node on the positive side of (u, v)
+
+  // Find the triangle (u, w, x) where u is the first 
+  // node in the segment, w is below the segment and x
+  // is above the segment
+  while (t){
+    if (u == t->u){
+      w = t->v;
+      x = t->w;
+    }
+    else if (u == t->v){
+      w = t->w;
+      x = t->u;
+    }
+    if (u == t->w){
+      w = t->u;
+      x = t->v;
+    }
+
+    // Check whether x is above the oriented edge (u, v) 
+    // and w is below the oriented edge (u, v)
+    if (orient2d(&pts[2*u], &pts[2*v], &pts[2*x]) >= 0.0 &&
+        orient2d(&pts[2*u], &pts[2*v], &pts[2*w]) <= 0.0){
+      tri = t;
+      break;
+    }
+
+    completeMe(u, x, &t);
+  }
+
+  if (!t){
+    t = pts_to_tris[u];
+
+    while (t){
+      if (u == t->u){
+        w = t->v;
+        x = t->w;
+      }
+      else if (u == t->v){
+        w = t->w;
+        x = t->u;
+      }
+      if (u == t->w){
+        w = t->u;
+        x = t->v;
+      }
+
+      // Check whether x is above the oriented edge (u, v) 
+      // and w is below the oriented edge (u, v)
+      if (orient2d(&pts[2*u], &pts[2*v], &pts[2*x]) >= 0.0 &&
+          orient2d(&pts[2*u], &pts[2*v], &pts[2*w]) <= 0.0){
+        tri = t;
+        break;
+      }
+
+      completeMe(w, u, &t);
+    }
+  }
+
+  // Set the initial entries in the arrays
+  int pos_count = 2;
+  uint32_t pos[1028];
+  pos[0] = u;
+  pos[1] = x;
+
+  int neg_count = 2;
+  uint32_t neg[1028];
+  neg[0] = u;
+  neg[1] = w;
+
+  // Delete the triangle
+  deleteTriangle(*tri);
+
+  // Now search through to find the next triangle
+  while (1){
+    // Find the next triangle
+    completeMe(x, w, &tri);
+
+    // Find the last node y that completes the triangle (x, w, y)
+    uint32_t y = 0;
+    if (x == tri->u && w == tri->v){
+      y = tri->w;
+    }
+    else if (x == tri->w && w == tri->u){
+      y = tri->v;
+    }
+    else {
+      y = tri->u;
+    }
+
+    // Free this triangle
+    deleteTriangle(*tri);
+
+    if (y == v){
+      pos[pos_count] = v;  pos_count++;
+      neg[neg_count] = v;  neg_count++;
+      break;
+    }
+    else {
+      // Use the orientation check to determine which side of the
+      // segment things should lie on...
+      if (orient2d(&pts[2*u], &pts[2*v], &pts[2*y]) >= 0.0){
+        pos[pos_count] = y;
+        pos_count++;
+        x = y;
+      }
+      else {
+        neg[neg_count] = y;
+        neg_count++;
+        w = y;
+      }
+    }
+  }
+
+  // Convert the arrays
+  giftWrap(pos, pos_count, 1);
+  giftWrap(neg, neg_count, -1);
+}
+
+/*
+  Gift-wrap algorithm for segments (does not consider visibility)
+*/
+void TMRTriangularize::giftWrap( const uint32_t v[], int size, 
+                                 int orient ){
+  if (size == 2){
+    // There is only one segment left, we are done
+    return;
+  }
+
+  // Find the node in the list that does not
+  int index = 1;
+  uint32_t t = v[1];
+  for ( int i = 2; i < size-1; i++ ){
+    if (orient > 0){
+      if (inCircle(v[0], v[size-1], t, v[i]) >= 0.0){
+        t = v[i];
+        index = i;
+      }
+    }
+    else {
+      if (inCircle(v[size-1], v[0], t, v[i]) >= 0.0){
+        t = v[i];
+        index = i;
+      }
+    }
+  }
+
+  // Add the triangle that we just found
+  if (orient > 0){
+    addTriangle(TMRTriangle(v[0], v[size-1], t));
+  }
+  else {
+    addTriangle(TMRTriangle(v[size-1], v[0], t));
+  }
+
+  // Perform the gift wrapping on the remaining triangles
+  giftWrap(&v[0], index+1, orient);
+  giftWrap(&v[index], size-index, orient);
 }
 
 /*
