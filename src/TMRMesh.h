@@ -100,6 +100,20 @@ class TMRLinearElementSize : public TMRElementFeatureSize {
 };
 
 /*
+  Set a min/max feature size and feature sizes dictated within boxes
+*/
+class TMRBoxFeatureSize : public TMRElementFeatureSize {
+ public:
+  TMRBoxFeatureSize( double _hmin, double _hmax );
+  ~TMRBoxFeatureSize();
+  void addBox( TMRPoint p1, TMRPoint p2, double h );
+  double getFeatureSize( TMRPoint pt );
+
+ private:
+  double hmax;  
+};
+
+/*
   The mesh for a geometric curve
 */
 class TMREdgeMesh : public TMREntity {

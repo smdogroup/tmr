@@ -248,7 +248,8 @@ void test_surface_lofter( double htarget ){
   TMRMesh *mesh = new TMRMesh(comm, geo);
 
   // Mesh the geometry
-  mesh->mesh(htarget);
+  TMRMeshOptions options;
+  mesh->mesh(options, htarget);
   mesh->writeToVTK("mesh.vtk");
 
   // Create the mesh

@@ -57,7 +57,6 @@ int main( int argc, char *argv[] ){
   double length = 2.0*M_PI*R/(npts-1);
 
   int nholes = 0;
-  double *holes = NULL;
 
   // Triangulate the region
   TMRTriangularize *tri = 

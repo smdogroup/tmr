@@ -44,3 +44,8 @@ NUMPY_DIR=${shell python -c "import numpy; print numpy.get_include()"}
 # If you're going to use the python interface you'll also have to have
 # a working version of mpi4py
 MPI4PY_DIR=${shell python -c "import mpi4py; print mpi4py.get_include()"}
+
+# Include the netgen libraries
+NETGEN_INCLUDE=-I${HOME}/packages/netgen/include/
+NG_LD_PATH=${HOME}/packages/netgen/lib
+NETGEN_LD_FLAGS=-L${NG_LD_PATH} -Wl,-rpath,${NG_LD_PATH} -lnglib 

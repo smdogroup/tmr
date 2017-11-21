@@ -56,6 +56,7 @@ int main( int argc, char *argv[] ){
 
   // Create the random trees
   forest->createRandomTrees(175, 0, 10);
+  forest->repartition();
   forest->balance(1);
 
   // Create the nodes
@@ -70,44 +71,34 @@ int main( int argc, char *argv[] ){
   FILE *fp = fopen(filename, "w");
  
   fprintf(fp, "Variables = X, Y\n");
- 
-  // Get the quadtrees some may be NULL!
-  TMRQuadtree **trees;
-  int ntrees = forest->getQuadtrees(&trees);
- 
-  for ( int i = 0; i < ntrees; i++ ){
-    if (trees[i]){
-      TMRQuadrantArray *elements;
-      trees[i]->getElements(&elements);
+  
+  TMRQuadrantArray *quadrants;
+  forest->getQuadrants(&quadrants);
 
-      // Get the elements
-      int size;
-      TMRQuadrant *array;
-      elements->getArray(&array, &size);
+  int size;
+  TMRQuadrant *array;
+  quadrants->getArray(&array, &size);
 
-      fprintf(fp, "ZONE T=TMR%d N=%d E=%d ", i, 4*size, size);
-      fprintf(fp, "DATAPACKING=POINT ZONETYPE=FEQUADRILATERAL\n");
+  fprintf(fp, "ZONE T=Quadrants N=%d E=%d ", 4*size, size);
+  fprintf(fp, "DATAPACKING=POINT ZONETYPE=FEQUADRILATERAL\n");
 
-      // Write out this portion of the forrest
-      for ( int k = 0; k < size; k++ ){
-        int32_t h = 1 << (TMR_MAX_LEVEL - array[k].level);
-        double X[3];
-
-        for ( int jj = 0; jj < 2; jj++ ){
-          for ( int ii = 0; ii < 2; ii++ ){
-            int x = array[k].x + h*ii;
-            int y = array[k].y + h*jj;
-            getLocation(i, x, y, X);
-            fprintf(fp, "%e %e\n", X[0], X[1]);
-          }
-        }
-      }
+  // Write out this portion of the forrest
+  for ( int k = 0; k < size; k++ ){
+    int32_t h = 1 << (TMR_MAX_LEVEL - array[k].level);
+    double X[3];
     
-      for ( int k = 0; k < size; k++ ){
-	fprintf(fp, "%d %d %d %d\n", 
-                4*k+1, 4*k+2, 4*k+4, 4*k+3);
+    for ( int jj = 0; jj < 2; jj++ ){
+      for ( int ii = 0; ii < 2; ii++ ){
+        int x = array[k].x + h*ii;
+        int y = array[k].y + h*jj;
+        getLocation(array[k].face, x, y, X);
+        fprintf(fp, "%e %e\n", X[0], X[1]);
       }
     }
+  }
+  
+  for ( int k = 0; k < size; k++ ){
+    fprintf(fp, "%d %d %d %d\n", 4*k+1, 4*k+2, 4*k+4, 4*k+3);
   }
 
   delete forest;

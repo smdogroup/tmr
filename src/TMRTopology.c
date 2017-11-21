@@ -894,22 +894,30 @@ TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
 
   for ( int i = 0; i < num_vertices; i++ ){
     vertices[i] = _vertices[i];
-    vertices[i]->incref();
+    if (vertices[i]){
+      vertices[i]->incref();
+    }
   }
 
   for ( int i = 0; i < num_edges; i++ ){
     edges[i] = _edges[i];
-    edges[i]->incref();
+    if (edges[i]){
+      edges[i]->incref();
+    }
   }
 
   for ( int i = 0; i < num_faces; i++ ){
     faces[i] = _faces[i];
-    faces[i]->incref();
+    if (faces[i]){
+      faces[i]->incref();
+    }
   }
   
   for ( int i = 0; i < num_volumes; i++ ){
     volumes[i] = _volumes[i];
-    volumes[i]->incref();
+    if (volumes[i]){
+      volumes[i]->incref();
+    }
   }
 
   ordered_verts = new OrderedPair<TMRVertex>[ num_vertices ];
@@ -956,16 +964,24 @@ TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
 */
 TMRModel::~TMRModel(){
   for ( int i = 0; i < num_vertices; i++ ){
-    vertices[i]->decref();
+    if (vertices[i]){
+      vertices[i]->decref();
+    }
   }
   for ( int i = 0; i < num_edges; i++ ){
-    edges[i]->decref();
+    if (edges[i]){
+      edges[i]->decref();
+    }
   }
   for ( int i = 0; i < num_faces; i++ ){
-    faces[i]->decref();
+    if (faces[i]){
+      faces[i]->decref();
+    }
   }
   for ( int i = 0; i < num_volumes; i++ ){
-    volumes[i]->decref();
+    if (volumes[i]){
+      volumes[i]->decref();
+    }
   }
   delete [] vertices;
   delete [] edges;
@@ -1108,7 +1124,17 @@ int TMRModel::compare_ordered_pairs( const void *avoid,
     static_cast<const OrderedPair<ctype>*>(avoid);
   const OrderedPair<ctype> *b = 
     static_cast<const OrderedPair<ctype>*>(bvoid);
-  return a->obj->getEntityId() - b->obj->getEntityId();
+
+  if (a->obj && b->obj){
+    return a->obj->getEntityId() - b->obj->getEntityId();
+  }
+  else if (a->obj){
+    return 1;
+  }
+  else if (b->obj){
+    return -1;
+  }
+  return 0;
 }
 
 /*
@@ -1471,11 +1497,16 @@ void TMRTopology::computeFaceConn(){
   // Create the edge -> vertex information
   edge_to_vertices = new int[ 2*num_edges ];
   for ( int i = 0; i < num_edges; i++ ){    
-    TMRVertex *v1, *v2;
-    edges[i]->getVertices(&v1, &v2);
-    
-    edge_to_vertices[2*i] = geo->getVertexIndex(v1);
-    edge_to_vertices[2*i+1] = geo->getVertexIndex(v2);
+    if (edges[i]){
+      TMRVertex *v1, *v2;
+      edges[i]->getVertices(&v1, &v2);
+      edge_to_vertices[2*i] = geo->getVertexIndex(v1);
+      edge_to_vertices[2*i+1] = geo->getVertexIndex(v2);
+    }
+    else {
+      edge_to_vertices[2*i] = 0;
+      edge_to_vertices[2*i+1] = 0;
+    }
   }
 
   // Create the face -> vertex information. Within the TMR geometry
@@ -1498,34 +1529,41 @@ void TMRTopology::computeFaceConn(){
     if (face_to_new_num){
       f = face_to_new_num[i];
     }
+    
+    if (faces[i]){
+      // Get the edge loop and direction
+      TMREdgeLoop *loop;
+      faces[i]->getEdgeLoop(0, &loop);
 
-    // Get the edge loop and direction
-    TMREdgeLoop *loop;
-    faces[i]->getEdgeLoop(0, &loop);
-
-    const int *edge_dir;
-    loop->getEdgeLoop(NULL, NULL, &edge_dir);
-
-    // Coordinate-ordered edge e0
-    int edge = face_to_edges[4*f];
-    if (edge_dir[3] > 0){
-      face_to_vertices[4*f] = edge_to_vertices[2*edge+1];
-      face_to_vertices[4*f+2] = edge_to_vertices[2*edge];
+      const int *edge_dir;
+      loop->getEdgeLoop(NULL, NULL, &edge_dir);
+      
+      // Coordinate-ordered edge e0
+      int edge = face_to_edges[4*f];
+      if (edge_dir[3] > 0){
+        face_to_vertices[4*f] = edge_to_vertices[2*edge+1];
+        face_to_vertices[4*f+2] = edge_to_vertices[2*edge];
+      }
+      else {
+        face_to_vertices[4*f] = edge_to_vertices[2*edge];
+        face_to_vertices[4*f+2] = edge_to_vertices[2*edge+1];
+      }
+      
+      // Coordinate-ordered edge e1
+      edge = face_to_edges[4*f+1];
+      if (edge_dir[1] > 0){
+        face_to_vertices[4*f+1] = edge_to_vertices[2*edge];
+        face_to_vertices[4*f+3] = edge_to_vertices[2*edge+1];
+      }
+      else {
+        face_to_vertices[4*f+1] = edge_to_vertices[2*edge+1];
+        face_to_vertices[4*f+3] = edge_to_vertices[2*edge];
+      }
     }
     else {
-      face_to_vertices[4*f] = edge_to_vertices[2*edge];
-      face_to_vertices[4*f+2] = edge_to_vertices[2*edge+1];
-    }
-
-    // Coordinate-ordered edge e1
-    edge = face_to_edges[4*f+1];
-    if (edge_dir[1] > 0){
-      face_to_vertices[4*f+1] = edge_to_vertices[2*edge];
-      face_to_vertices[4*f+3] = edge_to_vertices[2*edge+1];
-    }
-    else {
-      face_to_vertices[4*f+1] = edge_to_vertices[2*edge+1];
-      face_to_vertices[4*f+3] = edge_to_vertices[2*edge];
+      for ( int k = 0; k < 4; k++ ){
+        face_to_vertices[4*f+k] = 0;
+      }
     }
   }
 }
