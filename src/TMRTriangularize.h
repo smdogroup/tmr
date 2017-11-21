@@ -91,10 +91,12 @@ class TMRTriangle {
   TMRTriangle(){
     u = v = w = 0;
     tag = status = 0;
+    quality = 0.0;
   }
   TMRTriangle( uint32_t _u, uint32_t _v, uint32_t _w ){
     u = _u;  v = _v;  w = _w;
     tag = status = 0;
+    quality = 0.0;
   }
   // The indices of this triangle
   uint32_t u, v, w;
@@ -209,6 +211,12 @@ class TMRTriangularize : public TMREntity {
 
   // Form the Delaunay triangularization using an edge-flip algorithm
   void delaunayEdgeFlip();
+
+  // Segment insertion code
+  void insertSegment( uint32_t u, uint32_t v );
+
+  // Gift wrap for segment insertion
+  void giftWrap( const uint32_t v[], int size, int orient );
 
   // The underlying surface
   TMRFace *face;
