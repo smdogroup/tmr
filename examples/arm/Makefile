@@ -1,6 +1,5 @@
-TMR_DIR=${HOME}/hg/tmr
-include ${TMR_DIR}/Makefile.in
-include ${TMR_DIR}/TMR_Common.mk
+include ../../Makefile.in
+include ../../TMR_Common.mk
 
 OBJS = arm.o arm_mesh.o
 

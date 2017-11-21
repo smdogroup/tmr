@@ -2405,47 +2405,49 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
   t0 = MPI_Wtime() - t0;
 
-  // Ensure that we do not have isolated triangles on the boundary
-  // which will cause problems when (if) we do conversion to a
-  // quadrilateral mesh. This will not do "good" things to the
-  // triangularization.
-  node = list_start;
-  while (node){
-    if (node->tri.status == ACCEPTED){
-      const uint32_t u = node->tri.u;
-      const uint32_t v = node->tri.v;
-      const uint32_t w = node->tri.w;
+  if (options.mesh_type_default != TMR_TRIANGLE){
+    // Ensure that we do not have isolated triangles on the boundary
+    // which will cause problems when (if) we do conversion to a
+    // quadrilateral mesh. This will not do "good" things to the
+    // triangularization.
+    node = list_start;
+    while (node){
+      if (node->tri.status == ACCEPTED){
+        const uint32_t u = node->tri.u;
+        const uint32_t v = node->tri.v;
+        const uint32_t w = node->tri.w;
 
-      if ((u - FIXED_POINT_OFFSET < init_boundary_points) &&
-          (v - FIXED_POINT_OFFSET < init_boundary_points) &&
-          (w - FIXED_POINT_OFFSET < init_boundary_points)){
-        // Check that only one adjacent triangle exists
-        TMRTriangle *t1, *t2, *t3;
-        completeMe(v, u, &t1);
-        completeMe(w, v, &t2);
-        completeMe(u, w, &t3);
+        if ((u - FIXED_POINT_OFFSET < init_boundary_points) &&
+            (v - FIXED_POINT_OFFSET < init_boundary_points) &&
+            (w - FIXED_POINT_OFFSET < init_boundary_points)){
+          // Check that only one adjacent triangle exists
+          TMRTriangle *t1, *t2, *t3;
+          completeMe(v, u, &t1);
+          completeMe(w, v, &t2);
+          completeMe(u, w, &t3);
 
-        if ((!t1 && !t2)){
-          double pt[2];
-          pt[0] = 0.5*(pts[2*u] + pts[2*w]);
-          pt[1] = 0.5*(pts[2*u+1] + pts[2*w+1]);
-          addPointToMesh(pt, face);
-        }
-        else if (!t2 && !t3){
-          double pt[2];
-          pt[0] = 0.5*(pts[2*u] + pts[2*v]);
-          pt[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
-          addPointToMesh(pt, face);
-        }
-        else if (!t1 && !t3){
-          double pt[2];
-          pt[0] = 0.5*(pts[2*v] + pts[2*w]);
-          pt[1] = 0.5*(pts[2*v+1] + pts[2*w+1]);
-          addPointToMesh(pt, face);
-        }
-      }      
+          if ((!t1 && !t2)){
+            double pt[2];
+            pt[0] = 0.5*(pts[2*u] + pts[2*w]);
+            pt[1] = 0.5*(pts[2*u+1] + pts[2*w+1]);
+            addPointToMesh(pt, face);
+          }
+          else if (!t2 && !t3){
+            double pt[2];
+            pt[0] = 0.5*(pts[2*u] + pts[2*v]);
+            pt[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
+            addPointToMesh(pt, face);
+          }
+          else if (!t1 && !t3){
+            double pt[2];
+            pt[0] = 0.5*(pts[2*v] + pts[2*w]);
+            pt[1] = 0.5*(pts[2*v+1] + pts[2*w+1]);
+            addPointToMesh(pt, face);
+          }
+        }      
+      }
+      node = node->next;
     }
-    node = node->next;
   }
 
   // Free the deleted trianlges from the doubly linked list
