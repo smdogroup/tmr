@@ -119,8 +119,11 @@ class TMRQuadForest : public TMREntity {
   void getNodes( TMRQuadrantArray **_nodes ){
     if (_nodes){ *_nodes = nodes; }
   }
-  void getPoints( TMRPoint **_X ){
+  int getPoints( TMRPoint **_X ){
     if (_X){ *_X = X; }
+    int size;
+    nodes->getArray(NULL, &size);
+    return size;
   }
 
   // Get the index of the given element or node
