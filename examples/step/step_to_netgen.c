@@ -78,7 +78,7 @@ int main( int argc, char *argv[] ){
       new TMRBoxFeatureSize(a, b, 0.01*htarget, htarget);
 
     // Set the default box size
-    const int NUM_BOXES = 10;
+    const int NUM_BOXES = 280;
     TMRPoint p1[NUM_BOXES], p2[NUM_BOXES];
     
     double p[3] = {65.0, -150.0, -175.0};
@@ -90,10 +90,51 @@ int main( int argc, char *argv[] ){
       p1[i].y = p[1] + (d[1]*rand())/RAND_MAX;
       p1[i].z = p[2] + (d[2]*rand())/RAND_MAX;
 
-      p2[i].x = p[0] + (d[0]*rand())/RAND_MAX;
-      p2[i].y = p[1] + (d[1]*rand())/RAND_MAX;
-      p2[i].z = p[2] + (d[2]*rand())/RAND_MAX;
+      p2[i].x = p1[i].x + 25.0;
+      p2[i].y = p1[i].y + 25.0;
+      p2[i].z = p1[i].z + 25.0;
+
       fs->addBox(p1[i], p2[i], 0.5*htarget);
+    }
+    
+    // Print out the refinement volumes to a VTK file
+    FILE *rfp = fopen("volume-refine.vtk", "w");
+    if (rfp){
+      fprintf(rfp, "# vtk DataFile Version 3.0\n");
+      fprintf(rfp, "vtk output\nASCII\n");
+      fprintf(rfp, "DATASET UNSTRUCTURED_GRID\n");
+
+      // Write out the points
+      fprintf(rfp, "POINTS %d float\n", 8*NUM_BOXES);
+      for ( int kk = 0; kk < NUM_BOXES; kk++ ){
+        for ( int k = 0; k < 2; k++ ){
+          for ( int j = 0; j < 2; j++ ){
+            for ( int i = 0; i < 2; i++ ){
+              double x = p1[kk].x + i*(p2[kk].x - p1[kk].x);
+              double y = p1[kk].y + j*(p2[kk].y - p1[kk].y);
+              double z = p1[kk].z + k*(p2[kk].z - p1[kk].z);
+              fprintf(rfp, "%e %e %e\n", x, y, z);
+            }
+          }
+        }
+      }
+
+      fprintf(rfp, "\nCELLS %d %d\n", NUM_BOXES, 9*NUM_BOXES);
+      
+      // Write out the cell connectivities
+      for ( int k = 0; k < NUM_BOXES; k++ ){
+        fprintf(rfp, "8 %d %d %d %d %d %d %d %d\n", 
+                8*k, 8*k+1, 8*k+3, 8*k+2,
+                8*k+4, 8*k+5, 8*k+7, 8*k+6);
+      }
+      
+      // All quadrilaterals
+      fprintf(rfp, "\nCELL_TYPES %d\n", NUM_BOXES);
+      for ( int k = 0; k < NUM_BOXES; k++ ){
+        fprintf(rfp, "%d\n", 12);
+      }
+
+      fclose(rfp);      
     }
 
     // Mesh the object of interest

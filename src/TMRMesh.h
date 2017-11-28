@@ -117,21 +117,52 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
   // Store the information about the points
   class BoxSize {
    public:
-    BoxSize( TMRPoint _m, TMRPoint d, double _h );
-    ~BoxSize();
-
-    // Add a box 
-    void addBox( TMRPoint m, TMRPoint d, double h );
+    // Check whether the box contains a point
     int contains( TMRPoint p );
 
-    // Get the element size 
-    void getSize( TMRPoint x, double *hval );
- 
-   private:
+    // Data for the box and its location
     TMRPoint m; // Center of the box
     TMRPoint d; // Half-edge length of each box
     double h; // Mesh size within the box
-    BoxSize *c[8];
+  } *boxes;
+  
+  // The list of boxes that are stored
+  int num_boxes;
+
+  // A list object
+  static const int MAX_LIST_BOXES = 256;
+  class BoxList {
+   public:
+    BoxList(){ next = NULL; }
+    BoxSize boxes[MAX_LIST_BOXES];
+    BoxList *next;
+  } *list_root, *list_current;
+
+
+  // Store the information about the size
+  class BoxNode {
+   public:
+    static const int MAX_NUM_BOXES = 10;
+
+    BoxNode( BoxSize *cover, TMRPoint m, TMRPoint d );
+    ~BoxNode();
+
+    // Add a box
+    void addBox( BoxSize *ptr );
+
+    // Add a box to the data structure
+    void getSize( TMRPoint pt, double *h );
+    
+    // The mid-point of the node and the distance from the mid-point
+    // to the box sides
+    TMRPoint m, d;
+
+    // The children from this node
+    BoxNode *c[8];
+
+    // The number of boxes and the pointers to them
+    int num_boxes;
+    BoxSize **boxes;
   } *root;
 };
 
