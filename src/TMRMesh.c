@@ -872,10 +872,17 @@ TMRElementFeatureSize::TMRElementFeatureSize( double _hmin ){
 
 TMRElementFeatureSize::~TMRElementFeatureSize(){}
 
+/*
+  Return the feature size - hmin
+*/
 double TMRElementFeatureSize::getFeatureSize( TMRPoint pt ){
   return hmin;
 }
 
+/*
+  Create a feature size dependency that is linear but does not
+  exceed hmin or hmax anywhere in the domain
+*/
 TMRLinearElementSize::TMRLinearElementSize( double _hmin, double _hmax,
                                             double _c,
                                             double _ax,
@@ -891,6 +898,9 @@ TMRElementFeatureSize(_hmin){
 
 TMRLinearElementSize::~TMRLinearElementSize(){}
 
+/*
+  Get the feature size based on the input coefficients
+*/
 double TMRLinearElementSize::getFeatureSize( TMRPoint pt ){
   double h = c + ax*pt.x + ay*pt.y + az*pt.z;
   if (h < hmin){ h = hmin; }
@@ -901,20 +911,163 @@ double TMRLinearElementSize::getFeatureSize( TMRPoint pt ){
 /*
   Create the feature size within a box
 */
-TMRBoxFeatureSize::TMRBoxFeatureSize( double _hmin, double _hmax ):
+TMRBoxFeatureSize::TMRBoxFeatureSize( TMRPoint p1, TMRPoint p2,
+                                      double _hmin, double _hmax ):
 TMRElementFeatureSize(_hmin){
   hmax = _hmax;
+
+  TMRPoint m1, d1;
+  m1.x = 0.5*(p1.x + p2.x);
+  m1.y = 0.5*(p1.y + p2.y);
+  m1.z = 0.5*(p1.z + p2.z);
+  d1.x = 0.5*fabs(p1.x - p2.x);
+  d1.y = 0.5*fabs(p1.y - p2.y);
+  d1.z = 0.5*fabs(p1.z - p2.z); 
+  
+  root = new BoxSize(m1, d1, hmax);
 }
 
-TMRBoxFeatureSize::~TMRBoxFeatureSize(){}
+/*
+  Free the data allocated by the feature-size object
+*/
+TMRBoxFeatureSize::~TMRBoxFeatureSize(){
+  delete root;
+}
 
-void TMRBoxFeatureSize::addBox( TMRPoint p1, TMRPoint p2, double h ){}
+/*
+  Add a box that is designed to constrain the feature size
+*/
+void TMRBoxFeatureSize::addBox( TMRPoint p1, TMRPoint p2, double hval ){
+  TMRPoint m1, d1;
+  m1.x = 0.5*(p1.x + p2.x);
+  m1.y = 0.5*(p1.y + p2.y);
+  m1.z = 0.5*(p1.z + p2.z);
+  d1.x = 0.5*fabs(p1.x - p2.x);
+  d1.y = 0.5*fabs(p1.y - p2.y);
+  d1.z = 0.5*fabs(p1.z - p2.z);
 
+  // Add a box to the data structure
+  root->addBox(m1, d1, hval);
+}
+
+/*
+  Retrieve the feature size
+*/
 double TMRBoxFeatureSize::getFeatureSize( TMRPoint pt ){
-  double h = hmin;  
+  double h = hmax;
+  root->getSize(pt, &h);
   if (h < hmin){ h = hmin; }
   if (h > hmax){ h = hmax; }
   return h;
+}
+
+/*
+  Constructor for the BoxSize class inside TMRBoxFeatureSize
+*/
+TMRBoxFeatureSize::BoxSize::BoxSize( TMRPoint _m, TMRPoint _d, double _h ){
+  h = _h;
+  m = _m;
+  d = _d;
+  memset(c, 0, sizeof(c));
+}
+
+/*
+  Free any data allocated by the BoxSize class -- its children
+*/
+TMRBoxFeatureSize::BoxSize::~BoxSize(){
+  for ( int i = 0; i < 8; i++ ){
+    if (c[i]){ delete c[i]; }
+  }
+}
+
+/*
+  Add a box to the octree data structure
+*/
+void TMRBoxFeatureSize::BoxSize::addBox( TMRPoint m1, 
+                                         TMRPoint d1, 
+                                         double hval ){
+  for ( int k = 0; k < 2; k++ ){
+    double zl = m.z + (k-1)*d.z;
+    double zu = m.z + k*d.z;
+    
+    for ( int j = 0; j < 2; j++ ){
+      double yl = m.y + (j-1)*d.y;
+      double yu = m.y + j*d.y;
+       
+      for ( int i = 0; i < 2; i++ ){
+        double xl = m.x + (i-1)*d.x;
+        double xu = m.x + i*d.x;
+
+        // Check if the new mid-point lies in the box
+        if ((m1.x >= xl && m1.x <= xu) &&
+            (m1.y >= yl && m1.y <= yu) &&
+            (m1.z >= zl && m1.z <= zu)){
+          if (c[i + 2*j + 4*k]){
+            c[i + 2*j + 4*k]->addBox(m1, d1, hval);
+          }
+          else {
+            c[i + 2*j + 4*k] = new BoxSize(m1, d1, hval);
+          }
+        }
+      }
+    }
+  }
+}
+
+/*
+  Check if the box contains the point
+*/
+int TMRBoxFeatureSize::BoxSize::contains( TMRPoint p ){
+  // Compute the lower/upper bounds
+  double xl = m.x - d.x;
+  double xu = m.x + d.x;
+  double yl = m.y - d.y;
+  double yu = m.y + d.y;
+  double zl = m.z - d.z;
+  double zu = m.z + d.z;
+
+  // Return true if the box contains the point
+  if ((p.x >= xl && p.x <= xu) &&
+      (p.y >= yl && p.y <= yu) &&
+      (p.z >= zl && p.z <= zu)){
+    return 1;
+  }
+  return 0;
+}
+
+/*
+  Get the element size based on the extent of this box
+*/
+void TMRBoxFeatureSize::BoxSize::getSize( TMRPoint p, double *hval ){
+  if (h < *hval && contains(p)){
+    *hval = h;
+  }
+
+  // Scan through the tree and find the most-constraining
+  // box size
+  for ( int k = 0; k < 2; k++ ){
+    double zl = m.z + (k-1)*d.z;
+    double zu = m.z + k*d.z;
+    
+    for ( int j = 0; j < 2; j++ ){
+      double yl = m.y + (j-1)*d.y;
+      double yu = m.y + j*d.y;
+       
+      for ( int i = 0; i < 2; i++ ){
+        double xl = m.x + (i-1)*d.x;
+        double xu = m.x + i*d.x;
+
+        // Check if the point lies in the box and the box exists
+        if ((p.x >= xl && p.x <= xu) &&
+            (p.y >= yl && p.y <= yu) &&
+            (p.z >= zl && p.z <= zu)){
+          if (c[i + 2*j + 4*k]){
+            c[i + 2*j + 4*k]->getSize(p, hval);
+          }
+        }
+      }
+    }
+  }
 }
 
 /*

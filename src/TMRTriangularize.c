@@ -2407,7 +2407,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
   if (options.mesh_type_default != TMR_TRIANGLE){
     // Ensure that we do not have isolated triangles on the boundary
-    // which will cause problems when (if) we do conversion to a
+    // which will cause problems if we do a conversion to a
     // quadrilateral mesh. This will not do "good" things to the
     // triangularization.
     node = list_start;
@@ -2420,13 +2420,13 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
         if ((u - FIXED_POINT_OFFSET < init_boundary_points) &&
             (v - FIXED_POINT_OFFSET < init_boundary_points) &&
             (w - FIXED_POINT_OFFSET < init_boundary_points)){
-          // Check that only one adjacent triangle exists
+          // Check if only one adjacent triangle exists
           TMRTriangle *t1, *t2, *t3;
           completeMe(v, u, &t1);
           completeMe(w, v, &t2);
           completeMe(u, w, &t3);
 
-          if ((!t1 && !t2)){
+          if (!t1 && !t2){
             double pt[2];
             pt[0] = 0.5*(pts[2*u] + pts[2*w]);
             pt[1] = 0.5*(pts[2*u+1] + pts[2*w+1]);

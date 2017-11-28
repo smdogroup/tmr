@@ -104,13 +104,35 @@ class TMRLinearElementSize : public TMRElementFeatureSize {
 */
 class TMRBoxFeatureSize : public TMRElementFeatureSize {
  public:
-  TMRBoxFeatureSize( double _hmin, double _hmax );
+  TMRBoxFeatureSize( TMRPoint p1, TMRPoint p2,
+                     double _hmin, double _hmax );
   ~TMRBoxFeatureSize();
   void addBox( TMRPoint p1, TMRPoint p2, double h );
   double getFeatureSize( TMRPoint pt );
 
  private:
-  double hmax;  
+  // Maximum feature size
+  double hmax;
+
+  // Store the information about the points
+  class BoxSize {
+   public:
+    BoxSize( TMRPoint _m, TMRPoint d, double _h );
+    ~BoxSize();
+
+    // Add a box 
+    void addBox( TMRPoint m, TMRPoint d, double h );
+    int contains( TMRPoint p );
+
+    // Get the element size 
+    void getSize( TMRPoint x, double *hval );
+ 
+   private:
+    TMRPoint m; // Center of the box
+    TMRPoint d; // Half-edge length of each box
+    double h; // Mesh size within the box
+    BoxSize *c[8];
+  } *root;
 };
 
 /*

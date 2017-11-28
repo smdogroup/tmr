@@ -70,8 +70,34 @@ int main( int argc, char *argv[] ){
     options.write_mesh_quality_histogram = 1;
     options.triangularize_print_level = 1;
 
+    // Create the feature size 
+    TMRPoint a, b;
+    a.x = a.y = a.z = -1e3;
+    b.x = b.y = b.z = 1e3;
+    TMRBoxFeatureSize *fs = 
+      new TMRBoxFeatureSize(a, b, 0.01*htarget, htarget);
+
+    // Set the default box size
+    const int NUM_BOXES = 10;
+    TMRPoint p1[NUM_BOXES], p2[NUM_BOXES];
+    
+    double p[3] = {65.0, -150.0, -175.0};
+    double d[3] = {220.0, 150.0,  260.0};
+
+    // Create random boxes
+    for ( int i = 0; i < NUM_BOXES; i++ ){
+      p1[i].x = p[0] + (d[0]*rand())/RAND_MAX;
+      p1[i].y = p[1] + (d[1]*rand())/RAND_MAX;
+      p1[i].z = p[2] + (d[2]*rand())/RAND_MAX;
+
+      p2[i].x = p[0] + (d[0]*rand())/RAND_MAX;
+      p2[i].y = p[1] + (d[1]*rand())/RAND_MAX;
+      p2[i].z = p[2] + (d[2]*rand())/RAND_MAX;
+      fs->addBox(p1[i], p2[i], 0.5*htarget);
+    }
+
     // Mesh the object of interest
-    mesh->mesh(options, htarget);
+    mesh->mesh(options, fs);
     mesh->writeToVTK("surface-mesh.vtk");
     
     if (!surface_only){
@@ -103,6 +129,14 @@ int main( int argc, char *argv[] ){
         tri[1] = tris[3*i+1]+1;
         tri[2] = tris[3*i+2]+1;
         Ng_AddSurfaceElement(m, NG_TRIG, tri);
+      }
+
+      // Set the meshing parameters
+      Ng_RestrictMeshSizeGlobal(m, htarget);
+      for ( int i = 0; i < NUM_BOXES; i++ ){
+        double pt1[3] = {p1[i].x, p1[i].y, p1[i].z};
+        double pt2[3] = {p2[i].x, p2[i].y, p2[i].z};
+        Ng_RestrictMeshSizeBox(m, pt1, pt2, 0.5*htarget);
       }
 
       // generate volume mesh
