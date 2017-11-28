@@ -1160,6 +1160,17 @@ cdef class QuadForest:
         self.ptr.getNodes(&array)
         return _init_QuadrantArray(array, 0)
 
+    def getPoints(self):
+        cdef TMRPoint *X = NULL
+        cdef int npts = 0
+        npts = self.ptr.getPoints(&X)
+        Xp = np.zeros((npts, 3), dtype=np.double)
+        for i in range(npts):
+            Xp[i,0] = X[i].x
+            Xp[i,1] = X[i].y
+            Xp[i,2] = X[i].z
+        return Xp
+
     def getNodeRange(self):
         cdef int size = 0
         cdef const int *node_range = NULL
@@ -1412,6 +1423,17 @@ cdef class OctForest:
         cdef TMROctantArray *array = NULL
         self.ptr.getNodes(&array)
         return _init_OctantArray(array, 0)
+
+    def getPoints(self):
+        cdef TMRPoint *X = NULL
+        cdef int npts = 0
+        npts = self.ptr.getPoints(&X)
+        Xp = np.zeros((npts, 3), dtype=np.double)
+        for i in range(npts):
+            Xp[i,0] = X[i].x
+            Xp[i,1] = X[i].y
+            Xp[i,2] = X[i].z
+        return Xp
 
     def getNodeRange(self):
         cdef int size = 0
