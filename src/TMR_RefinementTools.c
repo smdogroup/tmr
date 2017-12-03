@@ -200,6 +200,31 @@ static void computeJacobianTrans3D( const TacsScalar Xpts[],
   FElibrary::jacobian3d(Xd, J);
 }
 
+// Specify the maximum order
+static const int MAX_ORDER = 3;
+
+// Specify the maximum number of enrichment functions in 2D and 3D
+static const int MAX_2D_ENRICH = 6;
+static const int MAX_3D_ENRICH = 15;
+
+/*
+  Get the number of enrichment functions associated with the given
+  order of the element
+*/
+static int getNum2dEnrich( int order ){
+  if (order == 2){
+    return 4;
+  }
+  return 6;
+}
+
+static int getNum3dEnrich( int order ){
+  if (order == 2){
+    return 9;
+  }
+  return 15;
+}
+
 /*
   Evaluate the enrichment function for a second-order shell problem
 */
@@ -213,7 +238,6 @@ static void eval2ndEnrichmentFuncs2D( const double pt[], double N[] ){
   N[1] = pt[1]*ca;
   N[2] = cb;
   N[3] = pt[0]*cb;
-  N[4] = ca*cb;
 }
 
 /*
@@ -237,20 +261,17 @@ static void eval2ndEnrichmentFuncs2D( const double pt[],
   N[1] = pt[1]*ca;
   N[2] = cb;
   N[3] = pt[0]*cb;
-  N[4] = ca*cb;
 
   // Evaluate the derivatives of the shape functions
   Na[0] = da;
   Na[1] = pt[1]*da;
   Na[2] = 0.0;
   Na[3] = cb;
-  Na[4] = da*cb;
 
   Nb[0] = 0.0;
   Nb[1] = ca;
   Nb[2] = db;
   Nb[3] = pt[0]*db;
-  Nb[4] = ca*db;
 } 
 
 /*
@@ -269,7 +290,6 @@ static void eval3rdEnrichmentFuncs2D( const double pt[], double N[] ){
   N[3] = cb;
   N[4] = pt[0]*cb;
   N[5] = pt[0]*pt[0]*cb;
-  N[6] = ca*cb;
 }
 
 /*
@@ -295,7 +315,6 @@ static void eval3rdEnrichmentFuncs2D( const double pt[],
   N[3] = cb;
   N[4] = pt[0]*cb;
   N[5] = pt[0]*pt[0]*cb;
-  N[6] = ca*cb;
 
   // Set the derivatives of the enrichment functions with respect to
   // the first and second coordinate directions
@@ -305,7 +324,6 @@ static void eval3rdEnrichmentFuncs2D( const double pt[],
   Na[3] = 0.0;
   Na[4] = cb;
   Na[5] = 2.0*pt[0]*cb;
-  Na[6] = da*cb;
   
   Nb[0] = 0.0;
   Nb[1] = ca;
@@ -313,7 +331,6 @@ static void eval3rdEnrichmentFuncs2D( const double pt[],
   Nb[3] = db;
   Nb[4] = pt[0]*db;
   Nb[5] = pt[0]*pt[0]*db;
-  Nb[6] = ca*db;
 }
 
 /*
@@ -335,7 +352,6 @@ static void eval2ndEnrichmentFuncs3D( const double pt[], double N[] ){
   N[6] = cc;
   N[7] = pt[0]*cc;
   N[8] = pt[1]*cc;
-  N[9] = ca*cb*cc;
 }
 
 /*
@@ -367,7 +383,6 @@ static void eval2ndEnrichmentFuncs3D( const double pt[],
   N[6] = cc;
   N[7] = pt[0]*cc;
   N[8] = pt[1]*cc;
-  N[9] = ca*cb*cc;
 
   // Evaluate the derivatives of the shape functions
   Na[0] = da;
@@ -379,7 +394,6 @@ static void eval2ndEnrichmentFuncs3D( const double pt[],
   Na[6] = 0.0;
   Na[7] = cc;
   Na[8] = 0.0;
-  Na[9] = da*cb*cc;
 
   Nb[0] = 0.0;
   Nb[1] = ca;
@@ -390,7 +404,6 @@ static void eval2ndEnrichmentFuncs3D( const double pt[],
   Nb[6] = 0.0;
   Nb[7] = 0.0;
   Nb[8] = cc;
-  Nb[9] = ca*db*cc;
 
   Nc[0] = 0.0;
   Nc[1] = 0.0;
@@ -401,7 +414,6 @@ static void eval2ndEnrichmentFuncs3D( const double pt[],
   Nc[6] = dc;
   Nc[7] = pt[0]*dc;
   Nc[8] = pt[1]*dc;
-  Nc[9] = ca*cb*dc;
 }
 
 /*
@@ -429,7 +441,6 @@ static void eval3rdEnrichmentFuncs3D( const double pt[], double N[] ){
   N[12] = pt[0]*pt[0]*cc;
   N[13] = pt[1]*cc;
   N[14] = pt[1]*pt[1]*cc;
-  N[15] = ca*cb*cc;
 }
 
 /*
@@ -466,7 +477,6 @@ static void eval3rdEnrichmentFuncs3D( const double pt[],
   N[12] = pt[0]*pt[0]*cc;
   N[13] = pt[1]*cc;
   N[14] = pt[1]*pt[1]*cc;
-  N[15] = ca*cb*cc;
 
   // Evaluate the derivatives of the shape functions
   Na[0] = da;
@@ -484,7 +494,6 @@ static void eval3rdEnrichmentFuncs3D( const double pt[],
   Na[12] = 2.0*pt[0]*cc;
   Na[13] = 0.0;
   Na[14] = 0.0;
-  Na[15] = da*cb*cc;
 
   Nb[0] = 0.0;
   Nb[1] = ca;
@@ -501,7 +510,6 @@ static void eval3rdEnrichmentFuncs3D( const double pt[],
   Nb[12] = 0.0;
   Nb[13] = cc;
   Nb[14] = 2.0*pt[1]*cc;
-  Nb[15] = ca*db*cc;
 
   Nc[0] = 0.0;
   Nc[1] = 0.0;
@@ -518,7 +526,6 @@ static void eval3rdEnrichmentFuncs3D( const double pt[],
   Nc[12] = pt[0]*pt[0]*dc;
   Nc[13] = pt[1]*dc;
   Nc[14] = pt[1]*pt[1]*dc;
-  Nc[15] = ca*cb*dc;
 }
 
 /*
@@ -541,9 +548,9 @@ static void computeElemRecon2D( const int order,
                                 const TacsScalar uderiv[],
                                 TacsScalar ubar[],
                                 TacsScalar *tmp ){
-  // The number of enrichment functions: 5 if we have a second-order
+  // The number of enrichment functions: 4 if we have a second-order
   // mesh 7 if we have a third-order mesh
-  const int nenrich = (order == 2 ? 5 : 7);
+  const int nenrich = getNum2dEnrich(order);
 
   // The number of equations
   const int neq = 2*order*order;
@@ -575,7 +582,8 @@ static void computeElemRecon2D( const int order,
       pt[1] = -1.0 + (2.0*jj)/(order-1);
 
       // Compute the element shape functions at this point
-      double N[9], Na[9], Nb[9];
+      double N[MAX_ORDER*MAX_ORDER];
+      double Na[MAX_ORDER*MAX_ORDER], Nb[MAX_ORDER*MAX_ORDER];
       FElibrary::biLagrangeSF(N, Na, Nb, pt, order);
       
       // Evaluate the Jacobian transformation at this point
@@ -630,7 +638,8 @@ static void computeElemRecon2D( const int order,
       
       // Now, evaluate the terms for the left-hand-side
       // that contribute to the derivative
-      double Nr[7], Nar[7], Nbr[7];
+      double Nr[MAX_2D_ENRICH];
+      double Nar[MAX_2D_ENRICH], Nbr[MAX_2D_ENRICH];
       if (order == 2){
         eval2ndEnrichmentFuncs2D(pt, Nr, Nar, Nbr);
       }
@@ -654,7 +663,7 @@ static void computeElemRecon2D( const int order,
   }
 
   // Singular values
-  TacsScalar s[7];
+  TacsScalar s[MAX_2D_ENRICH];
   int m = neq, n = nenrich;
   double rcond = -1.0;
   int rank;
@@ -698,7 +707,7 @@ static void computeElemRecon3D( const int order,
                                 const TacsScalar uderiv[],
                                 TacsScalar ubar[],
                                 TacsScalar *tmp ){
-  const int nenrich = (order == 2 ? 10 : 16);
+  const int nenrich = getNum3dEnrich(order);
 
   // The number of equations
   const int neq = 3*order*order*order;
@@ -732,7 +741,10 @@ static void computeElemRecon3D( const int order,
         pt[2] = -1.0 + (2.0*kk)/(order-1);
 
         // Compute the element shape functions at this point
-        double N[27], Na[27], Nb[27], Nc[27];
+        double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+        double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+        double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+        double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
         FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, order);
         
         // Evaluate the Jacobian transformation at this point
@@ -777,7 +789,8 @@ static void computeElemRecon3D( const int order,
         // contribute to the derivative
         // xi,X = [X,xi]^{-1}
         // U,X = U,xi*xi,X = U,xi*J^{T}        
-        double Nr[16], Nar[16], Nbr[16], Ncr[16];
+        double Nr[MAX_3D_ENRICH];
+        double Nar[MAX_3D_ENRICH], Nbr[MAX_3D_ENRICH], Ncr[MAX_3D_ENRICH];
         if (order == 2){
           eval2ndEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
         }
@@ -801,7 +814,7 @@ static void computeElemRecon3D( const int order,
   }
 
   // Singular values
-  TacsScalar s[16];
+  TacsScalar s[MAX_3D_ENRICH];
   int m = neq, n = nenrich;
   double rcond = -1.0;
   int rank;
@@ -950,14 +963,14 @@ static void computeNodeDeriv2D( const int order,
     tacs->getElement(elem, &nodes, &len);
 
     // Get the local weight values for this element
-    TacsScalar welem[9];
+    TacsScalar welem[MAX_ORDER*MAX_ORDER];
     weights->getValues(len, nodes, welem);
 
     // Get the local element variables
     uvec->getValues(len, nodes, uelem);
 
     // Get the node locations for the element
-    TacsScalar Xpts[3*9];
+    TacsScalar Xpts[3*MAX_ORDER*MAX_ORDER];
     tacs->getElement(elem, Xpts);
     
     // Compute the derivative of the components of the variables along
@@ -973,7 +986,8 @@ static void computeNodeDeriv2D( const int order,
         pt[1] = -1.0 + 2.0*jj/(order-1);
 
         // Evaluate the the quadratic shape functions at this point
-        double N[9], Na[9], Nb[9];
+        double N[MAX_ORDER*MAX_ORDER];
+        double Na[MAX_ORDER*MAX_ORDER], Nb[MAX_ORDER*MAX_ORDER];
         FElibrary::biLagrangeSF(N, Na, Nb, pt, order);
       
         // Evaluate the Jacobian transformation at this point
@@ -1202,9 +1216,8 @@ void addRefinedSolution2D( const int order,
   // The number of equations: 2 times the number of nodes for each element
   const int neq = 2*order*order;
 
-  // The number of enrichment functions: 5 if we have a second-order
-  // mesh 7 if we have a third-order mesh
-  const int nenrich = (order == 2 ? 5 : 7);
+  // The number of enrichment functions
+  const int nenrich = getNum2dEnrich(order);
   
   // Allocate space for the element reconstruction problem
   TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
@@ -1218,7 +1231,7 @@ void addRefinedSolution2D( const int order,
   TacsScalar *uref = new TacsScalar[ vars_per_node*order*order ];
 
   // The maximum number of nodes for any element
-  TacsScalar Xpts[3*9];
+  TacsScalar Xpts[3*MAX_ORDER*MAX_ORDER];
 
   // Number of local elements in the coarse version of TACS
   int nelems = tacs->getNumElements();
@@ -1268,7 +1281,8 @@ void addRefinedSolution2D( const int order,
 
             // Evaluate the shape functions and the enrichment
             // functions at the new parametric point
-            double N[9], Nr[7];
+            double N[MAX_ORDER*MAX_ORDER];
+            double Nr[MAX_2D_ENRICH];
             FElibrary::biLagrangeSF(N, pt, order);
             if (order == 2){
               eval2ndEnrichmentFuncs2D(pt, Nr);
@@ -1340,9 +1354,8 @@ void addRefinedSolution3D( const int order,
   // The number of equations: 3 times the number of nodes for each element
   const int neq = 3*order*order*order;
 
-  // The number of enrichment functions: 5 if we have a second-order
-  // mesh 7 if we have a third-order mesh
-  const int nenrich = (order == 2 ? 10 : 16);
+  // The number of enrichment function
+  const int nenrich = getNum3dEnrich(order);
   
   // Allocate space for the element reconstruction problem
   TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
@@ -1409,7 +1422,8 @@ void addRefinedSolution3D( const int order,
 
                 // Evaluate the shape functions and the enrichment
                 // functions at the new parametric point
-                double N[27], Nr[16];
+                double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+                double Nr[MAX_3D_ENRICH];
                 FElibrary::triLagrangeSF(N, pt, order);
                 if (order == 2){
                   eval2ndEnrichmentFuncs3D(pt, Nr);
@@ -1812,11 +1826,11 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
                                    double target_err,
                                    int min_level, int max_level ){
   // The maximum number of nodes
-  const int max_num_nodes = 9;
+  const int max_num_nodes = MAX_ORDER*MAX_ORDER;
 
   // Set the order of the mesh and the number of enrichment shape functions
   const int order = forest->getMeshOrder();
-  const int nenrich = (order == 2 ? 5 : 7);
+  const int nenrich = getNum2dEnrich(order);
 
   // Get the communicator
   MPI_Comm comm = tacs->getMPIComm();
@@ -1926,7 +1940,8 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
             pt[1] = jj - 1.0 + 1.0*m/(order-1);
 
             // Evaluate the locations of the new nodes
-            double N[9], Nr[7];
+            double N[max_num_nodes];
+            double Nr[MAX_2D_ENRICH];
             FElibrary::biLagrangeSF(N, pt, order);
             if (order == 2){
               eval2ndEnrichmentFuncs2D(pt, Nr);
@@ -2460,7 +2475,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   const int vars_per_node = tacs->getVarsPerNode();
 
   // Set the number of enrichment functions
-  const int nenrich = (order == 2 ? 10 : 16);
+  const int nenrich = getNum3dEnrich(order);
 
   // Set the derivative of the function w.r.t. the state variables
   dfdu->zeroEntries();
@@ -2558,7 +2573,10 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
                                             TacsScalar J[], 
                                             TacsScalar e[] ){        
   // Evaluate the product of the adjoint
-  double N[27], Na[27], Nb[27], Nc[27];
+  double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
   FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, order);
 
   // First evaluate the contributions to the derivatives from
@@ -2609,7 +2627,8 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
   TacsScalar detJ = FElibrary::jacobian3d(Xd, J);
 
   // Evaluate the contribution from the enrichment functions
-  double Nr[16], Nar[16], Nbr[16], Ncr[16];
+  double Nr[MAX_3D_ENRICH];
+  double Nar[MAX_3D_ENRICH], Nbr[MAX_3D_ENRICH], Ncr[MAX_3D_ENRICH];
   if (order == 2){
     eval2ndEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
   }
@@ -2618,7 +2637,7 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
   }
 
   // Set the number of enrichment functions
-  const int nenrich = (order == 2 ? 10 : 16);
+  const int nenrich = getNum3dEnrich(order);
 
   // Add the contributions from the enrichment functions
   u = ubar;
@@ -2665,11 +2684,15 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
                                                 TacsScalar dfdu[],
                                                 TacsScalar dfdubar[] ){
   // Evaluate the product of the adjoint
-  double N[27], Na[27], Nb[27], Nc[27];
+  double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
   FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, order);
 
   // Evaluate the contribution from the enrichment functions
-  double Nr[16], Nar[16], Nbr[16], Ncr[16];
+  double Nr[MAX_3D_ENRICH];
+  double Nar[MAX_3D_ENRICH], Nbr[MAX_3D_ENRICH], Ncr[MAX_3D_ENRICH];
   if (order == 2){
     eval2ndEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
   }
@@ -2678,7 +2701,7 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
   }
 
   // Set the number of enrichment functions
-  const int nenrich = (order == 2 ? 10 : 16);
+  const int nenrich = getNum3dEnrich(order);
 
   // Evaluate the derivative
   const int len = order*order*order;
@@ -2708,4 +2731,6 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
     dfdubar += 3;
     na++; nb++; nc++;
   }
+
+  return 0.0;
 }

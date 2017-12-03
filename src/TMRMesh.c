@@ -2263,7 +2263,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
           num_tris = ntris;
           tris = mesh_tris;
 
-
           // Free the allocated data
           delete [] tri_edges;
           delete [] tri_neighbors;
@@ -2625,6 +2624,7 @@ double TMRFaceMesh::computeTriQuality( const int *tri,
 
   return eta;
 }
+
 /*
   Recombine the triangulation into a quadrilateral mesh
 */
