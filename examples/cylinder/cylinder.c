@@ -282,6 +282,7 @@ int main( int argc, char *argv[] ){
   int order = 2;
   int orthotropic_flag = 0;
   double htarget = 10.0;
+  double target_rel_err = 1e-3;
   int strain_energy_refine = 0;
   for ( int i = 0; i < argc; i++ ){
     if (sscanf(argv[i], "h=%lf", &htarget) == 1){
@@ -294,6 +295,9 @@ int main( int argc, char *argv[] ){
     if (strcmp(argv[i], "strain_energy") == 0){
       strain_energy_refine = 1;
     }
+    if (sscanf(argv[i], "rel_err=%lf", &target_rel_err) == 1){
+      printf("target_rel_err = %g\n", target_rel_err);
+    }    
   }
 
   // Set the shell geometry parameters
@@ -401,8 +405,8 @@ int main( int argc, char *argv[] ){
     
     TMRMeshOptions options;
     options.frontal_quality_factor = 1.25;
-    // options.mesh_type_default = TMR_STRUCTURED;
-    options.mesh_type_default = TMR_UNSTRUCTURED;
+    options.mesh_type_default = TMR_STRUCTURED;
+    // options.mesh_type_default = TMR_UNSTRUCTURED;
     mesh->mesh(options, htarget);
 
     TMRModel *model = mesh->createModelFromMesh();
@@ -417,9 +421,6 @@ int main( int argc, char *argv[] ){
     forest[0]->setTopology(topo);
     forest[0]->createTrees(0);
     forest[0]->repartition();
-    
-    // The target relative error on the compliance
-    double target_rel_err = 5e-5;
 
     FILE *fp = NULL;
     if (mpi_rank == 0){
@@ -521,6 +522,32 @@ int main( int argc, char *argv[] ){
       TacsScalar abs_err = 0.0, fval_est = 0.0;
 
       if (strain_energy_refine){
+        // Uniformly refine the mesh everywhere
+        TMRQuadForest *forest_refine = forest[0]->duplicate();
+        forest_refine->incref();
+        forest_refine->refine();
+        forest_refine->balance();
+
+        // Create the new, refined version of TACS
+        TACSAssembler *tacs_refine = creator->createTACS(order, forest_refine);
+        tacs_refine->incref();
+
+        // Create the refined vector
+        TACSBVec *ans_refine = tacs_refine->createVec();
+        ans_refine->incref();
+        TMR_ComputeReconSolution(tacs[0], forest[0], tacs_refine,
+                                 ans, ans_refine);
+        tacs_refine->setVariables(ans_refine);
+        ans_refine->decref();
+
+        // Write out the adjoint solution
+        f5 = new TACSToFH5(tacs_refine, TACS_SHELL, write_flag);
+        f5->incref();
+        sprintf(outfile, "ans_reconstruction%02d.f5", iter);
+        f5->writeToFile(outfile);
+        f5->decref();
+        forest_refine->decref();
+
         // Set the absolute element-level error based on the relative
         // error that is requested
         target_abs_err = factor*target_rel_err*fabs(fval)/nelems_total;

@@ -15,4 +15,4 @@ debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
 debug: default
 
 clean:
-	rm -rf step_import *.o
+	rm -rf step_import step_to_netgen *.o

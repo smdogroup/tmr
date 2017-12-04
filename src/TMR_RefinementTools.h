@@ -24,7 +24,6 @@ void TMR_ComputeReconSolution( TACSAssembler *tacs,
                                TACSAssembler *tacs_refined,
                                TACSBVec *_uvec=NULL,
                                TACSBVec *_uvec_refined=NULL );
-
 void TMR_ComputeReconSolution( TACSAssembler *tacs,
                                TMROctForest *forest,
                                TACSAssembler *tacs_refined,
@@ -37,6 +36,11 @@ void TMR_ComputeReconSolution( TACSAssembler *tacs,
 */
 TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
                                    TMRQuadForest *forest,
+                                   double target_err,
+                                   int min_level=0, 
+                                   int max_level=TMR_MAX_LEVEL );
+TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
+                                   TMROctForest *forest,
                                    double target_err,
                                    int min_level=0, 
                                    int max_level=TMR_MAX_LEVEL );

@@ -63,10 +63,12 @@ int main( int argc, char *argv[] ){
     new TMRTriangularize(npts, prms, nholes, nsegs, seg, face);
   tri->incref();
 
+  tri->writeToVTK("init_delaunay_triangle.vtk");
+
   TMRMeshOptions opts;
   opts.triangularize_print_level = 1;
   opts.write_triangularize_intermediate = 1;
-  opts.triangularize_print_iter = 10;
+  opts.triangularize_print_iter = 1;
   TMRElementFeatureSize *fs = new TMRElementFeatureSize(length);
   tri->frontal(opts, fs);
   tri->writeToVTK("triangle.vtk");
