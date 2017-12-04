@@ -756,9 +756,9 @@ void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights ){
 */
 void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights,
                                    TACSFunction **_obj_funcs ){
-  for ( int i = 0; i < num_load_cases; i++ ){
-    if (_obj_funcs[i]){ obj_funcs[i]->incref(); }
-  }
+  /* for ( int i = 0; i < num_load_cases; i++ ){ */
+  /*   if (_obj_funcs[i]){ obj_funcs[i]->incref(); } */
+  /* } */
   if (!obj_weights){
     obj_weights = new TacsScalar[ num_load_cases ];
   }
@@ -773,6 +773,7 @@ void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights,
   for ( int i = 0; i < num_load_cases; i++ ){
     obj_weights[i] = _obj_weights[i];
     obj_funcs[i] = _obj_funcs[i];
+    obj_funcs[i]->incref();
   }
 }
 
@@ -1395,6 +1396,9 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       // problem again.
       int err_count = 1;
 
+      // Solve the eigenvalue problem
+      freq->solve(new KSMPrintStdout("KSM", mpi_rank, 1));
+
       // Keep track of the smallest eigenvalue
       TacsScalar smallest_eigval = 0.0;
       while (err_count > 0){
@@ -1438,10 +1442,12 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
         // Add up the contribution to the ks function
         freq_ks_sum += exp(-freq_ks_weight*(eigval - smallest_eigval));
+        
       }
 
       // Evaluate the KS function of the aggregation of the eigenvalues
       cons[count] = (smallest_eigval - log(freq_ks_sum)/freq_ks_weight);
+      
       cons[count] = freq_scale*(cons[count] + freq_offset);
       count++;
     }
@@ -1610,10 +1616,9 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
           // Evaluate the weight on the gradient
           ks_grad_weight *=
             exp(-freq_ks_weight*(eigval - smallest_eigval))/freq_ks_sum;
-
           // Scale the constraint by the frequency scaling value
           ks_grad_weight *= freq_scale;
-
+          
           // Add contribution to eigenvalue gradient
           for ( int j = 0; j < max_local_size; j++ ){
             xlocal[j] += ks_grad_weight*temp[j];
