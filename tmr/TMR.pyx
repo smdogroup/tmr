@@ -1816,17 +1816,23 @@ def createMg(list assemblers, list forests):
         return _init_Pc(mg)
     return None
 
-def strainEnergyRefine(Assembler assembler,
-                       QuadForest forest,
+def strainEnergyRefine(Assembler assembler, forest,
                        double target_err,
                        int min_refine=0, int max_refine=30):
     cdef TACSAssembler *assm = NULL
-    cdef TMRQuadForest *forst = NULL
+    cdef TMRQuadForest *quad_forest = NULL
+    cdef TMROctForest *oct_forest = NULL
     cdef TacsScalar ans = 0.0
     assm = assembler.ptr
-    forst = forest.ptr   
-    ans = TMR_StrainEnergyRefine(assm, forst, target_err,
-                                 min_refine, max_refine)
+
+    if isinstance(forest, OctForest):
+        oct_forest = (<OctForest>forest).ptr
+        ans = TMR_StrainEnergyRefine(assm, oct_forest, target_err,
+                                     min_refine, max_refine)
+    elif isinstance(forest, QuadForest):
+        quad_forest = (<QuadForest>forest).ptr
+        ans = TMR_StrainEnergyRefine(assm, quad_forest, target_err,
+                                     min_refine, max_refine)
     return ans
 
 def adjointRefine(Assembler coarse,

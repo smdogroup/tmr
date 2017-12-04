@@ -367,6 +367,9 @@ cdef extern from "TMR_RefinementTools.h":
     TacsScalar TMR_StrainEnergyRefine(TACSAssembler*,
                                       TMRQuadForest*,
                                       double, int, int)
+    TacsScalar TMR_StrainEnergyRefine(TACSAssembler*,
+                                      TMROctForest*,
+                                      double, int, int)
     TacsScalar TMR_AdjointRefine(TACSAssembler*,
                                  TACSAssembler*,
                                  TACSBVec*,

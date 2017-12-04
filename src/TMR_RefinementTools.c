@@ -2036,6 +2036,233 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
 }
 
 /*
+  The following function performs a mesh refinement based on the strain
+  energy criteria.
+
+  This is the equivalent of the TMR_StrainEnergyRefine function for 
+  quadtrees.
+*/
+TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
+                                   TMROctForest *forest,
+                                   double target_err,
+                                   int min_level, int max_level ){
+  // The maximum number of nodes
+  const int max_num_nodes = MAX_ORDER*MAX_ORDER*MAX_ORDER;
+
+  // Set the order of the mesh and the number of enrichment shape functions
+  const int order = forest->getMeshOrder();
+  const int nenrich = getNum3dEnrich(order);
+
+  // Get the communicator
+  MPI_Comm comm = tacs->getMPIComm();
+  
+  // Retrieve the variables from the TACSAssembler object
+  TACSBVec *uvec = tacs->createVec();
+  uvec->incref();
+
+  tacs->getVariables(uvec);
+  uvec->beginDistributeValues();
+  uvec->endDistributeValues();
+
+  // Number of local elements
+  const int nelems = tacs->getNumElements();
+
+  // Get the number of variables per node
+  const int vars_per_node = tacs->getVarsPerNode();
+  const int deriv_per_node = 3*vars_per_node;
+
+  // The number of equations: 3 times the number of nodes for each element
+  const int neq = 3*order*order*order;
+
+  // Compute the contribution to the error in the energy norm from
+  // each element
+  TacsScalar *SE_error = new TacsScalar[ nelems ];
+  
+  // Create the weight vector - the weights are the number of times
+  // each node is referenced by adjacent elements, including
+  // inter-process references.
+  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
+                                   tacs->getBVecDistribute(),
+                                   tacs->getBVecDepNodes());
+  weights->incref();
+  computeLocalWeights(tacs, weights);
+
+  // Compute the nodal derivatives
+  TACSBVec *uderiv = 
+    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
+                 tacs->getBVecDistribute(), tacs->getBVecDepNodes());
+  uderiv->incref();
+  computeNodeDeriv3D(order, tacs, uvec, weights, uderiv);
+  weights->decref();
+
+  // Allocate space for the element reconstruction problem
+  TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
+  TacsScalar *ubar = new TacsScalar[ vars_per_node*nenrich ];
+  TacsScalar *delem = new TacsScalar[ deriv_per_node*order*order*order ];
+
+  // Allocate arrays needed for the reconstruction
+  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // The interpolated variables on the refined mesh
+  TacsScalar *dvars = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *ddvars = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // Allocate the element residual array
+  TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // Keep track of the total error
+  TacsScalar SE_total_error = 0.0;
+
+  for ( int i = 0; i < nelems; i++ ){
+    // The simulation time -- we assume time-independent analysis
+    double time = 0.0;
+
+    // Get the node locations and variables
+    TacsScalar Xpts[3*max_num_nodes];
+    TACSElement *elem = tacs->getElement(i, Xpts, vars_elem, dvars, ddvars);
+    
+    // Get the node numbers for this element
+    int len;
+    const int *nodes;
+    tacs->getElement(i, &nodes, &len);
+
+    // Evaluate the element residual
+    memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
+    elem->addResidual(time, res, Xpts, vars_elem, dvars, ddvars);
+    
+    // Take the inner product to get the strain energy
+    SE_error[i] = 0.0;
+    for ( int j = 0; j < elem->numVariables(); j++ ){
+      SE_error[i] += res[j]*vars_elem[j];
+    }
+
+    // Compute the solution on the refined mesh
+    uderiv->getValues(len, nodes, delem);
+
+    // Compute the enrichment functions for each degree of freedom
+    computeElemRecon2D(order, vars_per_node,
+                       Xpts, vars_elem, delem, ubar, tmp);
+
+    TacsScalar SE_refine = 0.0;
+    for ( int kk = 0; kk < 2; kk++ ){
+      for ( int jj = 0; jj < 2; jj++ ){
+        for ( int ii = 0; ii < 2; ii++ ){
+          // Retrieve the refined element
+          TacsScalar rXpts[3*max_num_nodes];
+          memset(rXpts, 0, 3*order*order*order*sizeof(TacsScalar));
+
+          // Set the variables to zero
+          memset(vars_interp, 0, 
+                 vars_per_node*order*order*order*sizeof(TacsScalar));
+
+          for ( int p = 0; p < order; p++ ){
+            for ( int m = 0; m < order; m++ ){
+              for ( int n = 0; n < order; n++ ){
+                double pt[3];
+                pt[0] = ii - 1.0 + 1.0*n/(order-1);
+                pt[1] = jj - 1.0 + 1.0*m/(order-1);
+                pt[2] = kk - 1.0 + 1.0*p/(order-1);
+
+                // Evaluate the locations of the new nodes
+                double N[max_num_nodes];
+                double Nr[MAX_3D_ENRICH];
+                FElibrary::biLagrangeSF(N, pt, order);
+                if (order == 2){
+                  eval2ndEnrichmentFuncs3D(pt, Nr);
+                }
+                else {
+                  eval3rdEnrichmentFuncs3D(pt, Nr);
+                }
+                
+                // Set the values of the variables at this point
+                for ( int k = 0; k < order*order*order; k++ ){
+                  rXpts[3*(n + m*order + p*order*order)] += Xpts[3*k]*N[k];
+                  rXpts[3*(n + m*order + p*order*order)+1] += Xpts[3*k+1]*N[k];
+                  rXpts[3*(n + m*order + p*order*order)+2] += Xpts[3*k+2]*N[k];
+                }
+
+                // Evaluate the interpolation part of the reconstruction
+                for ( int k = 0; k < order*order; k++ ){
+                  for ( int ik = 0; ik < vars_per_node; ik++ ){
+                    TacsScalar *v = 
+                      &vars_interp[vars_per_node*(n + m*order + p*order*order)];
+                    v[ik] += vars_elem[vars_per_node*k + ik]*N[k];
+                  }
+                }
+
+                // Add the portion from the enrichment functions
+                for ( int k = 0; k < nenrich; k++ ){
+                  // Evaluate the interpolation part of the reconstruction
+                  for ( int ik = 0; ik < vars_per_node; ik++ ){
+                    vars_interp[vars_per_node*(n + m*order) + ik] += 
+                      ubar[vars_per_node*k + ik]*Nr[k];
+                  }
+                }
+              }
+            }
+          }
+
+          // Compute the element residual
+          memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
+          elem->addResidual(time, res, rXpts, 
+                            vars_interp, dvars, ddvars);
+          
+          // Take the inner product to get the strain energy
+          for ( int j = 0; j < elem->numVariables(); j++ ){
+            SE_refine += res[j]*vars_interp[j];
+          }
+        }
+      }
+    }
+
+    // SE_refine - SE_error should always be a positive quantity
+    SE_error[i] = fabs(SE_refine - SE_error[i]);
+
+    // Add up the total error
+    SE_total_error += SE_error[i];
+  }
+  
+  // Free the global vectors
+  uvec->decref();
+  uderiv->decref();
+
+  // Free the element-related data
+  delete [] tmp;
+  delete [] ubar;
+  delete [] delem;
+  delete [] vars_elem;
+  delete [] dvars;
+  delete [] ddvars;
+  delete [] vars_interp;
+  delete [] res;
+
+  // Count up the total strain energy 
+  TacsScalar SE_temp = 0.0;
+  MPI_Allreduce(&SE_total_error, &SE_temp, 1, TACS_MPI_TYPE, MPI_SUM, comm);
+  SE_total_error = SE_temp;
+
+  // Go through and flag which element should be refined
+  int *refine = new int[ nelems ];
+  memset(refine, 0, nelems*sizeof(int));
+  for ( int i = 0; i < nelems; i++ ){
+    if (SE_error[i] >= target_err){
+      refine[i] = 1;
+    }
+  }
+
+  forest->refine(refine, min_level, max_level);
+
+  // Free the data that is no longer required
+  delete [] SE_error;
+
+  // refine the quadrant mesh based on the local refinement values
+  delete [] refine;
+
+  // Return the error
+  return SE_total_error;
+}
+/*
   Refine the mesh using the original solution and the adjoint solution
 
   input:
