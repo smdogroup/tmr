@@ -1442,12 +1442,10 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
         // Add up the contribution to the ks function
         freq_ks_sum += exp(-freq_ks_weight*(eigval - smallest_eigval));
-        
       }
 
       // Evaluate the KS function of the aggregation of the eigenvalues
       cons[count] = (smallest_eigval - log(freq_ks_sum)/freq_ks_weight);
-      
       cons[count] = freq_scale*(cons[count] + freq_offset);
       count++;
     }
@@ -1616,6 +1614,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
           // Evaluate the weight on the gradient
           ks_grad_weight *=
             exp(-freq_ks_weight*(eigval - smallest_eigval))/freq_ks_sum;
+
           // Scale the constraint by the frequency scaling value
           ks_grad_weight *= freq_scale;
           
