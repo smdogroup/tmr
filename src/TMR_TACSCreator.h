@@ -87,6 +87,8 @@ class TMRQuadTACSCreator : public TMREntity {
 
   // Create the TACSAssembler object with the given order for this forest
   TACSAssembler *createTACS( int order, TMRQuadForest *forest,
+                             TACSAssembler::OrderingType 
+                               ordering=TACSAssembler::NATURAL_ORDER,
                              TacsScalar _scale=1.0 );
 
  private:
@@ -136,7 +138,9 @@ class TMROctTACSCreator : public TMREntity {
 
   // Create the TACSAssembler object with the given order for this forest
   TACSAssembler *createTACS( int order, TMROctForest *forest,
-                             TacsScalar _scale=1.0);
+                             TACSAssembler::OrderingType 
+                               ordering=TACSAssembler::NATURAL_ORDER,
+                             TacsScalar _scale=1.0 );
 
  private:
   // Set the boundary conditions

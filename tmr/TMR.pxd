@@ -47,7 +47,6 @@ cdef extern from "TMRTopology.h":
         void getEdge(int, TMREdge**)
         void getVertex(int, TMRVertex**)
 
-            
     cdef cppclass TMRVertex(TMREntity):
         TMRVertex()
         int evalPoint(TMRPoint*)
@@ -370,12 +369,12 @@ cdef extern from "TMR_RefinementTools.h":
     TacsScalar TMR_StrainEnergyRefine(TACSAssembler*,
                                       TMROctForest*,
                                       double, int, int)
-    TacsScalar TMR_AdjointRefine(TACSAssembler*,
-                                 TACSAssembler*,
-                                 TACSBVec*,
-                                 TMRQuadForest*,
-                                 double target_err,
-                                 int, int, TacsScalar*)
+    TacsScalar TMR_AdjointRefine(TACSAssembler*, TACSAssembler*,
+                                 TACSBVec*, TMRQuadForest*,
+                                 double, int, int, TacsScalar*)
+    TacsScalar TMR_AdjointRefine(TACSAssembler*, TACSAssembler*,
+                                 TACSBVec*, TMROctForest*,
+                                 double, int, int, TacsScalar*)
 
 cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
@@ -389,15 +388,15 @@ cdef extern from "TMRCyCreator.h":
         TMRCyQuadCreator(TMRBoundaryConditions*)
         void setSelfPointer(void*)
         void setCreateQuadElement( 
-            TACSElement* (*createquadelements)(void*, int, TMRQuadrant*) )
-        TACSAssembler *createTACS(int, TMRQuadForest*)
+            TACSElement* (*createquadelements)(void*, int, TMRQuadrant*))
+        TACSAssembler *createTACS(int, TMRQuadForest*, OrderingType)
 
     cdef cppclass TMRCyOctCreator(TMREntity):
         TMRCyOctCreator(TMRBoundaryConditions*)
         void setSelfPointer(void*)
         void setCreateOctElement( 
-            TACSElement* (*createoctelements)(void*, int, TMROctant*) )
-        TACSAssembler *createTACS(int, TMROctForest*)
+            TACSElement* (*createoctelements)(void*, int, TMROctant*))
+        TACSAssembler *createTACS(int, TMROctForest*, OrderingType)
 
     cdef cppclass TMRCyTopoQuadCreator(TMREntity):
         TMRCyTopoQuadCreator(TMRBoundaryConditions*, TMRQuadForest*)
@@ -405,7 +404,7 @@ cdef extern from "TMRCyCreator.h":
         void setCreateQuadTopoElement( 
             TACSElement* (*createquadtopoelements)(
                 void*, int, TMRQuadrant*, TMRIndexWeight*, int))
-        TACSAssembler *createTACS(int, TMRQuadForest*)
+        TACSAssembler *createTACS(int, TMRQuadForest*, OrderingType)
         void getFilter(TMRQuadForest**)
         void getMap(TACSVarMap**)
         void getIndices(TACSBVecIndices**)
@@ -416,7 +415,7 @@ cdef extern from "TMRCyCreator.h":
         void setCreateOctTopoElement( 
             TACSElement* (*createocttopoelements)(
                 void*, int, TMROctant*, TMRIndexWeight*, int))
-        TACSAssembler *createTACS(int, TMROctForest*,double)
+        TACSAssembler *createTACS(int, TMROctForest*, OrderingType, double)
         void getFilter(TMROctForest**)
         void getMap(TACSVarMap**)
         void getIndices(TACSBVecIndices**)

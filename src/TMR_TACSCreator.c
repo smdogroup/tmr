@@ -157,9 +157,11 @@ void TMRQuadTACSCreator::createConnectivity( int order,
 /*
   Create the TACSAssembler object
 */
-TACSAssembler* TMRQuadTACSCreator::createTACS( int order, 
-                                               TMRQuadForest *forest,
-                                               TacsScalar _scale ){
+TACSAssembler* 
+  TMRQuadTACSCreator::createTACS( int order, 
+                                  TMRQuadForest *forest,
+                                  TACSAssembler::OrderingType ordering,
+                                  TacsScalar _scale ){
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -206,7 +208,6 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
     new TACSAssembler(forest->getMPIComm(), vars_per_node,
                       num_nodes, num_elements, num_dep_nodes);
 
-    
   // Set the element connectivity into TACSAssembler
   tacs->setElementConnectivity(elem_conn, ptr);
   delete [] elem_conn;
@@ -221,7 +222,12 @@ TACSAssembler* TMRQuadTACSCreator::createTACS( int order,
 
   // Specify the boundary conditions
   setBoundaryConditions(forest, tacs);
-    
+
+  // Reordering everything - if needed
+  if (ordering != TACSAssembler::NATURAL_ORDER){
+    tacs->computeReordering(ordering, TACSAssembler::ADDITIVE_SCHWARZ);
+  }
+
   // Initialize the TACSAssembler object
   tacs->initialize();
 
@@ -346,6 +352,7 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
     }
   }
 
+  tacs->reorderVec(X);
   tacs->setNodes(X);
   X->decref();
 }
@@ -369,9 +376,9 @@ TMROctTACSCreator::~TMROctTACSCreator(){
   Create the TACS element connectivity -- default
 */
 void TMROctTACSCreator::createConnectivity( int order,
-                                             TMROctForest *forest,
-                                             int **_conn, int **_ptr,
-                                             int *_num_elements ){
+                                            TMROctForest *forest,
+                                            int **_conn, int **_ptr,
+                                            int *_num_elements ){
   // Create the mesh
   int *elem_conn, num_elements = 0;
   forest->createMeshConn(&elem_conn, &num_elements);
@@ -390,9 +397,11 @@ void TMROctTACSCreator::createConnectivity( int order,
 /*
   Create the TACSAssembler object
 */
-TACSAssembler* TMROctTACSCreator::createTACS( int order, 
-                                              TMROctForest *forest,
-                                              TacsScalar _scale ){
+TACSAssembler* 
+  TMROctTACSCreator::createTACS( int order, 
+                                 TMROctForest *forest,
+                                 TACSAssembler::OrderingType ordering,
+                                 TacsScalar _scale ){
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -453,6 +462,11 @@ TACSAssembler* TMROctTACSCreator::createTACS( int order,
 
   // Specify the boundary conditions
   setBoundaryConditions(forest, tacs);
+
+  // Reordering everything
+  if (ordering != TACSAssembler::NATURAL_ORDER){
+    tacs->computeReordering(ordering, TACSAssembler::ADDITIVE_SCHWARZ);
+  }
     
   // Initialize the TACSAssembler object
   tacs->initialize();
@@ -525,7 +539,7 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
 */
 void TMROctTACSCreator::setNodeLocations( TMROctForest *forest, 
                                           TACSAssembler *tacs,
-                                          TacsScalar _scale){
+                                          TacsScalar _scale ){
   TacsScalar scale = _scale;
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
@@ -574,6 +588,7 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
     }
   }
 
+  tacs->reorderVec(X);
   tacs->setNodes(X);
   X->decref();
 }

@@ -11,7 +11,7 @@
 */
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMROctForest *forest[],
-                       TACSMg **_mg, int use_pairs=0 );
+                       TACSMg **_mg );
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMRQuadForest *forest[],
                        TACSMg **_mg );
@@ -56,7 +56,14 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
                               int min_level=0, 
                               int max_level=TMR_MAX_LEVEL,
                               TacsScalar *adj_corr=NULL );
-
+TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
+                              TACSAssembler *tacs_refine,
+                              TACSBVec *adjoint,
+                              TMROctForest *forest,
+                              double target_error,
+                              int min_level=0, 
+                              int max_level=TMR_MAX_LEVEL,
+                              TacsScalar *adj_corr=NULL );
 /*
   Evaluate a stress constraint based on a higher-order interpolation
   of the stresses in the problem.

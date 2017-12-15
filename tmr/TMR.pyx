@@ -21,6 +21,7 @@ from tacs.TACS cimport *
 from tacs.constitutive cimport *
 from tacs.functions cimport *
 from paropt.ParOpt cimport *
+from tacs import TACS
 
 # Import the definitions
 from TMR cimport *
@@ -1532,9 +1533,10 @@ cdef class QuadCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, int order, QuadForest forest):
+    def createTACS(self, int order, QuadForest forest, 
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr)
+        assembler = self.ptr.createTACS(order, forest.ptr, ordering)
         return _init_Assembler(assembler)
 
 cdef TACSElement* _createOctElement(void *_self, int order, 
@@ -1566,9 +1568,10 @@ cdef class OctCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, int order, OctForest forest):
+    def createTACS(self, int order, OctForest forest, 
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr)
+        assembler = self.ptr.createTACS(order, forest.ptr, ordering)
         return _init_Assembler(assembler)
 
 cdef TACSElement* _createQuadTopoElement(void *_self, int order, 
@@ -1606,9 +1609,10 @@ cdef class QuadTopoCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, int order, QuadForest forest):
+    def createTACS(self, int order, QuadForest forest, 
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr)
+        assembler = self.ptr.createTACS(order, forest.ptr, ordering)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -1652,7 +1656,8 @@ cdef TACSElement* _createOctTopoElement(void *_self, int order,
 
 cdef class OctTopoCreator:
     cdef TMRCyTopoOctCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, OctForest filt, *args, **kwargs):
+    def __cinit__(self, BoundaryConditions bcs, OctForest filt, 
+                  *args, **kwargs):
         self.ptr = NULL
         self.ptr = new TMRCyTopoOctCreator(bcs.ptr, filt.ptr)
         self.ptr.incref()
@@ -1664,9 +1669,11 @@ cdef class OctTopoCreator:
         if self.ptr:
             self.ptr.decref()
 
-    def createTACS(self, int order, OctForest forest, double Xscale=1.0):
+    def createTACS(self, int order, OctForest forest,  
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER,
+                   double scale=1.0):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr, Xscale)
+        assembler = self.ptr.createTACS(order, forest.ptr, ordering, scale)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -1816,15 +1823,13 @@ def createMg(list assemblers, list forests):
         return _init_Pc(mg)
     return None
 
-def strainEnergyRefine(Assembler assembler, forest,
-                       double target_err,
-                       int min_refine=0, int max_refine=30):
+def strainEnergyRefine(Assembler assembler, forest, double target_err,
+                       int min_refine=0, int max_refine=MAX_LEVEL):
     cdef TACSAssembler *assm = NULL
     cdef TMRQuadForest *quad_forest = NULL
     cdef TMROctForest *oct_forest = NULL
     cdef TacsScalar ans = 0.0
     assm = assembler.ptr
-
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
         ans = TMR_StrainEnergyRefine(assm, oct_forest, target_err,
@@ -1835,17 +1840,25 @@ def strainEnergyRefine(Assembler assembler, forest,
                                      min_refine, max_refine)
     return ans
 
-def adjointRefine(Assembler coarse,
-                  Assembler fine,
-                  Vec adjoint,
-                  QuadForest forest,
-                  double target_err,
-                  int min_refine=0, int max_refine=30):
+def adjointRefine(Assembler coarse, Assembler fine,
+                  Vec adjoint, forest, double target_err,
+                  int min_refine=0, int max_refine=MAX_LEVEL):
     cdef TacsScalar ans = 0.0
     cdef TacsScalar adj_corr
-    ans = TMR_AdjointRefine(coarse.ptr, fine.ptr,
-                            adjoint.ptr, forest.ptr, target_err,
-                            min_refine, max_refine, &adj_corr)
+    cdef TMRQuadForest *quad_forest = NULL
+    cdef TMROctForest *oct_forest = NULL
+
+    if isinstance(forest, OctForest):
+        oct_forest = (<OctForest>forest).ptr
+        ans = TMR_AdjointRefine(coarse.ptr, fine.ptr,
+                                adjoint.ptr, oct_forest, target_err,
+                                min_refine, max_refine, &adj_corr)
+    elif isinstance(forest, QuadForest):
+        quad_forest = (<QuadForest>forest).ptr
+        ans = TMR_AdjointRefine(coarse.ptr, fine.ptr,
+                                adjoint.ptr, quad_forest, target_err,
+                                min_refine, max_refine, &adj_corr)
+
     return ans, adj_corr
 
 def computeReconSolution(Assembler assembler, forest,
