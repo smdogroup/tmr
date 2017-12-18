@@ -10,62 +10,14 @@
 /*
   Create a multgrid object for a forest of octrees
 */
-void TMR_CreateTACSMg( int num_levels, 
-                       TACSAssembler *tacs[],
-                       TMROctForest *forest[],
-                       TACSMg **_mg ){
+void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
+                       TMROctForest *forest[], TACSMg **_mg, 
+                       int use_coarse_direct_solve ){
   // Get the communicator
   MPI_Comm comm = tacs[0]->getMPIComm();
 
   // Create the multigrid object
   int zero_guess = 0;
-  double omega = 0.75;
-  int mg_sor_iters = 1;
-  int mg_sor_symm = 0;
-  int mg_iters_per_level = 1;
-  TACSMg *mg = new TACSMg(comm, num_levels);
-  
-  // Create the intepolation/restriction objects between mesh levels
-  for ( int level = 0; level < num_levels-1; level++ ){
-    // Create the interpolation object
-    TACSBVecInterp *interp = 
-      new TACSBVecInterp(tacs[level+1], tacs[level]);
-
-    // Set the interpolation
-    forest[level]->createInterpolation(forest[level+1], interp);
-    
-    // Initialize the interpolation
-    interp->initialize();
-
-    // Create the matrix
-    TACSPMat *mat = tacs[level]->createMat();
-    TACSGaussSeidel *pc = 
-      new TACSGaussSeidel(mat, zero_guess, omega, 
-                          mg_sor_iters, mg_sor_symm);
-
-    // Set the interpolation and TACS object within the multigrid object
-    mg->setLevel(level, tacs[level], interp, mg_iters_per_level,
-                 mat, pc);
-  }
-
-  // Set the lowest level - with no interpolation object
-  mg->setLevel(num_levels-1, tacs[num_levels-1]);
-
-  // Return the multigrid object
-  *_mg = mg;
-} 
-
-/*
-  Create the TACS multigrid objects for the quadrilateral case
-*/
-void TMR_CreateTACSMg( int num_levels, 
-                       TACSAssembler *tacs[],
-                       TMRQuadForest *forest[],
-                       TACSMg **_mg ){
-  // Get the communicator
-  MPI_Comm comm = tacs[0]->getMPIComm();
-
-  // Create the multigrid object
   double omega = 0.75;
   int mg_sor_iters = 1;
   int mg_sor_symm = 0;
@@ -89,8 +41,75 @@ void TMR_CreateTACSMg( int num_levels,
     mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
   }
 
-  // Set the lowest level - with no interpolation object
-  mg->setLevel(num_levels-1, tacs[num_levels-1]);
+  if (use_coarse_direct_solve){
+    // Set the lowest level - with no interpolation object
+    mg->setLevel(num_levels-1, tacs[num_levels-1]);
+  }
+  else {
+    // Create the matrix
+    TACSPMat *mat = tacs[num_levels-1]->createMat();
+    TACSGaussSeidel *pc = 
+      new TACSGaussSeidel(mat, zero_guess, omega, 
+                          mg_sor_iters, mg_sor_symm);
+
+    // Set the interpolation and TACS object within the multigrid object
+    mg->setLevel(num_levels-1, tacs[num_levels-1], NULL, 1,
+                 mat, pc);
+  }
+
+  // Return the multigrid object
+  *_mg = mg;
+} 
+
+/*
+  Create the TACS multigrid objects for the quadrilateral case
+*/
+void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
+                       TMRQuadForest *forest[], TACSMg **_mg, 
+                       int use_coarse_direct_solve ){
+  // Get the communicator
+  MPI_Comm comm = tacs[0]->getMPIComm();
+
+  // Create the multigrid object
+  int zero_guess = 0;
+  double omega = 0.75;
+  int mg_sor_iters = 1;
+  int mg_sor_symm = 0;
+  int mg_iters_per_level = 1;
+  TACSMg *mg = new TACSMg(comm, num_levels, omega, 
+                          mg_sor_iters, mg_sor_symm);
+  
+  // Create the intepolation/restriction objects between mesh levels
+  for ( int level = 0; level < num_levels-1; level++ ){
+    // Create the interpolation object
+    TACSBVecInterp *interp = 
+      new TACSBVecInterp(tacs[level+1], tacs[level]);
+
+    // Set the interpolation
+    forest[level]->createInterpolation(forest[level+1], interp);
+    
+    // Initialize the interpolation
+    interp->initialize();
+
+    // Set the interpolation and TACS object within the multigrid object
+    mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
+  }
+
+  if (use_coarse_direct_solve){
+    // Set the lowest level - with no interpolation object
+    mg->setLevel(num_levels-1, tacs[num_levels-1]);
+  }
+  else {
+    // Create the matrix
+    TACSPMat *mat = tacs[num_levels-1]->createMat();
+    TACSGaussSeidel *pc = 
+      new TACSGaussSeidel(mat, zero_guess, omega, 
+                          mg_sor_iters, mg_sor_symm);
+
+    // Set the interpolation and TACS object within the multigrid object
+    mg->setLevel(num_levels-1, tacs[num_levels-1], NULL, 1,
+                 mat, pc);
+  }
 
   // Return the multigrid object
   *_mg = mg;

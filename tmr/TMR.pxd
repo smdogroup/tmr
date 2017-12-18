@@ -354,11 +354,9 @@ cdef extern from "TMROpenCascade.h":
 
 cdef extern from "TMR_RefinementTools.h":
     void TMR_CreateTACSMg(int, TACSAssembler**,
-                          TMROctForest**,
-                          TACSMg**)
+                          TMROctForest**, TACSMg**, int)
     void TMR_CreateTACSMg(int, TACSAssembler**,
-                          TMRQuadForest**,
-                          TACSMg**)
+                          TMRQuadForest**, TACSMg**, int)
     void TMR_ComputeReconSolution(TACSAssembler*, TMRQuadForest*,
                                   TACSAssembler*, TACSBVec*, TACSBVec*)
     void TMR_ComputeReconSolution(TACSAssembler*, TMROctForest*,

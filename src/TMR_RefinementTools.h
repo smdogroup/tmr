@@ -10,11 +10,11 @@
   Create a TACS multigrid object
 */
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
-                       TMROctForest *forest[],
-                       TACSMg **_mg );
+                       TMROctForest *forest[], TACSMg **_mg, 
+                       int use_coarse_direct_solve=1 );
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
-                       TMRQuadForest *forest[],
-                       TACSMg **_mg );
+                       TMRQuadForest *forest[], TACSMg **_mg, 
+                       int use_coarse_direct_solve=1 );
 
 /*
   Compute the reconstructed solution on a uniformly refined mesh

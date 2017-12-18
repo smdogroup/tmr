@@ -1785,13 +1785,17 @@ cdef class QuadStiffness(PlaneStress):
         free(w)
         return
 
-def createMg(list assemblers, list forests):
+def createMg(list assemblers, list forests, use_coarse_direct_solve=True):
     cdef int nlevels = 0
     cdef TACSAssembler **assm = NULL
     cdef TMRQuadForest **qforest = NULL
     cdef TMROctForest **oforest = NULL
     cdef TACSMg *mg = NULL
     cdef int isqforest = 0
+    cdef int coarse_direct = 0
+    if use_coarse_direct_solve:
+        coarse_direct = 1
+
     if len(assemblers) != len(forests):
         errstr = 'Number of Assembler and Forest objects must be equal'
         raise ValueError(errstr)
@@ -1809,14 +1813,14 @@ def createMg(list assemblers, list forests):
         for i in range(nlevels):
             assm[i] = (<Assembler>assemblers[i]).ptr
             qforest[i] = (<QuadForest>forests[i]).ptr
-        TMR_CreateTACSMg(nlevels, assm, qforest, &mg)
+        TMR_CreateTACSMg(nlevels, assm, qforest, &mg, coarse_direct)
         free(qforest)
     else:
         oforest = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))    
         for i in range(nlevels):
             assm[i] = (<Assembler>assemblers[i]).ptr
             oforest[i] = (<OctForest>forests[i]).ptr
-        TMR_CreateTACSMg(nlevels, assm, oforest, &mg)
+        TMR_CreateTACSMg(nlevels, assm, oforest, &mg, coarse_direct)
         free(oforest)
     free(assm)
     if mg != NULL:

@@ -177,7 +177,7 @@ elif ordering == 'multicolor':
 else:
     ordering = TACS.py_NATURAL_ORDER
 
-niters = 1
+niters = 3
 for k in range(niters):
     # Create the topology problem
     assembler, mg = createTopoProblem(forest, ordering, nlevels=nlevs+1)
@@ -239,7 +239,8 @@ for k in range(niters):
         # Make the creator class
         creator = CreateMe(bcs, filtr)
         assembler_refined = creator.createTACS(order, refined)
-                                               # 
+
+        # Do an adjoint-based refinement of the mesh
         TMR.adjointRefine(assembler, assembler_refined, ans, forest, target_err)
 
         # Code for strain energy based refinement
