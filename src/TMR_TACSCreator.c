@@ -225,7 +225,7 @@ TACSAssembler*
 
   // Reordering everything - if needed
   if (ordering != TACSAssembler::NATURAL_ORDER){
-    tacs->computeReordering(ordering, TACSAssembler::ADDITIVE_SCHWARZ);
+    tacs->computeReordering(ordering, TACSAssembler::GAUSS_SEIDEL);
   }
 
   // Initialize the TACSAssembler object
@@ -465,7 +465,7 @@ TACSAssembler*
 
   // Reordering everything
   if (ordering != TACSAssembler::NATURAL_ORDER){
-    tacs->computeReordering(ordering, TACSAssembler::ADDITIVE_SCHWARZ);
+    tacs->computeReordering(ordering, TACSAssembler::GAUSS_SEIDEL);
   }
     
   // Initialize the TACSAssembler object

@@ -104,7 +104,7 @@ comm = MPI.COMM_WORLD
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
-p.add_argument('--htarget', type=float, default=4.0)
+p.add_argument('--htarget', type=float, default=0.15)
 p.add_argument('--ordering', type=str, default='natural')
 args = p.parse_args()
 
@@ -175,7 +175,7 @@ if ordering == 'rcm':
 elif ordering == 'multicolor':
     ordering = TACS.PY_MULTICOLOR_ORDER
 else:
-    ordering = TACS.py_NATURAL_ORDER
+    ordering = TACS.PY_NATURAL_ORDER
 
 niters = 3
 for k in range(niters):
