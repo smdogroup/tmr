@@ -1843,7 +1843,7 @@ def strainEnergyError(Assembler assembler, forest):
         ans = TMR_StrainEnergyErrorEst(quad_forest, assm, <double*>err.data)
     return ans, err
 
-def adjointRefine(Assembler coarse, Assembler fine, Vec adjoint, forest):
+def adjointError(Assembler coarse, Assembler fine, Vec adjoint, forest):
     cdef TacsScalar ans = 0.0
     cdef TacsScalar adj_corr = 0.0
     cdef TMRQuadForest *quad_forest = NULL
@@ -1860,7 +1860,6 @@ def adjointRefine(Assembler coarse, Assembler fine, Vec adjoint, forest):
         ans = TMR_AdjointErrorEst(coarse.ptr, fine.ptr,
                                   adjoint.ptr, quad_forest, 
                                   <double*>err.data, &adj_corr)
-
     return ans, adj_corr, err
 
 def computeReconSolution(Assembler assembler, forest,

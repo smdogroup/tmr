@@ -173,6 +173,7 @@ TACSAssembler*
   forest->getNodes(&nodes);
   if (!nodes){
     forest->createNodes(order);
+    forest->getNodes(&nodes);
   }
 
   // Find the number of nodes for this processor
@@ -413,6 +414,7 @@ TACSAssembler*
   forest->getNodes(&nodes);
   if (!nodes){
     forest->createNodes(order);
+    forest->getNodes(&nodes);
   }
 
   // Find the number of nodes for this processor

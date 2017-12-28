@@ -193,13 +193,36 @@ for k in range(niters):
     f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
     f5.writeToFile('beam%d.f5'%(k))
 
+    ksweight = 10
+    func = functions.KSFailure(assembler, ksweight)
+    func.setKSFailureType('continuous')
+
+    func = functions.Compliance(assembler)
+    fval = assembler.evalFunctions([func])
+
     if k < niters:
-        # Compute the strain energy error estimate
-        estimate, error = TMR.strainEnergyError(assembler, forest)
+        if True:
+            # Compute the strain energy error estimate
+            err_est, error = TMR.strainEnergyError(assembler, forest)
+        else:
+            # Compute the adjoint
+            assembler.evalSVSens(func, res)
+
+            # Compute the adjoint solution
+            adjoint = assembler.createVec()
+            gmres.solve(res, adjoint)
+            adjoint.scale(-1.0)
+
+            # Create the refined mesh
+            refined = createRefined(forest, bcs, order=3)
+
+            # Compute the adjoint and use adjoint-based refinement
+            err_est, func_corr, error = \
+                TMR.adjointError(assembler, refined, adjoint, forest)
 
         # Print the error estimate
         if comm.rank == 0:
-            print 'estimate = ', estimate
+            print 'estimate = ', err_est
 
         # Compute the refinement from the error estimate
         nbins = 30
@@ -254,5 +277,5 @@ for k in range(niters):
             if error[i] > cutoff:
                 refine[i] = 1
 
+        # Refine the forest
         forest.refine(refine)
-

@@ -4947,7 +4947,7 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
               for ( int dof = 0; dof < dof_per_node; dof++, node++ ){
                 for ( int ik = 0; ik < mesh_order; ik++ ){
                   conn[ptr[node] + ik] = fn[2*ik + jj*n] + dof;
-                  weights[ptr[node] + ik] = wt[jj/2][ik];
+                  weights[ptr[node] + ik] = wt[ii/2][ik];
                 }
               }
             }
@@ -4965,7 +4965,7 @@ void TMROctForest::createDepNodeConn( int **_ptr, int **_conn,
               for ( int dof = 0; dof < dof_per_node; dof++, node++ ){
                 for ( int jk = 0; jk < mesh_order; jk++ ){
                   conn[ptr[node] + jk] = fn[ii + (2*jk)*n] + dof;
-                  weights[ptr[node] + jk] = wt[ii/2][jk];
+                  weights[ptr[node] + jk] = wt[jj/2][jk];
                 }
               }
             }
