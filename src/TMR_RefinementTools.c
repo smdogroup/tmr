@@ -1795,22 +1795,18 @@ void TMR_ComputeReconSolution( TACSAssembler *tacs,
   input:
   tacs:        the TACSAssembler object
   forest:      the forest of quadtrees 
-  target_err:  target absolute error value
-  min_level:   minimum refinement level
-  max_level:   maximum refinement level
 
   returns:     predicted strain energy error
 */
-TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
-                                   TMRQuadForest *forest,
-                                   double target_err,
-                                   int min_level, int max_level ){
+double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
+                                 TACSAssembler *tacs,
+                                 double *error ){
   // The maximum number of nodes
   const int max_num_nodes = MAX_ORDER*MAX_ORDER;
 
-  // Set the order of the mesh and the number of enrichment shape functions
+  // The number of enrichment shape functions
   const int order = forest->getMeshOrder();
-  const int nenrich = getNum2dEnrich(order);
+  const int nenrich = getNum3dEnrich(order);
 
   // Get the communicator
   MPI_Comm comm = tacs->getMPIComm();
@@ -1832,10 +1828,6 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
 
   // The number of equations: 2 times the number of nodes for each element
   const int neq = 2*order*order;
-
-  // Compute the contribution to the error in the energy norm from
-  // each element
-  TacsScalar *SE_error = new TacsScalar[ nelems ];
   
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
@@ -1891,9 +1883,9 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     elem->addResidual(time, res, Xpts, vars_elem, dvars, ddvars);
     
     // Take the inner product to get the strain energy
-    SE_error[i] = 0.0;
+    error[i] = 0.0;
     for ( int j = 0; j < elem->numVariables(); j++ ){
-      SE_error[i] += res[j]*vars_elem[j];
+      error[i] += TacsRealPart(res[j]*vars_elem[j]);
     }
 
     // Compute the solution on the refined mesh
@@ -1963,18 +1955,23 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
         
         // Take the inner product to get the strain energy
         for ( int j = 0; j < elem->numVariables(); j++ ){
-          SE_refine += res[j]*vars_interp[j];
+          SE_refine += TacsRealPart(res[j]*vars_interp[j]);
         }
       }
     }
 
     // SE_refine - SE_error should always be a positive quantity
-    SE_error[i] = fabs(SE_refine - SE_error[i]);
+    error[i] = fabs(TacsRealPart(SE_refine - error[i]));
 
     // Add up the total error
-    SE_total_error += SE_error[i];
+    SE_total_error += error[i];
   }
   
+  // Count up the total strain energy 
+  double SE_temp = 0.0;
+  MPI_Allreduce(&SE_total_error, &SE_temp, 1, MPI_DOUBLE, MPI_SUM, comm);
+  SE_total_error = SE_temp;
+
   // Free the global vectors
   uvec->decref();
   uderiv->decref();
@@ -1989,28 +1986,6 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   delete [] vars_interp;
   delete [] res;
 
-  // Count up the total strain energy 
-  TacsScalar SE_temp = 0.0;
-  MPI_Allreduce(&SE_total_error, &SE_temp, 1, TACS_MPI_TYPE, MPI_SUM, comm);
-  SE_total_error = SE_temp;
-
-  // Go through and flag which element should be refined
-  int *refine = new int[ nelems ];
-  memset(refine, 0, nelems*sizeof(int));
-  for ( int i = 0; i < nelems; i++ ){
-    if (SE_error[i] >= target_err){
-      refine[i] = 1;
-    }
-  }
-
-  forest->refine(refine, min_level, max_level);
-
-  // Free the data that is no longer required
-  delete [] SE_error;
-
-  // refine the quadrant mesh based on the local refinement values
-  delete [] refine;
-
   // Return the error
   return SE_total_error;
 }
@@ -2022,14 +1997,13 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   This is the equivalent of the TMR_StrainEnergyRefine function for 
   quadtrees.
 */
-TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
-                                   TMROctForest *forest,
-                                   double target_err,
-                                   int min_level, int max_level ){
+double TMR_StrainEnergyErrorEst( TMROctForest *forest,
+                                 TACSAssembler *tacs,
+                                 double *error ){
   // The maximum number of nodes
   const int max_num_nodes = MAX_ORDER*MAX_ORDER*MAX_ORDER;
 
-  // Set the order of the mesh and the number of enrichment shape functions
+  // The number of enrichment shape functions
   const int order = forest->getMeshOrder();
   const int nenrich = getNum3dEnrich(order);
 
@@ -2053,10 +2027,6 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
 
   // The number of equations: 3 times the number of nodes for each element
   const int neq = 3*order*order*order;
-
-  // Compute the contribution to the error in the energy norm from
-  // each element
-  TacsScalar *SE_error = new TacsScalar[ nelems ];
   
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
@@ -2092,7 +2062,7 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
 
   // Keep track of the total error
-  TacsScalar SE_total_error = 0.0;
+  double SE_total_error = 0.0;
 
   for ( int i = 0; i < nelems; i++ ){
     // The simulation time -- we assume time-independent analysis
@@ -2112,9 +2082,9 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     elem->addResidual(time, res, Xpts, vars_elem, dvars, ddvars);
     
     // Take the inner product to get the strain energy
-    SE_error[i] = 0.0;
+    error[i] = 0.0;
     for ( int j = 0; j < elem->numVariables(); j++ ){
-      SE_error[i] += res[j]*vars_elem[j];
+      error[i] += TacsRealPart(res[j]*vars_elem[j]);
     }
 
     // Compute the solution on the refined mesh
@@ -2196,11 +2166,16 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
     }
 
     // SE_refine - SE_error should always be a positive quantity
-    SE_error[i] = fabs(SE_refine - SE_error[i]);
+    error[i] = fabs(TacsRealPart(SE_refine - error[i]));
 
     // Add up the total error
-    SE_total_error += SE_error[i];
+    SE_total_error += error[i];
   }
+
+  // Count up the total strain energy 
+  double SE_temp = 0.0;
+  MPI_Allreduce(&SE_total_error, &SE_temp, 1, MPI_DOUBLE, MPI_SUM, comm);
+  SE_total_error = SE_temp;
   
   // Free the global vectors
   uvec->decref();
@@ -2216,6 +2191,14 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   delete [] vars_interp;
   delete [] res;
 
+  return SE_total_error;
+}
+
+/*
+  Write out the error bins to stdout
+*/
+void TMR_PrintErrorBins( MPI_Comm comm, 
+                         double *error, const int nelems ){
   const int NUM_BINS = 20;
   double low = -10;
   double high = 0;
@@ -2229,16 +2212,16 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   }
 
   for ( int i = 0; i < nelems; i++ ){
-    if (SE_error[i] <= bin_bounds[0]){
+    if (error[i] <= bin_bounds[0]){
       bins[0]++;
     }
-    else if (SE_error[i] >= bin_bounds[NUM_BINS]){
+    else if (error[i] >= bin_bounds[NUM_BINS]){
       bins[NUM_BINS+1]++;
     }
     else {
       for ( int j = 0; j < NUM_BINS; j++ ){
-        if (SE_error[i] >= bin_bounds[j] && 
-            SE_error[i] < bin_bounds[j+1]){
+        if (error[i] >= bin_bounds[j] && 
+            error[i] < bin_bounds[j+1]){
           bins[j+1]++;
         }
       }
@@ -2271,32 +2254,8 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
            1.0*bins[NUM_BINS+1]/total);
     fflush(stdout);
   }
-
-  // Count up the total strain energy 
-  TacsScalar SE_temp = 0.0;
-  MPI_Allreduce(&SE_total_error, &SE_temp, 1, TACS_MPI_TYPE, MPI_SUM, comm);
-  SE_total_error = SE_temp;
-
-  // Go through and flag which element should be refined
-  int *refine = new int[ nelems ];
-  memset(refine, 0, nelems*sizeof(int));
-  for ( int i = 0; i < nelems; i++ ){
-    if (SE_error[i] >= target_err){
-      refine[i] = 1;
-    }
-  }
-
-  forest->refine(refine, min_level, max_level);
-
-  // Free the data that is no longer required
-  delete [] SE_error;
-
-  // refine the quadrant mesh based on the local refinement values
-  delete [] refine;
-
-  // Return the error
-  return SE_total_error;
 }
+
 /*
   Refine the mesh using the original solution and the adjoint solution
 
@@ -2305,9 +2264,6 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   tacs_refine:   the uniformly refined TACSAssembler object
   adjvec:        the adjoint solution variables
   forest:        the forest of quadtrees 
-  target_err:    absolute value of the target error
-  min_level:     minimum refinement
-  max_level:     maximum refinement
 
   output:
   adj_corr:      adjoint-based functional correction
@@ -2315,13 +2271,12 @@ TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
   returns: 
   absolute functional error estimate
 */
-TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
-                              TACSAssembler *tacs_refine,
-                              TACSBVec *adjoint,
-                              TMRQuadForest *forest,
-                              double target_error,
-                              int min_level, int max_level,
-                              TacsScalar *adj_corr ){
+double TMR_AdjointErrorEst( TACSAssembler *tacs,
+                            TACSAssembler *tacs_refine,
+                            TACSBVec *adjoint,
+                            TMRQuadForest *forest,
+                            double *error,
+                            double *adj_corr ){
   // The maximum number of nodes
   const int max_num_nodes = MAX_ORDER*MAX_ORDER;
 
@@ -2344,11 +2299,8 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
-  TacsScalar total_error_remain = 0.0;
-  TacsScalar total_adjoint_corr = 0.0;
-
-  // Store the error associated with each element
-  TacsScalar *elem_error = new TacsScalar[ nelems ];
+  double total_error_remain = 0.0;
+  double total_adjoint_corr = 0.0;
 
   // Allocate the element arrays needed for the reconstruction
   TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
@@ -2463,42 +2415,26 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
         
         // Add in the contribution to the error from this element
         for ( int j = 0; j < elem->numVariables(); j++ ){
-          elem_error_remain += (adj_elem_refine[j] - adj_elem_interp[j])*res[j];
+          elem_error_remain += 
+            (adj_elem_refine[j] - adj_elem_interp[j])*res[j];
         }
       }
     }
 
     // Add the contribution to the total remaining error and the
     // adjoint correction.
-    total_error_remain += fabs(elem_error_remain);
-    total_adjoint_corr += elem_error_remain;
-
-    elem_error[elem] = fabs(elem_error_remain);
+    error[elem] = fabs(TacsRealPart(elem_error_remain));
+    total_error_remain += error[elem];
+    total_adjoint_corr += TacsRealPart(elem_error_remain);
   }
 
   // Sum up the contributions across all processors
-  TacsScalar temp[2];
+  double temp[2];
   temp[0] = total_error_remain;
   temp[1] = total_adjoint_corr;
-  MPI_Allreduce(MPI_IN_PLACE, temp, 2, TACS_MPI_TYPE, MPI_SUM, comm);
+  MPI_Allreduce(MPI_IN_PLACE, temp, 2, MPI_DOUBLE, MPI_SUM, comm);
   total_error_remain = temp[0];
   total_adjoint_corr = temp[1];
-
-  // Set the adjoint reconstruction as the variables
-  tacs_refine->setVariables(adjoint_refine);
-
-  // Allocate the refinement array - which elements will be refined
-  int *refine = new int[ nelems ];
-  memset(refine, 0, nelems*sizeof(int));
-
-
-
-
-
-
-
-
-
 
   // Free the data that is no longer required
   delete [] vars_elem;
@@ -2511,10 +2447,6 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   delete [] res;
   adjoint_refine->decref();
 
-  // refine the quadrant mesh based on the local refinement values
-  forest->refine(refine, min_level, max_level);
-  delete [] refine;
-
   // Set the adjoint residual correction
   if (adj_corr){
     *adj_corr = total_adjoint_corr;
@@ -2524,17 +2456,28 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   return total_error_remain;
 }
 
+/*
+  Compute the error estimate in each element as well as the total 
+  remaining error and the adjoint correction
 
+  input:
+  tacs:          the TACSAssembler object
+  tacs_refine:   the uniformly refined TACSAssembler object
+  adjvec:        the adjoint solution variables
+  forest:        the forest of quadtrees 
 
+  output:
+  adj_corr:      adjoint-based functional correction
 
-TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
-                              TACSAssembler *tacs_refine,
-                              TACSBVec *adjoint,
-                              TMROctForest *forest,
-                              double target_error,
-                              int min_level, int max_level,
-                              TacsScalar *adj_corr ){
-  // The maximum number of nodes
+  returns: 
+  absolute functional error estimate
+*/
+double TMR_AdjointErrorEst( TACSAssembler *tacs,
+                            TACSAssembler *tacs_refine,
+                            TACSBVec *adjoint,
+                            TMROctForest *forest,
+                            double *error,
+                            double *adj_corr ){
   const int max_num_nodes = MAX_ORDER*MAX_ORDER*MAX_ORDER;
 
   // Get the order of the mesh and the number of enrichment shape functions
@@ -2554,14 +2497,10 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   TACSBVec *adjoint_refine = tacs_refine->createVec();
   adjoint_refine->incref();
 
-  // Allocate the refinement array - which elements will be refined
-  int *refine = new int[ nelems ];
-  memset(refine, 0, nelems*sizeof(int));
-
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
-  TacsScalar total_error_remain = 0.0;
-  TacsScalar total_adjoint_corr = 0.0;
+  double total_error_remain = 0.0;
+  double total_adjoint_corr = 0.0;
 
   // Allocate arrays needed for the reconstruction
   TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
@@ -2610,7 +2549,7 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
     adjoint->getValues(elem_len, elem_nodes, adj_elem);
 
     // Keep track of the remaining error from this element
-    TacsScalar elem_error_remain = 0.0;
+    double elem_error_remain = 0.0;
 
     // For each element on the refined mesh, compute the interpolated
     // solution and sum up the local contribution to the adjoint
@@ -2624,7 +2563,7 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
           memset(vars_interp, 0, 
             vars_per_node*order*order*order*sizeof(TacsScalar));
           memset(adj_elem_interp, 0, 
-                 vars_per_node*order*order*order*sizeof(TacsScalar));
+            vars_per_node*order*order*order*sizeof(TacsScalar));
 
           // Perform the interpolation
           for ( int p = 0; p < order; p++ ){
@@ -2690,25 +2629,18 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
 
     // Add the contribution to the total remaining error and the
     // adjoint correction.
-    total_error_remain += fabs(elem_error_remain);
-    total_adjoint_corr += elem_error_remain;
-
-    // Refine the element if the element error exceeds the target error
-    if (fabs(elem_error_remain) > target_error){
-      refine[elem] = 1;
-    }
+    error[elem] = fabs(TacsRealPart(elem_error_remain));
+    total_error_remain += error[elem];
+    total_adjoint_corr += TacsRealPart(elem_error_remain);
   }
 
   // Sum up the contributions across all processors
-  TacsScalar temp[2];
+  double temp[2];
   temp[0] = total_error_remain;
   temp[1] = total_adjoint_corr;
-  MPI_Allreduce(MPI_IN_PLACE, temp, 2, TACS_MPI_TYPE, MPI_SUM, comm);
+  MPI_Allreduce(MPI_IN_PLACE, temp, 2, MPI_DOUBLE, MPI_SUM, comm);
   total_error_remain = temp[0];
   total_adjoint_corr = temp[1];
-
-  // Set the adjoint reconstruction as the variables
-  tacs_refine->setVariables(adjoint_refine);
 
   // Free the data that is no longer required
   delete [] vars_elem;
@@ -2720,10 +2652,6 @@ TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
   delete [] adj_elem_refine;
   delete [] res;
   adjoint_refine->decref();
-
-  // refine the quadrant mesh based on the local refinement values
-  forest->refine(refine, min_level, max_level);
-  delete [] refine;
 
   // Set the adjoint residual correction
   if (adj_corr){

@@ -5,36 +5,18 @@ import numpy as np
 import argparse
 import os
 
-class CreateMe(TMR.OctTopoCreator):
-    def __init__(self, bcs, filt):
-        TMR.OctTopoCreator.__init__(bcs, filt)
+class CreateMe(TMR.OctCreator):
+    def __init__(self, bcs):
+        TMR.OctTopoCreator.__init__(bcs)
 
-    def createElement(self, order, octant, index, weights):
+    def createElement(self, order, octant):
         '''Create the element'''
         rho = 0.1015 # lbs/in
         E = 100e6 # 100,000 ksi
         nu = 0.3
         stiff = constitutive.isoSolidStiff(rho, E, nu)
-        elem = elements.Solid(2, stiff)
+        elem = elements.Solid(order, stiff)
         return elem
-
-def addVertexLoad(comm, order, forest, attr, assembler, F):
-    # Retrieve octants from the forest
-    octants = forest.getOctants()
-    node_octs = forest.getNodesWithAttribute(attr)
-    force = assembler.createVec()
-    f_array = force.getArray()
-    node_range = forest.getNodeRange()
-    mpi_rank = comm.Get_rank()
-    for i in range(len(node_octs)):
-        if (node_octs[i].tag >= node_range[mpi_rank]) and \
-               (node_octs[i].tag < node_range[mpi_rank+1]): 
-            index = node_octs[i].tag-node_range[mpi_rank]
-            
-            f_array[3*index] -= F[0]
-            f_array[3*index+1] -= F[1]
-            f_array[3*index+2] -= F[2]
-    return force
 
 def addFaceTraction(order, forest, attr, assembler, tr):
     trac = []
@@ -53,29 +35,33 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     return aux
 
-def createTopoProblem(forest, ordering, order=2, nlevels=2):
+def createRefined(forest, bcs, order=2):
+    refined = forest.refine()
+    creator = CreateMe(bcs)
+    return creator.createTACS(order, forest)
+
+def createProblem(forest, bcs, ordering, order=2, nlevels=2):
     # Create the forest
     forests = []
-    filters = []
     assemblers = []
-    varmaps = []
-    vecindices = []
 
     # Create the trees, rebalance the elements and repartition
     forest.balance(1)
     forest.repartition()
     forests.append(forest)
 
-    # Create the filter
-    filtr = forest.coarsen()
-    filtr.balance(1)
-    filters.append(filtr)
-
     # Make the creator class
-    creator = CreateMe(bcs, filters[-1])
+    creator = CreateMe(bcs)
     assemblers.append(creator.createTACS(order, forest, ordering))
-    varmaps.append(creator.getMap())
-    vecindices.append(creator.getIndices())
+
+    if order == 3:
+        forest = forests[-1].duplicate()
+        forest.balance(1)
+        forests.append(forest)
+
+        # Make the creator class
+        creator = CreateMe(bcs)
+        assemblers.append(creator.createTACS(2, forest, ordering))
 
     for i in xrange(nlevels-1):
         forest = forests[-1].coarsen()
@@ -83,19 +69,12 @@ def createTopoProblem(forest, ordering, order=2, nlevels=2):
         forest.repartition()
         forests.append(forest)
 
-        # Create the filter
-        filtr = forest.coarsen()
-        filtr.balance(1)
-        filters.append(filtr)
-
         # Make the creator class
-        creator = CreateMe(bcs, filters[-1])
-        assemblers.append(creator.createTACS(order, forest, ordering))
-        varmaps.append(creator.getMap())
-        vecindices.append(creator.getIndices())
+        creator = CreateMe(bcs)
+        assemblers.append(creator.createTACS(2, forest, ordering))
 
     # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests)
+    mg = TMR.createMg(assemblers, forests, use_coarse_direct_solve=True)
 
     return assemblers[0], mg
 
@@ -158,16 +137,14 @@ model = mesh.createModelFromMesh()
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
-nlevs = 2
+depth = 0
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
-forest.createTrees(nlevs)
+forest.createTrees(depth)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
 bcs.addBoundaryCondition('fixed')
-
-target_rel_err = 1e-4
 
 # Set the ordering to use
 if ordering == 'rcm':
@@ -180,7 +157,8 @@ else:
 niters = 3
 for k in range(niters):
     # Create the topology problem
-    assembler, mg = createTopoProblem(forest, ordering, nlevels=nlevs+1)
+    assembler, mg = createProblem(forest, bcs, ordering, 
+                                  order=3, nlevels=depth+1+k)
 
     # Computet the surface traction magnitude
     diameter = 1.0
@@ -190,8 +168,7 @@ for k in range(niters):
     tr = [0.0, ty, 0.0]
 
     # Add the surface traction
-    order = 2
-    aux = addFaceTraction(order, forest, 'load', assembler, tr)
+    aux = addFaceTraction(3, forest, 'load', assembler, tr)
     assembler.setAuxElements(aux)
 
     # Create the assembler object
@@ -216,33 +193,66 @@ for k in range(niters):
     f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
     f5.writeToFile('beam%d.f5'%(k))
 
-    if k < niters-1:
-        # Get the number of elements
-        nelems = assembler.getNumElements()
-        nelems = comm.allreduce(nelems, op=MPI.SUM)
+    if k < niters:
+        # Compute the strain energy error estimate
+        estimate, error = TMR.strainEnergyError(assembler, forest)
 
-        # Compute the strain energy
-        obj = -0.5*res.dot(ans)
+        # Print the error estimate
+        if comm.rank == 0:
+            print 'estimate = ', estimate
 
-        # Set the target error
-        target_err = target_rel_err*obj/nelems
+        # Compute the refinement from the error estimate
+        nbins = 30
+        low = -15
+        high = 0
+        bounds = 10**np.linspace(low, high, nbins+1)
+        bins = np.zeros(nbins+2, dtype=np.int)
 
-        # Create the refined mesh
-        refined = forest.duplicate()
-        refined.refine()
-        refined.balance(1)
-        
-        # Create the filter
-        filtr = refined.coarsen()
-        filtr.balance(1)
+        # Compute the bins
+        for i in range(len(error)):
+            if error[i] < bounds[0]:
+                bins[0] += 1
+            elif error[i] > bounds[-1]:
+                bins[-1] += 1
+            else:
+                for j in range(len(bounds)-1):
+                    if (error[i] >= bounds[j] and
+                        error[i] < bounds[j+1]):
+                        bins[j+1] += 1
 
-        # Make the creator class
-        creator = CreateMe(bcs, filtr)
-        assembler_refined = creator.createTACS(order, refined)
+        # Compute the number of bins
+        bins = comm.allreduce(bins, MPI.SUM)
 
-        # Do an adjoint-based refinement of the mesh
-        TMR.adjointRefine(assembler, assembler_refined, ans, forest, target_err)
+        # Compute the sum of the bins
+        total = np.sum(bins)
 
-        # Code for strain energy based refinement
-        # TMR.strainEnergyRefine(assembler, forest, target_err)
+        # Compute the cutoff
+        bsum = bins[-1]
+        cutoff = bounds[-1]
+        for i in range(len(bounds), -1, -1):
+            if bsum > 0.25*total:
+                cutoff = bounds[i]
+                break
+            bsum += bins[i]
+
+        # Print out the result
+        if comm.rank == 0:
+            print '%10s  %10s  %12s  %12s'%(
+                'low', 'high', 'bins', 'percentage')
+            print '%10.2e  %10s  %12d  %12.2f'%(
+                bounds[-1], ' ', bins[-1], 1.0*bins[-1]/total)
+            for k in range(nbins-1, -1, -1):
+                print '%10.2e  %10.2e  %12d  %12.2f'%(
+                    bounds[k], bounds[k+1], bins[k+1], 1.0*bins[k]/total)
+            print '%10s  %10.2e  %12d  %12.2f'%(
+                ' ', bounds[0], bins[0], 1.0*bins[0]/total)
+            print 'cutoff:  %15.2e'%(cutoff)
+
+        # Compute the refinement
+        refine = np.zeros(len(error), dtype=np.intc)
+        for i in range(len(error)):
+            if error[i] > cutoff:
+                refine[i] = 1
+
+        forest.refine(refine)
 

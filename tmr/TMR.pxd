@@ -361,18 +361,12 @@ cdef extern from "TMR_RefinementTools.h":
                                   TACSAssembler*, TACSBVec*, TACSBVec*)
     void TMR_ComputeReconSolution(TACSAssembler*, TMROctForest*,
                                   TACSAssembler*, TACSBVec*, TACSBVec*)
-    TacsScalar TMR_StrainEnergyRefine(TACSAssembler*,
-                                      TMRQuadForest*,
-                                      double, int, int)
-    TacsScalar TMR_StrainEnergyRefine(TACSAssembler*,
-                                      TMROctForest*,
-                                      double, int, int)
-    TacsScalar TMR_AdjointRefine(TACSAssembler*, TACSAssembler*,
-                                 TACSBVec*, TMRQuadForest*,
-                                 double, int, int, TacsScalar*)
-    TacsScalar TMR_AdjointRefine(TACSAssembler*, TACSAssembler*,
-                                 TACSBVec*, TMROctForest*,
-                                 double, int, int, TacsScalar*)
+    double TMR_StrainEnergyErrorEst(TMRQuadForest*, TACSAssembler*, double*)
+    double TMR_StrainEnergyErrorEst(TMROctForest*, TACSAssembler*, double*)
+    double TMR_AdjointErrorEst(TACSAssembler*, TACSAssembler*, TACSBVec*,
+                               TMRQuadForest*, double*, double*)
+    double TMR_AdjointErrorEst(TACSAssembler*, TACSAssembler*, TACSBVec*,
+                               TMROctForest*, double*, double*)
 
 cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)

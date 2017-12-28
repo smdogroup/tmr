@@ -1827,43 +1827,41 @@ def createMg(list assemblers, list forests, use_coarse_direct_solve=True):
         return _init_Pc(mg)
     return None
 
-def strainEnergyRefine(Assembler assembler, forest, double target_err,
-                       int min_refine=0, int max_refine=MAX_LEVEL):
+def strainEnergyError(Assembler assembler, forest):
+    cdef double ans = 0.0
     cdef TACSAssembler *assm = NULL
     cdef TMRQuadForest *quad_forest = NULL
     cdef TMROctForest *oct_forest = NULL
-    cdef TacsScalar ans = 0.0
+    cdef np.ndarray err = None
     assm = assembler.ptr
+    err = np.zeros(assm.getNumElements(), dtype=np.double)
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
-        ans = TMR_StrainEnergyRefine(assm, oct_forest, target_err,
-                                     min_refine, max_refine)
+        ans = TMR_StrainEnergyErrorEst(oct_forest, assm, <double*>err.data)
     elif isinstance(forest, QuadForest):
         quad_forest = (<QuadForest>forest).ptr
-        ans = TMR_StrainEnergyRefine(assm, quad_forest, target_err,
-                                     min_refine, max_refine)
-    return ans
+        ans = TMR_StrainEnergyErrorEst(quad_forest, assm, <double*>err.data)
+    return ans, err
 
-def adjointRefine(Assembler coarse, Assembler fine,
-                  Vec adjoint, forest, double target_err,
-                  int min_refine=0, int max_refine=MAX_LEVEL):
+def adjointRefine(Assembler coarse, Assembler fine, Vec adjoint, forest):
     cdef TacsScalar ans = 0.0
-    cdef TacsScalar adj_corr
+    cdef TacsScalar adj_corr = 0.0
     cdef TMRQuadForest *quad_forest = NULL
     cdef TMROctForest *oct_forest = NULL
-
+    cdef np.ndarray err = None
+    err = np.zeros(coarse.ptr.getNumElements(), dtype=np.double)
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
-        ans = TMR_AdjointRefine(coarse.ptr, fine.ptr,
-                                adjoint.ptr, oct_forest, target_err,
-                                min_refine, max_refine, &adj_corr)
+        ans = TMR_AdjointErrorEst(coarse.ptr, fine.ptr,
+                                  adjoint.ptr, oct_forest, 
+                                  <double*>err.data, &adj_corr)
     elif isinstance(forest, QuadForest):
         quad_forest = (<QuadForest>forest).ptr
-        ans = TMR_AdjointRefine(coarse.ptr, fine.ptr,
-                                adjoint.ptr, quad_forest, target_err,
-                                min_refine, max_refine, &adj_corr)
+        ans = TMR_AdjointErrorEst(coarse.ptr, fine.ptr,
+                                  adjoint.ptr, quad_forest, 
+                                  <double*>err.data, &adj_corr)
 
-    return ans, adj_corr
+    return ans, adj_corr, err
 
 def computeReconSolution(Assembler assembler, forest,
                          Assembler refined, Vec uvec=None,

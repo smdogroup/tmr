@@ -298,152 +298,176 @@ void quadSmoothing( int nsmooth, int num_fixed_pts,
                     int num_quads, const int *quads,
                     double *prm, TMRPoint *p,
                     TMRFace *face ){
+  // Compute the min/max degree
+  int min_degree = 0;
+  int max_degree = 0;
+  for ( int i = num_fixed_pts; i < num_pts; i++ ){
+    int N = ptr[i+1] - ptr[i];
+    if (i == num_fixed_pts){
+      min_degree = N;
+      max_degree = N; 
+    }
+    if (N < min_degree){
+      min_degree = N;
+    }
+    if (N > max_degree){
+      max_degree = N;
+    }
+  }
+
   for ( int iter = 0; iter < nsmooth; iter++ ){
-    for ( int i = num_fixed_pts; i < num_pts; i++ ){
-      // Evaluate the derivatives w.r.t. the parameter locations so
-      // that we can take movement in the physical plane and convert
-      // it to movement in the parametric coordinates
-      TMRPoint Xu, Xv;
-      face->evalDeriv(prm[2*i], prm[2*i+1], &Xu, &Xv);
+    for ( int degree = min_degree; degree <= max_degree; degree++ ){
+      for ( int i = num_fixed_pts; i < num_pts; i++ ){
+        int N = ptr[i+1] - ptr[i];
 
-      // Normalize the directions Xu, Xv to form a locally-orthonormal 
-      // coordinate frame aligned with the surface
-      TMRPoint xdir, ydir;
+        if (N == degree){
+          // Evaluate the derivatives w.r.t. the parameter locations so
+          // that we can take movement in the physical plane and convert
+          // it to movement in the parametric coordinates
+          TMRPoint Xu, Xv;
+          face->evalDeriv(prm[2*i], prm[2*i+1], &Xu, &Xv);
 
-      // Normalize the x-direction
-      double xnorm = sqrt(Xu.dot(Xu));
-      xdir.x = Xu.x/xnorm;
-      xdir.y = Xu.y/xnorm;
-      xdir.z = Xu.z/xnorm;
+          // Normalize the directions Xu, Xv to form a locally-orthonormal 
+          // coordinate frame aligned with the surface
+          TMRPoint xdir, ydir;
 
-      // Remove the component of the x-direction from Xv
-      double dot = xdir.dot(Xv);
-      ydir.x = Xv.x - dot*xdir.x;
-      ydir.y = Xv.y - dot*xdir.y;
-      ydir.z = Xv.z - dot*xdir.z;
+          // Normalize the x-direction
+          double xnorm = sqrt(Xu.dot(Xu));
+          xdir.x = Xu.x/xnorm;
+          xdir.y = Xu.y/xnorm;
+          xdir.z = Xu.z/xnorm;
 
-      double ynorm = sqrt(ydir.dot(ydir));
-      ydir.x = ydir.x/ynorm;
-      ydir.y = ydir.y/ynorm;
-      ydir.z = ydir.z/ynorm;
+          // Remove the component of the x-direction from Xv
+          double dot = xdir.dot(Xv);
+          ydir.x = Xv.x - dot*xdir.x;
+          ydir.y = Xv.y - dot*xdir.y;
+          ydir.z = Xv.z - dot*xdir.z;
 
-      int N = ptr[i+1] - ptr[i];
-      if (N > 0){
-        // Loop over the quadrilaterals that reference this point 
-        double A = 0.0, B = 0.0;  
-        for ( int qp = ptr[i]; qp < ptr[i+1]; qp++ ){
-          const int *quad = &quads[4*pts_to_quads[qp]];
+          double ynorm = sqrt(ydir.dot(ydir));
+          ydir.x = ydir.x/ynorm;
+          ydir.y = ydir.y/ynorm;
+          ydir.z = ydir.z/ynorm;
 
-          // Pick out the influence triangle points from the quadrilateral 
-          // This consists of the base point i and the following two
-          int ijk[3];
-          if (quad[0] == i){
-            ijk[0] = quad[0];  ijk[1] = quad[1];  ijk[2] = quad[3];
+          if (N > 0){
+            // Loop over the quadrilaterals that reference this point 
+            double A = 0.0, B = 0.0;  
+            for ( int qp = ptr[i]; qp < ptr[i+1]; qp++ ){
+              const int *quad = &quads[4*pts_to_quads[qp]];
+
+              // Pick out the influence triangle points from the quadrilateral 
+              // This consists of the base point i and the following two
+              int ijk[3];
+              if (quad[0] == i){
+                ijk[0] = quad[0];  ijk[1] = quad[1];  ijk[2] = quad[3];
+              }
+              else if (quad[1] == i){
+                ijk[0] = quad[1];  ijk[1] = quad[2];  ijk[2] = quad[0];
+              }
+              else if (quad[2] == i){
+                ijk[0] = quad[2];  ijk[1] = quad[3];  ijk[2] = quad[1];
+              }
+              else {
+                ijk[0] = quad[3];  ijk[1] = quad[0];  ijk[2] = quad[2];
+              }
+
+              // Now compute the geometric quantities
+              // p = yj - yk, q = xk - xj
+              double xi = xdir.dot(p[ijk[0]]);
+              double yi = ydir.dot(p[ijk[0]]);
+              double xj = xdir.dot(p[ijk[1]]);
+              double yj = ydir.dot(p[ijk[1]]);
+              double xk = xdir.dot(p[ijk[2]]);
+              double yk = ydir.dot(p[ijk[2]]);
+              double p = yj - yk;
+              double q = xk - xj;
+              double r = xj*yk - xk*yj;
+              double a = 0.5*(p*xi + q*yi + r);
+              double b = sqrt(p*p + q*q); 
+              A += a;
+              B += b;
+            }
+
+            double hbar = 2.0*A/B;
+            double bbar = B/N;
+
+            // Set the weights
+            double w1 = 1.0/(hbar*hbar);
+            double w2 = 4.0/(bbar*bbar);
+
+            // The parameters for the Jacobian/right-hand-side
+            double s1 = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, s5 = 0.0;
+
+            for ( int qp = ptr[i]; qp < ptr[i+1]; qp++ ){
+              const int *quad = &quads[4*pts_to_quads[qp]];
+
+              // Pick out the influence triangle points from the quadrilateral 
+              // This consists of the base point i and the following two
+              int ijk[3];
+              if (quad[0] == i){
+                ijk[0] = quad[0];  ijk[1] = quad[1];  ijk[2] = quad[3];
+              }
+              else if (quad[1] == i){
+                ijk[0] = quad[1];  ijk[1] = quad[2];  ijk[2] = quad[0];
+              }
+              else if (quad[2] == i){
+                ijk[0] = quad[2];  ijk[1] = quad[3];  ijk[2] = quad[1];
+              }
+              else {
+                ijk[0] = quad[3];  ijk[1] = quad[0];  ijk[2] = quad[2];
+              }
+
+              // Now compute the geometric quantities
+              // p = yj - yk, q = xk - xj
+              double xi = xdir.dot(p[ijk[0]]);
+              double yi = ydir.dot(p[ijk[0]]);
+              double xj = xdir.dot(p[ijk[1]]);
+              double yj = ydir.dot(p[ijk[1]]);
+              double xk = xdir.dot(p[ijk[2]]);
+              double yk = ydir.dot(p[ijk[2]]);
+              double p = yj - yk;
+              double q = xk - xj;
+              double r = xj*yk - xk*yj;
+              double a = 0.5*(p*xi + q*yi + r);
+              double b = sqrt(p*p + q*q); 
+
+              // Other quantities derived from the in-plane triangle data
+              double xm = 0.5*(xj + xk);
+              double ym = 0.5*(yj + yk);
+              double binv2 = 1.0/(b*b);
+
+              // Sum up the contributions to the s terms
+              s1 += binv2*(w1*p*p + w2*q*q);
+              s2 += binv2*p*q*(w1 - w2);
+              s3 += binv2*(w1*p*(hbar*b - 2*a) - 
+                           w2*q*((xi - xm)*q - (yi - ym)*p));
+              s4 += binv2*(w1*q*q + w2*p*p);
+              s5 += binv2*(w1*q*(hbar*b - 2*a) - 
+                           w2*p*((yi - ym)*p - (xi - xm)*q));
+            }
+
+            // Compute the updates in the physical plane
+            double det = s1*s4 - s2*s2;
+            double lx = 0.0, ly = 0.0;
+            if (det != 0.0){
+              det = 1.0/det;
+              lx = det*(s3*s4 - s2*s5);
+              ly = det*(s1*s5 - s2*s3);
+            }
+
+            // Check that the requested move direction is well-defined
+            if (lx == lx && ly == ly){
+              // Add up the displacements along the local coordinate directions
+              TMRPoint dir;
+              dir.x = lx*xdir.x + ly*ydir.x;
+              dir.y = lx*xdir.y + ly*ydir.y;
+              dir.z = lx*xdir.z + ly*ydir.z;
+
+              // Add the parameter movement along the specified direction
+              // and compute the update
+              addParamMovement(1.0, &Xu, &Xv, &dir, &prm[2*i]);
+              face->evalPoint(prm[2*i], prm[2*i+1], &p[i]);
+            }
           }
-          else if (quad[1] == i){
-            ijk[0] = quad[1];  ijk[1] = quad[2];  ijk[2] = quad[0];
-          }
-          else if (quad[2] == i){
-            ijk[0] = quad[2];  ijk[1] = quad[3];  ijk[2] = quad[1];
-          }
-          else {
-            ijk[0] = quad[3];  ijk[1] = quad[0];  ijk[2] = quad[2];
-          }
-
-          // Now compute the geometric quantities
-          // p = yj - yk, q = xk - xj
-          double xi = xdir.dot(p[ijk[0]]);
-          double yi = ydir.dot(p[ijk[0]]);
-          double xj = xdir.dot(p[ijk[1]]);
-          double yj = ydir.dot(p[ijk[1]]);
-          double xk = xdir.dot(p[ijk[2]]);
-          double yk = ydir.dot(p[ijk[2]]);
-          double p = yj - yk;
-          double q = xk - xj;
-          double r = xj*yk - xk*yj;
-          double a = 0.5*(p*xi + q*yi + r);
-          double b = sqrt(p*p + q*q); 
-          A += a;
-          B += b;
-        }
-
-        double hbar = 2.0*A/B;
-        double bbar = B/N;
-
-        // Set the weights
-        double w1 = 1.0/(hbar*hbar);
-        double w2 = 4.0/(bbar*bbar);
-
-        // The parameters for the Jacobian/right-hand-side
-        double s1 = 0.0, s2 = 0.0, s3 = 0.0, s4 = 0.0, s5 = 0.0;
-
-        for ( int qp = ptr[i]; qp < ptr[i+1]; qp++ ){
-          const int *quad = &quads[4*pts_to_quads[qp]];
-
-          // Pick out the influence triangle points from the quadrilateral 
-          // This consists of the base point i and the following two
-          int ijk[3];
-          if (quad[0] == i){
-            ijk[0] = quad[0];  ijk[1] = quad[1];  ijk[2] = quad[3];
-          }
-          else if (quad[1] == i){
-            ijk[0] = quad[1];  ijk[1] = quad[2];  ijk[2] = quad[0];
-          }
-          else if (quad[2] == i){
-            ijk[0] = quad[2];  ijk[1] = quad[3];  ijk[2] = quad[1];
-          }
-          else {
-            ijk[0] = quad[3];  ijk[1] = quad[0];  ijk[2] = quad[2];
-          }
-
-          // Now compute the geometric quantities
-          // p = yj - yk, q = xk - xj
-          double xi = xdir.dot(p[ijk[0]]);
-          double yi = ydir.dot(p[ijk[0]]);
-          double xj = xdir.dot(p[ijk[1]]);
-          double yj = ydir.dot(p[ijk[1]]);
-          double xk = xdir.dot(p[ijk[2]]);
-          double yk = ydir.dot(p[ijk[2]]);
-          double p = yj - yk;
-          double q = xk - xj;
-          double r = xj*yk - xk*yj;
-          double a = 0.5*(p*xi + q*yi + r);
-          double b = sqrt(p*p + q*q); 
-
-          // Other quantities derived from the in-plane triangle data
-          double xm = 0.5*(xj + xk);
-          double ym = 0.5*(yj + yk);
-          double binv2 = 1.0/(b*b);
-
-          // Sum up the contributions to the s terms
-          s1 += binv2*(w1*p*p + w2*q*q);
-          s2 += binv2*p*q*(w1 - w2);
-          s3 += binv2*(w1*p*(hbar*b - 2*a) - w2*q*((xi - xm)*q - (yi - ym)*p));
-          s4 += binv2*(w1*q*q + w2*p*p);
-          s5 += binv2*(w1*q*(hbar*b - 2*a) - w2*p*((yi - ym)*p - (xi - xm)*q));
-        }
-
-        // Compute the updates in the physical plane
-        double det = s1*s4 - s2*s2;
-        double lx = 0.0, ly = 0.0;
-        if (det != 0.0){
-          det = 1.0/det;
-          lx = det*(s3*s4 - s2*s5);
-          ly = det*(s1*s5 - s2*s3);
-        }
-
-        // Check that the requested move direction is well-defined
-        if (lx == lx && ly == ly){
-          // Add up the displacements along the local coordinate directions
-          TMRPoint dir;
-          dir.x = lx*xdir.x + ly*ydir.x;
-          dir.y = lx*xdir.y + ly*ydir.y;
-          dir.z = lx*xdir.z + ly*ydir.z;
-
-          // Add the parameter movement along the specified direction
-          // and compute the update
-          addParamMovement(1.0, &Xu, &Xv, &dir, &prm[2*i]);
-          face->evalPoint(prm[2*i], prm[2*i+1], &p[i]);
         }
       }
     }

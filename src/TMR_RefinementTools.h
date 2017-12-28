@@ -31,39 +31,37 @@ void TMR_ComputeReconSolution( TACSAssembler *tacs,
                                TACSBVec *_uvec_refined=NULL );
 
 /*
+  Print the error as a series of bins
+*/
+void TMR_PrintErrorBins( MPI_Comm comm, double *error, const int nelems );
+
+/*
   Perform a mesh refinement based on the strain engery refinement
   criteria.
 */
-TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
-                                   TMRQuadForest *forest,
-                                   double target_err,
-                                   int min_level=0, 
-                                   int max_level=TMR_MAX_LEVEL );
-TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
-                                   TMROctForest *forest,
-                                   double target_err,
-                                   int min_level=0, 
-                                   int max_level=TMR_MAX_LEVEL );
+double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
+                                 TACSAssembler *tacs,
+                                 double *error );
+double TMR_StrainEnergyErrorEst( TMROctForest *forest,
+                                 TACSAssembler *tacs,
+                                 double *error );
 
 /*
   Perform adjoint-based mesh refinement on the forest of quadtrees
 */
-TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
-                              TACSAssembler *refine,
-                              TACSBVec *adjvec,
-                              TMRQuadForest *forest,
-                              double target_err,
-                              int min_level=0, 
-                              int max_level=TMR_MAX_LEVEL,
-                              TacsScalar *adj_corr=NULL );
-TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
-                              TACSAssembler *tacs_refine,
-                              TACSBVec *adjoint,
-                              TMROctForest *forest,
-                              double target_error,
-                              int min_level=0, 
-                              int max_level=TMR_MAX_LEVEL,
-                              TacsScalar *adj_corr=NULL );
+double TMR_AdjointErrorEst( TACSAssembler *tacs,
+                            TACSAssembler *tacs_refine,
+                            TACSBVec *adjoint,
+                            TMRQuadForest *forest,
+                            double *error,
+                            double *adj_corr );
+double TMR_AdjointErrorEst( TACSAssembler *tacs,
+                            TACSAssembler *tacs_refine,
+                            TACSBVec *adjoint,
+                            TMROctForest *forest,
+                            double *error,
+                            double *adj_corr );
+
 /*
   Evaluate a stress constraint based on a higher-order interpolation
   of the stresses in the problem.
