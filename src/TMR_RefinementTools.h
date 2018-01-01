@@ -11,10 +11,12 @@
 */
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMROctForest *forest[], TACSMg **_mg, 
-                       int use_coarse_direct_solve=1 );
+                       int use_coarse_direct_solve=1,
+                       int use_chebyshev_smoother=0 );
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMRQuadForest *forest[], TACSMg **_mg, 
-                       int use_coarse_direct_solve=1 );
+                       int use_coarse_direct_solve=1,
+                       int use_chebyshev_smoother=0 );
 
 /*
   Compute the reconstructed solution on a uniformly refined mesh

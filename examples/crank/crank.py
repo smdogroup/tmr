@@ -74,7 +74,8 @@ def createProblem(forest, bcs, ordering, order=2, nlevels=2):
         assemblers.append(creator.createTACS(2, forest, ordering))
 
     # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests, use_coarse_direct_solve=True)
+    mg = TMR.createMg(assemblers, forests, use_coarse_direct_solve=True, 
+        use_chebyshev_smoother=False)
 
     return assemblers[0], mg
 
