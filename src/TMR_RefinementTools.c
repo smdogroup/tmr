@@ -2244,14 +2244,42 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
   Write out the error bins to stdout
 */
 void TMR_PrintErrorBins( MPI_Comm comm, 
-                         double *error, const int nelems ){
-  const int NUM_BINS = 20;
-  double low = -10;
+                         const double *error, const int nelems, 
+                         double *mean, double *stddev ){
+  const int NUM_BINS = 30;
+  double low = -15;
   double high = 0;
   double bin_bounds[NUM_BINS+1];
   int bins[NUM_BINS+2];
   memset(bins, 0, (NUM_BINS+2)*sizeof(int));
 
+  // Compute the total number of elements
+  int ntotal = nelems;
+  MPI_Allreduce(MPI_IN_PLACE, &ntotal, 1, MPI_INT, MPI_SUM, comm);
+
+  // Compute the mean of the element errors
+  double m = 0;
+  for ( int i = 0; i < nelems; i++ ){
+    m += error[i];
+  }
+  MPI_Allreduce(MPI_IN_PLACE, &m, 1, MPI_DOUBLE, MPI_SUM, comm);
+  m = m/ntotal;
+  if (mean){
+    *mean = m;
+  }
+
+  // Compute the standard deviation
+  double s = 0;
+  for ( int i = 0; i < nelems; i++ ){
+    s += (error[i] - m)*(error[i] - m);
+  }
+  MPI_Allreduce(MPI_IN_PLACE, &s, 1, MPI_DOUBLE, MPI_SUM, comm);
+  s = sqrt(s/(ntotal-1));
+  if (stddev){
+    *stddev = s;
+  }
+
+  // Now compute the bins
   for ( int k = 0; k < NUM_BINS+1; k++ ){
     double val = low + 1.0*k*(high - low)/NUM_BINS;
     bin_bounds[k] = pow(10.0, val);
@@ -2285,19 +2313,20 @@ void TMR_PrintErrorBins( MPI_Comm comm,
     for ( int i = 0; i < NUM_BINS+2; i++ ){
       total += bins[i];
     }
-
+    printf("%10s  %10s  %12s  %12s\n", "stats", " ", "mean", "stddev");
+    printf("%10s  %10s  %12.2e %12.2e\n", " ", " ", m, s);    
     printf("%10s  %10s  %12s  %12s\n",
            "low", "high", "bins", "percentage");
     printf("%10s  %10.2e  %12d  %12.2f\n",
-           " ", bin_bounds[0], bins[0], 1.0*bins[0]/total);
+           " ", bin_bounds[0], bins[0], 100.0*bins[0]/total);
 
     for ( int k = 0; k < NUM_BINS; k++ ){
       printf("%10.2e  %10.2e  %12d  %12.2f\n",
-             bin_bounds[k], bin_bounds[k+1], bins[k+1], 1.0*bins[k+1]/total);
+             bin_bounds[k], bin_bounds[k+1], bins[k+1], 100.0*bins[k+1]/total);
     }
     printf("%10.2e  %10s  %12d  %12.2f\n",
            bin_bounds[NUM_BINS], " ", bins[NUM_BINS+1], 
-           1.0*bins[NUM_BINS+1]/total);
+           100.0*bins[NUM_BINS+1]/total);
     fflush(stdout);
   }
 }
@@ -2339,14 +2368,15 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
   // Get the number of variables per node 
   const int vars_per_node = tacs->getVarsPerNode();
   
-  // Create the refined residual vector
+  // Create the refined residual/adjoint vectors
+  TACSBVec *res_refine = tacs_refine->createVec();
   TACSBVec *adjoint_refine = tacs_refine->createVec();
+  res_refine->incref();
   adjoint_refine->incref();
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
   double total_error_remain = 0.0;
-  double total_adjoint_corr = 0.0;
 
   // Allocate the element arrays needed for the reconstruction
   TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
@@ -2357,6 +2387,7 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
   TacsScalar *ddvars = new TacsScalar[ vars_per_node*max_num_nodes ];
   TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
   TacsScalar *adj_elem_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *res_elem_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
   TacsScalar *adj_elem_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
 
   // Allocate the element residual array
@@ -2372,12 +2403,6 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
     num_aux_elems = aux_elements->getAuxElements(&aux);
   }
 
-  // Reconstruct the adjoint solution on the finer mesh
-  TMR_ComputeReconSolution(tacs, forest, tacs_refine,
-                           adjoint, adjoint_refine);
-  
-  // For each element in the mesh, compute the residual on the refined
-  // mesh based on its and store its value in the global solution
   int aux_count = 0;
   for ( int elem = 0; elem < nelems; elem++ ){
     // Set the simulation time
@@ -2390,23 +2415,13 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
     int elem_len = 0;
     const int *elem_nodes;
     tacs->getElement(elem, &elem_nodes, &elem_len);
-        
-    // Get the values of the adjoint on the coarse mesh
-    adjoint->getValues(elem_len, elem_nodes, adj_elem);
-
-    // Keep track of the remaining error from this element
-    TacsScalar elem_error_remain = 0.0;
 
     // For each element on the refined mesh, compute the interpolated
     // solution and sum up the local contribution to the adjoint
     for ( int ii = 0; ii < 2; ii++ ){
       for ( int jj = 0; jj < 2; jj++ ){
-        // Set the element number on the refined mesh
-        int elem_num = 4*elem + jj + 2*ii;
-
-        // Zero the interpolations
-        memset(vars_interp, 0, vars_per_node*order*order*sizeof(TacsScalar));
-        memset(adj_elem_interp, 0, 
+        // Zero the interpolation
+        memset(vars_interp, 0, 
                vars_per_node*order*order*sizeof(TacsScalar));
 
         // Perform the interpolation
@@ -2423,16 +2438,15 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
             // Evaluate the interpolation part of the reconstruction
             for ( int k = 0; k < order*order; k++ ){
               for ( int kk = 0; kk < vars_per_node; kk++ ){
-                vars_interp[vars_per_node*(n + m*order)+kk] += 
-                  vars_elem[vars_per_node*k+kk]*N[k];
-              }
-              for ( int kk = 0; kk < vars_per_node; kk++ ){
-                adj_elem_interp[vars_per_node*(n + m*order)+kk] += 
-                  adj_elem[vars_per_node*k+kk]*N[k];
+                vars_interp[vars_per_node*(n + m*order) + kk] += 
+                  vars_elem[vars_per_node*k + kk]*N[k];
               }
             }
           }
         }
+
+        // Compute the element number for this mesh
+        int elem_num = 4*elem + jj + 2*ii;
 
         // Get the node locations and the velocity/acceleration
         // variables (these shuold be zero and are not used...)
@@ -2456,31 +2470,104 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
         const int *nodes;
         tacs_refine->getElement(elem_num, &nodes, &len);
 
-        // Get the adjoint variables for the refined mesh
+        // Add the residual contributions
+        res_refine->setValues(len, nodes, res, TACS_ADD_VALUES);
+      }
+    }
+  }
+
+  // Finish adding the residual to the array
+  res_refine->beginSetValues(TACS_ADD_VALUES);
+  res_refine->endSetValues(TACS_ADD_VALUES);
+
+  // Apply the boundary conditions
+  tacs_refine->applyBCs(res_refine);
+
+  // Distribute the values
+  res_refine->beginDistributeValues();
+  res_refine->endDistributeValues();
+
+  // Reconstruct the adjoint solution on the finer mesh
+  TMR_ComputeReconSolution(tacs, forest, tacs_refine,
+                           adjoint, adjoint_refine);
+ 
+  TacsScalar total_adjoint_corr = 0.0;
+
+  // Now compute, element-by-element the inner product
+  for ( int elem = 0; elem < nelems; elem++ ){
+    // Get the element node numbers
+    int elem_len = 0;
+    const int *elem_nodes;
+    tacs->getElement(elem, &elem_nodes, &elem_len);
+
+    // Get the element adjoint variables
+    adjoint->getValues(elem_len, elem_nodes, adj_elem);
+
+    // Keep track of the remaining error from this element
+    TacsScalar elem_error_remain = 0.0;
+
+    // For each element on the refined mesh, compute the interpolated
+    // solution and sum up the local contribution to the adjoint
+    for ( int ii = 0; ii < 2; ii++ ){
+      for ( int jj = 0; jj < 2; jj++ ){
+        // Evaluate the interpolated adjoint solution
+        memset(adj_elem_interp, 0, 
+               vars_per_node*order*order*sizeof(TacsScalar));
+
+        for ( int m = 0; m < order; m++ ){
+          for ( int n = 0; n < order; n++ ){
+            double pt[2];
+            pt[0] = ii - 1.0 + 1.0*n/(order-1);
+            pt[1] = jj - 1.0 + 1.0*m/(order-1);
+
+            // Evaluate the locations of the new nodes
+            double N[max_num_nodes];
+            FElibrary::biLagrangeSF(N, pt, order);
+           
+            // Evaluate the interpolation part of the reconstruction
+            for ( int k = 0; k < order*order; k++ ){
+              for ( int kk = 0; kk < vars_per_node; kk++ ){
+                adj_elem_interp[vars_per_node*(n + m*order) + kk] += 
+                  adj_elem[vars_per_node*k + kk]*N[k];
+              }
+            }
+          }
+        }
+
+        // Compute the element number on the refined mesh
+        int elem_num = 4*elem + jj + 2*ii;
+
+        // Get the node numbers for the refined mesh
+        int len = 0;
+        const int *nodes;
+        TACSElement *elem = 
+          tacs_refine->getElement(elem_num, &nodes, &len);
+
+        // Get the adjoint variables and residual for the refined mesh
         adjoint_refine->getValues(len, nodes, adj_elem_refine);
-        
+        res_refine->getValues(len, nodes, res_elem_refine);
+
         // Add in the contribution to the error from this element
         for ( int j = 0; j < elem->numVariables(); j++ ){
           elem_error_remain += 
-            (adj_elem_refine[j] - adj_elem_interp[j])*res[j];
+            res_elem_refine[j]*(adj_elem_refine[j] - adj_elem_interp[j]);
         }
       }
     }
 
     // Add the contribution to the total remaining error and the
     // adjoint correction.
+    total_adjoint_corr += elem_error_remain;
     error[elem] = fabs(TacsRealPart(elem_error_remain));
     total_error_remain += error[elem];
-    total_adjoint_corr += TacsRealPart(elem_error_remain);
   }
 
   // Sum up the contributions across all processors
-  double temp[2];
-  temp[0] = total_error_remain;
-  temp[1] = total_adjoint_corr;
-  MPI_Allreduce(MPI_IN_PLACE, temp, 2, MPI_DOUBLE, MPI_SUM, comm);
-  total_error_remain = temp[0];
-  total_adjoint_corr = temp[1];
+  MPI_Allreduce(MPI_IN_PLACE, &total_error_remain, 1, MPI_DOUBLE, 
+                MPI_SUM, comm);
+
+  MPI_Allreduce(MPI_IN_PLACE, &total_adjoint_corr, 1, MPI_DOUBLE, 
+                MPI_SUM, comm);
 
   // Free the data that is no longer required
   delete [] vars_elem;
@@ -2488,10 +2575,11 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
   delete [] dvars;
   delete [] ddvars;
   delete [] vars_interp;
-  delete [] adj_elem_interp;
   delete [] adj_elem_refine;
+  delete [] res_elem_refine;
   delete [] res;
   adjoint_refine->decref();
+  res_refine->decref();
 
   // Set the adjoint residual correction
   if (adj_corr){

@@ -28,7 +28,8 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
   TMRCylinderCreator( MPI_Comm comm,
                       TMRBoundaryConditions *_bcs,
                       double _alpha, double _beta, double _R,
-                      double _load, FSDTStiffness *stiff ):
+                      double _load, OrthoPly *_ply, 
+                      int _ortho_flag, double _t ):
   TMRQuadTACSCreator(_bcs){
     int rank;
     MPI_Comm_rank(comm, &rank);
@@ -36,14 +37,13 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
     beta = _beta;
     R = _R;
     load = _load;
-    elem2 = new MITCShell<2>(stiff); elem2->incref();
-    elem3 = new MITCShell<3>(stiff); elem3->incref();
-    // elem2->setComponentNum(rank);
-    // elem3->setComponentNum(rank);
+    ply = _ply;
+    ply->incref();
+    ortho_flag = _ortho_flag;
+    t = _t;
   }
   ~TMRCylinderCreator(){
-    elem2->decref();
-    elem3->decref();
+    ply->decref();
   }
 
   /*
@@ -55,12 +55,52 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
                        TACSElement **elements ){
     if (order == 2){
       for ( int i = 0; i < num_elements; i++ ){
-        elements[i] = elem2;
+        double kcorr = 5.0/6.0;
+        FSDTStiffness *stiff = 
+          new specialFSDTStiffness(ply, ortho_flag, t, kcorr, i);
+        elements[i] = new MITCShell<2>(stiff);
+
+        /*
+        if (i == 0){
+          TacsScalar e[8];
+          for ( int i = 0; i < 3; i++ ){
+            e[i] = -0.001 + 0.002*rand()/RAND_MAX;
+          }
+          for ( int i = 3; i < 6; i++ ){
+            e[i] = -0.1 + 0.2*rand()/RAND_MAX;
+          }
+          e[6] = e[7] = 0.0;
+
+          double pt[3];
+          TacsScalar f;
+          stiff->failure(pt, e, &f);
+
+          // Evaluate the derivative
+          TacsScalar ed[8];
+          stiff->failureStrainSens(pt, e, ed);
+
+          double dh = 1e-7;
+          for ( int i = 0; i < 8; i++ ){
+            TacsScalar fd = 0.0;
+
+            TacsScalar et = e[i];
+            e[i] = et + dh;
+            stiff->failure(pt, e, &fd);
+            fd = (fd - f)/dh;
+            e[i] = et;
+
+            printf("%2d  %12.5e %12.5e %12.5e\n", i, ed[i], fd, (ed[i] - fd)/fd);
+          }
+        }
+        */
       }
     }
     else if (order == 3){
       for ( int i = 0; i < num_elements; i++ ){
-        elements[i] = elem3;
+        double kcorr = 5.0/6.0;
+        FSDTStiffness *stiff = 
+          new specialFSDTStiffness(ply, ortho_flag, t, kcorr, i);
+        elements[i] = new MITCShell<3>(stiff);
       }
     }
   }
@@ -131,8 +171,9 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
   double alpha, beta;
   double R;
   double load;
-  
-  TACSElement *elem2, *elem3;
+  double t;
+  int ortho_flag;
+  OrthoPly *ply;
 };
 
 /*
@@ -165,60 +206,11 @@ void compute_coefficients( double *U, double *V, double *W,
                            double D11, double D12, double D22, double D33,
                            double bA11, double bA22, double load ){
 
-  double A[5*5], A2[5*5]; // 5 x 5 system of linear equations
+  double A[5*5]; // 5 x 5 system of linear equations
   int ipiv[5];
   double rhs[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
-  rhs[2] = - load;
+  rhs[2] = -load;
  
-  double B[8*5];
-  memset(B, 0, sizeof(B));
-  double * b = B;
-
-  // Assign the columns for u
-  b[0] = -beta;
-  b[2] = alpha;
-  b[5] = -alpha*ainv;
-  b += 8;
-
-  // Assign columns for v
-  b[1] = -alpha;
-  b[2] = beta;
-  b[4] = alpha*ainv;
-  b[6] = -ainv;
-  b += 8;
-
-  // Assign the columns for w
-  b[1] = ainv;
-  b[4] = -ainv*ainv;
-  b[6] = alpha;
-  b[7] = beta;
-  b += 8;
-
-  // Assign the columns for psi_x
-  b[3] = -beta;
-  b[5] = alpha;
-  b[7] = 1.0;
-  b += 8;
-
-  // Assign the columns for psi_y
-  b[4] = -alpha; 
-  b[5] = beta;
-  b[6] = 1.0;
-
-  for ( int j = 0; j < 5; j++ ){
-    double * bj = &B[8*j];
-    for ( int i = 0; i < 5; i++ ){
-      double * bi = &B[8*i];
-
-      A2[i + 5*j] = 
-        - ((bi[0]*(A11*bj[0] + A12*bj[1]) +  
-            bi[1]*(A12*bj[0] + A22*bj[1]) + bi[2]*A33*bj[2]) +
-           (bi[3]*(D11*bj[3] + D12*bj[4]) +
-            bi[4]*(D12*bj[3] + D22*bj[4]) + bi[5]*D33*bj[5]) +
-           bi[6]*bA11*bj[6] + bi[7]*bA22*bj[7]);
-    }
-  }
-
   // The first equation for u
   A[0]  = -(A11*beta*beta + A33*alpha*alpha + 
             D33*ainv*ainv*alpha*alpha);
@@ -260,7 +252,7 @@ void compute_coefficients( double *U, double *V, double *W,
   int info = 0;
   int n = 5;
   int nrhs = 1;
-  LAPACKgesv(&n, &nrhs, A2, &n, ipiv, rhs, &n, &info);
+  LAPACKgesv(&n, &nrhs, A, &n, ipiv, rhs, &n, &info);
 
   // Solve for the coefficients 
   *U = rhs[0];
@@ -345,11 +337,7 @@ int main( int argc, char *argv[] ){
     ply = new OrthoPly(t, rho, E, nu, ys);
   }
 
-  // Create the stiffness relationship
-  double kcorr = 5.0/6.0;
-  FSDTStiffness *stiff = 
-    new specialFSDTStiffness(ply, orthotropic_flag, t, kcorr);
-  stiff->incref();
+  // Incref the ply properties
   ply->incref();
 
   // Set the boundary conditions
@@ -362,7 +350,8 @@ int main( int argc, char *argv[] ){
   // Set up the creator object - this facilitates creating the
   // TACSAssembler objects for different geometries
   TMRCylinderCreator *creator = 
-    new TMRCylinderCreator(comm, bcs, alpha, beta, R, load, stiff);
+    new TMRCylinderCreator(comm, bcs, alpha, beta, R, load,
+                           ply, orthotropic_flag, t);
 
   // Create the geometry
   BRepPrimAPI_MakeCylinder cylinder(R, L);
@@ -412,7 +401,7 @@ int main( int argc, char *argv[] ){
     TMRModel *model = mesh->createModelFromMesh();
     model->incref();
 
-    const int MAX_REFINE = 5;
+    const int MAX_REFINE = 10;
     TMRQuadForest *forest[MAX_REFINE+2];
     forest[0] = new TMRQuadForest(comm);
     forest[0]->incref();
@@ -501,7 +490,7 @@ int main( int argc, char *argv[] ){
 
       // Write out the solution
       char outfile[128];
-      sprintf(outfile, "output%02d.f5", iter);
+      sprintf(outfile, "solution%02d.f5", iter);
       f5->writeToFile(outfile);
       f5->decref();
 
@@ -552,13 +541,30 @@ int main( int argc, char *argv[] ){
         // error that is requested
         target_abs_err = factor*target_rel_err*fabs(fval)/nelems_total;
 
-        // Perform the strain energy refinement
-        abs_err = TMR_StrainEnergyRefine(tacs[0], forest[0], 
-                                         target_abs_err);
+        // Compute the strain energy error estimate
+        double *error = new double[ nelems ];
+        abs_err = TMR_StrainEnergyErrorEst(forest[0], tacs[0], error);
+        TMR_PrintErrorBins(comm, error, nelems);
+
+        // Compute the refinement based on the error estimates
+        int *refine = new int[ nelems ];
+        for ( int i = 0; i < nelems; i++ ){
+          refine[i] = 0;
+          if (error[i] > target_abs_err){
+            refine[i] = 1;
+          }
+        }
+        delete [] error;
+
+        // Refine the forest
+        forest[0]->refine(refine);
+        delete [] refine;
+
+        // Compute the function value estimate
         fval_est = fval + abs_err;
       }
       else {
-        double ks_weight = 10;
+        double ks_weight = 10.0;
         TACSKSFailure *ks_func = new TACSKSFailure(tacs[0], ks_weight);
         ks_func->setKSFailureType(TACSKSFailure::CONTINUOUS);
         ks_func->incref();
@@ -586,7 +592,6 @@ int main( int argc, char *argv[] ){
         adjvec->scale(-1.0);
 
         // Duplicate the forest
-        int min_level = 0, max_level = TMR_MAX_LEVEL;
         TMRQuadForest *forest_refine = forest[0]->duplicate();
         forest_refine->incref();
 
@@ -598,23 +603,54 @@ int main( int argc, char *argv[] ){
         TACSAssembler *tacs_refine = creator->createTACS(order, forest_refine);
         tacs_refine->incref();
 
-        // Perform the adjoint refinement
+        // Compute the adjoint-based error estimate
+        double *error = new double[ nelems ];
         TacsScalar adj_corr;
-        abs_err = TMR_AdjointRefine(tacs[0], tacs_refine,
-                                    adjvec, forest[0],
-                                    target_abs_err, min_level, max_level,
-                                    &adj_corr);
+        abs_err = TMR_AdjointErrorEst(tacs[0], tacs_refine,
+                                      adjvec, forest[0], error, &adj_corr);
+
+        double mean, stddev;
+        TMR_PrintErrorBins(comm, error, nelems, &mean, &stddev);
+
+        // Compute the refinement based on the error estimates
+        int *refine = new int[ nelems ];
+        for ( int i = 0; i < nelems; i++ ){
+          refine[i] = 0;
+          if (error[i] > mean){
+            // if (error[i] > target_abs_err){
+            refine[i] = 1;
+          }
+        }
+
+        // Refine the forest
+        forest[0]->refine(refine);
+        delete [] refine;
 
         // Compute the function estimate
         fval_est = fval + adj_corr; 
 
+        // Visuzlize the error using the "design variables"
+        tacs[0]->setDesignVars(error, nelems);
+        f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
+        f5->incref();
+        sprintf(outfile, "error%02d.f5", iter);
+        f5->writeToFile(outfile);
+        f5->decref();
+
+        // Set the errors back to the structural thickness and reset
+        // the design variable values
+
+        delete [] error;
+        
         // Write out the adjoint solution
+        /*
         tacs[0]->setVariables(adjvec);
         f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
         f5->incref();
         sprintf(outfile, "adjoint%02d.f5", iter);
         f5->writeToFile(outfile);
         f5->decref();
+        */
 
         // Create the refined vector
         TACSBVec *adjvec_refine = tacs_refine->createVec();

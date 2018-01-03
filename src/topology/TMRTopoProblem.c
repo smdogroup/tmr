@@ -1396,14 +1396,15 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       // problem again.
       int err_count = 1;
 
-      // Solve the eigenvalue problem
-      freq->solve(new KSMPrintStdout("KSM", mpi_rank, 1));
-
       // Keep track of the smallest eigenvalue
+      double shift = 0.95;
       TacsScalar smallest_eigval = 0.0;
       while (err_count > 0){
         // Set the error counter to zero
         err_count = 0;
+
+        // Solve the eigenvalue problem
+        freq->solve(new KSMPrintStdout("KSM", mpi_rank, 1));
           
         // Extract the first k eigenvalues
         for ( int k = 0; k < num_freq_eigvals; k++ ){
@@ -1424,7 +1425,8 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         // If there is significant error in computing the eigenvalues,
         // reset the buckling computation
         if (err_count > 0){
-          double sigma = 0.95*smallest_eigval;
+          double sigma = shift*smallest_eigval;
+          shift += 0.5*(1.0 - shift) + shift;
           freq->setSigma(sigma);
         }
       }

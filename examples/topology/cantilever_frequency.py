@@ -201,7 +201,7 @@ filtr_volumes = None
 
 # Create the array of properties
 rho = [2600.0]#, 1300.0, 600.0]
-E = [70e9]#, 35e9, 10e9]
+E = [70e6]#, 35e9, 10e9]
 nu = [0.3]#, 0.3, 0.3]
 vars_per_node = 1
 
@@ -239,9 +239,16 @@ for ite in xrange(max_iterations):
 
     # Set the frequency constraint
     #freq-1.5 >= 0.0
-    problem.addFrequencyConstraint(200.0, 4, 15.0, -1.5, 1.0,
-                                   100, 1e-15)
- 
+    sigma = 200.0
+    num_eigs = 6
+    ks_weight = 10.0
+    offset = 0.0
+    scale = 1.0
+    max_lanczos = 50
+    tol = 1e-30
+    problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
+                                   offset, scale, max_lanczos, tol)
+    
     #problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
     problem.setObjective(obj_array, funcs)
  
@@ -264,10 +271,10 @@ for ite in xrange(max_iterations):
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
 
-        #opt.setGradientCheckFrequency(5, 1e-6)
-
         opt.checkGradients(1e-6)
-        sadf
+
+        sys.exit(0)
+
         # If the old filter exists, we're on the second iteration
         if old_filtr:
             # Create the interpolation

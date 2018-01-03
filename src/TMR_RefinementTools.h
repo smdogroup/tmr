@@ -35,7 +35,9 @@ void TMR_ComputeReconSolution( TACSAssembler *tacs,
 /*
   Print the error as a series of bins
 */
-void TMR_PrintErrorBins( MPI_Comm comm, double *error, const int nelems );
+void TMR_PrintErrorBins( MPI_Comm comm, const double *error, 
+                         const int nelems, double *mean=NULL, 
+                         double *stddev=NULL );
 
 /*
   Perform a mesh refinement based on the strain engery refinement
