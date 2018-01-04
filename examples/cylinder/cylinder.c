@@ -5,6 +5,7 @@
 #include "TACSAssembler.h"
 #include "Compliance.h"
 #include "specialFSDTStiffness.h"
+#include "isoFSDTStiffness.h"
 #include "MITCShell.h"
 #include "TACSShellTraction.h"
 #include "TACSToFH5.h"
@@ -53,53 +54,35 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
                        TMRQuadForest *forest,
                        int num_elements,
                        TACSElement **elements ){
+    double rho = 2500.0;
+    double E = 70e9;
+    double nu = 0.3;
+    double ys = 350.0e6;
+    double kcorr = 5.0/6.0;
+
     if (order == 2){
       for ( int i = 0; i < num_elements; i++ ){
+        /*
         double kcorr = 5.0/6.0;
         FSDTStiffness *stiff = 
           new specialFSDTStiffness(ply, ortho_flag, t, kcorr, i);
         elements[i] = new MITCShell<2>(stiff);
-
-        /*
-        if (i == 0){
-          TacsScalar e[8];
-          for ( int i = 0; i < 3; i++ ){
-            e[i] = -0.001 + 0.002*rand()/RAND_MAX;
-          }
-          for ( int i = 3; i < 6; i++ ){
-            e[i] = -0.1 + 0.2*rand()/RAND_MAX;
-          }
-          e[6] = e[7] = 0.0;
-
-          double pt[3];
-          TacsScalar f;
-          stiff->failure(pt, e, &f);
-
-          // Evaluate the derivative
-          TacsScalar ed[8];
-          stiff->failureStrainSens(pt, e, ed);
-
-          double dh = 1e-7;
-          for ( int i = 0; i < 8; i++ ){
-            TacsScalar fd = 0.0;
-
-            TacsScalar et = e[i];
-            e[i] = et + dh;
-            stiff->failure(pt, e, &fd);
-            fd = (fd - f)/dh;
-            e[i] = et;
-
-            printf("%2d  %12.5e %12.5e %12.5e\n", i, ed[i], fd, (ed[i] - fd)/fd);
-          }
-        }
         */
+        isoFSDTStiffness *stiff = 
+          new isoFSDTStiffness(rho, E, nu, kcorr, ys, t, i);
+        elements[i] = new MITCShell<2>(stiff);
       }
     }
     else if (order == 3){
       for ( int i = 0; i < num_elements; i++ ){
+        /*
         double kcorr = 5.0/6.0;
         FSDTStiffness *stiff = 
           new specialFSDTStiffness(ply, ortho_flag, t, kcorr, i);
+        elements[i] = new MITCShell<3>(stiff);
+        */        
+        isoFSDTStiffness *stiff = 
+          new isoFSDTStiffness(rho, E, nu, kcorr, ys, t, i);
         elements[i] = new MITCShell<3>(stiff);
       }
     }
@@ -395,7 +378,7 @@ int main( int argc, char *argv[] ){
     TMRMeshOptions options;
     options.frontal_quality_factor = 1.25;
     options.mesh_type_default = TMR_STRUCTURED;
-    // options.mesh_type_default = TMR_UNSTRUCTURED;
+    options.mesh_type_default = TMR_UNSTRUCTURED;
     mesh->mesh(options, htarget);
 
     TMRModel *model = mesh->createModelFromMesh();
@@ -564,7 +547,7 @@ int main( int argc, char *argv[] ){
         fval_est = fval + abs_err;
       }
       else {
-        double ks_weight = 10.0;
+        double ks_weight = 50.0;
         TACSKSFailure *ks_func = new TACSKSFailure(tacs[0], ks_weight);
         ks_func->setKSFailureType(TACSKSFailure::CONTINUOUS);
         ks_func->incref();
@@ -612,45 +595,7 @@ int main( int argc, char *argv[] ){
         double mean, stddev;
         TMR_PrintErrorBins(comm, error, nelems, &mean, &stddev);
 
-        // Compute the refinement based on the error estimates
-        int *refine = new int[ nelems ];
-        for ( int i = 0; i < nelems; i++ ){
-          refine[i] = 0;
-          if (error[i] > mean){
-            // if (error[i] > target_abs_err){
-            refine[i] = 1;
-          }
-        }
 
-        // Refine the forest
-        forest[0]->refine(refine);
-        delete [] refine;
-
-        // Compute the function estimate
-        fval_est = fval + adj_corr; 
-
-        // Visuzlize the error using the "design variables"
-        tacs[0]->setDesignVars(error, nelems);
-        f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
-        f5->incref();
-        sprintf(outfile, "error%02d.f5", iter);
-        f5->writeToFile(outfile);
-        f5->decref();
-
-        // Set the errors back to the structural thickness and reset
-        // the design variable values
-
-        delete [] error;
-        
-        // Write out the adjoint solution
-        /*
-        tacs[0]->setVariables(adjvec);
-        f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
-        f5->incref();
-        sprintf(outfile, "adjoint%02d.f5", iter);
-        f5->writeToFile(outfile);
-        f5->decref();
-        */
 
         // Create the refined vector
         TACSBVec *adjvec_refine = tacs_refine->createVec();
@@ -667,6 +612,45 @@ int main( int argc, char *argv[] ){
         f5->writeToFile(outfile);
         f5->decref();
 
+        // Compute the refinement based on the error estimates
+        int c1 = 0, c2 = 0, c3 = 0;
+        int *refine = new int[ nelems ];
+        for ( int i = 0; i < nelems; i++ ){
+          refine[i] = 0;
+          double logerr = log(error[i]);
+          if (logerr > mean + 2*stddev){
+            c1++;
+            refine[i] = 2;
+          }
+          else if (logerr > mean){
+            c2++;
+            refine[i] = 1;
+          }
+          else if (logerr < mean - 2*stddev){
+            c3++;
+            refine[i] = -1;
+          } 
+        }
+
+        printf("c1 = %5d  c2 = %5d  c3 = %5d\n", c1, c2, c3);
+
+        // Refine the forest
+        forest[0]->refine(refine);
+        delete [] refine;
+
+        // Compute the function estimate
+        fval_est = fval + adj_corr; 
+
+        // Visuzlize the error using the "design variables"
+        tacs[0]->setDesignVars(error, nelems);
+        f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
+        f5->incref();
+        sprintf(outfile, "error%02d.f5", iter);
+        f5->writeToFile(outfile);
+        f5->decref();
+
+        delete [] error;
+        
         // Delete all the info that is no longer needed
         tacs_refine->decref();
         forest_refine->decref();

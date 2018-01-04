@@ -25,12 +25,14 @@ void TMR_ComputeReconSolution( TACSAssembler *tacs,
                                TMRQuadForest *forest,
                                TACSAssembler *tacs_refined,
                                TACSBVec *_uvec=NULL,
-                               TACSBVec *_uvec_refined=NULL );
+                               TACSBVec *_uvec_refined=NULL,
+                               const int compute_difference=0 );
 void TMR_ComputeReconSolution( TACSAssembler *tacs,
                                TMROctForest *forest,
                                TACSAssembler *tacs_refined,
                                TACSBVec *_uvec=NULL,
-                               TACSBVec *_uvec_refined=NULL );
+                               TACSBVec *_uvec_refined=NULL,
+                               const int compute_difference=0 );
 
 /*
   Print the error as a series of bins

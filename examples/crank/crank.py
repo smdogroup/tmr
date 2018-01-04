@@ -107,6 +107,7 @@ vols = geo.getVolumes()
 faces[7].setSource(vols[0], faces[6])
 
 # Set the attributes
+v0 = None
 faces[4].setAttribute('fixed')
 for i in range(faces[4].getNumEdgeLoops()):
     eloop = faces[4].getEdgeLoop(i)
@@ -114,8 +115,12 @@ for i in range(faces[4].getNumEdgeLoops()):
     for e in edges:
         e.setAttribute('fixed')
         v1, v2 = e.getVertices()
-        v1.setAttribute('fixed')
-        v2.setAttribute('fixed')
+        if v0 is None:
+            v1.setAttribute('fully fixed')
+            v0 = v1
+        else:
+            v1.setAttribute('fixed')
+            v2.setAttribute('fixed')
 
 # Set the loads
 faces[5].setAttribute('load')
@@ -145,7 +150,8 @@ forest.createTrees(depth)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed')
+bcs.addBoundaryCondition('fixed', [0, 1])
+bcs.addBoundaryCondition('fully fixed')
 
 # Set the ordering to use
 if ordering == 'rcm':
