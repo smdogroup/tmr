@@ -38,7 +38,7 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 def createRefined(forest, bcs, order=2):
     refined = forest.refine()
     creator = CreateMe(bcs)
-    return creator.createTACS(order, forest)
+    return creator.createTACS(order, refined)
 
 def createProblem(forest, bcs, ordering, order=2, nlevels=2):
     # Create the forest
@@ -161,11 +161,12 @@ elif ordering == 'multicolor':
 else:
     ordering = TACS.PY_NATURAL_ORDER
 
+order = 3
 niters = 3
 for k in range(niters):
     # Create the topology problem
     assembler, mg = createProblem(forest, bcs, ordering, 
-                                  order=3, nlevels=depth+1+k)
+                                  order=order, nlevels=depth+1+k)
 
     # Computet the surface traction magnitude
     diameter = 1.0
@@ -175,7 +176,7 @@ for k in range(niters):
     tr = [0.0, ty, 0.0]
 
     # Add the surface traction
-    aux = addFaceTraction(3, forest, 'load', assembler, tr)
+    aux = addFaceTraction(order, forest, 'load', assembler, tr)
     assembler.setAuxElements(aux)
 
     # Create the assembler object
@@ -221,7 +222,7 @@ for k in range(niters):
             adjoint.scale(-1.0)
 
             # Create the refined mesh
-            refined = createRefined(forest, bcs, order=3)
+            refined = createRefined(forest, bcs, order=order)
 
             # Compute the adjoint and use adjoint-based refinement
             err_est, func_corr, error = \

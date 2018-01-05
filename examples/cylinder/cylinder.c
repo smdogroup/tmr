@@ -343,6 +343,13 @@ int main( int argc, char *argv[] ){
   builder.MakeCompound(compound);
   builder.Add(compound, cylinder.Shape());
 
+  // Write the compound to a file
+  if (mpi_rank == 0){
+    STEPControl_Writer aWriter;
+    aWriter.Transfer(compound, STEPControl_AsIs);
+    aWriter.Write("cylinder.stp");
+  }
+
   // Load in the geometry
   TMRModel *geo = TMR_LoadModelFromCompound(compound);
 

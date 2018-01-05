@@ -170,6 +170,12 @@ cdef extern from "":
     ParOptBVecWrap* _dynamicParOptBVecWrap "dynamic_cast<ParOptBVecWrap*>"(ParOptVec*)
 
 cdef extern from "TMRMesh.h":
+    enum TMRFaceMeshType:
+        TMR_NO_MESH
+        TMR_STRUCTURED
+        TMR_UNSTRUCTURED
+        TMR_TRIANGLE
+
     cdef cppclass TMRElementFeatureSize(TMREntity):
         TMRElementFeatureSize()
         TMRElementFeatureSize(double)
@@ -202,13 +208,12 @@ cdef extern from "TMRMesh.h":
 
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
+        TMRFaceMeshType mesh_type_default
         int triangularize_print_level
         int triangularize_print_iter
         int write_mesh_quality_histogram
         int num_smoothing_steps
         double frontal_quality_factor
-
-        # Write intermediate surface meshes to file
         int write_init_domain_triangle
         int write_triangularize_intermediate
         int write_pre_smooth_triangle

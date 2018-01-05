@@ -32,6 +32,11 @@ cdef extern from "mpi-compat.h":
 
 MAX_LEVEL = TMR_MAX_LEVEL
 
+NO_MESH = TMR_NO_MESH
+STRUCTURED = TMR_STRUCTURED
+UNSTRUCTURED = TMR_UNSTRUCTURED
+TRIANGLE = TMR_TRIANGLE
+
 cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):
@@ -693,6 +698,12 @@ cdef class MeshOptions:
       
     def __dealloc__(self):
         return
+
+    property mesh_type_default:
+        def __get__(self):
+            return self.ptr.mesh_type_default
+        def __set__(self, TMRFaceMeshType value):
+            self.ptr.mesh_type_default = value
    
     property num_smoothing_steps:
         def __get__(self):
