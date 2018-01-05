@@ -31,8 +31,8 @@ class CreateMe(TMR.QuadCreator):
         tmin = 0.0
         tmax = 1e6
         tnum = quad.tag
-        stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, t, tnum,
-                                     tmin, tmax)
+        stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, t,
+                                     tnum, tmin, tmax)
         elem = elements.MITCShell(order, stiff)
         return elem
 
@@ -199,6 +199,9 @@ elif ordering == 'multicolor':
 else:
     ordering = TACS.PY_NATURAL_ORDER
 
+# The target relative error
+target_rel_err = 1e-2
+
 for k in range(steps):
     # Create the topology problem
     assembler, mg = createProblem(forest, bcs, ordering, 
@@ -233,7 +236,7 @@ for k in range(steps):
     # Create the function
     func = functions.KSFailure(assembler, ksweight)
     func.setKSFailureType('continuous')
-    fval = assembler.evalFunctions([func])
+    fval = assembler.evalFunctions([func])[0]
 
     if False:
         # Compute the strain energy error estimate
@@ -253,10 +256,6 @@ for k in range(steps):
         # Compute the adjoint and use adjoint-based refinement
         err_est, func_corr, error = \
             TMR.adjointError(assembler, refined, adjoint, forest)
-
-    # Print the error estimate
-    if comm.rank == 0:
-        print 'estimate = ', err_est
 
     # Compute the refinement from the error estimate
     nbins = 30
@@ -294,6 +293,10 @@ for k in range(steps):
     
     # Print out the result
     if comm.rank == 0:
+        print 'estimate = ', err_est
+        print 'mean =   ', mean
+        print 'stddev = ', stddev
+
         print '%10s  %10s  %12s  %12s'%(
             'low', 'high', 'bins', 'percentage')
         print '%10.2e  %10s  %12d  %12.2f'%(
@@ -310,11 +313,45 @@ for k in range(steps):
 
     # Perform the refinement
     if k < steps-1:
-        # Compute the refinement
+        # The refinement array
         refine = np.zeros(len(error), dtype=np.intc)
-        for i in range(len(error)):
-            if np.log(error[i]) > mean:
-                refine[i] = 1
 
+        # Compute the target relative error
+        element_target_error = target_rel_err*fval/ntotal
+        log_elem_target_error = np.log(element_target_error)
+
+        if comm.rank == 0:
+            print 'element_target_error =        ', element_target_error
+            print 'log10(mean) =                 ', np.log10(np.exp(mean))
+            print 'log10(stddev) =               ', np.log10(np.exp(stddev))
+            print 'log10(element_target_error) = ', np.log10(element_target_error)
+
+        if log_elem_target_error < mean + 2*stddev:
+            # Element target error is still too high. Adapt based
+            # solely on decreasing the overall error
+            for i, err in enumerate(error):
+                # Compute the log of the error
+                logerr = np.log(err)
+
+                if logerr > mean + 2*stddev:
+                    refine[i] = 2
+                elif logerr > mean:
+                    refine[i] = 1
+                elif logerr < mean - 2*stddev:
+                    refine[i] = -1
+        else:
+            print '-----------------------------------------------'
+            print 'Entering final phase refinement'
+            print '-----------------------------------------------'
+            # Try to target the relative error
+            for i, err in enumerate(error):
+                # Compute the log of the error
+                logerr = np.log(err)
+
+                if logerr > log_elem_target_error + stddev:
+                    refine[i] = 1
+                elif logerr < log_elem_target_error - stddev:
+                    refine[i] = -1
+            
         # Refine the forest
         forest.refine(refine)
