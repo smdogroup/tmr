@@ -2501,14 +2501,14 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
 
   // Allocate the element arrays needed for the reconstruction
   TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *adj_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
 
-  // The interpolated variables on the refined mesh
+  // The reconstructed adjoint solution
+  TacsScalar *adj_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // Extra variables required for velocities/accelerations
   TacsScalar *dvars = new TacsScalar[ vars_per_node*max_num_nodes ];
   TacsScalar *ddvars = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *res_elem_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *adj_elem_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
 
   // Allocate the element residual array
   TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
@@ -2542,15 +2542,10 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
     double time = 0.0;
 
     // Compute the remaining element error
-    TacsScalar elem_error_remain = 0.0;
+    TacsScalar elem_error_corr = 0.0;
 
     // Get the element variable values on the coarse mesh
     tacs->getElement(elem, NULL, vars_elem);
-
-    // Get the element node numbers
-    int elem_len = 0;
-    const int *elem_nodes;
-    tacs->getElement(elem, &elem_nodes, &elem_len);
 
     // For each element on the refined mesh, compute the interpolated
     // solution and sum up the local contribution to the adjoint
@@ -2571,7 +2566,8 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
             double N[max_num_nodes];
             FElibrary::biLagrangeSF(N, pt, order);
            
-            // Evaluate the interpolation part of the reconstruction
+            // Evaluate the interpolation of the solution and the
+            // element adjoint interpolation
             for ( int k = 0; k < order*order; k++ ){
               for ( int kk = 0; kk < vars_per_node; kk++ ){
                 vars_interp[vars_per_node*(n + m*order) + kk] += 
@@ -2608,19 +2604,19 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
         tacs_refine->getElement(elem_num, &nodes, &len);
 
         // Get the adjoint variables and residual for the refined mesh
-        adjoint_refine->getValues(len, nodes, adj_elem_refine);
+        adjoint_refine->getValues(len, nodes, adj_refine);
 
         // Add in the contribution to the error from this element
         for ( int j = 0; j < element->numVariables(); j++ ){
-          elem_error_remain += res[j]*adj_elem_refine[j];
+          elem_error_corr += res[j]*adj_refine[j];
         }
       }
     }
 
     // Add the contribution to the total remaining error and the
     // adjoint correction.
-    total_adjoint_corr += elem_error_remain;
-    error[elem] = fabs(TacsRealPart(elem_error_remain));
+    total_adjoint_corr += elem_error_corr;
+    error[elem] = fabs(TacsRealPart(elem_error_corr));
     total_error_remain += error[elem];
   }
 
@@ -2634,12 +2630,10 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
 
   // Free the data that is no longer required
   delete [] vars_elem;
-  delete [] adj_elem;
+  delete [] vars_interp;
+  delete [] adj_refine;
   delete [] dvars;
   delete [] ddvars;
-  delete [] vars_interp;
-  delete [] adj_elem_refine;
-  delete [] res_elem_refine;
   delete [] res;
   adjoint_refine->decref();
 
@@ -2693,16 +2687,16 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
   TACSBVec *adjoint_refine = tacs_refine->createVec();
   adjoint_refine->incref();
 
-  // Allocate arrays needed for the reconstruction
+  // Allocate the element arrays needed for the reconstruction
   TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *adj_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
 
-  // The interpolated variables on the refined mesh
+  // The reconstructed adjoint solution
+  TacsScalar *adj_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
+
+  // Extra variables required for velocities/accelerations
   TacsScalar *dvars = new TacsScalar[ vars_per_node*max_num_nodes ];
   TacsScalar *ddvars = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *adj_elem_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *res_elem_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
 
   // Allocate the element residual array
   TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
@@ -2736,18 +2730,10 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
     double time = 0.0;
 
     // Compute the remaining element error
-    TacsScalar elem_error_remain = 0.0;
+    TacsScalar elem_error_corr = 0.0;
 
     // Get the element variable values on the coarse mesh
     tacs->getElement(elem, NULL, vars_elem);
-
-    // Get the element node numbers
-    int elem_len = 0;
-    const int *elem_nodes;
-    tacs->getElement(elem, &elem_nodes, &elem_len);
-        
-    // Get the values of the adjoint on the coarse mesh
-    adjoint->getValues(elem_len, elem_nodes, adj_elem);
 
     // For each element on the refined mesh, compute the interpolated
     // solution and sum up the local contribution to the adjoint
@@ -2811,11 +2797,11 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
           tacs_refine->getElement(elem_num, &nodes, &len);
 
           // Get the adjoint variables for the refined mesh
-          adjoint_refine->getValues(len, nodes, adj_elem_refine);
+          adjoint_refine->getValues(len, nodes, adj_refine);
           
           // Add in the contribution to the error from this element
           for ( int j = 0; j < elem->numVariables(); j++ ){
-            elem_error_remain += res[j]*adj_elem_refine[j];
+            elem_error_corr += res[j]*adj_refine[j];
           }
         }
       }
@@ -2823,8 +2809,8 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
 
     // Add the contribution to the total remaining error and the
     // adjoint correction.
-    total_adjoint_corr += elem_error_remain;
-    error[elem] = fabs(TacsRealPart(elem_error_remain));
+    total_adjoint_corr += elem_error_corr;
+    error[elem] = fabs(TacsRealPart(elem_error_corr));
     total_error_remain += error[elem];
   }
 
@@ -2838,12 +2824,10 @@ double TMR_AdjointErrorEst( TACSAssembler *tacs,
 
   // Free the data that is no longer required
   delete [] vars_elem;
-  delete [] adj_elem;
+  delete [] vars_interp;
+  delete [] adj_refine;
   delete [] dvars;
   delete [] ddvars;
-  delete [] vars_interp;
-  delete [] adj_elem_refine;
-  delete [] res_elem_refine;
   delete [] res;
   adjoint_refine->decref();
 

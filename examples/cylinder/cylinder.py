@@ -210,9 +210,18 @@ else:
 
 # The target relative error
 if order == 2:
-    target_rel_err = 5e-2
+    target_rel_err = 1e-3
 else:
     target_rel_err = 1e-4
+
+# Open a log file to write
+if order == 2:
+    log_fp = open('cylinder_refine2nd.dat', 'w')
+else:
+    log_fp = open('cylinder_refine3rd.dat', 'w')
+
+# Write the first line to the file
+log_fp.write('Variables = iter, nelems, nnodes, fval, fcorr, abs_err\n')
 
 for k in range(steps):
     # Create the topology problem
@@ -255,6 +264,7 @@ for k in range(steps):
     fval = assembler.evalFunctions([func])[0]
     
     # Compute the adjoint
+    res.zeroEntries()
     assembler.evalSVSens(func, res)
     
     # Compute the adjoint solution
@@ -284,6 +294,14 @@ for k in range(steps):
     # Compute the standard deviation
     stddev = comm.allreduce(np.sum((np.log(error) - mean)**2), op=MPI.SUM)
     stddev = np.sqrt(stddev/(ntotal-1))
+
+    # Get the total number of nodes
+    nnodes = comm.allreduce(assembler.getNumOwnedNodes(), op=MPI.SUM)
+
+    # Write the log data to a file
+    log_fp.write('%d %d %d %e %e %e\n'%(
+        k, ntotal, nnodes, fval, fval + func_corr, err_est))
+    log_fp.flush()               
     
     # Compute the bins
     for i in range(len(error)):
@@ -355,19 +373,21 @@ for k in range(steps):
         log_cutoff = np.log(cutoff)
 
         if comm.rank == 0:
-            print 'elem_target_error =        %15.3e'%(element_target_error)
-            print 'log10(mean) =              %15.3e'%(np.log10(np.exp(mean)))
-            print 'log10(stddev) =            %15.3e'%(
-                np.log10(np.exp(stddev)))
+            print 'elem_target_error =        %15.3e'%(
+                element_target_error)
             print 'log10(elem_target_error) = %15.3e'%(
                 np.log10(element_target_error))
-            print 'log_elem_target_error = %15.3e'%(
+            print 'log10(mean) =              %15.3e'%(
+                np.log10(np.exp(mean)))
+            print 'log10(stddev) =            %15.3e'%(
+                np.log10(np.exp(stddev)))
+            print 'log_elem_target_error =    %15.3e'%(
                 log_elem_target_error)
-            print 'mean =                  %15.3e'%(mean)
-            print 'stddev =                %15.3e'%(stddev)
-            print 'cutoff =.               %15.3e'%(cutoff)
+            print 'mean =                     %15.3e'%(mean)
+            print 'stddev =                   %15.3e'%(stddev)
+            print 'cutoff =                   %15.3e'%(cutoff)
 
-        if True: # log_elem_target_error < mean - stddev:
+        if log_elem_target_error < mean - stddev:
             if comm.rank == 0:
                 print '-----------------------------------------------'
                 print 'First refinement phase'

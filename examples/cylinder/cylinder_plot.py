@@ -1,11 +1,21 @@
 import tikzplots as tkz
+import argparse
 import numpy as np
 
+# Create an argument parser to read in arguments from the commnad line
+p = argparse.ArgumentParser()
+p.add_argument('--steps', type=int, default=5)
+args = p.parse_args()
+
+# Retrieve the number of steps
+steps = args.steps
+
+# Set the colors to use for each set of bars
 colors = ['BrickRed', 'NavyBlue', 'black', 'ForestGreen',
-          'Violet', 'Magenta', 'Red' ]
+          'Violet', 'Magenta' ]
 
 data = []
-for k in range(10):
+for k in range(steps):
     data.append(np.loadtxt('results/cylinder_data%d.txt'%(k))[12:56,:])
 
 # Delta value
