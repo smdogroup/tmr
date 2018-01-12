@@ -127,6 +127,7 @@ p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--ksweight', type=float, default=100.0)
+p.add_argument('--structured', type=int, default=0)
 args = p.parse_args()
 
 # Set the type of ordering to use for this problem
@@ -144,6 +145,9 @@ ksweight = args.ksweight
 
 # Set the number of AMR steps to use
 steps = args.steps
+
+# Store whether to use a structured/unstructed mesh
+structured = args.structured
 
 # Load the geometry model
 geo = TMR.LoadModel('cylinder.stp')
@@ -165,7 +169,12 @@ mesh = TMR.Mesh(comm, geo)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
-opts.mesh_type_default = TMR.STRUCTURED
+
+# Set the mesh type
+opts.mesh_type_default = TMR.UNSTRUCTURED
+if structured:
+    opts.mesh_type_default = TMR.STRUCTURED
+
 opts.frontal_quality_factor = 1.25
 opts.num_smoothing_steps = 50
 opts.write_mesh_quality_histogram = 1
@@ -200,12 +209,16 @@ else:
     ordering = TACS.PY_NATURAL_ORDER
 
 # The target relative error
-target_rel_err = 1e-2
+if order == 2:
+    target_rel_err = 5e-2
+else:
+    target_rel_err = 1e-4
 
 for k in range(steps):
     # Create the topology problem
+    nlevs = min(5, depth+k+1)
     assembler, mg = createProblem(forest, bcs, ordering, 
-                                  order=order, nlevels=depth+k+1)
+                                  order=order, nlevels=nlevs)
 
     # Add the surface traction
     aux = addFaceTraction(order, assembler, load)
@@ -231,34 +244,33 @@ for k in range(steps):
             TACS.ToFH5.DISPLACEMENTS |
             TACS.ToFH5.EXTRAS)
     f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
-    f5.writeToFile('solution%02d.f5'%(k))
+    f5.writeToFile('results/solution%02d.f5'%(k))
+
+    # Compute the strain energy error estimate
+    # err_est, error = TMR.strainEnergyError(assembler, forest)
 
     # Create the function
     func = functions.KSFailure(assembler, ksweight)
     func.setKSFailureType('continuous')
     fval = assembler.evalFunctions([func])[0]
-
-    if False:
-        # Compute the strain energy error estimate
-        err_est, error = TMR.strainEnergyError(assembler, forest)
-    else:
-        # Compute the adjoint
-        assembler.evalSVSens(func, res)
-        
-        # Compute the adjoint solution
-        adjoint = assembler.createVec()
-        gmres.solve(res, adjoint)
-        adjoint.scale(-1.0)
-        
-        # Create the refined mesh
-        refined = createRefined(forest, bcs, order=order)
-        
-        # Compute the adjoint and use adjoint-based refinement
-        err_est, func_corr, error = \
-            TMR.adjointError(assembler, refined, adjoint, forest)
+    
+    # Compute the adjoint
+    assembler.evalSVSens(func, res)
+    
+    # Compute the adjoint solution
+    adjoint = assembler.createVec()
+    gmres.solve(res, adjoint)
+    adjoint.scale(-1.0)
+    
+    # Create the refined mesh
+    refined = createRefined(forest, bcs, order=order)
+    
+    # Compute the adjoint and use adjoint-based refinement
+    err_est, func_corr, error = \
+        TMR.adjointError(assembler, refined, adjoint, forest)
 
     # Compute the refinement from the error estimate
-    nbins = 30
+    nbins = 60
     low = -15
     high = 0
     bounds = 10**np.linspace(low, high, nbins+1)
@@ -293,23 +305,34 @@ for k in range(steps):
     
     # Print out the result
     if comm.rank == 0:
-        print 'estimate = ', err_est
-        print 'mean =   ', mean
-        print 'stddev = ', stddev
+        print 'fval      = ', fval
+        print 'corr func = ', func_corr
+        print 'estimate =  ', err_est
+        print 'mean =      ', mean
+        print 'stddev =    ', stddev
 
-        print '%10s  %10s  %12s  %12s'%(
+        print '%10s   %10s   %12s   %12s'%(
             'low', 'high', 'bins', 'percentage')
-        print '%10.2e  %10s  %12d  %12.2f'%(
+        print '%10.2e   %10s   %12d   %12.2f'%(
             bounds[-1], ' ', bins[-1], 100.0*bins[-1]/total)
         for i in range(nbins-1, -1, -1):
-            print '%10.2e  %10.2e  %12d  %12.2f'%(
+            print '%10.2e   %10.2e   %12d   %12.2f'%(
                 bounds[i], bounds[i+1], bins[i+1], 100.0*bins[i+1]/total)
-        print '%10s  %10.2e  %12d  %12.2f'%(
+        print '%10s   %10.2e   %12d   %12.2f'%(
             ' ', bounds[0], bins[0], 100.0*bins[0]/total)
+
+        # Set the data 
+        data = np.zeros((60, 4))
+        for i in range(nbins-1, -1, -1):
+            data[i,0] = bounds[i]
+            data[i,1] = bounds[i+1]
+            data[i,2] = bins[i+1]
+            data[i,3] = 100.0*bins[i+1]/total
+        np.savetxt('results/cylinder_data%d.txt'%(k), data)
 
     # Print out the error estimate
     assembler.setDesignVars(error)
-    f5.writeToFile('error%02d.f5'%(k))
+    f5.writeToFile('results/error%02d.f5'%(k))
 
     # Perform the refinement
     if k < steps-1:
@@ -320,37 +343,60 @@ for k in range(steps):
         element_target_error = target_rel_err*fval/ntotal
         log_elem_target_error = np.log(element_target_error)
 
-        if comm.rank == 0:
-            print 'element_target_error =        ', element_target_error
-            print 'log10(mean) =                 ', np.log10(np.exp(mean))
-            print 'log10(stddev) =               ', np.log10(np.exp(stddev))
-            print 'log10(element_target_error) = ', np.log10(element_target_error)
+        # Determine the cutoff values
+        cutoff = 0.0
+        bin_sum = 0
+        for i in range(len(bins)-1, -1, -1):
+            bin_sum += bins[i]
+            if bin_sum > 0.25*ntotal:
+                cutoff = bounds[i]
+                break
 
-        if log_elem_target_error < mean + 2*stddev:
+        log_cutoff = np.log(cutoff)
+
+        if comm.rank == 0:
+            print 'elem_target_error =        %15.3e'%(element_target_error)
+            print 'log10(mean) =              %15.3e'%(np.log10(np.exp(mean)))
+            print 'log10(stddev) =            %15.3e'%(
+                np.log10(np.exp(stddev)))
+            print 'log10(elem_target_error) = %15.3e'%(
+                np.log10(element_target_error))
+            print 'log_elem_target_error = %15.3e'%(
+                log_elem_target_error)
+            print 'mean =                  %15.3e'%(mean)
+            print 'stddev =                %15.3e'%(stddev)
+            print 'cutoff =.               %15.3e'%(cutoff)
+
+        if True: # log_elem_target_error < mean - stddev:
+            if comm.rank == 0:
+                print '-----------------------------------------------'
+                print 'First refinement phase'
+                print '-----------------------------------------------'
+
             # Element target error is still too high. Adapt based
             # solely on decreasing the overall error
             for i, err in enumerate(error):
                 # Compute the log of the error
                 logerr = np.log(err)
 
-                if logerr > mean + 2*stddev:
-                    refine[i] = 2
-                elif logerr > mean:
+                if logerr > log_cutoff:
                     refine[i] = 1
-                elif logerr < mean - 2*stddev:
-                    refine[i] = -1
+                # elif logerr < mean - 2*stddev:
+                #     refine[i] = -1
         else:
-            print '-----------------------------------------------'
-            print 'Entering final phase refinement'
-            print '-----------------------------------------------'
+            if comm.rank == 0:
+                print '-----------------------------------------------'
+                print 'Entering final phase refinement'
+                print '-----------------------------------------------'
+
             # Try to target the relative error
             for i, err in enumerate(error):
                 # Compute the log of the error
                 logerr = np.log(err)
 
-                if logerr > log_elem_target_error + stddev:
+                if logerr > log_elem_target_error:
                     refine[i] = 1
-                elif logerr < log_elem_target_error - stddev:
+                elif logerr < log_elem_target_error - 2*stddev:
                     refine[i] = -1
             
         # Refine the forest

@@ -117,6 +117,7 @@ for i in range(faces[4].getNumEdgeLoops()):
         v1, v2 = e.getVertices()
         if v0 is None:
             v1.setAttribute('fully fixed')
+            v2.setAttribute('fixed')
             v0 = v1
         else:
             v1.setAttribute('fixed')
@@ -150,7 +151,7 @@ forest.createTrees(depth)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed', [0, 1])
+bcs.addBoundaryCondition('fixed', [0, 1, 2])
 bcs.addBoundaryCondition('fully fixed')
 
 # Set the ordering to use
