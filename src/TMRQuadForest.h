@@ -168,6 +168,14 @@ class TMRQuadForest : public TMREntity {
   TMRQuadrant* findEnclosing( TMRQuadrant *node );
 
  private:
+  inline void quadToNode( const int order, TMRQuadrant *quad, 
+                          const int ii, const int jj,
+                          TMRQuadrant *node );
+  inline void refinedQuadToNode( const int order, TMRQuadrant *quad, 
+                                const int ii, const int jj,
+                                TMRQuadrant *node );
+  inline int32_t getMaxMeshSize( const int order );
+
   // Free the internally stored data and zero things
   void freeData();
   
