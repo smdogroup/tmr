@@ -207,8 +207,14 @@ void TMRQuadForest::copyData( TMRQuadForest *copy ){
 }
 
 /*
-  Take the quad and the corresponding i,j index on the element
-  and convert it to the node space
+  Take the element quad and the corresponding local ii, jj node index
+  on the element and compute the corresponding position in the node
+  space.
+
+  For second-order elements this is a direct mapping. For third-order
+  elements this is a direct mapping where the node spacing is 1/2 the
+  element spacing. For fourth-order elements, the mapping involes a
+  3/4 factor.
 */
 inline void TMRQuadForest::quadToNode( const int order, TMRQuadrant *quad,
                                        const int ii, const int jj,
@@ -224,15 +230,23 @@ inline void TMRQuadForest::quadToNode( const int order, TMRQuadrant *quad,
     node->x = quad->x + h*ii;
     node->y = quad->y + h*jj;
   }
-  else { // (order == 4){
+  else if (order == 4){
     const int32_t h = 1 << (TMR_MAX_LEVEL - quad->level - 2);
-    node->x = 3*(quad->x >> 2) + h*ii;
-    node->y = 3*(quad->y >> 2) + h*jj;
+    node->x = 3*(quad->x/4) + h*ii;
+    node->y = 3*(quad->y/4) + h*jj;
+  }
+  else { // order == 5
+    const int32_t h = 1 << (TMR_MAX_LEVEL - quad->level - 2);
+    node->x = quad->x + h*ii;
+    node->y = quad->y + h*jj;
   }
 }
 
 /*
-  Go from a refined quad to a node
+  Go from a from a refined quadrilateral to the element node. This is
+  analogous to the code above except in this case the local node
+  spacing on each element is divided by two and the local ii, jj node
+  index goes over the full set of refined indices.
 */
 inline void TMRQuadForest::refinedQuadToNode( const int order, 
                                               TMRQuadrant *quad,
@@ -249,10 +263,15 @@ inline void TMRQuadForest::refinedQuadToNode( const int order,
     node->x = quad->x + h*ii;
     node->y = quad->y + h*jj;
   }
-  else { // (order == 4){
+  else if (order == 4){
     const int32_t h = 1 << (TMR_MAX_LEVEL - quad->level - 3);
-    node->x = 3*(quad->x >> 2) + h*ii;
-    node->y = 3*(quad->y >> 2) + h*jj;
+    node->x = 3*(quad->x/4) + h*ii;
+    node->y = 3*(quad->y/4) + h*jj;
+  }
+  else { // (order == 5)
+    const int32_t h = 1 << (TMR_MAX_LEVEL - quad->level - 3);
+    node->x = quad->x + h*ii;
+    node->y = quad->y + h*jj;
   }
 }
 
@@ -260,12 +279,24 @@ inline void TMRQuadForest::refinedQuadToNode( const int order,
   Get the maximum mesh edge length in the node space
 */
 inline int32_t TMRQuadForest::getMaxMeshSize( const int order ){
-  if (order == 2 || order == 3){
-    return 1 << TMR_MAX_LEVEL;
-  }
-  else if (order == 4){
+  if (order == 4){
     return 3*(1 << (TMR_MAX_LEVEL - 2));
   }
+  return 1 << TMR_MAX_LEVEL;
+}
+
+/*
+  Get the mesh-spacing for the given order
+*/
+inline int32_t TMRQuadForest::getMeshSpacing( const int order, 
+                                              const int level ){
+  if (order == 2){
+    return 1 << (TMR_MAX_LEVEL - level);
+  }
+  else if (order == 3){
+    return 1 << (TMR_MAX_LEVEL - level - 1);
+  }
+  return 1 << (TMR_MAX_LEVEL - level - 2);
 }
 
 /*
@@ -1114,8 +1145,11 @@ void TMRQuadForest::createRandomTrees( int nrand,
 }
 
 /*
-  Repartition the quadrants across all processors
- */
+  Repartition the quadrants across all processors.
+
+  This does not repartition the nodes. You have to recreate the nodes
+  after this call so be careful.
+*/
 void TMRQuadForest::repartition(){
   // First, this stores the number of elements on quadtrees owned on
   // each processor
@@ -1432,9 +1466,9 @@ void TMRQuadForest::refine( const int refinement[],
           // refinement
           hash->addQuadrant(&array[i]);
         }
-      } // end else if (refinement[i] > 0)
-    } // end for int i = 0; i < size; i++
-  } // end if refinement
+      }
+    }
+  }
   else {
     // No refinement array is provided. Just go ahead and refine
     // everything one level
@@ -1622,28 +1656,47 @@ int TMRQuadForest::getQuadrantMPIOwner( TMRQuadrant *quad ){
 }
 
 /*
-  Match the quadrant intervals
+  Match the quadrant intervals to the MPI owners. Note that this
+  requires that the input array is sorted.
 */
 void TMRQuadForest::matchQuadrantIntervals( TMRQuadrant *array,
-                                            int size, 
-                                            int *ptr ){
+                                            int size, int *ptr,
+                                            int use_nodes ){
   ptr[0] = 0;
-  
-  int index = 0;
-  for ( int rank = 0; rank < mpi_size-1; rank++ ){
-    while (index < size &&
-           owners[rank+1].compareEncoding(&array[index]) > 0){
-      index++;
+
+  if (use_nodes){
+    int index = 0;
+    for ( int rank = 0; rank < mpi_size-1; rank++ ){
+      // Convert the quadrant owner to the corresponding 
+      TMRQuadrant node;
+      quadToNode(mesh_order, &owners[rank+1], 0, 0, &node);
+
+      // Check for the ownership 
+      while (index < size &&
+             node.compareEncoding(&array[index]) > 0){
+        index++;
+      }
+      ptr[rank+1] = index;
     }
-    ptr[rank+1] = index;
+    ptr[mpi_size] = size;
   }
-  ptr[mpi_size] = size;
+  else {
+    int index = 0;
+    for ( int rank = 0; rank < mpi_size-1; rank++ ){
+      while (index < size &&
+             owners[rank+1].compareEncoding(&array[index]) > 0){
+        index++;
+      }
+      ptr[rank+1] = index;
+    }
+    ptr[mpi_size] = size;
+  }
 }
 
 /*
   Match the MPI intervals
 */
-void TMRQuadForest::matchMPIIntervals( TMRQuadrant *array,
+void TMRQuadForest::matchTagIntervals( TMRQuadrant *array,
                                        int size, int *ptr ){
   ptr[0] = 0;
   for ( int i = 0, rank = 0; rank < mpi_size; rank++ ){
@@ -1662,6 +1715,7 @@ TMRQuadrantArray *TMRQuadForest::distributeQuadrants( TMRQuadrantArray *list,
                                                       int use_tags,
                                                       int **_quad_ptr, 
                                                       int **_quad_recv_ptr,
+                                                      int use_nodes,
                                                       int include_local ){
   // Get the array itself
   int size;
@@ -1676,10 +1730,10 @@ TMRQuadrantArray *TMRQuadForest::distributeQuadrants( TMRQuadrantArray *list,
   // Match the quadrant intervals to determine how mnay quadrants
   // need to be sent to each processor
   if (use_tags){
-    matchMPIIntervals(array, size, quad_ptr);
+    matchTagIntervals(array, size, quad_ptr);
   }
   else {
-    matchQuadrantIntervals(array, size, quad_ptr);
+    matchQuadrantIntervals(array, size, quad_ptr, use_nodes);
   }
 
   // Count up the number of quadrants
@@ -2686,9 +2740,6 @@ void TMRQuadForest::labelDependentNodes(){
     for ( int ii = 1; ii < 2*mesh_order-1; ii += 2 ){
       // Label only the dependent nodes
       TMRQuadrant node;
-      node.level = 0;
-      node.tag = -1;
-
       if (edge_index < 2){
         refinedQuadToNode(mesh_order, b,
                           2*(edge_index % 2)*(mesh_order-1), ii, &node);
@@ -2697,6 +2748,10 @@ void TMRQuadForest::labelDependentNodes(){
         refinedQuadToNode(mesh_order, b,
                           ii, 2*(edge_index % 2)*(mesh_order-1), &node);
       }
+
+      // Set the tag = -1 to indicate a dependent node
+      node.level = 0;
+      node.tag = -1;
 
       // Transform the node to the global ordering
       transformNode(&node);
@@ -2740,7 +2795,7 @@ void TMRQuadForest::labelDependentNodes(){
 void TMRQuadForest::createNodes( int order ){
   // Check that the order falls within allowable bounds
   mesh_order = order;
-  if (order > 4){ mesh_order = 4; }
+  if (order > 5){ mesh_order = 5; }
   if (order < 2){ mesh_order = 2; }
 
   // Send/recv the adjacent quadrants
@@ -2805,7 +2860,7 @@ void TMRQuadForest::createNodes( int order ){
     // Get the owner of this node
     int owner = getQuadrantMPIOwner(&array[i]);
 
-    // If this is the owner, then it is either dependent
+    // If this is the owner, then count up if it is independent
     if (owner == mpi_rank && array[i].tag >= 0){
       nlocal++;
     }
@@ -2822,8 +2877,8 @@ void TMRQuadForest::createNodes( int order ){
   }
 
   // Set the global ordering of the local faces, edges, and nodes
-  // using the offsets computed above.  Set the node number offset
-  // from the range of owned nodes
+  // using the offsets computed above. Set the node number offset from
+  // the range of owned nodes
   int node_num = node_range[mpi_rank];
 
   // Count up the number of interior nodes
@@ -2852,7 +2907,7 @@ void TMRQuadForest::createNodes( int order ){
     if (array[i].tag >= 0){
       const int use_node_search = 1;
       TMRQuadrant *t = nodes->contains(&array[i], use_node_search);
-      array[i].tag = t->tag;
+      array[i].tag = t->tag;      
     }
   }
 
@@ -3034,7 +3089,8 @@ TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
   corner with a given attribute
 
   This code loops over all nodes and check whether they lie on a
-  geometric entity that has the given attribute.
+  geometric entity that has the given attribute. The nodes are not
+  unique if they are lie on a shared boundary between processors.
 
   input:
   attr:   the string of the attribute to search
@@ -3129,8 +3185,8 @@ void TMRQuadForest::createMeshConn( int **_conn, int *_nelems ){
     // For all searches/comparisons, we use node numbers
     const int use_node_search = 1;
 
-    // Loop over all element nodes and determine the global
-    // node number
+    // Loop over all element nodes and determine the global node
+    // numbering
     for ( int jj = 0; jj < mesh_order; jj++ ){
       for ( int ii = 0; ii < mesh_order; ii++ ){
         TMRQuadrant node;
@@ -3141,7 +3197,7 @@ void TMRQuadForest::createMeshConn( int **_conn, int *_nelems ){
         // Transform the node to the global ordering
         transformNode(&node);
         
-        // Get the node from the sorted list
+        // Search for the node from the sorted list of nodes
         TMRQuadrant *t = nodes->contains(&node, use_node_search);
         
         // Set the node number in the element connectivity
@@ -3290,13 +3346,17 @@ void TMRQuadForest::createDepNodeConn( int **_ptr, int **_conn,
   int *conn = new int[ ptr[num_dep_nodes] ];
   double *weights = new double[ ptr[num_dep_nodes] ];
 
+  // Weights for the second-order case
   const double wt2[] = {0.5, 0.5};
+
+  // Weights for the third-order case
   const double wt31[] = {0.375, 0.75, -0.125};
   const double wt32[] = {-0.125, 0.75, 0.375};
 
-  const double wt41[] = {0.375, 0.75, -0.125};
-  const double wt42[] = {-0.125, 0.75, 0.375};
-  const double wt43[] = {-0.125, 0.75, 0.375};
+  // Weights for the fourth-order case
+  const double wt41[] = {0.3125, 0.9375, -0.3125, 0.0625};
+  const double wt42[] = {-0.0625, 0.5625, 0.5625, -0.0625};
+  const double wt43[] = {0.0625, -0.3125, 0.9375, 0.3125};
 
   const double *wt[3] = {NULL, NULL, NULL};
   if (mesh_order == 2){
@@ -3471,14 +3531,13 @@ int TMRQuadForest::computeInterpWeights( const int order,
     Nu[2] = 2.0*ud*(ud - 0.5);
     return 3;
   }
-  else if (order == 4){
-    double ud = 1.0*u/h;
-    Nu[0] = 0.5*(1.0 - 3.0*ud)*(2 - 3.0*ud)*(1.0 - ud);
-    Nu[1] = 4.5*ud*(2.0 - 3.0*ud)*(1.0 - ud);
-    Nu[2] = 4.5*ud*(3.0*ud - 1.0)*(1.0 - ud);
-    Nu[3] = 0.5*ud*(3.0*ud - 1.0)*(3.0*ud - 2.0);
-    return 4;
-  }
+  // else if (order == 4){
+  double ud = 1.0*u/h;
+  Nu[0] = 0.5*(1.0 - 3.0*ud)*(2 - 3.0*ud)*(1.0 - ud);
+  Nu[1] = 4.5*ud*(2.0 - 3.0*ud)*(1.0 - ud);
+  Nu[2] = 4.5*ud*(3.0*ud - 1.0)*(1.0 - ud);
+  Nu[3] = 0.5*ud*(3.0*ud - 1.0)*(3.0*ud - 2.0);
+  return 4;
 }
 
 /*
@@ -3547,15 +3606,18 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   // Loop over the nodes in the fine mesh that are owned by quadrants
   // on the coarse mesh stored on this processor
   for ( int i = 0; i < fine_size; i++ ){
-    // Find an quadrant that encloses the node - this is not unique, but
-    // does produce a unique interpolation (since edges/face/corners
-    // will be treated the same when adjacent quadrants that both share
-    // a common node location touch)
+    
+
+
+    // Find an quadrant that encloses the node - this is not unique,
+    // but does produce a unique interpolation (since
+    // edges/face/corners will be treated the same when adjacent
+    // quadrants that both share a common node location touch)
     TMRQuadrant *quad = coarse->findEnclosing(&fine[i]);
     
     if (quad){
-      // The maximum possible size of the array of weights. Note
-      // that this is found if every node is a dependent node (which is
+      // The maximum possible size of the array of weights. Note that
+      // this is found if every node is a dependent node (which is
       // impossible) which points to a dependent face node (also
       // impossible). It is an upper bound.
       const int max_size = (4*4*4)*(4*4);
@@ -3563,10 +3625,13 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
 
       // Get the element size for coarse element
       const int32_t h = 1 << (TMR_MAX_LEVEL - quad->level);
-      const int32_t hc = 
-        1 << (TMR_MAX_LEVEL - quad->level - (coarse->mesh_order - 2));
 
-      // Compute the parametric location
+      // Get the node spacing size on the coarse mesh
+      const int32_t hc = getMeshSpacing(coarse->mesh_order, quad->level);
+
+      // Compute the parametric location within the element. Note that
+      // this modifies the end-point locations so that they are flush
+      // with the upper limit
       int32_t u = (fine[i].x == hnode-1 ? hnode : fine[i].x) - quad->x;
       int32_t v = (fine[i].y == hnode-1 ? hnode : fine[i].y) - quad->y;
 

@@ -158,6 +158,7 @@ class TMRQuadForest : public TMREntity {
                                          int use_tags=0,
                                          int **quad_ptr=NULL, 
                                          int **quad_recv_ptr=NULL,
+                                         int use_nodes=0,
                                          int include_local=0 );
   TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
                                    const int *quad_ptr,
@@ -175,6 +176,7 @@ class TMRQuadForest : public TMREntity {
                                 const int ii, const int jj,
                                 TMRQuadrant *node );
   inline int32_t getMaxMeshSize( const int order );
+  inline int32_t getMeshSpacing( const int order, const int level );
 
   // Free the internally stored data and zero things
   void freeData();
@@ -197,10 +199,9 @@ class TMRQuadForest : public TMREntity {
 
   // match the ownership intervals
   void matchQuadrantIntervals( TMRQuadrant *array,
-                               int size, int *ptr );
-  void matchMPIIntervals( TMRQuadrant *array,
+                               int size, int *ptr, int use_nodes );
+  void matchTagIntervals( TMRQuadrant *array,
                           int size, int *ptr );
-
  
   // Balance-related routines
   // ------------------------
@@ -258,7 +259,8 @@ class TMRQuadForest : public TMREntity {
   MPI_Comm comm;
   int mpi_rank, mpi_size;
 
-  // The owner ranges
+  // The owner quadrant ranges for each processor. Note that this is
+  // in the quadrant space not the node space
   TMRQuadrant *owners;
 
   // The following data is the same across all processors

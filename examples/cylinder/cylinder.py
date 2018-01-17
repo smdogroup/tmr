@@ -91,14 +91,15 @@ def createProblem(forest, bcs, ordering, order=2, nlevels=2):
     creator = CreateMe(bcs)
     assemblers.append(creator.createTACS(order, forest, ordering))
 
-    if order == 3:
+    while order > 2:
+        order = order-1
         forest = forests[-1].duplicate()
         forest.balance(1)
         forests.append(forest)
 
         # Make the creator class
         creator = CreateMe(bcs)
-        assemblers.append(creator.createTACS(2, forest, ordering))
+        assemblers.append(creator.createTACS(order, forest, ordering))
 
     for i in xrange(nlevels-1):
         forest = forests[-1].coarsen()
@@ -193,7 +194,9 @@ if order == 2:
     depth = 1
 forest = TMR.QuadForest(comm)
 forest.setTopology(topo)
-forest.createTrees(depth)
+
+forest.createRandomTrees(4, 0, 3)
+# forest.createTrees(depth)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
@@ -217,8 +220,10 @@ else:
 # Open a log file to write
 if order == 2:
     log_fp = open('cylinder_refine2nd.dat', 'w')
-else:
+elif order == 3:
     log_fp = open('cylinder_refine3rd.dat', 'w')
+elif order == 4:
+    log_fp = open('cylinder_refine4th.dat', 'w')
 
 # Write the first line to the file
 log_fp.write('Variables = iter, nelems, nnodes, fval, fcorr, abs_err\n')
@@ -255,6 +260,18 @@ for k in range(steps):
     f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
     f5.writeToFile('results/solution%02d.f5'%(k))
 
+
+
+
+
+
+
+
+
+
+
+    sys.exit(0)
+
     # Compute the strain energy error estimate
     # err_est, error = TMR.strainEnergyError(assembler, forest)
 
@@ -273,7 +290,7 @@ for k in range(steps):
     adjoint.scale(-1.0)
     
     # Create the refined mesh
-    refined = createRefined(forest, bcs, order=order)
+    refined = createRefined(forest, bcs, order=order+1)
     
     # Compute the adjoint and use adjoint-based refinement
     err_est, func_corr, error = \
