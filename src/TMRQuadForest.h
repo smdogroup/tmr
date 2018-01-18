@@ -72,7 +72,8 @@ class TMRQuadForest : public TMREntity {
 
   // Create and order the nodes
   // --------------------------
-  void createNodes( int order=2 );
+  void createNodes( int order=2, 
+                    TMRInterpolationType interp_type=TMR_UNIFORM_POINTS );
 
   // Get the nodes or elements with certain attributes
   // -------------------------------------------------
@@ -158,7 +159,6 @@ class TMRQuadForest : public TMREntity {
                                          int use_tags=0,
                                          int **quad_ptr=NULL, 
                                          int **quad_recv_ptr=NULL,
-                                         int use_nodes=0,
                                          int include_local=0 );
   TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
                                    const int *quad_ptr,
@@ -169,15 +169,6 @@ class TMRQuadForest : public TMREntity {
   TMRQuadrant* findEnclosing( TMRQuadrant *node );
 
  private:
-  inline void quadToNode( const int order, TMRQuadrant *quad, 
-                          const int ii, const int jj,
-                          TMRQuadrant *node );
-  inline void refinedQuadToNode( const int order, TMRQuadrant *quad, 
-                                const int ii, const int jj,
-                                TMRQuadrant *node );
-  inline int32_t getMaxMeshSize( const int order );
-  inline int32_t getMeshSpacing( const int order, const int level );
-
   // Free the internally stored data and zero things
   void freeData();
   
@@ -199,7 +190,7 @@ class TMRQuadForest : public TMREntity {
 
   // match the ownership intervals
   void matchQuadrantIntervals( TMRQuadrant *array,
-                               int size, int *ptr, int use_nodes );
+                               int size, int *ptr );
   void matchTagIntervals( TMRQuadrant *array,
                           int size, int *ptr );
  
@@ -239,6 +230,14 @@ class TMRQuadForest : public TMREntity {
   // Exchange non-local quadrant neighbors
   void computeAdjacentQuadrants();
 
+  // Get the node numbers along an edge of the given element
+  void getEdgeNodeNums( TMRQuadrant *quad, const int edge_index, 
+                        int *conn, const int incr,
+                        TMRQuadrantArray *ext_nodes=NULL );
+
+  // Get the node numbers associated with a given element
+  void getElementNodeNums( TMRQuadrant *quad, int *conn );
+
   // Find the dependent faces and edges in the mesh
   void computeDepEdges();
   int checkAdjacentDepEdges( int edge_index, TMRQuadrant *b,
@@ -258,6 +257,10 @@ class TMRQuadForest : public TMREntity {
   // The communicator
   MPI_Comm comm;
   int mpi_rank, mpi_size;
+
+  // Information about the type of interpolation
+  TMRInterpolationType interp_type;
+  double *interp_knots;
 
   // The owner quadrant ranges for each processor. Note that this is
   // in the quadrant space not the node space
