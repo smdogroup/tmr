@@ -277,15 +277,45 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
         TMRQuadrant *array;
         nodes->getArray(&array, &size);
 
-        // Allocate the array of the node numbers associated with the BC
+        // Get the mesh order
+        const int order = forest->getMeshOrder();
+
+        // Count up the total number of local nodes
         int num = 0;
-        int *vars = new int[ size ];
         for ( int i = 0; i < size; i++ ){
-          if (array[i].tag >= range[mpi_rank] &&
-              array[i].tag < range[mpi_rank+1]){
+          if (array[i].level & TMR_CORNER_NODE){
+            num++;
+          }
+          else if (array[i].level & TMR_EDGE_NODE){
+            num += order-2;
+          }
+          else if (array[i].level & TMR_FACE_NODE){
+            num += (order-2)*(order-2);          
+          }
+        }
+
+        // Allocate the array of the node numbers associated with the
+        // boundary conditions
+        int *vars = new int[ num ];
+        for ( int i = 0; i < size; i++ ){
+          if (array[i].level & TMR_CORNER_NODE){
             vars[num] = array[i].tag;
             num++;
           }
+          else if (array[i].level & TMR_EDGE_NODE){
+            for ( int ii = 0; ii < order-2; ii++ ){
+              vars[num] = array[i].tag + ii;
+              num++;
+            }
+          }
+          else if (array[i].level & TMR_FACE_NODE){
+            for ( int jj = 0; jj < order-2; jj++ ){
+              for ( int ii = 0; ii < order-2; ii++ ){
+                vars[num] = array[i].tag + ii + jj*(order-2);
+                num++;
+              }
+            }
+          }        
         }
 
         // Add the boundary conditions to TACSAssembler
@@ -335,20 +365,45 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
   TacsScalar *Xn;
   X->getArray(&Xn);
 
+  // Get the mesh order
+  const int order = forest->getMeshOrder();
+
   // Loop over all the nodes
-  for ( int i = 0; i < size; i++ ){
+  for ( int i = 0, index = 0; i < size; i++ ){
     if (array[i].tag >= range[mpi_rank] &&
         array[i].tag < range[mpi_rank+1]){
       int loc = array[i].tag - range[mpi_rank];
-      Xn[3*loc] = Xp[i].x*scale;
-      Xn[3*loc+1] = Xp[i].y*scale;
-      Xn[3*loc+2] = Xp[i].z*scale;   
 
-      for ( int k = 1; k < array[i].level; k++ ){
-        loc++;
-        Xn[3*loc] = Xp[i].x*scale;
-        Xn[3*loc+1] = Xp[i].y*scale;
-        Xn[3*loc+2] = Xp[i].z*scale;
+      if (array[i].level & TMR_CORNER_NODE){
+        Xn[3*loc] = scale*Xp[index].x;
+        Xn[3*loc+1] = scale*Xp[index].y;
+        Xn[3*loc+2] = scale*Xp[index].z;
+        index++;
+      }
+      else if (array[i].level & TMR_EDGE_NODE){
+        for ( int i = 0; i < order-2; i++, index++, loc++ ){
+          Xn[3*loc] = scale*Xp[index].x;
+          Xn[3*loc+1] = scale*Xp[index].y;
+          Xn[3*loc+2] = scale*Xp[index].z;
+        }
+      }
+      else if (array[i].level & TMR_FACE_NODE){
+        for ( int i = 0; i < (order-2)*(order-2); i++, index++, loc++ ){
+          Xn[3*loc] = scale*Xp[index].x;
+          Xn[3*loc+1] = scale*Xp[index].y;
+          Xn[3*loc+2] = scale*Xp[index].z;
+        }
+      }
+    }
+    else {
+      if (array[i].level & TMR_CORNER_NODE){
+        index++;
+      }
+      else if (array[i].level & TMR_EDGE_NODE){
+        index += order-2;
+      }
+      else if (array[i].level & TMR_FACE_NODE){
+        index += (order-2)*(order-2);
       }
     }
   }

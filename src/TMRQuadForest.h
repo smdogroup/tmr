@@ -282,7 +282,7 @@ class TMRQuadForest : public TMREntity {
   // Information about the mesh
   int mesh_order;
 
-  // Set the range of nodes owned by each processor
+  // Set the range of node numbers owned by each processor
   int *node_range;
 
   // The array of all quadrants
@@ -297,9 +297,8 @@ class TMRQuadForest : public TMREntity {
 
   // The following data is processor-local
   // -------------------------------------
-  // The number of elements and dependent nodes
-  int num_elements;
   int num_dep_nodes;
+  int num_local_nodes;
   int *dep_ptr, *dep_conn;
   double *dep_weights;
 
