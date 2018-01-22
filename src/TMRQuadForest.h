@@ -254,6 +254,9 @@ class TMRQuadForest : public TMREntity {
   // Label the dependent nodes on the locally owned blocks
   void labelDependentNodes( int *conn, const int dep_label );
 
+  // Order all the nodes that are local to elements on this processor
+  void orderLocalNodes( int *conn );
+
   // Create the dependent node connectivity
   void createDepNodeConn( int **_ptr, int **_conn,
                           double **_weights );

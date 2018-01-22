@@ -2959,7 +2959,7 @@ void TMRQuadForest::labelDependentNodes( int *conn,
     int edge_index = d->tag;
 
     // Compute the element edge length
-    const int32_t h = (TMR_MAX_LEVEL - d->level - 1);
+    const int32_t h = 1 << (TMR_MAX_LEVEL - d->level - 1);
 
     // Loop over the two half-length quads on the edge
     for ( int ii = 0; ii < 2; ii++ ){
@@ -3046,100 +3046,28 @@ void TMRQuadForest::labelDependentNodes( int *conn,
 }
 
 /*
-  Convert from the integer coordinate system to a physical coordinate
-  with the off-by-one check.
+  Order all the local nodes
 */
-double convertToCoordinate( const int32_t x ){
-  static const int32_t hmax = 1 << TMR_MAX_LEVEL;
-  if (x == 0){
-    return 0.0;
-  }
-  else if (x == hmax-1){
-    return 1.0;
-  }
-  else {
-    return 1.0*x/hmax;
-  }
-}
+void TMRQuadForest::orderLocalNodes( int *conn ){
 
-/*
-  Create the nodes from the element mesh
-
-  Note that the element mesh must be balanced before the nodes can be
-  ordered.
-
-  This function first computes the face that owns of each of the
-  faces, edges and corners(/nodes) within the super-mesh. Next, the
-  the non-local quadrants that border each quadtree are passed back to the
-  processors which own the quadtree. This creates a layer of quadrants
-  that are temporarily stored in a partial quadtree. The code then
-  creates nodes within each quadrant element for all of the quadtrees
-  (including the partial quadtrees). Next, the dependent nodes (that are
-  hanging on a face or an edge of an element)are labeled according to
-  whether they are on an edge or face.
-  
-  After the dependent nodes are labeled, the nodes are ordered on all
-  processors to form a complete global ordering. Next, the nodes are
-  communicated locally across quadrant and partial quadrant faces, edges
-  and corners. Finally, the new node numbers are returned to the
-  processors that border the quadtree owners. And lastly, the non-local
-  partial quadtrees are freed.
-
-  input:
-  order:   the order of the mesh
-*/
-void TMRQuadForest::createNodes( int order, 
-                                 TMRInterpolationType interp_type ){
-  // Check that the order falls within allowable bounds
-  mesh_order = order;
-  if (order < 2){ mesh_order = 2; }
-
-  // Set the interpolation knots based on the interpolation type
-  if (interp_knots){
-    delete [] interp_knots;
-  }
-
-  // Allocate the interpolation knots and set the knot locations
-  interp_knots = new double[ mesh_order ];
-  if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
-    interp_knots[0] = 0.0;
-    interp_knots[mesh_order-1] = 1.0;
-    for ( int i = 1; i < mesh_order-1; i++ ){
-      interp_knots[i] = 0.5*(1.0 - cos(M_PI*i/(mesh_order-1)));
-    }
-  }
-  else {
-    // Uniform mesh spacing
-    interp_knots[0] = 0.0;
-    interp_knots[mesh_order-1] = 1.0;
-    for ( int i = 1; i < mesh_order-1; i++ ){
-      interp_knots[i] = 1.0*i/(mesh_order-1);
-    }
-  }
-
-  // Send/recv the adjacent quadrants
-  computeAdjacentQuadrants();
-
-  // Compute the dependent face nodes
-  computeDepEdges();
-  
-  // Set the number of nodes per element
-  int nodes_per_elem = mesh_order*mesh_order;
-
-  // Allocate the array of elements
   int num_elements;
   TMRQuadrant *quads;
   quadrants->getArray(&quads, &num_elements);
-  int *conn = new int[ nodes_per_elem*num_elements ];
+
+
+  // Set the number of nodes per element
+  const int nodes_per_elem = mesh_order*mesh_order;
+
+  const int null_label = -(1 << 30);
+  const int dep_label = -(1 << 30) - 1;
 
   // Set the default values to -1
   for ( int i = 0; i < nodes_per_elem*num_elements; i++ ){
-    conn[i] = -1;
+    conn[i] = null_label;
   }
 
   // Label the dependent nodes with the index
-  const int dependent_label = -2;
-  labelDependentNodes(conn, dependent_label);
+  labelDependentNodes(conn, dep_label);
 
   // Set the number of locally referenced nodes
   num_local_nodes = 0;
@@ -3152,12 +3080,160 @@ void TMRQuadForest::createNodes( int order,
   int *adj_edge_index = new int[ max_quads ];
   int *adj_edge_orient = new int[ max_quads ];
 
+  // Loop over all the dependent edges and consistently order all the
+  // nodes/edges associated with them
+  int dep_size;
+  TMRQuadrant *dep_array;
+  dep_edges->getArray(&dep_array, &dep_size);
+
+  // Scan through the dependent edges
+  for ( int i = 0; i < dep_size; i++ ){
+    TMRQuadrant *d = &dep_array[i];
+
+    // Get the edge index
+    int edge_index = d->tag;
+
+    // Compute the element edge length
+    const int32_t h = 1 << (TMR_MAX_LEVEL - d->level - 1);
+
+    // Loop over the two half-length quads on the edge
+    for ( int ii = 0; ii < 2; ii++ ){
+      // Find the half-length quadrilateral touching the
+      // edge corresponding to edge_index
+      TMRQuadrant quad;
+      quad.face = d->face;
+      quad.level = d->level + 1;
+      if (edge_index < 2){
+        quad.x = d->x + h*(edge_index % 2);
+        quad.y = d->y + ii*h;
+      }
+      else {
+        quad.x = d->x + ii*h;
+        quad.y = d->y + h*(edge_index % 2);
+      }
+
+      // Match up the corners
+      int corners[2];
+      if (edge_index < 2){
+        corners[0] = edge_index;
+        corners[1] = edge_index + 2;
+      }
+      else {
+        corners[0] = 2*(edge_index % 2);
+        corners[1] = 1 + 2*(edge_index % 2);
+      }
+
+      for ( int j = ii; j < 2; j++ ){
+        // Get the quadrants that touch this corner
+        int num_adjacent = getTouchingCorners(quadrants, 
+                                              &quad, corners[j],
+                                              adjacent, adj_edge_index);
+
+        // Set the node number
+        int node = null_label;
+
+        // Loop over all the adjacent corner indices
+        for ( int k = 0; k < num_adjacent; k++ ){
+          // Set the adjacent element number
+          int num = adjacent[k]->tag;
+
+          // Get the corner index
+          int corner_index = adj_edge_index[k];
+
+          // Get the index for the corner
+          int offset = (mesh_order-1)*(corner_index % 2) +
+            mesh_order*(mesh_order-1)*(corner_index/2);
+
+          // Get the corner offset
+          int *c = &conn[nodes_per_elem*num + offset];
+
+          // Label the node, depending on the node type
+          if (k == 0){
+            if (c[0] == null_label){
+              node = c[0] = num_local_nodes;
+              num_local_nodes++;              
+            }
+            else if (c[0] == dep_label){
+              node = c[0] = -(num_dep_nodes+1);
+              num_dep_nodes++;
+            }
+            else {
+              break;
+            }
+          }
+          else {
+            c[0] = node;
+          }
+        }
+      }
+
+      /*
+      // Get the edges that touch this edge
+      int num_adjacent = getTouchingEdges(quadrants, &quad, edge_index,
+                                          adjacent, adj_edge_index, 
+                                          adj_orient);
+      
+      // Compute the increment for the local element
+      int incr = 1;
+      if (edge_index < 2){
+        incr = mesh_order;
+      }
+
+      // Compute the initial array position in the element
+      int offset = 0;
+      if (edge_index < 2){
+        offset = (edge_index % 2)*(mesh_order-1);
+      }
+      else {
+        offset = (edge_index % 2)*(mesh_order-1)*mesh_order;
+      }
+
+      int *c = &conn[nodes_per_elem*i + offset];
+
+      // Loop over all the adjacent quadrilaterals
+      for ( int k = 0; k < num_adjacent; k++ ){
+        // Check to see if this is the same quad
+        if (quads[i].tag != adjacent[k]->tag){
+          // Get the adjacent element index
+          int num = adjacent[k]->tag;
+
+          // Compute the increment for the local element
+          int adj_incr = 1;
+          if (adj_edge_index[k] < 2){
+            adj_incr = mesh_order;
+          }
+
+          // Compute the offset into the array
+          if (adj_edge_index[k] < 2){
+            offset = (adj_edge_index[k] % 2)*(mesh_order-1);
+          }
+          else {
+            offset = (adj_edge_index[k] % 2)*(mesh_order-1)*mesh_order;            
+          }
+          int *c_adj = &conn[nodes_per_elem*num + offset];
+
+          if (adj_edge_orient[k] > 0){
+            for ( int ii = 0; ii < mesh_order; ii++ ){
+              c_adj[adj_incr*ii] = c[incr*ii];
+            }
+          }
+          else {
+            for ( int ii = 0; ii < mesh_order; ii++ ){
+              c_adj[adj_incr*(mesh_order-1-ii)] = c[incr*ii];
+            }
+          }
+        }
+      }
+      */
+    }
+  }
+
   for ( int i = 0; i < num_elements; i++ ){
     // Look for nodes that are not assigned
     for ( int jj = 0; jj < mesh_order; jj++ ){
       for ( int ii = 0; ii < mesh_order; ii++ ){
         // Set a node number it hasn't been assigned yet
-        if (conn[nodes_per_elem*i + ii + mesh_order*jj] == -1){
+        if (conn[nodes_per_elem*i + ii + mesh_order*jj] == null_label){
           conn[nodes_per_elem*i + ii + mesh_order*jj] = num_local_nodes;
           num_local_nodes++;
         }
@@ -3258,15 +3334,100 @@ void TMRQuadForest::createNodes( int order,
     }
   }
 
-  // Get the array of dependent edges
-  int dep_size;
-  TMRQuadrant *dep_array;
-  dep_edges->getArray(&dep_array, &dep_size);
-
-
+  // Free the allocated data
   delete [] adjacent;
   delete [] adj_edge_index;
   delete [] adj_edge_orient;
+}
+
+/*
+  Convert from the integer coordinate system to a physical coordinate
+  with the off-by-one check.
+*/
+double convertToCoordinate( const int32_t x ){
+  static const int32_t hmax = 1 << TMR_MAX_LEVEL;
+  if (x == 0){
+    return 0.0;
+  }
+  else if (x == hmax-1){
+    return 1.0;
+  }
+  else {
+    return 1.0*x/hmax;
+  }
+}
+
+/*
+  Create the nodes from the element mesh
+
+  Note that the element mesh must be balanced before the nodes can be
+  ordered.
+
+  This function first computes the face that owns of each of the
+  faces, edges and corners(/nodes) within the super-mesh. Next, the
+  the non-local quadrants that border each quadtree are passed back to the
+  processors which own the quadtree. This creates a layer of quadrants
+  that are temporarily stored in a partial quadtree. The code then
+  creates nodes within each quadrant element for all of the quadtrees
+  (including the partial quadtrees). Next, the dependent nodes (that are
+  hanging on a face or an edge of an element)are labeled according to
+  whether they are on an edge or face.
+  
+  After the dependent nodes are labeled, the nodes are ordered on all
+  processors to form a complete global ordering. Next, the nodes are
+  communicated locally across quadrant and partial quadrant faces, edges
+  and corners. Finally, the new node numbers are returned to the
+  processors that border the quadtree owners. And lastly, the non-local
+  partial quadtrees are freed.
+
+  input:
+  order:   the order of the mesh
+*/
+void TMRQuadForest::createNodes( int order, 
+                                 TMRInterpolationType interp_type ){
+  // Check that the order falls within allowable bounds
+  mesh_order = order;
+  if (order < 2){ mesh_order = 2; }
+
+  // Set the interpolation knots based on the interpolation type
+  if (interp_knots){
+    delete [] interp_knots;
+  }
+
+  // Allocate the interpolation knots and set the knot locations
+  interp_knots = new double[ mesh_order ];
+  if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
+    interp_knots[0] = 0.0;
+    interp_knots[mesh_order-1] = 1.0;
+    for ( int i = 1; i < mesh_order-1; i++ ){
+      interp_knots[i] = 0.5*(1.0 - cos(M_PI*i/(mesh_order-1)));
+    }
+  }
+  else {
+    // Uniform mesh spacing
+    interp_knots[0] = 0.0;
+    interp_knots[mesh_order-1] = 1.0;
+    for ( int i = 1; i < mesh_order-1; i++ ){
+      interp_knots[i] = 1.0*i/(mesh_order-1);
+    }
+  }
+
+  // Send/recv the adjacent quadrants
+  computeAdjacentQuadrants();
+
+  // Compute the dependent face nodes
+  computeDepEdges();
+  
+  // Set the number of nodes per element
+  const int nodes_per_elem = mesh_order*mesh_order;
+
+  // Allocate the array of elements
+  int num_elements;
+  TMRQuadrant *quads;
+  quadrants->getArray(&quads, &num_elements);
+  int *conn = new int[ nodes_per_elem*num_elements ];
+
+  orderLocalNodes(conn);
 
   /*
   int nowned = 0;
@@ -3301,8 +3462,10 @@ void TMRQuadForest::createNodes( int order,
         for ( int ii = 0; ii < mesh_order; ii++ ){
           // Compute the mesh index
           int index = conn[nodes_per_elem*i + ii + jj*mesh_order];
-          surf->evalPoint(u + d*interp_knots[ii], 
-                          v + d*interp_knots[jj], &X[index]);
+          if (index >= 0){
+            surf->evalPoint(u + d*interp_knots[ii], 
+                            v + d*interp_knots[jj], &X[index]);
+          }
         }
       }
     }

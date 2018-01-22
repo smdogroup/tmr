@@ -193,6 +193,7 @@ int main( int argc, char *argv[] ){
     TMRModel *face_geo = new TMRModel(num_verts, verts,
                                       num_edges, edges,
                                       num_faces, faces);
+    face_geo->incref();
 
     // Allocate the new mesh
     TMRMesh *mesh = new TMRMesh(comm, face_geo);
