@@ -566,7 +566,7 @@ void TMRQuadTACSTopoCreator::createConnectivity( int order,
                                                  TMRQuadForest *forest,
                                                  int **_conn, int **_ptr,
                                                  int *_num_elements ){
-  
+  /*
   // Create the mesh
   int *elem_conn, num_quads;
   forest->createMeshConn(&elem_conn, &num_quads);
@@ -582,7 +582,8 @@ void TMRQuadTACSTopoCreator::createConnectivity( int order,
 
   *_conn = elem_conn;
   *_ptr = ptr;
-  *_num_elements = num_elements;  
+  *_num_elements = num_elements;
+  */
 }
 
 /*

@@ -5,6 +5,11 @@
 #include "TACSMg.h"
 #include "TACSToFH5.h"
 
+
+#include "TMRMesh.h"
+#include "TMROpenCascade.h"
+#include <BRepPrimAPI_MakeCylinder.hxx>
+
 /*
   Create the following L-bracket connectivity
 
@@ -95,7 +100,7 @@ void writeSerialMesh( TMRQuadForest *forest ){
 
   // Get the mesh connectivity
   int *elem_conn, num_elements = 0;
-  forest->createMeshConn(&elem_conn, &num_elements);
+  // forest->createMeshConn(&elem_conn, &num_elements);
 
   // Write out the vtk file
   FILE *fp = fopen("mesh.vtk", "w");
@@ -157,14 +162,96 @@ int main( int argc, char *argv[] ){
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
 
+  double R = 50.0, L = 150.0;
+
+  // Create the geometry
+  BRepPrimAPI_MakeCylinder cylinder(R, L);
+  TopoDS_Compound compound;
+  BRep_Builder builder;
+  builder.MakeCompound(compound);
+  builder.Add(compound, cylinder.Shape());
+
+  // Load in the geometry
+  TMRModel *geo = TMR_LoadModelFromCompound(compound);
+
+  if (geo){
+    geo->incref();
+
+    int num_verts;
+    TMRVertex **verts;
+    geo->getVertices(&num_verts, &verts);
+
+    int num_edges;
+    TMREdge **edges;
+    geo->getEdges(&num_edges, &edges);
+
+    // Only include the cylinder face
+    int num_faces;
+    TMRFace **faces;
+    geo->getFaces(&num_faces, &faces);
+
+    TMRModel *face_geo = new TMRModel(num_verts, verts,
+                                      num_edges, edges,
+                                      num_faces, faces);
+
+    // Allocate the new mesh
+    TMRMesh *mesh = new TMRMesh(comm, face_geo);
+    mesh->incref();
+    
+    double htarget = 20.0;
+    TMRMeshOptions options;
+    options.frontal_quality_factor = 1.25;
+    options.mesh_type_default = TMR_STRUCTURED;
+    options.mesh_type_default = TMR_UNSTRUCTURED;
+    mesh->mesh(options, htarget);
+
+    TMRModel *model = mesh->createModelFromMesh();
+    model->incref();
+
+    TMRQuadForest *forest = new TMRQuadForest(comm);
+    forest->incref();
+
+    TMRTopology *topo = new TMRTopology(comm, model);
+    forest->setTopology(topo);
+      
+    forest->createRandomTrees(5, 5, 3);
+    forest->repartition();
+
+    double tbal = MPI_Wtime();
+    forest->balance(0);
+    tbal = MPI_Wtime() - tbal;
+    printf("[%d] Balance: %f\n", mpi_rank, tbal);
+    forest->repartition();
+
+    // Create the nodes
+    double tnodes = MPI_Wtime();
+    forest->createNodes(4);
+    tnodes = MPI_Wtime() - tnodes;
+    printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
+  }
+
+/*
   // Create the forests
   TMRQuadForest *forest[3];
   forest[0] = new TMRQuadForest(comm);
   
   forest[0]->setConnectivity(npts, conn, nfaces);
   forest[0]->createRandomTrees(250, 5, 15);
-  // forest[0]->createTrees(6);
   forest[0]->repartition();
+
+  double tbal = MPI_Wtime();
+  forest[0]->balance(0);
+  tbal = MPI_Wtime() - tbal;
+  printf("[%d] Balance: %f\n", mpi_rank, tbal);
+  forest[0]->repartition();
+
+  // Create the nodes
+  double tnodes = MPI_Wtime();
+  forest[0]->createNodes(4);
+  tnodes = MPI_Wtime() - tnodes;
+  printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
+*/
+/*
 
   for ( int level = 0; level < 3; level++ ){
     double tbal = MPI_Wtime();
@@ -395,6 +482,7 @@ int main( int argc, char *argv[] ){
     delete forest[level];
   }
 
+  */
   TMRFinalize();
   MPI_Finalize();
   return (0);

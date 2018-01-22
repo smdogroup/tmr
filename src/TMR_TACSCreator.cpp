@@ -139,6 +139,7 @@ void TMRQuadTACSCreator::createConnectivity( int order,
                                              TMRQuadForest *forest,
                                              int **_conn, int **_ptr,
                                              int *_num_elements ){
+  /*
   // Create the mesh
   int *elem_conn, num_elements = 0;
   forest->createMeshConn(&elem_conn, &num_elements);
@@ -152,6 +153,7 @@ void TMRQuadTACSCreator::createConnectivity( int order,
   *_conn = elem_conn;
   *_ptr = ptr;
   *_num_elements = num_elements;
+  */
 }
 
 /*
@@ -162,6 +164,7 @@ TACSAssembler*
                                   TMRQuadForest *forest,
                                   TACSAssembler::OrderingType ordering,
                                   TacsScalar _scale ){
+    /*
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -242,6 +245,8 @@ TACSAssembler*
   setNodeLocations(forest, tacs,_scale);
 
   return tacs;
+  */
+  return NULL;
 }
 
 /*
@@ -277,51 +282,51 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
         TMRQuadrant *array;
         nodes->getArray(&array, &size);
 
-        // Get the mesh order
-        const int order = forest->getMeshOrder();
+        // // Get the mesh order
+        // const int order = forest->getMeshOrder();
 
-        // Count up the total number of local nodes
-        int num = 0;
-        for ( int i = 0; i < size; i++ ){
-          if (array[i].level & TMR_CORNER_NODE){
-            num++;
-          }
-          else if (array[i].level & TMR_EDGE_NODE){
-            num += order-2;
-          }
-          else if (array[i].level & TMR_FACE_NODE){
-            num += (order-2)*(order-2);          
-          }
-        }
+        // // Count up the total number of local nodes
+        // int num = 0;
+        // for ( int i = 0; i < size; i++ ){
+        //   if (array[i].level & TMR_CORNER_NODE){
+        //     num++;
+        //   }
+        //   else if (array[i].level & TMR_EDGE_NODE){
+        //     num += order-2;
+        //   }
+        //   else if (array[i].level & TMR_FACE_NODE){
+        //     num += (order-2)*(order-2);          
+        //   }
+        // }
 
-        // Allocate the array of the node numbers associated with the
-        // boundary conditions
-        int *vars = new int[ num ];
-        for ( int i = 0; i < size; i++ ){
-          if (array[i].level & TMR_CORNER_NODE){
-            vars[num] = array[i].tag;
-            num++;
-          }
-          else if (array[i].level & TMR_EDGE_NODE){
-            for ( int ii = 0; ii < order-2; ii++ ){
-              vars[num] = array[i].tag + ii;
-              num++;
-            }
-          }
-          else if (array[i].level & TMR_FACE_NODE){
-            for ( int jj = 0; jj < order-2; jj++ ){
-              for ( int ii = 0; ii < order-2; ii++ ){
-                vars[num] = array[i].tag + ii + jj*(order-2);
-                num++;
-              }
-            }
-          }        
-        }
+        // // Allocate the array of the node numbers associated with the
+        // // boundary conditions
+        // int *vars = new int[ num ];
+        // for ( int i = 0; i < size; i++ ){
+        //   if (array[i].level & TMR_CORNER_NODE){
+        //     vars[num] = array[i].tag;
+        //     num++;
+        //   }
+        //   else if (array[i].level & TMR_EDGE_NODE){
+        //     for ( int ii = 0; ii < order-2; ii++ ){
+        //       vars[num] = array[i].tag + ii;
+        //       num++;
+        //     }
+        //   }
+        //   else if (array[i].level & TMR_FACE_NODE){
+        //     for ( int jj = 0; jj < order-2; jj++ ){
+        //       for ( int ii = 0; ii < order-2; ii++ ){
+        //         vars[num] = array[i].tag + ii + jj*(order-2);
+        //         num++;
+        //       }
+        //     }
+        //   }        
+        // }
 
-        // Add the boundary conditions to TACSAssembler
-        tacs->addBCs(num, vars, num_bcs, bc_nums, bc_vals);
+        // // Add the boundary conditions to TACSAssembler
+        // tacs->addBCs(num, vars, num_bcs, bc_nums, bc_vals);
 
-        delete [] vars;
+        // delete [] vars;
         delete nodes;
       }
     }
@@ -368,45 +373,45 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
   // Get the mesh order
   const int order = forest->getMeshOrder();
 
-  // Loop over all the nodes
-  for ( int i = 0, index = 0; i < size; i++ ){
-    if (array[i].tag >= range[mpi_rank] &&
-        array[i].tag < range[mpi_rank+1]){
-      int loc = array[i].tag - range[mpi_rank];
+  // // Loop over all the nodes
+  // for ( int i = 0, index = 0; i < size; i++ ){
+  //   if (array[i].tag >= range[mpi_rank] &&
+  //       array[i].tag < range[mpi_rank+1]){
+  //     int loc = array[i].tag - range[mpi_rank];
 
-      if (array[i].level & TMR_CORNER_NODE){
-        Xn[3*loc] = scale*Xp[index].x;
-        Xn[3*loc+1] = scale*Xp[index].y;
-        Xn[3*loc+2] = scale*Xp[index].z;
-        index++;
-      }
-      else if (array[i].level & TMR_EDGE_NODE){
-        for ( int i = 0; i < order-2; i++, index++, loc++ ){
-          Xn[3*loc] = scale*Xp[index].x;
-          Xn[3*loc+1] = scale*Xp[index].y;
-          Xn[3*loc+2] = scale*Xp[index].z;
-        }
-      }
-      else if (array[i].level & TMR_FACE_NODE){
-        for ( int i = 0; i < (order-2)*(order-2); i++, index++, loc++ ){
-          Xn[3*loc] = scale*Xp[index].x;
-          Xn[3*loc+1] = scale*Xp[index].y;
-          Xn[3*loc+2] = scale*Xp[index].z;
-        }
-      }
-    }
-    else {
-      if (array[i].level & TMR_CORNER_NODE){
-        index++;
-      }
-      else if (array[i].level & TMR_EDGE_NODE){
-        index += order-2;
-      }
-      else if (array[i].level & TMR_FACE_NODE){
-        index += (order-2)*(order-2);
-      }
-    }
-  }
+  //     if (array[i].level & TMR_CORNER_NODE){
+  //       Xn[3*loc] = scale*Xp[index].x;
+  //       Xn[3*loc+1] = scale*Xp[index].y;
+  //       Xn[3*loc+2] = scale*Xp[index].z;
+  //       index++;
+  //     }
+  //     else if (array[i].level & TMR_EDGE_NODE){
+  //       for ( int i = 0; i < order-2; i++, index++, loc++ ){
+  //         Xn[3*loc] = scale*Xp[index].x;
+  //         Xn[3*loc+1] = scale*Xp[index].y;
+  //         Xn[3*loc+2] = scale*Xp[index].z;
+  //       }
+  //     }
+  //     else if (array[i].level & TMR_FACE_NODE){
+  //       for ( int i = 0; i < (order-2)*(order-2); i++, index++, loc++ ){
+  //         Xn[3*loc] = scale*Xp[index].x;
+  //         Xn[3*loc+1] = scale*Xp[index].y;
+  //         Xn[3*loc+2] = scale*Xp[index].z;
+  //       }
+  //     }
+  //   }
+  //   else {
+  //     if (array[i].level & TMR_CORNER_NODE){
+  //       index++;
+  //     }
+  //     else if (array[i].level & TMR_EDGE_NODE){
+  //       index += order-2;
+  //     }
+  //     else if (array[i].level & TMR_FACE_NODE){
+  //       index += (order-2)*(order-2);
+  //     }
+  //   }
+  // }
 
   tacs->reorderVec(X);
   tacs->setNodes(X);

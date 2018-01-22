@@ -20,21 +20,6 @@
 static const int TMR_MAX_LEVEL = 30;
 
 /*
-  Labels to indicate the type of node
-*/
-static const int32_t TMR_CORNER_NODE = 1;
-static const int32_t TMR_EDGE_NODE = 2;
-static const int32_t TMR_FACE_NODE = 4;
-static const int32_t TMR_VOLUME_NODE = 8;
-
-/*
-  Labels for x/y/z edges or faces
-*/
-static const int32_t TMR_X_ORIENTED_NODE = 16;
-static const int32_t TMR_Y_ORIENTED_NODE = 32;
-static const int32_t TMR_Z_ORIENTED_NODE = 64;
-
-/*
   Set the type of interpolation to use (only makes a difference
   for order >= 4)
 */

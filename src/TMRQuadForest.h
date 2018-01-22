@@ -80,10 +80,6 @@ class TMRQuadForest : public TMREntity {
   TMRQuadrantArray* getQuadsWithAttribute( const char *attr );
   TMRQuadrantArray* getNodesWithAttribute( const char *attr );
 
-  // Create the mesh connectivity
-  // ----------------------------
-  void createMeshConn( int **_conn, int *_nelems );
-
   // Retrieve the dependent mesh nodes
   // ---------------------------------
   void createDepNodeConn();
@@ -175,6 +171,9 @@ class TMRQuadForest : public TMREntity {
   // Duplicate data
   void copyData( TMRQuadForest *copy );
 
+  // Compute the maximum number of adjacent corners/edges
+  void computeMaxAdjacent();
+
   // Set up the connectivity from nodes -> faces
   void computeNodesToFaces();
 
@@ -242,9 +241,18 @@ class TMRQuadForest : public TMREntity {
   void computeDepEdges();
   int checkAdjacentDepEdges( int edge_index, TMRQuadrant *b,
                              TMRQuadrantArray *adjquads );
-  
+
+  // Get the quadrants that touch a corner/edge
+  int getTouchingCorners( TMRQuadrantArray *list,
+                          TMRQuadrant *quad, int corner_index,
+                          TMRQuadrant **adj, int *adj_corner_index );
+  int getTouchingEdges( TMRQuadrantArray *list, 
+                        TMRQuadrant *quad, int edge_index, 
+                        TMRQuadrant **adj, int *adj_edge_index,
+                        int *adj_edge_orient );
+
   // Label the dependent nodes on the locally owned blocks
-  void labelDependentNodes();
+  void labelDependentNodes( int *conn, const int dep_label );
 
   // Create the dependent node connectivity
   void createDepNodeConn( int **_ptr, int **_conn,
@@ -254,6 +262,7 @@ class TMRQuadForest : public TMREntity {
   int computeInterpWeights( const int order,
                             const int32_t u, const int32_t h,
                             double Nu[] );
+
   // The communicator
   MPI_Comm comm;
   int mpi_rank, mpi_size;
@@ -278,6 +287,10 @@ class TMRQuadForest : public TMREntity {
 
   // Set the node/edge owners
   int *node_face_owners, *edge_face_owners;
+
+  // Max adjacent number of corners/edges in the mesh
+  int max_adjacent_corners;
+  int max_adjacent_edges;
 
   // Information about the mesh
   int mesh_order;
