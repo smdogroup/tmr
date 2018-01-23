@@ -3123,17 +3123,40 @@ void TMRQuadForest::orderLocalNodes( int *conn ){
         corners[1] = 1 + 2*(edge_index % 2);
       }
 
-      for ( int j = ii; j < 2; j++ ){
+/*
+      for ( int j = 0; j < 2; j++ ){
         // Get the quadrants that touch this corner
         int num_adjacent = getTouchingCorners(quadrants, 
                                               &quad, corners[j],
                                               adjacent, adj_edge_index);
 
-        // Set the node number
-        int node = null_label;
+        int *c_adj = NULL;
+        if (num_adjacent >= 1){
+          // Set the adjacent element number
+          int num = adjacent[0]->tag;
+
+          // Get the corner index
+          int corner_index = adj_edge_index[0];
+
+          // Get the index for the corner
+          int offset = (mesh_order-1)*(corner_index % 2) +
+            mesh_order*(mesh_order-1)*(corner_index/2);
+
+          // Get the corner offset
+          c_adj = &conn[nodes_per_elem*num + offset];
+        
+          if (c_adj[0] == null_label){
+            c_adj[0] = num_local_nodes;
+            num_local_nodes++;
+          }
+          else if (c_adj[0] == dep_label){
+            c_adj[0] = -(num_dep_nodes+1);
+            num_dep_nodes++;
+          }
+        }
 
         // Loop over all the adjacent corner indices
-        for ( int k = 0; k < num_adjacent; k++ ){
+        for ( int k = 1; k < num_adjacent; k++ ){
           // Set the adjacent element number
           int num = adjacent[k]->tag;
 
@@ -3148,25 +3171,10 @@ void TMRQuadForest::orderLocalNodes( int *conn ){
           int *c = &conn[nodes_per_elem*num + offset];
 
           // Label the node, depending on the node type
-          if (k == 0){
-            if (c[0] == null_label){
-              node = c[0] = num_local_nodes;
-              num_local_nodes++;              
-            }
-            else if (c[0] == dep_label){
-              node = c[0] = -(num_dep_nodes+1);
-              num_dep_nodes++;
-            }
-            else {
-              break;
-            }
-          }
-          else {
-            c[0] = node;
-          }
+          c[0] = c_adj[0];
         }
       }
-
+*/
       /*
       // Get the edges that touch this edge
       int num_adjacent = getTouchingEdges(quadrants, &quad, edge_index,
