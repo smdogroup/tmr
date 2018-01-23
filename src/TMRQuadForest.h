@@ -245,11 +245,10 @@ class TMRQuadForest : public TMREntity {
   // Get the quadrants that touch a corner/edge
   int getTouchingCorners( TMRQuadrantArray *list,
                           TMRQuadrant *quad, int corner_index,
-                          TMRQuadrant **adj, int *adj_corner_index );
+                          int *index );
   int getTouchingEdges( TMRQuadrantArray *list, 
-                        TMRQuadrant *quad, int edge_index, 
-                        TMRQuadrant **adj, int *adj_edge_index,
-                        int *adj_edge_orient );
+                        TMRQuadrant *quad, int edge_index,
+                        int *index );
 
   // Label the dependent nodes on the locally owned blocks
   void labelDependentNodes( int *conn, const int dep_label );
