@@ -1,4 +1,6 @@
 #include "TMRBase.h"
+#include "TMRQuadrant.h"
+#include "TMROctant.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -20,25 +22,37 @@ MPI_Datatype TMRIndexWeight_MPI_type;
 */
 void TMRInitialize(){
   if (!TMR_is_initialized){
-    MPI_Aint offset = 0;
-    MPI_Datatype type = MPI_INT32_T;
-
-    // Create the TMROctant data type
-    int counts = 6;
-    MPI_Type_create_struct(1, &counts, &offset, &type, 
-                           &TMROctant_MPI_type);
-    MPI_Type_commit(&TMROctant_MPI_type);
+    int counts[2];
+    MPI_Aint offset[2];
+    MPI_Datatype types[2];
+    types[0] = MPI_INT32_T;
+    types[1] = MPI_INT16_T;
 
     // Create the TMRQudrant data type
-    counts = 5;
-    MPI_Type_create_struct(1, &counts, &offset, &type, 
+    TMRQuadrant quad;
+    counts[0] = 4;
+    counts[1] = 2;
+    offset[0] = offsetof(TMRQuadrant, face);
+    offset[1] = offsetof(TMRQuadrant, level);
+    MPI_Type_create_struct(2, counts, offset, types, 
                            &TMRQuadrant_MPI_type);
     MPI_Type_commit(&TMRQuadrant_MPI_type);
 
+    // Create the TMROctant data type
+    TMROctant oct;
+    counts[0] = 5;
+    counts[1] = 2;
+    offset[0] = offsetof(TMROctant, block);
+    offset[1] = offsetof(TMROctant, level);
+    MPI_Type_create_struct(2, counts, offset, types, 
+                           &TMROctant_MPI_type);
+    MPI_Type_commit(&TMROctant_MPI_type);
+
     // Create the TMRPoint data type
-    counts = 3;
-    type = MPI_DOUBLE;
-    MPI_Type_create_struct(1, &counts, &offset, &type, 
+    counts[0] = 3;
+    offset[0] = 0;
+    types[0] = MPI_DOUBLE;
+    MPI_Type_create_struct(1, counts, offset, types, 
                            &TMRPoint_MPI_type);
     MPI_Type_commit(&TMRPoint_MPI_type);
 
@@ -50,7 +64,8 @@ void TMRInitialize(){
     MPI_Aint disp[2];
     disp[0] = offsetof(TMRIndexWeight, index);
     disp[1] = offsetof(TMRIndexWeight, weight);
-    MPI_Datatype types[2] = {MPI_INT, MPI_DOUBLE};
+    types[0] = MPI_INT;
+    types[1] = MPI_DOUBLE;
     MPI_Type_create_struct(2, len, disp, types, 
                            &TMRIndexWeight_MPI_type);
     MPI_Type_commit(&TMRIndexWeight_MPI_type);

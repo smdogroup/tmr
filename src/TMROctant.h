@@ -31,10 +31,11 @@ class TMROctant {
   int compareEncoding( const TMROctant *octant ) const;
   int contains( TMROctant *oct );
 
-  int32_t x, y, z; // The x,y,z coordinates
-  int32_t level; // The refinement level
   int32_t block; // The block that owns this octant
+  int32_t x, y, z; // The x,y,z coordinates
   int32_t tag;   // A tag to store additional data
+  int16_t level; // The refinement level
+  int16_t info; // Info about the octant
 };
 
 /*

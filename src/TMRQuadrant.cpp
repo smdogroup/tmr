@@ -25,6 +25,7 @@ void TMRQuadrant::getSibling( int id, TMRQuadrant *sib ){
 
   sib->face = face;
   sib->level = level;
+  sib->info = 0;
   sib->x = ((id & 1) ? xr+h : xr);
   sib->y = ((id & 2) ? yr+h : yr);
 }
@@ -36,6 +37,7 @@ void TMRQuadrant::parent( TMRQuadrant *p ){
   if (level > 0){
     p->face = face;
     p->level = level-1;
+    p->info = 0;
     const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
     p->x = x & ~h;
@@ -44,6 +46,7 @@ void TMRQuadrant::parent( TMRQuadrant *p ){
   else {
     p->face = face;
     p->level = 0;
+    p->info = 0;
     p->x = x;
     p->y = y;
   }
@@ -56,6 +59,7 @@ void TMRQuadrant::edgeNeighbor( int edge, TMRQuadrant *neighbor ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->face = face;
   neighbor->level = level;
+  neighbor->info = 0;
 
   neighbor->x = x + ((edge == 0) ? -h : (edge == 1) ? h : 0);
   neighbor->y = y + ((edge == 2) ? -h : (edge == 3) ? h : 0);
@@ -68,6 +72,7 @@ void TMRQuadrant::cornerNeighbor( int corner, TMRQuadrant *neighbor ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->face = face;
   neighbor->level = level;
+  neighbor->info = 0;
 
   neighbor->x = x + (2*(corner & 1) - 1)*h;
   neighbor->y = y + ((corner & 2) - 1)*h;

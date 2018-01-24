@@ -2529,9 +2529,16 @@ int TMRQuadForest::checkAdjacentDepEdges( int edge_index,
       // If the more-refined element exists then label the
       // corresponding nodes as dependent
       const int use_node_search = 0;
-      if (quadrants->contains(&quad, use_node_search) || 
-          (adjquads && adjquads->contains(&quad, use_node_search))){
-        return 1; 
+      TMRQuadrant *dep = quadrants->contains(&quad);
+      if (dep){
+        // Set the info flag to the corresponding adjacent index
+        dep->info |= 1 << adj_index;
+      }
+      if (adjquads){
+        dep = adjquads->contains(&quad, use_node_search);
+        if (dep){
+          dep->info |= 1 << adj_index;
+        }
       }
     }
   }
@@ -2553,10 +2560,6 @@ int TMRQuadForest::checkAdjacentDepEdges( int edge_index,
   dep_edges:   a list of dependent edges (aligned with face edges)
 */
 void TMRQuadForest::computeDepEdges(){
-  if (dep_edges){
-    delete dep_edges;
-    dep_edges = NULL;
-  }
   if (dep_ptr){ 
     delete [] dep_ptr;  
     delete [] dep_conn;
@@ -2565,9 +2568,6 @@ void TMRQuadForest::computeDepEdges(){
     dep_conn = NULL; 
     dep_weights = NULL; 
   }
-
-  // Create the queue that will store the dependent edges
-  TMRQuadrantQueue *dedges = new TMRQuadrantQueue();
             
   for ( int iter = 0; iter < 2; iter++ ){
     // Get the elements either in the regular quadrant array or
@@ -2589,9 +2589,10 @@ void TMRQuadForest::computeDepEdges(){
       const int32_t hmax = 1 << TMR_MAX_LEVEL;
     
       // Enumerate the sibling-ids for each edge
-      const int edge_ids[][2] =
+      const int edge_index_to_children[][2] =
         {{0, 2}, {1, 3}, 
          {0, 1}, {2, 3}};
+      const int edge_index_to_adjacent[] = {1, 0, 3, 2};
 
       // Check whether the next-level refined element exists over an
       // adjacent edge
@@ -2605,16 +2606,17 @@ void TMRQuadForest::computeDepEdges(){
           TMRQuadrant p = array[i];
           p.level += 1;
 
-          // Get the sibling id for each quadrant along the
-          // face that we're on right now
+          // Get the sibling id for each quadrant along the face that
+          // we're on right now
           TMRQuadrant q;
-          p.getSibling(edge_ids[edge_index][k], &q);
+          p.getSibling(edge_index_to_children[edge_index][k], &q);
 
           // Get the edge neighbor
           q.edgeNeighbor(edge_index, &q);
 
-          // Check if the adjacent quadrant q lies over an quadtree edge
-          // or face and if so check for the corresponding quadrant
+          // Check if the adjacent quadrant q lies over an quadtree
+          // edge or face and if so check for the corresponding
+          // quadrant
           int fx0 = (q.x < 0);
           int fy0 = (q.y < 0);
           int fx = (fx0 || q.x >= hmax);
@@ -2627,27 +2629,22 @@ void TMRQuadForest::computeDepEdges(){
           }
           else {
             const int use_node_search = 0;
-            if (quadrants->contains(&q, use_node_search) || 
-                (adjquads && adjquads->contains(&q, use_node_search))){
-              add_me = 1; break;
+            TMRQuadrant *dep = quadrants->contains(&q);
+            if (dep){
+              // Set the info flag to the corresponding adjacent index
+              dep->info |= 1 << edge_index_to_adjacent[edge_index];
+            }
+            if (adjquads){
+              dep = adjquads->contains(&q, use_node_search);
+              if (dep){
+                dep->info |= 1 << edge_index_to_adjacent[edge_index];
+              }
             }
           }
-        }
-        
-        if (add_me){
-          TMRQuadrant t = array[i];
-          t.tag = edge_index;
-          dedges->push(&t);
         }
       }
     }
   }
-
-  // Create the arrays of the dependent nodes/faces
-  dep_edges = dedges->toArray();
-
-  // Free the data
-  delete dedges;
 }
 
 /*
@@ -3042,97 +3039,86 @@ int TMRQuadForest::getTouchingEdges( TMRQuadrantArray *list,
 */
 void TMRQuadForest::labelDependentNodes( int *conn, 
                                          const int dep_label ){
-  // Get the array of dependent edges
-  int dep_size;
-  TMRQuadrant *dep_array;
-  dep_edges->getArray(&dep_array, &dep_size);
+  int size = 0;
+  TMRQuadrant *array = NULL;
+  quadrants->getArray(&array, &size);
 
-  // Allocate arrays to store the information
-  int *node_index = new int[ max_adjacent_edges*mesh_order ];
+  // Scan through all the quadrants and label the edges that are
+  // dependent
+  for ( int i = 0; i < size; i++ ){
+    // This element contains dependent node information
+    if (array[i].info){
+      for ( int edge_index = 0; edge_index < 4; edge_index++ ){
+        // Find whether this edge is dependent or not
+        if (array[i].info & 1 << edge_index){
+          // Get the element number
+          int num = array[i].tag;
 
-  // Scan through the dependent edges that are adjacent 
-  // to this edge
-  for ( int i = 0; i < dep_size; i++ ){
-    TMRQuadrant *d = &dep_array[i];
-
-    // Get the edge index
-    int edge_index = d->tag;
-
-    // Compute the element edge length
-    const int32_t h = 1 << (TMR_MAX_LEVEL - d->level - 1);
-
-    // Loop over the two half-length quads on the edge
-    for ( int ii = 0; ii < 2; ii++ ){
-      // Find the half-length quadrilateral touching the
-      // edge corresponding to edge_index
-      TMRQuadrant quad;
-      quad.face = d->face;
-      quad.level = d->level + 1;
-      if (edge_index < 2){
-        quad.x = d->x + h*(edge_index % 2);
-        quad.y = d->y + ii*h;
-      }
-      else {
-        quad.x = d->x + ii*h;
-        quad.y = d->y + h*(edge_index % 2);
-      }
-
-      // Get the edges that touch the given quadrant along this edge
-      int num_adjacent = getTouchingEdges(quadrants, &quad, edge_index,
-                                          node_index);
-
-      // Set the start/end point depending on the element order and
-      // whether there are an even number of nodes
-      int start, end;
-      if (ii == 0){
-        start = 1;
-        end = mesh_order - (mesh_order % 2);
-      }
-      else {
-        start = (mesh_order % 2);
-        end = mesh_order-1;
-      }
-
-      // For each adjacent edge, label the dependent nodes
-      for ( int j = 0; j < num_adjacent; j++ ){
-        // Set the dependent node indices depending on the mesh order
-        // and whether we are on the first or second element along the
-        // dependent edge
-        if (interp_type == TMR_UNIFORM_POINTS){
-          for ( int k = start; k < end; k += 2 ){
-            int indx = node_index[mesh_order*j + k];
-            conn[indx] = dep_label;
+          // Compute the offset into the array based on the 
+          // edge index
+          int offset = 0;
+          if (edge_index < 2){
+            offset = (edge_index % 2)*(mesh_order-1);
           }
-        }
-        else {
-          // Otherwise, all the dependent nodes along the edge, except
-          // the first and possibly last are dependent
-          for ( int k = start; k < end; k++ ){
-            int indx = node_index[mesh_order*j + k];
-            conn[indx] = dep_label;
+          else {
+            offset = (edge_index % 2)*(mesh_order-1)*mesh_order;
+          }
+
+          // Compute the increment for the local element
+          int incr = 1;
+          if (edge_index < 2){
+            incr = mesh_order;
+          }
+
+          // Set the start/end point depending on the childId()
+          int id = array[i].childId();
+          int start, end;
+          if ((edge_index < 2 && id/2 == 0) ||
+              (edge_index >= 2 && id % 2 == 0)){
+            start = 1;
+            end = mesh_order - (mesh_order % 2);
+          }
+          else {
+            start = (mesh_order % 2);
+            end = mesh_order-1;
+          }
+
+          // Label the dependent node
+          if (interp_type == TMR_UNIFORM_POINTS){
+            int indx = mesh_order*mesh_order*num + offset;
+            for ( int k = start; k < end; k += 2 ){
+              conn[indx + k*incr] = dep_label;
+            }
+          }
+          else {
+            // Otherwise, all the dependent nodes along the edge,
+            // except the first and possibly last are dependent
+            int indx = mesh_order*mesh_order*num + offset;
+            for ( int k = start; k < end; k++ ){
+              conn[indx + k*incr] = dep_label;
+            }
           }
         }
       }
     }
   }
-
-  // Free the allocated data
-  delete [] node_index;
 }
 
 /*
   Order all the local nodes
 */
 void TMRQuadForest::orderLocalNodes( int *conn ){
+  // Set the labels for the nodes
+  const int null_label = -(1 << 30);
+  const int dep_label = -(1 << 30) - 1;
+
+  // Get the number of elements and number of quads
   int num_elements;
   TMRQuadrant *quads;
   quadrants->getArray(&quads, &num_elements);
 
   // Set the number of nodes per element
   const int nodes_per_elem = mesh_order*mesh_order;
-
-  const int null_label = -(1 << 30);
-  const int dep_label = -(1 << 30) - 1;
 
   // Set the default values to -1
   for ( int i = 0; i < nodes_per_elem*num_elements; i++ ){
@@ -3153,69 +3139,41 @@ void TMRQuadForest::orderLocalNodes( int *conn ){
   // Allocate an array for the temporary variables
   int *node_index = new int[ max_quads*mesh_order ];
 
-  // Loop over all the dependent edges and consistently order all the
-  // nodes/edges associated with them
-  int dep_size;
-  TMRQuadrant *dep_array;
-  dep_edges->getArray(&dep_array, &dep_size);
+  // Loop over all the elements, searching for dependent node numbers
+  for ( int i = 0; i < num_elements; i++ ){
+    // Search for any dependent quadrants and label them first
+    for ( int edge_index = 0; edge_index < 4; edge_index++ ){
+      // Find whether this edge is dependent or not
+      if (quads[i].info & 1 << edge_index){
+        // Get the parent of the octant and find the adjacent
+        TMRQuadrant p;
+        quads[i].parent(&p);
+        
+        // Get the quadrant edges that touch this quadrant
+        int num_adjacent = 
+          getTouchingEdges(quadrants, &p, edge_index,
+                           node_index);
 
-  // Scan through the dependent edges
-  for ( int i = 0; i < dep_size; i++ ){
-    TMRQuadrant *d = &dep_array[i];
-
-    // Get the edge index
-    int edge_index = d->tag;
-
-    // Compute the element edge length
-    const int32_t h = 1 << (TMR_MAX_LEVEL - d->level - 1);
-
-    // Loop over the two half-length quads on the edge
-    for ( int ii = 0; ii < 2; ii++ ){
-      // Find the half-length quadrilateral touching the
-      // edge corresponding to edge_index
-      TMRQuadrant quad;
-      quad.face = d->face;
-      quad.level = d->level + 1;
-      if (edge_index < 2){
-        quad.x = d->x + h*(edge_index % 2);
-        quad.y = d->y + ii*h;
-      }
-      else {
-        quad.x = d->x + ii*h;
-        quad.y = d->y + h*(edge_index % 2);
-      }
-
-      // Get the quadrants that touch this corner
-      int num_adjacent = getTouchingEdges(quadrants, 
-                                          &quad, edge_index,
-                                          node_index);
-
-      // Loop over the edge and assign the node numbers
-      if (num_adjacent > 0){
+        // Label the dependent nodes along the
         for ( int ii = 0; ii < mesh_order; ii++ ){
-          int indx = node_index[ii];
-          if (conn[indx] == null_label){
-            conn[indx] = num_local_nodes;
+          int orig = mesh_index[ii];
+          if (conn[orig] == null_label){
+            conn[orig] = num_local_nodes;
             num_local_nodes++;
           }
-          else if (conn[indx] == dep_label){
-            conn[indx] = -(num_dep_nodes+1);
-            num_dep_nodes++;
-          }
         }
-
-        // Copy the node numbers to the adjacent edges
-        for ( int j = 1; j < num_adjacent; j++ ){
+        
+        for ( int k = 1; k < num_adjacent; k++ ){
           for ( int ii = 0; ii < mesh_order; ii++ ){
-            int orig = node_index[ii];
-            int dest = node_index[ii + j*mesh_order];
+            int orig = node_index[0];
+            int dest = node_index[k];
             conn[dest] = conn[orig];
           }
         }
       }
     }
   }
-  
+
   for ( int i = 0; i < num_elements; i++ ){
     // Look for nodes that are not assigned
     for ( int jj = 0; jj < mesh_order; jj++ ){
@@ -3456,7 +3414,7 @@ void TMRQuadForest::createNodes( int order,
     }
   }
 
-
+  delete [] conn;
 }
 
 /*
