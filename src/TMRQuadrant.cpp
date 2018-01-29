@@ -330,7 +330,7 @@ TMRQuadrant* TMRQuadrantArray::contains( TMRQuadrant *q ){
 
   // Search the array for an identical element
   return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant), 
-                             compare_quadrants);
+                               compare_quadrants);
 }
 
 /*

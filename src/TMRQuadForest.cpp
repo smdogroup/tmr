@@ -2535,8 +2535,8 @@ int TMRQuadForest::getOwnerIndex( TMRQuadrant *q, int indx,
   // Set the node number
   TMRQuadrant node;
 
-  // The owner rank will be overwritten if the quadrant
-  // is not locally owned by this processor
+  // The owner rank will be overwritten if the quadrant is not locally
+  // owned by this processor
   *owner_rank = mpi_rank;
 
   // Check whether element is on a quadtree boundary
@@ -2646,12 +2646,8 @@ int TMRQuadForest::getOwnerIndex( TMRQuadrant *q, int indx,
 
         // Find the enclosing octant and its corresponding node
         if (t){
-          // Get the offset for the actual corner
-          int offset = (mesh_order-1)*(adj_index % 2) +
-            mesh_order*(mesh_order-1)*(adj_index/2);
-
           // Return the index of the owner
-          return mesh_order*mesh_order*t->tag + offset;
+          return mesh_order*mesh_order*t->tag;
         }
       }
     }
@@ -2659,8 +2655,10 @@ int TMRQuadForest::getOwnerIndex( TMRQuadrant *q, int indx,
   else {
     // Move the node into the interior of the quadrant to make
     // the owning octant unique
+    node.face = q->face;
     node.x = q->x + 1 + (ii < cutoff ? 0 : hf);
     node.y = q->y + 1 + (jj < cutoff ? 0 : hf);
+
 
     // Find the enclosing quadrant - if it exists, find the
     // corresponding node index
@@ -2833,10 +2831,6 @@ void TMRQuadForest::createNodes(){
           index = getOwnerIndex(&quads[i], offset, &owner_rank);
         }
 
-        if (index < 0){
-          printf("Index not found\n");
-        }
-
         // Set the node index
         c[offset] = -index - 1;
 
@@ -2872,31 +2866,27 @@ void TMRQuadForest::createNodes(){
           num_local_nodes++;
         }
         else if (c[offset] < 0){
-          int ptr = -c[offset] + 1;
-          if (c[ptr] < 0){
-            c[ptr] = num_local_nodes;
+          // If the owner has not been ordered, order it now
+          int ptr = -c[offset] - 1;
+          if (conn[ptr] < 0){
+            conn[ptr] = num_local_nodes;
             num_local_nodes++;
           }
-          c[offset] = c[ptr];
+          c[offset] = conn[ptr];
         }
       }
     }
   }
 
-  // Finally, copy the node numbers from the dependent nodes
+  // Sort and distribute the non-local nodes;
 
+  // Retrieve the non-local nodes and set the external node numbers
 
-  /*
-  // Gather the owned variable counts from each processor
-  node_range = new int[ mpi_size+1 ];
-  memset(node_range, 0, (mpi_size+1)*sizeof(int));
-  MPI_Allgather(&num_owned_nodes, 1, MPI_INT, 
-                &node_range[1], 1, MPI_INT, comm);
-  */
+  // Set the local node numbers
 
   // Allocate the array of locally owned nodes
-  X = new TMRPoint[ num_owned_nodes + num_dep_nodes ];
-  memset(X, 0, (num_owned_nodes + num_dep_nodes)*sizeof(TMRPoint));
+  X = new TMRPoint[ num_local_nodes + num_dep_nodes ];
+  memset(X, 0, (num_local_nodes + num_dep_nodes)*sizeof(TMRPoint));
 
   if (topo){
     for ( int i = 0; i < num_elements; i++ ){
@@ -2919,12 +2909,12 @@ void TMRQuadForest::createNodes(){
           // Compute the mesh index
           int index = conn[mesh_order*mesh_order*i + 
                            ii + jj*mesh_order];
-          if (index >= 0 && index < num_owned_nodes){
+          if (index >= 0 && index < num_local_nodes){
             surf->evalPoint(u + d*interp_knots[ii], 
                             v + d*interp_knots[jj], &X[index]);
           }
           else if (index < 0 && index >= -num_dep_nodes){
-            index = num_owned_nodes - index-1;
+            index = num_local_nodes - index-1;
             surf->evalPoint(u + d*interp_knots[ii], 
                             v + d*interp_knots[jj], &X[index]);            
           }
@@ -2937,7 +2927,7 @@ void TMRQuadForest::createNodes(){
   if (mpi_rank == 0 && topo){
     FILE *fp = fopen("output_result.dat", "w");
     if (fp){
-      int n = num_owned_nodes + num_dep_nodes;
+      int n = num_local_nodes + num_dep_nodes;
       fprintf(fp, "Variables = X,Y,Z\n");
       fprintf(fp, "Zone N = %d E = %d ", n,
               (mesh_order-1)*(mesh_order-1)*num_elements);
@@ -2967,7 +2957,7 @@ void TMRQuadForest::createNodes(){
 
             for ( int j = 0; j < 4; j++ ){
               if (n[j] < 0 && n[j] >= -num_dep_nodes){
-                n[j] = num_owned_nodes - n[j];
+                n[j] = num_local_nodes - n[j];
               }
               else if (n[j] >= 0){
                 n[j] += 1;
@@ -3352,7 +3342,7 @@ TMRQuadrant* TMRQuadForest::findEnclosing( TMRQuadrant *node ){
   // element of the element array
   int low = 0;
   int high = size-1;
-  int mid = low + (int)((high - low)/2);
+  int mid = low + (high - low)/2;
 
   // Maintain values of low/high and mid such that the
   // quadrant is between (elems[low], elems[high]).
@@ -3387,7 +3377,7 @@ TMRQuadrant* TMRQuadForest::findEnclosing( TMRQuadrant *node ){
     return &array[mid];
   }
 
-  // Check if elems[mid] contains the provided quadrant
+  // Check if elems[low] contains the provided quadrant
   const int32_t h2 = 1 << (TMR_MAX_LEVEL - array[low].level);
   if ((array[low].face == face) &&
       (array[low].x <= x && x <= array[low].x+h2) &&
