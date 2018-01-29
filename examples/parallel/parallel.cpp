@@ -46,6 +46,7 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
+  /*
   MPI_Comm comm = MPI_COMM_WORLD;
   TMRQuadForest *forest = new TMRQuadForest(comm);
     
@@ -102,7 +103,7 @@ int main( int argc, char *argv[] ){
   }
 
   delete forest;
-
+  */
   TMRFinalize();
   MPI_Finalize();
   return (0);

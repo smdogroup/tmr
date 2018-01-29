@@ -996,6 +996,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   Compute the volume corresponding to each node within the filter
 */
 TACSBVec* TMRTopoProblem::createAreaVec(){
+  /*
   // Get the dependent nodes and weight values
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
@@ -1113,6 +1114,8 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
   vec->endSetValues(TACS_ADD_VALUES);
 
   return vec;
+  */
+  return NULL;
 }
 
 /*

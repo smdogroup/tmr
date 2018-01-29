@@ -87,6 +87,7 @@ void TMROctTACSTopoCreator::createConnectivity( int order,
                                                 TMROctForest *forest,
                                                 int **_conn, int **_ptr,
                                                 int *_num_elements ){
+  /*
   // Create the mesh
   int *elem_conn, num_octs;
   forest->createMeshConn(&elem_conn, &num_octs);
@@ -164,6 +165,7 @@ void TMROctTACSTopoCreator::createConnectivity( int order,
   *_conn = elem_conn;
   *_ptr = ptr;
   *_num_elements = num_elements;
+  */
 }
 
 void TMROctTACSTopoCreator::computeWeights( TMROctant *oct,
@@ -519,10 +521,10 @@ TMRQuadTACSCreator(_bcs){
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Create the nodes within the filter
-  filter->createNodes(2);
+  // filter->createNodes(2);
 
   // Create the dependent node connectivity
-  filter->createDepNodeConn();
+  // filter->createDepNodeConn();
 
   // Get the node range for the filter design variables
   const int *filter_range;
@@ -592,6 +594,7 @@ void TMRQuadTACSTopoCreator::createConnectivity( int order,
 void TMRQuadTACSTopoCreator::computeWeights( TMRQuadrant *quad,
                                              TMRQuadrant *node,
                                              TMRIndexWeight *welem ){
+  /*
   
   // Find the side length of the quadrant in the filter that contains
   // the element quadrant
@@ -611,8 +614,8 @@ void TMRQuadTACSTopoCreator::computeWeights( TMRQuadrant *quad,
   filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
 
   // Get the octant array for the nodes
-  TMRQuadrantArray *filter_nodes;
-  filter->getNodes(&filter_nodes);
+  // TMRQuadrantArray *filter_nodes;
+  // filter->getNodes(&filter_nodes);
   
   // Store the weights for each node
   int nweights = 0;
@@ -660,6 +663,8 @@ void TMRQuadTACSTopoCreator::computeWeights( TMRQuadrant *quad,
   // per filter point at most
   nweights = TMRIndexWeight::uniqueSort(weights, nweights);
   memcpy(welem, weights, nweights*sizeof(TMRIndexWeight));
+
+  */
 }
 
 /*

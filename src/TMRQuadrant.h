@@ -13,16 +13,14 @@
 */
 class TMRQuadrant {
  public:
-  TMRQuadrant(){}
-  ~TMRQuadrant(){}
-
   int childId();
   void getSibling( int id, TMRQuadrant *sib );
   void parent( TMRQuadrant *parent );
   void edgeNeighbor( int edge, TMRQuadrant *neighbor );
   void cornerNeighbor( int corner, TMRQuadrant *neighbor );
   int compare( const TMRQuadrant *quadrant ) const;
-  int compareEncoding( const TMRQuadrant *quadrant ) const;
+  int comparePosition( const TMRQuadrant *quadrant ) const;
+  int compareNode( const TMRQuadrant *quadrant ) const;
   int contains( TMRQuadrant *quad );
 
   int32_t face; // The face owner
@@ -43,16 +41,17 @@ class TMRQuadrant {
 */
 class TMRQuadrantArray {
  public:
-  TMRQuadrantArray( TMRQuadrant *array, int size );
+  TMRQuadrantArray( TMRQuadrant *array, int size, int _use_node_index=0 );
   ~TMRQuadrantArray();
 
   TMRQuadrantArray* duplicate();
   void getArray( TMRQuadrant **_array, int *_size );
   void sort();
-  TMRQuadrant* contains( TMRQuadrant *q, int use_nodes=0 );
+  TMRQuadrant* contains( TMRQuadrant *q );
   void merge( TMRQuadrantArray * list );
 
  private:
+  int use_node_index;
   int is_sorted;
   int size, max_size;
   TMRQuadrant *array;
@@ -97,10 +96,10 @@ class TMRQuadrantQueue {
 */
 class TMRQuadrantHash {
  public:
-  TMRQuadrantHash();
+  TMRQuadrantHash( int _use_node_index=0 );
   ~TMRQuadrantHash();
 
-  TMRQuadrantArray * toArray();
+  TMRQuadrantArray* toArray();
   int addQuadrant( TMRQuadrant *quad );
 
  private:
@@ -113,6 +112,9 @@ class TMRQuadrantHash {
     TMRQuadrant quad;
     QuadHashNode *next;
   };
+
+  // Set the element index/node
+  int use_node_index;
 
   // Keep track of the bucket size
   int num_buckets;

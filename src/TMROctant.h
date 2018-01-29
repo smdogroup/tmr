@@ -18,9 +18,6 @@
 */
 class TMROctant {
  public:
-  TMROctant(){}
-  ~TMROctant(){}
-
   int childId();
   void getSibling( int id, TMROctant *sib );
   void parent( TMROctant *parent );

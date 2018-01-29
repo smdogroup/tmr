@@ -275,6 +275,7 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
       bcs->getBoundaryCondition(k, &attribute, &num_bcs, 
                                 &bc_nums, &bc_vals);
 
+      /*
       if (attribute){
         // Retrieve the nodes associated with the specified attribute
         TMRQuadrantArray *nodes = forest->getNodesWithAttribute(attribute);
@@ -329,6 +330,7 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
         // delete [] vars;
         delete nodes;
       }
+      */
     }
   }
 }
@@ -340,6 +342,7 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
 void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest, 
                                            TACSAssembler *tacs,
                                            TacsScalar _scale ){
+  /*
   TacsScalar scale = _scale;
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
@@ -350,9 +353,9 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
   const int *range;
   forest->getOwnedNodeRange(&range);
 
-  // Get the nodes
-  TMRQuadrantArray *nodes;
-  forest->getNodes(&nodes);
+  // // Get the nodes
+  // TMRQuadrantArray *nodes;
+  // forest->getNodes(&nodes);
 
   // Get the quadrants associated with the nodes
   int size;
@@ -416,6 +419,7 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
   tacs->reorderVec(X);
   tacs->setNodes(X);
   X->decref();
+  */
 }
 
 /*
@@ -468,14 +472,14 @@ TACSAssembler*
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
     
-  // Ceate the nodes for the underlying finite-element mesh if they
-  // don't exist
-  TMROctantArray *nodes;
-  forest->getNodes(&nodes);
-  if (!nodes){
-    forest->createNodes(order);
-    forest->getNodes(&nodes);
-  }
+  // // Ceate the nodes for the underlying finite-element mesh if they
+  // // don't exist
+  // TMROctantArray *nodes;
+  // forest->getNodes(&nodes);
+  // if (!nodes){
+  //   forest->createNodes(order);
+  //   forest->getNodes(&nodes);
+  // }
 
   // Find the number of nodes for this processor
   const int *range;
@@ -552,6 +556,7 @@ TACSAssembler*
 */
 void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
                                                TACSAssembler *tacs ){
+  /*
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -593,6 +598,7 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
       delete nodes;
     }
   }
+  */
 }
 
 /*
@@ -602,6 +608,7 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
 void TMROctTACSCreator::setNodeLocations( TMROctForest *forest, 
                                           TACSAssembler *tacs,
                                           TacsScalar _scale ){
+  /*
   TacsScalar scale = _scale;
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
@@ -612,9 +619,9 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
   const int *range;
   forest->getOwnedNodeRange(&range);
 
-  // Get the nodes
-  TMROctantArray *nodes;
-  forest->getNodes(&nodes);
+  // // Get the nodes
+  // TMROctantArray *nodes;
+  // forest->getNodes(&nodes);
 
   // Get the octants associated with the nodes
   int size;
@@ -653,5 +660,6 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
   tacs->reorderVec(X);
   tacs->setNodes(X);
   X->decref();
+  */
 }
 

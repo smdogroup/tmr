@@ -75,6 +75,7 @@ void getLocation( const int *cn,
   }
 }
 
+/*
 void writeSerialMesh( TMRQuadForest *forest ){
   // Print out the full mesh
   TMRQuadrantArray *nodes;
@@ -149,6 +150,7 @@ void writeSerialMesh( TMRQuadForest *forest ){
   }
   fclose(fp);
 }
+*/
 
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
@@ -209,7 +211,7 @@ int main( int argc, char *argv[] ){
     TMRModel *model = mesh->createModelFromMesh();
     model->incref();
 
-    TMRQuadForest *forest = new TMRQuadForest(comm);
+    TMRQuadForest *forest = new TMRQuadForest(comm, 4);
     forest->incref();
 
     TMRTopology *topo = new TMRTopology(comm, model);
@@ -226,7 +228,7 @@ int main( int argc, char *argv[] ){
 
     // Create the nodes
     double tnodes = MPI_Wtime();
-    forest->createNodes(4);
+    forest->createNodes();
     tnodes = MPI_Wtime() - tnodes;
     printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
   }
