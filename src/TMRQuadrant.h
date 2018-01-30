@@ -47,7 +47,7 @@ class TMRQuadrantArray {
   TMRQuadrantArray* duplicate();
   void getArray( TMRQuadrant **_array, int *_size );
   void sort();
-  TMRQuadrant* contains( TMRQuadrant *q );
+  TMRQuadrant* contains( TMRQuadrant *q, const int use_position=0 );
   void merge( TMRQuadrantArray * list );
 
  private:

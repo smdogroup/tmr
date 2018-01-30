@@ -164,9 +164,6 @@ class TMRQuadForest : public TMREntity {
   // Duplicate data
   void copyData( TMRQuadForest *copy );
 
-  // Compute the maximum number of adjacent corners/edges
-  void computeMaxAdjacent();
-
   // Set up the connectivity from nodes -> faces
   void computeNodesToFaces();
 
@@ -235,7 +232,9 @@ class TMRQuadForest : public TMREntity {
   int checkAdjacentDepEdges( int edge_index, TMRQuadrant *b,
                              TMRQuadrantArray *adjquads );
 
-  int getOwnerIndex( TMRQuadrant *q, int indx, int *owner_rank );
+  // Find the owner of the nodes
+  void findLocalOwner( TMRQuadrant *q, int indx, 
+                       TMRQuadrant **owner, int *owner_indx );
 
   // Label the dependent nodes in the dependent node list
   void labelDependentNodes( int *nodes );
@@ -287,10 +286,6 @@ class TMRQuadForest : public TMREntity {
   int num_owned_nodes;
   int *dep_ptr, *dep_conn;
   double *dep_weights;
-
-  // Max adjacent number of corners/edges in the mesh
-  int max_adjacent_corners;
-  int max_adjacent_edges;
 
   // The array of all quadrants
   TMRQuadrantArray *quadrants;

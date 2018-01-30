@@ -316,14 +316,15 @@ void TMRQuadrantArray::sort(){
 /*
   Determine if the array contains the specified quadrant
 */
-TMRQuadrant* TMRQuadrantArray::contains( TMRQuadrant *q ){
+TMRQuadrant* TMRQuadrantArray::contains( TMRQuadrant *q,
+                                         const int use_position ){
   if (!is_sorted){
     is_sorted = 1;
     sort();
   }
 
   // Search for nodes - these will share the same
-  if (use_node_index){
+  if (use_position || use_node_index){
     return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant), 
                                  compare_position);
   }
