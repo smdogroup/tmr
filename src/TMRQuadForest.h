@@ -131,10 +131,6 @@ class TMRQuadForest : public TMREntity {
                                const int **_edge_face_conn,
                                const int **_edge_face_ptr );
 
-  // Transform the quadrant to the global order
-  // ------------------------------------------
-  void transformNode( TMRQuadrant *quad );
-
   // Write out files showing the connectivity
   // ----------------------------------------
   void writeToVTK( const char *filename );
@@ -187,7 +183,8 @@ class TMRQuadForest : public TMREntity {
   // ------------------------
   // Balance the quadrant across the local tree and the forest
   void balanceQuadrant( TMRQuadrant *quad,
-                        TMRQuadrantHash *hash, TMRQuadrantHash *ext_hash,
+                        TMRQuadrantHash *hash, 
+                        TMRQuadrantHash *ext_hash,
                         TMRQuadrantQueue *queue,
                         const int balance_corner,
                         const int balance_tree );
@@ -232,9 +229,14 @@ class TMRQuadForest : public TMREntity {
   int checkAdjacentDepEdges( int edge_index, TMRQuadrant *b,
                              TMRQuadrantArray *adjquads );
 
-  // Find the owner of the nodes
-  void findLocalOwner( TMRQuadrant *q, int indx, 
-                       TMRQuadrant **owner, int *owner_indx );
+  // Transform the node to the global numbering. Note that the node
+  // may be labeled a node, edge or face
+  void transformNode( TMRQuadrant *quad, int *edge_reversed=NULL );
+
+  // Get the corner owner index
+  int getCornerOwnerIndex( TMRQuadrant *owner, TMRQuadrant *node );
+  void getEdgeOwnerIndex( TMRQuadrant *owner, TMRQuadrant *edge, 
+                          int *edge_index );
 
   // Label the dependent nodes in the dependent node list
   void labelDependentNodes( int *nodes );

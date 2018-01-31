@@ -124,7 +124,7 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
     TMRPoint m; // Center of the box
     TMRPoint d; // Half-edge length of each box
     double h; // Mesh size within the box
-  } *boxes;
+  };
   
   // The list of boxes that are stored
   int num_boxes;

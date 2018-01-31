@@ -29,7 +29,6 @@ void TMRInitialize(){
     types[1] = MPI_INT16_T;
 
     // Create the TMRQudrant data type
-    TMRQuadrant quad;
     counts[0] = 4;
     counts[1] = 2;
     offset[0] = offsetof(TMRQuadrant, face);
@@ -39,7 +38,6 @@ void TMRInitialize(){
     MPI_Type_commit(&TMRQuadrant_MPI_type);
 
     // Create the TMROctant data type
-    TMROctant oct;
     counts[0] = 5;
     counts[1] = 2;
     offset[0] = offsetof(TMROctant, block);
@@ -55,9 +53,6 @@ void TMRInitialize(){
     MPI_Type_create_struct(1, counts, offset, types, 
                            &TMRPoint_MPI_type);
     MPI_Type_commit(&TMRPoint_MPI_type);
-
-    // Create the weight type
-    TMRIndexWeight w;
 
     // Create the index/weight pair data
     int len[2] = {1, 1};

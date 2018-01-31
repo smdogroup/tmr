@@ -71,10 +71,9 @@ void TMRFinalize();
 */
 class TMRIndexWeight {
  public:
-  TMRIndexWeight(){}
-  TMRIndexWeight( const TMRIndexWeight& in ){
-    index = in.index;  weight = in.weight;
-  }
+  // TMRIndexWeight( const TMRIndexWeight& in ){
+  //   index = in.index;  weight = in.weight;
+  // }
   int index;
   double weight;
 
