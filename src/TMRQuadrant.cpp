@@ -323,15 +323,21 @@ TMRQuadrant* TMRQuadrantArray::contains( TMRQuadrant *q,
     sort();
   }
 
-  // Search for nodes - these will share the same
-  if (use_position || use_node_index){
+  if (use_node_index){
     return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant), 
-                                 compare_position);
+                                 compare_nodes);
   }
+  else {
+    // Search for nodes - these will share the same
+    if (use_position){
+      return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant), 
+                                   compare_position);
+    }
 
-  // Search the array for an identical element
-  return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant), 
-                               compare_quadrants);
+    // Search the array for an identical element
+    return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant), 
+                                 compare_quadrants);
+  }
 }
 
 /*
