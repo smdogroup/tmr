@@ -133,65 +133,34 @@ TMRQuadTACSCreator::~TMRQuadTACSCreator(){
 }
 
 /*
-  Create the TACS element connectivity -- default
-*/
-void TMRQuadTACSCreator::createConnectivity( int order,
-                                             TMRQuadForest *forest,
-                                             int **_conn, int **_ptr,
-                                             int *_num_elements ){
-  /*
-  // Create the mesh
-  int *elem_conn, num_elements = 0;
-  forest->createMeshConn(&elem_conn, &num_elements);
-
-  // Set the element ptr
-  int *ptr = new int[ num_elements+1 ];
-  for ( int i = 0; i < num_elements+1; i++ ){
-    ptr[i] = order*order*i;
-  }
-
-  *_conn = elem_conn;
-  *_ptr = ptr;
-  *_num_elements = num_elements;
-  */
-}
-
-/*
   Create the TACSAssembler object
 */
 TACSAssembler* 
-  TMRQuadTACSCreator::createTACS( int order, 
-                                  TMRQuadForest *forest,
+  TMRQuadTACSCreator::createTACS( TMRQuadForest *forest,
                                   TACSAssembler::OrderingType ordering,
                                   TacsScalar _scale ){
-    /*
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
     
-  // Ceate the nodes for the underlying finite-element mesh if they
-  // don't exist
-  TMRQuadrantArray *nodes;
-  forest->getNodes(&nodes);
-  if (!nodes){
-    forest->createNodes(order);
-    forest->getNodes(&nodes);
+  // Create the nodes for the underlying finite-element mesh if they
+  // don't yet exist
+  forest->createNodes();
+
+  // Get the element order
+  int order = forest->getMeshOrder();
+
+  // Get the local part of the connectivity
+  const int *conn;
+  int num_elements = 0, num_owned_nodes = 0;
+  forest->getNodeConn(&conn, &num_elements, &num_owned_nodes);
+
+  // Allocate the pointer array
+  int *ptr = new int[ num_elements+1 ];
+  for ( int i = 0; i <= num_elements; i++ ){
+    ptr[i] = order*order*i;
   }
-
-  // Find the number of nodes for this processor
-  const int *range;
-  forest->getOwnedNodeRange(&range);
-  int num_nodes = range[mpi_rank+1] - range[mpi_rank];
-
-  // Create the connectivity
-  int num_elements;
-  int *elem_conn, *ptr;
-  createConnectivity(order, forest, 
-                     &elem_conn, &ptr, &num_elements);
-
-  // Create the dependent node connectivity
-  forest->createDepNodeConn();
 
   // Create/retrieve the dependent node information
   const int *dep_ptr, *dep_conn;
@@ -210,11 +179,10 @@ TACSAssembler*
   // Create the associated TACSAssembler object
   TACSAssembler *tacs = 
     new TACSAssembler(forest->getMPIComm(), vars_per_node,
-                      num_nodes, num_elements, num_dep_nodes);
+                      num_owned_nodes, num_elements, num_dep_nodes);
 
   // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(elem_conn, ptr);
-  delete [] elem_conn;
+  tacs->setElementConnectivity(conn, ptr);
   delete [] ptr;
     
   // Set the dependent node information
@@ -245,8 +213,6 @@ TACSAssembler*
   setNodeLocations(forest, tacs,_scale);
 
   return tacs;
-  */
-  return NULL;
 }
 
 /*
@@ -275,62 +241,16 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
       bcs->getBoundaryCondition(k, &attribute, &num_bcs, 
                                 &bc_nums, &bc_vals);
 
-      /*
       if (attribute){
         // Retrieve the nodes associated with the specified attribute
-        TMRQuadrantArray *nodes = forest->getNodesWithAttribute(attribute);
-        int size;
-        TMRQuadrant *array;
-        nodes->getArray(&array, &size);
+        int *nodes;
+        int num_nodes = forest->getNodesWithAttribute(attribute, &nodes);
 
-        // // Get the mesh order
-        // const int order = forest->getMeshOrder();
+        // Add the boundary conditions to TACSAssembler
+        tacs->addBCs(num_nodes, nodes, num_bcs, bc_nums, bc_vals);
 
-        // // Count up the total number of local nodes
-        // int num = 0;
-        // for ( int i = 0; i < size; i++ ){
-        //   if (array[i].level & TMR_CORNER_NODE){
-        //     num++;
-        //   }
-        //   else if (array[i].level & TMR_EDGE_NODE){
-        //     num += order-2;
-        //   }
-        //   else if (array[i].level & TMR_FACE_NODE){
-        //     num += (order-2)*(order-2);          
-        //   }
-        // }
-
-        // // Allocate the array of the node numbers associated with the
-        // // boundary conditions
-        // int *vars = new int[ num ];
-        // for ( int i = 0; i < size; i++ ){
-        //   if (array[i].level & TMR_CORNER_NODE){
-        //     vars[num] = array[i].tag;
-        //     num++;
-        //   }
-        //   else if (array[i].level & TMR_EDGE_NODE){
-        //     for ( int ii = 0; ii < order-2; ii++ ){
-        //       vars[num] = array[i].tag + ii;
-        //       num++;
-        //     }
-        //   }
-        //   else if (array[i].level & TMR_FACE_NODE){
-        //     for ( int jj = 0; jj < order-2; jj++ ){
-        //       for ( int ii = 0; ii < order-2; ii++ ){
-        //         vars[num] = array[i].tag + ii + jj*(order-2);
-        //         num++;
-        //       }
-        //     }
-        //   }        
-        // }
-
-        // // Add the boundary conditions to TACSAssembler
-        // tacs->addBCs(num, vars, num_bcs, bc_nums, bc_vals);
-
-        // delete [] vars;
-        delete nodes;
+        delete [] nodes;
       }
-      */
     }
   }
 }
@@ -342,25 +262,20 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
 void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest, 
                                            TACSAssembler *tacs,
                                            TacsScalar _scale ){
-  /*
   TacsScalar scale = _scale;
+
   // Get the communicator and the rank
-  MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
+  MPI_Comm comm = forest->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
     
   // Find the number of nodes for this processor
   const int *range;
   forest->getOwnedNodeRange(&range);
 
-  // // Get the nodes
-  // TMRQuadrantArray *nodes;
-  // forest->getNodes(&nodes);
-
-  // Get the quadrants associated with the nodes
-  int size;
-  TMRQuadrant *array;
-  nodes->getArray(&array, &size);
+  // Get the node numbers
+  const int *nodes;
+  int num_local_nodes = forest->getNodeNumbers(&nodes);
 
   // Get the points
   TMRPoint *Xp;
@@ -373,53 +288,20 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
   TacsScalar *Xn;
   X->getArray(&Xn);
 
-  // Get the mesh order
-  const int order = forest->getMeshOrder();
-
-  // // Loop over all the nodes
-  // for ( int i = 0, index = 0; i < size; i++ ){
-  //   if (array[i].tag >= range[mpi_rank] &&
-  //       array[i].tag < range[mpi_rank+1]){
-  //     int loc = array[i].tag - range[mpi_rank];
-
-  //     if (array[i].level & TMR_CORNER_NODE){
-  //       Xn[3*loc] = scale*Xp[index].x;
-  //       Xn[3*loc+1] = scale*Xp[index].y;
-  //       Xn[3*loc+2] = scale*Xp[index].z;
-  //       index++;
-  //     }
-  //     else if (array[i].level & TMR_EDGE_NODE){
-  //       for ( int i = 0; i < order-2; i++, index++, loc++ ){
-  //         Xn[3*loc] = scale*Xp[index].x;
-  //         Xn[3*loc+1] = scale*Xp[index].y;
-  //         Xn[3*loc+2] = scale*Xp[index].z;
-  //       }
-  //     }
-  //     else if (array[i].level & TMR_FACE_NODE){
-  //       for ( int i = 0; i < (order-2)*(order-2); i++, index++, loc++ ){
-  //         Xn[3*loc] = scale*Xp[index].x;
-  //         Xn[3*loc+1] = scale*Xp[index].y;
-  //         Xn[3*loc+2] = scale*Xp[index].z;
-  //       }
-  //     }
-  //   }
-  //   else {
-  //     if (array[i].level & TMR_CORNER_NODE){
-  //       index++;
-  //     }
-  //     else if (array[i].level & TMR_EDGE_NODE){
-  //       index += order-2;
-  //     }
-  //     else if (array[i].level & TMR_FACE_NODE){
-  //       index += (order-2)*(order-2);
-  //     }
-  //   }
-  // }
-
+  // Loop over all the nodes
+  for ( int i = 0; i < num_local_nodes; i++ ){
+    if (nodes[i] >= range[mpi_rank] && nodes[i] < range[mpi_rank+1]){
+      int loc = nodes[i] - range[mpi_rank];
+      Xn[3*loc] = scale*Xp[i].x;
+      Xn[3*loc+1] = scale*Xp[i].y;
+      Xn[3*loc+2] = scale*Xp[i].z;
+    }
+  }
+  
+  // Reorder the vector if needed
   tacs->reorderVec(X);
   tacs->setNodes(X);
   X->decref();
-  */
 }
 
 /*

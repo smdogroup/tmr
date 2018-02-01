@@ -5,10 +5,53 @@
 #include "TACSMg.h"
 #include "TACSToFH5.h"
 
-
+#include "TMR_TACSCreator.h"
 #include "TMRMesh.h"
 #include "TMROpenCascade.h"
 #include <BRepPrimAPI_MakeCylinder.hxx>
+
+
+
+class QuadTest : public TMRQuadTACSCreator {
+ public:
+  QuadTest( PlaneStressStiffness *_stiff ): TMRQuadTACSCreator(NULL){
+    stiff = _stiff;
+  }
+  ~QuadTest(){}
+
+  // Create an array of elements for the given forest
+  void createElements( int order,
+                       TMRQuadForest *forest,
+                       int num_elements,
+                       TACSElement **elements ){
+    TACSElement *elem = NULL;
+    if (order == 2){
+      elem = new PlaneStressQuad<2>(stiff);
+    }
+    else if (order == 3){
+      elem = new PlaneStressQuad<3>(stiff);
+    }
+    else if (order == 4){
+      elem = new PlaneStressQuad<4>(stiff);
+    }
+
+    // Set the elements
+    for ( int i = 0; i < num_elements; i++ ){
+      elements[i] = elem;
+    }
+  }
+
+  // Create any auxiliary element for the given quadrant
+  TACSAuxElements *createAuxElements( int order,
+                                      TMRQuadForest *forest ){
+    return NULL;
+  }
+  
+ private:
+  PlaneStressStiffness *stiff;
+};
+
+
 
 /*
   Create the following L-bracket connectivity
@@ -231,6 +274,25 @@ int main( int argc, char *argv[] ){
     forest->createNodes();
     tnodes = MPI_Wtime() - tnodes;
     printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
+
+    // Allocate the stiffness object
+    TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
+    PlaneStressStiffness *stiff = 
+      new PlaneStressStiffness(rho, E, nu);
+
+    QuadTest *test = new QuadTest(stiff);
+    TACSAssembler *tacs = test->createTACS(forest);
+
+    // Create and write out an fh5 file
+    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                               TACSElement::OUTPUT_DISPLACEMENTS);
+    TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_PLANE_STRESS, write_flag);
+    f5->incref();
+
+    f5->writeToFile("test_output.f5");
+
+
+
   }
 
 /*

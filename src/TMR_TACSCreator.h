@@ -67,12 +67,6 @@ class TMRQuadTACSCreator : public TMREntity {
   TMRQuadTACSCreator( TMRBoundaryConditions *_bcs );
   virtual ~TMRQuadTACSCreator();
 
-  // Vritual function to create the connectivity (default is usually fine)
-  virtual void createConnectivity( int order,
-                                   TMRQuadForest *forest,
-                                   int **_conn, int **_ptr,
-                                   int *_num_elements );
-
   // Create an array of elements for the given forest
   virtual void createElements( int order,
                                TMRQuadForest *forest,
@@ -86,7 +80,7 @@ class TMRQuadTACSCreator : public TMREntity {
   }
 
   // Create the TACSAssembler object with the given order for this forest
-  TACSAssembler *createTACS( int order, TMRQuadForest *forest,
+  TACSAssembler *createTACS( TMRQuadForest *forest,
                              TACSAssembler::OrderingType 
                                ordering=TACSAssembler::NATURAL_ORDER,
                              TacsScalar _scale=1.0 );
@@ -99,7 +93,7 @@ class TMRQuadTACSCreator : public TMREntity {
   // Set the node locations
   void setNodeLocations( TMRQuadForest *forest, 
                          TACSAssembler *tacs,
-                         TacsScalar _scale=1.0);
+                         TacsScalar _scale=1.0 );
   
   TMRBoundaryConditions *bcs;
 };

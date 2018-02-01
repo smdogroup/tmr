@@ -77,6 +77,10 @@ class TMRQuadForest : public TMREntity {
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
+  void getNodeConn( const int **_conn=NULL, 
+                    int *_num_elements=NULL,
+                    int *_num_owned_nodes=NULL,
+                    int *_num_local_nodes=NULL );
   int getDepNodeConn( const int **_ptr, const int **_conn,
                       const double **_weights );
 
@@ -112,9 +116,13 @@ class TMRQuadForest : public TMREntity {
   void getQuadrants( TMRQuadrantArray **_quadrants ){
     if (_quadrants){ *_quadrants = quadrants; }
   }
+  int getNodeNumbers( const int **_node_numbers ){
+    if (_node_numbers){ *_node_numbers = node_numbers; }
+    return num_local_nodes;
+  }
   int getPoints( TMRPoint **_X ){
     if (_X){ *_X = X; }
-    return num_owned_nodes;
+    return num_local_nodes;
   }
 
   // Get the index of the given element or node
@@ -161,6 +169,7 @@ class TMRQuadForest : public TMREntity {
 
   // Free the internally stored data and zero things
   void freeData();
+  void freeMeshData( int free_quads=1, int free_owners=1 );
   
   // Duplicate data
   void copyData( TMRQuadForest *copy );
@@ -221,14 +230,6 @@ class TMRQuadForest : public TMREntity {
   // Exchange non-local quadrant neighbors
   void computeAdjacentQuadrants();
 
-  // Get the element number associated with the index
-  int getNodeElementOwner( TMRQuadrant *q, int indx );
-
-  // Get the node numbers along an edge of the given element
-  void getEdgeNodeNums( TMRQuadrant *quad, const int edge_index, 
-                        int *conn, const int incr,
-                        TMRQuadrantArray *ext_nodes=NULL );
-
   // Find the dependent faces and edges in the mesh
   void computeDepEdges();
   int checkAdjacentDepEdges( int edge_index, TMRQuadrant *b,
@@ -241,15 +242,11 @@ class TMRQuadForest : public TMREntity {
   // Label the dependent nodes in the dependent node list
   void labelDependentNodes( int *nodes );
 
+  // Compute the node locations
   void evaluateNodeLocations();
 
   // Create the dependent node connectivity
   void createDepNodeConn();
-  
-  // Compute the interpolation weights
-  int computeInterpWeights( const int order,
-                            const int32_t u, const int32_t h,
-                            double Nu[] );
 
   // The communicator 
   MPI_Comm comm;
