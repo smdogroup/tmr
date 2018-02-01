@@ -835,7 +835,8 @@ int TMR_GenerateBinFile( const char *filename,
                 // Get the independent node values
                 int dep_node = dep_conn[kp];
                 fail = fail || x->getValues(1, &dep_node, xvals);
-                levelvals[index] += dep_weights[kp]*TacsRealPart(xvals[x_offset]);
+                levelvals[index] += 
+                  dep_weights[kp]*TacsRealPart(xvals[x_offset]);
               }
             }
           }

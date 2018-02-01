@@ -1,4 +1,5 @@
 #include "TMRQuadForest.h"
+#include <stdlib.h>
 
 /*
   Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
@@ -70,9 +71,6 @@ TMRQuadForest::TMRQuadForest( MPI_Comm _comm, int _mesh_order,
   // Set the topology object to NULL
   topo = NULL;
 
-  // Set the range of nodes
-  node_range = NULL;
-
   // Zero out the nodes/edges/faces and all data
   num_nodes = 0;
   num_edges = 0;
@@ -96,8 +94,12 @@ TMRQuadForest::TMRQuadForest( MPI_Comm _comm, int _mesh_order,
 
   // Set data for the number of elements/nodes/dependents
   node_range = NULL;
+  node_numbers = NULL;
+  num_local_nodes = 0;
   num_owned_nodes = 0;
   num_dep_nodes = 0;
+  num_ext_pre_nodes = 0;
+
   dep_ptr = NULL;
   dep_conn = NULL;
   dep_weights = NULL;
@@ -135,13 +137,11 @@ void TMRQuadForest::freeData(){
   if (adjacent){ delete adjacent; }
   if (X){ delete [] X; }
 
+  if (node_numbers){ delete [] node_numbers; }
   if (node_range){ delete [] node_range; }
   if (dep_ptr){ delete [] dep_ptr; }
   if (dep_conn){ delete [] dep_conn; }
   if (dep_weights){ delete [] dep_weights; }
-
-  // Set the range of nodes
-  node_range = NULL;
 
   // Zero out the nodes/edges/faces and all data
   num_nodes = 0;
@@ -166,8 +166,12 @@ void TMRQuadForest::freeData(){
 
   // Set data for the number of elements/nodes/dependents
   node_range = NULL;
+  node_numbers = NULL;
+  num_local_nodes = 0;
   num_owned_nodes = 0;
   num_dep_nodes = 0;
+  num_ext_pre_nodes = 0;
+
   dep_ptr = NULL;
   dep_conn = NULL;
   dep_weights = NULL;
@@ -2574,7 +2578,8 @@ void TMRQuadForest::transformNode( TMRQuadrant *quad,
 
   This code is called after all the dependent faces have been
   computed.  Note that this relies on the mesh being edge-balanced
-  (which is required).
+  (which is required). It also relies on the connectivity still
+  being in a local state (such that conn[] refers to the local nodes)
 */
 void TMRQuadForest::labelDependentNodes( int *nodes ){
   int size = 0;
@@ -2643,79 +2648,6 @@ void TMRQuadForest::labelDependentNodes( int *nodes ){
 }
 
 /*
-  Get the corner owner index
-*/
-int TMRQuadForest::getCornerOwnerIndex( TMRQuadrant *owner, 
-                                        TMRQuadrant *node ){
-  const int32_t h = 1 << (TMR_MAX_LEVEL - owner->level);
-
-  for ( int jj = 0; jj < 2; jj++ ){
-    for ( int ii = 0; ii < 2; ii++ ){
-      TMRQuadrant n;
-      n.face = owner->face;
-      n.x = owner->x + ii*h;
-      n.y = owner->y + jj*h;
-      transformNode(&n);
-
-      // Compare the positions of the transformed node
-      if (n.comparePosition(node) == 0){
-        return mesh_order*mesh_order*owner->tag + 
-          (mesh_order-1)*ii + mesh_order*(mesh_order-1)*jj;
-      }
-    }
-  }
-
-  return -1;
-}
-
-/*
-  Get the edge owner index
-*/
-void TMRQuadForest::getEdgeOwnerIndex( TMRQuadrant *owner, 
-                                       TMRQuadrant *edge, 
-                                       int *owner_edge_index ){
-  const int32_t h = 1 << (TMR_MAX_LEVEL - owner->level - 1);
-
-  owner_edge_index[0] = -1;
-  owner_edge_index[mesh_order-1] = -1;
-
-  for ( int edge_index = 0; edge_index < 4; edge_index++ ){
-    TMRQuadrant e;
-    e.face = owner->face;
-    if (edge_index < 2){
-      e.x = owner->x + 2*h*(edge_index % 2);
-      e.y = owner->y + h;
-    }
-    else {
-      e.x = owner->x + h;
-      e.y = owner->y + 2*h*(edge_index % 2);
-    }
-    transformNode(&e);
-
-    // Compare the positions of the transformed node
-    if (e.comparePosition(edge) == 0){
-      if (edge_index < 2){
-        for ( int k = 1; k < mesh_order-1; k++ ){
-          owner_edge_index[k] = 
-            mesh_order*mesh_order*owner->tag +
-            k*mesh_order + (mesh_order-1)*(edge_index % 2);
-        }
-      }
-      else {
-        for ( int k = 1; k < mesh_order-1; k++ ){
-          owner_edge_index[k] = 
-            mesh_order*mesh_order*owner->tag +
-            k + mesh_order*(mesh_order-1)*(edge_index % 2);
-        }
-      }
-
-      // We've found the owner edge and set the edge indices
-      return;
-    }
-  }
-}
-
-/*
   Convert from the integer coordinate system to a physical coordinate
   with the off-by-one check.
 */
@@ -2770,19 +2702,24 @@ void TMRQuadForest::createNodes(){
   TMRQuadrant *quads;
   quadrants->getArray(&quads, &num_elements);
 
-  // Allocate an array to store the indices along an edge
-  int *owner_edge_index = new int[ mesh_order ];
-
   // Create all the nodes/edges/faces
   const int use_node_index = 1;
   TMRQuadrantHash *local_nodes = new TMRQuadrantHash(use_node_index);
+  TMRQuadrantHash *extern_nodes = NULL;
+  if (mesh_order >= 4){
+    extern_nodes = new TMRQuadrantHash(use_node_index);
+  }
 
   // Set the node, edge and face label
-  int node_label = 0, edge_label = 0, face_label = 0;
+  int node_label, edge_label, face_label;
+  node_label = edge_label = face_label = TMR_QUAD_NODE_LABEL;
+
+  // If the mesh order is high enough, we will have multiple nodes
+  // per edge/face
   if (mesh_order >= 4){
-    node_label = 0;
-    edge_label = 1;
-    face_label = 2;
+    node_label = TMR_QUAD_NODE_LABEL;
+    edge_label = TMR_QUAD_EDGE_LABEL;
+    face_label = TMR_QUAD_FACE_LABEL;
   }
 
   // Set the node locations
@@ -2793,7 +2730,7 @@ void TMRQuadForest::createNodes(){
         for ( int ii = 0; ii < 2; ii++ ){
           TMRQuadrant node;
           node.face = quads[i].face;
-          node.level = mpi_rank;
+          node.level = 1;
           node.x = quads[i].x + h*ii;
           node.y = quads[i].y + h*jj;
           node.tag = i;
@@ -2811,32 +2748,74 @@ void TMRQuadForest::createNodes(){
         for ( int ii = 0; ii < 3; ii++ ){
           TMRQuadrant node;
           node.face = quads[i].face;
-          node.level = mpi_rank;
           node.x = quads[i].x + h*ii;
           node.y = quads[i].y + h*jj;
           node.tag = i;
           if ((ii == 0 || ii == 2) &&
               (jj == 0 || jj == 2)){
+            node.level = 1;
             node.info = node_label;
           }
           else if (ii == 0 || ii == 2 ||
                    jj == 0 || jj == 2){
+            node.level = mesh_order-2;
             node.info = edge_label;
           }
           else {
+            node.level = (mesh_order-2)*(mesh_order-2);
             node.info = face_label;
           }
           transformNode(&node);
           local_nodes->addQuadrant(&node);
+
+          // Check if the edge owner is not local when mesh_order > 3
+          if (node.info == TMR_QUAD_EDGE_LABEL){
+            if (mpi_rank != getQuadrantMPIOwner(&node)){
+              extern_nodes->addQuadrant(&node);
+            }
+          }
         }
       }
     }
+  }
+
+  if (extern_nodes){
+    TMRQuadrantArray *extern_list = extern_nodes->toArray();
+    extern_list->sort();
+    delete extern_nodes;
+
+    // Get the local list quadrants added from other processors
+    // and add them to the local hash table
+    TMRQuadrantArray *local = distributeQuadrants(extern_list);
+    delete extern_list;
+
+    // Add the local nodes
+    int local_size;
+    TMRQuadrant* local_quads;
+    local->getArray(&local_quads, &local_size);
+    for ( int i = 0; i < local_size; i++ ){
+      local_nodes->addQuadrant(&local_quads[i]);
+    }
+    delete local;
   }
 
   // Create the array of nodes
   TMRQuadrantArray *nodes = local_nodes->toArray();
   delete local_nodes;
   nodes->sort();
+
+  // Count up the total number of nodes - dependent/independent
+  // on this processor
+  int node_size;
+  TMRQuadrant *node_array;
+  nodes->getArray(&node_array, &node_size);
+
+  // Set the local node numbers
+  num_local_nodes = 0;
+  for ( int i = 0; i < node_size; i++ ){
+    node_array[i].tag = num_local_nodes;
+    num_local_nodes += node_array[i].level;
+  }
 
   // Allocate the connectivity
   int size = mesh_order*mesh_order*num_elements;
@@ -2861,7 +2840,7 @@ void TMRQuadForest::createNodes(){
         TMRQuadrant *t = nodes->contains(&node);
         int offset = (mesh_order-1)*(corner_index % 2) +
                      (mesh_order-1)*mesh_order*(corner_index/2);
-        c[offset] = t - array;
+        c[offset] = t->tag;
       }
 
       if (mesh_order == 3){
@@ -2881,11 +2860,11 @@ void TMRQuadForest::createNodes(){
           TMRQuadrant *t = nodes->contains(&node);
           if (edge_index < 2){
             int offset = mesh_order + (mesh_order-1)*edge_index;
-            c[offset] = t - array;
+            c[offset] = t->tag;
           }
           else {
             int offset = 1 + (mesh_order-1)*mesh_order*(edge_index % 2);
-            c[offset] = t - array;
+            c[offset] = t->tag;
           }
         }
 
@@ -2895,7 +2874,7 @@ void TMRQuadForest::createNodes(){
         node.y = quads[i].y + h;
         transformNode(&node);
         TMRQuadrant *t = nodes->contains(&node);
-        c[4] = t - array;
+        c[4] = t->tag;
       }
     }
   }
@@ -2922,18 +2901,7 @@ void TMRQuadForest::createNodes(){
         node.y = quads[i].y + 2*h*(corner_index / 2);
         transformNode(&node);
         TMRQuadrant *t = nodes->contains(&node);
-
-        // Get the owner of this node and label all the nodes that
-        // touch it
-        int owner = t->tag;
-        int index = 0;
-        if (owner == i){
-          index = mesh_order*mesh_order*owner + offset;
-        }
-        else {
-          index = getCornerOwnerIndex(&quads[owner], &node);
-        }
-        c[offset] = -index - 1;
+        c[offset] = t->tag;
       }
 
       // Loop over the edges and get the owners
@@ -2953,106 +2921,57 @@ void TMRQuadForest::createNodes(){
         transformNode(&edge, &edge_reversed);
         TMRQuadrant *t = nodes->contains(&edge);
 
-        // Get the owner of this edge and label all the
-        // nodes that touch it
-        int owner = t->tag;
-        if (owner == i){
+        // The owner edge is reversed relative to this edge
+        if (edge_reversed){
           if (edge_index < 2){
             for ( int k = 1; k < mesh_order-1; k++ ){
               int offset = k*mesh_order + (mesh_order-1)*edge_index;
-              int index = mesh_order*mesh_order*owner + offset;
-              c[offset] = -index - 1;
+              c[offset] = t->tag + mesh_order-2-k;
             }
           }
           else {
             for ( int k = 1; k < mesh_order-1; k++ ){
               int offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
-              int index = mesh_order*mesh_order*owner + offset;
-              c[offset] = -index - 1;
+              c[offset] = t->tag + mesh_order-2-k;
             }
           }
         }
         else {
-          getEdgeOwnerIndex(&quads[owner], &edge, owner_edge_index);
-
-          // The owner edge is reversed relative to this edge
-          if (edge_reversed){
-            if (edge_index < 2){
-              for ( int k = 1; k < mesh_order-1; k++ ){
-                int offset = k*mesh_order + (mesh_order-1)*edge_index;
-                c[offset] = -owner_edge_index[mesh_order-1-k] - 1;
-              }
-            }
-            else {
-              for ( int k = 1; k < mesh_order-1; k++ ){
-                int offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
-                c[offset] = -owner_edge_index[mesh_order-1-k] - 1;
-              }
+          if (edge_index < 2){
+            for ( int k = 1; k < mesh_order-1; k++ ){
+              int offset = k*mesh_order + (mesh_order-1)*edge_index;
+              c[offset] = t->tag + k-1;
             }
           }
           else {
-            if (edge_index < 2){
-              for ( int k = 1; k < mesh_order-1; k++ ){
-                int offset = k*mesh_order + (mesh_order-1)*edge_index;
-                c[offset] = -owner_edge_index[k] - 1;
-              }
-            }
-            else {
-              for ( int k = 1; k < mesh_order-1; k++ ){
-                int offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
-                c[offset] = -owner_edge_index[k] - 1;
-              }
+            for ( int k = 1; k < mesh_order-1; k++ ){
+              int offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
+              c[offset] = t->tag + k-1;
             }
           }
         }
       }
 
       // Loop over the face owners
+      TMRQuadrant face;
+      face.face = quads[i].face;
+      face.info = face_label;
+      face.x = quads[i].x + h;
+      face.y = quads[i].y + h;
+      transformNode(&face);
+      TMRQuadrant *t = nodes->contains(&face);
+
       for ( int jj = 1; jj < mesh_order-1; jj++ ){
         for ( int ii = 1; ii < mesh_order-1; ii++ ){
           int offset = ii + jj*mesh_order;
-          int index = mesh_order*mesh_order*i + offset;
-          c[offset] = -index - 1;
-        }
-      }
-    }
-
-    // Set the number of locally owned nodes (including all dependent
-    // nodes)
-    num_local_nodes = 0;
-
-    // Assign the local node numbers
-    for ( int i = 0; i < num_elements; i++ ){
-      int *c = &conn[mesh_order*mesh_order*i];
-
-      // Assign the corner nodes
-      for ( int ii = 0; ii < mesh_order; ii++ ){
-        for ( int jj = 0; jj < mesh_order; jj++ ){
-          // Get the local element node index
-          int offset = ii + jj*mesh_order;
-          int index = mesh_order*mesh_order*i + offset;
-
-          // If the offset is the owner, then label it right away
-          if (c[offset] == -index - 1){
-            c[offset] = num_local_nodes;
-            num_local_nodes++;
-          }
-          else if (c[offset] < 0){
-            // If the owner has not been ordered, order it now
-            int ptr = -c[offset] - 1;
-            if (conn[ptr] < 0){
-              conn[ptr] = num_local_nodes;
-              num_local_nodes++;
-            }
-            c[offset] = conn[ptr];
-          }
+          c[offset] = t->tag + (ii-1) + (jj-1)*(mesh_order-2);
         }
       }
     }
   }
 
   // Allocate an array that will store the new node numbers
-  int *node_numbers = new int[ num_local_nodes ];
+  node_numbers = new int[ num_local_nodes ];
   memset(node_numbers, 0, num_local_nodes*sizeof(int));
 
   // Label any node that is dependent as a negative value
@@ -3071,106 +2990,27 @@ void TMRQuadForest::createNodes(){
   // dependent nodes are dependent)
   TMRQuadrantHash *ext_nodes = new TMRQuadrantHash(use_node_index);
   
-  if (mesh_order > 3){
-    for ( int i = 0; i < num_elements; i++ ){
-      // Set the pointer into the offset
-      const int *c = &conn[mesh_order*mesh_order*i];
+  // Add nodes that are externally owned 
+  nodes->getArray(&node_array, &node_size);
 
-      // Compute the half-edge length of the quadrant
-      const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level - 1);
+  for ( int i = 0; i < node_size; i++ ){
+    // Find the ownership of the independent nodes on this processor
+    if (node_numbers[node_array[i].tag] >= 0){
+      int mpi_owner = getQuadrantMPIOwner(&node_array[i]);
+      if (mpi_owner != mpi_rank){
+        ext_nodes->addQuadrant(&node_array[i]);
 
-      for ( int corner_index = 0; corner_index < 4; corner_index++ ){
-        // Compute the offset to the local node
-        int offset = (mesh_order-1)*(corner_index % 2) +
-                     (mesh_order-1)*mesh_order*(corner_index/2);
-
-        // Make sure that this node is not dependent
-        if (node_numbers[c[offset]] >= 0){
-          // Find the node at the corner to determine the owner
-          TMRQuadrant node;
-          node.face = quads[i].face;
-          node.info = node_label;
-          node.x = quads[i].x + 2*h*(corner_index % 2);
-          node.y = quads[i].y + 2*h*(corner_index / 2);
-          transformNode(&node);
-
-          // Check whether the node is owned by this processor or not
-          int mpi_owner = getQuadrantMPIOwner(&node);
-          if (mpi_owner != mpi_rank){
-            // Now, search for the owner
-            TMRQuadrant *t = nodes->contains(&node);
-
-            // If this is the owner add it
-            if (i == t->tag){
-              // Set the quadrant 
-              TMRQuadrant quad = quads[i];
-              quad.info = offset;
-              quad.tag = mpi_owner;
-              ext_nodes->addQuadrant(&quad);
-
-              // Label this as an external node
-              node_numbers[c[offset]] = -num_dep_nodes-1;
-            }
-          }
-        }
-      }
-
-      // Loop over the edges and check for dependent edges
-      for ( int edge_index = 0; edge_index < 4; edge_index++ ){
-        TMRQuadrant edge;
-        edge.face = quads[i].face;
-        edge.info = edge_label;
-        if (edge_index < 2){
-          edge.x = quads[i].x + 2*h*(edge_index % 2);
-          edge.y = quads[i].y + h;
-        }
-        else {
-          edge.y = quads[i].y + 2*h*(edge_index % 2);
-          edge.x = quads[i].x + h;
-        }
-        transformNode(&edge);
-
-        // Check that this is not a dependent edge
-        if (!(quads[i].info & 1 << edge_index)){
-          int mpi_owner = getQuadrantMPIOwner(&edge);
-          if (mpi_owner != mpi_rank){
-            // Now, search for the edge owner
-            TMRQuadrant *t = nodes->contains(&edge);
-
-            // If this is the owner add it
-            if (i == t->tag){
-              if (edge_index < 2){
-                for ( int k = 1; k < mesh_order-1; k++ ){
-                  int offset = k*mesh_order + (mesh_order-1)*edge_index;
-                  TMRQuadrant quad = quads[i];
-                  quad.info = offset;
-                  quad.tag = mpi_owner;
-                  ext_nodes->addQuadrant(&quad);
-
-                  // Label this as an external node
-                  node_numbers[c[offset]] = -num_dep_nodes-1;
-                }
-              }
-              else {
-                for ( int k = 1; k < mesh_order-1; k++ ){
-                  int offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
-                  TMRQuadrant quad = quads[i];
-                  quad.info = offset;
-                  quad.tag = mpi_owner;
-                  ext_nodes->addQuadrant(&quad);
-
-                  // Label this as an external node
-                  node_numbers[c[offset]] = -num_dep_nodes-1;
-                }
-              }
-            }
-          }
+        // Label the nodes here as owned by another processor
+        for ( int k = 0; k < node_array[i].level; k++ ){
+          node_numbers[node_array[i].tag + k] = -num_dep_nodes-1;
         }
       }
     }
   }
 
-  // Count the number of owned nodes
+  // Now all the external and dependent nodes are labeled, any remaining
+  // nodes that have a non-negative value are independent and must 
+  // be ordered. These are the local owned nodes.
   num_owned_nodes = 0;
   for ( int i = 0; i < num_local_nodes; i++ ){
     if (node_numbers[i] >= 0){
@@ -3207,7 +3047,7 @@ void TMRQuadForest::createNodes(){
 
   // Distribute the non-local nodes back to their owning processors
   // to determine their node numbers
-  int use_tags = 1;
+  int use_tags = 0;
   int *send_ptr, *recv_ptr;
   TMRQuadrantArray *dist_nodes = distributeQuadrants(ext_array, use_tags,
                                                      &send_ptr, &recv_ptr);
@@ -3219,94 +3059,11 @@ void TMRQuadForest::createNodes(){
   TMRQuadrant *dist_quads;
   dist_nodes->getArray(&dist_quads, &dist_size);
   for ( int i = 0; i < dist_size; i++ ){
-    const int32_t h = 1 << (TMR_MAX_LEVEL - dist_quads[i].level - 1);
-
-    // Figure out whether this is a node or edge
-    int ii = dist_quads[i].info % mesh_order;
-    int jj = dist_quads[i].info / mesh_order;
-
-    // Find the corresponding corner or edge number
-    int fx0 = (ii == 0);
-    int fy0 = (jj == 0);
-    int fx = (fx0 || ii == mesh_order-1);
-    int fy = (fy0 || jj == mesh_order-1);
-
-    if (fx || fy){
-      if (fx && fy){
-        int corner_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2);
-        
-        // Find the owner of this node
-        TMRQuadrant node;
-        node.face = dist_quads[i].face;
-        node.info = node_label;
-        node.x = dist_quads[i].x + 2*h*(corner_index % 2);
-        node.y = dist_quads[i].y + 2*h*(corner_index / 2);
-        transformNode(&node);
-        TMRQuadrant *t = nodes->contains(&node);
-
-        // Set the node owner
-        int owner = t->tag;
-        int index = getCornerOwnerIndex(&quads[owner], &node);
-        dist_quads[i].tag = conn[index];
-      }
-      else {
-        int edge_index = fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3);
-
-        // Locate the edge on the distributed quadrant
-        TMRQuadrant edge;
-        edge.face = dist_quads[i].face;
-        edge.info = edge_label;
-        if (edge_index < 2){
-          edge.x = dist_quads[i].x + 2*h*(edge_index % 2);
-          edge.y = dist_quads[i].y + h;
-        }
-        else {
-          edge.x = dist_quads[i].x + h;
-          edge.y = dist_quads[i].y + 2*h*(edge_index % 2);
-        }
-
-        // Transform to the local edge owner
-        int edge_reversed = 0;
-        transformNode(&edge, &edge_reversed);
-        TMRQuadrant *t = nodes->contains(&edge);
-
-        if (t){
-          int owner = t->tag;
-
-          // Get the edge owner indices
-          getEdgeOwnerIndex(&quads[owner], &edge, owner_edge_index);
-
-          // Extract the new node numbers and set them as the tag
-          if (edge_reversed){
-            if (edge_index < 2){
-              dist_quads[i].tag = conn[owner_edge_index[mesh_order-1-jj]];
-            }
-            else {
-              dist_quads[i].tag = conn[owner_edge_index[mesh_order-1-ii]];
-            }
-          }
-          else {
-            if (edge_index < 2){
-              dist_quads[i].tag = conn[owner_edge_index[jj]];
-            }
-            else {
-              dist_quads[i].tag = conn[owner_edge_index[ii]];
-            }
-          }
-        }
-        else {
-          printf("Missing edge\n");
-        }
-      }
-    }
-    else {
-      printf("This appears to be an internal node\n");
+    TMRQuadrant *t = nodes->contains(&dist_quads[i]);
+    if (t){
+      dist_quads[i].tag = node_numbers[t->tag];
     }
   }
-
-  // Free the edge index array
-  delete [] owner_edge_index;
-
 
   // Send the nodes back to the original processors
   TMRQuadrantArray *return_nodes = sendQuadrants(dist_nodes, 
@@ -3320,18 +3077,45 @@ void TMRQuadForest::createNodes(){
   TMRQuadrant *return_quads;
   return_nodes->getArray(&return_quads, &return_size);
   for ( int i = 0; i < return_size; i++ ){
-    TMRQuadrant *t = quadrants->contains(&return_quads[i]);
-    int owner = t->tag;
-    int index = mesh_order*mesh_order*owner + return_quads[i].info;
-    node_numbers[conn[index]] = return_quads[i].tag;
+    TMRQuadrant *t = nodes->contains(&return_quads[i]);
+    for ( int k = 0; k < t->level; k++ ){
+      node_numbers[t->tag+k] = return_quads[i].tag + k;
+    }
   } 
   delete return_nodes;
 
-  /*
+  // Apply the node numbering scheme to the local connectivity to 
+  // give us a global numbering scheme
+  for ( int i = 0; i < mesh_order*mesh_order*num_elements; i++ ){
+    conn[i] = node_numbers[conn[i]];
+  }
 
+  // Now, sort the global numbers
+  qsort(node_numbers, num_local_nodes, sizeof(int), compare_integers);
+
+  // Compute num_ext_pre_nodes -- the number of external pre nodes
+  int *item = (int*)bsearch(&node_range[mpi_rank], node_numbers,
+                            num_local_nodes, sizeof(int), compare_integers);
+  num_ext_pre_nodes = item - node_numbers;
+  num_ext_pre_nodes = num_ext_pre_nodes - num_dep_nodes;
+
+  delete nodes;
+
+  // Evaluate the node locations
+  evaluateNodeLocations();
+}
+
+/*
+  Evaluate the node locations based on the parametric locations
+*/
+void TMRQuadForest::evaluateNodeLocations(){
   // Allocate the array of locally owned nodes
   X = new TMRPoint[ num_local_nodes ];
   memset(X, 0, num_local_nodes*sizeof(TMRPoint));
+
+  int num_elements;
+  TMRQuadrant *quads;
+  quadrants->getArray(&quads, &num_elements);
 
   if (topo){
     for ( int i = 0; i < num_elements; i++ ){
@@ -3352,77 +3136,20 @@ void TMRQuadForest::createNodes(){
       for ( int jj = 0; jj < mesh_order; jj++ ){
         for ( int ii = 0; ii < mesh_order; ii++ ){
           // Compute the mesh index
-          int index = conn[mesh_order*mesh_order*i + 
-                           ii + jj*mesh_order];
-          if (index >= 0 && index < num_local_nodes){
+          int node = conn[mesh_order*mesh_order*i + 
+                          ii + jj*mesh_order];
+          int *item = (int*)bsearch(&node, node_numbers,
+                                    num_local_nodes, 
+                                    sizeof(int), compare_integers);
+          if (item){
+            int index = item - node_numbers;          
             surf->evalPoint(u + d*interp_knots[ii], 
                             v + d*interp_knots[jj], &X[index]);
           }
-          else if (index < 0 && index >= -num_dep_nodes){
-            index = num_local_nodes - index-1;
-            surf->evalPoint(u + d*interp_knots[ii], 
-                            v + d*interp_knots[jj], &X[index]);            
-          }
         }
       }
     }
   }
-
-  // Write out the connectivity to a file
-  if (mpi_rank == 0 && topo){
-    FILE *fp = fopen("output_result.dat", "w");
-    if (fp){
-      int n = num_local_nodes + num_dep_nodes;
-      fprintf(fp, "Variables = X,Y,Z,var\n");
-      fprintf(fp, "Zone N = %d E = %d ", n,
-              (mesh_order-1)*(mesh_order-1)*num_elements);
-      fprintf(fp, "DATAPACKING=BLOCK, ZONETYPE=FEQUADRILATERAL\n");
-
-      // Write out the points
-      for ( int k = 0; k < n; k++ ){
-        fprintf(fp, "%e\n", X[k].x);
-      }
-      for ( int k = 0; k < n; k++ ){
-        fprintf(fp, "%e\n", X[k].y);
-      }
-      for ( int k = 0; k < n; k++ ){
-        fprintf(fp, "%e\n", X[k].z);
-      }
-      for ( int k = 0; k < n; k++ ){
-        fprintf(fp, "%d\n", k);
-      }
-
-      // Write out the connectivity
-      for ( int k = 0; k < num_elements; k++ ){
-        int *c = &conn[mesh_order*mesh_order*k];
-        for ( int jj = 0; jj < mesh_order-1; jj++ ){
-          for ( int ii = 0; ii < mesh_order-1; ii++ ){
-            int n[4];
-            n[0] = c[ii + jj*mesh_order];
-            n[1] = c[ii+1 + jj*mesh_order];
-            n[2] = c[ii+1 + (jj+1)*mesh_order];
-            n[3] = c[ii + (jj+1)*mesh_order];
-
-            for ( int j = 0; j < 4; j++ ){
-              if (n[j] < 0 && n[j] >= -num_dep_nodes){
-                n[j] = 1; // num_local_nodes - n[j];
-              }
-              else if (n[j] >= 0){
-                n[j] += 1;
-              }
-              else {
-                n[j] = 1;
-              }
-            }
-
-            fprintf(fp, "%d %d %d %d\n", n[0], n[1], n[2], n[3]);
-          }
-        }
-      }
-      fclose(fp);
-    }
-  }
-  */
 }
 
 /*
@@ -3628,8 +3355,75 @@ int TMRQuadForest::getDepNodeConn( const int **ptr, const int **conn,
   conn:     connectivity to each (global) independent node
   weights:  the weight values for each dependent node
 */
-void TMRQuadForest::createDepNodeConn( int **_ptr, int **_conn,
-                                       double **_weights ){}
+void TMRQuadForest::createDepNodeConn(){
+  /*
+  // Allocate space for the connectivity
+  dep_ptr = new int[ num_dep_nodes+1 ];
+  for ( int k = 0; k < num_dep_nodes+1; k++ ){
+    dep_ptr[k] = k*mesh_order;
+  }
+
+  // Allocate the space for the node numbers
+  dep_conn = new int[ mesh_order*num_dep_nodes ];
+  dep_weights = new double[ mesh_order*num_dep_nodes ];
+
+  // Loop over all of the dependent nodes, and find the parents
+  // if they exist, if not, send/recv the nodes from the owners
+  TMRQuadrantHash *ext_quads = new TMRQuadrantHash();
+
+  int num_elements;
+  TMRQuadrant *quads;
+  quadrants->getArray(&quads, &num_elements);
+
+  for ( int i = 0; i < num_elements; i++ ){
+    if (quads[i].info){
+      for ( int edge_index = 0; edge_index < 4; edge_index++ ){
+        if (quads[i].info & 1 << edge_index){
+          // Get the parent, and search for the edge neighbor
+          // that will be required for the dependent nodes on
+          // this edge
+          TMRQuadrant p;
+          quads[i].parent(&p);
+          p.edgeNeighbor(edge_index, &p);
+
+          // Check if the edge-adjacent quadrant p lies over a
+          // quadtree edge and transform it to its owner
+          int fx0 = (p.x < 0);
+          int fy0 = (p.y < 0);
+          int fx = (fx0 || p.x >= hmax);
+          int fy = (fy0 || p.y >= hmax);
+
+          if (fx || fy){
+            int edge = face_edge_conn[4*p.face + edge_index];
+            int ptr = edge_face_ptr[ptr];
+
+            // Look for the adjacent quadrant that induced
+            // this 
+  for ( int ip = edge_face_ptr[edge]; ip < edge_face_ptr[edge+1]; ip++ ){
+    int face = edge_face_conn[ip]/4;
+
+          }
+
+
+          // Search for the parent
+          TMRQuadrant *t = quadrants->contains(&p);
+          if (t){
+            // We've found the parent, transform the 
+
+
+
+          }
+          else {
+            ext_quads->addQuadrant(&p);
+          }
+        }
+      }
+    }
+  }
+
+  delete ext_quads;
+  */
+}
 
 /*
   Given a node, find the enclosing quadrant

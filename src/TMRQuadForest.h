@@ -154,6 +154,11 @@ class TMRQuadForest : public TMREntity {
   TMRQuadrant* findEnclosing( TMRQuadrant *node );
 
  private:
+  // Labels for the nodes
+  static const int TMR_QUAD_NODE_LABEL = 0;
+  static const int TMR_QUAD_EDGE_LABEL = 1;
+  static const int TMR_QUAD_FACE_LABEL = 2;
+
   // Free the internally stored data and zero things
   void freeData();
   
@@ -233,17 +238,13 @@ class TMRQuadForest : public TMREntity {
   // may be labeled a node, edge or face
   void transformNode( TMRQuadrant *quad, int *edge_reversed=NULL );
 
-  // Get the corner owner index
-  int getCornerOwnerIndex( TMRQuadrant *owner, TMRQuadrant *node );
-  void getEdgeOwnerIndex( TMRQuadrant *owner, TMRQuadrant *edge, 
-                          int *edge_index );
-
   // Label the dependent nodes in the dependent node list
   void labelDependentNodes( int *nodes );
 
+  void evaluateNodeLocations();
+
   // Create the dependent node connectivity
-  void createDepNodeConn( int **_ptr, int **_conn,
-                          double **_weights );
+  void createDepNodeConn();
   
   // Compute the interpolation weights
   int computeInterpWeights( const int order,
@@ -282,10 +283,17 @@ class TMRQuadForest : public TMREntity {
   // Set the range of node numbers owned by each processor
   int *node_range;
 
+  // The nodes are organized as follows
+  // |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
+
   // The following data is processor-local
-  int num_local_nodes;
-  int num_dep_nodes;
-  int num_owned_nodes;
+  int *node_numbers; // All the local node numbers ref'd on this proc
+  int num_local_nodes; // Total number of locally ref'd nodes
+  int num_dep_nodes; // Number of dependent nodes
+  int num_owned_nodes; // Number of nodes that are owned by me
+  int num_ext_pre_nodes; // Number of nodes before pre
+
+  // The dependent node information
   int *dep_ptr, *dep_conn;
   double *dep_weights;
 
@@ -297,9 +305,6 @@ class TMRQuadForest : public TMREntity {
 
   // The array of all the nodes
   TMRPoint *X;
-
-  // Pointers to the dependent edges
-  TMRQuadrantArray *dep_edges;
 
   // The topology of the underlying model (if any)
   TMRTopology *topo;
