@@ -3403,14 +3403,18 @@ void TMRQuadForest::createDepNodeConn(){
             // Find the independent nodes along the adjacent edge
             if (adj_edge_index < 2){
               for ( int k = 0; k < mesh_order; k++ ){
-                int offset = k*mesh_order + (mesh_order-1)*adj_edge_index;
-                edge_nodes[k] = conn[mesh_order*mesh_order*adj->tag + offset];
+                int offset = 
+                  k*mesh_order + (mesh_order-1)*adj_edge_index;
+                edge_nodes[k] = 
+                  conn[mesh_order*mesh_order*adj->tag + offset];
               }
             }
             else {
               for ( int k = 0; k < mesh_order; k++ ){
-                int offset = k + (mesh_order-1)*mesh_order*(adj_edge_index % 2);
-                edge_nodes[k] = conn[mesh_order*mesh_order*adj->tag + offset];
+                int offset = 
+                  k + (mesh_order-1)*mesh_order*(adj_edge_index % 2);
+                edge_nodes[k] = 
+                  conn[mesh_order*mesh_order*adj->tag + offset];
               }
             }
             
@@ -3434,7 +3438,8 @@ void TMRQuadForest::createDepNodeConn(){
                   int index = -c[offset]-1;
                   
                   // Compute parametric location along the edge
-                  double u = 0.5*(quads[i].childId()/2) + 0.5*interp_knots[k];
+                  double u = 0.5*(quads[i].childId()/2) + 
+                    0.5*interp_knots[k];
 
                   // Compute the shape functions
                   int ptr = dep_ptr[index];
@@ -3455,7 +3460,8 @@ void TMRQuadForest::createDepNodeConn(){
                   int index = -c[offset]-1;
                   
                   // Compute parametric location along the edge
-                  double u = 0.5*(quads[i].childId() % 2) + 0.5*interp_knots[k];
+                  double u = 0.5*(quads[i].childId() % 2) +
+                    0.5*interp_knots[k];
 
                   // Compute the shape functions
                   int ptr = dep_ptr[index];
@@ -3491,7 +3497,6 @@ void TMRQuadForest::createDepNodeConn(){
     }
   }
 
-  /*
   // Create an array of the external depedendent quads that are needed
   TMRQuadrantArray *ext_array = ext_quads->toArray();
   delete ext_quads;
@@ -3524,7 +3529,6 @@ void TMRQuadForest::createDepNodeConn(){
   }
 
   // Send the node numbers back to the recvers
-  */
 
   delete ext_quads;
 }
@@ -3754,7 +3758,8 @@ getNodesWithAttribute()\n");
       if (vert_attr && strcmp(vert_attr, attr) == 0){
         int offset = (mesh_order-1)*(corner_index % 2) +
                      (mesh_order-1)*mesh_order*(corner_index/2);
-        node_list[count] = conn[mesh_order*mesh_order*quads[i].tag + offset];
+        node_list[count] = 
+          conn[mesh_order*mesh_order*quads[i].tag + offset];
         count++;
       }
     }
@@ -3774,7 +3779,8 @@ getNodesWithAttribute()\n");
           else {
             offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
           }
-          node_list[count] = conn[mesh_order*mesh_order*quads[i].tag + offset];
+          node_list[count] = 
+            conn[mesh_order*mesh_order*quads[i].tag + offset];
           count++;
         }
       }
@@ -3788,7 +3794,8 @@ getNodesWithAttribute()\n");
         for ( int jj = 0; jj < mesh_order; jj++ ){
           for ( int ii = 0; ii < mesh_order; ii++ ){
             int offset = ii + jj*mesh_order;
-            node_list[count] = conn[mesh_order*mesh_order*quads[i].tag + offset];
+            node_list[count] = 
+              conn[mesh_order*mesh_order*quads[i].tag + offset];
             count++;
           }
         }
