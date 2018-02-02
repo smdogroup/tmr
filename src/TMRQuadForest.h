@@ -156,6 +156,9 @@ class TMRQuadForest : public TMREntity {
   TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
                                    const int *quad_ptr,
                                    const int *quad_recv_ptr );
+  int *sendQuadrantConn( TMRQuadrantArray *list,
+                         const int *quad_ptr,
+                         const int *quad_recv_ptr );
 
   // Find the quadrant 
   // -----------------
