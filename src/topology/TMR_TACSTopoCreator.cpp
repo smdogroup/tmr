@@ -674,6 +674,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
                                              TMRQuadForest *forest,
                                              int num_elements,
                                              TACSElement **elements ){
+  /*
   // Get the MPI communicator
   int mpi_rank, mpi_size;
   MPI_Comm comm = forest->getMPIComm();
@@ -916,5 +917,6 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   }
 
   // Free the weights
-  delete [] weights;  
+  delete [] weights;
+  */
 }

@@ -255,13 +255,13 @@ TMRQuadrantArray* TMRQuadrantArray::duplicate(){
   TMRQuadrant *arr = new TMRQuadrant[ size ];
   memcpy(arr, array, size*sizeof(TMRQuadrant));
 
-  TMRQuadrantArray *dup = new TMRQuadrantArray(arr, size);
+  TMRQuadrantArray *dup = new TMRQuadrantArray(arr, size, use_node_index);
   dup->is_sorted = is_sorted;
-  dup->use_node_index = use_node_index;
 
   return dup;
 }
 
+#include <stdio.h>
 /*
   Sort the list and remove duplicates from the array of possible
   entries.

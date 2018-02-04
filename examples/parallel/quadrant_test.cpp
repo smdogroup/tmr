@@ -290,9 +290,6 @@ int main( int argc, char *argv[] ){
     f5->incref();
 
     f5->writeToFile("test_output.f5");
-
-
-
   }
 
 /*

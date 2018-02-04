@@ -93,10 +93,6 @@ class TMRQuadForest : public TMREntity {
   // -------------------------------------------------
   TMRQuadrantArray* getQuadsWithAttribute( const char *attr );
   int getNodesWithAttribute( const char *attr, int **nodes );
-
-  // Get the external node numbers
-  // -----------------------------
-  int getExtNodeNums( int **_extNodes );
   
   // Get the mesh order
   // ------------------
@@ -152,13 +148,12 @@ class TMRQuadForest : public TMREntity {
                                          int use_tags=0,
                                          int **quad_ptr=NULL, 
                                          int **quad_recv_ptr=NULL,
-                                         int include_local=0 );
+                                         int include_local=0,
+                                         int use_node_index=0 );
   TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
                                    const int *quad_ptr,
-                                   const int *quad_recv_ptr );
-  int *sendQuadrantConn( TMRQuadrantArray *list,
-                         const int *quad_ptr,
-                         const int *quad_recv_ptr );
+                                   const int *quad_recv_ptr,
+                                   int use_node_index=0 );
 
   // Find the quadrant 
   // -----------------
@@ -235,8 +230,8 @@ class TMRQuadForest : public TMREntity {
 
   // Find the dependent faces and edges in the mesh
   void computeDepEdges();
-  int checkAdjacentDepEdges( int edge_index, TMRQuadrant *b,
-                             TMRQuadrantArray *adjquads );
+  void computeAdjacentDepEdges( int edge_index, TMRQuadrant *b,
+                                TMRQuadrantArray *adjquads );
 
   // Transform the node to the global numbering. Note that the node
   // may be labeled a node, edge or face
@@ -245,11 +240,19 @@ class TMRQuadForest : public TMREntity {
   // Label the dependent nodes in the dependent node list
   void labelDependentNodes( int *nodes );
 
-  // Compute the node locations
-  void evaluateNodeLocations();
+  // Create the global node ownership data
+  TMRQuadrantArray* createLocalNodes();
+
+  // Create the local connectivity based on the input node array
+  void createLocalConn( TMRQuadrantArray *nodes, const int *node_offset );
 
   // Create the dependent node connectivity
-  void createDepNodeConn();
+  void createDependentConn( const int *node_nums,
+                            TMRQuadrantArray *nodes, 
+                            const int *node_offset );
+
+  // Compute the node locations
+  void evaluateNodeLocations();
 
   // The communicator 
   MPI_Comm comm;
@@ -291,7 +294,7 @@ class TMRQuadForest : public TMREntity {
   int num_local_nodes; // Total number of locally ref'd nodes
   int num_dep_nodes; // Number of dependent nodes
   int num_owned_nodes; // Number of nodes that are owned by me
-  int num_ext_pre_nodes; // Number of nodes before pre
+  int ext_pre_offset; // Number of nodes before pre
 
   // The dependent node information
   int *dep_ptr, *dep_conn;

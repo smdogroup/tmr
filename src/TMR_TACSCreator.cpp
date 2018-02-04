@@ -290,7 +290,8 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
 
   // Loop over all the nodes
   for ( int i = 0; i < num_local_nodes; i++ ){
-    if (nodes[i] >= range[mpi_rank] && nodes[i] < range[mpi_rank+1]){
+    if (nodes[i] >= range[mpi_rank] && 
+        nodes[i] < range[mpi_rank+1]){
       int loc = nodes[i] - range[mpi_rank];
       Xn[3*loc] = scale*Xp[i].x;
       Xn[3*loc+1] = scale*Xp[i].y;
