@@ -28,7 +28,8 @@
 */
 class TMROctForest : public TMREntity {
  public:
-  TMROctForest( MPI_Comm _comm );
+  TMROctForest( MPI_Comm _comm, int mesh_order=2,
+                TMRInterpolationType interp_type=TMR_GAUSS_LOBATTO_POINTS );
   ~TMROctForest();
 
   // Get the MPI communicator
@@ -77,26 +78,14 @@ class TMROctForest : public TMREntity {
 
   // Create and order the nodes
   // --------------------------
-  void createNodes( int order=2 );
-
-  // Expert routines for first allocating then ordering nodes (needed
-  // when the nodes have non-uniform dof/node)
-  // ----------------------------------------------------------------
-  void allocateNodes( int order=2 );
-  void orderNodes();
-
-  // Get the nodes or elements with certain attributes
-  // -------------------------------------------------
-  TMROctantArray* getOctsWithAttribute( const char *attr );
-  TMROctantArray* getNodesWithAttribute( const char *attr );
-
-  // Create the mesh connectivity
-  // ----------------------------
-  void createMeshConn( int **_conn, int *_nelems );
+  void createNodes();
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
-  void createDepNodeConn();
+  void getNodeConn( const int **_conn=NULL, 
+                    int *_num_elements=NULL,
+                    int *_num_owned_nodes=NULL,
+                    int *_num_local_nodes=NULL );
   int getDepNodeConn( const int **_ptr, const int **_conn,
                       const double **_weights );
  
@@ -105,9 +94,10 @@ class TMROctForest : public TMREntity {
   void createInterpolation( TMROctForest *coarse,
                             TACSBVecInterp *interp );
 
-  // Get the external node numbers
-  // -----------------------------
-  int getExtNodeNums( int **_extNodes );
+  // Get the nodes or elements with certain attributes
+  // -------------------------------------------------
+  TMROctantArray* getOctsWithAttribute( const char *attr );
+  TMROctantArray* getNodesWithAttribute( const char *attr );
   
   // Get the mesh order
   // ------------------
@@ -127,14 +117,13 @@ class TMROctForest : public TMREntity {
   void getOctants( TMROctantArray **_octants ){
     if (_octants){ *_octants = octants; }
   }
-  void getNodes( TMROctantArray **_nodes ){
-    if (_nodes){ *_nodes = nodes; }
+  int getNodeNumbers( const int **_node_numbers ){
+    if (_node_numbers){ *_node_numbers = node_numbers; }
+    return num_local_nodes;
   }
   int getPoints( TMRPoint **_X ){
     if (_X){ *_X = X; }
-    int size;
-    nodes->getArray(NULL, &size);
-    return size;
+    return num_local_nodes;
   }
 
   // Retrieve the connectivity information
@@ -158,7 +147,8 @@ class TMROctForest : public TMREntity {
 
   // Transform the octant to the global order
   // ----------------------------------------
-  void transformNode( TMROctant *oct );
+  void transformNode( TMROctant *oct, int *edge_reversed=NULL,
+                      int *src_face_id=NULL, int *dest_face_id=NULL );
 
   // Distribute the octant array in parallel to other processors
   // -----------------------------------------------------------
@@ -166,13 +156,15 @@ class TMROctForest : public TMREntity {
                                      int use_tags=0,
                                      int **oct_ptr=NULL, 
                                      int **oct_recv_ptr=NULL,
-                                     int include_local=0 );
+                                     int include_local=0,
+                                     int use_node_index=0 );
 
   // Send the octants back to their original processors (dual of distribute)
   // -----------------------------------------------------------------------
   TMROctantArray *sendOctants( TMROctantArray *list,
                                const int *oct_ptr,
-                               const int *oct_recv_ptr );
+                               const int *oct_recv_ptr,
+                               int use_node_index=0 );
 
   // Write out files showing the connectivity
   // ----------------------------------------
@@ -181,6 +173,17 @@ class TMROctForest : public TMREntity {
   void writeForestToVTK( const char *filename );
 
  private:
+  // Labels for the nodes
+  static const int TMR_OCT_NODE_LABEL = 0;
+  static const int TMR_OCT_EDGE_LABEL = 1;
+  static const int TMR_OCT_FACE_LABEL = 2;
+  static const int TMR_OCT_BLOCK_LABEL = 3;
+
+  // Free the internally stored data and zero things
+  void freeData();
+  void freeMeshData( int free_quads=1, int free_owners=1 );
+  void copyData( TMROctForest *copy );
+  
   // Compute the node connectivity information
   void computeNodesToBlocks();
 
@@ -194,10 +197,6 @@ class TMROctForest : public TMREntity {
   
   // Set the owners - this determines how the mesh will be ordered
   void computeBlockOwners();
-
-  // Free/copy the allocated data
-  void freeData();
-  void copyData( TMROctForest *copy );
 
   // Get the octant owner
   int getOctantMPIOwner( TMROctant *oct );
@@ -217,7 +216,7 @@ class TMROctForest : public TMREntity {
                       const int balance_corner,
                       const int balance_tree );
 
-  // Add adjacent quadrants to the hashes/queues for balancing
+  // Add adjacent octants to the hashes/queues for balancing
   void addFaceNeighbors( int face_index, 
                          TMROctant p,
                          TMROctantHash *hash,
@@ -234,8 +233,6 @@ class TMROctForest : public TMREntity {
                            TMROctantHash *ext_hash,
                            TMROctantQueue *queue );
 
-  // Nodal ordering routines
-  // -----------------------
   // Add octants to adjacent non-owner processor queues
   void addAdjacentFaceToQueue( int face_index,
                                TMROctant p,
@@ -259,25 +256,35 @@ class TMROctForest : public TMREntity {
                              TMROctantArray *adjocts );
   int checkAdjacentDepEdges( int edge_index, TMROctant *b,
                              TMROctantArray *adjocts );
-  
-  // Set the dependent node locations
-  void setDepNodeLocations();
 
   // Label the dependent nodes on the locally owned blocks
-  void labelDependentNodes();
+  void labelDependentNodes( int *nodes );
+
+  // Create the global node ownership data
+  TMROctantArray* createLocalNodes();
+
+  // Create the local connectivity based on the input node array
+  void createLocalConn( TMROctantArray *nodes, const int *node_offset );
 
   // Create the dependent node connectivity
-  void createDepNodeConn( int **_ptr, int **_conn,
-                          double **_weights );
+  void createDependentConn( const int *node_nums,
+                            TMROctantArray *nodes, 
+                            const int *node_offset );
 
-  // Compute the interpolation weights
-  int computeInterpWeights( const int order,
-                            const int32_t u, const int32_t h,
-                            double Nu[] );
+  // Compute the node locations
+  void evaluateNodeLocations();
 
   // The communicator
   MPI_Comm comm;
   int mpi_rank, mpi_size;
+
+  // Information about the type of interpolation
+  TMRInterpolationType interp_type;
+  double *interp_knots;
+
+  // The owner octants which dictates the partitioning of the octants
+  // across processors
+  TMROctant *owners;
 
   // The following data is the same across all processors
   // ----------------------------------------------------
@@ -300,12 +307,24 @@ class TMROctForest : public TMREntity {
 
   // Information about the mesh
   int mesh_order;
+  int *conn;
 
   // Set the range of nodes owned by each processor
   int *node_range;
 
-  // The owner octants 
-  TMROctant *owners;
+  // The nodes are organized as follows
+  // |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
+
+  // The following data is processor-local
+  int *node_numbers; // All the local node numbers ref'd on this proc
+  int num_local_nodes; // Total number of locally ref'd nodes
+  int num_dep_nodes; // Number of dependent nodes
+  int num_owned_nodes; // Number of nodes that are owned by me
+  int ext_pre_offset; // Number of nodes before pre
+
+  // The dependent node information
+  int *dep_ptr, *dep_conn;
+  double *dep_weights;
 
   // The array of all octants
   TMROctantArray *octants;
@@ -314,20 +333,7 @@ class TMROctForest : public TMREntity {
   TMROctantArray *adjacent;
 
   // The array of all the nodes
-  TMROctantArray *nodes;
   TMRPoint *X;
-
-  // The following data is processor-local
-  // -------------------------------------
-  // The number of elements and dependent nodes
-  int num_elements;
-  int num_dep_nodes;
-  int *dep_ptr, *dep_conn;
-  double *dep_weights;
-
-  // Pointers to the dependent faces/edges
-  TMROctantArray *dep_faces;
-  TMROctantArray *dep_edges;
 
   // The topology of the underlying model (if any)
   TMRTopology *topo;

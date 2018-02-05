@@ -311,6 +311,8 @@ void TMRQuadForest::copyData( TMRQuadForest *copy ){
   data and altering the topology of the mesh.
 */
 void TMRQuadForest::setTopology( TMRTopology *_topo ){
+  freeData();
+
   if (_topo){
     // Incref the topology object
     _topo->incref();
@@ -1106,7 +1108,6 @@ void TMRQuadForest::createRandomTrees( int nrand,
       const int32_t h = 1 << (TMR_MAX_LEVEL - level);
       int32_t x = h*(rand() % (1 << level));
       int32_t y = h*(rand() % (1 << level));
-      
       array[count].tag = 0;
       array[count].face = face;
       array[count].level = level;
@@ -1399,6 +1400,7 @@ void TMRQuadForest::refine( const int refinement[],
           // Copy over the quadrant
           TMRQuadrant q = array[i];
           q.level = new_level;
+          q.info = 0;
           
           // Compute the new side-length of the quadrant
           const int32_t h = 1 << (TMR_MAX_LEVEL - q.level);
@@ -1437,6 +1439,7 @@ void TMRQuadForest::refine( const int refinement[],
           // Copy the quadrant and set the new level
           TMRQuadrant q = array[i];
           q.level = new_level;
+          q.info = 0;
 
           // Compute the new side-length of the quadrant
           const int32_t h = 1 << (TMR_MAX_LEVEL - q.level);
@@ -1470,6 +1473,7 @@ void TMRQuadForest::refine( const int refinement[],
       if (array[i].level < max_level){
         TMRQuadrant q = array[i];
         q.level += 1;
+        q.info = 0;
         if (mpi_rank == getQuadrantMPIOwner(&q)){
           hash->addQuadrant(&q);
         }
@@ -2751,9 +2755,6 @@ void TMRQuadForest::transformNode( TMRQuadrant *quad,
   and corners. Finally, the new node numbers are returned to the
   processors that border the quadtree owners. And lastly, the non-local
   partial quadtrees are freed.
-
-  input:
-  order:   the order of the mesh
 */
 void TMRQuadForest::createNodes(){
   if (conn){
@@ -2771,11 +2772,11 @@ void TMRQuadForest::createNodes(){
   // Create and assign the ownership for the local node numbers
   TMRQuadrantArray *nodes = createLocalNodes();
 
-  // Retrieve the size of the node array and count up the offsets 
-  // for each node. When mesh_order <= 3, the offset array will 
-  // be equal to the index since each quadrant in the node array
-  // will represent only one node. When mesh_order >= 4 the quadrants
-  // may represent more than one node.
+  // Retrieve the size of the node array and count up the offsets for
+  // each node. When mesh_order <= 3, the offset array will be equal
+  // to the index since each quadrant in the node array will represent
+  // only one node. When mesh_order >= 4 the quadrants may represent
+  // more than one node.
   int node_size;
   TMRQuadrant *node_array;
   nodes->getArray(&node_array, &node_size);
@@ -3276,9 +3277,6 @@ void TMRQuadForest::createLocalConn( TMRQuadrantArray *nodes,
   memset(conn, 0, size*sizeof(int));
 
   if (mesh_order <= 3){
-    TMRQuadrant *array;
-    nodes->getArray(&array, &num_local_nodes);
-
     for ( int i = 0; i < num_elements; i++ ){
       int *c = &conn[mesh_order*mesh_order*i];
       const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level - 1);

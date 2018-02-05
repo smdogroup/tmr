@@ -41,7 +41,8 @@ class TMRQuadrant {
 */
 class TMRQuadrantArray {
  public:
-  TMRQuadrantArray( TMRQuadrant *array, int size, int _use_node_index=0 );
+  TMRQuadrantArray( TMRQuadrant *array, int size, 
+                    int _use_node_index=0 );
   ~TMRQuadrantArray();
 
   TMRQuadrantArray* duplicate();

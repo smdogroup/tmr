@@ -261,7 +261,6 @@ TMRQuadrantArray* TMRQuadrantArray::duplicate(){
   return dup;
 }
 
-#include <stdio.h>
 /*
   Sort the list and remove duplicates from the array of possible
   entries.

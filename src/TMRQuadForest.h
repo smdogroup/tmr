@@ -168,8 +168,6 @@ class TMRQuadForest : public TMREntity {
   // Free the internally stored data and zero things
   void freeData();
   void freeMeshData( int free_quads=1, int free_owners=1 );
-  
-  // Duplicate data
   void copyData( TMRQuadForest *copy );
 
   // Set up the connectivity from nodes -> faces
@@ -213,8 +211,6 @@ class TMRQuadForest : public TMREntity {
                            TMRQuadrantHash *ext_hash,
                            TMRQuadrantQueue *queue );
 
-  // Nodal ordering routines
-  // -----------------------
   // Add quadrants to adjacent non-owner processor queues
   void addAdjacentEdgeToQueue( int edge_index,
                                TMRQuadrant p,

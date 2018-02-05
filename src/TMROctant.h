@@ -24,8 +24,9 @@ class TMROctant {
   void faceNeighbor( int face, TMROctant *neighbor );
   void edgeNeighbor( int edge, TMROctant *neighbor );
   void cornerNeighbor( int corner, TMROctant *neighbor );
-  int compare( const TMROctant *octant ) const;
-  int compareEncoding( const TMROctant *octant ) const;
+  int compare( const TMROctant *oct ) const;
+  int comparePosition( const TMROctant *oct ) const;
+  int compareNode( const TMROctant *oct ) const;
   int contains( TMROctant *oct );
 
   int32_t block; // The block that owns this octant
@@ -46,7 +47,8 @@ class TMROctant {
 */
 class TMROctantArray {
  public:
-  TMROctantArray( TMROctant *array, int size );
+  TMROctantArray( TMROctant *array, int size,
+                  int _use_node_index=0 );
   ~TMROctantArray();
 
   TMROctantArray* duplicate();
@@ -56,6 +58,7 @@ class TMROctantArray {
   void merge( TMROctantArray * list );
 
  private:
+  int use_node_index;
   int is_sorted;
   int size, max_size;
   TMROctant *array;
@@ -100,7 +103,7 @@ class TMROctantQueue {
 */
 class TMROctantHash {
  public:
-  TMROctantHash();
+  TMROctantHash( int _use_node_index=0 );
   ~TMROctantHash();
 
   TMROctantArray * toArray();
@@ -116,6 +119,9 @@ class TMROctantHash {
     TMROctant oct;
     OctHashNode *next;
   };
+
+  // Keep track of whether to use a node-based search
+  int use_node_index;
 
   // Keep track of the bucket size
   int num_buckets;
