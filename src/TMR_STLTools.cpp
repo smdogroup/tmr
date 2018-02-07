@@ -704,14 +704,7 @@ int TMR_GenerateBinFile( const char *filename,
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Retrieve the mesh order
-  int mesh_order = filter->getMeshOrder();
-
-  // The mesh has not been created for the filter; we have to
-  // quit since there's no information
-  if (mesh_order < 2){
-    fail = 1;
-    return fail;
-  }
+  const int mesh_order = filter->getMeshOrder();
 
   // Ensure that the values are distributed so that we can access them
   // directly
@@ -744,14 +737,15 @@ int TMR_GenerateBinFile( const char *filename,
                                  NULL, &face_block_ptr);
 
   // Get the array of octants
-  TMROctantArray *octants, *nodes;
+  TMROctantArray *octants;
+  int nelems;
+  TMROctant *octs;
   filter->getOctants(&octants);
-  filter->getNodes(&nodes);
+  octants->getArray(&octs, &nelems);
 
-  int nelems, nnodes;
-  TMROctant *array, *node_array;
-  octants->getArray(&array, &nelems);
-  nodes->getArray(&node_array, &nnodes);
+  // Get the connectivity
+  const int *conn;
+  filter->getNodeConn(&conn);
 
   // Get the nodal locations from the TMROctree object
   TMRPoint *X;
@@ -760,10 +754,10 @@ int TMR_GenerateBinFile( const char *filename,
   // Get the mesh coordinates from the filter
   for ( int i = 0; i < nelems; i++ ){
     // Compute the side-length of this element
-    const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
+    const int32_t h = 1 << (TMR_MAX_LEVEL - octs[i].level);
       
     // Get the block id
-    int block = array[i].block;
+    int block = octs[i].block;
 
     // Check if the octree face lies on a boundary or not
     int octree_face_boundary[6];
@@ -775,75 +769,46 @@ int TMR_GenerateBinFile( const char *filename,
 
     // Evaluate whether the element is actually on a face
     octree_face_boundary[0] = 
-      octree_face_boundary[0] && (array[i].x == 0);
+      octree_face_boundary[0] && (octs[i].x == 0);
     octree_face_boundary[1] = 
-      octree_face_boundary[1] && (array[i].x + h == hmax);
+      octree_face_boundary[1] && (octs[i].x + h == hmax);
     octree_face_boundary[2] = 
-      octree_face_boundary[2] && (array[i].y == 0);
+      octree_face_boundary[2] && (octs[i].y == 0);
     octree_face_boundary[3] = 
-      octree_face_boundary[3] && (array[i].y + h == hmax);
+      octree_face_boundary[3] && (octs[i].y + h == hmax);
     octree_face_boundary[4] = 
-      octree_face_boundary[4] && (array[i].z == 0);
+      octree_face_boundary[4] && (octs[i].z == 0);
     octree_face_boundary[5] = 
-      octree_face_boundary[5] && (array[i].z + h == hmax);
+      octree_face_boundary[5] && (octs[i].z + h == hmax);
 
     // Get the values at the corners of the element
     double levelvals[8];
 
     // Get the corner nodes
     TMRPoint Xe[8];
+    
+    // Get the local connectivity
+    const int *c = &conn[mesh_order*mesh_order*mesh_order*i];
 
     // Loop over the nodes within the element
     for ( int kk = 0; kk < 2; kk++ ){
       for ( int jj = 0; jj < 2; jj++ ){
         for ( int ii = 0; ii < 2; ii++ ){
-          // Comopute the index
-          int index = ii + 2*jj + 4*kk;
+          // Find the local index
+          int index = (ii*(mesh_order-1) + 
+                       jj*(mesh_order-1)*mesh_order +
+                       kk*(mesh_order-1)*mesh_order*mesh_order);
 
-          // Find the octant node (without level/tag)
-          TMROctant node;
-          node.block = block;
-          node.x = array[i].x + ii*h;
-          node.y = array[i].y + jj*h;
-          node.z = array[i].z + kk*h;
-          filter->transformNode(&node);
-
-          // Find the corresponding node
-          const int use_nodes = 1;
-          TMROctant *t = nodes->contains(&node, use_nodes);
-             
-          int fail = 0;
-          if (t){
-            // Retrieve the global node number
-            int node = t->tag;
-
-            // Get the point location
-            Xe[index] = X[t - node_array];
-
-            // Get the nodal design variable value
-            if (node >= 0){
-              // Set the independent variable values directly
-              fail = fail || x->getValues(1, &node, xvals);
-              levelvals[index] = TacsRealPart(xvals[x_offset]);
-            }
-            else {
-              node = -node-1;
-           
-              // Evaluate the value of the dependent design variable
-              levelvals[index] = 0.0;
-              for ( int kp = dep_ptr[node]; kp < dep_ptr[node+1]; kp++ ){
-                // Get the independent node values
-                int dep_node = dep_conn[kp];
-                fail = fail || x->getValues(1, &dep_node, xvals);
-                levelvals[index] += 
-                  dep_weights[kp]*TacsRealPart(xvals[x_offset]);
-              }
-            }
+          // Find the local node number
+          int node = filter->getLocalNodeNumber(c[index]);
+          if (node >= 0){
+            // Get the node location
+            Xe[index] = X[node];
           }
           if (fail){
             printf("TMR_GenerateBinFile: \
 Failed at node with block: %d x %d y: %d z: %d\n",
-                   node.block, node.x, node.y, node.z);
+                   octs[i].block, octs[i].x, octs[i].y, octs[i].z);
           }
         }
       }

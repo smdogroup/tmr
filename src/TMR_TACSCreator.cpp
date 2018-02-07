@@ -321,33 +321,10 @@ TMROctTACSCreator::~TMROctTACSCreator(){
 }
 
 /*
-  Create the TACS element connectivity -- default
-*/
-void TMROctTACSCreator::createConnectivity( int order,
-                                            TMROctForest *forest,
-                                            int **_conn, int **_ptr,
-                                            int *_num_elements ){
-  // Create the mesh
-  int *elem_conn, num_elements = 0;
-  forest->createMeshConn(&elem_conn, &num_elements);
-
-  // Set the element ptr
-  int *ptr = new int[ num_elements+1 ];
-  for ( int i = 0; i < num_elements+1; i++ ){
-    ptr[i] = order*order*order*i;
-  }
-
-  *_conn = elem_conn;
-  *_ptr = ptr;
-  *_num_elements = num_elements;
-}
-
-/*
   Create the TACSAssembler object
 */
 TACSAssembler* 
-  TMROctTACSCreator::createTACS( int order, 
-                                 TMROctForest *forest,
+  TMROctTACSCreator::createTACS( TMROctForest *forest,
                                  TACSAssembler::OrderingType ordering,
                                  TacsScalar _scale ){
   // Get the communicator and the rank
@@ -355,28 +332,23 @@ TACSAssembler*
   int mpi_rank;
   MPI_Comm_rank(comm, &mpi_rank);
     
-  // // Ceate the nodes for the underlying finite-element mesh if they
-  // // don't exist
-  // TMROctantArray *nodes;
-  // forest->getNodes(&nodes);
-  // if (!nodes){
-  //   forest->createNodes(order);
-  //   forest->getNodes(&nodes);
-  // }
+  // Create the nodes for the underlying finite-element mesh if they
+  // don't yet exist
+  forest->createNodes();
 
-  // Find the number of nodes for this processor
-  const int *range;
-  forest->getOwnedNodeRange(&range);
-  int num_nodes = range[mpi_rank+1] - range[mpi_rank];
+  // Get the element order
+  int order = forest->getMeshOrder();
 
-  // Create the connectivity
-  int num_elements;
-  int *elem_conn, *ptr;
-  createConnectivity(order, forest, 
-                     &elem_conn, &ptr, &num_elements);
+  // Get the local part of the connectivity
+  const int *conn;
+  int num_elements = 0, num_owned_nodes = 0;
+  forest->getNodeConn(&conn, &num_elements, &num_owned_nodes);
 
-  // Create the dependent node connectivity
-  forest->createDepNodeConn();
+  // Allocate the pointer array
+  int *ptr = new int[ num_elements+1 ];
+  for ( int i = 0; i <= num_elements; i++ ){
+    ptr[i] = order*order*order*i;
+  }
 
   // Create/retrieve the dependent node information
   const int *dep_ptr, *dep_conn;
@@ -395,11 +367,10 @@ TACSAssembler*
   // Create the associated TACSAssembler object
   TACSAssembler *tacs = 
     new TACSAssembler(forest->getMPIComm(), vars_per_node,
-                      num_nodes, num_elements, num_dep_nodes);
-    
+                      num_owned_nodes, num_elements, num_dep_nodes);
+
   // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(elem_conn, ptr);
-  delete [] elem_conn;
+  tacs->setElementConnectivity(conn, ptr);
   delete [] ptr;
     
   // Set the dependent node information
@@ -412,11 +383,11 @@ TACSAssembler*
   // Specify the boundary conditions
   setBoundaryConditions(forest, tacs);
 
-  // Reordering everything
+  // Reordering everything - if needed
   if (ordering != TACSAssembler::NATURAL_ORDER){
     tacs->computeReordering(ordering, TACSAssembler::GAUSS_SEIDEL);
   }
-    
+
   // Initialize the TACSAssembler object
   tacs->initialize();
 
@@ -427,7 +398,7 @@ TACSAssembler*
   }
 
   // Set the node locations
-  setNodeLocations(forest, tacs, _scale);
+  setNodeLocations(forest, tacs,_scale);
 
   return tacs;
 }
@@ -439,7 +410,6 @@ TACSAssembler*
 */
 void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
                                                TACSAssembler *tacs ){
-  /*
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -456,32 +426,21 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
       int num_bcs;
       const int *bc_nums;
       const TacsScalar *bc_vals;
-      bcs->getBoundaryCondition(k, &attribute, &num_bcs, &bc_nums, &bc_vals);
+      bcs->getBoundaryCondition(k, &attribute, &num_bcs, 
+                                &bc_nums, &bc_vals);
 
-      // Retrieve the nodes associated with the specified attribute
-      TMROctantArray *nodes = forest->getNodesWithAttribute(attribute);
-      int size;
-      TMROctant *array;
-      nodes->getArray(&array, &size);
+      if (attribute){
+        // Retrieve the nodes associated with the specified attribute
+        int *nodes;
+        int num_nodes = forest->getNodesWithAttribute(attribute, &nodes);
 
-      // Allocate the array of the node numbers associated with the BC
-      int num = 0;
-      int *vars = new int[ size ];
-      for ( int i = 0; i < size; i++ ){
-        if (array[i].tag >= range[mpi_rank] &&
-            array[i].tag < range[mpi_rank+1]){
-          vars[num] = array[i].tag;
-          num++;
-        }
+        // Add the boundary conditions to TACSAssembler
+        tacs->addBCs(num_nodes, nodes, num_bcs, bc_nums, bc_vals);
+
+        delete [] nodes;
       }
-
-      // Add the boundary conditions to TACSAssembler
-      tacs->addBCs(num, vars, num_bcs, bc_nums,bc_vals);
-      delete [] vars;
-      delete nodes;
     }
   }
-  */
 }
 
 /*
@@ -491,25 +450,20 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
 void TMROctTACSCreator::setNodeLocations( TMROctForest *forest, 
                                           TACSAssembler *tacs,
                                           TacsScalar _scale ){
-  /*
   TacsScalar scale = _scale;
+
   // Get the communicator and the rank
-  MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
+  MPI_Comm comm = forest->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
     
   // Find the number of nodes for this processor
   const int *range;
   forest->getOwnedNodeRange(&range);
 
-  // // Get the nodes
-  // TMROctantArray *nodes;
-  // forest->getNodes(&nodes);
-
-  // Get the octants associated with the nodes
-  int size;
-  TMROctant *array;
-  nodes->getArray(&array, &size);
+  // Get the node numbers
+  const int *nodes;
+  int num_local_nodes = forest->getNodeNumbers(&nodes);
 
   // Get the points
   TMRPoint *Xp;
@@ -523,26 +477,19 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
   X->getArray(&Xn);
 
   // Loop over all the nodes
-  for ( int i = 0; i < size; i++ ){
-    if (array[i].tag >= range[mpi_rank] &&
-        array[i].tag < range[mpi_rank+1]){
-      int loc = array[i].tag - range[mpi_rank];
-      Xn[3*loc] = Xp[i].x*scale;
-      Xn[3*loc+1] = Xp[i].y*scale;
-      Xn[3*loc+2] = Xp[i].z*scale;
-
-      for ( int k = 1; k < array[i].level; k++ ){
-        loc++;
-        Xn[3*loc] = Xp[i].x*scale;
-        Xn[3*loc+1] = Xp[i].y*scale;
-        Xn[3*loc+2] = Xp[i].z*scale;
-      }
+  for ( int i = 0; i < num_local_nodes; i++ ){
+    if (nodes[i] >= range[mpi_rank] && 
+        nodes[i] < range[mpi_rank+1]){
+      int loc = nodes[i] - range[mpi_rank];
+      Xn[3*loc] = scale*Xp[i].x;
+      Xn[3*loc+1] = scale*Xp[i].y;
+      Xn[3*loc+2] = scale*Xp[i].z;
     }
   }
-
+  
+  // Reorder the vector if needed
   tacs->reorderVec(X);
   tacs->setNodes(X);
   X->decref();
-  */
 }
 

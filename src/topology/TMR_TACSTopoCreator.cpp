@@ -29,10 +29,7 @@ TMROctTACSCreator(_bcs){
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Create the nodes within the filter
-  filter->createNodes(2);
-
-  // Create the dependent node connectivity
-  filter->createDepNodeConn();
+  filter->createNodes();
 
   // Get the node range for the filter design variables
   const int *filter_range;
@@ -171,6 +168,7 @@ void TMROctTACSTopoCreator::createConnectivity( int order,
 void TMROctTACSTopoCreator::computeWeights( TMROctant *oct,
                                             TMROctant *node,
                                             TMRIndexWeight *welem ){
+  /*
   // Find the side length of the octant in the filter that contains
   // the element octant
   const int32_t hoct = 1 << (TMR_MAX_LEVEL - oct->level);
@@ -244,6 +242,7 @@ void TMROctTACSTopoCreator::computeWeights( TMROctant *oct,
   // per filter point at most
   nweights = TMRIndexWeight::uniqueSort(weights, nweights);
   memcpy(welem, weights, nweights*sizeof(TMRIndexWeight));
+  */
 }
 
 /*
@@ -253,6 +252,7 @@ void TMROctTACSTopoCreator::createElements( int order,
                                             TMROctForest *forest,
                                             int num_elements,
                                             TACSElement **elements ){
+  /*
   // Get the MPI communicator
   int mpi_rank, mpi_size;
   MPI_Comm comm = forest->getMPIComm();
@@ -414,7 +414,7 @@ void TMROctTACSTopoCreator::createElements( int order,
   const double *dep_weights;
   int num_dep_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
                                              &dep_weights);
-
+  
   // Get the external numbers from the filter itself
   int *filter_ext;
   int num_filter_ext = filter->getExtNodeNums(&filter_ext);
@@ -504,6 +504,7 @@ void TMROctTACSTopoCreator::createElements( int order,
   }
 
   delete [] weights;
+  */
 }
 
 /*

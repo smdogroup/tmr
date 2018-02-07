@@ -97,34 +97,22 @@ class TMROctForest : public TMREntity {
   // Get the nodes or elements with certain attributes
   // -------------------------------------------------
   TMROctantArray* getOctsWithAttribute( const char *attr );
-  TMROctantArray* getNodesWithAttribute( const char *attr );
+  int getNodesWithAttribute( const char *attr, int **_nodes );
   
   // Get the mesh order
   // ------------------
-  int getMeshOrder(){ return mesh_order; }
+  int getMeshOrder();
 
   // Get the node-processor ownership range
   // --------------------------------------
-  int getOwnedNodeRange( const int **_node_range ){
-    if (_node_range){
-      *_node_range = node_range;
-    }
-    return mpi_size;
-  }
+  int getOwnedNodeRange( const int **_node_range );
 
   // Get the octants and the nodes
   // -----------------------------
-  void getOctants( TMROctantArray **_octants ){
-    if (_octants){ *_octants = octants; }
-  }
-  int getNodeNumbers( const int **_node_numbers ){
-    if (_node_numbers){ *_node_numbers = node_numbers; }
-    return num_local_nodes;
-  }
-  int getPoints( TMRPoint **_X ){
-    if (_X){ *_X = X; }
-    return num_local_nodes;
-  }
+  void getOctants( TMROctantArray **_octants );
+  int getNodeNumbers( const int **_node_numbers );
+  int getPoints( TMRPoint **_X );
+  int getLocalNodeNumber( int node );
 
   // Retrieve the connectivity information
   // -------------------------------------
@@ -252,10 +240,8 @@ class TMROctForest : public TMREntity {
 
   // Find the dependent faces and edges in the mesh
   void computeDepFacesAndEdges();
-  int checkAdjacentDepFaces( int face_index, TMROctant *b,
-                             TMROctantArray *adjocts );
-  int checkAdjacentDepEdges( int edge_index, TMROctant *b,
-                             TMROctantArray *adjocts );
+  int checkAdjacentFaces( int face_index, TMROctant *neighbor );
+  int checkAdjacentEdges( int edge_index, TMROctant *neighbor );
 
   // Label the dependent nodes on the locally owned blocks
   void labelDependentNodes( int *nodes );

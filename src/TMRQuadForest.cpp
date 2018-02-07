@@ -3870,7 +3870,7 @@ getNodesWithAttribute()\n");
       node_list = tmp;      
     }
 
-    // Compute the max
+    // Compute the quadrant edge length
     const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
 
     // Check if this node is on a corner, edge or face, and whether it

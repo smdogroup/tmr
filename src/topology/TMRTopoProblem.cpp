@@ -878,6 +878,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   TACSBVec *vec = new TACSBVec(filter_maps[0], 1, filter_dist[0], dep_nodes);
   vec->zeroEntries();
 
+  /*
   // Get the octants
   TMROctantArray *octants;
   oct_filter[0]->getOctants(&octants);
@@ -985,11 +986,13 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
     // Add the values to the vector
     vec->setValues(8, node_nums, a, TACS_ADD_VALUES);
   }
-
+ 
   vec->beginSetValues(TACS_ADD_VALUES);
   vec->endSetValues(TACS_ADD_VALUES);
 
   return vec;
+  */
+  return NULL;
 }
 
 /*

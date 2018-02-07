@@ -108,12 +108,6 @@ class TMROctTACSCreator : public TMREntity {
   TMROctTACSCreator( TMRBoundaryConditions *_bcs );
   virtual ~TMROctTACSCreator();
 
-  // Vritual function to create the connectivity (default is usually fine)
-  virtual void createConnectivity( int order,
-                                   TMROctForest *forest,
-                                   int **_conn, int **_ptr,
-                                   int *_num_elements );
-
   // Create an array of elements for the given forest
   virtual void createElements( int order,
                                TMROctForest *forest,
@@ -131,7 +125,7 @@ class TMROctTACSCreator : public TMREntity {
                              int num_bcs, const int bc_nums[] );
 
   // Create the TACSAssembler object with the given order for this forest
-  TACSAssembler *createTACS( int order, TMROctForest *forest,
+  TACSAssembler *createTACS( TMROctForest *forest,
                              TACSAssembler::OrderingType 
                                ordering=TACSAssembler::NATURAL_ORDER,
                              TacsScalar _scale=1.0 );

@@ -129,11 +129,20 @@ const int connector_conn[] =
 */
 void getLocation( const int *elem_node_conn, 
                   const double *Xpts,
-                  const TMROctant *oct, TacsScalar X[] ){
+                  const TMROctant *oct,
+                  const int order, int index,
+                  TacsScalar X[] ){
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
-  double u = (1.0*oct->x)/hmax;
-  double v = (1.0*oct->y)/hmax;
-  double w = (1.0*oct->z)/hmax;
+  const int32_t h = 1 << (TMR_MAX_LEVEL - oct->level);
+  int ii = index % order;
+  int jj = (index % (order*order))/order;
+  int kk = index/(order*order);
+  double u = (1.0*ii)/(order-1);
+  double v = (1.0*jj)/(order-1);
+  double w = (1.0*kk)/(order-1);
+  u = (oct->x + u*h)/hmax;
+  v = (oct->y + v*h)/hmax;
+  w = (oct->z + w*h)/hmax;
 
   double N[8];
   N[0] = (1.0 - u)*(1.0 - v)*(1.0 - w);
@@ -234,7 +243,7 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
-  const int NUM_LEVELS = 5;
+  const int NUM_LEVELS = 1;
 
   // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
@@ -259,11 +268,12 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the forests
+  int order = 3;
   TMROctForest *forest[NUM_LEVELS];
-  forest[0] = new TMROctForest(comm);
+  forest[0] = new TMROctForest(comm, order);
   
   forest[0]->setConnectivity(npts, conn, nelems);
-  forest[0]->createRandomTrees(50, 0, 10);
+  forest[0]->createRandomTrees(5, 0, 5);
   forest[0]->repartition();
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){
@@ -275,7 +285,7 @@ int main( int argc, char *argv[] ){
 
     // Create the nodes
     double tnodes = MPI_Wtime();
-    forest[level]->createNodes(2);
+    forest[level]->createNodes();
     tnodes = MPI_Wtime() - tnodes;
     printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
   
@@ -290,7 +300,7 @@ int main( int argc, char *argv[] ){
   SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
 
   // Allocate the solid element class
-  TACSElement *solid = new Solid<2>(stiff, LINEAR, mpi_rank);
+  TACSElement *solid = new Solid<3>(stiff, LINEAR, mpi_rank);
   
   // Create the TACSAssembler objects
   TACSAssembler *tacs[NUM_LEVELS];
@@ -302,24 +312,16 @@ int main( int argc, char *argv[] ){
     int num_nodes = range[mpi_rank+1] - range[mpi_rank];
 
     // Create the mesh
-    double tmesh = MPI_Wtime();
-    int *elem_conn, num_elements = 0;
-    forest[level]->createMeshConn(&elem_conn, &num_elements);
-    tmesh = MPI_Wtime() - tmesh;
-    printf("[%d] Mesh: %f\n", mpi_rank, tmesh);
+    const int *elem_conn;
+    int num_elements = 0;
+    forest[level]->getNodeConn(&elem_conn, &num_elements);
 
     // Get the dependent node information
     const int *dep_ptr, *dep_conn;
     const double *dep_weights;
-
-    // Create/retrieve the dependent node information
-    double tdep = MPI_Wtime();
-    forest[level]->createDepNodeConn();
     int num_dep_nodes = 
       forest[level]->getDepNodeConn(&dep_ptr, &dep_conn,
                                     &dep_weights);
-    tdep = MPI_Wtime() - tdep;
-    printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
 
     // Create the associated TACSAssembler object
     int vars_per_node = 3;
@@ -329,14 +331,14 @@ int main( int argc, char *argv[] ){
     tacs[level]->incref();
 
     // Set the element ptr
-    int *ptr = new int[ 8*num_elements ];
+    int order = forest[level]->getMeshOrder();
+    int *ptr = new int[ order*order*order*num_elements ];
     for ( int i = 0; i < num_elements+1; i++ ){
-      ptr[i] = 8*i;
+      ptr[i] = order*order*order*i;
     }
     
     // Set the element connectivity into TACSAssembler
     tacs[level]->setElementConnectivity(elem_conn, ptr);
-    delete [] elem_conn;
     delete [] ptr;
     
     // Set the dependent node information
@@ -353,23 +355,28 @@ int main( int argc, char *argv[] ){
     tacs[level]->setElements(elems);
     delete [] elems;
 
-    // Get the nodes
-    TMROctantArray *nodes;
-    forest[level]->getNodes(&nodes);
+    // Get the octant locations
+    TMROctantArray *octants;
+    forest[level]->getOctants(&octants);
     
     // Get the octants associated with the nodes
-    int size;
-    TMROctant *array;
-    nodes->getArray(&array, &size);
+    int oct_size;
+    TMROctant *octs;
+    octants->getArray(&octs, &oct_size);
 
-    // Loop over all the nodes
-    for ( int i = 0; i < size; i++ ){
-      // Evaluate the point
-      TacsScalar Xpoint[3];
-      getLocation(conn, Xpts, &array[i], Xpoint);
+    // Loop over all the elements and retrieve the nodes
+    for ( int i = 0; i < oct_size; i++ ){
+      const int *c = &elem_conn[order*order*order*i];
+      for ( int j = 0; j < order*order*order; j++ ){
+        // Evaluate the point
+        TacsScalar Xpoint[3];
+        getLocation(conn, Xpts, &octs[i], order, j, Xpoint);
 
-      if (Xpoint[2] < 1e-12){
-        tacs[level]->addBCs(1, &array[i].tag);
+        if (Xpoint[2] < 1e-12){
+          if (c[j] >= 0){
+            tacs[level]->addBCs(1, &c[j]);
+          }
+        }
       }
     }
 
@@ -386,22 +393,16 @@ int main( int argc, char *argv[] ){
     forest[level]->getPoints(&Xp);
 
     // Loop over all the nodes
-    for ( int i = 0; i < size; i++ ){
-      // Evaluate the point
-      TacsScalar Xpoint[3];
-      getLocation(conn, Xpts, &array[i], Xpoint);
+    for ( int i = 0; i < oct_size; i++ ){
+      const int *c = &elem_conn[order*order*order*i];
+      for ( int j = 0; j < order*order*order; j++ ){
+        if (c[j] >= range[mpi_rank] &&
+            c[j] < range[mpi_rank+1]){
+          int index = c[j] - range[mpi_rank];
 
-      // Set the point
-      Xp[i].x = Xpoint[0];
-      Xp[i].y = Xpoint[1];
-      Xp[i].z = Xpoint[2];
-
-      if (array[i].tag >= range[mpi_rank] &&
-          array[i].tag < range[mpi_rank+1]){
-        int loc = array[i].tag - range[mpi_rank];
-        Xn[3*loc] = Xpoint[0];
-        Xn[3*loc+1] = Xpoint[1];
-        Xn[3*loc+2] = Xpoint[2];
+          // Evaluate the point
+          getLocation(conn, Xpts, &octs[i], order, j, &Xn[3*index]);
+        }
       }
     }
     
@@ -409,6 +410,7 @@ int main( int argc, char *argv[] ){
     tacs[level]->setNodes(X);
   }
 
+  /*
   // Create the interpolation
   TACSBVecInterp *interp[NUM_LEVELS-1];
 
@@ -470,7 +472,7 @@ int main( int argc, char *argv[] ){
   gmres->solve(force, ans);
   ans->scale(-1.0);
   tacs[0]->setVariables(ans);
-
+  */
   // Create and write out an fh5 file
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_DISPLACEMENTS |
