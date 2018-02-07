@@ -266,11 +266,19 @@ class TMROctForest : public TMREntity {
   // Create the local connectivity based on the input node array
   void createLocalConn( TMROctantArray *nodes, const int *node_offset );
 
+  // Get the local node numbers associated with an edge/face
+  void getEdgeNodes( TMROctant *oct, int edge_index, 
+                     TMROctantArray *nodes, const int *node_offset,
+                     int *edge_nodes );
+  void getFaceNodes( TMROctant *oct, int face_index,
+                     TMROctantArray *nodes, const int *node_offset,
+                     int *face_nodes );
+
   // Create the dependent node connectivity
   void createDependentConn( const int *node_nums,
                             TMROctantArray *nodes, 
                             const int *node_offset );
-
+  
   // Compute the node locations
   void evaluateNodeLocations();
 
