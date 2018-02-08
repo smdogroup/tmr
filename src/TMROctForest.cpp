@@ -3684,8 +3684,7 @@ void TMROctForest::labelDependentNodes( int *nodes ){
 */
 void TMROctForest::transformNode( TMROctant *oct, 
                                   int *edge_reversed,
-                                  int *src_face_id, 
-                                  int *dest_face_id ){
+                                  int *src_face_id ){
   // Get the maximum octant length
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
@@ -3703,9 +3702,6 @@ void TMROctForest::transformNode( TMROctant *oct,
   }
   if (src_face_id){
     *src_face_id = 0;
-  }
-  if (dest_face_id){
-    *dest_face_id = 0;
   }
 
   if (fx || fy || fz){
@@ -3806,7 +3802,8 @@ void TMROctForest::transformNode( TMROctant *oct,
 
       // Get the face owner
       if (block != face_block_owners[face]){
-        // Get source face id number
+        // Get source face id number. Note that this is the transformation
+        // from the source face to its owner
         int face_id = block_face_ids[6*block + face_index];
         if (src_face_id){
           *src_face_id = face_id;
@@ -3824,32 +3821,27 @@ void TMROctForest::transformNode( TMROctant *oct,
           get_face_node_coords(face_id, hmax, oct->x, oct->y, &u, &v);
         }
         
-        // Loop over the blocks adjacent to this face to find the
-        // block owner and its orientation
+        // Now find the owner block 
         int ptr = face_block_ptr[face];
         int adj = face_block_conn[ptr]/6;
         int adj_index = face_block_conn[ptr] % 6;
-
-        // Get the face_id corresponding to the orientation of this
-        // adjacent face
-        face_id = block_face_ids[6*adj + adj_index];
-        if (dest_face_id){
-          *dest_face_id = face_id;
-        }
           
         // Transform the octant p to the local octant coordinates
         oct->block = adj;
         if (adj_index < 2){
           oct->x = hmax*(adj_index % 2);
-          set_face_node_coords(face_id, hmax, u, v, &oct->y, &oct->z);
+          oct->y = u;
+          oct->z = v;
         }
         else if (adj_index < 4){
+          oct->x = u;
           oct->y = hmax*(adj_index % 2);
-          set_face_node_coords(face_id, hmax, u, v, &oct->x, &oct->z);
+          oct->z = v;
         }
         else {
+          oct->x = u;
+          oct->y = v;
           oct->z = hmax*(adj_index % 2);
-          set_face_node_coords(face_id, hmax, u, v, &oct->x, &oct->y);
         }
       }
     }
@@ -4650,8 +4642,8 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
           node.z = octs[i].z + 2*h*(face_index % 2);
         }
         // Transform the node and check the source/destination ids
-        int src_id, dest_id;
-        transformNode(&node, NULL, &src_id, &dest_id);
+        int face_id;
+        transformNode(&node, NULL, &face_id);
         TMROctant *t = nodes->contains(&node);
         int index = t - node_array;
   
@@ -4660,8 +4652,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
           for ( int32_t kk = 1; kk < mesh_order-1; kk++ ){
             for ( int32_t jj = 1; jj < mesh_order-1; jj++ ){
               int32_t u, v;
-              get_face_node_coords(src_id, mesh_order-1, jj, kk, &u, &v);
-              set_face_node_coords(dest_id, mesh_order-1, u, v, &u, &v);
+              get_face_node_coords(face_id, mesh_order-1, jj, kk, &u, &v);
               int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
               c[offset] = node_offset[index] + (u-1) + (v-1)*(mesh_order-2);
             }
@@ -4672,8 +4663,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
           for ( int32_t kk = 1; kk < mesh_order-1; kk++ ){
             for ( int32_t ii = 1; ii < mesh_order-1; ii++ ){
               int32_t u, v;
-              get_face_node_coords(src_id, mesh_order-1, ii, kk, &u, &v);
-              set_face_node_coords(dest_id, mesh_order-1, u, v, &u, &v);
+              get_face_node_coords(face_id, mesh_order-1, ii, kk, &u, &v);
               int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
               c[offset] = node_offset[index] + (u-1) + (v-1)*(mesh_order-2);
             }
@@ -4684,8 +4674,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
           for ( int32_t jj = 1; jj < mesh_order-1; jj++ ){
             for ( int32_t ii = 1; ii < mesh_order-1; ii++ ){
               int32_t u, v;
-              get_face_node_coords(src_id, mesh_order-1, ii, jj, &u, &v);
-              set_face_node_coords(dest_id, mesh_order-1, u, v, &u, &v);
+              get_face_node_coords(face_id, mesh_order-1, ii, jj, &u, &v);
               int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
               c[offset] = node_offset[index] + (u-1) + (v-1)*(mesh_order-2);
             }
@@ -4930,8 +4919,8 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
         }
 
         // Transform the node and check the source/destination ids
-        int edge_reversed, src_id, dest_id;
-        transformNode(&node, &edge_reversed, &src_id, &dest_id);
+        int edge_reversed, face_id;
+        transformNode(&node, &edge_reversed, &face_id);
         TMROctant *t = nodes->contains(&node);
         int index = t - node_array;
 
@@ -4970,8 +4959,7 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
             for ( int32_t k = 1; k < mesh_order-1; k++ ){
               for ( int32_t j = 1; j < mesh_order-1; j++ ){
                 int32_t u, v;
-                get_face_node_coords(src_id, mesh_order-1, j, k, &u, &v);
-                set_face_node_coords(dest_id, mesh_order-1, u, v, &u, &v);
+                get_face_node_coords(face_id, mesh_order-1, j, k, &u, &v);
                 face_nodes[j + k*mesh_order] = 
                   node_offset[index] + (u-1) + (v-1)*(mesh_order-2);
               }
@@ -4981,8 +4969,7 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
             for ( int32_t k = 1; k < mesh_order-1; k++ ){
               for ( int32_t i = 1; i < mesh_order-1; i++ ){
                 int32_t u, v;
-                get_face_node_coords(src_id, mesh_order-1, i, k, &u, &v);
-                set_face_node_coords(dest_id, mesh_order-1, u, v, &u, &v);
+                get_face_node_coords(face_id, mesh_order-1, i, k, &u, &v);
                 face_nodes[i + k*mesh_order] = 
                   node_offset[index] + (u-1) + (v-1)*(mesh_order-2);
               }
@@ -4992,8 +4979,7 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
             for ( int32_t j = 1; j < mesh_order-1; j++ ){
               for ( int32_t i = 1; i < mesh_order-1; i++ ){
                 int32_t u, v;
-                get_face_node_coords(src_id, mesh_order-1, i, j, &u, &v);
-                set_face_node_coords(dest_id, mesh_order-1, u, v, &u, &v);
+                get_face_node_coords(face_id, mesh_order-1, i, j, &u, &v);
                 face_nodes[i + j*mesh_order] =
                   node_offset[index] + (u-1) + (v-1)*(mesh_order-2);
               }
@@ -5205,15 +5191,6 @@ void TMROctForest::createDependentConn( const int *node_nums,
               
               int len = dep_ptr[index+1] - dep_ptr[index];
               if (len == mesh_order){
-
-                // Check whether these depend on dependents
-                for ( int j = 0; j < mesh_order; j++ ){
-                  if (node_nums[edge_nodes[j]] < 0){
-                    printf("edge %d index %d depends on dependents id: %d\n", index, j,
-                           octs[i].childId());
-                  }
-                }
-
                 // Compute the offsets to add (if any)
                 int x = id % 2;
                 int y = ((id % 4)/2);
@@ -5292,14 +5269,6 @@ void TMROctForest::createDependentConn( const int *node_nums,
       
                 int len = dep_ptr[index+1] - dep_ptr[index];
                 if (len == mesh_order*mesh_order){
-
-                  // Check whether these depend on dependents
-                  for ( int j = 0; j < mesh_order*mesh_order; j++ ){
-                    if (node_nums[face_nodes[j]] < 0){
-                      printf("face %d index %d depends on dependents\n", index, j);
-                    }
-                  }
-
                   // Compute the distance along the edges
                   double u = 0.5*interp_knots[ii];
                   double v = 0.5*interp_knots[jj];
