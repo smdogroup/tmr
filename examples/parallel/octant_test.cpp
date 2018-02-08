@@ -6,6 +6,39 @@
 #include "TMR_STLTools.h"
 
 /*
+  Bottom
+  3---4---5
+  |   |   |
+  0---1---2
+
+  Top
+  9--10--11
+  |   |   |
+  6---7---8
+*/
+
+const int rectangle_npts = 12;
+const int rectangle_nelems = 2;
+
+const double rectangle_xpts[] =
+  {0.0, 0.0, 0.0,
+   1.0, 0.0, 0.0,
+   2.0, 0.0, 0.0,
+   0.0, 1.0, 0.0,
+   1.0, 1.0, 0.0,
+   2.0, 1.0, 0.0,
+   0.0, 0.0, 1.0,
+   1.0, 0.0, 1.0,
+   2.0, 0.0, 1.0,
+   0.0, 1.0, 1.0,
+   1.0, 1.0, 1.0,
+   2.0, 1.0, 1.0};
+
+const int rectangle_conn[] =
+  {0, 1, 3, 4, 6, 7, 9, 10,
+   8, 11, 7, 10, 2, 5, 1, 4};
+
+/*
   The box problem
 
   Bottom surface      Top surface
@@ -265,6 +298,12 @@ int main( int argc, char *argv[] ){
       Xpts = connector_xpts;
       conn = connector_conn;
     }
+    else if (strcmp(argv[k], "rectangle") == 0){
+      npts = rectangle_npts;
+      nelems = rectangle_nelems;
+      Xpts = rectangle_xpts;
+      conn = rectangle_conn;
+    }
   }
 
   // Create the forests
@@ -274,7 +313,7 @@ int main( int argc, char *argv[] ){
   
   forest[0]->setConnectivity(npts, conn, nelems);
   // forest[0]->createRandomTrees(5, 0, 5);
-  forest[0]->createTrees(3);
+  forest[0]->createTrees(1);
   forest[0]->repartition();
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){

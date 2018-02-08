@@ -7,35 +7,66 @@
 /*
   Map from a block edge number to the local node numbers
 */
-const int block_to_edge_nodes[][2] = {{0,1}, {2,3}, {4,5}, {6,7}, 
-                                      {0,2}, {1,3}, {4,6}, {5,7}, 
-                                      {0,4}, {1,5}, {2,6}, {3,7}};
+const int block_to_edge_nodes[][2] =
+  {{0,1}, {2,3}, {4,5}, {6,7}, 
+   {0,2}, {1,3}, {4,6}, {5,7}, 
+   {0,4}, {1,5}, {2,6}, {3,7}};
 
 /*
   Map from the face number to the block number
 */
-const int block_to_face_nodes[][4] = {{0,2,4,6}, {1,3,5,7},
-                                      {0,1,4,5}, {2,3,6,7},
-                                      {0,1,2,3}, {4,5,6,7}};
+const int block_to_face_nodes[][4] =
+  {{0,2,4,6}, {1,3,5,7},
+   {0,1,4,5}, {2,3,6,7},
+   {0,1,2,3}, {4,5,6,7}};
 
 /*
   Map from the face to the edge indices
 */
-const int face_to_edge_index[][4] = {{4,6,8,10}, {5,7,9,11},
-                                     {0,2,8,9}, {1,3,10,11},
-                                     {0,1,4,5}, {2,3,6,7}};
+const int face_to_edge_index[][4] =
+  {{4,6,8,10}, {5,7,9,11},
+   {0,2,8,9}, {1,3,10,11},
+   {0,1,4,5}, {2,3,6,7}};
 
 /*
-  All possible orientations for two connecting faces
+  Given the octant child identifier, what are the adjacent faces?
 */
-const int face_orientations[][4] = {{0,1,2,3},
-                                    {2,0,3,1},
-                                    {3,2,1,0},
-                                    {1,3,0,2},
-                                    {0,2,1,3},
-                                    {2,3,0,1},
-                                    {3,1,2,0},
-                                    {1,0,3,2}};
+const int child_id_to_face_index[][3] = 
+  {{0, 2, 4}, 
+   {1, 2, 4},
+   {0, 3, 4},
+   {1, 3, 4},
+   {0, 2, 5},
+   {1, 2, 5},
+   {0, 3, 5},
+   {1, 3, 5}};
+
+/*
+  Given the octant child identifier, what are the adjacent edges?
+*/
+const int child_id_to_edge_index[][3] = 
+  {{0, 4, 8},
+   {0, 5, 9},
+   {1, 4, 10},
+   {1, 5, 11},
+   {2, 6, 8},
+   {2, 7, 9},
+   {3, 6, 10},
+   {3, 7, 11}};                         
+
+/*
+  All possible orientations for two connecting faces. These are
+  consistent with the get_face/set_face code below.
+*/
+const int face_orientations[][4] =
+  {{0,1,2,3},
+   {2,0,3,1},
+   {3,2,1,0},
+   {1,3,0,2},
+   {0,2,1,3},
+   {2,3,0,1},
+   {3,1,2,0},
+   {1,0,3,2}};
 
 /*
   Given the x/y locations on the face with orientation face_id,
@@ -207,26 +238,6 @@ inline void set_face_node_coords( const int face_id,
   }
 }
 
-const int child_id_to_face[][3] = 
-  {{0, 2, 4}, 
-   {1, 2, 4},
-   {0, 3, 4},
-   {1, 3, 4},
-   {0, 2, 5},
-   {1, 2, 5},
-   {0, 3, 5},
-   {1, 3, 5}};
-
-const int child_id_to_edge[][3] = 
-  {{0, 4, 8},
-   {0, 5, 9},
-   {1, 4, 10},
-   {1, 5, 11},
-   {2, 6, 8},
-   {2, 7, 9},
-   {3, 6, 10},
-   {3, 7, 11}};                         
-
 /*
   Convert from the face/edge infor arguments to a local info argument,
   indicating the dependent edges/faces on the given octant.
@@ -242,14 +253,14 @@ inline int encode_index_to_info( TMROctant *oct,
   int info = 0;
   if (face_info){
     for ( int k = 0; k < 3; k++ ){
-      if (face_info & 1 << child_id_to_face[id][k]){
+      if (face_info & 1 << child_id_to_face_index[id][k]){
         info |= 1 << k;
       }
     }
   }
   if (edge_info){
     for ( int k = 0; k < 3; k++ ){
-      if (edge_info & 1 << child_id_to_edge[id][k]){
+      if (edge_info & 1 << child_id_to_edge_index[id][k]){
         info |= 1 << (k + 3);
       }
     }
@@ -274,7 +285,7 @@ inline void decode_index_from_info( TMROctant *oct,
     *face_info = 0;
     for ( int k = 0; k < 3; k++ ){
       if (info & 1 << k){
-        *face_info |= 1 << child_id_to_face[id][k];
+        *face_info |= 1 << child_id_to_face_index[id][k];
       }
     }
   }
@@ -282,7 +293,7 @@ inline void decode_index_from_info( TMROctant *oct,
     *edge_info = 0;
     for ( int k = 0; k < 3; k++ ){
       if (info & 1 << (k + 3)){
-        *edge_info |= 1 << child_id_to_edge[id][k];
+        *edge_info |= 1 << child_id_to_edge_index[id][k];
       }
     }
   }
@@ -2314,7 +2325,7 @@ void TMROctForest::addFaceNeighbors( int face_index,
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   const int32_t h = 1 << (TMR_MAX_LEVEL - p.level);
 
-  // Get the u/v coordinates of this face
+  // Get the u/v coordinates of this face on the owner
   int32_t u, v;
   if (face_index < 2){ // x-face
     get_face_oct_coords(face_id, 2*h, p.y, p.z, &u, &v);
@@ -2342,6 +2353,8 @@ void TMROctForest::addFaceNeighbors( int face_index,
       neighbor.block = adjacent;
       neighbor.level = p.level;
       neighbor.info = 0;
+
+      // Set the coordinates from the owner to the destination face
       if (adj_index < 2){
         neighbor.x = (hmax - 2*h)*(adj_index % 2);
         set_face_oct_coords(face_id, 2*h, u, v, 
@@ -3482,7 +3495,7 @@ void TMROctForest::computeDepFacesAndEdges(){
     // Check for the face neighbors of the parent
     for ( int k = 0; k < 3; k++ ){
       // Get the possible adjacent faces
-      int face_index = child_id_to_face[id][k];
+      int face_index = child_id_to_face_index[id][k];
 
       // Get the adjacent face octant
       TMROctant neighbor;
@@ -3505,7 +3518,7 @@ void TMROctForest::computeDepFacesAndEdges(){
     // Now check for the dependent edges
     for ( int k = 0; k < 3; k++ ){
       // Get the possible adjacent edge
-      int edge_index = child_id_to_edge[id][k];
+      int edge_index = child_id_to_edge_index[id][k];
 
       // Get the adjacent edge octant
       TMROctant neighbor;
@@ -3679,10 +3692,17 @@ void TMROctForest::labelDependentNodes( int *nodes ){
   This transforms the given octant to the coordinate system of the
   lowest octant touching this node if it is on an octree boundary.
 
+  input (optional):
+  edge_dir:    -1 (for no direction) 0, 1, 2 for x,y,z
+  
   input/output:
   oct:  the octant representing a node in the local coordinate system
+
+  output:
+  
 */
-void TMROctForest::transformNode( TMROctant *oct, 
+void TMROctForest::transformNode( TMROctant *oct,
+                                  int edge_dir,
                                   int *edge_reversed,
                                   int *src_face_id ){
   // Get the maximum octant length
@@ -3766,7 +3786,7 @@ void TMROctForest::transformNode( TMROctant *oct,
         if (edge_reversed){
           *edge_reversed = reverse;
         }
-            
+
         // Set the u-coordinate along the edge
         int32_t uoct = u;
         if (reverse){
@@ -3820,6 +3840,27 @@ void TMROctForest::transformNode( TMROctant *oct,
         else { // z-face
           get_face_node_coords(face_id, hmax, oct->x, oct->y, &u, &v);
         }
+
+        // Compute the edge_reversed flag (if appropriate)
+        if (edge_reversed){
+          int32_t x = 0, y = 0, z = 0;
+          if (edge_dir == 0){ x = 1; }
+          if (edge_dir == 1){ y = 1; }
+          if (edge_dir == 2){ z = 1; }
+          if (face_index < 2){ // x-face
+            get_face_node_coords(face_id, 0, y, z, &y, &z);
+          }
+          else if (face_index < 4){ // y-face
+            get_face_node_coords(face_id, 0, x, z, &x, &z);
+          }
+          else { // z-face
+            get_face_node_coords(face_id, 0, x, y, &x, &y);
+          }
+          if (x < 0 || y < 0 || z < 0){
+            *edge_reversed = 1;
+          }
+        }
+        
         
         // Now find the owner block 
         int ptr = face_block_ptr[face];
@@ -4576,12 +4617,13 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
           node.z = octs[i].z + h;
         }
 
-        int edge_reversed = 0;
-        transformNode(&node, &edge_reversed);
+        int face_id;
+        int edge_dir = edge_index/4;
+        int edge_reversed = 0; // Is the edge reversed or not?
+        transformNode(&node, edge_dir, &edge_reversed, &face_id);
         TMROctant *t = nodes->contains(&node);
         int index = t - node_array;
 
-        // The owner edge is reversed relative to this edge
         if (edge_index < 4){
           const int jj = (mesh_order-1)*(edge_index % 2);
           const int kk = (mesh_order-1)*(edge_index / 2);
@@ -4647,7 +4689,8 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
 
         // Transform the node and check the source/destination ids
         int face_id;
-        transformNode(&node, NULL, &face_id);
+        int edge_dir = -1; // The edge info doesn't matter
+        transformNode(&node, edge_dir, NULL, &face_id);
         TMROctant *t = nodes->contains(&node);
         int index = t - node_array;
         
@@ -4800,12 +4843,13 @@ void TMROctForest::getEdgeNodes( TMROctant *oct, int edge_index,
         edge_nodes[(ii/2)*(mesh_order-1)] = node_offset[index];
       }
       else {
-        int reversed = 0;
+        int edge_dir = edge_index/4;
+        int edge_reversed = 0;
         node.info = edge_label;
-        transformNode(&node, &reversed);
+        transformNode(&node, edge_dir, &edge_reversed);
         TMROctant *t = nodes->contains(&node);
         int index = t - node_array;
-        if (reversed){
+        if (edge_reversed){
           for ( int k = 1; k < mesh_order-1; k++ ){
             edge_nodes[k] = node_offset[index] + mesh_order-2-k;
           }
@@ -4925,7 +4969,7 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
 
         // Transform the node and check the source/destination ids
         int edge_reversed, face_id;
-        transformNode(&node, &edge_reversed, &face_id);
+        transformNode(&node, -1, &edge_reversed, &face_id);
         TMROctant *t = nodes->contains(&node);
         int index = t - node_array;
 

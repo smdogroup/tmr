@@ -135,7 +135,8 @@ class TMROctForest : public TMREntity {
 
   // Transform the octant to the global order
   // ----------------------------------------
-  void transformNode( TMROctant *oct, int *edge_reversed=NULL,
+  void transformNode( TMROctant *oct, int edge_dir=-1,
+                      int *edge_reversed=NULL,
                       int *src_face_id=NULL );
 
   // Distribute the octant array in parallel to other processors
