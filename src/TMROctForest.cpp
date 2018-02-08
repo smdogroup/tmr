@@ -4537,6 +4537,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
         for ( int ii = 0; ii < 2; ii++ ){
           TMROctant node;
           node.block = octs[i].block;
+          node.level = 0;
           node.info = node_label;
           node.x = octs[i].x + 2*h*ii;
           node.y = octs[i].y + 2*h*jj;
@@ -4557,6 +4558,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
       for ( int edge_index = 0; edge_index < 12; edge_index++ ){
         TMROctant node;
         node.block = octs[i].block;
+        node.level = 0;
         node.info = edge_label;
         if (edge_index < 4){
           node.x = octs[i].x + h;
@@ -4625,6 +4627,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
       for ( int face_index = 0; face_index < 6; face_index++ ){
         TMROctant node;
         node.block = octs[i].block;
+        node.level = 0;
         node.info = face_label;
         if (face_index < 2){
           node.x = octs[i].x + 2*h*(face_index % 2);
@@ -4641,6 +4644,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
           node.y = octs[i].y + h;
           node.z = octs[i].z + 2*h*(face_index % 2);
         }
+
         // Transform the node and check the source/destination ids
         int face_id;
         transformNode(&node, NULL, &face_id);
@@ -4648,9 +4652,9 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
         int index = t - node_array;
         
         if (face_index < 2){
-          const int32_t ii = (mesh_order-1)*(face_index % 2);
-          for ( int32_t kk = 1; kk < mesh_order-1; kk++ ){
-            for ( int32_t jj = 1; jj < mesh_order-1; jj++ ){
+          const int ii = (mesh_order-1)*(face_index % 2);
+          for ( int kk = 1; kk < mesh_order-1; kk++ ){
+            for ( int jj = 1; jj < mesh_order-1; jj++ ){
               int32_t u, v;
               get_face_node_coords(face_id, mesh_order-1, jj, kk, &u, &v);
               int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
@@ -4659,9 +4663,9 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
           }
         }
         else if (face_index < 4){
-          const int32_t jj = (mesh_order-1)*(face_index % 2);
-          for ( int32_t kk = 1; kk < mesh_order-1; kk++ ){
-            for ( int32_t ii = 1; ii < mesh_order-1; ii++ ){
+          const int jj = (mesh_order-1)*(face_index % 2);
+          for ( int kk = 1; kk < mesh_order-1; kk++ ){
+            for ( int ii = 1; ii < mesh_order-1; ii++ ){
               int32_t u, v;
               get_face_node_coords(face_id, mesh_order-1, ii, kk, &u, &v);
               int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
@@ -4670,9 +4674,9 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
           }
         }
         else {
-          const int32_t kk = (mesh_order-1)*(face_index % 2);
-          for ( int32_t jj = 1; jj < mesh_order-1; jj++ ){
-            for ( int32_t ii = 1; ii < mesh_order-1; ii++ ){
+          const int kk = (mesh_order-1)*(face_index % 2);
+          for ( int jj = 1; jj < mesh_order-1; jj++ ){
+            for ( int ii = 1; ii < mesh_order-1; ii++ ){
               int32_t u, v;
               get_face_node_coords(face_id, mesh_order-1, ii, jj, &u, &v);
               int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
@@ -4685,6 +4689,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
       // Order the final block node
       TMROctant node;
       node.block = octs[i].block;
+      node.level = 0;
       node.x = octs[i].x + h;
       node.y = octs[i].y + h;
       node.z = octs[i].z + h;
@@ -5362,12 +5367,9 @@ void TMROctForest::evaluateNodeLocations(){
           for ( int ii = 0; ii < mesh_order; ii++ ){
             // Compute the mesh index
             int node = c[ii + jj*mesh_order + kk*mesh_order*mesh_order];
-            int *item = (int*)bsearch(&node, node_numbers,
-                                      num_local_nodes, 
-                                      sizeof(int), compare_integers);
-            if (item){
-              int index = item - node_numbers;
-              if (index >= num_dep_nodes && !flags[index]){
+            if (node >= 0){
+              int index = getLocalNodeNumber(node);
+              if (!flags[index]){
                 flags[index] = 1;
                 vol->evalPoint(u + d*interp_knots[ii], 
                                v + d*interp_knots[jj], 

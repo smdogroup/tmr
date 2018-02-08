@@ -31,6 +31,7 @@ void TMROctant::getSibling( int id, TMROctant *sib ){
 
   sib->block = block;
   sib->level = level;
+  sib->info = 0;
   sib->x = ((id & 1) ? xr+h : xr);
   sib->y = ((id & 2) ? yr+h : yr);
   sib->z = ((id & 4) ? zr+h : zr);
@@ -43,6 +44,7 @@ void TMROctant::parent( TMROctant *p ){
   if (level > 0){
     p->block = block;
     p->level = level-1;
+    p->info = 0;
     const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
     p->x = x & ~h;
@@ -52,6 +54,7 @@ void TMROctant::parent( TMROctant *p ){
   else {
     p->block = block;
     p->level = 0;
+    p->info = 0;
     p->x = x;
     p->y = y;
     p->z = z;
@@ -65,6 +68,7 @@ void TMROctant::faceNeighbor( int face, TMROctant *neighbor ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->block = block;
   neighbor->level = level;
+  neighbor->info = 0;
 
   neighbor->x = x + ((face == 0) ? -h : (face == 1) ? h : 0);
   neighbor->y = y + ((face == 2) ? -h : (face == 3) ? h : 0);
@@ -78,6 +82,7 @@ void TMROctant::edgeNeighbor( int edge, TMROctant *neighbor ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->block = block;
   neighbor->level = level;
+  neighbor->info = 0;
   
   if (edge < 4){
     // Edges parallel to the x-direction
@@ -141,6 +146,7 @@ void TMROctant::cornerNeighbor( int corner, TMROctant *neighbor ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->block = block;
   neighbor->level = level;
+  neighbor->info = 0;
 
   neighbor->x = x + (2*(corner & 1) - 1)*h;
   neighbor->y = y + ((corner & 2) - 1)*h;
@@ -725,19 +731,37 @@ int TMROctantHash::addOctant( TMROctant *oct ){
   else {
     // Get the head node for the corresponding bucket
     OctHashNode *node = hash_buckets[bucket];
-    while (node){
-      // The octant is in the list, quit now and return false
-      if (node->oct.compare(oct) == 0){
-	return 0;
+    if (use_node_index){
+      while (node){
+        // The octant is in the list, quit now and return false
+        if (node->oct.compareNode(oct) == 0){
+          return 0;
+        }
+        
+        // If the next node does not exist, quit
+        // while node is the last node in the linked
+        // list
+        if (!node->next){
+          break;
+        }
+        node = node->next;
       }
-      
-      // If the next node does not exist, quit
-      // while node is the last node in the linked
-      // list
-      if (!node->next){
-	break;
+    }
+    else {
+      while (node){
+        // The octant is in the list, quit now and return false
+        if (node->oct.compare(oct) == 0){
+          return 0;
+        }
+        
+        // If the next node does not exist, quit
+        // while node is the last node in the linked
+        // list
+        if (!node->next){
+          break;
+        }
+        node = node->next;
       }
-      node = node->next;
     }
     
     // Add the octant as the last node
