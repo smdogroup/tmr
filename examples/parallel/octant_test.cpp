@@ -268,9 +268,9 @@ int main( int argc, char *argv[] ){
   }
 
   // Create the forests
-  int order = 3;
+  int order = 4;
   TMROctForest *forest[NUM_LEVELS];
-  forest[0] = new TMROctForest(comm, order);
+  forest[0] = new TMROctForest(comm, order, TMR_UNIFORM_POINTS);
   
   forest[0]->setConnectivity(npts, conn, nelems);
   forest[0]->createRandomTrees(5, 0, 5);
@@ -300,7 +300,7 @@ int main( int argc, char *argv[] ){
   SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
 
   // Allocate the solid element class
-  TACSElement *solid = new Solid<3>(stiff, LINEAR, mpi_rank);
+  TACSElement *solid = new Solid<4>(stiff, LINEAR, mpi_rank);
   
   // Create the TACSAssembler objects
   TACSAssembler *tacs[NUM_LEVELS];
