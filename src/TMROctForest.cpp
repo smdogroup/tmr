@@ -4646,7 +4646,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
         transformNode(&node, NULL, &face_id);
         TMROctant *t = nodes->contains(&node);
         int index = t - node_array;
-  
+        
         if (face_index < 2){
           const int32_t ii = (mesh_order-1)*(face_index % 2);
           for ( int32_t kk = 1; kk < mesh_order-1; kk++ ){
