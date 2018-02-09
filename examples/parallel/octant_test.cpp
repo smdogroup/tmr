@@ -312,8 +312,8 @@ int main( int argc, char *argv[] ){
   forest[0] = new TMROctForest(comm, order, TMR_UNIFORM_POINTS);
   
   forest[0]->setConnectivity(npts, conn, nelems);
-  // forest[0]->createRandomTrees(5, 0, 5);
-  forest[0]->createTrees(1);
+  forest[0]->createRandomTrees(5, 0, 5);
+  // forest[0]->createTrees(2);
   forest[0]->repartition();
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){

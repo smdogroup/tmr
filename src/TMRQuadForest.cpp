@@ -2874,7 +2874,12 @@ void TMRQuadForest::createNodes(){
   // elements on this processor.
   TMRQuadrantArray *ext_array = ext_nodes->toArray();
   delete ext_nodes;
-  ext_array->sort();
+  
+    // Sort based on the tags
+  int ext_size;
+  TMRQuadrant *ext_quads;
+  ext_array->getArray(&ext_quads, &ext_size);
+  qsort(ext_quads, ext_size, sizeof(TMRQuadrant), compare_quadrant_tags);
 
   // Distribute the non-local nodes back to their owning processors
   // to determine their node numbers
