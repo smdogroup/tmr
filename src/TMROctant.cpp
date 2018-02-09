@@ -784,52 +784,23 @@ int TMROctantHash::getBucket( TMROctant *oct ){
   uint32_t val = 0;
 
   if (use_node_index){
-    uint32_t u = 0, v = 0, w = 0, x = 0, y = 0;
+    uint32_t u = 0, v = 0, w = 0, x = 0;
     u = oct->block;
-    if (oct->x >= 0){
-      v = oct->x;
-    }
-    else {
-      v = (1 << (TMR_MAX_LEVEL + 1)) - oct->x;
-    }
-    if (oct->y >= 0){
-      w = oct->y;
-    }
-    else {
-      w = (1 << (TMR_MAX_LEVEL + 1)) - oct->y;
-    }
-    if (oct->z >= 0){
-      x = oct->z;
-    }
-    else {
-      x = (1 << (TMR_MAX_LEVEL + 1)) - oct->z;
-    }
-    y = oct->info;
+    v = (1 << TMR_MAX_LEVEL) + oct->x;
+    w = (1 << TMR_MAX_LEVEL) + oct->y;
+    x = (1 << TMR_MAX_LEVEL) + oct->z;
+    // y = oct->info;
     
     // Compute the hash value
-    val = TMRIntegerFiveTupleHash(u, v, w, x, y);
+    // val = TMRIntegerFiveTupleHash(u, v, w, x, y);
+    val = TMRIntegerFourTupleHash(u, v, w, x);
   }
   else {
     uint32_t u = 0, v = 0, w = 0, x = 0;
     u = oct->block;
-    if (oct->x >= 0){
-      v = oct->x;
-    }
-    else {
-      v = (1 << (TMR_MAX_LEVEL + 1)) - oct->x;
-    }
-    if (oct->y >= 0){
-      w = oct->y;
-    }
-    else {
-      w = (1 << (TMR_MAX_LEVEL + 1)) - oct->y;
-    }
-    if (oct->z >= 0){
-      x = oct->z;
-    }
-    else {
-      x = (1 << (TMR_MAX_LEVEL + 1)) - oct->z;
-    }
+    v = (1 << TMR_MAX_LEVEL) + oct->x;
+    w = (1 << TMR_MAX_LEVEL) + oct->y;
+    x = (1 << TMR_MAX_LEVEL) + oct->z;
 
     // Compute the hash value
     val = TMRIntegerFourTupleHash(u, v, w, x);

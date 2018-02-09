@@ -36,7 +36,7 @@ const double rectangle_xpts[] =
 
 const int rectangle_conn[] =
   {0, 1, 3, 4, 6, 7, 9, 10,
-   8, 11, 7, 10, 2, 5, 1, 4};
+   8, 11, 2, 5, 7, 10, 1, 4};
 
 /*
   The box problem
@@ -164,18 +164,16 @@ void getLocation( const int *elem_node_conn,
                   const double *Xpts,
                   const TMROctant *oct,
                   const int order, int index,
+                  const double knots[],
                   TacsScalar X[] ){
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   const int32_t h = 1 << (TMR_MAX_LEVEL - oct->level);
   int ii = index % order;
   int jj = (index % (order*order))/order;
   int kk = index/(order*order);
-  double u = (1.0*ii)/(order-1);
-  double v = (1.0*jj)/(order-1);
-  double w = (1.0*kk)/(order-1);
-  u = (oct->x + u*h)/hmax;
-  v = (oct->y + v*h)/hmax;
-  w = (oct->z + w*h)/hmax;
+  double u = (oct->x + h*knots[ii])/hmax;
+  double v = (oct->y + h*knots[jj])/hmax;
+  double w = (oct->z + h*knots[kk])/hmax;
 
   double N[8];
   N[0] = (1.0 - u)*(1.0 - v)*(1.0 - w);
@@ -306,19 +304,19 @@ int main( int argc, char *argv[] ){
     }
   }
 
+  double knots[4] = {0.0, 0.25, 0.75, 1.0};
+  
   // Create the forests
   int order = 4;
   TMROctForest *forest[NUM_LEVELS];
-  forest[0] = new TMROctForest(comm, order, TMR_UNIFORM_POINTS);
-  
+  forest[0] = new TMROctForest(comm, order, TMR_GAUSS_LOBATTO_POINTS);
   forest[0]->setConnectivity(npts, conn, nelems);
-  forest[0]->createRandomTrees(5, 0, 5);
-  // forest[0]->createTrees(2);
+  forest[0]->createRandomTrees(15, 0, 5);  
   forest[0]->repartition();
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){
     double tbal = MPI_Wtime();
-    forest[level]->balance(1);
+    forest[level]->balance(0);
     tbal = MPI_Wtime() - tbal;
     printf("[%d] Balance: %f\n", mpi_rank, tbal);
     forest[level]->repartition();
@@ -410,7 +408,7 @@ int main( int argc, char *argv[] ){
       for ( int j = 0; j < order*order*order; j++ ){
         // Evaluate the point
         TacsScalar Xpoint[3];
-        getLocation(conn, Xpts, &octs[i], order, j, Xpoint);
+        getLocation(conn, Xpts, &octs[i], order, j, knots, Xpoint);
 
         if (Xpoint[2] < 1e-12){
           if (c[j] >= 0){
@@ -441,7 +439,7 @@ int main( int argc, char *argv[] ){
           int index = c[j] - range[mpi_rank];
 
           // Evaluate the point
-          getLocation(conn, Xpts, &octs[i], order, j, &Xn[3*index]);
+          getLocation(conn, Xpts, &octs[i], order, j, knots, &Xn[3*index]);
         }
       }
     }

@@ -24,10 +24,10 @@ const int block_to_face_nodes[][4] =
   Map from the face to the edge indices
 */
 const int face_to_edge_index[][4] =
-  {{4,6,8,10}, {5,7,9,11},
-   {0,2,8,9}, {1,3,10,11},
-   {0,1,4,5}, {2,3,6,7}};
-
+  {{8,10,4,6}, {9,11,5,7},
+   {8,9,0,2}, {10,11,1,3},
+   {4,5,0,1}, {6,7,2,3}};
+  
 /*
   Given the octant child identifier, what are the adjacent faces?
 */
@@ -3846,8 +3846,8 @@ void TMROctForest::transformNode( TMROctant *oct,
           *edge_reversed = 0;
           int32_t x = 0, y = 0, z = 0;
           if (edge_dir == 0){ x = 1; }
-          if (edge_dir == 1){ y = 1; }
-          if (edge_dir == 2){ z = 1; }
+          else if (edge_dir == 1){ y = 1; }
+          else if (edge_dir == 2){ z = 1; }
           if (face_index < 2){ // x-face
             get_face_node_coords(face_id, 0, y, z, &y, &z);
           }
@@ -3933,10 +3933,7 @@ void TMROctForest::createNodes(){
 
   // Create the local copies of the nodes and determine their
   // ownership (MPI rank that owns them)
-  double t;
-  t = MPI_Wtime();
   TMROctantArray *nodes = createLocalNodes();
-  printf("createLocalNodes():    %15.5f\n", MPI_Wtime() - t);
 
   // Retrieve the size of the node array and count up the offsets for
   // each node. When mesh_order <= 3, the offset array will be equal
@@ -3954,19 +3951,15 @@ void TMROctForest::createNodes(){
     num_local_nodes += node_array[i].level;
   }
 
-  t = MPI_Wtime();
   // Create the connectivity based on the node array
   createLocalConn(nodes, node_offset);
-  printf("createLocalConn():     %15.5f\n", MPI_Wtime() - t);
 
   // Allocate an array that will store the new node numbers
   node_numbers = new int[ num_local_nodes ];
   memset(node_numbers, 0, num_local_nodes*sizeof(int));
 
   // Label any node that is dependent as a negative value
-  t = MPI_Wtime();
   labelDependentNodes(node_numbers);
-  printf("labelDependentNodes(): %15.5f\n", MPI_Wtime() - t);
 
   // Count up and set the dependent node numbers
   num_dep_nodes = 0;
@@ -3978,9 +3971,7 @@ void TMROctForest::createNodes(){
   }
 
   // Create the local connectivyt based on the node array
-  t = MPI_Wtime();
   createDependentConn(node_numbers, nodes, node_offset);
-  printf("createDependentConn(): %15.5f\n", MPI_Wtime() - t);
 
   // Loop over all the nodes, check whether they are local (all
   // dependent nodes are dependent)
@@ -4011,9 +4002,9 @@ void TMROctForest::createNodes(){
     index += node_array[i].level;
   }
 
-  // Now all the external and dependent nodes are labeled, any remaining
-  // nodes that have a non-negative value are independent and must 
-  // be ordered. These are the locally owned nodes.
+  // Now all the external and dependent nodes are labeled, any
+  // remaining nodes that have a non-negative value are independent
+  // and must be ordered. These are the locally owned nodes.
   num_owned_nodes = 0;
   for ( int i = 0; i < num_local_nodes; i++ ){
     if (node_numbers[i] >= 0){
@@ -4041,9 +4032,9 @@ void TMROctForest::createNodes(){
     }
   }
 
-  // Create an array of all the independent nodes that are
-  // owned by other processors and referenced by the
-  // elements on this processor.
+  // Create an array of all the independent nodes that are owned by
+  // other processors and referenced by the elements on this
+  // processor.
   TMROctantArray *ext_array = ext_nodes->toArray();
   delete ext_nodes;
 
@@ -4053,8 +4044,8 @@ void TMROctForest::createNodes(){
   ext_array->getArray(&ext_octs, &ext_size);
   qsort(ext_octs, ext_size, sizeof(TMROctant), compare_octant_tags);
 
-  // Distribute the non-local nodes back to their owning processors
-  // to determine their node numbers
+  // Distribute the non-local nodes back to their owning processors to
+  // determine their node numbers
   int use_tags = 1;
   int *send_ptr, *recv_ptr;
   TMROctantArray *dist_nodes = distributeOctants(ext_array, use_tags,
@@ -4625,9 +4616,8 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
         }
 
         int edge_dir = edge_index/4; // Which coordinate direction?
-        int face_id = 0; // By default use the identity face id
         int edge_reversed = 0; // Is the edge reversed or not?
-        transformNode(&node, edge_dir, &edge_reversed, &face_id);
+        transformNode(&node, edge_dir, &edge_reversed);
         TMROctant *t = nodes->contains(&node);
         int index = t - node_array;
 
@@ -4695,7 +4685,7 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
         }
 
         // Transform the node and check the source/destination ids
-        int face_id;
+        int face_id = 0;
         int edge_dir = -1; // The edge info doesn't matter
         transformNode(&node, edge_dir, NULL, &face_id);
         TMROctant *t = nodes->contains(&node);
@@ -4898,7 +4888,6 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
   TMROctant *node_array;
   nodes->getArray(&node_array, NULL);
   const int32_t h = 1 << (TMR_MAX_LEVEL - oct->level - 1);
-  const int32_t hp = 1 << (TMR_MAX_LEVEL - oct->level);
 
   if (mesh_order == 2){
     for ( int jj = 0; jj < 2; jj++ ){
@@ -4906,19 +4895,19 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
         TMROctant node;
         node.block = oct->block;
         if (face_index < 2){
-          node.x = oct->x + hp*(face_index % 2);
-          node.y = oct->y + ii*hp;
-          node.z = oct->z + jj*hp;
+          node.x = oct->x + 2*h*(face_index % 2);
+          node.y = oct->y + 2*h*ii;
+          node.z = oct->z + 2*h*jj;
         }
         else if (face_index < 4){
-          node.x = oct->x + ii*hp;
-          node.y = oct->y + hp*(face_index % 2);
-          node.z = oct->z + jj*hp;
+          node.x = oct->x + 2*h*ii;
+          node.y = oct->y + 2*h*(face_index % 2);
+          node.z = oct->z + 2*h*jj;
         }
         else {
-          node.x = oct->x + ii*hp;
-          node.y = oct->y + jj*hp;
-          node.z = oct->z + hp*(face_index % 2);
+          node.x = oct->x + 2*h*ii;
+          node.y = oct->y + 2*h*jj;
+          node.z = oct->z + 2*h*(face_index % 2);
         }
         // Set the info 
         node.info = TMR_OCT_NODE_LABEL;
@@ -4938,25 +4927,25 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
       edge_label = TMR_OCT_EDGE_LABEL;
       face_label = TMR_OCT_FACE_LABEL;
     }
-
+    
     for ( int jj = 0; jj < 3; jj++ ){
       for ( int ii = 0; ii < 3; ii++ ){
         TMROctant node;
         node.block = oct->block;
         if (face_index < 2){
-          node.x = oct->x + hp*(face_index % 2);
-          node.y = oct->y + ii*h;
-          node.z = oct->z + jj*h;
+          node.x = oct->x + 2*h*(face_index % 2);
+          node.y = oct->y + h*ii;
+          node.z = oct->z + h*jj;
         }
         else if (face_index < 4){
-          node.x = oct->x + ii*h;
-          node.y = oct->y + hp*(face_index % 2);
-          node.z = oct->z + jj*h;
+          node.x = oct->x + h*ii;
+          node.y = oct->y + 2*h*(face_index % 2);
+          node.z = oct->z + h*jj;
         }
         else {
-          node.x = oct->x + ii*h;
-          node.y = oct->y + jj*h;
-          node.z = oct->z + hp*(face_index % 2);
+          node.x = oct->x + h*ii;
+          node.y = oct->y + h*jj;
+          node.z = oct->z + 2*h*(face_index % 2);
         }
 
         if ((ii == 0 || ii == 2) &&
@@ -4978,8 +4967,11 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
           node.level = mesh_order-2;
 
           // Compute the local edge index on the face
-          int e = ((ii == 0 || ii == 2 ? ii/2 : 0) +
-                   (jj == 0 || jj == 2 ? 2 + jj/2 : 0));
+          int e = 0;
+          if (ii == 0){ e = 0; }
+          else if (ii == 2){ e = 1; }
+          else if (jj == 0){ e = 2; }
+          else if (jj == 2){ e = 3; }
 
           // Compute the edge direction from the edge index 
           int edge_dir = face_to_edge_index[face_index][e]/4;
@@ -5215,10 +5207,6 @@ void TMROctForest::createDependentConn( const int *node_nums,
 
       for ( int edge_index = 0; edge_index < 12; edge_index++ ){
         if (edge_info & 1 << edge_index){
-          // Find the node indices of the parent
-          getEdgeNodes(&parent, edge_index, nodes, node_offset,
-                       edge_nodes);
-
           // Get the edges node numbers from the dependent edge
           if (edge_index < 4){
             const int jj = (mesh_order-1)*(edge_index % 2);
@@ -5244,6 +5232,10 @@ void TMROctForest::createDependentConn( const int *node_nums,
               dep_edge_nodes[kk] = c[offset];
             }
           }
+
+          // Find the node indices of the parent
+          getEdgeNodes(&parent, edge_index, nodes, node_offset,
+                       edge_nodes);
 
           for ( int k = 0; k < mesh_order; k++ ){               
             // If it's a negative number, it's a dependent node
@@ -5288,9 +5280,6 @@ void TMROctForest::createDependentConn( const int *node_nums,
 
       for ( int face_index = 0; face_index < 6; face_index++ ){
         if (face_info & 1 << face_index){
-          getFaceNodes(&parent, face_index, nodes, node_offset,
-                       face_nodes);
-
           // Get the edges node numbers from the dependent edge
           if (face_index < 2){
             const int ii = (mesh_order-1)*(face_index % 2);
@@ -5320,6 +5309,10 @@ void TMROctForest::createDependentConn( const int *node_nums,
             }
           }
 
+          // Get the face nodes associated with the parent face
+          getFaceNodes(&parent, face_index, nodes, node_offset,
+                       face_nodes);
+          
           // Set the node index in the mesh
           for ( int jj = 0; jj < mesh_order; jj++ ){
             for ( int ii = 0; ii < mesh_order; ii++ ){
@@ -5360,7 +5353,7 @@ void TMROctForest::createDependentConn( const int *node_nums,
                   // Evaluate the shape functions
                   lagrange_shape_functions(mesh_order, u, interp_knots, Nu);
                   lagrange_shape_functions(mesh_order, v, interp_knots, Nv);
-
+                  
                   // Add the appropriate offset along the u/v directions
                   int ptr = dep_ptr[index];
                   for ( int j = 0; j < mesh_order*mesh_order; j++ ){
@@ -5445,20 +5438,10 @@ void TMROctForest::evaluateNodeLocations(){
 
       for ( int j = dep_ptr[i]; j < dep_ptr[i+1]; j++ ){
         int node = dep_conn[j];
-        if (node >= node_range[mpi_rank] &&
-            node < node_range[mpi_rank+1]){
-          node = node - node_range[mpi_rank];
-          node += ext_pre_offset;
-        }
-        else {
-          int *item = (int*)bsearch(&node, node_numbers,
-                                    num_local_nodes, 
-                                    sizeof(int), compare_integers);
-          node = item - node_numbers;
-        }
-        X[i].x += dep_weights[j]*X[node].x;
-        X[i].y += dep_weights[j]*X[node].y;
-        X[i].z += dep_weights[j]*X[node].z;
+        int index = getLocalNodeNumber(node);
+        X[i].x += dep_weights[j]*X[index].x;
+        X[i].y += dep_weights[j]*X[index].y;
+        X[i].z += dep_weights[j]*X[index].z;
       }
     }
   }
