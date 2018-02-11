@@ -52,6 +52,13 @@ class TMROctForest : public TMREntity {
                             const int *_block_edge_conn,
                             const int *_block_face_conn );
 
+  // Set/get the interpolation and order
+  // -----------------------------------
+  void setMeshOrder( int mesh_order,
+                     TMRInterpolationType interp_type=
+                       TMR_GAUSS_LOBATTO_POINTS );
+  int getMeshOrder();
+  
   // Re-partition the octrees based on element count
   // -----------------------------------------------
   void repartition();
@@ -98,10 +105,6 @@ class TMROctForest : public TMREntity {
   // -------------------------------------------------
   TMROctantArray* getOctsWithAttribute( const char *attr );
   int getNodesWithAttribute( const char *attr, int **_nodes );
-  
-  // Get the mesh order
-  // ------------------
-  int getMeshOrder();
 
   // Get the node-processor ownership range
   // --------------------------------------
@@ -131,7 +134,8 @@ class TMROctForest : public TMREntity {
 
   // Find the octant enclosing the given node
   // ----------------------------------------
-  TMROctant* findEnclosing( TMROctant *node );
+  TMROctant* findEnclosing( const int order, const double *knots,
+                            TMROctant *node, int *mpi_owner=NULL );
 
   // Transform the octant to the global order
   // ----------------------------------------
@@ -268,6 +272,11 @@ class TMROctForest : public TMREntity {
   
   // Compute the node locations
   void evaluateNodeLocations();
+
+  // Compute the element interpolation
+  int computeElemInterp( TMROctant *node,
+                         TMROctForest *coarse, TMROctant *oct,
+                         TMRIndexWeight *weights, double *tmp );
 
   // The communicator
   MPI_Comm comm;

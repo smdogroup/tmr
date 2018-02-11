@@ -274,7 +274,7 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
-  const int NUM_LEVELS = 1;
+  const int NUM_LEVELS = 3;
 
   // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
@@ -448,7 +448,6 @@ int main( int argc, char *argv[] ){
     tacs[level]->setNodes(X);
   }
 
-  /*
   // Create the interpolation
   TACSBVecInterp *interp[NUM_LEVELS-1];
 
@@ -510,7 +509,7 @@ int main( int argc, char *argv[] ){
   gmres->solve(force, ans);
   ans->scale(-1.0);
   tacs[0]->setVariables(ans);
-  */
+
   // Create and write out an fh5 file
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_DISPLACEMENTS |
