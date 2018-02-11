@@ -305,6 +305,9 @@ int main( int argc, char *argv[] ){
   }
 
   double knots[4] = {0.0, 0.25, 0.75, 1.0};
+
+  // Set the random number generator to a constant
+  srand(0);
   
   // Create the forests
   int order = 4;

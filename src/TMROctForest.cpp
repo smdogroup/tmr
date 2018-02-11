@@ -5108,9 +5108,9 @@ void TMROctForest::createDependentConn( const int *node_nums,
   for ( int i = 0; i < num_elements; i++ ){
     if (octs[i].info){
       // Decode the dependent edge/face information
-      int face_info, edge_info;
+      int edge_info;
       decode_index_from_info(&octs[i], octs[i].info, 
-                             &face_info, &edge_info);
+                             NULL, &edge_info);
 
       const int *c = &conn[mesh_order*mesh_order*mesh_order*i];
 
@@ -5155,6 +5155,17 @@ void TMROctForest::createDependentConn( const int *node_nums,
           }
         }
       }
+    }
+  }
+
+  for ( int i = 0; i < num_elements; i++ ){
+    if (octs[i].info){
+      // Decode the dependent edge/face information
+      int face_info;
+      decode_index_from_info(&octs[i], octs[i].info, 
+                             &face_info, NULL);
+
+      const int *c = &conn[mesh_order*mesh_order*mesh_order*i];
 
       // Next, set the dependent face nodes on this face
       for ( int face_index = 0; face_index < 6; face_index++ ){
@@ -5891,7 +5902,7 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   const int32_t z = node->z;
 
   // Compute the ii/jj/kk locations
-  const int ii = node->info/order;
+  const int ii = node->info % order;
   const int jj = (node->info % (order*order))/order;
   const int kk = node->info/(order*order);
 
@@ -6017,7 +6028,7 @@ int TMROctForest::computeElemInterp( TMROctant *node,
   // the x,y,z directions
   int32_t x = node->x + h*(i/(mesh_order-1));
   int32_t y = node->y + h*(j/(mesh_order-1));
-  int32_t z = node->x + h*(k/(mesh_order-1));
+  int32_t z = node->z + h*(k/(mesh_order-1));
   if ((i == 0 || i == mesh_order-1) && 
       (x == oct->x || x == oct->x + hc)){
     if (x == oct->x){ 
@@ -6194,11 +6205,15 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
             // Compute the element interpolation
             int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
 
-            for ( int k = 0; k < nweights; k++ ){
-              vars[k] = weights[k].index;
-              wvals[k] = weights[k].weight;
+            if (nweights > order*order*order){
+              printf("nweights = %d index = %d  %d\n", nweights, i, j);
             }
-            interp->addInterp(c[j], wvals, vars, nweights);
+
+            // for ( int k = 0; k < nweights; k++ ){
+            //   vars[k] = weights[k].index;
+            //   wvals[k] = weights[k].weight;
+            // }
+            // interp->addInterp(c[j], wvals, vars, nweights);
           }
           else {
             // We've got to transfer the node to the owner processor
