@@ -5783,113 +5783,202 @@ getNodesWithAttribute()\n");
     int fx0 = (octs[i].x == 0);
     int fy0 = (octs[i].y == 0);
     int fz0 = (octs[i].z == 0);
-    int fx = (fx0 || octs[i].x + h == hmax);
-    int fy = (fy0 || octs[i].y + h == hmax);
-    int fz = (fz0 || octs[i].z + h == hmax);
+    int fx1 = (octs[i].x + h == hmax);
+    int fy1 = (octs[i].y + h == hmax);
+    int fz1 = (octs[i].z + h == hmax);
+    int fx = fx0 || fx1;
+    int fy = fy0 || fy1;
+    int fz = fz0 || fz1;
 
     // Set a pointer into the connectivity array
     const int *c = &conn[mesh_order*mesh_order*mesh_order*octs[i].tag];
 
     if (fx && fy && fz){
       // This node lies on a corner
-      TMRVertex *vert;
-      int vert_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2) + (fz0 ? 0 : 4);
-      int vert_num = block_conn[8*octs[i].block + vert_index];
-      topo->getVertex(vert_num, &vert);
-      const char *vert_attr = vert->getAttribute();
-      if ((attr_is_null && !vert_attr) ||
-          (vert_attr && strcmp(vert_attr, attr) == 0)){
-        int offset = ((mesh_order-1)*(vert_index % 2) +
-                      (mesh_order-1)*mesh_order*((vert_index % 4)/2) +
-                      (mesh_order-1)*mesh_order*mesh_order*(vert_index/4));
-        node_list[count] = c[offset];
-        count++;
+      int nverts = 0;
+      int vert_index[8];
+      if (fx0 && fy0 && fz0){
+        vert_index[nverts] = 0;  nverts++;
+      }
+      if (fx1 && fy0 && fz0){
+        vert_index[nverts] = 1;  nverts++;
+      }
+      if (fx0 && fy1 && fz0){
+        vert_index[nverts] = 2;  nverts++;
+      }
+      if (fx1 && fy1 && fz0){
+        vert_index[nverts] = 3;  nverts++;
+      }
+      if (fx0 && fy0 && fz1){
+        vert_index[nverts] = 4;  nverts++;
+      }
+      if (fx1 && fy0 && fz1){
+        vert_index[nverts] = 5;  nverts++;
+      }
+      if (fx0 && fy1 && fz1){
+        vert_index[nverts] = 6;  nverts++;
+      }
+      if (fx1 && fy1 && fz1){
+        vert_index[nverts] = 7;  nverts++;
+      }
+      
+      for ( int k = 0; k < nverts; k++ ){
+        TMRVertex *vert;
+        int vert_num = block_conn[8*octs[i].block + vert_index[k]];
+        topo->getVertex(vert_num, &vert);
+        const char *vert_attr = vert->getAttribute();
+        if ((attr_is_null && !vert_attr) ||
+            (vert_attr && strcmp(vert_attr, attr) == 0)){
+          int offset = ((mesh_order-1)*(vert_index[k] % 2) +
+                        (mesh_order-1)*mesh_order*((vert_index[k] % 4)/2) +
+                        (mesh_order-1)*mesh_order*mesh_order*(vert_index[k]/4));
+          node_list[count] = c[offset];
+          count++;
+        }
       }
     }
-    else if ((fy && fz) || (fx && fz) || (fx && fy)){
+    if ((fy && fz) || (fx && fz) || (fx && fy)){
+      int nedges = 0;
+      int edge_index[12];
+
+      // x-parallel edges
+      if (fy0 && fz0){
+        edge_index[nedges] = 0;  nedges++;
+      }
+      if (fy1 && fz0){
+        edge_index[nedges] = 1;  nedges++;
+      }
+      if (fy0 && fz1){
+        edge_index[nedges] = 2;  nedges++;
+      }
+      if (fy1 && fz1){
+        edge_index[nedges] = 3;  nedges++;
+      }
+
+      // y-parallel edges
+      if (fx0 && fz0){
+        edge_index[nedges] = 4;  nedges++;
+      }
+      if (fx1 && fz0){
+        edge_index[nedges] = 5;  nedges++;
+      }
+      if (fx0 && fz1){
+        edge_index[nedges] = 6;  nedges++;
+      }
+      if (fx1 && fz1){
+        edge_index[nedges] = 7;  nedges++;
+      }
+
+      // z-parallel edges
+      if (fx0 && fy0){
+        edge_index[nedges] = 8;  nedges++;
+      }
+      if (fx1 && fy0){
+        edge_index[nedges] = 9;  nedges++;
+      }
+      if (fx0 && fy1){
+        edge_index[nedges] = 10; nedges++;
+      }
+      if (fx1 && fy1){
+        edge_index[nedges] = 11; nedges++;
+      }
+     
       // This node lies on an edge
-      TMREdge *edge;
-      int edge_index = 0;
-      if (fy && fz){
-        edge_index = (fy0 ? 0 : 1) + (fz0 ? 0 : 2);
-      }
-      else if (fx && fz){
-        edge_index = (fx0 ? 4 : 5) + (fz0 ? 0 : 2);
-      }
-      else {
-        edge_index = (fx0 ? 8 : 9) + (fy0 ? 0 : 2);
-      }
-      int edge_num = block_edge_conn[12*octs[i].block + edge_index];
-      topo->getEdge(edge_num, &edge);
-      const char *edge_attr = edge->getAttribute();
-      if ((attr_is_null && !edge_attr) ||
-          (edge_attr && strcmp(edge_attr, attr) == 0)){
-        if (edge_index < 4){
-          for ( int ii = 0; ii < mesh_order; ii++ ){
-            int jj = (edge_index % 2);
-            int kk = (edge_index / 2);
-            int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
-            node_list[count] = c[offset];
-            count++;
+      for ( int k = 0; k < nedges; k++ ){
+        TMREdge *edge;
+        int edge_num = block_edge_conn[12*octs[i].block + edge_index[k]];
+        topo->getEdge(edge_num, &edge);
+        const char *edge_attr = edge->getAttribute();
+        if ((attr_is_null && !edge_attr) ||
+            (edge_attr && strcmp(edge_attr, attr) == 0)){
+          if (edge_index[k] < 4){
+            for ( int ii = 0; ii < mesh_order; ii++ ){
+              int jj = (edge_index[k] % 2);
+              int kk = (edge_index[k] / 2);
+              int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
+              node_list[count] = c[offset];
+              count++;
+            }
           }
-        }
-        else if (edge_index < 8){
-          for ( int jj = 1; jj < mesh_order-1; jj++ ){
-            int ii = (edge_index % 2);
-            int kk = ((edge_index - 4)/2);
-            int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
-            node_list[count] = c[offset];
-            count++;
+          else if (edge_index[k] < 8){
+            for ( int jj = 1; jj < mesh_order-1; jj++ ){
+              int ii = (edge_index[k] % 2);
+              int kk = ((edge_index[k] - 4)/2);
+              int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
+              node_list[count] = c[offset];
+              count++;
+            }
           }
-        }
-        else {
-          for ( int kk = 1; kk < mesh_order-1; kk++ ){
-            int ii = (edge_index % 2);
-            int jj = ((edge_index - 8)/2);
-            int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
-            node_list[count] = c[offset];
-            count++;
+          else {
+            for ( int kk = 1; kk < mesh_order-1; kk++ ){
+              int ii = (edge_index[k] % 2);
+              int jj = ((edge_index[k] - 8)/2);
+              int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
+              node_list[count] = c[offset];
+              count++;
+            }
           }
         }
       }
     }
-    else if (fx || fy || fz){
+    if (fx || fy || fz){
+      int nfaces = 0;
+      int face_index[6];
+      if (fx0){
+        face_index[nfaces] = 0;  nfaces++;
+      }
+      if (fx1){
+        face_index[nfaces] = 1;  nfaces++;
+      }
+      if (fy0){
+        face_index[nfaces] = 2;  nfaces++;
+      }
+      if (fy1){
+        face_index[nfaces] = 3;  nfaces++;
+      }
+      if (fz0){
+        face_index[nfaces] = 4;  nfaces++;
+      }
+      if (fz1){
+        face_index[nfaces] = 5;  nfaces++;
+      }
+      
       // Which face index are we dealing with?
-      TMRFace *face;
-      int face_index =
-        fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3) + fz*(fz0 ? 4 : 5);
-      int face_num = block_face_conn[6*octs[i].block + face_index];
-      topo->getFace(face_num, &face);  
-      const char *face_attr = face->getAttribute();
-      if ((attr_is_null && !face_attr) ||
-          (face_attr && strcmp(face_attr, attr) == 0)){
-        if (face_index < 2){
-          const int ii = (mesh_order-1)*(mesh_order % 2);
-          for ( int kk = 0; kk < mesh_order; kk++ ){
-            for ( int jj = 0; jj < mesh_order; jj++ ){
-              int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
+      for ( int k = 0; k < 6; k++ ){
+        TMRFace *face;
+        int face_num = block_face_conn[6*octs[i].block + face_index[k]];
+        topo->getFace(face_num, &face);  
+        const char *face_attr = face->getAttribute();
+        if ((attr_is_null && !face_attr) ||
+            (face_attr && strcmp(face_attr, attr) == 0)){
+          if (face_index[k] < 2){
+            const int ii = (mesh_order-1)*(face_index[k] % 2);
+            for ( int kk = 0; kk < mesh_order; kk++ ){
+              for ( int jj = 0; jj < mesh_order; jj++ ){
+                int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
               node_list[count] = c[offset];
               count++;
             }
           }
         }
-        else if (face_index < 4){
-          const int jj = (mesh_order-1)*(mesh_order % 2);
-          for ( int kk = 1; kk < mesh_order-1; kk++ ){
-            for ( int ii = 1; ii < mesh_order-1; ii++ ){
-              int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
-              node_list[count] = c[offset];
-              count++;
+          else if (face_index[k] < 4){
+            const int jj = (mesh_order-1)*(face_index[k] % 2);
+            for ( int kk = 1; kk < mesh_order-1; kk++ ){
+              for ( int ii = 1; ii < mesh_order-1; ii++ ){
+                int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
+                node_list[count] = c[offset];
+                count++;
+              }
             }
           }
-        }
-        else {
-          const int kk = (mesh_order-1)*(mesh_order % 2);
-          for ( int jj = 1; jj < mesh_order-1; jj++ ){
-            for ( int ii = 1; ii < mesh_order-1; ii++ ){
-              int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
-              node_list[count] = c[offset];
-              count++;
+          else {
+            const int kk = (mesh_order-1)*(face_index[k] % 2);
+            for ( int jj = 1; jj < mesh_order-1; jj++ ){
+              for ( int ii = 1; ii < mesh_order-1; ii++ ){
+                int offset = ii + jj*mesh_order + kk*mesh_order*mesh_order;
+                node_list[count] = c[offset];
+                count++;
+              }
             }
           }
         }
@@ -6121,14 +6210,14 @@ int TMROctForest::computeElemInterp( TMROctant *node,
 
   // Check whether the node is on a coarse mesh surface in either 
   // the x,y,z directions
-  if ((i == 0 && quad->x == node->x) ||
-      (i == mesh_order-1 && quad->x == node->x + h)){
+  if ((i == 0 && oct->x == node->x) ||
+      (i == mesh_order-1 && oct->x == node->x + h)){
     istart = 0;
     iend = 1;
     Nu[istart] = 1.0;
   }
-  else if ((i == 0 && quad->x + hc == node->x) ||
-           (i == mesh_order-1 && quad->x + hc == node->x + h)){
+  else if ((i == 0 && oct->x + hc == node->x) ||
+           (i == mesh_order-1 && oct->x + hc == node->x + h)){
     istart = coarse->mesh_order-1;
     iend = coarse->mesh_order;
     Nu[istart] = 1.0;
@@ -6139,14 +6228,14 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     lagrange_shape_functions(coarse->mesh_order, u,
                              coarse->interp_knots, Nu);
   }
-  if ((j == 0 && quad->y == node->y) ||
-      (j == mesh_order-1 && quad->y == node->y + h)){
+  if ((j == 0 && oct->y == node->y) ||
+      (j == mesh_order-1 && oct->y == node->y + h)){
     jstart = 0;
     jend = 1;
     Nv[jstart] = 1.0;
   }
-  else if ((j == 0 && quad->y + hc == node->y) ||
-           (j == mesh_order-1 && quad->y + hc == node->y + h)){
+  else if ((j == 0 && oct->y + hc == node->y) ||
+           (j == mesh_order-1 && oct->y + hc == node->y + h)){
     jstart = coarse->mesh_order-1;
     jend = coarse->mesh_order;
     Nv[jstart] = 1.0;
@@ -6157,14 +6246,14 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     lagrange_shape_functions(coarse->mesh_order, v,
                              coarse->interp_knots, Nv);
   }
-  if ((k == 0 && quad->z == node->z) ||
-      (k == mesh_order-1 && quad->z == node->z + h)){
+  if ((k == 0 && oct->z == node->z) ||
+      (k == mesh_order-1 && oct->z == node->z + h)){
     kstart = 0;
     kend = 1;
     Nw[kstart] = 1.0;
   }
-  else if ((k == 0 && quad->z + hc == node->z) ||
-           (k == mesh_order-1 && quad->z + hc == node->z + h)){
+  else if ((k == 0 && oct->z + hc == node->z) ||
+           (k == mesh_order-1 && oct->z + hc == node->z + h)){
     kstart = coarse->mesh_order-1;
     kend = coarse->mesh_order;
     Nw[kstart] = 1.0;
