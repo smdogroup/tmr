@@ -262,7 +262,7 @@ int main( int argc, char *argv[] ){
   int order = 2;
   int orthotropic_flag = 0;
   double htarget = 10.0;
-  double target_rel_err = 1e-3;
+  double target_rel_err = 1e-5;
   int strain_energy_refine = 0;
   for ( int i = 0; i < argc; i++ ){
     if (sscanf(argv[i], "h=%lf", &htarget) == 1){
@@ -414,11 +414,13 @@ int main( int argc, char *argv[] ){
     }
 
     for ( int iter = 0; iter < MAX_REFINE; iter++ ){
+      TACSAssembler::OrderingType ordering = TACSAssembler::MULTICOLOR_ORDER;
+
       // Create the TACSAssembler object associated with this forest
       TACSAssembler *tacs[MAX_REFINE+2];
       forest[0]->balance(1);
       forest[0]->repartition();
-      tacs[0] = creator->createTACS(forest[0], TACSAssembler::MULTICOLOR_ORDER);
+      tacs[0] = creator->createTACS(forest[0], ordering);
       tacs[0]->incref();
 
       // Set the number of levels: Cap it with a value of 4
@@ -431,7 +433,7 @@ int main( int argc, char *argv[] ){
         forest[1]->incref();
         forest[1]->setMeshOrder(2, TMR_UNIFORM_POINTS);
         forest[1]->balance();
-        tacs[1] = creator->createTACS(forest[1], TACSAssembler::MULTICOLOR_ORDER);
+        tacs[1] = creator->createTACS(forest[1], ordering);
         tacs[1]->incref();
       }
 
@@ -441,7 +443,7 @@ int main( int argc, char *argv[] ){
         forest[i]->incref();
         forest[i]->setMeshOrder(2, TMR_UNIFORM_POINTS);
         forest[i]->balance();
-        tacs[i] = creator->createTACS(forest[i], TACSAssembler::MULTICOLOR_ORDER);
+        tacs[i] = creator->createTACS(forest[i], ordering);
         tacs[i]->incref();
       }
 
@@ -491,14 +493,15 @@ int main( int argc, char *argv[] ){
       f5->writeToFile(outfile);
       f5->decref();
 
+      // Compute the total number of elements
       int nelems = tacs[0]->getNumElements();
-
-      // Set the target error using the factor: max(1.0, 16*(2**-iter))
-      double factor = 1.0;
 
       // Determine the total number of elements across all processors
       int nelems_total = 0;
       MPI_Allreduce(&nelems, &nelems_total, 1, MPI_INT, MPI_SUM, comm);
+
+      // Set the target error using the factor: max(1.0, 16*(2**-iter))
+      double factor = 1.0;
 
       // The target absolute error per element
       double target_abs_err = 0.0;
@@ -507,7 +510,12 @@ int main( int argc, char *argv[] ){
       // estimate with the adjoint error correction
       TacsScalar abs_err = 0.0, fval_est = 0.0;
 
-      if (1){ // (strain_energy_refine){
+      // Record the number of nodes for later use...
+      const int *range;
+      forest[0]->getOwnedNodeRange(&range);
+      int nnodes = range[mpi_size];
+
+      if (strain_energy_refine){
         // Uniformly refine the mesh everywhere
         TMRQuadForest *forest_refine = forest[0]->duplicate();
         forest_refine->incref();
@@ -519,22 +527,6 @@ int main( int argc, char *argv[] ){
         // Create the new, refined version of TACS
         TACSAssembler *tacs_refine = creator->createTACS(forest_refine);
         tacs_refine->incref();
-
-        // // Create the refined vector
-        // TACSBVec *ans_refine = tacs_refine->createVec();
-        // ans_refine->incref();
-        // TMR_ComputeReconSolution(tacs[0], forest[0], tacs_refine,
-        //                          ans, ans_refine);
-        // tacs_refine->setVariables(ans_refine);
-        // ans_refine->decref();
-
-        // // Write out the adjoint solution
-        // f5 = new TACSToFH5(tacs_refine, TACS_SHELL, write_flag);
-        // f5->incref();
-        // sprintf(outfile, "ans_reconstruction%02d.f5", iter);
-        // f5->writeToFile(outfile);
-        // f5->decref();
-        // forest_refine->decref();
 
         // Set the absolute element-level error based on the relative
         // error that is requested
@@ -555,20 +547,6 @@ int main( int argc, char *argv[] ){
           }
         }
         delete [] error;
-
-        if (mpi_rank == 0){
-          printf("Relative factor         = %e\n", factor);
-          printf("Function value          = %e\n", fval);
-          printf("Target element error    = %e\n", target_abs_err);
-          printf("Absolute error estimate = %e\n", abs_err);
-          printf("Relative error estimate = %e\n", fabs(abs_err/fval));
-
-          const int *range;
-          forest[0]->getOwnedNodeRange(&range);
-          int nnodes = range[mpi_size];
-          fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
-                  iter, nelems, nnodes, fval, fval_est, abs_err);
-        }
         
         // Refine the forest
         forest[0]->refine(refine);
@@ -578,7 +556,6 @@ int main( int argc, char *argv[] ){
         fval_est = fval + abs_err;
       }
       else {
-        /*
         double ks_weight = 50.0;
         TACSKSFailure *ks_func = new TACSKSFailure(tacs[0], ks_weight);
         ks_func->setKSFailureType(TACSKSFailure::CONTINUOUS);
@@ -607,62 +584,42 @@ int main( int argc, char *argv[] ){
         adjvec->scale(-1.0);
 
         // Duplicate the forest
-        TMRQuadForest *forest_refine = forest[0]->duplicate();
-        forest_refine->incref();
+        TMRQuadForest *forest_refined = forest[0]->duplicate();
+        forest_refined->incref();
 
         // Elevate the element order
-        forest_refine->setMeshOrder(order+1, TMR_UNIFORM_POINTS);
-        forest_refine->balance();
+        forest_refined->setMeshOrder(order+1, TMR_UNIFORM_POINTS);
+        forest_refined->balance();
 
         // Create the new, refined version of TACS
-        TACSAssembler *tacs_refine = creator->createTACS(forest_refine);
-        tacs_refine->incref();
+        TACSAssembler *tacs_refined = creator->createTACS(forest_refined);
+        tacs_refined->incref();
 
         // Compute the adjoint-based error estimate
         double *error = new double[ nelems ];
         TacsScalar adj_corr;
-        abs_err = TMR_AdjointErrorEst(tacs[0], tacs_refine,
-                                      adjvec, forest[0], error, &adj_corr);
+        abs_err = TMR_AdjointErrorEst(forest[0], tacs[0],
+                                      forest_refined, tacs_refined,
+                                      adjvec, error, &adj_corr);
 
         double mean, stddev;
         TMR_PrintErrorBins(comm, error, nelems, &mean, &stddev);
 
-        // Create the refined vector
-        TACSBVec *adjvec_refine = tacs_refine->createVec();
-        adjvec_refine->incref();
-        TMR_ComputeReconSolution(tacs[0], forest[0], tacs_refine,
-                                 adjvec, adjvec_refine);
-        tacs_refine->setVariables(adjvec_refine);
-        adjvec_refine->decref();
-
-        // Write out the adjoint solution
-        f5 = new TACSToFH5(tacs_refine, TACS_SHELL, write_flag);
-        f5->incref();
-        sprintf(outfile, "adjoint_reconstruction%02d.f5", iter);
-        f5->writeToFile(outfile);
-        f5->decref();
-
         // Compute the refinement based on the error estimates
-        int c1 = 0, c2 = 0, c3 = 0;
         int *refine = new int[ nelems ];
         for ( int i = 0; i < nelems; i++ ){
           refine[i] = 0;
           double logerr = log(error[i]);
           if (logerr > mean + 2*stddev){
-            c1++;
             refine[i] = 2;
           }
           else if (logerr > mean){
-            c2++;
             refine[i] = 1;
           }
           else if (logerr < mean - 2*stddev){
-            c3++;
             refine[i] = -1;
           } 
         }
-
-        printf("c1 = %5d  c2 = %5d  c3 = %5d\n", c1, c2, c3);
 
         // Refine the forest
         forest[0]->refine(refine);
@@ -682,11 +639,21 @@ int main( int argc, char *argv[] ){
         delete [] error;
         
         // Delete all the info that is no longer needed
-        tacs_refine->decref();
-        forest_refine->decref();
+        tacs_refined->decref();
+        forest_refined->decref();
         adjvec->decref();
         func->decref();
-        */
+      }
+
+      if (mpi_rank == 0){
+        printf("Relative factor         = %e\n", factor);
+        printf("Function value          = %e\n", fval);
+        printf("Target element error    = %e\n", target_abs_err);
+        printf("Absolute error estimate = %e\n", abs_err);
+        printf("Relative error estimate = %e\n", fabs(abs_err/fval));
+
+        fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
+                iter, nelems, nnodes, fval, fval_est, abs_err);
       }
 
       // Decrease the reference count

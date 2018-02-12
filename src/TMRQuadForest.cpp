@@ -925,18 +925,18 @@ void TMRQuadForest::setMeshOrder( int _mesh_order,
   interp_knots = new double[ mesh_order ];
   interp_type = _interp_type;
   if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
-    interp_knots[0] = 0.0;
+    interp_knots[0] = -1.0;
     interp_knots[mesh_order-1] = 1.0;
     for ( int i = 1; i < mesh_order-1; i++ ){
-      interp_knots[i] = 0.5*(1.0 - cos(M_PI*i/(mesh_order-1)));
+      interp_knots[i] = -cos(M_PI*i/(mesh_order-1));
     }
   }
   else {
     // Uniform mesh spacing
-    interp_knots[0] = 0.0;
+    interp_knots[0] = -1.0;
     interp_knots[mesh_order-1] = 1.0;
     for ( int i = 1; i < mesh_order-1; i++ ){
-      interp_knots[i] = 1.0*i/(mesh_order-1);
+      interp_knots[i] = -1.0 + 2.0*i/(mesh_order-1);
     }
   }
 }
@@ -3662,10 +3662,12 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
               // Compute parametric location along the edge
               double u = 0.0;
               if (edge_index < 2){
-                u = 0.5*(quads[i].childId()/2) + 0.5*interp_knots[k];
+                u = 1.0*(-1 + (quads[i].childId()/2)) +
+                  0.5*(1.0 + interp_knots[k]);
               }
               else {
-                u = 0.5*(quads[i].childId() % 2) + 0.5*interp_knots[k];
+                u = 1.0*(-1 + (quads[i].childId() % 2)) +
+                  0.5*(1.0 + interp_knots[k]);
               }
                 
               // Compute the shape functions
@@ -3730,8 +3732,9 @@ void TMRQuadForest::evaluateNodeLocations(){
             int index = item - node_numbers;
             if (index >= num_dep_nodes && !flags[index]){
               flags[index] = 1;
-              surf->evalPoint(u + d*interp_knots[ii], 
-                              v + d*interp_knots[jj], &X[index]);
+              surf->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]), 
+                              v + 0.5*d*(1.0 + interp_knots[jj]),
+                              &X[index]);
             }
           }
         }
@@ -4003,7 +4006,7 @@ getNodesWithAttribute()\n");
         }
       }
     }
-    else if (fx || fy){
+    if (fx || fy){
       // Keep track of which edges this element touches
       int nedges = 0;
       int edge_index[4];
@@ -4041,19 +4044,18 @@ getNodesWithAttribute()\n");
         }
       }
     }
-    else {
-      // This node lies on the face
-      TMRFace *face;
-      topo->getFace(quads[i].face, &face);  
-      const char *face_attr = face->getAttribute();
-      if (face_attr && strcmp(face_attr, attr) == 0){
-        for ( int jj = 0; jj < mesh_order; jj++ ){
-          for ( int ii = 0; ii < mesh_order; ii++ ){
-            int offset = ii + jj*mesh_order;
-            node_list[count] = 
-              conn[mesh_order*mesh_order*quads[i].tag + offset];
-            count++;
-          }
+
+    // This node lies on the face
+    TMRFace *face;
+    topo->getFace(quads[i].face, &face);  
+    const char *face_attr = face->getAttribute();
+    if (face_attr && strcmp(face_attr, attr) == 0){
+      for ( int jj = 0; jj < mesh_order; jj++ ){
+        for ( int ii = 0; ii < mesh_order; ii++ ){
+          int offset = ii + jj*mesh_order;
+          node_list[count] = 
+            conn[mesh_order*mesh_order*quads[i].tag + offset];
+          count++;
         }
       }
     }
@@ -4109,8 +4111,8 @@ TMRQuadrant* TMRQuadForest::findEnclosing( const int order,
 
   // Compute the parametric node location on this block
   const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
-  const double xd = x + h*knots[ii];
-  const double yd = y + h*knots[jj];
+  const double xd = x + 0.5*h*(1.0 + knots[ii]);
+  const double yd = y + 0.5*h*(1.0 + knots[jj]);
 
   // Set the low and high indices to the first and last
   // element of the element array
@@ -4249,36 +4251,38 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   // Check whether the node is on a coarse mesh surface in either 
   // the x,y,z directions
   if ((i == 0 && quad->x == node->x) ||
-      (i == 0 && quad->x + hc == node->x)){
+      (i == mesh_order-1 && quad->x == node->x + h)){
     istart = 0;
     iend = 1;
     Nu[istart] = 1.0;
   }
-  else if ((i == mesh_order-1 && quad->x == node->x + h) ||
+  else if ((i == 0 && quad->x + hc == node->x) ||
            (i == mesh_order-1 && quad->x + hc == node->x + h)){
     istart = coarse->mesh_order-1;
     iend = coarse->mesh_order;
     Nu[istart] = 1.0;
   }
   else {
-    double u = ((node->x % hc) + h*coarse->interp_knots[i])/hc;
+    double u = -1.0 + 2.0*((node->x % hc) +
+                           0.5*h*(1.0 + interp_knots[i]))/hc;
     lagrange_shape_functions(coarse->mesh_order, u, 
                              coarse->interp_knots, Nu);
   }
   if ((j == 0 && quad->y == node->y) ||
-      (j == 0 && quad->y + hc == node->y)){
+      (j == mesh_order-1 && quad->y == node->y + h)){
     jstart = 0;
     jend = 1;
     Nv[jstart] = 1.0;
   }
-  else if ((j == mesh_order-1 && quad->y == node->y + h) ||
+  else if ((j == 0 && quad->y + hc == node->y) ||
            (j == mesh_order-1 && quad->y + hc == node->y + h)){
     jstart = coarse->mesh_order-1;
     jend = coarse->mesh_order;
     Nv[jstart] = 1.0;
   }
   else {
-    double v = ((node->y % hc) + h*coarse->interp_knots[j])/hc;
+    double v = -1.0 + 2.0*((node->y % hc) +
+                           0.5*h*(1.0 + interp_knots[j]))/hc;
     lagrange_shape_functions(coarse->mesh_order, v, 
                              coarse->interp_knots, Nv);
   }
@@ -4415,8 +4419,8 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
           }
           else {
             // We've got to transfer the node to the processor that
-            // owns an enclosing element. Do to that, add the
-            // quad to the list of externals and store its mpi owner
+            // owns an enclosing element. Do to that, add the quad to
+            // the list of externals and store its mpi owner
             node.tag = mpi_owner;
             ext_queue->push(&node);
           }

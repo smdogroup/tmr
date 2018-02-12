@@ -21,14 +21,16 @@ void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
 /*
   Compute the reconstructed solution on a uniformly refined mesh
 */
-void TMR_ComputeReconSolution( TACSAssembler *tacs,
-                               TMRQuadForest *forest,
+void TMR_ComputeReconSolution( TMRQuadForest *forest,
+                               TACSAssembler *tacs,
+                               TMRQuadForest *forest_refined,
                                TACSAssembler *tacs_refined,
                                TACSBVec *_uvec=NULL,
                                TACSBVec *_uvec_refined=NULL,
                                const int compute_difference=0 );
-void TMR_ComputeReconSolution( TACSAssembler *tacs,
-                               TMROctForest *forest,
+void TMR_ComputeReconSolution( TMROctForest *forest,
+                               TACSAssembler *tacs,
+                               TMROctForest *forest_refined,
                                TACSAssembler *tacs_refined,
                                TACSBVec *_uvec=NULL,
                                TACSBVec *_uvec_refined=NULL,
@@ -52,23 +54,25 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
                                  double *error );
 double TMR_StrainEnergyErrorEst( TMROctForest *forest,
                                  TACSAssembler *tacs,
-                                 TMRQuadForest *forest_refined,
+                                 TMROctForest *forest_refined,
                                  TACSAssembler *tacs_refined,
                                  double *error );
 
 /*
   Perform adjoint-based mesh refinement on the forest of quadtrees
 */
-double TMR_AdjointErrorEst( TACSAssembler *tacs,
-                            TACSAssembler *tacs_refine,
+double TMR_AdjointErrorEst( TMRQuadForest *forest,
+                            TACSAssembler *tacs,
+                            TMRQuadForest *forest_refined,
+                            TACSAssembler *tacs_refined,
                             TACSBVec *adjoint,
-                            TMRQuadForest *forest,
                             double *error,
                             double *adj_corr );
-double TMR_AdjointErrorEst( TACSAssembler *tacs,
-                            TACSAssembler *tacs_refine,
+double TMR_AdjointErrorEst( TMROctForest *forest,
+                            TACSAssembler *tacs,
+                            TMROctForest *forest_refined,
+                            TACSAssembler *tacs_refined,
                             TACSBVec *adjoint,
-                            TMROctForest *forest,
                             double *error,
                             double *adj_corr );
 

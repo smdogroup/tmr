@@ -70,46 +70,51 @@ def addFaceTraction(order, assembler, load):
         
     return aux
 
-def createRefined(forest, bcs, order=2):
+def createRefined(forest, bcs, pttype=TMR.UNIFORM_POINTS):
     new_forest = forest.duplicate()
+    new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
     new_forest.refine()
     new_forest.balance(1)
     creator = CreateMe(bcs)
-    return creator.createTACS(order, new_forest)
+    return new_forest, creator.createTACS(new_forest)
 
-def createProblem(forest, bcs, ordering, order=2, nlevels=2):
+def createProblem(forest, bcs, ordering, order=2, nlevels=2,
+                  pttype=TMR.UNIFORM_POINTS):
     # Create the forest
     forests = []
     assemblers = []
 
     # Create the trees, rebalance the elements and repartition
     forest.balance(1)
+    forest.setMeshOrder(order, pttype)
     forest.repartition()
     forests.append(forest)
 
     # Make the creator class
     creator = CreateMe(bcs)
-    assemblers.append(creator.createTACS(order, forest, ordering))
+    assemblers.append(creator.createTACS(forest, ordering))
 
     while order > 2:
         order = order-1
         forest = forests[-1].duplicate()
+        forest.setMeshOrder(order, pttype)
         forest.balance(1)
         forests.append(forest)
 
         # Make the creator class
         creator = CreateMe(bcs)
-        assemblers.append(creator.createTACS(order, forest, ordering))
+        assemblers.append(creator.createTACS(forest, ordering))
 
     for i in xrange(nlevels-1):
         forest = forests[-1].coarsen()
+        forest.setMeshOrder(2, pttype)
         forest.balance(1)
         forest.repartition()
         forests.append(forest)
 
         # Make the creator class
         creator = CreateMe(bcs)
-        assemblers.append(creator.createTACS(2, forest, ordering))
+        assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
     mg = TMR.createMg(assemblers, forests,
@@ -194,9 +199,8 @@ if order == 2:
     depth = 1
 forest = TMR.QuadForest(comm)
 forest.setTopology(topo)
-
-forest.createRandomTrees(4, 0, 3)
-# forest.createTrees(depth)
+forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
+forest.createTrees(depth)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
@@ -212,10 +216,7 @@ else:
     ordering = TACS.PY_NATURAL_ORDER
 
 # The target relative error
-if order == 2:
-    target_rel_err = 1e-3
-else:
-    target_rel_err = 1e-4
+target_rel_err = 1e-4
 
 # Open a log file to write
 if order == 2:
@@ -230,7 +231,7 @@ log_fp.write('Variables = iter, nelems, nnodes, fval, fcorr, abs_err\n')
 
 for k in range(steps):
     # Create the topology problem
-    nlevs = min(5, depth+k+1)
+    nlevs = min(3, depth+k+1)
     assembler, mg = createProblem(forest, bcs, ordering, 
                                   order=order, nlevels=nlevs)
 
@@ -245,32 +246,13 @@ for k in range(steps):
 
     # Factor the matrix
     mg.factor()
-    gmres = TACS.KSM(mg.getMat(), mg, 50, isFlexible=1)
+    gmres = TACS.KSM(mg.getMat(), mg, 100, isFlexible=1)
     gmres.setMonitor(comm, freq=10)
     gmres.solve(res, ans)
     ans.scale(-1.0)
 
     # Set the variables
     assembler.setVariables(ans)
-
-    # Output for visualization
-    flag = (TACS.ToFH5.NODES |
-            TACS.ToFH5.DISPLACEMENTS |
-            TACS.ToFH5.EXTRAS)
-    f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
-    f5.writeToFile('results/solution%02d.f5'%(k))
-
-
-
-
-
-
-
-
-
-
-
-    sys.exit(0)
 
     # Compute the strain energy error estimate
     # err_est, error = TMR.strainEnergyError(assembler, forest)
@@ -288,13 +270,21 @@ for k in range(steps):
     adjoint = assembler.createVec()
     gmres.solve(res, adjoint)
     adjoint.scale(-1.0)
-    
+
+    # Output for visualization
+    flag = (TACS.ToFH5.NODES |
+            TACS.ToFH5.DISPLACEMENTS |
+            TACS.ToFH5.EXTRAS)
+    f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
+    f5.writeToFile('results/solution%02d.f5'%(k))
+
     # Create the refined mesh
-    refined = createRefined(forest, bcs, order=order+1)
+    forest_refined, refined = createRefined(forest, bcs)
     
     # Compute the adjoint and use adjoint-based refinement
     err_est, func_corr, error = \
-        TMR.adjointError(assembler, refined, adjoint, forest)
+        TMR.adjointError(forest, assembler,
+                         forest_refined, refined, adjoint)
 
     # Compute the refinement from the error estimate
     nbins = 60

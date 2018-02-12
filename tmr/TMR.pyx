@@ -1123,6 +1123,13 @@ cdef class QuadForest:
         if self.ptr:
             self.ptr.decref()
 
+    def setMeshOrder(self, int order,
+                     TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
+        self.ptr.setMeshOrder(order, interp)
+
+    def getMeshOrder(self):
+        return self.ptr.getMeshOrder()
+
     def setTopology(self, Topology topo):
         self.ptr.setTopology(topo.ptr)
 
@@ -1368,7 +1375,14 @@ cdef class OctForest:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-        
+
+    def setMeshOrder(self, int order,
+                     TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
+        self.ptr.setMeshOrder(order, interp)
+
+    def getMeshOrder(self):
+        return self.ptr.getMeshOrder()
+
     def setTopology(self, Topology topo):
         self.ptr.setTopology(topo.ptr)
 
@@ -1857,46 +1871,62 @@ def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
         return _init_Pc(mg)
     return None
 
-def strainEnergyError(Assembler assembler, forest):
+def strainEnergyError(forest, Assembler coarse,
+                      forest_refined, Assembler refined):
     cdef double ans = 0.0
-    cdef TACSAssembler *assm = NULL
-    cdef TMRQuadForest *quad_forest = NULL
     cdef TMROctForest *oct_forest = NULL
-    cdef np.ndarray err = None
-    assm = assembler.ptr
-    err = np.zeros(assm.getNumElements(), dtype=np.double)
-    if isinstance(forest, OctForest):
-        oct_forest = (<OctForest>forest).ptr
-        ans = TMR_StrainEnergyErrorEst(oct_forest, assm, <double*>err.data)
-    elif isinstance(forest, QuadForest):
-        quad_forest = (<QuadForest>forest).ptr
-        ans = TMR_StrainEnergyErrorEst(quad_forest, assm, <double*>err.data)
-    return ans, err
-
-def adjointError(Assembler coarse, Assembler fine, Vec adjoint, forest):
-    cdef TacsScalar ans = 0.0
-    cdef TacsScalar adj_corr = 0.0
+    cdef TMROctForest *oct_forest_refined = NULL
     cdef TMRQuadForest *quad_forest = NULL
-    cdef TMROctForest *oct_forest = NULL
+    cdef TMRQuadForest *quad_forest_refined = NULL
     cdef np.ndarray err = None
     err = np.zeros(coarse.ptr.getNumElements(), dtype=np.double)
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
-        ans = TMR_AdjointErrorEst(coarse.ptr, fine.ptr,
-                                  adjoint.ptr, oct_forest, 
-                                  <double*>err.data, &adj_corr)
+        oct_forest_refined = (<OctForest>forest_refined).ptr
+        ans = TMR_StrainEnergyErrorEst(oct_forest, coarse.ptr,
+                                       oct_forest_refined, refined.ptr,
+                                       <double*>err.data)
     elif isinstance(forest, QuadForest):
         quad_forest = (<QuadForest>forest).ptr
-        ans = TMR_AdjointErrorEst(coarse.ptr, fine.ptr,
-                                  adjoint.ptr, quad_forest, 
-                                  <double*>err.data, &adj_corr)
+        quad_forest_refined = (<QuadForest>forest_refined).ptr
+        ans = TMR_StrainEnergyErrorEst(quad_forest, coarse.ptr,
+                                       quad_forest_refined, refined.ptr,
+                                       <double*>err.data)
+    return ans, err
+
+def adjointError(forest, Assembler coarse,
+                 forest_refined, Assembler refined, Vec adjoint):
+    cdef TacsScalar ans = 0.0
+    cdef TacsScalar adj_corr = 0.0
+    cdef TMROctForest *oct_forest = NULL
+    cdef TMROctForest *oct_forest_refined = NULL
+    cdef TMRQuadForest *quad_forest = NULL
+    cdef TMRQuadForest *quad_forest_refined = NULL
+    cdef np.ndarray err = None
+    err = np.zeros(coarse.ptr.getNumElements(), dtype=np.double)
+    if isinstance(forest, OctForest):
+        oct_forest = (<OctForest>forest).ptr
+        oct_forest_refined = (<OctForest>forest_refined).ptr
+        ans = TMR_AdjointErrorEst(oct_forest, coarse.ptr,
+                                  oct_forest_refined, refined.ptr,
+                                  adjoint.ptr, <double*>err.data,
+                                  &adj_corr)
+    elif isinstance(forest, QuadForest):
+        quad_forest = (<QuadForest>forest).ptr
+        quad_forest_refined = (<QuadForest>forest_refined).ptr
+        ans = TMR_AdjointErrorEst(quad_forest, coarse.ptr,
+                                  quad_forest_refined, refined.ptr,
+                                  adjoint.ptr, <double*>err.data,
+                                  &adj_corr)
     return ans, adj_corr, err
 
-def computeReconSolution(Assembler assembler, forest,
-                         Assembler refined, Vec uvec=None,
-                         Vec uvec_refined=None):
-    cdef TMRQuadForest *quad_ptr = NULL
-    cdef TMROctForest *oct_ptr = NULL
+def computeReconSolution(forest, Assembler coarse,
+                         forest_refined, Assembler refined,
+                         Vec uvec=None, Vec uvec_refined=None):
+    cdef TMROctForest *oct_forest = NULL
+    cdef TMROctForest *oct_forest_refined = NULL
+    cdef TMRQuadForest *quad_forest = NULL
+    cdef TMRQuadForest *quad_forest_refined = NULL
     cdef TACSBVec *uvec_ptr = NULL
     cdef TACSBVec *refined_ptr = NULL
     if uvec is not None:
@@ -1904,12 +1934,16 @@ def computeReconSolution(Assembler assembler, forest,
     if uvec_refined is not None:
         refined_ptr = uvec_refined.ptr
     if isinstance(forest, OctForest):
-        oct_ptr = (<OctForest>forest).ptr
-        TMR_ComputeReconSolution(assembler.ptr, oct_ptr, refined.ptr,
+        oct_forest = (<OctForest>forest).ptr
+        oct_forest_refined = (<OctForest>forest_refined).ptr
+        TMR_ComputeReconSolution(oct_forest, coarse.ptr,
+                                 oct_forest_refined, refined.ptr,
                                  uvec_ptr, refined_ptr)
     elif isinstance(forest, QuadForest):
-        quad_ptr = (<QuadForest>forest).ptr
-        TMR_ComputeReconSolution(assembler.ptr, quad_ptr, refined.ptr,
+        quad_forest = (<QuadForest>forest).ptr
+        quad_forest_refined = (<QuadForest>forest_refined).ptr
+        TMR_ComputeReconSolution(quad_forest, coarse.ptr,
+                                 quad_forest_refined, refined.ptr,
                                  uvec_ptr, refined_ptr)
     return
 
