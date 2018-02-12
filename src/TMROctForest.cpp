@@ -1,8 +1,5 @@
 #include "TMROctForest.h"
-
-/*
-  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
-*/
+#include "TMRInterpolation.h"
 
 /*
   Map from a block edge number to the local node numbers
@@ -346,24 +343,6 @@ static double convert_to_coordinate( const int32_t x ){
   }
   else {
     return 1.0*x/hmax;
-  }
-}
-
-/*
-  Evaluate the shape functions at the given coordinate
-*/
-static void lagrange_shape_functions( const int order,
-                                      const double u, 
-                                      const double *knots,
-                                      double *N ){
-  // Loop over the shape functions
-  for ( int i = 0; i < order; i++ ){
-    N[i] = 1.0;
-    for ( int j = 0; j < order; j++ ){
-      if (i != j){
-        N[i] *= (u - knots[j])/(knots[i] - knots[j]);
-      }
-    }
   }
 }
 
@@ -1473,6 +1452,9 @@ void TMROctForest::setMeshOrder( int _mesh_order,
   if (mesh_order < 2){
     mesh_order = 2;
   }
+  else if (mesh_order > MAX_ORDER){
+    mesh_order = MAX_ORDER;
+  }
 
   // Allocate the interpolation knots and set the knot locations
   interp_knots = new double[ mesh_order ];
@@ -1552,6 +1534,64 @@ int TMROctForest::getLocalNodeNumber( int node ){
     }
   }
   return -1;
+}
+
+/*
+  Get the knot points for the interpolation
+*/
+int TMROctForest::getInterpKnots( const double **_knots ){
+  *_knots = interp_knots;
+  return mesh_order;
+}
+
+/*
+  Evaluate the interpolant at the given parametric point
+*/
+void TMROctForest::evalInterp( const double pt[], double N[] ){
+  double Nu[MAX_ORDER], Nv[MAX_ORDER], Nw[MAX_ORDER];
+
+  // Evaluate the shape functions
+  lagrange_shape_functions(mesh_order, pt[0], interp_knots, Nu);
+  lagrange_shape_functions(mesh_order, pt[1], interp_knots, Nv);
+  lagrange_shape_functions(mesh_order, pt[2], interp_knots, Nw);
+
+  for ( int k = 0; k < mesh_order; k++ ){
+    for ( int j = 0; j < mesh_order; j++ ){
+      for ( int i = 0; i < mesh_order; i++ ){
+        N[0] = Nu[i]*Nv[j]*Nw[k];
+        N++;
+      }
+    }    
+  }
+}
+
+/*
+  Evaluate the interpolant at the given parametric point
+*/
+void TMROctForest::evalInterp( const double pt[], double N[],
+                               double Nxi[], double Neta[], double Nzeta[] ){
+  double Nu[MAX_ORDER], Nv[MAX_ORDER], Nw[MAX_ORDER];
+  double Nud[MAX_ORDER], Nvd[MAX_ORDER], Nwd[MAX_ORDER];
+
+  // Evaluate the shape functions
+  lagrange_shape_func_derivative(mesh_order, pt[0], interp_knots, Nu, Nud);
+  lagrange_shape_func_derivative(mesh_order, pt[1], interp_knots, Nv, Nvd);
+  lagrange_shape_func_derivative(mesh_order, pt[2], interp_knots, Nw, Nwd);
+
+  for ( int k = 0; k < mesh_order; k++ ){
+    for ( int j = 0; j < mesh_order; j++ ){
+      for ( int i = 0; i < mesh_order; i++ ){
+        N[0] = Nu[i]*Nv[j]*Nw[k];
+        Nxi[0] = Nud[i]*Nv[j]*Nw[k];
+        Neta[0] = Nu[i]*Nvd[j]*Nw[k];
+        Nzeta[0] = Nu[i]*Nv[j]*Nwd[k];
+        N++;
+        Nxi++;
+        Neta++;
+        Nzeta++;
+      }
+    }
+  }
 }
 
 /*
@@ -6080,57 +6120,54 @@ int TMROctForest::computeElemInterp( TMROctant *node,
 
   // Check whether the node is on a coarse mesh surface in either 
   // the x,y,z directions
-  int32_t x = node->x + h*(i/(mesh_order-1));
-  int32_t y = node->y + h*(j/(mesh_order-1));
-  int32_t z = node->z + h*(k/(mesh_order-1));
-  if ((i == 0 || i == mesh_order-1) && 
-      (x == oct->x || x == oct->x + hc)){
-    if (x == oct->x){ 
-      istart = 0;
-      iend = 1;
-    }
-    else {
-      istart = coarse->mesh_order-1;
-      iend = coarse->mesh_order;
-    }
+  if ((i == 0 && oct->x == node->x) ||
+      (i == 0 && oct->x + hc == node->x)){
+    istart = 0;
+    iend = 1;
     Nu[istart] = 1.0;
-  } 
+  }
+  else if ((i == mesh_order-1 && oct->x == node->x + h) ||
+           (i == mesh_order-1 && oct->x + hc == node->x + h)){
+    istart = coarse->mesh_order-1;
+    iend = coarse->mesh_order;
+    Nu[istart] = 1.0;
+  }
   else {
-    double u = ((x % hc) + h*coarse->interp_knots[i])/hc;
+    double u = ((node->x % hc) + h*coarse->interp_knots[i])/hc;
     lagrange_shape_functions(coarse->mesh_order, u, 
                              coarse->interp_knots, Nu);
   }
-  if ((j == 0 || j == mesh_order-1) && 
-      (y == oct->y || y == oct->y + hc)){
-    if (y == oct->y){ 
-      jstart = 0;
-      jend = 1;
-    }
-    else {
-      jstart = coarse->mesh_order-1;
-      jend = coarse->mesh_order;
-    }
+  if ((j == 0 && oct->y == node->y) ||
+      (j == 0 && oct->y + hc == node->y)){
+    jstart = 0;
+    jend = 1;
     Nv[jstart] = 1.0;
-  } 
+  }
+  else if ((j == mesh_order-1 && oct->y == node->y + h) ||
+           (j == mesh_order-1 && oct->y + hc == node->y + h)){
+    jstart = coarse->mesh_order-1;
+    jend = coarse->mesh_order;
+    Nv[jstart] = 1.0;
+  }
   else {
-    double v = ((y % hc) + h*coarse->interp_knots[j])/hc;
+    double v = ((node->y % hc) + h*coarse->interp_knots[j])/hc;
     lagrange_shape_functions(coarse->mesh_order, v, 
                              coarse->interp_knots, Nv);
   }
-  if ((k == 0 || k == mesh_order-1) && 
-      (z == oct->z || z == oct->z + hc)){
-    if (z == oct->z){ 
-      kstart = 0;
-      kend = 1;
-    }
-    else {
-      kstart = coarse->mesh_order-1;
-      kend = coarse->mesh_order;
-    }
+  if ((k == 0 && oct->z == node->z) ||
+      (k == 0 && oct->z + hc == node->z)){
+    kstart = 0;
+    kend = 1;
     Nw[kstart] = 1.0;
-  } 
+  }
+  else if ((k == mesh_order-1 && oct->z == node->z + h) ||
+           (k == mesh_order-1 && oct->z + hc == node->z + h)){
+    kstart = coarse->mesh_order-1;
+    kend = coarse->mesh_order;
+    Nw[kstart] = 1.0;
+  }
   else {
-    double w = ((z % hc) + h*coarse->interp_knots[k])/hc;
+    double w = ((node->z % hc) + h*coarse->interp_knots[k])/hc;
     lagrange_shape_functions(coarse->mesh_order, w, 
                              coarse->interp_knots, Nw);
   }

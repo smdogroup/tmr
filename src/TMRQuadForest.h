@@ -1,10 +1,6 @@
 #ifndef TMR_QUADTREE_FOREST_H
 #define TMR_QUADTREE_FOREST_H
 
-/*
-  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
-*/
-
 #include "TMRTopology.h"
 #include "TMRQuadrant.h"
 #include "BVecInterp.h"
@@ -23,6 +19,9 @@
 */
 class TMRQuadForest : public TMREntity {
  public:
+  // This is somewhat arbitrary (could be as high as 40)
+  static const int MAX_ORDER = 16;
+  
   TMRQuadForest( MPI_Comm _comm, int mesh_order=2,
                  TMRInterpolationType interp_type=TMR_GAUSS_LOBATTO_POINTS );
   ~TMRQuadForest();
@@ -105,12 +104,16 @@ class TMRQuadForest : public TMREntity {
   // --------------------------------------
   int getOwnedNodeRange( const int **_node_range );
 
-  // Get the quadrants and the nodes
-  // -------------------------------
+  // Get the quadrants and the nodes and interpolation
+  // -------------------------------------------------
   void getQuadrants( TMRQuadrantArray **_quadrants );
   int getNodeNumbers( const int **_node_numbers );
   int getPoints( TMRPoint **_X );
   int getLocalNodeNumber( int node );
+  int getInterpKnots( const double **_knots );
+  void evalInterp( const double pt[], double N[] );
+  void evalInterp( const double pt[], double N[],
+                   double Nxi[], double Neta[] );
 
   // Retrieve the connectivity information
   // -------------------------------------

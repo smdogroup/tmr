@@ -86,6 +86,19 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
         elements[i] = new MITCShell<3>(stiff);
       }
     }
+    else if (order == 4){
+      for ( int i = 0; i < num_elements; i++ ){
+        /*
+        double kcorr = 5.0/6.0;
+        FSDTStiffness *stiff = 
+          new specialFSDTStiffness(ply, ortho_flag, t, kcorr, i);
+        elements[i] = new MITCShell<3>(stiff);
+        */        
+        isoFSDTStiffness *stiff = 
+          new isoFSDTStiffness(rho, E, nu, kcorr, ys, t, i);
+        elements[i] = new MITCShell<4>(stiff);
+      }
+    }
   }
 
   /*
@@ -94,36 +107,25 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
   TACSAuxElements *createAuxElements( int order,
                                       TMRQuadForest *forest ){
     TACSAuxElements *aux = new TACSAuxElements();
-    
-    // Get the quadrants
-    TMRQuadrantArray *quadrants;
-    forest->getQuadrants(&quadrants);
 
-    // get the quadrant array
-    int size; 
-    TMRQuadrant *quads;
-    quadrants->getArray(&quads, &size);
+    // Get the connectivity of the mesh
+    const int *conn;
+    int num_elements;
+    forest->getNodeConn(&conn, &num_elements);
 
     // Get the points from the forest
     TMRPoint *Xp;
     forest->getPoints(&Xp);
 
-    for ( int i = 0; i < size; i++ ){
-      // Get the side-length of the quadrant
-      const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level - (order-2));
-
+    for ( int i = 0; i < num_elements; i++ ){
       // Set the tractions based on the node location
-      TacsScalar tx[9], ty[9], tz[9];
+      TacsScalar tx[16], ty[16], tz[16];
       for ( int jj = 0, n = 0; jj < order; jj++ ){
         for ( int ii = 0; ii < order; ii++, n++ ){
           // Find the nodal index and determine the (x,y,z) location
-          TMRQuadrant node;
-          node.face = quads[i].face;
-          node.x = quads[i].x + h*ii;
-          node.y = quads[i].y + h*jj;
-          forest->transformNode(&node);
-          int index = forest->getNodeIndex(&node);
-        
+          int node = conn[order*order*i + ii + order*jj];
+          int index = forest->getLocalNodeNumber(node);
+          
           // Set the pressure load
           double z = Xp[index].z;
           double y = -R*atan2(Xp[index].y, Xp[index].x);
@@ -140,8 +142,11 @@ class TMRCylinderCreator : public TMRQuadTACSCreator {
       if (order == 2){
         trac = new TACSShellTraction<2>(tx, ty, tz);
       }
-      else {
+      else if (order == 3){
         trac = new TACSShellTraction<3>(tx, ty, tz);
+      }
+      else if (order == 4){
+        trac = new TACSShellTraction<4>(tx, ty, tz);
       }
 
       aux->addElement(i, trac);
@@ -393,12 +398,12 @@ int main( int argc, char *argv[] ){
 
     const int MAX_REFINE = 10;
     TMRQuadForest *forest[MAX_REFINE+2];
-    forest[0] = new TMRQuadForest(comm);
+    forest[0] = new TMRQuadForest(comm, order, TMR_UNIFORM_POINTS);
     forest[0]->incref();
 
     TMRTopology *topo = new TMRTopology(comm, model);
     forest[0]->setTopology(topo);
-    forest[0]->createTrees(0);
+    forest[0]->createTrees(1);
     forest[0]->repartition();
 
     FILE *fp = NULL;
@@ -413,7 +418,7 @@ int main( int argc, char *argv[] ){
       TACSAssembler *tacs[MAX_REFINE+2];
       forest[0]->balance(1);
       forest[0]->repartition();
-      tacs[0] = creator->createTACS(order, forest[0]);
+      tacs[0] = creator->createTACS(forest[0], TACSAssembler::MULTICOLOR_ORDER);
       tacs[0]->incref();
 
       // Set the number of levels: Cap it with a value of 4
@@ -424,8 +429,9 @@ int main( int argc, char *argv[] ){
         // Create the coarser versions of tacs
         forest[1] = forest[0]->duplicate();
         forest[1]->incref();
+        forest[1]->setMeshOrder(2, TMR_UNIFORM_POINTS);
         forest[1]->balance();
-        tacs[1] = creator->createTACS(2, forest[1]);
+        tacs[1] = creator->createTACS(forest[1], TACSAssembler::MULTICOLOR_ORDER);
         tacs[1]->incref();
       }
 
@@ -433,8 +439,9 @@ int main( int argc, char *argv[] ){
       for ( int i = order-1; i < num_levels; i++ ){
         forest[i] = forest[i-1]->coarsen();
         forest[i]->incref();
+        forest[i]->setMeshOrder(2, TMR_UNIFORM_POINTS);
         forest[i]->balance();
-        tacs[i] = creator->createTACS(2, forest[i]);
+        tacs[i] = creator->createTACS(forest[i], TACSAssembler::MULTICOLOR_ORDER);
         tacs[i]->incref();
       }
 
@@ -500,32 +507,34 @@ int main( int argc, char *argv[] ){
       // estimate with the adjoint error correction
       TacsScalar abs_err = 0.0, fval_est = 0.0;
 
-      if (strain_energy_refine){
+      if (1){ // (strain_energy_refine){
         // Uniformly refine the mesh everywhere
         TMRQuadForest *forest_refine = forest[0]->duplicate();
         forest_refine->incref();
-        forest_refine->refine();
+
+        // Elevate the element order
+        forest_refine->setMeshOrder(order+1, TMR_UNIFORM_POINTS);
         forest_refine->balance();
 
         // Create the new, refined version of TACS
-        TACSAssembler *tacs_refine = creator->createTACS(order, forest_refine);
+        TACSAssembler *tacs_refine = creator->createTACS(forest_refine);
         tacs_refine->incref();
 
-        // Create the refined vector
-        TACSBVec *ans_refine = tacs_refine->createVec();
-        ans_refine->incref();
-        TMR_ComputeReconSolution(tacs[0], forest[0], tacs_refine,
-                                 ans, ans_refine);
-        tacs_refine->setVariables(ans_refine);
-        ans_refine->decref();
+        // // Create the refined vector
+        // TACSBVec *ans_refine = tacs_refine->createVec();
+        // ans_refine->incref();
+        // TMR_ComputeReconSolution(tacs[0], forest[0], tacs_refine,
+        //                          ans, ans_refine);
+        // tacs_refine->setVariables(ans_refine);
+        // ans_refine->decref();
 
-        // Write out the adjoint solution
-        f5 = new TACSToFH5(tacs_refine, TACS_SHELL, write_flag);
-        f5->incref();
-        sprintf(outfile, "ans_reconstruction%02d.f5", iter);
-        f5->writeToFile(outfile);
-        f5->decref();
-        forest_refine->decref();
+        // // Write out the adjoint solution
+        // f5 = new TACSToFH5(tacs_refine, TACS_SHELL, write_flag);
+        // f5->incref();
+        // sprintf(outfile, "ans_reconstruction%02d.f5", iter);
+        // f5->writeToFile(outfile);
+        // f5->decref();
+        // forest_refine->decref();
 
         // Set the absolute element-level error based on the relative
         // error that is requested
@@ -533,7 +542,8 @@ int main( int argc, char *argv[] ){
 
         // Compute the strain energy error estimate
         double *error = new double[ nelems ];
-        abs_err = TMR_StrainEnergyErrorEst(forest[0], tacs[0], error);
+        abs_err = TMR_StrainEnergyErrorEst(forest[0], tacs[0],
+                                           forest_refine, tacs_refine, error);
         TMR_PrintErrorBins(comm, error, nelems);
 
         // Compute the refinement based on the error estimates
@@ -546,6 +556,20 @@ int main( int argc, char *argv[] ){
         }
         delete [] error;
 
+        if (mpi_rank == 0){
+          printf("Relative factor         = %e\n", factor);
+          printf("Function value          = %e\n", fval);
+          printf("Target element error    = %e\n", target_abs_err);
+          printf("Absolute error estimate = %e\n", abs_err);
+          printf("Relative error estimate = %e\n", fabs(abs_err/fval));
+
+          const int *range;
+          forest[0]->getOwnedNodeRange(&range);
+          int nnodes = range[mpi_size];
+          fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
+                  iter, nelems, nnodes, fval, fval_est, abs_err);
+        }
+        
         // Refine the forest
         forest[0]->refine(refine);
         delete [] refine;
@@ -554,6 +578,7 @@ int main( int argc, char *argv[] ){
         fval_est = fval + abs_err;
       }
       else {
+        /*
         double ks_weight = 50.0;
         TACSKSFailure *ks_func = new TACSKSFailure(tacs[0], ks_weight);
         ks_func->setKSFailureType(TACSKSFailure::CONTINUOUS);
@@ -585,12 +610,12 @@ int main( int argc, char *argv[] ){
         TMRQuadForest *forest_refine = forest[0]->duplicate();
         forest_refine->incref();
 
-        // Uniformly refine the mesh everywhere
-        forest_refine->refine();
+        // Elevate the element order
+        forest_refine->setMeshOrder(order+1, TMR_UNIFORM_POINTS);
         forest_refine->balance();
 
         // Create the new, refined version of TACS
-        TACSAssembler *tacs_refine = creator->createTACS(order, forest_refine);
+        TACSAssembler *tacs_refine = creator->createTACS(forest_refine);
         tacs_refine->incref();
 
         // Compute the adjoint-based error estimate
@@ -601,8 +626,6 @@ int main( int argc, char *argv[] ){
 
         double mean, stddev;
         TMR_PrintErrorBins(comm, error, nelems, &mean, &stddev);
-
-
 
         // Create the refined vector
         TACSBVec *adjvec_refine = tacs_refine->createVec();
@@ -663,20 +686,7 @@ int main( int argc, char *argv[] ){
         forest_refine->decref();
         adjvec->decref();
         func->decref();
-      }
-
-      if (mpi_rank == 0){
-        printf("Relative factor         = %e\n", factor);
-        printf("Function value          = %e\n", fval);
-        printf("Target element error    = %e\n", target_abs_err);
-        printf("Absolute error estimate = %e\n", abs_err);
-        printf("Relative error estimate = %e\n", fabs(abs_err/fval));
-
-        const int *range;
-        forest[0]->getOwnedNodeRange(&range);
-        int nnodes = range[mpi_size];
-        fprintf(fp, "%d %d %d %15.10e %15.10e %15.10e\n",
-                iter, nelems, nnodes, fval, fval_est, abs_err);
+        */
       }
 
       // Decrease the reference count

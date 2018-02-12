@@ -47,9 +47,13 @@ void TMR_PrintErrorBins( MPI_Comm comm, const double *error,
 */
 double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
                                  TACSAssembler *tacs,
+                                 TMRQuadForest *forest_refined,
+                                 TACSAssembler *tacs_refined,
                                  double *error );
 double TMR_StrainEnergyErrorEst( TMROctForest *forest,
                                  TACSAssembler *tacs,
+                                 TMRQuadForest *forest_refined,
+                                 TACSAssembler *tacs_refined,
                                  double *error );
 
 /*

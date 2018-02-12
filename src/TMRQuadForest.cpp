@@ -1,9 +1,6 @@
 #include "TMRQuadForest.h"
+#include "TMRInterpolation.h"
 #include <stdlib.h>
-
-/*
-  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
-*/
 
 /*
   Face to edge node connectivity
@@ -43,24 +40,6 @@ static double convert_to_coordinate( const int32_t x ){
   }
   else {
     return 1.0*x/hmax;
-  }
-}
-
-/*
-  Evaluate the shape functions at the given coordinate
-*/
-static void lagrange_shape_functions( const int order,
-                                      const double u, 
-                                      const double *knots,
-                                      double *N ){
-  // Loop over the shape functions
-  for ( int i = 0; i < order; i++ ){
-    N[i] = 1.0;
-    for ( int j = 0; j < order; j++ ){
-      if (i != j){
-        N[i] *= (u - knots[j])/(knots[i] - knots[j]);
-      }
-    }
   }
 }
 
@@ -938,6 +917,9 @@ void TMRQuadForest::setMeshOrder( int _mesh_order,
   if (mesh_order < 2){
     mesh_order = 2;
   }
+  else if (mesh_order > MAX_ORDER){
+    mesh_order = MAX_ORDER;
+  }
 
   // Allocate the interpolation knots and set the knot locations
   interp_knots = new double[ mesh_order ];
@@ -1017,6 +999,56 @@ int TMRQuadForest::getLocalNodeNumber( int node ){
     }
   }
   return -1;
+}
+
+/*
+  Get the knot points for the interpolation
+*/
+int TMRQuadForest::getInterpKnots( const double **_knots ){
+  *_knots = interp_knots;
+  return mesh_order;
+}
+
+/*
+  Evaluate the interpolant at the given parametric point
+*/
+void TMRQuadForest::evalInterp( const double pt[], double N[] ){
+  double Nu[MAX_ORDER], Nv[MAX_ORDER];
+
+  // Evaluate the shape functions
+  lagrange_shape_functions(mesh_order, pt[0], interp_knots, Nu);
+  lagrange_shape_functions(mesh_order, pt[1], interp_knots, Nv);
+
+  for ( int j = 0; j < mesh_order; j++ ){
+    for ( int i = 0; i < mesh_order; i++ ){
+      N[0] = Nu[i]*Nv[j];
+      N++;
+    }    
+  }
+}
+
+/*
+  Evaluate the interpolant at the given parametric point
+*/
+void TMRQuadForest::evalInterp( const double pt[], double N[],
+                                double Nxi[], double Neta[] ){
+  double Nu[MAX_ORDER], Nv[MAX_ORDER];
+  double Nud[MAX_ORDER], Nvd[MAX_ORDER];
+
+  // Evaluate the shape functions
+  lagrange_shape_func_derivative(mesh_order, pt[0], interp_knots, Nu, Nud);
+  lagrange_shape_func_derivative(mesh_order, pt[1], interp_knots, Nv, Nvd);
+  
+  for ( int j = 0; j < mesh_order; j++ ){
+    for ( int i = 0; i < mesh_order; i++ ){
+      N[0] = Nu[i]*Nv[j];
+      Nxi[0] = Nud[i]*Nv[j];
+      Neta[0] = Nu[i]*Nvd[j];
+      N++;
+      Nxi++;
+      Neta++;
+    }    
+  }
 }
 
 /*
@@ -3941,39 +3973,71 @@ getNodesWithAttribute()\n");
     int fy = (fy0 || quads[i].y + h == hmax);
 
     if (fx && fy){
-      // This node lies on a corner
-      TMRVertex *vert;
-      int corner_index = (fx0 ? 0 : 1) + (fy0 ? 0 : 2);
-      int vert_num = face_conn[4*quads[i].face + corner_index];
-      topo->getVertex(vert_num, &vert);
-      const char *vert_attr = vert->getAttribute();
-      if (vert_attr && strcmp(vert_attr, attr) == 0){
-        int offset = (mesh_order-1)*(corner_index % 2) +
-                     (mesh_order-1)*mesh_order*(corner_index/2);
-        node_list[count] = 
-          conn[mesh_order*mesh_order*quads[i].tag + offset];
-        count++;
+      // Keep track of which corners this element touches
+      int ncorners = 0;
+      int corner_index[4];
+      if (quads[i].x == 0 && quads[i].y == 0){
+        corner_index[ncorners] = 0; ncorners++;
       }
-    }
-    else if (fx || fy){
-      // This node lies on an edge
-      TMREdge *edge;
-      int edge_index = fx*(fx0 ? 0 : 1) + fy*(fy0 ? 2 : 3);
-      int edge_num = face_edge_conn[4*quads[i].face + edge_index];
-      topo->getEdge(edge_num, &edge);
-      const char *edge_attr = edge->getAttribute();
-      if (edge_attr && strcmp(edge_attr, attr) == 0){
-        for ( int k = 0; k < mesh_order; k++ ){
-          int offset = 0;
-          if (edge_index < 2){
-            offset = k*mesh_order + (mesh_order-1)*edge_index;
-          }
-          else {
-            offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
-          }
+      if (quads[i].x + h == hmax && quads[i].y == 0){
+        corner_index[ncorners] = 1; ncorners++;
+      }
+      if (quads[i].x == 0 && quads[i].y + h == hmax){
+        corner_index[ncorners] = 2; ncorners++;
+      }
+      if (quads[i].x + h == hmax && quads[i].y + h == hmax){
+        corner_index[ncorners] = 3; ncorners++;
+      }
+
+      for ( int ii = 0; ii < ncorners; ii++ ){
+        TMRVertex *vert;
+        int vert_num = face_conn[4*quads[i].face + corner_index[ii]];
+        topo->getVertex(vert_num, &vert);
+        const char *vert_attr = vert->getAttribute();
+        if (vert_attr && strcmp(vert_attr, attr) == 0){
+          int offset = ((mesh_order-1)*(corner_index[ii] % 2) +
+                        (mesh_order-1)*mesh_order*(corner_index[ii]/2));
           node_list[count] = 
             conn[mesh_order*mesh_order*quads[i].tag + offset];
           count++;
+        }
+      }
+    }
+    else if (fx || fy){
+      // Keep track of which edges this element touches
+      int nedges = 0;
+      int edge_index[4];
+      if (quads[i].x == 0){
+        edge_index[nedges] = 0; nedges++;
+      }
+      if (quads[i].x + h == hmax){
+        edge_index[nedges] = 1; nedges++;
+      }
+      if (quads[i].y == 0){
+        edge_index[nedges] = 2; nedges++;
+      }
+      if (quads[i].y + h == hmax){
+        edge_index[nedges] = 3; nedges++;
+      }
+
+      for ( int ii = 0; ii < nedges; ii++ ){
+        TMREdge *edge;
+        int edge_num = face_edge_conn[4*quads[i].face + edge_index[ii]];
+        topo->getEdge(edge_num, &edge);
+        const char *edge_attr = edge->getAttribute();
+        if (edge_attr && strcmp(edge_attr, attr) == 0){
+          for ( int k = 0; k < mesh_order; k++ ){
+            int offset = 0;
+            if (edge_index[ii] < 2){
+              offset = k*mesh_order + (mesh_order-1)*edge_index[ii];
+            }
+            else {
+              offset = k + (mesh_order-1)*mesh_order*(edge_index[ii] % 2);
+            }
+            node_list[count] = 
+              conn[mesh_order*mesh_order*quads[i].tag + offset];
+            count++;
+          }
         }
       }
     }
@@ -4184,39 +4248,37 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
 
   // Check whether the node is on a coarse mesh surface in either 
   // the x,y,z directions
-  int32_t x = node->x + h*(i/(mesh_order-1));
-  int32_t y = node->y + h*(j/(mesh_order-1));
-  if ((i == 0 || i == mesh_order-1) && 
-      (x == quad->x || x == quad->x + hc)){
-    if (x == quad->x){ 
-      istart = 0;
-      iend = 1;
-    }
-    else {
-      istart = coarse->mesh_order-1;
-      iend = coarse->mesh_order;
-    }
+  if ((i == 0 && quad->x == node->x) ||
+      (i == 0 && quad->x + hc == node->x)){
+    istart = 0;
+    iend = 1;
     Nu[istart] = 1.0;
-  } 
+  }
+  else if ((i == mesh_order-1 && quad->x == node->x + h) ||
+           (i == mesh_order-1 && quad->x + hc == node->x + h)){
+    istart = coarse->mesh_order-1;
+    iend = coarse->mesh_order;
+    Nu[istart] = 1.0;
+  }
   else {
-    double u = ((x % hc) + h*coarse->interp_knots[i])/hc;
+    double u = ((node->x % hc) + h*coarse->interp_knots[i])/hc;
     lagrange_shape_functions(coarse->mesh_order, u, 
                              coarse->interp_knots, Nu);
   }
-  if ((j == 0 || j == mesh_order-1) && 
-      (y == quad->y || y == quad->y + hc)){
-    if (y == quad->y){ 
-      jstart = 0;
-      jend = 1;
-    }
-    else {
-      jstart = coarse->mesh_order-1;
-      jend = coarse->mesh_order;
-    }
+  if ((j == 0 && quad->y == node->y) ||
+      (j == 0 && quad->y + hc == node->y)){
+    jstart = 0;
+    jend = 1;
     Nv[jstart] = 1.0;
-  } 
+  }
+  else if ((j == mesh_order-1 && quad->y == node->y + h) ||
+           (j == mesh_order-1 && quad->y + hc == node->y + h)){
+    jstart = coarse->mesh_order-1;
+    jend = coarse->mesh_order;
+    Nv[jstart] = 1.0;
+  }
   else {
-    double v = ((y % hc) + h*coarse->interp_knots[j])/hc;
+    double v = ((node->y % hc) + h*coarse->interp_knots[j])/hc;
     lagrange_shape_functions(coarse->mesh_order, v, 
                              coarse->interp_knots, Nv);
   }

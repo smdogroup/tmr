@@ -1,10 +1,6 @@
 #ifndef TMR_OCTANT_FOREST_H
 #define TMR_OCTANT_FOREST_H
 
-/*
-  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
-*/
-
 #include "TMRTopology.h"
 #include "TMROctant.h"
 #include "BVecInterp.h"
@@ -28,6 +24,9 @@
 */
 class TMROctForest : public TMREntity {
  public:
+  // This is the max order of the mesh
+  static const int MAX_ORDER = 16;
+  
   TMROctForest( MPI_Comm _comm, int mesh_order=2,
                 TMRInterpolationType interp_type=TMR_GAUSS_LOBATTO_POINTS );
   ~TMROctForest();
@@ -116,6 +115,10 @@ class TMROctForest : public TMREntity {
   int getNodeNumbers( const int **_node_numbers );
   int getPoints( TMRPoint **_X );
   int getLocalNodeNumber( int node );
+  int getInterpKnots( const double **_knots );
+  void evalInterp( const double pt[], double N[] );
+  void evalInterp( const double pt[], double N[],
+                   double Nxi[], double Neta[], double Nzeta[] );
 
   // Retrieve the connectivity information
   // -------------------------------------

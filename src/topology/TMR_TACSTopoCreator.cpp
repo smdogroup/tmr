@@ -398,10 +398,6 @@ void TMROctTACSTopoCreator::createElements( int order,
                                 &weights[nweights*i], nweights);
   }
 
-  for ( int i = num_octs; i < num_elements; i++ ){
-    elements[i] = shell;
-  }
-
   delete [] weights;
   */
 }
@@ -419,13 +415,7 @@ TMRQuadTACSCreator(_bcs){
   int mpi_rank;
   MPI_Comm comm = filter->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
-
-  // Create the nodes within the filter
-  // filter->createNodes(2);
-
-  // Create the dependent node connectivity
-  // filter->createDepNodeConn();
-
+  
   // Get the node range for the filter design variables
   const int *filter_range;
   filter->getOwnedNodeRange(&filter_range);
