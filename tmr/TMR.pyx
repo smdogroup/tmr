@@ -30,12 +30,18 @@ from TMR cimport *
 cdef extern from "mpi-compat.h":
     pass
 
+# Max level
 MAX_LEVEL = TMR_MAX_LEVEL
 
+# Set the different types of meshes
 NO_MESH = TMR_NO_MESH
 STRUCTURED = TMR_STRUCTURED
 UNSTRUCTURED = TMR_UNSTRUCTURED
 TRIANGLE = TMR_TRIANGLE
+
+# Set the type of interpolation to use
+UNIFORM_POINTS = TMR_UNIFORM_POINTS
+GAUSS_LOBATTO_POINTS = TMR_GAUSS_LOBATTO_POINTS
 
 cdef class Vertex:
     cdef TMRVertex *ptr
@@ -1104,12 +1110,13 @@ cdef class Quadrant:
 
 cdef class QuadForest:
     cdef TMRQuadForest *ptr
-    def __cinit__(self, MPI.Comm comm=None):
+    def __cinit__(self, MPI.Comm comm=None, int order=2, 
+                  TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
         cdef MPI_Comm c_comm = NULL
         self.ptr = NULL
         if comm is not None:
             c_comm = comm.ob_mpi
-            self.ptr = new TMRQuadForest(c_comm)
+            self.ptr = new TMRQuadForest(c_comm, order, interp)
             self.ptr.incref()
 
     def __dealloc__(self):
@@ -1149,8 +1156,8 @@ cdef class QuadForest:
     def balance(self, int btype):
         self.ptr.balance(btype)
 
-    def createNodes(self, int order):
-        self.ptr.createNodes(order)
+    def createNodes(self):
+        self.ptr.createNodes()
 
     def getQuadsWithAttribute(self, char *attr):
         cdef TMRQuadrantArray *array = NULL
@@ -1158,18 +1165,18 @@ cdef class QuadForest:
         return _init_QuadrantArray(array, 1)
 
     def getNodesWithAttribute(self, char *attr):
-        cdef TMRQuadrantArray *array = NULL
-        array = self.ptr.getNodesWithAttribute(attr)
-        return _init_QuadrantArray(array, 1)
+        cdef int size = 0
+        cdef int *nodes = NULL
+        size = self.ptr.getNodesWithAttribute(attr, &nodes)
+        array = np.zeros(size, dtype=np.intc)
+        for i in range(size):
+            array[i] = nodes[i]
+        _deleteMe(nodes)
+        return array
 
     def getQuadrants(self):
         cdef TMRQuadrantArray *array = NULL
         self.ptr.getQuadrants(&array)
-        return _init_QuadrantArray(array, 0)
-
-    def getNodes(self):
-        cdef TMRQuadrantArray *array = NULL
-        self.ptr.getNodes(&array)
         return _init_QuadrantArray(array, 0)
 
     def getPoints(self):
@@ -1192,34 +1199,15 @@ cdef class QuadForest:
             r[i] = node_range[i]
         return r
 
-    def createMeshConn(self):
-        cdef int *conn
+    def getMeshConn(self):
+        cdef const int *conn
         cdef int nelems
         cdef int order = self.ptr.getMeshOrder()
-        self.ptr.createMeshConn(&conn, &nelems)
-        quads = np.zeros((nelems, order*order), dtype=np.intc)
-        if order == 2:
-            for i in range(nelems):
-                quads[i,0] = conn[4*i]
-                quads[i,1] = conn[4*i+1]
-                quads[i,2] = conn[4*i+2]
-                quads[i,3] = conn[4*i+3]
-        elif order == 3:
-            for i in range(nelems):
-                quads[i,0] = conn[4*i]
-                quads[i,1] = conn[4*i+1]
-                quads[i,2] = conn[4*i+2]
-                quads[i,3] = conn[4*i+3]
-                quads[i,4] = conn[4*i+4]
-                quads[i,5] = conn[4*i+5]
-                quads[i,6] = conn[4*i+6]
-                quads[i,7] = conn[4*i+7]
-                quads[i,8] = conn[4*i+8]            
-        _deleteMe(conn)
+        self.ptr.getNodeConn(&conn, &nelems)
+        quads = np.zeros((order*order*nelems), dtype=np.intc)
+        for i in range(order*order*nelems):
+            quads[i] = conn[i]
         return quads
-
-    def createDepNodeConn(self):
-        self.ptr.createDepNodeConn()
 
     def getDepNodeConn(self):
         cdef int ndep = 0
@@ -1368,12 +1356,13 @@ cdef class Octant:
 
 cdef class OctForest:
     cdef TMROctForest *ptr
-    def __cinit__(self, MPI.Comm comm=None):
+    def __cinit__(self, MPI.Comm comm=None, int order=2, 
+                  TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
         cdef MPI_Comm c_comm = NULL
         self.ptr = NULL
         if comm is not None:
             c_comm = comm.ob_mpi
-            self.ptr = new TMROctForest(c_comm)
+            self.ptr = new TMROctForest(c_comm, order, interp)
             self.ptr.incref()
 
     def __dealloc__(self):
@@ -1413,8 +1402,8 @@ cdef class OctForest:
     def balance(self, int btype):
         self.ptr.balance(btype)
 
-    def createNodes(self, int order):
-        self.ptr.createNodes(order)
+    def createNodes(self):
+        self.ptr.createNodes()
 
     def getOctsWithAttribute(self, char *attr):
         cdef TMROctantArray *array = NULL
@@ -1422,18 +1411,18 @@ cdef class OctForest:
         return _init_OctantArray(array, 1)
 
     def getNodesWithAttribute(self, char *attr):
-        cdef TMROctantArray *array = NULL
-        array = self.ptr.getNodesWithAttribute(attr)
-        return _init_OctantArray(array, 1)
+        cdef int size = 0
+        cdef int *nodes = NULL
+        size = self.ptr.getNodesWithAttribute(attr, &nodes)
+        array = np.zeros(size, dtype=np.intc)
+        for i in range(size):
+            array[i] = nodes[i]
+        _deleteMe(nodes)
+        return array
 
     def getOctants(self):
         cdef TMROctantArray *array = NULL
         self.ptr.getOctants(&array)
-        return _init_OctantArray(array, 0)
-
-    def getNodes(self):
-        cdef TMROctantArray *array = NULL
-        self.ptr.getNodes(&array)
         return _init_OctantArray(array, 0)
 
     def getPoints(self):
@@ -1455,6 +1444,32 @@ cdef class OctForest:
         for i in range(size+1):
             r[i] = node_range[i]
         return r
+
+    def getMeshConn(self):
+        cdef const int *conn
+        cdef int nelems
+        cdef int order = self.ptr.getMeshOrder()
+        self.ptr.getNodeConn(&conn, &nelems)
+        octs = np.zeros((order*order*order*nelems), dtype=np.intc)
+        for i in range(order*order*order*nelems):
+            octs[i] = conn[i]
+        return octs
+
+    def getDepNodeConn(self):
+        cdef int ndep = 0
+        cdef const int *_ptr = NULL
+        cdef const int *_conn = NULL
+        cdef const double *_weights = NULL
+        ndep = self.ptr.getDepNodeConn(&_ptr, &_conn, &_weights)
+        ptr = np.zeros(ndep+1, dtype=np.intc)
+        conn = np.zeros(_ptr[ndep], dtype=np.intc)
+        weights = np.zeros(_ptr[ndep], dtype=np.double)
+        for i in range(ndep+1):
+            ptr[i] = _ptr[i]
+        for i in xrange(ptr[ndep]):
+            conn[i] = _conn[i]
+            weights[i] = _weights[i]
+        return ptr, conn, weights
 
     def writeToVTK(self, char *filename):
         self.ptr.writeToVTK(filename)
@@ -1544,10 +1559,10 @@ cdef class QuadCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, int order, QuadForest forest, 
+    def createTACS(self, QuadForest forest, 
                    OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr, ordering)
+        assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
 cdef TACSElement* _createOctElement(void *_self, int order, 
@@ -1579,10 +1594,10 @@ cdef class OctCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, int order, OctForest forest, 
+    def createTACS(self, OctForest forest, 
                    OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr, ordering)
+        assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
 cdef TACSElement* _createQuadTopoElement(void *_self, int order, 

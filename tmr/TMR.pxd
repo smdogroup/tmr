@@ -39,6 +39,10 @@ cdef extern from "TMRBase.h":
     void TMRInitialize()
     void TMRFinalize()
 
+    enum TMRInterpolationType:
+        TMR_UNIFORM_POINTS
+        TMR_GAUSS_LOBATTO_POINTS
+
 cdef extern from "TMRTopology.h":
     cdef cppclass TMRTopology(TMREntity):
         TMRTopology(MPI_Comm, TMRModel*)
@@ -246,7 +250,7 @@ cdef extern from "TMRQuadrant.h":
 
 cdef extern from "TMRQuadForest.h":
     cdef cppclass TMRQuadForest(TMREntity):
-        TMRQuadForest(MPI_Comm)
+        TMRQuadForest(MPI_Comm, int, TMRInterpolationType)
         MPI_Comm getMPIComm()
         void setTopology(TMRTopology*)
         void setConnectivity(int, const int*, int)
@@ -258,17 +262,16 @@ cdef extern from "TMRQuadForest.h":
         TMRQuadForest *duplicate()
         TMRQuadForest *coarsen()
         void balance(int)
-        void createNodes(int)
-        TMRQuadrantArray* getQuadsWithAttribute(const char*)
-        TMRQuadrantArray* getNodesWithAttribute(const char*)
+        void createNodes()
         int getMeshOrder()
-        void createMeshConn(const int**, const int*)
-        void createDepNodeConn()
+        void setMeshOrder(int, TMRInterpolationType)
+        void getNodeConn(const int**, int*)
         int getDepNodeConn(const int**, const int**, const double**)
+        TMRQuadrantArray* getQuadsWithAttribute(const char*)
+        int getNodesWithAttribute(const char*, int**)
         void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
         int getOwnedNodeRange(const int**)
         void getQuadrants(TMRQuadrantArray**)
-        void getNodes(TMRQuadrantArray**)
         int getPoints(TMRPoint**)
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
@@ -298,7 +301,7 @@ cdef extern from "TMROctant.h":
         
 cdef extern from "TMROctForest.h":
     cdef cppclass TMROctForest(TMREntity):
-        TMROctForest(MPI_Comm)
+        TMROctForest(MPI_Comm, int, TMRInterpolationType)
         MPI_Comm getMPIComm()
         void setTopology(TMRTopology*)
         void setConnectivity(int, const int*, int)
@@ -310,15 +313,16 @@ cdef extern from "TMROctForest.h":
         TMROctForest *duplicate()
         TMROctForest *coarsen()
         void balance(int)
-        void createNodes(int)
-        TMROctantArray* getOctsWithAttribute(const char*)
-        TMROctantArray* getNodesWithAttribute(const char*)
-        void createMeshConn(const int**, const int*)
+        void createNodes()
+        int getMeshOrder()
+        void setMeshOrder(int, TMRInterpolationType)
+        void getNodeConn(const int**, int*)
         int getDepNodeConn(const int**, const int**, const double**)
+        TMROctantArray* getOctsWithAttribute(const char*)
+        int getNodesWithAttribute(const char*, int**)
         void createInterpolation(TMROctForest*, TACSBVecInterp*)
         int getOwnedNodeRange(const int**)
         void getOctants(TMROctantArray**)
-        void getNodes(TMROctantArray**)
         int getPoints(TMRPoint**)
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
@@ -386,14 +390,14 @@ cdef extern from "TMRCyCreator.h":
         void setSelfPointer(void*)
         void setCreateQuadElement( 
             TACSElement* (*createquadelements)(void*, int, TMRQuadrant*))
-        TACSAssembler *createTACS(int, TMRQuadForest*, OrderingType)
+        TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
 
     cdef cppclass TMRCyOctCreator(TMREntity):
         TMRCyOctCreator(TMRBoundaryConditions*)
         void setSelfPointer(void*)
         void setCreateOctElement( 
             TACSElement* (*createoctelements)(void*, int, TMROctant*))
-        TACSAssembler *createTACS(int, TMROctForest*, OrderingType)
+        TACSAssembler *createTACS(TMROctForest*, OrderingType)
 
     cdef cppclass TMRCyTopoQuadCreator(TMREntity):
         TMRCyTopoQuadCreator(TMRBoundaryConditions*, TMRQuadForest*)
