@@ -1635,10 +1635,10 @@ cdef class QuadTopoCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, int order, QuadForest forest, 
+    def createTACS(self, QuadForest forest, 
                    OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr, ordering)
+        assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -1695,11 +1695,11 @@ cdef class OctTopoCreator:
         if self.ptr:
             self.ptr.decref()
 
-    def createTACS(self, int order, OctForest forest,  
+    def createTACS(self, OctForest forest,  
                    OrderingType ordering=TACS.PY_NATURAL_ORDER,
                    double scale=1.0):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(order, forest.ptr, ordering, scale)
+        assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
         return _init_Assembler(assembler)
 
     def getFilter(self):

@@ -878,7 +878,6 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   TACSBVec *vec = new TACSBVec(filter_maps[0], 1, filter_dist[0], dep_nodes);
   vec->zeroEntries();
 
-  /*
   // Get the octants
   TMROctantArray *octants;
   oct_filter[0]->getOctants(&octants);
@@ -889,11 +888,8 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   octants->getArray(&array, &size);
 
   // Get the nodes
-  TMROctantArray *nodes;
-  oct_filter[0]->getNodes(&nodes);
-  int node_size;
-  TMROctant *node_array;
-  nodes->getArray(&node_array, &node_size);  
+  const int *conn;
+  oct_filter[0]->getNodeConn(&conn);
 
   // Get the node locations from the filter
   TMRPoint *X;
@@ -901,8 +897,6 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   
   // Loop over the elements 
   for ( int i = 0; i < size; i++ ){
-    int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
-
     // Retrieve the node numbers and x/y/z locations for element i
     // within the mesh
     int node_nums[8];
@@ -910,25 +904,14 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
     for ( int kk = 0; kk < 2; kk++ ){
       for ( int jj = 0; jj < 2; jj++ ){
         for ( int ii = 0; ii < 2; ii++ ){
-          // Find the octant node (without level/tag)
-          TMROctant node;
-          node.block = array[i].block;
-          node.x = array[i].x + ii*h;
-          node.y = array[i].y + jj*h;
-          node.z = array[i].z + kk*h;
-          oct_filter[0]->transformNode(&node);
+          int node = conn[8*i + ii + 2*jj + 4*kk];
+          int index = oct_filter[0]->getLocalNodeNumber(node);
+
+          // Copy the node location
+          Xpts[ii + 2*jj + 4*kk] = X[index];
           
-          // Find the corresponding node
-          const int use_nodes = 1;
-          TMROctant *t = nodes->contains(&node, use_nodes);
-          
-          if (t){
-            // Copy the node location
-            Xpts[ii + 2*jj + 4*kk] = X[t - node_array];
-            
-            // Copy the node number
-            node_nums[ii + 2*jj + 4*kk] = t->tag;
-          }
+          // Copy the node number
+          node_nums[ii + 2*jj + 4*kk] = node;
         }
       }
     }
@@ -991,15 +974,12 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   vec->endSetValues(TACS_ADD_VALUES);
 
   return vec;
-  */
-  return NULL;
 }
 
 /*
   Compute the volume corresponding to each node within the filter
 */
 TACSBVec* TMRTopoProblem::createAreaVec(){
-  /*
   // Get the dependent nodes and weight values
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
@@ -1028,11 +1008,8 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
   quadrants->getArray(&array, &size);
 
   // Get the nodes
-  TMRQuadrantArray *nodes;
-  quad_filter[0]->getNodes(&nodes);
-  int node_size;
-  TMRQuadrant *node_array;
-  nodes->getArray(&node_array, &node_size);  
+  const int *conn;
+  quad_filter[0]->getNodeConn(&conn);
 
   // Get the node locations from the filter
   TMRPoint *X;
@@ -1040,8 +1017,6 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
   
   // Loop over the elements 
   for ( int i = 0; i < size; i++ ){
-    int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
-
     // Retrieve the node numbers and x/y/z locations for element i
     // within the mesh
     int node_nums[4];
@@ -1050,23 +1025,14 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
     for ( int jj = 0; jj < 2; jj++ ){
       for ( int ii = 0; ii < 2; ii++ ){
         // Find the quadrant node (without level/tag)
-        TMRQuadrant node;
-        node.face = array[i].face;
-        node.x = array[i].x + ii*h;
-        node.y = array[i].y + jj*h;
-        quad_filter[0]->transformNode(&node);
+        int node = conn[4*i + ii + 2*jj];
+        int index = quad_filter[0]->getLocalNodeNumber(node);
+
+        // Copy the node location
+        Xpts[ii + 2*jj] = X[index];
           
-        // Find the corresponding node
-        const int use_nodes = 1;
-        TMRQuadrant *t = nodes->contains(&node, use_nodes);
-          
-        if (t){
-          // Copy the node location
-          Xpts[ii + 2*jj] = X[t - node_array];
-            
-          // Copy the node number
-          node_nums[ii + 2*jj] = t->tag;
-        }
+        // Copy the node number
+        node_nums[ii + 2*jj] = node;
       }
     }
 
@@ -1117,8 +1083,6 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
   vec->endSetValues(TACS_ADD_VALUES);
 
   return vec;
-  */
-  return NULL;
 }
 
 /*
@@ -1885,7 +1849,8 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
 
     for ( int k = 0; k < vars_per_node; k++ ){
       double cutoff = 0.5;
-      sprintf(filename, "%s/levelset05_var%d_binary%04d.bstl", prefix, k, iter_count);
+      sprintf(filename, "%s/levelset05_var%d_binary%04d.bstl", 
+              prefix, k, iter_count);
       TMR_GenerateBinFile(filename, oct_filter[0], x[0], k, cutoff);
     }
     

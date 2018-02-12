@@ -4,7 +4,6 @@
 #include "TMR_TACSCreator.h"
 #include "TACSAssembler.h"
 #include "TMROctStiffness.h"
-#include "SolidShellWrapper.h"
 
 /*
   This is an abstract base class used to create octforests specialized
@@ -15,19 +14,11 @@
 class TMROctTACSTopoCreator : public TMROctTACSCreator {
  public:
   TMROctTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                         TMROctForest *_filter,
-                         const char *shell_attr=NULL, 
-                         SolidShellWrapper *_shell=NULL );
+                         TMROctForest *_filter );
   ~TMROctTACSTopoCreator();
 
-  // Create the connectivity
-  void createConnectivity( int order,
-                           TMROctForest *forest,
-                           int **_conn, int **_ptr,
-                           int *_num_elements );
-
   // Create the elements
-  void createElements( int order,
+  void createElements( int order, 
                        TMROctForest *forest,
                        int num_elements,
                        TACSElement **elements );
@@ -59,10 +50,6 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
   // local design variable numbers and the global design variable
   // numbers.
   TACSBVecIndices *filter_indices;
-
-  // Set the top/bottom attributes
-  char *shell_attr;
-  SolidShellWrapper *shell;
 };
 
 /*
@@ -74,12 +61,6 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
   TMRQuadTACSTopoCreator( TMRBoundaryConditions *_bcs,
                           TMRQuadForest *_filter );
   ~TMRQuadTACSTopoCreator();
-
-  // Create the connectivity
-  void createConnectivity( int order,
-                           TMRQuadForest *forest,
-                           int **_conn, int **_ptr,
-                           int *_num_elements );
 
   // Create the elements
   void createElements( int order,

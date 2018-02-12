@@ -16,9 +16,7 @@ static int compare_integers( const void *a, const void *b ){
   Set up a creator class for the given filter problem
 */
 TMROctTACSTopoCreator::TMROctTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                              TMROctForest *_filter,
-                                              const char *_shell_attr,
-                                              SolidShellWrapper *_shell ):
+                                              TMROctForest *_filter ):
 TMROctTACSCreator(_bcs){
   // Reference the filter
   filter = _filter;
@@ -42,16 +40,6 @@ TMROctTACSCreator(_bcs){
 
   // Set the filter indices to NULL
   filter_indices = NULL;
-
-  // Set shell attributes if they exist 
-  shell_attr = NULL;
-  shell = NULL;
-  if (_shell_attr && _shell){
-    shell_attr = new char[ strlen(_shell_attr)+1 ];
-    strcpy(shell_attr, _shell_attr);
-    shell = _shell;
-    shell->incref();
-  }
 }
 
 /*
@@ -61,7 +49,6 @@ TMROctTACSTopoCreator::~TMROctTACSTopoCreator(){
   filter->decref();
   filter_map->decref();
   if (filter_indices){ filter_indices->decref(); }
-  if (shell_attr){ delete [] shell_attr; }
 }
 
 // Get the underlying information about the
@@ -75,94 +62,6 @@ void TMROctTACSTopoCreator::getMap( TACSVarMap **_map ){
 
 void TMROctTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
   *_indices = filter_indices;
-}
-
-/*
-  If order != 2, this is not going to work.....
-*/
-void TMROctTACSTopoCreator::createConnectivity( int order,
-                                                TMROctForest *forest,
-                                                int **_conn, int **_ptr,
-                                                int *_num_elements ){
-  /*
-  // Create the mesh
-  int *elem_conn, num_octs;
-  forest->createMeshConn(&elem_conn, &num_octs);
-
-  // Set the default attributes
-  int num_elements = num_octs;
-
-  // Get the octants from the top and bottom surface
-  if (shell){
-    TMROctantArray *nodes;
-    forest->getNodes(&nodes);
-
-    TMROctantArray *shell_octs = forest->getOctsWithAttribute(shell_attr);
-    
-    // Get the top and bottom surface octants
-    int nshell;
-    TMROctant *octs;
-    shell_octs->getArray(&octs, &nshell);
-
-    num_elements = num_octs + nshell;
-    int *conn = new int[ 8*num_elements ];
-    memcpy(conn, elem_conn, 8*num_octs*sizeof(int));
-    delete [] elem_conn;
-
-    int index = 8*num_octs;
-
-    // Add the connectivity from the nodes
-    for ( int i = 0; i < nshell; i++ ){
-      const int32_t h = 1 << (TMR_MAX_LEVEL - octs[i].level);
-      for ( int jj = 0; jj < 2; jj++ ){
-        for ( int ii = 0; ii < 2; ii++ ){
-          int face_index = octs[i].tag;
-
-          TMROctant node;
-          node.block = octs[i].block;
-
-          if (face_index < 2){
-            node.x = octs[i].x + (face_index % 2)*h;
-            node.y = octs[i].y + ii*h;
-            node.z = octs[i].z + jj*h;
-          }
-          else if (face_index < 4){
-            node.x = octs[i].x + ii*h;
-            node.y = octs[i].y + (face_index % 2)*h;
-            node.z = octs[i].z + jj*h;
-          }
-          else {
-            node.x = octs[i].x + ii*h;
-            node.y = octs[i].y + jj*h;
-            node.z = octs[i].z + (face_index % 2)*h;
-          }
-
-          // Transform the node to the global ordering
-          forest->transformNode(&node);
-        
-          const int use_node_search = 1;
-          TMROctant *t = nodes->contains(&node, use_node_search);
-          conn[index] = t->tag;  index++;
-          conn[index] = t->tag+1; index++;
-        }
-      }
-    }
-
-    // Free the bottom octants
-    delete shell_octs;
-    elem_conn = conn;    
-  }
-
-  // Set the element ptr
-  int *ptr = new int[ num_elements+1 ];
-  for ( int i = 0; i < num_elements+1; i++ ){
-    ptr[i] = order*order*order*i;
-  }
-
-  *_conn = elem_conn;
-  *_ptr = ptr;
-  *_num_elements = num_elements;
-  */
 }
 
 void TMROctTACSTopoCreator::computeWeights( TMROctant *oct,
@@ -560,33 +459,6 @@ void TMRQuadTACSTopoCreator::getMap( TACSVarMap **_map ){
 
 void TMRQuadTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
   *_indices = filter_indices;
-}
-
-/*
-  Create the connectivity
-*/
-void TMRQuadTACSTopoCreator::createConnectivity( int order,
-                                                 TMRQuadForest *forest,
-                                                 int **_conn, int **_ptr,
-                                                 int *_num_elements ){
-  /*
-  // Create the mesh
-  int *elem_conn, num_quads;
-  forest->createMeshConn(&elem_conn, &num_quads);
-
-  // Set the default attributes
-  int num_elements = num_quads;
-
-  // Set the element ptr
-  int *ptr = new int[ num_elements+1 ];
-  for ( int i = 0; i < num_elements+1; i++ ){
-    ptr[i] = order*order*i;
-  }
-
-  *_conn = elem_conn;
-  *_ptr = ptr;
-  *_num_elements = num_elements;
-  */
 }
 
 /*
