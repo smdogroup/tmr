@@ -47,6 +47,13 @@ class TMRQuadForest : public TMREntity {
                             const int *_face_conn,
                             const int *_face_edge_conn );
 
+  // Set/get the interpolation and order
+  // -----------------------------------
+  void setMeshOrder( int mesh_order,
+                     TMRInterpolationType interp_type=
+                       TMR_GAUSS_LOBATTO_POINTS );
+  int getMeshOrder();
+
   // Re-partition the quadtrees based on element count
   // -------------------------------------------------
   void repartition();
@@ -57,15 +64,15 @@ class TMRQuadForest : public TMREntity {
   void createRandomTrees( int nrand=10, 
                           int min_level=0, int max_level=8 );
 
-  // Refine the mesh
-  // ---------------
-  void refine( const int refinement[]=NULL,
-               int min_level=0, int max_level=TMR_MAX_LEVEL );
-
   // Duplicate or coarsen the forest
   // -------------------------------
   TMRQuadForest *duplicate();
   TMRQuadForest *coarsen();
+
+  // Refine the mesh
+  // ---------------
+  void refine( const int refinement[]=NULL,
+               int min_level=0, int max_level=TMR_MAX_LEVEL );
 
   // Balance the quadtree meshes
   // -------------------------
@@ -94,36 +101,16 @@ class TMRQuadForest : public TMREntity {
   TMRQuadrantArray* getQuadsWithAttribute( const char *attr );
   int getNodesWithAttribute( const char *attr, int **nodes );
   
-  // Get the mesh order
-  // ------------------
-  int getMeshOrder(){ return mesh_order; }
-
   // Get the node-processor ownership range
   // --------------------------------------
-  int getOwnedNodeRange( const int **_node_range ){
-    if (_node_range){
-      *_node_range = node_range;
-    }
-    return mpi_size;
-  }
+  int getOwnedNodeRange( const int **_node_range );
 
   // Get the quadrants and the nodes
-  // -----------------------------
-  void getQuadrants( TMRQuadrantArray **_quadrants ){
-    if (_quadrants){ *_quadrants = quadrants; }
-  }
-  int getNodeNumbers( const int **_node_numbers ){
-    if (_node_numbers){ *_node_numbers = node_numbers; }
-    return num_local_nodes;
-  }
-  int getPoints( TMRPoint **_X ){
-    if (_X){ *_X = X; }
-    return num_local_nodes;
-  }
-
-  // Get the index of the given element or node
-  // ------------------------------------------
-  int getElementIndex( TMRQuadrant *element );
+  // -------------------------------
+  void getQuadrants( TMRQuadrantArray **_quadrants );
+  int getNodeNumbers( const int **_node_numbers );
+  int getPoints( TMRPoint **_X );
+  int getLocalNodeNumber( int node );
 
   // Retrieve the connectivity information
   // -------------------------------------
@@ -135,12 +122,10 @@ class TMRQuadForest : public TMREntity {
                                const int **_edge_face_conn,
                                const int **_edge_face_ptr );
 
-  // Write out files showing the connectivity
-  // ----------------------------------------
-  void writeToVTK( const char *filename );
-  void writeToTecplot( const char *filename );
-  void writeForestToVTK( const char *filename );
-  void writeAdjacentToVTK( const char *filename );
+  // Find the quadrant enclosing the given node
+  // ------------------------------------------
+  TMRQuadrant* findEnclosing( const int order, const double *knots,
+                              TMRQuadrant *node, int *mpi_owner=NULL );
 
   // Distribute the quadrant array
   // -----------------------------
@@ -153,11 +138,14 @@ class TMRQuadForest : public TMREntity {
   TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
                                    const int *quad_ptr,
                                    const int *quad_recv_ptr,
-                                   int use_node_index=0 );
+                                   int use_node_index=0 );  
 
-  // Find the quadrant 
-  // -----------------
-  TMRQuadrant* findEnclosing( TMRQuadrant *node );
+  // Write out files showing the connectivity
+  // ----------------------------------------
+  void writeToVTK( const char *filename );
+  void writeToTecplot( const char *filename );
+  void writeForestToVTK( const char *filename );
+  void writeAdjacentToVTK( const char *filename );
 
  private:
   // Labels for the nodes
@@ -249,6 +237,11 @@ class TMRQuadForest : public TMREntity {
 
   // Compute the node locations
   void evaluateNodeLocations();
+
+  // Compute the element interpolation
+  int computeElemInterp( TMRQuadrant *node,
+                         TMRQuadForest *coarse, TMRQuadrant *quad,
+                         TMRIndexWeight *weights, double *tmp );
 
   // The communicator 
   MPI_Comm comm;

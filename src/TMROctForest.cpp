@@ -41,6 +41,16 @@ const int child_id_to_face_index[][3] =
    {0, 3, 5},
    {1, 3, 5}};
 
+const int child_id_to_face_to_edge_index[][3][2] =
+  {{{8, 4}, {8, 0}, {4, 0}},
+   {{9, 5}, {9, 0}, {5, 0}},
+   {{10, 4}, {10, 1}, {4, 1}},
+   {{11, 5}, {11, 1}, {5, 1}},
+   {{8, 6}, {8, 2}, {6, 2}},
+   {{9, 7}, {9, 2}, {7, 2}},
+   {{10, 6}, {10, 3}, {6, 3}},
+   {{11, 7}, {11, 3}, {7, 3}}};
+
 /*
   Given the octant child identifier, what are the adjacent edges?
 */
@@ -294,6 +304,13 @@ inline void decode_index_from_info( TMROctant *oct,
     for ( int k = 0; k < 3; k++ ){
       if (info & 1 << (k + 3)){
         *edge_info |= 1 << child_id_to_edge_index[id][k];
+      }
+    }
+    for ( int k = 0; k < 3; k++ ){
+      if (info & 1 << k){
+        for ( int j = 0; j < 2; j++ ){
+          *edge_info |= 1 << child_id_to_face_to_edge_index[id][k][j];
+        }
       }
     }
   }
@@ -2166,7 +2183,7 @@ void TMROctForest::matchOctantIntervals( TMROctant *array,
 /*
   Match the MPI intervals
 */
-void TMROctForest::matchMPIIntervals( TMROctant *array,
+void TMROctForest::matchTagIntervals( TMROctant *array,
                                       int size, int *ptr ){
   ptr[0] = 0;
   for ( int i = 0, rank = 0; rank < mpi_size; rank++ ){
@@ -2200,7 +2217,7 @@ TMROctantArray *TMROctForest::distributeOctants( TMROctantArray *list,
   // Match the octant intervals to determine how mnay octants
   // need to be sent to each processor
   if (use_tags){
-    matchMPIIntervals(array, size, oct_ptr);
+    matchTagIntervals(array, size, oct_ptr);
   }
   else {
     matchOctantIntervals(array, size, oct_ptr);
@@ -5967,11 +5984,48 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   if (mpi_owner){
     int rank = 0;
     // while (owners[rank+1] <= oct) rank++
-    for ( ; rank < mpi_size-1 && 
-            (owners[rank+1].block < block &&
-             owners[rank+1].x < xd &&
-             owners[rank+1].y < yd &&
-             owners[rank+1].z < zd); rank++ );
+    while (rank < mpi_size-1){
+      // Determine the relative order of the octants
+      if (owners[rank+1].block < block){
+        rank++;
+      }
+      else if (owners[rank+1].block == block){
+        // Determine the largest number
+        double xmax = (owners[rank+1].x > xd ? owners[rank+1].x : xd);
+        double ymax = (owners[rank+1].y > yd ? owners[rank+1].y : yd);
+        double zmax = (owners[rank+1].z > zd ? owners[rank+1].z : zd);
+
+        // Check for the largest value
+        if (xmax > ymax && xmax > zmax){
+          if (owners[rank+1].x < xd){
+            rank++;
+          }
+          else {
+            break;
+          }
+        }
+        else if (ymax > xmax && ymax > zmax){
+          if (owners[rank+1].y < yd){
+            rank++;
+          }
+          else {
+            break;
+          }
+        }
+        else {
+          if (owners[rank+1].z < zd){
+            rank++;
+          }
+          else {
+            break;
+          }
+        }
+      }
+      else {
+        // oct > owners[rank+1]
+        break;
+      }
+    }
 
     // Set the owner rank
     *mpi_owner = rank;
@@ -6179,6 +6233,9 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   TMROctant *octs;
   octants->getArray(&octs, &num_elements);
 
+  // Allocate a queue to store the nodes that are on other procs
+  TMROctantQueue *ext_queue = new TMROctantQueue();
+
   for ( int i = 0; i < num_elements; i++ ){
     const int *c = &conn[nodes_per_element*i];
     for ( int j = 0; j < nodes_per_element; j++ ){
@@ -6205,20 +6262,18 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
             // Compute the element interpolation
             int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
 
-            if (nweights > order*order*order){
-              printf("nweights = %d index = %d  %d\n", nweights, i, j);
+            for ( int k = 0; k < nweights; k++ ){
+              vars[k] = weights[k].index;
+              wvals[k] = weights[k].weight;
             }
-
-            // for ( int k = 0; k < nweights; k++ ){
-            //   vars[k] = weights[k].index;
-            //   wvals[k] = weights[k].weight;
-            // }
-            // interp->addInterp(c[j], wvals, vars, nweights);
+            interp->addInterp(c[j], wvals, vars, nweights);
           }
           else {
-            // We've got to transfer the node to the owner processor
-
-
+            // We've got to transfer the node to the processor that
+            // owns an enclosing element. Do to that, add the
+            // octant to the list of externals and store its mpi owner
+            node.tag = mpi_owner;
+            ext_queue->push(&node);
           }
         }
       }
@@ -6227,27 +6282,101 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
 
   // Free the data
   delete [] flags;
+
+  // Sort the sending octants by MPI rank
+  TMROctantArray *ext_array = ext_queue->toArray();
+  delete ext_queue;
+
+  // Sort the node
+  int size;
+  TMROctant *array;
+  ext_array->getArray(&array, &size);
+  qsort(array, size, sizeof(TMROctant), compare_octant_tags);
+
+  // The number of octants that will be sent from this processor
+  // to all other processors in the communicator
+  int *oct_ptr = new int[ mpi_size+1 ];
+  int *oct_recv_ptr = new int[ mpi_size+1 ];
+
+  // Match the octant intervals to determine how mnay octants
+  // need to be sent to each processor
+  matchTagIntervals(array, size, oct_ptr);
+
+  // Now convert the node tags nodes back to node numbers
+  // from the connectivity
+  for ( int i = 0; i < size; i++ ){
+    // Search for the octant in the octants array
+    TMROctant *t = octants->contains(&array[i]);
+
+    // Set the tag value as the global node number
+    array[i].tag = conn[nodes_per_element*t->tag + array[i].info];
+  }
+  
+  // Count up the number of octants destined for other procs
+  int *oct_counts = new int[ mpi_size ];
+  for ( int i = 0; i < mpi_size; i++ ){
+    if (i == mpi_rank){
+      oct_counts[i] = 0;
+    }
+    else {
+      oct_counts[i] = oct_ptr[i+1] - oct_ptr[i];
+    }
+  }
+
+  // Now distribute the octants to their destination processors
+  int *oct_recv_counts = new int[ mpi_size ];
+  MPI_Alltoall(oct_counts, 1, MPI_INT,
+               oct_recv_counts, 1, MPI_INT, comm);
+
+  // Now use oct_ptr to point into the recv array
+  oct_recv_ptr[0] = 0;
+  for ( int i = 0; i < mpi_size; i++ ){
+    oct_recv_ptr[i+1] = oct_recv_ptr[i] + oct_recv_counts[i];
+  }
+
+  delete [] oct_counts;
+  delete [] oct_recv_counts;
+
+  // Distribute the octants based on the oct_ptr/oct_recv_ptr arrays
+  TMROctantArray *recv_array = sendOctants(ext_array, oct_ptr, oct_recv_ptr);
+  delete [] oct_ptr;
+  delete [] oct_recv_ptr;
+  delete ext_array;
+
+  // Get the nodes recv'd from other processors
+  int recv_size;
+  TMROctant *recv_nodes;
+  recv_array->getArray(&recv_nodes, &recv_size);
+
+  // Recv the nodes and loop over the connectivity
+  for ( int i = 0; i < recv_size; i++ ){
+    TMROctant *t = coarse->findEnclosing(mesh_order, interp_knots,
+                                         &recv_nodes[i]);
+
+    if (t){
+      // Compute the element interpolation
+      int nweights = computeElemInterp(&recv_nodes[i], coarse, t, 
+                                       weights, tmp);
+
+      for ( int k = 0; k < nweights; k++ ){
+        vars[k] = weights[k].index;
+        wvals[k] = weights[k].weight;
+      }
+      interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
+    }
+    else {
+      // This should not happen. Print out an error message here.
+      fprintf(stderr, 
+              "TMROctForest: Destination processor does not own node\n");
+    }
+  }
+
+  // Free the recv array
+  delete recv_array;
+
+  // Free the temporary arrays
   delete [] tmp;
   delete [] vars;
   delete [] wvals;
   delete [] weights;
-
-  /*
-  // Copy the locally owned nodes to the allocated array
-  TMROctantArray *local = new TMROctantArray(local_array, local_size);
-
-  // Distribute the octants to the owners - include the local octants
-  // in the new array since everything has to be interpolated
-  int use_tags = 0; // Use the octant ownership to distribute (not the tags)
-  int include_local = 1; // Include the locally owned octants
-  TMROctantArray *fine_nodes = 
-    coarse->distributeOctants(local, use_tags, NULL, NULL, include_local);
-  delete local;
-
-  // Get the number of locally owned nodes on this processor
-  int fine_size;
-  TMROctant *fine;
-  fine_nodes->getArray(&fine, &fine_size);
-  */
 }
-

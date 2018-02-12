@@ -197,7 +197,7 @@ class TMROctForest : public TMREntity {
   // match the ownership intervals
   void matchOctantIntervals( TMROctant *array,
                              int size, int *ptr );
-  void matchMPIIntervals( TMROctant *array,
+  void matchTagIntervals( TMROctant *array,
                           int size, int *ptr );
 
   // Balance-related routines

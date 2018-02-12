@@ -16,7 +16,6 @@
   |   |   |
   6---7---8
 */
-
 const int rectangle_npts = 12;
 const int rectangle_nelems = 2;
 
@@ -225,8 +224,7 @@ void computeShapeDeriv( double u, double v, double w,
 }
 
 /*
-  Check volume of the mesh to see if it is valid - is there a better
-  way to do this?
+  Check volume of the mesh to see if it is valid
 */
 double computeVolume( int i, const int *elem_node_conn, 
                       const double *Xpts ){
@@ -274,7 +272,7 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
-  const int NUM_LEVELS = 3;
+  const int NUM_LEVELS = 4;
 
   // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
@@ -304,17 +302,22 @@ int main( int argc, char *argv[] ){
     }
   }
 
-  double knots[4] = {0.0, 0.25, 0.75, 1.0};
-
-  // Set the random number generator to a constant
-  srand(0);
+  double knots4[4] = {0.0, 0.25, 0.75, 1.0};
+  double knots3[3] = {0.0, 0.5, 1.0};
+  double knots2[2] = {0.0, 1.0};
+  double *knots[NUM_LEVELS];
+  knots[0] = knots4;
+  knots[1] = knots3;
+  knots[2] = knots2;
+  knots[3] = knots2;
   
   // Create the forests
   int order = 4;
   TMROctForest *forest[NUM_LEVELS];
   forest[0] = new TMROctForest(comm, order, TMR_GAUSS_LOBATTO_POINTS);
+  forest[0]->incref();
   forest[0]->setConnectivity(npts, conn, nelems);
-  forest[0]->createRandomTrees(15, 0, 5);  
+  forest[0]->createRandomTrees(15, 0, 10);  
   forest[0]->repartition();
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){
@@ -332,7 +335,15 @@ int main( int argc, char *argv[] ){
   
     // Create the coarse mesh
     if (level < NUM_LEVELS-1){
-      forest[level+1] = forest[level]->coarsen();
+      if (order > 2){
+        forest[level+1] = forest[level]->duplicate();
+        order = order-1;
+        forest[level+1]->setMeshOrder(order, TMR_GAUSS_LOBATTO_POINTS);
+      }
+      else {
+        forest[level+1] = forest[level]->coarsen();
+      }
+      forest[level+1]->incref();
     }
   }
 
@@ -341,7 +352,11 @@ int main( int argc, char *argv[] ){
   SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
 
   // Allocate the solid element class
-  TACSElement *solid = new Solid<4>(stiff, LINEAR, mpi_rank);
+  TACSElement *solid[NUM_LEVELS];
+  solid[0] = new Solid<4>(stiff, LINEAR, mpi_rank);
+  solid[1] = new Solid<3>(stiff, LINEAR, mpi_rank);
+  solid[2] = new Solid<2>(stiff, LINEAR, mpi_rank);
+  solid[3] = new Solid<2>(stiff, LINEAR, mpi_rank);
   
   // Create the TACSAssembler objects
   TACSAssembler *tacs[NUM_LEVELS];
@@ -388,13 +403,16 @@ int main( int argc, char *argv[] ){
     // Set the elements
     TACSElement **elems = new TACSElement*[ num_elements ];
     for ( int k = 0; k < num_elements; k++ ){
-      elems[k] = solid;
+      elems[k] = solid[level];
       elems[k]->incref();
     }
     
     // Set the element array
     tacs[level]->setElements(elems);
     delete [] elems;
+
+    // Initialize the TACSAssembler object
+    tacs[level]->initialize();
 
     // Get the octant locations
     TMROctantArray *octants;
@@ -404,25 +422,6 @@ int main( int argc, char *argv[] ){
     int oct_size;
     TMROctant *octs;
     octants->getArray(&octs, &oct_size);
-
-    // Loop over all the elements and retrieve the nodes
-    for ( int i = 0; i < oct_size; i++ ){
-      const int *c = &elem_conn[order*order*order*i];
-      for ( int j = 0; j < order*order*order; j++ ){
-        // Evaluate the point
-        TacsScalar Xpoint[3];
-        getLocation(conn, Xpts, &octs[i], order, j, knots, Xpoint);
-
-        if (Xpoint[2] < 1e-12){
-          if (c[j] >= 0){
-            tacs[level]->addBCs(1, &c[j]);
-          }
-        }
-      }
-    }
-
-    // Initialize the TACSAssembler object
-    tacs[level]->initialize();
 
     // Create the node vector
     TacsScalar *Xn;
@@ -442,7 +441,8 @@ int main( int argc, char *argv[] ){
           int index = c[j] - range[mpi_rank];
 
           // Evaluate the point
-          getLocation(conn, Xpts, &octs[i], order, j, knots, &Xn[3*index]);
+          getLocation(conn, Xpts, &octs[i], order, j, 
+                      knots[level], &Xn[3*index]);
         }
       }
     }
@@ -468,66 +468,39 @@ int main( int argc, char *argv[] ){
     interp[level]->initialize();
   }
 
-  // Create the multigrid object
-  double omega = 1.0;
-  int mg_sor_iters = 1;
-  int mg_sor_symm = 1;
-  int mg_iters_per_level = 1;
-  TACSMg *mg = new TACSMg(comm, NUM_LEVELS, 
-                          omega, mg_sor_iters, mg_sor_symm);
-  mg->incref();
-
-  for ( int level = 0; level < NUM_LEVELS; level++ ){
-    if (level < NUM_LEVELS-1){
-      mg->setLevel(level, tacs[level], interp[level], mg_iters_per_level);
-    }
-    else {
-      mg->setLevel(level, tacs[level], NULL);
-    }
+  // Create a vector on the finest level
+  TACSBVec *x[NUM_LEVELS];
+  x[0] = tacs[0]->createVec();
+  x[0]->incref();
+  tacs[0]->getNodes(x[0]);
+  for ( int level = 0; level < NUM_LEVELS-1; level++ ){
+    x[level+1] = tacs[level+1]->createVec();
+    x[level+1]->incref();
+    interp[level]->multWeightTranspose(x[level], x[level+1]);
   }
-
-  // Assemble the matrix
-  mg->assembleJacobian(1.0, 0.0, 0.0);
-  mg->factor();
-
-  // Create a force vector
-  TACSBVec *force = tacs[0]->createVec();
-  force->incref();
-  force->set(1.0);
-  tacs[0]->applyBCs(force);
-
-  TACSBVec *ans = tacs[0]->createVec();
-  ans->incref();
-  
-  // Set up the solver
-  int gmres_iters = 100; 
-  int nrestart = 2;
-  int is_flexible = 1;
-  GMRES *gmres = new GMRES(mg->getMat(0), mg, 
-                           gmres_iters, nrestart, is_flexible);
-  gmres->incref();
-  gmres->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  gmres->setTolerances(1e-10, 1e-30);
-
-  gmres->solve(force, ans);
-  ans->scale(-1.0);
-  tacs[0]->setVariables(ans);
 
   // Create and write out an fh5 file
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_DISPLACEMENTS |
                              TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID, write_flag);
-  f5->incref();
+
+  for ( int level = 0; level < NUM_LEVELS; level++ ){
+    tacs[level]->setVariables(x[level]);
+    TACSToFH5 *f5 = new TACSToFH5(tacs[level], TACS_SOLID, write_flag);
+    f5->incref();
     
-  // Write out the solution
-  f5->writeToFile("output.f5");
-  f5->decref();
+    // Write out the solution
+    char filename[128];
+    sprintf(filename, "output%d.f5", level);
+    f5->writeToFile(filename);
+    f5->decref();
+  }
 
   // Create the level
   for ( int level = 0; level < NUM_LEVELS; level++ ){
+    x[level]->decref();
     tacs[level]->decref();
-    delete forest[level];
+    forest[level]->decref();
   }
 
   TMRFinalize();

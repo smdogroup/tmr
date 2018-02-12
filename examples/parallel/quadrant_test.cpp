@@ -5,54 +5,6 @@
 #include "TACSMg.h"
 #include "TACSToFH5.h"
 
-#include "TMR_TACSCreator.h"
-#include "TMRMesh.h"
-#include "TMROpenCascade.h"
-#include <BRepPrimAPI_MakeCylinder.hxx>
-
-
-
-class QuadTest : public TMRQuadTACSCreator {
- public:
-  QuadTest( PlaneStressStiffness *_stiff ): TMRQuadTACSCreator(NULL){
-    stiff = _stiff;
-  }
-  ~QuadTest(){}
-
-  // Create an array of elements for the given forest
-  void createElements( int order,
-                       TMRQuadForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    TACSElement *elem = NULL;
-    if (order == 2){
-      elem = new PlaneStressQuad<2>(stiff);
-    }
-    else if (order == 3){
-      elem = new PlaneStressQuad<3>(stiff);
-    }
-    else if (order == 4){
-      elem = new PlaneStressQuad<4>(stiff);
-    }
-
-    // Set the elements
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-
-  // Create any auxiliary element for the given quadrant
-  TACSAuxElements *createAuxElements( int order,
-                                      TMRQuadForest *forest ){
-    return NULL;
-  }
-  
- private:
-  PlaneStressStiffness *stiff;
-};
-
-
-
 /*
   Create the following L-bracket connectivity
 
@@ -64,7 +16,6 @@ class QuadTest : public TMRQuadTACSCreator {
   |    |    |    |     |
   6----7----8----11---12
 */
-
 const int nfaces = 6;
 const int npts = 13;
 const int conn[] = 
@@ -93,15 +44,18 @@ const double Xpts[] =
 /*
   Interpoalte from the connectivity/node locations
 */
-void getLocation( const int *cn,
-                  const double *x,
-                  const TMRQuadrant *quad, TacsScalar X[] ){
+void getLocation( const int *elem_node_conn, 
+                  const double *Xpts,
+                  const TMRQuadrant *quad,
+                  const int order, int index,
+                  const double knots[],
+                  TacsScalar X[] ){
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
-  double u = 0.0, v = 0.0;
-  if (quad->x == hmax-1){ u = 1.0; }
-  else { u = 1.0*quad->x/hmax; }
-  if (quad->y == hmax-1){ v = 1.0; }
-  else { v = 1.0*quad->y/hmax; }
+  const int32_t h = 1 << (TMR_MAX_LEVEL - quad->level);
+  int ii = index % order;
+  int jj = index/order;
+  double u = (quad->x + h*knots[ii])/hmax;
+  double v = (quad->y + h*knots[jj])/hmax;
 
   double N[4];
   N[0] = (1.0 - u)*(1.0 - v);
@@ -111,93 +65,19 @@ void getLocation( const int *cn,
 
   X[0] = X[1] = X[2] = 0.0;
   for ( int k = 0; k < 4; k++ ){
-    int node = cn[4*quad->face + k];
-    X[0] += x[3*node]*N[k];
-    X[1] += x[3*node+1]*N[k];
-    X[2] += x[3*node+2]*N[k];
+    int node = elem_node_conn[4*quad->face + k];
+    X[0] += Xpts[3*node]*N[k];
+    X[1] += Xpts[3*node+1]*N[k];
+    X[2] += Xpts[3*node+2]*N[k];
   }
 }
-
-/*
-void writeSerialMesh( TMRQuadForest *forest ){
-  // Print out the full mesh
-  TMRQuadrantArray *nodes;
-  forest->getNodes(&nodes);
-
-  // Get the quadrants associated with the nodes
-  int size;
-  TMRQuadrant *array;
-  nodes->getArray(&array, &size);
-  
-  // Set the node locations
-  double *X = new double[ 3*size ];
-  memset(X, 0, 3*size*sizeof(double));
-  for ( int i = 0; i < size; i++ ){
-    int node = array[i].tag;
-    if (node >= 0){
-      getLocation(conn, Xpts, &array[i], &X[3*node]);
-    }
-    else {
-      getLocation(conn, Xpts, &array[i], &X[3*(size+node)]);
-    }
-  }
-
-  // Get the mesh connectivity
-  int *elem_conn, num_elements = 0;
-  // forest->createMeshConn(&elem_conn, &num_elements);
-
-  // Write out the vtk file
-  FILE *fp = fopen("mesh.vtk", "w");
-  fprintf(fp, "# vtk DataFile Version 3.0\n");
-  fprintf(fp, "vtk output\nASCII\n");
-  fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
-    
-  // Write out the points
-  fprintf(fp, "POINTS %d float\n", size);
-  for ( int k = 0; k < size; k++ ){
-    fprintf(fp, "%e %e %e\n", X[3*k], X[3*k+1], X[3*k+2]);
-  }
-  delete [] X;
-  
-  // Write out the cell values
-  fprintf(fp, "\nCELLS %d %d\n", 
-          num_elements, 5*num_elements);
-  for ( int k = 0; k < num_elements; k++ ){
-    fprintf(fp, "4 ");
-    const int order[] = {0, 1, 3, 2};
-    for ( int j = 0; j < 4; j++ ){
-      int node = elem_conn[4*k+order[j]];
-      if (node < 0){
-        node = size+node;
-      }
-      fprintf(fp, "%d ", node);
-    }
-    fprintf(fp, "\n");
-  }
-  delete [] elem_conn;
-
-  // All quadrilaterals
-  fprintf(fp, "\nCELL_TYPES %d\n", num_elements);
-  for ( int k = 0; k < num_elements; k++ ){
-    fprintf(fp, "%d\n", 9);
-  }
-
-  // Print out the rest as fields one-by-one
-  fprintf(fp, "POINT_DATA %d\n", size);
-
-  fprintf(fp, "SCALARS var_nums float 1\n");
-  fprintf(fp, "LOOKUP_TABLE default\n");
-    
-  for ( int k = 0; k < size; k++ ){
-    fprintf(fp, "%d\n", k);
-  }
-  fclose(fp);
-}
-*/
 
 int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
+
+  // Set the number of levels to use
+  const int NUM_LEVELS = 4;
 
   // Define the different forest levels
   MPI_Comm comm = MPI_COMM_WORLD;
@@ -207,115 +87,25 @@ int main( int argc, char *argv[] ){
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
 
-  double R = 50.0, L = 150.0;
+  double knots4[4] = {0.0, 0.25, 0.75, 1.0};
+  double knots3[3] = {0.0, 0.5, 1.0};
+  double knots2[2] = {0.0, 1.0};
+  double *knots[NUM_LEVELS];
+  knots[0] = knots4;
+  knots[1] = knots3;
+  knots[2] = knots2;
+  knots[3] = knots2;
 
-  // Create the geometry
-  BRepPrimAPI_MakeCylinder cylinder(R, L);
-  TopoDS_Compound compound;
-  BRep_Builder builder;
-  builder.MakeCompound(compound);
-  builder.Add(compound, cylinder.Shape());
-
-  // Load in the geometry
-  TMRModel *geo = TMR_LoadModelFromCompound(compound);
-
-  if (geo){
-    geo->incref();
-
-    int num_verts;
-    TMRVertex **verts;
-    geo->getVertices(&num_verts, &verts);
-
-    int num_edges;
-    TMREdge **edges;
-    geo->getEdges(&num_edges, &edges);
-
-    // Only include the cylinder face
-    int num_faces;
-    TMRFace **faces;
-    geo->getFaces(&num_faces, &faces);
-
-    TMRModel *face_geo = new TMRModel(num_verts, verts,
-                                      num_edges, edges,
-                                      num_faces, faces);
-    face_geo->incref();
-
-    // Allocate the new mesh
-    TMRMesh *mesh = new TMRMesh(comm, face_geo);
-    mesh->incref();
-    
-    double htarget = 20.0;
-    TMRMeshOptions options;
-    options.frontal_quality_factor = 1.25;
-    options.mesh_type_default = TMR_STRUCTURED;
-    options.mesh_type_default = TMR_UNSTRUCTURED;
-    mesh->mesh(options, htarget);
-
-    TMRModel *model = mesh->createModelFromMesh();
-    model->incref();
-
-    TMRQuadForest *forest = new TMRQuadForest(comm, 4);
-    forest->incref();
-
-    TMRTopology *topo = new TMRTopology(comm, model);
-    forest->setTopology(topo);
-      
-    forest->createRandomTrees(5, 5, 3);
-    forest->repartition();
-
-    double tbal = MPI_Wtime();
-    forest->balance(0);
-    tbal = MPI_Wtime() - tbal;
-    printf("[%d] Balance: %f\n", mpi_rank, tbal);
-    forest->repartition();
-
-    // Create the nodes
-    double tnodes = MPI_Wtime();
-    forest->createNodes();
-    tnodes = MPI_Wtime() - tnodes;
-    printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
-
-    // Allocate the stiffness object
-    TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
-    PlaneStressStiffness *stiff = 
-      new PlaneStressStiffness(rho, E, nu);
-
-    QuadTest *test = new QuadTest(stiff);
-    TACSAssembler *tacs = test->createTACS(forest);
-
-    // Create and write out an fh5 file
-    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                               TACSElement::OUTPUT_DISPLACEMENTS);
-    TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_PLANE_STRESS, write_flag);
-    f5->incref();
-
-    f5->writeToFile("test_output.f5");
-  }
-
-/*
   // Create the forests
-  TMRQuadForest *forest[3];
-  forest[0] = new TMRQuadForest(comm);
-  
+  int order = 4;
+  TMRQuadForest *forest[NUM_LEVELS];
+  forest[0] = new TMRQuadForest(comm, order, TMR_GAUSS_LOBATTO_POINTS);
+  forest[0]->incref();
   forest[0]->setConnectivity(npts, conn, nfaces);
-  forest[0]->createRandomTrees(250, 5, 15);
+  forest[0]->createRandomTrees(15, 0, 10);  
   forest[0]->repartition();
 
-  double tbal = MPI_Wtime();
-  forest[0]->balance(0);
-  tbal = MPI_Wtime() - tbal;
-  printf("[%d] Balance: %f\n", mpi_rank, tbal);
-  forest[0]->repartition();
-
-  // Create the nodes
-  double tnodes = MPI_Wtime();
-  forest[0]->createNodes(4);
-  tnodes = MPI_Wtime() - tnodes;
-  printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
-*/
-/*
-
-  for ( int level = 0; level < 3; level++ ){
+  for ( int level = 0; level < NUM_LEVELS; level++ ){
     double tbal = MPI_Wtime();
     forest[level]->balance(0);
     tbal = MPI_Wtime() - tbal;
@@ -324,18 +114,22 @@ int main( int argc, char *argv[] ){
 
     // Create the nodes
     double tnodes = MPI_Wtime();
-    forest[level]->createNodes(2);
+    forest[level]->createNodes();
     tnodes = MPI_Wtime() - tnodes;
     printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
-  
-    // Create the coarse mesh
-    if (level < 2){
-      forest[level+1] = forest[level]->coarsen();
-    }
-  }
 
-  if (mpi_size == 1){
-    writeSerialMesh(forest[0]);
+      // Create the coarse mesh
+    if (level < NUM_LEVELS-1){
+      if (order > 2){
+        forest[level+1] = forest[level]->duplicate();
+        order = order-1;
+        forest[level+1]->setMeshOrder(order, TMR_GAUSS_LOBATTO_POINTS);
+      }
+      else {
+        forest[level+1] = forest[level]->coarsen();
+      }
+      forest[level+1]->incref();
+    }
   }
 
   // Allocate the stiffness object
@@ -344,36 +138,32 @@ int main( int argc, char *argv[] ){
     new PlaneStressStiffness(rho, E, nu);
 
   // Allocate the solid element class
-  TACSElement *elem = new PlaneStressQuad<2>(stiff, LINEAR, mpi_rank);
+  TACSElement *elem[NUM_LEVELS];
+  elem[0] = new PlaneStressQuad<4>(stiff, LINEAR, mpi_rank);
+  elem[1] = new PlaneStressQuad<3>(stiff, LINEAR, mpi_rank);
+  elem[2] = new PlaneStressQuad<2>(stiff, LINEAR, mpi_rank);
+  elem[3] = new PlaneStressQuad<2>(stiff, LINEAR, mpi_rank);
   
   // Create the TACSAssembler objects
-  TACSAssembler *tacs[3];
+  TACSAssembler *tacs[NUM_LEVELS];
 
-  for ( int level = 0; level < 3; level++ ){
+  for ( int level = 0; level < NUM_LEVELS; level++ ){
     // Find the number of nodes for this processor
     const int *range;
     forest[level]->getOwnedNodeRange(&range);
     int num_nodes = range[mpi_rank+1] - range[mpi_rank];
 
     // Create the mesh
-    double tmesh = MPI_Wtime();
-    int *elem_conn, num_elements = 0;
-    forest[level]->createMeshConn(&elem_conn, &num_elements);
-    tmesh = MPI_Wtime() - tmesh;
-    printf("[%d] Mesh: %f\n", mpi_rank, tmesh);
+    const int *elem_conn;
+    int num_elements = 0;
+    forest[level]->getNodeConn(&elem_conn, &num_elements);
 
     // Get the dependent node information
     const int *dep_ptr, *dep_conn;
     const double *dep_weights;
-
-    // Create/retrieve the dependent node information
-    double tdep = MPI_Wtime();
-    forest[level]->createDepNodeConn();
     int num_dep_nodes = 
       forest[level]->getDepNodeConn(&dep_ptr, &dep_conn,
                                     &dep_weights);
-    tdep = MPI_Wtime() - tdep;
-    printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
 
     // Create the associated TACSAssembler object
     int vars_per_node = 2;
@@ -383,14 +173,14 @@ int main( int argc, char *argv[] ){
     tacs[level]->incref();
 
     // Set the element ptr
-    int *ptr = new int[ num_elements+1 ];
+    int order = forest[level]->getMeshOrder();
+    int *ptr = new int[ order*order*num_elements ];
     for ( int i = 0; i < num_elements+1; i++ ){
-      ptr[i] = 4*i;
+      ptr[i] = order*order*i;
     }
     
     // Set the element connectivity into TACSAssembler
     tacs[level]->setElementConnectivity(elem_conn, ptr);
-    delete [] elem_conn;
     delete [] ptr;
     
     // Set the dependent node information
@@ -399,38 +189,25 @@ int main( int argc, char *argv[] ){
     // Set the elements
     TACSElement **elems = new TACSElement*[ num_elements ];
     for ( int k = 0; k < num_elements; k++ ){
-      elems[k] = elem;
+      elems[k] = elem[level];
+      elems[k]->incref();
     }
     
     // Set the element array
     tacs[level]->setElements(elems);
     delete [] elems;
 
-    // Get the nodes
-    TMRQuadrantArray *nodes;
-    forest[level]->getNodes(&nodes);
-
-    // Get the quadrants associated with the nodes
-    int size;
-    TMRQuadrant *array;
-    nodes->getArray(&array, &size);
-
-    // Loop over all the nodes
-    for ( int i = 0; i < size; i++ ){
-      // Evaluate the point
-      TacsScalar Xpoint[3];
-      getLocation(conn, Xpts, &array[i], Xpoint);
-
-      if (Xpoint[0] < 1e-3){
-        int node = array[i].tag;
-        if (node >= 0){
-          tacs[level]->addBCs(1, &node);
-        }
-      }
-    }
-
     // Initialize the TACSAssembler object
     tacs[level]->initialize();
+
+    // Get the quad locations
+    TMRQuadrantArray *quadrants;
+    forest[level]->getQuadrants(&quadrants);
+    
+    // Get the quadrants associated with the nodes
+    int quad_size;
+    TMRQuadrant *quads;
+    quadrants->getArray(&quads, &quad_size);
 
     // Create the node vector
     TacsScalar *Xn;
@@ -442,33 +219,28 @@ int main( int argc, char *argv[] ){
     forest[level]->getPoints(&Xp);
 
     // Loop over all the nodes
-    for ( int i = 0; i < size; i++ ){
-      // Evaluate the point
-      TacsScalar Xpoint[3];
-      getLocation(conn, Xpts, &array[i], Xpoint);
+    for ( int i = 0; i < quad_size; i++ ){
+      const int *c = &elem_conn[order*order*i];
+      for ( int j = 0; j < order*order; j++ ){
+        if (c[j] >= range[mpi_rank] &&
+            c[j] < range[mpi_rank+1]){
+          int index = c[j] - range[mpi_rank];
 
-      // Set the point
-      Xp[i].x = Xpoint[0];
-      Xp[i].y = Xpoint[1];
-      Xp[i].z = Xpoint[2];
-
-      if (array[i].tag >= range[mpi_rank] &&
-          array[i].tag < range[mpi_rank+1]){
-        int loc = array[i].tag - range[mpi_rank];
-        Xn[3*loc] = Xpoint[0];
-        Xn[3*loc+1] = Xpoint[1];
-        Xn[3*loc+2] = Xpoint[2];
+          // Evaluate the point
+          getLocation(conn, Xpts, &quads[i], order, j, 
+                      knots[level], &Xn[3*index]);
+        }
       }
     }
-    
+
     // Set the node locations into TACSAssembler
     tacs[level]->setNodes(X);
   }
 
   // Create the interpolation
-  TACSBVecInterp *interp[2];
+  TACSBVecInterp *interp[NUM_LEVELS-1];
 
-  for ( int level = 0; level < 2; level++ ){
+  for ( int level = 0; level < NUM_LEVELS-1; level++ ){
     // Create the interpolation object
     interp[level] = new TACSBVecInterp(tacs[level+1]->getVarMap(),
                                        tacs[level]->getVarMap(),
@@ -482,69 +254,41 @@ int main( int argc, char *argv[] ){
     interp[level]->initialize();
   }
 
-  // Create the multigrid object
-  double omega = 1.0;
-  int mg_sor_iters = 1;
-  int mg_sor_symm = 1;
-  int mg_iters_per_level = 1;
-  TACSMg *mg = new TACSMg(comm, 3, omega, mg_sor_iters, mg_sor_symm);
-  mg->incref();
-
-  for ( int level = 0; level < 3; level++ ){
-    if (level < 2){
-      mg->setLevel(level, tacs[level], interp[level], mg_iters_per_level);
-    }
-    else {
-      mg->setLevel(level, tacs[level], NULL);
-    }
+  // Create a vector on the finest level
+  TACSBVec *x[NUM_LEVELS];
+  x[0] = tacs[0]->createVec();
+  x[0]->incref();
+  x[0]->setRand(-1.0, 1.0);
+  for ( int level = 0; level < NUM_LEVELS-1; level++ ){
+    x[level+1] = tacs[level+1]->createVec();
+    x[level+1]->incref();
+    interp[level]->multWeightTranspose(x[level], x[level+1]);
   }
-
-  // Assemble the matrix
-  mg->assembleJacobian(1.0, 0.0, 0.0, NULL);
-  mg->factor();
-
-  // Create a force vector
-  TACSBVec *force = tacs[0]->createVec();
-  force->incref();
-  force->set(1.0);
-  tacs[0]->applyBCs(force);
-
-  TACSBVec *ans = tacs[0]->createVec();
-  ans->incref();
-  
-  // Set up the solver
-  int gmres_iters = 100; 
-  int nrestart = 2;
-  int is_flexible = 1;
-  GMRES *gmres = new GMRES(mg->getMat(0), mg, 
-                           gmres_iters, nrestart, is_flexible);
-  gmres->incref();
-  gmres->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  gmres->setTolerances(1e-10, 1e-30);
-
-  gmres->solve(force, ans);
-  ans->scale(-1.0);
-  tacs[0]->setVariables(ans);
 
   // Create and write out an fh5 file
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_DISPLACEMENTS |
-                             TACSElement::OUTPUT_STRESSES |
                              TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_PLANE_STRESS, write_flag);
-  f5->incref();
+
+  for ( int level = 0; level < NUM_LEVELS; level++ ){
+    tacs[level]->setVariables(x[level]);
+    TACSToFH5 *f5 = new TACSToFH5(tacs[level], TACS_PLANE_STRESS, write_flag);
+    f5->incref();
     
-  // Write out the solution
-  f5->writeToFile("output.f5");
-  f5->decref();
+    // Write out the solution
+    char filename[128];
+    sprintf(filename, "output%d.f5", level);
+    f5->writeToFile(filename);
+    f5->decref();
+  }
 
   // Create the level
   for ( int level = 0; level < 3; level++ ){
+    x[level]->decref();
     tacs[level]->decref();
     delete forest[level];
   }
 
-  */
   TMRFinalize();
   MPI_Finalize();
   return (0);

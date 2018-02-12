@@ -79,31 +79,6 @@ TMRQuadForest::TMRQuadForest( MPI_Comm _comm, int _mesh_order,
   MPI_Comm_rank(comm, &mpi_rank);
   MPI_Comm_size(comm, &mpi_size);
 
-  // Check that the order falls within allowable bounds
-  mesh_order = _mesh_order;
-  if (mesh_order < 2){
-    mesh_order = 2;
-  }
-
-  // Allocate the interpolation knots and set the knot locations
-  interp_knots = new double[ mesh_order ];
-  interp_type = _interp_type;
-  if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
-    interp_knots[0] = 0.0;
-    interp_knots[mesh_order-1] = 1.0;
-    for ( int i = 1; i < mesh_order-1; i++ ){
-      interp_knots[i] = 0.5*(1.0 - cos(M_PI*i/(mesh_order-1)));
-    }
-  }
-  else {
-    // Uniform mesh spacing
-    interp_knots[0] = 0.0;
-    interp_knots[mesh_order-1] = 1.0;
-    for ( int i = 1; i < mesh_order-1; i++ ){
-      interp_knots[i] = 1.0*i/(mesh_order-1);
-    }
-  }
-
   // Set the topology object to NULL
   topo = NULL;
 
@@ -140,6 +115,9 @@ TMRQuadForest::TMRQuadForest( MPI_Comm _comm, int _mesh_order,
   dep_ptr = NULL;
   dep_conn = NULL;
   dep_weights = NULL;
+
+  // Set the mesh order
+  setMeshOrder(_mesh_order, _interp_type);
 }
 
 /*
@@ -951,18 +929,93 @@ void TMRQuadForest::writeAdjacentToVTK( const char *filename ){
 }
 
 /*
-  Retrieve the element index
+  Set the mesh order
 */
-int TMRQuadForest::getElementIndex( TMRQuadrant *element ){
-  if (quadrants){
-    TMRQuadrant *t = quadrants->contains(element);
-    TMRQuadrant *array;
-    quadrants->getArray(&array, NULL);
-    if (t){
-      return t - array;
-    }
+void TMRQuadForest::setMeshOrder( int _mesh_order,
+                                  TMRInterpolationType _interp_type ){
+  // Check that the order falls within allowable bounds
+  mesh_order = _mesh_order;
+  if (mesh_order < 2){
+    mesh_order = 2;
   }
 
+  // Allocate the interpolation knots and set the knot locations
+  interp_knots = new double[ mesh_order ];
+  interp_type = _interp_type;
+  if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
+    interp_knots[0] = 0.0;
+    interp_knots[mesh_order-1] = 1.0;
+    for ( int i = 1; i < mesh_order-1; i++ ){
+      interp_knots[i] = 0.5*(1.0 - cos(M_PI*i/(mesh_order-1)));
+    }
+  }
+  else {
+    // Uniform mesh spacing
+    interp_knots[0] = 0.0;
+    interp_knots[mesh_order-1] = 1.0;
+    for ( int i = 1; i < mesh_order-1; i++ ){
+      interp_knots[i] = 1.0*i/(mesh_order-1);
+    }
+  }
+}
+
+/*
+  Retrieve the mesh order
+*/
+int TMRQuadForest::getMeshOrder(){
+  return mesh_order;
+}
+
+/*
+  Get the node-processor ownership range
+*/
+int TMRQuadForest::getOwnedNodeRange( const int **_node_range ){
+  if (_node_range){
+    *_node_range = node_range;
+  }
+  return mpi_size;
+}
+
+/*
+  Get the quadrants and the nodes
+*/
+void TMRQuadForest::getQuadrants( TMRQuadrantArray **_quadrants ){
+  if (_quadrants){
+    *_quadrants = quadrants;
+  }
+}
+
+/*
+  Get the node numbers (note that this may be NULL)
+*/
+int TMRQuadForest::getNodeNumbers( const int **_node_numbers ){
+  if (_node_numbers){
+    *_node_numbers = node_numbers;
+  }
+  return num_local_nodes;
+}
+
+/*
+  Get the node locations
+*/
+int TMRQuadForest::getPoints( TMRPoint **_X ){
+  if (_X){
+    *_X = X; 
+  }
+  return num_local_nodes;
+}
+
+/*
+  Retrieve the local node number
+*/
+int TMRQuadForest::getLocalNodeNumber( int node ){
+  if (node_numbers){
+    int *item = (int*)bsearch(&node, node_numbers, num_local_nodes, 
+                              sizeof(int), compare_integers);
+    if (item){
+      return item - node_numbers;
+    }
+  }
   return -1;
 }
 
@@ -1056,6 +1109,7 @@ void TMRQuadForest::createTrees( int refine_level ){
   p.tag = -1;
   p.face = num_faces-1;
   p.x = p.y = hmax;
+  p.info = 0;
   if (size > 0){
     p = array[0];
   }
@@ -1126,6 +1180,7 @@ void TMRQuadForest::createRandomTrees( int nrand,
   p.tag = -1;
   p.face = num_faces-1;
   p.x = p.y = 1 << TMR_MAX_LEVEL;
+  p.info = 0;
   if (size > 0){
     p = array[0];
   }
@@ -1513,7 +1568,7 @@ void TMRQuadForest::refine( const int refinement[],
 
   delete hash;
 
-  // Get the octants and order their labels
+  // Get the quadrants and order their labels
   quadrants->getArray(&array, &size);
   for ( int i = 0; i < size; i++ ){
     array[i].tag = i;
@@ -3965,7 +4020,15 @@ getNodesWithAttribute()\n");
   This code is used to find the quadrant in the quadrant array that
   encloses the given node.
 */
-TMRQuadrant* TMRQuadForest::findEnclosing( TMRQuadrant *node ){
+TMRQuadrant* TMRQuadForest::findEnclosing( const int order, 
+                                           const double *knots,
+                                           TMRQuadrant *node, 
+                                           int *mpi_owner ){
+  // Assume that we'll find octant on this processor for now..
+  if (mpi_owner){
+    *mpi_owner = mpi_rank;
+  }
+
   // Retrieve the array of elements
   int size = 0;
   TMRQuadrant *array = NULL;
@@ -3975,6 +4038,15 @@ TMRQuadrant* TMRQuadForest::findEnclosing( TMRQuadrant *node ){
   const int32_t face = node->face;
   const int32_t x = node->x;
   const int32_t y = node->y;
+
+  // Compute the ii/jj locations
+  const int ii = node->info % order;
+  const int jj = node->info/order;
+
+  // Compute the parametric node location on this block
+  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
+  const double xd = x + h*knots[ii];
+  const double yd = y + h*knots[jj];
 
   // Set the low and high indices to the first and last
   // element of the element array
@@ -3987,10 +4059,12 @@ TMRQuadrant* TMRQuadForest::findEnclosing( TMRQuadrant *node ){
   // Note that if high-low=1, then mid = high
   while (high != mid){
     // Check if array[mid] contains the provided quadrant
-    const int32_t h = 1 << (TMR_MAX_LEVEL - array[mid].level);
+    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
+
+    // Check whether the node is contained within mid
     if ((array[mid].face == face) &&
-        (array[mid].x <= x && x <= array[mid].x+h) &&
-        (array[mid].y <= y && y <= array[mid].y+h)){
+        (array[mid].x <= xd && xd <= array[mid].x+hm) &&
+        (array[mid].y <= yd && yd <= array[mid].y+hm)){
       return &array[mid];
     }
     
@@ -4010,21 +4084,184 @@ TMRQuadrant* TMRQuadForest::findEnclosing( TMRQuadrant *node ){
   // Check if array[mid] contains the provided quadrant
   const int32_t h1 = 1 << (TMR_MAX_LEVEL - array[mid].level);
   if ((array[mid].face == face) &&
-      (array[mid].x <= x && x <= array[mid].x+h1) &&
-      (array[mid].y <= y && y <= array[mid].y+h1)){
+      (array[mid].x <= xd && xd <= array[mid].x+h1) &&
+      (array[mid].y <= yd && yd <= array[mid].y+h1)){
     return &array[mid];
   }
 
   // Check if elems[low] contains the provided quadrant
   const int32_t h2 = 1 << (TMR_MAX_LEVEL - array[low].level);
   if ((array[low].face == face) &&
-      (array[low].x <= x && x <= array[low].x+h2) &&
-      (array[low].y <= y && y <= array[low].y+h2)){
+      (array[low].x <= xd && xd <= array[low].x+h2) &&
+      (array[low].y <= yd && yd <= array[low].y+h2)){
    return &array[low];
  }
 
+  if (mpi_owner){
+    int rank = 0;
+    // while (owners[rank+1] <= quad) rank++
+    while (rank < mpi_size-1){
+      // Determine the relative order of the quadrants
+      if (owners[rank+1].face < face){
+        rank++;
+      }
+      else if (owners[rank+1].face == face){
+        // Determine the largest number
+        double xmax = (owners[rank+1].x > xd ? owners[rank+1].x : xd);
+        double ymax = (owners[rank+1].y > yd ? owners[rank+1].y : yd);
+
+        // Check for the largest value
+        if (xmax > ymax){
+          if (owners[rank+1].x < xd){
+            rank++;
+          }
+          else {
+            break;
+          }
+        }
+        else {
+          if (owners[rank+1].y < yd){
+            rank++;
+          }
+          else {
+            break;
+          }
+        }
+      }
+      else {
+        // quad > owners[rank+1]
+        break;
+      }
+    }
+
+    // Set the owner rank
+    *mpi_owner = rank;
+  }
+
  // No quadrant was found, return NULL
  return NULL;
+}
+
+/*
+  Compute the interpolant from the given fine node to the
+  coarse mesh quadrants. 
+
+  Note that the node is defined as a TMRQuadrant class with the
+  quadrant information for the node where the info member is
+  the local index of the node on the element.
+
+  input:
+  node:     the node (element quad with info = element node index)
+  coarse:   the coarse TMRQuadForest object
+  quad:     an enclosing quadrant on the coarse mesh
+  tmp:      temporary array (must be of size 3*coarse->mesh_order)
+
+  output:
+  weights:  the index/weight pairs for the mesh
+*/
+int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
+                                      TMRQuadForest *coarse, 
+                                      TMRQuadrant *quad,
+                                      TMRIndexWeight *weights, 
+                                      double *tmp ){
+  // Loop over the array of nodes
+  const int coarse_nodes_per_element = 
+    coarse->mesh_order*coarse->mesh_order;
+
+  // Compute the i, j location of the fine mesh node on the element
+  const int i = node->info % mesh_order;
+  const int j = node->info/mesh_order;
+
+  // Get the element size for coarse element
+  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
+  const int32_t hc = 1 << (TMR_MAX_LEVEL - quad->level);
+
+  // Set pointers to create the interpolation 
+  int istart = 0, iend = coarse->mesh_order;
+  int jstart = 0, jend = coarse->mesh_order;
+  double *Nu = &tmp[0];
+  double *Nv = &tmp[coarse->mesh_order];
+
+  // Check whether the node is on a coarse mesh surface in either 
+  // the x,y,z directions
+  int32_t x = node->x + h*(i/(mesh_order-1));
+  int32_t y = node->y + h*(j/(mesh_order-1));
+  if ((i == 0 || i == mesh_order-1) && 
+      (x == quad->x || x == quad->x + hc)){
+    if (x == quad->x){ 
+      istart = 0;
+      iend = 1;
+    }
+    else {
+      istart = coarse->mesh_order-1;
+      iend = coarse->mesh_order;
+    }
+    Nu[istart] = 1.0;
+  } 
+  else {
+    double u = ((x % hc) + h*coarse->interp_knots[i])/hc;
+    lagrange_shape_functions(coarse->mesh_order, u, 
+                             coarse->interp_knots, Nu);
+  }
+  if ((j == 0 || j == mesh_order-1) && 
+      (y == quad->y || y == quad->y + hc)){
+    if (y == quad->y){ 
+      jstart = 0;
+      jend = 1;
+    }
+    else {
+      jstart = coarse->mesh_order-1;
+      jend = coarse->mesh_order;
+    }
+    Nv[jstart] = 1.0;
+  } 
+  else {
+    double v = ((y % hc) + h*coarse->interp_knots[j])/hc;
+    lagrange_shape_functions(coarse->mesh_order, v, 
+                             coarse->interp_knots, Nv);
+  }
+
+  // Get the coarse grid information
+  const int *cdep_ptr;
+  const int *cdep_conn;
+  const double *cdep_weights;
+  coarse->getDepNodeConn(&cdep_ptr, &cdep_conn, &cdep_weights);
+
+  // Get the coarse connectivity array
+  const int num = quad->tag;
+  const int *c = &(coarse->conn[coarse_nodes_per_element*num]);
+
+  // Loop over the nodes that are within this octant
+  int nweights = 0;
+  for ( int jj = jstart; jj < jend; jj++ ){
+    for ( int ii = istart; ii < iend; ii++ ){
+      // Compute the offset into the coarse mesh
+      int offset = ii + jj*coarse->mesh_order;
+
+      // Compute the interpolation weight
+      double weight = Nu[ii]*Nv[jj];
+
+      // Get the tag number
+      if (c[offset] >= 0){
+        weights[nweights].index = c[offset];
+        weights[nweights].weight = weight;
+        nweights++;
+      }
+      else {
+        int node = -c[offset]-1;
+        for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
+          weights[nweights].index = cdep_conn[jp];
+          weights[nweights].weight = weight*cdep_weights[jp];
+          nweights++;
+        }
+      }
+    }
+  }
+
+  // Sort and add up the weight values
+  nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+
+  return nweights;
 }
 
 /*
@@ -4044,139 +4281,186 @@ TMRQuadrant* TMRQuadForest::findEnclosing( TMRQuadrant *node ){
 */
 void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
                                          TACSBVecInterp *interp ){
-  /*
-  // Create the dependent node connectivity on the coarse mesh
-  coarse->createDepNodeConn();
+  // Ensure that the nodes are allocated on both octree forests
+  createNodes();
+  coarse->createNodes();
 
   // Get the dependent node information
   const int *cdep_ptr, *cdep_conn;
   const double *cdep_weights;
   coarse->getDepNodeConn(&cdep_ptr, &cdep_conn, &cdep_weights);
 
-  // Create the array of local nodes on the fine mesh. The original
-  // node array contains duplicates along processor boundaries.
-  int node_size;
-  TMRQuadrant *node_array;
-  nodes->getArray(&node_array, &node_size);
-  TMRQuadrant *local_array = new TMRQuadrant[ node_size ];
+  // First, loop over the local list
+  int local_size = node_range[mpi_rank+1] - node_range[mpi_rank];
+  int *flags = new int[ local_size ];
+  memset(flags, 0, local_size*sizeof(int));
 
-  // Copy only the nodes that are locally owned
-  int count = 0;
-  for ( int i = 0; i < node_size; i++ ){
-    if (node_array[i].tag >= node_range[mpi_rank] &&
-        node_array[i].tag < node_range[mpi_rank+1]){
-      local_array[count] = node_array[i];
-      count++;
-    }
-  }
+  // Allocate additional space for the interpolation
+  double *tmp = new double[ 2*coarse->mesh_order ];
 
-  // Allocate the quadrant array and distribute it across all 
-  // processors on the coarse mesh
-  TMRQuadrantArray *local = new TMRQuadrantArray(local_array, count);
+  // The interpolation variables/weights on the coarse mesh
+  const int order = coarse->mesh_order;
+  int max_nodes = order*order;
+  int *vars = new int[ max_nodes ];
+  double *wvals = new double[ max_nodes ];
 
-  // Distribute the quadrants to the owners - include the local
-  // quadrants in the new array since everything has to be
-  // interpolated
-  int use_tags = 0; // Use the quadrant ownership to distribute (not the tags)
-  int include_local = 1; // Include the locally owned quadrants
-  TMRQuadrantArray *fine_nodes = 
-    coarse->distributeQuadrants(local, use_tags, NULL, NULL, include_local);
-  delete local;
+  // Maximum number of weights
+  int max_weights = order*order*order*order;
+  TMRIndexWeight *weights = new TMRIndexWeight[ max_weights ];
 
-  // Get the number of locally owned nodes on this processor
-  int fine_size;
-  TMRQuadrant *fine;
-  fine_nodes->getArray(&fine, &fine_size);
+  // Loop over the array of nodes
+  const int nodes_per_element = mesh_order*mesh_order;
 
-  // Loop over the nodes in the fine mesh that are owned by quadrants
-  // on the coarse mesh stored on this processor
-  for ( int i = 0; i < fine_size; i++ ){
-    // Find the quadrant that encloses the node - this is not unique,
-    // but does produce a unique interpolation (since
-    // edges/face/corners will be treated the same when adjacent
-    // quadrants that both share a common node location touch)
-    TMRQuadrant *quad = coarse->findEnclosing(&fine[i]);
-    
-    if (quad){
-      // The maximum possible size of the array of weights. Note that
-      // this is found if every node is a dependent node (which is
-      // impossible) which points to a dependent face node (also
-      // impossible). It is an upper bound.
-      const int max_size = (4*4*4)*(4*4);
-      TMRIndexWeight weights[max_size];
+  // Get the quadrants
+  int num_elements;
+  TMRQuadrant *quads;
+  quadrants->getArray(&quads, &num_elements);
 
-      // Get the element size for coarse element
-      const int32_t h = 1 << (TMR_MAX_LEVEL - quad->level);
+  // Allocate a queue to store the nodes that are on other procs
+  TMRQuadrantQueue *ext_queue = new TMRQuadrantQueue();
 
-      // Compute the parametric location within the element. Note that
-      // this modifies the end-point locations so that they are flush
-      // with the upper limit
-      int32_t u = (fine[i].x == hmax-1 ? hmax : fine[i].x) - quad->x;
-      int32_t v = (fine[i].y == hmax-1 ? hmax : fine[i].y) - quad->y;
+  for ( int i = 0; i < num_elements; i++ ){
+    const int *c = &conn[nodes_per_element*i];
+    for ( int j = 0; j < nodes_per_element; j++ ){
+      // Check if the fine node is owned by this processor
+      if (c[j] >= node_range[mpi_rank] &&
+          c[j] < node_range[mpi_rank+1]){
+        int index = c[j] - node_range[mpi_rank];
+        if (!flags[index]){
+          // We're going to handle this node now, mark it as done
+          flags[index] = 1;
 
-      // Set the base node location
-      int32_t x = quad->x + (u == h ? h : 0);
-      int32_t y = quad->y + (v == h ? h : 0);
+          // Find the enclosing coarse quad on this 
+          // processor if it exits
+          TMRQuadrant node = quads[i];
+          node.info = j;
 
+          // Find the MPI owner or the
+          int mpi_owner = mpi_rank;
+          TMRQuadrant *t = coarse->findEnclosing(mesh_order, interp_knots,
+                                                 &node, &mpi_owner);
 
-      // Compute the interpolation weights
-      double Nu[4], Nv[4];
-      int nu = computeInterpWeights(coarse->mesh_order, u, h, Nu);
-      int nv = computeInterpWeights(coarse->mesh_order, v, h, Nv);
-    
-      // Loop over the nodes that are within this quadrant
-      int nweights = 0;
-      for ( int jj = 0; jj < nv; jj++ ){
-        for ( int ii = 0; ii < nu; ii++ ){
-          // Compute the interpolation weight
-          double weight = Nu[ii]*Nv[jj];
-          
-          // Set the node locations
-          TMRQuadrant node;
-          node.face = quad->face;
-          node.x = x + hc*ii;
-          node.y = y + hc*jj;
-            
-          // Transform the node using the coarse transform
-          coarse->transformNode(&node);
-          
-          // Find the coarse mesh
-          int use_node_search = 1;
-          TMRQuadrant *t = coarse->nodes->contains(&node, use_node_search);
-          
-          if (t->tag >= 0){
-            weights[nweights].index = t->tag;
-            weights[nweights].weight = weight;
-            nweights++;
+          // The node is owned a coarse element on this processor
+          if (t){
+            // Compute the element interpolation
+            int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
+
+            for ( int k = 0; k < nweights; k++ ){
+              vars[k] = weights[k].index;
+              wvals[k] = weights[k].weight;
+            }
+            interp->addInterp(c[j], wvals, vars, nweights);
           }
           else {
-            // Unravel the dependent node connectivity
-            int node = -t->tag-1;
-            for ( int jp = cdep_ptr[node]; jp < cdep_ptr[node+1]; jp++ ){
-              weights[nweights].index = cdep_conn[jp];
-              weights[nweights].weight = weight*cdep_weights[jp];
-              nweights++;
-            }
+            // We've got to transfer the node to the processor that
+            // owns an enclosing element. Do to that, add the
+            // quad to the list of externals and store its mpi owner
+            node.tag = mpi_owner;
+            ext_queue->push(&node);
           }
         }
       }
+    }
+  }
 
-      // Sort the dependent weight values
-      nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+  // Free the data
+  delete [] flags;
 
-      // The interpolation variables/weights on the coarse mesh
-      int vars[49];
-      double wvals[49];
+  // Sort the sending quadrants by MPI rank
+  TMRQuadrantArray *ext_array = ext_queue->toArray();
+  delete ext_queue;
+
+  // Sort the node
+  int size;
+  TMRQuadrant *array;
+  ext_array->getArray(&array, &size);
+  qsort(array, size, sizeof(TMRQuadrant), compare_quadrant_tags);
+
+  // The number of quadrants that will be sent from this processor
+  // to all other processors in the communicator
+  int *quad_ptr = new int[ mpi_size+1 ];
+  int *quad_recv_ptr = new int[ mpi_size+1 ];
+
+  // Match the quad intervals to determine how mnay quad
+  // need to be sent to each processor
+  matchTagIntervals(array, size, quad_ptr);
+
+  // Now convert the node tags nodes back to node numbers
+  // from the connectivity
+  for ( int i = 0; i < size; i++ ){
+    // Search for the quad in the quadrants array
+    TMRQuadrant *t = quadrants->contains(&array[i]);
+
+    // Set the tag value as the global node number
+    array[i].tag = conn[nodes_per_element*t->tag + array[i].info];
+  }
+  
+  // Count up the number of quad destined for other procs
+  int *quad_counts = new int[ mpi_size ];
+  for ( int i = 0; i < mpi_size; i++ ){
+    if (i == mpi_rank){
+      quad_counts[i] = 0;
+    }
+    else {
+      quad_counts[i] = quad_ptr[i+1] - quad_ptr[i];
+    }
+  }
+
+  // Now distribute the quad to their destination processors
+  int *quad_recv_counts = new int[ mpi_size ];
+  MPI_Alltoall(quad_counts, 1, MPI_INT,
+               quad_recv_counts, 1, MPI_INT, comm);
+
+  // Now use oct_ptr to point into the recv array
+  quad_recv_ptr[0] = 0;
+  for ( int i = 0; i < mpi_size; i++ ){
+    quad_recv_ptr[i+1] = quad_recv_ptr[i] + quad_recv_counts[i];
+  }
+
+  delete [] quad_counts;
+  delete [] quad_recv_counts;
+
+  // Distribute the quad based on the oct_ptr/oct_recv_ptr arrays
+  TMRQuadrantArray *recv_array = 
+    sendQuadrants(ext_array, quad_ptr, quad_recv_ptr);
+  delete [] quad_ptr;
+  delete [] quad_recv_ptr;
+  delete ext_array;
+
+  // Get the nodes recv'd from other processors
+  int recv_size;
+  TMRQuadrant *recv_nodes;
+  recv_array->getArray(&recv_nodes, &recv_size);
+
+  // Recv the nodes and loop over the connectivity
+  for ( int i = 0; i < recv_size; i++ ){
+    TMRQuadrant *t = coarse->findEnclosing(mesh_order, interp_knots,
+                                           &recv_nodes[i]);
+
+    if (t){
+      // Compute the element interpolation
+      int nweights = computeElemInterp(&recv_nodes[i], coarse, t, 
+                                       weights, tmp);
+
       for ( int k = 0; k < nweights; k++ ){
         vars[k] = weights[k].index;
         wvals[k] = weights[k].weight;
       }
-
-      // Add the weights/indices to the interpolation object
-      interp->addInterp(fine[i].tag, wvals, vars, nweights);
+      interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
+    }
+    else {
+      // This should not happen. Print out an error message here.
+      fprintf(stderr, 
+              "TMRQuadForest: Destination processor does not own node\n");
     }
   }
 
-  delete fine_nodes;
-  */
+  // Free the recv array
+  delete recv_array;
+
+  // Free the temporary arrays
+  delete [] tmp;
+  delete [] vars;
+  delete [] wvals;
+  delete [] weights;
 }
