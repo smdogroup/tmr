@@ -1253,6 +1253,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
   const double *knots, *refined_knots;
   const int order = forest->getInterpKnots(&knots);
   const int refined_order = forest_refined->getInterpKnots(&refined_knots);
+  const int num_nodes = order*order;
   const int num_refined_nodes = refined_order*refined_order;
 
   // The number of enrichment functions
@@ -1266,8 +1267,8 @@ void addRefinedSolution2D( TMRQuadForest *forest,
   TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
  
   // Element solution on the coarse TACS mesh
-  TacsScalar *uelem = new TacsScalar[ vars_per_node*order*order ];
-  TacsScalar *delem = new TacsScalar[ deriv_per_node*order*order ];
+  TacsScalar *uelem = new TacsScalar[ vars_per_node*num_nodes ];
+  TacsScalar *delem = new TacsScalar[ deriv_per_node*num_nodes ];
   TacsScalar *ubar = new TacsScalar[ vars_per_node*nenrich ];
 
   // Refined element solution
@@ -1306,7 +1307,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
     if (compute_difference){
       // Get the refined element nodes
       const int *refined_nodes;
-      tacs_refined->getElement(elem, &refined_nodes, NULL);
+      tacs_refined->getElement(elem, &refined_nodes, &len);
           
       // Zero the refined element contribution
       memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
@@ -1356,12 +1357,11 @@ void addRefinedSolution2D( TMRQuadForest *forest,
     else {
       // Get the refined element nodes
       const int *refined_nodes;
-      tacs_refined->getElement(elem, &refined_nodes, NULL);
+      tacs_refined->getElement(elem, &refined_nodes, &len);
           
       // Zero the refined element contribution
-      memset(uref, 0,
-             vars_per_node*refined_order*refined_order*sizeof(TacsScalar));
-          
+      memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
+
       // Compute the element order
       for ( int m = 0; m < refined_order; m++ ){
         for ( int n = 0; n < refined_order; n++ ){
@@ -1370,32 +1370,36 @@ void addRefinedSolution2D( TMRQuadForest *forest,
           pt[0] = refined_knots[n];
           pt[1] = refined_knots[m];
               
-          // Evaluate the shape functions and the enrichment
-          // functions at the new parametric point
+          // Evaluate the shape functions
           double N[MAX_ORDER*MAX_ORDER];
-          double Nr[MAX_2D_ENRICH];
           forest->evalInterp(pt, N);
-          if (order == 2){
-            eval2ndEnrichmentFuncs2D(pt, Nr);
-          }
-          else {
-            eval3rdEnrichmentFuncs2D(pt, Nr);
-          }
+          FElibrary::biLagrangeSF(N, pt, order);
             
           // Set the values of the variables at this point
           for ( int i = 0; i < vars_per_node; i++ ){
             const TacsScalar *ue = &uelem[i];
             TacsScalar *u = &uref[vars_per_node*(n + refined_order*m) + i];
             
-            for ( int k = 0; k < order*order; k++ ){
-              u[0] += N[k]*ue[vars_per_node*k];
+            for ( int k = 0; k < num_nodes; k++ ){
+              u[0] += N[k]*ue[0];
+              ue += vars_per_node;
             }
+          }
+
+          // Evaluate the enrichment functions and add them to the
+          // solution
+          double Nr[MAX_2D_ENRICH];
+          if (order == 2){
+            eval2ndEnrichmentFuncs2D(pt, Nr);
+          }
+          else {
+            eval3rdEnrichmentFuncs2D(pt, Nr);
           }
 
           // Add the portion from the enrichment functions
           for ( int i = 0; i < vars_per_node; i++ ){
             const TacsScalar *ue = &ubar[i];
-            TacsScalar *u = &uref[vars_per_node*(n + order*m) + i];
+            TacsScalar *u = &uref[vars_per_node*(n + refined_order*m) + i];
 
             for ( int k = 0; k < nenrich; k++ ){
               u[0] += Nr[k]*ue[vars_per_node*k];
@@ -1500,7 +1504,7 @@ void addRefinedSolution3D( TMROctForest *forest,
     if (compute_difference){
       // Get the refined element nodes
       const int *refined_nodes;
-      tacs_refined->getElement(elem, &refined_nodes, NULL);
+      tacs_refined->getElement(elem, &refined_nodes, &len);
       
       // Zero the refined element contribution
       memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
@@ -1553,7 +1557,7 @@ void addRefinedSolution3D( TMROctForest *forest,
     else {
       // Get the refined element nodes
       const int *refined_nodes;
-      tacs_refined->getElement(elem, &refined_nodes, NULL);
+      tacs_refined->getElement(elem, &refined_nodes, &len);
 
       // Zero the refined element contribution
       memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
@@ -1647,6 +1651,9 @@ void TMR_ComputeReconSolution( TMRQuadForest *forest,
     uvec_refined = tacs_refined->createVec();
     uvec_refined->incref();
   }
+
+  // Zero the entries of the reconstructed solution
+  uvec_refined->zeroEntries();
 
   // Distribute the solution vector answer
   uvec->beginDistributeValues();
@@ -1802,6 +1809,9 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
     uvec_refined = tacs_refined->createVec();
     uvec_refined->incref();
   }
+
+  // Zero the entries in the refined vector
+  uvec_refined->zeroEntries();
 
   // Distribute the solution vector answer
   uvec->beginDistributeValues();

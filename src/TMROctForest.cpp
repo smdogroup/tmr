@@ -5756,7 +5756,7 @@ getNodesWithAttribute()\n");
   }
 
   int count = 0; // Current node count
-  int max_len = 256; // max length of the node list
+  int max_len = 1024; // max length of the node list
   int *node_list = new int[ max_len ]; // Nodes touching this attribute
 
   // Get the octants
@@ -5764,12 +5764,16 @@ getNodesWithAttribute()\n");
   TMROctant *octs;
   octants->getArray(&octs, &size);
 
+  // Max node increment
+  const int max_node_incr = 8 + 12*mesh_order + 6*mesh_order*mesh_order +
+    mesh_order*mesh_order*mesh_order;
+  
   // Loop over the octants and find out whether it touches a face or
   // edge with the prescribed attribute
   for ( int i = 0; i < size; i++ ){
-    if (count + mesh_order*mesh_order*mesh_order > max_len){
+    if (count + max_node_incr > max_len){
       // Extend the length of the array
-      max_len *= 2;
+      max_len = 2*max_len + max_node_incr;
       int *tmp = new int[ max_len ];
       memcpy(tmp, node_list, count*sizeof(int));
       delete [] node_list;

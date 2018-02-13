@@ -26,8 +26,8 @@ inline void lagrange_shape_functions( const int order,
     N[i] = 1.0;
     for ( int j = 0; j < order; j++ ){
       if (i != j){
-        double dn = 1.0/(knots[i] - knots[j]);
-        N[i] *= (u - knots[j])*dn;
+        double d = 1.0/(knots[i] - knots[j]);
+        N[i] *= (u - knots[j])*d;
       }
     }
   }
@@ -60,18 +60,18 @@ inline void lagrange_shape_func_derivative( const int order,
     // point, adding the contribution to the shape function
     for ( int j = 0; j < order; j++ ){
       if (i != j){
-        double dn = 1.0/(knots[i] - knots[j]);
-        N[i] *= (u - knots[j])*dn;
+        double d = 1.0/(knots[i] - knots[j]);
+        N[i] *= (u - knots[j])*d;
         
         // Now add up the contribution to the derivative
         for ( int k = 0; k < order; k++ ){
           if (k != i && k != j){
-            dn *= (u - knots[k])/(knots[i] - knots[k]);
+            d *= (u - knots[k])/(knots[i] - knots[k]);
           }
         }
 
         // Add the derivative contribution
-        Nd[i] += dn;
+        Nd[i] += d;
       }
     }
   }

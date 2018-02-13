@@ -1928,23 +1928,23 @@ def computeReconSolution(forest, Assembler coarse,
     cdef TMRQuadForest *quad_forest = NULL
     cdef TMRQuadForest *quad_forest_refined = NULL
     cdef TACSBVec *uvec_ptr = NULL
-    cdef TACSBVec *refined_ptr = NULL
+    cdef TACSBVec *uvec_refined_ptr = NULL
     if uvec is not None:
         uvec_ptr = uvec.ptr
     if uvec_refined is not None:
-        refined_ptr = uvec_refined.ptr
+        uvec_refined_ptr = uvec_refined.ptr
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
         oct_forest_refined = (<OctForest>forest_refined).ptr
         TMR_ComputeReconSolution(oct_forest, coarse.ptr,
                                  oct_forest_refined, refined.ptr,
-                                 uvec_ptr, refined_ptr)
+                                 uvec_ptr, uvec_refined_ptr)
     elif isinstance(forest, QuadForest):
         quad_forest = (<QuadForest>forest).ptr
         quad_forest_refined = (<QuadForest>forest_refined).ptr
         TMR_ComputeReconSolution(quad_forest, coarse.ptr,
                                  quad_forest_refined, refined.ptr,
-                                 uvec_ptr, refined_ptr)
+                                 uvec_ptr, uvec_refined_ptr)
     return
 
 def writeSTLToBin(char *filename, OctForest forest,

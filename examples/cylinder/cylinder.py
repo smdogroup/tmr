@@ -73,7 +73,6 @@ def addFaceTraction(order, assembler, load):
 def createRefined(forest, bcs, pttype=TMR.UNIFORM_POINTS):
     new_forest = forest.duplicate()
     new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
-    new_forest.refine()
     new_forest.balance(1)
     creator = CreateMe(bcs)
     return new_forest, creator.createTACS(new_forest)
@@ -109,7 +108,6 @@ def createProblem(forest, bcs, ordering, order=2, nlevels=2,
         forest = forests[-1].coarsen()
         forest.setMeshOrder(2, pttype)
         forest.balance(1)
-        forest.repartition()
         forests.append(forest)
 
         # Make the creator class
@@ -279,13 +277,13 @@ for k in range(steps):
     f5.writeToFile('results/solution%02d.f5'%(k))
 
     # Create the refined mesh
-    forest_refined, refined = createRefined(forest, bcs)
+    forest_refined, assembler_refined = createRefined(forest, bcs)
     
     # Compute the adjoint and use adjoint-based refinement
     err_est, func_corr, error = \
         TMR.adjointError(forest, assembler,
-                         forest_refined, refined, adjoint)
-
+                         forest_refined, assembler_refined, adjoint)
+    
     # Compute the refinement from the error estimate
     nbins = 60
     low = -15

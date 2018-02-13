@@ -3870,7 +3870,7 @@ getQuadsWithAttribute()\n");
         const char *edge_attr = edge->getAttribute();
         if (edge_attr && strcmp(edge_attr, attr) == 0){
           TMRQuadrant p = array[i];
-          p.tag = 0;
+          p.info = 0;
           queue->push(&p);
         }
       }
@@ -3880,7 +3880,7 @@ getQuadsWithAttribute()\n");
         const char *edge_attr = edge->getAttribute();
         if (edge_attr && strcmp(edge_attr, attr) == 0){
           TMRQuadrant p = array[i];
-          p.tag = 1;
+          p.info = 1;
           queue->push(&p);
         }
       }
@@ -3890,7 +3890,7 @@ getQuadsWithAttribute()\n");
         const char *edge_attr = edge->getAttribute();
         if (edge_attr && strcmp(edge_attr, attr) == 0){
           TMRQuadrant p = array[i];
-          p.tag = 2;
+          p.info = 2;
           queue->push(&p);
         }
       }
@@ -3900,7 +3900,7 @@ getQuadsWithAttribute()\n");
         const char *edge_attr = edge->getAttribute();
         if (edge_attr && strcmp(edge_attr, attr) == 0){
           TMRQuadrant p = array[i];
-          p.tag = 3;
+          p.info = 3;
           queue->push(&p);
         }
       }
@@ -3950,15 +3950,18 @@ getNodesWithAttribute()\n");
   quadrants->getArray(&quads, &size);
 
   int count = 0; // Current node count
-  int max_len = 256; // max length of the node list
+  int max_len = 1024; // max length of the node list
   int *node_list = new int[ max_len ]; // Nodes touching this attribute
 
+  // Max number of nodes added by one quadrant
+  const int max_node_incr = 4 + 4*mesh_order + mesh_order*mesh_order;
+  
   // Loop over the quadrants and find out whether it touches a face or
   // edge with the prescribed attribute
   for ( int i = 0; i < size; i++ ){
     if (count + mesh_order*mesh_order > max_len){
       // Extend the length of the array
-      max_len *= 2;
+      max_len = 2*max_len + max_node_incr;
       int *tmp = new int[ max_len ];
       memcpy(tmp, node_list, count*sizeof(int));
       delete [] node_list;

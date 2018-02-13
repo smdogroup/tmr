@@ -1,10 +1,6 @@
 #ifndef TMR_OCTANT_H
 #define TMR_OCTANT_H
 
-/*
-  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
-*/
-
 #include <stdlib.h>
 #include "TMRBase.h"
 

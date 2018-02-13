@@ -2,10 +2,6 @@
 #include "TMRHashFunction.h"
 
 /*
-  Copyright (c) 2016 Graeme Kennedy. All rights reserved. 
-*/
-
-/*
   Get the child id of the quadrant
 */
 int TMROctant::childId(){
