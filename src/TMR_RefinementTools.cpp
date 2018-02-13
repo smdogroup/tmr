@@ -19,7 +19,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 
   // Create the multigrid object
   int zero_guess = 0;
-  double omega = 0.5;
+  double omega = 0.75;
   double lower = 1.0/30.0, upper = 1.1;
   int cheb_degree = 3;
   int mg_smooth_iters = 1;
@@ -96,7 +96,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 
   // Create the multigrid object
   int zero_guess = 0;
-  double omega = 0.5;
+  double omega = 0.75;
   double lower = 1.0/30.0, upper = 1.1;
   int cheb_degree = 3;
   int mg_smooth_iters = 1;
@@ -744,6 +744,8 @@ static void computeElemRecon3D( const int vars_per_node,
   // Get information about the interpolation
   const double *knots;
   const int order = forest->getInterpKnots(&knots);
+
+  // Get the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
 
   // The number of equations
@@ -978,16 +980,16 @@ static void computeNodeDeriv2D( TMRQuadForest *forest,
   // Get the number of elements
   int nelems = tacs->getNumElements();
 
-  // Allocate space for the element-wise values and derivatives
-  TacsScalar *Ud = new TacsScalar[ 2*vars_per_node ];
-  TacsScalar *uelem = new TacsScalar[ order*order*vars_per_node ];
-  TacsScalar *delem = new TacsScalar[ order*order*deriv_per_node ];
-
   // We're only going to iterate over the elements in the list, not
   // the entire array
   if (element_nums){
     nelems = num_elements;
   }
+
+  // Allocate space for the element-wise values and derivatives
+  TacsScalar *Ud = new TacsScalar[ 2*vars_per_node ];
+  TacsScalar *uelem = new TacsScalar[ order*order*vars_per_node ];
+  TacsScalar *delem = new TacsScalar[ order*order*deriv_per_node ];
 
   // Perform the reconstruction for the local
   for ( int index = 0; index < nelems; index++ ){
@@ -1096,46 +1098,37 @@ static void computeNodeDeriv2D( TMRQuadForest *forest,
   output:
   uderiv:         the approximate derivatives at the nodes
 */
-static void computeNodeDeriv3D( const int order,
+static void computeNodeDeriv3D( TMROctForest *forest,
                                 TACSAssembler *tacs, TACSBVec *uvec, 
                                 TACSBVec *weights, TACSBVec *uderiv,
                                 const int *element_nums=NULL,
                                 int num_elements=-1 ){
-  // Maximum number of nodes associated with an element
-  const int max_elem_nodes = tacs->getMaxElementNodes();
+  // Zero the nodal derivatives
+  uderiv->zeroEntries();
+
+  // Get the interpolation knot positions
+  const double *knots;
+  const int order = forest->getInterpKnots(&knots);
 
   // The number of variables at each node
-  int vars_per_node = tacs->getVarsPerNode();
+  const int vars_per_node = tacs->getVarsPerNode();
 
   // Number of derivatives per node - x,y,z derivatives
-  int deriv_per_node = 3*vars_per_node;
-
-  // Allocate arrays based on the maximum node size
-  TacsScalar *welem = new TacsScalar[ max_elem_nodes ];
-  
-  // Allocate space for the shape functions
-  double *N = new double[ max_elem_nodes ];
-  double *Na = new double[ max_elem_nodes ];
-  double *Nb = new double[ max_elem_nodes ];
-  double *Nc = new double[ max_elem_nodes ];
-
-  // Allocate space for the element-wise values and derivatives
-  TacsScalar *Xpts = new TacsScalar[ 3*max_elem_nodes ];
-  TacsScalar *Ud = new TacsScalar[ 3*vars_per_node ];
-  TacsScalar *uelem = new TacsScalar[ vars_per_node*max_elem_nodes ];
-  TacsScalar *delem = new TacsScalar[ deriv_per_node*max_elem_nodes ];
+  const int deriv_per_node = 3*vars_per_node;
 
   // Get the number of elements
   int nelems = tacs->getNumElements();
-
+  
   // We're only going to iterate over the elements in the list, not
   // the entire array
   if (element_nums){
     nelems = num_elements;
   }
-
-  // Zero the nodal derivatives
-  uderiv->zeroEntries();
+   
+  // Allocate space for the element-wise values and derivatives
+  TacsScalar *Ud = new TacsScalar[ 3*vars_per_node ];
+  TacsScalar *uelem = new TacsScalar[ order*order*order*vars_per_node ];
+  TacsScalar *delem = new TacsScalar[ order*order*order*deriv_per_node ];
 
   // Perform the reconstruction for the local
   for ( int index = 0; index < nelems; index++ ){
@@ -1152,12 +1145,14 @@ static void computeNodeDeriv3D( const int order,
     tacs->getElement(elem, &nodes, &len);
 
     // Get the local weight values for this element
+    TacsScalar welem[MAX_ORDER*MAX_ORDER*MAX_ORDER];
     weights->getValues(len, nodes, welem);
 
     // Get the local element variables
     uvec->getValues(len, nodes, uelem);
 
     // Get the node locations for the element
+    TacsScalar Xpts[3*MAX_ORDER*MAX_ORDER*MAX_ORDER];
     tacs->getElement(elem, Xpts);
     
     // Compute the derivative of the components of the variables along
@@ -1170,12 +1165,16 @@ static void computeNodeDeriv3D( const int order,
       for ( int jj = 0; jj < order; jj++ ){
         for ( int ii = 0; ii < order; ii++ ){
           double pt[3];
-          pt[0] = -1.0 + 2.0*ii/(order-1);
-          pt[1] = -1.0 + 2.0*jj/(order-1);
-          pt[2] = -1.0 + 2.0*kk/(order-1);
+          pt[0] = knots[ii];
+          pt[1] = knots[jj];
+          pt[2] = knots[kk];
 
-          // Evaluate the the quadratic shape functions at this point
-          FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, order);
+          // Evaluate the the shape functions
+          double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          forest->evalInterp(pt, N, Na, Nb, Nc);
         
           // Evaluate the Jacobian transformation at this point
           TacsScalar Xd[9], J[9];
@@ -1220,12 +1219,6 @@ static void computeNodeDeriv3D( const int order,
   }
 
   // Free the element values
-  delete [] welem;
-  delete [] N;
-  delete [] Na;
-  delete [] Nb;
-  delete [] Nc;
-  delete [] Xpts;
   delete [] Ud;
   delete [] uelem;
   delete [] delem;
@@ -1251,7 +1244,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
                            TACSBVec *vec_refined,
                            const int compute_difference=0,
                            const int *element_nums=NULL,
-                           int num_elements=-1  ){
+                           int num_elements=-1 ){
   // Number of variables/derivatives per node
   const int vars_per_node = tacs->getVarsPerNode();
   const int deriv_per_node = 3*vars_per_node;
@@ -1316,8 +1309,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
       tacs_refined->getElement(elem, &refined_nodes, NULL);
           
       // Zero the refined element contribution
-      memset(uref, 0,
-             vars_per_node*refined_order*refined_order*sizeof(TacsScalar));
+      memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
           
       // Compute the solution at the refined points
       for ( int m = 0; m < refined_order; m++ ){
@@ -1437,25 +1429,32 @@ void addRefinedSolution2D( TMRQuadForest *forest,
 /*
   Reconstruct the solution on a more refined mesh
 */
-void addRefinedSolution3D( const int order,
+void addRefinedSolution3D( TMROctForest *forest,
                            TACSAssembler *tacs,
-                           TACSAssembler *tacs_refine,
+                           TMROctForest *forest_refined,
+                           TACSAssembler *tacs_refined,
                            TACSBVec *vec,
                            TACSBVec *vecDeriv,
-                           TACSBVec *vec_refine,
-                           const int compute_difference,
+                           TACSBVec *vec_refined,
+                           const int compute_difference=0,
                            const int *element_nums=NULL,
-                           int num_elements=-1  ){
-  /*
+                           int num_elements=-1 ){
   // Number of variables/derivatives per node
   const int vars_per_node = tacs->getVarsPerNode();
   const int deriv_per_node = 3*vars_per_node;
 
-  // The number of equations: 3 times the number of nodes for each element
-  const int neq = 3*order*order*order;
+  // Get the order of the solution and the refined solution
+  const double *knots, *refined_knots;
+  const int order = forest->getInterpKnots(&knots);
+  const int refined_order = forest_refined->getInterpKnots(&refined_knots);
+  const int num_refined_nodes = refined_order*refined_order*refined_order;
 
-  // The number of enrichment function
+  // The number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
+
+  // The number of equations for the reconstruction: 2 times the
+  // number of nodes for each element
+  const int neq = 3*order*order*order;
   
   // Allocate space for the element reconstruction problem
   TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
@@ -1469,7 +1468,7 @@ void addRefinedSolution3D( const int order,
   TacsScalar *uref = new TacsScalar[ vars_per_node*order*order*order ];
 
   // The maximum number of nodes for any element
-  TacsScalar Xpts[3*27];
+  TacsScalar Xpts[3*MAX_ORDER*MAX_ORDER*MAX_ORDER];
 
   // Number of local elements in the coarse version of TACS
   int nelems = tacs->getNumElements();
@@ -1495,138 +1494,126 @@ void addRefinedSolution3D( const int order,
     vecDeriv->getValues(len, nodes, delem);
 
     // Compute the reconstruction weights for the enrichment functions
-    computeElemRecon3D(order, vars_per_node,
+    computeElemRecon3D(vars_per_node, forest,
                        Xpts, uelem, delem, ubar, tmp);
 
     if (compute_difference){
-      // Loop over the refined elements
-      for ( int ii = 0; ii < 2; ii++ ){
-        for ( int jj = 0; jj < 2; jj++ ){
-          for ( int kk = 0; kk < 2; kk++ ){
-            // Get the refined element nodes
-            const int *refine_nodes;
-            tacs_refine->getElement(8*elem + kk + 2*jj + 4*ii,
-                                    &refine_nodes, NULL);
-            
-            // Zero the refined element contribution
-            memset(uref, 0, vars_per_node*order*order*order*sizeof(TacsScalar));
-            
-            for ( int p = 0; p < order; p++ ){
-              for ( int m = 0; m < order; m++ ){
-                for ( int n = 0; n < order; n++ ){
-                  // Set the new parameter point in the refined element
-                  double pt[3];
-                  pt[0] = ii - 1.0 + 1.0*n/(order-1);
-                  pt[1] = jj - 1.0 + 1.0*m/(order-1);
-                  pt[2] = kk - 1.0 + 1.0*p/(order-1);
+      // Get the refined element nodes
+      const int *refined_nodes;
+      tacs_refined->getElement(elem, &refined_nodes, NULL);
+      
+      // Zero the refined element contribution
+      memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
+      
+      for ( int p = 0; p < refined_order; p++ ){
+        for ( int m = 0; m < refined_order; m++ ){
+          for ( int n = 0; n < refined_order; n++ ){
+            // Set the new parameter point in the refined element
+            double pt[3];
+            pt[0] = refined_knots[n];
+            pt[1] = refined_knots[m];
+            pt[2] = refined_knots[p];
 
-                  // Evaluate the shape functions and the enrichment
-                  // functions at the new parametric point
-                  double Nr[MAX_3D_ENRICH];
-                  if (order == 2){
-                    eval2ndEnrichmentFuncs3D(pt, Nr);
-                  }
-                  else if (order == 3){
-                    eval3rdEnrichmentFuncs3D(pt, Nr);
-                  }
-                
-                  // Add the portion from the enrichment functions
-                  TacsScalar *u = 
-                    &uref[vars_per_node*(n + order*m + order*order*p)];
-                  for ( int i = 0; i < vars_per_node; i++ ){
-                    const TacsScalar *ue = &ubar[i];
-                    for ( int k = 0; k < nenrich; k++ ){
-                      u[i] += Nr[k]*ue[vars_per_node*k];
-                    }
-                  }
-                }
+            // Evaluate the shape functions and the enrichment
+            // functions at the new parametric point
+            double Nr[MAX_3D_ENRICH];
+            if (order == 2){
+              eval2ndEnrichmentFuncs3D(pt, Nr);
+            }
+            else if (order == 3){
+              eval3rdEnrichmentFuncs3D(pt, Nr);
+            }
+          
+            // Add the portion from the enrichment functions
+            int offset = (n + refined_order*m + 
+                          refined_order*refined_order*p);
+            TacsScalar *u = &uref[vars_per_node*offset];
+            for ( int i = 0; i < vars_per_node; i++ ){
+              const TacsScalar *ue = &ubar[i];
+              for ( int k = 0; k < nenrich; k++ ){
+                u[i] += Nr[k]*ue[vars_per_node*k];
               }
             }
-
-            // Zero the contribution if it goes to a dependent node
-            for ( int i = 0; i < order*order*order; i++ ){
-              if (refine_nodes[i] < 0){
-                for ( int j = 0; j < vars_per_node; j++ ){
-                  uref[vars_per_node*i + j] = 0.0;
-                }
-              }
-            }
-
-            // Add the contributions to the element
-            vec_refine->setValues(len, refine_nodes, uref, TACS_ADD_VALUES);
           }
         }
       }
+
+      // Zero the contribution if it goes to a dependent node
+      for ( int i = 0; i < num_refined_nodes; i++ ){
+        if (refined_nodes[i] < 0){
+          for ( int j = 0; j < vars_per_node; j++ ){
+            uref[vars_per_node*i + j] = 0.0;
+          }
+        }
+      }
+
+      // Add the contributions to the element
+      vec_refined->setValues(len, refined_nodes, uref, TACS_ADD_VALUES);
     }
     else {
-      // Loop over the refined elements
-      for ( int ii = 0; ii < 2; ii++ ){
-        for ( int jj = 0; jj < 2; jj++ ){
-          for ( int kk = 0; kk < 2; kk++ ){
-            // Get the refined element nodes
-            const int *refine_nodes;
-            tacs_refine->getElement(8*elem + kk + 2*jj + 4*ii,
-                                    &refine_nodes, NULL);
-            
-            // Zero the refined element contribution
-            memset(uref, 0, vars_per_node*order*order*order*sizeof(TacsScalar));
+      // Get the refined element nodes
+      const int *refined_nodes;
+      tacs_refined->getElement(elem, &refined_nodes, NULL);
 
-            for ( int p = 0; p < order; p++ ){
-              for ( int m = 0; m < order; m++ ){
-                for ( int n = 0; n < order; n++ ){
-                  // Set the new parameter point in the refined element
-                  double pt[3];
-                  pt[0] = ii - 1.0 + 1.0*n/(order-1);
-                  pt[1] = jj - 1.0 + 1.0*m/(order-1);
-                  pt[2] = kk - 1.0 + 1.0*p/(order-1);
+      // Zero the refined element contribution
+      memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
+      
+      for ( int p = 0; p < refined_order; p++ ){
+        for ( int m = 0; m < refined_order; m++ ){
+          for ( int n = 0; n < refined_order; n++ ){
+            // Set the new parameter point in the refined element
+            double pt[3];
+            pt[0] = refined_knots[n];
+            pt[1] = refined_knots[m];
+            pt[2] = refined_knots[p];
 
-                  // Evaluate the shape functions and the enrichment
-                  // functions at the new parametric point
-                  double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-                  double Nr[MAX_3D_ENRICH];
-                  FElibrary::triLagrangeSF(N, pt, order);
-                  if (order == 2){
-                    eval2ndEnrichmentFuncs3D(pt, Nr);
-                  }
-                  else if (order == 3){
-                    eval3rdEnrichmentFuncs3D(pt, Nr);
-                  }
-            
-                  // Set the values of the variables at this point
-                  TacsScalar *u = 
-                    &uref[vars_per_node*(n + order*m + order*order*p)];
-                  for ( int i = 0; i < vars_per_node; i++ ){
-                    const TacsScalar *ue = &uelem[i];
-                    for ( int k = 0; k < order*order*order; k++ ){
-                      u[i] += N[k]*ue[vars_per_node*k];
-                    }
-                  }
-                
-                  // Add the portion from the enrichment functions
-                  for ( int i = 0; i < vars_per_node; i++ ){
-                    const TacsScalar *ue = &ubar[i];
-                    for ( int k = 0; k < nenrich; k++ ){
-                      u[i] += Nr[k]*ue[vars_per_node*k];
-                    }
-                  }
-                }
+            // Evaluate the shape functions and the enrichment
+            // functions at the new parametric point
+            double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+            forest->evalInterp(pt, N);
+
+            // Add the portion from the enrichment functions
+            int offset = (n + refined_order*m + 
+                          refined_order*refined_order*p);
+            TacsScalar *u = &uref[vars_per_node*offset];
+
+            for ( int i = 0; i < vars_per_node; i++ ){
+              const TacsScalar *ue = &uelem[i];
+              for ( int k = 0; k < order*order*order; k++ ){
+                u[i] += N[k]*ue[vars_per_node*k];
               }
             }
 
-            // Zero the contribution if it goes to a dependent node
-            for ( int i = 0; i < order*order*order; i++ ){
-              if (refine_nodes[i] < 0){
-                for ( int j = 0; j < vars_per_node; j++ ){
-                  uref[vars_per_node*i + j] = 0.0;
-                }
-              }
+            double Nr[MAX_3D_ENRICH];
+            if (order == 2){
+              eval2ndEnrichmentFuncs3D(pt, Nr);
+            }
+            else if (order == 3){
+              eval3rdEnrichmentFuncs3D(pt, Nr);
             }
 
-            // Add the contributions to the element
-            vec_refine->setValues(len, refine_nodes, uref, TACS_ADD_VALUES);
+            // Add the portion from the enrichment functions
+            for ( int i = 0; i < vars_per_node; i++ ){
+              const TacsScalar *ue = &ubar[i];
+              for ( int k = 0; k < nenrich; k++ ){
+                u[i] += Nr[k]*ue[vars_per_node*k];
+              }
+            }
           }
         }
       }
+
+      // Zero the contribution if it goes to a dependent node
+      for ( int i = 0; i < num_refined_nodes; i++ ){
+        if (refined_nodes[i] < 0){
+          for ( int j = 0; j < vars_per_node; j++ ){
+            uref[vars_per_node*i + j] = 0.0;
+          }
+        }
+      }
+
+      // Add the contributions to the element
+      vec_refined->setValues(len, refined_nodes, uref, TACS_ADD_VALUES);
     }
   }
 
@@ -1636,7 +1623,6 @@ void addRefinedSolution3D( const int order,
   delete [] delem;
   delete [] ubar;
   delete [] uref;
-  */
 }
 
 /*
@@ -1804,10 +1790,6 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
                                TACSBVec *_uvec,
                                TACSBVec *_uvec_refined,
                                const int compute_difference ){
-  /*
-  // Get the mesh order
-  const int order = forest->getMeshOrder();
-
   // Retrieve the variables from the TACSAssembler object
   TACSBVec *uvec = _uvec; 
   if (!uvec){
@@ -1891,11 +1873,11 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
     computeLocalWeights(tacs, weights, vol_elem_nums, num_vol_elems);
 
     // Compute the nodal derivatives
-    computeNodeDeriv3D(order, tacs, uvec, weights, uderiv,
+    computeNodeDeriv3D(forest, tacs, uvec, weights, uderiv,
                        vol_elem_nums, num_vol_elems);
 
     // Compute the refined solution
-    addRefinedSolution3D(order, tacs, tacs_refined,
+    addRefinedSolution3D(forest, tacs, forest_refined, tacs_refined,
                          uvec, uderiv, uvec_refined,
                          compute_difference,
                          vol_elem_nums, num_vol_elems);
@@ -1949,7 +1931,6 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
     tacs_refined->setVariables(uvec_refined);
     uvec_refined->decref();
   }
-  */
 }
 
 /*
@@ -2080,8 +2061,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
                        Xpts, vars_elem, delem, ubar, tmp);
 
     // Set the variables to zero
-    memset(vars_interp, 0,
-           vars_per_node*refined_order*refined_order*sizeof(TacsScalar));
+    memset(vars_interp, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
 
     // Evaluate the interpolation on the refined mesh
     for ( int m = 0; m < refined_order; m++ ){
@@ -2096,10 +2076,10 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
 
         // Evaluate the interpolation part of the reconstruction from
         // the original mesh
+        TacsScalar *v = &vars_interp[vars_per_node*(n + m*refined_order)];
         for ( int k = 0; k < order*order; k++ ){
           for ( int kk = 0; kk < vars_per_node; kk++ ){
-            vars_interp[vars_per_node*(n + m*refined_order) + kk] += 
-              vars_elem[vars_per_node*k + kk]*N[k];
+            v[kk] += vars_elem[vars_per_node*k + kk]*N[k];
           }
         }
 
@@ -2169,17 +2149,45 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
                                  TMROctForest *forest_refined,
                                  TACSAssembler *tacs_refined,
                                  double *error ){
-  /*
   // The maximum number of nodes
   const int max_num_nodes = MAX_ORDER*MAX_ORDER*MAX_ORDER;
 
-  // The number of enrichment shape functions
-  const int order = forest->getMeshOrder();
-  const int nenrich = getNum3dEnrich(order);
+  // Get the order of the original mesh and the number of enrichment
+  // functions associated with the order
+  const double *knots;
+  const int order = forest->getInterpKnots(&knots);
+  const int nenrich = getNum2dEnrich(order);
 
+  // Get the refined order of the mesh
+  const double *refined_knots;
+  const int refined_order = forest_refined->getInterpKnots(&refined_knots);
+  const int num_refined_nodes = refined_order*refined_order*refined_order;
+  
+  // Get the number of variables per node
+  const int vars_per_node = tacs->getVarsPerNode();
+  const int deriv_per_node = 3*vars_per_node;
+
+  // The number of equations: 2 times the number of nodes for each element
+  const int neq = 2*order*order;
+  
+  // Number of local elements
+  const int nelems = tacs->getNumElements();
+  
+  // Allocate space for the element reconstruction problem
+  TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
+  TacsScalar *ubar = new TacsScalar[ vars_per_node*nenrich ];
+  TacsScalar *delem = new TacsScalar[ deriv_per_node*order*order ];
+
+  // Allocate arrays needed for the reconstruction
+  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*order*order ];
+
+  // The interpolated variables on the refined mesh
+  TacsScalar *dvars = new TacsScalar[ vars_per_node*num_refined_nodes ];
+  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*num_refined_nodes ];
+  
   // Get the communicator
   MPI_Comm comm = tacs->getMPIComm();
-  
+
   // Retrieve the variables from the TACSAssembler object
   TACSBVec *uvec = tacs->createVec();
   uvec->incref();
@@ -2187,16 +2195,6 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
   tacs->getVariables(uvec);
   uvec->beginDistributeValues();
   uvec->endDistributeValues();
-
-  // Number of local elements
-  const int nelems = tacs->getNumElements();
-
-  // Get the number of variables per node
-  const int vars_per_node = tacs->getVarsPerNode();
-  const int deriv_per_node = 3*vars_per_node;
-
-  // The number of equations: 3 times the number of nodes for each element
-  const int neq = 3*order*order*order;
   
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
@@ -2212,24 +2210,8 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
     new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
                  tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   uderiv->incref();
-  computeNodeDeriv3D(order, tacs, uvec, weights, uderiv);
+  computeNodeDeriv3D(forest, tacs, uvec, weights, uderiv);
   weights->decref();
-
-  // Allocate space for the element reconstruction problem
-  TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
-  TacsScalar *ubar = new TacsScalar[ vars_per_node*nenrich ];
-  TacsScalar *delem = new TacsScalar[ deriv_per_node*order*order*order ];
-
-  // Allocate arrays needed for the reconstruction
-  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
-
-  // The interpolated variables on the refined mesh
-  TacsScalar *dvars = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *ddvars = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
-
-  // Allocate the element residual array
-  TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
 
   // Keep track of the total error
   double SE_total_error = 0.0;
@@ -2240,22 +2222,17 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
 
     // Get the node locations and variables
     TacsScalar Xpts[3*max_num_nodes];
-    TACSElement *elem = tacs->getElement(i, Xpts, vars_elem, dvars, ddvars);
+    TACSElement *elem = tacs->getElement(i, Xpts, vars_elem, dvars);
     
+    // Compute the strain/potential energy
+    TacsScalar Te, Pe;
+    elem->computeEnergies(time, &Te, &Pe, Xpts, vars_elem, dvars);
+    error[i] = TacsRealPart(Pe);
+
     // Get the node numbers for this element
     int len;
     const int *nodes;
     tacs->getElement(i, &nodes, &len);
-
-    // Evaluate the element residual
-    memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
-    elem->addResidual(time, res, Xpts, vars_elem, dvars, ddvars);
-    
-    // Take the inner product to get the strain energy
-    error[i] = 0.0;
-    for ( int j = 0; j < elem->numVariables(); j++ ){
-      error[i] += TacsRealPart(res[j]*vars_elem[j]);
-    }
 
     // Compute the solution on the refined mesh
     uderiv->getValues(len, nodes, delem);
@@ -2264,79 +2241,60 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars_elem, delem, ubar, tmp);
 
-    TacsScalar SE_refine = 0.0;
-    for ( int kk = 0; kk < 2; kk++ ){
-      for ( int jj = 0; jj < 2; jj++ ){
-        for ( int ii = 0; ii < 2; ii++ ){
-          // Retrieve the refined element
-          TacsScalar rXpts[3*max_num_nodes];
-          memset(rXpts, 0, 3*order*order*order*sizeof(TacsScalar));
+    // Set the variables to zero
+    memset(vars_interp, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
 
-          // Set the variables to zero
-          memset(vars_interp, 0, 
-                 vars_per_node*order*order*order*sizeof(TacsScalar));
+    for ( int p = 0; p < order; p++ ){
+      for ( int m = 0; m < order; m++ ){
+        for ( int n = 0; n < order; n++ ){
+          double pt[3];
+          pt[0] = knots[n];
+          pt[1] = knots[m];
+          pt[2] = knots[p];
 
-          for ( int p = 0; p < order; p++ ){
-            for ( int m = 0; m < order; m++ ){
-              for ( int n = 0; n < order; n++ ){
-                double pt[3];
-                pt[0] = ii - 1.0 + 1.0*n/(order-1);
-                pt[1] = jj - 1.0 + 1.0*m/(order-1);
-                pt[2] = kk - 1.0 + 1.0*p/(order-1);
+          // Evaluate the locations of the new nodes
+          double N[max_num_nodes];
+          forest->evalInterp(pt, N);
 
-                // Evaluate the locations of the new nodes
-                double N[max_num_nodes];
-                double Nr[MAX_3D_ENRICH];
-                FElibrary::triLagrangeSF(N, pt, order);
-                if (order == 2){
-                  eval2ndEnrichmentFuncs3D(pt, Nr);
-                }
-                else {
-                  eval3rdEnrichmentFuncs3D(pt, Nr);
-                }
-                
-                // Set the values of the variables at this point
-                for ( int k = 0; k < order*order*order; k++ ){
-                  rXpts[3*(n + m*order + p*order*order)] += Xpts[3*k]*N[k];
-                  rXpts[3*(n + m*order + p*order*order)+1] += Xpts[3*k+1]*N[k];
-                  rXpts[3*(n + m*order + p*order*order)+2] += Xpts[3*k+2]*N[k];
-                }
+          // Evaluate the interpolation part of the reconstruction from
+          // the original mesh
+          int offset = (n + m*refined_order + 
+                        p*refined_order*refined_order);
+          TacsScalar *v = &vars_interp[vars_per_node*offset];
 
-                // Evaluate the interpolation part of the reconstruction
-                TacsScalar *v = 
-                  &vars_interp[vars_per_node*(n + m*order + p*order*order)];
-                for ( int k = 0; k < order*order*order; k++ ){
-                  for ( int ik = 0; ik < vars_per_node; ik++ ){
-                    v[ik] += vars_elem[vars_per_node*k + ik]*N[k];
-                  }
-                }
-
-                // Add the portion from the enrichment functions
-                for ( int k = 0; k < nenrich; k++ ){
-                  // Evaluate the interpolation part of the reconstruction
-                  for ( int ik = 0; ik < vars_per_node; ik++ ){
-                    v[ik] += ubar[vars_per_node*k + ik]*Nr[k];
-                  }
-                }
-              }
+          for ( int k = 0; k < order*order*order; k++ ){
+            for ( int kk = 0; kk < vars_per_node; kk++ ){
+              v[kk] += vars_elem[vars_per_node*k + kk]*N[k];
             }
           }
 
-          // Compute the element residual
-          memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
-          elem->addResidual(time, res, rXpts, 
-                            vars_interp, dvars, ddvars);
-          
-          // Take the inner product to get the strain energy
-          for ( int j = 0; j < elem->numVariables(); j++ ){
-            SE_refine += res[j]*vars_interp[j];
+          double Nr[MAX_3D_ENRICH];
+          if (order == 2){
+            eval2ndEnrichmentFuncs3D(pt, Nr);
+          }
+          else {
+            eval3rdEnrichmentFuncs3D(pt, Nr);
+          }
+
+          // Add the portion from the enrichment functions
+          for ( int k = 0; k < nenrich; k++ ){
+            // Evaluate the interpolation part of the reconstruction
+            for ( int kk = 0; kk < vars_per_node; kk++ ){
+              v[kk] += ubar[vars_per_node*k + kk]*Nr[k];
+            }
           }
         }
       }
     }
 
+    // Get the element from the refined mesh
+    elem = tacs_refined->getElement(i, Xpts);
+
+    // Compute the energy in the refined mesh
+    elem->computeEnergies(time, &Te, &Pe, Xpts, vars_interp, dvars);
+
     // SE_refine - SE_error should always be a positive quantity
-    error[i] = fabs(TacsRealPart(SE_refine - error[i]));
+    error[i] = fabs(TacsRealPart(Pe - error[i]));
 
     // Add up the total error
     SE_total_error += error[i];
@@ -2357,13 +2315,9 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
   delete [] delem;
   delete [] vars_elem;
   delete [] dvars;
-  delete [] ddvars;
   delete [] vars_interp;
-  delete [] res;
 
   return SE_total_error;
-  */
-  return 0.0;
 }
 
 /*
@@ -2440,7 +2394,8 @@ void TMR_PrintErrorBins( MPI_Comm comm,
     for ( int i = 0; i < NUM_BINS+2; i++ ){
       total += bins[i];
     }
-    printf("%10s  %10s  %12s  %12s\n", "stats", " ", "log(mean)", "log(stddev)");
+    printf("%10s  %10s  %12s  %12s\n", 
+           "stats", " ", "log(mean)", "log(stddev)");
     printf("%10s  %10s  %12.2e %12.2e\n", " ", " ", m, s);    
     printf("%10s  %10s  %12s  %12s\n",
            "low", "high", "bins", "percentage");
@@ -2449,7 +2404,8 @@ void TMR_PrintErrorBins( MPI_Comm comm,
 
     for ( int k = 0; k < NUM_BINS; k++ ){
       printf("%10.2e  %10.2e  %12d  %12.2f\n",
-             bin_bounds[k], bin_bounds[k+1], bins[k+1], 100.0*bins[k+1]/total);
+             bin_bounds[k], bin_bounds[k+1], bins[k+1], 
+             100.0*bins[k+1]/total);
     }
     printf("%10.2e  %10s  %12d  %12.2f\n",
            bin_bounds[NUM_BINS], " ", bins[NUM_BINS+1], 
@@ -2664,14 +2620,14 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
                             TACSBVec *adjoint,
                             double *error,
                             double *adj_corr ){
-  /*
   const int max_num_nodes = MAX_ORDER*MAX_ORDER*MAX_ORDER;
 
   // Get the order of the mesh and the number of enrichment shape functions
-  const int order = forest->getMeshOrder();
-
-  // Get the communicator
-  MPI_Comm comm = tacs->getMPIComm();
+  const double *knots, *refined_knots;
+  const int order = forest->getInterpKnots(&knots);
+  const int refined_order = forest_refined->getInterpKnots(&refined_knots);
+  const int num_nodes = order*order*order;
+  const int num_refined_nodes = refined_order*refined_order*refined_order;
   
   // Perform a local refinement of the nodes based on the strain energy
   // within each element
@@ -2679,39 +2635,42 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
 
   // Get the number of variables per node 
   const int vars_per_node = tacs->getVarsPerNode();
-  
-  // Create the refined residual vector
-  TACSBVec *adjoint_refine = tacs_refine->createVec();
-  adjoint_refine->incref();
+
+  // Get the communicator
+  MPI_Comm comm = tacs->getMPIComm();
+
+  // Create the refined residual/adjoint vectors
+  TACSBVec *adjoint_refined = tacs_refined->createVec();
+  adjoint_refined->incref();
 
   // Allocate the element arrays needed for the reconstruction
-  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*num_nodes ];
+  TacsScalar *vars_interp = new TacsScalar[ vars_per_node*num_refined_nodes ];
 
   // The reconstructed adjoint solution
-  TacsScalar *adj_refine = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *adj_refined = new TacsScalar[ vars_per_node*num_refined_nodes ];
 
   // Extra variables required for velocities/accelerations
-  TacsScalar *dvars = new TacsScalar[ vars_per_node*max_num_nodes ];
-  TacsScalar *ddvars = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *dvars = new TacsScalar[ vars_per_node*num_refined_nodes ];
+  TacsScalar *ddvars = new TacsScalar[ vars_per_node*num_refined_nodes ];
 
   // Allocate the element residual array
-  TacsScalar *res = new TacsScalar[ vars_per_node*max_num_nodes ];
+  TacsScalar *res = new TacsScalar[ vars_per_node*num_refined_nodes ];
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
   double total_error_remain = 0.0;
-  double total_adjoint_corr = 0.0;
+  TacsScalar total_adjoint_corr = 0.0;
 
   // Compute the difference between the reconstructed adjoint solution
   // and the interpolated adjoint solution on the finer mesh
   int compute_difference = 1;
-  TMR_ComputeReconSolution(tacs, forest, tacs_refine,
-                           adjoint, adjoint_refine, compute_difference);
+  TMR_ComputeReconSolution(forest, tacs, forest_refined, tacs_refined,
+                           adjoint, adjoint_refined, compute_difference);
 
   // Get the auxiliary elements (surface tractions) associated with the
   // element class
-  TACSAuxElements *aux_elements = tacs_refine->getAuxElements();
+  TACSAuxElements *aux_elements = tacs_refined->getAuxElements();
   int num_aux_elems = 0;
   TACSAuxElem *aux = NULL;
   if (aux_elements){
@@ -2734,74 +2693,63 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
 
     // For each element on the refined mesh, compute the interpolated
     // solution and sum up the local contribution to the adjoint
-    for ( int ii = 0; ii < 2; ii++ ){
-      for ( int jj = 0; jj < 2; jj++ ){
-        for ( int kk = 0; kk < 2; kk++ ){
-          // Zero the interpolations
-          memset(vars_interp, 0, 
-            vars_per_node*order*order*order*sizeof(TacsScalar));
+    memset(vars_interp, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
 
-          // Perform the interpolation
-          for ( int p = 0; p < order; p++ ){
-            for ( int m = 0; m < order; m++ ){
-              for ( int n = 0; n < order; n++ ){
-                double pt[3];
-                pt[0] = ii - 1.0 + 1.0*n/(order-1);
-                pt[1] = jj - 1.0 + 1.0*m/(order-1);
-                pt[2] = kk - 1.0 + 1.0*p/(order-1);
+    // Perform the interpolation
+    for ( int p = 0; p < order; p++ ){
+      for ( int m = 0; m < order; m++ ){
+        for ( int n = 0; n < order; n++ ){
+          double pt[3];
+          pt[0] = refined_knots[n];
+          pt[1] = refined_knots[m];
+          pt[2] = refined_knots[p];
 
-                // Evaluate the locations of the new nodes
-                double N[max_num_nodes];
-                FElibrary::triLagrangeSF(N, pt, order);
+          // Evaluate the locations of the new nodes
+          double N[max_num_nodes];
+          forest->evalInterp(pt, N);
                
-                // Evaluate the interpolation part of the reconstruction
-                int index = vars_per_node*(n + m*order + p*order*order);
-                TacsScalar *v = &vars_interp[index];
+          // Evaluate the interpolation part of the reconstruction
+          int offset = (n + m*refined_order + 
+                        p*refined_order*refined_order);
+          TacsScalar *v = &vars_interp[vars_per_node*offset];
 
-                for ( int k = 0; k < order*order*order; k++ ){
-                  for ( int ik = 0; ik < vars_per_node; ik++ ){
-                    v[ik] += vars_elem[vars_per_node*k + ik]*N[k];
-                  }
-                }
-              }
+          for ( int k = 0; k < order*order*order; k++ ){
+            for ( int kk = 0; kk < vars_per_node; kk++ ){
+              v[kk] += vars_elem[vars_per_node*k + kk]*N[k];
             }
-          }
-
-          // Set the element number on the refined mesh
-          const int elem_num = 8*elem + kk + 2*jj + 4*ii;
-
-          // Get the node locations and the velocity/acceleration
-          // variables (these shuold be zero and are not used...)
-          TacsScalar Xpts[3*max_num_nodes];
-          TACSElement *elem = 
-            tacs_refine->getElement(elem_num, Xpts,
-                                    NULL, dvars, ddvars);
-
-          // Compute the residual for this element on the refined mesh
-          memset(res, 0, elem->numVariables()*sizeof(TacsScalar));
-          elem->addResidual(time, res, Xpts, 
-                            vars_interp, dvars, ddvars);
-
-          while (aux_count < num_aux_elems && aux[aux_count].num == elem_num){
-            aux[aux_count].elem->addResidual(time, res, Xpts, 
-                                             vars_interp, dvars, ddvars);
-            aux_count++;
-          }
-
-          // Get the element and node numbers for the refined mesh
-          int len = 0;
-          const int *nodes;
-          tacs_refine->getElement(elem_num, &nodes, &len);
-
-          // Get the adjoint variables for the refined mesh
-          adjoint_refine->getValues(len, nodes, adj_refine);
-          
-          // Add in the contribution to the error from this element
-          for ( int j = 0; j < elem->numVariables(); j++ ){
-            elem_error_corr += res[j]*adj_refine[j];
           }
         }
       }
+    }
+
+    // Get the node locations and the velocity/acceleration variables
+    // (these shuold be zero)
+    TacsScalar Xpts[3*max_num_nodes];
+    TACSElement *element = 
+      tacs_refined->getElement(elem, Xpts, NULL, dvars, ddvars);
+
+    // Compute the residual for this element on the refined mesh
+    memset(res, 0, element->numVariables()*sizeof(TacsScalar));
+    element->addResidual(time, res, Xpts, 
+                         vars_interp, dvars, ddvars);
+
+    while (aux_count < num_aux_elems && aux[aux_count].num == elem){
+      aux[aux_count].elem->addResidual(time, res, Xpts, 
+                                       vars_interp, dvars, ddvars);
+      aux_count++;
+    }
+
+    // Get the node numbers for the refined mesh
+    int len = 0;
+    const int *nodes;
+    tacs_refined->getElement(elem, &nodes, &len);
+
+    // Get the adjoint variables and residual for the refined mesh
+    adjoint_refined->getValues(len, nodes, adj_refined);
+
+    // Add in the contribution to the error from this element
+    for ( int j = 0; j < element->numVariables(); j++ ){
+      elem_error_corr += res[j]*adj_refined[j];
     }
 
     // Add the contribution to the total remaining error and the
@@ -2822,11 +2770,11 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   // Free the data that is no longer required
   delete [] vars_elem;
   delete [] vars_interp;
-  delete [] adj_refine;
+  delete [] adj_refined;
   delete [] dvars;
   delete [] ddvars;
   delete [] res;
-  adjoint_refine->decref();
+  adjoint_refined->decref();
 
   // Set the adjoint residual correction
   if (adj_corr){
@@ -2835,22 +2783,24 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
 
   // Return the error
   return total_error_remain;
-  */
-  return 0.0;
 }
 
 /*
   Evaluate the stress constraints on a more-refined mesh
 */
-TMRStressConstraint::TMRStressConstraint( int _order,
+TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
                                           TACSAssembler *_tacs,
                                           TacsScalar _ks_weight ){
   tacs = _tacs;
   tacs->incref();
 
   // Set the order/ksweight
-  order = _order;
+  forest = _forest;
+  forest->incref();
   ks_weight = _ks_weight;
+
+  // Get the mesh order
+  order = forest->getMeshOrder();
 
   // Allocate a local vector
   uvec = tacs->createVec();
@@ -2893,6 +2843,8 @@ TMRStressConstraint::TMRStressConstraint( int _order,
   Free the data that was allocated
 */
 TMRStressConstraint::~TMRStressConstraint(){
+  forest->decref();
+  tacs->decref();
   weights->decref();
   uderiv->decref();
   uvec->decref();
@@ -2909,7 +2861,6 @@ TMRStressConstraint::~TMRStressConstraint(){
   Evaluate the constraint on the refined mesh
 */
 TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
-  /*
   const int vars_per_node = tacs->getVarsPerNode();
 
   // Copy the values
@@ -2921,7 +2872,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   uvec->endDistributeValues();
 
   // Compute the derivatives at the nodes
-  computeNodeDeriv3D(order, tacs, uvec, weights, uderiv);
+  computeNodeDeriv3D(forest, tacs, uvec, weights, uderiv);
   
   // Number of local elements
   const int nelems = tacs->getNumElements();
@@ -2952,7 +2903,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
-    computeElemRecon3D(order, vars_per_node,
+    computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
     // Get the quadrature points/weights
@@ -3014,7 +2965,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
-    computeElemRecon3D(order, vars_per_node,
+    computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
     // Get the quadrature points/weights
@@ -3052,8 +3003,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   MPI_Allreduce(MPI_IN_PLACE, &ks_fail_sum, 1, TACS_MPI_TYPE, MPI_SUM, comm);
 
   return ks_max_fail + log(ks_fail_sum)/ks_weight;
-  */
-  return 0.0;
 }
 
 /*
@@ -3061,7 +3010,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 */
 void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size, 
                                         TACSBVec *dfdu ){
-  /*
   const int vars_per_node = tacs->getVarsPerNode();
 
   // Set the number of enrichment functions
@@ -3093,7 +3041,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
 
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
-    computeElemRecon3D(order, vars_per_node,
+    computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
     // Get the quadrature points/weights
@@ -3151,7 +3099,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   }
 
   tacs->applyBCs(dfdu);
-  */
 }
                      
 /*

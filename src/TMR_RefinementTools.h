@@ -85,7 +85,8 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
 */
 class TMRStressConstraint : public TMREntity {
  public:
-  TMRStressConstraint( int order, TACSAssembler *tacs, 
+  TMRStressConstraint( TMROctForest *_forest,
+                       TACSAssembler *tacs, 
                        TacsScalar _ks_weight=30.0 );
   ~TMRStressConstraint();
 
@@ -110,6 +111,7 @@ class TMRStressConstraint : public TMREntity {
 
   // The mesh order
   int order;
+  TMROctForest *forest;
 
   // The values used to compute the KS function
   TacsScalar ks_weight;
