@@ -8,6 +8,38 @@
 #include "TMR_TACSTopoCreator.h"
 #include "TMR_STLTools.h"
 
+class CreateMe : public TMROctTACSTopoCreator {
+ public:
+  CreateMe( TMRBoundaryConditions *_bcs, TMROctForest *_filter,
+            TMRStiffnessProperties *_props ):
+    TMROctTACSTopoCreator(_bcs, _filter){
+    props = _props;
+  }
+
+  TACSElement *createElement( int order, TMROctant *oct,
+                              TMRIndexWeight *weights, int nweights ){
+    double q = 5.0;
+    TMROctStiffness *stiff = new TMROctStiffness(weights, nweights,
+                                                 props, q);
+    if (order == 2){
+      return new Solid<2>(stiff);
+    }
+    else if (order == 3){
+      return new Solid<3>(stiff);
+    }
+    else if (order == 4){
+      return new Solid<4>(stiff);
+    }
+    else if (order == 5){
+      return new Solid<5>(stiff);
+    }    
+    return NULL;
+  }
+
+ private:
+  TMRStiffnessProperties *props;
+};
+
 /*
   Test the STL output generator using the bracket example
 */
@@ -21,31 +53,34 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   // Create an empty set of boundary conditions and default material
   // properties
   TMRBoundaryConditions *bcs = new TMRBoundaryConditions();
-  TMRStiffnessProperties props;
+
+  // Create the stiffness properties object
+  TacsScalar rho = 2700.0;
+  TacsScalar E = 70e9;
+  TacsScalar nu = 0.3;
+  TMRStiffnessProperties *props =
+    new TMRStiffnessProperties(1, &rho, &E, &nu);
   
   // Allocate a creator object
-  TMROctTACSTopoCreator *creator = 
-    new TMROctTACSTopoCreator(bcs, props, filter);
+  CreateMe *creator = new CreateMe(bcs, filter, props);
   creator->incref();
   
   // Create TACS
-  TACSAssembler *tacs = creator->createTACS(2, forest);
+  TACSAssembler *tacs = creator->createTACS(forest);
   tacs->incref();
 
-  // Get the underlying objects
+  // Get the underlying variable objects
   TACSVarMap *var_map;
   TACSBVecIndices *indices;
   creator->getMap(&var_map);
   creator->getIndices(&indices);
-
-  // Create the distributor
   TACSBVecDistribute *dist = new TACSBVecDistribute(var_map, indices);
-
+  
   // Create the design vector
   TACSBVec *vars = new TACSBVec(var_map, 1, dist);
   vars->incref();
 
-  // Get the range of variables
+  // Get the range of the nodes
   const int *range;
   filter->getOwnedNodeRange(&range);
 
@@ -53,33 +88,34 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   int mpi_rank;
   MPI_Comm_rank(forest->getMPIComm(), &mpi_rank);
   
-  // Get the nodes from the filter
-  TMROctantArray *nodes;
-  filter->getNodes(&nodes);
-
-  // Get the array of nodes
-  int size;
-  TMROctant *array;
-  nodes->getArray(&array, &size);
-
   // Get the filter points
   TMRPoint *X;
   filter->getPoints(&X);
 
-  // Get the design vector
+  // Get the connectivity
+  int num_elements;
+  const int *conn;
+  filter->getNodeConn(&conn, &num_elements);
+
+  // Get the mesh order
+  const int order = filter->getMeshOrder(); 
+  const int size = order*order*order*num_elements;
+
+  // Get the elements of the array
   TacsScalar *x;
   vars->getArray(&x);
-
+  
   for ( int i = 0; i < size; i++ ){
-    if (array[i].tag >= range[mpi_rank] &&
-        array[i].tag < range[mpi_rank+1]){
-      int var = array[i].tag - range[mpi_rank];
-      double xval = X[i].x - 30.0;
-      double yval = X[i].y - 40.0;
-      double zval = X[i].z;
+    if (conn[i] >= range[mpi_rank] &&
+        conn[i] < range[mpi_rank+1]){
+      int var = conn[i] - range[mpi_rank];
+      int index = filter->getLocalNodeNumber(conn[i]);
+      double xval = X[index].x - 30.0;
+      double yval = X[index].y - 40.0;
+      double zval = X[index].z;
       double d = sqrt(xval*xval + yval*yval + 4.0*zval*zval);
       x[var] = cos(0.5*d);
-    }    
+    }
   }
 
   double cutoff = 0.5;
@@ -119,7 +155,7 @@ int main( int argc, char *argv[] ){
 
   // This is all tied to this STEP file
   const char *filename = "bracket_solid.stp";
-  double htarget = 4.0;
+  double htarget = 10.0;
 
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
@@ -178,7 +214,6 @@ int main( int argc, char *argv[] ){
     // Create the random trees
     forest->setTopology(topo);
     forest->createRandomTrees(10, 0, 4);
-    //forest->createTrees(2);
     forest->balance();
     forest->createNodes();
 

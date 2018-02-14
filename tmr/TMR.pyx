@@ -1072,11 +1072,18 @@ cdef _init_QuadrantArray(TMRQuadrantArray *array, int self_owned):
 cdef class Quadrant:
     cdef TMRQuadrant quad
     def __cinit__(self):
+        self.quad.face = 0
         self.quad.x = 0
         self.quad.y = 0
-        self.quad.level = 0
-        self.quad.face = 0
         self.quad.tag = 0
+        self.quad.level = 0
+        self.quad.info = 0
+
+    property face:
+        def __get__(self):
+            return self.quad.face
+        def __set__(self, value):
+            self.quad.face = value
 
     property x:
         def __get__(self):
@@ -1090,23 +1097,23 @@ cdef class Quadrant:
         def __set__(self, value):
             self.quad.y = value
 
+    property tag:
+        def __get__(self):
+            return self.quad.tag
+        def __set__(self, value):
+            self.quad.tag = value
+
     property level:
         def __get__(self):
             return self.quad.level
         def __set__(self, value):
             self.quad.level = value
 
-    property face:
+    property info:
         def __get__(self):
-            return self.quad.face
+            return self.quad.info
         def __set__(self, value):
-            self.quad.face = value
-
-    property tag:
-        def __get__(self):
-            return self.quad.tag
-        def __set__(self, value):
-            self.quad.tag = value
+            self.quad.info = value
 
 cdef class QuadForest:
     cdef TMRQuadForest *ptr
@@ -1318,12 +1325,19 @@ cdef _init_OctantArray(TMROctantArray *array, int self_owned):
 cdef class Octant:
     cdef TMROctant octant
     def __cinit__(self):
+        self.octant.block = 0
         self.octant.x = 0
         self.octant.y = 0
         self.octant.z = 0
-        self.octant.level = 0
-        self.octant.block = 0
         self.octant.tag = 0
+        self.octant.level = 0
+        self.octant.info = 0
+
+    property block:
+        def __get__(self):
+            return self.octant.block
+        def __set__(self, value):
+            self.octant.block = value
 
     property x:
         def __get__(self):
@@ -1343,23 +1357,17 @@ cdef class Octant:
         def __set__(self, value):
             self.octant.z = value
 
-    property level:
-        def __get__(self):
-            return self.octant.level
-        def __set__(self, value):
-            self.octant.level = value
-
-    property block:
-        def __get__(self):
-            return self.octant.block
-        def __set__(self, value):
-            self.octant.block = value
-
     property tag:
         def __get__(self):
             return self.octant.tag
         def __set__(self, value):
             self.octant.tag = value
+
+    property info:
+        def __get__(self):
+            return self.octant.info
+        def __set__(self, value):
+            self.octant.info = value
 
 cdef class OctForest:
     cdef TMROctForest *ptr

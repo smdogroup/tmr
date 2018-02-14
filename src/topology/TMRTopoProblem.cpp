@@ -756,9 +756,6 @@ void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights ){
 */
 void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights,
                                    TACSFunction **_obj_funcs ){
-  /* for ( int i = 0; i < num_load_cases; i++ ){ */
-  /*   if (_obj_funcs[i]){ obj_funcs[i]->incref(); } */
-  /* } */
   if (!obj_weights){
     obj_weights = new TacsScalar[ num_load_cases ];
   }
@@ -863,7 +860,8 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   // Get the dependent nodes and weight values
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
-  int ndep = oct_filter[0]->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+  int ndep = oct_filter[0]->getDepNodeConn(&dep_ptr, &dep_conn,
+                                           &dep_weights);
 
   // Copy over the data
   int *dptr = new int[ ndep+1 ];
@@ -890,50 +888,60 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
   // Get the nodes
   const int *conn;
   oct_filter[0]->getNodeConn(&conn);
-
+  
   // Get the node locations from the filter
   TMRPoint *X;
   oct_filter[0]->getPoints(&X);
+  
+  // Allocate the memory required
+  int order = oct_filter[0]->getMeshOrder();
+  int num_nodes = order*order*order;
+  double *N = new double[ num_nodes ];
+  double *Na = new double[ num_nodes ];
+  double *Nb = new double[ num_nodes ];
+  double *Nc = new double[ num_nodes ];
+  TMRPoint *Xpts = new TMRPoint[ num_nodes ];
+  TacsScalar *area = new TacsScalar[ num_nodes ];    
+
+  // Get the quadrature points/weights
+  const double *quadPts;
+  const double *quadWts;
+  int npts = FElibrary::getGaussPtsWts(order, &quadPts, &quadWts);
   
   // Loop over the elements 
   for ( int i = 0; i < size; i++ ){
     // Retrieve the node numbers and x/y/z locations for element i
     // within the mesh
-    int node_nums[8];
-    TMRPoint Xpts[8];
-    for ( int kk = 0; kk < 2; kk++ ){
-      for ( int jj = 0; jj < 2; jj++ ){
-        for ( int ii = 0; ii < 2; ii++ ){
-          int node = conn[8*i + ii + 2*jj + 4*kk];
+    for ( int kk = 0; kk < order; kk++ ){
+      for ( int jj = 0; jj < order; jj++ ){
+        for ( int ii = 0; ii < order; ii++ ){
+          const int offset = ii + jj*order + kk*order*order;
+          const int node = conn[num_nodes*i + offset];
           int index = oct_filter[0]->getLocalNodeNumber(node);
 
           // Copy the node location
-          Xpts[ii + 2*jj + 4*kk] = X[index];
-          
-          // Copy the node number
-          node_nums[ii + 2*jj + 4*kk] = node;
+          Xpts[offset] = X[index];
         }
       }
     }
     
-    // Compute the element area
-    TacsScalar Area = 0.0;
+    // Set the area
+    memset(area, 0, num_nodes*sizeof(TacsScalar));
     
-    // The quadrature points
-    const double gaussPts[] = {-0.577350269189626, 0.577350269189626};
-
-    for ( int kk = 0; kk < 2; kk++ ){
-      for ( int jj = 0; jj < 2; jj++ ){
-        for ( int ii = 0; ii < 2; ii++ ){
+    for ( int kk = 0; kk < npts; kk++ ){
+      for ( int jj = 0; jj < npts; jj++ ){
+        for ( int ii = 0; ii < npts; ii++ ){
           double pt[3];
-          pt[0] = gaussPts[ii];
-          pt[1] = gaussPts[jj];
-          pt[2] = gaussPts[kk];
+          pt[0] = quadPts[ii];
+          pt[1] = quadPts[jj];
+          pt[2] = quadPts[kk];
+
+          // Compute the quadrature weight
+          double wt = quadWts[ii]*quadWts[jj]*quadWts[kk];
 
           // Evaluate the derivative of the shape functions
-          double N[8], Na[8], Nb[8], Nc[8];
-          FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, 2);
-
+          oct_filter[0]->evalInterp(pt, N, Na, Nb, Nc);
+          
           // Compute the Jacobian transformation
           TacsScalar J[9];
           memset(J, 0, 9*sizeof(TacsScalar));
@@ -954,21 +962,24 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
           // Add the determinant to the area - the weights in this
           // case are just = 1.0
           TacsScalar det = FElibrary::jacobian3d(J);
-          Area += det;
+          for ( int j = 0; j < num_nodes; j++ ){
+            area[j] += wt*det*N[j];
+          }
         }
       }
     }
-  
-    // Distribute the element area equally to all nodes in the
-    // element
-    TacsScalar a[8];
-    for ( int k = 0; k < 8; k++ ){
-      a[k] = 0.125*Area;
-    }
-    
+     
     // Add the values to the vector
-    vec->setValues(8, node_nums, a, TACS_ADD_VALUES);
+    vec->setValues(num_nodes, &conn[num_nodes*i], area, TACS_ADD_VALUES);
   }
+
+  // Free the element-related data
+  delete [] N;
+  delete [] Na;
+  delete [] Nb;
+  delete [] Nc;
+  delete [] Xpts;
+  delete [] area;
  
   vec->beginSetValues(TACS_ADD_VALUES);
   vec->endSetValues(TACS_ADD_VALUES);
@@ -983,7 +994,8 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
   // Get the dependent nodes and weight values
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
-  int ndep = quad_filter[0]->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+  int ndep = quad_filter[0]->getDepNodeConn(&dep_ptr, &dep_conn,
+                                            &dep_weights);
 
   // Copy over the data
   int *dptr = new int[ ndep+1 ];
@@ -1015,41 +1027,49 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
   TMRPoint *X;
   quad_filter[0]->getPoints(&X);
   
+  // Allocate the memory required
+  int order = quad_filter[0]->getMeshOrder();
+  int num_nodes = order*order;
+  double *N = new double[ num_nodes ];
+  double *Na = new double[ num_nodes ];
+  double *Nb = new double[ num_nodes ];
+  TMRPoint *Xpts = new TMRPoint[ num_nodes ];
+  TacsScalar *area = new TacsScalar[ num_nodes ];
+
+  // Get the quadrature points/weights
+  const double *quadPts;
+  const double *quadWts;
+  int npts = FElibrary::getGaussPtsWts(order, &quadPts, &quadWts);
+  
   // Loop over the elements 
   for ( int i = 0; i < size; i++ ){
     // Retrieve the node numbers and x/y/z locations for element i
     // within the mesh
-    int node_nums[4];
-    TMRPoint Xpts[4];
-    
-    for ( int jj = 0; jj < 2; jj++ ){
-      for ( int ii = 0; ii < 2; ii++ ){
-        // Find the quadrant node (without level/tag)
-        int node = conn[4*i + ii + 2*jj];
+    for ( int jj = 0; jj < order; jj++ ){
+      for ( int ii = 0; ii < order; ii++ ){
+        const int offset = ii + jj*order;
+        const int node = conn[num_nodes*i + offset];
         int index = quad_filter[0]->getLocalNodeNumber(node);
 
         // Copy the node location
-        Xpts[ii + 2*jj] = X[index];
-          
-        // Copy the node number
-        node_nums[ii + 2*jj] = node;
+        Xpts[offset] = X[index];
       }
     }
 
-    // Compute the element area
-    TacsScalar Area = 0.0;
-    
-    // The quadrature points
-    const double gaussPts[] = {-0.577350269189626, 0.577350269189626};
-    for ( int jj = 0; jj < 2; jj++ ){
-      for ( int ii = 0; ii < 2; ii++ ){
+    // Set the area
+    memset(area, 0, num_nodes*sizeof(TacsScalar));
+
+    for ( int jj = 0; jj < npts; jj++ ){
+      for ( int ii = 0; ii < npts; ii++ ){
         double pt[2];
-        pt[0] = gaussPts[ii];
-        pt[1] = gaussPts[jj];
+        pt[0] = quadPts[ii];
+        pt[1] = quadPts[jj];
+        
+        // Compute the quadrature weight
+        double wt = quadWts[ii]*quadWts[jj];
         
         // Evaluate the derivative of the shape functions
-        double N[4], Na[4], Nb[4];
-        FElibrary::biLagrangeSF(N, Na, Nb, pt, 2);
+        quad_filter[0]->evalInterp(pt, N, Na, Nb);
 
         // Compute the Jacobian transformation
         TacsScalar J[4];
@@ -1061,23 +1081,26 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
           J[2] += Na[j]*Xpts[j].y;
           J[3] += Nb[j]*Xpts[j].y;
         }
+        
         // Add the determinant to the area - the weights in this
         // case are just = 1.0
         TacsScalar det = FElibrary::jacobian2d(J);
-        Area += det;
+        for ( int j = 0; j < num_nodes; j++ ){
+          area[j] += wt*det*N[j];
+        }
       }
     }
-
-    // Distribute the element area equally to all nodes in the
-    // element
-    TacsScalar a[4];
-    for ( int k = 0; k < 4; k++ ){
-      a[k] = 0.25*Area;
-    }
-    
+     
     // Add the values to the vector
-    vec->setValues(4, node_nums, a, TACS_ADD_VALUES);
+    vec->setValues(num_nodes, &conn[num_nodes*i], area, TACS_ADD_VALUES);
   }
+
+  // Free the element-related data
+  delete [] N;
+  delete [] Na;
+  delete [] Nb;
+  delete [] Xpts;
+  delete [] area;
 
   vec->beginSetValues(TACS_ADD_VALUES);
   vec->endSetValues(TACS_ADD_VALUES);

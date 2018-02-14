@@ -722,9 +722,6 @@ int TMR_GenerateBinFile( const char *filename,
   // Create the list of Triangles
   TriangleList *list = new TriangleList(5000);
 
-  // Get the values
-  TacsScalar *xvals = new TacsScalar[ x->getBlockSize() ];
-
   // Get the block -> face information and the face -> block info.
   // This will be used to determine which faces lie on the boundaries
   // of the domain
@@ -750,6 +747,12 @@ int TMR_GenerateBinFile( const char *filename,
   // Get the nodal locations from the TMROctree object
   TMRPoint *X;
   filter->getPoints(&X);
+
+  // Allocate space to store the node locations and levelset values
+  const int bsize = x->getBlockSize();
+  int xsize = bsize*mesh_order*mesh_order*mesh_order;
+  TacsScalar *levelvals = new TacsScalar[ xsize ];
+  TMRPoint *Xe = new TMRPoint[ mesh_order*mesh_order*mesh_order ];
 
   // Get the mesh coordinates from the filter
   for ( int i = 0; i < nelems; i++ ){
@@ -780,24 +783,18 @@ int TMR_GenerateBinFile( const char *filename,
       octree_face_boundary[4] && (octs[i].z == 0);
     octree_face_boundary[5] = 
       octree_face_boundary[5] && (octs[i].z + h == hmax);
-
-    // Get the values at the corners of the element
-    double levelvals[8];
-
-    // Get the corner nodes
-    TMRPoint Xe[8];
     
     // Get the local connectivity
     const int *c = &conn[mesh_order*mesh_order*mesh_order*i];
 
     // Loop over the nodes within the element
-    for ( int kk = 0; kk < 2; kk++ ){
-      for ( int jj = 0; jj < 2; jj++ ){
-        for ( int ii = 0; ii < 2; ii++ ){
+    for ( int kk = 0; kk < mesh_order; kk++ ){
+      for ( int jj = 0; jj < mesh_order; jj++ ){
+        for ( int ii = 0; ii < mesh_order; ii++ ){
           // Find the local index
-          int index = (ii*(mesh_order-1) + 
-                       jj*(mesh_order-1)*mesh_order +
-                       kk*(mesh_order-1)*mesh_order*mesh_order);
+          int index = (ii +
+                       jj*mesh_order +
+                       kk*mesh_order*mesh_order);
 
           // Find the local node number
           int node = filter->getLocalNodeNumber(c[index]);
@@ -805,7 +802,7 @@ int TMR_GenerateBinFile( const char *filename,
             // Get the node location
             Xe[index] = X[node];
           }
-          if (fail){
+          else {
             printf("TMR_GenerateBinFile: \
 Failed at node with block: %d x %d y: %d z: %d\n",
                    octs[i].block, octs[i].x, octs[i].y, octs[i].z);
@@ -814,69 +811,48 @@ Failed at node with block: %d x %d y: %d z: %d\n",
       }
     }
 
+    // Get the levelset values
+    x->getValues(mesh_order*mesh_order*mesh_order, c, levelvals);
+
     // Loop over each octant in the mesh (if the mesh is higher-order)
-    for ( int iz = 0; iz < 2; iz++ ){
-      for ( int iy = 0; iy < 2; iy++ ){
-        for ( int ix = 0; ix < 2; ix++ ){
+    for ( int iz = 0; iz < mesh_order-1; iz++ ){
+      for ( int iy = 0; iy < mesh_order-1; iy++ ){
+        for ( int ix = 0; ix < mesh_order-1; ix++ ){
           // Set the value of the X/Y/Z locations of the nodes
           Cell cell;
 
-          // Keep track if any of the nodes lies on a boundary
-          // surface
+          // Keep track if any of the nodes lies on a boundary surface
           int on_boundary[8];
           int bound = 0;
 
           // Loop over the nodes within the element
           for ( int kk = 0; kk < 2; kk++ ){
-            const double w = 0.5*(kk + iz);
-            const double nw[2] = {1.0-w, w};
             for ( int jj = 0; jj < 2; jj++ ){
-              const double v = 0.5*(jj + iy);
-              const double nv[2] = {1.0-v, v}; 
               for ( int ii = 0; ii < 2; ii++ ){
-                const double u = 0.5*(ii + ix);
-                const double nu[2] = {1.0-u, u};
-                
-                // Compute the shape functions at this point
-                const double N[] = 
-                  {nu[0]*nv[0]*nw[0], nu[1]*nv[0]*nw[0],
-                   nu[0]*nv[1]*nw[0], nu[1]*nv[1]*nw[0],
-                   nu[0]*nv[0]*nw[1], nu[1]*nv[0]*nw[1],
-                   nu[0]*nv[1]*nw[1], nu[1]*nv[1]*nw[1]};
-
                 // Compute the index
                 int index = ordering_transform[ii + 2*jj + 4*kk];
-                cell.val[index] =
-                  (N[0]*levelvals[0] + N[1]*levelvals[1] + 
-                   N[2]*levelvals[2] + N[3]*levelvals[3] +
-                   N[4]*levelvals[4] + N[5]*levelvals[5] +
-                   N[6]*levelvals[6] + N[7]*levelvals[7]);
-                      
+
+                // Compute the offset into the local mesh
+                int offset =
+                  (ix + ii) +
+                  (iy + jj)*mesh_order +
+                  (iz + kk)*mesh_order*mesh_order;
+
+                cell.val[index] = Xe[offset].z; // levelvals[bsize*offset + x_offset];
+                                      
                 // Set the node location
-                cell.p[index].x =
-                  (N[0]*Xe[0].x + N[1]*Xe[1].x + 
-                   N[2]*Xe[2].x + N[3]*Xe[3].x +
-                   N[4]*Xe[4].x + N[5]*Xe[5].x +
-                   N[6]*Xe[6].x + N[7]*Xe[7].x);
-                cell.p[index].y =
-                  (N[0]*Xe[0].y + N[1]*Xe[1].y + 
-                   N[2]*Xe[2].y + N[3]*Xe[3].y +
-                   N[4]*Xe[4].y + N[5]*Xe[5].y +
-                   N[6]*Xe[6].y + N[7]*Xe[7].y);
-                cell.p[index].z =
-                  (N[0]*Xe[0].z + N[1]*Xe[1].z + 
-                   N[2]*Xe[2].z + N[3]*Xe[3].z +
-                   N[4]*Xe[4].z + N[5]*Xe[5].z +
-                   N[6]*Xe[6].z + N[7]*Xe[7].z);
+                cell.p[index].x = Xe[offset].x;
+                cell.p[index].y = Xe[offset].y;
+                cell.p[index].z = Xe[offset].z;
           
                 // Check if this node lies on a boundary
                 on_boundary[index] = 
                   ((octree_face_boundary[0] && (ix == 0 && ii == 0)) ||
-                   (octree_face_boundary[1] && (ix == 1 && ii == 1)) ||
+                   (octree_face_boundary[1] && (ix == mesh_order-2 && ii == 1)) ||
                    (octree_face_boundary[2] && (iy == 0 && jj == 0)) ||
-                   (octree_face_boundary[3] && (iy == 1 && jj == 1)) ||
+                   (octree_face_boundary[3] && (iy == mesh_order-2 && jj == 1)) ||
                    (octree_face_boundary[4] && (iz == 0 && kk == 0)) ||
-                   (octree_face_boundary[5] && (iz == 1 && kk == 1)));
+                   (octree_face_boundary[5] && (iz == mesh_order-2 && kk == 1)));
 
                 // Store whether this node is on the boundary
                 bound = bound || on_boundary[index];
@@ -897,7 +873,8 @@ Failed at node with block: %d x %d y: %d z: %d\n",
   }
 
   // Free xvals
-  delete [] xvals;
+  delete [] levelvals;
+  delete [] Xe;
 
   // Commit the types if they are not defined
   if (!MPI_Point_type){

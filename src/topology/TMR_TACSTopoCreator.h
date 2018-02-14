@@ -36,8 +36,9 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
 
  private:
   // Compute the weights for a given point
-  void computeWeights( TMROctant *oct, TMROctant *node,
-                       TMRIndexWeight *welem );
+  void computeWeights( const int mesh_order, const double *knots,
+                       TMROctant *node, TMROctant *oct,
+                       TMRIndexWeight *weights, double *tmp );
 
   // The forest that defines the filter
   TMROctForest *filter;

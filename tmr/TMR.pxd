@@ -4,6 +4,7 @@ cimport mpi4py.MPI as MPI
 
 # Import string stuff
 from libc.string cimport const_char
+from libc.stdint cimport int32_t, int16_t
 
 # Import numpy 
 cimport numpy as np
@@ -13,9 +14,6 @@ import numpy as np
 from paropt.ParOpt cimport *
 from tacs.TACS cimport *
 from tacs.constitutive cimport *
-
-cdef extern from "<stdint.h>":
-    ctypedef signed int int32_t
 
 cdef extern from "TMRBase.h":
     enum:
@@ -235,11 +233,12 @@ cdef extern from "TMRQuadrant.h":
         void edgeNeighbor(int, TMRQuadrant*)
         void cornerNeighbor(int, TMRQuadrant*)
         int contains(TMRQuadrant*)
+        int32_t face
         int32_t x
         int32_t y
-        int32_t level
-        int32_t face
         int32_t tag
+        int16_t level
+        int16_t info
 
     cdef cppclass TMRQuadrantArray:
         TMRQuadrantArray(TMRQuadrant*, int)
@@ -285,12 +284,13 @@ cdef extern from "TMROctant.h":
         void cornerNeighbor(int, TMROctant*)
         void faceNeighbor(int, TMROctant)
         int contains(TMROctant*)
+        int32_t block
         int32_t x
         int32_t y
         int32_t z
-        int32_t level
-        int32_t block
         int32_t tag
+        int16_t level
+        int16_t info
 
     cdef cppclass TMROctantArray:
         TMROctantArray(TMROctant*, int)

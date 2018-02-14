@@ -6059,9 +6059,9 @@ TMROctant* TMROctForest::findEnclosing( const int order,
 
   // Compute the parametric node location on this block
   const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
-  const double xd = x + h*knots[ii];
-  const double yd = y + h*knots[jj];
-  const double zd = z + h*knots[kk];
+  const double xd = x + 0.5*h*(1.0 + knots[ii]);
+  const double yd = y + 0.5*h*(1.0 + knots[jj]);
+  const double zd = z + 0.5*h*(1.0 + knots[kk]);
 
   // Set the low and high indices to the first and last
   // element of the element array
