@@ -402,7 +402,9 @@ TMRQuadTACSCreator(_bcs){
   int mpi_rank;
   MPI_Comm comm = filter->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
-  
+  // Create the nodes within the filter
+  filter->createNodes();
+
   // Get the node range for the filter design variables
   const int *filter_range;
   filter->getOwnedNodeRange(&filter_range);
