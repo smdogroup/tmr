@@ -82,8 +82,9 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
 
  private:
   // Compute the weights for a given point
-  void computeWeights( TMRQuadrant *oct, TMRQuadrant *node,
-                       TMRIndexWeight *welem );
+  void computeWeights( const int mesh_order, const double *knots,
+                       TMRQuadrant *node, TMRQuadrant *quad,
+                       TMRIndexWeight *weights, double *tmp );
 
   // The forest that defines the filter
   TMRQuadForest *filter;

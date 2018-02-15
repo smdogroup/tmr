@@ -206,8 +206,8 @@ void TMROctTACSTopoCreator::createElements( int order,
   // Distribute the nodes to the processors that own them
   int use_tags = 0;
   int *send_ptr, *recv_ptr;
-  TMROctantArray *dist_nodes = filter->distributeOctants(nodes, use_tags,
-                                                         &send_ptr, &recv_ptr);
+  TMROctantArray *dist_nodes =
+    filter->distributeOctants(nodes, use_tags, &send_ptr, &recv_ptr);
   delete nodes;
 
   // Get the external nodes that are local to this processor and
@@ -441,80 +441,71 @@ void TMRQuadTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
 /*
   Compute the weights associated with the given quadrant
 */
-void TMRQuadTACSTopoCreator::computeWeights( TMRQuadrant *quad,
+void TMRQuadTACSTopoCreator::computeWeights( const int mesh_order,
+                                             const double *knots,
                                              TMRQuadrant *node,
-                                             TMRIndexWeight *welem ){
-  /*
-  
-  // Find the side length of the quadrant in the filter that contains
-  // the element quadrant
+                                             TMRQuadrant *quad,
+                                             TMRIndexWeight *weights,
+                                             double *tmp ){
+  // Find the side length of the octant in the filter that contains
+  // the element octant
+  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
   const int32_t hquad = 1 << (TMR_MAX_LEVEL - quad->level);
-    
-  // Get the u/v/w values within the filter octant
+
+  // Compute the i, j, k location of the nod
+  const int i = node->info % mesh_order;
+  const int j = node->info/mesh_order;
+  
+  // Get the u/v values within the filter octant
   double pt[3];
-  pt[0] = -1.0 + 2.0*(node->x - quad->x)/hquad;
-  pt[1] = -1.0 + 2.0*(node->y - quad->y)/hquad;
+  pt[0] = -1.0 + 2.0*((node->x % hquad) + 0.5*h*(1.0 + knots[i]))/hquad;
+  pt[1] = -1.0 + 2.0*((node->y % hquad) + 0.5*h*(1.0 + knots[j]))/hquad;
+
   // Get the Lagrange shape functions
-  double N[4];
-  FElibrary::biLagrangeSF(N, pt, 2);
-  // ------------------------------------------------------------------
+  double *N = tmp;
+  filter->evalInterp(pt, N);
+    
   // Get the dependent node information for this mesh
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
   filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
 
-  // Get the octant array for the nodes
-  // TMRQuadrantArray *filter_nodes;
-  // filter->getNodes(&filter_nodes);
+  // Get the mesh order
+  const int order = filter->getMeshOrder();
   
-  // Store the weights for each node
-  int nweights = 0;
-  TMRIndexWeight weights[32];
-    
+  // Get the connectivity
+  const int *conn;
+  filter->getNodeConn(&conn);
+  const int *c = &conn[quad->tag*order*order];
+  
   // Loop over the adjacent nodes within the filter
-  for ( int jj = 0; jj < 2; jj++ ){
-    for ( int ii = 0; ii < 2; ii++ ){
+  int nweights = 0;
+  for ( int jj = 0; jj < order; jj++ ){
+    for ( int ii = 0; ii < order; ii++ ){
       // Set the weights
-      double wval = N[ii + 2*jj];
-            
-      // Compute the location of the node
-      TMRQuadrant p;
-      p.face = quad->face;
-      p.x = quad->x + hquad*ii;
-      p.y = quad->y + hquad*jj;
-     
-      // Transform the node into the appropriate location
-      filter->transformNode(&p);
-            
-      // Search for the node p within the octant
-      const int use_node_search = 1;
-      TMRQuadrant *t = filter_nodes->contains(&p, use_node_search);
+      int offset = ii + jj*order;
+      double weight = N[offset];
 
-      // Get the node number
-      int node = t->tag;
-      if (node >= 0){
-        weights[nweights].index = node;
-        weights[nweights].weight = wval;
+      // Get the tag number
+      if (c[offset] >= 0){
+        weights[nweights].index = c[offset];
+        weights[nweights].weight = weight;
         nweights++;
       }
       else {
-        node = -node-1;
+        int node = -c[offset]-1;
         for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
-          int dep_node = dep_conn[jp];
-          weights[nweights].index = dep_node;
-          weights[nweights].weight = wval*dep_weights[jp];
+          weights[nweights].index = dep_conn[jp];
+          weights[nweights].weight = weight*dep_weights[jp];
           nweights++;
-        } // end for int jp
-      } // end else
-    } // end for int ii 
-  } // end for int jj 
-  // ------------------------------------------------------------
-  // Sort and sum the array of weights - there are only 4 nodes
+        }
+      }
+    }
+  }
+  
+  // Sort and sum the array of weights - there are only 8 nodes
   // per filter point at most
   nweights = TMRIndexWeight::uniqueSort(weights, nweights);
-  memcpy(welem, weights, nweights*sizeof(TMRIndexWeight));
-
-  */
 }
 
 /*
@@ -524,7 +515,6 @@ void TMRQuadTACSTopoCreator::createElements( int order,
                                              TMRQuadForest *forest,
                                              int num_elements,
                                              TACSElement **elements ){
-  /*
   // Get the MPI communicator
   int mpi_rank, mpi_size;
   MPI_Comm comm = forest->getMPIComm();
@@ -540,38 +530,45 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   TMRQuadrant *quads;
   quadrants->getArray(&quads, &num_quads);
 
-  // Create a queue for the external quadrants
+  // Create a queue for the external octants
   TMRQuadrantQueue *queue = new TMRQuadrantQueue();
 
   // The number of weights/element
-  const int nweights = 4;
+  const int filter_order = filter->getMeshOrder();
+  const int nweights = filter_order*filter_order;
+
+  // Allocate temp space
+  double *tmp = new double[ nweights ];
+  TMRIndexWeight *wtmp = new TMRIndexWeight[ nweights*filter_order*filter_order ];
+  
   // Allocate the weights for all of the local elements 
   TMRIndexWeight *weights = new TMRIndexWeight[ nweights*num_quads ];
+
+  // Fake the information as if we have a third-order and we are
+  // searching for the centeral node
+  const int node_info = 4;
+  const double node_knots[] = {-1.0, 0.0, 1.0};
+  const int node_order = 3;
+
   for ( int i = 0; i < num_quads; i++ ){
     // Get the original quadrant from the forest    
     TMRQuadrant node = quads[i];
-
-    // Compute the half the edge length of the quadrant
-    const int32_t h_half = 1 << (TMR_MAX_LEVEL - (quads[i].level + 1));
-
-    // Place the quadrant node at the element mid-point location
-    node.x += h_half;
-    node.y += h_half;
+    node.info = node_info;
     
-    // No need to transform the quadrant since this will always lie
-    // strictly in the interior of the owner quadtree. Find the
-    // enclosing quadrant within the filter. If it does not exist on
-    // this processor, add it to the external queue.
-    TMRQuadrant *t = filter->findEnclosing(&node);
+    // Find the central node
+    TMRQuadrant *quad = filter->findEnclosing(node_order, node_knots,
+                                           &node);
 
-    if (!t){
+    if (!quad){
       // Push the quadrant to the external queue. We will handle these
       // cases seperately after a collective communication.
       queue->push(&node);
       weights[nweights*i].index = -1;
     }
     else {
-      computeWeights(t, &node, &weights[nweights*i]);
+      computeWeights(node_order, node_knots, &node,
+                     quad, wtmp, tmp);
+      memcpy(&weights[nweights*i], wtmp, nweights*sizeof(TMRIndexWeight));
     }
   }
 
@@ -595,12 +592,19 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   // Create the distributed weights
   TMRIndexWeight *dist_weights = new TMRIndexWeight[ nweights*dist_size ];
   for ( int i = 0; i < dist_size; i++ ){
-    TMRQuadrant *t = filter->findEnclosing(&dist_array[i]);
-    if (t){
-      computeWeights(t, &dist_array[i], &dist_weights[nweights*i]);
+    TMRQuadrant *quad = filter->findEnclosing(node_order, node_knots,
+                                              &dist_array[i]);
+    if (quad){
+      computeWeights(node_order, node_knots, &dist_array[i],
+                     quad, wtmp, tmp);
+      memcpy(&dist_weights[nweights*i], wtmp, nweights*sizeof(TMRIndexWeight));
     }
   }
 
+  // Free the tmporary space
+  delete [] wtmp;
+  delete [] tmp;
+  
   // The distributed nodes are no longer required
   delete dist_nodes;
 
@@ -677,38 +681,25 @@ void TMRQuadTACSTopoCreator::createElements( int order,
 
   // The number of local nodes
   int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
-
-  // Get the dependent node information for this mesh
-  const int *dep_ptr, *dep_conn;
-  const double *dep_weights;
-  int num_dep_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
-                                             &dep_weights);
-
+ 
   // Get the external numbers from the filter itself
-  int *filter_ext;
-  int num_filter_ext = filter->getExtNodeNums(&filter_ext);
+  const int *filter_ext;
+  int num_filter_ext = filter->getNodeNumbers(&filter_ext);
 
   // Count up all the external nodes
   int num_ext = 0;
-  int max_ext_nodes = nweights*num_quads + 
-    dep_ptr[num_dep_nodes] + num_filter_ext;
+  int max_ext_nodes = nweights*num_quads + num_filter_ext;
   int *ext_nodes = new int[ max_ext_nodes ];
 
   // Add the external nodes from the filter
   for ( int i = 0; i < num_filter_ext; i++ ){
-    ext_nodes[num_ext] = filter_ext[i];
-    num_ext++;
-  }
-  delete [] filter_ext;
-
-  // Add the external nodes from the dependent connectivity
-  for ( int i = 0; i < dep_ptr[num_dep_nodes]; i++ ){
-    int node = dep_conn[i];
-    if (node < filter_range[mpi_rank] || 
-        node >= filter_range[mpi_rank+1]){
+    int node = filter_ext[i];
+    if (node >= 0 &&
+        (node < filter_range[mpi_rank] ||
+         node >= filter_range[mpi_rank+1])){
       ext_nodes[num_ext] = node;
       num_ext++;
-    }    
+    }
   }
 
   // Add the external nodes from the element-level connectivity
@@ -720,6 +711,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
       num_ext++;
     }
   }
+
   // Sort the external array of nodes
   qsort(ext_nodes, num_ext, sizeof(int), compare_integers);
 
@@ -733,6 +725,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
       ext_nodes[len] = ext_nodes[i];
     }
   }
+  
   // Truncate the array and delete the old array
   int num_ext_nodes = len;
   int *ext_node_nums = new int[ len ];
@@ -768,5 +761,4 @@ void TMRQuadTACSTopoCreator::createElements( int order,
 
   // Free the weights
   delete [] weights;
-  */
 }

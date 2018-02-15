@@ -1,3 +1,4 @@
+from __future__ import print_function
 from mpi4py import MPI
 from tmr import TMR
 from tacs import TACS, elements, constitutive, functions
@@ -98,8 +99,8 @@ args = p.parse_args()
 order = args.order
 if order < 2:
     order = 2
-elif order > 4:
-    order = 4
+elif order > 5:
+    order = 5
 
 # Set the type of ordering to use for this problem
 ordering = args.ordering
@@ -160,7 +161,8 @@ topo = TMR.Topology(comm, model)
 depth = 0
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
-forest.createTrees(depth)
+# forest.createTrees(depth)
+forest.createRandomTrees(5, 0, 2)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
@@ -214,6 +216,10 @@ for k in range(niters):
     f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
     f5.writeToFile('crank%d.f5'%(k))
 
+    if order >= 4:
+        print('Cannot perform adaptive refinement with order >= 4')
+        break
+
     ksweight = 10
     func = functions.KSFailure(assembler, ksweight)
     func.setKSFailureType('continuous')
@@ -246,7 +252,7 @@ for k in range(niters):
 
         # Print the error estimate
         if comm.rank == 0:
-            print 'estimate = ', err_est
+            print('estimate = ', err_est)
 
         # Compute the refinement from the error estimate
         nbins = 30
@@ -284,16 +290,16 @@ for k in range(niters):
 
         # Print out the result
         if comm.rank == 0:
-            print '%10s  %10s  %12s  %12s'%(
-                'low', 'high', 'bins', 'percentage')
-            print '%10.2e  %10s  %12d  %12.2f'%(
-                bounds[-1], ' ', bins[-1], 1.0*bins[-1]/total)
+            print('%10s  %10s  %12s  %12s'%(
+                'low', 'high', 'bins', 'percentage'))
+            print('%10.2e  %10s  %12d  %12.2f'%(
+                bounds[-1], ' ', bins[-1], 1.0*bins[-1]/total))
             for k in range(nbins-1, -1, -1):
-                print '%10.2e  %10.2e  %12d  %12.2f'%(
-                    bounds[k], bounds[k+1], bins[k+1], 1.0*bins[k]/total)
-            print '%10s  %10.2e  %12d  %12.2f'%(
-                ' ', bounds[0], bins[0], 1.0*bins[0]/total)
-            print 'cutoff:  %15.2e'%(cutoff)
+                print('%10.2e  %10.2e  %12d  %12.2f'%(
+                    bounds[k], bounds[k+1], bins[k+1], 1.0*bins[k]/total))
+            print('%10s  %10.2e  %12d  %12.2f'%(
+                ' ', bounds[0], bins[0], 1.0*bins[0]/total))
+            print('cutoff:  %15.2e'%(cutoff))
 
         # Compute the refinement
         refine = np.zeros(len(error), dtype=np.intc)
