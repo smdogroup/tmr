@@ -270,7 +270,7 @@ void test_surface_lofter( double htarget ){
 
   // Create random trees
   forest->createRandomTrees(10, 0, 4);
-  // forest->createTrees(3);
+
   double tbal = MPI_Wtime();
   forest->balance();
   tbal = MPI_Wtime() - tbal;
@@ -297,24 +297,15 @@ void test_surface_lofter( double htarget ){
   int num_nodes = range[mpi_rank+1] - range[mpi_rank];
 
   // Create the mesh
-  double tmesh = MPI_Wtime();
-  int *elem_conn, num_elements = 0;
-  forest->createMeshConn(&elem_conn, &num_elements);
-  tmesh = MPI_Wtime() - tmesh;
-  printf("[%d] Mesh: %f\n", mpi_rank, tmesh);
+  const int *elem_conn;
+  int num_elements = 0;
+  forest->getNodeConn(&elem_conn, &num_elements);
 
   // Get the dependent node information
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
-  
-  // Create/retrieve the dependent node information
-  double tdep = MPI_Wtime();
-  forest->createDepNodeConn();
-  int num_dep_nodes = 
-    forest->getDepNodeConn(&dep_ptr, &dep_conn,
-                            &dep_weights);
-  tdep = MPI_Wtime() - tdep;
-  printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
+  int num_dep_nodes = forest->getDepNodeConn(&dep_ptr, &dep_conn,
+                                             &dep_weights);
 
   // Create the associated TACSAssembler object
   int vars_per_node = 2;
@@ -331,7 +322,6 @@ void test_surface_lofter( double htarget ){
   
   // Set the element connectivity into TACSAssembler
   tacs->setElementConnectivity(elem_conn, ptr);
-  delete [] elem_conn;
   delete [] ptr;
     
   // Set the dependent node information
@@ -346,16 +336,7 @@ void test_surface_lofter( double htarget ){
   // Set the element array
   tacs->setElements(elems);
   delete [] elems;
-
-  // Get the nodes
-  TMRQuadrantArray *nodes;
-  forest->getNodes(&nodes);
-  
-  // Get the quadrants associated with the nodes
-  int size;
-  TMRQuadrant *array;
-  nodes->getArray(&array, &size);
-  
+    
   // Initialize the TACSAssembler object
   tacs->initialize();
 
@@ -368,11 +349,15 @@ void test_surface_lofter( double htarget ){
   TMRPoint *Xp;
   forest->getPoints(&Xp);
 
+  // Get all of the local node numbers
+  const int *local_nodes;
+  int num_local_nodes = forest->getNodeNumbers(&local_nodes);
+  
   // Loop over all the nodes
-  for ( int i = 0; i < size; i++ ){
-    if (array[i].tag >= range[mpi_rank] &&
-        array[i].tag < range[mpi_rank+1]){
-      int loc = array[i].tag - range[mpi_rank];
+  for ( int i = 0; i < num_local_nodes; i++ ){
+    if (local_nodes[i] >= range[mpi_rank] &&
+        local_nodes[i] < range[mpi_rank+1]){
+      int loc = local_nodes[i] - range[mpi_rank];
       Xn[3*loc] = Xp[i].x;
       Xn[3*loc+1] = Xp[i].y;
       Xn[3*loc+2] = Xp[i].z;

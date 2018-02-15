@@ -2,7 +2,7 @@
 #include "TMRHashFunction.h"
 
 /*
-  Get the child id of the quadrant
+  Get the child id of the octant
 */
 int TMROctant::childId(){
   int id = 0;
@@ -271,9 +271,9 @@ int TMROctant::compareNode( const TMROctant *octant ) const {
 }
 
 /*
-  Determine whether the input octant is contained within the quadrant
-  itself. This can be used to determine whether the given octant is
-  a descendent of this object.  
+  Determine whether the input octant is contained within the octant
+  itself. This can be used to determine whether the given octant is a
+  descendent of this object.
 */
 int TMROctant::contains( TMROctant *oct ){
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);

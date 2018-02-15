@@ -119,9 +119,6 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
     }
   }
 
-  vars->beginSetValues(TACS_ADD_VALUES);
-  vars->endSetValues(TACS_ADD_VALUES);
-
   double cutoff = 0.5;
   int var_offset = 0;
   TMR_GenerateBinFile(filename, filter, vars, var_offset, cutoff);
@@ -142,6 +139,7 @@ int main( int argc, char *argv[] ){
   int write_faces_to_vtk = 0;
   int test_bdf_file = 1;
   int test_stl_file = 1;
+  int order = 2;
   for ( int k = 0; k < argc; k++ ){
     if (strcmp(argv[k], "--write_faces") == 0){
       write_faces_to_vtk = 1;
@@ -151,6 +149,10 @@ int main( int argc, char *argv[] ){
     }
     if (strcmp(argv[k], "--test_stl") == 0){
       test_stl_file = 1;
+    }
+    if (sscanf(argv[k], "order=%d", &order) == 1){
+      if (order < 2){ order = 2; }
+      if (order > 5){ order = 5; }
     }
   }
 
@@ -215,6 +217,9 @@ int main( int argc, char *argv[] ){
     TMROctForest *forest = new TMROctForest(comm);
     forest->incref();
 
+    // Set the mesh order
+    forest->setMeshOrder(order, TMR_GAUSS_LOBATTO_POINTS);
+
     // Create the random trees
     forest->setTopology(topo);
     forest->createRandomTrees(10, 0, 4);
@@ -224,10 +229,6 @@ int main( int argc, char *argv[] ){
     // Test the output file
     if (test_stl_file){
       test_stl_output("level_set_test.bstl", forest);
-
-      char fname[128];
-      sprintf(fname, "full_forest%d.vtk", rank);
-      forest->writeForestToVTK(fname);
     }
 
     // Write the volume mesh

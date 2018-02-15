@@ -465,12 +465,11 @@ int main( int argc, char *argv[] ){
   forest->incref();
 
   forest->setTopology(topo);
-  // forest->createTrees(5);
   forest->createRandomTrees(150, 0, 10);
   forest->repartition();
   forest->balance(1);
   forest->repartition();
-  forest->createNodes(2);
+  forest->createNodes();
 
     // Allocate the stiffness object
   TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
@@ -486,24 +485,16 @@ int main( int argc, char *argv[] ){
   int num_nodes = range[mpi_rank+1] - range[mpi_rank];
 
   // Create the mesh
-  double tmesh = MPI_Wtime();
-  int *elem_conn, num_elements = 0;
-  forest->createMeshConn(&elem_conn, &num_elements);
-  tmesh = MPI_Wtime() - tmesh;
-  printf("[%d] Mesh: %f\n", mpi_rank, tmesh);
+  const int *elem_conn;
+  int num_elements = 0;
+  forest->getNodeConn(&elem_conn, &num_elements);
 
   // Get the dependent node information
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
-
-  // Create/retrieve the dependent node information
-  double tdep = MPI_Wtime();
-  forest->createDepNodeConn();
   int num_dep_nodes = 
     forest->getDepNodeConn(&dep_ptr, &dep_conn,
                            &dep_weights);
-  tdep = MPI_Wtime() - tdep;
-  printf("[%d] Dependent nodes: %f\n", mpi_rank, tdep);
 
   // Create the associated TACSAssembler object
   int vars_per_node = 2;
@@ -520,7 +511,6 @@ int main( int argc, char *argv[] ){
   
   // Set the element connectivity into TACSAssembler
   tacs->setElementConnectivity(elem_conn, ptr);
-  delete [] elem_conn;
   delete [] ptr;
 
   // Set the dependent node information
@@ -536,16 +526,11 @@ int main( int argc, char *argv[] ){
   tacs->setElements(elems);
   delete [] elems;
 
-  // Set the boundary conditions  
-  int dim;
-  TMRQuadrant *bcs;
-  TMRQuadrantArray *inner1 = forest->getNodesWithAttribute("inner1");
-  inner1->getArray(&bcs, &dim);
-  for ( int i = 0; i < dim; i++ ){
-    int node = bcs[i].tag;
-    tacs->addBCs(1, &node);
-  }
-  delete inner1;
+  // Set the boundary conditions
+  int *nodes;
+  int num_bc_nodes = forest->getNodesWithAttribute("inner1", &nodes);
+  tacs->addBCs(num_bc_nodes, nodes);
+  delete nodes;
 
   // Initialize the model
   tacs->initialize();
@@ -554,9 +539,15 @@ int main( int argc, char *argv[] ){
   TMRQuadrantArray *quadrants;
   forest->getQuadrants(&quadrants);
 
-  // Add the loads to the
+  // Add the loads
   TMRQuadrantArray *inner2 = forest->getQuadsWithAttribute("inner2");
+
+  // Get the quads on the given surface
+  int dim;
+  TMRQuadrant *bcs;
   inner2->getArray(&bcs, &dim);
+
+  // Create the traction container object
   TACSAuxElements *aux = new TACSAuxElements(dim);
 
   double tx = 0.0;
@@ -569,50 +560,39 @@ int main( int argc, char *argv[] ){
 
   // Set up the boundary tractions 
   for ( int i = 0; i < dim; i++ ){
-    int face = bcs[i].tag;
-    if (face >= 0 && face < 4){
-      int use_node_search = 0;
-      TMRQuadrant *t = quadrants->contains(&bcs[i], use_node_search);
-      if (t){
-        aux->addElement(t->tag, trac[face]);
-      }
+    int face = bcs[i].info;
+    TMRQuadrant *t = quadrants->contains(&bcs[i]);
+    if (t){
+      aux->addElement(t->tag, trac[face]);      
     }
   }
   tacs->setAuxElements(aux);
   delete inner2;
-
-  // Get the nodes
-  TMRQuadrantArray *nodes;
-  forest->getNodes(&nodes);
-
-  // Get the quadrants associated with the nodes
-  int size;
-  TMRQuadrant *array;
-  nodes->getArray(&array, &size);
- 
+  
   // Create the node vector
-  TACSBVec *X = tacs->createNodeVec();
-  X->incref();
-
-  // Retrieve the node array
   TacsScalar *Xn;
+  TACSBVec *X = tacs->createNodeVec();
   X->getArray(&Xn);
 
   // Get the points
   TMRPoint *Xp;
   forest->getPoints(&Xp);
 
+  // Get all of the local node numbers
+  const int *local_nodes;
+  int num_local_nodes = forest->getNodeNumbers(&local_nodes);
+  
   // Loop over all the nodes
-  for ( int i = 0; i < size; i++ ){
-    if (array[i].tag >= range[mpi_rank] &&
-        array[i].tag < range[mpi_rank+1]){
-      int loc = array[i].tag - range[mpi_rank];
+  for ( int i = 0; i < num_local_nodes; i++ ){
+    if (local_nodes[i] >= range[mpi_rank] &&
+        local_nodes[i] < range[mpi_rank+1]){
+      int loc = local_nodes[i] - range[mpi_rank];
       Xn[3*loc] = Xp[i].x;
       Xn[3*loc+1] = Xp[i].y;
       Xn[3*loc+2] = Xp[i].z;
     }
   }
-    
+ 
   // Set the node locations into TACSAssembler
   tacs->setNodes(X);
 

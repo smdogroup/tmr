@@ -1030,6 +1030,7 @@ cdef class QuadrantArray:
         quad.x = array[k].x
         quad.y = array[k].y
         quad.level = array[k].level
+        quad.info = array[k].info
         quad.face = array[k].face
         quad.tag = array[k].tag
         return quad
@@ -1044,6 +1045,7 @@ cdef class QuadrantArray:
         array[k].x = quad.x
         array[k].y = quad.y
         array[k].level = quad.level
+        array[k].info = quad.info
         array[k].face = quad.face
         array[k].tag = quad.tag
         return
@@ -1282,6 +1284,7 @@ cdef class OctantArray:
         oc.y = array[k].y
         oc.z = array[k].z
         oc.level = array[k].level
+        oc.info = array[k].info
         oc.block = array[k].block
         oc.tag = array[k].tag
         return oc
@@ -1297,6 +1300,7 @@ cdef class OctantArray:
         array[k].y = oc.y
         array[k].z = oc.z
         array[k].level = oc.level
+        array[k].info = oc.info
         array[k].block = oc.block
         array[k].tag = oc.tag
         return
@@ -1362,6 +1366,12 @@ cdef class Octant:
             return self.octant.tag
         def __set__(self, value):
             self.octant.tag = value
+
+    property level:
+        def __get__(self):
+            return self.octant.level
+        def __set__(self, value):
+            self.octant.level = value
 
     property info:
         def __get__(self):
@@ -1560,6 +1570,7 @@ cdef TACSElement* _createQuadElement(void *_self, int order,
     q.quad.x = quad.x
     q.quad.y = quad.y
     q.quad.level = quad.level
+    q.quad.info = quad.info
     q.quad.face = quad.face
     q.quad.tag = quad.tag
     e = (<object>_self).createElement(order, q)
@@ -1595,6 +1606,7 @@ cdef TACSElement* _createOctElement(void *_self, int order,
     q.octant.y = octant.y
     q.octant.z = octant.z
     q.octant.level = octant.level
+    q.octant.info = octant.info
     q.octant.block = octant.block
     q.octant.tag = octant.tag
     e = (<object>_self).createElement(order, q)
@@ -1631,6 +1643,7 @@ cdef TACSElement* _createQuadTopoElement(void *_self, int order,
     q.quad.x = quad.x
     q.quad.y = quad.y
     q.quad.level = quad.level
+    q.quad.info = quad.info
     q.quad.face = quad.face
     q.quad.tag = quad.tag
     idx = []
@@ -1688,6 +1701,7 @@ cdef TACSElement* _createOctTopoElement(void *_self, int order,
     oct.octant.y = octant.y
     oct.octant.z = octant.z
     oct.octant.level = octant.level
+    oct.octant.info = octant.info
     oct.octant.block = octant.block
     oct.octant.tag = octant.tag
     idx = []

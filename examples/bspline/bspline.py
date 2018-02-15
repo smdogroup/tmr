@@ -202,7 +202,7 @@ mesh.mesh(hval)
 
 # Extract the quadrilaterals/points
 pts = mesh.getMeshPoints()
-quads, hexa = mesh.getMeshConnectivity()
+quads = mesh.getQuadConnectivity()
 npts = pts.shape[0]
 nquads = quads.shape[0]
 

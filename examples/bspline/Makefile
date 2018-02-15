@@ -14,4 +14,4 @@ debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
 debug: default
 
 clean:
-	rm -rf bspline tfi quartersphere *.o
+	rm -rf bspline *.o

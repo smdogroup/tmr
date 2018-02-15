@@ -2166,19 +2166,20 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
   // functions associated with the order
   const double *knots;
   const int order = forest->getInterpKnots(&knots);
-  const int nenrich = getNum2dEnrich(order);
+  const int nenrich = getNum3dEnrich(order);
 
   // Get the refined order of the mesh
   const double *refined_knots;
   const int refined_order = forest_refined->getInterpKnots(&refined_knots);
+  const int num_nodes = order*order*order;
   const int num_refined_nodes = refined_order*refined_order*refined_order;
   
   // Get the number of variables per node
   const int vars_per_node = tacs->getVarsPerNode();
   const int deriv_per_node = 3*vars_per_node;
 
-  // The number of equations: 2 times the number of nodes for each element
-  const int neq = 2*order*order;
+  // The number of equations: 3 times the number of nodes for each element
+  const int neq = 3*order*order*order;
   
   // Number of local elements
   const int nelems = tacs->getNumElements();
@@ -2186,10 +2187,10 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
   // Allocate space for the element reconstruction problem
   TacsScalar *tmp = new TacsScalar[ neq*(nenrich + vars_per_node) ];
   TacsScalar *ubar = new TacsScalar[ vars_per_node*nenrich ];
-  TacsScalar *delem = new TacsScalar[ deriv_per_node*order*order ];
+  TacsScalar *delem = new TacsScalar[ deriv_per_node*num_nodes ];
 
   // Allocate arrays needed for the reconstruction
-  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*order*order ];
+  TacsScalar *vars_elem = new TacsScalar[ vars_per_node*num_nodes ];
 
   // The interpolated variables on the refined mesh
   TacsScalar *dvars = new TacsScalar[ vars_per_node*num_refined_nodes ];
@@ -2254,13 +2255,13 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
     // Set the variables to zero
     memset(vars_interp, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
 
-    for ( int p = 0; p < order; p++ ){
-      for ( int m = 0; m < order; m++ ){
-        for ( int n = 0; n < order; n++ ){
+    for ( int p = 0; p < refined_order; p++ ){
+      for ( int m = 0; m < refined_order; m++ ){
+        for ( int n = 0; n < refined_order; n++ ){
           double pt[3];
-          pt[0] = knots[n];
-          pt[1] = knots[m];
-          pt[2] = knots[p];
+          pt[0] = refined_knots[n];
+          pt[1] = refined_knots[m];
+          pt[2] = refined_knots[p];
 
           // Evaluate the locations of the new nodes
           double N[max_num_nodes];

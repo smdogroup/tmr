@@ -99,7 +99,7 @@ class TMROctStiffness : public SolidStiffness {
 
   // The local density of the
   int nweights;
-  TMRIndexWeight weights[MAX_NUM_WEIGHTS];
+  TMRIndexWeight *weights;
 };
 
 /*

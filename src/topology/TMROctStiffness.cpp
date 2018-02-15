@@ -16,6 +16,7 @@ TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
 
   // Set the weights/local indices
   nweights = _nweights;
+  weights = new TMRIndexWeight[ nweights ];
   memcpy(weights, _weights, nweights*sizeof(TMRIndexWeight));
   
   // Set the initial value for the densities
@@ -35,6 +36,7 @@ TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
 */
 TMROctStiffness::~TMROctStiffness(){
   props->decref();
+  delete [] weights;
 }
 
 /*

@@ -749,8 +749,8 @@ int TMR_GenerateBinFile( const char *filename,
 
   // Allocate space to store the node locations and levelset values
   const int bsize = x->getBlockSize();
-  int xsize = bsize*mesh_order*mesh_order*mesh_order;
-  TacsScalar *levelvals = new TacsScalar[ xsize ];
+  TacsScalar *xvars = new TacsScalar[ bsize ];
+  TacsScalar *levelvals = new TacsScalar[ mesh_order*mesh_order*mesh_order ];
   TMRPoint *Xe = new TMRPoint[ mesh_order*mesh_order*mesh_order ];
 
   // Get the mesh coordinates from the filter
@@ -806,12 +806,21 @@ int TMR_GenerateBinFile( const char *filename,
 Failed at node with block: %d x %d y: %d z: %d\n",
                    octs[i].block, octs[i].x, octs[i].y, octs[i].z);
           }
+          if (c[index] >= 0){
+            x->getValues(1, &c[index], xvars);
+            levelvals[index] = xvars[x_offset];
+          }
+          else {
+            int dep = -c[index]-1;
+            levelvals[index] = 0.0;
+            for ( int jp = dep_ptr[dep]; jp < dep_ptr[dep+1]; jp++ ){
+              x->getValues(1, &dep_conn[jp], xvars);
+              levelvals[index] += dep_weights[jp]*xvars[x_offset];
+            }
+          }
         }
       }
     }
-
-    // Get the levelset values
-    x->getValues(mesh_order*mesh_order*mesh_order, c, levelvals);
 
     // Loop over each octant in the mesh (if the mesh is higher-order)
     for ( int iz = 0; iz < mesh_order-1; iz++ ){
@@ -879,6 +888,7 @@ Failed at node with block: %d x %d y: %d z: %d\n",
   }
 
   // Free xvals
+  delete [] xvars;
   delete [] levelvals;
   delete [] Xe;
 

@@ -28,13 +28,15 @@ class CreateMe(TMR.QuadCreator):
             element = elements.MITCShell(2, stiff)
         elif order == 3:
             element = elements.MITCShell(3, stiff)
+        elif order == 4:
+            element = elements.MITCShell(4, stiff)
         return element
 
     def createAuxElements(self, assembler, order=3):
         aux = TACS.AuxElements()
-        tx = 0.0
-        ty = 0.0
-        tz = -1.0
+        tx = np.zeros(order*order)
+        ty = np.zeros(order*order)
+        tz = -np.ones(order*order)
         trac = elements.ShellTraction(order, tx, ty, tz)
         for i in range(assembler.getNumElements()):
             aux.addElement(i, trac)
@@ -44,23 +46,25 @@ class CreateMe(TMR.QuadCreator):
         # Create the forest
         forest.balance(1)
         forest.repartition()
+        forest.setMeshOrder(order)
 
         # Create the forests
         forests = [ forest ]
-        assemblers = [ self.createTACS(order, forest) ]
+        assemblers = [ self.createTACS(forest) ]
 
         if order == 3:
-            order = 2
             forests.append(forests[-1].duplicate())
             forests[-1].balance(1)
             forests[-1].repartition()
-            assemblers.append(self.createTACS(order, forests[-1]))
+            forests[-1].setMeshOrder(2)
+            assemblers.append(self.createTACS(forests[-1]))
 
         for i in xrange(nlevels-1):
             forests.append(forests[-1].coarsen())
             forests[-1].balance(1)
             forests[-1].repartition()
-            assemblers.append(self.createTACS(order, forests[-1]))
+            forests[-1].setMeshOrder(2)
+            assemblers.append(self.createTACS(forests[-1]))
 
         # Create the multigrid object
         mg = TMR.createMg(assemblers, forests)
@@ -204,63 +208,51 @@ target_rel_err = 1e-5
 
 order = 3
 
-nrefine = 4
-for i in range(nrefine):
-    # Create the problem
-    assembler, mg = creator.createMg(forest, nlevels=nlevels, order=order)
-    aux = creator.createAuxElements(assembler, order=order)
-    assembler.setAuxElements(aux)
+# Create the problem
+assembler, mg = creator.createMg(forest, nlevels=nlevels, order=order)
+aux = creator.createAuxElements(assembler, order=order)
+assembler.setAuxElements(aux)
 
-    # Create a solution vector
-    ans = assembler.createVec()
-    res = assembler.createVec()
-    alpha = 1.0
-    beta = 0.0
-    gamma = 0.0
-    mg.assembleJacobian(alpha, beta, gamma, res)
+# Create a solution vector
+ans = assembler.createVec()
+res = assembler.createVec()
+alpha = 1.0
+beta = 0.0
+gamma = 0.0
+mg.assembleJacobian(alpha, beta, gamma, res)
 
-    # Factor the preconditioner
-    mg.factor()
+# Factor the preconditioner
+mg.factor()
 
-    subspace = 100
-    gmres = TACS.KSM(mg.getMat(), mg, subspace, isFlexible=1)
-    gmres.setMonitor(comm, 'GMRES', 1)
-    gmres.solve(res, ans)
-    ans.scale(-1.0)
-    assembler.setVariables(ans)
+subspace = 100
+gmres = TACS.KSM(mg.getMat(), mg, subspace, isFlexible=1)
+gmres.setMonitor(comm, 'GMRES', 1)
+gmres.solve(res, ans)
+ans.scale(-1.0)
+assembler.setVariables(ans)
 
-    # Output for visualization 
-    flag = (TACS.ToFH5.NODES |
-            TACS.ToFH5.DISPLACEMENTS |
-            TACS.ToFH5.STRAINS)
-    f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
-    f5.writeToFile('visualization%d.f5'%(i))
+# Output for visualization 
+flag = (TACS.ToFH5.NODES |
+        TACS.ToFH5.DISPLACEMENTS |
+        TACS.ToFH5.STRAINS)
+f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
+f5.writeToFile('visualization.f5')
 
-    # Duplicate the forest and refine it uniformly
-    refined = forest.duplicate()
-    refined.refine()
-    refined.balance(1)
-    assembler_refined = creator.createTACS(order, refined)
-    ans_refined = assembler_refined.createVec()
-    TMR.computeReconSolution(assembler, forest, assembler_refined, 
-                             ans, ans_refined)
-    assembler_refined.setVariables(ans_refined)
+# Duplicate the forest and refine it uniformly
+forest_refined = forest.duplicate()
+forest_refined.setMeshOrder(4)
+forest_refined.balance(1)
+assembler_refined = creator.createTACS(forest_refined)
+ans_refined = assembler_refined.createVec()
+TMR.computeReconSolution(forest, assembler,
+                         forest_refined, assembler_refined, 
+                        ans, ans_refined)
+assembler_refined.setVariables(ans_refined)
 
-    # Output for visualization 
-    flag = (TACS.ToFH5.NODES |
-            TACS.ToFH5.DISPLACEMENTS |
-            TACS.ToFH5.STRAINS)
-    f5 = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
-    f5.writeToFile('visualization_refined%d.f5'%(i))
-
-    # Get the function value and compute the element error
-    nelems = comm.allreduce(assembler.getNumElements(), op=MPI.SUM)
-    fval = -res.dot(ans)
-    target_element_err = target_rel_err*fval/nelems
-
-    err_estimate = TMR.strainEnergyRefine(assembler, forest, 
-                                          target_element_err)
-    if comm.rank == 0:
-        print 'total error    ', err_estimate
-        print 'relative error ', err_estimate/fval
+# Output for visualization 
+flag = (TACS.ToFH5.NODES |
+        TACS.ToFH5.DISPLACEMENTS |
+        TACS.ToFH5.STRAINS)
+f5 = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
+f5.writeToFile('visualization_refined.f5')
 

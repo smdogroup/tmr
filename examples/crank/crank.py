@@ -29,53 +29,58 @@ def addFaceTraction(order, forest, attr, assembler, tr):
     aux = TACS.AuxElements()
 
     for i in range(len(face_octs)):
-        index = octants.findIndex(face_octs[i])
-        if index is not None:
-            aux.addElement(index, trac[face_octs[i].tag])
+        aux.addElement(face_octs[i].tag, trac[face_octs[i].info])
 
     return aux
 
-def createRefined(forest, bcs, order=2):
-    refined = forest.refine()
+def createRefined(forest, bcs, pttype=TMR.GAUSS_LOBATTO_POINTS):
+    refined = forest.duplicate()
+    refined.setMeshOrder(forest.getMeshOrder()+1, pttype)
+    refined.balance(1)
     creator = CreateMe(bcs)
-    return creator.createTACS(order, refined)
+    return refined, creator.createTACS(refined)
 
-def createProblem(forest, bcs, ordering, order=2, nlevels=2):
+def createProblem(forest, bcs, ordering, mesh_order=2, nlevels=2,
+                  pttype=TMR.GAUSS_LOBATTO_POINTS):
     # Create the forest
     forests = []
     assemblers = []
 
     # Create the trees, rebalance the elements and repartition
     forest.balance(1)
+    forest.setMeshOrder(mesh_order, pttype)
     forest.repartition()
     forests.append(forest)
 
     # Make the creator class
     creator = CreateMe(bcs)
-    assemblers.append(creator.createTACS(order, forest, ordering))
+    assemblers.append(creator.createTACS(forest, ordering))
 
-    if order == 3:
+    while mesh_order > 2:
+        mesh_order = mesh_order-1
         forest = forests[-1].duplicate()
         forest.balance(1)
+        forest.setMeshOrder(mesh_order, pttype)
         forests.append(forest)
 
         # Make the creator class
         creator = CreateMe(bcs)
-        assemblers.append(creator.createTACS(2, forest, ordering))
+        assemblers.append(creator.createTACS(forest, ordering))
 
     for i in xrange(nlevels-1):
         forest = forests[-1].coarsen()
+        forest.setMeshOrder(2, pttype)
         forest.balance(1)
         forest.repartition()
         forests.append(forest)
 
         # Make the creator class
         creator = CreateMe(bcs)
-        assemblers.append(creator.createTACS(2, forest, ordering))
+        assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
     mg = TMR.createMg(assemblers, forests, use_coarse_direct_solve=True, 
-        use_chebyshev_smoother=False)
+                      use_chebyshev_smoother=False)
 
     return assemblers[0], mg
 
@@ -86,7 +91,15 @@ comm = MPI.COMM_WORLD
 p = argparse.ArgumentParser()
 p.add_argument('--htarget', type=float, default=0.15)
 p.add_argument('--ordering', type=str, default='natural')
+p.add_argument('--order', type=int, default=3)
 args = p.parse_args()
+
+# Set the element order
+order = args.order
+if order < 2:
+    order = 2
+elif order > 4:
+    order = 4
 
 # Set the type of ordering to use for this problem
 ordering = args.ordering
@@ -162,12 +175,11 @@ elif ordering == 'multicolor':
 else:
     ordering = TACS.PY_NATURAL_ORDER
 
-order = 3
 niters = 3
 for k in range(niters):
     # Create the topology problem
     assembler, mg = createProblem(forest, bcs, ordering, 
-                                  order=order, nlevels=depth+1+k)
+                                  mesh_order=order, nlevels=depth+1+k)
 
     # Computet the surface traction magnitude
     diameter = 1.0
@@ -200,7 +212,7 @@ for k in range(niters):
             TACS.ToFH5.DISPLACEMENTS |
             TACS.ToFH5.STRESSES)
     f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
-    f5.writeToFile('beam%d.f5'%(k))
+    f5.writeToFile('crank%d.f5'%(k))
 
     ksweight = 10
     func = functions.KSFailure(assembler, ksweight)
@@ -210,9 +222,14 @@ for k in range(niters):
     fval = assembler.evalFunctions([func])
 
     if k < niters:
+        # Create the refined mesh
+        forest_refined, assembler_refined = createRefined(forest, bcs)
+
         if True:
             # Compute the strain energy error estimate
-            err_est, error = TMR.strainEnergyError(assembler, forest)
+            err_est, error = TMR.strainEnergyError(forest, assembler,
+                                                   forest_refined,
+                                                   assembler_refined)
         else:
             # Compute the adjoint
             assembler.evalSVSens(func, res)
@@ -222,12 +239,10 @@ for k in range(niters):
             gmres.solve(res, adjoint)
             adjoint.scale(-1.0)
 
-            # Create the refined mesh
-            refined = createRefined(forest, bcs, order=order)
-
             # Compute the adjoint and use adjoint-based refinement
             err_est, func_corr, error = \
-                TMR.adjointError(assembler, refined, adjoint, forest)
+                     TMR.adjointError(forest, assembler,
+                                      forest_refined, assembler_refined, adjoint)
 
         # Print the error estimate
         if comm.rank == 0:
