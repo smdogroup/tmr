@@ -5528,14 +5528,15 @@ void TMROctForest::evaluateNodeLocations(){
 
     // Set the dependent node values
     for ( int i = 0; i < num_dep_nodes; i++ ){
-      X[i].x = X[i].y = X[i].z = 0.0;
+      int pt = num_dep_nodes-1-i;
+      X[pt].x = X[pt].y = X[pt].z = 0.0;
 
       for ( int j = dep_ptr[i]; j < dep_ptr[i+1]; j++ ){
         int node = dep_conn[j];
         int index = getLocalNodeNumber(node);
-        X[i].x += dep_weights[j]*X[index].x;
-        X[i].y += dep_weights[j]*X[index].y;
-        X[i].z += dep_weights[j]*X[index].z;
+        X[pt].x += dep_weights[j]*X[index].x;
+        X[pt].y += dep_weights[j]*X[index].y;
+        X[pt].z += dep_weights[j]*X[index].z;
       }
     }
   }

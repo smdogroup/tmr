@@ -3725,12 +3725,9 @@ void TMRQuadForest::evaluateNodeLocations(){
           // Compute the mesh index
           int node = conn[mesh_order*mesh_order*i + 
                           ii + jj*mesh_order];
-          int *item = (int*)bsearch(&node, node_numbers,
-                                    num_local_nodes, 
-                                    sizeof(int), compare_integers);
-          if (item){
-            int index = item - node_numbers;
-            if (index >= num_dep_nodes && !flags[index]){
+          if (node >= 0){
+            int index = getLocalNodeNumber(node);
+            if (!flags[index]){
               flags[index] = 1;
               surf->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]), 
                               v + 0.5*d*(1.0 + interp_knots[jj]),
@@ -3743,24 +3740,15 @@ void TMRQuadForest::evaluateNodeLocations(){
 
     // Set the dependent node values
     for ( int i = 0; i < num_dep_nodes; i++ ){
-      X[i].x = X[i].y = X[i].z = 0.0;
+      int pt = num_dep_nodes-1-i;
+      X[pt].x = X[pt].y = X[pt].z = 0.0;
 
       for ( int j = dep_ptr[i]; j < dep_ptr[i+1]; j++ ){
         int node = dep_conn[j];
-        if (node >= node_range[mpi_rank] &&
-            node < node_range[mpi_rank+1]){
-          node = node - node_range[mpi_rank];
-          node += ext_pre_offset;
-        }
-        else {
-          int *item = (int*)bsearch(&node, node_numbers,
-                                    num_local_nodes, 
-                                    sizeof(int), compare_integers);
-          node = item - node_numbers;
-        }
-        X[i].x += dep_weights[j]*X[node].x;
-        X[i].y += dep_weights[j]*X[node].y;
-        X[i].z += dep_weights[j]*X[node].z;
+        int index = getLocalNodeNumber(node);
+        X[pt].x += dep_weights[j]*X[index].x;
+        X[pt].y += dep_weights[j]*X[index].y;
+        X[pt].z += dep_weights[j]*X[index].z;
       }
     }
   }

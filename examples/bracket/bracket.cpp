@@ -77,7 +77,8 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   TACSBVecDistribute *dist = new TACSBVecDistribute(var_map, indices);
   
   // Create the design vector
-  TACSBVec *vars = new TACSBVec(var_map, 1, dist);
+  TACSBVec *vars = new TACSBVec(var_map, 1, dist, 
+                                tacs->getBVecDepNodes());
   vars->incref();
 
   // Get the range of the nodes
@@ -118,6 +119,9 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
     }
   }
 
+  vars->beginSetValues(TACS_ADD_VALUES);
+  vars->endSetValues(TACS_ADD_VALUES);
+
   double cutoff = 0.5;
   int var_offset = 0;
   TMR_GenerateBinFile(filename, filter, vars, var_offset, cutoff);
@@ -155,7 +159,7 @@ int main( int argc, char *argv[] ){
 
   // This is all tied to this STEP file
   const char *filename = "bracket_solid.stp";
-  double htarget = 10.0;
+  double htarget = 8.0;
 
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);

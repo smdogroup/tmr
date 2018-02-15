@@ -697,9 +697,8 @@ int TMR_GenerateBinFile( const char *filename,
   int fail = 0;
 
   // Get the MPI communicator
-  MPI_Comm comm = filter->getMPIComm();
-
   int mpi_size, mpi_rank;  
+  MPI_Comm comm = filter->getMPIComm();
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
 
@@ -838,21 +837,28 @@ Failed at node with block: %d x %d y: %d z: %d\n",
                   (iy + jj)*mesh_order +
                   (iz + kk)*mesh_order*mesh_order;
 
-                cell.val[index] = Xe[offset].z; // levelvals[bsize*offset + x_offset];
+                cell.val[index] = levelvals[bsize*offset + x_offset];
                                       
                 // Set the node location
                 cell.p[index].x = Xe[offset].x;
                 cell.p[index].y = Xe[offset].y;
                 cell.p[index].z = Xe[offset].z;
           
+                int fx0 = (ix == 0 && ii == 0);
+                int fx1 = (ix == mesh_order-2 && ii == 1);
+                int fy0 = (iy == 0 && jj == 0);
+                int fy1 = (iy == mesh_order-2 && jj == 1);
+                int fz0 = (iz == 0 && kk == 0);
+                int fz1 = (iz == mesh_order-2 && kk == 1);
+
                 // Check if this node lies on a boundary
                 on_boundary[index] = 
-                  ((octree_face_boundary[0] && (ix == 0 && ii == 0)) ||
-                   (octree_face_boundary[1] && (ix == mesh_order-2 && ii == 1)) ||
-                   (octree_face_boundary[2] && (iy == 0 && jj == 0)) ||
-                   (octree_face_boundary[3] && (iy == mesh_order-2 && jj == 1)) ||
-                   (octree_face_boundary[4] && (iz == 0 && kk == 0)) ||
-                   (octree_face_boundary[5] && (iz == mesh_order-2 && kk == 1)));
+                  ((octree_face_boundary[0] && fx0) ||
+                   (octree_face_boundary[1] && fx1) ||
+                   (octree_face_boundary[2] && fy0) ||
+                   (octree_face_boundary[3] && fy1) ||
+                   (octree_face_boundary[4] && fz0) ||
+                   (octree_face_boundary[5] && fz1));
 
                 // Store whether this node is on the boundary
                 bound = bound || on_boundary[index];
