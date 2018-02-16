@@ -4254,8 +4254,8 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
     Nu[istart] = 1.0;
   }
   else {
-    double u = -1.0 + 2.0*((node->x % hc) +
-                           0.5*h*(1.0 + interp_knots[i]))/hc;
+    double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
+                           oct->x)/hc;
     lagrange_shape_functions(coarse->mesh_order, u, 
                              coarse->interp_knots, Nu);
   }
@@ -4272,8 +4272,8 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
     Nv[jstart] = 1.0;
   }
   else {
-    double v = -1.0 + 2.0*((node->y % hc) +
-                           0.5*h*(1.0 + interp_knots[j]))/hc;
+    double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
+                           oct->y)/hc;
     lagrange_shape_functions(coarse->mesh_order, v, 
                              coarse->interp_knots, Nv);
   }

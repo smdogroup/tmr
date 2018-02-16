@@ -158,10 +158,8 @@ model = mesh.createModelFromMesh()
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
-depth = 0
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
-# forest.createTrees(depth)
 forest.createRandomTrees(5, 0, 2)
 
 # Set the boundary conditions for the problem
@@ -179,9 +177,12 @@ else:
 
 niters = 3
 for k in range(niters):
+    t = MPI.Wtime()
     # Create the topology problem
     assembler, mg = createProblem(forest, bcs, ordering, 
-                                  mesh_order=order, nlevels=depth+1+k)
+                                  mesh_order=order, nlevels=2+k)
+    if comm.rank == 0:
+        print('Creating TACS assembler objects', MPI.Wtime() - t)
 
     # Computet the surface traction magnitude
     diameter = 1.0
@@ -197,11 +198,17 @@ for k in range(niters):
     # Create the assembler object
     res = assembler.createVec()
     ans = assembler.createVec()
+    t = MPI.Wtime()
     mg.assembleJacobian(1.0, 0.0, 0.0, res)
-
+    if comm.rank == 0:
+        print('Assembling the Jacobians', MPI.Wtime() - t)
+    
     # Factor the matrix
+    t = MPI.Wtime()
     mg.factor()
-    gmres = TACS.KSM(mg.getMat(), mg, 50, isFlexible=1)
+    if comm.rank == 0:
+        print('Factoring the Jacobians', MPI.Wtime() - t)
+    gmres = TACS.KSM(mg.getMat(), mg, 100, isFlexible=1)
     gmres.setMonitor(comm, freq=1)
     gmres.solve(res, ans)
     ans.scale(-1.0)
@@ -217,7 +224,8 @@ for k in range(niters):
     f5.writeToFile('crank%d.f5'%(k))
 
     if order >= 4:
-        print('Cannot perform adaptive refinement with order >= 4')
+        if comm.rank == 0:
+            print('Cannot perform adaptive refinement with order >= 4')
         break
 
     ksweight = 10
@@ -296,9 +304,10 @@ for k in range(niters):
                 bounds[-1], ' ', bins[-1], 1.0*bins[-1]/total))
             for k in range(nbins-1, -1, -1):
                 print('%10.2e  %10.2e  %12d  %12.2f'%(
-                    bounds[k], bounds[k+1], bins[k+1], 1.0*bins[k]/total))
+                    bounds[k], bounds[k+1], bins[k+1],
+                    100.0*bins[k]/total))
             print('%10s  %10.2e  %12d  %12.2f'%(
-                ' ', bounds[0], bins[0], 1.0*bins[0]/total))
+                ' ', bounds[0], bins[0], 100.0*bins[0]/total))
             print('cutoff:  %15.2e'%(cutoff))
 
         # Compute the refinement

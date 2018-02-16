@@ -16,3 +16,6 @@ debug: default
 
 clean:
 	rm -rf step_import step_to_netgen *.o
+
+test:
+	./step_import

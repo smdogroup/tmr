@@ -6233,8 +6233,8 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     Nu[istart] = 1.0;
   }
   else {
-    double u = -1.0 + 2.0*((node->x % hc) +
-                           0.5*h*(1.0 + interp_knots[i]))/hc;
+    double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
+                           oct->x)/hc;
     lagrange_shape_functions(coarse->mesh_order, u,
                              coarse->interp_knots, Nu);
   }
@@ -6251,8 +6251,8 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     Nv[jstart] = 1.0;
   }
   else {
-    double v = -1.0 + 2.0*((node->y % hc) +
-                           0.5*h*(1.0 + interp_knots[j]))/hc;
+    double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
+                           oct->y)/hc;
     lagrange_shape_functions(coarse->mesh_order, v,
                              coarse->interp_knots, Nv);
   }
@@ -6269,12 +6269,12 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     Nw[kstart] = 1.0;
   }
   else {
-    double w = -1.0 + 2.0*((node->z % hc) +
-                           0.5*h*(1.0 + interp_knots[k]))/hc;
+    double w = -1.0 + 2.0*(node->z + 0.5*h*(1.0 + interp_knots[k]) -
+                           oct->z)/hc;
     lagrange_shape_functions(coarse->mesh_order, w,
                              coarse->interp_knots, Nw);
   }
-
+ 
   // Get the coarse grid information
   const int *cdep_ptr;
   const int *cdep_conn;
@@ -6291,7 +6291,8 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     for ( int jj = jstart; jj < jend; jj++ ){
       for ( int ii = istart; ii < iend; ii++ ){
         // Compute the offset into the coarse mesh
-        int offset = (ii + jj*coarse->mesh_order +
+        int offset = (ii +
+                      jj*coarse->mesh_order +
                       kk*coarse->mesh_order*coarse->mesh_order);
 
         // Compute the interpolation weight

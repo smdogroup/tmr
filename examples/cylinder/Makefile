@@ -15,3 +15,5 @@ debug: default
 
 clean:
 	rm -rf *.o
+
+test:

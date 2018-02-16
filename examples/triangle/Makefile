@@ -15,3 +15,6 @@ debug: default
 
 clean:
 	rm -rf tritest *.o
+
+test:
+	./tritest

@@ -16,3 +16,7 @@ debug: default
 
 clean:
 	rm -rf arm arm_mesh *.o
+
+test:
+	./arm
+	./arm_mesh

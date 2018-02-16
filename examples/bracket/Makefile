@@ -14,3 +14,6 @@ debug: default
 
 clean:
 	rm -rf bracket *.o
+
+test:
+	./bracket --test_stl --test_bdf

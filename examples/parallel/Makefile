@@ -19,3 +19,8 @@ debug: default
 
 clean:
 	rm -rf octant_test quadrant_test parallel *.o
+
+test:
+	./quadrant_test
+	./octant_test
+	./parallel

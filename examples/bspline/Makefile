@@ -15,3 +15,7 @@ debug: default
 
 clean:
 	rm -rf bspline *.o
+
+test:
+	./bspline
+	python bspline.py
