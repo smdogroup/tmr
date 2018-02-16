@@ -1984,7 +1984,7 @@ void TMRQuadForest::balanceQuadrant( TMRQuadrant *quad,
     for ( int edge = 0; edge < 4; edge++ ){
       p.edgeNeighbor(edge, &neighbor);
       neighbor.getSibling(0, &q);
-	  
+          
       // If we're in bounds, add the neighbor
       if ((q.x >= 0 && q.x < hmax) &&
           (q.y >= 0 && q.y < hmax)){
@@ -2406,7 +2406,7 @@ void TMRQuadForest::computeAdjacentQuadrants(){
 
         // Get the edge neighbor
         q.edgeNeighbor(edge_index, &q);
-	  
+          
         // If we're in bounds, add the neighbor
         if ((q.x >= 0 && q.x < hmax) &&
             (q.y >= 0 && q.y < hmax)){
@@ -4255,7 +4255,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   }
   else {
     double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
-                           oct->x)/hc;
+                           quad->x)/hc;
     lagrange_shape_functions(coarse->mesh_order, u, 
                              coarse->interp_knots, Nu);
   }
@@ -4273,7 +4273,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   }
   else {
     double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
-                           oct->y)/hc;
+                           quad->y)/hc;
     lagrange_shape_functions(coarse->mesh_order, v, 
                              coarse->interp_knots, Nv);
   }
