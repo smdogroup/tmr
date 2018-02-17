@@ -534,6 +534,52 @@ void TMR_RemoveFloatingShapes( TopoDS_Compound &compound,
 }
 
 /*
+  Create the TMRModel based on the IGES input file
+*/
+TMRModel* TMR_LoadModelFromIGESFile( const char *filename,
+                                     int print_level ){
+  FILE *fp = fopen(filename, "r");
+  if (!fp){
+    return NULL;
+  }
+  fclose(fp);
+  
+  IGESControl_Reader reader;
+  IFSelect_ReturnStatus status = reader.ReadFile(filename);
+  if (status != IFSelect_RetDone){
+    fprintf(stderr, "TMR Warning: IGES file reader failed\n");
+  }
+
+  // inspect the root transfers
+  reader.PrintCheckLoad(Standard_False, IFSelect_ItemsByEntity);
+
+  // The number of root objects for transfer
+  int nroots = reader.NbRootsForTransfer();
+  for ( int k = 1; k <= nroots; k++ ){
+    Standard_Boolean ok = reader.TransferOneRoot(k);
+    if (!ok){
+      fprintf(stderr, "TMR Warning: Transfer %d not OK!\n", k);
+    }
+  }
+
+  // Load the different shapes
+  int nbs = reader.NbShapes();
+
+  // Build the shape
+  TopoDS_Compound compound;
+  BRep_Builder builder;
+  builder.MakeCompound(compound);
+  for ( int i = 1; i <= nbs; i++ ){
+    TopoDS_Shape shape = reader.Shape(i);
+    builder.Add(compound, shape);
+  }
+
+  // TMR_RemoveFloatingShapes(compound, TopAbs_FACE);
+
+  return TMR_LoadModelFromCompound(compound, print_level);
+}
+
+/*
   Create the TMRModel based on the STEP input file
 */
 TMRModel* TMR_LoadModelFromSTEPFile( const char *filename,
@@ -555,10 +601,10 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename,
 
   // The number of root objects for transfer
   int nroots = reader.NbRootsForTransfer();
-  for ( int k = 0; k < nroots; k++ ){
-    Standard_Boolean ok = reader.TransferRoot(k+1);
+  for ( int k = 1; k <= nroots; k++ ){
+    Standard_Boolean ok = reader.TransferRoot(k);
     if (!ok){
-      fprintf(stderr, "TMR Warning: Transfer %d not OK!\n", k+1);
+      fprintf(stderr, "TMR Warning: Transfer %d not OK!\n", k);
     }
   }
 
