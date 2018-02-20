@@ -1978,6 +1978,31 @@ def writeSTLToBin(char *filename, OctForest forest,
     TMR_GenerateBinFile(filename, forest.ptr, x.ptr, offset, cutoff)
     return
 
+cdef class StressConstraint:
+    cdef TMRStressConstraint *ptr
+    def __cinit__(self, OctForest oct, Assembler assembler,
+                  TacsScalar ks_weight):
+        self.ptr = NULL
+        self.ptr = new TMRStressConstraint(oct.ptr,
+                                           assembler.ptr,
+                                           ks_weight)
+        self.ptr.incref()
+
+    def __dealloc__(self):
+        if self.ptr:
+           self.ptr.decref()
+
+    def evalCon(self, Vec uvec):
+        return self.ptr.evalConstraint(uvec.ptr)
+
+    def evalConDeriv(self,
+                     np.ndarray[int, ndim=1, mode='c'] dfdx,
+                     Vec dfdu):
+        cdef int size = len(dfdx)
+        self.ptr.evalConDeriv(<TacsScalar*>dfdx.data, size,
+                              dfdu.ptr)
+        return
+
 cdef class TopoProblem(pyParOptProblemBase):
     def __cinit__(self, list assemblers, list filters, 
                   list varmaps, list varindices, Pc pc, int vars_per_node=1):
