@@ -17,7 +17,7 @@ class CreateMe(TMR.OctTopoCreator):
         elem = elements.Solid(2, stiff)
         return elem
 
-def addVertexLoad(comm, order, forest, attr, assembler, F):
+def addVertexLoad(comm, forest, attr, assembler, F):
     # Retrieve octants from the forest
     octants = forest.getOctants()
     node_octs = forest.getNodesWithAttribute(attr)
@@ -26,9 +26,9 @@ def addVertexLoad(comm, order, forest, attr, assembler, F):
     node_range = forest.getNodeRange()
     mpi_rank = comm.Get_rank()
     for i in range(len(node_octs)):
-        if (node_octs[i].tag >= node_range[mpi_rank]) and \
-               (node_octs[i].tag < node_range[mpi_rank+1]): 
-            index = node_octs[i].tag-node_range[mpi_rank]
+        if (node_octs[i] >= node_range[mpi_rank]) and \
+               (node_octs[i] < node_range[mpi_rank+1]): 
+            index = node_octs[i]-node_range[mpi_rank]
             
             f_array[3*index] -= F[0]
             f_array[3*index+1] -= F[1]
@@ -52,7 +52,8 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     return aux
 
-def createTopoProblem(props, forest, order=2, nlevels=2):
+def createTopoProblem(props, forest, order=2, nlevels=2,
+                      Xscale=1.0):
     # Create the forest
     forests = []
     filters = []
@@ -72,7 +73,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2):
 
     # Make the creator class
     creator = CreateMe(bcs, filters[-1], props)
-    assemblers.append(creator.createTACS(order, forest))
+    assemblers.append(creator.createTACS(forest,scale=Xscale))
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 
@@ -89,7 +90,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2):
 
         # Make the creator class
         creator = CreateMe(bcs, filters[-1], props)
-        assemblers.append(creator.createTACS(order, forest))
+        assemblers.append(creator.createTACS(forest,scale=Xscale))
         varmaps.append(creator.getMap())
         vecindices.append(creator.getIndices())
 
@@ -167,17 +168,6 @@ topo = TMR.Topology(comm, model)
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 
-# Compute the volume of the bracket
-r = 10.0
-a = 50.0
-vol = r*r*a
-vol_frac = args.vol_frac
-
-# Set the fixed mass
-density = 2600.0
-initial_mass = vol*density
-m_fixed = vol_frac*initial_mass
-
 # Set the max nmber of iterations
 mg_levels = args.mg_levels
 max_iterations = len(mg_levels)
@@ -185,6 +175,17 @@ max_iterations = len(mg_levels)
 # Set parameters for later usage
 order = 2
 forest.createTrees(2)#args.init_depth)
+
+# Compute the volume of the bracket
+r = 1.0
+a = 5.0
+vol = r*r*a
+vol_frac = args.vol_frac
+
+# Set the fixed mass
+density = 2600.0
+initial_mass = vol*density
+m_fixed = vol_frac*initial_mass
 
 # The old filter/map classes
 old_filtr = None
@@ -201,12 +202,12 @@ filtr_volumes = None
 
 # Create the array of properties
 rho = [2600.0]#, 1300.0, 600.0]
-E = [70e6]#, 35e9, 10e9]
+E = [70e9]#, 35e9, 10e9]
 nu = [0.3]#, 0.3, 0.3]
 vars_per_node = 1
 
 # Set the values of the objective array
-obj_array = [ 1/(rho[0]*0.5) ]
+obj_array = [ 1.0e2 ]
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(rho, E, nu)
@@ -215,20 +216,22 @@ for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
     nlevs = mg_levels[ite]
     assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
-                                                          nlevels=nlevs)
+                                                          nlevels=nlevs,
+                                                          Xscale=0.1)
     
     # Write out just the mesh - for visualization
     flag = TACS.ToFH5.NODES
     f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
     f5.writeToFile(os.path.join(args.prefix, 'beam_mesh%d.f5'%(ite)))
-
+    
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
     # Add the point loads to the vertices
-    force1 = addVertexLoad(comm, order, forest, 'pt1', assembler,
-                           [0.0, -1000., 0.0])
-    force2 = addVertexLoad(comm, order, forest, 'pt2', assembler,
-                           [0.0, 0.0, -1000.])
+    T = 1e3
+    force1 = addVertexLoad(comm, forest, 'pt1', assembler,
+                           [0.0, -T, 0.0])
+    force2 = addVertexLoad(comm, forest, 'pt2', assembler,
+                           [0.0, 0.0, -T])
 
     force1.axpy(1.0, force2)
     force1.scale(-1.0)
@@ -239,18 +242,19 @@ for ite in xrange(max_iterations):
 
     # Set the frequency constraint
     #freq-1.5 >= 0.0
-    sigma = 200.0
-    num_eigs = 6
-    ks_weight = 10.0
-    offset = 0.0
-    scale = 1.0
-    max_lanczos = 50
+    sigma = 2e4
+    num_eigs = 20
+    ks_weight = 50.0
+    offset = -1e4#-2.5e4
+    scale = 1.0/3e5
+    max_lanczos = 100
     tol = 1e-30
     problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
-                                   offset, scale, max_lanczos, tol)
-    
-    #problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
-    problem.setObjective(obj_array, funcs)
+                                   offset, scale,
+                                   max_lanczos, tol)
+    # problem.setObjective(obj_array, funcs)
+    problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
+    problem.setObjective(obj_array)
  
     # Initialize the problem and set the prefix
     problem.initialize()
@@ -270,11 +274,8 @@ for ite in xrange(max_iterations):
         opt.setOutputFrequency(args.output_freq)
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
-
-        opt.checkGradients(1e-6)
-
-        sys.exit(0)
-
+        # opt.checkGradients(1e-6)
+        # asd
         # If the old filter exists, we're on the second iteration
         if old_filtr:
             # Create the interpolation
@@ -440,7 +441,7 @@ for ite in xrange(max_iterations):
 
     # Create refinement array
     num_elems = assembler.getNumElements()
-    refine = np.ones(num_elems, dtype=np.int32)
+    refine = np.zeros(num_elems, dtype=np.int32)
 
     # Refine based solely on the value of the density variable
     elems = assembler.getElements()
