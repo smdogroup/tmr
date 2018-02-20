@@ -1518,8 +1518,12 @@ cdef _init_OctForest(TMROctForest* ptr):
     forest.ptr.incref()
     return forest
 
-def LoadModel(char *filename, int print_lev=0):
-    cdef TMRModel *model = TMR_LoadModelFromSTEPFile(filename, print_lev)
+def LoadModel(str filename, int print_lev=0):
+    cdef TMRModel *model = NULL
+    if filename.lower().endswith(('step', 'stp')):
+        model = TMR_LoadModelFromSTEPFile(filename, print_lev)
+    elif filename.lower().endswith(('igs', 'iges')):
+        model = TMR_LoadModelFromIGESFile(filename, print_lev)
     return _init_Model(model)
    
 cdef class BoundaryConditions:
