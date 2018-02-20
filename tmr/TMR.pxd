@@ -386,6 +386,10 @@ cdef extern from "TMR_RefinementTools.h":
     double TMR_AdjointErrorEst(TMROctForest*, TACSAssembler*,
                                TMROctForest*, TACSAssembler*,
                                TACSBVec*, double*, double*)
+    cdef cppclass TMRStressConstraint(TMREntity):
+         TMRStressConstraint(TMROctForest*, TACSAssembler*, TacsScalar)
+         void evalConstraint(TACSBVec*)
+         void evalConDeriv(TacsScalar*, int, TACSBVec*)
 
 cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
