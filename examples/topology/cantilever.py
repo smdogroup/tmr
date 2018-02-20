@@ -16,8 +16,8 @@ class CreateMe(TMR.OctTopoCreator):
         stiff = TMR.OctStiffness(self.props, index, weights, q=5.0, eps=1e-6)
         elem = elements.Solid(2, stiff)
         return elem
-
-def addVertexLoad(comm, order, forest, attr, assembler, F):
+    
+def addVertexLoad(comm, forest, attr, assembler, F):
     # Retrieve octants from the forest
     octants = forest.getOctants()
     node_octs = forest.getNodesWithAttribute(attr)
@@ -26,9 +26,9 @@ def addVertexLoad(comm, order, forest, attr, assembler, F):
     node_range = forest.getNodeRange()
     mpi_rank = comm.Get_rank()
     for i in range(len(node_octs)):
-        if (node_octs[i].tag >= node_range[mpi_rank]) and \
-               (node_octs[i].tag < node_range[mpi_rank+1]): 
-            index = node_octs[i].tag-node_range[mpi_rank]
+        if (node_octs[i] >= node_range[mpi_rank]) and \
+               (node_octs[i] < node_range[mpi_rank+1]): 
+            index = node_octs[i]-node_range[mpi_rank]
             
             f_array[3*index] -= F[0]
             f_array[3*index+1] -= F[1]
@@ -72,7 +72,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2):
 
     # Make the creator class
     creator = CreateMe(bcs, filters[-1], props)
-    assemblers.append(creator.createTACS(order, forest))
+    assemblers.append(creator.createTACS(forest))
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 
@@ -89,7 +89,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2):
 
         # Make the creator class
         creator = CreateMe(bcs, filters[-1], props)
-        assemblers.append(creator.createTACS(order, forest))
+        assemblers.append(creator.createTACS(forest))
         varmaps.append(creator.getMap())
         vecindices.append(creator.getIndices())
 
@@ -225,9 +225,9 @@ for ite in xrange(max_iterations):
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
     # Add the point loads to the vertices
-    force1 = addVertexLoad(comm, order, forest, 'pt1', assembler,
+    force1 = addVertexLoad(comm, forest, 'pt1', assembler,
                            [0.0, -1000., 0.0])
-    force2 = addVertexLoad(comm, order, forest, 'pt2', assembler,
+    force2 = addVertexLoad(comm, forest, 'pt2', assembler,
                            [0.0, 0.0, -1000.])
     
     force1.axpy(1.0, force2)
