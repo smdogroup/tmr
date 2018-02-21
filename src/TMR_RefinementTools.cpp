@@ -3105,6 +3105,10 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
     }
 
     dfdu->setValues(len, nodes, dfduelem, TACS_ADD_VALUES);
+
+    // Compute dubar/du
+
+    // Compute the total Df/Du = df/du + (df/dubar)(dubar/du)
     
     // dfduderiv->setValues(len, nodes, dfdubar, TACS_ADD_VALUES);
   }
@@ -3281,5 +3285,119 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
     na++; nb++; nc++;
   }
 
+  return 0.0;
+}
+
+/*
+  Add the element contribution to the derivative dubar/du
+*/
+TACSScalar TMRStressConstraint::addEnrichDeriv( const TacsScalar Xpts[],
+                                                TMROctForest *forest,
+                                                const double pt[],
+                                                const TacsScalar J[],
+                                                const TacsScalar alpha,
+                                                const TacsScalar dfde[],
+                                                TacsScalar dubardu[]){
+
+  // Compute db/du ----------------
+  // Evaluate the product of the adjoint
+  double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, order);
+
+  // Evaluate the derivative
+  const int len = order*order*order;
+  const double *na = Na, *nb = Nb, *nc = Nc;
+  for ( int i = 0; i < len; i++ ){
+    TacsScalar Dx = na[0]*J[0] + nb[0]*J[3] + nc[0]*J[6];
+    TacsScalar Dy = na[0]*J[1] + nb[0]*J[4] + nc[0]*J[7];
+    TacsScalar Dz = na[0]*J[2] + nb[0]*J[5] + nc[0]*J[8];
+
+    /// plug these values of Dx, Dy, Dz into the db/du matrix at each point
+  
+
+  // Compute the A matrix ----------------
+  TacsScalar *A = &tmp[0];
+
+  // Get information about the interpolation
+  const double *knots;
+  const int order = forest->getInterpKnots(&knots);
+
+  // Get the number of enrichment functions
+  const int nenrich = getNum3dEnrich(order);
+
+  // The number of equations
+  const int neq = 3*order*order*order;
+
+  // The number of derivatives per node
+  const int deriv_per_node = 3*vars_per_node;  
+
+  // Set the weights 
+  double wvals[3];
+  if (order == 2){
+    wvals[0] = wvals[1] = 1.0;
+  }
+  else if (order == 3){
+    wvals[0] = wvals[2] = 0.5;
+    wvals[1] = 1.0;
+  }
+
+  for ( int c = 0, kk = 0; kk < order; kk++ ){
+    for ( int jj = 0; jj < order; jj++ ){
+      for ( int ii = 0; ii < order; ii++, c += 3 ){
+        // Set the parametric location within the element
+        double pt[3];
+        pt[0] = knots[ii];
+        pt[1] = knots[jj];
+        pt[2] = knots[kk];
+
+        // Compute the element shape functions at this point
+        double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+        double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+        double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+        double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+        forest->evalInterp(pt, N, Na, Nb, Nc);
+                
+        // Evaluate the Jacobian transformation at this point
+        TacsScalar Xd[9], J[9];
+        computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J, order*order*order);
+
+        // Now, evaluate the terms for the left-hand-side that
+        // contribute to the derivative
+        // xi,X = [X,xi]^{-1}
+        // U,X = U,xi*xi,X = U,xi*J^{T}        
+        double Nr[MAX_3D_ENRICH];
+        double Nar[MAX_3D_ENRICH], Nbr[MAX_3D_ENRICH], Ncr[MAX_3D_ENRICH];
+        if (order == 2){
+          eval2ndEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
+        }
+        else if (order == 3){
+          eval3rdEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
+        }
+
+        // Add the contributions to the the enricment 
+        for ( int i = 0; i < nenrich; i++ ){
+          TacsScalar d[3];
+          d[0] = Nar[i]*J[0] + Nbr[i]*J[1] + Ncr[i]*J[2];
+          d[1] = Nar[i]*J[3] + Nbr[i]*J[4] + Ncr[i]*J[5];
+          d[2] = Nar[i]*J[6] + Nbr[i]*J[7] + Ncr[i]*J[8];
+
+          A[neq*i+c] = wvals[ii]*wvals[jj]*wvals[kk]*d[0];
+          A[neq*i+c+1] = wvals[ii]*wvals[jj]*wvals[kk]*d[1];
+          A[neq*i+c+2] = wvals[ii]*wvals[jj]*wvals[kk]*d[2];
+        }
+      }
+    }
+  }
+
+  // Compute the product [A^T A]^-1 A^T ----------------
+
+  
+
+  // Evaluate dubar/du as [A^T A]^-1 A^T db/du ----------------
+  
+  
   return 0.0;
 }
