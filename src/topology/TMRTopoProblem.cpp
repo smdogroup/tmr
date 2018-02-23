@@ -298,6 +298,15 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   freq_ks_weight = 30.0;
   freq_offset = 0.0;
   freq_scale = 1.0;
+
+  // Set up the buckling constraint data
+  buck = NULL;
+  buck_eig_tol = 1e-8;
+  num_buck_eigvals = 5;
+  buck_ks_sum = 0.0;
+  buck_ks_weight = 30.0;
+  buck_offset = 0.0;
+  buck_scale = 1.0;
 }
 
 /*
@@ -732,6 +741,38 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
   freq_ks_weight = ks_weight;
   freq_offset = offset;
   freq_scale = scale;
+}
+
+/*
+  Add a buckling constraint
+*/
+void TMRTopoProblem::addBucklingConstraint( double sigma, 
+                                            int num_eigvals,
+                                            TacsScalar ks_weight,
+                                            TacsScalar offset, 
+                                            TacsScalar scale,
+                                            int max_lanczos,
+                                            double eigtol ){
+  if (!buck){
+    // Create a geometric stiffness matrix for buckling constraint
+    TACSMat *gmat = tacs[0]->createMat();
+    TACSMat *aux_mat = tacs[0]->createMat();
+    ksm->getOperators(&aux_mat, NULL);
+    // Create the buckling analysis object    
+    buck = new TACSLinearBuckling(tacs[0], sigma, gmat, mg->getMat(0),
+                                  aux_mat, ksm, max_lanczos, 
+                                  num_eigvals, eigtol);
+    buck->incref();
+  }
+
+  // Set a parameters that control how the natural frequency
+  // constraint is implemented
+  buck_eig_tol = eigtol;
+  num_buck_eigvals = num_eigvals;
+  buck_ks_sum = 0.0;
+  buck_ks_weight = ks_weight;
+  buck_offset = offset;
+  buck_scale = scale;
 }
 
 /*
