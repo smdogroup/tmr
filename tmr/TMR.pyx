@@ -1894,7 +1894,7 @@ def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
         free(oforest)
     free(assm)
     if mg != NULL:
-        return _init_Pc(mg)
+        return _init_Mg(mg)
     return None
 
 def strainEnergyError(forest, Assembler coarse,
