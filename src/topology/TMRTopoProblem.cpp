@@ -758,6 +758,7 @@ void TMRTopoProblem::addBucklingConstraint( double sigma,
     TACSMat *gmat = tacs[0]->createMat();
     TACSMat *aux_mat = tacs[0]->createMat();
     ksm->getOperators(&aux_mat, NULL);
+    
     // Create the buckling analysis object    
     buck = new TACSLinearBuckling(tacs[0], sigma, gmat, mg->getMat(0),
                                   aux_mat, ksm, max_lanczos, 
@@ -828,7 +829,9 @@ void TMRTopoProblem::initialize(){
   if (freq){
     num_constraints++;
   }
-
+  if (buck){
+    num_constraints++;
+  }
   // Set the problem sizes
   int nvars = x[0]->getArray(NULL);
   int nw = 0;
@@ -1485,6 +1488,79 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       cons[count] = freq_scale*(cons[count] + freq_offset);
       count++;
     }
+    // Compute the natural frequency constraint, if any
+    if (buck){
+      for ( int i = 0; i < num_load_cases; i++ ){
+        if (forces[i]){
+          // Keep track of the number of eigenvalues with unacceptable
+          // error. If more than one exists, re-solve the eigenvalue
+          // problem again.
+          int err_count = 1;
+
+          // Keep track of the smallest eigenvalue
+          double shift = 0.95;
+          TacsScalar smallest_eigval = 0.0;
+      
+          while (err_count > 0){
+            // Set the error counter to zero
+            err_count = 0;
+
+            // Solve the eigenvalue problem
+            buck->solve(forces[i],
+                        new KSMPrintStdout("KSM", mpi_rank, 1));
+            // Check eigenvector
+            printf("Orthogonal: %e\n", buck->checkOrthogonality());
+            for ( int k = 0; k < num_buck_eigvals; k++ ){
+              buck->checkEigenvector(k);
+            }
+            exit(0);
+            // Extract the first k eigenvalues
+            for ( int k = 0; k < num_buck_eigvals; k++ ){
+              TacsScalar error;
+              TacsScalar eigval = buck->extractEigenvalue(k, &error);
+              if (eigval < 0.0){ 
+                eigval *= -1.0; 
+              }
+
+              if (k == 0){
+                smallest_eigval = eigval;            
+              }
+              if (error > buck_eig_tol){
+                err_count++;
+              }
+            }
+
+            // If there is significant error in computing the eigenvalues,
+            // reset the buckling computation
+            if (err_count > 0){
+              double sigma = shift*smallest_eigval;
+              shift += 0.5*(1.0 - shift) + shift;
+              buck->setSigma(sigma);
+            }
+          }
+
+          // Evaluate the KS function of the lowest eigenvalues
+          buck_ks_sum = 0.0;
+
+          // Weight on the KS function
+          for (int k = 0; k < num_buck_eigvals; k++){
+            TacsScalar error;
+            TacsScalar eigval = buck->extractEigenvalue(k, &error);
+            if (eigval < 0.0){
+              eigval *= -1.0;
+            }
+
+            // Add up the contribution to the ks function
+            buck_ks_sum += exp(-buck_ks_weight*(eigval - smallest_eigval));
+          }
+
+          // Evaluate the KS function of the aggregation of the eigenvalues
+          cons[count] = (smallest_eigval - log(buck_ks_sum)/buck_ks_weight);
+          cons[count] = buck_scale*(cons[count] + buck_offset);
+          count++;
+        }
+      }
+    }
   }
   else {
     return 1;
@@ -1653,6 +1729,59 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
 
           // Scale the constraint by the frequency scaling value
           ks_grad_weight *= freq_scale;
+          
+          // Add contribution to eigenvalue gradient
+          for ( int j = 0; j < max_local_size; j++ ){
+            xlocal[j] += ks_grad_weight*temp[j];
+          }
+        }
+
+        // Free the data 
+        delete [] temp;
+
+        // Add the values for each constraint gradient
+        setBVecFromLocalValues(xlocal, A);
+        A->beginSetValues(TACS_ADD_VALUES);
+        A->endSetValues(TACS_ADD_VALUES);
+      }
+      
+      count++;
+    }
+    if (buck){
+      // Try to unwrap the vector
+      wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
+      if (wrap){
+        // Get the vector
+        TACSBVec *A = wrap->vec;
+        memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
+
+        TacsScalar *temp = new TacsScalar[max_local_size];
+        memset(temp, 0, max_local_size*sizeof(TacsScalar));
+
+        // Add the contribution from each eigenvalue derivative
+        TacsScalar smallest_eigval = 0.0;
+        for ( int k = 0; k < num_buck_eigvals; k++ ){
+          // Compute the derivaive of the eigenvalue
+          buck->evalEigenDVSens(k, temp, max_local_size);
+
+          // Extract the eigenvalue itself
+          TacsScalar error;
+          TacsScalar ks_grad_weight = 1.0;
+          TacsScalar eigval = buck->extractEigenvalue(k, &error);
+          if (eigval < 0.0){
+            eigval *= -1.0;
+            ks_grad_weight = -1.0;
+          }
+          if (k == 0){
+            smallest_eigval = eigval;
+          }
+
+          // Evaluate the weight on the gradient
+          ks_grad_weight *=
+            exp(-buck_ks_weight*(eigval - smallest_eigval))/buck_ks_sum;
+
+          // Scale the constraint by the buckling scaling value
+          ks_grad_weight *= buck_scale;
           
           // Add contribution to eigenvalue gradient
           for ( int j = 0; j < max_local_size; j++ ){

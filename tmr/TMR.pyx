@@ -2137,7 +2137,22 @@ cdef class TopoProblem(pyParOptProblemBase):
         prob.addFrequencyConstraint(sigma, num_eigvals, ks_weight,
                                     offset, scale, max_lanczos, eigtol)
         return
-
+    
+    def addBucklingConstraint(self, double sigma, int num_eigvals,
+                              TacsScalar ks_weight=30.0,
+                              TacsScalar offset=0.0, TacsScalar scale=0.0,
+                              int max_lanczos=100, double eigtol=1e-8):
+        '''
+        Add buckling/natural frequency constraints
+        '''
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.addBucklingConstraint(sigma, num_eigvals, ks_weight,
+                                   offset, scale, max_lanczos, eigtol)
+        return
+    
     def setObjective(self, list weights, list funcs=None):
         cdef int lenw = 0
         cdef TacsScalar *w = NULL
