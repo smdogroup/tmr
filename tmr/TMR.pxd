@@ -388,7 +388,7 @@ cdef extern from "TMR_RefinementTools.h":
                                TACSBVec*, double*, double*)
     cdef cppclass TMRStressConstraint(TMREntity):
          TMRStressConstraint(TMROctForest*, TACSAssembler*, TacsScalar)
-         void evalConstraint(TACSBVec*)
+         TacsScalar evalConstraint(TACSBVec*)
          void evalConDeriv(TacsScalar*, int, TACSBVec*)
 
 cdef extern from "TMRCyCreator.h":
