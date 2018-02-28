@@ -2816,6 +2816,9 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
   // Allocate a local vector
   uvec = tacs->createVec();
   uvec->incref();
+  // Allocate derivative vector
+  dfduderiv = tacs->createVec();
+  dfduderiv->incref();
 
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
@@ -2859,6 +2862,7 @@ TMRStressConstraint::~TMRStressConstraint(){
   weights->decref();
   uderiv->decref();
   uvec->decref();
+  dfduderiv->decref();
   delete [] Xpts;
   delete [] vars;
   delete [] dvars;
@@ -3092,8 +3096,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     TacsScalar dfdubar_prod[3*nenrich];
     memset(dfdubar_prod, 0, 3*nenrich*sizeof(TacsScalar));
 
-    TacsScalar *A = new TacsScalar[nenrich*nenrich]; //&tmp[0];
-    TacsScalar *dbdu = new TacsScalar[nenrich*nenrich]; //&tmp[0];
+    TacsScalar *A = new TacsScalar[neq*nenrich]; //&tmp[0];
+    TacsScalar *dbdu = new TacsScalar[neq*nenrich]; //&tmp[0];
 
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
@@ -3181,7 +3185,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     }
 
     dfdu->setValues(len, nodes, dfduelem, TACS_ADD_VALUES);
-
+    
     addEnrichDeriv(A, dbdu, dubardu);
     
     // Compute the product (df/dubar)(dubar/du)
@@ -3388,43 +3392,42 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   
   // Compute A^T A
   TacsScalar a = 1.0, b = 0.0;
-  BLASgemm( "T", "N", &m, &m, &n, &a, A, &m, A, &n, &b, ATA, &m);
+  BLASgemm("T", "N", &m, &m, &n, &a, A, &n, A, &n, &b, ATA, &m);
 
   // Factor A^T A
   int * ipiv = new int[ nenrich ];
   int info;
   LAPACKgetrf(&m, &m, ATA, &m, ipiv, &info);
-
+  
   // Invert A^T A
   int lwork = 10*18;
   TacsScalar work[10*18];
   LAPACKgetri(&m, ATA, &m, ipiv, work, &lwork, &info);
-
+  
   // Compute (A^T A)^-1 A^T
-  BLASgemm( "N", "T", &m, &n, &m, &a, ATA, &m, A, &m, &b, ATAi_AT, &m);
+  BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, ATAi_AT, &m);
   
   //
   //
   // Evaluate dubar/du as [A^T A]^-1 A^T db/du
   //
   //
-  TacsScalar *dubardu_pt = new TacsScalar[ nenrich*nenrich ];
-  BLASgemm( "N", "N", &m, &n, &m, &a, ATAi_AT, &m, dbdu, &n, &b, dubardu_pt, &m);
+  TacsScalar *dubardu_elem = new TacsScalar[ m*m ];
+  BLASgemm( "N", "N", &m, &m, &n, &a, ATAi_AT, &m, dbdu, &n, &b, dubardu_elem, &m); 
 
   // Allocate dubardu_elem to dubardu
   for (int i = 0; i < nenrich; i++ ){
     for ( int j = 0; j < nenrich; j++ ){
-      dubardu[nenrich*i + j] = dubardu_pt[nenrich*i + j];
+      dubardu[nenrich*i + j] = dubardu_elem[nenrich*i + j];
     }
   }
   
   // Delete variables
-  delete [] A;
   delete [] dbdu;
   delete [] ATA;
   delete [] ATAi_AT;
   delete [] ipiv;
-  delete [] dubardu_pt;
+  delete [] dubardu_elem;
   
   return 0.0;
 }
