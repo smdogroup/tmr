@@ -109,9 +109,8 @@ class TMRStressConstraint : public TMREntity {
                              const TacsScalar alpha, const TacsScalar dfde[],
                              TacsScalar dfdu[], TacsScalar dfdubar[] );
 
-  /* TacsScalar addEnrichDeriv( const double pt[], const TacsScalar J[], */
-  /*                            const TacsScalar scale, const int vars_per_node, */
-  /*                            TacsScalar dubardu[] ); */
+  TacsScalar addEnrichDeriv( TacsScalar A[], TacsScalar dbdu[], 
+                             TacsScalar dubardu[] );
   
   // The mesh order
   int order;
