@@ -8,7 +8,7 @@
 
 #include "TMRBase.h"
 #include "SolidStiffness.h"
-
+#include "YSlibrary.h"
 /*
   The TMRStiffnessProperties class
 */
@@ -18,7 +18,8 @@ class TMRStiffnessProperties : public TMREntity {
   
   // Set the stiffness properties
   TMRStiffnessProperties( int _nmats, TacsScalar *rho, 
-                          TacsScalar *_E, TacsScalar *_nu ){
+                          TacsScalar *_E, TacsScalar *_nu,
+                          TacsScalar *_ys=NULL){
     if (_nmats > MAX_NUM_MATERIALS){
       _nmats = MAX_NUM_MATERIALS;
     }
@@ -27,8 +28,12 @@ class TMRStiffnessProperties : public TMREntity {
       density[i] = rho[i];
       E[i] = _E[i];
       nu[i] = _nu[i];
+      ys[i] = 1.0e8;
       G[i] = 0.5*E[i]/(1.0 + nu[i]);
       D[i] = E[i]/((1.0 + nu[i])*(1.0 - 2.0*nu[i]));
+      if (_ys){
+        ys[i] = _ys[i];
+      }
     }
   }
                    
@@ -38,6 +43,7 @@ class TMRStiffnessProperties : public TMREntity {
   TacsScalar D[MAX_NUM_MATERIALS];
   TacsScalar nu[MAX_NUM_MATERIALS];
   TacsScalar G[MAX_NUM_MATERIALS];
+  TacsScalar ys[MAX_NUM_MATERIALS];
 };
 
 /*
@@ -84,6 +90,22 @@ class TMROctStiffness : public SolidStiffness {
   TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
     return rho[0]; 
   }
+
+  // Return the failure
+  // -------------------
+
+  void failure( const double pt[], 
+                const TacsScalar strain[],
+                TacsScalar * fail );
+
+  void addFailureDVSens( const double pt[], 
+                         const TacsScalar strain[],
+                         TacsScalar alpha,
+                         TacsScalar dvSens[], int dvLen );
+
+  void failureStrainSens(const double pt[],
+                         const TacsScalar strain[],
+                         TacsScalar sens[]);
 
  private:
   // The stiffness properties

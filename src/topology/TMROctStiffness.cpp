@@ -262,6 +262,131 @@ void TMROctStiffness::addPointwiseMassDVSens( const double pt[],
   }
 }
 
+// Evaluate the failure criteria
+void TMROctStiffness::failure( const double pt[], 
+                               const TacsScalar e[],
+                               TacsScalar * fail ){
+  if (nvars == 1){
+    // Use the von Mises failure criterion
+    // Compute the relaxation factor
+    TacsScalar r_factor = 1.0;
+    TacsScalar xw = 1.0*rho[0];
+    if (eps > 0.0){      
+      r_factor = xw/(eps*(1.0-xw)+xw);
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor = pow(xw,p);
+    }
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+    TacsScalar s[6];
+   
+    // Compute the resulting stress
+    s[0] = D*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
+    s[1] = D*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
+    s[2] = D*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
+    s[3] = G*e[3];
+    s[4] = G*e[4];
+    s[5] = G*e[5];
+    
+    *fail = r_factor*VonMisesFailure3D(s,ys);
+  }
+  else {
+    printf("Not implemented yet \n");
+  }
+}
+// Evaluate the failure criteria w.r.t. design variables
+void TMROctStiffness::addFailureDVSens( const double pt[], 
+                                        const TacsScalar e[],
+                                        TacsScalar alpha,
+                                        TacsScalar dvSens[], 
+                                        int dvLen ){
+  if (nvars == 1){
+    // Compute the relaxation factor
+    TacsScalar r_factor_sens = 0.0;
+    TacsScalar xw = 1.0*rho[0];
+    if (eps > 0.0){
+      TacsScalar d = 1.0/(eps*(1.0-xw)+xw);
+      r_factor_sens = eps*d*d;
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor_sens = pow(xw,p-1)*p;
+    }
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+    TacsScalar s[6];
+    // Compute the resulting stress
+    s[0] = D*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
+    s[1] = D*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
+    s[2] = D*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
+    s[3] = G*e[3];
+    s[4] = G*e[4];
+    s[5] = G*e[5];
+
+    TacsScalar fail = VonMisesFailure3D(s,ys);
+    TacsScalar inner = alpha*r_factor_sens*fail;
+    for ( int i = 0; i < nweights; i++ ){
+      dvSens[weights[i].index] += weights[i].weight*inner;
+    }
+  }
+  else {
+    printf("Not implemented yet \n");
+  }
+}
+void TMROctStiffness::failureStrainSens( const double pt[], 
+                                         const TacsScalar e[],
+                                         TacsScalar sens[]){
+  if (nvars == 1){ 
+    TacsScalar s[6], ps_sens[6];
+    // Use the von Mises failure criterion
+    // Compute the relaxation factor
+    TacsScalar r_factor = 1.0;
+    TacsScalar xw = 1.0*rho[0];
+    if (eps > 0.0){
+      r_factor = xw/(eps*(1.0-xw)+xw);
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor = pow(xw,p);
+    }
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+    // Compute the resulting stress
+    s[0] = D*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
+    s[1] = D*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
+    s[2] = D*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
+    s[3] = G*e[3];
+    s[4] = G*e[4];
+    s[5] = G*e[5];
+    TacsScalar fail = VonMisesFailure3DStressSens(ps_sens, s, ys);
+  
+    sens[0] = r_factor*D*((1.0-nu)*ps_sens[0] + nu*(ps_sens[1] +
+                                                    ps_sens[2]));
+    sens[1] = r_factor*D*((1.0-nu)*ps_sens[1] + nu*(ps_sens[0] +
+                                                    ps_sens[2]));
+    sens[2] = r_factor*D*((1.0-nu)*ps_sens[2] + nu*(ps_sens[0] +
+                                                    ps_sens[1]));
+      
+    sens[3] = r_factor*G*ps_sens[3];
+    sens[4] = r_factor*G*ps_sens[4];
+    sens[5] = r_factor*G*ps_sens[5];
+  }
+  else {
+    printf("Not implemented yet \n");
+  }
+}
+
 /*
   Create the octree stiffness object based on an interpolation from
   the filter variables
