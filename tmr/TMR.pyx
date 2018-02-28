@@ -1404,6 +1404,17 @@ cdef class OctForest:
     def setTopology(self, Topology topo):
         self.ptr.setTopology(topo.ptr)
 
+    def setConnectivity(self, np.ndarray[int, ndim=2, mode='c'] conn):
+        '''Set non-degenerate connectivity'''
+        cdef int num_nodes = 0
+        cdef int num_blocks = 0
+        if conn.shape[1] != 8:
+            errmsg = 'Expected array of shape (n, 8)'
+            raise ValueError(errmsg)
+        num_blocks = conn.shape[0]
+        num_nodes = np.max(conn)+1
+        self.ptr.setConnectivity(num_nodes, <int*>conn.data, num_blocks)
+
     def repartition(self):
         self.ptr.repartition()
 
@@ -1894,7 +1905,7 @@ def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
         free(oforest)
     free(assm)
     if mg != NULL:
-        return _init_Pc(mg)
+        return _init_Mg(mg)
     return None
 
 def strainEnergyError(forest, Assembler coarse,
