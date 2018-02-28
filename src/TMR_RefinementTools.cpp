@@ -778,7 +778,6 @@ static void computeElemRecon3D( const int vars_per_node,
         pt[0] = knots[ii];
         pt[1] = knots[jj];
         pt[2] = knots[kk];
-        printf("Point[%d %d %d]: %f %f %f", ii, jj, kk, pt[0], pt[1], pt[2]);
 
         // Compute the element shape functions at this point
         double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
@@ -2912,12 +2911,12 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // Retrieve the nodal values and nodal derivatives
     uvec->getValues(len, nodes, vars);
     uderiv->getValues(len, nodes, varderiv);
-
+    
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
-
+    
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
     FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
@@ -2937,11 +2936,11 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
           // Evaluate the strain
           TacsScalar J[9], e[6];
           evalStrain(pt, Xpts, vars, ubar, J, e);
-
+          
           // Evaluate the failure criteria
           TacsScalar fval;
           con->failure(pt, e, &fval);
-
+          
           if (TacsRealPart(fval) > 
               TacsRealPart(ks_max_fail)){
             ks_max_fail = fval;
@@ -3020,17 +3019,20 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 /*
   Evaluate the derivative w.r.t. state and design vectors
 */
-void TMRStressConstraint::evalConDeriv( TMROctForest *forest, TacsScalar *dfdx,
+void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
                                         int size, TACSBVec *dfdu ){
 
   // Get information about the interpolation
-  const double *knots;
+  const double *knots; 
   const int order = forest->getInterpKnots(&knots);
   
   const int vars_per_node = tacs->getVarsPerNode();
 
   // Set the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
+  int m = nenrich;
+
+  const int neq = 3*order*order*order;
 
   // Set the derivative of the function w.r.t. the state variables
   dfdu->zeroEntries();
@@ -3084,25 +3086,32 @@ void TMRStressConstraint::evalConDeriv( TMROctForest *forest, TacsScalar *dfdx,
     memset(dfdubar, 0, 3*nenrich*sizeof(TacsScalar));
 
     // Set temporary values
-    TacsScalar dudubar[3*16];
-    memset(dudubar, 0, 3*nenrich*sizeof(TacsScalar));
+    TacsScalar dubardu[nenrich*nenrich];
+    memset(dubardu, 0, nenrich*nenrich*sizeof(TacsScalar));
 
-    TacsScalar *A = &tmp[0];
-    TacsScalar *dbdu = &tmp[0];
+    TacsScalar dfdubar_prod[3*nenrich];
+    memset(dfdubar_prod, 0, 3*nenrich*sizeof(TacsScalar));
+
+    TacsScalar *A = new TacsScalar[nenrich*nenrich]; //&tmp[0];
+    TacsScalar *dbdu = new TacsScalar[nenrich*nenrich]; //&tmp[0];
 
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
-    for ( int kk = 0; kk < order; kk++ ){
+    for ( int c = 0, kk = 0; kk < order; kk++ ){
       for ( int jj = 0; jj < order; jj++ ){
-        for ( int ii = 0; ii < order; ii++ ){
+        for ( int ii = 0; ii < order; ii++, c += 3 ){
           // Pick the quadrature point at which we will
           // evaluate the strain
           double pt[3];
           pt[0] = gaussPts[ii];
           pt[1] = gaussPts[jj];
           pt[2] = gaussPts[kk];
-          kt[0] = knots[ii];
 
+          double kt[3];
+          kt[0] = knots[ii];
+          kt[1] = knots[jj];
+          kt[2] = knots[kk];
+          
           // Evaluate the strain
           TacsScalar J[9], e[6];
           TacsScalar detJ = evalStrain(pt, Xpts, vars, ubar, J, e);
@@ -3125,24 +3134,63 @@ void TMRStressConstraint::evalConDeriv( TMROctForest *forest, TacsScalar *dfdx,
           // Add the derivative of the strain
           addStrainDeriv(pt, J, kw, dfde, dfduelem, dfdubar);
 
-          // Compute A
+          //
+          // Compute A and dbdu
+          //
 
+          // Compute the element shape functions at this point
+          double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          forest->evalInterp(kt, N, Na, Nb, Nc);
 
-          // Compute dbdu
+          double Nr[MAX_3D_ENRICH];
+          double Nar[MAX_3D_ENRICH], Nbr[MAX_3D_ENRICH], Ncr[MAX_3D_ENRICH];
+          if (order == 2){
+            eval2ndEnrichmentFuncs3D(kt, Nr, Nar, Nbr, Ncr);
+          }
+          else if (order == 3){
+            eval3rdEnrichmentFuncs3D(kt, Nr, Nar, Nbr, Ncr);
+          }
 
+          // Add the contributions to the the enricment 
+          for ( int i = 0; i < nenrich; i++ ){
+            // Compute and assemble dbdu
+            TacsScalar d[3];
+            d[0] = Na[i]*J[0] + Nb[i]*J[1] + Nc[i]*J[2];
+            d[1] = Na[i]*J[3] + Nb[i]*J[4] + Nc[i]*J[5];
+            d[2] = Na[i]*J[6] + Nb[i]*J[7] + Nc[i]*J[8];
 
-          
+            dbdu[neq*i+c] = wvals[ii]*wvals[jj]*wvals[kk]*d[0];
+            dbdu[neq*i+c+1] = wvals[ii]*wvals[jj]*wvals[kk]*d[1];
+            dbdu[neq*i+c+2] = wvals[ii]*wvals[jj]*wvals[kk]*d[2];
+
+            // Compute and assemble A
+            TacsScalar dr[3];
+            dr[0] = Nar[i]*J[0] + Nbr[i]*J[1] + Ncr[i]*J[2];
+            dr[1] = Nar[i]*J[3] + Nbr[i]*J[4] + Ncr[i]*J[5];
+            dr[2] = Nar[i]*J[6] + Nbr[i]*J[7] + Ncr[i]*J[8];
+            
+            A[neq*i+c] = wvals[ii]*wvals[jj]*wvals[kk]*dr[0];
+            A[neq*i+c+1] = wvals[ii]*wvals[jj]*wvals[kk]*dr[1];
+            A[neq*i+c+2] = wvals[ii]*wvals[jj]*wvals[kk]*dr[2];
+          }
         }
       }
     }
 
     dfdu->setValues(len, nodes, dfduelem, TACS_ADD_VALUES);
 
-    //addEnrichDeriv(pt, J, hscale, vars_per_node, dubardu);
+    addEnrichDeriv(A, dbdu, dubardu);
     
     // Compute the product (df/dubar)(dubar/du)
+    TacsScalar a = 1.0, b = 0.0;
+    int k = 3;
+    BLASgemm("N", "N", &m, &k, &m, &a, dubardu, &m,
+             dfdubar, &m, &b, dfdubar_prod, &m);
     
-    // dfduderiv->setValues(len, nodes, dfdubar, TACS_ADD_VALUES);
+    dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
   }
 
   tacs->applyBCs(dfdu);
@@ -3162,13 +3210,13 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
   double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
   double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
   double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+  
   FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, order);
-
   // First evaluate the contributions to the derivatives from
   // the regular element interpolation
   TacsScalar Ud[9], Xd[9];
-  memset(Ud, 0, 9*sizeof(TacsScalar));
-  memset(Xd, 0, 9*sizeof(TacsScalar));          
+  memset(Ud, 0.0, 9*sizeof(TacsScalar));
+  memset(Xd, 0.0, 9*sizeof(TacsScalar));          
 
   // Evaluate the derivative
   const TacsScalar *u = vars;
@@ -3177,36 +3225,35 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
   const int len = order*order*order;
   for ( int i = 0; i < len; i++ ){
     // Compute the inverse of the Jacobian transformation
-    Xd[0] += na[i]*x[0];
-    Xd[1] += nb[i]*x[0];
-    Xd[2] += nc[i]*x[0];
+    Xd[0] += Na[i]*x[0];
+    Xd[1] += Nb[i]*x[0];
+    Xd[2] += Nc[i]*x[0];
 
-    Xd[3] += na[i]*x[1];
-    Xd[4] += nb[i]*x[1];
-    Xd[5] += nc[i]*x[1];
+    Xd[3] += Na[i]*x[1];
+    Xd[4] += Nb[i]*x[1];
+    Xd[5] += Nc[i]*x[1];
 
-    Xd[6] += na[i]*x[2];
-    Xd[7] += nb[i]*x[2];
-    Xd[8] += nc[i]*x[2];
+    Xd[6] += Na[i]*x[2];
+    Xd[7] += Nb[i]*x[2];
+    Xd[8] += Nc[i]*x[2];
 
     // Compute the displacement gradient
-    Ud[0] += na[i]*u[0];
-    Ud[1] += nb[i]*u[0];
-    Ud[2] += nc[i]*u[0];
+    Ud[0] += Na[i]*u[0];
+    Ud[1] += Nb[i]*u[0];
+    Ud[2] += Nc[i]*u[0];
 
-    Ud[3] += na[i]*u[1];
-    Ud[4] += nb[i]*u[1];
-    Ud[5] += nc[i]*u[1];
+    Ud[3] += Na[i]*u[1];
+    Ud[4] += Nb[i]*u[1];
+    Ud[5] += Nc[i]*u[1];
 
-    Ud[6] += na[i]*u[2];
-    Ud[7] += nb[i]*u[2];
-    Ud[8] += nc[i]*u[2];
-
+    Ud[6] += Na[i]*u[2];
+    Ud[7] += Nb[i]*u[2];
+    Ud[8] += Nc[i]*u[2];
+   
     x += 3;
     u += 3;
-    na++; nb++; nc++;
   }
-
+  
   // Invert the derivatives to obtain the Jacobian
   // transformation matrixx and its determinant
   TacsScalar detJ = FElibrary::jacobian3d(Xd, J);
@@ -3241,7 +3288,7 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
     Ud[8] += ubar[2]*nc[i];
 
     ubar += 3;
-    na++; nb++; nc++;
+    //na++; nb++; nc++;
   }
 
   // Compute the displacement gradient
@@ -3323,126 +3370,61 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
 /*
   Add the element contribution to the derivative dubar/du
 */
-// TacsScalar TMRStressConstraint::addEnrichDeriv( const double pt[],
-//                                                 const TacsScalar J[],
-//                                                 const TacsScalar scale,
-//                                                 const int vars_per_node,
-//                                                 TacsScalar dubardu[]){
+TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
+                                                TacsScalar dbdu[],
+                                                TacsScalar dubardu[]){
   
-//   // Get the number of enrichment functions
-//   const int nenrich = getNum3dEnrich(order);
+  // Get the number of enrichment functions
+  const int nenrich = getNum3dEnrich(order);
 
-//   // The number of equations
-//   const int neq = 3*order*order*order;
+  // The number of equations
+  const int neq = 3*order*order*order;
 
-//   // The number of derivatives per node
-//   const int deriv_per_node = 3*vars_per_node;  
-
-//   // Initialize the variables
-//   TacsScalar *A = new TacsScalar[ neq*nenrich ];
-//   TacsScalar *dbdu = new TacsScalar[ neq*nenrich ];
-              
-//   // Compute the element shape functions at this point
-//   double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-//   double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-//   double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-//   double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-//   FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, order);
-                
-//   //
-//   //
-//   // Compute db/du
-//   //
-//   //
-//   for (int i = 0; i < nenrich; i++ ){
-//     for ( int j = 0; j < nenrich; j++ ){
-//       TacsScalar Dx = Na[j]*J[0] + Nb[j]*J[3] + Nc[j]*J[6];
-//       TacsScalar Dy = Na[j]*J[1] + Nb[j]*J[4] + Nc[j]*J[7];
-//       TacsScalar Dz = Na[j]*J[2] + Nb[j]*J[5] + Nc[j]*J[8];
-//       dbdu[j + nenrich*3*i] = Dx;
-//       dbdu[j + nenrich*(3*i + 1)] = Dy;
-//       dbdu[j + nenrich*(3*i + 2)] = Dz;
-//     }
-//   }
-        
-//   //
-//   //
-//   // Compute the A matrix
-//   //
-//   //       
-//   double Nr[MAX_3D_ENRICH];
-//   double Nar[MAX_3D_ENRICH], Nbr[MAX_3D_ENRICH], Ncr[MAX_3D_ENRICH];
-//   if (order == 2){
-//     eval2ndEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
-//   }
-//   else if (order == 3){
-//     eval3rdEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
-//   }
-
-//   // Add the contributions to the the enricment
+  // Initialize variables
+  int m = nenrich;
+  int n = neq;
+  TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
+  TacsScalar *ATAi_AT = new TacsScalar[m*n]; // store (A^T A)^-1 A^T
   
-//   for ( int i = 0; i < nenrich; i++ ){
-//     TacsScalar d[3];
-//     d[0] = Nar[i]*J[0] + Nbr[i]*J[1] + Ncr[i]*J[2];
-//     d[1] = Nar[i]*J[3] + Nbr[i]*J[4] + Ncr[i]*J[5];
-//     d[2] = Nar[i]*J[6] + Nbr[i]*J[7] + Ncr[i]*J[8];
+  // Compute A^T A
+  TacsScalar a = 1.0, b = 0.0;
+  BLASgemm( "T", "N", &m, &m, &n, &a, A, &m, A, &n, &b, ATA, &m);
 
-//     A[neq*i] = scale*d[0];
-//     A[neq*i+1] = scale*d[1];
-//     A[neq*i+2] = scale*d[2];
-//   }
+  // Factor A^T A
+  int * ipiv = new int[ nenrich ];
+  int info;
+  LAPACKgetrf(&m, &m, ATA, &m, ipiv, &info);
+
+  // Invert A^T A
+  int lwork = 10*18;
+  TacsScalar work[10*18];
+  LAPACKgetri(&m, ATA, &m, ipiv, work, &lwork, &info);
+
+  // Compute (A^T A)^-1 A^T
+  BLASgemm( "N", "T", &m, &n, &m, &a, ATA, &m, A, &m, &b, ATAi_AT, &m);
   
-//   //
-//   //
-//   // Compute the product [A^T A]^-1 A^T
-//   //
-//   //
+  //
+  //
+  // Evaluate dubar/du as [A^T A]^-1 A^T db/du
+  //
+  //
+  TacsScalar *dubardu_pt = new TacsScalar[ nenrich*nenrich ];
+  BLASgemm( "N", "N", &m, &n, &m, &a, ATAi_AT, &m, dbdu, &n, &b, dubardu_pt, &m);
 
-//   // Initialize variables
-//   int m = nenrich;
-//   int n = neq;
-//   TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
-//   TacsScalar *ATAi_AT = new TacsScalar[m*n]; // store (A^T A)^-1 A^T
+  // Allocate dubardu_elem to dubardu
+  for (int i = 0; i < nenrich; i++ ){
+    for ( int j = 0; j < nenrich; j++ ){
+      dubardu[nenrich*i + j] = dubardu_pt[nenrich*i + j];
+    }
+  }
   
-//   // Compute A^T A
-//   TacsScalar a = 1.0, b = 0.0;
-//   BLASgemm( "T", "N", &m, &m, &n, &a, A, &m, A, &n, &b, ATA, &m);
-
-//   // Factor A^T A
-//   int * ipiv = new int[ nenrich ];
-//   int info;
-//   LAPACKgetrf(&m, &m, ATA, &m, ipiv, &info);
-
-//   // Invert A^T A
-//   int lwork = 10*18;
-//   TacsScalar work[10*18];
-//   LAPACKgetri(&m, ATA, &m, ipiv, work, &lwork, &info);
-
-//   // Compute (A^T A)^-1 A^T
-//   BLASgemm( "N", "T", &m, &n, &m, &a, ATA, &m, A, &m, &b, ATAi_AT, &m);
+  // Delete variables
+  delete [] A;
+  delete [] dbdu;
+  delete [] ATA;
+  delete [] ATAi_AT;
+  delete [] ipiv;
+  delete [] dubardu_pt;
   
-//   //
-//   //
-//   // Evaluate dubar/du as [A^T A]^-1 A^T db/du
-//   //
-//   //
-//   TacsScalar *dubardu_pt = new TacsScalar[ nenrich*nenrich ];
-//   BLASgemm( "N", "N", &m, &n, &m, &a, ATAi_AT, &m, dbdu, &n, &b, dubardu_pt, &m);
-
-//   // Allocate dubardu_elem to dubardu
-//   for (int i = 0; i < nenrich; i++ ){
-//     for ( int j = 0; j < nenrich; j++ ){
-//       dubardu[nenrich*i + j] = dubardu_pt[nenrich*i + j];
-//     }
-//   }
-  
-//   // Delete variables
-//   delete [] A;
-//   delete [] dbdu;
-//   delete [] ATA;
-//   delete [] ATAi_AT;
-//   delete [] ipiv;
-//   delete [] dubardu_pt;
-  
-//   return 0.0;
-// }
+  return 0.0;
+}
