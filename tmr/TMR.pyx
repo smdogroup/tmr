@@ -1996,7 +1996,7 @@ cdef class StressConstraint:
         return self.ptr.evalConstraint(uvec.ptr)
 
     def evalConDeriv(self,
-                     np.ndarray[int, ndim=1, mode='c'] dfdx,
+                     np.ndarray[double, ndim=1, mode='c'] dfdx,
                      Vec dfdu):
         cdef int size = len(dfdx)
         self.ptr.evalConDeriv(<TacsScalar*>dfdx.data, size,
