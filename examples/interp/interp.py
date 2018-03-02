@@ -5,7 +5,6 @@ from tacs import TACS
 
 conn = np.array([[0, 1, 3, 4, 6, 7, 9, 10],
                  [8, 11, 2, 5, 7, 10, 1, 4]], dtype=np.intc)
-
 comm = MPI.COMM_WORLD
 
 fine = TMR.OctForest(comm)

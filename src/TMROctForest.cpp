@@ -6034,6 +6034,23 @@ getNodesWithAttribute()\n");
 /*
   Given a node, find the enclosing octant
 
+  x ----------- x ----------- x
+  |             |             |
+  |             |             |
+  |             |             |
+  |             |             |
+  |             |             |
+  x -----o----- x ---- o ---- x
+  |      |      |      |      |
+  |      |      |      |      |
+  o ---- o ---- o ---- o ---- o
+  |      |      |      |      |
+  |      |      |      |      |
+  x ---- o ---- x ---- o ---- x
+
+
+
+
   This code is used to find the octant in the octant array that
   encloses the given node.
 */
@@ -6171,8 +6188,8 @@ TMROctant* TMROctForest::findEnclosing( const int order,
     *mpi_owner = rank;
   }
 
- // No octant was found, return NULL
- return NULL;
+  // No octant was found, return NULL
+  return NULL;
 }
 
 /*
@@ -6491,8 +6508,9 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
 
   // Recv the nodes and loop over the connectivity
   for ( int i = 0; i < recv_size; i++ ){
+    int mpi_owner;
     TMROctant *t = coarse->findEnclosing(mesh_order, interp_knots,
-                                         &recv_nodes[i]);
+                                         &recv_nodes[i], &mpi_owner);
 
     if (t){
       // Compute the element interpolation
@@ -6508,7 +6526,11 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
     else {
       // This should not happen. Print out an error message here.
       fprintf(stderr, 
-              "TMROctForest: Destination processor does not own node\n");
+              "[%d] TMROctForest: Destination processor does not own node\n",
+              mpi_rank);
+      fprintf(stderr, "[%d] block = %d coords = %d %d %d info = %d Actual owner = %d\n", 
+        mpi_rank, recv_nodes[i].block, recv_nodes[i].x,
+        recv_nodes[i].y, recv_nodes[i].z, recv_nodes[i].info, mpi_owner);
     }
   }
 

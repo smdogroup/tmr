@@ -4,8 +4,6 @@ from subprocess import check_output
 # Numpy/mpi4py must be installed prior to installing TACS
 import numpy
 import mpi4py
-import tacs
-import paropt
 
 # Import distutils
 from setuptools import setup
@@ -48,17 +46,9 @@ inc_dirs.extend(get_global_dir(rel_inc_dirs))
 lib_dirs.extend(get_global_dir(rel_lib_dirs))
 
 # Add the include directories from OpenCascade
-if 'CASARCH' in os.environ:
-    for sufix in ['include/oce', 'inc', 'include']:
-      cas_inc = os.path.join(os.environ['CASROOT'], 
-                             os.environ['CASARCH'], sufix)
-      if os.path.isdir(cas_inc):
-        inc_dirs.append(cas_inc)
-        break
-else:
-    for sufix in ['include/oce', 'inc', 'include']:
-      cas_inc = os.path.join(os.environ['CASROOT'], sufix)
-      if os.path.isdir(cas_inc):
+for sufix in ['include/oce', 'inc', 'include']:
+    cas_inc = os.path.join(os.environ['CASROOT'], sufix)
+    if os.path.isdir(cas_inc):
         inc_dirs.append(cas_inc)
         break
 
@@ -69,24 +59,26 @@ inc_dirs.extend(get_global_dir(default_ext_inc))
 
 # Add the numpy/mpi4py/tacs/paropt include directories
 inc_dirs.extend([numpy.get_include(), mpi4py.get_include()])
-inc_dirs.extend(tacs.get_include())
-inc_dirs.extend(tacs.get_cython_include())
-inc_dirs.extend(paropt.get_include())
-inc_dirs.extend(paropt.get_cython_include())
-
-# Add the TACS libraries
-tacs_lib_dirs, tacs_libs = tacs.get_libraries()
-lib_dirs.extend(tacs_lib_dirs)
-libs.extend(tacs_libs)
-
-# Add the ParOpt libraries
-paropt_lib_dirs, paropt_libs = paropt.get_libraries()
-lib_dirs.extend(paropt_lib_dirs)
-libs.extend(paropt_libs)
 
 # Add tmr/lib as a runtime directory
 runtime_lib_dirs = get_global_dir(['lib'])
+
+# Add the TACS libraries
+import tacs
+inc_dirs.extend(tacs.get_include())
+inc_dirs.extend(tacs.get_cython_include())
+tacs_lib_dirs, tacs_libs = tacs.get_libraries()
+lib_dirs.extend(tacs_lib_dirs)
+libs.extend(tacs_libs)
 runtime_lib_dirs.extend(tacs_lib_dirs)
+
+# Add the ParOpt libraries
+import paropt
+inc_dirs.extend(paropt.get_include())
+inc_dirs.extend(paropt.get_cython_include())
+paropt_lib_dirs, paropt_libs = paropt.get_libraries()
+lib_dirs.extend(paropt_lib_dirs)
+libs.extend(paropt_libs)
 runtime_lib_dirs.extend(paropt_lib_dirs)
 
 exts = []
