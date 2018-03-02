@@ -6032,27 +6032,172 @@ getNodesWithAttribute()\n");
 }
 
 /*
-  Given a node, find the enclosing octant
+  Compare the node and the element to one another:
 
-  x ----------- x ----------- x
-  |             |             |
-  |             |             |
-  |             |             |
-  |             |             |
-  |             |             |
-  x -----o----- x ---- o ---- x
-  |      |      |      |      |
-  |      |      |      |      |
-  o ---- o ---- o ---- o ---- o
-  |      |      |      |      |
-  |      |      |      |      |
-  x ---- o ---- x ---- o ---- x
+  node ? element
 
+  where the element's lower left node location is compared against the
+  absolute node location.
 
+  If ? = '<' a negative number is returned, if ? = '==' 0 is returned
+  and if ? = '>' a positive number is returned.
+*/
+static int compare_node_to_element( const int order,
+                                    const double *knots,
+                                    const TMROctant *node,
+                                    const TMROctant *element ){
+  if (node->block != element->block){
+    return node->block - element->block;
+  }
 
+  // Compute the edge-length of the node element
+  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
+    
+  // Compute the ii/jj/kk locations
+  const int i = node->info % order;
+  const int j = (node->info % (order*order))/order;
+  const int k = node->info/(order*order);
+
+  // The coordinates
+  double x = 0.0, y = 0.0, z = 0.0;
+  
+  // Do a comparison of the x coordinates
+  int xstat = 0;
+  if (i == 0 || i == order-1){
+    xstat = node->x + h*(i/(order-1)) - element->x;
+    if (xstat < 0){
+      x = element->x;
+    }
+    else {
+      x = node->x + h*(i/(order-1));
+    }
+  }
+  else if (order % 2 == 1 && i == (order/2)){
+    xstat = node->x + h/2 - element->x;
+    if (xstat < 0){
+      x = element->x;
+    }
+    else {
+      x = node->x + h/2;
+    }
+  }
+  else {
+    x = node->x + 0.5*h*(1.0 + knots[i]);
+    if (x < element->x){
+      xstat = -1;
+      x = element->x;
+    }
+    else if (x == element->x){
+      xstat = 0;
+    }
+    else {
+      xstat = 1;
+    }
+  }
+  
+  // Do a comparison of the y coordinates
+  int ystat = 0;
+  if (j == 0 || j == order-1){
+    ystat = node->y + h*(j/(order-1)) - element->y;
+    if (ystat < 0){
+      y = element->y;
+    }
+    else {
+      y = node->y + h*(j/(order-1));
+    }
+  }
+  else if (order % 2 == 1 && j == (order/2)){
+    ystat = node->y + h/2 - element->y;
+    if (ystat < 0){
+      y = element->y;
+    }
+    else {
+      y = node->y + h/2;
+    }
+  }
+  else {
+    y = node->y + 0.5*h*(1.0 + knots[j]);
+    if (y < element->y){
+      ystat = -1;
+      y = element->y;
+    }
+    else if (y == element->y){
+      ystat = 0;
+    }
+    else {
+      ystat = 1;
+    }
+  }
+
+  // Do a comparison of the z coordinates
+  int zstat = 0;
+  if (k == 0 || k == order-1){
+    zstat = node->z + h*(k/(order-1)) - element->z;
+    if (zstat < 0){
+      z = element->z;
+    }
+    else {
+      z = node->z + h*(k/(order-1));
+    }
+  }
+  else if (order % 2 == 1 && k == (order/2)){
+    zstat = node->z + h/2 - element->z;
+    if (zstat < 0){
+      z = element->z;
+    }
+    else {
+      z = node->z + h/2;
+    }
+  }
+  else {
+    z = node->z + 0.5*h*(1.0 + knots[k]);
+    if (z < element->z){
+      zstat = -1;
+      z = element->z;
+    }
+    else if (z == element->z){
+      zstat = 0;
+    }
+    else {
+      zstat = 1;
+    }
+  }
+  
+  
+  if (x > y && x > z){
+    return xstat;
+  }
+  else if (y > x && y > z){
+    return ystat;
+  }
+  else {
+    return zstat;
+  }
+}
+
+/*
+  Given a node, find the enclosing octant.
 
   This code is used to find the octant in the octant array that
-  encloses the given node.
+  encloses the given node.  The 'node' consists of an octant enriched
+  with the flattened node location information stored in the info
+  member. 'info' in this case is info = i + j*order +
+  k*order*order. The enclosing octant must enclose the node location,
+  not just node's element octant.
+  
+  This is shown below for an example. Here NE denotes the element node
+  octant, with a spacing of 2h, with order = 2 and info = 3. The node
+  itself is denoted by N. However, the element containing N is E and
+  is one level finer than the node octant NE.
+
+  o -----o----- N
+  |      |      |
+  |      |      |
+  o ---- E ---- o
+  |      |      |
+  |      |      |
+  NE---- o ---- o
+
 */
 TMROctant* TMROctForest::findEnclosing( const int order, 
                                         const double *knots,
@@ -6086,6 +6231,20 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   const double yd = y + 0.5*h*(1.0 + knots[jj]);
   const double zd = z + 0.5*h*(1.0 + knots[kk]);
 
+  for ( int i = 0; i < size; i++ ){
+    // Check if array[i] contains the provided octant
+    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[i].level);
+
+    // Check whether the node is contained within the array
+    if ((array[i].block == block) &&
+        (array[i].x <= xd && xd <= array[i].x+hm) &&
+        (array[i].y <= yd && yd <= array[i].y+hm) &&
+        (array[i].z <= zd && zd <= array[i].z+hm)){
+      return &array[i];
+    }   
+  }
+  
+  /*
   // Set the low and high indices to the first and last
   // element of the element array
   int low = 0;
@@ -6107,9 +6266,11 @@ TMROctant* TMROctForest::findEnclosing( const int order,
       return &array[mid];
     }
     
-    // Compare the ordering of the two octants - if the
-    // octant is less than the other, then adjust the mid point 
-    if (node->comparePosition(&array[mid]) < 0){
+    // Compare the ordering of the two octants - if the octant is less
+    // than the other, then adjust the mid point
+    int stat = compare_node_to_element(order, knots, node, &array[mid]);
+    // node ? array[mid]
+    if (stat < 0){
       high = mid-1;
     } 
     else {
@@ -6137,7 +6298,8 @@ TMROctant* TMROctForest::findEnclosing( const int order,
       (array[low].z <= zd && zd <= array[low].z+h2)){
     return &array[low];
   }
-
+  */
+  
   if (mpi_owner){
     int rank = 0;
     // while (owners[rank+1] <= oct) rank++
