@@ -142,6 +142,9 @@ cdef extern from "TMRBspline.h":
         TMRBsplineCurve(int, int, TMRPoint*)
         TMRBsplineCurve(int, int, double*, TMRPoint*)
         TMRBsplineCurve(int, int, double*, double*, TMRPoint*)
+        void getData(int*, int*, const double**,
+                     const double**, const TMRPoint**)
+        void split(double, TMRBsplineCurve**, TMRBsplineCurve**)
 
     cdef cppclass TMRBsplineSurface(TMRSurface):
         TMRBsplineSurface(int, int, int, int, TMRPoint*)
@@ -149,6 +152,8 @@ cdef extern from "TMRBspline.h":
                           double*, double*, TMRPoint*)
         TMRBsplineSurface(int, int, int, int,
                           double*, double*, double*, TMRPoint*)
+        void getData(int*, int*, int*, int*, const double**, const double**,
+                     const double**, const TMRPoint**)
 
     cdef cppclass TMRBsplinePcurve(TMRPcurve):
         TMRBsplinePcurve(int, int, double*)
@@ -167,6 +172,7 @@ cdef extern from "TMRBspline.h":
 cdef extern from "":
     void _deleteMe "delete [] "(int *array)
     TMRBsplineCurve* _dynamicBsplineCurve "dynamic_cast<TMRBsplineCurve*>"(TMRCurve*)
+    TMRBsplineSurface* _dynamicBsplineSurface "dynamic_cast<TMRBsplineSurface*>"(TMRSurface*)
     TMREdgeFromFace* _dynamicEdgeFromFace "dynamic_cast<TMREdgeFromFace*>"(TMREdge*)
     TMRTopoProblem* _dynamicTopoProblem "dynamic_cast<TMRTopoProblem*>"(ParOptProblem*)
     ParOptBVecWrap* _dynamicParOptBVecWrap "dynamic_cast<ParOptBVecWrap*>"(ParOptVec*)

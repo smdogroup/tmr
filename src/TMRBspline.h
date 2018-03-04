@@ -13,10 +13,10 @@
 */
 class TMRBsplineCurve : public TMRCurve {
  public:
-  TMRBsplineCurve( int n, int k, TMRPoint *pts );
-  TMRBsplineCurve( int n, int k, const double *Tu, TMRPoint *pts );
+  TMRBsplineCurve( int n, int k, const TMRPoint *pts );
+  TMRBsplineCurve( int n, int k, const double *Tu, const TMRPoint *pts );
   TMRBsplineCurve( int n, int k, const double *Tu, const double *wts, 
-                   TMRPoint *pts );
+                   const TMRPoint *pts );
   ~TMRBsplineCurve();
 
   // Get the parameter range for this edge
@@ -33,6 +33,9 @@ class TMRBsplineCurve : public TMRCurve {
 
   // Given the parametric point, evaluate the second derivative 
   int eval2ndDeriv( double t, TMRPoint *Xt );
+
+  // Split the curve at the given parametric point
+  void split( double tsplit, TMRBsplineCurve **c1, TMRBsplineCurve **c2 );
 
   // Refine the knot vector using knot insertion
   TMRBsplineCurve* refineKnots( const double *Tnew, int nnew );
@@ -71,13 +74,13 @@ class TMRBsplineCurve : public TMRCurve {
 class TMRBsplineSurface : public TMRSurface {
  public:
   TMRBsplineSurface( int nu, int nv, int ku, int kv, 
-                     TMRPoint *pts );
+                     const TMRPoint *pts );
   TMRBsplineSurface( int nu, int nv, int ku, int kv, 
                      const double *Tu, const double *Tv, 
-                     TMRPoint *pts );
+                     const TMRPoint *pts );
   TMRBsplineSurface( int nu, int nv, int ku, int kv, 
                      const double *Tu, const double *Tv,
-                     const double *wts, TMRPoint *pts );
+                     const double *wts, const TMRPoint *pts );
   ~TMRBsplineSurface();
 
   // Get the parameter range for this surface
@@ -97,6 +100,19 @@ class TMRBsplineSurface : public TMRSurface {
   // Given the parametric point, evaluate the second derivatives
   int eval2ndDeriv( double u, double v,
                     TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
+
+  void getData( int *_nu, int *_nv, int *_ku, int *_kv,
+                const double **_Tu, const double **_Tv,
+                const double **_wts, const TMRPoint **_pts ){
+    if (_nu){ *_nu = nu; }
+    if (_nv){ *_nv = nv; }
+    if (_ku){ *_ku = ku; }
+    if (_kv){ *_kv = kv; }
+    if (_Tu){ *_Tu = Tu; }
+    if (_Tv){ *_Tv = Tv; }
+    if (_wts){ *_wts = wts; }
+    if (_pts){ *_pts = pts; }
+  }
  private:
   // The number of control points and b-spline order
   int ku, kv;

@@ -257,7 +257,7 @@ void bspline_basis_derivative( double *N, const int idx, const double u,
   Create a B-spline curve with a uniform knot vector
 */
 TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
-                                  TMRPoint *_pts ){
+                                  const TMRPoint *_pts ){
   nctl = _n;
 
   // Check the bounds on the bspline order
@@ -287,7 +287,7 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
 */
 TMRBsplineCurve::TMRBsplineCurve( int _n, int _k, 
                                   const double *_Tu,
-                                  TMRPoint *_pts ){
+                                  const TMRPoint *_pts ){
   nctl = _n;
 
   // Check the bounds on the bspline order
@@ -322,7 +322,7 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
 TMRBsplineCurve::TMRBsplineCurve( int _n, int _k, 
                                   const double *_Tu,
                                   const double *_wts, 
-                                  TMRPoint *_pts ){
+                                  const TMRPoint *_pts ){
   nctl = _n;
 
   // Check the bounds on the bspline order
@@ -793,6 +793,71 @@ int TMRBsplineCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
   }
 
   return 0;
+}
+
+/*
+  Split the curve at the given parametric point to find the new
+  Bspline curves c1 and c2
+*/
+void TMRBsplineCurve::split( double tsplit, 
+                             TMRBsplineCurve **c1, 
+                             TMRBsplineCurve **c2 ){
+  // Find out how many times the knot should be inserted
+  int insert = ku;
+  for ( int i = 0; i < nctl + ku; i++ ){
+    if (Tu[i] == tsplit){
+      insert--;
+    }
+  }
+
+  // Set up the knots to insert -- the number of knots needed to 
+  // completely split the b-spline at the knot location
+  double Tnew[MAX_BSPLINE_ORDER];
+  for ( int i = 0; i < insert; i++ ){
+    Tnew[i] = tsplit;
+  }
+
+  // Insert the knots to create a new object
+  TMRBsplineCurve *refined = refineKnots(Tnew, insert);
+  refined->incref();
+
+  // Get the data from the refined b-spline
+  int n, k;
+  const double *tu;
+  const double *w;
+  const TMRPoint *p;
+  refined->getData(&n, &k, &tu, &w, &p);
+
+  // Find the location of the split
+  int mid = 0;
+  for ( int i = 0; i < n+k; i++ ){
+    if (tu[i] == tsplit){
+      mid = i;
+      break;
+    }
+  }
+
+  // Create the bspline before the split
+  if (c1){
+    if (w){
+      *c1 = new TMRBsplineCurve(mid, k, tu, w, p);     
+     }
+     else {
+      *c1 = new TMRBsplineCurve(mid, k, tu, p);
+    }
+  }
+
+  // Create the bspline after the split
+  if (c2){
+    if (w){
+      *c2 = new TMRBsplineCurve(n-mid, k, &tu[mid], &w[mid], &p[mid]);
+    }
+    else {
+      *c2 = new TMRBsplineCurve(n-mid, k, &tu[mid], &p[mid]);      
+    }
+  }
+
+  refined->decref();
 }
 
 /*
@@ -1335,7 +1400,7 @@ TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
 */
 TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv, 
                                       int _ku, int _kv, 
-                                      TMRPoint *_pts ){
+                                      const TMRPoint *_pts ){
   // Record the number of control points and the basis order
   nu = _nu;
   nv = _nv;
@@ -1369,7 +1434,7 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
                                       int _ku, int _kv, 
                                       const double *_Tu, 
                                       const double *_Tv, 
-                                      TMRPoint *_pts ){
+                                      const TMRPoint *_pts ){
   // Record the number of control points and the basis order
   nu = _nu;
   nv = _nv;
@@ -1410,7 +1475,7 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
                                       int _ku, int _kv, 
                                       const double *_Tu, const double *_Tv,
                                       const double *_wts, 
-                                      TMRPoint *_pts ){
+                                      const TMRPoint *_pts ){
   // Record the number of control points and the basis order
   nu = _nu;
   nv = _nv;

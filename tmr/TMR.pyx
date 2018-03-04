@@ -299,6 +299,43 @@ cdef class Curve:
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
 
+    def getData(self):
+        cdef int nu, ku
+        cdef const double *Tu = NULL
+        cdef const double *wts = NULL
+        cdef const TMRPoint *pts = NULL
+        cdef TMRBsplineCurve *curve = NULL
+        curve = _dynamicBsplineCurve(self.ptr)
+
+        if curve is not NULL:
+            curve.getData(&nu, &ku, &Tu, &wts, &pts)
+            tu = np.zeros(nu+ku)
+            w = np.ones((nu))
+            p = np.zeros((nu, 3))
+            for i in range(nu+ku):
+                tu[i] = Tu[i]
+            if wts is not NULL:
+                for i in range(nu):
+                    w[i] = wts[i]
+            for i in range(nu):
+                p[i,0] = pts[i].x 
+                p[i,1] = pts[i].y
+                p[i,2] = pts[i].z
+            return ku, tu, w, p
+        return None
+
+    def split(self, double t):
+        cdef TMRBsplineCurve *curve = NULL
+        cdef TMRBsplineCurve *c1 = NULL
+        cdef TMRBsplineCurve *c2 = NULL
+        curve = _dynamicBsplineCurve(self.ptr)
+
+        if curve is not NULL:
+            curve.split(t, &c1, &c2)
+            return _init_Curve(c1), _init_Curve(c2)
+        return None
+
+
 cdef _init_Curve(TMRCurve *ptr):
     curve = Curve()
     curve.ptr = ptr
@@ -338,6 +375,35 @@ cdef class Surface:
 
     def writeToVTK(self, char* filename):
         self.ptr.writeToVTK(filename)
+
+    def getData(self):
+        cdef int nu, nv, ku, kv
+        cdef const double *Tu = NULL
+        cdef const double *Tv = NULL
+        cdef const double *wts = NULL
+        cdef const TMRPoint *pts = NULL
+        cdef TMRBsplineSurface *surf = NULL
+        surf = _dynamicBsplineSurface(self.ptr)
+
+        if surf is not NULL:
+            surf.getData(&nu, &nv, &ku, &kv, &Tu, &Tv, &wts, &pts)
+            tu = np.zeros(nu+ku)
+            tv = np.zeros(nv+kv)
+            w = np.ones((nu*nv))
+            p = np.zeros((nu*nv, 3))
+            for i in range(nu+ku):
+                tu[i] = Tu[i]
+            for i in range(nv+kv):
+                tv[i] = Tv[i]
+            if wts is not NULL:
+                for i in range(nu*nv):
+                    w[i] = wts[i]
+            for i in range(nv*nu):
+                p[i,0] = pts[i].x 
+                p[i,1] = pts[i].y
+                p[i,2] = pts[i].z
+            return ku, kv, tu, tv, w, p
+        return None
 
 cdef _init_Surface(TMRSurface *ptr):
     surface = Surface()
