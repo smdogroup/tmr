@@ -44,11 +44,9 @@ def addFaceTraction(order, forest, attr, assembler, tr):
     octants = forest.getOctants()
     face_octs = forest.getOctsWithAttribute(attr)
     aux = TACS.AuxElements()
-
+    
     for i in range(len(face_octs)):
-        index = octants.findIndex(face_octs[i])
-        if index is not None:
-            aux.addElement(index, trac[face_octs[i].tag])
+        aux.addElement(face_octs[i].tag, trac[face_octs[i].info])
 
     return aux
 
