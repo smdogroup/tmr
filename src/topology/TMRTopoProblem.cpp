@@ -756,11 +756,12 @@ void TMRTopoProblem::addBucklingConstraint( double sigma,
   if (!buck){
     // Create a geometric stiffness matrix for buckling constraint
     TACSMat *gmat = tacs[0]->createMat();
-    TACSMat *aux_mat = tacs[0]->createMat();
+    TACSMat *kmat = tacs[0]->createMat();
+    TACSMat *aux_mat;
     ksm->getOperators(&aux_mat, NULL);
     
     // Create the buckling analysis object    
-    buck = new TACSLinearBuckling(tacs[0], sigma, gmat, mg->getMat(0),
+    buck = new TACSLinearBuckling(tacs[0], sigma, gmat, kmat,
                                   aux_mat, ksm, max_lanczos, 
                                   num_eigvals, eigtol);
     buck->incref();
@@ -1508,12 +1509,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
             // Solve the eigenvalue problem
             buck->solve(forces[i],
                         new KSMPrintStdout("KSM", mpi_rank, 1));
-            // Check eigenvector
-            printf("Orthogonal: %e\n", buck->checkOrthogonality());
-            for ( int k = 0; k < num_buck_eigvals; k++ ){
-              buck->checkEigenvector(k);
-            }
-            exit(0);
+
             // Extract the first k eigenvalues
             for ( int k = 0; k < num_buck_eigvals; k++ ){
               TacsScalar error;
