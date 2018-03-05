@@ -1686,9 +1686,9 @@ cdef class QuadTopoCreator:
         self.ptr.decref()
 
     def createTACS(self, QuadForest forest, 
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER,scale=1.0):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(forest.ptr, ordering)
+        assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -1905,7 +1905,7 @@ def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
         free(oforest)
     free(assm)
     if mg != NULL:
-        return _init_Mg(mg)
+        return _init_Pc(mg)
     return None
 
 def strainEnergyError(forest, Assembler coarse,
