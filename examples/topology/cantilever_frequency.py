@@ -21,8 +21,10 @@ def addVertexLoad(comm, forest, attr, assembler, F):
     # Retrieve octants from the forest
     octants = forest.getOctants()
     node_octs = forest.getNodesWithAttribute(attr)
+
     force = assembler.createVec()
     f_array = force.getArray()
+
     node_range = forest.getNodeRange()
     mpi_rank = comm.Get_rank()
     for i in range(len(node_octs)):
@@ -53,7 +55,7 @@ def addFaceTraction(order, forest, attr, assembler, tr):
     return aux
 
 def createTopoProblem(props, forest, order=2, nlevels=2,
-                      Xscale=1.0):
+                      Xscale=1.0, ordering=TACS.PY_MULTICOLOR_ORDER):
     # Create the forest
     forests = []
     filters = []
@@ -73,7 +75,8 @@ def createTopoProblem(props, forest, order=2, nlevels=2,
 
     # Make the creator class
     creator = CreateMe(bcs, filters[-1], props)
-    assemblers.append(creator.createTACS(forest,scale=Xscale))
+    assemblers.append(creator.createTACS(forest,scale=Xscale,
+                                         ordering=ordering))
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 
@@ -90,7 +93,8 @@ def createTopoProblem(props, forest, order=2, nlevels=2,
 
         # Make the creator class
         creator = CreateMe(bcs, filters[-1], props)
-        assemblers.append(creator.createTACS(forest,scale=Xscale))
+        assemblers.append(creator.createTACS(forest,scale=Xscale,
+                                             ordering=ordering))
         varmaps.append(creator.getMap())
         vecindices.append(creator.getIndices())
 
@@ -174,7 +178,7 @@ max_iterations = len(mg_levels)
 
 # Set parameters for later usage
 order = 2
-forest.createTrees(2)#args.init_depth)
+forest.createTrees(args.init_depth)
 
 # Compute the volume of the bracket
 r = 1.0
@@ -211,13 +215,14 @@ obj_array = [ 1.0e2 ]
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(rho, E, nu)
-
+max_iterations = 2
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
     nlevs = mg_levels[ite]
     assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
                                                           nlevels=nlevs,
-                                                          Xscale=0.1)
+                                                          Xscale=0.1,
+                                                          ordering=TACS.PY_MULTICOLOR_ORDER)
     
     # Write out just the mesh - for visualization
     flag = TACS.ToFH5.NODES
@@ -245,7 +250,7 @@ for ite in xrange(max_iterations):
     sigma = 2e4
     num_eigs = 20
     ks_weight = 50.0
-    offset = -1e4#-2.5e4
+    offset = -2.e4#-2.5e4, 1e4
     scale = 1.0/3e5
     max_lanczos = 100
     tol = 1e-30
@@ -274,8 +279,8 @@ for ite in xrange(max_iterations):
         opt.setOutputFrequency(args.output_freq)
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
-        # opt.checkGradients(1e-6)
-        # asd
+        opt.checkGradients(1e-6)
+        
         # If the old filter exists, we're on the second iteration
         if old_filtr:
             # Create the interpolation
