@@ -52,7 +52,8 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     return aux
 
-def createTopoProblem(props, forest, order=2, nlevels=2):
+def createTopoProblem(props, forest, order=2, nlevels=2,
+                      ordering=TACS.PY_MULTICOLOR_ORDER):
     # Create the forest
     forests = []
     filters = []
@@ -72,7 +73,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2):
 
     # Make the creator class
     creator = CreateMe(bcs, filters[-1], props)
-    assemblers.append(creator.createTACS(forest))
+    assemblers.append(creator.createTACS(forest,ordering))
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 
@@ -89,7 +90,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2):
 
         # Make the creator class
         creator = CreateMe(bcs, filters[-1], props)
-        assemblers.append(creator.createTACS(forest))
+        assemblers.append(creator.createTACS(forest,ordering))
         varmaps.append(creator.getMap())
         vecindices.append(creator.getIndices())
 
@@ -262,7 +263,7 @@ for ite in xrange(max_iterations):
                                        'paropt_output%d.out'%(ite)))
 
         opt.checkGradients(1e-6)
-        
+       
         # If the old filter exists, we're on the second iteration
         if old_filtr:
             # Create the interpolation
