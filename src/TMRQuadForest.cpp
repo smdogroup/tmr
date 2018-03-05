@@ -4105,6 +4105,19 @@ TMRQuadrant* TMRQuadForest::findEnclosing( const int order,
   const double xd = x + 0.5*h*(1.0 + knots[ii]);
   const double yd = y + 0.5*h*(1.0 + knots[jj]);
 
+  for ( int i = 0; i < size; i++ ){
+    // Check if array[i] contains the provided quadrant
+    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[i].level);
+
+    // Check whether the node is contained within element i
+    if ((array[i].face == face) &&
+        (array[i].x <= xd && xd <= array[i].x+hm) &&
+        (array[i].y <= yd && yd <= array[i].y+hm)){
+      return &array[i];
+    }
+  }
+  
+  /*
   // Set the low and high indices to the first and last
   // element of the element array
   int low = 0;
@@ -4151,9 +4164,10 @@ TMRQuadrant* TMRQuadForest::findEnclosing( const int order,
   if ((array[low].face == face) &&
       (array[low].x <= xd && xd <= array[low].x+h2) &&
       (array[low].y <= yd && yd <= array[low].y+h2)){
-   return &array[low];
- }
-
+    return &array[low];
+  }
+  */
+    
   if (mpi_owner){
     int rank = 0;
     // while (owners[rank+1] <= quad) rank++

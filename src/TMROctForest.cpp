@@ -6032,150 +6032,6 @@ getNodesWithAttribute()\n");
 }
 
 /*
-  Compare the node and the element to one another:
-
-  node ? element
-
-  where the element's lower left node location is compared against the
-  absolute node location.
-
-  If ? = '<' a negative number is returned, if ? = '==' 0 is returned
-  and if ? = '>' a positive number is returned.
-*/
-static int compare_node_to_element( const int order,
-                                    const double *knots,
-                                    const TMROctant *node,
-                                    const TMROctant *element ){
-  if (node->block != element->block){
-    return node->block - element->block;
-  }
-
-  // Compute the edge-length of the node element
-  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
-    
-  // Compute the ii/jj/kk locations
-  const int i = node->info % order;
-  const int j = (node->info % (order*order))/order;
-  const int k = node->info/(order*order);
-
-  // The coordinates
-  double x = 0.0, y = 0.0, z = 0.0;
-  
-  // Do a comparison of the x coordinates
-  int xstat = 0;
-  if (i == 0 || i == order-1){
-    xstat = node->x + h*(i/(order-1)) - element->x;
-    if (xstat < 0){
-      x = element->x;
-    }
-    else {
-      x = node->x + h*(i/(order-1));
-    }
-  }
-  else if (order % 2 == 1 && i == (order/2)){
-    xstat = node->x + h/2 - element->x;
-    if (xstat < 0){
-      x = element->x;
-    }
-    else {
-      x = node->x + h/2;
-    }
-  }
-  else {
-    x = node->x + 0.5*h*(1.0 + knots[i]);
-    if (x < element->x){
-      xstat = -1;
-      x = element->x;
-    }
-    else if (x == element->x){
-      xstat = 0;
-    }
-    else {
-      xstat = 1;
-    }
-  }
-  
-  // Do a comparison of the y coordinates
-  int ystat = 0;
-  if (j == 0 || j == order-1){
-    ystat = node->y + h*(j/(order-1)) - element->y;
-    if (ystat < 0){
-      y = element->y;
-    }
-    else {
-      y = node->y + h*(j/(order-1));
-    }
-  }
-  else if (order % 2 == 1 && j == (order/2)){
-    ystat = node->y + h/2 - element->y;
-    if (ystat < 0){
-      y = element->y;
-    }
-    else {
-      y = node->y + h/2;
-    }
-  }
-  else {
-    y = node->y + 0.5*h*(1.0 + knots[j]);
-    if (y < element->y){
-      ystat = -1;
-      y = element->y;
-    }
-    else if (y == element->y){
-      ystat = 0;
-    }
-    else {
-      ystat = 1;
-    }
-  }
-
-  // Do a comparison of the z coordinates
-  int zstat = 0;
-  if (k == 0 || k == order-1){
-    zstat = node->z + h*(k/(order-1)) - element->z;
-    if (zstat < 0){
-      z = element->z;
-    }
-    else {
-      z = node->z + h*(k/(order-1));
-    }
-  }
-  else if (order % 2 == 1 && k == (order/2)){
-    zstat = node->z + h/2 - element->z;
-    if (zstat < 0){
-      z = element->z;
-    }
-    else {
-      z = node->z + h/2;
-    }
-  }
-  else {
-    z = node->z + 0.5*h*(1.0 + knots[k]);
-    if (z < element->z){
-      zstat = -1;
-      z = element->z;
-    }
-    else if (z == element->z){
-      zstat = 0;
-    }
-    else {
-      zstat = 1;
-    }
-  }
-  
-  
-  if (x > y && x > z){
-    return xstat;
-  }
-  else if (y > x && y > z){
-    return ystat;
-  }
-  else {
-    return zstat;
-  }
-}
-
-/*
   Given a node, find the enclosing octant.
 
   This code is used to find the octant in the octant array that
@@ -6197,7 +6053,6 @@ static int compare_node_to_element( const int order,
   |      |      |
   |      |      |
   NE---- o ---- o
-
 */
 TMROctant* TMROctForest::findEnclosing( const int order, 
                                         const double *knots,
@@ -6243,7 +6098,7 @@ TMROctant* TMROctForest::findEnclosing( const int order,
       return &array[i];
     }   
   }
-  
+
   /*
   // Set the low and high indices to the first and last
   // element of the element array
@@ -6690,9 +6545,6 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
       fprintf(stderr, 
               "[%d] TMROctForest: Destination processor does not own node\n",
               mpi_rank);
-      fprintf(stderr, "[%d] block = %d coords = %d %d %d info = %d Actual owner = %d\n", 
-        mpi_rank, recv_nodes[i].block, recv_nodes[i].x,
-        recv_nodes[i].y, recv_nodes[i].z, recv_nodes[i].info, mpi_owner);
     }
   }
 
