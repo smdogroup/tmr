@@ -2046,7 +2046,37 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
     delete [] filename;
   }
 
+  if (buck){
+    writeEigenVector(iter);
+  }
+
   // Update the iteration count
   iter_count++;
 }
 
+void TMRTopoProblem::writeEigenVector( int iter ){
+  // Only valid if buckling is used
+  if (buck){
+    char outfile[256];
+    TACSBVec *tmp = tacs[0]->createVec();
+    tmp->incref();
+    tmp->zeroEntries();
+    // Create the visualization for the object
+    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                               TACSElement::OUTPUT_DISPLACEMENTS);
+    TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID, 
+                                  write_flag);
+    f5->incref();
+    // Extract the first k eigenvectors
+    for ( int k = 0; k < num_buck_eigvals; k++ ){
+      TacsScalar error;
+      buck->extractEigenvector(k, tmp, &error);
+      tacs[0]->setVariables(tmp);
+      sprintf(outfile, "%s/eigenvector%02d_output%d.f5", 
+              prefix, k, iter);
+      f5->writeToFile(outfile);
+    }
+    f5->decref();
+    tmp->decref();
+  }
+}

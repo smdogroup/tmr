@@ -183,6 +183,9 @@ class TMRTopoProblem : public ParOptProblem {
   int getLocalValuesFromBVec( TACSBVec *vec, TacsScalar *xloc );
   void setBVecFromLocalValues( const TacsScalar *xloc, TACSBVec *vec );
 
+  // Extract and write the eigenvectors to file
+  void writeEigenVector( int iter );
+
   // Store the prefix
   char *prefix;
 
