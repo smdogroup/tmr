@@ -238,7 +238,8 @@ for ite in xrange(max_iterations):
 
     force1.axpy(1.0, force2)
     force1.scale(-1.0)
-    
+    # Reorder the load vector
+    assembler.reorderVec(force1)
     # Set the load cases
     forces = [force1]
     problem.setLoadCases(forces)
@@ -277,13 +278,14 @@ for ite in xrange(max_iterations):
         opt.setOutputFrequency(args.output_freq)
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
-        opt.checkGradients(1e-6)
+        #opt.checkGradients(1e-6)
         
         # If the old filter exists, we're on the second iteration
         if old_filtr:
             # Create the interpolation
             interp = TACS.VecInterp(old_varmap, varmap, vars_per_node)
             filtr.createInterpolation(old_filtr, interp)
+            
             interp.initialize()
         
             # Get the optimization variables for the new optimizer
