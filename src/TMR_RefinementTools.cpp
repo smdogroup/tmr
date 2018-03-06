@@ -3034,10 +3034,14 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
 
   // Set the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
-  int m = nenrich;
+  const int deriv_per_node = 3*vars_per_node;
+  const int num_nodes = order*order*order;
+  const int neq = 3*num_nodes;
 
-  const int neq = 3*order*order*order;
-  int n = neq;
+  // Set the matrix dimensions
+  int m = nenrich;
+  int n = deriv_per_node*num_nodes;
+  int p = neq;
 
   // Set the derivative of the function w.r.t. the state variables
   dfdu->zeroEntries();
@@ -3092,8 +3096,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     // memset(dfdubar, 0, 3*nenrich*sizeof(TacsScalar)); // size m as well
     // //TacsScalar *dfdubar = new TacsScalar[3*nenrich];
 
-    TacsScalar *dfduelem = new TacsScalar[m];
-    memset(dfduelem, 0, m*sizeof(TacsScalar));
+    TacsScalar *dfduelem = new TacsScalar[p];
+    memset(dfduelem, 0, p*sizeof(TacsScalar));
 
     TacsScalar *dfdubar = new TacsScalar[m];
     memset(dfduelem, 0, m*sizeof(TacsScalar));
@@ -3101,18 +3105,18 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     // Set temporary values
     //TacsScalar dubardu[nenrich*nenrich];
     //memset(dubardu, 0, nenrich*nenrich*sizeof(TacsScalar));
-    TacsScalar *dubardu = new TacsScalar[m*m];
-    memset(dubardu, 0, m*m*sizeof(TacsScalar));
+    TacsScalar *dubardu = new TacsScalar[m*p];
+    memset(dubardu, 0, m*p*sizeof(TacsScalar));
     
     //TacsScalar dfdubar_prod[3*nenrich];
     //memset(dfdubar_prod, 0, 3*nenrich*sizeof(TacsScalar));
-    TacsScalar *dfdubar_prod = new TacsScalar[m];//[3*nenrich];
-    memset(dfdubar_prod, 0, m*m*sizeof(TacsScalar));
+    TacsScalar *dfdubar_prod = new TacsScalar[p];//[3*nenrich];
+    memset(dfdubar_prod, 0, p*sizeof(TacsScalar));
     
     TacsScalar *A = new TacsScalar[n*m]; //&tmp[0];
-    TacsScalar *dbdu = new TacsScalar[n*m]; //&tmp[0];
+    TacsScalar *dbdu = new TacsScalar[n*p]; //&tmp[0];
     memset(A, 0, n*m*sizeof(TacsScalar));
-    memset(dbdu, 0, n*m*sizeof(TacsScalar));
+    memset(dbdu, 0, n*p*sizeof(TacsScalar));
     
     // //
     // //
@@ -3195,16 +3199,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
 
           // Add the contributions to the the enricment 
           for ( int aa = 0; aa < nenrich; aa++ ){
-            // Compute and assemble dbdu
-            TacsScalar d[3];
-            d[0] = Na[aa]*J[0] + Nb[aa]*J[1] + Nc[aa]*J[2];
-            d[1] = Na[aa]*J[3] + Nb[aa]*J[4] + Nc[aa]*J[5];
-            d[2] = Na[aa]*J[6] + Nb[aa]*J[7] + Nc[aa]*J[8];
-
-            dbdu[neq*aa+c] = -wvals[ii]*wvals[jj]*wvals[kk]*d[0];
-            dbdu[neq*aa+c+1] = -wvals[ii]*wvals[jj]*wvals[kk]*d[1];
-            dbdu[neq*aa+c+2] = -wvals[ii]*wvals[jj]*wvals[kk]*d[2];
-
             // Compute and assemble A
             TacsScalar dr[3];
             dr[0] = Nar[aa]*J[0] + Nbr[aa]*J[1] + Ncr[aa]*J[2];
@@ -3214,6 +3208,17 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             A[neq*aa+c] = wvals[ii]*wvals[jj]*wvals[kk]*dr[0];
             A[neq*aa+c+1] = wvals[ii]*wvals[jj]*wvals[kk]*dr[1];
             A[neq*aa+c+2] = wvals[ii]*wvals[jj]*wvals[kk]*dr[2];
+          }
+          for ( int aa = 0; aa < neq; aa++ ){
+            // Compute and assemble dbdu
+            TacsScalar d[3];
+            d[0] = Na[aa]*J[0] + Nb[aa]*J[1] + Nc[aa]*J[2];
+            d[1] = Na[aa]*J[3] + Nb[aa]*J[4] + Nc[aa]*J[5];
+            d[2] = Na[aa]*J[6] + Nb[aa]*J[7] + Nc[aa]*J[8];
+
+            dbdu[neq*aa+c] = -wvals[ii]*wvals[jj]*wvals[kk]*d[0];
+            dbdu[neq*aa+c+1] = -wvals[ii]*wvals[jj]*wvals[kk]*d[1];
+            dbdu[neq*aa+c+2] = -wvals[ii]*wvals[jj]*wvals[kk]*d[2];
           }
         }
       }
@@ -3234,17 +3239,17 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     //   }
     // }
     
-    for ( int aa = 0; aa < m; aa++ ){
-      for ( int bb = 0; bb < m; bb++ ){
-        printf("dubardu[%d, %d]: %e\n", aa, bb, dubardu[aa*m+bb]);
-      }
-    }
+    // for ( int aa = 0; aa < m; aa++ ){
+    //   for ( int bb = 0; bb < m; bb++ ){
+    //     printf("dubardu[%d, %d]: %e\n", aa, bb, dubardu[aa*m+bb]);
+    //   }
+    // }
     
     // Compute the product (df/dubar)(dubar/du)
     TacsScalar a = 1.0, b = 0.0;
-    int k = 3;
-    BLASgemm("N", "N", &m, &k, &m, &a, dubardu, &m,
-             dfdubar, &m, &b, dfdubar_prod, &m);
+    int k = 1;
+    BLASgemm("N", "N", &p, &k, &n, &a, dubardu, &p,
+             dfdubar, &n, &b, dfdubar_prod, &p);
     
     dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
   }
@@ -3429,24 +3434,27 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
 TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
                                                 TacsScalar dbdu[],
                                                 TacsScalar dubardu[]){
-  
-  // Get the number of enrichment functions
+
+  // Set the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
+  const int vars_per_node = 3; // is it ever not going to be 3 (in 3d at least?)
+  const int deriv_per_node = 3*vars_per_node;
+  const int num_nodes = order*order*order;
+  const int neq = 3*num_nodes;
 
-  // The number of equations
-  const int neq = 3*order*order*order;
-
-  // Initialize variables
+  // Set the matrix dimensions
   int m = nenrich;
-  int n = neq;
+  int n = deriv_per_node*num_nodes;
+  int p = neq;
+   
   TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
   //TacsScalar *ATAi_AT = new TacsScalar[m*n]; // store (A^T A)^-1 A^T
-  TacsScalar *dbduT_A = new TacsScalar[m*m]; // store (db/du)^T A
+  TacsScalar *dbduT_A = new TacsScalar[p*m]; // store (db/du)^T A
   
   // Compute A^T A
   TacsScalar a = 1.0, b = 0.0;
   BLASgemm("T", "N", &m, &m, &n, &a, A, &n, A, &n, &b, ATA, &m);
-
+  
   // Factor A^T A
   int * ipiv = new int[ nenrich ];
   int info;
@@ -3461,21 +3469,21 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   //BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, ATAi_AT, &m);
 
   // Compute (db/du)^T A
-  BLASgemm("T", "N", &m, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &m);
+  BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
   
   //
   //
   // Evaluate dubar/du as (db/du)^T A [A^T A]^-T         //[A^T A]^-1 A^T db/du
   //
   //
-  TacsScalar *dubardu_elem = new TacsScalar[ m*m ];
-  BLASgemm("N", "T", &m, &m, &m, &a, dbduT_A, &m, ATA, &m, &b, dubardu_elem, &m);
+  TacsScalar *dubardu_elem = new TacsScalar[ p*m ];
+  BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu_elem, &p);
   //BLASgemm( "N", "N", &m, &m, &n, &a, ATAi_AT, &m, dbdu, &n, &b, dubardu_elem, &m); 
-
+  
   // Allocate dubardu_elem to dubardu
-  for (int i = 0; i < nenrich; i++ ){
-    for ( int j = 0; j < nenrich; j++ ){
-      dubardu[nenrich*i + j] = dubardu_elem[nenrich*i + j];
+  for (int i = 0; i < m; i++ ){
+    for ( int j = 0; j < p; j++ ){
+      dubardu[p*i + j] = dubardu_elem[p *i + j];
     }
   }
   
