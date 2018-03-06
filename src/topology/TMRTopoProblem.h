@@ -79,7 +79,10 @@ class TMRTopoProblem : public ParOptProblem {
                                TacsScalar ks_weight,
                                TacsScalar offset, TacsScalar scale,
                                int max_lanczos, double eigtol );
-
+  void addBucklingConstraint( double sigma, int num_eigvals,
+                              TacsScalar ks_weight,
+                              TacsScalar offset, TacsScalar scale,
+                              int max_lanczos, double eigtol );
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
   // ----------------------------------------------------------------
@@ -180,6 +183,9 @@ class TMRTopoProblem : public ParOptProblem {
   int getLocalValuesFromBVec( TACSBVec *vec, TacsScalar *xloc );
   void setBVecFromLocalValues( const TacsScalar *xloc, TACSBVec *vec );
 
+  // Extract and write the eigenvectors to file
+  void writeEigenVector( int iter );
+
   // Store the prefix
   char *prefix;
 
@@ -208,6 +214,15 @@ class TMRTopoProblem : public ParOptProblem {
   TacsScalar freq_ks_sum;
   TacsScalar freq_ks_weight;
   TacsScalar freq_offset, freq_scale;
+
+  // The buckling TACS object
+  TACSLinearBuckling *buck;
+  // Set parameters used to control the buckling constraint
+  double buck_eig_tol;
+  int num_buck_eigvals;
+  TacsScalar buck_ks_sum;
+  TacsScalar buck_ks_weight;
+  TacsScalar buck_offset, buck_scale;
 
   // The derivative of f(x,u) w.r.t. u and the adjoint variables
   TACSBVec *dfdu, *adjoint;

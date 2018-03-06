@@ -240,6 +240,7 @@ for ite in xrange(max_iterations):
     force1.scale(-1.0)
     # Reorder the load vector
     assembler.reorderVec(force1)
+
     # Set the load cases
     forces = [force1]
     problem.setLoadCases(forces)
