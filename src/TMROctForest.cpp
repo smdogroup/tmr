@@ -6068,12 +6068,19 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   TMROctant *array = NULL;
   octants->getArray(&array, &size);
 
+  // Find the coordinates of the octant that will enclose the
+  // node
+  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
+
+  // Compute the bounding octant
+  TMROctant oct;
+  oct.x = node->x + h;
+  oct.y = node->y + h;
+  oct.z = node->z + h;
+
   // Find the lower left corner of the octant that the node
   // blongs to and find its edge length
   const int32_t block = node->block;
-  const int32_t x = node->x;
-  const int32_t y = node->y;
-  const int32_t z = node->z;
 
   // Compute the ii/jj/kk locations
   const int ii = node->info % order;
@@ -6081,25 +6088,10 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   const int kk = node->info/(order*order);
 
   // Compute the parametric node location on this block
-  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
-  const double xd = x + 0.5*h*(1.0 + knots[ii]);
-  const double yd = y + 0.5*h*(1.0 + knots[jj]);
-  const double zd = z + 0.5*h*(1.0 + knots[kk]);
+  const double xd = node->x + 0.5*h*(1.0 + knots[ii]);
+  const double yd = node->y + 0.5*h*(1.0 + knots[jj]);
+  const double zd = node->z + 0.5*h*(1.0 + knots[kk]);
 
-  for ( int i = 0; i < size; i++ ){
-    // Check if array[i] contains the provided octant
-    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[i].level);
-
-    // Check whether the node is contained within the array
-    if ((array[i].block == block) &&
-        (array[i].x <= xd && xd <= array[i].x+hm) &&
-        (array[i].y <= yd && yd <= array[i].y+hm) &&
-        (array[i].z <= zd && zd <= array[i].z+hm)){
-      return &array[i];
-    }   
-  }
-
-  /*
   // Set the low and high indices to the first and last
   // element of the element array
   int low = 0;
@@ -6109,7 +6101,7 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   // Maintain values of low/high and mid such that the
   // octant is between (elems[low], elems[high]).
   // Note that if high-low=1, then mid = high
-  while (high != mid){
+  while (mid != low){
     // Check if array[mid] contains the provided octant
     const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
 
@@ -6123,38 +6115,37 @@ TMROctant* TMROctForest::findEnclosing( const int order,
     
     // Compare the ordering of the two octants - if the octant is less
     // than the other, then adjust the mid point
-    int stat = compare_node_to_element(order, knots, node, &array[mid]);
-    // node ? array[mid]
-    if (stat < 0){
-      high = mid-1;
-    } 
-    else {
+    int stat = array[mid].comparePosition(node);
+
+    // array[mid] ? node
+    if (stat == 0){
+      break;
+    }
+    else if (stat < 0){
       low = mid+1;
+    }
+    else {
+      high = mid-1;
     }
     
     // Re compute the mid-point and repeat
-    mid = high - (int)((high - low)/2);
+    mid = low + (int)((high - low)/2);
   }
 
-  // Check if array[mid] contains the provided octant
-  const int32_t h1 = 1 << (TMR_MAX_LEVEL - array[mid].level);
-  if ((array[mid].block == block) &&
-      (array[mid].x <= xd && xd <= array[mid].x+h1) &&
-      (array[mid].y <= yd && yd <= array[mid].y+h1) &&
-      (array[mid].z <= zd && zd <= array[mid].z+h1)){
-    return &array[mid];
+  while (mid < size && array[mid].comparePosition(&oct) < 0){
+    // Check if array[mid] contains the provided octant
+    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
+
+    // Check whether the node is contained within the array
+    if ((array[mid].block == block) &&
+        (array[mid].x <= xd && xd <= array[mid].x+hm) &&
+        (array[mid].y <= yd && yd <= array[mid].y+hm) &&
+        (array[mid].z <= zd && zd <= array[mid].z+hm)){
+      return &array[mid];
+    }
+    mid++;
   }
 
-  // Check if elems[mid] contains the provided octant
-  const int32_t h2 = 1 << (TMR_MAX_LEVEL - array[low].level);
-  if ((array[low].block == block) &&
-      (array[low].x <= xd && xd <= array[low].x+h2) &&
-      (array[low].y <= yd && yd <= array[low].y+h2) &&
-      (array[low].z <= zd && zd <= array[low].z+h2)){
-    return &array[low];
-  }
-  */
-  
   if (mpi_owner){
     int rank = 0;
     // while (owners[rank+1] <= oct) rank++
@@ -6163,40 +6154,10 @@ TMROctant* TMROctForest::findEnclosing( const int order,
       if (owners[rank+1].block < block){
         rank++;
       }
-      else if (owners[rank+1].block == block){
-        // Determine the largest number
-        double xmax = (owners[rank+1].x > xd ? owners[rank+1].x : xd);
-        double ymax = (owners[rank+1].y > yd ? owners[rank+1].y : yd);
-        double zmax = (owners[rank+1].z > zd ? owners[rank+1].z : zd);
-
-        // Check for the largest value
-        if (xmax > ymax && xmax > zmax){
-          if (owners[rank+1].x < xd){
-            rank++;
-          }
-          else {
-            break;
-          }
-        }
-        else if (ymax > xmax && ymax > zmax){
-          if (owners[rank+1].y < yd){
-            rank++;
-          }
-          else {
-            break;
-          }
-        }
-        else {
-          if (owners[rank+1].z < zd){
-            rank++;
-          }
-          else {
-            break;
-          }
-        }
+      else if (owners[rank+1].comparePosition(node) <= 0){
+        rank++;
       }
       else {
-        // oct > owners[rank+1]
         break;
       }
     }

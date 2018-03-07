@@ -99,9 +99,27 @@ int main( int argc, char *argv[] ){
     TACSAssembler *tacs = loader->createTACS(6);
     tacs->incref();
 
+    // Create the FE matrix
+    TACSBVec *res = tacs->createVec();
+    TACSBVec *ans = tacs->createVec();
+    FEMat *mat = tacs->createFEMat();
+    int lev_fill = 100000;
+    double fill = 10.0;
+    int reorder_schur = 1;
+    TACSPc *pc = new PcScMat(mat, lev_fill, fill, reorder_schur);
+    tacs->assembleJacobian(1.0, 0.0, 0.0, res, mat);
+    pc->factor();
+
+    res->set(1.0);
+    tacs->applyBCs(res);
+    pc->applyFactor(res, ans);
+    ans->scale(-1.0);
+    tacs->setVariables(ans);
+
     // Create the f5 visualization object
     TACSToFH5 *f5 = loader->createTACSToFH5(tacs, TACS_SHELL, 
-                                            TACSElement::OUTPUT_NODES);
+                                            TACSElement::OUTPUT_NODES |
+                                            TACSElement::OUTPUT_DISPLACEMENTS);
     f5->incref();
     f5->writeToFile("surface-mesh.f5");
   }
