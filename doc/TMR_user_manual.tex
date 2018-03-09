@@ -255,9 +255,9 @@ Once the topology object has been created, the \texttt{TMROctForest} object can 
 \item \texttt{TMROctForest *coarsen()}: Create a new forest object by coarsening all the elements within the mesh by one level, if possible. Does not create new nodes.
 \item \texttt{void refine( const int refinement[] )}: Refine the elements in the node by the specified number of levels. If a negative number is supplied, coarsen the element.
 \item \texttt{void balance( int balance\_corner=0 )}: Balance all the elements in the mesh to achieve a 2:1 balance 
-\item \texttt{void createNodes( int order=2 )}: Create all the nodes within the mesh with the given element order
+\item \texttt{void createNodes()}: Create all the nodes within the mesh
 \item \texttt{TMROctantArray* getOctsWithAttribute( const char *attr )}: Get an array of octants with the desired attribute
-\item \texttt{TMROctantArray* getNodesWithAttribute( const char *attr)}: Get an array of octant nodes with the desired attribute
+\item \texttt{int* getNodesWithAttribute( const char *attr, int *len )}: Get an array of the nodes numbers with the desired attribute
 \item \texttt{void createMeshConn( int **conn, int *nelems )}: Create and return the distributed mesh connectivity using a global ordering
 \item \texttt{void createDepNodeConn()}: Create the dependent (hanging) node connectivity
 \item \texttt{int getDepNodeConn( const int **ptr, const int **conn, const double **weights )}: Retrieve the dependent node connectivity from the octree object
@@ -314,37 +314,34 @@ htarget = 4.0
 mesh.mesh(htarget, opts=opts)
 \end{verbatim}
 
-
-\subsection{Mesh refinement algorithms}
+\subsection{Error estimation algorithms}
 
 There are two mesh refinement strategies that are implemented in TMR: the first is based on the strain energy norm, while the second is an adjoint-based refinement technique.
-Currently, both strategies are implemented only for 2D and mapped 2D meshes.
 The strain energy based refinement method is designed to reduce the solution error in the natural strain energy norm.
 This call takes the form:
 %
 \begin{verbatim}
-TacsScalar TMR_StrainEnergyRefine( TACSAssembler *tacs,
-                                   TMRQuadForest *forest,
-                                   double target_err,
-                                   int min_level=0, 
-                                   int max_level=TMR_MAX_LEVEL );
+double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
+                                 TACSAssembler *tacs,
+                                 TMRQuadForest *forest_refined,
+                                 TACSAssembler *tacs_refined,
+                                 double *error );
 \end{verbatim}
 %
-The forest is automatically refined based on the requested target error and the solution set in TACS.
+The forest can be refined based on the requested target error and the solution set in TACS.
 
 The adjoint-based refinement method requires a \texttt{TACSAssembler} object for both the current level of refinement and a uniformly refined version of the model. 
 The adjoint-based mesh refinement call takes the form
 \begin{verbatim}
-TacsScalar TMR_AdjointRefine( TACSAssembler *tacs,
-                              TACSAssembler *refine,
-                              TACSBVec *adjvec,
-                              TMRQuadForest *forest,
-                              double target_err,
-                              int min_level=0, 
-                              int max_level=TMR_MAX_LEVEL,
-                              TacsScalar *adj_corr=NULL );
+double TMR_AdjointErrorEst( TMRQuadForest *forest,
+                            TACSAssembler *tacs,
+                            TMRQuadForest *forest_refined,
+                            TACSAssembler *tacs_refined,
+                            TACSBVec *adjoint,
+                            double *error,
+                            double *adj_corr );
 \end{verbatim}
-The adjoint vector is supplied in \texttt{adjvec} and the target error is specified by the \texttt{target\_err} argument.
+The adjoint vector is supplied in \texttt{adjvec}.
 
 \bibliographystyle{abbrvnat}
 \bibliography{refs}
