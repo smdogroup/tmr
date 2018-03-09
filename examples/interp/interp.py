@@ -54,9 +54,8 @@ if comm.rank == 0:
 fine.refine(refine)
 fine.balance(1)
 fine.repartition()
-fine.setMeshOrder(2, TMR.GAUSS_LOBATTO_POINTS)
+fine.setMeshOrder(4, TMR.GAUSS_LOBATTO_POINTS)
 fine.createNodes()
-fine.writeForestToVTK('fine_forest%d.vtk'%(comm.rank))
 
 # Create a refinement array
 octants = fine.getOctants()
@@ -74,7 +73,6 @@ coarse.balance(0)
 coarse.repartition()
 coarse.setMeshOrder(2, TMR.GAUSS_LOBATTO_POINTS)
 coarse.createNodes()
-coarse.writeForestToVTK('coarse_forest%d.vtk'%(comm.rank))
 
 coarse_range = coarse.getNodeRange()
 nc = coarse_range[comm.rank+1] - coarse_range[comm.rank]

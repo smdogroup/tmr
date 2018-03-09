@@ -4103,16 +4103,15 @@ TMRQuadrant* TMRQuadForest::findEnclosing( const int order,
   // exactly along a coordinate line. These will take precidence over
   // the real value parametric locations since comparisons will be
   // exact.
-  int32_t xi = -1;
+  int32_t xi = -1, yi = -1;
   if (ii == 0 || ii == order-1){
-    xi = node->x + ii*h;
+    xi = node->x + (ii/(order-1))*h;
   }
   else if (order % 2 == 1 && ii == order/2){
     xi = node->x + h/2;
   }
-  int32_t yi = -1;
   if (jj == 0 || jj == order-1){
-    yi = node->y + jj*h;
+    yi = node->y + (jj/(order-1))*h;
   }
   else if (order % 2 == 1 && jj == order/2){
     yi = node->y + h/2;

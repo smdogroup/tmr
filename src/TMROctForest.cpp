@@ -6079,32 +6079,30 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   // exactly along a coordinate line. These will take precidence over
   // the real value parametric locations since comparisons will be
   // exact.
-  int32_t xi = -1;
+  int32_t xi = -1, yi = -1, zi = -1;
   if (ii == 0 || ii == order-1){
-    xi = node->x + ii*h;
+    xi = node->x + (ii/(order-1))*h;
   }
   else if (order % 2 == 1 && ii == order/2){
     xi = node->x + h/2;
   }
-  int32_t yi = -1;
   if (jj == 0 || jj == order-1){
-    yi = node->y + jj*h;
+    yi = node->y + (jj/(order-1))*h;
   }
   else if (order % 2 == 1 && jj == order/2){
     yi = node->y + h/2;
   }
-  int32_t zi = -1;
   if (kk == 0 || kk == order-1){
-    zi = node->z + ii*h;
+    zi = node->z + (kk/(order-1))*h;
   }
   else if (order % 2 == 1 && kk == order/2){
     zi = node->z + h/2;
   }
   
   // Compute the real value parametric node location on this block
-  double xd = node->x + 0.5*h*(1.0 + knots[ii]);
-  double yd = node->y + 0.5*h*(1.0 + knots[jj]);
-  double zd = node->z + 0.5*h*(1.0 + knots[kk]);
+  const double xd = node->x + 0.5*h*(1.0 + knots[ii]);
+  const double yd = node->y + 0.5*h*(1.0 + knots[jj]);
+  const double zd = node->z + 0.5*h*(1.0 + knots[kk]);
 
   // Set the low and high indices to the first and last element of the
   // element array
