@@ -4093,124 +4093,103 @@ TMRQuadrant* TMRQuadForest::findEnclosing( const int order,
 
   // Set the lower and upper bounds for the quadrant
   const int32_t face = node->face;
-  const int32_t x = node->x;
-  const int32_t y = node->y;
+  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
 
   // Compute the ii/jj locations
   const int ii = node->info % order;
   const int jj = node->info/order;
 
-  // Compute the parametric node location on this block
-  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
-  const double xd = x + 0.5*h*(1.0 + knots[ii]);
-  const double yd = y + 0.5*h*(1.0 + knots[jj]);
-
-  for ( int i = 0; i < size; i++ ){
-    // Check if array[i] contains the provided quadrant
-    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[i].level);
-
-    // Check whether the node is contained within element i
-    if ((array[i].face == face) &&
-        (array[i].x <= xd && xd <= array[i].x+hm) &&
-        (array[i].y <= yd && yd <= array[i].y+hm)){
-      return &array[i];
-    }
+  // Compute the integer locations for the x/y nodes if they lie
+  // exactly along a coordinate line. These will take precidence over
+  // the real value parametric locations since comparisons will be
+  // exact.
+  int32_t xi = -1;
+  if (ii == 0 || ii == order-1){
+    xi = node->x + ii*h;
   }
-  
-  /*
+  else if (order % 2 == 1 && ii == order/2){
+    xi = node->x + h/2;
+  }
+  int32_t yi = -1;
+  if (jj == 0 || jj == order-1){
+    yi = node->y + jj*h;
+  }
+  else if (order % 2 == 1 && jj == order/2){
+    yi = node->y + h/2;
+  }
+
+  // Compute the parametric node location on this block
+  const double xd = node->x + 0.5*h*(1.0 + knots[ii]);
+  const double yd = node->y + 0.5*h*(1.0 + knots[jj]);
+
   // Set the low and high indices to the first and last
   // element of the element array
   int low = 0;
   int high = size-1;
   int mid = low + (high - low)/2;
 
-  // Maintain values of low/high and mid such that the
-  // quadrant is between (elems[low], elems[high]).
-  // Note that if high-low=1, then mid = high
-  while (high != mid){
-    // Check if array[mid] contains the provided quadrant
-    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
+  // Maintain values of low/high and mid such that the octant is
+  // between (elems[low], elems[high]).  Note that if high-low=1, then
+  // mid = low
+  while (mid != low){
+    // Compare the ordering of the two octants - if the octant is less
+    // than the other, then adjust the mid point
+    int stat = array[mid].comparePosition(node);
 
-    // Check whether the node is contained within mid
-    if ((array[mid].face == face) &&
-        (array[mid].x <= xd && xd <= array[mid].x+hm) &&
-        (array[mid].y <= yd && yd <= array[mid].y+hm)){
-      return &array[mid];
+    // array[mid] ? node
+    if (stat == 0){
+      break;
     }
-    
-    // Compare the ordering of the two quadrants - if the
-    // quadrant is less than the other, then adjust the mid point 
-    if (node->comparePosition(&array[mid]) < 0){
-      high = mid-1;
-    } 
-    else {
+    else if (stat < 0){
       low = mid+1;
+    }
+    else {
+      high = mid-1;
     }
     
     // Re compute the mid-point and repeat
-    mid = high - (int)((high - low)/2);
+    mid = low + (int)((high - low)/2);
   }
 
-  // Check if array[mid] contains the provided quadrant
-  const int32_t h1 = 1 << (TMR_MAX_LEVEL - array[mid].level);
-  if ((array[mid].face == face) &&
-      (array[mid].x <= xd && xd <= array[mid].x+h1) &&
-      (array[mid].y <= yd && yd <= array[mid].y+h1)){
-    return &array[mid];
-  }
+  // Compute the bounding quadrant. Quadrants greater than this quad
+  // cannot own the node so a further search is futile.
+  TMRQuadrant quad;
+  quad.face = face;
+  quad.x = node->x + h;
+  quad.y = node->y + h;
 
-  // Check if elems[low] contains the provided quadrant
-  const int32_t h2 = 1 << (TMR_MAX_LEVEL - array[low].level);
-  if ((array[low].face == face) &&
-      (array[low].x <= xd && xd <= array[low].x+h2) &&
-      (array[low].y <= yd && yd <= array[low].y+h2)){
-    return &array[low];
-  }
-  */
-    
-  if (mpi_owner){
-    int rank = 0;
-    // while (owners[rank+1] <= quad) rank++
-    while (rank < mpi_size-1){
-      // Determine the relative order of the quadrants
-      if (owners[rank+1].face < face){
-        rank++;
-      }
-      else if (owners[rank+1].face == face){
-        // Determine the largest number
-        double xmax = (owners[rank+1].x > xd ? owners[rank+1].x : xd);
-        double ymax = (owners[rank+1].y > yd ? owners[rank+1].y : yd);
+  while (mid < size && array[mid].comparePosition(&quad) <= 0){
+    // Check if array[mid] contains the provided octant
+    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
 
-        // Check for the largest value
-        if (xmax > ymax){
-          if (owners[rank+1].x < xd){
-            rank++;
-          }
-          else {
-            break;
-          }
-        }
-        else {
-          if (owners[rank+1].y < yd){
-            rank++;
-          }
-          else {
-            break;
-          }
-        }
+    // First, make sure that we're on the right block
+    if (array[mid].face == face){
+      // Check the intervals. If the integers are non-negative, use
+      // the integer comparison, otherwise use the double values.
+      int xinterval = 0, yinterval = 0;
+      if (xi >= 0){
+        xinterval = (array[mid].x <= xi && xi <= array[mid].x+hm);
       }
       else {
-        // quad > owners[rank+1]
-        break;
+        xinterval = (array[mid].x <= xd && xd <= array[mid].x+hm);
+      }
+      if (yi >= 0){
+        yinterval = (array[mid].y <= yi && yi <= array[mid].y+hm);
+      }
+      else {
+        yinterval = (array[mid].y <= yd && yd <= array[mid].y+hm);
+      }
+
+      // If all the intervals are satisfied, return the array
+      if (xinterval && yinterval){
+        return &array[mid];
       }
     }
-
-    // Set the owner rank
-    *mpi_owner = rank;
+    mid++;
   }
 
- // No quadrant was found, return NULL
- return NULL;
+  // No quadrant was found, return NULL
+  return NULL;
 }
 
 /*

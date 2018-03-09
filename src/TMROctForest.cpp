@@ -6143,30 +6143,27 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   oct.y = node->y + h;
   oct.z = node->z + h;
 
-  while (mid < size && array[mid].comparePosition(&oct) < 0){
+  while (mid < size && array[mid].comparePosition(&oct) <= 0){
     // Check if array[mid] contains the provided octant
     const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
 
     // First, make sure that we're on the right block
     if (array[mid].block == block){
-      // Check the intervals. If the
-      int xinterval = 0;
+      // Check the intervals. If the integers are non-negative, use
+      // the integer comparison, otherwise use the double values.
+      int xinterval = 0, yinterval = 0, zinterval = 0;
       if (xi >= 0){
         xinterval = (array[mid].x <= xi && xi <= array[mid].x+hm);
       }
       else {
         xinterval = (array[mid].x <= xd && xd <= array[mid].x+hm);
       }
-
-      int yinterval = 0;
       if (yi >= 0){
         yinterval = (array[mid].y <= yi && yi <= array[mid].y+hm);
       }
       else {
         yinterval = (array[mid].y <= yd && yd <= array[mid].y+hm);
       }
-      
-      int zinterval = 0;
       if (zi >= 0){
         zinterval = (array[mid].z <= zi && zi <= array[mid].z+hm);
       }
@@ -6174,11 +6171,11 @@ TMROctant* TMROctForest::findEnclosing( const int order,
         zinterval = (array[mid].z <= zd && zd <= array[mid].z+hm);
       }
 
+      // If all the intervals are satisfied, return the array
       if (xinterval && yinterval && zinterval){
         return &array[mid];
       }
     }
-
     mid++;
   }
 
@@ -6190,8 +6187,12 @@ TMROctant* TMROctForest::findEnclosing( const int order,
     n.y = (yi < 0 ? (int)yd : yi);
     n.z = (zi < 0 ? (int)zd : zi);
 
-    transformNode(&n);
-    
+    if (n.x == 0){ n.x += 1; }
+    else if (n.x == hmax){ n.x -= 1; }
+    if (n.y == 0){ n.y += 1; }
+    else if (n.y == hmax){ n.y -= 1; }
+    if (n.z == 0){ n.z += 1; }
+    else if (n.z == hmax){ n.z -= 1; }
     *mpi_owner = getOctantMPIOwner(&n);
   }
 
