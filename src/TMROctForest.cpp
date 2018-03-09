@@ -3784,9 +3784,6 @@ void TMROctForest::labelDependentNodes( int *nodes ){
   
   input/output:
   oct:  the octant representing a node in the local coordinate system
-
-  output:
-  
 */
 void TMROctForest::transformNode( TMROctant *oct,
                                   int edge_dir,
@@ -3928,7 +3925,7 @@ void TMROctForest::transformNode( TMROctant *oct,
           get_face_node_coords(face_id, hmax, oct->x, oct->y, &u, &v);
         }
 
-        // Compute the edge_reversed flag (if appropriate)
+        // Compute the edge_reversed flag (if needed)
         if (edge_reversed){
           *edge_reversed = 0;
           int32_t x = 0, y = 0, z = 0;
@@ -6058,7 +6055,7 @@ TMROctant* TMROctForest::findEnclosing( const int order,
                                         const double *knots,
                                         TMROctant *node, 
                                         int *mpi_owner ){
-  // Assume that we'll find octant on this processor for now..
+  // Assume that we'll find the node on this processor for now.
   if (mpi_owner){
     *mpi_owner = mpi_rank;
   }
@@ -6067,52 +6064,58 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   int size = 0;
   TMROctant *array = NULL;
   octants->getArray(&array, &size);
-
-  // Find the coordinates of the octant that will enclose the
-  // node
-  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
-
-  // Compute the bounding octant
-  TMROctant oct;
-  oct.x = node->x + h;
-  oct.y = node->y + h;
-  oct.z = node->z + h;
-
-  // Find the lower left corner of the octant that the node
-  // blongs to and find its edge length
+  
+  // The node octant represents the lower left corner of the octant
+  // that the node blongs to. Find the octants edge length.
   const int32_t block = node->block;
-
+  const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
+  
   // Compute the ii/jj/kk locations
   const int ii = node->info % order;
   const int jj = (node->info % (order*order))/order;
   const int kk = node->info/(order*order);
 
-  // Compute the parametric node location on this block
-  const double xd = node->x + 0.5*h*(1.0 + knots[ii]);
-  const double yd = node->y + 0.5*h*(1.0 + knots[jj]);
-  const double zd = node->z + 0.5*h*(1.0 + knots[kk]);
+  // Compute the integer locations for the x/y/z nodes if they lie
+  // exactly along a coordinate line. These will take precidence over
+  // the real value parametric locations since comparisons will be
+  // exact.
+  int32_t xi = -1;
+  if (ii == 0 || ii == order-1){
+    xi = node->x + ii*h;
+  }
+  else if (order % 2 == 1 && ii == order/2){
+    xi = node->x + h/2;
+  }
+  int32_t yi = -1;
+  if (jj == 0 || jj == order-1){
+    yi = node->y + jj*h;
+  }
+  else if (order % 2 == 1 && jj == order/2){
+    yi = node->y + h/2;
+  }
+  int32_t zi = -1;
+  if (kk == 0 || kk == order-1){
+    zi = node->z + ii*h;
+  }
+  else if (order % 2 == 1 && kk == order/2){
+    zi = node->z + h/2;
+  }
+  
+  // Compute the real value parametric node location on this block
+  double xd = node->x + 0.5*h*(1.0 + knots[ii]);
+  double yd = node->y + 0.5*h*(1.0 + knots[jj]);
+  double zd = node->z + 0.5*h*(1.0 + knots[kk]);
 
-  // Set the low and high indices to the first and last
-  // element of the element array
+  // Set the low and high indices to the first and last element of the
+  // element array
   int low = 0;
   int high = size-1;
   int mid = low + (int)((high - low)/2);
 
-  // Maintain values of low/high and mid such that the
-  // octant is between (elems[low], elems[high]).
-  // Note that if high-low=1, then mid = high
+  // Maintain values of low/high and mid such that the octant is
+  // between (elems[low], elems[high]).  Note that if high-low=1, then
+  // mid = low
   while (mid != low){
-    // Check if array[mid] contains the provided octant
-    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
-
-    // Check whether the node is contained within the array
-    if ((array[mid].block == block) &&
-        (array[mid].x <= xd && xd <= array[mid].x+hm) &&
-        (array[mid].y <= yd && yd <= array[mid].y+hm) &&
-        (array[mid].z <= zd && zd <= array[mid].z+hm)){
-      return &array[mid];
-    }
-    
     // Compare the ordering of the two octants - if the octant is less
     // than the other, then adjust the mid point
     int stat = array[mid].comparePosition(node);
@@ -6131,39 +6134,65 @@ TMROctant* TMROctForest::findEnclosing( const int order,
     // Re compute the mid-point and repeat
     mid = low + (int)((high - low)/2);
   }
+  
+  // Compute the bounding octant. Octants greater than this octant
+  // cannot own the node so a further search is futile.
+  TMROctant oct;
+  oct.block = block;
+  oct.x = node->x + h;
+  oct.y = node->y + h;
+  oct.z = node->z + h;
 
   while (mid < size && array[mid].comparePosition(&oct) < 0){
     // Check if array[mid] contains the provided octant
     const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
 
-    // Check whether the node is contained within the array
-    if ((array[mid].block == block) &&
-        (array[mid].x <= xd && xd <= array[mid].x+hm) &&
-        (array[mid].y <= yd && yd <= array[mid].y+hm) &&
-        (array[mid].z <= zd && zd <= array[mid].z+hm)){
-      return &array[mid];
+    // First, make sure that we're on the right block
+    if (array[mid].block == block){
+      // Check the intervals. If the
+      int xinterval = 0;
+      if (xi >= 0){
+        xinterval = (array[mid].x <= xi && xi <= array[mid].x+hm);
+      }
+      else {
+        xinterval = (array[mid].x <= xd && xd <= array[mid].x+hm);
+      }
+
+      int yinterval = 0;
+      if (yi >= 0){
+        yinterval = (array[mid].y <= yi && yi <= array[mid].y+hm);
+      }
+      else {
+        yinterval = (array[mid].y <= yd && yd <= array[mid].y+hm);
+      }
+      
+      int zinterval = 0;
+      if (zi >= 0){
+        zinterval = (array[mid].z <= zi && zi <= array[mid].z+hm);
+      }
+      else {
+        zinterval = (array[mid].z <= zd && zd <= array[mid].z+hm);
+      }
+
+      if (xinterval && yinterval && zinterval){
+        return &array[mid];
+      }
     }
+
     mid++;
   }
 
   if (mpi_owner){
-    int rank = 0;
-    // while (owners[rank+1] <= oct) rank++
-    while (rank < mpi_size-1){
-      // Determine the relative order of the octants
-      if (owners[rank+1].block < block){
-        rank++;
-      }
-      else if (owners[rank+1].comparePosition(node) <= 0){
-        rank++;
-      }
-      else {
-        break;
-      }
-    }
+    const int32_t hmax = 1 << TMR_MAX_LEVEL;
+    TMROctant n;
+    n.block = block;
+    n.x = (xi < 0 ? (int)xd : xi);
+    n.y = (yi < 0 ? (int)yd : yi);
+    n.z = (zi < 0 ? (int)zd : zi);
 
-    // Set the owner rank
-    *mpi_owner = rank;
+    transformNode(&n);
+    
+    *mpi_owner = getOctantMPIOwner(&n);
   }
 
   // No octant was found, return NULL

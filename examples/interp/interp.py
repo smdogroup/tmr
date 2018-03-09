@@ -27,7 +27,7 @@ if os.path.isfile(stepfile):
     opts = TMR.MeshOptions()
     opts.frontal_quality_factor = 1.25
     opts.num_smoothing_steps = 10
-    opts.write_mesh_quality_histogram = 1
+    opts.write_mesh_quality_histogram = 0
 
     # Create the surface mesh
     htarget = 4.0
@@ -54,15 +54,16 @@ if comm.rank == 0:
 fine.refine(refine)
 fine.balance(1)
 fine.repartition()
+fine.setMeshOrder(2, TMR.GAUSS_LOBATTO_POINTS)
 fine.createNodes()
-# fine.writeForestToVTK('fine_forest%d.vtk'%(comm.rank))
+fine.writeForestToVTK('fine_forest%d.vtk'%(comm.rank))
 
 # Create a refinement array
 octants = fine.getOctants()
 refine = np.zeros(len(octants), dtype=np.intc)
 for i in range(len(octants)):
-    if i % 3 == 0:
-        refine[i] = 1
+    if i % 7 == 0:
+        refine[i] = 2
     elif i % 5 == 0:
         refine[i] = -1
 
@@ -71,8 +72,9 @@ coarse = fine.duplicate()
 coarse.refine(refine)
 coarse.balance(0)
 coarse.repartition()
+coarse.setMeshOrder(2, TMR.GAUSS_LOBATTO_POINTS)
 coarse.createNodes()
-# coarse.writeForestToVTK('coarse_forest%d.vtk'%(comm.rank))
+coarse.writeForestToVTK('coarse_forest%d.vtk'%(comm.rank))
 
 coarse_range = coarse.getNodeRange()
 nc = coarse_range[comm.rank+1] - coarse_range[comm.rank]
