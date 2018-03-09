@@ -203,12 +203,14 @@ void TMROctTACSTopoCreator::createElements( int order,
     node.info = node_info;
     
     // Find the enclosing central node
+    int mpi_owner = 0;
     TMROctant *oct = filter->findEnclosing(node_order, node_knots,
-                                           &node);
+                                           &node, &mpi_owner);
 
     if (!oct){
       // Push the octant to the external queue. We will handle these
       // cases seperately after a collective communication.
+      node.tag = mpi_owner;
       queue->push(&node);
       weights[nweights*i].index = -1;
     }
@@ -224,7 +226,7 @@ void TMROctTACSTopoCreator::createElements( int order,
   delete queue;
   
   // Distribute the nodes to the processors that own them
-  int use_tags = 0;
+  int use_tags = 1;
   int *send_ptr, *recv_ptr;
   TMROctantArray *dist_nodes =
     filter->distributeOctants(nodes, use_tags, &send_ptr, &recv_ptr);
@@ -245,6 +247,9 @@ void TMROctTACSTopoCreator::createElements( int order,
       computeWeights(node_order, node_knots, &dist_array[i],
                      oct, wtmp, tmp);
       memcpy(&dist_weights[nweights*i], wtmp, nweights*sizeof(TMRIndexWeight));
+    }
+    else {
+      fprintf(stderr, "[%d] TMROctTACSTopoCreator: Node not found\n", mpi_rank);
     }
   }
 
@@ -422,6 +427,7 @@ TMRQuadTACSCreator(_bcs){
   int mpi_rank;
   MPI_Comm comm = filter->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
+  
   // Create the nodes within the filter
   filter->createNodes();
 
@@ -578,12 +584,14 @@ void TMRQuadTACSTopoCreator::createElements( int order,
     node.info = node_info;
     
     // Find the central node
+    int mpi_owner;
     TMRQuadrant *quad = filter->findEnclosing(node_order, node_knots,
-                                           &node);
+                                              &node, &mpi_owner);
 
     if (!quad){
       // Push the quadrant to the external queue. We will handle these
       // cases seperately after a collective communication.
+      node.tag = mpi_owner;
       queue->push(&node);
       weights[nweights*i].index = -1;
     }
@@ -599,7 +607,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   delete queue;
   
   // Distribute the nodes to the processors that own them
-  int use_tags = 0;
+  int use_tags = 1;
   int *send_ptr, *recv_ptr;
   TMRQuadrantArray *dist_nodes = 
     filter->distributeQuadrants(nodes, use_tags, &send_ptr, &recv_ptr);

@@ -4151,6 +4151,11 @@ TMRQuadrant* TMRQuadForest::findEnclosing( const int order,
   // between (elems[low], elems[high]).  Note that if high-low=1, then
   // mid = low
   while (mid != low){
+    // Check if the node is contained by the mid octant
+    if (array[mid].contains(node)){
+      break;
+    }
+
     // Compare the ordering of the two octants - if the octant is less
     // than the other, then adjust the mid point
     int stat = array[mid].comparePosition(node);

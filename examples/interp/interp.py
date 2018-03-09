@@ -82,5 +82,11 @@ fine_range = fine.getNodeRange()
 nf = fine_range[comm.rank+1] - fine_range[comm.rank]
 fine_map = TACS.VarMap(comm, nf)
 
+# Create the two interpolations fine -> coarse and coarse -> fine
 interp = TACS.VecInterp(coarse_map, fine_map, 1)
 fine.createInterpolation(coarse, interp)
+interp.initialize()
+
+interp2 = TACS.VecInterp(fine_map, coarse_map, 1)
+coarse.createInterpolation(fine, interp2)
+interp2.initialize()

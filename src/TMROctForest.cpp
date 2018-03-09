@@ -6134,6 +6134,11 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   // between (elems[low], elems[high]).  Note that if high-low=1, then
   // mid = low
   while (mid != low){
+    // Check if the node is contained by the mid octant
+    if (array[mid].contains(node)){
+      break;
+    }
+
     // Compare the ordering of the two octants - if the octant is less
     // than the other, then adjust the mid point
     int stat = array[mid].comparePosition(node);
@@ -6162,11 +6167,11 @@ TMROctant* TMROctForest::findEnclosing( const int order,
   oct.z = node->z + h;
 
   while (mid < size && array[mid].comparePosition(&oct) <= 0){
-    // Check if array[mid] contains the provided octant
-    const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
-
     // First, make sure that we're on the right block
     if (array[mid].block == block){
+      // Check if array[mid] contains the provided octant
+      const int32_t hm = 1 << (TMR_MAX_LEVEL - array[mid].level);
+      
       // Check the intervals. If the integers are non-negative, use
       // the integer comparison, otherwise use the double values.
       int xinterval = 0, yinterval = 0, zinterval = 0;
