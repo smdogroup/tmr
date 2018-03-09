@@ -210,6 +210,10 @@ cdef extern from "TMRMesh.h":
         TMRLinearElementSize(double, double,
                              double, double, double, double)
 
+    cdef cppclass TMRBoxFeatureSize(TMRElementFeatureSize):
+        TMRBoxFeatureSize(TMRPoint, TMRPoint, double, double)
+        void addBox(TMRPoint, TMRPoint, double)
+
     cdef cppclass TMRMesh(TMREntity):     
         TMRMesh(MPI_Comm, TMRModel*)
         void mesh(TMRMeshOptions, double)

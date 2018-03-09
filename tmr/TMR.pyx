@@ -901,6 +901,32 @@ cdef class LinearElementSize(ElementFeatureSize):
                   double ay=0.0, double az=0.0):
         self.ptr = new TMRLinearElementSize(hmin, hmax, c, ax, ay, az)
         self.ptr.incref()
+
+cdef class BoxFeatureSize(ElementFeatureSize):
+    cdef TMRBoxFeatureSize *bptr
+    def __cinit__(self, xlow, xhigh, double hmin, double hmax):
+        cdef TMRPoint p1
+        cdef TMRPoint p2
+        p1.x = xlow[0]
+        p1.y = xlow[1]
+        p1.z = xlow[2]
+        p2.x = xhigh[0]
+        p2.y = xhigh[1]
+        p2.z = xhigh[2]
+        self.bptr = new TMRBoxFeatureSize(p1, p2, hmin, hmax)
+        self.ptr = self.bptr
+        self.ptr.incref()
+
+    def addBox(self, xlow, xhigh, double h):
+        cdef TMRPoint p1
+        cdef TMRPoint p2
+        p1.x = xlow[0]
+        p1.y = xlow[1]
+        p1.z = xlow[2]
+        p2.x = xhigh[0]
+        p2.y = xhigh[1]
+        p2.z = xhigh[2]
+        self.bptr.addBox(p1, p2, h)
         
 cdef class Mesh:
     cdef TMRMesh *ptr
