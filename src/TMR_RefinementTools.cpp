@@ -3029,19 +3029,20 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   // Get information about the interpolation
   const double *knots; 
   const int order = forest->getInterpKnots(&knots);
-  
-  const int vars_per_node = tacs->getVarsPerNode();
 
-  // Set the number of enrichment functions
+  // Get the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
+
+  // Get vars per node and compute other size variables
+  const int vars_per_node = tacs->getVarsPerNode();
   const int deriv_per_node = 3*vars_per_node;
   const int num_nodes = order*order*order;
-  const int neq = 3*num_nodes;
+  const int neq = 3*num_nodes; //num_nodes*vars_per_node;
 
   // Set the matrix dimensions
-  int m = nenrich;
+  int m = nenrich*vars_per_node;
   int n = deriv_per_node*num_nodes;
-  int p = neq;
+  int p = neq; 
 
   // Set the derivative of the function w.r.t. the state variables
   dfdu->zeroEntries();
@@ -3087,20 +3088,20 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
 
     // // Set temorary values
-    // TacsScalar *dfduelem = dvars; // should be same size as dfdubar
+    // TacsScalar *dfduelem = dvars; 
     // memset(dfduelem, 0, 3*len*sizeof(TacsScalar));
     // //TacsScalar *dfduelem = new TacsScalar[3*len];
 
     // // Set temporary variable values
-    // TacsScalar dfdubar[3*16]; // *****where is 16 coming from? ---expect this to be size m
-    // memset(dfdubar, 0, 3*nenrich*sizeof(TacsScalar)); // size m as well
+    // TacsScalar dfdubar[3*16]; 
+    // memset(dfdubar, 0, 3*nenrich*sizeof(TacsScalar));
     // //TacsScalar *dfdubar = new TacsScalar[3*nenrich];
 
     TacsScalar *dfduelem = new TacsScalar[p];
     memset(dfduelem, 0, p*sizeof(TacsScalar));
 
     TacsScalar *dfdubar = new TacsScalar[m];
-    memset(dfduelem, 0, m*sizeof(TacsScalar));
+    memset(dfdubar, 0, m*sizeof(TacsScalar));
     
     // Set temporary values
     //TacsScalar dubardu[nenrich*nenrich];
@@ -3110,34 +3111,14 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     
     //TacsScalar dfdubar_prod[3*nenrich];
     //memset(dfdubar_prod, 0, 3*nenrich*sizeof(TacsScalar));
-    TacsScalar *dfdubar_prod = new TacsScalar[p];//[3*nenrich];
+    TacsScalar *dfdubar_prod = new TacsScalar[p];
     memset(dfdubar_prod, 0, p*sizeof(TacsScalar));
     
     TacsScalar *A = new TacsScalar[n*m]; //&tmp[0];
-    TacsScalar *dbdu = new TacsScalar[n*p]; //&tmp[0];
+    TacsScalar *dbdu = new TacsScalar[p*n]; //&tmp[0];
     memset(A, 0, n*m*sizeof(TacsScalar));
-    memset(dbdu, 0, n*p*sizeof(TacsScalar));
+    memset(dbdu, 0, p*n*sizeof(TacsScalar));
     
-    // //
-    // //
-    // //
-    // //
-    // // Check dubar/du using finite difference method
-    // TacsScalar *dubardu_fd = new TacsScalar[m*m];
-    // TacsScalar *u_plus = new TacsScalar[neq];
-    // TacsScalar *ubar_plus = new TacsScalar[neq];
-    // TacsScalar *u_minus = new TacsScalar[neq];
-    // TacsScalar *ubar_minus = new TacsScalar[neq];
-    // double dh = pow(10.0, -10.0);
-    
-
-    // //
-    // //
-    // //
-    // //
-    // //
-    
-
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
     for ( int c = 0, kk = 0; kk < order; kk++ ){
@@ -3150,6 +3131,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           pt[1] = gaussPts[jj];
           pt[2] = gaussPts[kk];
 
+          // Evaluate the knot locations
           double kt[3];
           kt[0] = knots[ii];
           kt[1] = knots[jj];
@@ -3188,6 +3170,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           forest->evalInterp(kt, N, Na, Nb, Nc);
 
+          // Evaluate the enrichment shape functions
           double Nr[MAX_3D_ENRICH];
           double Nar[MAX_3D_ENRICH], Nbr[MAX_3D_ENRICH], Ncr[MAX_3D_ENRICH];
           if (order == 2){
@@ -3208,14 +3191,16 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             A[neq*aa+c] = wvals[ii]*wvals[jj]*wvals[kk]*dr[0];
             A[neq*aa+c+1] = wvals[ii]*wvals[jj]*wvals[kk]*dr[1];
             A[neq*aa+c+2] = wvals[ii]*wvals[jj]*wvals[kk]*dr[2];
+
+            printf("A[%d]=%e, A[%d]=%e, A[%d]=%e\n", neq*aa+c, A[neq*aa+c], neq*aa+c+1, A[neq*aa+c+1], neq*aa+c+2, A[neq*aa+c+2]);
           }
-          for ( int aa = 0; aa < neq; aa++ ){
+          for ( int aa = 0; aa < num_nodes; aa++ ){
             // Compute and assemble dbdu
             TacsScalar d[3];
             d[0] = Na[aa]*J[0] + Nb[aa]*J[1] + Nc[aa]*J[2];
             d[1] = Na[aa]*J[3] + Nb[aa]*J[4] + Nc[aa]*J[5];
             d[2] = Na[aa]*J[6] + Nb[aa]*J[7] + Nc[aa]*J[8];
-
+            
             dbdu[neq*aa+c] = -wvals[ii]*wvals[jj]*wvals[kk]*d[0];
             dbdu[neq*aa+c+1] = -wvals[ii]*wvals[jj]*wvals[kk]*d[1];
             dbdu[neq*aa+c+2] = -wvals[ii]*wvals[jj]*wvals[kk]*d[2];
@@ -3225,22 +3210,23 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     }
 
     dfdu->setValues(len, nodes, dfduelem, TACS_ADD_VALUES);
-    
-    addEnrichDeriv(A, dbdu, dubardu);
-    // for ( int aa = 0; aa < m; aa++ ){
-    //   for ( int bb = 0; bb < n; bb++ ){
+
+    // for ( int aa = 0; aa < n; aa++ ){
+    //   for ( int bb = 0; bb < m; bb++ ){
     //     printf("A[%d, %d]: %e\n", aa, bb, A[aa*n+bb]);
     //   }
     // }
-
-    // for ( int aa = 0; aa < m; aa++ ){
-    //   for ( int bb = 0; bb < n; bb++ ){
+    
+    // for ( int aa = 0; aa < n; aa++ ){
+    //   for ( int bb = 0; bb < p; bb++ ){
     //     printf("dbdu[%d, %d]: %e\n", aa, bb, dbdu[aa*n+bb]);
     //   }
     // }
     
-    // for ( int aa = 0; aa < m; aa++ ){
-    //   for ( int bb = 0; bb < m; bb++ ){
+    addEnrichDeriv(A, dbdu, dubardu);
+    
+    // for ( int aa = 0; aa < n; aa++ ){
+    //   for ( int bb = 0; bb < n; bb++ ){
     //     printf("dubardu[%d, %d]: %e\n", aa, bb, dubardu[aa*m+bb]);
     //   }
     // }
@@ -3277,7 +3263,7 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
   // the regular element interpolation
   TacsScalar Ud[9], Xd[9];
   memset(Ud, 0.0, 9*sizeof(TacsScalar));
-  memset(Xd, 0.0, 9*sizeof(TacsScalar));          
+  memset(Xd, 0.0, 9*sizeof(TacsScalar));
 
   // Evaluate the derivative
   const TacsScalar *u = vars;
@@ -3440,10 +3426,10 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   const int vars_per_node = 3; // is it ever not going to be 3 (in 3d at least?)
   const int deriv_per_node = 3*vars_per_node;
   const int num_nodes = order*order*order;
-  const int neq = 3*num_nodes;
+  const int neq = num_nodes*vars_per_node;
 
   // Set the matrix dimensions
-  int m = nenrich;
+  int m = nenrich*vars_per_node;
   int n = deriv_per_node*num_nodes;
   int p = neq;
    
