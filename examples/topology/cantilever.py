@@ -26,10 +26,9 @@ def addVertexLoad(comm, forest, attr, assembler, F):
     node_range = forest.getNodeRange()
     mpi_rank = comm.Get_rank()
     for i in range(len(node_octs)):
-        if (node_octs[i] >= node_range[mpi_rank]) and \
-               (node_octs[i] < node_range[mpi_rank+1]): 
-            index = node_octs[i]-node_range[mpi_rank]
-            
+        if ((node_octs[i] >= node_range[mpi_rank]) and
+            (node_octs[i] < node_range[mpi_rank+1])): 
+            index = node_octs[i] - node_range[mpi_rank]
             f_array[3*index] -= F[0]
             f_array[3*index+1] -= F[1]
             f_array[3*index+2] -= F[2]
@@ -71,7 +70,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2,
 
     # Make the creator class
     creator = CreateMe(bcs, filters[-1], props)
-    assemblers.append(creator.createTACS(forest,ordering))
+    assemblers.append(creator.createTACS(forest, ordering))
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 

@@ -846,8 +846,8 @@ Failed at node with block: %d x %d y: %d z: %d\n",
                   (iy + jj)*mesh_order +
                   (iz + kk)*mesh_order*mesh_order;
 
-                cell.val[index] = levelvals[bsize*offset + x_offset];
-                                      
+                cell.val[index] = levelvals[offset];
+
                 // Set the node location
                 cell.p[index].x = Xe[offset].x;
                 cell.p[index].y = Xe[offset].y;
