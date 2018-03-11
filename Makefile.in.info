@@ -1,9 +1,9 @@
 # Do not modify this file. Copy this file to Makefile.in and then modify it.
 
 # the full path to the root directory
-TMR_DIR = ${HOME}/hg/tmr
-TACS_DIR = ${HOME}/hg/tacs
-PAROPT_DIR = ${HOME}/hg/paropt
+TMR_DIR = ${HOME}/git/tmr
+TACS_DIR = ${HOME}/git/tacs
+PAROPT_DIR = ${HOME}/git/paropt
 CXX = mpicxx
 RM = rm -f
 

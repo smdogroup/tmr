@@ -30,9 +30,9 @@ def addFaceTraction(order, forest, attr, assembler, tr):
     aux = TACS.AuxElements()
 
     for i in range(len(face_octs)):
-        index = octants.findIndex(face_octs[i])
+        index = face_octs[i].tag
         if index is not None:
-            aux.addElement(index, trac[face_octs[i].tag])
+            aux.addElement(index, trac[face_octs[i].info])
 
     return aux
 
