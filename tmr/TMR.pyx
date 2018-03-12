@@ -150,6 +150,35 @@ cdef class EdgeLoop:
         cdef int *d = NULL
         self.ptr = NULL
 
+        # If no directions are specified, try to find them
+        # based on the node locations
+        if edges is not None and dirs is None:
+            edge_list = edges[:]
+            nedges = len(edge_list)
+            dirs = [1]
+            elist = [edge_list.pop()]
+            v1, vnext = elist[0].getVertices()
+            for k in range(nedges-1):
+                for i, edge in enumerate(edge_list):
+                    v1, v2 = edge.getVertices()
+                    if v1.getEntityId() == vnext.getEntityId():
+                        dirs.append(1)
+                        elist.append(edge)
+                        edge_list.remove(edge)
+                        vnext = v2
+                        break
+                    elif v2.getEntityId() == vnext.getEntityId():
+                        dirs.append(-1)
+                        elist.append(edge)
+                        edge_list.remove(edge)
+                        vnext = v1
+                        break
+            if len(elist) == nedges:
+                edges = elist
+            else:
+                errmsg = 'EdgeLoop: Could not compute directions from edges'
+                raise ValueError(errmsg)
+
         if (edges is not None and dirs is not None and
             len(edges) == len(dirs)):
             nedges = len(edges)
@@ -540,7 +569,15 @@ cdef class TFIFace(Face):
         cdef TMREdge *e[4]
         cdef int d[4]
         cdef TMRVertex *v[4]
-        assert(len(edges) == 4 and len(dirs) == 4 and len(verts) == 4)
+        if len(edges) != 4:
+            errmsg = 'TFIFace: Number of edges must be 4'
+            raise ValueError(errmsg)
+        if len(dirs) != 4:
+            errmsg = 'TFIFace: Number of edge directions must be 4'
+            raise ValueError(errmsg)
+        if len(verts) != 4:
+            errmsg = 'TFIFace: Number of vertices must be 4'
+            raise ValueError(errmsg)
         for i in range(4):
             e[i] = (<Edge>edges[i]).ptr
             v[i] = (<Vertex>verts[i]).ptr

@@ -1,5 +1,4 @@
 /*
-
   The following algorithm generates an STL file from an octree
   with a prescribed scalar field.
   
