@@ -479,6 +479,15 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   freq_ks_weight = 30.0;
   freq_offset = 0.0;
   freq_scale = 1.0;
+
+  // Set up the buckling constraint data
+  buck = NULL;
+  buck_eig_tol = 1e-8;
+  num_buck_eigvals = 5;
+  buck_ks_sum = 0.0;
+  buck_ks_weight = 30.0;
+  buck_offset = 0.0;
+  buck_scale = 1.0;
 }
 
 /*
@@ -1509,7 +1518,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       cons[count] = freq_scale*(cons[count] + freq_offset);
       count++;
     }
-    // Compute the natural frequency constraint, if any
+    // Compute the buckling constraint, if any
     if (buck){
       for ( int i = 0; i < num_load_cases; i++ ){
         if (forces[i]){
