@@ -307,7 +307,7 @@ for ite in xrange(max_iterations):
             problem.setInitDesignVars(x)
 
             # Compute the new filter volumes
-            filtr_volumes = problem.createVolumeVec()
+            filtr_volumes = problem.createVolumeVec(Xscale)
             vols = filtr_volumes.getArray()
         
             # Do the interpolation of the multipliers
@@ -326,7 +326,7 @@ for ite in xrange(max_iterations):
             new_barrier = opt.getComplementarity()
             opt.setInitBarrierParameter(new_barrier)
         else:
-            filtr_volumes = problem.createVolumeVec()
+            filtr_volumes = problem.createVolumeVec(Xscale)
 
         # Optimize the new point
         opt.optimize()
