@@ -2920,6 +2920,12 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
+
+    //-------------------------------------
+    // Set ubar to 0 for debugging purposes
+    const int nenrich = getNum3dEnrich(order);
+    memset(ubar, 0, vars_per_node*16);//3*nenrich);
+    //-------------------------------------
     
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
@@ -3040,9 +3046,9 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   const int neq = 3*num_nodes; //num_nodes*vars_per_node;
 
   // Set the matrix dimensions
-  int m = nenrich*vars_per_node;
+  int m = nenrich; //nenrich*vars_per_node;
   int n = deriv_per_node*num_nodes;
-  int p = neq; 
+  int p = num_nodes; //neq; 
 
   // Set the derivative of the function w.r.t. the state variables
   dfdu->zeroEntries();
@@ -3082,6 +3088,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
+
+    //-------------------------------------
+    // Set ubar to 0 for debugging purposes
+    const int nenrich = getNum3dEnrich(order);
+    memset(ubar, 0, vars_per_node*16);//3*nenrich);
+    //-------------------------------------
 
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
@@ -3191,8 +3203,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             A[neq*aa+c] = wvals[ii]*wvals[jj]*wvals[kk]*dr[0];
             A[neq*aa+c+1] = wvals[ii]*wvals[jj]*wvals[kk]*dr[1];
             A[neq*aa+c+2] = wvals[ii]*wvals[jj]*wvals[kk]*dr[2];
-
-            printf("A[%d]=%e, A[%d]=%e, A[%d]=%e\n", neq*aa+c, A[neq*aa+c], neq*aa+c+1, A[neq*aa+c+1], neq*aa+c+2, A[neq*aa+c+2]);
           }
           for ( int aa = 0; aa < num_nodes; aa++ ){
             // Compute and assemble dbdu
@@ -3423,15 +3433,15 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
 
   // Set the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
-  const int vars_per_node = 3; // is it ever not going to be 3 (in 3d at least?)
+  const int vars_per_node = 3; 
   const int deriv_per_node = 3*vars_per_node;
   const int num_nodes = order*order*order;
   const int neq = num_nodes*vars_per_node;
 
   // Set the matrix dimensions
-  int m = nenrich*vars_per_node;
+  int m = nenrich;
   int n = deriv_per_node*num_nodes;
-  int p = neq;
+  int p = num_nodes;
    
   TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
   //TacsScalar *ATAi_AT = new TacsScalar[m*n]; // store (A^T A)^-1 A^T
