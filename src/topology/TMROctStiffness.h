@@ -64,7 +64,7 @@ class TMRStiffnessProperties : public TMREntity {
   The TMROctStiffness class
 
   This defines the TMROctStiffness class which takes the weights from
-  up to 8 adjacent vertices. This uses the RAMP method for
+  up to 8 adjacent vertices. This class uses the RAMP method for
   penalization.
 */
 class TMROctStiffness : public SolidStiffness {
@@ -122,6 +122,62 @@ class TMROctStiffness : public SolidStiffness {
   TMRIndexWeight *weights;
 };
 
+/*
+
+*/
+/*
+class TMROctStiff : public SolidStiffness {
+ public:
+  TMROctStiff( TMROctForest *_forest, int _elem, 
+               TMRStiffnessProperties *_props,
+               double _q, double _eps=1e-3 ){
+
+  }
+  
+  // Set the design variable values in the object
+  // --------------------------------------------
+  void setDesignVars( const TacsScalar x[], int numDVs );
+  void getDesignVars( TacsScalar x[], int numDVs );
+  void getDesignVarRange( TacsScalar lb[], TacsScalar ub[], int numDVs );
+
+  // Compute the stress
+  // ------------------
+  void calculateStress( const double pt[],
+                        const TacsScalar e[], TacsScalar s[] );
+  void addStressDVSens( const double pt[], const TacsScalar strain[], 
+                        TacsScalar alpha, const TacsScalar psi[], 
+                        TacsScalar dvSens[], int dvLen );
+
+  // Evaluate the pointwise mass
+  // ---------------------------
+  void getPointwiseMass( const double pt[], 
+                         TacsScalar mass[] );
+  void addPointwiseMassDVSens( const double pt[], 
+                               const TacsScalar alpha[],
+                               TacsScalar dvSens[], int dvLen );
+
+  // Return the density as the design variable
+  // -----------------------------------------
+  TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
+    return rho[0]; 
+  }
+
+ private:
+  // Keep track of the element/forest
+  int elem;
+  TMROctForest *forest;
+
+  // The stiffness properties
+  TMRStiffnessProperties *props;
+
+  // The RAMP penalization factor
+  TacsScalar q;
+  double eps;
+
+  // Compute the forest values
+  TacsScalar *rho;
+};
+*/
 /*
   TMRLinearOctStiffness class
 
@@ -201,4 +257,4 @@ class TMRLinearOctStiffness : public SolidStiffness {
   TMRIndexWeight weights[MAX_NUM_WEIGHTS];
 };
 
-#endif // TMR_OCTANT_STIFFNESS
+#endif // TMR_OCTANT_STIFFNESS_H
