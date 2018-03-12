@@ -177,10 +177,10 @@ max_iterations = len(mg_levels)
 # Set parameters for later usage
 order = 2
 forest.createTrees(args.init_depth)
-
+Xscale = 0.1
 # Compute the volume of the bracket
-r = 1.0
-a = 5.0
+r = 10.0*Xscale
+a = 50.0*Xscale
 vol = r*r*a
 vol_frac = args.vol_frac
 
@@ -219,7 +219,7 @@ for ite in xrange(max_iterations):
     nlevs = mg_levels[ite]
     assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
                                                           nlevels=nlevs,
-                                                          Xscale=0.1,
+                                                          Xscale=Xscale,
                                                           ordering=TACS.PY_MULTICOLOR_ORDER)
     
     # Write out just the mesh - for visualization
