@@ -2847,7 +2847,7 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
 
   // Set the maximum number of nodes
   int neq = 3*max_nodes;
-  int max_enrich = 16;
+  int max_enrich = 15;
   varderiv = new TacsScalar[ deriv_per_node*max_nodes ];
   ubar = new TacsScalar[ vars_per_node*max_enrich ];
   tmp = new TacsScalar[ neq*(max_enrich + vars_per_node) ];
@@ -2924,7 +2924,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     //-------------------------------------
     // Set ubar to 0 for debugging purposes
     const int nenrich = getNum3dEnrich(order);
-    memset(ubar, 0, vars_per_node*16);//3*nenrich);
+    memset(ubar, 0, vars_per_node*15);//3*nenrich);
     //-------------------------------------
     
     // Get the quadrature points/weights
@@ -3092,7 +3092,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     //-------------------------------------
     // Set ubar to 0 for debugging purposes
     const int nenrich = getNum3dEnrich(order);
-    memset(ubar, 0, vars_per_node*16);//3*nenrich);
+    memset(ubar, 0, vars_per_node*15);//3*nenrich);
     //-------------------------------------
 
     // Get the quadrature points/weights
@@ -3105,7 +3105,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     // //TacsScalar *dfduelem = new TacsScalar[3*len];
 
     // // Set temporary variable values
-    // TacsScalar dfdubar[3*16]; 
+    // TacsScalar dfdubar[3*15]; 
     // memset(dfdubar, 0, 3*nenrich*sizeof(TacsScalar));
     // //TacsScalar *dfdubar = new TacsScalar[3*nenrich];
 
