@@ -280,18 +280,21 @@ cdef class Volume:
         cdef int *d = NULL
         cdef TMRFace **f = NULL
         self.ptr = NULL
-        if (faces is not None and dirs is not None and
-            len(faces) == len(dirs)):
-            nfaces = len(faces)
-            d = <int*>malloc(nfaces*sizeof(int))
-            f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
-            for i in range(nfaces):
-                f[i] = (<Face>faces[i]).ptr
-                d[i] = <int>dirs[i]
-            self.ptr = new TMRVolume(nfaces, f, d)
-            self.ptr.incref()
-            free(d)
-            free(f)
+        if faces is not None and dirs is not None:
+            if len(faces) == len(dirs):
+                nfaces = len(faces)
+                d = <int*>malloc(nfaces*sizeof(int))
+                f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
+                for i in range(nfaces):
+                    f[i] = (<Face>faces[i]).ptr
+                    d[i] = <int>dirs[i]
+                self.ptr = new TMRVolume(nfaces, f, d)
+                self.ptr.incref()
+                free(d)
+                free(f)
+            else:
+                errmsg = 'Face and direction lists must be the same length'
+                raise ValueError(errmsg)
       
     def __dealloc__(self):
         if self.ptr:
@@ -649,6 +652,9 @@ cdef class Model:
             v = <TMRVertex**>malloc(nverts*sizeof(TMRVertex*))
             for i in xrange(len(verts)):
                 v[i] = (<Vertex>verts[i]).ptr
+                if v[i] is NULL:
+                    errmsg = 'Vertex %d is NULL'%(i)
+                    raise ValueError(errmsg)
 
         cdef int nedges = 0
         cdef TMREdge **e = NULL
@@ -657,6 +663,9 @@ cdef class Model:
             e = <TMREdge**>malloc(nedges*sizeof(TMREdge*))
             for i in xrange(len(edges)):
                 e[i] = (<Edge>edges[i]).ptr
+                if e[i] is NULL:
+                    errmsg = 'Edge %d is NULL'%(i)
+                    raise ValueError(errmsg)
 
         cdef int nfaces = 0
         cdef TMRFace **f = NULL
@@ -665,6 +674,9 @@ cdef class Model:
             f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
             for i in xrange(len(faces)):
                 f[i] = (<Face>faces[i]).ptr
+                if f[i] is NULL:
+                    errmsg = 'Face %d is NULL'%(i)
+                    raise ValueError(errmsg)
 
         cdef int nvols = 0
         cdef TMRVolume **b = NULL
@@ -673,6 +685,9 @@ cdef class Model:
             b = <TMRVolume**>malloc(nvols*sizeof(TMRVolume*))
             for i in xrange(len(vols)):
                 b[i] = (<Volume>vols[i]).ptr
+                if b[i] is NULL:
+                    errmsg = 'Volume %d is NULL'%(i)
+                    raise ValueError(errmsg)
 
         if v and e and f and b:
             self.ptr = new TMRModel(nverts, v, nedges, e, nfaces, f, nvols, b)

@@ -584,7 +584,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
     node.info = node_info;
     
     // Find the central node
-    int mpi_owner;
+    int mpi_owner = 0;
     TMRQuadrant *quad = filter->findEnclosing(node_order, node_knots,
                                               &node, &mpi_owner);
 
