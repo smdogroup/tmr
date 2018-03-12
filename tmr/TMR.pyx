@@ -2333,24 +2333,24 @@ cdef class TopoProblem(pyParOptProblemBase):
         prob.setIterationCounter(count)
         return
 
-    def createVolumeVec(self):
+    def createVolumeVec(self, scale=1.0):
         cdef TACSBVec *vec
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        vec = prob.createVolumeVec()
+        vec = prob.createVolumeVec(scale)
         return _init_Vec(vec)
     
-    def createAreaVec(self):
+    def createAreaVec(self, scale=1.0):
         cdef TACSBVec *vec
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        vec = prob.createAreaVec()
+        vec = prob.createAreaVec(scale)
         return _init_Vec(vec)
             
     def convertPVecToVec(self, PVec pvec):

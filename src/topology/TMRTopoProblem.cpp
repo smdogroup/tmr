@@ -921,7 +921,7 @@ ParOptVec *TMRTopoProblem::createDesignVec(){
 /*
   Compute the volume corresponding to each node within the filter
 */
-TACSBVec* TMRTopoProblem::createVolumeVec(){
+TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
   // Get the dependent nodes and weight values
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
@@ -1011,17 +1011,17 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
           TacsScalar J[9];
           memset(J, 0, 9*sizeof(TacsScalar));
           for ( int j = 0; j < 8; j++ ){
-            J[0] += Na[j]*Xpts[j].x;
-            J[1] += Nb[j]*Xpts[j].x;
-            J[2] += Nc[j]*Xpts[j].x;
+            J[0] += Na[j]*Xpts[j].x*Xscale;
+            J[1] += Nb[j]*Xpts[j].x*Xscale;
+            J[2] += Nc[j]*Xpts[j].x*Xscale;
             
-            J[3] += Na[j]*Xpts[j].y;
-            J[4] += Nb[j]*Xpts[j].y;
-            J[5] += Nc[j]*Xpts[j].y;
+            J[3] += Na[j]*Xpts[j].y*Xscale;
+            J[4] += Nb[j]*Xpts[j].y*Xscale;
+            J[5] += Nc[j]*Xpts[j].y*Xscale;
 
-            J[6] += Na[j]*Xpts[j].z;
-            J[7] += Nb[j]*Xpts[j].z;
-            J[8] += Nc[j]*Xpts[j].z;
+            J[6] += Na[j]*Xpts[j].z*Xscale;
+            J[7] += Nb[j]*Xpts[j].z*Xscale;
+            J[8] += Nc[j]*Xpts[j].z*Xscale;
           }
 
           // Add the determinant to the area - the weights in this
@@ -1055,7 +1055,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec(){
 /*
   Compute the volume corresponding to each node within the filter
 */
-TACSBVec* TMRTopoProblem::createAreaVec(){
+TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
   // Get the dependent nodes and weight values
   const int *dep_ptr, *dep_conn;
   const double *dep_weights;
@@ -1140,11 +1140,11 @@ TACSBVec* TMRTopoProblem::createAreaVec(){
         TacsScalar J[4];
         memset(J, 0, 4*sizeof(TacsScalar));
         for ( int j = 0; j < 4; j++ ){
-          J[0] += Na[j]*Xpts[j].x;
-          J[1] += Nb[j]*Xpts[j].x;
+          J[0] += Na[j]*Xpts[j].x*Xscale;
+          J[1] += Nb[j]*Xpts[j].x*Xscale;
           
-          J[2] += Na[j]*Xpts[j].y;
-          J[3] += Nb[j]*Xpts[j].y;
+          J[2] += Na[j]*Xpts[j].y*Xscale;
+          J[3] += Nb[j]*Xpts[j].y*Xscale;
         }
         
         // Add the determinant to the area - the weights in this
