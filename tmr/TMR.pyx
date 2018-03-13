@@ -1935,10 +1935,11 @@ cdef class OctTopoCreator:
 
 cdef class StiffnessProperties:
     cdef TMRStiffnessProperties *ptr
-    def __cinit__(self, list _rho, list _E, list _nu):
+    def __cinit__(self, list _rho, list _E, list _nu, list _ys=None):
         cdef TacsScalar *rho = NULL
         cdef TacsScalar *E = NULL
         cdef TacsScalar *nu = NULL
+        cdef TacsScalar *ys = NULL
         cdef int nmats = 0
         if len(_rho) != len(_E) or len(_rho) != len(_nu):
             errmsg = 'Must specify the same number of properties'
@@ -1947,19 +1948,27 @@ cdef class StiffnessProperties:
         rho = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
         E = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
         nu = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        if (_ys):
+            ys = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        
         for i in range(nmats):
             rho[i] = <TacsScalar>_rho[i]
             E[i] = <TacsScalar>_E[i]
             nu[i] = <TacsScalar>_nu[i]
-        self.ptr = new TMRStiffnessProperties(nmats, rho, E, nu)
+            if (_ys):
+                ys[i] = <TacsScalar>_ys[i]
+        self.ptr = new TMRStiffnessProperties(nmats, rho, E, nu, ys)
         self.ptr.incref()
         free(rho)
         free(E)
         free(nu)
+        if (ys):
+            free(ys)
         return
 
     def __dealloc__(self):
-        self.ptr.decref()
+        if self.ptr:
+            self.ptr.decref()
 
     def getNumMaterials(self):
         return self.ptr.nmats
