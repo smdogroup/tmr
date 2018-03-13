@@ -1697,6 +1697,9 @@ def LoadModel(str filename, int print_lev=0):
         model = TMR_LoadModelFromSTEPFile(filename, print_lev)
     elif filename.lower().endswith(('igs', 'iges')):
         model = TMR_LoadModelFromIGESFile(filename, print_lev)
+    if model is NULL:
+        errmsg = 'Error loading model. File %s does not exist?'%(filename)
+        raise RuntimeError(errmsg)
     return _init_Model(model)
    
 cdef class BoundaryConditions:
