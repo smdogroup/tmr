@@ -143,15 +143,24 @@ class TMROctStiffness : public SolidStiffness {
 };
 
 /*
-
+  An octant stiffness class that enables variation of the material
+  density/stiffness across the element based on the interpolation in
+  the underlying forest.
 */
 /*
-class TMROctStiff : public SolidStiffness {
+class TMROctInterpStiffness : public SolidStiffness {
  public:
-  TMROctStiff( TMROctForest *_forest, int _elem, 
+  TMROctStiff( TMROctForest *_filter, int _elem, 
                TMRStiffnessProperties *_props,
                double _q, double _eps=1e-3 ){
+    filter = _filter;
+    props = _props;
+    filter->incref();
+    props->incref();
 
+    // Set the material penalization parameters
+    q = _q;
+    eps = _eps;    
   }
   
   // Set the design variable values in the object
@@ -198,6 +207,7 @@ class TMROctStiff : public SolidStiffness {
   TacsScalar *rho;
 };
 */
+
 /*
   TMRLinearOctStiffness class
 

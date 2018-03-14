@@ -77,8 +77,7 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   TACSBVecDistribute *dist = new TACSBVecDistribute(var_map, indices);
   
   // Create the design vector
-  TACSBVec *vars = new TACSBVec(var_map, 1, dist, 
-                                tacs->getBVecDepNodes());
+  TACSBVec *vars = new TACSBVec(var_map, 1, dist);
   vars->incref();
 
   // Get the range of the nodes
@@ -88,7 +87,7 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   // Get the communicator rank
   int mpi_rank;
   MPI_Comm_rank(forest->getMPIComm(), &mpi_rank);
-  
+
   // Get the filter points
   TMRPoint *X;
   filter->getPoints(&X);
@@ -137,8 +136,8 @@ int main( int argc, char *argv[] ){
   // Don't write anything to a file, unless a flag is 
   // set on the command line
   int write_faces_to_vtk = 0;
-  int test_bdf_file = 1;
-  int test_stl_file = 1;
+  int test_bdf_file = 0;
+  int test_stl_file = 0;
   int order = 2;
   for ( int k = 0; k < argc; k++ ){
     if (strcmp(argv[k], "--write_faces") == 0){
@@ -222,7 +221,7 @@ int main( int argc, char *argv[] ){
 
     // Create the random trees
     forest->setTopology(topo);
-    forest->createRandomTrees(10, 0, 4);
+    forest->createRandomTrees(10, 0, 5);
     forest->balance();
     forest->createNodes();
 

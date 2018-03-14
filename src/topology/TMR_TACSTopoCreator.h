@@ -27,9 +27,9 @@
 
 /*
   This is an abstract base class used to create octforests specialized
-  for topology optimization. This class can be overriden with the 
-  createElement class to create different types of topolgy optimization
-  problems for 3D structures
+  for topology optimization. This class can be overriden with the
+  createElement function to create different types of topolgy
+  optimization problems for 3D structures.
 */
 class TMROctTACSTopoCreator : public TMROctTACSCreator {
  public:

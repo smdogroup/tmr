@@ -71,7 +71,7 @@ TMROctTACSTopoCreator::~TMROctTACSTopoCreator(){
   if (filter_indices){ filter_indices->decref(); }
 }
 
-// Get the underlying information about the
+// Get the underlying information about the filter
 void TMROctTACSTopoCreator::getFilter( TMROctForest **_filter ){
   *_filter = filter;
 }
@@ -337,7 +337,7 @@ void TMROctTACSTopoCreator::createElements( int order,
   // Get the external numbers from the filter itself
   const int *filter_ext;
   int num_filter_ext = filter->getNodeNumbers(&filter_ext);
-
+  
   // Count up all the external nodes
   int num_ext = 0;
   int max_ext_nodes = nweights*num_octs + num_filter_ext;

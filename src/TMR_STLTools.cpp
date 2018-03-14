@@ -718,7 +718,7 @@ int TMR_GenerateBinFile( const char *filename,
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
   // Create the list of Triangles
-  TriangleList *list = new TriangleList(5000);
+  TriangleList *list = new TriangleList(4096);
 
   // Get the block -> face information and the face -> block info.
   // This will be used to determine which faces lie on the boundaries

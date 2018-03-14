@@ -1395,9 +1395,9 @@ void TMROctForest::writeForestToVTK( const char *filename ){
       
       // Get the quadrants
       int size;
-      TMROctant *array;
-      octants->getArray(&array, &size);
-      
+      TMROctant *octs;
+      octants->getArray(&octs, &size);
+
       // Write out the points
       fprintf(fp, "POINTS %d float\n", 8*size);
 
@@ -1405,18 +1405,18 @@ void TMROctForest::writeForestToVTK( const char *filename ){
       const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
       for ( int k = 0; k < size; k++ ){
-        const int32_t h = 1 << (TMR_MAX_LEVEL - array[k].level);
-                
+        const int32_t h = 1 << (TMR_MAX_LEVEL - octs[k].level);
+
         // Get the surface object and evaluate the point
         TMRVolume *vol;
-        topo->getVolume(array[k].block, &vol);
+        topo->getVolume(octs[k].block, &vol);
 
         for ( int kk = 0; kk < 2; kk++ ){
           for ( int jj = 0; jj < 2; jj++ ){
             for ( int ii = 0; ii < 2; ii++ ){
-              double u = 1.0*(array[k].x + ii*h)/hmax;
-              double v = 1.0*(array[k].y + jj*h)/hmax;
-              double w = 1.0*(array[k].z + kk*h)/hmax;
+              double u = 1.0*(octs[k].x + ii*h)/hmax;
+              double v = 1.0*(octs[k].y + jj*h)/hmax;
+              double w = 1.0*(octs[k].z + kk*h)/hmax;
 
               TMRPoint p;
               vol->evalPoint(u, v, w, &p);
@@ -1445,7 +1445,7 @@ void TMROctForest::writeForestToVTK( const char *filename ){
       fprintf(fp, "SCALARS entity_index float 1\n");
       fprintf(fp, "LOOKUP_TABLE default\n");
       for ( int k = 0; k < size; k++ ){
-        fprintf(fp, "%e\n", 1.0*array[k].block);
+        fprintf(fp, "%e\n", 1.0*octs[k].block);
       }
 
       fclose(fp);
@@ -4271,8 +4271,8 @@ TMROctantArray *TMROctForest::createLocalNodes(){
 
   // Set the node locations
   if (mesh_order == 2){
-    // First of all, add all the nodes from the local elements
-    // on this processor
+    // First add all the nodes from the local elements on this
+    // processor
     for ( int i = 0; i < num_elements; i++ ){
       const int32_t h = 1 << (TMR_MAX_LEVEL - octs[i].level);
       for ( int kk = 0; kk < 2; kk++ ){
@@ -5533,32 +5533,16 @@ void TMROctForest::evaluateNodeLocations(){
           for ( int ii = 0; ii < mesh_order; ii++ ){
             // Compute the mesh index
             int node = c[ii + jj*mesh_order + kk*mesh_order*mesh_order];
-            if (node >= 0){
-              int index = getLocalNodeNumber(node);
-              if (!flags[index]){
-                flags[index] = 1;
-                vol->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
-                               v + 0.5*d*(1.0 + interp_knots[jj]),
-                               w + 0.5*d*(1.0 + interp_knots[kk]),
-                               &X[index]);
-              }
+            int index = getLocalNodeNumber(node);
+            if (!flags[index]){
+              flags[index] = 1;
+              vol->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
+                             v + 0.5*d*(1.0 + interp_knots[jj]),
+                             w + 0.5*d*(1.0 + interp_knots[kk]),
+                             &X[index]);
             }
           }
         }
-      }
-    }
-
-    // Set the dependent node values
-    for ( int i = 0; i < num_dep_nodes; i++ ){
-      int pt = num_dep_nodes-1-i;
-      X[pt].x = X[pt].y = X[pt].z = 0.0;
-
-      for ( int j = dep_ptr[i]; j < dep_ptr[i+1]; j++ ){
-        int node = dep_conn[j];
-        int index = getLocalNodeNumber(node);
-        X[pt].x += dep_weights[j]*X[index].x;
-        X[pt].y += dep_weights[j]*X[index].y;
-        X[pt].z += dep_weights[j]*X[index].z;
       }
     }
   }
