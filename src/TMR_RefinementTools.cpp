@@ -2946,7 +2946,8 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
           // Evaluate the strain
           TacsScalar J[9], e[6];
           evalStrain(pt, Xpts, vars, ubar, J, e);
-          
+          // printf("exx=%e, eyy=%e, ezz=%e, exy=%e, eyz=%e, exz=%e\n", e[0], e[1], e[2], e[3], e[4], e[5]);
+            
           // Evaluate the failure criteria
           TacsScalar fval;
           con->failure(pt, e, &fval);
@@ -2989,6 +2990,12 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
+    //-------------------------------------
+    // Set ubar to 0 for debugging purposes
+    const int nenrich = getNum3dEnrich(order);
+    memset(ubar, 0, vars_per_node*15);//3*nenrich);
+    //-------------------------------------
+    
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
     FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
@@ -3109,11 +3116,11 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     // memset(dfdubar, 0, 3*nenrich*sizeof(TacsScalar));
     // //TacsScalar *dfdubar = new TacsScalar[3*nenrich];
 
-    TacsScalar *dfduelem = new TacsScalar[p];
-    memset(dfduelem, 0, p*sizeof(TacsScalar));
+    TacsScalar *dfduelem = new TacsScalar[3*p];
+    memset(dfduelem, 0, 3*p*sizeof(TacsScalar));
 
-    TacsScalar *dfdubar = new TacsScalar[m];
-    memset(dfdubar, 0, m*sizeof(TacsScalar));
+    TacsScalar *dfdubar = new TacsScalar[3*m];
+    memset(dfdubar, 0, 3*m*sizeof(TacsScalar));
     
     // Set temporary values
     //TacsScalar dubardu[nenrich*nenrich];
@@ -3152,15 +3159,23 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           // Evaluate the strain
           TacsScalar J[9], e[6];
           TacsScalar detJ = evalStrain(pt, Xpts, vars, ubar, J, e);
+          // printf("detJ=%e\n", detJ);
           detJ *= gaussWts[ii]*gaussWts[jj]*gaussWts[kk];
-
+          // printf("gauss wts=%e, %e, %e\n", gaussWts[ii], gaussWts[jj], gaussWts[kk]);
+          
           // Evaluate the failure criteria
           TacsScalar fval;
           con->failure(pt, e, &fval);
 
           // Compute the weight at this point
           TacsScalar kw = detJ*exp(ks_weight*(fval - ks_max_fail))/ks_fail_sum;
-
+          // printf("ks_fail_sum=%e\n", ks_fail_sum);
+          // printf("ks weight=%e\n", ks_weight);
+          // printf("fval=%e\n", fval);
+          // printf("ks_max_fail=%e\n", ks_max_fail);
+          // printf("exponent=%e\n", exp(ks_weight*(fval - ks_max_fail)));
+          // printf("kw=%e\n\n",kw);
+          
           // Add the derivative w.r.t. the design variables
           con->addFailureDVSens(pt, e, kw, dfdx, size);
 
@@ -3233,7 +3248,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     //   }
     // }
     
-    addEnrichDeriv(A, dbdu, dubardu);
+    // addEnrichDeriv(A, dbdu, dubardu);
     
     // for ( int aa = 0; aa < n; aa++ ){
     //   for ( int bb = 0; bb < n; bb++ ){
@@ -3242,17 +3257,26 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     // }
     
     // Compute the product (df/dubar)(dubar/du)
-    TacsScalar a = 1.0, b = 0.0;
-    int k = 1;
-    BLASgemm("N", "N", &p, &k, &n, &a, dubardu, &p,
-             dfdubar, &n, &b, dfdubar_prod, &p);
+    // --------------- Commented for debugging ------------------
+    // TacsScalar a = 1.0, b = 0.0;
+    // int k = 1;
+    // BLASgemm("N", "N", &p, &k, &n, &a, dubardu, &p,
+    //          dfdubar, &n, &b, dfdubar_prod, &p);
     
-    dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
+    // dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
+
+    // Free allocated memory
+    delete [] dfduelem;
+    delete [] dfdubar;
+    delete [] dubardu;
+    delete [] dfdubar_prod;
+    delete [] A;
+    delete [] dbdu;
   }
 
   tacs->applyBCs(dfdu);
 }
-                     
+
 /*
   Evaluate the strain
 */
@@ -3399,10 +3423,11 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
     TacsScalar Dx = na[0]*J[0] + nb[0]*J[3] + nc[0]*J[6];
     TacsScalar Dy = na[0]*J[1] + nb[0]*J[4] + nc[0]*J[7];
     TacsScalar Dz = na[0]*J[2] + nb[0]*J[5] + nc[0]*J[8];
-
+    
     dfdu[0] += alpha*(dfde[0]*Dx + dfde[4]*Dz + dfde[5]*Dy);
     dfdu[1] += alpha*(dfde[1]*Dy + dfde[3]*Dz + dfde[4]*Dz);
     dfdu[2] += alpha*(dfde[2]*Dz + dfde[3]*Dy + dfde[5]*Dx);
+    // printf("dfdu: %e, %e, %e\n\n", dfdu[0], dfdu[1], dfdu[2]);
     dfdu += 3;
     na++; nb++; nc++;
   }
@@ -3417,6 +3442,7 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
     dfdubar[0] += alpha*(dfde[0]*Dx + dfde[4]*Dz + dfde[5]*Dy);
     dfdubar[1] += alpha*(dfde[1]*Dy + dfde[3]*Dz + dfde[4]*Dz);
     dfdubar[2] += alpha*(dfde[2]*Dz + dfde[3]*Dy + dfde[5]*Dx);
+    // printf("dfdubar: %e, %e, %e\n", dfdubar[0], dfdubar[1], dfdubar[2]);
     dfdubar += 3;
     na++; nb++; nc++;
   }
