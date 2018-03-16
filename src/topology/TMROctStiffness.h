@@ -28,7 +28,7 @@ class TMRStiffnessProperties : public TMREntity {
       density[i] = rho[i];
       E[i] = _E[i];
       nu[i] = _nu[i];
-      ys[i] = 1.0e8;
+      ys[i] = 1.0e6;
       G[i] = 0.5*E[i]/(1.0 + nu[i]);
       D[i] = E[i]/((1.0 + nu[i])*(1.0 - 2.0*nu[i]));
       if (_ys){
