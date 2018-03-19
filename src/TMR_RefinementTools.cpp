@@ -2921,11 +2921,11 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
-    //-------------------------------------
-    // Set ubar to 0 for debugging purposes
-    const int nenrich = getNum3dEnrich(order);
-    memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
-    //-------------------------------------
+    // //-------------------------------------
+    // // Set ubar to 0 for debugging purposes
+    // const int nenrich = getNum3dEnrich(order);
+    // memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
+    // //-------------------------------------
     
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
@@ -2989,11 +2989,11 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
-    //-------------------------------------
-    // Set ubar to 0 for debugging purposes
-    const int nenrich = getNum3dEnrich(order);
-    memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
-    //-------------------------------------
+    // //-------------------------------------
+    // // Set ubar to 0 for debugging purposes
+    // const int nenrich = getNum3dEnrich(order);
+    // memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
+    // //-------------------------------------
     
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
@@ -3054,7 +3054,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   // Set the matrix dimensions
   int m = nenrich; //nenrich*vars_per_node;
   int n = deriv_per_node*num_nodes;
-  int p = num_nodes; //neq; 
+  int p = num_nodes; //neq;
 
   // Set the derivative of the function w.r.t. the state variables
   dfdu->zeroEntries();
@@ -3072,6 +3072,14 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     wvals[0] = wvals[2] = 0.5;
     wvals[1] = 1.0;
   }
+
+  // Initialize variables
+  TacsScalar *dfduelem = new TacsScalar[3*p];
+  TacsScalar *dfdubar = new TacsScalar[3*m];
+  TacsScalar *dubardu = new TacsScalar[m*p];
+  TacsScalar *dfdubar_prod = new TacsScalar[p];
+  TacsScalar *A = new TacsScalar[n*m];
+  TacsScalar *dbdu = new TacsScalar[p*n];
 
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
@@ -3095,45 +3103,21 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
-    //-------------------------------------
-    // Set ubar to 0 for debugging purposes
-    const int nenrich = getNum3dEnrich(order);
-    memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
-    //-------------------------------------
+    // //-------------------------------------
+    // // Set ubar to 0 for debugging purposes
+    // const int nenrich = getNum3dEnrich(order);
+    // memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
+    // //-------------------------------------
 
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
     FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
-
-    // // Set temorary values
-    // TacsScalar *dfduelem = dvars; 
-    // memset(dfduelem, 0, 3*len*sizeof(TacsScalar));
-    // //TacsScalar *dfduelem = new TacsScalar[3*len];
-
-    // // Set temporary variable values
-    // TacsScalar dfdubar[3*15]; 
-    // memset(dfdubar, 0, 3*nenrich*sizeof(TacsScalar));
-    // //TacsScalar *dfdubar = new TacsScalar[3*nenrich];
-
-    TacsScalar *dfduelem = new TacsScalar[3*p];
+    
+    // Zero variables before elementwise operations begin
     memset(dfduelem, 0, 3*p*sizeof(TacsScalar));
-
-    TacsScalar *dfdubar = new TacsScalar[3*m];
     memset(dfdubar, 0, 3*m*sizeof(TacsScalar));
-    
-    // Set temporary values
-    //TacsScalar dubardu[nenrich*nenrich];
-    //memset(dubardu, 0, nenrich*nenrich*sizeof(TacsScalar));
-    TacsScalar *dubardu = new TacsScalar[m*p];
     memset(dubardu, 0, m*p*sizeof(TacsScalar));
-    
-    //TacsScalar dfdubar_prod[3*nenrich];
-    //memset(dfdubar_prod, 0, 3*nenrich*sizeof(TacsScalar));
-    TacsScalar *dfdubar_prod = new TacsScalar[p];
     memset(dfdubar_prod, 0, p*sizeof(TacsScalar));
-    
-    TacsScalar *A = new TacsScalar[n*m]; //&tmp[0];
-    TacsScalar *dbdu = new TacsScalar[p*n]; //&tmp[0];
     memset(A, 0, n*m*sizeof(TacsScalar));
     memset(dbdu, 0, p*n*sizeof(TacsScalar));
     
@@ -3148,12 +3132,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           pt[0] = gaussPts[ii];
           pt[1] = gaussPts[jj];
           pt[2] = gaussPts[kk];
-
-          // Evaluate the knot locations
-          double kt[3];
-          kt[0] = knots[ii];
-          kt[1] = knots[jj];
-          kt[2] = knots[kk];
           
           // Evaluate the strain
           TacsScalar J[9], e[6];
@@ -3166,13 +3144,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
 
           // Compute the weight at this point
           TacsScalar kw = detJ*exp(ks_weight*(fval - ks_max_fail))/ks_fail_sum;
-          
-          // printf("ks_fail_sum=%e\n", ks_fail_sum);
-          // printf("ks weight=%e\n", ks_weight);
-          // printf("fval=%e\n", fval);
-          // printf("ks_max_fail=%e\n", ks_max_fail);
-          // printf("exponent=%e\n", exp(ks_weight*(fval - ks_max_fail)));
-          // printf("kw=%e\n\n",kw);
 
           // Add the derivative w.r.t. the design variables
           con->addFailureDVSens(pt, e, kw, dfdx, size);
@@ -3183,12 +3154,23 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
 
           // Add the derivative of the strain
           addStrainDeriv(pt, J, kw, dfde, dfduelem, dfdubar);
+    //     }
+    //   }
+    // }
+    
+    // //
+    // // Compute A and dbdu
+    // //
+    // for ( int c = 0, kk = 0; kk < order; kk++ ){
+    //   for ( int jj = 0; jj < order; jj++ ){
+    //     for ( int ii = 0; ii < order; ii++, c += 3 ){
 
-          /*
-          //
-          // Compute A and dbdu
-          //
-
+          // Evaluate the knot locations
+          double kt[3];
+          kt[0] = knots[ii];
+          kt[1] = knots[jj];
+          kt[2] = knots[kk];
+          
           // Compute the element shape functions at this point
           double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
@@ -3196,6 +3178,10 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           forest->evalInterp(kt, N, Na, Nb, Nc);
 
+          // // Evaluate the Jacobian transformation at this point
+          // TacsScalar Xd[9], J[9];
+          // computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J, order*order*order);
+          
           // Evaluate the enrichment shape functions
           double Nr[MAX_3D_ENRICH];
           double Nar[MAX_3D_ENRICH], Nbr[MAX_3D_ENRICH], Ncr[MAX_3D_ENRICH];
@@ -3229,7 +3215,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             dbdu[neq*aa+c+1] = -wvals[ii]*wvals[jj]*wvals[kk]*d[1];
             dbdu[neq*aa+c+2] = -wvals[ii]*wvals[jj]*wvals[kk]*d[2];
           }
-          */
         }
       }
     }
@@ -3248,7 +3233,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     //   }
     // }
     
-    // addEnrichDeriv(A, dbdu, dubardu);
+    addEnrichDeriv(A, dbdu, dubardu);
     
     // for ( int aa = 0; aa < n; aa++ ){
     //   for ( int bb = 0; bb < n; bb++ ){
@@ -3257,13 +3242,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     // }
     
     // Compute the product (df/dubar)(dubar/du)
-    // --------------- Commented for debugging ------------------
-    // TacsScalar a = 1.0, b = 0.0;
-    // int k = 1;
-    // BLASgemm("N", "N", &p, &k, &n, &a, dubardu, &p,
-    //          dfdubar, &n, &b, dfdubar_prod, &p);
+    TacsScalar a = 1.0, b = 0.0;
+    int k = 1;
+    BLASgemm("N", "N", &p, &k, &n, &a, dubardu, &p,
+             dfdubar, &n, &b, dfdubar_prod, &p);
     
-    // dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
+    dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
 
     // Free allocated memory
     delete [] dfduelem;
