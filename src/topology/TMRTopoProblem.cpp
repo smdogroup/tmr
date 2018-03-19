@@ -323,7 +323,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   buck = NULL;
   buck_eig_tol = 1e-8;
   num_buck_eigvals = 5;
-  buck_ks_sum = 0.0;
+  buck_ks_sum = NULL;
   buck_ks_weight = 30.0;
   buck_offset = 0.0;
   buck_scale = 1.0;
@@ -484,7 +484,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   buck = NULL;
   buck_eig_tol = 1e-8;
   num_buck_eigvals = 5;
-  buck_ks_sum = 0.0;
+  buck_ks_sum = NULL;
   buck_ks_weight = 30.0;
   buck_offset = 0.0;
   buck_scale = 1.0;
@@ -783,24 +783,30 @@ void TMRTopoProblem::addBucklingConstraint( double sigma,
                                             int max_lanczos,
                                             double eigtol ){
   if (!buck){
+    
     // Create a geometric stiffness matrix for buckling constraint
     TACSMat *gmat = tacs[0]->createMat();
     TACSMat *kmat = tacs[0]->createMat();
     TACSMat *aux_mat;
     ksm->getOperators(&aux_mat, NULL);
-    
-    // Create the buckling analysis object    
-    buck = new TACSLinearBuckling(tacs[0], sigma, gmat, kmat,
-                                  aux_mat, ksm, max_lanczos, 
-                                  num_eigvals, eigtol);
-    buck->incref();
+
+    buck = new TACSLinearBuckling*[ num_load_cases ];
+    buck_ks_sum = new TacsScalar[ num_load_cases ];
+    for ( int i = 0; i < num_load_cases; i++ ){
+      // Create the buckling analysis object    
+      buck[i] = new TACSLinearBuckling(tacs[0], sigma, gmat, kmat,
+                                       aux_mat, ksm, max_lanczos, 
+                                       num_eigvals, eigtol);
+      
+      buck[i]->incref();
+    }    
   }
 
   // Set a parameters that control how the natural frequency
   // constraint is implemented
   buck_eig_tol = eigtol;
-  num_buck_eigvals = num_eigvals;
-  buck_ks_sum = 0.0;
+  num_buck_eigvals = num_eigvals;  
+  memset(buck_ks_sum, 0.0, num_load_cases*sizeof(TacsScalar));
   buck_ks_weight = ks_weight;
   buck_offset = offset;
   buck_scale = scale;
@@ -860,7 +866,9 @@ void TMRTopoProblem::initialize(){
     num_constraints++;
   }
   if (buck){
-    num_constraints++;
+    for ( int i = 0; i < num_load_cases; i++ ){
+      num_constraints++;
+    }
   }
   // Set the problem sizes
   int nvars = x[0]->getArray(NULL);
@@ -1450,7 +1458,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         for ( int j = 0; j < num_funcs; j++ ){
           TacsScalar offset = load_case_info[i].offset[j];
           TacsScalar scale = load_case_info[i].scale[j];
-          cons[count + j] = scale*(cons[count+j] + offset);
+          cons[count + j] = scale*(cons[count+j] + offset);          
         }
         count += num_funcs;
       }
@@ -1536,13 +1544,13 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
             err_count = 0;
 
             // Solve the eigenvalue problem
-            buck->solve(forces[i],
-                        new KSMPrintStdout("KSM", mpi_rank, 1));
+            buck[i]->solve(forces[i],
+                           new KSMPrintStdout("KSM", mpi_rank, 1));
 
             // Extract the first k eigenvalues
             for ( int k = 0; k < num_buck_eigvals; k++ ){
               TacsScalar error;
-              TacsScalar eigval = buck->extractEigenvalue(k, &error);
+              TacsScalar eigval = buck[i]->extractEigenvalue(k, &error);
               if (eigval < 0.0){ 
                 eigval *= -1.0; 
               }
@@ -1560,27 +1568,27 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
             if (err_count > 0){
               double sigma = shift*smallest_eigval;
               shift += 0.5*(1.0 - shift) + shift;
-              buck->setSigma(sigma);
+              buck[i]->setSigma(sigma);
             }
           }
 
           // Evaluate the KS function of the lowest eigenvalues
-          buck_ks_sum = 0.0;
+          buck_ks_sum[i] = 0.0;
 
           // Weight on the KS function
           for (int k = 0; k < num_buck_eigvals; k++){
             TacsScalar error;
-            TacsScalar eigval = buck->extractEigenvalue(k, &error);
+            TacsScalar eigval = buck[i]->extractEigenvalue(k, &error);
             if (eigval < 0.0){
               eigval *= -1.0;
             }
 
             // Add up the contribution to the ks function
-            buck_ks_sum += exp(-buck_ks_weight*(eigval - smallest_eigval));
+            buck_ks_sum[i] += exp(-buck_ks_weight*(eigval - smallest_eigval));
           }
 
           // Evaluate the KS function of the aggregation of the eigenvalues
-          cons[count] = (smallest_eigval - log(buck_ks_sum)/buck_ks_weight);
+          cons[count] = (smallest_eigval - log(buck_ks_sum[i])/buck_ks_weight);
           cons[count] = buck_scale*(cons[count] + buck_offset);
           count++;
         }
@@ -1689,7 +1697,6 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         if (dynamic_cast<TACSStructuralMass*>(func)){
           use_adjoint = 0;
         }
-
         if (use_adjoint){
           // Evaluate the right-hand-side
           dfdu->zeroEntries();
@@ -1768,31 +1775,32 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(xlocal, A);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
-      }
-      
+      } //wrap      
       count++;
     }
     if (buck){
+      // // Compute the derivative of the buckling functions
+      // for ( int i = 0; i < num_load_cases; i++ ){
+      //   tacs[0]->setVariables(vars[i]);
       // Try to unwrap the vector
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
       if (wrap){
         // Get the vector
         TACSBVec *A = wrap->vec;
         memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
-
+          
         TacsScalar *temp = new TacsScalar[max_local_size];
         memset(temp, 0, max_local_size*sizeof(TacsScalar));
-
         // Add the contribution from each eigenvalue derivative
         TacsScalar smallest_eigval = 0.0;
         for ( int k = 0; k < num_buck_eigvals; k++ ){
           // Compute the derivaive of the eigenvalue
-          buck->evalEigenDVSens(k, temp, max_local_size);
+          buck[i]->evalEigenDVSens(k, temp, max_local_size);
 
           // Extract the eigenvalue itself
           TacsScalar error;
           TacsScalar ks_grad_weight = 1.0;
-          TacsScalar eigval = buck->extractEigenvalue(k, &error);
+          TacsScalar eigval = buck[i]->extractEigenvalue(k, &error);
           if (eigval < 0.0){
             eigval *= -1.0;
             ks_grad_weight = -1.0;
@@ -1803,7 +1811,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
 
           // Evaluate the weight on the gradient
           ks_grad_weight *=
-            exp(-buck_ks_weight*(eigval - smallest_eigval))/buck_ks_sum;
+            exp(-buck_ks_weight*(eigval - smallest_eigval))/buck_ks_sum[i];
 
           // Scale the constraint by the buckling scaling value
           ks_grad_weight *= buck_scale;
@@ -1822,10 +1830,9 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
       }
-      
-      count++;
+      count++;      
     }
-  }
+  } // end num_load_cases
 
   return 0;
 }
@@ -2096,15 +2103,19 @@ void TMRTopoProblem::writeEigenVector( int iter ){
     TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID, 
                                   write_flag);
     f5->incref();
-    // Extract the first k eigenvectors
-    for ( int k = 0; k < num_buck_eigvals; k++ ){
-      TacsScalar error;
-      buck->extractEigenvector(k, tmp, &error);
-      tacs[0]->setVariables(tmp);
-      sprintf(outfile, "%s/eigenvector%02d_output%d.f5", 
-              prefix, k, iter);
-      f5->writeToFile(outfile);
+    for ( int i = 0; i < num_load_cases; i++ ){
+      // Extract the first k eigenvectors for ith load
+      for ( int k = 0; k < num_buck_eigvals; k++ ){
+        TacsScalar error;
+        buck[i]->extractEigenvector(k, tmp, &error);
+        tacs[0]->setVariables(tmp);
+        sprintf(outfile, "%s/load%d_eigenvector%02d_output%d.f5", 
+                prefix, i, k, iter);
+        f5->writeToFile(outfile);
+      }
     }
+
+    
     f5->decref();
     tmp->decref();
   }
