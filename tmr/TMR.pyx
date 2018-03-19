@@ -1852,7 +1852,7 @@ cdef class QuadStiffness(PlaneStress):
         return
 
 def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
-             use_chebyshev_smoother=False, pc_flag=True):
+             use_chebyshev_smoother=False):
     cdef int nlevels = 0
     cdef TACSAssembler **assm = NULL
     cdef TMRQuadForest **qforest = NULL
@@ -1894,10 +1894,7 @@ def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
         free(oforest)
     free(assm)
     if mg != NULL:
-        if pc_flag:
-            return _init_Pc(mg)
-        else:
-            return _init_Mg(mg)
+        return _init_Pc(mg)
     return None
 
 def strainEnergyError(forest, Assembler coarse,
