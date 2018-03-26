@@ -236,11 +236,11 @@ class TMRTopoProblem : public ParOptProblem {
   TacsScalar freq_offset, freq_scale;
 
   // The buckling TACS object
-  TACSLinearBuckling *buck;
+  TACSLinearBuckling **buck;
   // Set parameters used to control the buckling constraint
   double buck_eig_tol;
   int num_buck_eigvals;
-  TacsScalar buck_ks_sum;
+  TacsScalar *buck_ks_sum;
   TacsScalar buck_ks_weight;
   TacsScalar buck_offset, buck_scale;
 
