@@ -1,3 +1,4 @@
+from __future__ import print_function
 from mpi4py import MPI
 from tmr import TMR
 from tacs import TACS, elements, constitutive, functions
@@ -104,7 +105,7 @@ def createProblem(forest, bcs, ordering, order=2, nlevels=2,
         creator = CreateMe(bcs)
         assemblers.append(creator.createTACS(forest, ordering))
 
-    for i in xrange(nlevels-1):
+    for i in range(nlevels-1):
         forest = forests[-1].coarsen()
         forest.setMeshOrder(2, pttype)
         forest.balance(1)
@@ -328,21 +329,21 @@ for k in range(steps):
     
     # Print out the result
     if comm.rank == 0:
-        print 'fval      = ', fval
-        print 'corr func = ', func_corr
-        print 'estimate =  ', err_est
-        print 'mean =      ', mean
-        print 'stddev =    ', stddev
+        print('fval      = ', fval)
+        print('corr func = ', func_corr)
+        print('estimate =  ', err_est)
+        print('mean =      ', mean)
+        print('stddev =    ', stddev)
 
-        print '%10s   %10s   %12s   %12s'%(
-            'low', 'high', 'bins', 'percentage')
-        print '%10.2e   %10s   %12d   %12.2f'%(
-            bounds[-1], ' ', bins[-1], 100.0*bins[-1]/total)
+        print('%10s   %10s   %12s   %12s'%(
+            'low', 'high', 'bins', 'percentage'))
+        print('%10.2e   %10s   %12d   %12.2f'%(
+            bounds[-1], ' ', bins[-1], 100.0*bins[-1]/total))
         for i in range(nbins-1, -1, -1):
-            print '%10.2e   %10.2e   %12d   %12.2f'%(
-                bounds[i], bounds[i+1], bins[i+1], 100.0*bins[i+1]/total)
-        print '%10s   %10.2e   %12d   %12.2f'%(
-            ' ', bounds[0], bins[0], 100.0*bins[0]/total)
+            print('%10.2e   %10.2e   %12d   %12.2f'%(
+                bounds[i], bounds[i+1], bins[i+1], 100.0*bins[i+1]/total))
+        print('%10s   %10.2e   %12d   %12.2f'%(
+            ' ', bounds[0], bins[0], 100.0*bins[0]/total))
 
         # Set the data 
         data = np.zeros((60, 4))
@@ -378,25 +379,25 @@ for k in range(steps):
         log_cutoff = np.log(cutoff)
 
         if comm.rank == 0:
-            print 'elem_target_error =        %15.3e'%(
-                element_target_error)
-            print 'log10(elem_target_error) = %15.3e'%(
-                np.log10(element_target_error))
-            print 'log10(mean) =              %15.3e'%(
-                np.log10(np.exp(mean)))
-            print 'log10(stddev) =            %15.3e'%(
-                np.log10(np.exp(stddev)))
-            print 'log_elem_target_error =    %15.3e'%(
-                log_elem_target_error)
-            print 'mean =                     %15.3e'%(mean)
-            print 'stddev =                   %15.3e'%(stddev)
-            print 'cutoff =                   %15.3e'%(cutoff)
+            print('elem_target_error =        %15.3e'%(
+                element_target_error))
+            print('log10(elem_target_error) = %15.3e'%(
+                np.log10(element_target_error)))
+            print('log10(mean) =              %15.3e'%(
+                np.log10(np.exp(mean))))
+            print('log10(stddev) =            %15.3e'%(
+                np.log10(np.exp(stddev))))
+            print('log_elem_target_error =    %15.3e'%(
+                log_elem_target_error))
+            print('mean =                     %15.3e'%(mean))
+            print('stddev =                   %15.3e'%(stddev))
+            print('cutoff =                   %15.3e'%(cutoff))
 
         if log_elem_target_error < mean - stddev:
             if comm.rank == 0:
-                print '-----------------------------------------------'
-                print 'First refinement phase'
-                print '-----------------------------------------------'
+                print('-----------------------------------------------')
+                print('First refinement phase')
+                print('-----------------------------------------------')
 
             # Element target error is still too high. Adapt based
             # solely on decreasing the overall error
@@ -410,9 +411,9 @@ for k in range(steps):
                 #     refine[i] = -1
         else:
             if comm.rank == 0:
-                print '-----------------------------------------------'
-                print 'Entering final phase refinement'
-                print '-----------------------------------------------'
+                print('-----------------------------------------------')
+                print('Entering final phase refinement')
+                print('-----------------------------------------------')
 
             # Try to target the relative error
             for i, err in enumerate(error):

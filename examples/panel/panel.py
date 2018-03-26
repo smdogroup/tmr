@@ -59,7 +59,7 @@ class CreateMe(TMR.QuadCreator):
             forests[-1].setMeshOrder(2)
             assemblers.append(self.createTACS(forests[-1]))
 
-        for i in xrange(nlevels-1):
+        for i in range(nlevels-1):
             forests.append(forests[-1].coarsen())
             forests[-1].balance(1)
             forests[-1].repartition()
@@ -81,8 +81,8 @@ def create_panel(Lx, Ly, use_hole=True):
     x = np.linspace(-0.5*Lx, 0.5*Lx, nu)
     y = np.linspace(-0.5*Ly, 0.5*Ly, nv)
     pts = np.zeros((nu, nv, 3))
-    for j in xrange(nv):
-        for i in xrange(nu):
+    for j in range(nv):
+        for i in range(nu):
             pts[i,j,0] = x[i]
             pts[i,j,1] = y[j]
 

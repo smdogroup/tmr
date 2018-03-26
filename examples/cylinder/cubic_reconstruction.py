@@ -75,8 +75,8 @@ def computeRecon(Xpts, uvals, uderiv):
     b = np.zeros(18)
 
     c = 0
-    for j in xrange(3):
-        for i in xrange(3):
+    for j in range(3):
+        for i in range(3):
             # Set the parametric location
             xi = -1.0 + 1.0*i
             eta = -1.0 + 1.0*j
@@ -111,7 +111,7 @@ def computeRecon(Xpts, uvals, uderiv):
             N, Nxi, Neta = getEnrichmentFuncs(xi, eta)
 
             # For each row, cycle through and set the enrichment values
-            for i in xrange(7):
+            for i in range(7):
                 A[c,i] = J[0,0]*Nxi[i] + J[1,0]*Neta[i]
                 A[c+1,i] = J[0,1]*Nxi[i] + J[1,1]*Neta[i]
 
@@ -121,7 +121,7 @@ def computeRecon(Xpts, uvals, uderiv):
     wvals = [0.5, 1.0, 0.5]
     weights = np.outer(wvals, wvals).flatten()
 
-    for i in xrange(9):
+    for i in range(9):
         b[2*i] *= weights[i]
         b[2*i+1] *= weights[i]
         A[2*i,:] *= weights[i]
@@ -169,8 +169,8 @@ def computeElemError(uvals, ubar, Xpts, nquad=5):
                     0.3607615730481386075698335, 
                     0.1713244923791703450402961 ]
 
-    for j in xrange(nquad):
-        for i in xrange(nquad):
+    for j in range(nquad):
+        for i in range(nquad):
             # Set the parametric location
             xi = quadpts[i]
             eta = quadpts[j]
@@ -224,10 +224,10 @@ def computeError(Xpts, nx, ny, dh=1e-30):
     err2 = 0.0 # Reconstruction error
 
     # Loop over all the sub-elements in this mesh
-    for j in xrange(ny):
-        for i in xrange(nx):
-            for jj in xrange(3):
-                for ii in xrange(3):
+    for j in range(ny):
+        for i in range(nx):
+            for jj in range(3):
+                for ii in range(3):
                     # Set the parameter points
                     xi = u[2*i+ii]
                     eta = v[2*j+jj]
@@ -240,7 +240,7 @@ def computeError(Xpts, nx, ny, dh=1e-30):
             # Set the values of the distribution at the nodes and the
             # derivative of u in the x/y directions at each of the
             # nodes in the element
-            for ii in xrange(9):
+            for ii in range(9):
                 x = elemXpts[ii,0]
                 y = elemXpts[ii,1]
 
@@ -291,7 +291,7 @@ for i in range(len(tableau20)):
     tableau20[i] = (r / 255., g / 255., b / 255.)    
 
 
-for i in xrange(num):
+for i in range(num):
     print 'Computing error ', i
     interp_err[i], recon_err[i] =\
         computeError(globalXpts, nx[i], nx[i])

@@ -16,6 +16,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function, division
+
 # For the use of MPI
 from mpi4py.libmpi cimport *
 cimport mpi4py.MPI as MPI
@@ -75,7 +77,8 @@ cdef class Vertex:
         self.ptr.evalPoint(&pt)
         return np.array([pt.x, pt.y, pt.z])
 
-    def setAttribute(self, char *name):
+    def setAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
             self.ptr.setAttribute(name)
 
@@ -104,7 +107,8 @@ cdef class Edge:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, char *name):
+    def setAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
             self.ptr.setAttribute(name)
 
@@ -133,7 +137,8 @@ cdef class Edge:
     def setMesh(self, EdgeMesh mesh):
         self.ptr.setMesh(mesh.ptr)
 
-    def writeToVTK(self, char *filename):
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
 cdef _init_Edge(TMREdge *ptr):
@@ -229,7 +234,8 @@ cdef class Face:
         if self.ptr:
             self.ptr.decref()
          
-    def setAttribute(self, char *name):
+    def setAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
             self.ptr.setAttribute(name)
 
@@ -264,7 +270,8 @@ cdef class Face:
     def setMesh(self, FaceMesh mesh):
         self.ptr.setMesh(mesh.ptr)
 
-    def writeToVTK(self, char *filename):
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
       
 cdef _init_Face(TMRFace *ptr):
@@ -300,7 +307,8 @@ cdef class Volume:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, char *name):
+    def setAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
             self.ptr.setAttribute(name)
 
@@ -319,7 +327,8 @@ cdef class Volume:
             faces.append(_init_Face(f[i]))
         return faces
    
-    def writeToVTK(self, char* filename):
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
 cdef _init_Volume(TMRVolume *ptr):
@@ -337,7 +346,8 @@ cdef class Curve:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, char *name):
+    def setAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
             self.ptr.setAttribute(name)
             
@@ -346,7 +356,8 @@ cdef class Curve:
             return self.ptr.getEntityId()
         return -1
 
-    def writeToVTK(self, char* filename):
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
     def getData(self):
@@ -401,7 +412,8 @@ cdef class Pcurve:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, char *name):
+    def setAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
             self.ptr.setAttribute(name)
 
@@ -418,12 +430,14 @@ cdef class Surface:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-            
-    def setAttribute(self, char *name):
+
+    def setAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
             self.ptr.setAttribute(name)
 
-    def writeToVTK(self, char* filename):
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
     def getData(self):
@@ -749,7 +763,7 @@ cdef class Model:
             verts.append(_init_Vertex(v[i]))
         return verts
 
-    def writeModelToTecplot(self, char *fname, 
+    def writeModelToTecplot(self, fname, 
                             vlabels=True, elabels=True, flabels=True):
         '''Write a representation of the edge loops to a file'''
         fp = open(fname, 'w')
@@ -1066,8 +1080,9 @@ cdef class Mesh:
         model = self.ptr.createModelFromMesh()
         return _init_Model(model) 
 
-    def writeToBDF(self, char *filename, outtype=None):
+    def writeToBDF(self, fname, outtype=None):
         # Write both quads and hexahedral elements
+        cdef char *filename = tmr_convert_to_chars(fname)
         cdef int flag = 3
         if outtype is None:
             flag = 3
@@ -1077,8 +1092,9 @@ cdef class Mesh:
             flag = 2
         self.ptr.writeToBDF(filename, flag)
 
-    def writeToVTK(self, char *filename, outtype=None):
+    def writeToVTK(self, fname, outtype=None):
         # Write both quads and hexahedral elements
+        cdef char *filename = tmr_convert_to_chars(fname)
         cdef int flag = 3
         if outtype is None:
             flag = 3
@@ -1337,15 +1353,17 @@ cdef class QuadForest:
     def createNodes(self):
         self.ptr.createNodes()
 
-    def getQuadsWithAttribute(self, char *attr):
+    def getQuadsWithAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         cdef TMRQuadrantArray *array = NULL
-        array = self.ptr.getQuadsWithAttribute(attr)
+        array = self.ptr.getQuadsWithAttribute(name)
         return _init_QuadrantArray(array, 1)
 
-    def getNodesWithAttribute(self, char *attr):
+    def getNodesWithAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         cdef int size = 0
         cdef int *nodes = NULL
-        size = self.ptr.getNodesWithAttribute(attr, &nodes)
+        size = self.ptr.getNodesWithAttribute(name, &nodes)
         array = np.zeros(size, dtype=np.intc)
         for i in range(size):
             array[i] = nodes[i]
@@ -1403,10 +1421,12 @@ cdef class QuadForest:
             weights[i] = _weights[i]
         return ptr, conn, weights
             
-    def writeToVTK(self, char *filename):
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
-    def writeForestToVTK(self, char *filename):
+    def writeForestToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeForestToVTK(filename)
         
     def createInterpolation(self, QuadForest forest, VecInterp vec):
@@ -1610,15 +1630,17 @@ cdef class OctForest:
     def createNodes(self):
         self.ptr.createNodes()
 
-    def getOctsWithAttribute(self, char *attr):
+    def getOctsWithAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         cdef TMROctantArray *array = NULL
-        array = self.ptr.getOctsWithAttribute(attr)
+        array = self.ptr.getOctsWithAttribute(name)
         return _init_OctantArray(array, 1)
 
-    def getNodesWithAttribute(self, char *attr):
+    def getNodesWithAttribute(self, aname):
+        cdef char *name = tmr_convert_to_chars(aname)
         cdef int size = 0
         cdef int *nodes = NULL
-        size = self.ptr.getNodesWithAttribute(attr, &nodes)
+        size = self.ptr.getNodesWithAttribute(name, &nodes)
         array = np.zeros(size, dtype=np.intc)
         for i in range(size):
             array[i] = nodes[i]
@@ -1676,10 +1698,12 @@ cdef class OctForest:
             weights[i] = _weights[i]
         return ptr, conn, weights
 
-    def writeToVTK(self, char *filename):
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
-    def writeForestToVTK(self, char *filename):
+    def writeForestToVTK(self, fname):
+        cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeForestToVTK(filename)
 
     def createInterpolation(self, OctForest forest, VecInterp vec):
@@ -1691,14 +1715,15 @@ cdef _init_OctForest(TMROctForest* ptr):
     forest.ptr.incref()
     return forest
 
-def LoadModel(str filename, int print_lev=0):
+def LoadModel(fname, int print_lev=0):
+    cdef char *filename = tmr_convert_to_chars(fname)
     cdef TMRModel *model = NULL
-    if filename.lower().endswith(('step', 'stp')):
+    if fname.lower().endswith(('step', 'stp')):
         model = TMR_LoadModelFromSTEPFile(filename, print_lev)
-    elif filename.lower().endswith(('igs', 'iges')):
+    elif fname.lower().endswith(('igs', 'iges')):
         model = TMR_LoadModelFromIGESFile(filename, print_lev)
     if model is NULL:
-        errmsg = 'Error loading model. File %s does not exist?'%(filename)
+        errmsg = 'Error loading model. File %s does not exist?'%(fname)
         raise RuntimeError(errmsg)
     return _init_Model(model)
    
@@ -1714,8 +1739,9 @@ cdef class BoundaryConditions:
     def getNumBoundaryConditions(self):
         return self.ptr.getNumBoundaryConditions()
    
-    def addBoundaryCondition(self, char* attr, 
+    def addBoundaryCondition(self, aname, 
                              list bc_nums=None, list bc_vals=None):
+        cdef char *name = tmr_convert_to_chars(aname)
         cdef int *nums = NULL
         cdef double *vals = NULL
         cdef int num_bcs = 0
@@ -1729,7 +1755,7 @@ cdef class BoundaryConditions:
             for i in range(len(bc_nums)):
                 nums[i] = <int>bc_nums[i]
                 vals[i] = <double>bc_vals[i]
-            self.ptr.addBoundaryCondition(attr, num_bcs, nums, vals)
+            self.ptr.addBoundaryCondition(name, num_bcs, nums, vals)
             free(nums)
             free(vals)
         elif bc_nums is not None:
@@ -1737,10 +1763,10 @@ cdef class BoundaryConditions:
             nums = <int*>malloc(num_bcs*sizeof(int))
             for i in range(len(bc_nums)):
                 nums[i] = <int>bc_nums[i]
-            self.ptr.addBoundaryCondition(attr, num_bcs, nums, NULL)
+            self.ptr.addBoundaryCondition(name, num_bcs, nums, NULL)
             free(nums)
         else:
-            self.ptr.addBoundaryCondition(attr, 0, NULL, NULL)
+            self.ptr.addBoundaryCondition(name, 0, NULL, NULL)
         return
 
 cdef TACSElement* _createQuadElement(void *_self, int order, 
@@ -2079,7 +2105,7 @@ def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
         free(oforest)
     free(assm)
     if mg != NULL:
-        return _init_Pc(mg)
+        return _init_Mg(mg)
     return None
 
 def strainEnergyError(forest, Assembler coarse,
@@ -2158,8 +2184,9 @@ def computeReconSolution(forest, Assembler coarse,
                                  uvec_ptr, uvec_refined_ptr)
     return
 
-def writeSTLToBin(char *filename, OctForest forest,
+def writeSTLToBin(fname, OctForest forest,
                   Vec x, int offset=0, double cutoff=0.5):
+    cdef char *filename = tmr_convert_to_chars(fname)
     TMR_GenerateBinFile(filename, forest.ptr, x.ptr, offset, cutoff)
     return
 
@@ -2379,7 +2406,8 @@ cdef class TopoProblem(pyParOptProblemBase):
         prob.initialize()
         return
 
-    def setPrefix(self, char *prefix):
+    def setPrefix(self, _prefix):
+        cdef char *prefix = tmr_convert_to_chars(_prefix)
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:

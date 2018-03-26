@@ -129,7 +129,7 @@ if order == 3:
     forests[-1].balance(1)
     assemblers.append(creator.createTACS(order, forests[-1]))
 
-for i in xrange(nlevels-1):
+for i in range(nlevels-1):
     forests.append(forests[-1].coarsen())
     forests[-1].balance(1)
     assemblers.append(creator.createTACS(order, forests[-1]))

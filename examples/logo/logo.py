@@ -16,7 +16,7 @@ d = ImageDraw.Draw(img)
 d.text((2,-2), 'TMR', font=fnt, fill=(0, 0, 0))
 img.save('tmr.png')
 pixels = list(img.getdata())
-pixels = [pixels[i*width:(i + 1)*width] for i in xrange(height)]
+pixels = [pixels[i*width:(i + 1)*width] for i in range(height)]
 
 # Set the bounding box for now
 xlow = [0.0, 0.0, -5.0]
@@ -46,8 +46,8 @@ nv = 2
 x = [0.0, width]
 y = [0.0, height]
 pts = np.zeros((nu, nv, 3))
-for j in xrange(nv):
-    for i in xrange(nu):
+for j in range(nv):
+    for i in range(nu):
         pts[i,j,0] = x[i]
         pts[i,j,1] = y[j]
 

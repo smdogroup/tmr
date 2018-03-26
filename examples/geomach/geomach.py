@@ -6,7 +6,7 @@ The model is taken from the examples and was developed by John Hwang
 and Davide Ivaldi.
 '''
 
-from __future__ import division
+from __future__ import print_function, division
 
 from mpi4py import MPI
 from tmr import TMR
@@ -357,7 +357,7 @@ p.add_argument('--model_type', type=str, default='wing')
 args = p.parse_args()
 
 # Create the GeoMACH model
-print 'Loading GeoMACH model...'
+print('Loading GeoMACH model...')
 if args.model_type == 'wing':
     pgm = Wing()
 elif args.model_type == 'trussbraced':
@@ -365,11 +365,11 @@ elif args.model_type == 'trussbraced':
 bse = pgm.initialize()
 
 # Convert from GeoMACH to TMR
-print 'Converting GeoMACH model to TMR model...'
+print('Converting GeoMACH model to TMR model...')
 geo = geomach_to_tmr(bse)
 
 # Create the mesh
-print 'Meshing TMR model...'
+print('Meshing TMR model...')
 comm = MPI.COMM_WORLD
 mesh = TMR.Mesh(comm, geo)
 
@@ -386,14 +386,14 @@ mesh.mesh(htarget, opts=opts)
 mesh.writeToVTK('surface-mesh.vtk')
 
 # Create a model from the mesh
-print 'Creating model from mesh...'
+print('Creating model from mesh...')
 model = mesh.createModelFromMesh()
 
 # Create the corresponding mesh topology from the mesh-model 
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
-print 'Creating TMRQuadForest...'
+print('Creating TMRQuadForest...')
 forest = TMR.QuadForest(comm)
 forest.setTopology(topo)
 
