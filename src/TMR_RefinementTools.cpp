@@ -2899,6 +2899,13 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   // in all of the elements
   ks_max_fail = -1e20;
 
+  // -------------------------------------------------------
+  // Create a temporary vars vec to set u to 0 for debugging
+  int max_nodes = tacs->getMaxElementNodes();
+  TacsScalar *temp_vars = new TacsScalar[vars_per_node*max_nodes];
+  memset(temp_vars, 0, vars_per_node*max_nodes*sizeof(TacsScalar));
+  // -------------------------------------------------------
+  
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
     TACSElement *elem = tacs->getElement(i, Xpts, vars, dvars, ddvars);
@@ -2946,6 +2953,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
           // Evaluate the strain
           TacsScalar J[9], e[6];
           evalStrain(pt, Xpts, vars, ubar, J, e);
+          //evalStrain(pt, Xpts, temp_vars, ubar, J, e);
           
           // Evaluate the failure criteria
           TacsScalar fval;
@@ -3014,6 +3022,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
           // Evaluate the strain
           TacsScalar J[9], e[6];
           TacsScalar detJ = evalStrain(pt, Xpts, vars, ubar, J, e);
+          //TacsScalar detJ = evalStrain(pt, Xpts, temp_vars, ubar, J, e);
           detJ *= gaussWts[ii]*gaussWts[jj]*gaussWts[kk];
           
           // Evaluate the failure criteria
@@ -3028,6 +3037,8 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   }
 
   MPI_Allreduce(MPI_IN_PLACE, &ks_fail_sum, 1, TACS_MPI_TYPE, MPI_SUM, comm);
+
+  delete [] temp_vars;
   
   return ks_max_fail + log(ks_fail_sum)/ks_weight;
 }
@@ -3047,14 +3058,14 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
 
   // Get vars per node and compute other size variables
   const int vars_per_node = tacs->getVarsPerNode();
-  const int deriv_per_node = 3; //3*vars_per_node;
+  const int deriv_per_node = 3;
   const int num_nodes = order*order*order;
   const int neq = num_nodes*vars_per_node;
 
   // Set the matrix dimensions
-  int m = nenrich; //nenrich*vars_per_node;
-  int n = deriv_per_node*num_nodes;
-  int p = num_nodes; //neq;
+  int m = nenrich;
+  int n = neq; //deriv_per_node*num_nodes;
+  int p = num_nodes;
 
   // Set the derivative of the function w.r.t. the state variables
   dfdu->zeroEntries();
@@ -3081,6 +3092,13 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   TacsScalar *A = new TacsScalar[n*m];
   TacsScalar *dbdu = new TacsScalar[n*p];
 
+  // --------------------------------------------------
+  // Create a temp_vars vec to set u to 0 for debugging
+  int max_nodes = tacs->getMaxElementNodes();
+  TacsScalar *temp_vars = new TacsScalar[vars_per_node*max_nodes];
+  memset(temp_vars, 0, vars_per_node*max_nodes*sizeof(TacsScalar));
+  // --------------------------------------------------
+  
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
     TACSElement *elem = tacs->getElement(i, Xpts, vars, dvars, ddvars);
@@ -3135,7 +3153,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           
           // Evaluate the strain
           TacsScalar J[9], e[6];
-          TacsScalar detJ = evalStrain(pt, Xpts, vars, ubar, J, e);          
+          TacsScalar detJ = evalStrain(pt, Xpts, vars, ubar, J, e);
+          //TacsScalar detJ = evalStrain(pt, Xpts, temp_vars, ubar, J, e);
           detJ *= gaussWts[ii]*gaussWts[jj]*gaussWts[kk];
           
           // Evaluate the failure criteria
@@ -3176,6 +3195,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          // should these be evaluated at gauss points or knot locations?
           forest->evalInterp(kt, N, Na, Nb, Nc);
 
           // // Evaluate the Jacobian transformation at this point
@@ -3233,7 +3253,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     //   }
     // }
     
-    addEnrichDeriv(A, dbdu, dubardu);
+    //addEnrichDeriv(A, dbdu, dubardu);
     
     // for ( int aa = 0; aa < n; aa++ ){
     //   for ( int bb = 0; bb < n; bb++ ){
@@ -3264,6 +3284,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   
   // tacs->applyBCs(dfdu);
 
+  delete [] temp_vars;
+  
   // Free allocated memory
   delete [] dfduelem;
   delete [] dfdubar;
@@ -3469,13 +3491,13 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
 
   // Get vars per node and other dimensions
   const int vars_per_node = tacs->getVarsPerNode();
-  const int deriv_per_node = 3; //3*vars_per_node;
+  const int deriv_per_node = 3;
   const int num_nodes = order*order*order;
   const int neq = num_nodes*vars_per_node;
 
   // Set the matrix dimensions
   int m = nenrich;
-  int n = deriv_per_node*num_nodes;
+  int n = neq; //deriv_per_node*num_nodes;
   int p = num_nodes;
 
   // // print values of dbdu
@@ -3516,9 +3538,6 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   //     printf("(ATA)^-1[%d, %d]: %e\n", aa, bb, ATA[aa*m+bb]);
   //   }
   // }
-  
-  // // Compute (A^T A)^-1 A^T
-  //BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, ATAi_AT, &m);
 
   // Compute (db/du)^T A
   BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
@@ -3532,7 +3551,7 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   
   //
   //
-  // Evaluate dubar/du as (db/du)^T A [A^T A]^-T         //[A^T A]^-1 A^T db/du
+  // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
   //
   //
   TacsScalar *dubardu_elem = new TacsScalar[ p*m ];
@@ -3547,15 +3566,17 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // }
   
   // Allocate dubardu_elem to dubardu
-  for (int i = 0; i < m; i++ ){
-    for ( int j = 0; j < p; j++ ){
-      dubardu[p*i + j] = dubardu_elem[p*i + j];
-    }
+  for ( int i = 0; i < m*p; i++ ){
+    dubardu[i] = dubardu_elem[i];
   }
+  // for (int i = 0; i < m; i++ ){
+  //   for ( int j = 0; j < p; j++ ){
+  //     dubardu[p*i + j] = dubardu_elem[p*i + j];
+  //   }
+  // }
   
   // Delete variables
   delete [] ATA;
-  //delete [] ATAi_AT;
   delete [] dbduT_A;
   delete [] ipiv;
   delete [] dubardu_elem;
