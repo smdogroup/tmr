@@ -277,7 +277,7 @@ for ite in xrange(max_iterations):
         opt.setOutputFrequency(args.output_freq)
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
-        opt.checkGradients(1e-6)
+        opt.checkGradients(1e-6)        
         opt.setRelFunctionTol(1e-7)
         # If the old filter exists, we're on the second iteration
         if old_filtr:

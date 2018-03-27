@@ -213,7 +213,7 @@ obj_array = [ 1.0e2 ]
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(rho, E, nu)
-max_iterations = 2
+
 for ite in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
     nlevs = mg_levels[ite]
