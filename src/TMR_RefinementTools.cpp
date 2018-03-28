@@ -2898,13 +2898,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   // First, go through and evaluate the maximum stress
   // in all of the elements
   ks_max_fail = -1e20;
-
-  // -------------------------------------------------------
-  // Create a temporary vars vec to set u to 0 for debugging
-  int max_nodes = tacs->getMaxElementNodes();
-  TacsScalar *temp_vars = new TacsScalar[vars_per_node*max_nodes];
-  memset(temp_vars, 0, vars_per_node*max_nodes*sizeof(TacsScalar));
-  // -------------------------------------------------------
   
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
@@ -2927,12 +2920,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
-
-    // //-------------------------------------
-    // // Set ubar to 0 for debugging purposes
-    // const int nenrich = getNum3dEnrich(order);
-    // memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
-    // //-------------------------------------
     
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
@@ -2953,7 +2940,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
           // Evaluate the strain
           TacsScalar J[9], e[6];
           evalStrain(pt, Xpts, vars, ubar, J, e);
-          //evalStrain(pt, Xpts, temp_vars, ubar, J, e);
           
           // Evaluate the failure criteria
           TacsScalar fval;
@@ -2996,12 +2982,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
-
-    // //-------------------------------------
-    // // Set ubar to 0 for debugging purposes
-    // const int nenrich = getNum3dEnrich(order);
-    // memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
-    // //-------------------------------------
     
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
@@ -3022,7 +3002,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
           // Evaluate the strain
           TacsScalar J[9], e[6];
           TacsScalar detJ = evalStrain(pt, Xpts, vars, ubar, J, e);
-          //TacsScalar detJ = evalStrain(pt, Xpts, temp_vars, ubar, J, e);
           detJ *= gaussWts[ii]*gaussWts[jj]*gaussWts[kk];
           
           // Evaluate the failure criteria
@@ -3037,8 +3016,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   }
 
   MPI_Allreduce(MPI_IN_PLACE, &ks_fail_sum, 1, TACS_MPI_TYPE, MPI_SUM, comm);
-
-  delete [] temp_vars;
   
   return ks_max_fail + log(ks_fail_sum)/ks_weight;
 }
@@ -3093,15 +3070,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   TacsScalar *dbdu = new TacsScalar[n*p];
   TacsScalar *dubar_duderiv = new TacsScalar[m*n];
   TacsScalar *dfduderiv = new TacsScalar[3*n];
-  // TacsScalar *duderiv_du = new TacsScalar[];
-  // TacsScalar *dfduderiv_prod = new TacsScalar[3*p];
-
-  // --------------------------------------------------
-  // Create a temp_vars vec to set u to 0 for debugging
-  int max_nodes = tacs->getMaxElementNodes();
-  TacsScalar *temp_vars = new TacsScalar[vars_per_node*max_nodes];
-  memset(temp_vars, 0, vars_per_node*max_nodes*sizeof(TacsScalar));
-  // --------------------------------------------------
+  TacsScalar *duderiv_du = new TacsScalar[3*n*3*p];
+  TacsScalar *dfduderiv_prod = new TacsScalar[3*p];
   
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
@@ -3125,12 +3095,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
-    // //-------------------------------------
-    // // Set ubar to 0 for debugging purposes
-    // const int nenrich = getNum3dEnrich(order);
-    // memset(ubar, 0, vars_per_node*nenrich*sizeof(TacsScalar));
-    // //-------------------------------------
-
     // Get the quadrature points/weights
     const double *gaussPts, *gaussWts;
     FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
@@ -3144,9 +3108,10 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     memset(dbdu, 0, n*p*sizeof(TacsScalar));
     memset(dubar_duderiv, 0, m*n*sizeof(TacsScalar));
     memset(dfduderiv, 0, 3*n*sizeof(TacsScalar));
+    memset(duderiv_du, 0, 3*n*3*p*sizeof(TacsScalar));
+    memset(dfduderiv_prod, 0, 3*p*sizeof(TacsScalar));
     
-    // For each quadrature point, evaluate the strain at the
-    // quadrature point and evaluate the stress constraint
+    // Compute the partial derivatives (df/du) and (df/dubar)
     for ( int c = 0, kk = 0; kk < order; kk++ ){
       for ( int jj = 0; jj < order; jj++ ){
         for ( int ii = 0; ii < order; ii++, c += 3 ){
@@ -3160,7 +3125,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           // Evaluate the strain
           TacsScalar J[9], e[6];
           TacsScalar detJ = evalStrain(pt, Xpts, vars, ubar, J, e);
-          //TacsScalar detJ = evalStrain(pt, Xpts, temp_vars, ubar, J, e);
           detJ *= gaussWts[ii]*gaussWts[jj]*gaussWts[kk];
           
           // Evaluate the failure criteria
@@ -3184,7 +3148,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     }
     
     //
-    // Compute A and dbdu
+    // Compute A and (db/du)
     //
     for ( int c = 0, kk = 0; kk < order; kk++ ){
       for ( int jj = 0; jj < order; jj++ ){
@@ -3217,7 +3181,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             eval3rdEnrichmentFuncs3D(kt, Nr, Nar, Nbr, Ncr);
           }
 
-          // Add the contributions to the the enricment 
           for ( int aa = 0; aa < nenrich; aa++ ){
             // Compute and assemble A
             TacsScalar dr[3];
@@ -3230,7 +3193,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             A[neq*aa+c+2] = wvals[ii]*wvals[jj]*wvals[kk]*dr[2];
           }
           for ( int aa = 0; aa < num_nodes; aa++ ){
-            // Compute and assemble dbdu
+            // Compute and assemble (db/du)
             TacsScalar d[3];
             d[0] = Na[aa]*J[0] + Nb[aa]*J[1] + Nc[aa]*J[2];
             d[1] = Na[aa]*J[3] + Nb[aa]*J[4] + Nc[aa]*J[5];
@@ -3244,9 +3207,23 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
       }
     }
 
+    // Add the partial dertiv df/du term to the total deriv
     dfdu->setValues(len, nodes, dfduelem, TACS_ADD_VALUES);
-    
+
+    // Compute dubar/du and dubar/duderiv
     addEnrichDeriv(A, dbdu, dubardu, dubar_duderiv);
+    
+    // Compute the product (df/dubar)(dubar/du)
+    for ( int c = 0; c < 3; c++ ){
+      for ( int ii = 0; ii < m; ii++ ){
+        for ( int jj = 0; jj < p; jj++ ){
+          dfdubar_prod[c*p+jj] += dubardu[p*ii+jj]*dfdubar[c*m+ii];
+        }
+      }
+    }
+
+    // Add the product (df/dubar)(dubar/du) to the total deriv
+    dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
 
     // Compute the product (df/duderiv) = (df/dubar)(dubar/duderiv)
     for ( int c = 0; c < 3; c++ ){
@@ -3257,24 +3234,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
       }
     }
     
-    // Compute the product (df/dubar)(dubar/du)
-    for ( int c = 0; c < 3; c++ ){
-      for ( int ii = 0; ii < m; ii++ ){
-        for ( int jj = 0; jj < p; jj++ ){
-          dfdubar_prod[c*p+jj] += dubardu[p*ii+jj]*dfdubar[c*m+ii];
-        }
-      }
-    }
-    
-    dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
-
   }
 
   dfdu->beginSetValues(TACS_ADD_VALUES);
   dfdu->endSetValues(TACS_ADD_VALUES);
   
   // Free allocated memory
-  delete [] temp_vars;
   delete [] dfduelem;
   delete [] dfdubar;
   delete [] dubardu;
@@ -3283,6 +3248,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   delete [] dbdu;
   delete [] dubar_duderiv;
   delete [] dfduderiv;
+  delete [] duderiv_du;
+  delete [] dfduderiv_prod;
 }
 
 /*
