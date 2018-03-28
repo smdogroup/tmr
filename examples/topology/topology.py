@@ -60,7 +60,7 @@ def createTopoProblem(forest, order=2, nlevels=2):
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 
-    for i in xrange(nlevels-1):
+    for i in range(nlevels-1):
         forest = forests[-1].coarsen()
         forest.balance(1)
         forest.repartition()

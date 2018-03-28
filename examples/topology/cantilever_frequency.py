@@ -78,7 +78,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2,
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
 
-    for i in xrange(nlevels-1):
+    for i in range(nlevels-1):
         forest = forests[-1].coarsen()
         forest.balance(1)
         forest.repartition()
@@ -452,7 +452,7 @@ for ite in xrange(max_iterations):
     # Refine based solely on the value of the density variable
     elems = assembler.getElements()
     
-    for i in xrange(num_elems):        
+    for i in range(num_elems):        
         c = elems[i].getConstitutive()
         if c is not None:
             rho = c.getDVOutputValue(0, np.zeros(3, dtype=float))

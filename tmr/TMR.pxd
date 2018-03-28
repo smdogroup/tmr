@@ -33,6 +33,11 @@ from paropt.ParOpt cimport *
 from tacs.TACS cimport *
 from tacs.constitutive cimport *
 
+cdef inline char* tmr_convert_to_chars(s):
+   if isinstance(s, unicode):
+      s = (<unicode>s).encode('utf8')
+   return s
+
 cdef extern from "TMRBase.h":
     enum:
         TMR_MAX_LEVEL"TMR_MAX_LEVEL"

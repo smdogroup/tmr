@@ -68,7 +68,7 @@ def createProblem(forest, bcs, ordering, mesh_order=2, nlevels=2,
         creator = CreateMe(bcs)
         assemblers.append(creator.createTACS(forest, ordering))
 
-    for i in xrange(nlevels-1):
+    for i in range(nlevels-1):
         forest = forests[-1].coarsen()
         forest.setMeshOrder(2, pttype)
         forest.balance(1)

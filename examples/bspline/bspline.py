@@ -140,7 +140,7 @@ scale = np.array([6.0, 4.0, 3.0, 2.0, 1.0])
 zpts = np.array([0.0, 2.0, 5.0, 10.0, 20.0])
 
 lofts = []
-for i in xrange(5):
+for i in range(5):
     X = np.zeros((rae2822_pts.shape[0], 3))
     X[:,0] = rae2822_pts[:,0]
     X[:,1] = rae2822_pts[:,1]
@@ -207,7 +207,7 @@ npts = pts.shape[0]
 nquads = quads.shape[0]
 
 # Flip the quadrilateral ordering to 
-for i in xrange(nquads):
+for i in range(nquads):
     t = quads[i,2]
     quads[i,2] = quads[i,3]
     quads[i,3] = t
@@ -241,7 +241,7 @@ stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, thickness, 0,
 
 # Set the elements into TACS
 elems = []
-for i in xrange(nquads):
+for i in range(nquads):
     elems.append(elements.MITCShell(2, stiff))
 
 # Set the elements
