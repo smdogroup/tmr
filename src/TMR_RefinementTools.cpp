@@ -1136,7 +1136,7 @@ static void computeNodeDeriv3D( TMROctForest *forest,
     // full set of elements, or only a subset of the elements
     int elem = index;
     if (element_nums){
-      elem = element_nums[index];      
+      elem = element_nums[index];
     }
 
     // Get the element nodes
@@ -3091,6 +3091,10 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   TacsScalar *dfdubar_prod = new TacsScalar[3*p];
   TacsScalar *A = new TacsScalar[n*m];
   TacsScalar *dbdu = new TacsScalar[n*p];
+  TacsScalar *dubar_duderiv = new TacsScalar[m*n];
+  TacsScalar *dfduderiv = new TacsScalar[3*n];
+  // TacsScalar *duderiv_du = new TacsScalar[];
+  // TacsScalar *dfduderiv_prod = new TacsScalar[3*p];
 
   // --------------------------------------------------
   // Create a temp_vars vec to set u to 0 for debugging
@@ -3138,6 +3142,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     memset(dfdubar_prod, 0, 3*p*sizeof(TacsScalar));
     memset(A, 0, n*m*sizeof(TacsScalar));
     memset(dbdu, 0, n*p*sizeof(TacsScalar));
+    memset(dubar_duderiv, 0, m*n*sizeof(TacsScalar));
+    memset(dfduderiv, 0, 3*n*sizeof(TacsScalar));
     
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
@@ -3173,16 +3179,16 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
 
           // Add the derivative of the strain
           addStrainDeriv(pt, J, kw, dfde, dfduelem, dfdubar);
-    //     }
-    //   }
-    // }
+        }
+      }
+    }
     
-    // //
-    // // Compute A and dbdu
-    // //
-    // for ( int c = 0, kk = 0; kk < order; kk++ ){
-    //   for ( int jj = 0; jj < order; jj++ ){
-    //     for ( int ii = 0; ii < order; ii++, c += 3 ){
+    //
+    // Compute A and dbdu
+    //
+    for ( int c = 0, kk = 0; kk < order; kk++ ){
+      for ( int jj = 0; jj < order; jj++ ){
+        for ( int ii = 0; ii < order; ii++, c += 3 ){
 
           // Evaluate the knot locations
           double kt[3];
@@ -3195,12 +3201,11 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          // should these be evaluated at gauss points or knot locations?
           forest->evalInterp(kt, N, Na, Nb, Nc);
 
-          // // Evaluate the Jacobian transformation at this point
-          // TacsScalar Xd[9], J[9];
-          // computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J, order*order*order);
+          // Evaluate the Jacobian transformation at this point
+          TacsScalar Xd[9], J[9];
+          computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J, order*order*order);
           
           // Evaluate the enrichment shape functions
           double Nr[MAX_3D_ENRICH];
@@ -3240,32 +3245,18 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     }
 
     dfdu->setValues(len, nodes, dfduelem, TACS_ADD_VALUES);
+    
+    addEnrichDeriv(A, dbdu, dubardu, dubar_duderiv);
 
-    // for ( int aa = 0; aa < n; aa++ ){
-    //   for ( int bb = 0; bb < m; bb++ ){
-    //     printf("A[%d, %d]: %e\n", aa, bb, A[aa*n+bb]);
-    //   }
-    // }
+    // Compute the product (df/duderiv) = (df/dubar)(dubar/duderiv)
+    for ( int c = 0; c < 3; c++ ){
+      for ( int ii = 0; ii < n; ii++ ){
+        for ( int jj = 0; jj < m; jj++ ){
+          dfduderiv[c*n+ii] += dfdubar[c*m+jj]*dubar_duderiv[m*ii+jj];
+        }
+      }
+    }
     
-    // for ( int aa = 0; aa < n; aa++ ){
-    //   for ( int bb = 0; bb < p; bb++ ){
-    //     printf("dbdu[%d, %d]: %e\n", aa, bb, dbdu[aa*n+bb]);
-    //   }
-    // }
-    
-    //addEnrichDeriv(A, dbdu, dubardu);
-    
-    // for ( int aa = 0; aa < n; aa++ ){
-    //   for ( int bb = 0; bb < n; bb++ ){
-    //     printf("dubardu[%d, %d]: %e\n", aa, bb, dubardu[aa*m+bb]);
-    //   }
-    // }
-    
-    //TacsScalar a = 1.0, b = 0.0;
-    //int k = 1;
-    //BLASgemm("N", "N", &p, &k, &n, &a, dubardu, &p,
-    //         dfdubar, &n, &b, dfdubar_prod, &p);
-
     // Compute the product (df/dubar)(dubar/du)
     for ( int c = 0; c < 3; c++ ){
       for ( int ii = 0; ii < m; ii++ ){
@@ -3282,17 +3273,16 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   dfdu->beginSetValues(TACS_ADD_VALUES);
   dfdu->endSetValues(TACS_ADD_VALUES);
   
-  // tacs->applyBCs(dfdu);
-
-  delete [] temp_vars;
-  
   // Free allocated memory
+  delete [] temp_vars;
   delete [] dfduelem;
   delete [] dfdubar;
   delete [] dubardu;
   delete [] dfdubar_prod;
   delete [] A;
   delete [] dbdu;
+  delete [] dubar_duderiv;
+  delete [] dfduderiv;
 }
 
 /*
@@ -3484,8 +3474,12 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
 */
 TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
                                                 TacsScalar dbdu[],
-                                                TacsScalar dubardu[]){
+                                                TacsScalar dubardu[],
+                                                TacsScalar dubar_duderiv[]){
 
+  // note for future work: change this to forward derivative
+  // of dubardu and there will be one fewer matrix multiplication
+  
   // Get the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
 
@@ -3497,30 +3491,15 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
 
   // Set the matrix dimensions
   int m = nenrich;
-  int n = neq; //deriv_per_node*num_nodes;
+  int n = neq;
   int p = num_nodes;
-
-  // // print values of dbdu
-  // for ( int aa = 0; aa < p; aa++ ){
-  //   for ( int bb = 0; bb < n; bb++ ){
-  //     printf("dbdu[%d, %d]: %e\n", aa, bb, dbdu[aa*n+bb]);
-  //   }
-  // }
   
   TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
-  //TacsScalar *ATAi_AT = new TacsScalar[m*n]; // store (A^T A)^-1 A^T
   TacsScalar *dbduT_A = new TacsScalar[p*m]; // store (db/du)^T A
   
   // Compute A^T A
   TacsScalar a = 1.0, b = 0.0;
   BLASgemm("T", "N", &m, &m, &n, &a, A, &n, A, &n, &b, ATA, &m);
-
-  // // print values for ATA
-  // for ( int aa = 0; aa < m; aa++ ){
-  //   for ( int bb = 0; bb < m; bb++ ){
-  //     printf("ATA[%d, %d]: %e\n", aa, bb, ATA[aa*m+bb]);
-  //   }
-  // }
   
   // Factor A^T A
   int * ipiv = new int[ nenrich ];
@@ -3532,54 +3511,23 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   TacsScalar work[10*18];
   LAPACKgetri(&m, ATA, &m, ipiv, work, &lwork, &info);
 
-  // // print values for ATA^-1
-  // for ( int aa = 0; aa < m; aa++ ){
-  //   for ( int bb = 0; bb < m; bb++ ){
-  //     printf("(ATA)^-1[%d, %d]: %e\n", aa, bb, ATA[aa*m+bb]);
-  //   }
-  // }
+  // Compute dubar_duderiv = (A^T A)^-1 A^T
+  BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, dubar_duderiv, &m);
 
   // Compute (db/du)^T A
   BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
-
-  // // print values for (dbdu)^T A
-  // for ( int aa = 0; aa < m; aa++ ){
-  //   for ( int bb = 0; bb < p; bb++ ){
-  //     printf("dbduT_A[%d, %d]: %e\n", aa, bb, dbduT_A[aa*p+bb]);
-  //   }
-  // }
   
-  //
   //
   // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
   //
-  //
-  TacsScalar *dubardu_elem = new TacsScalar[ p*m ];
-  BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu_elem, &p);
+  //TacsScalar *dubardu_elem = new TacsScalar[ p*m ];
+  BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
   //BLASgemm( "N", "N", &m, &m, &n, &a, ATAi_AT, &m, dbdu, &n, &b, dubardu_elem, &m); 
 
-  // // print values for dubardu
-  // for ( int aa = 0; aa < m; aa++ ){
-  //   for ( int bb = 0; bb < p; bb++ ){
-  //     printf("dubardu[%d, %d]: %e\n", aa, bb, dubardu_elem[aa*p+bb]);
-  //   }
-  // }
-  
-  // Allocate dubardu_elem to dubardu
-  for ( int i = 0; i < m*p; i++ ){
-    dubardu[i] = dubardu_elem[i];
-  }
-  // for (int i = 0; i < m; i++ ){
-  //   for ( int j = 0; j < p; j++ ){
-  //     dubardu[p*i + j] = dubardu_elem[p*i + j];
-  //   }
-  // }
-  
   // Delete variables
   delete [] ATA;
   delete [] dbduT_A;
   delete [] ipiv;
-  delete [] dubardu_elem;
   
   return 0.0;
 }
