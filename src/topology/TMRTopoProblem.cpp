@@ -1726,7 +1726,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     } //  num_funcs
     count += num_funcs;
 
-    if (freq){
+    if (freq && i == 0){
       // Try to unwrap the vector
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
       if (wrap){
@@ -1779,9 +1779,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       count++;
     }
     if (buck){
-      // // Compute the derivative of the buckling functions
-      // for ( int i = 0; i < num_load_cases; i++ ){
-      //   tacs[0]->setVariables(vars[i]);
+      // Compute the derivative of the buckling functions
       // Try to unwrap the vector
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
       if (wrap){
