@@ -3035,13 +3035,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
 
   // Get vars per node and compute other size variables
   const int vars_per_node = tacs->getVarsPerNode();
-  const int deriv_per_node = 3;
   const int num_nodes = order*order*order;
   const int neq = num_nodes*vars_per_node;
 
   // Set the matrix dimensions
   int m = nenrich;
-  int n = neq; //deriv_per_node*num_nodes;
+  int n = neq;
   int p = num_nodes;
 
   // Set the derivative of the function w.r.t. the state variables
@@ -3085,6 +3084,10 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     const int *nodes;
     tacs->getElement(i, &nodes, &len);
     tacs->getElement(i, Xpts);
+
+    // Get the local weight used for computing uderiv
+    TacsScalar welem[order*order*order];
+    weights->getValues(len, nodes, welem);
     
     // Retrieve the nodal values and nodal derivatives
     uvec->getValues(len, nodes, vars);
@@ -3202,6 +3205,13 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             dbdu[neq*aa+c] = -wvals[ii]*wvals[jj]*wvals[kk]*d[0];
             dbdu[neq*aa+c+1] = -wvals[ii]*wvals[jj]*wvals[kk]*d[1];
             dbdu[neq*aa+c+2] = -wvals[ii]*wvals[jj]*wvals[kk]*d[2];
+          }
+
+          // Compute (duderiv/du)
+          int index = ii + jj*order + kk*order*order;
+          TacsScalar winv = 1.0/welem[index];
+          if (nodes[index] >= 0){
+            
           }
         }
       }
@@ -3452,7 +3462,6 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
 
   // Get vars per node and other dimensions
   const int vars_per_node = tacs->getVarsPerNode();
-  const int deriv_per_node = 3;
   const int num_nodes = order*order*order;
   const int neq = num_nodes*vars_per_node;
 
