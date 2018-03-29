@@ -2816,10 +2816,7 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
   // Allocate a local vector
   uvec = tacs->createVec();
   uvec->incref();
-  // Allocate derivative vector
-  dfduderiv = tacs->createVec();
-  dfduderiv->incref();
-
+  
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
   // inter-process references.
@@ -2838,6 +2835,11 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
                         tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   uderiv->incref();
 
+  // Allocate derivative vector
+  dfduderiv = new TACSBVec(tacs->getVarMap(), deriv_per_node,
+                           tacs->getBVecDistribute(), tacs->getBVecDepNodes());
+  dfduderiv->incref();
+  
   // Allocate the vectors
   int max_nodes = tacs->getMaxElementNodes();
   Xpts = new TacsScalar[ 3*max_nodes ];
@@ -2888,7 +2890,11 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 
   // Compute the derivatives at the nodes
   computeNodeDeriv3D(forest, tacs, uvec, weights, uderiv);
-  
+
+  // Set a random uderiv
+  srand(0);
+  uderiv->setRand(-1e-5, 1e-5);
+    
   // Number of local elements
   const int nelems = tacs->getNumElements();
 
@@ -3061,16 +3067,14 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   }
 
   // Initialize variables
-  TacsScalar *dfduelem = new TacsScalar[3*p];
+  TacsScalar *dfdu_elem = new TacsScalar[3*p];
   TacsScalar *dfdubar = new TacsScalar[3*m];
   TacsScalar *dubardu = new TacsScalar[p*m];
-  TacsScalar *dfdubar_prod = new TacsScalar[3*p];
   TacsScalar *A = new TacsScalar[n*m];
   TacsScalar *dbdu = new TacsScalar[n*p];
-  TacsScalar *dubar_duderiv = new TacsScalar[m*n];
-  TacsScalar *dfduderiv = new TacsScalar[3*n];
+  TacsScalar *dubar_duderiv = new TacsScalar[m*n];  
+  TacsScalar *dfduderiv_elem = new TacsScalar[3*n];
   TacsScalar *duderiv_du = new TacsScalar[3*n*3*p];
-  TacsScalar *dfduderiv_prod = new TacsScalar[3*p];
   
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
@@ -3103,16 +3107,13 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
     
     // Zero variables before elementwise operations begin
-    memset(dfduelem, 0, 3*p*sizeof(TacsScalar));
+    memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
     memset(dfdubar, 0, 3*m*sizeof(TacsScalar));
     memset(dubardu, 0, p*m*sizeof(TacsScalar));
-    memset(dfdubar_prod, 0, 3*p*sizeof(TacsScalar));
     memset(A, 0, n*m*sizeof(TacsScalar));
     memset(dbdu, 0, n*p*sizeof(TacsScalar));
     memset(dubar_duderiv, 0, m*n*sizeof(TacsScalar));
-    memset(dfduderiv, 0, 3*n*sizeof(TacsScalar));
     memset(duderiv_du, 0, 3*n*3*p*sizeof(TacsScalar));
-    memset(dfduderiv_prod, 0, 3*p*sizeof(TacsScalar));
     
     // Compute the partial derivatives (df/du) and (df/dubar)
     for ( int c = 0, kk = 0; kk < order; kk++ ){
@@ -3145,18 +3146,20 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           con->failureStrainSens(pt, e, dfde);
 
           // Add the derivative of the strain
-          addStrainDeriv(pt, J, kw, dfde, dfduelem, dfdubar);
+          addStrainDeriv(pt, J, kw, dfde, dfdu_elem, dfdubar);
         }
       }
     }
     
+    // Add the partial dertiv df/du term to the total deriv
+    dfdu->setValues(len, nodes, dfdu_elem, TACS_ADD_VALUES);
+
     //
     // Compute A and (db/du)
     //
     for ( int c = 0, kk = 0; kk < order; kk++ ){
       for ( int jj = 0; jj < order; jj++ ){
         for ( int ii = 0; ii < order; ii++, c += 3 ){
-
           // Evaluate the knot locations
           double kt[3];
           kt[0] = knots[ii];
@@ -3195,6 +3198,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             A[neq*aa+c+1] = wvals[ii]*wvals[jj]*wvals[kk]*dr[1];
             A[neq*aa+c+2] = wvals[ii]*wvals[jj]*wvals[kk]*dr[2];
           }
+
           for ( int aa = 0; aa < num_nodes; aa++ ){
             // Compute and assemble (db/du)
             TacsScalar d[3];
@@ -3206,60 +3210,143 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
             dbdu[neq*aa+c+1] = -wvals[ii]*wvals[jj]*wvals[kk]*d[1];
             dbdu[neq*aa+c+2] = -wvals[ii]*wvals[jj]*wvals[kk]*d[2];
           }
-
-          // Compute (duderiv/du)
-          int index = ii + jj*order + kk*order*order;
-          TacsScalar winv = 1.0/welem[index];
-          if (nodes[index] >= 0){
-            
-          }
         }
       }
     }
-
-    // Add the partial dertiv df/du term to the total deriv
-    dfdu->setValues(len, nodes, dfduelem, TACS_ADD_VALUES);
 
     // Compute dubar/du and dubar/duderiv
     addEnrichDeriv(A, dbdu, dubardu, dubar_duderiv);
     
     // Compute the product (df/dubar)(dubar/du)
+    memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
     for ( int c = 0; c < 3; c++ ){
       for ( int ii = 0; ii < m; ii++ ){
         for ( int jj = 0; jj < p; jj++ ){
-          dfdubar_prod[c*p+jj] += dubardu[p*ii+jj]*dfdubar[c*m+ii];
+          dfdu_elem[c*p+jj] += dubardu[p*ii+jj]*dfdubar[c*m+ii];
         }
       }
     }
 
     // Add the product (df/dubar)(dubar/du) to the total deriv
-    dfdu->setValues(len, nodes, dfdubar_prod, TACS_ADD_VALUES);
+    dfdu->setValues(len, nodes, dfdu_elem, TACS_ADD_VALUES);
 
     // Compute the product (df/duderiv) = (df/dubar)(dubar/duderiv)
+    memset(dfduderiv_elem, 0, 3*n*sizeof(TacsScalar));
     for ( int c = 0; c < 3; c++ ){
       for ( int ii = 0; ii < n; ii++ ){
         for ( int jj = 0; jj < m; jj++ ){
-          dfduderiv[c*n+ii] += dfdubar[c*m+jj]*dubar_duderiv[m*ii+jj];
+          dfduderiv_elem[c + 3*ii] += dfdubar[c*m+jj]*dubar_duderiv[m*ii+jj];
         }
       }
     }
-    
+
+    // Add the contributions to the derivative of the function
+    // w.r.t. the derivatives at the nodes
+    dfduderiv->setValues(len, nodes, dfduderiv_elem, TACS_ADD_VALUES);
   }
 
+  // Add the values across all processors
+  dfduderiv->beginSetValues(TACS_ADD_VALUES);
+  dfduderiv->endSetValues(TACS_ADD_VALUES);
+  
+  // Distribute the values so that we can call getValues
+  dfduderiv->beginDistributeValues();
+  dfduderiv->endDistributeValues();
+
+  dfduderiv->zeroEntries();
+  
+  // Allocate a temporary array to store a component of the derivative
+  TacsScalar *dUd = new TacsScalar[ 3*vars_per_node ];
+  
+  // Perform the reconstruction for the local
+  for ( int elem = 0; elem < nelems; elem++ ){
+    // Get the element nodes
+    int len = 0;
+    const int *nodes = NULL;
+    tacs->getElement(elem, &nodes, &len);
+
+    // Get the local weight values for this element
+    TacsScalar welem[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+    weights->getValues(len, nodes, welem);
+
+    // Add the values of the derivatives
+    dfduderiv->getValues(len, nodes, dfduderiv_elem);
+    
+    // Get the node locations for the element
+    tacs->getElement(elem, Xpts);
+    
+    // Set the pointer for the derivatives of the components of the
+    // variables along each of the 3-coordinate directions
+    const TacsScalar *d = dfduderiv_elem;
+
+    // Zero the element derivative
+    memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
+
+    // Compute the contributions to the derivative from this side of
+    // the element
+    for ( int kk = 0; kk < order; kk++ ){
+      for ( int jj = 0; jj < order; jj++ ){
+        for ( int ii = 0; ii < order; ii++ ){
+          double pt[3];
+          pt[0] = knots[ii];
+          pt[1] = knots[jj];
+          pt[2] = knots[kk];
+
+          // Evaluate the the shape functions
+          double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          forest->evalInterp(pt, N, Na, Nb, Nc);
+        
+          // Evaluate the Jacobian transformation at this point
+          TacsScalar Xd[9], J[9];
+          computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J, 
+                                 order*order*order);
+
+          // Accumulate the derivatives w.r.t. x/y/z for each value at
+          // the independent nodes
+          TacsScalar winv = 1.0/welem[ii + jj*order + kk*order*order];
+          if (nodes[ii + jj*order + kk*order*order] >= 0){
+            for ( int k = 0; k < vars_per_node; k++ ){
+              dUd[3*k]   = winv*(J[0]*d[0] + J[3]*d[1] + J[6]*d[2]);
+              dUd[3*k+1] = winv*(J[1]*d[0] + J[4]*d[1] + J[7]*d[2]);
+              dUd[3*k+2] = winv*(J[2]*d[0] + J[5]*d[1] + J[8]*d[2]);
+              d += 3;
+            }
+            
+            // Compute the derivatives from the interpolated solution
+            for ( int k = 0; k < vars_per_node; k++ ){
+              TacsScalar *ue = &dfdu_elem[k];
+              for ( int i = 0; i < order*order*order; i++ ){
+                ue[0] += (Na[i]*dUd[3*k] + Nb[i]*dUd[3*k+1] + Nc[i]*dUd[3*k+2]);
+                ue += vars_per_node;
+              }
+            }
+          }
+          else {
+            d += 3*vars_per_node;          
+          }
+        }
+      }
+    }
+
+    // Get the local element variables
+    dfdu->setValues(len, nodes, dfdu_elem, TACS_ADD_VALUES);
+  }
+  
   dfdu->beginSetValues(TACS_ADD_VALUES);
   dfdu->endSetValues(TACS_ADD_VALUES);
   
   // Free allocated memory
-  delete [] dfduelem;
+  delete [] dfdu_elem;
   delete [] dfdubar;
   delete [] dubardu;
-  delete [] dfdubar_prod;
   delete [] A;
   delete [] dbdu;
   delete [] dubar_duderiv;
-  delete [] dfduderiv;
   delete [] duderiv_du;
-  delete [] dfduderiv_prod;
+  delete [] dUd;
 }
 
 /*
