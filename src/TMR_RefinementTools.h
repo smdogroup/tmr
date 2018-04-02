@@ -111,7 +111,8 @@ class TMRStressConstraint : public TMREntity {
 
   // Compute the derivative terms related to the reconstructed solution
   TacsScalar addEnrichDeriv( TacsScalar A[], TacsScalar dbdu[], 
-                             TacsScalar dubardu[] , TacsScalar dubar_duderiv[]);
+                             TacsScalar dubardu[],
+                             TacsScalar dubar_duderiv[] );
   
   // The mesh order
   int order;

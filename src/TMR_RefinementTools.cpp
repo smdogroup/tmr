@@ -2883,18 +2883,14 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   // Copy the values
   uvec->copyValues(_uvec);
 
-  // Distribute the variable values so that the non-owned values
-  // can be accessed locally
+  // Distribute the variable values so that the non-owned values can
+  // be accessed locally
   uvec->beginDistributeValues();
   uvec->endDistributeValues();
 
   // Compute the derivatives at the nodes
   computeNodeDeriv3D(forest, tacs, uvec, weights, uderiv);
 
-  // Set a random uderiv
-  srand(0);
-  uderiv->setRand(-1e-5, 1e-5);
-    
   // Number of local elements
   const int nelems = tacs->getNumElements();
 
@@ -3235,7 +3231,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     for ( int ii = 0; ii < n; ii++ ){
       for ( int jj = 0; jj < m; jj++ ){
         for ( int c = 0; c < 3; c++ ){
-          dfduderiv_elem[3*ii+c] += dfdubar[3*jj+c]*dubar_duderiv[m*ii+jj];
+          // dfduderiv_elem[3*ii + c] += dfdubar[3*jj+c]*dubar_duderiv[m*ii+jj];
+          dfduderiv_elem[9*(ii/3) + 3*c + (ii % 3)] += dfdubar[3*jj+c]*dubar_duderiv[m*ii+jj];
         }
       }
     }
@@ -3252,8 +3249,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   // Distribute the values so that we can call getValues
   dfduderiv->beginDistributeValues();
   dfduderiv->endDistributeValues();
-
-  //dfduderiv->zeroEntries();
 
   //
   // Compute the product of (df/duderiv)(duderiv/du)
@@ -3313,9 +3308,9 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           TacsScalar winv = 1.0/welem[ii + jj*order + kk*order*order];
           if (nodes[ii + jj*order + kk*order*order] >= 0){
             for ( int k = 0; k < vars_per_node; k++ ){
-              // dUd[3*k]   = winv*(J[0]*d[0] + J[3]*d[1] + J[6]*d[2]);
-              // dUd[3*k+1] = winv*(J[1]*d[0] + J[4]*d[1] + J[7]*d[2]);
-              // dUd[3*k+2] = winv*(J[2]*d[0] + J[5]*d[1] + J[8]*d[2]);
+              dUd[3*k]   = winv*(J[0]*d[0] + J[3]*d[1] + J[6]*d[2]);
+              dUd[3*k+1] = winv*(J[1]*d[0] + J[4]*d[1] + J[7]*d[2]);
+              dUd[3*k+2] = winv*(J[2]*d[0] + J[5]*d[1] + J[8]*d[2]);
               d += 3;
             }
             
