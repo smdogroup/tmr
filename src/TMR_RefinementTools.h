@@ -129,6 +129,11 @@ class TMRStressConstraint : public TMREntity {
                              const TacsScalar alpha, const TacsScalar dfde[],
                              TacsScalar dfdu[], TacsScalar dfdubar[] );
 
+  // Compute the derivative terms related to the reconstructed solution
+  TacsScalar addEnrichDeriv( TacsScalar A[], TacsScalar dbdu[], 
+                             TacsScalar dubardu[],
+                             TacsScalar dubar_duderiv[] );
+  
   // The mesh order
   int order;
   TMROctForest *forest;

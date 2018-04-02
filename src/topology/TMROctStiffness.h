@@ -118,7 +118,8 @@ class TMROctStiffness : public SolidStiffness {
 
   void failureStrainSens(const double pt[],
                          const TacsScalar strain[],
-                         TacsScalar sens[]);
+                         TacsScalar sens[] );
+  
   // Return the density as the design variable
   // -----------------------------------------
   TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 

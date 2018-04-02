@@ -406,7 +406,6 @@ void TMROctStiffness::failureStrainSens( const double pt[],
   }
 }
 
-
 /*
   Create the octree stiffness object based on an interpolation from
   the filter variables
