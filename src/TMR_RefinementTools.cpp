@@ -3219,10 +3219,10 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     
     // Compute the product (df/dubar)(dubar/du)
     memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
-    for ( int c = 0; c < 3; c++ ){
-      for ( int ii = 0; ii < m; ii++ ){
-        for ( int jj = 0; jj < p; jj++ ){
-          dfdu_elem[c*p+jj] += dubardu[p*ii+jj]*dfdubar[c*m+ii];
+    for ( int ii = 0; ii < m; ii++ ){
+      for ( int jj = 0; jj < p; jj++ ){
+        for ( int c = 0; c < 3; c++ ){
+          dfdu_elem[3*jj+c] += dfdubar[3*ii+c]*dubardu[p*ii+jj];
         }
       }
     }
@@ -3232,10 +3232,10 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
 
     // Compute the product (df/duderiv) = (df/dubar)(dubar/duderiv)
     memset(dfduderiv_elem, 0, 3*n*sizeof(TacsScalar));
-    for ( int c = 0; c < 3; c++ ){
-      for ( int ii = 0; ii < n; ii++ ){
-        for ( int jj = 0; jj < m; jj++ ){
-          dfduderiv_elem[c + 3*ii] += dfdubar[c*m+jj]*dubar_duderiv[m*ii+jj];
+    for ( int ii = 0; ii < n; ii++ ){
+      for ( int jj = 0; jj < m; jj++ ){
+        for ( int c = 0; c < 3; c++ ){
+          dfduderiv_elem[3*ii+c] += dfdubar[3*jj+c]*dubar_duderiv[m*ii+jj];
         }
       }
     }
@@ -3253,7 +3253,11 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   dfduderiv->beginDistributeValues();
   dfduderiv->endDistributeValues();
 
-  dfduderiv->zeroEntries();
+  //dfduderiv->zeroEntries();
+
+  //
+  // Compute the product of (df/duderiv)(duderiv/du)
+  //
   
   // Allocate a temporary array to store a component of the derivative
   TacsScalar *dUd = new TacsScalar[ 3*vars_per_node ];
@@ -3269,7 +3273,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     TacsScalar welem[MAX_ORDER*MAX_ORDER*MAX_ORDER];
     weights->getValues(len, nodes, welem);
 
-    // Add the values of the derivatives
+    // Get the values of the derivatives
     dfduderiv->getValues(len, nodes, dfduderiv_elem);
     
     // Get the node locations for the element
@@ -3309,9 +3313,9 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           TacsScalar winv = 1.0/welem[ii + jj*order + kk*order*order];
           if (nodes[ii + jj*order + kk*order*order] >= 0){
             for ( int k = 0; k < vars_per_node; k++ ){
-              dUd[3*k]   = winv*(J[0]*d[0] + J[3]*d[1] + J[6]*d[2]);
-              dUd[3*k+1] = winv*(J[1]*d[0] + J[4]*d[1] + J[7]*d[2]);
-              dUd[3*k+2] = winv*(J[2]*d[0] + J[5]*d[1] + J[8]*d[2]);
+              // dUd[3*k]   = winv*(J[0]*d[0] + J[3]*d[1] + J[6]*d[2]);
+              // dUd[3*k+1] = winv*(J[1]*d[0] + J[4]*d[1] + J[7]*d[2]);
+              // dUd[3*k+2] = winv*(J[2]*d[0] + J[5]*d[1] + J[8]*d[2]);
               d += 3;
             }
             
