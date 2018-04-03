@@ -26,6 +26,7 @@
 #include "TACSMg.h"
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
+#include "TMR_RefinementTools.h"
 #include "StructuralMass.h"
 #include "Compliance.h"
 #include "KSFailure.h"
@@ -92,6 +93,8 @@ class TMRTopoProblem : public ParOptProblem {
                        const TacsScalar *_func_offset, 
                        const TacsScalar *_func_scale,
                        int num_funcs );
+  void addStressConstraint( int _load_case,
+                            TMRStressConstraint *stress_func );
   void addLinearConstraints( ParOptVec **vecs,
                              TacsScalar *offset,
                              int _ncon );
@@ -259,6 +262,7 @@ class TMRTopoProblem : public ParOptProblem {
     TacsScalar *offset;
     TacsScalar *scale;
     TACSFunction **funcs;
+    TMRStressConstraint *stress_func;
   } *load_case_info;
 
   // Store the design variable info

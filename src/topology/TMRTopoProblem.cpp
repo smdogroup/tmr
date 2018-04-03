@@ -535,6 +535,7 @@ TMRTopoProblem::~TMRTopoProblem(){
   if (xinit){ xinit->decref(); }
   if (xlb){ xlb->decref(); }
   if (xub){ xub->decref(); }
+  
   // Free the local temp array
   delete [] xlocal;
 
@@ -559,6 +560,9 @@ TMRTopoProblem::~TMRTopoProblem(){
   for ( int i = 0; i < num_load_cases; i++ ){
     for ( int j = 0; j < load_case_info[i].num_funcs; j++ ){
       load_case_info[i].funcs[j]->decref();
+    }
+    if (load_case_info[i].stress_func){
+      load_case_info[i].stress_func->decref();
     }
     if (load_case_info[i].funcs){
       delete [] load_case_info[i].funcs;
@@ -645,6 +649,7 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
   for ( int i = 0; i < num_load_cases; i++ ){
     load_case_info[i].num_funcs = 0;
     load_case_info[i].funcs = NULL;
+    load_case_info[i].stress_func = NULL;
     load_case_info[i].offset = NULL;
     load_case_info[i].scale = NULL;
   }
@@ -706,9 +711,20 @@ void TMRTopoProblem::addConstraints( int load_case,
   }
   else {
     load_case_info[load_case].funcs = NULL;
+    load_case_info[load_case].stress_func = NULL;
     load_case_info[load_case].offset = NULL;
     load_case_info[load_case].scale = NULL;
   }
+}
+
+/*
+  Add a stress constraint to the given load case using the TMRStressConstraint
+  class
+*/
+void TMRTopoProblem::addStressConstraint( int load_case,
+                                          TMRStressConstraint *stress_func ){
+  load_case_info[load_case].stress_func = stress_func;
+  load_case_info[load_case].stress_func->incref();
 }
 
 /*
@@ -860,6 +876,9 @@ void TMRTopoProblem::initialize(){
   int num_constraints = num_linear_con;
   for ( int i = 0; i < num_load_cases; i++ ){
     num_constraints += load_case_info[i].num_funcs;
+    if (load_case_info[i].stress_func){
+      num_constraints++;
+    }
   }
 
   if (freq){
@@ -870,6 +889,7 @@ void TMRTopoProblem::initialize(){
       num_constraints++;
     }
   }
+  
   // Set the problem sizes
   int nvars = x[0]->getArray(NULL);
   int nw = 0;
@@ -878,6 +898,7 @@ void TMRTopoProblem::initialize(){
     nw = nvars/vars_per_node;
     nwblock = 1;
   }
+  
   setProblemSizes(nvars, num_constraints, nw, nwblock);
 }
 
@@ -1451,16 +1472,25 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
         // Evaluate the constraints
         int num_funcs = load_case_info[i].num_funcs;
-        tacs[0]->evalFunctions(load_case_info[i].funcs, 
-                               num_funcs, &cons[count]);
+        if (num_funcs > 0){
+          tacs[0]->evalFunctions(load_case_info[i].funcs, 
+                                 num_funcs, &cons[count]);
 
-        // Scale and offset the constraints that we just evaluated
-        for ( int j = 0; j < num_funcs; j++ ){
-          TacsScalar offset = load_case_info[i].offset[j];
-          TacsScalar scale = load_case_info[i].scale[j];
-          cons[count + j] = scale*(cons[count+j] + offset);          
+          // Scale and offset the constraints that we just evaluated
+          for ( int j = 0; j < num_funcs; j++ ){
+            TacsScalar offset = load_case_info[i].offset[j];
+            TacsScalar scale = load_case_info[i].scale[j];
+            cons[count + j] = scale*(cons[count+j] + offset);          
+          }
+          count += num_funcs;
         }
-        count += num_funcs;
+
+        // Evaluate the stress constraint
+        if (load_case_info[i].stress_func){
+          cons[count] =
+            1.0 - load_case_info[i].stress_func->evalConstraint(vars[i]);
+          count++;
+        }
       }
     }
   
@@ -1726,6 +1756,43 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     } //  num_funcs
     count += num_funcs;
 
+    if (load_case_info[i].stress_func){
+      TacsScalar scale = -1.0;
+
+      // Try to unwrap the vector
+      wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
+
+      if (wrap){
+        // Get the underlying TACS vector for the design variables
+        TACSBVec *A = wrap->vec;
+        
+        // Evaluate the partial derivatives required for the adjoint
+        dfdu->zeroEntries();
+        load_case_info[i].stress_func->evalConDeriv(xlocal,
+                                                    max_local_size,
+                                                    dfdu);
+        tacs[0]->applyBCs(dfdu);
+
+        // Solve the system of equations
+        ksm->solve(dfdu, adjoint);
+
+        // Compute the total derivative using the adjoint
+        tacs[0]->addAdjointResProducts(-scale, &adjoint, 
+                                       1, xlocal, max_local_size);
+        
+        // Wrap the vector class
+        setBVecFromLocalValues(xlocal, A);
+        A->beginSetValues(TACS_ADD_VALUES);
+        A->endSetValues(TACS_ADD_VALUES);
+
+        // Scale the constraint by -1 since the constraint is
+        // formulated as 1 - c(x, u) > 0.0
+        A->scale(-1.0);
+      }
+      
+      count++;
+    }
+    
     if (freq && i == 0){
       // Try to unwrap the vector
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
@@ -1775,7 +1842,8 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(xlocal, A);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
-      } //wrap      
+      } //wrap
+      
       count++;
     }
     if (buck){
