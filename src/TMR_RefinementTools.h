@@ -114,7 +114,7 @@ class TMRStressConstraint : public TMREntity {
   TacsScalar evalConstraint( TACSBVec *_uvec );
 
   // Evaluate the terms required for the total derivative
-  void evalConDeriv( TacsScalar *dfdxx, int size, TACSBVec *dfdu );
+  void evalConDeriv( TacsScalar *dfdx, int size, TACSBVec *dfdu );
 
  private:
   // Evaluate the element strain at the given point
