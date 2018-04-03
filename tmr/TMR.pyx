@@ -2336,6 +2336,15 @@ cdef class TopoProblem(pyParOptProblemBase):
         free(_scale)
         return
 
+    def addStressConstraint(self, int case, StressConstraint sc):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.addStressConstraint(case, sc.ptr)
+        return
+
     def addLinearConstraints(self, list vecs, list offset):
         cdef int nvecs
         cdef TacsScalar *_offset = NULL
