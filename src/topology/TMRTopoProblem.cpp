@@ -766,15 +766,29 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
                                              TacsScalar offset, 
                                              TacsScalar scale,
                                              int max_lanczos,
-                                             double eigtol ){
+                                             double eigtol,
+                                             int use_jd,
+                                             int fgmres_size,
+                                             double eig_atol ){
   if (!freq){
     // Create a mass matrix for the frequency constraint
     TACSMat *mmat = tacs[0]->createMat();
-
-    // Create the frequency analysis object
-    freq = new TACSFrequencyAnalysis(tacs[0], sigma, mmat, 
-                                     mg->getMat(0), ksm,
-                                     max_lanczos, num_eigvals, eigtol);
+    if (use_jd){
+      // Create the preconditioner matrix
+      TACSMat *pcmat = tacs[0]->createMat();
+      freq = new TACSFrequencyAnalysis(tacs[0], sigma, mmat, 
+                                       mg->getMat(0), pcmat,
+                                       max_lanczos, fgmres_size,
+                                       num_eigvals, eigtol, 
+                                       eig_atol);
+    }
+    else{
+      // Create the frequency analysis object
+      freq = new TACSFrequencyAnalysis(tacs[0], sigma, mmat, 
+                                       mg->getMat(0), ksm,
+                                       max_lanczos, num_eigvals, 
+                                       eigtol);
+    }
     freq->incref();
   }
 
