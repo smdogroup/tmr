@@ -2338,6 +2338,15 @@ cdef class TopoProblem(pyParOptProblemBase):
         free(_scale)
         return
 
+    def addStressConstraint(self, int case, StressConstraint sc):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.addStressConstraint(case, sc.ptr)
+        return
+
     def addLinearConstraints(self, list vecs, list offset):
         cdef int nvecs
         cdef TacsScalar *_offset = NULL
@@ -2364,8 +2373,12 @@ cdef class TopoProblem(pyParOptProblemBase):
 
     def addFrequencyConstraint(self, double sigma, int num_eigvals,
                                TacsScalar ks_weight=30.0,
-                               TacsScalar offset=0.0, TacsScalar scale=0.0,
-                               int max_lanczos=100, double eigtol=1e-8):
+                               TacsScalar offset=0.0,
+                               TacsScalar scale=0.0,
+                               int max_lanczos=100,
+                               double eigtol=1e-8,
+                               int use_jd=0, int fgmres_size=5,
+                               double eig_atol=1e-30):
         '''
         Add buckling/natural frequency constraints
         '''
@@ -2373,8 +2386,11 @@ cdef class TopoProblem(pyParOptProblemBase):
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        prob.addFrequencyConstraint(sigma, num_eigvals, ks_weight,
-                                    offset, scale, max_lanczos, eigtol)
+        prob.addFrequencyConstraint(sigma, num_eigvals,
+                                    ks_weight, offset,
+                                    scale, max_lanczos,
+                                    eigtol, use_jd, fgmres_size,
+                                    eig_atol)
         return
     
     def addBucklingConstraint(self, double sigma, int num_eigvals,
