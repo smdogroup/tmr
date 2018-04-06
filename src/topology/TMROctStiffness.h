@@ -38,13 +38,18 @@ class TMRStiffnessProperties : public TMREntity {
   static const int MAX_NUM_MATERIALS = 5;
   
   // Set the stiffness properties
-  TMRStiffnessProperties( int _nmats, TacsScalar *rho, 
-                          TacsScalar *_E, TacsScalar *_nu,
-                          TacsScalar *_ys=NULL){
+  TMRStiffnessProperties( int _nmats, 
+                          double _q, double _eps, double _k0,
+                          double _beta, double _xoffset,
+                          TacsScalar *rho, TacsScalar *_E, TacsScalar *_nu,
+                          TacsScalar *_ys=NULL ){
     if (_nmats > MAX_NUM_MATERIALS){
       _nmats = MAX_NUM_MATERIALS;
     }
     nmats = _nmats;
+    q = _q;
+    k0 = _k0;
+    eps = _eps;
     for ( int i = 0; i < nmats; i++ ){
       density[i] = rho[i];
       E[i] = _E[i];
@@ -58,13 +63,18 @@ class TMRStiffnessProperties : public TMREntity {
     }
   }
                    
-  int nmats;
-  TacsScalar density[MAX_NUM_MATERIALS];
-  TacsScalar E[MAX_NUM_MATERIALS];
-  TacsScalar D[MAX_NUM_MATERIALS];
-  TacsScalar nu[MAX_NUM_MATERIALS];
-  TacsScalar G[MAX_NUM_MATERIALS];
-  TacsScalar ys[MAX_NUM_MATERIALS];
+  int nmats;   // Number of materials to use
+  double q;    // RAMP penalization factor
+  double eps;  // Stress relaxation parameter
+  double k0;   // Small stiffness factor >= 0 ~ 1e-6
+  double beta; // Parameter for the logistics function
+  double xoffset;  // Offset parameter in the logistics function
+  TacsScalar density[MAX_NUM_MATERIALS]; // Material density
+  TacsScalar E[MAX_NUM_MATERIALS]; // Young's modulus
+  TacsScalar D[MAX_NUM_MATERIALS]; // Stiffness
+  TacsScalar nu[MAX_NUM_MATERIALS]; // Poisson's ratio
+  TacsScalar G[MAX_NUM_MATERIALS]; // Shear stiffness
+  TacsScalar ys[MAX_NUM_MATERIALS]; // Yield stress
 };
 
 /*
@@ -80,8 +90,7 @@ class TMROctStiffness : public SolidStiffness {
   static const int MAX_NUM_WEIGHTS = 8;
 
   TMROctStiffness( TMRIndexWeight *_weights, int _nweights,
-                   TMRStiffnessProperties *_props,
-                   double _q, double _eps=1e-3 );
+                   TMRStiffnessProperties *_props );
   ~TMROctStiffness();
 
   // Set the design variable values in the object
@@ -130,162 +139,14 @@ class TMROctStiffness : public SolidStiffness {
   // The stiffness properties
   TMRStiffnessProperties *props;
 
-  // The RAMP penalization factor
-  TacsScalar q;
-  double eps;
-
   // The value of the design-dependent density
   int nvars;
+  TacsScalar x[MAX_NUM_MATERIALS+1];
   TacsScalar rho[MAX_NUM_MATERIALS+1];
 
   // The local density of the
   int nweights;
   TMRIndexWeight *weights;
-};
-
-/*
-  An octant stiffness class that enables variation of the material
-  density/stiffness across the element based on the interpolation in
-  the underlying forest.
-*/
-/*
-class TMROctInterpStiffness : public SolidStiffness {
- public:
-  TMROctStiff( TMROctForest *_filter, int _elem, 
-               TMRStiffnessProperties *_props,
-               double _q, double _eps=1e-3 ){
-    filter = _filter;
-    props = _props;
-    filter->incref();
-    props->incref();
-
-    // Set the material penalization parameters
-    q = _q;
-    eps = _eps;    
-  }
-  
-  // Set the design variable values in the object
-  // --------------------------------------------
-  void setDesignVars( const TacsScalar x[], int numDVs );
-  void getDesignVars( TacsScalar x[], int numDVs );
-  void getDesignVarRange( TacsScalar lb[], TacsScalar ub[], int numDVs );
-
-  // Compute the stress
-  // ------------------
-  void calculateStress( const double pt[],
-                        const TacsScalar e[], TacsScalar s[] );
-  void addStressDVSens( const double pt[], const TacsScalar strain[], 
-                        TacsScalar alpha, const TacsScalar psi[], 
-                        TacsScalar dvSens[], int dvLen );
-
-  // Evaluate the pointwise mass
-  // ---------------------------
-  void getPointwiseMass( const double pt[], 
-                         TacsScalar mass[] );
-  void addPointwiseMassDVSens( const double pt[], 
-                               const TacsScalar alpha[],
-                               TacsScalar dvSens[], int dvLen );
-
-  // Return the density as the design variable
-  // -----------------------------------------
-  TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
-    return rho[0]; 
-  }
-
- private:
-  // Keep track of the element/forest
-  int elem;
-  TMROctForest *forest;
-
-  // The stiffness properties
-  TMRStiffnessProperties *props;
-
-  // The RAMP penalization factor
-  TacsScalar q;
-  double eps;
-
-  // Compute the forest values
-  TacsScalar *rho;
-};
-*/
-
-/*
-  TMRLinearOctStiffness class
-
-  The linearized stiffness class. This can be used to perform a
-  sequential linearized convex optimization.
-*/
-class TMRLinearOctStiffness : public SolidStiffness {
- public: 
-  enum PenaltyType { SIMP, RAMP };
-  static const int MAX_NUM_WEIGHTS = 8;
-
-  TMRLinearOctStiffness( TMRIndexWeight *_weights, int _nweights,
-                         TacsScalar _x_init,
-                         TacsScalar _density, TacsScalar E, 
-                         TacsScalar _nu, double _q, 
-                         PenaltyType _type=RAMP, double _eps=1e-3);
-  
-  // Set the linearization coefficients
-  // ----------------------------------
-  void setLinearization( TacsScalar _q,
-                         const TacsScalar dvs[], int numDVs );
-
-  // Set the design variable values in the object
-  // --------------------------------------------
-  void setDesignVars( const TacsScalar x[], int numDVs );
-  void getDesignVars( TacsScalar x[], int numDVs );
-  void getDesignVarRange( TacsScalar lb[], TacsScalar ub[], int numDVs );
-
-  // Compute the stress
-  // ------------------
-  void calculateStress( const double pt[],
-                        const TacsScalar e[], TacsScalar s[] );
-  void addStressDVSens( const double pt[], const TacsScalar strain[], 
-                        TacsScalar alpha, const TacsScalar psi[], 
-                        TacsScalar dvSens[], int dvLen );
-
-  // Compute the derivative of the stress
-  // ------------------------------------
-  void calcStressDVProject( const double pt[],
-                            const TacsScalar e[],
-                            const TacsScalar px[],
-                            int dvLen, TacsScalar s[] );
-
-  // Evaluate the pointwise mass
-  // ---------------------------
-  void getPointwiseMass( const double pt[], TacsScalar mass[] );
-  void addPointwiseMassDVSens( const double pt[], 
-                               const TacsScalar alpha[],
-                               TacsScalar dvSens[], int dvLen );
-  
-  // Return the density as the design variable
-  // -----------------------------------------
-  TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
-    return rho; 
-  }
-
- private:
-  // The density and stiffness properties
-  TacsScalar density;
-  TacsScalar D, G, nu;
-
-  // The RAMP penalization factor
-  static PenaltyType penalty_type;
-  TacsScalar q;
-  double eps;
-
-  // The value of the design-dependent density
-  TacsScalar rho;
-  TacsScalar rho_const, rho_linear;
-
-  // The lower bounds and design variable values
-  TacsScalar x_vals[MAX_NUM_WEIGHTS];
-  TacsScalar x_lb[MAX_NUM_WEIGHTS];
-
-  // The local density of the
-  int nweights;
-  TMRIndexWeight weights[MAX_NUM_WEIGHTS];
 };
 
 #endif // TMR_OCTANT_STIFFNESS_H

@@ -1961,7 +1961,9 @@ cdef class OctTopoCreator:
 
 cdef class StiffnessProperties:
     cdef TMRStiffnessProperties *ptr
-    def __cinit__(self, list _rho, list _E, list _nu, list _ys=None):
+    def __cinit__(self, list _rho, list _E, list _nu, list _ys=None,
+                  double q=5.0, double eps=0.1, double k0=0.0,
+                  double beta=15.0, double xoffset=0.5):
         cdef TacsScalar *rho = NULL
         cdef TacsScalar *E = NULL
         cdef TacsScalar *nu = NULL
@@ -1983,7 +1985,8 @@ cdef class StiffnessProperties:
             nu[i] = <TacsScalar>_nu[i]
             if (_ys):
                 ys[i] = <TacsScalar>_ys[i]
-        self.ptr = new TMRStiffnessProperties(nmats, rho, E, nu, ys)
+        self.ptr = new TMRStiffnessProperties(nmats, q, eps, k0, beta, xoffset, 
+                                              rho, E, nu, ys)
         self.ptr.incref()
         free(rho)
         free(E)
@@ -2001,8 +2004,7 @@ cdef class StiffnessProperties:
 
 cdef class OctStiffness(SolidStiff):
     def __cinit__(self, StiffnessProperties props,
-                  list index=None, list weights=None,
-                  double q=5.0, double eps=1e-6):
+                  list index=None, list weights=None):
         cdef TMRIndexWeight *w = NULL
         cdef int nw = 0
         self.ptr = NULL
@@ -2026,7 +2028,7 @@ cdef class OctStiffness(SolidStiff):
             w[i].index = <int>index[i]
 
         # Create the constitutive object
-        self.ptr = new TMROctStiffness(w, nw, props.ptr, q, eps)
+        self.ptr = new TMROctStiffness(w, nw, props.ptr)
         self.ptr.incref()
         free(w)
         return

@@ -26,13 +26,10 @@
 */
 TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
                                   int _nweights,
-                                  TMRStiffnessProperties *_props,
-                                  double _q, double _eps ){
+                                  TMRStiffnessProperties *_props ){
   // Record the density, Poisson ratio, D and the shear modulus
   props = _props;
   props->incref();
-  q = _q;
-  eps = _eps;
 
   // Set the weights/local indices
   nweights = _nweights;
@@ -63,12 +60,19 @@ TMROctStiffness::~TMROctStiffness(){
   Loop over the design variable inputs and compute the local value of
   the density
 */
-void TMROctStiffness::setDesignVars( const TacsScalar x[], int numDVs ){
+void TMROctStiffness::setDesignVars( const TacsScalar xdv[], int numDVs ){
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
+
   for ( int j = 0; j < nvars; j++ ){
-    rho[j] = 0.0;
+    x[j] = 0.0;
     for ( int i = 0; i < nweights; i++ ){
-      rho[j] += weights[i].weight*x[nvars*weights[i].index + j];
+      x[j] += weights[i].weight*xdv[nvars*weights[i].index + j];
     }
+
+    // Apply the projection to obtain the projected value
+    // of the density
+    rho[j] = 1.0/(1.0 + exp(-beta*(x[j] - xoffset)));
   }
 }
 
@@ -78,11 +82,11 @@ void TMROctStiffness::setDesignVars( const TacsScalar x[], int numDVs ){
   This is not possible to back out once the density is computed, so
   instead we use a constant value of 0.95 as the output.
 */
-void TMROctStiffness::getDesignVars( TacsScalar x[], int numDVs ){
+void TMROctStiffness::getDesignVars( TacsScalar xdv[], int numDVs ){
   if (nvars == 1){
     for ( int i = 0; i < nweights; i++ ){
       if (weights[i].index >= 0 && weights[i].index < numDVs){
-        x[weights[i].index] = 0.95;
+        xdv[weights[i].index] = 0.95;
       }
     }
   }
@@ -94,7 +98,7 @@ void TMROctStiffness::getDesignVars( TacsScalar x[], int numDVs ){
       }
       for ( int i = 0; i < nweights; i++ ){
         if (weights[i].index >= 0 && weights[i].index < numDVs){
-          x[nvars*weights[i].index + j] = value;
+          xdv[nvars*weights[i].index + j] = value;
         }
       }
     }
@@ -132,6 +136,9 @@ void TMROctStiffness::getDesignVarRange( TacsScalar lb[],
 void TMROctStiffness::calculateStress( const double pt[],
                                        const TacsScalar e[], 
                                        TacsScalar s[] ){
+  const double k0 = props->k0;
+  const double q = props->q;
+
   if (nvars == 1){
     // Compute the penalized stiffness
     TacsScalar penalty = rho[0]/(1.0 + q*(1.0 - rho[0]));
@@ -141,8 +148,8 @@ void TMROctStiffness::calculateStress( const double pt[],
     TacsScalar D = props->D[0];
     TacsScalar G = props->G[0];
 
-    TacsScalar Dp = (penalty + eps)*D;
-    TacsScalar Gp = (penalty + eps)*G;
+    TacsScalar Dp = (penalty + k0)*D;
+    TacsScalar Gp = (penalty + k0)*G;
     s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
     s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
     s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
@@ -163,8 +170,8 @@ void TMROctStiffness::calculateStress( const double pt[],
       TacsScalar G = props->G[j-1];
 
       // Add the penalized value
-      TacsScalar Dp = (penalty + eps)*D;
-      TacsScalar Gp = (penalty + eps)*G;
+      TacsScalar Dp = (penalty + k0)*D;
+      TacsScalar Gp = (penalty + k0)*G;
       s[0] += Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
       s[1] += Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
       s[2] += Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
@@ -184,10 +191,18 @@ void TMROctStiffness::addStressDVSens( const double pt[],
                                        TacsScalar alpha, 
                                        const TacsScalar psi[], 
                                        TacsScalar fdvSens[], int dvLen ){
+  const double q = props->q;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
+
   if (nvars == 1){
-    // Compute the derivative of the penalty
+    // Compute the derivative of the penalization with respect to
+    // the projected density
     TacsScalar penalty = 
       (q + 1.0)/((1.0 + q*(1.0 - rho[0]))*(1.0 + q*(1.0 - rho[0])));
+
+    // Add the derivative of the projection
+    penalty *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
 
     // Extract the properties
     TacsScalar nu = props->nu[0];
@@ -212,9 +227,13 @@ void TMROctStiffness::addStressDVSens( const double pt[],
   }
   else {
     for ( int j = 1; j < nvars; j++ ){
-      // Compute the penalty
+      // Compute the derivative of the penalization with respect to
+      // the projected density
       TacsScalar penalty = 
         (q + 1.0)/((1.0 + q*(1.0 - rho[j]))*(1.0 + q*(1.0 - rho[j])));
+
+      // Add the derivative of the projection
+      penalty *= beta*exp(-beta*(x[j] - xoffset))*rho[j]*rho[j];
 
       // Extract the properties
       TacsScalar nu = props->nu[j-1];
@@ -248,12 +267,12 @@ void TMROctStiffness::addStressDVSens( const double pt[],
 void TMROctStiffness::getPointwiseMass( const double pt[], 
                                         TacsScalar mass[] ){
   if (nvars == 1){
-    mass[0] = rho[0]*props->density[0];
+    mass[0] = x[0]*props->density[0];
   }
   else {
     mass[0] = 0.0;
     for ( int j = 1; j < nvars; j++ ){
-      mass[0] += rho[j]*props->density[j-1];
+      mass[0] += x[j]*props->density[j-1];
     }
   }
 }
@@ -286,18 +305,22 @@ void TMROctStiffness::addPointwiseMassDVSens( const double pt[],
 void TMROctStiffness::failure( const double pt[], 
                                const TacsScalar e[],
                                TacsScalar *fail ){
+  const double eps = props->eps;
+
   if (nvars == 1){
     // Use the von Mises failure criterion
     // Compute the relaxation factor
     TacsScalar r_factor = 1.0;
-    TacsScalar xw = 1.0*rho[0];
-    if (eps > 0.0){      
-      r_factor = xw/(eps*(1.0-xw)+xw);
+    TacsScalar xw = rho[0];
+
+    if (eps > 0.0){
+      r_factor = xw/(eps*(1.0 - xw) + xw);
     }
     else {
       TacsScalar p = -1.0*eps;
-      r_factor = pow(xw,p);
+      r_factor = pow(xw, p);
     }
+
     // Extract the properties
     TacsScalar nu = props->nu[0];
     TacsScalar D = props->D[0];
@@ -313,10 +336,7 @@ void TMROctStiffness::failure( const double pt[],
     s[4] = G*e[4];
     s[5] = G*e[5];
     
-    *fail = r_factor*VonMisesFailure3D(s,ys);
-  }
-  else {
-    printf("Not implemented yet \n");
+    *fail = r_factor*VonMisesFailure3D(s, ys);
   }
 }
 // Evaluate the failure criteria w.r.t. design variables
@@ -325,24 +345,34 @@ void TMROctStiffness::addFailureDVSens( const double pt[],
                                         TacsScalar alpha,
                                         TacsScalar dvSens[], 
                                         int dvLen ){
+  const double eps = props->eps;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
+
   if (nvars == 1){
     // Compute the relaxation factor
     TacsScalar r_factor_sens = 0.0;
-    TacsScalar xw = 1.0*rho[0];
+    TacsScalar xw = rho[0];
+
     if (eps > 0.0){
-      TacsScalar d = 1.0/(eps*(1.0-xw)+xw);
+      TacsScalar d = 1.0/(eps*(1.0-xw) + xw);
       r_factor_sens = eps*d*d;
     }
     else {
-      TacsScalar p = -1.0*eps;
-      r_factor_sens = pow(xw,p-1)*p;
+      TacsScalar p = -eps;
+      r_factor_sens = pow(xw, p-1.0)*p;
     }
+
+    // Add the contribution from the derivative of the projection
+    r_factor_sens *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
+
     // Extract the properties
     TacsScalar nu = props->nu[0];
     TacsScalar D = props->D[0];
     TacsScalar G = props->G[0];
     TacsScalar ys = props->ys[0];
     TacsScalar s[6];
+
     // Compute the resulting stress
     s[0] = D*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
     s[1] = D*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
@@ -351,7 +381,7 @@ void TMROctStiffness::addFailureDVSens( const double pt[],
     s[4] = G*e[4];
     s[5] = G*e[5];
 
-    TacsScalar fail = VonMisesFailure3D(s,ys);
+    TacsScalar fail = VonMisesFailure3D(s, ys);
     TacsScalar inner = alpha*r_factor_sens*fail;
     for ( int i = 0; i < nweights; i++ ){
       dvSens[weights[i].index] += weights[i].weight*inner;
@@ -361,9 +391,11 @@ void TMROctStiffness::addFailureDVSens( const double pt[],
     printf("Not implemented yet \n");
   }
 }
+
 void TMROctStiffness::failureStrainSens( const double pt[], 
                                          const TacsScalar e[],
                                          TacsScalar sens[]){
+  const double eps = props->eps;
   if (nvars == 1){ 
     TacsScalar s[6], ps_sens[6];
     // Use the von Mises failure criterion
@@ -371,17 +403,19 @@ void TMROctStiffness::failureStrainSens( const double pt[],
     TacsScalar r_factor = 1.0;
     TacsScalar xw = 1.0*rho[0];
     if (eps > 0.0){
-      r_factor = xw/(eps*(1.0-xw)+xw);
+      r_factor = xw/(eps*(1.0 - xw) + xw);
     }
     else {
       TacsScalar p = -1.0*eps;
-      r_factor = pow(xw,p);
+      r_factor = pow(xw, p);
     }
+
     // Extract the properties
     TacsScalar nu = props->nu[0];
     TacsScalar D = props->D[0];
     TacsScalar G = props->G[0];
     TacsScalar ys = props->ys[0];
+
     // Compute the resulting stress
     s[0] = D*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
     s[1] = D*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
@@ -406,239 +440,3 @@ void TMROctStiffness::failureStrainSens( const double pt[],
   }
 }
 
-/*
-  Create the octree stiffness object based on an interpolation from
-  the filter variables
-*/
-TMRLinearOctStiffness::TMRLinearOctStiffness( TMRIndexWeight *_weights,
-                                              int _nweights,
-                                              TacsScalar _x_init,
-                                              TacsScalar _density,
-                                              TacsScalar E, 
-                                              TacsScalar _nu,
-                                              double _q,
-                                              PenaltyType _type,
-                                              double _eps ){
-  // Record the density, Poisson ratio, D and the shear modulus
-  density = _density;
-  nu = _nu;
-  D = E/((1.0 + nu)*(1.0 - 2.0*nu));
-  G = 0.5*E/(1.0 + nu);
-  q = _q;
-  penalty_type = _type;
-  eps = _eps;
-
-  // Set the initial values of the linearization
-  rho_const = eps;
-  rho_linear = 1.0;
-
-  // Set the weights/local indices
-  nweights = _nweights;
-  memcpy(weights, _weights, nweights*sizeof(TMRIndexWeight));
-
-  // Set the lower bound for the design variables
-  for ( int i = 0; i < nweights; i++ ){
-    x_vals[i] = _x_init;
-    x_lb[i] = 0.0;
-  }
-
-  // Set the initial value for the density
-  rho = 0.95;
-}
-
-// Set the default penalty type
-TMRLinearOctStiffness::PenaltyType 
-TMRLinearOctStiffness::penalty_type = TMRLinearOctStiffness::SIMP;
-
-/*
-  Loop over the design variable inputs and compute the local value of
-  the density
-*/
-void TMRLinearOctStiffness::setDesignVars( const TacsScalar x[], 
-                                           int numDVs ){
-  rho = 0.0;
-  for ( int i = 0; i < nweights; i++ ){
-    x_vals[i] = x[weights[i].index];
-    rho += weights[i].weight*x[weights[i].index];
-  }
-}
-
-/*
-  Get the design variable values
-
-  This is not possible to back out once the density is computed, so
-  instead we use a constant value of 0.95 as the output.
-*/
-void TMRLinearOctStiffness::getDesignVars( TacsScalar x[], int numDVs ){
-  for ( int i = 0; i < nweights; i++ ){
-    if (weights[i].index >= 0 && weights[i].index < numDVs){
-      x[weights[i].index] = x_vals[i];
-    }
-  }
-}
-
-/*
-  Retrieve the range of the design variable values
-*/
-void TMRLinearOctStiffness::getDesignVarRange( TacsScalar lb[], 
-                                               TacsScalar ub[], 
-                                               int numDVs ){
-  for ( int i = 0; i < nweights; i++ ){
-    if (weights[i].index >= 0 && weights[i].index < numDVs){
-      lb[weights[i].index] = x_lb[i];
-      ub[weights[i].index] = 1.0;
-    }
-  }
-}
-
-/*
-  Set the linearization
-*/
-void TMRLinearOctStiffness::setLinearization( TacsScalar _q,
-                                              const TacsScalar x[], 
-                                              int numDVs ){ 
-  // Set the value of the RAMP penalization
-  q = _q;
-
-  // Compute the value of rho
-  rho = 0.0;
-  for ( int i = 0; i < nweights; i++ ){
-    x_vals[i] = x[weights[i].index];
-    rho += weights[i].weight*x[weights[i].index];
-  }
- 
-  if (penalty_type == SIMP){
-    // Set the linearization for the material weights
-    if (q > 1.0){
-      rho_const = pow(rho, q) + eps;
-      rho_linear = q*pow(rho, q-1.0);
-    
-      // Set the lower bound
-      for ( int i = 0; i < nweights; i++ ){
-        x_lb[i] = ((q - 1.0)/q)*x_vals[i];
-      }
-    }
-    else {
-      rho_const = eps;
-      rho_linear = 1.0;
-
-      // Set the lower bound
-      for ( int i = 0; i < nweights; i++ ){
-        x_lb[i] = 0.0;
-      }
-    }
-  }
-  else {
-    if (q > 0.0){
-      // Set the linearization for the material weights
-      rho_const = rho/(1.0 + q*(1.0 - rho)) + eps;
-      rho_linear = (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
-    
-      // Set the lower bound
-      for ( int i = 0; i < nweights; i++ ){
-        x_lb[i] = (q/(1.0 + q))*x_vals[i];
-      }
-    }
-    else {
-      rho_const = eps;
-      rho_linear = 1.0;
-
-      // Set the lower bound
-      for ( int i = 0; i < nweights; i++ ){
-        x_lb[i] = 0.0;
-      }
-    }
-  }
-}
-
-/*
-  Given the values of everything, compute the stress
-*/
-void TMRLinearOctStiffness::calculateStress( const double pt[],
-                                             const TacsScalar e[], 
-                                             TacsScalar s[] ){
-  // Compute the penalized stiffness
-  TacsScalar Dp = (rho_const + rho_linear*rho)*D;
-  TacsScalar Gp = (rho_const + rho_linear*rho)*G;
-  s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
-  s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
-  s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
-  s[3] = Gp*e[3];
-  s[4] = Gp*e[4];
-  s[5] = Gp*e[5];
-}
-
-/*
-  Add the derivative of the product of the stress with the vector psi
-  times alpha to the design variable array dvSens
-*/
-void TMRLinearOctStiffness::addStressDVSens( const double pt[], 
-                                             const TacsScalar e[], 
-                                             TacsScalar alpha, 
-                                             const TacsScalar psi[], 
-                                             TacsScalar fdvSens[], 
-                                             int dvLen ){
-  TacsScalar Dp = alpha*rho_linear*D;
-  TacsScalar Gp = alpha*rho_linear*G;
-  TacsScalar s[6];
-  s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
-  s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
-  s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
-  s[3] = Gp*e[3];
-  s[4] = Gp*e[4];
-  s[5] = Gp*e[5];
-
-  for ( int i = 0; i < nweights; i++ ){
-    fdvSens[weights[i].index] += 
-      weights[i].weight*(s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2] + 
-                         s[3]*psi[3] + s[4]*psi[4] + s[5]*psi[5]);
-  }
-}
-
-/*
-  Compute the density of the material as a linear function of the
-  element-wise density
-*/
-void TMRLinearOctStiffness::getPointwiseMass( const double pt[], 
-                                              TacsScalar mass[] ){
-  mass[0] = rho*density;
-}
-
-/*
-  Compute the derivative of the pointwise mass as function of the design
-  variable values
-*/
-void TMRLinearOctStiffness::addPointwiseMassDVSens( const double pt[], 
-                                                    const TacsScalar alpha[],
-                                                    TacsScalar dvSens[], 
-                                                    int dvLen ){
-  TacsScalar scale = density*alpha[0];
-  for ( int i = 0; i < nweights; i++ ){
-    dvSens[weights[i].index] += scale*weights[i].weight;
-  }
-}
-
-/*
-  Compute the derivative of the stress projected onto the provided
-  design variable vector.
-*/
-void TMRLinearOctStiffness::calcStressDVProject( const double pt[],
-                                                 const TacsScalar e[],
-                                                 const TacsScalar px[],
-                                                 int dvLen, 
-                                                 TacsScalar s[] ){
-  TacsScalar alpha = 0.0;
-  for ( int i = 0; i < nweights; i++ ){
-    alpha += px[i]*weights[i].weight;
-  }
-
-  // Compute the product of the stress derivative times px
-  TacsScalar Dp = alpha*rho_linear*D;
-  TacsScalar Gp = alpha*rho_linear*G;
-  s[0] = Dp*((1.0 - nu)*e[0] + nu*(e[1] + e[2]));
-  s[1] = Dp*((1.0 - nu)*e[1] + nu*(e[0] + e[2]));
-  s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));
-  s[3] = Gp*e[3];
-  s[4] = Gp*e[4];
-  s[5] = Gp*e[5];
-}
