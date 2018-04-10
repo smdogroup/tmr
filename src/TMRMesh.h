@@ -158,7 +158,6 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
     BoxList *next;
   } *list_root, *list_current;
 
-
   // Store the information about the size
   class BoxNode {
    public:

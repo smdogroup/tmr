@@ -775,12 +775,14 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     TACSMat *mmat = tacs[0]->createMat();
     if (use_jd){
       // Create the preconditioner matrix
-      TACSMat *pcmat = tacs[0]->createMat();
+      TACSMat *kmat = tacs[0]->createMat();
+      TACSMat *pcmat = mg->getMat(0);
+
       // Get preconditioner from Mg
-      TACSPc *pc; 
-      ksm->getOperators(NULL, &pc);
+      TACSPc *pc = mg;
+
       freq = new TACSFrequencyAnalysis(tacs[0], sigma, mmat, 
-                                       mg->getMat(0), pcmat, pc,
+                                       kmat, pcmat, pc,
                                        max_lanczos, fgmres_size,
                                        num_eigvals, eigtol, 
                                        eig_atol);

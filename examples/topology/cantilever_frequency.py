@@ -1,3 +1,4 @@
+from __future__ import print_function
 from mpi4py import MPI
 from tmr import TMR
 from paropt import ParOpt
@@ -217,7 +218,7 @@ obj_array = [ 1.0e2 ]
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(rho, E, nu)
 
-for ite in xrange(max_iterations):
+for ite in range(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
     nlevs = mg_levels[ite]
     assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
@@ -260,7 +261,7 @@ for ite in xrange(max_iterations):
     if use_jd:
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
                                        offset, scale,
-                                       25, 1e-9, 1, 25, 1e-16)
+                                       50, 1e-9, 1, 20, 1e-16)
     else:
         
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
@@ -433,9 +434,9 @@ for ite in xrange(max_iterations):
             # Compute the KKT error
             l1_norm, linfty_norm, infeas = mma.computeKKTError()
             if comm.rank == 0:
-                print 'z = ', z
-                print 'l1_norm = ', l1_norm
-                print 'infeas = ', infeas
+                print('z = ', z)
+                print('l1_norm = ', l1_norm)
+                print('infeas = ', infeas)
 
             if l1_norm < 1e-3 and infeas < 1e-6:
                 break

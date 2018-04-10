@@ -50,6 +50,8 @@ class TMRStiffnessProperties : public TMREntity {
     q = _q;
     k0 = _k0;
     eps = _eps;
+    beta = _beta;
+    xoffset = _xoffset;
     for ( int i = 0; i < nmats; i++ ){
       density[i] = rho[i];
       E[i] = _E[i];

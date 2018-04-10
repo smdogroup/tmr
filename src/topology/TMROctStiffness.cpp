@@ -41,8 +41,10 @@ TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
   rho[0] = 0.95;
   if (props->nmats > 1){
     nvars = props->nmats+1;
+    x[0] = 1.0;
     rho[0] = 1.0;
     for ( int j = 1; j < nvars; j++ ){
+      x[j] = 1.0/(nvars-1);
       rho[j] = 1.0/(nvars-1);
     }
   }  
