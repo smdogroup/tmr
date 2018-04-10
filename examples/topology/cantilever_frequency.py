@@ -13,7 +13,7 @@ class CreateMe(TMR.OctTopoCreator):
 
     def createElement(self, order, octant, index, weights):
         '''Create the element'''
-        stiff = TMR.OctStiffness(self.props, index, weights, q=5.0, eps=1e-6)
+        stiff = TMR.OctStiffness(self.props, index, weights)
         elem = elements.Solid(2, stiff)
         return elem
 
@@ -125,13 +125,16 @@ p.add_argument('--max_lbfgs', type=int, default=10)
 p.add_argument('--hessian_reset', type=int, default=10)
 p.add_argument('--use_paropt', action='store_true', default=True)
 p.add_argument('--use_mma', action='store_true', default=False)
+p.add_argument('--use_jd', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the parameter to use paropt or MMA
 use_paropt = True
+use_jd = False
 if args.use_mma:
     use_paropt = False
-
+if args.use_jd:
+    use_jd = True
 # The communicator
 comm = MPI.COMM_WORLD
 
@@ -254,10 +257,16 @@ for ite in xrange(max_iterations):
     scale = 1.0/3e5
     max_lanczos = 100
     tol = 1e-30
-    problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
-                                   offset, scale,
-                                   max_lanczos, tol)
-    # problem.setObjective(obj_array, funcs)
+    if use_jd:
+        problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
+                                       offset, scale,
+                                       25, 1e-9, 1, 25, 1e-16)
+    else:
+        
+        problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
+                                       offset, scale,
+                                       max_lanczos, tol)
+    
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
     problem.setObjective(obj_array)
  
@@ -279,8 +288,8 @@ for ite in xrange(max_iterations):
         opt.setOutputFrequency(args.output_freq)
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
-        #opt.checkGradients(1e-6)
-        
+        opt.checkGradients(1e-6)
+        AS
         # If the old filter exists, we're on the second iteration
         if old_filtr:
             # Create the interpolation
