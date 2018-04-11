@@ -1736,8 +1736,6 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     count += num_funcs;
 
     if (load_case_info[i].stress_func){
-      TacsScalar scale = -1.0;
-
       // Try to unwrap the vector
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
 
@@ -1746,7 +1744,6 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         TACSBVec *A = wrap->vec;
         
         // Evaluate the partial derivatives required for the adjoint
-        dfdu->zeroEntries();
         load_case_info[i].stress_func->evalConDeriv(xlocal,
                                                     max_local_size,
                                                     dfdu);
@@ -1756,7 +1753,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         ksm->solve(dfdu, adjoint);
 
         // Compute the total derivative using the adjoint
-        tacs[0]->addAdjointResProducts(-scale, &adjoint, 
+        tacs[0]->addAdjointResProducts(-1.0, &adjoint,
                                        1, xlocal, max_local_size);
         
         // Wrap the vector class

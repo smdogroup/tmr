@@ -3047,6 +3047,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 */
 void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
                                         int size, TACSBVec *dfdu ){
+  memset(dfdx, 0, size*sizeof(TacsScalar));
 
   // Get information about the interpolation
   const double *knots; 
