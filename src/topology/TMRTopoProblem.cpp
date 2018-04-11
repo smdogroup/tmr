@@ -1505,7 +1505,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
             err_count++;
           }
         }
-
+        err_count = 0;
         // If there is significant error in computing the eigenvalues,
         // reset the buckling computation
         if (err_count > 0){
