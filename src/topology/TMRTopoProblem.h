@@ -101,8 +101,9 @@ class TMRTopoProblem : public ParOptProblem {
   void addFrequencyConstraint( double sigma, int num_eigvals,
                                TacsScalar ks_weight,
                                TacsScalar offset, TacsScalar scale,
-                               int max_lanczos, double eigtol, 
+                               int max_subspace_size, double eigtol,
                                int use_jd=0, int fgmres_size=5,
+                               double eig_rtol=1e-12,
                                double eig_atol=1e-30 );
   void addBucklingConstraint( double sigma, int num_eigvals,
                               TacsScalar ks_weight,

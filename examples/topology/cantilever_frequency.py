@@ -259,12 +259,15 @@ for ite in range(max_iterations):
     max_lanczos = 100
     tol = 1e-30
     fgmres_size = 5
-    max_jd_size = 50
+    max_jd_size = 20
     if use_jd:
+        eig_tol = 1e-9
+        eig_rtol = 1e-6
+        eig_atol = 1e-12
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
                                        offset, scale,
-                                       max_jd_size, 1e-6, 1,
-                                       fgmres_size, 1e-16)
+                                       max_jd_size, eig_tol, use_jd,
+                                       fgmres_size, eig_rtol, eig_atol)
     else:
         
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,

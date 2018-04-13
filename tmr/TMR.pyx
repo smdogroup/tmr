@@ -2375,9 +2375,10 @@ cdef class TopoProblem(pyParOptProblemBase):
                                TacsScalar ks_weight=30.0,
                                TacsScalar offset=0.0,
                                TacsScalar scale=0.0,
-                               int max_lanczos=100,
+                               int max_subspace_size=100,
                                double eigtol=1e-8,
                                int use_jd=0, int fgmres_size=5,
+                               double eig_rtol=1e-12,
                                double eig_atol=1e-30):
         '''
         Add buckling/natural frequency constraints
@@ -2388,8 +2389,9 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.addFrequencyConstraint(sigma, num_eigvals,
                                     ks_weight, offset,
-                                    scale, max_lanczos,
+                                    scale, max_subspace_size,
                                     eigtol, use_jd, fgmres_size,
+                                    eig_rtol,
                                     eig_atol)
         return
     
