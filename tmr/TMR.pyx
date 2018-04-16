@@ -2379,7 +2379,8 @@ cdef class TopoProblem(pyParOptProblemBase):
                                double eigtol=1e-8,
                                int use_jd=0, int fgmres_size=5,
                                double eig_rtol=1e-12,
-                               double eig_atol=1e-30):
+                               double eig_atol=1e-30,
+                               int num_recycle=0):
         '''
         Add buckling/natural frequency constraints
         '''
@@ -2391,8 +2392,7 @@ cdef class TopoProblem(pyParOptProblemBase):
                                     ks_weight, offset,
                                     scale, max_subspace_size,
                                     eigtol, use_jd, fgmres_size,
-                                    eig_rtol,
-                                    eig_atol)
+                                    eig_rtol, eig_atol, num_recycle)
         return
     
     def addBucklingConstraint(self, double sigma, int num_eigvals,

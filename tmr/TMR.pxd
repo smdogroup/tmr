@@ -483,7 +483,8 @@ cdef extern from "TMRTopoProblem.h":
         void addLinearConstraints(ParOptVec**, TacsScalar*, int)
         void addFrequencyConstraint(double, int, TacsScalar,
                                     TacsScalar, TacsScalar, int,
-                                    double, int, int, double, double)
+                                    double, int, int, double, double,
+                                    int)
         void addBucklingConstraint(double, int, TacsScalar,
                                    TacsScalar, TacsScalar, int, double)
         void setObjective(const TacsScalar*)
