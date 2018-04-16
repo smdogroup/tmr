@@ -2920,6 +2920,10 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   // First, go through and evaluate the maximum stress
   // in all of the elements
   ks_max_fail = -1e20;
+
+  // Get the quadrature points/weights
+  const double *gaussPts, *gaussWts;
+  FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
   
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
@@ -2942,10 +2946,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
-    
-    // Get the quadrature points/weights
-    const double *gaussPts, *gaussWts;
-    FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
 
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
@@ -2975,14 +2975,14 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
       }
     }
   }
-
+  
   // Find the maximum failure value across all of the processors
   MPI_Allreduce(MPI_IN_PLACE, &ks_max_fail, 1, TACS_MPI_TYPE, MPI_MAX, comm);
 
   // Compute the sum over all the element - integrate the sum over all
   // elements/procs
   ks_fail_sum = 0.0;
-
+  
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
     TACSElement *elem = tacs->getElement(i, Xpts, vars, dvars, ddvars);
@@ -3004,10 +3004,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
-    
-    // Get the quadrature points/weights
-    const double *gaussPts, *gaussWts;
-    FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
 
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
@@ -3438,7 +3434,7 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
   if (order == 2){
     eval2ndEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
   }
-  if (order == 3){
+  else if (order == 3){
     eval3rdEnrichmentFuncs3D(pt, Nr, Nar, Nbr, Ncr);
   }
 
