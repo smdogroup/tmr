@@ -425,6 +425,9 @@ cdef extern from "TMR_RefinementTools.h":
          TacsScalar evalConstraint(TACSBVec*)
          void evalConDeriv(TacsScalar*, int, TACSBVec*)
 
+         void writeReconToTec(TACSBVec*, char*,
+                              TacsScalar)
+
 cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
     ctypedef TACSElement* (*createoctelements)(void*, int, TMROctant*)

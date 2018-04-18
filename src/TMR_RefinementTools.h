@@ -116,6 +116,10 @@ class TMRStressConstraint : public TMREntity {
   // Evaluate the terms required for the total derivative
   void evalConDeriv( TacsScalar *dfdx, int size, TACSBVec *dfdu );
 
+  // Write the von Misses stress from the reconstruction to tecplot
+  void writeReconToTec( TACSBVec *_uvec, const char *fname,
+                        TacsScalar ys=1e6 );
+  
  private:
   // Evaluate the element strain at the given point
   TacsScalar evalStrain( const double pt[],
@@ -130,9 +134,9 @@ class TMRStressConstraint : public TMREntity {
                              TacsScalar dfdu[], TacsScalar dfdubar[] );
 
   // Compute the derivative terms related to the reconstructed solution
-  TacsScalar addEnrichDeriv( TacsScalar A[], TacsScalar dbdu[], 
-                             TacsScalar dubardu[],
-                             TacsScalar dubar_duderiv[] );
+  void addEnrichDeriv( TacsScalar A[], TacsScalar dbdu[], 
+                       TacsScalar dubardu[],
+                       TacsScalar dubar_duderiv[] );
   
   // The mesh order
   int order;

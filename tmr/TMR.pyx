@@ -2217,6 +2217,11 @@ cdef class StressConstraint:
                               dfdu.ptr)
         return
 
+    def writeReconToTec(self, Vec uvec, fname, TacsScalar ys=1e6):
+        cdef char *filename = tmr_convert_to_chars(fname)
+        self.ptr.writeReconToTec(uvec.ptr, filename, ys)
+        return
+
 cdef class TopoProblem(pyParOptProblemBase):
     def __cinit__(self, list assemblers, list filters, 
                   list varmaps, list varindices, Pc pc, int vars_per_node=1):
