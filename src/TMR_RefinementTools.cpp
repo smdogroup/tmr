@@ -3707,7 +3707,7 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
   FILE *fp = fopen(fname, "w");
   fprintf(fp, "TITLE = \"Reconstruction Solution\"\n");
   fprintf(fp, "FILETYPE = FULL\n");
-  fprintf(fp, "VARIABLES = \"X\", \"Y\", \"Z\", \"svm\"\n");
+  fprintf(fp, "VARIABLES = \"X\", \"Y\", \"Z\", \"exx\", \"eyy\", \"ezz\", \"exy\", \"eyz\", \"exz\", \"svm\"\n");
   int num_tec_elems = (num_quad_pts-1)*(num_quad_pts-1)*(num_quad_pts-1)*nelems;
   int num_tec_pts = num_quad_pts*num_quad_pts*num_quad_pts*nelems;
   fprintf(fp, "ZONE ZONETYPE = FEBRICK, N = %d, E = %d, DATAPACKING = POINT\n",
@@ -3777,7 +3777,8 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
             Xpt[1] += Xpts[3*k+1]*N[k];
             Xpt[2] += Xpts[3*k+2]*N[k];
           }
-          fprintf(fp, "%f %f %f %e\n", Xpt[0], Xpt[1], Xpt[2], svm);
+          fprintf(fp, "%f %f %f %e %e %e %e %e %e %e\n", Xpt[0], Xpt[1], Xpt[2],
+                  e[0], e[1], e[2], e[3], e[4], e[5], svm);
         }
       }
     }
