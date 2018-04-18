@@ -969,6 +969,13 @@ int TMRQuadForest::getMeshOrder(){
 }
 
 /*
+  Retrieve the interpolation type for this mesh
+*/
+TMRInterpolationType TMRQuadForest::getInterpType(){
+  return interp_type;
+}
+
+/*
   Get the node-processor ownership range
 */
 int TMRQuadForest::getOwnedNodeRange( const int **_node_range ){

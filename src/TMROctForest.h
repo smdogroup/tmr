@@ -77,6 +77,7 @@ class TMROctForest : public TMREntity {
                      TMRInterpolationType interp_type=
                        TMR_GAUSS_LOBATTO_POINTS );
   int getMeshOrder();
+  TMRInterpolationType getInterpType();
   
   // Re-partition the octrees based on element count
   // -----------------------------------------------

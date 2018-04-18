@@ -2836,6 +2836,17 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
 
   // Get the mesh order
   order = forest->getMeshOrder();
+  TMRInterpolationType interp_type = forest->getInterpType();
+
+  // Create a forest with elevated order
+  interp_forest = forest->duplicate();
+  interp_forest->incref();
+
+  // Create the mesh for the forest
+  interp_forest->setMeshOrder(order+1, interp_type);
+
+  // Create the nodes for the duplicated forest
+  interp_forest->createNodes();
 
   // Allocate a local vector
   uvec = tacs->createVec();
@@ -2866,7 +2877,7 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
   
   // Allocate the vectors
   int max_nodes = tacs->getMaxElementNodes();
-  Xpts = new TacsScalar[ 3*max_nodes ];
+  Xpts = new TacsScalar[ 3*(order+1)*(order+1)*(order+1) ];
   vars = new TacsScalar[ vars_per_node*max_nodes ];
   dvars = new TacsScalar[ vars_per_node*max_nodes ];
   ddvars = new TacsScalar[ vars_per_node*max_nodes ];
@@ -2884,6 +2895,7 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
 */
 TMRStressConstraint::~TMRStressConstraint(){
   forest->decref();
+  interp_forest->decref();
   tacs->decref();
   weights->decref();
   uderiv->decref();
@@ -2930,6 +2942,14 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   // int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
   int num_quad_pts = FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
                                                &gaussPts, &gaussWts);
+
+  // Get the local connectivity for the higher-order mesh
+  const int *conn = NULL;
+  interp_forest->getNodeConn(&conn);
+
+  // Get the higher-order points
+  TMRPoint *X;
+  interp_forest->getPoints(&X);
     
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
@@ -2952,6 +2972,16 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
+
+    // Now get the node locations for the locally refined mesh
+    const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    for ( int j = 0; j < interp_elem_size; j++ ){
+      int c = conn[interp_elem_size*i + j];
+      int node = interp_forest->getLocalNodeNumber(c);
+      Xpts[3*j] = X[node].x;
+      Xpts[3*j+1] = X[node].y;
+      Xpts[3*j+2] = X[node].z;
+    }
 
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
@@ -3011,6 +3041,16 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
     
+    // Now get the node locations for the locally refined mesh
+    const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    for ( int j = 0; j < interp_elem_size; j++ ){
+      int c = conn[interp_elem_size*i + j];
+      int node = interp_forest->getLocalNodeNumber(c);
+      Xpts[3*j] = X[node].x;
+      Xpts[3*j+1] = X[node].y;
+      Xpts[3*j+2] = X[node].z;
+    }
+
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
     for ( int kk = 0; kk < num_quad_pts; kk++ ){
@@ -3396,23 +3436,9 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
 
   // Evaluate the derivative
   const TacsScalar *u = vars;
-  const TacsScalar *x = Xpts;
   const double *na = Na, *nb = Nb, *nc = Nc;
-  const int len = order*order*order;
-  for ( int i = 0; i < len; i++ ){
-    // Compute the inverse of the Jacobian transformation
-    Xd[0] += Na[i]*x[0];
-    Xd[1] += Nb[i]*x[0];
-    Xd[2] += Nc[i]*x[0];
-
-    Xd[3] += Na[i]*x[1];
-    Xd[4] += Nb[i]*x[1];
-    Xd[5] += Nc[i]*x[1];
-
-    Xd[6] += Na[i]*x[2];
-    Xd[7] += Nb[i]*x[2];
-    Xd[8] += Nc[i]*x[2];
-
+  const int ulen = order*order*order;
+  for ( int i = 0; i < ulen; i++ ){
     // Compute the displacement gradient
     Ud[0] += Na[i]*u[0];
     Ud[1] += Nb[i]*u[0];
@@ -3425,11 +3451,32 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
     Ud[6] += Na[i]*u[2];
     Ud[7] += Nb[i]*u[2];
     Ud[8] += Nc[i]*u[2];
-   
-    x += 3;
     u += 3;
   }
-  
+
+  // Evaluate the interpolation of the nodes using the 
+  // basis functions from the higher-order mesh
+  interp_forest->evalInterp(pt, N, Na, Nb, Nc);
+
+  const TacsScalar *x = Xpts;
+  na = Na;  nb = Nb;  nc = Nc;
+  const int xlen = (order+1)*(order+1)*(order+1);
+  for ( int i = 0; i < xlen; i++ ){
+    // Compute the inverse of the Jacobian transformation
+    Xd[0] += Na[i]*x[0];
+    Xd[1] += Nb[i]*x[0];
+    Xd[2] += Nc[i]*x[0];
+
+    Xd[3] += Na[i]*x[1];
+    Xd[4] += Nb[i]*x[1];
+    Xd[5] += Nc[i]*x[1];
+
+    Xd[6] += Na[i]*x[2];
+    Xd[7] += Nb[i]*x[2];
+    Xd[8] += Nc[i]*x[2];   
+    x += 3;
+  }
+
   // Invert the derivatives to obtain the Jacobian
   // transformation matrixx and its determinant
   TacsScalar detJ = FElibrary::jacobian3d(Xd, J);
@@ -3648,6 +3695,14 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
   int num_quad_pts = FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
                                                &gaussPts, &gaussWts);
 
+  // Get the local connectivity for the higher-order mesh
+  const int *conn = NULL;
+  interp_forest->getNodeConn(&conn);
+
+  // Get the higher-order points
+  TMRPoint *X;
+  interp_forest->getPoints(&X);
+
   // Create file to write out the von Misses stress to .dat file
   FILE *fp = fopen(fname, "w");
   fprintf(fp, "TITLE = \"Reconstruction Solution\"\n");
@@ -3680,6 +3735,16 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
 
+    // Now get the node locations for the locally refined mesh
+    const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    for ( int j = 0; j < interp_elem_size; j++ ){
+      int c = conn[interp_elem_size*i + j];
+      int node = interp_forest->getLocalNodeNumber(c);
+      Xpts[3*j] = X[node].x;
+      Xpts[3*j+1] = X[node].y;
+      Xpts[3*j+2] = X[node].z;
+    }
+
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
     for ( int kk = 0; kk < num_quad_pts; kk++ ){
@@ -3706,8 +3771,8 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
           // Write the value of von Misess stress
           TacsScalar Xpt[3] = {0.0, 0.0, 0.0};
           double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          FElibrary::triLagrangeSF(N, pt, order);
-          for ( int k = 0; k < order*order*order; k++ ){
+          interp_forest->evalInterp(pt, N);
+          for ( int k = 0; k < interp_elem_size; k++ ){
             Xpt[0] += Xpts[3*k]*N[k];
             Xpt[1] += Xpts[3*k+1]*N[k];
             Xpt[2] += Xpts[3*k+2]*N[k];
@@ -3723,27 +3788,6 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
 
   // Write the element connectivity
   for ( int i = 0; i < nelems; i++ ){
-    // Get the element class and the variables associated with it
-    TACSElement *elem = tacs->getElement(i, Xpts, vars, dvars, ddvars);
-    
-    // Get the constitutive relationship
-    TACSConstitutive *con = elem->getConstitutive();
-
-    // Get the node numbers and node locations for this element
-    int len;
-    const int *nodes;
-    tacs->getElement(i, &nodes, &len);
-    tacs->getElement(i, Xpts);
-    
-    // Retrieve the nodal values and nodal derivatives
-    uvec->getValues(len, nodes, vars);
-    uderiv->getValues(len, nodes, varderiv);
-
-    // Compute the values of the enrichment coefficient for each
-    // degree of freedom
-    computeElemRecon3D(vars_per_node, forest,
-                       Xpts, vars, varderiv, ubar, tmp);
-
     // Write the connectivity
     for ( int kk = 0; kk < num_quad_pts-1; kk++ ){
       for ( int jj = 0; jj < num_quad_pts-1; jj++ ){
@@ -3762,6 +3806,7 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
       }
     }
   }
+
   // Close the file
   fclose(fp);
 }
