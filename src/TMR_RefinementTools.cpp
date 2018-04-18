@@ -27,6 +27,10 @@
 #include <string>
 #include <set>
 
+// Include for writing output file
+#include <stdio.h>
+#include <stdlib.h>
+
 /*
   Create a multgrid object for a forest of octrees
 */
@@ -2923,8 +2927,10 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 
   // Get the quadrature points/weights
   const double *gaussPts, *gaussWts;
-  FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
-  
+  // int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
+  int num_quad_pts = FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
+                                               &gaussPts, &gaussWts);
+    
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
     TACSElement *elem = tacs->getElement(i, Xpts, vars, dvars, ddvars);
@@ -2949,9 +2955,9 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
-    for ( int kk = 0; kk < order; kk++ ){
-      for ( int jj = 0; jj < order; jj++ ){
-        for ( int ii = 0; ii < order; ii++ ){
+    for ( int kk = 0; kk < num_quad_pts; kk++ ){
+      for ( int jj = 0; jj < num_quad_pts; jj++ ){
+        for ( int ii = 0; ii < num_quad_pts; ii++ ){
           // Pick the quadrature point at which we will
           // evaluate the strain
           double pt[3];
@@ -3004,12 +3010,12 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest,
                        Xpts, vars, varderiv, ubar, tmp);
-
+    
     // For each quadrature point, evaluate the strain at the
     // quadrature point and evaluate the stress constraint
-    for ( int kk = 0; kk < order; kk++ ){
-      for ( int jj = 0; jj < order; jj++ ){
-        for ( int ii = 0; ii < order; ii++ ){
+    for ( int kk = 0; kk < num_quad_pts; kk++ ){
+      for ( int jj = 0; jj < num_quad_pts; jj++ ){
+        for ( int ii = 0; ii < num_quad_pts; ii++ ){
           // Pick the quadrature point at which we will
           // evaluate the strain
           double pt[3];
@@ -3552,10 +3558,10 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
 /*
   Add the element contribution to the derivative dubar/du
 */
-TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
-                                                TacsScalar dbdu[],
-                                                TacsScalar dubardu[],
-                                                TacsScalar dubar_duderiv[]){
+void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
+                                          TacsScalar dbdu[],
+                                          TacsScalar dubardu[],
+                                          TacsScalar dubar_duderiv[]){
 
   // note for future work: change this to forward derivative
   // of dubardu and there will be one fewer matrix multiplication
@@ -3607,6 +3613,155 @@ TacsScalar TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   delete [] ATA;
   delete [] dbduT_A;
   delete [] ipiv;
+}
+
+
+/*
+  Output the von Misess stress from the reconstructed solution to a tecplot file
+*/
+
+void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
+                                           const char *fname,
+                                           TacsScalar ys ){
+  const int vars_per_node = tacs->getVarsPerNode();
   
-  return 0.0;
+  // Copy the values
+  uvec->copyValues(_uvec);
+
+  // Distribute the variable values so that the non-owned values can
+  // be accessed locally
+  uvec->beginDistributeValues();
+  uvec->endDistributeValues();
+
+  // Compute the derivatives at the nodes
+  computeNodeDeriv3D(forest, tacs, uvec, weights, uderiv);
+
+  // Number of local elements
+  const int nelems = tacs->getNumElements();
+
+  // Set the communicator
+  MPI_Comm comm = tacs->getMPIComm();
+
+  // Get the quadrature points/weights
+  const double *gaussPts, *gaussWts;
+  // int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
+  int num_quad_pts = FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
+                                               &gaussPts, &gaussWts);
+
+  // Create file to write out the von Misses stress to .dat file
+  FILE *fp = fopen(fname, "w");
+  fprintf(fp, "TITLE = \"Reconstruction Solution\"\n");
+  fprintf(fp, "FILETYPE = FULL\n");
+  fprintf(fp, "VARIABLES = \"X\", \"Y\", \"Z\", \"svm\"\n");
+  int num_tec_elems = (num_quad_pts-1)*(num_quad_pts-1)*(num_quad_pts-1)*nelems;
+  int num_tec_pts = num_quad_pts*num_quad_pts*num_quad_pts*nelems;
+  fprintf(fp, "ZONE ZONETYPE = FEBRICK, N = %d, E = %d, DATAPACKING = POINT\n",
+          num_tec_pts, num_tec_elems);
+
+  for ( int i = 0; i < nelems; i++ ){
+    // Get the element class and the variables associated with it
+    TACSElement *elem = tacs->getElement(i, Xpts, vars, dvars, ddvars);
+    
+    // Get the constitutive relationship
+    TACSConstitutive *con = elem->getConstitutive();
+
+    // Get the node numbers and node locations for this element
+    int len;
+    const int *nodes;
+    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, Xpts);
+    
+    // Retrieve the nodal values and nodal derivatives
+    uvec->getValues(len, nodes, vars);
+    uderiv->getValues(len, nodes, varderiv);
+    
+    // Compute the values of the enrichment coefficient for each
+    // degree of freedom
+    computeElemRecon3D(vars_per_node, forest,
+                       Xpts, vars, varderiv, ubar, tmp);
+
+    // For each quadrature point, evaluate the strain at the
+    // quadrature point and evaluate the stress constraint
+    for ( int kk = 0; kk < num_quad_pts; kk++ ){
+      for ( int jj = 0; jj < num_quad_pts; jj++ ){
+        for ( int ii = 0; ii < num_quad_pts; ii++ ){
+          // Pick the quadrature point at which we will
+          // evaluate the strain
+          double pt[3];
+          pt[0] = gaussPts[ii];
+          pt[1] = gaussPts[jj];
+          pt[2] = gaussPts[kk];
+
+          // Evaluate the strain
+          TacsScalar J[9], e[6];
+          evalStrain(pt, Xpts, vars, ubar, J, e);
+          
+          // Evaluate the failure criteria
+          TacsScalar fval;
+          con->failure(pt, e, &fval);
+
+          // Compute von Misess stress from failure
+          TacsScalar svm = fval*ys;
+          
+          // Write the value of von Misess stress
+          TacsScalar Xpt[3] = {0.0, 0.0, 0.0};
+          double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
+          FElibrary::triLagrangeSF(N, pt, order);
+          for ( int k = 0; k < order*order*order; k++ ){
+            Xpt[0] += Xpts[3*k]*N[k];
+            Xpt[1] += Xpts[3*k+1]*N[k];
+            Xpt[2] += Xpts[3*k+2]*N[k];
+          }
+          fprintf(fp, "%f %f %f %e\n", Xpt[0], Xpt[1], Xpt[2], svm);
+        }
+      }
+    }
+  }
+
+  // Seperate the point data from the connectivity by a blank line
+  fprintf(fp, "\n");
+
+  // Write the element connectivity
+  for ( int i = 0; i < nelems; i++ ){
+    // Get the element class and the variables associated with it
+    TACSElement *elem = tacs->getElement(i, Xpts, vars, dvars, ddvars);
+    
+    // Get the constitutive relationship
+    TACSConstitutive *con = elem->getConstitutive();
+
+    // Get the node numbers and node locations for this element
+    int len;
+    const int *nodes;
+    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, Xpts);
+    
+    // Retrieve the nodal values and nodal derivatives
+    uvec->getValues(len, nodes, vars);
+    uderiv->getValues(len, nodes, varderiv);
+
+    // Compute the values of the enrichment coefficient for each
+    // degree of freedom
+    computeElemRecon3D(vars_per_node, forest,
+                       Xpts, vars, varderiv, ubar, tmp);
+
+    // Write the connectivity
+    for ( int kk = 0; kk < num_quad_pts-1; kk++ ){
+      for ( int jj = 0; jj < num_quad_pts-1; jj++ ){
+        for ( int ii = 0; ii < num_quad_pts-1; ii++ ){
+          int off = num_quad_pts*num_quad_pts*num_quad_pts*i + 1;
+          fprintf(fp, "%d %d %d %d %d %d %d %d\n",
+                  off + ii + jj*num_quad_pts + kk*num_quad_pts*num_quad_pts,
+                  off + ii+1 + jj*num_quad_pts + kk*num_quad_pts*num_quad_pts,
+                  off + ii+1 + (jj+1)*num_quad_pts + kk*num_quad_pts*num_quad_pts,
+                  off + ii + (jj+1)*num_quad_pts + kk*num_quad_pts*num_quad_pts,
+                  off + ii + jj*num_quad_pts + (kk+1)*num_quad_pts*num_quad_pts,
+                  off + ii+1 + jj*num_quad_pts + (kk+1)*num_quad_pts*num_quad_pts,
+                  off + ii+1 + (jj+1)*num_quad_pts + (kk+1)*num_quad_pts*num_quad_pts,
+                  off + ii + (jj+1)*num_quad_pts + (kk+1)*num_quad_pts*num_quad_pts);
+        }
+      }
+    }
+  }
+  // Close the file
+  fclose(fp);
 }
