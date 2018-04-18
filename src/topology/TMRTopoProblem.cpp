@@ -771,7 +771,8 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
                                              int fgmres_size,
                                              double eig_rtol,
                                              double eig_atol,
-                                             int num_recycle ){
+                                             int num_recycle,
+                                             JDRecycleType recycle_type ){
   if (!freq){
     // Create a mass matrix for the frequency constraint
     TACSMat *mmat = tacs[0]->createMat();
@@ -787,7 +788,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
                                        kmat, pcmat, pc,
                                        max_subspace_size, fgmres_size,
                                        num_eigvals, eigtol, eig_rtol,
-                                       eig_atol, num_recycle);
+                                       eig_atol, num_recycle, recycle_type);
     }
     else{
       // Create the frequency analysis object

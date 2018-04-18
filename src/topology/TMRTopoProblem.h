@@ -105,7 +105,8 @@ class TMRTopoProblem : public ParOptProblem {
                                int use_jd=0, int fgmres_size=5,
                                double eig_rtol=1e-12,
                                double eig_atol=1e-30,
-                               int num_recycle=0 );
+                               int num_recycle=0,
+                               JDRecycleType recycle_type=JD_NUM_RECYCLE );
   void addBucklingConstraint( double sigma, int num_eigvals,
                               TacsScalar ks_weight,
                               TacsScalar offset, TacsScalar scale,
