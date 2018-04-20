@@ -252,27 +252,31 @@ for ite in range(max_iterations):
     # Set the frequency constraint
     #freq-1.5 >= 0.0
     sigma = 2e4
-    num_eigs = 20
+    num_eigs = 9
     ks_weight = 50.0
     offset = -2.e4#-2.5e4, 1e4
     scale = 1.0/3e5
     max_lanczos = 100
     tol = 1e-30
-    fgmres_size = 5
-    max_jd_size = 20
+    fgmres_size = 10
+    max_jd_size = 50
     if use_jd:
-        eig_tol = 1e-9
+        eig_tol = 1e-8
         eig_rtol = 1e-6
         eig_atol = 1e-12
+        num_recycle = 5
+        recycle_type = TACS.SUM_TWO
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
                                        offset, scale,
                                        max_jd_size, eig_tol, use_jd,
-                                       fgmres_size, eig_rtol, eig_atol)
+                                       fgmres_size, eig_rtol, eig_atol,
+                                       num_recycle, recycle_type,1)
     else:
         
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
                                        offset, scale,
-                                       max_lanczos, tol)
+                                       max_lanczos, tol, 0,
+                                       0, 0, 0, 0, TACS.SUM_TWO,1)
     
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
     problem.setObjective(obj_array)
@@ -295,8 +299,8 @@ for ite in range(max_iterations):
         opt.setOutputFrequency(args.output_freq)
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
-        opt.checkGradients(1e-6)
-        AS
+        #opt.checkGradients(1e-6)
+        
         # If the old filter exists, we're on the second iteration
         if old_filtr:
             # Create the interpolation
