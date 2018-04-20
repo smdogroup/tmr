@@ -1504,6 +1504,13 @@ int TMROctForest::getMeshOrder(){
 }
 
 /*
+  Retrieve the interpolation type for this mesh
+*/
+TMRInterpolationType TMROctForest::getInterpType(){
+  return interp_type;
+}
+
+/*
   Get the node-processor ownership range
 */
 int TMROctForest::getOwnedNodeRange( const int **_node_range ){

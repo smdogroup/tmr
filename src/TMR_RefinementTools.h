@@ -141,6 +141,7 @@ class TMRStressConstraint : public TMREntity {
   // The mesh order
   int order;
   TMROctForest *forest;
+  TMROctForest *interp_forest;
 
   // The values used to compute the KS function
   TacsScalar ks_weight;

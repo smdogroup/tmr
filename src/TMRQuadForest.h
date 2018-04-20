@@ -72,6 +72,7 @@ class TMRQuadForest : public TMREntity {
                      TMRInterpolationType interp_type=
                        TMR_GAUSS_LOBATTO_POINTS );
   int getMeshOrder();
+  TMRInterpolationType getInterpType();
 
   // Re-partition the quadtrees based on element count
   // -------------------------------------------------
