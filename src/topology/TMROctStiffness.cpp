@@ -341,7 +341,11 @@ void TMROctStiffness::failure( const double pt[],
     *fail = r_factor*VonMisesFailure3D(s, ys);
   }
 }
-// Evaluate the failure criteria w.r.t. design variables
+
+/*
+  Evaluate the derivative of the failure criteria w.r.t. design
+  variables
+*/
 void TMROctStiffness::addFailureDVSens( const double pt[], 
                                         const TacsScalar e[],
                                         TacsScalar alpha,
@@ -441,4 +445,3 @@ void TMROctStiffness::failureStrainSens( const double pt[],
     printf("Not implemented yet \n");
   }
 }
-
