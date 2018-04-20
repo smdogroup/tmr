@@ -106,7 +106,8 @@ class TMRTopoProblem : public ParOptProblem {
                                double eig_rtol=1e-12,
                                double eig_atol=1e-30,
                                int num_recycle=0,
-                               JDRecycleType recycle_type=JD_NUM_RECYCLE );
+                               JDRecycleType recycle_type=JD_NUM_RECYCLE,
+                               int _track_eigen_iters=0 );
   void addBucklingConstraint( double sigma, int num_eigvals,
                               TacsScalar ks_weight,
                               TacsScalar offset, TacsScalar scale,
@@ -242,7 +243,8 @@ class TMRTopoProblem : public ParOptProblem {
   TacsScalar freq_ks_sum;
   TacsScalar freq_ks_weight;
   TacsScalar freq_offset, freq_scale;
-
+  int track_eigen_iters;
+  KSMPrint *ksm_file;
   // The buckling TACS object
   TACSLinearBuckling **buck;
   // Set parameters used to control the buckling constraint

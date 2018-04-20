@@ -479,7 +479,8 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   freq_ks_weight = 30.0;
   freq_offset = 0.0;
   freq_scale = 1.0;
-
+  track_eigen_iters = 0;
+  ksm_file = NULL;
   // Set up the buckling constraint data
   buck = NULL;
   buck_eig_tol = 1e-8;
@@ -772,7 +773,8 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
                                              double eig_rtol,
                                              double eig_atol,
                                              int num_recycle,
-                                             JDRecycleType recycle_type ){
+                                             JDRecycleType recycle_type,
+                                             int _track_eigen_iters){
   if (!freq){
     // Create a mass matrix for the frequency constraint
     TACSMat *mmat = tacs[0]->createMat();
@@ -808,6 +810,17 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
   freq_ks_weight = ks_weight;
   freq_offset = offset;
   freq_scale = scale;
+  track_eigen_iters = _track_eigen_iters;
+  if (track_eigen_iters){
+    // Get the processor rank
+    int mpi_rank;
+    char line[256];
+    MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
+    sprintf(line, "eigen_iteration.dat", 
+            prefix);
+    ksm_file = new KSMPrintFile(line,
+                                "KSM", mpi_rank, 1);
+  }
 }
 
 /*
@@ -1489,10 +1502,10 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       while (err_count > 0){
         // Set the error counter to zero
         err_count = 0;
-
         // Solve the eigenvalue problem
-        freq->solve(new KSMPrintStdout("KSM", mpi_rank, 1));
-          
+        freq->solve(new KSMPrintStdout("KSM", mpi_rank, 1),
+                    ksm_file);
+        
         // Extract the first k eigenvalues
         for ( int k = 0; k < num_freq_eigvals; k++ ){
           TacsScalar error;
