@@ -2843,7 +2843,7 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
   interp_forest->incref();
 
   // Create the mesh for the forest
-  interp_forest->setMeshOrder(order+1, interp_type);
+  interp_forest->setMeshOrder(order, interp_type);
 
   // Create the nodes for the duplicated forest
   interp_forest->createNodes();
@@ -2974,7 +2974,8 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
                        Xpts, vars, varderiv, ubar, tmp);
 
     // Now get the node locations for the locally refined mesh
-    const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    // const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    const int interp_elem_size = order*order*order;
     for ( int j = 0; j < interp_elem_size; j++ ){
       int c = conn[interp_elem_size*i + j];
       int node = interp_forest->getLocalNodeNumber(c);
@@ -3042,7 +3043,8 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
                        Xpts, vars, varderiv, ubar, tmp);
     
     // Now get the node locations for the locally refined mesh
-    const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    // const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    const int interp_elem_size = order*order*order;
     for ( int j = 0; j < interp_elem_size; j++ ){
       int c = conn[interp_elem_size*i + j];
       int node = interp_forest->getLocalNodeNumber(c);
@@ -3460,7 +3462,8 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
 
   const TacsScalar *x = Xpts;
   na = Na;  nb = Nb;  nc = Nc;
-  const int xlen = (order+1)*(order+1)*(order+1);
+  // const int xlen = (order+1)*(order+1)*(order+1);
+  const int xlen = order*order*order;
   for ( int i = 0; i < xlen; i++ ){
     // Compute the inverse of the Jacobian transformation
     Xd[0] += Na[i]*x[0];
@@ -3736,7 +3739,8 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
                        Xpts, vars, varderiv, ubar, tmp);
 
     // Now get the node locations for the locally refined mesh
-    const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    // const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    const int interp_elem_size = order*order*order;
     for ( int j = 0; j < interp_elem_size; j++ ){
       int c = conn[interp_elem_size*i + j];
       int node = interp_forest->getLocalNodeNumber(c);
@@ -3783,7 +3787,7 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
       }
     }
   }
-
+  
   // Seperate the point data from the connectivity by a blank line
   fprintf(fp, "\n");
 
