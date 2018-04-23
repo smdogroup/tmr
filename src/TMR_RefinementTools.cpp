@@ -3149,10 +3149,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
 
   // Get the quadrature points/weights
   const double *gaussPts, *gaussWts;
+  // int num_quad_pts = 
+  //   FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
   int num_quad_pts =
     FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
                               &gaussPts, &gaussWts);
-  
+
   // Get the local connectivity for the higher-order mesh
   const int *conn = NULL;
   interp_forest->getNodeConn(&conn);
@@ -3160,7 +3162,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   // Get the higher-order points
   TMRPoint *X;
   interp_forest->getPoints(&X);
-
+  
   // Set the matrix dimensions
   int m = nenrich;
   int n = neq;
@@ -3175,23 +3177,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   TacsScalar *dubar_duderiv = new TacsScalar[m*n];
   TacsScalar *dfduderiv_elem = new TacsScalar[3*n];
   TacsScalar *duderiv_du = new TacsScalar[3*n*3*p];
-
-
-  // Get the quadrature points/weights
-  const double *gaussPts, *gaussWts;
-  // int num_quad_pts = 
-  //   FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
-  int num_quad_pts =
-    FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
-                              &gaussPts, &gaussWts);
-
-  // Get the local connectivity for the higher-order mesh
-  const int *conn = NULL;
-  interp_forest->getNodeConn(&conn);
-
-  // Get the higher-order points
-  TMRPoint *X;
-  interp_forest->getPoints(&X);
 
   for ( int i = 0; i < nelems; i++ ){
     // Get the element class and the variables associated with it
@@ -3225,8 +3210,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
     
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
-    computeElemRecon3DNew(vars_per_node, forest, interp_forest,
-                          Xpts, vars, varderiv, ubar, tmp);
+    computeElemRecon3D(vars_per_node, forest, interp_forest,
+                       Xpts, vars, varderiv, ubar, tmp);
 
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
