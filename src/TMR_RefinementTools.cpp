@@ -3166,7 +3166,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   // Set the matrix dimensions
   int m = nenrich;
   int n = neq;
-  int p = num_quad_pts; //num_nodes;
+  int p = num_nodes; //num_quad_pts*num_quad_pts*num_quad_pts;
   
   // Initialize variables
   TacsScalar *dfdu_elem = new TacsScalar[3*p];
@@ -3208,11 +3208,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
       Xpts[3*j+2] = X[node].z;
     }
     
-    // Compute the values of the enrichment coefficient for each
-    // degree of freedom
-    computeElemRecon3D(vars_per_node, forest, interp_forest,
-                       Xpts, vars, varderiv, ubar, tmp);
-
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest, interp_forest,
@@ -3681,13 +3676,12 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // note for future work: change this to forward derivative
   // of dubardu and there will be one fewer matrix multiplication
 
-  // Get the quadrature points/weights
-  const double *gaussPts, *gaussWts;
-  int num_quad_pts =
-    FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
-                              &gaussPts, &gaussWts);
+  // // Get the quadrature points/weights
+  // const double *gaussPts, *gaussWts;
+  // int num_quad_pts =
+  //   FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
+  //                             &gaussPts, &gaussWts);
 
-  
   // Get the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
 
@@ -3699,7 +3693,7 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // Set the matrix dimensions
   int m = nenrich;
   int n = neq;
-  int p = num_quad_pts; //num_nodes;
+  int p = num_nodes; //num_quad_pts*num_quad_pts*num_quad_pts;
 
   TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
   TacsScalar *dbduT_A = new TacsScalar[p*m]; // store (db/du)^T A
