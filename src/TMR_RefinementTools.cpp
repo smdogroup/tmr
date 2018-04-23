@@ -3614,7 +3614,7 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
   double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
   double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
   double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-  FElibrary::triLagrangeSF(N, Na, Nb, Nc, pt, order);
+  forest->evalInterp(pt, N, Na, Nb, Nc);
 
   // Evaluate the contribution from the enrichment functions
   double Nr[MAX_3D_ENRICH];
@@ -3746,9 +3746,6 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
 
   // Number of local elements
   const int nelems = tacs->getNumElements();
-
-  // Set the communicator
-  MPI_Comm comm = tacs->getMPIComm();
 
   // Get the quadrature points/weights
   const double *gaussPts, *gaussWts;
