@@ -3109,7 +3109,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 
   // Get the quadrature points/weights
   const double *gaussPts, *gaussWts;
-  // int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
+  //int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
   int num_quad_pts =
     FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
                               &gaussPts, &gaussWts);
@@ -3274,11 +3274,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
   const int num_nodes = order*order*order;
   const int neq = num_nodes*vars_per_node;
 
-  // Set the matrix dimensions
-  int m = nenrich;
-  int n = neq;
-  int p = num_nodes;
-
   // Set the derivative of the function w.r.t. the state variables
   dfdu->zeroEntries();
   dfduderiv->zeroEntries();
@@ -3296,6 +3291,25 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     wvals[1] = 1.0;
   }
 
+  // Get the quadrature points/weights
+  const double *gaussPts, *gaussWts;
+  int num_quad_pts =
+    FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
+                              &gaussPts, &gaussWts);
+  
+  // Get the local connectivity for the higher-order mesh
+  const int *conn = NULL;
+  interp_forest->getNodeConn(&conn);
+
+  // Get the higher-order points
+  TMRPoint *X;
+  interp_forest->getPoints(&X);
+
+  // Set the matrix dimensions
+  int m = nenrich;
+  int n = neq;
+  int p = num_quad_pts; //num_nodes;
+  
   // Initialize variables
   TacsScalar *dfdu_elem = new TacsScalar[3*p];
   TacsScalar *dfdubar = new TacsScalar[3*m];
@@ -3327,14 +3341,20 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     uvec->getValues(len, nodes, vars);
     uderiv->getValues(len, nodes, varderiv);
 
+    // Now get the node locations for the locally refined mesh
+    const int interp_elem_size = (order+1)*(order+1)*(order+1);
+    for ( int j = 0; j < interp_elem_size; j++ ){
+      int c = conn[interp_elem_size*i + j];
+      int node = interp_forest->getLocalNodeNumber(c);
+      Xpts[3*j] = X[node].x;
+      Xpts[3*j+1] = X[node].y;
+      Xpts[3*j+2] = X[node].z;
+    }
+    
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
-    computeElemRecon3D(vars_per_node, forest,
-                       Xpts, vars, varderiv, ubar, tmp);
-
-    // Get the quadrature points/weights
-    const double *gaussPts, *gaussWts;
-    FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
+    computeElemRecon3DNew(vars_per_node, forest, interp_forest,
+                          Xpts, vars, varderiv, ubar, tmp);
 
     // Zero variables before elementwise operations begin
     memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
@@ -3346,9 +3366,9 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
     memset(duderiv_du, 0, 3*n*3*p*sizeof(TacsScalar));
 
     // Compute the partial derivatives (df/du) and (df/dubar)
-    for ( int c = 0, kk = 0; kk < order; kk++ ){
-      for ( int jj = 0; jj < order; jj++ ){
-        for ( int ii = 0; ii < order; ii++, c += 3 ){
+    for ( int c = 0, kk = 0; kk < num_quad_pts; kk++ ){
+      for ( int jj = 0; jj < num_quad_pts; jj++ ){
+        for ( int ii = 0; ii < num_quad_pts; ii++, c += 3 ){
           // Pick the quadrature point at which we will
           // evaluate the strain
           double pt[3];
@@ -3401,11 +3421,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          forest->evalInterp(kt, N, Na, Nb, Nc);
+          interp_forest->evalInterp(kt, N, Na, Nb, Nc);
 
           // Evaluate the Jacobian transformation at this point
           TacsScalar Xd[9], J[9];
-          computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J, order*order*order);
+          computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J,
+                                 (order+1)*(order+1)*(order+1));
 
           // Evaluate the enrichment shape functions
           double Nr[MAX_3D_ENRICH];
@@ -3530,12 +3551,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx,
           double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
           double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          forest->evalInterp(pt, N, Na, Nb, Nc);
+          interp_forest->evalInterp(pt, N, Na, Nb, Nc);
 
           // Evaluate the Jacobian transformation at this point
           TacsScalar Xd[9], J[9];
           computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J,
-                                 order*order*order);
+                                 (order+1)*(order+1)*(order+1));
 
           // Accumulate the derivatives w.r.t. x/y/z for each value at
           // the independent nodes
@@ -3785,6 +3806,13 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // note for future work: change this to forward derivative
   // of dubardu and there will be one fewer matrix multiplication
 
+  // Get the quadrature points/weights
+  const double *gaussPts, *gaussWts;
+  int num_quad_pts =
+    FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
+                              &gaussPts, &gaussWts);
+
+  
   // Get the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
 
@@ -3796,7 +3824,7 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // Set the matrix dimensions
   int m = nenrich;
   int n = neq;
-  int p = num_nodes;
+  int p = num_quad_pts; //num_nodes;
 
   TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
   TacsScalar *dbduT_A = new TacsScalar[p*m]; // store (db/du)^T A
@@ -3824,9 +3852,7 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   //
   // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
   //
-  //TacsScalar *dubardu_elem = new TacsScalar[ p*m ];
   BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
-  //BLASgemm( "N", "N", &m, &m, &n, &a, ATAi_AT, &m, dbdu, &n, &b, dubardu_elem, &m);
 
   // Delete variables
   delete [] ATA;
@@ -3863,7 +3889,7 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
 
   // Get the quadrature points/weights
   const double *gaussPts, *gaussWts;
-  // int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
+  //int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
   int num_quad_pts = FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
                                                &gaussPts, &gaussWts);
 
