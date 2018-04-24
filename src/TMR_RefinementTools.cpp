@@ -3462,6 +3462,8 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   dfdu->beginSetValues(TACS_ADD_VALUES);
   dfdu->endSetValues(TACS_ADD_VALUES);
 
+  tacs->applyBCs(dfdu);
+  
   // Free allocated memory
   delete [] dfdu_elem;
   delete [] dfdubar;
