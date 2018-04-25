@@ -38,6 +38,7 @@ TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
   
   // Set the initial value for the densities
   nvars = 1;
+  x[0] = 0.95;
   rho[0] = 0.95;
   if (props->nmats > 1){
     nvars = props->nmats+1;
