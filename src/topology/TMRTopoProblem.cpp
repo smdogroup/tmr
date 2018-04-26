@@ -816,8 +816,12 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     int mpi_rank;
     char line[256];
     MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
-    sprintf(line, "eigen_iteration.dat", 
-            prefix);
+    if (use_jd){
+      sprintf(line, "eigen_iteration_jd_%01d.dat", num_recycle);
+    }
+    else {
+      sprintf(line, "eigen_iteration_lanczos.dat");
+    }
     ksm_file = new KSMPrintFile(line,
                                 "KSM", mpi_rank, 1);
   }
@@ -2003,7 +2007,7 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
     delete [] filename;
   }
 
-  if (buck){
+  if ((buck || freq) && iter_count % 50 == 0){
     writeEigenVector(iter);
   }
 
@@ -2040,4 +2044,28 @@ void TMRTopoProblem::writeEigenVector( int iter ){
     f5->decref();
     tmp->decref();
   }
+  else {
+    char outfile[256];
+    TACSBVec *tmp = tacs[0]->createVec();
+    tmp->incref();
+    tmp->zeroEntries();
+    // Create the visualization for the object
+    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                               TACSElement::OUTPUT_DISPLACEMENTS);
+    TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID, 
+                                  write_flag);
+    f5->incref();
+    // Extract the first k eigenvectors for ith load
+    for ( int k = 0; k < num_freq_eigvals; k++ ){
+      TacsScalar error;
+      freq->extractEigenvector(k, tmp, &error);
+      tacs[0]->setVariables(tmp);
+      sprintf(outfile, "%s/freq_eigenvector%02d_output%d.f5", 
+	      prefix, k, iter);
+      f5->writeToFile(outfile);
+    }
+    
+    f5->decref();
+    tmp->decref();
+  }  
 }
