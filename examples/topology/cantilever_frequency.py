@@ -124,9 +124,12 @@ p.add_argument('--init_depth', type=int, default=3)
 p.add_argument('--mg_levels', type=int, nargs='+', default=[2, 2, 3, 3])
 p.add_argument('--max_lbfgs', type=int, default=10)
 p.add_argument('--hessian_reset', type=int, default=10)
+p.add_argument('--num_recycle', type=int, default=0)
 p.add_argument('--use_paropt', action='store_true', default=True)
 p.add_argument('--use_mma', action='store_true', default=False)
 p.add_argument('--use_jd', action='store_true', default=False)
+p.add_argument('--use_sum_recycling', action='store_true', default=False)
+p.add_argument('--use_num_recycling', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the parameter to use paropt or MMA
@@ -258,14 +261,19 @@ for ite in range(max_iterations):
     scale = 1.0/3e5
     max_lanczos = 100
     tol = 1e-30
-    fgmres_size = 10
+    fgmres_size = 8
     max_jd_size = 50
     if use_jd:
-        eig_tol = 1e-8
+        eig_tol = 1e-7
         eig_rtol = 1e-6
         eig_atol = 1e-12
-        num_recycle = 5
-        recycle_type = TACS.SUM_TWO
+        num_recycle = args.num_recycle
+        if args.use_sum_recycling:
+            recycle_type = TACS.SUM_TWO
+        elif args.use_num_recycling:
+            recycle_type = TACS.NUM_RECYCLE
+        else:
+            recycle_type = TACS.SUM_TWO
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
                                        offset, scale,
                                        max_jd_size, eig_tol, use_jd,
