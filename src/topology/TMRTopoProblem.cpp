@@ -816,8 +816,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     int mpi_rank;
     char line[256];
     MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
-    sprintf(line, "eigen_iteration.dat", 
-            prefix);
+    sprintf(line, "eigen_iteration.dat");
     ksm_file = new KSMPrintFile(line,
                                 "KSM", mpi_rank, 1);
   }

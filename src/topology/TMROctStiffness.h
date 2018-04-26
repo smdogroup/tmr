@@ -42,7 +42,7 @@ class TMRStiffnessProperties : public TMREntity {
                           double _q, double _eps, double _k0,
                           double _beta, double _xoffset,
                           TacsScalar *rho, TacsScalar *_E, TacsScalar *_nu,
-                          TacsScalar *_ys=NULL ){
+                          TacsScalar *_ys=NULL, int _use_project=0 ){
     if (_nmats > MAX_NUM_MATERIALS){
       _nmats = MAX_NUM_MATERIALS;
     }
@@ -52,6 +52,7 @@ class TMRStiffnessProperties : public TMREntity {
     eps = _eps;
     beta = _beta;
     xoffset = _xoffset;
+    use_project = _use_project;
     for ( int i = 0; i < nmats; i++ ){
       density[i] = rho[i];
       E[i] = _E[i];
@@ -71,6 +72,7 @@ class TMRStiffnessProperties : public TMREntity {
   double k0;   // Small stiffness factor >= 0 ~ 1e-6
   double beta; // Parameter for the logistics function
   double xoffset;  // Offset parameter in the logistics function
+  int use_project; // Flag to indicate if projection should be used (0, 1)
   TacsScalar density[MAX_NUM_MATERIALS]; // Material density
   TacsScalar E[MAX_NUM_MATERIALS]; // Young's modulus
   TacsScalar D[MAX_NUM_MATERIALS]; // Stiffness
