@@ -74,7 +74,6 @@ def addFaceTraction(order, assembler, load):
 def createRefined(forest, bcs, pttype=TMR.UNIFORM_POINTS):
     new_forest = forest.duplicate()
     new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
-    new_forest.balance(1)
     creator = CreateMe(bcs)
     return new_forest, creator.createTACS(new_forest)
 

@@ -38,6 +38,7 @@ TMROctStiffness::TMROctStiffness( TMRIndexWeight *_weights,
   
   // Set the initial value for the densities
   nvars = 1;
+  x[0] = 0.95;
   rho[0] = 0.95;
   if (props->nmats > 1){
     nvars = props->nmats+1;
@@ -65,6 +66,7 @@ TMROctStiffness::~TMROctStiffness(){
 void TMROctStiffness::setDesignVars( const TacsScalar xdv[], int numDVs ){
   const double beta = props->beta;
   const double xoffset = props->xoffset;
+  const int use_project = props->use_project;
 
   for ( int j = 0; j < nvars; j++ ){
     x[j] = 0.0;
@@ -74,7 +76,12 @@ void TMROctStiffness::setDesignVars( const TacsScalar xdv[], int numDVs ){
 
     // Apply the projection to obtain the projected value
     // of the density
-    rho[j] = 1.0/(1.0 + exp(-beta*(x[j] - xoffset)));
+    if (use_project){
+      rho[j] = 1.0/(1.0 + exp(-beta*(x[j] - xoffset)));
+    }
+    else{
+      rho[j] = x[j];
+    } 
   }
 }
 
@@ -196,6 +203,7 @@ void TMROctStiffness::addStressDVSens( const double pt[],
   const double q = props->q;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
+  const int use_project = props->use_project;
 
   if (nvars == 1){
     // Compute the derivative of the penalization with respect to
@@ -204,8 +212,10 @@ void TMROctStiffness::addStressDVSens( const double pt[],
       (q + 1.0)/((1.0 + q*(1.0 - rho[0]))*(1.0 + q*(1.0 - rho[0])));
 
     // Add the derivative of the projection
-    penalty *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
-
+    if (use_project){
+      penalty *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
+    }
+    
     // Extract the properties
     TacsScalar nu = props->nu[0];
     TacsScalar D = props->D[0];
@@ -235,7 +245,9 @@ void TMROctStiffness::addStressDVSens( const double pt[],
         (q + 1.0)/((1.0 + q*(1.0 - rho[j]))*(1.0 + q*(1.0 - rho[j])));
 
       // Add the derivative of the projection
-      penalty *= beta*exp(-beta*(x[j] - xoffset))*rho[j]*rho[j];
+      if (use_project){
+	penalty *= beta*exp(-beta*(x[j] - xoffset))*rho[j]*rho[j];
+      }
 
       // Extract the properties
       TacsScalar nu = props->nu[j-1];
@@ -354,6 +366,7 @@ void TMROctStiffness::addFailureDVSens( const double pt[],
   const double eps = props->eps;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
+  const int use_project = props->use_project;
 
   if (nvars == 1){
     // Compute the relaxation factor
@@ -370,7 +383,9 @@ void TMROctStiffness::addFailureDVSens( const double pt[],
     }
 
     // Add the contribution from the derivative of the projection
-    r_factor_sens *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
+    if (use_project){
+      r_factor_sens *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
+    }
 
     // Extract the properties
     TacsScalar nu = props->nu[0];

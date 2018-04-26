@@ -1963,7 +1963,7 @@ cdef class StiffnessProperties:
     cdef TMRStiffnessProperties *ptr
     def __cinit__(self, list _rho, list _E, list _nu, list _ys=None,
                   double q=5.0, double eps=0.1, double k0=0.0,
-                  double beta=15.0, double xoffset=0.5):
+                  double beta=15.0, double xoffset=0.5, int use_project=0):
         cdef TacsScalar *rho = NULL
         cdef TacsScalar *E = NULL
         cdef TacsScalar *nu = NULL
@@ -1986,7 +1986,7 @@ cdef class StiffnessProperties:
             if (_ys):
                 ys[i] = <TacsScalar>_ys[i]
         self.ptr = new TMRStiffnessProperties(nmats, q, eps, k0, beta, xoffset, 
-                                              rho, E, nu, ys)
+                                              rho, E, nu, ys, use_project)
         self.ptr.incref()
         free(rho)
         free(E)
