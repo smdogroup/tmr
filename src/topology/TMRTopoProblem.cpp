@@ -817,10 +817,12 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     char line[256];
     MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
     if (use_jd){
-      sprintf(line, "eigen_iteration_jd_%01d.dat", num_recycle);
+      sprintf(line, "eigen_iteration_jd_recycle%02d_res%d.dat", num_recycle,
+	      track_eigen_iters);
+      
     }
     else {
-      sprintf(line, "eigen_iteration_lanczos.dat");
+      sprintf(line, "eigen_iteration_lanczos_res%d.dat",track_eigen_iters);
     }
     ksm_file = new KSMPrintFile(line,
                                 "KSM", mpi_rank, 1);
