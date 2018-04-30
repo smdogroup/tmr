@@ -1400,6 +1400,10 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(pxvec);
 
   if (wrap){
+    // Get the rank of comm
+    int mpi_rank;
+    MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
+    
     TACSBVec *xvec = wrap->vec;
 
     // Copy the values to the local design variable vector
@@ -1436,10 +1440,6 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     
     // Set the objective value
     *fobj = 0.0;
-
-    // Get the rank of comm
-    int mpi_rank;
-    MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
 
     // Keep track of the constraint number
     int count = 0;
@@ -1523,6 +1523,9 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
           if (k == 0){
             smallest_eigval = eigval;            
           }
+          if (eigval < smallest_eigval){
+            smallest_eigval = eigval;
+          }
           if (error > freq_eig_tol){
             err_count++;
           }
@@ -1539,7 +1542,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
       // Evaluate the KS function of the lowest eigenvalues
       freq_ks_sum = 0.0;
-
+      
       // Weight on the KS function
       for (int k = 0; k < num_freq_eigvals; k++){
         TacsScalar error;
@@ -1551,7 +1554,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         // Add up the contribution to the ks function
         freq_ks_sum += exp(-freq_ks_weight*(eigval - smallest_eigval));
       }
-
+      
       // Evaluate the KS function of the aggregation of the eigenvalues
       cons[count] = (smallest_eigval - log(freq_ks_sum)/freq_ks_weight);
       cons[count] = freq_scale*(cons[count] + freq_offset);
@@ -1642,8 +1645,10 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
   // Evaluate the derivative of the weighted compliance with
   // respect to the design variables
   gvec->zeroEntries();
+  int mpi_rank;
+  MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(gvec);
-  if (wrap){
+  if (wrap){   
     TACSBVec *g = wrap->vec;
 
     // Evaluate the gradient of the objective - weighted sum of 
@@ -1804,6 +1809,21 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
 
         // Add the contribution from each eigenvalue derivative
         TacsScalar smallest_eigval = 0.0;
+        // Extract the first k eigenvalues to find smallest eigval
+        for ( int k = 0; k < num_freq_eigvals; k++ ){
+          TacsScalar error;
+          TacsScalar eigval = freq->extractEigenvalue(k, &error);
+          if (eigval < 0.0){ 
+            eigval *= -1.0; 
+          }
+
+          if (k == 0){
+            smallest_eigval = eigval;            
+          }
+          if (eigval < smallest_eigval){
+            smallest_eigval = eigval;
+          }
+        }
         for ( int k = 0; k < num_freq_eigvals; k++ ){
           // Compute the derivaive of the eigenvalue
           freq->evalEigenDVSens(k, temp, max_local_size);
@@ -1816,23 +1836,20 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
             eigval *= -1.0;
             ks_grad_weight = -1.0;
           }
-          if (k == 0){
-            smallest_eigval = eigval;
-          }
-
+          
           // Evaluate the weight on the gradient
           ks_grad_weight *=
             exp(-freq_ks_weight*(eigval - smallest_eigval))/freq_ks_sum;
-
+          
           // Scale the constraint by the frequency scaling value
           ks_grad_weight *= freq_scale;
-          
+         
           // Add contribution to eigenvalue gradient
           for ( int j = 0; j < max_local_size; j++ ){
             xlocal[j] += ks_grad_weight*temp[j];
           }
         }
-
+       
         // Free the data 
         delete [] temp;
 

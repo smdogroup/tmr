@@ -3108,7 +3108,16 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 
   MPI_Allreduce(MPI_IN_PLACE, &ks_fail_sum, 1, TACS_MPI_TYPE, MPI_SUM, comm);
 
-  return ks_max_fail + log(ks_fail_sum)/ks_weight;
+  TacsScalar ks_func_val = ks_max_fail + log(ks_fail_sum)/ks_weight;
+
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+  if (mpi_rank == 0){
+    printf("KS stress value:  %25.10e\n", ks_func_val);
+    printf("Max stress value: %25.10e\n", ks_max_fail);
+  }
+
+  return ks_func_val;
 }
 
 /*
