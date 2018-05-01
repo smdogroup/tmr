@@ -487,7 +487,8 @@ cdef extern from "TMRTopoProblem.h":
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,
                             const TacsScalar*, const TacsScalar*, int)
-        void addStressConstraint(int, TMRStressConstraint*)
+        void addStressConstraint(int, TMRStressConstraint*, 
+                                 TacsScalar, TacsScalar, TacsScalar)
         void addLinearConstraints(ParOptVec**, TacsScalar*, int)
         void addFrequencyConstraint(double, int, TacsScalar,
                                     TacsScalar, TacsScalar, int,

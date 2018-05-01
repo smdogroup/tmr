@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,15 +40,15 @@ ParOptBVecWrap::~ParOptBVecWrap(){
 /*
   Set all the values within the vector
 */
-void ParOptBVecWrap::set( ParOptScalar alpha ){ 
-  vec->set(alpha); 
+void ParOptBVecWrap::set( ParOptScalar alpha ){
+  vec->set(alpha);
 }
 
 /*
   Zero all the entries in the vector
 */
-void ParOptBVecWrap::zeroEntries(){ 
-  vec->zeroEntries(); 
+void ParOptBVecWrap::zeroEntries(){
+  vec->zeroEntries();
 }
 
 /*
@@ -63,9 +63,9 @@ void ParOptBVecWrap::copyValues( ParOptVec *pvec ){
 
 /*
   Compute the norm
-*/ 
-double ParOptBVecWrap::norm(){ 
-  return vec->norm(); 
+*/
+double ParOptBVecWrap::norm(){
+  return vec->norm();
 }
 
 /*
@@ -74,18 +74,18 @@ double ParOptBVecWrap::norm(){
 double ParOptBVecWrap::maxabs(){
   TacsScalar *x = NULL;
   int size = vec->getArray(&x);
-  
+
   double res = 0.0;
   for ( int i = 0; i < size; i++ ){
     if (fabs(TacsRealPart(x[i])) > res){
       res = fabs(TacsRealPart(x[i]));
     }
   }
-  
+
   double infty_norm = 0.0;
-  MPI_Allreduce(&res, &infty_norm, 1, MPI_DOUBLE, MPI_MAX, 
+  MPI_Allreduce(&res, &infty_norm, 1, MPI_DOUBLE, MPI_MAX,
                 vec->getMPIComm());
-  
+
   return infty_norm;
 }
 
@@ -95,16 +95,16 @@ double ParOptBVecWrap::maxabs(){
 double ParOptBVecWrap::l1norm(){
   TacsScalar *x = NULL;
   int size = vec->getArray(&x);
-  
+
   double res = 0.0;
   for ( int i = 0; i < size; i++ ){
     res += fabs(TacsRealPart(x[i]));
   }
-  
+
   double l1_norm = 0.0;
   MPI_Allreduce(&res, &l1_norm, 1, MPI_DOUBLE, MPI_SUM,
                 vec->getMPIComm());
-  
+
   return l1_norm;
 }
 
@@ -122,7 +122,7 @@ ParOptScalar ParOptBVecWrap::dot( ParOptVec *pvec ){
 /*
   Compute multiple dot products simultaneously
 */
-void ParOptBVecWrap::mdot( ParOptVec **vecs, int nvecs, 
+void ParOptBVecWrap::mdot( ParOptVec **vecs, int nvecs,
                            ParOptScalar *output ){
   TACSVec **tvecs = new TACSVec*[ nvecs ];
   for ( int k = 0; k < nvecs; k++ ){
@@ -132,7 +132,7 @@ void ParOptBVecWrap::mdot( ParOptVec **vecs, int nvecs,
       tvecs[k] = wrap->vec;
     }
   }
-  
+
   vec->mdot(tvecs, output, nvecs);
   delete [] tvecs;
 }
@@ -140,8 +140,8 @@ void ParOptBVecWrap::mdot( ParOptVec **vecs, int nvecs,
 /*
   Scale the vector
 */
-void ParOptBVecWrap::scale( ParOptScalar alpha ){ 
-  vec->scale(alpha); 
+void ParOptBVecWrap::scale( ParOptScalar alpha ){
+  vec->scale(alpha);
 }
 
 /*
@@ -170,9 +170,9 @@ int ParOptBVecWrap::getArray( ParOptScalar **array ){
 /*
   Create the topology optimization problem
 */
-TMRTopoProblem::TMRTopoProblem( int _nlevels, 
+TMRTopoProblem::TMRTopoProblem( int _nlevels,
                                 TACSAssembler *_tacs[],
-                                TMROctForest *_filter[], 
+                                TMROctForest *_filter[],
                                 TACSVarMap *_filter_maps[],
                                 TACSBVecIndices *_filter_indices[],
                                 TACSMg *_mg,
@@ -184,9 +184,9 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   // Get the processor rank
   int mpi_rank;
   MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
-  
+
   // Set the number of design variables per node i.e. multi-material or single
-  // material 
+  // material
   vars_per_node = _vars_per_node;
 
   // Set the maximum number of indices
@@ -222,7 +222,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     // Set the filter object
     oct_filter[k] = _filter[k];
     oct_filter[k]->incref();
- 
+
     // Copy over the filter information
     filter_maps[k] = _filter_maps[k];
     filter_maps[k]->incref();
@@ -242,7 +242,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     }
 
     // Create the distribution object for the design variables
-    filter_dist[k] = new TACSBVecDistribute(filter_maps[k], 
+    filter_dist[k] = new TACSBVecDistribute(filter_maps[k],
                                             filter_indices[k]);
     filter_dist[k]->incref();
 
@@ -266,7 +266,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     oct_filter[k-1]->createInterpolation(oct_filter[k], filter_interp[k-1]);
     filter_interp[k-1]->initialize();
   }
-  
+
   // Set the maximum local size
   xlocal = new TacsScalar[ max_local_size ];
 
@@ -281,10 +281,10 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   adjoint->incref();
 
   // Set up the solver
-  int gmres_iters = 100; 
+  int gmres_iters = 100;
   int nrestart = 2;
   int is_flexible = 1;
-  ksm = new GMRES(mg->getMat(0), mg, 
+  ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
   ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
@@ -332,9 +332,9 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 /*
   Create the topology optimization problem for 2D quad meshes
 */
-TMRTopoProblem::TMRTopoProblem( int _nlevels, 
+TMRTopoProblem::TMRTopoProblem( int _nlevels,
                                 TACSAssembler *_tacs[],
-                                TMRQuadForest *_filter[], 
+                                TMRQuadForest *_filter[],
                                 TACSVarMap *_filter_maps[],
                                 TACSBVecIndices *_filter_indices[],
                                 TACSMg *_mg,
@@ -342,11 +342,11 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
  ParOptProblem(_tacs[0]->getMPIComm()){
   // Set the prefix to NULL
   prefix = NULL;
-  
+
   // Get the processor rank
   int mpi_rank;
   MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
-  
+
   // Set the number of variables per node
   vars_per_node = _vars_per_node;
 
@@ -357,7 +357,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   xinit = NULL;
   xlb = NULL;
   xub = NULL;
-  
+
   // Set the number of levels
   nlevels = _nlevels;
 
@@ -403,7 +403,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     }
 
     // Create the distribution object for the design variables
-    filter_dist[k] = new TACSBVecDistribute(filter_maps[k], 
+    filter_dist[k] = new TACSBVecDistribute(filter_maps[k],
                                             filter_indices[k]);
     filter_dist[k]->incref();
 
@@ -427,7 +427,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     quad_filter[k-1]->createInterpolation(quad_filter[k], filter_interp[k-1]);
     filter_interp[k-1]->initialize();
   }
-  
+
   // Set the maximum local size
   xlocal = new TacsScalar[ max_local_size ];
 
@@ -442,10 +442,10 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   adjoint->incref();
 
   // Set up the solver
-  int gmres_iters = 100; 
+  int gmres_iters = 100;
   int nrestart = 2;
   int is_flexible = 1;
-  ksm = new GMRES(mg->getMat(0), mg, 
+  ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
   ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
@@ -536,7 +536,7 @@ TMRTopoProblem::~TMRTopoProblem(){
   if (xinit){ xinit->decref(); }
   if (xlb){ xlb->decref(); }
   if (xub){ xub->decref(); }
-  
+
   // Free the local temp array
   delete [] xlocal;
 
@@ -653,7 +653,9 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
     load_case_info[i].offset = NULL;
     load_case_info[i].scale = NULL;
     load_case_info[i].stress_func = NULL;
+    load_case_info[i].stress_func_offset = 1.0;
     load_case_info[i].stress_func_scale = 1.0;
+    load_case_info[i].stress_func_obj_weight = 0.0;
   }
 }
 
@@ -667,9 +669,9 @@ int TMRTopoProblem::getNumLoadCases(){
 /*
   Set the constraint functions for each of the specified load cases
 */
-void TMRTopoProblem::addConstraints( int load_case, 
+void TMRTopoProblem::addConstraints( int load_case,
                                      TACSFunction **funcs,
-                                     const TacsScalar *offset, 
+                                     const TacsScalar *offset,
                                      const TacsScalar *scale,
                                      int num_funcs ){
   if (!load_case_info){
@@ -703,7 +705,7 @@ void TMRTopoProblem::addConstraints( int load_case,
     load_case_info[load_case].funcs = new TACSFunction*[ num_funcs ];
     load_case_info[load_case].offset = new TacsScalar[ num_funcs ];
     load_case_info[load_case].scale = new TacsScalar[ num_funcs ];
-    
+
     // Copy over the values
     for ( int i = 0; i < num_funcs; i++ ){
       load_case_info[load_case].funcs[i] = funcs[i];
@@ -725,9 +727,13 @@ void TMRTopoProblem::addConstraints( int load_case,
 */
 void TMRTopoProblem::addStressConstraint( int load_case,
                                           TMRStressConstraint *stress_func,
-                                          TacsScalar constr_scale ){
+                                          TacsScalar constr_offset,
+                                          TacsScalar constr_scale,
+                                          TacsScalar obj_weight ){
   load_case_info[load_case].stress_func = stress_func;
+  load_case_info[load_case].stress_func_offset = constr_offset;
   load_case_info[load_case].stress_func_scale = constr_scale;
+  load_case_info[load_case].stress_func_obj_weight = obj_weight;
   load_case_info[load_case].stress_func->incref();
 }
 
@@ -764,10 +770,10 @@ void TMRTopoProblem::addLinearConstraints( ParOptVec **vecs,
 /*
   Add a natural frequency constraint
 */
-void TMRTopoProblem::addFrequencyConstraint( double sigma, 
+void TMRTopoProblem::addFrequencyConstraint( double sigma,
                                              int num_eigvals,
                                              TacsScalar ks_weight,
-                                             TacsScalar offset, 
+                                             TacsScalar offset,
                                              TacsScalar scale,
                                              int max_subspace_size,
                                              double eigtol,
@@ -789,7 +795,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
       // Get preconditioner from Mg
       TACSPc *pc = mg;
 
-      freq = new TACSFrequencyAnalysis(tacs[0], sigma, mmat, 
+      freq = new TACSFrequencyAnalysis(tacs[0], sigma, mmat,
                                        kmat, pcmat, pc,
                                        max_subspace_size, fgmres_size,
                                        num_eigvals, eigtol, eig_rtol,
@@ -797,9 +803,9 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     }
     else{
       // Create the frequency analysis object
-      freq = new TACSFrequencyAnalysis(tacs[0], sigma, mmat, 
+      freq = new TACSFrequencyAnalysis(tacs[0], sigma, mmat,
                                        mg->getMat(0), ksm,
-                                       max_subspace_size, num_eigvals, 
+                                       max_subspace_size, num_eigvals,
                                        eigtol);
     }
     freq->incref();
@@ -822,7 +828,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     if (use_jd){
       sprintf(line, "eigen_iteration_jd_recycle%02d_res%d.dat", num_recycle,
 	      track_eigen_iters);
-      
+
     }
     else {
       sprintf(line, "eigen_iteration_lanczos_res%d.dat",track_eigen_iters);
@@ -835,15 +841,15 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
 /*
   Add a buckling constraint
 */
-void TMRTopoProblem::addBucklingConstraint( double sigma, 
+void TMRTopoProblem::addBucklingConstraint( double sigma,
                                             int num_eigvals,
                                             TacsScalar ks_weight,
-                                            TacsScalar offset, 
+                                            TacsScalar offset,
                                             TacsScalar scale,
                                             int max_lanczos,
                                             double eigtol ){
   if (!buck){
-    
+
     // Create a geometric stiffness matrix for buckling constraint
     TACSMat *gmat = tacs[0]->createMat();
     TACSMat *kmat = tacs[0]->createMat();
@@ -853,19 +859,19 @@ void TMRTopoProblem::addBucklingConstraint( double sigma,
     buck = new TACSLinearBuckling*[ num_load_cases ];
     buck_ks_sum = new TacsScalar[ num_load_cases ];
     for ( int i = 0; i < num_load_cases; i++ ){
-      // Create the buckling analysis object    
+      // Create the buckling analysis object
       buck[i] = new TACSLinearBuckling(tacs[0], sigma, gmat, kmat,
-                                       aux_mat, ksm, max_lanczos, 
+                                       aux_mat, ksm, max_lanczos,
                                        num_eigvals, eigtol);
-      
+
       buck[i]->incref();
-    }    
+    }
   }
 
   // Set a parameters that control how the natural frequency
   // constraint is implemented
   buck_eig_tol = eigtol;
-  num_buck_eigvals = num_eigvals;  
+  num_buck_eigvals = num_eigvals;
   memset(buck_ks_sum, 0.0, num_load_cases*sizeof(TacsScalar));
   buck_ks_weight = ks_weight;
   buck_offset = offset;
@@ -914,7 +920,7 @@ void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights,
 
 /*
   Initialize the problem sizes
-*/ 
+*/
 void TMRTopoProblem::initialize(){
   // Add up the total number of constraints
   int num_constraints = num_linear_con;
@@ -933,7 +939,7 @@ void TMRTopoProblem::initialize(){
       num_constraints++;
     }
   }
-  
+
   // Set the problem sizes
   int nvars = x[0]->getArray(NULL);
   int nw = 0;
@@ -942,7 +948,7 @@ void TMRTopoProblem::initialize(){
     nw = nvars/vars_per_node;
     nwblock = 1;
   }
-  
+
   setProblemSizes(nvars, num_constraints, nw, nwblock);
 }
 
@@ -956,7 +962,7 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars,
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvars);
     if (wrap){
       if (xinit){ xinit->decref(); }
-      xinit = new TACSBVec(filter_maps[0], 
+      xinit = new TACSBVec(filter_maps[0],
                            vars_per_node, filter_dist[0]);
       xinit->incref();
       xinit->copyValues(wrap->vec);
@@ -1017,7 +1023,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
   memcpy(dptr, dep_ptr, (ndep+1)*sizeof(int));
   memcpy(dconn, dep_conn, dep_ptr[ndep]*sizeof(int));
   memcpy(dweights, dep_weights, dep_ptr[ndep]*sizeof(double));
-  TACSBVecDepNodes *dep_nodes = new TACSBVecDepNodes(ndep, &dptr, 
+  TACSBVecDepNodes *dep_nodes = new TACSBVecDepNodes(ndep, &dptr,
 						     &dconn, &dweights);
 
   TACSBVec *vec = new TACSBVec(filter_maps[0], 1, filter_dist[0], dep_nodes);
@@ -1026,7 +1032,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
   // Get the octants
   TMROctantArray *octants;
   oct_filter[0]->getOctants(&octants);
-  
+
   // Get the array of octants
   int size;
   TMROctant *array;
@@ -1035,11 +1041,11 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
   // Get the nodes
   const int *conn;
   oct_filter[0]->getNodeConn(&conn);
-  
+
   // Get the node locations from the filter
   TMRPoint *X;
   oct_filter[0]->getPoints(&X);
-  
+
   // Allocate the memory required
   int order = oct_filter[0]->getMeshOrder();
   int num_nodes = order*order*order;
@@ -1048,14 +1054,14 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
   double *Nb = new double[ num_nodes ];
   double *Nc = new double[ num_nodes ];
   TMRPoint *Xpts = new TMRPoint[ num_nodes ];
-  TacsScalar *area = new TacsScalar[ num_nodes ];    
+  TacsScalar *area = new TacsScalar[ num_nodes ];
 
   // Get the quadrature points/weights
   const double *quadPts;
   const double *quadWts;
   int npts = FElibrary::getGaussPtsWts(order, &quadPts, &quadWts);
-  
-  // Loop over the elements 
+
+  // Loop over the elements
   for ( int i = 0; i < size; i++ ){
     // Retrieve the node numbers and x/y/z locations for element i
     // within the mesh
@@ -1071,10 +1077,10 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
         }
       }
     }
-    
+
     // Set the area
     memset(area, 0, num_nodes*sizeof(TacsScalar));
-    
+
     for ( int kk = 0; kk < npts; kk++ ){
       for ( int jj = 0; jj < npts; jj++ ){
         for ( int ii = 0; ii < npts; ii++ ){
@@ -1088,7 +1094,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
 
           // Evaluate the derivative of the shape functions
           oct_filter[0]->evalInterp(pt, N, Na, Nb, Nc);
-          
+
           // Compute the Jacobian transformation
           TacsScalar J[9];
           memset(J, 0, 9*sizeof(TacsScalar));
@@ -1096,7 +1102,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
             J[0] += Na[j]*Xpts[j].x*Xscale;
             J[1] += Nb[j]*Xpts[j].x*Xscale;
             J[2] += Nc[j]*Xpts[j].x*Xscale;
-            
+
             J[3] += Na[j]*Xpts[j].y*Xscale;
             J[4] += Nb[j]*Xpts[j].y*Xscale;
             J[5] += Nc[j]*Xpts[j].y*Xscale;
@@ -1115,7 +1121,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
         }
       }
     }
-     
+
     // Add the values to the vector
     vec->setValues(num_nodes, &conn[num_nodes*i], area, TACS_ADD_VALUES);
   }
@@ -1127,7 +1133,7 @@ TACSBVec* TMRTopoProblem::createVolumeVec( double Xscale ){
   delete [] Nc;
   delete [] Xpts;
   delete [] area;
- 
+
   vec->beginSetValues(TACS_ADD_VALUES);
   vec->endSetValues(TACS_ADD_VALUES);
 
@@ -1151,7 +1157,7 @@ TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
   memcpy(dptr, dep_ptr, (ndep+1)*sizeof(int));
   memcpy(dconn, dep_conn, dep_ptr[ndep]*sizeof(int));
   memcpy(dweights, dep_weights, dep_ptr[ndep]*sizeof(double));
-  TACSBVecDepNodes *dep_nodes = new TACSBVecDepNodes(ndep, &dptr, 
+  TACSBVecDepNodes *dep_nodes = new TACSBVecDepNodes(ndep, &dptr,
 						     &dconn, &dweights);
 
   TACSBVec *vec = new TACSBVec(filter_maps[0], 1, filter_dist[0], dep_nodes);
@@ -1160,7 +1166,7 @@ TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
   // Get the quadrants
   TMRQuadrantArray *quadrants;
   quad_filter[0]->getQuadrants(&quadrants);
-  
+
   // Get the array of quadrants
   int size;
   TMRQuadrant *array;
@@ -1173,7 +1179,7 @@ TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
   // Get the node locations from the filter
   TMRPoint *X;
   quad_filter[0]->getPoints(&X);
-  
+
   // Allocate the memory required
   int order = quad_filter[0]->getMeshOrder();
   int num_nodes = order*order;
@@ -1187,8 +1193,8 @@ TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
   const double *quadPts;
   const double *quadWts;
   int npts = FElibrary::getGaussPtsWts(order, &quadPts, &quadWts);
-  
-  // Loop over the elements 
+
+  // Loop over the elements
   for ( int i = 0; i < size; i++ ){
     // Retrieve the node numbers and x/y/z locations for element i
     // within the mesh
@@ -1211,10 +1217,10 @@ TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
         double pt[2];
         pt[0] = quadPts[ii];
         pt[1] = quadPts[jj];
-        
+
         // Compute the quadrature weight
         double wt = quadWts[ii]*quadWts[jj];
-        
+
         // Evaluate the derivative of the shape functions
         quad_filter[0]->evalInterp(pt, N, Na, Nb);
 
@@ -1224,11 +1230,11 @@ TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
         for ( int j = 0; j < 4; j++ ){
           J[0] += Na[j]*Xpts[j].x*Xscale;
           J[1] += Nb[j]*Xpts[j].x*Xscale;
-          
+
           J[2] += Na[j]*Xpts[j].y*Xscale;
           J[3] += Nb[j]*Xpts[j].y*Xscale;
         }
-        
+
         // Add the determinant to the area - the weights in this
         // case are just = 1.0
         TacsScalar det = FElibrary::jacobian2d(J);
@@ -1237,7 +1243,7 @@ TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
         }
       }
     }
-     
+
     // Add the values to the vector
     vec->setValues(num_nodes, &conn[num_nodes*i], area, TACS_ADD_VALUES);
   }
@@ -1260,7 +1266,7 @@ TACSBVec* TMRTopoProblem::createAreaVec( double Xscale ){
 */
 int TMRTopoProblem::isSparseInequality(){
   // These are sparse equality constraints
-  return 0; 
+  return 0;
 }
 
 /*
@@ -1274,8 +1280,8 @@ int TMRTopoProblem::isDenseInequality(){
 /*
   Always use the lower bound variables
 */
-int TMRTopoProblem::useLowerBounds(){ 
-  return 1; 
+int TMRTopoProblem::useLowerBounds(){
+  return 1;
 }
 
 /*
@@ -1286,18 +1292,18 @@ int TMRTopoProblem::useUpperBounds(){
   if (vars_per_node > 1){
     return 0;
   }
-  return 1; 
+  return 1;
 }
 
 /*
   Set the initial design variables
-*/ 
-void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec, 
-                                       ParOptVec *lbvec, 
+*/
+void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
+                                       ParOptVec *lbvec,
                                        ParOptVec *ubvec ){
   // Get the values of the design variables from the inner-most
   // version of TACS
-  if (xvec){ 
+  if (xvec){
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvec);
     if (wrap){
       if (xinit){
@@ -1366,7 +1372,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
   xlocal:  the local design variable array
 
   returns: the number of design variables on this processor
-*/  
+*/
 int TMRTopoProblem::getLocalValuesFromBVec( TACSBVec *vec,
                                             TacsScalar *xloc ){
   TacsScalar *x_vals, *x_ext_vals;
@@ -1398,7 +1404,7 @@ void TMRTopoProblem::setBVecFromLocalValues( const TacsScalar *xloc,
   Evaluate the objective and constraints
 */
 int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
-                                ParOptScalar *fobj, 
+                                ParOptScalar *fobj,
                                 ParOptScalar *cons ){
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(pxvec);
 
@@ -1406,7 +1412,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     // Get the rank of comm
     int mpi_rank;
     MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
-    
+
     TACSBVec *xvec = wrap->vec;
 
     // Copy the values to the local design variable vector
@@ -1440,13 +1446,13 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     double alpha = 1.0, beta = 0.0, gamma = 0.0;
     mg->assembleJacobian(alpha, beta, gamma, NULL);
     mg->factor();
-    
+
     // Set the objective value
     *fobj = 0.0;
 
     // Keep track of the constraint number
     int count = 0;
-    
+
     // Compute the linear constraint
     for ( int i = 0; i < num_linear_con; i++, count++ ){
       cons[count] = linear_offset[i] + Alinear[i]->dot(pxvec);
@@ -1457,7 +1463,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         // Solve the system: K(x)*u = forces
         ksm->solve(forces[i], vars[i]);
         tacs[0]->applyBCs(vars[i]);
-      
+
         // Set the variables into TACSAssembler
         tacs[0]->setVariables(vars[i]);
 
@@ -1477,28 +1483,34 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         // Evaluate the constraints
         int num_funcs = load_case_info[i].num_funcs;
         if (num_funcs > 0){
-          tacs[0]->evalFunctions(load_case_info[i].funcs, 
+          tacs[0]->evalFunctions(load_case_info[i].funcs,
                                  num_funcs, &cons[count]);
 
           // Scale and offset the constraints that we just evaluated
           for ( int j = 0; j < num_funcs; j++ ){
             TacsScalar offset = load_case_info[i].offset[j];
             TacsScalar scale = load_case_info[i].scale[j];
-            cons[count + j] = scale*(cons[count+j] + offset);          
+            cons[count + j] = scale*(cons[count+j] + offset);
           }
           count += num_funcs;
         }
 
         // Evaluate the stress constraint
         if (load_case_info[i].stress_func){
+          TacsScalar con_offset = load_case_info[i].stress_func_offset;
+          TacsScalar stress_func_obj_weight =
+            load_case_info[i].stress_func_obj_weight;
+
           cons[count] =
-            1.0 - load_case_info[i].stress_func->evalConstraint(vars[i]);
+            con_offset - load_case_info[i].stress_func->evalConstraint(vars[i]);
           cons[count] *= load_case_info[i].stress_func_scale;
+
+          *fobj += 0.5*stress_func_obj_weight*cons[count]*cons[count];
           count++;
         }
       }
     }
-  
+
     // Compute the natural frequency constraint, if any
     if (freq){
       // Keep track of the number of eigenvalues with unacceptable
@@ -1515,17 +1527,17 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         // Solve the eigenvalue problem
         freq->solve(new KSMPrintStdout("KSM", mpi_rank, 1),
                     ksm_file);
-        
+
         // Extract the first k eigenvalues
         for ( int k = 0; k < num_freq_eigvals; k++ ){
           TacsScalar error;
           TacsScalar eigval = freq->extractEigenvalue(k, &error);
-          if (eigval < 0.0){ 
-            eigval *= -1.0; 
+          if (eigval < 0.0){
+            eigval *= -1.0;
           }
 
           if (k == 0){
-            smallest_eigval = eigval;            
+            smallest_eigval = eigval;
           }
           if (eigval < smallest_eigval){
             smallest_eigval = eigval;
@@ -1546,7 +1558,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
       // Evaluate the KS function of the lowest eigenvalues
       freq_ks_sum = 0.0;
-      
+
       // Weight on the KS function
       for (int k = 0; k < num_freq_eigvals; k++){
         TacsScalar error;
@@ -1558,7 +1570,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         // Add up the contribution to the ks function
         freq_ks_sum += exp(-freq_ks_weight*(eigval - smallest_eigval));
       }
-      
+
       // Evaluate the KS function of the aggregation of the eigenvalues
       cons[count] = (smallest_eigval - log(freq_ks_sum)/freq_ks_weight);
       cons[count] = freq_scale*(cons[count] + freq_offset);
@@ -1576,7 +1588,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
           // Keep track of the smallest eigenvalue
           double shift = 0.95;
           TacsScalar smallest_eigval = 0.0;
-      
+
           while (err_count > 0){
             // Set the error counter to zero
             err_count = 0;
@@ -1589,12 +1601,12 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
             for ( int k = 0; k < num_buck_eigvals; k++ ){
               TacsScalar error;
               TacsScalar eigval = buck[i]->extractEigenvalue(k, &error);
-              if (eigval < 0.0){ 
-                eigval *= -1.0; 
+              if (eigval < 0.0){
+                eigval *= -1.0;
               }
 
               if (k == 0){
-                smallest_eigval = eigval;            
+                smallest_eigval = eigval;
               }
               if (error > buck_eig_tol){
                 err_count++;
@@ -1643,8 +1655,8 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 /*
   Evaluate the objective and constraint gradients
 */
-int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec, 
-                                        ParOptVec *gvec, 
+int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
+                                        ParOptVec *gvec,
                                         ParOptVec **Acvec ){
   // Evaluate the derivative of the weighted compliance with
   // respect to the design variables
@@ -1652,10 +1664,11 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
   int mpi_rank;
   MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(gvec);
-  if (wrap){   
-    TACSBVec *g = wrap->vec;
+  TACSBVec *g = NULL;
+  if (wrap){
+    g = wrap->vec;
 
-    // Evaluate the gradient of the objective - weighted sum of 
+    // Evaluate the gradient of the objective - weighted sum of
     // compliances
     memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
     if (obj_funcs){
@@ -1674,31 +1687,31 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
 
           // Solve the system of adjoint equations
           ksm->solve(dfdu, adjoint);
-          tacs[0]->addDVSens(obj_weights[i], &obj_funcs[i], 
+          tacs[0]->addDVSens(obj_weights[i], &obj_funcs[i],
                              1, xlocal, max_local_size);
-          tacs[0]->addAdjointResProducts(-obj_weights[i], &adjoint, 
+          tacs[0]->addAdjointResProducts(-obj_weights[i], &adjoint,
                                          1, xlocal, max_local_size);
         }
         else {
-          tacs[0]->addDVSens(obj_weights[i], &obj_funcs[i], 1, xlocal, 
+          tacs[0]->addDVSens(obj_weights[i], &obj_funcs[i], 1, xlocal,
                              max_local_size);
         }
 
         setBVecFromLocalValues(xlocal, g);
         g->beginSetValues(TACS_ADD_VALUES);
         g->endSetValues(TACS_ADD_VALUES);
-      }      
-    }  
+      }
+    }
     else { // For compliance objective
       for ( int i = 0; i < num_load_cases; i++ ){
         tacs[0]->setVariables(vars[i]);
-        tacs[0]->addAdjointResProducts(-obj_weights[i], &vars[i], 
+        tacs[0]->addAdjointResProducts(-obj_weights[i], &vars[i],
                                        1, xlocal, max_local_size);
       }
       setBVecFromLocalValues(xlocal, g);
       g->beginSetValues(TACS_ADD_VALUES);
       g->endSetValues(TACS_ADD_VALUES);
-    }   
+    }
   } // end if wrap
   else {
     return 1;
@@ -1715,7 +1728,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
   // Compute the derivative of the constraint functions
   for ( int i = 0; i < num_load_cases; i++ ){
     tacs[0]->setVariables(vars[i]);
-    
+
     // Get the number of functions for each load case
     int num_funcs = load_case_info[i].num_funcs;
 
@@ -1750,12 +1763,12 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
           // Compute the total derivative using the adjoint
           memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
           tacs[0]->addDVSens(scale, &func, 1, xlocal, max_local_size);
-          tacs[0]->addAdjointResProducts(-scale, &adjoint, 
+          tacs[0]->addAdjointResProducts(-scale, &adjoint,
                                          1, xlocal, max_local_size);
         }
         else {
           memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
-          tacs[0]->addDVSens(scale, &func, 1, xlocal, max_local_size);          
+          tacs[0]->addDVSens(scale, &func, 1, xlocal, max_local_size);
         }
 
         // Wrap the vector class
@@ -1771,9 +1784,18 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
 
       if (wrap){
+        // Get the weight information
+        TacsScalar con_offset = load_case_info[i].stress_func_offset;
+        TacsScalar stress_func_obj_weight =
+          load_case_info[i].stress_func_obj_weight;
+
+        // Evaluate the constraint
+        TacsScalar con =
+          con_offset - load_case_info[i].stress_func->evalConstraint(vars[i]);
+
         // Get the underlying TACS vector for the design variables
         TACSBVec *A = wrap->vec;
-        
+
         // Evaluate the partial derivatives required for the adjoint
         load_case_info[i].stress_func->evalConDeriv(xlocal,
                                                     max_local_size,
@@ -1786,20 +1808,25 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         // Compute the total derivative using the adjoint
         tacs[0]->addAdjointResProducts(-1.0, &adjoint,
                                        1, xlocal, max_local_size);
-        
+
         // Wrap the vector class
         setBVecFromLocalValues(xlocal, A);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
 
+        // Add the contribution to the objective gradient
+        if (g){
+          g->axpy(-stress_func_obj_weight*con, A);
+        }
+
         // Scale the constraint by -1 since the constraint is
         // formulated as 1 - c(x, u) > 0.0
         A->scale(-load_case_info[i].stress_func_scale);
       }
-      
+
       count++;
     }
-    
+
     if (freq && i == 0){
       // Try to unwrap the vector
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
@@ -1817,12 +1844,12 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         for ( int k = 0; k < num_freq_eigvals; k++ ){
           TacsScalar error;
           TacsScalar eigval = freq->extractEigenvalue(k, &error);
-          if (eigval < 0.0){ 
-            eigval *= -1.0; 
+          if (eigval < 0.0){
+            eigval *= -1.0;
           }
 
           if (k == 0){
-            smallest_eigval = eigval;            
+            smallest_eigval = eigval;
           }
           if (eigval < smallest_eigval){
             smallest_eigval = eigval;
@@ -1840,21 +1867,21 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
             eigval *= -1.0;
             ks_grad_weight = -1.0;
           }
-          
+
           // Evaluate the weight on the gradient
           ks_grad_weight *=
             exp(-freq_ks_weight*(eigval - smallest_eigval))/freq_ks_sum;
-          
+
           // Scale the constraint by the frequency scaling value
           ks_grad_weight *= freq_scale;
-         
+
           // Add contribution to eigenvalue gradient
           for ( int j = 0; j < max_local_size; j++ ){
             xlocal[j] += ks_grad_weight*temp[j];
           }
         }
-       
-        // Free the data 
+
+        // Free the data
         delete [] temp;
 
         // Add the values for each constraint gradient
@@ -1862,7 +1889,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
       } //wrap
-      
+
       count++;
     }
     if (buck){
@@ -1873,7 +1900,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         // Get the vector
         TACSBVec *A = wrap->vec;
         memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
-          
+
         TacsScalar *temp = new TacsScalar[max_local_size];
         memset(temp, 0, max_local_size*sizeof(TacsScalar));
         // Add the contribution from each eigenvalue derivative
@@ -1900,14 +1927,14 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
 
           // Scale the constraint by the buckling scaling value
           ks_grad_weight *= buck_scale;
-          
+
           // Add contribution to eigenvalue gradient
           for ( int j = 0; j < max_local_size; j++ ){
             xlocal[j] += ks_grad_weight*temp[j];
           }
         }
 
-        // Free the data 
+        // Free the data
         delete [] temp;
 
         // Add the values for each constraint gradient
@@ -1915,7 +1942,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
       }
-      count++;      
+      count++;
     }
   } // end num_load_cases
 
@@ -1926,9 +1953,9 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
   Evaluate the product of the Hessian with the given vector px
 */
 int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
-                                     ParOptScalar *z, 
+                                     ParOptScalar *z,
                                      ParOptVec *zw,
-                                     ParOptVec *pxvec, 
+                                     ParOptVec *pxvec,
                                      ParOptVec *hvec ){}
 
 // Evaluate the sparse constraints
@@ -1940,7 +1967,7 @@ void TMRTopoProblem::evalSparseCon( ParOptVec *xvec,
     TacsScalar *x, *out;
     int size = xvec->getArray(&x);
     outvec->getArray(&out);
-    
+
     // Compute the weighting constraints
     int n = size/vars_per_node;
     for ( int i = 0; i < n; i++ ){
@@ -1954,36 +1981,36 @@ void TMRTopoProblem::evalSparseCon( ParOptVec *xvec,
 
 // Compute the Jacobian-vector product out = J(x)*px
 // --------------------------------------------------
-void TMRTopoProblem::addSparseJacobian( double alpha, 
+void TMRTopoProblem::addSparseJacobian( double alpha,
                                         ParOptVec *xvec,
-                                        ParOptVec *pxvec, 
+                                        ParOptVec *pxvec,
                                         ParOptVec *outvec ){
   if (vars_per_node > 1){
     TacsScalar *px, *out;
     int size = pxvec->getArray(&px);
     outvec->getArray(&out);
-    
+
     // Compute the matrix-vector product
     int n = size/vars_per_node;
     for ( int i = 0; i < n; i++ ){
       for ( int j = 0; j < vars_per_node; j++ ){
         out[i] += alpha*px[vars_per_node*i + j];
-      }    
+      }
     }
   }
 }
 
 // Compute the transpose Jacobian-vector product out = J(x)^{T}*pzw
 // -----------------------------------------------------------------
-void TMRTopoProblem::addSparseJacobianTranspose( double alpha, 
+void TMRTopoProblem::addSparseJacobianTranspose( double alpha,
                                                  ParOptVec *x,
-                                                 ParOptVec *pzwvec, 
+                                                 ParOptVec *pzwvec,
                                                  ParOptVec *outvec ){
   if (vars_per_node > 1){
     TacsScalar *pzw, *out;
     pzwvec->getArray(&pzw);
     int size = outvec->getArray(&out);
-    
+
     int n = size/vars_per_node;
     for ( int i = 0; i < n; i++ ){
       for ( int j = 0; j < vars_per_node; j++ ){
@@ -1993,17 +2020,17 @@ void TMRTopoProblem::addSparseJacobianTranspose( double alpha,
   }
 }
 
-// Add the inner product of the constraints to the matrix such 
+// Add the inner product of the constraints to the matrix such
 // that A += J(x)*cvec*J(x)^{T} where cvec is a diagonal matrix
 // ------------------------------------------------------------
-void TMRTopoProblem::addSparseInnerProduct( double alpha, 
+void TMRTopoProblem::addSparseInnerProduct( double alpha,
                                             ParOptVec *x,
-                                            ParOptVec *cvec, 
+                                            ParOptVec *cvec,
                                             double *A ){
   if (vars_per_node > 1){
     TacsScalar *c;
     int size = cvec->getArray(&c);
-    
+
     int n = size/vars_per_node;
     for ( int i = 0; i < n; i++ ){
       for ( int j = 0; j < vars_per_node; j++ ){
@@ -2022,11 +2049,11 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
 
     for ( int k = 0; k < vars_per_node; k++ ){
       double cutoff = 0.5;
-      sprintf(filename, "%s/levelset05_var%d_binary%04d.bstl", 
+      sprintf(filename, "%s/levelset05_var%d_binary%04d.bstl",
               prefix, k, iter_count);
       TMR_GenerateBinFile(filename, oct_filter[0], x[0], k, cutoff);
     }
-    
+
     delete [] filename;
   }
 
@@ -2044,9 +2071,9 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
 
     for ( int i = 0; i < num_load_cases; i++ ){
       if (load_case_info[i].stress_func){
-        sprintf(filename, "%s/load%d_stress_proc%d.dat", 
+        sprintf(filename, "%s/load%d_stress_proc%d.dat",
                 prefix, i, mpi_rank);
-        load_case_info[i].stress_func->writeReconToTec(vars[i], 
+        load_case_info[i].stress_func->writeReconToTec(vars[i],
                                                        filename, 1.0);
       }
     }
@@ -2069,7 +2096,7 @@ void TMRTopoProblem::writeEigenVector( int iter ){
     // Create the visualization for the object
     unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                TACSElement::OUTPUT_DISPLACEMENTS);
-    TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID, 
+    TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID,
                                   write_flag);
     f5->incref();
     for ( int i = 0; i < num_load_cases; i++ ){
@@ -2078,13 +2105,13 @@ void TMRTopoProblem::writeEigenVector( int iter ){
         TacsScalar error;
         buck[i]->extractEigenvector(k, tmp, &error);
         tacs[0]->setVariables(tmp);
-        sprintf(outfile, "%s/load%d_eigenvector%02d_output%d.f5", 
+        sprintf(outfile, "%s/load%d_eigenvector%02d_output%d.f5",
                 prefix, i, k, iter);
         f5->writeToFile(outfile);
       }
     }
 
-    
+
     f5->decref();
     tmp->decref();
   }
@@ -2096,7 +2123,7 @@ void TMRTopoProblem::writeEigenVector( int iter ){
     // Create the visualization for the object
     unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                TACSElement::OUTPUT_DISPLACEMENTS);
-    TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID, 
+    TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_SOLID,
                                   write_flag);
     f5->incref();
     // Extract the first k eigenvectors for ith load
@@ -2104,12 +2131,12 @@ void TMRTopoProblem::writeEigenVector( int iter ){
       TacsScalar error;
       freq->extractEigenvector(k, tmp, &error);
       tacs[0]->setVariables(tmp);
-      sprintf(outfile, "%s/freq_eigenvector%02d_output%d.f5", 
+      sprintf(outfile, "%s/freq_eigenvector%02d_output%d.f5",
 	      prefix, k, iter);
       f5->writeToFile(outfile);
     }
-    
+
     f5->decref();
     tmp->decref();
-  }  
+  }
 }
