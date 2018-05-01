@@ -379,6 +379,11 @@ cdef extern from "TMROctStiffness.h":
                                TacsScalar*, TacsScalar*, TacsScalar*,
                                TacsScalar*, int)
         int nmats
+        double q
+        double eps
+        double k0
+        double beta
+        double xoffset
         
     cdef cppclass TMROctStiffness(SolidStiffness):
         TMROctStiffness(TMRIndexWeight*, int, TMRStiffnessProperties*)
@@ -482,7 +487,8 @@ cdef extern from "TMRTopoProblem.h":
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,
                             const TacsScalar*, const TacsScalar*, int)
-        void addStressConstraint(int, TMRStressConstraint*)
+        void addStressConstraint(int, TMRStressConstraint*, 
+                                 TacsScalar, TacsScalar, TacsScalar)
         void addLinearConstraints(ParOptVec**, TacsScalar*, int)
         void addFrequencyConstraint(double, int, TacsScalar,
                                     TacsScalar, TacsScalar, int,
