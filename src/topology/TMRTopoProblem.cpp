@@ -602,6 +602,9 @@ TMRTopoProblem::~TMRTopoProblem(){
       if (obj_funcs[i]){ obj_funcs[i]->decref(); }
     }
   }
+  if (ksm_file){
+    ksm_file->decref();
+  }
 }
 
 /*
@@ -826,6 +829,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     }
     ksm_file = new KSMPrintFile(line,
                                 "KSM", mpi_rank, 1);
+    ksm_file->incref();
   }
 }
 
@@ -2026,7 +2030,7 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
     delete [] filename;
   }
 
-  if ((buck || freq) && iter_count % 50 == 0){
+  if ((buck || freq) && iter_count % 250 == 0){
     writeEigenVector(iter);
   }
 
