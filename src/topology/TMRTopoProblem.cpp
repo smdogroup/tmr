@@ -650,9 +650,10 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
   for ( int i = 0; i < num_load_cases; i++ ){
     load_case_info[i].num_funcs = 0;
     load_case_info[i].funcs = NULL;
-    load_case_info[i].stress_func = NULL;
     load_case_info[i].offset = NULL;
     load_case_info[i].scale = NULL;
+    load_case_info[i].stress_func = NULL;
+    load_case_info[i].stress_func_scale = 1.0;
   }
 }
 
@@ -723,8 +724,10 @@ void TMRTopoProblem::addConstraints( int load_case,
   class
 */
 void TMRTopoProblem::addStressConstraint( int load_case,
-                                          TMRStressConstraint *stress_func ){
+                                          TMRStressConstraint *stress_func,
+                                          TacsScalar constr_scale ){
   load_case_info[load_case].stress_func = stress_func;
+  load_case_info[load_case].stress_func_scale = constr_scale;
   load_case_info[load_case].stress_func->incref();
 }
 
@@ -1488,6 +1491,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         if (load_case_info[i].stress_func){
           cons[count] =
             1.0 - load_case_info[i].stress_func->evalConstraint(vars[i]);
+          cons[count] *= load_case_info[i].stress_func_scale;
           count++;
         }
       }
@@ -1783,7 +1787,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
 
         // Scale the constraint by -1 since the constraint is
         // formulated as 1 - c(x, u) > 0.0
-        A->scale(-1.0);
+        A->scale(-load_case_info[i].stress_func_scale);
       }
       
       count++;
@@ -2009,6 +2013,27 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
 
   if ((buck || freq) && iter_count % 50 == 0){
     writeEigenVector(iter);
+  }
+
+  if (iter_count % 50 == 0){
+    // Get the processor rank
+    int mpi_rank;
+    MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
+
+    // Allocate the filename array
+    char *filename = new char[ strlen(prefix) + 100 ];
+
+    for ( int i = 0; i < num_load_cases; i++ ){
+      if (load_case_info[i].stress_func){
+        sprintf(filename, "%s/load%d_stress_proc%d.dat", 
+                prefix, i, mpi_rank);
+        load_case_info[i].stress_func->writeReconToTec(vars[i], 
+                                                       filename, 1.0);
+      }
+    }
+
+    // Free the filename array
+    delete [] filename;
   }
 
   // Update the iteration count

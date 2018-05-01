@@ -379,6 +379,11 @@ cdef extern from "TMROctStiffness.h":
                                TacsScalar*, TacsScalar*, TacsScalar*,
                                TacsScalar*, int)
         int nmats
+        double q
+        double eps
+        double k0
+        double beta
+        double xoffset
         
     cdef cppclass TMROctStiffness(SolidStiffness):
         TMROctStiffness(TMRIndexWeight*, int, TMRStiffnessProperties*)

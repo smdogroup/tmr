@@ -1962,7 +1962,7 @@ cdef class OctTopoCreator:
 cdef class StiffnessProperties:
     cdef TMRStiffnessProperties *ptr
     def __cinit__(self, list _rho, list _E, list _nu, list _ys=None,
-                  double q=5.0, double eps=0.1, double k0=0.0,
+                  double q=5.0, double eps=0.3, double k0=1e-6,
                   double beta=15.0, double xoffset=0.5, int use_project=0):
         cdef TacsScalar *rho = NULL
         cdef TacsScalar *E = NULL
@@ -2001,6 +2001,18 @@ cdef class StiffnessProperties:
 
     def getNumMaterials(self):
         return self.ptr.nmats
+
+    property q:
+        def __get__(self):
+            return self.ptr.q
+        def __set__(self, value):
+            self.ptr.q = value
+
+    property eps:
+        def __get__(self):
+            return self.ptr.eps
+        def __set__(self, value):
+            self.ptr.eps = value
 
 cdef class OctStiffness(SolidStiff):
     def __cinit__(self, StiffnessProperties props,
