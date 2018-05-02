@@ -1505,7 +1505,9 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
             con_offset - load_case_info[i].stress_func->evalConstraint(vars[i]);
           cons[count] *= load_case_info[i].stress_func_scale;
 
-          *fobj += 0.5*stress_func_obj_weight*cons[count]*cons[count];
+          if (stress_func_obj_weight != 0.0){
+            *fobj += 0.5*stress_func_obj_weight*cons[count]*cons[count];
+          }
           count++;
         }
       }
@@ -1790,8 +1792,10 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
           load_case_info[i].stress_func_obj_weight;
 
         // Evaluate the constraint
-        TacsScalar con =
-          con_offset - load_case_info[i].stress_func->evalConstraint(vars[i]);
+        TacsScalar con = 0.0;
+        if (stress_func_obj_weight != 0.0){
+          con = con_offset - load_case_info[i].stress_func->evalConstraint(vars[i]);
+        }
 
         // Get the underlying TACS vector for the design variables
         TACSBVec *A = wrap->vec;
@@ -1815,7 +1819,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         A->endSetValues(TACS_ADD_VALUES);
 
         // Add the contribution to the objective gradient
-        if (g){
+        if (g && stress_func_obj_weight != 0.0){
           g->axpy(-stress_func_obj_weight*con, A);
         }
 
