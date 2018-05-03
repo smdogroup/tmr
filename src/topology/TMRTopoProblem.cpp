@@ -318,7 +318,9 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   freq_ks_weight = 30.0;
   freq_offset = 0.0;
   freq_scale = 1.0;
-
+  track_eigen_iters = 0;
+  ksm_file = NULL;
+  
   // Set up the buckling constraint data
   buck = NULL;
   buck_eig_tol = 1e-8;
