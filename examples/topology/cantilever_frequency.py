@@ -130,15 +130,21 @@ p.add_argument('--use_mma', action='store_true', default=False)
 p.add_argument('--use_jd', action='store_true', default=False)
 p.add_argument('--use_sum_recycling', action='store_true', default=False)
 p.add_argument('--use_num_recycling', action='store_true', default=False)
+p.add_argument('--use_project', action='store_true', default=False)
+p.add_argument('--use_tr', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the parameter to use paropt or MMA
 use_paropt = True
 use_jd = False
+use_tr = False
 if args.use_mma:
     use_paropt = False
 if args.use_jd:
     use_jd = True
+if args.use_tr:
+    use_tr = True
+    use_paropt = False
 # The communicator
 comm = MPI.COMM_WORLD
 
@@ -219,7 +225,9 @@ vars_per_node = 1
 obj_array = [ 1.0e2 ]
 
 # Create the stiffness properties object
-props = TMR.StiffnessProperties(rho, E, nu)
+use_project = args.use_project
+props = TMR.StiffnessProperties(rho, E, nu, k0=1e-3,
+                                use_project=use_project)
 
 for ite in range(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
@@ -258,13 +266,15 @@ for ite in range(max_iterations):
     num_eigs = 9
     ks_weight = 50.0
     offset = -2.e4#-2.5e4, 1e4
-    scale = 1.0/3e5
+    scale = 1.0/3e4
     max_lanczos = 100
     tol = 1e-30
     fgmres_size = 8
     max_jd_size = 50
+    # For writing purposes
+    track_eigen_iters=args.init_depth
     if use_jd:
-        eig_tol = 1e-7
+        eig_tol = 5e-7
         eig_rtol = 1e-6
         eig_atol = 1e-12
         num_recycle = args.num_recycle
@@ -278,13 +288,15 @@ for ite in range(max_iterations):
                                        offset, scale,
                                        max_jd_size, eig_tol, use_jd,
                                        fgmres_size, eig_rtol, eig_atol,
-                                       num_recycle, recycle_type,1)
+                                       num_recycle, recycle_type,
+                                       track_eigen_iters)
     else:
         
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
                                        offset, scale,
                                        max_lanczos, tol, 0,
-                                       0, 0, 0, 0, TACS.SUM_TWO,1)
+                                       0, 0, 0, 0, TACS.SUM_TWO,
+                                       track_eigen_iters)
     
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
     problem.setObjective(obj_array)
@@ -293,7 +305,89 @@ for ite in range(max_iterations):
     problem.initialize()
     problem.setPrefix(args.prefix)
 
-    if use_paropt:
+    if use_tr:
+        # Create the quasi-Newton Hessian approximation
+        qn_subspace_size = 25
+        qn = ParOpt.LBFGS(problem, subspace=qn_subspace_size)
+        
+        # Trust region problem parameters
+        tr_size = 0.01
+        tr_max_size = 0.02
+        tr_min_size = 1e-6
+        eta = 0.25
+        tr_penalty = 10.0
+        
+        # Create the trust region problem
+        tr = ParOpt.pyTrustRegion(problem, qn, tr_size,
+                                  tr_min_size, tr_max_size, eta, tr_penalty)
+        # Create the ParOpt problem
+        opt = ParOpt.pyParOpt(tr, qn_subspace_size,
+                              ParOpt.NO_HESSIAN_APPROX)
+        # Set the penalty parameter internally in the code. These must be
+        # consistent between the trust region object and ParOpt.
+        opt.setPenaltyGamma(tr_penalty)
+        
+        # Set parameters for ParOpt in the subproblem
+        opt.setMaxMajorIterations(500)
+        opt.setAbsOptimalityTol(1e-6)
+        
+        # Don't update the quasi-Newton method
+        opt.setQuasiNewton(qn)
+        opt.setUseQuasiNewtonUpdates(0)
+        
+        # Set the design variable bounds
+        filename = os.path.join(args.prefix, 'paropt%d.out'%(ite))
+        opt.setOutputFile(filename)
+        # If the old filter exists, we're on the second iteration
+        if old_filtr:
+            # Create the interpolation
+            interp = TACS.VecInterp(old_varmap, varmap)
+            filtr.createInterpolation(old_filtr, interp)
+            interp.initialize()
+            
+            # Get the optimization variables for the new optimizer
+            x, z, zw, zl, zu = opt.getOptimizedPoint()
+            
+            # Do the interpolation
+            old_vec = problem.convertPVecToVec(old_x)
+            x_vec = problem.convertPVecToVec(x)
+            interp.mult(old_vec, x_vec)
+            
+            # Set the new design variables
+            problem.setInitDesignVars(x)
+
+        # Initialize the problem
+        tr.initialize()
+        
+        # Iterate
+        for i in range(args.max_opt_iters):
+            opt.setInitBarrierParameter(10.0)
+            opt.resetDesignAndBounds()
+            opt.optimize()
+            
+            # Get the optimized point
+            x, z, zw, zl, zu = opt.getOptimizedPoint()
+            # Write the solution out to a file
+            if i % args.output_freq == 0:
+                # Compute the iteration counter
+                itr = ite*args.max_opt_iters + i
+                
+                # Get the vector and convert it
+                vec = problem.convertPVecToVec(x)
+                
+                for k in range(vars_per_node):
+                    f = 'levelset05_var%d_binary%04d.bstl'%(k, itr)
+                    filename = os.path.join(args.prefix, f)
+                    TMR.writeSTLToBin(filename, filtr, vec, offset=k)
+
+            # Update the trust region method
+            infeas, l1, linfty = tr.update(x, z, zw)
+            # Check for convergence using relatively strict tolerances
+            if infeas < 1e-4 and l1 < 0.01:
+                break
+        # Set the old values of the variables
+        old_x, z, zw, zl, zu = opt.getOptimizedPoint()
+    elif use_paropt:
         # Create the ParOpt problem
         opt = ParOpt.pyParOpt(problem, args.max_lbfgs, ParOpt.BFGS)
 
@@ -307,7 +401,7 @@ for ite in range(max_iterations):
         opt.setOutputFrequency(args.output_freq)
         opt.setOutputFile(os.path.join(args.prefix, 
                                        'paropt_output%d.out'%(ite)))
-        #opt.checkGradients(1e-6)
+        opt.checkGradients(1e-6)
         
         # If the old filter exists, we're on the second iteration
         if old_filtr:
