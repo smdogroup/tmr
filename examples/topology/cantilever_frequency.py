@@ -271,6 +271,8 @@ for ite in range(max_iterations):
     tol = 1e-30
     fgmres_size = 8
     max_jd_size = 50
+    # For writing purposes
+    track_eigen_iters=args.init_depth
     if use_jd:
         eig_tol = 5e-7
         eig_rtol = 1e-6
@@ -286,13 +288,15 @@ for ite in range(max_iterations):
                                        offset, scale,
                                        max_jd_size, eig_tol, use_jd,
                                        fgmres_size, eig_rtol, eig_atol,
-                                       num_recycle, recycle_type,1)
+                                       num_recycle, recycle_type,
+                                       track_eigen_iters)
     else:
         
         problem.addFrequencyConstraint(sigma, num_eigs, ks_weight,
                                        offset, scale,
                                        max_lanczos, tol, 0,
-                                       0, 0, 0, 0, TACS.SUM_TWO,1)
+                                       0, 0, 0, 0, TACS.SUM_TWO,
+                                       track_eigen_iters)
     
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
     problem.setObjective(obj_array)
