@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,11 +30,13 @@
   Create a TACS multigrid object
 */
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
-                       TMROctForest *forest[], TACSMg **_mg, 
+                       TMROctForest *forest[], TACSMg **_mg,
+                       double omega,
                        int use_coarse_direct_solve=1,
                        int use_chebyshev_smoother=0 );
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
-                       TMRQuadForest *forest[], TACSMg **_mg, 
+                       TMRQuadForest *forest[], TACSMg **_mg,
+                       double omega,
                        int use_coarse_direct_solve=1,
                        int use_chebyshev_smoother=0 );
 
@@ -59,8 +61,8 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
 /*
   Print the error as a series of bins
 */
-void TMR_PrintErrorBins( MPI_Comm comm, const double *error, 
-                         const int nelems, double *mean=NULL, 
+void TMR_PrintErrorBins( MPI_Comm comm, const double *error,
+                         const int nelems, double *mean=NULL,
                          double *stddev=NULL );
 
 /*
@@ -106,7 +108,7 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
 class TMRStressConstraint : public TMREntity {
  public:
   TMRStressConstraint( TMROctForest *_forest,
-                       TACSAssembler *tacs, 
+                       TACSAssembler *tacs,
                        TacsScalar _ks_weight=30.0 );
   ~TMRStressConstraint();
 
@@ -119,12 +121,12 @@ class TMRStressConstraint : public TMREntity {
   // Write the von Misses stress from the reconstruction to tecplot
   void writeReconToTec( TACSBVec *_uvec, const char *fname,
                         TacsScalar ys=1e6 );
-  
+
  private:
   // Evaluate the element strain at the given point
   TacsScalar evalStrain( const double pt[],
                          const TacsScalar *Xpts,
-                         const TacsScalar *vars, 
+                         const TacsScalar *vars,
                          const TacsScalar *ubar,
                          TacsScalar J[], TacsScalar e[] );
 
@@ -134,10 +136,10 @@ class TMRStressConstraint : public TMREntity {
                              TacsScalar dfdu[], TacsScalar dfdubar[] );
 
   // Compute the derivative terms related to the reconstructed solution
-  void addEnrichDeriv( TacsScalar A[], TacsScalar dbdu[], 
+  void addEnrichDeriv( TacsScalar A[], TacsScalar dbdu[],
                        TacsScalar dubardu[],
                        TacsScalar dubar_duderiv[] );
-  
+
   // The mesh order
   int order;
   TMROctForest *forest;
@@ -147,7 +149,7 @@ class TMRStressConstraint : public TMREntity {
   TacsScalar ks_weight;
   TacsScalar ks_max_fail, ks_fail_sum;
 
-  // The TACSAssembler 
+  // The TACSAssembler
   TACSAssembler *tacs;
 
   // The solution vector and the derivatives at the nodes
@@ -156,7 +158,7 @@ class TMRStressConstraint : public TMREntity {
   // The temporary derivative vector
   TACSBVec *dfduderiv;
 
-  // The weights on the local 
+  // The weights on the local
   TACSBVec *weights;
 
   // Arrays to store the element-wise variables
