@@ -194,11 +194,15 @@ TACSAssembler*
 
   // Create the first element - and read out the number of
   // variables-per-node
-  int vars_per_node = elements[0]->numDisplacements();
+  int vars_per_node = 0;
+  if (num_elements > 0){
+    vars_per_node = elements[0]->numDisplacements();
+  }
+  MPI_Allreduce(MPI_IN_PLACE, &vars_per_node, 1, MPI_INT, MPI_MAX, comm);
 
   // Create the associated TACSAssembler object
   TACSAssembler *tacs = 
-    new TACSAssembler(forest->getMPIComm(), vars_per_node,
+    new TACSAssembler(comm, vars_per_node,
                       num_owned_nodes, num_elements, num_dep_nodes);
 
   // Set the element connectivity into TACSAssembler
