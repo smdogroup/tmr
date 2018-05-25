@@ -1597,8 +1597,8 @@ cdef class OctForest:
         num_nodes = np.max(conn)+1
         self.ptr.setConnectivity(num_nodes, <int*>conn.data, num_blocks)
 
-    def repartition(self):
-        self.ptr.repartition()
+    def repartition(self, int max_rank=-1):
+        self.ptr.repartition(max_rank)
 
     def createTrees(self, int depth):
         self.ptr.createTrees(depth)

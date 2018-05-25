@@ -339,7 +339,7 @@ cdef extern from "TMROctForest.h":
         void setTopology(TMRTopology*)
         void setConnectivity(int, const int*, int)
         void setFullConnectivity(int, int, int, const int*, const int*)
-        void repartition()
+        void repartition(int)
         void createTrees(int)
         void createRandomTrees(int, int, int)
         void refine(int*, int, int)

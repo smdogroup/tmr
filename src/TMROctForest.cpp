@@ -1842,7 +1842,7 @@ void TMROctForest::repartition( int max_rank ){
   freeMeshData(0);
 
   // Adjust the rank of the maximum rank
-  if (max_rank < 0 || max_rank > mpi_size){
+  if (max_rank <= 0 || max_rank > mpi_size){
     max_rank = mpi_size;
   }
 
