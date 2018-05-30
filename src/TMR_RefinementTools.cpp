@@ -36,6 +36,7 @@
 */
 void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
                        TMROctForest *forest[], TACSMg **_mg,
+                       double omega,
                        int use_coarse_direct_solve,
                        int use_chebyshev_smoother ){
   // Get the communicator
@@ -43,11 +44,10 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 
   // Create the multigrid object
   int zero_guess = 0;
-  double omega = 0.75;
   double lower = 1.0/30.0, upper = 1.1;
   int cheb_degree = 3;
   int mg_smooth_iters = 1;
-  int mg_sor_symm = 0;
+  int mg_sor_symm = 1;
   int mg_iters_per_level = 1;
   TACSMg *mg = new TACSMg(comm, num_levels, omega,
                           mg_smooth_iters, mg_sor_symm);
@@ -113,6 +113,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 */
 void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
                        TMRQuadForest *forest[], TACSMg **_mg,
+                       double omega,
                        int use_coarse_direct_solve,
                        int use_chebyshev_smoother ){
   // Get the communicator
@@ -120,7 +121,6 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 
   // Create the multigrid object
   int zero_guess = 0;
-  double omega = 0.75;
   double lower = 1.0/30.0, upper = 1.1;
   int cheb_degree = 3;
   int mg_smooth_iters = 1;

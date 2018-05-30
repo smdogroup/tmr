@@ -81,7 +81,7 @@ class TMROctForest : public TMREntity {
   
   // Re-partition the octrees based on element count
   // -----------------------------------------------
-  void repartition();
+  void repartition( int max_rank=-1 );
   
   // Create the forest of octrees
   // ----------------------------

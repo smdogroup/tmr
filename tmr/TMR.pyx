@@ -22,7 +22,7 @@ from __future__ import print_function, division
 from mpi4py.libmpi cimport *
 cimport mpi4py.MPI as MPI
 
-# Import numpy 
+# Import numpy
 cimport numpy as np
 import numpy as np
 
@@ -67,7 +67,7 @@ cdef class Vertex:
     cdef TMRVertex *ptr
     def __cinit__(self):
         self.ptr = NULL
-        
+
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
@@ -102,7 +102,7 @@ cdef class Edge:
     cdef TMREdge *ptr
     def __cinit__(self):
         self.ptr = NULL
-      
+
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
@@ -133,7 +133,7 @@ cdef class Edge:
         cdef TMREdge *e
         self.ptr.getSource(&e)
         return _init_Edge(e)
-    
+
     def setMesh(self, EdgeMesh mesh):
         self.ptr.setMesh(mesh.ptr)
 
@@ -192,7 +192,7 @@ cdef class EdgeLoop:
             for i in range(nedges):
                 e[i] = (<Edge>edges[i]).ptr
                 d[i] = <int>dirs[i]
-            
+
             self.ptr = new TMREdgeLoop(nedges, e, d)
             self.ptr.incref()
             free(e)
@@ -217,7 +217,7 @@ cdef class EdgeLoop:
         for i in range(nedges):
             e.append(_init_Edge(edges[i]))
             d.append(dirs[i])
-        return e, d        
+        return e, d
 
 cdef _init_EdgeLoop(TMREdgeLoop *ptr):
     loop = EdgeLoop()
@@ -229,11 +229,11 @@ cdef class Face:
     cdef TMRFace *ptr
     def __cinit__(self):
         self.ptr = NULL
-      
+
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-         
+
     def setAttribute(self, aname):
         cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
@@ -256,7 +256,7 @@ cdef class Face:
         if loop:
             return _init_EdgeLoop(loop)
         return None
-    
+
     def setSource(self, Volume v, Face f):
         self.ptr.setSource(v.ptr, f.ptr)
 
@@ -273,7 +273,7 @@ cdef class Face:
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
-      
+
 cdef _init_Face(TMRFace *ptr):
     face = Face()
     face.ptr = ptr
@@ -302,7 +302,7 @@ cdef class Volume:
             else:
                 errmsg = 'Face and direction lists must be the same length'
                 raise ValueError(errmsg)
-      
+
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
@@ -326,7 +326,7 @@ cdef class Volume:
         for i in xrange(num_faces):
             faces.append(_init_Face(f[i]))
         return faces
-   
+
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
@@ -341,7 +341,7 @@ cdef class Curve:
     cdef TMRCurve *ptr
     def __cinit__(self):
         self.ptr = NULL
-        
+
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
@@ -350,7 +350,7 @@ cdef class Curve:
         cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
             self.ptr.setAttribute(name)
-            
+
     def getEntityId(self):
         if self.ptr:
             return self.ptr.getEntityId()
@@ -379,7 +379,7 @@ cdef class Curve:
                 for i in range(nu):
                     w[i] = wts[i]
             for i in range(nu):
-                p[i,0] = pts[i].x 
+                p[i,0] = pts[i].x
                 p[i,1] = pts[i].y
                 p[i,2] = pts[i].z
             return ku, tu, w, p
@@ -407,7 +407,7 @@ cdef class Pcurve:
     cdef TMRPcurve *ptr
     def __cinit__(self):
         self.ptr = NULL
-        
+
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
@@ -426,7 +426,7 @@ cdef class Surface:
     cdef TMRSurface *ptr
     def __cinit__(self):
         self.ptr = NULL
-        
+
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
@@ -463,7 +463,7 @@ cdef class Surface:
                 for i in range(nu*nv):
                     w[i] = wts[i]
             for i in range(nv*nu):
-                p[i,0] = pts[i].x 
+                p[i,0] = pts[i].x
                 p[i,1] = pts[i].y
                 p[i,2] = pts[i].z
             return ku, kv, tu, tv, w, p
@@ -491,8 +491,8 @@ cdef class BsplineCurve(Curve):
         free(p)
 
 cdef class BsplinePcurve(Pcurve):
-    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] pts, 
-                  np.ndarray[double, ndim=1, mode='c'] tu=None, 
+    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] pts,
+                  np.ndarray[double, ndim=1, mode='c'] tu=None,
                   np.ndarray[double, ndim=1, mode='c'] wts=None, int k=4):
         cdef int nctl = pts.shape[0]
         cdef ku = k
@@ -506,7 +506,7 @@ cdef class BsplinePcurve(Pcurve):
                 errmsg = 'Incorrect BsplinePcurve knot length'
                 raise ValueError(errmsg)
             self.ptr = new TMRBsplinePcurve(nctl, ku, <double*>tu.data,
-                                            <double*>wts.data, 
+                                            <double*>wts.data,
                                             <double*>pts.data)
         elif tu is not None and wts is None:
             self.ptr = new TMRBsplinePcurve(nctl, ku, <double*>tu.data,
@@ -718,11 +718,11 @@ cdef class Model:
         if f: free(f)
         if b: free(b)
         return
-  
+
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-   
+
     def getVolumes(self):
         cdef TMRVolume **vol
         cdef int num_vol = 0
@@ -763,7 +763,7 @@ cdef class Model:
             verts.append(_init_Vertex(v[i]))
         return verts
 
-    def writeModelToTecplot(self, fname, 
+    def writeModelToTecplot(self, fname,
                             vlabels=True, elabels=True, flabels=True):
         '''Write a representation of the edge loops to a file'''
         fp = open(fname, 'w')
@@ -827,10 +827,10 @@ cdef class Model:
                     tx[i,:] = pts[i+1,:] - pts[i,:]
                     xav[:] += 0.5*(pts[i+1,:] + pts[i,:])
                     count += 1
-                
+
                 for i in xrange(len(e)+1):
                     fp.write('%e %e %e %e %e %e\n'%(
-                        pts[i,0], pts[i,1], pts[i,2], 
+                        pts[i,0], pts[i,1], pts[i,2],
                         tx[i,0], tx[i,1], tx[i,2]))
 
             if count != 0 and flabels:
@@ -840,7 +840,7 @@ cdef class Model:
 
             index += 1
         return
-        
+
 cdef _init_Model(TMRModel* ptr):
     model = Model()
     model.ptr = ptr
@@ -851,7 +851,7 @@ cdef class MeshOptions:
     cdef TMRMeshOptions ptr
     def __cinit__(self):
         self.ptr = TMRMeshOptions()
-      
+
     def __dealloc__(self):
         return
 
@@ -860,7 +860,7 @@ cdef class MeshOptions:
             return self.ptr.mesh_type_default
         def __set__(self, TMRFaceMeshType value):
             self.ptr.mesh_type_default = value
-   
+
     property num_smoothing_steps:
         def __get__(self):
             return self.ptr.num_smoothing_steps
@@ -963,7 +963,7 @@ cdef class ConstElementSize(ElementFeatureSize):
 
 cdef class LinearElementSize(ElementFeatureSize):
     def __cinit__(self, double hmin, double hmax,
-                  double c=0.0, double ax=0.0, 
+                  double c=0.0, double ax=0.0,
                   double ay=0.0, double az=0.0):
         self.ptr = new TMRLinearElementSize(hmin, hmax, c, ax, ay, az)
         self.ptr.incref()
@@ -993,7 +993,7 @@ cdef class BoxFeatureSize(ElementFeatureSize):
         p2.y = xhigh[1]
         p2.z = xhigh[2]
         self.bptr.addBox(p1, p2, h)
-        
+
 cdef class Mesh:
     cdef TMRMesh *ptr
     def __cinit__(self, MPI.Comm comm, Model geo):
@@ -1036,7 +1036,7 @@ cdef class Mesh:
     def getQuadConnectivity(self):
         cdef const int *quads = NULL
         cdef int nquads = 0
-        
+
         self.ptr.getQuadConnectivity(&nquads, &quads)
         q = np.zeros((nquads, 4), dtype=np.intc)
         for i in range(nquads):
@@ -1049,8 +1049,8 @@ cdef class Mesh:
     def getTriConnectivity(self):
         cdef const int *tris = NULL
         cdef int ntris = 0
-        
-        self.ptr.getTriConnectivity(&ntris, &tris)       
+
+        self.ptr.getTriConnectivity(&ntris, &tris)
         t = np.zeros((ntris, 3), dtype=np.intc)
         for i in range(ntris):
             t[i,0] = tris[3*i]
@@ -1078,7 +1078,7 @@ cdef class Mesh:
     def createModelFromMesh(self):
         cdef TMRModel *model = NULL
         model = self.ptr.createModelFromMesh()
-        return _init_Model(model) 
+        return _init_Model(model)
 
     def writeToBDF(self, fname, outtype=None):
         # Write both quads and hexahedral elements
@@ -1107,19 +1107,19 @@ cdef class Mesh:
 cdef class EdgeMesh:
     cdef TMREdgeMesh *ptr
     def __cinit__(self, MPI.Comm comm, Edge e):
-        cdef MPI_Comm c_comm = comm.ob_mpi        
+        cdef MPI_Comm c_comm = comm.ob_mpi
         self.ptr = new TMREdgeMesh(c_comm, e.ptr)
         self.ptr.incref()
 
     def __dealloc__(self):
         pass
-    
+
     def mesh(self, double h, MeshOptions opts=None):
         cdef TMRMeshOptions options
         cdef TMRElementFeatureSize *fs = NULL
         fs = new TMRElementFeatureSize(h)
         fs.incref()
-        if opts is None:            
+        if opts is None:
             self.ptr.mesh(options, fs)
         else:
             self.ptr.mesh(opts.ptr, fs)
@@ -1128,7 +1128,7 @@ cdef class EdgeMesh:
 cdef class FaceMesh:
     cdef TMRFaceMesh *ptr
     def __cinit__(self, MPI.Comm comm, Face f):
-        cdef MPI_Comm c_comm = comm.ob_mpi        
+        cdef MPI_Comm c_comm = comm.ob_mpi
         self.ptr = new TMRFaceMesh(c_comm, f.ptr)
         self.ptr.incref()
 
@@ -1140,7 +1140,7 @@ cdef class FaceMesh:
         cdef TMRElementFeatureSize *fs = NULL
         fs = new TMRElementFeatureSize(h)
         fs.incref()
-        if opts is None:            
+        if opts is None:
             self.ptr.mesh(options, fs)
         else:
             self.ptr.mesh(opts.ptr, fs)
@@ -1184,7 +1184,7 @@ cdef class Topology:
 
 cdef class QuadrantArray:
     cdef TMRQuadrantArray *ptr
-    cdef int self_owned 
+    cdef int self_owned
     def __cinit__(self):
         self.ptr = NULL
 
@@ -1297,7 +1297,7 @@ cdef class Quadrant:
 
 cdef class QuadForest:
     cdef TMRQuadForest *ptr
-    def __cinit__(self, MPI.Comm comm=None, int order=2, 
+    def __cinit__(self, MPI.Comm comm=None, int order=2,
                   TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
         cdef MPI_Comm c_comm = NULL
         self.ptr = NULL
@@ -1420,7 +1420,7 @@ cdef class QuadForest:
             conn[i] = _conn[i]
             weights[i] = _weights[i]
         return ptr, conn, weights
-            
+
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeToVTK(filename)
@@ -1428,16 +1428,16 @@ cdef class QuadForest:
     def writeForestToVTK(self, fname):
         cdef char *filename = tmr_convert_to_chars(fname)
         self.ptr.writeForestToVTK(filename)
-        
+
     def createInterpolation(self, QuadForest forest, VecInterp vec):
         self.ptr.createInterpolation(forest.ptr, vec.ptr)
-        
+
 cdef _init_QuadForest(TMRQuadForest* ptr):
     forest = QuadForest()
     forest.ptr = ptr
     forest.ptr.incref()
     return forest
- 
+
 cdef class OctantArray:
     cdef TMROctantArray *ptr
     cdef int self_owned
@@ -1563,7 +1563,7 @@ cdef class Octant:
 
 cdef class OctForest:
     cdef TMROctForest *ptr
-    def __cinit__(self, MPI.Comm comm=None, int order=2, 
+    def __cinit__(self, MPI.Comm comm=None, int order=2,
                   TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
         cdef MPI_Comm c_comm = NULL
         self.ptr = NULL
@@ -1597,8 +1597,8 @@ cdef class OctForest:
         num_nodes = np.max(conn)+1
         self.ptr.setConnectivity(num_nodes, <int*>conn.data, num_blocks)
 
-    def repartition(self):
-        self.ptr.repartition()
+    def repartition(self, int max_rank=-1):
+        self.ptr.repartition(max_rank)
 
     def createTrees(self, int depth):
         self.ptr.createTrees(depth)
@@ -1726,7 +1726,7 @@ def LoadModel(fname, int print_lev=0):
         errmsg = 'Error loading model. File %s does not exist?'%(fname)
         raise RuntimeError(errmsg)
     return _init_Model(model)
-   
+
 cdef class BoundaryConditions:
     cdef TMRBoundaryConditions* ptr
     def __cinit__(self):
@@ -1738,8 +1738,8 @@ cdef class BoundaryConditions:
 
     def getNumBoundaryConditions(self):
         return self.ptr.getNumBoundaryConditions()
-   
-    def addBoundaryCondition(self, aname, 
+
+    def addBoundaryCondition(self, aname,
                              list bc_nums=None, list bc_vals=None):
         cdef char *name = tmr_convert_to_chars(aname)
         cdef int *nums = NULL
@@ -1769,7 +1769,7 @@ cdef class BoundaryConditions:
             self.ptr.addBoundaryCondition(name, 0, NULL, NULL)
         return
 
-cdef TACSElement* _createQuadElement(void *_self, int order, 
+cdef TACSElement* _createQuadElement(void *_self, int order,
                                      TMRQuadrant *quad):
     cdef TACSElement *elem = NULL
     q = Quadrant()
@@ -1798,13 +1798,13 @@ cdef class QuadCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, QuadForest forest, 
+    def createTACS(self, QuadForest forest,
                    OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
-cdef TACSElement* _createOctElement(void *_self, int order, 
+cdef TACSElement* _createOctElement(void *_self, int order,
                                     TMROctant *octant):
     cdef TACSElement *elem = NULL
     q = Octant()
@@ -1834,13 +1834,13 @@ cdef class OctCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, OctForest forest, 
+    def createTACS(self, OctForest forest,
                    OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
-cdef TACSElement* _createQuadTopoElement(void *_self, int order, 
+cdef TACSElement* _createQuadTopoElement(void *_self, int order,
                                          TMRQuadrant *quad,
                                          TMRIndexWeight *weights,
                                          int nweights):
@@ -1876,7 +1876,7 @@ cdef class QuadTopoCreator:
     def __dealloc__(self):
         self.ptr.decref()
 
-    def createTACS(self, QuadForest forest, 
+    def createTACS(self, QuadForest forest,
                    OrderingType ordering=TACS.PY_NATURAL_ORDER,scale=1.0):
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
@@ -1897,7 +1897,7 @@ cdef class QuadTopoCreator:
         self.ptr.getIndices(&indices)
         return _init_VecIndices(indices)
 
-cdef TACSElement* _createOctTopoElement(void *_self, int order, 
+cdef TACSElement* _createOctTopoElement(void *_self, int order,
                                         TMROctant *octant,
                                         TMRIndexWeight *weights,
                                         int nweights):
@@ -1924,7 +1924,7 @@ cdef TACSElement* _createOctTopoElement(void *_self, int order,
 
 cdef class OctTopoCreator:
     cdef TMRCyTopoOctCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, OctForest filt, 
+    def __cinit__(self, BoundaryConditions bcs, OctForest filt,
                   *args, **kwargs):
         self.ptr = NULL
         self.ptr = new TMRCyTopoOctCreator(bcs.ptr, filt.ptr)
@@ -1937,7 +1937,7 @@ cdef class OctTopoCreator:
         if self.ptr:
             self.ptr.decref()
 
-    def createTACS(self, OctForest forest,  
+    def createTACS(self, OctForest forest,
                    OrderingType ordering=TACS.PY_NATURAL_ORDER,
                    double scale=1.0):
         cdef TACSAssembler *assembler = NULL
@@ -1978,14 +1978,14 @@ cdef class StiffnessProperties:
         nu = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
         if (_ys):
             ys = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        
+
         for i in range(nmats):
             rho[i] = <TacsScalar>_rho[i]
             E[i] = <TacsScalar>_E[i]
             nu[i] = <TacsScalar>_nu[i]
             if (_ys):
                 ys[i] = <TacsScalar>_ys[i]
-        self.ptr = new TMRStiffnessProperties(nmats, q, eps, k0, beta, xoffset, 
+        self.ptr = new TMRStiffnessProperties(nmats, q, eps, k0, beta, xoffset,
                                               rho, E, nu, ys, use_project)
         self.ptr.incref()
         free(rho)
@@ -2076,7 +2076,8 @@ cdef class QuadStiffness(PlaneStress):
         free(w)
         return
 
-def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
+def createMg(list assemblers, list forests, double omega=1.0,
+             use_coarse_direct_solve=True,
              use_chebyshev_smoother=False):
     cdef int nlevels = 0
     cdef TACSAssembler **assm = NULL
@@ -2102,20 +2103,22 @@ def createMg(list assemblers, list forests, use_coarse_direct_solve=True,
         elif isinstance(forests[i], OctForest):
             isqforest = 0
 
-    assm = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))    
+    assm = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
     if isqforest:
-        qforest = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))    
+        qforest = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
         for i in range(nlevels):
             assm[i] = (<Assembler>assemblers[i]).ptr
             qforest[i] = (<QuadForest>forests[i]).ptr
-        TMR_CreateTACSMg(nlevels, assm, qforest, &mg, coarse_direct, use_cheb)
+        TMR_CreateTACSMg(nlevels, assm, qforest, &mg, omega,
+                         coarse_direct, use_cheb)
         free(qforest)
     else:
-        oforest = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))    
+        oforest = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
         for i in range(nlevels):
             assm[i] = (<Assembler>assemblers[i]).ptr
             oforest[i] = (<OctForest>forests[i]).ptr
-        TMR_CreateTACSMg(nlevels, assm, oforest, &mg, coarse_direct, use_cheb)
+        TMR_CreateTACSMg(nlevels, assm, oforest, &mg, omega,
+                         coarse_direct, use_cheb)
         free(oforest)
     free(assm)
     if mg != NULL:
@@ -2235,7 +2238,7 @@ cdef class StressConstraint:
         return
 
 cdef class TopoProblem(pyParOptProblemBase):
-    def __cinit__(self, list assemblers, list filters, 
+    def __cinit__(self, list assemblers, list filters,
                   list varmaps, list varindices, Pc pc, int vars_per_node=1):
         cdef int nlevels = 0
         cdef TACSAssembler **assemb = NULL
@@ -2246,7 +2249,7 @@ cdef class TopoProblem(pyParOptProblemBase):
         cdef TACSMg *mg = NULL
 
         # Check for the sizes of the arrays
-        if (len(assemblers) != len(filters) or 
+        if (len(assemblers) != len(filters) or
             len(assemblers) != len(varmaps) or
             len(assemblers) != len(varindices)):
             errmsg = 'TopoProblem must have equal number of objects in lists'
@@ -2261,7 +2264,7 @@ cdef class TopoProblem(pyParOptProblemBase):
         assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
         vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
         vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
-        
+
         isqforest = 0
         for i in range(nlevels):
             if isinstance(filters[i], QuadForest):
@@ -2276,7 +2279,7 @@ cdef class TopoProblem(pyParOptProblemBase):
                 assemb[i] = (<Assembler>assemblers[i]).ptr
                 vmaps[i] = (<VarMap>varmaps[i]).ptr
                 vindex[i] = (<VecIndices>varindices[i]).ptr
-            self.ptr = new TMRTopoProblem(nlevels, assemb, qfiltr, 
+            self.ptr = new TMRTopoProblem(nlevels, assemb, qfiltr,
                                           vmaps, vindex, mg, vars_per_node)
             self.ptr.incref()
             free(qfiltr)
@@ -2287,8 +2290,8 @@ cdef class TopoProblem(pyParOptProblemBase):
                 assemb[i] = (<Assembler>assemblers[i]).ptr
                 vmaps[i] = (<VarMap>varmaps[i]).ptr
                 vindex[i] = (<VecIndices>varindices[i]).ptr
-                
-            self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr, 
+
+            self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr,
                                           vmaps, vindex, mg, vars_per_node)
             self.ptr.incref()
             free(ofiltr)
@@ -2416,7 +2419,7 @@ cdef class TopoProblem(pyParOptProblemBase):
                                     eig_rtol, eig_atol, num_recycle,
                                     recycle_type, track_eigen_iters)
         return
-    
+
     def addBucklingConstraint(self, double sigma, int num_eigvals,
                               TacsScalar ks_weight=30.0,
                               TacsScalar offset=0.0, TacsScalar scale=0.0,
@@ -2431,7 +2434,7 @@ cdef class TopoProblem(pyParOptProblemBase):
         prob.addBucklingConstraint(sigma, num_eigvals, ks_weight,
                                    offset, scale, max_lanczos, eigtol)
         return
-    
+
     def setObjective(self, list weights, list funcs=None):
         cdef int lenw = 0
         cdef TacsScalar *w = NULL
@@ -2463,7 +2466,7 @@ cdef class TopoProblem(pyParOptProblemBase):
         if (f):
             free(f)
         return
-          
+
     def initialize(self):
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
@@ -2501,7 +2504,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         vec = prob.createVolumeVec(scale)
         return _init_Vec(vec)
-    
+
     def createAreaVec(self, scale=1.0):
         cdef TACSBVec *vec
         cdef TMRTopoProblem *prob = NULL
@@ -2511,7 +2514,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         vec = prob.createAreaVec(scale)
         return _init_Vec(vec)
-            
+
     def convertPVecToVec(self, PVec pvec):
         cdef ParOptBVecWrap *new_vec = NULL
         new_vec = _dynamicParOptBVecWrap(pvec.ptr)
@@ -2519,7 +2522,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             errmsg = 'Expected ParOptBVecWrap got other type'
             raise ValueError(errmsg)
         return _init_Vec(new_vec.vec)
-    
+
     def setInitDesignVars(self, PVec pvec, PVec lbvec=None,
                           PVec ubvec=None):
         cdef TMRTopoProblem *prob = NULL
