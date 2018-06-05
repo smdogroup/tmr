@@ -31,12 +31,12 @@
 */
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMROctForest *forest[], TACSMg **_mg,
-                       double omega,
+                       double omega=1.0,
                        int use_coarse_direct_solve=1,
                        int use_chebyshev_smoother=0 );
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMRQuadForest *forest[], TACSMg **_mg,
-                       double omega,
+                       double omega=1.0,
                        int use_coarse_direct_solve=1,
                        int use_chebyshev_smoother=0 );
 

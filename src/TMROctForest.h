@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,11 +32,11 @@
   forest can be distributed across processors. The connectivity
   between octrees is defined on all processors by setting a octree to
   node connectivity.
-  
+
   The octrees can be redistributed across processors by using the
   repartition function. This destroys the nodes that may have been
   created (but can easily be recomputed).
-  
+
   The duplicate() and coarsen() functions create a forest that is
   aligned with the parallel distribution of octrees. This facilitates
   the construction of the interpolation operators that can be used for
@@ -46,7 +46,7 @@ class TMROctForest : public TMREntity {
  public:
   // This is the max order of the mesh
   static const int MAX_ORDER = 16;
-  
+
   TMROctForest( MPI_Comm _comm, int mesh_order=2,
                 TMRInterpolationType interp_type=TMR_GAUSS_LOBATTO_POINTS );
   ~TMROctForest();
@@ -78,15 +78,15 @@ class TMROctForest : public TMREntity {
                        TMR_GAUSS_LOBATTO_POINTS );
   int getMeshOrder();
   TMRInterpolationType getInterpType();
-  
+
   // Re-partition the octrees based on element count
   // -----------------------------------------------
   void repartition( int max_rank=-1 );
-  
+
   // Create the forest of octrees
   // ----------------------------
   void createTrees( int refine_level );
-  void createRandomTrees( int nrand=10, 
+  void createRandomTrees( int nrand=10,
                           int min_level=0, int max_level=8 );
 
   // Duplicate or coarsen the forest
@@ -109,13 +109,13 @@ class TMROctForest : public TMREntity {
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
-  void getNodeConn( const int **_conn=NULL, 
+  void getNodeConn( const int **_conn=NULL,
                     int *_num_elements=NULL,
                     int *_num_owned_nodes=NULL,
                     int *_num_local_nodes=NULL );
   int getDepNodeConn( const int **_ptr, const int **_conn,
                       const double **_weights );
- 
+
   // Create interpolation/restriction operators
   // ------------------------------------------
   void createInterpolation( TMROctForest *coarse,
@@ -143,10 +143,10 @@ class TMROctForest : public TMREntity {
 
   // Retrieve the connectivity information
   // -------------------------------------
-  void getConnectivity( int *_nblocks, int *_nfaces, 
-                        int *_nedges, int *_nnodes, 
-                        const int **_block_conn, 
-                        const int **_block_face_conn, 
+  void getConnectivity( int *_nblocks, int *_nfaces,
+                        int *_nedges, int *_nnodes,
+                        const int **_block_conn,
+                        const int **_block_face_conn,
                         const int **_block_edge_conn,
                         const int **_block_face_ids );
   void getInverseConnectivity( const int **_node_block_conn,
@@ -171,7 +171,7 @@ class TMROctForest : public TMREntity {
   // -----------------------------------------------------------
   TMROctantArray *distributeOctants( TMROctantArray *list,
                                      int use_tags=0,
-                                     int **oct_ptr=NULL, 
+                                     int **oct_ptr=NULL,
                                      int **oct_recv_ptr=NULL,
                                      int include_local=0,
                                      int use_node_index=0 );
@@ -200,7 +200,7 @@ class TMROctForest : public TMREntity {
   void freeData();
   void freeMeshData( int free_quads=1, int free_owners=1 );
   void copyData( TMROctForest *copy );
-  
+
   // Compute the node connectivity information
   void computeNodesToBlocks();
 
@@ -211,7 +211,7 @@ class TMROctForest : public TMREntity {
   // Compute the inverse connectivities
   void computeEdgesToBlocks();
   void computeFacesToBlocks();
-  
+
   // Set the owners - this determines how the mesh will be ordered
   void computeBlockOwners();
 
@@ -234,17 +234,17 @@ class TMROctForest : public TMREntity {
                       const int balance_tree );
 
   // Add adjacent octants to the hashes/queues for balancing
-  void addFaceNeighbors( int face_index, 
+  void addFaceNeighbors( int face_index,
                          TMROctant p,
                          TMROctantHash *hash,
                          TMROctantHash *ext_hash,
                          TMROctantQueue *queue );
-  void addEdgeNeighbors( int edge_index, 
+  void addEdgeNeighbors( int edge_index,
                          TMROctant p,
                          TMROctantHash *hash,
                          TMROctantHash *ext_hash,
                          TMROctantQueue *queue );
-  void addCornerNeighbors( int corner, 
+  void addCornerNeighbors( int corner,
                            TMROctant p,
                            TMROctantHash *hash,
                            TMROctantHash *ext_hash,
@@ -253,15 +253,15 @@ class TMROctForest : public TMREntity {
   // Add octants to adjacent non-owner processor queues
   void addAdjacentFaceToQueue( int face_index,
                                TMROctant p,
-                               TMROctantQueue *queue, 
+                               TMROctantQueue *queue,
                                TMROctant orig );
   void addAdjacentEdgeToQueue( int edge_index,
                                TMROctant p,
-                               TMROctantQueue *queue, 
+                               TMROctantQueue *queue,
                                TMROctant orig );
   void addAdjacentCornerToQueue( int corner,
                                  TMROctant p,
-                                 TMROctantQueue *queue, 
+                                 TMROctantQueue *queue,
                                  TMROctant orig );
 
   // Exchange non-local octant neighbors
@@ -282,7 +282,7 @@ class TMROctForest : public TMREntity {
   void createLocalConn( TMROctantArray *nodes, const int *node_offset );
 
   // Get the local node numbers associated with an edge/face
-  void getEdgeNodes( TMROctant *oct, int edge_index, 
+  void getEdgeNodes( TMROctant *oct, int edge_index,
                      TMROctantArray *nodes, const int *node_offset,
                      int *edge_nodes );
   void getFaceNodes( TMROctant *oct, int face_index,
@@ -291,9 +291,9 @@ class TMROctForest : public TMREntity {
 
   // Create the dependent node connectivity
   void createDependentConn( const int *node_nums,
-                            TMROctantArray *nodes, 
+                            TMROctantArray *nodes,
                             const int *node_offset );
-  
+
   // Compute the node locations
   void evaluateNodeLocations();
 
@@ -313,25 +313,6 @@ class TMROctForest : public TMREntity {
   // The owner octants which dictates the partitioning of the octants
   // across processors
   TMROctant *owners;
-
-  // The following data is the same across all processors
-  // ----------------------------------------------------
-  // Set the nodes/edges/faces/blocks
-  int num_nodes, num_edges, num_faces, num_blocks;
-
-  // Information for the face/edge/node connectivity
-  int *block_conn, *block_face_conn, *block_edge_conn;
-  int *node_block_ptr, *node_block_conn;
-  int *edge_block_ptr, *edge_block_conn;
-  int *face_block_ptr, *face_block_conn;
-
-  // Store the face/edge/node owners
-  int *face_block_owners;
-  int *edge_block_owners;
-  int *node_block_owners;
-
-  // Information to enable transformations between faces
-  int *block_face_ids;
 
   // Information about the mesh
   int mesh_order;
@@ -356,7 +337,7 @@ class TMROctForest : public TMREntity {
 
   // The array of all octants
   TMROctantArray *octants;
-  
+
   // The octants that are adjacent to this processor
   TMROctantArray *adjacent;
 
@@ -365,6 +346,70 @@ class TMROctForest : public TMREntity {
 
   // The topology of the underlying model (if any)
   TMRTopology *topo;
+
+  // Class for the block connectivity
+  class TMRBlockConn : public TMREntity {
+  public:
+    TMRBlockConn(){
+      // Zero out the nodes/edges/faces and all data
+      num_nodes = 0;
+      num_edges = 0;
+      num_faces = 0;
+      num_blocks = 0;
+
+      // Set all the unallocated pointers to NULL
+      block_conn = NULL;
+      block_face_conn = NULL;
+      block_face_ids = NULL;
+      block_edge_conn = NULL;
+      node_block_ptr = NULL;
+      node_block_conn = NULL;
+      edge_block_ptr = NULL;
+      edge_block_conn = NULL;
+      face_block_ptr = NULL;
+      face_block_conn = NULL;
+      face_block_owners = NULL;
+      edge_block_owners = NULL;
+      node_block_owners = NULL;
+    }
+    ~TMRBlockConn(){
+      // Free the connectivity data
+      if (block_conn){ delete [] block_conn; }
+      if (block_face_conn){ delete [] block_face_conn; }
+      if (block_face_ids){ delete [] block_face_ids; }
+      if (block_edge_conn){ delete [] block_edge_conn; }
+      if (node_block_ptr){ delete [] node_block_ptr; }
+      if (node_block_conn){ delete [] node_block_conn; }
+      if (edge_block_ptr){ delete [] edge_block_ptr; }
+      if (edge_block_conn){ delete [] edge_block_conn; }
+      if (face_block_ptr){ delete [] face_block_ptr; }
+      if (face_block_conn){ delete [] face_block_conn; }
+
+      // Free the ownership data
+      if (face_block_owners){ delete [] face_block_owners; }
+      if (edge_block_owners){ delete [] edge_block_owners; }
+      if (node_block_owners){ delete [] node_block_owners; }
+    }
+
+    // The following data is the same across all processors
+    // ----------------------------------------------------
+    // Set the nodes/edges/faces/blocks
+    int num_nodes, num_edges, num_faces, num_blocks;
+
+    // Information for the face/edge/node connectivity
+    int *block_conn, *block_face_conn, *block_edge_conn;
+    int *node_block_ptr, *node_block_conn;
+    int *edge_block_ptr, *edge_block_conn;
+    int *face_block_ptr, *face_block_conn;
+
+    // Store the face/edge/node owners
+    int *face_block_owners;
+    int *edge_block_owners;
+    int *node_block_owners;
+
+    // Information to enable transformations between faces
+    int *block_face_ids;
+  } *bdata;
 };
 
 #endif // TMR_OCTANT_FOREST_H

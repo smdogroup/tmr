@@ -18,9 +18,8 @@ class CreateMe : public TMROctTACSTopoCreator {
 
   TACSElement *createElement( int order, TMROctant *oct,
                               TMRIndexWeight *weights, int nweights ){
-    double q = 5.0;
     TMROctStiffness *stiff = new TMROctStiffness(weights, nweights,
-                                                 props, q);
+                                                 props);
     if (order == 2){
       return new Solid<2>(stiff);
     }
@@ -58,8 +57,14 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   TacsScalar rho = 2700.0;
   TacsScalar E = 70e9;
   TacsScalar nu = 0.3;
+  double q = 5.0;
+  double eps = 0.1;
+  double k0 = 1e-6;
+  double beta = 20.0;
+  double xoffset = 0.5;
   TMRStiffnessProperties *props =
-    new TMRStiffnessProperties(1, &rho, &E, &nu);
+    new TMRStiffnessProperties(1, q, eps, k0,
+                               beta, xoffset, &rho, &E, &nu);
   
   // Allocate a creator object
   CreateMe *creator = new CreateMe(bcs, filter, props);
@@ -249,7 +254,7 @@ int main( int argc, char *argv[] ){
     loader->scanBDFFile("volume-mesh.bdf");
 
     // Create the solid stiffness object
-    SolidStiffness *stiff = new SolidStiffness(1.0, 1.0, 0.3);
+    SolidStiffness *stiff = new SolidStiffness(1.0, 1.0, 0.3, 1.0);
     Solid<2> *elem = new Solid<2>(stiff);
     loader->setElement(0, elem);
     
