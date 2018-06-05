@@ -71,7 +71,8 @@ def readSTLFile(fname):
                 k = k + 1
                 ind = 1
 
-    # Reshape coordinate array to correspond to number of elements row-wise
+    # Reshape coordinate array to correspond to number of elements
+    # row-wise
     norm = np.array(norm).reshape(len(norm)/3,3)
     P1 = np.array(P1).reshape(len(P1)/3,3)
     P2 = np.array(P2).reshape(len(P2)/3,3)
@@ -79,7 +80,7 @@ def readSTLFile(fname):
 
     return norm, P1, P2, P3
 
-def createUniqueList(P1, P2, P3, tol=1e-8):
+def createUniqueList(P1, P2, P3, tol=1e-5):
     '''
     Create unique list of nodes
 
@@ -112,7 +113,7 @@ def createUniqueList(P1, P2, P3, tol=1e-8):
             dist[:] = 1e20
             loc.locateKClosest(Xpts[row,:], index, dist)
             for k in range(K):
-                if dist[k] < tol:
+                if np.sqrt(dist[k]) < tol:
                     node_nums[index[k]] = unique_node
                 else:
                     break

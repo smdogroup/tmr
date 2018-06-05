@@ -7,17 +7,17 @@
 /*
   Implementation of the locate point code
 
-  Copyright (c) 2010 Graeme Kennedy. All rights reserved. 
+  Copyright (c) 2010 Graeme Kennedy. All rights reserved.
   Not for commercial purposes.
 */
 
 /*
   Create an object that can rapidly locate the closest point
-  within a cloud of points to the specified input point. 
+  within a cloud of points to the specified input point.
   This works in O(log(n)) time roughly, rather than O(n) time.
-*/ 
-LocatePoint::LocatePoint( double *_Xpts, int _npts, 
-			  int _max_num_points ){
+*/
+LocatePoint::LocatePoint( double *_Xpts, int _npts,
+                          int _max_num_points ){
   npts = _npts;
   max_num_points = _max_num_points;
 
@@ -64,11 +64,11 @@ LocatePoint::LocatePoint( double *_Xpts, int _npts,
   Deallocate the memory for this object
 */
 LocatePoint::~LocatePoint(){
-  delete [] indices;    
-  delete [] nodes;      
+  delete [] indices;
+  delete [] nodes;
   delete [] indices_ptr;
   delete [] num_indices;
-  delete [] node_xav;   
+  delete [] node_xav;
   delete [] node_normal;
 }
 
@@ -76,7 +76,7 @@ LocatePoint::~LocatePoint(){
   Locate the K closest points in the domain to the point using
   the plane-splitting method.
 */
-void LocatePoint::locateKClosest( int K, int indx[], double dist[], 
+void LocatePoint::locateKClosest( int K, int indx[], double dist[],
                                   double xpt[] ){
   int nk = 0; // Length of the array
   int root = 0;
@@ -108,15 +108,15 @@ void LocatePoint::locateKClosest( int K, int indx[], double dist[],
   Insert a point into a sorted list based upon the distance from the
   given point
 */
-void LocatePoint::insertIndex( double * dist, int * indx, int *nk, 
-			       double d, int dindex, int K ){
+void LocatePoint::insertIndex( double * dist, int * indx, int *nk,
+                               double d, int dindex, int K ){
 
   if (*nk == 0){
     dist[*nk] = d;
     indx[*nk] = dindex;
     *nk += 1;
     return;
-  }  
+  }
   else if (*nk < K && dist[*nk-1] <= d){
     dist[*nk] = d;
     indx[*nk] = dindex;
@@ -150,31 +150,31 @@ void LocatePoint::insertIndex( double * dist, int * indx, int *nk,
   Locate the K-closest points to a given point!
 
   dist  == A sorted list of the K-closest distances
-  indx  == The indices of the K-closest values 
+  indx  == The indices of the K-closest values
   nk    == The actual number of points in the list nk <= K
 */
-void LocatePoint::locateKClosest( int K, int root, double xpt[], 
-				  double * dist, int * indx, int * nk ){  
+void LocatePoint::locateKClosest( int K, int root, double xpt[],
+                                  double * dist, int * indx, int * nk ){
   int start = indices_ptr[root];
   int left_node = nodes[2*root];
   int right_node = nodes[2*root+1];
 
   if (start != -1){ // This node is a leaf
     // Do an exhaustive search of the points at the node
-    
+
     int end = start + num_indices[root];
     for ( int k = start; k < end; k++ ){
       int n = indices[k];
 
       double t = ((Xpts[3*n]   - xpt[0])*(Xpts[3*n]   - xpt[0]) +
-                      (Xpts[3*n+1] - xpt[1])*(Xpts[3*n+1] - xpt[1]) +
-                      (Xpts[3*n+2] - xpt[2])*(Xpts[3*n+2] - xpt[2]));
+                  (Xpts[3*n+1] - xpt[1])*(Xpts[3*n+1] - xpt[1]) +
+                  (Xpts[3*n+2] - xpt[2])*(Xpts[3*n+2] - xpt[2]));
 
-      if ((*nk < K ) || 
-	   (t < dist[K-1] ) ){
-	insertIndex(dist, indx, nk, t, n, K );
+      if ((*nk < K) ||
+           (t < dist[K-1])){
+        insertIndex(dist, indx, nk, t, n, K);
       }
-    }    
+    }
   }
   else {
     double * xav    = &node_xav[3*root];
@@ -183,16 +183,16 @@ void LocatePoint::locateKClosest( int K, int root, double xpt[],
     // The normal distance
     double ndist = ((xpt[0] - xav[0])*normal[0] +
                         (xpt[1] - xav[1])*normal[1] +
-                        (xpt[2] - xav[2])*normal[2]); 
+                        (xpt[2] - xav[2])*normal[2]);
 
-    if (ndist < 0.0 ){ // The point lies to the 'left' of the plane
+    if (ndist < 0.0){ // The point lies to the 'left' of the plane
       locateKClosest(K, left_node, xpt, dist, indx, nk);
 
       // If the minimum distance to the plane is less than the minimum
       // distance then search the other branch too - there could be a
       // point on that branch that lies closer than *dist
-      if (*nk < K || ndist*ndist < dist[*nk-1] ){ 
-	locateKClosest(K, right_node, xpt, dist, indx, nk);
+      if (*nk < K || ndist*ndist < dist[*nk-1]){
+        locateKClosest(K, right_node, xpt, dist, indx, nk);
       }
     }
     else { // The point lies to the 'right' of the plane
@@ -201,8 +201,8 @@ void LocatePoint::locateKClosest( int K, int root, double xpt[],
       // If the minimum distance to the plane is less than the minimum
       // distance then search the other branch too - there could be a
       // point on that branch that lies closer than *dist
-      if (*nk < K || ndist*ndist < dist[*nk-1] ){
-	locateKClosest(K, left_node, xpt, dist, indx, nk);
+      if (*nk < K || ndist*ndist < dist[*nk-1]){
+        locateKClosest(K, left_node, xpt, dist, indx, nk);
       }
     }
   }
@@ -217,7 +217,7 @@ int LocatePoint::locateClosest( double xpt[] ){
   double dist = 1e40;
 
   // Find the closest value
-  locateClosest(root, xpt, &dist, &index); 
+  locateClosest(root, xpt, &dist, &index);
 
   return index;
 }
@@ -227,28 +227,28 @@ int LocatePoint::locateClosest( double xpt[] ){
 
   Note that 'dist' is the distance squared to the point in this function!
 */
-void LocatePoint::locateClosest( int root, double xpt[], 
-				 double * dist, int * index ){  
+void LocatePoint::locateClosest( int root, double xpt[],
+                                 double * dist, int * index ){
   int start = indices_ptr[root];
   int left_node = nodes[2*root];
   int right_node = nodes[2*root+1];
 
   if (start != -1){ // This node is a leaf
     // Do an exhaustive search of the points at the node
-    
+
     int end = start + num_indices[root];
     for ( int k = start; k < end; k++ ){
       int n = indices[k];
 
       double t = ((Xpts[3*n]   - xpt[0])*(Xpts[3*n]   - xpt[0]) +
-                      (Xpts[3*n+1] - xpt[1])*(Xpts[3*n+1] - xpt[1]) +
-                      (Xpts[3*n+2] - xpt[2])*(Xpts[3*n+2] - xpt[2]));
+                  (Xpts[3*n+1] - xpt[1])*(Xpts[3*n+1] - xpt[1]) +
+                  (Xpts[3*n+2] - xpt[2])*(Xpts[3*n+2] - xpt[2]));
 
       if (t < *dist){
-	*dist = t;
-	*index = n;
+        *dist = t;
+        *index = n;
       }
-    }    
+    }
   }
   else {
     double * xav    = &node_xav[3*root];
@@ -256,8 +256,8 @@ void LocatePoint::locateClosest( int root, double xpt[],
 
     // The normal distance
     double ndist = ((xpt[0] - xav[0])*normal[0] +
-                        (xpt[1] - xav[1])*normal[1] +
-                        (xpt[2] - xav[2])*normal[2] ); 
+                    (xpt[1] - xav[1])*normal[1] +
+                    (xpt[2] - xav[2])*normal[2]);
 
     if (ndist < 0.0){ // The point lies to the 'left' of the plane
       locateClosest(left_node, xpt, dist, index);
@@ -265,8 +265,8 @@ void LocatePoint::locateClosest( int root, double xpt[],
       // If the minimum distance to the plane is less than the minimum
       // distance then search the other branch too - there could be a
       // point on that branch that lies closer than *dist
-      if (ndist*ndist < *dist){ 
-	locateClosest(right_node, xpt, dist, index);
+      if (ndist*ndist < *dist){
+        locateClosest(right_node, xpt, dist, index);
       }
     }
     else { // The point lies to the 'right' of the plane
@@ -275,29 +275,29 @@ void LocatePoint::locateClosest( int root, double xpt[],
       // If the minimum distance to the plane is less than the minimum
       // distance then search the other branch too - there could be a
       // point on that branch that lies closer than *dist
-      if (ndist*ndist < *dist){ 
-	locateClosest(left_node, xpt, dist, index);
+      if (ndist*ndist < *dist){
+        locateClosest(left_node, xpt, dist, index);
       }
     }
   }
 }
-/*!  
+/*!
   Split the list of indices into approximately two.  Those on one
   half of a plane and those on the other.
 */
-int LocatePoint::split(int start, int end ){  
+int LocatePoint::split(int start, int end ){
   int root = num_nodes;
 
   num_nodes++;
-  if (num_nodes >= max_nodes ){
+  if (num_nodes >= max_nodes){
     extendArrays(num_nodes, 2*(num_nodes+1));
     max_nodes = 2*(num_nodes+1);
   }
-  
-  if (end - start <= max_num_points ){
+
+  if (end - start <= max_num_points){
     nodes[ 2*root ]    = -1;
     nodes[ 2*root+1 ]  = -1;
-    
+
     for ( int k = 0; k < 3; k++ ){
       node_xav[ 3*root + k ] = 0.0;
       node_normal[ 3*root + k ] = 0.0;
@@ -310,18 +310,18 @@ int LocatePoint::split(int start, int end ){
   }
 
   indices_ptr[root] = -1;
-  num_indices[root] = 0;  
+  num_indices[root] = 0;
 
-  int mid = splitList(&node_xav[3*root], &node_normal[3*root], 
-		       &indices[start], end-start);
+  int mid = splitList(&node_xav[3*root], &node_normal[3*root],
+                       &indices[start], end-start);
 
-  if (mid == 0 || mid == end-start ){
+  if (mid == 0 || mid == end-start){
     fprintf(stderr, "LocatePoint: Error, splitting points did nothing \
 -- problem with your nodes?\n");
     return root;
   }
 
-  // Now, split the right and left hand sides of the list 
+  // Now, split the right and left hand sides of the list
   int left_node = split(start, start + mid);
   int right_node = split(start + mid, end);
 
@@ -335,7 +335,7 @@ int LocatePoint::split(int start, int end ){
   Split the array of indices into two sets: those indices that correspond
   to points on either side of a plane in three-space.
 */
-int LocatePoint::splitList( double xav[], double normal[], 
+int LocatePoint::splitList( double xav[], double normal[],
                             int * ind, int np ){
   xav[0] = xav[1] = xav[2] = double(0.0);
   normal[0] = normal[1] = normal[2] = double(0.0);
@@ -362,7 +362,7 @@ int LocatePoint::splitList( double xav[], double normal[],
     }
 
     // I[0] = Ix = y^2 + z^2
-    I[0] += (Xpts[3*n+1]*Xpts[3*n+1] + Xpts[3*n+2]*Xpts[3*n+2]); 
+    I[0] += (Xpts[3*n+1]*Xpts[3*n+1] + Xpts[3*n+2]*Xpts[3*n+2]);
     // I[4] = Iy = x^2 + z^2
     I[4] += (Xpts[3*n]*Xpts[3*n] + Xpts[3*n+2]*Xpts[3*n+2]);
      // I[8] = Iz = x^2 + y^2
@@ -381,7 +381,7 @@ int LocatePoint::splitList( double xav[], double normal[],
   I[0] = I[0] - np*(xav[1]*xav[1] + xav[2]*xav[2]);
   I[4] = I[4] - np*(xav[0]*xav[0] + xav[2]*xav[2]);
   I[8] = I[8] - np*(xav[0]*xav[0] + xav[1]*xav[1]);
-  
+
   I[1] = I[1] + np*(xav[0]*xav[1]);
   I[2] = I[2] + np*(xav[0]*xav[2]);
   I[5] = I[5] + np*(xav[1]*xav[2]);
@@ -396,7 +396,7 @@ int LocatePoint::splitList( double xav[], double normal[],
   const char * uplo = "U";
 
   LAPACKsyevd(jobz, uplo, &N, I, &N,
-	      eigs, work, &lwork, iwork, &liwork, &info);
+              eigs, work, &lwork, iwork, &liwork, &info);
 
   normal[0] = I[0];
   normal[1] = I[1];
@@ -405,21 +405,21 @@ int LocatePoint::splitList( double xav[], double normal[],
   int low = 0;
   int high = np-1;
 
-  // Now, split the index array such that 
+  // Now, split the index array such that
   while (high > low){
-    // (dot(Xpts[ind] - xav, n ) < 0 ) < 0.0 for i < low
-    while (high > low &&	    
-           ((Xpts[3*ind[low]]   - xav[0] )*normal[0] +
-            (Xpts[3*ind[low]+1] - xav[1] )*normal[1] +
-            (Xpts[3*ind[low]+2] - xav[2] )*normal[2]) < 0.0){
+    // (dot(Xpts[ind] - xav, n) < 0) < 0.0 for i < low
+    while (high > low &&
+           ((Xpts[3*ind[low]]   - xav[0])*normal[0] +
+            (Xpts[3*ind[low]+1] - xav[1])*normal[1] +
+            (Xpts[3*ind[low]+2] - xav[2])*normal[2]) < 0.0){
       low++;
     }
 
-    // (dot(Xpts[ind] - xav, n ) < 0 ) >= 0.0 for i >= high
+    // (dot(Xpts[ind] - xav, n) < 0) >= 0.0 for i >= high
     while (high > low &&
-           ((Xpts[3*ind[high]]   - xav[0] )*normal[0] +
-            (Xpts[3*ind[high]+1] - xav[1] )*normal[1] +
-            (Xpts[3*ind[high]+2] - xav[2] )*normal[2]) >= 0.0){
+           ((Xpts[3*ind[high]]   - xav[0])*normal[0] +
+            (Xpts[3*ind[high]+1] - xav[1])*normal[1] +
+            (Xpts[3*ind[high]+2] - xav[2])*normal[2]) >= 0.0){
       high--;
     }
 
@@ -474,8 +474,8 @@ int * LocatePoint::newIntArray( int * array, int old_len, int new_len ){
   Allocate space for a new double array and copy the old
   array to the newly created array
 */
-double * LocatePoint::newDoubleArray( double * array, int old_len, 
-					  int new_len ){
+double * LocatePoint::newDoubleArray( double * array, int old_len,
+                                          int new_len ){
   double * temp = new double[ new_len ];
 
   for ( int i = 0; i < old_len; i++ ){
@@ -485,6 +485,6 @@ double * LocatePoint::newDoubleArray( double * array, int old_len,
     temp[i] = 0.0;
   }
   delete [] array;
-  
+
   return temp;
 }
