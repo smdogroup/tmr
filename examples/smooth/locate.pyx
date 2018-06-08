@@ -12,7 +12,7 @@ cdef extern from "LocatePoint.h":
       int locateClosest(double*)
       void locateKClosest(int, int*, double*, double*)
 
-cdef class pylocate:
+cdef class locate:
    cdef LocatePoint *ptr
      
    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] xpts):

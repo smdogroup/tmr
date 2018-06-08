@@ -348,8 +348,8 @@ int main( int argc, char *argv[] ){
   }
 
   // Allocate the stiffness object
-  TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
-  SolidStiffness *stiff = new SolidStiffness(rho, E, nu);
+  TacsScalar rho = 2570.0, E = 70e9, nu = 0.3, ys = 1.0;
+  SolidStiffness *stiff = new SolidStiffness(rho, E, nu, ys);
 
   // Allocate the solid element class
   TACSElement *solid[NUM_LEVELS];
