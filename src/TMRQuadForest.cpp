@@ -78,6 +78,10 @@ TMRQuadForest::TMRQuadForest( MPI_Comm _comm, int _mesh_order,
   MPI_Comm_rank(comm, &mpi_rank);
   MPI_Comm_size(comm, &mpi_size);
 
+  // Set default mesh data
+  mesh_order = 2;
+  interp_knots = NULL;
+
   // Set the topology object to NULL
   topo = NULL;
 
@@ -932,6 +936,16 @@ void TMRQuadForest::writeAdjacentToVTK( const char *filename ){
 */
 void TMRQuadForest::setMeshOrder( int _mesh_order,
                                   TMRInterpolationType _interp_type ){
+
+  // Don't free the octants/owner information if it exists,
+  // but free the connectivity and node data
+  freeMeshData(0, 0);
+
+  // Free the interpolation knots
+  if (interp_knots){
+    delete [] interp_knots;
+  }
+
   // Check that the order falls within allowable bounds
   mesh_order = _mesh_order;
   if (mesh_order < 2){
@@ -1424,7 +1438,7 @@ void TMRQuadForest::repartition(){
   and copies each individual tree.
 */
 TMRQuadForest *TMRQuadForest::duplicate(){
-  TMRQuadForest *dup = new TMRQuadForest(comm);
+  TMRQuadForest *dup = new TMRQuadForest(comm, mesh_order, interp_type);
   if (face_conn){
     copyData(dup);
 
@@ -1446,7 +1460,7 @@ TMRQuadForest *TMRQuadForest::duplicate(){
   forest is not necessarily balanced.
 */
 TMRQuadForest *TMRQuadForest::coarsen(){
-  TMRQuadForest *coarse = new TMRQuadForest(comm);
+  TMRQuadForest *coarse = new TMRQuadForest(comm, mesh_order, interp_type);
   if (face_conn){
     copyData(coarse);
 
@@ -3768,30 +3782,14 @@ void TMRQuadForest::evaluateNodeLocations(){
           // Compute the mesh index
           int node = conn[mesh_order*mesh_order*i +
                           ii + jj*mesh_order];
-          if (node >= 0){
-            int index = getLocalNodeNumber(node);
-            if (!flags[index]){
-              flags[index] = 1;
-              surf->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
-                              v + 0.5*d*(1.0 + interp_knots[jj]),
-                              &X[index]);
-            }
+          int index = getLocalNodeNumber(node);
+          if (!flags[index]){
+            flags[index] = 1;
+            surf->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
+                            v + 0.5*d*(1.0 + interp_knots[jj]),
+                            &X[index]);
           }
         }
-      }
-    }
-
-    // Set the dependent node values
-    for ( int i = 0; i < num_dep_nodes; i++ ){
-      int pt = num_dep_nodes-1-i;
-      X[pt].x = X[pt].y = X[pt].z = 0.0;
-
-      for ( int j = dep_ptr[i]; j < dep_ptr[i+1]; j++ ){
-        int node = dep_conn[j];
-        int index = getLocalNodeNumber(node);
-        X[pt].x += dep_weights[j]*X[index].x;
-        X[pt].y += dep_weights[j]*X[index].y;
-        X[pt].z += dep_weights[j]*X[index].z;
       }
     }
   }

@@ -236,7 +236,7 @@ class TMRFaceMesh : public TMREntity {
   void getFace( TMRFace **_surface );
   
   // Mesh the underlying geometric object
-  void mesh( TMRMeshOptions options, 
+  void mesh( TMRMeshOptions options,
              TMRElementFeatureSize *fs );
 
   // Return the type of the underlying mesh

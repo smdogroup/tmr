@@ -34,6 +34,7 @@ class CreateMe(TMR.QuadCreator):
         tnum = quad.tag
         stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, t,
                                      tnum, tmin, tmax)
+        stiff.setRefAxis(np.array([0.0, 0.0, 1.0]))
         elem = elements.MITCShell(order, stiff)
         return elem
 
@@ -115,9 +116,7 @@ def createProblem(forest, bcs, ordering, order=2, nlevels=2,
         assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests,
-                      use_coarse_direct_solve=True, 
-                      use_chebyshev_smoother=False)
+    mg = TMR.createMg(assemblers, forests, omega=0.5)
 
     return assemblers[0], mg
 
@@ -132,11 +131,15 @@ p.add_argument('--ordering', type=str, default='multicolor')
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--ksweight', type=float, default=100.0)
 p.add_argument('--structured', type=int, default=0)
+p.add_argument('--adjoint_error_est', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the type of ordering to use for this problem
 ordering = args.ordering
 ordering = ordering.lower()
+
+# Set whether to use the adjoint error estimate or not
+adjoint_error_est = args.adjoint_error_est
 
 # Set the value of the target length scale in the mesh
 htarget = args.htarget
@@ -240,54 +243,77 @@ for k in range(steps):
     # Create the assembler object
     res = assembler.createVec()
     ans = assembler.createVec()
-    mg.assembleJacobian(1.0, 0.0, 0.0, res)
 
-    # Factor the matrix
-    mg.factor()
-    gmres = TACS.KSM(mg.getMat(), mg, 100, isFlexible=1)
-    gmres.setMonitor(comm, freq=10)
+    use_direct_solve = False
+    if use_direct_solve:
+        mat = assembler.createFEMat()
+        assembler.assembleJacobian(1.0, 0.0, 0.0, res, mat)
+
+        # Create the direct solver
+        pc = TACS.Pc(mat)
+        pc.factor()
+    else:
+        # Solve the linear system
+        mg.assembleJacobian(1.0, 0.0, 0.0, res)
+        mg.factor()
+        pc = mg
+        mat = mg.getMat()
+    
+    gmres = TACS.KSM(mat, pc, 100, isFlexible=0)
+    gmres.setMonitor(comm, freq=1)
     gmres.solve(res, ans)
     ans.scale(-1.0)
 
     # Set the variables
     assembler.setVariables(ans)
 
-    # Compute the strain energy error estimate
-    # err_est, error = TMR.strainEnergyError(assembler, forest)
+    # Output for visualization
+    flag = (TACS.ToFH5.NODES |
+            TACS.ToFH5.DISPLACEMENTS |
+            TACS.ToFH5.STRAINS |
+            TACS.ToFH5.EXTRAS)
+    f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
+    f5.writeToFile('results/solution%02d.f5'%(k))
 
     # Create the function
     func = functions.KSFailure(assembler, ksweight)
     func.setKSFailureType('continuous')
     fval = assembler.evalFunctions([func])[0]
-    
-    # Compute the adjoint
-    res.zeroEntries()
-    assembler.evalSVSens(func, res)
-    
-    # Compute the adjoint solution
-    adjoint = assembler.createVec()
-    gmres.solve(res, adjoint)
-    adjoint.scale(-1.0)
-
-    # Output for visualization
-    flag = (TACS.ToFH5.NODES |
-            TACS.ToFH5.DISPLACEMENTS |
-            TACS.ToFH5.EXTRAS)
-    f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
-    f5.writeToFile('results/solution%02d.f5'%(k))
 
     # Create the refined mesh
     forest_refined, assembler_refined = createRefined(forest, bcs)
-    
-    # Compute the adjoint and use adjoint-based refinement
-    err_est, func_corr, error = \
-        TMR.adjointError(forest, assembler,
-                         forest_refined, assembler_refined, adjoint)
-    
+
+    # Find the refined solution
+    TMR.computeReconSolution(forest, assembler,
+        forest_refined, assembler_refined)
+
+    f5 = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
+    f5.writeToFile('results/solution_refined%02d.f5'%(k))
+
+    if adjoint_error_est:
+        # Compute the adjoint
+        res.zeroEntries()
+        assembler.evalSVSens(func, res)
+
+        # Compute the adjoint solution
+        adjoint = assembler.createVec()
+        gmres.solve(res, adjoint)
+        adjoint.scale(-1.0)
+
+        # Compute the adjoint and use adjoint-based refinement
+        err_est, func_corr, error = \
+            TMR.adjointError(forest, assembler,
+                             forest_refined, assembler_refined, adjoint)
+    else:
+        # Compute the strain energy error estimate
+        func_corr = 0.0
+        err_est, error = TMR.strainEnergyError(forest, assembler,
+            forest_refined, assembler_refined)
+
     # Compute the refinement from the error estimate
     nbins = 60
-    low = -15
-    high = 0
+    low = -5
+    high = 2
     bounds = 10**np.linspace(low, high, nbins+1)
     bins = np.zeros(nbins+2, dtype=np.int)
 
@@ -369,9 +395,9 @@ for k in range(steps):
         # Determine the cutoff values
         cutoff = 0.0
         bin_sum = 0
-        for i in range(len(bins)-1, -1, -1):
+        for i in range(len(bins)-2, -1, -1):
             bin_sum += bins[i]
-            if bin_sum > 0.25*ntotal:
+            if bin_sum > 0.15*ntotal:
                 cutoff = bounds[i]
                 break
 
