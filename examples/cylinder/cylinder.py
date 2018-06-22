@@ -287,8 +287,8 @@ for k in range(steps):
     TMR.computeReconSolution(forest, assembler,
         forest_refined, assembler_refined)
 
-    f5 = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
-    f5.writeToFile('results/solution_refined%02d.f5'%(k))
+    f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
+    f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
 
     if adjoint_error_est:
         # Compute the adjoint
@@ -312,7 +312,7 @@ for k in range(steps):
 
     # Compute the refinement from the error estimate
     nbins = 60
-    low = -5
+    low = -10
     high = 2
     bounds = 10**np.linspace(low, high, nbins+1)
     bins = np.zeros(nbins+2, dtype=np.int)

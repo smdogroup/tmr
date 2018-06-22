@@ -345,6 +345,7 @@ static void eval3rdEnrichmentFuncs2D( const double pt[], double N[] ){
   N[3] = cb;
   N[4] = pt[0]*cb;
   N[5] = pt[0]*pt[0]*cb;
+  N[6] = ca*cb;
 }
 
 /*
@@ -823,7 +824,7 @@ static void computeElemRecon3D( const int vars_per_node,
 
         // Evaluate the Jacobian transformation at this point
         TacsScalar Xd[9], J[9];
-        computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J, 
+        computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J,
                                refined_order*refined_order*refined_order);
 
         // First, compute the contributions to the righ-hand-side. The
@@ -2484,12 +2485,8 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   // The reconstructed adjoint solution
   TacsScalar *adj_refined = new TacsScalar[ vars_per_node*num_refined_nodes ];
 
-  // Extra variables required for velocities/accelerations
-  TacsScalar *dvars = new TacsScalar[ vars_per_node*num_refined_nodes ];
-  TacsScalar *ddvars = new TacsScalar[ vars_per_node*num_refined_nodes ];
-
-  // Allocate the element residual array
-  TacsScalar *res = new TacsScalar[ vars_per_node*num_refined_nodes ];
+  // Allocate the nodal error estimates array
+  TacsScalar *err = new TacsScalar[ num_refined_nodes ];
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
@@ -2501,6 +2498,12 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   int compute_difference = 1;
   TMR_ComputeReconSolution(forest, tacs, forest_refined, tacs_refined,
                            adjoint, adjoint_refined, compute_difference);
+
+  // Create a vector for the predicted nodal errors.
+  TACSBVec *nodal_error = new TACSBVec(tacs_refined->getVarMap(), 1,
+                                       tacs_refined->getBVecDistribute(),
+                                       tacs_refined->getBVecDepNodes());
+  nodal_error->incref();
 
   // Get the auxiliary elements (surface tractions) associated with
   // the element class
@@ -2518,9 +2521,6 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   for ( int elem = 0; elem < nelems; elem++ ){
     // Set the simulation time
     double time = 0.0;
-
-    // Compute the remaining element error
-    TacsScalar elem_error_corr = 0.0;
 
     // Get the element variable values on the coarse mesh
     tacs->getElement(elem, NULL, vars_elem);
@@ -2551,41 +2551,61 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
       }
     }
 
-
     // Get the node locations and the velocity/acceleration variables
     // (these shuold be zero)
     TacsScalar Xpts[3*max_num_nodes];
     TACSElement *element =
-      tacs_refined->getElement(elem, Xpts, NULL, dvars, ddvars);
-
-    // Compute the residual for this element on the refined mesh
-    memset(res, 0, element->numVariables()*sizeof(TacsScalar));
-    element->addResidual(time, res, Xpts,
-                         vars_interp, dvars, ddvars);
-
-    while (aux_count < num_aux_elems && aux[aux_count].num == elem){
-      aux[aux_count].elem->addResidual(time, res, Xpts,
-                                       vars_interp, dvars, ddvars);
-      aux_count++;
-    }
+      tacs_refined->getElement(elem, Xpts);
 
     // Get the node numbers for the refined mesh
     int len = 0;
     const int *nodes;
     tacs_refined->getElement(elem, &nodes, &len);
 
-    // Get the adjoint variables and residual for the refined mesh
+    // Get the adjoint variables for this element
     adjoint_refined->getValues(len, nodes, adj_refined);
 
-    // Add in the contribution to the error from this element
-    for ( int j = 0; j < element->numVariables(); j++ ){
-      elem_error_corr += res[j]*adj_refined[j];
+    // Compute the localized error on the refined mesh
+    memset(err, 0, element->numNodes()*sizeof(TacsScalar));
+    element->addLocalizedError(time, err, adj_refined, Xpts, vars_interp);
+
+    // Add the contribution from any forces
+    while (aux_count < num_aux_elems && aux[aux_count].num == elem){
+      aux[aux_count].elem->addLocalizedError(time, err,
+                                             adj_refined, Xpts, vars_interp);
+      aux_count++;
     }
 
-    // Add the contribution to the total remaining error and the
-    // adjoint correction.
-    total_adjoint_corr += elem_error_corr;
-    error[elem] = fabs(TacsRealPart(elem_error_corr));
+    // Add the contributions to the nodal error
+    nodal_error->setValues(len, nodes, err, TACS_ADD_VALUES);
+
+    // Add up the total adjoint correction
+    for ( int i = 0; i < element->numNodes(); i++ ){
+      total_adjoint_corr += err[i];
+    }
+  }
+
+  // Finish setting the values into the nodal error array
+  nodal_error->beginSetValues(TACS_ADD_VALUES);
+  nodal_error->endSetValues(TACS_ADD_VALUES);
+
+  // Finish setting the values into the array
+  for ( int elem = 0; elem < nelems; elem++ ){
+    // Get the node numbers for the refined mesh
+    int len = 0;
+    const int *nodes;
+    tacs_refined->getElement(elem, &nodes, &len);
+
+    // Get the adjoint variables for this element
+    nodal_error->getValues(len, nodes, err);
+
+    // Compute the element indicator error as a function of the nodal
+    // error estimate.
+    error[elem] =
+      0.25*fabs(TacsRealPart(err[0] +
+                             err[refined_order-1] +
+                             err[refined_order*(refined_order-1)] +
+                             err[refined_order*refined_order-1]));
     total_error_remain += error[elem];
   }
 
@@ -2601,10 +2621,9 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   delete [] vars_elem;
   delete [] vars_interp;
   delete [] adj_refined;
-  delete [] dvars;
-  delete [] ddvars;
-  delete [] res;
+  delete [] err;
   adjoint_refined->decref();
+  nodal_error->decref();
 
   // Set the adjoint residual correction
   if (adj_corr){
@@ -2668,12 +2687,8 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   // The reconstructed adjoint solution
   TacsScalar *adj_refined = new TacsScalar[ vars_per_node*num_refined_nodes ];
 
-  // Extra variables required for velocities/accelerations
-  TacsScalar *dvars = new TacsScalar[ vars_per_node*num_refined_nodes ];
-  TacsScalar *ddvars = new TacsScalar[ vars_per_node*num_refined_nodes ];
-
   // Allocate the element residual array
-  TacsScalar *res = new TacsScalar[ vars_per_node*num_refined_nodes ];
+  TacsScalar *err = new TacsScalar[ num_refined_nodes ];
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
@@ -2685,6 +2700,12 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   int compute_difference = 1;
   TMR_ComputeReconSolution(forest, tacs, forest_refined, tacs_refined,
                            adjoint, adjoint_refined, compute_difference);
+
+  // Create a vector for the predicted nodal errors.
+  TACSBVec *nodal_error = new TACSBVec(tacs_refined->getVarMap(), 1,
+                                       tacs_refined->getBVecDistribute(),
+                                       tacs_refined->getBVecDepNodes());
+  nodal_error->incref();
 
   // Get the auxiliary elements (surface tractions) associated with the
   // element class
@@ -2702,9 +2723,6 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   for ( int elem = 0; elem < nelems; elem++ ){
     // Set the simulation time
     double time = 0.0;
-
-    // Compute the remaining element error
-    TacsScalar elem_error_corr = 0.0;
 
     // Get the element variable values on the coarse mesh
     tacs->getElement(elem, NULL, vars_elem);
@@ -2744,36 +2762,66 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
     // (these shuold be zero)
     TacsScalar Xpts[3*max_num_nodes];
     TACSElement *element =
-      tacs_refined->getElement(elem, Xpts, NULL, dvars, ddvars);
-
-    // Compute the residual for this element on the refined mesh
-    memset(res, 0, element->numVariables()*sizeof(TacsScalar));
-    element->addResidual(time, res, Xpts,
-                         vars_interp, dvars, ddvars);
-
-    while (aux_count < num_aux_elems && aux[aux_count].num == elem){
-      aux[aux_count].elem->addResidual(time, res, Xpts,
-                                       vars_interp, dvars, ddvars);
-      aux_count++;
-    }
+      tacs_refined->getElement(elem, Xpts);
 
     // Get the node numbers for the refined mesh
     int len = 0;
     const int *nodes;
     tacs_refined->getElement(elem, &nodes, &len);
 
-    // Get the adjoint variables and residual for the refined mesh
+    // Get the adjoint variables for this element
     adjoint_refined->getValues(len, nodes, adj_refined);
 
-    // Add in the contribution to the error from this element
-    for ( int j = 0; j < element->numVariables(); j++ ){
-      elem_error_corr += res[j]*adj_refined[j];
+    // Compute the localized error on the refined mesh
+    memset(err, 0, element->numNodes()*sizeof(TacsScalar));
+    element->addLocalizedError(time, err, adj_refined, Xpts, vars_interp);
+
+    // Add the contribution from any forces
+    while (aux_count < num_aux_elems && aux[aux_count].num == elem){
+      aux[aux_count].elem->addLocalizedError(time, err,
+                                             adj_refined, Xpts, vars_interp);
+      aux_count++;
     }
 
-    // Add the contribution to the total remaining error and the
-    // adjoint correction.
-    total_adjoint_corr += elem_error_corr;
-    error[elem] = fabs(TacsRealPart(elem_error_corr));
+    // Add the contributions to the nodal error
+    nodal_error->setValues(len, nodes, err, TACS_ADD_VALUES);
+
+    // Add up the total adjoint correction
+    for ( int i = 0; i < element->numNodes(); i++ ){
+      total_adjoint_corr += err[i];
+    }
+  }
+
+
+  // Finish setting the values into the nodal error array
+  nodal_error->beginSetValues(TACS_ADD_VALUES);
+  nodal_error->endSetValues(TACS_ADD_VALUES);
+
+  // Finish setting the values into the array
+  for ( int elem = 0; elem < nelems; elem++ ){
+    // Get the node numbers for the refined mesh
+    int len = 0;
+    const int *nodes;
+    tacs_refined->getElement(elem, &nodes, &len);
+
+    // Get the adjoint variables for this element
+    nodal_error->getValues(len, nodes, err);
+
+    // Compute the element indicator error as a function of the nodal
+    // error estimate.
+    TacsScalar estimate = 0.0;
+    for ( int k = 0; k < 2; k++ ){
+      for ( int j = 0; j < 2; j++ ){
+        for ( int i = 0; i < 2; i++ ){
+          estimate +=
+            err[(refined_order-1)*i +
+                (refined_order-1)*j*refined_order +
+                (refined_order-1)*k*refined_order*refined_order];
+        }
+      }
+    }
+
+    error[elem] = 0.125*fabs(TacsRealPart(estimate));
     total_error_remain += error[elem];
   }
 
@@ -2789,9 +2837,7 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   delete [] vars_elem;
   delete [] vars_interp;
   delete [] adj_refined;
-  delete [] dvars;
-  delete [] ddvars;
-  delete [] res;
+  delete [] err;
   adjoint_refined->decref();
 
   // Set the adjoint residual correction
@@ -2802,7 +2848,6 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   // Return the error
   return total_error_remain;
 }
-
 
 /*
   Evaluate the stress constraints on a more-refined mesh
@@ -2925,7 +2970,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   const double *gaussPts, *gaussWts;
 
   //int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
-  int num_quad_pts = 
+  int num_quad_pts =
     FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
 
   // int num_quad_pts =
@@ -3085,7 +3130,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 /*
   Evaluate the derivative w.r.t. state and design vectors
 */
-void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size, 
+void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
                                         TACSBVec *dfdu ){
   memset(dfdx, 0, size*sizeof(TacsScalar));
 
@@ -3120,7 +3165,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
 
   // Get the quadrature points/weights
   const double *gaussPts, *gaussWts;
-  int num_quad_pts = 
+  int num_quad_pts =
     FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
   // int num_quad_pts =
   //   FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
@@ -3133,12 +3178,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   // Get the higher-order points
   TMRPoint *X;
   interp_forest->getPoints(&X);
-  
+
   // Set the matrix dimensions
   int m = nenrich;
   int n = neq;
   int p = num_nodes; //num_quad_pts*num_quad_pts*num_quad_pts;
-  
+
   // Initialize variables
   TacsScalar *dfdu_elem = new TacsScalar[3*p];
   TacsScalar *dfdubar = new TacsScalar[3*m];
@@ -3178,7 +3223,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
       Xpts[3*j+1] = X[node].y;
       Xpts[3*j+2] = X[node].z;
     }
-    
+
     // Compute the values of the enrichment coefficient for each
     // degree of freedom
     computeElemRecon3D(vars_per_node, forest, interp_forest,
@@ -3434,7 +3479,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   dfdu->endSetValues(TACS_ADD_VALUES);
 
   tacs->applyBCs(dfdu);
-  
+
   // Free allocated memory
   delete [] dfdu_elem;
   delete [] dfdubar;
@@ -3697,7 +3742,7 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
 
 /*
   Output the von Misess stress from the reconstructed solution to a
-  tecplot file 
+  tecplot file
 */
 void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
                                            const char *fname,
@@ -3720,7 +3765,7 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
 
   // Get the quadrature points/weights
   const double *gaussPts, *gaussWts;
-  int num_quad_pts = 
+  int num_quad_pts =
     FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+1,
                               &gaussPts, &gaussWts);
 
@@ -3809,7 +3854,7 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
             Xpt[2] += Xpts[3*k+2]*N[k];
           }
 
-          fprintf(fp, "%e %e %e %e\n", 
+          fprintf(fp, "%e %e %e %e\n",
                   Xpt[0], Xpt[1], Xpt[2], svm);
           // fprintf(fp, "%f %f %f %e %e %e %e %e %e %e\n",
           //        Xpt[0], Xpt[1], Xpt[2],

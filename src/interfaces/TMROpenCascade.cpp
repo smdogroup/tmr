@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,8 +34,8 @@ TMR_OCCCurve::~TMR_OCCCurve(){}
 void TMR_OCCCurve::getRange( double *tmin, double *tmax ){
   *tmin = curve->FirstParameter();
   *tmax = curve->LastParameter();
-} 
- 
+}
+
 int TMR_OCCCurve::evalPoint( double t, TMRPoint *X ){
   gp_Pnt p;
   curve->D0(t, p);
@@ -50,7 +50,7 @@ int TMR_OCCCurve::invEvalPoint( TMRPoint X, double *t ){
   GeomAPI_ProjectPointOnCurve projection(pt, curve);
   if (projection.NbPoints() == 0){
     return 1;
-  } 
+  }
   else {
     *t = projection.LowerDistanceParameter();
     return 0;
@@ -90,7 +90,7 @@ void TMR_OCCSurface::getRange( double *umin, double *vmin,
                                double *umax, double *vmax ){
   surf->Bounds(*umin, *umax, *vmin, *vmax);
 }
- 
+
 int TMR_OCCSurface::evalPoint( double u, double v, TMRPoint *X ){
   gp_Pnt p;
   surf->D0(u, v, p);
@@ -99,20 +99,20 @@ int TMR_OCCSurface::evalPoint( double u, double v, TMRPoint *X ){
   X->z = p.Z();
   return 0;
 }
-  
+
 int TMR_OCCSurface::invEvalPoint( TMRPoint X, double *u, double *v ){
   gp_Pnt pt(X.x, X.y, X.z);
   GeomAPI_ProjectPointOnSurf projection(pt, surf);
   if (projection.NbPoints() == 0){
     return 1;
-  } 
+  }
   else {
     projection.LowerDistanceParameters(*u, *v);
     return 0;
   }
 }
 
-int TMR_OCCSurface::evalDeriv( double u, double v, 
+int TMR_OCCSurface::evalDeriv( double u, double v,
                                TMRPoint *Xu, TMRPoint *Xv ){
   gp_Pnt p;
   gp_Vec pu, pv;
@@ -126,8 +126,8 @@ int TMR_OCCSurface::evalDeriv( double u, double v,
   return 0;
 }
 
-int TMR_OCCSurface::eval2ndDeriv( double u, double v, 
-                                  TMRPoint *Xuu, 
+int TMR_OCCSurface::eval2ndDeriv( double u, double v,
+                                  TMRPoint *Xuu,
                                   TMRPoint *Xuv,
                                   TMRPoint *Xvv ){
   gp_Pnt p;
@@ -178,7 +178,7 @@ int TMR_OCCVertex::getParamOnEdge( TMREdge *edge, double *t ){
 
 int TMR_OCCVertex::getParamsOnFace( TMRFace *face,
                                     double *u, double *v ){
-  TMR_OCCFace *f = dynamic_cast<TMR_OCCFace*>(face);  
+  TMR_OCCFace *f = dynamic_cast<TMR_OCCFace*>(face);
   if (f){
     TopoDS_Face occ_face;
     f->getFaceObject(occ_face);
@@ -209,7 +209,7 @@ void TMR_OCCEdge::getRange( double *tmin, double *tmax ){
   BRep_Tool::Range(edge, *tmin, *tmax);
 }
 
-int TMR_OCCEdge::getParamsOnFace( TMRFace *surface, double t, 
+int TMR_OCCEdge::getParamsOnFace( TMRFace *surface, double t,
                                   int dir, double *u, double *v ){
   TMR_OCCFace *f = dynamic_cast<TMR_OCCFace*>(surface);
   if (f){
@@ -243,7 +243,7 @@ int TMR_OCCEdge::getParamsOnFace( TMRFace *surface, double t,
   // Fall through to the underlying implementation
   return TMREdge::getParamsOnFace(surface, t, dir, u, v);
 }
-  
+
 int TMR_OCCEdge::evalPoint( double t, TMRPoint *X ){
   BRepAdaptor_Curve curve(edge);
   gp_Pnt p;
@@ -262,7 +262,7 @@ int TMR_OCCEdge::invEvalPoint( TMRPoint X, double *t ){
   GeomAPI_ProjectPointOnCurve projection(pt, curve);
   if (projection.NbPoints() == 0){
     return 1;
-  } 
+  }
   else {
     *t = projection.LowerDistanceParameter();
     return 0;
@@ -333,14 +333,14 @@ int TMR_OCCFace::invEvalPoint( TMRPoint X, double *u, double *v ){
   if (projection.NbPoints() == 0){
     *u = *v = 0.0;
     return 1;
-  } 
+  }
   else {
     projection.LowerDistanceParameters(*u, *v);
     return 0;
   }
 }
 
-int TMR_OCCFace::evalDeriv( double u, double v, 
+int TMR_OCCFace::evalDeriv( double u, double v,
                             TMRPoint *Xu, TMRPoint *Xv ){
   const Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
   gp_Pnt p;
@@ -355,7 +355,7 @@ int TMR_OCCFace::evalDeriv( double u, double v,
   return 0;
 }
 
-int TMR_OCCFace::eval2ndDeriv( double u, double v, 
+int TMR_OCCFace::eval2ndDeriv( double u, double v,
                                TMRPoint *Xuu,
                                TMRPoint *Xuv,
                                TMRPoint *Xvv ){
@@ -386,7 +386,7 @@ void TMR_OCCFace::getFaceObject( TopoDS_Face &f ){
   Remove from a compound, those objects that are not referenced by the
   given TopoAbs type
 */
-void TMR_RemoveFloatingShapes( TopoDS_Compound &compound, 
+void TMR_RemoveFloatingShapes( TopoDS_Compound &compound,
                                TopAbs_ShapeEnum shape_type ){
   // Keep track of what we have already added to the new compound
   TopTools_IndexedMapOfShape shapes;
@@ -439,7 +439,7 @@ void TMR_RemoveFloatingShapes( TopoDS_Compound &compound,
     }
   }
 
-  if (shape_type != TopAbs_SHELL){ 
+  if (shape_type != TopAbs_SHELL){
     TopExp_Explorer shellExp(compound, TopAbs_SHELL);
     for ( ; shellExp.More(); shellExp.Next() ){
       TopoDS_Shape shell = shellExp.Current();
@@ -479,7 +479,7 @@ void TMR_RemoveFloatingShapes( TopoDS_Compound &compound,
         }
       }
     }
-  
+
     if (shape_type != TopAbs_FACE){
       TopExp_Explorer faceExp(compound, TopAbs_FACE);
       for ( ; faceExp.More(); faceExp.Next() ){
@@ -563,7 +563,7 @@ TMRModel* TMR_LoadModelFromIGESFile( const char *filename,
     return NULL;
   }
   fclose(fp);
-  
+
   IGESControl_Reader reader;
   IFSelect_ReturnStatus status = reader.ReadFile(filename);
   if (status != IFSelect_RetDone){
@@ -609,7 +609,7 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename,
     return NULL;
   }
   fclose(fp);
-  
+
   STEPControl_Reader reader;
   IFSelect_ReturnStatus status = reader.ReadFile(filename);
   if (status != IFSelect_RetDone){
@@ -640,7 +640,7 @@ TMRModel* TMR_LoadModelFromSTEPFile( const char *filename,
     builder.Add(compound, shape);
   }
 
-  TMR_RemoveFloatingShapes(compound, TopAbs_FACE);
+  TMR_RemoveFloatingShapes(compound, TopAbs_EDGE);
 
   return TMR_LoadModelFromCompound(compound, print_level);
 }
@@ -727,7 +727,7 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
     TopExp::Vertices(e, v1, v2);
     int idx1 = verts.FindIndex(v1);
     int idx2 = verts.FindIndex(v2);
-    all_edges[index-1]->setVertices(all_vertices[idx1-1], 
+    all_edges[index-1]->setVertices(all_vertices[idx1-1],
                                     all_vertices[idx2-1]);
   }
 
@@ -737,7 +737,7 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
     TopoDS_Face face_orig = TopoDS::Face(faces(index));
     TopoDS_Face face = TopoDS::Face(faces(index).Oriented(TopAbs_FORWARD));
 
-    // Check if the orientation of the face is flipped relative 
+    // Check if the orientation of the face is flipped relative
     // to the natural orientation of the surface
     int orient = 1;
     if (face_orig.Orientation() == TopAbs_REVERSED){

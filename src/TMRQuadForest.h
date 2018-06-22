@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,7 +41,7 @@ class TMRQuadForest : public TMREntity {
  public:
   // This is somewhat arbitrary (could be as high as 40)
   static const int MAX_ORDER = 16;
-  
+
   TMRQuadForest( MPI_Comm _comm, int mesh_order=2,
                  TMRInterpolationType interp_type=TMR_GAUSS_LOBATTO_POINTS );
   ~TMRQuadForest();
@@ -60,9 +60,9 @@ class TMRQuadForest : public TMREntity {
   void setConnectivity( int _num_nodes,
                         const int *_face_conn,
                         int _num_faces );
-  void setFullConnectivity( int _num_nodes, 
+  void setFullConnectivity( int _num_nodes,
                             int _num_edges,
-                            int _num_faces, 
+                            int _num_faces,
                             const int *_face_conn,
                             const int *_face_edge_conn );
 
@@ -81,7 +81,7 @@ class TMRQuadForest : public TMREntity {
   // Create the forest of quadtrees
   // ----------------------------
   void createTrees( int refine_level );
-  void createRandomTrees( int nrand=10, 
+  void createRandomTrees( int nrand=10,
                           int min_level=0, int max_level=8 );
 
   // Duplicate or coarsen the forest
@@ -104,7 +104,7 @@ class TMRQuadForest : public TMREntity {
 
   // Retrieve the dependent mesh nodes
   // ---------------------------------
-  void getNodeConn( const int **_conn=NULL, 
+  void getNodeConn( const int **_conn=NULL,
                     int *_num_elements=NULL,
                     int *_num_owned_nodes=NULL,
                     int *_num_local_nodes=NULL );
@@ -120,7 +120,7 @@ class TMRQuadForest : public TMREntity {
   // -------------------------------------------------
   TMRQuadrantArray* getQuadsWithAttribute( const char *attr );
   int getNodesWithAttribute( const char *attr, int **nodes );
-  
+
   // Get the node-processor ownership range
   // --------------------------------------
   int getOwnedNodeRange( const int **_node_range );
@@ -138,8 +138,8 @@ class TMRQuadForest : public TMREntity {
 
   // Retrieve the connectivity information
   // -------------------------------------
-  void getConnectivity( int *_nfaces, int *_nedges, int *_nnodes, 
-                        const int **_face_conn, 
+  void getConnectivity( int *_nfaces, int *_nedges, int *_nnodes,
+                        const int **_face_conn,
                         const int **_face_edge_conn );
   void getInverseConnectivity( const int **_node_face_conn,
                                const int **_node_face_ptr,
@@ -155,14 +155,14 @@ class TMRQuadForest : public TMREntity {
   // -----------------------------
   TMRQuadrantArray *distributeQuadrants( TMRQuadrantArray *list,
                                          int use_tags=0,
-                                         int **quad_ptr=NULL, 
+                                         int **quad_ptr=NULL,
                                          int **quad_recv_ptr=NULL,
                                          int include_local=0,
                                          int use_node_index=0 );
   TMRQuadrantArray *sendQuadrants( TMRQuadrantArray *list,
                                    const int *quad_ptr,
                                    const int *quad_recv_ptr,
-                                   int use_node_index=0 );  
+                                   int use_node_index=0 );
 
   // Write out files showing the connectivity
   // ----------------------------------------
@@ -200,24 +200,24 @@ class TMRQuadForest : public TMREntity {
                                int size, int *ptr );
   void matchTagIntervals( TMRQuadrant *array,
                           int size, int *ptr );
- 
+
   // Balance-related routines
   // ------------------------
   // Balance the quadrant across the local tree and the forest
   void balanceQuadrant( TMRQuadrant *quad,
-                        TMRQuadrantHash *hash, 
+                        TMRQuadrantHash *hash,
                         TMRQuadrantHash *ext_hash,
                         TMRQuadrantQueue *queue,
                         const int balance_corner,
                         const int balance_tree );
 
   // Add adjacent quadrants to the hashes/queues for balancing
-  void addEdgeNeighbors( int edge_index, 
+  void addEdgeNeighbors( int edge_index,
                          TMRQuadrant p,
                          TMRQuadrantHash *hash,
                          TMRQuadrantHash *ext_hash,
                          TMRQuadrantQueue *queue );
-  void addCornerNeighbors( int corner, 
+  void addCornerNeighbors( int corner,
                            TMRQuadrant p,
                            TMRQuadrantHash *hash,
                            TMRQuadrantHash *ext_hash,
@@ -226,11 +226,11 @@ class TMRQuadForest : public TMREntity {
   // Add quadrants to adjacent non-owner processor queues
   void addAdjacentEdgeToQueue( int edge_index,
                                TMRQuadrant p,
-                               TMRQuadrantQueue *queue, 
+                               TMRQuadrantQueue *queue,
                                TMRQuadrant orig );
   void addAdjacentCornerToQueue( int corner,
                                  TMRQuadrant p,
-                                 TMRQuadrantQueue *queue, 
+                                 TMRQuadrantQueue *queue,
                                  TMRQuadrant orig );
 
   // Exchange non-local quadrant neighbors
@@ -256,7 +256,7 @@ class TMRQuadForest : public TMREntity {
 
   // Create the dependent node connectivity
   void createDependentConn( const int *node_nums,
-                            TMRQuadrantArray *nodes, 
+                            TMRQuadrantArray *nodes,
                             const int *node_offset );
 
   // Compute the node locations
@@ -267,7 +267,7 @@ class TMRQuadForest : public TMREntity {
                          TMRQuadForest *coarse, TMRQuadrant *quad,
                          TMRIndexWeight *weights, double *tmp );
 
-  // The communicator 
+  // The communicator
   MPI_Comm comm;
   int mpi_rank, mpi_size;
 
@@ -278,19 +278,6 @@ class TMRQuadForest : public TMREntity {
   // The owner quadrant ranges for each processor. Note that this is
   // in the quadrant space not the node space
   TMRQuadrant *owners;
-
-  // The following data is the same across all processors
-  // ----------------------------------------------------
-  // Set the nodes/edges/faces
-  int num_nodes, num_edges, num_faces;
-
-  // Information for the face/edge/node connectivity
-  int *face_conn, *face_edge_conn;
-  int *node_face_ptr, *node_face_conn;
-  int *edge_face_ptr, *edge_face_conn;
-
-  // Set the node/edge owners
-  int *node_face_owners, *edge_face_owners;
 
   // The mesh order/connectivity information
   int mesh_order;
@@ -315,7 +302,7 @@ class TMRQuadForest : public TMREntity {
 
   // The array of all quadrants
   TMRQuadrantArray *quadrants;
-  
+
   // The quadrants that are adjacent to this processor
   TMRQuadrantArray *adjacent;
 
@@ -324,6 +311,53 @@ class TMRQuadForest : public TMREntity {
 
   // The topology of the underlying model (if any)
   TMRTopology *topo;
+
+    // Class for the block connectivity
+  class TMRFaceConn : public TMREntity {
+  public:
+    TMRFaceConn(){
+      // Zero out the nodes/edges/faces and all data
+      num_nodes = 0;
+      num_edges = 0;
+      num_faces = 0;
+
+      // Set all the unallocated pointers to NULL
+      face_conn = NULL;
+      face_edge_conn = NULL;
+      node_face_ptr = NULL;
+      node_face_conn = NULL;
+      edge_face_ptr = NULL;
+      edge_face_conn = NULL;
+      edge_face_owners = NULL;
+      node_face_owners = NULL;
+    }
+    ~TMRFaceConn(){
+      // Free the connectivity data
+      if (face_conn){ delete [] face_conn; }
+      if (face_edge_conn){ delete [] face_edge_conn; }
+      if (node_face_ptr){ delete [] node_face_ptr; }
+      if (node_face_conn){ delete [] node_face_conn; }
+      if (edge_face_ptr){ delete [] edge_face_ptr; }
+      if (edge_face_conn){ delete [] edge_face_conn; }
+
+      // Free the ownership data
+      if (edge_face_owners){ delete [] edge_face_owners; }
+      if (node_face_owners){ delete [] node_face_owners; }
+    }
+
+    // The following data is the same across all processors
+    // ----------------------------------------------------
+    // Set the nodes/edges/faces
+    int num_nodes, num_edges, num_faces;
+
+    // Information for the face/edge/node connectivity
+    int *face_conn, *face_edge_conn;
+    int *node_face_ptr, *node_face_conn;
+    int *edge_face_ptr, *edge_face_conn;
+
+    // Set the node/edge owners
+    int *node_face_owners, *edge_face_owners;
+  } *fdata;
 };
 
 #endif // TMR_QUADTREE_FOREST_H
