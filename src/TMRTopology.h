@@ -282,7 +282,7 @@ class TMRModel : public TMREntity {
   // error messages if something doesn't make sense.
   int verify();
 
-  // The verticies, curves and surfaces that define a BRep
+  // The vertices, curves and surfaces that define a BRep
   int num_vertices, num_edges, num_faces, num_volumes;
   TMRVertex **vertices;
   TMREdge **edges;

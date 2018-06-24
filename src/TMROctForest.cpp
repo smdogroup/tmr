@@ -1584,6 +1584,16 @@ void TMROctForest::getConnectivity( int *_nblocks, int *_nfaces,
     if (_block_edge_conn){ *_block_edge_conn = bdata->block_edge_conn; }
     if (_block_face_ids){ *_block_face_ids = bdata->block_face_ids; }
   }
+  else {
+    if (_nblocks){ *_nblocks = 0; }
+    if (_nfaces){ *_nfaces = 0; }
+    if (_nedges){ *_nedges = 0; }
+    if (_nnodes){ *_nnodes = 0; }
+    if (_block_conn){ *_block_conn = NULL; }
+    if (_block_face_conn){ *_block_face_conn = NULL; }
+    if (_block_edge_conn){ *_block_edge_conn = NULL; }
+    if (_block_face_ids){ *_block_face_ids = NULL; }
+  }
 }
 
 /*
@@ -1602,6 +1612,14 @@ void TMROctForest::getInverseConnectivity( const int **_node_block_conn,
     if (_edge_block_ptr){ *_edge_block_ptr = bdata->edge_block_ptr; }
     if (_face_block_conn){ *_face_block_conn = bdata->face_block_conn; }
     if (_face_block_ptr){ *_face_block_ptr = bdata->face_block_ptr; }
+  }
+  else {
+    if (_node_block_conn){ *_node_block_conn = NULL; }
+    if (_node_block_ptr){ *_node_block_ptr = NULL; }
+    if (_edge_block_conn){ *_edge_block_conn = NULL; }
+    if (_edge_block_ptr){ *_edge_block_ptr = NULL; }
+    if (_face_block_conn){ *_face_block_conn = NULL; }
+    if (_face_block_ptr){ *_face_block_ptr = NULL; }
   }
 }
 

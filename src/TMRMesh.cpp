@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -1108,7 +1108,7 @@ void TMRBoxFeatureSize::BoxNode::addBox( BoxSize *ptr ){
     // to add it to the list of local boxes
     if (num_boxes < MAX_NUM_BOXES){
       boxes[num_boxes] = ptr;
-      num_boxes++;      
+      num_boxes++;
       return;
     }
     else {
@@ -1116,11 +1116,11 @@ void TMRBoxFeatureSize::BoxNode::addBox( BoxSize *ptr ){
       for ( int k = 0; k < 2; k++ ){
         double zl = m.z + (k-1)*d.z;
         double zu = m.z + k*d.z;
-    
+
         for ( int j = 0; j < 2; j++ ){
           double yl = m.y + (j-1)*d.y;
           double yu = m.y + j*d.y;
-       
+
           for ( int i = 0; i < 2; i++ ){
             double xl = m.x + (i-1)*d.x;
             double xu = m.x + i*d.x;
@@ -1151,7 +1151,7 @@ void TMRBoxFeatureSize::BoxNode::addBox( BoxSize *ptr ){
         }
         num_boxes--;
       }
-      
+
       // Free the boxes
       delete [] boxes;
       boxes = NULL;
@@ -1176,11 +1176,11 @@ void TMRBoxFeatureSize::BoxNode::getSize( TMRPoint p, double *hval ){
   for ( int k = 0; k < 2; k++ ){
     double zl = m.z + (k-1)*d.z;
     double zu = m.z + k*d.z;
-    
+
     for ( int j = 0; j < 2; j++ ){
       double yl = m.y + (j-1)*d.y;
       double yu = m.y + j*d.y;
-       
+
       for ( int i = 0; i < 2; i++ ){
         double xl = m.x + (i-1)*d.x;
         double xu = m.x + i*d.x;
@@ -4967,7 +4967,6 @@ TMRModel* TMRMesh::createModelFromMesh(){
   // Create a searchable array that stores the edge number and the two
   // connecting node numbers. The node numbers are sorted such that
   // the lowest one comes first. This enables fast sorting/searching
-  // (based on a Morton ordering).
   int *sorted_edges = new int[ 3*num_mesh_edges ];
 
   // Populate the sorted_edges array, sorting each edge as we go...

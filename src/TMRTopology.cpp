@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,8 +29,8 @@ TMR_EXTERN_C_BEGIN
 TMR_EXTERN_C_END
 
 /*
-  Perform an inverse evaluation by obtaining the underlying 
-  parametrization on the specified curve 
+  Perform an inverse evaluation by obtaining the underlying
+  parametrization on the specified curve
 */
 int TMRVertex::getParamOnEdge( TMREdge *edge, double *t ){
   TMRPoint p;
@@ -119,15 +119,15 @@ int TMREdge::evalDeriv( double t, TMRPoint *Xt ){
   int fail = 1;
 
   // Retrieve the parameter bounds for the curve
-  double tmin, tmax; 
+  double tmin, tmax;
   getRange(&tmin, &tmax);
 
   if (t >= tmin && t <= tmax){
-    // Evaluate the point at the original 
+    // Evaluate the point at the original
     TMRPoint p;
     fail = evalPoint(t, &p);
     if (fail){ return fail; }
-    
+
     // Compute the approximate derivative using a forward
     // difference
     if (t + deriv_step_size <= tmax){
@@ -160,22 +160,22 @@ int TMREdge::eval2ndDeriv( double t, TMRPoint *Xtt ){
   int fail = 1;
 
   // Retrieve the parameter bounds for the curve
-  double tmin, tmax; 
+  double tmin, tmax;
   getRange(&tmin, &tmax);
 
   if (t >= tmin && t <= tmax){
-    // Evaluate the point at the original 
+    // Evaluate the point at the original
     TMRPoint p;
     fail = evalDeriv(t, &p);
     if (fail){ return fail; }
-    
+
     // Compute the approximate derivative using a forward
     // difference
     if (t + deriv_step_size <= tmax){
       TMRPoint p2;
       fail = evalDeriv(t + deriv_step_size, &p2);
       if (fail){ return fail; }
-      
+
       Xtt->x = (p2.x - p.x)/deriv_step_size;
       Xtt->y = (p2.y - p.y)/deriv_step_size;
       Xtt->z = (p2.z - p.z)/deriv_step_size;
@@ -197,7 +197,7 @@ int TMREdge::eval2ndDeriv( double t, TMRPoint *Xtt ){
 /*
   Find the point on the surface closest to the point C(t)
 */
-int TMREdge::getParamsOnFace( TMRFace *face, double t, 
+int TMREdge::getParamsOnFace( TMRFace *face, double t,
                               int dir, double *u, double *v ){
   TMRPoint p;
   int fail = evalPoint(t, &p);
@@ -272,7 +272,7 @@ void TMREdge::writeToVTK( const char *filename ){
     fprintf(fp, "# vtk DataFile Version 3.0\n");
     fprintf(fp, "vtk output\nASCII\n");
     fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
-    
+
     // Write out the points
     fprintf(fp, "POINTS %d float\n", npts);
     for ( int k = 0; k < npts; k++ ){
@@ -282,31 +282,31 @@ void TMREdge::writeToVTK( const char *filename ){
       // Evaluate the point
       TMRPoint p;
       evalPoint(t, &p);
-      
+
       // Write out the point
       fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
     }
-    
+
     // Write out the cell values
     fprintf(fp, "\nCELLS %d %d\n", npts-1, 3*(npts-1));
     for ( int k = 0; k < npts-1; k++ ){
       fprintf(fp, "2 %d %d\n", k, k+1);
     }
-    
+
     // Write out the cell types
     fprintf(fp, "\nCELL_TYPES %d\n", npts-1);
     for ( int k = 0; k < npts-1; k++ ){
       fprintf(fp, "%d\n", 3);
     }
-    
+
     fclose(fp);
-  } 
+  }
 }
 
 /*
   Create the edge loop object
 */
-TMREdgeLoop::TMREdgeLoop( int _nedges, TMREdge *_edges[], 
+TMREdgeLoop::TMREdgeLoop( int _nedges, TMREdge *_edges[],
                           const int _dir[] ){
   int fail = 0;
   if (_nedges == 0){
@@ -329,7 +329,7 @@ TMREdgeLoop::TMREdgeLoop( int _nedges, TMREdge *_edges[],
     vnext = v2;
     if (i == _nedges-1){
       if (vinit != vnext){
-        fprintf(stderr, 
+        fprintf(stderr,
                 "TMREdgeLoop error: Edge loop must be closed\n");
         fail = 1;
       }
@@ -368,7 +368,7 @@ TMREdgeLoop::~TMREdgeLoop(){
 /*
   Retrieve the edge loop edges
 */
-void TMREdgeLoop::getEdgeLoop( int *_nedges, TMREdge **_edges[], 
+void TMREdgeLoop::getEdgeLoop( int *_nedges, TMREdge **_edges[],
                                const int *_dir[] ){
   if (_nedges){ *_nedges = nedges; }
   if (_edges){ *_edges = edges; }
@@ -422,7 +422,7 @@ int TMRFace::getOrientation(){
 /*
   Evaluate the derivative using a finite-difference step size
 */
-int TMRFace::evalDeriv( double u, double v, 
+int TMRFace::evalDeriv( double u, double v,
                         TMRPoint *Xu, TMRPoint *Xv ){
   int fail = 0;
 
@@ -432,7 +432,7 @@ int TMRFace::evalDeriv( double u, double v,
 
   if (u >= umin && u <= umax &&
       v >= vmin && v <= vmax){
-    // Evaluate the point at the original 
+    // Evaluate the point at the original
     TMRPoint p;
     fail = evalPoint(u, v, &p);
 
@@ -488,7 +488,7 @@ int TMRFace::evalDeriv( double u, double v,
 /*
   Evaluate the second derivative using a finite-difference step size
 */
-int TMRFace::eval2ndDeriv( double u, double v, 
+int TMRFace::eval2ndDeriv( double u, double v,
                            TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv ){
   int fail = 0;
 
@@ -498,7 +498,7 @@ int TMRFace::eval2ndDeriv( double u, double v,
 
   if (u >= umin && u <= umax &&
       v >= vmin && v <= vmax){
-    // Evaluate the point at the original 
+    // Evaluate the point at the original
     TMRPoint pu, pv;
     fail = evalDeriv(u, v, &pu, &pv);
 
@@ -659,7 +659,7 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
     TMRFace **faces;
     const int *dir;
     volume->getFaces(&num_faces, &faces, &dir);
-    
+
     // Find the indices of this face and the source - if they exist
     for ( int i = 0; i < num_faces; i++ ){
       if (faces[i] == face){ source_index = i; }
@@ -685,8 +685,8 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
 /*
   Retrieve the source edge
 */
-void TMRFace::getSource( int *_source_dir, 
-                         TMRVolume **volume, 
+void TMRFace::getSource( int *_source_dir,
+                         TMRVolume **volume,
                          TMRFace **face ){
   if (face){ *face = source; }
   if (volume){ *volume = source_volume; }
@@ -708,7 +708,7 @@ void TMRFace::writeToVTK( const char *filename ){
     fprintf(fp, "# vtk DataFile Version 3.0\n");
     fprintf(fp, "vtk output\nASCII\n");
     fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
-    
+
     // Write out the points
     fprintf(fp, "POINTS %d float\n", npts*npts);
     for ( int j = 0; j < npts; j++ ){
@@ -721,30 +721,30 @@ void TMRFace::writeToVTK( const char *filename ){
         // Evaluate the point
         TMRPoint p;
         evalPoint(u, v, &p);
-        
+
         // Write out the point
         fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
       }
-    } 
-    
+    }
+
     // Write out the cell values
     fprintf(fp, "\nCELLS %d %d\n", (npts-1)*(npts-1), 5*(npts-1)*(npts-1));
     for ( int j = 0; j < npts-1; j++ ){
       for ( int i = 0; i < npts-1; i++ ){
-        fprintf(fp, "4 %d %d %d %d\n", 
-                i + j*npts, i+1 + j*npts, 
+        fprintf(fp, "4 %d %d %d %d\n",
+                i + j*npts, i+1 + j*npts,
                 i+1 + (j+1)*npts, i + (j+1)*npts);
       }
     }
-    
+
     // Write out the cell types
     fprintf(fp, "\nCELL_TYPES %d\n", (npts-1)*(npts-1));
     for ( int k = 0; k < (npts-1)*(npts-1); k++ ){
       fprintf(fp, "%d\n", 9);
     }
-    
+
     fclose(fp);
-  } 
+  }
 }
 
 /*
@@ -755,7 +755,7 @@ void TMRFace::writeToVTK( const char *filename ){
   faces:    the TMRFace objects
   orient:   the orientation of the face
 */
-TMRVolume::TMRVolume( int nfaces, TMRFace **_faces, 
+TMRVolume::TMRVolume( int nfaces, TMRFace **_faces,
                       const int *_dir ){
   num_faces = nfaces;
   faces = new TMRFace*[ num_faces ];
@@ -842,7 +842,7 @@ void TMRVolume::writeToVTK( const char *filename ){
     fprintf(fp, "# vtk DataFile Version 3.0\n");
     fprintf(fp, "vtk output\nASCII\n");
     fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
-    
+
     // Write out the points
     fprintf(fp, "POINTS %d float\n", npts*npts*npts);
     for ( int k = 0; k < npts; k++ ){
@@ -858,47 +858,47 @@ void TMRVolume::writeToVTK( const char *filename ){
           // Evaluate the point
           TMRPoint p;
           evalPoint(u, v, w, &p);
-        
+
           // Write out the point
           fprintf(fp, "%e %e %e\n", p.x, p.y, p.z);
         }
       }
-    } 
-    
+    }
+
     // Write out the cell values
-    fprintf(fp, "\nCELLS %d %d\n", (npts-1)*(npts-1)*(npts-1), 
+    fprintf(fp, "\nCELLS %d %d\n", (npts-1)*(npts-1)*(npts-1),
             9*(npts-1)*(npts-1)*(npts-1));
     for ( int k = 0; k < npts-1; k++ ){
       for ( int j = 0; j < npts-1; j++ ){
         for ( int i = 0; i < npts-1; i++ ){
-          fprintf(fp, "8 %d %d %d %d  %d %d %d %d\n", 
-                  i + j*npts + k*npts*npts, 
-                  i+1 + j*npts + k*npts*npts, 
-                  i+1 + (j+1)*npts + k*npts*npts, 
+          fprintf(fp, "8 %d %d %d %d  %d %d %d %d\n",
+                  i + j*npts + k*npts*npts,
+                  i+1 + j*npts + k*npts*npts,
+                  i+1 + (j+1)*npts + k*npts*npts,
                   i + (j+1)*npts + k*npts*npts,
-                  i + j*npts + (k+1)*npts*npts, 
-                  i+1 + j*npts + (k+1)*npts*npts, 
-                  i+1 + (j+1)*npts + (k+1)*npts*npts, 
+                  i + j*npts + (k+1)*npts*npts,
+                  i+1 + j*npts + (k+1)*npts*npts,
+                  i+1 + (j+1)*npts + (k+1)*npts*npts,
                   i + (j+1)*npts + (k+1)*npts*npts);
         }
       }
     }
-    
+
     // Write out the cell types
     fprintf(fp, "\nCELL_TYPES %d\n", (npts-1)*(npts-1)*(npts-1));
     for ( int k = 0; k < (npts-1)*(npts-1)*(npts-1); k++ ){
       fprintf(fp, "%d\n", 12);
     }
-    
+
     fclose(fp);
-  } 
+  }
 }
 
 /*
   The TMRModel class containing all of the required geometry
   objects.
 */
-TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices, 
+TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
                     int _num_edges, TMREdge **_edges,
                     int _num_faces, TMRFace **_faces,
                     int _num_volumes, TMRVolume **_volumes ){
@@ -932,7 +932,7 @@ TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
       faces[i]->incref();
     }
   }
-  
+
   for ( int i = 0; i < num_volumes; i++ ){
     volumes[i] = _volumes[i];
     if (volumes[i]){
@@ -1027,7 +1027,7 @@ int TMRModel::verify(){
 
   for ( int face = 0; face < num_faces; face++ ){
     int nloops = faces[face]->getNumEdgeLoops();
-    
+
     for ( int k = 0; k < nloops; k++ ){
       TMREdgeLoop *loop;
       faces[face]->getEdgeLoop(k, &loop);
@@ -1042,8 +1042,8 @@ int TMRModel::verify(){
         int cindex = getEdgeIndex(loop_edges[j]);
         if (cindex < 0){
           fail = 1;
-          fprintf(stderr, 
-                  "TMRGeometry error: Missing edge %d in \
+          fprintf(stderr,
+                  "TMRModel error: Missing edge %d in \
 edge loop %d for face %d\n",
                   j, k, face);
         }
@@ -1051,12 +1051,12 @@ edge loop %d for face %d\n",
           crvs[cindex]++;
         }
 
-        TMRVertex *v1, *v2;      
+        TMRVertex *v1, *v2;
         loop_edges[j]->getVertices(&v1, &v2);
         if (!v1 || !v2){
           fail = 1;
-          fprintf(stderr, 
-                  "TMRGeometry error: Vertices not set for edge %d\n",
+          fprintf(stderr,
+                  "TMRModel error: Vertices not set for edge %d\n",
                   cindex);
         }
 
@@ -1064,8 +1064,8 @@ edge loop %d for face %d\n",
         int v2index = getVertexIndex(v2);
         if (v1index < 0 || v2index < 0){
           fail = 1;
-          fprintf(stderr, 
-                  "TMRGeometry error: Vertices do not exist \
+          fprintf(stderr,
+                  "TMRModel error: Vertices do not exist \
 within the vertex list\n");
         }
         else {
@@ -1079,15 +1079,31 @@ within the vertex list\n");
   // Check if any of the counts are zero
   for ( int i = 0; i < num_vertices; i++ ){
     if (verts[i] == 0){
-      fprintf(stderr,
-              "TMRGeometry warning: Vertex %d unreferenced\n", i);
+      const char *attr = NULL;
+      if (vertices[i] && (attr = vertices[i]->getAttribute())){
+        fprintf(stderr,
+                "TMRModel warning: Vertex %d with name %s unreferenced\n",
+                i, attr);
+      }
+      else {
+        fprintf(stderr,
+                "TMRModel warning: Vertex %d unreferenced\n", i);
+      }
       fail = 1;
     }
   }
   for ( int i = 0; i < num_edges; i++ ){
     if (crvs[i] == 0){
-      fprintf(stderr,
-              "TMRGeometry warning: Edge %d unreferenced\n", i);
+      const char *attr = NULL;
+      if (edges[i] && (attr = edges[i]->getAttribute())){
+        fprintf(stderr,
+                "TMRModel warning: Edge %d with name %s unreferenced\n",
+                i, attr);
+      }
+      else {
+        fprintf(stderr,
+                "TMRModel warning: Edge %d unreferenced\n", i);
+      }
       fail = 1;
     }
   }
@@ -1101,7 +1117,7 @@ within the vertex list\n");
 /*
   Retrieve the vertices
 */
-void TMRModel::getVertices( int *_num_vertices, 
+void TMRModel::getVertices( int *_num_vertices,
                             TMRVertex ***_vertices ){
   if (_num_vertices){ *_num_vertices = num_vertices; }
   if (_vertices){ *_vertices = vertices; }
@@ -1110,7 +1126,7 @@ void TMRModel::getVertices( int *_num_vertices,
 /*
   Retrieve the curves
 */
-void TMRModel::getEdges( int *_num_edges, 
+void TMRModel::getEdges( int *_num_edges,
                          TMREdge ***_edges ){
   if (_num_edges){ *_num_edges = num_edges; }
   if (_edges){ *_edges = edges; }
@@ -1119,7 +1135,7 @@ void TMRModel::getEdges( int *_num_edges,
 /*
   Retrieve the surfaces
 */
-void TMRModel::getFaces( int *_num_faces, 
+void TMRModel::getFaces( int *_num_faces,
                          TMRFace ***_faces ){
   if (_num_faces){ *_num_faces = num_faces; }
   if (_faces){ *_faces = faces; }
@@ -1138,11 +1154,11 @@ void TMRModel::getVolumes( int *_num_volumes,
   Static member function for sorting the ordered pairs
 */
 template <class ctype>
-int TMRModel::compare_ordered_pairs( const void *avoid, 
+int TMRModel::compare_ordered_pairs( const void *avoid,
                                      const void *bvoid ){
-  const OrderedPair<ctype> *a = 
+  const OrderedPair<ctype> *a =
     static_cast<const OrderedPair<ctype>*>(avoid);
-  const OrderedPair<ctype> *b = 
+  const OrderedPair<ctype> *b =
     static_cast<const OrderedPair<ctype>*>(bvoid);
 
   if (a->obj && b->obj){
@@ -1166,14 +1182,14 @@ int TMRModel::getVertexIndex( TMRVertex *vertex ){
   pair.obj = vertex;
 
   // Search for the ordered pair
-  OrderedPair<TMRVertex> *item = 
-    (OrderedPair<TMRVertex>*)bsearch(&pair, ordered_verts, num_vertices, 
+  OrderedPair<TMRVertex> *item =
+    (OrderedPair<TMRVertex>*)bsearch(&pair, ordered_verts, num_vertices,
                                      sizeof(OrderedPair<TMRVertex>),
                                      compare_ordered_pairs<TMRVertex>);
   if (item){
     return item->num;
   }
-  
+
   fprintf(stderr, "TMRModel error: Vertex index search failed\n");
   return -1;
 }
@@ -1187,7 +1203,7 @@ int TMRModel::getEdgeIndex( TMREdge *edge ){
   pair.obj = edge;
 
   // Search for the ordered pair
-  OrderedPair<TMREdge> *item = 
+  OrderedPair<TMREdge> *item =
     (OrderedPair<TMREdge>*)bsearch(&pair, ordered_edges, num_edges,
                                    sizeof(OrderedPair<TMREdge>),
                                    compare_ordered_pairs<TMREdge>);
@@ -1208,14 +1224,14 @@ int TMRModel::getFaceIndex( TMRFace *face ){
   pair.obj = face;
 
   // Search for the ordered pair
-  OrderedPair<TMRFace> *item = 
+  OrderedPair<TMRFace> *item =
     (OrderedPair<TMRFace>*)bsearch(&pair, ordered_faces, num_faces,
                                    sizeof(OrderedPair<TMRFace>),
                                    compare_ordered_pairs<TMRFace>);
   if (item){
     return item->num;
   }
-  
+
   fprintf(stderr, "TMRModel error: Face index search failed\n");
   return -1;
 }
@@ -1229,7 +1245,7 @@ int TMRModel::getVolumeIndex( TMRVolume *volume ){
   pair.obj = volume;
 
   // Search for the ordered pair
-  OrderedPair<TMRVolume> *item = 
+  OrderedPair<TMRVolume> *item =
     (OrderedPair<TMRVolume>*)bsearch(&pair, ordered_volumes, num_volumes,
                                      sizeof(OrderedPair<TMRVolume>),
                                      compare_ordered_pairs<TMRVolume>);
@@ -1243,7 +1259,7 @@ int TMRModel::getVolumeIndex( TMRVolume *volume ){
 
 /*
   The main topology class that contains the objects used to build the
-  underlying mesh.  
+  underlying mesh.
 */
 TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
   // Set the communicator
@@ -1286,7 +1302,7 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
     for ( int i = 0; i < num_volumes; i++ ){
       TMRTFIVolume *vol = dynamic_cast<TMRTFIVolume*>(volumes[i]);
       if (!vol){
-        fprintf(stderr, 
+        fprintf(stderr,
                 "TMRTopology error: All volumes must be of type TMRTFIVolume\n");
       }
     }
@@ -1300,7 +1316,7 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
       volumes[i]->getFaces(&nfaces, &f, NULL);
 
       if (nfaces != 6){
-        fprintf(stderr, 
+        fprintf(stderr,
                 "TMRTopology error: TMRVolume %d does not contain 6 faces\n", i);
       }
       // Search for the face indices
@@ -1341,7 +1357,7 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
       int nloops = faces[i]->getNumEdgeLoops();
       if (nloops != 1){
         fprintf(stderr,
-                "TMRTopology error: TMRFace %d contains %d loops\n", 
+                "TMRTopology error: TMRFace %d contains %d loops\n",
                 i, nloops);
       }
       if (nloops >= 1){
@@ -1353,13 +1369,13 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
         int nedges;
         TMREdge **e;
         loop->getEdgeLoop(&nedges, &e, NULL);
-        
+
         if (nedges != 4){
-          fprintf(stderr, 
-                  "TMRTopology error: TMRFace %d does not contain 4 edges\n", 
+          fprintf(stderr,
+                  "TMRTopology error: TMRFace %d does not contain 4 edges\n",
                   i);
         }
-        
+
         // Search for the face indices
         for ( int jp = 0; jp < 4; jp++ ){
           int j = coordinate_to_edge[jp];
@@ -1445,10 +1461,10 @@ void TMRTopology::computeVolumeConn(){
     if (volume_to_new_num){
       n = volume_to_new_num[i];
     }
-    
+
     // Dynamic cast to a TMRTFIVolume
     TMRTFIVolume *vol = dynamic_cast<TMRTFIVolume*>(volumes[i]);
-    
+
     if (vol){
       // Get the faces associated with the volume
       TMRFace **f;
@@ -1516,7 +1532,7 @@ void TMRTopology::computeFaceConn(){
 
   // Create the edge -> vertex information
   edge_to_vertices = new int[ 2*num_edges ];
-  for ( int i = 0; i < num_edges; i++ ){    
+  for ( int i = 0; i < num_edges; i++ ){
     if (edges[i]){
       TMRVertex *v1, *v2;
       edges[i]->getVertices(&v1, &v2);
@@ -1533,7 +1549,7 @@ void TMRTopology::computeFaceConn(){
   // routines, the ordering is as shown on the left.  The
   // quadrant/octree code uses the coordinate ordering shown on the
   // right.
-  // 
+  //
   //  From TMRSurface         Coordinate-ordering
   //  v3---e2---v2            v2---e3---v3
   //  |         |             |         |
@@ -1541,7 +1557,7 @@ void TMRTopology::computeFaceConn(){
   //  |         |             |         |
   //  v0---e0---v1            v0---e2---v1
   //  C.C.W. direction        Coordinate direction
-  
+
   face_to_vertices = new int[ 4*num_faces ];
   for ( int i = 0; i < num_faces; i++ ){
     // Get the new face number
@@ -1549,7 +1565,7 @@ void TMRTopology::computeFaceConn(){
     if (face_to_new_num){
       f = face_to_new_num[i];
     }
-    
+
     if (faces[i]){
       // Get the edge loop and direction
       TMREdgeLoop *loop;
@@ -1557,7 +1573,7 @@ void TMRTopology::computeFaceConn(){
 
       const int *edge_dir;
       loop->getEdgeLoop(NULL, NULL, &edge_dir);
-      
+
       // Coordinate-ordered edge e0
       int edge = face_to_edges[4*f];
       if (edge_dir[3] > 0){
@@ -1568,7 +1584,7 @@ void TMRTopology::computeFaceConn(){
         face_to_vertices[4*f] = edge_to_vertices[2*edge];
         face_to_vertices[4*f+2] = edge_to_vertices[2*edge+1];
       }
-      
+
       // Coordinate-ordered edge e1
       edge = face_to_edges[4*f+1];
       if (edge_dir[1] > 0){
@@ -1589,7 +1605,7 @@ void TMRTopology::computeFaceConn(){
 }
 
 /*
-  Compute the connectivity between faces or volumes given the 
+  Compute the connectivity between faces or volumes given the
   connectivity between faces to edges or volumes to faces.
 */
 void TMRTopology::computeConnectivty( int num_entities,
@@ -1626,7 +1642,7 @@ void TMRTopology::computeConnectivty( int num_entities,
     }
   }
 
-  // Reset the edge to face pointer  
+  // Reset the edge to face pointer
   for ( int i = num_edges; i >= 1; i-- ){
     edge_to_face_ptr[i] = edge_to_face_ptr[i-1];
   }
@@ -1689,7 +1705,7 @@ void TMRTopology::computeConnectivty( int num_entities,
 /*
   Reorder volumes or faces to group things according to MPI rank
 */
-void TMRTopology::reorderEntities( int num_entities, 
+void TMRTopology::reorderEntities( int num_entities,
                                    int num_edges, int num_faces,
                                    const int *ftoedges,
                                    int *entity_to_new_num,
@@ -1703,33 +1719,33 @@ void TMRTopology::reorderEntities( int num_entities,
   if (mpi_rank == 0){
     // Compute the new ordering
     int *face_to_face_ptr, *face_to_face;
-    computeConnectivty(num_entities, num_edges, 
+    computeConnectivty(num_entities, num_edges,
                        num_faces, ftoedges,
                        &face_to_face_ptr, &face_to_face);
-    
+
     if (mpi_size == 1 || use_rcm){
       // Set a pointer to the new numbers
       int *vars = entity_to_new_num;
       int *levset = new_num_to_entity;
-      
+
       // Tag all the values to indicate that we have not yet visited
       // these entities
       for ( int i = 0; i < num_faces; i++ ){
-        vars[i] = -1; 
+        vars[i] = -1;
       }
 
       // Set the start and end location for each level set
       int start = 0, end = 0;
-      
+
       // The number of ordered entities
       int n = 0;
-      
+
       // Keep going until everything has been ordered
       while (n < num_faces){
         // Find the next root
         int root = -1, max_degree = num_faces+1;
         for ( int i = 0; i < num_faces; i++ ){
-          if (vars[i] < 0 && 
+          if (vars[i] < 0 &&
               face_to_face_ptr[i+1] - face_to_face_ptr[i] < max_degree){
             root = i;
             max_degree = face_to_face_ptr[i+1] - face_to_face_ptr[i];
@@ -1740,7 +1756,7 @@ void TMRTopology::reorderEntities( int num_entities,
         if (root < 0){
           break;
         }
-        
+
         // Set the next root within the level set and continue
         levset[end] = root;
         vars[root] = n;
@@ -1754,10 +1770,10 @@ void TMRTopology::reorderEntities( int num_entities,
             int node = levset[current];
 
             // Add all the nodes in the next level set
-            for ( int j = face_to_face_ptr[node]; 
+            for ( int j = face_to_face_ptr[node];
                   j < face_to_face_ptr[node+1]; j++ ){
               int next_node = face_to_face[j];
-	    
+
               if (vars[next_node] < 0){
                 vars[next_node] = n;
                 levset[next] = next_node;
@@ -1782,17 +1798,17 @@ void TMRTopology::reorderEntities( int num_entities,
 
       // Use 0-based numbering
       options[METIS_OPTION_NUMBERING] = 0;
-        
+
       // The objective value in METIS
       int objval = 0;
-        
+
       // Partition based on the size of the mesh
       int ncon = 1;
-      METIS_PartGraphRecursive(&num_faces, &ncon, 
+      METIS_PartGraphRecursive(&num_faces, &ncon,
                                face_to_face_ptr, face_to_face,
-                               NULL, NULL, NULL, &mpi_size, 
+                               NULL, NULL, NULL, &mpi_size,
                                NULL, NULL, options, &objval, partition);
-        
+
       int *offset = new int[ mpi_size+1 ];
       memset(offset, 0, (mpi_size+1)*sizeof(int));
       for ( int i = 0; i < num_faces; i++ ){
@@ -1801,7 +1817,7 @@ void TMRTopology::reorderEntities( int num_entities,
       for ( int i = 0; i < mpi_size; i++ ){
         offset[i+1] += offset[i];
       }
-        
+
       // Order the faces according to their partition
       for ( int i = 0; i < num_faces; i++ ){
         entity_to_new_num[i] = offset[partition[i]];
@@ -1811,17 +1827,17 @@ void TMRTopology::reorderEntities( int num_entities,
       // Free the local offset data
       delete [] offset;
     }
-    
+
     delete [] face_to_face_ptr;
     delete [] face_to_face;
   }
-  
+
   // Broadcast the new ordering
   MPI_Bcast(entity_to_new_num, num_faces, MPI_INT, 0, comm);
 
   // Now overwrite the new_num_to_face == partition array
   for ( int i = 0; i < num_faces; i++ ){
-    new_num_to_entity[entity_to_new_num[i]] = i;    
+    new_num_to_entity[entity_to_new_num[i]] = i;
   }
 }
 
@@ -1860,7 +1876,7 @@ int TMRTopology::getNumFaces(){
   geo->getFaces(&nfaces, NULL);
   return nfaces;
 }
- 
+
 /*
   Get the number of edges
 */
@@ -1929,7 +1945,7 @@ void TMRTopology::getVertex( int vert_num, TMRVertex **vert ){
 /*
   Retrieve the connectivity information
 */
-void TMRTopology::getConnectivity( int *nnodes, 
+void TMRTopology::getConnectivity( int *nnodes,
                                    int *nedges, int *nfaces,
                                    const int **face_nodes,
                                    const int **face_edges ){
@@ -1947,9 +1963,9 @@ void TMRTopology::getConnectivity( int *nnodes,
 /*
   Retrieve the connectivity for the underlying mesh
 */
-void TMRTopology::getConnectivity( int *nnodes, int *nedges, 
+void TMRTopology::getConnectivity( int *nnodes, int *nedges,
                                    int *nfaces, int *nvolumes,
-                                   const int **volume_nodes, 
+                                   const int **volume_nodes,
                                    const int **volume_edges,
                                    const int **volume_faces ){
   int num_vertices, num_edges, num_faces, num_volumes;

@@ -11,11 +11,11 @@ args = p.parse_args()
 steps = args.steps
 
 # Set the colors to use for each set of bars
-colors = ['BrickRed', 'NavyBlue', 'black', 'ForestGreen',
+colors = ['BrickRed', 'ForestGreen', 'NavyBlue',
           'Violet', 'Magenta' ]
 
 data = []
-for k in range(steps):
+for k in [0, steps/2, steps-1]:
     data.append(np.loadtxt('results/cylinder_data%d.txt'%(k))[12:56,:])
 
 # Delta value
@@ -33,19 +33,23 @@ ytick_labels.append(20)
 
 # Set the value of the x-ticks
 xvalues = len(data[0])
-xticks = range(0, xvalues+1, 4)
-xtick_labels = np.linspace(np.log10(data[0][0,0]), 
-                           np.log10(data[0][-1,1]), len(xticks))
+
+x0 = int(np.floor(np.log10(data[0][0,0])))
+x1 = int(np.ceil(np.log10(data[0][-1,1])))
+
+xticks = xvalues*(np.linspace(x0, x1, x1 - x0 + 1) - x0)/(x1 - x0)
+xtick_labels = range(x0, x1+1)
 
 # Show the max/min value
 xmin = 0
 xmax = xvalues
+
 ymin = 0
 ymax = delta*len(data)
 
 # The overall dimensions
 xdim = 3.0
-xscale = xdim/(2*xvalues)
+xscale = xdim/(2.5*xvalues)
 
 ydim = 1.5
 yscale = ydim/ymax
