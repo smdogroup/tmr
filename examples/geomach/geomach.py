@@ -17,9 +17,7 @@ from GeoMACH.PGM.core import PGMconfiguration, PGMparameter, PGMdv
 from GeoMACH.PGM.components import PGMwing, PGMbody, PGMshell
 from GeoMACH.PGM.components import PGMjunction, PGMtip, PGMcone
 
-
 class Wing(PGMconfiguration):
-
     def _define_comps(self):
         self.comps['wing'] = PGMwing(num_x=1, num_z=1, left_closed=True)
         self.comps['tip'] = PGMtip(self, 'wing', 'left', 0.1)
@@ -43,7 +41,6 @@ class Wing(PGMconfiguration):
         wing['upp'].set_option('num_cp', 'v', [40])
 
 class Trussbraced(PGMconfiguration):
-
     def _define_comps(self):
         self.comps['fuse'] = PGMbody(num_x=17, num_y=6, num_z=4)
         self.comps['lwing'] = PGMwing(num_x=7, num_z=7, left_closed=True)
@@ -249,8 +246,8 @@ def geomach_to_tmr(bse):
 
         # Extract and create the b-spline surfaces
         cp = np.zeros((nu, nv, 3), dtype=np.double)
-        for jj in xrange(nv):
-            for ii in xrange(nu):
+        for jj in range(nv):
+            for ii in range(nu):
                 cp_index = cp_offset + ii + jj*nu
                 cp[ii, jj, :] = cp_str[cp_index]
 
