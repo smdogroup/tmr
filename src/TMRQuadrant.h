@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -51,8 +51,8 @@ class TMRQuadrant {
 };
 
 /*
-  A array of quadrants that may or may not be sorted 
-  
+  A array of quadrants that may or may not be sorted
+
   When the array is sorted, the quadrants are made unique by discarding
   quadrants with a smaller level (that have larger side lengths).  After
   the array is sorted, it is searchable either based on elements (when
@@ -61,7 +61,7 @@ class TMRQuadrant {
 */
 class TMRQuadrantArray {
  public:
-  TMRQuadrantArray( TMRQuadrant *array, int size, 
+  TMRQuadrantArray( TMRQuadrant *array, int size,
                     int _use_node_index=0 );
   ~TMRQuadrantArray();
 
@@ -93,7 +93,7 @@ class TMRQuadrantQueue {
   void push( TMRQuadrant *quad );
   TMRQuadrant pop();
   TMRQuadrantArray* toArray();
-  
+
  private:
   // Class that defines an element within the queue
   class QuadQueueNode {
@@ -140,7 +140,7 @@ class TMRQuadrantHash {
   // Keep track of the bucket size
   int num_buckets;
   QuadHashNode **hash_buckets;
-  
+
   // Keep track of the number of elements
   int num_elems;
 
