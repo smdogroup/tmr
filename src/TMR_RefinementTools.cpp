@@ -2589,6 +2589,10 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   nodal_error->beginSetValues(TACS_ADD_VALUES);
   nodal_error->endSetValues(TACS_ADD_VALUES);
 
+  // Distribute the values back to all nodes
+  nodal_error->beginDistributeValues();
+  nodal_error->endDistributeValues();
+
   // Finish setting the values into the array
   for ( int elem = 0; elem < nelems; elem++ ){
     // Get the node numbers for the refined mesh
@@ -2796,6 +2800,10 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   // Finish setting the values into the nodal error array
   nodal_error->beginSetValues(TACS_ADD_VALUES);
   nodal_error->endSetValues(TACS_ADD_VALUES);
+
+  // Distribute the values back to all nodes
+  nodal_error->beginDistributeValues();
+  nodal_error->endDistributeValues();
 
   // Finish setting the values into the array
   for ( int elem = 0; elem < nelems; elem++ ){
