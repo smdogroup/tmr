@@ -3713,6 +3713,7 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   int p = num_nodes;
 
   TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
+  TacsScalar *dbduT_A = new TacsScalar[p*m];
 
   // Compute A^T A
   TacsScalar a = 1.0, b = 0.0;
@@ -3732,16 +3733,17 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, dubar_duderiv, &m);
 
   // // Compute (db/du)^T A
-  // BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
+  BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
 
   // // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
-  // BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
+  BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
 
   // Evaluate dubar/du as (dubar/duderiv)(db/du)
-  BLASgemm("N", "N", &p, &m, &n, &a, dubar_duderiv, &m, dbdu, &n, &b, dubardu, &p);
-
+  //BLASgemm("N", "N", &p, &m, &n, &a, dubar_duderiv, &m, dbdu, &n, &b, dubardu, &p);
+  
   // Delete variables
   delete [] ATA;
+  delete [] dbduT_A;
   delete [] ipiv;
 }
 
