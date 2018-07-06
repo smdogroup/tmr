@@ -16,29 +16,56 @@ colors = ['BrickRed', 'ForestGreen', 'NavyBlue',
 
 data = []
 for k in [0, steps/2, steps-1]:
-    data.append(np.loadtxt('results/cylinder_data%d.txt'%(k))[12:56,:])
+    data.append(np.loadtxt('results/cylinder_data%d.txt'%(k)))
 
 # Delta value
-delta = 20.0
+delta = 25.0
 
 # Set the positions of the tick locations
-yticks = [0, 5, 15, 20]
+yticks = [0, 5, 15, 20, 25]
 
 # Set the values for the ticks
-yticks = np.linspace(0, delta*len(data), 4*len(data)+1)
+yticks = np.linspace(0, delta*len(data), 5*len(data)+1)
 ytick_labels = []
 for i in range(len(data)):
-    ytick_labels.extend([0, 5, 10, 15])
-ytick_labels.append(20)
+    ytick_labels.extend([0, 5, 10, 15, 20])
+ytick_labels.append(25)
 
-# Set the value of the x-ticks
-xvalues = len(data[0])
+# Look for all the data
+bins_per_decade = 4
+idx_min = data[0].shape[0]
+idx_max = 0
+for d in data:
+    # Loop over all the bins
+    for i in range(0, d.shape[0], bins_per_decade):
+        flag = False
+        for k in range(bins_per_decade):
+            if d[i+k,3] > 0.01:
+                flag = True
 
-x0 = int(np.floor(np.log10(data[0][0,0])))
-x1 = int(np.ceil(np.log10(data[0][-1,1])))
+        # Set the new value for idx_min
+        if flag and i < idx_min:
+            idx_min = i
+        if flag and i > idx_max:
+            idx_max = i
 
-xticks = xvalues*(np.linspace(x0, x1, x1 - x0 + 1) - x0)/(x1 - x0)
-xtick_labels = range(x0, x1+1)
+idx_max = min(idx_max + bins_per_decade-1, data[0].shape[0]-1)
+
+# Find the largest error value
+x0 = int(np.ceil(np.log10(data[0][idx_min,0])))
+
+# Find the smallest error value
+x1 = int(np.floor(np.log10(data[0][idx_max,1])))
+
+# Set the number of x values
+xvalues = idx_max - idx_min + 1
+
+# Create a range
+xticks = xvalues*(np.linspace(x0, x1, x0 - x1 + 1) - x0)/(x1 - x0)
+xtick_labels = range(x0, x1-1, -1)
+
+print xticks
+print xtick_labels
 
 # Show the max/min value
 xmin = 0
@@ -57,7 +84,6 @@ yscale = ydim/ymax
 # Get the header info
 s = tkz.get_header()
 s += tkz.get_begin_tikz(xdim=3.5, ydim=2.0, xunit='in', yunit='in')
-
 
 # Create the plot background
 for y in yticks:
@@ -88,7 +114,7 @@ s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
 for k, d in enumerate(data):
     bars = []
     ymin = delta*(len(data)-k-1)
-    for i in range(d.shape[0]):
+    for i in range(idx_min, idx_max+1):
         bars.append([d[i,3] + ymin])
 
     s += tkz.get_bar_chart(bars, color_list=[colors[k % len(colors)]], 

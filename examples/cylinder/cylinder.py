@@ -130,16 +130,14 @@ p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--ksweight', type=float, default=100.0)
-p.add_argument('--structured', type=int, default=0)
-p.add_argument('--adjoint_error_est', action='store_true', default=False)
+p.add_argument('--uniform_refinement', action='store_true', default=False)
+p.add_argument('--structured', action='store_true', default=False)
+p.add_argument('--energy_error', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the type of ordering to use for this problem
 ordering = args.ordering
 ordering = ordering.lower()
-
-# Set whether to use the adjoint error estimate or not
-adjoint_error_est = args.adjoint_error_est
 
 # Set the value of the target length scale in the mesh
 htarget = args.htarget
@@ -192,6 +190,7 @@ mesh.mesh(htarget, opts)
 
 # Create the corresponding mesh topology from the mesh-model
 model = mesh.createModelFromMesh()
+model.writeModelToTecplot('model.dat')
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
@@ -228,7 +227,7 @@ elif order == 4:
     log_fp = open('cylinder_refine4th.dat', 'w')
 
 # Write the first line to the file
-log_fp.write('Variables = iter, nelems, nnodes, fval, fcorr, abs_err\n')
+log_fp.write('Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr\n')
 
 for k in range(steps):
     # Create the topology problem
@@ -275,29 +274,24 @@ for k in range(steps):
     f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
     f5.writeToFile('results/solution%02d.f5'%(k))
 
-    # # Create the function
-    # -------------------------------------------------------------------
+    # Create the function
     func = functions.KSFailure(assembler, ksweight)
     func.setKSFailureType('continuous')
     fval = assembler.evalFunctions([func])[0]
-    # -------------------------------------------------------------------
 
     # Create the refined mesh
     forest_refined, assembler_refined = createRefined(forest, bcs)
 
-    # Find the refined solution
-    TMR.computeReconSolution(forest, assembler,
-        forest_refined, assembler_refined)
-
-    f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
-    f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
-
-    if adjoint_error_est:
+    if args.energy_error:
+        # Compute the strain energy error estimate
+        fval_corr = 0.0
+        adjoint_corr = 0.0
+        err_est, error = TMR.strainEnergyError(forest, assembler,
+            forest_refined, assembler_refined)
+    else:
         # Compute the adjoint
-        # -------------------------------------------------------------------
         res.zeroEntries()
         assembler.evalSVSens(func, res)
-        # -------------------------------------------------------------------
 
         # Compute the adjoint solution
         adjoint = assembler.createVec()
@@ -305,14 +299,21 @@ for k in range(steps):
         adjoint.scale(-1.0)
 
         # Compute the adjoint and use adjoint-based refinement
-        err_est, func_corr, error = \
+        err_est, adjoint_corr, error = \
             TMR.adjointError(forest, assembler,
                              forest_refined, assembler_refined, adjoint)
-    else:
-        # Compute the strain energy error estimate
-        func_corr = 0.0
-        err_est, error = TMR.strainEnergyError(forest, assembler,
-            forest_refined, assembler_refined)
+
+        # Evaluate the function again on the refined mesh to obtain
+        # the
+        func_refined = functions.KSFailure(assembler_refined, ksweight)
+        func_refined.setKSFailureType('continuous')
+        fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+
+        # Compute the refined function value
+        fval_corr = fval_refined + adjoint_corr
+
+    f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
+    f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
 
     # Compute the refinement from the error estimate
     low = -16
@@ -335,8 +336,8 @@ for k in range(steps):
     nnodes = comm.allreduce(assembler.getNumOwnedNodes(), op=MPI.SUM)
 
     # Write the log data to a file
-    log_fp.write('%6d %6d %6d %20.15e %20.15e %20.15e\n'%(
-        k, ntotal, nnodes, fval, fval - func_corr, err_est))
+    log_fp.write('%6d %6d %6d %20.15e %20.15e %20.15e %20.15e\n'%(
+        k, ntotal, nnodes, fval, fval_corr, err_est, adjoint_corr))
     log_fp.flush()
 
     # Compute the bins
@@ -360,13 +361,13 @@ for k in range(steps):
     # Print out the result
     if comm.rank == 0:
         print('fval      = ', fval)
-        print('corr func = ', func_corr)
-        print('estimate =  ', err_est)
-        print('mean =      ', mean)
-        print('stddev =    ', stddev)
+        print('fval corr = ', fval_corr)
+        print('estimate  = ', err_est)
+        print('mean      = ', mean)
+        print('stddev    = ', stddev)
 
         print('%10s   %10s   %12s   %12s'%(
-            'low', 'high', 'bins', 'percentage'))
+            'high', 'low', 'bins', 'percentage'))
         print('%10.2e   %10s   %12d   %12.2f'%(
             bounds[0], ' ', bins[0], 100.0*bins[0]/total))
         for i in range(nbins):
@@ -389,7 +390,9 @@ for k in range(steps):
     f5.writeToFile('results/error%02d.f5'%(k))
 
     # Perform the refinement
-    if k < steps-1:
+    if args.uniform_refinement:
+        forest.refine()
+    elif k < steps-1:
         # The refinement array
         refine = np.zeros(len(error), dtype=np.intc)
 
