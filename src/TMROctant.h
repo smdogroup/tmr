@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -53,8 +53,8 @@ class TMROctant {
 };
 
 /*
-  A array of octants that may or may not be sorted 
-  
+  A array of octants that may or may not be sorted
+
   When the array is sorted, the octants are made unique by discarding
   octants with a smaller level (that have larger side lengths).  After
   the array is sorted, it is searchable either based on elements (when
@@ -95,7 +95,7 @@ class TMROctantQueue {
   void push( TMROctant *oct );
   TMROctant pop();
   TMROctantArray* toArray();
-  
+
  private:
   // Class that defines an element within the queue
   class OctQueueNode {
@@ -142,7 +142,7 @@ class TMROctantHash {
   // Keep track of the bucket size
   int num_buckets;
   OctHashNode **hash_buckets;
-  
+
   // Keep track of the number of elements
   int num_elems;
 

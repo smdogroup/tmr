@@ -2589,6 +2589,10 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   nodal_error->beginSetValues(TACS_ADD_VALUES);
   nodal_error->endSetValues(TACS_ADD_VALUES);
 
+  // Distribute the values back to all nodes
+  nodal_error->beginDistributeValues();
+  nodal_error->endDistributeValues();
+
   // Finish setting the values into the array
   for ( int elem = 0; elem < nelems; elem++ ){
     // Get the node numbers for the refined mesh
@@ -2796,6 +2800,10 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   // Finish setting the values into the nodal error array
   nodal_error->beginSetValues(TACS_ADD_VALUES);
   nodal_error->endSetValues(TACS_ADD_VALUES);
+
+  // Distribute the values back to all nodes
+  nodal_error->beginDistributeValues();
+  nodal_error->endDistributeValues();
 
   // Finish setting the values into the array
   for ( int elem = 0; elem < nelems; elem++ ){
@@ -3690,8 +3698,6 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
                                           TacsScalar dbdu[],
                                           TacsScalar dubardu[],
                                           TacsScalar dubar_duderiv[] ){
-  // note for future work: change this to forward derivative
-  // of dubardu and there will be one fewer matrix multiplication
 
   // Get the number of enrichment functions
   const int nenrich = getNum3dEnrich(order);
@@ -3704,10 +3710,10 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // Set the matrix dimensions
   int m = nenrich;
   int n = neq;
-  int p = num_nodes; //num_quad_pts*num_quad_pts*num_quad_pts;
+  int p = num_nodes;
 
   TacsScalar *ATA = new TacsScalar[m*m]; // store A^T A
-  TacsScalar *dbduT_A = new TacsScalar[p*m]; // store (db/du)^T A
+  TacsScalar *dbduT_A = new TacsScalar[p*m];
 
   // Compute A^T A
   TacsScalar a = 1.0, b = 0.0;
@@ -3726,14 +3732,15 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // Compute dubar_duderiv = (A^T A)^-1 A^T
   BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, dubar_duderiv, &m);
 
-  // Compute (db/du)^T A
+  // // Compute (db/du)^T A
   BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
 
-  //
-  // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
-  //
+  // // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
   BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
 
+  // Evaluate dubar/du as (dubar/duderiv)(db/du)
+  //BLASgemm("N", "N", &p, &m, &n, &a, dubar_duderiv, &m, dbdu, &n, &b, dubardu, &p);
+  
   // Delete variables
   delete [] ATA;
   delete [] dbduT_A;

@@ -69,7 +69,7 @@ def addFaceTraction(order, assembler, load):
 
         trac = elements.ShellTraction(order, tx, ty, tz)
         aux.addElement(i, trac)
-        
+
     return aux
 
 def createRefined(forest, bcs, pttype=TMR.UNIFORM_POINTS):
@@ -190,7 +190,7 @@ opts.triangularize_print_iter = 50000
 # Create the surface mesh
 mesh.mesh(htarget, opts)
 
-# Create the corresponding mesh topology from the mesh-model 
+# Create the corresponding mesh topology from the mesh-model
 model = mesh.createModelFromMesh()
 topo = TMR.Topology(comm, model)
 
@@ -233,7 +233,7 @@ log_fp.write('Variables = iter, nelems, nnodes, fval, fcorr, abs_err\n')
 for k in range(steps):
     # Create the topology problem
     nlevs = min(3, depth+k+1)
-    assembler, mg = createProblem(forest, bcs, ordering, 
+    assembler, mg = createProblem(forest, bcs, ordering,
                                   order=order, nlevels=nlevs)
 
     # Add the surface traction
@@ -258,9 +258,9 @@ for k in range(steps):
         mg.factor()
         pc = mg
         mat = mg.getMat()
-    
+
     gmres = TACS.KSM(mat, pc, 100, isFlexible=0)
-    gmres.setMonitor(comm, freq=1)
+    gmres.setMonitor(comm, freq=10)
     gmres.solve(res, ans)
     ans.scale(-1.0)
 
@@ -275,10 +275,12 @@ for k in range(steps):
     f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
     f5.writeToFile('results/solution%02d.f5'%(k))
 
-    # Create the function
+    # # Create the function
+    # -------------------------------------------------------------------
     func = functions.KSFailure(assembler, ksweight)
     func.setKSFailureType('continuous')
     fval = assembler.evalFunctions([func])[0]
+    # -------------------------------------------------------------------
 
     # Create the refined mesh
     forest_refined, assembler_refined = createRefined(forest, bcs)
@@ -292,8 +294,10 @@ for k in range(steps):
 
     if adjoint_error_est:
         # Compute the adjoint
+        # -------------------------------------------------------------------
         res.zeroEntries()
         assembler.evalSVSens(func, res)
+        # -------------------------------------------------------------------
 
         # Compute the adjoint solution
         adjoint = assembler.createVec()
@@ -311,10 +315,11 @@ for k in range(steps):
             forest_refined, assembler_refined)
 
     # Compute the refinement from the error estimate
-    nbins = 60
-    low = -10
-    high = 2
-    bounds = 10**np.linspace(low, high, nbins+1)
+    low = -16
+    high = 4
+    bins_per_decade = 4
+    nbins = bins_per_decade*(high - low)
+    bounds = 10**np.linspace(high, low, nbins+1)
     bins = np.zeros(nbins+2, dtype=np.int)
 
     # Compute the mean and standard deviations of the log(error)
@@ -330,20 +335,20 @@ for k in range(steps):
     nnodes = comm.allreduce(assembler.getNumOwnedNodes(), op=MPI.SUM)
 
     # Write the log data to a file
-    log_fp.write('%d %d %d %e %e %e\n'%(
-        k, ntotal, nnodes, fval, fval + func_corr, err_est))
-    log_fp.flush()               
-    
+    log_fp.write('%6d %6d %6d %20.15e %20.15e %20.15e\n'%(
+        k, ntotal, nnodes, fval, fval - func_corr, err_est))
+    log_fp.flush()
+
     # Compute the bins
     for i in range(len(error)):
-        if error[i] < bounds[0]:
+        if error[i] > bounds[0]:
             bins[0] += 1
-        elif error[i] > bounds[-1]:
+        elif error[i] < bounds[-1]:
             bins[-1] += 1
         else:
             for j in range(len(bounds)-1):
-                if (error[i] >= bounds[j] and
-                    error[i] < bounds[j+1]):
+                if (error[i] <= bounds[j] and
+                    error[i] > bounds[j+1]):
                     bins[j+1] += 1
 
     # Compute the number of bins
@@ -351,7 +356,7 @@ for k in range(steps):
 
     # Compute the sum of the bins
     total = np.sum(bins)
-    
+
     # Print out the result
     if comm.rank == 0:
         print('fval      = ', fval)
@@ -363,15 +368,15 @@ for k in range(steps):
         print('%10s   %10s   %12s   %12s'%(
             'low', 'high', 'bins', 'percentage'))
         print('%10.2e   %10s   %12d   %12.2f'%(
-            bounds[-1], ' ', bins[-1], 100.0*bins[-1]/total))
-        for i in range(nbins-1, -1, -1):
+            bounds[0], ' ', bins[0], 100.0*bins[0]/total))
+        for i in range(nbins):
             print('%10.2e   %10.2e   %12d   %12.2f'%(
                 bounds[i], bounds[i+1], bins[i+1], 100.0*bins[i+1]/total))
         print('%10s   %10.2e   %12d   %12.2f'%(
-            ' ', bounds[0], bins[0], 100.0*bins[0]/total))
+            ' ', bounds[-1], bins[-1], 100.0*bins[-1]/total))
 
-        # Set the data 
-        data = np.zeros((60, 4))
+        # Set the data
+        data = np.zeros((nbins, 4))
         for i in range(nbins-1, -1, -1):
             data[i,0] = bounds[i]
             data[i,1] = bounds[i+1]
@@ -393,9 +398,9 @@ for k in range(steps):
         log_elem_target_error = np.log(element_target_error)
 
         # Determine the cutoff values
-        cutoff = 0.0
+        cutoff = bins[-1]
         bin_sum = 0
-        for i in range(len(bins)-2, -1, -1):
+        for i in range(len(bins)+1):
             bin_sum += bins[i]
             if bin_sum > 0.15*ntotal:
                 cutoff = bounds[i]
@@ -418,37 +423,16 @@ for k in range(steps):
             print('stddev =                   %15.3e'%(stddev))
             print('cutoff =                   %15.3e'%(cutoff))
 
-        if log_elem_target_error < mean - stddev:
-            if comm.rank == 0:
-                print('-----------------------------------------------')
-                print('First refinement phase')
-                print('-----------------------------------------------')
+        # Element target error is still too high. Adapt based
+        # solely on decreasing the overall error
+        nrefine = 0
+        for i, err in enumerate(error):
+            # Compute the log of the error
+            logerr = np.log(err)
 
-            # Element target error is still too high. Adapt based
-            # solely on decreasing the overall error
-            for i, err in enumerate(error):
-                # Compute the log of the error
-                logerr = np.log(err)
+            if logerr > log_cutoff:
+                refine[i] = 1
+                nrefine += 1
 
-                if logerr > log_cutoff:
-                    refine[i] = 1
-                # elif logerr < mean - 2*stddev:
-                #     refine[i] = -1
-        else:
-            if comm.rank == 0:
-                print('-----------------------------------------------')
-                print('Entering final phase refinement')
-                print('-----------------------------------------------')
-
-            # Try to target the relative error
-            for i, err in enumerate(error):
-                # Compute the log of the error
-                logerr = np.log(err)
-
-                if logerr > log_elem_target_error:
-                    refine[i] = 1
-                elif logerr < log_elem_target_error - 2*stddev:
-                    refine[i] = -1
-            
         # Refine the forest
         forest.refine(refine)

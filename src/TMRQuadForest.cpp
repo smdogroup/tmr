@@ -522,9 +522,8 @@ void TMRQuadForest::computeEdgesFromNodes(){
         // Set the edge number - if any is found
         int edge_num = -1;
 
-        // Scan through the faces that share the same
-        // node and check if any of the edges are also
-        // shared
+        // Scan through the faces that share the same node and check
+        // if any of the edges are also shared
         for ( int ip = fdata->node_face_ptr[n1];
               ip < fdata->node_face_ptr[n1+1]; ip++ ){
           int ii = fdata->node_face_conn[ip]/4;
@@ -538,15 +537,14 @@ void TMRQuadForest::computeEdgesFromNodes(){
             if ((n1 == nn1 && n2 == nn2) ||
                 (n1 == nn2 && n2 == nn1)){
               if (fdata->face_edge_conn[4*ii + jj] >= 0){
-                // If this edge has been ordered, copy over
-                // the edge number
+                // If this edge has been ordered, copy over the edge
+                // number
                 edge_num = fdata->face_edge_conn[4*ii + jj];
               }
               else if (nedges < max_nedges){
-                // This edge has not yet been ordered, add it
-                // to the unordered list if there is still room
-                // if not, we will detect and order it during
-                // a future iteration
+                // This edge has not yet been ordered, add it to the
+                // unordered list if there is still room if not, we
+                // will detect and order it during a future iteration
                 edge_index[nedges] = 4*ii + jj;
                 nedges++;
               }
@@ -2817,7 +2815,7 @@ void TMRQuadForest::transformNode( TMRQuadrant *quad,
       int corner = (fx0 ? 0 : 1) + (fy0 ? 0 : 2);
       int node = fdata->face_conn[4*face + corner];
 
-      if (face != fdata->node_face_owners[face]){
+      if (face != fdata->node_face_owners[node]){
         // Get the pointer information
         int ptr = fdata->node_face_ptr[node];
         int adj = fdata->node_face_conn[ptr]/4;
