@@ -1788,7 +1788,7 @@ cdef TACSElement* _createQuadElement(void *_self, int order,
 
 cdef class QuadCreator:
     cdef TMRCyQuadCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs):
+    def __cinit__(self, BoundaryConditions bcs, *args, **kwargs):
         self.ptr = new TMRCyQuadCreator(bcs.ptr)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)

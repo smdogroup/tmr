@@ -2702,7 +2702,7 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   const int vars_per_node = tacs->getVarsPerNode();
 
   // Get the order of the mesh and the number of enrichment shape functions
-  const double *knots, *refined_knots;
+  const double *refined_knots;
   const int refined_order = forest_refined->getInterpKnots(&refined_knots);
   const int num_refined_nodes = refined_order*refined_order;
 
@@ -2886,10 +2886,8 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   const int max_num_nodes = MAX_ORDER*MAX_ORDER*MAX_ORDER;
 
   // Get the order of the mesh and the number of enrichment shape functions
-  const double *knots, *refined_knots;
-  const int order = forest->getInterpKnots(&knots);
+  const double *refined_knots;
   const int refined_order = forest_refined->getInterpKnots(&refined_knots);
-  const int num_nodes = order*order*order;
   const int num_refined_nodes = refined_order*refined_order*refined_order;
 
   // Perform a local refinement of the nodes based on the strain energy

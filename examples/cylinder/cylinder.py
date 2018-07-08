@@ -6,79 +6,301 @@ import numpy as np
 import argparse
 import os
 
-# Parameters that define the geometry of the cylinder
-t = 1.0 # 1 mm thickness
-L = 100.0 # 100 mm length
-R = 100.0/np.pi # Radius of the cylinder (in mm)
+def cylinder_ks_functional(rho, t, E, nu, kcorr, ys,
+                           L, R, alpha, beta, load, n=1000):
+    A = np.zeros((5, 5))
+    rhs = np.zeros(5)
+    rhs[2] = -load
+    ainv = 1.0/R
 
-# Set the load to apply to the cylinder
-load = 3.0 # 3 MPa
-alpha = 4.0/R # Set the value of alpha
-beta = 3.0*np.pi/L # Set the value of beta
+    # Compute the shear modulus
+    G = 0.5*E/(1.0 + nu)
 
-# Set the material properties
-rho = 2700.0e-9 # kg/mm^3
-E = 70e3 # 70 GPa
-nu = 0.3 # Poisson's ratio
-ys = 350.0 # 350 MPa
-kcorr = 5.0/6.0 # The shear correction factor
+    Q11 = E/(1.0 - nu*nu)
+    Q12 = nu*Q11
+    Q22 = Q11
+    Q33 = G
+
+    # In-plane stiffness
+    A11 = t*Q11
+    A12 = t*Q12
+    A22 = t*Q22
+    A33 = t*G
+
+    # Bending stiffness
+    I = (t**3)/12.0
+    D11 = Q11*I
+    D12 = Q12*I
+    D22 = Q22*I
+    D33 = Q33*I
+
+    # Shear stiffness
+    bA11 = kcorr*t*G
+    bA22 = kcorr*t*G
+
+    # The first equation for u
+    A[0,0] = -(A11*beta*beta + A33*alpha*alpha +
+               D33*ainv*ainv*alpha*alpha)
+    A[1,0] = -(A33 + A12)*alpha*beta
+    A[2,0] = A12*beta*ainv
+    A[3,0] = D33*ainv*alpha*alpha
+    A[4,0] = D33*ainv*alpha*beta
+
+    # The second equation for v
+    A[0,1] = -(A12 + A33)*alpha*beta;
+    A[1,1] = -(A33*beta*beta + A22*alpha*alpha + ainv*ainv*bA11 +
+               D22*ainv*ainv*alpha*alpha)
+    A[2,1] = (A22 + bA11)*ainv*alpha + D22*alpha*ainv*ainv*ainv
+    A[3,1] = D12*ainv*alpha*beta
+    A[4,1] = bA11*ainv + D22*ainv*alpha*alpha
+
+    # The third equation for w
+    A[0,2] = A12*beta*ainv
+    A[1,2] = (bA11 + A22)*alpha*ainv + D22*alpha*ainv*ainv*ainv
+    A[2,2] = -(bA11*alpha*alpha + bA22*beta*beta + A22*ainv*ainv +
+               D22*ainv*ainv*ainv*ainv)
+    A[3,2] = -bA22*beta - D12*beta*ainv*ainv
+    A[4,2] = -bA11*alpha - D22*alpha*ainv*ainv
+
+    # Fourth equation for theta
+    A[0,3] = D33*ainv*alpha*alpha
+    A[1,3] = D12*ainv*alpha*beta
+    A[2,3] = -bA22*beta - D12*beta*ainv*ainv
+    A[3,3] = -(D11*beta*beta + D33*alpha*alpha) - bA22
+    A[4,3] = -(D12 + D33)*alpha*beta
+
+    # Fifth equation for phi
+    A[0,4] =  D33*ainv*alpha*beta
+    A[1,4] =  bA11*ainv + D22*ainv*alpha*alpha
+    A[2,4] = -bA11*alpha - D22*alpha*ainv*ainv
+    A[3,4] = -(D33 + D12)*alpha*beta
+    A[4,4] = -(D33*beta*beta + D22*alpha*alpha) - bA11
+
+    # Solve for the coefficients
+    ans = np.linalg.solve(A, rhs)
+
+    U = ans[0]
+    V = ans[1]
+    W = ans[2]
+    theta = ans[3]
+    phi = ans[4]
+
+    z1 = 0.5*t
+    rz1 = 1.0 - z1*ainv
+    a1 = -(beta*Q11*(U + z1*theta) + Q12*(alpha*(V*rz1 + z1*phi) - W*rz1*ainv))/ys
+    b1 = -(beta*Q12*(U + z1*theta) + Q22*(alpha*(V*rz1 + z1*phi) - W*rz1*ainv))/ys
+    c1 = Q33*(alpha*(U*rz1 + z1*theta) + beta*(V + z1*phi))/ys
+
+    z2 = -0.5*t
+    rz2 = 1.0 - z2*ainv
+    a2 = -(beta*Q11*(U + z2*theta) + Q12*(alpha*(V*rz2 + z2*phi) - W*rz2*ainv))/ys
+    b2 = -(beta*Q12*(U + z2*theta) + Q22*(alpha*(V*rz2 + z2*phi) - W*rz2*ainv))/ys
+    c2 = Q33*(alpha*(U*rz2 + z2*theta) + beta*(V + z2*phi))/ys
+
+    x = (a1**2 + b1**2 - a1*b1)
+    y = 3.0*c1**2
+    vm_max = max(np.sqrt(x*y/(x + y)), np.sqrt(x), np.sqrt(y))
+
+    x = (a2**2 + b2**2 - a2*b2)
+    y = 3.0*c2**2
+    vm_max = max(vm_max, np.sqrt(x*y/(x + y)), np.sqrt(x), np.sqrt(y))
+
+    x = np.linspace(0.0, L, n)
+    y = np.linspace(0.0, 2.0*np.pi*R, n)
+    S = np.zeros((n, n))
+
+    tcoef1 = (a1**2 + b1**2 - a1*b1)
+    tcoef2 = 3*c1**2
+    bcoef1 = (a2**2 + b2**2 - a2*b2)
+    bcoef2 = 3*c2**2
+
+    for j in range(n):
+        for i in range(n):
+            sin2 = (np.sin(alpha*y[j])*np.sin(beta*x[i]))**2
+            cos2 = (np.cos(alpha*y[j])*np.cos(beta*x[i]))**2
+            vm1 = np.sqrt((tcoef1*sin2 + tcoef2*cos2))
+            vm2 = np.sqrt((bcoef1*sin2 + bcoef2*cos2))
+            S[i,j] = np.exp(rho*(max(vm1, vm2) - vm_max))
+
+    # Integrate over the area
+    h = (2.0*L*R*np.pi)/(n-1)**2
+    ks_sum = 0.0
+    for j in range(n-1):
+        for i in range(n-1):
+            ks_sum += (S[i,j] + S[i+1,j] + S[i,j+1] + S[i+1,j+1])
+    ks_sum = 0.25*h*ks_sum
+
+    return vm_max, vm_max + np.log(ks_sum)/rho
+
+def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
+    '''
+    Axisymmetric disk subject to a uniform pressure load
+    '''
+    D = ((t**3)/12.0)*E/(1.0 - nu**2)
+    G = 0.5*E/(1.0 + nu)
+
+    Q11 = E/(1.0 - nu**2)
+    Q12 = nu*Q11
+    Q22 = Q11
+
+    # Compute the value of the radii
+    r0 = np.linspace(0, R, n)
+    S = np.zeros(n)
+
+    phi_over_r0 = load*(R**2/(16*D))
+    dphidr0 = load*(R**2/(16*D))
+
+    # Compute the value of the stress at the top surface
+    z1 = 0.5*t
+    err = z1*dphidr0
+    ett = z1*phi_over_r0
+
+    srr = Q11*err + Q12*ett
+    stt = Q12*err + Q22*ett
+
+    # Compute the von Mises at the top surface
+    vm1 = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+
+    # Compute the value of the stress at the bottom surface
+    z2 = -0.5*t
+    err = z2*dphidr0
+    ett = z2*phi_over_r0
+
+    srr = Q11*err + Q12*ett
+    stt = Q12*err + Q22*ett
+
+    # Compute the von Mises at the bottom surface
+    vm2 = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+
+    # Set the max von Mises stress
+    S[0] = max(vm1, vm2)
+
+    for i, r in enumerate(r0):
+        if i == 0:
+            continue
+
+        # The value of the transverse displacement
+        w = load*((R**4/(64*D))*(1 - (r/R)**2)**2 +
+                  (R**2/(4*kcorr*G*t))*(1 - (r/R)**2))
+
+        # The value of the rotation
+        phi = load*(R**3/(16*D))*(r/R)*(1 - (r/R)**2)
+        dphidr = load*(R**2/(16*D))*(1 - 3*(r/R)**2)
+
+        # Compute the value of the stress at the top surface
+        z1 = 0.5*t
+        err = z1*dphidr
+        ett = z1*phi/r
+
+        srr = Q11*err + Q12*ett
+        stt = Q12*err + Q22*ett
+
+        # Compute the von Mises at the top surface
+        vm1 = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+
+        # Compute the value of the stress at the bottom surface
+        z2 = -0.5*t
+        err = z2*dphidr
+        ett = z2*phi/r
+
+        srr = Q11*err + Q12*ett
+        stt = Q12*err + Q22*ett
+
+        # Compute the von Mises at the bottom surface
+        vm2 = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+
+        S[i] = max(vm1, vm2)
+
+    # Compute the maximum von Mises stress
+    vm_max = max(S)
+
+    # Compute the contribution to the KS functional
+    for i in range(n):
+        S[i] = np.exp(rho*(S[i] - vm_max))
+
+    # Integrate over the area
+    ks_sum = 0.0
+    for i in range(n-1):
+        r = 0.5*(r0[i+1] + r0[i])
+        dr = r0[i+1] - r0[i]
+        dA = 2*np.pi*r*dr
+        ks_sum += 0.5*dA*(S[i] + S[i+1])
+
+    return vm_max, vm_max + np.log(ks_sum)/rho
 
 class CreateMe(TMR.QuadCreator):
-    def __init__(self, bcs):
+    def __init__(self, bcs, case='cylinder'):
         TMR.QuadCreator.__init__(bcs)
+        self.case = case
+        return
 
     def createElement(self, order, quad):
         '''Create the element'''
         tmin = 0.0
         tmax = 1e6
         tnum = quad.tag
-        stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, t,
+        stiff = constitutive.isoFSDT(density, E, nu, kcorr, ys, t,
                                      tnum, tmin, tmax)
-        stiff.setRefAxis(np.array([0.0, 0.0, 1.0]))
+        if self.case == 'cylinder':
+            stiff.setRefAxis(np.array([0.0, 0.0, 1.0]))
+        elif self.case == 'disk':
+            stiff.setRefAxis(np.array([1.0, 0.0, 0.0]))
         elem = elements.MITCShell(order, stiff)
         return elem
 
-def addFaceTraction(order, assembler, load):
+def addFaceTraction(case, order, assembler, load):
     # Create the surface traction
     aux = TACS.AuxElements()
 
     # Get the element node locations
     nelems = assembler.getNumElements()
-    for i in range(nelems):
-        # Get the information about the given element
-        elem, Xpt, vars0, dvars, ddvars = assembler.getElementData(i)
 
-        # Loop over the nodes and create the traction forces in the
-        # x/y/z directions
+    if case == 'cylinder':
+        for i in range(nelems):
+            # Get the information about the given element
+            elem, Xpt, vars0, dvars, ddvars = assembler.getElementData(i)
+
+            # Loop over the nodes and create the traction forces in the
+            # x/y/z directions
+            nnodes = order*order
+            tx = np.zeros(nnodes, dtype=TACS.dtype)
+            ty = np.zeros(nnodes, dtype=TACS.dtype)
+            tz = np.zeros(nnodes, dtype=TACS.dtype)
+
+            # Set the components of the surface traction
+            for j in range(nnodes):
+                x = Xpt[3*j]
+                y = Xpt[3*j+1]
+                z = Xpt[3*j+2]
+                theta = -R*np.arctan2(y, x)
+                p = -load*np.sin(beta*z)*np.sin(alpha*theta)
+
+                tx[j] = p*Xpt[3*j]/R
+                ty[j] = p*Xpt[3*j+1]/R
+                tz[j] = 0.0
+
+            trac = elements.ShellTraction(order, tx, ty, tz)
+            aux.addElement(i, trac)
+    elif case == 'disk':
         nnodes = order*order
         tx = np.zeros(nnodes, dtype=TACS.dtype)
         ty = np.zeros(nnodes, dtype=TACS.dtype)
         tz = np.zeros(nnodes, dtype=TACS.dtype)
-
-        # Set the components of the surface traction
-        for j in range(nnodes):
-            x = Xpt[3*j]
-            y = Xpt[3*j+1]
-            z = Xpt[3*j+2]
-            theta = -R*np.arctan2(y, x)
-            p = -load*np.sin(beta*z)*np.sin(alpha*theta)
-
-            tx[j] = p*Xpt[3*j]/R
-            ty[j] = p*Xpt[3*j+1]/R
-            tz[j] = 0.0
-
+        tz[:] = load
         trac = elements.ShellTraction(order, tx, ty, tz)
-        aux.addElement(i, trac)
+
+        for i in range(nelems):
+            aux.addElement(i, trac)
 
     return aux
 
-def createRefined(forest, bcs, pttype=TMR.UNIFORM_POINTS):
+def createRefined(case, forest, bcs, pttype=TMR.UNIFORM_POINTS):
     new_forest = forest.duplicate()
     new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
-    creator = CreateMe(bcs)
+    creator = CreateMe(bcs, case=case)
     return new_forest, creator.createTACS(new_forest)
 
-def createProblem(forest, bcs, ordering, order=2, nlevels=2,
+def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
                   pttype=TMR.UNIFORM_POINTS):
     # Create the forest
     forests = []
@@ -91,7 +313,7 @@ def createProblem(forest, bcs, ordering, order=2, nlevels=2,
     forests.append(forest)
 
     # Make the creator class
-    creator = CreateMe(bcs)
+    creator = CreateMe(bcs, case=case)
     assemblers.append(creator.createTACS(forest, ordering))
 
     while order > 2:
@@ -102,7 +324,7 @@ def createProblem(forest, bcs, ordering, order=2, nlevels=2,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs)
+        creator = CreateMe(bcs, case=case)
         assemblers.append(creator.createTACS(forest, ordering))
 
     for i in range(nlevels-1):
@@ -112,7 +334,7 @@ def createProblem(forest, bcs, ordering, order=2, nlevels=2,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs)
+        creator = CreateMe(bcs, case=case)
         assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
@@ -125,6 +347,7 @@ comm = MPI.COMM_WORLD
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
+p.add_argument('--case', type=str, default='cylinder')
 p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
@@ -134,6 +357,26 @@ p.add_argument('--uniform_refinement', action='store_true', default=False)
 p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
 args = p.parse_args()
+
+# Set the case type
+case = args.case
+
+# Parameters that define the geometry of the cylinder
+t = 1.0 # 1 mm thickness
+L = 100.0 # 100 mm length
+R = 100.0/np.pi # Radius of the cylinder (in mm)
+
+# Set the load to apply to the cylinder
+load = 3.0 # 3 MPa
+alpha = 4.0/R # Set the value of alpha
+beta = 3.0*np.pi/L # Set the value of beta
+
+# Set the material properties
+density = 2700.0e-9 # kg/mm^3
+E = 70e3 # 70 GPa
+nu = 0.3 # Poisson's ratio
+ys = 350.0 # 350 MPa
+kcorr = 5.0/6.0 # The shear correction factor
 
 # Set the type of ordering to use for this problem
 ordering = args.ordering
@@ -154,20 +397,68 @@ steps = args.steps
 # Store whether to use a structured/unstructed mesh
 structured = args.structured
 
-# Load the geometry model
-geo = TMR.LoadModel('cylinder.stp')
-verts = geo.getVertices()
-edges = geo.getEdges()
-faces = geo.getFaces()
+# Set the load value to use depending on the case
+exact_ks_functional = 0.0
 
-# Create the simplified geometry with only faces
-geo = TMR.Model(verts, edges, [faces[0]])
+# The boundary condition object
+bcs = TMR.BoundaryConditions()
 
-# Set the boundary conditions
-verts[0].setAttribute('Clamped')
-verts[1].setAttribute('Restrained')
-edges[0].setAttribute('Restrained')
-edges[2].setAttribute('Restrained')
+if case == 'cylinder':
+    # Get the maximum stress and re-adjust the load
+    vm_max, res = cylinder_ks_functional(1.0, t, E, nu, kcorr, ys,
+        L, R, alpha, beta, load, n=10)
+    load = load/vm_max
+
+    # Compute the exact KS value
+    one, exact_ks_functional = cylinder_ks_functional(ksweight,
+        t, E, nu, kcorr, ys,
+        L, R, alpha, beta, load, n=1000)
+
+    # Load the geometry model
+    geo = TMR.LoadModel('cylinder.stp')
+    verts = geo.getVertices()
+    edges = geo.getEdges()
+    faces = geo.getFaces()
+
+    # Create the simplified geometry with only faces
+    geo = TMR.Model(verts, edges, [faces[0]])
+
+    # Set the boundary conditions
+    verts[0].setAttribute('Clamped')
+    verts[1].setAttribute('Restrained')
+    edges[0].setAttribute('Restrained')
+    edges[2].setAttribute('Restrained')
+
+    # Set the boundary conditions
+    bcs.addBoundaryCondition('Clamped', [0, 1, 2, 5])
+    bcs.addBoundaryCondition('Restrained', [0, 1, 5])
+elif case == 'disk':
+    # Get the maximum stress and re-adjust the load
+    vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=10)
+    load = load/vm_max
+
+    # Compute the exact KS value
+    one, exact_ks_functional = disk_ks_functional(ksweight,
+        t, E, nu, kcorr, ys, R, load, n=1000)
+
+    # Load the geometry model
+    geo = TMR.LoadModel('cylinder.stp')
+    verts = geo.getVertices()
+    edges = geo.getEdges()
+    faces = geo.getFaces()
+
+    # Set the attributes
+    verts[1].setAttribute('clamped')
+    edges[2].setAttribute('clamped')
+
+    # Set the boundary conditions
+    bcs.addBoundaryCondition('clamped', [0, 1, 2, 3, 4, 5])
+
+    # Create the new model
+    geo = TMR.Model([verts[1]], [edges[2]], [faces[2]])
+
+if comm.rank == 0:
+    print('Exact KS functional = %25.15e'%(exact_ks_functional))
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -187,6 +478,7 @@ opts.triangularize_print_iter = 50000
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)
+mesh.writeToVTK('mesh.vtk')
 
 # Create the corresponding mesh topology from the mesh-model
 model = mesh.createModelFromMesh()
@@ -202,11 +494,6 @@ forest.setTopology(topo)
 forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
 forest.createTrees(depth)
 
-# Set the boundary conditions for the problem
-bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('Clamped', [0, 1, 2, 5])
-bcs.addBoundaryCondition('Restrained', [0, 1, 5])
-
 # Set the ordering to use
 if ordering == 'rcm':
     ordering = TACS.PY_RCM_ORDER
@@ -219,24 +506,25 @@ else:
 target_rel_err = 1e-4
 
 # Open a log file to write
-if order == 2:
-    log_fp = open('cylinder_refine2nd.dat', 'w')
-elif order == 3:
-    log_fp = open('cylinder_refine3rd.dat', 'w')
-elif order == 4:
-    log_fp = open('cylinder_refine4th.dat', 'w')
+descript = 'unstructured'
+if structured:
+    descript = 'structured'
+if args.uniform_refinement:
+    descript += '_uniform'
 
-# Write the first line to the file
-log_fp.write('Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr\n')
+# Create the log file and write out the header
+log_fp = open('%s_order%d_%s.dat'%(case, order, descript), 'w')
+s = 'Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr, '
+s += 'exact, fval_error, fval_corr_error, '
+s += 'fval_effectivity, indicator_effectivity\n'
+log_fp.write(s)
 
 for k in range(steps):
     # Create the topology problem
     nlevs = min(3, depth+k+1)
-    assembler, mg = createProblem(forest, bcs, ordering,
+    assembler, mg = createProblem(case, forest, bcs, ordering,
                                   order=order, nlevels=nlevs)
-
-    # Add the surface traction
-    aux = addFaceTraction(order, assembler, load)
+    aux = addFaceTraction(case, order, assembler, load)
     assembler.setAuxElements(aux)
 
     # Create the assembler object
@@ -260,6 +548,7 @@ for k in range(steps):
 
     gmres = TACS.KSM(mat, pc, 100, isFlexible=0)
     gmres.setMonitor(comm, freq=10)
+    gmres.setTolerances(1e-14, 1e-30)
     gmres.solve(res, ans)
     ans.scale(-1.0)
 
@@ -280,7 +569,9 @@ for k in range(steps):
     fval = assembler.evalFunctions([func])[0]
 
     # Create the refined mesh
-    forest_refined, assembler_refined = createRefined(forest, bcs)
+    forest_refined, assembler_refined = createRefined(case, forest, bcs)
+    aux = addFaceTraction(case, order+1, assembler_refined, load)
+    assembler_refined.setAuxElements(aux)
 
     if args.energy_error:
         # Compute the strain energy error estimate
@@ -335,9 +626,20 @@ for k in range(steps):
     # Get the total number of nodes
     nnodes = comm.allreduce(assembler.getNumOwnedNodes(), op=MPI.SUM)
 
+    # Compute the error from the exact solution
+    fval_error = np.fabs(exact_ks_functional - fval)
+    fval_corr_error = np.fabs(exact_ks_functional - fval_corr)
+
+    fval_effectivity = (fval_corr - fval)/(exact_ks_functional - fval)
+    indicator_effectivity = err_est/np.fabs(exact_ks_functional - fval)
+
     # Write the log data to a file
-    log_fp.write('%6d %6d %6d %20.15e %20.15e %20.15e %20.15e\n'%(
-        k, ntotal, nnodes, fval, fval_corr, err_est, adjoint_corr))
+    s = '%6d %6d %6d %20.15e %20.15e %20.15e %20.15e '
+    s += '%20.15e %20.15e %20.15e %20.15e %20.15e\n'
+    log_fp.write(
+        s%(k, ntotal, nnodes, fval, fval_corr, err_est, adjoint_corr,
+        exact_ks_functional, fval_error, fval_corr_error,
+        fval_effectivity, indicator_effectivity))
     log_fp.flush()
 
     # Compute the bins
