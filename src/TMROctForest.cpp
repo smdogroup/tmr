@@ -1510,7 +1510,9 @@ int TMROctForest::getLocalNodeNumber( int node ){
   Get the knot points for the interpolation
 */
 int TMROctForest::getInterpKnots( const double **_knots ){
-  *_knots = interp_knots;
+  if (_knots){
+    *_knots = interp_knots;
+  }
   return mesh_order;
 }
 
