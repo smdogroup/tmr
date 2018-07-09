@@ -1,19 +1,28 @@
+TACS_DIR=${HOME}/git/tacs
+include ${TACS_DIR}/Makefile.in
+include ${TACS_DIR}/TACS_Common.mk
 include ../../Makefile.in
-include ../../TMR_Common.mk
 
-OBJS = cylinder.o
+#Flags for python compilation
+PY_INCLUDE = ${PYTHON_INCLUDE} -I${NUMPY_DIR} -I${MPI4PY_DIR}
+CYTHON_INCLUDE = -I${NUMPY_DIR} -I${MPI4PY_DIR}
 
-# Create a new rule for the code that requires both TACS and TMR
-%.o: %.c
-	${CXX} ${TMR_CC_FLAGS} -c $< -o $*.o
+# ParOpt shared objects
+CYTHON_SO = ksFSDT.so
 
-default: ${OBJS}
-	${CXX} cylinder.o ${TMR_LD_FLAGS} -o cylinder
+default: ${CYTHON_SO}
 
-debug: TMR_CC_FLAGS=${TMR_DEBUG_CC_FLAGS}
+debug: TACS_CC_FLAGS=${TACS_DEBUG_CC_FLAGS}
 debug: default
 
-clean:
-	rm -rf *.o
+%.cpp:%.pyx
+	cython -I${TACS_DIR}/tacs/ --cplus $*.pyx --include-dir ${TACS_DIR}/tacs/
 
-test:
+%.o:%.cpp
+	${CXX} -I${TACS_DIR}/tacs/ ${TACS_CC_FLAGS} ${PY_INCLUDE} -c $< -o $@
+
+ksFSDT.so: ksFSDT.o
+	${CXX} ${SO_LINK_FLAGS} ksFSDT.o ${TACS_LD_FLAGS} -o $@
+
+clean:
+	${RM} *.so *.o 

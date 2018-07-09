@@ -5,6 +5,21 @@ from tacs import TACS, elements, constitutive, functions
 import numpy as np
 import argparse
 import os
+import ksFSDT
+
+def integrate(integrand):
+    sigma = [17.0/48.0, 59.0/48.0, 43.0/48, 49/48.9]
+    r = len(sigma)
+
+    integral = 0.0
+    for i, s in enumerate(sigma):
+        integral += s*integrand[i]
+        integral += s*integrand[-1-i]
+
+    for i in range(r, len(integrand)-r):
+        integral += integrand[i]
+
+    return integral
 
 def cylinder_ks_functional(rho, t, E, nu, kcorr, ys,
                            L, R, alpha, beta, load, n=1000):
@@ -145,7 +160,7 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
 
     # Compute the value of the radii
     r0 = np.linspace(0, R, n)
-    S = np.zeros(n)
+    S = np.zeros((n, 2))
 
     phi_over_r0 = load*(R**2/(16*D))
     dphidr0 = load*(R**2/(16*D))
@@ -159,7 +174,7 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
     stt = Q12*err + Q22*ett
 
     # Compute the von Mises at the top surface
-    vm1 = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+    S[0,0] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
     # Compute the value of the stress at the bottom surface
     z2 = -0.5*t
@@ -170,18 +185,11 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
     stt = Q12*err + Q22*ett
 
     # Compute the von Mises at the bottom surface
-    vm2 = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
-
-    # Set the max von Mises stress
-    S[0] = max(vm1, vm2)
+    S[0,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
     for i, r in enumerate(r0):
         if i == 0:
             continue
-
-        # The value of the transverse displacement
-        w = load*((R**4/(64*D))*(1 - (r/R)**2)**2 +
-                  (R**2/(4*kcorr*G*t))*(1 - (r/R)**2))
 
         # The value of the rotation
         phi = load*(R**3/(16*D))*(r/R)*(1 - (r/R)**2)
@@ -196,7 +204,7 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
         stt = Q12*err + Q22*ett
 
         # Compute the von Mises at the top surface
-        vm1 = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+        S[i,0] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
         # Compute the value of the stress at the bottom surface
         z2 = -0.5*t
@@ -207,26 +215,20 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
         stt = Q12*err + Q22*ett
 
         # Compute the von Mises at the bottom surface
-        vm2 = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
-
-        S[i] = max(vm1, vm2)
+        S[i,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
     # Compute the maximum von Mises stress
-    vm_max = max(S)
+    vm_mx = np.max(S)
 
     # Compute the contribution to the KS functional
+    integrand = np.zeros(n)
     for i in range(n):
-        S[i] = np.exp(rho*(S[i] - vm_max))
+        integrand[i] = 2*np.pi*r0[i]*(np.exp(rho*(S[i,0] - vm_mx)) +
+                                      np.exp(rho*(S[i,1] - vm_mx)))
 
-    # Integrate over the area
-    ks_sum = 0.0
-    for i in range(n-1):
-        r = 0.5*(r0[i+1] + r0[i])
-        dr = r0[i+1] - r0[i]
-        dA = 2*np.pi*r*dr
-        ks_sum += 0.5*dA*(S[i] + S[i+1])
+    ks_sum = (R/(n-1))*integrate(integrand)
 
-    return vm_max, vm_max + np.log(ks_sum)/rho
+    return vm_mx, vm_mx + np.log(ks_sum)/rho
 
 class CreateMe(TMR.QuadCreator):
     def __init__(self, bcs, case='cylinder'):
@@ -239,8 +241,8 @@ class CreateMe(TMR.QuadCreator):
         tmin = 0.0
         tmax = 1e6
         tnum = quad.tag
-        stiff = constitutive.isoFSDT(density, E, nu, kcorr, ys, t,
-                                     tnum, tmin, tmax)
+        stiff = ksFSDT.ksFSDT(ksweight, density, E, nu, kcorr, ys, t,
+                              tnum, tmin, tmax)
         if self.case == 'cylinder':
             stiff.setRefAxis(np.array([0.0, 0.0, 1.0]))
         elif self.case == 'disk':
@@ -438,8 +440,12 @@ elif case == 'disk':
     load = load/vm_max
 
     # Compute the exact KS value
-    one, exact_ks_functional = disk_ks_functional(ksweight,
-        t, E, nu, kcorr, ys, R, load, n=1000)
+    # for n in [1000, 10000, 100000, 1000000, 10000000]:
+    #     one, exact_ks_functional = disk_ks_functional(ksweight,
+    #         t, E, nu, kcorr, ys, R, load, n=n)
+    #     print('exact ks functional = ', exact_ks_functional)
+
+    exact_ks_functional = 1.0372627248381336
 
     # Load the geometry model
     geo = TMR.LoadModel('cylinder.stp')

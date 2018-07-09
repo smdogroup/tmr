@@ -1,3 +1,4 @@
+from __future__ import print_function
 import tikzplots as tkz
 import argparse
 import numpy as np
@@ -64,8 +65,8 @@ xvalues = idx_max - idx_min + 1
 xticks = xvalues*(np.linspace(x0, x1, x0 - x1 + 1) - x0)/(x1 - x0)
 xtick_labels = range(x0, x1-1, -1)
 
-print xticks
-print xtick_labels
+print('xticks = ', xticks)
+print('xtick_labels = ', xtick_labels)
 
 # Show the max/min value
 xmin = 0
