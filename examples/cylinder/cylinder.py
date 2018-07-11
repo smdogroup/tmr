@@ -102,14 +102,18 @@ def cylinder_ks_functional(rho, t, E, nu, kcorr, ys,
 
     z1 = 0.5*t
     rz1 = 1.0 - z1*ainv
-    a1 = -(beta*Q11*(U + z1*theta) + Q12*(alpha*(V*rz1 + z1*phi) - W*rz1*ainv))/ys
-    b1 = -(beta*Q12*(U + z1*theta) + Q22*(alpha*(V*rz1 + z1*phi) - W*rz1*ainv))/ys
+    a1 = (-(beta*Q11*(U + z1*theta) +
+          Q12*(alpha*(V*rz1 + z1*phi) - W*rz1*ainv))/ys)
+    b1 = (-(beta*Q12*(U + z1*theta) +
+          Q22*(alpha*(V*rz1 + z1*phi) - W*rz1*ainv))/ys)
     c1 = Q33*(alpha*(U*rz1 + z1*theta) + beta*(V + z1*phi))/ys
 
     z2 = -0.5*t
     rz2 = 1.0 - z2*ainv
-    a2 = -(beta*Q11*(U + z2*theta) + Q12*(alpha*(V*rz2 + z2*phi) - W*rz2*ainv))/ys
-    b2 = -(beta*Q12*(U + z2*theta) + Q22*(alpha*(V*rz2 + z2*phi) - W*rz2*ainv))/ys
+    a2 = (-(beta*Q11*(U + z2*theta) +
+          Q12*(alpha*(V*rz2 + z2*phi) - W*rz2*ainv))/ys)
+    b2 = (-(beta*Q12*(U + z2*theta) +
+          Q22*(alpha*(V*rz2 + z2*phi) - W*rz2*ainv))/ys)
     c2 = Q33*(alpha*(U*rz2 + z2*theta) + beta*(V + z2*phi))/ys
 
     x = (a1**2 + b1**2 - a1*b1)
@@ -147,7 +151,7 @@ def cylinder_ks_functional(rho, t, E, nu, kcorr, ys,
 
     return vm_max, vm_max + np.log(ks_sum)/rho
 
-def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
+def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000, disp=False):
     '''
     Axisymmetric disk subject to a uniform pressure load
     '''
@@ -161,6 +165,7 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
     # Compute the value of the radii
     r0 = np.linspace(0, R, n)
     S = np.zeros((n, 2))
+    w0 = np.zeros(n)
 
     phi_over_r0 = load*(R**2/(16*D))
     dphidr0 = load*(R**2/(16*D))
@@ -188,6 +193,10 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
     S[0,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
     for i, r in enumerate(r0):
+        # Set the transverse displacement
+        w0[i] = load*((R**4)/(64*D)*(1.0 - (r/R)**2)**2 +
+                      (R**2)/(4*kcorr*G*t)*(1.0 - (r/R)**2))
+
         if i == 0:
             continue
 
@@ -221,14 +230,125 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000):
     vm_mx = np.max(S)
 
     # Compute the contribution to the KS functional
-    integrand = np.zeros(n)
-    for i in range(n):
-        integrand[i] = 2*np.pi*r0[i]*(np.exp(rho*(S[i,0] - vm_mx)) +
-                                      np.exp(rho*(S[i,1] - vm_mx)))
+    if disp:
+        max_disp = np.max(w0)
+        integrand = np.zeros(n)
+        for i in range(n):
+            integrand[i] = 2*np.pi*r0[i]*np.exp(rho*(w0[i] - max_disp))
 
-    ks_sum = (R/(n-1))*integrate(integrand)
+        ks_sum = (R/(n-1))*integrate(integrand)
+        ks = max_disp + np.log(ks_sum)/rho
+    else:
+        integrand = np.zeros(n)
+        for i in range(n):
+            integrand[i] = 2*np.pi*r0[i]*(np.exp(rho*(S[i,0] - vm_mx)) +
+                                          np.exp(rho*(S[i,1] - vm_mx)))
 
-    return vm_mx, vm_mx + np.log(ks_sum)/rho
+        ks_sum = (R/(n-1))*integrate(integrand)
+        ks = vm_mx + np.log(ks_sum)/rho
+
+    return vm_mx, ks
+
+def get_quadrature(order):
+    '''Get the quadrature rule for the given element order'''
+
+    pts, wts = np.polynomial.legendre.leggauss(order)
+
+    plist = []
+    wlist = []
+    for w2, p2 in zip(wts, pts):
+        for w1, p1 in zip(wts, pts):
+            plist.append([p1, p2])
+            wlist.append(w1*w2)
+
+    return wlist, plist
+
+def shape_funcs(order, x):
+    if order == 2:
+        n = [0.5*(1.0 - x), 0.5*(1.0 + x)]
+        nx = [-0.5, 0.5]
+    elif order == 3:
+        n = [0.5*x*(x-1), 1-x**2, 0.5*(1+x)*x]
+        nx = [-0.5+x, -2*x, 0.5+x]
+    elif order == 4:
+        n = [-(1.0/16.0)*(3.0*x + 1.0)*(3.0*x - 1.0)*(x - 1.0),
+            (9.0/16.0)*(x + 1.0)*(3.0*x - 1.0)*(x - 1.0),
+            -(9.0/16.0)*(x + 1.0)*(3.0*x + 1.0)*(x - 1.0),
+            (1.0/16.0)*(x + 1.0)*(3.0*x + 1.0)*(3.0*x - 1.0)]
+        nx =[-(1.0/16.0)*(27.0*x*x - 18.0*x - 1.0),
+            (9.0/16.0)*(9.0*x*x - 2.0*x - 3.0),
+            -(9.0/16.0)*(9.0*x*x + 2.0*x - 3.0),
+            (1.0/16.0)*(27.0*x*x + 18.0*x - 1.0)]
+    elif order == 5:
+        n = [(4*x**4 - 4*x**3 - x**2 + x)/6,
+             (-16*x**4 + 8*x**3 + 16*x**2 - 8*x)/6,
+             (4*x**4 - 5*x**2 + 1.0),
+             (-16*x**4 - 8*x**3 + 16*x**2 + 8*x)/6,
+             (4*x**4 + 4*x**3 - x**2 - x)/6]
+        nx = [(16*x**3 - 12*x**2 - 2*x + 1)/6,
+              (-64*x**3 + 24*x**2 + 32*x - 8)/6,
+              (16*x**3 - 10*x),
+              (-64*x**3 - 24*x**2 + 32*x + 8)/6,
+              (16*x**3 + 12*x**2 - 2*x - 1)/6]
+
+    return n, nx
+
+def get_shape_funcs(order, pt):
+    '''Get the shape functions for the given element order'''
+    n1, n1x = shape_funcs(order, pt[0])
+    n2, n2x = shape_funcs(order, pt[1])
+
+    N = np.outer(n2, n1).flatten()
+    Na = np.outer(n2, n1x).flatten()
+    Nb = np.outer(n2x, n1).flatten()
+    return N, Na, Nb
+
+class disk_exact:
+    def __init__(self, load, E, nu, kcorr, R, t):
+        self.load = load
+        self.E = E
+        self.nu = nu
+        self.kcorr = kcorr
+        self.G = 0.5*E/(1.0 + nu)
+        self.R = R
+        self.t = t
+        self.D = ((t**3)/12)*E/(1.0 - nu**2)
+
+    def disk_exact_callback(self, X):
+        r = np.sqrt(X[0]**2 + X[1]**2 + X[2]**2)
+
+        return self.load*((self.R**4)/(64*self.D)*(1.0 - (r/self.R)**2)**2 +
+            (self.R**2)/(4*self.kcorr*self.G*self.t)*(1.0 - (r/self.R)**2))
+
+def compute_solution_error(comm, order, assembler, exact_callback):
+    nelems = assembler.getNumElements()
+
+    # Get the quadrature for the given element order
+    wts, pts = get_quadrature(order+1)
+
+    err = 0.0
+    for i in range(nelems):
+        # Get the information about the given element
+        elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
+        Xpt = np.array(Xpt).reshape(-1, 3).T
+        vrs = np.array(vrs)
+
+        # Compute the quadrature points/weights over the element
+        for wt, pt in zip(wts, pts):
+            N, Na, Nb = get_shape_funcs(order, pt)
+            X = np.dot(Xpt, N)
+            Xa = np.dot(Xpt, Na)
+            Xb = np.dot(Xpt, Nb)
+            normal = np.cross(Xa, Xb)
+            detJ = np.sqrt(np.dot(normal, normal))
+
+            w = np.dot(vrs[2::6], N)
+            w_exact = exact_callback(X)
+            err += wt*detJ*(w - w_exact)**2
+
+    err = comm.allreduce(err, op=MPI.SUM)
+
+    return np.sqrt(err)
 
 class CreateMe(TMR.QuadCreator):
     def __init__(self, bcs, case='cylinder'):
@@ -260,7 +380,7 @@ def addFaceTraction(case, order, assembler, load):
     if case == 'cylinder':
         for i in range(nelems):
             # Get the information about the given element
-            elem, Xpt, vars0, dvars, ddvars = assembler.getElementData(i)
+            elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
 
             # Loop over the nodes and create the traction forces in the
             # x/y/z directions
@@ -298,7 +418,7 @@ def addFaceTraction(case, order, assembler, load):
 
 def createRefined(case, forest, bcs, pttype=TMR.UNIFORM_POINTS):
     new_forest = forest.duplicate()
-    new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
+    new_forest.setMeshOrder(forest.getMeshOrder()+2, pttype)
     creator = CreateMe(bcs, case=case)
     return new_forest, creator.createTACS(new_forest)
 
@@ -350,6 +470,7 @@ comm = MPI.COMM_WORLD
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--case', type=str, default='cylinder')
+p.add_argument('--disp_aggregation', action='store_true', default=False)
 p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
@@ -358,6 +479,7 @@ p.add_argument('--ksweight', type=float, default=100.0)
 p.add_argument('--uniform_refinement', action='store_true', default=False)
 p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
+p.add_argument('--compute_solution_error', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the case type
@@ -399,6 +521,9 @@ steps = args.steps
 # Store whether to use a structured/unstructed mesh
 structured = args.structured
 
+# Set what to aggregate
+disp_aggregation = args.disp_aggregation
+
 # Set the load value to use depending on the case
 exact_ks_functional = 0.0
 
@@ -439,13 +564,17 @@ elif case == 'disk':
     vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=10)
     load = load/vm_max
 
-    # Compute the exact KS value
-    # for n in [1000, 10000, 100000, 1000000, 10000000]:
-    #     one, exact_ks_functional = disk_ks_functional(ksweight,
-    #         t, E, nu, kcorr, ys, R, load, n=n)
-    #     print('exact ks functional = ', exact_ks_functional)
-
-    exact_ks_functional = 1.0372627248381336
+    if ksweight == 100.0:
+        if disp_aggregation:
+            exact_ks_functional = 1.3276372529418012
+        else:
+            exact_ks_functional = 1.0372627248381336
+    else:
+        # Compute the exact KS value
+        for n in [1000, 10000, 100000, 1000000]: #, 10000000]:
+            one, exact_ks_functional = disk_ks_functional(ksweight,
+                t, E, nu, kcorr, ys, R, load, n=n, disp=disp_aggregation)
+            print('exact ks functional = ', exact_ks_functional)
 
     # Load the geometry model
     geo = TMR.LoadModel('cylinder.stp')
@@ -517,6 +646,8 @@ if structured:
     descript = 'structured'
 if args.uniform_refinement:
     descript += '_uniform'
+if args.disp_aggregation:
+    descript += '_disp'
 
 # Create the log file and write out the header
 log_fp = open('%s_order%d_%s.dat'%(case, order, descript), 'w')
@@ -524,6 +655,13 @@ s = 'Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr, '
 s += 'exact, fval_error, fval_corr_error, '
 s += 'fval_effectivity, indicator_effectivity\n'
 log_fp.write(s)
+
+if case == 'disk' and args.compute_solution_error:
+    sol_log_fp = open('solution_error_%s_order%d_%s.dat'%(
+        case, order, descript), 'w')
+    s = 'Variables = iter, nelems, nnodes, '
+    s += 'solution_error, recon_solution_error\n'
+    sol_log_fp.write(s)
 
 for k in range(steps):
     # Create the topology problem
@@ -552,7 +690,7 @@ for k in range(steps):
         pc = mg
         mat = mg.getMat()
 
-    gmres = TACS.KSM(mat, pc, 100, isFlexible=0)
+    gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
     gmres.setMonitor(comm, freq=10)
     gmres.setTolerances(1e-14, 1e-30)
     gmres.solve(res, ans)
@@ -570,13 +708,23 @@ for k in range(steps):
     f5.writeToFile('results/solution%02d.f5'%(k))
 
     # Create the function
-    func = functions.KSFailure(assembler, ksweight)
-    func.setKSFailureType('continuous')
+    if disp_aggregation:
+        direction = [0.0, 0.0, 1.0]
+        func = functions.KSDisplacement(assembler, ksweight, direction)
+    else:
+        func = functions.KSFailure(assembler, ksweight)
+        func.setKSFailureType('continuous')
     fval = assembler.evalFunctions([func])[0]
 
-    # Create the refined mesh
+    # # Create the refined mesh
+    # forest_refined = forest.duplicate()
+    # assembler_refined, mg_refined = createProblem(case, forest_refined,
+    #     bcs, ordering, order=order+1, nlevels=nlevs)
+    # aux = addFaceTraction(case, order+1, assembler_refined, load)
+    # assembler_refined.setAuxElements(aux)
+
     forest_refined, assembler_refined = createRefined(case, forest, bcs)
-    aux = addFaceTraction(case, order+1, assembler_refined, load)
+    aux = addFaceTraction(case, order+2, assembler_refined, load)
     assembler_refined.setAuxElements(aux)
 
     if args.energy_error:
@@ -585,26 +733,131 @@ for k in range(steps):
         adjoint_corr = 0.0
         err_est, error = TMR.strainEnergyError(forest, assembler,
             forest_refined, assembler_refined)
+
+        TMR.computeReconSolution(forest, assembler,
+            forest_refined, assembler_refined)
     else:
-        # Compute the adjoint
+        # Compute the adjoint on the original mesh
         res.zeroEntries()
         assembler.evalSVSens(func, res)
-
-        # Compute the adjoint solution
         adjoint = assembler.createVec()
         gmres.solve(res, adjoint)
         adjoint.scale(-1.0)
 
+        # # Compute the interpolated adjoint on the refined mesh
+        # adjoint_interp = assembler_refined.createVec()
+        # TMR.computeInterpSolution(forest, assembler,
+        #     forest_refined, assembler_refined, adjoint, adjoint_interp)
+
+        # # Compute the solution on the refined mesh
+        # ans_interp = assembler_refined.createVec()
+        # TMR.computeInterpSolution(forest, assembler,
+        #     forest_refined, assembler_refined, ans, ans_interp)
+
+        # # Apply the boundary conditions
+        # assembler_refined.applyBCs(ans_interp)
+        # assembler_refined.applyBCs(adjoint_interp)
+
+        # # Set the interpolated variable values
+        # assembler_refined.setVariables(ans_interp)
+
+        # # Compute the functional on the refined mesh
+        # if disp_aggregation:
+        #     direction = [0.0, 0.0, 1.0]
+        #     func_refined = functions.KSDisplacement(assembler_refined,
+        #         ksweight, direction)
+        # else:
+        #     func_refined = functions.KSFailure(assembler_refined, ksweight)
+        #     func_refined.setKSFailureType('continuous')
+        # fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+
+        # # Set up the preconditioner on the refined mesh
+        # if use_direct_solve:
+        #     mat = assembler.createFEMat()
+        #     assembler.assembleJacobian(1.0, 0.0, 0.0, res, mat)
+
+        #     # Create the direct solver
+        #     pc = TACS.Pc(mat)
+        #     pc.factor()
+        # else:
+        #     # Solve the linear system
+        #     mg_refined.assembleJacobian(1.0, 0.0, 0.0)
+        #     mg_refined.factor()
+        #     pc = mg_refined
+        #     mat = mg_refined.getMat()
+
+        # # Create the GMRES object
+        # gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
+        # gmres.setMonitor(comm, freq=10)
+        # gmres.setTolerances(1e-14, 1e-30)
+
+        # # Compute the adjoint on the original mesh
+        # res = assembler_refined.createVec()
+        # assembler_refined.evalSVSens(func_refined, res)
+        # adjoint_refined = assembler_refined.createVec()
+        # gmres.solve(res, adjoint_refined)
+        # adjoint_refined.scale(-1.0)
+
+        # # Take the difference to compute the input to the refinement tool
+        # adjoint_refined.axpy(-1.0, adjoint_interp)
+
+        # ans_diff = assembler_refined.createVec()
+        # TMR.computeReconSolution(forest, assembler,
+        #     forest_refined, assembler_refined, ans, ans_diff)
+        # ans_diff.axpy(-1.0, ans_interp)
+
+        # # Compute the right-hand-side of the functional
+        # scale = -1.0
+        # alpha = 1.0
+        # beta = 0.0
+        # gamma = 0.0
+        # assembler_refined.addJacobianVecProduct(scale, alpha, beta, gamma,
+        #     adjoint_refined, res, matOr=TACS.PY_TRANSPOSE)
+
+        # adjoint_corr_dual = ans_diff.dot(res)
+
+        # # Compute the adjoint and use adjoint-based refinement
+        # err_est, adjoint_corr_primal, error = \
+        #     TMR.adjointError(forest, assembler,
+        #                      forest_refined, assembler_refined,
+        #                      ans_interp, adjoint_refined)
+
+        # adjoint_corr = 0.5*(adjoint_corr_primal + adjoint_corr_dual)
+
+        # Compute the solution on the refined mesh
+        ans_interp = assembler_refined.createVec()
+        TMR.computeReconSolution(forest, assembler,
+            forest_refined, assembler_refined, ans, ans_interp)
+
+        # Apply Dirichlet boundary conditions
+        assembler_refined.applyBCs(ans_interp)
+        assembler_refined.setVariables(ans_interp)
+
+        # Compute the functional on the refined mesh
+        if disp_aggregation:
+            direction = [0.0, 0.0, 1.0]
+            func_refined = functions.KSDisplacement(assembler_refined,
+                ksweight, direction)
+        else:
+            func_refined = functions.KSFailure(assembler_refined, ksweight)
+            func_refined.setKSFailureType('continuous')
+        fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+
+        # Approximate the difference between the refined adjoint and the
+        # adjoint on the current mesh
+        adjoint_diff = assembler_refined.createVec()
+        TMR.computeReconSolution(forest, assembler,
+            forest_refined, assembler_refined, adjoint, adjoint_diff,
+            compute_diff=True)
+
+        # Apply Dirichlet boundary conditions to the solution
+        assembler_refined.applyBCs(adjoint_diff)
+
         # Compute the adjoint and use adjoint-based refinement
         err_est, adjoint_corr, error = \
             TMR.adjointError(forest, assembler,
-                             forest_refined, assembler_refined, adjoint)
-
-        # Evaluate the function again on the refined mesh to obtain
-        # the
-        func_refined = functions.KSFailure(assembler_refined, ksweight)
-        func_refined.setKSFailureType('continuous')
-        fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+                             forest_refined, assembler_refined,
+                             ans_interp, adjoint_diff)
 
         # Compute the refined function value
         fval_corr = fval_refined + adjoint_corr
@@ -615,7 +868,7 @@ for k in range(steps):
     # Compute the refinement from the error estimate
     low = -16
     high = 4
-    bins_per_decade = 4
+    bins_per_decade = 10
     nbins = bins_per_decade*(high - low)
     bounds = 10**np.linspace(high, low, nbins+1)
     bins = np.zeros(nbins+2, dtype=np.int)
@@ -647,6 +900,16 @@ for k in range(steps):
         exact_ks_functional, fval_error, fval_corr_error,
         fval_effectivity, indicator_effectivity))
     log_fp.flush()
+
+    if case == 'disk' and args.compute_solution_error:
+        disk_model = disk_exact(load, E, nu, kcorr, R, t)
+        solution_error = compute_solution_error(comm, order, assembler,
+            disk_model.disk_exact_callback)
+        recon_solution_error = compute_solution_error(comm, order+1,
+            assembler_refined, disk_model.disk_exact_callback)
+        sol_log_fp.write('%6d %6d %6d %20.15e %20.15e\n'%(
+            k, ntotal, nnodes, solution_error, recon_solution_error))
+        sol_log_fp.flush()
 
     # Compute the bins
     for i in range(len(error)):
@@ -713,7 +976,7 @@ for k in range(steps):
         bin_sum = 0
         for i in range(len(bins)+1):
             bin_sum += bins[i]
-            if bin_sum > 0.15*ntotal:
+            if bin_sum > 0.3*ntotal:
                 cutoff = bounds[i]
                 break
 
