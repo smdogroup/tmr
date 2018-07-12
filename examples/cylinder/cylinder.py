@@ -363,23 +363,28 @@ def get_midpoint_vector(comm, forest, assembler, attr):
     return vec
 
 class CreateMe(TMR.QuadCreator):
-    def __init__(self, bcs, case='cylinder'):
+    def __init__(self, bcs, case='cylinder', use_shell=False):
         TMR.QuadCreator.__init__(bcs)
         self.case = case
+        self.use_shell = use_shell
         return
 
     def createElement(self, order, quad):
         '''Create the element'''
-        tmin = 0.0
-        tmax = 1e6
-        tnum = quad.tag
-        stiff = ksFSDT.ksFSDT(ksweight, density, E, nu, kcorr, ys, t,
-                              tnum, tmin, tmax)
-        if self.case == 'cylinder':
-            stiff.setRefAxis(np.array([0.0, 0.0, 1.0]))
-        elif self.case == 'disk':
-            stiff.setRefAxis(np.array([1.0, 0.0, 0.0]))
-        elem = elements.MITCShell(order, stiff)
+        if self.use_shell:
+            tmin = 0.0
+            tmax = 1e6
+            tnum = quad.tag
+            stiff = ksFSDT.ksFSDT(ksweight, density, E, nu, kcorr, ys, t,
+                                  tnum, tmin, tmax)
+            if self.case == 'cylinder':
+                stiff.setRefAxis(np.array([0.0, 0.0, 1.0]))
+            elif self.case == 'disk':
+                stiff.setRefAxis(np.array([1.0, 0.0, 0.0]))
+            elem = elements.MITCShell(order, stiff)
+        else:
+            f = np.ones(order*order)
+            elem = elements.PoissonQuad(order, f)
         return elem
 
 def addFaceTraction(case, order, assembler, load):
@@ -572,12 +577,12 @@ if case == 'cylinder':
     bcs.addBoundaryCondition('Clamped', [0, 1, 2, 5])
     bcs.addBoundaryCondition('Restrained', [0, 1, 5])
 elif case == 'disk':
-    t = 2.0
+    t = 10.0
     R = 100.0
 
     # Get the maximum stress and re-adjust the load
     vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=10)
-    load = load/vm_max
+    load = 10*load/vm_max
 
     D = ((t**3)/12)*E/(1.0 - nu**2)
     G = 0.5*E/(1.0 + nu)
@@ -702,11 +707,11 @@ if case == 'disk' and args.compute_solution_error:
 
 for k in range(steps):
     # Create the topology problem
-    nlevs = min(3, depth+k+1)
+    nlevs = min(4, depth+k+1)
     assembler, mg = createProblem(case, forest, bcs, ordering,
                                   order=order, nlevels=nlevs)
-    aux = addFaceTraction(case, order, assembler, load)
-    assembler.setAuxElements(aux)
+    # aux = addFaceTraction(case, order, assembler, load)
+    # assembler.setAuxElements(aux)
 
     # Create the assembler object
     res = assembler.createVec()
@@ -764,8 +769,8 @@ for k in range(steps):
     # assembler_refined.setAuxElements(aux)
 
     forest_refined, assembler_refined = createRefined(case, forest, bcs)
-    aux = addFaceTraction(case, order+1, assembler_refined, load)
-    assembler_refined.setAuxElements(aux)
+    # aux = addFaceTraction(case, order+1, assembler_refined, load)
+    # assembler_refined.setAuxElements(aux)
 
     if args.energy_error:
         # Compute the strain energy error estimate
@@ -894,7 +899,7 @@ for k in range(steps):
         adjoint_diff = assembler_refined.createVec()
         TMR.computeReconSolution(forest, assembler,
             forest_refined, assembler_refined, adjoint, adjoint_diff,
-            compute_diff=True)
+            compute_diff=False)
 
         # Apply Dirichlet boundary conditions to the solution
         assembler_refined.applyBCs(adjoint_diff)
