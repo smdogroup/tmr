@@ -697,11 +697,11 @@ static void computeElemRecon2D( const int vars_per_node,
     wvals[0] = wvals[1] = 1.0;
   }
   else if (order == 3){
-    wvals[0] = wvals[2] = 1.0;
+    wvals[0] = wvals[2] = 0.5;
     wvals[1] = 1.0;
   }
   else {
-    wvals[0] = wvals[3] = 1.0;
+    wvals[0] = wvals[3] = 0.5;
     wvals[1] = wvals[2] = 1.0;
   }
 
@@ -1825,6 +1825,9 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
   uvec_refined->beginSetValues(TACS_INSERT_NONZERO_VALUES);
   uvec_refined->endSetValues(TACS_INSERT_NONZERO_VALUES);
 
+  uvec_refined->beginDistributeValues();
+  uvec_refined->endDistributeValues();
+
   // The solution was not passed as an argument
   if (!_uvec){
     uvec->decref();
@@ -2835,18 +2838,19 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
     // Get the node numbers for the refined mesh
     int refine_len = 0;
     const int *refine_nodes;
-    tacs_refined->getElement(elem, &refine_nodes, &refine_len);
+    TACSElement *element =
+      tacs_refined->getElement(elem, &refine_nodes, &refine_len);
 
     // Get the adjoint variables for this element
     nodal_error->getValues(refine_len, refine_nodes, err);
 
     // Compute the element indicator error as a function of the nodal
     // error estimate.
-    error[elem] =
-      0.25*fabs(TacsRealPart(err[0] +
-                             err[refined_order-1] +
-                             err[refined_order*(refined_order-1)] +
-                             err[refined_order*refined_order-1]));
+    error[elem] = 0.0;
+    for ( int i = 0; i < element->numNodes(); i++ ){
+      error[elem] += TacsRealPart(err[i]);
+    }
+    error[elem] = 0.25*fabs(error[elem]);
     total_error_remain += error[elem];
   }
 

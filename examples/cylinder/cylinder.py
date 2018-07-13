@@ -363,28 +363,23 @@ def get_midpoint_vector(comm, forest, assembler, attr):
     return vec
 
 class CreateMe(TMR.QuadCreator):
-    def __init__(self, bcs, case='cylinder', use_shell=False):
+    def __init__(self, bcs, case='cylinder'):
         TMR.QuadCreator.__init__(bcs)
         self.case = case
-        self.use_shell = use_shell
         return
 
     def createElement(self, order, quad):
         '''Create the element'''
-        if self.use_shell:
-            tmin = 0.0
-            tmax = 1e6
-            tnum = quad.tag
-            stiff = ksFSDT.ksFSDT(ksweight, density, E, nu, kcorr, ys, t,
-                                  tnum, tmin, tmax)
-            if self.case == 'cylinder':
-                stiff.setRefAxis(np.array([0.0, 0.0, 1.0]))
-            elif self.case == 'disk':
-                stiff.setRefAxis(np.array([1.0, 0.0, 0.0]))
-            elem = elements.MITCShell(order, stiff)
-        else:
-            f = np.ones(order*order)
-            elem = elements.PoissonQuad(order, f)
+        tmin = 0.0
+        tmax = 1e6
+        tnum = quad.tag
+        stiff = ksFSDT.ksFSDT(ksweight, density, E, nu, kcorr, ys, t,
+                              tnum, tmin, tmax)
+        if self.case == 'cylinder':
+            stiff.setRefAxis(np.array([0.0, 0.0, 1.0]))
+        elif self.case == 'disk':
+            stiff.setRefAxis(np.array([1.0, 0.0, 0.0]))
+        elem = elements.MITCShell(order, stiff)
         return elem
 
 def addFaceTraction(case, order, assembler, load):
@@ -577,9 +572,6 @@ if case == 'cylinder':
     bcs.addBoundaryCondition('Clamped', [0, 1, 2, 5])
     bcs.addBoundaryCondition('Restrained', [0, 1, 5])
 elif case == 'disk':
-    t = 10.0
-    R = 100.0
-
     # Get the maximum stress and re-adjust the load
     vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=10)
     load = 10*load/vm_max
@@ -659,7 +651,6 @@ mesh.writeToVTK('mesh.vtk')
 
 # Create the corresponding mesh topology from the mesh-model
 model = mesh.createModelFromMesh()
-model.writeModelToTecplot('model.dat')
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
@@ -710,8 +701,8 @@ for k in range(steps):
     nlevs = min(4, depth+k+1)
     assembler, mg = createProblem(case, forest, bcs, ordering,
                                   order=order, nlevels=nlevs)
-    # aux = addFaceTraction(case, order, assembler, load)
-    # assembler.setAuxElements(aux)
+    aux = addFaceTraction(case, order, assembler, load)
+    assembler.setAuxElements(aux)
 
     # Create the assembler object
     res = assembler.createVec()
@@ -741,7 +732,7 @@ for k in range(steps):
     # Set the variables
     assembler.setVariables(ans)
 
-    # Output for visualization
+    Output for visualization
     flag = (TACS.ToFH5.NODES |
             TACS.ToFH5.DISPLACEMENTS |
             TACS.ToFH5.STRAINS |
@@ -769,8 +760,8 @@ for k in range(steps):
     # assembler_refined.setAuxElements(aux)
 
     forest_refined, assembler_refined = createRefined(case, forest, bcs)
-    # aux = addFaceTraction(case, order+1, assembler_refined, load)
-    # assembler_refined.setAuxElements(aux)
+    aux = addFaceTraction(case, order+1, assembler_refined, load)
+    assembler_refined.setAuxElements(aux)
 
     if args.energy_error:
         # Compute the strain energy error estimate
@@ -898,20 +889,37 @@ for k in range(steps):
         # adjoint on the current mesh
         adjoint_diff = assembler_refined.createVec()
         TMR.computeReconSolution(forest, assembler,
-            forest_refined, assembler_refined, adjoint, adjoint_diff,
-            compute_diff=False)
+            forest_refined, assembler_refined, adjoint, adjoint_diff)
 
-        # Apply Dirichlet boundary conditions to the solution
-        assembler_refined.applyBCs(adjoint_diff)
-
-        # Compute the adjoint and use adjoint-based refinement
-        err_est, adjoint_corr, error = \
+        # # Compute the adjoint and use adjoint-based refinement
+        err_est, adjoint_corr1, error = \
             TMR.adjointError(forest, assembler,
                              forest_refined, assembler_refined,
                              ans_interp, adjoint_diff)
 
+        # Apply Dirichlet boundary conditions to the solution
+        assembler_refined.applyBCs(adjoint_diff)
+        assembler_refined.assembleRes(ans_interp);
+        adjoint_corr2 = ans_interp.dot(adjoint_diff)
+
+        adjoint_diff = assembler_refined.createVec()
+        TMR.computeReconSolution(forest, assembler,
+            forest_refined, assembler_refined, adjoint, adjoint_diff,
+            compute_diff=True)
+
+        # Apply Dirichlet boundary conditions to the solution
+        assembler_refined.applyBCs(adjoint_diff)
+        adjoint_corr3 = ans_interp.dot(adjoint_diff)
+
+        print('adjoint_corr1 - adjoint_corr2 = ',
+              adjoint_corr1 - adjoint_corr2)
+        print('adjoint_corr1 - adjoint_corr2 = ',
+              adjoint_corr1 - adjoint_corr3)
+
+        adjoint_corr = adjoint_corr1
+
         # Compute the refined function value
-        fval_corr = fval_refined + adjoint_corr
+        fval_corr = fval + adjoint_corr # fval_refined + adjoint_corr
 
     f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
     f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
@@ -1048,8 +1056,8 @@ for k in range(steps):
             print('stddev =                   %15.3e'%(stddev))
             print('cutoff =                   %15.3e'%(cutoff))
 
-        # Element target error is still too high. Adapt based
-        # solely on decreasing the overall error
+        # Element target error is still too high. Adapt based solely
+        # on decreasing the overall error
         nrefine = 0
         for i, err in enumerate(error):
             # Compute the log of the error
