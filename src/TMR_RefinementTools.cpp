@@ -2760,8 +2760,8 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
-  double total_error_remain = 0.0;
   TacsScalar total_adjoint_corr = 0.0;
+
   // Create a vector for the predicted nodal errors.
   TACSBVec *nodal_error = new TACSBVec(tacs_refined->getVarMap(), 1,
                                        tacs_refined->getBVecDistribute(),
@@ -2834,12 +2834,12 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   nodal_error->endDistributeValues();
 
   // Finish setting the values into the array
+  double total_error_remain = 0.0;
   for ( int elem = 0; elem < nelems; elem++ ){
     // Get the node numbers for the refined mesh
     int refine_len = 0;
     const int *refine_nodes;
-    TACSElement *element =
-      tacs_refined->getElement(elem, &refine_nodes, &refine_len);
+    tacs_refined->getElement(elem, &refine_nodes, &refine_len);
 
     // Get the adjoint variables for this element
     nodal_error->getValues(refine_len, refine_nodes, err);
@@ -2847,8 +2847,10 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
     // Compute the element indicator error as a function of the nodal
     // error estimate.
     error[elem] = 0.0;
-    for ( int i = 0; i < element->numNodes(); i++ ){
-      error[elem] += TacsRealPart(err[i]);
+    for ( int j = 0; j < refined_order; j += refined_order-1 ){
+      for ( int i = 0; i < refined_order; i += refined_order-1 ){
+        error[elem] += TacsRealPart(err[i + j*refined_order]);
+      }
     }
     error[elem] = 0.25*fabs(error[elem]);
     total_error_remain += error[elem];

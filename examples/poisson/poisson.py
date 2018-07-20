@@ -84,7 +84,7 @@ comm = MPI.COMM_WORLD
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--case', type=str, default='disk')
-p.add_argument('--disp_aggregation', action='store_true', default=False)
+p.add_argument('--functional', type=str, default='integral')
 p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
@@ -134,8 +134,8 @@ steps = args.steps
 # Store whether to use a structured/unstructed mesh
 structured = args.structured
 
-# Set what to aggregate
-disp_aggregation = args.disp_aggregation
+# Set what functional to use
+functional = args.functional
 
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
@@ -147,11 +147,12 @@ R = 100.0
 L = 200.0
 
 if case == 'disk':
-    exact_functional = (1.0/8)*np.pi*R**4
-
-    # exact_functional = 0.25*R**2
-    # if disp_aggregation:
-    #     exact_functional = 2.502531024247042e+03
+    if functional == 'integral':
+        exact_functional = (1.0/8)*np.pi*R**4
+    elif functional == 'displacement':
+        exact_functional = 0.25*R**2
+    elif functional == 'aggregate':
+        exact_functional = 2.502531024247042e+03
     
     geo = TMR.LoadModel('2d-disk.stp')
     verts = geo.getVertices()
@@ -183,6 +184,13 @@ elif case == 'square':
                     func*16.0/((m**2 + n**2)*m*n*np.pi**2)
         exact_functional *= (L/np.pi)**2
     
+    if functional == 'integral':
+        exact_functional = (1.0/8)*np.pi*R**4
+    elif functional == 'displacement':
+        exact_functional = 0.25*R**2
+    elif functional == 'aggregate':
+        exact_functional = 2.502531024247042e+03
+
     exact_functional = 2.946854131254945e+03
     if disp_aggregation:
         exact_functional = 2.502531024247042e+03
@@ -256,8 +264,7 @@ if structured:
     descript = 'poisson_structured'
 if args.uniform_refinement:
     descript += '_uniform'
-if args.disp_aggregation:
-    descript += '_disp'
+descript += '_' + functional
 
 # Create the log file and write out the header
 log_fp = open('%s_order%d_%s.dat'%(case, order, descript), 'w')
@@ -309,16 +316,19 @@ for k in range(steps):
 
     # Create and compute the function
     fval = 0.0
-    if disp_aggregation:
-        direction = [1.0, 0.0, 0.0]
-        # func = functions.KSDisplacement(assembler,
-        #                                 ksweight, direction)
-        func = functions.DisplacementIntegral(assembler, direction)
-        fval = assembler.evalFunctions([func])[0]
-    else:
+    if functional == 'displacement':
         res = get_midpoint_vector(comm, forest,
                                   assembler, 'midpoint')
         fval = ans.dot(res)
+    elif functional == 'integral':
+        direction = [1.0, 0.0, 0.0]
+        func = functions.DisplacementIntegral(assembler, direction)
+        fval = assembler.evalFunctions([func])[0]
+    elif functional == 'aggregate':
+        direction = [1.0, 0.0, 0.0]
+        func = functions.KSDisplacement(assembler,
+                                        ksweight, direction)
+        fval = assembler.evalFunctions([func])[0]
 
     # This flag indicates whether to solve the adjoint exactly on the
     # next-finest mesh or not
@@ -345,7 +355,7 @@ for k in range(steps):
     else:
         # Compute the adjoint on the original mesh
         res.zeroEntries()
-        if disp_aggregation:
+        if functional != 'displacement':
             assembler.evalSVSens(func, res)
         else:
             res = get_midpoint_vector(comm, forest,
@@ -355,36 +365,44 @@ for k in range(steps):
         adjoint.scale(-1.0)
 
         if exact_refined_adjoint:
-            adjoint_interp = assembler_refined.createVec()
-            TMR.computeInterpSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_interp)
-
-            # Compute the solution on the refined mesh
+            # Compute the reconstructed solution on the refined mesh
             ans_interp = assembler_refined.createVec()
-            TMR.computeInterpSolution(forest, assembler,
+            TMR.computeReconSolution(forest, assembler,
                 forest_refined, assembler_refined, ans, ans_interp)
 
             # Set the interpolated solution on the fine mesh
             assembler_refined.setVariables(ans_interp)        
+
+            # Compute the reconstructed adjoint solution on the refined mesh
+            adjoint_interp = assembler_refined.createVec()
+            TMR.computeReconSolution(forest, assembler,
+                forest_refined, assembler_refined, adjoint, adjoint_interp)
 
             # Solve the linear system
             res_refined = assembler_refined.createVec()
             adjoint_refined = assembler_refined.createVec()
 
             # Compute the functional on the refined mesh
-            if disp_aggregation:
-                direction = [1.0, 0.0, 0.0]
-                # func_refined = functions.KSDisplacement(assembler_refined,
-                #     ksweight, direction)
-                func_refined = functions.DisplacementIntegral(assembler_refined,
-                    direction)
-                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
-                assembler_refined.evalSVSens(func_refined, res_refined)
-            else:
+            if functional == 'displacement':
                 res_refined = get_midpoint_vector(comm, forest_refined,
                                                   assembler_refined, 'midpoint')
                 fval_refined = ans_interp.dot(res_refined)
-        
+            else:
+                if functional == 'integral':
+                    direction = [1.0, 0.0, 0.0]
+                    func_refined = functions.DisplacementIntegral(assembler_refined,
+                                                                  direction)
+
+                elif functional == 'aggregate':
+                    direction = [1.0, 0.0, 0.0]
+                    func_refined = functions.KSDisplacement(assembler_refined,
+                                                            ksweight, direction)
+
+                # Evaluate the functional on the refined mesh
+                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+                assembler_refined.evalSVSens(func_refined, res_refined)
+
+            # Assemble the adjoint equations
             mg.assembleJacobian(1.0, 0.0, 0.0, adjoint_refined)
             mg.factor()
             pc = mg
@@ -397,21 +415,17 @@ for k in range(steps):
             gmres.solve(res_refined, adjoint_refined)
             adjoint_refined.scale(-1.0)
 
-            # Take the difference between the refined and interpolated
-            # adjoints
-            adjoint_refined.axpy(-1.0, adjoint_interp)      
-
             # Compute the adjoint and use adjoint-based refinement
             err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
                 forest_refined, assembler_refined, ans_interp, adjoint_refined)
         else:
             # Compute the solution on the refined mesh
-            ans_interp = assembler_refined.createVec()
-            TMR.computeInterpSolution(forest, assembler,
-                forest_refined, assembler_refined, ans, ans_interp)
+            ans_refined = assembler_refined.createVec()
+            TMR.computeReconSolution(forest, assembler,
+                forest_refined, assembler_refined, ans, ans_refined)
 
             # Apply Dirichlet boundary conditions
-            assembler_refined.setVariables(ans_interp)
+            assembler_refined.setVariables(ans_refined)
 
             # Test orthogonality of the residual of the interpolated
             # solution on the fine mesh
@@ -441,49 +455,33 @@ for k in range(steps):
                         print('Orthogonality check: ', dprod/norm)
 
             # Compute the functional on the refined mesh
-            if disp_aggregation:
-                direction = [1.0, 0.0, 0.0]
-                # func_refined = functions.KSDisplacement(assembler_refined,
-                #     ksweight, direction)
-                func_refined = functions.DisplacementIntegral(assembler_refined,
-                    direction)
-                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+            if functional == 'displacement':
+                res_refined = get_midpoint_vector(comm, forest_refined,
+                                                  assembler_refined, 'midpoint')
+                fval_refined = ans_refined.dot(res_refined)
             else:
-                res = get_midpoint_vector(comm, forest_refined,
-                                          assembler_refined, 'midpoint')
-                fval_refined = ans_interp.dot(res)
+                if functional == 'integral':
+                    direction = [1.0, 0.0, 0.0]
+                    func_refined = functions.DisplacementIntegral(assembler_refined,
+                                                                  direction)
+
+                elif functional == 'aggregate':
+                    direction = [1.0, 0.0, 0.0]
+                    func_refined = functions.KSDisplacement(assembler_refined,
+                                                            ksweight, direction)
+
+                # Evaluate the functional on the refined mesh
+                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
 
             # Approximate the difference between the refined adjoint and the
             # adjoint on the current mesh
-            adjoint_diff = assembler_refined.createVec()
+            adjoint_refined = assembler_refined.createVec()
             TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_diff,
-                compute_diff=True)
+                forest_refined, assembler_refined, adjoint, adjoint_refined)
 
             # Compute the adjoint and use adjoint-based refinement
             err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_interp, adjoint_diff)
-
-            # Create a residual vector
-            res_interp = assembler_refined.createVec()
-
-            # Compute the residual on the fine mesh
-            assembler_refined.assembleRes(res_interp);
-            adjoint_corr2 = res_interp.dot(adjoint_diff)
-
-            # Compute the difference
-            TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_diff,
-                compute_diff=False)
-
-            # Apply Dirichlet boundary conditions to the solution
-            adjoint_corr3 = res_interp.dot(adjoint_diff)
-
-            if comm.rank == 0:
-                print('Adjoint corrections: ')
-                print('adjointErrorEst:                   ', adjoint_corr)
-                print('(R_{h}*psi - I_{h}*psi)^{T}*R(uh): ', adjoint_corr2)
-                print('R_{h}*psi^{T}*R(uh):               ', adjoint_corr3)
+                forest_refined, assembler_refined, ans_refined, adjoint_refined)
 
         # Compute the refined function value
         fval_corr = fval_refined + adjoint_corr
