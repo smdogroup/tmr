@@ -147,9 +147,11 @@ R = 100.0
 L = 200.0
 
 if case == 'disk':
-    exact_functional = 0.25*R**2
-    if disp_aggregation:
-        exact_functional = 2.502531024247042e+03
+    exact_functional = (1.0/8)*np.pi*R**4
+
+    # exact_functional = 0.25*R**2
+    # if disp_aggregation:
+    #     exact_functional = 2.502531024247042e+03
     
     geo = TMR.LoadModel('2d-disk.stp')
     verts = geo.getVertices()
@@ -309,8 +311,9 @@ for k in range(steps):
     fval = 0.0
     if disp_aggregation:
         direction = [1.0, 0.0, 0.0]
-        func = functions.KSDisplacement(assembler,
-                                        ksweight, direction)
+        # func = functions.KSDisplacement(assembler,
+        #                                 ksweight, direction)
+        func = functions.DisplacementIntegral(assembler, direction)
         fval = assembler.evalFunctions([func])[0]
     else:
         res = get_midpoint_vector(comm, forest,
@@ -319,7 +322,7 @@ for k in range(steps):
 
     # This flag indicates whether to solve the adjoint exactly on the
     # next-finest mesh or not
-    exact_refined_adjoint = True
+    exact_refined_adjoint = False
 
     # Create the refined mesh
     if exact_refined_adjoint:
@@ -351,7 +354,6 @@ for k in range(steps):
         gmres.solve(res, adjoint)
         adjoint.scale(-1.0)
 
-
         if exact_refined_adjoint:
             adjoint_interp = assembler_refined.createVec()
             TMR.computeInterpSolution(forest, assembler,
@@ -372,15 +374,16 @@ for k in range(steps):
             # Compute the functional on the refined mesh
             if disp_aggregation:
                 direction = [1.0, 0.0, 0.0]
-                func_refined = functions.KSDisplacement(assembler_refined,
-                    ksweight, direction)
+                # func_refined = functions.KSDisplacement(assembler_refined,
+                #     ksweight, direction)
+                func_refined = functions.DisplacementIntegral(assembler_refined,
+                    direction)
                 fval_refined = assembler_refined.evalFunctions([func_refined])[0]
                 assembler_refined.evalSVSens(func_refined, res_refined)
             else:
                 res_refined = get_midpoint_vector(comm, forest_refined,
                                                   assembler_refined, 'midpoint')
                 fval_refined = ans_interp.dot(res_refined)
-
         
             mg.assembleJacobian(1.0, 0.0, 0.0, adjoint_refined)
             mg.factor()
@@ -440,8 +443,10 @@ for k in range(steps):
             # Compute the functional on the refined mesh
             if disp_aggregation:
                 direction = [1.0, 0.0, 0.0]
-                func_refined = functions.KSDisplacement(assembler_refined,
-                    ksweight, direction)
+                # func_refined = functions.KSDisplacement(assembler_refined,
+                #     ksweight, direction)
+                func_refined = functions.DisplacementIntegral(assembler_refined,
+                    direction)
                 fval_refined = assembler_refined.evalFunctions([func_refined])[0]
             else:
                 res = get_midpoint_vector(comm, forest_refined,
@@ -479,8 +484,6 @@ for k in range(steps):
                 print('adjointErrorEst:                   ', adjoint_corr)
                 print('(R_{h}*psi - I_{h}*psi)^{T}*R(uh): ', adjoint_corr2)
                 print('R_{h}*psi^{T}*R(uh):               ', adjoint_corr3)
-
-        adjoint_corr = adjoint_corr
 
         # Compute the refined function value
         fval_corr = fval_refined + adjoint_corr
