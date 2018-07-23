@@ -118,14 +118,14 @@ inline void lagrange_shape_func_second_derivative( const int order,
                                                    double *Nd,
                                                    double *Ndd ){
  // Loop over the shape function control points
-  for ( int i = 0; i < porder; i++ ){
+  for ( int i = 0; i < order; i++ ){
     N[i] = 1.0;
     Nd[i] = 0.0;
     Ndd[i] = 0.0;
 
     // Loop over each point again, except for the current control
     // point, adding the contribution to the shape function
-    for ( int j = 0; j < porder; j++ ){
+    for ( int j = 0; j < order; j++ ){
       if (i != j){
         double tj = 1.0/(knots[i] - knots[j]);
         double dj = tj;
@@ -133,13 +133,13 @@ inline void lagrange_shape_func_second_derivative( const int order,
 
         // Loop over all the knots again to determine the
         // contribution to the derivative of the shape function
-        for ( int k = 0; k < porder; k++ ){
+        for ( int k = 0; k < order; k++ ){
           if (k != i && k != j){
             double dk = 1.0/(knots[i] - knots[k]);
             dj *= (u - knots[k])*dk;
             dk *= tj;
 
-            for ( int m = 0; m < porder; m++ ){
+            for ( int m = 0; m < order; m++ ){
               if (m != i && m != j && m != k){
                 dk *= (u - knots[m])/(knots[i] - knots[m]);
               }
@@ -147,11 +147,10 @@ inline void lagrange_shape_func_second_derivative( const int order,
             Ndd[i] += dk;
           }
         }
-        Nd[i] += dn;
+        Nd[i] += dj;
       }
     }
   }
 }
-
 
 #endif // TMR_INTERPOLATION_FUNCTIONS_H
