@@ -137,8 +137,10 @@ forest.createNodes()
 
 ar = computeAR(forest)
 min_ang = computeMinAngle(forest)
+fshape = computeShape(forest)
 
 # Wrtie the mesh quality to vtk
-writeQualityToVtk(forest, ar, min_ang)
+writeQualityToVtk(forest, ar, min_ang, fshape,fname='quality-bracket.vtk')
+plotShapeHist(fshape, xmin=np.amin(fshape), fname='bracket_shape_hist.pdf')
 plotARHist(ar, fname='bracket_ar_hist.pdf', xmax=np.ceil(4.0*np.amax(ar))/4.0)
 plotMinAngHist(min_ang, fname='bracket_ang_hist.pdf', xmin=np.amin(min_ang)-1.0)

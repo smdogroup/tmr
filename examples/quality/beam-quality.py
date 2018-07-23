@@ -90,8 +90,10 @@ forest.createNodes()
 
 ar = computeAR(forest)
 min_ang = computeMinAngle(forest)
+fshape = computeShape(forest)
 
 # Wrtie the mesh quality to vtk
-writeQualityToVtk(forest, ar, min_ang)
+writeQualityToVtk(forest, ar, min_ang, fshape)
+plotShapeHist(fshape, xmin=np.amin(fshape), fname='beam_shape_hist.pdf')
 plotARHist(ar, fname='beam_ar_hist.pdf', xmax=np.ceil(4.0*np.amax(ar))/4.0)
 plotMinAngHist(min_ang, xmin=np.amin(min_ang)-1.0, fname='beam_ang_hist.pdf')
