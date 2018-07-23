@@ -19,21 +19,47 @@ def get_midpoint_vector(comm, forest, assembler, attr):
     return vec
 
 class CreateMe(TMR.QuadCreator):
-    def __init__(self, bcs, case='disk'):
+    def __init__(self, bcs, topo, case='disk'):
         self.case = case
         TMR.QuadCreator.__init__(bcs)
+        self.topo = topo
         return
 
     def createElement(self, order, quad):
         '''Create the element'''
         f = np.ones(order*order)
+        face = topo.getFace(quad.face)
+        h = (1 << (TMR.MAX_LEVEL - quad.level))
+        x = 1.0*quad.x/(1 << TMR.MAX_LEVEL)
+        y = 1.0*quad.y/(1 << TMR.MAX_LEVEL)
+        d = h/(1 << TMR.MAX_LEVEL)
+        u = 0.5*d*(1.0 - np.cos(np.linspace(0, np.pi, order)))
+
+        if case == 'square':
+            for j in range(order):
+                for i in range(order):
+                    # Evaluate the node locations
+                    pt = face.evalPoint(x + u[i], y + u[j])
+                    sx = np.sin(np.pi*(pt[0] + 0.5*L)/L)
+                    sy = np.sin(np.pi*(pt[1] + 0.5*L)/L)
+                    f[i + j*order] = sx*sy
+        elif case == 'disk':
+            for j in range(order):
+                for i in range(order):
+                   # Evaluate the node locations
+                    pt = face.evalPoint(x + u[i], y + u[j])
+                    r = np.sqrt(pt[0]*pt[0] + pt[1]*pt[1])
+                    f[i + j*order] = 1.0 - (r/R)**2
+
+        f[:] = 1.0
+
         elem = elements.PoissonQuad(order, f)
         return elem
 
 def createRefined(case, forest, bcs, pttype=TMR.GAUSS_LOBATTO_POINTS):
     new_forest = forest.duplicate()
     new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
-    creator = CreateMe(bcs, case=case)
+    creator = CreateMe(bcs, forest.getTopology(), case=case)
     return new_forest, creator.createTACS(new_forest)
 
 def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
@@ -43,13 +69,11 @@ def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
     assemblers = []
 
     # Create the trees, rebalance the elements and repartition
-    forest.balance(1)
     forest.setMeshOrder(order, pttype)
-    forest.repartition()
     forests.append(forest)
 
     # Make the creator class
-    creator = CreateMe(bcs, case=case)
+    creator = CreateMe(bcs, forest.getTopology(), case=case)
     assemblers.append(creator.createTACS(forest, ordering))
 
     while order > 2:
@@ -60,7 +84,7 @@ def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs, case=case)
+        creator = CreateMe(bcs, forest.getTopology(), case=case)
         assemblers.append(creator.createTACS(forest, ordering))
 
     for i in range(nlevels-1):
@@ -70,7 +94,7 @@ def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs, case=case)
+        creator = CreateMe(bcs, forest.getTopology(), case=case)
         assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
@@ -97,23 +121,6 @@ args = p.parse_args()
 
 # Set the case type
 case = args.case
-
-# Parameters that define the geometry of the cylinder
-t = 1.0 # 1 mm thickness
-L = 100.0 # 100 mm length
-R = 100.0/np.pi # Radius of the cylinder (in mm)
-
-# Set the load to apply to the cylinder
-load = 3.0 # 3 MPa
-alpha = 4.0/R # Set the value of alpha
-beta = 3.0*np.pi/L # Set the value of beta
-
-# Set the material properties
-density = 2700.0e-9 # kg/mm^3
-E = 70e3 # 70 GPa
-nu = 0.3 # Poisson's ratio
-ys = 350.0 # 350 MPa
-kcorr = 5.0/6.0 # The shear correction factor
 
 # Set the type of ordering to use for this problem
 ordering = args.ordering
@@ -148,7 +155,7 @@ L = 200.0
 
 if case == 'disk':
     if functional == 'integral':
-        exact_functional = (1.0/8)*np.pi*R**4
+        exact_functional = (1.0/12)*np.pi*R**4
     elif functional == 'displacement':
         exact_functional = 0.25*R**2
     elif functional == 'aggregate':
@@ -169,30 +176,11 @@ if case == 'disk':
     # Set the boundary conditions
     bcs.addBoundaryCondition('clamped', [0])
 elif case == 'square':
-    find_exact = False
-
-    if find_exact:
-        exact_functional = 0.0
-        for n in range(1, 10000, 2):
-            for m in range(1, 10000, 2):
-                func = 1
-                if n % 4 == 3:
-                    func *= -1
-                if m % 4 == 3:
-                    func *= -1
-                exact_functional += \
-                    func*16.0/((m**2 + n**2)*m*n*np.pi**2)
-        exact_functional *= (L/np.pi)**2
-    
     if functional == 'integral':
-        exact_functional = (1.0/8)*np.pi*R**4
+        exact_functional = -2*(L/np.pi)**4
     elif functional == 'displacement':
-        exact_functional = 0.25*R**2
+        exact_functional = 2.946854131254945e+03
     elif functional == 'aggregate':
-        exact_functional = 2.502531024247042e+03
-
-    exact_functional = 2.946854131254945e+03
-    if disp_aggregation:
         exact_functional = 2.502531024247042e+03
 
     # Load the geometry model
@@ -332,7 +320,7 @@ for k in range(steps):
 
     # This flag indicates whether to solve the adjoint exactly on the
     # next-finest mesh or not
-    exact_refined_adjoint = False
+    exact_refined_adjoint = True
 
     # Create the refined mesh
     if exact_refined_adjoint:
@@ -353,34 +341,21 @@ for k in range(steps):
         TMR.computeReconSolution(forest, assembler,
             forest_refined, assembler_refined)
     else:
-        # Compute the adjoint on the original mesh
-        res.zeroEntries()
-        if functional != 'displacement':
-            assembler.evalSVSens(func, res)
-        else:
-            res = get_midpoint_vector(comm, forest,
-                                      assembler, 'midpoint')            
-        adjoint = assembler.createVec()
-        gmres.solve(res, adjoint)
-        adjoint.scale(-1.0)
-
         if exact_refined_adjoint:
             # Compute the reconstructed solution on the refined mesh
             ans_interp = assembler_refined.createVec()
-            TMR.computeReconSolution(forest, assembler,
+            TMR.computeInterpSolution(forest, assembler,
                 forest_refined, assembler_refined, ans, ans_interp)
 
             # Set the interpolated solution on the fine mesh
-            assembler_refined.setVariables(ans_interp)        
+            assembler_refined.setVariables(ans_interp)
 
-            # Compute the reconstructed adjoint solution on the refined mesh
-            adjoint_interp = assembler_refined.createVec()
-            TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_interp)
-
-            # Solve the linear system
+            # Assemble the adjoint equations
             res_refined = assembler_refined.createVec()
-            adjoint_refined = assembler_refined.createVec()
+            mg.assembleJacobian(1.0, 0.0, 0.0, res_refined)
+            mg.factor()
+            pc = mg
+            mat = mg.getMat()
 
             # Compute the functional on the refined mesh
             if functional == 'displacement':
@@ -402,23 +377,74 @@ for k in range(steps):
                 fval_refined = assembler_refined.evalFunctions([func_refined])[0]
                 assembler_refined.evalSVSens(func_refined, res_refined)
 
-            # Assemble the adjoint equations
-            mg.assembleJacobian(1.0, 0.0, 0.0, adjoint_refined)
-            mg.factor()
-            pc = mg
-            mat = mg.getMat()
-
             # Create the GMRES object on the fine mesh
             gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
             gmres.setMonitor(comm, freq=10)
             gmres.setTolerances(1e-14, 1e-30)
+
+            # Solve the linear system
+            adjoint_refined = assembler_refined.createVec()
             gmres.solve(res_refined, adjoint_refined)
             adjoint_refined.scale(-1.0)
+
+            assembler_refined.setVariables(ans_interp)
+            assembler_refined.assembleRes(res_refined)
+
+            # Create a random vector on the coarse mesh
+            vec = assembler.createVec()
+            vec_interp = assembler_refined.createVec()
+            for i in range(5):
+                # Compute the random displacement vector in the
+                # original space and apply Dirichlet bcs
+                vec.setRand(-1.0, 1.0)
+                assembler.applyBCs(vec)            
+                TMR.computeInterpSolution(forest, assembler,
+                                          forest_refined, assembler_refined,
+                                          vec, vec_interp)
+
+                # Compute the relative error
+                dprod = vec_interp.dot(res_refined)
+                norm = res_refined.norm()*res_refined.norm()
+                if comm.rank == 0:
+                    print('Orthogonality check: ', dprod/norm, dprod)
+
 
             # Compute the adjoint and use adjoint-based refinement
             err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
                 forest_refined, assembler_refined, ans_interp, adjoint_refined)
+
+            print('adjoint_corr = ', adjoint_corr, ' err_est = ', err_est)
+
+            # Compute the reconstructed adjoint solution on the refined mesh
+            adjoint = assembler.createVec()
+            adjoint_interp = assembler_refined.createVec()
+            TMR.computeInterpSolution(forest_refined, assembler_refined,
+                forest, assembler, adjoint_refined, adjoint)
+            TMR.computeInterpSolution(forest, assembler,
+                forest_refined, assembler_refined, adjoint, adjoint_interp)
+
+            print('dot = ', adjoint_refined.dot(res_refined))
+            print('dot = ', adjoint_interp.dot(res_refined))
+            adjoint_refined.axpy(-1.0, adjoint_interp)
+            print('dot = ', adjoint_refined.dot(res_refined))
+
+            err_est, not_a_correction, error = TMR.adjointError(forest, assembler,
+                forest_refined, assembler_refined, ans_interp, adjoint_refined)
+
+            print('not_a_correction = ', not_a_correction, ' err_est = ', err_est)
+
         else:
+            # Compute the adjoint on the original mesh
+            res.zeroEntries()
+            if functional != 'displacement':
+                assembler.evalSVSens(func, res)
+            else:
+                res = get_midpoint_vector(comm, forest,
+                                          assembler, 'midpoint')            
+            adjoint = assembler.createVec()
+            gmres.solve(res, adjoint)
+            adjoint.scale(-1.0)
+
             # Compute the solution on the refined mesh
             ans_refined = assembler_refined.createVec()
             TMR.computeReconSolution(forest, assembler,
@@ -477,11 +503,20 @@ for k in range(steps):
             # adjoint on the current mesh
             adjoint_refined = assembler_refined.createVec()
             TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_refined)
+                forest_refined, assembler_refined, adjoint,
+                adjoint_refined)
 
             # Compute the adjoint and use adjoint-based refinement
             err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
                 forest_refined, assembler_refined, ans_refined, adjoint_refined)
+
+            # Compute the adjoint and use adjoint-based refinement
+            err_est, __, error = TMR.adjointError(forest, assembler,
+                forest_refined, assembler_refined, ans_refined, adjoint_refined)
+
+            TMR.computeReconSolution(forest, assembler,
+                forest_refined, assembler_refined, adjoint, adjoint_refined)
+            assembler_refined.setVariables(adjoint_refined)
 
         # Compute the refined function value
         fval_corr = fval_refined + adjoint_corr
@@ -568,12 +603,14 @@ for k in range(steps):
     # Perform the refinement
     if args.uniform_refinement:
         forest.refine()
+        forest.balance(1)
+        forest.repartition()
     elif k < steps-1:
         # The refinement array
         refine = np.zeros(len(error), dtype=np.intc)
 
         # Compute the target relative error
-        element_target_error = target_rel_err*fval/ntotal
+        element_target_error = target_rel_err*np.fabs(fval)/ntotal
         log_elem_target_error = np.log(element_target_error)
 
         # Determine the cutoff values
@@ -600,3 +637,5 @@ for k in range(steps):
 
         # Refine the forest
         forest.refine(refine)
+        forest.balance(1)
+        forest.repartition()

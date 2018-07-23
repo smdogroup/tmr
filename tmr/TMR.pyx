@@ -107,6 +107,11 @@ cdef class Edge:
         if self.ptr:
             self.ptr.decref()
 
+    def evalPoint(self, double t):
+        cdef TMRPoint pt
+        self.ptr.evalPoint(t, &pt)
+        return np.array([pt.x, pt.y, pt.z])
+
     def setAttribute(self, aname):
         cdef char *name = tmr_convert_to_chars(aname)
         if self.ptr:
@@ -233,6 +238,11 @@ cdef class Face:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def evalPoint(self, double u, double v):
+        cdef TMRPoint pt
+        self.ptr.evalPoint(u, v, &pt)
+        return np.array([pt.x, pt.y, pt.z])
 
     def setAttribute(self, aname):
         cdef char *name = tmr_convert_to_chars(aname)
@@ -1182,6 +1192,12 @@ cdef class Topology:
         self.ptr.getVertex(index, &vert)
         return _init_Vertex(vert)
 
+cdef _init_Topology(TMRTopology *ptr):
+    topo = Topology()
+    topo.ptr = ptr
+    topo.ptr.incref()
+    return topo
+
 cdef class QuadrantArray:
     cdef TMRQuadrantArray *ptr
     cdef int self_owned
@@ -1319,6 +1335,12 @@ cdef class QuadForest:
 
     def setTopology(self, Topology topo):
         self.ptr.setTopology(topo.ptr)
+
+    def getTopology(self):
+        cdef TMRTopology *topo = self.ptr.getTopology()
+        if topo is not NULL:
+            return _init_Topology(topo)
+        return None
 
     def repartition(self):
         self.ptr.repartition()
@@ -1585,6 +1607,12 @@ cdef class OctForest:
 
     def setTopology(self, Topology topo):
         self.ptr.setTopology(topo.ptr)
+
+    def getTopology(self):
+        cdef TMRTopology *topo = self.ptr.getTopology()
+        if topo is not NULL:
+            return _init_Topology(topo)
+        return None
 
     def setConnectivity(self, np.ndarray[int, ndim=2, mode='c'] conn):
         '''Set non-degenerate connectivity'''

@@ -6,10 +6,12 @@ import numpy as np
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--steps', type=int, default=5)
+p.add_argument('--case', type=str, default='disk')
 args = p.parse_args()
 
 # Retrieve the number of steps
 steps = args.steps
+case = args.case
 
 # Set the colors to use for each set of bars
 colors = ['BrickRed', 'ForestGreen', 'NavyBlue',
@@ -17,7 +19,7 @@ colors = ['BrickRed', 'ForestGreen', 'NavyBlue',
 
 data = []
 for k in [0, steps/2, steps-1]:
-    data.append(np.loadtxt('results/disk_data%d.txt'%(k)))
+    data.append(np.loadtxt('results/%s_data%d.txt'%(case, k)))
 
 # Delta value
 delta = 25.0
@@ -124,7 +126,7 @@ for k, d in enumerate(data):
 
 s += tkz.get_end_tikz()
 
-fp = open('poisson_disk_plot.tex', 'w')
+fp = open('poisson_%s_plot.tex'%(case), 'w')
 fp.write(s)
 fp.close()
 

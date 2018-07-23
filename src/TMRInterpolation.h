@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,12 +33,12 @@
   order:  the order of the polynomial and number of knots
   u:      the parametric coordinate
   knots:  the interpolation knots in parameter space
-  
+
   output:
   N:      the values of the shape functions at u
 */
 inline void lagrange_shape_functions( const int order,
-                                      const double u, 
+                                      const double u,
                                       const double *knots,
                                       double *N ){
   // Loop over the shape functions
@@ -61,13 +61,13 @@ inline void lagrange_shape_functions( const int order,
   order:  the order of the polynomial and number of knots
   u:      the parametric coordinate
   knots:  the interpolation knots in parameter space
-  
+
   output:
   N:      the values of the shape functions at u
   Nd:     the derivative of the shape functions at u
 */
 inline void lagrange_shape_func_derivative( const int order,
-                                            const double u, 
+                                            const double u,
                                             const double *knots,
                                             double *N,
                                             double *Nd ){
@@ -75,14 +75,14 @@ inline void lagrange_shape_func_derivative( const int order,
   for ( int i = 0; i < order; i++ ){
     N[i] = 1.0;
     Nd[i] = 0.0;
-      
+
     // Loop over each point again, except for the current control
     // point, adding the contribution to the shape function
     for ( int j = 0; j < order; j++ ){
       if (i != j){
         double d = 1.0/(knots[i] - knots[j]);
         N[i] *= (u - knots[j])*d;
-        
+
         // Now add up the contribution to the derivative
         for ( int k = 0; k < order; k++ ){
           if (k != i && k != j){
@@ -96,5 +96,62 @@ inline void lagrange_shape_func_derivative( const int order,
     }
   }
 }
+
+/*
+  Evaluate the shape functions and their first and second derivatives
+  with respect to the parameter coordinate
+
+  input:
+  order:  the order of the polynomial and number of knots
+  u:      the parametric coordinate
+  knots:  the interpolation knots in parameter space
+
+  output:
+  N:      the values of the shape functions at u
+  Nd:     the derivative of the shape functions at u
+  Ndd:    the second derivative of the shape functions at u
+*/
+inline void lagrange_shape_func_second_derivative( const int order,
+                                                   const double u,
+                                                   const double *knots,
+                                                   double *N,
+                                                   double *Nd,
+                                                   double *Ndd ){
+ // Loop over the shape function control points
+  for ( int i = 0; i < porder; i++ ){
+    N[i] = 1.0;
+    Nd[i] = 0.0;
+    Ndd[i] = 0.0;
+
+    // Loop over each point again, except for the current control
+    // point, adding the contribution to the shape function
+    for ( int j = 0; j < porder; j++ ){
+      if (i != j){
+        double tj = 1.0/(knots[i] - knots[j]);
+        double dj = tj;
+        N[i] = N[i]*(u - knots[j])*dj;
+
+        // Loop over all the knots again to determine the
+        // contribution to the derivative of the shape function
+        for ( int k = 0; k < porder; k++ ){
+          if (k != i && k != j){
+            double dk = 1.0/(knots[i] - knots[k]);
+            dj *= (u - knots[k])*dk;
+            dk *= tj;
+
+            for ( int m = 0; m < porder; m++ ){
+              if (m != i && m != j && m != k){
+                dk *= (u - knots[m])/(knots[i] - knots[m]);
+              }
+            }
+            Ndd[i] += dk;
+          }
+        }
+        Nd[i] += dn;
+      }
+    }
+  }
+}
+
 
 #endif // TMR_INTERPOLATION_FUNCTIONS_H
