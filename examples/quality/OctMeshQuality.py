@@ -47,6 +47,37 @@ for i in range(len(tableau20)):
 # Color scheme
 hist_color = tableau20[0]
 
+# Compute the relative size of the element in the forest
+def computeShape(forest):
+    octs = forest.getOctants()
+    Xpts = forest.getPoints()
+    conn = forest.getMeshConn()
+    fshape = np.zeros(len(octs))
+    jacobian_list={0:[1,2,4], 1:[3,0,5], 2:[0,3,6],
+                   3:[2,1,7], 4:[6,5,0], 5:[4,7,1],
+                   6:[7,4,2], 7:[5,6,3]}
+    for i in range(len(octs)):
+        npts = 8
+        nodes = conn[npts*i:npts*(i+1)]
+        pts = np.zeros((npts,3))
+        pts[:, :] = Xpts[nodes[:], :]
+        # Initialize the numerator
+        num = 0.0
+        # Compute the individual Ak matrices
+        for j in range(npts):
+            # Get the reference vertices of volume
+            v = jacobian_list[j]
+            Ak = np.array([pts[v[0],:]-pts[j,:], pts[v[1],:]-pts[j,:], \
+                           pts[v[2],:]-pts[j,:] ])
+            # Get determinant of local matrix alpha
+            #alpha[j] = np.linalg.det(Ak)
+            #sigma[j] = np.sum(np.dot(Ak.T, Ak).diagonal())
+            num += np.sum(np.dot(Ak.T, Ak).diagonal())/np.linalg.det(Ak)**(2./3.)
+        # Compute the shape metric 24/num
+        fshape[i] = 24./num
+        
+    return fshape
+
 # Compute the aspect ratio of each element in the forest
 def computeAR(forest):
     octs = forest.getOctants()
@@ -115,7 +146,7 @@ def computeMinAngle(forest):
     return min_angs
 
 # Write out mesh quality metrics to vtk file
-def writeQualityToVtk(forest, ar, min_ang, fname='quality.vtk'):
+def writeQualityToVtk(forest, ar, min_ang, fshape, fname='quality.vtk'):
     octs = forest.getOctants()
     Xpts = forest.getPoints()
     conn = forest.getMeshConn()
@@ -156,6 +187,13 @@ def writeQualityToVtk(forest, ar, min_ang, fname='quality.vtk'):
     for elem_ang in min_ang:
         f.write('%e\n'%(elem_ang))
 
+    # Write the shape metric
+    # write minimum angle values
+    f.write('SCALARS shape_metric float 1\n')
+    f.write('LOOKUP_TABLE default\n')
+    for elem_shape in fshape:
+        f.write('%e\n'%(elem_shape))
+        
     f.close()
 
     return
@@ -226,5 +264,37 @@ def plotMinAngHist(min_ang, xmin=None, fname='angle_hist.pdf'):
     ax.tick_params(which='both', direction='out', top=False, right=False)
     plt.tight_layout()
     plt.savefig(fname, bbox_inches='tight', pad_inches=0.05)
+
+    return
+
+def plotShapeHist(fshape, xmin=None, fname='shape_hist.pdf'):
+    hist_min = np.amin(fshape)
+    nbins = 50
+    #nbins = 40*(hist_min-1)
+
+    # Create the figure and set parameters
+    fig, ax = plt.subplots(1, 1, figsize=(12, 9))
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.get_xaxis().tick_bottom()
+    ax.get_yaxis().tick_left()
+
+    # Plot the histogram
+    n, bins, patches = plt.hist(fshape, bins=nbins, range=(xmin, 1.0), \
+                                density=True)
+
+    widths = bins[:-1] - bins[1:]
+    
+    # Set the colors
+    norm = colors.Normalize(fshape.min(), fshape.max())
+    for b, p in zip(bins, patches):
+        color = plt.cm.coolwarm(norm(b))
+        p.set_facecolor(color)
+            
+    plt.xlabel('Hexahedron Shape Metric')
+    ax.yaxis.set_major_formatter(PercentFormatter(xmax=-1/widths[0], decimals=0))
+    ax.tick_params(which='both', direction='out', top=False, right=False)
+    plt.tight_layout()
+    plt.savefig(fname, bbox_inches='tight', pad_inches=0.05,dpi=1000)
 
     return
