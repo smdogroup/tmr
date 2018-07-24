@@ -6,6 +6,31 @@ import numpy as np
 import argparse
 import os
 
+def integrate(integrand):
+    '''Integrate over equally spaced data'''
+    sigma = [17.0/48.0, 59.0/48.0, 43.0/48, 49/48.9]
+    r = len(sigma)
+
+    integral = 0.0
+    for i, s in enumerate(sigma):
+        integral += s*integrand[i]
+        integral += s*integrand[-1-i]
+
+    for i in range(r, len(integrand)-r):
+        integral += integrand[i]
+
+    return integral
+
+def get_disk_aggregate(rho, R, n=1000):
+    '''Evaluate the KS functional on a disk'''
+    scale = 1.0/R**2    
+    r = np.linspace(0.0, R, n)
+    phi = (0.1875*R**2 - 0.25*r**2 + (0.0625/R**2)*r**4)
+    ksmax = np.max(phi)
+    integrand = r*np.exp(rho*scale*(phi - ksmax))
+    kssum = 2*np.pi*(R/(n-1))*integrate(integrand)
+    return scale*ksmax + np.log(kssum)/rho
+
 def get_midpoint_vector(comm, forest, assembler, attr):
     vec = assembler.createVec()
     v = vec.getArray()
@@ -32,7 +57,7 @@ class CreateMe(TMR.QuadCreator):
         h = (1 << (TMR.MAX_LEVEL - quad.level))
         x = 1.0*quad.x/(1 << TMR.MAX_LEVEL)
         y = 1.0*quad.y/(1 << TMR.MAX_LEVEL)
-        d = h/(1 << TMR.MAX_LEVEL)
+        d = 1.0*h/(1 << TMR.MAX_LEVEL)
         u = 0.5*d*(1.0 - np.cos(np.linspace(0, np.pi, order)))
 
         if case == 'square':
@@ -50,8 +75,6 @@ class CreateMe(TMR.QuadCreator):
                     pt = face.evalPoint(x + u[i], y + u[j])
                     r = np.sqrt(pt[0]*pt[0] + pt[1]*pt[1])
                     f[i + j*order] = 1.0 - (r/R)**2
-
-        f[:] = 1.0
 
         elem = elements.PoissonQuad(order, f)
         return elem
@@ -113,10 +136,12 @@ p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
 p.add_argument('--order', type=int, default=2)
-p.add_argument('--ksweight', type=float, default=1.0)
+p.add_argument('--ksweight', type=float, default=50.0)
 p.add_argument('--uniform_refinement', action='store_true', default=False)
 p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
+p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
+    
 args = p.parse_args()
 
 # Set the case type
@@ -144,6 +169,10 @@ structured = args.structured
 # Set what functional to use
 functional = args.functional
 
+# This flag indicates whether to solve the adjoint exactly on the
+# next-finest mesh or not
+exact_refined_adjoint = args.exact_refined_adjoint
+
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
 
@@ -155,12 +184,16 @@ L = 200.0
 
 if case == 'disk':
     if functional == 'integral':
-        exact_functional = (1.0/12)*np.pi*R**4
+        exact_functional = (1.0/12)*np.pi*R**4 # for f = 1 - (r/R)**2
     elif functional == 'displacement':
         exact_functional = 0.25*R**2
     elif functional == 'aggregate':
-        exact_functional = 2.502531024247042e+03
-    
+        for n in [10000, 100000, 1000000, 10000000]:
+            approx = get_disk_aggregate(ksweight, R, n=n)
+            if comm.rank == 0:
+                print('%10d %25.16e'%(n, approx))
+            exact_functional = approx
+
     geo = TMR.LoadModel('2d-disk.stp')
     verts = geo.getVertices()
     edges = geo.getEdges()
@@ -181,7 +214,7 @@ elif case == 'square':
     elif functional == 'displacement':
         exact_functional = 2.946854131254945e+03
     elif functional == 'aggregate':
-        exact_functional = 2.502531024247042e+03
+        raise ValueError('No exact solution for square aggregate')
 
     # Load the geometry model
     geo = TMR.LoadModel('2d-square.stp')
@@ -313,14 +346,10 @@ for k in range(steps):
         func = functions.DisplacementIntegral(assembler, direction)
         fval = assembler.evalFunctions([func])[0]
     elif functional == 'aggregate':
-        direction = [1.0, 0.0, 0.0]
+        direction = [1.0/R**2, 0.0, 0.0]
         func = functions.KSDisplacement(assembler,
                                         ksweight, direction)
         fval = assembler.evalFunctions([func])[0]
-
-    # This flag indicates whether to solve the adjoint exactly on the
-    # next-finest mesh or not
-    exact_refined_adjoint = True
 
     # Create the refined mesh
     if exact_refined_adjoint:
@@ -350,18 +379,20 @@ for k in range(steps):
             # Set the interpolated solution on the fine mesh
             assembler_refined.setVariables(ans_interp)
 
-            # Assemble the adjoint equations
+            # Assemble the Jacobian matrix on the refined mesh
             res_refined = assembler_refined.createVec()
             mg.assembleJacobian(1.0, 0.0, 0.0, res_refined)
             mg.factor()
             pc = mg
             mat = mg.getMat()
 
-            # Compute the functional on the refined mesh
+            # Compute the functional and the right-hand-side for the
+            # adjoint on the refined mesh
+            adjoint_rhs = assembler_refined.createVec()
             if functional == 'displacement':
-                res_refined = get_midpoint_vector(comm, forest_refined,
+                adjoint_rhs = get_midpoint_vector(comm, forest_refined,
                                                   assembler_refined, 'midpoint')
-                fval_refined = ans_interp.dot(res_refined)
+                fval_refined = ans_interp.dot(adjoint_rhs)
             else:
                 if functional == 'integral':
                     direction = [1.0, 0.0, 0.0]
@@ -369,13 +400,13 @@ for k in range(steps):
                                                                   direction)
 
                 elif functional == 'aggregate':
-                    direction = [1.0, 0.0, 0.0]
+                    direction = [1.0/R**2, 0.0, 0.0]
                     func_refined = functions.KSDisplacement(assembler_refined,
                                                             ksweight, direction)
 
                 # Evaluate the functional on the refined mesh
                 fval_refined = assembler_refined.evalFunctions([func_refined])[0]
-                assembler_refined.evalSVSens(func_refined, res_refined)
+                assembler_refined.evalSVSens(func_refined, adjoint_rhs)
 
             # Create the GMRES object on the fine mesh
             gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
@@ -384,36 +415,11 @@ for k in range(steps):
 
             # Solve the linear system
             adjoint_refined = assembler_refined.createVec()
-            gmres.solve(res_refined, adjoint_refined)
+            gmres.solve(adjoint_rhs, adjoint_refined)
             adjoint_refined.scale(-1.0)
 
-            assembler_refined.setVariables(ans_interp)
-            assembler_refined.assembleRes(res_refined)
-
-            # Create a random vector on the coarse mesh
-            vec = assembler.createVec()
-            vec_interp = assembler_refined.createVec()
-            for i in range(5):
-                # Compute the random displacement vector in the
-                # original space and apply Dirichlet bcs
-                vec.setRand(-1.0, 1.0)
-                assembler.applyBCs(vec)            
-                TMR.computeInterpSolution(forest, assembler,
-                                          forest_refined, assembler_refined,
-                                          vec, vec_interp)
-
-                # Compute the relative error
-                dprod = vec_interp.dot(res_refined)
-                norm = res_refined.norm()*res_refined.norm()
-                if comm.rank == 0:
-                    print('Orthogonality check: ', dprod/norm, dprod)
-
-
-            # Compute the adjoint and use adjoint-based refinement
-            err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_interp, adjoint_refined)
-
-            print('adjoint_corr = ', adjoint_corr, ' err_est = ', err_est)
+            # Compute the adjoint correction on the fine mesh
+            adjoint_corr = adjoint_refined.dot(res_refined)
 
             # Compute the reconstructed adjoint solution on the refined mesh
             adjoint = assembler.createVec()
@@ -422,17 +428,10 @@ for k in range(steps):
                 forest, assembler, adjoint_refined, adjoint)
             TMR.computeInterpSolution(forest, assembler,
                 forest_refined, assembler_refined, adjoint, adjoint_interp)
-
-            print('dot = ', adjoint_refined.dot(res_refined))
-            print('dot = ', adjoint_interp.dot(res_refined))
             adjoint_refined.axpy(-1.0, adjoint_interp)
-            print('dot = ', adjoint_refined.dot(res_refined))
 
-            err_est, not_a_correction, error = TMR.adjointError(forest, assembler,
+            err_est, __, error = TMR.adjointError(forest, assembler,
                 forest_refined, assembler_refined, ans_interp, adjoint_refined)
-
-            print('not_a_correction = ', not_a_correction, ' err_est = ', err_est)
-
         else:
             # Compute the adjoint on the original mesh
             res.zeroEntries()
@@ -440,7 +439,7 @@ for k in range(steps):
                 assembler.evalSVSens(func, res)
             else:
                 res = get_midpoint_vector(comm, forest,
-                                          assembler, 'midpoint')            
+                                          assembler, 'midpoint')
             adjoint = assembler.createVec()
             gmres.solve(res, adjoint)
             adjoint.scale(-1.0)
@@ -453,38 +452,11 @@ for k in range(steps):
             # Apply Dirichlet boundary conditions
             assembler_refined.setVariables(ans_refined)
 
-            # Test orthogonality of the residual of the interpolated
-            # solution on the fine mesh
-            test_res_orthogonality = False
-            if test_res_orthogonality:
-                # Assemble the residual on the fine mesh from the
-                # interpolated solution
-                res_interp = assembler_refined.createVec()
-                assembler_refined.assembleRes(res_interp)
-
-                # Create a random vector on the coarse mesh
-                vec = assembler.createVec()
-                vec_interp = assembler_refined.createVec()
-                for i in range(5):
-                    # Compute the random displacement vector in the
-                    # original space and apply Dirichlet bcs
-                    vec.setRand(-1.0, 1.0)
-                    assembler.applyBCs(vec)            
-                    TMR.computeInterpSolution(forest, assembler,
-                                              forest_refined, assembler_refined,
-                                              vec, vec_interp)
-
-                    # Compute the relative error
-                    dprod = vec_interp.dot(res_interp)
-                    norm = res_interp.norm()*vec_interp.norm()
-                    if comm.rank == 0:
-                        print('Orthogonality check: ', dprod/norm)
-
             # Compute the functional on the refined mesh
             if functional == 'displacement':
-                res_refined = get_midpoint_vector(comm, forest_refined,
+                adjoint_rhs = get_midpoint_vector(comm, forest_refined,
                                                   assembler_refined, 'midpoint')
-                fval_refined = ans_refined.dot(res_refined)
+                fval_refined = ans_refined.dot(adjoint_rhs)
             else:
                 if functional == 'integral':
                     direction = [1.0, 0.0, 0.0]
@@ -492,15 +464,15 @@ for k in range(steps):
                                                                   direction)
 
                 elif functional == 'aggregate':
-                    direction = [1.0, 0.0, 0.0]
+                    direction = [1.0/R**2, 0.0, 0.0]
                     func_refined = functions.KSDisplacement(assembler_refined,
                                                             ksweight, direction)
 
                 # Evaluate the functional on the refined mesh
                 fval_refined = assembler_refined.evalFunctions([func_refined])[0]
 
-            # Approximate the difference between the refined adjoint and the
-            # adjoint on the current mesh
+            # Approximate the difference between the refined adjoint
+            # and the adjoint on the current mesh
             adjoint_refined = assembler_refined.createVec()
             TMR.computeReconSolution(forest, assembler,
                 forest_refined, assembler_refined, adjoint,
@@ -521,7 +493,6 @@ for k in range(steps):
         # Compute the refined function value
         fval_corr = fval_refined + adjoint_corr
 
-    # f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
     f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_POISSON_2D_ELEMENT, flag)
     f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
 
@@ -608,10 +579,6 @@ for k in range(steps):
     elif k < steps-1:
         # The refinement array
         refine = np.zeros(len(error), dtype=np.intc)
-
-        # Compute the target relative error
-        element_target_error = target_rel_err*np.fabs(fval)/ntotal
-        log_elem_target_error = np.log(element_target_error)
 
         # Determine the cutoff values
         cutoff = bins[-1]

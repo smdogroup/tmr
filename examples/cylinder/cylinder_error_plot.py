@@ -6,10 +6,14 @@ import numpy as np
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--steps', type=int, default=5)
+p.add_argument('--case', type=str, default='cylinder')
 args = p.parse_args()
 
 # Retrieve the number of steps
 steps = args.steps
+
+# Set the case string
+case = args.case
 
 # Set the colors to use for each set of bars
 colors = ['BrickRed', 'ForestGreen', 'NavyBlue',
@@ -17,23 +21,22 @@ colors = ['BrickRed', 'ForestGreen', 'NavyBlue',
 
 data = []
 for k in [0, steps/2, steps-1]:
-    data.append(np.loadtxt('results/cylinder_data%d.txt'%(k)))
+    data.append(np.loadtxt('results/%s_data%d.txt'%(case, k)))
 
-# Delta value
-delta = 25.0
+delta = 10
 
 # Set the positions of the tick locations
-yticks = [0, 5, 15, 20, 25]
+yticks_lab = [0, 2, 4, 6, 8]
 
 # Set the values for the ticks
 yticks = np.linspace(0, delta*len(data), 5*len(data)+1)
 ytick_labels = []
 for i in range(len(data)):
-    ytick_labels.extend([0, 5, 10, 15, 20])
-ytick_labels.append(25)
+    ytick_labels.extend(yticks_lab)
+ytick_labels.append(delta)
 
 # Look for all the data
-bins_per_decade = 4
+bins_per_decade = 10
 idx_min = data[0].shape[0]
 idx_max = 0
 for d in data:
@@ -124,7 +127,7 @@ for k, d in enumerate(data):
 
 s += tkz.get_end_tikz()
 
-fp = open('cylinder_plot.tex', 'w')
+fp = open('%s_plot.tex'%(case), 'w')
 fp.write(s)
 fp.close()
 

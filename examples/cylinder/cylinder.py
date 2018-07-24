@@ -124,22 +124,21 @@ def cylinder_ks_functional(rho, t, E, nu, kcorr, ys,
     y = 3.0*c2**2
     vm_max = max(vm_max, np.sqrt(x*y/(x + y)), np.sqrt(x), np.sqrt(y))
 
-    x = np.linspace(0.0, L, n)
-    y = np.linspace(0.0, 2.0*np.pi*R, n)
-    S = np.zeros((n, n))
-
     tcoef1 = (a1**2 + b1**2 - a1*b1)
     tcoef2 = 3*c1**2
     bcoef1 = (a2**2 + b2**2 - a2*b2)
     bcoef2 = 3*c2**2
 
-    for j in range(n):
-        for i in range(n):
-            sin2 = (np.sin(alpha*y[j])*np.sin(beta*x[i]))**2
-            cos2 = (np.cos(alpha*y[j])*np.cos(beta*x[i]))**2
-            vm1 = np.sqrt((tcoef1*sin2 + tcoef2*cos2))
-            vm2 = np.sqrt((bcoef1*sin2 + bcoef2*cos2))
-            S[i,j] = np.exp(rho*(max(vm1, vm2) - vm_max))
+    x = np.linspace(0.0, L, n)
+    y = np.linspace(0.0, 2.0*np.pi*R, n)
+    X, Y = np.meshgrid(x, y)
+
+    # Compute the contribution from both stress components
+    sin2 = (np.sin(alpha*Y)*np.sin(beta*X))**2
+    cos2 = (np.cos(alpha*Y)*np.cos(beta*X))**2
+    vm1 = np.sqrt((tcoef1*sin2 + tcoef2*cos2))
+    vm2 = np.sqrt((bcoef1*sin2 + bcoef2*cos2))
+    S = np.exp(rho*(vm1 - vm_max)) + np.exp(rho*(vm2 - vm_max))
 
     # Integrate over the area
     h = (2.0*L*R*np.pi)/(n-1)**2
@@ -151,7 +150,8 @@ def cylinder_ks_functional(rho, t, E, nu, kcorr, ys,
 
     return vm_max, vm_max + np.log(ks_sum)/rho
 
-def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000, disp=False):
+def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000,
+                       functional='aggregate'):
     '''
     Axisymmetric disk subject to a uniform pressure load
     '''
@@ -167,6 +167,11 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000, disp=False):
     S = np.zeros((n, 2))
     w0 = np.zeros(n)
 
+    # Set the transverse displacement
+    w0 = load*((R**4)/(64*D)*(1.0 - (r0/R)**2)**2 +
+               (R**2)/(4*kcorr*G*t)*(1.0 - (r0/R)**2))
+
+    # Do the work to compute the stresses
     phi_over_r0 = load*(R**2/(16*D))
     dphidr0 = load*(R**2/(16*D))
 
@@ -192,59 +197,47 @@ def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000, disp=False):
     # Compute the von Mises at the bottom surface
     S[0,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
-    for i, r in enumerate(r0):
-        # Set the transverse displacement
-        w0[i] = load*((R**4)/(64*D)*(1.0 - (r/R)**2)**2 +
-                      (R**2)/(4*kcorr*G*t)*(1.0 - (r/R)**2))
+    # The value of the rotation
+    phi = load*(R**3/(16*D))*(r0[1:]/R)*(1 - (r0[1:]/R)**2)
+    dphidr = load*(R**2/(16*D))*(1 - 3*(r0[1:]/R)**2)
 
-        if i == 0:
-            continue
+    # Compute the value of the stress at the top surface
+    z1 = 0.5*t
+    err = z1*dphidr
+    ett = z1*phi/r0[1:]
 
-        # The value of the rotation
-        phi = load*(R**3/(16*D))*(r/R)*(1 - (r/R)**2)
-        dphidr = load*(R**2/(16*D))*(1 - 3*(r/R)**2)
+    srr = Q11*err + Q12*ett
+    stt = Q12*err + Q22*ett
 
-        # Compute the value of the stress at the top surface
-        z1 = 0.5*t
-        err = z1*dphidr
-        ett = z1*phi/r
+    # Compute the von Mises at the top surface
+    S[1:,0] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
-        srr = Q11*err + Q12*ett
-        stt = Q12*err + Q22*ett
+    # Compute the value of the stress at the bottom surface
+    z2 = -0.5*t
+    err = z2*dphidr
+    ett = z2*phi/r0[1:]
 
-        # Compute the von Mises at the top surface
-        S[i,0] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+    srr = Q11*err + Q12*ett
+    stt = Q12*err + Q22*ett
 
-        # Compute the value of the stress at the bottom surface
-        z2 = -0.5*t
-        err = z2*dphidr
-        ett = z2*phi/r
-
-        srr = Q11*err + Q12*ett
-        stt = Q12*err + Q22*ett
-
-        # Compute the von Mises at the bottom surface
-        S[i,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+    # Compute the von Mises at the bottom surface
+    S[1:,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
     # Compute the maximum von Mises stress
     vm_mx = np.max(S)
 
     # Compute the contribution to the KS functional
-    if disp:
+    if functional == 'displacement':
         max_disp = np.max(w0)
-        integrand = np.zeros(n)
-        for i in range(n):
-            integrand[i] = 2*np.pi*r0[i]*np.exp(rho*(w0[i] - max_disp))
+        integrand = 2*np.pi*r0*np.exp(rho*(w0 - max_disp))
 
         ks_sum = (R/(n-1))*integrate(integrand)
         ks = max_disp + np.log(ks_sum)/rho
     else:
-        integrand = np.zeros(n)
-        for i in range(n):
-            integrand[i] = 2*np.pi*r0[i]*(np.exp(rho*(S[i,0] - vm_mx)) +
-                                          np.exp(rho*(S[i,1] - vm_mx)))
+        integrand = r0*(np.exp(rho*(S[:,0] - vm_mx)) +
+                        np.exp(rho*(S[:,1] - vm_mx)))
 
-        ks_sum = (R/(n-1))*integrate(integrand)
+        ks_sum = 2*np.pi*(R/(n-1))*integrate(integrand)
         ks = vm_mx + np.log(ks_sum)/rho
 
     return vm_mx, ks
@@ -482,7 +475,7 @@ comm = MPI.COMM_WORLD
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--case', type=str, default='cylinder')
-p.add_argument('--disp_aggregation', action='store_true', default=False)
+p.add_argument('--functional', type=str, default='integral')
 p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
@@ -492,13 +485,14 @@ p.add_argument('--uniform_refinement', action='store_true', default=False)
 p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
 p.add_argument('--compute_solution_error', action='store_true', default=False)
+p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the case type
 case = args.case
 
 # Parameters that define the geometry of the cylinder
-t = 1.0 # 1 mm thickness
+t = 2.5 # 2.5 mm thickness
 L = 100.0 # 100 mm length
 R = 100.0/np.pi # Radius of the cylinder (in mm)
 
@@ -533,11 +527,15 @@ steps = args.steps
 # Store whether to use a structured/unstructed mesh
 structured = args.structured
 
-# Set what to aggregate
-disp_aggregation = args.disp_aggregation
+# Set what functional to use
+functional = args.functional
+
+# This flag indicates whether to solve the adjoint exactly on the
+# next-finest mesh or not
+exact_refined_adjoint = args.exact_refined_adjoint
 
 # Set the load value to use depending on the case
-exact_ks_functional = 0.0
+exact_functional = 0.0
 
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
@@ -549,9 +547,13 @@ if case == 'cylinder':
     load = load/vm_max
 
     # Compute the exact KS value
-    one, exact_ks_functional = cylinder_ks_functional(ksweight,
-        t, E, nu, kcorr, ys,
-        L, R, alpha, beta, load, n=1000)
+    for n in [100, 500, 1000, 2500]:
+        one, approx = cylinder_ks_functional(ksweight,
+            t, E, nu, kcorr, ys, L, R, alpha, beta, load, n=n)
+        if comm.rank == 0:
+            print('%10d %25.16e'%(n, approx))
+        exact_functional = approx
+        
 
     # Load the geometry model
     geo = TMR.LoadModel('cylinder.stp')
@@ -572,62 +574,47 @@ if case == 'cylinder':
     bcs.addBoundaryCondition('Clamped', [0, 1, 2, 5])
     bcs.addBoundaryCondition('Restrained', [0, 1, 5])
 elif case == 'disk':
+    # Set the true dimension of the radius
+    R = 100.0
+    
     # Get the maximum stress and re-adjust the load
-    vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=10)
-    load = 10*load/vm_max
+    vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=20)
+    load = load/vm_max
 
     D = ((t**3)/12)*E/(1.0 - nu**2)
     G = 0.5*E/(1.0 + nu)
-    exact_ks_functional = load*((R**4)/(64*D) + (R**2)/(4*kcorr*G*t))
 
-    # if ksweight == 100.0:
-    #     if disp_aggregation:
-    #         exact_ks_functional = 1.3276372529418012
-    #     else:
-    #         exact_ks_functional = 1.0372627248381336
-    # else:
-    #     # Compute the exact KS value
-    #     for n in [1000, 10000, 100000, 1000000]: #, 10000000]:
-    #         one, exact_ks_functional = disk_ks_functional(ksweight,
-    #             t, E, nu, kcorr, ys, R, load, n=n, disp=disp_aggregation)
-    #         print('exact ks functional = ', exact_ks_functional)
+    if functional == 'displacement':
+        exact_functional = load*((R**4)/(64*D) + (R**2)/(4*kcorr*G*t))
+    elif functional == 'integral':
+        pass
+    elif functional == 'aggregate':
+        # Compute the exact KS value
+        for n in [1000, 10000, 100000, 1000000, 10000000]:
+            one, approx = disk_ks_functional(ksweight,
+                t, E, nu, kcorr, ys, R, load, n=n, functional=functional)
+            if comm.rank == 0:
+                print('%10d %25.16e'%(n, approx))
+            exact_functional = approx
 
-    from_cylinder = False
-    if from_cylinder:
-        # Load the geometry model
-        geo = TMR.LoadModel('cylinder.stp')
-        verts = geo.getVertices()
-        edges = geo.getEdges()
-        faces = geo.getFaces()
+    # Load the geometry model
+    geo = TMR.LoadModel('2d-disk.stp')
+    verts = geo.getVertices()
+    edges = geo.getEdges()
+    faces = geo.getFaces()
+    
+    # Set the attributes
+    verts[1].setAttribute('midpoint')
+    for index in [0, 2, 3, 4]:
+        verts[index].setAttribute('clamped')
+    for index in [2, 4, 6, 7]:
+        edges[index].setAttribute('clamped')
 
-        # Set the attributes
-        verts[1].setAttribute('clamped')
-        edges[2].setAttribute('clamped')
-
-        # Set the boundary conditions
-        bcs.addBoundaryCondition('clamped', [0, 1, 2, 3, 4, 5])
-
-        # Create the new model
-        geo = TMR.Model([verts[1]], [edges[2]], [faces[2]])
-    else:
-        # Load the geometry model
-        geo = TMR.LoadModel('2d-disk.stp')
-        verts = geo.getVertices()
-        edges = geo.getEdges()
-        faces = geo.getFaces()
-
-        # Set the attributes
-        verts[1].setAttribute('midpoint')
-        for index in [0, 2, 3, 4]:
-            verts[index].setAttribute('clamped')
-        for index in [2, 4, 6, 7]:
-            edges[index].setAttribute('clamped')
-
-        # Set the boundary conditions
-        bcs.addBoundaryCondition('clamped', [0, 1, 2, 3, 4, 5])
+    # Set the boundary conditions
+    bcs.addBoundaryCondition('clamped', [0, 1, 2, 3, 4, 5])
 
 if comm.rank == 0:
-    print('Exact KS functional = %25.15e'%(exact_ks_functional))
+    print('Exact KS functional = %25.15e'%(exact_functional))
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -670,17 +657,13 @@ elif ordering == 'multicolor':
 else:
     ordering = TACS.PY_NATURAL_ORDER
 
-# The target relative error
-target_rel_err = 1e-4
-
 # Open a log file to write
 descript = 'unstructured'
 if structured:
     descript = 'structured'
 if args.uniform_refinement:
     descript += '_uniform'
-if args.disp_aggregation:
-    descript += '_disp'
+descript += '_' + functional
 
 # Create the log file and write out the header
 log_fp = open('%s_order%d_%s.dat'%(case, order, descript), 'w')
@@ -723,6 +706,7 @@ for k in range(steps):
         pc = mg
         mat = mg.getMat()
 
+    # Create the GMRES object
     gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
     gmres.setMonitor(comm, freq=10)
     gmres.setTolerances(1e-14, 1e-30)
@@ -732,7 +716,7 @@ for k in range(steps):
     # Set the variables
     assembler.setVariables(ans)
 
-    Output for visualization
+    # Output for visualization
     flag = (TACS.ToFH5.NODES |
             TACS.ToFH5.DISPLACEMENTS |
             TACS.ToFH5.STRAINS |
@@ -740,26 +724,29 @@ for k in range(steps):
     f5 = TACS.ToFH5(assembler, TACS.PY_SHELL, flag)
     f5.writeToFile('results/solution%02d.f5'%(k))
 
-    # # Create the function
-    # if disp_aggregation:
-    #     direction = [0.0, 0.0, 1.0]
-    #     func = functions.KSDisplacement(assembler, ksweight, direction)
-    # else:
-    #     func = functions.KSFailure(assembler, ksweight)
-    #     func.setKSFailureType('continuous')
-    # fval = assembler.evalFunctions([func])[0]
+    # Create and compute the function
+    fval = 0.0
+    if functional == 'displacement':
+        res = get_midpoint_vector(comm, forest,
+                                  assembler, 'midpoint')
+        fval = ans.dot(res)
+    elif functional == 'integral':
+        direction = [0.0, 0.0, 1.0]
+        func = functions.DisplacementIntegral(assembler, direction)
+        fval = assembler.evalFunctions([func])[0]
+    elif functional == 'aggregate':
+        func = functions.KSFailure(assembler, ksweight)
+        func.setKSFailureType('continuous')
+        fval = assembler.evalFunctions([func])[0]
 
-    res = get_midpoint_vector(comm, forest, assembler, 'midpoint')
-    fval = ans.dot(res)
-
-    # # Create the refined mesh
-    # forest_refined = forest.duplicate()
-    # assembler_refined, mg_refined = createProblem(case, forest_refined,
-    #     bcs, ordering, order=order+1, nlevels=nlevs)
-    # aux = addFaceTraction(case, order+1, assembler_refined, load)
-    # assembler_refined.setAuxElements(aux)
-
-    forest_refined, assembler_refined = createRefined(case, forest, bcs)
+    # Create the refined mesh
+    if exact_refined_adjoint:
+        forest_refined = forest.duplicate()
+        assembler_refined, mg = createProblem(case, forest_refined,
+                                              bcs, ordering,
+                                              order=order+1, nlevels=nlevs+1)
+    else:
+        forest_refined, assembler_refined = createRefined(case, forest, bcs)
     aux = addFaceTraction(case, order+1, assembler_refined, load)
     assembler_refined.setAuxElements(aux)
 
@@ -773,153 +760,124 @@ for k in range(steps):
         TMR.computeReconSolution(forest, assembler,
             forest_refined, assembler_refined)
     else:
-        # Compute the adjoint on the original mesh
-        # ######################################
-        # res.zeroEntries()
-        # assembler.evalSVSens(func, res)
-        ######################################
-        adjoint = assembler.createVec()
-        gmres.solve(res, adjoint)
-        adjoint.scale(-1.0)
+        if exact_refined_adjoint:
+            # Compute the reconstructed solution on the refined mesh
+            ans_interp = assembler_refined.createVec()
+            TMR.computeInterpSolution(forest, assembler,
+                forest_refined, assembler_refined, ans, ans_interp)
 
-        # # Compute the interpolated adjoint on the refined mesh
-        # adjoint_interp = assembler_refined.createVec()
-        # TMR.computeInterpSolution(forest, assembler,
-        #     forest_refined, assembler_refined, adjoint, adjoint_interp)
+            # Set the interpolated solution on the fine mesh
+            assembler_refined.setVariables(ans_interp)
 
-        # # Compute the solution on the refined mesh
-        # ans_interp = assembler_refined.createVec()
-        # TMR.computeInterpSolution(forest, assembler,
-        #     forest_refined, assembler_refined, ans, ans_interp)
+            # Assemble the Jacobian matrix on the refined mesh
+            res_refined = assembler_refined.createVec()
+            mg.assembleJacobian(1.0, 0.0, 0.0, res_refined)
+            mg.factor()
+            pc = mg
+            mat = mg.getMat()
 
-        # # Apply the boundary conditions
-        # assembler_refined.applyBCs(ans_interp)
-        # assembler_refined.applyBCs(adjoint_interp)
+            # Compute the functional and the right-hand-side for the
+            # adjoint on the refined mesh
+            adjoint_rhs = assembler_refined.createVec()
+            if functional == 'displacement':
+                adjoint_rhs = get_midpoint_vector(comm, forest_refined,
+                                                  assembler_refined, 'midpoint')
+                fval_refined = ans_interp.dot(adjoint_rhs)
+            else:
+                if functional == 'integral':
+                    direction = [0.0, 0.0, 1.0]
+                    func_refined = functions.DisplacementIntegral(assembler_refined,
+                                                                  direction)
+                elif functional == 'aggregate':
+                    func_refined = functions.KSFailure(assembler_refined, ksweight)
+                    func_refined.setKSFailureType('continuous')
 
-        # # Set the interpolated variable values
-        # assembler_refined.setVariables(ans_interp)
+                # Evaluate the functional on the refined mesh
+                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+                assembler_refined.evalSVSens(func_refined, adjoint_rhs)
 
-        # # Compute the functional on the refined mesh
-        # if disp_aggregation:
-        #     direction = [0.0, 0.0, 1.0]
-        #     func_refined = functions.KSDisplacement(assembler_refined,
-        #         ksweight, direction)
-        # else:
-        #     func_refined = functions.KSFailure(assembler_refined, ksweight)
-        #     func_refined.setKSFailureType('continuous')
-        # fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+            # Create the GMRES object on the fine mesh
+            gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
+            gmres.setMonitor(comm, freq=10)
+            gmres.setTolerances(1e-14, 1e-30)
 
-        # # Set up the preconditioner on the refined mesh
-        # if use_direct_solve:
-        #     mat = assembler.createFEMat()
-        #     assembler.assembleJacobian(1.0, 0.0, 0.0, res, mat)
+            # Solve the linear system
+            adjoint_refined = assembler_refined.createVec()
+            gmres.solve(adjoint_rhs, adjoint_refined)
+            adjoint_refined.scale(-1.0)
 
-        #     # Create the direct solver
-        #     pc = TACS.Pc(mat)
-        #     pc.factor()
-        # else:
-        #     # Solve the linear system
-        #     mg_refined.assembleJacobian(1.0, 0.0, 0.0)
-        #     mg_refined.factor()
-        #     pc = mg_refined
-        #     mat = mg_refined.getMat()
+            # Compute the adjoint correction on the fine mesh
+            adjoint_corr = adjoint_refined.dot(res_refined)
 
-        # # Create the GMRES object
-        # gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
-        # gmres.setMonitor(comm, freq=10)
-        # gmres.setTolerances(1e-14, 1e-30)
+            # Compute the reconstructed adjoint solution on the refined mesh
+            adjoint = assembler.createVec()
+            adjoint_interp = assembler_refined.createVec()
+            TMR.computeInterpSolution(forest_refined, assembler_refined,
+                forest, assembler, adjoint_refined, adjoint)
+            TMR.computeInterpSolution(forest, assembler,
+                forest_refined, assembler_refined, adjoint, adjoint_interp)
+            adjoint_refined.axpy(-1.0, adjoint_interp)
 
-        # # Compute the adjoint on the original mesh
-        # res = assembler_refined.createVec()
-        # assembler_refined.evalSVSens(func_refined, res)
-        # adjoint_refined = assembler_refined.createVec()
-        # gmres.solve(res, adjoint_refined)
-        # adjoint_refined.scale(-1.0)
+            err_est, __, error = TMR.adjointError(forest, assembler,
+                forest_refined, assembler_refined, ans_interp, adjoint_refined)
+        else:
+            # Compute the adjoint on the original mesh
+            res.zeroEntries()
+            if functional != 'displacement':
+                assembler.evalSVSens(func, res)
+            else:
+                res = get_midpoint_vector(comm, forest,
+                                          assembler, 'midpoint')
+            adjoint = assembler.createVec()
+            gmres.solve(res, adjoint)
+            adjoint.scale(-1.0)
 
-        # # Take the difference to compute the input to the refinement tool
-        # adjoint_refined.axpy(-1.0, adjoint_interp)
+            # Compute the solution on the refined mesh
+            ans_refined = assembler_refined.createVec()
+            TMR.computeReconSolution(forest, assembler,
+                forest_refined, assembler_refined, ans, ans_refined)
 
-        # ans_diff = assembler_refined.createVec()
-        # TMR.computeReconSolution(forest, assembler,
-        #     forest_refined, assembler_refined, ans, ans_diff)
-        # ans_diff.axpy(-1.0, ans_interp)
+            # Apply Dirichlet boundary conditions
+            assembler_refined.setVariables(ans_refined)
 
-        # # Compute the right-hand-side of the functional
-        # scale = -1.0
-        # alpha = 1.0
-        # beta = 0.0
-        # gamma = 0.0
-        # assembler_refined.addJacobianVecProduct(scale, alpha, beta, gamma,
-        #     adjoint_refined, res, matOr=TACS.PY_TRANSPOSE)
+            # Compute the functional on the refined mesh
+            if functional == 'displacement':
+                adjoint_rhs = get_midpoint_vector(comm, forest_refined,
+                                                  assembler_refined, 'midpoint')
+                fval_refined = ans_refined.dot(adjoint_rhs)
+            else:
+                if functional == 'integral':
+                    direction = [0.0, 0.0, 1.0]
+                    func_refined = functions.DisplacementIntegral(assembler_refined,
+                                                                  direction)
+                elif functional == 'aggregate':
+                    func_refined = functions.KSFailure(assembler_refined, ksweight)
+                    func_refined.setKSFailureType('continuous')
 
-        # adjoint_corr_dual = ans_diff.dot(res)
+                # Evaluate the functional on the refined mesh
+                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
 
-        # # Compute the adjoint and use adjoint-based refinement
-        # err_est, adjoint_corr_primal, error = \
-        #     TMR.adjointError(forest, assembler,
-        #                      forest_refined, assembler_refined,
-        #                      ans_interp, adjoint_refined)
+            # Approximate the difference between the refined adjoint
+            # and the adjoint on the current mesh
+            adjoint_refined = assembler_refined.createVec()
+            TMR.computeReconSolution(forest, assembler,
+                forest_refined, assembler_refined, adjoint,
+                adjoint_refined)
 
-        # adjoint_corr = 0.5*(adjoint_corr_primal + adjoint_corr_dual)
+            # Compute the adjoint and use adjoint-based refinement
+            err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
+                forest_refined, assembler_refined, ans_refined, adjoint_refined)
 
-        # Compute the solution on the refined mesh
-        ans_interp = assembler_refined.createVec()
-        TMR.computeInterpSolution(forest, assembler,
-            forest_refined, assembler_refined, ans, ans_interp)
+            # Compute the adjoint and use adjoint-based refinement
+            err_est, __, error = TMR.adjointError(forest, assembler,
+                forest_refined, assembler_refined, ans_refined, adjoint_refined)
 
-        # Apply Dirichlet boundary conditions
-        assembler_refined.applyBCs(ans_interp)
-        assembler_refined.setVariables(ans_interp)
-
-        # # Compute the functional on the refined mesh
-        # if disp_aggregation:
-        #     direction = [0.0, 0.0, 1.0]
-        #     func_refined = functions.KSDisplacement(assembler_refined,
-        #         ksweight, direction)
-        # else:
-        #     func_refined = functions.KSFailure(assembler_refined, ksweight)
-        #     func_refined.setKSFailureType('continuous')
-        # fval_refined = assembler_refined.evalFunctions([func_refined])[0]
-
-        res = get_midpoint_vector(comm, forest_refined, assembler_refined,
-                                  'midpoint')
-        fval_refined = ans_interp.dot(res)
-
-        # Approximate the difference between the refined adjoint and the
-        # adjoint on the current mesh
-        adjoint_diff = assembler_refined.createVec()
-        TMR.computeReconSolution(forest, assembler,
-            forest_refined, assembler_refined, adjoint, adjoint_diff)
-
-        # # Compute the adjoint and use adjoint-based refinement
-        err_est, adjoint_corr1, error = \
-            TMR.adjointError(forest, assembler,
-                             forest_refined, assembler_refined,
-                             ans_interp, adjoint_diff)
-
-        # Apply Dirichlet boundary conditions to the solution
-        assembler_refined.applyBCs(adjoint_diff)
-        assembler_refined.assembleRes(ans_interp);
-        adjoint_corr2 = ans_interp.dot(adjoint_diff)
-
-        adjoint_diff = assembler_refined.createVec()
-        TMR.computeReconSolution(forest, assembler,
-            forest_refined, assembler_refined, adjoint, adjoint_diff,
-            compute_diff=True)
-
-        # Apply Dirichlet boundary conditions to the solution
-        assembler_refined.applyBCs(adjoint_diff)
-        adjoint_corr3 = ans_interp.dot(adjoint_diff)
-
-        print('adjoint_corr1 - adjoint_corr2 = ',
-              adjoint_corr1 - adjoint_corr2)
-        print('adjoint_corr1 - adjoint_corr2 = ',
-              adjoint_corr1 - adjoint_corr3)
-
-        adjoint_corr = adjoint_corr1
+            TMR.computeReconSolution(forest, assembler,
+                forest_refined, assembler_refined, adjoint, adjoint_refined)
+            assembler_refined.setVariables(adjoint_refined)
 
         # Compute the refined function value
-        fval_corr = fval + adjoint_corr # fval_refined + adjoint_corr
+        fval_corr = fval_refined + adjoint_corr
 
     f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
     f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
@@ -945,18 +903,18 @@ for k in range(steps):
     nnodes = comm.allreduce(assembler.getNumOwnedNodes(), op=MPI.SUM)
 
     # Compute the error from the exact solution
-    fval_error = np.fabs(exact_ks_functional - fval)
-    fval_corr_error = np.fabs(exact_ks_functional - fval_corr)
+    fval_error = np.fabs(exact_functional - fval)
+    fval_corr_error = np.fabs(exact_functional - fval_corr)
 
-    fval_effectivity = (fval_corr - fval)/(exact_ks_functional - fval)
-    indicator_effectivity = err_est/np.fabs(exact_ks_functional - fval)
+    fval_effectivity = (fval_corr - fval)/(exact_functional - fval)
+    indicator_effectivity = err_est/np.fabs(exact_functional - fval)
 
     # Write the log data to a file
     s = '%6d %6d %6d %20.15e %20.15e %20.15e %20.15e '
     s += '%20.15e %20.15e %20.15e %20.15e %20.15e\n'
     log_fp.write(
         s%(k, ntotal, nnodes, fval, fval_corr, err_est, adjoint_corr,
-        exact_ks_functional, fval_error, fval_corr_error,
+        exact_functional, fval_error, fval_corr_error,
         fval_effectivity, indicator_effectivity))
     log_fp.flush()
 
@@ -996,16 +954,6 @@ for k in range(steps):
         print('mean      = ', mean)
         print('stddev    = ', stddev)
 
-        print('%10s   %10s   %12s   %12s'%(
-            'high', 'low', 'bins', 'percentage'))
-        print('%10.2e   %10s   %12d   %12.2f'%(
-            bounds[0], ' ', bins[0], 100.0*bins[0]/total))
-        for i in range(nbins):
-            print('%10.2e   %10.2e   %12d   %12.2f'%(
-                bounds[i], bounds[i+1], bins[i+1], 100.0*bins[i+1]/total))
-        print('%10s   %10.2e   %12d   %12.2f'%(
-            ' ', bounds[-1], bins[-1], 100.0*bins[-1]/total))
-
         # Set the data
         data = np.zeros((nbins, 4))
         for i in range(nbins-1, -1, -1):
@@ -1026,10 +974,6 @@ for k in range(steps):
         # The refinement array
         refine = np.zeros(len(error), dtype=np.intc)
 
-        # Compute the target relative error
-        element_target_error = target_rel_err*fval/ntotal
-        log_elem_target_error = np.log(element_target_error)
-
         # Determine the cutoff values
         cutoff = bins[-1]
         bin_sum = 0
@@ -1040,22 +984,7 @@ for k in range(steps):
                 break
 
         log_cutoff = np.log(cutoff)
-
-        if comm.rank == 0:
-            print('elem_target_error =        %15.3e'%(
-                element_target_error))
-            print('log10(elem_target_error) = %15.3e'%(
-                np.log10(element_target_error)))
-            print('log10(mean) =              %15.3e'%(
-                np.log10(np.exp(mean))))
-            print('log10(stddev) =            %15.3e'%(
-                np.log10(np.exp(stddev))))
-            print('log_elem_target_error =    %15.3e'%(
-                log_elem_target_error))
-            print('mean =                     %15.3e'%(mean))
-            print('stddev =                   %15.3e'%(stddev))
-            print('cutoff =                   %15.3e'%(cutoff))
-
+        
         # Element target error is still too high. Adapt based solely
         # on decreasing the overall error
         nrefine = 0
