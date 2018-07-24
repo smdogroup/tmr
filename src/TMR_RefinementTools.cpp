@@ -256,10 +256,10 @@ static void computeJacobianTrans3D( const TacsScalar Xpts[],
 }
 
 // Specify the maximum order
-static const int MAX_ORDER = 5;
+static const int MAX_ORDER = 6;
 
 // Specify the maximum number of enrichment functions in 2D and 3D
-static const int MAX_2D_ENRICH = 7;
+static const int MAX_2D_ENRICH = 9;
 static const int MAX_3D_ENRICH = 15;
 
 /*
@@ -268,9 +268,12 @@ static const int MAX_3D_ENRICH = 15;
 */
 static int getNum2dEnrich( int order ){
   if (order == 2){
-    return 4;
+    return 5;
   }
-  return 7;
+  else if (order == 3){
+    return 7;
+  }
+  return 9;
 }
 
 static int getNum3dEnrich( int order ){
@@ -283,113 +286,173 @@ static int getNum3dEnrich( int order ){
 /*
   Evaluate the enrichment function for a second-order shell problem
 */
-static void eval2ndEnrichmentFuncs2D( const double pt[], double N[] ){
-  // Compute the cubic enrichment shape functions along the two
-  // coordinate directions
-  double ca = (1.0 + pt[0])*(1.0 - pt[0]);
-  double cb = (1.0 + pt[1])*(1.0 - pt[1]);
+static void evalEnrichmentFuncs2D( const int order, const double pt[],
+                                   const double *knots, double N[] ){
+  if (order == 2){
+    // Compute the cubic enrichment shape functions along the two
+    // coordinate directions
+    double ca = (1.0 + pt[0])*(1.0 - pt[0]);
+    double cb = (1.0 + pt[1])*(1.0 - pt[1]);
 
-  N[0] = ca;
-  N[1] = pt[1]*ca;
-  N[2] = cb;
-  N[3] = pt[0]*cb;
+    N[0] = ca;
+    N[1] = pt[1]*ca;
+    N[2] = cb;
+    N[3] = pt[0]*cb;
+    N[4] = ca*cb;
+  }
+  else if (order == 3){
+    // Compute the cubic enrichment shape functions along the two
+    // coordinate directions
+    double ca = (1.0 + pt[0])*pt[0]*(1.0 - pt[0]);
+    double cb = (1.0 + pt[1])*pt[1]*(1.0 - pt[1]);
+
+    // Set the shape functions themselves
+    N[0] = ca;
+    N[1] = pt[1]*ca;
+    N[2] = pt[1]*pt[1]*ca;
+    N[3] = cb;
+    N[4] = pt[0]*cb;
+    N[5] = pt[0]*pt[0]*cb;
+    N[6] = ca*cb;
+  }
+  else if (order == 4){
+    double ca = (1.0 + pt[0])*(1.0 - pt[0]);
+    ca *= (pt[0] - knots[1])*(pt[0] - knots[2]);
+
+    double cb = (1.0 + pt[1])*(1.0 - pt[1]);
+    cb *= (pt[1] - knots[1])*(pt[1] - knots[2]);
+
+    // Set the shape functions themselves
+    N[0] = ca;
+    N[1] = pt[1]*ca;
+    N[2] = pt[1]*pt[1]*ca;
+    N[3] = pt[1]*pt[1]*pt[1]*ca;
+    N[4] = cb;
+    N[5] = pt[0]*cb;
+    N[6] = pt[0]*pt[0]*cb;
+    N[7] = pt[0]*pt[0]*pt[0]*cb;
+    N[8] = ca*cb;
+  }
 }
 
 /*
   Evaluate the derivative of the enrichment functions for a
   second-order problem.
 */
-static void eval2ndEnrichmentFuncs2D( const double pt[],
-                                      double N[], double Na[], double Nb[] ){
+static void evalEnrichmentFuncs2D( const int order, const double pt[],
+                                   const double *knots,
+                                   double N[], double Na[], double Nb[] ){
 
-  // Compute the cubic enrichment shape functions along the two
-  // coordinate directions
-  double ca = (1.0 + pt[0])*(1.0 - pt[0]);
-  double cb = (1.0 + pt[1])*(1.0 - pt[1]);
+  if (order == 2){
+    // Compute the cubic enrichment shape functions along the two
+    // coordinate directions
+    double ca = (1.0 + pt[0])*(1.0 - pt[0]);
+    double cb = (1.0 + pt[1])*(1.0 - pt[1]);
 
-  // Compute the derivatives
-  double da = -2.0*pt[0];
-  double db = -2.0*pt[1];
+    // Compute the derivatives
+    double da = -2.0*pt[0];
+    double db = -2.0*pt[1];
 
-  // Evaluate the shape functions
-  N[0] = ca;
-  N[1] = pt[1]*ca;
-  N[2] = cb;
-  N[3] = pt[0]*cb;
+    // Evaluate the shape functions
+    N[0] = ca;
+    N[1] = pt[1]*ca;
+    N[2] = cb;
+    N[3] = pt[0]*cb;
+    N[4] = ca*cb;
 
-  // Evaluate the derivatives of the shape functions
-  Na[0] = da;
-  Na[1] = pt[1]*da;
-  Na[2] = 0.0;
-  Na[3] = cb;
+    // Evaluate the derivatives of the shape functions
+    Na[0] = da;
+    Na[1] = pt[1]*da;
+    Na[2] = 0.0;
+    Na[3] = cb;
+    Na[4] = da*cb;
 
-  Nb[0] = 0.0;
-  Nb[1] = ca;
-  Nb[2] = db;
-  Nb[3] = pt[0]*db;
-}
+    Nb[0] = 0.0;
+    Nb[1] = ca;
+    Nb[2] = db;
+    Nb[3] = pt[0]*db;
+    Nb[4] = ca*db;
+  }
+  else if (order == 3){
+    // Compute the cubic enrichment shape functions along the two
+    // coordinate directions
+    double ca = (1.0 + pt[0])*pt[0]*(1.0 - pt[0]);
+    double cb = (1.0 + pt[1])*pt[1]*(1.0 - pt[1]);
 
-/*
-  Evaluate the enrichment functions for a third-order shell problem
-*/
-static void eval3rdEnrichmentFuncs2D( const double pt[], double N[] ){
-  // Compute the cubic enrichment shape functions along the two
-  // coordinate directions
-  double ca = (1.0 + pt[0])*pt[0]*(1.0 - pt[0]);
-  double cb = (1.0 + pt[1])*pt[1]*(1.0 - pt[1]);
+    // Compute the derivative of the enrichment functions w.r.t.
+    // the two coordinate directions
+    double da = 1.0 - 3*pt[0]*pt[0];
+    double db = 1.0 - 3*pt[1]*pt[1];
 
-  // Set the shape functions themselves
-  N[0] = ca;
-  N[1] = pt[1]*ca;
-  N[2] = pt[1]*pt[1]*ca;
-  N[3] = cb;
-  N[4] = pt[0]*cb;
-  N[5] = pt[0]*pt[0]*cb;
-  N[6] = ca*cb;
-}
+    // Set the shape functions themselves
+    N[0] = ca;
+    N[1] = pt[1]*ca;
+    N[2] = pt[1]*pt[1]*ca;
+    N[3] = cb;
+    N[4] = pt[0]*cb;
+    N[5] = pt[0]*pt[0]*cb;
+    N[6] = ca*cb;
 
-/*
-  The enriched shape functions for the tensor-product quadratic
-  Lagrange shape functions.
-*/
-static void eval3rdEnrichmentFuncs2D( const double pt[],
-                                      double N[], double Na[], double Nb[] ){
-  // Compute the cubic enrichment shape functions along the two
-  // coordinate directions
-  double ca = (1.0 + pt[0])*pt[0]*(1.0 - pt[0]);
-  double cb = (1.0 + pt[1])*pt[1]*(1.0 - pt[1]);
+    // Set the derivatives of the enrichment functions with respect to
+    // the first and second coordinate directions
+    Na[0] = da;
+    Na[1] = pt[1]*da;
+    Na[2] = pt[1]*pt[1]*da;
+    Na[3] = 0.0;
+    Na[4] = cb;
+    Na[5] = 2.0*pt[0]*cb;
+    Na[6] = da*cb;
 
-  // Compute the derivative of the enrichment functions w.r.t.
-  // the two coordinate directions
-  double da = 1.0 - 3*pt[0]*pt[0];
-  double db = 1.0 - 3*pt[1]*pt[1];
+    Nb[0] = 0.0;
+    Nb[1] = ca;
+    Nb[2] = 2.0*pt[1]*ca;
+    Nb[3] = db;
+    Nb[4] = pt[0]*db;
+    Nb[5] = pt[0]*pt[0]*db;
+    Nb[6] = ca*db;
+  }
+  else {
+    double ca = (1.0 + pt[0])*(1.0 - pt[0]);
+    ca *= (pt[0] - knots[1])*(pt[0] - knots[2]);
+    double da = -2.0*pt[0]*(pt[0] - knots[1])*(pt[0] - knots[2]) +
+      (1.0 + pt[0])*(1.0 - pt[0])*(2.0*pt[0] - knots[1] - knots[2]);
 
-  // Set the shape functions themselves
-  N[0] = ca;
-  N[1] = pt[1]*ca;
-  N[2] = pt[1]*pt[1]*ca;
-  N[3] = cb;
-  N[4] = pt[0]*cb;
-  N[5] = pt[0]*pt[0]*cb;
-  N[6] = ca*cb;
+    double cb = (1.0 + pt[1])*(1.0 - pt[1]);
+    cb *= (pt[1] - knots[1])*(pt[1] - knots[2]);
+    double db = -2.0*pt[1]*(pt[1] - knots[1])*(pt[1] - knots[2]) +
+      (1.0 + pt[1])*(1.0 - pt[1])*(2.0*pt[1] - knots[1] - knots[2]);
 
-  // Set the derivatives of the enrichment functions with respect to
-  // the first and second coordinate directions
-  Na[0] = da;
-  Na[1] = pt[1]*da;
-  Na[2] = pt[1]*pt[1]*da;
-  Na[3] = 0.0;
-  Na[4] = cb;
-  Na[5] = 2.0*pt[0]*cb;
-  Na[6] = da*cb;
+    // Set the shape functions themselves
+    N[0] = ca;
+    N[1] = pt[1]*ca;
+    N[2] = pt[1]*pt[1]*ca;
+    N[3] = pt[1]*pt[1]*pt[1]*ca;
+    N[4] = cb;
+    N[5] = pt[0]*cb;
+    N[6] = pt[0]*pt[0]*cb;
+    N[7] = pt[0]*pt[0]*pt[0]*cb;
+    N[8] = ca*cb;
 
-  Nb[0] = 0.0;
-  Nb[1] = ca;
-  Nb[2] = 2.0*pt[1]*ca;
-  Nb[3] = db;
-  Nb[4] = pt[0]*db;
-  Nb[5] = pt[0]*pt[0]*db;
-  Nb[6] = ca*db;
+    Na[0] = da;
+    Na[1] = pt[1]*da;
+    Na[2] = pt[1]*pt[1]*da;
+    Na[3] = pt[1]*pt[1]*pt[1]*da;
+    Na[4] = 0.0;
+    Na[5] = cb;
+    Na[6] = 2*pt[0]*cb;
+    Na[7] = 3*pt[0]*pt[0]*cb;
+    Na[8] = da*cb;
+
+    Nb[0] = 0.0;
+    Nb[1] = ca;
+    Nb[2] = 2*pt[1]*ca;
+    Nb[3] = 3*pt[1]*pt[1]*ca;
+    Nb[4] = db;
+    Nb[5] = pt[0]*db;
+    Nb[6] = pt[0]*pt[0]*db;
+    Nb[7] = pt[0]*pt[0]*pt[0]*db;
+    Nb[8] = ca*db;
+  }
 }
 
 /*
@@ -609,9 +672,9 @@ static void computeElemRecon2D( const int vars_per_node,
                                 TacsScalar ubar[],
                                 TacsScalar *tmp ){
   // Get information about the interpolation
-  const double *knots;
+  const double *knots, *refined_knots;
   const int order = forest->getInterpKnots(&knots);
-  const int refined_order = refined_forest->getMeshOrder();
+  const int refined_order = refined_forest->getInterpKnots(&refined_knots);
 
   // The number of enrichment functions
   const int nenrich = getNum2dEnrich(order);
@@ -629,13 +692,17 @@ static void computeElemRecon2D( const int vars_per_node,
   TacsScalar *b = &tmp[nenrich*neq];
 
   // Set the weighs
-  double wvals[3];
+  double wvals[4];
   if (order == 2){
     wvals[0] = wvals[1] = 1.0;
   }
   else if (order == 3){
     wvals[0] = wvals[2] = 0.5;
     wvals[1] = 1.0;
+  }
+  else {
+    wvals[0] = wvals[3] = 0.5;
+    wvals[1] = wvals[2] = 1.0;
   }
 
   for ( int c = 0, jj = 0; jj < order; jj++ ){
@@ -708,12 +775,7 @@ static void computeElemRecon2D( const int vars_per_node,
       // that contribute to the derivative
       double Nr[MAX_2D_ENRICH];
       double Nar[MAX_2D_ENRICH], Nbr[MAX_2D_ENRICH];
-      if (order == 2){
-        eval2ndEnrichmentFuncs2D(pt, Nr, Nar, Nbr);
-      }
-      else {
-        eval3rdEnrichmentFuncs2D(pt, Nr, Nar, Nbr);
-      }
+      evalEnrichmentFuncs2D(order, pt, refined_knots, Nr, Nar, Nbr);
 
       // Add the contributions to the the enricment
       for ( int i = 0; i < nenrich; i++ ){
@@ -737,8 +799,8 @@ static void computeElemRecon2D( const int vars_per_node,
   int rank;
 
   // Length of the work array
-  int lwork = 10*18;
-  TacsScalar work[10*18];
+  int lwork = 512;
+  TacsScalar work[512];
 
   // LAPACK output status
   int info;
@@ -899,8 +961,8 @@ static void computeElemRecon3D( const int vars_per_node,
   int rank;
 
   // Length of the work array
-  int lwork = 10*18;
-  TacsScalar work[10*18];
+  int lwork = 512;
+  TacsScalar work[512];
 
   // LAPACK output status
   int info;
@@ -1365,12 +1427,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
           // Evaluate the shape functions and the enrichment
           // functions at the new parametric point
           double Nr[MAX_2D_ENRICH];
-          if (order == 2){
-            eval2ndEnrichmentFuncs2D(pt, Nr);
-          }
-          else {
-            eval3rdEnrichmentFuncs2D(pt, Nr);
-          }
+          evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
 
           // Add the portion from the enrichment functions
           for ( int i = 0; i < vars_per_node; i++ ){
@@ -1430,12 +1487,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
           // Evaluate the enrichment functions and add them to the
           // solution
           double Nr[MAX_2D_ENRICH];
-          if (order == 2){
-            eval2ndEnrichmentFuncs2D(pt, Nr);
-          }
-          else {
-            eval3rdEnrichmentFuncs2D(pt, Nr);
-          }
+          evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
 
           // Add the portion from the enrichment functions
           for ( int i = 0; i < vars_per_node; i++ ){
@@ -1773,7 +1825,6 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
   uvec_refined->beginSetValues(TACS_INSERT_NONZERO_VALUES);
   uvec_refined->endSetValues(TACS_INSERT_NONZERO_VALUES);
 
-  // Distribute the values back to all nodes
   uvec_refined->beginDistributeValues();
   uvec_refined->endDistributeValues();
 
@@ -1894,10 +1945,6 @@ void TMR_ComputeInterpSolution( TMROctForest *forest,
   // Finish setting the values into the nodal error array
   uvec_refined->beginSetValues(TACS_INSERT_NONZERO_VALUES);
   uvec_refined->endSetValues(TACS_INSERT_NONZERO_VALUES);
-
-  // Distribute the values back to all nodes
-  uvec_refined->beginDistributeValues();
-  uvec_refined->endDistributeValues();
 
   // The solution was not passed as an argument
   if (!_uvec){
@@ -2054,10 +2101,6 @@ void TMR_ComputeReconSolution( TMRQuadForest *forest,
   // Free the refined weights
   weights_refined->decref();
 
-  // Distribute the values
-  uvec_refined->beginDistributeValues();
-  uvec_refined->endDistributeValues();
-
   // The solution was not passed as an argument
   if (!_uvec){
     uvec->decref();
@@ -2211,10 +2254,6 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
   // Free the refined weights
   weights_refined->decref();
 
-  // Distribute the values
-  uvec_refined->beginDistributeValues();
-  uvec_refined->endDistributeValues();
-
   // The solution was not passed as an argument
   if (!_uvec){
     uvec->decref();
@@ -2367,12 +2406,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
 
         // Add the contribution from the enrichment functions
         double Nr[MAX_2D_ENRICH];
-        if (order == 2){
-          eval2ndEnrichmentFuncs2D(pt, Nr);
-        }
-        else {
-          eval3rdEnrichmentFuncs2D(pt, Nr);
-        }
+        evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
 
         // Add the portion from the enrichment functions
         for ( int k = 0; k < nenrich; k++ ){
@@ -2677,10 +2711,13 @@ void TMR_PrintErrorBins( MPI_Comm comm,
   Refine the mesh using the original solution and the adjoint solution
 
   input:
-  tacs:          the TACSAssembler object
-  tacs_refine:   the uniformly refined TACSAssembler object
-  adjvec:        the adjoint solution variables
-  forest:        the forest of quadtrees
+  forest:           the forest of quadtrees
+  tacs:             the TACSAssembler object
+  forest_refined:   the higher-order forest of quadtrees
+  tacs_refined:     the higher-order TACSAssembler object
+  solution_refined: the higher-order solution (or approximation)
+  adjoint_refined:  the difference between the refined and coarse adjoint
+                    solutions computed in some manner
 
   output:
   adj_corr:      adjoint-based functional correction
@@ -2692,7 +2729,8 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
                             TACSAssembler *tacs,
                             TMRQuadForest *forest_refined,
                             TACSAssembler *tacs_refined,
-                            TACSBVec *adjoint,
+                            TACSBVec *solution_refined,
+                            TACSBVec *adjoint_refined,
                             double *error,
                             double *adj_corr ){
   // The maximum number of nodes
@@ -2713,16 +2751,6 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   // Get the communicator
   MPI_Comm comm = tacs->getMPIComm();
 
-  // Extract the solution from TACS
-  TACSBVec *solution = tacs->createVec();
-  solution->incref();
-
-  // Create the refined residual/adjoint vectors
-  TACSBVec *solution_refined = tacs_refined->createVec();
-  TACSBVec *adjoint_refined = tacs_refined->createVec();
-  solution_refined->incref();
-  adjoint_refined->incref();
-
   // Allocate the element arrays needed for the reconstruction
   TacsScalar *vars_interp = new TacsScalar[ vars_per_node*num_refined_nodes ];
   TacsScalar *adj_interp = new TacsScalar[ vars_per_node*num_refined_nodes ];
@@ -2732,28 +2760,19 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
-  double total_error_remain = 0.0;
   TacsScalar total_adjoint_corr = 0.0;
-
-  // Compute the difference between the reconstructed adjoint solution
-  // and the interpolated adjoint solution on the finer mesh
-  int compute_difference = 1;
-  TMR_ComputeReconSolution(forest, tacs, forest_refined, tacs_refined,
-                           adjoint, adjoint_refined, compute_difference);
-
-  // Get the variables and compute the refined solution
-  tacs->getVariables(solution);
-  TMR_ComputeInterpSolution(forest, tacs, forest_refined, tacs_refined,
-                            solution, solution_refined);
-
-  // Set the solution in the refined mesh
-  tacs_refined->setVariables(solution_refined);
 
   // Create a vector for the predicted nodal errors.
   TACSBVec *nodal_error = new TACSBVec(tacs_refined->getVarMap(), 1,
                                        tacs_refined->getBVecDistribute(),
                                        tacs_refined->getBVecDepNodes());
   nodal_error->incref();
+
+  // Distribute the values for the adjoint/solution
+  solution_refined->beginDistributeValues();
+  adjoint_refined->beginDistributeValues();
+  solution_refined->endDistributeValues();
+  adjoint_refined->endDistributeValues();
 
   // Get the auxiliary elements (surface tractions) associated with
   // the element class
@@ -2815,6 +2834,7 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   nodal_error->endDistributeValues();
 
   // Finish setting the values into the array
+  double total_error_remain = 0.0;
   for ( int elem = 0; elem < nelems; elem++ ){
     // Get the node numbers for the refined mesh
     int refine_len = 0;
@@ -2826,11 +2846,13 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
 
     // Compute the element indicator error as a function of the nodal
     // error estimate.
-    error[elem] =
-      0.25*fabs(TacsRealPart(err[0] +
-                             err[refined_order-1] +
-                             err[refined_order*(refined_order-1)] +
-                             err[refined_order*refined_order-1]));
+    error[elem] = 0.0;
+    for ( int j = 0; j < refined_order; j += refined_order-1 ){
+      for ( int i = 0; i < refined_order; i += refined_order-1 ){
+        error[elem] += TacsRealPart(err[i + j*refined_order]);
+      }
+    }
+    error[elem] = 0.25*fabs(error[elem]);
     total_error_remain += error[elem];
   }
 
@@ -2846,9 +2868,6 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   delete [] vars_interp;
   delete [] adj_interp;
   delete [] err;
-  solution->decref();
-  adjoint_refined->decref();
-  solution_refined->decref();
   nodal_error->decref();
 
   // Set the adjoint residual correction
@@ -2861,14 +2880,16 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
 }
 
 /*
-  Compute the error estimate in each element as well as the total
-  remaining error and the adjoint correction
+  Refine the mesh using the original solution and the adjoint solution
 
   input:
-  tacs:          the TACSAssembler object
-  tacs_refine:   the uniformly refined TACSAssembler object
-  adjvec:        the adjoint solution variables
-  forest:        the forest of quadtrees
+  forest:           the forest of quadtrees
+  tacs:             the TACSAssembler object
+  forest_refined:   the higher-order forest of quadtrees
+  tacs_refined:     the higher-order TACSAssembler object
+  solution_refined: the higher-order solution (or approximation)
+  adjoint_refined:  the difference between the refined and coarse adjoint
+                    solutions computed in some manner
 
   output:
   adj_corr:      adjoint-based functional correction
@@ -2880,7 +2901,8 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
                             TACSAssembler *tacs,
                             TMROctForest *forest_refined,
                             TACSAssembler *tacs_refined,
-                            TACSBVec *adjoint,
+                            TACSBVec *solution_refined,
+                            TACSBVec *adjoint_refined,
                             double *error,
                             double *adj_corr ){
   const int max_num_nodes = MAX_ORDER*MAX_ORDER*MAX_ORDER;
@@ -2900,16 +2922,6 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   // Get the communicator
   MPI_Comm comm = tacs->getMPIComm();
 
-  // Extract the solution from TACS
-  TACSBVec *solution = tacs->createVec();
-  solution->incref();
-
-  // Create the refined residual/adjoint vectors
-  TACSBVec *solution_refined = tacs_refined->createVec();
-  TACSBVec *adjoint_refined = tacs_refined->createVec();
-  solution_refined->incref();
-  adjoint_refined->incref();
-
   // Allocate the element arrays needed for the reconstruction
   TacsScalar *vars_interp = new TacsScalar[ vars_per_node*num_refined_nodes ];
   TacsScalar *adj_interp = new TacsScalar[ vars_per_node*num_refined_nodes ];
@@ -2922,25 +2934,17 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   double total_error_remain = 0.0;
   TacsScalar total_adjoint_corr = 0.0;
 
-  // Compute the difference between the reconstructed adjoint solution
-  // and the interpolated adjoint solution on the finer mesh
-  int compute_difference = 1;
-  TMR_ComputeReconSolution(forest, tacs, forest_refined, tacs_refined,
-                           adjoint, adjoint_refined, compute_difference);
-
-  // Get the variables and compute the refined solution
-  tacs->getVariables(solution);
-  TMR_ComputeInterpSolution(forest, tacs, forest_refined, tacs_refined,
-                            solution, solution_refined);
-
-  // Set the solution in the refined mesh
-  tacs_refined->setVariables(solution_refined);
-
   // Create a vector for the predicted nodal errors.
   TACSBVec *nodal_error = new TACSBVec(tacs_refined->getVarMap(), 1,
                                        tacs_refined->getBVecDistribute(),
                                        tacs_refined->getBVecDepNodes());
   nodal_error->incref();
+
+  // Distribute the values for the adjoint/solution
+  solution_refined->beginDistributeValues();
+  adjoint_refined->beginDistributeValues();
+  solution_refined->endDistributeValues();
+  adjoint_refined->endDistributeValues();
 
   // Get the auxiliary elements (surface tractions) associated with
   // the element class
@@ -3041,9 +3045,6 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   delete [] vars_interp;
   delete [] adj_interp;
   delete [] err;
-  solution->decref();
-  adjoint_refined->decref();
-  solution_refined->decref();
   nodal_error->decref();
 
   // Set the adjoint residual correction

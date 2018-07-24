@@ -41,6 +41,23 @@ void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        int use_chebyshev_smoother=0 );
 
 /*
+  Compute a direct interpolation from a lower-order mesh to a
+  higher-order one
+*/
+void TMR_ComputeInterpSolution( TMRQuadForest *forest,
+                                TACSAssembler *tacs,
+                                TMRQuadForest *forest_refined,
+                                TACSAssembler *tacs_refined,
+                                TACSBVec *_uvec,
+                                TACSBVec *_uvec_refined );
+void TMR_ComputeInterpSolution( TMROctForest *forest,
+                                TACSAssembler *tacs,
+                                TMROctForest *forest_refined,
+                                TACSAssembler *tacs_refined,
+                                TACSBVec *_uvec,
+                                TACSBVec *_uvec_refined );
+
+/*
   Compute the reconstructed solution on a uniformly refined mesh
 */
 void TMR_ComputeReconSolution( TMRQuadForest *forest,
@@ -87,14 +104,16 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
                             TACSAssembler *tacs,
                             TMRQuadForest *forest_refined,
                             TACSAssembler *tacs_refined,
-                            TACSBVec *adjoint,
+                            TACSBVec *solution_refined,
+                            TACSBVec *adjoint_refined,
                             double *error,
                             double *adj_corr );
 double TMR_AdjointErrorEst( TMROctForest *forest,
                             TACSAssembler *tacs,
                             TMROctForest *forest_refined,
                             TACSAssembler *tacs_refined,
-                            TACSBVec *adjoint,
+                            TACSBVec *solution_refined,
+                            TACSBVec *adjoint_refined,
                             double *error,
                             double *adj_corr );
 

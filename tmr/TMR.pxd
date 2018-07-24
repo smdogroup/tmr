@@ -82,6 +82,7 @@ cdef extern from "TMRTopology.h":
         TMREdge()
         void setSource(TMREdge*)
         void getSource(TMREdge**)
+        int evalPoint(double, TMRPoint*)
         void setVertices(TMRVertex*, TMRVertex*)
         void getVertices(TMRVertex**, TMRVertex**)
         void setMesh(TMREdgeMesh*)
@@ -91,6 +92,7 @@ cdef extern from "TMRTopology.h":
     cdef cppclass TMRFace(TMREntity):
         TMRFace()
         TMRFace(int)
+        int evalPoint(double, double, TMRPoint*)
         void setSource(TMRVolume*, TMRFace*)
         void getSource(int*, TMRVolume**, TMRFace**)
         int getNumEdgeLoops()
@@ -285,6 +287,7 @@ cdef extern from "TMRQuadForest.h":
         TMRQuadForest(MPI_Comm, int, TMRInterpolationType)
         MPI_Comm getMPIComm()
         void setTopology(TMRTopology*)
+        TMRTopology* getTopology()
         void setConnectivity(int, const int*, int)
         void setFullConnectivity(int, int, int, const int*, const int*)
         void repartition()
@@ -337,6 +340,7 @@ cdef extern from "TMROctForest.h":
         TMROctForest(MPI_Comm, int, TMRInterpolationType)
         MPI_Comm getMPIComm()
         void setTopology(TMRTopology*)
+        TMRTopology* getTopology()
         void setConnectivity(int, const int*, int)
         void setFullConnectivity(int, int, int, const int*, const int*)
         void repartition(int)
@@ -404,27 +408,33 @@ cdef extern from "TMROpenCascade.h":
 cdef extern from "TMR_RefinementTools.h":
     void TMR_CreateTACSMg(int, TACSAssembler**,
                           TMRQuadForest**, TACSMg**, double, int, int)
+    void TMR_ComputeInterpSolution(TMRQuadForest*, TACSAssembler*,
+                                   TMRQuadForest*, TACSAssembler*,
+                                   TACSBVec*, TACSBVec*)
     void TMR_ComputeReconSolution(TMRQuadForest*, TACSAssembler*,
                                   TMRQuadForest*, TACSAssembler*,
-                                  TACSBVec*, TACSBVec*)
+                                  TACSBVec*, TACSBVec*, int)
     double TMR_StrainEnergyErrorEst(TMRQuadForest*, TACSAssembler*,
                                     TMRQuadForest *, TACSAssembler*,
                                     double*)
     double TMR_AdjointErrorEst(TMRQuadForest*, TACSAssembler*,
                                TMRQuadForest*, TACSAssembler*,
-                               TACSBVec*, double*, double*)
+                               TACSBVec*, TACSBVec*, double*, double*)
     
     void TMR_CreateTACSMg(int, TACSAssembler**,
                           TMROctForest**, TACSMg**, double, int, int)
+    void TMR_ComputeInterpSolution(TMROctForest*, TACSAssembler*,
+                                   TMROctForest*, TACSAssembler*,
+                                   TACSBVec*, TACSBVec*)
     void TMR_ComputeReconSolution(TMROctForest*, TACSAssembler*,
                                   TMROctForest*, TACSAssembler*,
-                                  TACSBVec*, TACSBVec*)
+                                  TACSBVec*, TACSBVec*, int)
     double TMR_StrainEnergyErrorEst(TMROctForest*, TACSAssembler*,
                                     TMROctForest *, TACSAssembler*,
                                     double*)
     double TMR_AdjointErrorEst(TMROctForest*, TACSAssembler*,
                                TMROctForest*, TACSAssembler*,
-                               TACSBVec*, double*, double*)
+                               TACSBVec*, TACSBVec*, double*, double*)
     cdef cppclass TMRStressConstraint(TMREntity):
          TMRStressConstraint(TMROctForest*, TACSAssembler*, TacsScalar)
          TacsScalar evalConstraint(TACSBVec*)

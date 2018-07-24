@@ -66,17 +66,17 @@ pcurve1 = TMR.BsplinePcurve(np.array([[0.0, 0.0], [1.0, 0.0]]))
 edge1 = TMR.EdgeFromFace(face, pcurve1)
 edge1.setVertices(v1, v2)
 
-# Set up the first edge
+# Set up the second edge
 pcurve2 = TMR.BsplinePcurve(np.array([[1.0, 0.0], [1.0, 1.0]]))
 edge2 = TMR.EdgeFromFace(face, pcurve2)
 edge2.setVertices(v2, v3)
 
-# Set up the first edge
+# Set up the third edge
 pcurve3 = TMR.BsplinePcurve(np.array([[1.0, 1.0], [0.0, 1.0]]))
 edge3 = TMR.EdgeFromFace(face, pcurve3)
 edge3.setVertices(v3, v4)
 
-# Set up the first edge
+# Set up the fourth edge
 pcurve4 = TMR.BsplinePcurve(np.array([[0.0, 1.0], [0.0, 0.0]]))
 edge4 = TMR.EdgeFromFace(face, pcurve4)
 edge4.setVertices(v4, v1)
