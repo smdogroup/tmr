@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,12 +24,13 @@
 #include "TMRBase.h"
 #include "TMRGeometry.h"
 #include "TMRTopology.h"
+#include "TMRFeatureSize.h"
 
 /*
   The type of face mesh algorithm to apply
 */
-enum TMRFaceMeshType { TMR_NO_MESH, 
-                       TMR_STRUCTURED, 
+enum TMRFaceMeshType { TMR_NO_MESH,
+                       TMR_STRUCTURED,
                        TMR_UNSTRUCTURED,
                        TMR_TRIANGLE };
 
@@ -48,7 +49,7 @@ class TMRMeshOptions {
     triangularize_print_level = 0;
     triangularize_print_iter = 1000;
     write_mesh_quality_histogram = 0;
-    
+
     // Set the default meshing options
     mesh_type_default = TMR_STRUCTURED;
     num_smoothing_steps = 10;
@@ -91,101 +92,6 @@ class TMRMeshOptions {
 };
 
 /*
-  The element feature size class
-*/
-class TMRElementFeatureSize : public TMREntity {
- public:
-  TMRElementFeatureSize( double _hmin );
-  virtual ~TMRElementFeatureSize();
-  virtual double getFeatureSize( TMRPoint pt );
-
- protected:
-  // The min local feature size
-  double hmin;
-};
-
-/*
-  Set a min/max element feature size
-*/
-class TMRLinearElementSize : public TMRElementFeatureSize {
- public:
-  TMRLinearElementSize( double _hmin, double _hmax,
-                        double c, double _ax, double _ay, double _az );
-  ~TMRLinearElementSize();
-  double getFeatureSize( TMRPoint pt );
-
- private:
-  double hmax;
-  double c, ax, ay, az;
-};
-
-/*
-  Set a min/max feature size and feature sizes dictated within boxes
-*/
-class TMRBoxFeatureSize : public TMRElementFeatureSize {
- public:
-  TMRBoxFeatureSize( TMRPoint p1, TMRPoint p2,
-                     double _hmin, double _hmax );
-  ~TMRBoxFeatureSize();
-  void addBox( TMRPoint p1, TMRPoint p2, double h );
-  double getFeatureSize( TMRPoint pt );
-
- private:
-  // Maximum feature size
-  double hmax;
-
-  // Store the information about the points
-  class BoxSize {
-   public:
-    // Check whether the box contains a point
-    int contains( TMRPoint p );
-
-    // Data for the box and its location
-    TMRPoint m; // Center of the box
-    TMRPoint d; // Half-edge length of each box
-    double h; // Mesh size within the box
-  };
-  
-  // The list of boxes that are stored
-  int num_boxes;
-
-  // A list object
-  static const int MAX_LIST_BOXES = 256;
-  class BoxList {
-   public:
-    BoxList(){ next = NULL; }
-    BoxSize boxes[MAX_LIST_BOXES];
-    BoxList *next;
-  } *list_root, *list_current;
-
-  // Store the information about the size
-  class BoxNode {
-   public:
-    static const int MAX_NUM_BOXES = 10;
-
-    BoxNode( BoxSize *cover, TMRPoint m, TMRPoint d );
-    ~BoxNode();
-
-    // Add a box
-    void addBox( BoxSize *ptr );
-
-    // Add a box to the data structure
-    void getSize( TMRPoint pt, double *h );
-    
-    // The mid-point of the node and the distance from the mid-point
-    // to the box sides
-    TMRPoint m, d;
-
-    // The children from this node
-    BoxNode *c[8];
-
-    // The number of boxes and the pointers to them
-    int num_boxes;
-    BoxSize **boxes;
-  } *root;
-};
-
-/*
   The mesh for a geometric curve
 */
 class TMREdgeMesh : public TMREntity {
@@ -200,7 +106,7 @@ class TMREdgeMesh : public TMREntity {
   void getEdge( TMREdge **_edge );
 
   // Mesh the geometric object
-  void mesh( TMRMeshOptions options, 
+  void mesh( TMRMeshOptions options,
              TMRElementFeatureSize *fs );
 
   // Order the mesh points uniquely
@@ -234,7 +140,7 @@ class TMRFaceMesh : public TMREntity {
 
   // Retrieve the underlying surface
   void getFace( TMRFace **_surface );
-  
+
   // Mesh the underlying geometric object
   void mesh( TMRMeshOptions options,
              TMRElementFeatureSize *fs );
@@ -265,17 +171,17 @@ class TMRFaceMesh : public TMREntity {
 
  private:
   // Write the segments to a VTK file in parameter space
-  void writeSegmentsToVTK( const char *filename, 
-                           int npts, const double *params, 
+  void writeSegmentsToVTK( const char *filename,
+                           int npts, const double *params,
                            int nsegs, const int segs[] );
 
   // Print the triangle quality
   void printTriQuality( int ntris, const int tris[] );
   void writeTrisToVTK( const char *filename,
                        int ntris, const int tris[] );
-  
+
   // Write the dual mesh - used for recombination - to a file
-  void writeDualToVTK( const char *filename, int nodes_per_elem, 
+  void writeDualToVTK( const char *filename, int nodes_per_elem,
                        int nelems, const int elems[],
                        int num_dual_edges, const int dual_edges[],
                        const TMRPoint *p );
@@ -295,9 +201,9 @@ class TMRFaceMesh : public TMREntity {
   // Compute recombined triangle information
   int getRecombinedQuad( const int tris[], const int trineighbors[],
                          int t1, int t2, int quad[] );
-  double computeRecombinedQuality( const int tris[], 
+  double computeRecombinedQuality( const int tris[],
                                    const int trineighbors[],
-                                   int t1, int t2, const TMRPoint *p ); 
+                                   int t1, int t2, const TMRPoint *p );
 
   // Compute the quadrilateral quality
   double computeQuadQuality( const int *quad, const TMRPoint *p );
@@ -329,14 +235,14 @@ class TMRFaceMesh : public TMREntity {
 /*
   TMRVolumeMesh class
 
-  This is the class that contains the volume mesh. This mesh 
+  This is the class that contains the volume mesh. This mesh
   takes in the arguments needed to form a volume mesh
 */
 class TMRVolumeMesh : public TMREntity {
  public:
   TMRVolumeMesh( MPI_Comm _comm, TMRVolume *volume );
   ~TMRVolumeMesh();
-  
+
   // Create the volume mesh
   int mesh( TMRMeshOptions options );
 
@@ -406,11 +312,11 @@ class TMRMesh : public TMREntity {
 
   // Mesh the underlying geometry
   void mesh( TMRMeshOptions options, double htarget );
-  void mesh( TMRMeshOptions options, 
+  void mesh( TMRMeshOptions options,
              TMRElementFeatureSize *fs );
 
   // Write the mesh to a VTK file
-  void writeToVTK( const char *filename, 
+  void writeToVTK( const char *filename,
                    int flag=(TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX) );
 
   // Write the mesh to a BDF file
@@ -440,7 +346,7 @@ class TMRMesh : public TMREntity {
 
   // The number of nodes/positions in the mesh
   int num_nodes;
-  TMRPoint *X;  
+  TMRPoint *X;
 
   // The number of quads
   int num_quads;

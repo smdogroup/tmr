@@ -966,6 +966,13 @@ cdef class ElementFeatureSize:
         if self.ptr:
             self.ptr.decref()
 
+    def getFeatureSize(self, x):
+        cdef TMRPoint pt
+        pt.x = x[0]
+        pt.y = x[1]
+        pt.z = x[2]
+        return self.ptr.getFeatureSize(pt)
+
 cdef class ConstElementSize(ElementFeatureSize):
     def __cinit__(self, double h):
         self.ptr = new TMRElementFeatureSize(h)
@@ -1003,6 +1010,32 @@ cdef class BoxFeatureSize(ElementFeatureSize):
         p2.y = xhigh[1]
         p2.z = xhigh[2]
         self.bptr.addBox(p1, p2, h)
+
+cdef class PointFeatureSize(ElementFeatureSize):
+    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] X,
+                  np.ndarray[double, ndim=1, mode='c'] hvals,
+                  double hmin, double hmax):
+        cdef int npts = 0
+        cdef TMRPoint *pts
+        if X.shape[0] != hvals.shape[0]:
+            errmsg = 'PointFeatureSize arrays must be same size'
+            raise ValueError(errmsg)
+        elif X.shape[1] != 3:
+            errmsg = 'PointFeatureSize expecting point (n,3) array'
+            raise ValueError(errmsg)
+
+        # Convert to input data
+        npts = hvals.shape[0]
+        pts = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
+        for i in range(npts):
+            pts[i].x = X[i,0]
+            pts[i].y = X[i,1]
+            pts[i].z = X[i,2]
+        self.ptr = new TMRPointFeatureSize(npts, pts, <double*>hvals.data,
+                                           hmin, hmax)
+        self.ptr.incref()
+        free(pts)
+        return
 
 cdef class Mesh:
     cdef TMRMesh *ptr

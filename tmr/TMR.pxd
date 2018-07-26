@@ -24,7 +24,7 @@ cimport mpi4py.MPI as MPI
 from libc.string cimport const_char
 from libc.stdint cimport int32_t, int16_t
 
-# Import numpy 
+# Import numpy
 cimport numpy as np
 import numpy as np
 
@@ -41,13 +41,13 @@ cdef inline char* tmr_convert_to_chars(s):
 cdef extern from "TMRBase.h":
     enum:
         TMR_MAX_LEVEL"TMR_MAX_LEVEL"
-        
+
     cdef cppclass TMREntity:
         void incref()
         void decref()
         void setAttribute(char*)
         int getEntityId()
-        
+
     cdef cppclass TMRPoint:
         double x
         double y
@@ -77,7 +77,7 @@ cdef extern from "TMRTopology.h":
         int evalPoint(TMRPoint*)
         int setNodeNum(int*)
         int getNodeNum(int*)
-    
+
     cdef cppclass TMREdge(TMREntity):
         TMREdge()
         void setSource(TMREdge*)
@@ -88,7 +88,7 @@ cdef extern from "TMRTopology.h":
         void setMesh(TMREdgeMesh*)
         void getMesh(TMREdgeMesh**)
         void writeToVTK(char*)
-        
+
     cdef cppclass TMRFace(TMREntity):
         TMRFace()
         TMRFace(int)
@@ -110,7 +110,7 @@ cdef extern from "TMRTopology.h":
         TMRVolume(int, TMRFace**, const int*)
         void getFaces(int*, TMRFace***, const int**)
         void writeToVTK(char*)
-        
+
     cdef cppclass TMRModel(TMREntity):
         TMRModel(int, TMRVertex**,
                  int, TMREdge**,
@@ -120,7 +120,7 @@ cdef extern from "TMRTopology.h":
         void getEdges(int*,TMREdge***)
         void getFaces(int*,TMRFace***)
         void getVolumes(int*,TMRVolume***)
-        
+
 cdef extern from "TMRGeometry.h":
     cdef cppclass TMRCurve(TMREntity):
         void writeToVTK(char*)
@@ -189,7 +189,7 @@ cdef extern from "TMRBspline.h":
         TMRCurveInterpolation(TMRPoint*, int)
         void setNumControlPoints(int)
         TMRBsplineCurve *createCurve(int)
-        
+
     cdef cppclass TMRCurveLofter(TMREntity):
         TMRCurveLofter(TMRBsplineCurve**, int)
         TMRBsplineSurface* createSurface(int)
@@ -202,16 +202,11 @@ cdef extern from "":
     TMRTopoProblem* _dynamicTopoProblem "dynamic_cast<TMRTopoProblem*>"(ParOptProblem*)
     ParOptBVecWrap* _dynamicParOptBVecWrap "dynamic_cast<ParOptBVecWrap*>"(ParOptVec*)
 
-cdef extern from "TMRMesh.h":
-    enum TMRFaceMeshType:
-        TMR_NO_MESH
-        TMR_STRUCTURED
-        TMR_UNSTRUCTURED
-        TMR_TRIANGLE
-
+cdef extern from "TMRFeatureSize.h":
     cdef cppclass TMRElementFeatureSize(TMREntity):
         TMRElementFeatureSize()
         TMRElementFeatureSize(double)
+        double getFeatureSize(TMRPoint)
 
     cdef cppclass TMRLinearElementSize(TMRElementFeatureSize):
         TMRLinearElementSize(double, double,
@@ -221,7 +216,17 @@ cdef extern from "TMRMesh.h":
         TMRBoxFeatureSize(TMRPoint, TMRPoint, double, double)
         void addBox(TMRPoint, TMRPoint, double)
 
-    cdef cppclass TMRMesh(TMREntity):     
+    cdef cppclass TMRPointFeatureSize(TMRElementFeatureSize):
+        TMRPointFeatureSize(int, TMRPoint*, double*, double, double)
+
+cdef extern from "TMRMesh.h":
+    enum TMRFaceMeshType:
+        TMR_NO_MESH
+        TMR_STRUCTURED
+        TMR_UNSTRUCTURED
+        TMR_TRIANGLE
+
+    cdef cppclass TMRMesh(TMREntity):
         TMRMesh(MPI_Comm, TMRModel*)
         void mesh(TMRMeshOptions, double)
         void mesh(TMRMeshOptions, TMRElementFeatureSize*)
@@ -334,7 +339,7 @@ cdef extern from "TMROctant.h":
         void getArray(TMROctant**, int*)
         void sort()
         TMROctant* contains(TMROctant*, int)
-        
+
 cdef extern from "TMROctForest.h":
     cdef cppclass TMROctForest(TMREntity):
         TMROctForest(MPI_Comm, int, TMRInterpolationType)
@@ -388,10 +393,10 @@ cdef extern from "TMROctStiffness.h":
         double k0
         double beta
         double xoffset
-        
+
     cdef cppclass TMROctStiffness(SolidStiffness):
         TMROctStiffness(TMRIndexWeight*, int, TMRStiffnessProperties*)
-        
+
 cdef extern from "TMRQuadStiffness.h":
     cdef cppclass TMRQuadStiffness(PlaneStressStiffness):
         TMRQuadStiffness(TMRIndexWeight*, int, TacsScalar, TacsScalar,
@@ -400,7 +405,7 @@ cdef extern from "TMRQuadStiffness.h":
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):
         pass
-    
+
 cdef extern from "TMROpenCascade.h":
     cdef TMRModel* TMR_LoadModelFromIGESFile(const char*, int)
     cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*, int)
@@ -420,7 +425,7 @@ cdef extern from "TMR_RefinementTools.h":
     double TMR_AdjointErrorEst(TMRQuadForest*, TACSAssembler*,
                                TMRQuadForest*, TACSAssembler*,
                                TACSBVec*, TACSBVec*, double*, double*)
-    
+
     void TMR_CreateTACSMg(int, TACSAssembler**,
                           TMROctForest**, TACSMg**, double, int, int)
     void TMR_ComputeInterpSolution(TMROctForest*, TACSAssembler*,
@@ -454,21 +459,21 @@ cdef extern from "TMRCyCreator.h":
     cdef cppclass TMRCyQuadCreator(TMREntity):
         TMRCyQuadCreator(TMRBoundaryConditions*)
         void setSelfPointer(void*)
-        void setCreateQuadElement( 
+        void setCreateQuadElement(
             TACSElement* (*createquadelements)(void*, int, TMRQuadrant*))
         TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
 
     cdef cppclass TMRCyOctCreator(TMREntity):
         TMRCyOctCreator(TMRBoundaryConditions*)
         void setSelfPointer(void*)
-        void setCreateOctElement( 
+        void setCreateOctElement(
             TACSElement* (*createoctelements)(void*, int, TMROctant*))
         TACSAssembler *createTACS(TMROctForest*, OrderingType)
 
     cdef cppclass TMRCyTopoQuadCreator(TMREntity):
         TMRCyTopoQuadCreator(TMRBoundaryConditions*, TMRQuadForest*)
         void setSelfPointer(void*)
-        void setCreateQuadTopoElement( 
+        void setCreateQuadTopoElement(
             TACSElement* (*createquadtopoelements)(
                 void*, int, TMRQuadrant*, TMRIndexWeight*, int))
         TACSAssembler *createTACS(TMRQuadForest*, OrderingType, double)
@@ -479,7 +484,7 @@ cdef extern from "TMRCyCreator.h":
     cdef cppclass TMRCyTopoOctCreator(TMREntity):
         TMRCyTopoOctCreator(TMRBoundaryConditions*, TMROctForest*)
         void setSelfPointer(void*)
-        void setCreateOctTopoElement( 
+        void setCreateOctTopoElement(
             TACSElement* (*createocttopoelements)(
                 void*, int, TMROctant*, TMRIndexWeight*, int))
         TACSAssembler *createTACS(TMROctForest*, OrderingType, double)
@@ -489,15 +494,15 @@ cdef extern from "TMRCyCreator.h":
 
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
-        TMRTopoProblem(int, TACSAssembler**, TMROctForest**, 
+        TMRTopoProblem(int, TACSAssembler**, TMROctForest**,
                        TACSVarMap**, TACSBVecIndices**, TACSMg*, int)
-        TMRTopoProblem(int, TACSAssembler**, TMRQuadForest**, 
+        TMRTopoProblem(int, TACSAssembler**, TMRQuadForest**,
                        TACSVarMap**, TACSBVecIndices**, TACSMg*, int)
         void setLoadCases(TACSBVec**, int)
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,
                             const TacsScalar*, const TacsScalar*, int)
-        void addStressConstraint(int, TMRStressConstraint*, 
+        void addStressConstraint(int, TMRStressConstraint*,
                                  TacsScalar, TacsScalar, TacsScalar)
         void addLinearConstraints(ParOptVec**, TacsScalar*, int)
         void addFrequencyConstraint(double, int, TacsScalar,

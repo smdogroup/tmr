@@ -28,6 +28,7 @@
 #define TmrLAPACKdgels dgels_
 #define TmrLAPACKdgetrf dgetrf_
 #define TmrLAPACKdgetrs dgetrs_
+#define TmrLAPACKsyevd dsyevd_
 
 extern "C" {
   extern void TmrLAPACKdgbsv( int *n, int *ku, int *kv, int *nrhs, 
@@ -44,6 +45,11 @@ extern "C" {
   extern void TmrLAPACKdgetrs( const char *c, int *n, int *nrhs, 
                                double *a, int *lda, int *ipiv, 
                                double *b, int *ldb, int *info );
+
+  extern void TmrLAPACKsyevd( const char *jobz, const char *uplo, int *N, 
+                              double *A, int *lda, double *w, 
+                              double *work, int *lwork, int *iwork, int *liwork, 
+                              int *info );
 }
 
 #endif

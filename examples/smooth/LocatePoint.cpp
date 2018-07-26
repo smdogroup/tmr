@@ -281,11 +281,12 @@ void LocatePoint::locateClosest( int root, double xpt[],
     }
   }
 }
+
 /*!
   Split the list of indices into approximately two.  Those on one
   half of a plane and those on the other.
 */
-int LocatePoint::split(int start, int end ){
+int LocatePoint::split( int start, int end ){
   int root = num_nodes;
 
   num_nodes++;
