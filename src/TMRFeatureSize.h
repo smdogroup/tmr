@@ -130,7 +130,7 @@ class TMRPointFeatureSize : public TMRElementFeatureSize {
 
  private:
   // Maximum number of points used
-  static const int MAX_CLOSEST_POINTS = 16;
+  static const int MAX_CLOSEST_POINTS = 64;
   static const int MAX_BIN_SIZE = 8;
 
   // Private functions

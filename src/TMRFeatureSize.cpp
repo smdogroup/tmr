@@ -415,7 +415,7 @@ double TMRPointFeatureSize::getFeatureSize( TMRPoint pt ){
   locateClosest(MAX_CLOSEST_POINTS, root, pt, &n, indx, dist);
 
   // The maximum h-size squared
-  double d = 25*hmax*hmax;
+  double d = 10*hmax;
   double dinv = 1.0/d;
 
   // Set the first weight (on the closest point) to 1
@@ -424,8 +424,9 @@ double TMRPointFeatureSize::getFeatureSize( TMRPoint pt ){
 
   // Compute the weights
   for ( int i = 0; i < n; i++ ){
+    dist[i] = sqrt(dist[i]);
     if (dist[i] < d){
-      weights[i] = 1.25 - dinv*dist[i];
+      weights[i] = 1.0 - dinv*dist[i];
     }
     else {
       weights[i] = 0.0;
@@ -681,11 +682,11 @@ void TMRPointFeatureSize::locateClosest( const int K, const int root,
       int n = indices[k];
 
       // Compute the square of the distances
-      double t = ((pts[n].x - pt.z)*(pts[n].x - pt.x) +
-                  (pts[n].y - pt.z)*(pts[n].y - pt.y) +
+      double t = ((pts[n].x - pt.x)*(pts[n].x - pt.x) +
+                  (pts[n].y - pt.y)*(pts[n].y - pt.y) +
                   (pts[n].z - pt.z)*(pts[n].z - pt.z));
 
-      // Compute the
+      // Insert the point if needed
       if ((*nk < K) || (t < dist[K-1])){
         insertIndex(K, n, t, nk, indx, dist);
       }

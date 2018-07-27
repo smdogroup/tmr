@@ -540,6 +540,9 @@ exact_functional = 0.0
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
 
+# Set the feature size object
+feature_size = None
+
 if case == 'cylinder':
     # Get the maximum stress and re-adjust the load
     vm_max, res = cylinder_ks_functional(1.0, t, E, nu, kcorr, ys,
@@ -666,7 +669,7 @@ if args.uniform_refinement:
 descript += '_' + functional
 
 # Create the log file and write out the header
-log_fp = open('%s_order%d_%s.dat'%(case, order, descript), 'w')
+log_fp = open('results/%s_order%d_%s.dat'%(case, order, descript), 'w')
 s = 'Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr, '
 s += 'exact, fval_error, fval_corr_error, '
 s += 'fval_effectivity, indicator_effectivity\n'
@@ -970,31 +973,125 @@ for k in range(steps):
     # Perform the refinement
     if args.uniform_refinement:
         forest.refine()
-    elif k < steps-1:
-        # The refinement array
-        refine = np.zeros(len(error), dtype=np.intc)
+    elif k < steps-1:        
+        if create_new_mesh:
+            create_new_mesh = False
 
-        # Determine the cutoff values
-        cutoff = bins[-1]
-        bin_sum = 0
-        for i in range(len(bins)+1):
-            bin_sum += bins[i]
-            if bin_sum > 0.3*ntotal:
-                cutoff = bounds[i]
-                break
+            # Find the positions of the center points of each node
+            nelems = assembler.getNumElements()
 
-        log_cutoff = np.log(cutoff)
-        
-        # Element target error is still too high. Adapt based solely
-        # on decreasing the overall error
-        nrefine = 0
-        for i, err in enumerate(error):
-            # Compute the log of the error
-            logerr = np.log(err)
+            # Allocate the positions
+            Xp = np.zeros((nelems, 3))
+            for i in range(nelems):
+                # Get the information about the given element
+                elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
+                
+                # Get the approximate element centroid
+                Xp[i,:] = np.average(Xpt.reshape((-1, 3)), axis=0)
 
-            if logerr > log_cutoff:
-                refine[i] = 1
-                nrefine += 1
+            # Prepare to collect things to the root processor
+            # (only one where it is required)
+            root = 0
+ 
+            # Get the element counts
+            if comm.rank == root:
+                size = error.shape[0]
+                count = comm.gather(size, root=root)
+                count = np.array(count, dtype=np.int)
+                ntotal = np.sum(count)
 
-        # Refine the forest
-        forest.refine(refine)
+                errors = np.zeros(np.sum(count))
+                Xpt = np.zeros(3*np.sum(count))
+                comm.Gatherv(error, [errors, count])
+                comm.Gatherv(Xp.flatten(), [Xpt, 3*count])
+
+                # Reshape the point array
+                Xpt = Xpt.reshape(-1,3)
+
+                # Compute the contributions to the error
+                G = np.sum(np.fabs(errors))
+                factor = (G/(2*ntotal))**0.5
+
+                # Compute the element feature size for a mesh with 1.5 times
+                # as many elements as the current mesh
+                hvals = factor*np.fabs(errors)**(-0.5)
+
+                # Set the values of
+                if feature_size is not None:
+                    for i, hp in enumerate(hvals):
+                        hlocal = feature_size.getFeatureSize(Xpt[i,:])
+                        hvals[i] = np.min(
+                            (np.max((hp*hlocal, 0.25*hlocal)), 2*hlocal))
+                else:
+                    for i, hp in enumerate(hvals):
+                        hvals[i] = np.min(
+                            (np.max((hp*htarget, 0.25*htarget)), 2*htarget))
+
+                # Allocate the feature size object
+                hmax = 10.0
+                hmin = 0.25
+                feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax)
+
+                x = np.linspace(0, R, 100)
+                h = np.zeros(100)
+                for i in range(100):
+                    h[i] = feature_size.getFeatureSize(np.array([x[i], 0, 0]))
+
+                import matplotlib.pylab as plt
+                plt.plot(x, h)
+                plt.show()
+
+            else:
+                size = error.shape[0]
+                comm.gather(size, root=root)
+                comm.Gatherv(error, None)
+                comm.Gatherv(Xp.flatten(), None)
+
+                # Create a dummy feature size object...
+                feature_size = TMR.ConstElementSize(0.5*htarget)
+
+            # Create the surface mesh
+            mesh.mesh(fs=feature_size, opts=opts)
+            if comm.rank == root:
+                mesh.writeToVTK('mesh.vtk')
+
+            # Create the corresponding mesh topology from the mesh-model
+            model = mesh.createModelFromMesh()
+            topo = TMR.Topology(comm, model)
+
+            # Create the quad forest and set the topology of the forest
+            depth = 0
+            if order == 2:
+                depth = 1
+            forest = TMR.QuadForest(comm)
+            forest.setTopology(topo)
+            forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
+            forest.createTrees(depth)
+        else:
+            # The refinement array
+            refine = np.zeros(len(error), dtype=np.intc)
+
+            # Determine the cutoff values
+            cutoff = bins[-1]
+            bin_sum = 0
+            for i in range(len(bins)+1):
+                bin_sum += bins[i]
+                if bin_sum > 0.3*ntotal:
+                    cutoff = bounds[i]
+                    break
+
+            log_cutoff = np.log(cutoff)
+            
+            # Element target error is still too high. Adapt based solely
+            # on decreasing the overall error
+            nrefine = 0
+            for i, err in enumerate(error):
+                # Compute the log of the error
+                logerr = np.log(err)
+
+                if logerr > log_cutoff:
+                    refine[i] = 1
+                    nrefine += 1
+
+            # Refine the forest
+            forest.refine(refine)
