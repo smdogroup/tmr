@@ -486,6 +486,7 @@ p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
 p.add_argument('--compute_solution_error', action='store_true', default=False)
 p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
+p.add_argument('--remesh_domain', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the case type
@@ -556,7 +557,6 @@ if case == 'cylinder':
         if comm.rank == 0:
             print('%10d %25.16e'%(n, approx))
         exact_functional = approx
-        
 
     # Load the geometry model
     geo = TMR.LoadModel('cylinder.stp')
@@ -579,7 +579,7 @@ if case == 'cylinder':
 elif case == 'disk':
     # Set the true dimension of the radius
     R = 100.0
-    
+
     # Get the maximum stress and re-adjust the load
     vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=20)
     load = load/vm_max
@@ -605,7 +605,7 @@ elif case == 'disk':
     verts = geo.getVertices()
     edges = geo.getEdges()
     faces = geo.getFaces()
-    
+
     # Set the attributes
     verts[1].setAttribute('midpoint')
     for index in [0, 2, 3, 4]:
@@ -684,7 +684,13 @@ if case == 'disk' and args.compute_solution_error:
 
 for k in range(steps):
     # Create the topology problem
-    nlevs = min(4, depth+k+1)
+    if args.remesh_domain:
+        if order == 2:
+            nlevs = 2
+        else:
+            nlevs = 1
+    else:
+        nlevs = min(5, depth+k+1)
     assembler, mg = createProblem(case, forest, bcs, ordering,
                                   order=order, nlevels=nlevs)
     aux = addFaceTraction(case, order, assembler, load)
@@ -973,9 +979,10 @@ for k in range(steps):
     # Perform the refinement
     if args.uniform_refinement:
         forest.refine()
-    elif k < steps-1:        
-        if create_new_mesh:
-            create_new_mesh = False
+    elif k < steps-1:
+        if args.remesh_domain:
+            # Ensure that we're using an unstructured mesh
+            opts.mesh_type_default = TMR.UNSTRUCTURED
 
             # Find the positions of the center points of each node
             nelems = assembler.getNumElements()
@@ -985,14 +992,14 @@ for k in range(steps):
             for i in range(nelems):
                 # Get the information about the given element
                 elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
-                
+
                 # Get the approximate element centroid
                 Xp[i,:] = np.average(Xpt.reshape((-1, 3)), axis=0)
 
-            # Prepare to collect things to the root processor
-            # (only one where it is required)
+            # Prepare to collect things to the root processor (only
+            # one where it is required)
             root = 0
- 
+
             # Get the element counts
             if comm.rank == root:
                 size = error.shape[0]
@@ -1008,13 +1015,14 @@ for k in range(steps):
                 # Reshape the point array
                 Xpt = Xpt.reshape(-1,3)
 
-                # Compute the contributions to the error
-                G = np.sum(np.fabs(errors))
-                factor = (G/(2*ntotal))**0.5
+                # Compute the target relative error in each element.
+                # This is set as a fraction of the error in the
+                # current mesh level.
+                err_target = 0.1*(err_est/ntotal)
 
-                # Compute the element feature size for a mesh with 1.5 times
-                # as many elements as the current mesh
-                hvals = factor*np.fabs(errors)**(-0.5)
+                # Compute the element size factor in each element
+                # using the order or accuracy
+                hvals = (err_target/errors)**(0.5)
 
                 # Set the values of
                 if feature_size is not None:
@@ -1032,15 +1040,20 @@ for k in range(steps):
                 hmin = 0.25
                 feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax)
 
-                x = np.linspace(0, R, 100)
-                h = np.zeros(100)
-                for i in range(100):
-                    h[i] = feature_size.getFeatureSize(np.array([x[i], 0, 0]))
+                # Code to visualize the mesh size distribution on the fly
+                visualize_mesh_size = False
+                if case == 'cylinder' and visualize_mesh_size:
+                    import matplotlib.pylab as plt
+                    x, y = np.meshgrid(np.linspace(0, 2*np.pi, 100),
+                                       np.linspace(0, L, 100))
+                    z = np.zeros((100, 100))
+                    for j in range(100):
+                        for i in range(100):
+                            xpt = [R*np.cos(x[i,j]), R*np.sin(x[i,j]), y[i,j]]
+                            z[i,j] = feature_size.getFeatureSize(xpt)
 
-                import matplotlib.pylab as plt
-                plt.plot(x, h)
-                plt.show()
-
+                    plt.contourf(x, y, z)
+                    plt.show()
             else:
                 size = error.shape[0]
                 comm.gather(size, root=root)
@@ -1052,8 +1065,6 @@ for k in range(steps):
 
             # Create the surface mesh
             mesh.mesh(fs=feature_size, opts=opts)
-            if comm.rank == root:
-                mesh.writeToVTK('mesh.vtk')
 
             # Create the corresponding mesh topology from the mesh-model
             model = mesh.createModelFromMesh()
@@ -1081,7 +1092,7 @@ for k in range(steps):
                     break
 
             log_cutoff = np.log(cutoff)
-            
+
             # Element target error is still too high. Adapt based solely
             # on decreasing the overall error
             nrefine = 0

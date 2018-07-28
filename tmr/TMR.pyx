@@ -1014,7 +1014,7 @@ cdef class BoxFeatureSize(ElementFeatureSize):
 cdef class PointFeatureSize(ElementFeatureSize):
     def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] X,
                   np.ndarray[double, ndim=1, mode='c'] hvals,
-                  double hmin, double hmax):
+                  double hmin, double hmax, int num_sample_pts=16):
         cdef int npts = 0
         cdef TMRPoint *pts
         if X.shape[0] != hvals.shape[0]:
@@ -1032,7 +1032,7 @@ cdef class PointFeatureSize(ElementFeatureSize):
             pts[i].y = X[i,1]
             pts[i].z = X[i,2]
         self.ptr = new TMRPointFeatureSize(npts, pts, <double*>hvals.data,
-                                           hmin, hmax)
+                                           hmin, hmax, num_sample_pts)
         self.ptr.incref()
         free(pts)
         return

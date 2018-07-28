@@ -1399,8 +1399,9 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
     face_to_new_num = new int[ num_faces ];
     new_num_to_face = new int[ num_faces ];
 
+    int use_rcm = 0;
     reorderEntities(4, num_edges, num_faces, face_edges,
-                    face_to_new_num, new_num_to_face);
+                    face_to_new_num, new_num_to_face, use_rcm);
 
     // Delete face edges
     delete [] face_edges;

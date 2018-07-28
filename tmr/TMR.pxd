@@ -217,7 +217,7 @@ cdef extern from "TMRFeatureSize.h":
         void addBox(TMRPoint, TMRPoint, double)
 
     cdef cppclass TMRPointFeatureSize(TMRElementFeatureSize):
-        TMRPointFeatureSize(int, TMRPoint*, double*, double, double)
+        TMRPointFeatureSize(int, TMRPoint*, double*, double, double, int)
 
 cdef extern from "TMRMesh.h":
     enum TMRFaceMeshType:

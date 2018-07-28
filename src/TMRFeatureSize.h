@@ -124,7 +124,8 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
 class TMRPointFeatureSize : public TMRElementFeatureSize {
  public:
   TMRPointFeatureSize( int npts, TMRPoint *pts, double *hvals,
-                      double _hmin, double _hmax );
+                       double _hmin, double _hmax,
+                       int _num_sample_pts=16 );
   ~TMRPointFeatureSize();
   double getFeatureSize( TMRPoint pt );
 
@@ -153,6 +154,9 @@ class TMRPointFeatureSize : public TMRElementFeatureSize {
   int npts;
   TMRPoint *pts;
   double *hvals;
+
+  // Number of closest points to sample from
+  int num_sample_pts;
 
   // Private data for a sorted spatial data structure
   int num_nodes, max_num_nodes;

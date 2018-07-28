@@ -356,11 +356,18 @@ void TMRBoxFeatureSize::BoxNode::getSize( TMRPoint p, double *hval ){
 */
 TMRPointFeatureSize::TMRPointFeatureSize( int _npts, TMRPoint *_pts,
                                           double *_hvals,
-                                          double _hmin, double _hmax ):
+                                          double _hmin, double _hmax,
+                                          int _num_sample_pts ):
   TMRElementFeatureSize(_hmin){
   npts = _npts;
   hmin = _hmin;
   hmax = _hmax;
+
+  // Set the number of sample points
+  num_sample_pts = _num_sample_pts;
+  if (num_sample_pts > MAX_CLOSEST_POINTS){
+    num_sample_pts = MAX_CLOSEST_POINTS;
+  }
 
   pts = new TMRPoint[ npts ];
   hvals = new double[ npts ];
@@ -412,7 +419,7 @@ double TMRPointFeatureSize::getFeatureSize( TMRPoint pt ){
   // Find the closest points
   int n = 0;
   int root = 0;
-  locateClosest(MAX_CLOSEST_POINTS, root, pt, &n, indx, dist);
+  locateClosest(num_sample_pts, root, pt, &n, indx, dist);
 
   // The maximum h-size squared
   double d = 10*hmax;
