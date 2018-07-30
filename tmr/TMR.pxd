@@ -24,6 +24,9 @@ cimport mpi4py.MPI as MPI
 from libc.string cimport const_char
 from libc.stdint cimport int32_t, int16_t
 
+# Import the python version information
+from cpython.version cimport PY_MAJOR_VERSION
+
 # Import numpy
 cimport numpy as np
 import numpy as np
@@ -33,10 +36,18 @@ from paropt.ParOpt cimport *
 from tacs.TACS cimport *
 from tacs.constitutive cimport *
 
-cdef inline char* tmr_convert_to_chars(s):
+cdef inline char* tmr_convert_str_to_chars(s):
    if isinstance(s, unicode):
-      s = (<unicode>s).encode('utf8')
+      s = (<unicode>s).encode('utf-8')
    return s
+
+cdef inline str tmr_convert_char_to_str(const char* s):
+    if s == NULL:
+        return None
+    elif PY_MAJOR_VERSION >= 3:
+        return s.decode('utf-8')
+    else:
+        return str(s)
 
 cdef extern from "TMRBase.h":
     enum:
@@ -46,6 +57,7 @@ cdef extern from "TMRBase.h":
         void incref()
         void decref()
         void setAttribute(char*)
+        const char* getAttribute()
         int getEntityId()
 
     cdef cppclass TMRPoint:

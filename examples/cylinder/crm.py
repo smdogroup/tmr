@@ -44,7 +44,7 @@ class uCRM_VonMisesMassMin(ParOpt.pyParOptProblem):
                                   use_lower=True, use_upper=True)
         return
 
-    def setAssembler(self, assembler, ksfunc):
+    def setAssembler(self, assembler, mg, gmres, ksfunc):
 
         # Create tacs assembler object from mesh loader
         self.assembler = assembler
@@ -57,11 +57,9 @@ class uCRM_VonMisesMassMin(ParOpt.pyParOptProblem):
         self.res = self.assembler.createVec()
         self.adjoint = self.assembler.createVec()
         self.dfdu = self.assembler.createVec()
-        self.mat = self.assembler.createFEMat()
-        self.pc = TACS.Pc(self.mat)
-        subspace = 100
-        restarts = 2
-        self.gmres = TACS.KSM(self.mat, self.pc, subspace, restarts)
+        self.mg = mg
+        self.mat = self.mg.getMat()
+        self.gmres = gmres
 
         # For visualization
         flag = (TACS.ToFH5.NODES |
@@ -101,12 +99,11 @@ class uCRM_VonMisesMassMin(ParOpt.pyParOptProblem):
         beta = 0.0
         gamma = 0.0
         self.assembler.zeroVariables()
-        self.assembler.assembleJacobian(alpha, beta, gamma,
-                                        self.res, self.mat)
-        self.pc.factor()
+        self.mg.assembleJacobian(alpha, beta, gamma, self.res)
+        self.mg.factor()
 
         # Solve the linear system and set the varaibles into TACS
-        self.gmres.solve(self.forces, self.res)
+        self.gmres.solve(self.res, self.ans)
         self.ans.scale(-1.0)
         self.assembler.setVariables(self.ans)
 
@@ -158,19 +155,19 @@ class uCRM_VonMisesMassMin(ParOpt.pyParOptProblem):
         return fail
 
 class CreateMe(TMR.QuadCreator):
-    def __init__(self, bcs, model_faces, elem_dict):
+    def __init__(self, bcs, topo, elem_dict):
         TMR.QuadCreator.__init__(bcs)
-        self.model_faces = model_faces
+        self.topo = topo
         self.elem_dict = elem_dict
         return
 
     def createElement(self, order, quad):
         '''Create the element'''
         # Get the model attribute and set the face
-        attr = model_faces[quad.face].getAttribute()
+        attr = topo.getFace(quad.face).getAttribute()
         return self.elem_dict[order-1][attr]
 
-def addFaceTraction(case, order, assembler, load):
+def addFaceTraction(order, assembler):
     # Create the surface traction
     aux = TACS.AuxElements()
 
@@ -191,14 +188,14 @@ def addFaceTraction(case, order, assembler, load):
 
     return aux
 
-def createRefined(case, forest, bcs, pttype=TMR.UNIFORM_POINTS):
+def createRefined(topo, elem_dict, forest, bcs, pttype=TMR.UNIFORM_POINTS):
     new_forest = forest.duplicate()
     new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
-    creator = CreateMe(bcs, case=case)
+    creator = CreateMe(bcs, topo, elem_dict)
     return new_forest, creator.createTACS(new_forest)
 
-def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
-                  pttype=TMR.UNIFORM_POINTS):
+def createProblem(topo, elem_dict, forest, bcs, ordering, 
+                  order=2, nlevels=2, pttype=TMR.UNIFORM_POINTS):
     # Create the forest
     forests = []
     assemblers = []
@@ -210,7 +207,7 @@ def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
     forests.append(forest)
 
     # Make the creator class
-    creator = CreateMe(bcs, case=case)
+    creator = CreateMe(bcs, topo, elem_dict)
     assemblers.append(creator.createTACS(forest, ordering))
 
     while order > 2:
@@ -221,7 +218,7 @@ def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs, case=case)
+        creator = CreateMe(bcs, topo, elem_dict)
         assemblers.append(creator.createTACS(forest, ordering))
 
     for i in range(nlevels-1):
@@ -231,7 +228,7 @@ def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs, case=case)
+        creator = CreateMe(bcs, topo, elem_dict)
         assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
@@ -248,7 +245,7 @@ p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--ordering', type=str, default='multicolor')
-p.add_argument('--ksweight', type=float, default=100.0)
+p.add_argument('--ksweight', type=float, default=10.0)
 p.add_argument('--uniform_refinement', action='store_true', default=False)
 p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
@@ -266,6 +263,9 @@ exact_refined_adjoint = args.exact_refined_adjoint
 
 # Set the number of AMR steps to use
 steps = args.steps
+
+# Set the order of the mesh
+order = args.order
 
 # Set the type of ordering to use for this problem
 ordering = args.ordering
@@ -288,7 +288,10 @@ ucrm_bottom_skins = [117,  91,  97,   5, 183,  45, 180,  31,  28, 129,
 
 # Create the CRM wingbox model and set the attributes
 geo = TMR.LoadModel('ucrm_9_full_model.step')
+verts = geo.getVertices()
+edges = geo.getEdges()
 faces = geo.getFaces()
+geo = TMR.Model(verts, edges, faces)
 
 # Set the number of design variables
 num_design_vars = len(faces)
@@ -299,6 +302,7 @@ E = 70e9 # Young's modulus
 nu = 0.3 # Poisson ratio
 kcorr = 5.0/6.0 # Shear correction factor
 ys = 270e6 # Yield stress
+thickness = 0.01
 min_thickness = 0.002
 max_thickness = 0.05
 
@@ -325,7 +329,7 @@ for i, f in enumerate(faces):
 htarget = 5.0
 
 # Create the new mesh
-mesh = TMR.Mesh(comm, model)
+mesh = TMR.Mesh(comm, geo)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
@@ -373,12 +377,8 @@ elif ordering == 'multicolor':
 else:
     ordering = TACS.PY_NATURAL_ORDER
 
-
-
-
-
-
-
+# Null pointer to the optimizer
+opt = None
 
 for k in range(steps):
     # Create the topology problem
@@ -391,18 +391,53 @@ for k in range(steps):
         nlevs = min(5, depth+k+1)
 
     # Create the assembler object
-    assembler, mg = createProblem(case, forest, bcs, ordering,
+    assembler, mg = createProblem(topo, elem_dict, forest, bcs, ordering,
                                   order=order, nlevels=nlevs)
-    aux = addFaceTraction(case, order, assembler, load)
+    aux = addFaceTraction(order, assembler)
     assembler.setAuxElements(aux)
 
     # Create the KS functional
     func = functions.KSFailure(assembler, ksweight)
     func.setKSFailureType('continuous')
 
-    # Set the new assembler object
-    opt_problem.setAssembler(assembler, mg, ksfunc)
+    # Create the GMRES object
+    gmres = TACS.KSM(mg.getMat(), mg, 100, isFlexible=1)
+    gmres.setMonitor(comm, freq=10)
+    gmres.setTolerances(1e-10, 1e-30)
 
+    # Set the new assembler object
+    opt_problem.setAssembler(assembler, mg, gmres, func)
+
+    if k == 0:
+        # Set up the optimization problem
+        max_lbfgs = 5
+        opt = ParOpt.pyParOpt(opt_problem, max_lbfgs, ParOpt.BFGS)
+        opt.setOutputFile('results/crm_opt.out')
+
+        # Set the optimality tolerance
+        opt.setAbsOptimalityTol(1e-4)
+
+        # Set optimization parameters
+        opt.setArmijoParam(1e-5)
+
+        # Get the optimized point
+        x, z, zw, zl, zu = opt.getOptimizedPoint()
+
+        # Set the starting point strategy
+        opt.setStartingPointStrategy(ParOpt.AFFINE_STEP)
+
+        # Set the max oiterations
+        opt.setMaxMajorIterations(100)
+
+        # Set the output level to understand what is going on
+        opt.setOutputLevel(2)
+    else:
+        beta = 1e-4
+        opt.resetDesignAndBounds()
+        opt.setStartAffineStepMultiplierMin(beta)
+
+    # Optimize the new point
+    opt.optimize()
 
     # Create and compute the function
     fval = assembler.evalFunctions([func])[0]
@@ -410,12 +445,12 @@ for k in range(steps):
     # Create the refined mesh
     if exact_refined_adjoint:
         forest_refined = forest.duplicate()
-        assembler_refined, mg = createProblem(case, forest_refined,
-                                              bcs, ordering,
+        assembler_refined, mg = createProblem(topo, elem_dict, 
+                                              forest_refined, bcs, ordering,
                                               order=order+1, nlevels=nlevs+1)
     else:
         forest_refined, assembler_refined = createRefined(case, forest, bcs)
-    aux = addFaceTraction(case, order+1, assembler_refined, load)
+    aux = addFaceTraction(case, order+1, assembler_refined)
     assembler_refined.setAuxElements(aux)
 
     if args.energy_error:
