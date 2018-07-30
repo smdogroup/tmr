@@ -236,15 +236,14 @@ static inline void sort_face_nodes( int *node ){
     }
   }
 }
-
 /*
   Compute a node to triangle or node to quad data structure
 */
-static void computeNodeToElems( int nnodes, int nelems,
-                                int num_elem_nodes,
-                                const int conn[],
-                                int **_ptr,
-                                int **_node_to_elems ){
+void TMR_ComputeNodeToElems( int nnodes, int nelems,
+                             int num_elem_nodes,
+                             const int conn[],
+                             int **_ptr,
+                             int **_node_to_elems ){
   // Set the pointer
   int *ptr = new int[ nnodes+1 ];
   memset(ptr, 0, (nnodes+1)*sizeof(int));
@@ -290,19 +289,19 @@ static void computeNodeToElems( int nnodes, int nelems,
 /*
   Compute all of the edges within the triangular mesh
 */
-static void computeTriEdges( int nnodes, int ntris,
-                             const int tris[],
-                             int *num_tri_edges,
-                             int **_tri_edges,
-                             int **_tri_neighbors,
-                             int **_dual_edges,
-                             int **_node_to_tri_ptr=NULL,
-                             int **_node_to_tris=NULL,
-                             int **_tri_edge_nums=NULL ){
+void TMR_ComputeTriEdges( int nnodes, int ntris,
+                          const int tris[],
+                          int *num_tri_edges,
+                          int **_tri_edges,
+                          int **_tri_neighbors,
+                          int **_dual_edges,
+                          int **_node_to_tri_ptr,
+                          int **_node_to_tris,
+                          int **_tri_edge_nums ){
   // Compute the edges in the triangular mesh
   int *ptr;
   int *node_to_tris;
-  computeNodeToElems(nnodes, ntris, 3, tris, &ptr, &node_to_tris);
+  TMR_ComputeNodeToElems(nnodes, ntris, 3, tris, &ptr, &node_to_tris);
 
   // Now compute the neighbors for each triangle
   int *tri_edge_nums = new int[ 3*ntris ];
@@ -421,17 +420,17 @@ static void computeTriEdges( int nnodes, int ntris,
 /*
   Compute the connectivity between the edges
 */
-static void computeQuadEdges( int nnodes, int nquads,
-                              const int quads[],
-                              int *_num_quad_edges,
-                              int **_quad_edges,
-                              int **_quad_neighbors=NULL,
-                              int **_dual_edges=NULL,
-                              int **_quad_edge_nums=NULL ){
+void TMR_ComputeQuadEdges( int nnodes, int nquads,
+                           const int quads[],
+                           int *_num_quad_edges,
+                           int **_quad_edges,
+                           int **_quad_neighbors,
+                           int **_dual_edges,
+                           int **_quad_edge_nums ){
   // Compute the connectivity from nodes to quads
   int *ptr;
   int *node_to_quads;
-  computeNodeToElems(nnodes, nquads, 4, quads, &ptr, &node_to_quads);
+  TMR_ComputeNodeToElems(nnodes, nquads, 4, quads, &ptr, &node_to_quads);
 
   // Now compute the neighbors for each quad
   int *quad_edge_nums = new int[ 4*nquads ];
@@ -556,18 +555,18 @@ static void computeQuadEdges( int nnodes, int nquads,
 /*
   Compute the connectivity between edges within a hexahedral mesh
 */
-static void computeHexEdgesAndFaces( int nnodes, int nhex,
-                                     const int hex[],
-                                     int *_num_hex_edges,
-                                     int **_hex_edges,
-                                     int **_hex_edge_nums,
-                                     int *_num_hex_faces,
-                                     int **_hex_faces,
-                                     int **_hex_face_nums ){
+void TMR_ComputeHexEdgesAndFaces( int nnodes, int nhex,
+                                  const int hex[],
+                                  int *_num_hex_edges,
+                                  int **_hex_edges,
+                                  int **_hex_edge_nums,
+                                  int *_num_hex_faces,
+                                  int **_hex_faces,
+                                  int **_hex_face_nums ){
   // Compute the connectivity from nodes to hex
   int *ptr;
   int *node_to_hex;
-  computeNodeToElems(nnodes, nhex, 8, hex, &ptr, &node_to_hex);
+  TMR_ComputeNodeToElems(nnodes, nhex, 8, hex, &ptr, &node_to_hex);
 
   // Comput the neighbors for each hex
   int *hex_edge_nums = new int[ 12*nhex ];
@@ -1721,13 +1720,13 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         // Smooth the copied mesh on the new surface
         int *pts_to_quad_ptr;
         int *pts_to_quads;
-        computeNodeToElems(num_points, num_quads, 4, quads,
-                           &pts_to_quad_ptr, &pts_to_quads);
+        TMR_ComputeNodeToElems(num_points, num_quads, 4, quads,
+                               &pts_to_quad_ptr, &pts_to_quads);
 
         // Smooth the mesh using a local optimization of node locations
-        quadSmoothing(options.num_smoothing_steps, num_fixed_pts,
-                      num_points, pts_to_quad_ptr, pts_to_quads,
-                      num_quads, quads, pts, X, face);
+        TMR_QuadSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                          num_points, pts_to_quad_ptr, pts_to_quads,
+                          num_quads, quads, pts, X, face);
 
         // Free the connectivity information
         delete [] pts_to_quad_ptr;
@@ -1737,21 +1736,21 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         // Compute the triangle edges and neighbors in the dual mesh
         int num_tri_edges;
         int *tri_edges, *tri_neighbors, *dual_edges;
-        computeTriEdges(num_points, num_tris, tris,
-                        &num_tri_edges, &tri_edges,
-                        &tri_neighbors, &dual_edges);
+        TMR_ComputeTriEdges(num_points, num_tris, tris,
+                            &num_tri_edges, &tri_edges,
+                            &tri_neighbors, &dual_edges);
 
         // Smooth the resulting triangular mesh
         if (options.tri_smoothing_type == TMRMeshOptions::TMR_LAPLACIAN){
-          laplacianSmoothing(options.num_smoothing_steps, num_fixed_pts,
-                             num_tri_edges, tri_edges,
-                             num_points, pts, X, face);
+          TMR_LaplacianSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                                 num_tri_edges, tri_edges,
+                                 num_points, pts, X, face);
         }
         else {
           double alpha = 0.1;
-          springSmoothing(options.num_smoothing_steps, alpha,
-                          num_fixed_pts, num_tri_edges, tri_edges,
-                          num_points, pts, X, face);
+          TMR_SpringSmoothing(options.num_smoothing_steps, alpha,
+                              num_fixed_pts, num_tri_edges, tri_edges,
+                              num_points, pts, X, face);
         }
 
         delete [] tri_edges;
@@ -1930,22 +1929,22 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         int num_tri_edges;
         int *tri_edges, *tri_neighbors, *dual_edges;
         int *node_to_tri_ptr, *node_to_tris;
-        computeTriEdges(num_points, ntris, mesh_tris,
-                        &num_tri_edges, &tri_edges,
-                        &tri_neighbors, &dual_edges,
-                        &node_to_tri_ptr, &node_to_tris);
+        TMR_ComputeTriEdges(num_points, ntris, mesh_tris,
+                            &num_tri_edges, &tri_edges,
+                            &tri_neighbors, &dual_edges,
+                            &node_to_tri_ptr, &node_to_tris);
 
         // Smooth the resulting triangular mesh
         if (options.tri_smoothing_type == TMRMeshOptions::TMR_LAPLACIAN){
-          laplacianSmoothing(options.num_smoothing_steps, num_fixed_pts,
-                             num_tri_edges, tri_edges,
-                             num_points, pts, X, face);
+          TMR_LaplacianSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                                 num_tri_edges, tri_edges,
+                                 num_points, pts, X, face);
         }
         else {
           double alpha = 0.1;
-          springSmoothing(options.num_smoothing_steps, alpha,
-                          num_fixed_pts, num_tri_edges, tri_edges,
-                          num_points, pts, X, face);
+          TMR_SpringSmoothing(options.num_smoothing_steps, alpha,
+                              num_fixed_pts, num_tri_edges, tri_edges,
+                              num_points, pts, X, face);
         }
 
         if (options.write_post_smooth_triangle){
@@ -1986,12 +1985,11 @@ cannot perform recombination\n");
           delete [] node_to_tri_ptr;
           delete [] node_to_tris;
 
-          // Simplify the new quadrilateral mesh by removing points/quads
-          // with poor quality/connectivity
-          simplifyQuads();
-
-          // Simplify a second time (for good measure)
-          simplifyQuads();
+          // Simplify the new quadrilateral mesh by removing
+          // points/quads with poor quality/connectivity
+          for ( int k = 0; k < 2; k++ ){
+            simplifyQuads();
+          }
         }
 
         if (options.write_pre_smooth_quad){
@@ -2003,13 +2001,13 @@ cannot perform recombination\n");
 
         int *pts_to_quad_ptr;
         int *pts_to_quads;
-        computeNodeToElems(num_points, num_quads, 4, quads,
-                           &pts_to_quad_ptr, &pts_to_quads);
+        TMR_ComputeNodeToElems(num_points, num_quads, 4, quads,
+                               &pts_to_quad_ptr, &pts_to_quads);
 
         // Smooth the mesh using a local optimization of node locations
-        quadSmoothing(options.num_smoothing_steps, num_fixed_pts,
-                      num_points, pts_to_quad_ptr, pts_to_quads,
-                      num_quads, quads, pts, X, face);
+        TMR_QuadSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                          num_points, pts_to_quad_ptr, pts_to_quads,
+                          num_quads, quads, pts, X, face);
 
         // Free the connectivity information
         delete [] pts_to_quad_ptr;
@@ -2027,9 +2025,9 @@ cannot perform recombination\n");
           int num_quad_edges;
           int *quad_edges;
           int *quad_neighbors, *quad_dual;
-          computeQuadEdges(num_points, num_quads, quads,
-                           &num_quad_edges, &quad_edges,
-                           &quad_neighbors, &quad_dual);
+          TMR_ComputeQuadEdges(num_points, num_quads, quads,
+                               &num_quad_edges, &quad_edges,
+                               &quad_neighbors, &quad_dual);
 
           char filename[256];
           sprintf(filename, "quad_dual%d.vtk",
@@ -2246,7 +2244,7 @@ double TMRFaceMesh::computeQuadQuality( const int *quad,
     b.y = p[quad[next]].y - p[quad[k]].y;
     b.z = p[quad[next]].z - p[quad[k]].z;
 
-    // Compute the internal angle between the
+    // Compute the internal angle
     double alpha = M_PI - acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
     double val = fabs(0.5*M_PI - alpha);
     if (val > max_val){
@@ -2404,7 +2402,7 @@ void TMRFaceMesh::recombine( int ntris, const int triangles[],
                 tri_neighbors[3*k + tri_node_edges[kj][1]] < 0){
               graph_edges[2*edge_num] = i;
               graph_edges[2*edge_num+1] = k;
-              weights[edge_num] = 1.0;
+              weights[edge_num] = 10.0 + 1.0/eps;
               edge_num++;
             }
           }
@@ -2654,11 +2652,11 @@ Quad %d from triangles %d and %d failed\n",
 void TMRFaceMesh::simplifyQuads(){
   // Compute the node -> quad information
   int *ptr, *pts_to_quads;
-  computeNodeToElems(num_points, num_quads, 4, quads,
-                     &ptr, &pts_to_quads);
+  TMR_ComputeNodeToElems(num_points, num_quads, 4, quads,
+                         &ptr, &pts_to_quads);
 
-  // First, remove the nodes that are only referred to twice,
-  // not on the boundary
+  // First, remove the nodes that are only referred to twice, not on
+  // the boundary
   int *new_pt_nums = new int[ num_points ];
   memset(new_pt_nums, 0, num_points*sizeof(int));
 
@@ -2707,15 +2705,14 @@ void TMRFaceMesh::simplifyQuads(){
     }
   }
 
-  // Remove the triangle quadrilaterals
   for ( int i = 0; i < num_quads; i++ ){
     for ( int j1 = 0; j1 < 2; j1++ ){
       // Find the local node numbers that are on opposite
       // sides of the quadrilateral
       int j2 = j1 + 2;
 
-      // Compute the points that are on opposite sides
-      // of the quadrilateral
+      // Compute the points that are on opposite sides of the
+      // quadrilateral
       int p1 = quads[4*i+j1];
       int p2 = quads[4*i+j2];
       if (p1 >= 0 && p2 >= 0 &&
@@ -2723,8 +2720,8 @@ void TMRFaceMesh::simplifyQuads(){
           p2 >= num_fixed_pts &&
           ptr[p1+1] - ptr[p1] == 3 &&
           ptr[p2+1] - ptr[p2] == 3){
-        // Check whether any of the quadrilaterals which
-        // touch either p1 or p2 have negative indices
+        // Check whether any of the quadrilaterals which touch either
+        // p1 or p2 have negative indices or are on a boundary.
         int flag = 0;
         for ( int kp = ptr[p1]; kp < ptr[p1+1]; kp++ ){
           int q = pts_to_quads[kp];
@@ -2750,6 +2747,51 @@ void TMRFaceMesh::simplifyQuads(){
           }
         }
         if (flag){ break; }
+
+        // Find the common node that is not p1 but is shared by the
+        // elements that touch p1 that are not element i
+        int p1a = 0;
+        int a[2];
+        for ( int index = 0, j = 0; j < 3; j++ ){
+          if (pts_to_quads[ptr[p1]+j] != i){
+            a[index] = pts_to_quads[ptr[p1]+j];
+            index++;
+          }
+        }
+        for ( int j = 0; j < 4; j++ ){
+          if (quads[4*a[0]+j] != p1){
+            for ( int k = 0; k < 4; k++ ){
+              if (quads[4*a[0]+j] == quads[4*a[1]+k]){
+                p1a = quads[4*a[0]+j];
+                break;
+              }
+            }
+          }
+        }
+        if (p1a < num_fixed_pts){
+          break;
+        }
+
+        int p2a = 0;
+        for ( int index = 0, j = 0; j < 3; j++ ){
+          if (pts_to_quads[ptr[p2]+j] != i){
+            a[index] = pts_to_quads[ptr[p2]+j];
+            index++;
+          }
+        }
+        for ( int j = 0; j < 4; j++ ){
+          if (quads[4*a[0]+j] != p2){
+            for ( int k = 0; k < 4; k++ ){
+              if (quads[4*a[0]+j] == quads[4*a[1]+k]){
+                p2a = quads[4*a[0]+j];
+                break;
+              }
+            }
+          }
+        }
+        if (p2a < num_fixed_pts){
+          break;
+        }
 
         // Figure out which node to eliminate
         new_pt_nums[p1] = -1;
@@ -4613,14 +4655,14 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   if (num_hex > 0){
     // Compute the hexahedral edges and surfaces
-    computeHexEdgesAndFaces(num_nodes, num_hex, hex,
-                            &num_hex_edges, &hex_edges, &hex_edge_nums,
-                            &num_hex_faces, &hex_faces, &hex_face_nums);
+    TMR_ComputeHexEdgesAndFaces(num_nodes, num_hex, hex,
+                                &num_hex_edges, &hex_edges, &hex_edge_nums,
+                                &num_hex_faces, &hex_faces, &hex_face_nums);
   }
   else {
     // Compute the quadrilateral edges
-    computeQuadEdges(num_nodes, num_quads, quads,
-                     &num_quad_edges, &quad_edges);
+    TMR_ComputeQuadEdges(num_nodes, num_quads, quads,
+                         &num_quad_edges, &quad_edges);
   }
 
   // Set a pointer to all of the edges

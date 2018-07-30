@@ -4000,7 +4000,7 @@ getNodesWithAttribute()\n");
   // Loop over the quadrants and find out whether it touches a face or
   // edge with the prescribed attribute
   for ( int i = 0; i < size; i++ ){
-    if (count + mesh_order*mesh_order > max_len){
+    if (count + max_node_incr > max_len){
       // Extend the length of the array
       max_len = 2*max_len + max_node_incr;
       int *tmp = new int[ max_len ];

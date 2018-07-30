@@ -35,6 +35,39 @@ enum TMRFaceMeshType { TMR_NO_MESH,
                        TMR_TRIANGLE };
 
 /*
+  Methods for computing the mesh connectivity and dual connectivity
+  information from other data.
+*/
+void TMR_ComputeNodeToElems( int nnodes, int nelems,
+                             int num_elem_nodes,
+                             const int conn[],
+                             int **_ptr,
+                             int **_node_to_elems );
+void TMR_ComputeTriEdges( int nnodes, int ntris,
+                          const int tris[],
+                          int *num_tri_edges,
+                          int **_tri_edges,
+                          int **_tri_neighbors,
+                          int **_dual_edges,
+                          int **_node_to_tri_ptr=NULL,
+                          int **_node_to_tris=NULL,
+                          int **_tri_edge_nums=NULL );
+void TMR_ComputeQuadEdges( int nnodes, int nquads,
+                           const int quads[],
+                           int *_num_quad_edges,
+                           int **_quad_edges,
+                           int **_quad_neighbors=NULL,
+                           int **_dual_edges=NULL,
+                           int **_quad_edge_nums=NULL );
+void TMR_ComputeHexEdgesAndFaces( int nnodes, int nhex,
+                                  const int hex[],
+                                  int *_num_hex_edges,
+                                  int **_hex_edges,
+                                  int **_hex_edge_nums,
+                                  int *_num_hex_faces,
+                                  int **_hex_faces,
+                                  int **_hex_face_nums );
+/*
   Global options for meshing
 */
 class TMRMeshOptions {

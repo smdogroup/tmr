@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,7 +33,7 @@
 class TMRQuadDomain {
  public:
   double xlow, xhigh;
-  double ylow, yhigh; 
+  double ylow, yhigh;
 };
 
 /*
@@ -42,7 +42,7 @@ class TMRQuadDomain {
 
   This uses a recursive implementation for searching, adding and deleting
   nodes from the quadtree. The leafs of the quadtree are of fixed size
-  so that it is not necessary to 
+  so that it is not necessary to
 */
 class TMRQuadNode {
  public:
@@ -52,9 +52,9 @@ class TMRQuadNode {
   // Create the root in a quadtree
   TMRQuadNode( TMRQuadDomain *_domain );
 
-  // Create the root node (or other nodes) 
+  // Create the root node (or other nodes)
   ~TMRQuadNode();
- 
+
   // Add/delete nodes from the quadtree
   // ----------------------------------
   void addNode( uint32_t num, const double pt[] );
@@ -83,7 +83,7 @@ class TMRQuadNode {
   TMRQuadNode *low_left, *low_right;
   TMRQuadNode *up_left, *up_right;
 
-  // The level required 
+  // The level required
   int level;
 
   // The u/v location of the lower left-hand corner of the domain
@@ -120,11 +120,11 @@ class TMRTriangle {
   }
   // The indices of this triangle
   uint32_t u, v, w;
-  
+
   // Tag/info values (used to helpfully tag/label triangles)
   uint32_t tag;
   uint32_t status;
-  
+
   // Quality metric
   float quality;
 };
@@ -148,22 +148,22 @@ class TMRTriangularize : public TMREntity {
   void setFrontalQualityFactor( double factor );
 
   // Create the frontal mesh with the given mesh spacing
-  void frontal( TMRMeshOptions options, 
+  void frontal( TMRMeshOptions options,
                 TMRElementFeatureSize *fs );
 
   // Remove degenerate edges/points and reorder things
   void removeDegenerateEdges( int num_degen, const int degen[] );
-  
+
   // Retrieve the mesh connectivity from the object
-  void getMesh( int *_num_points, int *_num_triangles, 
+  void getMesh( int *_num_points, int *_num_triangles,
                 int **_conn, double **_pts, TMRPoint **_X );
-  
+
   // Write the triangulation to an outputfile
   void writeToVTK( const char *filename, const int param_space=0 );
 
  private:
   // The Bowyer-Watson algorithm is started with 4 points (2 triangles)
-  // that cover the entire domain. These are deleted at the end 
+  // that cover the entire domain. These are deleted at the end
   // of the algorithm.
   static const int FIXED_POINT_OFFSET = 4;
 
@@ -179,8 +179,8 @@ class TMRTriangularize : public TMREntity {
                    int nsegs, const int segs[],
                    TMRFace *surf );
 
-  // Add a point to the list -- this only adds a point to the list and 
-  // returns the new point number, it does not add the point to the 
+  // Add a point to the list -- this only adds a point to the list and
+  // returns the new point number, it does not add the point to the
   uint32_t addPoint( const double pt[] );
 
   // Add a point to the mesh and re-triangularize the mesh
@@ -200,7 +200,7 @@ class TMRTriangularize : public TMREntity {
   int deleteTriangle( TMRTriangle tri );
 
   // Get a hash value for the given triangle
-  inline uint32_t getTriangleHash( TMRTriangle *tri );              
+  inline uint32_t getTriangleHash( TMRTriangle *tri );
 
   // Mark all the triangles in the list
   void setTriangleTags( uint32_t tag );
@@ -210,11 +210,11 @@ class TMRTriangularize : public TMREntity {
   void completeMe( uint32_t u, uint32_t v, TMRTriangle **tri );
 
   // Dig cavity
-  void digCavity( uint32_t u, uint32_t v, uint32_t w, 
+  void digCavity( uint32_t u, uint32_t v, uint32_t w,
                   TMRFace *metric=NULL );
 
   // Determine whether this edge is in the PSLG edge list
-  void setUpPSLGEdges( int nsegs, const int segs[] ); 
+  void setUpPSLGEdges( int nsegs, const int segs[] );
   int edgeInPSLG( uint32_t u, uint32_t v );
 
   // Does this triangle enclose the point
@@ -287,7 +287,7 @@ class TMRTriangularize : public TMREntity {
   public:
     uint32_t u, v; // The edge indices
     TriListNode *tri_node; // Pointer to the node within the triangle list
-    EdgeHashNode *next; // Next node 
+    EdgeHashNode *next; // Next node
   };
 
   // Create the array of hash buckets

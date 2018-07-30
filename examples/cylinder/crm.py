@@ -19,11 +19,11 @@ class uCRM_VonMisesMassMin(ParOpt.pyParOptProblem):
         self.comm = comm
 
         # Scale the mass objective so that it is O(10)
-        self.mass_scale = 1e-3
+        self.mass_scale = 1e-2
 
         # Scale the thickness variables so that they are measured in
-        # mm rather than meters
-        self.thickness_scale = 1000.0
+        # 1/10-ths of inches
+        self.thickness_scale = 10.0
 
         # The number of thickness variables in the problem
         self.nvars = num_components
@@ -165,7 +165,7 @@ class CreateMe(TMR.QuadCreator):
         '''Create the element'''
         # Get the model attribute and set the face
         attr = topo.getFace(quad.face).getAttribute()
-        return self.elem_dict[order-1][attr]
+        return self.elem_dict[order-2][attr]
 
 def addFaceTraction(order, assembler):
     # Create the surface traction
@@ -184,7 +184,8 @@ def addFaceTraction(order, assembler):
 
     # Create the shell traction
     trac = elements.ShellTraction(order, tx, ty, tz)
-    aux.addElement(i, trac)
+    for i in range(nelems):
+        aux.addElement(i, trac)
 
     return aux
 
@@ -242,7 +243,7 @@ comm = MPI.COMM_WORLD
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--steps', type=int, default=5)
-p.add_argument('--htarget', type=float, default=10.0)
+p.add_argument('--htarget', type=float, default=4.0)
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--ordering', type=str, default='multicolor')
 p.add_argument('--ksweight', type=float, default=10.0)
@@ -272,7 +273,7 @@ ordering = args.ordering
 ordering = ordering.lower()
 
 # The root rib for boundary conditions
-ucrm_root_rib = 3
+ucrm_root_rib = 149
 
 # The 47 top and bottom skin segments
 ucrm_top_skins = [127, 141,  30, 133, 154,  10,  29,  33, 116, 100,
@@ -297,14 +298,14 @@ geo = TMR.Model(verts, edges, faces)
 num_design_vars = len(faces)
 
 # Set the material properties
-rho = 2500.0 # kg/m^3
-E = 70e9 # Young's modulus
+rho = 97.5e-3 # 0.0975 lb/in^3
+E = 10000e3 # 10,000 ksi: Young's modulus
 nu = 0.3 # Poisson ratio
 kcorr = 5.0/6.0 # Shear correction factor
-ys = 270e6 # Yield stress
-thickness = 0.01
-min_thickness = 0.002
-max_thickness = 0.05
+ys = 40e3 # psi
+thickness = 1.0
+min_thickness = 0.1
+max_thickness = 10.0
 
 # Set the face attributes and create the constitutive objects
 elem_dict = [{}, {}, {}, {}]
@@ -323,10 +324,11 @@ for i, f in enumerate(faces):
 
     # Create the elements of different orders
     for j in range(4):
-        elem_dict[j][attr] = elements.MITCShell(j+1, stiff, component_num=comp)
+        elem_dict[j][attr] = elements.MITCShell(j+2, stiff,
+                                                component_num=comp)
 
 # Initial target mesh spacing
-htarget = 5.0
+htarget = args.htarget
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -335,16 +337,23 @@ mesh = TMR.Mesh(comm, geo)
 opts = TMR.MeshOptions()
 
 # Set the mesh type
-opts.mesh_type_default = TMR.UNSTRUCTURED
-
+# opts.mesh_type_default = TMR.TRIANGLE
 opts.frontal_quality_factor = 1.25
 opts.num_smoothing_steps = 50
 opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 
+opts.write_pre_smooth_triangle = 1
+opts.write_post_smooth_triangle = 1
+opts.write_dual_recombine = 1
+opts.write_pre_smooth_quad = 1
+opts.write_post_smooth_quad = 1
+
 # Create the surface mesh
 mesh.mesh(htarget, opts)
 mesh.writeToVTK('mesh.vtk')
+
+exit(0)
 
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
@@ -449,8 +458,9 @@ for k in range(steps):
                                               forest_refined, bcs, ordering,
                                               order=order+1, nlevels=nlevs+1)
     else:
-        forest_refined, assembler_refined = createRefined(case, forest, bcs)
-    aux = addFaceTraction(case, order+1, assembler_refined)
+        forest_refined, assembler_refined = createRefined(topo, elem_dict,
+                                                          forest_refined, bcs)
+    aux = addFaceTraction(order+1, assembler)
     assembler_refined.setAuxElements(aux)
 
     if args.energy_error:
