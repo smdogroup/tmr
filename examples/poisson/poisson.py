@@ -288,7 +288,7 @@ if args.uniform_refinement:
 descript += '_' + functional
 
 # Create the log file and write out the header
-log_fp = open('%s_order%d_%s.dat'%(case, order, descript), 'w')
+log_fp = open('results/%s_order%d_%s.dat'%(case, order, descript), 'w')
 s = 'Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr, '
 s += 'exact, fval_error, fval_corr_error, '
 s += 'fval_effectivity, indicator_effectivity\n'

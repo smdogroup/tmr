@@ -486,6 +486,7 @@ p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
 p.add_argument('--compute_solution_error', action='store_true', default=False)
 p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
+p.add_argument('--remesh_domain', action='store_true', default=False)
 args = p.parse_args()
 
 # Set the case type
@@ -540,6 +541,9 @@ exact_functional = 0.0
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
 
+# Set the feature size object
+feature_size = None
+
 if case == 'cylinder':
     # Get the maximum stress and re-adjust the load
     vm_max, res = cylinder_ks_functional(1.0, t, E, nu, kcorr, ys,
@@ -553,7 +557,6 @@ if case == 'cylinder':
         if comm.rank == 0:
             print('%10d %25.16e'%(n, approx))
         exact_functional = approx
-        
 
     # Load the geometry model
     geo = TMR.LoadModel('cylinder.stp')
@@ -576,7 +579,7 @@ if case == 'cylinder':
 elif case == 'disk':
     # Set the true dimension of the radius
     R = 100.0
-    
+
     # Get the maximum stress and re-adjust the load
     vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=20)
     load = load/vm_max
@@ -602,7 +605,7 @@ elif case == 'disk':
     verts = geo.getVertices()
     edges = geo.getEdges()
     faces = geo.getFaces()
-    
+
     # Set the attributes
     verts[1].setAttribute('midpoint')
     for index in [0, 2, 3, 4]:
@@ -666,7 +669,7 @@ if args.uniform_refinement:
 descript += '_' + functional
 
 # Create the log file and write out the header
-log_fp = open('%s_order%d_%s.dat'%(case, order, descript), 'w')
+log_fp = open('results/%s_order%d_%s.dat'%(case, order, descript), 'w')
 s = 'Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr, '
 s += 'exact, fval_error, fval_corr_error, '
 s += 'fval_effectivity, indicator_effectivity\n'
@@ -681,7 +684,13 @@ if case == 'disk' and args.compute_solution_error:
 
 for k in range(steps):
     # Create the topology problem
-    nlevs = min(4, depth+k+1)
+    if args.remesh_domain:
+        if order == 2:
+            nlevs = 2
+        else:
+            nlevs = 1
+    else:
+        nlevs = min(5, depth+k+1)
     assembler, mg = createProblem(case, forest, bcs, ordering,
                                   order=order, nlevels=nlevs)
     aux = addFaceTraction(case, order, assembler, load)
@@ -971,30 +980,129 @@ for k in range(steps):
     if args.uniform_refinement:
         forest.refine()
     elif k < steps-1:
-        # The refinement array
-        refine = np.zeros(len(error), dtype=np.intc)
+        if args.remesh_domain:
+            # Ensure that we're using an unstructured mesh
+            opts.mesh_type_default = TMR.UNSTRUCTURED
 
-        # Determine the cutoff values
-        cutoff = bins[-1]
-        bin_sum = 0
-        for i in range(len(bins)+1):
-            bin_sum += bins[i]
-            if bin_sum > 0.3*ntotal:
-                cutoff = bounds[i]
-                break
+            # Find the positions of the center points of each node
+            nelems = assembler.getNumElements()
 
-        log_cutoff = np.log(cutoff)
-        
-        # Element target error is still too high. Adapt based solely
-        # on decreasing the overall error
-        nrefine = 0
-        for i, err in enumerate(error):
-            # Compute the log of the error
-            logerr = np.log(err)
+            # Allocate the positions
+            Xp = np.zeros((nelems, 3))
+            for i in range(nelems):
+                # Get the information about the given element
+                elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
 
-            if logerr > log_cutoff:
-                refine[i] = 1
-                nrefine += 1
+                # Get the approximate element centroid
+                Xp[i,:] = np.average(Xpt.reshape((-1, 3)), axis=0)
 
-        # Refine the forest
-        forest.refine(refine)
+            # Prepare to collect things to the root processor (only
+            # one where it is required)
+            root = 0
+
+            # Get the element counts
+            if comm.rank == root:
+                size = error.shape[0]
+                count = comm.gather(size, root=root)
+                count = np.array(count, dtype=np.int)
+                ntotal = np.sum(count)
+
+                errors = np.zeros(np.sum(count))
+                Xpt = np.zeros(3*np.sum(count))
+                comm.Gatherv(error, [errors, count])
+                comm.Gatherv(Xp.flatten(), [Xpt, 3*count])
+
+                # Reshape the point array
+                Xpt = Xpt.reshape(-1,3)
+
+                # Compute the target relative error in each element.
+                # This is set as a fraction of the error in the
+                # current mesh level.
+                err_target = 0.1*(err_est/ntotal)
+
+                # Compute the element size factor in each element
+                # using the order or accuracy
+                hvals = (err_target/errors)**(0.5)
+
+                # Set the values of
+                if feature_size is not None:
+                    for i, hp in enumerate(hvals):
+                        hlocal = feature_size.getFeatureSize(Xpt[i,:])
+                        hvals[i] = np.min(
+                            (np.max((hp*hlocal, 0.25*hlocal)), 2*hlocal))
+                else:
+                    for i, hp in enumerate(hvals):
+                        hvals[i] = np.min(
+                            (np.max((hp*htarget, 0.25*htarget)), 2*htarget))
+
+                # Allocate the feature size object
+                hmax = 10.0
+                hmin = 0.25
+                feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax)
+
+                # Code to visualize the mesh size distribution on the fly
+                visualize_mesh_size = False
+                if case == 'cylinder' and visualize_mesh_size:
+                    import matplotlib.pylab as plt
+                    x, y = np.meshgrid(np.linspace(0, 2*np.pi, 100),
+                                       np.linspace(0, L, 100))
+                    z = np.zeros((100, 100))
+                    for j in range(100):
+                        for i in range(100):
+                            xpt = [R*np.cos(x[i,j]), R*np.sin(x[i,j]), y[i,j]]
+                            z[i,j] = feature_size.getFeatureSize(xpt)
+
+                    plt.contourf(x, y, z)
+                    plt.show()
+            else:
+                size = error.shape[0]
+                comm.gather(size, root=root)
+                comm.Gatherv(error, None)
+                comm.Gatherv(Xp.flatten(), None)
+
+                # Create a dummy feature size object...
+                feature_size = TMR.ConstElementSize(0.5*htarget)
+
+            # Create the surface mesh
+            mesh.mesh(fs=feature_size, opts=opts)
+
+            # Create the corresponding mesh topology from the mesh-model
+            model = mesh.createModelFromMesh()
+            topo = TMR.Topology(comm, model)
+
+            # Create the quad forest and set the topology of the forest
+            depth = 0
+            if order == 2:
+                depth = 1
+            forest = TMR.QuadForest(comm)
+            forest.setTopology(topo)
+            forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
+            forest.createTrees(depth)
+        else:
+            # The refinement array
+            refine = np.zeros(len(error), dtype=np.intc)
+
+            # Determine the cutoff values
+            cutoff = bins[-1]
+            bin_sum = 0
+            for i in range(len(bins)+1):
+                bin_sum += bins[i]
+                if bin_sum > 0.3*ntotal:
+                    cutoff = bounds[i]
+                    break
+
+            log_cutoff = np.log(cutoff)
+
+            # Element target error is still too high. Adapt based solely
+            # on decreasing the overall error
+            nrefine = 0
+            for i, err in enumerate(error):
+                # Compute the log of the error
+                logerr = np.log(err)
+
+                if logerr > log_cutoff:
+                    refine[i] = 1
+                    nrefine += 1
+
+            # Refine the forest
+            forest.refine(refine)
