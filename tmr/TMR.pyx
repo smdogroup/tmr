@@ -2103,6 +2103,47 @@ cdef class StiffnessProperties:
         def __set__(self, value):
             self.ptr.eps = value
 
+
+cdef class AnisotropicProperties:
+    cdef TMRAnisotropicProperties *ptr
+    def __cinit__(self, list _rho, list _C,
+                  double q=5.0, double k0=1e-6,
+                  double beta=15.0, double xoffset=0.5, int use_project=0):
+        cdef TacsScalar *rho = NULL
+        cdef TacsScalar *C = NULL
+        cdef int nmats = 0
+        if len(_rho) != len(_C):
+            errmsg = 'Must specify the correct number of properties'
+            raise ValueError(errmsg)
+        nmats = len(_rho)
+        rho = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        C = <TacsScalar*>malloc(21*nmats*sizeof(TacsScalar));
+
+        for i in range(nmats):
+            rho[i] = <TacsScalar>_rho[i]
+        for i in range(nmats):
+            for j in range(21):
+                C[21*i+j] = <TacsScalar>_C[i][j]
+        self.ptr = new TMRAnisotropicProperties(nmats, q, k0, beta, xoffset,
+                                                rho, C, use_project)
+        self.ptr.incref()
+        free(rho)
+        free(C)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def getNumMaterials(self):
+        return self.ptr.nmats
+
+    property q:
+        def __get__(self):
+            return self.ptr.q
+        def __set__(self, value):
+            self.ptr.q = value
+
 cdef class OctStiffness(SolidStiff):
     def __cinit__(self, StiffnessProperties props,
                   list index=None, list weights=None):
@@ -2164,6 +2205,36 @@ cdef class QuadStiffness(PlaneStress):
         self.ptr.incref()
         free(w)
         return
+
+cdef class AnisotropicStiffness(SolidStiff):
+    def __cinit__(self, AnisotropicProperties props,
+                  list index=None, list weights=None):
+        cdef TMRIndexWeight *w = NULL
+        cdef int nw = 0
+        self.ptr = NULL
+        if weights is None or index is None:
+            errmsg = 'Must define weights and indices'
+            raise ValueError(errmsg)
+        if len(weights) != len(index):
+            errmsg = 'Weights and index list lengths must be the same'
+            raise ValueError(errmsg)
+
+        # Check that the lengths are less than 8
+        if len(weights) > 8:
+            errmsg = 'Weight/index lists too long > 8'
+            raise ValueError(errmsg)
+
+        # Extract the weights
+        nw = len(weights)
+        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
+        for i in range(nw):
+            w[i].weight = <double>weights[i]
+            w[i].index = <int>index[i]
+
+        # Create the constitutive object
+        self.ptr = new TMRAnisotropicStiffness(w, nw, props.ptr)
+        self.ptr.incref()
+        free(w)
 
 def createMg(list assemblers, list forests, double omega=1.0,
              use_coarse_direct_solve=True,

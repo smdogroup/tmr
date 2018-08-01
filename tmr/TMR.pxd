@@ -406,8 +406,21 @@ cdef extern from "TMROctStiffness.h":
         double beta
         double xoffset
 
+    cdef cppclass TMRAnisotropicProperties(TMREntity):
+        TMRAnisotropicProperties(int, double, double, double, double,
+                                 TacsScalar*, TacsScalar*, int)
+        int nmats
+        double q
+        double k0
+        double beta
+        double xoffset
+
     cdef cppclass TMROctStiffness(SolidStiffness):
         TMROctStiffness(TMRIndexWeight*, int, TMRStiffnessProperties*)
+
+    cdef cppclass TMRAnisotropicStiffness(SolidStiffness):
+        TMRAnisotropicStiffness(TMRIndexWeight*, int, 
+                                TMRAnisotropicProperties*)
 
 cdef extern from "TMRQuadStiffness.h":
     cdef cppclass TMRQuadStiffness(PlaneStressStiffness):
