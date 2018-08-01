@@ -640,7 +640,7 @@ void TMRAnisotropicStiffness::addStressDVSens( const double pt[],
     }
 
     // Compute the product
-    TacsScalar product = penalty*evalStressProduct(props->C, e, psi);
+    TacsScalar product = alpha*penalty*evalStressProduct(props->C, e, psi);
     for ( int i = 0; i < nweights; i++ ){
       fdvSens[weights[i].index] += weights[i].weight*product;
     }
@@ -659,7 +659,7 @@ void TMRAnisotropicStiffness::addStressDVSens( const double pt[],
 
       // Compute the product
       TacsScalar product =
-        penalty*evalStressProduct(&props->C[21*(j-1)], e, psi);
+        alpha*penalty*evalStressProduct(&props->C[21*(j-1)], e, psi);
       for ( int i = 0; i < nweights; i++ ){
         fdvSens[nvars*weights[i].index + j] += weights[i].weight*product;
       }
