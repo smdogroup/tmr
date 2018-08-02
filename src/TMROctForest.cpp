@@ -1567,6 +1567,60 @@ void TMROctForest::evalInterp( const double pt[], double N[],
 }
 
 /*
+  Evaluate the interpolant at the given parametric point
+*/
+void TMROctForest::evalInterp( const double pt[], double N[],
+                               double N1[], double N2[], double N3[],
+                               double N11[], double N22[], double N33[],
+                               double N23[], double N13[], double N12[] ){
+  double Nu[MAX_ORDER], Nv[MAX_ORDER], Nw[MAX_ORDER];
+  double Nud[MAX_ORDER], Nvd[MAX_ORDER], Nwd[MAX_ORDER];
+  double Nudd[MAX_ORDER], Nvdd[MAX_ORDER], Nwdd[MAX_ORDER];
+
+  // Evaluate the shape functions
+  lagrange_shape_func_second_derivative(mesh_order, pt[0], interp_knots,
+                                        Nu, Nud, Nudd);
+  lagrange_shape_func_second_derivative(mesh_order, pt[1], interp_knots,
+                                        Nv, Nvd, Nvdd);
+  lagrange_shape_func_second_derivative(mesh_order, pt[2], interp_knots,
+                                        Nw, Nwd, Nwdd);
+
+  for ( int k = 0; k < mesh_order; k++ ){
+    for ( int j = 0; j < mesh_order; j++ ){
+      for ( int i = 0; i < mesh_order; i++ ){
+        // Shape functions
+        N[0] = Nu[i]*Nv[j]*Nw[k];
+
+        // First deriatives
+        N1[0] = Nud[i]*Nv[j]*Nw[k];
+        N2[0] = Nu[i]*Nvd[j]*Nw[k];
+        N3[0] = Nu[i]*Nv[j]*Nwd[k];
+
+        // Second derivatives
+        N11[0] = Nudd[i]*Nv[j]*Nw[k];
+        N22[0] = Nu[i]*Nvdd[j]*Nw[k];
+        N33[0] = Nu[i]*Nv[j]*Nwdd[k];
+
+        N23[0] = Nu[i]*Nvd[j]*Nwd[k];
+        N13[0] = Nud[i]*Nv[j]*Nwd[k];
+        N33[0] = Nud[i]*Nvd[j]*Nw[k];
+
+        N++;
+        N1++;
+        N2++;
+        N3++;
+        N11++;
+        N22++;
+        N33++;
+        N23++;
+        N13++;
+        N12++;
+      }
+    }
+  }
+}
+
+/*
   Retrieve information about the connectivity between
   blocks, faces, edges and nodes
 */

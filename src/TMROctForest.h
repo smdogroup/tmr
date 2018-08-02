@@ -140,6 +140,10 @@ class TMROctForest : public TMREntity {
   void evalInterp( const double pt[], double N[] );
   void evalInterp( const double pt[], double N[],
                    double Nxi[], double Neta[], double Nzeta[] );
+  void evalInterp( const double pt[], double N[],
+                   double N1[], double N2[], double N3[],
+                   double N11[], double N22[], double N33[],
+                   double N23[], double N13[], double N12[] );
 
   // Retrieve the connectivity information
   // -------------------------------------
