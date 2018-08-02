@@ -2430,6 +2430,23 @@ cdef class StressConstraint:
         self.ptr.writeReconToTec(uvec.ptr, filename, ys)
         return
 
+cdef class CurvatureConstraint:
+    cdef TMRCurvatureConstraint *ptr
+    def __cinit__(self, OctForest oct, VarMap map,
+                  TacsScalar ks_weight):
+        self.ptr = NULL
+        self.ptr = new TMRCurvatureConstraint(oct.ptr,
+                                              map.ptr,
+                                              ks_weight)
+        self.ptr.incref()
+
+    def __dealloc__(self):
+        if self.ptr:
+           self.ptr.decref()
+
+    def evalCon(self, Vec xvec):
+        return self.ptr.evalConstraint(xvec.ptr)
+
 cdef class TopoProblem(pyParOptProblemBase):
     def __cinit__(self, list assemblers, list filters,
                   list varmaps, list varindices, Pc pc, int vars_per_node=1):
@@ -2561,7 +2578,18 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.addStressConstraint(case, sc.ptr, offset, scale, obj_weight)
         return
-
+    
+    def addCurvatureConstraint(self, int case, CurvatureConstraint cc,
+                               TacsScalar offset=1.0, TacsScalar scale=1.0,
+                               TacsScalar obj_weight=0.0):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.addCurvatureConstraint(case, cc.ptr, offset, scale, obj_weight)
+        return
+    
     def addLinearConstraints(self, list vecs, list offset):
         cdef int nvecs
         cdef TacsScalar *_offset = NULL

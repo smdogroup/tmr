@@ -4121,16 +4121,17 @@ TMRCurvatureConstraint::TMRCurvatureConstraint( TMROctForest *_forest,
 
   // Get the number of local nodes
   const int *node_numbers = NULL;
-  int num_local_nodes = forest->getNodeNumbers(&node_numbers);
-  int num_ext_nodes = num_local_nodes - (range[rank+1] - range[rank]);
+  forest->getNodeNumbers(&node_numbers);
+  int num_ext_nodes = 0;
 
   // Create an array of the external node numbers
   int *ext_nodes = new int[ num_ext_nodes ];
-  for ( int j = 0, i = 0; i < num_ext_nodes; i++ ){
-    if (node_numbers[i] < range[rank] ||
-        node_numbers[i] >= range[rank+1]){
-      ext_nodes[j] = node_numbers[i];
-      j++;
+  for ( int i = 0; i < num_ext_nodes; i++ ){
+    if (node_numbers[i] >= 0 &&
+        (node_numbers[i] < range[rank] ||
+         node_numbers[i] >= range[rank+1])){
+      ext_nodes[num_ext_nodes] = node_numbers[i];
+      num_ext_nodes++;
     }
   }
 
@@ -4428,10 +4429,16 @@ TacsScalar TMRCurvatureConstraint::evalCurvature( const int elem_size,
           (H[0]*H[4] - H[1]*H[1])*g[2]);
 
   // Compute the Gaussian and mean curvature
-  TacsScalar KG = Hfact/(gn*gn);
-  TacsScalar KM = 0.5*(Hprod - gn*(H[0] + H[4] + H[8]))/(gn*sqrtgn);
+  TacsScalar KG = 0.0;
+  if (gn != 0.0){
+    KG = Hfact/(gn*gn);
+  }
+  TacsScalar KM = 0.0;
+  if (gn != 0.0){
+    KM = 0.5*(Hprod - gn*(H[0] + H[4] + H[8]))/(gn*sqrtgn);
+  }
 
-  // Compute the principal curvatures
+  // Compute the principal curvature
   TacsScalar sqrtk = sqrt(KM*KM - KG);
   TacsScalar k1 = fabs(KM + sqrtk);
   TacsScalar k2 = fabs(KM - sqrtk);
@@ -4452,7 +4459,7 @@ TacsScalar TMRCurvatureConstraint::evalCurvature( const int elem_size,
     1.0 - 16*(val - 0.5)*(val - 0.5)*(val - 0.5)*(val - 0.5);
 
   // Evaluate the result
-  TacsScalar result =
+  TacsScalar result = 
     factor*(kmax + log(1.0 + exp(aggregate_weight*kdiff))/aggregate_weight);
 
   return result;

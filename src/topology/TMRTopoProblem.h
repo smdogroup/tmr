@@ -98,6 +98,11 @@ class TMRTopoProblem : public ParOptProblem {
                             TacsScalar _constr_offset=1.0,
                             TacsScalar _constr_scale=1.0,
                             TacsScalar _obj_weight=0.0 );
+  void addCurvatureConstraint( int _load_case,
+                               TMRCurvatureConstraint *stress_func,
+                               TacsScalar _constr_offset=1.0,
+                               TacsScalar _constr_scale=1.0,
+                               TacsScalar _obj_weight=0.0 );
   void addLinearConstraints( ParOptVec **vecs,
                              TacsScalar *offset,
                              int _ncon );
@@ -278,6 +283,10 @@ class TMRTopoProblem : public ParOptProblem {
     TacsScalar stress_func_offset;
     TacsScalar stress_func_scale;
     TacsScalar stress_func_obj_weight;
+    TMRCurvatureConstraint *curve_func;
+    TacsScalar curve_func_offset;
+    TacsScalar curve_func_scale;
+    TacsScalar curve_func_obj_weight;
   } *load_case_info;
 
   // Store the design variable info
