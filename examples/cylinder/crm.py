@@ -338,6 +338,7 @@ opts = TMR.MeshOptions()
 
 # Set the mesh type
 # opts.mesh_type_default = TMR.TRIANGLE
+opts.triangularize_print_level = 2
 opts.frontal_quality_factor = 1.25
 opts.num_smoothing_steps = 50
 opts.write_mesh_quality_histogram = 1

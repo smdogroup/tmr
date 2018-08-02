@@ -2081,6 +2081,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     printf("%10s %10s %10s\n", "Iteration", "Triangles", "Active");
   }
 
+  int num_newton_fail = 0;
   double t0 = MPI_Wtime();
   double t0_enclose = 0.0, t1_enclose = 0.0;
   double t0_update = 0.0, t1_update = 0.0;
@@ -2229,7 +2230,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
       int newton_fail = 1;
       const double rtol = 1e-5;
-      const int max_newton_iters = 25;
+      const int max_newton_iters = 10;
 
       for ( int k = 0; k < max_newton_iters; k++ ){
         // Solve for the problem
@@ -2295,6 +2296,13 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
         }
       }
 
+      // Reset the point
+      if (newton_fail){
+        num_newton_fail++;
+        pt[0] = m[0] + f*e[0];
+        pt[1] = m[1] + f*e[1];
+      }
+
       // Find the enclosing triangle for the new point
       pt_tri = tri;
       if (!enclosed(pt, pt_tri->u, pt_tri->v, pt_tri->w)){
@@ -2316,7 +2324,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
         // already been accepted. This is not permitted, so we
         // continue...
         pt_tri = NULL;
-        htrial *= 0.5;
+        htrial *= 0.75;
       }
     }
 
@@ -2488,6 +2496,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
   // Free the deleted trianlges from the doubly linked list
   deleteTrianglesFromList();
 
+  /*
   // Now apply smoothing and re-delaunay the mesh. This only has an
   // impact if there is a surface, so we check for that first.
   if (face){
@@ -2532,14 +2541,16 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     // Free the deleted trianlges from the doubly linked list
     deleteTrianglesFromList();
   }
+  */
 
   if (options.triangularize_print_level > 0){
     printf("%10d %10d\n", iter, num_triangles);
   }
   if (options.triangularize_print_level > 1){
     printf("Time breakdown\n");
-    printf("findEnclosing: %15.4e s\n", t1_enclose - t0_enclose);
-    printf("update:        %15.4e s\n", t1_update - t0_update);
-    printf("total:         %15.4e s\n", t0);
+    printf("findEnclosing:    %15.4e s\n", t1_enclose - t0_enclose);
+    printf("update:           %15.4e s\n", t1_update - t0_update);
+    printf("total:            %15.4e s\n", t0);
+    printf("num_newton_fail:  %15d\n", num_newton_fail);
   }
 }

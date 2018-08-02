@@ -1987,7 +1987,7 @@ cannot perform recombination\n");
 
           // Simplify the new quadrilateral mesh by removing
           // points/quads with poor quality/connectivity
-          for ( int k = 0; k < 2; k++ ){
+          for ( int k = 0; k < 6; k++ ){
             simplifyQuads();
           }
         }
@@ -2402,7 +2402,7 @@ void TMRFaceMesh::recombine( int ntris, const int triangles[],
                 tri_neighbors[3*k + tri_node_edges[kj][1]] < 0){
               graph_edges[2*edge_num] = i;
               graph_edges[2*edge_num+1] = k;
-              weights[edge_num] = 10.0 + 1.0/eps;
+              weights[edge_num] = 1.0;
               edge_num++;
             }
           }
@@ -2768,9 +2768,6 @@ void TMRFaceMesh::simplifyQuads(){
             }
           }
         }
-        if (p1a < num_fixed_pts){
-          break;
-        }
 
         int p2a = 0;
         for ( int index = 0, j = 0; j < 3; j++ ){
@@ -2789,9 +2786,9 @@ void TMRFaceMesh::simplifyQuads(){
             }
           }
         }
-        if (p2a < num_fixed_pts){
-          break;
-        }
+        // if (p1a < num_fixed_pts && p2a < num_fixed_pts){
+        //   break;
+        // }
 
         // Figure out which node to eliminate
         new_pt_nums[p1] = -1;
