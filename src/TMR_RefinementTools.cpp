@@ -4102,7 +4102,6 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
 
 
 
-
 TMRCurvatureConstraint::TMRCurvatureConstraint( TMROctForest *_forest,
                                                 TACSVarMap *varmap,
                                                 TacsScalar _aggregate_weight ){
@@ -4182,7 +4181,7 @@ TMRCurvatureConstraint::TMRCurvatureConstraint( TMROctForest *_forest,
 
   // Add unit entries to all the free variables
   for ( int i = 0; i < nelems; i++ ){
-    for ( int j = 0; j < max_nodes; i++ ){
+    for ( int j = 0; j < max_nodes; j++ ){
       welem[j] = 1.0;
       if (conn[j] < 0){
         welem[j] = 0.0;
@@ -4218,7 +4217,6 @@ TMRCurvatureConstraint::TMRCurvatureConstraint( TMROctForest *_forest,
   dfderiv->incref();
 }
 
-
 TMRCurvatureConstraint::~TMRCurvatureConstraint(){
   forest->decref();
   weights->decref();
@@ -4226,7 +4224,6 @@ TMRCurvatureConstraint::~TMRCurvatureConstraint(){
   xderiv->decref();
   dfderiv->decref();
 }
-
 
 void TMRCurvatureConstraint::computeNodeDeriv(){
   // Zero the nodal derivatives
@@ -4408,15 +4405,30 @@ TacsScalar TMRCurvatureConstraint::evalCurvature( const int elem_size,
   H[2] = H[6] = 0.5*(H[2] + H[6]);
   H[5] = H[7] = 0.5*(H[5] + H[7]);
 
+  // Compute the squared norm of the gradient
   TacsScalar gn = g[0]*g[0] + g[1]*g[1] + g[2]*g[2];
   TacsScalar sqrtgn = sqrt(gn);
+
+  // Compute the inner product with the Hessian matrix
   TacsScalar Hprod =
     (g[0]*(H[0]*g[0] + H[1]*g[1] + H[2]*g[2]) +
      g[1]*(H[1]*g[0] + H[4]*g[1] + H[5]*g[2]) +
      g[2]*(H[2]*g[0] + H[5]*g[1] + H[8]*g[2]));
 
+  // Compute the inner product with the cofactor matrix
+  TacsScalar Hfact = 
+    g[0]*((H[4]*H[8] - H[5]*H[5])*g[0] +
+          (H[5]*H[2] - H[1]*H[8])*g[1] +
+          (H[1]*H[5] - H[4]*H[2])*g[2]) +
+    g[1]*((H[5]*H[2] - H[1]*H[8])*g[0] +
+          (H[0]*H[8] - H[2]*H[2])*g[1] +
+          (H[1]*H[2] - H[0]*H[5])*g[2]) +
+    g[2]*((H[1]*H[5] - H[4]*H[2])*g[0] +
+          (H[1]*H[2] - H[0]*H[5])*g[1] +
+          (H[0]*H[4] - H[1]*H[1])*g[2]);
+
   // Compute the Gaussian and mean curvature
-  TacsScalar KG = Hprod/(gn*gn);
+  TacsScalar KG = Hfact/(gn*gn);
   TacsScalar KM = 0.5*(Hprod - gn*(H[0] + H[4] + H[8]))/(gn*sqrtgn);
 
   // Compute the principal curvatures
