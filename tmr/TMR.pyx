@@ -2432,12 +2432,13 @@ cdef class StressConstraint:
 
 cdef class CurvatureConstraint:
     cdef TMRCurvatureConstraint *ptr
-    def __cinit__(self, OctForest oct, VarMap map,
-                  TacsScalar ks_weight):
-        self.ptr = NULL
-        self.ptr = new TMRCurvatureConstraint(oct.ptr,
-                                              map.ptr,
-                                              ks_weight)
+    def __cinit__(self, OctForest oct, VarMap vmap=None,
+                  TacsScalar aggregate_weight=30.0):
+        cdef TACSVarMap *vptr = NULL
+        if vmap is not None:
+            vptr = vmap.ptr
+        self.ptr = new TMRCurvatureConstraint(oct.ptr, vptr,
+                                              aggregate_weight)
         self.ptr.incref()
 
     def __dealloc__(self):
@@ -2446,6 +2447,10 @@ cdef class CurvatureConstraint:
 
     def evalCon(self, Vec xvec):
         return self.ptr.evalConstraint(xvec.ptr)
+
+    def writeCurvatureToFile(self, Vec xvec, fname):
+        cdef char *filename = tmr_convert_str_to_chars(fname)
+        self.ptr.writeCurvatureToFile(xvec.ptr, filename)
 
 cdef class TopoProblem(pyParOptProblemBase):
     def __cinit__(self, list assemblers, list filters,

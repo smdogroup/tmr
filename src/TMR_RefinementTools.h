@@ -201,16 +201,30 @@ class TMRStressConstraint : public TMREntity {
 class TMRCurvatureConstraint : public TMREntity {
  public:
   TMRCurvatureConstraint( TMROctForest *_forest,
+                          TacsScalar _aggregate_weight );
+  TMRCurvatureConstraint( TMROctForest *_forest,
                           TACSVarMap *_varmap,
                           TacsScalar _aggregate_weight );
   ~TMRCurvatureConstraint();
 
   // Evaluate the curvature constraint
   TacsScalar evalConstraint( TACSBVec *_xvec );
-  
+
+  // Write the curvature to file
+  void writeCurvatureToFile( TACSBVec *_xvec, const char *filename );
 
  private:
   void computeNodeDeriv();
+  void estimateHessian( const TacsScalar elem_Xpts[], 
+                        const TacsScalar elem_vals[],
+                        const TacsScalar elem_derivs[], 
+                        TacsScalar *val, TacsScalar g[], TacsScalar H[] );
+  TacsScalar evalCurvature( const TacsScalar val,
+                            const TacsScalar g[],
+                            const TacsScalar H[] );
+  TacsScalar evalCurvDeriv( const TacsScalar val, const TacsScalar g[],
+                            const TacsScalar H[], TacsScalar *dval,
+                            TacsScalar dg[], TacsScalar dH[] );
   TacsScalar evalCurvature( const int elem_size,
                             const double N[], const double Na[],
                             const double Nb[], const double Nc[],
@@ -221,8 +235,15 @@ class TMRCurvatureConstraint : public TMREntity {
                            const double N[], const double Na[],
                            const double Nb[], const double Nc[],
                            const TacsScalar J[], const TacsScalar Xpts[],
-                           const TacsScalar elem_vals[], const TacsScalar elem_deriv[],
+                           const TacsScalar elem_vals[],
+                           const TacsScalar elem_deriv[],
                            TacsScalar dvals[], TacsScalar dderiv[] );
+
+  void init( TMROctForest *_forest, TACSVarMap *_varmap,
+             TacsScalar _aggregate_weight );
+
+  // The variable map
+  TACSVarMap *varmap;
 
   // The TMROctForest
   TMROctForest *forest;
