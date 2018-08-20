@@ -37,8 +37,6 @@ mesh = TMR.Mesh(comm, geo_new)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
-opts.frontal_quality_factor = 1.25
-opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 

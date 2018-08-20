@@ -1077,34 +1077,61 @@ within the vertex list\n");
   }
 
   // Check if any of the counts are zero
-  for ( int i = 0; i < num_vertices; i++ ){
-    if (verts[i] == 0){
-      const char *attr = NULL;
-      if (vertices[i] && (attr = vertices[i]->getAttribute())){
-        fprintf(stderr,
-                "TMRModel warning: Vertex %d with name %s unreferenced\n",
-                i, attr);
+  int print_all_errors = 0;
+
+  if (print_all_errors){
+    for ( int i = 0; i < num_vertices; i++ ){
+      if (verts[i] == 0){
+        const char *attr = NULL;
+        if (vertices[i] && (attr = vertices[i]->getAttribute())){
+          fprintf(stderr,
+                  "TMRModel warning: Vertex %d with name %s unreferenced\n",
+                  i, attr);
+        }
+        else {
+          fprintf(stderr,
+                  "TMRModel warning: Vertex %d unreferenced\n", i);
+        }
+        fail = 1;
       }
-      else {
-        fprintf(stderr,
-                "TMRModel warning: Vertex %d unreferenced\n", i);
+    }
+    for ( int i = 0; i < num_edges; i++ ){
+      if (crvs[i] == 0){
+        const char *attr = NULL;
+        if (edges[i] && (attr = edges[i]->getAttribute())){
+          fprintf(stderr,
+                  "TMRModel warning: Edge %d with name %s unreferenced\n",
+                  i, attr);
+        }
+        else {
+          fprintf(stderr,
+                  "TMRModel warning: Edge %d unreferenced\n", i);
+        }
+        fail = 1;
       }
-      fail = 1;
     }
   }
-  for ( int i = 0; i < num_edges; i++ ){
-    if (crvs[i] == 0){
-      const char *attr = NULL;
-      if (edges[i] && (attr = edges[i]->getAttribute())){
-        fprintf(stderr,
-                "TMRModel warning: Edge %d with name %s unreferenced\n",
-                i, attr);
+  else {
+    int verts_count = 0, crvs_count = 0;
+    for ( int i = 0; i < num_vertices; i++ ){
+      if (verts[i] == 0){
+        verts_count++;
+        fail = 1;
       }
-      else {
-        fprintf(stderr,
-                "TMRModel warning: Edge %d unreferenced\n", i);
+    }
+    for ( int i = 0; i < num_edges; i++ ){
+      if (crvs[i] == 0){
+        crvs_count++;
+        fail = 1;
       }
-      fail = 1;
+    }
+    if (verts_count > 0){
+      fprintf(stderr, "TMRModel warning: %d vertices unreferenced\n",
+              verts_count);
+    }
+    if (crvs_count > 0){
+      fprintf(stderr, "TMRModel warning: %d edges unreferenced\n",
+              crvs_count);
     }
   }
 
