@@ -2099,6 +2099,23 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
   for ( int i = 0; i < num_points; i++ ){
     face->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
   }
+
+  if (num_quads > 0){
+    // Smooth the copied mesh on the new surface
+    int *pts_to_quad_ptr;
+    int *pts_to_quads;
+    TMR_ComputeNodeToElems(num_points, num_quads, 4, quads,
+                           &pts_to_quad_ptr, &pts_to_quads);
+
+    // Smooth the mesh using a local optimization of node locations
+    TMR_QuadSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                      num_points, pts_to_quad_ptr, pts_to_quads,
+                      num_quads, quads, pts, X, face);
+
+    // Free the connectivity information
+    delete [] pts_to_quad_ptr;
+    delete [] pts_to_quads;
+  }
 }
 
 /*
