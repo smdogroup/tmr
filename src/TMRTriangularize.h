@@ -127,6 +127,7 @@ class TMRTriangle {
 
   // Quality metric
   float quality;
+  float R;
 };
 
 /*
@@ -143,9 +144,6 @@ class TMRTriangularize : public TMREntity {
                     int nsegs, const int segs[],
                     TMRFace *surf );
   ~TMRTriangularize();
-
-  // Set some options into the triangularization algorithm
-  void setFrontalQualityFactor( double factor );
 
   // Create the frontal mesh with the given mesh spacing
   void frontal( TMRMeshOptions options,
@@ -227,7 +225,7 @@ class TMRTriangularize : public TMREntity {
 
   // Compute the maximum edge length of the triangle
   double computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
-                           TMRElementFeatureSize *fs );
+                           TMRElementFeatureSize *fs, double *_R );
 
   // Form the Delaunay triangularization using an edge-flip algorithm
   void delaunayEdgeFlip();
@@ -240,9 +238,6 @@ class TMRTriangularize : public TMREntity {
 
   // The underlying surface
   TMRFace *face;
-
-  // The quality factor
-  double frontal_quality_factor;
 
   // Initial number of boundary points
   uint32_t init_boundary_points;

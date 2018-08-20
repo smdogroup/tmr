@@ -503,9 +503,6 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // Initialize the predicates code
   exactinit();
 
-  // Set the frontal quality acceptance factor
-  frontal_quality_factor = 1.5;
-
   // Set the surface
   face = surf;
   face->incref();
@@ -836,15 +833,6 @@ void TMRTriangularize::delaunayEdgeFlip(){
         }
       }
     }
-  }
-}
-
-/*
-  Set the frontal quality acceptance factor
-*/
-void TMRTriangularize::setFrontalQualityFactor( double factor ){
-  if (factor >= 1.25 && factor <= 2.0){
-    frontal_quality_factor = factor;
   }
 }
 
@@ -1944,7 +1932,8 @@ void TMRTriangularize::findEnclosing( const double pt[],
   a better one.
 */
 double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
-                                           TMRElementFeatureSize *fs ){
+                                           TMRElementFeatureSize *fs,
+                                           double *_R ){
   // The circumcircle of an equilateral triangle is sqrt(3)*h where h
   // is the side-length of the triangle
   const double sqrt3 = 1.73205080757;
@@ -1982,6 +1971,9 @@ double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
 
   // Compute the radius
   double R = sqrt(d1.dot(d1));
+  if (_R){
+    *_R = R;
+  }
 
   // Compute the center of the triangle
   d1.x = (X[u].x + X[v].x + X[w].x)/3.0;
@@ -2000,7 +1992,7 @@ class TMRTriangleCompare {
  public:
   bool operator()(TMRTriangle* const& A,
                   TMRTriangle* const& B){
-    return A->quality < B->quality;
+    return A->R > B->R;
   }
 };
 
@@ -2018,6 +2010,15 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
   std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
     TMRTriangleCompare> active;
 
+  // Get the quality factor
+  double frontal_quality_factor = options.frontal_quality_factor;
+  if (options.frontal_quality_factor > 2.0){
+    frontal_quality_factor = 2.0;
+  }
+  else if (options.frontal_quality_factor < 1.01){
+    frontal_quality_factor = 1.01;
+  }
+
   // Add the triangles to the active set that
   TriListNode *node = list_start;
   while (node){
@@ -2027,7 +2028,9 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
       // Compute the 'quality' indicator for this triangle
       TMRTriangle t = node->tri;
-      node->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs);
+      double R = 0.0;
+      node->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs, &R);
+      node->tri.R = R;
       if (node->tri.quality < frontal_quality_factor){
         node->tri.status = ACCEPTED;
       }
@@ -2240,11 +2243,12 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
         // Solve for the surface location that satisfies
         // ||X - X[u]||_{2} = de and
         // ||X - X[v]||_{2} = de
-        TMRPoint du, dv;
+        TMRPoint du;
         du.x = Xpt.x - X[u].x;
         du.y = Xpt.y - X[u].y;
         du.z = Xpt.z - X[u].z;
 
+        TMRPoint dv;
         dv.x = Xpt.x - X[v].x;
         dv.y = Xpt.y - X[v].y;
         dv.z = Xpt.z - X[v].z;
@@ -2272,8 +2276,8 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
         TmrLAPACKdgetrf(&n, &n, A, &n, ipiv, &info);
         TmrLAPACKdgetrs("N", &n, &one, A, &n, ipiv, r, &n, &info);
 
-        // Guard against moving the u/v coordinates outside the domain
-        // of the problem
+        // Guard against moving the u/v coordinates outside the
+        // domain of the surface
         double umin, umax, vmin, vmax;
         face->getRange(&umin, &vmin, &umax, &vmax);
         if (pt[0] + r[0] > umax){
@@ -2324,7 +2328,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
         // already been accepted. This is not permitted, so we
         // continue...
         pt_tri = NULL;
-        htrial *= 0.75;
+        htrial *= 0.5;
       }
     }
 
@@ -2338,7 +2342,8 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     dpt.y = dpt.y - X[w].y;
     dpt.z = dpt.z - X[w].z;
 
-    double beta = 0.6;
+    // Reject points that are too close to other points
+    double beta = 0.25;
     if (dpt.dot(dpt) < beta*h*h){
       pt_tri = NULL;
     }
@@ -2379,7 +2384,9 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       }
       while (ptr){
         TMRTriangle t = ptr->tri;
-        ptr->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs);
+        double R = 0.0;
+        ptr->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs, &R);
+        ptr->tri.R = R;
         if (ptr->tri.quality < frontal_quality_factor){
           ptr->tri.status = ACCEPTED;
         }
@@ -2448,7 +2455,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
   t0 = MPI_Wtime() - t0;
 
-  if (options.mesh_type_default != TMR_TRIANGLE){
+  if (face && options.mesh_type_default != TMR_TRIANGLE){
     // Ensure that we do not have isolated triangles on the boundary
     // which will cause problems if we do a conversion to a
     // quadrilateral mesh. This will not do "good" things to the
@@ -2470,21 +2477,33 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
           completeMe(u, w, &t3);
 
           if (!t1 && !t2){
+            TMRPoint p;
+            p.x = 0.5*(X[u].x + X[w].x);
+            p.y = 0.5*(X[u].y + X[w].y);
+            p.z = 0.5*(X[u].z + X[w].z);
+
             double pt[2];
-            pt[0] = 0.5*(pts[2*u] + pts[2*w]);
-            pt[1] = 0.5*(pts[2*u+1] + pts[2*w+1]);
+            face->invEvalPoint(p, &pt[0], &pt[1]);
             addPointToMesh(pt, face);
           }
           else if (!t2 && !t3){
+            TMRPoint p;
+            p.x = 0.5*(X[u].x + X[v].x);
+            p.y = 0.5*(X[u].y + X[v].y);
+            p.z = 0.5*(X[u].z + X[v].z);
+
             double pt[2];
-            pt[0] = 0.5*(pts[2*u] + pts[2*v]);
-            pt[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
+            face->invEvalPoint(p, &pt[0], &pt[1]);
             addPointToMesh(pt, face);
           }
           else if (!t1 && !t3){
+            TMRPoint p;
+            p.x = 0.5*(X[v].x + X[w].x);
+            p.y = 0.5*(X[v].y + X[w].y);
+            p.z = 0.5*(X[v].z + X[w].z);
+
             double pt[2];
-            pt[0] = 0.5*(pts[2*v] + pts[2*w]);
-            pt[1] = 0.5*(pts[2*v+1] + pts[2*w+1]);
+            face->invEvalPoint(p, &pt[0], &pt[1]);
             addPointToMesh(pt, face);
           }
         }
@@ -2495,53 +2514,6 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
   // Free the deleted trianlges from the doubly linked list
   deleteTrianglesFromList();
-
-  /*
-  // Now apply smoothing and re-delaunay the mesh. This only has an
-  // impact if there is a surface, so we check for that first.
-  if (face){
-    // The number of points in the mesh
-    int npts = (num_points - FIXED_POINT_OFFSET);
-
-    // Compute the triangle edges and neighbors in the dual mesh
-    double *_pts = &pts[2*FIXED_POINT_OFFSET];
-    TMRPoint *_X = &X[FIXED_POINT_OFFSET];
-
-    // Get the connectivity
-    int *conn;
-    getMesh(NULL, NULL, &conn, NULL, NULL);
-
-    // Get the edge information based on the connectivity
-    int num_tri_edges;
-    int *tri_edges, *tri_neighbors, *dual_edges;
-    TMR_ComputeTriEdges(npts, num_triangles, conn,
-                        &num_tri_edges, &tri_edges,
-                        &tri_neighbors, &dual_edges);
-
-    // The number of points (listed first) that cannot be moved by the
-    // smoothing algorithm
-    int num_fixed_pts = init_boundary_points;
-
-    // Smooth the resulting triangular mesh
-    if (options.tri_smoothing_type == TMRMeshOptions::TMR_LAPLACIAN){
-      TMR_LaplacianSmoothing(options.num_smoothing_steps, num_fixed_pts,
-                             num_tri_edges, tri_edges,
-                             npts, _pts, _X, face);
-    }
-    else {
-      double alpha = 0.1;
-      TMR_SpringSmoothing(options.num_smoothing_steps, alpha,
-                          num_fixed_pts, num_tri_edges, tri_edges,
-                          npts, _pts, _X, face);
-    }
-
-    // Perform the delaunay edge flip algorithm
-    delaunayEdgeFlip();
-
-    // Free the deleted trianlges from the doubly linked list
-    deleteTrianglesFromList();
-  }
-  */
 
   if (options.triangularize_print_level > 0){
     printf("%10d %10d\n", iter, num_triangles);

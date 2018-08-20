@@ -229,7 +229,7 @@ class TMRFaceMesh : public TMREntity {
 
   // Simplify the quadrilateral mesh to remove points that make
   // for a poor quadrilateral mesh
-  void simplifyQuads();
+  void simplifyQuads( int flag );
 
   // Compute recombined triangle information
   int getRecombinedQuad( const int tris[], const int trineighbors[],
@@ -242,6 +242,29 @@ class TMRFaceMesh : public TMREntity {
   double computeQuadQuality( const int *quad, const TMRPoint *p );
   double computeTriQuality( const int *tri, const TMRPoint *p );
 
+  // Compute the locations of the hole points
+  void computeHolePts( const int nloops, int hole_pt,
+                       const int *loop_pt_offset,
+                       const int *segments, double *params );
+
+  // Map the source face to the target face
+  void mapSourceToTarget( TMRMeshOptions options, const double *params );
+
+  // Create a structured mesh
+  void createStructuredMesh( TMRMeshOptions options, const double *params );
+
+  // Create an unstructured mesh
+  void createUnstructuredMesh( TMRMeshOptions options,
+                               TMRElementFeatureSize *fs,
+                               TMRFaceMeshType mesh_type,
+                               const int total_num_pts, const int nholes,
+                               const double *params,
+                               const int nsegs, const int *segments,
+                               const int num_degen, const int *degen,
+                               int *npts, double **param_pts, TMRPoint **Xpts,
+                               int *nquads, int **mesh_quads,
+                               int *ntris, int **mesh_tris );
+
   // The underlying surface
   MPI_Comm comm;
   TMRFace *face;
@@ -250,7 +273,7 @@ class TMRFaceMesh : public TMREntity {
   TMRFaceMeshType mesh_type;
 
   // Points in the mesh
-  int num_fixed_pts; // number of fixed points
+  int num_fixed_pts; // number of fixed points on the boundary
   int num_points; // The number of point locations
   double *pts; // The parametric node locations
   TMRPoint *X; // The physical node locations
