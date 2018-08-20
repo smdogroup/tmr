@@ -1393,7 +1393,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
           if (next >= loop_pt_offset[loop+1]){
             next = loop_pt_offset[loop];
           }
-          if (prev < 0){
+          if (prev < loop_pt_offset[loop]){
             prev = loop_pt_offset[loop+1]-1;
           }
 
@@ -1437,7 +1437,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
               if (next >= loop_pt_offset[loop+1]){
                 next = loop_pt_offset[loop];
               }
-              if (prev < 0){
+              if (prev < loop_pt_offset[loop]){
                 prev = loop_pt_offset[loop+1]-1;
               }
 
@@ -2211,8 +2211,8 @@ cannot perform recombination\n");
 
       // Simplify the new quadrilateral mesh by removing
       // points/quads with poor quality/connectivity
-      for ( int k = 0; k < 4; k++ ){
-        simplifyQuads(k < 2);
+      for ( int k = 0; k < 5; k++ ){
+        simplifyQuads(0);
       }
 
       // Free the triangular mesh data
@@ -2838,7 +2838,7 @@ Quad %d from triangles %d and %d failed\n",
   |     \ /     |         |      |      |
   x ---- x ---- x         x ---- x ---- x
 */
-void TMRFaceMesh::simplifyQuads( int flag ){
+void TMRFaceMesh::simplifyQuads( int dummy_flag ){
   // Compute the node -> quad information
   int *ptr, *pts_to_quads;
   TMR_ComputeNodeToElems(num_points, num_quads, 4, quads,
@@ -2904,11 +2904,29 @@ void TMRFaceMesh::simplifyQuads( int flag ){
       // quadrilateral
       int p1 = quads[4*i+j1];
       int p2 = quads[4*i+j2];
+
+      int collapse = 0;
       if (p1 >= 0 && p2 >= 0 &&
           p1 >= num_fixed_pts &&
-          p2 >= num_fixed_pts &&
-          (ptr[p1+1] - ptr[p1] == 3 &&
-           ptr[p2+1] - ptr[p2] == 3)){
+          p2 >= num_fixed_pts){
+        // If the quad is in the interior
+        if ((ptr[p1+1] - ptr[p1] == 3 &&
+             ptr[p2+1] - ptr[p2] == 3)){
+          collapse = 1;
+        }
+        // If the quad is on the boundary, collapse it if the degree of the
+        // nodes are one larger
+        if ((quads[4*i+((j1+1) % 4)] < num_fixed_pts ||
+             quads[4*i+((j2+1) % 4)] < num_fixed_pts) &&
+            ((ptr[p1+1] - ptr[p1] == 3 &&
+              ptr[p2+1] - ptr[p2] <= 4) || 
+             (ptr[p2+1] - ptr[p2] == 3 &&
+              ptr[p1+1] - ptr[p1] <= 4))){
+          collapse = 1;
+        }             
+      }
+
+      if (collapse){
         // Check whether any of the quadrilaterals which touch either
         // p1 or p2 have negative indices or are on a boundary.
         int flag = 0;
