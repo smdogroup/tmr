@@ -89,6 +89,9 @@ class TMRMeshOptions {
     tri_smoothing_type = TMR_LAPLACIAN;
     frontal_quality_factor = 1.5;
 
+    // By default, reset the mesh objects
+    reset_mesh_objects = 1;
+
     // By default, write nothing to any files
     write_init_domain_triangle = 0;
     write_triangularize_intermediate = 0;
@@ -112,6 +115,9 @@ class TMRMeshOptions {
   int num_smoothing_steps;
   TriangleSmoothingType tri_smoothing_type;
   double frontal_quality_factor;
+
+  // Reset the mesh objects in each geometry object
+  int reset_mesh_objects;
 
   // Write intermediate surface meshes to file
   int write_init_domain_triangle;
@@ -168,7 +174,9 @@ class TMREdgeMesh : public TMREntity {
 */
 class TMRFaceMesh : public TMREntity {
  public:
-  TMRFaceMesh( MPI_Comm _comm, TMRFace *face );
+  TMRFaceMesh( MPI_Comm _comm, TMRFace *face,
+               TMRPoint *_X=NULL, int _npts=0,
+               const int *_quads=NULL, int _nquads=0 );
   ~TMRFaceMesh();
 
   // Retrieve the underlying surface
@@ -278,6 +286,9 @@ class TMRFaceMesh : public TMREntity {
   double *pts; // The parametric node locations
   TMRPoint *X; // The physical node locations
   int *vars; // The global variable numbers
+
+  // Record whether this mesh is prescribed
+  int prescribed_mesh;
 
   // Quadrilateral surface mesh information
   int num_quads;
