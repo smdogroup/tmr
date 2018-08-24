@@ -878,11 +878,21 @@ double integrateEdge( TMREdge *edge, TMRElementFeatureSize *fs,
   return len;
 }
 
+class EdgePt {
+ public:
+  TMRPoint p;
+  double t;
+  
+  static int compare( const void *a, const void *b ){
+    return (static_cast<const EdgePt*>(a))->t < (static_cast<const EdgePt*>(b))->t;
+  }
+};
 
 /*
   Create a mesh along curve
 */
-TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge ){
+TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge,
+                          TMRPoint *_X, int _npts ){
   comm = _comm;
   edge = _edge;
   edge->incref();
@@ -891,6 +901,40 @@ TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge ){
   pts = NULL;
   X = NULL;
   vars = NULL;
+
+  prescribed_mesh = 0;
+
+  if (_X && _npts > 0){
+    prescribed_mesh = 1;
+
+    // Allocate space for the number of points
+    npts = _npts;
+
+    // Allocate an array of the edge points
+    EdgePt *epts = new EdgePt[ npts ];
+    for ( int i = 0; i < npts; i++ ){
+      double t;
+      edge->invEvalPoint(_X[i], &t);
+      epts[i].p = _X[i];
+      epts[i].t = t;
+    }
+
+    // Sort the edges
+    qsort(epts, npts, sizeof(EdgePt), EdgePt::compare);
+
+    // Retrieve the sorted points
+    pts = new double[ npts ];
+    X = new TMRPoint[ npts ];
+
+    // Copy over the point locations
+    for ( int i = 0; i < npts; i++ ){
+      pts[i] = epts[i].t;
+      X[i] = epts[i].p;
+    }
+
+    // Free the edge points
+    delete [] epts;
+  }
 }
 
 /*
@@ -1114,15 +1158,190 @@ TMRFaceMesh::TMRFaceMesh( MPI_Comm _comm, TMRFace *_face,
   // Check if the input mesh is consistent
   if (_X && _quads && _npts > 0 && _nquads > 0){
     prescribed_mesh = 1;
+
+    // Check that all the edge meshes are already defined...
+    for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+      // Get the curve information for this loop segment
+      TMREdgeLoop *loop;
+      face->getEdgeLoop(k, &loop);
+
+      int nedges;
+      TMREdge **edges;
+      const int *dir;
+      loop->getEdgeLoop(&nedges, &edges, &dir);
+
+      for ( int i = 0; i < nedges; i++ ){
+        // Retrieve the underlying curve mesh
+        TMREdgeMesh *mesh = NULL;
+        edges[i]->getMesh(&mesh);
+
+        if (!mesh){
+          prescribed_mesh = 0;
+        }
+      }
+    }
+
+    // The edge meshes are not defined: cannot prescribe the mesh
+    if (!prescribed_mesh){
+      fprintf(stderr, "TMRFaceMesh: Must prescribe all edge meshes \
+for a prescribed face mesh\n");
+      return;
+    }
+
+    // Otherwise, we can now prescribe the mesh
     mesh_type = TMR_UNSTRUCTURED;
     num_points = _npts;
     num_quads = _nquads;
-    X = new TMRPoint[ num_points ];
-    memcpy(X, _X, num_points*sizeof(TMRPoint));
+
+    // Compute a mapping that places the edge nodes first in the correct order
+    int *node_mapping = new int[ num_points ];
+
+    // Set all the variable values to negative
+    for ( int i = 0; i < num_points; i++ ){
+      node_mapping[i] = -1;
+    }
+
+    // Keep track of whether we encounter any problems
+    int fail = 0;
+
+    // Retrieve the boundary node numbers from the surface loops
+    int pt = 0;
+    for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+      // Get the curve information for this loop segment
+      TMREdgeLoop *loop;
+      face->getEdgeLoop(k, &loop);
+
+      int nedges;
+      TMREdge **edges;
+      const int *dir;
+      loop->getEdgeLoop(&nedges, &edges, &dir);
+
+      for ( int i = 0; i < nedges; i++ ){
+        // Retrieve the underlying curve mesh
+        TMREdgeMesh *mesh = NULL;
+        edges[i]->getMesh(&mesh);
+
+        // Retrieve the variable numbers for this loop
+        const int *edge_vars;
+        int npts = mesh->getNodeNums(&edge_vars);
+
+        // Get the points along the edge
+        TMRPoint *Xedge;
+        mesh->getMeshPoints(NULL, NULL, &Xedge);
+
+        // Find the closest point
+        if (edges[i]->isDegenerate()){
+          int min_k = -1;
+          double min_dist = 1e20;
+          for ( int k = 0; k < num_points; k++ ){
+            double dist =
+              (Xedge[0].x - _X[k].x)*(Xedge[0].x - _X[k].x) +
+              (Xedge[0].y - _X[k].y)*(Xedge[0].y - _X[k].y) +
+              (Xedge[0].z - _X[k].z)*(Xedge[0].z - _X[k].z);
+            if (dist < min_dist){
+              min_dist = dist;
+              min_k = k;
+            }
+          }
+          if (node_mapping[min_k] == -1){
+            node_mapping[min_k] = pt;
+            pt++;
+          }
+          else {
+            fail = 1;
+          }
+        }
+        else {
+          // Find the point on the curve
+          if (dir[i] > 0){
+            for ( int j = 0; j < npts-1; j++ ){
+              int min_k = -1;
+              double min_dist = 1e20;
+              for ( int k = 0; k < num_points; k++ ){
+                double dist =
+                  (Xedge[j].x - _X[k].x)*(Xedge[j].x - _X[k].x) +
+                  (Xedge[j].y - _X[k].y)*(Xedge[j].y - _X[k].y) +
+                  (Xedge[j].z - _X[k].z)*(Xedge[j].z - _X[k].z);
+                if (dist < min_dist){
+                  min_dist = dist;
+                  min_k = k;
+                }
+              }
+              if (node_mapping[min_k] == -1){
+                node_mapping[min_k] = pt;
+                pt++;
+              }
+              else {
+                fail = 1;
+              }
+            }
+          }
+          else {
+            for ( int j = npts-1; j >= 1; j-- ){
+              int min_k = -1;
+              double min_dist = 1e20;
+              for ( int k = 0; k < num_points; k++ ){
+                double dist =
+                  (Xedge[j].x - _X[k].x)*(Xedge[j].x - _X[k].x) +
+                  (Xedge[j].y - _X[k].y)*(Xedge[j].y - _X[k].y) +
+                  (Xedge[j].z - _X[k].z)*(Xedge[j].z - _X[k].z);
+                if (dist < min_dist){
+                  min_dist = dist;
+                  min_k = k;
+                }
+              }
+              if (node_mapping[min_k] == -1){
+                node_mapping[min_k] = pt;
+                pt++;
+              }
+              else {
+                fail = 1;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Abandon the prescribed mesh
+    if (fail){
+      prescribed_mesh = 0;
+      mesh_type = TMR_NO_MESH;
+      num_points = 0;
+      num_quads = 0;
+      delete [] node_mapping;
+      fprintf(stderr, "TMRFaceMesh: Failed to map edge nodes\n");
+      return;
+    }
+
+    // Set the number of fixed points
+    num_fixed_pts = pt;
+
+    // Find the un-ordered nodes
+    for ( int i = 0; i < num_points; i++ ){
+      if (node_mapping[i] < 0){
+        node_mapping[i] = pt;
+        pt++;
+      }
+    }
+
+    // Copy over the quadrilaterals
     quads = new int[ 4*num_quads ];
     memcpy(quads, _quads, 4*num_quads*sizeof(int));
+    for ( int i = 0; i < 4*num_quads; i++ ){
+      quads[i] = node_mapping[quads[i]];
+    }
 
-    // Find the parametric points on the face
+    // Now copy over the node locations
+    X = new TMRPoint[ num_points ];
+    for ( int i = 0; i < num_points; i++ ){
+      X[node_mapping[i]] = _X[i];
+    }
+
+    // Free the mapping
+    delete [] node_mapping;
+
+    // Set the point locations
     pts = new double[ 2*num_points ];
     for ( int i = 0; i < num_points; i++ ){
       face->invEvalPoint(X[i], &pts[2*i], &pts[2*i+1]);
@@ -1148,7 +1367,7 @@ TMRFaceMesh::~TMRFaceMesh(){
 void TMRFaceMesh::mesh( TMRMeshOptions options,
                         TMRElementFeatureSize *fs ){
   // Check if the mesh has already been allocated
-  if (X && pts && quads){
+  if (prescribed_mesh){
     return;
   }
 
@@ -2127,6 +2346,23 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
   for ( int i = 0; i < num_points; i++ ){
     face->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
   }
+
+  if (num_quads > 0){
+    // Smooth the copied mesh on the new surface
+    int *pts_to_quad_ptr;
+    int *pts_to_quads;
+    TMR_ComputeNodeToElems(num_points, num_quads, 4, quads,
+                           &pts_to_quad_ptr, &pts_to_quads);
+
+    // Smooth the mesh using a local optimization of node locations
+    TMR_QuadSmoothing(options.num_smoothing_steps, num_fixed_pts,
+                      num_points, pts_to_quad_ptr, pts_to_quads,
+                      num_quads, quads, pts, X, face);
+
+    // Free the connectivity information
+    delete [] pts_to_quad_ptr;
+    delete [] pts_to_quads;
+  }
 }
 
 /*
@@ -2305,154 +2541,54 @@ int TMRFaceMesh::setNodeNums( int *num ){
   if (!vars){
     vars = new int[ num_points ];
 
-    if (prescribed_mesh){
-      // Set all the variable values to negative
-      for ( int i = 0; i < num_points; i++ ){
-        vars[i] = -1;
-      }
+    // Retrieve the boundary node numbers from the surface loops
+    int pt = 0;
+    for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+      // Get the curve information for this loop segment
+      TMREdgeLoop *loop;
+      face->getEdgeLoop(k, &loop);
 
-      // Retrieve the boundary node numbers from the surface loops
-      for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
-        // Get the curve information for this loop segment
-        TMREdgeLoop *loop;
-        face->getEdgeLoop(k, &loop);
+      int nedges;
+      TMREdge **edges;
+      const int *dir;
+      loop->getEdgeLoop(&nedges, &edges, &dir);
 
-        int nedges;
-        TMREdge **edges;
-        const int *dir;
-        loop->getEdgeLoop(&nedges, &edges, &dir);
+      for ( int i = 0; i < nedges; i++ ){
+        // Retrieve the underlying curve mesh
+        TMREdgeMesh *mesh = NULL;
+        edges[i]->getMesh(&mesh);
 
-        for ( int i = 0; i < nedges; i++ ){
-          // Retrieve the underlying curve mesh
-          TMREdgeMesh *mesh = NULL;
-          edges[i]->getMesh(&mesh);
+        // Retrieve the variable numbers for this loop
+        const int *edge_vars;
+        int npts = mesh->getNodeNums(&edge_vars);
 
-          // Retrieve the variable numbers for this loop
-          const int *edge_vars;
-          int npts = mesh->getNodeNums(&edge_vars);
-
-          // Get the points along the edge
-          TMRPoint *Xedge;
-          mesh->getMeshPoints(NULL, NULL, &Xedge);
-
-          // Find the closest point
-          if (edges[i]->isDegenerate()){
-            int min_k = -1;
-            double min_dist = 1e20;
-            for ( int k = 0; k < num_points; k++ ){
-              double dist = 
-                (Xedge[0].x - X[k].x)*(Xedge[0].x - X[k].x) +
-                (Xedge[0].y - X[k].y)*(Xedge[0].y - X[k].y) +
-                (Xedge[0].z - X[k].z)*(Xedge[0].z - X[k].z);
-              if (dist < min_dist){
-                min_dist = dist;
-                min_k = k;
-              }                  
+        if (edges[i]->isDegenerate()){
+          vars[pt] = edge_vars[0];
+        }
+        else {
+          // Find the point on the curve
+          if (dir[i] > 0){
+            for ( int j = 0; j < npts-1; j++, pt++ ){
+              vars[pt] = edge_vars[j];
             }
-            vars[min_k] = edge_vars[0];
           }
           else {
-            // Find the point on the curve
-            if (dir[i] > 0){
-              for ( int j = 0; j < npts-1; j++ ){
-                int min_k = -1;
-                double min_dist = 1e20;
-                for ( int k = 0; k < num_points; k++ ){
-                  double dist = 
-                    (Xedge[j].x - X[k].x)*(Xedge[j].x - X[k].x) +
-                    (Xedge[j].y - X[k].y)*(Xedge[j].y - X[k].y) +
-                    (Xedge[j].z - X[k].z)*(Xedge[j].z - X[k].z);
-                  if (dist < min_dist){
-                    min_dist = dist;
-                    min_k = k;
-                  }                  
-                }
-                vars[min_k] = edge_vars[j];
-              }
-            }
-            else {
-              for ( int j = npts-1; j >= 1; j-- ){
-                int min_k = -1;
-                double min_dist = 1e20;
-                for ( int k = 0; k < num_points; k++ ){
-                  double dist = 
-                    (Xedge[j].x - X[k].x)*(Xedge[j].x - X[k].x) +
-                    (Xedge[j].y - X[k].y)*(Xedge[j].y - X[k].y) +
-                    (Xedge[j].z - X[k].z)*(Xedge[j].z - X[k].z);
-                  if (dist < min_dist){
-                    min_dist = dist;
-                    min_k = k;
-                  }                  
-                }
-                vars[min_k] = edge_vars[j];
-              }
+            for ( int j = npts-1; j >= 1; j--, pt++ ){
+              vars[pt] = edge_vars[j];
             }
           }
         }
       }
-
-      int new_pts = 0;
-      for ( int i = 0; i < num_points; i++ ){
-        if (vars[i] < 0){
-          vars[i] = *num;
-          (*num)++;
-          new_pts++;
-        }
-      }
-
-      // Return the number of new points
-      return new_pts;
     }
-    else {
-      // Retrieve the boundary node numbers from the surface loops
-      int pt = 0;
-      for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
-        // Get the curve information for this loop segment
-        TMREdgeLoop *loop;
-        face->getEdgeLoop(k, &loop);
 
-        int nedges;
-        TMREdge **edges;
-        const int *dir;
-        loop->getEdgeLoop(&nedges, &edges, &dir);
-
-        for ( int i = 0; i < nedges; i++ ){
-          // Retrieve the underlying curve mesh
-          TMREdgeMesh *mesh = NULL;
-          edges[i]->getMesh(&mesh);
-
-          // Retrieve the variable numbers for this loop
-          const int *edge_vars;
-          int npts = mesh->getNodeNums(&edge_vars);
-
-          if (edges[i]->isDegenerate()){
-            vars[pt] = edge_vars[0];
-          }
-          else {
-            // Find the point on the curve
-            if (dir[i] > 0){
-              for ( int j = 0; j < npts-1; j++, pt++ ){
-                vars[pt] = edge_vars[j];
-              }
-            }
-            else {
-              for ( int j = npts-1; j >= 1; j--, pt++ ){
-                vars[pt] = edge_vars[j];
-              }
-            }
-          }
-        }
-      }
-
-      // Now order the variables as they arrive
-      for ( ; pt < num_points; pt++ ){
-        vars[pt] = *num;
-        (*num)++;
-      }
-
-      // Return the number of points that have been allocated
-      return num_points - num_fixed_pts;
+    // Now order the variables as they arrive
+    for ( ; pt < num_points; pt++ ){
+      vars[pt] = *num;
+      (*num)++;
     }
+
+    // Return the number of points that have been allocated
+    return num_points - num_fixed_pts;
   }
 
   return 0;
@@ -3047,11 +3183,11 @@ void TMRFaceMesh::simplifyQuads( int dummy_flag ){
         if ((quads[4*i+((j1+1) % 4)] < num_fixed_pts ||
              quads[4*i+((j2+1) % 4)] < num_fixed_pts) &&
             ((ptr[p1+1] - ptr[p1] == 3 &&
-              ptr[p2+1] - ptr[p2] <= 4) || 
+              ptr[p2+1] - ptr[p2] <= 4) ||
              (ptr[p2+1] - ptr[p2] == 3 &&
               ptr[p1+1] - ptr[p1] <= 4))){
           collapse = 1;
-        }             
+        }
       }
 
       if (collapse){
@@ -4431,7 +4567,7 @@ void TMRMesh::mesh( TMRMeshOptions options,
       TMRVolumeMesh *mesh = NULL;
       volumes[i]->getMesh(&mesh);
       num_hex += mesh->getHexConnectivity(NULL);
-      num_hex += mesh->getTetConnectivity(NULL);
+      num_tet += mesh->getTetConnectivity(NULL);
     }
   }
   if (num_faces > 0){

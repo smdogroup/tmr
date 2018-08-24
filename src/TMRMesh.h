@@ -135,7 +135,8 @@ class TMRMeshOptions {
 */
 class TMREdgeMesh : public TMREntity {
  public:
-  TMREdgeMesh( MPI_Comm _comm, TMREdge *edge );
+  TMREdgeMesh( MPI_Comm _comm, TMREdge *edge,
+               TMRPoint *_X=NULL, int _npts=0 );
   ~TMREdgeMesh();
 
   // Is this edge mesh degenerate
@@ -158,6 +159,9 @@ class TMREdgeMesh : public TMREntity {
  private:
   MPI_Comm comm;
   TMREdge *edge;
+
+  // Keep track if this mesh is prescribed
+  int prescribed_mesh;
 
   // The parametric locations of the points that are obtained from
   // meshing the curve

@@ -1183,9 +1183,21 @@ cdef class Mesh:
 
 cdef class EdgeMesh:
     cdef TMREdgeMesh *ptr
-    def __cinit__(self, MPI.Comm comm, Edge e):
+    def __cinit__(self, MPI.Comm comm, Edge e,
+                  np.ndarray[double, ndim=2, mode='c'] _X=None):
         cdef MPI_Comm c_comm = comm.ob_mpi
-        self.ptr = new TMREdgeMesh(c_comm, e.ptr)
+        cdef TMRPoint *X = NULL
+        cdef int npts = 0
+        if _X is not None:
+            npts = _X.shape[0]
+            X = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
+            for i in range(npts):
+                X[i].x = _X[i,0]
+                X[i].y = _X[i,1]
+                X[i].z = _X[i,2]
+        self.ptr = new TMREdgeMesh(c_comm, e.ptr, X, npts)
+        if X:
+            free(X)
         self.ptr.incref()
 
     def __dealloc__(self):
@@ -1246,6 +1258,10 @@ cdef class FaceMesh:
         else:
             self.ptr.mesh(opts.ptr, fs)
         fs.decref()
+
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_str_to_chars(fname)
+        self.ptr.writeToVTK(filename)
 
 cdef class Topology:
     cdef TMRTopology *ptr

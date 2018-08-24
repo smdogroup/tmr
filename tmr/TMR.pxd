@@ -253,12 +253,13 @@ cdef extern from "TMRMesh.h":
         void writeToBDF(const char*, int)
 
     cdef cppclass TMREdgeMesh(TMREntity):
-        TMREdgeMesh(MPI_Comm, TMREdge*)
+        TMREdgeMesh(MPI_Comm, TMREdge*, TMRPoint*, int)
         void mesh(TMRMeshOptions, TMRElementFeatureSize*)
 
     cdef cppclass TMRFaceMesh(TMREntity):
         TMRFaceMesh(MPI_Comm, TMRFace*, TMRPoint*, int, int*, int)
         void mesh(TMRMeshOptions, TMRElementFeatureSize*)
+        void writeToVTK(const char*)
 
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
