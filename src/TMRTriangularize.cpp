@@ -1936,7 +1936,7 @@ double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
                                            double *_R ){
   // The circumcircle of an equilateral triangle is sqrt(3)*h where h
   // is the side-length of the triangle
-  const double sqrt3 = 1.73205080757;
+  const double sqrt3 = 1.7320508075688772;
 
   // Compute the edge lengths in physical space
   TMRPoint d1;
@@ -1949,7 +1949,9 @@ double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
   d2.y = X[w].y - X[u].y;
   d2.z = X[w].z - X[u].z;
 
-  double dot = d1.dot(d2)/d1.dot(d1);
+  // Compute the dot product
+  double d1d = d1.dot(d1);
+  double dot = d1.dot(d2)/d1d;
 
   // Compute the perpendicular component along the second direction
   // that we'll use to determine the center point
@@ -1981,20 +1983,20 @@ double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
   d1.z = (X[u].z + X[v].z + X[w].z)/3.0;
   double h = fs->getFeatureSize(d1);
 
-  return sqrt3*R/h;
+  return (sqrt3*R/h);
 }
 
 /*
   Class for comparing triangle quality that is used within the frontal
   code.
 */
-class TMRTriangleCompare {
- public:
-  bool operator()(TMRTriangle* const& A,
-                  TMRTriangle* const& B){
-    return A->R > B->R;
-  }
-};
+// class TMRTriangleCompare {
+//  public:
+//   bool operator()(TMRTriangle* const& A,
+//                   TMRTriangle* const& B){
+//     return A->R < B->R;
+//   }
+// };
 
 /*
   Perform a frontal mesh generation algorithm to create a constrained
@@ -2007,8 +2009,10 @@ class TMRTriangleCompare {
 void TMRTriangularize::frontal( TMRMeshOptions options,
                                 TMRElementFeatureSize *fs ){
   // The queue of active (and sometimes deleted) triangles
-  std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
-    TMRTriangleCompare> active;
+  // std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
+  //   TMRTriangleCompare> active;
+
+  std::queue<TMRTriangle*> active;
 
   // Get the quality factor
   double frontal_quality_factor = options.frontal_quality_factor;
@@ -2117,7 +2121,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       // This wonderful syntax brought to you by C++! Constant
       // reference to a pointer, which we can just copy to a
       // non-constant pointer.
-      TMRTriangle* const& tri_ptr = active.top();
+      TMRTriangle* const& tri_ptr = active.front();
       tri = tri_ptr;
 
       // Pop the top member of the priority queue, but only use it if
