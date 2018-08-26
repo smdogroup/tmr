@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,6 +21,8 @@
 #include "TMRTriangularize.h"
 #include "TMRPerfectMatchInterface.h"
 #include "TMRHashFunction.h"
+#include "TMRMesh.h"
+#include "TMRMeshSmoothing.h"
 #include "predicates.h"
 #include "tmrlapack.h"
 #include <math.h>
@@ -45,7 +47,7 @@ static int compare_edges( const void *avoid, const void *bvoid ){
   // Cast the input to uint32_t types
   const uint32_t *a = static_cast<const uint32_t*>(avoid);
   const uint32_t *b = static_cast<const uint32_t*>(bvoid);
-  
+
   // Extract the x/y locations for the a and b points
   uint32_t ax = a[0], ay = a[1];
   uint32_t bx = b[0], by = b[1];
@@ -80,7 +82,7 @@ class TriQueueNode {
   The triangle priority queue
 
   This enables the storage of a list of triangles that can
-  be accessed 
+  be accessed
 */
 class TriQueue {
  public:
@@ -95,7 +97,7 @@ class TriQueue {
     while (start){
       TriQueueNode *tmp = start->next;
       delete start;
-      start = tmp;      
+      start = tmp;
     }
   }
 
@@ -133,7 +135,7 @@ class TriQueue {
       size++;
     }
   }
-  
+
   // Delete the *next* entry in the list after the provided
   // pointer. Note that this is required since we only have a pointer
   // to the next entry in the list (and not the previous one). This
@@ -142,7 +144,7 @@ class TriQueue {
     if (node && node->next){
       // Pointer to the entry to be deleted
       TriQueueNode *next = node->next;
-      
+
       // Adjust the 'next' pointer to point past the entry that will
       // be deleted
       node->next = next->next;
@@ -247,7 +249,7 @@ TMRQuadNode::~TMRQuadNode(){
 void TMRQuadNode::addNode( uint32_t num, const double pt[] ){
   // If any of the children have been allocated, searh them for
   // the place where the node should be added
-  if (low_left){    
+  if (low_left){
     if (pt[0] <= x && pt[1] <= y){
       low_left->addNode(num, pt);
     }
@@ -345,7 +347,7 @@ int TMRQuadNode::deleteNode( uint32_t num, const double pt[] ){
   }
   // Decrease the number of points to account for the deleted node
   num_points--;
-    
+
   // The point was found
   return 1;
 }
@@ -373,7 +375,7 @@ uint32_t TMRQuadNode::findClosest( const double pt[], double *_dist ){
   scan multiple quadrants to ensure that we have, in fact, located the
   closest point to the provided point.
 */
-void TMRQuadNode::findClosest( const double pt[], 
+void TMRQuadNode::findClosest( const double pt[],
                                uint32_t *index, double *dist ){
   // Scan through the quadtree
   if (low_left){
@@ -441,7 +443,7 @@ void TMRQuadNode::findClosest( const double pt[],
 }
 
 /*
-  Create the triangularization object. 
+  Create the triangularization object.
 
   This code uses Schewchuk's geometric predicates for testing whether
   points lie within a triangle's circumcircle or whether a point forms
@@ -501,9 +503,6 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // Initialize the predicates code
   exactinit();
 
-  // Set the frontal quality acceptance factor
-  frontal_quality_factor = 1.5;
-
   // Set the surface
   face = surf;
   face->incref();
@@ -515,7 +514,8 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   memset(buckets, 0, num_buckets*sizeof(EdgeHashNode*));
 
   // Set the initial root/current location of the doubly-linked
-  // triangle list structure. These are allocated as we add new triangles.
+  // triangle list structure. These are allocated as we add new
+  // triangles.
   list_start = NULL;
   list_end = NULL;
 
@@ -554,7 +554,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
     }
     if (inpts[2*i+1] > domain.yhigh){
       domain.yhigh = inpts[2*i+1];
-    }    
+    }
   }
 
   // Re-adjust the domain boundary to ensure that it is sufficiently
@@ -589,12 +589,12 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   // Set the point (xhigh, yhigh)
   pts[6] = domain.xhigh;
   pts[7] = domain.yhigh;
-  
+
   // Evaluate the points on the face
   for ( int i = 0; i < num_points; i++ ){
     X[i].x = X[i].y = X[i].z = 0.0;
   }
-  
+
   // Add the extreme points to the quadtree
   for ( int i = 0; i < FIXED_POINT_OFFSET; i++ ){
     root->addNode(i, &pts[2*i]);
@@ -610,7 +610,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
     addPointToMesh(&inpts[2*i], NULL);
   }
 
-  // Ensure that all the segments are in the triangulation to 
+  // Ensure that all the segments are in the triangulation to
   // recover a CDT
   for ( int i = 0; i < nsegs; i++ ){
     uint32_t u = 0, v = 0;
@@ -639,7 +639,7 @@ void TMRTriangularize::initialize( int npts, const double inpts[], int nholes,
   uint32_t max_node_num = num_points - nholes;
   while (node){
     if (node->tri.status != DELETE_ME &&
-        node->tri.tag == 0 && 
+        node->tri.tag == 0 &&
         ((node->tri.u < FIXED_POINT_OFFSET ||
           node->tri.v < FIXED_POINT_OFFSET ||
           node->tri.w < FIXED_POINT_OFFSET) ||
@@ -703,7 +703,7 @@ TMRTriangularize::~TMRTriangularize(){
 
   // Dereference the face
   face->decref();
-  
+
   // Free the PSLG edges
   if (pslg_edges){
     delete [] pslg_edges;
@@ -771,7 +771,7 @@ void TMRTriangularize::delaunayEdgeFlip(){
     uint32_t u = edge.u;
     uint32_t v = edge.v;
     q.pop();
-      
+
     // Find the two triangles with the u-v and v-u edges
     TMRTriangle *t1, *t2;
     completeMe(u, v, &t1);
@@ -792,7 +792,7 @@ void TMRTriangularize::delaunayEdgeFlip(){
       else {
         w = t1->u;
       }
-      
+
       if (u == t2->u){
         x = t2->v;
       }
@@ -813,14 +813,14 @@ void TMRTriangularize::delaunayEdgeFlip(){
         // triangles agree that they are not encircled
         int not_delaunay = (inCircle(u, v, w, x, face) >= 0.0 &&
                             inCircle(v, u, x, w, face) >= 0.0);
-        int delaunay = (inCircle(x, w, u, v, face) < 0.0 && 
+        int delaunay = (inCircle(x, w, u, v, face) < 0.0 &&
                         inCircle(w, x, v, u, face) < 0.0);
 
         if (not_delaunay && delaunay){
           // Delete the existing triangles
           deleteTriangle(*t1);
           deleteTriangle(*t2);
-          
+
           // Flip the edges
           addTriangle(TMRTriangle(x, w, u));
           addTriangle(TMRTriangle(w, x, v));
@@ -837,15 +837,6 @@ void TMRTriangularize::delaunayEdgeFlip(){
 }
 
 /*
-  Set the frontal quality acceptance factor
-*/
-void TMRTriangularize::setFrontalQualityFactor( double factor ){
-  if (factor >= 1.25 && factor <= 2.0){
-    frontal_quality_factor = factor;
-  }
-}
-
-/*
   Compare sorted edges
 
   This code compares two edges together. This relies on the edges being
@@ -856,7 +847,7 @@ static int compare_degen_edges( const void *avoid, const void *bvoid ){
   // Cast the input to uint32_t types
   const uint32_t *a = static_cast<const uint32_t*>(avoid);
   const uint32_t *b = static_cast<const uint32_t*>(bvoid);
-  
+
   // Extract the x/y locations for the a and b points
   uint32_t ax = a[0], ay = a[1];
   uint32_t bx = b[0], by = b[1];
@@ -872,7 +863,7 @@ static int compare_degen_edges( const void *avoid, const void *bvoid ){
 
   Note that this code adjusts the degen[] array so it is not constant.
 */
-void TMRTriangularize::removeDegenerateEdges( int num_degen, 
+void TMRTriangularize::removeDegenerateEdges( int num_degen,
                                               const int degen[] ){
   if (num_degen > 0){
     // Sort the degenerate edges
@@ -881,8 +872,8 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
       sorted_degen[2*i] = degen[2*i] + FIXED_POINT_OFFSET;
       sorted_degen[2*i+1] = degen[2*i+1] + FIXED_POINT_OFFSET;
 
-      // Flip the degenerate edge order so that the larger number appears
-      // first in the edge list
+      // Flip the degenerate edge order so that the larger number
+      // appears first in the edge list
       if (sorted_degen[2*i+1] > sorted_degen[2*i]){
         uint32_t tmp = sorted_degen[2*i];
         sorted_degen[2*i] = sorted_degen[2*i+1];
@@ -898,20 +889,20 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
       // Keep track of whether we actually delete a triangle. If not,
       // we may run into problems so we report an error.
       int fail = 1;
-      
+
       TMRTriangle *t;
       completeMe(u, v, &t);
-      if (t){ 
+      if (t){
         deleteTriangle(*t);
         fail = 0;
       }
       completeMe(v, u, &t);
-      if (t){ 
+      if (t){
         deleteTriangle(*t);
         fail = 0;
       }
       if (fail){
-        fprintf(stderr, 
+        fprintf(stderr,
                 "TMRTriangularize error: \
 Failed to find degenerate edge (%d, %d)\n",
                 degen[2*i], degen[2*i+1]);
@@ -964,31 +955,44 @@ Failed to find degenerate edge (%d, %d)\n",
   Retrieve the underlying mesh
 */
 void TMRTriangularize::getMesh( int *_num_points,
-                                int *_num_triangles, 
+                                int *_num_triangles,
                                 int **_conn, double **_pts,
                                 TMRPoint **_X ){
+  // Set the number of points/triangles
   int npts = (num_points - FIXED_POINT_OFFSET);
-  *_num_points = npts;
-  *_num_triangles = num_triangles;
-  *_conn = new int[ 3*num_triangles ];
-  *_pts = new double[ 2*npts ];
-  *_X = new TMRPoint[ npts ];
-  
-  // Set the points
-  memcpy(*_pts, &pts[2*FIXED_POINT_OFFSET], 2*npts*sizeof(double));
-  memcpy(*_X, &X[FIXED_POINT_OFFSET], npts*sizeof(TMRPoint));
+  if (_num_points){
+    *_num_points = npts;
+  }
+  if (_num_triangles){
+    *_num_triangles = num_triangles;
+  }
 
-  // Set the pointer into the connectivity array
-  int *t = *_conn;
+  // Set the parametric point locations
+  if (_pts){
+    *_pts = new double[ 2*npts ];
+    memcpy(*_pts, &pts[2*FIXED_POINT_OFFSET], 2*npts*sizeof(double));
+  }
 
-  // Determine the connectivity
-  TriListNode *node = list_start;
-  while (node){
-    t[0] = node->tri.u - FIXED_POINT_OFFSET;
-    t[1] = node->tri.v - FIXED_POINT_OFFSET;
-    t[2] = node->tri.w - FIXED_POINT_OFFSET;
-    t += 3;
-    node = node->next;
+  // Set the physical node locations
+  if (_X){
+    *_X = new TMRPoint[ npts ];
+    memcpy(*_X, &X[FIXED_POINT_OFFSET], npts*sizeof(TMRPoint));
+  }
+
+  if (_conn){
+    // Set the pointer into the connectivity array
+    *_conn = new int[ 3*num_triangles ];
+    int *t = *_conn;
+
+    // Determine the connectivity
+    TriListNode *node = list_start;
+    while (node){
+      t[0] = node->tri.u - FIXED_POINT_OFFSET;
+      t[1] = node->tri.v - FIXED_POINT_OFFSET;
+      t[2] = node->tri.w - FIXED_POINT_OFFSET;
+      t += 3;
+      node = node->next;
+    }
   }
 }
 
@@ -1023,7 +1027,7 @@ void TMRTriangularize::tagTriangles( TMRTriangle *tri ){
         tagTriangles(t);
       }
     }
-  }                           
+  }
 }
 
 /*
@@ -1036,13 +1040,13 @@ void TMRTriangularize::writeToVTK( const char *filename,
     fprintf(fp, "# vtk DataFile Version 3.0\n");
     fprintf(fp, "vtk output\nASCII\n");
     fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
-      
+
     // Write out the points
     fprintf(fp, "POINTS %d float\n", num_points);
     if (param_space){
       for ( int k = 0; k < num_points; k++ ){
         fprintf(fp, "%e %e 0\n", pts[2*k], pts[2*k+1]);
-      }    
+      }
     }
     else {
       for ( int k = 0; k < num_points; k++ ){
@@ -1206,7 +1210,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
         EdgeHashNode *tmp = node->next;
         uint32_t value = getEdgeHash(node->u, node->v);
         uint32_t bucket = value % num_buckets;
-        
+
         // If the new bucket linked list does not exist, create a new
         // one and set the end_buckets pointer
         if (!new_buckets[bucket]){
@@ -1219,7 +1223,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
           end_buckets[bucket] = end_buckets[bucket]->next;
           node->next = NULL;
         }
-        
+
         node = tmp;
       }
     }
@@ -1234,7 +1238,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
   uint32_t edge_pairs[][2] = {{tri.u, tri.v},
                               {tri.v, tri.w},
                               {tri.w, tri.u}};
-                              
+
   // Add the triangle to the hash table
   for ( int k = 0; k < 3; k++ ){
     // Add a hash for each pair of edges around the triangle
@@ -1271,7 +1275,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
           break;
         }
 
-        // If the next node does not exist, then break 
+        // If the next node does not exist, then break
         if (!node->next){
           break;
         }
@@ -1302,7 +1306,7 @@ int TMRTriangularize::addTriangle( TMRTriangle tri ){
 }
 
 /*
-  Delete the triangle from the mesh. 
+  Delete the triangle from the mesh.
 
   This deletes the triangle from the hash table but not the list.
 */
@@ -1319,7 +1323,7 @@ int TMRTriangularize::deleteTriangle( TMRTriangle tri ){
 
   // Keep track if this is the first edge we find
   int first = 1;
-  
+
   // Remove the triangle from the hash table
   for ( int k = 0; k < 3; k++ ){
     // Add a hash for each pair of edges around the triangle
@@ -1524,7 +1528,7 @@ inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
 
     pw[0] = l11*pts[2*w] + l21*pts[2*w+1];
     pw[1] = l22*pts[2*w+1];
-    
+
     px[0] = l11*pts[2*x] + l21*pts[2*x+1];
     px[1] = l22*pts[2*x+1];
   }
@@ -1555,12 +1559,12 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
     memcpy(new_pts_to_tris, pts_to_tris, num_points*sizeof(TMRTriangle*));
     delete [] pts_to_tris;
     pts_to_tris = new_pts_to_tris;
-    
+
     // Allocate the space for the triangle vertices in physical space
     TMRPoint *new_X = new TMRPoint[ max_num_points ];
     memcpy(new_X, X, num_points*sizeof(TMRPoint));
     delete [] X;
-    X = new_X;    
+    X = new_X;
   }
 
   // Add the point to the quadtree
@@ -1575,7 +1579,7 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
 
   // Evaluate the face location
   face->evalPoint(pt[0], pt[1], &X[num_points]);
-  
+
   // Increase the number of points by one
   num_points++;
 
@@ -1586,7 +1590,7 @@ uint32_t TMRTriangularize::addPoint( const double pt[] ){
 /*
   Add the vertex to the underlying Delaunay triangularization.
 */
-void TMRTriangularize::addPointToMesh( const double pt[], 
+void TMRTriangularize::addPointToMesh( const double pt[],
                                        TMRFace *metric ){
   // Find the enclosing triangle
   TMRTriangle *tri;
@@ -1609,10 +1613,10 @@ void TMRTriangularize::addPointToMesh( const double pt[],
 }
 
 /*
-  Add the point to the mesh, given that we've already found the 
-  triangle that encloses the given point. 
+  Add the point to the mesh, given that we've already found the
+  triangle that encloses the given point.
 */
-void TMRTriangularize::addPointToMesh( const double pt[], 
+void TMRTriangularize::addPointToMesh( const double pt[],
                                        TMRTriangle *tri,
                                        TMRFace *metric ){
   uint32_t u = addPoint(pt);
@@ -1630,21 +1634,21 @@ void TMRTriangularize::addPointToMesh( const double pt[],
 
 /*
   The following code tests whether the triangle formed from the point
-  (u, v, w) is constrained Delaunay. 
+  (u, v, w) is constrained Delaunay.
 
-  If the edge (w, v) is in the PSLG, then the triangle is added immediately. 
-  If not, and if the point lies within the circumcircle of the triangle 
+  If the edge (w, v) is in the PSLG, then the triangle is added immediately.
+  If not, and if the point lies within the circumcircle of the triangle
   (u, w, v) with the directed edge (v, w).
 */
 void TMRTriangularize::digCavity( uint32_t u, uint32_t v, uint32_t w,
-                                  TMRFace *metric ){ 
+                                  TMRFace *metric ){
   // If the edge is along the polynomial straight line graph, then we
   // add the triangle as it exists and we're done, even though it may
   // not be Delaunay (it will be constrained Delaunay). We cannot
   // split a PSLG edge.
   if (edgeInPSLG(w, v)){
     addTriangle(TMRTriangle(u, v, w));
-    return; 
+    return;
   }
 
   // Complete the triangle
@@ -1688,7 +1692,7 @@ void TMRTriangularize::insertSegment( uint32_t u, uint32_t v ){
   uint32_t w = 0; // The node on the negative side of (u, v)
   uint32_t x = 0; // The node on the positive side of (u, v)
 
-  // Find the triangle (u, w, x) where u is the first 
+  // Find the triangle (u, w, x) where u is the first
   // node in the segment, w is below the segment and x
   // is above the segment
   while (t){
@@ -1705,7 +1709,7 @@ void TMRTriangularize::insertSegment( uint32_t u, uint32_t v ){
       x = t->v;
     }
 
-    // Check whether x is above the oriented edge (u, v) 
+    // Check whether x is above the oriented edge (u, v)
     // and w is below the oriented edge (u, v)
     if (orient2d(&pts[2*u], &pts[2*v], &pts[2*x]) >= 0.0 &&
         orient2d(&pts[2*u], &pts[2*v], &pts[2*w]) <= 0.0){
@@ -1733,7 +1737,7 @@ void TMRTriangularize::insertSegment( uint32_t u, uint32_t v ){
         x = t->v;
       }
 
-      // Check whether x is above the oriented edge (u, v) 
+      // Check whether x is above the oriented edge (u, v)
       // and w is below the oriented edge (u, v)
       if (orient2d(&pts[2*u], &pts[2*v], &pts[2*x]) >= 0.0 &&
           orient2d(&pts[2*u], &pts[2*v], &pts[2*w]) <= 0.0){
@@ -1808,7 +1812,7 @@ void TMRTriangularize::insertSegment( uint32_t u, uint32_t v ){
 /*
   Gift-wrap algorithm for segments (does not consider visibility)
 */
-void TMRTriangularize::giftWrap( const uint32_t v[], int size, 
+void TMRTriangularize::giftWrap( const uint32_t v[], int size,
                                  int orient ){
   if (size == 2){
     // There is only one segment left, we are done
@@ -1847,7 +1851,7 @@ void TMRTriangularize::giftWrap( const uint32_t v[], int size,
 }
 
 /*
-  Find the enclosing triangle within the mesh. 
+  Find the enclosing triangle within the mesh.
 
   This code uses a quadtree for geometric searching. First, we find
   the node that is closest to the query point. This node is not
@@ -1865,7 +1869,7 @@ void TMRTriangularize::findEnclosing( const double pt[],
   }
   search_tag++;
 
-  // Find the closest point to the given 
+  // Find the closest point to the given
   uint32_t u = root->findClosest(pt);
 
   // Obtain the triangle associated with the node u. This triangle may
@@ -1922,29 +1926,32 @@ void TMRTriangularize::findEnclosing( const double pt[],
 /*
   Compute the circumcircle for the given triangle.
 
-  This can be used to evaluate an effective 'h' value (based on the 
+  This can be used to evaluate an effective 'h' value (based on the
   equilateral radius length r_eq = h/sqrt(3)) which  is used as a
   metric to determine whether to retain the triangle, or search for
   a better one.
 */
 double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
-                                           TMRElementFeatureSize *fs ){
+                                           TMRElementFeatureSize *fs,
+                                           double *_R ){
   // The circumcircle of an equilateral triangle is sqrt(3)*h where h
   // is the side-length of the triangle
-  const double sqrt3 = 1.73205080757;
+  const double sqrt3 = 1.7320508075688772;
 
   // Compute the edge lengths in physical space
   TMRPoint d1;
   d1.x = X[v].x - X[u].x;
   d1.y = X[v].y - X[u].y;
   d1.z = X[v].z - X[u].z;
-    
+
   TMRPoint d2;
   d2.x = X[w].x - X[u].x;
   d2.y = X[w].y - X[u].y;
   d2.z = X[w].z - X[u].z;
-  
-  double dot = d1.dot(d2)/d1.dot(d1);
+
+  // Compute the dot product
+  double d1d = d1.dot(d1);
+  double dot = d1.dot(d2)/d1d;
 
   // Compute the perpendicular component along the second direction
   // that we'll use to determine the center point
@@ -1954,8 +1961,8 @@ double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
   n1.z = d2.z - dot*d1.z;
 
   // Compute alpha = 0.5*(d2, d2 - d1)/(d2, n1)
-  double alpha = 0.5*(d2.x*(d2.x - d1.x) + 
-                      d2.y*(d2.y - d1.y) + 
+  double alpha = 0.5*(d2.x*(d2.x - d1.x) +
+                      d2.y*(d2.y - d1.y) +
                       d2.z*(d2.z - d1.z));
   alpha = alpha/d2.dot(n1);
 
@@ -1966,6 +1973,9 @@ double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
 
   // Compute the radius
   double R = sqrt(d1.dot(d1));
+  if (_R){
+    *_R = R;
+  }
 
   // Compute the center of the triangle
   d1.x = (X[u].x + X[v].x + X[w].x)/3.0;
@@ -1973,20 +1983,20 @@ double TMRTriangularize::computeSizeRatio( uint32_t u, uint32_t v, uint32_t w,
   d1.z = (X[u].z + X[v].z + X[w].z)/3.0;
   double h = fs->getFeatureSize(d1);
 
-  return sqrt3*R/h;
+  return (sqrt3*R/h);
 }
 
 /*
   Class for comparing triangle quality that is used within the frontal
   code.
 */
-class TMRTriangleCompare {
- public:
-  bool operator()(TMRTriangle* const& A, 
-                  TMRTriangle* const& B){
-    return A->quality < B->quality;
-  }
-};
+// class TMRTriangleCompare {
+//  public:
+//   bool operator()(TMRTriangle* const& A,
+//                   TMRTriangle* const& B){
+//     return A->R < B->R;
+//   }
+// };
 
 /*
   Perform a frontal mesh generation algorithm to create a constrained
@@ -1996,22 +2006,35 @@ class TMRTriangleCompare {
   generation algorithm. The frontal mesh generation technique is based
   on Rebay's 1993 paper in JCP.
 */
-void TMRTriangularize::frontal( TMRMeshOptions options, 
+void TMRTriangularize::frontal( TMRMeshOptions options,
                                 TMRElementFeatureSize *fs ){
   // The queue of active (and sometimes deleted) triangles
-  std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
-    TMRTriangleCompare> active;
+  // std::priority_queue<TMRTriangle*, std::vector<TMRTriangle*>,
+  //   TMRTriangleCompare> active;
 
-  // Add the triangles to the active set that 
+  std::queue<TMRTriangle*> active;
+
+  // Get the quality factor
+  double frontal_quality_factor = options.frontal_quality_factor;
+  if (options.frontal_quality_factor > 2.0){
+    frontal_quality_factor = 2.0;
+  }
+  else if (options.frontal_quality_factor < 1.01){
+    frontal_quality_factor = 1.01;
+  }
+
+  // Add the triangles to the active set that
   TriListNode *node = list_start;
   while (node){
     if (node->tri.status != DELETE_ME){
       // Set the status by default as waiting
       node->tri.status = WAITING;
-    
+
       // Compute the 'quality' indicator for this triangle
       TMRTriangle t = node->tri;
-      node->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs);
+      double R = 0.0;
+      node->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs, &R);
+      node->tri.R = R;
       if (node->tri.quality < frontal_quality_factor){
         node->tri.status = ACCEPTED;
       }
@@ -2065,13 +2088,14 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     printf("%10s %10s %10s\n", "Iteration", "Triangles", "Active");
   }
 
+  int num_newton_fail = 0;
   double t0 = MPI_Wtime();
   double t0_enclose = 0.0, t1_enclose = 0.0;
   double t0_update = 0.0, t1_update = 0.0;
 
   int iter = 0;
   while (1){
-    if (options.triangularize_print_level > 0 && 
+    if (options.triangularize_print_level > 0 &&
         iter % options.triangularize_print_iter == 0){
       int queue_size = active.size();
       printf("%10d %10d %10d\n", iter, num_triangles, queue_size);
@@ -2094,14 +2118,15 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
     // Find the first active triangle that is not marked to be deleted
     while (active.size() > 0 && !tri){
-      // This wonderful syntax brought to you by C++! Constant reference
-      // to a pointer, which we can just copy to a non-constant pointer.
-      TMRTriangle* const& tri_ptr = active.top();
+      // This wonderful syntax brought to you by C++! Constant
+      // reference to a pointer, which we can just copy to a
+      // non-constant pointer.
+      TMRTriangle* const& tri_ptr = active.front();
       tri = tri_ptr;
 
       // Pop the top member of the priority queue, but only use it if
-      // the triangle is still active (note: the queue can contain non-active
-      // triangles)
+      // the triangle is still active (note: the queue can contain
+      // non-active triangles)
       active.pop();
       if (tri->status != ACTIVE){
         tri = NULL;
@@ -2111,14 +2136,14 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     // We've failed to find any active triangle. We're done
     if (!tri){
       break;
-    }   
+    }
 
     int found = 0;
     uint32_t u = 0, v = 0;
     uint32_t edge_pairs[][2] = {{tri->u, tri->v},
                                 {tri->v, tri->w},
                                 {tri->w, tri->u}};
-    
+
     // Check if the edge is on the PSLG
     for ( int k = 0; k < 3; k++ ){
       u = edge_pairs[k][0];
@@ -2164,19 +2189,19 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     double g11 = Xu.dot(Xu);
     double g12 = Xu.dot(Xv);
     double g22 = Xv.dot(Xv);
-    
+
     // Compute the inverse metric components
     double invdet = 1.0/(g11*g22 - g12*g12);
     double G11 = invdet*g22;
     double G12 = -invdet*g12;
     double G22 = invdet*g11;
-       
+
     // Compute the parametric direction along the curvilinear line
     // connecting from u to v
     double d[2];
     d[0] = (pts[2*v] - pts[2*u]);
     d[1] = (pts[2*v+1] - pts[2*u+1]);
-    
+
     // Compute the orthogonal coordinate contributions to the vector
     double e[2];
     e[0] = G12*d[0] - G11*d[1];
@@ -2202,7 +2227,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       // Compute the side-edge length, given the prescribed mesh
       // spacing at this point in the domain.
       double de = 0.5*sqrt3*htrial;
-   
+
       // Compute the ratio between the desired distance in physical
       // space and the length of the direction dir in physical space
       // for a unit change in parameter space.
@@ -2210,24 +2235,24 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       pt[0] = m[0] + f*e[0];
       pt[1] = m[1] + f*e[1];
 
-      /*
       int newton_fail = 1;
       const double rtol = 1e-5;
-      const int max_newton_iters = 25;
-      
+      const int max_newton_iters = 10;
+
       for ( int k = 0; k < max_newton_iters; k++ ){
-        // Solve for the problem 
+        // Solve for the problem
         face->evalPoint(pt[0], pt[1], &Xpt);
         face->evalDeriv(pt[0], pt[1], &Xu, &Xv);
 
         // Solve for the surface location that satisfies
-        // ||X - X[u]||_{2} = de and 
+        // ||X - X[u]||_{2} = de and
         // ||X - X[v]||_{2} = de
-        TMRPoint du, dv;
+        TMRPoint du;
         du.x = Xpt.x - X[u].x;
         du.y = Xpt.y - X[u].y;
         du.z = Xpt.z - X[u].z;
 
+        TMRPoint dv;
         dv.x = Xpt.x - X[v].x;
         dv.y = Xpt.y - X[v].y;
         dv.z = Xpt.z - X[v].z;
@@ -2236,7 +2261,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
         r[0] = de*de - du.dot(du);
         r[1] = de*de - dv.dot(dv);
 
-        if (fabs(r[0]) < rtol*de*de && 
+        if (fabs(r[0]) < rtol*de*de &&
             fabs(r[1]) < rtol*de*de){
           newton_fail = 0;
           break;
@@ -2249,14 +2274,14 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
         A[1] = 2.0*Xu.dot(dv);
         A[3] = 2.0*Xv.dot(dv);
-        
+
         // Solve the system of equations
         int n = 2, one = 1, ipiv[2], info = 0;
         TmrLAPACKdgetrf(&n, &n, A, &n, ipiv, &info);
         TmrLAPACKdgetrs("N", &n, &one, A, &n, ipiv, r, &n, &info);
-        
-        // Guard against moving the u/v coordinates outside the domain
-        // of the problem
+
+        // Guard against moving the u/v coordinates outside the
+        // domain of the surface
         double umin, umax, vmin, vmax;
         face->getRange(&umin, &vmin, &umax, &vmax);
         if (pt[0] + r[0] > umax){
@@ -2278,7 +2303,13 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
           pt[1] += r[1];
         }
       }
-      */      
+
+      // Reset the point
+      if (newton_fail){
+        num_newton_fail++;
+        pt[0] = m[0] + f*e[0];
+        pt[1] = m[1] + f*e[1];
+      }
 
       // Find the enclosing triangle for the new point
       pt_tri = tri;
@@ -2315,7 +2346,8 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     dpt.y = dpt.y - X[w].y;
     dpt.z = dpt.z - X[w].z;
 
-    double beta = 0.6;
+    // Reject points that are too close to other points
+    double beta = 0.25;
     if (dpt.dot(dpt) < beta*h*h){
       pt_tri = NULL;
     }
@@ -2327,7 +2359,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       if (tri->status == WAITING ||
           tri->status == ACTIVE){
         tri->status = ACCEPTED;
-        
+
         // Search from adjacent triangles
         for ( int k = 0; k < 3; k++ ){
           TMRTriangle *adjacent;
@@ -2342,9 +2374,9 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
     else { // (pt_tri){
       // Add up the update time
       t0_update += MPI_Wtime();
-    
+
       // Set the pointer to the last member in the list
-      TriListNode *list_marker = list_end; 
+      TriListNode *list_marker = list_end;
       addPointToMesh(pt, pt_tri, face);
       pt_tri = NULL;
 
@@ -2356,7 +2388,9 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       }
       while (ptr){
         TMRTriangle t = ptr->tri;
-        ptr->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs);
+        double R = 0.0;
+        ptr->tri.quality = computeSizeRatio(t.u, t.v, t.w, fs, &R);
+        ptr->tri.R = R;
         if (ptr->tri.quality < frontal_quality_factor){
           ptr->tri.status = ACCEPTED;
         }
@@ -2377,7 +2411,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
       // Scan through the list of the added triangles and mark which
       // ones are active/working/accepted.
       ptr = list_start;
-      if (list_marker){ 
+      if (list_marker){
         ptr = list_marker->next;
       }
 
@@ -2391,7 +2425,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
                                       {ptr->tri.w, ptr->tri.u}};
 
           // Loop over all of the edges in the triangle and check
-          // whether they're in the PSLG 
+          // whether they're in the PSLG
           for ( int k = 0; k < 3; k++ ){
             if (edgeInPSLG(edge_pairs[k][0], edge_pairs[k][1])){
               ptr->tri.status = ACTIVE;
@@ -2415,7 +2449,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
             }
           }
         }
-        
+
         // Increment the pointer to the next member of the list
         ptr = ptr->next;
       }
@@ -2425,7 +2459,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
   t0 = MPI_Wtime() - t0;
 
-  if (options.mesh_type_default != TMR_TRIANGLE){
+  if (face && options.mesh_type_default != TMR_TRIANGLE){
     // Ensure that we do not have isolated triangles on the boundary
     // which will cause problems if we do a conversion to a
     // quadrilateral mesh. This will not do "good" things to the
@@ -2447,24 +2481,36 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
           completeMe(u, w, &t3);
 
           if (!t1 && !t2){
+            TMRPoint p;
+            p.x = 0.5*(X[u].x + X[w].x);
+            p.y = 0.5*(X[u].y + X[w].y);
+            p.z = 0.5*(X[u].z + X[w].z);
+
             double pt[2];
-            pt[0] = 0.5*(pts[2*u] + pts[2*w]);
-            pt[1] = 0.5*(pts[2*u+1] + pts[2*w+1]);
+            face->invEvalPoint(p, &pt[0], &pt[1]);
             addPointToMesh(pt, face);
           }
           else if (!t2 && !t3){
+            TMRPoint p;
+            p.x = 0.5*(X[u].x + X[v].x);
+            p.y = 0.5*(X[u].y + X[v].y);
+            p.z = 0.5*(X[u].z + X[v].z);
+
             double pt[2];
-            pt[0] = 0.5*(pts[2*u] + pts[2*v]);
-            pt[1] = 0.5*(pts[2*u+1] + pts[2*v+1]);
+            face->invEvalPoint(p, &pt[0], &pt[1]);
             addPointToMesh(pt, face);
           }
           else if (!t1 && !t3){
+            TMRPoint p;
+            p.x = 0.5*(X[v].x + X[w].x);
+            p.y = 0.5*(X[v].y + X[w].y);
+            p.z = 0.5*(X[v].z + X[w].z);
+
             double pt[2];
-            pt[0] = 0.5*(pts[2*v] + pts[2*w]);
-            pt[1] = 0.5*(pts[2*v+1] + pts[2*w+1]);
+            face->invEvalPoint(p, &pt[0], &pt[1]);
             addPointToMesh(pt, face);
           }
-        }      
+        }
       }
       node = node->next;
     }
@@ -2478,8 +2524,9 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
   }
   if (options.triangularize_print_level > 1){
     printf("Time breakdown\n");
-    printf("findEnclosing: %15.4e s\n", t1_enclose - t0_enclose);
-    printf("update:        %15.4e s\n", t1_update - t0_update);
-    printf("total:         %15.4e s\n", t0);
+    printf("findEnclosing:    %15.4e s\n", t1_enclose - t0_enclose);
+    printf("update:           %15.4e s\n", t1_update - t0_update);
+    printf("total:            %15.4e s\n", t0);
+    printf("num_newton_fail:  %15d\n", num_newton_fail);
   }
 }

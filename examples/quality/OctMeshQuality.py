@@ -126,12 +126,12 @@ def computeMinAngle(forest):
             node_neighbors = angle_list[j]
             for k in node_neighbors:
                 for l in node_neighbors:
-                    if k <> l:
+                    if k != l:
                         # Compute 2 vectors from 3 unique points
                         vec1 = pts[k, :] - pts[j, :]
                         vec2 = pts[l, :] - pts[j, :]
                         # Make the vectors unit vectors
-                        if (np.linalg.norm(vec1) <> np.float64(0.0)) & (np.linalg.norm(vec2) <> np.float64(0.0)):
+                        if (np.linalg.norm(vec1) != np.float64(0.0)) and (np.linalg.norm(vec2) != np.float64(0.0)):
                             vec1 /= np.linalg.norm(vec1)
                             vec2 /= np.linalg.norm(vec2)
                             # Compute the angle between the vectors as long as they

@@ -661,6 +661,10 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
     load_case_info[i].stress_func_offset = 1.0;
     load_case_info[i].stress_func_scale = 1.0;
     load_case_info[i].stress_func_obj_weight = 0.0;
+    load_case_info[i].curve_func = NULL;
+    load_case_info[i].curve_func_offset = 1.0;
+    load_case_info[i].curve_func_scale = 1.0;
+    load_case_info[i].curve_func_obj_weight = 0.0;
   }
 }
 
@@ -741,6 +745,23 @@ void TMRTopoProblem::addStressConstraint( int load_case,
   load_case_info[load_case].stress_func_obj_weight = obj_weight;
   load_case_info[load_case].stress_func->incref();
 }
+
+/*
+  Add a stress constraint to the given load case using the TMRStressConstraint
+  class
+*/
+void TMRTopoProblem::addCurvatureConstraint( int load_case,
+                                             TMRCurvatureConstraint *curve_func,
+                                             TacsScalar constr_offset,
+                                             TacsScalar constr_scale,
+                                             TacsScalar obj_weight ){
+  load_case_info[load_case].curve_func = curve_func;
+  load_case_info[load_case].curve_func_offset = constr_offset;
+  load_case_info[load_case].curve_func_scale = constr_scale;
+  load_case_info[load_case].curve_func_obj_weight = obj_weight;
+  load_case_info[load_case].curve_func->incref();
+}
+
 
 /*
   Add linear constraints to the problem.
@@ -933,6 +954,9 @@ void TMRTopoProblem::initialize(){
   for ( int i = 0; i < num_load_cases; i++ ){
     num_constraints += load_case_info[i].num_funcs;
     if (load_case_info[i].stress_func){
+      num_constraints++;
+    }
+    if (load_case_info[i].curve_func){
       num_constraints++;
     }
   }
@@ -1516,6 +1540,21 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
           }
           count++;
         }
+        // Evaluate the curvature constraint
+        if (load_case_info[i].curve_func){
+          TacsScalar con_offset = load_case_info[i].curve_func_offset;
+          TacsScalar curve_func_obj_weight =
+            load_case_info[i].curve_func_obj_weight;
+
+          cons[count] =
+            con_offset - load_case_info[i].curve_func->evalConstraint(x[0]);
+          cons[count] *= load_case_info[i].curve_func_scale;
+
+          if (curve_func_obj_weight != 0.0){
+            *fobj += 0.5*curve_func_obj_weight*cons[count]*cons[count];
+          }
+          count++;
+        }
       }
     }
 
@@ -1834,6 +1873,56 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         A->scale(-load_case_info[i].stress_func_scale);
       }
 
+      count++;
+    }
+    // Compute derivative of curvature constraint
+    if (load_case_info[i].curve_func){
+      // Try to unwrap the vector
+      wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
+
+      if (wrap){
+        // Get the weight information
+        // Get the weight information
+        TacsScalar con_offset = load_case_info[i].curve_func_offset;
+        TacsScalar curve_func_obj_weight =
+          load_case_info[i].curve_func_obj_weight;
+
+        // Evaluate the constraint
+        TacsScalar con = 0.0;
+        if (curve_func_obj_weight != 0.0){
+          con = con_offset - load_case_info[i].curve_func->evalConstraint(x[0]);
+        }
+
+        // Get the underlying TACS vector for the design variables
+        TACSBVec *A = wrap->vec;
+
+        // Evaluate the partial derivatives required for the adjoint
+        // load_case_info[i].curve_func->evalConDeriv(xlocal,
+        //                                            max_local_size,
+        //                                            dfdu);
+        tacs[0]->applyBCs(dfdu);
+
+        // // Solve the system of equations
+        // ksm->solve(dfdu, adjoint);
+
+        // // Compute the total derivative using the adjoint
+        // tacs[0]->addAdjointResProducts(-1.0, &adjoint,
+        //                                1, xlocal, max_local_size);
+
+        // Wrap the vector class
+        setBVecFromLocalValues(xlocal, A);
+        A->beginSetValues(TACS_ADD_VALUES);
+        A->endSetValues(TACS_ADD_VALUES);
+
+        // Add the contribution to the objective gradient
+        if (g && curve_func_obj_weight != 0.0){
+          g->axpy(-curve_func_obj_weight*con, A);
+        }
+
+        // Scale the constraint by -1 since the constraint is
+        // formulated as 1 - c(x, u) > 0.0
+        A->scale(-load_case_info[i].curve_func_scale);
+      }
       count++;
     }
 

@@ -35,6 +35,39 @@ enum TMRFaceMeshType { TMR_NO_MESH,
                        TMR_TRIANGLE };
 
 /*
+  Methods for computing the mesh connectivity and dual connectivity
+  information from other data.
+*/
+void TMR_ComputeNodeToElems( int nnodes, int nelems,
+                             int num_elem_nodes,
+                             const int conn[],
+                             int **_ptr,
+                             int **_node_to_elems );
+void TMR_ComputeTriEdges( int nnodes, int ntris,
+                          const int tris[],
+                          int *num_tri_edges,
+                          int **_tri_edges,
+                          int **_tri_neighbors,
+                          int **_dual_edges,
+                          int **_node_to_tri_ptr=NULL,
+                          int **_node_to_tris=NULL,
+                          int **_tri_edge_nums=NULL );
+void TMR_ComputeQuadEdges( int nnodes, int nquads,
+                           const int quads[],
+                           int *_num_quad_edges,
+                           int **_quad_edges,
+                           int **_quad_neighbors=NULL,
+                           int **_dual_edges=NULL,
+                           int **_quad_edge_nums=NULL );
+void TMR_ComputeHexEdgesAndFaces( int nnodes, int nhex,
+                                  const int hex[],
+                                  int *_num_hex_edges,
+                                  int **_hex_edges,
+                                  int **_hex_edge_nums,
+                                  int *_num_hex_faces,
+                                  int **_hex_faces,
+                                  int **_hex_face_nums );
+/*
   Global options for meshing
 */
 class TMRMeshOptions {
@@ -196,7 +229,7 @@ class TMRFaceMesh : public TMREntity {
 
   // Simplify the quadrilateral mesh to remove points that make
   // for a poor quadrilateral mesh
-  void simplifyQuads();
+  void simplifyQuads( int flag );
 
   // Compute recombined triangle information
   int getRecombinedQuad( const int tris[], const int trineighbors[],
@@ -209,6 +242,29 @@ class TMRFaceMesh : public TMREntity {
   double computeQuadQuality( const int *quad, const TMRPoint *p );
   double computeTriQuality( const int *tri, const TMRPoint *p );
 
+  // Compute the locations of the hole points
+  void computeHolePts( const int nloops, int hole_pt,
+                       const int *loop_pt_offset,
+                       const int *segments, double *params );
+
+  // Map the source face to the target face
+  void mapSourceToTarget( TMRMeshOptions options, const double *params );
+
+  // Create a structured mesh
+  void createStructuredMesh( TMRMeshOptions options, const double *params );
+
+  // Create an unstructured mesh
+  void createUnstructuredMesh( TMRMeshOptions options,
+                               TMRElementFeatureSize *fs,
+                               TMRFaceMeshType mesh_type,
+                               const int total_num_pts, const int nholes,
+                               const double *params,
+                               const int nsegs, const int *segments,
+                               const int num_degen, const int *degen,
+                               int *npts, double **param_pts, TMRPoint **Xpts,
+                               int *nquads, int **mesh_quads,
+                               int *ntris, int **mesh_tris );
+
   // The underlying surface
   MPI_Comm comm;
   TMRFace *face;
@@ -217,7 +273,7 @@ class TMRFaceMesh : public TMREntity {
   TMRFaceMeshType mesh_type;
 
   // Points in the mesh
-  int num_fixed_pts; // number of fixed points
+  int num_fixed_pts; // number of fixed points on the boundary
   int num_points; // The number of point locations
   double *pts; // The parametric node locations
   TMRPoint *X; // The physical node locations

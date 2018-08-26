@@ -472,6 +472,12 @@ cdef extern from "TMR_RefinementTools.h":
 
          void writeReconToTec(TACSBVec*, char*,
                               TacsScalar)
+    cdef cppclass TMRCurvatureConstraint(TMREntity):
+         TMRCurvatureConstraint(TMROctForest*, TacsScalar)
+         TMRCurvatureConstraint(TMROctForest*, TACSVarMap*, TacsScalar)
+         TacsScalar evalConstraint(TACSBVec*)
+         #void evalConDeriv(TacsScalar*, int, TACSBVec*)
+         void writeCurvatureToFile(TACSBVec*, const char*)
 
 cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
@@ -529,6 +535,8 @@ cdef extern from "TMRTopoProblem.h":
                             const TacsScalar*, const TacsScalar*, int)
         void addStressConstraint(int, TMRStressConstraint*,
                                  TacsScalar, TacsScalar, TacsScalar)
+        void addCurvatureConstraint(int, TMRCurvatureConstraint*,
+                                    TacsScalar, TacsScalar, TacsScalar)
         void addLinearConstraints(ParOptVec**, TacsScalar*, int)
         void addFrequencyConstraint(double, int, TacsScalar,
                                     TacsScalar, TacsScalar, int,

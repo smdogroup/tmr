@@ -68,10 +68,14 @@ mesh = TMR.Mesh(comm, geo)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
-opts.frontal_quality_factor = 1.25
-opts.num_smoothing_steps = 50
+opts.num_smoothing_steps = 10
 opts.triangularize_print_iter = 50000
 opts.write_mesh_quality_histogram = 1
+opts.triangularize_print_iter = 5
+opts.write_triangularize_intermediate = 1
+opts.triangularize_print_level = 2
+opts.write_post_smooth_triangle = 1
+opts.frontal_quality_factor = 1.2
 
 # Create the surface mesh
 mesh.mesh(0.02, opts)
@@ -85,7 +89,7 @@ topo = TMR.Topology(comm, model)
 # Create the quad forest and set the topology of the forest
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
-forest.createTrees(1)
+forest.createTrees(0)
 forest.createNodes()
 
 ar = computeAR(forest)
