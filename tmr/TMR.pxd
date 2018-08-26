@@ -70,6 +70,7 @@ cdef extern from "TMRBase.h":
         double weight
 
     void TMRInitialize()
+    int TMRIsInitialized()
     void TMRFinalize()
 
     enum TMRInterpolationType:

@@ -26,8 +26,15 @@ cimport mpi4py.MPI as MPI
 cimport numpy as np
 import numpy as np
 
+cdef tmr_init():
+    if not TMRIsInitialized():
+        TMRInitialize()
+
 # Ensure that numpy is initialized
 np.import_array()
+
+# Initialize
+tmr_init()
 
 # Import the definition required for const strings
 from libc.string cimport const_char
