@@ -884,7 +884,15 @@ class EdgePt {
   double t;
   
   static int compare( const void *a, const void *b ){
-    return (static_cast<const EdgePt*>(a))->t < (static_cast<const EdgePt*>(b))->t;
+    double ta = (static_cast<const EdgePt*>(a))->t;
+    double tb = (static_cast<const EdgePt*>(b))->t;
+    if (ta < tb){
+      return -1;
+    }
+    if (ta > tb){
+      return 1;
+    }
+    return 0;
   }
 };
 
@@ -928,8 +936,8 @@ TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge,
 
     // Copy over the point locations
     for ( int i = 0; i < npts; i++ ){
-      pts[i] = epts[i].t;
       X[i] = epts[i].p;
+      pts[i] = epts[i].t;
     }
 
     // Free the edge points
@@ -952,6 +960,11 @@ TMREdgeMesh::~TMREdgeMesh(){
 */
 void TMREdgeMesh::mesh( TMRMeshOptions options,
                         TMRElementFeatureSize *fs ){
+  // Check if the mesh has already been allocated
+  if (prescribed_mesh){
+    return;
+  }
+
   int mpi_rank, mpi_size;
   MPI_Comm_size(comm, &mpi_size);
   MPI_Comm_rank(comm, &mpi_rank);
