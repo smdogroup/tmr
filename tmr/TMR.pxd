@@ -70,6 +70,7 @@ cdef extern from "TMRBase.h":
         double weight
 
     void TMRInitialize()
+    int TMRIsInitialized()
     void TMRFinalize()
 
     enum TMRInterpolationType:
@@ -253,12 +254,13 @@ cdef extern from "TMRMesh.h":
         void writeToBDF(const char*, int)
 
     cdef cppclass TMREdgeMesh(TMREntity):
-        TMREdgeMesh(MPI_Comm, TMREdge*)
+        TMREdgeMesh(MPI_Comm, TMREdge*, TMRPoint*, int)
         void mesh(TMRMeshOptions, TMRElementFeatureSize*)
 
     cdef cppclass TMRFaceMesh(TMREntity):
-        TMRFaceMesh(MPI_Comm, TMRFace*)
+        TMRFaceMesh(MPI_Comm, TMRFace*, TMRPoint*, int, int*, int)
         void mesh(TMRMeshOptions, TMRElementFeatureSize*)
+        void writeToVTK(const char*)
 
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
@@ -268,6 +270,7 @@ cdef extern from "TMRMesh.h":
         int write_mesh_quality_histogram
         int num_smoothing_steps
         double frontal_quality_factor
+        int reset_mesh_objects
         int write_init_domain_triangle
         int write_triangularize_intermediate
         int write_pre_smooth_triangle

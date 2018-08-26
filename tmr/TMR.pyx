@@ -26,8 +26,15 @@ cimport mpi4py.MPI as MPI
 cimport numpy as np
 import numpy as np
 
+cdef tmr_init():
+    if not TMRIsInitialized():
+        TMRInitialize()
+
 # Ensure that numpy is initialized
 np.import_array()
+
+# Initialize
+tmr_init()
 
 # Import the definition required for const strings
 from libc.string cimport const_char
@@ -924,6 +931,12 @@ cdef class MeshOptions:
             if value >= 1:
                 self.ptr.triangularize_print_iter = value
 
+    property reset_mesh_objects:
+        def __get__(self):
+            return self.ptr.reset_mesh_objects
+        def __set__(self, value):
+            self.ptr.reset_mesh_objects = value
+
     property write_mesh_quality_histogram:
         def __get__(self):
             return self.ptr.write_mesh_quality_histogram
@@ -1177,9 +1190,21 @@ cdef class Mesh:
 
 cdef class EdgeMesh:
     cdef TMREdgeMesh *ptr
-    def __cinit__(self, MPI.Comm comm, Edge e):
+    def __cinit__(self, MPI.Comm comm, Edge e,
+                  np.ndarray[double, ndim=2, mode='c'] _X=None):
         cdef MPI_Comm c_comm = comm.ob_mpi
-        self.ptr = new TMREdgeMesh(c_comm, e.ptr)
+        cdef TMRPoint *X = NULL
+        cdef int npts = 0
+        if _X is not None:
+            npts = _X.shape[0]
+            X = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
+            for i in range(npts):
+                X[i].x = _X[i,0]
+                X[i].y = _X[i,1]
+                X[i].z = _X[i,2]
+        self.ptr = new TMREdgeMesh(c_comm, e.ptr, X, npts)
+        if X:
+            free(X)
         self.ptr.incref()
 
     def __dealloc__(self):
@@ -1198,9 +1223,33 @@ cdef class EdgeMesh:
 
 cdef class FaceMesh:
     cdef TMRFaceMesh *ptr
-    def __cinit__(self, MPI.Comm comm, Face f):
+    def __cinit__(self, MPI.Comm comm, Face f,
+                  np.ndarray[double, ndim=2, mode='c'] _X=None,
+                  np.ndarray[int, ndim=2, mode='c'] _quads=None):
         cdef MPI_Comm c_comm = comm.ob_mpi
-        self.ptr = new TMRFaceMesh(c_comm, f.ptr)
+        cdef TMRPoint *X = NULL
+        cdef int *quads = NULL
+        cdef int npts = 0
+        cdef int nquads = 0
+        if _X is not None and _quads is not None:
+            npts = _X.shape[0]
+            nquads = _quads.shape[0]
+            X = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
+            quads = <int*>malloc(4*nquads*sizeof(int))
+            for i in range(npts):
+                X[i].x = _X[i,0]
+                X[i].y = _X[i,1]
+                X[i].z = _X[i,2]
+            for i in range(nquads):
+                quads[4*i] = _quads[i,0]
+                quads[4*i+1] = _quads[i,1]
+                quads[4*i+2] = _quads[i,2]
+                quads[4*i+3] = _quads[i,3]
+        self.ptr = new TMRFaceMesh(c_comm, f.ptr, X, npts, quads, nquads)
+        if X:
+            free(X)
+        if quads:
+            free(quads)
         self.ptr.incref()
 
     def __dealloc__(self):
@@ -1216,6 +1265,10 @@ cdef class FaceMesh:
         else:
             self.ptr.mesh(opts.ptr, fs)
         fs.decref()
+
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_str_to_chars(fname)
+        self.ptr.writeToVTK(filename)
 
 cdef class Topology:
     cdef TMRTopology *ptr
