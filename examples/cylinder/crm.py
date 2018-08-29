@@ -300,7 +300,6 @@ elif optimizer == 'ipopt':
     options['output_file'] = fname
     options['max_iter'] = 10000
 
-
 # The root rib for boundary conditions
 ucrm_root_rib = 149
 
@@ -391,13 +390,9 @@ opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 
-opts.write_post_smooth_quad = 1
-
 # Create the surface mesh
 mesh.mesh(htarget, opts)
 mesh.writeToVTK('results/mesh.vtk')
-
-exit(0)
 
 # The boundary condition object
 bcs = TMR.BoundaryConditions()

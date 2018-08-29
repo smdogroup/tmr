@@ -2711,8 +2711,10 @@ double TMRFaceMesh::computeQuadQuality( const int *quad,
     b.z = p[quad[next]].z - p[quad[k]].z;
 
     // Compute the internal angle
-    double beta = acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
-    double alpha = M_PI - beta;
+    double beta = a.dot(b)/sqrt(a.dot(a)*b.dot(b));
+    if (beta < -1.0){ beta = -1.0; }
+    if (beta > 1.0){ beta = 1.0; }
+    double alpha = M_PI - acos(beta);
     double val = fabs(0.5*M_PI - alpha);
     if (val > max_val){
       max_val = val;
@@ -2770,7 +2772,10 @@ double TMRFaceMesh::computeTriQuality( const int *tri,
     b.z = p[tri[next]].z - p[tri[k]].z;
 
     // Compute the internal angle
-    double alpha = M_PI - acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
+    double beta = a.dot(b)/sqrt(a.dot(a)*b.dot(b));
+    if (beta < -1.0){ beta = -1.0; }
+    if (beta > 1.0){ beta = 1.0; }
+    double alpha = M_PI - acos(beta);
     double val = fabs(M_PI/3.0 - alpha);
     if (val > max_val){
       max_val = val;
@@ -3425,8 +3430,8 @@ void TMRFaceMesh::writeToVTK( const char *filename ){
       fprintf(fp, "CELL_DATA %d\n", num_quads);
       fprintf(fp, "SCALARS quality float 1\n");
       fprintf(fp, "LOOKUP_TABLE default\n");
-      for ( int k = 0; k < num_quads; k++ ){
-        fprintf(fp, "%e\n", computeQuadQuality(&quads[4*k], X));
+      for ( int i = 0; i < num_quads; i++ ){
+        fprintf(fp, "%e\n", computeQuadQuality(&quads[4*i], X));
       }
 
       fclose(fp);

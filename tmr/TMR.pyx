@@ -311,6 +311,11 @@ cdef class Face:
     def setMesh(self, FaceMesh mesh):
         self.ptr.setMesh(mesh.ptr)
 
+    def getMesh(self):
+        cdef TMRFaceMesh *fmesh
+        self.ptr.getMesh(&fmesh)
+        return _init_FaceMesh(fmesh)
+
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
@@ -1231,15 +1236,16 @@ cdef class EdgeMesh:
 
 cdef class FaceMesh:
     cdef TMRFaceMesh *ptr
-    def __cinit__(self, MPI.Comm comm, Face f,
+    def __cinit__(self, MPI.Comm comm=None, Face f=None,
                   np.ndarray[double, ndim=2, mode='c'] _X=None,
                   np.ndarray[int, ndim=2, mode='c'] _quads=None):
-        cdef MPI_Comm c_comm = comm.ob_mpi
+        cdef MPI_Comm c_comm = NULL
         cdef TMRPoint *X = NULL
         cdef int *quads = NULL
         cdef int npts = 0
         cdef int nquads = 0
         if _X is not None and _quads is not None:
+            c_comm = comm.ob_mpi
             npts = _X.shape[0]
             nquads = _quads.shape[0]
             X = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
@@ -1253,12 +1259,12 @@ cdef class FaceMesh:
                 quads[4*i+1] = _quads[i,1]
                 quads[4*i+2] = _quads[i,2]
                 quads[4*i+3] = _quads[i,3]
-        self.ptr = new TMRFaceMesh(c_comm, f.ptr, X, npts, quads, nquads)
-        if X:
-            free(X)
-        if quads:
-            free(quads)
-        self.ptr.incref()
+            self.ptr = new TMRFaceMesh(c_comm, f.ptr, X, npts, quads, nquads)
+            if X:
+                free(X)
+            if quads:
+                free(quads)
+            self.ptr.incref()
 
     def __dealloc__(self):
         pass
@@ -1277,6 +1283,13 @@ cdef class FaceMesh:
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
+
+cdef _init_FaceMesh(TMRFaceMesh *ptr):
+    fm = FaceMesh()
+    fm.ptr = ptr
+    if ptr != NULL:
+        fm.ptr.incref()
+    return fm
 
 cdef class Topology:
     cdef TMRTopology *ptr
