@@ -109,7 +109,8 @@ cdef class Vertex:
 cdef _init_Vertex(TMRVertex *ptr):
     vertex = Vertex()
     vertex.ptr = ptr
-    vertex.ptr.incref()
+    if ptr != NULL:
+        vertex.ptr.incref()
     return vertex
 
 cdef class Edge:
@@ -170,7 +171,8 @@ cdef class Edge:
 cdef _init_Edge(TMREdge *ptr):
     edge = Edge()
     edge.ptr = ptr
-    edge.ptr.incref()
+    if ptr != NULL:
+        edge.ptr.incref()
     return edge
 
 cdef class EdgeLoop:
@@ -248,7 +250,8 @@ cdef class EdgeLoop:
 cdef _init_EdgeLoop(TMREdgeLoop *ptr):
     loop = EdgeLoop()
     loop.ptr = ptr
-    loop.ptr.incref()
+    if ptr != NULL:
+        loop.ptr.incref()
     return loop
 
 cdef class Face:
@@ -315,7 +318,8 @@ cdef class Face:
 cdef _init_Face(TMRFace *ptr):
     face = Face()
     face.ptr = ptr
-    face.ptr.incref()
+    if ptr != NULL:
+        face.ptr.incref()
     return face
 
 cdef class Volume:
@@ -379,7 +383,8 @@ cdef class Volume:
 cdef _init_Volume(TMRVolume *ptr):
     vol = Volume()
     vol.ptr = ptr
-    vol.ptr.incref()
+    if ptr != NULL:
+        vol.ptr.incref()
     return vol
 
 cdef class Curve:
@@ -445,7 +450,8 @@ cdef class Curve:
 cdef _init_Curve(TMRCurve *ptr):
     curve = Curve()
     curve.ptr = ptr
-    curve.ptr.incref()
+    if ptr != NULL:
+        curve.ptr.incref()
     return curve
 
 cdef class Pcurve:
@@ -517,7 +523,8 @@ cdef class Surface:
 cdef _init_Surface(TMRSurface *ptr):
     surface = Surface()
     surface.ptr = ptr
-    surface.ptr.incref()
+    if ptr != NULL:
+        surface.ptr.incref()
     return surface
 
 cdef class BsplineCurve(Curve):
@@ -889,7 +896,8 @@ cdef class Model:
 cdef _init_Model(TMRModel* ptr):
     model = Model()
     model.ptr = ptr
-    model.ptr.incref()
+    if ptr != NULL:
+        model.ptr.incref()
     return model
 
 cdef class MeshOptions:
@@ -1309,7 +1317,8 @@ cdef class Topology:
 cdef _init_Topology(TMRTopology *ptr):
     topo = Topology()
     topo.ptr = ptr
-    topo.ptr.incref()
+    if ptr != NULL:
+        topo.ptr.incref()
     return topo
 
 cdef class QuadrantArray:
@@ -1571,7 +1580,8 @@ cdef class QuadForest:
 cdef _init_QuadForest(TMRQuadForest* ptr):
     forest = QuadForest()
     forest.ptr = ptr
-    forest.ptr.incref()
+    if ptr != NULL:
+        forest.ptr.incref()
     return forest
 
 cdef class OctantArray:
@@ -1854,7 +1864,8 @@ cdef class OctForest:
 cdef _init_OctForest(TMROctForest* ptr):
     forest = OctForest()
     forest.ptr = ptr
-    forest.ptr.incref()
+    if ptr != NULL:
+        forest.ptr.incref()
     return forest
 
 def LoadModel(fname, int print_lev=0):

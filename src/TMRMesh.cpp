@@ -882,7 +882,7 @@ class EdgePt {
  public:
   TMRPoint p;
   double t;
-  
+
   static int compare( const void *a, const void *b ){
     double ta = (static_cast<const EdgePt*>(a))->t;
     double tb = (static_cast<const EdgePt*>(b))->t;
@@ -2696,9 +2696,9 @@ double TMRFaceMesh::computeQuadQuality( const int *quad,
 
   for ( int k = 0; k < 4; k++ ){
     int prev = k-1;
-    if (prev < 0){ prev = 3; }
+    if (k == 0){ prev = 3; }
     int next = k+1;
-    if (next > 3){ next = 0; }
+    if (k == 3){ next = 0; }
 
     TMRPoint a;
     a.x = p[quad[k]].x - p[quad[prev]].x;
@@ -2711,7 +2711,8 @@ double TMRFaceMesh::computeQuadQuality( const int *quad,
     b.z = p[quad[next]].z - p[quad[k]].z;
 
     // Compute the internal angle
-    double alpha = M_PI - acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
+    double beta = acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
+    double alpha = M_PI - beta;
     double val = fabs(0.5*M_PI - alpha);
     if (val > max_val){
       max_val = val;
