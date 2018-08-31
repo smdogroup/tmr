@@ -173,8 +173,8 @@ class CreateMe(TMR.QuadCreator):
 
     def createElement(self, order, quad):
         '''Create the element'''
-        # Get the model attribute and set the face
-        attr = topo.getFace(quad.face).getAttribute()
+        # Get the model name and set the face
+        attr = topo.getFace(quad.face).getName()
         return self.elem_dict[order-2][attr]
 
 def addFaceTraction(order, assembler):
@@ -323,7 +323,7 @@ ucrm_bottom_skins = [0,     6,  11,  16,  21,  26,  31,  36,  41,  46,
                      152, 157, 162, 168, 173, 178, 183, 188, 193, 198,
                      203, 211, 212, 216, 219, 223, 226]
 
-# Create the CRM wingbox model and set the attributes
+# Create the CRM wingbox model and set the names
 geo = TMR.LoadModel('ucrm_9_full_model.step')
 verts = geo.getVertices()
 edges = geo.getEdges()
@@ -347,11 +347,11 @@ max_thickness = 10.0
 skin_spar_dir = np.array([np.sin(30*np.pi/180.0), np.cos(30*np.pi/180), 0.0])
 rib_dir = np.array([1.0, 0.0, 0.0])
 
-# Set the face attributes and create the constitutive objects
+# Set the face names and create the constitutive objects
 elem_dict = [{}, {}, {}, {}]
 for i, f in enumerate(faces):
     attr = 'F%d'%(i)
-    f.setAttribute(attr)
+    f.setName(attr)
     stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, thickness,
                                  i, min_thickness, max_thickness)
 

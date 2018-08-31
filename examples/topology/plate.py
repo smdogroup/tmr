@@ -22,7 +22,7 @@ class CreateMe(TMR.QuadTopoCreator):
 def addVertexLoad(comm, order, forest, attr, assembler, F):
     # Retrieve octants from the forest
     quadrants = forest.getQuadrants()
-    node_octs = forest.getNodesWithAttribute(attr)
+    node_octs = forest.getNodesWithName(attr)
     force = assembler.createVec()
     f_array = force.getArray()
     node_range = forest.getNodeRange()
@@ -46,7 +46,7 @@ def addEdgeTraction(order, forest, attr, assembler, tr):
 
     # Retrieve octants from the forest
     quadrants = forest.getQuadrants()
-    edge_quads = forest.getQuadsWithAttribute(attr)
+    edge_quads = forest.getQuadsWithName(attr)
     aux = TACS.AuxElements()
 
     for i in range(len(edge_quads)):
@@ -134,8 +134,8 @@ geo = TMR.LoadModel('beam2d.stp')
 verts = geo.getVertices()
 edges = geo.getEdges()
 volumes = geo.getVolumes()
-edges[1].setAttribute('fixed')
-verts[0].setAttribute('pt1')
+edges[1].setName('fixed')
+verts[0].setName('pt1')
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()

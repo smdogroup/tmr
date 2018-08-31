@@ -69,11 +69,11 @@ geo = TMR.Model(verts, edges, faces)
 geo.writeModelToTecplot('model.dat')
 
 # Set the names of the geometric objects that will be fixed
-faces[28].setAttribute('fixed')
+faces[28].setName('fixed')
 for index in [67, 72, 74, 75]:
-    edges[index].setAttribute('fixed')
+    edges[index].setName('fixed')
 for index in [44, 46, 47, 45]:
-    verts[index].setAttribute('fixed')
+    verts[index].setName('fixed')
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)

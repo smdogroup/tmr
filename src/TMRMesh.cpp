@@ -4524,11 +4524,11 @@ void TMRMesh::mesh( TMRMeshOptions options,
       mesh = new TMRVolumeMesh(comm, volumes[i]);
       int fail = mesh->mesh(options);
       if (fail){
-        const char *attr = volumes[i]->getAttribute();
-        if (attr){
+        const char *name = volumes[i]->getName();
+        if (name){
           fprintf(stderr,
                   "TMRMesh: Volume meshing failed for object %s\n",
-                  attr);
+                  name);
         }
         else {
           fprintf(stderr,
@@ -4929,12 +4929,12 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
           const int *vars;
           mesh->getNodeNums(&vars);
 
-          // Set the face id == attribute
+          // Set the face id == name
           char descript[128];
           snprintf(descript, sizeof(descript), "FACE%d",
                    faces[i]->getEntityId());
-          if (faces[i]->getAttribute() != NULL){
-            strncpy(descript, faces[i]->getAttribute(), sizeof(descript));
+          if (faces[i]->getName() != NULL){
+            strncpy(descript, faces[i]->getName(), sizeof(descript));
           }
 
           // Print a local description of the face - use the entity
@@ -4983,13 +4983,12 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
           const int *vars;
           mesh->getNodeNums(&vars);
 
-          // Set the face id == attribute
+          // Set the face id == name
           char descript[128];
           snprintf(descript, sizeof(descript), "VOLUME%d",
                    volumes[i]->getEntityId());
-          if (volumes[i]->getAttribute() != NULL){
-            strncpy(descript, volumes[i]->getAttribute(),
-                    sizeof(descript));
+          if (volumes[i]->getName() != NULL){
+            strncpy(descript, volumes[i]->getName(), sizeof(descript));
           }
 
           // Print a local description of the face - use the entity

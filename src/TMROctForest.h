@@ -121,10 +121,10 @@ class TMROctForest : public TMREntity {
   void createInterpolation( TMROctForest *coarse,
                             TACSBVecInterp *interp );
 
-  // Get the nodes or elements with certain attributes
-  // -------------------------------------------------
-  TMROctantArray* getOctsWithAttribute( const char *attr );
-  int getNodesWithAttribute( const char *attr, int **_nodes );
+  // Get the nodes or elements with a certain name
+  // ---------------------------------------------
+  TMROctantArray* getOctsWithName( const char *name );
+  int getNodesWithName( const char *name, int **_nodes );
 
   // Get the node-processor ownership range
   // --------------------------------------

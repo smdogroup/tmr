@@ -38,7 +38,7 @@
 #include "TACSAssembler.h"
 
 /*
-  Specify a list of boundary conditions through a list of attributes
+  Specify a list of boundary conditions through a list of names
   and boundary condition information for each node
 */
 class TMRBoundaryConditions : public TMREntity {
@@ -46,14 +46,14 @@ class TMRBoundaryConditions : public TMREntity {
   TMRBoundaryConditions();
   ~TMRBoundaryConditions();
 
-  // Add a boundary condition associated with the specified attribute  
-  void addBoundaryCondition( const char *attr, 
+  // Add a boundary condition associated with the specified name  
+  void addBoundaryCondition( const char *name, 
                              int num_bcs, const int bc_nums[],
                              const TacsScalar *_bc_vals=NULL );
 
   // Get the number of boundary conditions
   int getNumBoundaryConditions();
-  void getBoundaryCondition( int bc, const char **_attr, 
+  void getBoundaryCondition( int bc, const char **_name, 
                              int *_num_bcs,
                              const int **_bcs_nums,
                              const TacsScalar **_bc_vals );
@@ -66,11 +66,11 @@ class TMRBoundaryConditions : public TMREntity {
   // typically only a handful of these objects
   class BCNode {
   public:
-    BCNode( const char *_attr, int _num_bcs, const int *_bc_nums,
+    BCNode( const char *_name, int _num_bcs, const int *_bc_nums,
             const TacsScalar *_bc_vals );
     ~BCNode();
     BCNode *next;
-    char *attr;
+    char *name;
     int num_bcs;
     int *bc_nums;
     TacsScalar *bc_vals;
@@ -140,8 +140,8 @@ class TMROctTACSCreator : public TMREntity {
     return NULL;
   }
 
-  // Add a boundary condition associated with the specified attribute  
-  void addBoundaryCondition( const char *attr, 
+  // Add a boundary condition associated with the specified name  
+  void addBoundaryCondition( const char *name, 
                              int num_bcs, const int bc_nums[] );
 
   // Create the TACSAssembler object with the given order for this forest

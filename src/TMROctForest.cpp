@@ -5667,36 +5667,36 @@ int TMROctForest::getDepNodeConn( const int **ptr, const int **conn,
 
 /*
   Get the elements that either lie in a volume, on a face or on a
-  curve with a given attribute.
+  curve with a given name.
 
   This code loops over all octants that are locally owned on this
-  processor and checks the attribute of the underlying topological
-  entry. If the volume attribute matches, the octant is added
+  processor and checks the name of the underlying topological
+  entry. If the volume name matches, the octant is added
   directly, otherwise the local face or volume index is set as the
   tag.
 
   input:
-  attr:   string attribute associated with the geometric feature
+  name:   string name associated with the geometric feature
 
   returns:
-  list:   an array of octants satisfying the attribute
+  list:   an array of octants satisfying the name
 */
-TMROctantArray* TMROctForest::getOctsWithAttribute( const char *attr ){
+TMROctantArray* TMROctForest::getOctsWithName( const char *name ){
   if (!topo){
     fprintf(stderr, "TMROctForest: Must define topology to use \
-getOctsWithAttribute()\n");
+getOctsWithName()\n");
     return NULL;
   }
   if (!octants){
     fprintf(stderr, "TMROctForest: Must create octants to use \
-getOctsWithAttribute()\n");
+getOctsWithName()\n");
     return NULL;
   }
 
-  // Set the flag if the attribute is NULL
-  int attr_is_null = 1;
-  if (attr){
-    attr_is_null = 0;
+  // Set the flag if the name is NULL
+  int name_is_null = 1;
+  if (name){
+    name_is_null = 0;
   }
 
   // Create a queue to store the elements that we find
@@ -5708,7 +5708,7 @@ getOctsWithAttribute()\n");
   octants->getArray(&array, &size);
 
   // Loop over the octants and find out whether it touches
-  // a face or edge with the prescribed attribute
+  // a face or edge with the prescribed name
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   for ( int i = 0; i < size; i++ ){
     const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
@@ -5716,24 +5716,24 @@ getOctsWithAttribute()\n");
     // Get the surface octant
     TMRVolume *vol;
     topo->getVolume(array[i].block, &vol);
-    const char *vol_attr = vol->getAttribute();
-    if ((attr_is_null && !vol_attr) ||
-        (vol_attr && strcmp(vol_attr, attr) == 0)){
+    const char *vol_name = vol->getName();
+    if ((name_is_null && !vol_name) ||
+        (vol_name && strcmp(vol_name, name) == 0)){
       queue->push(&array[i]);
     }
     else {
       // If this is a root octant, then we should check all of the
       // sides, otherwise we will only check a maximum of three of the
-      // sides to see if the face attribute matches
+      // sides to see if the face name matches
       if (array[i].level == 0){
         for ( int face_index = 0; face_index < 6; face_index++ ){
           TMROctant oct = array[i];
           int face_num = bdata->block_face_conn[6*array[i].block + face_index];
           TMRFace *face;
           topo->getFace(face_num, &face);
-          const char *face_attr = face->getAttribute();
-          if ((attr_is_null && !face_attr) ||
-              (face_attr && strcmp(face_attr, attr) == 0)){
+          const char *face_name = face->getName();
+          if ((name_is_null && !face_name) ||
+              (face_name && strcmp(face_name, name) == 0)){
             oct.info = face_index;
             queue->push(&oct);
           }
@@ -5755,9 +5755,9 @@ getOctsWithAttribute()\n");
             int face_index = (fx0 ? 0 : 1);
             int face_num = bdata->block_face_conn[6*array[i].block + face_index];
             topo->getFace(face_num, &face);
-            const char *face_attr = face->getAttribute();
-            if ((attr_is_null && !face_attr) ||
-                (face_attr && strcmp(face_attr, attr) == 0)){
+            const char *face_name = face->getName();
+            if ((name_is_null && !face_name) ||
+                (face_name && strcmp(face_name, name) == 0)){
               oct.info = face_index;
               queue->push(&oct);
             }
@@ -5766,9 +5766,9 @@ getOctsWithAttribute()\n");
             int face_index = (fy0 ? 2 : 3);
             int face_num = bdata->block_face_conn[6*array[i].block + face_index];
             topo->getFace(face_num, &face);
-            const char *face_attr = face->getAttribute();
-            if ((attr_is_null && !face_attr) ||
-                (face_attr && strcmp(face_attr, attr) == 0)){
+            const char *face_name = face->getName();
+            if ((name_is_null && !face_name) ||
+                (face_name && strcmp(face_name, name) == 0)){
               oct.info = face_index;
               queue->push(&oct);
             }
@@ -5777,9 +5777,9 @@ getOctsWithAttribute()\n");
             int face_index = (fz0 ? 4 : 5);
             int face_num = bdata->block_face_conn[6*array[i].block + face_index];
             topo->getFace(face_num, &face);
-            const char *face_attr = face->getAttribute();
-            if ((attr_is_null && !face_attr) ||
-                (face_attr && strcmp(face_attr, attr) == 0)){
+            const char *face_name = face->getName();
+            if ((name_is_null && !face_name) ||
+                (face_name && strcmp(face_name, name) == 0)){
               oct.info = face_index;
               queue->push(&oct);
             }
@@ -5796,33 +5796,33 @@ getOctsWithAttribute()\n");
 
 /*
   Create an array of the nodes that are lie on a surface, edge or
-  corner with a given attribute
+  corner with a given name
 
   This code loops over all nodes and check whether they lie on a
-  geometric entity that has the given attribute. If the intersect flag
+  geometric entity that has the given name. If the intersect flag
   is active (which is the default), then only the owner is checked,
-  e.g. if the node lies on a corner, only the attribute of the vertex
+  e.g. if the node lies on a corner, only the name of the vertex
   is checked. If intersect is false then the edge, face and volume
-  attributes are also check and the node is added if any of them
+  names are also check and the node is added if any of them
   match.
 
   input:
-  attr:       the string of the attribute to search
+  name:       the string of the name to search
 
   returns:
-  list:   the nodes matching the specified attribute
+  list:   the nodes matching the specified name
 */
-int TMROctForest::getNodesWithAttribute( const char *attr,
-                                         int **_nodes ){
+int TMROctForest::getNodesWithName( const char *name,
+                                    int **_nodes ){
   if (!topo){
     fprintf(stderr, "TMROctForest: Must define topology to use \
-getNodesWithAttribute()\n");
+getNodesWithName()\n");
     *_nodes = NULL;
     return 0;
   }
   if (!conn){
     fprintf(stderr, "TMROctForest: Nodes must be created before calling \
-getNodesWithAttribute()\n");
+getNodesWithName()\n");
     *_nodes = NULL;
     return 0;
   }
@@ -5830,15 +5830,15 @@ getNodesWithAttribute()\n");
   // The max octant edge length
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
 
-  // Set the flag if the attribute is NULL
-  int attr_is_null = 1;
-  if (attr){
-    attr_is_null = 0;
+  // Set the flag if the name is NULL
+  int name_is_null = 1;
+  if (name){
+    name_is_null = 0;
   }
 
   int count = 0; // Current node count
   int max_len = 1024; // max length of the node list
-  int *node_list = new int[ max_len ]; // Nodes touching this attribute
+  int *node_list = new int[ max_len ]; // Nodes touching this name
 
   // Get the octants
   int size;
@@ -5850,7 +5850,7 @@ getNodesWithAttribute()\n");
     mesh_order*mesh_order*mesh_order;
 
   // Loop over the octants and find out whether it touches a face or
-  // edge with the prescribed attribute
+  // edge with the prescribed name
   for ( int i = 0; i < size; i++ ){
     if (count + max_node_incr > max_len){
       // Extend the length of the array
@@ -5911,9 +5911,9 @@ getNodesWithAttribute()\n");
         TMRVertex *vert;
         int vert_num = bdata->block_conn[8*octs[i].block + vert_index[k]];
         topo->getVertex(vert_num, &vert);
-        const char *vert_attr = vert->getAttribute();
-        if ((attr_is_null && !vert_attr) ||
-            (vert_attr && strcmp(vert_attr, attr) == 0)){
+        const char *vert_name = vert->getName();
+        if ((name_is_null && !vert_name) ||
+            (vert_name && strcmp(vert_name, name) == 0)){
           int offset = ((mesh_order-1)*(vert_index[k] % 2) +
                         (mesh_order-1)*mesh_order*((vert_index[k] % 4)/2) +
                         (mesh_order-1)*mesh_order*mesh_order*(vert_index[k]/4));
@@ -5973,9 +5973,9 @@ getNodesWithAttribute()\n");
         TMREdge *edge;
         int edge_num = bdata->block_edge_conn[12*octs[i].block + edge_index[k]];
         topo->getEdge(edge_num, &edge);
-        const char *edge_attr = edge->getAttribute();
-        if ((attr_is_null && !edge_attr) ||
-            (edge_attr && strcmp(edge_attr, attr) == 0)){
+        const char *edge_name = edge->getName();
+        if ((name_is_null && !edge_name) ||
+            (edge_name && strcmp(edge_name, name) == 0)){
           if (edge_index[k] < 4){
             const int jj = (mesh_order-1)*(edge_index[k] % 2);
             const int kk = (mesh_order-1)*(edge_index[k] / 2);
@@ -6033,9 +6033,9 @@ getNodesWithAttribute()\n");
         TMRFace *face;
         int face_num = bdata->block_face_conn[6*octs[i].block + face_index[k]];
         topo->getFace(face_num, &face);
-        const char *face_attr = face->getAttribute();
-        if ((attr_is_null && !face_attr) ||
-            (face_attr && strcmp(face_attr, attr) == 0)){
+        const char *face_name = face->getName();
+        if ((name_is_null && !face_name) ||
+            (face_name && strcmp(face_name, name) == 0)){
           if (face_index[k] < 2){
             const int ii = (mesh_order-1)*(face_index[k] % 2);
             for ( int kk = 0; kk < mesh_order; kk++ ){
@@ -6072,9 +6072,9 @@ getNodesWithAttribute()\n");
     else {
       TMRVolume *volume;
       topo->getVolume(octs[i].block, &volume);
-      const char *volume_attr = volume->getAttribute();
-      if ((attr_is_null && !volume_attr) ||
-          (volume_attr && strcmp(volume_attr, attr) == 0)){
+      const char *volume_name = volume->getName();
+      if ((name_is_null && !volume_name) ||
+          (volume_name && strcmp(volume_name, name) == 0)){
         for ( int kk = 0; kk < mesh_order; kk++ ){
           for ( int jj = 0; jj < mesh_order; jj++ ){
             for ( int ii = 0; ii < mesh_order; ii++ ){

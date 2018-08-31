@@ -1082,11 +1082,11 @@ within the vertex list\n");
   if (print_all_errors){
     for ( int i = 0; i < num_vertices; i++ ){
       if (verts[i] == 0){
-        const char *attr = NULL;
-        if (vertices[i] && (attr = vertices[i]->getAttribute())){
+        const char *name = NULL;
+        if (vertices[i] && (name = vertices[i]->getName())){
           fprintf(stderr,
                   "TMRModel warning: Vertex %d with name %s unreferenced\n",
-                  i, attr);
+                  i, name);
         }
         else {
           fprintf(stderr,
@@ -1097,11 +1097,11 @@ within the vertex list\n");
     }
     for ( int i = 0; i < num_edges; i++ ){
       if (crvs[i] == 0){
-        const char *attr = NULL;
-        if (edges[i] && (attr = edges[i]->getAttribute())){
+        const char *name = NULL;
+        if (edges[i] && (name = edges[i]->getName())){
           fprintf(stderr,
                   "TMRModel warning: Edge %d with name %s unreferenced\n",
-                  i, attr);
+                  i, name);
         }
         else {
           fprintf(stderr,

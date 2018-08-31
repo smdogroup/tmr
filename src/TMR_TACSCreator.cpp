@@ -44,13 +44,13 @@ TMRBoundaryConditions::~TMRBoundaryConditions(){
 /*
   Constructor for the BCNode sub-class
 */
-TMRBoundaryConditions::BCNode::BCNode( const char *_attr,
+TMRBoundaryConditions::BCNode::BCNode( const char *_name,
                                        int _num_bcs,
                                        const int *_bc_nums,
                                        const TacsScalar *_bc_vals ){
   next = NULL;
-  attr = new char[ strlen(_attr)+1 ];
-  strcpy(attr, _attr);
+  name = new char[ strlen(_name)+1 ];
+  strcpy(name, _name);
   num_bcs = _num_bcs;
 
   if (num_bcs > 0){
@@ -75,21 +75,21 @@ TMRBoundaryConditions::BCNode::BCNode( const char *_attr,
   Destructor for the BCNode sub-class
 */
 TMRBoundaryConditions::BCNode::~BCNode(){
-  delete [] attr;
+  delete [] name;
   if (bc_nums){ delete [] bc_nums; }
   if (bc_vals){ delete [] bc_vals; }
 }
 
 /*
   Add the boundary conditions that will be associated with the
-  specified attribute to the boundary condition linked list.
+  specified name to the boundary condition linked list.
 */
-void TMRBoundaryConditions::addBoundaryCondition( const char *attribute,
+void TMRBoundaryConditions::addBoundaryCondition( const char *name,
                                                   int num_bc_nums,
                                                   const int bc_nums[],
                                                   const TacsScalar *bc_vals ){
   num_bcs++;
-  BCNode *node = new BCNode(attribute, num_bc_nums, bc_nums, bc_vals);
+  BCNode *node = new BCNode(name, num_bc_nums, bc_nums, bc_vals);
   if (!bc_root){
     bc_root = node;
     bc_current = node;
@@ -110,11 +110,11 @@ int TMRBoundaryConditions::getNumBoundaryConditions(){
 /*
   Retrieve the boundary conditions
 */
-void TMRBoundaryConditions::getBoundaryCondition( int bc, const char **_attr,
+void TMRBoundaryConditions::getBoundaryCondition( int bc, const char **_name,
                                                   int *_num_bcs,
                                                   const int **_bc_nums,
                                                   const TacsScalar **_bc_vals ){
-  *_attr = NULL;
+  *_name = NULL;
   *_num_bcs = -1;
   *_bc_nums = NULL;
   *_bc_vals = NULL;
@@ -130,7 +130,7 @@ void TMRBoundaryConditions::getBoundaryCondition( int bc, const char **_attr,
 
   // If the node exists, write out the node
   if (node){
-    *_attr = node->attr;
+    *_name = node->name;
     *_num_bcs = node->num_bcs;
     *_bc_nums = node->bc_nums;
     *_bc_vals = node->bc_vals;
@@ -258,17 +258,17 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
   if (bcs){
     for ( int k = 0; k < bcs->getNumBoundaryConditions(); k++ ){
       // Retrieve the boundary condition
-      const char *attribute;
+      const char *name;
       int num_bcs;
       const int *bc_nums;
       const TacsScalar *bc_vals;
-      bcs->getBoundaryCondition(k, &attribute, &num_bcs,
+      bcs->getBoundaryCondition(k, &name, &num_bcs,
                                 &bc_nums, &bc_vals);
 
-      if (attribute){
-        // Retrieve the nodes associated with the specified attribute
+      if (name){
+        // Retrieve the nodes associated with the specified name
         int *nodes;
-        int num_nodes = forest->getNodesWithAttribute(attribute, &nodes);
+        int num_nodes = forest->getNodesWithName(name, &nodes);
 
         // Add the boundary conditions to TACSAssembler
         tacs->addBCs(num_nodes, nodes, num_bcs, bc_nums, bc_vals);
@@ -455,17 +455,17 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
   if (bcs){
     for ( int k = 0; k < bcs->getNumBoundaryConditions(); k++ ){
       // Retrieve the boundary condition
-      const char *attribute;
+      const char *name;
       int num_bcs;
       const int *bc_nums;
       const TacsScalar *bc_vals;
-      bcs->getBoundaryCondition(k, &attribute, &num_bcs,
+      bcs->getBoundaryCondition(k, &name, &num_bcs,
                                 &bc_nums, &bc_vals);
 
-      if (attribute){
-        // Retrieve the nodes associated with the specified attribute
+      if (name){
+        // Retrieve the nodes associated with the specified name
         int *nodes;
-        int num_nodes = forest->getNodesWithAttribute(attribute, &nodes);
+        int num_nodes = forest->getNodesWithName(name, &nodes);
 
         // Add the boundary conditions to TACSAssembler
         tacs->addBCs(num_nodes, nodes, num_bcs, bc_nums, bc_vals);

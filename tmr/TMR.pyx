@@ -84,15 +84,15 @@ cdef class Vertex:
         self.ptr.evalPoint(&pt)
         return np.array([pt.x, pt.y, pt.z])
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
-    def getAttribute(self):
+    def getName(self):
         cdef const char *name = NULL
         if self.ptr:
-            name = self.ptr.getAttribute()
+            name = self.ptr.getName()
             return tmr_convert_char_to_str(name)
         return None
 
@@ -127,15 +127,15 @@ cdef class Edge:
         self.ptr.evalPoint(t, &pt)
         return np.array([pt.x, pt.y, pt.z])
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
-    def getAttribute(self):
+    def getName(self):
         cdef const char *name = NULL
         if self.ptr:
-            name = self.ptr.getAttribute()
+            name = self.ptr.getName()
             return tmr_convert_char_to_str(name)
         return None
 
@@ -268,15 +268,15 @@ cdef class Face:
         self.ptr.evalPoint(u, v, &pt)
         return np.array([pt.x, pt.y, pt.z])
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
-    def getAttribute(self):
+    def getName(self):
         cdef const char *name = NULL
         if self.ptr:
-            name = self.ptr.getAttribute()
+            name = self.ptr.getName()
             return tmr_convert_char_to_str(name)
         return None
 
@@ -354,15 +354,15 @@ cdef class Volume:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
-    def getAttribute(self):
+    def getName(self):
         cdef const char *name = NULL
         if self.ptr:
-            name = self.ptr.getAttribute()
+            name = self.ptr.getName()
             return tmr_convert_char_to_str(name)
         return None
 
@@ -401,10 +401,10 @@ cdef class Curve:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
     def getEntityId(self):
         if self.ptr:
@@ -468,10 +468,10 @@ cdef class Pcurve:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
     def getEntityId(self):
         if self.ptr:
@@ -487,10 +487,10 @@ cdef class Surface:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
@@ -1511,17 +1511,17 @@ cdef class QuadForest:
     def createNodes(self):
         self.ptr.createNodes()
 
-    def getQuadsWithAttribute(self, aname):
+    def getQuadsWithName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef TMRQuadrantArray *array = NULL
-        array = self.ptr.getQuadsWithAttribute(name)
+        array = self.ptr.getQuadsWithName(name)
         return _init_QuadrantArray(array, 1)
 
-    def getNodesWithAttribute(self, aname):
+    def getNodesWithName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int size = 0
         cdef int *nodes = NULL
-        size = self.ptr.getNodesWithAttribute(name, &nodes)
+        size = self.ptr.getNodesWithName(name, &nodes)
         array = np.zeros(size, dtype=np.intc)
         for i in range(size):
             array[i] = nodes[i]
@@ -1795,17 +1795,17 @@ cdef class OctForest:
     def createNodes(self):
         self.ptr.createNodes()
 
-    def getOctsWithAttribute(self, aname):
+    def getOctsWithName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef TMROctantArray *array = NULL
-        array = self.ptr.getOctsWithAttribute(name)
+        array = self.ptr.getOctsWithName(name)
         return _init_OctantArray(array, 1)
 
-    def getNodesWithAttribute(self, aname):
+    def getNodesWithName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int size = 0
         cdef int *nodes = NULL
-        size = self.ptr.getNodesWithAttribute(name, &nodes)
+        size = self.ptr.getNodesWithName(name, &nodes)
         array = np.zeros(size, dtype=np.intc)
         for i in range(size):
             array[i] = nodes[i]
