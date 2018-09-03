@@ -12,6 +12,120 @@ import ksFSDT
 from pyoptsparse import Optimization, OPT
 from scipy import sparse
 
+# Guess the spar, rib and skin indices
+def get_face_indices(faces):
+    ucrm_skins = []
+    ucrm_spars = []
+    ucrm_ribs = []
+
+    # Find the edge loops
+    for index, face in enumerate(faces):
+        nx = np.zeros(3)
+
+        for k in range(face.getNumEdgeLoops()):
+            loop = face.getEdgeLoop(k)
+
+            elist, dirs = loop.getEdgeLoop()
+            pts = np.zeros((len(elist)+1, 3))
+            tx = np.zeros((len(elist)+1, 3))
+            for i, e in enumerate(elist):
+                v1, v2 = e.getVertices()
+                if dirs[i] > 0:
+                    pt1 = v1.evalPoint()
+                    pt2 = v2.evalPoint()
+                else:
+                    pt1 = v2.evalPoint()
+                    pt2 = v1.evalPoint()
+                if i == 0:
+                    pts[0,:] = pt1[:]
+                pts[i+1,:] = pt2[:]
+
+            for i in range(len(elist)):
+                tx[i,:] = pts[i+1,:] - pts[i,:]
+            tx[-1,:] = pts[1,:] - pts[0,:]
+
+            # Find the average normal direction
+            for i in range(len(elist)):
+                nx += np.cross(tx[i], tx[i+1])
+            nx /= np.sqrt(np.dot(nx, nx))
+
+            # Quit after the first face loop
+            break
+
+        # Normal directions
+        theta = 30*np.pi/180.0
+        face_dir = np.array([0.0, 0.0, 1.0])
+        rib_dir = np.array([np.sin(theta), np.cos(theta), 0.0])
+        spar_dir = np.array([-np.cos(theta), np.sin(theta), 0.0])
+
+        fd = np.fabs(np.dot(face_dir, nx))
+        rd = np.fabs(np.dot(rib_dir, nx))
+        sd = np.fabs(np.dot(spar_dir, nx))
+
+        if fd > rd and fd > sd:
+            ucrm_skins.append(index)
+        elif rd > fd and rd > sd:
+            ucrm_ribs.append(index)
+        else:
+            ucrm_spars.append(index)
+
+    return ucrm_skins, ucrm_spars, ucrm_ribs
+
+def uniquify(seq):
+    set = {}
+    for e in seq:
+        set[e] = 1
+    return sorted(set.keys())
+
+def get_face_to_face_index(faces, edges):
+    # Set the face indices
+    face_index = {}
+    for i, f in enumerate(faces):
+        face_index[f.getName()] = i
+
+    # Set the edge to face index
+    edge_to_face = {}
+    for e in edges:
+        edge_to_face[e.getName()] = {}
+
+    # Create an edge to face dictionary
+    for i, face in enumerate(faces):
+        # Get the edge loop
+        loop = face.getEdgeLoop(0)
+        elist, dirs = loop.getEdgeLoop()
+
+        for e in elist:
+            name = e.getName()
+            if name in edge_to_face:
+                edge_to_face[name][face.getName()] = True
+
+    # Now loop over the edges
+    face_to_face = []
+    for i, face in enumerate(faces):
+        loop = face.getEdgeLoop(0)
+        elist, dirs = loop.getEdgeLoop()
+
+        flist = []
+        for e in elist:
+            ename = e.getName()
+            if ename in edge_to_face:
+                for name in edge_to_face[e.getName()]:
+                    if i != face_index[name]:
+                        flist.append(face_index[name])
+
+        # Sort the edge list
+        face_to_face.append(uniquify(flist))
+
+    return face_to_face
+
+def get_constraint_pairs(face_to_face, face_set):
+    pairs = []
+    for index in face_set:
+        for adj in face_to_face[index]:
+            if adj in face_set:
+                pairs.append((index, adj))
+    return pairs
+
 class uCRM_VonMisesMassMin:
     '''
     Mass minimization with a von Mises stress constraint
@@ -35,6 +149,9 @@ class uCRM_VonMisesMassMin:
         # will use the KS function)
         self.ncon = 1
 
+        # Set the iteration counter
+        self.iter_count = 0
+
         return
 
     def setAssembler(self, assembler, mg, gmres, ksfunc):
@@ -50,9 +167,16 @@ class uCRM_VonMisesMassMin:
         self.res = self.assembler.createVec()
         self.adjoint = self.assembler.createVec()
         self.dfdu = self.assembler.createVec()
-        self.mg = mg
-        self.mat = self.mg.getMat()
-        self.gmres = gmres
+
+        self.use_multigrid = False
+        if self.use_multigrid:
+            self.mg = mg
+            self.mat = self.mg.getMat()
+            self.gmres = gmres
+        else:
+            self.mat = self.assembler.createFEMat()
+            self.pc = TACS.Pc(self.mat)
+            self.gmres = TACS.KSM(self.mat, self.pc, 10)
 
         # For visualization
         flag = (TACS.ToFH5.NODES |
@@ -60,7 +184,6 @@ class uCRM_VonMisesMassMin:
                 TACS.ToFH5.STRAINS |
                 TACS.ToFH5.EXTRAS)
         self.f5 = TACS.ToFH5(self.assembler, TACS.PY_SHELL, flag)
-        self.iter_count = 0
 
         return
 
@@ -100,8 +223,12 @@ class uCRM_VonMisesMassMin:
         beta = 0.0
         gamma = 0.0
         self.assembler.zeroVariables()
-        self.mg.assembleJacobian(alpha, beta, gamma, self.res)
-        self.mg.factor()
+        if self.use_multigrid:
+            self.mg.assembleJacobian(alpha, beta, gamma, self.res)
+            self.mg.factor()
+        else:
+            self.assembler.assembleJacobian(alpha, beta, gamma, self.res, self.mat)
+            self.pc.factor()
 
         # Solve the linear system and set the varaibles into TACS
         self.gmres.solve(self.res, self.ans)
@@ -190,7 +317,7 @@ def addFaceTraction(order, assembler):
     tx = np.zeros(nnodes, dtype=TACS.dtype)
     ty = np.zeros(nnodes, dtype=TACS.dtype)
     tz = np.zeros(nnodes, dtype=TACS.dtype)
-    tz[:] = 10.0
+    tz[:] = 5.0
 
     # Create the shell traction
     trac = elements.ShellTraction(order, tx, ty, tz)
@@ -283,13 +410,14 @@ order = args.order
 ordering = args.ordering
 ordering = ordering.lower()
 
-tol = 1e-5
+tol = 1e-4
 fname = 'results/crm_opt.out'
 options = {}
 if args.optimizer == 'snopt':
     options['Print file'] = fname
     options['Summary file'] = fname + '_summary'
     options['Major optimality tolerance'] = tol
+    options['Major iterations limit'] = 50
 elif optimizer == 'ipopt':
     options['print_user_options'] = 'yes'
     options['tol'] = tol
@@ -300,35 +428,36 @@ elif optimizer == 'ipopt':
     options['output_file'] = fname
     options['max_iter'] = 10000
 
-# The root rib for boundary conditions
-ucrm_root_rib = 149
-
-ucrm_ribs = [4,     5,  10,  15,  20,  25,  30,  35,  40,  45,
-             50,   55,  60,  65,  70,  75,  80,  85,  90,  95,
-             100, 105, 110, 115, 120, 125, 130, 135, 140, 142,
-             149, 151, 156, 161, 166, 167, 172, 177, 182, 187,
-             192, 197, 202, 207, 229, 230, 231, 232, 233, 234,
-             235]
-
-# The 47 top and bottom skin segments
-ucrm_top_skins = [2,     8,  13,  18,  23,  28,  33,  38,  43,  48,
-                  53,   58,  63,  68,  73,  78,  83,  88,  93,  98,
-                  103, 108, 113, 118, 123, 128, 133, 138, 143, 148,
-                  154, 159, 164, 170, 175, 180, 185, 190, 195, 200,
-                  205, 208, 214, 218, 221, 225, 228]
-
-ucrm_bottom_skins = [0,     6,  11,  16,  21,  26,  31,  36,  41,  46,
-                     51,   56,  61,  66,  71,  76,  81,  86,  91,  96,
-                     101, 106, 111, 116, 121, 126, 131, 136, 141, 146,
-                     152, 157, 162, 168, 173, 178, 183, 188, 193, 198,
-                     203, 211, 212, 216, 219, 223, 226]
-
 # Create the CRM wingbox model and set the names
-geo = TMR.LoadModel('ucrm_9_full_model.step')
+geo = TMR.LoadModel('ucrm_9_model.step')
 verts = geo.getVertices()
 edges = geo.getEdges()
 faces = geo.getFaces()
 geo = TMR.Model(verts, edges, faces)
+
+# Set the edge names
+for i, e in enumerate(edges):
+    attr = 'E%d'%(i)
+    e.setName(attr)
+
+# Set the face names and create the constitutive objects
+elem_dict = [{}, {}, {}, {}]
+for i, f in enumerate(faces):
+    attr = 'F%d'%(i)
+    f.setName(attr)
+
+# The root rib for boundary conditions
+ucrm_root_edges = [200, 380, 270, 220]
+
+ucrm_skins, ucrm_spars, ucrm_ribs = get_face_indices(faces)
+
+# Get the face to face adjacency data structure
+face_to_face = get_face_to_face_index(faces, edges)
+
+# Create the constraint pairs for each group
+pairs = get_constraint_pairs(face_to_face, ucrm_skins)
+pairs.extend(get_constraint_pairs(face_to_face, ucrm_spars))
+pairs.extend(get_constraint_pairs(face_to_face, ucrm_ribs))
 
 # Set the number of design variables
 num_design_vars = len(faces)
@@ -338,10 +467,10 @@ rho = 97.5e-3 # 0.0975 lb/in^3
 E = 10000e3 # 10,000 ksi: Young's modulus
 nu = 0.3 # Poisson ratio
 kcorr = 5.0/6.0 # Shear correction factor
-ys = 40e3 # psi
+ys = 20e3 # psi
 thickness = 1.0
-min_thickness = 0.1
-max_thickness = 10.0
+min_thickness = 0.125 # 1/8th of an inch
+max_thickness = 100.0
 
 # Set the different directions
 skin_spar_dir = np.array([np.sin(30*np.pi/180.0), np.cos(30*np.pi/180), 0.0])
@@ -351,7 +480,6 @@ rib_dir = np.array([1.0, 0.0, 0.0])
 elem_dict = [{}, {}, {}, {}]
 for i, f in enumerate(faces):
     attr = 'F%d'%(i)
-    f.setName(attr)
     stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, thickness,
                                  i, min_thickness, max_thickness)
 
@@ -363,12 +491,10 @@ for i, f in enumerate(faces):
 
     # Set the component number for visualization purposes
     comp = 0
-    if i in ucrm_top_skins:
+    if i in ucrm_skins:
         comp = 1
-    elif i in ucrm_bottom_skins:
-        comp = 2
     elif i in ucrm_ribs:
-        comp = 3
+        comp = 2
 
     # Create the elements of different orders
     for j in range(4):
@@ -396,7 +522,8 @@ mesh.writeToVTK('results/mesh.vtk')
 
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('F%d'%(ucrm_root_rib), [0, 1, 2, 3, 4, 5])
+for edge_num in ucrm_root_edges:
+    bcs.addBoundaryCondition('E%d'%(edge_num), [0, 1, 2, 3, 4, 5])
 
 # Set the feature size object
 feature_size = None
@@ -410,8 +537,8 @@ opt_problem = uCRM_VonMisesMassMin(comm, num_design_vars)
 
 # Create the quad forest and set the topology of the forest
 depth = 0
-if order == 2:
-    depth = 1
+# if order == 2:
+#     depth = 1
 forest = TMR.QuadForest(comm)
 forest.setTopology(topo)
 forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
@@ -504,6 +631,20 @@ for k in range(steps):
     # Add the objective
     prob.addObj('objective')
 
+    # Set up the sparse constraint Jacobian
+    rowp = [0]
+    cols = []
+    data = []
+    for i, pair in enumerate(pairs):
+        data.extend([1.0, -1.0])
+        cols.extend([pair[0], pair[1]])
+        rowp.append(rowp[i] + 2)
+    jacobian = {'csr':[rowp, cols, data], 'shape':[len(pairs), n]}
+
+    # Set the linear constraint Jacobian
+    prob.addConGroup('lincon', len(pairs), lower=-0.05, upper=0.05,
+                     wrt='x', jac={'x': jacobian}, linear=True)
+
     # Create the optimizer and optimize it!
     opt = OPT(args.optimizer, options=options)
     sol = opt(prob, sens=opt_problem.gobjcon)
@@ -523,6 +664,11 @@ for k in range(steps):
     aux = addFaceTraction(order+1, assembler)
     assembler_refined.setAuxElements(aux)
 
+    # Set the design variables in the refined assembler object
+    xvals = np.zeros(opt_problem.nvars, TACS.dtype)
+    assembler.getDesignVars(xvals)
+    assembler_refined.setDesignVars(xvals)
+        
     # Extract the answer
     ans = opt_problem.ans
 
@@ -774,8 +920,8 @@ for k in range(steps):
 
             # Create the quad forest and set the topology of the forest
             depth = 0
-            if order == 2:
-                depth = 1
+            # if order == 2:
+            #     depth = 1
             forest = TMR.QuadForest(comm)
             forest.setTopology(topo)
             forest.setMeshOrder(order, TMR.UNIFORM_POINTS)

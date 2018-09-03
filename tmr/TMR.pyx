@@ -33,7 +33,7 @@ cdef tmr_init():
 # Ensure that numpy is initialized
 np.import_array()
 
-# Initialize
+# Initialize the MPI libraries in TMR (if not already done)
 tmr_init()
 
 # Import the definition required for const strings
@@ -121,6 +121,11 @@ cdef class Edge:
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def getRange(self):
+        cdef double tmin, tmax
+        self.ptr.getRange(&tmin, &tmax)
+        return tmin, tmax
 
     def evalPoint(self, double t):
         cdef TMRPoint pt
@@ -263,6 +268,11 @@ cdef class Face:
         if self.ptr:
             self.ptr.decref()
 
+    def getRange(self):
+        cdef double umin, vmin, umax, vmax
+        self.ptr.getRange(&umin, &vmin, &umax, &vmax)
+        return umin, vmin, umax, vmax
+
     def evalPoint(self, double u, double v):
         cdef TMRPoint pt
         self.ptr.evalPoint(u, v, &pt)
@@ -377,7 +387,7 @@ cdef class Volume:
         if self.ptr:
             self.ptr.getFaces(&num_faces, &f, NULL)
         faces = []
-        for i in xrange(num_faces):
+        for i in range(num_faces):
             faces.append(_init_Face(f[i]))
         return faces
 
@@ -450,7 +460,6 @@ cdef class Curve:
             curve.split(t, &c1, &c2)
             return _init_Curve(c1), _init_Curve(c2)
         return None
-
 
 cdef _init_Curve(TMRCurve *ptr):
     curve = Curve()
@@ -721,7 +730,7 @@ cdef class Model:
         if verts is not None:
             nverts = len(verts)
             v = <TMRVertex**>malloc(nverts*sizeof(TMRVertex*))
-            for i in xrange(len(verts)):
+            for i in range(len(verts)):
                 v[i] = (<Vertex>verts[i]).ptr
                 if v[i] is NULL:
                     errmsg = 'Vertex %d is NULL'%(i)
@@ -732,7 +741,7 @@ cdef class Model:
         if edges is not None:
             nedges = len(edges)
             e = <TMREdge**>malloc(nedges*sizeof(TMREdge*))
-            for i in xrange(len(edges)):
+            for i in range(len(edges)):
                 e[i] = (<Edge>edges[i]).ptr
                 if e[i] is NULL:
                     errmsg = 'Edge %d is NULL'%(i)
@@ -743,7 +752,7 @@ cdef class Model:
         if faces is not None:
             nfaces = len(faces)
             f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
-            for i in xrange(len(faces)):
+            for i in range(len(faces)):
                 f[i] = (<Face>faces[i]).ptr
                 if f[i] is NULL:
                     errmsg = 'Face %d is NULL'%(i)
@@ -754,7 +763,7 @@ cdef class Model:
         if vols is not None:
             nvols = len(vols)
             b = <TMRVolume**>malloc(nvols*sizeof(TMRVolume*))
-            for i in xrange(len(vols)):
+            for i in range(len(vols)):
                 b[i] = (<Volume>vols[i]).ptr
                 if b[i] is NULL:
                     errmsg = 'Volume %d is NULL'%(i)
@@ -786,7 +795,7 @@ cdef class Model:
         if self.ptr:
             self.ptr.getVolumes(&num_vol, &vol)
         volumes = []
-        for i in xrange(num_vol):
+        for i in range(num_vol):
             volumes.append(_init_Volume(vol[i]))
         return volumes
 
@@ -796,7 +805,7 @@ cdef class Model:
         if self.ptr:
             self.ptr.getFaces(&num_faces, &f)
         faces = []
-        for i in xrange(num_faces):
+        for i in range(num_faces):
             faces.append(_init_Face(f[i]))
         return faces
 
@@ -806,7 +815,7 @@ cdef class Model:
         if self.ptr:
             self.ptr.getEdges(&num_edges, &e)
         edges = []
-        for i in xrange(num_edges):
+        for i in range(num_edges):
             edges.append(_init_Edge(e[i]))
         return edges
 
@@ -816,7 +825,7 @@ cdef class Model:
         if self.ptr:
             self.ptr.getVertices(&num_verts, &v)
         verts = []
-        for i in xrange(num_verts):
+        for i in range(num_verts):
             verts.append(_init_Vertex(v[i]))
         return verts
 
@@ -880,12 +889,12 @@ cdef class Model:
                         pts[0,:] = pt1[:]
                     pts[i+1,:] = pt2[:]
 
-                for i in xrange(len(e)):
+                for i in range(len(e)):
                     tx[i,:] = pts[i+1,:] - pts[i,:]
                     xav[:] += 0.5*(pts[i+1,:] + pts[i,:])
                     count += 1
 
-                for i in xrange(len(e)+1):
+                for i in range(len(e)+1):
                     fp.write('%e %e %e %e %e %e\n'%(
                         pts[i,0], pts[i,1], pts[i,2],
                         tx[i,0], tx[i,1], tx[i,2]))
@@ -1574,7 +1583,7 @@ cdef class QuadForest:
         weights = np.zeros(_ptr[ndep], dtype=np.double)
         for i in range(ndep+1):
             ptr[i] = _ptr[i]
-        for i in xrange(ptr[ndep]):
+        for i in range(ptr[ndep]):
             conn[i] = _conn[i]
             weights[i] = _weights[i]
         return ptr, conn, weights
@@ -1858,7 +1867,7 @@ cdef class OctForest:
         weights = np.zeros(_ptr[ndep], dtype=np.double)
         for i in range(ndep+1):
             ptr[i] = _ptr[i]
-        for i in xrange(ptr[ndep]):
+        for i in range(ptr[ndep]):
             conn[i] = _conn[i]
             weights[i] = _weights[i]
         return ptr, conn, weights

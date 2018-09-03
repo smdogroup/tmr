@@ -95,6 +95,7 @@ cdef extern from "TMRTopology.h":
         TMREdge()
         void setSource(TMREdge*)
         void getSource(TMREdge**)
+        void getRange(double*, double*)
         int evalPoint(double, TMRPoint*)
         void setVertices(TMRVertex*, TMRVertex*)
         void getVertices(TMRVertex**, TMRVertex**)
@@ -105,6 +106,7 @@ cdef extern from "TMRTopology.h":
     cdef cppclass TMRFace(TMREntity):
         TMRFace()
         TMRFace(int)
+        void getRange(double*, double*, double*, double*)
         int evalPoint(double, double, TMRPoint*)
         void setSource(TMRVolume*, TMRFace*)
         void getSource(int*, TMRVolume**, TMRFace**)
