@@ -26,11 +26,18 @@ class MassMin:
 
         # The number of topo variables
         self.nvars = nvars
+        self.x = np.zeros(self.nvars)
+        self.x[:] = 0.95
+
+        # Set the scaling on the mass objective
+        xlen = 0.1
+        self.mass_scale = 100.0/(0.64*xlen**2)
 
         # The number of constraints (1 global stress constraint that
         # will use the KS function)
         self.ncon = 1
 
+        self.iter_count = 0
         return
 
     def setAssembler(self, assembler, mg, gmres, ksfunc):
@@ -46,36 +53,31 @@ class MassMin:
         self.res = self.assembler.createVec()
         self.adjoint = self.assembler.createVec()
         self.dfdu = self.assembler.createVec()
-        self.mg = mg
-        self.mat = self.mg.getMat()
-        self.gmres = gmres
+
+        self.use_multigrid = False
+        if self.use_multigrid:
+            self.mg = mg
+            self.mat = self.mg.getMat()
+            self.gmres = gmres
+        else:
+            self.mat = self.assembler.createFEMat()
+            self.pc = TACS.Pc(self.mat)
+            self.gmres = TACS.KSM(self.mat, self.pc, 10)
 
         # For visualization
         flag = (TACS.ToFH5.NODES |
                 TACS.ToFH5.DISPLACEMENTS |
                 TACS.ToFH5.STRAINS |
                 TACS.ToFH5.EXTRAS)
-        self.f5 = TACS.ToFH5(self.assembler, TACS.PY_SHELL, flag)
-        self.iter_count = 0
+        self.f5 = TACS.ToFH5(self.assembler, TACS.PY_PLANE_STRESS, flag)
 
         return
 
     def getVarsAndBounds(self, x, lb, ub):
         '''Set the values of the bounds'''
-        xvals = np.zeros(self.nvars, TACS.dtype)
-        self.assembler.getDesignVars(xvals)
-        xvals[:] = self.thickness_scale*xvals
-
-        xlb = 1e20*np.ones(self.nvars, TACS.dtype)
-        xub = -1e20*np.ones(self.nvars, TACS.dtype)
-        self.assembler.getDesignVarRange(xlb, xub)
-        xlb[:] = self.thickness_scale*xlb
-        xub[:] = self.thickness_scale*xub
-
-        self.comm.Allreduce(xvals, x, op=MPI.MAX)
-        self.comm.Allreduce(xlb, lb, op=MPI.MIN)
-        self.comm.Allreduce(xub, ub, op=MPI.MAX)
-
+        x[:] = self.x[:]
+        lb[:] = 1e-3
+        ub[:] = 1.0
         return
 
     def objcon(self, xdict):
@@ -83,21 +85,52 @@ class MassMin:
 
         # Extract the values of x
         x = xdict['x']
-        
+
+        # Evaluate the objective
+        fail, fobj, con = self.evalObjCon(x)
+
+        # Create the dictionary of functions
+        funcs = {'objective': fobj, 'con': con}
+
+        return funcs, fail
+
+    def gobjcon(self, xdict, funcs):
+        '''Evaluate the objective and constraint gradient'''
+        fail = 0
+
+        # Extract the values of x
+        x = xdict['x']
+
+        gx = np.zeros(self.nvars)
+        dfdx = np.zeros((1, self.nvars))
+        fail = self.evalObjConGradient(x, gx, dfdx)
+
+        # Create the sensitivity dictionary
+        sens = {'objective':{'x': gx}, 'con':{'x': dfdx}}
+
+        return sens, fail
+
+    def evalObjCon(self, x):
+        self.x[:] = x[:]
+
         # Evaluate the objective and constraints
         fail = 0
         con = np.zeros(1)
 
         # Set the new design variable values
-        self.assembler.setDesignVars(x[:]/self.thickness_scale)
+        self.assembler.setDesignVars(self.x)
 
         # Assemble the Jacobian and factor the matrix
         alpha = 1.0
         beta = 0.0
         gamma = 0.0
         self.assembler.zeroVariables()
-        self.mg.assembleJacobian(alpha, beta, gamma, self.res)
-        self.mg.factor()
+        if self.use_multigrid:
+            self.mg.assembleJacobian(alpha, beta, gamma, self.res)
+            self.mg.factor()
+        else:
+            self.assembler.assembleJacobian(alpha, beta, gamma, self.res, self.mat)
+            self.pc.factor()
 
         # Solve the linear system and set the varaibles into TACS
         self.gmres.solve(self.res, self.ans)
@@ -115,23 +148,21 @@ class MassMin:
         # than or equal to 1.0
         con[0] = 1.0 - fvals[1] # ~= 1.0 - max (sigma/design) >= 0
 
-        # Create the dictionary of functions
-        funcs = {'objective': fobj, 'con': con}
+        if self.comm.rank == 0:
+            print('fobj = ', fobj)
+            print('con = ', con)
 
-        return funcs, fail
+        return fail, fobj, con
 
-    def gobjcon(self, xdict, funcs):
+    def evalObjConGradient(self, x, g, A):
         '''Evaluate the objective and constraint gradient'''
         fail = 0
-
-        # Extract the values of x
-        x = xdict['x']
 
         # Evaluate the derivative of the mass and place it in the
         # objective gradient
         gx = np.zeros(self.nvars, TACS.dtype)
         self.assembler.evalDVSens(self.funcs[0], gx)
-        gx[:] *= self.mass_scale/self.thickness_scale
+        g[:] = self.mass_scale*gx
 
         # Compute the total derivative w.r.t. material design variables
         dfdx = np.zeros(self.nvars, TACS.dtype)
@@ -148,17 +179,16 @@ class MassMin:
         self.assembler.evalAdjointResProduct(self.adjoint, product)
 
         # Set the constraint gradient
-        dfdx[:] = -(dfdx - product)/self.thickness_scale
+        A[0][:] = -(dfdx - product)
 
         # Write out the solution file every 10 iterations
-        if self.iter_count % 10 == 0:
-            self.f5.writeToFile('results/topo%d.f5'%(self.iter_count))
+        if self.iter_count % 1 == 0:
+            if self.comm.rank == 0:
+                print('Write out file %d'%(self.iter_count))
+            self.f5.writeToFile('results/topo%04d.f5'%(self.iter_count))
         self.iter_count += 1
 
-        # Create the sensitivity dictionary
-        sens = {'objective':{'x': gx}, 'con':{'x': dfdx}}
-        
-        return sens, fail
+        return fail
 
 class CreateMe(TMR.QuadCreator):
     def __init__(self, bcs, topo):
@@ -173,8 +203,6 @@ class CreateMe(TMR.QuadCreator):
         h = (1 << (TMR.MAX_LEVEL - quad.level))
         x = 1.0*(quad.x + 0.5*h)/(1 << TMR.MAX_LEVEL)
         y = 1.0*(quad.y + 0.5*h)/(1 << TMR.MAX_LEVEL)
-        d = 1.0*h/(1 << TMR.MAX_LEVEL)
-        u = 0.5*d*(1.0 - np.cos(np.linspace(0, np.pi, order)))
 
         # Evaluate the node locations
         pt = face.evalPoint(x, y)
@@ -182,23 +210,25 @@ class CreateMe(TMR.QuadCreator):
         nodes = []
         weights = []
 
-        m = 50
+        m = 100
         index = np.zeros(m, dtype=np.intc)
         dist = np.zeros(m)
         locator.locateKClosest(pt, index, dist)
+        dist = np.sqrt(dist)
 
         # Set the length as a fraction of the overall distance
         xlen = 0.1
-        r0 = 0.04*xlen
+        r0 = 0.05*xlen
 
         for i in range(m):
             if dist[i] < r0:
                 nodes.append(index[i])
-                weights.append((r0 - dist[i])/r0)
+                weights.append(((r0 - dist[i])/r0)**1.5)
             else:
                 break
         nodes = np.array(nodes, dtype=np.intc)
         weights = np.array(weights)
+        weights[:] = weights/np.sum(weights)
 
         # Set the properties
         rho = 1.0
@@ -207,7 +237,7 @@ class CreateMe(TMR.QuadCreator):
         ys = 275e6
         q = 5.0
         eps = 0.15
-        ps = const_topo.ptopo(rho, E, nu, ys, q, eps, nodes, weights)
+        ps = const_topo.pstopo(rho, E, nu, ys, q, eps, nodes, weights)
 
         # Create the plane stree quadrilateral
         elem = elements.PlaneQuad(order, ps)
@@ -225,7 +255,8 @@ def addFaceTraction(order, forest, assembler):
     nnodes = order
     tx = np.zeros(nnodes, dtype=TACS.dtype)
     ty = np.zeros(nnodes, dtype=TACS.dtype)
-    ty[:] = 6e4
+    thickness = 1e-3
+    ty[:] = 10e4/thickness
 
     # Create the shell traction
     surf = 3
@@ -289,10 +320,10 @@ comm = MPI.COMM_WORLD
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--steps', type=int, default=5)
-p.add_argument('--htarget', type=float, default=0.002)
+p.add_argument('--htarget', type=float, default=0.001)
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--ordering', type=str, default='multicolor')
-p.add_argument('--ksweight', type=float, default=10.0)
+p.add_argument('--ksweight', type=float, default=30.0)
 p.add_argument('--uniform_refinement', action='store_true', default=False)
 p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
@@ -319,14 +350,20 @@ order = args.order
 ordering = args.ordering
 ordering = ordering.lower()
 
-tol = 1e-5
+tol = 1e-4
 fname = 'results/opt.out'
 options = {}
 if args.optimizer == 'snopt':
     options['Print file'] = fname
     options['Summary file'] = fname + '_summary'
     options['Major optimality tolerance'] = tol
-elif optimizer == 'ipopt':
+    options['Penalty parameter'] = 50.0
+    options['Nonderivative linesearch'] = None
+    options['Minor print level'] = 0
+
+    # Set a large number of iterations
+    options['Minor iterations limit'] = 10000
+elif args.optimizer == 'ipopt':
     options['print_user_options'] = 'yes'
     options['tol'] = tol
     options['nlp_scaling_method'] = 'none'
@@ -339,15 +376,17 @@ elif optimizer == 'ipopt':
 # Set up the design variables
 xlen = 0.1
 
-n = 75
-r0 = 3.0
-a = 0.4*xlen
+# Set the bounds on the variables
+a = 0.4*xlen + 1e-6
+
+# Set the x/y locations of the density "nodes"
+n = 100
 x = np.linspace(0, xlen, n)
 
 pts = []
 for j in range(n):
     for i in range(n):
-        if x[i] < a or x[j] < a:
+        if x[i] <= a or x[j] <= a:
             pts.append([x[i], x[j], 0.0])
 locator = locate.locate(np.array(pts))
 
@@ -400,8 +439,6 @@ opt_problem = MassMin(comm, num_design_vars)
 
 # Create the quad forest and set the topology of the forest
 depth = 0
-if order == 2:
-    depth = 1
 forest = TMR.QuadForest(comm)
 forest.setTopology(topo)
 forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
@@ -454,7 +491,7 @@ for k in range(steps):
     x0 = np.zeros(n)
     lb = np.zeros(n)
     ub = np.zeros(n)
-    opt_problem.getVarsAndBounds(x0, lb, ub)    
+    opt_problem.getVarsAndBounds(x0, lb, ub)
     prob.addVarGroup('x', n, value=x0, lower=lb, upper=ub)
 
     # Add the constraints
@@ -462,6 +499,13 @@ for k in range(steps):
 
     # Add the objective
     prob.addObj('objective')
+
+    fname = 'results/opt%02d.out'%(k)
+    if args.optimizer == 'snopt':
+        options['Print file'] = fname
+        options['Summary file'] = fname + '_summary'
+    elif args.optimizer == 'ipopt':
+        options['output_file'] = fname
 
     # Create the optimizer and optimize it!
     opt = OPT(args.optimizer, options=options)
@@ -473,7 +517,7 @@ for k in range(steps):
     # Create the refined mesh
     if exact_refined_adjoint:
         forest_refined = forest.duplicate()
-        assembler_refined, mg = createProblem(topo, elem_dict,
+        assembler_refined, mg = createProblem(topo,
                                               forest_refined, bcs, ordering,
                                               order=order+1, nlevels=nlevs+1)
     else:
@@ -481,6 +525,9 @@ for k in range(steps):
                                                           forest_refined, bcs)
     aux = addFaceTraction(order+1, forest_refined, assembler_refined)
     assembler_refined.setAuxElements(aux)
+
+    # Set the design variables for the refined problem
+    assembler_refined.setDesignVars(opt_problem.x)
 
     # Extract the answer
     ans = opt_problem.ans
@@ -594,7 +641,7 @@ for k in range(steps):
             TACS.ToFH5.DISPLACEMENTS |
             TACS.ToFH5.STRAINS |
             TACS.ToFH5.EXTRAS)
-    f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
+    f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_PLANE_STRESS, flag)
     f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
 
     # Compute the refinement from the error estimate
@@ -665,9 +712,13 @@ for k in range(steps):
 
             # Allocate the positions
             Xp = np.zeros((nelems, 3))
+            xrho = np.zeros(nelems)
+            param = np.zeros(3)
             for i in range(nelems):
                 # Get the information about the given element
                 elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
+                c = elem.getConstitutive()
+                xrho[i] = c.getDVOutputValue(0, param)
 
                 # Get the approximate element centroid
                 Xp[i,:] = np.average(Xpt.reshape((-1, 3)), axis=0)
@@ -688,6 +739,9 @@ for k in range(steps):
                 comm.Gatherv(error, [errors, count])
                 comm.Gatherv(Xp.flatten(), [Xpt, 3*count])
 
+                xr = np.zeros(np.sum(count))
+                comm.Gatherv(xrho, [xr, count])
+
                 # Reshape the point array
                 Xpt = Xpt.reshape(-1,3)
 
@@ -697,10 +751,15 @@ for k in range(steps):
                 err_target = 0.1*(err_est/ntotal)
 
                 # Compute the element size factor in each element
-                # using the order or accuracy
+                # using the order of accuracy
                 hvals = (err_target/errors)**(0.5)
 
-                # Set the values of
+                # Decide on whether to refine based on the value of
+                for i, hp in enumerate(hvals):
+                    hvals[i] = min(hp, 0.5 + 2*(xr[i] - 0.5)**2)
+
+                # Set the new h value based on the previous feature
+                # size value
                 if feature_size is not None:
                     for i, hp in enumerate(hvals):
                         hlocal = feature_size.getFeatureSize(Xpt[i,:])
@@ -720,6 +779,7 @@ for k in range(steps):
                 comm.gather(size, root=root)
                 comm.Gatherv(error, None)
                 comm.Gatherv(Xp.flatten(), None)
+                comm.Gatherv(xrho, None)
 
                 # Create a dummy feature size object...
                 feature_size = TMR.ConstElementSize(0.5*htarget)
@@ -733,8 +793,6 @@ for k in range(steps):
 
             # Create the quad forest and set the topology of the forest
             depth = 0
-            if order == 2:
-                depth = 1
             forest = TMR.QuadForest(comm)
             forest.setTopology(topo)
             forest.setMeshOrder(order, TMR.UNIFORM_POINTS)

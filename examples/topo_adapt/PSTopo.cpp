@@ -2,10 +2,10 @@
 #include <math.h>
 #include "tacslapack.h"
 
-PSTopo::PSTopo( TacsScalar _rho, TacsScalar _E, 
+PSTopo::PSTopo( TacsScalar _rho, TacsScalar _E,
                 TacsScalar _nu, TacsScalar _ys,
                 double _q, double _eps,
-                int _nodes[], double _weights[], 
+                int _nodes[], double _weights[],
                 int _nweights ){
   // Set the material properties
   rho = _rho;
@@ -31,7 +31,7 @@ PSTopo::PSTopo( TacsScalar _rho, TacsScalar _E,
 PSTopo::~PSTopo(){
   delete [] w;
 }
-  
+
 /*
   Set the design variable values
 */
@@ -46,7 +46,13 @@ void PSTopo::setDesignVars( const TacsScalar dvs[], int numDVs ){
 /*
   Retrieve the design variable values. This call has no effect...
 */
-void PSTopo::getDesignVars( TacsScalar dvs[], int numDVs ){}
+void PSTopo::getDesignVars( TacsScalar dvs[], int numDVs ){
+  for ( int i = 0; i < nweights; i++ ){
+    if (w[i].index >= 0 && w[i].index < numDVs){
+      dvs[w[i].index] = 0.95;
+    }
+  }
+}
 
 /*
   Get the design variable range
@@ -66,11 +72,13 @@ void PSTopo::getDesignVarRange( TacsScalar lb[], TacsScalar ub[],
   Compute the stress at a parametric point in the element based on
   the local strain value
 */
-void PSTopo::calculateStress( const double pt[], 
-                              const TacsScalar e[], 
+void PSTopo::calculateStress( const double pt[],
+                              const TacsScalar e[],
                               TacsScalar s[] ){
   // Compute the penalty
-  double p = xw/(1.0 + q*(1.0 - xw));
+  double k0 = 1e-6;
+  // double p = xw/(1.0 + q*(1.0 - xw)) + k0;
+  double p = xw*xw*xw;
   s[0] = p*D*(e[0] + nu*e[1]);
   s[1] = p*D*(e[1] + nu*e[0]);
   s[2] = p*G*e[2];
@@ -84,7 +92,8 @@ void PSTopo::addStressDVSens( const double pt[], const TacsScalar e[],
                               TacsScalar alpha, const TacsScalar psi[],
                               TacsScalar fdvSens[], int dvLen ){
   // Compute the contribution to the derivative
-  double p = (q + 1.0)/((1.0 + q*(1.0 - xw))*(1.0 + q*(1.0 - xw)));
+  // double p = (q + 1.0)/((1.0 + q*(1.0 - xw))*(1.0 + q*(1.0 - xw)));
+  double p = 3*xw*xw;
   TacsScalar s[3];
   s[0] = p*D*(e[0] + nu*e[1]);
   s[1] = p*D*(e[1] + nu*e[0]);
@@ -117,7 +126,7 @@ void PSTopo::addPointwiseMassDVSens( const double pt[],
 }
 
 void PSTopo::failure( const double pt[], const TacsScalar e[],
-                      TacsScalar * fail ){
+                      TacsScalar *fail ){
   TacsScalar r = xw/(eps*(1.0 - xw) + xw);
   TacsScalar s[3];
   s[0] = D*(e[0] + nu*e[1]);
@@ -129,34 +138,37 @@ void PSTopo::failure( const double pt[], const TacsScalar e[],
 void PSTopo::failureStrainSens( const double pt[], const TacsScalar e[],
                                 TacsScalar sens[] ){
   TacsScalar r = xw/(eps*(1.0 - xw) + xw);
-
   TacsScalar s[3];
   s[0] = D*(e[0] + nu*e[1]);
   s[1] = D*(e[1] + nu*e[0]);
   s[2] = G*e[2];
-  TacsScalar fail = sqrt(s[0]*s[0] + s[1]*s[1] - s[0]*s[1] + 3.0*s[2]*s[2]);
 
-  if (fail != 0.0){
-    sens[0] = r*(s[0] - 0.5*s[1])/(fail*ys);
-    sens[1] = r*(s[1] - 0.5*s[0])/(fail*ys);
-    sens[2] = r*(3.0*s[2])/(fail*ys);
+  TacsScalar fact = sqrt(s[0]*s[0] + s[1]*s[1] - s[0]*s[1] + 3.0*s[2]*s[2]);
+  if (fact != 0.0){
+    fact = 1.0/(ys*fact);
   }
-  else {
-    sens[0] = sens[1] = sens[2] = 0.0;
-  }
+
+  TacsScalar ds[3];
+  ds[0] = r*fact*(s[0] - 0.5*s[1]);
+  ds[1] = r*fact*(s[1] - 0.5*s[0]);
+  ds[2] = 3.0*r*fact*s[2];
+
+  sens[0] = D*(ds[0] + nu*ds[1]);
+  sens[1] = D*(ds[1] + nu*ds[0]);
+  sens[2] = G*ds[2];
 }
 
 void PSTopo::addFailureDVSens( const double pt[], const TacsScalar e[],
-                               TacsScalar alpha, TacsScalar fdvSens[], 
+                               TacsScalar alpha, TacsScalar fdvSens[],
                                int dvLen ){
-  TacsScalar d = 1.0/(eps*(1.0-xw) + xw);
+  TacsScalar d = 1.0/(eps*(1.0 - xw) + xw);
   TacsScalar r = eps*d*d;
 
   TacsScalar s[3];
   s[0] = D*(e[0] + nu*e[1]);
   s[1] = D*(e[1] + nu*e[0]);
   s[2] = G*e[2];
-  TacsScalar fail = sqrt(s[0]*s[0] + s[1]*s[1] - s[0]*s[1] + 3.0*s[2]*s[2]);
+  TacsScalar fail = sqrt(s[0]*s[0] + s[1]*s[1] - s[0]*s[1] + 3.0*s[2]*s[2])/ys;
 
   TacsScalar scale = alpha*r*fail;
   for ( int i = 0; i < nweights; i++ ){

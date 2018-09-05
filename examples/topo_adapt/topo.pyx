@@ -26,8 +26,9 @@ cdef extern from "PSTopo.h":
     cdef cppclass PSTopo(PlaneStressStiffness):
         PSTopo(TacsScalar, TacsScalar, TacsScalar, TacsScalar,
                double, double, int*, double*, int)
+        TacsScalar getDensity()
     
-cdef class ptopo(PlaneStress):
+cdef class pstopo(PlaneStress):
     cdef PSTopo *self_ptr
     def __cinit__(self, double rho, double E, double nu, double ys,
                   double q, double eps,
@@ -40,3 +41,6 @@ cdef class ptopo(PlaneStress):
         self.ptr = self.self_ptr
         self.ptr.incref()
         return
+
+    def getDensity(self):
+        return self.self_ptr.getDensity()

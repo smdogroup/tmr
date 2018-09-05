@@ -19,7 +19,7 @@ class PSTopo : public PlaneStressStiffness {
   void getDesignVars( TacsScalar dvs[], int numDVs );
   void getDesignVarRange( TacsScalar lb[], TacsScalar ub[],
                           int numDVs );
-  void calculateStress( const double pt[], const TacsScalar e[], 
+  void calculateStress( const double pt[], const TacsScalar e[],
                         TacsScalar s[] );
   void addStressDVSens( const double pt[], const TacsScalar e[],
                         TacsScalar alpha, const TacsScalar psi[],
@@ -34,9 +34,10 @@ class PSTopo : public PlaneStressStiffness {
                           TacsScalar sens[] );
   void addFailureDVSens( const double pt[], const TacsScalar strain[],
                          TacsScalar alpha, TacsScalar dvSens[], int dvLen );
-  TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
-    return xw; 
+  TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){
+    return xw;
   }
+  TacsScalar getDensity(){ return xw; }
 
  public:
   // Material property information
@@ -45,7 +46,7 @@ class PSTopo : public PlaneStressStiffness {
 
   // Maximum number of weights/nodes
   int nweights;
-  
+
   // weights/index values
   class Weight {
   public:
