@@ -153,4 +153,87 @@ inline void lagrange_shape_func_second_derivative( const int order,
   }
 }
 
+/*
+  Evaluate the Bernstein shape functions at the given parametric point
+
+  input:
+  order:  the order of the polynomial and number of knots
+  u:      the parametric coordinate
+  idx:    the index of the interval for u
+  knots:  the interpolation knots in parameter space
+  work:   a temporary array of size 2*k
+
+  output:
+  N:      the values of the shape functions at u
+*/
+inline void bernstein_shape_functions( const int order,
+                                       const double u,
+                                       const double *knots,
+                                       double *N,
+                                       double *work ){
+  N[0] = 1.0;
+  const int idx = order-1;
+  // Set the pointers for the temporary work arrays
+  // Note that left[j] = u - knots[i+1 - j]
+  // and right[j] = knots[i+j] - u
+  double *left = &work[0];
+  double *right = &work[order+1];
+  
+  for ( int j = 1; j < order+1; j++ ){
+    left[j] = u - knots[idx+1-j];
+    right[j] = knots[idx+j] - u;
+    
+    N[j] = 0.0;
+    for ( int i = 0; i < j; i++ ){
+      double temp = N[i]/(right[i+1] + left[j-i]);
+      N[i] = N[j] + right[i+1]*temp;
+      N[j] = left[j-i]*temp;
+    }
+  }
+}
+
+/*
+  Evaluate the shape functions and the derivative of the shape functions
+  with respect to the parameter coordinate
+
+  input:
+  order:  the order of the polynomial and number of knots
+  u:      the parametric coordinate
+  knots:  the interpolation knots in parameter space
+
+  output:
+  N:      the values of the shape functions at u
+  Nd:     the derivative of the shape functions at u
+*/
+inline void bernstein_shape_func_derivative( const int order,
+                                             const double u,
+                                             const double *knots,
+                                             double *N,
+                                             double *Nd ){
+  
+}
+
+/*
+  Evaluate the shape functions and their first and second derivatives
+  with respect to the parameter coordinate
+
+  input:
+  order:  the order of the polynomial and number of knots
+  u:      the parametric coordinate
+  knots:  the interpolation knots in parameter space
+
+  output:
+  N:      the values of the shape functions at u
+  Nd:     the derivative of the shape functions at u
+  Ndd:    the second derivative of the shape functions at u
+*/
+inline void bernstein_shape_func_second_derivative( const int order,
+                                                    const double u,
+                                                    const double *knots,
+                                                    double *N,
+                                                    double *Nd,
+                                                    double *Ndd ){
+  
+}
+
 #endif // TMR_INTERPOLATION_FUNCTIONS_H
