@@ -3851,30 +3851,30 @@ int TMRQuadForest::getDepNodeConn( const int **ptr, const int **conn,
 
 /*
   Get the elements that either lie on a face or curve with a given
-  attribute.
+  name.
 
   This code loops over all quadrants owned locally on this processor
   and checks if each quadrant lies on a face or boundary. If the face
-  attribute matches, the quadrant is added without modification. If
+  name matches, the quadrant is added without modification. If
   the quadrant lies on an edge, the quadrant is modified so that the
   tag indicates which edge the quadrant lies on using the regular edge
   ordering scheme.
 
   input:
-  attr:   string attribute associated with the geometric feature
+  name:   string name associated with the geometric feature
 
   returns:
-  list:   an array of quadrants satisfying the attribute
+  list:   an array of quadrants satisfying the name
 */
-TMRQuadrantArray* TMRQuadForest::getQuadsWithAttribute( const char *attr ){
+TMRQuadrantArray* TMRQuadForest::getQuadsWithName( const char *name ){
   if (!topo){
     fprintf(stderr, "TMRQuadForest: Must define topology to use \
-getQuadsWithAttribute()\n");
+getQuadsWithName()\n");
     return NULL;
   }
   if (!quadrants){
     fprintf(stderr, "TMRQuadForest: Must create quadrants to use \
-getQuadsWithAttribute()\n");
+getQuadsWithName()\n");
     return NULL;
   }
 
@@ -3887,7 +3887,7 @@ getQuadsWithAttribute()\n");
   quadrants->getArray(&array, &size);
 
   // Loop over the quadrants and find out whether it touches
-  // a face or edge with the prescribed attribute
+  // a face or edge with the prescribed name
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
   for ( int i = 0; i < size; i++ ){
     const int32_t h = 1 << (TMR_MAX_LEVEL - array[i].level);
@@ -3895,21 +3895,21 @@ getQuadsWithAttribute()\n");
     // Get the surface quadrant
     TMRFace *surf;
     topo->getFace(array[i].face, &surf);
-    const char *face_attr = surf->getAttribute();
-    if ((!attr && !face_attr) ||
-        (face_attr && strcmp(face_attr, attr) == 0)){
+    const char *face_name = surf->getName();
+    if ((!name && !face_name) ||
+        (face_name && strcmp(face_name, name) == 0)){
       queue->push(&array[i]);
     }
     else {
       // If this quadrant was not added from a face
-      // attribute, check to see if it should be added
-      // as an edge/curve attribute
+      // name, check to see if it should be added
+      // as an edge/curve name
       TMREdge *edge;
       if (array[i].x == 0){
         int edge_num = fdata->face_edge_conn[4*array[i].face];
         topo->getEdge(edge_num,&edge);
-        const char *edge_attr = edge->getAttribute();
-        if (edge_attr && strcmp(edge_attr, attr) == 0){
+        const char *edge_name = edge->getName();
+        if (edge_name && strcmp(edge_name, name) == 0){
           TMRQuadrant p = array[i];
           p.info = 0;
           queue->push(&p);
@@ -3918,8 +3918,8 @@ getQuadsWithAttribute()\n");
       if (array[i].x+h == hmax){
         int edge_num = fdata->face_edge_conn[4*array[i].face+1];
         topo->getEdge(edge_num, &edge);
-        const char *edge_attr = edge->getAttribute();
-        if (edge_attr && strcmp(edge_attr, attr) == 0){
+        const char *edge_name = edge->getName();
+        if (edge_name && strcmp(edge_name, name) == 0){
           TMRQuadrant p = array[i];
           p.info = 1;
           queue->push(&p);
@@ -3928,8 +3928,8 @@ getQuadsWithAttribute()\n");
       if (array[i].y == 0){
         int edge_num = fdata->face_edge_conn[4*array[i].face+2];
         topo->getEdge(edge_num, &edge);
-        const char *edge_attr = edge->getAttribute();
-        if (edge_attr && strcmp(edge_attr, attr) == 0){
+        const char *edge_name = edge->getName();
+        if (edge_name && strcmp(edge_name, name) == 0){
           TMRQuadrant p = array[i];
           p.info = 2;
           queue->push(&p);
@@ -3938,8 +3938,8 @@ getQuadsWithAttribute()\n");
       if (array[i].y+h == hmax){
         int edge_num = fdata->face_edge_conn[4*array[i].face+3];
         topo->getEdge(edge_num, &edge);
-        const char *edge_attr = edge->getAttribute();
-        if (edge_attr && strcmp(edge_attr, attr) == 0){
+        const char *edge_name = edge->getName();
+        if (edge_name && strcmp(edge_name, name) == 0){
           TMRQuadrant p = array[i];
           p.info = 3;
           queue->push(&p);
@@ -3955,29 +3955,29 @@ getQuadsWithAttribute()\n");
 
 /*
   Create an array of the nodes that are lie on a surface, edge or
-  corner with a given attribute
+  corner with a given name
 
   This code loops over all nodes and check whether they lie on a
-  geometric entity that has the given attribute. The nodes are not
+  geometric entity that has the given name. The nodes are not
   unique if they are lie on a shared boundary between processors.
 
   input:
-  attr:   the string of the attribute to search
+  name:   the string of the name to search
 
   returns:
-  list:   the nodes matching the specified attribute
+  list:   the nodes matching the specified name
 */
-int TMRQuadForest::getNodesWithAttribute( const char *attr,
-                                          int **_nodes ){
+int TMRQuadForest::getNodesWithName( const char *name,
+                                     int **_nodes ){
   if (!topo){
     fprintf(stderr, "TMRQuadForest: Must define topology to use \
-getNodesWithAttribute()\n");
+getNodesWithName()\n");
     *_nodes = NULL;
     return 0;
   }
   if (!conn){
     fprintf(stderr, "TMRQuadForest: Nodes must be created before calling \
-getNodesWithAttribute()\n");
+getNodesWithName()\n");
     *_nodes = NULL;
     return 0;
   }
@@ -3992,13 +3992,13 @@ getNodesWithAttribute()\n");
 
   int count = 0; // Current node count
   int max_len = 1024; // max length of the node list
-  int *node_list = new int[ max_len ]; // Nodes touching this attribute
+  int *node_list = new int[ max_len ]; // Nodes touching this name
 
   // Max number of nodes added by one quadrant
   const int max_node_incr = 4 + 4*mesh_order + mesh_order*mesh_order;
 
   // Loop over the quadrants and find out whether it touches a face or
-  // edge with the prescribed attribute
+  // edge with the prescribed name
   for ( int i = 0; i < size; i++ ){
     if (count + max_node_incr > max_len){
       // Extend the length of the array
@@ -4013,7 +4013,7 @@ getNodesWithAttribute()\n");
     const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
 
     // Check if this node is on a corner, edge or face, and whether it
-    // shares the appropriate attribute
+    // shares the appropriate name
     int fx0 = (quads[i].x == 0);
     int fy0 = (quads[i].y == 0);
     int fx = (fx0 || quads[i].x + h == hmax);
@@ -4040,8 +4040,8 @@ getNodesWithAttribute()\n");
         TMRVertex *vert;
         int vert_num = fdata->face_conn[4*quads[i].face + corner_index[ii]];
         topo->getVertex(vert_num, &vert);
-        const char *vert_attr = vert->getAttribute();
-        if (vert_attr && strcmp(vert_attr, attr) == 0){
+        const char *vert_name = vert->getName();
+        if (vert_name && strcmp(vert_name, name) == 0){
           int offset = ((mesh_order-1)*(corner_index[ii] % 2) +
                         (mesh_order-1)*mesh_order*(corner_index[ii]/2));
           node_list[count] =
@@ -4071,8 +4071,8 @@ getNodesWithAttribute()\n");
         TMREdge *edge;
         int edge_num = fdata->face_edge_conn[4*quads[i].face + edge_index[ii]];
         topo->getEdge(edge_num, &edge);
-        const char *edge_attr = edge->getAttribute();
-        if (edge_attr && strcmp(edge_attr, attr) == 0){
+        const char *edge_name = edge->getName();
+        if (edge_name && strcmp(edge_name, name) == 0){
           for ( int k = 0; k < mesh_order; k++ ){
             int offset = 0;
             if (edge_index[ii] < 2){
@@ -4092,8 +4092,8 @@ getNodesWithAttribute()\n");
     // This node lies on the face
     TMRFace *face;
     topo->getFace(quads[i].face, &face);
-    const char *face_attr = face->getAttribute();
-    if (face_attr && strcmp(face_attr, attr) == 0){
+    const char *face_name = face->getName();
+    if (face_name && strcmp(face_name, name) == 0){
       for ( int jj = 0; jj < mesh_order; jj++ ){
         for ( int ii = 0; ii < mesh_order; ii++ ){
           int offset = ii + jj*mesh_order;

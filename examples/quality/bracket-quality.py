@@ -74,13 +74,13 @@ def load_model():
     s4 = [fx, fy, fz, faces[0], faces[1], faces[2]]
     d4 = [-1, 1, -1, -1, -1, -1]
 
-    # Set the attributes
-    faces[11].setAttribute('fx')
-    faces[12].setAttribute('fx')
-    faces[17].setAttribute('fy')
-    faces[18].setAttribute('fy')
-    faces[21].setAttribute('fz')
-    faces[22].setAttribute('fz')
+    # Set the names
+    faces[11].setName('fx')
+    faces[12].setName('fx')
+    faces[17].setName('fy')
+    faces[18].setName('fy')
+    faces[21].setName('fz')
+    faces[22].setName('fz')
 
     # Form the 4 independent bodies that are connected through
     v1 = TMR.Volume(s1, d1)

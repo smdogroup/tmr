@@ -292,8 +292,8 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   TMREdge *line2 = createLine(p5, p6);
 
   // Set the names of the curves
-  inner1->setAttribute("inner1");
-  inner2->setAttribute("inner2");
+  inner1->setName("inner1");
+  inner2->setName("inner2");
 
   // Create the vertices within the model
   const int num_vertices = 18;
@@ -528,7 +528,7 @@ int main( int argc, char *argv[] ){
 
   // Set the boundary conditions
   int *nodes;
-  int num_bc_nodes = forest->getNodesWithAttribute("inner1", &nodes);
+  int num_bc_nodes = forest->getNodesWithName("inner1", &nodes);
   tacs->addBCs(num_bc_nodes, nodes);
   delete nodes;
 
@@ -540,7 +540,7 @@ int main( int argc, char *argv[] ){
   forest->getQuadrants(&quadrants);
 
   // Add the loads
-  TMRQuadrantArray *inner2 = forest->getQuadsWithAttribute("inner2");
+  TMRQuadrantArray *inner2 = forest->getQuadsWithName("inner2");
 
   // Get the quads on the given surface
   int dim;

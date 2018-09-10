@@ -346,7 +346,7 @@ def compute_solution_error(comm, order, assembler, exact_callback):
 def get_midpoint_vector(comm, forest, assembler, attr):
     vec = assembler.createVec()
     v = vec.getArray()
-    nodes = forest.getNodesWithAttribute(attr)
+    nodes = forest.getNodesWithName(attr)
     node_range = forest.getNodeRange()
     for n in nodes:
         if n >= node_range[comm.rank] and n < node_range[comm.rank+1]:
@@ -568,10 +568,10 @@ if case == 'cylinder':
     geo = TMR.Model(verts, edges, [faces[0]])
 
     # Set the boundary conditions
-    verts[0].setAttribute('Clamped')
-    verts[1].setAttribute('Restrained')
-    edges[0].setAttribute('Restrained')
-    edges[2].setAttribute('Restrained')
+    verts[0].setName('Clamped')
+    verts[1].setName('Restrained')
+    edges[0].setName('Restrained')
+    edges[2].setName('Restrained')
 
     # Set the boundary conditions
     bcs.addBoundaryCondition('Clamped', [0, 1, 2, 5])
@@ -606,12 +606,12 @@ elif case == 'disk':
     edges = geo.getEdges()
     faces = geo.getFaces()
 
-    # Set the attributes
-    verts[1].setAttribute('midpoint')
+    # Set the names
+    verts[1].setName('midpoint')
     for index in [0, 2, 3, 4]:
-        verts[index].setAttribute('clamped')
+        verts[index].setName('clamped')
     for index in [2, 4, 6, 7]:
-        edges[index].setAttribute('clamped')
+        edges[index].setName('clamped')
 
     # Set the boundary conditions
     bcs.addBoundaryCondition('clamped', [0, 1, 2, 3, 4, 5])

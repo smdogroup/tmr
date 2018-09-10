@@ -105,34 +105,34 @@ void TMRFinalize(){
 
 TMREntity::TMREntity(): entity_id(entity_id_count){
   entity_id_count++;
-  attr = NULL;
+  name = NULL;
   ref_count = 0;
 }
 
 TMREntity::~TMREntity(){
-  if (attr){ delete [] attr; }
+  if (name){ delete [] name; }
 }
 
 int TMREntity::entity_id_count = 0;
 
 /*
-  Set the attribute/name associate with this object
+  Set the name associate with this object
 */
-void TMREntity::setAttribute( const char *_attr ){
-  if (attr){
-    delete [] attr;
+void TMREntity::setName( const char *_name ){
+  if (name){
+    delete [] name;
   }
-  if (_attr){
-    attr = new char[ strlen(_attr)+1 ];
-    strcpy(attr, _attr);
+  if (_name){
+    name = new char[ strlen(_name)+1 ];
+    strcpy(name, _name);
   }
 }
 
 /*
-  Retrieve the attribute associated with this object
+  Retrieve the name associated with this object
 */
-const char* TMREntity::getAttribute() const {
-  return attr;
+const char* TMREntity::getName() const {
+  return name;
 }
 
 /*

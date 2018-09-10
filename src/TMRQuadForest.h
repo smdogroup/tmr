@@ -116,10 +116,10 @@ class TMRQuadForest : public TMREntity {
   void createInterpolation( TMRQuadForest *coarse,
                             TACSBVecInterp *interp );
 
-  // Get the nodes or elements with certain attributes
-  // -------------------------------------------------
-  TMRQuadrantArray* getQuadsWithAttribute( const char *attr );
-  int getNodesWithAttribute( const char *attr, int **nodes );
+  // Get the nodes or elements with a certain name
+  // ---------------------------------------------
+  TMRQuadrantArray* getQuadsWithName( const char *name );
+  int getNodesWithName( const char *name, int **nodes );
 
   // Get the node-processor ownership range
   // --------------------------------------

@@ -45,7 +45,7 @@ TMRVertexFromEdge::TMRVertexFromEdge( TMREdge *_edge,
   t = _t;
   edge = _edge;
   edge->incref();
-  setAttribute(edge->getAttribute());
+  setName(edge->getName());
 }
 
 /*
@@ -55,7 +55,7 @@ TMRVertexFromEdge::TMRVertexFromEdge( TMREdge *_edge,
                                       TMRPoint p ){
   edge = _edge;
   edge->incref();
-  setAttribute(edge->getAttribute());
+  setName(edge->getName());
   
   // Determine the parametric location of p using the initial
   // position
@@ -111,7 +111,7 @@ TMRVertexFromFace::TMRVertexFromFace( TMRFace *_face,
                                       double _u, double _v ){
   face = _face;
   face->incref();
-  setAttribute(face->getAttribute());
+  setName(face->getName());
   u = _u;
   v = _v;
 }
@@ -124,7 +124,7 @@ TMRVertexFromFace::TMRVertexFromFace( TMRFace *_face,
                                       TMRPoint p ){
   face = _face;
   face->incref();
-  setAttribute(face->getAttribute());
+  setName(face->getName());
   face->invEvalPoint(p, &u, &v);
 }
 
@@ -168,7 +168,7 @@ TMREdgeFromFace::TMREdgeFromFace( TMRFace *_face,
   faces[0]->incref();
   pcurves[0] = _pcurve;
   pcurves[0]->incref();
-  setAttribute(faces[0]->getAttribute());
+  setName(faces[0]->getName());
   is_degen = _is_degen;
 }
 
@@ -273,7 +273,7 @@ TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
                             double _t1, double _t2 ){
   edge = _edge;
   edge->incref();
-  setAttribute(edge->getAttribute());
+  setName(edge->getName());
 
   // Set the parameter values
   t1 = _t1;
@@ -295,7 +295,7 @@ TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
                             TMRPoint *p1, TMRPoint *p2 ){
   edge = _edge;
   edge->incref();
-  setAttribute(edge->getAttribute());
+  setName(edge->getName());
 
   // Perform the inverse evaluation
   edge->invEvalPoint(*p1, &t1);
@@ -319,7 +319,7 @@ TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
                             TMRVertex *v1, TMRVertex *v2 ){
   edge = _edge;
   edge->incref();
-  setAttribute(edge->getAttribute());
+  setName(edge->getName());
 
   // Get the parameters for this curve for the point v1/v2
   v1->getParamOnEdge(edge, &t1);
@@ -695,7 +695,7 @@ TMRParametricTFIFace::TMRParametricTFIFace( TMRFace *_face,
                                             TMRVertex *verts[] ){
   face = _face;
   face->incref();
-  setAttribute(face->getAttribute());
+  setName(face->getName());
 
   for ( int k = 0; k < 4; k++ ){
     // Retrieve the parametric curves on the surface

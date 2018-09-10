@@ -26,7 +26,7 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     # Retrieve octants from the forest
     octants = forest.getOctants()
-    face_octs = forest.getOctsWithAttribute(attr)
+    face_octs = forest.getOctsWithName(attr)
     aux = TACS.AuxElements()
 
     for i in range(len(face_octs)):
@@ -120,25 +120,25 @@ faces = geo.getFaces()
 vols = geo.getVolumes()
 faces[7].setSource(vols[0], faces[6])
 
-# Set the attributes
+# Set the names
 v0 = None
-faces[4].setAttribute('fixed')
+faces[4].setName('fixed')
 for i in range(faces[4].getNumEdgeLoops()):
     eloop = faces[4].getEdgeLoop(i)
     edges, d = eloop.getEdgeLoop()
     for e in edges:
-        e.setAttribute('fixed')
+        e.setName('fixed')
         v1, v2 = e.getVertices()
         if v0 is None:
-            v1.setAttribute('fully fixed')
-            v2.setAttribute('fixed')
+            v1.setName('fully fixed')
+            v2.setName('fixed')
             v0 = v1
         else:
-            v1.setAttribute('fixed')
-            v2.setAttribute('fixed')
+            v1.setName('fixed')
+            v2.setName('fixed')
 
 # Set the loads
-faces[5].setAttribute('load')
+faces[5].setName('load')
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)

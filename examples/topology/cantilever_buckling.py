@@ -20,7 +20,7 @@ class CreateMe(TMR.OctTopoCreator):
 def addVertexLoad(comm, forest, attr, assembler, F):
     # Retrieve octants from the forest
     octants = forest.getOctants()
-    node_octs = forest.getNodesWithAttribute(attr)
+    node_octs = forest.getNodesWithName(attr)
     force = assembler.createVec()
     f_array = force.getArray()
     node_range = forest.getNodeRange()
@@ -42,7 +42,7 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     # Retrieve octants from the forest
     octants = forest.getOctants()
-    face_octs = forest.getOctsWithAttribute(attr)
+    face_octs = forest.getOctsWithName(attr)
     aux = TACS.AuxElements()
 
     for i in range(len(face_octs)):
@@ -139,14 +139,14 @@ geo = TMR.LoadModel('long-beam.stp')
 verts = geo.getVertices()
 faces = geo.getFaces()
 volumes = geo.getVolumes()
-# faces[3].setAttribute('fixed')
+# faces[3].setName('fixed')
 # faces[4].setSource(volumes[0], faces[5])
-# verts[4].setAttribute('pt1')
-# verts[3].setAttribute('pt2')
-# faces[1].setAttribute('load')
-faces[4].setAttribute('fixed')
+# verts[4].setName('pt1')
+# verts[3].setName('pt2')
+# faces[1].setName('load')
+faces[4].setName('fixed')
 faces[4].setSource(volumes[0], faces[5])
-faces[5].setAttribute('load')
+faces[5].setName('load')
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()

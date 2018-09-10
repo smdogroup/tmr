@@ -364,14 +364,14 @@ int main( int argc, char *argv[] ){
     int num_verts;
     TMRVertex **verts;
     geo->getVertices(&num_verts, &verts);
-    verts[0]->setAttribute("Clamped");
-    verts[1]->setAttribute("Restrained");
+    verts[0]->setName("Clamped");
+    verts[1]->setName("Restrained");
 
     int num_edges;
     TMREdge **edges;
     geo->getEdges(&num_edges, &edges);
-    edges[0]->setAttribute("Restrained");
-    edges[2]->setAttribute("Restrained");
+    edges[0]->setName("Restrained");
+    edges[2]->setName("Restrained");
 
     // Only include the cylinder face
     int num_faces;

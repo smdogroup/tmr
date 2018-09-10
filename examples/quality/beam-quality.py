@@ -43,10 +43,10 @@ def load_model():
     verts = geo.getVertices()
     vols = geo.getVolumes()
 
-    # Set the attributes
-    faces[6].setAttribute('hole')
-    faces[7].setAttribute('hole')
-    faces[0].setAttribute('fixed')
+    # Set the names
+    faces[6].setName('hole')
+    faces[7].setName('hole')
+    faces[0].setName('fixed')
 
     # Set the source/destination faces
     faces[1].setSource(vols[0], faces[3])

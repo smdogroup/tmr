@@ -11,10 +11,10 @@ geo = TMR.LoadModel('beam.stp')
 verts = geo.getVertices()
 faces = geo.getFaces()
 volumes = geo.getVolumes()
-faces[3].setAttribute('fixed')
+faces[3].setName('fixed')
 faces[4].setSource(volumes[0], faces[5])
-verts[4].setAttribute('pt1')
-verts[3].setAttribute('pt2')
+verts[4].setName('pt1')
+verts[3].setName('pt2')
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()

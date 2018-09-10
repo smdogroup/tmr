@@ -882,7 +882,7 @@ class EdgePt {
  public:
   TMRPoint p;
   double t;
-  
+
   static int compare( const void *a, const void *b ){
     double ta = (static_cast<const EdgePt*>(a))->t;
     double tb = (static_cast<const EdgePt*>(b))->t;
@@ -2696,9 +2696,9 @@ double TMRFaceMesh::computeQuadQuality( const int *quad,
 
   for ( int k = 0; k < 4; k++ ){
     int prev = k-1;
-    if (prev < 0){ prev = 3; }
+    if (k == 0){ prev = 3; }
     int next = k+1;
-    if (next > 3){ next = 0; }
+    if (k == 3){ next = 0; }
 
     TMRPoint a;
     a.x = p[quad[k]].x - p[quad[prev]].x;
@@ -2711,7 +2711,10 @@ double TMRFaceMesh::computeQuadQuality( const int *quad,
     b.z = p[quad[next]].z - p[quad[k]].z;
 
     // Compute the internal angle
-    double alpha = M_PI - acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
+    double beta = a.dot(b)/sqrt(a.dot(a)*b.dot(b));
+    if (beta < -1.0){ beta = -1.0; }
+    if (beta > 1.0){ beta = 1.0; }
+    double alpha = M_PI - acos(beta);
     double val = fabs(0.5*M_PI - alpha);
     if (val > max_val){
       max_val = val;
@@ -2769,7 +2772,10 @@ double TMRFaceMesh::computeTriQuality( const int *tri,
     b.z = p[tri[next]].z - p[tri[k]].z;
 
     // Compute the internal angle
-    double alpha = M_PI - acos(a.dot(b)/sqrt(a.dot(a)*b.dot(b)));
+    double beta = a.dot(b)/sqrt(a.dot(a)*b.dot(b));
+    if (beta < -1.0){ beta = -1.0; }
+    if (beta > 1.0){ beta = 1.0; }
+    double alpha = M_PI - acos(beta);
     double val = fabs(M_PI/3.0 - alpha);
     if (val > max_val){
       max_val = val;
@@ -3424,8 +3430,8 @@ void TMRFaceMesh::writeToVTK( const char *filename ){
       fprintf(fp, "CELL_DATA %d\n", num_quads);
       fprintf(fp, "SCALARS quality float 1\n");
       fprintf(fp, "LOOKUP_TABLE default\n");
-      for ( int k = 0; k < num_quads; k++ ){
-        fprintf(fp, "%e\n", computeQuadQuality(&quads[4*k], X));
+      for ( int i = 0; i < num_quads; i++ ){
+        fprintf(fp, "%e\n", computeQuadQuality(&quads[4*i], X));
       }
 
       fclose(fp);
@@ -4518,11 +4524,11 @@ void TMRMesh::mesh( TMRMeshOptions options,
       mesh = new TMRVolumeMesh(comm, volumes[i]);
       int fail = mesh->mesh(options);
       if (fail){
-        const char *attr = volumes[i]->getAttribute();
-        if (attr){
+        const char *name = volumes[i]->getName();
+        if (name){
           fprintf(stderr,
                   "TMRMesh: Volume meshing failed for object %s\n",
-                  attr);
+                  name);
         }
         else {
           fprintf(stderr,
@@ -4923,12 +4929,12 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
           const int *vars;
           mesh->getNodeNums(&vars);
 
-          // Set the face id == attribute
+          // Set the face id == name
           char descript[128];
           snprintf(descript, sizeof(descript), "FACE%d",
                    faces[i]->getEntityId());
-          if (faces[i]->getAttribute() != NULL){
-            strncpy(descript, faces[i]->getAttribute(), sizeof(descript));
+          if (faces[i]->getName() != NULL){
+            strncpy(descript, faces[i]->getName(), sizeof(descript));
           }
 
           // Print a local description of the face - use the entity
@@ -4977,13 +4983,12 @@ void TMRMesh::writeToBDF( const char *filename, int flag ){
           const int *vars;
           mesh->getNodeNums(&vars);
 
-          // Set the face id == attribute
+          // Set the face id == name
           char descript[128];
           snprintf(descript, sizeof(descript), "VOLUME%d",
                    volumes[i]->getEntityId());
-          if (volumes[i]->getAttribute() != NULL){
-            strncpy(descript, volumes[i]->getAttribute(),
-                    sizeof(descript));
+          if (volumes[i]->getName() != NULL){
+            strncpy(descript, volumes[i]->getName(), sizeof(descript));
           }
 
           // Print a local description of the face - use the entity

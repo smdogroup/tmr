@@ -2013,30 +2013,30 @@ void TMR_ComputeReconSolution( TMRQuadForest *forest,
 
   // Loop over all of the faces and uniquely sort the faces
   int num_faces = topo->getNumFaces();
-  std::set<std::string> face_attr_set;
+  std::set<std::string> face_name_set;
   for ( int face_num = 0; face_num < num_faces; face_num++ ){
     TMRFace *face;
     topo->getFace(face_num, &face);
-    const char *attr = face->getAttribute();
-    if (attr){
-      std::string str(attr);
-      face_attr_set.insert(str);
+    const char *name = face->getName();
+    if (name){
+      std::string str(name);
+      face_name_set.insert(str);
     }
     else {
       std::string str("");
-      face_attr_set.insert(str);
+      face_name_set.insert(str);
     }
   }
 
   // Loop over all of the faces
   std::set<std::string>::iterator it;
-  for ( it = face_attr_set.begin(); it != face_attr_set.end(); it++ ){
+  for ( it = face_name_set.begin(); it != face_name_set.end(); it++ ){
     // Get the quads with the given face number
-    const char *attr = NULL;
+    const char *name = NULL;
     if (!(*it).empty()){
-      attr = (*it).c_str();
+      name = (*it).c_str();
     }
-    TMRQuadrantArray *quad_array = forest->getQuadsWithAttribute(attr);
+    TMRQuadrantArray *quad_array = forest->getQuadsWithName(name);
 
     // Get the quadrants for this face
     int num_face_elems;
@@ -2168,30 +2168,30 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
 
   // Loop over all of the vols and uniquely sort the vols
   int num_vols = topo->getNumVolumes();
-  std::set<std::string> vol_attr_set;
+  std::set<std::string> vol_name_set;
   for ( int vol_num = 0; vol_num < num_vols; vol_num++ ){
     TMRVolume *vol;
     topo->getVolume(vol_num, &vol);
-    const char *attr = vol->getAttribute();
-    if (attr){
-      std::string str(attr);
-      vol_attr_set.insert(str);
+    const char *name = vol->getName();
+    if (name){
+      std::string str(name);
+      vol_name_set.insert(str);
     }
     else {
       std::string str("");
-      vol_attr_set.insert(str);
+      vol_name_set.insert(str);
     }
   }
 
   // Loop over all of the volumes
   std::set<std::string>::iterator it;
-  for ( it = vol_attr_set.begin(); it != vol_attr_set.end(); it++ ){
+  for ( it = vol_name_set.begin(); it != vol_name_set.end(); it++ ){
     // Get the quads with the given vol number
-    const char *attr = NULL;
+    const char *name = NULL;
     if (!(*it).empty()){
-      attr = (*it).c_str();
+      name = (*it).c_str();
     }
-    TMROctantArray *oct_array = forest->getOctsWithAttribute(attr);
+    TMROctantArray *oct_array = forest->getOctsWithName(name);
 
     // Get the octants for this volume
     int num_vol_elems;

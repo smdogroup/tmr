@@ -33,7 +33,7 @@ cdef tmr_init():
 # Ensure that numpy is initialized
 np.import_array()
 
-# Initialize
+# Initialize the MPI libraries in TMR (if not already done)
 tmr_init()
 
 # Import the definition required for const strings
@@ -84,15 +84,15 @@ cdef class Vertex:
         self.ptr.evalPoint(&pt)
         return np.array([pt.x, pt.y, pt.z])
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
-    def getAttribute(self):
+    def getName(self):
         cdef const char *name = NULL
         if self.ptr:
-            name = self.ptr.getAttribute()
+            name = self.ptr.getName()
             return tmr_convert_char_to_str(name)
         return None
 
@@ -109,7 +109,8 @@ cdef class Vertex:
 cdef _init_Vertex(TMRVertex *ptr):
     vertex = Vertex()
     vertex.ptr = ptr
-    vertex.ptr.incref()
+    if ptr != NULL:
+        vertex.ptr.incref()
     return vertex
 
 cdef class Edge:
@@ -121,20 +122,25 @@ cdef class Edge:
         if self.ptr:
             self.ptr.decref()
 
+    def getRange(self):
+        cdef double tmin, tmax
+        self.ptr.getRange(&tmin, &tmax)
+        return tmin, tmax
+
     def evalPoint(self, double t):
         cdef TMRPoint pt
         self.ptr.evalPoint(t, &pt)
         return np.array([pt.x, pt.y, pt.z])
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
-    def getAttribute(self):
+    def getName(self):
         cdef const char *name = NULL
         if self.ptr:
-            name = self.ptr.getAttribute()
+            name = self.ptr.getName()
             return tmr_convert_char_to_str(name)
         return None
 
@@ -170,7 +176,8 @@ cdef class Edge:
 cdef _init_Edge(TMREdge *ptr):
     edge = Edge()
     edge.ptr = ptr
-    edge.ptr.incref()
+    if ptr != NULL:
+        edge.ptr.incref()
     return edge
 
 cdef class EdgeLoop:
@@ -248,7 +255,8 @@ cdef class EdgeLoop:
 cdef _init_EdgeLoop(TMREdgeLoop *ptr):
     loop = EdgeLoop()
     loop.ptr = ptr
-    loop.ptr.incref()
+    if ptr != NULL:
+        loop.ptr.incref()
     return loop
 
 cdef class Face:
@@ -260,20 +268,25 @@ cdef class Face:
         if self.ptr:
             self.ptr.decref()
 
+    def getRange(self):
+        cdef double umin, vmin, umax, vmax
+        self.ptr.getRange(&umin, &vmin, &umax, &vmax)
+        return umin, vmin, umax, vmax
+
     def evalPoint(self, double u, double v):
         cdef TMRPoint pt
         self.ptr.evalPoint(u, v, &pt)
         return np.array([pt.x, pt.y, pt.z])
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
-    def getAttribute(self):
+    def getName(self):
         cdef const char *name = NULL
         if self.ptr:
-            name = self.ptr.getAttribute()
+            name = self.ptr.getName()
             return tmr_convert_char_to_str(name)
         return None
 
@@ -308,6 +321,11 @@ cdef class Face:
     def setMesh(self, FaceMesh mesh):
         self.ptr.setMesh(mesh.ptr)
 
+    def getMesh(self):
+        cdef TMRFaceMesh *fmesh
+        self.ptr.getMesh(&fmesh)
+        return _init_FaceMesh(fmesh)
+
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
@@ -315,7 +333,8 @@ cdef class Face:
 cdef _init_Face(TMRFace *ptr):
     face = Face()
     face.ptr = ptr
-    face.ptr.incref()
+    if ptr != NULL:
+        face.ptr.incref()
     return face
 
 cdef class Volume:
@@ -345,15 +364,15 @@ cdef class Volume:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
-    def getAttribute(self):
+    def getName(self):
         cdef const char *name = NULL
         if self.ptr:
-            name = self.ptr.getAttribute()
+            name = self.ptr.getName()
             return tmr_convert_char_to_str(name)
         return None
 
@@ -368,7 +387,7 @@ cdef class Volume:
         if self.ptr:
             self.ptr.getFaces(&num_faces, &f, NULL)
         faces = []
-        for i in xrange(num_faces):
+        for i in range(num_faces):
             faces.append(_init_Face(f[i]))
         return faces
 
@@ -379,7 +398,8 @@ cdef class Volume:
 cdef _init_Volume(TMRVolume *ptr):
     vol = Volume()
     vol.ptr = ptr
-    vol.ptr.incref()
+    if ptr != NULL:
+        vol.ptr.incref()
     return vol
 
 cdef class Curve:
@@ -391,10 +411,10 @@ cdef class Curve:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
     def getEntityId(self):
         if self.ptr:
@@ -441,11 +461,11 @@ cdef class Curve:
             return _init_Curve(c1), _init_Curve(c2)
         return None
 
-
 cdef _init_Curve(TMRCurve *ptr):
     curve = Curve()
     curve.ptr = ptr
-    curve.ptr.incref()
+    if ptr != NULL:
+        curve.ptr.incref()
     return curve
 
 cdef class Pcurve:
@@ -457,10 +477,10 @@ cdef class Pcurve:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
     def getEntityId(self):
         if self.ptr:
@@ -476,10 +496,10 @@ cdef class Surface:
         if self.ptr:
             self.ptr.decref()
 
-    def setAttribute(self, aname):
+    def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
-            self.ptr.setAttribute(name)
+            self.ptr.setName(name)
 
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
@@ -517,7 +537,8 @@ cdef class Surface:
 cdef _init_Surface(TMRSurface *ptr):
     surface = Surface()
     surface.ptr = ptr
-    surface.ptr.incref()
+    if ptr != NULL:
+        surface.ptr.incref()
     return surface
 
 cdef class BsplineCurve(Curve):
@@ -709,7 +730,7 @@ cdef class Model:
         if verts is not None:
             nverts = len(verts)
             v = <TMRVertex**>malloc(nverts*sizeof(TMRVertex*))
-            for i in xrange(len(verts)):
+            for i in range(len(verts)):
                 v[i] = (<Vertex>verts[i]).ptr
                 if v[i] is NULL:
                     errmsg = 'Vertex %d is NULL'%(i)
@@ -720,7 +741,7 @@ cdef class Model:
         if edges is not None:
             nedges = len(edges)
             e = <TMREdge**>malloc(nedges*sizeof(TMREdge*))
-            for i in xrange(len(edges)):
+            for i in range(len(edges)):
                 e[i] = (<Edge>edges[i]).ptr
                 if e[i] is NULL:
                     errmsg = 'Edge %d is NULL'%(i)
@@ -731,7 +752,7 @@ cdef class Model:
         if faces is not None:
             nfaces = len(faces)
             f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
-            for i in xrange(len(faces)):
+            for i in range(len(faces)):
                 f[i] = (<Face>faces[i]).ptr
                 if f[i] is NULL:
                     errmsg = 'Face %d is NULL'%(i)
@@ -742,7 +763,7 @@ cdef class Model:
         if vols is not None:
             nvols = len(vols)
             b = <TMRVolume**>malloc(nvols*sizeof(TMRVolume*))
-            for i in xrange(len(vols)):
+            for i in range(len(vols)):
                 b[i] = (<Volume>vols[i]).ptr
                 if b[i] is NULL:
                     errmsg = 'Volume %d is NULL'%(i)
@@ -774,7 +795,7 @@ cdef class Model:
         if self.ptr:
             self.ptr.getVolumes(&num_vol, &vol)
         volumes = []
-        for i in xrange(num_vol):
+        for i in range(num_vol):
             volumes.append(_init_Volume(vol[i]))
         return volumes
 
@@ -784,7 +805,7 @@ cdef class Model:
         if self.ptr:
             self.ptr.getFaces(&num_faces, &f)
         faces = []
-        for i in xrange(num_faces):
+        for i in range(num_faces):
             faces.append(_init_Face(f[i]))
         return faces
 
@@ -794,7 +815,7 @@ cdef class Model:
         if self.ptr:
             self.ptr.getEdges(&num_edges, &e)
         edges = []
-        for i in xrange(num_edges):
+        for i in range(num_edges):
             edges.append(_init_Edge(e[i]))
         return edges
 
@@ -804,7 +825,7 @@ cdef class Model:
         if self.ptr:
             self.ptr.getVertices(&num_verts, &v)
         verts = []
-        for i in xrange(num_verts):
+        for i in range(num_verts):
             verts.append(_init_Vertex(v[i]))
         return verts
 
@@ -868,12 +889,12 @@ cdef class Model:
                         pts[0,:] = pt1[:]
                     pts[i+1,:] = pt2[:]
 
-                for i in xrange(len(e)):
+                for i in range(len(e)):
                     tx[i,:] = pts[i+1,:] - pts[i,:]
                     xav[:] += 0.5*(pts[i+1,:] + pts[i,:])
                     count += 1
 
-                for i in xrange(len(e)+1):
+                for i in range(len(e)+1):
                     fp.write('%e %e %e %e %e %e\n'%(
                         pts[i,0], pts[i,1], pts[i,2],
                         tx[i,0], tx[i,1], tx[i,2]))
@@ -889,7 +910,8 @@ cdef class Model:
 cdef _init_Model(TMRModel* ptr):
     model = Model()
     model.ptr = ptr
-    model.ptr.incref()
+    if ptr != NULL:
+        model.ptr.incref()
     return model
 
 cdef class MeshOptions:
@@ -1223,15 +1245,16 @@ cdef class EdgeMesh:
 
 cdef class FaceMesh:
     cdef TMRFaceMesh *ptr
-    def __cinit__(self, MPI.Comm comm, Face f,
+    def __cinit__(self, MPI.Comm comm=None, Face f=None,
                   np.ndarray[double, ndim=2, mode='c'] _X=None,
                   np.ndarray[int, ndim=2, mode='c'] _quads=None):
-        cdef MPI_Comm c_comm = comm.ob_mpi
+        cdef MPI_Comm c_comm = NULL
         cdef TMRPoint *X = NULL
         cdef int *quads = NULL
         cdef int npts = 0
         cdef int nquads = 0
         if _X is not None and _quads is not None:
+            c_comm = comm.ob_mpi
             npts = _X.shape[0]
             nquads = _quads.shape[0]
             X = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
@@ -1245,12 +1268,12 @@ cdef class FaceMesh:
                 quads[4*i+1] = _quads[i,1]
                 quads[4*i+2] = _quads[i,2]
                 quads[4*i+3] = _quads[i,3]
-        self.ptr = new TMRFaceMesh(c_comm, f.ptr, X, npts, quads, nquads)
-        if X:
-            free(X)
-        if quads:
-            free(quads)
-        self.ptr.incref()
+            self.ptr = new TMRFaceMesh(c_comm, f.ptr, X, npts, quads, nquads)
+            if X:
+                free(X)
+            if quads:
+                free(quads)
+            self.ptr.incref()
 
     def __dealloc__(self):
         pass
@@ -1269,6 +1292,13 @@ cdef class FaceMesh:
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
+
+cdef _init_FaceMesh(TMRFaceMesh *ptr):
+    fm = FaceMesh()
+    fm.ptr = ptr
+    if ptr != NULL:
+        fm.ptr.incref()
+    return fm
 
 cdef class Topology:
     cdef TMRTopology *ptr
@@ -1309,7 +1339,8 @@ cdef class Topology:
 cdef _init_Topology(TMRTopology *ptr):
     topo = Topology()
     topo.ptr = ptr
-    topo.ptr.incref()
+    if ptr != NULL:
+        topo.ptr.incref()
     return topo
 
 cdef class QuadrantArray:
@@ -1489,17 +1520,17 @@ cdef class QuadForest:
     def createNodes(self):
         self.ptr.createNodes()
 
-    def getQuadsWithAttribute(self, aname):
+    def getQuadsWithName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef TMRQuadrantArray *array = NULL
-        array = self.ptr.getQuadsWithAttribute(name)
+        array = self.ptr.getQuadsWithName(name)
         return _init_QuadrantArray(array, 1)
 
-    def getNodesWithAttribute(self, aname):
+    def getNodesWithName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int size = 0
         cdef int *nodes = NULL
-        size = self.ptr.getNodesWithAttribute(name, &nodes)
+        size = self.ptr.getNodesWithName(name, &nodes)
         array = np.zeros(size, dtype=np.intc)
         for i in range(size):
             array[i] = nodes[i]
@@ -1552,7 +1583,7 @@ cdef class QuadForest:
         weights = np.zeros(_ptr[ndep], dtype=np.double)
         for i in range(ndep+1):
             ptr[i] = _ptr[i]
-        for i in xrange(ptr[ndep]):
+        for i in range(ptr[ndep]):
             conn[i] = _conn[i]
             weights[i] = _weights[i]
         return ptr, conn, weights
@@ -1571,7 +1602,8 @@ cdef class QuadForest:
 cdef _init_QuadForest(TMRQuadForest* ptr):
     forest = QuadForest()
     forest.ptr = ptr
-    forest.ptr.incref()
+    if ptr != NULL:
+        forest.ptr.incref()
     return forest
 
 cdef class OctantArray:
@@ -1772,17 +1804,17 @@ cdef class OctForest:
     def createNodes(self):
         self.ptr.createNodes()
 
-    def getOctsWithAttribute(self, aname):
+    def getOctsWithName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef TMROctantArray *array = NULL
-        array = self.ptr.getOctsWithAttribute(name)
+        array = self.ptr.getOctsWithName(name)
         return _init_OctantArray(array, 1)
 
-    def getNodesWithAttribute(self, aname):
+    def getNodesWithName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int size = 0
         cdef int *nodes = NULL
-        size = self.ptr.getNodesWithAttribute(name, &nodes)
+        size = self.ptr.getNodesWithName(name, &nodes)
         array = np.zeros(size, dtype=np.intc)
         for i in range(size):
             array[i] = nodes[i]
@@ -1835,7 +1867,7 @@ cdef class OctForest:
         weights = np.zeros(_ptr[ndep], dtype=np.double)
         for i in range(ndep+1):
             ptr[i] = _ptr[i]
-        for i in xrange(ptr[ndep]):
+        for i in range(ptr[ndep]):
             conn[i] = _conn[i]
             weights[i] = _weights[i]
         return ptr, conn, weights
@@ -1854,7 +1886,8 @@ cdef class OctForest:
 cdef _init_OctForest(TMROctForest* ptr):
     forest = OctForest()
     forest.ptr = ptr
-    forest.ptr.incref()
+    if ptr != NULL:
+        forest.ptr.incref()
     return forest
 
 def LoadModel(fname, int print_lev=0):

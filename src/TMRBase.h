@@ -141,8 +141,8 @@ class TMREntity {
   virtual ~TMREntity();
   
   // Set an attribute
-  void setAttribute( const char *attr );
-  const char* getAttribute() const;
+  void setName( const char *name );
+  const char* getName() const;
 
   // Reference count the geometric entity objects
   // --------------------------------------------
@@ -167,7 +167,7 @@ class TMREntity {
   int ref_count;
 
   // Named attribute
-  char *attr;
+  char *name;
 
   // The entity identification value
   const int entity_id;

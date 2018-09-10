@@ -34,7 +34,7 @@ def get_disk_aggregate(rho, R, n=1000):
 def get_midpoint_vector(comm, forest, assembler, attr):
     vec = assembler.createVec()
     v = vec.getArray()
-    nodes = forest.getNodesWithAttribute(attr)
+    nodes = forest.getNodesWithName(attr)
     node_range = forest.getNodeRange()
     for n in nodes:
         if n >= node_range[comm.rank] and n < node_range[comm.rank+1]:
@@ -199,12 +199,12 @@ if case == 'disk':
     edges = geo.getEdges()
     faces = geo.getFaces()
 
-    # Set the attributes
-    verts[1].setAttribute('midpoint')
+    # Set the names
+    verts[1].setName('midpoint')
     for index in [0, 2, 3, 4]:
-        verts[index].setAttribute('clamped')
+        verts[index].setName('clamped')
     for index in [2, 4, 6, 7]:
-        edges[index].setAttribute('clamped')
+        edges[index].setName('clamped')
 
     # Set the boundary conditions
     bcs.addBoundaryCondition('clamped', [0])
@@ -222,12 +222,12 @@ elif case == 'square':
     edges = geo.getEdges()
     faces = geo.getFaces()
 
-    # Set the attributes
-    verts[1].setAttribute('midpoint')
+    # Set the names
+    verts[1].setName('midpoint')
     for index in [0, 3, 2, 5, 4, 6, 7, 8]:
-        verts[index].setAttribute('clamped')
+        verts[index].setName('clamped')
     for index in [2, 3, 5, 6, 7, 8, 10, 11]:
-        edges[index].setAttribute('clamped')
+        edges[index].setName('clamped')
 
     # Set the boundary conditions
     bcs.addBoundaryCondition('clamped', [0])

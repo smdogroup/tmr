@@ -56,8 +56,8 @@ cdef extern from "TMRBase.h":
     cdef cppclass TMREntity:
         void incref()
         void decref()
-        void setAttribute(char*)
-        const char* getAttribute()
+        void setName(const char*)
+        const char* getName()
         int getEntityId()
 
     cdef cppclass TMRPoint:
@@ -95,6 +95,7 @@ cdef extern from "TMRTopology.h":
         TMREdge()
         void setSource(TMREdge*)
         void getSource(TMREdge**)
+        void getRange(double*, double*)
         int evalPoint(double, TMRPoint*)
         void setVertices(TMRVertex*, TMRVertex*)
         void getVertices(TMRVertex**, TMRVertex**)
@@ -105,6 +106,7 @@ cdef extern from "TMRTopology.h":
     cdef cppclass TMRFace(TMREntity):
         TMRFace()
         TMRFace(int)
+        void getRange(double*, double*, double*, double*)
         int evalPoint(double, double, TMRPoint*)
         void setSource(TMRVolume*, TMRFace*)
         void getSource(int*, TMRVolume**, TMRFace**)
@@ -322,8 +324,8 @@ cdef extern from "TMRQuadForest.h":
         void setMeshOrder(int, TMRInterpolationType)
         void getNodeConn(const int**, int*)
         int getDepNodeConn(const int**, const int**, const double**)
-        TMRQuadrantArray* getQuadsWithAttribute(const char*)
-        int getNodesWithAttribute(const char*, int**)
+        TMRQuadrantArray* getQuadsWithName(const char*)
+        int getNodesWithName(const char*, int**)
         void createInterpolation(TMRQuadForest*, TACSBVecInterp*)
         int getOwnedNodeRange(const int**)
         void getQuadrants(TMRQuadrantArray**)
@@ -375,8 +377,8 @@ cdef extern from "TMROctForest.h":
         void setMeshOrder(int, TMRInterpolationType)
         void getNodeConn(const int**, int*)
         int getDepNodeConn(const int**, const int**, const double**)
-        TMROctantArray* getOctsWithAttribute(const char*)
-        int getNodesWithAttribute(const char*, int**)
+        TMROctantArray* getOctsWithName(const char*)
+        int getNodesWithName(const char*, int**)
         void createInterpolation(TMROctForest*, TACSBVecInterp*)
         int getOwnedNodeRange(const int**)
         void getOctants(TMROctantArray**)

@@ -26,7 +26,7 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     # Retrieve octants from the forest
     octants = forest.getOctants()
-    face_octs = forest.getOctsWithAttribute(attr)
+    face_octs = forest.getOctsWithName(attr)
     aux = TACS.AuxElements()
 
     for i in range(len(face_octs)):
@@ -93,9 +93,9 @@ geo = TMR.LoadModel('bracket_solid.stp')
 # Mark the boundary condition faces
 faces = geo.getFaces()
 volumes = geo.getVolumes()
-faces[15].setAttribute('fixed')
+faces[15].setName('fixed')
 faces[4].setSource(volumes[0], faces[1])
-faces[4].setAttribute('surface')
+faces[4].setName('surface')
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
