@@ -28,10 +28,12 @@ class MassMin:
         self.nvars = nvars
         self.x = np.zeros(self.nvars)
         self.x[:] = 0.95
+        self.x_scale = 100.0
 
         # Set the scaling on the mass objective
         xlen = 0.1
         self.mass_scale = 100.0/(0.64*xlen**2)
+        self.con_scale = 1.0
 
         # The number of constraints (1 global stress constraint that
         # will use the KS function)
@@ -75,9 +77,11 @@ class MassMin:
 
     def getVarsAndBounds(self, x, lb, ub):
         '''Set the values of the bounds'''
-        x[:] = self.x[:]
-        lb[:] = 1e-3
-        ub[:] = 1.0
+        x[:] = self.x_scale*self.x[:]
+        xlb = 1e-3
+        xub = 1.0
+        lb[:] = self.x_scale*xlb
+        ub[:] = self.x_scale*xub
         return
 
     def objcon(self, xdict):
@@ -111,7 +115,7 @@ class MassMin:
         return sens, fail
 
     def evalObjCon(self, x):
-        self.x[:] = x[:]
+        self.x[:] = x[:]/self.x_scale
 
         # Evaluate the objective and constraints
         fail = 0
@@ -146,7 +150,7 @@ class MassMin:
         # Set the KS function (the approximate maximum ratio of the
         # von Mises stress to the design stress) so that it is less
         # than or equal to 1.0
-        con[0] = 1.0 - fvals[1] # ~= 1.0 - max (sigma/design) >= 0
+        con[0] = self.con_scale*(1.0 - fvals[1])
 
         if self.comm.rank == 0:
             print('fobj = ', fobj)
@@ -162,7 +166,7 @@ class MassMin:
         # objective gradient
         gx = np.zeros(self.nvars, TACS.dtype)
         self.assembler.evalDVSens(self.funcs[0], gx)
-        g[:] = self.mass_scale*gx
+        g[:] = self.mass_scale*gx/self.x_scale
 
         # Compute the total derivative w.r.t. material design variables
         dfdx = np.zeros(self.nvars, TACS.dtype)
@@ -179,7 +183,7 @@ class MassMin:
         self.assembler.evalAdjointResProduct(self.adjoint, product)
 
         # Set the constraint gradient
-        A[0][:] = -(dfdx - product)
+        A[0][:] = -self.con_scale*(dfdx - product)/self.x_scale
 
         # Write out the solution file every 10 iterations
         if self.iter_count % 1 == 0:
@@ -259,7 +263,7 @@ def addFaceTraction(order, forest, assembler):
     ty[:] = 10e4/thickness
 
     # Create the shell traction
-    surf = 3
+    surf = 1
     trac = elements.PSQuadTraction(surf, tx, ty)
     for q in quads:
         aux.addElement(q.tag, trac)
@@ -357,9 +361,10 @@ if args.optimizer == 'snopt':
     options['Print file'] = fname
     options['Summary file'] = fname + '_summary'
     options['Major optimality tolerance'] = tol
-    options['Penalty parameter'] = 50.0
+    options['Penalty parameter'] = 10.0
     options['Nonderivative linesearch'] = None
     options['Minor print level'] = 0
+    options['Minor feasibility tolerance'] = 1e-8
 
     # Set a large number of iterations
     options['Minor iterations limit'] = 10000
@@ -394,7 +399,7 @@ locator = locate.locate(np.array(pts))
 num_design_vars = len(pts)
 
 # Create the CRM wingbox model and set the names
-geo = TMR.LoadModel('bracket_traction_face1.stp')
+geo = TMR.LoadModel('2d-bracket-fillet.stp')
 verts = geo.getVertices()
 edges = geo.getEdges()
 faces = geo.getFaces()
@@ -402,7 +407,7 @@ geo = TMR.Model(verts, edges, faces)
 
 # Set the edges
 edges[5].setName('clamped')
-edges[2].setName('traction')
+edges[1].setName('traction')
 
 # Initial target mesh spacing
 htarget = args.htarget
