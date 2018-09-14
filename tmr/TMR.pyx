@@ -2154,13 +2154,14 @@ cdef class StiffnessProperties:
         nu = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
         if (_ys):
             ys = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-
+            
         for i in range(nmats):
             rho[i] = <TacsScalar>_rho[i]
             E[i] = <TacsScalar>_E[i]
             nu[i] = <TacsScalar>_nu[i]
             if (_ys):
                 ys[i] = <TacsScalar>_ys[i]
+                
         self.ptr = new TMRStiffnessProperties(nmats, q, eps, k0, beta, xoffset,
                                               rho, E, nu, ys, use_project)
         self.ptr.incref()
@@ -2169,6 +2170,7 @@ cdef class StiffnessProperties:
         free(nu)
         if (ys):
             free(ys)
+        
         return
 
     def __dealloc__(self):
@@ -2193,12 +2195,16 @@ cdef class StiffnessProperties:
 cdef class QuadStiffnessProperties:
     cdef TMRQuadStiffnessProperties *ptr
     def __cinit__(self, list _rho, list _E, list _nu, list _ys=None,
-                  double q=5.0, double eps=0.3, double k0=1e-6,
+                  list _aT=None, list _kcond=None,                  
+                  double q=5.0, double qtemp=0.0, double qcond=0.0,
+                  double eps=0.3, double k0=1e-6,
                   double beta=15.0, double xoffset=0.5, int use_project=0):
         cdef TacsScalar *rho = NULL
         cdef TacsScalar *E = NULL
         cdef TacsScalar *nu = NULL
         cdef TacsScalar *ys = NULL
+        cdef TacsScalar *aT = NULL
+        cdef TacsScalar *kcond = NULL
         cdef int nmats = 0
         if len(_rho) != len(_E) or len(_rho) != len(_nu):
             errmsg = 'Must specify the same number of properties'
@@ -2209,21 +2215,33 @@ cdef class QuadStiffnessProperties:
         nu = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
         if (_ys):
             ys = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-
+        if (_aT):
+            aT = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        if (_kcond):
+            kcond = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
         for i in range(nmats):
             rho[i] = <TacsScalar>_rho[i]
             E[i] = <TacsScalar>_E[i]
             nu[i] = <TacsScalar>_nu[i]
             if (_ys):
                 ys[i] = <TacsScalar>_ys[i]
+            if (_aT):
+                aT[i]= <TacsScalar>_aT[i]
+            if (_kcond):
+                kcond[i] = <TacsScalar>_kcond[i]
         self.ptr = new TMRQuadStiffnessProperties(nmats, q, eps, k0, beta, xoffset,
-                                                  rho, E, nu, ys, use_project)
+                                                  rho, E, nu, ys, aT, kcond,
+                                                  qtemp, qcond, use_project)
         self.ptr.incref()
         free(rho)
         free(E)
         free(nu)
         if (ys):
             free(ys)
+        if (aT):
+            free(aT)
+        if (kcond):
+            free(kcond)
         return
 
     def __dealloc__(self):
@@ -2343,6 +2361,37 @@ cdef class QuadStiffness(PlaneStress):
 
         # Create the constitutive object
         self.ptr = new TMRQuadStiffness(w, nw, props.ptr)
+        self.ptr.incref()
+        free(w)
+        return
+
+cdef class ThermoQuadStiffness(CoupledPlaneStress):
+    def __cinit__(self, QuadStiffnessProperties props,
+                  list index=None, list weights=None):
+        cdef TMRIndexWeight *w = NULL
+        cdef int nw = 0
+        self.ptr = NULL
+        if weights is None or index is None:
+            errmsg = 'Must define weights and indices'
+            raise ValueError(errmsg)
+        if len(weights) != len(index):
+            errmsg = 'Weights and index list lengths must be the same'
+            raise ValueError(errmsg)
+
+        # Check that the lengths are less than 4
+        if len(weights) > 4:
+            errmsg = 'Weight/index lists too long > 4'
+            raise ValueError(errmsg)
+
+        # Extract the weights
+        nw = len(weights)
+        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
+        for i in range(nw):
+            w[i].weight = <double>weights[i]
+            w[i].index = <int>index[i]
+
+        # Create the constitutive object
+        self.ptr = new TMRCoupledThermoQuadStiffness(w, nw, props.ptr)
         self.ptr.incref()
         free(w)
         return

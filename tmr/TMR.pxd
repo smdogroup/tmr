@@ -432,16 +432,24 @@ cdef extern from "TMRQuadStiffness.h":
     cdef cppclass TMRQuadStiffnessProperties(TMREntity):
         TMRQuadStiffnessProperties(int, double, double, double, double, double,
                                    TacsScalar*, TacsScalar*, TacsScalar*,
-                                   TacsScalar*, int)
+                                   TacsScalar*, TacsScalar*, TacsScalar*,
+                                   double, double, int)
         int nmats
         double q
         double eps
         double k0
         double beta
         double xoffset
+        double qtemp
+        double qcond
+        
     cdef cppclass TMRQuadStiffness(PlaneStressStiffness):
         TMRQuadStiffness(TMRIndexWeight*, int, TMRQuadStiffnessProperties*)
-
+        
+cdef extern from "TMRCoupledThermoQuadStiffness.h":
+   cdef cppclass TMRCoupledThermoQuadStiffness(CoupledThermoPlaneStressStiffness):
+        TMRCoupledThermoQuadStiffness(TMRIndexWeight*, int, TMRQuadStiffnessProperties*)
+        
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):
         pass
