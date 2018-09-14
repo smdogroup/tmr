@@ -487,7 +487,13 @@ p.add_argument('--energy_error', action='store_true', default=False)
 p.add_argument('--compute_solution_error', action='store_true', default=False)
 p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
 p.add_argument('--remesh_domain', action='store_true', default=False)
+p.add_argument('--remesh_strategy', type=str, default='fraction')
 args = p.parse_args()
+
+# Print the keys
+if comm.rank == 0:
+    for key in vars(args):
+        print('args[%30s] = %30s'%(key, str(getattr(args, key))))
 
 # Set the case type
 case = args.case
@@ -581,7 +587,8 @@ elif case == 'disk':
     R = 100.0
 
     # Get the maximum stress and re-adjust the load
-    vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr, ys, R, load, n=20)
+    vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr,
+                                     ys, R, load, n=20)
     load = load/vm_max
 
     D = ((t**3)/12)*E/(1.0 - nu**2)
@@ -1015,14 +1022,41 @@ for k in range(steps):
                 # Reshape the point array
                 Xpt = Xpt.reshape(-1,3)
 
-                # Compute the target relative error in each element.
-                # This is set as a fraction of the error in the
-                # current mesh level.
-                err_target = 0.1*(err_est/ntotal)
+                # Asymptotic order of accuracy on per-element basis
+                s = 1.0
+                if args.order >= 3:
+                    s = args.order - 1.0
 
-                # Compute the element size factor in each element
-                # using the order or accuracy
-                hvals = (err_target/errors)**(0.5)
+                # Dimension of the problem
+                d = 2.0
+
+                # Set the exponent
+                exponent = d/(d + s)
+
+                # Compute the target error as a fixed fraction of the
+                # error estimate. This will result in the size of the
+                # mesh increasing at each iteration.
+                if args.remesh_strategy == 'fraction':
+                    err_target = 0.1*err_est
+                else:
+                    # Set a fixed target error
+                    err_target = 1e-4   # Target error estimate
+
+                # Set the error estimate
+                cval = 1.0
+                if args.remesh_strategy == 'fixed_mesh':
+                    # Set the target error
+                    count_target = 20e3 # Target element count
+
+                    # Compute the constant for element count
+                    cval = (count_target)**(-1.0/d)
+                    cval *= (np.sum(errors**(exponent)))**(1.0/d)
+                else:
+                    # Compute the constant for target error
+                    cval = (err_target/np.sum(errors**(exponent)))**(1.0/s)
+
+                # Compute the element-wise target error
+                hvals = cval*errors**(-(1.0/(d + s)))
 
                 # Set the values of
                 if feature_size is not None:
@@ -1037,8 +1071,9 @@ for k in range(steps):
 
                 # Allocate the feature size object
                 hmax = 10.0
-                hmin = 0.25
-                feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax)
+                hmin = 0.1
+                feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax,
+                                                    num_sample_pts=16)
 
                 # Code to visualize the mesh size distribution on the fly
                 visualize_mesh_size = False

@@ -16,6 +16,76 @@ import sys
 sys.path.append('../smooth')
 import locate
 
+# Optimize the mesh spacing to meet criteria
+def optimize_mesh(hvals, errors, lower, upper, Ntarget, p, d):
+    def objfunc(xdict):
+        '''Evaluate the objective/constraint'''
+        x = xdict['x']
+
+        # Minimize predicted error
+        fobj = 0.0
+        ratio = 0.0
+        for i, h in enumerate(hvals):
+            fobj += errors[i]*(x[i]/h)**s
+            ratio += (x[i]/h)**(-d)
+
+        # Set the objective and constraint
+        funcs = {}
+        funcs['fobj'] = fobj
+        funcs['ratio'] = ratio/Ntarget
+
+        fail = 0
+        return funcs, fail
+
+    def gobjfunc(xdict, funcs):
+        '''Evaluate the objective/constraint derivatives'''
+        x = xdict['x']
+
+        # Minimize predicted error
+        gobj = np.zeros(x.shape)
+        gratio = np.zeros(x.shape)
+        for i, h in enumerate(hvals):
+            gobj[i] = s*(errors[i]/h)*(x[i]/h)**(s-1)
+            gratio[i] = -(d/h)*(x[i]/h)**(-d-1.0)
+        gratio[:] /= Ntarget
+
+        # Set the objective and constraint
+        sens = {'fobj': {'x': gobj}, 'ratio': {'x': gratio}}
+
+        fail = 0.0
+        return sens, fail
+
+    print('hvals = ', hvals)
+    print('errors = ', errors)
+
+    # Create the optimization problem
+    mesh_prob = Optimization('mesh', objfunc, comm=MPI.COMM_SELF)
+
+    # Add the variable group
+    x0 = 0.5*(lower + upper)
+    mesh_prob.addVarGroup('x', len(hvals), value=x0, lower=lower, upper=upper)
+
+    # Add the constraints
+    mesh_prob.addConGroup('ratio', 1, lower=1.0, upper=1.0)
+
+    # Add the objective
+    mesh_prob.addObj('fobj')
+
+    # The Optimizer is IPOPT
+    options = {}
+    options['print_user_options'] = 'yes'
+    options['tol'] = 1e-8
+    options['bound_relax_factor'] = 0.0
+    options['linear_solver'] = 'ma27'
+    options['output_file'] = 'results/mesh_opt.out'
+    options['max_iter'] = 10000
+
+    # Create the optimizer and optimize it!
+    opt = OPT('ipopt', options=options)
+    sol = opt(mesh_prob, sens=gobjfunc)
+
+    return sol.xStar['x']
+
 class MassMin:
     '''
     Mass minimization with a von Mises stress constraint
@@ -42,7 +112,7 @@ class MassMin:
         self.iter_count = 0
         return
 
-    def setAssembler(self, assembler, mg, gmres, ksfunc):
+    def setAssembler(self, assembler, ksfunc):
 
         # Create tacs assembler object from mesh loader
         self.assembler = assembler
@@ -56,15 +126,9 @@ class MassMin:
         self.adjoint = self.assembler.createVec()
         self.dfdu = self.assembler.createVec()
 
-        self.use_multigrid = False
-        if self.use_multigrid:
-            self.mg = mg
-            self.mat = self.mg.getMat()
-            self.gmres = gmres
-        else:
-            self.mat = self.assembler.createFEMat()
-            self.pc = TACS.Pc(self.mat)
-            self.gmres = TACS.KSM(self.mat, self.pc, 10)
+        self.mat = self.assembler.createFEMat()
+        self.pc = TACS.Pc(self.mat)
+        self.gmres = TACS.KSM(self.mat, self.pc, 10)
 
         # For visualization
         flag = (TACS.ToFH5.NODES |
@@ -129,12 +193,8 @@ class MassMin:
         beta = 0.0
         gamma = 0.0
         self.assembler.zeroVariables()
-        if self.use_multigrid:
-            self.mg.assembleJacobian(alpha, beta, gamma, self.res)
-            self.mg.factor()
-        else:
-            self.assembler.assembleJacobian(alpha, beta, gamma, self.res, self.mat)
-            self.pc.factor()
+        self.assembler.assembleJacobian(alpha, beta, gamma, self.res, self.mat)
+        self.pc.factor()
 
         # Solve the linear system and set the varaibles into TACS
         self.gmres.solve(self.res, self.ans)
@@ -239,9 +299,9 @@ class CreateMe(TMR.QuadCreator):
         E = 70e9
         nu = 0.3
         ys = 275e6
-        q = 5.0
+        p = 4.0
         eps = 0.15
-        ps = const_topo.pstopo(rho, E, nu, ys, q, eps, nodes, weights)
+        ps = const_topo.pstopo(rho, E, nu, ys, p, eps, nodes, weights)
 
         # Create the plane stree quadrilateral
         elem = elements.PlaneQuad(order, ps)
@@ -276,7 +336,7 @@ def createRefined(topo, forest, bcs, pttype=TMR.UNIFORM_POINTS):
     creator = CreateMe(bcs, topo)
     return new_forest, creator.createTACS(new_forest)
 
-def createProblem(topo, forest, bcs, ordering,
+def createProblem(topo, forest, bcs, ordering=TACS.PY_MULTICOLOR_ORDER,
                   order=2, nlevels=2, pttype=TMR.UNIFORM_POINTS):
     # Create the forest
     forests = []
@@ -316,7 +376,7 @@ def createProblem(topo, forest, bcs, ordering,
     # Create the multigrid object
     mg = TMR.createMg(assemblers, forests, omega=0.5)
 
-    return assemblers[0], mg
+    return assemblers, mg
 
 # Set the communicator
 comm = MPI.COMM_WORLD
@@ -326,23 +386,13 @@ p = argparse.ArgumentParser()
 p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=0.001)
 p.add_argument('--order', type=int, default=2)
-p.add_argument('--ordering', type=str, default='multicolor')
 p.add_argument('--ksweight', type=float, default=30.0)
-p.add_argument('--uniform_refinement', action='store_true', default=False)
-p.add_argument('--structured', action='store_true', default=False)
-p.add_argument('--energy_error', action='store_true', default=False)
-p.add_argument('--compute_solution_error', action='store_true', default=False)
-p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
-p.add_argument('--remesh_domain', action='store_true', default=False)
 p.add_argument('--optimizer', type=str, default='snopt')
+p.add_argument('--remesh_strategy', type=str, default='fixed_mesh')
 args = p.parse_args()
 
 # Set the KS parameter
 ksweight = args.ksweight
-
-# This flag indicates whether to solve the adjoint exactly on the
-# next-finest mesh or not
-exact_refined_adjoint = args.exact_refined_adjoint
 
 # Set the number of AMR steps to use
 steps = args.steps
@@ -350,20 +400,18 @@ steps = args.steps
 # Set the order of the mesh
 order = args.order
 
-# Set the type of ordering to use for this problem
-ordering = args.ordering
-ordering = ordering.lower()
-
-tol = 1e-4
 fname = 'results/opt.out'
 options = {}
 if args.optimizer == 'snopt':
     options['Print file'] = fname
     options['Summary file'] = fname + '_summary'
-    options['Major optimality tolerance'] = tol
     options['Penalty parameter'] = 10.0
     options['Nonderivative linesearch'] = None
     options['Minor print level'] = 0
+
+    # Set the tolerances
+    options['Major optimality tolerance'] = 1e-5
+    options['Major feasibility tolerance'] = 1e-6
     options['Minor feasibility tolerance'] = 1e-8
 
     # Set a large number of iterations
@@ -377,6 +425,14 @@ elif args.optimizer == 'ipopt':
     options['linear_solver'] = 'ma27'
     options['output_file'] = fname
     options['max_iter'] = 10000
+elif args.optimizer == 'paropt':
+    # options['this is an option'] = value
+    options['algorithm'] = 'tr'
+    options['max_iterations'] = 250
+    options['tr_init_size'] = 1.0
+    options['tr_max_size'] = 5.0
+    options['tr_min_size'] = 1e-3
+    options['tr_penalty_gamma'] = 50.0
 
 # Set up the design variables
 xlen = 0.1
@@ -398,7 +454,7 @@ locator = locate.locate(np.array(pts))
 # Set the number of design variables
 num_design_vars = len(pts)
 
-# Create the CRM wingbox model and set the names
+# Load in the L-bracket model
 geo = TMR.LoadModel('2d-bracket-fillet.stp')
 verts = geo.getVertices()
 edges = geo.getEdges()
@@ -419,7 +475,6 @@ mesh = TMR.Mesh(comm, geo)
 opts = TMR.MeshOptions()
 
 # Set the mesh type
-# opts.mesh_type_default = TMR.TRIANGLE
 opts.num_smoothing_steps = 10
 opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
@@ -449,30 +504,18 @@ forest.setTopology(topo)
 forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
 forest.createTrees(depth)
 
-# Set the ordering to use
-if ordering == 'rcm':
-    ordering = TACS.PY_RCM_ORDER
-elif ordering == 'multicolor':
-    ordering = TACS.PY_MULTICOLOR_ORDER
-else:
-    ordering = TACS.PY_NATURAL_ORDER
-
 # Null pointer to the optimizer
 opt = None
 
-for k in range(steps):
-    # Create the topology problem
-    if args.remesh_domain:
-        if order == 2:
-            nlevs = 2
-        else:
-            nlevs = 1
-    else:
-        nlevs = min(5, depth+k+1)
+for step in range(2*steps):
+    # Balance the forest, create the assembler object
+    forest.balance(1)
+    forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
+    forest.repartition()
+    creator = CreateMe(bcs, topo)
+    assembler = creator.createTACS(forest, order)
 
-    # Create the assembler object
-    assembler, mg = createProblem(topo, forest, bcs, ordering,
-                                  order=order, nlevels=nlevs)
+    # Add the face tractions to TACS
     aux = addFaceTraction(order, forest, assembler)
     assembler.setAuxElements(aux)
 
@@ -480,174 +523,127 @@ for k in range(steps):
     func = functions.KSFailure(assembler, ksweight)
     func.setKSFailureType('continuous')
 
-    # Create the GMRES object
-    gmres = TACS.KSM(mg.getMat(), mg, 100, isFlexible=1)
-    gmres.setMonitor(comm, freq=10)
-    gmres.setTolerances(1e-10, 1e-30)
-
     # Set the new assembler object
-    opt_problem.setAssembler(assembler, mg, gmres, func)
+    opt_problem.setAssembler(assembler, func)
 
-    # Create the optimization problem
-    prob = Optimization('topo', opt_problem.objcon)
+    if step % 2 == 0:
+        # Solve the analysis problem at the first step
+        opt_problem.evalObjCon(opt_problem.x*opt_problem.x_scale)
+    else:
+        # Create the optimization problem
+        prob = Optimization('topo', opt_problem.objcon)
 
-    # Add the variable group
-    n = opt_problem.nvars
-    x0 = np.zeros(n)
-    lb = np.zeros(n)
-    ub = np.zeros(n)
-    opt_problem.getVarsAndBounds(x0, lb, ub)
-    prob.addVarGroup('x', n, value=x0, lower=lb, upper=ub)
+        # Add the variable group
+        n = opt_problem.nvars
+        x0 = np.zeros(n)
+        lb = np.zeros(n)
+        ub = np.zeros(n)
+        opt_problem.getVarsAndBounds(x0, lb, ub)
+        prob.addVarGroup('x', n, value=x0, lower=lb, upper=ub)
 
-    # Add the constraints
-    prob.addConGroup('con', opt_problem.ncon, lower=0.0, upper=None)
+        # Add the constraints
+        prob.addConGroup('con', opt_problem.ncon, lower=0.0, upper=None)
 
-    # Add the objective
-    prob.addObj('objective')
+        # Add the objective
+        prob.addObj('objective')
 
-    fname = 'results/opt%02d.out'%(k)
-    if args.optimizer == 'snopt':
-        options['Print file'] = fname
-        options['Summary file'] = fname + '_summary'
-    elif args.optimizer == 'ipopt':
-        options['output_file'] = fname
+        fname = 'results/opt%02d.out'%(step)
+        if args.optimizer == 'snopt':
+            options['Print file'] = fname
+            options['Summary file'] = fname + '_summary'
+        elif args.optimizer == 'ipopt':
+            options['output_file'] = fname
+        elif args.optimizer == 'paropt':
+            options['filename'] = fname
 
-    # Create the optimizer and optimize it!
-    opt = OPT(args.optimizer, options=options)
-    sol = opt(prob, sens=opt_problem.gobjcon)
+        # Create the optimizer and optimize it!
+        opt = OPT(args.optimizer, options=options)
+        sol = opt(prob, sens=opt_problem.gobjcon)
 
     # Create and compute the function
     fval = assembler.evalFunctions([func])[0]
 
     # Create the refined mesh
-    if exact_refined_adjoint:
-        forest_refined = forest.duplicate()
-        assembler_refined, mg = createProblem(topo,
-                                              forest_refined, bcs, ordering,
-                                              order=order+1, nlevels=nlevs+1)
+    forest_refined = forest.duplicate()
+    if order == 2:
+        nlevs = 2
     else:
-        forest_refined, assembler_refined = createRefined(topo, elem_dict,
-                                                          forest_refined, bcs)
+        nlevs = 1
+    assembler_list, mg = createProblem(topo,
+                                          forest_refined, bcs,
+                                          order=order+1, nlevels=nlevs+1)
+    assembler_refined = assembler_list[0]
     aux = addFaceTraction(order+1, forest_refined, assembler_refined)
     assembler_refined.setAuxElements(aux)
 
     # Set the design variables for the refined problem
-    assembler_refined.setDesignVars(opt_problem.x)
+    for assemb in assembler_list:
+        assemb.setDesignVars(opt_problem.x)
 
     # Extract the answer
     ans = opt_problem.ans
 
-    if args.energy_error:
-        # Compute the strain energy error estimate
-        fval_corr = 0.0
-        adjoint_corr = 0.0
-        err_est, error = TMR.strainEnergyError(forest, assembler,
-            forest_refined, assembler_refined)
+    # Compute the reconstructed solution on the refined mesh
+    ans_interp = assembler_refined.createVec()
+    TMR.computeInterpSolution(forest, assembler,
+                              forest_refined, assembler_refined, ans, ans_interp)
 
-        TMR.computeReconSolution(forest, assembler,
-            forest_refined, assembler_refined)
-    else:
-        if exact_refined_adjoint:
-            # Compute the reconstructed solution on the refined mesh
-            ans_interp = assembler_refined.createVec()
-            TMR.computeInterpSolution(forest, assembler,
-                forest_refined, assembler_refined, ans, ans_interp)
+    # Set the interpolated solution on the fine mesh
+    assembler_refined.setVariables(ans_interp)
 
-            # Set the interpolated solution on the fine mesh
-            assembler_refined.setVariables(ans_interp)
+    # Assemble the Jacobian matrix on the refined mesh
+    res_refined = assembler_refined.createVec()
+    mg.assembleJacobian(1.0, 0.0, 0.0, res_refined)
+    mg.factor()
+    pc = mg
+    mat = mg.getMat()
 
-            # Assemble the Jacobian matrix on the refined mesh
-            res_refined = assembler_refined.createVec()
-            mg.assembleJacobian(1.0, 0.0, 0.0, res_refined)
-            mg.factor()
-            pc = mg
-            mat = mg.getMat()
+    # Compute the functional and the right-hand-side for the adjoint
+    # on the refined mesh
+    adjoint_rhs = assembler_refined.createVec()
+    func_refined = functions.KSFailure(assembler_refined, ksweight)
+    func_refined.setKSFailureType('continuous')
 
-            # Compute the functional and the right-hand-side for the
-            # adjoint on the refined mesh
-            adjoint_rhs = assembler_refined.createVec()
-            func_refined = functions.KSFailure(assembler_refined, ksweight)
-            func_refined.setKSFailureType('continuous')
+    # Evaluate the functional on the refined mesh
+    fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+    assembler_refined.evalSVSens(func_refined, adjoint_rhs)
 
-            # Evaluate the functional on the refined mesh
-            fval_refined = assembler_refined.evalFunctions([func_refined])[0]
-            assembler_refined.evalSVSens(func_refined, adjoint_rhs)
+    # Create the GMRES object on the fine mesh
+    gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
+    gmres.setMonitor(comm, freq=10)
+    gmres.setTolerances(1e-14, 1e-30)
 
-            # Create the GMRES object on the fine mesh
-            gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
-            gmres.setMonitor(comm, freq=10)
-            gmres.setTolerances(1e-14, 1e-30)
+    # Solve the linear system
+    adjoint_refined = assembler_refined.createVec()
+    gmres.solve(adjoint_rhs, adjoint_refined)
+    adjoint_refined.scale(-1.0)
 
-            # Solve the linear system
-            adjoint_refined = assembler_refined.createVec()
-            gmres.solve(adjoint_rhs, adjoint_refined)
-            adjoint_refined.scale(-1.0)
+    # Compute the adjoint correction on the fine mesh
+    adjoint_corr = adjoint_refined.dot(res_refined)
 
-            # Compute the adjoint correction on the fine mesh
-            adjoint_corr = adjoint_refined.dot(res_refined)
+    # Compute the reconstructed adjoint solution on the refined mesh
+    adjoint = assembler.createVec()
+    adjoint_interp = assembler_refined.createVec()
+    TMR.computeInterpSolution(forest_refined, assembler_refined,
+                              forest, assembler, adjoint_refined, adjoint)
+    TMR.computeInterpSolution(forest, assembler,
+                              forest_refined, assembler_refined,
+                              adjoint, adjoint_interp)
+    adjoint_refined.axpy(-1.0, adjoint_interp)
 
-            # Compute the reconstructed adjoint solution on the refined mesh
-            adjoint = assembler.createVec()
-            adjoint_interp = assembler_refined.createVec()
-            TMR.computeInterpSolution(forest_refined, assembler_refined,
-                forest, assembler, adjoint_refined, adjoint)
-            TMR.computeInterpSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_interp)
-            adjoint_refined.axpy(-1.0, adjoint_interp)
+    err_est, __, error = TMR.adjointError(forest, assembler,
+                                          forest_refined, assembler_refined,
+                                          ans_interp, adjoint_refined)
 
-            err_est, __, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_interp, adjoint_refined)
-        else:
-            # Compute the adjoint on the original mesh
-            res.zeroEntries()
-            assembler.evalSVSens(func, res)
-            adjoint = assembler.createVec()
-            gmres.solve(res, adjoint)
-            adjoint.scale(-1.0)
-
-            # Compute the solution on the refined mesh
-            ans_refined = assembler_refined.createVec()
-            TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, ans, ans_refined)
-
-            # Apply Dirichlet boundary conditions
-            assembler_refined.setVariables(ans_refined)
-
-            # Compute the functional on the refined mesh
-            func_refined = functions.KSFailure(assembler_refined, ksweight)
-            func_refined.setKSFailureType('continuous')
-
-            # Evaluate the functional on the refined mesh
-            fval_refined = assembler_refined.evalFunctions([func_refined])[0]
-
-            # Approximate the difference between the refined adjoint
-            # and the adjoint on the current mesh
-            adjoint_refined = assembler_refined.createVec()
-            TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint,
-                adjoint_refined)
-
-            # Compute the adjoint and use adjoint-based refinement
-            err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_refined, adjoint_refined)
-
-            # Compute the adjoint and use adjoint-based refinement
-            err_est, __, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_refined, adjoint_refined)
-
-            TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_refined)
-            assembler_refined.setVariables(adjoint_refined)
-
-        # Compute the refined function value
-        fval_corr = fval_refined + adjoint_corr
+    # Compute the refined function value
+    fval_corr = fval_refined + adjoint_corr
 
     flag = (TACS.ToFH5.NODES |
             TACS.ToFH5.DISPLACEMENTS |
             TACS.ToFH5.STRAINS |
             TACS.ToFH5.EXTRAS)
     f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_PLANE_STRESS, flag)
-    f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
+    f5_refine.writeToFile('results/solution_refined%02d.f5'%(step))
 
     # Compute the refinement from the error estimate
     low = -16
@@ -702,131 +698,153 @@ for k in range(steps):
             data[i,1] = bounds[i+1]
             data[i,2] = bins[i+1]
             data[i,3] = 100.0*bins[i+1]/total
-        np.savetxt('results/crm_data%d.txt'%(k), data)
+        np.savetxt('results/topo_data%d.txt'%(step), data)
 
     # Perform the refinement
-    if args.uniform_refinement:
-        forest.refine()
-    elif k < steps-1:
-        if args.remesh_domain:
-            # Ensure that we're using an unstructured mesh
-            opts.mesh_type_default = TMR.UNSTRUCTURED
+    # Ensure that we're using an unstructured mesh
+    opts.mesh_type_default = TMR.UNSTRUCTURED
 
-            # Find the positions of the center points of each node
-            nelems = assembler.getNumElements()
+    # Find the positions of the center points of each node
+    nelems = assembler.getNumElements()
 
-            # Allocate the positions
-            Xp = np.zeros((nelems, 3))
-            xrho = np.zeros(nelems)
-            param = np.zeros(3)
-            for i in range(nelems):
-                # Get the information about the given element
-                elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
-                c = elem.getConstitutive()
-                xrho[i] = c.getDVOutputValue(0, param)
+    # Allocate the positions
+    Xp = np.zeros((nelems, 3))
+    xrho = np.zeros(nelems)
+    param = np.zeros(3)
+    for i in range(nelems):
+        # Get the information about the given element
+        elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
+        c = elem.getConstitutive()
+        xrho[i] = c.getDVOutputValue(0, param)
 
-                # Get the approximate element centroid
-                Xp[i,:] = np.average(Xpt.reshape((-1, 3)), axis=0)
+        # Get the approximate element centroid
+        Xp[i,:] = np.average(Xpt.reshape((-1, 3)), axis=0)
 
-            # Prepare to collect things to the root processor (only
-            # one where it is required)
-            root = 0
+    # Prepare to collect things to the root processor (only
+    # one where it is required)
+    root = 0
 
-            # Get the element counts
-            if comm.rank == root:
-                size = error.shape[0]
-                count = comm.gather(size, root=root)
-                count = np.array(count, dtype=np.int)
-                ntotal = np.sum(count)
+    # Get the element counts
+    if comm.rank == root:
+        size = error.shape[0]
+        count = comm.gather(size, root=root)
+        count = np.array(count, dtype=np.int)
+        ntotal = np.sum(count)
 
-                errors = np.zeros(np.sum(count))
-                Xpt = np.zeros(3*np.sum(count))
-                comm.Gatherv(error, [errors, count])
-                comm.Gatherv(Xp.flatten(), [Xpt, 3*count])
+        errors = np.zeros(np.sum(count))
+        Xpt = np.zeros(3*np.sum(count))
+        comm.Gatherv(error, [errors, count])
+        comm.Gatherv(Xp.flatten(), [Xpt, 3*count])
 
-                xr = np.zeros(np.sum(count))
-                comm.Gatherv(xrho, [xr, count])
+        xr = np.zeros(np.sum(count))
+        comm.Gatherv(xrho, [xr, count])
 
-                # Reshape the point array
-                Xpt = Xpt.reshape(-1,3)
+        # Reshape the point array
+        Xpt = Xpt.reshape(-1,3)
 
-                # Compute the target relative error in each element.
-                # This is set as a fraction of the error in the
-                # current mesh level.
-                err_target = 0.1*(err_est/ntotal)
+        # Asymptotic order of accuracy on per-element basis
+        s = 1.0
+        if args.order >= 3:
+            s = args.order - 1.0
 
-                # Compute the element size factor in each element
-                # using the order of accuracy
-                hvals = (err_target/errors)**(0.5)
+        # Dimension of the problem
+        d = 2.0
 
-                # Decide on whether to refine based on the value of
-                for i, hp in enumerate(hvals):
-                    hvals[i] = min(hp, 0.5 + 2*(xr[i] - 0.5)**2)
+        # Set upper/lower limits on the mesh spacing
+        hmax = args.htarget
+        hmin = 0.05*args.htarget
 
-                # Set the new h value based on the previous feature
-                # size value
-                if feature_size is not None:
-                    for i, hp in enumerate(hvals):
-                        hlocal = feature_size.getFeatureSize(Xpt[i,:])
-                        hvals[i] = np.min(
-                            (np.max((hp*hlocal, 0.25*hlocal)), 2*hlocal))
-                else:
-                    for i, hp in enumerate(hvals):
-                        hvals[i] = np.min(
-                            (np.max((hp*htarget, 0.25*htarget)), 2*htarget))
-
-                # Allocate the feature size object
-                hmax = args.htarget
-                hmin = 0.05*args.htarget
-                feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax)
+        if True:
+            # Evaluate the exiting element sizes
+            h = np.zeros(Xpt.shape[0])
+            if feature_size is not None:
+                for i in range(len(h)):
+                    h[i] = feature_size.getFeatureSize(Xpt[i,:])
             else:
-                size = error.shape[0]
-                comm.gather(size, root=root)
-                comm.Gatherv(error, None)
-                comm.Gatherv(Xp.flatten(), None)
-                comm.Gatherv(xrho, None)
+                h[:] = htarget
 
-                # Create a dummy feature size object...
-                feature_size = TMR.ConstElementSize(0.5*htarget)
+            lower = np.zeros(h.shape)
+            upper = np.zeros(h.shape)
+            for i in range(len(h)):
+                lower[i] = max(hmin, 0.25*h[i])
+                upper[i] = min(hmax, 2.0*h[i])
 
-            # Create the surface mesh
-            mesh.mesh(fs=feature_size, opts=opts)
+            if step > 0:
+                for i in range(len(h)):
+                    upper[i] = min(h[i], max(0.5, 2.5 - 8*xr[i])*hmax)
 
-            # Create the corresponding mesh topology from the mesh-model
-            model = mesh.createModelFromMesh()
-            topo = TMR.Topology(comm, model)
-
-            # Create the quad forest and set the topology of the forest
-            depth = 0
-            forest = TMR.QuadForest(comm)
-            forest.setTopology(topo)
-            forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
-            forest.createTrees(depth)
+            # Optimize the mesh
+            count_target = 20e3 # Target element count
+            hvals = optimize_mesh(h, errors, lower, upper,
+                                  count_target, s, d)
         else:
-            # The refinement array
-            refine = np.zeros(len(error), dtype=np.intc)
+            # Set the exponent
+            exponent = d/(d + s)
 
-            # Determine the cutoff values
-            cutoff = bins[-1]
-            bin_sum = 0
-            for i in range(len(bins)+1):
-                bin_sum += bins[i]
-                if bin_sum > 0.3*ntotal:
-                    cutoff = bounds[i]
-                    break
+            # Compute the target error as a fixed fraction of the error
+            # estimate. This will result in the size of the mesh
+            # increasing at each iteration.
+            if args.remesh_strategy == 'fraction':
+                err_target = 0.1*err_est
+            else:
+                # Set a fixed target error
+                err_target = 1e-4   # Target error estimate
 
-            log_cutoff = np.log(cutoff)
+            # Set the error estimate
+            cval = 1.0
+            if args.remesh_strategy == 'fixed_mesh':
+                # Set the target error
+                count_target = 20e3 # Target element count
 
-            # Element target error is still too high. Adapt based solely
-            # on decreasing the overall error
-            nrefine = 0
-            for i, err in enumerate(error):
-                # Compute the log of the error
-                logerr = np.log(err)
+                # Compute the constant for element count
+                cval = (count_target)**(-1.0/d)
+                cval *= (np.sum(errors**(exponent)))**(1.0/d)
+            else:
+                # Compute the constant for target error
+                cval = (err_target/np.sum(errors**(exponent)))**(1.0/s)
 
-                if logerr > log_cutoff:
-                    refine[i] = 1
-                    nrefine += 1
+            # Compute the element-wise target error
+            hvals = cval*errors**(-(1.0/(d + s)))
 
-            # Refine the forest
-            forest.refine(refine)
+            # Decide on whether to refine further based on the value of
+            # the design variables -- target transition areas
+            for i, hp in enumerate(hvals):
+                hvals[i] = min(hp, 0.5 + 2*(xr[i] - 0.5)**2)
+
+            # Set the new h value based on the previous feature
+            # size value
+            if feature_size is not None:
+                for i, hp in enumerate(hvals):
+                    hlocal = feature_size.getFeatureSize(Xpt[i,:])
+                    hvals[i] = np.min(
+                        (np.max((hp*hlocal, 0.25*hlocal)), 2*hlocal))
+            else:
+                for i, hp in enumerate(hvals):
+                    hvals[i] = np.min(
+                        (np.max((hp*htarget, 0.25*htarget)), 2*htarget))
+
+        # Allocate the feature size object
+        feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax)
+    else:
+        size = error.shape[0]
+        comm.gather(size, root=root)
+        comm.Gatherv(error, None)
+        comm.Gatherv(Xp.flatten(), None)
+        comm.Gatherv(xrho, None)
+
+        # Create a dummy feature size object...
+        feature_size = TMR.ConstElementSize(0.5*htarget)
+
+    # Create the surface mesh
+    mesh.mesh(fs=feature_size, opts=opts)
+
+    # Create the corresponding mesh topology from the mesh-model
+    model = mesh.createModelFromMesh()
+    topo = TMR.Topology(comm, model)
+
+    # Create the quad forest and set the topology of the forest
+    depth = 0
+    forest = TMR.QuadForest(comm)
+    forest.setTopology(topo)
+    forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
+    forest.createTrees(depth)

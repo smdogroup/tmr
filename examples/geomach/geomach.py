@@ -372,7 +372,8 @@ mesh = TMR.Mesh(comm, geo)
 
 # Mesh the part
 opts = TMR.MeshOptions()
-opts.num_smoothing_steps = 5
+opts.mesh_type_default = TMR.TRIANGLE
+opts.num_smoothing_steps = 10
 opts.triangularize_print_level = 1
 opts.triangularize_print_iter = 10000
 opts.write_mesh_quality_histogram = 1
