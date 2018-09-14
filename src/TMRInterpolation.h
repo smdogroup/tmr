@@ -177,9 +177,9 @@ inline void bernstein_shape_functions( const int order,
   // Note that left[j] = u - knots[i+1 - j]
   // and right[j] = knots[i+j] - u
   double *left = &work[0];
-  double *right = &work[order+1];
+  double *right = &work[order];
   
-  for ( int j = 1; j < order+1; j++ ){
+  for ( int j = 1; j < order; j++ ){
     left[j] = u - knots[idx+1-j];
     right[j] = knots[idx+j] - u;
     

@@ -927,13 +927,20 @@ void TMRQuadForest::setMeshOrder( int _mesh_order,
   }
 
   // Allocate the interpolation knots and set the knot locations
-  interp_knots = new double[ mesh_order ];
   interp_type = _interp_type;
+  interp_knots = new double[ 2*(mesh_order) ];
+  memset(interp_knots, 0.0, 2*(mesh_order)*sizeof(double));
   if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
     interp_knots[0] = -1.0;
     interp_knots[mesh_order-1] = 1.0;
     for ( int i = 1; i < mesh_order-1; i++ ){
       interp_knots[i] = -cos(M_PI*i/(mesh_order-1));
+    }
+  }
+  else if (interp_type == TMR_BERNSTEIN_POINTS){
+    for (int i = 0; i < mesh_order; i++){
+      interp_knots[i] = -1;
+      interp_knots[mesh_order+i] = 1;
     }
   }
   else {
@@ -1028,11 +1035,17 @@ int TMRQuadForest::getInterpKnots( const double **_knots ){
 */
 void TMRQuadForest::evalInterp( const double pt[], double N[] ){
   double Nu[MAX_ORDER], Nv[MAX_ORDER];
-
-  // Evaluate the shape functions
-  lagrange_shape_functions(mesh_order, pt[0], interp_knots, Nu);
-  lagrange_shape_functions(mesh_order, pt[1], interp_knots, Nv);
-
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    double *work = new double [ 4*(mesh_order) ];
+    // Evaluate the lagrange shape functions
+    bernstein_shape_functions(mesh_order, pt[0], interp_knots, Nu, work);
+    bernstein_shape_functions(mesh_order, pt[1], interp_knots, Nv, work);
+  }
+  else{
+    // Evaluate the lagrange shape functions
+    lagrange_shape_functions(mesh_order, pt[0], interp_knots, Nu);
+    lagrange_shape_functions(mesh_order, pt[1], interp_knots, Nv);
+  }
   for ( int j = 0; j < mesh_order; j++ ){
     for ( int i = 0; i < mesh_order; i++ ){
       N[0] = Nu[i]*Nv[j];

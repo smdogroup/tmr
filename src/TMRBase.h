@@ -40,7 +40,8 @@ static const int TMR_MAX_LEVEL = 30;
   for order >= 4)
 */
 enum TMRInterpolationType { TMR_UNIFORM_POINTS, 
-                            TMR_GAUSS_LOBATTO_POINTS };
+                            TMR_GAUSS_LOBATTO_POINTS,
+                            TMR_BERNSTEIN_POINTS };
 
 /*
   Base class for all point-evaluation algorithms

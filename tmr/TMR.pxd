@@ -76,7 +76,8 @@ cdef extern from "TMRBase.h":
     enum TMRInterpolationType:
         TMR_UNIFORM_POINTS
         TMR_GAUSS_LOBATTO_POINTS
-
+        TMR_BERNSTEIN_POINTS
+        
 cdef extern from "TMRTopology.h":
     cdef cppclass TMRTopology(TMREntity):
         TMRTopology(MPI_Comm, TMRModel*)
@@ -428,9 +429,18 @@ cdef extern from "TMROctStiffness.h":
                                 TMRAnisotropicProperties*)
 
 cdef extern from "TMRQuadStiffness.h":
+    cdef cppclass TMRQuadStiffnessProperties(TMREntity):
+        TMRQuadStiffnessProperties(int, double, double, double, double, double,
+                                   TacsScalar*, TacsScalar*, TacsScalar*,
+                                   TacsScalar*, int)
+        int nmats
+        double q
+        double eps
+        double k0
+        double beta
+        double xoffset
     cdef cppclass TMRQuadStiffness(PlaneStressStiffness):
-        TMRQuadStiffness(TMRIndexWeight*, int, TacsScalar, TacsScalar,
-                         TacsScalar, double)
+        TMRQuadStiffness(TMRIndexWeight*, int, TMRQuadStiffnessProperties*)
 
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):

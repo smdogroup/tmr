@@ -69,6 +69,7 @@ TRIANGLE = TMR_TRIANGLE
 # Set the type of interpolation to use
 UNIFORM_POINTS = TMR_UNIFORM_POINTS
 GAUSS_LOBATTO_POINTS = TMR_GAUSS_LOBATTO_POINTS
+BERNSTEIN_POINTS = TMR_BERNSTEIN_POINTS
 
 cdef class Vertex:
     cdef TMRVertex *ptr
@@ -2189,7 +2190,61 @@ cdef class StiffnessProperties:
         def __set__(self, value):
             self.ptr.eps = value
 
+cdef class QuadStiffnessProperties:
+    cdef TMRQuadStiffnessProperties *ptr
+    def __cinit__(self, list _rho, list _E, list _nu, list _ys=None,
+                  double q=5.0, double eps=0.3, double k0=1e-6,
+                  double beta=15.0, double xoffset=0.5, int use_project=0):
+        cdef TacsScalar *rho = NULL
+        cdef TacsScalar *E = NULL
+        cdef TacsScalar *nu = NULL
+        cdef TacsScalar *ys = NULL
+        cdef int nmats = 0
+        if len(_rho) != len(_E) or len(_rho) != len(_nu):
+            errmsg = 'Must specify the same number of properties'
+            raise ValueError(errmsg)
+        nmats = len(_E)
+        rho = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        E = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        nu = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
+        if (_ys):
+            ys = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
 
+        for i in range(nmats):
+            rho[i] = <TacsScalar>_rho[i]
+            E[i] = <TacsScalar>_E[i]
+            nu[i] = <TacsScalar>_nu[i]
+            if (_ys):
+                ys[i] = <TacsScalar>_ys[i]
+        self.ptr = new TMRQuadStiffnessProperties(nmats, q, eps, k0, beta, xoffset,
+                                                  rho, E, nu, ys, use_project)
+        self.ptr.incref()
+        free(rho)
+        free(E)
+        free(nu)
+        if (ys):
+            free(ys)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def getNumMaterials(self):
+        return self.ptr.nmats
+
+    property q:
+        def __get__(self):
+            return self.ptr.q
+        def __set__(self, value):
+            self.ptr.q = value
+
+    property eps:
+        def __get__(self):
+            return self.ptr.eps
+        def __set__(self, value):
+            self.ptr.eps = value
+            
 cdef class AnisotropicProperties:
     cdef TMRAnisotropicProperties *ptr
     def __cinit__(self, list _rho, list _C,
@@ -2262,8 +2317,8 @@ cdef class OctStiffness(SolidStiff):
         return
 
 cdef class QuadStiffness(PlaneStress):
-    def __cinit__(self, TacsScalar rho, TacsScalar E, TacsScalar nu,
-                  list index=None, list weights=None, double q=5.0):
+    def __cinit__(self, QuadStiffnessProperties props,
+                  list index=None, list weights=None):
         cdef TMRIndexWeight *w = NULL
         cdef int nw = 0
         self.ptr = NULL
@@ -2287,7 +2342,7 @@ cdef class QuadStiffness(PlaneStress):
             w[i].index = <int>index[i]
 
         # Create the constitutive object
-        self.ptr = new TMRQuadStiffness(w, nw, rho, E, nu, q)
+        self.ptr = new TMRQuadStiffness(w, nw, props.ptr)
         self.ptr.incref()
         free(w)
         return
