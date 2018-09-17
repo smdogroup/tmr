@@ -31,6 +31,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Include MPI for timing
+#include <mpi.h>
+double MPI::Wtime();
+
 /*
   Create a multgrid object for a forest of octrees
 */
@@ -3152,6 +3156,10 @@ TMRStressConstraint::~TMRStressConstraint(){
 TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   const int vars_per_node = tacs->getVarsPerNode();
 
+  // Initialize values for timing forward analysis
+  double starttime, endtime, totaltime;
+  starttime = MPI_Wtime();
+  
   // Copy the values
   uvec->copyValues(_uvec);
 
@@ -3331,6 +3339,12 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     printf("Max stress value: %25.10e\n", ks_max_fail);
   }
 
+  // Print the time taken for forward analysis
+  endtime = MPI_Wtime();
+  totaltime = endtime - starttime;
+  printf("Total time for forward analysis = %g\n",
+  totaltime);
+  
   return ks_func_val;
 }
 
@@ -3339,6 +3353,12 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 */
 void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
                                         TACSBVec *dfdu ){
+
+  // Initialize values for timing the derivative
+  double starttime, endtime, totaltime, addEnrichDeriv_starttime, addEnrichDeriv_endtime;
+  double addEnrichDeriv_time = 0.0;
+  starttime = MPI_Wtime();
+  
   memset(dfdx, 0, size*sizeof(TacsScalar));
 
   // Get information about the interpolation
@@ -3394,7 +3414,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   // Initialize variables
   TacsScalar *dfdu_elem = new TacsScalar[3*p];
   TacsScalar *dfdubar = new TacsScalar[3*m];
-  TacsScalar *dubardu = new TacsScalar[p*m];
+  TacsScalar *dubardu = new TacsScalar[m*p];
   TacsScalar *A = new TacsScalar[n*m];
   TacsScalar *dbdu = new TacsScalar[n*p];
   TacsScalar *dubar_duderiv = new TacsScalar[m*n];
@@ -3439,7 +3459,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
     // Zero variables before elementwise operations begin
     memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
     memset(dfdubar, 0, 3*m*sizeof(TacsScalar));
-    memset(dubardu, 0, p*m*sizeof(TacsScalar));
+    memset(dubardu, 0, m*p*sizeof(TacsScalar));
     memset(A, 0, n*m*sizeof(TacsScalar));
     memset(dbdu, 0, n*p*sizeof(TacsScalar));
     memset(dubar_duderiv, 0, m*n*sizeof(TacsScalar));
@@ -3548,15 +3568,34 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
       }
     }
 
+    // start timing the addEnrichDeiv function
+    addEnrichDeriv_starttime = MPI_Wtime(); 
+    
     // Compute dubar/du and dubar/duderiv
     addEnrichDeriv(A, dbdu, dubardu, dubar_duderiv);
 
+    addEnrichDeriv_endtime = MPI_Wtime();
+    addEnrichDeriv_time += addEnrichDeriv_endtime - addEnrichDeriv_starttime;
+    
     // Compute the product (df/dubar)(dubar/du)
     memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
-    for ( int ii = 0; ii < m; ii++ ){
+    
+    // // for transposed (old method)
+    
+    // for ( int ii = 0; ii < m; ii++ ){ 
+    //   for ( int jj = 0; jj < p; jj++ ){
+    //     for ( int c = 0; c < 3; c++ ){
+    //       dfdu_elem[3*jj+c] += dfdubar[3*ii+c]*dubardu[p*ii+jj];
+    //     }
+    //   }
+    // }
+
+    // for non-transposed (new method)
+    
+    for ( int ii = 0; ii < m; ii++ ){ 
       for ( int jj = 0; jj < p; jj++ ){
         for ( int c = 0; c < 3; c++ ){
-          dfdu_elem[3*jj+c] += dfdubar[3*ii+c]*dubardu[p*ii+jj];
+          dfdu_elem[3*jj+c] += dfdubar[3*ii+c]*dubardu[m*jj+ii];
         }
       }
     }
@@ -3687,6 +3726,13 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
 
   tacs->applyBCs(dfdu);
 
+  // Print the times taken
+  endtime = MPI_Wtime();
+  totaltime = endtime - starttime;
+  printf("Total time taken to evaluate the derivative = %g\n",
+  totaltime);
+  printf("Time in addEnrichDeriv = %g\n", addEnrichDeriv_time);
+  
   // Free allocated memory
   delete [] dfdu_elem;
   delete [] dfdubar;
@@ -3931,14 +3977,14 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // Compute dubar_duderiv = (A^T A)^-1 A^T
   BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, dubar_duderiv, &m);
 
-  // // Compute (db/du)^T A
-  BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
+  // Compute (db/du)^T A
+  //BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
 
-  // // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
-  BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
+  // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
+  //BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
 
   // Evaluate dubar/du as (dubar/duderiv)(db/du)
-  //BLASgemm("N", "N", &p, &m, &n, &a, dubar_duderiv, &m, dbdu, &n, &b, dubardu, &p);
+  BLASgemm("N", "N", &m, &p, &n, &a, dubar_duderiv, &m, dbdu, &n, &b, dubardu, &m);
 
   // Delete variables
   delete [] ATA;
@@ -4957,6 +5003,7 @@ TacsScalar TMRCurvatureConstraint::addCurvDeriv( const TacsScalar alpha,
   Evaluate the constraint on the refined mesh
 */
 TacsScalar TMRCurvatureConstraint::evalConstraint( TACSBVec *_xvec ){
+  
   // Get the communicator from the forest
   MPI_Comm comm = forest->getMPIComm();
 
@@ -5097,7 +5144,7 @@ TacsScalar TMRCurvatureConstraint::evalConstraint( TACSBVec *_xvec ){
     printf("Induced curvature:  %25.10e\n", func_val);
     printf("Max curvature:      %25.10e\n", max_curvature);
   }
-
+  
   return func_val;
 }
 
