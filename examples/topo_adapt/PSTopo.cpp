@@ -76,9 +76,9 @@ void PSTopo::calculateStress( const double pt[],
                               const TacsScalar e[],
                               TacsScalar s[] ){
   // Compute the penalty
-  double k0 = 1e-6;
   // double p = xw/(1.0 + q*(1.0 - xw)) + k0;
-  double p = xw*xw*xw;
+  // double p = xw*xw*xw;
+  double p = pow(xw, q);
   s[0] = p*D*(e[0] + nu*e[1]);
   s[1] = p*D*(e[1] + nu*e[0]);
   s[2] = p*G*e[2];
@@ -93,7 +93,7 @@ void PSTopo::addStressDVSens( const double pt[], const TacsScalar e[],
                               TacsScalar fdvSens[], int dvLen ){
   // Compute the contribution to the derivative
   // double p = (q + 1.0)/((1.0 + q*(1.0 - xw))*(1.0 + q*(1.0 - xw)));
-  double p = 3*xw*xw;
+  double p = q*pow(xw, q-1.0);
   TacsScalar s[3];
   s[0] = p*D*(e[0] + nu*e[1]);
   s[1] = p*D*(e[1] + nu*e[0]);

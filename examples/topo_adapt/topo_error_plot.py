@@ -6,7 +6,7 @@ import numpy as np
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--steps', type=int, default=5)
-p.add_argument('--case', type=str, default='cylinder')
+p.add_argument('--case', type=str, default='topo')
 args = p.parse_args()
 
 # Retrieve the number of steps

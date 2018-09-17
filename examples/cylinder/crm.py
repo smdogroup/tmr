@@ -210,7 +210,7 @@ class uCRM_VonMisesMassMin:
 
         # Extract the values of x
         x = xdict['x']
-        
+
         # Evaluate the objective and constraints
         fail = 0
         con = np.zeros(1)
@@ -288,7 +288,7 @@ class uCRM_VonMisesMassMin:
 
         # Create the sensitivity dictionary
         sens = {'objective':{'x': gx}, 'con':{'x': dfdx}}
-        
+
         return sens, fail
 
 class CreateMe(TMR.QuadCreator):
@@ -390,6 +390,7 @@ p.add_argument('--energy_error', action='store_true', default=False)
 p.add_argument('--compute_solution_error', action='store_true', default=False)
 p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
 p.add_argument('--remesh_domain', action='store_true', default=False)
+p.add_argument('--remesh_strategy', type=str, default='fraction')
 p.add_argument('--optimizer', type=str, default='snopt')
 args = p.parse_args()
 
@@ -480,8 +481,8 @@ rib_dir = np.array([1.0, 0.0, 0.0])
 elem_dict = [{}, {}, {}, {}]
 for i, f in enumerate(faces):
     attr = 'F%d'%(i)
-    stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, thickness,
-                                 i, min_thickness, max_thickness)
+    stiff = ksFSDT.ksFSDT(ksweight, rho, E, nu, kcorr, ys, thickness,
+                          i, min_thickness, max_thickness)
 
     # Set the reference direction
     if i in ucrm_ribs:
@@ -622,7 +623,7 @@ for k in range(steps):
     x0 = np.zeros(n)
     lb = np.zeros(n)
     ub = np.zeros(n)
-    opt_problem.getVarsAndBounds(x0, lb, ub)    
+    opt_problem.getVarsAndBounds(x0, lb, ub)
     prob.addVarGroup('x', n, value=x0, lower=lb, upper=ub)
 
     # Add the constraints
@@ -642,8 +643,18 @@ for k in range(steps):
     jacobian = {'csr':[rowp, cols, data], 'shape':[len(pairs), n]}
 
     # Set the linear constraint Jacobian
-    prob.addConGroup('lincon', len(pairs), lower=-0.05, upper=0.05,
+    tscale = opt_problem.thickness_scale
+    prob.addConGroup('lincon', len(pairs),
+                     lower=-0.05*tscale, upper=0.05*tscale,
                      wrt='x', jac={'x': jacobian}, linear=True)
+
+    # Set the output file name
+    fname = 'results/crm_opt%02d.out'%(k)
+    if args.optimizer == 'snopt':
+        options['Print file'] = fname
+        options['Summary file'] = fname + '_summary'
+    elif args.optimizer == 'ipopt':
+        options['output_file'] = fname
 
     # Create the optimizer and optimize it!
     opt = OPT(args.optimizer, options=options)
@@ -668,7 +679,7 @@ for k in range(steps):
     xvals = np.zeros(opt_problem.nvars, TACS.dtype)
     assembler.getDesignVars(xvals)
     assembler_refined.setDesignVars(xvals)
-        
+
     # Extract the answer
     ans = opt_problem.ans
 
@@ -878,14 +889,41 @@ for k in range(steps):
                 # Reshape the point array
                 Xpt = Xpt.reshape(-1,3)
 
-                # Compute the target relative error in each element.
-                # This is set as a fraction of the error in the
-                # current mesh level.
-                err_target = 0.1*(err_est/ntotal)
+                # Asymptotic order of accuracy on per-element basis
+                s = 1.0
+                if args.order >= 3:
+                    s = args.order - 1.0
 
-                # Compute the element size factor in each element
-                # using the order or accuracy
-                hvals = (err_target/errors)**(0.5)
+                # Dimension of the problem
+                d = 2.0
+
+                # Set the exponent
+                exponent = d/(d + s)
+
+                # Compute the target error as a fixed fraction of the
+                # error estimate. This will result in the size of the
+                # mesh increasing at each iteration.
+                if args.remesh_strategy == 'fraction':
+                    err_target = 0.1*err_est
+                else:
+                    # Set a fixed target error
+                    err_target = 1e-4   # Target error estimate
+
+                # Set the error estimate
+                cval = 1.0
+                if args.remesh_strategy == 'fixed_mesh':
+                    # Set the target error
+                    count_target = 20e3 # Target element count
+
+                    # Compute the constant for element count
+                    cval = (count_target)**(-1.0/d)
+                    cval *= (np.sum(errors**(exponent)))**(1.0/d)
+                else:
+                    # Compute the constant for target error
+                    cval = (err_target/np.sum(errors**(exponent)))**(1.0/s)
+
+                # Compute the element-wise target error
+                hvals = cval*errors**(-(1.0/(d + s)))
 
                 # Set the values of
                 if feature_size is not None:
