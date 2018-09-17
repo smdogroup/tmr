@@ -3155,10 +3155,6 @@ TMRStressConstraint::~TMRStressConstraint(){
 */
 TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   const int vars_per_node = tacs->getVarsPerNode();
-
-  // Initialize values for timing forward analysis
-  double starttime, endtime, totaltime;
-  starttime = MPI_Wtime();
   
   // Copy the values
   uvec->copyValues(_uvec);
@@ -3338,12 +3334,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     printf("KS stress value:  %25.10e\n", ks_func_val);
     printf("Max stress value: %25.10e\n", ks_max_fail);
   }
-
-  // Print the time taken for forward analysis
-  endtime = MPI_Wtime();
-  totaltime = endtime - starttime;
-  printf("Total time for forward analysis = %g\n",
-  totaltime);
   
   return ks_func_val;
 }
@@ -3354,11 +3344,6 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
                                         TACSBVec *dfdu ){
 
-  // Initialize values for timing the derivative
-  double starttime, endtime, totaltime, addEnrichDeriv_starttime, addEnrichDeriv_endtime;
-  double addEnrichDeriv_time = 0.0;
-  starttime = MPI_Wtime();
-  
   memset(dfdx, 0, size*sizeof(TacsScalar));
 
   // Get information about the interpolation
@@ -3567,31 +3552,13 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
         }
       }
     }
-
-    // start timing the addEnrichDeiv function
-    addEnrichDeriv_starttime = MPI_Wtime(); 
     
     // Compute dubar/du and dubar/duderiv
     addEnrichDeriv(A, dbdu, dubardu, dubar_duderiv);
 
-    addEnrichDeriv_endtime = MPI_Wtime();
-    addEnrichDeriv_time += addEnrichDeriv_endtime - addEnrichDeriv_starttime;
-    
     // Compute the product (df/dubar)(dubar/du)
     memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
-    
-    // // for transposed (old method)
-    
-    // for ( int ii = 0; ii < m; ii++ ){ 
-    //   for ( int jj = 0; jj < p; jj++ ){
-    //     for ( int c = 0; c < 3; c++ ){
-    //       dfdu_elem[3*jj+c] += dfdubar[3*ii+c]*dubardu[p*ii+jj];
-    //     }
-    //   }
-    // }
-
-    // for non-transposed (new method)
-    
+        
     for ( int ii = 0; ii < m; ii++ ){ 
       for ( int jj = 0; jj < p; jj++ ){
         for ( int c = 0; c < 3; c++ ){
@@ -3725,13 +3692,6 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   dfdu->endSetValues(TACS_ADD_VALUES);
 
   tacs->applyBCs(dfdu);
-
-  // Print the times taken
-  endtime = MPI_Wtime();
-  totaltime = endtime - starttime;
-  printf("Total time taken to evaluate the derivative = %g\n",
-  totaltime);
-  printf("Time in addEnrichDeriv = %g\n", addEnrichDeriv_time);
   
   // Free allocated memory
   delete [] dfdu_elem;
@@ -3976,12 +3936,6 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
 
   // Compute dubar_duderiv = (A^T A)^-1 A^T
   BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, dubar_duderiv, &m);
-
-  // Compute (db/du)^T A
-  //BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
-
-  // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
-  //BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
 
   // Evaluate dubar/du as (dubar/duderiv)(db/du)
   BLASgemm("N", "N", &m, &p, &n, &a, dubar_duderiv, &m, dbdu, &n, &b, dubardu, &m);
