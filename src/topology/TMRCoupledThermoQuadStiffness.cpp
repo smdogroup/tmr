@@ -100,7 +100,7 @@ void TMRCoupledThermoQuadStiffness::getDesignVars( TacsScalar xdv[],
   if (nvars == 1){
     for ( int i = 0; i < nweights; i++ ){
       if (weights[i].index >= 0 && weights[i].index < numDVs){
-        xdv[weights[i].index] = 0.95;
+        xdv[weights[i].index] = 0.5;
       }
     }
   }
