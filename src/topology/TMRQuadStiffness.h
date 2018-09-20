@@ -107,10 +107,6 @@ class TMRQuadStiffnessProperties : public TMREntity {
 class TMRQuadStiffness : public PlaneStressStiffness {
  public: 
   static const int MAX_NUM_MATERIALS = 5;
-
-  /* TMRQuadStiffness( TMRIndexWeight *_weights, int _nweights, */
-  /*                   TacsScalar _density, TacsScalar E,  */
-  /*                   TacsScalar _nu, double _q, double _eps=1e-3 ); */
   TMRQuadStiffness( TMRIndexWeight *_weights, int _nweights,
                     TMRQuadStiffnessProperties *_props );
   ~TMRQuadStiffness();

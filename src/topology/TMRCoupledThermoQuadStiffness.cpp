@@ -35,7 +35,7 @@ TMRCoupledThermoQuadStiffness::TMRCoupledThermoQuadStiffness( TMRIndexWeight *_w
   props = _props;
   props->incref();
   
-// Set the weights/local indices
+  // Set the weights/local indices
   nweights = _nweights;
   weights = new TMRIndexWeight[ nweights ];
   memcpy(weights, _weights, nweights*sizeof(TMRIndexWeight));
@@ -228,13 +228,13 @@ void TMRCoupledThermoQuadStiffness::calculateStress( const double pt[],
   }
 }
 /*
-  Compute the matrix vector product of D*e
+  Compute the matrix vector product of L*e
 */
 void TMRCoupledThermoQuadStiffness::calculateThermal( const double pt[],
                                                       const TacsScalar e[], 
                                                       TacsScalar s[] ){
   const double k0 = props->k0;
-  const double qtemp = props->qtemp;  
+  const double qtemp = props->qtemp;
   if (nvars == 1){
     TacsScalar penalty = rho[0]/(1.0+qtemp*(1.0-rho[0]));
     // Extract the properties
