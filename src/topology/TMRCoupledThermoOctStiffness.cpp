@@ -427,7 +427,7 @@ void TMRCoupledThermoOctStiffness::addThermalDVSens( const double pt[],
       
       // Compute the term psi^{T}*B^{T}*dD/dx*B*u
       for ( int i = 0; i < nweights; i++ ){
-      fdvSens[nvars*weights[i].index + j] += weights[i].weight*product;
+        fdvSens[nvars*weights[i].index + j] += weights[i].weight*product;
       }
     }
   }
