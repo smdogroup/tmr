@@ -21,15 +21,28 @@ def integrate(integrand):
 
     return integral
 
+def poisson_evalf(x):
+    R = 100.0
+    return (1.0 - (x[0]*x[0] + x[1]*x[1])/R**2)**6
+
 def get_disk_aggregate(rho, R, n=1000):
     '''Evaluate the KS functional on a disk'''
-    scale = 1.0/R**2    
+    scale = 1.0/R**2
     r = np.linspace(0.0, R, n)
-    phi = (0.1875*R**2 - 0.25*r**2 + (0.0625/R**2)*r**4)
+
+    # This is the solution for constant order
+    # phi = (0.1875*R**2 - 0.25*r**2 + (0.0625/R**2)*r**4)
+
+    # Compute the solution scaled to r/R
+    x = np.linspace(0.0, 1.0, n)
+    phi = R**2*(-(1.0/196)*x**14 + (1.0/24)*x**12 - (3.0/20)*x**10 +
+                (5.0/16)*x**8 - (5.0/12)*x**6 + (3.0/8)*x**4 - 0.25*x**2)
+    phi -= phi[-1]
+
     ksmax = np.max(phi)
     integrand = r*np.exp(rho*scale*(phi - ksmax))
     kssum = 2*np.pi*(R/(n-1))*integrate(integrand)
-    return scale*ksmax + np.log(kssum)/rho
+    return scale*ksmax, scale*ksmax + np.log(kssum)/rho
 
 def get_midpoint_vector(comm, forest, assembler, attr):
     vec = assembler.createVec()
@@ -52,31 +65,7 @@ class CreateMe(TMR.QuadCreator):
 
     def createElement(self, order, quad):
         '''Create the element'''
-        f = np.ones(order*order)
-        face = topo.getFace(quad.face)
-        h = (1 << (TMR.MAX_LEVEL - quad.level))
-        x = 1.0*quad.x/(1 << TMR.MAX_LEVEL)
-        y = 1.0*quad.y/(1 << TMR.MAX_LEVEL)
-        d = 1.0*h/(1 << TMR.MAX_LEVEL)
-        u = 0.5*d*(1.0 - np.cos(np.linspace(0, np.pi, order)))
-
-        if case == 'square':
-            for j in range(order):
-                for i in range(order):
-                    # Evaluate the node locations
-                    pt = face.evalPoint(x + u[i], y + u[j])
-                    sx = np.sin(np.pi*(pt[0] + 0.5*L)/L)
-                    sy = np.sin(np.pi*(pt[1] + 0.5*L)/L)
-                    f[i + j*order] = sx*sy
-        elif case == 'disk':
-            for j in range(order):
-                for i in range(order):
-                   # Evaluate the node locations
-                    pt = face.evalPoint(x + u[i], y + u[j])
-                    r = np.sqrt(pt[0]*pt[0] + pt[1]*pt[1])
-                    f[i + j*order] = 1.0 - (r/R)**2
-
-        elem = elements.PoissonQuad(order, f)
+        elem = elements.PoissonQuad(order, evalf=poisson_evalf)
         return elem
 
 def createRefined(case, forest, bcs, pttype=TMR.GAUSS_LOBATTO_POINTS):
@@ -136,12 +125,14 @@ p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
 p.add_argument('--order', type=int, default=2)
-p.add_argument('--ksweight', type=float, default=50.0)
+p.add_argument('--ksweight', type=float, default=100.0)
 p.add_argument('--uniform_refinement', action='store_true', default=False)
 p.add_argument('--structured', action='store_true', default=False)
 p.add_argument('--energy_error', action='store_true', default=False)
 p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
-    
+p.add_argument('--remesh_domain', action='store_true', default=False)
+p.add_argument('--remesh_strategy', type=str, default='fraction')
+
 args = p.parse_args()
 
 # Set the case type
@@ -189,9 +180,9 @@ if case == 'disk':
         exact_functional = 0.25*R**2
     elif functional == 'aggregate':
         for n in [10000, 100000, 1000000, 10000000]:
-            approx = get_disk_aggregate(ksweight, R, n=n)
+            ks_max, approx = get_disk_aggregate(ksweight, R, n=n)
             if comm.rank == 0:
-                print('%10d %25.16e'%(n, approx))
+                print('%10d %25.16e %25.16e'%(n, ks_max, approx))
             exact_functional = approx
 
     geo = TMR.LoadModel('2d-disk.stp')
@@ -253,7 +244,6 @@ opts.triangularize_print_iter = 50000
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)
-mesh.writeToVTK('mesh.vtk')
 
 # Create the corresponding mesh topology from the mesh-model
 model = mesh.createModelFromMesh()
@@ -293,6 +283,9 @@ s = 'Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr, '
 s += 'exact, fval_error, fval_corr_error, '
 s += 'fval_effectivity, indicator_effectivity\n'
 log_fp.write(s)
+
+# Set the feature size object
+feature_size = None
 
 for k in range(steps):
     # Create the topology problem
@@ -425,13 +418,18 @@ for k in range(steps):
             adjoint = assembler.createVec()
             adjoint_interp = assembler_refined.createVec()
             TMR.computeInterpSolution(forest_refined, assembler_refined,
-                forest, assembler, adjoint_refined, adjoint)
+                                      forest, assembler,
+                                      adjoint_refined, adjoint)
             TMR.computeInterpSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_interp)
+                                      forest_refined, assembler_refined,
+                                      adjoint, adjoint_interp)
             adjoint_refined.axpy(-1.0, adjoint_interp)
 
+            # Estimate the element-wise errors
             err_est, __, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_interp, adjoint_refined)
+                                                  forest_refined, assembler_refined,
+                                                  ans_interp, adjoint_refined)
+            err_est = np.fabs(adjoint_corr)
         else:
             # Compute the adjoint on the original mesh
             res.zeroEntries()
@@ -577,32 +575,159 @@ for k in range(steps):
         forest.balance(1)
         forest.repartition()
     elif k < steps-1:
-        # The refinement array
-        refine = np.zeros(len(error), dtype=np.intc)
+        if args.remesh_domain:
+            # Ensure that we're using an unstructured mesh
+            opts.mesh_type_default = TMR.UNSTRUCTURED
 
-        # Determine the cutoff values
-        cutoff = bins[-1]
-        bin_sum = 0
-        for i in range(len(bins)+1):
-            bin_sum += bins[i]
-            if bin_sum > 0.3*ntotal:
-                cutoff = bounds[i]
-                break
+            # Find the positions of the center points of each node
+            nelems = assembler.getNumElements()
 
-        log_cutoff = np.log(cutoff)
+            # Allocate the positions
+            Xp = np.zeros((nelems, 3))
+            for i in range(nelems):
+                # Get the information about the given element
+                elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
 
-        # Element target error is still too high. Adapt based solely
-        # on decreasing the overall error
-        nrefine = 0
-        for i, err in enumerate(error):
-            # Compute the log of the error
-            logerr = np.log(err)
+                # Get the approximate element centroid
+                Xp[i,:] = np.average(Xpt.reshape((-1, 3)), axis=0)
 
-            if logerr > log_cutoff:
-                refine[i] = 1
-                nrefine += 1
+            # Prepare to collect things to the root processor (only
+            # one where it is required)
+            root = 0
 
-        # Refine the forest
-        forest.refine(refine)
-        forest.balance(1)
-        forest.repartition()
+            # Get the element counts
+            if comm.rank == root:
+                size = error.shape[0]
+                count = comm.gather(size, root=root)
+                count = np.array(count, dtype=np.int)
+                ntotal = np.sum(count)
+
+                errors = np.zeros(np.sum(count))
+                Xpt = np.zeros(3*np.sum(count))
+                comm.Gatherv(error, [errors, count])
+                comm.Gatherv(Xp.flatten(), [Xpt, 3*count])
+
+                # Reshape the point array
+                Xpt = Xpt.reshape(-1,3)
+
+                # Asymptotic order of accuracy on per-element basis
+                s = 1.0
+                if args.order >= 3:
+                    s = args.order - 1.0
+
+                # Dimension of the problem
+                d = 2.0
+
+                # Set the exponent
+                exponent = d/(d + s)
+
+                # Compute the target error as a fixed fraction of the
+                # error estimate. This will result in the size of the
+                # mesh increasing at each iteration.
+                if args.remesh_strategy == 'fraction':
+                    err_target = 0.1*err_est
+                else:
+                    # Set a fixed target error
+                    err_target = 1e-4   # Target error estimate
+
+                # Set the error estimate
+                cval = 1.0
+                if args.remesh_strategy == 'fixed_mesh':
+                    # Set the target error
+                    count_target = 20e3 # Target element count
+
+                    # Compute the constant for element count
+                    cval = (count_target)**(-1.0/d)
+                    cval *= (np.sum(errors**(exponent)))**(1.0/d)
+                else:
+                    # Compute the constant for target error
+                    cval = (err_target/np.sum(errors**(exponent)))**(1.0/s)
+
+                # Compute the element-wise target error
+                hvals = cval*errors**(-(1.0/(d + s)))
+
+                # Set the values of
+                if feature_size is not None:
+                    for i, hp in enumerate(hvals):
+                        hlocal = feature_size.getFeatureSize(Xpt[i,:])
+                        hvals[i] = np.min(
+                            (np.max((hp*hlocal, 0.25*hlocal)), 2*hlocal))
+                else:
+                    for i, hp in enumerate(hvals):
+                        hvals[i] = np.min(
+                            (np.max((hp*htarget, 0.25*htarget)), 2*htarget))
+
+                # Allocate the feature size object
+                hmax = 10.0
+                hmin = 0.1
+                feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax,
+                                                    num_sample_pts=16)
+
+                # Code to visualize the mesh size distribution on the fly
+                visualize_mesh_size = False
+                if case == 'cylinder' and visualize_mesh_size:
+                    import matplotlib.pylab as plt
+                    x, y = np.meshgrid(np.linspace(0, 2*np.pi, 100),
+                                       np.linspace(0, L, 100))
+                    z = np.zeros((100, 100))
+                    for j in range(100):
+                        for i in range(100):
+                            xpt = [R*np.cos(x[i,j]), R*np.sin(x[i,j]), y[i,j]]
+                            z[i,j] = feature_size.getFeatureSize(xpt)
+
+                    plt.contourf(x, y, z)
+                    plt.show()
+            else:
+                size = error.shape[0]
+                comm.gather(size, root=root)
+                comm.Gatherv(error, None)
+                comm.Gatherv(Xp.flatten(), None)
+
+                # Create a dummy feature size object...
+                feature_size = TMR.ConstElementSize(0.5*htarget)
+
+            # Create the surface mesh
+            mesh.mesh(fs=feature_size, opts=opts)
+
+            # Create the corresponding mesh topology from the mesh-model
+            model = mesh.createModelFromMesh()
+            topo = TMR.Topology(comm, model)
+
+            # Create the quad forest and set the topology of the forest
+            depth = 0
+            if order == 2:
+                depth = 1
+            forest = TMR.QuadForest(comm)
+            forest.setTopology(topo)
+            forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
+            forest.createTrees(depth)
+        else:
+            # Allocate the refinement array
+            refine = np.zeros(len(error), dtype=np.intc)
+
+            # Determine the cutoff values
+            cutoff = bins[-1]
+            bin_sum = 0
+            for i in range(len(bins)+1):
+                bin_sum += bins[i]
+                if bin_sum > 0.15*ntotal:
+                    cutoff = bounds[i+1]
+                    break
+
+            log_cutoff = np.log(cutoff)
+
+            # Element target error is still too high. Adapt based solely
+            # on decreasing the overall error
+            nrefine = 0
+            for i, err in enumerate(error):
+                # Compute the log of the error
+                logerr = np.log(err)
+
+                if logerr > log_cutoff:
+                    refine[i] = 1
+                    nrefine += 1
+
+            # Refine the forest
+            forest.refine(refine)
+            forest.balance(1)
+            forest.repartition()

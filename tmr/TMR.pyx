@@ -2408,18 +2408,18 @@ def adjointError(forest, Assembler coarse,
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
         oct_forest_refined = (<OctForest>forest_refined).ptr
-        ans = TMR_AdjointErrorEst(oct_forest, coarse.ptr,
-                                  oct_forest_refined, refined.ptr,
-                                  solution.ptr, adjoint.ptr, <double*>err.data,
-                                  &adj_corr)
+        err_est = TMR_AdjointErrorEst(oct_forest, coarse.ptr,
+                                      oct_forest_refined, refined.ptr,
+                                      solution.ptr, adjoint.ptr,
+                                      <double*>err.data, &adj_corr)
     elif isinstance(forest, QuadForest):
         quad_forest = (<QuadForest>forest).ptr
         quad_forest_refined = (<QuadForest>forest_refined).ptr
-        ans = TMR_AdjointErrorEst(quad_forest, coarse.ptr,
-                                  quad_forest_refined, refined.ptr,
-                                  solution.ptr, adjoint.ptr, <double*>err.data,
-                                  &adj_corr)
-    return ans, adj_corr, err
+        err_est = TMR_AdjointErrorEst(quad_forest, coarse.ptr,
+                                      quad_forest_refined, refined.ptr,
+                                      solution.ptr, adjoint.ptr,
+                                      <double*>err.data, &adj_corr)
+    return err_est, adj_corr, err
 
 def computeInterpSolution(forest, Assembler coarse,
                           forest_refined, Assembler refined,
@@ -2669,7 +2669,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.addStressConstraint(case, sc.ptr, offset, scale, obj_weight)
         return
-    
+
     def addCurvatureConstraint(self, int case, CurvatureConstraint cc,
                                TacsScalar offset=1.0, TacsScalar scale=1.0,
                                TacsScalar obj_weight=0.0):
@@ -2680,7 +2680,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.addCurvatureConstraint(case, cc.ptr, offset, scale, obj_weight)
         return
-    
+
     def addLinearConstraints(self, list vecs, list offset):
         cdef int nvecs
         cdef TacsScalar *_offset = NULL

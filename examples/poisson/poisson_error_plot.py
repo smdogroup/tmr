@@ -14,25 +14,14 @@ steps = args.steps
 case = args.case
 
 # Set the colors to use for each set of bars
-colors = ['BrickRed', 'ForestGreen', 'NavyBlue',
-          'Violet', 'Magenta' ]
+colors = ['lightgray', 'ForestGreen']
 
 data = []
-for k in [0, steps/2, steps-1]:
+for k in [0, steps-1]:
     data.append(np.loadtxt('results/%s_data%d.txt'%(case, k)))
 
-# Delta value
-delta = 10
-
-# Set the positions of the tick locations
-yticks_lab = [0, 2, 4, 6, 8]
-
-# Set the values for the ticks
-yticks = np.linspace(0, delta*len(data), 5*len(data)+1)
-ytick_labels = []
-for i in range(len(data)):
-    ytick_labels.extend(yticks_lab)
-ytick_labels.append(delta)
+# Find the max value of y
+ymax = 0
 
 # Look for all the data
 bins_per_decade = 10
@@ -45,6 +34,8 @@ for d in data:
         for k in range(bins_per_decade):
             if d[i+k,3] > 0.01:
                 flag = True
+            if d[i+k,3] > ymax:
+                ymax = d[i+k,3]
 
         # Set the new value for idx_min
         if flag and i < idx_min:
@@ -67,6 +58,22 @@ xvalues = idx_max - idx_min + 1
 xticks = xvalues*(np.linspace(x0, x1, x0 - x1 + 1) - x0)/(x1 - x0)
 xtick_labels = range(x0, x1-1, -1)
 
+# Set the positions of the tick locations
+if ymax < 10:
+    ymax = int(np.ceil(ymax))
+    yticks = np.linspace(0, ymax, ymax+1)
+    ytick_labels = range(ymax+1)
+elif ymax < 20:
+    ymax = 2*int(np.ceil(ymax/2.0))
+    yticks = np.linspace(0, ymax, ymax+1)
+    ytick_labels = range(0, ymax+1, 2)
+    yticks = np.linspace(0, ymax, ymax/2 + 1)
+elif ymax < 30:
+    ymax = 5*int(np.ceil(ymax/5.0))
+    yticks = np.linspace(0, ymax, ymax+1)
+    ytick_labels = range(0, ymax+1, 5)
+    yticks = np.linspace(0, ymax, ymax/5 + 1)
+
 print('xticks = ', xticks)
 print('xtick_labels = ', xtick_labels)
 
@@ -75,13 +82,12 @@ xmin = 0
 xmax = xvalues
 
 ymin = 0
-ymax = delta*len(data)
 
 # The overall dimensions
 xdim = 3.0
 xscale = xdim/(2.5*xvalues)
 
-ydim = 1.5
+ydim = 1.25
 yscale = ydim/ymax
 
 # Get the header info
@@ -95,11 +101,16 @@ for y in yticks:
                           color='gray', line_dim='thin',
                           xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
 
-for y in np.linspace(0, delta*(len(data)-1), len(data)):
-    s += tkz.get_2d_plot([xmin, xmax], [y, y],
-                          xscale=xscale, yscale=yscale,
-                          color='gray', line_dim='thick',
-                          xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+for k, d in enumerate(data):
+    bars = []
+    ymin = 0
+    for i in range(idx_min, idx_max+1):
+        bars.append([d[i,3] + ymin])
+
+    s += tkz.get_bar_chart(bars, color_list=[colors[k % len(colors)]], 
+                            xscale=xscale, yscale=yscale, 
+                            ymin=ymin, ymax=ymax)
+
 
 # Plot the axes
 s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
@@ -113,16 +124,6 @@ s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
                      xlabel='$\\log_{10}(\\text{Error})$', 
                      ylabel_offset=0.065,
                      ylabel='Percentage')
-
-for k, d in enumerate(data):
-    bars = []
-    ymin = delta*(len(data)-k-1)
-    for i in range(idx_min, idx_max+1):
-        bars.append([d[i,3] + ymin])
-
-    s += tkz.get_bar_chart(bars, color_list=[colors[k % len(colors)]], 
-                            xscale=xscale, yscale=yscale, 
-                            ymin=ymin, ymax=ymax)
 
 s += tkz.get_end_tikz()
 
