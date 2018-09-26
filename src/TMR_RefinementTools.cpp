@@ -31,10 +31,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Include MPI for timing
-#include <mpi.h>
-double MPI::Wtime();
-
 /*
   Create a multgrid object for a forest of octrees
 */

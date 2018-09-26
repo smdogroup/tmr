@@ -23,9 +23,9 @@ def integrate(integrand):
 
 def poisson_evalf(x):
     R = 100.0
-    return (1.0 - (x[0]*x[0] + x[1]*x[1])/R**2)**6
+    return (3920.0/363)*(1.0 - (x[0]*x[0] + x[1]*x[1])/R**2)**6
 
-def get_disk_aggregate(rho, R, n=1000):
+def get_disk_aggregate(functional, rho, R, n=1000):
     '''Evaluate the KS functional on a disk'''
     scale = 1.0/R**2
     r = np.linspace(0.0, R, n)
@@ -35,26 +35,21 @@ def get_disk_aggregate(rho, R, n=1000):
 
     # Compute the solution scaled to r/R
     x = np.linspace(0.0, 1.0, n)
-    phi = R**2*(-(1.0/196)*x**14 + (1.0/24)*x**12 - (3.0/20)*x**10 +
-                (5.0/16)*x**8 - (5.0/12)*x**6 + (3.0/8)*x**4 - 0.25*x**2)
+    phi = R**2*(-(20.0/363)*x**14 + (490.0/1089)*x**12 - (196.0/121)*x**10 +
+                (1225.0/363)*x**8 - (4900.0/1089)*x**6 + (490.0/121)*x**4 - 
+                (980.0/363)*x**2)
     phi -= phi[-1]
 
-    ksmax = np.max(phi)
-    integrand = r*np.exp(rho*scale*(phi - ksmax))
-    kssum = 2*np.pi*(R/(n-1))*integrate(integrand)
-    return scale*ksmax, scale*ksmax + np.log(kssum)/rho
-
-def get_midpoint_vector(comm, forest, assembler, attr):
-    vec = assembler.createVec()
-    v = vec.getArray()
-    nodes = forest.getNodesWithName(attr)
-    node_range = forest.getNodeRange()
-    for n in nodes:
-        if n >= node_range[comm.rank] and n < node_range[comm.rank+1]:
-            index = n - node_range[comm.rank]
-            v[index] = 1.0
-    assembler.reorderVec(vec)
-    return vec
+    if functional == 'ks':
+        ksmax = np.max(phi)
+        integrand = r*np.exp(rho*scale*(phi - ksmax))
+        kssum = 2*np.pi*(R/(n-1))*integrate(integrand)
+        return scale*ksmax, scale*ksmax + np.log(kssum)/rho
+    else:
+        maxphi = scale*np.max(phi)
+        integrand = r*np.power((scale*phi/maxphi), rho)
+        psum = 2*np.pi*(R/(n-1))*integrate(integrand)
+        return maxphi, maxphi*np.power(psum, 1.0/rho)
 
 class CreateMe(TMR.QuadCreator):
     def __init__(self, bcs, topo, case='disk'):
@@ -174,16 +169,11 @@ R = 100.0
 L = 200.0
 
 if case == 'disk':
-    if functional == 'integral':
-        exact_functional = (1.0/12)*np.pi*R**4 # for f = 1 - (r/R)**2
-    elif functional == 'displacement':
-        exact_functional = 0.25*R**2
-    elif functional == 'aggregate':
-        for n in [10000, 100000, 1000000, 10000000]:
-            ks_max, approx = get_disk_aggregate(ksweight, R, n=n)
-            if comm.rank == 0:
-                print('%10d %25.16e %25.16e'%(n, ks_max, approx))
-            exact_functional = approx
+    for n in [10000, 100000, 1000000, 10000000]:
+        ks_max, approx = get_disk_aggregate(functional, ksweight, R, n=n)
+        if comm.rank == 0:
+            print('%10d %25.16e %25.16e'%(n, ks_max, approx))
+        exact_functional = approx
 
     geo = TMR.LoadModel('2d-disk.stp')
     verts = geo.getVertices()
@@ -195,29 +185,6 @@ if case == 'disk':
     for index in [0, 2, 3, 4]:
         verts[index].setName('clamped')
     for index in [2, 4, 6, 7]:
-        edges[index].setName('clamped')
-
-    # Set the boundary conditions
-    bcs.addBoundaryCondition('clamped', [0])
-elif case == 'square':
-    if functional == 'integral':
-        exact_functional = -2*(L/np.pi)**4
-    elif functional == 'displacement':
-        exact_functional = 2.946854131254945e+03
-    elif functional == 'aggregate':
-        raise ValueError('No exact solution for square aggregate')
-
-    # Load the geometry model
-    geo = TMR.LoadModel('2d-square.stp')
-    verts = geo.getVertices()
-    edges = geo.getEdges()
-    faces = geo.getFaces()
-
-    # Set the names
-    verts[1].setName('midpoint')
-    for index in [0, 3, 2, 5, 4, 6, 7, 8]:
-        verts[index].setName('clamped')
-    for index in [2, 3, 5, 6, 7, 8, 10, 11]:
         edges[index].setName('clamped')
 
     # Set the boundary conditions
@@ -330,18 +297,15 @@ for k in range(steps):
 
     # Create and compute the function
     fval = 0.0
-    if functional == 'displacement':
-        res = get_midpoint_vector(comm, forest,
-                                  assembler, 'midpoint')
-        fval = ans.dot(res)
-    elif functional == 'integral':
-        direction = [1.0, 0.0, 0.0]
-        func = functions.DisplacementIntegral(assembler, direction)
-        fval = assembler.evalFunctions([func])[0]
-    elif functional == 'aggregate':
+    if functional == 'ks':
         direction = [1.0/R**2, 0.0, 0.0]
-        func = functions.KSDisplacement(assembler,
-                                        ksweight, direction)
+        func = functions.KSDisplacement(assembler, ksweight, direction)
+        func.setKSDispType('continuous')
+        fval = assembler.evalFunctions([func])[0]
+    else:
+        direction = [1.0/R**2, 0.0, 0.0]
+        func = functions.KSDisplacement(assembler, ksweight, direction)
+        func.setKSDispType('pnorm-continuous')
         fval = assembler.evalFunctions([func])[0]
 
     # Create the refined mesh
@@ -382,24 +346,20 @@ for k in range(steps):
             # Compute the functional and the right-hand-side for the
             # adjoint on the refined mesh
             adjoint_rhs = assembler_refined.createVec()
-            if functional == 'displacement':
-                adjoint_rhs = get_midpoint_vector(comm, forest_refined,
-                                                  assembler_refined, 'midpoint')
-                fval_refined = ans_interp.dot(adjoint_rhs)
+            if functional == 'ks':
+                direction = [1.0/R**2, 0.0, 0.0]
+                func_refined = functions.KSDisplacement(assembler_refined,
+                                                        ksweight, direction)
+                func_refined.setKSDispType('continuous')
             else:
-                if functional == 'integral':
-                    direction = [1.0, 0.0, 0.0]
-                    func_refined = functions.DisplacementIntegral(assembler_refined,
-                                                                  direction)
+                direction = [1.0/R**2, 0.0, 0.0]
+                func_refined = functions.KSDisplacement(assembler_refined,
+                                                        ksweight, direction)
+                func_refined.setKSDispType('pnorm-continuous')
 
-                elif functional == 'aggregate':
-                    direction = [1.0/R**2, 0.0, 0.0]
-                    func_refined = functions.KSDisplacement(assembler_refined,
-                                                            ksweight, direction)
-
-                # Evaluate the functional on the refined mesh
-                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
-                assembler_refined.evalSVSens(func_refined, adjoint_rhs)
+            # Evaluate the functional on the refined mesh
+            fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+            assembler_refined.evalSVSens(func_refined, adjoint_rhs)
 
             # Create the GMRES object on the fine mesh
             gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
@@ -433,11 +393,7 @@ for k in range(steps):
         else:
             # Compute the adjoint on the original mesh
             res.zeroEntries()
-            if functional != 'displacement':
-                assembler.evalSVSens(func, res)
-            else:
-                res = get_midpoint_vector(comm, forest,
-                                          assembler, 'midpoint')
+            assembler.evalSVSens(func, res)
             adjoint = assembler.createVec()
             gmres.solve(res, adjoint)
             adjoint.scale(-1.0)
@@ -451,23 +407,19 @@ for k in range(steps):
             assembler_refined.setVariables(ans_refined)
 
             # Compute the functional on the refined mesh
-            if functional == 'displacement':
-                adjoint_rhs = get_midpoint_vector(comm, forest_refined,
-                                                  assembler_refined, 'midpoint')
-                fval_refined = ans_refined.dot(adjoint_rhs)
+            if functional == 'ks':
+                direction = [1.0/R**2, 0.0, 0.0]
+                func_refined = functions.KSDisplacement(assembler_refined,
+                                                        ksweight, direction)
+                func_refined.setKSDispType('continuous')
             else:
-                if functional == 'integral':
-                    direction = [1.0, 0.0, 0.0]
-                    func_refined = functions.DisplacementIntegral(assembler_refined,
-                                                                  direction)
+                direction = [1.0/R**2, 0.0, 0.0]
+                func_refined = functions.KSDisplacement(assembler_refined,
+                                                        ksweight, direction)
+                func_refined.setKSDispType('pnorm-continuous')
 
-                elif functional == 'aggregate':
-                    direction = [1.0/R**2, 0.0, 0.0]
-                    func_refined = functions.KSDisplacement(assembler_refined,
-                                                            ksweight, direction)
-
-                # Evaluate the functional on the refined mesh
-                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+            # Evaluate the functional on the refined mesh
+            fval_refined = assembler_refined.evalFunctions([func_refined])[0]
 
             # Approximate the difference between the refined adjoint
             # and the adjoint on the current mesh
