@@ -5,20 +5,31 @@ import numpy as np
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
-p.add_argument('--steps', type=int, default=5)
-p.add_argument('--case', type=str, default='disk')
+p.add_argument('--files', nargs='+', type=str, help='List of files')
+p.add_argument('--outfile', type=str, default='output.tex')
 args = p.parse_args()
 
-# Retrieve the number of steps
-steps = args.steps
-case = args.case
-
 # Set the colors to use for each set of bars
-colors = ['lightgray', 'ForestGreen']
+colors = []
+for i in range(10):
+    colors.append('tableau%d'%(i))
+
+tikzcolors = '''
+\definecolor{tableau0}{RGB}{31,119,180}
+\definecolor{tableau1}{RGB}{255,158,74}
+\definecolor{tableau2}{RGB}{103,191,92}
+\definecolor{tableau3}{RGB}{237,102,93}
+\definecolor{tableau4}{RGB}{148,103,189}
+\definecolor{tableau5}{RGB}{168,120,110}
+\definecolor{tableau6}{RGB}{237,151,202}
+\definecolor{tableau7}{RGB}{162,162,162}
+\definecolor{tableau8}{RGB}{205,204,93}
+\definecolor{tableau9}{RGB}{109,204,218}
+'''
 
 data = []
-for k in [0, steps-1]:
-    data.append(np.loadtxt('results/%s_data%d.txt'%(case, k)))
+for fname in args.files:
+    data.append(np.loadtxt(fname))
 
 # Find the max value of y
 ymax = 0
@@ -94,6 +105,8 @@ yscale = ydim/ymax
 s = tkz.get_header()
 s += tkz.get_begin_tikz(xdim=3.5, ydim=2.0, xunit='in', yunit='in')
 
+s += tikzcolors
+
 # Create the plot background
 for y in yticks:
     s += tkz.get_2d_plot([xmin, xmax], [y, y],
@@ -127,7 +140,7 @@ s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
 
 s += tkz.get_end_tikz()
 
-fp = open('poisson_%s_plot.tex'%(case), 'w')
+fp = open(args.outfile, 'w')
 fp.write(s)
 fp.close()
 

@@ -127,6 +127,7 @@ p.add_argument('--energy_error', action='store_true', default=False)
 p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
 p.add_argument('--remesh_domain', action='store_true', default=False)
 p.add_argument('--remesh_strategy', type=str, default='fraction')
+p.add_argument('--element_count_target', type=float, default=20e3)
 
 args = p.parse_args()
 
@@ -158,6 +159,9 @@ functional = args.functional
 # This flag indicates whether to solve the adjoint exactly on the
 # next-finest mesh or not
 exact_refined_adjoint = args.exact_refined_adjoint
+
+# Set the count target
+element_count_target = args.element_count_target
 
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
@@ -237,15 +241,19 @@ else:
 target_rel_err = 1e-4
 
 # Open a log file to write
-descript = 'poisson_unstructured'
-if structured:
-    descript = 'poisson_structured'
+descript = '%s_order%d_poisson'%(case, order)
 if args.uniform_refinement:
     descript += '_uniform'
 descript += '_' + functional
 
+# Add a description about the meshing strategy
+if args.remesh_domain:
+    descript += '_' + args.remesh_strategy
+    if args.remesh_strategy == 'fixed_mesh':
+        descript += '_%g'%(args.element_count_target)
+
 # Create the log file and write out the header
-log_fp = open('results/%s_order%d_%s.dat'%(case, order, descript), 'w')
+log_fp = open('results/%s.dat'%(descript), 'w')
 s = 'Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr, '
 s += 'exact, fval_error, fval_corr_error, '
 s += 'fval_effectivity, indicator_effectivity\n'
@@ -515,7 +523,7 @@ for k in range(steps):
             data[i,1] = bounds[i+1]
             data[i,2] = bins[i+1]
             data[i,3] = 100.0*bins[i+1]/total
-        np.savetxt('results/%s_data%d.txt'%(case, k), data)
+        np.savetxt('results/%s_data%d.txt'%(descript, k), data)
 
     # Print out the error estimate
     assembler.setDesignVars(error)
@@ -585,11 +593,8 @@ for k in range(steps):
                 # Set the error estimate
                 cval = 1.0
                 if args.remesh_strategy == 'fixed_mesh':
-                    # Set the target error
-                    count_target = 20e3 # Target element count
-
                     # Compute the constant for element count
-                    cval = (count_target)**(-1.0/d)
+                    cval = (element_count_target)**(-1.0/d)
                     cval *= (np.sum(errors**(exponent)))**(1.0/d)
                 else:
                     # Compute the constant for target error
@@ -614,21 +619,6 @@ for k in range(steps):
                 hmin = 0.1
                 feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax,
                                                     num_sample_pts=16)
-
-                # Code to visualize the mesh size distribution on the fly
-                visualize_mesh_size = False
-                if case == 'cylinder' and visualize_mesh_size:
-                    import matplotlib.pylab as plt
-                    x, y = np.meshgrid(np.linspace(0, 2*np.pi, 100),
-                                       np.linspace(0, L, 100))
-                    z = np.zeros((100, 100))
-                    for j in range(100):
-                        for i in range(100):
-                            xpt = [R*np.cos(x[i,j]), R*np.sin(x[i,j]), y[i,j]]
-                            z[i,j] = feature_size.getFeatureSize(xpt)
-
-                    plt.contourf(x, y, z)
-                    plt.show()
             else:
                 size = error.shape[0]
                 comm.gather(size, root=root)
