@@ -115,7 +115,7 @@ comm = MPI.COMM_WORLD
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--case', type=str, default='disk')
-p.add_argument('--functional', type=str, default='integral')
+p.add_argument('--functional', type=str, default='ks')
 p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
@@ -128,7 +128,6 @@ p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
 p.add_argument('--remesh_domain', action='store_true', default=False)
 p.add_argument('--remesh_strategy', type=str, default='fraction')
 p.add_argument('--element_count_target', type=float, default=20e3)
-
 args = p.parse_args()
 
 # Set the case type

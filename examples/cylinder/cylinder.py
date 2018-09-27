@@ -21,7 +21,7 @@ def integrate(integrand):
 
     return integral
 
-def cylinder_ks_functional(rho, t, E, nu, kcorr, ys,
+def cylinder_ks_functional(functional, rho, t, E, nu, kcorr, ys,
                            L, R, alpha, beta, load, n=1000):
     A = np.zeros((5, 5))
     rhs = np.zeros(5)
@@ -150,8 +150,7 @@ def cylinder_ks_functional(rho, t, E, nu, kcorr, ys,
 
     return vm_max, vm_max + np.log(ks_sum)/rho
 
-def disk_ks_functional(rho, t, E, nu, kcorr, ys, R, load, n=1000,
-                       functional='aggregate'):
+def disk_ks_functional(functional, rho, t, E, nu, kcorr, ys, R, load, n=1000):
     '''
     Axisymmetric disk subject to a uniform pressure load
     '''
@@ -475,7 +474,7 @@ comm = MPI.COMM_WORLD
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--case', type=str, default='cylinder')
-p.add_argument('--functional', type=str, default='integral')
+p.add_argument('--functional', type=str, default='ks')
 p.add_argument('--steps', type=int, default=5)
 p.add_argument('--htarget', type=float, default=10.0)
 p.add_argument('--ordering', type=str, default='multicolor')
@@ -488,6 +487,7 @@ p.add_argument('--compute_solution_error', action='store_true', default=False)
 p.add_argument('--exact_refined_adjoint', action='store_true', default=False)
 p.add_argument('--remesh_domain', action='store_true', default=False)
 p.add_argument('--remesh_strategy', type=str, default='fraction')
+p.add_argument('--element_count_target', type=float, default=20e3)
 args = p.parse_args()
 
 # Print the keys
@@ -541,6 +541,9 @@ functional = args.functional
 # next-finest mesh or not
 exact_refined_adjoint = args.exact_refined_adjoint
 
+# Set the count target
+element_count_target = args.element_count_target
+
 # Set the load value to use depending on the case
 exact_functional = 0.0
 
@@ -552,13 +555,13 @@ feature_size = None
 
 if case == 'cylinder':
     # Get the maximum stress and re-adjust the load
-    vm_max, res = cylinder_ks_functional(1.0, t, E, nu, kcorr, ys,
+    vm_max, res = cylinder_ks_functional(functional, 1.0, t, E, nu, kcorr, ys,
         L, R, alpha, beta, load, n=10)
     load = load/vm_max
 
     # Compute the exact KS value
     for n in [100, 500, 1000, 2500]:
-        one, approx = cylinder_ks_functional(ksweight,
+        one, approx = cylinder_ks_functional(functional, ksweight,
             t, E, nu, kcorr, ys, L, R, alpha, beta, load, n=n)
         if comm.rank == 0:
             print('%10d %25.16e'%(n, approx))
@@ -594,18 +597,13 @@ elif case == 'disk':
     D = ((t**3)/12)*E/(1.0 - nu**2)
     G = 0.5*E/(1.0 + nu)
 
-    if functional == 'displacement':
-        exact_functional = load*((R**4)/(64*D) + (R**2)/(4*kcorr*G*t))
-    elif functional == 'integral':
-        pass
-    elif functional == 'aggregate':
-        # Compute the exact KS value
-        for n in [1000, 10000, 100000, 1000000, 10000000]:
-            one, approx = disk_ks_functional(ksweight,
-                t, E, nu, kcorr, ys, R, load, n=n, functional=functional)
-            if comm.rank == 0:
-                print('%10d %25.16e'%(n, approx))
-            exact_functional = approx
+    # Compute the exact KS value
+    for n in [1000, 10000, 100000, 1000000, 10000000]:
+        one, approx = disk_ks_functional(functional, ksweight,
+            t, E, nu, kcorr, ys, R, load, n=n, functional=functional)
+        if comm.rank == 0:
+            print('%10d %25.16e'%(n, approx))
+        exact_functional = approx
 
     # Load the geometry model
     geo = TMR.LoadModel('2d-disk.stp')
@@ -644,7 +642,6 @@ opts.triangularize_print_iter = 50000
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)
-mesh.writeToVTK('mesh.vtk')
 
 # Create the corresponding mesh topology from the mesh-model
 model = mesh.createModelFromMesh()
@@ -668,23 +665,26 @@ else:
     ordering = TACS.PY_NATURAL_ORDER
 
 # Open a log file to write
-descript = 'unstructured'
-if structured:
-    descript = 'structured'
+descript = '%s_order%d'%(case, order)
 if args.uniform_refinement:
     descript += '_uniform'
 descript += '_' + functional
 
+# Add a description about the meshing strategy
+if args.remesh_domain:
+    descript += '_' + args.remesh_strategy
+    if args.remesh_strategy == 'fixed_mesh':
+        descript += '_%g'%(args.element_count_target)
+
 # Create the log file and write out the header
-log_fp = open('results/%s_order%d_%s.dat'%(case, order, descript), 'w')
+log_fp = open('results/%s.dat'%(descript), 'w')
 s = 'Variables = iter, nelems, nnodes, fval, fcorr, abs_err, adjoint_corr, '
 s += 'exact, fval_error, fval_corr_error, '
 s += 'fval_effectivity, indicator_effectivity\n'
 log_fp.write(s)
 
 if case == 'disk' and args.compute_solution_error:
-    sol_log_fp = open('solution_error_%s_order%d_%s.dat'%(
-        case, order, descript), 'w')
+    sol_log_fp = open('solution_error_%s.dat'%(descript), 'w')
     s = 'Variables = iter, nelems, nnodes, '
     s += 'solution_error, recon_solution_error\n'
     sol_log_fp.write(s)
@@ -742,17 +742,13 @@ for k in range(steps):
 
     # Create and compute the function
     fval = 0.0
-    if functional == 'displacement':
-        res = get_midpoint_vector(comm, forest,
-                                  assembler, 'midpoint')
-        fval = ans.dot(res)
-    elif functional == 'integral':
-        direction = [0.0, 0.0, 1.0]
-        func = functions.DisplacementIntegral(assembler, direction)
-        fval = assembler.evalFunctions([func])[0]
-    elif functional == 'aggregate':
+    if functional == 'ks':
         func = functions.KSFailure(assembler, ksweight)
         func.setKSFailureType('continuous')
+        fval = assembler.evalFunctions([func])[0]
+    else:
+        func = functions.KSFailure(assembler, ksweight)
+        func.setKSFailureType('pnorm-continuous')
         fval = assembler.evalFunctions([func])[0]
 
     # Create the refined mesh
@@ -795,22 +791,20 @@ for k in range(steps):
             # Compute the functional and the right-hand-side for the
             # adjoint on the refined mesh
             adjoint_rhs = assembler_refined.createVec()
-            if functional == 'displacement':
-                adjoint_rhs = get_midpoint_vector(comm, forest_refined,
-                                                  assembler_refined, 'midpoint')
-                fval_refined = ans_interp.dot(adjoint_rhs)
+            if functional == 'ks':
+                direction = [1.0/R**2, 0.0, 0.0]
+                func_refined = functions.KSFailure(assembler_refined,
+                                                   ksweight)
+                func_refined.setKSFailureType('continuous')
             else:
-                if functional == 'integral':
-                    direction = [0.0, 0.0, 1.0]
-                    func_refined = functions.DisplacementIntegral(assembler_refined,
-                                                                  direction)
-                elif functional == 'aggregate':
-                    func_refined = functions.KSFailure(assembler_refined, ksweight)
-                    func_refined.setKSFailureType('continuous')
+                direction = [1.0/R**2, 0.0, 0.0]
+                func_refined = functions.KSFailure(assembler_refined,
+                                                   ksweight)
+                func_refined.setKSFailureType('pnorm-continuous')
 
-                # Evaluate the functional on the refined mesh
-                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
-                assembler_refined.evalSVSens(func_refined, adjoint_rhs)
+            # Evaluate the functional on the refined mesh
+            fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+            assembler_refined.evalSVSens(func_refined, adjoint_rhs)
 
             # Create the GMRES object on the fine mesh
             gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
@@ -839,11 +833,7 @@ for k in range(steps):
         else:
             # Compute the adjoint on the original mesh
             res.zeroEntries()
-            if functional != 'displacement':
-                assembler.evalSVSens(func, res)
-            else:
-                res = get_midpoint_vector(comm, forest,
-                                          assembler, 'midpoint')
+            assembler.evalSVSens(func, res)
             adjoint = assembler.createVec()
             gmres.solve(res, adjoint)
             adjoint.scale(-1.0)
@@ -857,21 +847,17 @@ for k in range(steps):
             assembler_refined.setVariables(ans_refined)
 
             # Compute the functional on the refined mesh
-            if functional == 'displacement':
-                adjoint_rhs = get_midpoint_vector(comm, forest_refined,
-                                                  assembler_refined, 'midpoint')
-                fval_refined = ans_refined.dot(adjoint_rhs)
+            if functional == 'ks':
+                func_refined = functions.KSFailure(assembler_refined,
+                                                   ksweight)
+                func_refined.setKSFailureType('continuous')
             else:
-                if functional == 'integral':
-                    direction = [0.0, 0.0, 1.0]
-                    func_refined = functions.DisplacementIntegral(assembler_refined,
-                                                                  direction)
-                elif functional == 'aggregate':
-                    func_refined = functions.KSFailure(assembler_refined, ksweight)
-                    func_refined.setKSFailureType('continuous')
+                func_refined = functions.KSFailure(assembler_refined,
+                                                   ksweight)
+                func_refined.setKSFailureType('pnorm-continuous')
 
-                # Evaluate the functional on the refined mesh
-                fval_refined = assembler_refined.evalFunctions([func_refined])[0]
+            # Evaluate the functional on the refined mesh
+            fval_refined = assembler_refined.evalFunctions([func_refined])[0]
 
             # Approximate the difference between the refined adjoint
             # and the adjoint on the current mesh
@@ -977,11 +963,11 @@ for k in range(steps):
             data[i,1] = bounds[i+1]
             data[i,2] = bins[i+1]
             data[i,3] = 100.0*bins[i+1]/total
-        np.savetxt('results/cylinder_data%d.txt'%(k), data)
+        np.savetxt('results/%s_data%d.txt'%(descript, k), data)
 
-    # Print out the error estimate
-    assembler.setDesignVars(error)
-    f5.writeToFile('results/error%02d.f5'%(k))
+    # # Print out the error estimate
+    # assembler.setDesignVars(error)
+    # f5.writeToFile('results/error%02d.f5'%(k))
 
     # Perform the refinement
     if args.uniform_refinement:
@@ -1045,11 +1031,8 @@ for k in range(steps):
                 # Set the error estimate
                 cval = 1.0
                 if args.remesh_strategy == 'fixed_mesh':
-                    # Set the target error
-                    count_target = 20e3 # Target element count
-
                     # Compute the constant for element count
-                    cval = (count_target)**(-1.0/d)
+                    cval = (element_count_target)**(-1.0/d)
                     cval *= (np.sum(errors**(exponent)))**(1.0/d)
                 else:
                     # Compute the constant for target error
