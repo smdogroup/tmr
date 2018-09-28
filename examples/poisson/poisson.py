@@ -36,7 +36,7 @@ def get_disk_aggregate(functional, rho, R, n=1000):
     # Compute the solution scaled to r/R
     x = np.linspace(0.0, 1.0, n)
     phi = R**2*(-(20.0/363)*x**14 + (490.0/1089)*x**12 - (196.0/121)*x**10 +
-                (1225.0/363)*x**8 - (4900.0/1089)*x**6 + (490.0/121)*x**4 - 
+                (1225.0/363)*x**8 - (4900.0/1089)*x**6 + (490.0/121)*x**4 -
                 (980.0/363)*x**2)
     phi -= phi[-1]
 
@@ -396,7 +396,6 @@ for k in range(steps):
             err_est, __, error = TMR.adjointError(forest, assembler,
                                                   forest_refined, assembler_refined,
                                                   ans_interp, adjoint_refined)
-            err_est = np.fabs(adjoint_corr)
         else:
             # Compute the adjoint on the original mesh
             res.zeroEntries()

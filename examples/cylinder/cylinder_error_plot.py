@@ -79,14 +79,11 @@ elif ymax < 20:
     yticks = np.linspace(0, ymax, ymax+1)
     ytick_labels = range(0, ymax+1, 2)
     yticks = np.linspace(0, ymax, ymax/2 + 1)
-elif ymax < 30:
+else:
     ymax = 5*int(np.ceil(ymax/5.0))
     yticks = np.linspace(0, ymax, ymax+1)
     ytick_labels = range(0, ymax+1, 5)
     yticks = np.linspace(0, ymax, ymax/5 + 1)
-
-print('xticks = ', xticks)
-print('xtick_labels = ', xtick_labels)
 
 # Show the max/min value
 xmin = 0
@@ -135,7 +132,7 @@ s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
                      tick_frac=0.0125,
                      xlabel_offset=0.1,
                      xlabel='$\\log_{10}(\\text{Error})$', 
-                     ylabel_offset=0.065,
+                     ylabel_offset=0.075,
                      ylabel='Percentage')
 
 s += tkz.get_end_tikz()

@@ -590,7 +590,7 @@ elif case == 'disk':
     R = 100.0
 
     # Get the maximum stress and re-adjust the load
-    vm_max, res = disk_ks_functional(1.0, t, E, nu, kcorr,
+    vm_max, res = disk_ks_functional(functional, 1.0, t, E, nu, kcorr,
                                      ys, R, load, n=20)
     load = load/vm_max
 
@@ -600,7 +600,7 @@ elif case == 'disk':
     # Compute the exact KS value
     for n in [1000, 10000, 100000, 1000000, 10000000]:
         one, approx = disk_ks_functional(functional, ksweight,
-            t, E, nu, kcorr, ys, R, load, n=n, functional=functional)
+            t, E, nu, kcorr, ys, R, load, n=n)
         if comm.rank == 0:
             print('%10d %25.16e'%(n, approx))
         exact_functional = approx
@@ -759,24 +759,26 @@ for k in range(steps):
                                               order=order+1, nlevels=nlevs+1)
     else:
         forest_refined, assembler_refined = createRefined(case, forest, bcs)
-    aux = addFaceTraction(case, order+1, assembler_refined, load)
-    assembler_refined.setAuxElements(aux)
+    aux_refined = addFaceTraction(case, order+1, assembler_refined, load)
+    assembler_refined.setAuxElements(aux_refined)
 
     if args.energy_error:
         # Compute the strain energy error estimate
         fval_corr = 0.0
         adjoint_corr = 0.0
         err_est, error = TMR.strainEnergyError(forest, assembler,
-            forest_refined, assembler_refined)
+                                               forest_refined,
+                                               assembler_refined)
 
         TMR.computeReconSolution(forest, assembler,
-            forest_refined, assembler_refined)
+                                 forest_refined, assembler_refined)
     else:
         if exact_refined_adjoint:
             # Compute the reconstructed solution on the refined mesh
             ans_interp = assembler_refined.createVec()
             TMR.computeInterpSolution(forest, assembler,
-                forest_refined, assembler_refined, ans, ans_interp)
+                                      forest_refined, assembler_refined,
+                                      ans, ans_interp)
 
             # Set the interpolated solution on the fine mesh
             assembler_refined.setVariables(ans_interp)
@@ -792,12 +794,10 @@ for k in range(steps):
             # adjoint on the refined mesh
             adjoint_rhs = assembler_refined.createVec()
             if functional == 'ks':
-                direction = [1.0/R**2, 0.0, 0.0]
                 func_refined = functions.KSFailure(assembler_refined,
                                                    ksweight)
                 func_refined.setKSFailureType('continuous')
             else:
-                direction = [1.0/R**2, 0.0, 0.0]
                 func_refined = functions.KSFailure(assembler_refined,
                                                    ksweight)
                 func_refined.setKSFailureType('pnorm-continuous')
@@ -823,13 +823,16 @@ for k in range(steps):
             adjoint = assembler.createVec()
             adjoint_interp = assembler_refined.createVec()
             TMR.computeInterpSolution(forest_refined, assembler_refined,
-                forest, assembler, adjoint_refined, adjoint)
+                                      forest, assembler,
+                                      adjoint_refined, adjoint)
             TMR.computeInterpSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_interp)
+                                      forest_refined, assembler_refined,
+                                      adjoint, adjoint_interp)
             adjoint_refined.axpy(-1.0, adjoint_interp)
 
             err_est, __, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_interp, adjoint_refined)
+                                                  forest_refined, assembler_refined,
+                                                  ans_interp, adjoint_refined)
         else:
             # Compute the adjoint on the original mesh
             res.zeroEntries()
@@ -841,7 +844,8 @@ for k in range(steps):
             # Compute the solution on the refined mesh
             ans_refined = assembler_refined.createVec()
             TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, ans, ans_refined)
+                                     forest_refined, assembler_refined,
+                                     ans, ans_refined)
 
             # Apply Dirichlet boundary conditions
             assembler_refined.setVariables(ans_refined)
@@ -863,19 +867,23 @@ for k in range(steps):
             # and the adjoint on the current mesh
             adjoint_refined = assembler_refined.createVec()
             TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint,
-                adjoint_refined)
+                                     forest_refined, assembler_refined,
+                                     adjoint, adjoint_refined)
 
             # Compute the adjoint and use adjoint-based refinement
-            err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_refined, adjoint_refined)
+            err_est, adjoint_corr, error =\
+                     TMR.adjointError(forest, assembler,
+                                      forest_refined, assembler_refined,
+                                      ans_refined, adjoint_refined)
 
             # Compute the adjoint and use adjoint-based refinement
             err_est, __, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_refined, adjoint_refined)
+                                                  forest_refined, assembler_refined,
+                                                  ans_refined, adjoint_refined)
 
             TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_refined)
+                                     forest_refined, assembler_refined,
+                                     adjoint, adjoint_refined)
             assembler_refined.setVariables(adjoint_refined)
 
         # Compute the refined function value
@@ -965,9 +973,9 @@ for k in range(steps):
             data[i,3] = 100.0*bins[i+1]/total
         np.savetxt('results/%s_data%d.txt'%(descript, k), data)
 
-    # # Print out the error estimate
-    # assembler.setDesignVars(error)
-    # f5.writeToFile('results/error%02d.f5'%(k))
+    # Print out the error estimate
+    assembler.setDesignVars(error)
+    f5.writeToFile('results/error%02d.f5'%(k))
 
     # Perform the refinement
     if args.uniform_refinement:
@@ -1010,8 +1018,6 @@ for k in range(steps):
 
                 # Asymptotic order of accuracy on per-element basis
                 s = 1.0
-                if args.order >= 3:
-                    s = args.order - 1.0
 
                 # Dimension of the problem
                 d = 2.0
@@ -1054,7 +1060,7 @@ for k in range(steps):
 
                 # Allocate the feature size object
                 hmax = 10.0
-                hmin = 0.1
+                hmin = 0.01
                 feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax,
                                                     num_sample_pts=16)
 
