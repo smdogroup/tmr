@@ -3651,123 +3651,131 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
 
   // Allocate space to store the free node variables
   int *edge_nodes = new int[ mesh_order ];
+  if (interp_type != TMR_BERNSTEIN_POINTS){
+    for ( int i = 0; i < num_elements; i++ ){
+      if (quads[i].info){
+        // Set the edge length based on the quadrant
+        const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
 
-  for ( int i = 0; i < num_elements; i++ ){
-    if (quads[i].info){
-      // Set the edge length based on the quadrant
-      const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
+        for ( int edge_index = 0; edge_index < 4; edge_index++ ){
+          if (quads[i].info & 1 << edge_index){
+            TMRQuadrant parent;
+            quads[i].parent(&parent);
 
-      for ( int edge_index = 0; edge_index < 4; edge_index++ ){
-        if (quads[i].info & 1 << edge_index){
-          TMRQuadrant parent;
-          quads[i].parent(&parent);
-
-          // Get the local edge nodes
-          if (mesh_order == 2){
-            // Transform from the global ordering to the local ordering
-            for ( int ii = 0; ii < 2; ii++ ){
-              TMRQuadrant node;
-              node.face = parent.face;
-              if (edge_index < 2){
-                node.x = parent.x + 2*h*(edge_index % 2);
-                node.y = parent.y + 2*h*ii;
-              }
-              else {
-                node.x = parent.x + 2*h*ii;
-                node.y = parent.y + 2*h*(edge_index % 2);
-              }
-              node.info = node_label;
-              transformNode(&node);
-              TMRQuadrant *t = nodes->contains(&node);
-              int index = t - node_array;
-              edge_nodes[ii] = node_offset[index];
-            }
-          }
-          else {
-            // Transform from the global ordering to the local ordering
-            for ( int ii = 0; ii < 3; ii++ ){
-              TMRQuadrant node;
-              node.face = parent.face;
-              if (edge_index < 2){
-                node.x = parent.x + 2*h*(edge_index % 2);
-                node.y = parent.y + h*ii;
-              }
-              else {
-                node.x = parent.x + h*ii;
-                node.y = parent.y + 2*h*(edge_index % 2);
-              }
-              if (ii == 0 || ii == 2){
+            // Get the local edge nodes
+            if (mesh_order == 2){
+              // Transform from the global ordering to the local ordering
+              for ( int ii = 0; ii < 2; ii++ ){
+                TMRQuadrant node;
+                node.face = parent.face;
+                if (edge_index < 2){
+                  node.x = parent.x + 2*h*(edge_index % 2);
+                  node.y = parent.y + 2*h*ii;
+                }
+                else {
+                  node.x = parent.x + 2*h*ii;
+                  node.y = parent.y + 2*h*(edge_index % 2);
+                }
                 node.info = node_label;
                 transformNode(&node);
                 TMRQuadrant *t = nodes->contains(&node);
                 int index = t - node_array;
-                edge_nodes[(ii/2)*(mesh_order-1)] = node_offset[index];
+                edge_nodes[ii] = node_offset[index];
               }
-              else {
-                int reversed = 0;
-                node.info = edge_label;
-                transformNode(&node, &reversed);
-                TMRQuadrant *t = nodes->contains(&node);
-                int index = t - node_array;
-                if (reversed){
-                  for ( int k = 1; k < mesh_order-1; k++ ){
-                    edge_nodes[k] = node_offset[index] + mesh_order-2-k;
-                  }
-                }
-                else {
-                  for ( int k = 1; k < mesh_order-1; k++ ){
-                    edge_nodes[k] = node_offset[index] + k-1;
-                  }
-                }
-              }
-            }
-          }
-
-          // Set the offset into the local connectivity array
-          const int *c = &conn[mesh_order*mesh_order*i];
-          for ( int k = 0; k < mesh_order; k++ ){
-            // Compute the offset to the local edge
-            int offset = 0;
-            if (edge_index < 2){
-              offset = k*mesh_order + (mesh_order-1)*edge_index;
             }
             else {
-              offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
+              // Transform from the global ordering to the local ordering
+              for ( int ii = 0; ii < 3; ii++ ){
+                TMRQuadrant node;
+                node.face = parent.face;
+                if (edge_index < 2){
+                  node.x = parent.x + 2*h*(edge_index % 2);
+                  node.y = parent.y + h*ii;
+                }
+                else {
+                  node.x = parent.x + h*ii;
+                  node.y = parent.y + 2*h*(edge_index % 2);
+                }
+                if (ii == 0 || ii == 2){
+                  node.info = node_label;
+                  transformNode(&node);
+                  TMRQuadrant *t = nodes->contains(&node);
+                  int index = t - node_array;
+                  edge_nodes[(ii/2)*(mesh_order-1)] = node_offset[index];
+                }
+                else {
+                  int reversed = 0;
+                  node.info = edge_label;
+                  transformNode(&node, &reversed);
+                  TMRQuadrant *t = nodes->contains(&node);
+                  int index = t - node_array;
+                  if (reversed){
+                    for ( int k = 1; k < mesh_order-1; k++ ){
+                      edge_nodes[k] = node_offset[index] + mesh_order-2-k;
+                    }
+                  }
+                  else {
+                    for ( int k = 1; k < mesh_order-1; k++ ){
+                      edge_nodes[k] = node_offset[index] + k-1;
+                    }
+                  }
+                }
+              }
             }
 
-            // If it's a negative number, it's a dependent node
-            // whose interpolation must be set
-            int index = node_nums[c[offset]];
-            if (index < 0){
-              index = -index-1;
-
-              // Compute parametric location along the edge
-              double u = 0.0;
+            // Set the offset into the local connectivity array
+            const int *c = &conn[mesh_order*mesh_order*i];
+            for ( int k = 0; k < mesh_order; k++ ){
+              // Compute the offset to the local edge
+              int offset = 0;
               if (edge_index < 2){
-                u = 1.0*(-1 + (quads[i].childId()/2)) +
-                  0.5*(1.0 + interp_knots[k]);
+                offset = k*mesh_order + (mesh_order-1)*edge_index;
               }
               else {
-                u = 1.0*(-1 + (quads[i].childId() % 2)) +
-                  0.5*(1.0 + interp_knots[k]);
+                offset = k + (mesh_order-1)*mesh_order*(edge_index % 2);
               }
 
-              // Compute the shape functions
-              int ptr = dep_ptr[index];
-              for ( int j = 0; j < mesh_order; j++ ){
-                dep_conn[ptr + j] = edge_nodes[j];
-              }
+              // If it's a negative number, it's a dependent node
+              // whose interpolation must be set
+              int index = node_nums[c[offset]];
+              if (index < 0){
+                index = -index-1;
 
-              // Evaluate the shape functions
-              lagrange_shape_functions(mesh_order, u, interp_knots,
-                                       &dep_weights[ptr]);
+                // Compute parametric location along the edge
+                double u = 0.0;
+                if (edge_index < 2){
+                  u = 1.0*(-1 + (quads[i].childId()/2)) +
+                    0.5*(1.0 + interp_knots[k]);
+                }
+                else {
+                  u = 1.0*(-1 + (quads[i].childId() % 2)) +
+                    0.5*(1.0 + interp_knots[k]);
+                }
+
+                // Compute the shape functions
+                int ptr = dep_ptr[index];
+                for ( int j = 0; j < mesh_order; j++ ){
+                  dep_conn[ptr + j] = edge_nodes[j];
+                }
+
+                // Evaluate the shape functions
+                lagrange_shape_functions(mesh_order, u, interp_knots,
+                                         &dep_weights[ptr]);
+              }
             }
           }
         }
       }
     }
   }
-
+  else { 
+    // Dependent node info for Bernstein polynomial
+    for ( int i = 0; i < num_elements; i++ ){
+      if (quads[i].info){
+        
+      }
+    } // for ( int i = 0; i < num_elements; i++ )
+  }
   delete [] edge_nodes;
 }
 
@@ -3785,40 +3793,79 @@ void TMRQuadForest::evaluateNodeLocations(){
   int num_elements;
   TMRQuadrant *quads;
   quadrants->getArray(&quads, &num_elements);
+  if (interp_type != TMR_BERNSTEIN_POINTS){
+    if (topo){
+      for ( int i = 0; i < num_elements; i++ ){
+        // Get the right surface
+        TMRFace *surf;
+        topo->getFace(quads[i].face, &surf);
 
-  if (topo){
-    for ( int i = 0; i < num_elements; i++ ){
-      // Get the right surface
-      TMRFace *surf;
-      topo->getFace(quads[i].face, &surf);
+        // Compute the edge length
+        const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
 
-      // Compute the edge length
-      const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
+        // Compute the origin of the element in parametric space
+        // and the edge length of the element
+        double d = convert_to_coordinate(h);
+        double u = convert_to_coordinate(quads[i].x);
+        double v = convert_to_coordinate(quads[i].y);
 
-      // Compute the origin of the element in parametric space
-      // and the edge length of the element
-      double d = convert_to_coordinate(h);
-      double u = convert_to_coordinate(quads[i].x);
-      double v = convert_to_coordinate(quads[i].y);
-
-      // Look for nodes that are not assigned
-      for ( int jj = 0; jj < mesh_order; jj++ ){
-        for ( int ii = 0; ii < mesh_order; ii++ ){
-          // Compute the mesh index
-          int node = conn[mesh_order*mesh_order*i +
-                          ii + jj*mesh_order];
-          int index = getLocalNodeNumber(node);
-          if (!flags[index]){
-            flags[index] = 1;
-            surf->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
-                            v + 0.5*d*(1.0 + interp_knots[jj]),
-                            &X[index]);
+        // Look for nodes that are not assigned
+        for ( int jj = 0; jj < mesh_order; jj++ ){
+          for ( int ii = 0; ii < mesh_order; ii++ ){
+            // Compute the mesh index
+            int node = conn[mesh_order*mesh_order*i +
+                            ii + jj*mesh_order];
+            int index = getLocalNodeNumber(node);
+            if (!flags[index]){
+              flags[index] = 1;
+              surf->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
+                              v + 0.5*d*(1.0 + interp_knots[jj]),
+                              &X[index]);
+            }
           }
         }
       }
     }
   }
+  else { // Bernstein control points
+    double *bern_knots = new double[mesh_order];
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
+    double knot_space = 2.0/mesh_order;
+    for (int j = 1; j < mesh_order-1; j++){
+      bern_knots[j] = -1. + j*knot_space;
+    }
+    if (topo){
+      for ( int i = 0; i < num_elements; i++ ){
+        // Get the right surface
+        TMRFace *surf;
+        topo->getFace(quads[i].face, &surf);
 
+        // Compute the edge length
+        const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
+        // Compute the origin of the element in parametric space
+        // and the edge length of the element
+        double d = convert_to_coordinate(h);
+        double u = convert_to_coordinate(quads[i].x);
+        double v = convert_to_coordinate(quads[i].y);
+        // Look for nodes that are not assigned
+        for ( int jj = 0; jj < mesh_order; jj++ ){
+          for ( int ii = 0; ii < mesh_order; ii++ ){
+            // Compute the mesh index
+            int node = conn[mesh_order*mesh_order*i +
+                            ii + jj*mesh_order];
+            int index = getLocalNodeNumber(node);
+            if (!flags[index]){
+              flags[index] = 1;
+              surf->evalPoint(u + 0.5*d*(1.0 + bern_knots[ii]),
+                              v + 0.5*d*(1.0 + bern_knots[jj]),
+                              &X[index]);
+            }
+          }
+        }
+      }
+    }
+  }
   delete [] flags;
 }
 
@@ -4302,45 +4349,144 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   double *Nu = &tmp[0];
   double *Nv = &tmp[coarse->mesh_order];
 
-  // Check whether the node is on a coarse mesh surface in either
-  // the x,y,z directions
-  if ((i == 0 && quad->x == node->x) ||
-      (i == mesh_order-1 && quad->x == node->x + h)){
-    istart = 0;
-    iend = 1;
-    Nu[istart] = 1.0;
+  if (interp_type != TMR_BERNSTEIN_POINTS){
+    // Check whether the node is on a coarse mesh surface in either
+    // the x,y,z directions
+    if ((i == 0 && quad->x == node->x) ||
+        (i == mesh_order-1 && quad->x == node->x + h)){
+      istart = 0;
+      iend = 1;
+      Nu[istart] = 1.0;
+    }
+    else if ((i == 0 && quad->x + hc == node->x) ||
+             (i == mesh_order-1 && quad->x + hc == node->x + h)){
+      istart = coarse->mesh_order-1;
+      iend = coarse->mesh_order;
+      Nu[istart] = 1.0;
+    }
+    else {
+      double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
+                             quad->x)/hc;
+      lagrange_shape_functions(coarse->mesh_order, u,
+                               coarse->interp_knots, Nu);
+    }
+    if ((j == 0 && quad->y == node->y) ||
+        (j == mesh_order-1 && quad->y == node->y + h)){
+      jstart = 0;
+      jend = 1;
+      Nv[jstart] = 1.0;
+    }
+    else if ((j == 0 && quad->y + hc == node->y) ||
+             (j == mesh_order-1 && quad->y + hc == node->y + h)){
+      jstart = coarse->mesh_order-1;
+      jend = coarse->mesh_order;
+      Nv[jstart] = 1.0;
+    }
+    else {
+      double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
+                             quad->y)/hc;
+      lagrange_shape_functions(coarse->mesh_order, v,
+                               coarse->interp_knots, Nv);
+    }
   }
-  else if ((i == 0 && quad->x + hc == node->x) ||
-           (i == mesh_order-1 && quad->x + hc == node->x + h)){
-    istart = coarse->mesh_order-1;
-    iend = coarse->mesh_order;
-    Nu[istart] = 1.0;
-  }
-  else {
-    double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
-                           quad->x)/hc;
-    lagrange_shape_functions(coarse->mesh_order, u,
-                             coarse->interp_knots, Nu);
-  }
-  if ((j == 0 && quad->y == node->y) ||
-      (j == mesh_order-1 && quad->y == node->y + h)){
-    jstart = 0;
-    jend = 1;
-    Nv[jstart] = 1.0;
-  }
-  else if ((j == 0 && quad->y + hc == node->y) ||
-           (j == mesh_order-1 && quad->y + hc == node->y + h)){
-    jstart = coarse->mesh_order-1;
-    jend = coarse->mesh_order;
-    Nv[jstart] = 1.0;
-  }
-  else {
-    double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
-                           quad->y)/hc;
-    lagrange_shape_functions(coarse->mesh_order, v,
-                             coarse->interp_knots, Nv);
-  }
+  else { 
+    // Dependent node info for Bernstein polynomial
+    // Check whether the node is on a coarse mesh surface in either
+    // the x,y,z directions
+    istart = 0, iend = coarse->mesh_order+1;
+    jstart = 0, jend = coarse->mesh_order+1; 
+    
+    if ((i == 0 && quad->x == node->x) ||
+        (i == mesh_order-1 && quad->x == node->x + h)){
+      if (mesh_order == 3){
+        Nu[0] = 1.;
+        Nu[1] = 0.5;
+        Nu[2] = 0.25;
+      }
+      else if (mesh_order == 4){
 
+      }
+      else if (mesh_order == 5){
+
+      }     
+    }
+    else if ((i == 0 && quad->x + hc == node->x) ||
+             (i == mesh_order-1 && quad->x + hc == node->x + h)){
+      if (mesh_order == 3){
+        Nu[0] = 0.25;
+        Nu[1] = 0.5;
+        Nu[2] = 1.0;
+      }
+      else if (mesh_order == 4){
+
+      }
+      else if (mesh_order == 5){
+
+      }
+    }
+    else {
+      if (mesh_order == 3){
+        Nu[0] = 0.5;
+        Nu[1] = 0.5;
+        Nu[2] = 0.5;
+      }
+      else if (mesh_order == 4){
+
+      }
+      else if (mesh_order == 5){
+
+      }
+      // double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
+      //                        quad->x)/hc;
+      // lagrange_shape_functions(coarse->mesh_order, u,
+      //                          coarse->interp_knots, Nu);
+    }
+    if ((j == 0 && quad->y == node->y) ||
+        (j == mesh_order-1 && quad->y == node->y + h)){
+      if (mesh_order == 3){
+        Nv[0] = 1.;
+        Nv[1] = 0.5;
+        Nv[2] = 0.25;
+      }
+      else if (mesh_order == 4){
+
+      }
+      else if (mesh_order == 5){
+
+      }
+    }
+    else if ((j == 0 && quad->y + hc == node->y) ||
+             (j == mesh_order-1 && quad->y + hc == node->y + h)){
+      if (mesh_order == 3){
+        Nv[0] = 0.25;
+        Nv[1] = 0.5;
+        Nv[2] = 1.0;
+      }
+      else if (mesh_order == 4){
+
+      }
+      else if (mesh_order == 5){
+
+      }
+    }
+    else {
+      if (mesh_order == 3){
+        Nv[0] = 0.5;
+        Nv[1] = 0.5;
+        Nv[2] = 0.5;
+      }
+      else if (mesh_order == 4){
+
+      }
+      else if (mesh_order == 5){
+
+      }
+      // double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
+      //                        quad->y)/hc;
+      // lagrange_shape_functions(coarse->mesh_order, v,
+      //                          coarse->interp_knots, Nv);
+    }
+  }
   // Get the coarse grid information
   const int *cdep_ptr;
   const int *cdep_conn;
@@ -4350,7 +4496,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   // Get the coarse connectivity array
   const int num = quad->tag;
   const int *c = &(coarse->conn[coarse_nodes_per_element*num]);
-
+  
   // Loop over the nodes that are within this octant
   int nweights = 0;
   for ( int jj = jstart; jj < jend; jj++ ){
@@ -4377,7 +4523,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
       }
     }
   }
-
+  
   // Sort and add up the weight values
   nweights = TMRIndexWeight::uniqueSort(weights, nweights);
 
