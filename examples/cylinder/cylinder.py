@@ -374,6 +374,14 @@ class CreateMe(TMR.QuadCreator):
         elem = elements.MITCShell(order, stiff)
         return elem
 
+def cylinderEvalTraction(Xp):
+    x = Xp[0]
+    y = Xp[1]
+    z = Xp[2]
+    theta = -R*np.arctan2(y, x)
+    p = -load*np.sin(beta*z)*np.sin(alpha*theta)
+    return [p*x/R, p*y/R, 0.0]
+
 def addFaceTraction(case, order, assembler, load):
     # Create the surface traction
     aux = TACS.AuxElements()
@@ -382,30 +390,9 @@ def addFaceTraction(case, order, assembler, load):
     nelems = assembler.getNumElements()
 
     if case == 'cylinder':
+        trac = elements.ShellTraction(order, evalf=cylinderEvalTraction)
+
         for i in range(nelems):
-            # Get the information about the given element
-            elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
-
-            # Loop over the nodes and create the traction forces in the
-            # x/y/z directions
-            nnodes = order*order
-            tx = np.zeros(nnodes, dtype=TACS.dtype)
-            ty = np.zeros(nnodes, dtype=TACS.dtype)
-            tz = np.zeros(nnodes, dtype=TACS.dtype)
-
-            # Set the components of the surface traction
-            for j in range(nnodes):
-                x = Xpt[3*j]
-                y = Xpt[3*j+1]
-                z = Xpt[3*j+2]
-                theta = -R*np.arctan2(y, x)
-                p = -load*np.sin(beta*z)*np.sin(alpha*theta)
-
-                tx[j] = p*Xpt[3*j]/R
-                ty[j] = p*Xpt[3*j+1]/R
-                tz[j] = 0.0
-
-            trac = elements.ShellTraction(order, tx, ty, tz)
             aux.addElement(i, trac)
     elif case == 'disk':
         nnodes = order*order
