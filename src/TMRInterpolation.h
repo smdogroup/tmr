@@ -152,6 +152,42 @@ inline void lagrange_shape_func_second_derivative( const int order,
     }
   }
 }
+/*
+  Find the interval for the computing the basis function
+
+  input:
+  u: the parametric location
+  T: the knot locations
+  n: the number of control points
+  k: the order of the b-spline
+*/
+int bernstein_interval( double u, const double *T, int n, int k ){
+  if (u >= T[n]){
+    return n-1;
+  }
+  else if (u < T[k-1]){
+    return k-1;
+  }
+  else {
+    // Use a binary search to locate the interval required
+    int low = k-1;
+    int high = n;
+    int mid = low + (high - low)/2;
+
+    while (u < T[mid] || u >= T[mid+1]){
+      if (u < T[mid]){
+        high = mid;
+      }
+      else {
+        low = mid;
+      }
+
+      mid = low + (high - low)/2;
+    }
+
+    return mid;
+  }
+}
 
 /*
   Evaluate the Bernstein shape functions at the given parametric point
@@ -169,13 +205,14 @@ inline void lagrange_shape_func_second_derivative( const int order,
 inline void bernstein_shape_functions( const int order,
                                        const double u,
                                        const double *knots,
-                                       double *N,
-                                       double *work ){
+                                       double *N ){
   N[0] = 1.0;
-  const int idx = order-1;
+  int idx = order-1;
+  //int idx = bspline_interval(u, knots, order, order);
   // Set the pointers for the temporary work arrays
   // Note that left[j] = u - knots[i+1 - j]
   // and right[j] = knots[i+j] - u
+  double *work = new double[ 2*order ];
   double *left = &work[0];
   double *right = &work[order];
   
@@ -190,6 +227,7 @@ inline void bernstein_shape_functions( const int order,
       N[j] = left[j-i]*temp;
     }
   }
+  delete [] work;
 }
 
 /*
@@ -210,7 +248,105 @@ inline void bernstein_shape_func_derivative( const int order,
                                              const double *knots,
                                              double *N,
                                              double *Nd ){
-  
+  int ideriv = 1;
+  int ku = order;
+  const int idx = order-1;
+  double *work = new double[4*ku];
+  N[0] = 1.0;
+
+  // Set the pointers for the temporary work arrays
+  // Note that left[j] = u - knots[i+1 - j]
+  // and right[j] = knots[i+j] - u
+  double *left = &work[0];
+  double *right = &work[ku];
+
+  // ndu is a matrix of total size ku*ku
+  // The basis functions are stored in the upper triangular part of the matrix
+  // such that N_{idx-j, i} = ndu[i + j*ku] if i >= j is the basis function.
+  // The knot differences are stored in the lower portion of the matrix such that
+  // ndu[i + j*ku] = u_{idx+i+1} - u_{idx+j-i}
+  double *ndu = &work[2*ku];
+  ndu[0] = 1.0;
+
+  // Compute all orders of the basis functions
+  for ( int j = 1; j < ku; j++ ){
+    left[j] = u - knots[idx+1-j];
+    right[j] = knots[idx+j] - u;
+    // Compute the shape functions
+    N[j] = 0.0;
+    for ( int i = 0; i < j; i++ ){
+      double temp = N[i]/(right[i+1] + left[j-i]);
+      N[i] = N[j] + right[i+1]*temp;
+      N[j] = left[j-i]*temp;
+    }
+    // Compute the terms needed for the 1st and 2nd derivative
+    double njj = 0.0;
+    for ( int i = 0; i < j; i++ ){
+      // Compute the difference knots[idx+i+1] - knots[idx+j-i]
+      ndu[i + j*ku] = right[i+1] + left[j-i];
+      double temp = ndu[j-1 + i*ku]/ndu[i + j*ku];
+
+      // Compute the basis function
+      ndu[j + i*ku] = njj + right[i+1]*temp;
+      njj = left[j-i]*temp;
+    }
+
+    // Store the basis function
+    ndu[j*(ku+1)] = njj; 
+  }
+
+  // Set the basis functions
+  for ( int i = 0; i < ku; i++ ){
+    Nd[i] = ndu[(ku-1) + i*ku]; 
+  }
+
+  // Set the temporary arrays for the a-coefficients
+  double *a0 = &work[0];
+  double *a1 = &work[ku];
+
+  for ( int i = 0; i < ku; i++ ){
+    a0[0] = 1.0;
+    double d = 0.0;
+
+    // Compute the first of the a-terms
+    // a_{k,0} = a_{k-1,0}/(u_{i+ku-k} - u_{i})
+    if (i >= ideriv){
+      a1[0] = a0[0]/ndu[(i-ideriv) + (ku-ideriv)*ku];
+      d = a1[0]*ndu[(ku-ideriv-1) + (i-ideriv)*ku];
+    }
+    
+    int jstart = ideriv-i;
+    if (i >= ideriv-1){ jstart = 1; }
+    
+    int jend = ku-i-1;
+    if (i <= ku-ideriv){ jend = ideriv-1; }
+    
+    for ( int j = jstart; j <= jend; j++ ){
+      // Compute a_{k,j} = (a_{k-1,j} - a_{k-1,j-1})/(u_{i+ku+j-k} - u_{i+j})
+      a1[j] = (a0[j] - a0[j-1])/ndu[(i-ideriv+j) + (ku-ideriv)*ku];
+      d += a1[j]*ndu[(ku-ideriv-1) + (i-ideriv+j)*ku];
+    }
+    
+    // Compute the term 
+    // a_{k,k} = -a_{k-1}/(u_{i+ku} - u_{i+k})
+    if (i <= ku-ideriv-1){
+      a1[ideriv] = -a0[ideriv-1]/ndu[i + (ku-ideriv)*ku];
+      d += a1[ideriv]*ndu[(ku-ideriv-1) + i*ku];
+    }
+    
+    // Set the basis function
+    Nd[i + ideriv*ku] = d;
+    
+    // Swap the rows of a
+    double *t = a0;
+    a0 = a1;  a1 = t;
+  }
+
+  // Multiply the basis by the factorial term
+  int r = ku-1;
+  for ( int j = 0; j < ku; j++ ){
+    Nd[j + ideriv*ku] *= r;
+  }
 }
 
 /*
@@ -233,7 +369,123 @@ inline void bernstein_shape_func_second_derivative( const int order,
                                                     double *N,
                                                     double *Nd,
                                                     double *Ndd ){
-  
+  int ku = order;
+  const int idx = order-1;
+  double *work = new double[4*ku];
+  N[0] = 1.0;
+
+  // Set the pointers for the temporary work arrays
+  // Note that left[j] = u - knots[i+1 - j]
+  // and right[j] = knots[i+j] - u
+  double *left = &work[0];
+  double *right = &work[ku];
+
+  // ndu is a matrix of total size ku*ku
+  // The basis functions are stored in the upper triangular part of the matrix
+  // such that N_{idx-j, i} = ndu[i + j*ku] if i >= j is the basis function.
+  // The knot differences are stored in the lower portion of the matrix such that
+  // ndu[i + j*ku] = u_{idx+i+1} - u_{idx+j-i}
+  double *ndu = &work[2*ku];
+  ndu[0] = 1.0;
+
+  // Compute all orders of the basis functions
+  for ( int j = 1; j < ku; j++ ){
+    left[j] = u - knots[idx+1-j];
+    right[j] = knots[idx+j] - u;
+    // Compute the shape functions
+    N[j] = 0.0;
+    for ( int i = 0; i < j; i++ ){
+      double temp = N[i]/(right[i+1] + left[j-i]);
+      N[i] = N[j] + right[i+1]*temp;
+      N[j] = left[j-i]*temp;
+    }
+    // Compute the second derivative
+    double njj = 0.0;
+    for ( int i = 0; i < j; i++ ){
+      // Compute the difference knots[idx+i+1] - knots[idx+j-i]
+      ndu[i + j*ku] = right[i+1] + left[j-i];
+      double temp = ndu[j-1 + i*ku]/ndu[i + j*ku];
+
+      // Compute the basis function
+      ndu[j + i*ku] = njj + right[i+1]*temp;
+      njj = left[j-i]*temp;
+    }
+
+    // Store the basis function
+    ndu[j*(ku+1)] = njj;
+  }
+
+  // Set the basis functions
+  for ( int i = 0; i < ku; i++ ){
+    Nd[i] = ndu[(ku-1) + i*ku];
+    Ndd[i] = ndu[(ku-1) + i*ku];
+  }
+
+  // Set the temporary arrays for the a-coefficients
+  double *a0 = &work[0];
+  double *a1 = &work[ku];
+  int n_deriv[] = {1,2};
+  // Compute the nth derivative
+  for (int n = 0; n < 2; n++){
+    for (int i = 0; i < ku; i++){
+      a0[0] = 1.0;
+      
+      for ( int k = 1; k <= n_deriv[n]; k++ ){
+        double d = 0.0;
+
+        // Compute the first of the a-terms
+        // a_{k,0} = a_{k-1,0}/(u_{i+ku-k} - u_{i})
+        if (i >= k){
+          a1[0] = a0[0]/ndu[(i-k) + (ku-k)*ku];
+          d = a1[0]*ndu[(ku-k-1) + (i-k)*ku];
+        }
+
+        int jstart = k-i;
+        if (i >= k-1){ jstart = 1; }
+
+        int jend = ku-i-1;
+        if (i <= ku-k){ jend = k-1; }
+
+        for ( int j = jstart; j <= jend; j++ ){
+          // Compute a_{k,j} = (a_{k-1,j} - a_{k-1,j-1})/(u_{i+ku+j-k} - u_{i+j})
+          a1[j] = (a0[j] - a0[j-1])/ndu[(i-k+j) + (ku-k)*ku];
+          d += a1[j]*ndu[(ku-k-1) + (i-k+j)*ku];
+        }
+
+        // Compute the term
+        // a_{k,k} = -a_{k-1}/(u_{i+ku} - u_{i+k})
+        if (i <= ku-k-1){
+          a1[k] = -a0[k-1]/ndu[i + (ku-k)*ku];
+          d += a1[k]*ndu[(ku-k-1) + i*ku];
+        }
+        if (n_deriv[n] == 1){
+          // Set the basis function
+          Nd[i + k*ku] = d;
+        }
+        else{
+          // Set the basis function
+          Ndd[i + k*ku] = d;
+        }
+        // Swap the rows of a
+        double *t = a0;
+        a0 = a1;  a1 = t;
+      }
+      // Multiply the basis by the factorial term
+      int r = ku-1;
+      for ( int k = 1; k <= n_deriv[n]; k++ ){
+        for ( int j = 0; j < ku; j++ ){
+          if (n_deriv[n] == 1){
+          // Set the basis function
+            Nd[j + k*ku] *= r;
+          }
+          else{
+            Ndd[j + k*ku] *= r;
+          }
+        }
+        r *= (ku-1 - k);
+      }
+    }
+  } 
 }
 
 #endif // TMR_INTERPOLATION_FUNCTIONS_H

@@ -100,9 +100,9 @@ void TMRQuadStiffness::getDesignVars( TacsScalar xdv[], int numDVs ){
   }
   else {
     for ( int j = 0; j < nvars; j++ ){
-      TacsScalar value = 0.5;
+      TacsScalar value = 0.75;
       if (j >= 1){
-        value = 0.5/(nvars-1);
+        value = 0.25/(nvars-1);
       }
       for ( int i = 0; i < nweights; i++ ){
         if (weights[i].index >= 0 && weights[i].index < numDVs){

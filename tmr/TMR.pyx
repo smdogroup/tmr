@@ -2424,10 +2424,10 @@ cdef class ThermoQuadStiffness(CoupledPlaneStress):
             errmsg = 'Weights and index list lengths must be the same'
             raise ValueError(errmsg)
 
-        # Check that the lengths are less than 4
-        if len(weights) > 4:
-            errmsg = 'Weight/index lists too long > 4'
-            raise ValueError(errmsg)
+        # # Check that the lengths are less than 4
+        # if len(weights) > 4:
+        #     errmsg = 'Weight/index lists too long > 4'
+        #     raise ValueError(errmsg)
 
         # Extract the weights
         nw = len(weights)
