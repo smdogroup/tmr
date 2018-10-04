@@ -1004,7 +1004,7 @@ for k in range(steps):
                 Xpt = Xpt.reshape(-1,3)
 
                 # Asymptotic order of accuracy on per-element basis
-                s = 1.0
+                s = order-1
 
                 # Dimension of the problem
                 d = 2.0
