@@ -888,6 +888,7 @@ for k in range(steps):
     bins = np.zeros(nbins+2, dtype=np.int)
 
     # Compute the mean and standard deviations of the log(error)
+    err_est = comm.allreduce(np.sum(error), op=MPI.SUM)
     ntotal = comm.allreduce(assembler.getNumElements(), op=MPI.SUM)
     mean = comm.allreduce(np.sum(np.log(error)), op=MPI.SUM)
     mean /= ntotal

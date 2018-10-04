@@ -72,7 +72,6 @@ xtick_labels = []
 for exp in range(x0, x1-1, -1):
     xtick_labels.append('$10^{%d}$'%(exp))
 
-
 # Set the positions of the tick locations
 if ymax < 10:
     ymax = int(np.ceil(ymax))
