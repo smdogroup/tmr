@@ -4454,7 +4454,10 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   int jstart = 0, jend = coarse->mesh_order;
   double *Nu = &tmp[0];
   double *Nv = &tmp[coarse->mesh_order];
-
+  // Check that the interpolation type between the meshes are identical
+  if (interp_type != coarse->interp_type){
+    printf("Error: Interpolation type between meshes are not identical\n");
+  }
   if (interp_type != TMR_BERNSTEIN_POINTS){
     // Check whether the node is on a coarse mesh surface in either
     // the x,y,z directions
@@ -4508,32 +4511,21 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
     }
     if ((i == 0 && quad->x == node->x) ||
         (i == mesh_order-1 && quad->x == node->x + h)){
-      double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + bern_knots[i]) -
-                             quad->x)/hc;
-      bernstein_shape_functions(coarse->mesh_order, u,
-                                coarse->interp_knots, Nu);
-      printf("u: %e Nu: %e %e %e\n", u, Nu[0], Nu[1], Nu[2]);
-      // istart = 0;
-      // iend = 1;
-      // Nu[istart] = 1.0;
+      istart = 0;
+      iend = 1;
+      Nu[istart] = 1.0;
     }
     else if ((i == 0 && quad->x + hc == node->x) ||
              (i == mesh_order-1 && quad->x + hc == node->x + h)){
-      double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + bern_knots[i]) -
-                             quad->x)/hc;
-      bernstein_shape_functions(coarse->mesh_order, u,
-                                coarse->interp_knots, Nu);
-      printf("u: %e Nu: %e %e %e\n", u, Nu[0], Nu[1], Nu[2]);
-      // istart = coarse->mesh_order-1;
-      // iend = coarse->mesh_order;
-      // Nu[istart] = 1.0;
+      istart = coarse->mesh_order-1;
+      iend = coarse->mesh_order;
+      Nu[istart] = 1.0;
     }
     else {
       double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + bern_knots[i]) -
                              quad->x)/hc;
       bernstein_shape_functions(coarse->mesh_order, u,
                                 coarse->interp_knots, Nu);
-      printf("u: %e Nu: %e %e %e\n", u, Nu[0], Nu[1], Nu[2]);
     }
     if ((j == 0 && quad->y == node->y) ||
         (j == mesh_order-1 && quad->y == node->y + h)){
@@ -4552,7 +4544,6 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
                              quad->y)/hc;
       bernstein_shape_functions(coarse->mesh_order, v,
                                coarse->interp_knots, Nv);
-      exit(0);
     }
     delete [] bern_knots;
   }

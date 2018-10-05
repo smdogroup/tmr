@@ -152,42 +152,6 @@ inline void lagrange_shape_func_second_derivative( const int order,
     }
   }
 }
-/*
-  Find the interval for the computing the basis function
-
-  input:
-  u: the parametric location
-  T: the knot locations
-  n: the number of control points
-  k: the order of the b-spline
-*/
-int bernstein_interval( double u, const double *T, int n, int k ){
-  if (u >= T[n]){
-    return n-1;
-  }
-  else if (u < T[k-1]){
-    return k-1;
-  }
-  else {
-    // Use a binary search to locate the interval required
-    int low = k-1;
-    int high = n;
-    int mid = low + (high - low)/2;
-
-    while (u < T[mid] || u >= T[mid+1]){
-      if (u < T[mid]){
-        high = mid;
-      }
-      else {
-        low = mid;
-      }
-
-      mid = low + (high - low)/2;
-    }
-
-    return mid;
-  }
-}
 
 /*
   Evaluate the Bernstein shape functions at the given parametric point
@@ -208,7 +172,6 @@ inline void bernstein_shape_functions( const int order,
                                        double *N ){
   N[0] = 1.0;
   int idx = order-1;
-  //int idx = bspline_interval(u, knots, order, order);
   // Set the pointers for the temporary work arrays
   // Note that left[j] = u - knots[i+1 - j]
   // and right[j] = knots[i+j] - u
@@ -226,7 +189,7 @@ inline void bernstein_shape_functions( const int order,
       N[i] = N[j] + right[i+1]*temp;
       N[j] = left[j-i]*temp;
     }
-  }
+  }    
   delete [] work;
 }
 
