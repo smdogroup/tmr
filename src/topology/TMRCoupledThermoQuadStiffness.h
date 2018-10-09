@@ -10,6 +10,7 @@
 #include "CoupledThermoPlaneStressStiffness.h"
 #include "TACSConstitutive.h"
 #include "TMRQuadStiffness.h"
+#include "TMRQuadForest.h"
 /*
   The TMRCoupledThermoQuadStiffness class
 
@@ -22,7 +23,8 @@ class TMRCoupledThermoQuadStiffness : public CoupledThermoPlaneStressStiffness {
   static const int MAX_NUM_MATERIALS = 5;
   TMRCoupledThermoQuadStiffness( TMRIndexWeight *_weights, 
                                  int _nweights,
-                                 TMRQuadStiffnessProperties *_props );
+                                 TMRQuadStiffnessProperties *_props,
+                                 TMRQuadForest *_filter=NULL );
   ~TMRCoupledThermoQuadStiffness();
   // Set the design variable values in the object
   // --------------------------------------------
@@ -97,9 +99,12 @@ class TMRCoupledThermoQuadStiffness : public CoupledThermoPlaneStressStiffness {
   TacsScalar x[MAX_NUM_MATERIALS+1];
   TacsScalar rho[MAX_NUM_MATERIALS+1];
   
-  // The local density of the
+  // The local weights
   int nweights;
   TMRIndexWeight *weights;
+  // Local design variable vector
+  TacsScalar *dv;
+  TMRQuadForest *filter;
 };
 
 #endif // TMR_THERMO_QUADRANT_STIFFNESS_H

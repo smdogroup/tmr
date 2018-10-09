@@ -2413,7 +2413,8 @@ cdef class QuadStiffness(PlaneStress):
 
 cdef class ThermoQuadStiffness(CoupledPlaneStress):
     def __cinit__(self, QuadStiffnessProperties props,
-                  list index=None, list weights=None):
+                  list index=None, list weights=None,
+                  QuadForest filtr=None):
         cdef TMRIndexWeight *w = NULL
         cdef int nw = 0
         self.ptr = NULL
@@ -2437,7 +2438,12 @@ cdef class ThermoQuadStiffness(CoupledPlaneStress):
             w[i].index = <int>index[i]
 
         # Create the constitutive object
-        self.ptr = new TMRCoupledThermoQuadStiffness(w, nw, props.ptr)
+        if filtr:
+            self.ptr = new TMRCoupledThermoQuadStiffness(w, nw, props.ptr,
+                                                         filtr.ptr)
+        else:
+            self.ptr = new TMRCoupledThermoQuadStiffness(w, nw, props.ptr, NULL)
+                                                     
         self.ptr.incref()
         free(w)
         return

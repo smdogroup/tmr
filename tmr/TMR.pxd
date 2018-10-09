@@ -452,7 +452,7 @@ cdef extern from "TMRQuadStiffness.h":
 cdef extern from "TMRCoupledThermoQuadStiffness.h":
    cdef cppclass TMRCoupledThermoQuadStiffness(CoupledThermoPlaneStressStiffness):
         TMRCoupledThermoQuadStiffness(TMRIndexWeight*, int,
-                                      TMRQuadStiffnessProperties*)
+                                      TMRQuadStiffnessProperties*, TMRQuadForest*)
 
 cdef extern from "TMRCoupledThermoOctStiffness.h":
    cdef cppclass TMRCoupledThermoOctStiffness(CoupledThermoSolidStiffness):

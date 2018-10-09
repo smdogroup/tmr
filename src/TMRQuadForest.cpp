@@ -3768,6 +3768,13 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
     }
   }
   else { 
+    double *bern_knots = new double[mesh_order];
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
+    double knot_space = 2.0/(mesh_order-1);
+    for (int p = 1; p < mesh_order-1; p++){
+      bern_knots[p] = -1. + p*knot_space;
+    }
     // Dependent node info for Bernstein polynomial
     for ( int i = 0; i < num_elements; i++ ){
       if (quads[i].info){
@@ -3859,11 +3866,11 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
                 double u = 0.0;
                 if (edge_index < 2){
                   u = 1.0*(-1 + (quads[i].childId()/2)) +
-                    0.5*(1.0 + interp_knots[k]);
+                    0.5*(1.0 + bern_knots[k]);
                 }
                 else {
                   u = 1.0*(-1 + (quads[i].childId() % 2)) +
-                    0.5*(1.0 + interp_knots[k]);
+                    0.5*(1.0 + bern_knots[k]);
                 }
 
                 // Compute the shape functions
@@ -3873,14 +3880,15 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
                 }
 
                 // Evaluate the shape functions
-                bernstein_shape_functions(mesh_order, u, interp_knots,
+                bernstein_shape_functions(mesh_order, u, bern_knots,
                                           &dep_weights[ptr]);
               }
-            }
+            } // end int k = 0; k < mesh_order; k++
           } // end if (quads[i].info & 1 << edge_index)
         } // end for ( int edge_index = 0; edge_index < 4; edge_index++ )
       } // end if quads[i].info
     } // for ( int i = 0; i < num_elements; i++ )
+    delete [] bern_knots;
   }
   delete [] edge_nodes;
 }

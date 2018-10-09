@@ -489,7 +489,7 @@ void TMRQuadTACSTopoCreator::computeWeights( const int mesh_order,
   pt[0] = -1.0 + 2.0*((node->x % hquad) + 0.5*h*(1.0 + knots[i]))/hquad;
   pt[1] = -1.0 + 2.0*((node->y % hquad) + 0.5*h*(1.0 + knots[j]))/hquad;
 
-  // Get the Lagrange shape functions
+  // Get the shape functions
   double *N = tmp;
   filter->evalInterp(pt, N);
     
