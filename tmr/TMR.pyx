@@ -72,6 +72,10 @@ GAUSS_LOBATTO_POINTS = TMR_GAUSS_LOBATTO_POINTS
 BERNSTEIN_POINTS = TMR_BERNSTEIN_POINTS
 
 cdef class Vertex:
+    """
+    The vertex class is used to store both the point and to
+    represent the underlying geometry
+    """
     cdef TMRVertex *ptr
     def __cinit__(self):
         self.ptr = NULL
@@ -81,16 +85,43 @@ cdef class Vertex:
             self.ptr.decref()
 
     def evalPoint(self):
+        """
+        evalPoint(self)
+        
+        Evaluate the point on the parametric surface and returns the node
+        location
+        
+        """
         cdef TMRPoint pt
         self.ptr.evalPoint(&pt)
         return np.array([pt.x, pt.y, pt.z])
 
     def setName(self, aname):
+        """
+        setName(self, aname)
+        
+        Set the name associated with the vertex
+        
+        Parameters
+        ----------
+        aname: str
+            name associated with the vertex
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
             self.ptr.setName(name)
 
     def getName(self):
+        """
+        getName(self)
+        
+        Get the name associated with the vertex
+
+        Returns
+        ----------
+        name: str
+            name associated with the entity        
+        """
         cdef const char *name = NULL
         if self.ptr:
             name = self.ptr.getName()
@@ -98,11 +129,30 @@ cdef class Vertex:
         return None
 
     def getEntityId(self):
+        """
+        getEntityId(self)
+        
+        Get the entity id associated with the vertex
+        
+        Returns
+        ----------
+        id: int
+            id number of the model
+        """
         if self.ptr:
             return self.ptr.getEntityId()
         return -1
 
     def setNodeNum(self, num):
+        """
+        setNodeNum(self, num)
+        Set the node number associated with the vertex
+        
+        Parameters
+        ----------
+        num: int
+            node number associated with the vertex
+        """
         cdef int n = num
         self.ptr.setNodeNum(&n)
         return n
@@ -115,6 +165,10 @@ cdef _init_Vertex(TMRVertex *ptr):
     return vertex
 
 cdef class Edge:
+    """
+    The edge class is used to store both the points on an edge and to
+    represent the underlying geometry
+    """
     cdef TMREdge *ptr
     def __cinit__(self):
         self.ptr = NULL
@@ -129,6 +183,19 @@ cdef class Edge:
         return tmin, tmax
 
     def evalPoint(self, double t):
+        """
+        evalPoint(self, t)
+        
+        Evaluate a node location on a curve with a single
+        parametric argument *t*. Provides access to the first and second vertices
+        that begin/end the edge. Given a parametric location t and a face, return
+        the (*u,v*) location on the face.
+
+        Parameter
+        ---------
+        *t*: double
+          parameteric location
+        """
         cdef TMRPoint pt
         self.ptr.evalPoint(t, &pt)
         return np.array([pt.x, pt.y, pt.z])
@@ -182,6 +249,10 @@ cdef _init_Edge(TMREdge *ptr):
     return edge
 
 cdef class EdgeLoop:
+    """
+    Contains an oriented set of edges that enclose a surface. Provides the edge
+    list and their relative orientations in the loop
+    """
     cdef TMREdgeLoop *ptr
     def __cinit__(self, list edges=None, list dirs=None):
         cdef int nedges = 0
@@ -261,6 +332,10 @@ cdef _init_EdgeLoop(TMREdgeLoop *ptr):
     return loop
 
 cdef class Face:
+    """
+    The face class is used to store both the points and edges and to
+    represent the underlying geometry
+    """
     cdef TMRFace *ptr
     def __cinit__(self):
         self.ptr = NULL
@@ -275,6 +350,19 @@ cdef class Face:
         return umin, vmin, umax, vmax
 
     def evalPoint(self, double u, double v):
+        """
+        evalPoint(self, u, v)
+
+        Evaluate a node location given a parametric location
+        (*u,v*). Access the edge loops that bound the face.
+
+        Parameters
+        ----------
+        u: double
+         Parametric location in u
+        v: double
+         Parametric location in v
+        """
         cdef TMRPoint pt
         self.ptr.evalPoint(u, v, &pt)
         return np.array([pt.x, pt.y, pt.z])
@@ -339,6 +427,10 @@ cdef _init_Face(TMRFace *ptr):
     return face
 
 cdef class Volume:
+    """
+    Contains an oriented collection of surfaces that enclose a volume. Provides
+    a list of surfaces and their relative orientations in the volume.
+    """
     cdef TMRVolume *ptr
     def __cinit__(self, list faces=None, list dirs=None):
         cdef int nfaces = 0
@@ -721,11 +813,14 @@ cdef class CurveLofter:
         return _init_Surface(surf)
 
 cdef class Model:
+    """
+    Contains an ordered collection of vertices, edges, faces, and volumes that
+    define a model geometry.
+    """
     cdef TMRModel *ptr
     def __cinit__(self, verts=None, edges=None, faces=None, vols=None):
         # Set the pointer to NULL
         self.ptr = NULL
-
         cdef int nverts = 0
         cdef TMRVertex **v = NULL
         if verts is not None:
@@ -916,6 +1011,9 @@ cdef _init_Model(TMRModel* ptr):
     return model
 
 cdef class MeshOptions:
+    """
+    Defines a number of options that modify the meshing algorithm. 
+    """
     cdef TMRMeshOptions ptr
     def __cinit__(self):
         self.ptr = TMRMeshOptions()
@@ -924,24 +1022,56 @@ cdef class MeshOptions:
         return
 
     property mesh_type_default:
+        """        
+        Default mesh type either structured or unstructured. In the case that it
+        is set to structured, the algorithm firsts checks if it is possible to
+        use a mapped mesh, and reverts to an unstructured algorithm otherwise.
+        """
         def __get__(self):
             return self.ptr.mesh_type_default
         def __set__(self, TMRFaceMeshType value):
             self.ptr.mesh_type_default = value
 
     property num_smoothing_steps:
+        """
+        Number of smoothing steps to apply during both the Laplacian and quad
+        smoothing algorithms
+
+        Parameters
+        ----------
+        value: int
+           number of smoothing steps
+        """
         def __get__(self):
             return self.ptr.num_smoothing_steps
         def __set__(self, value):
             self.ptr.num_smoothing_steps=value
 
     property frontal_quality_factor:
+        """
+        Use the mesh quality indicator to determine when to accept new triangles
+        in the frontal algorithm.
+
+        Parameters
+        ----------
+        value: double
+           Quality factor
+        """
         def __get__(self):
             return self.ptr.frontal_quality_factor
         def __set__(self, value):
             self.ptr.frontal_quality_factor = value
 
     property triangularize_print_level:
+        """
+        Print level to provide more verbosity during the triangularization
+        algorithm
+
+        Parameters
+        ----------
+        value: int
+           print level
+        """
         def __get__(self):
             return self.ptr.triangularize_print_level
         def __set__(self, value):
@@ -961,6 +1091,15 @@ cdef class MeshOptions:
             self.ptr.reset_mesh_objects = value
 
     property write_mesh_quality_histogram:
+        """
+        Write out a histogram of the mesh quality in the final smoothed
+        quadrilateral mesh.
+        
+        Parameters
+        ----------
+        value: bool
+           Whether or not to write the mesh quality histogram
+        """
         def __get__(self):
             return self.ptr.write_mesh_quality_histogram
         def __set__(self, value):
@@ -1102,6 +1241,11 @@ cdef class PointFeatureSize(ElementFeatureSize):
         return
 
 cdef class Mesh:
+    """
+    Mesh the geometry model. This class handles the meshing for surface objects
+    without any additional information. For hexahedral meshes, the model must
+    have a source or target.
+    """
     cdef TMRMesh *ptr
     def __cinit__(self, MPI.Comm comm, Model geo):
         cdef MPI_Comm c_comm = NULL
@@ -1117,6 +1261,20 @@ cdef class Mesh:
 
     def mesh(self, double h=1.0, MeshOptions opts=None,
              ElementFeatureSize fs=None):
+        """
+        mesh(self, h, opts)
+
+        Mesh the model with the provided mesh spacing *h* and default meshing
+        options :class:`~TMR.MeshOptions` opts if it is not provided.
+
+        Parameters
+        ----------
+        h: double
+           Mesh spacing
+               
+        opts: :class:`~TMR.MeshOptions`
+           Meshing options
+        """
         cdef TMRMeshOptions default
         if fs is not None:
             if opts is None:
@@ -1130,6 +1288,11 @@ cdef class Mesh:
                 self.ptr.mesh(opts.ptr, h)
 
     def getMeshPoints(self):
+        """
+        getMeshPoints(self)
+
+        Retrieve a global array of the mesh locations
+        """
         cdef TMRPoint *X
         cdef int npts = 0
         npts = self.ptr.getMeshPoints(&X)
@@ -1141,6 +1304,11 @@ cdef class Mesh:
         return Xp
 
     def getQuadConnectivity(self):
+        """
+        getQuadConnectivity(self)
+
+        Retrieve the global connectivity from the quadrilateral mesh
+        """
         cdef const int *quads = NULL
         cdef int nquads = 0
 
@@ -1154,6 +1322,11 @@ cdef class Mesh:
         return q
 
     def getTriConnectivity(self):
+        """
+        getTriConnectivity(self)
+
+        Retrieve the global connectivity from the triangular mesh
+        """
         cdef const int *tris = NULL
         cdef int ntris = 0
 
@@ -1166,6 +1339,11 @@ cdef class Mesh:
         return t
 
     def getHexConnectivity(self):
+        """
+        getHexConnectivity(self)
+
+        Retrieve the global connectivity from the hexahedral mesh
+        """
         cdef const int *hex = NULL
         cdef int nhex = 0
 
@@ -1183,12 +1361,29 @@ cdef class Mesh:
         return he
 
     def createModelFromMesh(self):
+        """
+        createModelFromMesh(self)
+        
+        Create a geometry model based on the input mesh
+        """
         cdef TMRModel *model = NULL
         model = self.ptr.createModelFromMesh()
         return _init_Model(model)
 
     def writeToBDF(self, fname, outtype=None):
-        # Write both quads and hexahedral elements
+        """
+        writeToBDF(self, fname, outtype=None)
+        
+        Write both the quadrilateral and hexahedral mesh to a BDF file
+
+        Parameters
+        ----------
+        fname: str
+               filename
+               
+        outtype: str
+                 Type of mesh to output to BDF file i.e. quad or hex
+        """
         cdef char *filename = tmr_convert_str_to_chars(fname)
         cdef int flag = 3
         if outtype is None:
@@ -1200,7 +1395,19 @@ cdef class Mesh:
         self.ptr.writeToBDF(filename, flag)
 
     def writeToVTK(self, fname, outtype=None):
-        # Write both quads and hexahedral elements
+        """
+        writeToVTK(self, fname, outtype=None)
+        
+        Write both the quadrilateral and hexahedral mesh to a VTK file
+
+        Parameters
+        ----------
+        fname: str
+               filename
+               
+        outtype: str
+                 Type of mesh to output to VTK file i.e. quad or hex
+        """
         cdef char *filename = tmr_convert_str_to_chars(fname)
         cdef int flag = 3
         if outtype is None:
@@ -1212,6 +1419,9 @@ cdef class Mesh:
         self.ptr.writeToVTK(filename, flag)
 
 cdef class EdgeMesh:
+    """
+    This is the class that stores the node numbers along an edge
+    """
     cdef TMREdgeMesh *ptr
     def __cinit__(self, MPI.Comm comm, Edge e,
                   np.ndarray[double, ndim=2, mode='c'] _X=None):
@@ -1245,6 +1455,9 @@ cdef class EdgeMesh:
         fs.decref()
 
 cdef class FaceMesh:
+    """
+    This is the class that stores the structured/unstructured surface mesh
+    """
     cdef TMRFaceMesh *ptr
     def __cinit__(self, MPI.Comm comm=None, Face f=None,
                   np.ndarray[double, ndim=2, mode='c'] _X=None,
@@ -1301,7 +1514,36 @@ cdef _init_FaceMesh(TMRFaceMesh *ptr):
         fm.ptr.incref()
     return fm
 
+cdef class VolumeMesh:
+    """
+    This is the class that stores the hexahedral mesh
+    """
+    cdef TMRVolumeMesh *ptr
+    def __cinit__(self, MPI.Comm comm=None, Volume v=None):
+        cdef MPI_Comm c_comm = NULL
+        c_comm = comm.ob_mpi
+        self.ptr = new TMRVolumeMesh(c_comm, v.ptr)
+        self.ptr.incref()
+
+    def __dealloc__(self):
+        pass
+    
 cdef class Topology:
+    """
+    The main topology class that contains the objects used to build the
+    underlying mesh.
+    
+    This class takes in a general :class:`~TMR.Model`, but there are additional
+    requirements that are placed on the model to create a proper
+    topology object. These requirements are as follows:
+        #. No edge can degenerate to a vertex.
+        #. No face can degenerate to an edge or vertex.
+        #. All faces must be surrounded by a single edge loop with 4
+           non-degenerate edges. 
+        #. All volumes must contain 6 non-degenerate faces that are
+           ordered in coordinate ordering as shown below. Furthermore, all
+           volumes must be of type :class:`~TMR.TFIVolume`.
+    """
     cdef TMRTopology *ptr
     def __cinit__(self, MPI.Comm comm=None, Model m=None):
         cdef MPI_Comm c_comm = NULL
@@ -1564,6 +1806,10 @@ cdef class QuadForest:
         return r
 
     def getMeshConn(self):
+        """
+        getMeshConn(self)
+        Return the distributed mesh connectivity using a global ordering
+        """
         cdef const int *conn
         cdef int nelems
         cdef int order = self.ptr.getMeshOrder()
@@ -1731,6 +1977,16 @@ cdef class Octant:
             self.octant.info = value
 
 cdef class OctForest:
+    """
+    This class defines a forest of octrees. The octrees within the
+    forest can be distributed across processors. The connectivity
+    between octrees is defined on all processors by setting a octree to
+    node connectivity.
+
+    The octrees can be redistributed across processors by using the
+    repartition function. This destroys the nodes that may have been
+    created (but can easily be recomputed).
+    """
     cdef TMROctForest *ptr
     def __cinit__(self, MPI.Comm comm=None, int order=2,
                   TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
@@ -1753,6 +2009,15 @@ cdef class OctForest:
         return self.ptr.getMeshOrder()
 
     def setTopology(self, Topology topo):
+        """
+        setTopology(self, topo)
+        Set the topology (and determine the connectivity)
+        
+        Parameters
+        ----------
+        topo:  :class:`~TMR.Topology`
+          Set topo as the underlying topology object
+        """
         self.ptr.setTopology(topo.ptr)
 
     def getTopology(self):
@@ -1773,16 +2038,65 @@ cdef class OctForest:
         self.ptr.setConnectivity(num_nodes, <int*>conn.data, num_blocks)
 
     def repartition(self, int max_rank=-1):
+        """
+        repartition(self, max_rank=-1)
+        Repartition the mesh across processors. This redistributes the elements
+        so that there are an equal, or nearly equal, number of elements on each
+        processor.
+
+        Parameters
+        ----------
+        max_rank: int
+          Number of processors to distribute the mesh across. If negative, the
+          mesh is distribute across all processors
+        """
         self.ptr.repartition(max_rank)
 
     def createTrees(self, int depth):
+        """
+        createTrees(self, depth_level)
+        Create all the octrees in the mesh with the given level of refinement.
+
+        Parameters
+        ----------
+        refine_level: int
+          Octree of refinement level depth
+        """
         self.ptr.createTrees(depth)
 
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
+        """
+        createRandomTrees(self, nrand, min_level, max_level)
+        Create a set of trees with random levels of refinement. This is useful
+        for testing purposes.
+
+        Parameters
+        ----------
+        nrand: int
+          Number of random octrees
+        min_level: int
+          Minimum refinement level
+        max_level: int
+          Maximum refinement level
+        """
         self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
     def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None,
                int min_lev=0, int max_lev=MAX_LEVEL):
+        """
+        refine(self, refine, min_level, max_level)
+        Refine the elements in the mesh by the specified number of levels. If a
+        negative number is supplied, coarsen the element.
+
+        Parameters
+        ----------
+        refine: array of int
+          Array of integers
+        min_level: int
+          Minimum level of refinement
+        max_level: int
+          Maximum refinement level
+        """
         if refine is not None:
             self.ptr.refine(<int*>refine.data, min_lev, max_lev)
         else:
@@ -1790,28 +2104,87 @@ cdef class OctForest:
         return
 
     def duplicate(self):
+        """
+        duplicate(self)
+        Duplicate a forest by copying connectivity, topology and elements (but
+        not duplicating nodes)
+
+        Returns
+        -------
+        dup: :class:`~TMR.OctForest`
+         The duplicate OctForest
+        """
         cdef TMROctForest *dup = NULL
         dup = self.ptr.duplicate()
         return _init_OctForest(dup)
 
     def coarsen(self):
+        """
+        coarsen(self)
+        Create a new forest object by coarsening all the elements within the
+        mesh by one level, if possible. Does not create new nodes. 
+        
+        Returns
+        -------
+        dup: :class:`~TMR.OctForest`
+         The coarsened OctForest
+        """
         cdef TMROctForest *dup = NULL
         dup = self.ptr.coarsen()
         return _init_OctForest(dup)
 
     def balance(self, int btype):
+        """
+        balance(self, btype)
+        Balance all the elements in the mesh to achieve a 2-to-1 balance
+
+        Parameters
+        ----------
+        btype: bool
+          Whether or not to balance corners
+        """
         self.ptr.balance(btype)
 
     def createNodes(self):
+        """
+        createNodes(self)
+        Create all the nodes within the mesh
+        """
         self.ptr.createNodes()
 
     def getOctsWithName(self, aname):
+        """
+        getOctsWithName(self, aname)
+        Get an array of octants with the desired name
+
+        Parameters
+        ----------
+        aname: str
+          Get the octants with aname
+
+        Returns
+        -------
+        array: :class:`~TMR.OctantArray`
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef TMROctantArray *array = NULL
         array = self.ptr.getOctsWithName(name)
         return _init_OctantArray(array, 1)
 
     def getNodesWithName(self, aname):
+        """
+        getNodesWithName(self, aname)
+        Get an array of nodes with the desired name
+
+        Parameters
+        ----------
+        aname: str
+          Get the nodes with aname
+
+        Returns
+        -------
+        array: array of int
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int size = 0
         cdef int *nodes = NULL
@@ -1848,6 +2221,10 @@ cdef class OctForest:
         return r
 
     def getMeshConn(self):
+        """
+        getMeshConn(self)
+        Return the distributed mesh connectivity using a global ordering
+        """
         cdef const int *conn
         cdef int nelems
         cdef int order = self.ptr.getMeshOrder()
@@ -1858,6 +2235,20 @@ cdef class OctForest:
         return octs
 
     def getDepNodeConn(self):
+        """
+        getDepNodeConn(self)
+        Return the dependent node connectivity, weights and number of dependent
+        nodes from the octree object
+
+        Return
+        ------
+        ptr: array of int
+          array of dependent nodes
+        conn: array of int
+          array of connectivity of dependent nodes
+        weights: array of double
+          array of weights associated with the dependent nodes
+        """
         cdef int ndep = 0
         cdef const int *_ptr = NULL
         cdef const int *_conn = NULL
@@ -1882,6 +2273,18 @@ cdef class OctForest:
         self.ptr.writeForestToVTK(filename)
 
     def createInterpolation(self, OctForest forest, VecInterp vec):
+        """
+        createInterpolation(self, forest, vec)
+        Create an interpolation object between two octrees that share a common
+        topology.
+
+        Parameters
+        ----------
+        forest: :class:`~TMR.OctForest`
+          The octree forest that has the common topology
+        vec: :class:`~TACS.VecInterp`
+          The interpolation operator created
+        """
         self.ptr.createInterpolation(forest.ptr, vec.ptr)
 
 cdef _init_OctForest(TMROctForest* ptr):
@@ -1892,6 +2295,15 @@ cdef _init_OctForest(TMROctForest* ptr):
     return forest
 
 def LoadModel(fname, int print_lev=0):
+    """
+    LoadModel(fname, print_lev)
+    Initialization of the OpenCascade geometry from an IGES/STEP files
+
+    Parameters
+    ----------
+    fname: str
+      Name of the geometry file
+    """
     cdef char *filename = tmr_convert_str_to_chars(fname)
     cdef TMRModel *model = NULL
     if fname.lower().endswith(('step', 'stp')):

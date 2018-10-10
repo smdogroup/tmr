@@ -58,7 +58,8 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
   // Compute the weights for a given point
   void computeWeights( const int mesh_order, const double *knots,
                        TMROctant *node, TMROctant *oct,
-                       TMRIndexWeight *weights, double *tmp );
+                       TMRIndexWeight *weights, double *tmp,
+                       int sort=1);
 
   // The forest that defines the filter
   TMROctForest *filter;
@@ -86,6 +87,10 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
   // Create the elements
   void createElements( int order,
                        TMRQuadForest *forest,
+                       int num_elements,
+                       TACSElement **elements );
+
+  void createElements( TMRQuadForest *forest,
                        int num_elements,
                        TACSElement **elements );
 

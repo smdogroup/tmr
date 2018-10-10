@@ -265,6 +265,11 @@ cdef extern from "TMRMesh.h":
         void mesh(TMRMeshOptions, TMRElementFeatureSize*)
         void writeToVTK(const char*)
 
+    cdef cppclass TMRVolumeMesh(TMREntity):
+       TMRVolumeMesh(MPI_Comm, TMRVolume*)
+       void mesh(TMRMeshOptions)
+       void writeToVTK(const char*)
+
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
         TMRFaceMeshType mesh_type_default

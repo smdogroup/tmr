@@ -474,7 +474,7 @@ void TMRQuadTACSTopoCreator::computeWeights( const int mesh_order,
                                              TMRQuadrant *node,
                                              TMRQuadrant *quad,
                                              TMRIndexWeight *weights,
-                                             double *tmp ){
+                                             double *tmp, int sort ){
   // Find the side length of the octant in the filter that contains
   // the element octant
   const int32_t h = 1 << (TMR_MAX_LEVEL - node->level);
@@ -518,6 +518,7 @@ void TMRQuadTACSTopoCreator::computeWeights( const int mesh_order,
       if (c[offset] >= 0){
         weights[nweights].index = c[offset];
         weights[nweights].weight = weight;
+        weights[nweights].mask = nweights;
         nweights++;
       }
       else {
@@ -525,15 +526,17 @@ void TMRQuadTACSTopoCreator::computeWeights( const int mesh_order,
         for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
           weights[nweights].index = dep_conn[jp];
           weights[nweights].weight = weight*dep_weights[jp];
+          weights[nweights].mask = nweights;
           nweights++;
         }
       }
     }
   }
-  
-  // Sort and sum the array of weights - there are only 8 nodes
-  // per filter point at most
-  nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+  if (sort){
+    // Sort and sum the array of weights - there are only 8 nodes
+    // per filter point at most
+    nweights = TMRIndexWeight::uniqueSort(weights, nweights);
+  }
 }
 
 /*
@@ -577,7 +580,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   const int node_info = 4;
   const double node_knots[] = {-1.0, 0.0, 1.0};
   const int node_order = 3;
-
+  
   for ( int i = 0; i < num_quads; i++ ){
     // Get the original quadrant from the forest    
     TMRQuadrant node = quads[i];
@@ -791,4 +794,72 @@ void TMRQuadTACSTopoCreator::createElements( int order,
 
   // Free the weights
   delete [] weights;
+}
+
+/*
+  Create all of the higher order elements for the topology optimization problem
+*/
+void TMRQuadTACSTopoCreator::createElements( TMRQuadForest *forest,
+                                             int num_elements,
+                                             TACSElement **elements ){
+  const int order = forest->getMeshOrder();  
+  // Get the MPI communicator
+  int mpi_rank, mpi_size;
+  MPI_Comm comm = forest->getMPIComm();
+  MPI_Comm_rank(comm, &mpi_rank);
+  MPI_Comm_size(comm, &mpi_size);
+
+  // Get the quadrants associated with the forest
+  TMRQuadrantArray *quadrants;
+  forest->getQuadrants(&quadrants);
+
+  // Get the array of quadrants from the forest
+  int num_quads;
+  TMRQuadrant *quads;
+  quadrants->getArray(&quads, &num_quads);
+
+  // Create a queue for the external octants
+  TMRQuadrantQueue *queue = new TMRQuadrantQueue();
+
+  // The number of weights/element
+  const int filter_order = filter->getMeshOrder();
+  const int nweights = filter_order*filter_order;
+
+  // Allocate temp space
+  double *tmp = new double[ nweights ];
+  TMRIndexWeight *wtmp = new TMRIndexWeight[ nweights*filter_order*filter_order ];
+  
+  // Allocate the weights for all of the local elements 
+  TMRIndexWeight *weights = new TMRIndexWeight[ nweights*num_quads ];
+
+  // Fake the information as if we have a third-order and we are
+  // searching for the centeral node
+  const int node_info = 4;
+  const double node_knots[] = {-1.0, 0.0, 1.0};
+  const int node_order = 3;
+
+  for ( int i = 0; i < num_quads; i++ ){
+    // Get the original quadrant from the forest    
+    TMRQuadrant node = quads[i];
+    node.info = node_info;
+    
+    // Find the central node
+    int mpi_owner = 0;
+    TMRQuadrant *quad = filter->findEnclosing(node_order, node_knots,
+                                              &node, &mpi_owner);
+
+    if (!quad){
+      // Push the quadrant to the external queue. We will handle these
+      // cases seperately after a collective communication.
+      node.tag = mpi_owner;
+      queue->push(&node);
+      weights[nweights*i].index = -1;
+    }
+    else {
+      computeWeights(node_order, node_knots, &node,
+                     quad, wtmp, tmp);
+      memcpy(&weights[nweights*i], wtmp, nweights*sizeof(TMRIndexWeight));
+    }
+  }
+  
 }

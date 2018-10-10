@@ -93,6 +93,9 @@ class TMRCoupledThermoQuadStiffness : public CoupledThermoPlaneStressStiffness {
     return nvars;
   }
  private:
+  void computeLocalWeights( const double pt[], 
+                            TMRIndexWeight *local_weights );
+
   // The density and stiffness properties
   TMRQuadStiffnessProperties *props;
   int nmats, nvars;

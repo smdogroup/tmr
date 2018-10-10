@@ -40,7 +40,7 @@ TMRCoupledThermoQuadStiffness::TMRCoupledThermoQuadStiffness( TMRIndexWeight *_w
   nweights = _nweights;
   weights = new TMRIndexWeight[ nweights ];
   memcpy(weights, _weights, nweights*sizeof(TMRIndexWeight));
-  
+    
   // Copy over the filter if provided
   filter = NULL;
   if (_filter){
@@ -1096,6 +1096,8 @@ TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex,
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
+        printf("N[%d]: %f weights: %f %d %d\n",i, N[i],
+               weights[i].weight, weights[i].index, weights[i].mask);
         x[j] += N[i]*dv[nvars*weights[i].index + j];
         //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
       }
@@ -1110,6 +1112,31 @@ TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex,
     }
     return rho[0];
   }
+  // if (filter && dv){
+  //   TMRIndexWeight *local_weights = new TMRIndexWeight[ nweights ];
+  //   computeLocalWeights(pt, local_weights);
+  //   double N[nweights];
+  //   filter->evalInterp(pt, N);
+  //   for ( int j = 0; j < nvars; j++ ){
+  //     x[j] = 0.0;
+  //     for ( int i = 0; i < nweights; i++ ){
+  //       printf("N[%d]: %f weights: %f %d, new: %f %d\n",i, N[i],
+  //              weights[i].weight, weights[i].index, local_weights[i].weight,
+  //              local_weights[i].index);
+  //       x[j] += N[i]*dv[nvars*weights[i].index + j];
+  //       //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
+  //     }
+  //     // Apply the projection to obtain the projected value
+  //     // of the density
+  //     rho[j] = x[j];
+  //   }
+  // }
+  // if (dvIndex == 0){
+  //   if (nvars > 1){
+  //     return rho[1];
+  //   }
+  //   return rho[0];
+  // }
   else if (dvIndex == 1){
     if (nvars > 1){
       return rho[2];
@@ -1118,3 +1145,50 @@ TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex,
   }
   return 0;
 }
+
+// void TMRCoupledThermoQuadStiffness::computeLocalWeights( const double pt[],
+//                                                          TMRIndexWeight *local_weights ){
+//   double N[nweights];
+//   filter->evalInterp(pt, N);
+
+//   // Get the dependent node information for this mesh
+//   const int *dep_ptr, *dep_conn;
+//   const double *dep_weights;
+//   filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
+
+//   // Get the mesh order
+//   const int order = filter->getMeshOrder();
+  
+//   // Get the connectivity
+//   const int *conn;
+//   filter->getNodeConn(&conn);
+//   const int *c = &conn[quad->tag*order*order];
+
+//   // Loop over the adjacent nodes within the filter
+//   int local_nweights = 0;
+//   for ( int jj = 0; jj < order; jj++ ){
+//     for ( int ii = 0; ii < order; ii++ ){
+//       // Set the weights
+//       int offset = ii + jj*order;
+//       double weight = N[offset];
+
+//       // Get the tag number
+//       if (c[offset] >= 0){
+//         local_weights[local_nweights].index = c[offset];
+//         local_weights[local_nweights].weight = weight;
+//         local_nweights++;
+//       }
+//       else {
+//         int node = -c[offset]-1;
+//         for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
+//           local_weights[local_nweights].index = dep_conn[jp];
+//           local_weights[local_nweights].weight = weight*dep_weights[jp];
+//           local_nweights++;
+//         }
+//       }
+//     }
+//   }
+//   local_nweights = TMRIndexWeight::uniqueSort(local_weights, local_nweights);
+
+// }
+

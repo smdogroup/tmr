@@ -190,7 +190,12 @@ TACSAssembler*
 
   // Create the elements using the virtual call
   TACSElement **elements = new TACSElement*[ num_elements ];
-  createElements(order, forest, num_elements, elements);
+  if (order >= 3){
+    createElements(forest, num_elements, elements);
+  }
+  else {
+    createElements(order, forest, num_elements, elements);
+  }
 
   // Create the first element - and read out the number of
   // variables-per-node
