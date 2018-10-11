@@ -338,7 +338,8 @@ for k in range(steps):
             # Compute the reconstructed solution on the refined mesh
             ans_interp = assembler_refined.createVec()
             TMR.computeInterpSolution(forest, assembler,
-                forest_refined, assembler_refined, ans, ans_interp)
+                                      forest_refined, assembler_refined,
+                                      ans, ans_interp)
 
             # Set the interpolated solution on the fine mesh
             assembler_refined.setVariables(ans_interp)

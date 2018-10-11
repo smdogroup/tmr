@@ -81,8 +81,10 @@ for d in data:
 
     if args.plot == 'effectivity':
         ymax = max(ymax, np.max(d[:, fval_eff_index]))
+        ymax = min(ymax, 10)
     else:
         ymax = max(ymax, np.max(d[:, indc_eff_index]))
+        ymax = min(ymax, 20)
 
 # Round to the nearest multiple of 10
 xmin = int(np.floor(np.log10(xmin)))

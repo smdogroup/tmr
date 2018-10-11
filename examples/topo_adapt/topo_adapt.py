@@ -17,7 +17,8 @@ sys.path.append('../smooth')
 import locate
 
 # Optimize the mesh spacing to meet criteria
-def optimize_mesh(hvals, errors, lower, upper, Ntarget, p, d):
+def optimize_mesh(hvals, errors, mass_errors, lower, upper, Ntarget, p, d,
+                  beta=0.25):
     def objfunc(xdict):
         '''Evaluate the objective/constraint'''
         x = xdict['x']
@@ -26,7 +27,8 @@ def optimize_mesh(hvals, errors, lower, upper, Ntarget, p, d):
         fobj = 0.0
         ratio = 0.0
         for i, h in enumerate(hvals):
-            fobj += errors[i]*(x[i]/h)**s
+            fobj += ((1.0 - beta)*errors[i]*(x[i]/h)**s +
+                     beta*mass_errors[i]*(x[i]/h)**2)
             ratio += (x[i]/h)**(-d)
 
         # Set the objective and constraint
@@ -45,7 +47,8 @@ def optimize_mesh(hvals, errors, lower, upper, Ntarget, p, d):
         gobj = np.zeros(x.shape)
         gratio = np.zeros(x.shape)
         for i, h in enumerate(hvals):
-            gobj[i] = s*(errors[i]/h)*(x[i]/h)**(s-1)
+            gobj[i] = (s*(errors[i]/h)*(x[i]/h)**(s-1) +
+                       2*beta*(mass_errors[i]/h)*(x[i]/h))
             gratio[i] = -(d/h)*(x[i]/h)**(-d-1.0)
         gratio[:] /= Ntarget
 
@@ -74,11 +77,11 @@ def optimize_mesh(hvals, errors, lower, upper, Ntarget, p, d):
     # The Optimizer is IPOPT
     options = {}
     options['print_user_options'] = 'yes'
-    options['tol'] = 1e-8
+    options['tol'] = 1e-6
     options['bound_relax_factor'] = 0.0
     options['linear_solver'] = 'ma27'
     options['output_file'] = 'results/mesh_opt.out'
-    options['max_iter'] = 10000
+    options['max_iter'] = 500
 
     # Create the optimizer and optimize it!
     opt = OPT('ipopt', options=options)
@@ -90,9 +93,12 @@ class MassMin:
     '''
     Mass minimization with a von Mises stress constraint
     '''
-    def __init__(self, comm, nvars):
+    def __init__(self, comm, nvars, locator):
         # Set the communicator
         self.comm = comm
+
+        # Set the locator
+        self.locator = locator
 
         # The number of topo variables
         self.nvars = nvars
@@ -138,6 +144,131 @@ class MassMin:
         self.f5 = TACS.ToFH5(self.assembler, TACS.PY_PLANE_STRESS, flag)
 
         return
+
+    def getPoint(self, pt, xpts):
+        '''Get the design point within the element'''
+        order = int(np.sqrt(xpts.shape[0]/3))
+
+        if order == 2:
+            na = [0.5*(1.0 - pt[0]), 0.5*(1.0 + pt[0])]
+            nb = [0.5*(1.0 - pt[1]), 0.5*(1.0 + pt[1])]
+            naa = [-0.5, 0.5]
+            nbb = [-0.5, 0.5]
+        elif order == 3:
+            na = [-0.5*(1.0 - pt[0])*pt[0],
+                  1.0 - pt[0]*pt[0],
+                  0.5*(1.0 + pt[0])*pt[0]]
+            nb = [-0.5*(1.0 - pt[1])*pt[1],
+                  1.0 - pt[1]*pt[1],
+                  0.5*(1.0 + pt[1])*pt[1]]
+            naa = [-0.5 + pt[0], -2*pt[0], 0.5 + pt[0]]
+            nbb = [-0.5 + pt[1], -2*pt[1], 0.5 + pt[1]]
+
+        # Compute the shape functions
+        N = np.outer(nb, na).flatten()
+        Na = np.outer(nb, naa).flatten()
+        Nb = np.outer(nbb, na).flatten()
+
+        # Compute the derivatives
+        xpt = np.dot(N, xpts.reshape(-1, 3))
+        xa = np.dot(Na, xpts.reshape(-1, 3))
+        xb = np.dot(Nb, xpts.reshape(-1, 3))
+        normal = np.cross(xa, xb)
+
+        return xpt, np.sqrt(np.dot(normal, normal))
+
+    def getDesignValue(self, xpt):
+        '''Get the exact value of the design variable'''
+
+        # Get the points that are the closest
+        m = 100
+        index = np.zeros(m, dtype=np.intc)
+        dist = np.zeros(m)
+        self.locator.locateKClosest(xpt, index, dist)
+        dist = np.sqrt(dist)
+
+        # Set the length as a fraction of the overall distance
+        xlen = 0.1
+        r0 = 0.05*xlen
+
+        nodes = []
+        weights = []
+        for i in range(m):
+            if dist[i] < r0:
+                nodes.append(index[i])
+                weights.append(((r0 - dist[i])/r0))
+            else:
+                break
+
+        # Set the nodes/weights
+        nodes = np.array(nodes, dtype=np.intc)
+        weights = np.array(weights)
+        weights[:] = weights/np.sum(weights)
+        
+        return np.dot(weights, self.x[nodes])
+
+    def estimateMassError(self):
+        '''Estimate the error in the mass estimate'''
+
+        nelems = self.assembler.getNumElements()
+        errors = np.zeros(nelems)
+
+        # Set the length as a fraction of the overall distance
+        xlen = 0.1
+        r0 = 0.05*xlen
+
+        # Set the quadrature estimates
+        qwts2 = [1.0, 1.0]
+        qpts2 = [-0.577350269189626, 0.577350269189626]
+
+        qwts3 = [5.0/9.0, 8.0/9.0, 5.0/9.0]
+        qpts3 = [-0.774596669241483, 0.0, 0.774596669241483]
+
+        for i in range(nelems):
+            # Get the node locations
+            elem, xpts, v, dv, ddv = self.assembler.getElementData(i)
+
+            # # Get the center point location
+            # xpt, detJ = self.getPoint([0.0, 0.0], xpts)
+            # xconst = self.getDesignValue(xpt)
+
+            # Compute the difference in the area interval
+            const = 0.0
+            exact = 0.0
+
+            # Compute the mass based on a second-order element
+            for m in range(2):
+                for n in range(2):
+                    pt = [qpts2[n], qpts2[m]]
+                    wval = qwts2[n]*qwts2[m]
+
+                    # Get the point
+                    xpt, detJ = self.getPoint(pt, xpts)
+
+                    # Get the exact value of the density
+                    xexact = self.getDesignValue(xpt)
+
+                    # Compute the constant value/exact
+                    const += xexact*wval*detJ
+
+            for m in range(3):
+                for n in range(3):
+                    pt = [qpts3[n], qpts3[m]]
+                    wval = qwts3[n]*qwts3[m]
+
+                    # Get the point
+                    xpt, detJ = self.getPoint(pt, xpts)
+
+                    # Get the exact value of the density
+                    xexact = self.getDesignValue(xpt)
+
+                    # Compute the constant value/exact
+                    exact += xexact*wval*detJ
+
+            # Compute the absolute error in the mass
+            errors[i] = np.fabs(const - exact)
+
+        return errors
 
     def getVarsAndBounds(self, x, lb, ub):
         '''Set the values of the bounds'''
@@ -255,9 +386,10 @@ class MassMin:
         return fail
 
 class CreateMe(TMR.QuadCreator):
-    def __init__(self, bcs, topo):
+    def __init__(self, bcs, topo, locator):
         TMR.QuadCreator.__init__(bcs)
         self.topo = topo
+        self.locator = locator
         return
 
     def createElement(self, order, quad):
@@ -265,43 +397,94 @@ class CreateMe(TMR.QuadCreator):
         # Get the model name and set the face
         face = self.topo.getFace(quad.face)
         h = (1 << (TMR.MAX_LEVEL - quad.level))
-        x = 1.0*(quad.x + 0.5*h)/(1 << TMR.MAX_LEVEL)
-        y = 1.0*(quad.y + 0.5*h)/(1 << TMR.MAX_LEVEL)
-
-        # Evaluate the node locations
-        pt = face.evalPoint(x, y)
-
-        nodes = []
-        weights = []
-
-        m = 100
-        index = np.zeros(m, dtype=np.intc)
-        dist = np.zeros(m)
-        locator.locateKClosest(pt, index, dist)
-        dist = np.sqrt(dist)
-
-        # Set the length as a fraction of the overall distance
-        xlen = 0.1
-        r0 = 0.05*xlen
-
-        for i in range(m):
-            if dist[i] < r0:
-                nodes.append(index[i])
-                weights.append(((r0 - dist[i])/r0)**1.5)
-            else:
-                break
-        nodes = np.array(nodes, dtype=np.intc)
-        weights = np.array(weights)
-        weights[:] = weights/np.sum(weights)
 
         # Set the properties
         rho = 1.0
         E = 70e9
         nu = 0.3
         ys = 275e6
-        p = 4.0
-        eps = 0.15
-        ps = const_topo.pstopo(rho, E, nu, ys, p, eps, nodes, weights)
+        p = 3.0
+        eps = 0.2
+
+        if False:
+            x = 1.0*(quad.x + 0.5*h)/(1 << TMR.MAX_LEVEL)
+            y = 1.0*(quad.y + 0.5*h)/(1 << TMR.MAX_LEVEL)
+
+            # Evaluate the node locations
+            pt = face.evalPoint(x, y)
+
+            nodes = []
+            weights = []
+
+            m = 100
+            index = np.zeros(m, dtype=np.intc)
+            dist = np.zeros(m)
+            self.locator.locateKClosest(pt, index, dist)
+            dist = np.sqrt(dist)
+
+            # Set the length as a fraction of the overall distance
+            xlen = 0.1
+            r0 = 0.05*xlen
+            
+            for i in range(m):
+                if dist[i] < r0:
+                    nodes.append(index[i])
+                    weights.append(((r0 - dist[i])/r0))
+                else:
+                    break
+
+            # Compute the nodes
+            nodes = np.array(nodes, dtype=np.intc)
+            weights = np.array(weights)
+            weights[:] = weights/np.sum(weights)
+            
+            ps = const_topo.pstopo(rho, E, nu, ys, p, eps, nodes, weights)
+        else:
+            all_nodes = []
+            all_weights = []
+
+            for j in range(2):
+                for i in range(2):          
+                    x = 1.0*(quad.x + h*i)/(1 << TMR.MAX_LEVEL)
+                    y = 1.0*(quad.y + h*j)/(1 << TMR.MAX_LEVEL)
+
+                    # Evaluate the node locations
+                    pt = face.evalPoint(x, y)
+
+                    nodes = []
+                    weights = []
+
+                    m = 100
+                    index = np.zeros(m, dtype=np.intc)
+                    dist = np.zeros(m)
+                    self.locator.locateKClosest(pt, index, dist)
+                    dist = np.sqrt(dist)
+
+                    # Set the length as a fraction of the overall distance
+                    xlen = 0.1
+                    r0 = 0.05*xlen
+
+                    for i in range(m):
+                        if dist[i] < r0:
+                            nodes.append(index[i])
+                            weights.append(((r0 - dist[i])/r0))
+                        else:
+                            break
+
+                    # Compute the nodes
+                    nodes = np.array(nodes, dtype=np.intc)
+                    weights = np.array(weights)
+                    weights[:] = weights/np.sum(weights)
+
+                    all_nodes.append(nodes)
+                    all_weights.append(weights)
+            
+            # Set the properties
+            ps = const_topo.pstopo4(rho, E, nu, ys, p, eps,
+                                    all_nodes[0], all_weights[0],
+                                    all_nodes[1], all_weights[1],
+                                    all_nodes[2], all_weights[2],
+                                    all_nodes[3], all_weights[3])
 
         # Create the plane stree quadrilateral
         elem = elements.PlaneQuad(order, ps)
@@ -309,6 +492,7 @@ class CreateMe(TMR.QuadCreator):
         return elem
 
 def addFaceTraction(order, forest, assembler):
+    # Get the quadrilaterals of interest
     quads = forest.getQuadsWithName('traction')
 
     # Create the surface traction
@@ -330,14 +514,9 @@ def addFaceTraction(order, forest, assembler):
 
     return aux
 
-def createRefined(topo, forest, bcs, pttype=TMR.UNIFORM_POINTS):
-    new_forest = forest.duplicate()
-    new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
-    creator = CreateMe(bcs, topo)
-    return new_forest, creator.createTACS(new_forest)
-
-def createProblem(topo, forest, bcs, ordering=TACS.PY_MULTICOLOR_ORDER,
-                  order=2, nlevels=2, pttype=TMR.UNIFORM_POINTS):
+def createProblem(topo, forest, bcs, locator, order=2, nlevels=2,
+                  ordering=TACS.PY_MULTICOLOR_ORDER,
+                  pttype=TMR.UNIFORM_POINTS):
     # Create the forest
     forests = []
     assemblers = []
@@ -349,7 +528,7 @@ def createProblem(topo, forest, bcs, ordering=TACS.PY_MULTICOLOR_ORDER,
     forests.append(forest)
 
     # Make the creator class
-    creator = CreateMe(bcs, topo)
+    creator = CreateMe(bcs, topo, locator)
     assemblers.append(creator.createTACS(forest, ordering))
 
     while order > 2:
@@ -360,7 +539,7 @@ def createProblem(topo, forest, bcs, ordering=TACS.PY_MULTICOLOR_ORDER,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs, topo)
+        creator = CreateMe(bcs, topo, locator)
         assemblers.append(creator.createTACS(forest, ordering))
 
     for i in range(nlevels-1):
@@ -370,7 +549,7 @@ def createProblem(topo, forest, bcs, ordering=TACS.PY_MULTICOLOR_ORDER,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs, topo)
+        creator = CreateMe(bcs, topo, locator)
         assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
@@ -389,6 +568,7 @@ p.add_argument('--order', type=int, default=2)
 p.add_argument('--ksweight', type=float, default=30.0)
 p.add_argument('--optimizer', type=str, default='snopt')
 p.add_argument('--remesh_strategy', type=str, default='fixed_mesh')
+p.add_argument('--element_count_target', type=float, default=20e3)
 args = p.parse_args()
 
 # Set the KS parameter
@@ -399,6 +579,9 @@ steps = args.steps
 
 # Set the order of the mesh
 order = args.order
+
+# Set the count target
+element_count_target = args.element_count_target
 
 fname = 'results/opt.out'
 options = {}
@@ -428,14 +611,21 @@ elif args.optimizer == 'ipopt':
 elif args.optimizer == 'paropt':
     # options['this is an option'] = value
     options['algorithm'] = 'tr'
-    options['max_iterations'] = 250
-    options['tr_init_size'] = 1.0
-    options['tr_max_size'] = 5.0
-    options['tr_min_size'] = 1e-3
-    options['tr_penalty_gamma'] = 50.0
+    options['abs_optimality_tol'] = 1e-8
+    options['max_iterations'] = 200
+    options['qn_subspace_size'] = 10
+
+    # Set the trust region size
+    options['tr_init_size'] = 0.5
+    options['tr_max_size'] = 2.0
+    options['tr_min_size'] = 1e-5
+    options['tr_penalty_gamma'] = 20.0
 
 # Set up the design variables
 xlen = 0.1
+
+# Compute the (approximate) area
+Area = 0.64*xlen**2
 
 # Set the bounds on the variables
 a = 0.4*xlen + 1e-6
@@ -495,7 +685,7 @@ model = mesh.createModelFromMesh()
 topo = TMR.Topology(comm, model)
 
 # Create the optimization problem
-opt_problem = MassMin(comm, num_design_vars)
+opt_problem = MassMin(comm, num_design_vars, locator)
 
 # Create the quad forest and set the topology of the forest
 depth = 0
@@ -512,7 +702,7 @@ for step in range(2*steps):
     forest.balance(1)
     forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
     forest.repartition()
-    creator = CreateMe(bcs, topo)
+    creator = CreateMe(bcs, topo, locator)
     assembler = creator.createTACS(forest, order)
 
     # Add the face tractions to TACS
@@ -526,7 +716,7 @@ for step in range(2*steps):
     # Set the new assembler object
     opt_problem.setAssembler(assembler, func)
 
-    if step % 2 == 0:
+    if step % 2 == 1:
         # Solve the analysis problem at the first step
         opt_problem.evalObjCon(opt_problem.x*opt_problem.x_scale)
     else:
@@ -554,14 +744,21 @@ for step in range(2*steps):
         elif args.optimizer == 'ipopt':
             options['output_file'] = fname
         elif args.optimizer == 'paropt':
+            options['tr_penalty_gamma'] = 20.0
             options['filename'] = fname
+            if step >= 2:
+                options['max_iterations'] = 100
 
         # Create the optimizer and optimize it!
         opt = OPT(args.optimizer, options=options)
         sol = opt(prob, sens=opt_problem.gobjcon)
 
-    # Create and compute the function
+    # Compute the aggregation function
     fval = assembler.evalFunctions([func])[0]
+
+    # Write out the current solution
+    filename = 'results/solution%02d.f5'%(step)
+    opt_problem.f5.writeToFile(filename)
 
     # Create the refined mesh
     forest_refined = forest.duplicate()
@@ -570,8 +767,8 @@ for step in range(2*steps):
     else:
         nlevs = 1
     assembler_list, mg = createProblem(topo,
-                                          forest_refined, bcs,
-                                          order=order+1, nlevels=nlevs+1)
+                                       forest_refined, bcs, locator,
+                                       order=order+1, nlevels=nlevs+1)
     assembler_refined = assembler_list[0]
     aux = addFaceTraction(order+1, forest_refined, assembler_refined)
     assembler_refined.setAuxElements(aux)
@@ -579,6 +776,9 @@ for step in range(2*steps):
     # Set the design variables for the refined problem
     for assemb in assembler_list:
         assemb.setDesignVars(opt_problem.x)
+
+    # Compute the mass error estimate
+    mass_error = opt_problem.estimateMassError()/Area
 
     # Extract the answer
     ans = opt_problem.ans
@@ -732,8 +932,10 @@ for step in range(2*steps):
         ntotal = np.sum(count)
 
         errors = np.zeros(np.sum(count))
+        mass_errors = np.zeros(np.sum(count))
         Xpt = np.zeros(3*np.sum(count))
         comm.Gatherv(error, [errors, count])
+        comm.Gatherv(mass_error, [mass_errors, count])
         comm.Gatherv(Xp.flatten(), [Xpt, 3*count])
 
         xr = np.zeros(np.sum(count))
@@ -743,16 +945,14 @@ for step in range(2*steps):
         Xpt = Xpt.reshape(-1,3)
 
         # Asymptotic order of accuracy on per-element basis
-        s = 1.0
-        if args.order >= 3:
-            s = args.order - 1.0
+        s = args.order-1
 
         # Dimension of the problem
         d = 2.0
 
         # Set upper/lower limits on the mesh spacing
-        hmax = args.htarget
-        hmin = 0.05*args.htarget
+        hmax = 2*args.htarget
+        hmin = 0.01*args.htarget
 
         if True:
             # Evaluate the exiting element sizes
@@ -769,14 +969,9 @@ for step in range(2*steps):
                 lower[i] = max(hmin, 0.25*h[i])
                 upper[i] = min(hmax, 2.0*h[i])
 
-            if step > 0:
-                for i in range(len(h)):
-                    upper[i] = min(h[i], max(0.5, 2.5 - 8*xr[i])*hmax)
-
             # Optimize the mesh
-            count_target = 20e3 # Target element count
-            hvals = optimize_mesh(h, errors, lower, upper,
-                                  count_target, s, d)
+            hvals = optimize_mesh(h, errors, mass_errors, lower, upper,
+                                  element_count_target, s, d)
         else:
             # Set the exponent
             exponent = d/(d + s)
@@ -829,6 +1024,7 @@ for step in range(2*steps):
         size = error.shape[0]
         comm.gather(size, root=root)
         comm.Gatherv(error, None)
+        comm.Gatherv(mass_error, None)
         comm.Gatherv(Xp.flatten(), None)
         comm.Gatherv(xrho, None)
 

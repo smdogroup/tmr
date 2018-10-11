@@ -34,6 +34,7 @@ def parse_data_file(fname):
 p = argparse.ArgumentParser()
 p.add_argument('--files', nargs='+', type=str, help='List of files')
 p.add_argument('--outfile', type=str, default='output.tex')
+p.add_argument('--corrected', default=False, action='store_true')
 args = p.parse_args()
 
 # Set the colors to use for each set of bars
@@ -62,6 +63,7 @@ for fname in args.files:
 # Plot the error on the y-axis
 nnodes_index = header.index('nnodes')
 fval_error_index = header.index('fval_error')
+fval_corr_error_index = header.index('fval_corr_error')
 
 # Find the max value of y
 xmin = 1e20
@@ -76,7 +78,11 @@ for d in data:
     xmax = max(xmax, np.max(d[:, nnodes_index]))
 
     ymin = min(ymin, np.min(d[:, fval_error_index]))
+    if args.corrected:
+        ymin = min(ymin, np.min(d[:, fval_corr_error_index]))
     ymax = max(ymax, np.max(d[:, fval_error_index]))
+    if args.corrected:
+        ymax = max(ymax, np.max(d[:, fval_corr_error_index]))
 
 # Round to the nearest multiple of 10
 xmin = int(np.floor(np.log10(xmin)))
@@ -107,14 +113,34 @@ yscale = ydim/(ymax - ymin)
 s = tkz.get_header()
 s += tkz.get_begin_tikz(xdim=1.5, ydim=1.5, xunit='in', yunit='in')
 
+s += r'\tikzstyle{dashed}= [dash pattern=on 6pt off 2pt]'
 s += tikzcolors
 
 symbols = ['circle', 'square', 'triangle', 'delta', 'diamond']
 
+xerr = np.array([1.5e3, 4.5e4])
+yerr = np.array([1e-2, 1.0])
+order_list = [1, 2, 3, 4, 5]
+
+for order in order_list:
+    # Set the value of the order
+    yerr[1] = yerr[0]*(xerr[0]/xerr[1])**(0.5*order)
+    xvals = np.log10(xerr)
+    yvals = np.log10(yerr)
+    s += tkz.get_2d_plot(xvals, yvals,
+                         line_dim='thin',
+                         color='Gray!50', symbol=None,
+                         xscale=xscale, yscale=yscale, 
+                         xmin=xmin, xmax=xmax,
+                         ymin=ymin, ymax=ymax)
+
+    s += r'\draw[color=Gray!50, font=\scriptsize] (%e, %e) node[right] {%d};'%(
+        xscale*xvals[1], yscale*yvals[1], order)
+
+
 for k, d in enumerate(data):
     xvals = np.log10(d[:, nnodes_index])
-    yvals = np.log10(d[:, fval_error_index])
-    
+    yvals = np.log10(d[:, fval_error_index])    
     s += tkz.get_2d_plot(xvals, yvals,
                          color=colors[k % 4],
                          symbol=symbols[k % 4 ],
@@ -122,6 +148,17 @@ for k, d in enumerate(data):
                          xscale=xscale, yscale=yscale, 
                          xmin=xmin, xmax=xmax,
                          ymin=ymin, ymax=ymax)
+
+    if args.corrected:
+        yvals = np.log10(d[:, fval_corr_error_index])
+        s += tkz.get_2d_plot(xvals, yvals,
+                             line_dim='thick, opacity=0.5, dashed',
+                             color=colors[k % 4],
+                             symbol=symbols[k % 4 ],
+                             symbol_size=0.03,
+                             xscale=xscale, yscale=yscale, 
+                             xmin=xmin, xmax=xmax,
+                             ymin=ymin, ymax=ymax)
 
 # Plot the axes
 s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,

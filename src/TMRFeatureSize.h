@@ -119,20 +119,23 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
 };
 
 /*
-  Create a feature size on a finite-element mesh
+  TMR Point locator: Find point(s) from a point cloud that are closest
+  specified input point.
+
+  This is useful for geometric search
 */
-class TMRPointFeatureSize : public TMRElementFeatureSize {
+class TMRPointLocator : public TMREntity {
  public:
-  TMRPointFeatureSize( int npts, TMRPoint *pts, double *hvals,
-                       double _hmin, double _hmax,
-                       int _num_sample_pts=16 );
-  ~TMRPointFeatureSize();
-  double getFeatureSize( TMRPoint pt );
+  TMRPointLocator( int npts, TMRPoint *pts );
+  ~TMRPointLocator();
+
+  // Find the K-closest points within the point cloud. Note
+  // that K cannot exceed
+  void locateClosest( const int K, const TMRPoint pt,
+                      int *nk, int *indx, double *dist );
 
  private:
-  // Maximum number of points used
-  static const int MAX_CLOSEST_POINTS = 64;
-  static const int MAX_BIN_SIZE = 8;
+  static const int MAX_BIN_SIZE = 16;
 
   // Private functions
   int split( int start, int end );
@@ -147,22 +150,44 @@ class TMRPointFeatureSize : public TMRElementFeatureSize {
   void insertIndex( const int K, int dindx, double d,
                     int *nk, int *indx, double *dist );
 
-  // Max/min feature sizes
-  double hmax, hmin;
-
   // Point data
   int npts;
   TMRPoint *pts;
-  double *hvals;
-
-  // Number of closest points to sample from
-  int num_sample_pts;
 
   // Private data for a sorted spatial data structure
   int num_nodes, max_num_nodes;
   int *indices, *nodes;
   int *index_offset, *index_count;
   TMRPoint *node_loc, *node_normal;
+};
+
+/*
+  Create a feature size on a finite-element mesh
+*/
+class TMRPointFeatureSize : public TMRElementFeatureSize {
+ public:
+  // Maximum number of points used
+  static const int MAX_CLOSEST_POINTS = 64;
+
+  TMRPointFeatureSize( int npts, TMRPoint *pts, double *hvals,
+                       double _hmin, double _hmax,
+                       int _num_sample_pts=16 );
+  ~TMRPointFeatureSize();
+  double getFeatureSize( TMRPoint pt );
+
+ private:
+  // Find the closest point in the point cloud
+  TMRPointLocator *locator;
+
+  // Max/min feature sizes
+  double hmax, hmin;
+
+  // Feature size data
+  int npts;
+  double *hvals;
+
+  // Number of closest points to sample from
+  int num_sample_pts;
 };
 
 #endif // TMR_FEATURE_SIZE_H

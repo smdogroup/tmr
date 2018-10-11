@@ -234,6 +234,10 @@ cdef extern from "TMRFeatureSize.h":
     cdef cppclass TMRPointFeatureSize(TMRElementFeatureSize):
         TMRPointFeatureSize(int, TMRPoint*, double*, double, double, int)
 
+    cdef cppclass TMRPointLocator(TMREntity):
+        TMRPointLocator(int, TMRPoint*)
+        void locateClosest(int, TMRPoint, int*, int*, double*)
+
 cdef extern from "TMRMesh.h":
     enum TMRFaceMeshType:
         TMR_NO_MESH
@@ -424,7 +428,7 @@ cdef extern from "TMROctStiffness.h":
         TMROctStiffness(TMRIndexWeight*, int, TMRStiffnessProperties*)
 
     cdef cppclass TMRAnisotropicStiffness(SolidStiffness):
-        TMRAnisotropicStiffness(TMRIndexWeight*, int, 
+        TMRAnisotropicStiffness(TMRIndexWeight*, int,
                                 TMRAnisotropicProperties*)
 
 cdef extern from "TMRQuadStiffness.h":

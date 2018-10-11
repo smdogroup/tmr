@@ -4,13 +4,12 @@ Imports a STL file and applies a smoothing to it
 from __future__ import print_function
 
 # Import the locate point code
-import locate
-
+from tmr import TMR
 import numpy as np
 from itertools import islice
 import time
 import argparse
-  
+
 def readSTLFile(fname):
     '''
     Reads in the STL file
@@ -91,13 +90,14 @@ def createUniqueList(P1, P2, P3, tol=1e-5):
 
     Output:
     unique_nodes: Unique list of nodes in structure
-    conn:        Elemental connectivity
-    node_conn:   Adjacency matrix
+    conn:         Elemental connectivity
+    node_conn:    Adjacency matrix
     '''
 
     # Tolerance for uniqueness
     Xpts = np.vstack((P1, P2, P3))
-    loc = locate.locate(Xpts)
+    loc = TMR.PointLocator(Xpts)
+    exit(0)
     node_nums = -np.ones(Xpts.shape[0], dtype='intc')
 
     # Locate the closest K points
@@ -110,8 +110,7 @@ def createUniqueList(P1, P2, P3, tol=1e-5):
         if node_nums[row] < 0:
             # Locate the closest points and label them with
             # the same index
-            dist[:] = 1e20
-            loc.locateKClosest(Xpts[row,:], index, dist)
+            loc.locateClosest(Xpts[row,:], index, dist)
             for k in range(K):
                 if np.sqrt(dist[k]) < tol:
                     node_nums[index[k]] = unique_node
@@ -142,7 +141,7 @@ def createUniqueList(P1, P2, P3, tol=1e-5):
         u = conn[k,0]
         v = conn[k,1]
         w = conn[k,2]
-        
+
         if u < v:
             node_conn[u].append(v)
         if v < w:
@@ -168,10 +167,10 @@ def smoothMesh(unique_nodes, conn, node_conn, w=0.5):
     for k in range(unique_nodes.shape[0]):
         # Node k coordinates of interest
         node_k = unique_nodes[k,:]
-        
+
         # Adjacent nodes coordinates to node k
         nodes_adj = unique_nodes[node_conn[k],:]
-        
+
         # Number of adjacent nodes for node k
         N = len(node_conn[k])
         if N > 0:
@@ -186,7 +185,7 @@ def smoothMesh(unique_nodes, conn, node_conn, w=0.5):
 def outputSTLFile(unique_nodes, conn, fname):
     '''
     Output the new STL filename
-    '''       
+    '''
     s = 'solid topology\n'
     # Loop over all elements
     for k in range(conn.shape[0]):

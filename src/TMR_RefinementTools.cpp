@@ -1725,6 +1725,119 @@ void addRefinedSolution3D( TMROctForest *forest,
 }
 
 /*
+  Use Newton's method to find the closest point
+
+
+
+
+
+*/
+int inverseEvalPoint( const TacsScalar Xp[],
+                      const TacsScalar Xpts[],
+                      TMRQuadForest *forest,
+                      double pt[],
+                      const int max_iterations=20,
+                      const double eps_dist=1e-8,
+                      const double eps_cosine=1e-8 ){
+
+  // Get the order of the forest
+  const int order = forest->getMeshOrder();
+  
+  // Find the closes point
+  for ( int iter = 0; iter < max_iterations; iter++ ){
+    double N[MAX_ORDER*MAX_ORDER];
+    double N1[MAX_ORDER*MAX_ORDER], N2[MAX_ORDER*MAX_ORDER];
+    double N11[MAX_ORDER*MAX_ORDER], N22[MAX_ORDER*MAX_ORDER],
+      N12[MAX_ORDER*MAX_ORDER];
+
+    // Evaluate the shape functions
+    forest->evalInterp(pt, N, N1, N2, N11, N22, N12);
+
+    // Set the point and their derivatives
+    TMRPoint X, Xu, Xv, Xuu, Xuv, Xvv;
+    X.zero();  Xu.zero();  Xv.zero();
+    Xuu.zero();  Xuv.zero();  Xvv.zero();
+    
+    // Evaluate the points and their derivatives
+    for ( int i = 0; i < order*order; i++ ){
+      const TacsScalar x = Xpts[3*i];
+      const TacsScalar y = Xpts[3*i+1];
+      const TacsScalar z = Xpts[3*i+2];
+
+      // Node location
+      X.x += N[i]*x;
+      X.y += N[i]*y;
+      X.z += N[i]*z;
+      
+      // First derivatives
+      Xu.x += N1[i]*x;
+      Xu.y += N1[i]*y;
+      Xu.z += N1[i]*z;
+      Xv.x += N2[i]*x;
+      Xv.y += N2[i]*y;
+      Xv.z += N2[i]*z;
+      
+      // Second derivatives
+      Xuu.x += N11[i]*x;
+      Xuu.y += N11[i]*y;
+      Xuu.z += N11[i]*z;
+      Xvv.x += N22[i]*x;
+      Xvv.y += N22[i]*y;
+      Xvv.z += N22[i]*z;
+      Xuv.x += N12[i]*x;
+      Xuv.y += N12[i]*y;
+      Xuv.z += N12[i]*z;
+    }
+
+    // Compute the difference between the position on the surface and
+    // the point
+    TMRPoint r;
+    r.x = (X.x - Xp[0]);
+    r.y = (X.y - Xp[1]);
+    r.z = (X.z - Xp[2]);
+
+    // Compute the residual
+    double ru = Xu.dot(r);
+    double rv = Xv.dot(r);
+
+    // Compute the elements of the Jacobian matrix
+    double Juu = Xuu.dot(r) + Xu.dot(Xu);
+    double Juv = Xuv.dot(r) + Xu.dot(Xv);
+    double Jvv = Xvv.dot(r) + Xv.dot(Xv);
+
+    // The increments along the parametric directions
+    double du = 0.0, dv = 0.0;
+    
+    // Solve the 2x2 system
+    double det = Juu*Jvv - Juv*Juv;
+    if (det != 0.0){
+      du = (Jvv*ru - Juv*rv)/det;
+      dv = (Juu*rv - Juv*ru)/det;
+    }
+    
+    // Compute the updates
+    pt[0] = pt[0] - du;
+    pt[1] = pt[1] - dv;
+
+    // Check if the convergence test is satisfied
+    if (fabs(r.x) < eps_dist && 
+        fabs(r.y) < eps_dist && 
+        fabs(r.z) < eps_dist){
+      return 0;
+    }
+
+    // Perform the cosine check
+    double dotr = r.dot(r);
+    double dotu = Xu.dot(Xu);
+    double dotv = Xv.dot(Xv);
+    if (ru*ru < eps_cosine*eps_cosine*dotu*dotr && 
+        rv*rv < eps_cosine*eps_cosine*dotv*dotr){
+      return 0;
+    }
+  }    
+}
+
+/*
   Compute the interpolated solution on the order-elevated mesh
 */
 void TMR_ComputeInterpSolution( TMRQuadForest *forest,
@@ -1779,6 +1892,11 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
     const int *nodes;
     tacs->getElement(elem, &nodes, &len);
 
+    // Get the node locations for the coarse mesh
+    TacsScalar Xpts[3*max_num_nodes], Xpts_refined[3*max_num_nodes];
+    tacs->getElement(elem, Xpts);
+    tacs_refined->getElement(elem, Xpts_refined);
+
     // For each element, interpolate the solution
     memset(vars_interp, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
 
@@ -1788,15 +1906,20 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
     // Perform the interpolation
     for ( int m = 0; m < refined_order; m++ ){
       for ( int n = 0; n < refined_order; n++ ){
-        double pt[3];
+        const int refined_index = n + m*refined_order;
+        double pt[2];
         pt[0] = refined_knots[n];
         pt[1] = refined_knots[m];
 
-        // Evaluate the locations of the new nodes
+        // Find the closest point on the refined mesh
+        const TacsScalar *X = &Xpts_refined[3*refined_index];
+        // inverseEvalPoint(X, Xpts, forest, pt);
+        
+        // Evaluate the shape functions
         double N[max_num_nodes];
         forest->evalInterp(pt, N);
 
-        // Evaluate the interpolation part of the reconstruction
+        // Evaluate the interpolation
         int offset = n + m*refined_order;
         TacsScalar *v = &vars_interp[vars_per_node*offset];
 

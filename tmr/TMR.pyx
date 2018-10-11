@@ -1100,6 +1100,39 @@ cdef class PointFeatureSize(ElementFeatureSize):
         free(pts)
         return
 
+cdef class PointLocator:
+    cdef TMRPointLocator *ptr
+    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] X):
+        cdef int npts = 0
+        cdef TMRPoint *pts
+        npts = X.shape[0]
+        pts = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
+        for i in range(npts):
+            pts[i].x = X[i,0]
+            pts[i].y = X[i,1]
+            pts[i].z = X[i,2]
+        self.ptr = new TMRPointLocator(npts, pts)
+        self.ptr.incref()
+        free(pts)
+        return
+
+    def locateClosest(self, x,
+                      np.ndarray[int, ndim=1] index,
+                      np.ndarray[double, ndim=1] dist):
+        if index.shape[0] != dist.shape[0]:
+            errmsg = 'PointLocator expects equal length input/output arrays'
+            raise ValueError(errmsg)
+
+        cdef int num_found = 0
+        cdef int K = index.shape[0]
+        cdef TMRPoint pt
+        pt.x = x[0]
+        pt.y = x[1]
+        pt.z = x[2]
+        self.ptr.locateClosest(K, pt, &num_found,
+                               <int*>index.data, <double*>dist.data)
+        return num_found
+
 cdef class Mesh:
     cdef TMRMesh *ptr
     def __cinit__(self, MPI.Comm comm, Model geo):
@@ -2404,6 +2437,7 @@ def adjointError(forest, Assembler coarse,
     cdef TMRQuadForest *quad_forest = NULL
     cdef TMRQuadForest *quad_forest_refined = NULL
     cdef np.ndarray err = None
+    cdef TacsScalar err_est = 0.0
     err = np.zeros(coarse.ptr.getNumElements(), dtype=np.double)
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
