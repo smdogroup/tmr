@@ -6,6 +6,7 @@ import numpy as np
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--files', nargs='+', type=str, help='List of files')
+p.add_argument('--labels', nargs='+', type=str, help='List of labels')
 p.add_argument('--outfile', type=str, default='output.tex')
 args = p.parse_args()
 
@@ -124,6 +125,43 @@ for k, d in enumerate(data):
                             xscale=xscale, yscale=yscale, 
                             ymin=ymin, ymax=ymax)
 
+
+# Set the labels (lower-left corner)
+if args.labels is not None:
+    x = xmin + 0.75*(xmax - xmin)
+    y = ymin + (ymax - ymin)*(0.95 - 0.025*(len(args.labels)-1))
+
+    xlen = 0.2*(xmax - xmin)
+    ylen = 0.05*len(args.labels)*(ymax - ymin)
+    
+    x1 = x - 0.1*xlen
+    x2 = x + 0.9*xlen
+    y1 = y - 0.5*ylen
+    y2 = y + 0.5*ylen
+
+    s += r'\draw[color=white, fill=white] (%f,%f) rectangle (%f,%f);'%(
+        xscale*x1, yscale*y1, xscale*x2, yscale*y2)
+
+
+    for k, label in enumerate(args.labels):
+        y = ymin + (ymax - ymin)*(0.95 - 0.05*k)
+
+        xlen = 0.025*(xmax - xmin)
+        ylen = 0.02*(ymax - ymin)
+        x1 = x - 0.5*xlen
+        x2 = x + 0.5*xlen
+        y1 = y - 0.5*ylen
+        y2 = y + 0.5*ylen
+        line_dim='thick'
+        color = colors[k % len(colors)]
+        font_size = 'small'
+
+        s += r'\draw[%s, color=%s, fill=%s, fill opacity=0.3]'%(
+            line_dim, color, color)
+        s += ' (%f, %f) rectangle (%f, %f);'%(
+            xscale*x1, yscale*y1, xscale*x2, yscale*y2)
+        s += r'\draw[font=\%s] (%f, %f) node[right] {%s};'%(
+            font_size, xscale*(x + xlen), yscale*y, label)
 
 # Plot the axes
 s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,

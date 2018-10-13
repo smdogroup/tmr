@@ -238,6 +238,9 @@ cdef extern from "TMRFeatureSize.h":
         TMRPointLocator(int, TMRPoint*)
         void locateClosest(int, TMRPoint, int*, int*, double*)
 
+cdef class PointLocator:
+    cdef TMRPointLocator *ptr
+
 cdef extern from "TMRMesh.h":
     enum TMRFaceMeshType:
         TMR_NO_MESH

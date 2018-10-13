@@ -1101,7 +1101,6 @@ cdef class PointFeatureSize(ElementFeatureSize):
         return
 
 cdef class PointLocator:
-    cdef TMRPointLocator *ptr
     def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] X):
         cdef int npts = 0
         cdef TMRPoint *pts
@@ -1115,6 +1114,10 @@ cdef class PointLocator:
         self.ptr.incref()
         free(pts)
         return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
 
     def locateClosest(self, x,
                       np.ndarray[int, ndim=1] index,

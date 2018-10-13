@@ -32,6 +32,7 @@ def parse_data_file(fname):
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--files', nargs='+', type=str, help='List of files')
+p.add_argument('--labels', nargs='+', type=str, help='List of labels')
 p.add_argument('--outfile', type=str, default='output.tex')
 p.add_argument('--plot', type=str, default='effectivity')
 args = p.parse_args()
@@ -84,7 +85,7 @@ for d in data:
         ymax = min(ymax, 10)
     else:
         ymax = max(ymax, np.max(d[:, indc_eff_index]))
-        ymax = min(ymax, 20)
+        ymax = min(ymax, 40)
 
 # Round to the nearest multiple of 10
 xmin = int(np.floor(np.log10(xmin)))
@@ -140,13 +141,25 @@ for k, d in enumerate(data):
         yvals = d[:, indc_eff_index]
 
     s += tkz.get_2d_plot(xvals, yvals,
-                         color=colors[k % 4],
-                         symbol=symbols[k % 4 ],
+                         color=colors[k % 10],
+                         symbol=symbols[k % 4],
                          symbol_size=0.03,
                          xscale=xscale, yscale=yscale, 
                          xmin=xmin, xmax=xmax,
                          ymin=ymin, ymax=ymax)
 
+# Set the labels (lower-right corner)
+if args.labels is not None:
+    for k, label in enumerate(args.labels):
+        x = xmin + 0.65*(xmax - xmin)
+        y = ymin + 0.05*(ymax - ymin)*(len(args.labels)-k)
+        length = 0.035*(xmax - xmin)
+        s += tkz.get_legend_entry(x, y, length, label=label,
+                                  font_size='scriptsize',
+                                  color=colors[k % 10], symbol=symbols[k % 4],
+                                  symbol_size=0.03,
+                                  xscale=xscale, yscale=yscale)
+        
 if args.plot == 'effectivity':
     title = 'Effectivity'
 else:

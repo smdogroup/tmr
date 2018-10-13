@@ -170,76 +170,90 @@ def disk_ks_functional(functional, rho, t, E, nu, kcorr, ys, R, load, n=1000):
     w0 = load*((R**4)/(64*D)*(1.0 - (r0/R)**2)**2 +
                (R**2)/(4*kcorr*G*t)*(1.0 - (r0/R)**2))
 
-    # Do the work to compute the stresses
-    phi_over_r0 = load*(R**2/(16*D))
-    dphidr0 = load*(R**2/(16*D))
+    if functional == 'ks' or functional == 'pnorm':
+        # Do the work to compute the stresses
+        phi_over_r0 = load*(R**2/(16*D))
+        dphidr0 = load*(R**2/(16*D))
 
-    # Compute the value of the stress at the top surface
-    z1 = 0.5*t
-    err = z1*dphidr0
-    ett = z1*phi_over_r0
+        # Compute the value of the stress at the top surface
+        z1 = 0.5*t
+        err = z1*dphidr0
+        ett = z1*phi_over_r0
 
-    srr = Q11*err + Q12*ett
-    stt = Q12*err + Q22*ett
+        srr = Q11*err + Q12*ett
+        stt = Q12*err + Q22*ett
 
-    # Compute the von Mises at the top surface
-    S[0,0] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+        # Compute the von Mises at the top surface
+        S[0,0] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
-    # Compute the value of the stress at the bottom surface
-    z2 = -0.5*t
-    err = z2*dphidr0
-    ett = z2*phi_over_r0
+        # Compute the value of the stress at the bottom surface
+        z2 = -0.5*t
+        err = z2*dphidr0
+        ett = z2*phi_over_r0
 
-    srr = Q11*err + Q12*ett
-    stt = Q12*err + Q22*ett
+        srr = Q11*err + Q12*ett
+        stt = Q12*err + Q22*ett
 
-    # Compute the von Mises at the bottom surface
-    S[0,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+        # Compute the von Mises at the bottom surface
+        S[0,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
-    # The value of the rotation
-    phi = load*(R**3/(16*D))*(r0[1:]/R)*(1 - (r0[1:]/R)**2)
-    dphidr = load*(R**2/(16*D))*(1 - 3*(r0[1:]/R)**2)
+        # The value of the rotation
+        phi = load*(R**3/(16*D))*(r0[1:]/R)*(1 - (r0[1:]/R)**2)
+        dphidr = load*(R**2/(16*D))*(1 - 3*(r0[1:]/R)**2)
 
-    # Compute the value of the stress at the top surface
-    z1 = 0.5*t
-    err = z1*dphidr
-    ett = z1*phi/r0[1:]
+        # Compute the value of the stress at the top surface
+        z1 = 0.5*t
+        err = z1*dphidr
+        ett = z1*phi/r0[1:]
 
-    srr = Q11*err + Q12*ett
-    stt = Q12*err + Q22*ett
+        srr = Q11*err + Q12*ett
+        stt = Q12*err + Q22*ett
 
-    # Compute the von Mises at the top surface
-    S[1:,0] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+        # Compute the von Mises at the top surface
+        S[1:,0] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
-    # Compute the value of the stress at the bottom surface
-    z2 = -0.5*t
-    err = z2*dphidr
-    ett = z2*phi/r0[1:]
+        # Compute the value of the stress at the bottom surface
+        z2 = -0.5*t
+        err = z2*dphidr
+        ett = z2*phi/r0[1:]
 
-    srr = Q11*err + Q12*ett
-    stt = Q12*err + Q22*ett
+        srr = Q11*err + Q12*ett
+        stt = Q12*err + Q22*ett
 
-    # Compute the von Mises at the bottom surface
-    S[1:,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
+        # Compute the von Mises at the bottom surface
+        S[1:,1] = np.sqrt(srr**2 + stt**2 - srr*stt)/ys
 
-    # Compute the maximum von Mises stress
-    vm_mx = np.max(S)
+        # Compute the maximum von Mises stress
+        max_value = np.max(S)
+    else:
+        max_value = np.max(w0)
 
     # Compute the contribution to the KS functional
-    if functional == 'displacement':
-        max_disp = np.max(w0)
-        integrand = 2*np.pi*r0*np.exp(rho*(w0 - max_disp))
+    if functional == 'ks_disp':
+        integrand = 2*np.pi*r0*np.exp(rho*(w0 - max_value))
 
         ks_sum = (R/(n-1))*integrate(integrand)
-        ks = max_disp + np.log(ks_sum)/rho
-    else:
-        integrand = r0*(np.exp(rho*(S[:,0] - vm_mx)) +
-                        np.exp(rho*(S[:,1] - vm_mx)))
+        functional_estimate = max_value + np.log(ks_sum)/rho
+    elif functional == 'pnorm_disp':
+        max_disp = np.max(w0)
+        integrand = 2*np.pi*r0*np.power(w0/max_value, rho)
+
+        pow_sum = (R/(n-1))*integrate(integrand)
+        functional_estimate = max_value*pow_sum
+    elif functional == 'ks':
+        integrand = r0*(np.exp(rho*(S[:,0] - max_value)) +
+                        np.exp(rho*(S[:,1] - max_value)))
 
         ks_sum = 2*np.pi*(R/(n-1))*integrate(integrand)
-        ks = vm_mx + np.log(ks_sum)/rho
+        functional_estimate = max_value + np.log(ks_sum)/rho
+    elif functional == 'pnorm':
+        integrand = r0*(np.power((S[:,0]/max_value), rho) +
+                        np.power((S[:,1]/max_value), rho))
 
-    return vm_mx, ks
+        pow_sum = 2*np.pi*(R/(n-1))*integrate(integrand)
+        functional_estimate = max_value*pow_sum
+
+    return max_value, functional_estimate
 
 def get_quadrature(order):
     '''Get the quadrature rule for the given element order'''
@@ -520,19 +534,17 @@ feature_size = None
 
 if case == 'cylinder':
     # Get the maximum stress and re-adjust the load
-    vm_max, res = cylinder_ks_functional(functional, 1.0, t, E, nu, kcorr, ys,
-                                         L, R, alpha, beta, load, n=10)
-    load = load/vm_max
+    max_value, res = cylinder_ks_functional(functional, 1.0, t, E, nu, kcorr, ys,
+                                            L, R, alpha, beta, load, n=10)
+    load = load/max_value
 
-    # # Compute the exact KS value
-    # for n in [100, 500, 1000, 2500]:
-    #     one, approx = cylinder_ks_functional(functional, ksweight,
-    #         t, E, nu, kcorr, ys, L, R, alpha, beta, load, n=n)
-    #     if comm.rank == 0:
-    #         print('%10d %25.16e'%(n, approx))
-    #     exact_functional = approx
-
-    exact_functional = 1.1124326501984634e+00
+    # Compute the exact KS value
+    for n in [100, 500, 1000, 2500]:
+        one, approx = cylinder_ks_functional(functional, ksweight,
+            t, E, nu, kcorr, ys, L, R, alpha, beta, load, n=n)
+        if comm.rank == 0:
+            print('%10d %25.16e'%(n, approx))
+        exact_functional = approx
 
     # Load the geometry model
     geo = TMR.LoadModel('cylinder.stp')
@@ -557,22 +569,20 @@ elif case == 'disk':
     R = 100.0
 
     # Get the maximum stress and re-adjust the load
-    vm_max, res = disk_ks_functional(functional, 1.0, t, E, nu, kcorr,
-                                     ys, R, load, n=20)
-    load = load/vm_max
+    max_value, res = disk_ks_functional(functional, 1.0, t, E, nu, kcorr,
+                                        ys, R, load, n=20)
+    load = load/max_value
 
     D = ((t**3)/12)*E/(1.0 - nu**2)
     G = 0.5*E/(1.0 + nu)
 
     # Compute the exact KS value
-    # for n in [1000, 10000, 100000, 1000000, 10000000]:
-    #     one, approx = disk_ks_functional(functional, ksweight,
-    #                                      t, E, nu, kcorr, ys, R, load, n=n)
-    #     if comm.rank == 0:
-    #         print('%10d %25.16e'%(n, approx))
-    #     exact_functional = approx
-
-    exact_functional = 1.1342010650447265e+00
+    for n in [1000, 10000, 100000, 1000000, 10000000]:
+        one, approx = disk_ks_functional(functional, ksweight,
+                                         t, E, nu, kcorr, ys, R, load, n=n)
+        if comm.rank == 0:
+            print('%10d %25.16e'%(n, approx))
+        exact_functional = approx
 
     # Load the geometry model
     geo = TMR.LoadModel('2d-disk.stp')
@@ -704,11 +714,20 @@ for k in range(steps):
 
     # Create and compute the function
     fval = 0.0
-    func = functions.KSFailure(assembler, ksweight)
+    direction = [0.0, 0.0, 1.0]
     if functional == 'ks':
+        func = functions.KSFailure(assembler, ksweight)
         func.setKSFailureType('continuous')
-    else:
+    elif functional == 'pnorm':
+        func = functions.KSFailure(assembler, ksweight)
         func.setKSFailureType('pnorm-continuous')
+    elif functional == 'ks_disp':
+        func = functions.KSDisplacement(assembler, ksweight, direction)
+        func.setKSDispType('continuous')
+    elif functional == 'pnorm_disp':
+        func = functions.KSDisplacement(assembler, ksweight, direction)
+        func.setKSDispType('pnorm-continuous')
+
     fval = assembler.evalFunctions([func])[0]
 
     # Create the refined mesh
@@ -756,11 +775,20 @@ for k in range(steps):
         # Compute the functional and the right-hand-side for the
         # adjoint on the refined mesh
         adjoint_rhs = assembler_refined.createVec()
-        func_refined = functions.KSFailure(assembler_refined, ksweight)
         if functional == 'ks':
+            func_refined = functions.KSFailure(assembler_refined, ksweight)
             func_refined.setKSFailureType('continuous')
-        else:
+        elif functional == 'pnorm':
+            func_refined = functions.KSFailure(assembler_refined, ksweight)
             func_refined.setKSFailureType('pnorm-continuous')
+        elif functional == 'ks_disp':
+            func_refined = functions.KSDisplacement(assembler_refined, ksweight,
+                                                    direction)
+            func_refined.setKSDispType('continuous')
+        elif functional == 'pnorm_disp':
+            func_refined = functions.KSDisplacement(assembler_refined, ksweight,
+                                                    direction)
+            func_refined.setKSDispType('pnorm-continuous')
 
         # Evaluate the functional on the refined mesh
         fval_refined = assembler_refined.evalFunctions([func_refined])[0]

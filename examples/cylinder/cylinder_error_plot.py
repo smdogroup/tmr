@@ -33,8 +33,10 @@ def parse_data_file(fname):
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
 p.add_argument('--files', nargs='+', type=str, help='List of files')
+p.add_argument('--labels', nargs='+', type=str, help='List of labels')
 p.add_argument('--outfile', type=str, default='output.tex')
 p.add_argument('--corrected', default=False, action='store_true')
+p.add_argument('--error_offset', type=float, default=1e-2, help='Error order offset')
 args = p.parse_args()
 
 # Set the colors to use for each set of bars
@@ -119,8 +121,8 @@ s += tikzcolors
 symbols = ['circle', 'square', 'triangle', 'delta', 'diamond']
 
 xerr = np.array([1.5e3, 4.5e4])
-yerr = np.array([1e-2, 1.0])
-order_list = [1, 2, 3, 4, 5]
+yerr = np.array([args.error_offset, 1.0])
+order_list = [1, 2, 3, 4, 5, 6, 7]
 
 for order in order_list:
     # Set the value of the order
@@ -134,16 +136,17 @@ for order in order_list:
                          xmin=xmin, xmax=xmax,
                          ymin=ymin, ymax=ymax)
 
-    s += r'\draw[color=Gray!50, font=\scriptsize] (%e, %e) node[right] {%d};'%(
-        xscale*xvals[1], yscale*yvals[1], order)
-
+    if ((xvals[1] >= xmin and xvals[1] <= xmax) and
+        (yvals[1] >= ymin and yvals[1] <= ymax)):
+        s += r'\draw[color=Gray!80, font=\scriptsize] (%e, %e) node[right] {%d};'%(
+            xscale*xvals[1], yscale*yvals[1], order)
 
 for k, d in enumerate(data):
     xvals = np.log10(d[:, nnodes_index])
     yvals = np.log10(d[:, fval_error_index])    
     s += tkz.get_2d_plot(xvals, yvals,
                          color=colors[k % 4],
-                         symbol=symbols[k % 4 ],
+                         symbol=symbols[k % 4],
                          symbol_size=0.03,
                          xscale=xscale, yscale=yscale, 
                          xmin=xmin, xmax=xmax,
@@ -159,6 +162,18 @@ for k, d in enumerate(data):
                              xscale=xscale, yscale=yscale, 
                              xmin=xmin, xmax=xmax,
                              ymin=ymin, ymax=ymax)
+
+# Set the labels (lower-left corner)
+if args.labels is not None:
+    for k, label in enumerate(args.labels):
+        x = xmin + 0.05*(xmax - xmin)
+        y = ymin + 0.05*(ymax - ymin)*(len(args.labels)-k)
+        length = 0.035*(xmax - xmin)
+        s += tkz.get_legend_entry(x, y, length, label=label,
+                                  font_size='small',
+                                  color=colors[k % 4], symbol=symbols[k % 4],
+                                  symbol_size=0.03,
+                                  xscale=xscale, yscale=yscale)
 
 # Plot the axes
 s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
