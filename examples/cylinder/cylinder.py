@@ -471,6 +471,7 @@ p.add_argument('--compute_solution_error', action='store_true', default=False)
 p.add_argument('--remesh_domain', action='store_true', default=False)
 p.add_argument('--remesh_strategy', type=str, default='fraction')
 p.add_argument('--element_count_target', type=float, default=20e3)
+p.add_argument('--use_reconstruction', default=False, action='store_true')
 args = p.parse_args()
 
 # Print the keys
@@ -753,7 +754,7 @@ for k in range(steps):
     else:
         # Compute the reconstructed solution on the refined mesh
         ans_interp = assembler_refined.createVec()
-        if case == 'disk':
+        if args.use_reconstruction:
             TMR.computeReconSolution(forest, assembler,
                                      forest_refined, assembler_refined,
                                      ans, ans_interp)
@@ -807,12 +808,6 @@ for k in range(steps):
         # Compute the adjoint correction
         adjoint_corr = adjoint_refined.dot(res_refined)
 
-        # Compute the adjoint correction
-        err_est, adjoint_corr, error =\
-                 TMR.adjointError(forest, assembler,
-                                  forest_refined, assembler_refined,
-                                  ans_interp, adjoint_refined)
-
         # Compute the reconstructed adjoint solution on the refined mesh
         adjoint = assembler.createVec()
         adjoint_interp = assembler_refined.createVec()
@@ -825,7 +820,7 @@ for k in range(steps):
         adjoint_refined.axpy(-1.0, adjoint_interp)
 
         # Assemble the adjoint contribution
-        err_est, __, error =\
+        err_est, adjoint_corr_est, error =\
                  TMR.adjointError(forest, assembler,
                                   forest_refined, assembler_refined,
                                   ans_interp, adjoint_refined)
