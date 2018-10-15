@@ -457,7 +457,8 @@ cdef extern from "TMRQuadStiffness.h":
 cdef extern from "TMRCoupledThermoQuadStiffness.h":
    cdef cppclass TMRCoupledThermoQuadStiffness(CoupledThermoPlaneStressStiffness):
         TMRCoupledThermoQuadStiffness(TMRIndexWeight*, int,
-                                      TMRQuadStiffnessProperties*, TMRQuadForest*)
+                                      TMRQuadStiffnessProperties*,
+                                      TMRQuadForest*, int* )
 
 cdef extern from "TMRCoupledThermoOctStiffness.h":
    cdef cppclass TMRCoupledThermoOctStiffness(CoupledThermoSolidStiffness):
@@ -560,6 +561,17 @@ cdef extern from "TMRCyCreator.h":
         void getMap(TACSVarMap**)
         void getIndices(TACSBVecIndices**)
 
+    cdef cppclass TMRCyTopoQuadBernsteinCreator(TMREntity):
+       TMRCyTopoQuadBernsteinCreator(TMRBoundaryConditions*, TMRQuadForest*)
+       void setSelfPointer(void*)
+       void setCreateQuadTopoElement(
+          TACSElement* (*createquadtopoelements)(
+             void*, int, TMRQuadrant*, int*, int, TMRQuadForest*))
+       TACSAssembler *createTACS(TMRQuadForest*, OrderingType, double)
+       void getFilter(TMRQuadForest**)
+       void getMap(TACSVarMap**)
+       void getIndices(TACSBVecIndices**)
+       
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(int, TACSAssembler**, TMROctForest**,

@@ -58,8 +58,7 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
   // Compute the weights for a given point
   void computeWeights( const int mesh_order, const double *knots,
                        TMROctant *node, TMROctant *oct,
-                       TMRIndexWeight *weights, double *tmp,
-                       int sort=1);
+                       TMRIndexWeight *weights, double *tmp );
 
   // The forest that defines the filter
   TMROctForest *filter;
@@ -89,11 +88,7 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
                        TMRQuadForest *forest,
                        int num_elements,
                        TACSElement **elements );
-
-  void createElements( TMRQuadForest *forest,
-                       int num_elements,
-                       TACSElement **elements );
-
+  
   // Create the element
   virtual TACSElement *createElement( int order, 
                                       TMRQuadrant *oct,
@@ -109,7 +104,8 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
   // Compute the weights for a given point
   void computeWeights( const int mesh_order, const double *knots,
                        TMRQuadrant *node, TMRQuadrant *quad,
-                       TMRIndexWeight *weights, double *tmp );
+                       TMRIndexWeight *weights, double *tmp, 
+                       int sort=1 );
 
   // The forest that defines the filter
   TMRQuadForest *filter;
@@ -123,6 +119,54 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
   // numbers.
   TACSBVecIndices *filter_indices;
 };
+
+/*
+  This class is an abstract base class for setting up 
+  topology optimzation problems using TMRQuadForest objects
+*/
+class TMRQuadBernsteinTACSTopoCreator : public TMRQuadTACSCreator {
+ public:
+  TMRQuadBernsteinTACSTopoCreator( TMRBoundaryConditions *_bcs,
+                                   TMRQuadForest *_forest );
+  ~TMRQuadBernsteinTACSTopoCreator();
+
+  // Create the elements
+  void createElements( int order,
+                       TMRQuadForest *forest,
+                       int num_elements,
+                       TACSElement **elements );
+
+  // Create the element
+  virtual TACSElement *createElement( int order, 
+                                      TMRQuadrant *oct,
+                                      int *index, 
+                                      int nweights,
+                                      TMRQuadForest *filter ) = 0;
+
+  // Get the underlying objects that define the filter
+  void getFilter( TMRQuadForest **filter );
+  void getMap( TACSVarMap **_map );
+  void getIndices( TACSBVecIndices **_indices );  
+
+ private:
+  // Compute the weights for a given point
+  void computeIndex( const int mesh_order, const double *knots,
+                     TMRQuadrant *quad,
+                     int *index, double *tmp );
+
+  // The forest that defines the filter
+  TMRQuadForest *filter;
+
+  // The filter map for this object. This defines how the design
+  // variables are distributed across all of the processors.
+  TACSVarMap *filter_map;
+
+  // The filter indices. This defines the relationship between the
+  // local design variable numbers and the global design variable
+  // numbers.
+  TACSBVecIndices *filter_indices;
+};
+
 
 #endif // TMR_TACS_TOPO_CREATOR_H
 

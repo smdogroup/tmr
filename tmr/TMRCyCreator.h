@@ -180,4 +180,40 @@ class TMRCyTopoOctCreator : public TMROctTACSTopoCreator {
     void*, int, TMROctant*, TMRIndexWeight *weights, int nweights );
 };
 
+/*
+  Create a wrapper for topology optimization with a filter
+*/
+class TMRCyTopoQuadBernsteinCreator : public TMRQuadBernsteinTACSTopoCreator {
+ public:
+  TMRCyTopoQuadBernsteinCreator( TMRBoundaryConditions *_bcs,
+                                 TMRQuadForest *_forest ):
+  TMRQuadBernsteinTACSTopoCreator(_bcs, _forest){}
+
+  void setSelfPointer( void *_self ){
+    self = _self;
+  }
+  void setCreateQuadTopoElement( 
+                                TACSElement* (*func)(void*, int, TMRQuadrant*,
+                                                     int*, int, TMRQuadForest*) ){
+    createquadtopoelement = func;
+  }
+
+  // Create the element
+  TACSElement *createElement( int order, 
+                              TMRQuadrant *quad,
+                              int *index, 
+                              int nweights,
+                              TMRQuadForest *filter){
+    TACSElement *elem =
+      createquadtopoelement(self, order, quad, index, nweights,
+                            filter);
+    return elem;
+  }
+
+ private:
+  void *self; // Pointer to the python-level object
+  TACSElement* (*createquadtopoelement)( void*, int, TMRQuadrant*, int *index,
+                                         int nweights, TMRQuadForest* );
+};
+
 #endif // TMR_CY_CREATOR_H

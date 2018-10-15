@@ -267,6 +267,11 @@ class TMRQuadForest : public TMREntity {
                          TMRQuadForest *coarse, TMRQuadrant *quad,
                          TMRIndexWeight *weights, double *tmp );
 
+  // Initialize the node label
+  void initLabel( int mesh_order, TMRInterpolationType interp_type,
+                  int label_type[] );
+  
+  void evalBernsteinWeights( int mesh_order, double u, double *N );
   // The communicator
   MPI_Comm comm;
   int mpi_rank, mpi_size;

@@ -24,7 +24,8 @@ class TMRCoupledThermoQuadStiffness : public CoupledThermoPlaneStressStiffness {
   TMRCoupledThermoQuadStiffness( TMRIndexWeight *_weights, 
                                  int _nweights,
                                  TMRQuadStiffnessProperties *_props,
-                                 TMRQuadForest *_filter=NULL );
+                                 TMRQuadForest *_filter=NULL,
+                                 int *_index=NULL);
   ~TMRCoupledThermoQuadStiffness();
   // Set the design variable values in the object
   // --------------------------------------------
@@ -105,6 +106,7 @@ class TMRCoupledThermoQuadStiffness : public CoupledThermoPlaneStressStiffness {
   // The local weights
   int nweights;
   TMRIndexWeight *weights;
+  int *index;
   // Local design variable vector
   TacsScalar *dv;
   TMRQuadForest *filter;

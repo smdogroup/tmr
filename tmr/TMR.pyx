@@ -191,9 +191,9 @@ cdef class Edge:
         that begin/end the edge. Given a parametric location t and a face, return
         the (*u,v*) location on the face.
 
-        Parameter
-        ---------
-        *t*: double
+        Parameters
+        ----------
+        t: double
           parameteric location
         """
         cdef TMRPoint pt
@@ -1040,7 +1040,7 @@ cdef class MeshOptions:
         Parameters
         ----------
         value: int
-           number of smoothing steps
+           Number of smoothing steps
         """
         def __get__(self):
             return self.ptr.num_smoothing_steps
@@ -1055,7 +1055,7 @@ cdef class MeshOptions:
         Parameters
         ----------
         value: double
-           Quality factor
+          Quality factor
         """
         def __get__(self):
             return self.ptr.frontal_quality_factor
@@ -1070,7 +1070,7 @@ cdef class MeshOptions:
         Parameters
         ----------
         value: int
-           print level
+           Print level for the operation
         """
         def __get__(self):
             return self.ptr.triangularize_print_level
@@ -1161,6 +1161,9 @@ cdef class MeshOptions:
    #    self.ptr.num_smoothing_steps = value
 
 cdef class ElementFeatureSize:
+    """
+    Base class for creating feature size
+    """
     cdef TMRElementFeatureSize *ptr
     def __cinit__(self, *args, **kwargs):
         self.ptr = NULL
@@ -1262,10 +1265,11 @@ cdef class Mesh:
     def mesh(self, double h=1.0, MeshOptions opts=None,
              ElementFeatureSize fs=None):
         """
-        mesh(self, h, opts)
+        mesh(self, h, opts, fs)
 
-        Mesh the model with the provided mesh spacing *h* and default meshing
-        options :class:`~TMR.MeshOptions` opts if it is not provided.
+        Mesh the model with the provided mesh spacing *h*, default meshing
+        options :class:`~TMR.MeshOptions` opts if it is not provided or given
+        :class:`~TMR.ElementFeatureSize` fs
 
         Parameters
         ----------
@@ -1274,6 +1278,9 @@ cdef class Mesh:
                
         opts: :class:`~TMR.MeshOptions`
            Meshing options
+
+        fs: :class:`~TMR.ElementFeatureSize`
+           Element Feature Size options
         """
         cdef TMRMeshOptions default
         if fs is not None:
@@ -1700,6 +1707,14 @@ cdef class Quadrant:
             self.quad.info = value
 
 cdef class QuadForest:
+    """
+    A parallel forest of quadtrees
+
+    This class defines a parallel forest of quadrtrees. The connectivity
+    between quadtrees is defined at a global level. The quadrants can
+    easily be redistributed across processors using the repartition()
+    call.
+    """
     cdef TMRQuadForest *ptr
     def __cinit__(self, MPI.Comm comm=None, int order=2,
                   TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
@@ -2165,6 +2180,7 @@ cdef class OctForest:
         Returns
         -------
         array: :class:`~TMR.OctantArray`
+           Array of octants with name
         """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef TMROctantArray *array = NULL
@@ -2184,6 +2200,7 @@ cdef class OctForest:
         Returns
         -------
         array: array of int
+           Array of node numbers with name
         """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int size = 0
@@ -2243,11 +2260,11 @@ cdef class OctForest:
         Return
         ------
         ptr: array of int
-          array of dependent nodes
+          Array of dependent nodes
         conn: array of int
-          array of connectivity of dependent nodes
+          Array of connectivity of dependent nodes
         weights: array of double
-          array of weights associated with the dependent nodes
+          Array of weights associated with the dependent nodes
         """
         cdef int ndep = 0
         cdef const int *_ptr = NULL
@@ -2297,12 +2314,15 @@ cdef _init_OctForest(TMROctForest* ptr):
 def LoadModel(fname, int print_lev=0):
     """
     LoadModel(fname, print_lev)
+    
     Initialization of the OpenCascade geometry from an IGES/STEP files
 
     Parameters
     ----------
     fname: str
       Name of the geometry file
+    print_level: int
+      Print level for operation
     """
     cdef char *filename = tmr_convert_str_to_chars(fname)
     cdef TMRModel *model = NULL
@@ -2485,6 +2505,65 @@ cdef class QuadTopoCreator:
         self.ptr.getIndices(&indices)
         return _init_VecIndices(indices)
 
+cdef TACSElement* _createQuadBernsteinTopoElement( void *_self, int order,
+                                                   TMRQuadrant *quad,
+                                                   int *index,
+                                                   int nweights,
+                                                   TMRQuadForest *filtr ):
+    cdef TACSElement *elem = NULL
+    q = Quadrant()
+    q.quad.x = quad.x
+    q.quad.y = quad.y
+    q.quad.level = quad.level
+    q.quad.info = quad.info
+    q.quad.face = quad.face
+    q.quad.tag = quad.tag
+    idx = []
+
+    qf = QuadForest()
+    qf.ptr = filtr
+    for i in range(nweights):
+        idx.append(index[i])
+    e = (<object>_self).createElement(order, q, idx, qf)
+    if e is not None:
+        (<Element>e).ptr.incref()
+        elem = (<Element>e).ptr
+        return elem
+    return NULL
+
+cdef class QuadBernsteinTopoCreator:
+    cdef TMRCyTopoQuadBernsteinCreator *ptr
+    def __cinit__(self, BoundaryConditions bcs, QuadForest forest, *args, **kwargs):
+        self.ptr = new TMRCyTopoQuadBernsteinCreator(bcs.ptr, forest.ptr)
+        self.ptr.incref()
+        self.ptr.setSelfPointer(<void*>self)
+        self.ptr.setCreateQuadTopoElement(_createQuadBernsteinTopoElement)
+        return
+
+    def __dealloc__(self):
+        self.ptr.decref()
+
+    def createTACS(self, QuadForest forest,
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER,scale=1.0):
+        cdef TACSAssembler *assembler = NULL
+        assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
+        return _init_Assembler(assembler)
+
+    def getFilter(self):
+        cdef TMRQuadForest *filtr = NULL
+        self.ptr.getFilter(&filtr)
+        return _init_QuadForest(filtr)
+
+    def getMap(self):
+        cdef TACSVarMap *vmap = NULL
+        self.ptr.getMap(&vmap)
+        return _init_VarMap(vmap)
+
+    def getIndices(self):
+        cdef TACSBVecIndices *indices = NULL
+        self.ptr.getIndices(&indices)
+        return _init_VecIndices(indices)
+    
 cdef TACSElement* _createOctTopoElement(void *_self, int order,
                                         TMROctant *octant,
                                         TMRIndexWeight *weights,
@@ -2826,16 +2905,17 @@ cdef class QuadStiffness(PlaneStress):
 cdef class ThermoQuadStiffness(CoupledPlaneStress):
     def __cinit__(self, QuadStiffnessProperties props,
                   list index=None, list weights=None,
-                  QuadForest filtr=None):
+                  QuadForest filtr=None ):
         cdef TMRIndexWeight *w = NULL
+        cdef int* ind = NULL
         cdef int nw = 0
         self.ptr = NULL
-        if weights is None or index is None:
-            errmsg = 'Must define weights and indices'
-            raise ValueError(errmsg)
-        if len(weights) != len(index):
-            errmsg = 'Weights and index list lengths must be the same'
-            raise ValueError(errmsg)
+        # if weights is None or index is None:
+        #     errmsg = 'Must define weights and indices'
+        #     raise ValueError(errmsg)
+        # if len(weights) != len(index):
+        #     errmsg = 'Weights and index list lengths must be the same'
+        #     raise ValueError(errmsg)
 
         # # Check that the lengths are less than 4
         # if len(weights) > 4:
@@ -2843,21 +2923,32 @@ cdef class ThermoQuadStiffness(CoupledPlaneStress):
         #     raise ValueError(errmsg)
 
         # Extract the weights
-        nw = len(weights)
-        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
-        for i in range(nw):
-            w[i].weight = <double>weights[i]
-            w[i].index = <int>index[i]
-
-        # Create the constitutive object
-        if filtr:
-            self.ptr = new TMRCoupledThermoQuadStiffness(w, nw, props.ptr,
-                                                         filtr.ptr)
+        if weights:
+            nw = len(weights)
+            w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
+            for i in range(nw):
+                w[i].weight = <double>weights[i]
+                w[i].index = <int>index[i]
         else:
-            self.ptr = new TMRCoupledThermoQuadStiffness(w, nw, props.ptr, NULL)
+            nw = len(index)
+            ind = <int*>malloc(nw*sizeof(int));
+            for i in range(nw):
+                ind[i] = <int>index[i]
+            
+            
+        # Create the constitutive object
+        if filtr and index:
+            self.ptr = new TMRCoupledThermoQuadStiffness(NULL, nw, props.ptr,
+                                                         filtr.ptr, ind)
+        else:
+            self.ptr = new TMRCoupledThermoQuadStiffness(w, nw, props.ptr,
+                                                         NULL, NULL)
                                                      
         self.ptr.incref()
-        free(w)
+        if w:
+            free(w)
+        if ind:
+            free(ind)
         return
 
 cdef class AnisotropicStiffness(SolidStiff):
@@ -2941,6 +3032,53 @@ def createMg(list assemblers, list forests, double omega=1.0,
 
 def strainEnergyError(forest, Assembler coarse,
                       forest_refined, Assembler refined):
+    """
+    strainEnergyError(forest, coarse_assembler, forest_refined, refined_assembler)
+    
+    The following function performs a mesh refinement based on a strain
+    energy criteria. It is based on the following relationship for
+    linear finite-element analysis
+
+    .. math::   
+         \Pi(u-u_h,u-u_h) = \Pi(u,u) - \Pi(u_h,u_h)
+    
+    where a(u,u) is the trilinear strain energy functional, u is the
+    exact solution, and uh is the discretized solution at any mesh
+    level. This relies on the relationship that :math:`\Pi(u_h, u - u_h) = 0` which
+    is satisfied due to the method of Galerkin/Ritz.
+    
+    The following function computes a localized error indicator using
+    the element-wise strain energy. The code computes a higher-order
+    reconstructed solution using a cubic enrichment functions. These
+    enrichment functions expand the original solution space and are
+    computed based on a least-squares approximation with nodal gradient
+    values. The localized error indicator is evaluated as follows:
+
+    .. math::
+         err = \sum_{i=1}^{4} \Pi_e(u_{ce}, u_{ce}) ] - \Pi_e(u_e, u_e)
+    
+    where :math:`u_{ce}` is the element-wise cubic element reconstruction projected
+    onto a uniformly refined mesh.
+
+    Parameters
+    -----------
+    forest_coarse: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
+      Forest for current mesh level
+    coarse_assembler: :class:`~TACS.Assembler`
+      Finite assembler class for associated with forest
+    forest_refined: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
+      Forest for refined mesh level
+    refined_assembler: :class:`~TACS.Assembler`
+      Finite assembler class for associated with forest_refined
+      
+    Returns
+    --------
+    ans: double
+      Total strain energy error
+
+    err: array of double
+      Elemental strain energy error
+    """
     cdef double ans = 0.0
     cdef TMROctForest *oct_forest = NULL
     cdef TMROctForest *oct_forest_refined = NULL
@@ -2965,6 +3103,39 @@ def strainEnergyError(forest, Assembler coarse,
 def adjointError(forest, Assembler coarse,
                  forest_refined, Assembler refined,
                  Vec solution, Vec adjoint):
+    """
+    adjointError(forest, coarse_assembler, forest_refined, refined_assembler, solution_refined, adjoint_refined)
+                 
+    Refine the mesh using the original solution and the adjoint solution
+
+    Parameters
+    -----------
+    forest: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
+      Forest for current mesh level
+    coarse_assembler: :class:`~TACS.Assembler`
+      Finite assembler class for associated with forest
+    forest_refined: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
+      Higher-order forest for refined mesh level
+    refined_assembler: :class:`~TACS.Assembler`
+      Higher-order finite assembler class for associated with forest_refined
+    solution_refined: :class:`~TACS.Vec`
+      The higher-order solution (or approximation)
+    adjoint_refined: :class:`~TACS.Vec`
+      The difference between the refined and coarse adjoint solutions computed
+      in some manner 
+    
+    Returns
+    -------
+    ans: double
+      Total strain energy error
+
+    err: array of double
+      Elemental strain energy error
+      
+    adj_corr: TacsScalar
+      Adjoint-based functional correction
+    
+    """
     cdef TacsScalar ans = 0.0
     cdef TacsScalar adj_corr = 0.0
     cdef TMROctForest *oct_forest = NULL

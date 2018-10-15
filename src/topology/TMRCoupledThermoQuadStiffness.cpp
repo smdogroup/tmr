@@ -29,7 +29,8 @@
 TMRCoupledThermoQuadStiffness::TMRCoupledThermoQuadStiffness( TMRIndexWeight *_weights,
                                                               int _nweights,
                                                               TMRQuadStiffnessProperties *_props,
- TMRQuadForest *_filter ){
+                                                              TMRQuadForest *_filter, 
+int *_index ){
   
 
   // Record the density, Poisson ratio, D and the shear modulus
@@ -38,9 +39,18 @@ TMRCoupledThermoQuadStiffness::TMRCoupledThermoQuadStiffness( TMRIndexWeight *_w
   
   // Set the weights/local indices
   nweights = _nweights;
-  weights = new TMRIndexWeight[ nweights ];
-  memcpy(weights, _weights, nweights*sizeof(TMRIndexWeight));
-    
+  weights = NULL;
+  if (_weights){
+    weights = new TMRIndexWeight[ nweights ];
+    memcpy(weights, _weights, nweights*sizeof(TMRIndexWeight));
+  }
+  if (_index){
+    index = new int[ nweights ];
+    memcpy(index, _index, nweights*sizeof(int));
+  }
+  if (weights && index){
+    printf("Define only using TMRIndexWeight or Index\n");
+  }
   // Copy over the filter if provided
   filter = NULL;
   if (_filter){
@@ -69,7 +79,12 @@ TMRCoupledThermoQuadStiffness::TMRCoupledThermoQuadStiffness( TMRIndexWeight *_w
 */
 TMRCoupledThermoQuadStiffness::~TMRCoupledThermoQuadStiffness(){
   props->decref();
-  delete [] weights;
+  if (weights){
+    delete [] weights;
+  }
+  if (index){
+    delete [] index;
+  }
   if (filter){
     filter->decref();
   }
@@ -89,25 +104,32 @@ void TMRCoupledThermoQuadStiffness::setDesignVars( const TacsScalar xdv[],
   const int use_project = props->use_project;
 
   if (!dv){
-    dv = new TacsScalar[ numDVs ];
+    dv = new TacsScalar[ nvars*nweights ];
   }
-  memcpy(dv, xdv, numDVs*sizeof(TacsScalar));
-  
-  for ( int j = 0; j < nvars; j++ ){
-    x[j] = 0.0;
-    for ( int i = 0; i < nweights; i++ ){
-      x[j] += weights[i].weight*xdv[nvars*weights[i].index + j];
+  if (weights){
+    for ( int j = 0; j < nvars; j++ ){
+      x[j] = 0.0;
+      for ( int i = 0; i < nweights; i++ ){
+        x[j] += weights[i].weight*xdv[nvars*weights[i].index + j];
+      }
+      
+      // Apply the projection to obtain the projected value
+      // of the density
+      if (use_project){
+        rho[j] = 1.0/(1.0 + exp(-beta*(x[j] - xoffset)));
+      }
+      else{
+        rho[j] = x[j];
+      }
     }
-
-    // Apply the projection to obtain the projected value
-    // of the density
-    if (use_project){
-      rho[j] = 1.0/(1.0 + exp(-beta*(x[j] - xoffset)));
+  }
+  else { // Check for dependent nodes
+    for ( int j = 0; j < nvars; j++ ){
+      for ( int i = 0; i < nweights; i++ ){
+        dv[nvars*i+j] = xdv[nvars*index[i] + j];
+      }
     }
-    else{
-      rho[j] = x[j];
-    }
-  } 
+  }
 }
 
 /*
@@ -118,30 +140,52 @@ void TMRCoupledThermoQuadStiffness::setDesignVars( const TacsScalar xdv[],
 */
 void TMRCoupledThermoQuadStiffness::getDesignVars( TacsScalar xdv[], 
                                                    int numDVs ){
-  dv = new TacsScalar[ numDVs ];
-  memset(dv, 0.0, numDVs*sizeof(TacsScalar));
-
-  if (nvars == 1){
-    for ( int i = 0; i < nweights; i++ ){
-      if (weights[i].index >= 0 && weights[i].index < numDVs){
-        xdv[weights[i].index] = 0.95;
-      }
-    }
-  }
-  else {
-    for ( int j = 0; j < nvars; j++ ){
-      TacsScalar value = 0.25;
-      if (j >= 1){
-        value = 0.75/(nvars-1);
-      }
+  dv = new TacsScalar[ nvars*nweights ];
+  memset(dv, 0.0, nvars*nweights*sizeof(TacsScalar));
+  if (weights){
+    if (nvars == 1){
       for ( int i = 0; i < nweights; i++ ){
         if (weights[i].index >= 0 && weights[i].index < numDVs){
-          xdv[nvars*weights[i].index + j] = value;
+          xdv[weights[i].index] = 0.95;
+        }
+      }
+    }
+    else {
+      for ( int j = 0; j < nvars; j++ ){
+        TacsScalar value = 0.25;
+        if (j >= 1){
+          value = 0.75/(nvars-1);
+        }
+        for ( int i = 0; i < nweights; i++ ){
+          if (weights[i].index >= 0 && weights[i].index < numDVs){
+            xdv[nvars*weights[i].index + j] = value;
+          }
         }
       }
     }
   }
-  memcpy(dv, xdv, numDVs*sizeof(TacsScalar));
+  else { // Using Bernstein polynomial; check for dependent nodes 
+    if (nvars == 1){
+      for ( int i = 0; i < nweights; i++ ){
+        if (weights[i].index >= 0 && weights[i].index < numDVs){
+          xdv[index[i]] = 0.95;
+        }
+      }
+    }
+    else {
+      for ( int j = 0; j < nvars; j++ ){
+        TacsScalar value = 0.25;
+        if (j >= 1){
+          value = 0.75/(nvars-1);
+        }
+        for ( int i = 0; i < nweights; i++ ){
+          if (weights[i].index >= 0 && weights[i].index < numDVs){
+            xdv[nvars*index[i] + j] = value;
+          }
+        }
+      }
+    }
+  }
 }
 
 /*
@@ -150,20 +194,42 @@ void TMRCoupledThermoQuadStiffness::getDesignVars( TacsScalar xdv[],
 void TMRCoupledThermoQuadStiffness::getDesignVarRange( TacsScalar lb[], 
                                                        TacsScalar ub[], 
                                                        int numDVs ){
-  if (nvars == 1){
-    for ( int i = 0; i < nweights; i++ ){
-      if (weights[i].index >= 0 && weights[i].index < numDVs){
-        lb[weights[i].index] = 0.0;
-        ub[weights[i].index] = 1.0;
+  if (weights){
+    if (nvars == 1){
+      for ( int i = 0; i < nweights; i++ ){
+        if (weights[i].index >= 0 && weights[i].index < numDVs){
+          lb[weights[i].index] = 0.0;
+          ub[weights[i].index] = 1.0;
+        }
+      }
+    }
+    else {
+      for ( int j = 0; j < nvars; j++ ){
+        for ( int i = 0; i < nweights; i++ ){
+          if (weights[i].index >= 0 && weights[i].index < numDVs){
+            lb[nvars*weights[i].index + j] = 0.0;
+            ub[nvars*weights[i].index + j] = 1e30;
+          }
+        }
       }
     }
   }
-  else {
-    for ( int j = 0; j < nvars; j++ ){
+  else { // Using Bernstein polynomail; check for dependent nodes
+    if (nvars == 1){
       for ( int i = 0; i < nweights; i++ ){
-        if (weights[i].index >= 0 && weights[i].index < numDVs){
-          lb[nvars*weights[i].index + j] = 0.0;
-          ub[nvars*weights[i].index + j] = 1e30;
+        if (index[i] >= 0 && index[i] < numDVs){
+          lb[index[i]] = 0.0;
+          ub[index[i]] = 1.0;
+        }
+      }
+    }
+    else {
+      for ( int j = 0; j < nvars; j++ ){
+        for ( int i = 0; i < nweights; i++ ){
+          if (index[i] >= 0 && index[i] < numDVs){
+            lb[nvars*index[i] + j] = 0.0;
+            ub[nvars*index[i] + j] = 1e30;
+          }
         }
       }
     }
@@ -183,8 +249,7 @@ void TMRCoupledThermoQuadStiffness::getPointwiseMass( const double pt[],
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        x[j] += N[i]*dv[nvars*weights[i].index + j];
-        //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
+        x[j] += N[i]*dv[nvars*i + j];        
       }
     }
   }
@@ -216,16 +281,14 @@ void TMRCoupledThermoQuadStiffness::addPointwiseMassDVSens( const double pt[],
     if (nvars == 1){
       TacsScalar scale = props->density[0]*alpha[0];
       for ( int i = 0; i < nweights; i++ ){
-        dvSens[weights[i].index] += (scale*N[i]);
-        //dvSens[weights[i].index] += (scale*weights[i].weight*N[i]);
+        dvSens[index[i]] += (scale*N[i]);
       }
     }
     else {
       for ( int j = 1; j < nvars; j++ ){
         TacsScalar scale = props->density[j-1]*alpha[0];
         for ( int i = 0; i < nweights; i++ ){
-          dvSens[nvars*weights[i].index + j] += (scale*N[i]);
-          //dvSens[nvars*weights[i].index + j] += (scale*weights[i].weight*N[i]);
+          dvSens[nvars*index[i] + j] += (scale*N[i]);
         }
       }
     }    
@@ -262,8 +325,7 @@ void TMRCoupledThermoQuadStiffness::calculateStress( const double pt[],
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        x[j] += N[i]*dv[nvars*weights[i].index + j];
-        //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
+        x[j] += N[i]*dv[nvars*i + j];
       }
       // Apply the projection to obtain the projected value
       // of the density
@@ -319,8 +381,7 @@ void TMRCoupledThermoQuadStiffness::calculateThermal( const double pt[],
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
-        x[j] += N[i]*dv[nvars*weights[i].index + j];
+        x[j] += N[i]*dv[nvars*i + j];
       }
       rho[j] = x[j];
     }  
@@ -375,8 +436,7 @@ void TMRCoupledThermoQuadStiffness::calculateConduction( const double pt[],
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        x[j] += N[i]*dv[nvars*weights[i].index + j];
-        //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
+        x[j] += N[i]*dv[nvars*i + j];
       }
       rho[j] = x[j];
     }  
@@ -424,8 +484,7 @@ void TMRCoupledThermoQuadStiffness::addStressDVSens( const double pt[],
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        x[j] += N[i]*dv[nvars*weights[i].index + j];
-        //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
+        x[j] += N[i]*dv[nvars*i + j];        
       }
       // Apply the projection to obtain the projected value
       // of the density
@@ -458,7 +517,7 @@ void TMRCoupledThermoQuadStiffness::addStressDVSens( const double pt[],
 
       // Compute the term psi^{T}*B^{T}*dD/dx*B*u
       for ( int i = 0; i < nweights; i++ ){
-        fdvSens[weights[i].index] += N[i]*product;
+        fdvSens[index[i]] += N[i]*product;
       }    
     }
     else {
@@ -490,7 +549,7 @@ void TMRCoupledThermoQuadStiffness::addStressDVSens( const double pt[],
 
         // Compute the term psi^{T}*B^{T}*dD/dx*B*u
         for ( int i = 0; i < nweights; i++ ){
-          fdvSens[nvars*weights[i].index + j] += N[i]*product;
+          fdvSens[nvars*index[i] + j] += N[i]*product;
         }
       }
     }
@@ -579,8 +638,7 @@ void TMRCoupledThermoQuadStiffness::addThermalDVSens( const double pt[],
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
-        x[j] += N[i]*dv[nvars*weights[i].index + j];
+        x[j] += N[i]*dv[nvars*i + j];
       }
       // Apply the projection to obtain the projected value
       // of the density
@@ -614,7 +672,7 @@ void TMRCoupledThermoQuadStiffness::addThermalDVSens( const double pt[],
 
       // Compute the term psi^{T}*B^{T}*dD/dx*B*u
       for ( int i = 0; i < nweights; i++ ){
-        fdvSens[weights[i].index] += N[i]*product;
+        fdvSens[index[i]] += N[i]*product;
       }    
     }
     else {
@@ -644,7 +702,7 @@ void TMRCoupledThermoQuadStiffness::addThermalDVSens( const double pt[],
         TacsScalar product = (s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2]);
         // Compute the term psi^{T}*B^{T}*dD/dx*B*u
         for ( int i = 0; i < nweights; i++ ){
-          fdvSens[nvars*weights[i].index + j] += N[i]*product;
+          fdvSens[nvars*index[i] + j] += N[i]*product;
         }
       }
     }
@@ -735,7 +793,7 @@ void TMRCoupledThermoQuadStiffness::addConductionDVSens( const double pt[],
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        x[j] += N[i]*dv[nvars*weights[i].index + j];
+        x[j] += N[i]*dv[nvars*i + j];
       }
       // Apply the projection to obtain the projected value
       // of the density
@@ -761,7 +819,7 @@ void TMRCoupledThermoQuadStiffness::addConductionDVSens( const double pt[],
       TacsScalar product = (s[0]*psi[0] + s[1]*psi[1]);
       // Compute the term psi^{T}*B^{T}*dD/dx*B*u
       for ( int i = 0; i < nweights; i++ ){
-        fdvSens[weights[i].index] += N[i]*product;
+        fdvSens[index[i]] += N[i]*product;
       }
     }
     else {
@@ -785,7 +843,7 @@ void TMRCoupledThermoQuadStiffness::addConductionDVSens( const double pt[],
         s[1] = Cp*e[1];
         TacsScalar product = (s[0]*psi[0] + s[1]*psi[1]);
         for ( int i = 0; i < nweights; i++ ){
-          fdvSens[nvars*weights[i].index + j] += N[i]*product;
+          fdvSens[nvars*index[i] + j] += N[i]*product;
         }
       }
     }
@@ -1090,16 +1148,21 @@ void TMRCoupledThermoQuadStiffness::failureStrainSens( const double pt[],
 TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex, 
                                                             const double pt[] ){
   // Compute the filter shape functions
+  //double x_vars[nvars];
   if (filter && dv){
     double N[nweights];
     filter->evalInterp(pt, N);
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
+      //x_vars[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        printf("N[%d]: %f weights: %f %d %d\n",i, N[i],
-               weights[i].weight, weights[i].index, weights[i].mask);
-        x[j] += N[i]*dv[nvars*weights[i].index + j];
-        //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
+        // printf("N[%d]: %f weights: %f %d \n",i, N[i],
+        //        weights[i].weight, weights[i].index);
+        // printf("dv[%d]: %f\n", nvars*weights[i].index + j,
+        //        dv[nvars*weights[i].index + j]);
+               
+        x[j] += N[i]*dv[nvars*i + j];
+        //x_vars[j] += weights[i].weight*dv[nvars*weights[i].index + j];
       }
       // Apply the projection to obtain the projected value
       // of the density
@@ -1142,53 +1205,7 @@ TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex,
       return rho[2];
     }
     return rho[0];
+    //return x_vars[0];
   }
   return 0;
 }
-
-// void TMRCoupledThermoQuadStiffness::computeLocalWeights( const double pt[],
-//                                                          TMRIndexWeight *local_weights ){
-//   double N[nweights];
-//   filter->evalInterp(pt, N);
-
-//   // Get the dependent node information for this mesh
-//   const int *dep_ptr, *dep_conn;
-//   const double *dep_weights;
-//   filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
-
-//   // Get the mesh order
-//   const int order = filter->getMeshOrder();
-  
-//   // Get the connectivity
-//   const int *conn;
-//   filter->getNodeConn(&conn);
-//   const int *c = &conn[quad->tag*order*order];
-
-//   // Loop over the adjacent nodes within the filter
-//   int local_nweights = 0;
-//   for ( int jj = 0; jj < order; jj++ ){
-//     for ( int ii = 0; ii < order; ii++ ){
-//       // Set the weights
-//       int offset = ii + jj*order;
-//       double weight = N[offset];
-
-//       // Get the tag number
-//       if (c[offset] >= 0){
-//         local_weights[local_nweights].index = c[offset];
-//         local_weights[local_nweights].weight = weight;
-//         local_nweights++;
-//       }
-//       else {
-//         int node = -c[offset]-1;
-//         for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
-//           local_weights[local_nweights].index = dep_conn[jp];
-//           local_weights[local_nweights].weight = weight*dep_weights[jp];
-//           local_nweights++;
-//         }
-//       }
-//     }
-//   }
-//   local_nweights = TMRIndexWeight::uniqueSort(local_weights, local_nweights);
-
-// }
-

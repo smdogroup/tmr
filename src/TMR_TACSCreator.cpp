@@ -170,7 +170,6 @@ TACSAssembler*
 
   // Get the element order
   int order = forest->getMeshOrder();
-
   // Get the local part of the connectivity
   const int *conn;
   int num_elements = 0, num_owned_nodes = 0;
@@ -190,13 +189,7 @@ TACSAssembler*
 
   // Create the elements using the virtual call
   TACSElement **elements = new TACSElement*[ num_elements ];
-  if (order >= 3){
-    createElements(forest, num_elements, elements);
-  }
-  else {
-    createElements(order, forest, num_elements, elements);
-  }
-
+  createElements(order, forest, num_elements, elements);
   // Create the first element - and read out the number of
   // variables-per-node
   int vars_per_node = 0;
@@ -204,7 +197,6 @@ TACSAssembler*
     vars_per_node = elements[0]->numDisplacements();
   }
   MPI_Allreduce(MPI_IN_PLACE, &vars_per_node, 1, MPI_INT, MPI_MAX, comm);
-
   // Create the associated TACSAssembler object
   TACSAssembler *tacs =
     new TACSAssembler(comm, vars_per_node,
