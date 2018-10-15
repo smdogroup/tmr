@@ -149,11 +149,6 @@ class TMRQuadBernsteinTACSTopoCreator : public TMRQuadTACSCreator {
   void getIndices( TACSBVecIndices **_indices );  
 
  private:
-  // Compute the weights for a given point
-  void computeIndex( const int mesh_order, const double *knots,
-                     TMRQuadrant *quad,
-                     int *index, double *tmp );
-
   // The forest that defines the filter
   TMRQuadForest *filter;
 

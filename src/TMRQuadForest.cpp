@@ -2769,13 +2769,13 @@ void TMRQuadForest::labelDependentNodes( int *nodes ){
               (edge_index >= 2 && id % 2 == 0)){
             start = 1;
             end = mesh_order;
-            if (mesh_order == 3){
+            if (mesh_order == 3 && interp_type != TMR_BERNSTEIN_POINTS){
               end = mesh_order-1;
             }
           }
           else {
             start = 0;
-            if (mesh_order == 3){
+            if (mesh_order == 3 && interp_type != TMR_BERNSTEIN_POINTS){
               start = 1;
             }
             end = mesh_order-1;
@@ -3774,12 +3774,7 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
 
                 // Evaluate the shape functions
                 lagrange_shape_functions(mesh_order, u, interp_knots,
-                                         &dep_weights[ptr]);
-                // --------------------------------------------------
-                // for (int q = 0; q < mesh_order; q++){
-                //   printf("u[%d]: %f dep_weights[%d]: %f\n",k,
-                //          u, ptr, dep_weights[ptr+q]);
-                // }
+                                         &dep_weights[ptr]);                
               }
             }
           }
@@ -3799,7 +3794,7 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
               int index = node_nums[c[offset]];
               if (index < 0){
                 index = -index-1;
-
+                
                 // Compute the shape functions
                 int ptr = dep_ptr[index];
                 for ( int j = 0; j < mesh_order; j++ ){
@@ -3819,16 +3814,8 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
                 }
                 
                 // Evaluate dependent weights
-                evalBernsteinWeights(mesh_order, u, &dep_weights[ptr]);
-                // // Evaluate the shape functions
-                // bernstein_shape_functions(mesh_order, u, interp_knots,
-                //                           &dep_weights[ptr]);
-                
-                // --------------------------------------------------
-                // for (int q = 0; q < mesh_order; q++){
-                //   printf("u[%d]: %f dep_weights[%d]: %f\n",k,
-                //          u, ptr, dep_weights[ptr+q]);
-                // }
+                evalBernsteinWeights(mesh_order, u, interp_knots, 
+                                     &dep_weights[ptr]);               
               }
             }
           }          
@@ -4501,6 +4488,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
     }
     delete [] bern_knots;
   }
+
   // Get the coarse grid information
   const int *cdep_ptr;
   const int *cdep_conn;
@@ -4765,8 +4753,10 @@ void TMRQuadForest::initLabel( int mesh_order, TMRInterpolationType interp_type,
   Compute the dependent weights associated with the Bernstein polynomial
 */
 void TMRQuadForest::evalBernsteinWeights( int mesh_order,
-                                          double u, 
+                                          double u,
+                                          double *knots,
                                           double *N ){
+  //bernstein_shape_functions(mesh_order, u, knots, N);
   if (mesh_order == 3){
     if ( u < 0.0 ){
       N[0] = 0.5;

@@ -167,9 +167,9 @@ void TMRCoupledThermoQuadStiffness::getDesignVars( TacsScalar xdv[],
   else { // Using Bernstein polynomial; check for dependent nodes 
     if (nvars == 1){
       for ( int i = 0; i < nweights; i++ ){
-        if (weights[i].index >= 0 && weights[i].index < numDVs){
+        if (index[i] >= 0 && index[i] < numDVs){
           xdv[index[i]] = 0.95;
-        }
+        }         
       }
     }
     else {
@@ -179,7 +179,7 @@ void TMRCoupledThermoQuadStiffness::getDesignVars( TacsScalar xdv[],
           value = 0.75/(nvars-1);
         }
         for ( int i = 0; i < nweights; i++ ){
-          if (weights[i].index >= 0 && weights[i].index < numDVs){
+          if (index[i] >= 0 && index[i] < numDVs){
             xdv[nvars*index[i] + j] = value;
           }
         }

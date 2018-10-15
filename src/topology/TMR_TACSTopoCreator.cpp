@@ -1099,67 +1099,6 @@ void TMRQuadBernsteinTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
 }
 
 /*
-  Compute the index associated with the given quadrant
-*/
-void TMRQuadBernsteinTACSTopoCreator::computeIndex( const int mesh_order, 
-                                                    const double *knots,
-                                                    TMRQuadrant *quad,
-                                                    int *index, double *tmp ){
-  // Find the side length of the octant in the filter that contains
-  // the element octant
-  const int32_t h = 1 << (TMR_MAX_LEVEL - quad->level);
-  const int32_t hquad = 1 << (TMR_MAX_LEVEL - quad->level);
-  
-  // Compute the i, j, k location of the node
-  const int i = quad->info % mesh_order;
-  const int j = quad->info/mesh_order;
-  
-  // Get the u/v values within the filter octant
-  double pt[3];
-  pt[0] = -1.0 + 2.0*((quad->x % hquad) + 0.5*h*(1.0 + knots[i]))/hquad;
-  pt[1] = -1.0 + 2.0*((quad->y % hquad) + 0.5*h*(1.0 + knots[j]))/hquad;
-
-  // Get the shape functions
-  double *N = tmp;
-  filter->evalInterp(pt, N);
-    
-  // Get the dependent node information for this mesh
-  const int *dep_ptr, *dep_conn;
-  const double *dep_weights;
-  filter->getDepNodeConn(&dep_ptr, &dep_conn, &dep_weights);
-
-  // Get the mesh order
-  const int order = filter->getMeshOrder();
-  
-  // Get the connectivity
-  const int *conn;
-  filter->getNodeConn(&conn);
-  const int *c = &conn[quad->tag*order*order];
-
-  // Loop over the adjacent nodes within the filter
-  int nweights = 0;
-  for ( int jj = 0; jj < order; jj++ ){
-    for ( int ii = 0; ii < order; ii++ ){
-      // Set the weights
-      int offset = ii + jj*order;
-      
-      // Get the tag number
-      index[nweights] = c[offset];
-      nweights++;
-      
-      // else {
-      //   int node = -c[offset]-1;
-      //   for ( int jp = dep_ptr[node]; jp < dep_ptr[node+1]; jp++ ){
-      //     weights[nweights].index = dep_conn[jp];
-      //     weights[nweights].weight = weight*dep_weights[jp];
-      //     nweights++;
-      //   }
-      // }
-    }
-  }
-}
-
-/*
   Create all of the elements for the topology optimization problem
 */
 void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
@@ -1185,102 +1124,44 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
   // The number of weights/element
   const int filter_order = filter->getMeshOrder();
   const int nweights = filter_order*filter_order;
-  
-  // Allocate temp space
-  double *tmp = new double[ nweights ];
-  int *index_tmp = new int [ nweights ];
-  
+ 
   // Allocate the weights for all of the local elements 
   int *index = new int[ nweights*num_quads ];
-  
-  // Fake the information as if we have a third-order and we are
-  // searching for the centeral node
-  const int node_info = 4;
-  const double node_knots[] = {-1.0, 0.0, 1.0};
-  const int node_order = 3;
-  
-  for ( int i = 0; i < num_quads; i++ ){
-    
-    computeIndex(node_order, node_knots,
-                 &quads[i], index_tmp, tmp);
-    memcpy(&index[nweights*i], index_tmp, nweights*sizeof(int));
-  }
-  // The node numbers within the weights are global. Convert them into
-  // a local node ordering and create a list of the external node
-  // numbers referenced by the weights.
 
-  // Get the node range for the filter design variables
-  const int *filter_range;
-  filter->getOwnedNodeRange(&filter_range);
+  // Loop over the nodes and convert to the local numbering scheme
+  const int *conn;
+  filter->getNodeConn(&conn);
 
-  // The number of local nodes
-  int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
-  // Get the external numbers from the filter itself
-  const int *filter_ext;
-  int num_filter_ext = filter->getNodeNumbers(&filter_ext);
-  // Count up all the external nodes
-  int num_ext = 0;
-  int max_ext_nodes = nweights*num_quads + num_filter_ext;
-  int *ext_nodes = new int[ max_ext_nodes ];
-
-  // Add the external nodes from the filter
-  for ( int i = 0; i < num_filter_ext; i++ ){
-    int node = filter_ext[i];
-    if (node >= 0 &&
-        (node < filter_range[mpi_rank] ||
-         node >= filter_range[mpi_rank+1])){
-      ext_nodes[num_ext] = node;
-      num_ext++;
-    }
-  }
-
-  // Add the external nodes from the element-level connectivity
+  TMRPoint *X;
+  int num_points = filter->getPoints(&X);
+  //printf("num: %d\n", num_points);
+  // Get the local node index on this processor
   for ( int i = 0; i < nweights*num_quads; i++ ){
-    int node = index[i];
-    if (node < filter_range[mpi_rank] || 
-        node >= filter_range[mpi_rank+1]){
-      ext_nodes[num_ext] = node;
-      num_ext++;
-    }
+    index[i] = filter->getLocalNodeNumber(conn[i]);
+    // printf("[%d]: %f %f %d %d\n", i, X[index[i]].x, X[index[i]].y,
+    //        index[i], conn[i]);
   }
-  
-  // Sort the external array of nodes
-  qsort(ext_nodes, num_ext, sizeof(int), compare_integers);
+  //exit(0);
+  // Get the local node numbers
+  const int *node_nums;
+  int num_nodes = filter->getNodeNumbers(&node_nums);
+  int num_dep_nodes = filter->getDepNodeConn();
 
-  // Remove duplicates from the array
-  int len = 0;
-  for ( int i = 0; i < num_ext; i++, len++ ){
-    while ((i < num_ext-1) && (ext_nodes[i] == ext_nodes[i+1])){
-      i++;
-    }
-    if (i != len){
-      ext_nodes[len] = ext_nodes[i];
-    }
-  }
+  // Set the number of filter nodes
+  int num_filter_nodes = num_nodes - num_dep_nodes;
   
-  // Truncate the array and delete the old array
-  int num_ext_nodes = len;
-  int *ext_node_nums = new int[ len ];
-  memcpy(ext_node_nums, ext_nodes, len*sizeof(int));
-  delete [] ext_nodes;
+  // Copy over the node numbers
+  int *filter_node_nums = new int[ num_filter_nodes ];
+  memcpy(filter_node_nums, &node_nums[num_dep_nodes],
+         num_filter_nodes*sizeof(int));
 
   // Set up the external filter indices for this filter.  The indices
   // objects steals the array for the external nodes.
-  filter_indices = new TACSBVecIndices(&ext_node_nums, num_ext_nodes);
+  filter_indices = new TACSBVecIndices(&filter_node_nums, 
+                                       num_filter_nodes);
   filter_indices->incref();
   filter_indices->setUpInverse();
-  // Scan through all of the weights and convert them to the local
-  // ordering
-  for ( int i = 0; i < nweights*num_quads; i++ ){
-    int node = index[i];
-    if (node >= filter_range[mpi_rank] && node < filter_range[mpi_rank+1]){
-      node = node - filter_range[mpi_rank];
-    }
-    else {
-      node = num_filter_local + filter_indices->findIndex(node);
-    }
-    index[i] = node;
-  }
+
   // Loop over the octants
   quadrants->getArray(&quads, &num_quads);
   for ( int i = 0; i < num_quads; i++ ){

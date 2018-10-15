@@ -113,8 +113,9 @@ class TMROctForest : public TMREntity {
                     int *_num_elements=NULL,
                     int *_num_owned_nodes=NULL,
                     int *_num_local_nodes=NULL );
-  int getDepNodeConn( const int **_ptr, const int **_conn,
-                      const double **_weights );
+  int getDepNodeConn( const int **_ptr=NULL,
+                      const int **_conn=NULL,
+                      const double **_weights=NULL );
 
   // Create interpolation/restriction operators
   // ------------------------------------------
