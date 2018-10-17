@@ -87,6 +87,9 @@ exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],
                 language='c++',
                 include_dirs=inc_dirs, libraries=libs, 
                 library_dirs=lib_dirs, runtime_library_dirs=runtime_lib_dirs))
+for e in exts:
+    e.cython_directives = {"embedsignature": True,
+                           "binding":True}
 setup(name='tmr',
       version=0.1,
       description='Parallel mesh generation utilities',
