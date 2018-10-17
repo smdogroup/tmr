@@ -281,9 +281,13 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   adjoint->incref();
 
   // Set up the solver
-  int gmres_iters = 100;
-  int nrestart = 2;
-  int is_flexible = 1;
+  int gmres_iters = 50;
+  int nrestart = 5;
+  int is_flexible = 0;
+  
+  // int gmres_iters = 100;
+  // int nrestart = 2;
+  // int is_flexible = 1;
   ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
@@ -414,7 +418,31 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     filter_ctx[k]->incref();
 
     // Create the design variable vector for this level
-    x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k]);
+    if (quad_filter[k]->getInterpType() == TMR_BERNSTEIN_POINTS){
+      int *dep_ptr, *dep_conn;
+      const int *_dep_ptr, *_dep_conn;
+      double *dep_weights;
+      const double *_dep_weights;
+      int num_dep_nodes = quad_filter[k]->getDepNodeConn(&_dep_ptr, &_dep_conn,
+                                                         &_dep_weights);
+      // Copy over the data
+      dep_ptr = new int[ num_dep_nodes+1 ];
+      memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
+      int dep_size = quad_filter[k]->getMeshOrder()*num_dep_nodes;
+      dep_conn = new int[ dep_size ];
+      memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
+      
+      dep_weights = new double[ dep_size ];
+      memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
+      
+      TACSBVecDepNodes *dep = new TACSBVecDepNodes(num_dep_nodes,
+                                                   &dep_ptr, &dep_conn,
+                                                   &dep_weights);
+      x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k], dep);
+    }
+    else {
+      x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k]);     
+    }
     x[k]->incref();
   }
 
@@ -444,6 +472,9 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   adjoint->incref();
 
   // Set up the solver
+  // int gmres_iters = 50;
+  // int nrestart = 5;
+  // int is_flexible = 0;
   int gmres_iters = 100;
   int nrestart = 2;
   int is_flexible = 1;
@@ -451,7 +482,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
   ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  ksm->setTolerances(1e-10, 1e-30);
+  ksm->setTolerances(1e-9, 1e-30);
 
   // Set the iteration count
   iter_count = 0;
@@ -806,7 +837,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
                                              double eig_atol,
                                              int num_recycle,
                                              JDRecycleType recycle_type,
-                                             int _track_eigen_iters){
+                                             int _track_eigen_iters ){
   if (!freq){
     // Create a mass matrix for the frequency constraint
     TACSMat *mmat = tacs[0]->createMat();
@@ -988,8 +1019,48 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars,
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvars);
     if (wrap){
       if (xinit){ xinit->decref(); }
-      xinit = new TACSBVec(filter_maps[0],
-                           vars_per_node, filter_dist[0]);
+      if (quad_filter){
+        if (quad_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+          // Get dependent node information
+          int *dep_ptr, *dep_conn;
+          const int *_dep_ptr, *_dep_conn;
+          double *dep_weights;
+          const double *_dep_weights;
+          int num_dep_nodes = quad_filter[0]->getDepNodeConn(&_dep_ptr, &_dep_conn,
+                                                             &_dep_weights);
+          // Copy over the data
+          dep_ptr = new int[ num_dep_nodes+1 ];
+          memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
+      
+          int dep_size = quad_filter[0]->getMeshOrder()*num_dep_nodes;
+          dep_conn = new int[ dep_size ];
+          memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
+
+          dep_weights = new double[ dep_size ];
+          memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
+      
+          TACSBVecDepNodes *dep = new TACSBVecDepNodes(num_dep_nodes,
+                                                       &dep_ptr, &dep_conn,
+                                                       &dep_weights);
+          xinit = new TACSBVec(filter_maps[0],
+                               vars_per_node, filter_dist[0], dep);
+        }
+        else {
+          xinit = new TACSBVec(filter_maps[0],
+                               vars_per_node, filter_dist[0]);
+        }
+      }
+      else {
+        if (oct_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+
+
+        }
+        else {
+          xinit = new TACSBVec(filter_maps[0],
+                               vars_per_node, filter_dist[0]);
+        
+        }
+      }
       xinit->incref();
       xinit->copyValues(wrap->vec);
     }
@@ -998,8 +1069,48 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars,
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(lb);
     if (wrap){
       if (xlb){ xlb->decref(); }
-      xlb = new TACSBVec(filter_maps[0], vars_per_node,
-                         filter_dist[0]);
+      if (quad_filter){
+        if (quad_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+          // Get dependent node information
+          int *dep_ptr, *dep_conn;
+          const int *_dep_ptr, *_dep_conn;
+          double *dep_weights;
+          const double *_dep_weights;
+          int num_dep_nodes = quad_filter[0]->getDepNodeConn(&_dep_ptr, &_dep_conn,
+                                                             &_dep_weights);
+          // Copy over the data
+          dep_ptr = new int[ num_dep_nodes+1 ];
+          memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
+      
+          int dep_size = quad_filter[0]->getMeshOrder()*num_dep_nodes;
+          dep_conn = new int[ dep_size ];
+          memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
+
+          dep_weights = new double[ dep_size ];
+          memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
+      
+          TACSBVecDepNodes *dep = new TACSBVecDepNodes(num_dep_nodes,
+                                                       &dep_ptr, &dep_conn,
+                                                       &dep_weights);
+          xlb = new TACSBVec(filter_maps[0],
+                             vars_per_node, filter_dist[0], dep);
+        }
+        else {
+          xlb = new TACSBVec(filter_maps[0],
+                             vars_per_node, filter_dist[0]);
+        }
+      }
+      else {
+        if (oct_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+
+
+        }
+        else {
+          xlb = new TACSBVec(filter_maps[0],
+                             vars_per_node, filter_dist[0]);
+        
+        }
+      }
       xlb->incref();
       xlb->copyValues(wrap->vec);
     }
@@ -1008,8 +1119,48 @@ void TMRTopoProblem::setInitDesignVars( ParOptVec *xvars,
     ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(ub);
     if (wrap){
       if (xub){ xub->decref(); }
-      xub = new TACSBVec(filter_maps[0], vars_per_node,
-                         filter_dist[0]);
+      if (quad_filter){
+        if (quad_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+          // Get dependent node information
+          int *dep_ptr, *dep_conn;
+          const int *_dep_ptr, *_dep_conn;
+          double *dep_weights;
+          const double *_dep_weights;
+          int num_dep_nodes = quad_filter[0]->getDepNodeConn(&_dep_ptr, &_dep_conn,
+                                                             &_dep_weights);
+          // Copy over the data
+          dep_ptr = new int[ num_dep_nodes+1 ];
+          memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
+      
+          int dep_size = quad_filter[0]->getMeshOrder()*num_dep_nodes;
+          dep_conn = new int[ dep_size ];
+          memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
+
+          dep_weights = new double[ dep_size ];
+          memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
+      
+          TACSBVecDepNodes *dep = new TACSBVecDepNodes(num_dep_nodes,
+                                                       &dep_ptr, &dep_conn,
+                                                       &dep_weights);
+          xub = new TACSBVec(filter_maps[0],
+                             vars_per_node, filter_dist[0], dep);
+        }
+        else {
+          xub = new TACSBVec(filter_maps[0],
+                             vars_per_node, filter_dist[0]);
+        }
+      }
+      else {
+        if (oct_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+
+
+        }
+        else {
+          xub = new TACSBVec(filter_maps[0],
+                             vars_per_node, filter_dist[0]);
+        
+        }
+      }
       xub->incref();
       xub->copyValues(wrap->vec);
     }
@@ -1027,6 +1178,41 @@ void TMRTopoProblem::setIterationCounter( int iter ){
   Create a design variable vector
 */
 ParOptVec *TMRTopoProblem::createDesignVec(){
+  if (quad_filter){
+    if (quad_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+      // Get dependent node information
+      int *dep_ptr, *dep_conn;
+      const int *_dep_ptr, *_dep_conn;
+      double *dep_weights;
+      const double *_dep_weights;
+      int num_dep_nodes = quad_filter[0]->getDepNodeConn(&_dep_ptr, &_dep_conn,
+                                                         &_dep_weights);
+      // Copy over the data
+      dep_ptr = new int[ num_dep_nodes+1 ];
+      memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
+      
+      int dep_size = quad_filter[0]->getMeshOrder()*num_dep_nodes;
+      dep_conn = new int[ dep_size ];
+      memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
+
+      dep_weights = new double[ dep_size ];
+      memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
+      
+      TACSBVecDepNodes *dep = new TACSBVecDepNodes(num_dep_nodes,
+                                                   &dep_ptr, &dep_conn,
+                                                   &dep_weights);
+
+      return new ParOptBVecWrap(new TACSBVec(filter_maps[0],
+                                             vars_per_node,
+                                             filter_dist[0],
+                                             dep));
+    }   
+  }
+  else {
+    if (oct_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+
+    }  
+  }
   return new ParOptBVecWrap(new TACSBVec(filter_maps[0],
                                          vars_per_node,
                                          filter_dist[0]));
@@ -1404,10 +1590,25 @@ int TMRTopoProblem::getLocalValuesFromBVec( TACSBVec *vec,
   TacsScalar *x_vals, *x_ext_vals;
   int size = vec->getArray(&x_vals);
   int ext_size = vec->getExtArray(&x_ext_vals);
+  if (quad_filter){
+    if (quad_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+      vec->beginDistributeValues();
+      vec->endDistributeValues();
+      const int *node_numbers;
+      int num_nodes = quad_filter[0]->getNodeNumbers(&node_numbers);
+      vec->getValues(num_nodes, node_numbers, &xloc[0]);
+      return num_nodes;
+    }    
+  }
+  else if (oct_filter) {
+    if (oct_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+      
+    }    
+  }
   memcpy(xloc, x_vals, size*sizeof(TacsScalar));
   if (x_ext_vals){
     memcpy(&xloc[size], x_ext_vals, ext_size*sizeof(TacsScalar));
-  }
+    }
   return size + ext_size;
 }
 
@@ -1420,10 +1621,52 @@ void TMRTopoProblem::setBVecFromLocalValues( const TacsScalar *xloc,
   TacsScalar *x_vals, *x_ext_vals;
   int size = vec->getArray(&x_vals);
   int ext_size = vec->getExtArray(&x_ext_vals);
-  memcpy(x_vals, xloc, size*sizeof(TacsScalar));
-  if (x_ext_vals){
-    memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
+  if (quad_filter){
+    if (quad_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+      /*
+      TACSBVecDepNodes *dep_vec = vec->getBVecDepNodes();
+      const int *dep_ptr, *dep_conn;
+      int ndep = dep_vec->getDepNodes(NULL, NULL, NULL);
+      int *index = new int[ ndep ];
+      for ( int i = 0; i < ndep; i++ ){
+        index[i] = i;
+      }
+      // Set the dependent node info to BVec
+      vec->setValue(ndep, index, &xloc[0], TACS_INSERT_VALUES);
+      delete [] index;
+      // Set the external node info to BVec
+      //vec->setValue();
+      // Set the local node info to BVec
+      index = new int[ size ];
+      for ( int i = 0; i < size; i++ ){
+        index[i] = i+ndep;
+      }
+      delete [] index;
+      vec->setValue(size, index, &xloc[ndep], TACS_INSERT_VALUES);
+      */
+
+      const int *node_numbers;
+      int num_nodes = quad_filter[0]->getNodeNumbers(&node_numbers);
+      vec->setValues(num_nodes, node_numbers, xloc, TACS_INSERT_VALUES);
+    }
+    else {
+      memcpy(x_vals, xloc, size*sizeof(TacsScalar));
+      if (x_ext_vals){
+        memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
+      }
+    }
   }
+  else if (oct_filter) {
+    if (oct_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
+      
+    }
+    else {
+      memcpy(x_vals, xloc, size*sizeof(TacsScalar));
+      if (x_ext_vals){
+        memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
+      }
+    }
+  }  
 }
 
 /*
@@ -1488,8 +1731,10 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       if (forces[i]){
         // Solve the system: K(x)*u = forces
         ksm->solve(forces[i], vars[i]);
-        tacs[0]->applyBCs(vars[i]);
-
+        //tacs[0]->applyBCs(vars[i]);
+        vars[i]->scale(-1.0);
+        tacs[0]->setBCs(vars[i]);
+        vars[i]->scale(-1.0);
         // Set the variables into TACSAssembler
         tacs[0]->setVariables(vars[i]);
 
@@ -1511,7 +1756,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         if (num_funcs > 0){
           tacs[0]->evalFunctions(load_case_info[i].funcs,
                                  num_funcs, &cons[count]);
-
+          printf("Mass: %e\n", cons[count]);
           // Scale and offset the constraints that we just evaluated
           for ( int j = 0; j < num_funcs; j++ ){
             TacsScalar offset = load_case_info[i].offset[j];

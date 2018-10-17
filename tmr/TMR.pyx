@@ -1811,6 +1811,9 @@ cdef class QuadForest:
             Xp[i,2] = X[i].z
         return Xp
 
+    def getLocalNodeNumber(self, int node):
+        return self.ptr.getLocalNodeNumber(node)
+        
     def getNodeRange(self):
         cdef int size = 0
         cdef const int *node_range = NULL
@@ -2910,6 +2913,7 @@ cdef class ThermoQuadStiffness(CoupledPlaneStress):
         cdef int* ind = NULL
         cdef int nw = 0
         self.ptr = NULL
+        cdef TMRQuadForest *qf = NULL
         # if weights is None or index is None:
         #     errmsg = 'Must define weights and indices'
         #     raise ValueError(errmsg)
@@ -2935,15 +2939,10 @@ cdef class ThermoQuadStiffness(CoupledPlaneStress):
             for i in range(nw):
                 ind[i] = <int>index[i]
             
-            
+        if filtr:
+            qf = filtr.ptr
         # Create the constitutive object
-        if filtr and index:
-            self.ptr = new TMRCoupledThermoQuadStiffness(NULL, nw, props.ptr,
-                                                         filtr.ptr, ind)
-        else:
-            self.ptr = new TMRCoupledThermoQuadStiffness(w, nw, props.ptr,
-                                                         NULL, NULL)
-                                                     
+        self.ptr =new TMRCoupledThermoQuadStiffness(w, nw, props.ptr, qf, ind)
         self.ptr.incref()
         if w:
             free(w)

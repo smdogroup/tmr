@@ -1032,7 +1032,6 @@ void TMRQuadTACSTopoCreator::createElements( int order,
       }
       weights[i].index = node;
     }
-    
     // Loop over the quadrants
     quadrants->getArray(&quads, &num_quads);
     for ( int i = 0; i < num_quads; i++ ){
@@ -1138,10 +1137,7 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
   // Get the local node index on this processor
   for ( int i = 0; i < nweights*num_quads; i++ ){
     index[i] = filter->getLocalNodeNumber(conn[i]);
-    // printf("[%d]: %f %f %d %d\n", i, X[index[i]].x, X[index[i]].y,
-    //        index[i], conn[i]);
   }
-  //exit(0);
   // Get the local node numbers
   const int *node_nums;
   int num_nodes = filter->getNodeNumbers(&node_nums);

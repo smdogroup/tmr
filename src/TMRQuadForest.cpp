@@ -4484,7 +4484,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
       double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + bern_knots[j]) -
                              quad->y)/hc;
       bernstein_shape_functions(coarse->mesh_order, v,
-                               coarse->interp_knots, Nv);
+                                coarse->interp_knots, Nv);
     }
     delete [] bern_knots;
   }
@@ -4756,9 +4756,9 @@ void TMRQuadForest::evalBernsteinWeights( int mesh_order,
                                           double u,
                                           double *knots,
                                           double *N ){
-  //bernstein_shape_functions(mesh_order, u, knots, N);
+  // Weights evaluated from the subdivison matrix
   if (mesh_order == 3){
-    if ( u < 0.0 ){
+    if (u < 0.0){
       N[0] = 0.5;
       N[1] = 0.5;
       N[2] = 0.0;
@@ -4772,6 +4772,89 @@ void TMRQuadForest::evalBernsteinWeights( int mesh_order,
       N[0] = 0.25;
       N[1] = 0.5;
       N[2] = 0.25;
+    }
+  }
+  else if (mesh_order == 4){
+    if (u == -2./3){
+      N[0] = 0.5;
+      N[1] = 0.5;
+      N[2] = 0.0;
+      N[3] = 0.0;
+    }
+    else if (u == -1./3){
+      N[0] = 0.25;
+      N[1] = 0.5;
+      N[2] = 0.25;
+      N[3] = 0.0;
+    }
+    else if (u == 0){
+      N[0] = 0.125;
+      N[1] = 0.375;
+      N[2] = 0.375;
+      N[3] = 0.125;
+    }
+    else if (u == 1./3){
+      N[0] = 0.0;
+      N[1] = 0.25;
+      N[2] = 0.5;
+      N[3] = 0.25;
+    }
+    else {
+      N[0] = 0.0;
+      N[1] = 0.0;
+      N[2] = 0.5;
+      N[3] = 0.5;
+    }
+  }
+  else if (mesh_order == 5){
+    if (u == -0.75){
+      N[0] = 0.5;
+      N[1] = 0.5;
+      N[2] = 0.0;
+      N[3] = 0.0;
+      N[4] = 0.0;
+    }
+    else if (u == -0.5){
+      N[0] = 0.25;
+      N[1] = 0.5;
+      N[2] = 0.25;
+      N[3] = 0.0;
+      N[4] = 0.0;
+    }
+    else if (u == -0.25){
+      N[0] = 0.125;
+      N[1] = 0.375;
+      N[2] = 0.375;
+      N[3] = 0.125;
+      N[4] = 0.0;
+    }
+    else if (u == 0.0){
+      N[0] = 0.0625;
+      N[1] = 0.25;
+      N[2] = 0.375;
+      N[3] = 0.25;
+      N[4] = 0.0625;
+    }
+    else if (u == 0.25){
+      N[0] = 0.0;
+      N[1] = 0.125;
+      N[2] = 0.375;
+      N[3] = 0.375;
+      N[4] = 0.125;      
+    }
+    else if (u == 0.5){
+      N[0] = 0.0;
+      N[1] = 0.0;
+      N[2] = 0.25;
+      N[3] = 0.5;
+      N[4] = 0.25;      
+    }
+    else if (u == 0.75){
+      N[0] = 0.0;
+      N[1] = 0.0;
+      N[2] = 0.0;
+      N[3] = 0.5;
+      N[4] = 0.5;      
     }
   }
 }

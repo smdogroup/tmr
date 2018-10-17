@@ -203,7 +203,7 @@ class TMRCyTopoQuadBernsteinCreator : public TMRQuadBernsteinTACSTopoCreator {
                               TMRQuadrant *quad,
                               int *index, 
                               int nweights,
-                              TMRQuadForest *filter){
+                              TMRQuadForest *filter ){
     TACSElement *elem =
       createquadtopoelement(self, order, quad, index, nweights,
                             filter);

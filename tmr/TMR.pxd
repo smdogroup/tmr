@@ -336,6 +336,7 @@ cdef extern from "TMRQuadForest.h":
         int getOwnedNodeRange(const int**)
         void getQuadrants(TMRQuadrantArray**)
         int getPoints(TMRPoint**)
+        int getLocalNodeNumber(int);
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
 
