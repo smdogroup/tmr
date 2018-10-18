@@ -1036,7 +1036,7 @@ int TMRQuadForest::getInterpKnots( const double **_knots ){
 void TMRQuadForest::evalInterp( const double pt[], double N[] ){
   double Nu[MAX_ORDER], Nv[MAX_ORDER];
   if (interp_type == TMR_BERNSTEIN_POINTS){
-    // Evaluate the lagrange shape functions
+    // Evaluate the bernstein shape functions
     bernstein_shape_functions(mesh_order, pt[0], interp_knots, Nu);
     bernstein_shape_functions(mesh_order, pt[1], interp_knots, Nv);
   }
@@ -1060,11 +1060,18 @@ void TMRQuadForest::evalInterp( const double pt[], double N[],
                                 double Nxi[], double Neta[] ){
   double Nu[MAX_ORDER], Nv[MAX_ORDER];
   double Nud[MAX_ORDER], Nvd[MAX_ORDER];
-
-  // Evaluate the shape functions
-  lagrange_shape_func_derivative(mesh_order, pt[0], interp_knots, Nu, Nud);
-  lagrange_shape_func_derivative(mesh_order, pt[1], interp_knots, Nv, Nvd);
-
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Evaluate the bernstein shape functions
+    bernstein_shape_func_derivative(mesh_order, pt[0], interp_knots, 
+                                    Nu, Nud);
+    bernstein_shape_func_derivative(mesh_order, pt[1], interp_knots, 
+                                    Nv, Nvd);
+  }
+  else {
+    // Evaluate the shape functions
+    lagrange_shape_func_derivative(mesh_order, pt[0], interp_knots, Nu, Nud);
+    lagrange_shape_func_derivative(mesh_order, pt[1], interp_knots, Nv, Nvd);
+  }
   for ( int j = 0; j < mesh_order; j++ ){
     for ( int i = 0; i < mesh_order; i++ ){
       N[0] = Nu[i]*Nv[j];
@@ -3759,8 +3766,7 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
                 for ( int j = 0; j < mesh_order; j++ ){
                   dep_conn[ptr + j] = edge_nodes[j];
                 }
-                // --------------------------------------------------
-              
+                
                 // Compute parametric location along the edge
                 double u = 0.0;
                 if (edge_index < 2){
@@ -3815,7 +3821,7 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
                 
                 // Evaluate dependent weights
                 evalBernsteinWeights(mesh_order, u, interp_knots, 
-                                     &dep_weights[ptr]);               
+                                     &dep_weights[ptr]);
               }
             }
           }          

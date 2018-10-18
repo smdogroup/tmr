@@ -30,7 +30,7 @@ TMRCoupledThermoQuadStiffness::TMRCoupledThermoQuadStiffness( TMRIndexWeight *_w
                                                               int _nweights,
                                                               TMRQuadStiffnessProperties *_props,
                                                               TMRQuadForest *_filter, 
-int *_index ){
+                                                              int *_index ){
   
 
   // Record the density, Poisson ratio, D and the shear modulus
@@ -1150,10 +1150,6 @@ TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex,
     for ( int j = 0; j < nvars; j++ ){
       x[j] = 0.0;
       for ( int i = 0; i < nweights; i++ ){
-        // printf("N[%d]: %f weights: %d \n",i, N[i],
-        //        index[i]);
-        // printf("dv[%d]: %f\n", nvars*i + j,
-        //        dv[nvars*i + j]);               
         x[j] += N[i]*dv[nvars*i + j];
       }
       // Apply the projection to obtain the projected value
@@ -1166,38 +1162,12 @@ TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex,
       return rho[1];
     }
     return rho[0];
-  }
-  // if (filter && dv){
-  //   TMRIndexWeight *local_weights = new TMRIndexWeight[ nweights ];
-  //   computeLocalWeights(pt, local_weights);
-  //   double N[nweights];
-  //   filter->evalInterp(pt, N);
-  //   for ( int j = 0; j < nvars; j++ ){
-  //     x[j] = 0.0;
-  //     for ( int i = 0; i < nweights; i++ ){
-  //       printf("N[%d]: %f weights: %f %d, new: %f %d\n",i, N[i],
-  //              weights[i].weight, weights[i].index, local_weights[i].weight,
-  //              local_weights[i].index);
-  //       x[j] += N[i]*dv[nvars*weights[i].index + j];
-  //       //x[j] += N[i]*weights[i].weight*dv[nvars*weights[i].index + j];
-  //     }
-  //     // Apply the projection to obtain the projected value
-  //     // of the density
-  //     rho[j] = x[j];
-  //   }
-  // }
-  // if (dvIndex == 0){
-  //   if (nvars > 1){
-  //     return rho[1];
-  //   }
-  //   return rho[0];
-  // }
+  } 
   else if (dvIndex == 1){
     if (nvars > 1){
       return rho[2];
     }
     return rho[0];
-    //return x_vars[0];
   }
   return 0;
 }

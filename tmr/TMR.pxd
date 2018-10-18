@@ -572,6 +572,17 @@ cdef extern from "TMRCyCreator.h":
        void getFilter(TMRQuadForest**)
        void getMap(TACSVarMap**)
        void getIndices(TACSBVecIndices**)
+
+    cdef cppclass TMRCyTopoOctBernsteinCreator(TMREntity):
+        TMRCyTopoOctBernsteinCreator(TMRBoundaryConditions*, TMROctForest*)
+        void setSelfPointer(void*)
+        void setCreateOctTopoElement(
+            TACSElement* (*createocttopoelements)(
+                void*, int, TMROctant*, int*, int, TMROctForest*))
+        TACSAssembler *createTACS(TMROctForest*, OrderingType, double)
+        void getFilter(TMROctForest**)
+        void getMap(TACSVarMap**)
+        void getIndices(TACSBVecIndices**)
        
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):

@@ -121,8 +121,9 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
 };
 
 /*
-  This class is an abstract base class for setting up 
-  topology optimzation problems using TMRQuadForest objects
+  This class is an abstract base class for setting up topology optimzation
+  problems using TMRQuadForest objects. This is simplified for when the
+  underlying forest for the analysis and design mesh is identical
 */
 class TMRQuadBernsteinTACSTopoCreator : public TMRQuadTACSCreator {
  public:
@@ -161,7 +162,48 @@ class TMRQuadBernsteinTACSTopoCreator : public TMRQuadTACSCreator {
   // numbers.
   TACSBVecIndices *filter_indices;
 };
+/*
+  This class is an abstract base class for setting up topology optimzation
+  problems using TMROctForest objects. This is simplified for when the
+  underlying forest for the analysis and design mesh is identical
+*/
+class TMROctBernsteinTACSTopoCreator : public TMROctTACSCreator {
+ public:
+  TMROctBernsteinTACSTopoCreator( TMRBoundaryConditions *_bcs,
+                                   TMROctForest *_forest );
+  ~TMROctBernsteinTACSTopoCreator();
 
+  // Create the elements
+  void createElements( int order,
+                       TMROctForest *forest,
+                       int num_elements,
+                       TACSElement **elements );
+
+  // Create the element
+  virtual TACSElement *createElement( int order, 
+                                      TMROctant *oct,
+                                      int *index, 
+                                      int nweights,
+                                      TMROctForest *filter ) = 0;
+
+  // Get the underlying objects that define the filter
+  void getFilter( TMROctForest **filter );
+  void getMap( TACSVarMap **_map );
+  void getIndices( TACSBVecIndices **_indices );  
+
+ private:
+  // The forest that defines the filter
+  TMROctForest *filter;
+
+  // The filter map for this object. This defines how the design
+  // variables are distributed across all of the processors.
+  TACSVarMap *filter_map;
+
+  // The filter indices. This defines the relationship between the
+  // local design variable numbers and the global design variable
+  // numbers.
+  TACSBVecIndices *filter_indices;
+};
 
 #endif // TMR_TACS_TOPO_CREATOR_H
 

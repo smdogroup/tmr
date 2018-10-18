@@ -25,7 +25,7 @@ class TMRCoupledThermoQuadStiffness : public CoupledThermoPlaneStressStiffness {
                                  int _nweights,
                                  TMRQuadStiffnessProperties *_props,
                                  TMRQuadForest *_filter=NULL,
-                                 int *_index=NULL);
+                                 int *_index=NULL );
   ~TMRCoupledThermoQuadStiffness();
   // Set the design variable values in the object
   // --------------------------------------------

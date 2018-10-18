@@ -10,7 +10,7 @@
 #include "CoupledThermoSolidStiffness.h"
 #include "TACSConstitutive.h"
 #include "TMROctStiffness.h"
-
+#include "TMROctForest.h"
 /*
   The TMRCoupledThermoOctStiffness class
 
@@ -23,7 +23,9 @@ class TMRCoupledThermoOctStiffness : public CoupledThermoSolidStiffness {
   static const int MAX_NUM_MATERIALS = 5;
   TMRCoupledThermoOctStiffness( TMRIndexWeight *_weights, 
                                 int _nweights,
-                                TMRStiffnessProperties *_props );
+                                TMRStiffnessProperties *_props,
+                                TMROctForest *_filter=NULL,
+                                int *_index=NULL );
   ~TMRCoupledThermoOctStiffness();
   // Set the design variable values in the object
   // --------------------------------------------
@@ -92,13 +94,17 @@ class TMRCoupledThermoOctStiffness : public CoupledThermoSolidStiffness {
  private:
   // The density and stiffness properties
   TMRStiffnessProperties *props;
-  int nvars;
+  int nmats, nvars;
   TacsScalar x[MAX_NUM_MATERIALS+1];
   TacsScalar rho[MAX_NUM_MATERIALS+1];
 
-  // The local density of the
+  // The local weights
   int nweights;
   TMRIndexWeight *weights;
+  int *index;
+  // Local design variable vector
+  TacsScalar *dv;
+  TMROctForest *filter;
 };
 
 #endif // TMR_THERMO_OCTANT_STIFFNESS_H

@@ -1429,6 +1429,12 @@ void TMROctForest::setMeshOrder( int _mesh_order,
       interp_knots[i] = -cos(M_PI*i/(mesh_order-1));
     }
   }
+  else if (interp_type == TMR_BERNSTEIN_POINTS){
+    for (int i = 0; i < mesh_order; i++){
+      interp_knots[i] = -1;
+      interp_knots[mesh_order+i] = 1;
+    }
+  }
   else {
     // Uniform mesh spacing
     interp_knots[0] = -1.0;
@@ -1521,12 +1527,18 @@ int TMROctForest::getInterpKnots( const double **_knots ){
 */
 void TMROctForest::evalInterp( const double pt[], double N[] ){
   double Nu[MAX_ORDER], Nv[MAX_ORDER], Nw[MAX_ORDER];
-
-  // Evaluate the shape functions
-  lagrange_shape_functions(mesh_order, pt[0], interp_knots, Nu);
-  lagrange_shape_functions(mesh_order, pt[1], interp_knots, Nv);
-  lagrange_shape_functions(mesh_order, pt[2], interp_knots, Nw);
-
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Evaluate the bernstein shape functions
+    bernstein_shape_functions(mesh_order, pt[0], interp_knots, Nu);
+    bernstein_shape_functions(mesh_order, pt[1], interp_knots, Nv);
+    bernstein_shape_functions(mesh_order, pt[2], interp_knots, Nw);
+  }
+  else{
+    // Evaluate the shape functions
+    lagrange_shape_functions(mesh_order, pt[0], interp_knots, Nu);
+    lagrange_shape_functions(mesh_order, pt[1], interp_knots, Nv);
+    lagrange_shape_functions(mesh_order, pt[2], interp_knots, Nw);
+  }
   for ( int k = 0; k < mesh_order; k++ ){
     for ( int j = 0; j < mesh_order; j++ ){
       for ( int i = 0; i < mesh_order; i++ ){
@@ -1544,12 +1556,21 @@ void TMROctForest::evalInterp( const double pt[], double N[],
                                double Nxi[], double Neta[], double Nzeta[] ){
   double Nu[MAX_ORDER], Nv[MAX_ORDER], Nw[MAX_ORDER];
   double Nud[MAX_ORDER], Nvd[MAX_ORDER], Nwd[MAX_ORDER];
-
-  // Evaluate the shape functions
-  lagrange_shape_func_derivative(mesh_order, pt[0], interp_knots, Nu, Nud);
-  lagrange_shape_func_derivative(mesh_order, pt[1], interp_knots, Nv, Nvd);
-  lagrange_shape_func_derivative(mesh_order, pt[2], interp_knots, Nw, Nwd);
-
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Evaluate the bernstein shape functions
+    bernstein_shape_func_derivative(mesh_order, pt[0], interp_knots, 
+                                    Nu, Nud);
+    bernstein_shape_func_derivative(mesh_order, pt[1], interp_knots, 
+                                    Nv, Nvd);
+    bernstein_shape_func_derivative(mesh_order, pt[2], interp_knots, 
+                                    Nw, Nwd);
+  }
+  else {
+    // Evaluate the shape functions
+    lagrange_shape_func_derivative(mesh_order, pt[0], interp_knots, Nu, Nud);
+    lagrange_shape_func_derivative(mesh_order, pt[1], interp_knots, Nv, Nvd);
+    lagrange_shape_func_derivative(mesh_order, pt[2], interp_knots, Nw, Nwd);
+  }
   for ( int k = 0; k < mesh_order; k++ ){
     for ( int j = 0; j < mesh_order; j++ ){
       for ( int i = 0; i < mesh_order; i++ ){
@@ -1576,15 +1597,24 @@ void TMROctForest::evalInterp( const double pt[], double N[],
   double Nu[MAX_ORDER], Nv[MAX_ORDER], Nw[MAX_ORDER];
   double Nud[MAX_ORDER], Nvd[MAX_ORDER], Nwd[MAX_ORDER];
   double Nudd[MAX_ORDER], Nvdd[MAX_ORDER], Nwdd[MAX_ORDER];
-
-  // Evaluate the shape functions
-  lagrange_shape_func_second_derivative(mesh_order, pt[0], interp_knots,
-                                        Nu, Nud, Nudd);
-  lagrange_shape_func_second_derivative(mesh_order, pt[1], interp_knots,
-                                        Nv, Nvd, Nvdd);
-  lagrange_shape_func_second_derivative(mesh_order, pt[2], interp_knots,
-                                        Nw, Nwd, Nwdd);
-
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Evaluate the bernstein shape functions
+    bernstein_shape_func_second_derivative(mesh_order, pt[0], interp_knots, 
+                                           Nu, Nud, Nudd);
+    bernstein_shape_func_second_derivative(mesh_order, pt[1], interp_knots, 
+                                           Nv, Nvd, Nvdd);
+    bernstein_shape_func_second_derivative(mesh_order, pt[2], interp_knots,
+                                           Nw, Nwd, Nwdd);
+  }
+  else {
+    // Evaluate the shape functions
+    lagrange_shape_func_second_derivative(mesh_order, pt[0], interp_knots,
+                                          Nu, Nud, Nudd);
+    lagrange_shape_func_second_derivative(mesh_order, pt[1], interp_knots,
+                                          Nv, Nvd, Nvdd);
+    lagrange_shape_func_second_derivative(mesh_order, pt[2], interp_knots,
+                                          Nw, Nwd, Nwdd);
+  }
   for ( int k = 0; k < mesh_order; k++ ){
     for ( int j = 0; j < mesh_order; j++ ){
       for ( int i = 0; i < mesh_order; i++ ){
@@ -3788,12 +3818,16 @@ void TMROctForest::labelDependentNodes( int *nodes ){
             if (id == 0){
               start = 1;
               end = mesh_order;
-              if (mesh_order == 3){ end = mesh_order-1; }
+              if (mesh_order == 3 && interp_type != TMR_BERNSTEIN_POINTS){ 
+                end = mesh_order-1; 
+              }
             }
             else {
               start = 0;
               end = mesh_order-1;
-              if (mesh_order == 3){ start = 1; }
+              if (mesh_order == 3 && interp_type != TMR_BERNSTEIN_POINTS){ 
+                start = 1; 
+              }
             }
 
             if (edge_index < 4){
@@ -4334,14 +4368,15 @@ TMROctantArray *TMROctForest::createLocalNodes(){
   node_label = edge_label = face_label = block_label =
     TMR_OCT_NODE_LABEL;
 
+  int label_type[4];
   // If the mesh order is high enough, we will have multiple nodes
   // per edge/face
-  if (mesh_order > 3){
-    node_label = TMR_OCT_NODE_LABEL;
-    edge_label = TMR_OCT_EDGE_LABEL;
-    face_label = TMR_OCT_FACE_LABEL;
-    block_label = TMR_OCT_BLOCK_LABEL;
-  }
+  initLabel(mesh_order, interp_type, label_type);
+  
+  node_label = label_type[0];
+  edge_label = label_type[1];
+  face_label = label_type[2];
+  block_label = label_type[3];
 
   // Set the node locations
   if (mesh_order == 2){
@@ -4729,16 +4764,17 @@ void TMROctForest::createLocalConn( TMROctantArray *nodes,
   int node_label, edge_label, face_label, block_label;
   node_label = edge_label = face_label = block_label =
     TMR_OCT_NODE_LABEL;
-
+  
+  int label_type[4];
   // If the mesh order is high enough, we will have multiple nodes
   // per edge/face
-  if (mesh_order > 3){
-    node_label = TMR_OCT_NODE_LABEL;
-    edge_label = TMR_OCT_EDGE_LABEL;
-    face_label = TMR_OCT_FACE_LABEL;
-    block_label = TMR_OCT_BLOCK_LABEL;
-  }
-
+  initLabel(mesh_order, interp_type, label_type);
+  
+  node_label = label_type[0];
+  edge_label = label_type[1];
+  face_label = label_type[2];
+  block_label = label_type[3];
+ 
   // Allocate the connectivity
   int size = mesh_order*mesh_order*mesh_order*num_elements;
   conn = new int[ size ];
@@ -5258,6 +5294,17 @@ void TMROctForest::createDependentConn( const int *node_nums,
   double *Nu = new double[ mesh_order ];
   double *Nv = new double[ mesh_order ];
 
+  double *bern_knots = new double[mesh_order];
+  memset(bern_knots, 0.0, mesh_order*sizeof(double));
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
+    double knot_space = 2.0/(mesh_order-1);
+    for (int p = 1; p < mesh_order-1; p++){
+      bern_knots[p] = -1. + p*knot_space;
+    }
+  }
+
   for ( int i = 0; i < num_elements; i++ ){
     if (octs[i].info){
       // Decode the dependent edge/face information
@@ -5439,28 +5486,45 @@ void TMROctForest::createDependentConn( const int *node_nums,
                 int x = id % 2;
                 int y = ((id % 4)/2);
                 int z = id/4;
-
-                // Compute parametric location along the edge
-                double u = 0.0;
-                if (edge_index < 4){
-                  u = 1.0*(x-1) + 0.5*(1.0 + interp_knots[k]);
-                }
-                else if (edge_index < 8){
-                  u = 1.0*(y-1) + 0.5*(1.0 + interp_knots[k]);
-                }
-                else {
-                  u = 1.0*(z-1) + 0.5*(1.0 + interp_knots[k]);
-                }
-
+                
                 // Compute the shape functions
                 int ptr = dep_ptr[index];
                 for ( int j = 0; j < mesh_order; j++ ){
                   dep_conn[ptr + j] = edge_nodes[j];
                 }
 
-                // Evaluate the shape functions
-                lagrange_shape_functions(mesh_order, u, interp_knots,
-                                         &dep_weights[ptr]);
+                // Compute parametric location along the edge
+                double u = 0.0;
+                
+                // Evaluate the weights based on the interpolation type
+                if (interp_type != TMR_BERNSTEIN_POINTS){
+                  if (edge_index < 4){
+                    u = 1.0*(x-1) + 0.5*(1.0 + interp_knots[k]);
+                  }
+                  else if (edge_index < 8){
+                    u = 1.0*(y-1) + 0.5*(1.0 + interp_knots[k]);
+                  }
+                  else {
+                    u = 1.0*(z-1) + 0.5*(1.0 + interp_knots[k]);
+                  }
+                  // Evaluate the shape functions
+                  lagrange_shape_functions(mesh_order, u, interp_knots,
+                                           &dep_weights[ptr]);
+                }
+                else {
+                  if (edge_index < 4){
+                    u = 1.0*(x-1) + 0.5*(1.0 + bern_knots[k]);
+                  }
+                  else if (edge_index < 8){
+                    u = 1.0*(y-1) + 0.5*(1.0 + bern_knots[k]);
+                  }
+                  else {
+                    u = 1.0*(z-1) + 0.5*(1.0 + bern_knots[k]);
+                  }
+                  // Evaluate dependent weights
+                  evalBernsteinWeights(mesh_order, u, interp_knots, 
+                                       &dep_weights[ptr]);
+                }                
               }
             }
           }
@@ -5514,14 +5578,24 @@ void TMROctForest::createDependentConn( const int *node_nums,
 
                 int len = dep_ptr[index+1] - dep_ptr[index];
                 if (len == mesh_order*mesh_order){
-                  // Compute the distance along the edges
-                  double u = -1.0 + 0.5*(1.0 + interp_knots[ii]);
-                  double v = -1.0 + 0.5*(1.0 + interp_knots[jj]);
-
                   // Compute the offsets to add (if any)
                   int x = id % 2;
                   int y = ((id % 4)/2);
                   int z = id/4;
+                  
+                  // Compute the distance along the edges
+                  double u = 0.0;
+                  double v = 0.0;
+                  // Evaluate the parametric point differently depending on the
+                  // interpolation type
+                  if (interp_type != TMR_BERNSTEIN_POINTS){
+                    u = -1.0 + 0.5*(1.0 + interp_knots[ii]);
+                    v = -1.0 + 0.5*(1.0 + interp_knots[jj]);
+                  }
+                  else {
+                    u = -1.0 + 0.5*(1.0 + bern_knots[ii]);
+                    v = -1.0 + 0.5*(1.0 + bern_knots[jj]);
+                  }
 
                   if (face_index < 2){
                     // add the y/z components
@@ -5538,11 +5612,16 @@ void TMROctForest::createDependentConn( const int *node_nums,
                     u += 1.0*x;
                     v += 1.0*y;
                   }
-
-                  // Evaluate the shape functions
-                  lagrange_shape_functions(mesh_order, u, interp_knots, Nu);
-                  lagrange_shape_functions(mesh_order, v, interp_knots, Nv);
-
+                  if (interp_type != TMR_BERNSTEIN_POINTS){
+                    // Evaluate the shape functions
+                    lagrange_shape_functions(mesh_order, u, interp_knots, Nu);
+                    lagrange_shape_functions(mesh_order, v, interp_knots, Nv);
+                  }
+                  else {
+                    // Evaluate dependent weights
+                    evalBernsteinWeights(mesh_order, u, interp_knots, Nu);
+                    evalBernsteinWeights(mesh_order, v, interp_knots, Nv);
+                  }
                   // Add the appropriate offset along the u/v directions
                   int ptr = dep_ptr[index];
                   for ( int j = 0; j < mesh_order*mesh_order; j++ ){
@@ -5581,7 +5660,7 @@ void TMROctForest::evaluateNodeLocations(){
   int num_elements;
   TMROctant *octs;
   octants->getArray(&octs, &num_elements);
-
+  
   if (topo){
     for ( int i = 0; i < num_elements; i++ ){
       // Get the right surface
@@ -5600,20 +5679,47 @@ void TMROctForest::evaluateNodeLocations(){
 
       // Set the offset into the connectivity array
       const int *c = &conn[mesh_order*mesh_order*mesh_order*i];
-
-      // Look for nodes that are not assigned
-      for ( int kk = 0; kk < mesh_order; kk++ ){
-        for ( int jj = 0; jj < mesh_order; jj++ ){
-          for ( int ii = 0; ii < mesh_order; ii++ ){
-            // Compute the mesh index
-            int node = c[ii + jj*mesh_order + kk*mesh_order*mesh_order];
-            int index = getLocalNodeNumber(node);
-            if (!flags[index]){
-              flags[index] = 1;
-              vol->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
-                             v + 0.5*d*(1.0 + interp_knots[jj]),
-                             w + 0.5*d*(1.0 + interp_knots[kk]),
-                             &X[index]);
+      if (interp_type != TMR_BERNSTEIN_POINTS){
+        // Look for nodes that are not assigned
+        for ( int kk = 0; kk < mesh_order; kk++ ){
+          for ( int jj = 0; jj < mesh_order; jj++ ){
+            for ( int ii = 0; ii < mesh_order; ii++ ){
+              // Compute the mesh index
+              int node = c[ii + jj*mesh_order + kk*mesh_order*mesh_order];
+              int index = getLocalNodeNumber(node);
+              if (!flags[index]){
+                flags[index] = 1;
+                vol->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
+                               v + 0.5*d*(1.0 + interp_knots[jj]),
+                               w + 0.5*d*(1.0 + interp_knots[kk]),
+                               &X[index]);
+              }
+            }
+          }
+        }
+      }
+      else { // Bernstein control points
+        double *bern_knots = new double[mesh_order];
+        bern_knots[0] = -1.0;
+        bern_knots[mesh_order-1] = 1.0;
+        double knot_space = 2.0/(mesh_order-1);
+        for (int j = 1; j < mesh_order-1; j++){
+          bern_knots[j] = -1. + j*knot_space;
+        }
+        // Look for nodes that are not assigned
+        for ( int kk = 0; kk < mesh_order; kk++ ){
+          for ( int jj = 0; jj < mesh_order; jj++ ){
+            for ( int ii = 0; ii < mesh_order; ii++ ){
+              // Compute the mesh index
+              int node = c[ii + jj*mesh_order + kk*mesh_order*mesh_order];
+              int index = getLocalNodeNumber(node);
+              if (!flags[index]){
+                flags[index] = 1;
+                vol->evalPoint(u + 0.5*d*(1.0 + bern_knots[ii]),
+                               v + 0.5*d*(1.0 + bern_knots[jj]),
+                               w + 0.5*d*(1.0 + bern_knots[kk]),
+                               &X[index]);
+              }
             }
           }
         }
@@ -6323,64 +6429,134 @@ int TMROctForest::computeElemInterp( TMROctant *node,
   double *Nu = &tmp[0];
   double *Nv = &tmp[coarse->mesh_order];
   double *Nw = &tmp[2*coarse->mesh_order];
-
-  // Check whether the node is on a coarse mesh surface in either
-  // the x,y,z directions
-  if ((i == 0 && oct->x == node->x) ||
-      (i == mesh_order-1 && oct->x == node->x + h)){
-    istart = 0;
-    iend = 1;
-    Nu[istart] = 1.0;
+  
+  // Check that the interpolation type between the meshes are identical
+  if (interp_type != coarse->interp_type){
+    printf("Error: Interpolation type between meshes are not identical\n");
   }
-  else if ((i == 0 && oct->x + hc == node->x) ||
-           (i == mesh_order-1 && oct->x + hc == node->x + h)){
-    istart = coarse->mesh_order-1;
-    iend = coarse->mesh_order;
-    Nu[istart] = 1.0;
+  if (interp_type != TMR_BERNSTEIN_POINTS){
+    // Check whether the node is on a coarse mesh surface in either
+    // the x,y,z directions
+    if ((i == 0 && oct->x == node->x) ||
+        (i == mesh_order-1 && oct->x == node->x + h)){
+      istart = 0;
+      iend = 1;
+      Nu[istart] = 1.0;
+    }
+    else if ((i == 0 && oct->x + hc == node->x) ||
+             (i == mesh_order-1 && oct->x + hc == node->x + h)){
+      istart = coarse->mesh_order-1;
+      iend = coarse->mesh_order;
+      Nu[istart] = 1.0;
+    }
+    else {
+      double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
+                             oct->x)/hc;
+      lagrange_shape_functions(coarse->mesh_order, u,
+                               coarse->interp_knots, Nu);
+    }
+    if ((j == 0 && oct->y == node->y) ||
+        (j == mesh_order-1 && oct->y == node->y + h)){
+      jstart = 0;
+      jend = 1;
+      Nv[jstart] = 1.0;
+    }
+    else if ((j == 0 && oct->y + hc == node->y) ||
+             (j == mesh_order-1 && oct->y + hc == node->y + h)){
+      jstart = coarse->mesh_order-1;
+      jend = coarse->mesh_order;
+      Nv[jstart] = 1.0;
+    }
+    else {
+      double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
+                             oct->y)/hc;
+      lagrange_shape_functions(coarse->mesh_order, v,
+                               coarse->interp_knots, Nv);
+    }
+    if ((k == 0 && oct->z == node->z) ||
+        (k == mesh_order-1 && oct->z == node->z + h)){
+      kstart = 0;
+      kend = 1;
+      Nw[kstart] = 1.0;
+    }
+    else if ((k == 0 && oct->z + hc == node->z) ||
+             (k == mesh_order-1 && oct->z + hc == node->z + h)){
+      kstart = coarse->mesh_order-1;
+      kend = coarse->mesh_order;
+      Nw[kstart] = 1.0;
+    }
+    else {
+      double w = -1.0 + 2.0*(node->z + 0.5*h*(1.0 + interp_knots[k]) -
+                             oct->z)/hc;
+      lagrange_shape_functions(coarse->mesh_order, w,
+                               coarse->interp_knots, Nw);
+    }
   }
-  else {
-    double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
-                           oct->x)/hc;
-    lagrange_shape_functions(coarse->mesh_order, u,
-                             coarse->interp_knots, Nu);
-  }
-  if ((j == 0 && oct->y == node->y) ||
-      (j == mesh_order-1 && oct->y == node->y + h)){
-    jstart = 0;
-    jend = 1;
-    Nv[jstart] = 1.0;
-  }
-  else if ((j == 0 && oct->y + hc == node->y) ||
-           (j == mesh_order-1 && oct->y + hc == node->y + h)){
-    jstart = coarse->mesh_order-1;
-    jend = coarse->mesh_order;
-    Nv[jstart] = 1.0;
-  }
-  else {
-    double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
-                           oct->y)/hc;
-    lagrange_shape_functions(coarse->mesh_order, v,
-                             coarse->interp_knots, Nv);
-  }
-  if ((k == 0 && oct->z == node->z) ||
-      (k == mesh_order-1 && oct->z == node->z + h)){
-    kstart = 0;
-    kend = 1;
-    Nw[kstart] = 1.0;
-  }
-  else if ((k == 0 && oct->z + hc == node->z) ||
-           (k == mesh_order-1 && oct->z + hc == node->z + h)){
-    kstart = coarse->mesh_order-1;
-    kend = coarse->mesh_order;
-    Nw[kstart] = 1.0;
-  }
-  else {
-    double w = -1.0 + 2.0*(node->z + 0.5*h*(1.0 + interp_knots[k]) -
-                           oct->z)/hc;
-    lagrange_shape_functions(coarse->mesh_order, w,
-                             coarse->interp_knots, Nw);
-  }
-
+  else { // For the Bernstein Polynomials
+    // Check whether the node is on a coarse mesh surface in either
+    // the x,y,z directions
+    double *bern_knots = new double[mesh_order];
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
+    double knot_space = 2.0/(mesh_order-1);
+    for (int p = 1; p < mesh_order-1; p++){
+      bern_knots[p] = -1. + p*knot_space;
+    }
+    if ((i == 0 && oct->x == node->x) ||
+        (i == mesh_order-1 && oct->x == node->x + h)){
+      istart = 0;
+      iend = 1;
+      Nu[istart] = 1.0;
+    }
+    else if ((i == 0 && oct->x + hc == node->x) ||
+             (i == mesh_order-1 && oct->x + hc == node->x + h)){
+      istart = coarse->mesh_order-1;
+      iend = coarse->mesh_order;
+      Nu[istart] = 1.0;
+    }
+    else {
+      double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + interp_knots[i]) -
+                             oct->x)/hc;
+      bernstein_shape_functions(coarse->mesh_order, u,
+                                coarse->interp_knots, Nu);
+    }
+    if ((j == 0 && oct->y == node->y) ||
+        (j == mesh_order-1 && oct->y == node->y + h)){
+      jstart = 0;
+      jend = 1;
+      Nv[jstart] = 1.0;
+    }
+    else if ((j == 0 && oct->y + hc == node->y) ||
+             (j == mesh_order-1 && oct->y + hc == node->y + h)){
+      jstart = coarse->mesh_order-1;
+      jend = coarse->mesh_order;
+      Nv[jstart] = 1.0;
+    }
+    else {
+      double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
+                             oct->y)/hc;
+      bernstein_shape_functions(coarse->mesh_order, v,
+                                coarse->interp_knots, Nv);
+    }
+    if ((k == 0 && oct->z == node->z) ||
+        (k == mesh_order-1 && oct->z == node->z + h)){
+      kstart = 0;
+      kend = 1;
+      Nw[kstart] = 1.0;
+    }
+    else if ((k == 0 && oct->z + hc == node->z) ||
+             (k == mesh_order-1 && oct->z + hc == node->z + h)){
+      kstart = coarse->mesh_order-1;
+      kend = coarse->mesh_order;
+      Nw[kstart] = 1.0;
+    }
+    else {
+      double w = -1.0 + 2.0*(node->z + 0.5*h*(1.0 + interp_knots[k]) -
+                             oct->z)/hc;
+      bernstein_shape_functions(coarse->mesh_order, w,
+                                coarse->interp_knots, Nw);
+    }
+  }  
   // Get the coarse grid information
   const int *cdep_ptr;
   const int *cdep_conn;
@@ -6628,4 +6804,132 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   delete [] vars;
   delete [] wvals;
   delete [] weights;
+}
+/*
+  Initialize the node label
+*/
+void TMROctForest::initLabel( int mesh_order, TMRInterpolationType interp_type,
+                               int label_type[] ){
+  if (mesh_order > 3 || (mesh_order >= 3 
+                         && interp_type == TMR_BERNSTEIN_POINTS)){
+    label_type[0] = TMR_OCT_NODE_LABEL;
+    label_type[1] = TMR_OCT_EDGE_LABEL;
+    label_type[2] = TMR_OCT_FACE_LABEL;
+    label_type[3] = TMR_OCT_BLOCK_LABEL;
+  }
+  else {
+    for (int i = 0; i < 4; i++){
+      label_type[i] = TMR_OCT_NODE_LABEL;
+    }
+  }
+}
+
+/*
+  Compute the dependent weights associated with the Bernstein polynomial
+*/
+void TMROctForest::evalBernsteinWeights( int mesh_order,
+                                         double u,
+                                         double *knots,
+                                         double *N ){
+  // Weights evaluated from the subdivison matrix
+  if (mesh_order == 3){
+    if (u < 0.0){
+      N[0] = 0.5;
+      N[1] = 0.5;
+      N[2] = 0.0;
+    }
+    else if (u > 0.0){
+      N[0] = 0.0;
+      N[1] = 0.5;
+      N[2] = 0.5;
+    }
+    else {
+      N[0] = 0.25;
+      N[1] = 0.5;
+      N[2] = 0.25;
+    }
+  }
+  else if (mesh_order == 4){
+    if (u == -2./3){
+      N[0] = 0.5;
+      N[1] = 0.5;
+      N[2] = 0.0;
+      N[3] = 0.0;
+    }
+    else if (u == -1./3){
+      N[0] = 0.25;
+      N[1] = 0.5;
+      N[2] = 0.25;
+      N[3] = 0.0;
+    }
+    else if (u == 0){
+      N[0] = 0.125;
+      N[1] = 0.375;
+      N[2] = 0.375;
+      N[3] = 0.125;
+    }
+    else if (u == 1./3){
+      N[0] = 0.0;
+      N[1] = 0.25;
+      N[2] = 0.5;
+      N[3] = 0.25;
+    }
+    else {
+      N[0] = 0.0;
+      N[1] = 0.0;
+      N[2] = 0.5;
+      N[3] = 0.5;
+    }
+  }
+  else if (mesh_order == 5){
+    if (u == -0.75){
+      N[0] = 0.5;
+      N[1] = 0.5;
+      N[2] = 0.0;
+      N[3] = 0.0;
+      N[4] = 0.0;
+    }
+    else if (u == -0.5){
+      N[0] = 0.25;
+      N[1] = 0.5;
+      N[2] = 0.25;
+      N[3] = 0.0;
+      N[4] = 0.0;
+    }
+    else if (u == -0.25){
+      N[0] = 0.125;
+      N[1] = 0.375;
+      N[2] = 0.375;
+      N[3] = 0.125;
+      N[4] = 0.0;
+    }
+    else if (u == 0.0){
+      N[0] = 0.0625;
+      N[1] = 0.25;
+      N[2] = 0.375;
+      N[3] = 0.25;
+      N[4] = 0.0625;
+    }
+    else if (u == 0.25){
+      N[0] = 0.0;
+      N[1] = 0.125;
+      N[2] = 0.375;
+      N[3] = 0.375;
+      N[4] = 0.125;      
+    }
+    else if (u == 0.5){
+      N[0] = 0.0;
+      N[1] = 0.0;
+      N[2] = 0.25;
+      N[3] = 0.5;
+      N[4] = 0.25;      
+    }
+    else if (u == 0.75){
+      N[0] = 0.0;
+      N[1] = 0.0;
+      N[2] = 0.0;
+      N[3] = 0.5;
+      N[4] = 0.5;      
+    }
+  }
 }

@@ -1131,9 +1131,6 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
   const int *conn;
   filter->getNodeConn(&conn);
 
-  TMRPoint *X;
-  int num_points = filter->getPoints(&X);
-  //printf("num: %d\n", num_points);
   // Get the local node index on this processor
   for ( int i = 0; i < nweights*num_quads; i++ ){
     index[i] = filter->getLocalNodeNumber(conn[i]);
@@ -1163,6 +1160,126 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
   for ( int i = 0; i < num_quads; i++ ){
     // Allocate the stiffness object
     elements[i] = createElement(order, &quads[i], 
+                                &index[nweights*i], nweights,
+                                filter);
+  }
+}
+
+/*
+  Set up a creator class for the given forest problem
+*/
+TMROctBernsteinTACSTopoCreator::TMROctBernsteinTACSTopoCreator( TMRBoundaryConditions *_bcs,
+                                                                TMROctForest *_forest ):
+TMROctTACSCreator(_bcs){
+  // Create and reference the filter
+  filter = _forest->duplicate();
+  filter->setMeshOrder(_forest->getMeshOrder()-1, 
+                       TMR_BERNSTEIN_POINTS);
+  filter->incref();
+  
+  int mpi_rank;
+  MPI_Comm comm = filter->getMPIComm();
+  MPI_Comm_rank(comm, &mpi_rank);
+  
+  // Create the nodes within the filter
+  filter->createNodes();
+
+  // Get the node range for the filter design variables
+  const int *filter_range;
+  filter->getOwnedNodeRange(&filter_range);
+
+  // Set up the variable map for the design variable numbers
+  int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
+  filter_map = new TACSVarMap(comm, num_filter_local);
+  filter_map->incref();
+
+  // Set the filter indices to NULL
+  filter_indices = NULL;
+}
+/*
+  Free the creator object
+*/
+TMROctBernsteinTACSTopoCreator::~TMROctBernsteinTACSTopoCreator(){
+  filter->decref();
+  filter_map->decref();
+  if (filter_indices){ filter_indices->decref(); }
+}
+
+// Get the underlying information about the problem
+void TMROctBernsteinTACSTopoCreator::getFilter( TMROctForest **_filter ){
+  *_filter = filter;
+}
+
+void TMROctBernsteinTACSTopoCreator::getMap( TACSVarMap **_map ){
+  *_map = filter_map;
+}
+
+void TMROctBernsteinTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
+  *_indices = filter_indices;
+}
+
+/*
+  Create all of the elements for the topology optimization problem
+*/
+void TMROctBernsteinTACSTopoCreator::createElements( int order,
+                                                     TMROctForest *forest,
+                                                     int num_elements,
+                                                     TACSElement **elements ){
+  // Get the MPI communicator
+  int mpi_rank, mpi_size;
+  MPI_Comm comm = forest->getMPIComm();
+  MPI_Comm_rank(comm, &mpi_rank);
+  MPI_Comm_size(comm, &mpi_size);
+
+  // Get the quadrants associated with the forest
+  TMROctantArray *octants;
+  forest->getOctants(&octants);
+
+  // Get the array of quadrants from the forest
+  int num_octs;
+  TMROctant *octs;
+  octants->getArray(&octs, &num_octs);
+  
+  // The number of weights/element
+  const int filter_order = filter->getMeshOrder();
+  const int nweights = filter_order*filter_order;
+ 
+  // Allocate the weights for all of the local elements 
+  int *index = new int[ nweights*num_octs ];
+
+  // Loop over the nodes and convert to the local numbering scheme
+  const int *conn;
+  filter->getNodeConn(&conn);
+
+  // Get the local node index on this processor
+  for ( int i = 0; i < nweights*num_octs; i++ ){
+    index[i] = filter->getLocalNodeNumber(conn[i]);
+  }
+  // Get the local node numbers
+  const int *node_nums;
+  int num_nodes = filter->getNodeNumbers(&node_nums);
+  int num_dep_nodes = filter->getDepNodeConn();
+
+  // Set the number of filter nodes
+  int num_filter_nodes = num_nodes - num_dep_nodes;
+  
+  // Copy over the node numbers
+  int *filter_node_nums = new int[ num_filter_nodes ];
+  memcpy(filter_node_nums, &node_nums[num_dep_nodes],
+         num_filter_nodes*sizeof(int));
+
+  // Set up the external filter indices for this filter.  The indices
+  // objects steals the array for the external nodes.
+  filter_indices = new TACSBVecIndices(&filter_node_nums, 
+                                       num_filter_nodes);
+  filter_indices->incref();
+  filter_indices->setUpInverse();
+
+  // Loop over the octants
+  octants->getArray(&octs, &num_octs);
+  for ( int i = 0; i < num_octs; i++ ){
+    // Allocate the stiffness object
+    elements[i] = createElement(order, &octs[i], 
                                 &index[nweights*i], nweights,
                                 filter);
   }

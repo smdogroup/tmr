@@ -2629,6 +2629,70 @@ cdef class OctTopoCreator:
         self.ptr.getIndices(&indices)
         return _init_VecIndices(indices)
 
+cdef TACSElement* _createOctBernsteinTopoElement( void *_self, int order,
+                                                  TMROctant *octant,
+                                                  int *index,
+                                                  int nweights,
+                                                  TMROctForest *filtr):
+    cdef TACSElement *elem = NULL
+    oct = Octant()
+    oct.octant.x = octant.x
+    oct.octant.y = octant.y
+    oct.octant.z = octant.z
+    oct.octant.level = octant.level
+    oct.octant.info = octant.info
+    oct.octant.block = octant.block
+    oct.octant.tag = octant.tag
+    idx = []
+
+    of = OctForest()
+    of.ptr = filtr    
+    for i in range(nweights):
+        idx.append(index[i])
+    e = (<object>_self).createElement(order, oct, idx, of)
+    if e is not None:
+        (<Element>e).ptr.incref()
+        elem = (<Element>e).ptr
+        return elem
+    return NULL
+
+cdef class OctBernsteinTopoCreator:
+    cdef TMRCyTopoOctBernsteinCreator *ptr
+    def __cinit__(self, BoundaryConditions bcs, OctForest forest,
+                  *args, **kwargs):
+        self.ptr = NULL
+        self.ptr = new TMRCyTopoOctBernsteinCreator(bcs.ptr, forest.ptr)
+        self.ptr.incref()
+        self.ptr.setSelfPointer(<void*>self)
+        self.ptr.setCreateOctTopoElement(_createOctBernsteinTopoElement)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def createTACS(self, OctForest forest,
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER,
+                   double scale=1.0):
+        cdef TACSAssembler *assembler = NULL
+        assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
+        return _init_Assembler(assembler)
+
+    def getFilter(self):
+        cdef TMROctForest *filtr = NULL
+        self.ptr.getFilter(&filtr)
+        return _init_OctForest(filtr)
+
+    def getMap(self):
+        cdef TACSVarMap *vmap = NULL
+        self.ptr.getMap(&vmap)
+        return _init_VarMap(vmap)
+
+    def getIndices(self):
+        cdef TACSBVecIndices *indices = NULL
+        self.ptr.getIndices(&indices)
+        return _init_VecIndices(indices)
+
 cdef class StiffnessProperties:
     cdef TMRStiffnessProperties *ptr
     def __cinit__(self, list _rho, list _E, list _nu, list _ys=None,
