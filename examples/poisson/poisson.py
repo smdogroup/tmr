@@ -5,51 +5,225 @@ from tacs import TACS, elements, functions
 import numpy as np
 import argparse
 import os
+import poisson_function
 
-def integrate(integrand):
-    '''Integrate over equally spaced data'''
-    sigma = [17.0/48.0, 59.0/48.0, 43.0/48, 49/48.9]
-    r = len(sigma)
+glpts6 = [-0.9324695142031520278123016,
+          -0.6612093864662645136613996,
+          -0.2386191860831969086305017,
+          0.2386191860831969086305017,
+          0.6612093864662645136613996,
+          0.9324695142031520278123016 ]
+glwts6 = [ 0.1713244923791703450402961,
+           0.3607615730481386075698335,
+           0.4679139345726910473898703,
+           0.4679139345726910473898703,
+           0.3607615730481386075698335,
+           0.1713244923791703450402961 ]
 
+def get_quadrature_pts(m):
+    x = np.zeros(len(glpts6)*m)
+    for i, pt in enumerate(glpts6):
+        x[i::6] = np.linspace(0, 1-1.0/m, m) + 0.5*(1.0 + glpts6[i])/m
+    return x
+
+def quadrature(integrand):
     integral = 0.0
-    for i, s in enumerate(sigma):
-        integral += s*integrand[i]
-        integral += s*integrand[-1-i]
-
-    for i in range(r, len(integrand)-r):
-        integral += integrand[i]
-
+    for i, wt in enumerate(glwts6):
+        integral += wt*np.sum(integrand[i::6])
     return integral
 
 def poisson_evalf(x):
     R = 100.0
     return (3920.0/363)*(1.0 - (x[0]*x[0] + x[1]*x[1])/R**2)**6
 
-def get_disk_aggregate(functional, rho, R, n=1000):
+def get_disk_aggregate(comm, functional, rho, R, n=1000):
     '''Evaluate the KS functional on a disk'''
-    scale = 1.0/R**2
-    r = np.linspace(0.0, R, n)
+    a0 = 3920.0/363.0
+    if functional == 'ks' or functional == 'pnorm':
+        # Compute the solution scaled to r/R
+        x = get_quadrature_pts(n)
+        phi = a0*(- (1.0/196)*x**14
+                  + (1.0/24)*x**12
+                  - (3.0/20)*x**10
+                  + (5.0/16)*x**8
+                  - (5.0/12)*x**6
+                  + (3.0/8)*x**4
+                  - (1.0/4)*x**2
+                  + (363.0/3920))
 
-    # This is the solution for constant order
-    # phi = (0.1875*R**2 - 0.25*r**2 + (0.0625/R**2)*r**4)
-
-    # Compute the solution scaled to r/R
-    x = np.linspace(0.0, 1.0, n)
-    phi = R**2*(-(20.0/363)*x**14 + (490.0/1089)*x**12 - (196.0/121)*x**10 +
-                (1225.0/363)*x**8 - (4900.0/1089)*x**6 + (490.0/121)*x**4 -
-                (980.0/363)*x**2)
-    phi -= phi[-1]
-
-    if functional == 'ks':
-        ksmax = np.max(phi)
-        integrand = r*np.exp(rho*scale*(phi - ksmax))
-        kssum = 2*np.pi*(R/(n-1))*integrate(integrand)
-        return scale*ksmax, scale*ksmax + np.log(kssum)/rho
+        if functional == 'ks':
+            ksmax = np.max(phi)
+            integrand = R*x*np.exp(rho*(phi - ksmax))
+            kssum = 2*np.pi*(R/(2*n))*quadrature(integrand)
+            return ksmax, ksmax + np.log(kssum)/rho
+        elif functional == 'pnorm':
+            maxphi = np.max(phi)
+            integrand = R*x*np.power((phi/maxphi), rho)
+            psum = 2*np.pi*(R/(2*n))*quadrature(integrand)
+            return maxphi, maxphi*np.power(psum, 1.0/rho)
     else:
-        maxphi = scale*np.max(phi)
-        integrand = r*np.power((scale*phi/maxphi), rho)
-        psum = 2*np.pi*(R/(n-1))*integrate(integrand)
-        return maxphi, maxphi*np.power(psum, 1.0/rho)
+        # Compute the solution scaled to r/R
+        m = 2*n
+        x = get_quadrature_pts(n)
+        theta = np.pi*get_quadrature_pts(m)
+
+        dphi = a0*(- (14.0/196)*x**13
+                   + (12.0/24)*x**11
+                   - (30.0/20)*x**9
+                   + (40.0/16)*x**7
+                   - (30.0/12)*x**5
+                   + (12.0/8)*x**3
+                   - (2.0/4)*x)
+
+        poly = np.poly1d([-a0*14/196, 0,
+                          a0*12/24, 0,
+                          -a0*(30.0/20), 0,
+                          a0*(40.0/16), 0,
+                          -a0*(30.0/12), 0,
+                          a0*(12.0/8), 0,
+                          -a0*(2.0/4), 0])
+
+        deriv = poly.deriv()
+        for root in deriv.roots:
+            if root.real >= 0.0 and root.real <= 1.0 and root.imag == 0.0:
+                pmax = np.fabs(poly(root).real)
+                break
+
+        # Set the start/end locations
+        step = len(theta)/comm.size
+        start = step*comm.rank
+        end = step*(comm.rank+1)
+        if comm.rank == comm.size-1:
+            end = len(theta)
+
+        if functional == 'ks_grad':
+            integrand1 = np.zeros(m)
+            for i, t in enumerate(theta[start:end]):
+                integrand = R*x*np.exp(rho*(dphi*np.cos(t) - pmax))
+                integrand1[i] = (R/(2*n))*quadrature(integrand)
+
+            integrand1 = comm.allreduce(integrand1, op=MPI.SUM)
+            kssum = 2*(np.pi/(2*m))*quadrature(integrand1)
+            return pmax, pmax + np.log(kssum)/rho
+        elif functional == 'pnorm_grad':
+            integrand1 = np.zeros(m)
+            for i, t in enumerate(theta[start:end]):
+                integrand = R*x*np.power((np.fabs(dphi*np.cos(t))/pmax), rho)
+                integrand1[i] = (R/(2*n))*quadrature(integrand)
+
+            integrand1 = comm.allreduce(integrand1, op=MPI.SUM)
+            psum = 2*(np.pi/(2*m))*quadrature(integrand1)
+            return pmax, pmax*np.power(psum, 1.0/rho)
+
+def recon_basis(order, x):
+    '''
+    Get the quadratic shape functions centered about the point pt
+    '''
+
+    if order == 2:
+        N = np.array([1.0, x[0], x[1],
+                      x[0]**2, x[0]*x[1], x[1]**2])
+    elif order == 3:
+        N = np.array([1.0, x[0], x[1],
+                      x[0]**2, x[0]*x[1], x[1]**2,
+                      x[0]**3, x[0]**2*x[1], x[0]*x[1]**2, x[1]**3])
+    elif order == 4:
+        N = np.array([1.0, x[0], x[1],
+                      x[0]**2, x[0]*x[1], x[1]**2,
+                      x[0]**3, x[0]**2*x[1], x[0]*x[1]**2, x[1]**3,
+                      x[0]**4, x[0]**3*x[1], x[0]**2*x[1]**2,
+                      x[0]**3*x[1], x[1]**4])
+
+    return N
+
+def elem_recon(order, conn, Xpts, uvals, elem_list, max_dist=1.0):
+    # Get a unique list of the nodes in the list
+    var = []
+    for elem in elem_list:
+        var.extend(conn[elem])
+
+    # Get a unique list of values
+    var = list(set(var))
+
+    # Set up the least-squares fit
+    pt = np.average(Xpts[var, :], axis=0)[:2]
+    dist = np.sqrt(np.sum((Xpts[var, :2] - pt)**2, axis=1))
+
+    # Loop over the adjacent nodes and fit them
+    dim = 6
+    if order == 3:
+        dim = 10
+    elif order == 4:
+        dim = 15
+    A = np.zeros((len(var), dim))
+    b = np.zeros(len(var))
+
+    for i, v in enumerate(var):
+        w = np.exp(-dist[i]/max_dist)
+        
+        # Compute the basis at the provided point
+        b[i] = w*uvals[v]
+
+        x = Xpts[v, :2]
+        A[i, :] = w*recon_basis(order, (x - pt)/max_dist)
+
+    # Fit the basis
+    vals, res, rank, s = np.linalg.lstsq(A, b, rcond=None)
+
+    return vals, pt
+
+def computeRecon(order, conn, Xpts, uvals,
+                 conn_refine, Xpts_refine):
+    '''
+    Compute the planar reconstruction over the given mesh
+    '''
+
+    # Compute the element->element connectivity
+    nelems = conn.shape[0]
+
+    # Create a node->element dictionary
+    node_to_elems = {}
+    for i in range(nelems):
+        for node in conn[i,:]:
+            if node in node_to_elems:
+                node_to_elems[node][i] = True
+            else:
+                node_to_elems[node] = {i: True}
+
+    # Now create an elements to elements list
+    elem_to_elem = []
+    for i in range(nelems):
+        elems = {}
+        for node in conn[i,:]:
+            for elem in node_to_elems[node]:
+                elems[elem] = True
+        elem_to_elem.append(elems.keys())
+
+    # Get the refined shape
+    uvals_refine = np.zeros(Xpts_refine.shape[0])
+    count = np.zeros(Xpts_refine.shape[0])
+
+    # Compute the average element distance
+    max_dist = 2.0*np.average(np.sqrt(np.sum((Xpts[conn[:,0]] - Xpts[conn[:,-1]])**2, axis=1)))
+
+    for elem in range(nelems):
+        # Get the list of elements
+        elem_list = elem_to_elem[elem]
+
+        # Get the reconstructed values
+        vals, pt = elem_recon(order, conn, Xpts, uvals, elem_list,
+                              max_dist=max_dist)
+
+        # Compute the refined contributions to each element
+        for node in conn_refine[elem, :]:
+            N = recon_basis(order, (Xpts_refine[node, :2] - pt)/max_dist)
+            uvals_refine[node] += np.dot(vals, N)
+            count[node] += 1.0
+
+    # Average the values
+    uvals_refine /= count
+
+    return uvals_refine
 
 class CreateMe(TMR.QuadCreator):
     def __init__(self, bcs, topo, case='disk'):
@@ -153,7 +327,7 @@ steps = args.steps
 structured = args.structured
 
 # Set what functional to use
-functional = args.functional
+functional = str(args.functional)
 
 # This flag indicates whether to solve the adjoint exactly on the
 # next-finest mesh or not
@@ -172,11 +346,34 @@ R = 100.0
 L = 200.0
 
 if case == 'disk':
-    for n in [10000, 100000, 1000000, 10000000]:
-        ks_max, approx = get_disk_aggregate(functional, ksweight, R, n=n)
-        if comm.rank == 0:
-            print('%10d %25.16e %25.16e'%(n, ks_max, approx))
-        exact_functional = approx
+    # Note max_grad = 1.3650347513266252e+00
+    table = {
+        'ks'         : {10:   1.7194793227700980e+00,
+                        100:  1.0476803898865747e+00,
+                        1000: 1.0024552781857017e+00},
+        'pnorm'      : {10:   2.0278875565653012e+00,
+                        100:  1.0487286434118916e+00,
+                        1000: 1.0024572906600107e+00},
+        'ks_grad'    : {10:   2.0271422810814967e+00,
+                        100:  1.4068698636894836e+00,
+                        1000: 1.3669053566825087e+00},
+        'pnorm_grad' : {10:   2.9050104578537992e+00,
+                        100:  1.4376337509101673e+00,
+                        1000: 1.3689639709982468e+00}}
+
+    if functional in table and int(ksweight) in table[functional]:
+        exact_functional = table[functional][int(ksweight)]
+    else:
+        nrange = [500, 1000, 2000, 5000]
+        if functional == 'ks_grad' or functional == 'pnorm_grad':
+            if comm.rank == 0:
+                print('functional: %10s  parameter: %g'%(functional, ksweight))
+                print('%10s %25s %25s'%('n', 'max', 'func. estimate'))
+            for n in nrange:
+                ks_max, approx = get_disk_aggregate(comm, functional, ksweight, R, n=n)
+                if comm.rank == 0:
+                    print('%10d %25.16e %25.16e'%(n, ks_max, approx))
+                exact_functional = approx
 
     geo = TMR.LoadModel('2d-disk.stp')
     verts = geo.getVertices()
@@ -229,12 +426,12 @@ forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
 forest.createTrees(depth)
 
 # Set the ordering to use
-if ordering == 'rcm':
-    ordering = TACS.PY_RCM_ORDER
-elif ordering == 'multicolor':
-    ordering = TACS.PY_MULTICOLOR_ORDER
-else:
-    ordering = TACS.PY_NATURAL_ORDER
+# if ordering == 'rcm':
+#     ordering = TACS.PY_RCM_ORDER
+# elif ordering == 'multicolor':
+#     ordering = TACS.PY_MULTICOLOR_ORDER
+# else:
+ordering = TACS.PY_NATURAL_ORDER
 
 # The target relative error
 target_rel_err = 1e-4
@@ -243,7 +440,7 @@ target_rel_err = 1e-4
 descript = '%s_order%d_poisson'%(case, order)
 if args.uniform_refinement:
     descript += '_uniform'
-descript += '_' + functional
+descript += '_' + functional + '%g'%(ksweight)
 
 # Add a description about the meshing strategy
 if args.remesh_domain:
@@ -300,7 +497,7 @@ for k in range(steps):
             TACS.ToFH5.DISPLACEMENTS |
             TACS.ToFH5.STRAINS)
     f5 = TACS.ToFH5(assembler, TACS.PY_POISSON_2D_ELEMENT, flag)
-    f5.writeToFile('results/solution%02d.f5'%(k))
+    f5.writeToFile('results/%s_solution%02d.f5'%(descript, k))
 
     # Create and compute the function
     fval = 0.0
@@ -308,12 +505,19 @@ for k in range(steps):
         direction = [1.0/R**2, 0.0, 0.0]
         func = functions.KSDisplacement(assembler, ksweight, direction)
         func.setKSDispType('continuous')
-        fval = assembler.evalFunctions([func])[0]
-    else:
+    elif functional == 'pnorm':
         direction = [1.0/R**2, 0.0, 0.0]
         func = functions.KSDisplacement(assembler, ksweight, direction)
         func.setKSDispType('pnorm-continuous')
-        fval = assembler.evalFunctions([func])[0]
+    elif functional == 'ks_grad':
+        direction = [1.0/R, 0.0]
+        func = poisson_function.KSPoissonGrad(assembler, ksweight, direction)
+        func.setGradFunctionType('continuous')
+    elif functional == 'pnorm_grad':
+        direction = [1.0/R, 0.0]
+        func = poisson_function.KSPoissonGrad(assembler, ksweight, direction)
+        func.setGradFunctionType('pnorm-continuous')
+    fval = assembler.evalFunctions([func])[0]
 
     # Create the refined mesh
     if exact_refined_adjoint:
@@ -329,20 +533,54 @@ for k in range(steps):
         fval_corr = 0.0
         adjoint_corr = 0.0
         err_est, error = TMR.strainEnergyError(forest, assembler,
-            forest_refined, assembler_refined)
-
+                                               forest_refined, assembler_refined)
+        
         TMR.computeReconSolution(forest, assembler,
-            forest_refined, assembler_refined)
+                                 forest_refined, assembler_refined)
     else:
         if exact_refined_adjoint:
             # Compute the reconstructed solution on the refined mesh
             ans_interp = assembler_refined.createVec()
-            TMR.computeInterpSolution(forest, assembler,
-                                      forest_refined, assembler_refined,
-                                      ans, ans_interp)
 
-            # Set the interpolated solution on the fine mesh
-            assembler_refined.setVariables(ans_interp)
+            if comm.size == 1:
+                # Distribute the answer vector across all procs
+                ans.distributeValues()
+
+                # Create the node vector
+                Xpts = forest.getPoints()
+                Xpts_refined = forest_refined.getPoints()
+
+                conn = forest.getMeshConn()
+                conn_refined = forest_refined.getMeshConn()
+
+                # Find the min/max values
+                num_dep = -np.min(conn)
+                num_vars = np.max(conn)+1
+                num_dep_refined = -np.min(conn_refined)
+                num_vars_refined = np.max(conn_refined)+1
+
+                # Adjust the indices so that they are always positive
+                conn += num_dep
+                conn_refined += num_dep_refined
+
+                # Get the values
+                var = np.arange(-num_dep, num_vars, dtype=np.intc)
+                values = ans.getValues(var)
+                ans_refined = computeRecon(order, conn, Xpts, values,
+                                           conn_refined, Xpts_refined)
+
+                # Set the values
+                var = np.arange(-num_dep_refined, num_vars_refined, dtype=np.intc)
+                ans_interp.setValues(var, ans_refined, op=TACS.INSERT_VALUES)
+
+                assembler_refined.copyVariables(ans_interp)
+            else:
+                TMR.computeReconSolution(forest, assembler,
+                                         forest_refined, assembler_refined,
+                                         ans, ans_interp)
+
+                # Set the interpolated solution on the fine mesh
+                assembler_refined.setVariables(ans_interp)
 
             # Assemble the Jacobian matrix on the refined mesh
             res_refined = assembler_refined.createVec()
@@ -359,11 +597,21 @@ for k in range(steps):
                 func_refined = functions.KSDisplacement(assembler_refined,
                                                         ksweight, direction)
                 func_refined.setKSDispType('continuous')
-            else:
+            elif functional == 'pnorm':
                 direction = [1.0/R**2, 0.0, 0.0]
                 func_refined = functions.KSDisplacement(assembler_refined,
                                                         ksweight, direction)
                 func_refined.setKSDispType('pnorm-continuous')
+            elif functional == 'ks_grad':
+                direction = [1.0/R, 0.0]
+                func_refined = poisson_function.KSPoissonGrad(assembler_refined,
+                                                              ksweight, direction)
+                func_refined.setGradFunctionType('continuous')
+            elif functional == 'pnorm_grad':
+                direction = [1.0/R, 0.0]
+                func_refined = poisson_function.KSPoissonGrad(assembler_refined,
+                                                              ksweight, direction)
+                func_refined.setGradFunctionType('pnorm-continuous')
 
             # Evaluate the functional on the refined mesh
             fval_refined = assembler_refined.evalFunctions([func_refined])[0]
@@ -397,6 +645,10 @@ for k in range(steps):
             err_est, __, error = TMR.adjointError(forest, assembler,
                                                   forest_refined, assembler_refined,
                                                   ans_interp, adjoint_refined)
+
+            # Set the adjoint variables
+            adjoint_refined.axpy(1.0, adjoint_interp)
+            assembler_refined.setVariables(adjoint_refined)
         else:
             # Compute the adjoint on the original mesh
             res.zeroEntries()
@@ -419,11 +671,21 @@ for k in range(steps):
                 func_refined = functions.KSDisplacement(assembler_refined,
                                                         ksweight, direction)
                 func_refined.setKSDispType('continuous')
-            else:
+            elif functional == 'pnorm':
                 direction = [1.0/R**2, 0.0, 0.0]
                 func_refined = functions.KSDisplacement(assembler_refined,
                                                         ksweight, direction)
                 func_refined.setKSDispType('pnorm-continuous')
+            elif functional == 'ks_grad':
+                direction = [1.0/R, 0.0]
+                func_refined = poisson_function.KSPoissonGrad(assembler_refined,
+                                                              ksweight, direction)
+                func_refined.setGradFunctionType('continuous')
+            elif functional == 'pnorm_grad':
+                direction = [1.0/R, 0.0]
+                func_refined = poisson_function.KSPoissonGrad(assembler_refined,
+                                                              ksweight, direction)
+                func_refined.setGradFunctionType('pnorm-continuous')
 
             # Evaluate the functional on the refined mesh
             fval_refined = assembler_refined.evalFunctions([func_refined])[0]
@@ -451,10 +713,10 @@ for k in range(steps):
         fval_corr = fval_refined + adjoint_corr
 
     f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_POISSON_2D_ELEMENT, flag)
-    f5_refine.writeToFile('results/solution_refined%02d.f5'%(k))
+    f5_refine.writeToFile('results/%s_solution_refined%02d.f5'%(descript, k))
 
     # Compute the refinement from the error estimate
-    low = -16
+    low = -25
     high = 4
     bins_per_decade = 10
     nbins = bins_per_decade*(high - low)

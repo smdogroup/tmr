@@ -1526,7 +1526,7 @@ cdef class QuadForest:
     def repartition(self):
         self.ptr.repartition()
 
-    def createTrees(self, int depth):
+    def createTrees(self, int depth=0):
         self.ptr.createTrees(depth)
 
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
@@ -1582,31 +1582,43 @@ cdef class QuadForest:
         cdef TMRPoint *X = NULL
         cdef int npts = 0
         npts = self.ptr.getPoints(&X)
-        Xp = np.zeros((npts, 3), dtype=np.double)
-        for i in range(npts):
-            Xp[i,0] = X[i].x
-            Xp[i,1] = X[i].y
-            Xp[i,2] = X[i].z
-        return Xp
+        if X != NULL:           
+            Xp = np.zeros((npts, 3), dtype=np.double)
+            for i in range(npts):
+                Xp[i,0] = X[i].x
+                Xp[i,1] = X[i].y
+                Xp[i,2] = X[i].z
+            return Xp
+        else:
+            errmsg = 'TMRQuadForest: No node locations'
+            raise RuntimeError(errmsg)
 
     def getNodeRange(self):
         cdef int size = 0
         cdef const int *node_range = NULL
         size = self.ptr.getOwnedNodeRange(&node_range)
-        r = np.zeros(size+1, dtype=np.intc)
-        for i in range(size+1):
-            r[i] = node_range[i]
-        return r
+        if node_range != NULL:
+            r = np.zeros(size+1, dtype=np.intc)
+            for i in range(size+1):
+                r[i] = node_range[i]
+            return r
+        else:
+            errmsg = 'TMRQuadForest: No node range'
+            raise RuntimeError(errmsg)
 
     def getMeshConn(self):
         cdef const int *conn
         cdef int nelems
         cdef int order = self.ptr.getMeshOrder()
         self.ptr.getNodeConn(&conn, &nelems)
-        quads = np.zeros((order*order*nelems), dtype=np.intc)
-        for i in range(order*order*nelems):
-            quads[i] = conn[i]
-        return quads
+        if conn != NULL:
+            quads = np.zeros((order*order*nelems), dtype=np.intc)
+            for i in range(order*order*nelems):
+                quads[i] = conn[i]
+            return quads.reshape((nelems, order*order))
+        else:
+            errmsg = 'TMRQuadForest: No mesh connectivity'
+            raise RuntimeError(errmsg)
 
     def getDepNodeConn(self):
         cdef int ndep = 0
@@ -1810,7 +1822,7 @@ cdef class OctForest:
     def repartition(self, int max_rank=-1):
         self.ptr.repartition(max_rank)
 
-    def createTrees(self, int depth):
+    def createTrees(self, int depth=0):
         self.ptr.createTrees(depth)
 
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
@@ -1890,7 +1902,7 @@ cdef class OctForest:
         octs = np.zeros((order*order*order*nelems), dtype=np.intc)
         for i in range(order*order*order*nelems):
             octs[i] = conn[i]
-        return octs
+        return octs.reshape((nelems, order*order*order))
 
     def getDepNodeConn(self):
         cdef int ndep = 0

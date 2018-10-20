@@ -14,7 +14,7 @@ def parse_data_file(fname):
         for index, h in enumerate(hline):
             if h == '=':
                 hstr = hline[index+1:].split(',')
-
+        
         # Strip away any white space
         header = []
         for h in hstr:
@@ -28,7 +28,6 @@ def parse_data_file(fname):
             data.append(dline)
 
         return header, np.array(data)
-
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
@@ -145,8 +144,8 @@ for k, d in enumerate(data):
     xvals = np.log10(d[:, nnodes_index])
     yvals = np.log10(d[:, fval_error_index])    
     s += tkz.get_2d_plot(xvals, yvals,
-                         color=colors[k % 4],
-                         symbol=symbols[k % 4],
+                         color=colors[k % len(colors)],
+                         symbol=symbols[k % len(symbols)],
                          symbol_size=0.03,
                          xscale=xscale, yscale=yscale, 
                          xmin=xmin, xmax=xmax,
@@ -156,8 +155,8 @@ for k, d in enumerate(data):
         yvals = np.log10(d[:, fval_corr_error_index])
         s += tkz.get_2d_plot(xvals, yvals,
                              line_dim='thick, opacity=0.5, dashed',
-                             color=colors[k % 4],
-                             symbol=symbols[k % 4 ],
+                             color=colors[k % len(colors)],
+                             symbol=symbols[k % len(symbols)],
                              symbol_size=0.03,
                              xscale=xscale, yscale=yscale, 
                              xmin=xmin, xmax=xmax,
@@ -171,7 +170,8 @@ if args.labels is not None:
         length = 0.035*(xmax - xmin)
         s += tkz.get_legend_entry(x, y, length, label=label,
                                   font_size='small',
-                                  color=colors[k % 4], symbol=symbols[k % 4],
+                                  color=colors[k % len(colors)],
+                                  symbol=symbols[k % len(symbols)],
                                   symbol_size=0.03,
                                   xscale=xscale, yscale=yscale)
 
