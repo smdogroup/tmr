@@ -1045,7 +1045,7 @@ void TMRQuadForest::evalInterp( const double pt[], double N[] ){
   Evaluate the interpolant at the given parametric point
 */
 void TMRQuadForest::evalInterp( const double pt[], double N[],
-                                double Nxi[], double Neta[] ){
+                                double N1[], double N2[] ){
   double Nu[MAX_ORDER], Nv[MAX_ORDER];
   double Nud[MAX_ORDER], Nvd[MAX_ORDER];
 
@@ -1056,11 +1056,44 @@ void TMRQuadForest::evalInterp( const double pt[], double N[],
   for ( int j = 0; j < mesh_order; j++ ){
     for ( int i = 0; i < mesh_order; i++ ){
       N[0] = Nu[i]*Nv[j];
-      Nxi[0] = Nud[i]*Nv[j];
-      Neta[0] = Nu[i]*Nvd[j];
+      N1[0] = Nud[i]*Nv[j];
+      N2[0] = Nu[i]*Nvd[j];
       N++;
-      Nxi++;
-      Neta++;
+      N1++;
+      N2++;
+    }
+  }
+}
+
+/*
+  Evaluate the interpolant at the given parametric point
+*/
+void TMRQuadForest::evalInterp( const double pt[], double N[],
+                                double N1[], double N2[],
+                                double N11[], double N22[], double N12[] ){
+  double Nu[MAX_ORDER], Nud[MAX_ORDER], Nudd[MAX_ORDER];
+  double Nv[MAX_ORDER], Nvd[MAX_ORDER], Nvdd[MAX_ORDER];
+
+  // Evaluate the shape functions
+  lagrange_shape_func_second_derivative(mesh_order, pt[0], interp_knots,
+                                        Nu, Nud, Nudd);
+  lagrange_shape_func_second_derivative(mesh_order, pt[1], interp_knots,
+                                        Nv, Nvd, Nvdd);
+
+  for ( int j = 0; j < mesh_order; j++ ){
+    for ( int i = 0; i < mesh_order; i++ ){
+      N[0] = Nu[i]*Nv[j];
+      N1[0] = Nud[i]*Nv[j];
+      N2[0] = Nu[i]*Nvd[j];
+      N11[0] = Nudd[i]*Nv[j];
+      N22[0] = Nu[i]*Nvdd[j];
+      N12[0] = Nud[i]*Nvd[j];
+      N++;
+      N1++;
+      N2++;
+      N11++;
+      N22++;
+      N12++;
     }
   }
 }
@@ -4460,7 +4493,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
           }
           else {
             // We've got to transfer the node to the processor that
-            // owns an enclosing element. Do to that, add the quad to
+            // owns an enclosing element. To do that, add the quad to
             // the list of externals and store its mpi owner
             node.tag = mpi_owner;
             ext_queue->push(&node);

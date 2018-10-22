@@ -351,28 +351,13 @@ void TMRBoxFeatureSize::BoxNode::getSize( TMRPoint p, double *hval ){
 }
 
 /*
-  Set the feature size based on a point cloud and the mesh size at
-  those points
+  Create the point locator: This is used to find the points from the
+  initial point set that are closest to the provided point.
 */
-TMRPointFeatureSize::TMRPointFeatureSize( int _npts, TMRPoint *_pts,
-                                          double *_hvals,
-                                          double _hmin, double _hmax,
-                                          int _num_sample_pts ):
-  TMRElementFeatureSize(_hmin){
+TMRPointLocator::TMRPointLocator( int _npts, TMRPoint *_pts ){
   npts = _npts;
-  hmin = _hmin;
-  hmax = _hmax;
-
-  // Set the number of sample points
-  num_sample_pts = _num_sample_pts;
-  if (num_sample_pts > MAX_CLOSEST_POINTS){
-    num_sample_pts = MAX_CLOSEST_POINTS;
-  }
-
   pts = new TMRPoint[ npts ];
-  hvals = new double[ npts ];
   memcpy(pts, _pts, npts*sizeof(TMRPoint));
-  memcpy(hvals, _hvals, npts*sizeof(double));
 
   // Calculate approximately how many nodes there should be
   max_num_nodes = int(2.0*npts/MAX_BIN_SIZE) + 1;
@@ -399,9 +384,9 @@ TMRPointFeatureSize::TMRPointFeatureSize( int _npts, TMRPoint *_pts,
   split(0, npts);
 }
 
-TMRPointFeatureSize::~TMRPointFeatureSize(){
+
+TMRPointLocator::~TMRPointLocator(){
   delete [] pts;
-  delete [] hvals;
   delete [] indices;
   delete [] nodes;
   delete [] index_offset;
@@ -410,63 +395,11 @@ TMRPointFeatureSize::~TMRPointFeatureSize(){
   delete [] node_normal;
 }
 
-double TMRPointFeatureSize::getFeatureSize( TMRPoint pt ){
-  // Get the closest points and use them to compute a set of weights
-  int indx[MAX_CLOSEST_POINTS];
-  double dist[MAX_CLOSEST_POINTS];
-  double weights[MAX_CLOSEST_POINTS];
-
-  // Find the closest points
-  int n = 0;
-  int root = 0;
-  locateClosest(num_sample_pts, root, pt, &n, indx, dist);
-
-  // The maximum h-size squared
-  double d = 10*hmax;
-  double dinv = 1.0/d;
-
-  // Set the first weight (on the closest point) to 1
-  double wsum = 1.0;
-  weights[0] = 1.0;
-
-  // Compute the weights
-  for ( int i = 0; i < n; i++ ){
-    dist[i] = sqrt(dist[i]);
-    if (dist[i] < d){
-      weights[i] = 1.0 - dinv*dist[i];
-    }
-    else {
-      weights[i] = 0.0;
-    }
-    if (i == 0){
-      wsum = weights[i];
-    }
-    else {
-      wsum += weights[i];
-    }
-  }
-
-  // Set the weights so that they satisfy a partition of unity
-  // property
-  wsum = 1.0/wsum;
-
-  // Compute the new value of h
-  double h = 0.0;
-  for ( int i = 0; i < n; i++ ){
-    h += wsum*weights[i]*hvals[indx[i]];
-  }
-
-  if (h < hmin){ h = hmin; }
-  if (h > hmax){ h = hmax; }
-
-  return h;
-}
-
 /*
   Split the list of indices into approximately two. Those on one half
   of a plane and those on the other.
 */
-int TMRPointFeatureSize::split( int start, int end ){
+int TMRPointLocator::split( int start, int end ){
   int root = num_nodes;
 
   num_nodes++;
@@ -531,8 +464,6 @@ int TMRPointFeatureSize::split( int start, int end ){
                             &indices[start], end - start);
 
   if (mid == 0 || mid == end-start){
-    fprintf(stderr, "TMRPointFeatureSize: Error, splitting points did nothing \
--- problem with your nodes?\n");
     return root;
   }
 
@@ -550,8 +481,8 @@ int TMRPointFeatureSize::split( int start, int end ){
   Split the array of indices into two sets: those indices that
   correspond to points on either side of a plane in three-space.
 */
-int TMRPointFeatureSize::partitionPoints( TMRPoint *loc, TMRPoint *normal,
-                                          int *indx, int np ){
+int TMRPointLocator::partitionPoints( TMRPoint *loc, TMRPoint *normal,
+                                      int *indx, int np ){
   // The inertia about the average location of the point cloud
   double I[9];
   memset(I, 0, 9*sizeof(double));
@@ -653,13 +584,23 @@ int TMRPointFeatureSize::partitionPoints( TMRPoint *loc, TMRPoint *normal,
 
   // If this didn't work, issue an error message
   if (low == 0 || low == np){
-    fprintf(stderr, "TMRPointFeatureSize: Error split points\n");
+    fprintf(stderr, "n = (%25.16e, %25.16e, %25.16e\n", nx, ny, nz);
+    fprintf(stderr, "TMRPointLocator: Error splitting points\n");
   }
 
   return low;
 }
 
-/*!
+/*
+  Locate the closest points to a given point: Initiate the recursive
+  call.
+*/
+void TMRPointLocator::locateClosest( const int K, const TMRPoint pt,
+                                     int *nk, int *indx, double *dist ){
+  locateClosest(K, 0, pt, nk, indx, dist);
+}
+
+/*
   Locate the closest points to a given point
 
   input:
@@ -672,9 +613,9 @@ int TMRPointFeatureSize::partitionPoints( TMRPoint *loc, TMRPoint *normal,
   indx:   The indices of the K-closest values
   nk:     The actual number of points in the list nk <= K
 */
-void TMRPointFeatureSize::locateClosest( const int K, const int root,
-                                         const TMRPoint pt,
-                                         int *nk, int *indx, double *dist ){
+void TMRPointLocator::locateClosest( const int K, const int root,
+                                     const TMRPoint pt,
+                                     int *nk, int *indx, double *dist ){
   int start = index_offset[root];
   int left_node = nodes[2*root];
   int right_node = nodes[2*root+1];
@@ -753,9 +694,9 @@ void TMRPointFeatureSize::locateClosest( const int K, const int root,
   indx:   the sorted list of index values
   dist;   the distances
 */
-void TMRPointFeatureSize::insertIndex( const int K, int dindx,
-                                       double d, int *nk,
-                                       int *indx, double *dist ){
+void TMRPointLocator::insertIndex( const int K, int dindx,
+                                   double d, int *nk,
+                                   int *indx, double *dist ){
   if (*nk == 0){
     dist[*nk] = d;
     indx[*nk] = dindx;
@@ -789,4 +730,87 @@ void TMRPointFeatureSize::insertIndex( const int K, int dindx,
     dist[*nk] = d;
     *nk += 1;
   }
+}
+
+/*
+  Set the feature size based on a point cloud and the mesh size at
+  those points
+*/
+TMRPointFeatureSize::TMRPointFeatureSize( int _npts, TMRPoint *_pts,
+                                          double *_hvals,
+                                          double _hmin, double _hmax,
+                                          int _num_sample_pts ):
+  TMRElementFeatureSize(_hmin){
+  npts = _npts;
+  hmin = _hmin;
+  hmax = _hmax;
+
+  locator = new TMRPointLocator(npts, _pts);
+  locator->incref();
+
+  // Set the number of sample points
+  num_sample_pts = _num_sample_pts;
+  if (num_sample_pts > MAX_CLOSEST_POINTS){
+    num_sample_pts = MAX_CLOSEST_POINTS;
+  }
+
+  // Set the feature sizes assocaited with each spatial point
+  hvals = new double[ npts ];
+  memcpy(hvals, _hvals, npts*sizeof(double));
+}
+
+TMRPointFeatureSize::~TMRPointFeatureSize(){
+  delete [] hvals;
+  locator->decref();
+}
+
+double TMRPointFeatureSize::getFeatureSize( TMRPoint pt ){
+  // Get the closest points and use them to compute a set of weights
+  int indx[MAX_CLOSEST_POINTS];
+  double dist[MAX_CLOSEST_POINTS];
+  double weights[MAX_CLOSEST_POINTS];
+
+  // Find the closest points
+  int n = 0;
+  locator->locateClosest(num_sample_pts, pt, &n, indx, dist);
+
+  // The maximum h-size squared
+  double d = 10*hmax;
+  double dinv = 1.0/d;
+
+  // Set the first weight (on the closest point) to 1
+  double wsum = 1.0;
+  weights[0] = 1.0;
+
+  // Compute the weights
+  for ( int i = 0; i < n; i++ ){
+    dist[i] = sqrt(dist[i]);
+    if (dist[i] < d){
+      weights[i] = 1.0 - dinv*dist[i];
+    }
+    else {
+      weights[i] = 0.0;
+    }
+    if (i == 0){
+      wsum = weights[i];
+    }
+    else {
+      wsum += weights[i];
+    }
+  }
+
+  // Set the weights so that they satisfy a partition of unity
+  // property
+  wsum = 1.0/wsum;
+
+  // Compute the new value of h
+  double h = 0.0;
+  for ( int i = 0; i < n; i++ ){
+    h += wsum*weights[i]*hvals[indx[i]];
+  }
+
+  if (h < hmin){ h = hmin; }
+  if (h > hmax){ h = hmax; }
+
+  return h;
 }

@@ -1,0 +1,185 @@
+TMR Interface and Methods
+*************************
+
+There are two interfaces to :class:`TMR`: the C++ interface and the Python-level
+interface. :class:`TMR` is implemented in C++, so the interface through C++
+contains all publicly accessible class member functions. The Python-level
+interface wraps the most important classes and functions, but does not provide
+an interface to all lower-level operations.
+
+There are three primary types of classes within :class:`TMR`:
+
+#. Geometry and topology-level classes which interface with the underlying
+   geometry kernel
+#. Serial mesh-level classes which are used to create moderate-size
+   quadrilateral and hexahedral meshes based on the input geometry
+#. Quadtree and Octree-level classes which are used to create, modify, refine
+   and extract information from the quad/octrees. 
+
+TMREntity
+=========
+Almost all classes in :class:`TMR` inherit from :class:`~TMR.Entity`. Those that do
+not are low-level data structures that are used within high-level
+operations. :class:`~TMR.Entity` defines a reference counting scheme for
+all objects allocated on the heap. This is handled automatically through the
+Python interface.
+
+Geometry-level classes
+======================
+The primary geometry-level classes used within :class:`TMR` consist of
+entity-level classes and container-level classes. The abstract interface classes
+to the underlying geometry consist of:
+
+* .. automodule:: TMR
+  
+  .. autoclass:: Vertex
+     :members: evalPoint
+
+* .. autoclass:: Edge
+      :members: evalPoint
+
+* .. autoclass:: Face
+      :members: evalPoint
+
+The other objects define collections of geometric entities:
+
+* .. autoclass:: EdgeLoop
+          
+* .. autoclass:: Volume
+
+* .. autoclass:: Model
+
+The class :class:`~TMR.Model` is often created by a call to the
+function :func:`~TMR.LoadModel`. This function
+loads the model data from the STEP file and creates the OpenCASCADE versions of
+the geometric entities and containers that define the model. This call attempts
+to remove any extraneous geometry defined in the STEP file but not contained
+within the model. This function creates and initializes the internal topology of
+the model, which can then be used in subsequent meshing operations.
+
+* .. autofunction:: LoadModel
+
+A direct connection between the geometry and octree or quadtree levels is
+provided through :class:`~TMR.Topology` that defines the topology for
+mapped-quadrilateral and hexahedral geometries. This class can be created
+directly, but it is most common to create this using the mesh-level classes
+described below.
+
+Mesh generation-level classes
+=============================
+:class:`~TMR.Mesh` provides the primary interface to the meshing
+functionality in :class:`TMR` and is used to create quadrilateral and hexahedral
+meshes. The actual meshing operations are performed on the root processor with
+rank 0, but all connectivity and location information is broadcast to all
+processors. The primary functions are as follows:
+
+* .. autoclass:: Mesh
+      :members:
+
+:class:`~TMR.MeshOptions` class defines a number of options that modify
+the meshing algorithm. These include the following:
+
+* .. autoclass:: MeshOptions
+      :members:
+
+:class:`~TMR.ElementFeatureSize` class is a base class that defines the feature
+size of the elements in the mesh and can be used in place of :class:`~TMR.MeshOptions`
+
+* .. autoclass:: ElementFeatureSize
+
+The mesh itself is created by meshing the vertices, edges, faces, and volumes
+within the mesh.  These meshes are stored in the following classes:
+
+* .. autoclass:: EdgeMesh
+          
+* .. autoclass:: FaceMesh
+   
+* .. autoclass:: VolumeMesh
+
+:class:`TMR` only supports swept volume mesh generation. This requires the
+specification of additional information to indicate what surfaces should be
+linked and what direction should be swept. This information is provided by
+indicating source and target geometry entities. When a source/target pair is
+set, the mesh connectivity is copied from the source to the target. A swept
+volume can only be created if:
+
+#. :class:`~TMR.Volume` contains a source/target :class:`~TMR.Face` object
+   pair that share the same number of edge loops and each source/target edge
+   pair has the same number of nodes.
+
+#. All other :class:`~TMR.Face` objects are structured with the same number
+   of nodes along the swept direction.
+
+To ensure these conditions apply, it is often necessary to set source/target
+pairs for faces and edges.
+
+The :class:`~TMR.EdgeMesh` object is created by first computing the number of
+nodes along its length, and then globally ordering the nodes. The number of
+nodes is determined based on the following criteria:
+
+#. If the first and second vertices are different, then at least 3 nodes are
+   created along the edge.
+       
+#. If the first and second vertices are the same and the edge is not
+   degenerate, then it forms a loop back on itself and at least 5 nodes are
+   created (double counting the first and last node number).
+
+#. If the edge is a target edge, the number of nodes is taken from the source
+   edge.
+
+#. Otherwise, the number of nodes is selected as an odd number that most
+   closely matches the spacing requested along the edge.
+
+Quad/octree-level classes
+=========================
+The quadtree and octree level classes are used to create, refine and manipulate
+the semi-structured mesh in parallel. The quadrants or octants are stored in a
+distributed manner across processors. The following section describes the
+functions for the forest of octree operations. Analogous functionality is
+defined for the forest of quadtree object as well. The first step in creating a
+:class:`~TMR.OctForest` object is typically creating a :class:`~TMR.Topology`
+which defines a model with mapped 2D and 3D geometry that consists entirely of
+non-degenerate quadrilateral surfaces with four non-degenerate edges and
+hexahedral volumes with 6 enclosing surfaces. This type of object can be
+created using the constructor as follows:
+
+* .. autoclass:: Topology
+
+The :class:`~TMR.Topology` object defines additional functionality that is
+generally required only for lower-level operations. Once the topology object has
+been created, the :class:`~TMR.OctForest` can be initialized. It has the
+following functions:
+
+* .. autoclass:: OctForest
+      :members: setTopology, repartition, createTrees, createRandomTrees,
+                duplicate, coarsen, refine, balance, createNodes,
+                getOctsWithName, getNodesWithName, getMeshConn,
+                getDepNodeConn, createInterpolation
+
+Similarly, :class:`~TMR.QuadForest` can be initialized and has the similar functions:
+
+* .. autoclass:: QuadForest
+
+Typical Usage
+-------------
+The typical usage for a :class:`~TMR.OctForest` would consist of the following:
+
+#. Create the object and call :func:`~TMR.OctForest.setTopology` to set the
+   super mesh
+#. Create an initial element mesh by calling :func:`~TMR.OctForest.createTrees`
+
+#. Create a refined mesh by duplicating and refining the octree forest by
+   calling :func:`~TMR.OctForest.duplicate` followed by
+   :func:`~TMR.OctForest.refine`. Note that the length of the integer array
+   passed to refine must be equal to the number of elements in the original mesh.
+
+#. Balance the mesh and create nodes by calling :func:`~TMR.OctForest.balance`
+   then :func:`~TMR.OctForest.createNodes`
+
+#. Create a sequence of coarser lower-order meshes by repeated calling
+   :func:`~TMR.OctForest.duplicate` and :func:`~TMR.OctForest.coarsen`
+
+#. Create interpolants between meshes for multigrid methods by calling
+   :func:`~TMR.OctForest.createInterpolation`  
+
+See :doc:`example` for an example of this usage.

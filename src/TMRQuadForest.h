@@ -134,7 +134,10 @@ class TMRQuadForest : public TMREntity {
   int getInterpKnots( const double **_knots );
   void evalInterp( const double pt[], double N[] );
   void evalInterp( const double pt[], double N[],
-                   double Nxi[], double Neta[] );
+                   double N1[], double N2[] );
+  void evalInterp( const double pt[], double N[],
+                   double N1[], double N2[],
+                   double N11[], double N22[], double N12[] );
 
   // Retrieve the connectivity information
   // -------------------------------------

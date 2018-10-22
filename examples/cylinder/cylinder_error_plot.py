@@ -2,105 +2,178 @@ from __future__ import print_function
 import tikzplots as tkz
 import argparse
 import numpy as np
+import re
+
+def parse_data_file(fname):
+    with open(fname, 'r') as fp:
+        lines = fp.readlines()
+
+        # Read in the first line, and find the comma-separated values
+        # in the header
+        hline = lines[0]
+        for index, h in enumerate(hline):
+            if h == '=':
+                hstr = hline[index+1:].split(',')
+        
+        # Strip away any white space
+        header = []
+        for h in hstr:
+            header.append(h.strip())     
+
+        data = []
+        for line in lines[1:]:
+            dline = []
+            for entry in line.split():
+                dline.append(float(entry))
+            data.append(dline)
+
+        return header, np.array(data)
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
-p.add_argument('--steps', type=int, default=5)
-p.add_argument('--case', type=str, default='cylinder')
+p.add_argument('--files', nargs='+', type=str, help='List of files')
+p.add_argument('--labels', nargs='+', type=str, help='List of labels')
+p.add_argument('--outfile', type=str, default='output.tex')
+p.add_argument('--corrected', default=False, action='store_true')
+p.add_argument('--error_offset', type=float, default=1e-2, help='Error order offset')
 args = p.parse_args()
 
-# Retrieve the number of steps
-steps = args.steps
-
-# Set the case string
-case = args.case
-
 # Set the colors to use for each set of bars
-colors = ['BrickRed', 'ForestGreen', 'NavyBlue',
-          'Violet', 'Magenta' ]
+colors = []
+for i in range(10):
+    colors.append('tableau%d'%(i))
+
+tikzcolors = '''
+\definecolor{tableau0}{RGB}{31,119,180}
+\definecolor{tableau1}{RGB}{255,158,74}
+\definecolor{tableau2}{RGB}{103,191,92}
+\definecolor{tableau3}{RGB}{237,102,93}
+\definecolor{tableau4}{RGB}{148,103,189}
+\definecolor{tableau5}{RGB}{168,120,110}
+\definecolor{tableau6}{RGB}{237,151,202}
+\definecolor{tableau7}{RGB}{162,162,162}
+\definecolor{tableau8}{RGB}{205,204,93}
+\definecolor{tableau9}{RGB}{109,204,218}
+'''
 
 data = []
-for k in [0, steps/2, steps-1]:
-    data.append(np.loadtxt('results/%s_data%d.txt'%(case, k)))
+for fname in args.files:
+    header, dat = parse_data_file(fname)
+    data.append(dat)
 
-delta = 10
+# Plot the error on the y-axis
+nnodes_index = header.index('nnodes')
+fval_error_index = header.index('fval_error')
+fval_corr_error_index = header.index('fval_corr_error')
 
-# Set the positions of the tick locations
-yticks_lab = [0, 2, 4, 6, 8]
+# Find the max value of y
+xmin = 1e20
+xmax = 0
 
-# Set the values for the ticks
-yticks = np.linspace(0, delta*len(data), 5*len(data)+1)
-ytick_labels = []
-for i in range(len(data)):
-    ytick_labels.extend(yticks_lab)
-ytick_labels.append(delta)
+ymin = 1e20
+ymax = 0
 
-# Look for all the data
-bins_per_decade = 10
-idx_min = data[0].shape[0]
-idx_max = 0
+# Look through all the data
 for d in data:
-    # Loop over all the bins
-    for i in range(0, d.shape[0], bins_per_decade):
-        flag = False
-        for k in range(bins_per_decade):
-            if d[i+k,3] > 0.01:
-                flag = True
+    xmin = min(xmin, np.min(d[:, nnodes_index]))
+    xmax = max(xmax, np.max(d[:, nnodes_index]))
 
-        # Set the new value for idx_min
-        if flag and i < idx_min:
-            idx_min = i
-        if flag and i > idx_max:
-            idx_max = i
+    ymin = min(ymin, np.min(d[:, fval_error_index]))
+    if args.corrected:
+        ymin = min(ymin, np.min(d[:, fval_corr_error_index]))
+    ymax = max(ymax, np.max(d[:, fval_error_index]))
+    if args.corrected:
+        ymax = max(ymax, np.max(d[:, fval_corr_error_index]))
 
-idx_max = min(idx_max + bins_per_decade-1, data[0].shape[0]-1)
+# Round to the nearest multiple of 10
+xmin = int(np.floor(np.log10(xmin)))
+xmax = int(np.ceil(np.log10(xmax)))
 
-# Find the largest error value
-x0 = int(np.ceil(np.log10(data[0][idx_min,0])))
-
-# Find the smallest error value
-x1 = int(np.floor(np.log10(data[0][idx_max,1])))
-
-# Set the number of x values
-xvalues = idx_max - idx_min + 1
+ymin = int(np.floor(np.log10(ymin)))
+ymax = int(np.ceil(np.log10(ymax)))
 
 # Create a range
-xticks = xvalues*(np.linspace(x0, x1, x0 - x1 + 1) - x0)/(x1 - x0)
-xtick_labels = range(x0, x1-1, -1)
+xticks = np.linspace(xmin, xmax, xmax - xmin + 1)
+xtick_labels = []
+for exp in range(xmin, xmax + 1, 1):
+    xtick_labels.append('$10^{%d}$'%(exp))
 
-print('xticks = ', xticks)
-print('xtick_labels = ', xtick_labels)
-
-# Show the max/min value
-xmin = 0
-xmax = xvalues
-
-ymin = 0
-ymax = delta*len(data)
+yticks = np.linspace(ymin, ymax, ymax - ymin + 1)
+ytick_labels = []
+for exp in range(ymin, ymax + 1, 1):
+    ytick_labels.append('$10^{%d}$'%(exp))
 
 # The overall dimensions
-xdim = 3.0
-xscale = xdim/(2.5*xvalues)
+xdim = 2.0
+xscale = xdim/(xmax - xmin)
 
-ydim = 1.5
-yscale = ydim/ymax
+ydim = 1.75
+yscale = ydim/(ymax - ymin)
 
 # Get the header info
 s = tkz.get_header()
-s += tkz.get_begin_tikz(xdim=3.5, ydim=2.0, xunit='in', yunit='in')
+s += tkz.get_begin_tikz(xdim=1.5, ydim=1.5, xunit='in', yunit='in')
 
-# Create the plot background
-for y in yticks:
-    s += tkz.get_2d_plot([xmin, xmax], [y, y],
-                          xscale=xscale, yscale=yscale,
-                          color='gray', line_dim='thin',
-                          xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+s += r'\tikzstyle{dashed}= [dash pattern=on 6pt off 2pt]'
+s += tikzcolors
 
-for y in np.linspace(0, delta*(len(data)-1), len(data)):
-    s += tkz.get_2d_plot([xmin, xmax], [y, y],
-                          xscale=xscale, yscale=yscale,
-                          color='gray', line_dim='thick',
-                          xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax)
+symbols = ['circle', 'square', 'triangle', 'delta', 'diamond']
+
+xerr = np.array([1.5e3, 4.5e4])
+yerr = np.array([args.error_offset, 1.0])
+order_list = [1, 2, 3, 4, 5, 6, 7]
+
+for order in order_list:
+    # Set the value of the order
+    yerr[1] = yerr[0]*(xerr[0]/xerr[1])**(0.5*order)
+    xvals = np.log10(xerr)
+    yvals = np.log10(yerr)
+    s += tkz.get_2d_plot(xvals, yvals,
+                         line_dim='thin',
+                         color='Gray!50', symbol=None,
+                         xscale=xscale, yscale=yscale, 
+                         xmin=xmin, xmax=xmax,
+                         ymin=ymin, ymax=ymax)
+
+    if ((xvals[1] >= xmin and xvals[1] <= xmax) and
+        (yvals[1] >= ymin and yvals[1] <= ymax)):
+        s += r'\draw[color=Gray!80, font=\scriptsize] (%e, %e) node[right] {%d};'%(
+            xscale*xvals[1], yscale*yvals[1], order)
+
+for k, d in enumerate(data):
+    xvals = np.log10(d[:, nnodes_index])
+    yvals = np.log10(d[:, fval_error_index])    
+    s += tkz.get_2d_plot(xvals, yvals,
+                         color=colors[k % len(colors)],
+                         symbol=symbols[k % len(symbols)],
+                         symbol_size=0.03,
+                         xscale=xscale, yscale=yscale, 
+                         xmin=xmin, xmax=xmax,
+                         ymin=ymin, ymax=ymax)
+
+    if args.corrected:
+        yvals = np.log10(d[:, fval_corr_error_index])
+        s += tkz.get_2d_plot(xvals, yvals,
+                             line_dim='thick, opacity=0.5, dashed',
+                             color=colors[k % len(colors)],
+                             symbol=symbols[k % len(symbols)],
+                             symbol_size=0.03,
+                             xscale=xscale, yscale=yscale, 
+                             xmin=xmin, xmax=xmax,
+                             ymin=ymin, ymax=ymax)
+
+# Set the labels (lower-left corner)
+if args.labels is not None:
+    for k, label in enumerate(args.labels):
+        x = xmin + 0.05*(xmax - xmin)
+        y = ymin + 0.05*(ymax - ymin)*(len(args.labels)-k)
+        length = 0.035*(xmax - xmin)
+        s += tkz.get_legend_entry(x, y, length, label=label,
+                                  font_size='small',
+                                  color=colors[k % len(colors)],
+                                  symbol=symbols[k % len(symbols)],
+                                  symbol_size=0.03,
+                                  xscale=xscale, yscale=yscale)
 
 # Plot the axes
 s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
@@ -109,25 +182,17 @@ s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
                      xtick_labels=xtick_labels,
                      ytick_labels=ytick_labels,
                      tick_font='small',
-                     tick_frac=0.0125,
-                     xlabel_offset=0.1,
-                     xlabel='$\\log_{10}(\\text{Error})$', 
-                     ylabel_offset=0.065,
-                     ylabel='Percentage')
-
-for k, d in enumerate(data):
-    bars = []
-    ymin = delta*(len(data)-k-1)
-    for i in range(idx_min, idx_max+1):
-        bars.append([d[i,3] + ymin])
-
-    s += tkz.get_bar_chart(bars, color_list=[colors[k % len(colors)]], 
-                            xscale=xscale, yscale=yscale, 
-                            ymin=ymin, ymax=ymax)
+                     tick_frac=0.01,
+                     xlabel_offset=0.075,
+                     label_font='large',
+                     xlabel='Number of nodes',
+                     ylabel_offset=0.165,
+                     ylabel='Functional error')
+                     
 
 s += tkz.get_end_tikz()
 
-fp = open('%s_plot.tex'%(case), 'w')
+fp = open(args.outfile, 'w')
 fp.write(s)
 fp.close()
 

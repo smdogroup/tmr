@@ -775,7 +775,7 @@ static void computeElemRecon2D( const int vars_per_node,
       // that contribute to the derivative
       double Nr[MAX_2D_ENRICH];
       double Nar[MAX_2D_ENRICH], Nbr[MAX_2D_ENRICH];
-      evalEnrichmentFuncs2D(order, pt, refined_knots, Nr, Nar, Nbr);
+      evalEnrichmentFuncs2D(order, pt, knots, Nr, Nar, Nbr);
 
       // Add the contributions to the the enricment
       for ( int i = 0; i < nenrich; i++ ){
@@ -1427,7 +1427,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
           // Evaluate the shape functions and the enrichment
           // functions at the new parametric point
           double Nr[MAX_2D_ENRICH];
-          evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
+          evalEnrichmentFuncs2D(order, pt, knots, Nr);
 
           // Add the portion from the enrichment functions
           for ( int i = 0; i < vars_per_node; i++ ){
@@ -1487,7 +1487,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
           // Evaluate the enrichment functions and add them to the
           // solution
           double Nr[MAX_2D_ENRICH];
-          evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
+          evalEnrichmentFuncs2D(order, pt, knots, Nr);
 
           // Add the portion from the enrichment functions
           for ( int i = 0; i < vars_per_node; i++ ){
@@ -1725,6 +1725,116 @@ void addRefinedSolution3D( TMROctForest *forest,
 }
 
 /*
+  Use Newton's method to find the closest point
+*/
+int inverseEvalPoint( const TacsScalar Xp[],
+                      const TacsScalar Xpts[],
+                      TMRQuadForest *forest,
+                      double pt[],
+                      const int max_iterations=20,
+                      const double eps_dist=1e-8,
+                      const double eps_cosine=1e-8 ){
+
+  // Get the order of the forest
+  const int order = forest->getMeshOrder();
+  
+  // Find the closes point
+  for ( int iter = 0; iter < max_iterations; iter++ ){
+    double N[MAX_ORDER*MAX_ORDER];
+    double N1[MAX_ORDER*MAX_ORDER], N2[MAX_ORDER*MAX_ORDER];
+    double N11[MAX_ORDER*MAX_ORDER], N22[MAX_ORDER*MAX_ORDER],
+      N12[MAX_ORDER*MAX_ORDER];
+
+    // Evaluate the shape functions
+    forest->evalInterp(pt, N, N1, N2, N11, N22, N12);
+
+    // Set the point and their derivatives
+    TMRPoint X, Xu, Xv, Xuu, Xuv, Xvv;
+    X.zero();  Xu.zero();  Xv.zero();
+    Xuu.zero();  Xuv.zero();  Xvv.zero();
+    
+    // Evaluate the points and their derivatives
+    for ( int i = 0; i < order*order; i++ ){
+      const TacsScalar x = Xpts[3*i];
+      const TacsScalar y = Xpts[3*i+1];
+      const TacsScalar z = Xpts[3*i+2];
+
+      // Node location
+      X.x += N[i]*x;
+      X.y += N[i]*y;
+      X.z += N[i]*z;
+      
+      // First derivatives
+      Xu.x += N1[i]*x;
+      Xu.y += N1[i]*y;
+      Xu.z += N1[i]*z;
+      Xv.x += N2[i]*x;
+      Xv.y += N2[i]*y;
+      Xv.z += N2[i]*z;
+      
+      // Second derivatives
+      Xuu.x += N11[i]*x;
+      Xuu.y += N11[i]*y;
+      Xuu.z += N11[i]*z;
+      Xvv.x += N22[i]*x;
+      Xvv.y += N22[i]*y;
+      Xvv.z += N22[i]*z;
+      Xuv.x += N12[i]*x;
+      Xuv.y += N12[i]*y;
+      Xuv.z += N12[i]*z;
+    }
+
+    // Compute the difference between the position on the surface and
+    // the point
+    TMRPoint r;
+    r.x = (X.x - Xp[0]);
+    r.y = (X.y - Xp[1]);
+    r.z = (X.z - Xp[2]);
+
+    // Compute the residual
+    double ru = Xu.dot(r);
+    double rv = Xv.dot(r);
+
+    // Compute the elements of the Jacobian matrix
+    double Juu = Xuu.dot(r) + Xu.dot(Xu);
+    double Juv = Xuv.dot(r) + Xu.dot(Xv);
+    double Jvv = Xvv.dot(r) + Xv.dot(Xv);
+
+    // The increments along the parametric directions
+    double du = 0.0, dv = 0.0;
+    
+    // Solve the 2x2 system
+    double det = Juu*Jvv - Juv*Juv;
+    if (det != 0.0){
+      du = (Jvv*ru - Juv*rv)/det;
+      dv = (Juu*rv - Juv*ru)/det;
+    }
+    
+    // Compute the updates
+    pt[0] = pt[0] - du;
+    pt[1] = pt[1] - dv;
+
+    // Check if the convergence test is satisfied
+    if (fabs(r.x) < eps_dist && 
+        fabs(r.y) < eps_dist && 
+        fabs(r.z) < eps_dist){
+      return 0;
+    }
+
+    // Perform the cosine check
+    double dotr = r.dot(r);
+    double dotu = Xu.dot(Xu);
+    double dotv = Xv.dot(Xv);
+    if (ru*ru < eps_cosine*eps_cosine*dotu*dotr && 
+        rv*rv < eps_cosine*eps_cosine*dotv*dotr){
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+/*
   Compute the interpolated solution on the order-elevated mesh
 */
 void TMR_ComputeInterpSolution( TMRQuadForest *forest,
@@ -1779,6 +1889,11 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
     const int *nodes;
     tacs->getElement(elem, &nodes, &len);
 
+    // Get the node locations for the coarse mesh
+    TacsScalar Xpts[3*max_num_nodes], Xpts_refined[3*max_num_nodes];
+    tacs->getElement(elem, Xpts);
+    tacs_refined->getElement(elem, Xpts_refined);
+
     // For each element, interpolate the solution
     memset(vars_interp, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
 
@@ -1788,15 +1903,15 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
     // Perform the interpolation
     for ( int m = 0; m < refined_order; m++ ){
       for ( int n = 0; n < refined_order; n++ ){
-        double pt[3];
+        double pt[2];
         pt[0] = refined_knots[n];
         pt[1] = refined_knots[m];
-
-        // Evaluate the locations of the new nodes
+        
+        // Evaluate the shape functions
         double N[max_num_nodes];
         forest->evalInterp(pt, N);
 
-        // Evaluate the interpolation part of the reconstruction
+        // Evaluate the interpolation
         int offset = n + m*refined_order;
         TacsScalar *v = &vars_interp[vars_per_node*offset];
 
@@ -2406,7 +2521,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
 
         // Add the contribution from the enrichment functions
         double Nr[MAX_2D_ENRICH];
-        evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
+        evalEnrichmentFuncs2D(order, pt, knots, Nr);
 
         // Add the portion from the enrichment functions
         for ( int k = 0; k < nenrich; k++ ){
@@ -2707,6 +2822,72 @@ void TMR_PrintErrorBins( MPI_Comm comm,
   }
 }
 
+/*!
+  Create a nodal vector from the forest
+*/
+void createPartUnityVector( TMRQuadForest *pu,
+                            TACSBVec **pu_vec ){
+  MPI_Comm comm = pu->getMPIComm();
+
+  // Get the rank
+  int mpi_rank;
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // Create the variable map for the partition of unity constraint
+  const int *pu_range;
+  pu->getOwnedNodeRange(&pu_range);
+
+  int num_pu_local = pu_range[mpi_rank+1] - pu_range[mpi_rank];
+  TACSVarMap *pu_map = new TACSVarMap(comm, num_pu_local);
+
+  // Create/retrieve the dependent node information
+  const int *dep_ptr = NULL, *dep_conn = NULL;
+  const double *dep_weights = NULL;
+  int ndep = pu->getDepNodeConn(&dep_ptr, &dep_conn,
+                                &dep_weights);
+
+  // Get the external numbers from the filter itself
+  const int *pu_ext;
+  int num_pu_ext = pu->getNodeNumbers(&pu_ext);
+
+  // Count up all the external nodes
+  int num_ext = 0;
+  int *ext_nodes = new int[ num_pu_ext ];
+
+  // Add the external nodes from the filter
+  for ( int i = 0; i < num_pu_ext; i++ ){
+    int node = pu_ext[i];
+    if (node >= 0 &&
+        (node < pu_range[mpi_rank] ||
+         node >= pu_range[mpi_rank+1])){
+      ext_nodes[num_ext] = node;
+      num_ext++;
+    }
+  }
+
+  // Set up the external filter indices for this filter.  The indices
+  // objects steals the array for the external nodes.
+  TACSBVecIndices *pu_indices = new TACSBVecIndices(&ext_nodes, num_ext);
+  pu_indices->setUpInverse();
+
+  // Set up the external indices
+  TACSBVecDistribute *pu_dist = new TACSBVecDistribute(pu_map, pu_indices);
+  pu_dist->incref();
+
+  // Copy over the data (inefficient)
+  int *dptr = new int[ ndep+1 ];
+  int *dconn = new int[ dep_ptr[ndep] ];
+  double *dweights = new double[ dep_ptr[ndep] ];
+  memcpy(dptr, dep_ptr, (ndep+1)*sizeof(int));
+  memcpy(dconn, dep_conn, dep_ptr[ndep]*sizeof(int));
+  memcpy(dweights, dep_weights, dep_ptr[ndep]*sizeof(double));
+  TACSBVecDepNodes *pu_dep_nodes = new TACSBVecDepNodes(ndep, &dptr,
+                                                        &dconn, &dweights);
+
+  // Create a vector for the predicted nodal errors.
+  *pu_vec = new TACSBVec(pu_map, 1, pu_dist, pu_dep_nodes);
+}
+
 /*
   Refine the mesh using the original solution and the adjoint solution
 
@@ -2757,15 +2938,28 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
 
   // Allocate the nodal error estimates array
   TacsScalar *err = new TacsScalar[ num_refined_nodes ];
+  TacsScalar pu_err[4];
 
   // Keep track of the total error remaining from each element
   // indicator and the adjoint error correction
   TacsScalar total_adjoint_corr = 0.0;
 
+  // Create the partition of unity
+  TMRQuadForest *pu = NULL;
+  if (forest->getMeshOrder() > 2){
+    pu = forest->duplicate();
+    pu->incref();
+    pu->setMeshOrder(2);
+    pu->createNodes();
+  }
+  else {
+    pu = forest;
+    pu->incref();
+  }
+
   // Create a vector for the predicted nodal errors.
-  TACSBVec *nodal_error = new TACSBVec(tacs_refined->getVarMap(), 1,
-                                       tacs_refined->getBVecDistribute(),
-                                       tacs_refined->getBVecDepNodes());
+  TACSBVec *nodal_error;
+  createPartUnityVector(pu, &nodal_error);
   nodal_error->incref();
 
   // Distribute the values for the adjoint/solution
@@ -2783,6 +2977,10 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
     aux_elements->sort();
     num_aux_elems = aux_elements->getAuxElements(&aux);
   }
+
+  // Get the partition of unity connectivity
+  const int *pu_conn;
+  pu->getNodeConn(&pu_conn);
 
   // Compute the residual on the refined mesh with the interpolated
   // variables.
@@ -2817,12 +3015,17 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
     }
 
     // Add up the total adjoint correction
-    for ( int i = 0; i < element->numNodes(); i++ ){
-      total_adjoint_corr += err[i];
+    for ( int j = 0; j < 2; j++ ){
+      for ( int i = 0; i < 2; i++ ){
+        int node = (i*(refined_order-1) +
+                    j*refined_order*(refined_order-1));
+        total_adjoint_corr += TacsRealPart(err[node]);
+        pu_err[i + 2*j] = err[node];
+      }
     }
 
     // Add the contributions to the nodal error
-    nodal_error->setValues(refine_len, refine_nodes, err, TACS_ADD_VALUES);
+    nodal_error->setValues(4, &pu_conn[4*elem], pu_err, TACS_ADD_VALUES);
   }
 
   // Finish setting the values into the nodal error array
@@ -2836,24 +3039,23 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   // Finish setting the values into the array
   double total_error_remain = 0.0;
   for ( int elem = 0; elem < nelems; elem++ ){
-    // Get the node numbers for the refined mesh
-    int refine_len = 0;
-    const int *refine_nodes;
-    tacs_refined->getElement(elem, &refine_nodes, &refine_len);
-
-    // Get the adjoint variables for this element
-    nodal_error->getValues(refine_len, refine_nodes, err);
+    // Get the error for this mesh
+    nodal_error->getValues(4, &pu_conn[4*elem], pu_err);
 
     // Compute the element indicator error as a function of the nodal
     // error estimate.
     error[elem] = 0.0;
-    for ( int j = 0; j < refined_order; j += refined_order-1 ){
-      for ( int i = 0; i < refined_order; i += refined_order-1 ){
-        error[elem] += TacsRealPart(err[i + j*refined_order]);
-      }
+    for ( int i = 0; i < 4; i++ ){
+      error[elem] += TacsRealPart(pu_err[i]);
     }
     error[elem] = 0.25*fabs(error[elem]);
-    total_error_remain += error[elem];
+  }
+
+  // Add up the absolute value of the total nodal error contributions
+  TacsScalar *nerr;
+  int size = nodal_error->getArray(&nerr);
+  for ( int i = 0; i < size; i++ ){
+    total_error_remain += fabs(TacsRealPart(nerr[i]));
   }
 
   // Sum up the contributions across all processors
@@ -2868,6 +3070,7 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
   delete [] vars_interp;
   delete [] adj_interp;
   delete [] err;
+  pu->decref();
   nodal_error->decref();
 
   // Set the adjoint residual correction
@@ -3151,7 +3354,7 @@ TMRStressConstraint::~TMRStressConstraint(){
 */
 TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   const int vars_per_node = tacs->getVarsPerNode();
-
+  
   // Copy the values
   uvec->copyValues(_uvec);
 
@@ -3330,7 +3533,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     printf("KS stress value:  %25.10e\n", ks_func_val);
     printf("Max stress value: %25.10e\n", ks_max_fail);
   }
-
+  
   return ks_func_val;
 }
 
@@ -3339,6 +3542,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
 */
 void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
                                         TACSBVec *dfdu ){
+
   memset(dfdx, 0, size*sizeof(TacsScalar));
 
   // Get information about the interpolation
@@ -3394,7 +3598,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   // Initialize variables
   TacsScalar *dfdu_elem = new TacsScalar[3*p];
   TacsScalar *dfdubar = new TacsScalar[3*m];
-  TacsScalar *dubardu = new TacsScalar[p*m];
+  TacsScalar *dubardu = new TacsScalar[m*p];
   TacsScalar *A = new TacsScalar[n*m];
   TacsScalar *dbdu = new TacsScalar[n*p];
   TacsScalar *dubar_duderiv = new TacsScalar[m*n];
@@ -3439,7 +3643,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
     // Zero variables before elementwise operations begin
     memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
     memset(dfdubar, 0, 3*m*sizeof(TacsScalar));
-    memset(dubardu, 0, p*m*sizeof(TacsScalar));
+    memset(dubardu, 0, m*p*sizeof(TacsScalar));
     memset(A, 0, n*m*sizeof(TacsScalar));
     memset(dbdu, 0, n*p*sizeof(TacsScalar));
     memset(dubar_duderiv, 0, m*n*sizeof(TacsScalar));
@@ -3547,16 +3751,17 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
         }
       }
     }
-
+    
     // Compute dubar/du and dubar/duderiv
     addEnrichDeriv(A, dbdu, dubardu, dubar_duderiv);
 
     // Compute the product (df/dubar)(dubar/du)
     memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
-    for ( int ii = 0; ii < m; ii++ ){
+        
+    for ( int ii = 0; ii < m; ii++ ){ 
       for ( int jj = 0; jj < p; jj++ ){
         for ( int c = 0; c < 3; c++ ){
-          dfdu_elem[3*jj+c] += dfdubar[3*ii+c]*dubardu[p*ii+jj];
+          dfdu_elem[3*jj+c] += dfdubar[3*ii+c]*dubardu[m*jj+ii];
         }
       }
     }
@@ -3686,7 +3891,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   dfdu->endSetValues(TACS_ADD_VALUES);
 
   tacs->applyBCs(dfdu);
-
+  
   // Free allocated memory
   delete [] dfdu_elem;
   delete [] dfdubar;
@@ -3931,14 +4136,8 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   // Compute dubar_duderiv = (A^T A)^-1 A^T
   BLASgemm("N", "T", &m, &n, &m, &a, ATA, &m, A, &n, &b, dubar_duderiv, &m);
 
-  // // Compute (db/du)^T A
-  BLASgemm("T", "N", &p, &m, &n, &a, dbdu, &n, A, &n, &b, dbduT_A, &p);
-
-  // // Evaluate dubar/du as (db/du)^T A [A^T A]^-T
-  BLASgemm("N", "T", &p, &m, &m, &a, dbduT_A, &p, ATA, &m, &b, dubardu, &p);
-
   // Evaluate dubar/du as (dubar/duderiv)(db/du)
-  //BLASgemm("N", "N", &p, &m, &n, &a, dubar_duderiv, &m, dbdu, &n, &b, dubardu, &p);
+  BLASgemm("N", "N", &m, &p, &n, &a, dubar_duderiv, &m, dbdu, &n, &b, dubardu, &m);
 
   // Delete variables
   delete [] ATA;
@@ -4368,15 +4567,15 @@ void TMRCurvatureConstraint::computeNodeDeriv(){
 /*
   Compute the polynomial coefficients
 */
-void evalPoly( const TacsScalar x[], TacsScalar N[], 
+void evalPoly( const TacsScalar x[], TacsScalar N[],
                TacsScalar Nx[], TacsScalar Ny[], TacsScalar Nz[] ){
   N[0] = 1.0;
-  
+
   // Linear terms
   N[1] = x[0];
   N[2] = x[1];
   N[3] = x[2];
-  
+
   // Quadratic terms
   N[4] = x[2]*x[1];
   N[5] = x[0]*x[2];
@@ -4385,7 +4584,7 @@ void evalPoly( const TacsScalar x[], TacsScalar N[],
   N[8] = x[1]*x[1];
   N[9] = x[2]*x[2];
 
-  // Add the additional basis functions xyz, x^2*(y + z + yz), 
+  // Add the additional basis functions xyz, x^2*(y + z + yz),
   // y^2*(x + z + xz), z^2*(x + y + xy)
   N[10] = x[0]*x[1]*x[2];
 
@@ -4494,7 +4693,7 @@ void testPoly(){
     for ( int j = 0; j < 20; j++ ){
       TacsScalar fd = (N1[j] - N[j])/dh;
       printf("Rel y-err[%2d] = %15.4e\n", j,(Ny[j] - fd)/fd);
-    } 
+    }
 
     tmp = x[2];
     x[2] = tmp + dh;
@@ -4504,7 +4703,7 @@ void testPoly(){
       TacsScalar fd = (N1[j] - N[j])/dh;
       printf("Rel z-err[%2d] = %15.4e\n", j, (Nz[j] - fd)/fd);
     }
-  }  
+  }
 }
 
 /*
@@ -4514,8 +4713,8 @@ void testPoly(){
 void TMRCurvatureConstraint::estimateHessian( const TacsScalar elem_Xpts[],
                                               const TacsScalar elem_vals[],
                                               const TacsScalar elem_derivs[],
-                                              TacsScalar *val, 
-                                              TacsScalar g[], 
+                                              TacsScalar *val,
+                                              TacsScalar g[],
                                               TacsScalar H[] ){
   // Compute the central node location
   TacsScalar c[3];
@@ -4591,7 +4790,7 @@ void TMRCurvatureConstraint::estimateHessian( const TacsScalar elem_Xpts[],
   H[5] = rhs[9];
 }
 
-TacsScalar TMRCurvatureConstraint::evalCurvature( const TacsScalar val, 
+TacsScalar TMRCurvatureConstraint::evalCurvature( const TacsScalar val,
                                                   const TacsScalar g[],
                                                   const TacsScalar H[] ){
   // Compute the squared norm of the gradient
@@ -4607,7 +4806,7 @@ TacsScalar TMRCurvatureConstraint::evalCurvature( const TacsScalar val,
   Hf[4] = H[1]*H[2] - H[0]*H[4];
   Hf[5] = H[0]*H[3] - H[1]*H[1];
 
-  TacsScalar Hfact = 
+  TacsScalar Hfact =
     (g[0]*(Hf[0]*g[0] + Hf[1]*g[1] + Hf[2]*g[2]) +
      g[1]*(Hf[1]*g[0] + Hf[3]*g[1] + Hf[4]*g[2]) +
      g[2]*(Hf[2]*g[0] + Hf[4]*g[1] + Hf[5]*g[2]));
@@ -4649,13 +4848,13 @@ TacsScalar TMRCurvatureConstraint::evalCurvature( const TacsScalar val,
     1.0 - 16*(val - 0.5)*(val - 0.5)*(val - 0.5)*(val - 0.5);
 
   // Evaluate the result
-  TacsScalar result = 
+  TacsScalar result =
     factor*(kmax + log(1.0 + exp(aggregate_weight*kdiff))/aggregate_weight);
 
   return result;
 }
 
-TacsScalar TMRCurvatureConstraint::evalCurvDeriv( const TacsScalar val, 
+TacsScalar TMRCurvatureConstraint::evalCurvDeriv( const TacsScalar val,
                                                   const TacsScalar g[],
                                                   const TacsScalar H[],
                                                   TacsScalar *dval,
@@ -4675,7 +4874,7 @@ TacsScalar TMRCurvatureConstraint::evalCurvDeriv( const TacsScalar val,
   Hf[4] = H[1]*H[2] - H[0]*H[4];
   Hf[5] = H[0]*H[3] - H[1]*H[1];
 
-  TacsScalar Hfact = 
+  TacsScalar Hfact =
     (g[0]*(Hf[0]*g[0] + Hf[1]*g[1] + Hf[2]*g[2]) +
      g[1]*(Hf[1]*g[0] + Hf[3]*g[1] + Hf[4]*g[2]) +
      g[2]*(Hf[2]*g[0] + Hf[4]*g[1] + Hf[5]*g[2]));
@@ -4746,7 +4945,7 @@ TacsScalar TMRCurvatureConstraint::evalCurvDeriv( const TacsScalar val,
     dKM = -dk1;
     dsqrtk = -dk1;
   }
-   
+
   if (KM - sqrtk > 0.0){
     dKM += dk2;
     dsqrtk -= dk2;
@@ -4762,7 +4961,7 @@ TacsScalar TMRCurvatureConstraint::evalCurvDeriv( const TacsScalar val,
   // Cary the derivative through to dHprod and dgn
   TacsScalar dHprod = 0.5*dKM/(gn*sqrtgn);
   TacsScalar dHfact = dKG/(gn*gn);
-  TacsScalar dgn = -0.5*dKM*((1.5*Hprod - 
+  TacsScalar dgn = -0.5*dKM*((1.5*Hprod -
                               0.5*gn*(H[0] + H[3] + H[5]))/(gn*gn*sqrtgn));
   dgn -= 2.0*dKG*Hfact/(gn*gn*gn);
 
@@ -4852,7 +5051,7 @@ TacsScalar TMRCurvatureConstraint::evalCurvature( const int elem_size,
               (J[0]*h[3] + J[3]*h[4] + J[6]*h[5]));
   H[2] = 0.5*((J[2]*h[0] + J[5]*h[1] + J[8]*h[2]) +
               (J[0]*h[6] + J[3]*h[7] + J[6]*h[8]));
-  
+
   H[3] = (J[1]*h[3] + J[4]*h[4] + J[7]*h[5]);
   H[4] = 0.5*((J[2]*h[3] + J[5]*h[4] + J[8]*h[5]) +
               (J[1]*h[6] + J[4]*h[7] + J[7]*h[8]));
@@ -4913,7 +5112,7 @@ TacsScalar TMRCurvatureConstraint::addCurvDeriv( const TacsScalar alpha,
               (J[0]*h[3] + J[3]*h[4] + J[6]*h[5]));
   H[2] = 0.5*((J[2]*h[0] + J[5]*h[1] + J[8]*h[2]) +
               (J[0]*h[6] + J[3]*h[7] + J[6]*h[8]));
-  
+
   H[3] = (J[1]*h[3] + J[4]*h[4] + J[7]*h[5]);
   H[4] = 0.5*((J[2]*h[3] + J[5]*h[4] + J[8]*h[5]) +
               (J[1]*h[6] + J[4]*h[7] + J[7]*h[8]));
@@ -4957,6 +5156,7 @@ TacsScalar TMRCurvatureConstraint::addCurvDeriv( const TacsScalar alpha,
   Evaluate the constraint on the refined mesh
 */
 TacsScalar TMRCurvatureConstraint::evalConstraint( TACSBVec *_xvec ){
+  
   // Get the communicator from the forest
   MPI_Comm comm = forest->getMPIComm();
 
@@ -5025,7 +5225,7 @@ TacsScalar TMRCurvatureConstraint::evalConstraint( TACSBVec *_xvec ){
     xderiv->getValues(8, &conn[8*elem], elem_derivs);
 
     // Estimate the model Hessian/gradient information
-    TacsScalar val, g[3], H[6]; 
+    TacsScalar val, g[3], H[6];
     estimateHessian(elem_Xpts, elem_vals, elem_derivs,
                     &val, g, H);
 
@@ -5066,7 +5266,7 @@ TacsScalar TMRCurvatureConstraint::evalConstraint( TACSBVec *_xvec ){
     xderiv->getValues(8, &conn[8*elem], elem_derivs);
 
     // Estimate the model Hessian/gradient information
-    TacsScalar val, g[3], H[6]; 
+    TacsScalar val, g[3], H[6];
     estimateHessian(elem_Xpts, elem_vals, elem_derivs,
                     &val, g, H);
 
@@ -5097,7 +5297,7 @@ TacsScalar TMRCurvatureConstraint::evalConstraint( TACSBVec *_xvec ){
     printf("Induced curvature:  %25.10e\n", func_val);
     printf("Max curvature:      %25.10e\n", max_curvature);
   }
-
+  
   return func_val;
 }
 
@@ -5165,7 +5365,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
 
 
 
-void TMRCurvatureConstraint::writeCurvatureToFile( TACSBVec *_xvec, 
+void TMRCurvatureConstraint::writeCurvatureToFile( TACSBVec *_xvec,
                                                    const char *filename ){
   // Copy the values
   const int bsize = _xvec->getBlockSize();
@@ -5235,7 +5435,7 @@ void TMRCurvatureConstraint::writeCurvatureToFile( TACSBVec *_xvec,
     xderiv->getValues(8, &conn[8*elem], elem_derivs);
 
     // Estimate the model Hessian/gradient information
-    TacsScalar val, g[3], H[6]; 
+    TacsScalar val, g[3], H[6];
     estimateHessian(elem_Xpts, elem_vals, elem_derivs,
                     &val, g, H);
 
@@ -5257,7 +5457,7 @@ void TMRCurvatureConstraint::writeCurvatureToFile( TACSBVec *_xvec,
     xderiv->getValues(8, &conn[8*elem], elem_derivs);
 
     // Estimate the model Hessian/gradient information
-    TacsScalar val, g[3], H[6]; 
+    TacsScalar val, g[3], H[6];
     estimateHessian(elem_Xpts, elem_vals, elem_derivs,
                     &val, g, H);
 

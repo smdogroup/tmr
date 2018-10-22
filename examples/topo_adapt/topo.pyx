@@ -26,7 +26,11 @@ cdef extern from "PSTopo.h":
     cdef cppclass PSTopo(PlaneStressStiffness):
         PSTopo(TacsScalar, TacsScalar, TacsScalar, TacsScalar,
                double, double, int*, double*, int)
-        TacsScalar getDensity()
+        TacsScalar getDensity()      
+
+    cdef cppclass PSTopo4(PlaneStressStiffness):
+        PSTopo4(TacsScalar, TacsScalar, TacsScalar, TacsScalar,
+                double, double, int**, double**, int*)
     
 cdef class pstopo(PlaneStress):
     cdef PSTopo *self_ptr
@@ -44,3 +48,47 @@ cdef class pstopo(PlaneStress):
 
     def getDensity(self):
         return self.self_ptr.getDensity()
+
+cdef class pstopo4(PlaneStress):
+    cdef PSTopo4 *self_ptr
+    def __cinit__(self, double rho, double E, double nu, double ys,
+                  double q, double eps,
+                  np.ndarray[int, ndim=1, mode='c'] nodes1,
+                  np.ndarray[double, ndim=1, mode='c'] weights1,
+                  np.ndarray[int, ndim=1, mode='c'] nodes2,
+                  np.ndarray[double, ndim=1, mode='c'] weights2,
+                  np.ndarray[int, ndim=1, mode='c'] nodes3,
+                  np.ndarray[double, ndim=1, mode='c'] weights3,
+                  np.ndarray[int, ndim=1, mode='c'] nodes4,
+                  np.ndarray[double, ndim=1, mode='c'] weights4):
+        '''Multimaterial topology optimization'''
+        assert(len(nodes1) == len(weights1))
+        assert(len(nodes2) == len(weights2))
+        assert(len(nodes3) == len(weights3))
+        assert(len(nodes4) == len(weights4))
+        cdef int *nodes[4]
+        cdef double *weights[4]
+        cdef int nweights[4]
+
+        # Set the weights
+        nweights[0] = len(weights1)
+        nweights[1] = len(weights2)
+        nweights[2] = len(weights3)
+        nweights[3] = len(weights4)
+
+        # Set the weights
+        nodes[0] = <int*>nodes1.data
+        nodes[1] = <int*>nodes2.data
+        nodes[2] = <int*>nodes3.data
+        nodes[3] = <int*>nodes4.data
+
+        # Set the weights
+        weights[0] = <double*>weights1.data
+        weights[1] = <double*>weights2.data
+        weights[2] = <double*>weights3.data
+        weights[3] = <double*>weights4.data
+        
+        self.self_ptr = new PSTopo4(rho, E, nu, ys, q, eps, nodes, weights, nweights)
+        self.ptr = self.self_ptr
+        self.ptr.incref()
+        return
