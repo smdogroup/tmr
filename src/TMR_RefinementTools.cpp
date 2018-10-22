@@ -775,7 +775,7 @@ static void computeElemRecon2D( const int vars_per_node,
       // that contribute to the derivative
       double Nr[MAX_2D_ENRICH];
       double Nar[MAX_2D_ENRICH], Nbr[MAX_2D_ENRICH];
-      evalEnrichmentFuncs2D(order, pt, refined_knots, Nr, Nar, Nbr);
+      evalEnrichmentFuncs2D(order, pt, knots, Nr, Nar, Nbr);
 
       // Add the contributions to the the enricment
       for ( int i = 0; i < nenrich; i++ ){
@@ -1427,7 +1427,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
           // Evaluate the shape functions and the enrichment
           // functions at the new parametric point
           double Nr[MAX_2D_ENRICH];
-          evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
+          evalEnrichmentFuncs2D(order, pt, knots, Nr);
 
           // Add the portion from the enrichment functions
           for ( int i = 0; i < vars_per_node; i++ ){
@@ -1487,7 +1487,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
           // Evaluate the enrichment functions and add them to the
           // solution
           double Nr[MAX_2D_ENRICH];
-          evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
+          evalEnrichmentFuncs2D(order, pt, knots, Nr);
 
           // Add the portion from the enrichment functions
           for ( int i = 0; i < vars_per_node; i++ ){
@@ -1726,11 +1726,6 @@ void addRefinedSolution3D( TMROctForest *forest,
 
 /*
   Use Newton's method to find the closest point
-
-
-
-
-
 */
 int inverseEvalPoint( const TacsScalar Xp[],
                       const TacsScalar Xpts[],
@@ -1834,7 +1829,9 @@ int inverseEvalPoint( const TacsScalar Xp[],
         rv*rv < eps_cosine*eps_cosine*dotv*dotr){
       return 0;
     }
-  }    
+  }
+
+  return 1;
 }
 
 /*
@@ -1906,14 +1903,9 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
     // Perform the interpolation
     for ( int m = 0; m < refined_order; m++ ){
       for ( int n = 0; n < refined_order; n++ ){
-        const int refined_index = n + m*refined_order;
         double pt[2];
         pt[0] = refined_knots[n];
         pt[1] = refined_knots[m];
-
-        // Find the closest point on the refined mesh
-        const TacsScalar *X = &Xpts_refined[3*refined_index];
-        // inverseEvalPoint(X, Xpts, forest, pt);
         
         // Evaluate the shape functions
         double N[max_num_nodes];
@@ -2529,7 +2521,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
 
         // Add the contribution from the enrichment functions
         double Nr[MAX_2D_ENRICH];
-        evalEnrichmentFuncs2D(order, pt, refined_knots, Nr);
+        evalEnrichmentFuncs2D(order, pt, knots, Nr);
 
         // Add the portion from the enrichment functions
         for ( int k = 0; k < nenrich; k++ ){

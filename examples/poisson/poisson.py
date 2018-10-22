@@ -132,7 +132,7 @@ def recon_basis(order, x):
                       x[0]**2, x[0]*x[1], x[1]**2,
                       x[0]**3, x[0]**2*x[1], x[0]*x[1]**2, x[1]**3,
                       x[0]**4, x[0]**3*x[1], x[0]**2*x[1]**2,
-                      x[0]**3*x[1], x[1]**4])
+                      x[0]*x[1]**3, x[1]**4])
 
     return N
 
@@ -159,7 +159,7 @@ def elem_recon(order, conn, Xpts, uvals, elem_list, max_dist=1.0):
     b = np.zeros(len(var))
 
     for i, v in enumerate(var):
-        w = np.exp(-dist[i]/max_dist)
+        w = 1.0 # np.exp(-dist[i]/max_dist)
         
         # Compute the basis at the provided point
         b[i] = w*uvals[v]
@@ -204,7 +204,8 @@ def computeRecon(order, conn, Xpts, uvals,
     count = np.zeros(Xpts_refine.shape[0])
 
     # Compute the average element distance
-    max_dist = 2.0*np.average(np.sqrt(np.sum((Xpts[conn[:,0]] - Xpts[conn[:,-1]])**2, axis=1)))
+    max_dist = 2.0*np.average(np.sqrt(
+        np.sum((Xpts[conn[:,0]] - Xpts[conn[:,-1]])**2, axis=1)))
 
     for elem in range(nelems):
         # Get the list of elements
@@ -370,7 +371,8 @@ if case == 'disk':
                 print('functional: %10s  parameter: %g'%(functional, ksweight))
                 print('%10s %25s %25s'%('n', 'max', 'func. estimate'))
             for n in nrange:
-                ks_max, approx = get_disk_aggregate(comm, functional, ksweight, R, n=n)
+                ks_max, approx = get_disk_aggregate(comm, functional,
+                                                    ksweight, R, n=n)
                 if comm.rank == 0:
                     print('%10d %25.16e %25.16e'%(n, ks_max, approx))
                 exact_functional = approx
@@ -542,7 +544,7 @@ for k in range(steps):
             # Compute the reconstructed solution on the refined mesh
             ans_interp = assembler_refined.createVec()
 
-            if comm.size == 1:
+            if False: # comm.size == 1:
                 # Distribute the answer vector across all procs
                 ans.distributeValues()
 
@@ -573,7 +575,7 @@ for k in range(steps):
                 var = np.arange(-num_dep_refined, num_vars_refined, dtype=np.intc)
                 ans_interp.setValues(var, ans_refined, op=TACS.INSERT_VALUES)
 
-                assembler_refined.copyVariables(ans_interp)
+                assembler_refined.setVariables(ans_interp)
             else:
                 TMR.computeReconSolution(forest, assembler,
                                          forest_refined, assembler_refined,
@@ -660,10 +662,15 @@ for k in range(steps):
             # Compute the solution on the refined mesh
             ans_refined = assembler_refined.createVec()
             TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, ans, ans_refined)
+                                     forest_refined, assembler_refined,
+                                     ans, ans_refined)
 
             # Apply Dirichlet boundary conditions
             assembler_refined.setVariables(ans_refined)
+
+            # Assemble the residual on the refined mesh
+            res_refined = assembler_refined.createVec()
+            assembler_refined.assembleRes(res_refined)
 
             # Compute the functional on the refined mesh
             if functional == 'ks':
@@ -694,20 +701,27 @@ for k in range(steps):
             # and the adjoint on the current mesh
             adjoint_refined = assembler_refined.createVec()
             TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint,
-                adjoint_refined)
+                                     forest_refined, assembler_refined,
+                                     adjoint, adjoint_refined)
 
-            # Compute the adjoint and use adjoint-based refinement
-            err_est, adjoint_corr, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_refined, adjoint_refined)
+            # # Compute the adjoint correction on the fine mesh
+            adjoint_corr = adjoint_refined.dot(res_refined)
 
-            # Compute the adjoint and use adjoint-based refinement
+            # Compute the diff between the interpolated and 
+            # reconstructed solutions
+            adjoint_interp = assembler_refined.createVec()
+            TMR.computeInterpSolution(forest_refined, assembler_refined,
+                                      forest, assembler,
+                                      adjoint_refined, adjoint)
+            TMR.computeInterpSolution(forest, assembler,
+                                      forest_refined, assembler_refined,
+                                      adjoint, adjoint_interp)
+            adjoint_refined.axpy(-1.0, adjoint_interp)
+
+            # Estimate the element-wise errors
             err_est, __, error = TMR.adjointError(forest, assembler,
-                forest_refined, assembler_refined, ans_refined, adjoint_refined)
-
-            TMR.computeReconSolution(forest, assembler,
-                forest_refined, assembler_refined, adjoint, adjoint_refined)
-            assembler_refined.setVariables(adjoint_refined)
+                                                  forest_refined, assembler_refined,
+                                                  ans_refined, adjoint_refined)
 
         # Compute the refined function value
         fval_corr = fval_refined + adjoint_corr
@@ -879,7 +893,7 @@ for k in range(steps):
                 hmax = 10.0
                 hmin = 0.1
                 feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax,
-                                                    num_sample_pts=16)
+                                                    num_sample_pts=12)
             else:
                 size = error.shape[0]
                 comm.gather(size, root=root)
