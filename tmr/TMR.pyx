@@ -2485,7 +2485,8 @@ cdef class QuadTopoCreator:
         return
 
     def __dealloc__(self):
-        self.ptr.decref()
+        if self.ptr:
+            self.ptr.decref()
 
     def createTACS(self, QuadForest forest,
                    OrderingType ordering=TACS.PY_NATURAL_ORDER,scale=1.0):
@@ -2544,7 +2545,8 @@ cdef class QuadBernsteinTopoCreator:
         return
 
     def __dealloc__(self):
-        self.ptr.decref()
+        if self.ptr:
+            self.ptr.decref()
 
     def createTACS(self, QuadForest forest,
                    OrderingType ordering=TACS.PY_NATURAL_ORDER,scale=1.0):
@@ -2635,21 +2637,21 @@ cdef TACSElement* _createOctBernsteinTopoElement( void *_self, int order,
                                                   int nweights,
                                                   TMROctForest *filtr):
     cdef TACSElement *elem = NULL
-    oct = Octant()
-    oct.octant.x = octant.x
-    oct.octant.y = octant.y
-    oct.octant.z = octant.z
-    oct.octant.level = octant.level
-    oct.octant.info = octant.info
-    oct.octant.block = octant.block
-    oct.octant.tag = octant.tag
+    Oct = Octant()
+    Oct.octant.x = octant.x
+    Oct.octant.y = octant.y
+    Oct.octant.z = octant.z
+    Oct.octant.level = octant.level
+    Oct.octant.info = octant.info
+    Oct.octant.block = octant.block
+    Oct.octant.tag = octant.tag
     idx = []
 
     of = OctForest()
     of.ptr = filtr    
     for i in range(nweights):
         idx.append(index[i])
-    e = (<object>_self).createElement(order, oct, idx, of)
+    e = (<object>_self).createElement(order, Oct, idx, of)
     if e is not None:
         (<Element>e).ptr.incref()
         elem = (<Element>e).ptr
@@ -2658,9 +2660,7 @@ cdef TACSElement* _createOctBernsteinTopoElement( void *_self, int order,
 
 cdef class OctBernsteinTopoCreator:
     cdef TMRCyTopoOctBernsteinCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, OctForest forest,
-                  *args, **kwargs):
-        self.ptr = NULL
+    def __cinit__(self, BoundaryConditions bcs, OctForest forest, *args, **kwargs):
         self.ptr = new TMRCyTopoOctBernsteinCreator(bcs.ptr, forest.ptr)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
@@ -2908,33 +2908,46 @@ cdef class OctStiffness(SolidStiff):
 
 cdef class ThermoOctStiffness(CoupledSolid):
     def __cinit__(self, StiffnessProperties props,
-                  list index=None, list weights=None):
+                  list index=None, list weights=None,
+                  OctForest filtr=None):
         cdef TMRIndexWeight *w = NULL
+        cdef int* ind = NULL
         cdef int nw = 0
         self.ptr = NULL
-        if weights is None or index is None:
-            errmsg = 'Must define weights and indices'
-            raise ValueError(errmsg)
-        if len(weights) != len(index):
-            errmsg = 'Weights and index list lengths must be the same'
-            raise ValueError(errmsg)
+        cdef TMROctForest *of = NULL
+        # if weights is None or index is None:
+        #     errmsg = 'Must define weights and indices'
+        #     raise ValueError(errmsg)
+        # if len(weights) != len(index):
+        #     errmsg = 'Weights and index list lengths must be the same'
+        #     raise ValueError(errmsg)
 
-        # Check that the lengths are less than 8
-        if len(weights) > 8:
-            errmsg = 'Weight/index lists too long > 8'
-            raise ValueError(errmsg)
+        # # Check that the lengths are less than 8
+        # if len(weights) > 8:
+        #     errmsg = 'Weight/index lists too long > 8'
+        #     raise ValueError(errmsg)
 
         # Extract the weights
-        nw = len(weights)
-        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
-        for i in range(nw):
-            w[i].weight = <double>weights[i]
-            w[i].index = <int>index[i]
-
+        if weights:
+            nw = len(weights)
+            w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
+            for i in range(nw):
+                w[i].weight = <double>weights[i]
+                w[i].index = <int>index[i]
+        else:
+            nw = len(index)
+            ind = <int*>malloc(nw*sizeof(int));
+            for i in range(nw):
+                ind[i] = <int>index[i]
+        if filtr:
+            of = filtr.ptr
         # Create the constitutive object
-        self.ptr = new TMRCoupledThermoOctStiffness(w, nw, props.ptr)
+        self.ptr = new TMRCoupledThermoOctStiffness(w, nw, props.ptr, of, ind)
         self.ptr.incref()
-        free(w)
+        if w:
+            free(w)
+        if ind:
+            free(ind)
         return
     
 

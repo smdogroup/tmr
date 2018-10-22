@@ -322,7 +322,7 @@ void TMRCoupledThermoOctStiffness::calculateStress( const double pt[],
       }
       // Apply the projection to obtain the projected value
       // of the density
-      rho[j] = x[j];      
+      rho[j] = x[j];
     }
   }
   if (nvars == 1){
@@ -340,7 +340,7 @@ void TMRCoupledThermoOctStiffness::calculateStress( const double pt[],
     s[2] = Dp*((1.0 - nu)*e[2] + nu*(e[0] + e[1]));    
     s[3] = Gp*e[3];
     s[4] = Gp*e[4];
-    s[5] = Gp*e[5];
+    s[5] = Gp*e[5];    
   }
   else {
     // Compute the penalized stiffness

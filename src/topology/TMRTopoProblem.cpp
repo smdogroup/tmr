@@ -1602,7 +1602,12 @@ int TMRTopoProblem::getLocalValuesFromBVec( TACSBVec *vec,
   }
   else if (oct_filter) {
     if (oct_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
-      
+      vec->beginDistributeValues();
+      vec->endDistributeValues();
+      const int *node_numbers;
+      int num_nodes = oct_filter[0]->getNodeNumbers(&node_numbers);
+      vec->getValues(num_nodes, node_numbers, &xloc[0]);
+      return num_nodes;
     }    
   }
   memcpy(xloc, x_vals, size*sizeof(TacsScalar));
@@ -1623,28 +1628,6 @@ void TMRTopoProblem::setBVecFromLocalValues( const TacsScalar *xloc,
   int ext_size = vec->getExtArray(&x_ext_vals);
   if (quad_filter){
     if (quad_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
-      /*
-      TACSBVecDepNodes *dep_vec = vec->getBVecDepNodes();
-      const int *dep_ptr, *dep_conn;
-      int ndep = dep_vec->getDepNodes(NULL, NULL, NULL);
-      int *index = new int[ ndep ];
-      for ( int i = 0; i < ndep; i++ ){
-        index[i] = i;
-      }
-      // Set the dependent node info to BVec
-      vec->setValue(ndep, index, &xloc[0], TACS_INSERT_VALUES);
-      delete [] index;
-      // Set the external node info to BVec
-      //vec->setValue();
-      // Set the local node info to BVec
-      index = new int[ size ];
-      for ( int i = 0; i < size; i++ ){
-        index[i] = i+ndep;
-      }
-      delete [] index;
-      vec->setValue(size, index, &xloc[ndep], TACS_INSERT_VALUES);
-      */
-
       const int *node_numbers;
       int num_nodes = quad_filter[0]->getNodeNumbers(&node_numbers);
       vec->setValues(num_nodes, node_numbers, xloc, TACS_INSERT_VALUES);
@@ -1658,7 +1641,9 @@ void TMRTopoProblem::setBVecFromLocalValues( const TacsScalar *xloc,
   }
   else if (oct_filter) {
     if (oct_filter[0]->getInterpType() == TMR_BERNSTEIN_POINTS){
-      
+      const int *node_numbers;
+      int num_nodes = oct_filter[0]->getNodeNumbers(&node_numbers);
+      vec->setValues(num_nodes, node_numbers, xloc, TACS_INSERT_VALUES);
     }
     else {
       memcpy(x_vals, xloc, size*sizeof(TacsScalar));

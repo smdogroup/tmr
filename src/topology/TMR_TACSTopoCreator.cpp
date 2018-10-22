@@ -1242,7 +1242,7 @@ void TMROctBernsteinTACSTopoCreator::createElements( int order,
   
   // The number of weights/element
   const int filter_order = filter->getMeshOrder();
-  const int nweights = filter_order*filter_order;
+  const int nweights = filter_order*filter_order*filter_order;
  
   // Allocate the weights for all of the local elements 
   int *index = new int[ nweights*num_octs ];

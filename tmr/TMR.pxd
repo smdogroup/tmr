@@ -464,7 +464,8 @@ cdef extern from "TMRCoupledThermoQuadStiffness.h":
 cdef extern from "TMRCoupledThermoOctStiffness.h":
    cdef cppclass TMRCoupledThermoOctStiffness(CoupledThermoSolidStiffness):
       TMRCoupledThermoOctStiffness(TMRIndexWeight*, int,
-                                   TMRStiffnessProperties*)
+                                   TMRStiffnessProperties*,
+                                   TMROctForest*, int*)
       
 cdef extern from "SolidShellWrapper.h":
     cdef cppclass SolidShellWrapper(TACSElement):

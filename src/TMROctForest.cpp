@@ -1420,8 +1420,9 @@ void TMROctForest::setMeshOrder( int _mesh_order,
   }
 
   // Allocate the interpolation knots and set the knot locations
-  interp_knots = new double[ mesh_order ];
+  interp_knots = new double[ 2*mesh_order ];
   interp_type = _interp_type;
+  memset(interp_knots, 0.0, 2*(mesh_order)*sizeof(double));
   if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
     interp_knots[0] = -1.0;
     interp_knots[mesh_order-1] = 1.0;
