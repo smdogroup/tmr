@@ -1048,12 +1048,19 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   Set up a creator class for the given forest problem
 */
 TMRQuadBernsteinTACSTopoCreator::TMRQuadBernsteinTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                                TMRQuadForest *_forest ):
+                                                                  TMRQuadForest  *_forest,
+                                                                  int is_bernstein ):
 TMRQuadTACSCreator(_bcs){
   // Create and reference the filter
   filter = _forest->duplicate();
-  filter->setMeshOrder(_forest->getMeshOrder()-1, 
-                       TMR_BERNSTEIN_POINTS);
+  if (is_bernstein){
+    filter->setMeshOrder(_forest->getMeshOrder()-1, 
+                         TMR_BERNSTEIN_POINTS);
+  }
+  else {
+    filter->setMeshOrder(_forest->getMeshOrder()-1, 
+                         _forest->getInterpType());
+  }
   filter->incref();
   
   int mpi_rank;
@@ -1129,8 +1136,9 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
 
   // Loop over the nodes and convert to the local numbering scheme
   const int *conn;
-  filter->getNodeConn(&conn);
-
+  int num_elems;
+  filter->getNodeConn(&conn, &num_elems);
+  
   // Get the local node index on this processor
   for ( int i = 0; i < nweights*num_quads; i++ ){
     index[i] = filter->getLocalNodeNumber(conn[i]);
@@ -1141,14 +1149,35 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
   int num_dep_nodes = filter->getDepNodeConn();
 
   // Set the number of filter nodes
-  int num_filter_nodes = num_nodes - num_dep_nodes;
+  int num_filter_nodes = 0;
   
-  // Copy over the node numbers
-  int *filter_node_nums = new int[ num_filter_nodes ];
-  memcpy(filter_node_nums, &node_nums[num_dep_nodes],
-         num_filter_nodes*sizeof(int));
+  // Get the node range
+  const int *range;
+  filter->getOwnedNodeRange(&range);
 
-  // Set up the external filter indices for this filter.  The indices
+  // Compute the number of external node numbers
+  for ( int i = num_dep_nodes; i < num_nodes; i++ ){
+    if (node_nums[i] >= 0 &&
+        (node_nums[i] < range[mpi_rank] ||
+         node_nums[i] >= range[mpi_rank+1])){
+      num_filter_nodes++;
+    }
+  }
+  
+  // Allocate an array for the external node numbers and set their values into
+  // the filter_node_nums array
+  int *filter_node_nums = new int[ num_filter_nodes ];
+  int count = 0;
+  for ( int i = num_dep_nodes; i < num_nodes; i++ ){
+    if (node_nums[i] >= 0 &&
+        (node_nums[i] < range[mpi_rank] ||
+         node_nums[i] >= range[mpi_rank+1])){
+      filter_node_nums[count] = node_nums[i];
+      count++;
+    }
+  }
+
+  // Set up the external filter indices for this filter. The indices
   // objects steals the array for the external nodes.
   filter_indices = new TACSBVecIndices(&filter_node_nums, 
                                        num_filter_nodes);
@@ -1274,7 +1303,7 @@ void TMROctBernsteinTACSTopoCreator::createElements( int order,
                                        num_filter_nodes);
   filter_indices->incref();
   filter_indices->setUpInverse();
-
+  
   // Loop over the octants
   octants->getArray(&octs, &num_octs);
   for ( int i = 0; i < num_octs; i++ ){

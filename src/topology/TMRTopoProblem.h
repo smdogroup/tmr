@@ -217,8 +217,8 @@ class TMRTopoProblem : public ParOptProblem {
 
  private:
   // Get/set values from the TACSBVec object
-  int getLocalValuesFromBVec( TACSBVec *vec, TacsScalar *xloc );
-  void setBVecFromLocalValues( const TacsScalar *xloc, TACSBVec *vec );
+  int getLocalValuesFromBVec( int level, TACSBVec *vec, TacsScalar *xloc );
+  void setBVecFromLocalValues( int level, const TacsScalar *xloc, TACSBVec *vec );
 
   // Extract and write the eigenvectors to file
   void writeEigenVector( int iter );

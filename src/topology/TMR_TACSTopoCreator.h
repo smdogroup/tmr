@@ -128,7 +128,8 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
 class TMRQuadBernsteinTACSTopoCreator : public TMRQuadTACSCreator {
  public:
   TMRQuadBernsteinTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                   TMRQuadForest *_forest );
+                                   TMRQuadForest *_forest,
+                                   int is_bernstein=1);
   ~TMRQuadBernsteinTACSTopoCreator();
 
   // Create the elements
