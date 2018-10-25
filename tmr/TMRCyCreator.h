@@ -186,8 +186,9 @@ class TMRCyTopoOctCreator : public TMROctTACSTopoCreator {
 class TMRCyTopoQuadBernsteinCreator : public TMRQuadBernsteinTACSTopoCreator {
  public:
   TMRCyTopoQuadBernsteinCreator( TMRBoundaryConditions *_bcs,
-                                 TMRQuadForest *_forest ):
-  TMRQuadBernsteinTACSTopoCreator(_bcs, _forest){}
+                                 TMRQuadForest *_forest,
+                                 int is_bernstein=1):
+  TMRQuadBernsteinTACSTopoCreator(_bcs, _forest, is_bernstein){}
 
   void setSelfPointer( void *_self ){
     self = _self;
@@ -222,8 +223,9 @@ class TMRCyTopoQuadBernsteinCreator : public TMRQuadBernsteinTACSTopoCreator {
 class TMRCyTopoOctBernsteinCreator : public TMROctBernsteinTACSTopoCreator {
  public:
   TMRCyTopoOctBernsteinCreator( TMRBoundaryConditions *_bcs,
-                                TMROctForest *_forest ):
-  TMROctBernsteinTACSTopoCreator(_bcs, _forest){}
+                                TMROctForest *_forest,
+                                int is_bernstein=1 ):
+  TMROctBernsteinTACSTopoCreator(_bcs, _forest, is_bernstein){}
 
   void setSelfPointer( void *_self ){
     self = _self;

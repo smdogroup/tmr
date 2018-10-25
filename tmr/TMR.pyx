@@ -2537,8 +2537,10 @@ cdef TACSElement* _createQuadBernsteinTopoElement( void *_self, int order,
 
 cdef class QuadBernsteinTopoCreator:
     cdef TMRCyTopoQuadBernsteinCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, QuadForest forest, *args, **kwargs):
-        self.ptr = new TMRCyTopoQuadBernsteinCreator(bcs.ptr, forest.ptr)
+    def __cinit__(self, BoundaryConditions bcs, QuadForest forest,
+                  use_bernstein=1, *args, **kwargs):
+        self.ptr = new TMRCyTopoQuadBernsteinCreator(bcs.ptr, forest.ptr, \
+                                                     use_bernstein)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateQuadTopoElement(_createQuadBernsteinTopoElement)
@@ -2660,8 +2662,10 @@ cdef TACSElement* _createOctBernsteinTopoElement( void *_self, int order,
 
 cdef class OctBernsteinTopoCreator:
     cdef TMRCyTopoOctBernsteinCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, OctForest forest, *args, **kwargs):
-        self.ptr = new TMRCyTopoOctBernsteinCreator(bcs.ptr, forest.ptr)
+    def __cinit__(self, BoundaryConditions bcs, OctForest forest,
+                  use_bernstein=1, *args, **kwargs):
+        self.ptr = new TMRCyTopoOctBernsteinCreator(bcs.ptr, forest.ptr,
+                                                    use_bernstein)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateOctTopoElement(_createOctBernsteinTopoElement)

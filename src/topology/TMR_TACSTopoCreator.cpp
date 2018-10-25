@@ -1198,7 +1198,8 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
   Set up a creator class for the given forest problem
 */
 TMROctBernsteinTACSTopoCreator::TMROctBernsteinTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                                                TMROctForest *_forest ):
+                                                                TMROctForest *_forest,
+                                                                int is_bernstein ):
 TMROctTACSCreator(_bcs){
   // Create and reference the filter
   filter = _forest->duplicate();
@@ -1288,15 +1289,35 @@ void TMROctBernsteinTACSTopoCreator::createElements( int order,
   const int *node_nums;
   int num_nodes = filter->getNodeNumbers(&node_nums);
   int num_dep_nodes = filter->getDepNodeConn();
-
-  // Set the number of filter nodes
-  int num_filter_nodes = num_nodes - num_dep_nodes;
   
-  // Copy over the node numbers
-  int *filter_node_nums = new int[ num_filter_nodes ];
-  memcpy(filter_node_nums, &node_nums[num_dep_nodes],
-         num_filter_nodes*sizeof(int));
+  // Set the number of filter nodes
+  int num_filter_nodes = 0;
+  
+  // Get the node range
+  const int *range;
+  filter->getOwnedNodeRange(&range);
 
+  // Compute the number of external node numbers
+  for ( int i = num_dep_nodes; i < num_nodes; i++ ){
+    if (node_nums[i] >= 0 &&
+        (node_nums[i] < range[mpi_rank] ||
+         node_nums[i] >= range[mpi_rank+1])){
+      num_filter_nodes++;
+    }
+  }
+  
+  // Allocate an array for the external node numbers and set their values into
+  // the filter_node_nums array
+  int *filter_node_nums = new int[ num_filter_nodes ];
+  int count = 0;
+  for ( int i = num_dep_nodes; i < num_nodes; i++ ){
+    if (node_nums[i] >= 0 &&
+        (node_nums[i] < range[mpi_rank] ||
+         node_nums[i] >= range[mpi_rank+1])){
+      filter_node_nums[count] = node_nums[i];
+      count++;
+    }
+  }
   // Set up the external filter indices for this filter.  The indices
   // objects steals the array for the external nodes.
   filter_indices = new TACSBVecIndices(&filter_node_nums, 

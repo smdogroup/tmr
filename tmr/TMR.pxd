@@ -564,7 +564,7 @@ cdef extern from "TMRCyCreator.h":
         void getIndices(TACSBVecIndices**)
 
     cdef cppclass TMRCyTopoQuadBernsteinCreator(TMREntity):
-       TMRCyTopoQuadBernsteinCreator(TMRBoundaryConditions*, TMRQuadForest*)
+       TMRCyTopoQuadBernsteinCreator(TMRBoundaryConditions*, TMRQuadForest*, int)
        void setSelfPointer(void*)
        void setCreateQuadTopoElement(
           TACSElement* (*createquadtopoelements)(
@@ -575,7 +575,7 @@ cdef extern from "TMRCyCreator.h":
        void getIndices(TACSBVecIndices**)
 
     cdef cppclass TMRCyTopoOctBernsteinCreator(TMREntity):
-        TMRCyTopoOctBernsteinCreator(TMRBoundaryConditions*, TMROctForest*)
+        TMRCyTopoOctBernsteinCreator(TMRBoundaryConditions*, TMROctForest*, int)
         void setSelfPointer(void*)
         void setCreateOctTopoElement(
             TACSElement* (*createocttopoelements)(
