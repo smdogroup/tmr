@@ -1136,8 +1136,7 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
 
   // Loop over the nodes and convert to the local numbering scheme
   const int *conn;
-  int num_elems;
-  filter->getNodeConn(&conn, &num_elems);
+  filter->getNodeConn(&conn);
   
   // Get the local node index on this processor
   for ( int i = 0; i < nweights*num_quads; i++ ){
@@ -1154,7 +1153,6 @@ void TMRQuadBernsteinTACSTopoCreator::createElements( int order,
   // Get the node range
   const int *range;
   filter->getOwnedNodeRange(&range);
-
   // Compute the number of external node numbers
   for ( int i = num_dep_nodes; i < num_nodes; i++ ){
     if (node_nums[i] >= 0 &&
@@ -1203,8 +1201,14 @@ TMROctBernsteinTACSTopoCreator::TMROctBernsteinTACSTopoCreator( TMRBoundaryCondi
 TMROctTACSCreator(_bcs){
   // Create and reference the filter
   filter = _forest->duplicate();
-  filter->setMeshOrder(_forest->getMeshOrder()-1, 
-                       TMR_BERNSTEIN_POINTS);
+  if (is_bernstein){
+    filter->setMeshOrder(_forest->getMeshOrder()-1, 
+                         TMR_BERNSTEIN_POINTS);
+  }
+  else {
+    filter->setMeshOrder(_forest->getMeshOrder()-1, 
+                         _forest->getInterpType());
+  }
   filter->incref();
   
   int mpi_rank;

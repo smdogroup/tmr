@@ -175,9 +175,8 @@ inline void bernstein_shape_functions( const int order,
   // Set the pointers for the temporary work arrays
   // Note that left[j] = u - knots[i+1 - j]
   // and right[j] = knots[i+j] - u
-  double *work = new double[ 2*order ];
-  double *left = &work[0];
-  double *right = &work[order];
+  double *left = new double[ order ];
+  double *right = new double[order];
   
   for ( int j = 1; j < order; j++ ){
     left[j] = u - knots[idx+1-j];
@@ -190,7 +189,8 @@ inline void bernstein_shape_functions( const int order,
       N[j] = left[j-i]*temp;
     }
   }    
-  delete [] work;
+  delete [] left;
+  delete [] right;
 }
 
 /*

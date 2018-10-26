@@ -180,8 +180,7 @@ void TMRCoupledThermoOctStiffness::getDesignVars( TacsScalar xdv[],
           value = 0.75/(nvars-1);
         }
         for ( int i = 0; i < nweights; i++ ){
-          xdv[nvars*index[i] + j] = value;
-          
+          xdv[nvars*index[i] + j] = value;          
         }
       }
     }
@@ -284,7 +283,7 @@ void TMRCoupledThermoOctStiffness::addPointwiseMassDVSens( const double pt[],
           dvSens[nvars*index[i] + j] += (scale*N[i]);
         }
       }
-    }    
+    }
   }
   else{
     if (nvars == 1){
@@ -325,6 +324,7 @@ void TMRCoupledThermoOctStiffness::calculateStress( const double pt[],
       rho[j] = x[j];
     }
   }
+  
   if (nvars == 1){
     TacsScalar penalty = rho[0]/(1.0+qs*(1.0-rho[0]));
     // Extract the properties
