@@ -1699,6 +1699,8 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
     if (quad_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
       const int *node_numbers;
       int num_nodes = quad_filter[level]->getNodeNumbers(&node_numbers);
+      vec->beginDistributeValues();
+      vec->endDistributeValues();
       vec->getValues(num_nodes, node_numbers, &xloc[0]);
       return num_nodes;
     }    
@@ -1707,6 +1709,8 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
     if (oct_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
       const int *node_numbers;
       int num_nodes = oct_filter[level]->getNodeNumbers(&node_numbers);
+      vec->beginDistributeValues();
+      vec->endDistributeValues();
       vec->getValues(num_nodes, node_numbers, &xloc[0]);
       return num_nodes;
     }    
