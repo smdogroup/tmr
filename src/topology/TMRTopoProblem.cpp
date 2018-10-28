@@ -1691,9 +1691,6 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
 int TMRTopoProblem::getLocalValuesFromBVec( int level,
                                             TACSBVec *vec,
                                             TacsScalar *xloc ){
-  TacsScalar *x_vals, *x_ext_vals;
-  int size = vec->getArray(&x_vals);
-  int ext_size = vec->getExtArray(&x_ext_vals);
   // If it is for a quadtree problem
   if (quad_filter){
     if (quad_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
@@ -1716,6 +1713,10 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
     }    
   }
   else {
+    TacsScalar *x_vals, *x_ext_vals;
+    int size = vec->getArray(&x_vals);
+    int ext_size = vec->getExtArray(&x_ext_vals);
+  
     memcpy(xloc, x_vals, size*sizeof(TacsScalar));
     if (x_ext_vals){
       memcpy(&xloc[size], x_ext_vals, ext_size*sizeof(TacsScalar));
@@ -1731,9 +1732,6 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
 void TMRTopoProblem::setBVecFromLocalValues( int level,
                                              const TacsScalar *xloc,
                                              TACSBVec *vec ){
-  TacsScalar *x_vals, *x_ext_vals;
-  int size = vec->getArray(&x_vals);
-  int ext_size = vec->getExtArray(&x_ext_vals);
   if (quad_filter){
     if (quad_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
       const int *node_numbers;
@@ -1745,6 +1743,10 @@ void TMRTopoProblem::setBVecFromLocalValues( int level,
       vec->endDistributeValues();
     }
     else {
+      TacsScalar *x_vals, *x_ext_vals;
+      int size = vec->getArray(&x_vals);
+      int ext_size = vec->getExtArray(&x_ext_vals);
+  
       memcpy(x_vals, xloc, size*sizeof(TacsScalar));
       if (x_ext_vals){
         memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
@@ -1762,6 +1764,10 @@ void TMRTopoProblem::setBVecFromLocalValues( int level,
       vec->endDistributeValues();
     }
     else {
+      TacsScalar *x_vals, *x_ext_vals;
+      int size = vec->getArray(&x_vals);
+      int ext_size = vec->getExtArray(&x_ext_vals);
+  
       memcpy(x_vals, xloc, size*sizeof(TacsScalar));
       if (x_ext_vals){
         memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
