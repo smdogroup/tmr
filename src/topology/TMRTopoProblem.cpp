@@ -2174,9 +2174,9 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, A);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
-      }
-      wrap->vec->beginDistributeValues();
-      wrap->vec->endDistributeValues();
+        A->beginDistributeValues();
+        A->endDistributeValues();
+      }      
     } //  num_funcs
     count += num_funcs;
 
