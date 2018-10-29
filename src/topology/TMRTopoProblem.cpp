@@ -2103,23 +2103,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       g->endSetValues(TACS_ADD_VALUES);      
     }
     g->beginDistributeValues();
-    g->endDistributeValues();
-    // // ---------------------------
-    // TacsScalar *g_array;
-    // int g_size = g->getArray(&g_array);
-    // tacs[0]->setDesignVars(g_array, g_size);
-    // unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-    //                            TACSElement::OUTPUT_DISPLACEMENTS |
-    //                            TACSElement::OUTPUT_EXTRAS);
-    // TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_PLANE_STRESS,
-    //                               write_flag);
-    // f5->incref();
-    // char outfile[256];
-    // int mpi_size;
-    // MPI_Comm_size(tacs[0]->getMPIComm(), &mpi_size);
-    // sprintf(outfile, "test_sens_plate%d.f5", mpi_size);
-    // f5->writeToFile(outfile);
-    // exit(0);
+    g->endDistributeValues();  
   } // end if wrap
   else {
     return 1;
