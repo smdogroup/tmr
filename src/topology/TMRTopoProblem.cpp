@@ -1622,7 +1622,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         tacs[0]->getDesignVars(xlocal, max_local_size);
 
         // Set the local values into the vector
-        setBVecFromLocalValues(0, xlocal, wrap->vec);
+        setBVecFromLocalValues(0, xlocal, wrap->vec, TACS_INSERT_NONZERO_VALUES);
         wrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
         wrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
         wrap->vec->beginDistributeValues();
@@ -1645,7 +1645,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
           lbwrap->vec->copyValues(xlb);
         }
         else{
-          setBVecFromLocalValues(0, xlocal, lbwrap->vec);
+          setBVecFromLocalValues(0, xlocal, lbwrap->vec,TACS_INSERT_NONZERO_VALUES);
           lbwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
           lbwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
           lbwrap->vec->beginDistributeValues();
@@ -1660,7 +1660,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
           ubwrap->vec->copyValues(xub);
         }
         else{
-          setBVecFromLocalValues(0, upper, ubwrap->vec);
+          setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_INSERT_NONZERO_VALUES);
           ubwrap->vec->beginSetValues(TACS_INSERT_NONZERO_VALUES);
           ubwrap->vec->endSetValues(TACS_INSERT_NONZERO_VALUES);
           ubwrap->vec->beginDistributeValues();
@@ -1731,16 +1731,13 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
 */
 void TMRTopoProblem::setBVecFromLocalValues( int level,
                                              const TacsScalar *xloc,
-                                             TACSBVec *vec ){
+                                             TACSBVec *vec,
+                                             TACSBVecOperation op ){
   if (quad_filter){
     if (quad_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
       const int *node_numbers;
       int num_nodes = quad_filter[level]->getNodeNumbers(&node_numbers);
-      vec->setValues(num_nodes, node_numbers, xloc, TACS_INSERT_VALUES);
-      vec->beginSetValues(TACS_INSERT_VALUES);
-      vec->endSetValues(TACS_INSERT_VALUES);
-      vec->beginDistributeValues();
-      vec->endDistributeValues();
+      vec->setValues(num_nodes, node_numbers, xloc, op);
     }
     else {
       TacsScalar *x_vals, *x_ext_vals;
@@ -1757,11 +1754,7 @@ void TMRTopoProblem::setBVecFromLocalValues( int level,
     if (oct_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
       const int *node_numbers;
       int num_nodes = oct_filter[level]->getNodeNumbers(&node_numbers);
-      vec->setValues(num_nodes, node_numbers, xloc, TACS_INSERT_VALUES);
-      vec->beginSetValues(TACS_INSERT_VALUES);
-      vec->endSetValues(TACS_INSERT_VALUES);
-      vec->beginDistributeValues();
-      vec->endDistributeValues();
+      vec->setValues(num_nodes, node_numbers, xloc, op);
     }
     else {
       TacsScalar *x_vals, *x_ext_vals;
@@ -2094,7 +2087,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
                              max_local_size);
         }
 
-        setBVecFromLocalValues(0, xlocal, g);
+        setBVecFromLocalValues(0, xlocal, g, TACS_ADD_VALUES);
         g->beginSetValues(TACS_ADD_VALUES);
         g->endSetValues(TACS_ADD_VALUES);
       }
@@ -2105,12 +2098,28 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         tacs[0]->addAdjointResProducts(-obj_weights[i], &vars[i],
                                        1, xlocal, max_local_size);
       }
-      setBVecFromLocalValues(0, xlocal, g);
+      setBVecFromLocalValues(0, xlocal, g, TACS_ADD_VALUES);
       g->beginSetValues(TACS_ADD_VALUES);
       g->endSetValues(TACS_ADD_VALUES);      
     }
     g->beginDistributeValues();
     g->endDistributeValues();
+    // // ---------------------------
+    // TacsScalar *g_array;
+    // int g_size = g->getArray(&g_array);
+    // tacs[0]->setDesignVars(g_array, g_size);
+    // unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+    //                            TACSElement::OUTPUT_DISPLACEMENTS |
+    //                            TACSElement::OUTPUT_EXTRAS);
+    // TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_PLANE_STRESS,
+    //                               write_flag);
+    // f5->incref();
+    // char outfile[256];
+    // int mpi_size;
+    // MPI_Comm_size(tacs[0]->getMPIComm(), &mpi_size);
+    // sprintf(outfile, "test_sens_plate%d.f5", mpi_size);
+    // f5->writeToFile(outfile);
+    // exit(0);
   } // end if wrap
   else {
     return 1;
@@ -2171,7 +2180,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         }
 
         // Wrap the vector class
-        setBVecFromLocalValues(0, xlocal, A);
+        setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
         A->beginDistributeValues();
@@ -2213,7 +2222,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
                                        1, xlocal, max_local_size);
 
         // Wrap the vector class
-        setBVecFromLocalValues(0, xlocal, A);
+        setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
 
@@ -2264,7 +2273,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         //                                1, xlocal, max_local_size);
 
         // Wrap the vector class
-        setBVecFromLocalValues(0, xlocal, A);
+        setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
         
@@ -2338,7 +2347,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         delete [] temp;
 
         // Add the values for each constraint gradient
-        setBVecFromLocalValues(0, xlocal, A);
+        setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
       } //wrap
@@ -2391,7 +2400,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         delete [] temp;
 
         // Add the values for each constraint gradient
-        setBVecFromLocalValues(0, xlocal, A);
+        setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
       }
