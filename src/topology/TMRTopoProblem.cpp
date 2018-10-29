@@ -58,6 +58,8 @@ void ParOptBVecWrap::copyValues( ParOptVec *pvec ){
   ParOptBVecWrap *avec = dynamic_cast<ParOptBVecWrap*>(pvec);
   if (avec){
     vec->copyValues(avec->vec);
+    vec->beginDistributeValues();
+    vec->endDistributeValues();
   }
 }
 
@@ -2057,7 +2059,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
   TACSBVec *g = NULL;
   if (wrap){
     g = wrap->vec;
-
+    g->zeroEntries();
     // Evaluate the gradient of the objective - weighted sum of
     // compliances
     memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
@@ -2086,10 +2088,11 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
           tacs[0]->addDVSens(obj_weights[i], &obj_funcs[i], 1, xlocal,
                              max_local_size);
         }
-
         setBVecFromLocalValues(0, xlocal, g, TACS_ADD_VALUES);
         g->beginSetValues(TACS_ADD_VALUES);
         g->endSetValues(TACS_ADD_VALUES);
+        g->beginDistributeValues();
+        g->endDistributeValues();
       }
     }
     else { // For compliance objective
@@ -2100,10 +2103,10 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       }
       setBVecFromLocalValues(0, xlocal, g, TACS_ADD_VALUES);
       g->beginSetValues(TACS_ADD_VALUES);
-      g->endSetValues(TACS_ADD_VALUES);      
+      g->endSetValues(TACS_ADD_VALUES);
+      g->beginDistributeValues();
+      g->endDistributeValues();
     }
-    g->beginDistributeValues();
-    g->endDistributeValues();  
   } // end if wrap
   else {
     return 1;
@@ -2134,7 +2137,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       if (wrap){
         // Get the vector
         TACSBVec *A = wrap->vec;
-
+        A->zeroEntries();
         // If the function is the structural mass, then do not
         // use the adjoint, otherwise assume that we should use the
         // adjoint method to compute the gradient.
@@ -2260,7 +2263,8 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
-        
+        A->beginDistributeValues();
+        A->endDistributeValues();
         // Add the contribution to the objective gradient
         if (g && curve_func_obj_weight != 0.0){
           g->axpy(-curve_func_obj_weight*con, A);
@@ -2334,6 +2338,8 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
+        A->beginDistributeValues();
+        A->endDistributeValues();
       } //wrap
 
       count++;
@@ -2387,6 +2393,8 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
+        A->beginDistributeValues();
+        A->endDistributeValues();
       }
       count++;
     }
