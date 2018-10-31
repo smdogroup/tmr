@@ -4358,6 +4358,20 @@ TMRQuadrant* TMRQuadForest::findEnclosing( const int order,
     mid++;
   }
 
+  if (mpi_owner){
+    const int32_t hmax = 1 << TMR_MAX_LEVEL;
+    TMRQuadrant n;
+    n.face = face;
+    n.x = (xi < 0 ? (int)xd : xi);
+    n.y = (yi < 0 ? (int)yd : yi);
+
+    if (n.x == 0){ n.x += 1; }
+    else if (n.x == hmax){ n.x -= 1; }
+    if (n.y == 0){ n.y += 1; }
+    else if (n.y == hmax){ n.y -= 1; }
+    *mpi_owner = getQuadrantMPIOwner(&n);
+  }
+
   // No quadrant was found, return NULL
   return NULL;
 }
@@ -4592,104 +4606,69 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
 
   // Allocate a queue to store the nodes that are on other procs
   TMRQuadrantQueue *ext_queue = new TMRQuadrantQueue();
-  if (interp_type != TMR_BERNSTEIN_POINTS){
-    for ( int i = 0; i < num_elements; i++ ){
-      const int *c = &conn[nodes_per_element*i];
-      for ( int j = 0; j < nodes_per_element; j++ ){
-        // Check if the fine node is owned by this processor
-        if (c[j] >= node_range[mpi_rank] &&
-            c[j] < node_range[mpi_rank+1]){
-          int index = c[j] - node_range[mpi_rank];
-          if (!flags[index]){
-            // We're going to handle this node now, mark it as done
-            flags[index] = 1;
+  
+  // Set the knots to use in the interpolation
+  const double *knots = interp_knots;
 
-            // Find the enclosing coarse quad on this
-            // processor if it exits
-            TMRQuadrant node = quads[i];
-            node.info = j;
-
-            // Find the MPI owner or the
-            int mpi_owner = mpi_rank;
-            TMRQuadrant *t = coarse->findEnclosing(mesh_order, interp_knots,
-                                                   &node, &mpi_owner);
-
-            // The node is owned a coarse element on this processor
-            if (t){
-              // Compute the element interpolation
-              int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
-
-              for ( int k = 0; k < nweights; k++ ){
-                vars[k] = weights[k].index;
-                wvals[k] = weights[k].weight;
-              }
-              interp->addInterp(c[j], wvals, vars, nweights);
-            }
-            else {
-              // We've got to transfer the node to the processor that
-              // owns an enclosing element. Do to that, add the quad to
-              // the list of externals and store its mpi owner
-              node.tag = mpi_owner;
-              ext_queue->push(&node);
-            }
-          }
-        }
-      }
-    }
-  }
-  else {
-    double *bern_knots = new double[mesh_order];
-    memset(bern_knots, 0.0, mesh_order*sizeof(double));
-    bern_knots[0] = -1.0;
-    bern_knots[mesh_order-1] = 1.0;
+  double *bern_knots = NULL;
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Create the evenly spaced "Bern knots"
+    bern_knots = new double[ mesh_order ];
     double knot_space = 2.0/(mesh_order-1);
     for (int p = 1; p < mesh_order-1; p++){
       bern_knots[p] = -1. + p*knot_space;
     }
-    for ( int i = 0; i < num_elements; i++ ){
-      const int *c = &conn[nodes_per_element*i];
-      for ( int j = 0; j < nodes_per_element; j++ ){
-        // Check if the fine node is owned by this processor
-        if (c[j] >= node_range[mpi_rank] &&
-            c[j] < node_range[mpi_rank+1]){
-          int index = c[j] - node_range[mpi_rank];
-          if (!flags[index]){
-            // We're going to handle this node now, mark it as done
-            flags[index] = 1;
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
 
-            // Find the enclosing coarse quad on this
-            // processor if it exits
-            TMRQuadrant node = quads[i];
-            node.info = j;
+    // Set the pointer to the knots
+    knots = bern_knots;
+  }
 
-            // Find the MPI owner or the
-            int mpi_owner = mpi_rank;
-            TMRQuadrant *t = coarse->findEnclosing(mesh_order, bern_knots,
-                                                   &node, &mpi_owner);
+  for ( int i = 0; i < num_elements; i++ ){
+    const int *c = &conn[nodes_per_element*i];
+    for ( int j = 0; j < nodes_per_element; j++ ){
+      // Check if the fine node is owned by this processor
+      if (c[j] >= node_range[mpi_rank] &&
+          c[j] < node_range[mpi_rank+1]){
+        int index = c[j] - node_range[mpi_rank];
+        if (!flags[index]){
+          // We're going to handle this node now, mark it as done
+          flags[index] = 1;
+          
+          // Find the enclosing coarse quad on this
+          // processor if it exits
+          TMRQuadrant node = quads[i];
+          node.info = j;
+          
+          // Find the MPI owner or the
+          int mpi_owner = mpi_rank;
+          TMRQuadrant *t = coarse->findEnclosing(mesh_order, knots,
+                                                 &node, &mpi_owner);
 
-            // The node is owned a coarse element on this processor
-            if (t){
-              // Compute the element interpolation
-              int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
+          // The node is owned a coarse element on this processor
+          if (t){
+            // Compute the element interpolation
+            int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
 
-              for ( int k = 0; k < nweights; k++ ){
-                vars[k] = weights[k].index;
-                wvals[k] = weights[k].weight;
-              }
-              interp->addInterp(c[j], wvals, vars, nweights);
+            for ( int k = 0; k < nweights; k++ ){
+              vars[k] = weights[k].index;
+              wvals[k] = weights[k].weight;
             }
-            else {
-              // We've got to transfer the node to the processor that
-              // owns an enclosing element. Do to that, add the quad to
-              // the list of externals and store its mpi owner
-              node.tag = mpi_owner;
-              ext_queue->push(&node);
-            }
+            interp->addInterp(c[j], wvals, vars, nweights);
+          }
+          else {
+            // We've got to transfer the node to the processor that
+            // owns an enclosing element. Do to that, add the quad to
+            // the list of externals and store its mpi owner
+            node.tag = mpi_owner;
+            ext_queue->push(&node);
           }
         }
       }
     }
   }
+
   // Free the data
   delete [] flags;
 
@@ -4702,7 +4681,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   TMRQuadrant *array;
   ext_array->getArray(&array, &size);
   qsort(array, size, sizeof(TMRQuadrant), compare_quadrant_tags);
-
+  
   // The number of quadrants that will be sent from this processor
   // to all other processors in the communicator
   int *quad_ptr = new int[ mpi_size+1 ];
@@ -4758,62 +4737,32 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   int recv_size;
   TMRQuadrant *recv_nodes;
   recv_array->getArray(&recv_nodes, &recv_size);
-  
-  if (interp_type != TMR_BERNSTEIN_POINTS){
-    // Recv the nodes and loop over the connectivity
-    for ( int i = 0; i < recv_size; i++ ){
-      TMRQuadrant *t = coarse->findEnclosing(mesh_order, interp_knots,
-                                             &recv_nodes[i]);
 
-      if (t){
-        // Compute the element interpolation
-        int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
-                                         weights, tmp);
-
-        for ( int k = 0; k < nweights; k++ ){
-          vars[k] = weights[k].index;
-          wvals[k] = weights[k].weight;
-        }
-        interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
+  // Recv the nodes and loop over the connectivity
+  for ( int i = 0; i < recv_size; i++ ){
+    TMRQuadrant *t = coarse->findEnclosing(mesh_order, knots,
+                                           &recv_nodes[i]);
+    
+    if (t){
+      // Compute the element interpolation
+      int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
+                                       weights, tmp);
+      
+      for ( int k = 0; k < nweights; k++ ){
+        vars[k] = weights[k].index;
+        wvals[k] = weights[k].weight;
       }
-      else {
-        // This should not happen. Print out an error message here.
-        fprintf(stderr,
-                "TMRQuadForest: Destination processor does not own node\n");
-      }
+      interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
+    }
+    else {
+      // This should not happen. Print out an error message here.
+      fprintf(stderr,
+              "TMRQuadForest: Destination processor does not own node\n");
     }
   }
-  else {                                                
-    double *bern_knots = new double[mesh_order];
-    memset(bern_knots, 0.0, mesh_order*sizeof(double));
-    bern_knots[0] = -1.0;
-    bern_knots[mesh_order-1] = 1.0;
-    double knot_space = 2.0/(mesh_order-1);
-    for (int p = 1; p < mesh_order-1; p++){
-      bern_knots[p] = -1. + p*knot_space;
-    }
-    // Recv the nodes and loop over the connectivity
-    for ( int i = 0; i < recv_size; i++ ){
-      TMRQuadrant *t = coarse->findEnclosing(mesh_order, bern_knots,
-                                             &recv_nodes[i]);
 
-      if (t){
-        // Compute the element interpolation
-        int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
-                                         weights, tmp);
-
-        for ( int k = 0; k < nweights; k++ ){
-          vars[k] = weights[k].index;
-          wvals[k] = weights[k].weight;
-        }
-        interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
-      }
-      else {
-        // This should not happen. Print out an error message here.
-        fprintf(stderr,
-                "TMRQuadForest: Destination processor does not own node\n");
-      }
-    }
+  if (bern_knots){
+    delete [] bern_knots;
   }
  
   // Free the recv array
@@ -4850,7 +4799,11 @@ void TMRQuadForest::evalBernsteinWeights( int mesh_order,
                                           double *knots,
                                           double *N ){
   // Weights evaluated from the subdivison matrix
-  if (mesh_order == 3){
+  if (mesh_order == 2){
+    N[0] = 0.5;
+    N[1] = 0.5;
+  }
+  else if (mesh_order == 3){
     if (u < 0.0){
       N[0] = 0.5;
       N[1] = 0.5;

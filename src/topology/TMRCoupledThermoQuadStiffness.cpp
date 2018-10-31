@@ -1171,5 +1171,8 @@ TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex,
     }
     return rho[0];
   }
+  else if (dvIndex == 2){
+    return rho[0];
+  }
   return 0;
 }

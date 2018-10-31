@@ -216,6 +216,9 @@ class TMRTopoProblem : public ParOptProblem {
   void writeOutput( int iter, ParOptVec *x );
 
  private:
+  // Set the design variables across all multigrid levels
+  void setDesignVars( ParOptVec *xvec );
+
   // Get/set values from the TACSBVec object
   int getLocalValuesFromBVec( int level, TACSBVec *vec, TacsScalar *xloc );
   void setBVecFromLocalValues( int level, const TacsScalar *xloc, TACSBVec *vec,
@@ -300,8 +303,8 @@ class TMRTopoProblem : public ParOptProblem {
   TACSVarMap **filter_maps;
   TACSBVecIndices **filter_indices;
   TACSBVecDistribute **filter_dist;
-  TACSBVecDistCtx **filter_ctx;
   TACSBVecInterp **filter_interp;
+  TACSBVecDepNodes **filter_dep_nodes;
 
   // Create the design variable values at each level
   TACSBVec **x;
@@ -315,8 +318,8 @@ class TMRTopoProblem : public ParOptProblem {
   TACSMg *mg;
 
   // The initial design variable values
-  TACSBVec *xinit;
-  TACSBVec *xlb, *xub;
+  ParOptVec *xinit;
+  ParOptVec *xlb, *xub;
 };
 
 #endif // TMR_TOPO_PROBLEM_H
