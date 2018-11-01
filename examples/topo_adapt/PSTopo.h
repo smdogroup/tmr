@@ -3,7 +3,48 @@
 
 #include "TACSAssembler.h"
 #include "PlaneStressStiffness.h"
-#include "TACS2DElement.h"
+#include "PlaneStressQuad.h"
+#include "FElibrary.h"
+
+class LobattoQuad2 : public PlaneStressQuad<2> {
+ public:
+ LobattoQuad2( PlaneStressStiffness *_stiff ):
+  PlaneStressQuad<2>(_stiff){
+    this->numGauss = 3;
+    this->gaussWts = FElibrary::lobattoWts3;
+    this->gaussPts = FElibrary::lobattoPts3;
+  }  
+};
+
+class LobattoQuad3 : public PlaneStressQuad<3> {
+ public:
+ LobattoQuad3( PlaneStressStiffness *_stiff ):
+  PlaneStressQuad<3>(_stiff){
+    this->numGauss = 4;
+    this->gaussWts = FElibrary::lobattoWts4;
+    this->gaussPts = FElibrary::lobattoPts4;
+  }  
+};
+
+class LobattoQuad4 : public PlaneStressQuad<4> {
+ public:
+ LobattoQuad4( PlaneStressStiffness *_stiff ):
+  PlaneStressQuad<4>(_stiff){
+    this->numGauss = 5;
+    this->gaussWts = FElibrary::lobattoWts5;
+    this->gaussPts = FElibrary::lobattoPts5;
+  }  
+};
+
+class LobattoQuad5 : public PlaneStressQuad<5> {
+ public:
+ LobattoQuad5( PlaneStressStiffness *_stiff ):
+  PlaneStressQuad<5>(_stiff){
+    this->numGauss = 6;
+    this->gaussWts = FElibrary::lobattoWts6;
+    this->gaussPts = FElibrary::lobattoPts6;
+  }  
+};
 
 class PSTopo : public PlaneStressStiffness {
  public:

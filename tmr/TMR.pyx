@@ -86,10 +86,10 @@ cdef class Vertex:
     def evalPoint(self):
         """
         evalPoint(self)
-        
+
         Evaluate the point on the parametric surface and returns the node
         location
-        
+
         """
         cdef TMRPoint pt
         self.ptr.evalPoint(&pt)
@@ -98,9 +98,9 @@ cdef class Vertex:
     def setName(self, aname):
         """
         setName(self, aname)
-        
+
         Set the name associated with the vertex
-        
+
         Parameters
         ----------
         aname: str
@@ -113,13 +113,13 @@ cdef class Vertex:
     def getName(self):
         """
         getName(self)
-        
+
         Get the name associated with the vertex
 
         Returns
         ----------
         name: str
-            name associated with the entity        
+            name associated with the entity
         """
         cdef const char *name = NULL
         if self.ptr:
@@ -130,9 +130,9 @@ cdef class Vertex:
     def getEntityId(self):
         """
         getEntityId(self)
-        
+
         Get the entity id associated with the vertex
-        
+
         Returns
         ----------
         id: int
@@ -146,7 +146,7 @@ cdef class Vertex:
         """
         setNodeNum(self, num)
         Set the node number associated with the vertex
-        
+
         Parameters
         ----------
         num: int
@@ -184,7 +184,7 @@ cdef class Edge:
     def evalPoint(self, double t):
         """
         evalPoint(self, t)
-        
+
         Evaluate a node location on a curve with a single
         parametric argument *t*. Provides access to the first and second vertices
         that begin/end the edge. Given a parametric location t and a face, return
@@ -1011,7 +1011,7 @@ cdef _init_Model(TMRModel* ptr):
 
 cdef class MeshOptions:
     """
-    Defines a number of options that modify the meshing algorithm. 
+    Defines a number of options that modify the meshing algorithm.
     """
     cdef TMRMeshOptions ptr
     def __cinit__(self):
@@ -1021,7 +1021,7 @@ cdef class MeshOptions:
         return
 
     property mesh_type_default:
-        """        
+        """
         Default mesh type either structured or unstructured. In the case that it
         is set to structured, the algorithm firsts checks if it is possible to
         use a mapped mesh, and reverts to an unstructured algorithm otherwise.
@@ -1093,7 +1093,7 @@ cdef class MeshOptions:
         """
         Write out a histogram of the mesh quality in the final smoothed
         quadrilateral mesh.
-        
+
         Parameters
         ----------
         value: bool
@@ -1242,6 +1242,42 @@ cdef class PointFeatureSize(ElementFeatureSize):
         free(pts)
         return
 
+cdef class PointLocator:
+    def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] X):
+        cdef int npts = 0
+        cdef TMRPoint *pts
+        npts = X.shape[0]
+        pts = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
+        for i in range(npts):
+            pts[i].x = X[i,0]
+            pts[i].y = X[i,1]
+            pts[i].z = X[i,2]
+        self.ptr = new TMRPointLocator(npts, pts)
+        self.ptr.incref()
+        free(pts)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def locateClosest(self, x,
+                      np.ndarray[int, ndim=1] index,
+                      np.ndarray[double, ndim=1] dist):
+        if index.shape[0] != dist.shape[0]:
+            errmsg = 'PointLocator expects equal length input/output arrays'
+            raise ValueError(errmsg)
+
+        cdef int num_found = 0
+        cdef int K = index.shape[0]
+        cdef TMRPoint pt
+        pt.x = x[0]
+        pt.y = x[1]
+        pt.z = x[2]
+        self.ptr.locateClosest(K, pt, &num_found,
+                               <int*>index.data, <double*>dist.data)
+        return num_found
+
 cdef class Mesh:
     """
     Mesh the geometry model. This class handles the meshing for surface objects
@@ -1274,7 +1310,7 @@ cdef class Mesh:
         ----------
         h: double
            Mesh spacing
-               
+
         opts: :class:`~TMR.MeshOptions`
            Meshing options
 
@@ -1369,7 +1405,7 @@ cdef class Mesh:
     def createModelFromMesh(self):
         """
         createModelFromMesh(self)
-        
+
         Create a geometry model based on the input mesh
         """
         cdef TMRModel *model = NULL
@@ -1379,14 +1415,14 @@ cdef class Mesh:
     def writeToBDF(self, fname, outtype=None):
         """
         writeToBDF(self, fname, outtype=None)
-        
+
         Write both the quadrilateral and hexahedral mesh to a BDF file
 
         Parameters
         ----------
         fname: str
                filename
-               
+
         outtype: str
                  Type of mesh to output to BDF file i.e. quad or hex
         """
@@ -1403,14 +1439,14 @@ cdef class Mesh:
     def writeToVTK(self, fname, outtype=None):
         """
         writeToVTK(self, fname, outtype=None)
-        
+
         Write both the quadrilateral and hexahedral mesh to a VTK file
 
         Parameters
         ----------
         fname: str
                filename
-               
+
         outtype: str
                  Type of mesh to output to VTK file i.e. quad or hex
         """
@@ -1533,19 +1569,19 @@ cdef class VolumeMesh:
 
     def __dealloc__(self):
         pass
-    
+
 cdef class Topology:
     """
     The main topology class that contains the objects used to build the
     underlying mesh.
-    
+
     This class takes in a general :class:`~TMR.Model`, but there are additional
     requirements that are placed on the model to create a proper
     topology object. These requirements are as follows:
         #. No edge can degenerate to a vertex.
         #. No face can degenerate to an edge or vertex.
         #. All faces must be surrounded by a single edge loop with 4
-           non-degenerate edges. 
+           non-degenerate edges.
         #. All volumes must contain 6 non-degenerate faces that are
            ordered in coordinate ordering as shown below. Furthermore, all
            volumes must be of type :class:`~TMR.TFIVolume`.
@@ -1803,7 +1839,7 @@ cdef class QuadForest:
         cdef TMRPoint *X = NULL
         cdef int npts = 0
         npts = self.ptr.getPoints(&X)
-        if X != NULL:           
+        if X != NULL:
             Xp = np.zeros((npts, 3), dtype=np.double)
             for i in range(npts):
                 Xp[i,0] = X[i].x
@@ -2038,7 +2074,7 @@ cdef class OctForest:
         """
         setTopology(self, topo)
         Set the topology (and determine the connectivity)
-        
+
         Parameters
         ----------
         topo:  :class:`~TMR.Topology`
@@ -2148,8 +2184,8 @@ cdef class OctForest:
         """
         coarsen(self)
         Create a new forest object by coarsening all the elements within the
-        mesh by one level, if possible. Does not create new nodes. 
-        
+        mesh by one level, if possible. Does not create new nodes.
+
         Returns
         -------
         dup: :class:`~TMR.OctForest`
@@ -2325,7 +2361,7 @@ cdef _init_OctForest(TMROctForest* ptr):
 def LoadModel(fname, int print_lev=0):
     """
     LoadModel(fname, print_lev)
-    
+
     Initialization of the OpenCascade geometry from an IGES/STEP files
 
     Parameters
@@ -2632,7 +2668,7 @@ cdef class StiffnessProperties:
             return self.ptr.eps
         def __set__(self, value):
             self.ptr.eps = value
-            
+
 cdef class AnisotropicProperties:
     cdef TMRAnisotropicProperties *ptr
     def __cinit__(self, list _rho, list _C,
@@ -2735,7 +2771,7 @@ cdef class QuadStiffness(PlaneStress):
         self.ptr.incref()
         free(w)
         return
-    
+
 cdef class AnisotropicStiffness(SolidStiff):
     def __cinit__(self, AnisotropicProperties props,
                   list index=None, list weights=None):
@@ -2819,19 +2855,19 @@ def strainEnergyError(forest, Assembler coarse,
                       forest_refined, Assembler refined):
     """
     strainEnergyError(forest, coarse_assembler, forest_refined, refined_assembler)
-    
+
     The following function performs a mesh refinement based on a strain
     energy criteria. It is based on the following relationship for
     linear finite-element analysis
 
-    .. math::   
+    .. math::
          \Pi(u-u_h,u-u_h) = \Pi(u,u) - \Pi(u_h,u_h)
-    
+
     where a(u,u) is the trilinear strain energy functional, u is the
     exact solution, and uh is the discretized solution at any mesh
     level. This relies on the relationship that :math:`\Pi(u_h, u - u_h) = 0` which
     is satisfied due to the method of Galerkin/Ritz.
-    
+
     The following function computes a localized error indicator using
     the element-wise strain energy. The code computes a higher-order
     reconstructed solution using a cubic enrichment functions. These
@@ -2841,7 +2877,7 @@ def strainEnergyError(forest, Assembler coarse,
 
     .. math::
          err = \sum_{i=1}^{4} \Pi_e(u_{ce}, u_{ce}) ] - \Pi_e(u_e, u_e)
-    
+
     where :math:`u_{ce}` is the element-wise cubic element reconstruction projected
     onto a uniformly refined mesh.
 
@@ -2855,7 +2891,7 @@ def strainEnergyError(forest, Assembler coarse,
       Forest for refined mesh level
     refined_assembler: :class:`~TACS.Assembler`
       Finite assembler class for associated with forest_refined
-      
+
     Returns
     --------
     ans: double
@@ -2890,7 +2926,7 @@ def adjointError(forest, Assembler coarse,
                  Vec solution, Vec adjoint):
     """
     adjointError(forest, coarse_assembler, forest_refined, refined_assembler, solution_refined, adjoint_refined)
-                 
+
     Refine the mesh using the original solution and the adjoint solution
 
     Parameters
@@ -2907,8 +2943,8 @@ def adjointError(forest, Assembler coarse,
       The higher-order solution (or approximation)
     adjoint_refined: :class:`~TACS.Vec`
       The difference between the refined and coarse adjoint solutions computed
-      in some manner 
-    
+      in some manner
+
     Returns
     -------
     ans: double
@@ -2916,10 +2952,10 @@ def adjointError(forest, Assembler coarse,
 
     err: array of double
       Elemental strain energy error
-      
+
     adj_corr: TacsScalar
       Adjoint-based functional correction
-    
+
     """
     cdef TacsScalar ans = 0.0
     cdef TacsScalar adj_corr = 0.0
@@ -2928,22 +2964,23 @@ def adjointError(forest, Assembler coarse,
     cdef TMRQuadForest *quad_forest = NULL
     cdef TMRQuadForest *quad_forest_refined = NULL
     cdef np.ndarray err = None
+    cdef TacsScalar err_est = 0.0
     err = np.zeros(coarse.ptr.getNumElements(), dtype=np.double)
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
         oct_forest_refined = (<OctForest>forest_refined).ptr
-        ans = TMR_AdjointErrorEst(oct_forest, coarse.ptr,
-                                  oct_forest_refined, refined.ptr,
-                                  solution.ptr, adjoint.ptr, <double*>err.data,
-                                  &adj_corr)
+        err_est = TMR_AdjointErrorEst(oct_forest, coarse.ptr,
+                                      oct_forest_refined, refined.ptr,
+                                      solution.ptr, adjoint.ptr,
+                                      <double*>err.data, &adj_corr)
     elif isinstance(forest, QuadForest):
         quad_forest = (<QuadForest>forest).ptr
         quad_forest_refined = (<QuadForest>forest_refined).ptr
-        ans = TMR_AdjointErrorEst(quad_forest, coarse.ptr,
-                                  quad_forest_refined, refined.ptr,
-                                  solution.ptr, adjoint.ptr, <double*>err.data,
-                                  &adj_corr)
-    return ans, adj_corr, err
+        err_est = TMR_AdjointErrorEst(quad_forest, coarse.ptr,
+                                      quad_forest_refined, refined.ptr,
+                                      solution.ptr, adjoint.ptr,
+                                      <double*>err.data, &adj_corr)
+    return err_est, adj_corr, err
 
 def computeInterpSolution(forest, Assembler coarse,
                           forest_refined, Assembler refined,
@@ -3193,7 +3230,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.addStressConstraint(case, sc.ptr, offset, scale, obj_weight)
         return
-    
+
     def addCurvatureConstraint(self, int case, CurvatureConstraint cc,
                                TacsScalar offset=1.0, TacsScalar scale=1.0,
                                TacsScalar obj_weight=0.0):
@@ -3204,7 +3241,7 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.addCurvatureConstraint(case, cc.ptr, offset, scale, obj_weight)
         return
-    
+
     def addLinearConstraints(self, list vecs, list offset):
         cdef int nvecs
         cdef TacsScalar *_offset = NULL

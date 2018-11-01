@@ -115,28 +115,55 @@ def get_disk_aggregate(comm, functional, rho, R, n=1000):
             psum = 2*(np.pi/(2*m))*quadrature(integrand1)
             return pmax, pmax*np.power(psum, 1.0/rho)
 
-def recon_basis(order, x):
+def recon_basis(degree, x):
     '''
     Get the quadratic shape functions centered about the point pt
     '''
 
-    if order == 2:
+    if degree == 2:
         N = np.array([1.0, x[0], x[1],
-                      x[0]**2, x[0]*x[1], x[1]**2])
-    elif order == 3:
+                      x[0]*x[0], x[0]*x[1], x[1]*x[1]])
+    elif degree == 3:
         N = np.array([1.0, x[0], x[1],
-                      x[0]**2, x[0]*x[1], x[1]**2,
-                      x[0]**3, x[0]**2*x[1], x[0]*x[1]**2, x[1]**3])
-    elif order == 4:
+                      x[0]*x[0], x[0]*x[1], x[1]*x[1],
+                      x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[1],
+                      x[0]*x[1]*x[1],
+                      x[1]*x[1]*x[1]])
+    elif degree == 4:
         N = np.array([1.0, x[0], x[1],
-                      x[0]**2, x[0]*x[1], x[1]**2,
-                      x[0]**3, x[0]**2*x[1], x[0]*x[1]**2, x[1]**3,
-                      x[0]**4, x[0]**3*x[1], x[0]**2*x[1]**2,
-                      x[0]*x[1]**3, x[1]**4])
+                      x[0]*x[0], x[0]*x[1], x[1]*x[1],
+                      x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[1],
+                      x[0]*x[1]*x[1],
+                      x[1]*x[1]*x[1],
+                      x[0]*x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[0]*x[1],
+                      x[0]*x[0]*x[1]*x[1],
+                      x[0]*x[1]*x[1]*x[1],
+                      x[1]*x[1]*x[1]*x[1]])
+    elif degree == 5:
+        N = np.array([1.0, x[0], x[1],
+                      x[0]*x[0], x[0]*x[1], x[1]*x[1],
+                      x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[1],
+                      x[0]*x[1]*x[1],
+                      x[1]*x[1]*x[1],
+                      x[0]*x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[0]*x[1],
+                      x[0]*x[0]*x[1]*x[1],
+                      x[0]*x[1]*x[1]*x[1],
+                      x[1]*x[1]*x[1]*x[1],
+                      x[0]*x[0]*x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[0]*x[0]*x[1],
+                      x[0]*x[0]*x[0]*x[1]*x[1],
+                      x[0]*x[0]*x[1]*x[1]*x[1],
+                      x[0]*x[1]*x[1]*x[1]*x[1],
+                      x[1]*x[1]*x[1]*x[1]*x[1]])
 
     return N
 
-def elem_recon(order, conn, Xpts, uvals, elem_list, max_dist=1.0):
+def elem_recon(degree, conn, Xpts, uvals, elem_list, max_dist=1.0):
     # Get a unique list of the nodes in the list
     var = []
     for elem in elem_list:
@@ -151,28 +178,30 @@ def elem_recon(order, conn, Xpts, uvals, elem_list, max_dist=1.0):
 
     # Loop over the adjacent nodes and fit them
     dim = 6
-    if order == 3:
+    if degree == 3:
         dim = 10
-    elif order == 4:
+    elif degree == 4:
         dim = 15
+    elif degree == 5:
+        dim = 21
     A = np.zeros((len(var), dim))
     b = np.zeros(len(var))
 
     for i, v in enumerate(var):
-        w = 1.0 # np.exp(-dist[i]/max_dist)
-        
+        w = np.exp(-2*dist[i]/max_dist)
+
         # Compute the basis at the provided point
         b[i] = w*uvals[v]
 
         x = Xpts[v, :2]
-        A[i, :] = w*recon_basis(order, (x - pt)/max_dist)
+        A[i, :] = w*recon_basis(degree, (x - pt)/max_dist)
 
     # Fit the basis
-    vals, res, rank, s = np.linalg.lstsq(A, b, rcond=None)
+    vals, res, rank, s = np.linalg.lstsq(A, b, rcond=-1)
 
     return vals, pt
 
-def computeRecon(order, conn, Xpts, uvals,
+def computeRecon(degree, conn, Xpts, uvals,
                  conn_refine, Xpts_refine):
     '''
     Compute the planar reconstruction over the given mesh
@@ -212,12 +241,12 @@ def computeRecon(order, conn, Xpts, uvals,
         elem_list = elem_to_elem[elem]
 
         # Get the reconstructed values
-        vals, pt = elem_recon(order, conn, Xpts, uvals, elem_list,
+        vals, pt = elem_recon(degree, conn, Xpts, uvals, elem_list,
                               max_dist=max_dist)
 
         # Compute the refined contributions to each element
         for node in conn_refine[elem, :]:
-            N = recon_basis(order, (Xpts_refine[node, :2] - pt)/max_dist)
+            N = recon_basis(degree, (Xpts_refine[node, :2] - pt)/max_dist)
             uvals_refine[node] += np.dot(vals, N)
             count[node] += 1.0
 
@@ -225,6 +254,51 @@ def computeRecon(order, conn, Xpts, uvals,
     uvals_refine /= count
 
     return uvals_refine
+
+def computeReconSolution(comm, forest, assembler,
+                         forest_refined, assembler_refined,
+                         ans, ans_refined):
+    if comm.size != 1:
+        raise RuntimeError('Only works with serial cases')
+
+    # Distribute the vector
+    ans.distributeValues()
+
+    # Create the node vector
+    Xpts = forest.getPoints()
+    Xpts_refined = forest_refined.getPoints()
+
+    conn = forest.getMeshConn()
+    conn_refined = forest_refined.getMeshConn()
+
+    # Find the min/max values
+    num_dep = -np.min(conn)
+    num_vars = np.max(conn)+1
+    num_dep_refined = -np.min(conn_refined)
+    num_vars_refined = np.max(conn_refined)+1
+
+    # Adjust the indices so that they are always positive
+    conn += num_dep
+    conn_refined += num_dep_refined
+
+    # Add + 2 to the degree of the interpolant
+    mesh_order = forest.getMeshOrder()
+    if mesh_order == 2:
+        degree = 2
+    else:
+        degree = mesh_order+1
+
+    # Get the values
+    var = np.arange(-num_dep, num_vars, dtype=np.intc)
+    values = ans.getValues(var)
+    ans_array = computeRecon(degree, conn, Xpts, values,
+                             conn_refined, Xpts_refined)
+
+    # Set the values
+    var = np.arange(-num_dep_refined, num_vars_refined, dtype=np.intc)
+    ans_refined.setValues(var, ans_array, op=TACS.INSERT_VALUES)
+
+    return
 
 class CreateMe(TMR.QuadCreator):
     def __init__(self, bcs, topo, case='disk'):
@@ -244,24 +318,24 @@ def createRefined(case, forest, bcs, pttype=TMR.GAUSS_LOBATTO_POINTS):
     creator = CreateMe(bcs, forest.getTopology(), case=case)
     return new_forest, creator.createTACS(new_forest)
 
-def createProblem(case, forest, bcs, ordering, order=2, nlevels=2,
+def createProblem(case, forest, bcs, ordering, mesh_order=2, nlevels=2,
                   pttype=TMR.GAUSS_LOBATTO_POINTS):
     # Create the forest
     forests = []
     assemblers = []
 
     # Create the trees, rebalance the elements and repartition
-    forest.setMeshOrder(order, pttype)
+    forest.setMeshOrder(mesh_order, pttype)
     forests.append(forest)
 
     # Make the creator class
     creator = CreateMe(bcs, forest.getTopology(), case=case)
     assemblers.append(creator.createTACS(forest, ordering))
 
-    while order > 2:
-        order = order-1
+    while mesh_order > 2:
+        mesh_order = mesh_order-1
         forest = forests[-1].duplicate()
-        forest.setMeshOrder(order, pttype)
+        forest.setMeshOrder(mesh_order, pttype)
         forest.balance(1)
         forests.append(forest)
 
@@ -464,7 +538,7 @@ for k in range(steps):
     # Create the topology problem
     nlevs = min(4, depth+k+1)
     assembler, mg = createProblem(case, forest, bcs, ordering,
-                                  order=order, nlevels=nlevs)
+                                  mesh_order=order, nlevels=nlevs)
 
     # Create the assembler object
     res = assembler.createVec()
@@ -526,7 +600,7 @@ for k in range(steps):
         forest_refined = forest.duplicate()
         assembler_refined, mg = createProblem(case, forest_refined,
                                               bcs, ordering,
-                                              order=order+1, nlevels=nlevs)
+                                              mesh_order=order+1, nlevels=nlevs)
     else:
         forest_refined, assembler_refined = createRefined(case, forest, bcs)
 
@@ -536,7 +610,7 @@ for k in range(steps):
         adjoint_corr = 0.0
         err_est, error = TMR.strainEnergyError(forest, assembler,
                                                forest_refined, assembler_refined)
-        
+
         TMR.computeReconSolution(forest, assembler,
                                  forest_refined, assembler_refined)
     else:
@@ -544,45 +618,18 @@ for k in range(steps):
             # Compute the reconstructed solution on the refined mesh
             ans_interp = assembler_refined.createVec()
 
-            if False: # comm.size == 1:
+            if comm.size == 1:
                 # Distribute the answer vector across all procs
-                ans.distributeValues()
-
-                # Create the node vector
-                Xpts = forest.getPoints()
-                Xpts_refined = forest_refined.getPoints()
-
-                conn = forest.getMeshConn()
-                conn_refined = forest_refined.getMeshConn()
-
-                # Find the min/max values
-                num_dep = -np.min(conn)
-                num_vars = np.max(conn)+1
-                num_dep_refined = -np.min(conn_refined)
-                num_vars_refined = np.max(conn_refined)+1
-
-                # Adjust the indices so that they are always positive
-                conn += num_dep
-                conn_refined += num_dep_refined
-
-                # Get the values
-                var = np.arange(-num_dep, num_vars, dtype=np.intc)
-                values = ans.getValues(var)
-                ans_refined = computeRecon(order, conn, Xpts, values,
-                                           conn_refined, Xpts_refined)
-
-                # Set the values
-                var = np.arange(-num_dep_refined, num_vars_refined, dtype=np.intc)
-                ans_interp.setValues(var, ans_refined, op=TACS.INSERT_VALUES)
-
-                assembler_refined.setVariables(ans_interp)
+                computeReconSolution(comm, forest, assembler,
+                                     forest_refined, assembler_refined,
+                                     ans, ans_interp)
             else:
                 TMR.computeReconSolution(forest, assembler,
                                          forest_refined, assembler_refined,
                                          ans, ans_interp)
 
-                # Set the interpolated solution on the fine mesh
-                assembler_refined.setVariables(ans_interp)
+            # Set the interpolated solution on the fine mesh
+            assembler_refined.setVariables(ans_interp)
 
             # Assemble the Jacobian matrix on the refined mesh
             res_refined = assembler_refined.createVec()
@@ -661,9 +708,15 @@ for k in range(steps):
 
             # Compute the solution on the refined mesh
             ans_refined = assembler_refined.createVec()
-            TMR.computeReconSolution(forest, assembler,
+
+            if comm.size == 1:
+                computeReconSolution(comm, forest, assembler,
                                      forest_refined, assembler_refined,
                                      ans, ans_refined)
+            else:
+                TMR.computeReconSolution(forest, assembler,
+                                         forest_refined, assembler_refined,
+                                         ans, ans_refined)
 
             # Apply Dirichlet boundary conditions
             assembler_refined.setVariables(ans_refined)
@@ -700,14 +753,19 @@ for k in range(steps):
             # Approximate the difference between the refined adjoint
             # and the adjoint on the current mesh
             adjoint_refined = assembler_refined.createVec()
-            TMR.computeReconSolution(forest, assembler,
+            if comm.size == 1:
+                computeReconSolution(comm, forest, assembler,
                                      forest_refined, assembler_refined,
                                      adjoint, adjoint_refined)
+            else:
+                TMR.computeReconSolution(forest, assembler,
+                                         forest_refined, assembler_refined,
+                                         adjoint, adjoint_refined)
 
-            # # Compute the adjoint correction on the fine mesh
+            # Compute the adjoint correction on the fine mesh
             adjoint_corr = adjoint_refined.dot(res_refined)
 
-            # Compute the diff between the interpolated and 
+            # Compute the diff between the interpolated and
             # reconstructed solutions
             adjoint_interp = assembler_refined.createVec()
             TMR.computeInterpSolution(forest_refined, assembler_refined,

@@ -97,7 +97,6 @@ def createUniqueList(P1, P2, P3, tol=1e-5):
     # Tolerance for uniqueness
     Xpts = np.vstack((P1, P2, P3))
     loc = TMR.PointLocator(Xpts)
-    exit(0)
     node_nums = -np.ones(Xpts.shape[0], dtype='intc')
 
     # Locate the closest K points
