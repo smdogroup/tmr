@@ -5662,6 +5662,23 @@ void TMROctForest::evaluateNodeLocations(){
   TMROctant *octs;
   octants->getArray(&octs, &num_elements);
   
+  // Set the knots to use in the interpolation
+  const double *knots = interp_knots;
+  double *bern_knots = NULL;
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Create the evenly spaced "Bern knots"
+    bern_knots = new double[ mesh_order ];
+    double knot_space = 2.0/(mesh_order-1);
+    for (int p = 1; p < mesh_order-1; p++){
+      bern_knots[p] = -1. + p*knot_space;
+    }
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
+
+    // Set the pointer to the knots
+    knots = bern_knots;
+  }
+
   if (topo){
     for ( int i = 0; i < num_elements; i++ ){
       // Get the right surface
@@ -5680,47 +5697,20 @@ void TMROctForest::evaluateNodeLocations(){
 
       // Set the offset into the connectivity array
       const int *c = &conn[mesh_order*mesh_order*mesh_order*i];
-      if (interp_type != TMR_BERNSTEIN_POINTS){
-        // Look for nodes that are not assigned
-        for ( int kk = 0; kk < mesh_order; kk++ ){
-          for ( int jj = 0; jj < mesh_order; jj++ ){
-            for ( int ii = 0; ii < mesh_order; ii++ ){
-              // Compute the mesh index
-              int node = c[ii + jj*mesh_order + kk*mesh_order*mesh_order];
-              int index = getLocalNodeNumber(node);
-              if (!flags[index]){
-                flags[index] = 1;
-                vol->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
-                               v + 0.5*d*(1.0 + interp_knots[jj]),
-                               w + 0.5*d*(1.0 + interp_knots[kk]),
-                               &X[index]);
-              }
-            }
-          }
-        }
-      }
-      else { // Bernstein control points
-        double *bern_knots = new double[mesh_order];
-        bern_knots[0] = -1.0;
-        bern_knots[mesh_order-1] = 1.0;
-        double knot_space = 2.0/(mesh_order-1);
-        for (int j = 1; j < mesh_order-1; j++){
-          bern_knots[j] = -1. + j*knot_space;
-        }
-        // Look for nodes that are not assigned
-        for ( int kk = 0; kk < mesh_order; kk++ ){
-          for ( int jj = 0; jj < mesh_order; jj++ ){
-            for ( int ii = 0; ii < mesh_order; ii++ ){
-              // Compute the mesh index
-              int node = c[ii + jj*mesh_order + kk*mesh_order*mesh_order];
-              int index = getLocalNodeNumber(node);
-              if (!flags[index]){
-                flags[index] = 1;
-                vol->evalPoint(u + 0.5*d*(1.0 + bern_knots[ii]),
-                               v + 0.5*d*(1.0 + bern_knots[jj]),
-                               w + 0.5*d*(1.0 + bern_knots[kk]),
-                               &X[index]);
-              }
+      
+      // Look for nodes that are not assigned
+      for ( int kk = 0; kk < mesh_order; kk++ ){
+        for ( int jj = 0; jj < mesh_order; jj++ ){
+          for ( int ii = 0; ii < mesh_order; ii++ ){
+            // Compute the mesh index
+            int node = c[ii + jj*mesh_order + kk*mesh_order*mesh_order];
+            int index = getLocalNodeNumber(node);
+            if (!flags[index]){
+              flags[index] = 1;
+              vol->evalPoint(u + 0.5*d*(1.0 + knots[ii]),
+                             v + 0.5*d*(1.0 + knots[jj]),
+                             w + 0.5*d*(1.0 + knots[kk]),
+                             &X[index]);
             }
           }
         }
@@ -6659,106 +6649,69 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
 
   // Allocate a queue to store the nodes that are on other procs
   TMROctantQueue *ext_queue = new TMROctantQueue();
-  if (interp_type != TMR_BERNSTEIN_POINTS){
-    for ( int i = 0; i < num_elements; i++ ){
-      const int *c = &conn[nodes_per_element*i];
-      for ( int j = 0; j < nodes_per_element; j++ ){
-        // Check if the fine node is owned by this processor
-        if (c[j] >= node_range[mpi_rank] &&
-            c[j] < node_range[mpi_rank+1]){
-          int index = c[j] - node_range[mpi_rank];
-          if (!flags[index]){
-            // We're going to handle this node now, mark it as done
-            flags[index] = 1;
 
-            // Find the enclosing coarse octant on this
-            // processor if it exits
-            TMROctant node = octs[i];
-            node.info = j;
+  // Set the knots to use in the interpolation
+  const double *knots = interp_knots;
 
-            // Find the MPI owner or the
-            int mpi_owner = mpi_rank;
-            TMROctant *t = coarse->findEnclosing(mesh_order, interp_knots,
-                                                 &node, &mpi_owner);
-
-            // The node is owned a coarse element on this processor
-            if (t){
-              // Compute the element interpolation
-              int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
-
-              for ( int k = 0; k < nweights; k++ ){
-                vars[k] = weights[k].index;
-                wvals[k] = weights[k].weight;
-              }
-              interp->addInterp(c[j], wvals, vars, nweights);
-            }
-            else {
-              // We've got to transfer the node to the processor that
-              // owns an enclosing element. Do to that, add the
-              // octant to the list of externals and store its mpi owner
-              node.tag = mpi_owner;
-              ext_queue->push(&node);
-            }
-          }
-        }
-      }
-    }
-  }
-  else {
-    double *bern_knots = new double[mesh_order];
-    memset(bern_knots, 0.0, mesh_order*sizeof(double));
-    bern_knots[0] = -1.0;
-    bern_knots[mesh_order-1] = 1.0;
+  double *bern_knots = NULL;
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Create the evenly spaced "Bern knots"
+    bern_knots = new double[ mesh_order ];
     double knot_space = 2.0/(mesh_order-1);
     for (int p = 1; p < mesh_order-1; p++){
       bern_knots[p] = -1. + p*knot_space;
     }
-    for ( int i = 0; i < num_elements; i++ ){
-      const int *c = &conn[nodes_per_element*i];
-      for ( int j = 0; j < nodes_per_element; j++ ){
-        // Check if the fine node is owned by this processor
-        if (c[j] >= node_range[mpi_rank] &&
-            c[j] < node_range[mpi_rank+1]){
-          int index = c[j] - node_range[mpi_rank];
-          if (!flags[index]){
-            // We're going to handle this node now, mark it as done
-            flags[index] = 1;
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
 
-            // Find the enclosing coarse octant on this
-            // processor if it exits
-            TMROctant node = octs[i];
-            node.info = j;
+    // Set the pointer to the knots
+    knots = bern_knots;
+  }
+  
+  for ( int i = 0; i < num_elements; i++ ){
+    const int *c = &conn[nodes_per_element*i];
+    for ( int j = 0; j < nodes_per_element; j++ ){
+      // Check if the fine node is owned by this processor
+      if (c[j] >= node_range[mpi_rank] &&
+          c[j] < node_range[mpi_rank+1]){
+        int index = c[j] - node_range[mpi_rank];
+        if (!flags[index]){
+          // We're going to handle this node now, mark it as done
+          flags[index] = 1;
 
-            // Find the MPI owner or the
-            int mpi_owner = mpi_rank;
-            TMROctant *t = coarse->findEnclosing(mesh_order, bern_knots,
-                                                 &node, &mpi_owner);
+          // Find the enclosing coarse octant on this
+          // processor if it exits
+          TMROctant node = octs[i];
+          node.info = j;
 
-            // The node is owned a coarse element on this processor
-            if (t){
-              // Compute the element interpolation
-              int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
+          // Find the MPI owner or the
+          int mpi_owner = mpi_rank;
+          TMROctant *t = coarse->findEnclosing(mesh_order, knots,
+                                               &node, &mpi_owner);
 
-              for ( int k = 0; k < nweights; k++ ){
-                vars[k] = weights[k].index;
-                wvals[k] = weights[k].weight;
-              }
-              interp->addInterp(c[j], wvals, vars, nweights);
+          // The node is owned a coarse element on this processor
+          if (t){
+            // Compute the element interpolation
+            int nweights = computeElemInterp(&node, coarse, t, weights, tmp);
+
+            for ( int k = 0; k < nweights; k++ ){
+              vars[k] = weights[k].index;
+              wvals[k] = weights[k].weight;
             }
-            else {
-              // We've got to transfer the node to the processor that
-              // owns an enclosing element. Do to that, add the
-              // octant to the list of externals and store its mpi owner
-              node.tag = mpi_owner;
-              ext_queue->push(&node);
-            }
+            interp->addInterp(c[j], wvals, vars, nweights);
+          }
+          else {
+            // We've got to transfer the node to the processor that
+            // owns an enclosing element. Do to that, add the
+            // octant to the list of externals and store its mpi owner
+            node.tag = mpi_owner;
+            ext_queue->push(&node);
           }
         }
       }
     }
   }
   
-
   // Free the data
   delete [] flags;
 
@@ -6830,41 +6783,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
     // Recv the nodes and loop over the connectivity
     for ( int i = 0; i < recv_size; i++ ){
       int mpi_owner;
-      TMROctant *t = coarse->findEnclosing(mesh_order, interp_knots,
-                                           &recv_nodes[i], &mpi_owner);
-      
-      if (t){
-        // Compute the element interpolation
-        int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
-                                         weights, tmp);
-        
-        for ( int k = 0; k < nweights; k++ ){
-          vars[k] = weights[k].index;
-          wvals[k] = weights[k].weight;
-        }
-        interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
-      }
-      else {
-        // This should not happen. Print out an error message here.
-        fprintf(stderr,
-                "[%d] TMROctForest: Destination processor does not own node\n",
-                mpi_rank);
-      }
-    }
-  }
-  else {
-    double *bern_knots = new double[mesh_order];
-    memset(bern_knots, 0.0, mesh_order*sizeof(double));
-    bern_knots[0] = -1.0;
-    bern_knots[mesh_order-1] = 1.0;
-    double knot_space = 2.0/(mesh_order-1);
-    for (int p = 1; p < mesh_order-1; p++){
-      bern_knots[p] = -1. + p*knot_space;
-    }
-    // Recv the nodes and loop over the connectivity
-    for ( int i = 0; i < recv_size; i++ ){
-      int mpi_owner;
-      TMROctant *t = coarse->findEnclosing(mesh_order, bern_knots,
+      TMROctant *t = coarse->findEnclosing(mesh_order, knots,
                                            &recv_nodes[i], &mpi_owner);
       
       if (t){
@@ -6887,7 +6806,10 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
     }
   }
   
-
+  if (bern_knots){
+    delete [] bern_knots;
+  }
+  
   // Free the recv array
   delete recv_array;
 

@@ -606,6 +606,7 @@ TMRTopoProblem::~TMRTopoProblem(){
   delete [] filter_interp;
 
   // Free the initial design variable values (if allocated)
+  if (xinit){ xinit->decref(); }
   if (xlb){ xlb->decref(); }
   if (xub){ xub->decref(); }
 
@@ -1416,7 +1417,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         // Get the design variable values from TACS directly
         memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
         tacs[0]->getDesignVars(xlocal, max_local_size);
-
+        
         // Set the local values into the vector
         setBVecFromLocalValues(0, xlocal, wrap->vec, TACS_INSERT_VALUES);
 
@@ -1445,22 +1446,24 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
       memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
       memset(upper, 0, max_local_size*sizeof(TacsScalar));
       tacs[0]->getDesignVarRange(xlocal, upper, max_local_size);
-
+      
       if (!has_lower){
         ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lbvec);
         if (lbwrap){
+          lbwrap->vec->zeroEntries();
           // Set the values from the local array
-          setBVecFromLocalValues(0, xlocal, lbwrap->vec,TACS_INSERT_VALUES);
-          lbwrap->vec->beginSetValues(TACS_INSERT_VALUES);
-          lbwrap->vec->endSetValues(TACS_INSERT_VALUES);
+          setBVecFromLocalValues(0, xlocal, lbwrap->vec,TACS_ADD_VALUES);
+          lbwrap->vec->beginSetValues(TACS_ADD_VALUES);
+          lbwrap->vec->endSetValues(TACS_ADD_VALUES);
         }
       }
       if (!has_upper){
         ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ubvec);
         if (ubwrap){
-          setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_INSERT_VALUES);
-          ubwrap->vec->beginSetValues(TACS_INSERT_VALUES);
-          ubwrap->vec->endSetValues(TACS_INSERT_VALUES);
+          ubwrap->vec->zeroEntries();
+          setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
+          ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
+          ubwrap->vec->endSetValues(TACS_ADD_VALUES);
         }
       }
       delete [] upper;

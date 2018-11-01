@@ -3846,74 +3846,50 @@ void TMRQuadForest::evaluateNodeLocations(){
   int num_elements;
   TMRQuadrant *quads;
   quadrants->getArray(&quads, &num_elements);
-  if (interp_type != TMR_BERNSTEIN_POINTS){
-    if (topo){
-      for ( int i = 0; i < num_elements; i++ ){
-        // Get the right surface
-        TMRFace *surf;
-        topo->getFace(quads[i].face, &surf);
 
-        // Compute the edge length
-        const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
-
-        // Compute the origin of the element in parametric space
-        // and the edge length of the element
-        double d = convert_to_coordinate(h);
-        double u = convert_to_coordinate(quads[i].x);
-        double v = convert_to_coordinate(quads[i].y);
-
-        // Look for nodes that are not assigned
-        for ( int jj = 0; jj < mesh_order; jj++ ){
-          for ( int ii = 0; ii < mesh_order; ii++ ){
-            // Compute the mesh index
-            int node = conn[mesh_order*mesh_order*i +
-                            ii + jj*mesh_order];
-            int index = getLocalNodeNumber(node);
-            if (!flags[index]){
-              flags[index] = 1;
-              surf->evalPoint(u + 0.5*d*(1.0 + interp_knots[ii]),
-                              v + 0.5*d*(1.0 + interp_knots[jj]),
-                              &X[index]);
-            }
-          }
-        }
-      }
+  // Set the knots to use in the interpolation
+  const double *knots = interp_knots;
+  double *bern_knots = NULL;
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Create the evenly spaced "Bern knots"
+    bern_knots = new double[ mesh_order ];
+    double knot_space = 2.0/(mesh_order-1);
+    for (int p = 1; p < mesh_order-1; p++){
+      bern_knots[p] = -1. + p*knot_space;
     }
-  }
-  else { // Bernstein control points
-    double *bern_knots = new double[mesh_order];
     bern_knots[0] = -1.0;
     bern_knots[mesh_order-1] = 1.0;
-    double knot_space = 2.0/(mesh_order-1);
-    for (int j = 1; j < mesh_order-1; j++){
-      bern_knots[j] = -1. + j*knot_space;
-    }
-    if (topo){
-      for ( int i = 0; i < num_elements; i++ ){
-        // Get the right surface
-        TMRFace *surf;
-        topo->getFace(quads[i].face, &surf);
 
-        // Compute the edge length
-        const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
-        // Compute the origin of the element in parametric space
-        // and the edge length of the element
-        double d = convert_to_coordinate(h);
-        double u = convert_to_coordinate(quads[i].x);
-        double v = convert_to_coordinate(quads[i].y);
-        // Look for nodes that are not assigned
-        for ( int jj = 0; jj < mesh_order; jj++ ){
-          for ( int ii = 0; ii < mesh_order; ii++ ){
-            // Compute the mesh index
-            int node = conn[mesh_order*mesh_order*i +
-                            ii + jj*mesh_order];
-            int index = getLocalNodeNumber(node);
-            if (!flags[index]){
-              flags[index] = 1;
-              surf->evalPoint(u + 0.5*d*(1.0 + bern_knots[ii]),
-                              v + 0.5*d*(1.0 + bern_knots[jj]),
-                              &X[index]);
-            }
+    // Set the pointer to the knots
+    knots = bern_knots;
+  }
+  if (topo){
+    for ( int i = 0; i < num_elements; i++ ){
+      // Get the right surface
+      TMRFace *surf;
+      topo->getFace(quads[i].face, &surf);
+
+      // Compute the edge length
+      const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
+
+      // Compute the origin of the element in parametric space
+      // and the edge length of the element
+      double d = convert_to_coordinate(h);
+      double u = convert_to_coordinate(quads[i].x);
+      double v = convert_to_coordinate(quads[i].y);
+
+      // Look for nodes that are not assigned
+      for ( int jj = 0; jj < mesh_order; jj++ ){
+        for ( int ii = 0; ii < mesh_order; ii++ ){
+          // Compute the mesh index
+          int node = conn[mesh_order*mesh_order*i +
+                          ii + jj*mesh_order];
+          int index = getLocalNodeNumber(node);
+          if (!flags[index]){
+            flags[index] = 1;
+            surf->evalPoint(u + 0.5*d*(1.0 + knots[ii]),
+                            v + 0.5*d*(1.0 + knots[jj]),
+                            &X[index]);
           }
         }
       }
