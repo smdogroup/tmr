@@ -6846,7 +6846,11 @@ void TMROctForest::evalBernsteinWeights( int mesh_order,
                                          double *knots,
                                          double *N ){
   // Weights evaluated from the subdivison matrix
-  if (mesh_order == 3){
+  if (mesh_order == 2){
+    N[0] = 0.5;
+    N[1] = 0.5;
+  }
+  else if (mesh_order == 3){
     if (u < 0.0){
       N[0] = 0.5;
       N[1] = 0.5;

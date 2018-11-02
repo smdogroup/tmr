@@ -511,7 +511,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // Set up the solver
   int gmres_iters = 50;
-  int nrestart = 5;
+  int nrestart = 6;
   int is_flexible = 0;
   // int gmres_iters = 100;
   // int nrestart = 2;
@@ -1424,6 +1424,8 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         // Insert the values across all processors
         wrap->vec->beginSetValues(TACS_INSERT_VALUES);
         wrap->vec->endSetValues(TACS_INSERT_VALUES);
+        wrap->vec->beginDistributeValues();
+        wrap->vec->endDistributeValues();
       }
     }
   }
@@ -1452,9 +1454,11 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         if (lbwrap){
           lbwrap->vec->zeroEntries();
           // Set the values from the local array
-          setBVecFromLocalValues(0, xlocal, lbwrap->vec,TACS_ADD_VALUES);
+          setBVecFromLocalValues(0, xlocal, lbwrap->vec, TACS_ADD_VALUES);
           lbwrap->vec->beginSetValues(TACS_ADD_VALUES);
           lbwrap->vec->endSetValues(TACS_ADD_VALUES);
+          //lbwrap->vec->beginDistributeValues();
+          //lbwrap->vec->endDistributeValues();
         }
       }
       if (!has_upper){
@@ -1464,6 +1468,8 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
           setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
           ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
           ubwrap->vec->endSetValues(TACS_ADD_VALUES);
+          ///ubwrap->vec->beginDistributeValues();
+          //ubwrap->vec->endDistributeValues();
         }
       }
       delete [] upper;
