@@ -6868,25 +6868,25 @@ void TMROctForest::evalBernsteinWeights( int mesh_order,
     }
   }
   else if (mesh_order == 4){
-    if (u == -2./3){
+    if (fabs(u + 2./3) < 1e-6){
       N[0] = 0.5;
       N[1] = 0.5;
       N[2] = 0.0;
       N[3] = 0.0;
     }
-    else if (u == -1./3){
+    else if (fabs(u+1./3) < 1e-6){
       N[0] = 0.25;
       N[1] = 0.5;
       N[2] = 0.25;
       N[3] = 0.0;
     }
-    else if (u == 0){
+    else if (fabs(u) < 1e-6){
       N[0] = 0.125;
       N[1] = 0.375;
       N[2] = 0.375;
       N[3] = 0.125;
     }
-    else if (u == 1./3){
+    else if (fabs(u -1./3) < 1e-6) {
       N[0] = 0.0;
       N[1] = 0.25;
       N[2] = 0.5;
@@ -6900,49 +6900,49 @@ void TMROctForest::evalBernsteinWeights( int mesh_order,
     }
   }
   else if (mesh_order == 5){
-    if (u == -0.75){
+    if (fabs(u + 0.75) < 1e-6){
       N[0] = 0.5;
       N[1] = 0.5;
       N[2] = 0.0;
       N[3] = 0.0;
       N[4] = 0.0;
     }
-    else if (u == -0.5){
+    else if (fabs(u + 0.5) < 1e-6){
       N[0] = 0.25;
       N[1] = 0.5;
       N[2] = 0.25;
       N[3] = 0.0;
       N[4] = 0.0;
     }
-    else if (u == -0.25){
+    else if (fabs(u + 0.25) < 1e-6){
       N[0] = 0.125;
       N[1] = 0.375;
       N[2] = 0.375;
       N[3] = 0.125;
       N[4] = 0.0;
     }
-    else if (u == 0.0){
+    else if (fabs(u) < 1e-6){
       N[0] = 0.0625;
       N[1] = 0.25;
       N[2] = 0.375;
       N[3] = 0.25;
       N[4] = 0.0625;
     }
-    else if (u == 0.25){
+    else if (fabs(u - 0.25) < 1e-6){
       N[0] = 0.0;
       N[1] = 0.125;
       N[2] = 0.375;
       N[3] = 0.375;
       N[4] = 0.125;      
     }
-    else if (u == 0.5){
+    else if (fabs(u -0.5) < 1e-6){
       N[0] = 0.0;
       N[1] = 0.0;
       N[2] = 0.25;
       N[3] = 0.5;
       N[4] = 0.25;      
     }
-    else if (u == 0.75){
+    else if (fabs(u -0.75) < 1e-6){
       N[0] = 0.0;
       N[1] = 0.0;
       N[2] = 0.0;
