@@ -6779,32 +6779,30 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   int recv_size;
   TMROctant *recv_nodes;
   recv_array->getArray(&recv_nodes, &recv_size);
-  if (interp_type != TMR_BERNSTEIN_POINTS){
-    // Recv the nodes and loop over the connectivity
-    for ( int i = 0; i < recv_size; i++ ){
-      int mpi_owner;
-      TMROctant *t = coarse->findEnclosing(mesh_order, knots,
-                                           &recv_nodes[i], &mpi_owner);
-      
-      if (t){
-        // Compute the element interpolation
-        int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
-                                         weights, tmp);
+  
+  // Recv the nodes and loop over the connectivity
+  for ( int i = 0; i < recv_size; i++ ){
+    int mpi_owner;
+    TMROctant *t = coarse->findEnclosing(mesh_order, knots,
+                                         &recv_nodes[i], &mpi_owner);
+    if (t){
+      // Compute the element interpolation
+      int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
+                                       weights, tmp);
         
-        for ( int k = 0; k < nweights; k++ ){
-          vars[k] = weights[k].index;
-          wvals[k] = weights[k].weight;
-        }
-        interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
+      for ( int k = 0; k < nweights; k++ ){
+        vars[k] = weights[k].index;
+        wvals[k] = weights[k].weight;
       }
-      else {
-        // This should not happen. Print out an error message here.
-        fprintf(stderr,
-                "[%d] TMROctForest: Destination processor does not own node\n",
-                mpi_rank);
-      }
+      interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
     }
-  }
+    else {
+      // This should not happen. Print out an error message here.
+      fprintf(stderr,
+              "[%d] TMROctForest: Destination processor does not own node\n",
+              mpi_rank);
+    }
+  }  
   
   if (bern_knots){
     delete [] bern_knots;
