@@ -4717,8 +4717,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   // Recv the nodes and loop over the connectivity
   for ( int i = 0; i < recv_size; i++ ){
     TMRQuadrant *t = coarse->findEnclosing(mesh_order, knots,
-                                           &recv_nodes[i]);
-    
+                                           &recv_nodes[i]);    
     if (t){
       // Compute the element interpolation
       int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
