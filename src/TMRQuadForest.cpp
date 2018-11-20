@@ -4432,7 +4432,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
       double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + interp_knots[j]) -
                              quad->y)/hc;
       lagrange_shape_functions(coarse->mesh_order, v,
-                               coarse->interp_knots, Nv);      
+                               coarse->interp_knots, Nv);
     }
   }
   else { 
@@ -4461,7 +4461,14 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
     else {
       double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + bern_knots[i]) -
                              quad->x)/hc;
-      bernstein_shape_functions(coarse->mesh_order, u,
+      if (mesh_order - coarse->mesh_order > 1){
+        printf("Warning: mesh order difference across grids should be 1\n");
+      }
+      // printf("[%d] u: %f %d %d\n", mpi_rank, u, mesh_order, 
+      //        coarse->mesh_order);
+      // bernstein_shape_functions(coarse->mesh_order, u,
+      //                           coarse->interp_knots, Nu);
+      evalBernsteinOrderWeights(coarse->mesh_order, u,
                                 coarse->interp_knots, Nu);
     }
     if ((j == 0 && quad->y == node->y) ||
@@ -4479,12 +4486,17 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
     else {
       double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + bern_knots[j]) -
                              quad->y)/hc;
-      bernstein_shape_functions(coarse->mesh_order, v,
+      if (mesh_order - coarse->mesh_order > 1){
+        printf("Warning: mesh order difference across grids should be 1\n");
+      }
+      // bernstein_shape_functions(coarse->mesh_order, v,
+      //                           coarse->interp_knots, Nv);
+      evalBernsteinOrderWeights(coarse->mesh_order, v,
                                 coarse->interp_knots, Nv);
     }
     delete [] bern_knots;
   }
-
+  
   // Get the coarse grid information
   const int *cdep_ptr;
   const int *cdep_conn;
@@ -4767,7 +4779,8 @@ void TMRQuadForest::initLabel( int mesh_order, TMRInterpolationType interp_type,
   }
 }
 /*
-  Compute the dependent weights associated with the Bernstein polynomial
+  Compute the dependent weights associated with the Bernstein polynomial for
+  change in spacing
 */
 void TMRQuadForest::evalBernsteinWeights( int mesh_order,
                                           double u,
@@ -4877,5 +4890,92 @@ void TMRQuadForest::evalBernsteinWeights( int mesh_order,
       N[3] = 0.5;
       N[4] = 0.5;      
     }
+  }
+}
+
+/*
+  Compute the weights associated with the Bernstein polynomial for change in
+  order across meshes (at most a single change in order)
+*/
+void TMRQuadForest::evalBernsteinOrderWeights( int coarse_mesh_order,
+                                               double u,
+                                               double *knots,
+                                               double *N ){
+  // Weights evaluated from the subdivison matrix
+  if (mesh_order - coarse_mesh_order > 0){
+    if (coarse_mesh_order == 2){
+      N[0] = 0.5;
+      N[1] = 0.5;
+    }
+    else if (coarse_mesh_order == 3){
+      if (u < 0.0){
+        N[0] = 1./3;
+        N[1] = 2./3;
+        N[2] = 0.0;
+      }
+      else if (u > 0.0){
+        N[0] = 0.0;
+        N[1] = 2./3;
+        N[2] = 1./3;
+      }
+    }
+    else if (coarse_mesh_order == 4){
+      if (u < 0.0){
+        N[0] = 0.25;
+        N[1] = 0.75;
+        N[2] = 0.0;
+        N[3] = 0.0;
+      }
+      else if (u > 0.0){
+        N[0] = 0.0;
+        N[1] = 0.5;
+        N[2] = 0.5;
+        N[3] = 0.0;
+      }
+      else {
+        N[0] = 0.0;
+        N[1] = 0.0;
+        N[2] = 0.75;
+        N[3] = 0.25;
+      }
+    }
+    else if (coarse_mesh_order == 5){
+      if (fabs(u + 0.6) < 1e-6){
+        N[0] = 0.2;
+        N[1] = 0.8;
+        N[2] = 0.0;
+        N[3] = 0.0;
+        N[4] = 0.0;
+      }
+      else if (fabs(u + 0.2) < 1e-6){
+        N[0] = 0.0;
+        N[1] = 0.4;
+        N[2] = 0.6;
+        N[3] = 0.0;
+        N[4] = 0.0;
+      }
+      else if (fabs(u - 0.2) < 1e-6){
+        N[0] = 0.0;
+        N[1] = 0.0;
+        N[2] = 0.6;
+        N[3] = 0.4;
+        N[4] = 0.0;
+      }
+      else if (fabs(u - 0.6) < 1e-6){
+        N[0] = 0.0;
+        N[1] = 0.0;
+        N[2] = 0.0;
+        N[3] = 0.8;
+        N[4] = 0.2;      
+      }
+    }
+  }
+  else if (mesh_order == coarse_mesh_order){
+    bernstein_shape_functions(coarse_mesh_order, u,
+                              knots, N);
+  }
+  else {
+    printf("[%d] Warning: mesh order difference across grids should be 1 or the \
+  same\n", mpi_rank);     
   }
 }

@@ -6510,8 +6510,10 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     else {
       double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + bern_knots[i]) -
                              oct->x)/hc;
-      bernstein_shape_functions(coarse->mesh_order, u,
+      evalBernsteinOrderWeights(coarse->mesh_order, u,
                                 coarse->interp_knots, Nu);
+      // bernstein_shape_functions(coarse->mesh_order, u,
+      //                           coarse->interp_knots, Nu);
     }
     if ((j == 0 && oct->y == node->y) ||
         (j == mesh_order-1 && oct->y == node->y + h)){
@@ -6528,8 +6530,10 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     else {
       double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + bern_knots[j]) -
                              oct->y)/hc;
-      bernstein_shape_functions(coarse->mesh_order, v,
+      evalBernsteinOrderWeights(coarse->mesh_order, v,
                                 coarse->interp_knots, Nv);
+      // bernstein_shape_functions(coarse->mesh_order, v,
+      //                           coarse->interp_knots, Nv);
     }
     if ((k == 0 && oct->z == node->z) ||
         (k == mesh_order-1 && oct->z == node->z + h)){
@@ -6546,8 +6550,10 @@ int TMROctForest::computeElemInterp( TMROctant *node,
     else {
       double w = -1.0 + 2.0*(node->z + 0.5*h*(1.0 + bern_knots[k]) -
                              oct->z)/hc;
-      bernstein_shape_functions(coarse->mesh_order, w,
+      evalBernsteinOrderWeights(coarse->mesh_order, w,
                                 coarse->interp_knots, Nw);
+      // bernstein_shape_functions(coarse->mesh_order, w,
+      //                           coarse->interp_knots, Nw);
     }
     delete [] bern_knots;
   }
@@ -6950,5 +6956,92 @@ void TMROctForest::evalBernsteinWeights( int mesh_order,
       N[3] = 0.5;
       N[4] = 0.5;
     }
+  }
+}
+
+/*
+  Compute the weights associated with the Bernstein polynomial for change in
+  order across meshes (at most a single change in order)
+*/
+void TMROctForest::evalBernsteinOrderWeights( int coarse_mesh_order,
+                                               double u,
+                                               double *knots,
+                                               double *N ){
+  // Weights evaluated from the subdivison matrix
+  if (mesh_order - coarse_mesh_order > 0){
+    if (coarse_mesh_order == 2){
+      N[0] = 0.5;
+      N[1] = 0.5;
+    }
+    else if (coarse_mesh_order == 3){
+      if (u < 0.0){
+        N[0] = 1./3;
+        N[1] = 2./3;
+        N[2] = 0.0;
+      }
+      else if (u > 0.0){
+        N[0] = 0.0;
+        N[1] = 2./3;
+        N[2] = 1./3;
+      }
+    }
+    else if (coarse_mesh_order == 4){
+      if (u < 0.0){
+        N[0] = 0.25;
+        N[1] = 0.75;
+        N[2] = 0.0;
+        N[3] = 0.0;
+      }
+      else if (u > 0.0){
+        N[0] = 0.0;
+        N[1] = 0.5;
+        N[2] = 0.5;
+        N[3] = 0.0;
+      }
+      else {
+        N[0] = 0.0;
+        N[1] = 0.0;
+        N[2] = 0.75;
+        N[3] = 0.25;
+      }
+    }
+    else if (coarse_mesh_order == 5){
+      if (fabs(u + 0.6) < 1e-6){
+        N[0] = 0.2;
+        N[1] = 0.8;
+        N[2] = 0.0;
+        N[3] = 0.0;
+        N[4] = 0.0;
+      }
+      else if (fabs(u + 0.2) < 1e-6){
+        N[0] = 0.0;
+        N[1] = 0.4;
+        N[2] = 0.6;
+        N[3] = 0.0;
+        N[4] = 0.0;
+      }
+      else if (fabs(u - 0.2) < 1e-6){
+        N[0] = 0.0;
+        N[1] = 0.0;
+        N[2] = 0.6;
+        N[3] = 0.4;
+        N[4] = 0.0;
+      }
+      else if (fabs(u - 0.6) < 1e-6){
+        N[0] = 0.0;
+        N[1] = 0.0;
+        N[2] = 0.0;
+        N[3] = 0.8;
+        N[4] = 0.2;      
+      }
+    }
+  }
+  else if (mesh_order == coarse_mesh_order){
+    bernstein_shape_functions(coarse_mesh_order, u,
+                              knots, N);
+  }
+  else {
+    printf("[%d] Warning: mesh order difference across grids should be 1 or the \
+  same\n", mpi_rank);     
   }
 }

@@ -314,6 +314,8 @@ class TMROctForest : public TMREntity {
   // Evaluate the Bernstein dependent weights
   void evalBernsteinWeights( int mesh_order, double u, double *knots, 
                              double *N );
+  void evalBernsteinOrderWeights( int mesh_order, double u, double *knots,
+                                  double *N );
 
   // The communicator
   MPI_Comm comm;
