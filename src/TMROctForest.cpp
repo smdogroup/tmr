@@ -6994,15 +6994,15 @@ void TMROctForest::evalBernsteinOrderWeights( int coarse_mesh_order,
       }
       else if (u > 0.0){
         N[0] = 0.0;
-        N[1] = 0.5;
-        N[2] = 0.5;
-        N[3] = 0.0;
-      }
-      else {
-        N[0] = 0.0;
         N[1] = 0.0;
         N[2] = 0.75;
         N[3] = 0.25;
+      }
+      else {
+        N[0] = 0.0;
+        N[1] = 0.5;
+        N[2] = 0.5;
+        N[3] = 0.0;
       }
     }
     else if (coarse_mesh_order == 5){

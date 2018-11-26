@@ -4926,17 +4926,17 @@ void TMRQuadForest::evalBernsteinOrderWeights( int coarse_mesh_order,
         N[2] = 0.0;
         N[3] = 0.0;
       }
-      else if (u > 0.0){
-        N[0] = 0.0;
-        N[1] = 0.5;
-        N[2] = 0.5;
-        N[3] = 0.0;
-      }
-      else {
+      else if (u > 0.0){        
         N[0] = 0.0;
         N[1] = 0.0;
         N[2] = 0.75;
         N[3] = 0.25;
+      }
+      else {
+        N[0] = 0.0;
+        N[1] = 0.5;
+        N[2] = 0.5;
+        N[3] = 0.0;
       }
     }
     else if (coarse_mesh_order == 5){
@@ -4967,7 +4967,7 @@ void TMRQuadForest::evalBernsteinOrderWeights( int coarse_mesh_order,
         N[2] = 0.0;
         N[3] = 0.8;
         N[4] = 0.2;      
-      }
+      }      
     }
   }
   else if (mesh_order == coarse_mesh_order){
