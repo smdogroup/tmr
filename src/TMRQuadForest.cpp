@@ -4446,6 +4446,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
     for (int p = 1; p < mesh_order-1; p++){
       bern_knots[p] = -1. + p*knot_space;
     }
+
     if ((i == 0 && quad->x == node->x) ||
         (i == mesh_order-1 && quad->x == node->x + h)){
       istart = 0;
@@ -4464,10 +4465,6 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
       if (mesh_order - coarse->mesh_order > 1){
         printf("Warning: mesh order difference across grids should be 1\n");
       }
-      // printf("[%d] u: %f %d %d\n", mpi_rank, u, mesh_order, 
-      //        coarse->mesh_order);
-      // bernstein_shape_functions(coarse->mesh_order, u,
-      //                           coarse->interp_knots, Nu);
       evalBernsteinOrderWeights(coarse->mesh_order, u,
                                 coarse->interp_knots, Nu);
     }
@@ -4489,8 +4486,6 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
       if (mesh_order - coarse->mesh_order > 1){
         printf("Warning: mesh order difference across grids should be 1\n");
       }
-      // bernstein_shape_functions(coarse->mesh_order, v,
-      //                           coarse->interp_knots, Nv);
       evalBernsteinOrderWeights(coarse->mesh_order, v,
                                 coarse->interp_knots, Nv);
     }
@@ -4641,7 +4636,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
 
             for ( int k = 0; k < nweights; k++ ){
               vars[k] = weights[k].index;
-              wvals[k] = weights[k].weight;
+              wvals[k] = weights[k].weight;             
             }
             interp->addInterp(c[j], wvals, vars, nweights);
           }
@@ -4729,7 +4724,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   // Recv the nodes and loop over the connectivity
   for ( int i = 0; i < recv_size; i++ ){
     TMRQuadrant *t = coarse->findEnclosing(mesh_order, knots,
-                                           &recv_nodes[i]);    
+                                           &recv_nodes[i]);
     if (t){
       // Compute the element interpolation
       int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
@@ -4739,7 +4734,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
         vars[k] = weights[k].index;
         wvals[k] = weights[k].weight;
       }
-      interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
+      interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);      
     }
     else {
       // This should not happen. Print out an error message here.
