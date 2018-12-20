@@ -2892,11 +2892,6 @@ cdef class OctStiffness(SolidStiff):
             errmsg = 'Weights and index list lengths must be the same'
             raise ValueError(errmsg)
 
-        # Check that the lengths are less than 8
-        if len(weights) > 8:
-            errmsg = 'Weight/index lists too long > 8'
-            raise ValueError(errmsg)
-
         # Extract the weights
         nw = len(weights)
         w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
@@ -2925,12 +2920,6 @@ cdef class ThermoOctStiffness(CoupledSolid):
         # if len(weights) != len(index):
         #     errmsg = 'Weights and index list lengths must be the same'
         #     raise ValueError(errmsg)
-
-        # # Check that the lengths are less than 8
-        # if len(weights) > 8:
-        #     errmsg = 'Weight/index lists too long > 8'
-        #     raise ValueError(errmsg)
-
         # Extract the weights
         if weights:
             nw = len(weights)
@@ -2968,10 +2957,10 @@ cdef class QuadStiffness(PlaneStress):
             errmsg = 'Weights and index list lengths must be the same'
             raise ValueError(errmsg)
 
-        # Check that the lengths are less than 4
-        if len(weights) > 4:
-            errmsg = 'Weight/index lists too long > 4'
-            raise ValueError(errmsg)
+        # # Check that the lengths are less than 4
+        # if len(weights) > 4:
+        #     errmsg = 'Weight/index lists too long > 4'
+        #     raise ValueError(errmsg)
 
         # Extract the weights
         nw = len(weights)

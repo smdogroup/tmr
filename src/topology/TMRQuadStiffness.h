@@ -28,6 +28,7 @@
 
 #include "TMRBase.h"
 #include "PlaneStressStiffness.h"
+#include "YSlibrary.h"
 /*
   The TMRStiffnessProperties class
 */
@@ -138,6 +139,20 @@ class TMRQuadStiffness : public PlaneStressStiffness {
   TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
     return rho[0]; 
   }
+  // Return the failure
+  // -------------------
+  void failure( const double pt[],
+                const TacsScalar strain[],
+                TacsScalar * fail );
+
+  void addFailureDVSens( const double pt[],
+                         const TacsScalar strain[],
+                         TacsScalar alpha,
+                         TacsScalar dvSens[], int dvLen );
+
+  void failureStrainSens(const double pt[],
+                         const TacsScalar strain[],
+                         TacsScalar sens[] );
 
  private:
   // The stiffness properties

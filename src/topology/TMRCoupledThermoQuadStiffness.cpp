@@ -79,7 +79,7 @@ TMRCoupledThermoQuadStiffness::TMRCoupledThermoQuadStiffness( TMRIndexWeight *_w
       rho[j] = 1.0/(nvars-1);
     }
   }
-
+ 
   // Set the dv vector to NULL
   dv = new TacsScalar[ nvars*nweights ];
   for (int i = 0; i < nvars*nweights; i++){
@@ -171,12 +171,10 @@ void TMRCoupledThermoQuadStiffness::getDesignVars( TacsScalar xdv[],
       }
     }
   }
-  else { // Using Bernstein polynomial; check for dependent nodes
+  else { // Using Bernstein polynomial
     if (nvars == 1){
       for ( int i = 0; i < nweights; i++ ){
-        //double rand_var = ((double) rand()/(RAND_MAX)) + 1e-3;
-        xdv[index[i]] = 0.95;
-        //xdv[index[i]] = rand_var;
+        xdv[index[i]] = 0.95;        
       }
     }
     else {
@@ -926,70 +924,79 @@ void TMRCoupledThermoQuadStiffness::failure( const double pt[],
                                              const TacsScalar T[],
                                              const TacsScalar e[],
                                              TacsScalar *fail ){
-  // const double eps = props->eps;
+  const double eps = props->eps;
+  if (filter && dv){
+    double N[nweights];
+    filter->evalInterp(pt, N);
+    for ( int j = 0; j < nvars; j++ ){
+      x[j] = 0.0;
+      for ( int i = 0; i < nweights; i++ ){
+        x[j] += N[i]*dv[nvars*i + j];     
+      }
+    }
+  }
+  if (nvars == 1){
+    // Use the von Mises failure criterion
+    // Compute the relaxation factor
+    TacsScalar r_factor = 1.0;
+    if (eps > 0.0){
+      r_factor = x[0]/(eps*(1.0-x[0])+x[0]);
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor = pow(x[0],p);
+    }
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar aT = props->aT[0];
+    TacsScalar ys = props->ys[0];
 
-  // if (nvars == 1){
-  //   // Use the von Mises failure criterion
-  //   // Compute the relaxation factor
-  //   TacsScalar r_factor = 1.0;
+    TacsScalar s[3], eff_e[3];
 
-  //   if (eps > 0.0){
-  //     r_factor = rho[0]/(eps*(1.0-rho[0])+rho[0]);
-  //   }
-  //   else {
-  //     TacsScalar p = -1.0*eps;
-  //     r_factor = pow(rho[0],p);
-  //   }
-  //   // Extract the properties
-  //   TacsScalar nu = props->nu[0];
-  //   TacsScalar D = props->D[0];
-  //   TacsScalar G = props->G[0];
-  //   TacsScalar aT = props->aT[0];
-  //   TacsScalar ys = props->ys[0];
-  //   TacsScalar s[3], eff_e[3];
+    eff_e[0] = e[0]-aT*T[0];
+    eff_e[1] = e[1]-aT*T[0];
+    eff_e[2] = e[2]*1.0;
 
-  //   eff_e[0] = e[0]-aT*T[0];
-  //   eff_e[1] = e[1]-aT*T[0];
-  //   eff_e[2] = e[2]*1.0;
-
-  //   // Compute the resulting stress
-  //   s[0] = D*(eff_e[0]+nu*eff_e[1]);
-  //   s[1] = D*(nu*eff_e[0]+eff_e[1]);
-  //   s[2] = G*eff_e[2];
+    // Compute the resulting stress
+    s[0] = D*(eff_e[0]+nu*eff_e[1]);
+    s[1] = D*(nu*eff_e[0]+eff_e[1]);
+    s[2] = G*eff_e[2];
     
-  //   *fail = r_factor*VonMisesFailurePlaneStress(s,ys);
-  // }
-  // else {    
-  //   *fail = 0.0;    
-  //   for ( int j = 1; j < nvars; j++ ){
-  //     TacsScalar r_factor = 1.0;
-  //     if (eps > 0.0){
-  //       r_factor = rho[j]/(eps*(1.0-rho[j])+rho[j]);
-  //     }
-  //     else {
-  //       TacsScalar p = -1.0*eps;
-  //       r_factor = pow(rho[j],p);
-  //     }
-  //     // Extract the properties
-  //     TacsScalar nu = props->nu[j-1];
-  //     TacsScalar D = props->D[j-1];
-  //     TacsScalar G = props->G[j-1];
-  //     TacsScalar ys = props->ys[j-1];
-  //     TacsScalar aT = props->aT[j-1];
-  //     // Compute effective strain = B*u-alpha*dT
-  //     TacsScalar s[3], eff_e[3];
-  //     eff_e[0] = e[0]-aT*T[0];
-  //     eff_e[1] = e[1]-aT*T[0];
-  //     eff_e[2] = e[2]*1.0;
+    *fail = r_factor*VonMisesFailurePlaneStress(s,ys);
+  }
+  else {    
+    *fail = 0.0;    
+    for ( int j = 1; j < nvars; j++ ){
+      TacsScalar r_factor = 1.0;
+      if (eps > 0.0){
+        r_factor = x[j]/(eps*(1.0-x[j])+x[j]);
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor = pow(x[j],p);
+      }
+      // Extract the properties
+      TacsScalar nu = props->nu[j-1];
+      TacsScalar D = props->D[j-1];
+      TacsScalar G = props->G[j-1];
+      TacsScalar ys = props->ys[j-1];
+      TacsScalar aT = props->aT[j-1];
+
+      // Compute effective strain = B*u-alpha*dT
+      TacsScalar s[3], eff_e[3];
+      eff_e[0] = e[0]-aT*T[0];
+      eff_e[1] = e[1]-aT*T[0];
+      eff_e[2] = e[2]*1.0;
       
-  //     // Compute the contribution of failure from each material
-  //     s[0] = D*(eff_e[0]+nu*eff_e[1]);
-  //     s[1] = D*(nu*eff_e[0]+eff_e[1]);
-  //     s[2] = G*eff_e[2];
-      
-  //     *fail += r_factor*VonMisesFailurePlaneStress(s,ys);      
-  //   }
-  // }  
+      // Compute the contribution of failure from each material
+      s[0] = D*(eff_e[0]+nu*eff_e[1]);
+      s[1] = D*(nu*eff_e[0]+eff_e[1]);
+      s[2] = G*eff_e[2];
+      *fail += r_factor*VonMisesFailurePlaneStress(s,ys);      
+    }
+  } 
 }
 // Evaluate the failure criteria w.r.t. design variables
 void TMRCoupledThermoQuadStiffness::addFailureDVSens( const double pt[], 
@@ -998,150 +1005,321 @@ void TMRCoupledThermoQuadStiffness::addFailureDVSens( const double pt[],
                                                       TacsScalar alpha,
                                                       TacsScalar dvSens[], 
                                                       int dvLen ){
-  // const double eps = props->eps;
-  // if (nvars == 1){
-  //   // Compute the relaxation factor
-  //   TacsScalar r_factor_sens = 0.0;
-  //   if (eps > 0.0){
-  //     TacsScalar d = 1.0/(eps*(1.0-rho[0])+rho[0]);
-  //     r_factor_sens = eps*d*d;
-  //   }
-  //   else {
-  //     TacsScalar p = -1.0*eps;
-  //     r_factor_sens = pow(rho[0],p-1)*p;
-  //   }
-  //   // Extract the properties
-  //   TacsScalar nu = props->nu[0];
-  //   TacsScalar D = props->D[0];
-  //   TacsScalar G = props->G[0];
-  //   TacsScalar ys = props->ys[0];
-  //   TacsScalar aT = props->aT[0];
-  //   TacsScalar s[3], eff_e[3];
+  const double eps = props->eps;
+  if (filter && dv){
+    double N[nweights];
+    filter->evalInterp(pt, N);    
+    for ( int j = 0; j < nvars; j++ ){
+      x[j] = 0.0;
+      for ( int i = 0; i < nweights; i++ ){
+        x[j] += N[i]*dv[nvars*i + j];        
+      }
+    }
+    if (nvars == 1){
+      // Compute the relaxation factor
+      TacsScalar r_factor_sens = 0.0;
+      if (eps > 0.0){
+        TacsScalar d = 1.0/(eps*(1.0-x[0])+x[0]);
+        r_factor_sens = eps*d*d;
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor_sens = pow(x[0],p-1)*p;
+      }
+      // Extract the properties
+      TacsScalar nu = props->nu[0];
+      TacsScalar D = props->D[0];
+      TacsScalar G = props->G[0];
+      TacsScalar ys = props->ys[0];
+      TacsScalar aT = props->aT[0];
+  
+      TacsScalar s[3], eff_e[3];
+      eff_e[0] = e[0]-aT*T[0];
+      eff_e[1] = e[1]-aT*T[0];
+      eff_e[2] = e[2]*1.0;      
 
-  //   eff_e[0] = e[0]-aT*T[0];
-  //   eff_e[1] = e[1]-aT*T[0];
-  //   eff_e[2] = e[2]*1.0;
-  //   // Compute the resulting stress
-  //   s[0] = D*(eff_e[0]+nu*eff_e[1]);
-  //   s[1] = D*(nu*eff_e[0]+eff_e[1]);
-  //   s[2] = G*eff_e[2];
-  //   TacsScalar fail = VonMisesFailurePlaneStress(s,ys);
-  //   TacsScalar inner = alpha*r_factor_sens*fail;
-  //   for ( int i = 0; i < nweights; i++ ){
-  //     dvSens[weights[i].index] += weights[i].weight*inner;
-  //   }
-  // }
-  // else {
-  //   for ( int j = 1; j < nvars; j++ ){
-  //     TacsScalar r_factor_sens = 0.0;
-  //     if (eps > 0.0){
-  //       TacsScalar d = 1.0/(eps*(1.0-rho[j])+rho[j]);
-  //       r_factor_sens = eps*d*d;
-  //     }
-  //     else {
-  //       TacsScalar p = -1.0*eps;
-  //       r_factor_sens = pow(rho[j],p-1)*p;
-  //     }
-  //     // Extract the properties
-  //     TacsScalar nu = props->nu[j-1];
-  //     TacsScalar D = props->D[j-1];
-  //     TacsScalar G = props->G[j-1];
-  //     TacsScalar ys = props->ys[j-1];
-  //     TacsScalar aT = props->aT[j-1];
+      // Compute the resulting stress
+      s[0] = D*(eff_e[0]+nu*eff_e[1]);
+      s[1] = D*(nu*eff_e[0]+eff_e[1]);
+      s[2] = G*eff_e[2];
+
+      TacsScalar fail = VonMisesFailurePlaneStress(s,ys);
+      TacsScalar inner = alpha*r_factor_sens*fail;
+      for ( int i = 0; i < nweights; i++ ){
+        dvSens[index[i]] += N[i]*inner;
+      }
+    }
+    else {
+      for ( int j = 1; j < nvars; j++ ){
+        TacsScalar r_factor_sens = 0.0;
+        if (eps > 0.0){
+          TacsScalar d = 1.0/(eps*(1.0-x[j])+x[j]);
+          r_factor_sens = eps*d*d;
+        }
+        else {
+          TacsScalar p = -1.0*eps;
+          r_factor_sens = pow(x[j],p-1)*p;
+        }
+        // Extract the properties
+        TacsScalar nu = props->nu[j-1];
+        TacsScalar D = props->D[j-1];
+        TacsScalar G = props->G[j-1];
+        TacsScalar ys = props->ys[j-1];
+        TacsScalar aT = props->aT[j-1];
       
-  //     TacsScalar s[3], eff_e[3];
-  //     eff_e[0] = e[0]-aT*T[0];
-  //     eff_e[1] = e[1]-aT*T[0];
-  //     eff_e[2] = e[2]*1.0;
+        TacsScalar s[3], eff_e[3];
+        eff_e[0] = e[0]-aT*T[0];
+        eff_e[1] = e[1]-aT*T[0];
+        eff_e[2] = e[2]*1.0;
       
-  //     // Compute the contribution of failure from each material
-  //     s[0] = D*(eff_e[0]+nu*eff_e[1]);
-  //     s[1] = D*(nu*eff_e[0]+eff_e[1]);
-  //     s[2] = G*eff_e[2];
+        // Compute the contribution of failure from each material
+        s[0] = D*(eff_e[0]+nu*eff_e[1]);
+        s[1] = D*(nu*eff_e[0]+eff_e[1]);
+        s[2] = G*eff_e[2];
      
-  //     // For the derivative dr/dx*sigma_vm/ys
-  //     TacsScalar fail = VonMisesFailurePlaneStress(s,ys);
+        // For the derivative dr/dx*sigma_vm/ys
+        TacsScalar fail = VonMisesFailurePlaneStress(s,ys);
           
-  //     // Compute the inner product
-  //     TacsScalar inner = alpha*(r_factor_sens*fail);
+        // Compute the inner product
+        TacsScalar inner = alpha*(r_factor_sens*fail);
+        
+        for ( int i = 0; i < nweights; i++ ){
+          dvSens[nvars*index[i] + j] += N[i]*inner;
+        }
+      }
+    }
+    
+  }
+  else {
+    if (nvars == 1){
+      // Compute the relaxation factor
+      TacsScalar r_factor_sens = 0.0;
+      if (eps > 0.0){
+        TacsScalar d = 1.0/(eps*(1.0-x[0])+x[0]);
+        r_factor_sens = eps*d*d;
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor_sens = pow(rho[0],p-1)*p;
+      }
+      // Extract the properties
+      TacsScalar nu = props->nu[0];
+      TacsScalar D = props->D[0];
+      TacsScalar G = props->G[0];
+      TacsScalar ys = props->ys[0];
+      TacsScalar aT = props->aT[0];
+     
+      TacsScalar s[3], eff_e[3];
+
+      eff_e[0] = e[0]-aT*T[0];
+      eff_e[1] = e[1]-aT*T[0];
+      eff_e[2] = e[2]*1.0;
+      // Compute the resulting stress
+      s[0] = D*(eff_e[0]+nu*eff_e[1]);
+      s[1] = D*(nu*eff_e[0]+eff_e[1]);
+      s[2] = G*eff_e[2];
+
+      TacsScalar fail = VonMisesFailurePlaneStress(s,ys);
+      TacsScalar inner = alpha*r_factor_sens*fail;
+      for ( int i = 0; i < nweights; i++ ){
+        dvSens[weights[i].index] += weights[i].weight*inner;
+      }
+    }
+    else {
+      for ( int j = 1; j < nvars; j++ ){
+        TacsScalar r_factor_sens = 0.0;
+        if (eps > 0.0){
+          TacsScalar d = 1.0/(eps*(1.0-x[j])+x[j]);
+          r_factor_sens = eps*d*d;
+        }
+        else {
+          TacsScalar p = -1.0*eps;
+          r_factor_sens = pow(rho[j],p-1)*p;
+        }
+        // Extract the properties
+        TacsScalar nu = props->nu[j-1];
+        TacsScalar D = props->D[j-1];
+        TacsScalar G = props->G[j-1];
+        TacsScalar ys = props->ys[j-1];
+        TacsScalar aT = props->aT[j-1];
+     
+        TacsScalar s[3], eff_e[3];
+        eff_e[0] = e[0]-aT*T[0];
+        eff_e[1] = e[1]-aT*T[0];
+        eff_e[2] = e[2]*1.0;
       
-  //     for ( int i = 0; i < nweights; i++ ){
-  //       dvSens[nvars*weights[i].index + j] += weights[i].weight*inner;
-  //     }
-  //   }
-  // }
+        // Compute the contribution of failure from each material
+        s[0] = D*(eff_e[0]+nu*eff_e[1]);
+        s[1] = D*(nu*eff_e[0]+eff_e[1]);
+        s[2] = G*eff_e[2];
+     
+        // For the derivative dr/dx*sigma_vm/ys
+        TacsScalar fail = VonMisesFailurePlaneStress(s,ys);
+          
+        // Compute the inner product
+        TacsScalar inner = alpha*(r_factor_sens*fail);
+      
+        for ( int i = 0; i < nweights; i++ ){
+          dvSens[nvars*weights[i].index + j] += weights[i].weight*inner;
+        }
+      }
+    }
+  }
 }
 void TMRCoupledThermoQuadStiffness::failureStrainSens( const double pt[],
-                                                            const TacsScalar T[],
-                                                            const TacsScalar e[],
-                                                            TacsScalar sens[],
-                                                            int vars_j ){
-  // const double eps = props->eps;
-  // if (nvars == 1){
-  //   TacsScalar s[3], ps_sens[3], eff_e[3];
-  //   // Use the von Mises failure criterion
-  //   // Compute the relaxation factor
-  //   TacsScalar r_factor = 1.0;
-  //   if (eps > 0.0){
-  //     r_factor = rho[0]/(eps*(1.0-rho[0])+rho[0]);
-  //   }
-  //   else {
-  //     TacsScalar p = -1.0*eps;
-  //     r_factor = pow(rho[0],p);
-  //   }
-  //   // Extract the properties
-  //   TacsScalar nu = props->nu[0];
-  //   TacsScalar D = props->D[0];
-  //   TacsScalar G = props->G[0];
-  //   TacsScalar ys = props->ys[0];
-  //   TacsScalar aT = props->aT[0];
-  //   // Compute the effective strain
-  //   eff_e[0] = e[0]-aT*T[0];
-  //   eff_e[1] = e[1]-aT*T[0];
-  //   eff_e[2] = e[2]*1.0;
+                                                       const TacsScalar T[],
+                                                       const TacsScalar e[],
+                                                       TacsScalar sens[],
+                                                       int vars_j ){
+  const double eps = props->eps;
 
-  //   // Compute the resulting stress
-  //   s[0] = D*(eff_e[0]+nu*eff_e[1]);
-  //   s[1] = D*(nu*eff_e[0]+eff_e[1]);
-  //   s[2] = G*eff_e[2];
+  if (filter && dv){
+    double N[nweights];
+    filter->evalInterp(pt, N);
     
-  //   VonMisesFailurePlaneStressSens(ps_sens, s, ys);
-  //   sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
-  //   sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
-  //   sens[2] = r_factor*G*ps_sens[2];
-  // }
-  // else {
-  //   int j = vars_j*1;
-  //   TacsScalar r_factor = 1.0;
-  //   if (eps > 0.0){
-  //     r_factor = rho[j]/(eps*(1.0-rho[j])+rho[j]);
-  //   }
-  //   else {
-  //     TacsScalar p = -1.0*eps;
-  //     r_factor = pow(rho[j],p);
-  //   }
-
-  //   TacsScalar s[3], ps_sens[3], eff_e[3];
-  //   // Extract the properties
-  //   TacsScalar nu = props->nu[j-1];
-  //   TacsScalar D = props->D[j-1];
-  //   TacsScalar G = props->G[j-1];
-  //   TacsScalar ys = props->ys[j-1];
-  //   TacsScalar aT = props->aT[j-1];
-  //   // Compute the effective strain B*u-a*dT
-  //   eff_e[0] = e[0]-aT*T[0];
-  //   eff_e[1] = e[1]-aT*T[0];
-  //   eff_e[2] = e[2]*1.0;
-  //   // Compute the contribution of failure from each material
-  //   s[0] = D*(eff_e[0]+nu*eff_e[1]);
-  //   s[1] = D*(nu*eff_e[0]+eff_e[1]);
-  //   s[2] = G*eff_e[2];
+    for ( int j = 0; j < nvars; j++ ){
+      x[j] = 0.0;
+      for ( int i = 0; i < nweights; i++ ){
+        x[j] += N[i]*dv[nvars*i + j];        
+      }  
+    }
+    if (nvars == 1){
+      TacsScalar s[3], ps_sens[3], eff_e[3];
+      // Use the von Mises failure criterion
+      // Compute the relaxation factor
+      TacsScalar r_factor = 1.0;
+      if (eps > 0.0){
+        r_factor = rho[0]/(eps*(1.0-x[0])+x[0]);
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor = pow(x[0],p);
+      }
+      // Extract the properties
+      TacsScalar nu = props->nu[0];
+      TacsScalar D = props->D[0];
+      TacsScalar G = props->G[0];
+      TacsScalar ys = props->ys[0];
+      TacsScalar aT = props->aT[0];
       
-  //   VonMisesFailurePlaneStressSens(ps_sens, s, ys);
-  //   sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
-  //   sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
-  //   sens[2] = r_factor*G*ps_sens[2];
-  // }
+      // Compute the effective strain
+      eff_e[0] = e[0]-aT*T[0];
+      eff_e[1] = e[1]-aT*T[0];
+      eff_e[2] = e[2]*1.0;
+
+      // Compute the resulting stress
+      s[0] = D*(eff_e[0]+nu*eff_e[1]);
+      s[1] = D*(nu*eff_e[0]+eff_e[1]);
+      s[2] = G*eff_e[2];
+    
+      VonMisesFailurePlaneStressSens(ps_sens, s, ys);
+      sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
+      sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
+      sens[2] = r_factor*G*ps_sens[2];
+    }
+    else{
+      int j = vars_j*1;
+      TacsScalar r_factor = 1.0;
+      if (eps > 0.0){
+        r_factor = x[j]/(eps*(1.0-x[j])+x[j]);
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor = pow(x[j],p);
+      }
+
+      TacsScalar s[3], ps_sens[3], eff_e[3];
+      // Extract the properties
+      TacsScalar nu = props->nu[j-1];
+      TacsScalar D = props->D[j-1];
+      TacsScalar G = props->G[j-1];
+      TacsScalar ys = props->ys[j-1];
+      TacsScalar aT = props->aT[j-1];
+
+      // Compute the effective strain B*u-a*dT
+      eff_e[0] = e[0]-aT*T[0];
+      eff_e[1] = e[1]-aT*T[0];
+      eff_e[2] = e[2]*1.0;
+      // Compute the contribution of failure from each material
+      s[0] = D*(eff_e[0]+nu*eff_e[1]);
+      s[1] = D*(nu*eff_e[0]+eff_e[1]);
+      s[2] = G*eff_e[2];
+      
+      VonMisesFailurePlaneStressSens(ps_sens, s, ys);
+      sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
+      sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
+      sens[2] = r_factor*G*ps_sens[2];
+    }
+  }
+  else{
+    if (nvars == 1){
+      TacsScalar s[3], ps_sens[3], eff_e[3];
+      // Use the von Mises failure criterion
+      // Compute the relaxation factor
+      TacsScalar r_factor = 1.0;
+      if (eps > 0.0){
+        r_factor = x[0]/(eps*(1.0-x[0])+x[0]);
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor = pow(x[0],p);
+      }
+      // Extract the properties
+      TacsScalar nu = props->nu[0];
+      TacsScalar D = props->D[0];
+      TacsScalar G = props->G[0];
+      TacsScalar ys = props->ys[0];
+      TacsScalar aT = props->aT[0];
+
+      // Compute the effective strain
+      eff_e[0] = e[0]-aT*T[0];
+      eff_e[1] = e[1]-aT*T[0];
+      eff_e[2] = e[2]*1.0;
+
+      // Compute the resulting stress
+      s[0] = D*(eff_e[0]+nu*eff_e[1]);
+      s[1] = D*(nu*eff_e[0]+eff_e[1]);
+      s[2] = G*eff_e[2];
+    
+      VonMisesFailurePlaneStressSens(ps_sens, s, ys);
+      sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
+      sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
+      sens[2] = r_factor*G*ps_sens[2];
+    }
+    else {
+      int j = vars_j*1;
+      TacsScalar r_factor = 1.0;
+      if (eps > 0.0){
+        r_factor = x[j]/(eps*(1.0-x[j])+x[j]);
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor = pow(x[j],p);
+      }
+
+      TacsScalar s[3], ps_sens[3], eff_e[3];
+      // Extract the properties
+      TacsScalar nu = props->nu[j-1];
+      TacsScalar D = props->D[j-1];
+      TacsScalar G = props->G[j-1];
+      TacsScalar ys = props->ys[j-1];
+      TacsScalar aT = props->aT[j-1];
+
+      // Compute the effective strain B*u-a*dT
+      eff_e[0] = e[0]-aT*T[0];
+      eff_e[1] = e[1]-aT*T[0];
+      eff_e[2] = e[2]*1.0;
+      // Compute the contribution of failure from each material
+      s[0] = D*(eff_e[0]+nu*eff_e[1]);
+      s[1] = D*(nu*eff_e[0]+eff_e[1]);
+      s[2] = G*eff_e[2];
+      
+      VonMisesFailurePlaneStressSens(ps_sens, s, ys);
+      sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
+      sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
+      sens[2] = r_factor*G*ps_sens[2];
+    }
+  }  
 }
 TacsScalar TMRCoupledThermoQuadStiffness::getDVOutputValue( int dvIndex, 
                                                             const double pt[] ){

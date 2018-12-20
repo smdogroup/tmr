@@ -300,3 +300,130 @@ void TMRQuadStiffness::addPointwiseMassDVSens( const double pt[],
     }
   }
 }
+// Evaluate the failure criteria
+void TMRQuadStiffness::failure( const double pt[],
+                                const TacsScalar e[],
+                                TacsScalar *fail ){
+  const double eps = props->eps;
+
+  if (nvars == 1){
+    // Use the von Mises failure criterion
+    // Compute the relaxation factor
+    TacsScalar r_factor = 1.0;
+    TacsScalar xw = rho[0];
+
+    if (eps > 0.0){
+      r_factor = xw/(eps*(1.0 - xw) + xw);
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor = pow(xw, p);
+    }
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+    TacsScalar s[3];
+
+    // Compute the resulting stress
+    s[0] = D*e[0]+nu*D*e[1];
+    s[1] = nu*D*e[0]+D*e[1];
+    s[2] = G*e[2];
+
+    *fail = r_factor*VonMisesFailurePlaneStress(s, ys);
+  }
+}
+
+/*
+  Evaluate the derivative of the failure criteria w.r.t. design
+  variables
+*/
+void TMRQuadStiffness::addFailureDVSens( const double pt[],
+                                         const TacsScalar e[],
+                                         TacsScalar alpha,
+                                         TacsScalar dvSens[],
+                                         int dvLen ){
+  const double eps = props->eps;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
+  const int use_project = props->use_project;
+
+  if (nvars == 1){
+    // Compute the relaxation factor
+    TacsScalar r_factor_sens = 0.0;
+    TacsScalar xw = rho[0];
+
+    if (eps > 0.0){
+      TacsScalar d = 1.0/(eps*(1.0-xw) + xw);
+      r_factor_sens = eps*d*d;
+    }
+    else {
+      TacsScalar p = -eps;
+      r_factor_sens = pow(xw, p-1.0)*p;
+    }
+
+    // Add the contribution from the derivative of the projection
+    if (use_project){
+      r_factor_sens *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
+    }
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+    TacsScalar s[3];
+
+    // Compute the resulting stress
+    s[0] = D*e[0]+nu*D*e[1];
+    s[1] = nu*D*e[0]+D*e[1];
+    s[2] = G*e[2];
+
+    TacsScalar fail = VonMisesFailurePlaneStress(s, ys);
+    TacsScalar inner = alpha*r_factor_sens*fail;
+    for ( int i = 0; i < nweights; i++ ){
+      dvSens[weights[i].index] += weights[i].weight*inner;
+    }
+  }
+  else {
+    printf("Not implemented yet \n");
+  }
+}
+
+void TMRQuadStiffness::failureStrainSens( const double pt[],
+                                         const TacsScalar e[],
+                                         TacsScalar sens[]){
+  const double eps = props->eps;
+  if (nvars == 1){
+    TacsScalar s[3], ps_sens[3];
+    // Use the von Mises failure criterion
+    // Compute the relaxation factor
+    TacsScalar r_factor = 1.0;
+    TacsScalar xw = 1.0*rho[0];
+    if (eps > 0.0){
+      r_factor = xw/(eps*(1.0 - xw) + xw);
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor = pow(xw, p);
+    }
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+
+    // Compute the resulting stress
+    s[0] = D*e[0]+nu*D*e[1];
+    s[1] = nu*D*e[0]+D*e[1];
+    s[2] = G*e[2];
+    
+    VonMisesFailurePlaneStressSens(ps_sens, s, ys);
+    sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
+    sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
+    sens[2] = r_factor*G*ps_sens[2];
+  }
+}

@@ -325,7 +325,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
   ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  ksm->setTolerances(1e-10, 1e-30);
+  ksm->setTolerances(1e-9, 1e-30);
 
   // Set the iteration count
   iter_count = 0;
@@ -511,8 +511,9 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // Set up the solver
   int gmres_iters = 50;
-  int nrestart = 6;
+  int nrestart = 5;
   int is_flexible = 0;
+
   // int gmres_iters = 100;
   // int nrestart = 2;
   // int is_flexible = 1;
@@ -1501,8 +1502,8 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
       quad_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
     const int *node_numbers;
     int num_nodes = quad_filter[level]->getNodeNumbers(&node_numbers);
-    vec->beginDistributeValues();
-    vec->endDistributeValues();
+    // vec->beginDistributeValues();
+    // vec->endDistributeValues();
     vec->getValues(num_nodes, node_numbers, &xloc[0]);
     return num_nodes;
   }
@@ -1510,8 +1511,8 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
            oct_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
     const int *node_numbers;
     int num_nodes = oct_filter[level]->getNodeNumbers(&node_numbers);
-    vec->beginDistributeValues();
-    vec->endDistributeValues();
+    // vec->beginDistributeValues();
+    // vec->endDistributeValues();
     vec->getValues(num_nodes, node_numbers, &xloc[0]);
     return num_nodes;
   }
@@ -1581,11 +1582,9 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
     // Copy the values to the local array
     int size = getLocalValuesFromBVec(0, x[0], xlocal);
     tacs[0]->setDesignVars(xlocal, size);
-
     // Set the design variable values on all processors
     for ( int k = 0; k < nlevels-1; k++ ){
-      filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
-
+      filter_interp[k]->multWeightTranspose(x[k], x[k+1]);      
       // Distribute the design variable values
       x[k+1]->beginDistributeValues();
       x[k+1]->endDistributeValues();
@@ -1595,6 +1594,33 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
       tacs[k+1]->setDesignVars(xlocal, size);
     }
   }
+  // Create the visualization for the object 
+  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                             TACSElement::OUTPUT_EXTRAS);
+  char outfile[256];
+  if (quad_filter){
+    for ( int k = 0; k < nlevels; k++ ){
+      TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_PLANE_STRESS,
+                                    write_flag);
+      f5->incref();
+      sprintf(outfile, "%s/beam_output%d_%d.f5",
+              prefix, iter_count,k);
+      f5->writeToFile(outfile);
+      f5->decref();
+    }
+  }  
+  else {
+    for ( int k = 0; k < nlevels; k++ ){
+      TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_SOLID,
+                                    write_flag);
+      f5->incref();
+      sprintf(outfile, "%s/beam_output%d_%d.f5",
+              prefix, iter_count,k);
+      f5->writeToFile(outfile);
+      f5->decref();
+    }
+  }
+  iter_count++;
 }
 
 /*
@@ -1870,6 +1896,8 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         if (use_adjoint){
           dfdu->zeroEntries();
           double alpha = 1.0, beta = 0.0, gamma = 0.0;
+          mg->assembleJacobian(alpha, beta, gamma, NULL, TRANSPOSE);
+          mg->factor();
           tacs[0]->addSVSens(alpha, beta, gamma, &obj_funcs[i], 1, &dfdu);
           tacs[0]->applyBCs(dfdu);
 
