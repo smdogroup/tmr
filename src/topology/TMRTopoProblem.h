@@ -69,14 +69,14 @@ class TMRTopoProblem : public ParOptProblem {
                   TACSAssembler *_tacs[],
                   TMROctForest *_filter[], 
                   TACSVarMap *_filter_maps[],
-                  TACSBVecIndices *_filter_indices[],
+                  TACSBVecIndices *filter_indices[],
                   TACSMg *_mg,
                   int _vars_per_node=1 );
   TMRTopoProblem( int _nlevels, 
                   TACSAssembler *_tacs[],
                   TMRQuadForest *_filter[], 
                   TACSVarMap *_filter_maps[],
-                  TACSBVecIndices *_filter_indices[],
+                  TACSBVecIndices *filter_indices[],
                   TACSMg *_mg,
                   int _vars_per_node=1 );
   ~TMRTopoProblem();
@@ -120,6 +120,7 @@ class TMRTopoProblem : public ParOptProblem {
                               TacsScalar ks_weight,
                               TacsScalar offset, TacsScalar scale,
                               int max_lanczos, double eigtol );
+
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
   // ----------------------------------------------------------------
@@ -301,7 +302,6 @@ class TMRTopoProblem : public ParOptProblem {
   TMROctForest **oct_filter;
   TMRQuadForest **quad_filter;
   TACSVarMap **filter_maps;
-  TACSBVecIndices **filter_indices;
   TACSBVecDistribute **filter_dist;
   TACSBVecInterp **filter_interp;
   TACSBVecDepNodes **filter_dep_nodes;

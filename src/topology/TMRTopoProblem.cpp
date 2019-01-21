@@ -174,7 +174,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
                                 TACSAssembler *_tacs[],
                                 TMROctForest *_filter[],
                                 TACSVarMap *_filter_maps[],
-                                TACSBVecIndices *_filter_indices[],
+                                TACSBVecIndices *filter_indices[],
                                 TACSMg *_mg,
                                 int _vars_per_node ):
  ParOptProblem(_tacs[0]->getMPIComm()){
@@ -205,87 +205,147 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   oct_filter = new TMROctForest*[ nlevels ];
   quad_filter = NULL;
   filter_maps = new TACSVarMap*[ nlevels ];
-  filter_indices = new TACSBVecIndices*[ nlevels ];
   filter_dist = new TACSBVecDistribute*[ nlevels ];
   filter_interp = new TACSBVecInterp*[ nlevels-1 ];
   filter_dep_nodes = new TACSBVecDepNodes*[ nlevels ];
 
   // The design variable vector for each level
   x = new TACSBVec*[ nlevels ];
+  
+  if (use_helmholtz_filter){
+    helmholtz_tacs = new TACSAssembler*[ nlevels ];
 
-  // Copy over the assembler objects and filters
-  for ( int k = 0; k < nlevels; k++ ){
-    // Set the TACSAssembler objects for each level
-    tacs[k] = _tacs[k];
-    tacs[k]->incref();
+    // Create the assembler objects on each multigrid level
+    helmholtz_element3d = new TMRHelmholtz3D<order>(r);
 
-    // Set the filter object
-    oct_filter[k] = _filter[k];
-    oct_filter[k]->incref();
+    helmholtz_creator = new TMROctTACSHelmholtzCreator(NULL);
+    helmholtz_creator->incref();
 
-    // Copy over the filter information
-    filter_maps[k] = _filter_maps[k];
-    filter_maps[k]->incref();
+    for ( int k = 0; k < nlevels; k++ ){
+      // Set the TACSAssembler objects for each level
+      tacs[k] = _tacs[k];
+      tacs[k]->incref();
 
-    filter_indices[k] = _filter_indices[k];
-    filter_indices[k]->incref();
+      // Set the filter object
+      oct_filter[k] = _filter[k];
+      oct_filter[k]->incref();
 
-    // Set the maximum local size
-    const int *range;
-    filter_maps[k]->getOwnerRange(&range);
-    int size = vars_per_node*((range[mpi_rank+1] - range[mpi_rank]) +
-                              filter_indices[k]->getNumIndices());
-    int size2 = vars_per_node*oct_filter[k]->getNodeNumbers(NULL);
-
-    // Update the maximum local size
-    if (size > max_local_size){
-      max_local_size = size;
-    }
-    if (size2 > max_local_size){
-      max_local_size = size2;
-    }
-
-    // Create the distribution object for the design variables
-    filter_dist[k] = new TACSBVecDistribute(filter_maps[k],
-                                            filter_indices[k]);
-    filter_dist[k]->incref();
-
-    // By default the dependent nodes are not created unless needed
-    filter_dep_nodes[k] = NULL;
-
-    // Create the design variable vector for this level
-    if (oct_filter[k]->getInterpType() == TMR_BERNSTEIN_POINTS){
-      // Extract the dependent node info from the oct filter
-      int *dep_ptr, *dep_conn;
-      const int *_dep_ptr, *_dep_conn;
-      double *dep_weights;
-      const double *_dep_weights;
-      int num_dep_nodes = oct_filter[k]->getDepNodeConn(&_dep_ptr, &_dep_conn,
-                                                        &_dep_weights);
-      // Copy over the dependent node data
-      dep_ptr = new int[ num_dep_nodes+1 ];
-      memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
-      int dep_size = dep_ptr[num_dep_nodes];
-      dep_conn = new int[ dep_size ];
-      memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
-
-      dep_weights = new double[ dep_size ];
-      memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
-
-      // Create the dependent node object
-      filter_dep_nodes[k] = new TACSBVecDepNodes(num_dep_nodes,
-                                                 &dep_ptr, &dep_conn,
-                                                 &dep_weights);
+      // Create the assembler object
+      helmholtz_tacs[k] = 
+        helmholtz_creator->createTACS(oct_filter[k],
+                                      TACSAssembler::MULTICOLOR_ORDER);
+      helmholtz_tacs[k]->incref();
+      
+      // Extract the information that we need from the helmholtz assembler object
+      filter_maps[k] = helmholtz_tacs[k]->getVarMap();
+      filter_maps[k]->incref();
+      
+      filter_dist[k] = helmholtz_tacs[k]->getBVecDistribute();
+      filter_dist[k]->incref();
+      
+      filter_dep_nodes[k] = helmholtz_tacs[k]->getBVecDepNodes();
       filter_dep_nodes[k]->incref();
 
-      x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k],
-                          filter_dep_nodes[k]);
-    }
-    else {
       // Create the design variable vector for this level
-      x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k]);
+      x[k] = helmholtz_tacs[k]->createVec();
+      x[k]->incref();
     }
-    x[k]->incref();
+    
+    // Destroy the helmholtz creator object
+    helmholtz_creator->decref();
+
+    double helmholtz_omega = 0.5;
+    TMR_CreateTACSMg(nlevels, helmholtz_tacs, oct_filter,
+                     &helmholtz_mg, helmholtz_omega);
+    helmholtz_mg->incref();
+    
+    // Set up the solver
+    int gmres_iters = 50;
+    int nrestart = 5;
+    int is_flexible = 0;
+
+    helmholtz_ksm = new GMRES(helmholtz_mg->getMat(0), helmholtz_mg,
+                              gmres_iters, nrestart, is_flexible);
+    helmholtz_ksm->incref();
+    helmholtz_ksm->setMonitor(new KSMPrintStdout("Filter GMRES", mpi_rank, 10));
+    helmholtz_ksm->setTolerances(1e-12, 1e-30);
+
+    double alpha = 1.0, beta = 0.0, gamma = 0.0;
+    helmholtz_mg->assembleJacobian(alpha, beta, gamma, NULL);
+    helmholtz_mg->factor();
+  }
+  else {
+    // Copy over the assembler objects and filters
+    for ( int k = 0; k < nlevels; k++ ){
+      // Set the TACSAssembler objects for each level
+      tacs[k] = _tacs[k];
+      tacs[k]->incref();
+
+      // Set the filter object
+      oct_filter[k] = _filter[k];
+      oct_filter[k]->incref();
+
+      // Copy over the filter information
+      filter_maps[k] = _filter_maps[k];
+      filter_maps[k]->incref();
+
+      // Set the maximum local size
+      const int *range;
+      filter_maps[k]->getOwnerRange(&range);
+      int size = vars_per_node*((range[mpi_rank+1] - range[mpi_rank]) +
+                                filter_indices[k]->getNumIndices());
+      int size2 = vars_per_node*oct_filter[k]->getNodeNumbers(NULL);
+
+      // Update the maximum local size
+      if (size > max_local_size){
+        max_local_size = size;
+      }
+      if (size2 > max_local_size){
+        max_local_size = size2;
+      }
+
+      // Create the distribution object for the design variables
+      filter_dist[k] = new TACSBVecDistribute(filter_maps[k],
+                                              filter_indices[k]);
+      filter_dist[k]->incref();
+
+      // By default the dependent nodes are not created unless needed
+      filter_dep_nodes[k] = NULL;
+
+      // Create the design variable vector for this level
+      if (oct_filter[k]->getInterpType() == TMR_BERNSTEIN_POINTS){
+        // Extract the dependent node info from the oct filter
+        int *dep_ptr, *dep_conn;
+        const int *_dep_ptr, *_dep_conn;
+        double *dep_weights;
+        const double *_dep_weights;
+        int num_dep_nodes = oct_filter[k]->getDepNodeConn(&_dep_ptr, &_dep_conn,
+                                                          &_dep_weights);
+        // Copy over the dependent node data
+        dep_ptr = new int[ num_dep_nodes+1 ];
+        memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
+        int dep_size = dep_ptr[num_dep_nodes];
+        dep_conn = new int[ dep_size ];
+        memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
+
+        dep_weights = new double[ dep_size ];
+        memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
+
+        // Create the dependent node object
+        filter_dep_nodes[k] = new TACSBVecDepNodes(num_dep_nodes,
+                                                   &dep_ptr, &dep_conn,
+                                                   &dep_weights);
+        filter_dep_nodes[k]->incref();
+
+        x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k],
+                            filter_dep_nodes[k]);
+      }
+      else {
+        // Create the design variable vector for this level
+        x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k]);
+      }
+      x[k]->incref();
+    }
   }
 
   // Now create the interpolation between filter levels
@@ -375,7 +435,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
                                 TACSAssembler *_tacs[],
                                 TMRQuadForest *_filter[],
                                 TACSVarMap *_filter_maps[],
-                                TACSBVecIndices *_filter_indices[],
+                                TACSBVecIndices *filter_indices[],
                                 TACSMg *_mg,
                                 int _vars_per_node ):
  ParOptProblem(_tacs[0]->getMPIComm()){
@@ -405,7 +465,6 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   quad_filter = new TMRQuadForest*[ nlevels ];
   oct_filter = NULL;
   filter_maps = new TACSVarMap*[ nlevels ];
-  filter_indices = new TACSBVecIndices*[ nlevels ];
   filter_dist = new TACSBVecDistribute*[ nlevels ];
   filter_interp = new TACSBVecInterp*[ nlevels-1 ];
   filter_dep_nodes = new TACSBVecDepNodes*[ nlevels ];
@@ -426,9 +485,6 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     // Copy over the filter information
     filter_maps[k] = _filter_maps[k];
     filter_maps[k]->incref();
-
-    filter_indices[k] = _filter_indices[k];
-    filter_indices[k]->incref();
 
     // Set the maximum local size
     const int *range;
@@ -499,6 +555,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // Set the maximum local size
   xlocal = new TacsScalar[ max_local_size ];
+
   // The multigrid object
   mg = _mg;
   mg->incref();
@@ -553,6 +610,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   freq_scale = 1.0;
   track_eigen_iters = 0;
   ksm_file = NULL;
+
   // Set up the buckling constraint data
   buck = NULL;
   buck_eig_tol = 1e-8;
@@ -581,7 +639,6 @@ TMRTopoProblem::~TMRTopoProblem(){
       oct_filter[k]->decref();
     }
     filter_maps[k]->decref();
-    filter_indices[k]->decref();
     filter_dist[k]->decref();
     if (filter_dep_nodes[k]){
       filter_dep_nodes[k]->decref();
@@ -596,7 +653,6 @@ TMRTopoProblem::~TMRTopoProblem(){
     delete [] oct_filter;
   }
   delete [] filter_maps;
-  delete [] filter_indices;
   delete [] filter_dist;
   delete [] filter_dep_nodes;
   delete [] x;
@@ -1458,8 +1514,6 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
           setBVecFromLocalValues(0, xlocal, lbwrap->vec, TACS_ADD_VALUES);
           lbwrap->vec->beginSetValues(TACS_ADD_VALUES);
           lbwrap->vec->endSetValues(TACS_ADD_VALUES);
-          //lbwrap->vec->beginDistributeValues();
-          //lbwrap->vec->endDistributeValues();
         }
       }
       if (!has_upper){
@@ -1469,8 +1523,6 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
           setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
           ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
           ubwrap->vec->endSetValues(TACS_ADD_VALUES);
-          ///ubwrap->vec->beginDistributeValues();
-          //ubwrap->vec->endDistributeValues();
         }
       }
       delete [] upper;
@@ -1502,8 +1554,6 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
       quad_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
     const int *node_numbers;
     int num_nodes = quad_filter[level]->getNodeNumbers(&node_numbers);
-    // vec->beginDistributeValues();
-    // vec->endDistributeValues();
     vec->getValues(num_nodes, node_numbers, &xloc[0]);
     return num_nodes;
   }
@@ -1511,8 +1561,6 @@ int TMRTopoProblem::getLocalValuesFromBVec( int level,
            oct_filter[level]->getInterpType() == TMR_BERNSTEIN_POINTS){
     const int *node_numbers;
     int num_nodes = oct_filter[level]->getNodeNumbers(&node_numbers);
-    // vec->beginDistributeValues();
-    // vec->endDistributeValues();
     vec->getValues(num_nodes, node_numbers, &xloc[0]);
     return num_nodes;
   }
@@ -1582,6 +1630,7 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
     // Copy the values to the local array
     int size = getLocalValuesFromBVec(0, x[0], xlocal);
     tacs[0]->setDesignVars(xlocal, size);
+
     // Set the design variable values on all processors
     for ( int k = 0; k < nlevels-1; k++ ){
       filter_interp[k]->multWeightTranspose(x[k], x[k+1]);      
@@ -1594,6 +1643,7 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
       tacs[k+1]->setDesignVars(xlocal, size);
     }
   }
+
   // Create the visualization for the object 
   unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                              TACSElement::OUTPUT_EXTRAS);
