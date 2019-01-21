@@ -42,7 +42,9 @@ class TMRStiffnessProperties : public TMREntity {
                           double _q, double _eps, double _k0,
                           double _beta, double _xoffset,
                           TacsScalar *rho, TacsScalar *_E, TacsScalar *_nu,
-                          TacsScalar *_ys=NULL, int _use_project=0 ){
+                          TacsScalar *_ys=NULL, TacsScalar *_aT=NULL,
+                          TacsScalar *_kcond=NULL, double _qtemp=0.0,
+                          double _qcond=0.0, int _use_project=0 ){
     if (_nmats > MAX_NUM_MATERIALS){
       _nmats = MAX_NUM_MATERIALS;
     }
@@ -53,6 +55,9 @@ class TMRStiffnessProperties : public TMREntity {
     beta = _beta;
     xoffset = _xoffset;
     use_project = _use_project;
+    // Penalization for thermoelastic problem
+    qtemp = _qtemp;
+    qcond = _qcond;
     for ( int i = 0; i < nmats; i++ ){
       density[i] = rho[i];
       E[i] = _E[i];
@@ -60,8 +65,16 @@ class TMRStiffnessProperties : public TMREntity {
       ys[i] = 1.0e8;
       G[i] = 0.5*E[i]/(1.0 + nu[i]);
       D[i] = E[i]/((1.0 + nu[i])*(1.0 - 2.0*nu[i]));
+      aT[i] = 0.0;
+      kcond[i] = 0.0;
       if (_ys){
         ys[i] = _ys[i];
+      }
+      if (_aT){
+        aT[i] = _aT[i];
+      }
+      if (_kcond){
+        kcond[i] = _kcond[i];
       }
     }
   }
@@ -79,6 +92,10 @@ class TMRStiffnessProperties : public TMREntity {
   TacsScalar nu[MAX_NUM_MATERIALS]; // Poisson's ratio
   TacsScalar G[MAX_NUM_MATERIALS]; // Shear stiffness
   TacsScalar ys[MAX_NUM_MATERIALS]; // Yield stress
+  TacsScalar aT[MAX_NUM_MATERIALS]; // Heat coefficient of expansion
+  TacsScalar kcond[MAX_NUM_MATERIALS]; // Heat conductivity
+  TacsScalar qtemp; // RAMP penalty parameter for temperature
+  TacsScalar qcond; // RAMP penalty parameter for conduction
 };
 
 /*

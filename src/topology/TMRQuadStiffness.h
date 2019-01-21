@@ -28,6 +28,75 @@
 
 #include "TMRBase.h"
 #include "PlaneStressStiffness.h"
+#include "YSlibrary.h"
+/*
+  The TMRStiffnessProperties class
+*/
+class TMRQuadStiffnessProperties : public TMREntity {
+ public:
+  static const int MAX_NUM_MATERIALS = 5;
+
+  // Set the stiffness properties
+  TMRQuadStiffnessProperties( int _nmats,
+                              double _q, double _eps, double _k0,
+                              double _beta, double _xoffset,
+                              TacsScalar *rho, TacsScalar *_E, TacsScalar *_nu,
+                              TacsScalar *_ys=NULL, TacsScalar *_aT=NULL,
+                              TacsScalar *_kcond=NULL, double _qtemp=0.0,
+                              double _qcond=0.0, int _use_project=0 ){
+    if (_nmats > MAX_NUM_MATERIALS){
+      _nmats = MAX_NUM_MATERIALS;
+    }
+    nmats = _nmats;
+    q = _q;
+    k0 = _k0;
+    eps = _eps;
+    beta = _beta;
+    xoffset = _xoffset;
+    use_project = _use_project;
+    // Penalization for thermoelastic problem
+    qtemp = _qtemp;
+    qcond = _qcond;
+
+    for ( int i = 0; i < nmats; i++ ){
+      density[i] = rho[i];
+      E[i] = _E[i];
+      nu[i] = _nu[i];
+      ys[i] = 1.0e8;
+      G[i] = 0.5*E[i]/(1.0 + nu[i]);
+      D[i] = E[i]/(1.0 - nu[i]*nu[i]);
+      aT[i] = 0.0;
+      kcond[i] = 0.0;
+      if (_ys){
+        ys[i] = _ys[i];
+      }
+      if (_aT){
+        aT[i] = _aT[i];
+      }
+      if (_kcond){
+        kcond[i] = _kcond[i];
+      }
+    }
+  }
+
+  int nmats;   // Number of materials to use
+  double q;    // RAMP penalization factor
+  double eps;  // Stress relaxation parameter
+  double k0;   // Small stiffness factor >= 0 ~ 1e-6
+  double beta; // Parameter for the logistics function
+  double xoffset;  // Offset parameter in the logistics function
+  int use_project; // Flag to indicate if projection should be used (0, 1)
+  TacsScalar density[MAX_NUM_MATERIALS]; // Material density
+  TacsScalar E[MAX_NUM_MATERIALS]; // Young's modulus
+  TacsScalar D[MAX_NUM_MATERIALS]; // Stiffness
+  TacsScalar nu[MAX_NUM_MATERIALS]; // Poisson's ratio
+  TacsScalar G[MAX_NUM_MATERIALS]; // Shear stiffness
+  TacsScalar ys[MAX_NUM_MATERIALS]; // Yield stress
+  TacsScalar aT[MAX_NUM_MATERIALS]; // Heat coefficient of expansion
+  TacsScalar kcond[MAX_NUM_MATERIALS]; // Heat conductivity
+  TacsScalar qtemp; // RAMP penalty parameter for temperature
+  TacsScalar qcond; // RAMP penalty parameter for conduction
+};
 
 /*
   The TMRQuadStiffness class
@@ -38,11 +107,10 @@
 */
 class TMRQuadStiffness : public PlaneStressStiffness {
  public: 
-  static const int MAX_NUM_WEIGHTS = 4;
-
+  static const int MAX_NUM_MATERIALS = 5;
   TMRQuadStiffness( TMRIndexWeight *_weights, int _nweights,
-                    TacsScalar _density, TacsScalar E, 
-                    TacsScalar _nu, double _q, double _eps=1e-3 );
+                    TMRQuadStiffnessProperties *_props );
+  ~TMRQuadStiffness();
 
   // Set the design variable values in the object
   // --------------------------------------------
@@ -69,24 +137,36 @@ class TMRQuadStiffness : public PlaneStressStiffness {
   // Return the density as the design variable
   // -----------------------------------------
   TacsScalar getDVOutputValue( int dvIndex, const double pt[] ){ 
-    return rho; 
+    return rho[0]; 
   }
+  // Return the failure
+  // -------------------
+  void failure( const double pt[],
+                const TacsScalar strain[],
+                TacsScalar * fail );
+
+  void addFailureDVSens( const double pt[],
+                         const TacsScalar strain[],
+                         TacsScalar alpha,
+                         TacsScalar dvSens[], int dvLen );
+
+  void failureStrainSens(const double pt[],
+                         const TacsScalar strain[],
+                         TacsScalar sens[] );
 
  private:
-  // The density and stiffness properties
-  TacsScalar density;
-  TacsScalar E, nu;
-
-  // The RAMP penalization factor
-  TacsScalar q;
-  double eps;
+  // The stiffness properties
+  TMRQuadStiffnessProperties *props;
 
   // The value of the design-dependent density
-  TacsScalar rho;
+  int nvars;
+  TacsScalar x[MAX_NUM_MATERIALS+1];
+  TacsScalar rho[MAX_NUM_MATERIALS+1];
+
 
   // The local density of the
   int nweights;
-  TMRIndexWeight weights[MAX_NUM_WEIGHTS];
+  TMRIndexWeight *weights;
 };
 
 #endif // TMR_QUADRANT_STIFFNESS

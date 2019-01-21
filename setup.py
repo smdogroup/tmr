@@ -1,5 +1,6 @@
 import os
 from subprocess import check_output
+import sys
 
 # Numpy/mpi4py must be installed prior to installing TACS
 import numpy
@@ -9,6 +10,7 @@ import mpi4py
 from setuptools import setup
 from distutils.core import Extension as Ext
 from Cython.Build import cythonize
+from Cython.Compiler import Options
 
 # Convert from local to absolute directories
 def get_global_dir(files):
@@ -65,21 +67,23 @@ runtime_lib_dirs = get_global_dir(['lib'])
 
 # Add the TACS libraries
 import tacs
-inc_dirs.extend(tacs.get_include())
-inc_dirs.extend(tacs.get_cython_include())
-tacs_lib_dirs, tacs_libs = tacs.get_libraries()
-lib_dirs.extend(tacs_lib_dirs)
-libs.extend(tacs_libs)
-runtime_lib_dirs.extend(tacs_lib_dirs)
+if 'tacs' in sys.modules:
+    inc_dirs.extend(tacs.get_include())
+    inc_dirs.extend(tacs.get_cython_include())
+    tacs_lib_dirs, tacs_libs = tacs.get_libraries()
+    lib_dirs.extend(tacs_lib_dirs)
+    libs.extend(tacs_libs)
+    runtime_lib_dirs.extend(tacs_lib_dirs)
 
 # Add the ParOpt libraries
 import paropt
-inc_dirs.extend(paropt.get_include())
-inc_dirs.extend(paropt.get_cython_include())
-paropt_lib_dirs, paropt_libs = paropt.get_libraries()
-lib_dirs.extend(paropt_lib_dirs)
-libs.extend(paropt_libs)
-runtime_lib_dirs.extend(paropt_lib_dirs)
+if 'paropt' in sys.modules:
+    inc_dirs.extend(paropt.get_include())
+    inc_dirs.extend(paropt.get_cython_include())
+    paropt_lib_dirs, paropt_libs = paropt.get_libraries()
+    lib_dirs.extend(paropt_lib_dirs)
+    libs.extend(paropt_libs)
+    runtime_lib_dirs.extend(paropt_lib_dirs)
 
 exts = []
 mod = 'TMR'
@@ -88,8 +92,9 @@ exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],
                 include_dirs=inc_dirs, libraries=libs, 
                 library_dirs=lib_dirs, runtime_library_dirs=runtime_lib_dirs))
 for e in exts:
-    e.cython_directives = {"embedsignature": True,
-                           "binding":True}
+    e.cython_directives = {'embedsignature': True,
+                           'binding': True}
+
 setup(name='tmr',
       version=0.1,
       description='Parallel mesh generation utilities',
