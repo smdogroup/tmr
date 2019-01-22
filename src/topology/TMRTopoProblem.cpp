@@ -24,6 +24,81 @@
 #include "Solid.h"
 #include "TMR_STLTools.h"
 #include "TACSToFH5.h"
+#include "TMRHelmholtz.h"
+#include "TMR_TACSCreator.h"
+
+/*
+  Helmholtz filter creator classes
+*/
+class TMRQuadTACSHelmholtzCreator : public TMRQuadTACSCreator {
+public:
+  TMRQuadTACSHelmholtzCreator( double r ):
+    TMRQuadTACSCreator(NULL){
+    radius = r;
+  }
+  void createElements( int order,
+                       TMRQuadForest *forest,
+                       int num_elements,
+                       TACSElement **elements ){
+    TACSElement *elem = NULL;
+    if (order == 2){
+      elem = new TMRQuadHelmholtz<2>(radius);
+    }
+    else if (order == 3){
+      elem = new TMRQuadHelmholtz<3>(radius);
+    }
+    else if (order == 4){
+      elem = new TMRQuadHelmholtz<4>(radius);
+    }
+    else if (order == 5){
+      elem = new TMRQuadHelmholtz<5>(radius);
+    }
+    else if (order == 6){
+      elem = new TMRQuadHelmholtz<6>(radius);
+    }
+
+    for ( int i = 0; i < num_elements; i++ ){
+      elements[i] = elem;
+    }
+  }
+
+  double radius;
+};
+
+class TMROctTACSHelmholtzCreator : public TMROctTACSCreator {
+public:
+  TMROctTACSHelmholtzCreator( double r ):
+    TMROctTACSCreator(NULL){
+    radius = r;
+  }
+  void createElements( int order,
+                       TMROctForest *forest,
+                       int num_elements,
+                       TACSElement **elements ){
+    TACSElement *elem = NULL;
+    if (order == 2){
+      elem = new TMROctHelmholtz<2>(radius);
+    }
+    else if (order == 3){
+      elem = new TMROctHelmholtz<3>(radius);
+    }
+    else if (order == 4){
+      elem = new TMROctHelmholtz<4>(radius);
+    }
+    else if (order == 5){
+      elem = new TMROctHelmholtz<5>(radius);
+    }
+    else if (order == 6){
+      elem = new TMROctHelmholtz<6>(radius);
+    }
+
+    for ( int i = 0; i < num_elements; i++ ){
+      elements[i] = elem;
+    }
+  }
+
+  double radius;
+};
 
 /*
   Wrap a TACSBVec object with the ParOpt vector interface
@@ -176,8 +251,42 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
                                 TACSVarMap *_filter_maps[],
                                 TACSBVecIndices *filter_indices[],
                                 TACSMg *_mg,
+                                double helmholtz_radius,
                                 int _vars_per_node ):
  ParOptProblem(_tacs[0]->getMPIComm()){
+  initialize(_nlevels, _tacs, _filter, NULL,
+             _filter_maps, filter_indices, _mg,
+             helmholtz_radius, _vars_per_node);
+}
+
+TMRTopoProblem::TMRTopoProblem( int _nlevels,
+                                TACSAssembler *_tacs[],
+                                TMRQuadForest *_filter[],
+                                TACSVarMap *_filter_maps[],
+                                TACSBVecIndices *filter_indices[],
+                                TACSMg *_mg,
+                                double helmholtz_radius,
+                                int _vars_per_node ):
+ ParOptProblem(_tacs[0]->getMPIComm()){
+  initialize(_nlevels, _tacs, NULL, _filter,
+             _filter_maps, filter_indices, _mg,
+             helmholtz_radius, _vars_per_node);
+}
+
+void TMRTopoProblem::initialize( int _nlevels,
+                                 TACSAssembler *_tacs[],
+                                 TMROctForest *_oct_filter[],
+                                 TMRQuadForest *_quad_filter[],
+                                 TACSVarMap *_filter_maps[],
+                                 TACSBVecIndices *filter_indices[],
+                                 TACSMg *_mg,
+                                 double helmholtz_radius,
+                                 int _vars_per_node ){
+  if (!_oct_filter && !_quad_filter){
+    fprintf(stderr,
+            "TMRTopoProblem: Quadtree and octree objects not provided.\n");
+  }
+
   // Set the prefix to NULL
   prefix = NULL;
 
@@ -200,10 +309,34 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   // Set the number of levels
   nlevels = _nlevels;
 
-  // Allocate the arrays
+  // Allocate arrays to store the assembler objects/forests
   tacs = new TACSAssembler*[ nlevels ];
-  oct_filter = new TMROctForest*[ nlevels ];
+  oct_filter = NULL;
   quad_filter = NULL;
+  if (_oct_filter){
+    oct_filter = new TMROctForest*[ nlevels ];
+  }
+  else {
+    quad_filter = new TMRQuadForest*[ nlevels ];
+  }
+
+  for ( int k = 0; k < nlevels; k++ ){
+    // Set the TACSAssembler objects for each level
+    tacs[k] = _tacs[k];
+    tacs[k]->incref();
+
+    // Set the filter object
+    if (_oct_filter){
+      oct_filter[k] = _oct_filter[k];
+      oct_filter[k]->incref();
+    }
+    else {
+      quad_filter[k] = _quad_filter[k];
+      quad_filter[k]->incref();
+    }
+  }
+
+  // Allocate arrays to store the filter data
   filter_maps = new TACSVarMap*[ nlevels ];
   filter_dist = new TACSBVecDistribute*[ nlevels ];
   filter_interp = new TACSBVecInterp*[ nlevels-1 ];
@@ -211,57 +344,95 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
 
   // The design variable vector for each level
   x = new TACSBVec*[ nlevels ];
-  
+
+  // Set the helmholtz data to NULL
+  helmholtz_tacs = NULL;
+  helmholtz_ksm = NULL;
+  helmholtz_mg = NULL;
+  helmholtz_rhs = NULL;
+  helmholtz_psi = NULL;
+  helmholtz_vec = NULL;
+
+  int use_helmholtz_filter = 0;
+  if (helmholtz_radius > 0.0){
+    use_helmholtz_filter = 1;
+  }
+
   if (use_helmholtz_filter){
     // Allocate space for the assembler objects
     helmholtz_tacs = new TACSAssembler*[ nlevels ];
 
-    // Create the assembler objects on each multigrid level
-    helmholtz_element3d = new TMRHelmholtz3D<order>(r);
+    // Create the Helmholtz creator objects
+    TMROctTACSHelmholtzCreator *helmholtz_creator3d = NULL;
+    TMRQuadTACSHelmholtzCreator *helmholtz_creator2d = NULL;
 
-    helmholtz_creator = new TMROctTACSHelmholtzCreator(NULL);
-    helmholtz_creator->incref();
+    if (oct_filter){
+      helmholtz_creator3d = new TMROctTACSHelmholtzCreator(helmholtz_radius);
+      helmholtz_creator3d->incref();
+    }
+    else {
+      helmholtz_creator2d = new TMRQuadTACSHelmholtzCreator(helmholtz_radius);
+      helmholtz_creator2d->incref();
+    }
 
     for ( int k = 0; k < nlevels; k++ ){
-      // Set the TACSAssembler objects for each level
-      tacs[k] = _tacs[k];
-      tacs[k]->incref();
-
-      // Set the filter object
-      oct_filter[k] = _filter[k];
-      oct_filter[k]->incref();
-
       // Create the assembler object
-      helmholtz_tacs[k] = 
-        helmholtz_creator->createTACS(oct_filter[k],
-                                      TACSAssembler::MULTICOLOR_ORDER);
+      if (helmholtz_creator3d){
+        helmholtz_tacs[k] =
+          helmholtz_creator3d->createTACS(oct_filter[k],
+                                          TACSAssembler::MULTICOLOR_ORDER);
+      }
+      else {
+        helmholtz_tacs[k] =
+          helmholtz_creator2d->createTACS(quad_filter[k],
+                                          TACSAssembler::MULTICOLOR_ORDER);
+      }
       helmholtz_tacs[k]->incref();
-      
-      // Extract the information that we need from the helmholtz assembler object
+
+      // Extract the information that we need from the helmholtz
+      // assembler object
       filter_maps[k] = helmholtz_tacs[k]->getVarMap();
       filter_maps[k]->incref();
-      
+
       filter_dist[k] = helmholtz_tacs[k]->getBVecDistribute();
       filter_dist[k]->incref();
-      
+
       filter_dep_nodes[k] = helmholtz_tacs[k]->getBVecDepNodes();
       filter_dep_nodes[k]->incref();
 
-      // Create the design vector
+      // Create the design vector (can't use the helmholtz tacs
+      // vectors because they have only one design variable per node)
       x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k],
                           filter_dep_nodes[k]);
       x[k]->incref();
     }
-    
+
+    // Create a temporary vector to store the design variables
+    helmholtz_vec =
+      new TACSBVec(filter_maps[0], vars_per_node, filter_dist[0],
+                   filter_dep_nodes[0]);
+    helmholtz_vec->incref();
+
     // Destroy the helmholtz creator object
-    helmholtz_creator->decref();
+    if (helmholtz_creator3d){
+      helmholtz_creator3d->decref();
+    }
+    else {
+      helmholtz_creator2d->decref();
+    }
 
     // Create the multigrid object
     double helmholtz_omega = 0.5;
-    TMR_CreateTACSMg(nlevels, helmholtz_tacs, oct_filter,
-                     &helmholtz_mg, helmholtz_omega);
+    if (oct_filter){
+      TMR_CreateTACSMg(nlevels, helmholtz_tacs, oct_filter,
+                       &helmholtz_mg, helmholtz_omega);
+    }
+    else {
+      TMR_CreateTACSMg(nlevels, helmholtz_tacs, quad_filter,
+                       &helmholtz_mg, helmholtz_omega);
+    }
     helmholtz_mg->incref();
-    
+
     // Set up the solver
     int gmres_iters = 50;
     int nrestart = 5;
@@ -282,15 +453,6 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   else {
     // Copy over the assembler objects and filters
     for ( int k = 0; k < nlevels; k++ ){
-      // Set the TACSAssembler objects for each level
-      tacs[k] = _tacs[k];
-      tacs[k]->incref();
-
-      // Set the filter object
-      oct_filter[k] = _filter[k];
-      oct_filter[k]->incref();
-
-      // Copy over the filter information
       filter_maps[k] = _filter_maps[k];
       filter_maps[k]->incref();
 
@@ -318,14 +480,27 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
       filter_dep_nodes[k] = NULL;
 
       // Create the design variable vector for this level
-      if (oct_filter[k]->getInterpType() == TMR_BERNSTEIN_POINTS){
+      if ((oct_filter && oct_filter[k] &&
+           oct_filter[k]->getInterpType() == TMR_BERNSTEIN_POINTS) ||
+          (quad_filter && quad_filter[k] &&
+           quad_filter[k]->getInterpType() == TMR_BERNSTEIN_POINTS)){
         // Extract the dependent node info from the oct filter
         int *dep_ptr, *dep_conn;
         const int *_dep_ptr, *_dep_conn;
         double *dep_weights;
         const double *_dep_weights;
-        int num_dep_nodes = oct_filter[k]->getDepNodeConn(&_dep_ptr, &_dep_conn,
-                                                          &_dep_weights);
+        int num_dep_nodes = 0;
+        if (oct_filter){
+          num_dep_nodes =
+            oct_filter[k]->getDepNodeConn(&_dep_ptr, &_dep_conn,
+                                          &_dep_weights);
+        }
+        else {
+          num_dep_nodes =
+            quad_filter[k]->getDepNodeConn(&_dep_ptr, &_dep_conn,
+                                           &_dep_weights);
+        }
+
         // Copy over the dependent node data
         dep_ptr = new int[ num_dep_nodes+1 ];
         memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
@@ -382,203 +557,6 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   int gmres_iters = 50;
   int nrestart = 5;
   int is_flexible = 0;
-
-  // int gmres_iters = 100;
-  // int nrestart = 2;
-  // int is_flexible = 1;
-  ksm = new GMRES(mg->getMat(0), mg,
-                  gmres_iters, nrestart, is_flexible);
-  ksm->incref();
-  ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  ksm->setTolerances(1e-9, 1e-30);
-
-  // Set the iteration count
-  iter_count = 0;
-
-  // Set the load case information
-  num_load_cases = 0;
-  forces = NULL;
-  vars = NULL;
-
-  // Set the load case information
-  load_case_info = NULL;
-
-  // Set the linear constraint info to NULL
-  num_linear_con = 0;
-  Alinear = NULL;
-  linear_offset = NULL;
-
-  // Set the objective weight information
-  obj_weights = NULL;
-  obj_funcs = NULL;
-
-  // Set up the frequency constraint data
-  freq = NULL;
-  freq_eig_tol = 1e-8;
-  num_freq_eigvals = 5;
-  freq_ks_sum = 0.0;
-  freq_ks_weight = 30.0;
-  freq_offset = 0.0;
-  freq_scale = 1.0;
-  track_eigen_iters = 0;
-  ksm_file = NULL;
-
-  // Set up the buckling constraint data
-  buck = NULL;
-  buck_eig_tol = 1e-8;
-  num_buck_eigvals = 5;
-  buck_ks_sum = NULL;
-  buck_ks_weight = 30.0;
-  buck_offset = 0.0;
-  buck_scale = 1.0;
-}
-
-/*
-  Create the topology optimization problem for 2D quad meshes
-*/
-TMRTopoProblem::TMRTopoProblem( int _nlevels,
-                                TACSAssembler *_tacs[],
-                                TMRQuadForest *_filter[],
-                                TACSVarMap *_filter_maps[],
-                                TACSBVecIndices *filter_indices[],
-                                TACSMg *_mg,
-                                int _vars_per_node ):
- ParOptProblem(_tacs[0]->getMPIComm()){
-  // Set the prefix to NULL
-  prefix = NULL;
-
-  // Get the processor rank
-  int mpi_rank;
-  MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
-
-  // Set the number of variables per node
-  vars_per_node = _vars_per_node;
-
-  // Set the maximum number of indices
-  max_local_size = 0;
-
-  // The initial design variable values (may not be set)
-  xinit = NULL;
-  xlb = NULL;
-  xub = NULL;
-
-  // Set the number of levels
-  nlevels = _nlevels;
-
-  // Allocate the arrays
-  tacs = new TACSAssembler*[ nlevels ];
-  quad_filter = new TMRQuadForest*[ nlevels ];
-  oct_filter = NULL;
-  filter_maps = new TACSVarMap*[ nlevels ];
-  filter_dist = new TACSBVecDistribute*[ nlevels ];
-  filter_interp = new TACSBVecInterp*[ nlevels-1 ];
-  filter_dep_nodes = new TACSBVecDepNodes*[ nlevels ];
-
-  // The design variable vector for each level
-  x = new TACSBVec*[ nlevels ];
-
-  // Copy over the assembler objects and filters
-  for ( int k = 0; k < nlevels; k++ ){
-    // Set the TACSAssembler objects for each level
-    tacs[k] = _tacs[k];
-    tacs[k]->incref();
-
-    // Set the filter object
-    quad_filter[k] = _filter[k];
-    quad_filter[k]->incref();
-
-    // Copy over the filter information
-    filter_maps[k] = _filter_maps[k];
-    filter_maps[k]->incref();
-
-    // Set the maximum local size
-    const int *range;
-    filter_maps[k]->getOwnerRange(&range);
-    int size = vars_per_node*((range[mpi_rank+1] - range[mpi_rank]) +
-                              filter_indices[k]->getNumIndices());
-    int size2 = vars_per_node*quad_filter[k]->getNodeNumbers(NULL);
-
-    // Update the maximum local size
-    if (size > max_local_size){
-      max_local_size = size;
-    }
-    if (size2 > max_local_size){
-      max_local_size = size2;
-    }
-
-    // Create the distribution object for the design variables
-    filter_dist[k] = new TACSBVecDistribute(filter_maps[k],
-                                            filter_indices[k]);
-    filter_dist[k]->incref();
-
-    // Set the dependent node data to NULL by default
-    filter_dep_nodes[k] = NULL;
-
-    // Create the design variable vector for this level
-    if (quad_filter[k]->getInterpType() == TMR_BERNSTEIN_POINTS){
-      int *dep_ptr, *dep_conn;
-      const int *_dep_ptr, *_dep_conn;
-      double *dep_weights;
-      const double *_dep_weights;
-      int num_dep_nodes = quad_filter[k]->getDepNodeConn(&_dep_ptr, &_dep_conn,
-                                                         &_dep_weights);
-      // Copy over the data
-      dep_ptr = new int[ num_dep_nodes+1 ];
-      memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
-      int dep_size = dep_ptr[num_dep_nodes];
-      dep_conn = new int[ dep_size ];
-      memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
-
-      dep_weights = new double[ dep_size ];
-      memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
-
-      filter_dep_nodes[k] = new TACSBVecDepNodes(num_dep_nodes,
-                                                 &dep_ptr, &dep_conn,
-                                                 &dep_weights);
-      filter_dep_nodes[k]->incref();
-
-      x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k],
-                          filter_dep_nodes[k]);
-    }
-    else {
-      x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k]);
-    }
-    x[k]->incref();
-  }
-
-  // Now create the interpolation between filter levels
-  for ( int k = 1; k < nlevels; k++ ){
-    // Create the interpolation object
-    filter_interp[k-1] = new TACSBVecInterp(filter_maps[k],
-                                            filter_maps[k-1], vars_per_node);
-    filter_interp[k-1]->incref();
-
-    // Create the interpolation on the TMR side
-    quad_filter[k-1]->createInterpolation(quad_filter[k], filter_interp[k-1]);
-    filter_interp[k-1]->initialize();
-  }
-
-  // Set the maximum local size
-  xlocal = new TacsScalar[ max_local_size ];
-
-  // The multigrid object
-  mg = _mg;
-  mg->incref();
-
-  // Allocate an adjoint and df/du vector
-  dfdu = tacs[0]->createVec();
-  adjoint = tacs[0]->createVec();
-  dfdu->incref();
-  adjoint->incref();
-
-  // Set up the solver
-  int gmres_iters = 50;
-  int nrestart = 5;
-  int is_flexible = 0;
-
-  // int gmres_iters = 100;
-  // int nrestart = 2;
-  // int is_flexible = 1;
   ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
@@ -643,6 +621,9 @@ TMRTopoProblem::~TMRTopoProblem(){
     if (oct_filter && oct_filter[k]){
       oct_filter[k]->decref();
     }
+    if (helmholtz_tacs && helmholtz_tacs[k]){
+      helmholtz_tacs[k]->decref();
+    }
     filter_maps[k]->decref();
     filter_dist[k]->decref();
     if (filter_dep_nodes[k]){
@@ -657,10 +638,20 @@ TMRTopoProblem::~TMRTopoProblem(){
   if (oct_filter){
     delete [] oct_filter;
   }
+
   delete [] filter_maps;
   delete [] filter_dist;
   delete [] filter_dep_nodes;
   delete [] x;
+
+  if (helmholtz_tacs){
+    delete [] helmholtz_tacs;
+    helmholtz_mg->decref();
+    helmholtz_ksm->decref();
+    helmholtz_vec->decref();
+    helmholtz_rhs->decref();
+    helmholtz_psi->decref();
+  }
 
   for ( int k = 0; k < nlevels-1; k++ ){
     filter_interp[k]->decref();
@@ -790,11 +781,6 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
     load_case_info[i].stress_func = NULL;
     load_case_info[i].stress_func_offset = 1.0;
     load_case_info[i].stress_func_scale = 1.0;
-    load_case_info[i].stress_func_obj_weight = 0.0;
-    load_case_info[i].curve_func = NULL;
-    load_case_info[i].curve_func_offset = 1.0;
-    load_case_info[i].curve_func_scale = 1.0;
-    load_case_info[i].curve_func_obj_weight = 0.0;
   }
 }
 
@@ -867,31 +853,12 @@ void TMRTopoProblem::addConstraints( int load_case,
 void TMRTopoProblem::addStressConstraint( int load_case,
                                           TMRStressConstraint *stress_func,
                                           TacsScalar constr_offset,
-                                          TacsScalar constr_scale,
-                                          TacsScalar obj_weight ){
+                                          TacsScalar constr_scale ){
   load_case_info[load_case].stress_func = stress_func;
   load_case_info[load_case].stress_func_offset = constr_offset;
   load_case_info[load_case].stress_func_scale = constr_scale;
-  load_case_info[load_case].stress_func_obj_weight = obj_weight;
   load_case_info[load_case].stress_func->incref();
 }
-
-/*
-  Add a stress constraint to the given load case using the TMRStressConstraint
-  class
-*/
-void TMRTopoProblem::addCurvatureConstraint( int load_case,
-                                             TMRCurvatureConstraint *curve_func,
-                                             TacsScalar constr_offset,
-                                             TacsScalar constr_scale,
-                                             TacsScalar obj_weight ){
-  load_case_info[load_case].curve_func = curve_func;
-  load_case_info[load_case].curve_func_offset = constr_offset;
-  load_case_info[load_case].curve_func_scale = constr_scale;
-  load_case_info[load_case].curve_func_obj_weight = obj_weight;
-  load_case_info[load_case].curve_func->incref();
-}
-
 
 /*
   Add linear constraints to the problem.
@@ -1083,9 +1050,6 @@ void TMRTopoProblem::initialize(){
   for ( int i = 0; i < num_load_cases; i++ ){
     num_constraints += load_case_info[i].num_funcs;
     if (load_case_info[i].stress_func){
-      num_constraints++;
-    }
-    if (load_case_info[i].curve_func){
       num_constraints++;
     }
   }
@@ -1479,7 +1443,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         // Get the design variable values from TACS directly
         memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
         tacs[0]->getDesignVars(xlocal, max_local_size);
-        
+
         // Set the local values into the vector
         setBVecFromLocalValues(0, xlocal, wrap->vec, TACS_INSERT_VALUES);
 
@@ -1510,7 +1474,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
       memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
       memset(upper, 0, max_local_size*sizeof(TacsScalar));
       tacs[0]->getDesignVarRange(xlocal, upper, max_local_size);
-      
+
       if (!has_lower){
         ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lbvec);
         if (lbwrap){
@@ -1615,6 +1579,191 @@ void TMRTopoProblem::setBVecFromLocalValues( int level,
 }
 
 /*
+  Apply the Helmholtz filter to the design variables.
+
+  Here the input/output vector are the same
+*/
+void TMRTopoProblem::applyHelmholtzFilter( TACSBVec *xvars ){
+  if (helmholtz_tacs){
+    // Get the number of local elements
+    int num_elements = helmholtz_tacs[0]->getNumElements();
+
+    // Get the maximum number of nodes per element (all elements in
+    // this assembler object have the same number of nodes)
+    int max_nodes = helmholtz_tacs[0]->getMaxElementNodes();
+
+    // Get all of the elements in the filter
+    TACSElement **elements = helmholtz_tacs[0]->getElements();
+
+    // Allocate space for element-level data
+    double *N = new double[ max_nodes ];
+    TacsScalar *Xpts = new TacsScalar[ 3*max_nodes ];
+    TacsScalar *x_values = new TacsScalar[ vars_per_node*max_nodes ];
+    TacsScalar *rhs_values = new TacsScalar[ max_nodes ];
+
+    for ( int k = 0; k < vars_per_node; k++ ){
+      // Zero the entries in the RHS vector
+      helmholtz_rhs->zeroEntries();
+
+      for ( int i = 0; i < num_elements; i++ ){
+        // Get the values for this element
+        int len;
+        const int *nodes;
+        helmholtz_tacs[0]->getElement(i, &nodes, &len);
+        helmholtz_tacs[0]->getElement(i, Xpts);
+
+        // Get the values of the design variables at the nodes
+        xvars->getValues(len, nodes, x_values);
+
+        // Zero the values on the right-hand-side
+        memset(rhs_values, 0, max_nodes*sizeof(TacsScalar));
+
+        // Get the number of quadrature points
+        const int num_quad_pts = elements[i]->getNumGaussPts();
+
+        // Perform the integration over the element
+        for ( int n = 0; n < num_quad_pts; n++ ){
+          double pt[3];
+          double wt = elements[i]->getGaussWtsPts(n, pt);
+          TacsScalar h = elements[i]->getDetJacobian(pt, Xpts);
+          h *= wt;
+
+          elements[i]->getShapeFunctions(pt, N);
+
+          for ( int ii = 0; ii < max_nodes; ii++ ){
+            const double *ns = N;
+            const TacsScalar *xs = &x_values[k];
+            TacsScalar v = 0.0;
+            for ( int jj = 0; jj < max_nodes; jj++ ){
+              v += ns[0]*xs[0];
+              ns++;
+              xs += vars_per_node;
+            }
+            rhs_values[ii] += h*N[ii]*v;
+          }
+        }
+
+        helmholtz_rhs->setValues(len, nodes, rhs_values, TACS_ADD_VALUES);
+      }
+
+      // Complete the assembly process
+      helmholtz_rhs->beginSetValues(TACS_ADD_VALUES);
+      helmholtz_rhs->endSetValues(TACS_ADD_VALUES);
+
+      // Solve for the filtered values of the design variables
+      helmholtz_ksm->solve(helmholtz_rhs, helmholtz_psi);
+
+      // Get the output array
+      TacsScalar *xarr;
+      xvars->getArray(&xarr);
+
+      // Get the Helmholtz solution vector
+      TacsScalar *hpsi;
+      const int size = helmholtz_psi->getArray(&hpsi);
+
+      for ( int i = 0; i < size; i++ ){
+        xarr[vars_per_node*i + k] = hpsi[i];
+      }
+    }
+
+    delete [] N;
+    delete [] Xpts;
+    delete [] x_values;
+    delete [] rhs_values;
+  }
+}
+
+/*
+  Compute the sensitivity w.r.t the Helmholtz filter
+*/
+void TMRTopoProblem::reverseHelmholtzFilter( TACSBVec *input,
+                                             TACSBVec *output ){
+  if (helmholtz_tacs){
+    // Get the number of local elements
+    int num_elements = helmholtz_tacs[0]->getNumElements();
+
+    // Get the maximum number of nodes per element (all elements in
+    // this assembler object have the same number of nodes)
+    int max_nodes = helmholtz_tacs[0]->getMaxElementNodes();
+
+    // Get all of the elements in the filter
+    TACSElement **elements = helmholtz_tacs[0]->getElements();
+
+    // Allocate space for element-level data
+    double *N = new double[ max_nodes ];
+    TacsScalar *Xpts = new TacsScalar[ 3*max_nodes ];
+    TacsScalar *x_values = new TacsScalar[ vars_per_node*max_nodes ];
+    TacsScalar *psi_values = new TacsScalar[ max_nodes ];
+
+    for ( int k = 0; k < vars_per_node; k++ ){
+      // Get the input array
+      TacsScalar *xarr;
+      input->getArray(&xarr);
+
+      // Get the Helmholtz solution vector
+      TacsScalar *hrhs;
+      const int size = helmholtz_rhs->getArray(&hrhs);
+
+      for ( int i = 0; i < size; i++ ){
+        hrhs[i] = xarr[vars_per_node*i + k];
+      }
+
+      // Solve for the filtered values of the design variables
+      helmholtz_ksm->solve(helmholtz_rhs, helmholtz_psi);
+
+      for ( int i = 0; i < num_elements; i++ ){
+        // Get the values for this element
+        int len;
+        const int *nodes;
+        helmholtz_tacs[0]->getElement(i, &nodes, &len);
+        helmholtz_tacs[0]->getElement(i, Xpts);
+
+        // Get the values of the design variables at the nodes
+        helmholtz_psi->getValues(len, nodes, psi_values);
+
+        // Zero the values on the right-hand-side
+        memset(x_values, 0, vars_per_node*max_nodes*sizeof(TacsScalar));
+
+        // Get the number of quadrature points
+        const int num_quad_pts = elements[i]->getNumGaussPts();
+
+        // Perform the integration over the element
+        for ( int n = 0; n < num_quad_pts; n++ ){
+          double pt[3];
+          double wt = elements[i]->getGaussWtsPts(n, pt);
+          TacsScalar h = elements[i]->getDetJacobian(pt, Xpts);
+          h *= wt;
+
+          elements[i]->getShapeFunctions(pt, N);
+
+          for ( int ii = 0; ii < max_nodes; ii++ ){
+            const double *ns = N;
+            const TacsScalar *psi = &psi_values[0];
+            TacsScalar v = 0.0;
+            for ( int jj = 0; jj < max_nodes; jj++ ){
+              v += ns[0]*psi[0];
+              ns++;
+              psi++;
+            }
+            x_values[vars_per_node*ii + k] += h*N[ii]*v;
+          }
+        }
+
+        output->setValues(len, nodes, x_values, TACS_ADD_VALUES);
+      }
+    }
+
+    delete [] N;
+    delete [] Xpts;
+    delete [] x_values;
+    delete [] psi_values;
+
+    output->beginSetValues(TACS_ADD_VALUES);
+    output->endSetValues(TACS_ADD_VALUES);
+  }
+}
+
+/*
   Set the design variable values consistently across all multigrid levels by
   interpolating the design variables using the filter interpolation objects.
 */
@@ -1632,13 +1781,17 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
     x[0]->beginDistributeValues();
     x[0]->endDistributeValues();
 
+    if (helmholtz_tacs){
+      applyHelmholtzFilter(x[0]);
+    }
+
     // Copy the values to the local array
     int size = getLocalValuesFromBVec(0, x[0], xlocal);
     tacs[0]->setDesignVars(xlocal, size);
 
     // Set the design variable values on all processors
     for ( int k = 0; k < nlevels-1; k++ ){
-      filter_interp[k]->multWeightTranspose(x[k], x[k+1]);      
+      filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
       // Distribute the design variable values
       x[k+1]->beginDistributeValues();
       x[k+1]->endDistributeValues();
@@ -1648,34 +1801,6 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
       tacs[k+1]->setDesignVars(xlocal, size);
     }
   }
-
-  // Create the visualization for the object 
-  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                             TACSElement::OUTPUT_EXTRAS);
-  char outfile[256];
-  if (quad_filter){
-    for ( int k = 0; k < nlevels; k++ ){
-      TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_PLANE_STRESS,
-                                    write_flag);
-      f5->incref();
-      sprintf(outfile, "%s/beam_output%d_%d.f5",
-              prefix, iter_count,k);
-      f5->writeToFile(outfile);
-      f5->decref();
-    }
-  }  
-  else {
-    for ( int k = 0; k < nlevels; k++ ){
-      TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_SOLID,
-                                    write_flag);
-      f5->incref();
-      sprintf(outfile, "%s/beam_output%d_%d.f5",
-              prefix, iter_count,k);
-      f5->writeToFile(outfile);
-      f5->decref();
-    }
-  }
-  iter_count++;
 }
 
 /*
@@ -1690,7 +1815,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
   // Set the design variable values on all mesh levels
   setDesignVars(pxvec);
-  
+
   // Zero the variables
   tacs[0]->zeroVariables();
 
@@ -1714,10 +1839,8 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     if (forces[i]){
       // Solve the system: K(x)*u = forces
       ksm->solve(forces[i], vars[i]);
-      //tacs[0]->applyBCs(vars[i]);
-      vars[i]->scale(-1.0);
       tacs[0]->setBCs(vars[i]);
-      vars[i]->scale(-1.0);
+
       // Set the variables into TACSAssembler
       tacs[0]->setVariables(vars[i]);
 
@@ -1754,31 +1877,10 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       // Evaluate the stress constraint
       if (load_case_info[i].stress_func){
         TacsScalar con_offset = load_case_info[i].stress_func_offset;
-        TacsScalar stress_func_obj_weight =
-          load_case_info[i].stress_func_obj_weight;
 
         cons[count] =
           con_offset - load_case_info[i].stress_func->evalConstraint(vars[i]);
         cons[count] *= load_case_info[i].stress_func_scale;
-
-        if (stress_func_obj_weight != 0.0){
-          *fobj += 0.5*stress_func_obj_weight*cons[count]*cons[count];
-        }
-        count++;
-      }
-      // Evaluate the curvature constraint
-      if (load_case_info[i].curve_func){
-        TacsScalar con_offset = load_case_info[i].curve_func_offset;
-        TacsScalar curve_func_obj_weight =
-          load_case_info[i].curve_func_obj_weight;
-
-        cons[count] =
-          con_offset - load_case_info[i].curve_func->evalConstraint(x[0]);
-        cons[count] *= load_case_info[i].curve_func_scale;
-
-        if (curve_func_obj_weight != 0.0){
-          *fobj += 0.5*curve_func_obj_weight*cons[count]*cons[count];
-        }
         count++;
       }
     }
@@ -1927,16 +2029,21 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
                                         ParOptVec *gvec,
                                         ParOptVec **Acvec ){
+  int mpi_rank;
+  MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
+
   // Evaluate the derivative of the weighted compliance with
   // respect to the design variables
   gvec->zeroEntries();
-  int mpi_rank;
-  MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(gvec);
-  TACSBVec *g = NULL;
   if (wrap){
-    g = wrap->vec;
+    TACSBVec *g = wrap->vec, *gB = wrap->vec;
+    if (helmholtz_vec){
+      g = helmholtz_vec;
+      gB = wrap->vec;
+    }
     g->zeroEntries();
+
     // Evaluate the gradient of the objective - weighted sum of
     // compliances
     memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
@@ -1970,8 +2077,11 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, g, TACS_ADD_VALUES);
         g->beginSetValues(TACS_ADD_VALUES);
         g->endSetValues(TACS_ADD_VALUES);
-        g->beginDistributeValues();
-        g->endDistributeValues();
+      }
+
+      // Apply the filter sensitivity
+      if (helmholtz_vec){
+        reverseHelmholtzFilter(g, gB);
       }
     }
     else { // For compliance objective
@@ -1980,13 +2090,17 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         tacs[0]->addAdjointResProducts(-obj_weights[i], &vars[i],
                                        1, xlocal, max_local_size);
       }
+
       setBVecFromLocalValues(0, xlocal, g, TACS_ADD_VALUES);
       g->beginSetValues(TACS_ADD_VALUES);
       g->endSetValues(TACS_ADD_VALUES);
-      g->beginDistributeValues();
-      g->endDistributeValues();
+
+      // Apply the filter sensitivity
+      if (helmholtz_vec){
+        reverseHelmholtzFilter(g, gB);
+      }
     }
-  } // end if wrap
+  }
   else {
     return 1;
   }
@@ -2014,9 +2128,15 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count + j]);
 
       if (wrap){
-        // Get the vector
-        TACSBVec *A = wrap->vec;
+        // Set up the vectors so that it works for the cases with and
+        // without the Helmholtz filter
+        TACSBVec *A = wrap->vec, *B = NULL;
+        if (helmholtz_vec){
+          A = helmholtz_vec;
+          B = wrap->vec;
+        }
         A->zeroEntries();
+
         // If the function is the structural mass, then do not
         // use the adjoint, otherwise assume that we should use the
         // adjoint method to compute the gradient.
@@ -2045,34 +2165,32 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
           tacs[0]->addDVSens(scale, &func, 1, xlocal, max_local_size);
         }
 
-        // Wrap the vector class
+        // Assemble the gradient across all procs
         setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
-        A->beginDistributeValues();
-        A->endDistributeValues();
+
+        // Apply the filter sensitivity
+        if (helmholtz_vec){
+          reverseHelmholtzFilter(A, B);
+        }
       }
-    } //  num_funcs
+    }
     count += num_funcs;
 
+    // Compute the gradient with respect to the stress-reconstruction
+    // ks functional
     if (load_case_info[i].stress_func){
       // Try to unwrap the vector
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
 
       if (wrap){
-        // Get the weight information
-        TacsScalar con_offset = load_case_info[i].stress_func_offset;
-        TacsScalar stress_func_obj_weight =
-          load_case_info[i].stress_func_obj_weight;
-
-        // Evaluate the constraint
-        TacsScalar con = 0.0;
-        if (stress_func_obj_weight != 0.0){
-          con = con_offset - load_case_info[i].stress_func->evalConstraint(vars[i]);
-        }
-
         // Get the underlying TACS vector for the design variables
-        TACSBVec *A = wrap->vec;
+        TACSBVec *A = wrap->vec, *B = wrap->vec;
+        if (helmholtz_vec){
+          A = helmholtz_vec;
+          B = wrap->vec;
+        }
 
         // Evaluate the partial derivatives required for the adjoint
         load_case_info[i].stress_func->evalConDeriv(xlocal,
@@ -2092,67 +2210,16 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
 
-        // Add the contribution to the objective gradient
-        if (g && stress_func_obj_weight != 0.0){
-          g->axpy(-stress_func_obj_weight*con, A);
+        // Apply the filter sensitivity
+        if (helmholtz_vec){
+          reverseHelmholtzFilter(A, B);
         }
 
         // Scale the constraint by -1 since the constraint is
         // formulated as 1 - c(x, u) > 0.0
-        A->scale(-load_case_info[i].stress_func_scale);
+        B->scale(-load_case_info[i].stress_func_scale);
       }
 
-      count++;
-    }
-    // Compute derivative of curvature constraint
-    if (load_case_info[i].curve_func){
-      // Try to unwrap the vector
-      wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
-
-      if (wrap){
-        // Get the weight information
-        // Get the weight information
-        TacsScalar con_offset = load_case_info[i].curve_func_offset;
-        TacsScalar curve_func_obj_weight =
-          load_case_info[i].curve_func_obj_weight;
-
-        // Evaluate the constraint
-        TacsScalar con = 0.0;
-        if (curve_func_obj_weight != 0.0){
-          con = con_offset - load_case_info[i].curve_func->evalConstraint(x[0]);
-        }
-
-        // Get the underlying TACS vector for the design variables
-        TACSBVec *A = wrap->vec;
-
-        // Evaluate the partial derivatives required for the adjoint
-        // load_case_info[i].curve_func->evalConDeriv(xlocal,
-        //                                            max_local_size,
-        //                                            dfdu);
-        tacs[0]->applyBCs(dfdu);
-
-        // // Solve the system of equations
-        // ksm->solve(dfdu, adjoint);
-
-        // // Compute the total derivative using the adjoint
-        // tacs[0]->addAdjointResProducts(-1.0, &adjoint,
-        //                                1, xlocal, max_local_size);
-
-        // Wrap the vector class
-        setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
-        A->beginSetValues(TACS_ADD_VALUES);
-        A->endSetValues(TACS_ADD_VALUES);
-        A->beginDistributeValues();
-        A->endDistributeValues();
-        // Add the contribution to the objective gradient
-        if (g && curve_func_obj_weight != 0.0){
-          g->axpy(-curve_func_obj_weight*con, A);
-        }
-
-        // Scale the constraint by -1 since the constraint is
-        // formulated as 1 - c(x, u) > 0.0
-        A->scale(-load_case_info[i].curve_func_scale);
-      }
       count++;
     }
 
@@ -2160,8 +2227,14 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       // Try to unwrap the vector
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
       if (wrap){
-        // Get the vector
-        TACSBVec *A = wrap->vec;
+        // Get the underlying TACS vector for the design variables
+        TACSBVec *A = wrap->vec, *B = wrap->vec;
+        if (helmholtz_vec){
+          A = helmholtz_vec;
+          B = wrap->vec;
+        }
+
+        // Zero the local components
         memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
 
         TacsScalar *temp = new TacsScalar[max_local_size];
@@ -2217,9 +2290,12 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
-        A->beginDistributeValues();
-        A->endDistributeValues();
-      } //wrap
+
+        // Apply the filter sensitivity
+        if (helmholtz_vec){
+          reverseHelmholtzFilter(A, B);
+        }
+      }
 
       count++;
     }
@@ -2229,7 +2305,13 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
       if (wrap){
         // Get the vector
-        TACSBVec *A = wrap->vec;
+        TACSBVec *A = wrap->vec, *B = wrap->vec;
+        if (helmholtz_vec){
+          A = helmholtz_vec;
+          B = wrap->vec;
+        }
+
+        // Zero the local components
         memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
 
         TacsScalar *temp = new TacsScalar[max_local_size];
@@ -2272,8 +2354,11 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, A, TACS_ADD_VALUES);
         A->beginSetValues(TACS_ADD_VALUES);
         A->endSetValues(TACS_ADD_VALUES);
-        A->beginDistributeValues();
-        A->endDistributeValues();
+
+        // Apply the filter sensitivity
+        if (helmholtz_vec){
+          reverseHelmholtzFilter(A, B);
+        }
       }
       count++;
     }
@@ -2373,7 +2458,9 @@ void TMRTopoProblem::addSparseInnerProduct( double alpha,
   }
 }
 
-// Write the output file
+/*
+  Write the output file
+*/
 void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
   // Print out the binary STL file for later visualization
   if (prefix && oct_filter){
@@ -2419,6 +2506,9 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
   iter_count++;
 }
 
+/*
+  Write the eigenvector file
+*/
 void TMRTopoProblem::writeEigenVector( int iter ){
   // Only valid if buckling is used
   if (buck){

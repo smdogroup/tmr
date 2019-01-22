@@ -248,8 +248,8 @@ class TMRQuadHelmholtz : public TACSElement {
         int index = 0;
         // Set the parametric point to extract the data
         double pt[2];
-        pt[0] = knots[n];
-        pt[1] = knots[m];
+        pt[0] = -1.0 + 2.0*n/(order-1);
+        pt[1] = -1.0 + 2.0*m/(order-1);
 
         // Get the shape functions
         double N[NUM_NODES], Na[NUM_NODES], Nb[NUM_NODES];
@@ -357,7 +357,7 @@ class TMROctHelmholtz : public TACSElement {
     TacsScalar Xd[9];
     getJacobianTransform(Na, Nb, Nc, Xpts, Xd);
 
-    return Xd[0]*Xd[3] - Xd[1]*Xd[2];
+    return FElibrary::jacobian3d(Xd);
   }
   void getShapeFunctions( const double pt[], double N[] ){
     double na[order], nb[order], nc[order];
@@ -527,17 +527,14 @@ class TMROctHelmholtz : public TACSElement {
     const double *pts, *wts;
     FElibrary::getGaussPtsWts(order, &pts, &wts);
 
-    const double *pts, *wts;
-    FElibrary::getGaussPtsWts(order, &pts, &wts);
-
     for ( int p = 0; p < order; p++ ){
       for ( int m = 0; m < order; m++ ){
         for ( int n = 0; n < order; n++ ){
           // Set the quadrature points
           double pt[3];
-          pt[0] = pts[n];
-          pt[1] = pts[m];
-          pt[2] = pts[p];
+          pt[0] = -1.0 + 2.0*n/(order-1);
+          pt[1] = -1.0 + 2.0*m/(order-1);
+          pt[2] = -1.0 + 2.0*p/(order-1);
 
           // Get the shape functions
           double N[NUM_NODES];

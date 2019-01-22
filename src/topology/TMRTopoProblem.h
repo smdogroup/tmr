@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -65,19 +65,21 @@ class TMRTopoProblem : public ParOptProblem {
  public:
   // Create the topology optimization object
   // ---------------------------------------
-  TMRTopoProblem( int _nlevels, 
+  TMRTopoProblem( int _nlevels,
                   TACSAssembler *_tacs[],
-                  TMROctForest *_filter[], 
+                  TMROctForest *_filter[],
                   TACSVarMap *_filter_maps[],
                   TACSBVecIndices *filter_indices[],
                   TACSMg *_mg,
+                  double helmholtz_radius=-1.0,
                   int _vars_per_node=1 );
-  TMRTopoProblem( int _nlevels, 
+  TMRTopoProblem( int _nlevels,
                   TACSAssembler *_tacs[],
-                  TMRQuadForest *_filter[], 
+                  TMRQuadForest *_filter[],
                   TACSVarMap *_filter_maps[],
                   TACSBVecIndices *filter_indices[],
                   TACSMg *_mg,
+                  double helmholtz_radius=-1.0,
                   int _vars_per_node=1 );
   ~TMRTopoProblem();
 
@@ -90,19 +92,13 @@ class TMRTopoProblem : public ParOptProblem {
   // Add constraints associated with one of the load cases
   // -----------------------------------------------------
   void addConstraints( int _load_case, TACSFunction **_funcs,
-                       const TacsScalar *_func_offset, 
+                       const TacsScalar *_func_offset,
                        const TacsScalar *_func_scale,
                        int num_funcs );
   void addStressConstraint( int _load_case,
                             TMRStressConstraint *stress_func,
                             TacsScalar _constr_offset=1.0,
-                            TacsScalar _constr_scale=1.0,
-                            TacsScalar _obj_weight=0.0 );
-  void addCurvatureConstraint( int _load_case,
-                               TMRCurvatureConstraint *stress_func,
-                               TacsScalar _constr_offset=1.0,
-                               TacsScalar _constr_scale=1.0,
-                               TacsScalar _obj_weight=0.0 );
+                            TacsScalar _constr_scale=1.0 );
   void addLinearConstraints( ParOptVec **vecs,
                              TacsScalar *offset,
                              int _ncon );
@@ -152,11 +148,11 @@ class TMRTopoProblem : public ParOptProblem {
   // Create a TACSBVec object containing the filter element volumes
   // --------------------------------------------------------------
   TACSBVec* createVolumeVec( double Xscale=1.0 );
-  
+
   // Create a TACSBVec object containing the filter element area
   // --------------------------------------------------------------
   TACSBVec* createAreaVec( double Xscale=1.0 );
-  
+
   // Create a design variable vector
   // -------------------------------
   ParOptVec *createDesignVec();
@@ -170,25 +166,25 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Get the initial variables and bounds
   // ------------------------------------
-  void getVarsAndBounds( ParOptVec *x, 
+  void getVarsAndBounds( ParOptVec *x,
                          ParOptVec *lb, ParOptVec *ub );
 
   // Evaluate the objective and constraints
   // --------------------------------------
-  int evalObjCon( ParOptVec *x, 
+  int evalObjCon( ParOptVec *x,
                   ParOptScalar *fobj, ParOptScalar *cons );
 
   // Evaluate the objective and constraint gradients
   // -----------------------------------------------
-  int evalObjConGradient( ParOptVec *x, 
+  int evalObjConGradient( ParOptVec *x,
                           ParOptVec *g, ParOptVec **Ac );
 
   // Evaluate the product of the Hessian with the given vector px
   // ------------------------------------------------------------
   int evalHvecProduct( ParOptVec *xvec,
-                       ParOptScalar *z, 
+                       ParOptScalar *z,
                        ParOptVec *zw,
-                       ParOptVec *pxvec, 
+                       ParOptVec *pxvec,
                        ParOptVec *hvec );
 
   // Evaluate the sparse constraints
@@ -203,10 +199,10 @@ class TMRTopoProblem : public ParOptProblem {
   // Compute the transpose Jacobian-vector product out = J(x)^{T}*pzw
   // -----------------------------------------------------------------
   void addSparseJacobianTranspose( double alpha, ParOptVec *x,
-                                   ParOptVec *pzw, 
+                                   ParOptVec *pzw,
                                    ParOptVec *out );
 
-  // Add the inner product of the constraints to the matrix such 
+  // Add the inner product of the constraints to the matrix such
   // that A += J(x)*cvec*J(x)^{T} where cvec is a diagonal matrix
   // ------------------------------------------------------------
   void addSparseInnerProduct( double alpha, ParOptVec *x,
@@ -217,6 +213,21 @@ class TMRTopoProblem : public ParOptProblem {
   void writeOutput( int iter, ParOptVec *x );
 
  private:
+  // Initialize the problem
+  void initialize( int _nlevels,
+                   TACSAssembler *_tacs[],
+                   TMROctForest *_oct_filter[],
+                   TMRQuadForest *_quad_filter[],
+                   TACSVarMap *_filter_maps[],
+                   TACSBVecIndices *filter_indices[],
+                   TACSMg *_mg,
+                   double helmholtz_radius=-1.0,
+                   int _vars_per_node=1 );
+
+  // Apply the filter for the design variables/output sensitivities
+  void applyHelmholtzFilter( TACSBVec *xvars );
+  void reverseHelmholtzFilter( TACSBVec *input, TACSBVec *output );
+
   // Set the design variables across all multigrid levels
   void setDesignVars( ParOptVec *xvec );
 
@@ -249,7 +260,7 @@ class TMRTopoProblem : public ParOptProblem {
 
   // The natural frequency TACS object
   TACSFrequencyAnalysis *freq;
-  
+
   // Set parameters used to control the frequency constraint
   double freq_eig_tol;
   int num_freq_eigvals;
@@ -287,11 +298,6 @@ class TMRTopoProblem : public ParOptProblem {
     TMRStressConstraint *stress_func;
     TacsScalar stress_func_offset;
     TacsScalar stress_func_scale;
-    TacsScalar stress_func_obj_weight;
-    TMRCurvatureConstraint *curve_func;
-    TacsScalar curve_func_offset;
-    TacsScalar curve_func_scale;
-    TacsScalar curve_func_obj_weight;
   } *load_case_info;
 
   // Store the design variable info
@@ -313,13 +319,20 @@ class TMRTopoProblem : public ParOptProblem {
   int max_local_size;
   TacsScalar *xlocal;
 
-  // Store the Krylov solver and the multigrid object 
+  // Store the Krylov solver and the multigrid object
   TACSKsm *ksm;
   TACSMg *mg;
 
   // The initial design variable values
   ParOptVec *xinit;
   ParOptVec *xlb, *xub;
+
+  // Data (that may be NULL) for the Helmholtz-based PDE filter
+  TACSAssembler **helmholtz_tacs;
+  TACSKsm *helmholtz_ksm;
+  TACSMg *helmholtz_mg;
+  TACSBVec *helmholtz_rhs, *helmholtz_psi;
+  TACSBVec *helmholtz_vec;
 };
 
 #endif // TMR_TOPO_PROBLEM_H

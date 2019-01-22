@@ -3369,31 +3369,10 @@ cdef class StressConstraint:
         self.ptr.writeReconToTec(uvec.ptr, filename, ys)
         return
 
-cdef class CurvatureConstraint:
-    cdef TMRCurvatureConstraint *ptr
-    def __cinit__(self, OctForest oct, VarMap vmap=None,
-                  TacsScalar aggregate_weight=30.0):
-        cdef TACSVarMap *vptr = NULL
-        if vmap is not None:
-            vptr = vmap.ptr
-        self.ptr = new TMRCurvatureConstraint(oct.ptr, vptr,
-                                              aggregate_weight)
-        self.ptr.incref()
-
-    def __dealloc__(self):
-        if self.ptr:
-           self.ptr.decref()
-
-    def evalCon(self, Vec xvec):
-        return self.ptr.evalConstraint(xvec.ptr)
-
-    def writeCurvatureToFile(self, Vec xvec, fname):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
-        self.ptr.writeCurvatureToFile(xvec.ptr, filename)
-
 cdef class TopoProblem(pyParOptProblemBase):
-    def __cinit__(self, list assemblers, list filters,
-                  list varmaps, list varindices, Pc pc, int vars_per_node=1):
+    def __cinit__(self, list assemblers, list filters, Pc pc,
+                  list varmaps=[], list varindices=[],
+                  double helmholtz_radius=-1.0, int vars_per_node=1):
         cdef int nlevels = 0
         cdef TACSAssembler **assemb = NULL
         cdef TMROctForest **ofiltr = NULL
@@ -3403,9 +3382,13 @@ cdef class TopoProblem(pyParOptProblemBase):
         cdef TACSMg *mg = NULL
 
         # Check for the sizes of the arrays
-        if (len(assemblers) != len(filters) or
-            len(assemblers) != len(varmaps) or
-            len(assemblers) != len(varindices)):
+        if helmholtz_radius < 0.0:
+            if (len(assemblers) != len(filters) or
+                len(assemblers) != len(varmaps) or
+                len(assemblers) != len(varindices)):
+                errmsg = 'TopoProblem must have equal number of objects in lists'
+                raise ValueError(errmsg)
+        elif len(assemblers) != len(filters):
             errmsg = 'TopoProblem must have equal number of objects in lists'
             raise ValueError(errmsg)
 
@@ -3414,11 +3397,6 @@ cdef class TopoProblem(pyParOptProblemBase):
         if mg == NULL:
             raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
-        nlevels = len(assemblers)
-        assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
-        vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
-        vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
-
         isqforest = 0
         for i in range(nlevels):
             if isinstance(filters[i], QuadForest):
@@ -3426,15 +3404,25 @@ cdef class TopoProblem(pyParOptProblemBase):
             elif isinstance(filters[i], OctForest):
                 isqforest = 0
 
+        nlevels = len(assemblers)
+        assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
+
+        if helmholtz_radius < 0.0:
+            vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
+            vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
+
+            for i in range(nlevels):
+                vmaps[i] = (<VarMap>varmaps[i]).ptr
+                vindex[i] = (<VecIndices>varindices[i]).ptr
+
         if isqforest:
             qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
             for i in range(nlevels):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-                vmaps[i] = (<VarMap>varmaps[i]).ptr
-                vindex[i] = (<VecIndices>varindices[i]).ptr
             self.ptr = new TMRTopoProblem(nlevels, assemb, qfiltr,
-                                          vmaps, vindex, mg, vars_per_node)
+                                          vmaps, vindex, mg,
+                                          helmholtz_radius, vars_per_node)
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -3442,16 +3430,18 @@ cdef class TopoProblem(pyParOptProblemBase):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-                vmaps[i] = (<VarMap>varmaps[i]).ptr
-                vindex[i] = (<VecIndices>varindices[i]).ptr
 
             self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr,
-                                          vmaps, vindex, mg, vars_per_node)
+                                          vmaps, vindex, mg,
+                                          helmholtz_radius, vars_per_node)
             self.ptr.incref()
             free(ofiltr)
+            
         free(assemb)
-        free(vmaps)
-        free(vindex)
+        if vmaps != NULL:
+            free(vmaps)
+        if vindex != NULL:
+            free(vindex)
         return
 
     def __dealloc__(self):
@@ -3513,25 +3503,13 @@ cdef class TopoProblem(pyParOptProblemBase):
         return
 
     def addStressConstraint(self, int case, StressConstraint sc,
-                            TacsScalar offset=1.0, TacsScalar scale=1.0,
-                            TacsScalar obj_weight=0.0):
+                            TacsScalar offset=1.0, TacsScalar scale=1.0):
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        prob.addStressConstraint(case, sc.ptr, offset, scale, obj_weight)
-        return
-
-    def addCurvatureConstraint(self, int case, CurvatureConstraint cc,
-                               TacsScalar offset=1.0, TacsScalar scale=1.0,
-                               TacsScalar obj_weight=0.0):
-        cdef TMRTopoProblem *prob = NULL
-        prob = _dynamicTopoProblem(self.ptr)
-        if prob == NULL:
-            errmsg = 'Expected TMRTopoProblem got other type'
-            raise ValueError(errmsg)
-        prob.addCurvatureConstraint(case, cc.ptr, offset, scale, obj_weight)
+        prob.addStressConstraint(case, sc.ptr, offset, scale)
         return
 
     def addLinearConstraints(self, list vecs, list offset):
