@@ -213,6 +213,7 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
   x = new TACSBVec*[ nlevels ];
   
   if (use_helmholtz_filter){
+    // Allocate space for the assembler objects
     helmholtz_tacs = new TACSAssembler*[ nlevels ];
 
     // Create the assembler objects on each multigrid level
@@ -246,14 +247,16 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
       filter_dep_nodes[k] = helmholtz_tacs[k]->getBVecDepNodes();
       filter_dep_nodes[k]->incref();
 
-      // Create the design variable vector for this level
-      x[k] = helmholtz_tacs[k]->createVec();
+      // Create the design vector
+      x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k],
+                          filter_dep_nodes[k]);
       x[k]->incref();
     }
     
     // Destroy the helmholtz creator object
     helmholtz_creator->decref();
 
+    // Create the multigrid object
     double helmholtz_omega = 0.5;
     TMR_CreateTACSMg(nlevels, helmholtz_tacs, oct_filter,
                      &helmholtz_mg, helmholtz_omega);
@@ -264,12 +267,14 @@ TMRTopoProblem::TMRTopoProblem( int _nlevels,
     int nrestart = 5;
     int is_flexible = 0;
 
+    // Create the GMRES object
     helmholtz_ksm = new GMRES(helmholtz_mg->getMat(0), helmholtz_mg,
                               gmres_iters, nrestart, is_flexible);
     helmholtz_ksm->incref();
     helmholtz_ksm->setMonitor(new KSMPrintStdout("Filter GMRES", mpi_rank, 10));
     helmholtz_ksm->setTolerances(1e-12, 1e-30);
 
+    // Create the multigrid solver and factor it
     double alpha = 1.0, beta = 0.0, gamma = 0.0;
     helmholtz_mg->assembleJacobian(alpha, beta, gamma, NULL);
     helmholtz_mg->factor();
