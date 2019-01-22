@@ -3430,7 +3430,6 @@ cdef class TopoProblem(pyParOptProblemBase):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-
             self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr,
                                           vmaps, vindex, mg,
                                           helmholtz_radius, vars_per_node)

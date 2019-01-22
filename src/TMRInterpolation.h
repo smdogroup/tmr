@@ -171,6 +171,26 @@ inline void bernstein_shape_functions( const int order,
                                        const double *knots,
                                        double *N ){
   N[0] = 1.0;
+  double u1 = 1.0 - u;
+  double u2 = u - 1.0;
+
+  for ( int j = 1; j < order; j++ ){
+    double saved = 0.0;
+    for ( int k = 0; k < j; k++ ){
+      double tmp = N[k];
+      N[k] = saved + u1*tmp;
+      saved = u2*tmp;
+    }
+    N[j] = saved;
+  }
+}
+
+/*
+inline void bernstein_shape_functions( const int order,
+                                       const double u,
+                                       const double *knots,
+                                       double *N ){
+  N[0] = 1.0;
   int idx = order-1;
   // Set the pointers for the temporary work arrays
   // Note that left[j] = u - knots[i+1 - j]
@@ -192,6 +212,7 @@ inline void bernstein_shape_functions( const int order,
   delete [] left;
   delete [] right;
 }
+*/
 
 /*
   Evaluate the shape functions and the derivative of the shape functions
@@ -206,6 +227,38 @@ inline void bernstein_shape_functions( const int order,
   N:      the values of the shape functions at u
   Nd:     the derivative of the shape functions at u
 */
+inline void bernstein_shape_func_derivative( const int order,
+                                             const double u,
+                                             const double *knots,
+                                             double *N,
+                                             double *Nd ){
+  N[0] = 1.0;
+  double u1 = 1.0 - u;
+  double u2 = u - 1.0;
+
+  for ( int j = 1; j < order; j++ ){
+    double saved = 0.0;
+    for ( int k = 0; k < j; k++ ){
+      double tmp = N[k];
+      N[k] = saved + u1*tmp;
+      saved = u2*tmp;
+    }
+    N[j] = saved;
+  }  
+
+  Nd[0] = 1.0;
+  for ( int j = 1; j < order; j++ ){
+    double saved = 0.0;
+    for ( int k = 0; k < j; k++ ){
+      double tmp = Nd[k];
+      Nd[k] = saved + u1*tmp;
+      saved = u2*tmp;
+    }
+    Nd[j] = saved;
+  }
+}
+
+/*
 inline void bernstein_shape_func_derivative( const int order,
                                              const double u,
                                              const double *knots,

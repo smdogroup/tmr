@@ -59,6 +59,7 @@ public:
 
     for ( int i = 0; i < num_elements; i++ ){
       elements[i] = elem;
+      elem->incref();
     }
   }
 
@@ -94,6 +95,7 @@ public:
 
     for ( int i = 0; i < num_elements; i++ ){
       elements[i] = elem;
+      elem->incref();
     }
   }
 
@@ -339,7 +341,6 @@ void TMRTopoProblem::initialize( int _nlevels,
   // Allocate arrays to store the filter data
   filter_maps = new TACSVarMap*[ nlevels ];
   filter_dist = new TACSBVecDistribute*[ nlevels ];
-  filter_interp = new TACSBVecInterp*[ nlevels-1 ];
   filter_dep_nodes = new TACSBVecDepNodes*[ nlevels ];
 
   // The design variable vector for each level
@@ -398,7 +399,9 @@ void TMRTopoProblem::initialize( int _nlevels,
       filter_dist[k]->incref();
 
       filter_dep_nodes[k] = helmholtz_tacs[k]->getBVecDepNodes();
-      filter_dep_nodes[k]->incref();
+      if (filter_dep_nodes[k]){
+        filter_dep_nodes[k]->incref();
+      }
 
       // Create the design vector (can't use the helmholtz tacs
       // vectors because they have only one design variable per node)
@@ -420,6 +423,12 @@ void TMRTopoProblem::initialize( int _nlevels,
     else {
       helmholtz_creator2d->decref();
     }
+
+    // Create the vectors
+    helmholtz_rhs = helmholtz_tacs[0]->createVec();
+    helmholtz_psi = helmholtz_tacs[0]->createVec();
+    helmholtz_rhs->incref();
+    helmholtz_psi->incref();
 
     // Create the multigrid object
     double helmholtz_omega = 0.5;
@@ -449,27 +458,13 @@ void TMRTopoProblem::initialize( int _nlevels,
     double alpha = 1.0, beta = 0.0, gamma = 0.0;
     helmholtz_mg->assembleJacobian(alpha, beta, gamma, NULL);
     helmholtz_mg->factor();
+
   }
   else {
     // Copy over the assembler objects and filters
     for ( int k = 0; k < nlevels; k++ ){
       filter_maps[k] = _filter_maps[k];
       filter_maps[k]->incref();
-
-      // Set the maximum local size
-      const int *range;
-      filter_maps[k]->getOwnerRange(&range);
-      int size = vars_per_node*((range[mpi_rank+1] - range[mpi_rank]) +
-                                filter_indices[k]->getNumIndices());
-      int size2 = vars_per_node*oct_filter[k]->getNodeNumbers(NULL);
-
-      // Update the maximum local size
-      if (size > max_local_size){
-        max_local_size = size;
-      }
-      if (size2 > max_local_size){
-        max_local_size = size2;
-      }
 
       // Create the distribution object for the design variables
       filter_dist[k] = new TACSBVecDistribute(filter_maps[k],
@@ -529,6 +524,8 @@ void TMRTopoProblem::initialize( int _nlevels,
   }
 
   // Now create the interpolation between filter levels
+  filter_interp = new TACSBVecInterp*[ nlevels-1 ];
+
   for ( int k = 1; k < nlevels; k++ ){
     // Create the interpolation object
     filter_interp[k-1] = new TACSBVecInterp(filter_maps[k],
@@ -536,10 +533,39 @@ void TMRTopoProblem::initialize( int _nlevels,
     filter_interp[k-1]->incref();
 
     // Create the interpolation on the TMR side
-    oct_filter[k-1]->createInterpolation(oct_filter[k], filter_interp[k-1]);
+    if (oct_filter){
+      oct_filter[k-1]->createInterpolation(oct_filter[k], filter_interp[k-1]);
+    }
+    else {
+      quad_filter[k-1]->createInterpolation(quad_filter[k], filter_interp[k-1]);
+    }
     filter_interp[k-1]->initialize();
   }
 
+  // Compute the max filter size
+  for ( int k = 0; k < nlevels; k++ ){
+    // Set the maximum local size
+    const int *range;
+    filter_maps[k]->getOwnerRange(&range);
+    int size = 0; // vars_per_node*((range[mpi_rank+1] - range[mpi_rank]) +
+    // filter_indices[k]->getNumIndices());
+    int size2 = 0;
+    if (oct_filter){
+      size2 = vars_per_node*oct_filter[k]->getNodeNumbers(NULL);
+    }
+    else {
+      size2 = vars_per_node*quad_filter[k]->getNodeNumbers(NULL);
+    }
+    
+    // Update the maximum local size
+    if (size > max_local_size){
+      max_local_size = size;
+    }
+    if (size2 > max_local_size){
+      max_local_size = size2;
+    }
+  }
+ 
   // Set the maximum local size
   xlocal = new TacsScalar[ max_local_size ];
 

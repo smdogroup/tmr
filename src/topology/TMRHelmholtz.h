@@ -532,9 +532,9 @@ class TMROctHelmholtz : public TACSElement {
         for ( int n = 0; n < order; n++ ){
           // Set the quadrature points
           double pt[3];
-          pt[0] = -1.0 + 2.0*n/(order-1);
-          pt[1] = -1.0 + 2.0*m/(order-1);
-          pt[2] = -1.0 + 2.0*p/(order-1);
+          pt[0] = pts[n];
+          pt[1] = pts[m];
+          pt[2] = pts[p];
 
           // Get the shape functions
           double N[NUM_NODES];
@@ -585,9 +585,9 @@ class TMROctHelmholtz : public TACSElement {
 
           // Set the parametric point to extract the data
           double pt[3];
-          pt[0] = knots[n];
-          pt[1] = knots[m];
-          pt[2] = knots[p];
+          pt[0] = -1.0 + 2.0*n/(order-1);
+          pt[1] = -1.0 + 2.0*m/(order-1);
+          pt[2] = -1.0 + 2.0*p/(order-1);
 
           // Get the shape functions
           double N[NUM_NODES];
@@ -620,10 +620,7 @@ class TMROctHelmholtz : public TACSElement {
 
  private:
   void setUpKnots(){
-    // Set the knot locations
-    knots[0] = -1.0;
-    knots[order-1] = 1.0;
-    for (int i = 0; i < order; i++){
+    for ( int i = 0; i < order; i++ ){
       knots[i] = -1;
       knots[order+i] = 1;
     }   
