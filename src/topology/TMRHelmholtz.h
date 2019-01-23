@@ -18,7 +18,7 @@ class TMRQuadHelmholtz : public TACSElement {
     return "TMRQuadHelmholtz";
   }
   const char* displacementName( int i ){
-    return "x";
+    return "u";
   }
   const char* stressName( int i ){
     return NULL;
@@ -272,6 +272,18 @@ class TMRQuadHelmholtz : public TACSElement {
       }
     }
   }
+  void getOutputConnectivity( int *con, int node ){
+    int p = 0;
+    for ( int m = 0; m < order-1; m++ ){
+      for ( int n = 0; n < order-1; n++ ){
+        con[4*p]   = node + n   + m*order;
+        con[4*p+1] = node + n+1 + m*order;
+        con[4*p+2] = node + n+1 + (m+1)*order;
+        con[4*p+3] = node + n   + (m+1)*order;
+        p++;
+      }
+    }
+  }
 
  private:
   // Filter length scale argument
@@ -293,7 +305,7 @@ class TMROctHelmholtz : public TACSElement {
     return "TMROctHelmholtz";
   }
   const char* displacementName( int i ){
-    return "x";
+    return "u";
   }
   const char* stressName( int i ){
     return NULL;
@@ -560,7 +572,7 @@ class TMROctHelmholtz : public TACSElement {
       for ( int m = 0; m < order; m++ ){
         for ( int n = 0; n < order; n++ ){
           int index = 0;
-
+          
           // Set the parametric point to extract the data
           double pt[3];
           pt[0] = -1.0 + 2.0*n/(order-1);
@@ -591,6 +603,24 @@ class TMROctHelmholtz : public TACSElement {
             index++;
           }
           data += ld_data;
+        }
+      }
+    }    
+  }
+  void getOutputConnectivity( int *con, int node ){
+    int j = 0;
+    for ( int p = 0; p < order-1; p++ ){
+      for ( int m = 0; m < order-1; m++ ){
+        for ( int n = 0; n < order-1; n++ ){
+          con[8*j]   = node + n   +     m*order +     p*order*order;
+          con[8*j+1] = node + n+1 +     m*order +     p*order*order;
+          con[8*j+2] = node + n+1 + (m+1)*order +     p*order*order;
+          con[8*j+3] = node + n   + (m+1)*order +     p*order*order;
+          con[8*j+4] = node + n   +     m*order + (p+1)*order*order;
+          con[8*j+5] = node + n+1 +     m*order + (p+1)*order*order;
+          con[8*j+6] = node + n+1 + (m+1)*order + (p+1)*order*order;
+          con[8*j+7] = node + n   + (m+1)*order + (p+1)*order*order;
+          j++;
         }
       }
     }
