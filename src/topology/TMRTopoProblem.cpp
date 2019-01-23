@@ -381,12 +381,12 @@ void TMRTopoProblem::initialize( int _nlevels,
       if (helmholtz_creator3d){
         helmholtz_tacs[k] =
           helmholtz_creator3d->createTACS(oct_filter[k],
-                                          TACSAssembler::MULTICOLOR_ORDER);
+                                          TACSAssembler::NATURAL_ORDER);
       }
       else {
         helmholtz_tacs[k] =
           helmholtz_creator2d->createTACS(quad_filter[k],
-                                          TACSAssembler::MULTICOLOR_ORDER);
+                                          TACSAssembler::NATURAL_ORDER);
       }
       helmholtz_tacs[k]->incref();
 
@@ -556,7 +556,6 @@ void TMRTopoProblem::initialize( int _nlevels,
     else {
       size2 = vars_per_node*quad_filter[k]->getNodeNumbers(NULL);
     }
-    
     // Update the maximum local size
     if (size > max_local_size){
       max_local_size = size;
@@ -565,7 +564,7 @@ void TMRTopoProblem::initialize( int _nlevels,
       max_local_size = size2;
     }
   }
- 
+
   // Set the maximum local size
   xlocal = new TacsScalar[ max_local_size ];
 
@@ -1679,6 +1678,8 @@ void TMRTopoProblem::applyHelmholtzFilter( TACSBVec *xvars ){
       // Solve for the filtered values of the design variables
       helmholtz_ksm->solve(helmholtz_rhs, helmholtz_psi);
 
+      helmholtz_tacs[0]->setVariables(helmholtz_psi);
+
       // Get the output array
       TacsScalar *xarr;
       xvars->getArray(&xarr);
@@ -1705,6 +1706,7 @@ void TMRTopoProblem::applyHelmholtzFilter( TACSBVec *xvars ){
 void TMRTopoProblem::reverseHelmholtzFilter( TACSBVec *input,
                                              TACSBVec *output ){
   if (helmholtz_tacs){
+    output->zeroEntries();
     // Get the number of local elements
     int num_elements = helmholtz_tacs[0]->getNumElements();
 
@@ -1771,6 +1773,7 @@ void TMRTopoProblem::reverseHelmholtzFilter( TACSBVec *input,
               ns++;
               psi++;
             }
+
             x_values[vars_per_node*ii + k] += h*N[ii]*v;
           }
         }
@@ -1826,6 +1829,25 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
       size = getLocalValuesFromBVec(k+1, x[k+1], xlocal);
       tacs[k+1]->setDesignVars(xlocal, size);
     }
+  }
+  if (helmholtz_tacs){
+    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                               TACSElement::OUTPUT_DISPLACEMENTS);
+    TACSToFH% *f5 = NULL;
+    if (oct_filter){
+      f5 = new TACSToFH5(helmholtz_tacs[0], TACS_POISSON_3D_ELEMENT,
+                         write_flag);
+    }
+    else {
+      f5 = new TACSToFH5(helmholtz_tacs[0], TACS_POISSON_2D_ELEMENT,
+                         write_flag);
+    }
+    f5->incref();
+    char outfile[256];
+    sprintf(outfile, "%s/tacs_output%d.f5", prefix, iter_count);
+    f5->writeToFile(outfile);
+    f5->decref();
+    iter_count++;
   }
 }
 
@@ -2561,8 +2583,6 @@ void TMRTopoProblem::writeEigenVector( int iter ){
         f5->writeToFile(outfile);
       }
     }
-
-
     f5->decref();
     tmp->decref();
   }
