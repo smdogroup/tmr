@@ -1,0 +1,1 @@
+mpirun -np 4 python cantilever.py --init_depth 1 --mg_levels 2 --max_opt_iters 2 --vol_frac 0.25 --qn_subspace 2 --tr_penalty 15. --use_L1 --opt_abs_tol 1e-8 --q_penalty 8.0

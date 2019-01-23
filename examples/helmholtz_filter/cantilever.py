@@ -6,42 +6,22 @@ import numpy as np
 import argparse
 import os
 
-class CreateMe(TMR.OctBernsteinTopoCreator):
-    def __init__(self, bcs, forest, use_bernstein, props):
-        TMR.OctBernsteinTopoCreator.__init__(bcs, forest, use_bernstein)        
-        # Create the array of properties
+class CreateMe(TMR.OctTopoCreator):
+    def __init__(self, bcs, filt, props):
+        TMR.OctTopoCreator.__init__(bcs, filt)
         self.props = props
-        
-    def createElement(self, order, octant, index, filtr):
+
+    def createElement(self, order, octant, index, weights):
         '''Create the element'''
-        stiff = TMR.ThermoOctStiffness(self.props,
-                                       index, None, filtr)
-        elem = elements.SolidThermo(order, stiff)
-        
+        stiff = TMR.OctStiffness(self.props, index, weights)
+        elem = elements.Solid(2, stiff)
         return elem
-     
-def addVertexLoad(comm, forest, attr, assembler, F):
-    # Retrieve octant from the forest
-    octants = forest.getOctants()
-    node_octs = forest.getNodesWithName(attr)
-    force = assembler.createVec()
-    f_array = force.getArray()
-    node_range = forest.getNodeRange()
-    mpi_rank = comm.Get_rank()
-    for i in range(len(node_octs)):
-        if ((node_octs[i] >= node_range[mpi_rank]) and
-            (node_octs[i] < node_range[mpi_rank+1])): 
-            index = node_octs[i] - node_range[mpi_rank]
-            f_array[4*index] += F[0]
-            f_array[4*index+1] += F[1]
-            f_array[4*index+2] += F[2]
-    return force
 
 def addFaceTraction(order, forest, attr, assembler, tr):
     trac = []
     for findex in range(6):
-        trac.append(elements.TACS3DThermoTraction(order, findex, tr[0], tr[1],
-                                                  tr[2]))
+        trac.append(elements.Traction3D(order, findex, tr[0], tr[1],
+                                        tr[2]))
 
     # Retrieve octants from the forest
     octants = forest.getOctants()
@@ -53,7 +33,7 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     return aux
 
-def createTopoProblem(props, forest, order=3, nlevels=2,
+def createTopoProblem(props, forest, order=2, nlevels=2,
                       ordering=TACS.PY_MULTICOLOR_ORDER,
                       ite=1):
     # Create the forest
@@ -65,41 +45,40 @@ def createTopoProblem(props, forest, order=3, nlevels=2,
 
     # Create the trees, rebalance the elements and repartition
     forest.balance(1)
-    forest.setMeshOrder(order)#, interp=TMR.GAUSS_LOBATTO_POINTS)
     forest.repartition()
     forests.append(forest)
-    use_bernstein = args.use_bernstein
+
+    # Create the filter
+    filtr = forest.coarsen()
+    filtr.balance(1)
+    filters.append(filtr)
+    
     # Make the creator class
-    creator = CreateMe(bcs, forests[-1], use_bernstein, props)
+    creator = CreateMe(bcs, filters[-1], props)
     assemblers.append(creator.createTACS(forest, ordering=ordering))
     varmaps.append(creator.getMap())
     vecindices.append(creator.getIndices())
-    filters.append(creator.getFilter())
+    #filters.append(creator.getFilter())
     
     for i in xrange(nlevels-1):
-        if args.use_decrease_order:
-            forest = forests[-1].duplicate()
-            forest.balance(1)
-            if order-i-1 >= 3:
-                forest.setMeshOrder(order-i-1)
-            else: 
-                forest.setMeshOrder(3)
-        else:
-            forest = forests[-1].coarsen()
-            forest.balance(1)
-            forest.setMeshOrder(order)#,interp=TMR.GAUSS_LOBATTO_POINTS)
-        #forest.repartition()
+        forest = forests[-1].coarsen()
+        forest.balance(1)
+        forest.repartition()
         forests.append(forest)
 
+        # Create the filter
+        filtr = forest.coarsen()
+        filtr.balance(1)
+        filters.append(filtr)
+
         # Make the creator class
-        creator = CreateMe(bcs, forests[-1], use_bernstein, props)
-        assemblers.append(creator.createTACS(forest, ordering=ordering))
+        creator = CreateMe(bcs, filters[-1], props)
+        assemblers.append(creator.createTACS(forest, ordering))
         varmaps.append(creator.getMap())
         vecindices.append(creator.getIndices())
-        filters.append(creator.getFilter())
 
     # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests, omega=args.omega)
+    mg = TMR.createMg(assemblers, forests)
     
     # Create the topology optimization problem
     vars_per_node = 1
@@ -107,7 +86,7 @@ def createTopoProblem(props, forest, order=3, nlevels=2,
     if nmats > 1:
         vars_per_node = nmats+1
     problem = TMR.TopoProblem(assemblers, filters, mg,
-                              varmaps, vecindices,  helmholtz_radius=0.25/100.,
+                              varmaps, vecindices, helmholtz_radius=0.25/100.,
                               vars_per_node=vars_per_node)
 
     return assemblers[0], problem, filters[0], varmaps[0]
@@ -133,9 +112,6 @@ p.add_argument('--use_paropt', action='store_true', default=True)
 p.add_argument('--use_mma', action='store_true', default=False)
 p.add_argument('--use_L1', action='store_true', default=False)
 p.add_argument('--use_Linf', action='store_true', default=False)
-p.add_argument('--use_decrease_order', action='store_true', default=False)
-p.add_argument('--use_bernstein', action='store_true', default=False)
-p.add_argument('--order', type=int, default=3)
 p.add_argument('--q_penalty', type=float, default=8.0)
 p.add_argument('--omega', type=float, default=1.0)
 args = p.parse_args()
@@ -243,8 +219,7 @@ faces[1].setMesh(ext_face_mesh)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed', [0,1,2,3],
-                         [0.0,0.0,0.0,0.0])
+bcs.addBoundaryCondition('fixed')
 
 # Create the mesh
 mesh = TMR.Mesh(comm, geo)
@@ -297,13 +272,12 @@ obj_array = [ 1e-2 ]
 rho = [2600, 1300.]
 E = [70e9, 35e9]
 nu = [0.3, 0.3]
-aT = [23.5e-6, 23.5e-6*0.5]
-kcond = [130.0, 65.0]
+#aT = [23.5e-6, 23.5e-6*0.5]
+#kcond = [130.0, 65.0]
 
 # Create the stiffness properties object
-props = TMR.StiffnessProperties(rho, E, nu, _aT=aT, _kcond=kcond, k0=1e-6,
-                                q=args.q_penalty, qtemp=0.0,
-                                qcond=args.q_penalty)
+props = TMR.StiffnessProperties(rho, E, nu, k0=1e-6,
+                                q=args.q_penalty)
 
 # Set the fixed mass
 max_density = sum(rho)/len(rho)
