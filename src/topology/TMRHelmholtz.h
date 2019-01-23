@@ -572,7 +572,6 @@ class TMROctHelmholtz : public TACSElement {
       for ( int m = 0; m < order; m++ ){
         for ( int n = 0; n < order; n++ ){
           int index = 0;
-          
           // Set the parametric point to extract the data
           double pt[3];
           pt[0] = -1.0 + 2.0*n/(order-1);
