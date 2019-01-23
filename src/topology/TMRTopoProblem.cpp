@@ -2400,7 +2400,9 @@ int TMRTopoProblem::evalHvecProduct( ParOptVec *xvec,
                                      ParOptScalar *z,
                                      ParOptVec *zw,
                                      ParOptVec *pxvec,
-                                     ParOptVec *hvec ){}
+                                     ParOptVec *hvec ){
+  return 0;
+}
 
 // Evaluate the sparse constraints
 // ------------------------

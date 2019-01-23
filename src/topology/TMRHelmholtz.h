@@ -11,7 +11,6 @@ class TMRQuadHelmholtz : public TACSElement {
 
   TMRQuadHelmholtz( TacsScalar r ){
     r2 = r*r;
-    setUpKnots();
   }
   ~TMRQuadHelmholtz(){}
   
@@ -64,10 +63,8 @@ class TMRQuadHelmholtz : public TACSElement {
   }
   void getShapeFunctions( const double pt[], double N[] ){
     double na[order], nb[order];
-    bernstein_shape_functions(order, pt[0], knots,
-                              na);
-    bernstein_shape_functions(order, pt[1], knots,
-                              nb);
+    bernstein_shape_functions(order, pt[0], na);
+    bernstein_shape_functions(order, pt[1], nb);
     for ( int j = 0; j < order; j++ ){
       for ( int i = 0; i < order; i++ ){
         N[0] = na[i]*nb[j];
@@ -79,10 +76,8 @@ class TMRQuadHelmholtz : public TACSElement {
                           double Na[], double Nb[] ){
     double na[order], nb[order];
     double dna[order], dnb[order];
-    bernstein_shape_func_derivative(order, pt[0], knots,
-                                    na, dna);
-    bernstein_shape_func_derivative(order, pt[1], knots,
-                                    nb, dnb); 
+    bernstein_shape_func_derivative(order, pt[0], na, dna);
+    bernstein_shape_func_derivative(order, pt[1], nb, dnb); 
     for ( int j = 0; j < order; j++ ){
       for ( int i = 0; i < order; i++ ){
         N[0] = na[i]*nb[j];
@@ -279,21 +274,8 @@ class TMRQuadHelmholtz : public TACSElement {
   }
 
  private:
-  void setUpKnots(){
-    // Set the knot locations
-    knots[0] = -1.0;
-    knots[order-1] = 1.0;
-    for (int i = 0; i < order; i++){
-      knots[i] = -1;
-      knots[order+i] = 1;
-    }   
-  }
-
   // Filter length scale argument
   TacsScalar r2; 
-
-  // Bernstein knots 
-  double knots[2*order];
 };
 
 template <int order>
@@ -304,7 +286,6 @@ class TMROctHelmholtz : public TACSElement {
   TMROctHelmholtz( TacsScalar r ){
     // Set the length scale
     r2 = r*r;
-    setUpKnots();
   }
   ~TMROctHelmholtz(){}
   
@@ -361,9 +342,9 @@ class TMROctHelmholtz : public TACSElement {
   }
   void getShapeFunctions( const double pt[], double N[] ){
     double na[order], nb[order], nc[order];
-    bernstein_shape_functions(order, pt[0], knots, na);
-    bernstein_shape_functions(order, pt[1], knots, nb);
-    bernstein_shape_functions(order, pt[2], knots, nc);
+    bernstein_shape_functions(order, pt[0], na);
+    bernstein_shape_functions(order, pt[1], nb);
+    bernstein_shape_functions(order, pt[2], nc);
 
     for ( int k = 0; k < order; k++ ){
       for ( int j = 0; j < order; j++ ){
@@ -378,12 +359,9 @@ class TMROctHelmholtz : public TACSElement {
                           double Na[], double Nb[], double Nc[] ){
     double na[order], nb[order], nc[order];
     double dna[order], dnb[order], dnc[order];
-    bernstein_shape_func_derivative(order, pt[0], knots,
-                                    na, dna);
-    bernstein_shape_func_derivative(order, pt[1], knots,
-                                    nb, dnb); 
-    bernstein_shape_func_derivative(order, pt[2], knots,
-                                    nc, dnc); 
+    bernstein_shape_func_derivative(order, pt[0], na, dna);
+    bernstein_shape_func_derivative(order, pt[1], nb, dnb); 
+    bernstein_shape_func_derivative(order, pt[2], nc, dnc); 
     for ( int k = 0; k < order; k++ ){
       for ( int j = 0; j < order; j++ ){
         for ( int i = 0; i < order; i++ ){
@@ -619,18 +597,8 @@ class TMROctHelmholtz : public TACSElement {
   }
 
  private:
-  void setUpKnots(){
-    for ( int i = 0; i < order; i++ ){
-      knots[i] = -1;
-      knots[order+i] = 1;
-    }   
-  }
-
   // Filter length scale argument
   TacsScalar r2; 
-
-  // Bernstein knots 
-  double knots[2*order];
 };
 
 #endif // TMR_HELMHOLTZ_H

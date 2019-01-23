@@ -938,7 +938,7 @@ void TMRQuadForest::setMeshOrder( int _mesh_order,
     }
   }
   else if (interp_type == TMR_BERNSTEIN_POINTS){
-    for (int i = 0; i < mesh_order; i++){
+    for ( int i = 0; i < mesh_order; i++ ){
       interp_knots[i] = -1;
       interp_knots[mesh_order+i] = 1;
     }
@@ -1037,14 +1037,15 @@ void TMRQuadForest::evalInterp( const double pt[], double N[] ){
   double Nu[MAX_ORDER], Nv[MAX_ORDER];
   if (interp_type == TMR_BERNSTEIN_POINTS){
     // Evaluate the bernstein shape functions
-    bernstein_shape_functions(mesh_order, pt[0], interp_knots, Nu);
-    bernstein_shape_functions(mesh_order, pt[1], interp_knots, Nv);
+    bernstein_shape_functions(mesh_order, pt[0], Nu);
+    bernstein_shape_functions(mesh_order, pt[1], Nv);
   }
   else{
     // Evaluate the lagrange shape functions
     lagrange_shape_functions(mesh_order, pt[0], interp_knots, Nu);
     lagrange_shape_functions(mesh_order, pt[1], interp_knots, Nv);
   }
+
   for ( int j = 0; j < mesh_order; j++ ){
     for ( int i = 0; i < mesh_order; i++ ){
       N[0] = Nu[i]*Nv[j];
@@ -1060,18 +1061,18 @@ void TMRQuadForest::evalInterp( const double pt[], double N[],
                                 double N1[], double N2[] ){
   double Nu[MAX_ORDER], Nv[MAX_ORDER];
   double Nud[MAX_ORDER], Nvd[MAX_ORDER];
+
   if (interp_type == TMR_BERNSTEIN_POINTS){
     // Evaluate the bernstein shape functions
-    bernstein_shape_func_derivative(mesh_order, pt[0], interp_knots, 
-                                    Nu, Nud);
-    bernstein_shape_func_derivative(mesh_order, pt[1], interp_knots, 
-                                    Nv, Nvd);
+    bernstein_shape_func_derivative(mesh_order, pt[0], Nu, Nud);
+    bernstein_shape_func_derivative(mesh_order, pt[1], Nv, Nvd);
   }
   else {
     // Evaluate the shape functions
     lagrange_shape_func_derivative(mesh_order, pt[0], interp_knots, Nu, Nud);
     lagrange_shape_func_derivative(mesh_order, pt[1], interp_knots, Nv, Nvd);
   }
+
   for ( int j = 0; j < mesh_order; j++ ){
     for ( int i = 0; i < mesh_order; i++ ){
       N[0] = Nu[i]*Nv[j];
@@ -1093,11 +1094,18 @@ void TMRQuadForest::evalInterp( const double pt[], double N[],
   double Nu[MAX_ORDER], Nud[MAX_ORDER], Nudd[MAX_ORDER];
   double Nv[MAX_ORDER], Nvd[MAX_ORDER], Nvdd[MAX_ORDER];
 
-  // Evaluate the shape functions
-  lagrange_shape_func_second_derivative(mesh_order, pt[0], interp_knots,
-                                        Nu, Nud, Nudd);
-  lagrange_shape_func_second_derivative(mesh_order, pt[1], interp_knots,
-                                        Nv, Nvd, Nvdd);
+  if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Evaluate the shape functions
+    lagrange_shape_func_second_derivative(mesh_order, pt[0], interp_knots,
+                                          Nu, Nud, Nudd);
+    lagrange_shape_func_second_derivative(mesh_order, pt[1], interp_knots,
+                                          Nv, Nvd, Nvdd);
+  }
+  else {
+    // Evaluate the bernstein shape functions
+    bernstein_shape_func_second_derivative(mesh_order, pt[0], Nu, Nud, Nudd);
+    bernstein_shape_func_second_derivative(mesh_order, pt[0], Nv, Nvd, Nvdd);
+  }
 
   for ( int j = 0; j < mesh_order; j++ ){
     for ( int i = 0; i < mesh_order; i++ ){
@@ -3696,12 +3704,13 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
 
   double *bern_knots = new double[mesh_order];
   memset(bern_knots, 0.0, mesh_order*sizeof(double));
+
   if (interp_type == TMR_BERNSTEIN_POINTS){
     bern_knots[0] = -1.0;
     bern_knots[mesh_order-1] = 1.0;
     double knot_space = 2.0/(mesh_order-1);
-    for (int p = 1; p < mesh_order-1; p++){
-      bern_knots[p] = -1. + p*knot_space;
+    for ( int p = 1; p < mesh_order-1; p++ ){
+      bern_knots[p] = -1.0 + p*knot_space;
     }
   }
   for ( int i = 0; i < num_elements; i++ ){
@@ -3777,6 +3786,7 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
 
           // Set the offset into the local connectivity array
           const int *c = &conn[mesh_order*mesh_order*i];
+
           if (interp_type != TMR_BERNSTEIN_POINTS){
             for ( int k = 0; k < mesh_order; k++ ){
               // Compute the offset to the local edge
@@ -3862,6 +3872,7 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
       }
     }
   } 
+
   delete [] edge_nodes;
 }
 
@@ -3887,7 +3898,7 @@ void TMRQuadForest::evaluateNodeLocations(){
     // Create the evenly spaced "Bern knots"
     bern_knots = new double[ mesh_order ];
     double knot_space = 2.0/(mesh_order-1);
-    for (int p = 1; p < mesh_order-1; p++){
+    for ( int p = 1; p < mesh_order-1; p++ ){
       bern_knots[p] = -1. + p*knot_space;
     }
     bern_knots[0] = -1.0;
@@ -4424,10 +4435,12 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   int jstart = 0, jend = coarse->mesh_order;
   double *Nu = &tmp[0];
   double *Nv = &tmp[coarse->mesh_order];
+
   // Check that the interpolation type between the meshes are identical
   if (interp_type != coarse->interp_type){
     printf("Error: Interpolation type between meshes are not identical\n");
   }
+
   if (interp_type != TMR_BERNSTEIN_POINTS){
     // Check whether the node is on a coarse mesh surface in either
     // the x,y,z directions
@@ -4999,8 +5012,7 @@ void TMRQuadForest::evalBernsteinOrderWeights( int coarse_mesh_order,
     }
   }
   else if (mesh_order == coarse_mesh_order){
-    bernstein_shape_functions(coarse_mesh_order, u,
-                              knots, N);
+    bernstein_shape_functions(coarse_mesh_order, u, N);
   }
   else {
     printf("[%d] Warning: mesh order difference across grids should be 1 or the \
