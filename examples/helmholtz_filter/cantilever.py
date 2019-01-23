@@ -86,7 +86,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2,
     if nmats > 1:
         vars_per_node = nmats+1
     problem = TMR.TopoProblem(assemblers, filters, mg,
-                              varmaps, vecindices, helmholtz_radius=0.25/100.,
+                              varmaps, vecindices, helmholtz_radius=.25/100.,
                               vars_per_node=vars_per_node)
 
     return assemblers[0], problem, filters[0], varmaps[0]
@@ -254,7 +254,6 @@ if len(args.max_opt_iters) < max_iterations:
     args.max_opt_iters.extend(n*[args.max_opt_iters[-1]])
     
 # Set parameters for later usage
-order = args.order
 forest.createTrees(args.init_depth)
 
 # The old filter/map classes
@@ -293,8 +292,7 @@ for step in xrange(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
     nlevs = mg_levels[step]
     assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
-                                                          nlevels=nlevs,
-                                                          order=args.order)
+                                                          nlevels=nlevs)
 
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
