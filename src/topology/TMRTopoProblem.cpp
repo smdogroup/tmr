@@ -59,7 +59,6 @@ public:
 
     for ( int i = 0; i < num_elements; i++ ){
       elements[i] = elem;
-      elem->incref();
     }
   }
 
@@ -95,7 +94,6 @@ public:
 
     for ( int i = 0; i < num_elements; i++ ){
       elements[i] = elem;
-      elem->incref();
     }
   }
 
@@ -1739,6 +1737,10 @@ void TMRTopoProblem::reverseHelmholtzFilter( TACSBVec *input,
       // Solve for the filtered values of the design variables
       helmholtz_ksm->solve(helmholtz_rhs, helmholtz_psi);
 
+      // Distribute the values from the solution
+      helmholtz_psi->beginDistributeValues();
+      helmholtz_psi->endDistributeValues();
+
       for ( int i = 0; i < num_elements; i++ ){
         // Get the values for this element
         int len;
@@ -1833,7 +1835,7 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
   if (helmholtz_tacs){
     unsigned int write_flag = (TACSElement::OUTPUT_NODES |
                                TACSElement::OUTPUT_DISPLACEMENTS);
-    TACSToFH% *f5 = NULL;
+    TACSToFH5 *f5 = NULL;
     if (oct_filter){
       f5 = new TACSToFH5(helmholtz_tacs[0], TACS_POISSON_3D_ELEMENT,
                          write_flag);

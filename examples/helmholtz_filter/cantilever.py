@@ -1,3 +1,4 @@
+from __future__ import print_function
 from mpi4py import MPI
 from tmr import TMR
 from paropt import ParOpt
@@ -319,7 +320,7 @@ for step in xrange(max_iterations):
     # Initialize the problem and set the prefix
     problem.initialize()
     problem.setPrefix(args.prefix)
-    use_tr = 0
+    use_tr = 1
     use_paropt = 1
     if use_tr:
         # Create the quasi-Newton Hessian approximation
@@ -393,7 +394,7 @@ for step in xrange(max_iterations):
             opt.setInitBarrierParameter(10.0)
             opt.resetDesignAndBounds()
             opt.optimize()
-            exit(0)
+
             # Get the optimized point
             x, z, zw, zl, zu = opt.getOptimizedPoint()
 
