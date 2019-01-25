@@ -379,12 +379,12 @@ void TMRTopoProblem::initialize( int _nlevels,
       if (helmholtz_creator3d){
         helmholtz_tacs[k] =
           helmholtz_creator3d->createTACS(oct_filter[k],
-                                          TACSAssembler::MULTICOLOR_ORDER);
+                                          TACSAssembler::NATURAL_ORDER);
       }
       else {
         helmholtz_tacs[k] =
           helmholtz_creator2d->createTACS(quad_filter[k],
-                                          TACSAssembler::MULTICOLOR_ORDER);
+                                          TACSAssembler::NATURAL_ORDER);
       }
       helmholtz_tacs[k]->incref();
 
