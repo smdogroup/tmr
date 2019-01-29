@@ -53,6 +53,7 @@ class HeatFluxIntCtx : public TACSFunctionCtx {
 
 TMRHeatFluxIntegral::TMRHeatFluxIntegral( TACSAssembler *_tacs,
                                           const char *_name,
+                                          int _surface,
                                           TMROctForest *_oforest,
                                           TMRQuadForest *_qforest ):
 TACSFunction(_tacs, TACSFunction::ENTIRE_DOMAIN,
@@ -62,6 +63,7 @@ TACSFunction(_tacs, TACSFunction::ENTIRE_DOMAIN,
   value = 0.0;
   oforest = _oforest;
   qforest = _qforest;
+  surface = _surface;
   
 }
 TMRHeatFluxIntegral::~TMRHeatFluxIntegral(){}
@@ -139,7 +141,8 @@ void TMRHeatFluxIntegral::elementWiseEval( EvaluationType ftype,
     const int numNodes = element->numNodes();
     
     int numGauss = element->getNumGaussPts();
-    double N[numNodes];
+    double N[numNodes], Na[numNodes], Nb[numNodes];
+    TacsScalar q[numDisps-1];
     int order = 0;
     // Get the constitutive object for this element
     TACSConstitutive *con = NULL;
@@ -153,18 +156,21 @@ void TMRHeatFluxIntegral::elementWiseEval( EvaluationType ftype,
         dynamic_cast<CoupledThermoQuadStiffness*>(element->getConstitutive());
       order = sqrt(numNodes);
     }
+    TacsScalar Xa[3], Xb[3];
+    Xa[0] = Xa[1] = Xa[2] = 0.0;
+    Xb[0] = Xb[1] = Xb[2] = 0.0;
+
     if (con){
       // With the first iteration, find the maximum over the domain
       for ( int i = 0; i < numGauss; i++ ){
         // Get the Gauss points one at a time
         double pt[3];
         double weight = element->getGaussWtsPts(i, pt);
-        element->getShapeFunctions(pt, N);
+        element->getShapeFunctions(pt, N, Na, Nb);
         // Get the strain B*u and temperature dT
         // If 3D structure
         if (numDisps == 4){
-          
-            CoupledThermoSolid<2>* elem =
+          CoupledThermoSolid<2>* elem =
               dynamic_cast<CoupledThermoSolid<2>*>(element);
           }
           else {
@@ -172,13 +178,24 @@ void TMRHeatFluxIntegral::elementWiseEval( EvaluationType ftype,
           }
           
         elem->getBT(strain, pt, Xpts, vars);
-        
-
+        con->calculateConduction(pt, strain, q);
+        // Compute the normal to the element
+        TacsScalar dir[3];
+        Tensor::crossProduct3D(dir, Xa, Xb);
+        if (numDisps == 3){
+          value += dir[0]*q[0] + dir[1]*q[1];
+        }
+        else {
+          value += dir[0]*q[0] + dir[1]*q[1] + dir[2]*q[2];
+        }
       }
-    } // end if constitutive
-    
-  }
-  
+      // Add up the contribution from the quadrature
+      TacsScalar h = element->getDetJacobian(pt, Xpts);
+      h *= weight;
+
+      ctx->value += h*value;
+    } // end if constitutive    
+  }  
 }
 /*
   For each thread used to evaluate the function, call the

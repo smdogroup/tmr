@@ -7,7 +7,8 @@
 */
 class TMRHeatFluxIntegral : public TACSFunction {
  public:
-  TMRHeatFluxIntegral( TACSAssembler *_tacs, const char *_name, 
+  TMRHeatFluxIntegral( TACSAssembler *_tacs, const char *_name,
+                       int _surface,
                        TMROctForest *_oforest=NULL, 
                        TMRQuadForest *_qforest=NULL );
   ~TMRHeatFluxIntegral(){}
@@ -80,6 +81,8 @@ class TMRHeatFluxIntegral : public TACSFunction {
   // The max number of nodes
   int maxNumNodes;
   
+  // Surface/edge number
+  int surface;
   // Octree or quadtree forest
   TMROctForest *oforest;
   TMRQuadForest *qforest;
