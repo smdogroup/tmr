@@ -53,9 +53,9 @@ class HeatFluxIntCtx : public TACSFunctionCtx {
 
 TMRHeatFluxIntegral::TMRHeatFluxIntegral( TACSAssembler *_tacs,
                                           const char *_name,
-                                          int _surface,
                                           TMROctForest *_oforest,
-                                          TMRQuadForest *_qforest ):
+                                          TMRQuadForest *_qforest,
+                                          int _surface ):
 TACSFunction(_tacs, TACSFunction::ENTIRE_DOMAIN,
              TACSFunction::SINGLE_STAGE, 0){
   maxNumNodes = _tacs->getMaxElementNodes();
@@ -119,7 +119,7 @@ void TMRHeatFluxIntegral::initThread( const double tcoef,
   HeatFluxCtx *ctx = dynamic_cast<HeatFluxIntCtx*>(fctx);
   if (ctx){
     ctx->value = 0.0;
-  }
+  }  
 }
 
 /*
@@ -156,10 +156,8 @@ void TMRHeatFluxIntegral::elementWiseEval( EvaluationType ftype,
         dynamic_cast<CoupledThermoQuadStiffness*>(element->getConstitutive());
       order = sqrt(numNodes);
     }
-    TacsScalar Xa[3], Xb[3];
-    Xa[0] = Xa[1] = Xa[2] = 0.0;
-    Xb[0] = Xb[1] = Xb[2] = 0.0;
-
+    // Direction vector of the surface/edge
+    TacsScalar dir[3];
     if (con){
       // With the first iteration, find the maximum over the domain
       for ( int i = 0; i < numGauss; i++ ){
@@ -167,21 +165,158 @@ void TMRHeatFluxIntegral::elementWiseEval( EvaluationType ftype,
         double pt[3];
         double weight = element->getGaussWtsPts(i, pt);
         element->getShapeFunctions(pt, N, Na, Nb);
+
+        TacsScalar Xa[3], Xb[3];
+        Xa[0] = Xa[1] = Xa[2] = 0.0;
+        Xb[0] = Xb[1] = Xb[2] = 0.0;
+
+        dir[0] = dir[1] = dir[2] = 0.0;
+        
         // Get the strain B*u and temperature dT
         // If 3D structure
         if (numDisps == 4){
-          CoupledThermoSolid<2>* elem =
-              dynamic_cast<CoupledThermoSolid<2>*>(element);
+          if (surface < 2){
+            const int ii = (order-1)*(surface % 2);
+            for ( int kk = 0; kk < order; kk++ ){
+              for ( int jj = 0; jj < order; jj++ ){
+                const int node = ii + jj*order + kk*order*order;
+              
+                Xa[0] += Na[jj + kk*order]*Xpts[3*node];
+                Xa[1] += Na[jj + kk*order]*Xpts[3*node+1];
+                Xa[2] += Na[jj + kk*order]*Xpts[3*node+2];
+
+                Xb[0] += Nb[jj + kk*order]*Xpts[3*node];
+                Xb[1] += Nb[jj + kk*order]*Xpts[3*node+1];
+                Xb[2] += Nb[jj + kk*order]*Xpts[3*node+2];
+              }
+            }
+          }
+          else if (surface < 4){
+            const int jj = (order-1)*(surface % 2);
+            for ( int kk = 0; kk < order; kk++ ){
+              for ( int ii = 0; ii < order; ii++ ){
+                const int node = ii + jj*order + kk*order*order;
+              
+                Xa[0] += Na[ii + kk*order]*Xpts[3*node];
+                Xa[1] += Na[ii + kk*order]*Xpts[3*node+1];
+                Xa[2] += Na[ii + kk*order]*Xpts[3*node+2];
+
+                Xb[0] += Nb[ii + kk*order]*Xpts[3*node];
+                Xb[1] += Nb[ii + kk*order]*Xpts[3*node+1];
+                Xb[2] += Nb[ii + kk*order]*Xpts[3*node+2];
+              }
+            }
           }
           else {
+            const int kk = (order-1)*(surface % 2);
+            for ( int jj = 0; jj < order; jj++ ){
+              for ( int ii = 0; ii < order; ii++ ){
+                const int node = ii + jj*order + kk*order*order;
+              
+                Xa[0] += Na[ii + jj*order]*Xpts[3*node];
+                Xa[1] += Na[ii + jj*order]*Xpts[3*node+1];
+                Xa[2] += Na[ii + jj*order]*Xpts[3*node+2];
 
+                Xb[0] += Nb[ii + jj*order]*Xpts[3*node];
+                Xb[1] += Nb[ii + jj*order]*Xpts[3*node+1];
+                Xb[2] += Nb[ii + jj*order]*Xpts[3*node+2];
+              }
+            }
           }
-          
-        elem->getBT(strain, pt, Xpts, vars);
+          // Compute the normal to the element
+          Tensor::crossProduct3D(dir, Xa, Xb);
+
+          if (order == 2){
+            CoupledThermoSolid<2>* elem =
+              dynamic_cast<CoupledThermoSolid<2>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else if (order == 3){
+            CoupledThermoSolid<3>* elem =
+              dynamic_cast<CoupledThermoSolid<3>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else if (order == 4){
+            CoupledThermoSolid<4>* elem =
+              dynamic_cast<CoupledThermoSolid<4>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else if (order == 5){
+            CoupledThermoSolid<5>* elem =
+              dynamic_cast<CoupledThermoSolid<5>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else if (order == 6){
+            CoupledThermoSolid<6>* elem =
+              dynamic_cast<CoupledThermoSolid<6>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else {
+            printf("Heat flux element not implemented\n");
+          }
+        }
+        else {
+          // Compute direction
+          if (surface == 0 || surface == 1){
+            dir[0] = 0.0;
+            dir[1] = 1.0;
+          }
+          else {
+            dir[0] = 1.0;
+            dir[1] = 0.0;
+          }         
+
+          if (order == 2){
+            PlaneStressCoupledThermoQuad<2>* elem =
+              dynamic_cast<PlaneStressCoupledThermoQuad<2>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else if (order == 3){
+            PlaneStressCoupledThermoQuad<3>* elem =
+              dynamic_cast<PlaneStressCoupledThermoQuad<3>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else if (order == 4){
+            PlaneStressCoupledThermoQuad<4>* elem =
+              dynamic_cast<PlaneStressCoupledThermoQuad<4>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else if (order == 5){
+            PlaneStressCoupledThermoQuad<5>* elem =
+              dynamic_cast<PlaneStressCoupledThermoQuad<5>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else if (order == 6){
+            PlaneStressCoupledThermoQuad<6>* elem =
+              dynamic_cast<PlaneStressCoupledThermoQuad<6>*>(element);
+            if (elem){
+              elem->getBT(strain, pt, Xpts, vars);
+            }
+          }
+          else {
+            printf("Heat flux element not implemented\n");
+          }
+        }          
+        
         con->calculateConduction(pt, strain, q);
-        // Compute the normal to the element
-        TacsScalar dir[3];
-        Tensor::crossProduct3D(dir, Xa, Xb);
         if (numDisps == 3){
           value += dir[0]*q[0] + dir[1]*q[1];
         }

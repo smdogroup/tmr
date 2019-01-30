@@ -8,9 +8,9 @@
 class TMRHeatFluxIntegral : public TACSFunction {
  public:
   TMRHeatFluxIntegral( TACSAssembler *_tacs, const char *_name,
-                       int _surface,
                        TMROctForest *_oforest=NULL, 
-                       TMRQuadForest *_qforest=NULL );
+                       TMRQuadForest *_qforest=NULL,
+                       int _surface=-1 );
   ~TMRHeatFluxIntegral(){}
   // Retrieve the name of the function
   // ---------------------------------
