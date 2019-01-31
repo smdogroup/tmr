@@ -18,8 +18,7 @@ CXX_OBJS = TMRTopoProblem.o \
 	SolidShellWrapper.o \
 	TMRQuadStiffness.o \
 	TMRCoupledThermoQuadStiffness.o \
-	TMRCoupledThermoOctStiffness.o \
-	TMRHeatFlux.o
+	TMRCoupledThermoOctStiffness.o 
 
 DIR=${TMR_DIR}/src/topology
 
