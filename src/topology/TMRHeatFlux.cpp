@@ -18,6 +18,7 @@
 #include "PlaneStressCoupledThermoQuad.h"
 #include "CoupledThermoSolidStiffness.h"
 #include "CoupledThermoPlaneStressStiffness.h"
+#include "TensorToolbox.h"
 
 /*
   The context for the TMRHeatFlux function
@@ -28,6 +29,7 @@ class HeatFluxIntCtx : public TACSFunctionCtx {
                   int maxNodes ){
     // Allocate the working array
     value = 0.0;
+    int maxStrains = 3;
     // Allocate the working array
     work = new TacsScalar[2*maxStrains + 3*maxNodes];
 
@@ -38,7 +40,10 @@ class HeatFluxIntCtx : public TACSFunctionCtx {
     
   }
   ~HeatFluxIntCtx(){
-    delete [] N;
+    delete [] work;
+    delete [] hXptSens;
+    delete [] failSens;
+    delete [] strain;
   }
 
   // Data to be used for the function computation
@@ -59,12 +64,14 @@ TMRHeatFluxIntegral::TMRHeatFluxIntegral( TACSAssembler *_tacs,
 TACSFunction(_tacs, TACSFunction::ENTIRE_DOMAIN,
              TACSFunction::SINGLE_STAGE, 0){
   maxNumNodes = _tacs->getMaxElementNodes();
-  name = _name;
   value = 0.0;
   oforest = _oforest;
   qforest = _qforest;
   surface = _surface;
-  
+  if (_name){
+    name = new char[ strlen(_name)+1 ];
+    strcpy(name, _name);
+  }  
 }
 TMRHeatFluxIntegral::~TMRHeatFluxIntegral(){}
 
@@ -116,7 +123,7 @@ void TMRHeatFluxIntegral::finalEvaluation( EvaluationType ftype ){
 void TMRHeatFluxIntegral::initThread( const double tcoef,
                                       EvaluationType ftype,
                                       TACSFunctionCtx *fctx ){
-  HeatFluxCtx *ctx = dynamic_cast<HeatFluxIntCtx*>(fctx);
+  HeatFluxIntCtx *ctx = dynamic_cast<HeatFluxIntCtx*>(fctx);
   if (ctx){
     ctx->value = 0.0;
   }  
@@ -139,32 +146,29 @@ void TMRHeatFluxIntegral::elementWiseEval( EvaluationType ftype,
     const int numGauss = element->getNumGaussPts();
     const int numDisps = element->numDisplacements();
     const int numNodes = element->numNodes();
-    
-    int numGauss = element->getNumGaussPts();
+        
     double N[numNodes], Na[numNodes], Nb[numNodes];
-    TacsScalar q[numDisps-1];
+    TacsScalar q[numDisps-1], strain[numDisps-1];
     int order = 0;
     // Get the constitutive object for this element
-    TACSConstitutive *con = NULL;
+    TACSConstitutive *constitutive = element->getConstitutive();
+    // Direction vector of the surface/edge
+    TacsScalar dir[3];
     if (numDisps == 4){
-      con =
-        dynamic_cast<CoupledThermoSolidStiffness*>(element->getConstitutive());
+      
       order = cbrt(numNodes);
     }
     else {
-      con =
-        dynamic_cast<CoupledThermoQuadStiffness*>(element->getConstitutive());
+      
       order = sqrt(numNodes);
     }
-    // Direction vector of the surface/edge
-    TacsScalar dir[3];
-    if (con){
+    if (constitutive){
       // With the first iteration, find the maximum over the domain
       for ( int i = 0; i < numGauss; i++ ){
         // Get the Gauss points one at a time
         double pt[3];
         double weight = element->getGaussWtsPts(i, pt);
-        element->getShapeFunctions(pt, N, Na, Nb);
+        element->getShapeFunctions(pt, N);
 
         TacsScalar Xa[3], Xb[3];
         Xa[0] = Xa[1] = Xa[2] = 0.0;
@@ -264,6 +268,13 @@ void TMRHeatFluxIntegral::elementWiseEval( EvaluationType ftype,
           else {
             printf("Heat flux element not implemented\n");
           }
+          CoupledThermoSolidStiffness *con =
+            dynamic_cast<CoupledThermoSolidStiffness*>(element->getConstitutive());
+          // Compute the heat flux to the surface
+          if (con){
+            con->calculateConduction(pt, strain, q);
+          }
+          value += dir[0]*q[0] + dir[1]*q[1] + dir[2]*q[2];
         }
         else {
           // Compute direction
@@ -314,21 +325,19 @@ void TMRHeatFluxIntegral::elementWiseEval( EvaluationType ftype,
           else {
             printf("Heat flux element not implemented\n");
           }
-        }          
-        
-        con->calculateConduction(pt, strain, q);
-        if (numDisps == 3){
+          CoupledThermoPlaneStressStiffness *con =
+            dynamic_cast<CoupledThermoPlaneStressStiffness*>(element->getConstitutive());
+          if (con){
+            con->calculateConduction(pt, strain, q);
+          }
           value += dir[0]*q[0] + dir[1]*q[1];
-        }
-        else {
-          value += dir[0]*q[0] + dir[1]*q[1] + dir[2]*q[2];
-        }
-      }
-      // Add up the contribution from the quadrature
-      TacsScalar h = element->getDetJacobian(pt, Xpts);
-      h *= weight;
-
-      ctx->value += h*value;
+        }          
+        // Add up the contribution from the quadrature
+        TacsScalar h = element->getDetJacobian(pt, Xpts);
+        h *= weight;
+        
+        ctx->value += h*value;
+      }      
     } // end if constitutive    
   }  
 }
@@ -344,3 +353,50 @@ void TMRHeatFluxIntegral::finalThread( const double tcoef,
     value += ctx->value;
   }
 }
+
+/*
+  These functions are used to determine the sensitivity of the
+  function with respect to the state variables.
+*/
+void TMRHeatFluxIntegral::getElementSVSens( double alpha,
+                                            double beta,
+                                            double gamma,
+                                            TacsScalar *elemSVSens,
+                                            TACSElement *element,
+                                            int elemNum,
+                                            const TacsScalar Xpts[],
+                                            const TacsScalar vars[],
+                                            const TacsScalar dvars[],
+                                            const TacsScalar ddvars[],
+                                            TACSFunctionCtx *fctx ){
+
+}
+/*
+  Determine the derivative of the function with respect to
+  the element nodal locations
+*/
+void TMRHeatFluxIntegral::getElementXptSens( const double tcoef,
+                                             TacsScalar fXptSens[],
+                                             TACSElement *element,
+                                             int elemNum,
+                                             const TacsScalar Xpts[],
+                                             const TacsScalar vars[],
+                                             const TacsScalar dvars[],
+                                             const TacsScalar ddvars[],
+                                             TACSFunctionCtx *fctx ){}
+
+/*
+  Determine the derivative of the function with respect to
+  the design variables defined by the element - usually just
+  the constitutive/material design variables.
+*/
+void TMRHeatFluxIntegral::addElementDVSens( const double tcoef,
+                                            TacsScalar *fdvSens,
+                                            int numDVs,
+                                            TACSElement *element,
+                                            int elemNum,
+                                            const TacsScalar Xpts[],
+                                            const TacsScalar vars[],
+                                            const TacsScalar dvars[],
+                                            const TacsScalar ddvars[],
+                                            TACSFunctionCtx *fctx ){}

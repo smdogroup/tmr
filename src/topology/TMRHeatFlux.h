@@ -2,6 +2,8 @@
 #define TMR_HEAT_FLUX_H
 
 #include "TACSFunction.h"
+#include "TMROctForest.h"
+#include "TMRQuadForest.h"
 /*
   Compute the KS functional of the heat flux on a given face or edge
 */
@@ -11,7 +13,7 @@ class TMRHeatFluxIntegral : public TACSFunction {
                        TMROctForest *_oforest=NULL, 
                        TMRQuadForest *_qforest=NULL,
                        int _surface=-1 );
-  ~TMRHeatFluxIntegral(){}
+  ~TMRHeatFluxIntegral();
   // Retrieve the name of the function
   // ---------------------------------
   const char *functionName();
