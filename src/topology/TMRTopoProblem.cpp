@@ -1659,10 +1659,8 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     if (forces[i]){
       // Solve the system: K(x)*u = forces
       ksm->solve(forces[i], vars[i]);
-      //tacs[0]->applyBCs(vars[i]);
-      vars[i]->scale(-1.0);
       tacs[0]->setBCs(vars[i]);
-      vars[i]->scale(-1.0);
+      
       // Set the variables into TACSAssembler
       tacs[0]->setVariables(vars[i]);
 
