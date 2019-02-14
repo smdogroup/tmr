@@ -141,9 +141,10 @@ for k, d in enumerate(data):
         yvals = d[:, indc_eff_index]
 
     s += tkz.get_2d_plot(xvals, yvals,
+                         line_dim='very thick',
                          color=colors[k % 10],
                          symbol=symbols[k % 4],
-                         symbol_size=0.03,
+                         symbol_size=0.035,
                          xscale=xscale, yscale=yscale, 
                          xmin=xmin, xmax=xmax,
                          ymin=ymin, ymax=ymax)
@@ -151,13 +152,14 @@ for k, d in enumerate(data):
 # Set the labels (lower-right corner)
 if args.labels is not None:
     for k, label in enumerate(args.labels):
-        x = xmin + 0.65*(xmax - xmin)
+        x = xmin + 0.75*(xmax - xmin)
         y = ymin + 0.05*(ymax - ymin)*(len(args.labels)-k)
         length = 0.035*(xmax - xmin)
         s += tkz.get_legend_entry(x, y, length, label=label,
-                                  font_size='scriptsize',
+                                  font_size='small',
+                                  line_dim='very thick',
                                   color=colors[k % 10], symbol=symbols[k % 4],
-                                  symbol_size=0.03,
+                                  symbol_size=0.035,
                                   xscale=xscale, yscale=yscale)
         
 if args.plot == 'effectivity':
@@ -171,12 +173,12 @@ s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
                      xticks=xticks, yticks=yticks,
                      xtick_labels=xtick_labels,
                      ytick_labels=ytick_labels,
-                     tick_font='small',
+                     tick_font='normalsize',
                      tick_frac=0.01,
-                     xlabel_offset=0.075,
-                     label_font='large',
+                     xlabel_offset=0.085,
+                     label_font='Large',
                      xlabel='Number of nodes',
-                     ylabel_offset=0.165,
+                     ylabel_offset=0.175,
                      ylabel=title)
 
 s += tkz.get_end_tikz()

@@ -144,9 +144,10 @@ for k, d in enumerate(data):
     xvals = np.log10(d[:, nnodes_index])
     yvals = np.log10(d[:, fval_error_index])    
     s += tkz.get_2d_plot(xvals, yvals,
+                         line_dim='very thick',
                          color=colors[k % len(colors)],
                          symbol=symbols[k % len(symbols)],
-                         symbol_size=0.03,
+                         symbol_size=0.035,
                          xscale=xscale, yscale=yscale, 
                          xmin=xmin, xmax=xmax,
                          ymin=ymin, ymax=ymax)
@@ -154,10 +155,10 @@ for k, d in enumerate(data):
     if args.corrected:
         yvals = np.log10(d[:, fval_corr_error_index])
         s += tkz.get_2d_plot(xvals, yvals,
-                             line_dim='thick, opacity=0.5, dashed',
+                             line_dim='very thick, opacity=0.5, dashed',
                              color=colors[k % len(colors)],
                              symbol=symbols[k % len(symbols)],
-                             symbol_size=0.03,
+                             symbol_size=0.035,
                              xscale=xscale, yscale=yscale, 
                              xmin=xmin, xmax=xmax,
                              ymin=ymin, ymax=ymax)
@@ -170,9 +171,10 @@ if args.labels is not None:
         length = 0.035*(xmax - xmin)
         s += tkz.get_legend_entry(x, y, length, label=label,
                                   font_size='small',
+                                  line_dim='very thick',
                                   color=colors[k % len(colors)],
                                   symbol=symbols[k % len(symbols)],
-                                  symbol_size=0.03,
+                                  symbol_size=0.035,
                                   xscale=xscale, yscale=yscale)
 
 # Plot the axes
@@ -181,12 +183,12 @@ s += tkz.get_2d_axes(xmin, xmax, ymin, ymax,
                      xticks=xticks, yticks=yticks,
                      xtick_labels=xtick_labels,
                      ytick_labels=ytick_labels,
-                     tick_font='small',
+                     tick_font='normalsize',
                      tick_frac=0.01,
-                     xlabel_offset=0.075,
-                     label_font='large',
+                     xlabel_offset=0.085,
+                     label_font='Large',
                      xlabel='Number of nodes',
-                     ylabel_offset=0.165,
+                     ylabel_offset=0.175,
                      ylabel='Functional error')
                      
 

@@ -108,8 +108,9 @@ class TMRQuadForest : public TMREntity {
                     int *_num_elements=NULL,
                     int *_num_owned_nodes=NULL,
                     int *_num_local_nodes=NULL );
-  int getDepNodeConn( const int **_ptr, const int **_conn,
-                      const double **_weights );
+  int getDepNodeConn( const int **_ptr=NULL,
+                      const int **_conn=NULL,
+                      const double **_weights=NULL );
 
   // Create interpolation/restriction operators
   // ------------------------------------------
@@ -270,6 +271,15 @@ class TMRQuadForest : public TMREntity {
                          TMRQuadForest *coarse, TMRQuadrant *quad,
                          TMRIndexWeight *weights, double *tmp );
 
+  // Initialize the node label
+  void initLabel( int mesh_order, TMRInterpolationType interp_type,
+                  int label_type[] );
+
+  // Evaluate the Bernstein dependent weights
+  void evalBernsteinWeights( int mesh_order, double u, double *knots, 
+                             double *N );
+  void evalBernsteinOrderWeights( int mesh_order, double u, double *knots,
+                                  double *N );
   // The communicator
   MPI_Comm comm;
   int mpi_rank, mpi_size;

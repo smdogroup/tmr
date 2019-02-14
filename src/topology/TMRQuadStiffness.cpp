@@ -21,36 +21,66 @@
 #include "TMRQuadStiffness.h"
 
 /*
-  Create the octree stiffness object based on an interpolation from
+  Create the quadtree stiffness object based on an interpolation from
   the filter variables
 */
 TMRQuadStiffness::TMRQuadStiffness( TMRIndexWeight *_weights,
                                     int _nweights,
-                                    TacsScalar _density,
-                                    TacsScalar _E, TacsScalar _nu,
-                                    double _q, double _eps ){
-  // Record the density, Poisson ratio
-  density = _density;
-  nu = _nu;
-  q = _q;
-  eps = _eps;
-  E = _E;
+                                    TMRQuadStiffnessProperties *_props ){
+  // Record the density, Poisson ratio, D and the shear modulus
+  props = _props;
+  props->incref();
+
   // Set the weights/local indices
   nweights = _nweights;
+  weights = new TMRIndexWeight[ nweights ];
   memcpy(weights, _weights, nweights*sizeof(TMRIndexWeight));
-  
   // Set the initial value for the densities
-  rho = 0.95;
+  nvars = 1;
+  x[0] = 0.95;
+  rho[0] = 0.95;
+  if (props->nmats > 1){
+    nvars = props->nmats+1;
+    x[0] = 1.0;
+    rho[0] = 1.0;
+    for ( int j = 1; j < nvars; j++ ){
+      x[j] = 1.0/(nvars-1);
+      rho[j] = 1.0/(nvars-1);
+    }
+  }
+}
+
+/*
+  Decref the props
+*/
+TMRQuadStiffness::~TMRQuadStiffness(){
+  props->decref();
+  delete [] weights;
 }
 
 /*
   Loop over the design variable inputs and compute the local value of
   the density
 */
-void TMRQuadStiffness::setDesignVars( const TacsScalar x[], int numDVs ){
-  rho = 0.0;
-  for ( int i = 0; i < nweights; i++ ){
-    rho += weights[i].weight*x[weights[i].index];
+void TMRQuadStiffness::setDesignVars( const TacsScalar xdv[], int numDVs ){
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
+  const int use_project = props->use_project;
+
+  for ( int j = 0; j < nvars; j++ ){
+    x[j] = 0.0;
+    for ( int i = 0; i < nweights; i++ ){
+      x[j] += weights[i].weight*xdv[nvars*weights[i].index + j];
+    }
+
+    // Apply the projection to obtain the projected value
+    // of the density
+    if (use_project){
+      rho[j] = 1.0/(1.0 + exp(-beta*(x[j] - xoffset)));
+    }
+    else{
+      rho[j] = x[j];
+    }
   }
 }
 
@@ -60,10 +90,25 @@ void TMRQuadStiffness::setDesignVars( const TacsScalar x[], int numDVs ){
   This is not possible to back out once the density is computed, so
   instead we use a constant value of 0.95 as the output.
 */
-void TMRQuadStiffness::getDesignVars( TacsScalar x[], int numDVs ){
-  for ( int i = 0; i < nweights; i++ ){
-    if (weights[i].index >= 0 && weights[i].index < numDVs){
-      x[weights[i].index] = 0.95;
+void TMRQuadStiffness::getDesignVars( TacsScalar xdv[], int numDVs ){
+  if (nvars == 1){
+    for ( int i = 0; i < nweights; i++ ){
+      if (weights[i].index >= 0 && weights[i].index < numDVs){
+        xdv[weights[i].index] = 0.5;
+      }
+    }
+  }
+  else {
+    for ( int j = 0; j < nvars; j++ ){
+      TacsScalar value = 0.75;
+      if (j >= 1){
+        value = 0.25/(nvars-1);
+      }
+      for ( int i = 0; i < nweights; i++ ){
+        if (weights[i].index >= 0 && weights[i].index < numDVs){
+          xdv[nvars*weights[i].index + j] = value;
+        }
+      }
     }
   }
 }
@@ -72,11 +117,23 @@ void TMRQuadStiffness::getDesignVars( TacsScalar x[], int numDVs ){
   Retrieve the range of the design variable values
 */
 void TMRQuadStiffness::getDesignVarRange( TacsScalar lb[], 
-                                         TacsScalar ub[], int numDVs ){
-  for ( int i = 0; i < nweights; i++ ){
-    if (weights[i].index >= 0 && weights[i].index < numDVs){
-      lb[weights[i].index] = 0.0;
-      ub[weights[i].index] = 1.0;
+                                          TacsScalar ub[], int numDVs ){
+  if (nvars == 1){
+    for ( int i = 0; i < nweights; i++ ){
+      if (weights[i].index >= 0 && weights[i].index < numDVs){
+        lb[weights[i].index] = 0.0;
+        ub[weights[i].index] = 1.0;
+      }
+    }
+  }
+  else {
+    for ( int j = 0; j < nvars; j++ ){
+      for ( int i = 0; i < nweights; i++ ){
+        if (weights[i].index >= 0 && weights[i].index < numDVs){
+          lb[nvars*weights[i].index + j] = 0.0;
+          ub[nvars*weights[i].index + j] = 1e30;
+        }
+      }
     }
   }
 }
@@ -87,13 +144,45 @@ void TMRQuadStiffness::getDesignVarRange( TacsScalar lb[],
 void TMRQuadStiffness::calculateStress( const double pt[],
                                         const TacsScalar e[], 
                                         TacsScalar s[] ){
-  // Compute the penalized stiffness
-  TacsScalar w = rho/(1.0 + q*(1.0 - rho));
-  TacsScalar D = E/(1.0-nu*nu)*(w + eps);
-  
-  s[0] = D*e[0]+nu*D*e[1];
-  s[1] = nu*D*e[0]+D*e[1];
-  s[2] = 0.5*(1.0-nu)*D*e[2];
+  const double k0 = props->k0;
+  const double q = props->q;
+  if (nvars == 1){
+    // Compute the penalized stiffness
+    TacsScalar penalty = rho[0]/(1.0 + q*(1.0 - rho[0]));
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+
+    TacsScalar Dp = (penalty + k0)*D;
+    TacsScalar Gp = (penalty + k0)*G;
+    
+    s[0] = Dp*e[0]+nu*Dp*e[1];
+    s[1] = nu*Dp*e[0]+Dp*e[1];
+    s[2] = Gp*e[2];
+  }
+  else {
+    // Compute the penalized stiffness
+    s[0] = s[1] = s[2] = 0.0;
+    for ( int j = 1; j < nvars; j++ ){
+      // Compute the penalty
+      TacsScalar penalty = rho[j]/(1.0 + q*(1.0 - rho[j]));
+
+      // Extract the properties
+      TacsScalar nu = props->nu[j-1];
+      TacsScalar D = props->D[j-1];
+      TacsScalar G = props->G[j-1];
+
+      // Add the penalized value
+      TacsScalar Dp = (penalty + k0)*D;
+      TacsScalar Gp = (penalty + k0)*G;
+
+      s[0] += Dp*e[0]+nu*Dp*e[1];
+      s[1] += nu*Dp*e[0]+Dp*e[1];
+      s[2] += Gp*e[2];
+    }
+  }  
 }
 
 /*
@@ -105,21 +194,69 @@ void TMRQuadStiffness::addStressDVSens( const double pt[],
                                         TacsScalar alpha, 
                                         const TacsScalar psi[], 
                                         TacsScalar fdvSens[], int dvLen ){
-  TacsScalar dxw = 1.0+q*(1.0-rho);
-  TacsScalar w = ((1.0+q)/(dxw*dxw));
-  TacsScalar D = E/(1.0-nu*nu)*w;
+  const double q = props->q;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
+  const int use_project = props->use_project;
 
-  // Compute the product dD/dx*(B*u)
-  TacsScalar s[3];
-  s[0] = D*e[0] + nu*D*e[1];
-  s[1] = nu*D*e[0] + D*e[1];
-  s[2] = 0.5*(1.0-nu)*D*e[2];
-  
-  // Compute the term psi^{T}*B^{T}*dD/dx*B*u
-  for ( int i = 0; i < nweights; i++ ){
-    fdvSens[weights[i].index] += 
-      alpha*weights[i].weight*(s[0]*psi[0] + s[1]*psi[1] 
-                               + s[2]*psi[2]); 
+  if (nvars == 1){
+    // Compute the derivative of the penalization with respect to
+    // the projected density
+    TacsScalar penalty =
+      (q + 1.0)/((1.0 + q*(1.0 - rho[0]))*(1.0 + q*(1.0 - rho[0])));
+
+    // Add the derivative of the projection
+    if (use_project){
+      penalty *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
+    }
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+
+    TacsScalar Dp = alpha*penalty*D;
+    TacsScalar Gp = alpha*penalty*G;
+    TacsScalar s[3];
+    s[0] = Dp*e[0]+nu*Dp*e[1];
+    s[1] = nu*Dp*e[0]+Dp*e[1];
+    s[2] = Gp*e[2];
+    
+    TacsScalar product = (s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2]);
+    for ( int i = 0; i < nweights; i++ ){
+      fdvSens[weights[i].index] += weights[i].weight*product;
+    }
+  }
+  else {
+    for ( int j = 1; j < nvars; j++ ){
+      // Compute the derivative of the penalization with respect to
+      // the projected density
+      TacsScalar penalty =
+        (q + 1.0)/((1.0 + q*(1.0 - rho[j]))*(1.0 + q*(1.0 - rho[j])));
+
+      // Add the derivative of the projection
+      if (use_project){
+        penalty *= beta*exp(-beta*(x[j] - xoffset))*rho[j]*rho[j];
+      }
+
+      // Extract the properties
+      TacsScalar nu = props->nu[j-1];
+      TacsScalar D = props->D[j-1];
+      TacsScalar G = props->G[j-1];
+
+      // Add the result to the derivative
+      TacsScalar Dp = alpha*penalty*D;
+      TacsScalar Gp = alpha*penalty*G;
+      TacsScalar s[3];
+      s[0] = Dp*e[0]+nu*Dp*e[1];
+      s[1] = nu*Dp*e[0]+Dp*e[1];
+      s[2] = Gp*e[2];
+
+      TacsScalar product = (s[0]*psi[0] + s[1]*psi[1] + s[2]*psi[2]);
+      for ( int i = 0; i < nweights; i++ ){
+        fdvSens[nvars*weights[i].index + j] += weights[i].weight*product;
+      }
+    }
   }
 }
 
@@ -129,7 +266,15 @@ void TMRQuadStiffness::addStressDVSens( const double pt[],
 */
 void TMRQuadStiffness::getPointwiseMass( const double pt[], 
                                          TacsScalar mass[] ){
-  mass[0] = rho*density;
+  if (nvars == 1){
+    mass[0] = x[0]*props->density[0];
+  }
+  else {
+    mass[0] = 0.0;
+    for ( int j = 1; j < nvars; j++ ){
+      mass[0] += x[j]*props->density[j-1];
+    }
+  }  
 }
 
 /*
@@ -140,8 +285,145 @@ void TMRQuadStiffness::addPointwiseMassDVSens( const double pt[],
                                                const TacsScalar alpha[],
                                                TacsScalar dvSens[], 
                                                int dvLen ){
-  TacsScalar scale = density*alpha[0];
-  for ( int i = 0; i < nweights; i++ ){
-    dvSens[weights[i].index] += scale*weights[i].weight;
+  if (nvars == 1){
+    TacsScalar scale = props->density[0]*alpha[0];
+    for ( int i = 0; i < nweights; i++ ){
+      dvSens[weights[i].index] += scale*weights[i].weight;
+    }
+  }
+  else {
+    for ( int j = 1; j < nvars; j++ ){
+      TacsScalar scale = props->density[j-1]*alpha[0];
+      for ( int i = 0; i < nweights; i++ ){
+        dvSens[nvars*weights[i].index + j] += scale*weights[i].weight;
+      }
+    }
+  }
+}
+// Evaluate the failure criteria
+void TMRQuadStiffness::failure( const double pt[],
+                                const TacsScalar e[],
+                                TacsScalar *fail ){
+  const double eps = props->eps;
+
+  if (nvars == 1){
+    // Use the von Mises failure criterion
+    // Compute the relaxation factor
+    TacsScalar r_factor = 1.0;
+    TacsScalar xw = rho[0];
+
+    if (eps > 0.0){
+      r_factor = xw/(eps*(1.0 - xw) + xw);
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor = pow(xw, p);
+    }
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+    TacsScalar s[3];
+
+    // Compute the resulting stress
+    s[0] = D*e[0]+nu*D*e[1];
+    s[1] = nu*D*e[0]+D*e[1];
+    s[2] = G*e[2];
+
+    *fail = r_factor*VonMisesFailurePlaneStress(s, ys);
+  }
+}
+
+/*
+  Evaluate the derivative of the failure criteria w.r.t. design
+  variables
+*/
+void TMRQuadStiffness::addFailureDVSens( const double pt[],
+                                         const TacsScalar e[],
+                                         TacsScalar alpha,
+                                         TacsScalar dvSens[],
+                                         int dvLen ){
+  const double eps = props->eps;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
+  const int use_project = props->use_project;
+
+  if (nvars == 1){
+    // Compute the relaxation factor
+    TacsScalar r_factor_sens = 0.0;
+    TacsScalar xw = rho[0];
+
+    if (eps > 0.0){
+      TacsScalar d = 1.0/(eps*(1.0-xw) + xw);
+      r_factor_sens = eps*d*d;
+    }
+    else {
+      TacsScalar p = -eps;
+      r_factor_sens = pow(xw, p-1.0)*p;
+    }
+
+    // Add the contribution from the derivative of the projection
+    if (use_project){
+      r_factor_sens *= beta*exp(-beta*(x[0] - xoffset))*rho[0]*rho[0];
+    }
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+    TacsScalar s[3];
+
+    // Compute the resulting stress
+    s[0] = D*e[0]+nu*D*e[1];
+    s[1] = nu*D*e[0]+D*e[1];
+    s[2] = G*e[2];
+
+    TacsScalar fail = VonMisesFailurePlaneStress(s, ys);
+    TacsScalar inner = alpha*r_factor_sens*fail;
+    for ( int i = 0; i < nweights; i++ ){
+      dvSens[weights[i].index] += weights[i].weight*inner;
+    }
+  }
+  else {
+    printf("Not implemented yet \n");
+  }
+}
+
+void TMRQuadStiffness::failureStrainSens( const double pt[],
+                                         const TacsScalar e[],
+                                         TacsScalar sens[]){
+  const double eps = props->eps;
+  if (nvars == 1){
+    TacsScalar s[3], ps_sens[3];
+    // Use the von Mises failure criterion
+    // Compute the relaxation factor
+    TacsScalar r_factor = 1.0;
+    TacsScalar xw = 1.0*rho[0];
+    if (eps > 0.0){
+      r_factor = xw/(eps*(1.0 - xw) + xw);
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor = pow(xw, p);
+    }
+
+    // Extract the properties
+    TacsScalar nu = props->nu[0];
+    TacsScalar D = props->D[0];
+    TacsScalar G = props->G[0];
+    TacsScalar ys = props->ys[0];
+
+    // Compute the resulting stress
+    s[0] = D*e[0]+nu*D*e[1];
+    s[1] = nu*D*e[0]+D*e[1];
+    s[2] = G*e[2];
+    
+    VonMisesFailurePlaneStressSens(ps_sens, s, ys);
+    sens[0] = r_factor*D*(ps_sens[0]+nu*ps_sens[1]);
+    sens[1] = r_factor*D*(nu*ps_sens[0]+ps_sens[1]);
+    sens[2] = r_factor*G*ps_sens[2];
   }
 }

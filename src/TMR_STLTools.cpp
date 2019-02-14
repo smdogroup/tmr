@@ -844,8 +844,27 @@ Failed at node with block: %d x %d y: %d z: %d\n",
                   (ix + ii) +
                   (iy + jj)*mesh_order +
                   (iz + kk)*mesh_order*mesh_order;
-
-                cell.val[index] = levelvals[offset];
+                
+                if (filter->getInterpType() == TMR_BERNSTEIN_POINTS){
+                  int w = (int)((offset)/(mesh_order*mesh_order));
+                  int v = (int)((offset - mesh_order*mesh_order*w)/mesh_order);
+                  int u = offset - mesh_order*v - mesh_order*mesh_order*w;
+                  double pt[3];
+                  pt[0] = -1.0 + 2.0/(mesh_order-1.0)*u;
+                  pt[1] = -1.0 + 2.0/(mesh_order-1.0)*v;
+                  pt[2] = -1.0 + 2.0/(mesh_order-1.0)*w;
+                  
+                  int nweights = mesh_order*mesh_order*mesh_order;
+                  double N[nweights];
+                  filter->evalInterp(pt, N);
+                  cell.val[index] = 0.0;
+                  for (int nn = 0; nn < nweights; nn++){
+                    cell.val[index] += N[nn]*levelvals[nn];
+                  }
+                }
+                else {
+                  cell.val[index] = levelvals[offset];
+                }
 
                 // Set the node location
                 cell.p[index].x = Xe[offset].x;

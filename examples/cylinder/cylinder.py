@@ -255,6 +255,230 @@ def disk_ks_functional(functional, rho, t, E, nu, kcorr, ys, R, load, n=1000):
 
     return max_value, functional_estimate
 
+def recon_basis(degree, x):
+    '''
+    Get the quadratic shape functions centered about the point pt
+    '''
+
+    if degree == 2:
+        N = np.array([1.0, x[0], x[1],
+                      x[0]*x[0], x[0]*x[1], x[1]*x[1]])
+    elif degree == 3:
+        N = np.array([1.0, x[0], x[1],
+                      x[0]*x[0], x[0]*x[1], x[1]*x[1],
+                      x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[1],
+                      x[0]*x[1]*x[1],
+                      x[1]*x[1]*x[1]])
+    elif degree == 4:
+        N = np.array([1.0, x[0], x[1],
+                      x[0]*x[0], x[0]*x[1], x[1]*x[1],
+                      x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[1],
+                      x[0]*x[1]*x[1],
+                      x[1]*x[1]*x[1],
+                      x[0]*x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[0]*x[1],
+                      x[0]*x[0]*x[1]*x[1],
+                      x[0]*x[1]*x[1]*x[1],
+                      x[1]*x[1]*x[1]*x[1]])
+    elif degree == 5:
+        N = np.array([1.0, x[0], x[1],
+                      x[0]*x[0], x[0]*x[1], x[1]*x[1],
+                      x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[1],
+                      x[0]*x[1]*x[1],
+                      x[1]*x[1]*x[1],
+                      x[0]*x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[0]*x[1],
+                      x[0]*x[0]*x[1]*x[1],
+                      x[0]*x[1]*x[1]*x[1],
+                      x[1]*x[1]*x[1]*x[1],
+                      x[0]*x[0]*x[0]*x[0]*x[0],
+                      x[0]*x[0]*x[0]*x[0]*x[1],
+                      x[0]*x[0]*x[0]*x[1]*x[1],
+                      x[0]*x[0]*x[1]*x[1]*x[1],
+                      x[0]*x[1]*x[1]*x[1]*x[1],
+                      x[1]*x[1]*x[1]*x[1]*x[1]])
+
+    return N
+
+def compute_plane(P):
+    '''
+    Compute a least-squares fit to the plane of points from the
+    element patch.
+    '''
+
+    # Compute the centroid
+    cent = np.average(P, axis=0)
+
+    # Compute the covariance matrix
+    A = np.zeros((3, 3))
+    for i, pt in enumerate(P):
+        d = pt - cent
+        A += np.outer(d, d)
+
+    eig, v = np.linalg.eigh(A)
+
+    # Extract the other two orhogonal matrix
+    B = v[:, 1:].T
+        
+    return B, cent
+
+def elem_recon(degree, conn, Xpts, uvals, elem_list, dist=1.0):
+    # Get a unique list of the nodes in the list
+    var = []
+    for elem in elem_list:
+        var.extend(conn[elem])
+
+    # Get a unique list of values
+    var = sorted(list(set(var)))
+
+    # Create the patch of points
+    Xpt = []
+    for i, v in enumerate(var):
+        Xpt.append(Xpts[v, :])
+
+    # Convert the result into an array
+    Xpt = np.array(Xpt)
+
+    # Compute the solution to find the best planar fit
+    B, cent = compute_plane(Xpt)
+
+    # Find the uv parametric locations for all points
+    uv = []
+    for i, pt in enumerate(Xpt):
+        uv.append(np.dot(B, pt - cent))
+
+    # Loop over the adjacent nodes and fit them
+    dim = 6
+    if degree == 3:
+        dim = 10
+    elif degree == 4:
+        dim = 15
+    elif degree == 5:
+        dim = 21
+    A = np.zeros((len(var), dim))
+    b = np.zeros((len(var), 6))
+
+    for i, v in enumerate(var):
+        # Compute the basis at the provided point
+        b[i, :] = uvals[6*v:6*(v+1)]
+        A[i, :] = recon_basis(degree, uv[i]/dist)
+
+    # Fit the basis
+    vals, res, rank, s = np.linalg.lstsq(A, b, rcond=-1)
+
+    return vals, B, cent
+
+def computeRecon(degree, conn, Xpts, uvals,
+                 conn_refine, Xpts_refine):
+    '''
+    Compute the planar reconstruction over the given mesh
+    '''
+
+    # Compute the element->element connectivity
+    nelems = conn.shape[0]
+
+    # Create a node->element dictionary
+    node_to_elems = {}
+    for i in range(nelems):
+        for node in conn[i,:]:
+            if node in node_to_elems:
+                node_to_elems[node][i] = True
+            else:
+                node_to_elems[node] = {i: True}
+
+    # Now create an elements to elements list
+    elem_to_elem = []
+    for i in range(nelems):
+        elems = {}
+        for node in conn[i,:]:
+            for elem in node_to_elems[node]:
+                elems[elem] = True
+        elem_to_elem.append(elems.keys())
+
+    # Get the refined shape
+    uvals_refine = np.zeros(6*Xpts_refine.shape[0])
+    count = np.zeros(Xpts_refine.shape[0])
+
+    for elem in range(nelems):
+        # Get the list of elements
+        elem_list = elem_to_elem[elem]
+
+        # Compute the characteristic element distance
+        X1 = Xpts[conn[elem, 0], :]
+        X2 = Xpts[conn[elem, -1], :]
+        dist = np.sqrt(np.dot(X1 - X2, X1 - X2))
+
+        # Get the reconstructed values
+        vals, B, cent = elem_recon(degree, conn, Xpts, uvals,
+                                   elem_list, dist=dist)
+
+        # Compute the refined contributions to each element
+        for node in conn_refine[elem, :]:
+            # Compute the uv location on the plane
+            upt = np.dot(B, (Xpts_refine[node, :] - cent)/dist)
+
+            # Reconstruct the basis
+            N = recon_basis(degree, upt)
+            uvals_refine[6*node:6*(node+1)] += np.dot(N, vals)
+            count[node] += 1.0
+
+    # Average the values
+    for i in range(6):
+        uvals_refine[i::6] /= count
+
+    return uvals_refine
+
+def computeReconSolution(comm, forest, assembler,
+                         forest_refined, assembler_refined,
+                         ans, ans_refined):
+    if comm.size != 1:
+        raise RuntimeError('Only works with serial cases')
+
+    # Distribute the vector
+    ans.distributeValues()
+
+    # Create the node vector
+    Xpts = forest.getPoints()
+    Xpts_refined = forest_refined.getPoints()
+
+    conn = forest.getMeshConn()
+    conn_refined = forest_refined.getMeshConn()
+
+    # Find the min/max values
+    num_dep = -np.min(conn)
+    num_vars = np.max(conn)+1
+    num_dep_refined = -np.min(conn_refined)
+    num_vars_refined = np.max(conn_refined)+1
+
+    # Adjust the indices so that they are always positive
+    conn += num_dep
+    conn_refined += num_dep_refined
+
+    # Add + 2 to the degree of the interpolant
+    mesh_order = forest.getMeshOrder()
+    if mesh_order == 2:
+        degree = 2
+    else:
+        degree = mesh_order+1
+
+    # Get the values
+    var = np.arange(-num_dep, num_vars, dtype=np.intc)
+    values = ans.getValues(var)
+
+    # Perform the reconstruction on each component individually
+    ans_array = np.zeros(6*(num_vars_refined + num_dep_refined))
+    ans_array = computeRecon(degree, conn, Xpts, values,
+                             conn_refined, Xpts_refined)
+
+    # Set the values
+    var = np.arange(-num_dep_refined, num_vars_refined, dtype=np.intc)
+    ans_refined.setValues(var, ans_array, op=TACS.INSERT_VALUES)
+
+    return
+
 def get_quadrature(order):
     '''Get the quadrature rule for the given element order'''
 
@@ -644,6 +868,9 @@ elif ordering == 'multicolor':
 else:
     ordering = TACS.PY_NATURAL_ORDER
 
+# Force natural ordering
+ordering = TACS.PY_NATURAL_ORDER
+
 # Open a log file to write
 descript = '%s_order%d'%(case, order)
 if args.uniform_refinement:
@@ -731,11 +958,20 @@ for k in range(steps):
 
     fval = assembler.evalFunctions([func])[0]
 
-    # Create the refined mesh
+    # Allocate variables
+    adjoint = assembler.createVec()
+    
+    # Compute the adjoint on the original mesh
+    assembler.evalSVSens(func, res)
+    gmres.solve(res, adjoint)
+    adjoint.scale(-1.0)
+
+    # Create the refined problem
     forest_refined = forest.duplicate()
-    assembler_refined, mg = createProblem(case, forest_refined,
-                                          bcs, ordering,
-                                          ordr=order+1, nlevels=nlevs+1)
+    forest_refined.balance(1)
+    forest_refined.setMeshOrder(order+1, TMR.UNIFORM_POINTS)
+    creator = CreateMe(bcs, case=case)
+    assembler_refined = creator.createTACS(forest_refined, ordering)
 
     # Set the face traction nodes
     aux_refined = addFaceTraction(case, order+1, assembler_refined, load)
@@ -752,30 +988,24 @@ for k in range(steps):
         TMR.computeReconSolution(forest, assembler,
                                  forest_refined, assembler_refined)
     else:
-        # Compute the reconstructed solution on the refined mesh
+        # Compute a reconstruction of the solution
         ans_interp = assembler_refined.createVec()
-        if args.use_reconstruction:
+    
+        if comm.size == 1:
+            # Distribute the answer vector across all procs
+            computeReconSolution(comm, forest, assembler,
+                                 forest_refined, assembler_refined,
+                                 ans, ans_interp)
+        else:
             TMR.computeReconSolution(forest, assembler,
                                      forest_refined, assembler_refined,
                                      ans, ans_interp)
-        else:
-            TMR.computeInterpSolution(forest, assembler,
-                                      forest_refined, assembler_refined,
-                                      ans, ans_interp)
 
         # Set the interpolated solution on the fine mesh
         assembler_refined.setVariables(ans_interp)
 
-        # Assemble the Jacobian matrix on the refined mesh
-        res_refined = assembler_refined.createVec()
-        mg.assembleJacobian(1.0, 0.0, 0.0, res_refined)
-        mg.factor()
-        pc = mg
-        mat = mg.getMat()
-
         # Compute the functional and the right-hand-side for the
         # adjoint on the refined mesh
-        adjoint_rhs = assembler_refined.createVec()
         if functional == 'ks':
             func_refined = functions.KSFailure(assembler_refined, ksweight)
             func_refined.setKSFailureType('continuous')
@@ -793,23 +1023,28 @@ for k in range(steps):
 
         # Evaluate the functional on the refined mesh
         fval_refined = assembler_refined.evalFunctions([func_refined])[0]
-        assembler_refined.evalSVSens(func_refined, adjoint_rhs)
 
-        # Create the GMRES object on the fine mesh
-        gmres = TACS.KSM(mat, pc, 50, isFlexible=1, nrestart=10)
-        gmres.setMonitor(comm, freq=10)
-        gmres.setTolerances(1e-14, 1e-30)
-
-        # Solve the linear system
+        # Assemble the residual on the refined mesh
+        res_refined = assembler_refined.createVec()
+        assembler_refined.assembleRes(res_refined)
+            
+        # Approximate the difference between the refined adjoint
+        # and the adjoint on the current mesh
         adjoint_refined = assembler_refined.createVec()
-        gmres.solve(adjoint_rhs, adjoint_refined)
-        adjoint_refined.scale(-1.0)
-
-        # Compute the adjoint correction
+        if comm.size == 1:
+            computeReconSolution(comm, forest, assembler,
+                                 forest_refined, assembler_refined,
+                                 adjoint, adjoint_refined)
+        else:
+            TMR.computeReconSolution(forest, assembler,
+                                     forest_refined, assembler_refined,
+                                     adjoint, adjoint_refined)
+            
+        # Compute the adjoint correction on the fine mesh
         adjoint_corr = adjoint_refined.dot(res_refined)
 
-        # Compute the reconstructed adjoint solution on the refined mesh
-        adjoint = assembler.createVec()
+        # Compute the diff between the interpolated and reconstructed
+        # solutions
         adjoint_interp = assembler_refined.createVec()
         TMR.computeInterpSolution(forest_refined, assembler_refined,
                                   forest, assembler,
@@ -819,11 +1054,10 @@ for k in range(steps):
                                   adjoint, adjoint_interp)
         adjoint_refined.axpy(-1.0, adjoint_interp)
 
-        # Assemble the adjoint contribution
-        err_est, adjoint_corr_est, error =\
-                 TMR.adjointError(forest, assembler,
-                                  forest_refined, assembler_refined,
-                                  ans_interp, adjoint_refined)
+        # Estimate the element-wise errors
+        err_est, __, error = TMR.adjointError(forest, assembler,
+                                              forest_refined, assembler_refined,
+                                              ans_interp, adjoint_refined)
 
         # Compute the refined function value
         fval_corr = fval_refined + adjoint_corr
