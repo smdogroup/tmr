@@ -1479,7 +1479,7 @@ TacsScalar TMRCoupledThermoOctStiffness::getDVOutputValue( int dvIndex,
 // Evaluate the heat flux normal to the surface
 // Change in temperature for the element is appended to the strain vector
 void TMRCoupledThermoOctStiffness::heatflux( const double pt[], 
-                                             const double normal[],
+                                             const TacsScalar normal[],
                                              const TacsScalar e[],
                                              TacsScalar *qn ){
   const double eps = props->eps;
@@ -1541,7 +1541,7 @@ void TMRCoupledThermoOctStiffness::heatflux( const double pt[],
 
 // Evaluate the failure criteria w.r.t. design variables
 void TMRCoupledThermoOctStiffness::addHeatFluxDVSens( const double pt[], 
-                                                      const double normal[],
+                                                      const TacsScalar normal[],
                                                       const TacsScalar e[],
                                                       TacsScalar alpha,
                                                       TacsScalar dvSens[], 
@@ -1609,7 +1609,7 @@ void TMRCoupledThermoOctStiffness::addHeatFluxDVSens( const double pt[],
   }
 }
 void TMRCoupledThermoOctStiffness::heatfluxStrainSens( const double pt[], 
-                                                       const TacsScalar T[],
+                                                       const TacsScalar normal[],
                                                        const TacsScalar e[],
                                                        TacsScalar sens[], 
                                                        int vars_j ){

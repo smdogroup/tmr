@@ -92,16 +92,16 @@ class TMRCoupledThermoOctStiffness : public CoupledThermoSolidStiffness {
     return nvars;
   }
   void heatflux( const double pt[],
-                 const double normal[],
+                 const TacsScalar normal[],
                  const TacsScalar strain[],
                  TacsScalar * qn );
   void addHeatFluxDVSens( const double pt[],
-                          const double normal[],
+                          const TacsScalar normal[],
                           const TacsScalar strain[],
                           TacsScalar alpha,
                           TacsScalar dvSens[], int dvLen );
   void heatfluxStrainSens( const double pt[],
-                           const double normal[],
+                           const TacsScalar normal[],
                            const TacsScalar strain[],
                            TacsScalar sens[], 
                            int vars_j=0 );
