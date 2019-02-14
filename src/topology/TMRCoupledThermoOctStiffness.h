@@ -60,11 +60,11 @@ class TMRCoupledThermoOctStiffness : public CoupledThermoSolidStiffness {
                          const TacsScalar strain[],
                          TacsScalar alpha,
                          TacsScalar dvSens[], int dvLen );
-  void failureStrainSens(const double pt[],
-                         const TacsScalar T[],
-                         const TacsScalar strain[],
-                         TacsScalar sens[], 
-                         int vars_j=0 );
+  void failureStrainSens( const double pt[],
+                          const TacsScalar T[],
+                          const TacsScalar strain[],
+                          TacsScalar sens[], 
+                          int vars_j=0 );
 
   // Return the density as the design variable
   // -----------------------------------------
@@ -91,6 +91,22 @@ class TMRCoupledThermoOctStiffness : public CoupledThermoSolidStiffness {
   int getVarsPerNode(){
     return nvars;
   }
+  void heatflux( const double pt[],
+                 const double normal[],
+                 const TacsScalar strain[],
+                 TacsScalar * qn );
+  void addHeatFluxDVSens( const double pt[],
+                          const double normal[],
+                          const TacsScalar strain[],
+                          TacsScalar alpha,
+                          TacsScalar dvSens[], int dvLen );
+  void heatfluxStrainSens( const double pt[],
+                           const double normal[],
+                           const TacsScalar strain[],
+                           TacsScalar sens[], 
+                           int vars_j=0 );
+
+  
  private:
   // The density and stiffness properties
   TMRStiffnessProperties *props;
