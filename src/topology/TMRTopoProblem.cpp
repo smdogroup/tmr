@@ -1594,33 +1594,6 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
       tacs[k+1]->setDesignVars(xlocal, size);
     }
   }
-  // Create the visualization for the object 
-  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                             TACSElement::OUTPUT_EXTRAS);
-  char outfile[256];
-  if (quad_filter){
-    for ( int k = 0; k < nlevels; k++ ){
-      TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_PLANE_STRESS,
-                                    write_flag);
-      f5->incref();
-      sprintf(outfile, "%s/beam_output%d_%d.f5",
-              prefix, iter_count,k);
-      f5->writeToFile(outfile);
-      f5->decref();
-    }
-  }  
-  else {
-    for ( int k = 0; k < nlevels; k++ ){
-      TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_SOLID,
-                                    write_flag);
-      f5->incref();
-      sprintf(outfile, "%s/beam_output%d_%d.f5",
-              prefix, iter_count,k);
-      f5->writeToFile(outfile);
-      f5->decref();
-    }
-  }
-  iter_count++;
 }
 
 /*
