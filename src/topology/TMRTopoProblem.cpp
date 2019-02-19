@@ -1453,7 +1453,6 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
       memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
       memset(upper, 0, max_local_size*sizeof(TacsScalar));
       tacs[0]->getDesignVarRange(xlocal, upper, max_local_size);
-      
       if (!has_lower){
         ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lbvec);
         if (lbwrap){
@@ -1470,11 +1469,17 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ubvec);
         if (ubwrap){
           ubwrap->vec->zeroEntries();
-          setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
-          ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
-          ubwrap->vec->endSetValues(TACS_ADD_VALUES);
-          ///ubwrap->vec->beginDistributeValues();
-          //ubwrap->vec->endDistributeValues();
+	  // setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
+	  // ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
+	  // ubwrap->vec->endSetValues(TACS_ADD_VALUES);	    
+	  
+	  // else {	    
+	  setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_INSERT_VALUES);
+	  ubwrap->vec->beginSetValues(TACS_INSERT_VALUES);
+	  ubwrap->vec->endSetValues(TACS_INSERT_VALUES);
+	  
+	  ubwrap->vec->beginDistributeValues();
+          ubwrap->vec->endDistributeValues();
         }
       }
       delete [] upper;
@@ -1557,7 +1562,6 @@ void TMRTopoProblem::setBVecFromLocalValues( int level,
     TacsScalar *x_vals, *x_ext_vals;
     int size = vec->getArray(&x_vals);
     int ext_size = vec->getExtArray(&x_ext_vals);
-
     memcpy(x_vals, xloc, size*sizeof(TacsScalar));
     if (x_ext_vals){
       memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
@@ -1598,33 +1602,33 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
       tacs[k+1]->setDesignVars(xlocal, size);
     }
   }
-  // Create the visualization for the object 
-  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                             TACSElement::OUTPUT_EXTRAS);
-  char outfile[256];
-  if (quad_filter){
-    for ( int k = 0; k < nlevels; k++ ){
-      TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_PLANE_STRESS,
-                                    write_flag);
-      f5->incref();
-      sprintf(outfile, "%s/beam_output%d_%d.f5",
-              prefix, iter_count,k);
-      f5->writeToFile(outfile);
-      f5->decref();
-    }
-  }  
-  else {
-    for ( int k = 0; k < nlevels; k++ ){
-      TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_SOLID,
-                                    write_flag);
-      f5->incref();
-      sprintf(outfile, "%s/beam_output%d_%d.f5",
-              prefix, iter_count,k);
-      f5->writeToFile(outfile);
-      f5->decref();
-    }
-  }
-  iter_count++;
+  // // Create the visualization for the object 
+  // unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+  //                            TACSElement::OUTPUT_EXTRAS);
+  // char outfile[256];
+  // if (quad_filter){
+  //   for ( int k = 0; k < nlevels; k++ ){
+  //     TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_PLANE_STRESS,
+  //                                   write_flag);
+  //     f5->incref();
+  //     sprintf(outfile, "%s/beam_output%d_%d.f5",
+  //             prefix, iter_count,k);
+  //     f5->writeToFile(outfile);
+  //     f5->decref();
+  //   }
+  // }  
+  // else {
+  //   for ( int k = 0; k < nlevels; k++ ){
+  //     TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_SOLID,
+  //                                   write_flag);
+  //     f5->incref();
+  //     sprintf(outfile, "%s/beam_output%d_%d.f5",
+  //             prefix, iter_count,k);
+  //     f5->writeToFile(outfile);
+  //     f5->decref();
+  //   }
+  // }
+  // iter_count++;
 }
 
 /*
