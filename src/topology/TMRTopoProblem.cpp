@@ -676,6 +676,9 @@ TMRTopoProblem::~TMRTopoProblem(){
       if (obj_funcs[i]){ obj_funcs[i]->decref(); }
     }
   }
+  if (ksm_file){
+    ksm_file->decref();
+  }
 }
 
 /*
@@ -930,6 +933,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     }
     ksm_file = new KSMPrintFile(line,
                                 "KSM", mpi_rank, 1);
+    ksm_file->incref();
   }
 }
 
@@ -1449,7 +1453,6 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
       memset(xlocal, 0, max_local_size*sizeof(TacsScalar));
       memset(upper, 0, max_local_size*sizeof(TacsScalar));
       tacs[0]->getDesignVarRange(xlocal, upper, max_local_size);
-      
       if (!has_lower){
         ParOptBVecWrap *lbwrap = dynamic_cast<ParOptBVecWrap*>(lbvec);
         if (lbwrap){
@@ -1466,11 +1469,17 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ubvec);
         if (ubwrap){
           ubwrap->vec->zeroEntries();
-          setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
-          ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
-          ubwrap->vec->endSetValues(TACS_ADD_VALUES);
-          ///ubwrap->vec->beginDistributeValues();
-          //ubwrap->vec->endDistributeValues();
+	  // setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
+	  // ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
+	  // ubwrap->vec->endSetValues(TACS_ADD_VALUES);	    
+	  
+	  // else {	    
+	  setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_INSERT_VALUES);
+	  ubwrap->vec->beginSetValues(TACS_INSERT_VALUES);
+	  ubwrap->vec->endSetValues(TACS_INSERT_VALUES);
+	  
+	  ubwrap->vec->beginDistributeValues();
+          ubwrap->vec->endDistributeValues();
         }
       }
       delete [] upper;
@@ -1553,7 +1562,6 @@ void TMRTopoProblem::setBVecFromLocalValues( int level,
     TacsScalar *x_vals, *x_ext_vals;
     int size = vec->getArray(&x_vals);
     int ext_size = vec->getExtArray(&x_ext_vals);
-
     memcpy(x_vals, xloc, size*sizeof(TacsScalar));
     if (x_ext_vals){
       memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
@@ -2306,7 +2314,7 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
     delete [] filename;
   }
 
-  if ((buck || freq) && iter_count % 50 == 0){
+  if ((buck || freq) && iter_count % 250 == 0){
     writeEigenVector(iter);
   }
 
