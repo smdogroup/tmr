@@ -1610,9 +1610,7 @@ void TMRCoupledThermoOctStiffness::addHeatFluxDVSens( const double pt[],
 }
 void TMRCoupledThermoOctStiffness::heatfluxStrainSens( const double pt[], 
                                                        const TacsScalar normal[],
-                                                       const TacsScalar e[],
-                                                       TacsScalar sens[], 
-                                                       int vars_j ){
+                                                       TacsScalar sens[] ){
   const double eps = props->eps;
   if (filter && dv){
     double N[nweights];
@@ -1635,25 +1633,26 @@ void TMRCoupledThermoOctStiffness::heatfluxStrainSens( const double pt[],
       }
       // Extract the properties
       TacsScalar kcond = props->kcond[0];
-      sens[0] = r_factor*kcond*e[0];
-      sens[1] = r_factor*kcond*e[1];
-      sens[2] = r_factor*kcond*e[2];
+      sens[0] = r_factor*kcond*normal[0];
+      sens[1] = r_factor*kcond*normal[1];
+      sens[2] = r_factor*kcond*normal[2];
     }
     else {
-      int j = vars_j*1;
-      TacsScalar r_factor = 1.0;
-      if (eps > 0.0){
-        r_factor = x[j]/(eps*(1.0-x[j])+x[j]);
-      }
-      else {
-        TacsScalar p = -1.0*eps;
-        r_factor = pow(x[j],p);
-      }
-      // Extract the properties
-      TacsScalar kcond = props->kcond[j-1];
-      sens[0] = r_factor*kcond*e[0];
-      sens[1] = r_factor*kcond*e[1];
-      sens[2] = r_factor*kcond*e[2];
+      for (int j = 1; j < nvars; j++){
+        TacsScalar r_factor = 1.0;
+        if (eps > 0.0){
+          r_factor = x[j]/(eps*(1.0-x[j])+x[j]);
+        }
+        else {
+          TacsScalar p = -1.0*eps;
+          r_factor = pow(x[j],p);
+        }
+        // Extract the properties
+        TacsScalar kcond = props->kcond[j-1];
+        sens[0] += r_factor*kcond*normal[0];
+        sens[1] += r_factor*kcond*normal[1];
+        sens[2] += r_factor*kcond*normal[2];
+      }      
     }    
   }
 }

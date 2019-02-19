@@ -102,9 +102,7 @@ class TMRCoupledThermoOctStiffness : public CoupledThermoSolidStiffness {
                           TacsScalar dvSens[], int dvLen );
   void heatfluxStrainSens( const double pt[],
                            const TacsScalar normal[],
-                           const TacsScalar strain[],
-                           TacsScalar sens[], 
-                           int vars_j=0 );
+                           TacsScalar sens[] );
 
   
  private:

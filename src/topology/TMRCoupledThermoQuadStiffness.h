@@ -93,6 +93,18 @@ class TMRCoupledThermoQuadStiffness : public CoupledThermoPlaneStressStiffness {
   int getVarsPerNode(){
     return nvars;
   }
+  void heatflux( const double pt[],
+                 const TacsScalar normal[],
+                 const TacsScalar strain[],
+                 TacsScalar * qn );
+  void addHeatFluxDVSens( const double pt[],
+                          const TacsScalar normal[],
+                          const TacsScalar strain[],
+                          TacsScalar alpha,
+                          TacsScalar dvSens[], int dvLen );
+  void heatfluxStrainSens( const double pt[],
+                           const TacsScalar normal[],
+                           TacsScalar sens[] );
  private:
   void computeLocalWeights( const double pt[], 
                             TMRIndexWeight *local_weights );
