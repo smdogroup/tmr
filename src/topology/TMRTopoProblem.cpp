@@ -1411,6 +1411,8 @@ int TMRTopoProblem::useUpperBounds(){
 void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
                                        ParOptVec *lbvec,
                                        ParOptVec *ubvec ){
+  int mpi_rank;
+  MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
   if (xvec){
     // If the initial design vector exists, copy it directly
     if (xinit){
@@ -1427,10 +1429,10 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, wrap->vec, TACS_INSERT_VALUES);
 
         // Insert the values across all processors
-        wrap->vec->beginSetValues(TACS_INSERT_VALUES);
-        wrap->vec->endSetValues(TACS_INSERT_VALUES);
         wrap->vec->beginDistributeValues();
         wrap->vec->endDistributeValues();
+        wrap->vec->beginSetValues(TACS_INSERT_VALUES);
+        wrap->vec->endSetValues(TACS_INSERT_VALUES);        
       }
     }
   }
@@ -1458,28 +1460,24 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         if (lbwrap){
           lbwrap->vec->zeroEntries();
           // Set the values from the local array
-          setBVecFromLocalValues(0, xlocal, lbwrap->vec, TACS_ADD_VALUES);
-          lbwrap->vec->beginSetValues(TACS_ADD_VALUES);
-          lbwrap->vec->endSetValues(TACS_ADD_VALUES);
-          //lbwrap->vec->beginDistributeValues();
-          //lbwrap->vec->endDistributeValues();
+          setBVecFromLocalValues(0, xlocal, lbwrap->vec, TACS_INSERT_VALUES);
+          lbwrap->vec->beginDistributeValues();
+          lbwrap->vec->endDistributeValues();
+          lbwrap->vec->beginSetValues(TACS_INSERT_VALUES);
+          lbwrap->vec->endSetValues(TACS_INSERT_VALUES);
+          
         }
       }
-      if (!has_upper){
+      if (!has_upper){        
         ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ubvec);
         if (ubwrap){
           ubwrap->vec->zeroEntries();
-	  // setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
-	  // ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
-	  // ubwrap->vec->endSetValues(TACS_ADD_VALUES);	    
-	  
-	  // else {	    
-	  setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_INSERT_VALUES);
-	  ubwrap->vec->beginSetValues(TACS_INSERT_VALUES);
-	  ubwrap->vec->endSetValues(TACS_INSERT_VALUES);
-	  
-	  ubwrap->vec->beginDistributeValues();
+          // Set the values from the local array
+          setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_INSERT_VALUES);
+          ubwrap->vec->beginDistributeValues();
           ubwrap->vec->endDistributeValues();
+          ubwrap->vec->beginSetValues(TACS_INSERT_VALUES);
+          ubwrap->vec->endSetValues(TACS_INSERT_VALUES);          
         }
       }
       delete [] upper;
@@ -1602,33 +1600,6 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
       tacs[k+1]->setDesignVars(xlocal, size);
     }
   }
-  // // Create the visualization for the object 
-  // unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-  //                            TACSElement::OUTPUT_EXTRAS);
-  // char outfile[256];
-  // if (quad_filter){
-  //   for ( int k = 0; k < nlevels; k++ ){
-  //     TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_PLANE_STRESS,
-  //                                   write_flag);
-  //     f5->incref();
-  //     sprintf(outfile, "%s/beam_output%d_%d.f5",
-  //             prefix, iter_count,k);
-  //     f5->writeToFile(outfile);
-  //     f5->decref();
-  //   }
-  // }  
-  // else {
-  //   for ( int k = 0; k < nlevels; k++ ){
-  //     TACSToFH5 *f5 = new TACSToFH5(tacs[k], TACS_SOLID,
-  //                                   write_flag);
-  //     f5->incref();
-  //     sprintf(outfile, "%s/beam_output%d_%d.f5",
-  //             prefix, iter_count,k);
-  //     f5->writeToFile(outfile);
-  //     f5->decref();
-  //   }
-  // }
-  // iter_count++;
 }
 
 /*
