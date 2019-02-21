@@ -739,14 +739,52 @@ cdef class FaceFromSurface(Face):
         self.ptr = new TMRFaceFromSurface(surf.ptr)
         self.ptr.incref()
 
+cdef class TFIEdge(Edge):
+    def __cinit__(self, Vertex v1, Vertex v2):
+        self.ptr = new TMRTFIEdge(v1.ptr, v2.ptr)
+        self.ptr.incref()
+        
 cdef class TFIFace(Face):
-    def __cinit__(self, list edges, list dirs, list verts):
+    def __cinit__(self, list edges, list dirs=None, list verts=None):
         cdef TMREdge *e[4]
         cdef int d[4]
         cdef TMRVertex *v[4]
+        cdef list edge_list
+
         if len(edges) != 4:
             errmsg = 'TFIFace: Number of edges must be 4'
             raise ValueError(errmsg)
+
+        if dirs is None or verts is None:
+            edge_list = edges
+            edges = [edge_list.pop()]
+            dirs = [1]
+            v1, vnext = edges[-1].getVertices()
+            verts = [v1, vnext]
+
+            nedges = len(edge_list)
+            for k in range(nedges):
+                for i in range(len(edge_list)):
+                    edge = edge_list[i]
+                    v1, v2 = edge.getVertices()
+                    if v1.getEntityId() == vnext.getEntityId():
+                        dirs.append(1)
+                        edges.append(edge_list[i])
+                        edge_list.remove(edges[-1])
+                        vnext = v2
+                        break
+                    elif v2.getEntityId() == vnext.getEntityId():
+                        dirs.append(-1)
+                        edges.append(edge_list[i])
+                        edge_list.remove(edges[-1])
+                        vnext = v1
+                        break
+            
+                verts.append(vnext)
+
+            # Remove the last entry from the list of vertices
+            verts.pop()
+        
         if len(dirs) != 4:
             errmsg = 'TFIFace: Number of edge directions must be 4'
             raise ValueError(errmsg)

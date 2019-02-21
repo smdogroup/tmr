@@ -754,6 +754,9 @@ TMRTopoProblem::~TMRTopoProblem(){
       if (obj_funcs[i]){ obj_funcs[i]->decref(); }
     }
   }
+  if (ksm_file){
+    ksm_file->decref();
+  }
 }
 
 /*
@@ -984,6 +987,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
     }
     ksm_file = new KSMPrintFile(line,
                                 "KSM", mpi_rank, 1);
+    ksm_file->incref();
   }
 }
 
@@ -1458,6 +1462,8 @@ int TMRTopoProblem::useUpperBounds(){
 void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
                                        ParOptVec *lbvec,
                                        ParOptVec *ubvec ){
+  int mpi_rank;
+  MPI_Comm_rank(tacs[0]->getMPIComm(), &mpi_rank);
   if (xvec){
     // If the initial design vector exists, copy it directly
     if (xinit){
@@ -1474,10 +1480,10 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         setBVecFromLocalValues(0, xlocal, wrap->vec, TACS_INSERT_VALUES);
 
         // Insert the values across all processors
-        wrap->vec->beginSetValues(TACS_INSERT_VALUES);
-        wrap->vec->endSetValues(TACS_INSERT_VALUES);
         wrap->vec->beginDistributeValues();
         wrap->vec->endDistributeValues();
+        wrap->vec->beginSetValues(TACS_INSERT_VALUES);
+        wrap->vec->endSetValues(TACS_INSERT_VALUES);        
       }
     }
   }
@@ -1511,7 +1517,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
           lbwrap->vec->endSetValues(TACS_ADD_VALUES);
         }
       }
-      if (!has_upper){
+      if (!has_upper){        
         ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ubvec);
         if (ubwrap){
           ubwrap->vec->zeroEntries();
@@ -1596,7 +1602,6 @@ void TMRTopoProblem::setBVecFromLocalValues( int level,
     TacsScalar *x_vals, *x_ext_vals;
     int size = vec->getArray(&x_vals);
     int ext_size = vec->getExtArray(&x_ext_vals);
-
     memcpy(x_vals, xloc, size*sizeof(TacsScalar));
     if (x_ext_vals){
       memcpy(x_ext_vals, &xloc[size], ext_size*sizeof(TacsScalar));
@@ -1866,7 +1871,11 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       // Solve the system: K(x)*u = forces
       ksm->solve(forces[i], vars[i]);
       tacs[0]->setBCs(vars[i]);
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> 07e1aaee50371089502c4baabda152ad8495523c
       // Set the variables into TACSAssembler
       tacs[0]->setVariables(vars[i]);
 
@@ -2505,7 +2514,7 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
     delete [] filename;
   }
 
-  if ((buck || freq) && iter_count % 50 == 0){
+  if ((buck || freq) && iter_count % 250 == 0){
     writeEigenVector(iter);
   }
 
