@@ -762,24 +762,21 @@ cdef class TFIFace(Face):
             edge_list = edges
             edges = [edge_list.pop()]
             dirs = [1]
-            v1, vnext = edges[-1].getVertices()
+            v1, vnext = edges[0].getVertices()
             verts = [v1, vnext]
 
             nedges = len(edge_list)
             for k in range(nedges):
-                for i in range(len(edge_list)):
-                    edge = edge_list[i]
+                for i, edge in enumerate(edge_list):
                     v1, v2 = edge.getVertices()
                     if v1.getEntityId() == vnext.getEntityId():
                         dirs.append(1)
-                        edges.append(edge_list[i])
-                        edge_list.remove(edges[-1])
+                        edges.append(edge_list.pop(i))
                         vnext = v2
                         break
                     elif v2.getEntityId() == vnext.getEntityId():
                         dirs.append(-1)
-                        edges.append(edge_list[i])
-                        edge_list.remove(edges[-1])
+                        edges.append(edge_list.pop(i))
                         vnext = v1
                         break
             
@@ -787,7 +784,7 @@ cdef class TFIFace(Face):
 
             # Remove the last entry from the list of vertices
             verts.pop()
-        
+
         if len(dirs) != 4:
             errmsg = 'TFIFace: Number of edge directions must be 4'
             raise ValueError(errmsg)
