@@ -3442,13 +3442,14 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
         isqforest = 0
+        nlevels = len(assemblers)
+
         for i in range(nlevels):
             if isinstance(filters[i], QuadForest):
                 isqforest = 1
             elif isinstance(filters[i], OctForest):
                 isqforest = 0
 
-        nlevels = len(assemblers)
         assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
 
         if helmholtz_radius < 0.0:
@@ -3479,7 +3480,7 @@ cdef class TopoProblem(pyParOptProblemBase):
                                           helmholtz_radius, vars_per_node)
             self.ptr.incref()
             free(ofiltr)
-            
+
         free(assemb)
         if vmaps != NULL:
             free(vmaps)

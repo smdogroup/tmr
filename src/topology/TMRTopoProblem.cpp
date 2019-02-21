@@ -59,7 +59,6 @@ public:
 
     for ( int i = 0; i < num_elements; i++ ){
       elements[i] = elem;
-      elem->incref();
     }
   }
 
@@ -95,7 +94,6 @@ public:
 
     for ( int i = 0; i < num_elements; i++ ){
       elements[i] = elem;
-      elem->incref();
     }
   }
 
@@ -381,22 +379,33 @@ void TMRTopoProblem::initialize( int _nlevels,
       if (helmholtz_creator3d){
         helmholtz_tacs[k] =
           helmholtz_creator3d->createTACS(oct_filter[k],
-                                          TACSAssembler::MULTICOLOR_ORDER);
+                                          TACSAssembler::NATURAL_ORDER);
       }
       else {
         helmholtz_tacs[k] =
           helmholtz_creator2d->createTACS(quad_filter[k],
-                                          TACSAssembler::MULTICOLOR_ORDER);
+                                          TACSAssembler::NATURAL_ORDER);
       }
       helmholtz_tacs[k]->incref();
 
       // Extract the information that we need from the helmholtz
       // assembler object
-      filter_maps[k] = helmholtz_tacs[k]->getVarMap();
-      filter_maps[k]->incref();
+      if (_filter_maps && filter_indices){
+        filter_maps[k] = _filter_maps[k];
+        filter_maps[k]->incref();
 
-      filter_dist[k] = helmholtz_tacs[k]->getBVecDistribute();
-      filter_dist[k]->incref();
+        // Create the distribution object for the design variables
+        filter_dist[k] = new TACSBVecDistribute(filter_maps[k],
+                                                filter_indices[k]);
+        filter_dist[k]->incref();
+      }
+      else {
+        filter_maps[k] = helmholtz_tacs[k]->getVarMap();
+        filter_maps[k]->incref();
+
+        filter_dist[k] = helmholtz_tacs[k]->getBVecDistribute();
+        filter_dist[k]->incref();
+      }
 
       filter_dep_nodes[k] = helmholtz_tacs[k]->getBVecDepNodes();
       if (filter_dep_nodes[k]){
@@ -547,8 +556,20 @@ void TMRTopoProblem::initialize( int _nlevels,
     // Set the maximum local size
     const int *range;
     filter_maps[k]->getOwnerRange(&range);
-    int size = 0; // vars_per_node*((range[mpi_rank+1] - range[mpi_rank]) +
-    // filter_indices[k]->getNumIndices());
+
+    // Find the number of dependent nodes
+    int ndep = 0;
+    if (filter_dep_nodes[k]){
+      ndep = filter_dep_nodes[k]->getDepNodes(NULL, NULL, NULL);
+    }
+
+    // Get the global indices and add its contribution to the
+    // max. size of the local design variable vector
+    TACSBVecIndices *indices = filter_dist[k]->getIndices();
+    int size = vars_per_node*((range[mpi_rank+1] - range[mpi_rank]) +
+                              indices->getNumIndices() + ndep);
+
+    // Compute the total number of referenced nodes on this filter object
     int size2 = 0;
     if (oct_filter){
       size2 = vars_per_node*oct_filter[k]->getNodeNumbers(NULL);
@@ -556,7 +577,7 @@ void TMRTopoProblem::initialize( int _nlevels,
     else {
       size2 = vars_per_node*quad_filter[k]->getNodeNumbers(NULL);
     }
-    
+
     // Update the maximum local size
     if (size > max_local_size){
       max_local_size = size;
@@ -565,7 +586,7 @@ void TMRTopoProblem::initialize( int _nlevels,
       max_local_size = size2;
     }
   }
- 
+
   // Set the maximum local size
   xlocal = new TacsScalar[ max_local_size ];
 
@@ -1635,7 +1656,8 @@ void TMRTopoProblem::applyHelmholtzFilter( TACSBVec *xvars ){
     for ( int k = 0; k < vars_per_node; k++ ){
       // Zero the entries in the RHS vector
       helmholtz_rhs->zeroEntries();
-
+      helmholtz_tacs[0]->zeroVariables();
+      
       for ( int i = 0; i < num_elements; i++ ){
         // Get the values for this element
         int len;
@@ -1680,10 +1702,30 @@ void TMRTopoProblem::applyHelmholtzFilter( TACSBVec *xvars ){
       // Complete the assembly process
       helmholtz_rhs->beginSetValues(TACS_ADD_VALUES);
       helmholtz_rhs->endSetValues(TACS_ADD_VALUES);
-
+      
       // Solve for the filtered values of the design variables
       helmholtz_ksm->solve(helmholtz_rhs, helmholtz_psi);
-
+      helmholtz_tacs[0]->reorderVec(helmholtz_psi);
+      helmholtz_tacs[0]->setVariables(helmholtz_psi);
+      
+      unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                                 TACSElement::OUTPUT_DISPLACEMENTS);
+      TACSToFH5 *f5 = NULL;
+      if (oct_filter){
+        f5 = new TACSToFH5(helmholtz_tacs[0], TACS_POISSON_3D_ELEMENT,
+                           write_flag);
+      }
+      else {
+        f5 = new TACSToFH5(helmholtz_tacs[0], TACS_POISSON_2D_ELEMENT,
+                           write_flag);
+      }
+      f5->incref();
+      char outfile[256];
+      sprintf(outfile, "%s/tacs_var%d_output%04d.f5", prefix, k, iter_count);
+      f5->writeToFile(outfile);
+      f5->decref();
+      
+  
       // Get the output array
       TacsScalar *xarr;
       xvars->getArray(&xarr);
@@ -1694,8 +1736,9 @@ void TMRTopoProblem::applyHelmholtzFilter( TACSBVec *xvars ){
 
       for ( int i = 0; i < size; i++ ){
         xarr[vars_per_node*i + k] = hpsi[i];
-      }
+      }      
     }
+    iter_count++;
 
     delete [] N;
     delete [] Xpts;
@@ -1710,6 +1753,7 @@ void TMRTopoProblem::applyHelmholtzFilter( TACSBVec *xvars ){
 void TMRTopoProblem::reverseHelmholtzFilter( TACSBVec *input,
                                              TACSBVec *output ){
   if (helmholtz_tacs){
+    output->zeroEntries();
     // Get the number of local elements
     int num_elements = helmholtz_tacs[0]->getNumElements();
 
@@ -1738,9 +1782,14 @@ void TMRTopoProblem::reverseHelmholtzFilter( TACSBVec *input,
       for ( int i = 0; i < size; i++ ){
         hrhs[i] = xarr[vars_per_node*i + k];
       }
-
+      
       // Solve for the filtered values of the design variables
       helmholtz_ksm->solve(helmholtz_rhs, helmholtz_psi);
+      helmholtz_tacs[0]->reorderVec(helmholtz_psi);
+
+      // Distribute the values from the solution
+      helmholtz_psi->beginDistributeValues();
+      helmholtz_psi->endDistributeValues();
 
       for ( int i = 0; i < num_elements; i++ ){
         // Get the values for this element
@@ -1776,6 +1825,7 @@ void TMRTopoProblem::reverseHelmholtzFilter( TACSBVec *input,
               ns++;
               psi++;
             }
+
             x_values[vars_per_node*ii + k] += h*N[ii]*v;
           }
         }
@@ -1831,7 +1881,7 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
       size = getLocalValuesFromBVec(k+1, x[k+1], xlocal);
       tacs[k+1]->setDesignVars(xlocal, size);
     }
-  }
+  }  
 }
 
 /*
@@ -2570,8 +2620,6 @@ void TMRTopoProblem::writeEigenVector( int iter ){
         f5->writeToFile(outfile);
       }
     }
-
-
     f5->decref();
     tmp->decref();
   }
