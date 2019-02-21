@@ -26,6 +26,9 @@ cimport mpi4py.MPI as MPI
 cimport numpy as np
 import numpy as np
 
+# Import random
+import random
+
 cdef tmr_init():
     if not TMRIsInitialized():
         TMRInitialize()
@@ -963,7 +966,7 @@ cdef class Model:
         return verts
 
     def writeModelToTecplot(self, fname,
-                            vlabels=True, elabels=True, flabels=True):
+                            vlabels=True, elabels=True, flabels=True, off_scale=0.0):
         '''Write a representation of the edge loops to a file'''
         fp = open(fname, 'w')
         fp.write('Variables = x, y, z, tx, ty, tz\n')
@@ -974,8 +977,9 @@ cdef class Model:
         for v in verts:
             pt = v.evalPoint()
             if vlabels:
+                dx = off_scale*random.uniform(-1.0, 1.0)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Vertex %d\"\n'%(
-                    pt[0], pt[1], pt[2], index))
+                    pt[0]+dx, pt[1]+dx, pt[2]+dx, index))
             fp.write('Zone T = \"Vertex %d\"\n'%(index))
             fp.write('%e %e %e 0 0 0\n'%(pt[0], pt[1], pt[2]))
             index += 1
@@ -988,9 +992,10 @@ cdef class Model:
             pt1 = v1.evalPoint()
             pt2 = v2.evalPoint()
             if elabels:
+                dx = off_scale*random.uniform(-1.0, 1.0)
                 pt = 0.5*(pt1 + pt2)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Edge %d\"\n'%(
-                    pt[0], pt[1], pt[2], index))
+                    pt[0]+dx, pt[1]+dx, pt[2]+dx, index))
             fp.write('Zone T = \"Edge %d\"\n'%(index))
             fp.write('%e %e %e  %e %e %e\n'%(pt1[0], pt1[1], pt1[2],
                 pt2[0] - pt1[0], pt2[1] - pt1[1], pt2[2] - pt1[2]))
@@ -1034,8 +1039,9 @@ cdef class Model:
 
             if count != 0 and flabels:
                 xav /= count
+                dx = off_scale*random.uniform(-1.0, 1.0)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Face %d\"\n'%(
-                    xav[0], xav[1], xav[2], index))
+                    xav[0]+dx, xav[1]+dx, xav[2]+dx, index))
 
             index += 1
         return
