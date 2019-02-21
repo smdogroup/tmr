@@ -175,6 +175,9 @@ cdef extern from "TMRNativeTopology.h":
     cdef cppclass TMRFaceFromSurface(TMRFace):
         TMRFaceFromSurface(TMRSurface*)
 
+    cdef cppclass TMRTFIEdge(TMREdge):
+        TMRTFIEdge(TMRVertex*, TMRVertex*)
+
     cdef cppclass TMRTFIFace(TMRFace):
         TMRTFIFace(TMREdge**, const int*, TMRVertex**)
 

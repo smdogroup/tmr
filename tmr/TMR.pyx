@@ -26,6 +26,9 @@ cimport mpi4py.MPI as MPI
 cimport numpy as np
 import numpy as np
 
+# Import random
+import random
+
 cdef tmr_init():
     if not TMRIsInitialized():
         TMRInitialize()
@@ -739,14 +742,49 @@ cdef class FaceFromSurface(Face):
         self.ptr = new TMRFaceFromSurface(surf.ptr)
         self.ptr.incref()
 
+cdef class TFIEdge(Edge):
+    def __cinit__(self, Vertex v1, Vertex v2):
+        self.ptr = new TMRTFIEdge(v1.ptr, v2.ptr)
+        self.ptr.incref()
+        
 cdef class TFIFace(Face):
-    def __cinit__(self, list edges, list dirs, list verts):
+    def __cinit__(self, list edges, list dirs=None, list verts=None):
         cdef TMREdge *e[4]
         cdef int d[4]
         cdef TMRVertex *v[4]
+        cdef list edge_list
+
         if len(edges) != 4:
             errmsg = 'TFIFace: Number of edges must be 4'
             raise ValueError(errmsg)
+
+        if dirs is None or verts is None:
+            edge_list = edges
+            edges = [edge_list.pop()]
+            dirs = [1]
+            v1, vnext = edges[0].getVertices()
+            verts = [v1, vnext]
+
+            nedges = len(edge_list)
+            for k in range(nedges):
+                for i, edge in enumerate(edge_list):
+                    v1, v2 = edge.getVertices()
+                    if v1.getEntityId() == vnext.getEntityId():
+                        dirs.append(1)
+                        edges.append(edge_list.pop(i))
+                        vnext = v2
+                        break
+                    elif v2.getEntityId() == vnext.getEntityId():
+                        dirs.append(-1)
+                        edges.append(edge_list.pop(i))
+                        vnext = v1
+                        break
+            
+                verts.append(vnext)
+
+            # Remove the last entry from the list of vertices
+            verts.pop()
+
         if len(dirs) != 4:
             errmsg = 'TFIFace: Number of edge directions must be 4'
             raise ValueError(errmsg)
@@ -925,7 +963,7 @@ cdef class Model:
         return verts
 
     def writeModelToTecplot(self, fname,
-                            vlabels=True, elabels=True, flabels=True):
+                            vlabels=True, elabels=True, flabels=True, off_scale=0.0):
         '''Write a representation of the edge loops to a file'''
         fp = open(fname, 'w')
         fp.write('Variables = x, y, z, tx, ty, tz\n')
@@ -936,8 +974,9 @@ cdef class Model:
         for v in verts:
             pt = v.evalPoint()
             if vlabels:
+                dx = off_scale*random.uniform(-1.0, 1.0)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Vertex %d\"\n'%(
-                    pt[0], pt[1], pt[2], index))
+                    pt[0]+dx, pt[1]+dx, pt[2]+dx, index))
             fp.write('Zone T = \"Vertex %d\"\n'%(index))
             fp.write('%e %e %e 0 0 0\n'%(pt[0], pt[1], pt[2]))
             index += 1
@@ -950,9 +989,10 @@ cdef class Model:
             pt1 = v1.evalPoint()
             pt2 = v2.evalPoint()
             if elabels:
+                dx = off_scale*random.uniform(-1.0, 1.0)
                 pt = 0.5*(pt1 + pt2)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Edge %d\"\n'%(
-                    pt[0], pt[1], pt[2], index))
+                    pt[0]+dx, pt[1]+dx, pt[2]+dx, index))
             fp.write('Zone T = \"Edge %d\"\n'%(index))
             fp.write('%e %e %e  %e %e %e\n'%(pt1[0], pt1[1], pt1[2],
                 pt2[0] - pt1[0], pt2[1] - pt1[1], pt2[2] - pt1[2]))
@@ -996,8 +1036,9 @@ cdef class Model:
 
             if count != 0 and flabels:
                 xav /= count
+                dx = off_scale*random.uniform(-1.0, 1.0)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Face %d\"\n'%(
-                    xav[0], xav[1], xav[2], index))
+                    xav[0]+dx, xav[1]+dx, xav[2]+dx, index))
 
             index += 1
         return
