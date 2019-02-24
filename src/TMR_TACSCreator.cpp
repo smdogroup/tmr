@@ -190,6 +190,7 @@ TACSAssembler*
   // Create the elements using the virtual call
   TACSElement **elements = new TACSElement*[ num_elements ];
   createElements(order, forest, num_elements, elements);
+
   // Create the first element - and read out the number of
   // variables-per-node
   int vars_per_node = 0;
@@ -197,6 +198,7 @@ TACSAssembler*
     vars_per_node = elements[0]->numDisplacements();
   }
   MPI_Allreduce(MPI_IN_PLACE, &vars_per_node, 1, MPI_INT, MPI_MAX, comm);
+
   // Create the associated TACSAssembler object
   TACSAssembler *tacs =
     new TACSAssembler(comm, vars_per_node,

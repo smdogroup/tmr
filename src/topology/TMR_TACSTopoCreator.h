@@ -129,7 +129,7 @@ class TMRQuadBernsteinTACSTopoCreator : public TMRQuadTACSCreator {
  public:
   TMRQuadBernsteinTACSTopoCreator( TMRBoundaryConditions *_bcs,
                                    TMRQuadForest *_forest,
-                                   int is_bernstein=1);
+                                   int is_bernstein=1 );
   ~TMRQuadBernsteinTACSTopoCreator();
 
   // Create the elements
@@ -163,6 +163,7 @@ class TMRQuadBernsteinTACSTopoCreator : public TMRQuadTACSCreator {
   // numbers.
   TACSBVecIndices *filter_indices;
 };
+
 /*
   This class is an abstract base class for setting up topology optimzation
   problems using TMROctForest objects. This is simplified for when the
