@@ -275,9 +275,6 @@ class TMRQuadForest : public TMREntity {
   void initLabel( int mesh_order, TMRInterpolationType interp_type,
                   int label_type[] );
 
-  // Evaluate the Bernstein dependent weights
-  void evalBernsteinOrderWeights( int mesh_order, double u, double *knots,
-                                  double *N );
   // The communicator
   MPI_Comm comm;
   int mpi_rank, mpi_size;
