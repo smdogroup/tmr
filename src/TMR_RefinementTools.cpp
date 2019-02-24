@@ -5186,8 +5186,7 @@ TacsScalar TMRCurvatureConstraint::evalConstraint( TACSBVec *_xvec ){
 
   // Get the quadrature points/weights
   const double *gaussPts, *gaussWts;
-  int num_quad_pts =
-    FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
+  FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
 
   // Get the higher-order points
   TMRPoint *X;
