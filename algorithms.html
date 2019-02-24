@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8">
+    
+    <title>Algorithms &mdash; TMR 1 documentation</title>
+    
+    <link rel="stylesheet" type="text/css" href="_static/css/spc-bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="_static/css/spc-extend.css">
+    <link rel="stylesheet" href="_static/scipy.css" type="text/css" >
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" >
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    './',
+        VERSION:     '1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/javascript" src="_static/js/copybutton.js"></script>
+    <link rel="index" title="Index" href="genindex.html" >
+    <link rel="search" title="Search" href="search.html" >
+    <link rel="top" title="TMR 1 documentation" href="index.html" >
+    <link rel="next" title="TMR Interface and Methods" href="interface_and_methods.html" >
+    <link rel="prev" title="Welcome to TMR’s documentation!" href="index.html" > 
+  </head>
+  <body>
+
+  <div class="container">
+    <div class="header">
+    </div>
+  </div>
+
+
+    <div class="container">
+      <div class="main">
+        
+	<div class="row-fluid">
+	  <div class="span12">
+	    <div class="spc-navbar">
+              
+    <ul class="nav nav-pills pull-left">
+        <li class="active"><a href="["></a></li>
+        <li class="active"><a href="]"></a></li>
+	
+        <li class="active"><a href="index.html">TMR 1 documentation</a></li>
+	 
+    </ul>
+              
+              
+    <ul class="nav nav-pills pull-right">
+      <li class="active">
+        <a href="genindex.html" title="General Index"
+           accesskey="I">index</a>
+      </li>
+      <li class="active">
+        <a href="py-modindex.html" title="Python Module Index"
+           >modules</a>
+      </li>
+      <li class="active">
+        <a href="interface_and_methods.html" title="TMR Interface and Methods"
+           accesskey="N">next</a>
+      </li>
+      <li class="active">
+        <a href="index.html" title="Welcome to TMR’s documentation!"
+           accesskey="P">previous</a>
+      </li>
+    </ul>
+              
+	    </div>
+	  </div>
+	</div>
+        
+
+	<div class="row-fluid">
+      <div class="spc-rightsidebar span3">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Algorithms</a><ul>
+<li><a class="reference internal" href="#serial-meshing-capabilities">Serial meshing capabilities</a></li>
+<li><a class="reference internal" href="#mapped-quadtree-and-octree-meshing">Mapped Quadtree and octree meshing</a></li>
+<li><a class="reference internal" href="#interface-to-cad">Interface to CAD</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">Welcome to TMR’s documentation!</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="interface_and_methods.html"
+                        title="next chapter">TMR Interface and Methods</a></p>
+<div class="this-page-menu">
+  <a href="/scipy/docs/scipy-docs/algorithms.rst.rst">Edit page</a>
+</div>
+
+        </div>
+      </div>
+          <div class="span9">
+            
+        <div class="bodywrapper">
+          <div class="body" id="spc-section-body">
+            
+  <div class="section" id="algorithms">
+<h1>Algorithms<a class="headerlink" href="#algorithms" title="Permalink to this headline">¶</a></h1>
+<p>The following sections describe the algorithms that are implemented with
+<a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> at a high-level.</p>
+<div class="section" id="serial-meshing-capabilities">
+<h2>Serial meshing capabilities<a class="headerlink" href="#serial-meshing-capabilities" title="Permalink to this headline">¶</a></h2>
+<p>The 2D and mapped 2D meshing capabilities in <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> are built around the
+blossom-quad algorithm <a class="reference internal" href="#remacle-2012-blossom-quad" id="id1">[RLS+12]</a>. This algorithm
+generally produces good quality quadrilateral meshes with some restrictions on
+the input geometry and the mesh size. The maximum mesh size is approximately
+<span class="math notranslate nohighlight">\(\frac{1}{2}\)</span> the minimum geometric feature size or edge length, or
+<span class="math notranslate nohighlight">\(\frac{1}{4}\)</span> the minimum hole size. This requirement arises because
+there is a minimum of 2 elements per edge or 4 elements around a hole. Sharp
+corners with small acute angles limit local mesh quality and lead to the
+introduction of local kite elements.</p>
+<p>Blossom-quad first builds a triangular surface mesh which is then converted to a
+quadrilateral mesh through an optimal weighted matching using the blossom
+algorithm. <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> uses a generalization of Rebay’s algorithm for efficient
+unstructured triangular mesh generation
+<a class="reference internal" href="#rebay-1993-unstructured-triangle" id="id2">[Reb93]</a>. This algorithm generates a triangular
+surface mesh using a frontal method that updates a Delaunay triangularization
+based on the Bowyer–Watson algorithm <a class="reference internal" href="#shewchuk-2012-delaunay-notes" id="id3">[She12]</a>. Once
+the triangular mesh is generated, it is smoothed using a Laplacian
+technique. The recombination of the triangular mesh into a quad mesh is then
+performed using the weighted matching algorithm.  The weights between adjacent
+triangles are computed based on a combined quad quality, which is a function of
+the maximum interior angle in the quadrilateral. The weights are a nonlinear
+function of this quality metric, where angles close to <span class="math notranslate nohighlight">\(180^{\circ}\)</span> are
+most heavily penalized. Adjacent triangular elements along the boundary are also
+linked with imaginary quads with a large weight.</p>
+<p>The matching algorithm selects which quads to combine in order to create the
+mesh with the best overall quality based on the weights. The quad mesh is then
+post-processed to remove poor quality quadrilateral elements with specific
+topologies. Finally, the resulting quad mesh is smoothed using a quad-specific
+algorithm <a class="reference internal" href="#giuliani-1982-quad-smoothing" id="id4">[Giu82]</a>. The smoothing algorithm
+minimizes a combination of the squeeze and distortion in the mesh.</p>
+</div>
+<div class="section" id="mapped-quadtree-and-octree-meshing">
+<h2>Mapped Quadtree and octree meshing<a class="headerlink" href="#mapped-quadtree-and-octree-meshing" title="Permalink to this headline">¶</a></h2>
+<p>Quadtree and octree meshing techniques provide an intermediate step between
+fully structured meshes and unstructured meshes.  There are several ways that an
+quadtree or octree can be stored.  The most natural way is to store the data in
+a tree structure where the leaves of the tree represent elements in the mesh.
+However, this type of data structure method requires extra overhead and memory
+needed to traverse through the depth of the tree.</p>
+<p>In <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a>, the leaves of the quadtree or octree are stored in an array data
+structure directly, without referencing the nodes within the tree hierarchy.
+This approach is based on the work of <a class="reference internal" href="#bursteddewilcoxghattas11" id="id5">[BWG11]</a> and
+<a class="reference internal" href="#isaacbursteddewilcoxetal15" id="id6">[IBWG15]</a>. Within this data structure, the leaves
+represent either elements or nodes within the mesh. To mesh realistic
+geometries, the method employs a semi-structured approach in which a global
+unstructured quadrilateral or hexahedral super-mesh defines the connections
+between quadtree or octrees. Each quadtree or octree is then parametrically
+mapped to the geometry using an abstract geometry layer described below.</p>
+<p>Each quadrant or octant within a local quadtree is uniquely identified based on
+its local <span class="math notranslate nohighlight">\(x\)</span>-<span class="math notranslate nohighlight">\(y\)</span>-<span class="math notranslate nohighlight">\(z\)</span> coordinates and its refinement
+level. The coordinates correspond to the lower left hand corner of the quadrant
+or octant and the level is used to determine the length of the side of an
+element.This length can be used to determine the local coordinates of
+neighboring elements. The tree can be traversed by creating parent or child
+quadrants.</p>
+<p>To enable local changes in the mesh refinement, adjacent quadrants may have
+different levels, producing elements with different side-lengths. Dependent or
+hanging nodes must be added when the mesh refinement level changes between
+adjacent quadrants. To ensure finite-element compatibility between adjacent
+elements, dependent nodes must be constrained along an edge. To ensure
+compatibility, <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> imposes that the relative difference in levels
+between two adjacent quadrants cannot exceed one. This is referred to as 2:1
+balancing.  After a refinement step, the global mesh must be balanced so that
+both intra- and inter-quadtree quadrants are 2:1 balanced. Inter-quadtree
+operations are performed by mapping the quadrants from their locally-aligned
+coordinate system to the coordinate system of an adjacent quadtree along common
+shared edges or corners.</p>
+<p>In addition to the element mesh, the semi-structured method must also create and
+uniquely order the nodes. A local Morton encoding on each tree to facilitate
+these operations. The order of the quadrilaterals within the global quadtree
+mesh is based on the unstructured global mesh. The ownership of shared corners,
+edges, and faces is determined in advance to avoid duplicating node numbers.
+During the node ordering process, hanging nodes are labeled and their
+corresponding independent neighbors are determined so that they can be
+eliminated using compatibility constraints during finite-element analysis.</p>
+</div>
+<div class="section" id="interface-to-cad">
+<h2>Interface to CAD<a class="headerlink" href="#interface-to-cad" title="Permalink to this headline">¶</a></h2>
+<p>The interface to CAD geometry is provided through an intermediate interface in
+<a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a>. An implementation of this interface is provided for OpenCascade
+which enables models to be loaded directly from OpenCascade or intermediate
+tools. For instance, OpenCascade can load geometry that has been exported in a
+STEP format.</p>
+<p><a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> has internal definitions for both geometry and topological
+entities.  The geometric entities include nodes, curves, and surfaces, while the
+topological entities include vertex, edge, edge loop, face, and volume objects.
+The topological entities describe the logical relationships between their
+underlying geometric representations. Each vertex is associated with a node,
+each edge with a curve, and each face with surface. Each edge contains a first
+and second vertex denoting the start and end point of the underlying curve. An
+edge loop contains a series of edges that are connected together to form a
+closed loop on a surface. Each face is bounded by a series of edge loops that
+define the extent of the face and any holes or cutouts that form the surface.
+The volume object contains a series of faces that bound the volume to create a
+watertight surface.</p>
+<p>The orientation of geometry objects within the model are of critical importance.
+Incorrect orientation information can produce a model with an incompatible
+topology that does not reflect the underlying geometry. Each edge has a natural
+orientation defined by its first and second vertices. However, within an edge
+loop, the orientation of a particular edge may be reversed relative to its
+natural orientation. Therefore, the edge loop object stores both the list of
+edges that form the loop and their orientations relative to the natural edge
+orientation.</p>
+<p>Faces in <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> are defined in their natural orientation. This means that
+the parametric areas computed are positive such that the parametric system is
+right-handed. The orientation of an edge loop on a face is always defined such
+that the material lies to the left of an edge within an edge loop when walking
+the loop in its positive orientation (taking into account the relative
+orientation in the edge loop object). The natural orientation may vary from the
+orientation used within the CAD package and so <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> stores a flag to
+indicate whether the orientation of the surface is flipped. The surfaces that
+create a volume have an orientation, defined with an outward normal
+direction. The volume object contains a list of surfaces and their orientations
+relative to the natural surface orientation stored in <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> that
+indicates whether the surface is outward facing.</p>
+<p>The meshes within <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> are generated and stored on a component-level
+basis. Meshing proceeds through the hierarchy of topological entities from
+vertices, edges, faces to volumes. Each component stores its own portion of the
+mesh using its natural orientation. However, when the mesh is extracted, the
+orientation is converted to the CAD-based orientation by flipping the
+orientation when it does not align.</p>
+<p id="bibtex-bibliography-algorithms-0"><table class="docutils citation" frame="void" id="bursteddewilcoxghattas11" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id5">[BWG11]</a></td><td>Carsten Burstedde, Lucas&nbsp;C. Wilcox, and Omar Ghattas. \texttt p4est: scalable algorithms for parallel adaptive mesh refinement on forests of octrees. <em>SIAM Journal on Scientific Computing</em>, 33(3):1103–1133, 2011. <a class="reference external" href="https://doi.org/10.1137/100791634">doi:10.1137/100791634</a>.</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="giuliani-1982-quad-smoothing" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id4">[Giu82]</a></td><td>S.&nbsp;Giuliani. An algorithm for continuous rezoning of the hydrodynamic grid in arbitrary lagrangian-eulerian computer codes. <em>Nuclear Engineering and Design</em>, 72(2):205 – 212, 1982. <a class="reference external" href="https://doi.org/10.1016/0029-5493(82)90216-3">doi:10.1016/0029-5493(82)90216-3</a>.</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="isaacbursteddewilcoxetal15" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id6">[IBWG15]</a></td><td>Tobin Isaac, Carsten Burstedde, Lucas&nbsp;C. Wilcox, and Omar Ghattas. Recursive algorithms for distributed forests of octrees. <em>SIAM Journal on Scientific Computing</em>, 37(5):C497–C531, 2015. <a class="reference external" href="https://doi.org/10.1137/140970963">doi:10.1137/140970963</a>.</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="rebay-1993-unstructured-triangle" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[Reb93]</a></td><td>S.&nbsp;Rebay. Efficient unstructured mesh generation by means of delaunay triangulation and Bowyer–Watson algorithm. <em>Journal of Computational Physics</em>, 106(1):125 – 138, 1993. <a class="reference external" href="https://doi.org/10.1006/jcph.1993.1097">doi:10.1006/jcph.1993.1097</a>.</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="remacle-2012-blossom-quad" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[RLS+12]</a></td><td>J.-F. Remacle, J.&nbsp;Lambrechts, B.&nbsp;Seny, E.&nbsp;Marchandise, A.&nbsp;Johnen, and C.&nbsp;Geuzainet. Blossom-Quad: a non-uniform quadrilateral mesh generator using a minimum-cost perfect-matching algorithm. <em>International Journal for Numerical Methods in Engineering</em>, 89(9):1102–1119, 2012. <a class="reference external" href="https://doi.org/10.1002/nme.3279">doi:10.1002/nme.3279</a>.</td></tr>
+</tbody>
+</table>
+<table class="docutils citation" frame="void" id="shewchuk-2012-delaunay-notes" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[She12]</a></td><td>Jonathan&nbsp;Richard Shewchuk. <em>Lecture Notes on Delaunay Mesh Generation</em>. Department of Electrical Engineering and Computer Sciences University of California at Berkeley, 2012.</td></tr>
+</tbody>
+</table>
+</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container container-navbar-bottom">
+      <div class="spc-navbar">
+        
+      </div>
+    </div>
+    <div class="container">
+    <div class="footer">
+    <div class="row-fluid">
+    <ul class="inline pull-left">
+      <li>
+        &copy; Copyright 2018, Graeme J. Kennedy.
+      </li>
+      <li>
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.8.1.
+      </li>
+    </ul>
+    </div>
+    </div>
+    </div>
+  </body>
+</html>
