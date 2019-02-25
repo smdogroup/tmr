@@ -3210,7 +3210,7 @@ def strainEnergyError(forest, Assembler coarse,
     values. The localized error indicator is evaluated as follows:
 
     .. math::
-         err = \sum_{i=1}^{4} \Pi_e(u_{ce}, u_{ce}) ] - \Pi_e(u_e, u_e)
+         err = \sum_{i=1}^{4} \Pi_e(u_{ce}, u_{ce}) - \Pi_e(u_e, u_e)
 
     where :math:`u_{ce}` is the element-wise cubic element reconstruction projected
     onto a uniformly refined mesh.

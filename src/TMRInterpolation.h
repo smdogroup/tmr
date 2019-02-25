@@ -293,7 +293,8 @@ inline void bernstein_shape_func_second_derivative( const int order,
   Evaluate the constraint weights for a Bernstein polynomial along an
   edge for the given mesh order.
 
-  This code relies on the
+  This code is for computing the weights along the edge indicated by Ec
+  indicated below:
   o---------------o
   |               |
   |               |

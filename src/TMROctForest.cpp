@@ -6814,6 +6814,7 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
   delete [] wvals;
   delete [] weights;
 }
+
 /*
   Initialize the node label
 */

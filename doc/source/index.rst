@@ -10,14 +10,12 @@ Contents:
 
 .. toctree::
    :maxdepth: 2
-      
+
    algorithms
    interface_and_methods
    error_estimation
    install
    example
-   
-
 
 Indices and tables
 ==================
