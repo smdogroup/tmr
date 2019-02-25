@@ -4438,6 +4438,15 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   }
 
   if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Create the evenly spaced "Bern knots"
+    double *bern_knots = new double[ mesh_order ];
+    double knot_space = 2.0/(mesh_order-1);
+    for (int p = 1; p < mesh_order-1; p++){
+      bern_knots[p] = -1. + p*knot_space;
+    }
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
+    
     // Check whether the node is on a coarse mesh surface in either
     // the x,y,z directions
     if ((i == 0 && quad->x == node->x) ||
@@ -4453,7 +4462,14 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
       Nu[istart] = 1.0;
     }
     else {
-      eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, i, Nu);
+      if (mesh_order == coarse->mesh_order){
+        double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + bern_knots[i]) -
+                               quad->x)/hc;
+        bernstein_shape_functions(mesh_order, u, Nu);
+      }
+      else {
+        eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, i, Nu);
+      }
     }
     if ((j == 0 && quad->y == node->y) ||
         (j == mesh_order-1 && quad->y == node->y + h)){
@@ -4468,8 +4484,16 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
       Nv[jstart] = 1.0;
     }
     else {
-      eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, j, Nv);
+      if (mesh_order == coarse->mesh_order){
+        double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + bern_knots[j]) -
+                               quad->y)/hc;
+        bernstein_shape_functions(mesh_order, v, Nv);
+      }
+      else{
+        eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, j, Nv);
+      }
     }
+    delete [] bern_knots;
   }
   else {
     // Check whether the node is on a coarse mesh surface in either

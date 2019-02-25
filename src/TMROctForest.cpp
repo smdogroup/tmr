@@ -6440,6 +6440,15 @@ int TMROctForest::computeElemInterp( TMROctant *node,
   }
 
   if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Create the evenly spaced "Bern knots"
+    double *bern_knots = new double[ mesh_order ];
+    double knot_space = 2.0/(mesh_order-1);
+    for (int p = 1; p < mesh_order-1; p++){
+      bern_knots[p] = -1. + p*knot_space;
+    }
+    bern_knots[0] = -1.0;
+    bern_knots[mesh_order-1] = 1.0;
+
     if ((i == 0 && oct->x == node->x) ||
         (i == mesh_order-1 && oct->x == node->x + h)){
       istart = 0;
@@ -6453,7 +6462,14 @@ int TMROctForest::computeElemInterp( TMROctant *node,
       Nu[istart] = 1.0;
     }
     else {
-      eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, i, Nu);
+      if (mesh_order == coarse->mesh_order){
+        double u = -1.0 + 2.0*(node->x + 0.5*h*(1.0 + bern_knots[i]) -
+                               oct->x)/hc;
+        bernstein_shape_functions(mesh_order, u, Nu);
+      }
+      else {
+        eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, i, Nu);
+      }
     }
     if ((j == 0 && oct->y == node->y) ||
         (j == mesh_order-1 && oct->y == node->y + h)){
@@ -6468,7 +6484,14 @@ int TMROctForest::computeElemInterp( TMROctant *node,
       Nv[jstart] = 1.0;
     }
     else {
-      eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, j, Nv);
+      if (mesh_order == coarse->mesh_order){
+        double v = -1.0 + 2.0*(node->y + 0.5*h*(1.0 + bern_knots[j]) -
+                               oct->y)/hc;
+        bernstein_shape_functions(mesh_order, v, Nv);
+      }
+      else {
+        eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, j, Nv);
+      }
     }
     if ((k == 0 && oct->z == node->z) ||
         (k == mesh_order-1 && oct->z == node->z + h)){
@@ -6483,7 +6506,14 @@ int TMROctForest::computeElemInterp( TMROctant *node,
       Nw[kstart] = 1.0;
     }
     else {
-      eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, k, Nw);
+      if (mesh_order == coarse->mesh_order){
+        double w = -1.0 + 2.0*(node->z + 0.5*h*(1.0 + bern_knots[k]) -
+                               oct->z)/hc;
+        bernstein_shape_functions(mesh_order, w, Nw);
+      }
+      else {
+        eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, k, Nw);
+      }
     }
   }
   else {

@@ -605,16 +605,8 @@ inline int eval_bernstein_interp_weights( const int mesh_order,
         N[4] = 1.0;
       }
     }
-
     return 0;
-  }
-  else if (mesh_order == coarse_mesh_order){
-    memset(N, 0, coarse_mesh_order*sizeof(double));
-    N[u] = 1.0;
-    
-    return 0;
-  }
-
+  }  
   // Failed
   return 1;
 }
