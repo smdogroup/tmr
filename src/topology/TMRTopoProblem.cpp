@@ -1533,18 +1533,22 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         if (lbwrap){
           lbwrap->vec->zeroEntries();
           // Set the values from the local array
-          setBVecFromLocalValues(0, xlocal, lbwrap->vec, TACS_ADD_VALUES);
-          lbwrap->vec->beginSetValues(TACS_ADD_VALUES);
-          lbwrap->vec->endSetValues(TACS_ADD_VALUES);
+          setBVecFromLocalValues(0, xlocal, lbwrap->vec, TACS_INSERT_VALUES);
+          lbwrap->vec->beginDistributeValues();
+          lbwrap->vec->endDistributeValues();
+          lbwrap->vec->beginSetValues(TACS_INSERT_VALUES);
+          lbwrap->vec->endSetValues(TACS_INSERT_VALUES);
         }
       }
       if (!has_upper){        
         ParOptBVecWrap *ubwrap = dynamic_cast<ParOptBVecWrap*>(ubvec);
         if (ubwrap){
           ubwrap->vec->zeroEntries();
-          setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_ADD_VALUES);
-          ubwrap->vec->beginSetValues(TACS_ADD_VALUES);
-          ubwrap->vec->endSetValues(TACS_ADD_VALUES);
+          setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_INSERT_VALUES);
+          ubwrap->vec->beginDistributeValues();
+          ubwrap->vec->endDistributeValues();
+          ubwrap->vec->beginSetValues(TACS_INSERT_VALUES);
+          ubwrap->vec->endSetValues(TACS_INSERT_VALUES);
         }
       }
       delete [] upper;
