@@ -17,8 +17,8 @@ Contents:
    install
    example
 
-Indices and tabless
-===================
+Indices and tables
+==================
 
 * :ref:`genindex`
 * :ref:`modindex`
