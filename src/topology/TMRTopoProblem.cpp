@@ -2544,6 +2544,23 @@ void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
     }
 
     delete [] filename;
+  }  
+  else if (prefix && quad_filter){
+    // Write out the file at a cut off of 0.25
+    char *filename = new char[ strlen(prefix) + 100 ];
+
+    sprintf(filename, "%s/tacs_output%04d.f5",
+            prefix, iter_count);
+    // Create the visualization for the object
+    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
+                               TACSElement::OUTPUT_DISPLACEMENTS |
+                               TACSElement::OUTPUT_EXTRAS);
+    TACSToFH5 *f5 = new TACSToFH5(tacs[0], TACS_PLANE_STRESS,
+                                  write_flag);
+    f5->incref();
+    f5->writeToFile(filename);
+    f5->decref();
+    delete [] filename;
   }
 
   if ((buck || freq) && iter_count % 250 == 0){
