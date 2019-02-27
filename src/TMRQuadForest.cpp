@@ -937,12 +937,6 @@ void TMRQuadForest::setMeshOrder( int _mesh_order,
       interp_knots[i] = -cos(M_PI*i/(mesh_order-1));
     }
   }
-  else if (interp_type == TMR_BERNSTEIN_POINTS){
-    for ( int i = 0; i < mesh_order; i++ ){
-      interp_knots[i] = -1;
-      interp_knots[mesh_order+i] = 1;
-    }
-  }
   else {
     // Uniform mesh spacing
     interp_knots[0] = -1.0;
@@ -3877,20 +3871,6 @@ void TMRQuadForest::evaluateNodeLocations(){
 
   // Set the knots to use in the interpolation
   const double *knots = interp_knots;
-  double *bern_knots = NULL;
-  if (interp_type == TMR_BERNSTEIN_POINTS){
-    // Create the evenly spaced "Bern knots"
-    bern_knots = new double[ mesh_order ];
-    double knot_space = 2.0/(mesh_order-1);
-    for ( int p = 1; p < mesh_order-1; p++ ){
-      bern_knots[p] = -1. + p*knot_space;
-    }
-    bern_knots[0] = -1.0;
-    bern_knots[mesh_order-1] = 1.0;
-
-    // Set the pointer to the knots
-    knots = bern_knots;
-  }
 
   if (topo){
     for ( int i = 0; i < num_elements; i++ ){
@@ -3926,9 +3906,6 @@ void TMRQuadForest::evaluateNodeLocations(){
   }
 
   delete [] flags;
-  if (bern_knots){
-    delete [] bern_knots;
-  }
 }
 
 /*
@@ -4439,13 +4416,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
 
   if (interp_type == TMR_BERNSTEIN_POINTS){
     // Create the evenly spaced "Bern knots"
-    double *bern_knots = new double[ mesh_order ];
-    double knot_space = 2.0/(mesh_order-1);
-    for (int p = 1; p < mesh_order-1; p++){
-      bern_knots[p] = -1. + p*knot_space;
-    }
-    bern_knots[0] = -1.0;
-    bern_knots[mesh_order-1] = 1.0;
+    const double *bern_knots = interp_knots;
     
     // Check whether the node is on a coarse mesh surface in either
     // the x,y,z directions
@@ -4493,7 +4464,6 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
         eval_bernstein_interp_weights(mesh_order, coarse->mesh_order, j, Nv);
       }
     }
-    delete [] bern_knots;
   }
   else {
     // Check whether the node is on a coarse mesh surface in either
@@ -4637,21 +4607,6 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   // Set the knots to use in the interpolation
   const double *knots = interp_knots;
 
-  double *bern_knots = NULL;
-  if (interp_type == TMR_BERNSTEIN_POINTS){
-    // Create the evenly spaced "Bern knots"
-    bern_knots = new double[ mesh_order ];
-    double knot_space = 2.0/(mesh_order-1);
-    for (int p = 1; p < mesh_order-1; p++){
-      bern_knots[p] = -1. + p*knot_space;
-    }
-    bern_knots[0] = -1.0;
-    bern_knots[mesh_order-1] = 1.0;
-
-    // Set the pointer to the knots
-    knots = bern_knots;
-  }
-
   for ( int i = 0; i < num_elements; i++ ){
     const int *c = &conn[nodes_per_element*i];
     for ( int j = 0; j < nodes_per_element; j++ ){
@@ -4785,10 +4740,6 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
       fprintf(stderr,
               "TMRQuadForest: Destination processor does not own node\n");
     }
-  }
-
-  if (bern_knots){
-    delete [] bern_knots;
   }
  
   // Free the recv array
