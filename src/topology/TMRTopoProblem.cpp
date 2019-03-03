@@ -1534,6 +1534,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
           lbwrap->vec->zeroEntries();
           // Set the values from the local array
           setBVecFromLocalValues(0, xlocal, lbwrap->vec, TACS_INSERT_VALUES);
+          // Distribute the lower bound
           lbwrap->vec->beginDistributeValues();
           lbwrap->vec->endDistributeValues();
           lbwrap->vec->beginSetValues(TACS_INSERT_VALUES);
@@ -1545,6 +1546,7 @@ void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
         if (ubwrap){
           ubwrap->vec->zeroEntries();
           setBVecFromLocalValues(0, upper, ubwrap->vec, TACS_INSERT_VALUES);
+          // Distribute the upper bound
           ubwrap->vec->beginDistributeValues();
           ubwrap->vec->endDistributeValues();
           ubwrap->vec->beginSetValues(TACS_INSERT_VALUES);
@@ -1844,7 +1846,10 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
     // Copy the values to the local design variable vector
     x[0]->copyValues(xvec);
 
-    // Distribute the design variable values
+    // Distribute the design variable values. This call is needed when using
+    // Bernstein polynomial formulation with adaptive mesh refinement since the
+    // design vector includes the dependent nodes. This call will ensure that
+    // the design variables are distributed to the proper processors.
     x[0]->beginDistributeValues();
     x[0]->endDistributeValues();
 
