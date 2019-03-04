@@ -4751,6 +4751,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   delete [] wvals;
   delete [] weights;
 }
+
 /*
   Initialize the node label
 */

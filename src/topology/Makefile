@@ -12,6 +12,10 @@ include ${PAROPT_DIR}/ParOpt_Common.mk
 endif
 
 CXX_OBJS = TMRTopoProblem.o \
+	TMRMatrixFilter.o \
+	TMRLagrangeFilter.o \
+	TMRConformFilter.o \
+	TMRHelmholtzFilter.o \
 	TMROctStiffness.o \
 	TMRQuadStiffness.o \
 	TMR_TACSTopoCreator.o \

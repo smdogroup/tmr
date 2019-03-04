@@ -24,6 +24,7 @@
 #include "ParOpt.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
+#include "TMRTopoFilter.h"
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
 #include "TMR_RefinementTools.h"
@@ -65,22 +66,7 @@ class TMRTopoProblem : public ParOptProblem {
  public:
   // Create the topology optimization object
   // ---------------------------------------
-  TMRTopoProblem( int _nlevels,
-                  TACSAssembler *_tacs[],
-                  TMROctForest *_filter[],
-                  TACSVarMap *_filter_maps[],
-                  TACSBVecIndices *filter_indices[],
-                  TACSMg *_mg,
-                  double helmholtz_radius=-1.0,
-                  int _vars_per_node=1 );
-  TMRTopoProblem( int _nlevels,
-                  TACSAssembler *_tacs[],
-                  TMRQuadForest *_filter[],
-                  TACSVarMap *_filter_maps[],
-                  TACSBVecIndices *filter_indices[],
-                  TACSMg *_mg,
-                  double helmholtz_radius=-1.0,
-                  int _vars_per_node=1 );
+  TMRTopoProblem( TMRTopoFilter *_filter, TACSMg *_mg );
   ~TMRTopoProblem();
 
   // Set the load cases - note that this destroys internal information
@@ -145,14 +131,6 @@ class TMRTopoProblem : public ParOptProblem {
   // -------------------------------------------------
   void setLinearization( double q, ParOptVec *xvec );
 
-  // Create a TACSBVec object containing the filter element volumes
-  // --------------------------------------------------------------
-  TACSBVec* createVolumeVec( double Xscale=1.0 );
-
-  // Create a TACSBVec object containing the filter element area
-  // --------------------------------------------------------------
-  TACSBVec* createAreaVec( double Xscale=1.0 );
-
   // Create a design variable vector
   // -------------------------------
   ParOptVec *createDesignVec();
@@ -213,28 +191,8 @@ class TMRTopoProblem : public ParOptProblem {
   void writeOutput( int iter, ParOptVec *x );
 
  private:
-  // Initialize the problem
-  void initialize( int _nlevels,
-                   TACSAssembler *_tacs[],
-                   TMROctForest *_oct_filter[],
-                   TMRQuadForest *_quad_filter[],
-                   TACSVarMap *_filter_maps[],
-                   TACSBVecIndices *filter_indices[],
-                   TACSMg *_mg,
-                   double helmholtz_radius=-1.0,
-                   int _vars_per_node=1 );
-
-  // Apply the filter for the design variables/output sensitivities
-  void applyHelmholtzFilter( TACSBVec *xvars );
-  void reverseHelmholtzFilter( TACSBVec *input, TACSBVec *output );
-
   // Set the design variables across all multigrid levels
   void setDesignVars( ParOptVec *xvec );
-
-  // Get/set values from the TACSBVec object
-  int getLocalValuesFromBVec( int level, TACSBVec *vec, TacsScalar *xloc );
-  void setBVecFromLocalValues( int level, const TacsScalar *xloc, TACSBVec *vec,
-                               TACSBVecOperation op );
 
   // Extract and write the eigenvectors to file
   void writeEigenVector( int iter );
@@ -301,19 +259,8 @@ class TMRTopoProblem : public ParOptProblem {
   } *load_case_info;
 
   // Store the design variable info
-  int nlevels;
-  TACSAssembler **tacs;
-
-  // Set the information about the filter at each level
-  TMROctForest **oct_filter;
-  TMRQuadForest **quad_filter;
-  TACSVarMap **filter_maps;
-  TACSBVecDistribute **filter_dist;
-  TACSBVecInterp **filter_interp;
-  TACSBVecDepNodes **filter_dep_nodes;
-
-  // Create the design variable values at each level
-  TACSBVec **x;
+  TACSAssembler *tacs;
+  TMRTopoFilter *filter;
 
   // The initial design variable values
   int max_local_size;
@@ -326,13 +273,6 @@ class TMRTopoProblem : public ParOptProblem {
   // The initial design variable values
   ParOptVec *xinit;
   ParOptVec *xlb, *xub;
-
-  // Data (that may be NULL) for the Helmholtz-based PDE filter
-  TACSAssembler **helmholtz_tacs;
-  TACSKsm *helmholtz_ksm;
-  TACSMg *helmholtz_mg;
-  TACSBVec *helmholtz_rhs, *helmholtz_psi;
-  TACSBVec *helmholtz_vec;
 };
 
 #endif // TMR_TOPO_PROBLEM_H

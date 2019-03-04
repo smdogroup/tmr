@@ -183,12 +183,13 @@ class TMRCyTopoOctCreator : public TMROctTACSTopoCreator {
 /*
   Create a wrapper for topology optimization with a filter
 */
-class TMRCyTopoQuadBernsteinCreator : public TMRQuadBernsteinTACSTopoCreator {
+class TMRCyTopoQuadConformCreator : public TMRQuadConformTACSTopoCreator {
  public:
-  TMRCyTopoQuadBernsteinCreator( TMRBoundaryConditions *_bcs,
-                                 TMRQuadForest *_forest,
-                                 int is_bernstein=1):
-  TMRQuadBernsteinTACSTopoCreator(_bcs, _forest, is_bernstein){}
+  TMRCyTopoQuadConformCreator( TMRBoundaryConditions *_bcs,
+                               TMRQuadForest *_forest,
+                               int order=-1
+                               TMRInterpolationType interp_type=TMR_UNIFORM_POINTS ):
+  TMRQuadConformTACSTopoCreator(_bcs, _forest, order, interp_type){}
 
   void setSelfPointer( void *_self ){
     self = _self;
@@ -220,12 +221,13 @@ class TMRCyTopoQuadBernsteinCreator : public TMRQuadBernsteinTACSTopoCreator {
 /*
   Create a wrapper for topology optimization with a filter
 */
-class TMRCyTopoOctBernsteinCreator : public TMROctBernsteinTACSTopoCreator {
+class TMRCyTopoOctConformCreator : public TMROctConformTACSTopoCreator {
  public:
-  TMRCyTopoOctBernsteinCreator( TMRBoundaryConditions *_bcs,
-                                TMROctForest *_forest,
-                                int is_bernstein=1 ):
-  TMROctBernsteinTACSTopoCreator(_bcs, _forest, is_bernstein){}
+  TMRCyTopoOctConformCreator( TMRBoundaryConditions *_bcs,
+                              TMROctForest *_forest,
+                              int order=-1
+                              TMRInterpolationType interp_type=TMR_UNIFORM_POINTS ):
+  TMROctConformTACSTopoCreator(_bcs, _forest, order, interp_type){}
 
   void setSelfPointer( void *_self ){
     self = _self;

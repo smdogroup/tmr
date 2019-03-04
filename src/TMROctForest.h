@@ -42,6 +42,7 @@
   the construction of the interpolation operators that can be used for
   multigrid solution algorithms.
 */
+
 class TMROctForest : public TMREntity {
  public:
   // This is the max order of the mesh

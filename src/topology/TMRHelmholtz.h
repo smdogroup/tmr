@@ -3,6 +3,7 @@
 
 #include "TMRInterpolation.h"
 #include "TACSElement.h"
+#include "FElibrary.h"
 
 template <int order>
 class TMRQuadHelmholtz : public TACSElement {
@@ -13,7 +14,7 @@ class TMRQuadHelmholtz : public TACSElement {
     r2 = r*r;
   }
   ~TMRQuadHelmholtz(){}
-  
+
   const char* elementName(){
     return "TMRQuadHelmholtz";
   }
@@ -77,7 +78,7 @@ class TMRQuadHelmholtz : public TACSElement {
     double na[order], nb[order];
     double dna[order], dnb[order];
     bernstein_shape_func_derivative(order, pt[0], na, dna);
-    bernstein_shape_func_derivative(order, pt[1], nb, dnb); 
+    bernstein_shape_func_derivative(order, pt[1], nb, dnb);
     for ( int j = 0; j < order; j++ ){
       for ( int i = 0; i < order; i++ ){
         N[0] = na[i]*nb[j];
@@ -102,7 +103,7 @@ class TMRQuadHelmholtz : public TACSElement {
                         const TacsScalar xdvs[],
                         TacsScalar res[] ){
     memset(res, 0, NUM_NODES*sizeof(TacsScalar));
-    
+
     const double *pts, *wts;
     FElibrary::getGaussPtsWts(order, &pts, &wts);
 
@@ -116,7 +117,7 @@ class TMRQuadHelmholtz : public TACSElement {
         // Get the shape functions
         double N[NUM_NODES], Na[NUM_NODES], Nb[NUM_NODES];
         getShapeFunctions(pt, N, Na, Nb);
-    
+
         // Compute the Jacobian transformation
         TacsScalar Xd[4];
         getJacobianTransform(Na, Nb, Xpts, Xd);
@@ -125,7 +126,7 @@ class TMRQuadHelmholtz : public TACSElement {
         TacsScalar J[4];
         TacsScalar h = FElibrary::jacobian2d(Xd, J);
         h *= wts[n]*wts[m];
-        
+
         TacsScalar q = 0.0;
         for ( int i = 0; i < NUM_NODES; i++ ){
           q += N[i]*xdvs[i];
@@ -136,7 +137,7 @@ class TMRQuadHelmholtz : public TACSElement {
           res[i] += h*N[i]*q;
         }
       }
-    }        
+    }
   }
   void addResidual( double time, TacsScalar res[],
                     const TacsScalar Xpts[],
@@ -164,7 +165,7 @@ class TMRQuadHelmholtz : public TACSElement {
         TacsScalar J[4];
         TacsScalar h = FElibrary::jacobian2d(Xd, J);
         h *= wts[n]*wts[m];
-        
+
         // Compute the derivatives of fval
         TacsScalar px = 0.0, py = 0.0, q = 0.0;
         for ( int i = 0; i < NUM_NODES; i++ ){
@@ -210,7 +211,7 @@ class TMRQuadHelmholtz : public TACSElement {
         TacsScalar J[4];
         TacsScalar h = FElibrary::jacobian2d(Xd, J);
         h *= alpha*wts[n]*wts[m];
-        
+
         for ( int j = 0; j < NUM_NODES; j++ ){
           TacsScalar Nxj = Na[j]*J[0] + Nb[j]*J[2];
           TacsScalar Nyj = Na[j]*J[1] + Nb[j]*J[3];
@@ -287,7 +288,7 @@ class TMRQuadHelmholtz : public TACSElement {
 
  private:
   // Filter length scale argument
-  TacsScalar r2; 
+  TacsScalar r2;
 };
 
 template <int order>
@@ -300,7 +301,7 @@ class TMROctHelmholtz : public TACSElement {
     r2 = r*r;
   }
   ~TMROctHelmholtz(){}
-  
+
   const char* elementName(){
     return "TMROctHelmholtz";
   }
@@ -372,8 +373,8 @@ class TMROctHelmholtz : public TACSElement {
     double na[order], nb[order], nc[order];
     double dna[order], dnb[order], dnc[order];
     bernstein_shape_func_derivative(order, pt[0], na, dna);
-    bernstein_shape_func_derivative(order, pt[1], nb, dnb); 
-    bernstein_shape_func_derivative(order, pt[2], nc, dnc); 
+    bernstein_shape_func_derivative(order, pt[1], nb, dnb);
+    bernstein_shape_func_derivative(order, pt[2], nc, dnc);
     for ( int k = 0; k < order; k++ ){
       for ( int j = 0; j < order; j++ ){
         for ( int i = 0; i < order; i++ ){
@@ -399,15 +400,15 @@ class TMROctHelmholtz : public TACSElement {
       Xd[0] += Xpts[0]*Na[0];
       Xd[1] += Xpts[0]*Nb[0];
       Xd[2] += Xpts[0]*Nc[0];
-      
+
       Xd[3] += Xpts[1]*Na[0];
       Xd[4] += Xpts[1]*Nb[0];
       Xd[5] += Xpts[1]*Nc[0];
-      
+
       Xd[6] += Xpts[2]*Na[0];
       Xd[7] += Xpts[2]*Nb[0];
       Xd[8] += Xpts[2]*Nc[0];
-      
+
       Na++; Nb++; Nc++;
       Xpts += 3;
     }
@@ -416,7 +417,7 @@ class TMROctHelmholtz : public TACSElement {
                         const TacsScalar xdvs[],
                         TacsScalar res[] ){
     memset(res, 0, NUM_NODES*sizeof(TacsScalar));
-    
+
     const double *pts, *wts;
     FElibrary::getGaussPtsWts(order, &pts, &wts);
 
@@ -433,7 +434,7 @@ class TMROctHelmholtz : public TACSElement {
           double N[NUM_NODES];
           double Na[NUM_NODES], Nb[NUM_NODES], Nc[NUM_NODES];
           getShapeFunctions(pt, N, Na, Nb, Nc);
-    
+
           // Compute the Jacobian transformation
           TacsScalar Xd[9];
           getJacobianTransform(Na, Nb, Nc, Xpts, Xd);
@@ -442,19 +443,19 @@ class TMROctHelmholtz : public TACSElement {
           TacsScalar J[9];
           TacsScalar h = FElibrary::jacobian3d(Xd, J);
           h *= wts[n]*wts[m]*wts[p];
-        
+
           TacsScalar q = 0.0;
           for ( int i = 0; i < NUM_NODES; i++ ){
             q += N[i]*xdvs[i];
           }
-          
+
           // Add the term to the residual
           for ( int i = 0; i < NUM_NODES; i++ ){
             res[i] += h*N[i]*q;
           }
         }
       }
-    }        
+    }
   }
   void addResidual( double time, TacsScalar res[],
                     const TacsScalar Xpts[],
@@ -486,7 +487,7 @@ class TMROctHelmholtz : public TACSElement {
           TacsScalar J[9];
           TacsScalar h = FElibrary::jacobian3d(Xd, J);
           h *= wts[n]*wts[m]*wts[p];
-        
+
           // Compute the derivatives of fval
           TacsScalar px = 0.0, py = 0.0, pz = 0.0, q = 0.0;
           for ( int i = 0; i < NUM_NODES; i++ ){
@@ -539,7 +540,7 @@ class TMROctHelmholtz : public TACSElement {
           TacsScalar J[9];
           TacsScalar h = FElibrary::jacobian3d(Xd, J);
           h *= alpha*wts[n]*wts[m]*wts[p];
-        
+
           for ( int j = 0; j < NUM_NODES; j++ ){
             TacsScalar Nxj = Na[j]*J[0] + Nb[j]*J[3] + Nc[j]*J[6];
             TacsScalar Nyj = Na[j]*J[1] + Nb[j]*J[4] + Nc[j]*J[7];
@@ -604,7 +605,7 @@ class TMROctHelmholtz : public TACSElement {
           data += ld_data;
         }
       }
-    }    
+    }
   }
   void getOutputConnectivity( int *con, int node ){
     int j = 0;
@@ -627,7 +628,7 @@ class TMROctHelmholtz : public TACSElement {
 
  private:
   // Filter length scale argument
-  TacsScalar r2; 
+  TacsScalar r2;
 };
 
 #endif // TMR_HELMHOLTZ_H

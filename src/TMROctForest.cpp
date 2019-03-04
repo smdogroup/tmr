@@ -2521,17 +2521,17 @@ void TMROctForest::addFaceNeighbors( int face_index,
   for ( int ip = bdata->face_block_ptr[face];
         ip < bdata->face_block_ptr[face+1]; ip++ ){
     // Get the adjacent block and the face index on the adjacent block
-    int adjacent = bdata->face_block_conn[ip]/6;
-    if (adjacent != block){
+    int adj_block = bdata->face_block_conn[ip]/6;
+    if (adj_block != block){
       // Get the face index on the adjacent block
       int adj_index = bdata->face_block_conn[ip] % 6;
 
       // Get the face id for the matching face
-      face_id = bdata->block_face_ids[6*adjacent + adj_index];
+      face_id = bdata->block_face_ids[6*adj_block + adj_index];
 
       // Get the neighboring octant on the face
       TMROctant neighbor;
-      neighbor.block = adjacent;
+      neighbor.block = adj_block;
       neighbor.level = p.level;
       neighbor.info = 0;
 
@@ -2616,15 +2616,15 @@ void TMROctForest::addEdgeNeighbors( int edge_index,
   for ( int ip = bdata->edge_block_ptr[edge];
         ip < bdata->edge_block_ptr[edge+1]; ip++ ){
     // Get the block that is adjacent across this edge
-    int adjacent = bdata->edge_block_conn[ip]/12;
-    if (adjacent != block){
+    int adj_block = bdata->edge_block_conn[ip]/12;
+    if (adj_block != block){
       // Get the adjacent edge index
       int adj_index = bdata->edge_block_conn[ip] % 12;
 
       // Get the nodes on the adjacent block
-      int nn1 = bdata->block_conn[8*adjacent +
+      int nn1 = bdata->block_conn[8*adj_block +
                                   block_to_edge_nodes[adj_index][0]];
-      int nn2 = bdata->block_conn[8*adjacent +
+      int nn2 = bdata->block_conn[8*adj_block +
                                   block_to_edge_nodes[adj_index][1]];
 
       // Add the octant to the list
@@ -2635,7 +2635,7 @@ void TMROctForest::addEdgeNeighbors( int edge_index,
       }
 
       TMROctant neighbor;
-      neighbor.block = adjacent;
+      neighbor.block = adj_block;
       neighbor.level = p.level;
       neighbor.info = 0;
       if (adj_index < 4){
@@ -2703,13 +2703,13 @@ void TMROctForest::addCornerNeighbors( int corner,
         ip < bdata->node_block_ptr[node+1]; ip++ ){
 
     // Get the faces that are adjacent across this edge
-    int adjacent = bdata->node_block_conn[ip]/8;
-    if (adjacent != block){
+    int adj_block = bdata->node_block_conn[ip]/8;
+    if (adj_block != block){
       int adj_index = bdata->node_block_conn[ip] % 8;
 
       // Compute the octant location
       TMROctant neighbor;
-      neighbor.block = adjacent;
+      neighbor.block = adj_block;
       neighbor.level = p.level;
       neighbor.info = 0;
       neighbor.x = (hmax - 2*h)*(adj_index % 2);
@@ -3126,17 +3126,17 @@ void TMROctForest::addAdjacentFaceToQueue( int face_index,
   for ( int ip = bdata->face_block_ptr[face];
         ip < bdata->face_block_ptr[face+1]; ip++ ){
     // Get the adjacent block and the face index on the adjacent block
-    int adjacent = bdata->face_block_conn[ip]/6;
-    if (adjacent != block){
+    int adj_block = bdata->face_block_conn[ip]/6;
+    if (adj_block != block){
       // Get the face index on the adjacent block
       int adj_index = bdata->face_block_conn[ip] % 6;
 
       // Get the face id for the matching face
-      face_id = bdata->block_face_ids[6*adjacent + adj_index];
+      face_id = bdata->block_face_ids[6*adj_block + adj_index];
 
       // Get the neighboring octant on the face
       TMROctant neighbor;
-      neighbor.block = adjacent;
+      neighbor.block = adj_block;
       neighbor.level = p.level;
       neighbor.info = 0;
       if (adj_index < 2){
@@ -3201,15 +3201,15 @@ void TMROctForest::addAdjacentEdgeToQueue( int edge_index,
   for ( int ip = bdata->edge_block_ptr[edge];
         ip < bdata->edge_block_ptr[edge+1]; ip++ ){
     // Get the block that is adjacent across this edge
-    int adjacent = bdata->edge_block_conn[ip]/12;
-    if (adjacent != block){
+    int adj_block = bdata->edge_block_conn[ip]/12;
+    if (adj_block != block){
       // Get the adjacent edge index
       int adj_index = bdata->edge_block_conn[ip] % 12;
 
       // Get the nodes on the adjacent block
-      int nn1 = bdata->block_conn[8*adjacent +
+      int nn1 = bdata->block_conn[8*adj_block +
                                   block_to_edge_nodes[adj_index][0]];
-      int nn2 = bdata->block_conn[8*adjacent +
+      int nn2 = bdata->block_conn[8*adj_block +
                                   block_to_edge_nodes[adj_index][1]];
 
       // Add the octant to the list
@@ -3220,7 +3220,7 @@ void TMROctForest::addAdjacentEdgeToQueue( int edge_index,
       }
 
       TMROctant neighbor;
-      neighbor.block = adjacent;
+      neighbor.block = adj_block;
       neighbor.level = p.level;
       neighbor.info = 0;
       if (adj_index < 4){
@@ -3270,13 +3270,13 @@ void TMROctForest::addAdjacentCornerToQueue( int corner,
         ip < bdata->node_block_ptr[node+1]; ip++ ){
 
     // Get the faces that are adjacent across this edge
-    int adjacent = bdata->node_block_conn[ip]/8;
-    if (adjacent != block){
+    int adj_block = bdata->node_block_conn[ip]/8;
+    if (adj_block != block){
       int adj_index = bdata->node_block_conn[ip] % 8;
 
       // Compute the octant location
       TMROctant neighbor;
-      neighbor.block = adjacent;
+      neighbor.block = adj_block;
       neighbor.level = p.level;
       neighbor.x = (hmax - h)*(adj_index % 2);
       neighbor.y = (hmax - h)*((adj_index % 4)/2);
