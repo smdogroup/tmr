@@ -23,7 +23,27 @@
 /*
   Create the filter matrix
 */
-TMRMatrixFilter::TMRMatrixFilter( TACSMat *_M, double _s, int _N ){
+TMRMatrixFilter::TMRMatrixFilter( double _s, int _N, 
+                                  int _nlevels,
+                                  TACSAssembler *_tacs[],
+                                  TMROctForest *_filter[],
+                                  int _vars_per_node ):
+  TMRConformFilter(_nlevels, _tacs, _filter, _vars_per_node){
+  initialize_matrix(_s, _N, _filter[0], NULL);
+}
+
+TMRMatrixFilter::TMRMatrixFilter( double _s, int _N, 
+                                  int _nlevels,
+                                  TACSAssembler *_tacs[],
+                                  TMRQuadForest *_filter[],
+                                  int _vars_per_node ):
+  TMRConformFilter(_nlevels, _tacs, _filter, _vars_per_node){
+  initialize_matrix(_s, _N, NULL, _filter[0]);
+}
+
+TMRMatrixFilter::initialize_matrix( double _s, int _N,
+                                    TMROctForest *oct_forest,
+                                    TMRQuadForest *quad_forest ){
   // Store the pointer to the matrix
   M = _M;
   M->incref();
