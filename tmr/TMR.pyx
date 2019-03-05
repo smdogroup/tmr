@@ -748,7 +748,7 @@ cdef class TFIEdge(Edge):
     def __cinit__(self, Vertex v1, Vertex v2):
         self.ptr = new TMRTFIEdge(v1.ptr, v2.ptr)
         self.ptr.incref()
-        
+
 cdef class TFIFace(Face):
     def __cinit__(self, list edges, list dirs=None, list verts=None):
         cdef TMREdge *e[4]
@@ -781,7 +781,7 @@ cdef class TFIFace(Face):
                         edges.append(edge_list.pop(i))
                         vnext = v1
                         break
-            
+
                 verts.append(vnext)
 
             # Remove the last entry from the list of vertices
@@ -3186,7 +3186,7 @@ def strainEnergyError(forest, Assembler coarse,
 
     where a(u,u) is the trilinear strain energy functional, u is the
     exact solution, and uh is the discretized solution at any mesh
-    level. This relies on the relationship that :math:`\Pi(u_h, u - u_h) = 0` 
+    level. This relies on the relationship that :math:`\Pi(u_h, u - u_h) = 0`
     which is satisfied due to the method of Galerkin/Ritz.
 
     The following function computes a localized error indicator using
@@ -3402,6 +3402,7 @@ cdef class LagrangeFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters,
                   list varmaps=[], list varindices=[], int vars_per_node=1):
         cdef int nlevels = 0
+        cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
         cdef TMROctForest **ofiltr = NULL
         cdef TMRQuadForest **qfiltr = NULL
@@ -3460,6 +3461,7 @@ cdef class LagrangeFilter(TopoFilter):
 cdef class ConformFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters, int vars_per_node=1):
         cdef int nlevels = 0
+        cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
         cdef TMROctForest **ofiltr = NULL
         cdef TMRQuadForest **qfiltr = NULL
@@ -3506,6 +3508,7 @@ cdef class HelmholtzFilter(TopoFilter):
     def __cinit__(self, double radius, list assemblers,
                   list filters, int vars_per_node=1):
         cdef int nlevels = 0
+        cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
         cdef TMROctForest **ofiltr = NULL
         cdef TMRQuadForest **qfiltr = NULL

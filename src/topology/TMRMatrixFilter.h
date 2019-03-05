@@ -21,8 +21,7 @@
 #ifndef TMR_MATRIX_FILTER_H
 #define TMR_MATRIX_FILTER_H
 
-#include "TMRQuadForest.h"
-#include "TMROctForest.h"
+#include "TMRConformFilter.h"
 
 /*
   The following class creates and stores approximate M-filters for
@@ -69,17 +68,22 @@ class TMRMatrixFilter : public TMRConformFilter {
                    int _vars_per_node=1 );
   ~TMRMatrixFilter();
 
+  // Set the design variable values (including all local values)
+  void setDesignVars( TACSBVec *x );
+
+  // Set values/add values to the vector
+  void addValues( TacsScalar *in, TACSBVec *out );
+
  private:
-  void initialize_matrix( int _nlevels,
-                          TMROctForest *_filter[],
-                          TMROctForest *_filter[],
-                          int _vars_per_node );
+  void initialize_matrix( double _s, int _N,
+                          TMROctForest *oct_filter,
+                          TMRQuadForest *quad_filter);
 
   // Apply the filter to get the density values
-  void applyFilter( TACSVec *in, TACSVec *out );
-  
+  void applyFilter( TACSBVec *in, TACSBVec *out );
+
   // Apply the transpose of the filter for sensitivities
-  void applyTranspose( TACSVec *in, TACSVec *out );
+  void applyTranspose( TACSBVec *in, TACSBVec *out );
 
   // The non-negative matrix M
   TACSMat *M;
@@ -91,13 +95,16 @@ class TMRMatrixFilter : public TMRConformFilter {
   double s;
 
   // Store the inverse of the diagonal matrices
-  TACSVec *Dinv, *Tinv;
+  TACSBVec *Dinv, *Tinv;
 
   // Temporary vectors required for the matrix computation
-  TACSVec *t1, *t2;
+  TACSBVec *t1, *t2;
+
+  // Another set of temporary vectors
+  TACSBVec *y1, *y2;
 
   // Compute the Kronecker product
-  void kronecker( TACSVec *c, TACSVec *x, TACSVec *y=NULL );
+  void kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y=NULL );
 };
 
 #endif // TMR_MATRIX_FILTER_H
