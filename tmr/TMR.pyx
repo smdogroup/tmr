@@ -2614,8 +2614,7 @@ cdef TACSElement* _createQuadConformTopoElement( void *_self, int order,
     q.quad.tag = quad.tag
     idx = []
 
-    qf = QuadForest()
-    qf.ptr = filtr
+    qf = _init_QuadForest(filtr)
     for i in range(nweights):
         idx.append(index[i])
     e = (<object>_self).createElement(order, q, idx, qf)
@@ -2628,7 +2627,7 @@ cdef TACSElement* _createQuadConformTopoElement( void *_self, int order,
 cdef class QuadConformTopoCreator:
     cdef TMRCyTopoQuadConformCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, QuadForest forest,
-                  int order=1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
+                  int order=-1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
                   *args, **kwargs):
         self.ptr = new TMRCyTopoQuadConformCreator(bcs.ptr, forest.ptr, \
                                                    order, interp)
@@ -2730,8 +2729,7 @@ cdef TACSElement* _createOctConformTopoElement( void *_self, int order,
     Oct.octant.tag = octant.tag
     idx = []
 
-    of = OctForest()
-    of.ptr = filtr
+    of = _init_OctForest(filtr)
     for i in range(nweights):
         idx.append(index[i])
     e = (<object>_self).createElement(order, Oct, idx, of)
@@ -2744,7 +2742,7 @@ cdef TACSElement* _createOctConformTopoElement( void *_self, int order,
 cdef class OctConformTopoCreator:
     cdef TMRCyTopoOctConformCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, OctForest forest,
-                  int order=1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
+                  int order=-1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
                   *args, **kwargs):
         self.ptr = new TMRCyTopoOctConformCreator(bcs.ptr, forest.ptr,
                                                   order, interp)

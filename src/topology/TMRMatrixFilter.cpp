@@ -149,12 +149,14 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
   Tinv = tacs->createVec();
   t1 = tacs->createVec();
   t2 = tacs->createVec();
+  t3 = tacs->createVec();
   y1 = tacs->createVec();
   y2 = tacs->createVec();
   Dinv->incref();
   Tinv->incref();
   t1->incref();
   t2->incref();
+  t3->incref();
   y1->incref();
   y2->incref();
 
@@ -178,11 +180,10 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
   }
 
   // Set all vector values to 1.0
-  t2->set(1.0);
+  y2->set(1.0);
 
   // Compute D_{i} = sum_{j=1}^{n} M_{ij}
-  M->mult(t2, Dinv);
-  Dinv->scale(1.0/(s - 1.0));
+  M->mult(y2, Dinv);
 
   // Create the inverse of the diagonal matrix
   TacsScalar *D;
@@ -199,7 +200,7 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
 
   // Apply the filter to create the normalization
   Tinv->set(1.0);
-  applyFilter(t2, y1);
+  applyFilter(y2, y1);
 
   // Create the inverse of the T matrix
   TacsScalar *T, *ty;
@@ -223,6 +224,7 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
 TMRMatrixFilter::~TMRMatrixFilter(){
   t1->decref();
   t2->decref();
+  t3->decref();
   M->decref();
   Dinv->decref();
   Tinv->decref();
@@ -235,49 +237,59 @@ TMRMatrixFilter::~TMRMatrixFilter(){
   Compute the action of the filter on the input vector using Horner's
   method
 
-  out = 1/s*in
-
+  t1 = 1/s*Dinv*in
+  out = t1
   for n in range(N):
-  .   out += (in + D^{-1}*M*out)/s
+  .   out += t1 + 1/s*D^{-1}*M*out
 */
 void TMRMatrixFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
-  // Set out = in/s
-  out->copyValues(in);
-  out->scale(1.0/s);
+  // Compute t1 = 1/s*Dinv*in
+  t1->copyValues(in);
+  kronecker(Dinv, t1);
+  t1->scale(1.0/s);
+
+  // Set out = 1/s*Dinv*in
+  out->copyValues(t1);
 
   // Apply Horner's method
   for ( int n = 0; n < N; n++ ){
-    // Compute t1 = D^{-1}*M*out
-    M->mult(out, t1);
-    kronecker(Dinv, t1);
+    // Compute t2 = 1/s*D^{-1}*M*out
+    M->mult(out, t2);
+    kronecker(Dinv, t2);
+    out->axpy(1.0/s, t2);
 
-    // Compute out = (in + D^{-1}*M*out)/s
-    t1->axpy(1.0, in);
-    out->axpy(1.0/s, t1);
+    // Compute out = t1 + 1/s*D^{-1}*M*out
+    out->axpy(1.0, t1);
   }
 
   // Multiply by Tinv
   kronecker(Tinv, out);
 }
 
+/*
+  Compute the transpose of the filter operation
+*/
 void TMRMatrixFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
-  // Set out = in/s
-  out->copyValues(in);
-  out->scale(1.0/s);
+  t1->copyValues(in);
+  kronecker(Tinv, t1);
+
+  // Copy the values from t1 to the out vector
+  out->copyValues(t1);
 
   // Apply Horner's method
   for ( int n = 0; n < N; n++ ){
     // Compute M*D^{-1}*out
-    kronecker(Dinv, out, t1);
-    M->mult(t1, t2);
+    kronecker(Dinv, out, t2);
+    M->mult(t2, t3);
+    out->axpy(1.0/s, t3);
 
-    // Compute out = (in + M*D^{-1}*out)/s
-    t2->axpy(1.0, in);
-    out->axpy(1.0/s, t2);
+    // Compute out = t1 + 1/s*M*D^{-1}*out
+    out->axpy(1.0, t1);
   }
 
-  // Multiply by Tinv
-  kronecker(Tinv, out);
+  // Multiply by 1/s*Dinv
+  kronecker(Dinv, out);
+  out->scale(1.0/s);
 }
 
 /*

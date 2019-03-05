@@ -98,7 +98,7 @@ class TMRMatrixFilter : public TMRConformFilter {
   TACSBVec *Dinv, *Tinv;
 
   // Temporary vectors required for the matrix computation
-  TACSBVec *t1, *t2;
+  TACSBVec *t1, *t2, *t3;
 
   // Another set of temporary vectors
   TACSBVec *y1, *y2;
