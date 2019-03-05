@@ -187,7 +187,7 @@ class TMRCyTopoQuadConformCreator : public TMRQuadConformTACSTopoCreator {
  public:
   TMRCyTopoQuadConformCreator( TMRBoundaryConditions *_bcs,
                                TMRQuadForest *_forest,
-                               int order=-1
+                               int order=-1,
                                TMRInterpolationType interp_type=TMR_UNIFORM_POINTS ):
   TMRQuadConformTACSTopoCreator(_bcs, _forest, order, interp_type){}
 
@@ -225,7 +225,7 @@ class TMRCyTopoOctConformCreator : public TMROctConformTACSTopoCreator {
  public:
   TMRCyTopoOctConformCreator( TMRBoundaryConditions *_bcs,
                               TMROctForest *_forest,
-                              int order=-1
+                              int order=-1,
                               TMRInterpolationType interp_type=TMR_UNIFORM_POINTS ):
   TMROctConformTACSTopoCreator(_bcs, _forest, order, interp_type){}
 

@@ -37,7 +37,7 @@ class TMRTopoFilter : public TMREntity {
   
   // Get problem definitions maximum local size of the design variable values
   virtual int getVarsPerNode() = 0;
-  virtual int getNumLocalVars();  
+  virtual int getNumLocalVars() = 0;  
   virtual int getMaxNumLocalVars() = 0;
   
   // Create a design vector on the finest mesh level

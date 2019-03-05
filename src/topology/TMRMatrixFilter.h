@@ -57,10 +57,23 @@
   F = T^{-1}*[ \sum_{n=0}^{infty} 1/s**(n+1)*(D^{-1}*M)**n ]
 */
 
-class TMRMatrixFilter : public TMREntity {
+class TMRMatrixFilter : public TMRConformFilter {
  public:
-  TMRMatrixFilter( TACSMat *_M, double _s, int _N );
+  TMRMatrixFilter( double _s, int _N, int _nlevels,
+                   TACSAssembler *_tacs[],
+                   TMROctForest *_filter[],
+                   int _vars_per_node=1 );
+  TMRMatrixFilter( double _s, int _N, int _nlevels,
+                   TACSAssembler *_tacs[],
+                   TMRQuadForest *_filter[],
+                   int _vars_per_node=1 );
   ~TMRMatrixFilter();
+
+ private:
+  void initialize_matrix( int _nlevels,
+                          TMROctForest *_filter[],
+                          TMROctForest *_filter[],
+                          int _vars_per_node );
 
   // Apply the filter to get the density values
   void applyFilter( TACSVec *in, TACSVec *out );
@@ -68,7 +81,6 @@ class TMRMatrixFilter : public TMREntity {
   // Apply the transpose of the filter for sensitivities
   void applyTranspose( TACSVec *in, TACSVec *out );
 
- private:
   // The non-negative matrix M
   TACSMat *M;
 

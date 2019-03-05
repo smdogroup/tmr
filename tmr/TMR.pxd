@@ -1,3 +1,5 @@
+# distutils: language=c++
+
 # This file is part of the package TMR for adaptive mesh refinement.
 
 # Copyright (C) 2015 Georgia Tech Research Corporation.
@@ -567,34 +569,53 @@ cdef extern from "TMRCyCreator.h":
         void getMap(TACSVarMap**)
         void getIndices(TACSBVecIndices**)
 
-    cdef cppclass TMRCyTopoQuadBernsteinCreator(TMREntity):
-       TMRCyTopoQuadBernsteinCreator(TMRBoundaryConditions*, TMRQuadForest*, int)
+    cdef cppclass TMRCyTopoQuadConformCreator(TMREntity):
+       TMRCyTopoQuadConformCreator(TMRBoundaryConditions*, TMRQuadForest*,
+                                   int, TMRInterpolationType)
        void setSelfPointer(void*)
        void setCreateQuadTopoElement(
           TACSElement* (*createquadtopoelements)(
              void*, int, TMRQuadrant*, int*, int, TMRQuadForest*))
        TACSAssembler *createTACS(TMRQuadForest*, OrderingType, double)
        void getFilter(TMRQuadForest**)
-       void getMap(TACSVarMap**)
-       void getIndices(TACSBVecIndices**)
 
-    cdef cppclass TMRCyTopoOctBernsteinCreator(TMREntity):
-        TMRCyTopoOctBernsteinCreator(TMRBoundaryConditions*, TMROctForest*, int)
+    cdef cppclass TMRCyTopoOctConformCreator(TMREntity):
+        TMRCyTopoOctConformCreator(TMRBoundaryConditions*, TMROctForest*,
+                                   int, TMRInterpolationType)
         void setSelfPointer(void*)
         void setCreateOctTopoElement(
             TACSElement* (*createocttopoelements)(
                 void*, int, TMROctant*, int*, int, TMROctForest*))
         TACSAssembler *createTACS(TMROctForest*, OrderingType, double)
         void getFilter(TMROctForest**)
-        void getMap(TACSVarMap**)
-        void getIndices(TACSBVecIndices**)
+
+cdef extern from "TMRTopoFilter.h":
+    cdef cppclass TMRTopoFilter(TMREntity):
+        pass
+
+cdef class TopoFilter:
+    cdef TMRTopoFilter *ptr
+
+cdef extern from "TMRLagrangeFilter.h":
+    cdef cppclass TMRLagrangeFilter(TMRTopoFilter):
+        TMRLagrangeFilter(int, TACSAssembler**, TMROctForest**,
+                          TACSVarMap**, TACSBVecIndices**, int)
+        TMRLagrangeFilter(int, TACSAssembler**, TMRQuadForest**,
+                          TACSVarMap**, TACSBVecIndices**, int)
+
+cdef extern from "TMRConformFilter.h":
+    cdef cppclass TMRConformFilter(TMRTopoFilter):
+        TMRConformFilter(int, TACSAssembler**, TMROctForest**, int)
+        TMRConformFilter(int, TACSAssembler**, TMRQuadForest**, int)
+
+cdef extern from "TMRHelmholtzFilter.h":
+    cdef cppclass TMRHelmholtzFilter(TMRTopoFilter):
+        TMRHelmholtzFilter(double, int, TACSAssembler**, TMROctForest**, int)
+        TMRHelmholtzFilter(double, int, TACSAssembler**, TMRQuadForest**, int)
 
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
-        TMRTopoProblem(int, TACSAssembler**, TMROctForest**,
-                       TACSVarMap**, TACSBVecIndices**, TACSMg*, double, int)
-        TMRTopoProblem(int, TACSAssembler**, TMRQuadForest**,
-                       TACSVarMap**, TACSBVecIndices**, TACSMg*, double, int)
+        TMRTopoProblem(TMRTopoFilter*, TACSMg*)
         void setLoadCases(TACSBVec**, int)
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,
@@ -614,8 +635,6 @@ cdef extern from "TMRTopoProblem.h":
         void setPrefix(const char*)
         void setInitDesignVars(ParOptVec*,ParOptVec*,ParOptVec*)
         void setIterationCounter(int)
-        TACSBVec* createVolumeVec(double)
-        TACSBVec* createAreaVec(double)
         ParOptVec* createDesignVec()
 
     cdef cppclass ParOptBVecWrap(ParOptVec):
