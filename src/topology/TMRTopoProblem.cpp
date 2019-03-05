@@ -189,6 +189,9 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   mg = _mg;
   mg->incref();
 
+  // Set the number of variables per node
+  vars_per_node = filter->getVarsPerNode();
+
   // Set the maximum number of indices
   max_local_size = filter->getMaxNumLocalVars();
 

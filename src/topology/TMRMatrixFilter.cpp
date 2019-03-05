@@ -158,6 +158,10 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
   y1->incref();
   y2->incref();
 
+  // Create a temporary design vector
+  temp = createVec();
+  temp->incref();
+
   // Assemble the mass matrix
   tacs->assembleJacobian(1.0, 0.0, 0.0, t2, M);
 
@@ -170,7 +174,7 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
   // Set the scalar value associated with the filter
   s = _s;
   if (s <= 1.0){
-    s = 1.01;
+    s = 2.0;
   }
 
   // Set all vector values to 1.0
@@ -190,21 +194,26 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
     else {
       D[0] = 0.0;
     }
+    D++;
   }
 
   // Apply the filter to create the normalization
-  applyFilter(t2, Tinv);
+  Tinv->set(1.0);
+  applyFilter(t2, y1);
 
   // Create the inverse of the T matrix
-  TacsScalar *T;
+  TacsScalar *T, *ty;
   size = Tinv->getArray(&T);
+  y1->getArray(&ty);
   for ( int i = 0; i < size; i++ ){
-    if (T[0] != 0.0){
-      T[0] = 1.0/T[0];
+    if (ty[0] != 0.0){
+      T[0] = 1.0/ty[0];
     }
     else {
       T[0] = 0.0;
     }
+    T++;
+    ty++;
   }
 }
 
@@ -219,6 +228,7 @@ TMRMatrixFilter::~TMRMatrixFilter(){
   Tinv->decref();
   y1->decref();
   y2->decref();
+  temp->decref();
 }
 
 /*
@@ -377,22 +387,23 @@ void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
   Add values to the output TACSBVec
 */
 void TMRMatrixFilter::addValues( TacsScalar *xlocal, TACSBVec *vec ){
-  setBVecFromLocalValues(0, xlocal, vec, TACS_ADD_VALUES);
-  vec->beginSetValues(TACS_ADD_VALUES);
-  vec->endSetValues(TACS_ADD_VALUES);
+  temp->zeroEntries();
+  setBVecFromLocalValues(0, xlocal, temp, TACS_ADD_VALUES);
+  temp->beginSetValues(TACS_ADD_VALUES);
+  temp->endSetValues(TACS_ADD_VALUES);
 
   if (getVarsPerNode() == 1){
-    y1->copyValues(vec);
-    applyTranspose(y1, vec);
+    applyTranspose(temp, y1);
+    vec->axpy(1.0, y1);
   }
   else {
     const int vpn = getVarsPerNode();
 
     for ( int k = 0; k < vpn; k++ ){
-      TacsScalar *xin;
+      TacsScalar *xin, *xout;
 
       // Get the pointer to the array and offset by vars per node
-      vec->getArray(&xin);
+      temp->getArray(&xin);
       xin = &xin[k];
 
       // Copy the values to the input vector (y1)
@@ -408,14 +419,14 @@ void TMRMatrixFilter::addValues( TacsScalar *xlocal, TACSBVec *vec ){
       // output y2
       applyTranspose(y1, y2);
 
-      // Copy the values from y2 back to the output vector vec
-      vec->getArray(&xin);
-      xin = &xin[k];
+      // Add the values from y2 back to the output vector vec
+      vec->getArray(&xout);
+      xout = &xout[k];
 
       TacsScalar *yout;
       y2->getArray(&yout);
       for ( int i = 0; i < size; i++ ){
-        xin[0] = yout[0];
+        xout[0] += yout[0];
         yout++;
         xin += vpn;
       }

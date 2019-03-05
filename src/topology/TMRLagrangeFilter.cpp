@@ -46,8 +46,11 @@ void TMRLagrangeFilter::initialize( int _nlevels,
                                     TMRQuadForest *_quad_filter[],
                                     TACSVarMap *_filter_maps[],
                                     TACSBVecIndices *filter_indices[],
-                                    int _vars_per_node ){  
+                                    int _vars_per_node ){
+  // Set the number of multigrid levels and the number of variables
+  // per node
   nlevels = _nlevels;
+  vars_per_node = _vars_per_node;
   
   // Allocate arrays to store the assembler objects/forests
   tacs = new TACSAssembler*[ nlevels ];

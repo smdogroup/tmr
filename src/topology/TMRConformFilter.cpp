@@ -39,7 +39,10 @@ void TMRConformFilter::initialize( int _nlevels,
                                    TMROctForest *_oct_filter[],
                                    TMRQuadForest *_quad_filter[],
                                    int _vars_per_node ){
+  // Set the number of multigrid levels and the number of variables
+  // per node
   nlevels = _nlevels;
+  vars_per_node = _vars_per_node;
 
   // Allocate arrays to store the assembler objects/forests
   tacs = new TACSAssembler*[ nlevels ];
@@ -112,22 +115,27 @@ void TMRConformFilter::initialize( int _nlevels,
                                        &_dep_weights);
     }
 
-    // Copy over the dependent node data
-    dep_ptr = new int[ num_dep_nodes+1 ];
-    memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
+    if (num_dep_nodes > 0){
+      // Copy over the dependent node data
+      dep_ptr = new int[ num_dep_nodes+1 ];
+      memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
 
-    int dep_size = dep_ptr[num_dep_nodes];
-    dep_conn = new int[ dep_size ];
-    memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
+      int dep_size = dep_ptr[num_dep_nodes];
+      dep_conn = new int[ dep_size ];
+      memcpy(dep_conn, _dep_conn, dep_size*sizeof(int));
 
-    dep_weights = new double[ dep_size ];
-    memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
+      dep_weights = new double[ dep_size ];
+      memcpy(dep_weights, _dep_weights, dep_size*sizeof(double));
 
-    // Create the dependent node object
-    filter_dep_nodes[k] = new TACSBVecDepNodes(num_dep_nodes,
-                                               &dep_ptr, &dep_conn,
-                                               &dep_weights);
-    filter_dep_nodes[k]->incref();
+      // Create the dependent node object
+      filter_dep_nodes[k] = new TACSBVecDepNodes(num_dep_nodes,
+                                                 &dep_ptr, &dep_conn,
+                                                 &dep_weights);
+      filter_dep_nodes[k]->incref();
+    }
+    else {
+      filter_dep_nodes[k] = NULL;
+    }
 
     // Create the vectors for each mesh level
     x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k],
@@ -185,7 +193,9 @@ TMRConformFilter::~TMRConformFilter(){
     }
     filter_maps[k]->decref();
     filter_dist[k]->decref();
-    filter_dep_nodes[k]->decref();
+    if (filter_dep_nodes[k]){
+      filter_dep_nodes[k]->decref();
+    }
     x[k]->decref();
   }
   delete [] tacs;
@@ -239,11 +249,11 @@ void TMRConformFilter::createMapIndices( TMRQuadForest *quad_filter,
   int num_nodes = 0, num_dep_nodes = 0;
 
   if (quad_filter){
-    quad_filter->getNodeNumbers(&node_nums);
+    num_nodes = quad_filter->getNodeNumbers(&node_nums);
     num_dep_nodes = quad_filter->getDepNodeConn();
   }
   else {
-    oct_filter->getNodeNumbers(&node_nums);
+    num_nodes = oct_filter->getNodeNumbers(&node_nums);
     num_dep_nodes = oct_filter->getDepNodeConn();
   }
 
@@ -343,6 +353,7 @@ void TMRConformFilter::setDesignVars( TACSBVec *xvec ){
   // Set the design variable values on all processors
   for ( int k = 0; k < nlevels-1; k++ ){
     filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
+
     // Distribute the design variable values
     x[k+1]->beginDistributeValues();
     x[k+1]->endDistributeValues();

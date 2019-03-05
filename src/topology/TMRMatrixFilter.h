@@ -103,6 +103,9 @@ class TMRMatrixFilter : public TMRConformFilter {
   // Another set of temporary vectors
   TACSBVec *y1, *y2;
 
+  // Temporary design variable vector
+  TACSBVec *temp;
+
   // Compute the Kronecker product
   void kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y=NULL );
 };
