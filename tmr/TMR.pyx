@@ -1,3 +1,5 @@
+# distutils: language=c++
+
 # This file is part of the package TMR for adaptive mesh refinement.
 
 # Copyright (C) 2015 Georgia Tech Research Corporation.
@@ -963,7 +965,8 @@ cdef class Model:
         return verts
 
     def writeModelToTecplot(self, fname,
-                            vlabels=True, elabels=True, flabels=True, off_scale=0.0):
+                            vlabels=True, elabels=True, flabels=True,
+                            off_scale=0.0):
         '''Write a representation of the edge loops to a file'''
         fp = open(fname, 'w')
         fp.write('Variables = x, y, z, tx, ty, tz\n')
@@ -2596,11 +2599,11 @@ cdef class QuadTopoCreator:
         self.ptr.getIndices(&indices)
         return _init_VecIndices(indices)
 
-cdef TACSElement* _createQuadBernsteinTopoElement( void *_self, int order,
-                                                   TMRQuadrant *quad,
-                                                   int *index,
-                                                   int nweights,
-                                                   TMRQuadForest *filtr ):
+cdef TACSElement* _createQuadConformTopoElement( void *_self, int order,
+                                                 TMRQuadrant *quad,
+                                                 int *index,
+                                                 int nweights,
+                                                 TMRQuadForest *filtr ):
     cdef TACSElement *elem = NULL
     q = Quadrant()
     q.quad.x = quad.x
@@ -2622,15 +2625,16 @@ cdef TACSElement* _createQuadBernsteinTopoElement( void *_self, int order,
         return elem
     return NULL
 
-cdef class QuadBernsteinTopoCreator:
-    cdef TMRCyTopoQuadBernsteinCreator *ptr
+cdef class QuadConformTopoCreator:
+    cdef TMRCyTopoQuadConformCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, QuadForest forest,
-                  use_bernstein=1, *args, **kwargs):
-        self.ptr = new TMRCyTopoQuadBernsteinCreator(bcs.ptr, forest.ptr, \
-                                                     use_bernstein)
+                  int order=1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
+                  *args, **kwargs):
+        self.ptr = new TMRCyTopoQuadConformCreator(bcs.ptr, forest.ptr, \
+                                                   order, interp)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
-        self.ptr.setCreateQuadTopoElement(_createQuadBernsteinTopoElement)
+        self.ptr.setCreateQuadTopoElement(_createQuadConformTopoElement)
         return
 
     def __dealloc__(self):
@@ -2647,16 +2651,6 @@ cdef class QuadBernsteinTopoCreator:
         cdef TMRQuadForest *filtr = NULL
         self.ptr.getFilter(&filtr)
         return _init_QuadForest(filtr)
-
-    def getMap(self):
-        cdef TACSVarMap *vmap = NULL
-        self.ptr.getMap(&vmap)
-        return _init_VarMap(vmap)
-
-    def getIndices(self):
-        cdef TACSBVecIndices *indices = NULL
-        self.ptr.getIndices(&indices)
-        return _init_VecIndices(indices)
 
 cdef TACSElement* _createOctTopoElement(void *_self, int order,
                                         TMROctant *octant,
@@ -2720,11 +2714,11 @@ cdef class OctTopoCreator:
         self.ptr.getIndices(&indices)
         return _init_VecIndices(indices)
 
-cdef TACSElement* _createOctBernsteinTopoElement( void *_self, int order,
-                                                  TMROctant *octant,
-                                                  int *index,
-                                                  int nweights,
-                                                  TMROctForest *filtr):
+cdef TACSElement* _createOctConformTopoElement( void *_self, int order,
+                                                TMROctant *octant,
+                                                int *index,
+                                                int nweights,
+                                                TMROctForest *filtr):
     cdef TACSElement *elem = NULL
     Oct = Octant()
     Oct.octant.x = octant.x
@@ -2747,15 +2741,16 @@ cdef TACSElement* _createOctBernsteinTopoElement( void *_self, int order,
         return elem
     return NULL
 
-cdef class OctBernsteinTopoCreator:
-    cdef TMRCyTopoOctBernsteinCreator *ptr
+cdef class OctConformTopoCreator:
+    cdef TMRCyTopoOctConformCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, OctForest forest,
-                  use_bernstein=1, *args, **kwargs):
-        self.ptr = new TMRCyTopoOctBernsteinCreator(bcs.ptr, forest.ptr,
-                                                    use_bernstein)
+                  int order=1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
+                  *args, **kwargs):
+        self.ptr = new TMRCyTopoOctConformCreator(bcs.ptr, forest.ptr,
+                                                  order, interp)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
-        self.ptr.setCreateOctTopoElement(_createOctBernsteinTopoElement)
+        self.ptr.setCreateOctTopoElement(_createOctConformTopoElement)
         return
 
     def __dealloc__(self):
@@ -2773,16 +2768,6 @@ cdef class OctBernsteinTopoCreator:
         cdef TMROctForest *filtr = NULL
         self.ptr.getFilter(&filtr)
         return _init_OctForest(filtr)
-
-    def getMap(self):
-        cdef TACSVarMap *vmap = NULL
-        self.ptr.getMap(&vmap)
-        return _init_VarMap(vmap)
-
-    def getIndices(self):
-        cdef TACSBVecIndices *indices = NULL
-        self.ptr.getIndices(&indices)
-        return _init_VecIndices(indices)
 
 cdef class StiffnessProperties:
     cdef TMRStiffnessProperties *ptr
@@ -2892,7 +2877,8 @@ cdef class QuadStiffnessProperties:
                 aT[i]= <TacsScalar>_aT[i]
             if (_kcond):
                 kcond[i] = <TacsScalar>_kcond[i]
-        self.ptr = new TMRQuadStiffnessProperties(nmats, q, eps, k0, beta, xoffset,
+        self.ptr = new TMRQuadStiffnessProperties(nmats, q, eps,
+                                                  k0, beta, xoffset,
                                                   rho, E, nu, ys, aT, kcond,
                                                   qtemp, qcond, use_project)
         self.ptr.incref()
@@ -3188,7 +3174,8 @@ def createMg(list assemblers, list forests, double omega=1.0,
 def strainEnergyError(forest, Assembler coarse,
                       forest_refined, Assembler refined):
     """
-    strainEnergyError(forest, coarse_assembler, forest_refined, refined_assembler)
+    strainEnergyError(forest, coarse_assembler, forest_refined,
+                      refined_assembler)
 
     The following function performs a mesh refinement based on a strain
     energy criteria. It is based on the following relationship for
@@ -3199,8 +3186,8 @@ def strainEnergyError(forest, Assembler coarse,
 
     where a(u,u) is the trilinear strain energy functional, u is the
     exact solution, and uh is the discretized solution at any mesh
-    level. This relies on the relationship that :math:`\Pi(u_h, u - u_h) = 0` which
-    is satisfied due to the method of Galerkin/Ritz.
+    level. This relies on the relationship that :math:`\Pi(u_h, u - u_h) = 0` 
+    which is satisfied due to the method of Galerkin/Ritz.
 
     The following function computes a localized error indicator using
     the element-wise strain energy. The code computes a higher-order
@@ -3212,8 +3199,8 @@ def strainEnergyError(forest, Assembler coarse,
     .. math::
          err = \sum_{i=1}^{4} \Pi_e(u_{ce}, u_{ce}) - \Pi_e(u_e, u_e)
 
-    where :math:`u_{ce}` is the element-wise cubic element reconstruction projected
-    onto a uniformly refined mesh.
+    where :math:`u_{ce}` is the element-wise cubic element reconstruction
+    projected onto a uniformly refined mesh.
 
     Parameters
     -----------
@@ -3259,7 +3246,8 @@ def adjointError(forest, Assembler coarse,
                  forest_refined, Assembler refined,
                  Vec solution, Vec adjoint):
     """
-    adjointError(forest, coarse_assembler, forest_refined, refined_assembler, solution_refined, adjoint_refined)
+    adjointError(forest, coarse_assembler, forest_refined, refined_assembler,
+                 solution_refined, adjoint_refined)
 
     Refine the mesh using the original solution and the adjoint solution
 
@@ -3410,37 +3398,23 @@ cdef class StressConstraint:
         self.ptr.writeReconToTec(uvec.ptr, filename, ys)
         return
 
-cdef class TopoProblem(pyParOptProblemBase):
-    def __cinit__(self, list assemblers, list filters, Pc pc,
-                  list varmaps=[], list varindices=[],
-                  double helmholtz_radius=-1.0, int vars_per_node=1):
+cdef class LagrangeFilter(TopoFilter):
+    def __cinit__(self, list assemblers, list filters,
+                  list varmaps=[], list varindices=[], int vars_per_node=1):
         cdef int nlevels = 0
         cdef TACSAssembler **assemb = NULL
         cdef TMROctForest **ofiltr = NULL
         cdef TMRQuadForest **qfiltr = NULL
         cdef TACSVarMap **vmaps = NULL
         cdef TACSBVecIndices **vindex = NULL
-        cdef TACSMg *mg = NULL
 
-        # Check for the sizes of the arrays
-        if helmholtz_radius < 0.0:
-            if (len(assemblers) != len(filters) or
-                len(assemblers) != len(varmaps) or
-                len(assemblers) != len(varindices)):
-                errmsg = 'TopoProblem must have equal number of objects in lists'
-                raise ValueError(errmsg)
-        elif len(assemblers) != len(filters):
-            errmsg = 'TopoProblem must have equal number of objects in lists'
+        if (len(assemblers) != len(filters) or
+            len(assemblers) != len(varmaps) or
+            len(assemblers) != len(varindices)):
+            errmsg = 'LagrangeFilter must have equal number of objects in lists'
             raise ValueError(errmsg)
 
-        # Check for a multigrid preconditioner
-        mg = _dynamicTACSMg(pc.ptr)
-        if mg == NULL:
-            raise ValueError('TopoProblem requires a TACSMg preconditioner')
-
-        isqforest = 0
         nlevels = len(assemblers)
-
         for i in range(nlevels):
             if isinstance(filters[i], QuadForest):
                 isqforest = 1
@@ -3448,23 +3422,20 @@ cdef class TopoProblem(pyParOptProblemBase):
                 isqforest = 0
 
         assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
+        vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
+        vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
 
-        if helmholtz_radius < 0.0:
-            vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
-            vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
-
-            for i in range(nlevels):
-                vmaps[i] = (<VarMap>varmaps[i]).ptr
-                vindex[i] = (<VecIndices>varindices[i]).ptr
+        for i in range(nlevels):
+            vmaps[i] = (<VarMap>varmaps[i]).ptr
+            vindex[i] = (<VecIndices>varindices[i]).ptr
 
         if isqforest:
             qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
             for i in range(nlevels):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRTopoProblem(nlevels, assemb, qfiltr,
-                                          vmaps, vindex, mg,
-                                          helmholtz_radius, vars_per_node)
+            self.ptr = new TMRLagrangeFilter(nlevels, assemb, qfiltr,
+                                             vmaps, vindex, vars_per_node)
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -3472,17 +3443,121 @@ cdef class TopoProblem(pyParOptProblemBase):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRTopoProblem(nlevels, assemb, ofiltr,
-                                          vmaps, vindex, mg,
-                                          helmholtz_radius, vars_per_node)
+            self.ptr = new TMRLagrangeFilter(nlevels, assemb, ofiltr,
+                                             vmaps, vindex, vars_per_node)
             self.ptr.incref()
             free(ofiltr)
 
         free(assemb)
-        if vmaps != NULL:
-            free(vmaps)
-        if vindex != NULL:
-            free(vindex)
+        free(vmaps)
+        free(vindex)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+cdef class ConformFilter(TopoFilter):
+    def __cinit__(self, list assemblers, list filters, int vars_per_node=1):
+        cdef int nlevels = 0
+        cdef TACSAssembler **assemb = NULL
+        cdef TMROctForest **ofiltr = NULL
+        cdef TMRQuadForest **qfiltr = NULL
+
+        if len(assemblers) != len(filters):
+            errmsg = 'ConformFilter must have equal number of objects in lists'
+            raise ValueError(errmsg)
+
+        nlevels = len(assemblers)
+        for i in range(nlevels):
+            if isinstance(filters[i], QuadForest):
+                isqforest = 1
+            elif isinstance(filters[i], OctForest):
+                isqforest = 0
+
+        assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
+        if isqforest:
+            qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
+            for i in range(nlevels):
+                qfiltr[i] = (<QuadForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+            self.ptr = new TMRConformFilter(nlevels, assemb, qfiltr,
+                                            vars_per_node)
+            self.ptr.incref()
+            free(qfiltr)
+        else:
+            ofiltr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
+            for i in range(nlevels):
+                ofiltr[i] = (<OctForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+            self.ptr = new TMRConformFilter(nlevels, assemb, ofiltr,
+                                            vars_per_node)
+            self.ptr.incref()
+            free(ofiltr)
+
+        free(assemb)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+cdef class HelmholtzFilter(TopoFilter):
+    def __cinit__(self, double radius, list assemblers,
+                  list filters, int vars_per_node=1):
+        cdef int nlevels = 0
+        cdef TACSAssembler **assemb = NULL
+        cdef TMROctForest **ofiltr = NULL
+        cdef TMRQuadForest **qfiltr = NULL
+
+        if len(assemblers) != len(filters):
+            errmsg = 'HelmholtzFilter must have equal number of objects in lists'
+            raise ValueError(errmsg)
+
+        nlevels = len(assemblers)
+        for i in range(nlevels):
+            if isinstance(filters[i], QuadForest):
+                isqforest = 1
+            elif isinstance(filters[i], OctForest):
+                isqforest = 0
+
+        assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
+        if isqforest:
+            qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
+            for i in range(nlevels):
+                qfiltr[i] = (<QuadForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+            self.ptr = new TMRHelmholtzFilter(radius, nlevels, assemb, qfiltr,
+                                              vars_per_node)
+            self.ptr.incref()
+            free(qfiltr)
+        else:
+            ofiltr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
+            for i in range(nlevels):
+                ofiltr[i] = (<OctForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+            self.ptr = new TMRHelmholtzFilter(radius, nlevels, assemb, ofiltr,
+                                              vars_per_node)
+            self.ptr.incref()
+            free(ofiltr)
+
+        free(assemb)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+cdef class TopoProblem(pyParOptProblemBase):
+    def __cinit__(self, TopoFilter fltr, Pc pc):
+        cdef TACSMg *mg = NULL
+
+        # Check for a multigrid preconditioner
+        mg = _dynamicTACSMg(pc.ptr)
+        if mg == NULL:
+            raise ValueError('TopoProblem requires a TACSMg preconditioner')
+
+        self.ptr = new TMRTopoProblem(fltr.ptr, mg)
         return
 
     def __dealloc__(self):
@@ -3678,26 +3753,6 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.setIterationCounter(count)
         return
-
-    def createVolumeVec(self, scale=1.0):
-        cdef TACSBVec *vec
-        cdef TMRTopoProblem *prob = NULL
-        prob = _dynamicTopoProblem(self.ptr)
-        if prob == NULL:
-            errmsg = 'Expected TMRTopoProblem got other type'
-            raise ValueError(errmsg)
-        vec = prob.createVolumeVec(scale)
-        return _init_Vec(vec)
-
-    def createAreaVec(self, scale=1.0):
-        cdef TACSBVec *vec
-        cdef TMRTopoProblem *prob = NULL
-        prob = _dynamicTopoProblem(self.ptr)
-        if prob == NULL:
-            errmsg = 'Expected TMRTopoProblem got other type'
-            raise ValueError(errmsg)
-        vec = prob.createAreaVec(scale)
-        return _init_Vec(vec)
 
     def convertPVecToVec(self, PVec pvec):
         cdef ParOptBVecWrap *new_vec = NULL

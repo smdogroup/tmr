@@ -274,6 +274,13 @@ void TMRConformFilter::createMapIndices( TMRQuadForest *quad_filter,
 }
 
 /*
+  Get the MPI communicator
+*/
+MPI_Comm TMRConformFilter::getMPIComm(){
+  return tacs[0]->getMPIComm();
+}
+
+/*
   Get the root assembler object
 */
 TACSAssembler* TMRConformFilter::getAssembler(){
