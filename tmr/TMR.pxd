@@ -613,6 +613,11 @@ cdef extern from "TMRHelmholtzFilter.h":
         TMRHelmholtzFilter(double, int, TACSAssembler**, TMROctForest**, int)
         TMRHelmholtzFilter(double, int, TACSAssembler**, TMRQuadForest**, int)
 
+cdef extern from "TMRMatrixFilter.h":
+    cdef cppclass TMRMatrixFilter(TMRTopoFilter):
+        TMRMatrixFilter(double, int, int, TACSAssembler**, TMROctForest**, int)
+        TMRMatrixFilter(double, int, int, TACSAssembler**, TMRQuadForest**, int)
+
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(TMRTopoFilter*, TACSMg*)

@@ -80,8 +80,14 @@ void TMRConformFilter::initialize( int _nlevels,
   // Copy over the assembler objects and filters
   for ( int k = 0; k < nlevels; k++ ){
     TACSBVecIndices *filter_indices;
-    createMapIndices(quad_filter[k], oct_filter[k],
-                     &filter_maps[k], &filter_indices);
+    if (oct_filter){
+      createMapIndices(NULL, oct_filter[k],
+                       &filter_maps[k], &filter_indices);
+    }
+    else {
+      createMapIndices(quad_filter[k], NULL,
+                       &filter_maps[k], &filter_indices);
+    }
     filter_maps[k]->incref();
 
     // Create the distribution object for the design variables

@@ -798,16 +798,20 @@ TMROctConformTACSTopoCreator::TMROctConformTACSTopoCreator( TMRBoundaryCondition
                                                             int order,
                                                             TMRInterpolationType interp_type ):
   TMROctTACSCreator(_bcs){
-  // Create and reference the filter
-  filter = _forest->duplicate();
-  if (order < 2){
+  // Use the forest as the filter in these cases
+  if (order < 0 ||
+      (order == _forest->getMeshOrder() &&
+       interp_type == _forest->getInterpType())){
+    filter = _forest;
+  }
+  else {
+    filter = _forest->duplicate();
     order = filter->getMeshOrder()-1;
-    interp_type = filter->getInterpType();
     if (order < 2){
       order = 2;
     }
+    filter->setMeshOrder(order, interp_type);
   }
-  filter->setMeshOrder(order, interp_type);
   filter->incref();
 
   // Create the nodes within the filter
@@ -881,17 +885,21 @@ TMRQuadConformTACSTopoCreator::TMRQuadConformTACSTopoCreator( TMRBoundaryConditi
                                                               TMRQuadForest *_forest,
                                                               int order,
                                                               TMRInterpolationType interp_type ):
-TMRQuadTACSCreator(_bcs){
+  TMRQuadTACSCreator(_bcs){
   // Create and reference the filter
-  filter = _forest->duplicate();
-  if (order < 2){
+  if (order < 0 ||
+      (order == _forest->getMeshOrder() &&
+       interp_type == _forest->getInterpType())){
+    filter = _forest;
+  }
+  else {
+    filter = _forest->duplicate();
     order = filter->getMeshOrder()-1;
-    interp_type = filter->getInterpType();
     if (order < 2){
       order = 2;
     }
+    filter->setMeshOrder(order, interp_type);
   }
-  filter->setMeshOrder(order, interp_type);
   filter->incref();
 
   // Create the nodes within the filter

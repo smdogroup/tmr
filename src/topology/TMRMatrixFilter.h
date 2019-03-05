@@ -53,7 +53,7 @@
 
   So the final filter can be written as follows:
 
-  F = T^{-1}*[ \sum_{n=0}^{infty} 1/s**(n+1)*(D^{-1}*M)**n ]
+  F = T^{-1}*[ \sum_{n=0}^{N} 1/s**(n+1)*(D^{-1}*M)**n ]
 */
 
 class TMRMatrixFilter : public TMRConformFilter {

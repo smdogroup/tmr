@@ -3551,6 +3551,53 @@ cdef class HelmholtzFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+cdef class MatrixFilter(TopoFilter):
+    def __cinit__(self, double s, int N, list assemblers,
+                  list filters, int vars_per_node=1):
+        cdef int nlevels = 0
+        cdef int isqforest = 0
+        cdef TACSAssembler **assemb = NULL
+        cdef TMROctForest **ofiltr = NULL
+        cdef TMRQuadForest **qfiltr = NULL
+
+        if len(assemblers) != len(filters):
+            errmsg = 'MatrixFilter must have equal number of objects in lists'
+            raise ValueError(errmsg)
+
+        nlevels = len(assemblers)
+        for i in range(nlevels):
+            if isinstance(filters[i], QuadForest):
+                isqforest = 1
+            elif isinstance(filters[i], OctForest):
+                isqforest = 0
+
+        assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
+        if isqforest:
+            qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
+            for i in range(nlevels):
+                qfiltr[i] = (<QuadForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+            self.ptr = new TMRMatrixFilter(s, N, nlevels, assemb, qfiltr,
+                                           vars_per_node)
+            self.ptr.incref()
+            free(qfiltr)
+        else:
+            ofiltr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
+            for i in range(nlevels):
+                ofiltr[i] = (<OctForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+            self.ptr = new TMRMatrixFilter(s, N, nlevels, assemb, ofiltr,
+                                           vars_per_node)
+            self.ptr.incref()
+            free(ofiltr)
+
+        free(assemb)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
 cdef class TopoProblem(pyParOptProblemBase):
     def __cinit__(self, TopoFilter fltr, Pc pc):
         cdef TACSMg *mg = NULL
