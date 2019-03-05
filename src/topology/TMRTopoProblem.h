@@ -75,6 +75,11 @@ class TMRTopoProblem : public ParOptProblem {
   void setLoadCases( TACSBVec **_forces, int _num_load_cases );
   int getNumLoadCases();
 
+  // Set the output frequency, element type and flags for f5 files
+  // -------------------------------------------------------------
+  void setF5OutputFlags( int freq, ElementType elem_type, unsigned int flag );
+  void setF5EigenOutputFlags( int freq, ElementType elem_type, unsigned int flag );
+
   // Add constraints associated with one of the load cases
   // -----------------------------------------------------
   void addConstraints( int _load_case, TACSFunction **_funcs,
@@ -194,9 +199,6 @@ class TMRTopoProblem : public ParOptProblem {
   // Set the design variables across all multigrid levels
   void setDesignVars( ParOptVec *xvec );
 
-  // Extract and write the eigenvectors to file
-  void writeEigenVector( int iter );
-
   // Store the prefix
   char *prefix;
 
@@ -273,6 +275,11 @@ class TMRTopoProblem : public ParOptProblem {
   // The initial design variable values
   ParOptVec *xinit;
   ParOptVec *xlb, *xub;
+
+  // Information to control the output frequency
+  int f5_frequency, f5_eigen_frequency;
+  ElementType f5_element_type, f5_eigen_element_type;
+  unsigned int f5_write_flag, f5_eigen_write_flag;
 };
 
 #endif // TMR_TOPO_PROBLEM_H

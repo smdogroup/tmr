@@ -3567,6 +3567,26 @@ cdef class TopoProblem(pyParOptProblemBase):
         if self.ptr:
             self.ptr.decref()
 
+    def setF5OutputFlags(self, int freq, ElementType elem_type,
+                         int flag):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.setF5OutputFlags(freq, elem_type, flag)
+        return
+
+    def setF5EigenOutputFlags(self, int freq, ElementType elem_type,
+                             int flag):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        prob.setF5EigenOutputFlags(freq, elem_type, flag)
+        return
+
     def setLoadCases(self, list forces):
         cdef TACSBVec **f = NULL
         cdef int nforces = len(forces)

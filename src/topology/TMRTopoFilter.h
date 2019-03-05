@@ -49,6 +49,9 @@ class TMRTopoFilter : public TMREntity {
   // Set values/add values to the vector
   virtual void addValues( TacsScalar *in, TACSBVec *out ) = 0;
   virtual void setValues( TacsScalar *in, TACSBVec *out ) = 0;
+
+  // Write the STL file
+  virtual void writeSTLFile( int k, double cutoff, const char *filename ){}
 };
 
 #endif // TMR_TOPO_FILTER_H

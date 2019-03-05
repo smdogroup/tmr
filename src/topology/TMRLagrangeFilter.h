@@ -25,6 +25,7 @@
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
 #include "TACSAssembler.h"
+#include "TMR_STLTools.h"
 
 /*
   Form a filter for the Lagrange interpolation filter
@@ -36,7 +37,7 @@ class TMRLagrangeFilter : public TMRTopoFilter {
                      TMROctForest *_filter[],
                      TACSVarMap *_filter_maps[],
                      TACSBVecIndices *filter_indices[],
-                     int _vars_per_node=1 );   
+                     int _vars_per_node=1 );
   TMRLagrangeFilter( int _nlevels,
                      TACSAssembler *_tacs[],
                      TMRQuadForest *_filter[],
@@ -47,25 +48,31 @@ class TMRLagrangeFilter : public TMRTopoFilter {
 
   // Get the MPI communicator
   MPI_Comm getMPIComm();
-  
+
   // Get the TACSAssembler instance (on the finest mesh level)
   TACSAssembler *getAssembler();
-  
+
   // Get problem definitions maximum local size of the design variable values
   int getVarsPerNode();
-  int getNumLocalVars();  
+  int getNumLocalVars();
   int getMaxNumLocalVars();
-  
+
   // Create a design vector on the finest mesh level
   TACSBVec *createVec();
 
-  // Set the design variable values (including all local values) 
+  // Set the design variable values (including all local values)
   void setDesignVars( TACSBVec *x );
 
   // Set values/add values to the vector
   void addValues( TacsScalar *in, TACSBVec *out );
   void setValues( TacsScalar *in, TACSBVec *out );
 
+  // Write the STL file
+  void writeSTLFile( int k, double cutoff, const char *filename ){
+    if (oct_filter){
+      TMR_GenerateBinFile(filename, oct_filter[0], x[0], k, cutoff);
+    }
+  }
  private:
   // Initialize the problem
   void initialize( int _nlevels,
@@ -90,7 +97,7 @@ class TMRLagrangeFilter : public TMRTopoFilter {
 
   // The maximum number of local design variables
   int max_local_vars;
-  
+
   // Set the information about the filter at each level
   TMROctForest **oct_filter;
   TMRQuadForest **quad_filter;

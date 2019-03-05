@@ -22,7 +22,6 @@
 #include "TMROctStiffness.h"
 #include "TACSFunction.h"
 #include "Solid.h"
-#include "TMR_STLTools.h"
 #include "TACSToFH5.h"
 #include "TMR_TACSCreator.h"
 
@@ -259,6 +258,14 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   buck_ks_weight = 30.0;
   buck_offset = 0.0;
   buck_scale = 1.0;
+
+  // Set the defaults for the output types
+  f5_frequency = -1;
+  f5_element_type = TACS_ELEMENT_NONE;
+  f5_write_flag = 0;
+  f5_eigen_frequency = -1;
+  f5_eigen_element_type = TACS_ELEMENT_NONE;
+  f5_eigen_write_flag = 0;
 }
 
 /*
@@ -342,6 +349,26 @@ TMRTopoProblem::~TMRTopoProblem(){
   if (ksm_file){
     ksm_file->decref();
   }
+}
+
+/*
+  Set the output flags for any f5 output files that will be created
+*/
+void TMRTopoProblem::setF5OutputFlags( int freq, ElementType elem_type,
+                                       unsigned int flag ){
+  f5_frequency = freq;
+  f5_element_type = elem_type;
+  f5_write_flag = flag;
+}
+
+/*
+  Set the output flags specifically for the eigenvalues
+*/
+void TMRTopoProblem::setF5EigenOutputFlags( int freq, ElementType elem_type,
+                                            unsigned int flag ){
+  f5_eigen_frequency = freq;
+  f5_eigen_element_type = elem_type;
+  f5_eigen_write_flag = flag;
 }
 
 /*
@@ -1449,120 +1476,75 @@ void TMRTopoProblem::addSparseInnerProduct( double alpha,
   Write the output file
 */
 void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
-  /*
   // Print out the binary STL file for later visualization
-  if (prefix && oct_filter){
+  if (prefix){
     // Write out the file at a cut off of 0.25
     char *filename = new char[ strlen(prefix) + 100 ];
 
-    for ( int k = 0; k < vars_per_node; k++ ){
+    for ( int k = 0; k < filter->getVarsPerNode(); k++ ){
       double cutoff = 0.5;
       sprintf(filename, "%s/levelset05_var%d_binary%04d.bstl",
               prefix, k, iter_count);
-      TMR_GenerateBinFile(filename, oct_filter[0], x[0], k, cutoff);
+
+      // Write the STL file
+      filter->writeSTLFile(k, cutoff, filename);
     }
 
     delete [] filename;
   }
-  else if (prefix && quad_filter){
-    // Write out the file at a cut off of 0.25
-    char *filename = new char[ strlen(prefix) + 100 ];
 
-    sprintf(filename, "%s/tacs_output%04d.f5",
-            prefix, iter_count);
-    // Create the visualization for the object
-    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                               TACSElement::OUTPUT_DISPLACEMENTS |
-                               TACSElement::OUTPUT_EXTRAS);
-    TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_PLANE_STRESS,
-                                  write_flag);
-    f5->incref();
-    f5->writeToFile(filename);
-    f5->decref();
-    delete [] filename;
-  }
+  if (prefix){
+    if (f5_frequency > 0 && (iter % f5_frequency) == 0){
+      // Create the filename
+      char *filename = new char[ strlen(prefix) + 100 ];
+      sprintf(filename, "%s/tacs_output%04d.f5", prefix, iter_count);
 
-  if ((buck || freq) && iter_count % 250 == 0){
-    writeEigenVector(iter);
-  }
+      TACSToFH5 *f5 = new TACSToFH5(tacs, f5_element_type, f5_write_flag);
+      f5->incref();
+      f5->writeToFile(filename);
+      f5->decref();
+      delete [] filename;
+    }
 
-  if (iter_count % 50 == 0){
-    // Get the processor rank
-    int mpi_rank;
-    MPI_Comm_rank(tacs->getMPIComm(), &mpi_rank);
+    if ((buck || freq) && f5_eigen_frequency > 0 &&
+        (iter % f5_eigen_frequency) == 0){
+      char *filename = new char[ strlen(prefix) + 100 ];
+      TACSToFH5 *f5 = new TACSToFH5(tacs, f5_eigen_element_type,
+                                    f5_eigen_write_flag);
+      f5->incref();
 
-    // Allocate the filename array
-    char *filename = new char[ strlen(prefix) + 100 ];
-
-    for ( int i = 0; i < num_load_cases; i++ ){
-      if (load_case_info[i].stress_func){
-        sprintf(filename, "%s/load%d_stress_proc%d.dat",
-                prefix, i, mpi_rank);
-        load_case_info[i].stress_func->writeReconToTec(vars[i],
-                                                       filename, 1.0);
+      TACSBVec *tmp = tacs->createVec();
+      tmp->incref();
+      if (buck){
+        for ( int i = 0; i < num_load_cases; i++ ){
+          // Extract the first k eigenvectors for ith load
+          for ( int k = 0; k < num_buck_eigvals; k++ ){
+            TacsScalar error;
+            buck[i]->extractEigenvector(k, tmp, &error);
+            tacs->setVariables(tmp);
+            sprintf(filename, "%s/load%d_eigenvector%02d_output%d.f5",
+                    prefix, i, k, iter);
+            f5->writeToFile(filename);
+          }
+        }
       }
-    }
+      else {
+        for ( int k = 0; k < num_freq_eigvals; k++ ){
+          TacsScalar error;
+          freq->extractEigenvector(k, tmp, &error);
+          tacs->setVariables(tmp);
+          sprintf(filename, "%s/freq_eigenvector%02d_output%d.f5",
+                  prefix, k, iter);
+          f5->writeToFile(filename);
+        }
+      }
+      tmp->decref();
 
-    // Free the filename array
-    delete [] filename;
+      f5->decref();
+      delete [] filename;
+    }
   }
-  */
+
   // Update the iteration count
   iter_count++;
-}
-
-/*
-  Write the eigenvector file
-*/
-void TMRTopoProblem::writeEigenVector( int iter ){
-  // Only valid if buckling is used
-  if (buck){
-    char outfile[256];
-    TACSBVec *tmp = tacs->createVec();
-    tmp->incref();
-    tmp->zeroEntries();
-    // Create the visualization for the object
-    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                               TACSElement::OUTPUT_DISPLACEMENTS);
-    TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_SOLID,
-                                  write_flag);
-    f5->incref();
-    for ( int i = 0; i < num_load_cases; i++ ){
-      // Extract the first k eigenvectors for ith load
-      for ( int k = 0; k < num_buck_eigvals; k++ ){
-        TacsScalar error;
-        buck[i]->extractEigenvector(k, tmp, &error);
-        tacs->setVariables(tmp);
-        sprintf(outfile, "%s/load%d_eigenvector%02d_output%d.f5",
-                prefix, i, k, iter);
-        f5->writeToFile(outfile);
-      }
-    }
-    f5->decref();
-    tmp->decref();
-  }
-  else {
-    char outfile[256];
-    TACSBVec *tmp = tacs->createVec();
-    tmp->incref();
-    tmp->zeroEntries();
-    // Create the visualization for the object
-    unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                               TACSElement::OUTPUT_DISPLACEMENTS);
-    TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_SOLID,
-                                  write_flag);
-    f5->incref();
-    // Extract the first k eigenvectors for ith load
-    for ( int k = 0; k < num_freq_eigvals; k++ ){
-      TacsScalar error;
-      freq->extractEigenvector(k, tmp, &error);
-      tacs->setVariables(tmp);
-      sprintf(outfile, "%s/freq_eigenvector%02d_output%d.f5",
-	      prefix, k, iter);
-      f5->writeToFile(outfile);
-    }
-
-    f5->decref();
-    tmp->decref();
-  }
 }

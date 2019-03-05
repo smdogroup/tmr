@@ -25,6 +25,7 @@
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
 #include "TACSAssembler.h"
+#include "TMR_STLTools.h"
 
 /*
   Build a conforming interpolation filter
@@ -62,6 +63,11 @@ class TMRConformFilter : public TMRTopoFilter {
   void addValues( TacsScalar *in, TACSBVec *out );
   void setValues( TacsScalar *in, TACSBVec *out );
 
+  void writeSTLFile( int k, double cutoff, const char *filename ){
+    if (oct_filter){
+      TMR_GenerateBinFile(filename, oct_filter[0], x[0], k, cutoff);
+    }
+  }
  protected:
   // Get/set values from the TACSBVec object
   int getLocalValuesFromBVec( int level, TACSBVec *vec, TacsScalar *xloc );
