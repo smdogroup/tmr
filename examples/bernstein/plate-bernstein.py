@@ -7,9 +7,12 @@ import numpy as np
 import argparse
 import os
 
-class CreateMe(TMR.QuadBernsteinTopoCreator):
-    def __init__(self, bcs, forest, use_bernstein, props):
-        TMR.QuadBernsteinTopoCreator.__init__(bcs, forest, use_bernstein)
+class CreateMe(TMR.QuadConformTopoCreator):
+    def __init__(self, bcs, forest, order, interp, props=None):
+        # Set the interpolation for the new filter
+        order = forest.getMeshOrder()-1
+        interp = TMR.BERNSTEIN_POINTS
+        TMR.QuadConformTopoCreator.__init__(bcs, forest, order, interp)
         
         # Create the array of properties
         self.props = props
@@ -71,13 +74,13 @@ def createTopoProblem(props, forest, order=3, nlevels=2,
     forest.repartition()
     forests.append(forest)
     use_bernstein=1
+
     # Make the creator class
-    creator = CreateMe(bcs, forests[-1], use_bernstein, props)
+    creator = CreateMe(bcs, forests[-1], props)
     assemblers.append(creator.createTACS(forest, ordering=ordering))
-    varmaps.append(creator.getMap())
-    vecindices.append(creator.getIndices())
     filters.append(creator.getFilter())
-    for i in xrange(nlevels-1):
+
+    for i in range(nlevels-1):
         if args.use_decrease_order:
             forest = forests[-1].duplicate()
             forest.balance(1)        
@@ -93,24 +96,25 @@ def createTopoProblem(props, forest, order=3, nlevels=2,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs, forests[-1], use_bernstein, props)
+        creator = CreateMe(bcs, forests[-1], props)
         assemblers.append(creator.createTACS(forest, ordering=ordering))
-        varmaps.append(creator.getMap())
-        vecindices.append(creator.getIndices())
         filters.append(creator.getFilter())
 
     # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests,omega=args.omega)
+    mg = TMR.createMg(assemblers, forests, omega=args.omega)
    
     # Create the topology optimization problem
     vars_per_node = 1
     nmats = props.getNumMaterials()
     if nmats > 1:
         vars_per_node = nmats+1
-    problem = TMR.TopoProblem(assemblers, filters, mg, varmaps, vecindices,
-                              vars_per_node=vars_per_node)
+
+    # Set the filter type
+    fltr = TMR.ConformFilter(assemblers, filters, vars_per_node=vars_per_node)
+    problem = TMR.TopoProblem(fltr, mg)
 
     return assemblers[0], problem, filters[0], varmaps[0]
+
 # Create an argument parser to read in arguments from the command line
 p = argparse.ArgumentParser()
 p.add_argument('--prefix', type=str, default='./results')
@@ -229,7 +233,7 @@ if (len(rho) > 1):
 time_array = np.zeros(sum(args.max_opt_iters[:]))
 t0 = MPI.Wtime()
 
-for step in xrange(max_iterations):
+for step in range(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
     nlevs = mg_levels[step]
     assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
@@ -376,13 +380,14 @@ for step in xrange(max_iterations):
     # Refine based solely on the value of the density variable
     elems = assembler.getElements()
     
-    for i in xrange(num_elems):        
+    for i in range(num_elems):        
         c = elems[i].getConstitutive()
         if c is not None:
             if vars_per_node == 1:
                 density = c.getDVOutputValue(0, np.zeros(3, dtype=float))
             else:
                 density = 1.0 - c.getDVOutputValue(2, np.zeros(3, dtype=float))
+
             # Refine things differently depending on whether the
             # density is above or below a threshold
             if density >= 0.1:
