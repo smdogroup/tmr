@@ -3456,6 +3456,9 @@ cdef class LagrangeFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+    def getMap(self):
+        return _init_VarMap(self.ptr.getDesignVarMap())
+
 cdef class ConformFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters, int vars_per_node=1):
         cdef int nlevels = 0
@@ -3501,6 +3504,9 @@ cdef class ConformFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def getMap(self):
+        return _init_VarMap(self.ptr.getDesignVarMap())
 
 cdef class HelmholtzFilter(TopoFilter):
     def __cinit__(self, double radius, list assemblers,
@@ -3549,6 +3555,9 @@ cdef class HelmholtzFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+    def getMap(self):
+        return _init_VarMap(self.ptr.getDesignVarMap())
+
 cdef class MatrixFilter(TopoFilter):
     def __cinit__(self, double s, int N, list assemblers,
                   list filters, int vars_per_node=1):
@@ -3596,8 +3605,12 @@ cdef class MatrixFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+    def getMap(self):
+        return _init_VarMap(self.ptr.getDesignVarMap())
+
 cdef class TopoProblem(pyParOptProblemBase):
-    def __cinit__(self, TopoFilter fltr, Pc pc):
+    def __cinit__(self, TopoFilter fltr, Pc pc,
+                  int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL
 
         # Check for a multigrid preconditioner
@@ -3605,7 +3618,7 @@ cdef class TopoProblem(pyParOptProblemBase):
         if mg == NULL:
             raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
-        self.ptr = new TMRTopoProblem(fltr.ptr, mg)
+        self.ptr = new TMRTopoProblem(fltr.ptr, mg, gmres_subspace, rtol)
         return
 
     def __dealloc__(self):

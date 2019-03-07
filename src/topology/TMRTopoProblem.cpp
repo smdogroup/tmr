@@ -172,7 +172,9 @@ int ParOptBVecWrap::getArray( ParOptScalar **array ){
   Create the topology optimization problem
 */
 TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
-                                TACSMg *_mg ):
+                                TACSMg *_mg,
+                                int gmres_iters,
+                                double rtol ):
   ParOptProblem(_filter->getMPIComm()){
   // Set the prefix to NULL
   prefix = NULL;
@@ -213,14 +215,13 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   MPI_Comm_rank(tacs->getMPIComm(), &mpi_rank);
 
   // Set up the solver
-  int gmres_iters = 50;
   int nrestart = 5;
   int is_flexible = 0;
   ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
   ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  ksm->setTolerances(1e-9, 1e-30);
+  ksm->setTolerances(rtol, 1e-30);
 
   // Set the iteration count
   iter_count = 0;

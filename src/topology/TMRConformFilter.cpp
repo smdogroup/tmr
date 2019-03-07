@@ -304,6 +304,13 @@ TACSAssembler* TMRConformFilter::getAssembler(){
 }
 
 /*
+  Get the design variable mapping for the finest mesh
+*/
+TACSVarMap* TMRConformFilter::getDesignVarMap(){
+  return filter_maps[0];
+}
+
+/*
   Get problem definitions maximum local size of the design variable values
 */
 int TMRConformFilter::getVarsPerNode(){

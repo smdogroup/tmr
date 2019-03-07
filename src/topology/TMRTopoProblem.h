@@ -66,7 +66,8 @@ class TMRTopoProblem : public ParOptProblem {
  public:
   // Create the topology optimization object
   // ---------------------------------------
-  TMRTopoProblem( TMRTopoFilter *_filter, TACSMg *_mg );
+  TMRTopoProblem( TMRTopoFilter *_filter, TACSMg *_mg,
+                  int gmres_iters=50, double rtol=1e-9 );
   ~TMRTopoProblem();
 
   // Set the load cases - note that this destroys internal information

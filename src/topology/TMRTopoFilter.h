@@ -31,19 +31,22 @@ class TMRTopoFilter : public TMREntity {
  public:
   // Get the MPI communicator
   virtual MPI_Comm getMPIComm() = 0;
-  
+
   // Get the TACSAssembler instance (on the finest mesh level)
   virtual TACSAssembler *getAssembler() = 0;
-  
+
+  // Get the variable map information
+  virtual TACSVarMap *getDesignVarMap() = 0;
+
   // Get problem definitions maximum local size of the design variable values
   virtual int getVarsPerNode() = 0;
-  virtual int getNumLocalVars() = 0;  
+  virtual int getNumLocalVars() = 0;
   virtual int getMaxNumLocalVars() = 0;
-  
+
   // Create a design vector on the finest mesh level
   virtual TACSBVec *createVec() = 0;
 
-  // Set the design variable values (including all local values) 
+  // Set the design variable values (including all local values)
   virtual void setDesignVars( TACSBVec *x ) = 0;
 
   // Set values/add values to the vector

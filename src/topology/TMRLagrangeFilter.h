@@ -49,6 +49,9 @@ class TMRLagrangeFilter : public TMRTopoFilter {
   // Get the MPI communicator
   MPI_Comm getMPIComm();
 
+  // Get the design variable map
+  TACSVarMap *getDesignVarMap();
+
   // Get the TACSAssembler instance (on the finest mesh level)
   TACSAssembler *getAssembler();
 

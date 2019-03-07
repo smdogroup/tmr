@@ -51,10 +51,10 @@ void TMRLagrangeFilter::initialize( int _nlevels,
   // per node
   nlevels = _nlevels;
   vars_per_node = _vars_per_node;
-  
+
   // Allocate arrays to store the assembler objects/forests
   tacs = new TACSAssembler*[ nlevels ];
-  
+
   oct_filter = NULL;
   quad_filter = NULL;
   if (_oct_filter){
@@ -96,7 +96,7 @@ void TMRLagrangeFilter::initialize( int _nlevels,
     filter_dist[k] = new TACSBVecDistribute(filter_maps[k],
                                             filter_indices[k]);
     filter_dist[k]->incref();
-    
+
     x[k] = new TACSBVec(filter_maps[k], vars_per_node, filter_dist[k]);
     x[k]->incref();
   }
@@ -126,7 +126,7 @@ void TMRLagrangeFilter::initialize( int _nlevels,
 
   // Set the max. number of local variables
   int max_local_vars = 0;
-  
+
   // Compute the max filter size
   for ( int k = 0; k < nlevels; k++ ){
     // Set the maximum local size
@@ -201,6 +201,13 @@ MPI_Comm TMRLagrangeFilter::getMPIComm(){
 }
 
 /*
+  Get the design variable mapping for the finest mesh
+*/
+TACSVarMap* TMRLagrangeFilter::getDesignVarMap(){
+  return filter_maps[0];
+}
+
+/*
   Get the root assembler object
 */
 TACSAssembler* TMRLagrangeFilter::getAssembler(){
@@ -248,18 +255,18 @@ void TMRLagrangeFilter::setDesignVars( TACSBVec *xvec ){
 
   // Temporarily allocate an array to store the variables
   TacsScalar *xlocal = new TacsScalar[ getMaxNumLocalVars() ];
-  
+
   // Copy the values to the local array
   int size = getLocalValuesFromBVec(0, x[0], xlocal);
   tacs[0]->setDesignVars(xlocal, size);
-  
+
   // Set the design variable values on all processors
   for ( int k = 0; k < nlevels-1; k++ ){
     filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
     // Distribute the design variable values
     x[k+1]->beginDistributeValues();
     x[k+1]->endDistributeValues();
-    
+
     // Set the design variable values
     size = getLocalValuesFromBVec(k+1, x[k+1], xlocal);
     tacs[k+1]->setDesignVars(xlocal, size);
@@ -310,7 +317,7 @@ int TMRLagrangeFilter::getLocalValuesFromBVec( int level,
   TacsScalar *x_vals, *x_ext_vals;
   int size = vec->getArray(&x_vals);
   int ext_size = vec->getExtArray(&x_ext_vals);
-  
+
   memcpy(xloc, x_vals, size*sizeof(TacsScalar));
   if (x_ext_vals){
     memcpy(&xloc[size], x_ext_vals, ext_size*sizeof(TacsScalar));
