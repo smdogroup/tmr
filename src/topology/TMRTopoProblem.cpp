@@ -877,45 +877,9 @@ void TMRTopoProblem::setDesignVars( ParOptVec *pxvec ){
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(pxvec);
 
   if (wrap){
-<<<<<<< HEAD
     // Set the design variable values
     filter->setDesignVars(wrap->vec);
   }
-=======
-    // Extract the TACSBVec class
-    TACSBVec *xvec = wrap->vec;
-
-    // Copy the values to the local design variable vector
-    x[0]->copyValues(xvec);
-
-    // Distribute the design variable values. This call is needed when using
-    // Bernstein polynomial formulation with adaptive mesh refinement since the
-    // design vector includes the dependent nodes. This call will ensure that
-    // the design variables are distributed to the proper processors.
-    x[0]->beginDistributeValues();
-    x[0]->endDistributeValues();
-
-    if (helmholtz_tacs){
-      applyHelmholtzFilter(x[0]);
-    }
-
-    // Copy the values to the local array
-    int size = getLocalValuesFromBVec(0, x[0], xlocal);
-    tacs[0]->setDesignVars(xlocal, size);
-
-    // Set the design variable values on all processors
-    for ( int k = 0; k < nlevels-1; k++ ){
-      filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
-      // Distribute the design variable values
-      x[k+1]->beginDistributeValues();
-      x[k+1]->endDistributeValues();
-
-      // Set the design variable values
-      size = getLocalValuesFromBVec(k+1, x[k+1], xlocal);
-      tacs[k+1]->setDesignVars(xlocal, size);
-    }
-  }  
->>>>>>> ad709ef255d7217ee953300a21545009d8d11093
 }
 
 /*
