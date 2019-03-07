@@ -1952,6 +1952,9 @@ cdef class QuadForest:
         self.ptr.writeForestToVTK(filename)
 
     def createInterpolation(self, QuadForest forest, VecInterp vec):
+        if self.ptr == forest.ptr:
+            errmsg = 'Cannot interpolate between the same object'
+            raise ValueError(errmsg)
         self.ptr.createInterpolation(forest.ptr, vec.ptr)
 
 cdef _init_QuadForest(TMRQuadForest* ptr):
@@ -2395,6 +2398,9 @@ cdef class OctForest:
         vec: :class:`~TACS.VecInterp`
           The interpolation operator created
         """
+        if self.ptr == forest.ptr:
+            errmsg = 'Cannot interpolate between the same object'
+            raise ValueError(errmsg)
         self.ptr.createInterpolation(forest.ptr, vec.ptr)
 
 cdef _init_OctForest(TMROctForest* ptr):

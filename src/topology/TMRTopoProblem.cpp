@@ -941,9 +941,22 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       if (num_funcs > 0){
         tacs->evalFunctions(load_case_info[i].funcs,
                             num_funcs, &cons[count]);
+
         if (mpi_rank == 0){
-          printf("Mass: %e\n", cons[count]);
+          for ( int k = 0; k < num_funcs; k++ ){
+            printf("%-30s: %25.10e\n",
+                   load_case_info[i].funcs[k]->functionName(),
+                   cons[count + k]);
+            TACSKSFailure *ks_fail =
+              dynamic_cast<TACSKSFailure*>(load_case_info[i].funcs[k]);
+            if (ks_fail){
+              TacsScalar max_fail = ks_fail->getMaximumFailure();
+              printf("%-30s: %25.10e\n", "TACSKSFailure max stress",
+                     max_fail);
+            }
+          }
         }
+
         // Scale and offset the constraints that we just evaluated
         for ( int j = 0; j < num_funcs; j++ ){
           TacsScalar offset = load_case_info[i].offset[j];
