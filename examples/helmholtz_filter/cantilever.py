@@ -60,7 +60,7 @@ def createTopoProblem(props, forest, order=2, nlevels=2,
     vecindices.append(creator.getIndices())
     filters.append(creator.getFilter())
     
-    for i in xrange(nlevels-1):
+    for i in range(nlevels-1):
         if args.use_decrease_order:
             forest = forests[-1].duplicate()
             forest.balance(1)
@@ -298,7 +298,7 @@ vars_per_node = 1
 if (len(rho) > 1):
     vars_per_node = 1+len(rho)
 
-for step in xrange(max_iterations):
+for step in range(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
     nlevs = mg_levels[step]
     assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
@@ -475,13 +475,14 @@ for step in xrange(max_iterations):
     # Refine based solely on the value of the density variable
     elems = assembler.getElements()
     
-    for i in xrange(num_elems):        
+    for i in range(num_elems):        
         c = elems[i].getConstitutive()
         if c is not None:
             if vars_per_node == 1:
                 density = c.getDVOutputValue(0, np.zeros(3, dtype=float))
             else:
                 density = 1.0-c.getDVOutputValue(2, np.zeros(3, dtype=float))
+
             # Refine things differently depending on whether the
             # density is above or below a threshold
             if density >= 0.1:
