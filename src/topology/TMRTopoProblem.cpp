@@ -174,7 +174,7 @@ int ParOptBVecWrap::getArray( ParOptScalar **array ){
 TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
                                 TACSMg *_mg,
                                 int gmres_iters,
-                                double rtol ):
+                                double _rtol ):
   ParOptProblem(_filter->getMPIComm()){
   // Set the prefix to NULL
   prefix = NULL;
@@ -217,11 +217,14 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   // Set up the solver
   int nrestart = 5;
   int is_flexible = 0;
+  double atol = 1e-30;
+  double rtol = _rtol;
   ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
   ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  ksm->setTolerances(rtol, 1e-30);
+  ksm->setTolerances(rtol, atol);
+  int use_recyc_sol = 0;
 
   // Set the iteration count
   iter_count = 0;
@@ -414,8 +417,20 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
     forces[i] = _forces[i];
     vars[i] = tacs->createVec();
     vars[i]->incref();
+    vars[i]->zeroEntries();
   }
 
+  // If using the previous solution as a starting
+  // point, set the atol based on rtol
+  if (use_recyc_sol){
+    double fnorm = 0.0;
+    for ( int i = 0; i < num_load_cases; i++ ){
+      fnorm += forces[i]->norm();
+    }
+    atol = fnorm*rtol;
+    ksm->setTolerances(rtol, atol);
+  }
+  
   // Allocate the load case information
   load_case_info = new LoadCaseInfo[ num_load_cases ];
   for ( int i = 0; i < num_load_cases; i++ ){
@@ -807,6 +822,14 @@ int TMRTopoProblem::useUpperBounds(){
 }
 
 /*
+  If True, use the solution to Ku=f from the previous iteration
+  as the starting point to the current iterative solve
+*/
+void TMRTopoProblem::useRecycledSolution( int truth ){
+  use_recyc_sol = truth;
+}
+
+/*
   Set the initial design variables
 */
 void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
@@ -917,7 +940,12 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
   for ( int i = 0; i < num_load_cases; i++ ){
     if (forces[i]){
       // Solve the system: K(x)*u = forces
-      ksm->solve(forces[i], vars[i]);
+      if (use_recyc_sol){
+        ksm->solve(forces[i], vars[i], 0);
+      }
+      else {
+        ksm->solve(forces[i], vars[i]);
+      }
       tacs->setBCs(vars[i]);
 
       // Set the variables into TACSAssembler
