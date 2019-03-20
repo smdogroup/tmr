@@ -643,7 +643,7 @@ cdef extern from "TMRTopoProblem.h":
         ParOptVec* createDesignVec()
         void setF5OutputFlags(int, ElementType, int)
         void setF5EigenOutputFlags(int, ElementType, int)
-        void useRecycledSolution(int)
+        void setUseRecycledSolution(int)
 
     cdef cppclass ParOptBVecWrap(ParOptVec):
         ParOptBVecWrap(TACSBVec*)

@@ -174,7 +174,7 @@ int ParOptBVecWrap::getArray( ParOptScalar **array ){
 TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
                                 TACSMg *_mg,
                                 int gmres_iters,
-                                double _rtol ):
+                                double rtol ):
   ParOptProblem(_filter->getMPIComm()){
   // Set the prefix to NULL
   prefix = NULL;
@@ -217,14 +217,14 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   // Set up the solver
   int nrestart = 5;
   int is_flexible = 0;
-  double atol = 1e-30;
-  double rtol = _rtol;
+  atol = 1e-30;
+  // double rtol = _rtol;
+  use_recyc_sol = 0;
   ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
   ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
   ksm->setTolerances(rtol, atol);
-  int use_recyc_sol = 0;
 
   // Set the iteration count
   iter_count = 0;
@@ -422,14 +422,14 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
 
   // If using the previous solution as a starting
   // point, set the atol based on rtol
-  if (use_recyc_sol){
-    double fnorm = 0.0;
-    for ( int i = 0; i < num_load_cases; i++ ){
-      fnorm += forces[i]->norm();
-    }
-    atol = fnorm*rtol;
-    ksm->setTolerances(rtol, atol);
-  }
+  // if (use_recyc_sol){
+  //   double fnorm = 0.0;
+  //   for ( int i = 0; i < num_load_cases; i++ ){
+  //     fnorm += forces[i]->norm();
+  //   }
+  //   atol = fnorm*rtol;
+  //   ksm->setTolerances(rtol, atol);
+  // }
   
   // Allocate the load case information
   load_case_info = new LoadCaseInfo[ num_load_cases ];
@@ -825,7 +825,7 @@ int TMRTopoProblem::useUpperBounds(){
   If True, use the solution to Ku=f from the previous iteration
   as the starting point to the current iterative solve
 */
-void TMRTopoProblem::useRecycledSolution( int truth ){
+void TMRTopoProblem::setUseRecycledSolution( int truth ){
   use_recyc_sol = truth;
 }
 
@@ -944,7 +944,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         ksm->solve(forces[i], vars[i], 0);
       }
       else {
-        ksm->solve(forces[i], vars[i]);
+	ksm->solve(forces[i], vars[i]);
       }
       tacs->setBCs(vars[i]);
 

@@ -3864,14 +3864,11 @@ cdef class TopoProblem(pyParOptProblemBase):
             ub = ubvec.ptr
         prob.setInitDesignVars(pvec.ptr,lb,ub)
 
-    def useRecycledSolution(self, truth):
+    def setUseRecycledSolution(self, int truth):
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        if truth:
-            prob.useRecycledSolution(1)
-        else:
-            prob.useRecycledSolution(0)
+        prob.setUseRecycledSolution(truth)
         return

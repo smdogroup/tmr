@@ -67,7 +67,7 @@ class TMRTopoProblem : public ParOptProblem {
   // Create the topology optimization object
   // ---------------------------------------
   TMRTopoProblem( TMRTopoFilter *_filter, TACSMg *_mg,
-                  int gmres_iters=50, double _rtol=1e-9 );
+                  int gmres_iters=50, double rtol=1e-9 );
   ~TMRTopoProblem();
 
   // Set the load cases - note that this destroys internal information
@@ -151,7 +151,7 @@ class TMRTopoProblem : public ParOptProblem {
   // Set the option to use the previous solution to
   // Ku=f as the starting point for the current iteration
   // ----------------------------------------------------
-  void useRecycledSolution( int truth );
+  void setUseRecycledSolution( int truth );
   
   // Get the initial variables and bounds
   // ------------------------------------
@@ -210,7 +210,6 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Solver parameters
   double atol;
-  double rtol;
   int use_recyc_sol;
   
   // Set the iteration count for printing to the file
