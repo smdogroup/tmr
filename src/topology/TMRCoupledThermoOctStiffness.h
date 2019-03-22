@@ -104,7 +104,17 @@ class TMRCoupledThermoOctStiffness : public CoupledThermoSolidStiffness {
                            const TacsScalar normal[],
                            TacsScalar sens[] );
 
-  
+  void maxtemp( const double pt[],
+		const TacsScalar max_temp,
+		TacsScalar *fail );
+  void addMaxTempDVSens ( const double pt[], 
+			  const TacsScalar max_temp,
+			  TacsScalar alpha,
+			  TacsScalar dvSens[], int dvLen );
+  void maxtempStrainSens( const double pt[],
+			  const TacsScalar max_temp,
+			  TacsScalar sens[] );
+
  private:
   // The density and stiffness properties
   TMRStiffnessProperties *props;
