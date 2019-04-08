@@ -85,6 +85,15 @@ if 'paropt' in sys.modules:
     libs.extend(paropt_libs)
     runtime_lib_dirs.extend(paropt_lib_dirs)
 
+import egads4py
+if 'egads4py' in sys.modules:
+    inc_dirs.extend(egads4py.get_include())
+    inc_dirs.extend(egads4py.get_cython_include())
+    egads4py_lib_dirs, egads4py_libs = egads4py.get_libraries()
+    lib_dirs.extend(egads4py_lib_dirs)
+    libs.extend(egads4py_libs)
+    runtime_lib_dirs.extend(egads4py_lib_dirs)
+
 exts = []
 mod = 'TMR'
 exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],

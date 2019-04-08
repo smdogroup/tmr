@@ -2429,6 +2429,8 @@ def LoadModel(fname, int print_lev=0):
         model = TMR_LoadModelFromSTEPFile(filename, print_lev)
     elif fname.lower().endswith(('igs', 'iges')):
         model = TMR_LoadModelFromIGESFile(filename, print_lev)
+    elif fname.lower().endswith(('egads')):
+        model = TMR_LoadModelFromEGADSFile(filename, print_lev)
     if model is NULL:
         errmsg = 'Error loading model. File %s does not exist?'%(fname)
         raise RuntimeError(errmsg)
