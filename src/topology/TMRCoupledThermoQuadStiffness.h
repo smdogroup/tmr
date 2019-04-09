@@ -105,6 +105,18 @@ class TMRCoupledThermoQuadStiffness : public CoupledThermoPlaneStressStiffness {
   void heatfluxStrainSens( const double pt[],
                            const TacsScalar normal[],
                            TacsScalar sens[] );
+  // Functions to evaluate the temperature constraint
+  void maxtemp( const double pt[],
+		const TacsScalar max_temp,
+		TacsScalar *fail );
+  void addMaxTempDVSens ( const double pt[], 
+			  const TacsScalar max_temp,
+			  TacsScalar alpha,
+			  TacsScalar dvSens[], int dvLen );
+  void maxtempStrainSens( const double pt[],
+			  const TacsScalar max_temp,
+			  TacsScalar sens[] );
+
  private:
   void computeLocalWeights( const double pt[], 
                             TMRIndexWeight *local_weights );

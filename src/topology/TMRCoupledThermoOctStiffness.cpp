@@ -155,9 +155,9 @@ void TMRCoupledThermoOctStiffness::getDesignVars( TacsScalar xdv[],
     }
     else {
       for ( int j = 0; j < nvars; j++ ){
-        TacsScalar value = 0.25;
+        TacsScalar value = 0.05;
         if (j >= 1){
-          value = 0.75/(nvars-1);
+          value = 0.95/(nvars-1);
         }
         for ( int i = 0; i < nweights; i++ ){
           if (weights[i].index >= 0 && weights[i].index < numDVs){
@@ -175,9 +175,9 @@ void TMRCoupledThermoOctStiffness::getDesignVars( TacsScalar xdv[],
     }
     else {
       for ( int j = 0; j < nvars; j++ ){
-        TacsScalar value = 0.25;
+        TacsScalar value = 0.05;
         if (j >= 1){
-          value = 0.75/(nvars-1);
+          value = 0.95/(nvars-1);
         }
         for ( int i = 0; i < nweights; i++ ){
           xdv[nvars*index[i] + j] = value;          
@@ -959,7 +959,6 @@ TacsScalar TMRCoupledThermoOctStiffness::getEffThermalAlpha( int vars_j ){
   }
 }
 
-
 // Evaluate the failure criteria
 // Change in temperature for the element is appended to the strain vector
 void TMRCoupledThermoOctStiffness::failure( const double pt[], 
@@ -1656,3 +1655,214 @@ void TMRCoupledThermoOctStiffness::heatfluxStrainSens( const double pt[],
     }    
   }
 }
+// Evaluate the failure criteria
+// Change in temperature for the element is appended to the strain vector
+void TMRCoupledThermoOctStiffness::maxtemp( const double pt[], 
+                                            const TacsScalar maxtemp,
+					    TacsScalar * fail ){
+  const double eps = props->eps;
+  if (filter && dv){
+    double N[nweights];
+    filter->evalInterp(pt, N);
+    for ( int j = 0; j < nvars; j++ ){
+      x[j] = 0.0;
+      for ( int i = 0; i < nweights; i++ ){
+        x[j] += N[i]*dv[nvars*i + j];
+      }
+      // Apply the projection to obtain the projected value
+      // of the density
+      rho[j] = x[j];
+    }
+  }
+  if (nvars == 1){
+    // Compute the relaxation factor
+    TacsScalar r_factor = 1.0;
+    if (eps > 0.0){
+      r_factor = rho[0]/(eps*(1.0-rho[0])+rho[0]);
+    }
+    else {
+      TacsScalar p = -1.0*eps;
+      r_factor = pow(rho[0],p);
+    }
+    
+    *fail = r_factor*maxtemp;
+  }
+  else {
+    *fail = 0.0;
+    for ( int j = 1; j < nvars; j++ ){
+      TacsScalar r_factor = 1.0;
+      if (eps > 0.0){
+        r_factor = rho[j]/(eps*(1.0-rho[j])+rho[j]);
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor = pow(rho[j],p);
+      }
+      *fail += r_factor*maxtemp;
+    }
+  }
+}
+
+void TMRCoupledThermoOctStiffness::addMaxTempDVSens( const double pt[], 
+						     const TacsScalar maxtemp,
+						     TacsScalar alpha,
+						     TacsScalar dvSens[], int dvLen ){
+  const double eps = props->eps;
+  if (filter && dv){
+    double N[nweights];
+    filter->evalInterp(pt, N);    
+    for ( int j = 0; j < nvars; j++ ){
+      x[j] = 0.0;
+      for ( int i = 0; i < nweights; i++ ){
+        x[j] += N[i]*dv[nvars*i + j];        
+      }
+    }
+    if (nvars == 1){
+      // Compute the relaxation factor
+      TacsScalar r_factor_sens = 0.0;
+      if (eps > 0.0){
+        TacsScalar d = 1.0/(eps*(1.0-x[0])+x[0]);
+        r_factor_sens = eps*d*d;
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor_sens = pow(x[0],p-1)*p;
+      }
+      TacsScalar inner = alpha*r_factor_sens*maxtemp;
+      for ( int i = 0; i < nweights; i++ ){
+        dvSens[index[i]] += N[i]*inner;
+      }
+    }
+    else {
+      for ( int j = 1; j < nvars; j++ ){
+        TacsScalar r_factor_sens = 0.0;
+        if (eps > 0.0){
+          TacsScalar d = 1.0/(eps*(1.0-x[j])+x[j]);
+          r_factor_sens = eps*d*d;
+        }
+        else {
+          TacsScalar p = -1.0*eps;
+          r_factor_sens = pow(x[j],p-1)*p;
+        }
+	// Compute the inner product
+        TacsScalar inner = alpha*(r_factor_sens*maxtemp);
+        
+        for ( int i = 0; i < nweights; i++ ){
+          dvSens[nvars*index[i] + j] += N[i]*inner;
+        }
+      }
+    }
+  }
+  else{
+    if (nvars == 1){
+      // Compute the relaxation factor
+      TacsScalar r_factor_sens = 0.0;
+      if (eps > 0.0){
+        TacsScalar d = 1.0/(eps*(1.0-rho[0])+rho[0]);
+        r_factor_sens = eps*d*d;
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor_sens = pow(rho[0],p-1)*p;
+      }
+      TacsScalar inner = alpha*r_factor_sens*maxtemp;
+      for ( int i = 0; i < nweights; i++ ){
+        dvSens[weights[i].index] += weights[i].weight*inner;
+      }
+    }
+    else {
+      for ( int j = 1; j < nvars; j++ ){
+        TacsScalar r_factor_sens = 0.0;
+        if (eps > 0.0){
+          TacsScalar d = 1.0/(eps*(1.0-rho[j])+rho[j]);
+          r_factor_sens = eps*d*d;
+        }
+        else {
+          TacsScalar p = -1.0*eps;
+          r_factor_sens = pow(rho[j],p-1)*p;
+        }
+	TacsScalar inner = alpha*(r_factor_sens*maxtemp);
+        for ( int i = 0; i < nweights; i++ ){
+          dvSens[nvars*weights[i].index + j] += weights[i].weight*inner;
+        }
+      }
+    }
+  }
+
+}
+
+void TMRCoupledThermoOctStiffness::maxtempStrainSens( const double pt[], 
+						      const TacsScalar maxtemp,
+						      TacsScalar sens[] ){
+  const double eps = props->eps;
+  if (filter && dv){
+    double N[nweights];
+    filter->evalInterp(pt, N);
+    for ( int j = 0; j < nvars; j++ ){
+      x[j] = 0.0;
+      for ( int i = 0; i < nweights; i++ ){
+        x[j] += N[i]*dv[nvars*i + j];
+      }
+      // Apply the projection to obtain the projected value
+      // of the density
+      rho[j] = x[j];
+    }
+    if (nvars == 1){
+      // Compute the relaxation factor
+      TacsScalar r_factor = 1.0;
+      if (eps > 0.0){
+        r_factor = rho[0]/(eps*(1.0-x[0])+x[0]);
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor = pow(x[0],p);
+      }
+      sens[0] = r_factor;
+    }
+    else {
+      sens[0] = 0.0;
+      for ( int j = 1; j < nvars; j++ ){
+        TacsScalar r_factor_sens = 0.0;
+        if (eps > 0.0){
+          TacsScalar d = 1.0/(eps*(1.0-rho[j])+rho[j]);
+          r_factor_sens = eps*d*d;
+        }
+        else {
+          TacsScalar p = -1.0*eps;
+          r_factor_sens = pow(rho[j],p-1)*p;
+        }
+	sens[0] += r_factor_sens;
+      }
+    }
+  }
+  else {
+    if (nvars == 1){
+      // Compute the relaxation factor
+      TacsScalar r_factor = 1.0;
+      if (eps > 0.0){
+        r_factor = rho[0]/(eps*(1.0-x[0])+x[0]);
+      }
+      else {
+        TacsScalar p = -1.0*eps;
+        r_factor = pow(x[0],p);
+      }
+      sens[0] = r_factor;
+    }
+    else {
+      sens[0] = 0.0;
+      for ( int j = 1; j < nvars; j++ ){
+        TacsScalar r_factor_sens = 0.0;
+        if (eps > 0.0){
+          TacsScalar d = 1.0/(eps*(1.0-rho[j])+rho[j]);
+          r_factor_sens = eps*d*d;
+        }
+        else {
+          TacsScalar p = -1.0*eps;
+          r_factor_sens = pow(rho[j],p-1)*p;
+        }
+	sens[0] += r_factor_sens;
+      }
+    }
+  }
+}
+
