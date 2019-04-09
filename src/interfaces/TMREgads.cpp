@@ -432,14 +432,22 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
       idx2 = idx1;
       isdegenerate = 1;
     }
-    else {
+    else if (nchildren == 2){
       idx2 = vert_map[children[1]];
     }
-    all_edges[index-1]->setVertices(all_vertices[idx1],
-                                    all_vertices[idx2]);
 
     // Set a flag to indicate that the edge is degenerate
     all_edges[index] = new TMR_EgadsEdge(ctx, edges[index], isdegenerate);
+
+    if ((idx1 >= 0 && idx1 < nverts) &&
+        (idx2 >= 0 && idx2 < nverts)){
+      all_edges[index]->setVertices(all_vertices[idx1],
+                                    all_vertices[idx2]);
+    }
+    else {
+      fprintf(stderr, "Unable to set vertices for edge %d from EGADS file\n",
+              index);
+    }
 
     // Set the "name" attribute
     int atype, len;
@@ -498,10 +506,20 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
       // Create the edge list to go into the EdgeLoop object
       TMREdge **edgs = new TMREdge*[ num_edges ];
       int *dir = new int[ num_edges ];
-      for ( int k = 0; k < num_edges; k++ ){
-        dir[k] = edge_sense[k]*loop_sense[i];
-        int edge_index = edge_map[loop_edges[k]];
-        edgs[k] = all_edges[edge_index-1];
+
+      if (loop_sense[i] > 0){
+        for ( int k = 0; k < num_edges; k++ ){
+          dir[k] = edge_sense[k];
+          int edge_index = edge_map[loop_edges[k]];
+          edgs[k] = all_edges[edge_index];
+        }
+      }
+      else {
+        for ( int k = 0; k < num_edges; k++ ){
+          dir[k] = edge_sense[num_edges-1-k];
+          int edge_index = edge_map[loop_edges[num_edges-1-k]];
+          edgs[k] = all_edges[edge_index];
+        }
       }
 
       // Allocate the loop with the given edges/directions
@@ -527,7 +545,7 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
                    data, &num_shells, &shells, &shell_sense);
 
     if (num_shells > 1){
-      fprintf(stderr, "... error in number of shells...\n");
+      fprintf(stderr, "... error in number of shells...???\n");
     }
 
     // Retrieve the children of the shell

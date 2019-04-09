@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -71,7 +71,7 @@ class TMR_EgadsEdge : public TMREdge {
   int invEvalPoint( TMRPoint X, double *t );
   int evalDeriv( double t, TMRPoint *Xt );
   int eval2ndDeriv( double t, TMRPoint *Xtt );
-  int getParamsOnFace( TMRFace *face, double t, 
+  int getParamsOnFace( TMRFace *face, double t,
                        int dir, double *u, double *v );
   int isDegenerate();
   void getEdgeObject( ego *e );
@@ -86,11 +86,11 @@ class TMR_EgadsFace : public TMRFace {
   TMR_EgadsFace( TMR_EgadsContext* _ctx, int _normal_dir, ego _face );
   ~TMR_EgadsFace();
   void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax ); 
-  int evalPoint( double u, double v, TMRPoint *X ); 
+                 double *umax, double *vmax );
+  int evalPoint( double u, double v, TMRPoint *X );
   int invEvalPoint( TMRPoint p, double *u, double *v );
   int evalDeriv( double u, double v, TMRPoint *Xu, TMRPoint *Xv );
-  int eval2ndDeriv( double u, double v, 
+  int eval2ndDeriv( double u, double v,
                     TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
   void getFaceObject( ego *f );
  private:
@@ -98,13 +98,13 @@ class TMR_EgadsFace : public TMRFace {
   ego face;
 };
 
+}
+
 /*
   Initialization of the OpenCascade geometry from an IGES/STEP files
 */
 TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
                                       int print_level=0 );
-
-}
 
 #endif // TMR_HAS_EGADS
 #endif // TMR_EGADS_H
