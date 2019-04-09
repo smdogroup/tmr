@@ -37,7 +37,6 @@ mesh = TMR.Mesh(comm, geo_new)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
-opts.mesh_type_default = TMR.TRIANGLE
 opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 
