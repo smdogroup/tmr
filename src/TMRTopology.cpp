@@ -115,7 +115,7 @@ double TMREdge::deriv_step_size = 1e-6;
 /*
   Evaluate the derivative using a finite-difference step size
 */
-int TMREdge::evalDeriv( double t, TMRPoint *Xt ){
+int TMREdge::evalDeriv( double t, TMRPoint *X, TMRPoint *Xt ){
   int fail = 1;
 
   // Retrieve the parameter bounds for the curve
@@ -124,29 +124,27 @@ int TMREdge::evalDeriv( double t, TMRPoint *Xt ){
 
   if (t >= tmin && t <= tmax){
     // Evaluate the point at the original
-    TMRPoint p;
-    fail = evalPoint(t, &p);
+    fail = evalPoint(t, X);
     if (fail){ return fail; }
 
-    // Compute the approximate derivative using a forward
-    // difference
+    // Compute the approximate derivative using a forward difference
     if (t + deriv_step_size <= tmax){
       TMRPoint p2;
       fail = evalPoint(t + deriv_step_size, &p2);
       if (fail){ return fail; }
 
-      Xt->x = (p2.x - p.x)/deriv_step_size;
-      Xt->y = (p2.y - p.y)/deriv_step_size;
-      Xt->z = (p2.z - p.z)/deriv_step_size;
+      Xt->x = (p2.x - X->x)/deriv_step_size;
+      Xt->y = (p2.y - X->y)/deriv_step_size;
+      Xt->z = (p2.z - X->z)/deriv_step_size;
     }
     else if (t >= tmin + deriv_step_size){
       TMRPoint p2;
       fail = evalPoint(t - deriv_step_size, &p2);
       if (fail){ return fail; }
 
-      Xt->x = (p.x - p2.x)/deriv_step_size;
-      Xt->y = (p.y - p2.y)/deriv_step_size;
-      Xt->z = (p.z - p2.z)/deriv_step_size;
+      Xt->x = (X->x - p2.x)/deriv_step_size;
+      Xt->y = (X->y - p2.y)/deriv_step_size;
+      Xt->z = (X->z - p2.z)/deriv_step_size;
     }
   }
 
@@ -156,7 +154,8 @@ int TMREdge::evalDeriv( double t, TMRPoint *Xt ){
 /*
   Evaluate the second derivative using a finite-difference step size
 */
-int TMREdge::eval2ndDeriv( double t, TMRPoint *Xtt ){
+int TMREdge::eval2ndDeriv( double t, TMRPoint *X,
+                           TMRPoint *Xt, TMRPoint *Xtt ){
   int fail = 1;
 
   // Retrieve the parameter bounds for the curve
@@ -165,29 +164,28 @@ int TMREdge::eval2ndDeriv( double t, TMRPoint *Xtt ){
 
   if (t >= tmin && t <= tmax){
     // Evaluate the point at the original
-    TMRPoint p;
-    fail = evalDeriv(t, &p);
+    fail = evalDeriv(t, X, Xt);
     if (fail){ return fail; }
 
     // Compute the approximate derivative using a forward
     // difference
     if (t + deriv_step_size <= tmax){
-      TMRPoint p2;
-      fail = evalDeriv(t + deriv_step_size, &p2);
+      TMRPoint p, p2;
+      fail = evalDeriv(t + deriv_step_size, &p, &p2);
       if (fail){ return fail; }
 
-      Xtt->x = (p2.x - p.x)/deriv_step_size;
-      Xtt->y = (p2.y - p.y)/deriv_step_size;
-      Xtt->z = (p2.z - p.z)/deriv_step_size;
+      Xtt->x = (p2.x - Xt->x)/deriv_step_size;
+      Xtt->y = (p2.y - Xt->y)/deriv_step_size;
+      Xtt->z = (p2.z - Xt->z)/deriv_step_size;
     }
     else if (t >= tmin + deriv_step_size){
-      TMRPoint p2;
-      fail = evalDeriv(t - deriv_step_size, &p2);
+      TMRPoint p, p2;
+      fail = evalDeriv(t - deriv_step_size, &p, &p2);
       if (fail){ return fail; }
 
-      Xtt->x = (p.x - p2.x)/deriv_step_size;
-      Xtt->y = (p.y - p2.y)/deriv_step_size;
-      Xtt->z = (p.z - p2.z)/deriv_step_size;
+      Xtt->x = (Xt->x - p2.x)/deriv_step_size;
+      Xtt->y = (Xt->y - p2.y)/deriv_step_size;
+      Xtt->z = (Xt->z - p2.z)/deriv_step_size;
     }
   }
 
@@ -378,11 +376,12 @@ void TMREdgeLoop::getEdgeLoop( int *_nedges, TMREdge **_edges[],
 /*
   Initialize data within the TMRSurface object
 */
-TMRFace::TMRFace( int _normal_orient ):
-normal_orient(_normal_orient){
+TMRFace::TMRFace( int _orientation ){
+  orientation = _orientation;
   max_num_loops = 0;
   num_loops = 0;
   loops = NULL;
+  loop_dirs = NULL;
   mesh = NULL;
   source = NULL;
   source_volume = NULL;
@@ -397,6 +396,7 @@ TMRFace::~TMRFace(){
     for ( int i = 0; i < num_loops; i++ ){
       loops[i]->decref();
     }
+    delete [] loop_dirs;
     delete [] loops;
   }
   if (source){ source->decref(); }
@@ -416,13 +416,14 @@ double TMRFace::deriv_step_size = 1e-6;
   normal is flipped.
 */
 int TMRFace::getOrientation(){
-  return normal_orient;
+  return orientation;
 }
 
 /*
   Evaluate the derivative using a finite-difference step size
 */
 int TMRFace::evalDeriv( double u, double v,
+                        TMRPoint *X,
                         TMRPoint *Xu, TMRPoint *Xv ){
   int fail = 0;
 
@@ -433,8 +434,7 @@ int TMRFace::evalDeriv( double u, double v,
   if (u >= umin && u <= umax &&
       v >= vmin && v <= vmax){
     // Evaluate the point at the original
-    TMRPoint p;
-    fail = evalPoint(u, v, &p);
+    fail = evalPoint(u, v, X);
 
     // Compute the approximate derivative using a forward
     // difference or backward difference, depending on whether
@@ -443,17 +443,17 @@ int TMRFace::evalDeriv( double u, double v,
       TMRPoint p2;
       fail = fail || evalPoint(u + deriv_step_size, v, &p2);
 
-      Xu->x = (p2.x - p.x)/deriv_step_size;
-      Xu->y = (p2.y - p.y)/deriv_step_size;
-      Xu->z = (p2.z - p.z)/deriv_step_size;
+      Xu->x = (p2.x - X->x)/deriv_step_size;
+      Xu->y = (p2.y - X->y)/deriv_step_size;
+      Xu->z = (p2.z - X->z)/deriv_step_size;
     }
     else if (u >= umin + deriv_step_size){
       TMRPoint p2;
       fail = fail || evalPoint(u - deriv_step_size, v, &p2);
 
-      Xu->x = (p.x - p2.x)/deriv_step_size;
-      Xu->y = (p.y - p2.y)/deriv_step_size;
-      Xu->z = (p.z - p2.z)/deriv_step_size;
+      Xu->x = (X->x - p2.x)/deriv_step_size;
+      Xu->y = (X->y - p2.y)/deriv_step_size;
+      Xu->z = (X->z - p2.z)/deriv_step_size;
     }
     else {
       fail = 1;
@@ -465,17 +465,17 @@ int TMRFace::evalDeriv( double u, double v,
       TMRPoint p2;
       fail = fail || evalPoint(u, v + deriv_step_size, &p2);
 
-      Xv->x = (p2.x - p.x)/deriv_step_size;
-      Xv->y = (p2.y - p.y)/deriv_step_size;
-      Xv->z = (p2.z - p.z)/deriv_step_size;
+      Xv->x = (p2.x - X->x)/deriv_step_size;
+      Xv->y = (p2.y - X->y)/deriv_step_size;
+      Xv->z = (p2.z - X->z)/deriv_step_size;
     }
     else if (v >= vmin + deriv_step_size){
       TMRPoint p2;
       fail = fail || evalPoint(u, v - deriv_step_size, &p2);
 
-      Xv->x = (p.x - p2.x)/deriv_step_size;
-      Xv->y = (p.y - p2.y)/deriv_step_size;
-      Xv->z = (p.z - p2.z)/deriv_step_size;
+      Xv->x = (X->x - p2.x)/deriv_step_size;
+      Xv->y = (X->y - p2.y)/deriv_step_size;
+      Xv->z = (X->z - p2.z)/deriv_step_size;
     }
     else {
       fail = 1;
@@ -489,6 +489,8 @@ int TMRFace::evalDeriv( double u, double v,
   Evaluate the second derivative using a finite-difference step size
 */
 int TMRFace::eval2ndDeriv( double u, double v,
+                           TMRPoint *X,
+                           TMRPoint *Xu, TMRPoint *Xv,
                            TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv ){
   int fail = 0;
 
@@ -499,35 +501,34 @@ int TMRFace::eval2ndDeriv( double u, double v,
   if (u >= umin && u <= umax &&
       v >= vmin && v <= vmax){
     // Evaluate the point at the original
-    TMRPoint pu, pv;
-    fail = evalDeriv(u, v, &pu, &pv);
+    fail = evalDeriv(u, v, X, Xu, Xv);
 
     // Compute the approximate derivative using a forward
     // difference or backward difference, depending on whether
     // the step is within the domain
     if (u + deriv_step_size <= umax){
-      TMRPoint p2u, p2v;
-      fail = fail || evalDeriv(u + deriv_step_size, v, &p2u, &p2v);
+      TMRPoint p, p2u, p2v;
+      fail = fail || evalDeriv(u + deriv_step_size, v, &p, &p2u, &p2v);
 
-      Xuu->x = (p2u.x - pu.x)/deriv_step_size;
-      Xuu->y = (p2u.y - pu.y)/deriv_step_size;
-      Xuu->z = (p2u.z - pu.z)/deriv_step_size;
+      Xuu->x = (p2u.x - Xu->x)/deriv_step_size;
+      Xuu->y = (p2u.y - Xu->y)/deriv_step_size;
+      Xuu->z = (p2u.z - Xu->z)/deriv_step_size;
 
-      Xuv->x = (p2v.x - pv.x)/deriv_step_size;
-      Xuv->y = (p2v.y - pv.y)/deriv_step_size;
-      Xuv->z = (p2v.z - pv.z)/deriv_step_size;
+      Xuv->x = (p2v.x - Xv->x)/deriv_step_size;
+      Xuv->y = (p2v.y - Xv->y)/deriv_step_size;
+      Xuv->z = (p2v.z - Xv->z)/deriv_step_size;
     }
     else if (u >= umin + deriv_step_size){
-      TMRPoint p2u, p2v;
-      fail = fail || evalDeriv(u - deriv_step_size, v, &p2u, &p2v);
+      TMRPoint p, p2u, p2v;
+      fail = fail || evalDeriv(u - deriv_step_size, v, &p, &p2u, &p2v);
 
-      Xuu->x = (pu.x - p2u.x)/deriv_step_size;
-      Xuu->y = (pu.y - p2u.y)/deriv_step_size;
-      Xuu->z = (pu.z - p2u.z)/deriv_step_size;
+      Xuu->x = (Xu->x - p2u.x)/deriv_step_size;
+      Xuu->y = (Xu->y - p2u.y)/deriv_step_size;
+      Xuu->z = (Xu->z - p2u.z)/deriv_step_size;
 
-      Xuv->x = (pv.x - p2v.x)/deriv_step_size;
-      Xuv->y = (pv.y - p2v.y)/deriv_step_size;
-      Xuv->z = (pv.z - p2v.z)/deriv_step_size;
+      Xuv->x = (Xv->x - p2v.x)/deriv_step_size;
+      Xuv->y = (Xv->y - p2v.y)/deriv_step_size;
+      Xuv->z = (Xv->z - p2v.z)/deriv_step_size;
     }
     else {
       fail = 1;
@@ -536,20 +537,20 @@ int TMRFace::eval2ndDeriv( double u, double v,
     // Compute the approximate derivative using a forward
     // difference
     if (v + deriv_step_size <= vmax){
-      TMRPoint p2u, p2v;
-      fail = fail || evalDeriv(u, v + deriv_step_size, &p2u, &p2v);
+      TMRPoint p, p2u, p2v;
+      fail = fail || evalDeriv(u, v + deriv_step_size, &p, &p2u, &p2v);
 
-      Xvv->x = (p2v.x - pv.x)/deriv_step_size;
-      Xvv->y = (p2v.y - pv.y)/deriv_step_size;
-      Xvv->z = (p2v.z - pv.z)/deriv_step_size;
+      Xvv->x = (p2v.x - Xv->x)/deriv_step_size;
+      Xvv->y = (p2v.y - Xv->y)/deriv_step_size;
+      Xvv->z = (p2v.z - Xv->z)/deriv_step_size;
     }
     else if (v >= vmin + deriv_step_size){
-      TMRPoint p2u, p2v;
-      fail = fail || evalDeriv(u, v - deriv_step_size, &p2u, &p2v);
+      TMRPoint p, p2u, p2v;
+      fail = fail || evalDeriv(u, v - deriv_step_size, &p, &p2u, &p2v);
 
-      Xvv->x = (pv.x - p2v.x)/deriv_step_size;
-      Xvv->y = (pv.y - p2v.y)/deriv_step_size;
-      Xvv->z = (pv.z - p2v.z)/deriv_step_size;
+      Xvv->x = (Xv->x - p2v.x)/deriv_step_size;
+      Xvv->y = (Xv->y - p2v.y)/deriv_step_size;
+      Xvv->z = (Xv->z - p2v.z)/deriv_step_size;
     }
     else {
       fail = 1;
@@ -571,7 +572,7 @@ int TMRFace::invEvalPoint( TMRPoint p, double *u, double *v ){
 /*
   Add the curves that bound the surface
 */
-void TMRFace::addEdgeLoop( TMREdgeLoop *loop ){
+void TMRFace::addEdgeLoop( int loop_dir, TMREdgeLoop *loop ){
   // Increase the reference count
   loop->incref();
 
@@ -581,17 +582,22 @@ void TMRFace::addEdgeLoop( TMREdgeLoop *loop ){
 
     // Allocate the new loops array
     TMREdgeLoop **lps = new TMREdgeLoop*[ max_num_loops ];
+    int *lp_dirs = new int[ max_num_loops ];
 
     // Copy over any existing segments
     if (num_loops > 0){
       memcpy(lps, loops, num_loops*sizeof(TMREdgeLoop*));
+      memcpy(lp_dirs, loop_dirs, num_loops*sizeof(int));
       delete [] loops;
+      delete [] loop_dirs;
     }
     loops = lps;
+    loop_dirs = lp_dirs;
   }
 
   // Set the new segment array
   loops[num_loops] = loop;
+  loop_dirs[num_loops] = loop_dir;
   num_loops++;
 }
 
@@ -605,11 +611,14 @@ int TMRFace::getNumEdgeLoops(){
 /*
   Retrieve the information from the given segment number
 */
-void TMRFace::getEdgeLoop( int k, TMREdgeLoop **_loop ){
+int TMRFace::getEdgeLoop( int k, TMREdgeLoop **_loop ){
   *_loop = NULL;
+  int loop_dir = 0;
   if (k >= 0 && k < num_loops){
     if (_loop){ *_loop = loops[k]; }
+    loop_dir = loop_dirs[k];
   }
+  return loop_dir;
 }
 
 /*

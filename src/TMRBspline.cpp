@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -51,11 +51,11 @@ static int compare_double( const void *a, const void *b ){
   k:     order of the b-spline
   umin:  minimum knot value
   umax:  maximum knot value
-  
+
   output:
   T:     knot vector with uniform spacing
 */
-void bspline_knots( int n, int k, double umin, double umax, 
+void bspline_knots( int n, int k, double umin, double umax,
                     double *T ){
   // Set the knot vectors in the u-direction
   for ( int i = 0; i < k; i++ ){
@@ -123,23 +123,23 @@ int bspline_interval( double u, const double *T, int n, int k ){
   work: a temporary array of size 2*k
 
   u is on the idx-th knot span such that u is in the interval
-  u \in [Tu[idx], Tu[idx+1]) 
+  u \in [Tu[idx], Tu[idx+1])
 */
-void bspline_basis( double *N, const int idx, const double u, 
-                    const double *Tu, 
+void bspline_basis( double *N, const int idx, const double u,
+                    const double *Tu,
                     const int ku, double *work ){
   N[0] = 1.0;
-  
+
   // Set the pointers for the temporary work arrays
   // Note that left[j] = u - Tu[i+1 - j]
   // and right[j] = Tu[i+j] - u
   double *left = &work[0];
   double *right = &work[ku];
-  
+
   for ( int j = 1; j < ku; j++ ){
     left[j] = u - Tu[idx+1-j];
     right[j] = Tu[idx+j] - u;
-    
+
     N[j] = 0.0;
     for ( int i = 0; i < j; i++ ){
       double temp = N[i]/(right[i+1] + left[j-i]);
@@ -163,7 +163,7 @@ void bspline_basis( double *N, const int idx, const double u,
   work: a temporary array of size 2*k + k*k
 
   u is on the idx-th knot span such that u is in the interval
-  u \in [Tu[idx], Tu[idx+1]) 
+  u \in [Tu[idx], Tu[idx+1])
 */
 void bspline_basis_derivative( double *N, const int idx, const double u,
                                int ideriv, const double *Tu,
@@ -209,12 +209,12 @@ void bspline_basis_derivative( double *N, const int idx, const double u,
     }
 
     // Store the basis function
-    ndu[j*(ku+1)] = njj; 
+    ndu[j*(ku+1)] = njj;
   }
 
   // Set the basis functions
   for ( int i = 0; i < ku; i++ ){
-    N[i] = ndu[(ku-1) + i*ku]; 
+    N[i] = ndu[(ku-1) + i*ku];
   }
 
   // Set the temporary arrays for the a-coefficients
@@ -224,7 +224,7 @@ void bspline_basis_derivative( double *N, const int idx, const double u,
   for ( int i = 0; i < ku; i++ ){
     a0[0] = 1.0;
 
-    for ( int k = 1; k <= ideriv; k++ ){ 
+    for ( int k = 1; k <= ideriv; k++ ){
       double d = 0.0;
 
       // Compute the first of the a-terms
@@ -247,7 +247,7 @@ void bspline_basis_derivative( double *N, const int idx, const double u,
         d += a1[j]*ndu[(ku-k-1) + (i-k+j)*ku];
       }
 
-      // Compute the term 
+      // Compute the term
       // a_{k,k} = -a_{k-1}/(u_{i+ku} - u_{i+k})
       if (i <= ku-k-1){
         a1[k] = -a0[k-1]/ndu[i + (ku-k)*ku];
@@ -292,7 +292,7 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
   // Allocate and copy over the points
   pts = new TMRPoint[ nctl ];
   memcpy(pts, _pts, nctl*sizeof(TMRPoint));
-  
+
   // Uniform weights
   wts = NULL;
 }
@@ -305,7 +305,7 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
   Tu:   the knot vector (n+k)
   pts:  the TMRPoint interpolation points
 */
-TMRBsplineCurve::TMRBsplineCurve( int _n, int _k, 
+TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
                                   const double *_Tu,
                                   const TMRPoint *_pts ){
   nctl = _n;
@@ -323,10 +323,10 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
   else {
     bspline_knots(nctl, ku, 0.0, 1.0, Tu);
   }
-  
+
   pts = new TMRPoint[ nctl ];
   memcpy(pts, _pts, nctl*sizeof(TMRPoint));
-  
+
   // Uniform weights
   wts = NULL;
 }
@@ -339,9 +339,9 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
   Tu:   the knot vector (n+k)
   pts:  the TMRPoint interpolation points
 */
-TMRBsplineCurve::TMRBsplineCurve( int _n, int _k, 
+TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
                                   const double *_Tu,
-                                  const double *_wts, 
+                                  const double *_wts,
                                   const TMRPoint *_pts ){
   nctl = _n;
 
@@ -358,7 +358,7 @@ TMRBsplineCurve::TMRBsplineCurve( int _n, int _k,
   else {
     bspline_knots(nctl, ku, 0.0, 1.0, Tu);
   }
-  
+
   // Allocate the weights
   wts = new double[ nctl ];
   memcpy(wts, _wts, nctl*sizeof(double));
@@ -387,10 +387,10 @@ void TMRBsplineCurve::getRange( double *tmin, double *tmax ){
   *tmin = Tu[0];
   *tmax = Tu[nctl+ku-1];
 }
-  
+
 /*
   Given the parametric point, evaluate the x,y,z location
-*/  
+*/
 int TMRBsplineCurve::evalPoint( double t, TMRPoint *X ){
   double Nu[MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER];
@@ -443,7 +443,7 @@ int TMRBsplineCurve::evalPoint( double t, TMRPoint *X ){
   Perform the inverse point evaluation
 */
 int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
-  // Did this evaluation fail or not? 
+  // Did this evaluation fail or not?
   int fail = 1;
 
   // Set a default value for the output parameter value
@@ -472,10 +472,10 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
 
     // Evaluate the basis functions
     bspline_basis(Nu, intu, t, Tu, ku, work);
-    
+
     // Set the interval to the initial control point
     intu = intu - ku + 1;
-      
+
     // Evaluate the point
     TMRPoint X;
     X.zero();
@@ -491,7 +491,7 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
         X.z += wts[index]*Nu[i]*pts[index].z;
         w += wts[index]*Nu[i];
       }
-        
+
       // Divide through by the weights
       if (w != 0.0){
         w = 1.0/w;
@@ -508,7 +508,7 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
         X.z += Nu[i]*pts[index].z;
       }
     }
-      
+
     // Find the distance vector
     X.x = point.x - X.x;
     X.y = point.y - X.y;
@@ -524,12 +524,12 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
 
   // Set the new closest point
   t = tbest;
-  
+
   // Perform a newton iteration until convergence
   for ( int j = 0; j < max_newton_iters; j++ ){
     // Compute the knot span
     int intu = bspline_interval(t, Tu, nctl, ku);
-    
+
     // Compute the basis functions
     int idu = 2;
     bspline_basis_derivative(Nu, intu, t, idu, Tu, ku, work);
@@ -540,12 +540,16 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
     // The positions and their derivatives on the b-spline
     // surface
     TMRPoint X, Xt, Xtt;
-    X.zero();  Xt.zero();  Xtt.zero();
+    X.zero();
+    Xt.zero();
+    Xtt.zero();
 
     if (wts){
       // Evaluate the weighted b-spline
       TMRPoint p, pt, ptt;
-      p.zero();  pt.zero();  ptt.zero();
+      p.zero();
+      pt.zero();
+      ptt.zero();
 
       double w = 0.0, wt = 0.0, wtt = 0.0;
       for ( int i = 0; i < ku; i++ ){
@@ -553,7 +557,7 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
         p.x += wts[intu + i]*Nu[i]*pts[intu + i].x;
         p.y += wts[intu + i]*Nu[i]*pts[intu + i].y;
         p.z += wts[intu + i]*Nu[i]*pts[intu + i].z;
-        
+
         pt.x += wts[intu + i]*Nu[ku + i]*pts[intu + i].x;
         pt.y += wts[intu + i]*Nu[ku + i]*pts[intu + i].y;
         pt.z += wts[intu + i]*Nu[ku + i]*pts[intu + i].z;
@@ -561,7 +565,7 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
         ptt.x += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].x;
         ptt.y += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].y;
         ptt.z += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].z;
-      
+
         // Compute the weights and their derivatives
         w += Nu[i]*wts[intu + i];
         wt += Nu[ku + i]*wts[intu + i];
@@ -576,15 +580,15 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
         wtt = 2.0*w*w*w*wt*wt - w*w*wtt;
         wt = -w*w*wt;
 
-        // Evaluate the derivatives 
+        // Evaluate the derivatives
         X.x = w*p.x;
         X.y = w*p.y;
         X.z = w*p.z;
-        
+
         Xt.x = w*pt.x + wt*p.x;
         Xt.y = w*pt.y + wt*p.y;
         Xt.z = w*pt.z + wt*p.z;
-        
+
         Xtt.x = 2.0*wt*pt.x + w*ptt.x + wtt*p.x;
         Xtt.y = 2.0*wt*pt.y + w*ptt.y + wtt*p.y;
         Xtt.z = 2.0*wt*pt.z + w*ptt.z + wtt*p.z;
@@ -600,11 +604,11 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
         X.x += Nu[i]*pts[intu + i].x;
         X.y += Nu[i]*pts[intu + i].y;
         X.z += Nu[i]*pts[intu + i].z;
-        
+
         Xt.x += Nu[ku + i]*pts[intu + i].x;
         Xt.y += Nu[ku + i]*pts[intu + i].y;
         Xt.z += Nu[ku + i]*pts[intu + i].z;
-        
+
         Xtt.x += Nu[2*ku + i]*pts[intu + i].x;
         Xtt.y += Nu[2*ku + i]*pts[intu + i].y;
         Xtt.z += Nu[2*ku + i]*pts[intu + i].z;
@@ -629,7 +633,7 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
     if (deriv != 0.0){
       tnew = t - res/deriv;
     }
-    
+
     // Truncate the new value to the boundary
     // if (open curve){
     if (tnew < Tu[0]){
@@ -640,10 +644,10 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
     }
     // }
     // else { }
-  
+
     // Check if the convergence test satisfied
-    if (fabs(r.x) < eps_dist && 
-        fabs(r.y) < eps_dist && 
+    if (fabs(r.x) < eps_dist &&
+        fabs(r.y) < eps_dist &&
         fabs(r.z) < eps_dist){
       *tf = t;
       return 0;
@@ -673,9 +677,9 @@ int TMRBsplineCurve::invEvalPoint( TMRPoint point, double *tf ){
 }
 
 /*
-  Given the parametric point, evaluate the derivative 
-*/  
-int TMRBsplineCurve::evalDeriv( double t, TMRPoint *Xt ){
+  Given the parametric point, evaluate the derivative
+*/
+int TMRBsplineCurve::evalDeriv( double t, TMRPoint *X, TMRPoint *Xt ){
   double Nu[2*MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
 
@@ -690,22 +694,20 @@ int TMRBsplineCurve::evalDeriv( double t, TMRPoint *Xt ){
   intu = intu - ku + 1;
 
   // Evaluate the b-spline
-  Xt->x = 0.0;
-  Xt->y = 0.0;
-  Xt->z = 0.0;
+  X->zero();
+  Xt->zero();
 
   if (wts){
     // Evaluate the weighted b-spline
-    TMRPoint p, pt;
-    p.x = p.y = p.z = 0.0;
-    pt.x = pt.y = pt.z = 0.0;
+    TMRPoint pt;
+    pt.zero();
 
     double w = 0.0, wt = 0.0;
     for ( int i = 0; i < ku; i++ ){
-      // Evaluate the numerator and its derivative
-      p.x += wts[intu + i]*Nu[i]*pts[intu + i].x;
-      p.y += wts[intu + i]*Nu[i]*pts[intu + i].y;
-      p.z += wts[intu + i]*Nu[i]*pts[intu + i].z;
+      // Evaluate the points
+      X->x += wts[intu + i]*Nu[i]*pts[intu + i].x;
+      X->y += wts[intu + i]*Nu[i]*pts[intu + i].y;
+      X->z += wts[intu + i]*Nu[i]*pts[intu + i].z;
 
       pt.x += wts[intu + i]*Nu[ku + i]*pts[intu + i].x;
       pt.y += wts[intu + i]*Nu[ku + i]*pts[intu + i].y;
@@ -720,14 +722,20 @@ int TMRBsplineCurve::evalDeriv( double t, TMRPoint *Xt ){
     if (w != 0.0){
       w = 1.0/w;
       wt = -w*w*wt;
-      Xt->x = w*pt.x + wt*p.x;
-      Xt->y = w*pt.y + wt*p.y;
-      Xt->z = w*pt.z + wt*p.z;
+      Xt->x = w*pt.x + wt*X->x;
+      Xt->y = w*pt.y + wt*X->y;
+      Xt->z = w*pt.z + wt*X->z;
+      X->x *= w;
+      X->y *= w;
+      X->z *= w;
     }
   }
   else {
     // Evaluate the b-spline
     for ( int i = 0; i < ku; i++ ){
+      X->x += Nu[i]*pts[intu + i].x;
+      X->y += Nu[i]*pts[intu + i].y;
+      X->z += Nu[i]*pts[intu + i].z;
       Xt->x += Nu[ku + i]*pts[intu + i].x;
       Xt->y += Nu[ku + i]*pts[intu + i].y;
       Xt->z += Nu[ku + i]*pts[intu + i].z;
@@ -740,7 +748,8 @@ int TMRBsplineCurve::evalDeriv( double t, TMRPoint *Xt ){
 /*
   Given the parametric point, evaluate the second derivative
 */
-int TMRBsplineCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
+int TMRBsplineCurve::eval2ndDeriv( double t, TMRPoint *X,
+                                   TMRPoint *Xt, TMRPoint *Xtt ){
 
   double Nu[2*MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
@@ -756,36 +765,37 @@ int TMRBsplineCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
   intu = intu - ku + 1;
 
   // Evaluate the b-spline
-  Xtt->x = 0.0;
-  Xtt->y = 0.0;
-  Xtt->z = 0.0;
+  X->zero();
+  Xt->zero();
+  Xtt->zero();
 
   if (wts){
     // Evaluate the weighted b-spline
-    TMRPoint p, pt, ptt;
-    p.zero();  pt.zero();  ptt.zero();
-    
+    TMRPoint pt, ptt;
+    pt.zero();
+    ptt.zero();
+
     double w = 0.0, wt = 0.0, wtt = 0.0;
     for ( int i = 0; i < ku; i++ ){
       // Evaluate the numerator and its derivative
-      p.x += wts[intu + i]*Nu[i]*pts[intu + i].x;
-      p.y += wts[intu + i]*Nu[i]*pts[intu + i].y;
-      p.z += wts[intu + i]*Nu[i]*pts[intu + i].z;
-      
+      X->x += wts[intu + i]*Nu[i]*pts[intu + i].x;
+      X->y += wts[intu + i]*Nu[i]*pts[intu + i].y;
+      X->z += wts[intu + i]*Nu[i]*pts[intu + i].z;
+
       pt.x += wts[intu + i]*Nu[ku + i]*pts[intu + i].x;
       pt.y += wts[intu + i]*Nu[ku + i]*pts[intu + i].y;
       pt.z += wts[intu + i]*Nu[ku + i]*pts[intu + i].z;
-      
+
       ptt.x += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].x;
       ptt.y += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].y;
       ptt.z += wts[intu + i]*Nu[2*ku + i]*pts[intu + i].z;
-      
+
       // Compute the weights and their derivatives
       w += Nu[i]*wts[intu + i];
       wt += Nu[ku + i]*wts[intu + i];
       wtt += Nu[2*ku + i]*wts[intu + i];
     }
-    
+
     // Divide through by the weights
     if (w != 0.0){
       // Compute the first and second derivatives of the inverse of
@@ -793,11 +803,19 @@ int TMRBsplineCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
       w = 1.0/w;
       wtt = 2.0*w*w*w*wt*wt - w*w*wtt;
       wt = -w*w*wt;
-      
-      // Evaluate the derivatives 
-      Xtt->x = 2.0*wt*pt.x + w*ptt.x + wtt*p.x;
-      Xtt->y = 2.0*wt*pt.y + w*ptt.y + wtt*p.y;
-      Xtt->z = 2.0*wt*pt.z + w*ptt.z + wtt*p.z;
+
+      Xt->x = w*pt.x + wt*X->x;
+      Xt->y = w*pt.y + wt*X->y;
+      Xt->z = w*pt.z + wt*X->z;
+
+      // Evaluate the derivatives
+      Xtt->x = 2.0*wt*pt.x + w*ptt.x + wtt*X->x;
+      Xtt->y = 2.0*wt*pt.y + w*ptt.y + wtt*X->y;
+      Xtt->z = 2.0*wt*pt.z + w*ptt.z + wtt*X->z;
+
+      X->x *= w;
+      X->y *= w;
+      X->z *= w;
     }
     else {
       // The evaluation has failed
@@ -806,6 +824,12 @@ int TMRBsplineCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
   }
   else {
     for ( int i = 0; i < ku; i++ ){
+      X->x += Nu[i]*pts[intu + i].x;
+      X->y += Nu[i]*pts[intu + i].y;
+      X->z += Nu[i]*pts[intu + i].z;
+      Xt->x += Nu[ku + i]*pts[intu + i].x;
+      Xt->y += Nu[ku + i]*pts[intu + i].y;
+      Xt->z += Nu[ku + i]*pts[intu + i].z;
       Xtt->x += Nu[2*ku + i]*pts[intu + i].x;
       Xtt->y += Nu[2*ku + i]*pts[intu + i].y;
       Xtt->z += Nu[2*ku + i]*pts[intu + i].z;
@@ -819,8 +843,8 @@ int TMRBsplineCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
   Split the curve at the given parametric point to find the new
   Bspline curves c1 and c2
 */
-void TMRBsplineCurve::split( double tsplit, 
-                             TMRBsplineCurve **c1, 
+void TMRBsplineCurve::split( double tsplit,
+                             TMRBsplineCurve **c1,
                              TMRBsplineCurve **c2 ){
   // Find out how many times the knot should be inserted
   int insert = ku;
@@ -830,7 +854,7 @@ void TMRBsplineCurve::split( double tsplit,
     }
   }
 
-  // Set up the knots to insert -- the number of knots needed to 
+  // Set up the knots to insert -- the number of knots needed to
   // completely split the b-spline at the knot location
   double Tnew[MAX_BSPLINE_ORDER];
   for ( int i = 0; i < insert; i++ ){
@@ -860,7 +884,7 @@ void TMRBsplineCurve::split( double tsplit,
   // Create the bspline before the split
   if (c1){
     if (w){
-      *c1 = new TMRBsplineCurve(mid, k, tu, w, p);     
+      *c1 = new TMRBsplineCurve(mid, k, tu, w, p);
      }
      else {
       *c1 = new TMRBsplineCurve(mid, k, tu, p);
@@ -873,7 +897,7 @@ void TMRBsplineCurve::split( double tsplit,
       *c2 = new TMRBsplineCurve(n-mid, k, &tu[mid], &w[mid], &p[mid]);
     }
     else {
-      *c2 = new TMRBsplineCurve(n-mid, k, &tu[mid], &p[mid]);      
+      *c2 = new TMRBsplineCurve(n-mid, k, &tu[mid], &p[mid]);
     }
   }
 
@@ -883,11 +907,11 @@ void TMRBsplineCurve::split( double tsplit,
 /*
   Refine the knot vector by inserting the knots specified in the input
   Tnew. This function returns a new, equivalent curve with the new
-  knots at the specified locations.  
+  knots at the specified locations.
 */
-TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew, 
+TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
                                                int nnew ){
-  // Allocate the new vectors 
+  // Allocate the new vectors
   int kbar = ku;
   int nbar = nctl + nnew;
   double *Tbar = new double[ nbar+kbar ];
@@ -923,7 +947,7 @@ TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
       wbar[j+nnew] = wts[j];
     }
   }
-  
+
   // Copy over the knots that do not change
   for ( int j = 0; j <= a; j++ ){
     Tbar[j] = Tu[j];
@@ -942,7 +966,7 @@ TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
       }
       // Read in the new knots
       Tbar[k] = Tu[i];
-      k--; 
+      k--;
       i--;
     }
     // Read in the last pt/weight pair
@@ -953,29 +977,29 @@ TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
 
     // Form the linear combinations of the point/weight pairs
     for ( int l = 1; l < ku; l++ ){
-      int ind = k-(ku-1)+l;     
+      int ind = k-(ku-1)+l;
       double alpha = Tbar[k+l] - Tnew[j];
-     
+
       if (alpha == 0.0){
         pbar[ind-1] = pbar[ind];
       }
       else {
-        alpha = alpha/(Tbar[k+l] - Tu[i-ku+1+l]);       
+        alpha = alpha/(Tbar[k+l] - Tu[i-ku+1+l]);
         if (wts){
-          pbar[ind-1].x = (alpha*wbar[ind-1]*pbar[ind-1].x + 
+          pbar[ind-1].x = (alpha*wbar[ind-1]*pbar[ind-1].x +
                            (1.0 - alpha)*wbar[ind]*pbar[ind].x);
-          pbar[ind-1].y = (alpha*wbar[ind-1]*pbar[ind-1].y + 
+          pbar[ind-1].y = (alpha*wbar[ind-1]*pbar[ind-1].y +
                            (1.0 - alpha)*wbar[ind]*pbar[ind].y);
-          pbar[ind-1].z = (alpha*wbar[ind-1]*pbar[ind-1].z + 
+          pbar[ind-1].z = (alpha*wbar[ind-1]*pbar[ind-1].z +
                            (1.0 - alpha)*wbar[ind]*pbar[ind].z);
           wbar[ind-1] = (alpha*wbar[ind-1] + (1.0 - alpha)*wbar[ind]);
         }
         else {
-          pbar[ind-1].x = 
+          pbar[ind-1].x =
             alpha*pbar[ind-1].x + (1.0 - alpha)*pbar[ind].x;
-          pbar[ind-1].y = 
+          pbar[ind-1].y =
             alpha*pbar[ind-1].y + (1.0 - alpha)*pbar[ind].y;
-          pbar[ind-1].z = 
+          pbar[ind-1].z =
             alpha*pbar[ind-1].z + (1.0 - alpha)*pbar[ind].z;
         }
       }
@@ -1011,7 +1035,7 @@ TMRBsplineCurve* TMRBsplineCurve::refineKnots( const double *_Tnew,
 /*
   Create a B-spline curve with a uniform knot vector
 */
-TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k, 
+TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k,
                                     const double *_pts ){
   nctl = _n;
 
@@ -1027,7 +1051,7 @@ TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k,
   // Allocate and copy over the points
   pts = new double[ 2*nctl ];
   memcpy(pts, _pts, 2*nctl*sizeof(double));
-  
+
   // Uniform weights
   wts = NULL;
 }
@@ -1040,7 +1064,7 @@ TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k,
   Tu:   the knot vector (n+k)
   pts:  the TMRPoint interpolation points
 */
-TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k, 
+TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k,
                                     const double *_Tu,
                                     const double *_pts ){
   nctl = _n;
@@ -1058,10 +1082,10 @@ TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k,
   else {
     bspline_knots(nctl, ku, 0.0, 1.0, Tu);
   }
-  
+
   pts = new double[ 2*nctl ];
   memcpy(pts, _pts, 2*nctl*sizeof(double));
-  
+
   // Uniform weights
   wts = NULL;
 }
@@ -1074,9 +1098,9 @@ TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k,
   Tu:   the knot vector (n+k)
   pts:  the TMRPoint interpolation points
 */
-TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k, 
+TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k,
                                     const double *_Tu,
-                                    const double *_wts, 
+                                    const double *_wts,
                                     const double *_pts ){
   nctl = _n;
 
@@ -1093,7 +1117,7 @@ TMRBsplinePcurve::TMRBsplinePcurve( int _n, int _k,
   else {
     bspline_knots(nctl, ku, 0.0, 1.0, Tu);
   }
-  
+
   // Allocate the weights
   wts = new double[ nctl ];
   memcpy(wts, _wts, nctl*sizeof(double));
@@ -1119,11 +1143,11 @@ void TMRBsplinePcurve::getRange( double *tmin, double *tmax ){
   *tmin = Tu[0];
   *tmax = Tu[nctl+ku-1];
 }
-  
+
 /*
   Given the parametric point, evaluate the x,y,z location
-*/  
-int TMRBsplinePcurve::evalPoint( double t, double *u, double *v ){
+*/
+int TMRBsplinePcurve::evalPoint( double t, double *_u, double *_v ){
   double Nu[MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER];
 
@@ -1137,41 +1161,46 @@ int TMRBsplinePcurve::evalPoint( double t, double *u, double *v ){
   intu = intu - ku + 1;
 
   // Zero the point location
-  *u = *v = 0.0;
+  double u = 0.0, v = 0.0;
 
   // If this is a NURBS curve add the effect of the weights
   if (wts){
     // Evaluate the b-spline
     double w = 0.0;
     for ( int i = 0; i < ku; i++ ){
-      *u += wts[intu + i]*Nu[i]*pts[2*(intu + i)];
-      *v += wts[intu + i]*Nu[i]*pts[2*(intu + i)+1];
+      u += wts[intu + i]*Nu[i]*pts[2*(intu + i)];
+      v += wts[intu + i]*Nu[i]*pts[2*(intu + i)+1];
       w += Nu[i]*wts[intu + i];
     }
 
     // Divide through by the weights
     if (w != 0.0){
       w = 1.0/w;
-      *u *= w;
-      *v *= w;
+      u *= w;
+      v *= w;
     }
   }
   else {
     // Evaluate the b-spline
     for ( int i = 0; i < ku; i++ ){
-      *u += Nu[i]*pts[2*(intu + i)];
-      *v += Nu[i]*pts[2*(intu + i)+1];
+      u += Nu[i]*pts[2*(intu + i)];
+      v += Nu[i]*pts[2*(intu + i)+1];
     }
   }
+
+  *_u = u;
+  *_v = v;
 
   // Success - we didn't fail
   return 0;
 }
 
 /*
-  Given the parametric point, evaluate the derivative 
-*/  
-int TMRBsplinePcurve::evalDeriv( double t, double *ut, double *vt ){
+  Given the parametric point, evaluate the derivative
+*/
+int TMRBsplinePcurve::evalDeriv( double t,
+                                 double *_u, double *_v,
+                                 double *_ut, double *_vt ){
   double Nu[2*MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
 
@@ -1186,20 +1215,20 @@ int TMRBsplinePcurve::evalDeriv( double t, double *ut, double *vt ){
   intu = intu - ku + 1;
 
   // Evaluate the b-spline
-  *ut = *vt = 0.0;
+  double u = 0.0, v = 0.0;
+  double ut = 0.0, vt = 0.0;
 
   if (wts){
     // Evaluate the weighted b-spline
-    double u = 0.0, v = 0.0;
     double w = 0.0, wt = 0.0;
     for ( int i = 0; i < ku; i++ ){
       // Evaluate the numerator and its derivative
       u += wts[intu + i]*Nu[i]*pts[2*(intu + i)];
       v += wts[intu + i]*Nu[i]*pts[2*(intu + i)+1];
-      
-      *ut += wts[intu + i]*Nu[ku + i]*pts[2*(intu + i)];
-      *vt += wts[intu + i]*Nu[ku + i]*pts[2*(intu + i)+1];
-      
+
+      ut += wts[intu + i]*Nu[ku + i]*pts[2*(intu + i)];
+      vt += wts[intu + i]*Nu[ku + i]*pts[2*(intu + i)+1];
+
       // Compute the weights
       w += Nu[i]*wts[intu + i];
       wt += Nu[i + ku]*wts[intu + i];
@@ -1209,25 +1238,37 @@ int TMRBsplinePcurve::evalDeriv( double t, double *ut, double *vt ){
     if (w != 0.0){
       w = 1.0/w;
       wt = -w*w*wt;
-      *ut = w*(*ut) + wt*u;
-      *vt = w*(*vt) + wt*v;
+      ut = w*ut + wt*u;
+      vt = w*vt + wt*v;
+      u *= w;
+      v *= w;
     }
   }
   else {
     // Evaluate the b-spline
     for ( int i = 0; i < ku; i++ ){
-      *ut += Nu[ku + i]*pts[2*(intu + i)];
-      *vt += Nu[ku + i]*pts[2*(intu + i)+1];
+      u += Nu[i]*pts[2*(intu + i)];
+      v += Nu[i]*pts[2*(intu + i)+1];
+      ut += Nu[ku + i]*pts[2*(intu + i)];
+      vt += Nu[ku + i]*pts[2*(intu + i)+1];
     }
   }
+
+  *_u = u;
+  *_v = v;
+  *_ut = ut;
+  *_vt = vt;
 
   return 0;
 }
 
 /*
-  Given the parametric point, evaluate the second derivative 
-*/  
-int TMRBsplinePcurve::eval2ndDeriv( double t, double *_utt, double *_vtt ){
+  Given the parametric point, evaluate the second derivative
+*/
+int TMRBsplinePcurve::eval2ndDeriv( double t,
+                                    double *_u, double *_v,
+                                    double *_ut, double *_vt,
+                                    double *_utt, double *_vtt ){
   double Nu[2*MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
 
@@ -1242,25 +1283,24 @@ int TMRBsplinePcurve::eval2ndDeriv( double t, double *_utt, double *_vtt ){
   intu = intu - ku + 1;
 
   // Evaluate the b-spline
-  *_utt = *_vtt = 0.0;
-  
+  double u = 0.0, v = 0.0;
+  double ut = 0.0, vt = 0.0;
   double utt = 0.0, vtt = 0.0;
+
   if (wts){
     // Evaluate the weighted b-spline
-    double u = 0.0, v = 0.0;
-    double ut = 0.0, vt = 0.0;
     double w = 0.0, wt = 0.0, wtt = 0.0;
     for ( int i = 0; i < ku; i++ ){
       // Evaluate the numerator and its derivative
       u += wts[intu + i]*Nu[i]*pts[2*(intu + i)];
       v += wts[intu + i]*Nu[i]*pts[2*(intu + i)+1];
-      
+
       ut += wts[intu + i]*Nu[ku + i]*pts[2*(intu + i)];
       vt += wts[intu + i]*Nu[ku + i]*pts[2*(intu + i)+1];
-      
+
       utt += wts[intu + i]*Nu[2*ku + i]*pts[2*(intu + i)];
       vtt += wts[intu + i]*Nu[2*ku + i]*pts[2*(intu + i)+1];
-      
+
       // Compute the weights
       w += Nu[i]*wts[intu + i];
       wt += Nu[i + ku]*wts[intu + i];
@@ -1272,19 +1312,31 @@ int TMRBsplinePcurve::eval2ndDeriv( double t, double *_utt, double *_vtt ){
       w = 1.0/w;
       wtt = 2.0*w*w*w*wt*wt - w*w*wtt;
       wt = -w*w*wt;
-      
+
       utt = w*utt + 2.0*wt*ut + wtt*u;
       vtt = w*vtt + 2.0*wt*vt + wtt*v;
+      ut = w*ut + wt*u;
+      vt = w*vt + wt*v;
+      u *= w;
+      v *= w;
     }
   }
   else {
     // Evaluate the b-spline
     for ( int i = 0; i < ku; i++ ){
+      u += Nu[i]*pts[2*(intu + i)];
+      v += Nu[i]*pts[2*(intu + i)+1];
+      ut += Nu[ku + i]*pts[2*(intu + i)];
+      vt += Nu[ku + i]*pts[2*(intu + i)+1];
       utt += Nu[2*ku + i]*pts[2*(intu + i)];
       vtt += Nu[2*ku + i]*pts[2*(intu + i)+1];
     }
   }
 
+  *_u = u;
+  *_v = v;
+  *_ut = ut;
+  *_vt = vt;
   *_utt = utt;
   *_vtt = vtt;
 
@@ -1294,11 +1346,11 @@ int TMRBsplinePcurve::eval2ndDeriv( double t, double *_utt, double *_vtt ){
 /*
   Refine the knot vector by inserting the knots specified in the input
   Tnew. This function returns a new, equivalent curve with the new
-  knots at the specified locations.  
+  knots at the specified locations.
 */
-TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew, 
+TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
                                                  int nnew ){
-  // Allocate the new vectors 
+  // Allocate the new vectors
   int kbar = ku;
   int nbar = nctl + nnew;
   double *Tbar = new double[ nbar+kbar ];
@@ -1334,7 +1386,7 @@ TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
       wbar[j+nnew] = wts[j];
     }
   }
-  
+
   // Copy over the knots that do not change
   for ( int j = 0; j <= a; j++ ){
     Tbar[j] = Tu[j];
@@ -1353,7 +1405,7 @@ TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
       }
       // Read in the new knots
       Tbar[k] = Tu[i];
-      k--; 
+      k--;
       i--;
     }
     // Read in the last pt/weight pair
@@ -1364,25 +1416,25 @@ TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
 
     // Form the linear combinations of the point/weight pairs
     for ( int l = 1; l < ku; l++ ){
-      int ind = k-(ku-1)+l;     
+      int ind = k-(ku-1)+l;
       double alpha = Tbar[k+l] - Tnew[j];
-     
+
       if (alpha == 0.0){
         pbar[ind-1] = pbar[ind];
       }
       else {
-        alpha = alpha/(Tbar[k+l] - Tu[i-ku+1+l]);       
+        alpha = alpha/(Tbar[k+l] - Tu[i-ku+1+l]);
         if (wts){
-          pbar[2*(ind-1)] = (alpha*wbar[ind-1]*pbar[2*(ind-1)] + 
+          pbar[2*(ind-1)] = (alpha*wbar[ind-1]*pbar[2*(ind-1)] +
                             (1.0 - alpha)*wbar[ind]*pbar[2*ind]);
-          pbar[2*(ind-1)+1] = (alpha*wbar[ind-1]*pbar[2*(ind-1)+1] + 
+          pbar[2*(ind-1)+1] = (alpha*wbar[ind-1]*pbar[2*(ind-1)+1] +
                               (1.0 - alpha)*wbar[ind]*pbar[2*ind]);
           wbar[ind-1] = (alpha*wbar[ind-1] + (1.0 - alpha)*wbar[ind]);
         }
         else {
-          pbar[2*(ind-1)] = 
+          pbar[2*(ind-1)] =
             alpha*pbar[2*(ind-1)] + (1.0 - alpha)*pbar[2*ind];
-          pbar[2*(ind-1)+1] = 
+          pbar[2*(ind-1)+1] =
             alpha*pbar[2*(ind-1)+1] + (1.0 - alpha)*pbar[2*ind+1];
         }
       }
@@ -1418,15 +1470,15 @@ TMRBsplinePcurve* TMRBsplinePcurve::refineKnots( const double *_Tnew,
 /*
   Evaluate the TMRSurface
 */
-TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv, 
-                                      int _ku, int _kv, 
+TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
+                                      int _ku, int _kv,
                                       const TMRPoint *_pts ){
   // Record the number of control points and the basis order
   nu = _nu;
   nv = _nv;
   ku = _ku;
   kv = _kv;
-  
+
   // Check the bounds on the bspline order
   if (ku < 2){ ku = 2; }
   if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
@@ -1450,10 +1502,10 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
 /*
   Allocate the B-spline surface and set the knot locations
 */
-TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv, 
-                                      int _ku, int _kv, 
-                                      const double *_Tu, 
-                                      const double *_Tv, 
+TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
+                                      int _ku, int _kv,
+                                      const double *_Tu,
+                                      const double *_Tv,
                                       const TMRPoint *_pts ){
   // Record the number of control points and the basis order
   nu = _nu;
@@ -1466,7 +1518,7 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
   if (kv < 2){ kv = 2; }
   if (kv > MAX_BSPLINE_ORDER){ kv = MAX_BSPLINE_ORDER; }
-  
+
   // Allocate the knot vectors
   Tu = new double[ nu+ku ];
   Tv = new double[ nv+kv ];
@@ -1482,7 +1534,7 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   else {
     bspline_knots(nv, kv, 0.0, 1.0, Tv);
   }
-  
+
   // Set the wts = 1.0
   wts = NULL;
 
@@ -1491,10 +1543,10 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   memcpy(pts, _pts, nu*nv*sizeof(TMRPoint));
 }
 
-TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv, 
-                                      int _ku, int _kv, 
+TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
+                                      int _ku, int _kv,
                                       const double *_Tu, const double *_Tv,
-                                      const double *_wts, 
+                                      const double *_wts,
                                       const TMRPoint *_pts ){
   // Record the number of control points and the basis order
   nu = _nu;
@@ -1507,7 +1559,7 @@ TMRBsplineSurface::TMRBsplineSurface( int _nu, int _nv,
   if (ku > MAX_BSPLINE_ORDER){ ku = MAX_BSPLINE_ORDER; }
   if (kv < 2){ kv = 2; }
   if (kv > MAX_BSPLINE_ORDER){ kv = MAX_BSPLINE_ORDER; }
-  
+
   // Allocate the knot vectors
   Tu = new double[ nu+ku ];
   Tv = new double[ nv+kv ];
@@ -1548,7 +1600,7 @@ TMRBsplineSurface::~TMRBsplineSurface(){
 */
 int TMRBsplineSurface::max_newton_iters = 25;
 
-/* 
+/*
    Get the parameter range for this surface from the knot vectors
 */
 void TMRBsplineSurface::getRange( double *umin, double *vmin,
@@ -1558,7 +1610,7 @@ void TMRBsplineSurface::getRange( double *umin, double *vmin,
   *vmin = Tv[0];
   *vmax = Tv[nv+kv-1];
 }
- 
+
 /*
   Given the parametric point, compute the x,y,z location
 */
@@ -1574,7 +1626,7 @@ int TMRBsplineSurface::evalPoint( double u, double v, TMRPoint *X ){
   // Evaluate the basis functions
   bspline_basis(Nu, intu, u, Tu, ku, work);
   bspline_basis(Nv, intv, v, Tv, kv, work);
-  
+
   // Set the interval to the initial control point
   intu = intu - ku + 1;
   intv = intv - kv + 1;
@@ -1615,15 +1667,15 @@ int TMRBsplineSurface::evalPoint( double u, double v, TMRPoint *X ){
       }
     }
   }
-  
+
   // Success
   return 0;
 }
-  
+
 /*
   Perform the inverse evaluation
 */
-int TMRBsplineSurface::invEvalPoint( TMRPoint point, 
+int TMRBsplineSurface::invEvalPoint( TMRPoint point,
                                      double *uf, double *vf ){
   // Did this evaluation fail or not?
   int fail = 1;
@@ -1634,7 +1686,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
   // The basis functions/work arrays
   double Nu[3*MAX_BSPLINE_ORDER], Nv[3*MAX_BSPLINE_ORDER];
   double work[2*MAX_BSPLINE_ORDER + MAX_BSPLINE_ORDER*MAX_BSPLINE_ORDER];
-  
+
   // Get the bounds
   double umin, vmin, umax, vmax;
   getRange(&umin, &vmin, &umax, &vmax);
@@ -1663,7 +1715,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
       // Set the interval to the initial control point
       intu = intu - ku + 1;
       intv = intv - kv + 1;
-      
+
       // Evaluate the point
       TMRPoint X;
       X.zero();
@@ -1681,7 +1733,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
             w += wts[index]*Nu[i]*Nv[j];
           }
         }
-        
+
         // Divide through by the weights
         if (w != 0.0){
           w = 1.0/w;
@@ -1701,7 +1753,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
           }
         }
       }
-      
+
       // Find the distance vector
       X.x = point.x - X.x;
       X.y = point.y - X.y;
@@ -1731,7 +1783,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
     int idu = 2, idv = 2;
     bspline_basis_derivative(Nu, intu, u, idu, Tu, ku, work);
     bspline_basis_derivative(Nv, intv, v, idv, Tv, kv, work);
-  
+
     // Set the interval to the initial control point
     intu = intu - ku + 1;
     intv = intv - kv + 1;
@@ -1740,14 +1792,14 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
     TMRPoint X, Xu, Xv, Xuu, Xuv, Xvv;
     X.zero();  Xu.zero();  Xv.zero();
     Xuu.zero();  Xuv.zero();  Xvv.zero();
-    
+
     // If this is a NURBS surface add the effect of the weights
     if (wts){
       // Evaluate the weighted b-spline
       TMRPoint p, pu, pv, puu, puv, pvv;
       p.zero();  pu.zero();  pv.zero();
       puu.zero();  puv.zero();  pvv.zero();
-      
+
       double w = 0.0, wu = 0.0, wv = 0.0;
       double wuu = 0.0, wuv = 0.0, wvv = 0.0;
       for ( int j = 0; j < kv; j++ ){
@@ -1757,11 +1809,11 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
           p.x += wts[index]*Nu[i]*Nv[j]*pts[index].x;
           p.y += wts[index]*Nu[i]*Nv[j]*pts[index].y;
           p.z += wts[index]*Nu[i]*Nv[j]*pts[index].z;
-          
+
           pu.x += wts[index]*Nu[ku+i]*Nv[j]*pts[index].x;
           pu.y += wts[index]*Nu[ku+i]*Nv[j]*pts[index].y;
           pu.z += wts[index]*Nu[ku+i]*Nv[j]*pts[index].z;
-          
+
           pv.x += wts[index]*Nu[i]*Nv[kv+j]*pts[index].x;
           pv.y += wts[index]*Nu[i]*Nv[kv+j]*pts[index].y;
           pv.z += wts[index]*Nu[i]*Nv[kv+j]*pts[index].z;
@@ -1773,11 +1825,11 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
           puv.x += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].x;
           puv.y += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].y;
           puv.z += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].z;
-          
+
           pvv.x += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].x;
           pvv.y += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].y;
           pvv.z += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].z;
-          
+
           // Compute the weights and the derivatives of weights
           w += wts[index]*Nu[i]*Nv[j];
           wu += wts[index]*Nu[ku+i]*Nv[j];
@@ -1787,7 +1839,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
           wvv += wts[index]*Nu[i]*Nv[2*kv+j];
         }
       }
-      
+
       // Divide through by the weights
       if (w != 0.0){
         w = 1.0/w;
@@ -1800,11 +1852,11 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
         X.x = w*p.x;
         X.y = w*p.y;
         X.z = w*p.z;
-        
+
         Xu.x = w*pu.x + wu*p.x;
         Xu.y = w*pu.y + wu*p.y;
         Xu.z = w*pu.z + wu*p.z;
-        
+
         Xv.x = w*pv.x + wv*p.x;
         Xv.y = w*pv.y + wv*p.y;
         Xv.z = w*pv.z + wv*p.z;
@@ -1812,7 +1864,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
         Xuu.x = 2.0*wu*pu.x + w*puu.x + wuu*p.x;
         Xuu.y = 2.0*wu*pu.y + w*puu.y + wuu*p.y;
         Xuu.z = 2.0*wu*pu.z + w*puu.z + wuu*p.z;
-        
+
         Xuv.x = wu*pv.x + w*puv.x + wuv*p.x + wv*pu.x;
         Xuv.y = wu*pv.y + w*puv.y + wuv*p.y + wv*pu.y;
         Xuv.z = wu*pv.z + w*puv.z + wuv*p.z + wv*pu.z;
@@ -1834,7 +1886,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
           Xu.x += Nu[ku+i]*Nv[j]*pts[index].x;
           Xu.y += Nu[ku+i]*Nv[j]*pts[index].y;
           Xu.z += Nu[ku+i]*Nv[j]*pts[index].z;
-        
+
           Xv.x += Nu[i]*Nv[kv+j]*pts[index].x;
           Xv.y += Nu[i]*Nv[kv+j]*pts[index].y;
           Xv.z += Nu[i]*Nv[kv+j]*pts[index].z;
@@ -1842,7 +1894,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
           Xuu.x += Nu[2*ku+i]*Nv[j]*pts[index].x;
           Xuu.y += Nu[2*ku+i]*Nv[j]*pts[index].y;
           Xuu.z += Nu[2*ku+i]*Nv[j]*pts[index].z;
-        
+
           Xuv.x += Nu[ku+i]*Nv[kv+j]*pts[index].x;
           Xuv.y += Nu[ku+i]*Nv[kv+j]*pts[index].y;
           Xuv.z += Nu[ku+i]*Nv[kv+j]*pts[index].z;
@@ -1853,7 +1905,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
         }
       }
     }
-  
+
     // Compute the difference between the position on the surface
     // and the point
     TMRPoint r;
@@ -1875,7 +1927,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
     // Check for the bounds on u
     if (u <= umin && ru >= 0.0){
       ru = 0.0;
-      Juu = 1.0; 
+      Juu = 1.0;
       Juv = 0.0;
     }
     else if (u >= umax && ru <= 0.0){
@@ -1883,7 +1935,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
       Juu = 1.0;
       Juv = 0.0;
     }
-    
+
     // Check for the bounds on v
     if (v <= vmin && rv >= 0.0){
       rv = 0.0;
@@ -1895,14 +1947,14 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
       Jvv = 1.0;
       Juv = 0.0;
     }
-                  
+
     // Solve the 2x2 system
     double det = Juu*Jvv - Juv*Juv;
     if (det != 0.0){
       du = (Jvv*ru - Juv*rv)/det;
       dv = (Juu*rv - Juv*ru)/det;
     }
-    
+
     // Compute the updates
     double unew = u - du;
     double vnew = v - dv;
@@ -1914,8 +1966,8 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
     else if (vnew > vmax){ vnew = vmax; }
 
     // Check if the convergence test is satisfied
-    if (fabs(r.x) < eps_dist && 
-        fabs(r.y) < eps_dist && 
+    if (fabs(r.x) < eps_dist &&
+        fabs(r.y) < eps_dist &&
         fabs(r.z) < eps_dist){
       *uf = u;
       *vf = v;
@@ -1926,7 +1978,7 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
     double dotr = r.dot(r);
     double dotu = Xu.dot(Xu);
     double dotv = Xv.dot(Xv);
-    if (ru*ru < eps_cosine*eps_cosine*dotu*dotr && 
+    if (ru*ru < eps_cosine*eps_cosine*dotu*dotr &&
         rv*rv < eps_cosine*eps_cosine*dotv*dotr){
       *uf = u;
       *vf = v;
@@ -1943,9 +1995,10 @@ int TMRBsplineSurface::invEvalPoint( TMRPoint point,
 }
 
 /*
-  Given the parametric location, evaluate the first derivative 
+  Given the parametric location, evaluate the first derivative
 */
-int TMRBsplineSurface::evalDeriv( double u, double v, 
+int TMRBsplineSurface::evalDeriv( double u, double v,
+                                  TMRPoint *X,
                                   TMRPoint *Xu, TMRPoint *Xv ){
   // The basis functions/work arrays
   double Nu[2*MAX_BSPLINE_ORDER], Nv[2*MAX_BSPLINE_ORDER];
@@ -1959,36 +2012,36 @@ int TMRBsplineSurface::evalDeriv( double u, double v,
   int idu = 1, idv = 1;
   bspline_basis_derivative(Nu, intu, u, idu, Tu, ku, work);
   bspline_basis_derivative(Nv, intv, v, idv, Tv, kv, work);
-  
+
   // Set the interval to the initial control point
   intu = intu - ku + 1;
   intv = intv - kv + 1;
 
   // Zero the point location
-  Xu->x = Xu->y = Xu->z = 0.0;
-  Xv->x = Xv->y = Xv->z = 0.0;
+  X->zero();
+  Xu->zero();
+  Xv->zero();
 
   // If this is a NURBS surface add the effect of the weights
   if (wts){
     // Evaluate the weighted b-spline
-    TMRPoint p, pu, pv;
-    p.x = p.y = p.z = 0.0;
-    pu.x = pu.y = pu.z = 0.0;
-    pv.x = pv.y = pv.z = 0.0;
+    TMRPoint pu, pv;
+    pu.zero();
+    pv.zero();
 
     double w = 0.0, wu = 0.0, wv = 0.0;
     for ( int j = 0; j < kv; j++ ){
       for ( int i = 0; i < ku; i++ ){
         // Evaluate the numerator and its derivative
         int index = intu+i + (intv+j)*nu;
-        p.x += wts[index]*Nu[i]*Nv[j]*pts[index].x;
-        p.y += wts[index]*Nu[i]*Nv[j]*pts[index].y;
-        p.z += wts[index]*Nu[i]*Nv[j]*pts[index].z;
+        X->x += wts[index]*Nu[i]*Nv[j]*pts[index].x;
+        X->y += wts[index]*Nu[i]*Nv[j]*pts[index].y;
+        X->z += wts[index]*Nu[i]*Nv[j]*pts[index].z;
 
         pu.x += wts[index]*Nu[ku+i]*Nv[j]*pts[index].x;
         pu.y += wts[index]*Nu[ku+i]*Nv[j]*pts[index].y;
         pu.z += wts[index]*Nu[ku+i]*Nv[j]*pts[index].z;
-        
+
         pv.x += wts[index]*Nu[i]*Nv[kv+j]*pts[index].x;
         pv.y += wts[index]*Nu[i]*Nv[kv+j]*pts[index].y;
         pv.z += wts[index]*Nu[i]*Nv[kv+j]*pts[index].z;
@@ -2006,13 +2059,17 @@ int TMRBsplineSurface::evalDeriv( double u, double v,
       wu = -w*w*wu;
       wv = -w*w*wv;
 
-      Xu->x = w*pu.x + wu*p.x;
-      Xu->y = w*pu.y + wu*p.y;
-      Xu->z = w*pu.z + wu*p.z;
+      Xu->x = w*pu.x + wu*X->x;
+      Xu->y = w*pu.y + wu*X->y;
+      Xu->z = w*pu.z + wu*X->z;
 
-      Xv->x = w*pv.x + wv*p.x;
-      Xv->y = w*pv.y + wv*p.y;
-      Xv->z = w*pv.z + wv*p.z;
+      Xv->x = w*pv.x + wv*X->x;
+      Xv->y = w*pv.y + wv*X->y;
+      Xv->z = w*pv.z + wv*X->z;
+
+      X->x *= w;
+      X->y *= w;
+      X->z *= w;
     }
   }
   else {
@@ -2020,10 +2077,14 @@ int TMRBsplineSurface::evalDeriv( double u, double v,
       for ( int i = 0; i < ku; i++ ){
         // Evaluate the numerator and its derivative
         int index = intu+i + (intv+j)*nu;
+        X->x += Nu[i]*Nv[j]*pts[index].x;
+        X->y += Nu[i]*Nv[j]*pts[index].y;
+        X->z += Nu[i]*Nv[j]*pts[index].z;
+
         Xu->x += Nu[ku+i]*Nv[j]*pts[index].x;
         Xu->y += Nu[ku+i]*Nv[j]*pts[index].y;
         Xu->z += Nu[ku+i]*Nv[j]*pts[index].z;
-        
+
         Xv->x += Nu[i]*Nv[kv+j]*pts[index].x;
         Xv->y += Nu[i]*Nv[kv+j]*pts[index].y;
         Xv->z += Nu[i]*Nv[kv+j]*pts[index].z;
@@ -2040,8 +2101,11 @@ int TMRBsplineSurface::evalDeriv( double u, double v,
   Evaluate the second derivatives of the bspline surface
 */
 int TMRBsplineSurface::eval2ndDeriv( double u, double v,
+                                     TMRPoint *X,
+                                     TMRPoint *Xu,
+                                     TMRPoint *Xv,
                                      TMRPoint *Xuu,
-                                     TMRPoint *Xuv, 
+                                     TMRPoint *Xuv,
                                      TMRPoint *Xvv ){
   // The basis functions/work arrays
   double Nu[2*MAX_BSPLINE_ORDER], Nv[2*MAX_BSPLINE_ORDER];
@@ -2055,12 +2119,15 @@ int TMRBsplineSurface::eval2ndDeriv( double u, double v,
   int idu = 2, idv = 2;
   bspline_basis_derivative(Nu, intu, u, idu, Tu, ku, work);
   bspline_basis_derivative(Nv, intv, v, idv, Tv, kv, work);
-  
+
   // Set the interval to the initial control point
   intu = intu - ku + 1;
   intv = intv - kv + 1;
-  
+
   // Zero the derivatives
+  X->zero();
+  Xu->zero();
+  Xv->zero();
   Xuu->zero();
   Xuv->zero();
   Xvv->zero();
@@ -2068,40 +2135,43 @@ int TMRBsplineSurface::eval2ndDeriv( double u, double v,
   // If this is a NURBS surface add the effect of the weights
   if (wts){
     // Evaluate the weighted b-spline
-    TMRPoint p, pu, pv, puu, puv, pvv;
-    p.zero();  pu.zero();  pv.zero();
-    puu.zero();  puv.zero();  pvv.zero();
-    
+    TMRPoint pu, pv, puu, puv, pvv;
+    pu.zero();
+    pv.zero();
+    puu.zero();
+    puv.zero();
+    pvv.zero();
+
     double w = 0.0, wu = 0.0, wv = 0.0;
     double wuu = 0.0, wuv = 0.0, wvv = 0.0;
     for ( int j = 0; j < kv; j++ ){
       for ( int i = 0; i < ku; i++ ){
         // Evaluate the numerator and its derivative
         int index = intu+i + (intv+j)*nu;
-        p.x += wts[index]*Nu[i]*Nv[j]*pts[index].x;
-        p.y += wts[index]*Nu[i]*Nv[j]*pts[index].y;
-        p.z += wts[index]*Nu[i]*Nv[j]*pts[index].z;
-        
+        X->x += wts[index]*Nu[i]*Nv[j]*pts[index].x;
+        X->y += wts[index]*Nu[i]*Nv[j]*pts[index].y;
+        X->z += wts[index]*Nu[i]*Nv[j]*pts[index].z;
+
         pu.x += wts[index]*Nu[ku+i]*Nv[j]*pts[index].x;
         pu.y += wts[index]*Nu[ku+i]*Nv[j]*pts[index].y;
         pu.z += wts[index]*Nu[ku+i]*Nv[j]*pts[index].z;
-        
+
         pv.x += wts[index]*Nu[i]*Nv[kv+j]*pts[index].x;
         pv.y += wts[index]*Nu[i]*Nv[kv+j]*pts[index].y;
         pv.z += wts[index]*Nu[i]*Nv[kv+j]*pts[index].z;
-        
+
         puu.x += wts[index]*Nu[2*ku+i]*Nv[j]*pts[index].x;
         puu.y += wts[index]*Nu[2*ku+i]*Nv[j]*pts[index].y;
         puu.z += wts[index]*Nu[2*ku+i]*Nv[j]*pts[index].z;
-        
+
         puv.x += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].x;
         puv.y += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].y;
         puv.z += wts[index]*Nu[ku+i]*Nv[kv+j]*pts[index].z;
-        
+
         pvv.x += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].x;
         pvv.y += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].y;
         pvv.z += wts[index]*Nu[i]*Nv[2*kv+j]*pts[index].z;
-        
+
         // Compute the weights and the derivatives of weights
         w += wts[index]*Nu[i]*Nv[j];
         wu += wts[index]*Nu[ku+i]*Nv[j];
@@ -2111,7 +2181,7 @@ int TMRBsplineSurface::eval2ndDeriv( double u, double v,
         wvv += wts[index]*Nu[i]*Nv[2*kv+j];
       }
     }
-    
+
     // Divide through by the weights
     if (w != 0.0){
       w = 1.0/w;
@@ -2120,18 +2190,30 @@ int TMRBsplineSurface::eval2ndDeriv( double u, double v,
       wvv = 2.0*w*w*w*wv*wv - w*w*wvv;
       wu = -w*w*wu;
       wv = -w*w*wv;
-           
-      Xuu->x = 2.0*wu*pu.x + w*puu.x + wuu*p.x;
-      Xuu->y = 2.0*wu*pu.y + w*puu.y + wuu*p.y;
-      Xuu->z = 2.0*wu*pu.z + w*puu.z + wuu*p.z;
-      
-      Xuv->x = wu*pv.x + w*puv.x + wuv*p.x + wv*pu.x;
-      Xuv->y = wu*pv.y + w*puv.y + wuv*p.y + wv*pu.y;
-      Xuv->z = wu*pv.z + w*puv.z + wuv*p.z + wv*pu.z;
-      
-      Xvv->x = 2.0*wv*pv.x + w*pvv.x + wvv*p.x;
-      Xvv->y = 2.0*wv*pv.y + w*pvv.y + wvv*p.y;
-      Xvv->z = 2.0*wv*pv.z + w*pvv.z + wvv*p.z;
+
+      Xuu->x = 2.0*wu*pu.x + w*puu.x + wuu*X->x;
+      Xuu->y = 2.0*wu*pu.y + w*puu.y + wuu*X->y;
+      Xuu->z = 2.0*wu*pu.z + w*puu.z + wuu*X->z;
+
+      Xuv->x = wu*pv.x + w*puv.x + wuv*X->x + wv*pu.x;
+      Xuv->y = wu*pv.y + w*puv.y + wuv*X->y + wv*pu.y;
+      Xuv->z = wu*pv.z + w*puv.z + wuv*X->z + wv*pu.z;
+
+      Xvv->x = 2.0*wv*pv.x + w*pvv.x + wvv*X->x;
+      Xvv->y = 2.0*wv*pv.y + w*pvv.y + wvv*X->y;
+      Xvv->z = 2.0*wv*pv.z + w*pvv.z + wvv*X->z;
+
+      Xu->x = w*pu.x + wu*X->x;
+      Xu->y = w*pu.y + wu*X->y;
+      Xu->z = w*pu.z + wu*X->z;
+
+      Xv->x = w*pv.x + wv*X->x;
+      Xv->y = w*pv.y + wv*X->y;
+      Xv->z = w*pv.z + wv*X->z;
+
+      X->x *= w;
+      X->y *= w;
+      X->z *= w;
     }
     else {
       // We've failed - the weight is zero
@@ -2143,10 +2225,22 @@ int TMRBsplineSurface::eval2ndDeriv( double u, double v,
       for ( int i = 0; i < ku; i++ ){
         // Evaluate the numerator and its derivative
         int index = intu+i + (intv+j)*nu;
+        X->x += Nu[i]*Nv[j]*pts[index].x;
+        X->y += Nu[i]*Nv[j]*pts[index].y;
+        X->z += Nu[i]*Nv[j]*pts[index].z;
+
+        Xu->x += Nu[ku+i]*Nv[j]*pts[index].x;
+        Xu->y += Nu[ku+i]*Nv[j]*pts[index].y;
+        Xu->z += Nu[ku+i]*Nv[j]*pts[index].z;
+
+        Xv->x += Nu[i]*Nv[kv+j]*pts[index].x;
+        Xv->y += Nu[i]*Nv[kv+j]*pts[index].y;
+        Xv->z += Nu[i]*Nv[kv+j]*pts[index].z;
+        
         Xuu->x += Nu[2*ku+i]*Nv[j]*pts[index].x;
         Xuu->y += Nu[2*ku+i]*Nv[j]*pts[index].y;
         Xuu->z += Nu[2*ku+i]*Nv[j]*pts[index].z;
-        
+
         Xuv->x += Nu[ku+i]*Nv[kv+j]*pts[index].x;
         Xuv->y += Nu[ku+i]*Nv[kv+j]*pts[index].y;
         Xuv->z += Nu[ku+i]*Nv[kv+j]*pts[index].z;
@@ -2161,7 +2255,7 @@ int TMRBsplineSurface::eval2ndDeriv( double u, double v,
   return 0;
 }
 
-/* 
+/*
   Create the interpolation curve generating object.
 
   This is designed so that different parameters can be set internally
@@ -2202,7 +2296,7 @@ void TMRCurveInterpolation::getInterpLoc( double *ubar ){
     d += sqrt(p.dot(p));
   }
 
-  // Now compute ubar inteprolation points based on the 
+  // Now compute ubar inteprolation points based on the
   // chord length distance between the control points
   ubar[0] = 0.0;
   for ( int i = 0; i < ninterp-1; i++ ){
@@ -2254,7 +2348,7 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
     int upp_bnd = ku-1, low_bnd = ku-1;
     int bnd = upp_bnd + low_bnd + 1;
     int lda = 2*low_bnd + upp_bnd + 1;
-    
+
     // Allocate the banded matrix
     double *A = new double[ lda*nctl ];
     memset(A, 0, lda*nctl*sizeof(double));
@@ -2267,13 +2361,13 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
       // Evaluate the B-spline basis functions
       double Nu[MAX_BSPLINE_ORDER];
       double work[2*MAX_BSPLINE_ORDER];
-      
+
       // Compute the b-spline interval
       int intu = bspline_interval(ubar[p], Tu, nctl, ku);
-      
+
       // Compute the b-spline basis
       bspline_basis(Nu, intu, ubar[p], Tu, ku, work);
-      
+
       // Convert to the initial control point
       intu = intu - ku + 1;
 
@@ -2284,7 +2378,7 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
         rhs[nctl+i] += Nu[jp]*interp[p].y;
         rhs[2*nctl+i] += Nu[jp]*interp[p].z;
       }
-      
+
       // Add the contribution to the matrix
       for ( int kp = 0; kp < ku; kp++ ){
         int i = intu+kp;
@@ -2294,7 +2388,7 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
         }
       }
     }
-    
+
     // Set the first and last point to be fixed to the
     // initial/final location
     for ( int jp = 0; jp < ku; jp++ ){
@@ -2319,21 +2413,21 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
     rhs[nctl-1] = interp[ninterp-1].x;
     rhs[2*nctl-1] = interp[ninterp-1].y;
     rhs[3*nctl-1] = interp[ninterp-1].z;
-    
+
     // Solve the linear system
     int nrhs = 3;
     int *ipiv = new int[ nctl ];
     int info = 0;
-    TmrLAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs, 
+    TmrLAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs,
                    A, &lda, ipiv, rhs, &nctl, &info);
-    
+
     if (info != 0){
-      fprintf(stderr, 
+      fprintf(stderr,
               "TMRCurveInterpolation error failed with LAPACK error %d\n",
               info);
       return NULL;
     }
-    
+
     // Record/store the control point locations
     pts = new TMRPoint[ nctl ];
     for ( int i = 0; i < nctl; i++ ){
@@ -2341,7 +2435,7 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
       pts[i].y = rhs[nctl+i];
       pts[i].z = rhs[2*nctl+i];
     }
-    
+
     // Free data associated with the linear system
     delete [] A;
     delete [] rhs;
@@ -2356,11 +2450,11 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
       Tu[i] = 0.0;
       Tu[nctl+ku-1-i] = 1.0;
     }
-    
+
     // Specify the interior knot locations
     for ( int i = ku; i < nctl; i++ ){
       Tu[i] = 0.0;
-      
+
       // Average the ubars to obtain the knot locations
       for ( int j = i; j < i+ku-1; j++ ){
         Tu[i] += ubar[j-ku+1];
@@ -2372,33 +2466,33 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
     int upp_bnd = ku-1, low_bnd = ku-1;
     int bnd = upp_bnd + low_bnd+1;
     int lda = 2*low_bnd + upp_bnd + 1;
-    
+
     // Allocate the banded matrix
     double *A = new double[ lda*nctl ];
     memset(A, 0, lda*nctl*sizeof(double));
-    
+
     // Set the values into the A matrix
     for ( int i = 0; i < nctl; i++ ){
       // Evaluate the B-spline basis functions
       double Nu[MAX_BSPLINE_ORDER];
       double work[2*MAX_BSPLINE_ORDER];
-      
+
       // Compute the b-spline interval
       int intu = bspline_interval(ubar[i], Tu, nctl, ku);
-      
+
       // Compute the b-spline basis
       bspline_basis(Nu, intu, ubar[i], Tu, ku, work);
-      
+
       // Convert to the initial control point
       intu = intu - ku + 1;
-      
+
       for ( int jp = 0; jp < ku; jp++ ){
         // A(KL+KU+1+i-j,j) = A(i,j)
         int j = intu+jp;
         A[bnd-1+i-j + lda*j] = Nu[jp];
       }
     }
-    
+
     // Compute the right-hand-side values - the x/y/z locations
     // of the interpolation points
     double *rhs = new double[ 3*nctl ];
@@ -2407,21 +2501,21 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
       rhs[nctl+i] = interp[i].y;
       rhs[2*nctl+i] = interp[i].z;
     }
-    
+
     // Solve the linear system
     int nrhs = 3;
     int *ipiv = new int[ nctl ];
     int info = 0;
-    TmrLAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs, 
+    TmrLAPACKdgbsv(&nctl, &upp_bnd, &low_bnd, &nrhs,
                    A, &lda, ipiv, rhs, &nctl, &info);
-    
+
     if (info != 0){
-      fprintf(stderr, 
+      fprintf(stderr,
               "TMRCurveInterpolation error failed with LAPACK error %d\n",
               info);
       return NULL;
     }
-    
+
     // Record/store the control point locations
     pts = new TMRPoint[ nctl ];
     for ( int i = 0; i < nctl; i++ ){
@@ -2451,7 +2545,7 @@ TMRBsplineCurve* TMRCurveInterpolation::createCurve( int ku ){
 /*
   The following function defines a lofting operation
 */
-TMRCurveLofter::TMRCurveLofter( TMRBsplineCurve **_curves, 
+TMRCurveLofter::TMRCurveLofter( TMRBsplineCurve **_curves,
                                 int _num_curves ){
   num_curves = _num_curves;
   curves = new TMRBsplineCurve*[ num_curves ];
@@ -2488,7 +2582,7 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
   if (kv < 2){ kv = 2; }
   if (kv > MAX_BSPLINE_ORDER){ kv = MAX_BSPLINE_ORDER; }
 
-  // Allocate data to store the indices and  
+  // Allocate data to store the indices and
   int *index = new int[ num_curves ];
   int *ptr = new int[ num_curves ];
   int *curve_mult = new int[ num_curves ];
@@ -2506,14 +2600,14 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
   int count = 0; // Number of knots on the "stack"
   double tmin = 0.0;
   int max_mult = 0;
-  
+
   // Compute the initial curve multiplicities
   for ( int i = 0; i < num_curves; i++ ){
     int k = ptr[i];
     int nu, ku;
     const double *curve_Tu;
     curves[i]->getData(&nu, &ku, &curve_Tu, NULL, NULL);
-    while (k < (nu+ku) && 
+    while (k < (nu+ku) &&
            curve_Tu[ptr[i]] == curve_Tu[k]){
       k++;
     }

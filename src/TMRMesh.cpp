@@ -1475,6 +1475,9 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     // number of segments.
     int total_num_pts = 0;
 
+    // Get the face orientation
+    int face_orient = face->getOrientation();
+    
     // Keep track of the number of closed loop cycles in the domain
     int nloops = face->getNumEdgeLoops();
 
@@ -1551,12 +1554,12 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
       // Get the curve information for this loop segment
       TMREdgeLoop *loop;
-      face->getEdgeLoop(k, &loop);
+      int loop_orient = face->getEdgeLoop(k, &loop);
       int nedges;
       TMREdge **edges;
-      const int *dir;
-      loop->getEdgeLoop(&nedges, &edges, &dir);
-
+      const int *edge_orient;
+      loop->getEdgeLoop(&nedges, &edges, &edge_orient);
+          
       for ( int i = 0; i < nedges; i++ ){
         // Retrieve the underlying curve mesh
         TMREdge *edge = edges[i];
@@ -1568,10 +1571,13 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         const double *tpts;
         mesh->getMeshPoints(&npts, &tpts, NULL);
 
+        // Get the final edge orientation
+        int orientation = face_orient*loop_orient*edge_orient[i];
+        
         // Find the point on the curve
-        if (dir[i] > 0){
+        if (orientation > 0){
           for ( int j = 0; j < npts-1; j++ ){
-            edge->getParamsOnFace(face, tpts[j], dir[i],
+            edge->getParamsOnFace(face, tpts[j], orientation,
                                   &params[2*pt], &params[2*pt+1]);
             segments[2*pt] = pt;
             segments[2*pt+1] = pt+1;
@@ -1586,7 +1592,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         else {
           // Reverse the parameter values on the edge
           for ( int j = npts-1; j >= 1; j-- ){
-            edge->getParamsOnFace(face, tpts[j], dir[i],
+            edge->getParamsOnFace(face, tpts[j], orientation,
                                   &params[2*pt], &params[2*pt+1]);
             segments[2*pt] = pt;
             segments[2*pt+1] = pt+1;

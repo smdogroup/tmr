@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -37,15 +37,15 @@ class TMREdgeFromCurve : public TMREdge {
   }
   void getRange( double *tmin, double *tmax ){
     curve->getRange(tmin, tmax);
-  } 
+  }
   int evalPoint( double t, TMRPoint *X ){
     return curve->evalPoint(t, X);
-  } 
+  }
   int invEvalPoint( TMRPoint p, double *t ){
     return curve->invEvalPoint(p, t);
   }
-  int evalDeriv( double t, TMRPoint *Xt ){
-    return curve->evalDeriv(t, Xt);
+  int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt ){
+    return curve->evalDeriv(t, X, Xt);
   }
  private:
   TMRCurve *curve;
@@ -66,16 +66,17 @@ class TMRFaceFromSurface : public TMRFace {
   void getRange( double *umin, double *vmin,
                  double *umax, double *vmax ){
     surf->getRange(umin, vmin, umax, vmax);
-  } 
+  }
   int evalPoint( double u, double v, TMRPoint *X ){
     return surf->evalPoint(u, v, X);
-  } 
+  }
   int invEvalPoint( TMRPoint p, double *u, double *v ){
     return surf->invEvalPoint(p, u, v);
   }
-  int evalDeriv( double u, double v, 
+  int evalDeriv( double u, double v,
+                 TMRPoint *X,
                  TMRPoint *Xu, TMRPoint *Xv ){
-    return surf->evalDeriv(u, v, Xu, Xv);
+    return surf->evalDeriv(u, v, X, Xu, Xv);
   }
  private:
   TMRSurface *surf;
@@ -95,7 +96,7 @@ class TMRVertexFromPoint : public TMRVertex {
 
 /*
   Set the TMRVertex location based on a parametric location along a
-  curve.  
+  curve.
 
   This takes either a parametric point or does an inverse evaluation
   first to determine the parametric location.
@@ -143,10 +144,10 @@ class TMREdgeFromFace : public TMREdge {
   ~TMREdgeFromFace();
   void getRange( double *tmin, double *tmax );
   int evalPoint( double t, TMRPoint *X );
-  int getParamsOnFace( TMRFace *face, double t, 
+  int getParamsOnFace( TMRFace *face, double t,
                        int dir, double *u, double *v );
   int invEvalPoint( TMRPoint X, double *t );
-  int evalDeriv( double t, TMRPoint *Xt );
+  int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt );
   int isDegenerate(){ return is_degen; }
   void addEdgeFromFace( TMRFace *_face, TMRPcurve *_pcurve );
  private:
@@ -168,7 +169,7 @@ class TMRSplitEdge : public TMREdge {
 
   void getRange( double *tmin, double *tmax );
   int evalPoint( double t, TMRPoint *X );
-  int getParamsOnFace( TMRFace *face, double t, 
+  int getParamsOnFace( TMRFace *face, double t,
                        int dir, double *u, double *v );
 
  private:
@@ -210,16 +211,17 @@ class TMRTFIFace : public TMRFace {
   ~TMRTFIFace();
 
   void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax ); 
-  int evalPoint( double u, double v, TMRPoint *X ); 
+                 double *umax, double *vmax );
+  int evalPoint( double u, double v, TMRPoint *X );
   int invEvalPoint( TMRPoint p, double *u, double *v );
-  int evalDeriv( double u, double v, 
+  int evalDeriv( double u, double v,
+                 TMRPoint *X,
                  TMRPoint *Xu, TMRPoint *Xv );
 
  private:
   // Set the number of Newton iterations
-  static int max_newton_iters; 
-  
+  static int max_newton_iters;
+
   // Set the min/max parameter value for each edge. This
   // accounts for edge direction
   double tmin[4], tmax[4];
@@ -260,15 +262,16 @@ class TMRTFIFace : public TMRFace {
 */
 class TMRParametricTFIFace : public TMRFace {
  public:
-  TMRParametricTFIFace( TMRFace *_face, 
+  TMRParametricTFIFace( TMRFace *_face,
                         TMREdge *_edges[], const int dir[],
                         TMRVertex *verts[] );
   ~TMRParametricTFIFace();
   void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax ); 
-  int evalPoint( double u, double v, TMRPoint *X ); 
+                 double *umax, double *vmax );
+  int evalPoint( double u, double v, TMRPoint *X );
   int invEvalPoint( TMRPoint p, double *u, double *v );
-  int evalDeriv( double u, double v, 
+  int evalDeriv( double u, double v,
+                 TMRPoint *X,
                  TMRPoint *Xu, TMRPoint *Xv );
 
  private:
@@ -284,11 +287,11 @@ class TMRParametricTFIFace : public TMRFace {
   The following class performs a transfinite interpolation over a
   brick volume element. The arguments to the volume are arranged in a
   coordinate ordering. This ordering is designed to be easily
-  compatible with the TMROctForest ordering. 
+  compatible with the TMROctForest ordering.
 
   The input faces, edges, and vertices are ordered in the following
   manner:
-  
+
        v6----------e3----------v7
       /|                       /|
      e6|                      e7|
@@ -304,10 +307,10 @@ class TMRParametricTFIFace : public TMRFace {
   | /--f4              f2--| /
   |/  /                |   |/
   v0----------e0----------v1
-  
+
   The orient argument captures the root node information for each face
   such that faces that have different orientations will enclose a
-  properly oriented volume. 
+  properly oriented volume.
 */
 class TMRTFIVolume : public TMRVolume {
  public:
@@ -317,8 +320,8 @@ class TMRTFIVolume : public TMRVolume {
   ~TMRTFIVolume();
   void getRange( double *umin, double *vmin, double *wmin,
                  double *umax, double *vmax, double *wmax );
-  int evalPoint( double u, double v, double w, TMRPoint *X ); 
-  void getEntities( TMRFace ***_faces, TMREdge ***_edges, 
+  int evalPoint( double u, double v, double w, TMRPoint *X );
+  void getEntities( TMRFace ***_faces, TMREdge ***_edges,
                     TMRVertex ***_verts );
 
  private:
@@ -329,7 +332,7 @@ class TMRTFIVolume : public TMRVolume {
   // Edges defining the volume intersections
   TMREdge *edges[12];
   int edge_dir[12];
-  
+
   // Locations of the vertices/corners
   TMRVertex *verts[8];
   TMRPoint c[8];

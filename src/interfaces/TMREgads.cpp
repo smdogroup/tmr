@@ -331,6 +331,10 @@ TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
   int flags = 0;
   ego model;
   int icode = EG_loadModel(ctx->getContext(), flags, filename, &model);
+  if (icode != 0){
+    fprintf(stderr, "TMR: Error reading egads file with error code %d\n",
+            icode);
+  }
 
   // Count the number of objects
   int nverts = 0;
@@ -465,23 +469,23 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
   TMRFace **all_faces = new TMRFace*[ nfaces ];
   memset(all_faces, 0, nfaces*sizeof(TMRFace*));
   for ( int index = 0; index < nfaces; index++ ){
-    ego face_ref; // reference geometry
-    int face_oclass, face_mtype; // object class and type
+    ego ref; // reference geometry
+    int oclass, mtype; // object class and type
     double data[4];
     int num_loops;
     ego *face_loops;
     int *loop_sense;
-    EG_getTopology(faces[index], &face_ref, &face_oclass, &face_mtype,
+    EG_getTopology(faces[index], &ref, &oclass, &mtype,
                    data, &num_loops, &face_loops, &loop_sense);
 
     // Check if the orientation of the face is flipped relative to the natural
     // orientation of the surface
-    int orient = 1;
-    if (face_mtype == SREVERSE){
-      orient = -1;
+    int orientation = 1;
+    if (mtype == SREVERSE){
+      orientation = -1;
     }
 
-    all_faces[index] = new TMR_EgadsFace(ctx, orient, faces[index]);
+    all_faces[index] = new TMR_EgadsFace(ctx, orientation, faces[index]);
 
     // Set the "name" attribute
     int atype, len;
@@ -508,23 +512,15 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
       TMREdge **edgs = new TMREdge*[ num_edges ];
       int *dir = new int[ num_edges ];
 
-      if (loop_sense[i] > 0){
-        for ( int k = 0; k < num_edges; k++ ){
-          dir[k] = edge_sense[k];
-          int edge_index = edge_map[loop_edges[k]];
-          edgs[k] = all_edges[edge_index];
-        }
-      }
-      else {
-        for ( int k = 0; k < num_edges; k++ ){
-          dir[k] = edge_sense[num_edges-1-k];
-          int edge_index = edge_map[loop_edges[num_edges-1-k]];
-          edgs[k] = all_edges[edge_index];
-        }
+      for ( int k = 0; k < num_edges; k++ ){
+        dir[k] = edge_sense[k];
+        int edge_index = edge_map[loop_edges[k]];
+        edgs[k] = all_edges[edge_index];
       }
 
       // Allocate the loop with the given edges/directions
-      all_faces[index]->addEdgeLoop(new TMREdgeLoop(num_edges, edgs, dir));
+      all_faces[index]->addEdgeLoop(loop_sense[i],
+                                    new TMREdgeLoop(num_edges, edgs, dir));
 
       // Free the allocated data
       delete [] edgs;

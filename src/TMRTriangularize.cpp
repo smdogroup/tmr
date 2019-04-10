@@ -1502,8 +1502,8 @@ inline double TMRTriangularize::inCircle( uint32_t u, uint32_t v,
 
   if (metric){
     // Compute the metric components at the center of the triangle (u,v,w)
-    TMRPoint Xu, Xv;
-    metric->evalDeriv(px[0], px[1], &Xu, &Xv);
+    TMRPoint X, Xu, Xv;
+    metric->evalDeriv(px[0], px[1], &X, &Xu, &Xv);
     double g11 = Xu.dot(Xu);
     double g12 = Xu.dot(Xv);
     double g22 = Xv.dot(Xv);
@@ -2182,8 +2182,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
     // Get the derivatives of the surface at the mid-point
     TMRPoint Xpt, Xu, Xv;
-    face->evalPoint(m[0], m[1], &Xpt);
-    face->evalDeriv(m[0], m[1], &Xu, &Xv);
+    face->evalDeriv(m[0], m[1], &Xpt, &Xu, &Xv);
 
     // Compute the metric tensor components
     double g11 = Xu.dot(Xu);
@@ -2241,8 +2240,7 @@ void TMRTriangularize::frontal( TMRMeshOptions options,
 
       for ( int k = 0; k < max_newton_iters; k++ ){
         // Solve for the problem
-        face->evalPoint(pt[0], pt[1], &Xpt);
-        face->evalDeriv(pt[0], pt[1], &Xu, &Xv);
+        face->evalDeriv(pt[0], pt[1], &Xpt, &Xu, &Xv);
 
         // Solve for the surface location that satisfies
         // ||X - X[u]||_{2} = de and

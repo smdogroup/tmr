@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -118,37 +118,6 @@
 #include <STEPControl_Writer.hxx>
 
 /*
-  Geometry objects defined from OpenCascade
-*/
-class TMR_OCCCurve : public TMRCurve {
- public:
-  TMR_OCCCurve( Handle(Geom_Curve) &c );
-  ~TMR_OCCCurve();
-  void getRange( double *tmin, double *tmax );
-  int evalPoint( double t, TMRPoint *X );
-  int invEvalPoint( TMRPoint X, double *t );
-  int evalDeriv( double t, TMRPoint *Xt );
-  int eval2ndDeriv( double t, TMRPoint *Xtt );
- private:
-  Handle(Geom_Curve) curve;
-};
-
-class TMR_OCCSurface : public TMRSurface {
- public:
-  TMR_OCCSurface( Handle(Geom_Surface) &s );
-  ~TMR_OCCSurface();
-  void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax ); 
-  int evalPoint( double u, double v, TMRPoint *X ); 
-  int invEvalPoint( TMRPoint p, double *u, double *v );
-  int evalDeriv( double u, double v, TMRPoint *Xu, TMRPoint *Xv );
-  int eval2ndDeriv( double u, double v, 
-                    TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
- private:
-  Handle(Geom_Surface) surf;
-};
-
-/*
   Topoloy objects for OpenCascade:
 
   TMR_OCCVertex
@@ -174,9 +143,9 @@ class TMR_OCCEdge : public TMREdge {
   void getRange( double *tmin, double *tmax );
   int evalPoint( double t, TMRPoint *X );
   int invEvalPoint( TMRPoint X, double *t );
-  int evalDeriv( double t, TMRPoint *Xt );
-  int eval2ndDeriv( double t, TMRPoint *Xtt );
-  int getParamsOnFace( TMRFace *face, double t, 
+  int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt );
+  int eval2ndDeriv( double t, TMRPoint *X, TMRPoint *Xt, TMRPoint *Xtt );
+  int getParamsOnFace( TMRFace *face, double t,
                        int dir, double *u, double *v );
   int isDegenerate();
   void getEdgeObject( TopoDS_Edge &e );
@@ -190,11 +159,14 @@ class TMR_OCCFace : public TMRFace {
   TMR_OCCFace( int _normal_dir, TopoDS_Face &f );
   ~TMR_OCCFace();
   void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax ); 
-  int evalPoint( double u, double v, TMRPoint *X ); 
+                 double *umax, double *vmax );
+  int evalPoint( double u, double v, TMRPoint *X );
   int invEvalPoint( TMRPoint p, double *u, double *v );
-  int evalDeriv( double u, double v, TMRPoint *Xu, TMRPoint *Xv );
-  int eval2ndDeriv( double u, double v, 
+  int evalDeriv( double u, double v, TMRPoint *X,
+                 TMRPoint *Xu, TMRPoint *Xv );
+  int eval2ndDeriv( double u, double v,
+                    TMRPoint *X,
+                    TMRPoint *Xu, TMRPoint *Xv,
                     TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
   void getFaceObject( TopoDS_Face &f );
  private:

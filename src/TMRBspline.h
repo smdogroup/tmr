@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,34 +25,35 @@
 
 /*
   This file contains the TMRBsplineCurve and TMRBsplineSurface
-  classes that define B-spline and NURBS curves/surfaces for 
-  simple geometries. 
+  classes that define B-spline and NURBS curves/surfaces for
+  simple geometries.
 
   These classes implement the TMRCurve and TMRSurface interfaces,
-  respectively.  
+  respectively.
 */
 class TMRBsplineCurve : public TMRCurve {
  public:
   TMRBsplineCurve( int n, int k, const TMRPoint *pts );
   TMRBsplineCurve( int n, int k, const double *Tu, const TMRPoint *pts );
-  TMRBsplineCurve( int n, int k, const double *Tu, const double *wts, 
+  TMRBsplineCurve( int n, int k, const double *Tu, const double *wts,
                    const TMRPoint *pts );
   ~TMRBsplineCurve();
 
   // Get the parameter range for this edge
   void getRange( double *tmin, double *tmax );
-  
+
   // Given the parametric point, evaluate the x,y,z location
   int evalPoint( double t, TMRPoint *X );
 
   // Given the x,y,z location, find the parametric coordinates
   int invEvalPoint( TMRPoint X, double *t );
 
-  // Given the parametric point, evaluate the derivative 
-  int evalDeriv( double t, TMRPoint *Xt );
+  // Given the parametric point, evaluate the derivative
+  int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt );
 
-  // Given the parametric point, evaluate the second derivative 
-  int eval2ndDeriv( double t, TMRPoint *Xt );
+  // Given the parametric point, evaluate the second derivative
+  int eval2ndDeriv( double t, TMRPoint *X,
+                    TMRPoint *Xt, TMRPoint *Xtt );
 
   // Split the curve at the given parametric point
   void split( double tsplit, TMRBsplineCurve **c1, TMRBsplineCurve **c2 );
@@ -69,7 +70,7 @@ class TMRBsplineCurve : public TMRCurve {
     if (_wts){ *_wts = wts; }
     if (_pts){ *_pts = pts; }
   }
-  
+
  private:
   // The number of control points and b-spline order
   int nctl, ku;
@@ -93,12 +94,12 @@ class TMRBsplineCurve : public TMRCurve {
 */
 class TMRBsplineSurface : public TMRSurface {
  public:
-  TMRBsplineSurface( int nu, int nv, int ku, int kv, 
+  TMRBsplineSurface( int nu, int nv, int ku, int kv,
                      const TMRPoint *pts );
-  TMRBsplineSurface( int nu, int nv, int ku, int kv, 
-                     const double *Tu, const double *Tv, 
+  TMRBsplineSurface( int nu, int nv, int ku, int kv,
+                     const double *Tu, const double *Tv,
                      const TMRPoint *pts );
-  TMRBsplineSurface( int nu, int nv, int ku, int kv, 
+  TMRBsplineSurface( int nu, int nv, int ku, int kv,
                      const double *Tu, const double *Tv,
                      const double *wts, const TMRPoint *pts );
   ~TMRBsplineSurface();
@@ -106,19 +107,22 @@ class TMRBsplineSurface : public TMRSurface {
   // Get the parameter range for this surface
   void getRange( double *umin, double *vmin,
                  double *umax, double *vmax );
- 
+
   // Given the parametric point, compute the x,y,z location
   int evalPoint( double u, double v, TMRPoint *X );
-  
+
   // Perform the inverse evaluation
   int invEvalPoint( TMRPoint p, double *u, double *v );
 
-  // Given the parametric point, evaluate the first derivative 
-  int evalDeriv( double u, double v, 
+  // Given the parametric point, evaluate the first derivative
+  int evalDeriv( double u, double v,
+                 TMRPoint *X,
                  TMRPoint *Xu, TMRPoint *Xv );
 
   // Given the parametric point, evaluate the second derivatives
   int eval2ndDeriv( double u, double v,
+                    TMRPoint *X,
+                    TMRPoint *Xu, TMRPoint *Xv,
                     TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
 
   void getData( int *_nu, int *_nv, int *_ku, int *_kv,
@@ -155,32 +159,35 @@ class TMRBsplineSurface : public TMRSurface {
 /*
   TMRBsplinePcurve: Parametric curve
 
-  This class defines a parametric curve such that u(t) and v(t) are 
+  This class defines a parametric curve such that u(t) and v(t) are
   functions of the parameter t.
 */
 class TMRBsplinePcurve : public TMRPcurve {
  public:
   TMRBsplinePcurve( int n, int k, const double *pts );
   TMRBsplinePcurve( int n, int k, const double *Tu, const double *pts );
-  TMRBsplinePcurve( int n, int k, const double *Tu, const double *wts, 
+  TMRBsplinePcurve( int n, int k, const double *Tu, const double *wts,
                     const double *pts );
   ~TMRBsplinePcurve();
 
   // Get the parameter range for this edge
   void getRange( double *tmin, double *tmax );
-  
+
   // Given the parametric point, evaluate the x,y,z location
   int evalPoint( double t, double *u, double *v );
 
-  // Given the parametric point, evaluate the derivative 
-  int evalDeriv( double t, double *ut, double *vt );
+  // Given the parametric point, evaluate the derivative
+  int evalDeriv( double t, double *u, double *v,
+                 double *ut, double *vt );
 
   // Evaluate the second derivative
-  int eval2ndDeriv( double t, double *utt, double *vtt );
+  int eval2ndDeriv( double t, double *u, double *v,
+                    double *ut, double *vt,
+                    double *utt, double *vtt );
 
   // Refine the knot vector using knot insertion
   TMRBsplinePcurve* refineKnots( const double *Tnew, int nnew );
-  
+
  private:
   // The number of control points and b-spline order
   int nctl, ku;
@@ -200,13 +207,13 @@ class TMRBsplinePcurve : public TMRPcurve {
   using a number of different interpolation strategies.
 
   The object is created, then internal parameters/options can be set,
-  and finally, the interpolation b-spline object can be created.  
+  and finally, the interpolation b-spline object can be created.
 */
 class TMRCurveInterpolation : public TMREntity {
  public:
   TMRCurveInterpolation( const TMRPoint *interp, int ninterp );
   ~TMRCurveInterpolation();
-  
+
   // Set the number of control points (must be < ninterp)
   void setNumControlPoints( int _nctl ){
     nctl = _nctl;
@@ -226,9 +233,9 @@ class TMRCurveInterpolation : public TMREntity {
 
 /*
   Create a b-spline surface by lofting a spline over b-spline curves
- 
+
   The loft requires 3 steps:
-  1. Converting the knot space to span the same to span the same 
+  1. Converting the knot space to span the same to span the same
   2. Inserting knots to create a common knot space
   3. Creating an interpolating spline to pass through all curves
 */

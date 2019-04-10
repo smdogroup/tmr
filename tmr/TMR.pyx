@@ -391,8 +391,8 @@ cdef class Face:
     def getNumEdgeLoops(self):
         return self.ptr.getNumEdgeLoops()
 
-    def addEdgeLoop(self, EdgeLoop loop):
-        self.ptr.addEdgeLoop(loop.ptr)
+    def addEdgeLoop(self, int _dir, EdgeLoop loop):
+        self.ptr.addEdgeLoop(_dir, loop.ptr)
 
     def getEdgeLoop(self, k):
         cdef TMREdgeLoop *loop = NULL

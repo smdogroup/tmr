@@ -23,132 +23,6 @@
 #ifdef TMR_HAS_OPENCASCADE
 
 /*
-  TMR interface to OpenCascade for the curve
-*/
-TMR_OCCCurve::TMR_OCCCurve( Handle(Geom_Curve) &c ){
-  curve = c;
-}
-
-TMR_OCCCurve::~TMR_OCCCurve(){}
-
-void TMR_OCCCurve::getRange( double *tmin, double *tmax ){
-  *tmin = curve->FirstParameter();
-  *tmax = curve->LastParameter();
-}
-
-int TMR_OCCCurve::evalPoint( double t, TMRPoint *X ){
-  gp_Pnt p;
-  curve->D0(t, p);
-  X->x = p.X();
-  X->y = p.Y();
-  X->z = p.Z();
-  return 0;
-}
-
-int TMR_OCCCurve::invEvalPoint( TMRPoint X, double *t ){
-  gp_Pnt pt(X.x, X.y, X.z);
-  GeomAPI_ProjectPointOnCurve projection(pt, curve);
-  if (projection.NbPoints() == 0){
-    return 1;
-  }
-  else {
-    *t = projection.LowerDistanceParameter();
-    return 0;
-  }
-}
-
-int TMR_OCCCurve::evalDeriv( double t, TMRPoint *Xt ){
-  gp_Pnt p;
-  gp_Vec v1;
-  curve->D1(t, p, v1);
-  Xt->x = v1.X();
-  Xt->y = v1.Y();
-  Xt->z = v1.Z();
-  return 0;
-}
-
-int TMR_OCCCurve::eval2ndDeriv( double t, TMRPoint *Xtt ){
-  gp_Pnt p;
-  gp_Vec v1, v2;
-  curve->D2(t, p, v1, v2);
-  Xtt->x = v2.X();
-  Xtt->y = v2.Y();
-  Xtt->z = v2.Z();
-  return 0;
-}
-
-/*
-  TMR interface to the OpenCascade geometry
-*/
-TMR_OCCSurface::TMR_OCCSurface( Handle(Geom_Surface) &s ){
-  surf = s;
-}
-
-TMR_OCCSurface::~TMR_OCCSurface(){}
-
-void TMR_OCCSurface::getRange( double *umin, double *vmin,
-                               double *umax, double *vmax ){
-  surf->Bounds(*umin, *umax, *vmin, *vmax);
-}
-
-int TMR_OCCSurface::evalPoint( double u, double v, TMRPoint *X ){
-  gp_Pnt p;
-  surf->D0(u, v, p);
-  X->x = p.X();
-  X->y = p.Y();
-  X->z = p.Z();
-  return 0;
-}
-
-int TMR_OCCSurface::invEvalPoint( TMRPoint X, double *u, double *v ){
-  gp_Pnt pt(X.x, X.y, X.z);
-  GeomAPI_ProjectPointOnSurf projection(pt, surf);
-  if (projection.NbPoints() == 0){
-    return 1;
-  }
-  else {
-    projection.LowerDistanceParameters(*u, *v);
-    return 0;
-  }
-}
-
-int TMR_OCCSurface::evalDeriv( double u, double v,
-                               TMRPoint *Xu, TMRPoint *Xv ){
-  gp_Pnt p;
-  gp_Vec pu, pv;
-  surf->D1(u, v, p, pu, pv);
-  Xu->x = pu.X();
-  Xu->y = pu.Y();
-  Xu->z = pu.Z();
-  Xv->x = pv.X();
-  Xv->y = pv.Y();
-  Xv->z = pv.Z();
-  return 0;
-}
-
-int TMR_OCCSurface::eval2ndDeriv( double u, double v,
-                                  TMRPoint *Xuu,
-                                  TMRPoint *Xuv,
-                                  TMRPoint *Xvv ){
-  gp_Pnt p;
-  gp_Vec pu, pv;
-  gp_Vec puu, puv, pvv;
-  surf->D2(u, v, p, pu, pv, puu, pvv, puv);
-  Xuu->x = puu.X();
-  Xuu->y = puu.Y();
-  Xuu->z = puu.Z();
-
-  Xvv->x = pvv.X();
-  Xvv->y = pvv.Y();
-  Xvv->z = pvv.Z();
-
-  Xuv->x = puv.X();
-  Xuv->y = puv.Y();
-  Xuv->z = puv.Z();
-  return 0;
-}
-
-/*
   The TMR interface to the underlying OpenCascade vertex object
 */
 TMR_OCCVertex::TMR_OCCVertex( TopoDS_Vertex &v ){
@@ -269,27 +143,40 @@ int TMR_OCCEdge::invEvalPoint( TMRPoint X, double *t ){
   }
 }
 
-int TMR_OCCEdge::evalDeriv( double t, TMRPoint *Xt ){
+int TMR_OCCEdge::evalDeriv( double t, TMRPoint *X, TMRPoint *Xt ){
   int fail = 0;
   gp_Pnt p;
   gp_Vec pt;
   BRepAdaptor_Curve curve(edge);
   curve.D1(t, p, pt);
+  X->x = p.X();
+  X->y = p.Y();
+  X->z = p.Z();
+
   Xt->x = pt.X();
   Xt->y = pt.Y();
   Xt->z = pt.Z();
   return fail;
 }
 
-int TMR_OCCEdge::eval2ndDeriv( double t, TMRPoint *Xtt ){
+int TMR_OCCEdge::eval2ndDeriv( double t, TMRPoint *X,
+                               TMRPoint *Xt, TMRPoint *Xtt ){
   int fail = 0;
   gp_Pnt p;
-  gp_Vec v1, v2;
+  gp_Vec pt, ptt;
   BRepAdaptor_Curve curve(edge);
-  curve.D2(t, p, v1, v2);
-  Xtt->x = v2.X();
-  Xtt->y = v2.Y();
-  Xtt->z = v2.Z();
+  curve.D2(t, p, pt, ptt);
+  X->x = p.X();
+  X->y = p.Y();
+  X->z = p.Z();
+
+  Xt->x = pt.X();
+  Xt->y = pt.Y();
+  Xt->z = pt.Z();
+
+  Xtt->x = ptt.X();
+  Xtt->y = ptt.Y();
+  Xtt->z = ptt.Z();
   return fail;
 }
 
@@ -341,14 +228,20 @@ int TMR_OCCFace::invEvalPoint( TMRPoint X, double *u, double *v ){
 }
 
 int TMR_OCCFace::evalDeriv( double u, double v,
+                            TMRPoint *X,
                             TMRPoint *Xu, TMRPoint *Xv ){
   const Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
   gp_Pnt p;
   gp_Vec pu, pv;
   surf->D1(u, v, p, pu, pv);
+  X->x = p.X();
+  X->y = p.Y();
+  X->z = p.Z();
+
   Xu->x = pu.X();
   Xu->y = pu.Y();
   Xu->z = pu.Z();
+
   Xv->x = pv.X();
   Xv->y = pv.Y();
   Xv->z = pv.Z();
@@ -356,6 +249,9 @@ int TMR_OCCFace::evalDeriv( double u, double v,
 }
 
 int TMR_OCCFace::eval2ndDeriv( double u, double v,
+                               TMRPoint *X,
+                               TMRPoint *Xu,
+                               TMRPoint *Xv,
                                TMRPoint *Xuu,
                                TMRPoint *Xuv,
                                TMRPoint *Xvv ){
@@ -364,6 +260,18 @@ int TMR_OCCFace::eval2ndDeriv( double u, double v,
   gp_Vec pu, pv;
   gp_Vec puu, puv, pvv;
   surf->D2(u, v, p, pu, pv, puu, pvv, puv);
+  X->x = p.X();
+  X->y = p.Y();
+  X->z = p.Z();
+
+  Xu->x = pu.X();
+  Xu->y = pu.Y();
+  Xu->z = pu.Z();
+
+  Xv->x = pv.X();
+  Xv->y = pv.Y();
+  Xv->z = pv.Z();
+
   Xuu->x = puu.X();
   Xuu->y = puu.Y();
   Xuu->z = puu.Z();
@@ -772,7 +680,7 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
       }
 
       // Allocate the loop with the given edges/directions
-      all_faces[index-1]->addEdgeLoop(new TMREdgeLoop(ne, edgs, dir));
+      all_faces[index-1]->addEdgeLoop(1, new TMREdgeLoop(ne, edgs, dir));
 
       // Free the allocated data
       delete [] edgs;

@@ -63,7 +63,8 @@ void TMR_LaplacianSmoothing( int nsmooth, int num_fixed_pts,
 
     // Evaluate the derivatives w.r.t. the parameter locations
     for ( int i = num_fixed_pts; i < num_pts; i++ ){
-      face->evalDeriv(prm[2*i], prm[2*i+1], &Xu[i], &Xv[i]);
+      TMRPoint X;
+      face->evalDeriv(prm[2*i], prm[2*i+1], &X, &Xu[i], &Xv[i]);
     }
 
     // Loop over all the edges
@@ -141,7 +142,8 @@ void TMR_SpringSmoothing( int nsmooth, double alpha, int num_fixed_pts,
 
     // Evaluate the derivatives w.r.t. the parameter locations
     for ( int i = num_fixed_pts; i < num_pts; i++ ){
-      face->evalDeriv(prm[2*i], prm[2*i+1], &Xu[i], &Xv[i]);
+      TMRPoint X;
+      face->evalDeriv(prm[2*i], prm[2*i+1], &X, &Xu[i], &Xv[i]);
     }
 
     memset(new_params, 0, 2*num_pts*sizeof(double));
@@ -226,7 +228,8 @@ void TMR_SpringQuadSmoothing( int nsmooth, double alpha, int num_fixed_pts,
 
     // Evaluate the derivatives w.r.t. the parameter locations
     for ( int i = num_fixed_pts; i < num_pts; i++ ){
-      face->evalDeriv(prm[2*i], prm[2*i+1], &Xu[i], &Xv[i]);
+      TMRPoint X;
+      face->evalDeriv(prm[2*i], prm[2*i+1], &X, &Xu[i], &Xv[i]);
     }
 
     memset(new_params, 0, 2*num_pts*sizeof(double));
@@ -344,8 +347,8 @@ void TMR_QuadSmoothing( int nsmooth, int num_fixed_pts,
           // Evaluate the derivatives w.r.t. the parameter locations so
           // that we can take movement in the physical plane and convert
           // it to movement in the parametric coordinates
-          TMRPoint Xu, Xv;
-          face->evalDeriv(prm[2*i], prm[2*i+1], &Xu, &Xv);
+          TMRPoint X, Xu, Xv;
+          face->evalDeriv(prm[2*i], prm[2*i+1], &X, &Xu, &Xv);
 
           // Normalize the directions Xu, Xv to form a locally-orthonormal
           // coordinate frame aligned with the surface

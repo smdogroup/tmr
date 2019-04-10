@@ -84,10 +84,12 @@ class TMREdge : public TMREntity {
   virtual int invEvalPoint( TMRPoint p, double *t );
 
   // Given the parametric point, evaluate the first derivative 
-  virtual int evalDeriv( double t, TMRPoint *Xt );
+  virtual int evalDeriv( double t, TMRPoint *X,
+                         TMRPoint *Xt );
 
   // Given the parametric point, evaluate the second derivative
-  virtual int eval2ndDeriv( double t, TMRPoint *Xtt );
+  virtual int eval2ndDeriv( double t, TMRPoint *X,
+                            TMRPoint *Xt, TMRPoint *Xtt );
   
   // Parametrize the curve on the given surface
   virtual int getParamsOnFace( TMRFace *face, double t, 
@@ -110,7 +112,7 @@ class TMREdge : public TMREntity {
 
   // Write the object to the VTK file
   void writeToVTK( const char *filename );
- private:
+ private: 
   // The start/end vertices of the curve
   TMRVertex *v1, *v2;
 
@@ -151,11 +153,11 @@ class TMREdgeLoop : public TMREntity {
 */
 class TMRFace : public TMREntity {
  public:
-  TMRFace( int _normal_orient=1 );
+  TMRFace( int _orientation=1 );
   virtual ~TMRFace();
 
   // Get the underlying normal direction
-  int getOrientation();
+  virtual int getOrientation();
 
   // Get the parameter range for this surface
   virtual void getRange( double *umin, double *vmin,
@@ -168,17 +170,20 @@ class TMRFace : public TMREntity {
   virtual int invEvalPoint( TMRPoint p, double *u, double *v );
 
   // Given the parametric point, evaluate the first derivative 
-  virtual int evalDeriv( double u, double v, 
+  virtual int evalDeriv( double u, double v,
+                         TMRPoint *X,
                          TMRPoint *Xu, TMRPoint *Xv );
 
   // Given the parametric point, evaluate the second derivatives
   virtual int eval2ndDeriv( double u, double v,
+                            TMRPoint *X,
+                            TMRPoint *Xu, TMRPoint *Xv,
                             TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
 
   // Add an edge loop to the face
   int getNumEdgeLoops();
-  void addEdgeLoop( TMREdgeLoop *loop );
-  void getEdgeLoop( int k, TMREdgeLoop **loop );
+  void addEdgeLoop( int loop_dir, TMREdgeLoop *loop );
+  int getEdgeLoop( int k, TMREdgeLoop **loop );
 
   // Set/retrieve the source face
   void setSource( TMRVolume *_volume, TMRFace *_face );
@@ -194,7 +199,7 @@ class TMRFace : public TMREntity {
  private:
   // Relative orientation of the normal direction and
   // the parametric normal direction
-  const int normal_orient;
+  int orientation;
 
   // The mesh for the curve - if it exists
   TMRFaceMesh *mesh;
@@ -206,6 +211,7 @@ class TMRFace : public TMREntity {
   // Store the loop information
   int num_loops, max_num_loops;
   TMREdgeLoop **loops;
+  int *loop_dirs;
 
   // Derivative step size
   static double deriv_step_size;

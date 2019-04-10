@@ -114,7 +114,7 @@ cdef extern from "TMRTopology.h":
         void setSource(TMRVolume*, TMRFace*)
         void getSource(int*, TMRVolume**, TMRFace**)
         int getNumEdgeLoops()
-        void addEdgeLoop(TMREdgeLoop*)
+        void addEdgeLoop(int, TMREdgeLoop*)
         void getEdgeLoop(int, TMREdgeLoop**)
         void setMesh(TMRFaceMesh*)
         void getMesh(TMRFaceMesh**)
