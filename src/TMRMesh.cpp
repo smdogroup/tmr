@@ -18,6 +18,10 @@
   limitations under the License.
 */
 
+#include <math.h>
+#include <stdio.h>
+#include <map>
+
 #include "TMRMesh.h"
 #include "TMRNativeTopology.h"
 #include "TMRTriangularize.h"
@@ -25,9 +29,6 @@
 #include "TMRPerfectMatchInterface.h"
 #include "TMRBspline.h"
 #include "tmrlapack.h"
-#include <math.h>
-#include <stdio.h>
-#include <map>
 
 #ifdef TMR_USE_NETGEN
 // The namespace is required because of the way nglib is compiled by
