@@ -642,13 +642,12 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
   TMRFace **all_faces = new TMRFace*[ nfaces ];
   memset(all_faces, 0, nfaces*sizeof(TMRFace*));
   for ( int index = 1; index <= faces.Extent(); index++ ){
-    TopoDS_Face face_orig = TopoDS::Face(faces(index));
-    TopoDS_Face face = TopoDS::Face(faces(index).Oriented(TopAbs_FORWARD));
+    TopoDS_Face face = TopoDS::Face(faces(index));
 
     // Check if the orientation of the face is flipped relative
     // to the natural orientation of the surface
     int orient = 1;
-    if (face_orig.Orientation() == TopAbs_REVERSED){
+    if (face.Orientation() == TopAbs_REVERSED){
       orient = -1;
     }
     all_faces[index-1] = new TMR_OCCFace(orient, face);
@@ -680,7 +679,12 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
       }
 
       // Allocate the loop with the given edges/directions
-      all_faces[index-1]->addEdgeLoop(1, new TMREdgeLoop(ne, edgs, dir));
+      int loop_orient = 1;
+      if (i > 0){
+        loop_orient = -1;
+      }
+      all_faces[index-1]->addEdgeLoop(loop_orient,
+                                      new TMREdgeLoop(ne, edgs, dir));
 
       // Free the allocated data
       delete [] edgs;

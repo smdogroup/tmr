@@ -60,31 +60,24 @@ from tmr import TMR
 comm = MPI.COMM_WORLD
 htarget = 0.02
 
-geo = TMR.LoadModel('model.step', print_lev=1)
-verts = geo.getVertices()
-edges = geo.getEdges()
-faces = geo.getFaces()
-vols = geo.getVolumes()
+# geo = TMR.LoadModel('model.step', print_lev=1)
+# verts = geo.getVertices()
+# edges = geo.getEdges()
+# faces = geo.getFaces()
+# vols = geo.getVolumes()
 
-print(len(verts))
-print(len(edges))
-print(len(faces))
+# print(len(verts))
+# print(len(edges))
+# print(len(faces))
 
-for vol in vols:
-    print(vol.getName())
+# for vol in vols:
+#     print(vol.getName())
 
 geo = TMR.LoadModel('model.egads', print_lev=1)
 verts = geo.getVertices()
 edges = geo.getEdges()
 faces = geo.getFaces()
 vols = geo.getVolumes()
-
-print(len(verts))
-print(len(edges))
-print(len(faces))
-
-for vol in vols:
-    print(vol.getName())
 
 geo_new = TMR.Model(verts, edges, faces)
 
@@ -93,8 +86,10 @@ mesh = TMR.Mesh(comm, geo_new)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
+opts.mesh_type_default = TMR.UNSTRUCTURED
 opts.write_mesh_quality_histogram = 1
-opts.triangularize_print_iter = 50000
+opts.triangularize_print_level = 1
+opts.write_post_smooth_quad = 1
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)

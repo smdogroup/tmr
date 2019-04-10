@@ -118,7 +118,7 @@ const int hex_face_nodes[6][4] =
 /*
   Possible orientations for two connecting faces
 */
-const int face_orient[8][4] =
+const int face_orientations[8][4] =
   {{0,1,2,3}, {1,2,3,0},
    {2,3,0,1}, {3,0,1,2},
    {3,2,1,0}, {0,3,2,1},
@@ -656,10 +656,10 @@ void TMR_ComputeHexEdgesAndFaces( int nnodes, int nhex,
 
             // Check if the adjacent edge matches in either direction
             for ( int ort = 0; ort < 8; ort++ ){
-              if (f[0] == f2[face_orient[ort][0]] &&
-                  f[1] == f2[face_orient[ort][1]] &&
-                  f[2] == f2[face_orient[ort][2]] &&
-                  f[3] == f2[face_orient[ort][3]]){
+              if (f[0] == f2[face_orientations[ort][0]] &&
+                  f[1] == f2[face_orientations[ort][1]] &&
+                  f[2] == f2[face_orientations[ort][2]] &&
+                  f[3] == f2[face_orientations[ort][3]]){
                 hex_face_nums[6*ihex + k] = face_num;
                 break;
               }
@@ -1477,7 +1477,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
     // Get the face orientation
     int face_orient = face->getOrientation();
-    
+
     // Keep track of the number of closed loop cycles in the domain
     int nloops = face->getNumEdgeLoops();
 
@@ -1554,15 +1554,20 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
       // Get the curve information for this loop segment
       TMREdgeLoop *loop;
-      int loop_orient = face->getEdgeLoop(k, &loop);
+      face->getEdgeLoop(k, &loop);
       int nedges;
       TMREdge **edges;
       const int *edge_orient;
       loop->getEdgeLoop(&nedges, &edges, &edge_orient);
-          
-      for ( int i = 0; i < nedges; i++ ){
+
+      int edge_index = nedges-1;
+      if (face_orient > 0){
+        edge_index = 0;
+      }
+
+      for ( int i = 0; i < nedges; i++, edge_index += face_orient ){
         // Retrieve the underlying curve mesh
-        TMREdge *edge = edges[i];
+        TMREdge *edge = edges[edge_index];
         TMREdgeMesh *mesh = NULL;
         edge->getMesh(&mesh);
 
@@ -1571,29 +1576,24 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
         const double *tpts;
         mesh->getMeshPoints(&npts, &tpts, NULL);
 
-        // Get the final edge orientation
-        int orientation = face_orient*loop_orient*edge_orient[i];
-        
-        // Find the point on the curve
+        // Get the orientation of the edge
+        int orientation = face_orient*edge_orient[edge_index];
+
+        int index = npts-1;
         if (orientation > 0){
-          for ( int j = 0; j < npts-1; j++ ){
-            edge->getParamsOnFace(face, tpts[j], orientation,
-                                  &params[2*pt], &params[2*pt+1]);
-            segments[2*pt] = pt;
-            segments[2*pt+1] = pt+1;
-            if (edge->isDegenerate()){
-              degen[2*num_degen] = pt;
-              degen[2*num_degen+1] = pt+1;
-              num_degen++;
-            }
-            pt++;
-          }
+          index = 0;
         }
-        else {
-          // Reverse the parameter values on the edge
-          for ( int j = npts-1; j >= 1; j-- ){
-            edge->getParamsOnFace(face, tpts[j], orientation,
-                                  &params[2*pt], &params[2*pt+1]);
+
+        for ( int j = 0; j < npts-1; j++, index += orientation ){
+          int info = edge->getParamsOnFace(face, tpts[index],
+                                           edge_orient[edge_index],
+                                           &params[2*pt], &params[2*pt+1]);
+          if (info != 0){
+            fprintf(stderr,
+                    "TMRFaceMesh: getParamsOnFace failed with error code %d\n",
+                    info);
+          }
+          else {
             segments[2*pt] = pt;
             segments[2*pt+1] = pt+1;
             if (edge->isDegenerate()){
@@ -2254,6 +2254,9 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
   // since we already know that the surface has four edges and the
   // nodes on those edges can be used for a structured mesh
 
+  // Get the face orientation
+  int face_orient = face->getOrientation();
+
   // Get the first edge loop and the edges in the loop
   TMREdgeLoop *loop;
   face->getEdgeLoop(0, &loop);
@@ -2265,10 +2268,19 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
   // Get the number of nodes for the x/y edges
   int nx = 0, ny = 0;
   TMREdgeMesh *mesh;
-  edges[0]->getMesh(&mesh);
-  mesh->getMeshPoints(&nx, NULL, NULL);
-  edges[1]->getMesh(&mesh);
-  mesh->getMeshPoints(&ny, NULL, NULL);
+
+  if (face_orient > 0){
+    edges[0]->getMesh(&mesh);
+    mesh->getMeshPoints(&nx, NULL, NULL);
+    edges[1]->getMesh(&mesh);
+    mesh->getMeshPoints(&ny, NULL, NULL);
+  }
+  else {
+    edges[0]->getMesh(&mesh);
+    mesh->getMeshPoints(&ny, NULL, NULL);
+    edges[1]->getMesh(&mesh);
+    mesh->getMeshPoints(&nx, NULL, NULL);
+  }
 
   // Compute the total number of points
   num_points = nx*ny;
@@ -2561,6 +2573,9 @@ int TMRFaceMesh::setNodeNums( int *num ){
   if (!vars){
     vars = new int[ num_points ];
 
+    // Get the face orientation
+    int face_orient = face->getOrientation();
+
     // Retrieve the boundary node numbers from the surface loops
     int pt = 0;
     for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
@@ -2570,32 +2585,38 @@ int TMRFaceMesh::setNodeNums( int *num ){
 
       int nedges;
       TMREdge **edges;
-      const int *dir;
-      loop->getEdgeLoop(&nedges, &edges, &dir);
+      const int *edge_orient;
+      loop->getEdgeLoop(&nedges, &edges, &edge_orient);
 
-      for ( int i = 0; i < nedges; i++ ){
+      int edge_index = nedges-1;
+      if (face_orient > 0){
+        edge_index = 0;
+      }
+
+      for ( int i = 0; i < nedges; i++, edge_index += face_orient ){
         // Retrieve the underlying curve mesh
         TMREdgeMesh *mesh = NULL;
-        edges[i]->getMesh(&mesh);
+        edges[edge_index]->getMesh(&mesh);
 
         // Retrieve the variable numbers for this loop
         const int *edge_vars;
         int npts = mesh->getNodeNums(&edge_vars);
 
-        if (edges[i]->isDegenerate()){
+        if (edges[edge_index]->isDegenerate()){
           vars[pt] = edge_vars[0];
         }
         else {
-          // Find the point on the curve
-          if (dir[i] > 0){
-            for ( int j = 0; j < npts-1; j++, pt++ ){
-              vars[pt] = edge_vars[j];
-            }
+          // Get the orientation of the edge
+          int orientation = face_orient*edge_orient[edge_index];
+
+          int index = npts-1;
+          if (orientation > 0){
+            index = 0;
           }
-          else {
-            for ( int j = npts-1; j >= 1; j--, pt++ ){
-              vars[pt] = edge_vars[j];
-            }
+
+          for ( int j = 0; j < npts-1; j++, index += orientation, pt++ ){
+            // Find the point on the curve
+            vars[pt] = edge_vars[index];
           }
         }
       }
