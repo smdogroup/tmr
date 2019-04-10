@@ -18,6 +18,7 @@
   limitations under the License.
 */
 
+#include <map>
 #include "TMREgads.h"
 
 #ifdef TMR_HAS_EGADS
