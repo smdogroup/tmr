@@ -1874,31 +1874,33 @@ void TMRFaceMesh::computeHolePts( const int nloops,
 */
 void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
                                      const double *params ){
-  int source_dir;
+  int rel_source_orient;
   TMRVolume *source_volume;
   TMRFace *source;
-  face->getSource(&source_dir, &source_volume, &source);
+  face->getSource(&rel_source_orient, &source_volume, &source);
 
   // Create the source map of edges and keep track of their local
   // directions relative to the source surface
   std::map<TMREdge*, int> source_edges;
+  int source_orient = source->getOrientation();
   for ( int k = 0; k < source->getNumEdgeLoops(); k++ ){
     TMREdgeLoop *loop;
     source->getEdgeLoop(k, &loop);
 
-    // Get the number of edges/edges from the source loop
+    // Get the number of edges from the source loop
     int nedges;
     TMREdge **edges;
-    const int *dir;
-    loop->getEdgeLoop(&nedges, &edges, &dir);
+    const int *edge_orient;
+    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
     for ( int j = 0; j < nedges; j++ ){
-      source_edges[edges[j]] = dir[j];
+      source_edges[edges[j]] = source_orient*edge_orient[j];
     }
   }
 
   // Create the target map of edges and keep track of their local
   // directions relative to the target surface
   std::map<TMREdge*, int> target_edges;
+  int target_orient = face->getOrientation();
   for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
     TMREdgeLoop *loop;
     face->getEdgeLoop(k, &loop);
@@ -1906,16 +1908,16 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     // Get the number of edges/edges from the source loop
     int nedges;
     TMREdge **edges;
-    const int *dir;
-    loop->getEdgeLoop(&nedges, &edges, &dir);
+    const int *edge_orient;
+    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
     for ( int j = 0; j < nedges; j++ ){
-      target_edges[edges[j]] = dir[j];
+      target_edges[edges[j]] = target_orient*edge_orient[j];
     }
   }
 
   // Keep track of the source-to-target edge and target-to-source
   // edge mappings as well as their relative orientations
-  std::map<TMREdge*, int> target_edge_dir;
+  std::map<TMREdge*, int> source_to_target_orient;
   std::map<TMREdge*, TMREdge*> source_to_target_edge;
 
   // Loop over the faces that are within the source volume
@@ -1926,47 +1928,49 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
   for ( int i = 0; i < num_faces; i++ ){
     // Check that this is not a target or source face
     if (faces[i] != source && faces[i] != face){
-      // Find the source and target edge shared by the
-      TMREdge *sedge = NULL, *tedge = NULL;
-      int sdir = 0, tdir = 0;
+      // Find the source and target edge that are both contained in
+      // one of the edge loops for this face
+      int face_orient = faces[i]->getOrientation();
+      TMREdge *src_edge = NULL, *tar_edge = NULL;
+      int src_orient = 0, tar_orient = 0;
       for ( int k = 0; k < faces[i]->getNumEdgeLoops(); k++ ){
-        sedge = tedge = NULL;
-        sdir = tdir = 0;
+        src_edge = tar_edge = NULL;
+        src_orient = tar_orient = 0;
 
         // Get the edge loop
         TMREdgeLoop *loop;
         faces[i]->getEdgeLoop(k, &loop);
 
-        // Get the number of edges/edges from the source loop
+        // Get the number of edges from the source loop
         int nedges;
         TMREdge **edges;
-        const int *dir;
-        loop->getEdgeLoop(&nedges, &edges, &dir);
+        const int *edge_orient;
+        loop->getEdgeLoop(&nedges, &edges, &edge_orient);
 
         // Determine which edge is shared
         for ( int j = 0; j < nedges; j++ ){
           if (target_edges.count(edges[j]) > 0){
-            tedge = edges[j];
-            tdir = dir[j];
+            tar_edge = edges[j];
+            tar_orient = face_orient*edge_orient[j];
           }
           if (source_edges.count(edges[j]) > 0){
-            sedge = edges[j];
-            sdir = dir[j];
+            src_edge = edges[j];
+            src_orient = face_orient*edge_orient[j];
           }
         }
 
-        if (sedge && tedge){
+        if (src_edge && tar_edge){
           break;
         }
       }
 
-      if (sedge && tedge){
+      if (src_edge && tar_edge){
         // Compute the relative source-to-target directions
-        int tmp = source_edges[sedge]*target_edges[tedge];
-        target_edge_dir[tedge] = -sdir*tdir*tmp;
+        int tmp = source_edges[src_edge]*target_edges[tar_edge];
+        source_to_target_orient[tar_edge] = -src_orient*tar_orient*tmp;
 
         // Source to target and target to source edges
-        source_to_target_edge[sedge] = tedge;
+        source_to_target_edge[src_edge] = tar_edge;
       }
     }
   }
@@ -1985,9 +1989,14 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     const int *dir;
     loop->getEdgeLoop(&nedges, &edges, &dir);
 
-    for ( int i = 0; i < nedges; i++ ){
+    int edge_index = nedges-1;
+    if (target_orient > 0){
+      edge_index = 0;
+    }
+
+    for ( int i = 0; i < nedges; i++, edge_index += target_orient ){
       // Retrieve the underlying curve mesh
-      TMREdge *edge = edges[i];
+      TMREdge *edge = edges[edge_index];
       TMREdgeMesh *mesh = NULL;
       edge->getMesh(&mesh);
 
@@ -2017,13 +2026,18 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     const int *dir;
     loop->getEdgeLoop(&nedges, &edges, &dir);
 
-    for ( int i = 0; i < nedges; i++ ){
-      // Retrieve the underlying mesh
+    int edge_index = nedges-1;
+    if (source_orient > 0){
+      edge_index = 0;
+    }
+
+    for ( int i = 0; i < nedges; i++, edge_index += source_orient ){
+      // Retrieve the edge and target edge
       TMREdge *edge = edges[i];
-      TMREdge *tedge = source_to_target_edge[edge];
+      TMREdge *tar_edge = source_to_target_edge[edge];
 
       // Get the offset for the target edge
-      int offset = target_edge_offset[tedge];
+      int offset = target_edge_offset[tar_edge];
 
       // Retrieve the source mesh
       TMREdgeMesh *mesh = NULL;
@@ -2041,7 +2055,7 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
       // 6 <- 5 -- 4   0 -- 1 -> 2
 
       if (!edge->isDegenerate()){
-        if (target_edge_dir[tedge] > 0){
+        if (source_to_target_orient[tar_edge] > 0){
           for ( int j = 0; j < npts-1; j++ ){
             source_to_target[source_offset + j] = offset + j;
           }
@@ -2054,7 +2068,7 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
           // Get the previous target edge in the loop. This will give
           // the first number from the last edge loop.
           TMREdge *init_edge = NULL;
-          if (i == 0){
+          if (edge_index == 0){
             init_edge = source_to_target_edge[edges[nedges-1]];
           }
           else {
@@ -2063,7 +2077,8 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
           int init_offset = target_edge_offset[init_edge];
           source_to_target[source_offset] = init_offset;
         }
-        // Increment the offset to the source
+
+        // Increment the offset to the source index
         source_offset += npts-1;
       }
     }
@@ -2157,9 +2172,10 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
       }
     }
 
-    // Flip the orientation of the quads to match the orientation
-    // of the face
-    if (source_dir < 0){
+    // Flip the orientation of the quads to match the orientation of
+    // the face
+    int rel_orient = rel_source_orient*target_orient*source_orient;
+    if (rel_orient < 0){
       for ( int i = 0; i < num_quads; i++ ){
         int tmp = quads[4*i+1];
         quads[4*i+1] = quads[4*i+3];
@@ -2182,7 +2198,8 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
     // Flip the orientation of the triangles to match the
     // orientation of the face
-    if (source_dir < 0){
+    int rel_orient = rel_source_orient*target_orient*source_orient;
+    if (rel_orient < 0){
       for ( int i = 0; i < num_tris; i++ ){
         int tmp = tris[3*i+1];
         tris[4*i+1] = tris[4*i+2];
