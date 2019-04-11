@@ -163,6 +163,7 @@ int TMR_EgadsEdge::invEvalPoint( TMRPoint X, double *t ){
 }
 
 int TMR_EgadsEdge::evalDeriv( double t,
+                              TMRPoint *X,
                               TMRPoint *Xt ){
   double eval[18];
 
@@ -172,6 +173,10 @@ int TMR_EgadsEdge::evalDeriv( double t,
   params[1] = 0.0;
   int icode = EG_evaluate(edge, params, eval);
 
+  X->x = eval[0];
+  X->y = eval[1];
+  X->z = eval[2];
+
   Xt->x = eval[3];
   Xt->y = eval[4];
   Xt->z = eval[5];
@@ -180,6 +185,8 @@ int TMR_EgadsEdge::evalDeriv( double t,
 }
 
 int TMR_EgadsEdge::eval2ndDeriv( double t,
+                                 TMRPoint *X,
+                                 TMRPoint *Xt,
                                  TMRPoint *Xtt ){
   double eval[18];
 
@@ -188,6 +195,14 @@ int TMR_EgadsEdge::eval2ndDeriv( double t,
   params[0] = t;
   params[1] = 0.0;
   int icode = EG_evaluate(edge, params, eval);
+
+  X->x = eval[0];
+  X->y = eval[1];
+  X->z = eval[2];
+
+  Xt->x = eval[3];
+  Xt->y = eval[4];
+  Xt->z = eval[5];
 
   Xtt->x = eval[6];
   Xtt->y = eval[7];
@@ -268,7 +283,9 @@ int TMR_EgadsFace::invEvalPoint( TMRPoint X, double *u, double *v ){
 }
 
 int TMR_EgadsFace::evalDeriv( double u, double v,
-                              TMRPoint *Xu, TMRPoint *Xv ){
+                              TMRPoint *X,
+                              TMRPoint *Xu,
+                              TMRPoint *Xv ){
   double eval[18];
 
   // Evaluate the position of the object
@@ -276,6 +293,10 @@ int TMR_EgadsFace::evalDeriv( double u, double v,
   params[0] = u;
   params[1] = v;
   int icode = EG_evaluate(face, params, eval);
+
+  X->x = eval[0];
+  X->y = eval[1];
+  X->z = eval[2];
 
   Xu->x = eval[3];
   Xu->y = eval[4];
@@ -289,6 +310,9 @@ int TMR_EgadsFace::evalDeriv( double u, double v,
 }
 
 int TMR_EgadsFace::eval2ndDeriv( double u, double v,
+                                 TMRPoint *X,
+                                 TMRPoint *Xu,
+                                 TMRPoint *Xv,
                                  TMRPoint *Xuu,
                                  TMRPoint *Xuv,
                                  TMRPoint *Xvv ){
@@ -299,6 +323,18 @@ int TMR_EgadsFace::eval2ndDeriv( double u, double v,
   params[0] = u;
   params[1] = v;
   int icode = EG_evaluate(face, params, eval);
+
+  X->x = eval[0];
+  X->y = eval[1];
+  X->z = eval[2];
+
+  Xu->x = eval[3];
+  Xu->y = eval[4];
+  Xu->z = eval[5];
+
+  Xv->x = eval[6];
+  Xv->y = eval[7];
+  Xv->z = eval[8];
 
   Xuu->x = eval[9];
   Xuu->y = eval[10];

@@ -69,8 +69,8 @@ class TMR_EgadsEdge : public TMREdge {
   void getRange( double *tmin, double *tmax );
   int evalPoint( double t, TMRPoint *X );
   int invEvalPoint( TMRPoint X, double *t );
-  int evalDeriv( double t, TMRPoint *Xt );
-  int eval2ndDeriv( double t, TMRPoint *Xtt );
+  int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt );
+  int eval2ndDeriv( double t, TMRPoint *X, TMRPoint *Xt, TMRPoint *Xtt );
   int getParamsOnFace( TMRFace *face, double t,
                        int dir, double *u, double *v );
   int isDegenerate();
@@ -89,8 +89,10 @@ class TMR_EgadsFace : public TMRFace {
                  double *umax, double *vmax );
   int evalPoint( double u, double v, TMRPoint *X );
   int invEvalPoint( TMRPoint p, double *u, double *v );
-  int evalDeriv( double u, double v, TMRPoint *Xu, TMRPoint *Xv );
-  int eval2ndDeriv( double u, double v,
+  int evalDeriv( double u, double v, TMRPoint *X,
+                 TMRPoint *Xu, TMRPoint *Xv );
+  int eval2ndDeriv( double u, double v, TMRPoint *X,
+                    TMRPoint *Xu, TMRPoint *Xv,
                     TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
   void getFaceObject( ego *f );
  private:

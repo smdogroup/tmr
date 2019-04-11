@@ -1,4 +1,8 @@
+from mpi4py import MPI
+from tmr import TMR
 from egads4py import egads
+
+comm = MPI.COMM_WORLD
 
 ctx = egads.context()
 
@@ -51,27 +55,9 @@ for c in [c1, c2, c3]:
     body = model.getChildren()[0]
 
 # Write out to a STEP file
-model.saveModel('model.step', overwrite=True)
 model.saveModel('model.egads', overwrite=True)
 
-from mpi4py import MPI
-from tmr import TMR
-
-comm = MPI.COMM_WORLD
 htarget = 0.02
-
-# geo = TMR.LoadModel('model.step', print_lev=1)
-# verts = geo.getVertices()
-# edges = geo.getEdges()
-# faces = geo.getFaces()
-# vols = geo.getVolumes()
-
-# print(len(verts))
-# print(len(edges))
-# print(len(faces))
-
-# for vol in vols:
-#     print(vol.getName())
 
 geo = TMR.LoadModel('model.egads', print_lev=1)
 verts = geo.getVertices()
@@ -88,8 +74,6 @@ mesh = TMR.Mesh(comm, geo_new)
 opts = TMR.MeshOptions()
 opts.mesh_type_default = TMR.UNSTRUCTURED
 opts.write_mesh_quality_histogram = 1
-opts.triangularize_print_level = 1
-opts.write_post_smooth_quad = 1
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)
