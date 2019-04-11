@@ -343,7 +343,7 @@ class TMRVolumeMesh : public TMREntity {
   int num_face_loops;
   int *face_loop_ptr;
   TMRFace **face_loops;
-  int *face_loop_dir;
+  int *face_loop_orient;
   int *face_loop_edge_count;
 
   // Number of points through-thickness
@@ -352,7 +352,7 @@ class TMRVolumeMesh : public TMREntity {
   // Keep the bottom/top surfaces (master/target) in the mesh for
   // future reference
   TMRFace *target, *source;
-  int target_dir, source_dir;
+  int target_orient, source_orient;
 
   int num_points; // The number of points
   TMRPoint *X; // The physical node locations
@@ -399,7 +399,6 @@ class TMRMesh : public TMREntity {
   void getQuadConnectivity( int *_nquads, const int **_quads );
   void getTriConnectivity( int *_ntris, const int **_tris );
   void getHexConnectivity( int *_nhex, const int **_hex );
-  // void getQuadConnectivity( int *_nquads, const int **_quads );
 
   // Create a topology object (with underlying mesh geometry)
   TMRModel* createModelFromMesh();

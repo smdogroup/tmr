@@ -1398,10 +1398,10 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
   // Get the source face and its orientation relative to this
   // face. Note that the source face may be NULL in which case the
   // source orientation is meaningless.
-  int source_dir;
+  int source_orient;
   TMRVolume *source_volume;
   TMRFace *source;
-  face->getSource(&source_dir, &source_volume, &source);
+  face->getSource(&source_orient, &source_volume, &source);
 
   if (source){
     // If the face mesh for the source does not yet exist, create it...
@@ -2174,7 +2174,7 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
     // Flip the orientation of the quads to match the orientation of
     // the face
-    int rel_orient = rel_source_orient*target_orient*source_orient;
+    int rel_orient = -rel_source_orient*target_orient*source_orient;
     if (rel_orient < 0){
       for ( int i = 0; i < num_quads; i++ ){
         int tmp = quads[4*i+1];
@@ -2198,7 +2198,7 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
     // Flip the orientation of the triangles to match the
     // orientation of the face
-    int rel_orient = rel_source_orient*target_orient*source_orient;
+    int rel_orient = -rel_source_orient*target_orient*source_orient;
     if (rel_orient < 0){
       for ( int i = 0; i < num_tris; i++ ){
         int tmp = tris[3*i+1];
@@ -3641,7 +3641,7 @@ TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm,
   num_face_loops = 0;
   face_loops = NULL;
   face_loop_ptr = NULL;
-  face_loop_dir = NULL;
+  face_loop_orient = NULL;
   face_loop_edge_count = NULL;
 
   // Set the number of points through-thickness
@@ -3661,7 +3661,7 @@ TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm,
   // Set the additional connectivity information that is required for
   // the volume mesh.
   source = target = NULL;
-  source_dir = target_dir = 0;
+  source_orient = target_orient = 0;
 }
 
 TMRVolumeMesh::~TMRVolumeMesh(){
@@ -3676,7 +3676,7 @@ TMRVolumeMesh::~TMRVolumeMesh(){
     }
     delete [] face_loop_ptr;
     delete [] face_loops;
-    delete [] face_loop_dir;
+    delete [] face_loop_orient;
     delete [] face_loop_edge_count;
   }
 }
@@ -3759,11 +3759,11 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
   // print out a helpful message.
   int mesh_fail = 0;
 
-  // Get the faces associated with the volume
+  // Get the faces and orientations associated with the volume
   int num_faces;
   TMRFace **faces;
-  const int *face_dir;
-  volume->getFaces(&num_faces, &faces, &face_dir);
+  const int *face_orient;
+  volume->getFaces(&num_faces, &faces, &face_orient);
 
   // Set integers for each face to determine whether it is a source or
   // a target face or it is connected to one of them or whether it is
@@ -3774,19 +3774,19 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
   // Set the pointers for the target/source faces and their directions
   // relative to the interior of the hexahedral volume
   target = NULL;
-  target_dir = 1;
+  target_orient = 1;
   source = NULL;
-  source_dir = 1;
+  source_orient = 1;
 
   // Loop over all the faces to find the sources/targets
   for ( int i = 0; i < num_faces; i++ ){
     TMRFace *src;
     faces[i]->getSource(NULL, NULL, &src);
     if (src){
-      // The natural source orientation should point in to the volume,
-      // otherwise its orientation must be flipped.
+      // To be copied directly, the target orientation should point in
+      // to the volume, otherwise its orientation must be flipped.
       target = faces[i];
-      target_dir = -face_dir[i];
+      target_orient = -face_orient[i]*target->getOrientation();
 
       // Find the source face
       source = src;
@@ -3795,9 +3795,10 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
         if (faces[j] == source){
           f[j] = 1;
 
-          // The natural orientation for the target face should point out
-          // of the volume, otherwise its orientation must be flipped.
-          source_dir = face_dir[j];
+          // The natural orientation for the source face should point
+          // out of the volume, otherwise its orientation must be
+          // flipped.
+          source_orient = face_orient[j]*source->getOrientation();
         }
       }
 
@@ -3871,7 +3872,7 @@ Through-thickness meshes must be structured\n");
   }
 
   face_loops = new TMRFace*[ count ];
-  face_loop_dir = new int[ count ];
+  face_loop_orient = new int[ count ];
   face_loop_edge_count = new int[ count ];
 
   // Set the number of points through the depth
@@ -3894,10 +3895,10 @@ Through-thickness meshes must be structured\n");
     source_loop->getEdgeLoop(&nedges, &edges, NULL);
 
     for ( int j = 0; j < nedges; j++ ){
-      // Search for the other face object that shares the edge
-      // object edges[j] with the source face object
+      // Search for the other face object that shares the edge object
+      // edges[j] with the source face object
       TMRFace *face = NULL;
-      int fdir = 0;
+      int forient = 0;
       for ( int i = 0; i < num_faces; i++ ){
         if (!(faces[i] == target || faces[i] == source)){
           // Get the edge loop associated with the face
@@ -3907,13 +3908,14 @@ Through-thickness meshes must be structured\n");
           // Get the edge loops associated with face i
           int n;
           TMREdge **e;
-          loop->getEdgeLoop(&n, &e, NULL);
+          const int *ort;
+          loop->getEdgeLoop(&n, &e, &ort);
 
           // Does this edge loop contain edges[j]
           for ( int ii = 0; ii < n; ii++ ){
             if (e[ii] == edges[j]){
               face = faces[i];
-              fdir = face_dir[i];
+              forient = face_orient[i]*faces[i]->getOrientation();
               break;
             }
           }
@@ -3983,7 +3985,7 @@ Inconsistent number of edge points through-thickness %d != %d\n",
       // incref the face object
       face_loops[face_loop_ptr[k+1]] = face;
       face->incref();
-      face_loop_dir[face_loop_ptr[k+1]] = fdir;
+      face_loop_orient[face_loop_ptr[k+1]] = forient;
       face_loop_ptr[k+1]++;
     }
   }
@@ -4021,7 +4023,7 @@ Inconsistent number of edge points through-thickness %d != %d\n",
   for ( int j = 0; j < num_depth_pts-1; j++ ){
     for ( int i = 0; i < num_quads; i++ ){
       // Set the quadrilateral points in the base layer
-      if (source_dir > 0){
+      if (source_orient > 0){
         for ( int k = 0; k < 4; k++ ){
           h[k] = j*num_quad_pts + quads[4*i+flip[k]];
         }
@@ -4209,10 +4211,10 @@ int TMRVolumeMesh::setNodeNums( int *num ){
       vars[i] = face_vars[i];
     }
 
-    // Now the target and source surfaces of the volume have the correct
-    // ordering, but the sides are not ordered correctly. Scan through
-    // the structured sides (with the same ordering as defined by the
-    // edge loops on the source surface) and determine the node
+    // Now the target and source surfaces of the volume have the
+    // correct ordering, but the sides are not ordered correctly. Scan
+    // through the structured sides (with the same ordering as defined
+    // by the edge loops on the source surface) and determine the node
     // ordering.
 
     // Keep track of the total number of nodes encountered around the
@@ -4233,7 +4235,6 @@ int TMRVolumeMesh::setNodeNums( int *num ){
       // Set the original ioffset number
       int ioffset_start = ioffset;
 
-      // If the face loop
       int end = face_loop_ptr[k+1];
       for ( int ii = 0, ptr = face_loop_ptr[k]; ptr < end; ii++, ptr++ ){
         TMRFace *face = face_loops[ptr];
@@ -4274,12 +4275,12 @@ int TMRVolumeMesh::setNodeNums( int *num ){
         }
 
         // Determine whether the directions are consistent
-        int abs_face_dir = 0;
-        if (face_loop_dir[ptr] < 0){
-          abs_face_dir = -1;
+        int abs_face_orient = 0;
+        if (face_loop_orient[ptr] < 0){
+          abs_face_orient = -1;
         }
         else {
-          abs_face_dir = 1;
+          abs_face_orient = 1;
         }
 
         // Scan through the depth points
@@ -4290,7 +4291,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
             // Determine the local number for the node on the boundary
             // of the face connecting the target and source surfaces
             // based on the orientation of the source face mesh.
-            if (source_dir < 0){
+            if (source_orient < 0){
               // When this is the last node in the loop, then the
               // ordering must loop back on itself.
               if (i == face_loop_edge_count[ptr]-1 &&
@@ -4315,7 +4316,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
 
             int x = 0, y = 0;
             if (orient == 0){
-              if (abs_face_dir < 0){
+              if (abs_face_orient < 0){
                 x = nx - 1 - i;
                 y = j;
               }
@@ -4325,7 +4326,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
               }
             }
             else if (orient == 1){
-              if (abs_face_dir < 0){
+              if (abs_face_orient < 0){
                 x = nx - 1 - j;
                 y = ny - 1 - i;
               }
@@ -4335,7 +4336,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
               }
             }
             else if (orient == 2){
-              if (abs_face_dir < 0){
+              if (abs_face_orient < 0){
                 x = i;
                 y = ny - 1 - j;
               }
@@ -4345,7 +4346,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
               }
             }
             else if (orient == 3){
-              if (abs_face_dir < 0){
+              if (abs_face_orient < 0){
                 x = j;
                 y = i;
               }

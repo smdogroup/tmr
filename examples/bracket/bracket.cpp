@@ -31,7 +31,7 @@ class CreateMe : public TMROctTACSTopoCreator {
     }
     else if (order == 5){
       return new Solid<5>(stiff);
-    }    
+    }
     return NULL;
   }
 
@@ -65,11 +65,11 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   TMRStiffnessProperties *props =
     new TMRStiffnessProperties(1, q, eps, k0,
                                beta, xoffset, &rho, &E, &nu);
-  
+
   // Allocate a creator object
   CreateMe *creator = new CreateMe(bcs, filter, props);
   creator->incref();
-  
+
   // Create TACS
   TACSAssembler *tacs = creator->createTACS(forest);
   tacs->incref();
@@ -80,7 +80,7 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   creator->getMap(&var_map);
   creator->getIndices(&indices);
   TACSBVecDistribute *dist = new TACSBVecDistribute(var_map, indices);
-  
+
   // Create the design vector
   TACSBVec *vars = new TACSBVec(var_map, 1, dist);
   vars->incref();
@@ -103,13 +103,13 @@ void test_stl_output( const char *filename, TMROctForest *forest ){
   filter->getNodeConn(&conn, &num_elements);
 
   // Get the mesh order
-  const int order = filter->getMeshOrder(); 
+  const int order = filter->getMeshOrder();
   const int size = order*order*order*num_elements;
 
   // Get the elements of the array
   TacsScalar *x;
   vars->getArray(&x);
-  
+
   for ( int i = 0; i < size; i++ ){
     if (conn[i] >= range[mpi_rank] &&
         conn[i] < range[mpi_rank+1]){
@@ -138,9 +138,10 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
-  // Don't write anything to a file, unless a flag is 
+  // Don't write anything to a file, unless a flag is
   // set on the command line
   int write_faces_to_vtk = 0;
+  int test_surf_mesh = 0;
   int test_bdf_file = 0;
   int test_stl_file = 0;
   int order = 2;
@@ -153,6 +154,9 @@ int main( int argc, char *argv[] ){
     }
     if (strcmp(argv[k], "--test_stl") == 0){
       test_stl_file = 1;
+    }
+    if (strcmp(argv[k], "--test_surf_mesh") == 0){
+      test_surf_mesh = 1;
     }
     if (sscanf(argv[k], "order=%d", &order) == 1){
       if (order < 2){ order = 2; }
@@ -202,6 +206,32 @@ int main( int argc, char *argv[] ){
     TMRFace *upper = faces[upper_face_num];
     upper->setSource(volume[0], lower);
 
+    if (test_surf_mesh){
+      int num_verts, num_edges;
+      TMRVertex **verts;
+      TMREdge **edges;
+      geo->getVertices(&num_verts, &verts);
+      geo->getEdges(&num_edges, &edges);
+      geo->getFaces(&num_faces, &faces);
+
+      TMRModel *geo_surf = new TMRModel(num_verts, verts,
+                                        num_edges, edges,
+                                        num_faces, faces);
+      geo_surf->incref();
+
+      TMRMesh *mesh_surf = new TMRMesh(comm, geo_surf);
+      mesh_surf->incref();
+
+      // Mesh the geometry
+      TMRMeshOptions opts;
+      opts.num_smoothing_steps = 5;
+      mesh_surf->mesh(opts, htarget);
+
+      mesh_surf->writeToVTK("surface-mesh.vtk");
+      mesh_surf->decref();
+      geo_surf->decref();
+    }
+
     TMRMesh *mesh = new TMRMesh(comm, geo);
     mesh->incref();
 
@@ -210,13 +240,15 @@ int main( int argc, char *argv[] ){
     options.num_smoothing_steps = 5;
     mesh->mesh(options, htarget);
 
+    mesh->writeToVTK("volume-mesh.vtk", TMRMesh::TMR_HEX);
+    /*
     TMRModel *model = mesh->createModelFromMesh();
     model->incref();
 
     // Create the topology object from the geo-mesh
     TMRTopology *topo = new TMRTopology(comm, model);
     topo->incref();
-    
+
     // Set the topology
     TMROctForest *forest = new TMROctForest(comm);
     forest->incref();
@@ -242,7 +274,7 @@ int main( int argc, char *argv[] ){
 
     topo->decref();
     forest->decref();
-    model->decref();
+    model->decref();*/
     mesh->decref();
     geo->decref();
   }
@@ -257,7 +289,7 @@ int main( int argc, char *argv[] ){
     SolidStiffness *stiff = new SolidStiffness(1.0, 1.0, 0.3, 1.0);
     Solid<2> *elem = new Solid<2>(stiff);
     loader->setElement(0, elem);
-    
+
     // Create the TACSAssembler object
     int vars_per_node = 3;
     TACSAssembler *tacs = loader->createTACS(vars_per_node);

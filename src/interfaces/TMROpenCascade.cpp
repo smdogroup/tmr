@@ -741,10 +741,6 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
           dir[nvol_faces] = -1;
         }
 
-        // Modify the face orientation relative to the natural
-        // orientation of faces that are stored in TMRFace
-        dir[nvol_faces] *= all_faces[index-1]->getOrientation();
-
         // Assign the face pointer
         vol_faces[nvol_faces] = all_faces[index-1];
         nvol_faces++;
