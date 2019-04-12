@@ -203,6 +203,12 @@ class TMRFaceMesh : public TMREntity {
   int getNodeNums( const int **_vars );
   int getNumFixedPoints();
 
+  // Get points indexed via index on an edge or structured face
+  void getSourceToTargetMapping( const int **_source_to_target );
+  int getFaceIndexFromEdge( TMREdge *e, int idx );
+  int getStructuredFaceIndex( TMREdge *e1, int idx1,
+                              TMREdge *e2, int idx2 );
+
   // Retrieve the local connectivity from this surface mesh
   int getQuadConnectivity( const int **_quads );
   int getTriConnectivity( const int **_tris );
@@ -290,6 +296,7 @@ class TMRFaceMesh : public TMREntity {
   double *pts; // The parametric node locations
   TMRPoint *X; // The physical node locations
   int *vars; // The global variable numbers
+  int *source_to_target; // Source to target mapping
 
   // Record whether this mesh is prescribed
   int prescribed_mesh;
@@ -340,14 +347,12 @@ class TMRVolumeMesh : public TMREntity {
   TMRVolume *volume;
 
   // Set the number of face loops
-  int num_face_loops;
-  int *face_loop_ptr;
-  TMRFace **face_loops;
-  int *face_loop_orient;
-  int *face_loop_edge_count;
+  int num_swept_faces;
+  TMREdge **swept_edges;
+  TMRFace **swept_faces;
 
-  // Number of points through-thickness
-  int num_depth_pts;
+  // Number of points swept through-thickness
+  int num_swept_pts;
 
   // Keep the bottom/top surfaces (master/target) in the mesh for
   // future reference
