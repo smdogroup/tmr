@@ -240,8 +240,10 @@ int main( int argc, char *argv[] ){
     options.num_smoothing_steps = 5;
     mesh->mesh(options, htarget);
 
+    // Write the original volume mesh to the file
     mesh->writeToVTK("volume-mesh.vtk", TMRMesh::TMR_HEX);
-    /*
+
+    // Construct the model from the mesh
     TMRModel *model = mesh->createModelFromMesh();
     model->incref();
 
@@ -274,7 +276,7 @@ int main( int argc, char *argv[] ){
 
     topo->decref();
     forest->decref();
-    model->decref();*/
+    model->decref();
     mesh->decref();
     geo->decref();
   }

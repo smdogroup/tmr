@@ -1374,6 +1374,7 @@ TMRFaceMesh::~TMRFaceMesh(){
   if (vars){ delete [] vars; }
   if (quads){ delete [] quads; }
   if (tris){ delete [] tris; }
+  if (source_to_target){ delete [] source_to_target; }
 }
 
 /*
@@ -2013,9 +2014,20 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     }
   }
 
+  // Get the source face mesh
+  TMRFaceMesh *face_mesh;
+  source->getMesh(&face_mesh);
+
+  // Set the total number of points
+  mesh_type = face_mesh->mesh_type;
+  num_points = face_mesh->num_points;
+  num_fixed_pts = face_mesh->num_fixed_pts;
+  num_quads = face_mesh->num_quads;
+  num_tris = face_mesh->num_tris;
+
   // March through the sources loop, and compute the source to
   // target ordering
-  int *source_to_target = new int[ num_fixed_pts ];
+  source_to_target = new int[ num_points ];
   int source_offset = 0;
   for ( int k = 0; k < source->getNumEdgeLoops(); k++ ){
     TMREdgeLoop *loop;
@@ -2085,30 +2097,10 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     }
   }
 
-  // Create the face mesh
-  TMRFaceMesh *face_mesh;
-  source->getMesh(&face_mesh);
-
-  // Compute the total number of points
-  mesh_type = face_mesh->mesh_type;
-  num_points = face_mesh->num_points;
-  num_fixed_pts = face_mesh->num_fixed_pts;
-  num_quads = face_mesh->num_quads;
-  num_tris = face_mesh->num_tris;
-
-  // Set the source-to-target mapping
-  source_to_target = new int[ num_points ];
-  for ( int i = 0; i < num_points; i++ ){
+  // Set the remaining source-to-target mapping
+  for ( int i = num_fixed_pts; i < num_points; i++ ){
     source_to_target[i] = i;
   }
-
-  /*
-  std::map<TMREdge*, TMREdge*>::iterator it;
-  for ( it = source_to_target_edge.begin; it != it.end(); it++ ){
-    int src_index = face_mesh->getFaceIndexFromEdge(it->first, i);
-
-  }
-  */
 
   // Allocate the array for the parametric locations
   pts = new double[ 2*num_points ];
@@ -2222,9 +2214,6 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
       }
     }
   }
-
-  // Free the data
-  delete [] source_to_target;
 
   // Evaluate the points
   X = new TMRPoint[ num_points ];
@@ -2618,21 +2607,28 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
     // Keep track of the number of closed loop cycles in the domain
     int nloops = face->getNumEdgeLoops();
 
+    // Keep track of the index
     int pt = 0;
 
     for ( int k = 0; k < nloops; k++ ){
       // Get the curve information for this loop segment
       TMREdgeLoop *loop;
       face->getEdgeLoop(k, &loop);
+
+      // Extract the edges and orientations from the loop
       int nedges;
       TMREdge **edges;
       const int *edge_orient;
       loop->getEdgeLoop(&nedges, &edges, &edge_orient);
 
+      // Set the starting edge based on the face orientation
       int edge_index = nedges-1;
       if (face_orient > 0){
         edge_index = 0;
       }
+
+      // Keep track of the starting loop point
+      int start_loop_pt = pt;
 
       for ( int i = 0; i < nedges; i++, edge_index += face_orient ){
         // Retrieve the underlying curve mesh
@@ -2645,16 +2641,35 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
         int npts;
         mesh->getMeshPoints(&npts, NULL, NULL);
 
+        // Is this the last edge in this loop?
+        int last_edge = 0;
+        if (face_orient > 0 && i == nedges-1){
+          last_edge = 1;
+        }
+        else if (face_orient < 0 && i == 0){
+          last_edge = 1;
+        }
+
         if (edge == e){
           if (idx < npts){
             // Check the orientation of the edge. Note that idx is the
             // absolute index along the edge, so the face orientation
             // is ignored here.
             if (edge_orient[edge_index] > 0){
-              index = pt + idx;
+              if (last_edge && idx == npts-1){
+                index = start_loop_pt;
+              }
+              else {
+                index = pt + idx;
+              }
             }
             else {
-              index = pt + npts-1 - idx;
+              if (last_edge && idx == 0){
+                index = start_loop_pt;
+              }
+              else {
+                index = pt + npts-1 - idx;
+              }
             }
           }
           break;
@@ -2676,6 +2691,41 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
   }
 
   return index;
+}
+
+/*
+  Returns the index number for the (i, j) node location along
+  the structured edge.
+
+  This the structured face nodes are ordered by first counting around
+  the edges of the face counter-clockwise. After these nodes are
+  counted, the interior face nodes are ordered in a cartesian order.
+  For nx = 5, and ny = 4, this produces the following face numbering:
+
+  11-- 10-- 9 -- 8 -- 7
+  |    |    |    |    |
+  12-- 17-- 18-- 19-- 6
+  |    |    |    |    |
+  13-- 14-- 15-- 16-- 5
+  |    |    |    |    |
+  0 -- 1 -- 2 -- 3 -- 4
+*/
+static int get_structured_index( const int nx, const int ny,
+                                 const int i, const int j ){
+  if (j == 0){
+    return i;
+  }
+  else if (i == nx-1){
+    return nx - 1 + j;
+  }
+  else if (j == ny-1){
+    return 2*nx + ny - 3 - i;
+  }
+  else if (i == 0){
+    return 2*nx + 2*ny - 4 - j;
+  }
+
+  return 2*nx + 2*ny - 4 + (i-1) + (j-1)*(nx-2);
 }
 
 /*
@@ -2709,125 +2759,180 @@ int TMRFaceMesh::getStructuredFaceIndex( TMREdge *e1, int idx1,
     // Get the number of nodes for the x/y edges
     int nx = 0, ny = 0;
     TMREdgeMesh *mesh;
+
+    // Check for the first edge
+    int i = -1, j = -1;
+
     if (face_orient > 0){
       edges[0]->getMesh(&mesh);
       mesh->getMeshPoints(&nx, NULL, NULL);
       edges[1]->getMesh(&mesh);
       mesh->getMeshPoints(&ny, NULL, NULL);
+
+      if ((e1 == edges[0] || e1 == edges[2]) &&
+          (e2 == edges[1] || e2 == edges[3])){
+        // Check for the index along e1
+        if (e1 == edges[0]){
+          if (edge_orient[0] > 0){
+            i = idx1;
+          }
+          else {
+            i = nx-1 - idx1;
+          }
+        }
+        else { // e1 == edges[2] -- reverse the index
+          if (edge_orient[2] > 0){
+            i = nx-1 - idx1;
+          }
+          else {
+            i = idx1;
+          }
+        }
+
+        // Check for the orientation along e2
+        if (e2 == edges[1]){
+          if (edge_orient[1] > 0){
+            j = idx2;
+          }
+          else {
+            j = ny-1 - idx2;
+          }
+        }
+        else { // e2 == edges[3]
+          if (edge_orient[3] > 0){
+            j = ny-1 - idx2;
+          }
+          else {
+            j = idx2;
+          }
+        }
+      }
+      else if ((e2 == edges[0] || e2 == edges[2]) &&
+               (e1 == edges[1] || e1 == edges[3])){
+        // Check for the index along e1
+        if (e2 == edges[0]){
+          if (edge_orient[0] > 0){
+            i = idx2;
+          }
+          else {
+            i = nx-1 - idx2;
+          }
+        }
+        else { // e2 == edges[2] -- reverse the index
+          if (edge_orient[2] > 0){
+            i = nx-1 - idx2;
+          }
+          else {
+            i = idx2;
+          }
+        }
+
+        // Check for the orientation along e2
+        if (e1 == edges[1]){
+          if (edge_orient[1] > 0){
+            j = idx1;
+          }
+          else {
+            j = ny-1 - idx1;
+          }
+        }
+        else { // e1 == edges[3]
+          if (edge_orient[3] > 0){
+            j = ny-1 - idx1;
+          }
+          else {
+            j = idx1;
+          }
+        }
+      }
     }
     else {
       edges[0]->getMesh(&mesh);
       mesh->getMeshPoints(&ny, NULL, NULL);
       edges[1]->getMesh(&mesh);
       mesh->getMeshPoints(&nx, NULL, NULL);
+
+     if ((e1 == edges[0] || e1 == edges[2]) &&
+         (e2 == edges[1] || e2 == edges[3])){
+        // Check for the index along e1
+        if (e1 == edges[0]){
+          if (edge_orient[0] > 0){
+            j = idx1;
+          }
+          else {
+            j = ny-1 - idx1;
+          }
+        }
+        else { // e1 == edges[2] -- reverse the index
+          if (edge_orient[2] > 0){
+            j = ny-1 - idx1;
+          }
+          else {
+            j = idx1;
+          }
+        }
+
+        // Check for the orientation along e2
+        if (e2 == edges[1]){
+          if (edge_orient[1] > 0){
+            i = idx2;
+          }
+          else {
+            i = nx-1 - idx2;
+          }
+        }
+        else { // e2 == edges[3]
+          if (edge_orient[3] > 0){
+            i = nx-1 - idx2;
+          }
+          else {
+            i = idx2;
+          }
+        }
+      }
+      else if ((e2 == edges[0] || e2 == edges[2]) &&
+               (e1 == edges[1] || e1 == edges[3])){
+        // Check for the index along e1
+        if (e2 == edges[0]){
+          if (edge_orient[0] > 0){
+            j = idx2;
+          }
+          else {
+            j = ny-1 - idx2;
+          }
+        }
+        else { // e2 == edges[2] -- reverse the index
+          if (edge_orient[2] > 0){
+            j = ny-1 - idx2;
+          }
+          else {
+            j = idx2;
+          }
+        }
+
+        // Check for the orientation along e2
+        if (e1 == edges[1]){
+          if (edge_orient[1] > 0){
+            i = idx1;
+          }
+          else {
+            i = nx-1 - idx1;
+          }
+        }
+        else { // e1 == edges[3]
+          if (edge_orient[3] > 0){
+            i = nx-1 - idx1;
+          }
+          else {
+            i = idx1;
+          }
+        }
+      }
     }
 
-    // Check for the first edge
-    int i = -1, j = -1;
-
-    if ((e1 == edges[0] || e1 == edges[2]) &&
-        (e2 == edges[1] || e2 == edges[3])){
-      // Check for the index along e1
-      if (e1 == edges[0]){
-        if (edge_orient[0] > 0){
-          i = idx1;
-        }
-        else {
-          i = nx-1 - idx1;
-        }
-      }
-      else { // e1 == edges[2] -- reverse the index
-        if (edge_orient[2] > 0){
-          i = nx-1 - idx1;
-        }
-        else {
-          i = idx1;
-        }
-      }
-
-      // Check for the orientation along e2
-      if (e2 == edges[1]){
-        if (edge_orient[1] > 0){
-          j = idx2;
-        }
-        else {
-          j = ny-1 - idx2;
-        }
-      }
-      else { // e2 == edges[3]
-        if (edge_orient[3] > 0){
-          j = ny-1 - idx2;
-        }
-        else {
-          j = idx2;
-        }
-      }
-
-      if ((i == 0 || i == nx-1) ||
-          (j == 0 || j == ny-1)){
-        if (i == 0 || i == nx-1){
-          index = getFaceIndexFromEdge(e2, idx2);
-        }
-        else {
-          index = getFaceIndexFromEdge(e1, idx1);
-        }
-      }
-      else {
-        // Set the index
-        index = num_fixed_pts + i-1 + (j-1)*(nx-2);
-      }
-    }
-    else if ((e2 == edges[0] || e2 == edges[2]) &&
-             (e1 == edges[1] || e1 == edges[3])){
-      // Check for the index along e1
-      if (e2 == edges[0]){
-        if (edge_orient[0] > 0){
-          i = idx2;
-        }
-        else {
-          i = nx-1 - idx2;
-        }
-      }
-      else { // e2 == edges[2] -- reverse the index
-        if (edge_orient[2] > 0){
-          i = nx-1 - idx2;
-        }
-        else {
-          i = idx2;
-        }
-      }
-
-      // Check for the orientation along e2
-      if (e1 == edges[1]){
-        if (edge_orient[1] > 0){
-          j = idx1;
-        }
-        else {
-          j = ny-1 - idx1;
-        }
-      }
-      else { // e1 == edges[3]
-        if (edge_orient[3] > 0){
-          j = ny-1 - idx1;
-        }
-        else {
-          j = idx1;
-        }
-      }
-
-      if ((i == 0 || i == nx-1) ||
-          (j == 0 || j == ny-1)){
-        if (i == 0 || i == nx-1){
-          index = getFaceIndexFromEdge(e1, idx1);
-        }
-        else {
-          index = getFaceIndexFromEdge(e2, idx2);
-        }
-      }
-      else {
-        // Set the index
-        index = num_fixed_pts + i-1 + (j-1)*(nx-2);
-      }
+    if ((i >= 0 && i < nx) &&
+        (j >= 0 && j < ny)){
+      index = get_structured_index(nx, ny, i, j);
     }
   }
 
@@ -4220,8 +4325,8 @@ Inconsistent number of edge points through-thickness %d != %d\n",
   source->getMesh(&mesh);
 
   // Points on the target surface
-  TMRPoint *Xbot;
-  mesh->getMeshPoints(NULL, NULL, &Xbot);
+  TMRPoint *Xsource;
+  mesh->getMeshPoints(NULL, NULL, &Xsource);
 
   // Get the local connectivity on the source surface
   const int *quads;
@@ -4267,6 +4372,7 @@ Inconsistent number of edge points through-thickness %d != %d\n",
   TMRFaceMesh *target_mesh;
   target->getMesh(&target_mesh);
   
+  // Get the source to target indices
   const int *source_to_target;
   target_mesh->getSourceToTargetMapping(&source_to_target);
 
@@ -4274,9 +4380,9 @@ Inconsistent number of edge points through-thickness %d != %d\n",
   for ( int j = 0; j < num_swept_pts; j++ ){
     double u = 1.0*j/(num_swept_pts-1);
     for ( int i = 0; i < num_quad_pts; i++ ){
-      x[0].x = (1.0 - u)*Xbot[source_to_target[i]].x + u*Xtarget[i].x;
-      x[0].y = (1.0 - u)*Xbot[source_to_target[i]].y + u*Xtarget[i].y;
-      x[0].z = (1.0 - u)*Xbot[source_to_target[i]].z + u*Xtarget[i].z;
+      x[0].x = (1.0 - u)*Xsource[i].x + u*Xtarget[source_to_target[i]].x;
+      x[0].y = (1.0 - u)*Xsource[i].y + u*Xtarget[source_to_target[i]].y;
+      x[0].z = (1.0 - u)*Xsource[i].z + u*Xtarget[source_to_target[i]].z;
       x += 1;
     }
   }
@@ -4359,41 +4465,6 @@ int TMRVolumeMesh::tetMesh( TMRMeshOptions options ){
 }
 
 /*
-  Returns the index number for the (i, j) node location along
-  the structured edge.
-
-  This the structured face nodes are ordered by first counting around
-  the edges of the face counter-clockwise. After these nodes are
-  counted, the interior face nodes are ordered in a cartesian order.
-  For nx = 5, and ny = 4, this produces the following face numbering:
-
-  11-- 10-- 9 -- 8 -- 7
-  |    |    |    |    |
-  12-- 17-- 18-- 19-- 6
-  |    |    |    |    |
-  13-- 14-- 15-- 16-- 5
-  |    |    |    |    |
-  0 -- 1 -- 2 -- 3 -- 4
-*/
-static int get_structured_index( const int nx, const int ny,
-                                 const int i, const int j ){
-  if (j == 0){
-    return i;
-  }
-  else if (i == nx-1){
-    return nx - 1 + j;
-  }
-  else if (j == ny-1){
-    return 2*nx + ny - 3 - i;
-  }
-  else if (i == 0){
-    return 2*nx + 2*ny - 4 - j;
-  }
-
-  return 2*nx + 2*ny - 4 + (i-1) + (j-1)*(nx-2);
-}
-
-/*
   Order the mesh points uniquely
 
   This code first copies the mesh locations from the target and source
@@ -4411,8 +4482,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
       vars[k] = -1;
     }
 
-    // Get the source and target surface mesh and target surface mesh
-    // points
+    // Get the source and target surface mesh and target surface meshes
     TMRFaceMesh *target_mesh;
     target->getMesh(&target_mesh);
 
@@ -4423,35 +4493,24 @@ int TMRVolumeMesh::setNodeNums( int *num ){
     int num_quad_pts = 0;
     target_mesh->getMeshPoints(&num_quad_pts, NULL, NULL);
 
-    // Set the nodes on the source face
-    const int *face_vars;
-    target_mesh->getNodeNums(&face_vars);
+    // Get the nodes on the target face
+    const int *target_face_vars;
+    target_mesh->getNodeNums(&target_face_vars);
 
-    // Set the target surface variable numbers
-    if (target_orient > 0){
-      for ( int i = 0; i < num_quad_pts; i++ ){
-        vars[i + num_quad_pts*(num_swept_pts-1)] = face_vars[i];
-      }
+    // Use the source to target index mapping so that the variables will
+    // be consistent with the target
+    const int *source_to_target;
+    target_mesh->getSourceToTargetMapping(&source_to_target);
+    for ( int i = 0; i < num_quad_pts; i++ ){
+      int target_var = target_face_vars[source_to_target[i]];
+      vars[i + num_quad_pts*(num_swept_pts-1)] = target_var;
     }
-    else {
-      for ( int i = 0; i < num_quad_pts; i++ ){
-        vars[num_quad_pts-1-i + num_quad_pts*(num_swept_pts-1)] = face_vars[i];
-      }
-    }
-
-    // Get information from the source surface mesh
-    source_mesh->getNodeNums(&face_vars);
 
     // Set the source face variable numbers
-    if (source_orient > 0){
-      for ( int i = 0; i < num_quad_pts; i++ ){
-        vars[i] = face_vars[i];
-      }
-    }
-    else {
-      for ( int i = 0; i < num_quad_pts; i++ ){
-        vars[num_quad_pts-1-i] = face_vars[i];
-      }
+    const int *source_face_vars;
+    source_mesh->getNodeNums(&source_face_vars);
+    for ( int i = 0; i < num_quad_pts; i++ ){
+      vars[i] = source_face_vars[i];
     }
 
     // Now the target and source surfaces of the volume have the
@@ -4459,7 +4518,6 @@ int TMRVolumeMesh::setNodeNums( int *num ){
     // correctly. Loop through the structured sides (with the same
     // ordering as defined by the edge loops on the source surface)
     // and determine the node ordering.
-    /*
     int num_source_loops = source->getNumEdgeLoops();
 
     for ( int k = 0, count = 0; k < num_source_loops; k++ ){
@@ -4494,18 +4552,33 @@ int TMRVolumeMesh::setNodeNums( int *num ){
           int src_face_index =
             source_mesh->getFaceIndexFromEdge(loop_edges[i], ix);
 
-          // Loop over the through-swept
-          for ( int iy = 0; iy < num_swept_pts; iy += num_swept_pts-1 ){
-            int swept_face_index =
-              swept_mesh->getStructuredFaceIndex(loop_edges[i], ix,
-                                                 swept_edges[count], iy);
+          if (src_face_index < 0 ||
+              src_face_index >= num_quad_pts){
+            fprintf(stderr,
+                    "TMRVolume error: Source surface index %d out of range\n",
+                    src_face_index);
+          }
+          else {
+            // Loop over the through-swept nodes
+            for ( int iy = 0; iy < num_swept_pts; iy++ ){
+              int swept_face_index =
+                swept_mesh->getStructuredFaceIndex(loop_edges[i], ix,
+                                                   swept_edges[count], iy);
 
-            vars[src_face_index + iy*num_quad_pts] = swept_face_vars[swept_face_index];
+              if (swept_face_index < 0 || swept_face_index >= nswept){
+                fprintf(stderr,
+                        "TMRVolume error: Swept face index %d out of range\n",
+                        swept_face_index);
+              }
+              else {
+                vars[src_face_index + iy*num_quad_pts] =
+                  swept_face_vars[swept_face_index];
+              }
+            }
           }
         }
       }
     }
-    */
 
     // Now order the variables as they arrive
     int start = *num;
