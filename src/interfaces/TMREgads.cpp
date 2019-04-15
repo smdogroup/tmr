@@ -391,12 +391,11 @@ TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
   std::map<ego, int> edge_map;
   std::map<ego, int> face_map;
 
-  ego next = model;
-  while (next){
+  ego ego_obj = model;
+  while (ego_obj){
     int oclass, mtype;
-    ego top, prev;
+    ego top, prev, next;
 
-    ego ego_obj = next;
     EG_getInfo(ego_obj, &oclass, &mtype, &top, &prev, &next);
 
     if (oclass == NODE){
@@ -424,6 +423,9 @@ TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
       solids[nsolids] = ego_obj;
       nsolids++;
     }
+
+    // Set the next object
+    ego_obj = next;
   }
 
   if (print_level > 0){
