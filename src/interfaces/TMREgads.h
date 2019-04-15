@@ -36,9 +36,11 @@ namespace TMR_EgadsInterface {
 class TMR_EgadsContext : public TMREntity {
   public:
   TMR_EgadsContext();
+  TMR_EgadsContext( ego _ctx );
   ~TMR_EgadsContext();
   ego getContext();
  private:
+  int ismine;
   ego ctx;
 };
 
@@ -100,13 +102,15 @@ class TMR_EgadsFace : public TMRFace {
   ego face;
 };
 
-}
-
 /*
   Initialization of the OpenCascade geometry from an IGES/STEP files
 */
 TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
                                       int print_level=0 );
+TMRModel* TMR_ConvertEGADSModel( ego model,
+                                 int print_level=0 );
+
+}
 
 #endif // TMR_HAS_EGADS
 #endif // TMR_EGADS_H

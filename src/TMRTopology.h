@@ -46,8 +46,8 @@ class TMRVolumeMesh;
 */
 class TMRVertex : public TMREntity {
  public:
-  TMRVertex(){ var = -1; }
-  virtual ~TMRVertex(){}
+  TMRVertex();
+  virtual ~TMRVertex();
 
   // Evalue the point
   virtual int evalPoint( TMRPoint *p ) = 0;
@@ -57,6 +57,10 @@ class TMRVertex : public TMREntity {
   virtual int getParamsOnFace( TMRFace *face,
                                double *u, double *v );
 
+  // Set the node number to copy from
+  void setCopy( TMRVertex *vert );
+  void getCopy( TMRVertex **vert );
+
   // Set/retrieve the node numbers
   void resetNodeNum();
   int setNodeNum( int *num );
@@ -64,6 +68,7 @@ class TMRVertex : public TMREntity {
 
  private:
   int var;
+  TMRVertex *copy; // Source numbering for the vertex
 };
 
 /*
@@ -106,6 +111,10 @@ class TMREdge : public TMREntity {
   void setSource( TMREdge *_edge );
   void getSource( TMREdge **_edge );
 
+  // Set the node number to copy from
+  void setCopy( int _copy_orient, TMREdge *edge );
+  void getCopy( int *_copy_orient, TMREdge **_edge );
+
   // Set/retrieve the mesh
   void setMesh( TMREdgeMesh *_mesh );
   void getMesh( TMREdgeMesh **_mesh );
@@ -119,6 +128,10 @@ class TMREdge : public TMREntity {
   // The mesh for the curve - if it exists
   TMREdgeMesh *mesh;
   TMREdge *source; // Source edge (may be NULL)
+
+  // Copy the node numbers from this edge (if possible)
+  int copy_orient; // Relative orientation of the edge to copy from
+  TMREdge *copy; // Edge to copy node numbers from
 
   // Derivative step size
   static double deriv_step_size;
@@ -187,7 +200,11 @@ class TMRFace : public TMREntity {
 
   // Set/retrieve the source face
   void setSource( TMRVolume *_volume, TMRFace *_face );
-  void getSource( int *dir, TMRVolume **_volume, TMRFace **_face );
+  void getSource( int *orient, TMRVolume **_volume, TMRFace **_face );
+
+  // Set/retrieve the copy face
+  void setCopy( int _copy_orient, TMRFace *_copy );
+  void getCopy( int *_copy_orient, TMRFace **_copy );
 
   // Set/retrieve the mesh
   void setMesh( TMRFaceMesh *_mesh );
@@ -197,16 +214,21 @@ class TMRFace : public TMREntity {
   void writeToVTK( const char *filename );
 
  private:
-  // Relative orientation of the normal direction and
-  // the parametric normal direction
+  // Relative orientation of the normal direction and the parametric
+  // normal direction
   int orientation;
 
   // The mesh for the curve - if it exists
   TMRFaceMesh *mesh;
 
-  int source_dir; // The relative source face direction
+  // Store information about the source mesh
+  int source_orient; // The relative source face direction
   TMRVolume *source_volume; // Source volume
   TMRFace *source; // Source face (may be NULL)
+
+  // Store information about a mesh that will be directly copied
+  int copy_orient;
+  TMRFace *copy;
 
   // Store the loop information
   int num_loops, max_num_loops;

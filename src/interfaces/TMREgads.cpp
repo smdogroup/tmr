@@ -27,10 +27,18 @@ using namespace TMR_EgadsInterface;
 
 TMR_EgadsContext::TMR_EgadsContext(){
   EG_open(&ctx);
+  ismine = 1;
+}
+
+TMR_EgadsContext::TMR_EgadsContext( ego _ctx ){
+  ctx = _ctx;
+  ismine = 0;
 }
 
 TMR_EgadsContext::~TMR_EgadsContext(){
-  EG_close(ctx);
+  if (ismine){
+    EG_close(ctx);
+  }
 }
 
 ego TMR_EgadsContext::getContext(){
@@ -356,10 +364,10 @@ void TMR_EgadsFace::getFaceObject( ego *f ){
 }
 
 /*
-  Create the TMRModel based on the TopoDS_Compound object
+  Create the TMRModel by loading in an EGADS model file
 */
-TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
-                                      int print_level ){
+TMRModel* TMR_EgadsInterface::TMR_LoadModelFromEGADSFile( const char *filename,
+                                                          int print_level ){
   // Create the common context for all egads objects
   TMR_EgadsContext *ctx = new TMR_EgadsContext();
 
@@ -370,7 +378,22 @@ TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
   if (icode != 0){
     fprintf(stderr, "TMR: Error reading egads file with error code %d\n",
             icode);
+    return NULL;
   }
+
+  return TMR_ConvertEGADSModel(model, print_level);
+}
+
+/*
+  Create a TMR model from an EGADS model object
+*/
+TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
+                                                     int print_level ){
+  ego context;
+  EG_getContext(model, &context);
+
+  // Create the common context for all egads objects
+  TMR_EgadsContext *ctx = new TMR_EgadsContext(context);
 
   // Count the number of objects
   int nverts = 0;
@@ -391,6 +414,51 @@ TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
   std::map<ego, int> edge_map;
   std::map<ego, int> face_map;
 
+  // Get the values
+  ego ref;
+  int oclass, mtype;
+  double data[4];
+  int nbodies;
+  ego *bodies;
+  int *bsense;
+
+  // Get all the bodies in the object
+  int icode = EG_getTopology(model, &ref, &oclass, &mtype, data,
+                             &nbodies, &bodies, &bsense);
+
+  if (icode){
+    fprintf(stderr, "TMR: EG_getTopology returned error code %d\n", icode);
+  }
+  if (oclass != MODEL){
+    fprintf(stderr, "TMR: Must provide model to TMR_ConvertEGADSModel\n");
+    return NULL;
+  }
+
+  // Iterate over the bodies
+  for ( int i = 0; i < nbodies; i++ ){
+    int nchildren;
+    ego *body_children;
+    int *body_sense;
+    icode = EG_getTopology(bodies[i], &ref, &oclass, &mtype, data,
+                           &nchildren, &body_children, &body_sense);
+    // Check that we have a body object
+    if (oclass != BODY){
+      // This should not occur
+      fprintf(stderr, "TMR: EGADS model does not define a body\n");
+      return NULL;
+    }
+    else if (mtype == WIREBODY){
+      // Cannot convert wirebodies to anything useful
+      fprintf(stderr, "TMR: Cannot convert wirebody to TMR object\n");
+      return NULL;
+    }
+    else if (mtype == SOLIDBODY || mtype == SHEETBODY){
+      solids[nsolids] = bodies[i];
+      nsolids++;
+    }
+  }
+
+  // Now, get the remaining objects
   ego ego_obj = model;
   while (ego_obj){
     int oclass, mtype;
@@ -418,10 +486,6 @@ TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
     }
     else if (oclass == SHELL){
       nshells++;
-    }
-    else if (oclass == BODY){
-      solids[nsolids] = ego_obj;
-      nsolids++;
     }
 
     // Set the next object
@@ -458,12 +522,11 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
   for ( int index = 0; index < nedges; index++ ){
     ego ref; // reference geometry
     int oclass, mtype; // object class and type
-    double data[4]; // data values
     int nchildren;
     ego *children;
     int *sense;
-    EG_getTopology(edges[index], &ref, &oclass, &mtype, data, &nchildren,
-                   &children, &sense);
+    EG_getTopology(edges[index], &ref, &oclass, &mtype, data,
+                   &nchildren, &children, &sense);
 
     int isdegenerate = 0;
     int idx1 = vert_map[children[0]];
@@ -509,12 +572,11 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
   for ( int index = 0; index < nfaces; index++ ){
     ego ref; // reference geometry
     int oclass, mtype; // object class and type
-    double data[4];
     int num_loops;
     ego *face_loops;
     int *loop_sense;
-    EG_getTopology(faces[index], &ref, &oclass, &mtype,
-                   data, &num_loops, &face_loops, &loop_sense);
+    EG_getTopology(faces[index], &ref, &oclass, &mtype, data,
+                   &num_loops, &face_loops, &loop_sense);
 
     // Check if the orientation of the face is flipped relative to the natural
     // orientation of the surface
@@ -572,45 +634,78 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
   for ( int index = 0; index < nsolids; index++ ){
     ego ref; // reference geometry
     int oclass, mtype; // object class and type
-    double data[4];
-    int num_shells;
-    ego *shells;
-    int *shell_sense;
-    EG_getTopology(solids[index], &ref, &oclass, &mtype,
-                   data, &num_shells, &shells, &shell_sense);
+    int nchild;
+    ego *children;
+    int *children_sense;
+    EG_getTopology(solids[index], &ref, &oclass, &mtype, data,
+                   &nchild, &children, &children_sense);
 
-    if (num_shells > 1){
-      fprintf(stderr, "... error in number of shells...???\n");
+    if (mtype == SHEETBODY){
+      // Retrieve the children of the shell
+      int nshell_faces;
+      ego *shell_faces;
+      int *face_sense;
+      EG_getTopology(children[0], &ref, &oclass, &mtype, data,
+                     &nshell_faces, &shell_faces, &face_sense);
+
+      // Allocate the faces arrays/directions
+      TMRFace **vol_faces = new TMRFace*[ nshell_faces ];
+      int *dir = new int[ nshell_faces ];
+
+      // Now, extract the faces from the underlying shell(s)
+      for ( int i = 0; i < nshell_faces; i++ ){
+        int face_index = face_map[shell_faces[i]];
+        dir[i] = children_sense[0]*face_sense[i];
+
+        // Assign the face pointer
+        vol_faces[i] = all_faces[face_index];
+      }
+
+      // Create the volume object
+      all_vols[index] = new TMRVolume(nshell_faces, vol_faces, dir);
+      delete [] vol_faces;
+      delete [] dir;
     }
+    else if (mtype == SOLIDBODY){
+      // Loop over the closed shells
+      int ntotal = 0;
+      for ( int k = 0; k < nchild; k++ ){
+        // Retrieve the children of the shell
+        int nshell_faces;
+        ego *shell_faces;
+        int *face_sense;
+        EG_getTopology(children[k], &ref, &oclass, &mtype, data,
+                       &nshell_faces, &shell_faces, &face_sense);
+        ntotal += nshell_faces;
+      }
 
-    // Retrieve the children of the shell
-    int nvol_faces;
-    ego *shell_children;
-    int *sense;
-    EG_getTopology(shells[0], &ref, &oclass, &mtype,
-                   data, &nvol_faces, &shell_children, &sense);
+      // Allocate the faces arrays/directions
+      TMRFace **vol_faces = new TMRFace*[ ntotal ];
+      int *dir = new int[ ntotal ];
 
-    // Allocate the faces arrays/directions
-    TMRFace **vol_faces = new TMRFace*[ nvol_faces ];
-    int *dir = new int[ nvol_faces ];
+      for ( int k = 0, vol_index = 0; k < nchild; k++ ){
+        // Retrieve the children of the shell
+        int nshell_faces;
+        ego *shell_faces;
+        int *face_sense;
+        EG_getTopology(children[k], &ref, &oclass, &mtype, data,
+                       &nshell_faces, &shell_faces, &face_sense);
 
-    // Now, extract the faces from the underlying shell(s)
-    for ( int i = 0; i < nvol_faces; i++ ){
-      int face_index = face_map[shell_children[i]];
-      dir[i] = sense[i]*shell_sense[0];
+        // Now, extract the faces from the underlying shell(s)
+        for ( int i = 0; i < nshell_faces; i++, vol_index++ ){
+          int face_index = face_map[shell_faces[i]];
+          dir[vol_index] = children_sense[k]; // *face_sense[i];
 
-      // Modify the face orientation relative to the natural orientation of
-      // faces that are stored in TMRFace
-      dir[i] *= all_faces[face_index]->getOrientation();
+          // Assign the face pointer
+          vol_faces[vol_index] = all_faces[face_index];
+        }
+      }
 
-      // Assign the face pointer
-      vol_faces[i] = all_faces[face_index];
+      // Create the volume object
+      all_vols[index] = new TMRVolume(ntotal, vol_faces, dir);
+      delete [] vol_faces;
+      delete [] dir;
     }
-
-    // Create the volume object
-    all_vols[index] = new TMRVolume(nvol_faces, vol_faces, dir);
-    delete [] vol_faces;
-    delete [] dir;
 
     // Set the "name" attribute
     int atype, len;

@@ -29,6 +29,20 @@ TMR_EXTERN_C_BEGIN
 TMR_EXTERN_C_END
 
 /*
+  Create the vertex
+*/
+TMRVertex::TMRVertex(){
+  copy = NULL;
+  var = -1;
+}
+
+TMRVertex::~TMRVertex(){
+  if (copy){
+    copy->decref();
+  }
+}
+
+/*
   Perform an inverse evaluation by obtaining the underlying
   parametrization on the specified curve
 */
@@ -51,6 +65,26 @@ int TMRVertex::getParamsOnFace( TMRFace *face,
 }
 
 /*
+  Set the vertex to copy from
+*/
+void TMRVertex::setCopy( TMRVertex *vert ){
+  if (vert && vert != this){
+    vert->incref();
+    if (copy){
+      copy->decref();
+    }
+    copy = vert;
+  }
+}
+
+/*
+  Retrieve the source vertex
+*/
+void TMRVertex::getCopy( TMRVertex **vert ){
+  *vert = copy;
+}
+
+/*
   Reset the node number to -1
 */
 void TMRVertex::resetNodeNum(){
@@ -61,12 +95,18 @@ void TMRVertex::resetNodeNum(){
   Set/retrieve vertex numbers
 */
 int TMRVertex::setNodeNum( int *num ){
+  int start = *num;
   if (var == -1){
-    var = *num;
-    (*num)++;
-    return 1;
+    if (copy){
+      copy->setNodeNum(num);
+      var = copy->var;
+    }
+    else {
+      var = *num;
+      (*num)++;
+    }
   }
-  return 0;
+  return start - (*num);
 }
 
 /*
@@ -87,6 +127,8 @@ TMREdge::TMREdge(){
   v1 = v2 = NULL;
   mesh = NULL;
   source = NULL;
+  copy_orient = 0;
+  copy = NULL;
 }
 
 /*
@@ -96,6 +138,7 @@ TMREdge::~TMREdge(){
   if (v1){ v1->decref(); }
   if (v2){ v2->decref(); }
   if (source){ source->decref(); }
+  if (copy){ copy->decref(); }
 }
 
 /*
@@ -256,6 +299,33 @@ void TMREdge::getSource( TMREdge **edge ){
 }
 
 /*
+  Set the source edge
+*/
+void TMREdge::setCopy( int _copy_orient, TMREdge *edge ){
+  if (edge && edge != this){
+    copy_orient = 0;
+    if (_copy_orient > 0){
+      copy_orient = 1;
+    }
+    else if (_copy_orient < 0){
+      copy_orient = -1;
+    }
+
+    edge->incref();
+    if (copy){ copy->decref(); }
+    copy = edge;
+  }
+}
+
+/*
+  Retrieve the copy edge
+*/
+void TMREdge::getCopy( int *_copy_orient, TMREdge **edge ){
+  *_copy_orient = copy_orient;
+  *edge = copy;
+}
+
+/*
   Write out a representation of the curve to a VTK file
 */
 void TMREdge::writeToVTK( const char *filename ){
@@ -385,7 +455,7 @@ TMRFace::TMRFace( int _orientation ){
   mesh = NULL;
   source = NULL;
   source_volume = NULL;
-  source_dir = 0;
+  source_orient = 0;
 }
 
 /*
@@ -686,7 +756,7 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
 
       // Multiply the relative orientations of the two faces within
       // the volume
-      source_dir = -dir[this_index]*dir[source_index];
+      source_orient = -dir[this_index]*dir[source_index];
     }
   }
 }
@@ -694,12 +764,39 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
 /*
   Retrieve the source edge
 */
-void TMRFace::getSource( int *_source_dir,
+void TMRFace::getSource( int *_source_orient,
                          TMRVolume **volume,
                          TMRFace **face ){
   if (face){ *face = source; }
   if (volume){ *volume = source_volume; }
-  if (_source_dir){ *_source_dir = source_dir; }
+  if (_source_orient){ *_source_orient = source_orient; }
+}
+
+/*
+  Set the source face
+*/
+void TMRFace::setCopy( int _copy_orient, TMRFace *face ){
+  if (face && face != this){
+    copy_orient = 0;
+    if (_copy_orient > 0){
+      copy_orient = 1;
+    }
+    else if (_copy_orient < 0){
+      copy_orient = -1;
+    }
+
+    face->incref();
+    if (copy){ copy->decref(); }
+    copy = face;
+  }
+}
+
+/*
+  Retrieve the copy face
+*/
+void TMRFace::getCopy( int *_copy_orient, TMRFace **face ){
+  *_copy_orient = copy_orient;
+  *face = copy;
 }
 
 /*

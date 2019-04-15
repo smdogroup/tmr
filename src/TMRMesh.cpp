@@ -1091,7 +1091,9 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
 */
 int TMREdgeMesh::setNodeNums( int *num ){
   if (!vars && pts){
-    // Retrieve the vertices
+    int start = *num;
+
+    // Retrieve the vertices1
     TMRVertex *v1, *v2;
     edge->getVertices(&v1, &v2);
 
@@ -1102,13 +1104,36 @@ int TMREdgeMesh::setNodeNums( int *num ){
     v1->getNodeNum(&vars[0]);
     v2->getNodeNum(&vars[npts-1]);
 
-    // Set the internal node numbers
-    for ( int i = 1; i < npts-1; i++ ){
-      vars[i] = *num;
-      (*num)++;
+    int copy_orient;
+    TMREdge *copy;
+    edge->getCopy(&copy_orient, &copy);
+
+    if (copy && !copy_orient){
+      TMREdgeMesh *copy_mesh;
+      copy->getMesh(&copy_mesh);
+      if (copy_mesh){
+        copy_mesh->setNodeNums(num);
+
+        if (copy_mesh->npts == npts){
+          int edge_index = npts-2;
+          if (copy_orient > 0){
+            edge_index = 1;
+          }
+          for ( int i = 1; i < npts-1; i++, edge_index += copy_orient ){
+            vars[i] = copy_mesh->vars[i];
+          }
+        }
+      }
+    }
+    else {
+      // Set the internal node numbers
+      for ( int i = 1; i < npts-1; i++ ){
+        vars[i] = *num;
+        (*num)++;
+      }
     }
 
-    return npts-2;
+    return start - (*num);
   }
 
   return 0;
@@ -4371,7 +4396,7 @@ Inconsistent number of edge points through-thickness %d != %d\n",
   // Set the new coordinates within the hexahedral mesh
   TMRFaceMesh *target_mesh;
   target->getMesh(&target_mesh);
-  
+
   // Get the source to target indices
   const int *source_to_target;
   target_mesh->getSourceToTargetMapping(&source_to_target);

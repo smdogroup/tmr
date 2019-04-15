@@ -488,7 +488,7 @@ cdef extern from "TMROpenCascade.h":
     cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*, int)
 
 cdef extern from "TMREgads.h":
-    cdef TMRModel* TMR_LoadModelFromEGADSFile(const char*, int)
+    cdef TMRModel* TMR_LoadModelFromEGADSFile"TMR_EgadsInterface::TMR_LoadModelFromEGADSFile"(const char*, int)
 
 cdef extern from "TMR_RefinementTools.h":
     void TMR_CreateTACSMg(int, TACSAssembler**,
