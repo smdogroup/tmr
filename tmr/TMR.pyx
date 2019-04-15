@@ -204,6 +204,15 @@ cdef class Edge:
         self.ptr.evalPoint(t, &pt)
         return np.array([pt.x, pt.y, pt.z])
 
+    def invEvalPoint(self, np.ndarray[double, ndim=1, mode='c'] pt):
+        cdef TMRPoint point
+        cdef double t
+        point.x = pt[0]
+        point.y = pt[1]
+        point.z = pt[2]
+        self.ptr.invEvalPoint(point, &t)
+        return t
+
     def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
