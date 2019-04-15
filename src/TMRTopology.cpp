@@ -106,7 +106,7 @@ int TMRVertex::setNodeNum( int *num ){
       (*num)++;
     }
   }
-  return start - (*num);
+  return *num - start;;
 }
 
 /*

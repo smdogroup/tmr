@@ -274,7 +274,7 @@ class TMRFaceMesh : public TMREntity {
   void mapSourceToTarget( TMRMeshOptions options, const double *params );
 
   // Map the copy source face to the target face
-  void mapCopyToTarget( TMRMeshOptions options, const double *params );
+  int mapCopyToTarget( TMRMeshOptions options, const double *params );
 
   // Set the mapping of the source/copy to the target (this) mesh
   void setMeshFromMapping( TMRMeshOptions options, const double *params,

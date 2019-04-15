@@ -1192,7 +1192,7 @@ int TMREdgeMesh::setNodeNums( int *num ){
     v1->getNodeNum(&vars[0]);
     v2->getNodeNum(&vars[npts-1]);
 
-    return start - (*num);
+    return *num - start;
   }
 
   return 0;
@@ -2094,8 +2094,11 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 /*
   Map the source mesh to the target mesh (this is the target mesh)
 */
-void TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
-                                   const double *params ){
+int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
+                                  const double *params ){
+  // Set the fail flag
+  int fail = 0;
+
   int rel_copy_orient;
   TMRFace *copy;
   face->getCopySource(&rel_copy_orient, &copy);
@@ -2108,7 +2111,7 @@ void TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   std::map<TMREdge*, TMREdge*> copy_to_target_edge;
   std::map<TMREdge*, int> copy_to_target_orient;
 
-  /*
+  // Loop over the edge orientations of the
   for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
     TMREdgeLoop *loop;
     face->getEdgeLoop(k, &loop);
@@ -2120,17 +2123,47 @@ void TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
     loop->getEdgeLoop(&nedges, &edges, &edge_orient);
 
     for ( int j = 0; j < nedges; j++ ){
-      copy_to_target_edge[e ] = edges[i]
+      // Get the edge to copy
+      TMREdge *copy_edge;
+      edges[j]->getCopySource(&copy_edge);
 
-      copy_edges[edges[j]] = source_orient*edge_orient[j];
+      // Set the copy to target edge mapping
+      copy_to_target_edge[copy_edge] = edges[j];
+
+      // Get the target vertices
+      TMRVertex *v1, *v2;
+      edges[j]->getVertices(&v1, &v2);
+
+      // Get ther vertex copies
+      TMRVertex *v1_copy, *v2_copy;
+      v1->getCopySource(&v1_copy);
+      v2->getCopySource(&v2_copy);
+
+      // Check if the direction of the edge that will be copied
+      // is the same or opposite to the face edge
+      TMRVertex *copy_v1, *copy_v2;
+      copy_edge->getVertices(&copy_v1, &copy_v2);
+
+      if (copy_v1 == v1_copy && copy_v2 == v2_copy){
+        copy_to_target_orient[copy_edge] = 1;
+      }
+      else if (copy_v1 == v1_copy && copy_v2 == v2_copy){
+        copy_to_target_orient[copy_edge] = -1;
+      }
+      else {
+        fail = 1;
+        fprintf(stderr,
+                "TMRFaceMesh: Warning, copy source and target vertices are not set consistently\n");
+      }
     }
   }
-  */
 
   // Set the copied face mesh
   setMeshFromMapping(options, params, copy, rel_copy_orient,
                      copy_to_target_edge, copy_to_target_orient,
                      &copy_to_target);
+
+  return fail;
 }
 
 
@@ -3118,63 +3151,85 @@ int TMRFaceMesh::setNodeNums( int *num ){
   if (!vars){
     vars = new int[ num_points ];
 
-    // Get the face orientation
-    int face_orient = face->getOrientation();
+    // Set the starting index
+    int start = *num;
 
-    // Retrieve the boundary node numbers from the surface loops
-    int pt = 0;
-    for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
-      // Get the curve information for this loop segment
-      TMREdgeLoop *loop;
-      face->getEdgeLoop(k, &loop);
+    // Check if the copy-to-target index has been set
+    if (copy_to_target){
+      TMRFace *copy;
+      face->getCopySource(NULL, &copy);
 
-      int nedges;
-      TMREdge **edges;
-      const int *edge_orient;
-      loop->getEdgeLoop(&nedges, &edges, &edge_orient);
+      TMRFaceMesh *copy_mesh;
+      copy->getMesh(&copy_mesh);
 
-      int edge_index = nedges-1;
-      if (face_orient > 0){
-        edge_index = 0;
-      }
+      // Set the node numbers
+      copy_mesh->setNodeNums(num);
 
-      for ( int i = 0; i < nedges; i++, edge_index += face_orient ){
-        // Retrieve the underlying curve mesh
-        TMREdgeMesh *mesh = NULL;
-        edges[edge_index]->getMesh(&mesh);
-
-        // Retrieve the variable numbers for this loop
-        const int *edge_vars;
-        int npts = mesh->getNodeNums(&edge_vars);
-
-        if (edges[edge_index]->isDegenerate()){
-          vars[pt] = edge_vars[0];
-        }
-        else {
-          // Get the orientation of the edge
-          int orientation = face_orient*edge_orient[edge_index];
-
-          int index = npts-1;
-          if (orientation > 0){
-            index = 0;
-          }
-
-          for ( int j = 0; j < npts-1; j++, index += orientation, pt++ ){
-            // Find the point on the curve
-            vars[pt] = edge_vars[index];
-          }
-        }
+      // Set the copy variable nubmers from the target
+      for ( int i = 0; i < num_points; i++ ){
+        vars[i] = copy_mesh->vars[copy_to_target[i]];
       }
     }
+    else {
+      // Get the face orientation
+      int face_orient = face->getOrientation();
 
-    // Now order the variables as they arrive
-    for ( ; pt < num_points; pt++ ){
-      vars[pt] = *num;
-      (*num)++;
+      // Retrieve the boundary node numbers from the surface loops
+      int pt = 0;
+      for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+        // Get the curve information for this loop segment
+        TMREdgeLoop *loop;
+        face->getEdgeLoop(k, &loop);
+
+        int nedges;
+        TMREdge **edges;
+        const int *edge_orient;
+        loop->getEdgeLoop(&nedges, &edges, &edge_orient);
+
+        int edge_index = nedges-1;
+        if (face_orient > 0){
+          edge_index = 0;
+        }
+
+        for ( int i = 0; i < nedges; i++, edge_index += face_orient ){
+          // Retrieve the underlying curve mesh
+          TMREdgeMesh *mesh = NULL;
+          edges[edge_index]->getMesh(&mesh);
+
+          // Retrieve the variable numbers for this loop
+          const int *edge_vars;
+          int npts = mesh->getNodeNums(&edge_vars);
+
+          if (edges[edge_index]->isDegenerate()){
+            vars[pt] = edge_vars[0];
+          }
+          else {
+            // Get the orientation of the edge
+            int orientation = face_orient*edge_orient[edge_index];
+
+            int index = npts-1;
+            if (orientation > 0){
+              index = 0;
+            }
+
+            for ( int j = 0; j < npts-1; j++, index += orientation, pt++ ){
+              // Find the point on the curve
+              vars[pt] = edge_vars[index];
+            }
+          }
+        }
+      }
+
+      // Now order the variables as they arrive
+      for ( ; pt < num_points; pt++ ){
+        vars[pt] = *num;
+        (*num)++;
+      }
+
     }
 
     // Return the number of points that have been allocated
-    return num_points - num_fixed_pts;
+    return *num - start;
   }
 
   return 0;
