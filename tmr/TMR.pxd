@@ -102,6 +102,7 @@ cdef extern from "TMRTopology.h":
         int evalPoint(double, TMRPoint*)
         void setVertices(TMRVertex*, TMRVertex*)
         void getVertices(TMRVertex**, TMRVertex**)
+        int isDegenerate()
         void setMesh(TMREdgeMesh*)
         void getMesh(TMREdgeMesh**)
         void writeToVTK(char*)

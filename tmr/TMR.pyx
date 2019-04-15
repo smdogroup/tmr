@@ -230,6 +230,9 @@ cdef class Edge:
         self.ptr.getVertices(&v1, &v2)
         return _init_Vertex(v1), _init_Vertex(v2)
 
+    def isDegenerate(self):
+        return self.ptr.isDegenerate()
+
     def setSource(self, Edge e):
         self.ptr.setSource(e.ptr)
 
