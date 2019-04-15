@@ -204,6 +204,15 @@ cdef class Edge:
         self.ptr.evalPoint(t, &pt)
         return np.array([pt.x, pt.y, pt.z])
 
+    def invEvalPoint(self, np.ndarray[double, ndim=1, mode='c'] pt):
+        cdef TMRPoint point
+        cdef double t
+        point.x = pt[0]
+        point.y = pt[1]
+        point.z = pt[2]
+        self.ptr.invEvalPoint(point, &t)
+        return t
+
     def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
@@ -229,6 +238,9 @@ cdef class Edge:
         cdef TMRVertex *v2 = NULL
         self.ptr.getVertices(&v1, &v2)
         return _init_Vertex(v1), _init_Vertex(v2)
+
+    def isDegenerate(self):
+        return self.ptr.isDegenerate()
 
     def setSource(self, Edge e):
         self.ptr.setSource(e.ptr)
