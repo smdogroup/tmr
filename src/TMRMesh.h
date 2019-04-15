@@ -21,6 +21,7 @@
 #ifndef TMR_MESH_H
 #define TMR_MESH_H
 
+#include <map>
 #include "TMRBase.h"
 #include "TMRGeometry.h"
 #include "TMRTopology.h"
@@ -221,6 +222,10 @@ class TMRFaceMesh : public TMREntity {
   void printMeshQuality();
 
  private:
+  // Set the prescribed mesh
+  void setPrescribedMesh( const TMRPoint *_X, int _npts,
+                          const int *_quads, int _nquads );
+
   // Write the segments to a VTK file in parameter space
   void writeSegmentsToVTK( const char *filename,
                            int npts, const double *params,
@@ -268,6 +273,16 @@ class TMRFaceMesh : public TMREntity {
   // Map the source face to the target face
   void mapSourceToTarget( TMRMeshOptions options, const double *params );
 
+  // Map the copy source face to the target face
+  void mapCopyToTarget( TMRMeshOptions options, const double *params );
+
+  // Set the mapping of the source/copy to the target (this) mesh
+  void setMeshFromMapping( TMRMeshOptions options, const double *params,
+                           TMRFace *src, const int rel_orient,
+                           std::map<TMREdge*, TMREdge*> &src_to_target_edge,
+                           std::map<TMREdge*, int> &src_to_target_orient,
+                           int **_src_to_target );
+
   // Create a structured mesh
   void createStructuredMesh( TMRMeshOptions options, const double *params );
 
@@ -296,7 +311,14 @@ class TMRFaceMesh : public TMREntity {
   double *pts; // The parametric node locations
   TMRPoint *X; // The physical node locations
   int *vars; // The global variable numbers
+
+  // Source to target mapping - exists only when source/target faces
+  // are set in the TMRFace class
   int *source_to_target; // Source to target mapping
+
+  // Copy to target mapping - exists only when source/target indices
+  // are set in the TMRFace class
+  int *copy_to_target;
 
   // Record whether this mesh is prescribed
   int prescribed_mesh;

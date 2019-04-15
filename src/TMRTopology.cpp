@@ -67,7 +67,7 @@ int TMRVertex::getParamsOnFace( TMRFace *face,
 /*
   Set the vertex to copy from
 */
-void TMRVertex::setCopy( TMRVertex *vert ){
+void TMRVertex::setCopySource( TMRVertex *vert ){
   if (vert && vert != this){
     vert->incref();
     if (copy){
@@ -80,7 +80,7 @@ void TMRVertex::setCopy( TMRVertex *vert ){
 /*
   Retrieve the source vertex
 */
-void TMRVertex::getCopy( TMRVertex **vert ){
+void TMRVertex::getCopySource( TMRVertex **vert ){
   *vert = copy;
 }
 
@@ -127,7 +127,6 @@ TMREdge::TMREdge(){
   v1 = v2 = NULL;
   mesh = NULL;
   source = NULL;
-  copy_orient = 0;
   copy = NULL;
 }
 
@@ -284,7 +283,7 @@ void TMREdge::getMesh( TMREdgeMesh **_mesh ){
   Set the source edge
 */
 void TMREdge::setSource( TMREdge *edge ){
-  if (edge && edge != this){
+  if (edge && edge != this && !copy){
     edge->incref();
     if (source){ source->decref(); }
     source = edge;
@@ -301,16 +300,8 @@ void TMREdge::getSource( TMREdge **edge ){
 /*
   Set the source edge
 */
-void TMREdge::setCopy( int _copy_orient, TMREdge *edge ){
-  if (edge && edge != this){
-    copy_orient = 0;
-    if (_copy_orient > 0){
-      copy_orient = 1;
-    }
-    else if (_copy_orient < 0){
-      copy_orient = -1;
-    }
-
+void TMREdge::setCopySource( TMREdge *edge ){
+  if (edge && edge != this && !source){
     edge->incref();
     if (copy){ copy->decref(); }
     copy = edge;
@@ -320,8 +311,7 @@ void TMREdge::setCopy( int _copy_orient, TMREdge *edge ){
 /*
   Retrieve the copy edge
 */
-void TMREdge::getCopy( int *_copy_orient, TMREdge **edge ){
-  *_copy_orient = copy_orient;
+void TMREdge::getCopySource( TMREdge **edge ){
   *edge = copy;
 }
 
@@ -456,6 +446,8 @@ TMRFace::TMRFace( int _orientation ){
   source = NULL;
   source_volume = NULL;
   source_orient = 0;
+  copy = NULL;
+  copy_orient = 0;
 }
 
 /*
@@ -709,7 +701,7 @@ void TMRFace::getMesh( TMRFaceMesh **_mesh ){
   Set the source face with a relative direction
 */
 void TMRFace::setSource( TMRVolume *volume, TMRFace *face ){
-  if (volume && face && face != this){
+  if (volume && face && face != this && !copy){
     int nloops = getNumEdgeLoops();
     if (nloops != face->getNumEdgeLoops()){
       fprintf(stderr, "TMRFace error: Topology not equivalent. \
@@ -775,8 +767,8 @@ void TMRFace::getSource( int *_source_orient,
 /*
   Set the source face
 */
-void TMRFace::setCopy( int _copy_orient, TMRFace *face ){
-  if (face && face != this){
+void TMRFace::setCopySource( int _copy_orient, TMRFace *face ){
+  if (face && face != this && !source){
     copy_orient = 0;
     if (_copy_orient > 0){
       copy_orient = 1;
@@ -794,9 +786,9 @@ void TMRFace::setCopy( int _copy_orient, TMRFace *face ){
 /*
   Retrieve the copy face
 */
-void TMRFace::getCopy( int *_copy_orient, TMRFace **face ){
-  *_copy_orient = copy_orient;
-  *face = copy;
+void TMRFace::getCopySource( int *_copy_orient, TMRFace **face ){
+  if (_copy_orient){ *_copy_orient = copy_orient; }
+  if (face){ *face = copy; }
 }
 
 /*

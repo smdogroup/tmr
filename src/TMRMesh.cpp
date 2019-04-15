@@ -20,7 +20,6 @@
 
 #include <math.h>
 #include <stdio.h>
-#include <map>
 
 #include "TMRMesh.h"
 #include "TMRNativeTopology.h"
@@ -971,8 +970,9 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Get the source edge
-  TMREdge *source;
+  TMREdge *source, *copy;
   edge->getSource(&source);
+  edge->getCopySource(&copy);
 
   // Figure out if there is a source edge and whether or not it has
   // been meshed.
@@ -988,6 +988,37 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
 
     // Retrieve the number of points along the source edge
     mesh->getMeshPoints(&npts, NULL, NULL);
+  }
+  else if (copy && copy != edge){
+    // Set the edge mesh
+    TMREdgeMesh *mesh;
+    copy->getMesh(&mesh);
+    if (!mesh){
+      mesh = new TMREdgeMesh(comm, copy);
+      mesh->mesh(options, fs);
+      copy->setMesh(mesh);
+    }
+
+    // Retrieve the vertices
+    TMRVertex *v1, *v2;
+    edge->getVertices(&v1, &v2);
+
+    // Get the vertex copies. These must be set to copy from the
+    // verties that the edge are set to copy from.
+    TMRVertex *v1_copy, *v2_copy;
+    v1->getCopySource(&v1_copy);
+    v2->getCopySource(&v2_copy);
+
+    // Get the vertices that are copies of v1 and v2
+    TMRVertex *copy_v1, *copy_v2;
+    copy->getVertices(&copy_v1, &copy_v2);
+
+    // Check the orientation. Note that if no orientation is set,
+    // then we don't copy the edge.
+    if (((v1_copy == copy_v1) && (v2_copy == copy_v2)) ||
+        ((v1_copy == copy_v2) && (v2_copy == copy_v1))){
+      mesh->getMeshPoints(&npts, NULL, NULL);
+    }
   }
 
   if (mpi_rank == 0){
@@ -1086,52 +1117,80 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
 }
 
 /*
-  Order the internal mesh points and return the number of owned
-  points that were ordered.
+  Order the internal mesh points and return the number of owned points
+  that were ordered.
 */
 int TMREdgeMesh::setNodeNums( int *num ){
   if (!vars && pts){
     int start = *num;
 
-    // Retrieve the vertices1
+    // Retrieve the vertices
     TMRVertex *v1, *v2;
     edge->getVertices(&v1, &v2);
 
     // Allocate/set the node numbers
     vars = new int[ npts ];
 
-    // Get the variable numbers
-    v1->getNodeNum(&vars[0]);
-    v2->getNodeNum(&vars[npts-1]);
-
-    int copy_orient;
+    int success = 0;
     TMREdge *copy;
-    edge->getCopy(&copy_orient, &copy);
+    edge->getCopySource(&copy);
 
-    if (copy && !copy_orient){
-      TMREdgeMesh *copy_mesh;
-      copy->getMesh(&copy_mesh);
-      if (copy_mesh){
-        copy_mesh->setNodeNums(num);
+    if (copy){
+      // Get the vertex copies. These must be set to copy from the
+      // verties that the edge are set to copy from.
+      TMRVertex *v1_copy, *v2_copy;
+      v1->getCopySource(&v1_copy);
+      v2->getCopySource(&v2_copy);
 
-        if (copy_mesh->npts == npts){
-          int edge_index = npts-2;
-          if (copy_orient > 0){
-            edge_index = 1;
-          }
-          for ( int i = 1; i < npts-1; i++, edge_index += copy_orient ){
-            vars[i] = copy_mesh->vars[i];
+      // Get the vertices that are copies of v1 and v2
+      TMRVertex *copy_v1, *copy_v2;
+      copy->getVertices(&copy_v1, &copy_v2);
+
+      // Check the orientation. Note that if no orientation is set,
+      // then we don't copy the edge.
+      int copy_orient = 0;
+      if ((v1_copy == copy_v1) && (v2_copy == copy_v2)){
+        copy_orient = 1;
+      }
+      else if ((v1_copy == copy_v2) && (v2_copy == copy_v1)){
+        copy_orient = -1;
+      }
+
+      if (copy_orient){
+        TMREdgeMesh *copy_mesh;
+        copy->getMesh(&copy_mesh);
+
+        if (copy_mesh){
+          // Set the node numbers of the mesh we're copying from
+          copy_mesh->setNodeNums(num);
+
+          if (copy_mesh->npts == npts){
+            // We've successfully copied the edge
+            success = 1;
+
+            int edge_index = npts-2;
+            if (copy_orient > 0){
+              edge_index = 1;
+            }
+            for ( int i = 1; i < npts-1; i++, edge_index += copy_orient ){
+              vars[i] = copy_mesh->vars[i];
+            }
           }
         }
       }
     }
-    else {
+
+    if (!success){
       // Set the internal node numbers
       for ( int i = 1; i < npts-1; i++ ){
         vars[i] = *num;
         (*num)++;
       }
     }
+
+    // Set the variable numbers at the end points
+    v1->getNodeNum(&vars[0]);
+    v2->getNodeNum(&vars[npts-1]);
 
     return start - (*num);
   }
@@ -1191,6 +1250,7 @@ TMRFaceMesh::TMRFaceMesh( MPI_Comm _comm, TMRFace *_face,
   quads = NULL;
   tris = NULL;
   source_to_target = NULL;
+  copy_to_target = NULL;
 
   // This is not a prescribed mesh
   prescribed_mesh = 0;
@@ -1198,194 +1258,7 @@ TMRFaceMesh::TMRFaceMesh( MPI_Comm _comm, TMRFace *_face,
   // Check if the input mesh is consistent
   if (_X && _quads && _npts > 0 && _nquads > 0){
     prescribed_mesh = 1;
-
-    // Check that all the edge meshes are already defined...
-    for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
-      // Get the curve information for this loop segment
-      TMREdgeLoop *loop;
-      face->getEdgeLoop(k, &loop);
-
-      int nedges;
-      TMREdge **edges;
-      const int *dir;
-      loop->getEdgeLoop(&nedges, &edges, &dir);
-
-      for ( int i = 0; i < nedges; i++ ){
-        // Retrieve the underlying curve mesh
-        TMREdgeMesh *mesh = NULL;
-        edges[i]->getMesh(&mesh);
-
-        if (!mesh){
-          prescribed_mesh = 0;
-        }
-      }
-    }
-
-    // The edge meshes are not defined: cannot prescribe the mesh
-    if (!prescribed_mesh){
-      fprintf(stderr, "TMRFaceMesh: Must prescribe all edge meshes \
-for a prescribed face mesh\n");
-      return;
-    }
-
-    // Otherwise, we can now prescribe the mesh
-    mesh_type = TMR_UNSTRUCTURED;
-    num_points = _npts;
-    num_quads = _nquads;
-
-    // Compute a mapping that places the edge nodes first in the correct order
-    int *node_mapping = new int[ num_points ];
-
-    // Set all the variable values to negative
-    for ( int i = 0; i < num_points; i++ ){
-      node_mapping[i] = -1;
-    }
-
-    // Keep track of whether we encounter any problems
-    int fail = 0;
-
-    // Retrieve the boundary node numbers from the surface loops
-    int pt = 0;
-    for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
-      // Get the curve information for this loop segment
-      TMREdgeLoop *loop;
-      face->getEdgeLoop(k, &loop);
-
-      int nedges;
-      TMREdge **edges;
-      const int *dir;
-      loop->getEdgeLoop(&nedges, &edges, &dir);
-
-      for ( int i = 0; i < nedges; i++ ){
-        // Retrieve the underlying curve mesh
-        TMREdgeMesh *mesh = NULL;
-        edges[i]->getMesh(&mesh);
-
-        // Retrieve the variable numbers for this loop
-        const int *edge_vars;
-        int npts = mesh->getNodeNums(&edge_vars);
-
-        // Get the points along the edge
-        TMRPoint *Xedge;
-        mesh->getMeshPoints(NULL, NULL, &Xedge);
-
-        // Find the closest point
-        if (edges[i]->isDegenerate()){
-          int min_k = -1;
-          double min_dist = 1e20;
-          for ( int k = 0; k < num_points; k++ ){
-            double dist =
-              (Xedge[0].x - _X[k].x)*(Xedge[0].x - _X[k].x) +
-              (Xedge[0].y - _X[k].y)*(Xedge[0].y - _X[k].y) +
-              (Xedge[0].z - _X[k].z)*(Xedge[0].z - _X[k].z);
-            if (dist < min_dist){
-              min_dist = dist;
-              min_k = k;
-            }
-          }
-          if (node_mapping[min_k] == -1){
-            node_mapping[min_k] = pt;
-            pt++;
-          }
-          else {
-            fail = 1;
-          }
-        }
-        else {
-          // Find the point on the curve
-          if (dir[i] > 0){
-            for ( int j = 0; j < npts-1; j++ ){
-              int min_k = -1;
-              double min_dist = 1e20;
-              for ( int k = 0; k < num_points; k++ ){
-                double dist =
-                  (Xedge[j].x - _X[k].x)*(Xedge[j].x - _X[k].x) +
-                  (Xedge[j].y - _X[k].y)*(Xedge[j].y - _X[k].y) +
-                  (Xedge[j].z - _X[k].z)*(Xedge[j].z - _X[k].z);
-                if (dist < min_dist){
-                  min_dist = dist;
-                  min_k = k;
-                }
-              }
-              if (node_mapping[min_k] == -1){
-                node_mapping[min_k] = pt;
-                pt++;
-              }
-              else {
-                fail = 1;
-              }
-            }
-          }
-          else {
-            for ( int j = npts-1; j >= 1; j-- ){
-              int min_k = -1;
-              double min_dist = 1e20;
-              for ( int k = 0; k < num_points; k++ ){
-                double dist =
-                  (Xedge[j].x - _X[k].x)*(Xedge[j].x - _X[k].x) +
-                  (Xedge[j].y - _X[k].y)*(Xedge[j].y - _X[k].y) +
-                  (Xedge[j].z - _X[k].z)*(Xedge[j].z - _X[k].z);
-                if (dist < min_dist){
-                  min_dist = dist;
-                  min_k = k;
-                }
-              }
-              if (node_mapping[min_k] == -1){
-                node_mapping[min_k] = pt;
-                pt++;
-              }
-              else {
-                fail = 1;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Abandon the prescribed mesh
-    if (fail){
-      prescribed_mesh = 0;
-      mesh_type = TMR_NO_MESH;
-      num_points = 0;
-      num_quads = 0;
-      delete [] node_mapping;
-      fprintf(stderr, "TMRFaceMesh: Failed to map edge nodes\n");
-      return;
-    }
-
-    // Set the number of fixed points
-    num_fixed_pts = pt;
-
-    // Find the un-ordered nodes
-    for ( int i = 0; i < num_points; i++ ){
-      if (node_mapping[i] < 0){
-        node_mapping[i] = pt;
-        pt++;
-      }
-    }
-
-    // Copy over the quadrilaterals
-    quads = new int[ 4*num_quads ];
-    memcpy(quads, _quads, 4*num_quads*sizeof(int));
-    for ( int i = 0; i < 4*num_quads; i++ ){
-      quads[i] = node_mapping[quads[i]];
-    }
-
-    // Now copy over the node locations
-    X = new TMRPoint[ num_points ];
-    for ( int i = 0; i < num_points; i++ ){
-      X[node_mapping[i]] = _X[i];
-    }
-
-    // Free the mapping
-    delete [] node_mapping;
-
-    // Set the point locations
-    pts = new double[ 2*num_points ];
-    for ( int i = 0; i < num_points; i++ ){
-      face->invEvalPoint(X[i], &pts[2*i], &pts[2*i+1]);
-    }
+    setPrescribedMesh(_X, _npts, _quads, _nquads);
   }
 }
 
@@ -1400,7 +1273,205 @@ TMRFaceMesh::~TMRFaceMesh(){
   if (quads){ delete [] quads; }
   if (tris){ delete [] tris; }
   if (source_to_target){ delete [] source_to_target; }
+  if (copy_to_target){ delete [] copy_to_target; }
 }
+
+/*
+  Set the prescribed mesh points/locations
+*/
+void TMRFaceMesh::setPrescribedMesh( const TMRPoint *_X,
+                                     int _npts,
+                                     const int *_quads,
+                                     int _nquads ){
+  // Check that all the edge meshes are already defined...
+  for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+    // Get the curve information for this loop segment
+    TMREdgeLoop *loop;
+    face->getEdgeLoop(k, &loop);
+
+    int nedges;
+    TMREdge **edges;
+    const int *dir;
+    loop->getEdgeLoop(&nedges, &edges, &dir);
+
+    for ( int i = 0; i < nedges; i++ ){
+      // Retrieve the underlying curve mesh
+      TMREdgeMesh *mesh = NULL;
+      edges[i]->getMesh(&mesh);
+
+      if (!mesh){
+        prescribed_mesh = 0;
+      }
+    }
+  }
+
+  // The edge meshes are not defined: cannot prescribe the mesh
+  if (!prescribed_mesh){
+    fprintf(stderr, "TMRFaceMesh: Must prescribe all edge meshes \
+for a prescribed face mesh\n");
+    return;
+  }
+
+  // Otherwise, we can now prescribe the mesh
+  mesh_type = TMR_UNSTRUCTURED;
+  num_points = _npts;
+  num_quads = _nquads;
+
+  // Compute a mapping that places the edge nodes first in the correct order
+  int *node_mapping = new int[ num_points ];
+
+  // Set all the variable values to negative
+  for ( int i = 0; i < num_points; i++ ){
+    node_mapping[i] = -1;
+  }
+
+  // Keep track of whether we encounter any problems
+  int fail = 0;
+
+  // Retrieve the boundary node numbers from the surface loops
+  int pt = 0;
+  for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+    // Get the curve information for this loop segment
+    TMREdgeLoop *loop;
+    face->getEdgeLoop(k, &loop);
+
+    int nedges;
+    TMREdge **edges;
+    const int *dir;
+    loop->getEdgeLoop(&nedges, &edges, &dir);
+
+    for ( int i = 0; i < nedges; i++ ){
+      // Retrieve the underlying curve mesh
+      TMREdgeMesh *mesh = NULL;
+      edges[i]->getMesh(&mesh);
+
+      // Retrieve the variable numbers for this loop
+      const int *edge_vars;
+      int npts = mesh->getNodeNums(&edge_vars);
+
+      // Get the points along the edge
+      TMRPoint *Xedge;
+      mesh->getMeshPoints(NULL, NULL, &Xedge);
+
+      // Find the closest point
+      if (edges[i]->isDegenerate()){
+        int min_k = -1;
+        double min_dist = 1e20;
+        for ( int k = 0; k < num_points; k++ ){
+          double dist =
+            (Xedge[0].x - _X[k].x)*(Xedge[0].x - _X[k].x) +
+            (Xedge[0].y - _X[k].y)*(Xedge[0].y - _X[k].y) +
+            (Xedge[0].z - _X[k].z)*(Xedge[0].z - _X[k].z);
+          if (dist < min_dist){
+            min_dist = dist;
+            min_k = k;
+          }
+        }
+        if (node_mapping[min_k] == -1){
+          node_mapping[min_k] = pt;
+          pt++;
+        }
+        else {
+          fail = 1;
+        }
+      }
+      else {
+        // Find the point on the curve
+        if (dir[i] > 0){
+          for ( int j = 0; j < npts-1; j++ ){
+            int min_k = -1;
+            double min_dist = 1e20;
+            for ( int k = 0; k < num_points; k++ ){
+              double dist =
+                (Xedge[j].x - _X[k].x)*(Xedge[j].x - _X[k].x) +
+                (Xedge[j].y - _X[k].y)*(Xedge[j].y - _X[k].y) +
+                (Xedge[j].z - _X[k].z)*(Xedge[j].z - _X[k].z);
+              if (dist < min_dist){
+                min_dist = dist;
+                min_k = k;
+              }
+            }
+            if (node_mapping[min_k] == -1){
+              node_mapping[min_k] = pt;
+              pt++;
+            }
+            else {
+              fail = 1;
+            }
+          }
+        }
+        else {
+          for ( int j = npts-1; j >= 1; j-- ){
+            int min_k = -1;
+            double min_dist = 1e20;
+            for ( int k = 0; k < num_points; k++ ){
+              double dist =
+                (Xedge[j].x - _X[k].x)*(Xedge[j].x - _X[k].x) +
+                (Xedge[j].y - _X[k].y)*(Xedge[j].y - _X[k].y) +
+                (Xedge[j].z - _X[k].z)*(Xedge[j].z - _X[k].z);
+              if (dist < min_dist){
+                min_dist = dist;
+                min_k = k;
+              }
+            }
+            if (node_mapping[min_k] == -1){
+              node_mapping[min_k] = pt;
+              pt++;
+            }
+            else {
+              fail = 1;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Abandon the prescribed mesh
+  if (fail){
+    prescribed_mesh = 0;
+    mesh_type = TMR_NO_MESH;
+    num_points = 0;
+    num_quads = 0;
+    delete [] node_mapping;
+    fprintf(stderr, "TMRFaceMesh: Failed to map edge nodes\n");
+    return;
+  }
+
+  // Set the number of fixed points
+  num_fixed_pts = pt;
+
+  // Find the un-ordered nodes
+  for ( int i = 0; i < num_points; i++ ){
+    if (node_mapping[i] < 0){
+      node_mapping[i] = pt;
+      pt++;
+    }
+  }
+
+  // Copy over the quadrilaterals
+  quads = new int[ 4*num_quads ];
+  memcpy(quads, _quads, 4*num_quads*sizeof(int));
+  for ( int i = 0; i < 4*num_quads; i++ ){
+    quads[i] = node_mapping[quads[i]];
+  }
+
+  // Now copy over the node locations
+  X = new TMRPoint[ num_points ];
+  for ( int i = 0; i < num_points; i++ ){
+    X[node_mapping[i]] = _X[i];
+  }
+
+  // Free the mapping
+  delete [] node_mapping;
+
+  // Set the point locations
+  pts = new double[ 2*num_points ];
+  for ( int i = 0; i < num_points; i++ ){
+    face->invEvalPoint(X[i], &pts[2*i], &pts[2*i+1]);
+  }
+}
+
 
 /*
   Create the surface mesh
@@ -1425,19 +1496,28 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
   // Get the source face and its orientation relative to this
   // face. Note that the source face may be NULL in which case the
   // source orientation is meaningless.
-  int source_orient;
-  TMRVolume *source_volume;
-  TMRFace *source;
-  face->getSource(&source_orient, &source_volume, &source);
+  TMRFace *source, *copy;
+  face->getSource(NULL, NULL, &source);
+  face->getCopySource(NULL, &copy);
 
+  // If the face mesh for the source or copy source does not yet
+  // exist, create it...
   if (source){
-    // If the face mesh for the source does not yet exist, create it...
     TMRFaceMesh *face_mesh;
     source->getMesh(&face_mesh);
     if (!face_mesh){
       face_mesh = new TMRFaceMesh(comm, source);
       face_mesh->mesh(options, fs);
       source->setMesh(face_mesh);
+    }
+  }
+  else if (copy){
+    TMRFaceMesh *face_mesh;
+    copy->getMesh(&face_mesh);
+    if (!face_mesh){
+      face_mesh = new TMRFaceMesh(comm, source);
+      face_mesh->mesh(options, fs);
+      copy->setMesh(face_mesh);
     }
   }
 
@@ -1650,6 +1730,9 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
 
     if (source){
       mapSourceToTarget(options, params);
+    }
+    else if (copy){
+      mapCopyToTarget(options, params);
     }
     else if (mesh_type == TMR_STRUCTURED){
       createStructuredMesh(options, params);
@@ -1944,8 +2027,8 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
   // Keep track of the source-to-target edge and target-to-source
   // edge mappings as well as their relative orientations
-  std::map<TMREdge*, int> source_to_target_orient;
   std::map<TMREdge*, TMREdge*> source_to_target_edge;
+  std::map<TMREdge*, int> source_to_target_orient;
 
   // Loop over the faces that are within the source volume
   int num_faces;
@@ -2002,6 +2085,70 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     }
   }
 
+  // Set the source face mesh from the mapping
+  setMeshFromMapping(options, params, source, rel_source_orient,
+                     source_to_target_edge, source_to_target_orient,
+                     &source_to_target);
+}
+
+/*
+  Map the source mesh to the target mesh (this is the target mesh)
+*/
+void TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
+                                   const double *params ){
+  int rel_copy_orient;
+  TMRFace *copy;
+  face->getCopySource(&rel_copy_orient, &copy);
+
+  // Get the copy face mesh
+  TMRFaceMesh *copy_face_mesh;
+  copy->getMesh(&copy_face_mesh);
+
+  // Set the source to target orientation
+  std::map<TMREdge*, TMREdge*> copy_to_target_edge;
+  std::map<TMREdge*, int> copy_to_target_orient;
+
+  /*
+  for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+    TMREdgeLoop *loop;
+    face->getEdgeLoop(k, &loop);
+
+    // Get the edge loop orientation
+    int nedges;
+    TMREdge **edges;
+    const int *edge_orient;
+    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
+
+    for ( int j = 0; j < nedges; j++ ){
+      copy_to_target_edge[e ] = edges[i]
+
+      copy_edges[edges[j]] = source_orient*edge_orient[j];
+    }
+  }
+  */
+
+  // Set the copied face mesh
+  setMeshFromMapping(options, params, copy, rel_copy_orient,
+                     copy_to_target_edge, copy_to_target_orient,
+                     &copy_to_target);
+}
+
+
+void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
+                                      const double *params,
+                                      TMRFace *src,
+                                      const int rel_orient,
+                                      std::map<TMREdge*, TMREdge*> &src_to_target_edge,
+                                      std::map<TMREdge*, int> &src_to_target_orient,
+                                      int **_src_to_target ){
+  // Get the source and target orientations
+  int src_orient = src->getOrientation();
+  int target_orient = face->getOrientation();
+
+  // Get the source mesh
+  TMRFaceMesh *src_face_mesh;
+  src->getMesh(&src_face_mesh);
+
   // Now, count up the number of nodes that the target index must
   // be offset
   int target_offset = 0;
@@ -2039,24 +2186,21 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     }
   }
 
-  // Get the source face mesh
-  TMRFaceMesh *face_mesh;
-  source->getMesh(&face_mesh);
 
   // Set the total number of points
-  mesh_type = face_mesh->mesh_type;
-  num_points = face_mesh->num_points;
-  num_fixed_pts = face_mesh->num_fixed_pts;
-  num_quads = face_mesh->num_quads;
-  num_tris = face_mesh->num_tris;
+  mesh_type = src_face_mesh->mesh_type;
+  num_points = src_face_mesh->num_points;
+  num_fixed_pts = src_face_mesh->num_fixed_pts;
+  num_quads = src_face_mesh->num_quads;
+  num_tris = src_face_mesh->num_tris;
 
   // March through the sources loop, and compute the source to
   // target ordering
-  source_to_target = new int[ num_points ];
-  int source_offset = 0;
-  for ( int k = 0; k < source->getNumEdgeLoops(); k++ ){
+  int *src_to_target = new int[ num_points ];
+  int src_offset = 0;
+  for ( int k = 0; k < src->getNumEdgeLoops(); k++ ){
     TMREdgeLoop *loop;
-    source->getEdgeLoop(k, &loop);
+    src->getEdgeLoop(k, &loop);
 
     // Get the edges within this loop
     int nedges;
@@ -2065,14 +2209,14 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     loop->getEdgeLoop(&nedges, &edges, &dir);
 
     int edge_index = nedges-1;
-    if (source_orient > 0){
+    if (src_orient > 0){
       edge_index = 0;
     }
 
-    for ( int i = 0; i < nedges; i++, edge_index += source_orient ){
+    for ( int i = 0; i < nedges; i++, edge_index += src_orient ){
       // Retrieve the edge and target edge
       TMREdge *edge = edges[i];
-      TMREdge *tar_edge = source_to_target_edge[edge];
+      TMREdge *tar_edge = src_to_target_edge[edge];
 
       // Get the offset for the target edge
       int offset = target_edge_offset[tar_edge];
@@ -2093,38 +2237,38 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
       // 6 <- 5 -- 4   0 -- 1 -> 2
 
       if (!edge->isDegenerate()){
-        if (source_to_target_orient[tar_edge] > 0){
+        if (src_to_target_orient[tar_edge] > 0){
           for ( int j = 0; j < npts-1; j++ ){
-            source_to_target[source_offset + j] = offset + j;
+            src_to_target[src_offset + j] = offset + j;
           }
         }
         else {
           for ( int j = 0; j < npts-1; j++ ){
-            source_to_target[source_offset + j] = offset + npts-1 - j;
+            src_to_target[src_offset + j] = offset + npts-1 - j;
           }
 
           // Get the previous target edge in the loop. This will give
           // the first number from the last edge loop.
           TMREdge *init_edge = NULL;
           if (edge_index == 0){
-            init_edge = source_to_target_edge[edges[nedges-1]];
+            init_edge = src_to_target_edge[edges[nedges-1]];
           }
           else {
-            init_edge = source_to_target_edge[edges[i-1]];
+            init_edge = src_to_target_edge[edges[i-1]];
           }
           int init_offset = target_edge_offset[init_edge];
-          source_to_target[source_offset] = init_offset;
+          src_to_target[src_offset] = init_offset;
         }
 
         // Increment the offset to the source index
-        source_offset += npts-1;
+        src_offset += npts-1;
       }
     }
   }
 
   // Set the remaining source-to-target mapping
   for ( int i = num_fixed_pts; i < num_points; i++ ){
-    source_to_target[i] = i;
+    src_to_target[i] = i;
   }
 
   // Allocate the array for the parametric locations
@@ -2146,8 +2290,8 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
   tc[0] = tc[1] = 0.0;
 
   for ( int k = 0; k < num_fixed_pts; k++ ){
-    sc[0] += face_mesh->pts[2*k];
-    sc[1] += face_mesh->pts[2*k+1];
+    sc[0] += src_face_mesh->pts[2*k];
+    sc[1] += src_face_mesh->pts[2*k+1];
     tc[0] += pts[2*k];
     tc[1] += pts[2*k+1];
   }
@@ -2158,11 +2302,11 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
   for ( int k = 0; k < num_fixed_pts; k++ ){
     double uS[2], uT[2];
-    uS[0] = face_mesh->pts[2*k] - sc[0];
-    uS[1] = face_mesh->pts[2*k+1] - sc[1];
+    uS[0] = src_face_mesh->pts[2*k] - sc[0];
+    uS[1] = src_face_mesh->pts[2*k+1] - sc[1];
 
     // Compute the source->target index number
-    int kt = source_to_target[k];
+    int kt = src_to_target[k];
     uT[0] = pts[2*kt] - tc[0];
     uT[1] = pts[2*kt+1] - tc[1];
 
@@ -2186,8 +2330,8 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
   // Set the interior points based on the linear transformation
   for ( int k = num_fixed_pts; k < num_points; k++ ){
-    double uS = face_mesh->pts[2*k] - sc[0];
-    double vS = face_mesh->pts[2*k+1] - sc[1];
+    double uS = src_face_mesh->pts[2*k] - sc[0];
+    double vS = src_face_mesh->pts[2*k+1] - sc[1];
     pts[2*k] = A[0]*uS + A[1]*vS + tc[0];
     pts[2*k+1] = A[2]*uS + A[3]*vS + tc[1];
   }
@@ -2195,19 +2339,19 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
   // Copy the quadrilateral mesh (if any)
   if (num_quads > 0){
     quads = new int[ 4*num_quads ];
-    memcpy(quads, face_mesh->quads, 4*num_quads*sizeof(int));
+    memcpy(quads, src_face_mesh->quads, 4*num_quads*sizeof(int));
 
     // Adjust the quadrilateral ordering at the boundary
     for ( int i = 0; i < 4*num_quads; i++ ){
       if (quads[i] < num_fixed_pts){
-        quads[i] = source_to_target[quads[i]];
+        quads[i] = src_to_target[quads[i]];
       }
     }
 
     // Flip the orientation of the quads to match the orientation of
     // the face
-    int rel_orient = -rel_source_orient*target_orient*source_orient;
-    if (rel_orient < 0){
+    int orient = -rel_orient*target_orient*src_orient;
+    if (orient < 0){
       for ( int i = 0; i < num_quads; i++ ){
         int tmp = quads[4*i+1];
         quads[4*i+1] = quads[4*i+3];
@@ -2219,19 +2363,19 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
   // Copy the triangular mesh (if any)
   if (num_tris > 0){
     tris = new int[ 3*num_tris ];
-    memcpy(tris, face_mesh->tris, 3*num_tris*sizeof(int));
+    memcpy(tris, src_face_mesh->tris, 3*num_tris*sizeof(int));
 
     // Adjust the triangle ordering at the boundary
     for ( int i = 0; i < 3*num_tris; i++ ){
       if (tris[i] < num_fixed_pts){
-        tris[i] = source_to_target[tris[i]];
+        tris[i] = src_to_target[tris[i]];
       }
     }
 
     // Flip the orientation of the triangles to match the
     // orientation of the face
-    int rel_orient = -rel_source_orient*target_orient*source_orient;
-    if (rel_orient < 0){
+    int orient = -rel_orient*target_orient*src_orient;
+    if (orient < 0){
       for ( int i = 0; i < num_tris; i++ ){
         int tmp = tris[3*i+1];
         tris[4*i+1] = tris[4*i+2];
@@ -2287,6 +2431,9 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     delete [] tri_neighbors;
     delete [] dual_edges;
   }
+
+  // Set the source-to-target mapping
+  *_src_to_target = src_to_target;
 }
 
 /*
