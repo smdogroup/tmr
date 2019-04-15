@@ -2103,6 +2103,24 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   TMRFace *copy;
   face->getCopySource(&rel_copy_orient, &copy);
 
+  // Find the orientation of each copy edge on the surface we're copying from
+  std::map<TMREdge*, int> copy_edge_orient;
+  int copy_orient = copy->getOrientation();
+  for ( int k = 0; k < copy->getNumEdgeLoops(); k++ ){
+    TMREdgeLoop *loop;
+    copy->getEdgeLoop(k, &loop);
+
+    // Get the edge loop orientation
+    int nedges;
+    TMREdge **edges;
+    const int *edge_orient;
+    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
+
+    for ( int i = 0; i < nedges; i++ ){
+      copy_edge_orient[edges[i]] = copy_orient*edge_orient[i];
+    }
+  }
+
   // Get the copy face mesh
   TMRFaceMesh *copy_face_mesh;
   copy->getMesh(&copy_face_mesh);
@@ -2112,6 +2130,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   std::map<TMREdge*, int> copy_to_target_orient;
 
   // Loop over the edge orientations of the
+  int target_orient = face->getOrientation();
   for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
     TMREdgeLoop *loop;
     face->getEdgeLoop(k, &loop);
@@ -2144,17 +2163,10 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       TMRVertex *copy_v1, *copy_v2;
       copy_edge->getVertices(&copy_v1, &copy_v2);
 
-      if (copy_v1 == v1_copy && copy_v2 == v2_copy){
-        copy_to_target_orient[copy_edge] = 1;
-      }
-      else if (copy_v1 == v1_copy && copy_v2 == v2_copy){
-        copy_to_target_orient[copy_edge] = -1;
-      }
-      else {
-        fail = 1;
-        fprintf(stderr,
-                "TMRFaceMesh: Warning, copy source and target vertices are not set consistently\n");
-      }
+      copy_to_target_orient[copy_edge] =
+        rel_copy_orient*target_orient*edge_orient[j]*copy_edge_orient[copy_edge];
+      printf("copy_to_target_orient[%d] = %d\n", j,
+             copy_to_target_orient[copy_edge]);
     }
   }
 
@@ -2165,7 +2177,6 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
 
   return fail;
 }
-
 
 void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
                                       const double *params,
@@ -2218,7 +2229,6 @@ void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
       }
     }
   }
-
 
   // Set the total number of points
   mesh_type = src_face_mesh->mesh_type;
@@ -3167,7 +3177,7 @@ int TMRFaceMesh::setNodeNums( int *num ){
 
       // Set the copy variable nubmers from the target
       for ( int i = 0; i < num_points; i++ ){
-        vars[i] = copy_mesh->vars[copy_to_target[i]];
+        vars[copy_to_target[i]] = copy_mesh->vars[i];
       }
     }
     else {
@@ -3225,7 +3235,6 @@ int TMRFaceMesh::setNodeNums( int *num ){
         vars[pt] = *num;
         (*num)++;
       }
-
     }
 
     // Return the number of points that have been allocated

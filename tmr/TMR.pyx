@@ -161,6 +161,9 @@ cdef class Vertex:
         self.ptr.setNodeNum(&n)
         return n
 
+    def setCopySource(self, Vertex vert):
+        self.ptr.setCopySource(vert.ptr)
+
 cdef _init_Vertex(TMRVertex *ptr):
     vertex = Vertex()
     vertex.ptr = ptr
@@ -252,6 +255,9 @@ cdef class Edge:
 
     def setMesh(self, EdgeMesh mesh):
         self.ptr.setMesh(mesh.ptr)
+
+    def setCopySource(self, Edge edge):
+        self.ptr.setCopySource(edge.ptr)
 
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
@@ -422,6 +428,9 @@ cdef class Face:
         cdef int d
         self.ptr.getSource(&d, &v, &f)
         return d, _init_Volume(v), _init_Face(f)
+
+    def setCopySource(self, Face face, int orient=-1):
+        self.ptr.setCopySource(orient, face.ptr)
 
     def setMesh(self, FaceMesh mesh):
         self.ptr.setMesh(mesh.ptr)

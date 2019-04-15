@@ -93,6 +93,8 @@ cdef extern from "TMRTopology.h":
         int evalPoint(TMRPoint*)
         int setNodeNum(int*)
         int getNodeNum(int*)
+        void setCopySource(TMRVertex*)
+        void getCopySource(TMRVertex**)
 
     cdef cppclass TMREdge(TMREntity):
         TMREdge()
@@ -106,6 +108,8 @@ cdef extern from "TMRTopology.h":
         int isDegenerate()
         void setMesh(TMREdgeMesh*)
         void getMesh(TMREdgeMesh**)
+        void setCopySource(TMREdge*)
+        void getCopySource(TMREdge**)
         void writeToVTK(char*)
 
     cdef cppclass TMRFace(TMREntity):
@@ -120,6 +124,8 @@ cdef extern from "TMRTopology.h":
         void getEdgeLoop(int, TMREdgeLoop**)
         void setMesh(TMRFaceMesh*)
         void getMesh(TMRFaceMesh**)
+        void setCopySource(int, TMRFace*)
+        void getCopySource(int*, TMRFace**)
         void writeToVTK(char*)
 
     cdef cppclass TMREdgeLoop(TMREntity):
