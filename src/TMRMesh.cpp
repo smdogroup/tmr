@@ -1173,7 +1173,7 @@ int TMREdgeMesh::setNodeNums( int *num ){
               edge_index = 1;
             }
             for ( int i = 1; i < npts-1; i++, edge_index += copy_orient ){
-              vars[i] = copy_mesh->vars[i];
+              vars[edge_index] = copy_mesh->vars[i];
             }
           }
         }
@@ -2077,7 +2077,7 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
       if (src_edge && tar_edge){
         // Compute the relative source-to-target directions
         int tmp = source_edges[src_edge]*target_edges[tar_edge];
-        source_to_target_orient[tar_edge] = -src_orient*tar_orient*tmp;
+        source_to_target_orient[src_edge] = -src_orient*tar_orient*tmp;
 
         // Source to target and target to source edges
         source_to_target_edge[src_edge] = tar_edge;
@@ -2149,24 +2149,9 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       // Set the copy to target edge mapping
       copy_to_target_edge[copy_edge] = edges[j];
 
-      // Get the target vertices
-      TMRVertex *v1, *v2;
-      edges[j]->getVertices(&v1, &v2);
-
-      // Get ther vertex copies
-      TMRVertex *v1_copy, *v2_copy;
-      v1->getCopySource(&v1_copy);
-      v2->getCopySource(&v2_copy);
-
-      // Check if the direction of the edge that will be copied
-      // is the same or opposite to the face edge
-      TMRVertex *copy_v1, *copy_v2;
-      copy_edge->getVertices(&copy_v1, &copy_v2);
-
       copy_to_target_orient[copy_edge] =
-        rel_copy_orient*target_orient*edge_orient[j]*copy_edge_orient[copy_edge];
-      printf("copy_to_target_orient[%d] = %d\n", j,
-             copy_to_target_orient[copy_edge]);
+        rel_copy_orient*target_orient*edge_orient[j];
+      copy_to_target_orient[copy_edge] *= copy_edge_orient[copy_edge];
     }
   }
 
@@ -2280,7 +2265,7 @@ void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
       // 6 <- 5 -- 4   0 -- 1 -> 2
 
       if (!edge->isDegenerate()){
-        if (src_to_target_orient[tar_edge] > 0){
+        if (src_to_target_orient[edge] > 0){
           for ( int j = 0; j < npts-1; j++ ){
             src_to_target[src_offset + j] = offset + j;
           }
