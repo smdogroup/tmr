@@ -301,7 +301,7 @@ cdef class Edge:
             # Check if these are degenerate edges
             if (self.isDegenerate() and e2.isDegenerate()):
                 return True # same and both degenerate
-            elif (self.isDegenerate() + e2.isDegenerate() == 1):
+            elif self.isDegenerate() != e2.isDegenerate():
                 return False # only one is degenerate
             # Check a midpoint on each
             else:

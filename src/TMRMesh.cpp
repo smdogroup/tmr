@@ -1515,7 +1515,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     TMRFaceMesh *face_mesh;
     copy->getMesh(&face_mesh);
     if (!face_mesh){
-      face_mesh = new TMRFaceMesh(comm, source);
+      face_mesh = new TMRFaceMesh(comm, copy);
       face_mesh->mesh(options, fs);
       copy->setMesh(face_mesh);
     }
@@ -2450,6 +2450,10 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
     }
   }
 
+  for ( int i = 0; i < num_fixed_pts; i++ ){
+    printf("copy_to_target[%d] = %d\n", i, copy_to_target[i]);
+  }
+
   // Allocate the array for the parametric locations
   pts = new double[ 2*num_points ];
   X = new TMRPoint[ num_points ];
@@ -2488,6 +2492,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       TMRVertex *v1_copy, *v2_copy;
       TMRVertex *copy_v1, *copy_v2;
 
+      // Get the mesh for the x-direction and check its orientation
       edges[0]->getMesh(&mesh);
       edges[0]->getCopySource(&copy_edge_x);
       mesh->getMeshPoints(&nx, NULL, NULL);
@@ -2501,6 +2506,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
         xorient *= -1;
       }
 
+      // Get the mesh for the y-direction and check its orientation
       edges[1]->getMesh(&mesh);
       edges[1]->getCopySource(&copy_edge_y);
       mesh->getMeshPoints(&ny, NULL, NULL);
@@ -2519,6 +2525,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       TMRVertex *v1_copy, *v2_copy;
       TMRVertex *copy_v1, *copy_v2;
 
+      // Get the mesh for the y-direction and check its orientation
       edges[0]->getMesh(&mesh);
       edges[0]->getCopySource(&copy_edge_y);
       mesh->getMeshPoints(&ny, NULL, NULL);
@@ -2532,6 +2539,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
         yorient *= -1;
       }
 
+      // Get the mesh for the x-direction and check its orientation
       edges[1]->getMesh(&mesh);
       edges[1]->getCopySource(&copy_edge_x);
       mesh->getMeshPoints(&nx, NULL, NULL);
@@ -2599,6 +2607,12 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       pts[2*i] = u;
       pts[2*i+1] = v;
       face->evalPoint(u, v, &X[i]);
+    }
+  }
+
+  for ( int i = 0; i < num_points; i++ ){
+    if (X[i].x == 0.0 && X[i].y == 0.0 && X[i].z == 0.0){
+      printf("Zero at %d\n", i);
     }
   }
 
@@ -2988,13 +3002,7 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
         mesh->getMeshPoints(&npts, NULL, NULL);
 
         // Is this the last edge in this loop?
-        int last_edge = 0;
-        if (face_orient > 0 && i == nedges-1){
-          last_edge = 1;
-        }
-        else if (face_orient < 0 && i == 0){
-          last_edge = 1;
-        }
+        int last_edge = (i == nedges-1);
 
         if (edge == e){
           if (idx < npts){

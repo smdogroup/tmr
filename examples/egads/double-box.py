@@ -35,37 +35,16 @@ vols = []
 sfi = [0, 4]
 for i, geo in enumerate([geo1, geo2]):
     vols = geo.getVolumes()
-    fail = vols[0].setExtrudeFaces(source_face_index = sfi[i])
-    print(fail)
+    # fail = vols[0].setExtrudeFaces(source_face_index = sfi[i])
 
     verts.extend(geo.getVertices())
     edges.extend(geo.getEdges())
     faces.extend(geo.getFaces())
-    # for i, f in enumerate(geo.getFaces()):
-    #     umin, vmin, umax, vmax = f.getRange()
-    #     pt1 = f.evalPoint(umin, vmin)
-    #     pt2 = f.evalPoint(umin, vmax)
-    #     pt3 = f.evalPoint(umax, vmin)
-    #     pt4 = f.evalPoint(umax, vmax)
-    #     xmin = np.amin(np.array([pt1[0], pt2[0], pt3[0], pt4[0]]))
-    #     ymin = np.amin(np.array([pt1[1], pt2[1], pt3[1], pt4[1]]))
-    #     zmin = np.amin(np.array([pt1[2], pt2[2], pt3[2], pt4[2]]))
-    #     xmax = np.amax(np.array([pt1[0], pt2[0], pt3[0], pt4[0]]))
-    #     ymax = np.amax(np.array([pt1[1], pt2[1], pt3[1], pt4[1]]))
-    #     zmax = np.amax(np.array([pt1[2], pt2[2], pt3[2], pt4[2]]))
-    #     print("Face {}: x in [{}, {}], y in [{}, {}], z in [{}, {}]".format(i,
-    #                                                                         xmin,
-    #                                                                         xmax,
-    #                                                                         ymin,
-    #                                                                         ymax,
-    #                                                                         zmin,
-    #                                                                         zmax))
-    #     print("")
     vols.extend(geo.getVolumes())
 
 geo = TMR.Model(verts, edges, faces)#, vols)
 
-# Create the new mesh
+# # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
 
 # Set the meshing options
