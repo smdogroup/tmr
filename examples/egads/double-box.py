@@ -2,7 +2,6 @@ from mpi4py import MPI
 from tmr import TMR
 from egads4py import egads
 import numpy as np
-from coincident_geom import *
 
 ctx = egads.context()
 
@@ -27,7 +26,7 @@ htarget = 0.05
 geo1 = TMR.LoadModel('box1.egads', print_lev=1)
 geo2 = TMR.LoadModel('box2.egads', print_lev=1)
 
-setMatchingFaces(geo1, geo2)
+TMR.setMatchingFaces([geo1, geo2])
 
 verts = []
 edges = []
@@ -36,7 +35,7 @@ vols = []
 sfi = [0, 4]
 for i, geo in enumerate([geo1, geo2]):
     vols = geo.getVolumes()
-    fail = setExtrudeVolume(vols[0], source_face_index = sfi[i])
+    fail = vols[0].setExtrudeFaces(source_face_index = sfi[i])
     print(fail)
 
     verts.extend(geo.getVertices())

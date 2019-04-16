@@ -28,9 +28,6 @@ cimport mpi4py.MPI as MPI
 cimport numpy as np
 import numpy as np
 
-# Import random
-import random
-
 cdef tmr_init():
     if not TMRIsInitialized():
         TMRInitialize()
@@ -164,6 +161,25 @@ cdef class Vertex:
     def setCopySource(self, Vertex vert):
         self.ptr.setCopySource(vert.ptr)
 
+    def checkMatching(self, Vertex v2, double atol=1e-6):
+        """
+        Check if two verticies are coincident, within a given tolerance
+        """
+        matching = False
+
+        # Check if they are the same object
+        if self.ptr == v2.ptr:
+            return True
+
+        # Get the points and compare them
+        pt1 = self.evalPoint()
+        pt2 = v2.evalPoint()
+        dx = np.abs(pt2-pt1)
+        if np.amax(dx) < atol:
+            matching = True
+
+        return matching
+
 cdef _init_Vertex(TMRVertex *ptr):
     vertex = Vertex()
     vertex.ptr = ptr
@@ -263,6 +279,42 @@ cdef class Edge:
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
+    def checkMatching(self, Edge e2, double atol=1e-6):
+        """
+        Check if two edges are coincident, within a given tolerance
+        """
+        matching = False
+
+        # Trivial check if they are the same object
+        if self.ptr == e2.ptr:
+            return True
+
+        # Get the verts on each edge
+        e1_v1, e1_v2 = self.getVertices()
+        e2_v1, e2_v2 = e2.getVertices()
+
+        # Check if the endpoints match
+        if ((e1_v1.checkMatching(e2_v1, atol=atol) and
+             e1_v2.checkMatching(e2_v2, atol=atol)) or
+            (e1_v2.checkMatching(e2_v1, atol=atol) and
+             e1_v1.checkMatching(e2_v2, atol=atol))):
+            # Check if these are degenerate edges
+            if (self.isDegenerate() and e2.isDegenerate()):
+                return True # same and both degenerate
+            elif (self.isDegenerate() + e2.isDegenerate() == 1):
+                return False # only one is degenerate
+            # Check a midpoint on each
+            else:
+                e1_tmin, e1_tmax = self.getRange()
+                e1_pt = self.evalPoint(0.5*(e1_tmin+e1_tmax))
+                t2 = e2.invEvalPoint(e1_pt)
+                e2_pt = self.evalPoint(t2)
+                dx = np.abs(e2_pt-e1_pt)
+                if np.amax(dx) < atol:
+                    matching = True
+
+        return matching
+
 cdef _init_Edge(TMREdge *ptr):
     edge = Edge()
     edge.ptr = ptr
@@ -345,6 +397,34 @@ cdef class EdgeLoop:
             e.append(_init_Edge(edges[i]))
             d.append(dirs[i])
         return e, d
+
+    def checkMatching(self, EdgeLoop eloop2, double atol=1e-6):
+        """
+        Check if two edge loops are coincident, within a given tolerance
+        """
+        matching = False
+
+        # Trivial check if they are the same object
+        if self.ptr == eloop2.ptr:
+            return True
+
+        edges1, dirs1 = self.getEdgeLoop()
+        edges2, dirs2 = eloop2.getEdgeLoop()
+
+        # If they have different number of edges, not matching
+        if len(edges1) != len(edges2):
+            return False
+
+        # Compare edge loops, comparing both directions
+        nmatches = 0
+        for e1 in edges1:
+            for e2 in edges2:
+                if e1.checkMatching(e2, atol=atol):
+                    nmatches += 1
+
+        matching = (nmatches == len(edges1))
+
+        return matching
 
 cdef _init_EdgeLoop(TMREdgeLoop *ptr):
     loop = EdgeLoop()
@@ -444,6 +524,77 @@ cdef class Face:
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
+    def checkMatching(self, Face f2, atol=1e-6):
+        """
+        Check if two faces are coincident, within a given tolerance
+        """
+        matching = False
+
+        # Trivial check if they are the same object
+        if self.ptr == f2.ptr:
+            return True
+
+        nloop1 = self.getNumEdgeLoops()
+        nloop2 = f2.getNumEdgeLoops()
+        # No match if the faces have different numbers of edge loops
+        if nloop1 != nloop2:
+            return False
+
+        # Check that each edge loop has a match
+        nmatched = 0
+        for i in range(nloop1):
+            l1 = self.getEdgeLoop(i)
+            for j in range(nloop2):
+                l2 = f2.getEdgeLoop(j)
+                if l1.checkMatching(l2, atol=atol):
+                    nmatched += 1
+                    break
+
+        if nmatched == nloop1:
+            matching = True
+
+        return matching
+
+    def setCopyFaces(self, Face source, double atol=1e-6):
+        """
+        Take in two coincident faces, set the target as
+        a copy of the source, find their coincident edges,
+        and set the edges as copies as well
+        """
+        self.setCopySource(source, orient=1)
+    
+        source_list = []
+        for i in range(source.getNumEdgeLoops()):
+            sloop = source.getEdgeLoop(i)     
+            s_edges, dirs = sloop.getEdgeLoop()
+            source_list.extend(s_edges)
+
+        target_list = []
+        for j in range(self.getNumEdgeLoops()):
+            tloop = self.getEdgeLoop(j)
+            t_edges, dirs = tloop.getEdgeLoop()
+            target_list.extend(t_edges)
+
+        for s in source_list:
+            for t in target_list:
+                if t.checkMatching(t, atol=atol):
+                    # Remove the target from the list of targets
+                    target_list.remove(t)
+                    sv1, sv2 = s.getVertices()
+                    tv1, tv2 = t.getVertices()
+
+                    # Set the target edge source edge
+                    t.setCopySource(s)
+                    if sv1.checkMatching(tv1, atol=atol):
+                        tv1.setCopySource(sv1)
+                        tv2.setCopySource(sv2)
+                    else:
+                        tv1.setCopySource(sv2)
+                        tv2.setCopySource(sv1)
+                    break
+
+        return
+
 cdef _init_Face(TMRFace *ptr):
     face = Face()
     face.ptr = ptr
@@ -512,6 +663,150 @@ cdef class Volume:
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
+
+    def setExtrudeFaces(self, int source_face_index=0):
+        """
+        Set source and target faces if
+        this is an extrudable volume
+
+        source_face_index: index of the face to use as the source
+        for extrusion (only used when all
+        directions are extrudable)
+        """
+        fail = True # if true, vol cannot be extruded
+        
+        faces = self.getFaces()
+        
+        extrude_faces = []
+        side_faces = []
+        for f in faces:
+            if f.getNumEdgeLoops() == 1:
+                el = f.getEdgeLoop(0)
+                edges, dirs = el.getEdgeLoop()
+                if len(edges) != 4:
+                    extrude_faces.append(f)
+                else:
+                    side_faces.append(f)
+            else:
+                extrude_faces.append(f)
+
+        # There can only be at most two faces with # edge
+        # loops != 1 and # edges != 4
+        if len(extrude_faces) > 2:
+            print("""Volume is not extrudable.
+            There are more than two faces with more
+            than one edge loop and/or more than
+            four edges.""")
+            return True
+
+        # Only one face has more than one edge loop, or more than 4 edges
+        # so it won't have a match to extrude
+        elif len(extrude_faces) == 1:
+            print("""Volume is not extrudable.
+            There is only one face with more
+            than one edge loop and/or more than
+            four edges, so it will not have a
+            matching face.""")
+            return True
+
+        # All faces have one edge loop and four edges, set
+        # which ones we will extrude through
+        elif len(extrude_faces) == 0:
+            source_face = faces.pop(source_face_index)
+            target_face = None
+
+            # Find the target face, which will be the one
+            # that has no edges matching the source face
+            source_loop = source_face.getEdgeLoop(0)
+            source_edges, dirs = source_loop.getEdgeLoop()
+            for i, f in enumerate(faces):
+                el = f.getEdgeLoop(0)
+                edges, dirs = el.getEdgeLoop()
+                match_flag = False
+                for e in edges:
+                    for s_e in source_edges:
+                        if s_e.checkMatching(e):
+                            match_flag = True
+                            break
+                    if match_flag:
+                        break
+                if not match_flag:
+                    target_face = faces.pop(i)
+
+            extrude_faces = [source_face, target_face]
+            side_faces = faces
+
+        # We now know which two faces are cantidates for extruding through
+
+        # Make sure we're not extruding two coincident faces
+        if extrude_faces[0].checkMatching(extrude_faces[1]):
+            print("""Volume is not extrudable.
+            The faces identified as the source and
+            target are coincident.""")
+            return True
+    
+        # Check that both extrude faces have same number
+        # of edge loops, and same number of edges in each loop
+        if (extrude_faces[0].getNumEdgeLoops() !=
+            extrude_faces[1].getNumEdgeLoops()):
+            print("""Volume is not extrudable.
+            The faces identified as the source and
+            target have different numbers of edge loops.""")
+            return True
+
+        num_edges1 = []
+        num_edges2 = []
+        for i in range(extrude_faces[0].getNumEdgeLoops()):
+            el1 = extrude_faces[0].getEdgeLoop(i)
+            el2 = extrude_faces[1].getEdgeLoop(i)
+            e1, d1 = el1.getEdgeLoop()
+            e2, d2 = el2.getEdgeLoop()
+            num_edges1.append(len(e1))
+            num_edges2.append(len(e2))
+
+        if num_edges1 != num_edges2:
+            if num_edges1.sort() != num_edges2.sort():
+                print("""Volume is not extrudable.
+                The faces identified as the source
+                and target have different numbers of
+                edges in their edge loops.""")
+                return True
+            # else: # TODO: Reorder the edge loops
+
+        # Check that each connecting face shares at least one
+        # edge with the faces that are being extruded
+        for f in side_faces:
+            match1 = False
+            match2 = False
+            el = f.getEdgeLoop(0)
+            side_edges, dirs = el.getEdgeLoop()
+            for s_e in side_edges:
+                for j in range(extrude_faces[0].getNumEdgeLoops()):
+                    el1 = extrude_faces[0].getEdgeLoop(i)
+                    el2 = extrude_faces[1].getEdgeLoop(i)
+                    edges1, d1 = el1.getEdgeLoop()
+                    edges2, d2 = el2.getEdgeLoop()
+                    for e1 in edges1:
+                        if s_e.checkMatching(e1):
+                            match1 = True
+                            break
+                    for e2 in edges2:
+                        if s_e.checkMatching(e2):
+                            match2 = True
+                            break
+            if (match1 + match2) == 0:
+                print("""Volume is not extrudable.
+                At least one of the connecting
+                faces does not share any edges with
+                either the source or the target face.""")
+                return True
+
+        # Now we have sufficiently checked if the volume
+        # can be extruded, so set the source and target faces
+        extrude_faces[1].setSource(self, extrude_faces[0])
+        fail = False
+
+        return fail
 
 cdef _init_Volume(TMRVolume *ptr):
     vol = Volume()
@@ -986,8 +1281,7 @@ cdef class Model:
         return verts
 
     def writeModelToTecplot(self, fname,
-                            vlabels=True, elabels=True, flabels=True,
-                            off_scale=0.0):
+                            vlabels=True, elabels=True, flabels=True):
         '''Write a representation of the edge loops to a file'''
         fp = open(fname, 'w')
         fp.write('Variables = x, y, z, tx, ty, tz\n')
@@ -998,9 +1292,8 @@ cdef class Model:
         for v in verts:
             pt = v.evalPoint()
             if vlabels:
-                dx = off_scale*random.uniform(-1.0, 1.0)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Vertex %d\"\n'%(
-                    pt[0]+dx, pt[1]+dx, pt[2]+dx, index))
+                    pt[0], pt[1], pt[2], index))
             fp.write('Zone T = \"Vertex %d\"\n'%(index))
             fp.write('%e %e %e 0 0 0\n'%(pt[0], pt[1], pt[2]))
             index += 1
@@ -1013,10 +1306,9 @@ cdef class Model:
             pt1 = v1.evalPoint()
             pt2 = v2.evalPoint()
             if elabels:
-                dx = off_scale*random.uniform(-1.0, 1.0)
                 pt = 0.5*(pt1 + pt2)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Edge %d\"\n'%(
-                    pt[0]+dx, pt[1]+dx, pt[2]+dx, index))
+                    pt[0], pt[1], pt[2], index))
             fp.write('Zone T = \"Edge %d\"\n'%(index))
             fp.write('%e %e %e  %e %e %e\n'%(pt1[0], pt1[1], pt1[2],
                 pt2[0] - pt1[0], pt2[1] - pt1[1], pt2[2] - pt1[2]))
@@ -1060,9 +1352,8 @@ cdef class Model:
 
             if count != 0 and flabels:
                 xav /= count
-                dx = off_scale*random.uniform(-1.0, 1.0)
                 fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Face %d\"\n'%(
-                    xav[0]+dx, xav[1]+dx, xav[2]+dx, index))
+                    xav[0], xav[1], xav[2], index))
 
             index += 1
         return
@@ -3895,3 +4186,20 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         prob.setUseRecycledSolution(truth)
         return
+
+def setMatchingFaces(list geo_list, double atol=1e-6):
+    """
+    Take in a list of geometries, find the matching faces,
+    and set them as copies
+    """
+
+    for i in range(len(geo_list)-1):
+        for j in range(i, len(geo_list)):
+            faces_i = geo_list[i].getFaces()
+            faces_j = geo_list[j].getFaces()
+            for f_i in faces_i:
+                for f_j in faces_j:
+                    if f_i.checkMatching(f_j, atol=atol):
+                        f_i.setCopyFaces(f_j)
+
+    return
