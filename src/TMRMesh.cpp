@@ -2092,77 +2092,8 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 }
 
 /*
-  Map the source mesh to the target mesh (this is the target mesh)
+  Create the mesh mapping
 */
-int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
-                                  const double *params ){
-  // Set the fail flag
-  int fail = 0;
-
-  int rel_copy_orient;
-  TMRFace *copy;
-  face->getCopySource(&rel_copy_orient, &copy);
-
-  // Find the orientation of each copy edge on the surface we're copying from
-  std::map<TMREdge*, int> copy_edge_orient;
-  int copy_orient = copy->getOrientation();
-  for ( int k = 0; k < copy->getNumEdgeLoops(); k++ ){
-    TMREdgeLoop *loop;
-    copy->getEdgeLoop(k, &loop);
-
-    // Get the edge loop orientation
-    int nedges;
-    TMREdge **edges;
-    const int *edge_orient;
-    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
-
-    for ( int i = 0; i < nedges; i++ ){
-      copy_edge_orient[edges[i]] = copy_orient*edge_orient[i];
-    }
-  }
-
-  // Get the copy face mesh
-  TMRFaceMesh *copy_face_mesh;
-  copy->getMesh(&copy_face_mesh);
-
-  // Set the source to target orientation
-  std::map<TMREdge*, TMREdge*> copy_to_target_edge;
-  std::map<TMREdge*, int> copy_to_target_orient;
-
-  // Loop over the edge orientations of the
-  int target_orient = face->getOrientation();
-  for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
-    TMREdgeLoop *loop;
-    face->getEdgeLoop(k, &loop);
-
-    // Get the edge loop orientation
-    int nedges;
-    TMREdge **edges;
-    const int *edge_orient;
-    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
-
-    for ( int j = 0; j < nedges; j++ ){
-      // Get the edge to copy
-      TMREdge *copy_edge;
-      edges[j]->getCopySource(&copy_edge);
-
-      // Set the copy to target edge mapping
-      copy_to_target_edge[copy_edge] = edges[j];
-
-      copy_to_target_orient[copy_edge] =
-        rel_copy_orient*target_orient*edge_orient[j];
-      copy_to_target_orient[copy_edge] *= copy_edge_orient[copy_edge];
-    }
-  }
-
-  // Set the copied face mesh
-  setMeshFromMapping(options, params, copy, rel_copy_orient,
-                     copy_to_target_edge, copy_to_target_orient,
-                     &copy_to_target);
-
-  return fail;
-}
-
 void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
                                       const double *params,
                                       TMRFace *src,
@@ -2462,6 +2393,222 @@ void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
 
   // Set the source-to-target mapping
   *_src_to_target = src_to_target;
+}
+
+/*
+  Copy the mesh from the source copy mesh to this mesh. Use inverse
+  evaluations to determine the parametric locations of the new mesh
+  points.
+*/
+int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
+                                  const double *params ){
+  int rel_orient;
+  TMRFace *copy;
+  face->getCopySource(&rel_orient, &copy);
+
+  // Get the source mesh
+  TMRFaceMesh *copy_mesh;
+  copy->getMesh(&copy_mesh);
+
+  // Set the total number of points
+  mesh_type = copy_mesh->mesh_type;
+  num_points = copy_mesh->num_points;
+  num_fixed_pts = copy_mesh->num_fixed_pts;
+  num_quads = copy_mesh->num_quads;
+  num_tris = copy_mesh->num_tris;
+
+  // Set the copy indices
+  copy_to_target = new int[ num_points ];
+
+  for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
+    // Get the curve information for this loop segment
+    TMREdgeLoop *loop;
+    face->getEdgeLoop(k, &loop);
+
+    // Extract the edges and orientations from the loop
+    int nedges;
+    TMREdge **edges;
+    loop->getEdgeLoop(&nedges, &edges, NULL);
+
+    for ( int i = 0; i < nedges; i++ ){
+      // Get the edge mesh
+      TMREdgeMesh *mesh = NULL;
+      edges[i]->getMesh(&mesh);
+
+      int npts;
+      mesh->getMeshPoints(&npts, NULL, NULL);
+
+      // Get the edge that we're going to copy
+      TMREdge *copy_edge;
+      edges[i]->getCopySource(&copy_edge);
+
+      for ( int j = 0; j < npts; j++ ){
+        int copy_index = copy_mesh->getFaceIndexFromEdge(copy_edge, j);
+        int target_index = getFaceIndexFromEdge(edges[i], j);
+        copy_to_target[copy_index] = target_index;
+      }
+    }
+  }
+
+  // Allocate the array for the parametric locations
+  pts = new double[ 2*num_points ];
+  X = new TMRPoint[ num_points ];
+
+  // Copy the points from around the boundaries
+  for ( int i = 0; i < num_fixed_pts; i++ ){
+    pts[2*i] = params[2*i];
+    pts[2*i+1] = params[2*i+1];
+  }
+
+  // Set the edge locations
+  for ( int i = 0; i < num_fixed_pts; i++ ){
+    X[copy_to_target[i]] = copy_mesh->X[i];
+  }
+
+  if (mesh_type == TMR_STRUCTURED){
+    // Get the first edge loop and the edges in the loop. There is
+    // only one loop since this is a structured mesh
+    TMREdgeLoop *loop;
+    face->getEdgeLoop(0, &loop);
+
+    // Get the edges associated with the edge loop
+    TMREdge **edges;
+    const int *edge_orient;
+    loop->getEdgeLoop(NULL, &edges, &edge_orient);
+
+    // Get the number of nodes for the x/y edges
+    int nx = 0, ny = 0;
+    TMREdgeMesh *mesh;
+
+    // If the mesh is structured, copy its indices
+    int xorient = 1, yorient = 1;
+    TMREdge *copy_edge_x, *copy_edge_y;
+    if (face->getOrientation() > 0){
+      TMRVertex *v1, *v2;
+      TMRVertex *v1_copy, *v2_copy;
+      TMRVertex *copy_v1, *copy_v2;
+
+      edges[0]->getMesh(&mesh);
+      edges[0]->getCopySource(&copy_edge_x);
+      mesh->getMeshPoints(&nx, NULL, NULL);
+      xorient = edge_orient[0];
+
+      edges[0]->getVertices(&v1, &v2);
+      v1->getCopySource(&v1_copy);
+      v2->getCopySource(&v2_copy);
+      copy_edge_x->getVertices(&copy_v1, &copy_v2);
+      if (v1_copy == copy_v2 && v2_copy == copy_v1){
+        xorient *= -1;
+      }
+
+      edges[1]->getMesh(&mesh);
+      edges[1]->getCopySource(&copy_edge_y);
+      mesh->getMeshPoints(&ny, NULL, NULL);
+      yorient = edge_orient[1];
+
+      edges[1]->getVertices(&v1, &v2);
+      v1->getCopySource(&v1_copy);
+      v2->getCopySource(&v2_copy);
+      copy_edge_y->getVertices(&copy_v1, &copy_v2);
+      if (v1_copy == copy_v2 && v2_copy == copy_v1){
+        yorient *= -1;
+      }
+    }
+    else {
+      TMRVertex *v1, *v2;
+      TMRVertex *v1_copy, *v2_copy;
+      TMRVertex *copy_v1, *copy_v2;
+
+      edges[0]->getMesh(&mesh);
+      edges[0]->getCopySource(&copy_edge_y);
+      mesh->getMeshPoints(&ny, NULL, NULL);
+      yorient = edge_orient[0];
+
+      edges[0]->getVertices(&v1, &v2);
+      v1->getCopySource(&v1_copy);
+      v2->getCopySource(&v2_copy);
+      copy_edge_y->getVertices(&copy_v1, &copy_v2);
+      if (v1_copy == copy_v2 && v2_copy == copy_v1){
+        yorient *= -1;
+      }
+
+      edges[1]->getMesh(&mesh);
+      edges[1]->getCopySource(&copy_edge_x);
+      mesh->getMeshPoints(&nx, NULL, NULL);
+      xorient = edge_orient[1];
+
+      edges[1]->getVertices(&v1, &v2);
+      v1->getCopySource(&v1_copy);
+      v2->getCopySource(&v2_copy);
+      copy_edge_x->getVertices(&copy_v1, &copy_v2);
+      if (v1_copy == copy_v2 && v2_copy == copy_v1){
+        xorient *= -1;
+      }
+    }
+
+    // Set the indices depending on the orientation of the edges
+    int iy = ny-2;
+    if (yorient > 0){
+      iy = 1;
+    }
+    for ( int j = 1; j < ny-1; j++, iy += yorient ){
+
+      int ix = nx-2;
+      if (xorient > 0){
+        ix = 1;
+      }
+      for ( int i = 1; i < nx-1; i++, ix += xorient ){
+        int copy_index = copy_mesh->getStructuredFaceIndex(copy_edge_x, ix,
+                                                           copy_edge_y, iy);
+        int target_index = num_fixed_pts + (i-1) + (j-1)*(nx-2);
+
+        // Set the copy-to-target index
+        copy_to_target[copy_index] = target_index;
+
+        // Copy over the X position
+        X[target_index] = copy_mesh->X[copy_index];
+
+        double u, v;
+        int icode = face->invEvalPoint(X[target_index], &u, &v);
+        if (icode){
+          fprintf(stderr,
+                  "TMRFaceMesh: Inverse point evaluation failed with code %d\n",
+                  icode);
+        }
+
+        // Set the target index
+        pts[2*target_index] = u;
+        pts[2*target_index+1] = v;
+        face->evalPoint(u, v, &X[target_index]);
+      }
+    }
+  }
+  else {
+    for ( int i = num_fixed_pts; i < num_points; i++ ){
+      copy_to_target[i] = i;
+      X[i] = copy_mesh->X[i];
+      double u, v;
+      int icode = face->invEvalPoint(X[i], &u, &v);
+      if (icode){
+        fprintf(stderr,
+                "TMRFaceMesh: Inverse point evaluation failed with code %d\n",
+                icode);
+      }
+
+      // Set the target index
+      pts[2*i] = u;
+      pts[2*i+1] = v;
+      face->evalPoint(u, v, &X[i]);
+    }
+  }
+
+  // Copy over the quadrilaterals
+  quads = new int[ 4*num_quads ];
+  for ( int i = 0; i < 4*num_quads; i++ ){
+    quads[i] = copy_to_target[copy_mesh->quads[i]];
+  }
+
+  return 0;
 }
 
 /*
