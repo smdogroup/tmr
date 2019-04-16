@@ -371,6 +371,7 @@ class TMRVolumeMesh : public TMREntity {
   // Set the number of face loops
   int num_swept_faces;
   TMREdge **swept_edges;
+  int *swept_edges_orient;
   TMRFace **swept_faces;
 
   // Number of points swept through-thickness

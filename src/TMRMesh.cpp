@@ -2475,9 +2475,6 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
   // since we already know that the surface has four edges and the
   // nodes on those edges can be used for a structured mesh
 
-  // Get the face orientation
-  int face_orient = face->getOrientation();
-
   // Get the first edge loop and the edges in the loop
   TMREdgeLoop *loop;
   face->getEdgeLoop(0, &loop);
@@ -2490,6 +2487,8 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
   int nx = 0, ny = 0;
   TMREdgeMesh *mesh;
 
+  // Get the face orientation
+  int face_orient = face->getOrientation();
   if (face_orient > 0){
     edges[0]->getMesh(&mesh);
     mesh->getMeshPoints(&nx, NULL, NULL);
@@ -4217,6 +4216,7 @@ TMRVolumeMesh::TMRVolumeMesh( MPI_Comm _comm,
   // Set the number of loops on the source face
   num_swept_faces = 0;
   swept_edges = NULL;
+  swept_edges_orient = NULL;
   swept_faces = NULL;
   num_swept_pts = -1;
 
@@ -4249,6 +4249,7 @@ TMRVolumeMesh::~TMRVolumeMesh(){
       swept_edges[k]->decref();
     }
     delete [] swept_edges;
+    delete [] swept_edges_orient;
     delete [] swept_faces;
   }
 }
@@ -4444,6 +4445,7 @@ Through-thickness meshes must be structured\n");
   // Allocate space for the swept faces and edges
   swept_faces = new TMRFace*[ num_swept_faces ];
   swept_edges = new TMREdge*[ num_swept_faces ];
+  swept_edges_orient = new int[ num_swept_faces ];
 
   // Set the swept faces/edges data
   for ( int count = 0, k = 0; k < num_face_loops; k++ ){
@@ -4469,13 +4471,34 @@ Through-thickness meshes must be structured\n");
           // Get the edge loops associated with face i
           int n;
           TMREdge **e;
-          const int *ort;
-          loop->getEdgeLoop(&n, &e, &ort);
+          const int *edge_orient;
+          loop->getEdgeLoop(&n, &e, &edge_orient);
 
           // Does this edge loop contain edges[j]
           for ( int ii = 0; ii < n; ii++ ){
             if (e[ii] == edges[j]){
               face = faces[i];
+              swept_faces[count] = face;
+
+              if (face->getOrientation() > 0){
+                int next = ii+1;
+                if (next >= n){
+                  next = 0;
+                }
+                swept_edges[count] = e[next];
+                swept_edges_orient[count] = edge_orient[next];
+              }
+              else {
+                int next = ii-1;
+                if (next < 0){
+                  next = n-1;
+                }
+                swept_edges[count] = e[next];
+                swept_edges_orient[count] = -edge_orient[next];
+              }
+
+              swept_faces[count]->incref();
+              swept_edges[count]->incref();
               break;
             }
           }
@@ -4486,33 +4509,9 @@ Through-thickness meshes must be structured\n");
         }
       }
 
-      // This face is not the target or source face and therefore must
-      // be structured.
-      TMREdgeLoop *loop;
-      face->getEdgeLoop(0, &loop);
-
-      // Get the edge loop for this face
-      TMREdge **face_edges;
-      loop->getEdgeLoop(NULL, &face_edges, NULL);
-
+      // Get the number of mesh points along the swept direction
       TMREdgeMesh *mesh = NULL;
-      if (face_edges[0] == edges[j] ||
-          face_edges[2] == edges[j]){
-        face_edges[1]->getMesh(&mesh);
-        swept_edges[count] = face_edges[1];
-      }
-      else if (face_edges[1] == edges[j] ||
-               face_edges[3] == edges[j]){
-        face_edges[0]->getMesh(&mesh);
-        swept_edges[count] = face_edges[0];
-      }
-      swept_edges[count]->incref();
-
-      // Set the swept face
-      swept_faces[count] = face;
-      swept_faces[count]->incref();
-
-      // Get the number of mesh points
+      swept_edges[count]->getMesh(&mesh);
       int npts = -1;
       mesh->getMeshPoints(&npts, NULL, NULL);
 
@@ -4781,10 +4780,16 @@ int TMRVolumeMesh::setNodeNums( int *num ){
           }
           else {
             // Loop over the through-swept nodes
-            for ( int iy = 0; iy < num_swept_pts; iy++ ){
+            int iy_index = num_swept_pts-1;
+            int orient = swept_edges_orient[count];
+            if (orient > 0){
+              iy_index = 0;
+            }
+
+            for ( int iy = 0; iy < num_swept_pts; iy++, iy_index += orient ){
               int swept_face_index =
                 swept_mesh->getStructuredFaceIndex(loop_edges[i], ix,
-                                                   swept_edges[count], iy);
+                                                   swept_edges[count], iy_index);
 
               if (swept_face_index < 0 || swept_face_index >= nswept){
                 fprintf(stderr,
