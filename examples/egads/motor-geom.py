@@ -92,7 +92,32 @@ x2 = [0, 0, 6.35]
 radius = 70.78
 plate = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
 plate.attributeAdd('name', egads.ATTRSTRING, 'plate')
-model = ctx.makeTopology(egads.MODEL, children=[plate])
+# model = ctx.makeTopology(egads.MODEL, children=[plate])
+
+# Subtract the holes from the plate
+x1 = [0, 0, 0]
+x2 = [0, 0, 6.35]
+radius = 9.91
+mid_hole = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
+
+x1 = [0, 45.98, 0]
+x2 = [0, 45.98, 6.35]
+radius = 4.08
+hole1 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
+
+x1 = [39.82, -22.99, 0]
+x2 = [39.82, -22.99, 6.35]
+radius = 4.08
+hole2 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
+
+x1 = [-39.82, -22.99, 0]
+x2 = [-39.82, -22.99, 6.35]
+radius = 4.08
+hole3 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
+
+for hole in [mid_hole, hole1, hole2, hole3]:
+    model = plate.solidBoolean(hole, egads.SUBTRACTION)
+    plate = model.getChildren()[0]
 
 faces = getBodyFacesAndDirs(plate)
 # for i, f in enumerate(faces):
