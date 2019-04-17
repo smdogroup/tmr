@@ -2396,6 +2396,31 @@ void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
 }
 
 /*
+  Get the relative orientations of the edge and the copy source
+  edge. This code returns +/- 1.
+*/ 
+int getEdgeCopyOrient( TMREdge *edge ){
+  TMREdge *copy_edge;
+  edge->getCopySource(&copy_edge);
+
+  TMRVertex *v1, *v2;
+  TMRVertex *v1_copy, *v2_copy;
+  TMRVertex *copy_v1, *copy_v2;
+
+  edge->getVertices(&v1, &v2);
+  v1->getCopySource(&v1_copy);
+  v2->getCopySource(&v2_copy);
+  copy_edge->getVertices(&copy_v1, &copy_v2);
+
+  int orient = 1;
+  if (v1_copy == copy_v2 && v2_copy == copy_v1){
+    orient *= -1;
+  }
+
+  return orient;
+}
+
+/*
   Copy the mesh from the source copy mesh to this mesh. Use inverse
   evaluations to determine the parametric locations of the new mesh
   points.
@@ -2442,11 +2467,23 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       TMREdge *copy_edge;
       edges[i]->getCopySource(&copy_edge);
 
-      for ( int j = 0; j < npts; j++ ){
-        int copy_index = copy_mesh->getFaceIndexFromEdge(copy_edge, j);
+      // Get the mesh for the x-direction and check its orientation
+      int orient = getEdgeCopyOrient(edges[i]);
+      int jc = npts-1;
+      if (orient > 0){
+        jc = 0;
+      }
+      printf("orient = %d\n", orient);
+      printf("face->getOrientation() =%d\n", face->getOrientation());
+      printf("copy->getOrientation() =%d\n", copy->getOrientation());
+
+      for ( int j = 0; j < npts; j++, jc += orient ){
+        int copy_index = copy_mesh->getFaceIndexFromEdge(copy_edge, jc);
         int target_index = getFaceIndexFromEdge(edges[i], j);
+        printf("(%d, %d) ", copy_index, target_index);
         copy_to_target[copy_index] = target_index;
       }
+      printf("\n");
     }
   }
 
@@ -2488,70 +2525,30 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
     int xorient = 1, yorient = 1;
     TMREdge *copy_edge_x, *copy_edge_y;
     if (face->getOrientation() > 0){
-      TMRVertex *v1, *v2;
-      TMRVertex *v1_copy, *v2_copy;
-      TMRVertex *copy_v1, *copy_v2;
-
       // Get the mesh for the x-direction and check its orientation
       edges[0]->getMesh(&mesh);
       edges[0]->getCopySource(&copy_edge_x);
       mesh->getMeshPoints(&nx, NULL, NULL);
-      xorient = edge_orient[0];
-
-      edges[0]->getVertices(&v1, &v2);
-      v1->getCopySource(&v1_copy);
-      v2->getCopySource(&v2_copy);
-      copy_edge_x->getVertices(&copy_v1, &copy_v2);
-      if (v1_copy == copy_v2 && v2_copy == copy_v1){
-        xorient *= -1;
-      }
+      xorient = getEdgeCopyOrient(edges[0])*edge_orient[0];
 
       // Get the mesh for the y-direction and check its orientation
       edges[1]->getMesh(&mesh);
       edges[1]->getCopySource(&copy_edge_y);
       mesh->getMeshPoints(&ny, NULL, NULL);
-      yorient = edge_orient[1];
-
-      edges[1]->getVertices(&v1, &v2);
-      v1->getCopySource(&v1_copy);
-      v2->getCopySource(&v2_copy);
-      copy_edge_y->getVertices(&copy_v1, &copy_v2);
-      if (v1_copy == copy_v2 && v2_copy == copy_v1){
-        yorient *= -1;
-      }
+      yorient = getEdgeCopyOrient(edges[1])*edge_orient[1];
     }
     else {
-      TMRVertex *v1, *v2;
-      TMRVertex *v1_copy, *v2_copy;
-      TMRVertex *copy_v1, *copy_v2;
-
       // Get the mesh for the y-direction and check its orientation
       edges[0]->getMesh(&mesh);
       edges[0]->getCopySource(&copy_edge_y);
       mesh->getMeshPoints(&ny, NULL, NULL);
-      yorient = edge_orient[0];
-
-      edges[0]->getVertices(&v1, &v2);
-      v1->getCopySource(&v1_copy);
-      v2->getCopySource(&v2_copy);
-      copy_edge_y->getVertices(&copy_v1, &copy_v2);
-      if (v1_copy == copy_v2 && v2_copy == copy_v1){
-        yorient *= -1;
-      }
+      yorient = getEdgeCopyOrient(edges[0])*edge_orient[0];
 
       // Get the mesh for the x-direction and check its orientation
       edges[1]->getMesh(&mesh);
       edges[1]->getCopySource(&copy_edge_x);
       mesh->getMeshPoints(&nx, NULL, NULL);
-      xorient = edge_orient[1];
-
-      edges[1]->getVertices(&v1, &v2);
-      v1->getCopySource(&v1_copy);
-      v2->getCopySource(&v2_copy);
-      copy_edge_x->getVertices(&copy_v1, &copy_v2);
-      if (v1_copy == copy_v2 && v2_copy == copy_v1){
-        xorient *= -1;
-      }
+      xorient = getEdgeCopyOrient(edges[1])*edge_orient[1];
     }
 
     // Set the indices depending on the orientation of the edges

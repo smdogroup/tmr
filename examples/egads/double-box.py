@@ -56,5 +56,5 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('output.vtk', 'hex')
+mesh.writeToVTK('output.vtk', 'quad')
 
