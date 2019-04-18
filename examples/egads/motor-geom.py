@@ -152,11 +152,13 @@ for vol in vols:
         print('Setting the swept directions failed')
 
 # Combine the geometries and mesh the assembly
-num_matches = TMR.setMatchingFaces(all_geos)
+# num_matches = TMR.setMatchingFaces(all_geos)
+num_matches = TMR.setMatchingFaces([plate_geo, ring_geo])
+num_matches += TMR.setMatchingFaces([shell_geo, ring_geo])
 print('Number of matching faces: ', num_matches)
 
 # Create the geometry
-geo = TMR.Model(verts, edges, faces)
+geo = TMR.Model(verts, edges, faces, vols)
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -170,18 +172,19 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-# mesh.writeToBDF('motor.bdf', 'hex')
+mesh.writeToBDF('motor.bdf', 'hex')
 mesh.writeToVTK('motor.vtk', 'hex')
 
+# Check for un-referenced nodes
 X = mesh.getMeshPoints()
 quads = mesh.getQuadConnectivity()
-# hexas = mesh.getHexConnectivity()
+hexas = mesh.getHexConnectivity()
 
 # Count up the number of un-referenced points
-# count = np.zeros(X.shape[0])
-# for i in range(hexas.shape[0]):
-#     count[hexas[i,:]] = 1
+count = np.zeros(X.shape[0])
+for i in range(hexas.shape[0]):
+    count[hexas[i,:]] = 1
 
-# for i in range(X.shape[0]):
-#     if count[i] == 0:
-#         print('Unreferenced node %d'%(i))
+for i in range(X.shape[0]):
+    if count[i] == 0:
+        print('Unreferenced node %d'%(i))
