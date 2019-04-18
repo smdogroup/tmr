@@ -14,9 +14,23 @@ x = [0, 0, 0.5]
 d = [0.5, 0.5, 0.5]
 b2 = ctx.makeSolidBody(egads.BOX, rdata=[x, d])
 
+# # Rotate the second box
+# nrot = 1.0
+# xform = [0.0]*12
+# xform[0] = np.cos(nrot*(np.pi/2.0))
+# xform[1] = -np.sin(nrot*(np.pi/2.0))
+# xform[4] = np.sin(nrot*(np.pi/2.0))
+# xform[5] = np.cos(nrot*(np.pi/2.0))
+# xform[10] = 1.0
+
+# xform[-3] = nrot*(np.pi/2.0)
+# ctx.makeTransform(xform)
+
 # Write out to a STEP file
 m1 = ctx.makeTopology(egads.MODEL, children=[b1])
 m2 = ctx.makeTopology(egads.MODEL, children=[b2])
+
+# Save the egads models
 m1.saveModel('box1.egads', overwrite=True)
 m2.saveModel('box2.egads', overwrite=True)
 
@@ -32,10 +46,12 @@ verts = []
 edges = []
 faces = []
 vols = []
-sfi = [0, 4]
+# sfi = [0, 4]
 for i, geo in enumerate([geo1, geo2]):
     vols = geo.getVolumes()
-    # fail = vols[0].setExtrudeFaces(source_face_index = sfi[i])
+    fail = vols[0].setExtrudeFaces()#source_face_index = sfi[i])
+    if fail:
+        print("setExtrudeFaces failed for volume {}".format(i))
 
     verts.extend(geo.getVertices())
     edges.extend(geo.getEdges())
@@ -44,7 +60,7 @@ for i, geo in enumerate([geo1, geo2]):
 
 geo = TMR.Model(verts, edges, faces)
 
-# # Create the new mesh
+# Create the new mesh
 mesh = TMR.Mesh(comm, geo)
 
 # Set the meshing options
