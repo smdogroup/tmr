@@ -1,6 +1,7 @@
 from egads4py import egads
 from mpi4py import MPI
 from tmr import TMR
+import numpy as np
 
 ctx = egads.context()
 
@@ -8,7 +9,6 @@ def getBodyFacesAndDirs(body):
     # takes in an egads body object, and returns it's faces
 
     children = body.getChildren()
-    print(children)
 
     # Check that there is only one shell
     if len(children) > 1:
@@ -38,15 +38,9 @@ model = c1.solidBoolean(c2, egads.SUBTRACTION)
 top_shell = model.getChildren()[0]
 top_shell.attributeAdd('name', egads.ATTRSTRING, 'top_shell')
 
-# # Get the faces associated with the top shell, then
-# # compute the range over each face to determine which face it is
+# Get the faces associated with the top shell, then compute the range
+# over each face to determine which face it is
 faces = getBodyFacesAndDirs(top_shell)
-# print(faces)
-# for i, f in enumerate(faces):
-#     r1, r2 = f.getBoundingBox()
-#     print("Top shell: face {0}".format(i))
-#     print("xyz min = {0}, xyz max = {1}".format(r1, r2))
-#     print("")
 
 # Set the face attributes for the top shell volume
 faces[3].attributeAdd('name', egads.ATTRSTRING, 'shell-top-face')
@@ -71,11 +65,6 @@ ring = model.getChildren()[0]
 ring.attributeAdd('name', egads.ATTRSTRING, 'ring')
 
 faces = getBodyFacesAndDirs(ring)
-# for i, f in enumerate(faces):
-#     r1, r2 = f.getBoundingBox()
-#     print("ring: face {0}".format(i))
-#     print("xyz min = {0}, xyz max = {1}".format(r1, r2))
-#     print("")
     
 # Set the face attributes for the ring volume
 faces[3].attributeAdd('name', egads.ATTRSTRING, 'ring-top-face')
@@ -92,7 +81,6 @@ x2 = [0, 0, 6.35]
 radius = 70.78
 plate = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
 plate.attributeAdd('name', egads.ATTRSTRING, 'plate')
-# model = ctx.makeTopology(egads.MODEL, children=[plate])
 
 # Subtract the holes from the plate
 x1 = [0, 0, 0]
@@ -120,11 +108,6 @@ for hole in [mid_hole, hole1, hole2, hole3]:
     plate = model.getChildren()[0]
 
 faces = getBodyFacesAndDirs(plate)
-# for i, f in enumerate(faces):
-#     r1, r2 = f.getBoundingBox()
-#     print("plate: face {0}".format(i))
-#     print("xyz min = {0}, xyz max = {1}".format(r1, r2))
-#     print("")
 
 # Set the face attributes for the plate volume
 faces[2].attributeAdd('name', egads.ATTRSTRING, 'plate-top-face')
@@ -135,20 +118,9 @@ faces[0].attributeAdd('name', egads.ATTRSTRING, 'plate-outer-face2')
 # Save the plate model
 model.saveModel('plate.egads', overwrite=True)
 
-# # assemble the components
-# model = top_shell.solidBoolean(ring, egads.FUSION)
-# body = model.getChildren()[0]
-# model = body.solidBoolean(plate, egads.FUSION)
-# # Get the fully fused motor
-# motor = model.getChildren()[0]
-# motor.attributeAdd('name', egads.ATTRSTRING, 'motor')
-
-# model.saveModel('model.step', overwrite=True)
-# model.saveModel('model.egads', overwrite=True)
-
 # Load in the model to TMR
 comm = MPI.COMM_WORLD
-htarget = 5.0
+htarget = 2.0
 
 # Set the meshing options
 opts = TMR.MeshOptions()
@@ -156,57 +128,41 @@ opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 
 # Load the separate geometries and mesh each
-shell_geo = TMR.LoadModel('shell.egads', print_lev=1)
-verts = shell_geo.getVertices()
-edges = shell_geo.getEdges()
-faces = shell_geo.getFaces()
-shell_geo = TMR.Model(verts, edges, faces)
+shell_geo = TMR.LoadModel('shell.egads')
+ring_geo = TMR.LoadModel('ring.egads')
+plate_geo = TMR.LoadModel('plate.egads')
 
-# Create the new mesh
-mesh = TMR.Mesh(comm, shell_geo)
-mesh.mesh(htarget, opts)
-mesh.writeToVTK('shell_mesh.vtk')
+# All the model objects
+# all_geos = [ring_geo, plate_geo, shell_geo]
+# all_geos = [shell_geo, ring_geo]
+all_geos = [plate_geo, ring_geo]
 
-ring_geo = TMR.LoadModel('ring.egads', print_lev=1)
-verts = ring_geo.getVertices()
-edges = ring_geo.getEdges()
-faces = ring_geo.getFaces()
-ring_geo = TMR.Model(verts, edges, faces)
-
-# Create the new mesh
-mesh = TMR.Mesh(comm, ring_geo)
-mesh.mesh(htarget, opts)
-mesh.writeToVTK('ring_mesh.vtk')
-
-plate_geo = TMR.LoadModel('plate.egads', print_lev=1)
-verts = plate_geo.getVertices()
-edges = plate_geo.getEdges()
-faces = plate_geo.getFaces()
-plate_geo = TMR.Model(verts, edges, faces)
-
-# Create the new mesh
-mesh = TMR.Mesh(comm, plate_geo)
-mesh.mesh(htarget, opts)
-mesh.writeToVTK('plate_mesh.vtk')
-
-# Combine the geometries and mesh the assembly
-TMR.setMatchingFaces([shell_geo, ring_geo, plate_geo])
-
+# Create the full list of vertices, edges, faces and volumes
 verts = []
 edges = []
 faces = []
 vols = []
-for geo in [shell_geo, ring_geo, plate_geo]:
-    for v in geo.getVolumes():
-        fail = v.setExtrudeFaces()
-        print(fail)
-
+for geo in all_geos:
     verts.extend(geo.getVertices())
     edges.extend(geo.getEdges())
     faces.extend(geo.getFaces())
     vols.extend(geo.getVolumes())
 
-geo = TMR.Model(verts, edges, faces)#, vols)
+for vol in vols:
+    fail = vol.setExtrudeFaces()
+    if fail:
+        print('Setting the swept directions failed')
+
+# Combine the geometries and mesh the assembly
+# num_matches = TMR.setMatchingFaces(all_geos)
+TMR.setMatchingFaces([plate_geo, ring_geo])
+# TMR.setMatchingFaces([shell_geo, ring_geo])
+# print('Number of matching faces: ', num_matches)
+
+print('len(vols) = ', len(vols))
+
+# Create the geometry
+geo = TMR.Model(verts, edges, faces, vols)
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -220,4 +176,18 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('motor.vtk')#, 'hex')
+# mesh.writeToBDF('motor.bdf', 'hex')
+mesh.writeToVTK('motor.vtk', 'quad')
+
+X = mesh.getMeshPoints()
+quads = mesh.getQuadConnectivity()
+hexas = mesh.getHexConnectivity()
+
+# Count up the number of un-referenced points
+count = np.zeros(X.shape[0])
+for i in range(hexas.shape[0]):
+    count[hexas[i,:]] = 1
+
+for i in range(X.shape[0]):
+    if count[i] == 0:
+        print('Unreferenced node %d'%(i))

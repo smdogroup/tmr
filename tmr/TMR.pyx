@@ -562,10 +562,10 @@ cdef class Face:
         and set the edges as copies as well
         """
         self.setCopySource(source, orient=1)
-    
+
         source_list = []
         for i in range(source.getNumEdgeLoops()):
-            sloop = source.getEdgeLoop(i)     
+            sloop = source.getEdgeLoop(i)
             s_edges, dirs = sloop.getEdgeLoop()
             source_list.extend(s_edges)
 
@@ -577,7 +577,7 @@ cdef class Face:
 
         for s in source_list:
             for t in target_list:
-                if t.checkMatching(t, atol=atol):
+                if t.checkMatching(s, atol=atol):
                     # Remove the target from the list of targets
                     target_list.remove(t)
                     sv1, sv2 = s.getVertices()
@@ -674,9 +674,9 @@ cdef class Volume:
         directions are extrudable)
         """
         fail = True # if true, vol cannot be extruded
-        
+
         faces = self.getFaces()
-        
+
         extrude_faces = []
         side_faces = []
         for f in faces:
@@ -693,30 +693,27 @@ cdef class Volume:
         # There can only be at most two faces with # edge
         # loops != 1 and # edges != 4
         if len(extrude_faces) > 2:
-            print("""Volume is not extrudable.
-            There are more than two faces with more
-            than one edge loop and/or more than
-            four edges.""")
+            print('Volume is not extrudable.\n'
+                  'There are more than two faces with more than one edge loop '
+                  'and/or more than four edges.')
             return True
 
         # Only one face has more than one edge loop, or more than 4 edges
         # so it won't have a match to extrude
         elif len(extrude_faces) == 1:
-            print("""Volume is not extrudable.
-            There is only one face with more
-            than one edge loop and/or more than
-            four edges, so it will not have a
-            matching face.""")
+            print('Volume is not extrudable.\n'
+                  'There is only one face with more than one edge loop and/or '
+                  'more than four edges, so it will not have a matching face.')
             return True
 
-        # All faces have one edge loop and four edges, set
-        # which ones we will extrude through
+        # All faces have one edge loop and four edges, set which ones
+        # we will extrude through
         elif len(extrude_faces) == 0:
             source_face = faces.pop(source_face_index)
             target_face = None
 
-            # Find the target face, which will be the one
-            # that has no edges matching the source face
+            # Find the target face, which will be the one that has no
+            # edges matching the source face
             source_loop = source_face.getEdgeLoop(0)
             source_edges, dirs = source_loop.getEdgeLoop()
             for i, f in enumerate(faces):
@@ -736,22 +733,21 @@ cdef class Volume:
             extrude_faces = [source_face, target_face]
             side_faces = faces
 
-        # We now know which two faces are cantidates for extruding through
+        # We now know which two faces are candidates for sweeping
 
         # Make sure we're not extruding two coincident faces
         if extrude_faces[0].checkMatching(extrude_faces[1]):
-            print("""Volume is not extrudable.
-            The faces identified as the source and
-            target are coincident.""")
+            print('Volume is not extrudable.\n'
+                  'The faces identified as the source and target are coincident.')
             return True
-    
+
         # Check that both extrude faces have same number
         # of edge loops, and same number of edges in each loop
         if (extrude_faces[0].getNumEdgeLoops() !=
             extrude_faces[1].getNumEdgeLoops()):
-            print("""Volume is not extrudable.
-            The faces identified as the source and
-            target have different numbers of edge loops.""")
+            print('Volume is not extrudable.\n'
+                  'The faces identified as the source and target have '
+                  'different numbers of edge loops.')
             return True
 
         num_edges1 = []
@@ -766,10 +762,9 @@ cdef class Volume:
 
         if num_edges1 != num_edges2:
             if num_edges1.sort() != num_edges2.sort():
-                print("""Volume is not extrudable.
-                The faces identified as the source
-                and target have different numbers of
-                edges in their edge loops.""")
+                print('Volume is not extrudable.\n'
+                      'The faces identified as the source and target '
+                      'have different numbers of edges in their edge loops.')
                 return True
             # else: # TODO: Reorder the edge loops
 
@@ -780,25 +775,25 @@ cdef class Volume:
             match2 = False
             el = f.getEdgeLoop(0)
             side_edges, dirs = el.getEdgeLoop()
-            for s_e in side_edges:
-                for j in range(extrude_faces[0].getNumEdgeLoops()):
-                    el1 = extrude_faces[0].getEdgeLoop(i)
-                    el2 = extrude_faces[1].getEdgeLoop(i)
-                    edges1, d1 = el1.getEdgeLoop()
-                    edges2, d2 = el2.getEdgeLoop()
+            for j in range(extrude_faces[0].getNumEdgeLoops()):
+                el1 = extrude_faces[0].getEdgeLoop(j)
+                el2 = extrude_faces[1].getEdgeLoop(j)
+                edges1, d1 = el1.getEdgeLoop()
+                edges2, d2 = el2.getEdgeLoop()
+                for s_e in side_edges:
                     for e1 in edges1:
                         if s_e.checkMatching(e1):
                             match1 = True
                             break
+                for s_e in side_edges:
                     for e2 in edges2:
                         if s_e.checkMatching(e2):
                             match2 = True
                             break
-            if (match1 + match2) == 0:
-                print("""Volume is not extrudable.
-                At least one of the connecting
-                faces does not share any edges with
-                either the source or the target face.""")
+            if match1 is False and match2 is False:
+                print('Volume is not extrudable.\n'
+                      'At least one of the connecting faces does not share '
+                      'any edges with either the source or the target face.')
                 return True
 
         # Now we have sufficiently checked if the volume
@@ -4193,13 +4188,15 @@ def setMatchingFaces(list geo_list, double atol=1e-6):
     and set them as copies
     """
 
-    for i in range(len(geo_list)-1):
-        for j in range(i, len(geo_list)):
-            faces_i = geo_list[i].getFaces()
+    num_matches = 0
+    for i in range(len(geo_list)):
+        faces_i = geo_list[i].getFaces()
+        for j in range(i+1, len(geo_list)):
             faces_j = geo_list[j].getFaces()
             for f_i in faces_i:
                 for f_j in faces_j:
                     if f_i.checkMatching(f_j, atol=atol):
                         f_i.setCopyFaces(f_j)
+                        num_matches += 1
 
-    return
+    return num_matches

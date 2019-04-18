@@ -748,7 +748,7 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
 
       // Multiply the relative orientations of the two faces within
       // the volume
-      source_orient = -dir[this_index]*dir[source_index];
+      source_orient = dir[this_index]*dir[source_index];
     }
   }
 }

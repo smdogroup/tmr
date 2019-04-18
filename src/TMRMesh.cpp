@@ -897,6 +897,38 @@ class EdgePt {
 };
 
 /*
+  Get the relative orientations of the edge and the copy source
+  edge. This code returns +/- 1.
+*/
+static int getEdgeCopyOrient( TMREdge *edge ){
+  TMREdge *copy_edge;
+  edge->getCopySource(&copy_edge);
+
+  TMRVertex *v1, *v2;
+  TMRVertex *v1_copy, *v2_copy;
+  TMRVertex *copy_v1, *copy_v2;
+
+  edge->getVertices(&v1, &v2);
+  v1->getCopySource(&v1_copy);
+  v2->getCopySource(&v2_copy);
+  copy_edge->getVertices(&copy_v1, &copy_v2);
+
+  int orient = 0;
+  if (v1_copy == copy_v1 && v2_copy == copy_v2){
+    orient = 1;
+  }
+  else if (v1_copy == copy_v2 && v2_copy == copy_v1){
+    orient = -1;
+  }
+  else {
+    fprintf(stderr,
+            "Error, edge vertices are not copied correctly");
+  }
+
+  return orient;
+}
+
+/*
   Create a mesh along curve
 */
 TMREdgeMesh::TMREdgeMesh( MPI_Comm _comm, TMREdge *_edge,
@@ -1022,82 +1054,112 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
   }
 
   if (mpi_rank == 0){
-    // Get the limits of integration that will be used
-    double tmin, tmax;
-    edge->getRange(&tmin, &tmax);
+    if (copy && copy != edge){
+      // Set the edge mesh
+      TMREdgeMesh *mesh;
+      copy->getMesh(&mesh);
 
-    // Get the associated vertices
-    TMRVertex *v1, *v2;
-    edge->getVertices(&v1, &v2);
-
-    if (!edge->isDegenerate()){
-      // Set the integration error tolerance
-      double integration_eps = 1e-8;
-
-      // Integrate along the curve to obtain the distance function such
-      // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
-      int nvals;
-      double *dist, *tvals;
-      integrateEdge(edge, fs, tmin, tmax, integration_eps,
-                    &tvals, &dist, &nvals);
-
-      // Only compute the number of points if there is no source edge
-      if (npts < 0){
-        // Compute the number of points along this curve
-        npts = (int)(ceil(dist[nvals-1]));
-        if (npts < 2){ npts = 2; }
-
-        // If we have an even number of points, increment by one to ensure
-        // that we have an even number of segments along the boundary
-        if (npts % 2 != 1){ npts++; }
-
-        // If the start/end vertex are the same, then the minimum number
-        // of points is 5
-        if ((v1 == v2) && npts < 5){
-          npts = 5;
-        }
-      }
-
-      // The average non-dimensional distance between points
-      double d = dist[nvals-1]/(npts-1);
-
-      // Allocate the parametric points that will be used
+      // Allocate space for the points/x locations
       pts = new double[ npts ];
+      X = new TMRPoint[ npts ];
 
-      // Set the starting/end location of the points
-      pts[0] = tmin;
-      pts[npts-1] = tmax;
-
-      // Perform the integration so that the points are evenly spaced
-      // along the curve
-      for ( int j = 1, k = 1; (j < nvals && k < npts-1); j++ ){
-        while ((k < npts-1) &&
-               (dist[j-1] <= d*k && d*k < dist[j])){
-          double u = 0.0;
-          if (dist[j] > dist[j-1]){
-            u = (d*k - dist[j-1])/(dist[j] - dist[j-1]);
-          }
-          pts[k] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
-          k++;
-        }
+      // Get the orientation of the copy
+      int orient = getEdgeCopyOrient(edge);
+      if (orient == 0){
+        fprintf(stderr, "TMREdgeMesh: Error, copy edge is not set correctly\n");
       }
 
-      // Free the integration result
-      delete [] tvals;
-      delete [] dist;
+      int edge_index = mesh->npts-1;
+      if (orient > 0){
+        edge_index = 0;
+      }
+      for ( int i = 0; i < mesh->npts; i++, edge_index += orient ){
+        int icode = edge->invEvalPoint(mesh->X[edge_index], &pts[i]);
+        if (icode){
+          fprintf(stderr, "TMREdge: Inverse evaluation failed with code %d\n",
+                  icode);
+        }
+        edge->evalPoint(pts[i], &X[i]);
+      }
     }
     else {
-      // This is a degenerate edge
-      npts = 2;
-      pts = new double[ npts ];
-      pts[0] = tmin;
-      pts[1] = tmax;
-    }
+      // Get the limits of integration that will be used
+      double tmin, tmax;
+      edge->getRange(&tmin, &tmax);
 
-    // Allocate the points
-    X = new TMRPoint[ npts ];
-    for ( int i = 0; i < npts; i++ ){
-      edge->evalPoint(pts[i], &X[i]);
+      // Get the associated vertices
+      TMRVertex *v1, *v2;
+      edge->getVertices(&v1, &v2);
+
+      if (!edge->isDegenerate()){
+        // Set the integration error tolerance
+        double integration_eps = 1e-8;
+
+        // Integrate along the curve to obtain the distance function such
+        // that dist(tvals[i]) = int_{tmin}^{tvals[i]} ||d{C(t)}dt||_{2} dt
+        int nvals;
+        double *dist, *tvals;
+        integrateEdge(edge, fs, tmin, tmax, integration_eps,
+                      &tvals, &dist, &nvals);
+
+        // Only compute the number of points if there is no source edge
+        if (npts < 0){
+          // Compute the number of points along this curve
+          npts = (int)(ceil(dist[nvals-1]));
+          if (npts < 2){ npts = 2; }
+
+          // If we have an even number of points, increment by one to ensure
+          // that we have an even number of segments along the boundary
+          if (npts % 2 != 1){ npts++; }
+
+          // If the start/end vertex are the same, then the minimum number
+          // of points is 5
+          if ((v1 == v2) && npts < 5){
+            npts = 5;
+          }
+        }
+
+        // The average non-dimensional distance between points
+        double d = dist[nvals-1]/(npts-1);
+
+        // Allocate the parametric points that will be used
+        pts = new double[ npts ];
+
+        // Set the starting/end location of the points
+        pts[0] = tmin;
+        pts[npts-1] = tmax;
+
+        // Perform the integration so that the points are evenly spaced
+        // along the curve
+        for ( int j = 1, k = 1; (j < nvals && k < npts-1); j++ ){
+          while ((k < npts-1) &&
+                 (dist[j-1] <= d*k && d*k < dist[j])){
+            double u = 0.0;
+            if (dist[j] > dist[j-1]){
+              u = (d*k - dist[j-1])/(dist[j] - dist[j-1]);
+            }
+            pts[k] = tvals[j-1] + (tvals[j] - tvals[j-1])*u;
+            k++;
+          }
+        }
+
+        // Free the integration result
+        delete [] tvals;
+        delete [] dist;
+      }
+      else {
+        // This is a degenerate edge
+        npts = 2;
+        pts = new double[ npts ];
+        pts[0] = tmin;
+        pts[1] = tmax;
+      }
+
+      // Allocate the points
+      X = new TMRPoint[ npts ];
+      for ( int i = 0; i < npts; i++ ){
+        edge->evalPoint(pts[i], &X[i]);
+      }
     }
   }
 
@@ -1135,28 +1197,10 @@ int TMREdgeMesh::setNodeNums( int *num ){
     TMREdge *copy;
     edge->getCopySource(&copy);
 
-    if (copy){
-      // Get the vertex copies. These must be set to copy from the
-      // verties that the edge are set to copy from.
-      TMRVertex *v1_copy, *v2_copy;
-      v1->getCopySource(&v1_copy);
-      v2->getCopySource(&v2_copy);
+    if (copy && copy != edge){
+      int orient = getEdgeCopyOrient(edge);
 
-      // Get the vertices that are copies of v1 and v2
-      TMRVertex *copy_v1, *copy_v2;
-      copy->getVertices(&copy_v1, &copy_v2);
-
-      // Check the orientation. Note that if no orientation is set,
-      // then we don't copy the edge.
-      int copy_orient = 0;
-      if ((v1_copy == copy_v1) && (v2_copy == copy_v2)){
-        copy_orient = 1;
-      }
-      else if ((v1_copy == copy_v2) && (v2_copy == copy_v1)){
-        copy_orient = -1;
-      }
-
-      if (copy_orient){
+      if (orient){
         TMREdgeMesh *copy_mesh;
         copy->getMesh(&copy_mesh);
 
@@ -1169,23 +1213,33 @@ int TMREdgeMesh::setNodeNums( int *num ){
             success = 1;
 
             int edge_index = npts-2;
-            if (copy_orient > 0){
+            if (orient > 0){
               edge_index = 1;
             }
-            for ( int i = 1; i < npts-1; i++, edge_index += copy_orient ){
-              vars[edge_index] = copy_mesh->vars[i];
+            for ( int i = 1; i < npts-1; i++, edge_index += orient ){
+              vars[i] = copy_mesh->vars[edge_index];
             }
           }
         }
       }
+      else {
+        fprintf(stderr,
+                "TMREdgeMesh: Error, copy edge is not set correctly\n");
+      }
     }
+    else {
+      success = 1;
 
-    if (!success){
       // Set the internal node numbers
       for ( int i = 1; i < npts-1; i++ ){
         vars[i] = *num;
         (*num)++;
       }
+    }
+
+    if (!success){
+      fprintf(stderr,
+              "TMREdgeMesh: Error, node numbers not set on edge\n");
     }
 
     // Set the variable numbers at the end points
@@ -2309,7 +2363,7 @@ void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
 
     // Flip the orientation of the quads to match the orientation of
     // the face
-    int orient = -rel_orient*target_orient*src_orient;
+    int orient = rel_orient*target_orient*src_orient;
     if (orient < 0){
       for ( int i = 0; i < num_quads; i++ ){
         int tmp = quads[4*i+1];
@@ -2333,7 +2387,7 @@ void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
 
     // Flip the orientation of the triangles to match the
     // orientation of the face
-    int orient = -rel_orient*target_orient*src_orient;
+    int orient = rel_orient*target_orient*src_orient;
     if (orient < 0){
       for ( int i = 0; i < num_tris; i++ ){
         int tmp = tris[3*i+1];
@@ -2396,31 +2450,6 @@ void TMRFaceMesh::setMeshFromMapping( TMRMeshOptions options,
 }
 
 /*
-  Get the relative orientations of the edge and the copy source
-  edge. This code returns +/- 1.
-*/ 
-int getEdgeCopyOrient( TMREdge *edge ){
-  TMREdge *copy_edge;
-  edge->getCopySource(&copy_edge);
-
-  TMRVertex *v1, *v2;
-  TMRVertex *v1_copy, *v2_copy;
-  TMRVertex *copy_v1, *copy_v2;
-
-  edge->getVertices(&v1, &v2);
-  v1->getCopySource(&v1_copy);
-  v2->getCopySource(&v2_copy);
-  copy_edge->getVertices(&copy_v1, &copy_v2);
-
-  int orient = 1;
-  if (v1_copy == copy_v2 && v2_copy == copy_v1){
-    orient *= -1;
-  }
-
-  return orient;
-}
-
-/*
   Copy the mesh from the source copy mesh to this mesh. Use inverse
   evaluations to determine the parametric locations of the new mesh
   points.
@@ -2444,16 +2473,22 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
 
   // Set the copy indices
   copy_to_target = new int[ num_points ];
+  for ( int i = 0; i < num_points; i++ ){
+    copy_to_target[i] = -1;
+  }
 
   for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
     // Get the curve information for this loop segment
-    TMREdgeLoop *loop;
+    TMREdgeLoop *loop, *copy_loop;
     face->getEdgeLoop(k, &loop);
+    copy->getEdgeLoop(k, &copy_loop);
 
     // Extract the edges and orientations from the loop
     int nedges;
-    TMREdge **edges;
-    loop->getEdgeLoop(&nedges, &edges, NULL);
+    TMREdge **edges, **copy_edges;
+    const int *edge_orient, *copy_edge_orient;
+    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
+    copy_loop->getEdgeLoop(NULL, &copy_edges, &copy_edge_orient);
 
     for ( int i = 0; i < nedges; i++ ){
       // Get the edge mesh
@@ -2467,28 +2502,52 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       TMREdge *copy_edge;
       edges[i]->getCopySource(&copy_edge);
 
-      // Get the mesh for the x-direction and check its orientation
-      int orient = getEdgeCopyOrient(edges[i]);
-      int jc = npts-1;
-      if (orient > 0){
-        jc = 0;
+      // Find the corresponding copy edge index within the copy edge
+      // face loop
+      int copy_edge_index = 0;
+      for ( ; copy_edge_index < nedges; copy_edge_index++ ){
+        if (copy_edges[copy_edge_index] == copy_edge){
+          break;
+        }
       }
-      printf("orient = %d\n", orient);
-      printf("face->getOrientation() =%d\n", face->getOrientation());
-      printf("copy->getOrientation() =%d\n", copy->getOrientation());
+      if (copy_edge_index >= nedges){
+        fprintf(stderr,
+                "TMRFaceMesh: Error, copy edge not found in copy source face\n");
+      }
 
-      for ( int j = 0; j < npts; j++, jc += orient ){
-        int copy_index = copy_mesh->getFaceIndexFromEdge(copy_edge, jc);
-        int target_index = getFaceIndexFromEdge(edges[i], j);
-        printf("(%d, %d) ", copy_index, target_index);
+      // Get the mesh for the x-direction and check its orientation
+      int orient_target = edge_orient[i];
+      int orient_copy = copy->getOrientation()*copy_edge_orient[copy_edge_index];
+      orient_copy *= getEdgeCopyOrient(edges[i]);
+
+      int j_target = npts-1;
+      if (orient_target > 0){
+        j_target = 0;
+      }
+      int j_copy = npts-1;
+      if (orient_copy > 0){
+        j_copy = 0;
+      }
+
+      for ( int j = 0; j < npts; j++,
+              j_target += orient_target, j_copy += orient_copy ){
+        int copy_index = copy_mesh->getFaceIndexFromEdge(copy_edge, j_copy);
+        int target_index = getFaceIndexFromEdge(edges[i], j_target);
         copy_to_target[copy_index] = target_index;
       }
-      printf("\n");
     }
   }
 
+  int count = 0;
   for ( int i = 0; i < num_fixed_pts; i++ ){
-    printf("copy_to_target[%d] = %d\n", i, copy_to_target[i]);
+    if (copy_to_target[i] < 0){
+      count++;
+      copy_to_target[i] = 0.0;
+    }
+  }
+  if (count > 0){
+    fprintf(stderr, "TMRFaceMesh: %d errors in mapping copy to target\n",
+            count);
   }
 
   // Allocate the array for the parametric locations
@@ -2604,12 +2663,6 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       pts[2*i] = u;
       pts[2*i+1] = v;
       face->evalPoint(u, v, &X[i]);
-    }
-  }
-
-  for ( int i = 0; i < num_points; i++ ){
-    if (X[i].x == 0.0 && X[i].y == 0.0 && X[i].z == 0.0){
-      printf("Zero at %d\n", i);
     }
   }
 
@@ -2988,10 +3041,9 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
       int start_loop_pt = pt;
 
       for ( int i = 0; i < nedges; i++, edge_index += face_orient ){
-        // Retrieve the underlying curve mesh
-        TMREdge *edge = edges[edge_index];
-
+        // Retrieve the underlying edge mesh
         TMREdgeMesh *mesh = NULL;
+        TMREdge *edge = edges[edge_index];
         edge->getMesh(&mesh);
 
         // Get the mesh points corresponding to this curve
@@ -3004,9 +3056,8 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
         if (edge == e){
           if (idx < npts){
             // Check the orientation of the edge. Note that idx is the
-            // absolute index along the edge, so the face orientation
-            // is ignored here.
-            if (edge_orient[edge_index] > 0){
+            // absolute index along the edge.
+            if (face_orient*edge_orient[edge_index] > 0){
               if (last_edge && idx == npts-1){
                 index = start_loop_pt;
               }
@@ -3058,7 +3109,7 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
   12-- 17-- 18-- 19-- 6
   |    |    |    |    |
   13-- 14-- 15-- 16-- 5
-  |    |    |    |    |
+  |    |    |    |    |-
   0 -- 1 -- 2 -- 3 -- 4
 */
 static int get_structured_index( const int nx, const int ny,
@@ -3308,7 +3359,7 @@ int TMRFaceMesh::setNodeNums( int *num ){
       TMRFaceMesh *copy_mesh;
       copy->getMesh(&copy_mesh);
 
-      // Set the node numbers
+      // Ensure that the variables are set on the copied mesh
       copy_mesh->setNodeNums(num);
 
       // Set the copy variable nubmers from the target
@@ -4556,12 +4607,14 @@ Through-thickness meshes must be structured\n");
   }
 
   // Check that the source mesh is not a triangular mesh
-  TMRFaceMesh *source_mesh;
-  source->getMesh(&source_mesh);
-  if (source_mesh->getMeshType() == TMR_TRIANGLE){
-    fprintf(stderr,
-            "TMRVolumeMesh error: Cannot extrude a triangluar mesh\n");
-    mesh_fail = 1;
+  if (source){
+    TMRFaceMesh *source_mesh;
+    source->getMesh(&source_mesh);
+    if (source_mesh->getMeshType() == TMR_TRIANGLE){
+      fprintf(stderr,
+              "TMRVolumeMesh error: Cannot extrude a triangluar mesh\n");
+      mesh_fail = 1;
+    }
   }
 
   // Free the f pointer
