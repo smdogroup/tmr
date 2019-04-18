@@ -512,6 +512,12 @@ cdef class Face:
     def setCopySource(self, Face face, int orient=-1):
         self.ptr.setCopySource(orient, face.ptr)
 
+    def getCopySource(self):
+        cdef TMRFace *f
+        cdef int orient
+        self.ptr.getCopySource(&orient, &f)
+        return orient, _init_Face(f)
+
     def setMesh(self, FaceMesh mesh):
         self.ptr.setMesh(mesh.ptr)
 
@@ -664,7 +670,7 @@ cdef class Volume:
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
-    def setExtrudeFaces(self, int source_face_index=0):
+    def setExtrudeFaces(self, list source_face_index=None):
         """
         Set source and target faces if
         this is an extrudable volume
@@ -709,26 +715,77 @@ cdef class Volume:
         # All faces have one edge loop and four edges, set which ones
         # we will extrude through
         elif len(extrude_faces) == 0:
-            source_face = faces.pop(source_face_index)
-            target_face = None
 
-            # Find the target face, which will be the one that has no
-            # edges matching the source face
-            source_loop = source_face.getEdgeLoop(0)
-            source_edges, dirs = source_loop.getEdgeLoop()
-            for i, f in enumerate(faces):
-                el = f.getEdgeLoop(0)
-                edges, dirs = el.getEdgeLoop()
-                match_flag = False
-                for e in edges:
-                    for s_e in source_edges:
-                        if s_e.checkMatching(e):
-                            match_flag = True
-                            break
-                    if match_flag:
+            # If source_face_index not set, try to determine
+            # which face should be used as the source.
+            # Check (1): If a face on the volume has been used
+            # as a target face for another volume, use it as the
+            # source for this volume.
+            # Check (2): If a face on the volume has been set as
+            # a copy of another face, set it as the target face,
+            # then determine the corresponding source face.
+            target_face = None
+            source_face = None
+            if source_face_index is None:
+                for i, f in enumerate(faces):
+                    s_d, s_v, s_f = f.getSource()
+                    if s_f:
+                        source_face = faces.pop(i)
                         break
-                if not match_flag:
-                    target_face = faces.pop(i)
+
+                if source_face is None:
+                    for i, f in enumerate(faces):
+                        cp_orient, cp_f = f.getCopySource()
+                        if cp_f:
+                            target_face = faces.pop(i)
+                            break
+
+                    if target_face is None:
+                        source_face = faces.pop(0)
+
+            else:
+                source_face = faces.pop(source_face_index[0])
+
+            if (source_face is None) and (target_face is None):
+                print("Source and target faces not set.")
+
+            # Find the target face, which will be the one that
+            # has no edges matching the source face
+            if (source_face is not None) and (target_face is None):
+                source_loop = source_face.getEdgeLoop(0)
+                source_edges, dirs = source_loop.getEdgeLoop()
+                for i, f in enumerate(faces):
+                    el = f.getEdgeLoop(0)
+                    edges, dirs = el.getEdgeLoop()
+                    match_flag = False
+                    for e in edges:
+                        for s_e in source_edges:
+                            if s_e.checkMatching(e):
+                                match_flag = True
+                                break
+                        if match_flag:
+                            break
+                    if not match_flag:
+                        target_face = faces.pop(i)
+
+            # Find the source face, which will be the one that
+            # has no edges matching the target face
+            if (target_face is not None) and (source_face is None):
+                source_loop = source_face.getEdgeLoop(0)
+                source_edges, dirs = source_loop.getEdgeLoop()
+                for i, f in enumerate(faces):
+                    el = f.getEdgeLoop(0)
+                    edges, dirs = el.getEdgeLoop()
+                    match_flag = False
+                    for e in edges:
+                        for s_e in source_edges:
+                            if s_e.checkMatching(e):
+                                match_flag = True
+                                break
+                        if match_flag:
+                            break
+                    if not match_flag:
+                        target_face = faces.pop(i)
 
             extrude_faces = [source_face, target_face]
             side_faces = faces
