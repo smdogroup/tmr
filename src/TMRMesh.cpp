@@ -1526,7 +1526,6 @@ for a prescribed face mesh\n");
   }
 }
 
-
 /*
   Create the surface mesh
 */
@@ -2517,13 +2516,14 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
 
       // Get the mesh for the x-direction and check its orientation
       int orient_target = edge_orient[i];
-      int orient_copy = copy->getOrientation()*copy_edge_orient[copy_edge_index];
-      orient_copy *= getEdgeCopyOrient(edges[i]);
-
+      orient_target *= face->getOrientation();
       int j_target = npts-1;
       if (orient_target > 0){
         j_target = 0;
       }
+
+      int orient_copy = copy_edge_orient[copy_edge_index];
+      orient_copy *= copy->getOrientation();
       int j_copy = npts-1;
       if (orient_copy > 0){
         j_copy = 0;
@@ -2542,7 +2542,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   for ( int i = 0; i < num_fixed_pts; i++ ){
     if (copy_to_target[i] < 0){
       count++;
-      copy_to_target[i] = 0.0;
+      copy_to_target[i] = 0;
     }
   }
   if (count > 0){
@@ -2671,6 +2671,18 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   for ( int i = 0; i < 4*num_quads; i++ ){
     quads[i] = copy_to_target[copy_mesh->quads[i]];
   }
+
+  // For each point in the copy mesh, check if the points in the
+  // current mesh, match up.. this is for debugging....
+  ///////////////
+  double atol = 1e-6;
+  for ( int i = 0; i < copy_mesh->num_points; i++ ){
+    int j = copy_to_target[i];
+    if (pointDist(&X[j], &copy_mesh->X[i]) > atol){
+      printf("Inconsistent ordering from copy %d to target %d\n", i, j);
+    }
+  }
+  /////////////////
 
   return 0;
 }

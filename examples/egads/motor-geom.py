@@ -133,9 +133,7 @@ ring_geo = TMR.LoadModel('ring.egads')
 plate_geo = TMR.LoadModel('plate.egads')
 
 # All the model objects
-# all_geos = [ring_geo, plate_geo, shell_geo]
-# all_geos = [shell_geo, ring_geo]
-all_geos = [plate_geo, ring_geo]
+all_geos = [ring_geo, plate_geo, shell_geo]
 
 # Create the full list of vertices, edges, faces and volumes
 verts = []
@@ -154,15 +152,11 @@ for vol in vols:
         print('Setting the swept directions failed')
 
 # Combine the geometries and mesh the assembly
-# num_matches = TMR.setMatchingFaces(all_geos)
-TMR.setMatchingFaces([plate_geo, ring_geo])
-# TMR.setMatchingFaces([shell_geo, ring_geo])
-# print('Number of matching faces: ', num_matches)
-
-print('len(vols) = ', len(vols))
+num_matches = TMR.setMatchingFaces(all_geos)
+print('Number of matching faces: ', num_matches)
 
 # Create the geometry
-geo = TMR.Model(verts, edges, faces, vols)
+geo = TMR.Model(verts, edges, faces)
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -177,17 +171,17 @@ mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
 # mesh.writeToBDF('motor.bdf', 'hex')
-mesh.writeToVTK('motor.vtk', 'quad')
+mesh.writeToVTK('motor.vtk', 'hex')
 
 X = mesh.getMeshPoints()
 quads = mesh.getQuadConnectivity()
-hexas = mesh.getHexConnectivity()
+# hexas = mesh.getHexConnectivity()
 
 # Count up the number of un-referenced points
-count = np.zeros(X.shape[0])
-for i in range(hexas.shape[0]):
-    count[hexas[i,:]] = 1
+# count = np.zeros(X.shape[0])
+# for i in range(hexas.shape[0]):
+#     count[hexas[i,:]] = 1
 
-for i in range(X.shape[0]):
-    if count[i] == 0:
-        print('Unreferenced node %d'%(i))
+# for i in range(X.shape[0]):
+#     if count[i] == 0:
+#         print('Unreferenced node %d'%(i))
