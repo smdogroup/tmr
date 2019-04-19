@@ -655,7 +655,7 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
       // Now, extract the faces from the underlying shell(s)
       for ( int i = 0; i < nshell_faces; i++ ){
         int face_index = face_map[shell_faces[i]];
-        dir[i] = children_sense[0]*face_sense[i];
+        dir[i] = children_sense[0];
 
         // Assign the face pointer
         vol_faces[i] = all_faces[face_index];
@@ -694,7 +694,7 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
         // Now, extract the faces from the underlying shell(s)
         for ( int i = 0; i < nshell_faces; i++, vol_index++ ){
           int face_index = face_map[shell_faces[i]];
-          dir[vol_index] = children_sense[k]; // *face_sense[i];
+          dir[vol_index] = children_sense[k];
 
           // Assign the face pointer
           vol_faces[vol_index] = all_faces[face_index];

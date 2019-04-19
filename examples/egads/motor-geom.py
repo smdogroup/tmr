@@ -5,7 +5,7 @@ from tmr import TMR
 import numpy as np
 
 extension = 'step'
-model_type = None
+model_type = 'full'
 ctx = egads.context()
 
 def getBodyFacesAndDirs(body):
@@ -139,7 +139,7 @@ plate_geo = TMR.LoadModel('plate.%s'%(extension))
 if model_type == 'full':
     all_geos = [ring_geo, plate_geo, shell_geo]
 else:
-    all_geos = [plate_geo]
+    all_geos = [plate_geo, ring_geo]
 
 # Create the full list of vertices, edges, faces and volumes
 verts = []
@@ -159,8 +159,13 @@ for vol in vols:
 
 # Combine the geometries and mesh the assembly
 if model_type == 'full':
-    TMR.setMatchingFaces([plate_geo, ring_geo])
-    TMR.setMatchingFaces([shell_geo, ring_geo])
+    pass
+# TMR.setMatchingFaces([plate_geo, ring_geo])
+#    TMR.setMatchingFaces([shell_geo, ring_geo])
+else:
+    pass
+    # TMR.setMatchingFaces([plate_geo, ring_geo])
+    # TMR.setMatchingFaces([ring_geo, plate_geo])
 
 # Create the geometry
 geo = TMR.Model(verts, edges, faces, vols)

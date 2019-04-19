@@ -1768,6 +1768,13 @@ void TMRTriangularize::insertSegment( uint32_t u, uint32_t v ){
     // Find the next triangle
     completeMe(x, w, &tri);
 
+    if (!tri){
+      fprintf(stderr,
+              "TMRTriangularize error: No triangle found; "
+              "Error in edge orientations\n");
+      break;
+    }
+
     // Find the last node y that completes the triangle (x, w, y)
     uint32_t y = 0;
     if (x == tri->u && w == tri->v){

@@ -644,18 +644,19 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
   for ( int index = 1; index <= faces.Extent(); index++ ){
     TopoDS_Face face = TopoDS::Face(faces(index));
 
-    // Check if the orientation of the face is flipped relative
-    // to the natural orientation of the surface
+    // Check if the orientation of the face is flipped relative to the
+    // orientation of the surface
     int orient = 1;
     if (face.Orientation() == TopAbs_REVERSED){
       orient = -1;
     }
     all_faces[index-1] = new TMR_OCCFace(orient, face);
 
-    TopTools_IndexedMapOfShape map;
-    TopExp::MapShapes(face.Oriented(TopAbs_FORWARD), TopAbs_WIRE, map);
-    for ( int i = 1; i <= map.Extent(); i++ ){
-      TopoDS_Wire wire = TopoDS::Wire(map(i));
+    // Find the wires connected to the face
+    TopTools_IndexedMapOfShape wire_map;
+    TopExp::MapShapes(face, TopAbs_WIRE, wire_map);
+    for ( int i = 1; i <= wire_map.Extent(); i++ ){
+      TopoDS_Wire wire = TopoDS::Wire(wire_map(i));
 
       // Count up the enumber of edges
       BRepTools_WireExplorer wExp;
@@ -668,21 +669,19 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
       TMREdge **edgs = new TMREdge*[ ne ];
       int *dir = new int[ ne ];
       int k = 0;
+
       for ( wExp.Init(wire, face); wExp.More(); wExp.Next(), k++ ){
         TopoDS_Edge edge = wExp.Current();
         dir[k] = 1;
         if (edge.Orientation() == TopAbs_REVERSED){
-          dir[k] *= -1;
+          dir[k] = -1;
         }
         int edge_index = edges.FindIndex(edge);
         edgs[k] = all_edges[edge_index-1];
       }
 
-      // Allocate the loop with the given edges/directions
-      int loop_orient = 1;
-      if (i > 0){
-        loop_orient = -1;
-      }
+      // This is not useful in this context
+      int loop_orient = -1;
       all_faces[index-1]->addEdgeLoop(loop_orient,
                                       new TMREdgeLoop(ne, edgs, dir));
 
