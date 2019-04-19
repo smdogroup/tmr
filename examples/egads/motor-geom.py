@@ -1,8 +1,11 @@
+import os
 from egads4py import egads
 from mpi4py import MPI
 from tmr import TMR
 import numpy as np
 
+extension = 'step'
+model_type = None
 ctx = egads.context()
 
 def getBodyFacesAndDirs(body):
@@ -47,7 +50,7 @@ faces[3].attributeAdd('name', egads.ATTRSTRING, 'shell-top-face')
 faces[1].attributeAdd('name', egads.ATTRSTRING, 'shell-bottom-face')
 
 # Save the shell model
-model.saveModel('shell.egads', overwrite=True)
+model.saveModel('shell.%s'%(extension), overwrite=True)
 
 # Create the bottom outer ring
 x1 = [0, 0, 6.35]
@@ -65,7 +68,7 @@ ring = model.getChildren()[0]
 ring.attributeAdd('name', egads.ATTRSTRING, 'ring')
 
 faces = getBodyFacesAndDirs(ring)
-    
+
 # Set the face attributes for the ring volume
 faces[3].attributeAdd('name', egads.ATTRSTRING, 'ring-top-face')
 faces[1].attributeAdd('name', egads.ATTRSTRING, 'ring-bottom-face')
@@ -73,7 +76,7 @@ faces[4].attributeAdd('name', egads.ATTRSTRING, 'ring-inner-face1')
 faces[5].attributeAdd('name', egads.ATTRSTRING, 'ring-inner-face2')
 
 # Save the ring model
-model.saveModel('ring.egads', overwrite=True)
+model.saveModel('ring.%s'%(extension), overwrite=True)
 
 # Create the bottom plate
 x1 = [0, 0, 0]
@@ -116,7 +119,7 @@ faces[1].attributeAdd('name', egads.ATTRSTRING, 'plate-outer-face1')
 faces[0].attributeAdd('name', egads.ATTRSTRING, 'plate-outer-face2')
 
 # Save the plate model
-model.saveModel('plate.egads', overwrite=True)
+model.saveModel('plate.%s'%(extension), overwrite=True)
 
 # Load in the model to TMR
 comm = MPI.COMM_WORLD
@@ -128,12 +131,15 @@ opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 
 # Load the separate geometries and mesh each
-shell_geo = TMR.LoadModel('shell.egads')
-ring_geo = TMR.LoadModel('ring.egads')
-plate_geo = TMR.LoadModel('plate.egads')
+shell_geo = TMR.LoadModel('shell.%s'%(extension))
+ring_geo = TMR.LoadModel('ring.%s'%(extension))
+plate_geo = TMR.LoadModel('plate.%s'%(extension))
 
 # All the model objects
-all_geos = [ring_geo, plate_geo, shell_geo]
+if model_type == 'full':
+    all_geos = [ring_geo, plate_geo, shell_geo]
+else:
+    all_geos = [plate_geo]
 
 # Create the full list of vertices, edges, faces and volumes
 verts = []
@@ -152,10 +158,9 @@ for vol in vols:
         print('Setting the swept directions failed')
 
 # Combine the geometries and mesh the assembly
-# num_matches = TMR.setMatchingFaces(all_geos)
-num_matches = TMR.setMatchingFaces([plate_geo, ring_geo])
-num_matches += TMR.setMatchingFaces([shell_geo, ring_geo])
-print('Number of matching faces: ', num_matches)
+if model_type == 'full':
+    TMR.setMatchingFaces([plate_geo, ring_geo])
+    TMR.setMatchingFaces([shell_geo, ring_geo])
 
 # Create the geometry
 geo = TMR.Model(verts, edges, faces, vols)
@@ -172,19 +177,20 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToBDF('motor.bdf', 'hex')
 mesh.writeToVTK('motor.vtk', 'hex')
 
-# Check for un-referenced nodes
-X = mesh.getMeshPoints()
-quads = mesh.getQuadConnectivity()
-hexas = mesh.getHexConnectivity()
+# Create the model from the unstructured volume mesh
+model = mesh.createModelFromMesh()
 
-# Count up the number of un-referenced points
-count = np.zeros(X.shape[0])
-for i in range(hexas.shape[0]):
-    count[hexas[i,:]] = 1
+# Create the corresponding mesh topology from the mesh-model
+topo = TMR.Topology(comm, model)
 
-for i in range(X.shape[0]):
-    if count[i] == 0:
-        print('Unreferenced node %d'%(i))
+# Create the quad forest and set the topology of the forest
+forest = TMR.OctForest(comm)
+forest.setTopology(topo)
+
+# Create random trees and balance the mesh. Print the output file
+forest.createRandomTrees(nrand=3, max_lev=2)
+forest.balance(1)
+filename = 'motor_forest%d.vtk'%(comm.rank)
+forest.writeForestToVTK(filename)

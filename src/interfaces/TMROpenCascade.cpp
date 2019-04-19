@@ -653,7 +653,7 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
     all_faces[index-1] = new TMR_OCCFace(orient, face);
 
     TopTools_IndexedMapOfShape map;
-    TopExp::MapShapes(face, TopAbs_WIRE, map);
+    TopExp::MapShapes(face.Oriented(TopAbs_FORWARD), TopAbs_WIRE, map);
     for ( int i = 1; i <= map.Extent(); i++ ){
       TopoDS_Wire wire = TopoDS::Wire(map(i));
 
