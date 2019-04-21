@@ -314,7 +314,7 @@ class TMRParametricTFIFace : public TMRFace {
 */
 class TMRTFIVolume : public TMRVolume {
  public:
-  TMRTFIVolume( TMRFace *_faces[], const int orient[],
+  TMRTFIVolume( TMRFace *_faces[],
                 TMREdge *_edges[], const int dir[],
                 TMRVertex *verts[] );
   ~TMRTFIVolume();
@@ -327,7 +327,6 @@ class TMRTFIVolume : public TMRVolume {
  private:
   // Faces surrounding the volume: coordinate ordered
   TMRFace *faces[6];
-  int orient[6];
 
   // Edges defining the volume intersections
   TMREdge *edges[12];

@@ -715,7 +715,6 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
 
     // Allocate the faces arrays/directions
     TMRFace **vol_faces = new TMRFace*[ nvol_faces ];
-    int *dir = new int[ nvol_faces ];
 
     // Now, extract the faces from the underlying shell(s)
     nvol_faces = 0;
@@ -731,14 +730,7 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
         // Find the index of the face and set its direction relative
         // to the face stored in the OCC file. If the direction is
         // reversed, store an orientation of -1.
-        dir[nvol_faces] = 1;
         int index = faces.FindIndex(face);
-        if (faces(index).IsEqual(face)){
-          dir[nvol_faces] = 1;
-        }
-        else {
-          dir[nvol_faces] = -1;
-        }
 
         // Assign the face pointer
         vol_faces[nvol_faces] = all_faces[index-1];
@@ -747,9 +739,8 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
     }
 
     // Create the volume object
-    all_vols[vol_index-1] = new TMRVolume(nvol_faces, vol_faces, dir);
+    all_vols[vol_index-1] = new TMRVolume(nvol_faces, vol_faces);
     delete [] vol_faces;
-    delete [] dir;
   }
 
   TMRModel *geo = new TMRModel(nverts, all_vertices,

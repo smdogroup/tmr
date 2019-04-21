@@ -856,14 +856,13 @@ int TMRParametricTFIFace::evalDeriv( double u, double v,
 /*
   Create the TFI volume
 */
-TMRTFIVolume::TMRTFIVolume( TMRFace *_faces[], const int _orient[],
+TMRTFIVolume::TMRTFIVolume( TMRFace *_faces[],
                             TMREdge *_edges[], const int _dir[],
                             TMRVertex *_verts[] ):
-TMRVolume(6, _faces, _orient){
+TMRVolume(6, _faces){
   for ( int i = 0; i < 6; i++ ){
     faces[i] = _faces[i];
     faces[i]->incref();
-    orient[i] = _orient[i];
   }
   for ( int i = 0; i < 12; i++ ){
     edges[i] = _edges[i];

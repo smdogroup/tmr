@@ -199,7 +199,7 @@ class TMRFace : public TMREntity {
 
   // Set/retrieve the source face
   void setSource( TMRVolume *_volume, TMRFace *_face );
-  void getSource( int *orient, TMRVolume **_volume, TMRFace **_face );
+  void getSource( TMRVolume **_volume, TMRFace **_face );
 
   // Set/retrieve the copy face
   void setCopySource( int _copy_orient, TMRFace *_copy );
@@ -220,8 +220,7 @@ class TMRFace : public TMREntity {
   // The mesh for the curve - if it exists
   TMRFaceMesh *mesh;
 
-  // Store information about the source mesh
-  int source_orient; // The relative source face direction
+  // Store information about the source face
   TMRVolume *source_volume; // Source volume
   TMRFace *source; // Source face (may be NULL)
 
@@ -248,7 +247,7 @@ class TMRFace : public TMREntity {
 */
 class TMRVolume : public TMREntity {
  public:
-  TMRVolume( int _nfaces, TMRFace **_faces, const int *_dir=NULL );
+  TMRVolume( int _nfaces, TMRFace **_faces );
   virtual ~TMRVolume();
 
   // Get the parameter range for this volume
@@ -259,7 +258,7 @@ class TMRVolume : public TMREntity {
   virtual int evalPoint( double u, double v, double w, TMRPoint *X );
 
   // Get the faces that enclose this volume
-  void getFaces( int *_num_faces, TMRFace ***_faces, const int **_dir );
+  void getFaces( int *_num_faces, TMRFace ***_faces );
 
   // Set/retrieve the mesh
   void setMesh( TMRVolumeMesh *_mesh );
@@ -272,7 +271,6 @@ class TMRVolume : public TMREntity {
   // Store the face information
   int num_faces;
   TMRFace **faces;
-  int *dir;
 
   // Set the volume mesh
   TMRVolumeMesh *mesh;

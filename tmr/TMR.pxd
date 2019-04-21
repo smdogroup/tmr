@@ -37,6 +37,7 @@ import numpy as np
 from paropt.ParOpt cimport *
 from tacs.TACS cimport *
 from tacs.constitutive cimport *
+from egads4py.egads cimport *
 
 cdef inline char* tmr_convert_str_to_chars(s):
    if isinstance(s, unicode):
@@ -118,7 +119,7 @@ cdef extern from "TMRTopology.h":
         void getRange(double*, double*, double*, double*)
         int evalPoint(double, double, TMRPoint*)
         void setSource(TMRVolume*, TMRFace*)
-        void getSource(int*, TMRVolume**, TMRFace**)
+        void getSource(TMRVolume**, TMRFace**)
         int getNumEdgeLoops()
         void addEdgeLoop(int, TMREdgeLoop*)
         void getEdgeLoop(int, TMREdgeLoop**)
@@ -133,8 +134,8 @@ cdef extern from "TMRTopology.h":
         void getEdgeLoop(int*, TMREdge***, const int**)
 
     cdef cppclass TMRVolume(TMREntity):
-        TMRVolume(int, TMRFace**, const int*)
-        void getFaces(int*, TMRFace***, const int**)
+        TMRVolume(int, TMRFace**)
+        void getFaces(int*, TMRFace***)
         void writeToVTK(char*)
 
     cdef cppclass TMRModel(TMREntity):
@@ -255,6 +256,23 @@ cdef extern from "TMRFeatureSize.h":
 cdef class PointLocator:
     cdef TMRPointLocator *ptr
 
+cdef extern from "TMREdgeMesh.h":
+    cdef cppclass TMREdgeMesh(TMREntity):
+        TMREdgeMesh(MPI_Comm, TMREdge*, TMRPoint*, int)
+        void mesh(TMRMeshOptions, TMRElementFeatureSize*)
+
+cdef extern from "TMRFaceMesh.h":
+    cdef cppclass TMRFaceMesh(TMREntity):
+        TMRFaceMesh(MPI_Comm, TMRFace*, TMRPoint*, int, int*, int)
+        void mesh(TMRMeshOptions, TMRElementFeatureSize*)
+        void writeToVTK(const char*)
+
+cdef extern from "TMRVolumeMesh.h":
+    cdef cppclass TMRVolumeMesh(TMREntity):
+        TMRVolumeMesh(MPI_Comm, TMRVolume*)
+        void mesh(TMRMeshOptions)
+        void writeToVTK(const char*)
+
 cdef extern from "TMRMesh.h":
     enum TMRFaceMeshType:
         TMR_NO_MESH
@@ -275,20 +293,6 @@ cdef extern from "TMRMesh.h":
         TMRModel *createModelFromMesh()
         void writeToVTK(const char*, int)
         void writeToBDF(const char*, int)
-
-    cdef cppclass TMREdgeMesh(TMREntity):
-        TMREdgeMesh(MPI_Comm, TMREdge*, TMRPoint*, int)
-        void mesh(TMRMeshOptions, TMRElementFeatureSize*)
-
-    cdef cppclass TMRFaceMesh(TMREntity):
-        TMRFaceMesh(MPI_Comm, TMRFace*, TMRPoint*, int, int*, int)
-        void mesh(TMRMeshOptions, TMRElementFeatureSize*)
-        void writeToVTK(const char*)
-
-    cdef cppclass TMRVolumeMesh(TMREntity):
-        TMRVolumeMesh(MPI_Comm, TMRVolume*)
-        void mesh(TMRMeshOptions)
-        void writeToVTK(const char*)
 
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()

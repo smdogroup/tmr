@@ -650,21 +650,18 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
 
       // Allocate the faces arrays/directions
       TMRFace **vol_faces = new TMRFace*[ nshell_faces ];
-      int *dir = new int[ nshell_faces ];
 
       // Now, extract the faces from the underlying shell(s)
       for ( int i = 0; i < nshell_faces; i++ ){
         int face_index = face_map[shell_faces[i]];
-        dir[i] = children_sense[0];
 
         // Assign the face pointer
         vol_faces[i] = all_faces[face_index];
       }
 
       // Create the volume object
-      all_vols[index] = new TMRVolume(nshell_faces, vol_faces, dir);
+      all_vols[index] = new TMRVolume(nshell_faces, vol_faces);
       delete [] vol_faces;
-      delete [] dir;
     }
     else if (mtype == SOLIDBODY){
       // Loop over the closed shells
@@ -681,7 +678,6 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
 
       // Allocate the faces arrays/directions
       TMRFace **vol_faces = new TMRFace*[ ntotal ];
-      int *dir = new int[ ntotal ];
 
       for ( int k = 0, vol_index = 0; k < nchild; k++ ){
         // Retrieve the children of the shell
@@ -694,17 +690,15 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
         // Now, extract the faces from the underlying shell(s)
         for ( int i = 0; i < nshell_faces; i++, vol_index++ ){
           int face_index = face_map[shell_faces[i]];
-          dir[vol_index] = children_sense[k];
-
+          
           // Assign the face pointer
           vol_faces[vol_index] = all_faces[face_index];
         }
       }
 
       // Create the volume object
-      all_vols[index] = new TMRVolume(ntotal, vol_faces, dir);
+      all_vols[index] = new TMRVolume(ntotal, vol_faces);
       delete [] vol_faces;
-      delete [] dir;
     }
 
     // Set the "name" attribute

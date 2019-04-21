@@ -49,7 +49,7 @@ vols = []
 # sfi = [0, 4]
 for i, geo in enumerate([geo1, geo2]):
     vols = geo.getVolumes()
-    fail = vols[0].setExtrudeFaces()#source_face_index = sfi[i])
+    fail = vols[0].setExtrudeFaces()
     if fail:
         print("setExtrudeFaces failed for volume {}".format(i))
 

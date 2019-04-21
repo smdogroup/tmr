@@ -50,6 +50,7 @@ from tacs.TACS cimport *
 from tacs.constitutive cimport *
 from tacs.functions cimport *
 from paropt.ParOpt cimport *
+from egads4py.egads cimport *
 from tacs import TACS
 
 # Import the definitions
@@ -505,9 +506,8 @@ cdef class Face:
     def getSource(self):
         cdef TMRFace *f
         cdef TMRVolume *v
-        cdef int d
-        self.ptr.getSource(&d, &v, &f)
-        return d, _init_Volume(v), _init_Face(f)
+        self.ptr.getSource(&v, &f)
+        return _init_Volume(v), _init_Face(f)
 
     def setCopySource(self, Face face, int orient=-1):
         self.ptr.setCopySource(orient, face.ptr)
@@ -610,30 +610,24 @@ cdef _init_Face(TMRFace *ptr):
 
 cdef class Volume:
     """
-    Contains an oriented collection of surfaces that enclose a volume. Provides
-    a list of surfaces and their relative orientations in the volume.
+    Contains an oriented collection of surfaces that enclose a
+    volume. Provides a list of surfaces. All faces must be oriented
+    with positive orientation outwards.
     """
     cdef TMRVolume *ptr
-    def __cinit__(self, list faces=None, list dirs=None):
+    def __cinit__(self, list faces=None):
         cdef int nfaces = 0
         cdef int *d = NULL
         cdef TMRFace **f = NULL
         self.ptr = NULL
-        if faces is not None and dirs is not None:
-            if len(faces) == len(dirs):
-                nfaces = len(faces)
-                d = <int*>malloc(nfaces*sizeof(int))
-                f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
-                for i in range(nfaces):
-                    f[i] = (<Face>faces[i]).ptr
-                    d[i] = <int>dirs[i]
-                self.ptr = new TMRVolume(nfaces, f, d)
-                self.ptr.incref()
-                free(d)
-                free(f)
-            else:
-                errmsg = 'Face and direction lists must be the same length'
-                raise ValueError(errmsg)
+        if faces is not None:
+            nfaces = len(faces)
+            f = <TMRFace**>malloc(nfaces*sizeof(TMRFace*))
+            for i in range(nfaces):
+                f[i] = (<Face>faces[i]).ptr
+            self.ptr = new TMRVolume(nfaces, f)
+            self.ptr.incref()
+            free(f)
 
     def __dealloc__(self):
         if self.ptr:
@@ -660,7 +654,7 @@ cdef class Volume:
         cdef TMRFace **f
         cdef int num_faces = 0
         if self.ptr:
-            self.ptr.getFaces(&num_faces, &f, NULL)
+            self.ptr.getFaces(&num_faces, &f)
         faces = []
         for i in range(num_faces):
             faces.append(_init_Face(f[i]))
@@ -728,7 +722,7 @@ cdef class Volume:
             source_face = None
             if source_face_index is None:
                 for i, f in enumerate(faces):
-                    s_d, s_v, s_f = f.getSource()
+                    s_v, s_f = f.getSource()
                     if s_f:
                         source_face = faces.pop(i)
                         break

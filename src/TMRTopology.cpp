@@ -445,7 +445,6 @@ TMRFace::TMRFace( int _orientation ){
   mesh = NULL;
   source = NULL;
   source_volume = NULL;
-  source_orient = 0;
   copy = NULL;
   copy_orient = 0;
 }
@@ -704,23 +703,53 @@ void TMRFace::setSource( TMRVolume *volume, TMRFace *face ){
   if (volume && face && face != this && !copy){
     int nloops = getNumEdgeLoops();
     if (nloops != face->getNumEdgeLoops()){
-      fprintf(stderr, "TMRFace error: Topology not equivalent. \
-Number of loops not equal. Could not set source face\n");
+      fprintf(stderr, "TMRFace error: Topology not equivalent. "
+              "Number of loops not equal. Could not set source face\n");
       return;
     }
 
-    TMREdgeLoop *l1, *l2;
+    int *loop_counts = new int[ nloops ];
+    
+    // Find the number of edges in each of the loops
     for ( int i = 0; i < nloops; i++ ){
-      getEdgeLoop(i, &l1);
-      face->getEdgeLoop(i, &l2);
-      int n1, n2;
-      l1->getEdgeLoop(&n1, NULL, NULL);
-      l2->getEdgeLoop(&n2, NULL, NULL);
-      if (n1 != n2){
-        fprintf(stderr, "TMRFace error: Topology not equivalent. \
-Number of edges in edge loop %d not equal. Could not set source face\n", i);
-        return;
+      TMREdgeLoop *loop;
+      face->getEdgeLoop(i, &loop);
+      int nedges;
+      loop->getEdgeLoop(&nedges, NULL, NULL);
+      loop_counts[i] = nedges;
+    }
+
+    // Check that each loop corresponds to a loop edge count
+    for ( int i = 0; i < nloops; i++ ){
+      TMREdgeLoop *loop;
+      getEdgeLoop(i, &loop);
+      int nedges;
+      loop->getEdgeLoop(&nedges, NULL, NULL);
+      for ( int j = 0; j < nloops; j++ ){
+        if (loop_counts[j] != -1 &&
+            loop_counts[j] == nedges){
+          loop_counts[j] = -1;
+          break;
+        }
       }
+    }
+
+    // Check if any loop is not accounted for
+    int fail = 0;
+    for ( int i = 0; i < nloops; i++ ){ 
+      if (loop_counts[i] != -1){
+        fail = 1;
+        break;
+      }
+    }
+
+    delete [] loop_counts;
+
+    if (fail){
+      fprintf(stderr, "TMRFace error: Topology not equivalent. "
+              "Number of edges in the edge loops do not match "
+              "Could not set source face\n");
+      return;
     }
 
     // Check that both the face and the source are contained with the
@@ -728,8 +757,7 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
     int this_index = -1, source_index = -1;
     int num_faces;
     TMRFace **faces;
-    const int *dir;
-    volume->getFaces(&num_faces, &faces, &dir);
+    volume->getFaces(&num_faces, &faces);
 
     // Find the indices of this face and the source - if they exist
     for ( int i = 0; i < num_faces; i++ ){
@@ -745,10 +773,6 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
       if (source_volume){ source_volume->decref(); }
       source = face;
       source_volume = volume;
-
-      // Multiply the relative orientations of the two faces within
-      // the volume
-      source_orient = dir[this_index]*dir[source_index];
     }
   }
 }
@@ -756,12 +780,10 @@ Number of edges in edge loop %d not equal. Could not set source face\n", i);
 /*
   Retrieve the source edge
 */
-void TMRFace::getSource( int *_source_orient,
-                         TMRVolume **volume,
+void TMRFace::getSource( TMRVolume **volume,
                          TMRFace **face ){
   if (face){ *face = source; }
   if (volume){ *volume = source_volume; }
-  if (_source_orient){ *_source_orient = source_orient; }
 }
 
 /*
@@ -853,20 +875,12 @@ void TMRFace::writeToVTK( const char *filename ){
   faces:    the TMRFace objects
   orient:   the orientation of the face
 */
-TMRVolume::TMRVolume( int nfaces, TMRFace **_faces,
-                      const int *_dir ){
+TMRVolume::TMRVolume( int nfaces, TMRFace **_faces ){
   num_faces = nfaces;
   faces = new TMRFace*[ num_faces ];
-  dir = new int[ num_faces ];
   for ( int i = 0; i < num_faces; i++ ){
     faces[i] = _faces[i];
     faces[i]->incref();
-    if (_dir){
-      dir[i] = _dir[i];
-    }
-    else {
-      dir[i] = 1;
-    }
   }
 
   mesh = NULL;
@@ -880,7 +894,6 @@ TMRVolume::~TMRVolume(){
     faces[i]->decref();
   }
   delete [] faces;
-  delete [] dir;
 }
 
 /*
@@ -903,11 +916,9 @@ int TMRVolume::evalPoint( double u, double v, double w, TMRPoint *X ){
 /*
   Get the faces that enclose this volume
 */
-void TMRVolume::getFaces( int *_num_faces, TMRFace ***_faces,
-                          const int **_dir ){
+void TMRVolume::getFaces( int *_num_faces, TMRFace ***_faces ){
   if (_num_faces){ *_num_faces = num_faces; }
   if (_faces){ *_faces = faces; }
-  if (_dir){ *_dir = dir; }
 }
 
 /*
@@ -1438,7 +1449,7 @@ TMRTopology::TMRTopology( MPI_Comm _comm, TMRModel *_geo ){
       // Get the faces
       int nfaces;
       TMRFace **f;
-      volumes[i]->getFaces(&nfaces, &f, NULL);
+      volumes[i]->getFaces(&nfaces, &f);
 
       if (nfaces != 6){
         fprintf(stderr,
@@ -1697,12 +1708,12 @@ void TMRTopology::computeFaceConn(){
       TMREdgeLoop *loop;
       faces[i]->getEdgeLoop(0, &loop);
 
-      const int *edge_dir;
-      loop->getEdgeLoop(NULL, NULL, &edge_dir);
+      const int *edge_orient;
+      loop->getEdgeLoop(NULL, NULL, &edge_orient);
 
       // Coordinate-ordered edge e0
       int edge = face_to_edges[4*f];
-      if (edge_dir[3] > 0){
+      if (edge_orient[3] > 0){
         face_to_vertices[4*f] = edge_to_vertices[2*edge+1];
         face_to_vertices[4*f+2] = edge_to_vertices[2*edge];
       }
@@ -1713,7 +1724,7 @@ void TMRTopology::computeFaceConn(){
 
       // Coordinate-ordered edge e1
       edge = face_to_edges[4*f+1];
-      if (edge_dir[1] > 0){
+      if (edge_orient[1] > 0){
         face_to_vertices[4*f+1] = edge_to_vertices[2*edge];
         face_to_vertices[4*f+3] = edge_to_vertices[2*edge+1];
       }

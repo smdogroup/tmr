@@ -14,6 +14,9 @@ CXX_OBJS = TMRBase.o \
 	TMRQuadForest.o \
 	TMRGeometry.o \
 	TMRTriangularize.o \
+	TMREdgeMesh.o \
+	TMRFaceMesh.o \
+	TMRVolumeMesh.o \
 	TMRMesh.o \
 	TMRFeatureSize.o \
 	TMRMeshSmoothing.o \

@@ -3,9 +3,24 @@ from egads4py import egads
 from mpi4py import MPI
 from tmr import TMR
 import numpy as np
+import argparse
 
-extension = 'step'
-model_type = 'full'
+# Load in the model to TMR
+comm = MPI.COMM_WORLD
+
+# Create an argument parser to read in arguments from the commnad line
+p = argparse.ArgumentParser()
+p.add_argument('--htarget', type=float, default=2.0)
+p.add_argument('--extension', type=str, default='egads', help='egads or step')
+p.add_argument('--model_type', type=str, default='full',
+               help='full or anything else')
+args = p.parse_args()
+
+htarget = args.htarget
+extension = args.extension
+model_type = args.model_type
+
+# Create the egads context
 ctx = egads.context()
 
 def getBodyFacesAndDirs(body):
@@ -121,10 +136,6 @@ faces[0].attributeAdd('name', egads.ATTRSTRING, 'plate-outer-face2')
 # Save the plate model
 model.saveModel('plate.%s'%(extension), overwrite=True)
 
-# Load in the model to TMR
-comm = MPI.COMM_WORLD
-htarget = 2.0
-
 # Set the meshing options
 opts = TMR.MeshOptions()
 opts.write_mesh_quality_histogram = 1
@@ -159,13 +170,10 @@ for vol in vols:
 
 # Combine the geometries and mesh the assembly
 if model_type == 'full':
-    pass
-# TMR.setMatchingFaces([plate_geo, ring_geo])
-#    TMR.setMatchingFaces([shell_geo, ring_geo])
+    TMR.setMatchingFaces([plate_geo, ring_geo])
+    TMR.setMatchingFaces([shell_geo, ring_geo])
 else:
-    pass
-    # TMR.setMatchingFaces([plate_geo, ring_geo])
-    # TMR.setMatchingFaces([ring_geo, plate_geo])
+    TMR.setMatchingFaces([plate_geo, ring_geo])
 
 # Create the geometry
 geo = TMR.Model(verts, edges, faces, vols)
