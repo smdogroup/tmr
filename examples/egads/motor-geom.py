@@ -168,20 +168,28 @@ for geo in all_geos:
     faces.extend(geo.getFaces())
     vols.extend(geo.getVolumes())
 
+print('len(vols) = ', len(vols))
+
+for v in vols:
+    print('len(v.getFaces()) = ', len(v.getFaces()))
+    
 for vol in vols:
-    fail = vol.setExtrudeFaces()
+    fail = vol.setExtrudeFaces(reverse_extrude=True)
     if fail:
         print('Setting the swept directions failed')
 
 # Combine the geometries and mesh the assembly
 if model_type == 'full':
-    TMR.setMatchingFaces([plate_geo, ring_geo])
-    TMR.setMatchingFaces([shell_geo, ring_geo])
+    num_matches = TMR.setMatchingFaces([plate_geo, ring_geo])
+    num_matches += TMR.setMatchingFaces([shell_geo, ring_geo])
 else:
-    TMR.setMatchingFaces([plate_geo, ring_geo])
+    num_matches = TMR.setMatchingFaces([plate_geo, ring_geo])
+
+print('num_matches = ', num_matches)
 
 # Create the geometry
-geo = TMR.Model(verts, edges, faces, vols)
+geo = TMR.Model(verts, edges, faces)
+# geo = TMR.Model(verts, edges, faces, vols)
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -195,24 +203,37 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('motor.vtk', 'hex')
+mesh.writeToVTK('motor.vtk', 'quad')
 
 for index, face in enumerate(faces):
     f = face.getMesh()
-    f.writeToVTK('face_mesh%d.vtk'%(index))
+    f.writeToVTK('motor_face_mesh%d.vtk'%(index))
 
+x = mesh.getMeshPoints()
+quads = mesh.getQuadConnectivity()
+count = np.zeros(x.shape[0], dtype=np.int)
+for i in range(quads.shape[0]):
+    count[quads[i,:]] += 1
+
+for i in range(count.shape[0]):
+    if count[i] == 0:
+        print('Missing ref. to node %d'%(i))
+    
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()
+
+exit(0)
 
 # Create the corresponding mesh topology from the mesh-model
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
-forest = TMR.OctForest(comm)
+forest = TMR.QuadForest(comm)
+# forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 
 # Create random trees and balance the mesh. Print the output file
-forest.createRandomTrees(nrand=3, max_lev=2)
+forest.createRandomTrees(nrand=1, max_lev=1)
 forest.balance(1)
 filename = 'motor_forest%d.vtk'%(comm.rank)
 forest.writeForestToVTK(filename)

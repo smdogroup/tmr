@@ -542,6 +542,10 @@ int TMREdgeMesh::setNodeNums( int *num ){
             }
           }
         }
+        else {
+          fprintf(stderr,
+                  "TMREdgeMesh Error: Copy mesh not created\n");
+        }
       }
       else {
         fprintf(stderr,

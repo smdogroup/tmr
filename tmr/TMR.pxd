@@ -103,6 +103,7 @@ cdef extern from "TMRTopology.h":
         void getSource(TMREdge**)
         void getRange(double*, double*)
         int evalPoint(double, TMRPoint*)
+        int evalDeriv(double, TMRPoint*, TMRPoint*)
         int invEvalPoint(TMRPoint, double*)
         void setVertices(TMRVertex*, TMRVertex*)
         void getVertices(TMRVertex**, TMRVertex**)

@@ -163,6 +163,13 @@ cdef class Vertex:
     def setCopySource(self, Vertex vert):
         self.ptr.setCopySource(vert.ptr)
 
+    def getCopySource(self):
+        cdef TMRVertex *v = NULL
+        self.ptr.getCopySource(&v)
+        if v != NULL:
+            return _init_Vertex(v)
+        return None
+
     def checkMatching(self, Vertex v2, double atol=1e-6):
         """
         Check if two verticies are coincident, within a given tolerance
@@ -213,8 +220,7 @@ cdef class Edge:
 
         Evaluate a node location on a curve with a single
         parametric argument *t*. Provides access to the first and second vertices
-        that begin/end the edge. Given a parametric location t and a face, return
-        the (*u,v*) location on the face.
+        that begin/end the edge.
 
         Parameters
         ----------
@@ -224,6 +230,17 @@ cdef class Edge:
         cdef TMRPoint pt
         self.ptr.evalPoint(t, &pt)
         return np.array([pt.x, pt.y, pt.z])
+
+    def evalDeriv(self, double t):
+        '''
+        evalDeriv(self, t)
+
+        Evaluate a node location on an edge and its derivative
+        '''
+        cdef TMRPoint pt
+        cdef TMRPoint deriv
+        self.ptr.evalDeriv(t, &pt, &deriv)
+        return np.array([pt.x, pt.y, pt.z]), np.array([deriv.x, deriv.y, deriv.z])
 
     def invEvalPoint(self, np.ndarray[double, ndim=1, mode='c'] pt):
         cdef TMRPoint point
@@ -268,15 +285,24 @@ cdef class Edge:
         self.ptr.setSource(e.ptr)
 
     def getSource(self):
-        cdef TMREdge *e
+        cdef TMREdge *e = NULL
         self.ptr.getSource(&e)
-        return _init_Edge(e)
+        if e != NULL:
+            return _init_Edge(e)
+        return None
 
     def setMesh(self, EdgeMesh mesh):
         self.ptr.setMesh(mesh.ptr)
 
     def setCopySource(self, Edge edge):
         self.ptr.setCopySource(edge.ptr)
+
+    def getCopySource(self):
+        cdef TMREdge *e = NULL
+        self.ptr.getCopySource(&e)
+        if e != NULL:
+            return _init_Edge(e)
+        return None
 
     def writeToVTK(self, fname):
         cdef char *filename = tmr_convert_str_to_chars(fname)
@@ -309,7 +335,7 @@ cdef class Edge:
             # Check a midpoint on each
             else:
                 e1_tmin, e1_tmax = self.getRange()
-                e1_pt = self.evalPoint(0.5*(e1_tmin+e1_tmax))
+                e1_pt = self.evalPoint(0.5*(e1_tmin + e1_tmax))
                 fail, t2 = e2.invEvalPoint(e1_pt)
 
                 if fail != 0:
@@ -317,7 +343,7 @@ cdef class Edge:
                 else:
                     e2_tmin, e2_tmax = e2.getRange()
                     if t2 + atol >= e2_tmin and t2 <= e2_tmax + atol:
-                        e2_pt = self.evalPoint(t2)
+                        e2_pt = e2.evalPoint(t2)
                         dx = np.abs(e2_pt - e1_pt)
                         if np.amax(dx) < atol:
                             matching = True
@@ -512,19 +538,23 @@ cdef class Face:
         self.ptr.setSource(v.ptr, f.ptr)
 
     def getSource(self):
-        cdef TMRFace *f
-        cdef TMRVolume *v
+        cdef TMRFace *f = NULL
+        cdef TMRVolume *v = NULL
         self.ptr.getSource(&v, &f)
-        return _init_Volume(v), _init_Face(f)
+        if f != NULL and v != NULL:
+            return _init_Volume(v), _init_Face(f)
+        return None, None
 
     def setCopySource(self, Face face, int orient=-1):
         self.ptr.setCopySource(orient, face.ptr)
 
     def getCopySource(self):
-        cdef TMRFace *f
-        cdef int orient
+        cdef TMRFace *f = NULL
+        cdef int orient = 0
         self.ptr.getCopySource(&orient, &f)
-        return orient, _init_Face(f)
+        if f != NULL:
+            return orient, _init_Face(f)
+        return orient, None
 
     def setMesh(self, FaceMesh mesh):
         self.ptr.setMesh(mesh.ptr)
@@ -591,15 +621,26 @@ cdef class Face:
 
         for s in source_list:
             for t in target_list:
+                # Find the matching edge
                 if t.checkMatching(s, atol=atol):
                     # Remove the target from the list of targets
                     target_list.remove(t)
+
+                    # Set the source for the edge
+                    t.setCopySource(s)
+
+                    # Get the vertices that must be set
                     sv1, sv2 = s.getVertices()
                     tv1, tv2 = t.getVertices()
 
-                    # Set the target edge source edge
-                    t.setCopySource(s)
-                    if sv1.checkMatching(tv1, atol=atol):
+                    t1, t2 = s.getRange()
+                    X, Xt = s.evalDeriv(0.5*(t1 + t2))
+                    fail, tpt = t.invEvalPoint(X)
+                    X2, X2t = t.evalDeriv(t2)
+
+                    # Find the relative orientation
+                    dot = np.dot(Xt, X2t)
+                    if dot >= 0.0:
                         tv1.setCopySource(sv1)
                         tv2.setCopySource(sv2)
                     else:
@@ -672,7 +713,8 @@ cdef class Volume:
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
-    def setExtrudeFaces(self, list source_face_index=None):
+    def setExtrudeFaces(self, list source_face_index=None,
+                        reverse_extrude=False):
         """
         Set source and target faces if
         this is an extrudable volume
@@ -731,14 +773,14 @@ cdef class Volume:
             if source_face_index is None:
                 for i, f in enumerate(faces):
                     s_v, s_f = f.getSource()
-                    if s_f:
+                    if s_f is not None:
                         source_face = faces.pop(i)
                         break
 
                 if source_face is None:
                     for i, f in enumerate(faces):
                         cp_orient, cp_f = f.getCopySource()
-                        if cp_f:
+                        if cp_f is not None:
                             target_face = faces.pop(i)
                             break
 
@@ -857,7 +899,11 @@ cdef class Volume:
 
         # Now we have sufficiently checked if the volume
         # can be extruded, so set the source and target faces
-        extrude_faces[1].setSource(self, extrude_faces[0])
+        if reverse_extrude:
+            extrude_faces[0].setSource(self, extrude_faces[1])
+        else:
+            extrude_faces[1].setSource(self, extrude_faces[0])
+
         fail = False
 
         return fail
@@ -4257,13 +4303,13 @@ def setMatchingFaces(list geo_list, double atol=1e-6):
 
     num_matches = 0
     for i in range(len(geo_list)):
-        faces_i = geo_list[i].getFaces()
+        ifaces = geo_list[i].getFaces()
         for j in range(i+1, len(geo_list)):
-            faces_j = geo_list[j].getFaces()
-            for f_i in faces_i:
-                for f_j in faces_j:
-                    if f_i.checkMatching(f_j, atol=atol):
-                        f_i.setCopyFaces(f_j)
+            jfaces = geo_list[j].getFaces()
+            for fi in ifaces:
+                for fj in jfaces:
+                    if fi.checkMatching(fj, atol=atol):
+                        fi.setCopyFaces(fj)
                         num_matches += 1
 
     return num_matches

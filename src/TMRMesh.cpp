@@ -973,8 +973,12 @@ void TMRMesh::mesh( TMRMeshOptions options,
     for ( int i = 0; i < num_faces; i++ ){
       TMRFaceMesh *mesh = NULL;
       faces[i]->getMesh(&mesh);
-      num_quads += mesh->getQuadConnectivity(NULL);
-      num_tris += mesh->getTriConnectivity(NULL);
+      TMRFace *copy_face = NULL;
+      faces[i]->getCopySource(NULL, &copy_face);
+      if (!copy_face){
+        num_quads += mesh->getQuadConnectivity(NULL);
+        num_tris += mesh->getTriConnectivity(NULL);
+      }
     }
 
     // Add the mesh quality to the bins from each mesh
@@ -984,7 +988,11 @@ void TMRMesh::mesh( TMRMeshOptions options,
     for ( int i = 0; i < num_faces; i++ ){
       TMRFaceMesh *mesh = NULL;
       faces[i]->getMesh(&mesh);
-      mesh->addMeshQuality(nbins, bins);
+      TMRFace *copy_face = NULL;
+      faces[i]->getCopySource(NULL, &copy_face);
+      if (!copy_face){
+        mesh->addMeshQuality(nbins, bins);
+      }
     }
 
     // Sum up the total number of elements
@@ -1097,61 +1105,65 @@ void TMRMesh::initMesh( int count_nodes ){
     int *q = quads;
     int *t = tris;
     for ( int i = 0; i < num_faces; i++ ){
-      // Get the mesh
-      TMRFaceMesh *mesh = NULL;
-      faces[i]->getMesh(&mesh);
+      TMRFace *copy_face = NULL;
+      faces[i]->getCopySource(NULL, &copy_face);
+      if (!copy_face){
+        // Get the mesh
+        TMRFaceMesh *mesh = NULL;
+        faces[i]->getMesh(&mesh);
 
-      // Get the local mesh points
-      int npts;
-      TMRPoint *Xpts;
-      mesh->getMeshPoints(&npts, NULL, &Xpts);
+        // Get the local mesh points
+        int npts;
+        TMRPoint *Xpts;
+        mesh->getMeshPoints(&npts, NULL, &Xpts);
 
-      // Get the local quadrilateral connectivity
-      const int *quad_local, *tri_local;
-      int nquad_local = mesh->getQuadConnectivity(&quad_local);
-      int ntri_local = mesh->getTriConnectivity(&tri_local);
+        // Get the local quadrilateral connectivity
+        const int *quad_local, *tri_local;
+        int nquad_local = mesh->getQuadConnectivity(&quad_local);
+        int ntri_local = mesh->getTriConnectivity(&tri_local);
 
-      // Get the local to global variable numbering
-      const int *vars;
-      mesh->getNodeNums(&vars);
+        // Get the local to global variable numbering
+        const int *vars;
+        mesh->getNodeNums(&vars);
 
-      // Set the quadrilateral connectivity
-      if (faces[i]->getOrientation() > 0){
-        for ( int j = 0; j < 4*nquad_local; j++, q++ ){
-          q[0] = vars[quad_local[j]];
-        }
-        for ( int j = 0; j < 3*ntri_local; j++, t++ ){
-          t[0] = vars[tri_local[j]];
-        }
-      }
-      else {
-        for ( int j = 0; j < nquad_local; j++ ){
-          for ( int k = 0; k < 4; k++ ){
-            q[k] = vars[quad_local[4*j + k]];
+        // Set the quadrilateral connectivity
+        if (faces[i]->getOrientation() > 0){
+          for ( int j = 0; j < 4*nquad_local; j++, q++ ){
+            q[0] = vars[quad_local[j]];
           }
-
-          // Flip the orientation of the quad
-          int tmp = q[1];
-          q[1] = q[3];
-          q[3] = tmp;
-          q += 4;
-        }
-        for ( int j = 0; j < ntri_local; j++ ){
-          for ( int k = 0; k < 3; k++ ){
-            t[k] = vars[tri_local[3*j + k]];
+          for ( int j = 0; j < 3*ntri_local; j++, t++ ){
+            t[0] = vars[tri_local[j]];
           }
-
-          // Flip the orientation of the quad
-          int tmp = t[1];
-          t[1] = t[2];
-          t[2] = tmp;
-          t += 3;
         }
-      }
+        else {
+          for ( int j = 0; j < nquad_local; j++ ){
+            for ( int k = 0; k < 4; k++ ){
+              q[k] = vars[quad_local[4*j + k]];
+            }
 
-      // Set the node locations
-      for ( int j = 0; j < npts; j++ ){
-        X[vars[j]] = Xpts[j];
+            // Flip the orientation of the quad
+            int tmp = q[1];
+            q[1] = q[3];
+            q[3] = tmp;
+            q += 4;
+          }
+          for ( int j = 0; j < ntri_local; j++ ){
+            for ( int k = 0; k < 3; k++ ){
+              t[k] = vars[tri_local[3*j + k]];
+            }
+
+            // Flip the orientation of the quad
+            int tmp = t[1];
+            t[1] = t[2];
+            t[2] = tmp;
+            t += 3;
+          }
+        }
+
+        // Set the node locations
+        for ( int j = 0; j < npts; j++ ){
+          X[vars[j]] = Xpts[j];
+        }
       }
     }
   }
@@ -1410,7 +1422,6 @@ TMRModel* TMRMesh::createModelFromMesh(){
   initMesh();
 
   // Create vertices
-  int vnum = 0;
   TMRVertex **new_verts = new TMRVertex*[ num_nodes ];
   memset(new_verts, 0, num_nodes*sizeof(TMRVertex*));
 
@@ -1418,8 +1429,14 @@ TMRModel* TMRMesh::createModelFromMesh(){
   int num_vertices;
   TMRVertex **vertices;
   geo->getVertices(&num_vertices, &vertices);
-  for ( int i = 0; i < num_vertices; i++, vnum++ ){
-    new_verts[vnum] = vertices[i];
+  for ( int i = 0; i < num_vertices; i++ ){
+    TMRVertex *copy_vert;
+    vertices[i]->getCopySource(&copy_vert);
+    if (!copy_vert){
+      int vnum;
+      vertices[i]->getNodeNum(&vnum);
+      new_verts[vnum] = vertices[i];
+    }
   }
 
   // Create the vertices on the edges
@@ -1427,15 +1444,23 @@ TMRModel* TMRMesh::createModelFromMesh(){
   TMREdge **edges;
   geo->getEdges(&num_edges, &edges);
   for ( int i = 0; i < num_edges; i++ ){
-    TMREdgeMesh *mesh = NULL;
-    edges[i]->getMesh(&mesh);
+    TMREdge *copy_edge;
+    edges[i]->getCopySource(&copy_edge);
+    if (!copy_edge){
+      TMREdgeMesh *mesh = NULL;
+      edges[i]->getMesh(&mesh);
 
-    // Get the parametric points associated with the mesh
-    int npts;
-    const double *tpts;
-    mesh->getMeshPoints(&npts, &tpts, NULL);
-    for ( int j = 1; j < npts-1; j++, vnum++ ){
-      new_verts[vnum] = new TMRVertexFromEdge(edges[i], tpts[j]);
+      // Get the variable numbers
+      const int *vars;
+      mesh->getNodeNums(&vars);
+
+      // Get the parametric points associated with the mesh
+      int npts;
+      const double *tpts;
+      mesh->getMeshPoints(&npts, &tpts, NULL);
+      for ( int j = 1; j < npts-1; j++ ){
+        new_verts[vars[j]] = new TMRVertexFromEdge(edges[i], tpts[j]);
+      }
     }
   }
 
@@ -1444,19 +1469,27 @@ TMRModel* TMRMesh::createModelFromMesh(){
   TMRFace **faces;
   geo->getFaces(&num_faces, &faces);
   for ( int i = 0; i < num_faces; i++ ){
-    TMRFaceMesh *mesh = NULL;
-    faces[i]->getMesh(&mesh);
+    TMRFace *copy_face;
+    faces[i]->getCopySource(NULL, &copy_face);
+    if (!copy_face){
+      TMRFaceMesh *mesh = NULL;
+      faces[i]->getMesh(&mesh);
 
-    // Get the mesh points
-    int npts;
-    const double *pts;
-    mesh->getMeshPoints(&npts, &pts, NULL);
+      // Get the variable numbers
+      const int *vars;
+      mesh->getNodeNums(&vars);
 
-    // Get the point-offset for this surface
-    int offset = mesh->getNumFixedPoints();
-    for ( int j = offset; j < npts; j++, vnum++ ){
-      new_verts[vnum] = new TMRVertexFromFace(faces[i],
-                                              pts[2*j], pts[2*j+1]);
+      // Get the mesh points
+      int npts;
+      const double *pts;
+      mesh->getMeshPoints(&npts, &pts, NULL);
+
+      // Get the point-offset for this surface
+      int offset = mesh->getNumFixedPoints();
+      for ( int j = offset; j < npts; j++ ){
+        new_verts[vars[j]] = new TMRVertexFromFace(faces[i],
+                                                   pts[2*j], pts[2*j+1]);
+      }
     }
   }
 
@@ -1545,8 +1578,17 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   // Loop over the geometric edges within the model
   for ( int i = 0; i < num_edges; i++ ){
+    // See if there is an underlying copy edge
+    TMREdge *copy_edge = NULL;
+    edges[i]->getCopySource(&copy_edge);
+
     TMREdgeMesh *mesh = NULL;
-    edges[i]->getMesh(&mesh);
+    if (copy_edge){
+      copy_edge->getMesh(&mesh);
+    }
+    else {
+      edges[i]->getMesh(&mesh);
+    }
 
     // Get the global variables associated with the edge
     const int *vars;
@@ -1575,18 +1617,19 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
       if (res){
         int edge_num = res[0];
+        if (!new_edges[edge_num]){
+          // Check whether the node ordering is consistent with the
+          // edge orientation. If not, tag this edge as reversed.
+          if (vars[j] < vars[j+1]){
+            edge_dir[edge_num] = 1;
+          }
+          else {
+            edge_dir[edge_num] = -1;
+          }
 
-        // Check whether the node ordering is consistent with the
-        // edge orientation. If not, tag this edge as reversed.
-        if (vars[j] < vars[j+1]){
-          edge_dir[edge_num] = 1;
+          new_edges[edge_num] =
+            new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
         }
-        else {
-          edge_dir[edge_num] = -1;
-        }
-
-        new_edges[edge_num] =
-          new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
       }
       else {
         fprintf(stderr,
@@ -1598,81 +1641,86 @@ TMRModel* TMRMesh::createModelFromMesh(){
 
   // Create the edges on the surface using Pcurve/CurveFromSurface
   for ( int i = 0; i < num_faces; i++ ){
-    TMRFaceMesh *mesh = NULL;
-    faces[i]->getMesh(&mesh);
+    TMRFace *copy_face = NULL;
+    faces[i]->getCopySource(NULL, &copy_face);
 
-    // Get the parametric points associated with the surface mesh
-    int npts;
-    const double *pts;
-    mesh->getMeshPoints(&npts, &pts, NULL);
+    if (!copy_face){
+      TMRFaceMesh *mesh = NULL;
+      faces[i]->getMesh(&mesh);
 
-    // Loop over all possible edges in the surface mesh
-    const int *quad_local;
-    int nlocal = mesh->getQuadConnectivity(&quad_local);
+      // Get the parametric points associated with the surface mesh
+      int npts;
+      const double *pts;
+      mesh->getMeshPoints(&npts, &pts, NULL);
 
-    // Get the global variables associated with the local mesh
-    const int *vars;
-    mesh->getNodeNums(&vars);
+      // Loop over all possible edges in the surface mesh
+      const int *quad_local;
+      int nlocal = mesh->getQuadConnectivity(&quad_local);
 
-    for ( int j = 0; j < nlocal; j++ ){
-      for ( int k = 0; k < 4; k++ ){
-        // The local variable numbers
-        int l1 = 0, l2 = 0;
-        if (faces[i]->getOrientation() > 0){
-          l1 = quad_local[4*j + quad_edge_nodes[k][0]];
-          l2 = quad_local[4*j + quad_edge_nodes[k][1]];
-        }
-        else {
-          l1 = quad_local[4*j + flipped_quad_edge_nodes[k][0]];
-          l2 = quad_local[4*j + flipped_quad_edge_nodes[k][1]];
-        }
+      // Get the global variables associated with the local mesh
+      const int *vars;
+      mesh->getNodeNums(&vars);
 
-        // Get the global edge number
-        int edge[3];
-        edge[0] = 0;
-        if (vars[l1] < vars[l2]){
-          edge[1] = vars[l1];
-          edge[2] = vars[l2];
-        }
-        else {
-          edge[1] = vars[l2];
-          edge[2] = vars[l1];
-        }
-
-        // Find the associated edge number
-        int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
-                                 3*sizeof(int), compare_edges);
-
-        if (res){
-          // Get the edge number
-          int edge_num = res[0];
-          if (!new_edges[edge_num]){
-            // These edges are constructed such that they are
-            // always in the 'positive' orientation.
-            edge_dir[edge_num] = 1;
-
-            // Create the TMRBsplinePcurve on this edge
-            double cpts[4];
-            if (vars[l1] < vars[l2]){
-              cpts[0] = pts[2*l1];
-              cpts[1] = pts[2*l1+1];
-              cpts[2] = pts[2*l2];
-              cpts[3] = pts[2*l2+1];
-            }
-            else {
-              cpts[0] = pts[2*l2];
-              cpts[1] = pts[2*l2+1];
-              cpts[2] = pts[2*l1];
-              cpts[3] = pts[2*l1+1];
-            }
-            TMRBsplinePcurve *pcurve = new TMRBsplinePcurve(2, 2, cpts);
-            new_edges[edge_num] = new TMREdgeFromFace(faces[i], pcurve);
+      for ( int j = 0; j < nlocal; j++ ){
+        for ( int k = 0; k < 4; k++ ){
+          // The local variable numbers
+          int l1 = 0, l2 = 0;
+          if (faces[i]->getOrientation() > 0){
+            l1 = quad_local[4*j + quad_edge_nodes[k][0]];
+            l2 = quad_local[4*j + quad_edge_nodes[k][1]];
           }
-        }
-        else {
-          fprintf(stderr,
-                  "TMRMesh error: Could not find edge (%d, %d) for Pcurve\n",
-                  edge[1], edge[2]);
+          else {
+            l1 = quad_local[4*j + flipped_quad_edge_nodes[k][0]];
+            l2 = quad_local[4*j + flipped_quad_edge_nodes[k][1]];
+          }
+
+          // Get the global edge number
+          int edge[3];
+          edge[0] = 0;
+          if (vars[l1] < vars[l2]){
+            edge[1] = vars[l1];
+            edge[2] = vars[l2];
+          }
+          else {
+            edge[1] = vars[l2];
+            edge[2] = vars[l1];
+          }
+
+          // Find the associated edge number
+          int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
+                                   3*sizeof(int), compare_edges);
+
+          if (res){
+            // Get the edge number
+            int edge_num = res[0];
+            if (!new_edges[edge_num]){
+              // These edges are constructed such that they are
+              // always in the forward orientation.
+              edge_dir[edge_num] = 1;
+
+              // Create the TMRBsplinePcurve on this edge
+              double cpts[4];
+              if (vars[l1] < vars[l2]){
+                cpts[0] = pts[2*l1];
+                cpts[1] = pts[2*l1+1];
+                cpts[2] = pts[2*l2];
+                cpts[3] = pts[2*l2+1];
+              }
+              else {
+                cpts[0] = pts[2*l2];
+                cpts[1] = pts[2*l2+1];
+                cpts[2] = pts[2*l1];
+                cpts[3] = pts[2*l1+1];
+              }
+              TMRBsplinePcurve *pcurve = new TMRBsplinePcurve(2, 2, cpts);
+              new_edges[edge_num] = new TMREdgeFromFace(faces[i], pcurve);
+            }
+          }
+          else {
+            fprintf(stderr,
+                    "TMRMesh error: Could not find edge (%d, %d) for Pcurve\n",
+                    edge[1], edge[2]);
+          }
         }
       }
     }
@@ -1699,6 +1747,61 @@ TMRModel* TMRMesh::createModelFromMesh(){
       }
     }
   }
+
+  int edge_count = 0;
+  for ( int i = 0; i < num_mesh_edges; i++ ){
+    if (!new_edges[i]){
+      printf("edge %d (%d, %d) not created\n", i, mesh_edges[2*i], mesh_edges[2*i+1]);
+      edge_count++;
+    }
+  }
+  printf("edge_count = %d\n", edge_count);
+
+
+  FILE *fp = fopen("unused_edges.vtk", "w");
+  fprintf(fp, "# vtk DataFile Version 3.0\n");
+  fprintf(fp, "vtk output\nASCII\nDATASET UNSTRUCTURED_GRID\nPOINTS %d float\n", 2*edge_count);
+  int p3 = -1;
+  for ( int i = 0; i < num_mesh_edges; i++ ){
+    if (!new_edges[i]){
+      int p1 = mesh_edges[2*i];
+      int p2 = mesh_edges[2*i+1];
+      if (i == 2){
+        p3 = p1;
+      }
+
+      fprintf(fp, "%e %e %e\n", X[p1].x, X[p1].y, X[p1].z);
+      fprintf(fp, "%e %e %e\n", X[p2].x, X[p2].y, X[p2].z);
+    }
+  }
+  fprintf(fp, "\nCELLS %d %d\n", edge_count, 3*edge_count);
+  for ( int i = 0; i < edge_count; i++ ){
+    fprintf(fp, "%d %d %d\n", 2, 2*i, 2*i+1);
+  }
+  fprintf(fp, "\nCELL_TYPES %d\n", edge_count);
+  for ( int i = 0; i < edge_count; i++ ){
+    fprintf(fp, "%d\n", 3);
+  }
+  fclose(fp);
+
+  // Find the closest node to p3
+  double dist = 1e20;
+  int index = -1;
+  for ( int i = 0; i < num_nodes; i++ ){
+    if (i != p3){
+      double h = ((X[i].x - X[p3].x)*(X[i].x - X[p3].x) +
+                  (X[i].y - X[p3].y)*(X[i].y - X[p3].y) +
+                  (X[i].z - X[p3].z)*(X[i].z - X[p3].z));
+      if (h < dist){
+        dist = h;
+        index = i;
+      }
+    }
+  }
+
+  printf("min dist point = %d dist = %15.8e\n", index, sqrt(dist));
+
+
 
   // Create the TMRFace objects
   TMRFace **new_faces = new TMRFace*[ num_mesh_faces ];
@@ -1728,117 +1831,122 @@ TMRModel* TMRMesh::createModelFromMesh(){
   // Allocate the faces
   int face_num = 0;
   for ( int i = 0; i < num_faces; i++ ){
-    TMRFaceMesh *mesh = NULL;
-    faces[i]->getMesh(&mesh);
+    TMRFace *copy_face = NULL;
+    faces[i]->getCopySource(NULL, &copy_face);
 
-    // Get the parametric points associated with the surface mesh
-    int npts;
-    const double *pts;
-    mesh->getMeshPoints(&npts, &pts, NULL);
+    if (!copy_face){
+      TMRFaceMesh *mesh = NULL;
+      faces[i]->getMesh(&mesh);
 
-    // Loop over all possible edges in the surface mesh
-    const int *quad_local;
-    int nlocal = mesh->getQuadConnectivity(&quad_local);
+      // Get the parametric points associated with the surface mesh
+      int npts;
+      const double *pts;
+      mesh->getMeshPoints(&npts, &pts, NULL);
 
-    // Get the global variables associated with the local mesh
-    const int *vars;
-    mesh->getNodeNums(&vars);
+      // Loop over all possible edges in the surface mesh
+      const int *quad_local;
+      int nlocal = mesh->getQuadConnectivity(&quad_local);
 
-    // Iterate over all of the edges, creating the appropriate faces
-    for ( int j = 0; j < nlocal; j++ ){
-      TMREdge *c[4];
-      int dir[4];
-      TMRVertex *v[4];
+      // Get the global variables associated with the local mesh
+      const int *vars;
+      mesh->getNodeNums(&vars);
 
-      // Set the nodes for this quad
-      if (faces[i]->getOrientation() > 0){
-        v[0] = new_verts[vars[quad_local[4*j]]];
-        v[1] = new_verts[vars[quad_local[4*j+1]]];
-        v[2] = new_verts[vars[quad_local[4*j+2]]];
-        v[3] = new_verts[vars[quad_local[4*j+3]]];
-      }
-      else {
-        v[0] = new_verts[vars[quad_local[4*j]]];
-        v[1] = new_verts[vars[quad_local[4*j+3]]];
-        v[2] = new_verts[vars[quad_local[4*j+2]]];
-        v[3] = new_verts[vars[quad_local[4*j+1]]];
-      }
+      // Iterate over all of the edges, creating the appropriate faces
+      for ( int j = 0; j < nlocal; j++ ){
+        TMREdge *c[4];
+        int dir[4];
+        TMRVertex *v[4];
 
-      // Loop over and search for the edges associated with this quad
-      for ( int k = 0; k < 4; k++ ){
-        // The edge variable numbers
-        int l1 = 0, l2 = 0;
+        // Set the nodes for this quad
         if (faces[i]->getOrientation() > 0){
-          l1 = quad_local[4*j + quad_edge_nodes[k][0]];
-          l2 = quad_local[4*j + quad_edge_nodes[k][1]];
+          v[0] = new_verts[vars[quad_local[4*j]]];
+          v[1] = new_verts[vars[quad_local[4*j+1]]];
+          v[2] = new_verts[vars[quad_local[4*j+2]]];
+          v[3] = new_verts[vars[quad_local[4*j+3]]];
         }
         else {
-          l1 = quad_local[4*j + flipped_quad_edge_nodes[k][0]];
-          l2 = quad_local[4*j + flipped_quad_edge_nodes[k][1]];
+          v[0] = new_verts[vars[quad_local[4*j]]];
+          v[1] = new_verts[vars[quad_local[4*j+3]]];
+          v[2] = new_verts[vars[quad_local[4*j+2]]];
+          v[3] = new_verts[vars[quad_local[4*j+1]]];
         }
 
-        // Get the global edge number
-        int edge[3];
-        edge[0] = 0;
-        if (vars[l1] < vars[l2]){
-          edge[1] = vars[l1];
-          edge[2] = vars[l2];
-        }
-        else {
-          edge[1] = vars[l2];
-          edge[2] = vars[l1];
-        }
-
-        // Find the associated edge number
-        int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
-                                 3*sizeof(int), compare_edges);
-
-        if (res){
-          // Get the global edge number
-          int edge_num = res[0];
-          c[k] = new_edges[edge_num];
-
-          if (vars[l1] < vars[l2]){
-            dir[k] = 1;
+        // Loop over and search for the edges associated with this quad
+        for ( int k = 0; k < 4; k++ ){
+          // The edge variable numbers
+          int l1 = 0, l2 = 0;
+          if (faces[i]->getOrientation() > 0){
+            l1 = quad_local[4*j + quad_edge_nodes[k][0]];
+            l2 = quad_local[4*j + quad_edge_nodes[k][1]];
           }
           else {
-            dir[k] = -1;
+            l1 = quad_local[4*j + flipped_quad_edge_nodes[k][0]];
+            l2 = quad_local[4*j + flipped_quad_edge_nodes[k][1]];
           }
-          dir[k] *= edge_dir[edge_num];
+
+          // Get the global edge number
+          int edge[3];
+          edge[0] = 0;
+          if (vars[l1] < vars[l2]){
+            edge[1] = vars[l1];
+            edge[2] = vars[l2];
+          }
+          else {
+            edge[1] = vars[l2];
+            edge[2] = vars[l1];
+          }
+
+          // Find the associated edge number
+          int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
+                                   3*sizeof(int), compare_edges);
+
+          if (res){
+            // Get the global edge number
+            int edge_num = res[0];
+            c[k] = new_edges[edge_num];
+
+            if (vars[l1] < vars[l2]){
+              dir[k] = 1;
+            }
+            else {
+              dir[k] = -1;
+            }
+            dir[k] *= edge_dir[edge_num];
+          }
+          else {
+            fprintf(stderr,
+                    "TMRMesh error: Could not find edge (%d, %d) for surface\n",
+                    edge[1], edge[2]);
+          }
         }
-        else {
-          fprintf(stderr,
-                  "TMRMesh error: Could not find edge (%d, %d) for surface\n",
-                  edge[1], edge[2]);
+
+        // If this is a hexahedral mesh, then we need to be consistent
+        // with how the faces are ordered. This code searches for the
+        // face number within the sorted_faces array to obtain the
+        // required face number
+        if (sorted_faces){
+          // Set the nodes associated with this face and sort them
+          int face[5];
+          face[0] = 0;
+          for ( int k = 0; k < 4; k++ ){
+            face[k+1] = vars[quad_local[4*j + k]];
+          }
+          sort_face_nodes(&face[1]);
+
+          // Search for the face
+          int *res = (int*)bsearch(face, sorted_faces, num_mesh_faces,
+                                   5*sizeof(int), compare_faces);
+
+          // Set the face number
+          if (res){
+            face_num = res[0];
+          }
         }
+
+        // Create the parametric TFI surface
+        new_faces[face_num] = new TMRParametricTFIFace(faces[i], c, dir, v);
+        face_num++;
       }
-
-      // If this is a hexahedral mesh, then we need to be consistent
-      // with how the faces are ordered. This code searches for the
-      // face number within the sorted_faces array to obtain the required
-      // face number
-      if (sorted_faces){
-        // Set the nodes associated with this face and sort them
-        int face[5];
-        face[0] = 0;
-        for ( int k = 0; k < 4; k++ ){
-          face[k+1] = vars[quad_local[4*j + k]];
-        }
-        sort_face_nodes(&face[1]);
-
-        // Search for the face
-        int *res = (int*)bsearch(face, sorted_faces, num_mesh_faces,
-                                 5*sizeof(int), compare_faces);
-
-        // Set the face number
-        if (res){
-          face_num = res[0];
-        }
-      }
-
-      // Create the parametric TFI surface
-      new_faces[face_num] = new TMRParametricTFIFace(faces[i], c, dir, v);
-      face_num++;
     }
   }
 

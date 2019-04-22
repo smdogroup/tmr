@@ -775,6 +775,10 @@ void TMRFace::setSource( TMRVolume *volume, TMRFace *face ){
       source_volume = volume;
     }
   }
+  else {
+    fprintf(stderr,
+            "TMRFace Warning: Unable to set source face and volume\n");
+  }
 }
 
 /*
@@ -802,6 +806,10 @@ void TMRFace::setCopySource( int _copy_orient, TMRFace *face ){
     face->incref();
     if (copy){ copy->decref(); }
     copy = face;
+  }
+  else {
+    fprintf(stderr,
+            "TMRFace Warning: Unable to set copy source face\n");
   }
 }
 
