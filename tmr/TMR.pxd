@@ -499,7 +499,8 @@ cdef extern from "TMROpenCascade.h":
     cdef TMRModel* TMR_LoadModelFromIGESFile(const char*, int)
     cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*, int)
 
-cdef extern from "TMREgads.h":
+cdef extern from "TMREgads.h" namespace "TMR_EgadsInterface":
+    cdef TMRModel* TMR_ConvertEGADSModel"TMR_EgadsInterface::TMR_ConvertEGADSModel"(ego, int)
     cdef TMRModel* TMR_LoadModelFromEGADSFile"TMR_EgadsInterface::TMR_LoadModelFromEGADSFile"(const char*, int)
 
 cdef extern from "TMR_RefinementTools.h":

@@ -902,9 +902,8 @@ void TMRTriangularize::removeDegenerateEdges( int num_degen,
         fail = 0;
       }
       if (fail){
-        fprintf(stderr,
-                "TMRTriangularize error: \
-Failed to find degenerate edge (%d, %d)\n",
+        fprintf(stderr, "TMRTriangularize Error: "
+                "Failed to find degenerate edge (%d, %d)\n",
                 degen[2*i], degen[2*i+1]);
       }
     }
@@ -1770,7 +1769,7 @@ void TMRTriangularize::insertSegment( uint32_t u, uint32_t v ){
 
     if (!tri){
       fprintf(stderr,
-              "TMRTriangularize error: No triangle found; "
+              "TMRTriangularize Error: No triangle found; "
               "Error in edge orientations\n");
       break;
     }

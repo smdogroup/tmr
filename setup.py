@@ -85,6 +85,7 @@ if 'paropt' in sys.modules:
     libs.extend(paropt_libs)
     runtime_lib_dirs.extend(paropt_lib_dirs)
 
+# Add the egads4py libraries
 import egads4py
 if 'egads4py' in sys.modules:
     inc_dirs.extend(egads4py.get_include())
@@ -97,7 +98,7 @@ if 'egads4py' in sys.modules:
 exts = []
 mod = 'TMR'
 exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],
-                include_dirs=inc_dirs, libraries=libs, 
+                include_dirs=inc_dirs, libraries=libs,
                 library_dirs=lib_dirs, runtime_library_dirs=runtime_lib_dirs,
                 define_macros=[('math_Memory_HeaderFile', '1')]))
 for e in exts:
@@ -109,5 +110,5 @@ setup(name='tmr',
       description='Parallel mesh generation utilities',
       author='Graeme J. Kennedy',
       author_email='graeme.kennedy@ae.gatech.edu',
-      ext_modules=cythonize(exts, language='c++', 
+      ext_modules=cythonize(exts, language='c++',
                             include_path=inc_dirs))

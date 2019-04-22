@@ -206,7 +206,7 @@ int TMREdgeMesh::getEdgeCopyOrient( TMREdge *edge_source ){
 
     int orient = 0;
     if (edge_source->isDegenerate() && copy_edge->isDegenerate()){
-      if (v1_copy == copy_v1){
+      if (v1_copy->isSame(copy_v1)){
         orient = 1;
       }
       else {
@@ -215,46 +215,15 @@ int TMREdgeMesh::getEdgeCopyOrient( TMREdge *edge_source ){
       }
     }
     else if (!edge_source->isDegenerate() && !copy_edge->isDegenerate()){
-      if (v1 == v2 &&
-          copy_v1 == copy_v2 &&
-          v1_copy == copy_v1){
-        orient = 0;
-        printf("TMREdgeMesh Error: Orient = 0\n");
-        
-        // The v1 and v2 nodes are equal, Determine whether the edges
-        // are in the same direction usinng the tangent vector since
-        // this is not degenerate.
-        /*
-          double t1, t2, t1copy, t2copy;
-          edge_source->getRange(&t1, &t2);
-          copy_edge->getRange(&t1copy, &t2copy);
-
-          if (v1_copy == copy_v2 && v2_copy == copy_v1){
-          t1copy = t2copy;
-          }
-
-          TMRPoint X1, X1copy, Xt, Xtcopy;
-          edge_source->evalDeriv(t1, &X1, &Xt);
-          copy_edge->evalDeriv(t1copy, &X1copy, &Xtcopy);
-
-          double dot = Xt.dot(Xtcopy);
-          if (dot >= 0.0){
-          orient = 1;
-          }
-          else {
-          orient = -1;
-          }
-        */
-      }
-      else if (v1_copy == copy_v1 && v2_copy == copy_v2){
+      if (v1_copy->isSame(copy_v1) && v2_copy->isSame(copy_v2)){
         orient = 1;
       }
-      else if (v1_copy == copy_v2 && v2_copy == copy_v1){
+      else if (v1_copy->isSame(copy_v2) && v2_copy->isSame(copy_v1)){
         orient = -1;
       }
       else {
         fprintf(stderr,
-                "TMR Error: Edge vertex sources not set correctly");
+                "TMREdgeMesh Error: Edge vertex sources not set correctly\n");
       }
     }
     else {
@@ -387,8 +356,9 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
 
     // Check the orientation. Note that if no orientation is set,
     // then we don't copy the edge.
-    if (((v1_copy == copy_v1) && (v2_copy == copy_v2)) ||
-        ((v1_copy == copy_v2) && (v2_copy == copy_v1))){
+    npts = 0;
+    if ((v1_copy->isSame(copy_v1) && v2_copy->isSame(copy_v2)) ||
+        (v1_copy->isSame(copy_v2) && v2_copy->isSame(copy_v1))){
       mesh->getMeshPoints(&npts, NULL, NULL);
     }
     else {
@@ -413,11 +383,11 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
         fprintf(stderr, "TMREdgeMesh Error: Copy edge is not set correctly\n");
       }
 
-      int edge_index = mesh->npts-1;
+      int edge_index = mesh->npts-2;
       if (orient > 0){
-        edge_index = 0;
+        edge_index = 1;
       }
-      for ( int i = 0; i < mesh->npts; i++, edge_index += orient ){
+      for ( int i = 1; i < npts-1; i++, edge_index += orient ){
         int icode = edge->invEvalPoint(mesh->X[edge_index], &pts[i]);
         if (icode){
           fprintf(stderr,
@@ -426,6 +396,12 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
         }
         edge->evalPoint(pts[i], &X[i]);
       }
+
+      // Get the end points of the edge
+      TMRVertex *v1, *v2;
+      edge->getVertices(&v1, &v2);
+      v1->getParamOnEdge(edge, &pts[0]);
+      v2->getParamOnEdge(edge, &pts[npts-1]);
     }
     else {
       // Get the limits of integration that will be used

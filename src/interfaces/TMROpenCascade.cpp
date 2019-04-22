@@ -64,6 +64,14 @@ int TMR_OCCVertex::getParamsOnFace( TMRFace *face,
   return TMRVertex::getParamsOnFace(face, u, v);
 }
 
+int TMR_OCCVertex::isSame( TMRVertex *vt ){
+  TMR_OCCVertex *v = dynamic_cast<TMR_OCCVertex*>(vt);
+  if (v){
+    return vert.IsSame(v->vert);
+  }
+  return 0;
+}
+
 void TMR_OCCVertex::getVertexObject( TopoDS_Vertex &v ){
   v = vert;
 }
@@ -180,6 +188,14 @@ int TMR_OCCEdge::eval2ndDeriv( double t, TMRPoint *X,
   return fail;
 }
 
+int TMR_OCCEdge::isSame( TMREdge *et ){
+  TMR_OCCEdge *e = dynamic_cast<TMR_OCCEdge*>(et);
+  if (e){
+    return edge.IsSame(e->edge);
+  }
+  return 0;
+}
+
 int TMR_OCCEdge::isDegenerate(){
   return BRep_Tool::Degenerated(edge);
 }
@@ -283,6 +299,14 @@ int TMR_OCCFace::eval2ndDeriv( double u, double v,
   Xuv->x = puv.X();
   Xuv->y = puv.Y();
   Xuv->z = puv.Z();
+  return 0;
+}
+
+int TMR_OCCFace::isSame( TMRFace *ft ){
+  TMR_OCCFace *f = dynamic_cast<TMR_OCCFace*>(ft);
+  if (f){
+    return face.IsSame(f->face);
+  }
   return 0;
 }
 
@@ -608,8 +632,8 @@ TMRModel* TMR_LoadModelFromCompound( TopoDS_Compound &compound,
   int nsolids = solids.Extent();
 
   if (print_level > 0){
-    printf("Compound loaded with:\nnverts = %d nedges = %d \
-nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
+    printf("Compound loaded with:\nnverts = %d nedges = %d nfaces = %d "
+           "nwires = %d nshells = %d nsolids = %d\n",
            nverts, nedges, nfaces, nwires, nshells, nsolids);
   }
 
@@ -670,7 +694,7 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
       int *dir = new int[ ne ];
       int k = 0;
 
-      for ( wExp.Init(wire, face); wExp.More(); wExp.Next(), k++ ){
+      for ( wExp.Init(wire); wExp.More(); wExp.Next(), k++ ){
         TopoDS_Edge edge = wExp.Current();
         dir[k] = 1;
         if (edge.Orientation() == TopAbs_REVERSED){
@@ -694,11 +718,9 @@ nfaces = %d nwires = %d nshells = %d nsolids = %d\n",
   // Create the volumes
   TMRVolume **all_vols = new TMRVolume*[ nsolids ];
   memset(all_vols, 0, nsolids*sizeof(TMRVolume*));
-  Exp.Init(compound, TopAbs_SOLID);
-  for ( ; Exp.More(); Exp.Next() ){
-    TopoDS_Shape shape = Exp.Current();
-    TopoDS_Solid solid = TopoDS::Solid(shape);
-    int vol_index = solids.FindIndex(shape);
+  for ( int index = 1; index <= solids.Extent(); index++ ){
+    TopoDS_Solid solid = TopoDS::Solid(solids(index));
+    int vol_index = solids.FindIndex(solid);
 
     // Count up the number of faces
     int nvol_faces = 0;

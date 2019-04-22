@@ -52,8 +52,8 @@ x2 = [0, 0, 67.06]
 radius = 70.78
 c2 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
 
-model = c1.solidBoolean(c2, egads.SUBTRACTION)
-top_shell = model.getChildren()[0]
+shell_model = c1.solidBoolean(c2, egads.SUBTRACTION)
+top_shell = shell_model.getChildren()[0]
 top_shell.attributeAdd('name', egads.ATTRSTRING, 'top_shell')
 
 # Get the faces associated with the top shell, then compute the range
@@ -65,7 +65,7 @@ faces[3].attributeAdd('name', egads.ATTRSTRING, 'shell-top-face')
 faces[1].attributeAdd('name', egads.ATTRSTRING, 'shell-bottom-face')
 
 # Save the shell model
-model.saveModel('shell.%s'%(extension), overwrite=True)
+shell_model.saveModel('shell.%s'%(extension), overwrite=True)
 
 # Create the bottom outer ring
 x1 = [0, 0, 6.35]
@@ -78,8 +78,8 @@ x2 = [0, 0, 0]
 radius = 70.78
 c4 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
 
-model = c3.solidBoolean(c4, egads.SUBTRACTION)
-ring = model.getChildren()[0]
+ring_model = c3.solidBoolean(c4, egads.SUBTRACTION)
+ring = ring_model.getChildren()[0]
 ring.attributeAdd('name', egads.ATTRSTRING, 'ring')
 
 faces = getBodyFacesAndDirs(ring)
@@ -91,7 +91,7 @@ faces[4].attributeAdd('name', egads.ATTRSTRING, 'ring-inner-face1')
 faces[5].attributeAdd('name', egads.ATTRSTRING, 'ring-inner-face2')
 
 # Save the ring model
-model.saveModel('ring.%s'%(extension), overwrite=True)
+ring_model.saveModel('ring.%s'%(extension), overwrite=True)
 
 # Create the bottom plate
 x1 = [0, 0, 0]
@@ -122,8 +122,8 @@ radius = 4.08
 hole3 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
 
 for hole in [mid_hole, hole1, hole2, hole3]:
-    model = plate.solidBoolean(hole, egads.SUBTRACTION)
-    plate = model.getChildren()[0]
+    plate_model = plate.solidBoolean(hole, egads.SUBTRACTION)
+    plate = plate_model.getChildren()[0]
 
 faces = getBodyFacesAndDirs(plate)
 
@@ -134,7 +134,7 @@ faces[1].attributeAdd('name', egads.ATTRSTRING, 'plate-outer-face1')
 faces[0].attributeAdd('name', egads.ATTRSTRING, 'plate-outer-face2')
 
 # Save the plate model
-model.saveModel('plate.%s'%(extension), overwrite=True)
+plate_model.saveModel('plate.%s'%(extension), overwrite=True)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
@@ -142,9 +142,14 @@ opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 
 # Load the separate geometries and mesh each
-shell_geo = TMR.LoadModel('shell.%s'%(extension))
-ring_geo = TMR.LoadModel('ring.%s'%(extension))
-plate_geo = TMR.LoadModel('plate.%s'%(extension))
+if extension == 'egads':
+    shell_geo = TMR.ConvertEGADSModel(shell_model)
+    ring_geo = TMR.ConvertEGADSModel(ring_model)
+    plate_geo = TMR.ConvertEGADSModel(plate_model)
+else:
+    shell_geo = TMR.LoadModel('shell.%s'%(extension))
+    ring_geo = TMR.LoadModel('ring.%s'%(extension))
+    plate_geo = TMR.LoadModel('plate.%s'%(extension))
 
 # All the model objects
 if model_type == 'full':
@@ -191,6 +196,10 @@ mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
 mesh.writeToVTK('motor.vtk', 'hex')
+
+for index, face in enumerate(faces):
+    f = face.getMesh()
+    f.writeToVTK('face_mesh%d.vtk'%(index))
 
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()

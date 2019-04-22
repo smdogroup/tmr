@@ -921,7 +921,7 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
   // Allocate the source to target mapping array
   source_to_target = new int[ num_points ];
-  
+
   for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
     // Get the curve information for this loop segment
     TMREdgeLoop *loop;
@@ -951,7 +951,7 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
         fprintf(stderr, "TMRFaceMesh Error: Inconsistent number of points "
                 "on source and target edges\n");
       }
-      
+
       // Get the orientation of the target edge
       int orient_target = edge_orient[i];
       orient_target *= face->getOrientation();
@@ -1172,18 +1172,34 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
     copy_to_target[i] = -1;
   }
 
+  // Loop over all of the edges, and find their copy edge sources and
+  // their orientations on the copied edges
+  std::map<TMREdge*, int> copy_orient;
+  for ( int k = 0; k < copy->getNumEdgeLoops(); k++ ){
+    TMREdgeLoop *loop;
+    copy->getEdgeLoop(k, &loop);
+
+    int nedges;
+    TMREdge **edges;
+    const int *edge_orient;
+    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
+
+    // Set the orientation on each edge
+    for ( int i = 0; i < nedges; i++ ){
+      copy_orient[edges[i]] = copy->getOrientation()*edge_orient[i];
+    }
+  }
+
   for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
     // Get the curve information for this loop segment
-    TMREdgeLoop *loop, *copy_loop;
+    TMREdgeLoop *loop;
     face->getEdgeLoop(k, &loop);
-    copy->getEdgeLoop(k, &copy_loop);
 
     // Extract the edges and orientations from the loop
     int nedges;
-    TMREdge **edges, **copy_edges;
-    const int *edge_orient, *copy_edge_orient;
+    TMREdge **edges;
+    const int *edge_orient;
     loop->getEdgeLoop(&nedges, &edges, &edge_orient);
-    copy_loop->getEdgeLoop(NULL, &copy_edges, &copy_edge_orient);
 
     for ( int i = 0; i < nedges; i++ ){
       // Get the edge mesh
@@ -1197,39 +1213,31 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       TMREdge *copy_edge;
       edges[i]->getCopySource(&copy_edge);
 
-      // Find the corresponding copy edge index within the copy edge
-      // face loop
-      int copy_edge_index = 0;
-      for ( ; copy_edge_index < nedges; copy_edge_index++ ){
-        if (copy_edges[copy_edge_index] == copy_edge){
-          break;
-        }
-      }
-      if (copy_edge_index >= nedges){
+      if (copy_orient.count(copy_edge) == 0){
         fprintf(stderr,
                 "TMRFaceMesh Error: Copy edge not found in copy source face\n");
       }
+      else {
+        // Get the mesh for the x-direction and check its orientation
+        int orient_target = edge_orient[i];
+        orient_target *= face->getOrientation();
+        int j_target = npts-1;
+        if (orient_target > 0){
+          j_target = 0;
+        }
 
-      // Get the mesh for the x-direction and check its orientation
-      int orient_target = edge_orient[i];
-      orient_target *= face->getOrientation();
-      int j_target = npts-1;
-      if (orient_target > 0){
-        j_target = 0;
-      }
+        int orient_copy = copy_orient[copy_edge];
+        int j_copy = npts-1;
+        if (orient_copy > 0){
+          j_copy = 0;
+        }
 
-      int orient_copy = copy_edge_orient[copy_edge_index];
-      orient_copy *= copy->getOrientation();
-      int j_copy = npts-1;
-      if (orient_copy > 0){
-        j_copy = 0;
-      }
-
-      for ( int j = 0; j < npts; j++,
-              j_target += orient_target, j_copy += orient_copy ){
-        int copy_index = copy_mesh->getFaceIndexFromEdge(copy_edge, j_copy);
-        int target_index = getFaceIndexFromEdge(edges[i], j_target);
-        copy_to_target[copy_index] = target_index;
+        for ( int j = 0; j < npts; j++,
+                j_target += orient_target, j_copy += orient_copy ){
+          int copy_index = copy_mesh->getFaceIndexFromEdge(copy_edge, j_copy);
+          int target_index = getFaceIndexFromEdge(edges[i], j_target);
+          copy_to_target[copy_index] = target_index;
+        }
       }
     }
   }

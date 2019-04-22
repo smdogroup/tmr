@@ -82,6 +82,14 @@ int TMR_EgadsNode::getParamsOnFace( TMRFace *face,
   return TMRVertex::getParamsOnFace(face, u, v);
 }
 
+int TMR_EgadsNode::isSame( TMRVertex *vt ){
+  TMR_EgadsNode *v = dynamic_cast<TMR_EgadsNode*>(vt);
+  if (v){
+    return EG_isSame(node, v->node);
+  }
+  return 0;
+}
+
 void TMR_EgadsNode::getNodeObject( ego *n ){
   *n = node;
 }
@@ -217,6 +225,14 @@ int TMR_EgadsEdge::eval2ndDeriv( double t,
   Xtt->z = eval[8];
 
   return icode;
+}
+
+int TMR_EgadsEdge::isSame( TMREdge *et ){
+  TMR_EgadsEdge *e = dynamic_cast<TMR_EgadsEdge*>(et);
+  if (e){
+    return EG_isSame(edge, e->edge);
+  }
+  return 0;
 }
 
 void TMR_EgadsEdge::getEdgeObject( ego *e ){
@@ -359,6 +375,14 @@ int TMR_EgadsFace::eval2ndDeriv( double u, double v,
   return icode;
 }
 
+int TMR_EgadsFace::isSame( TMRFace *ft ){
+  TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace*>(ft);
+  if (f){
+    return EG_isSame(face, f->face);
+  }
+  return 0;
+}
+
 void TMR_EgadsFace::getFaceObject( ego *f ){
   *f = face;
 }
@@ -381,7 +405,7 @@ TMRModel* TMR_EgadsInterface::TMR_LoadModelFromEGADSFile( const char *filename,
     return NULL;
   }
 
-  return TMR_ConvertEGADSModel(model, print_level);
+  return TMR_EgadsInterface::TMR_ConvertEGADSModel(model, print_level);
 }
 
 /*
@@ -493,8 +517,8 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
   }
 
   if (print_level > 0){
-    printf("EGADS model loaded with:\nnverts = %d nedges = %d \
-nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
+    printf("EGADS model loaded with:\nnverts = %d nedges = %d nfaces = %d "
+           "nloops = %d nshells = %d nsolids = %d\n",
            nverts, nedges, nfaces, nloops, nshells, nsolids);
   }
 
@@ -690,7 +714,7 @@ nfaces = %d nloops = %d nshells = %d nsolids = %d\n",
         // Now, extract the faces from the underlying shell(s)
         for ( int i = 0; i < nshell_faces; i++, vol_index++ ){
           int face_index = face_map[shell_faces[i]];
-          
+
           // Assign the face pointer
           vol_faces[vol_index] = all_faces[face_index];
         }

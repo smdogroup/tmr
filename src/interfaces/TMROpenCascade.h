@@ -131,6 +131,7 @@ class TMR_OCCVertex : public TMRVertex {
   int evalPoint( TMRPoint *p );
   int getParamOnEdge( TMREdge *edge, double *t );
   int getParamsOnFace( TMRFace *face, double *u, double *v );
+  int isSame( TMRVertex *v );
   void getVertexObject( TopoDS_Vertex &v );
  private:
   TopoDS_Vertex vert;
@@ -147,6 +148,7 @@ class TMR_OCCEdge : public TMREdge {
   int eval2ndDeriv( double t, TMRPoint *X, TMRPoint *Xt, TMRPoint *Xtt );
   int getParamsOnFace( TMRFace *face, double t,
                        int dir, double *u, double *v );
+  int isSame( TMREdge *e );
   int isDegenerate();
   void getEdgeObject( TopoDS_Edge &e );
  private:
@@ -168,6 +170,7 @@ class TMR_OCCFace : public TMRFace {
                     TMRPoint *X,
                     TMRPoint *Xu, TMRPoint *Xv,
                     TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
+  int isSame( TMRFace *f );
   void getFaceObject( TopoDS_Face &f );
  private:
   TopoDS_Face face;

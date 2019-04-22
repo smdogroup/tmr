@@ -26,12 +26,10 @@
 /*
   Include the TMR files required
 */
-#include "TMRGeometry.h"
+#include "egads.h"
 #include "TMRTopology.h"
 
 namespace TMR_EgadsInterface {
-
-#include "egads.h"
 
 class TMR_EgadsContext : public TMREntity {
   public:
@@ -45,7 +43,7 @@ class TMR_EgadsContext : public TMREntity {
 };
 
 /*
-  Topoloy objects for OpenCascade:
+  Topoloy objects from EGADS:
 
   TMR_EgadsNode
   TMR_EgadsEdge
@@ -58,6 +56,7 @@ class TMR_EgadsNode : public TMRVertex {
   int evalPoint( TMRPoint *p );
   int getParamOnEdge( TMREdge *edge, double *t );
   int getParamsOnFace( TMRFace *face, double *u, double *v );
+  int isSame( TMRVertex *v );
   void getNodeObject( ego *n );
  private:
   TMR_EgadsContext *ctx;
@@ -75,6 +74,7 @@ class TMR_EgadsEdge : public TMREdge {
   int eval2ndDeriv( double t, TMRPoint *X, TMRPoint *Xt, TMRPoint *Xtt );
   int getParamsOnFace( TMRFace *face, double t,
                        int dir, double *u, double *v );
+  int isSame( TMREdge *e );
   int isDegenerate();
   void getEdgeObject( ego *e );
  private:
@@ -96,6 +96,7 @@ class TMR_EgadsFace : public TMRFace {
   int eval2ndDeriv( double u, double v, TMRPoint *X,
                     TMRPoint *Xu, TMRPoint *Xv,
                     TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
+  int isSame( TMRFace *v );
   void getFaceObject( ego *f );
  private:
   TMR_EgadsContext *ctx;

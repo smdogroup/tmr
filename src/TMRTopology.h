@@ -57,6 +57,11 @@ class TMRVertex : public TMREntity {
   virtual int getParamsOnFace( TMRFace *face,
                                double *u, double *v );
 
+  // Is this the same underlying vertex
+  virtual int isSame( TMRVertex *vert ){
+    return this == vert;
+  }
+
   // Set the node number to copy from
   void setCopySource( TMRVertex *vert );
   void getCopySource( TMRVertex **vert );
@@ -99,6 +104,11 @@ class TMREdge : public TMREntity {
   // Parametrize the curve on the given surface
   virtual int getParamsOnFace( TMRFace *face, double t,
                                int dir, double *u, double *v );
+
+  // Is this the same underlying edge?
+  virtual int isSame( TMREdge *edge ){
+    return this == edge;
+  }
 
   // Is this edge degenerate
   virtual int isDegenerate(){ return 0; }
@@ -191,6 +201,11 @@ class TMRFace : public TMREntity {
                             TMRPoint *X,
                             TMRPoint *Xu, TMRPoint *Xv,
                             TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
+
+  // Is this the same underlying face?
+  virtual int isSame( TMRFace *face ){
+    return this == face;
+  }
 
   // Add an edge loop to the face
   int getNumEdgeLoops();

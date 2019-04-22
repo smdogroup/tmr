@@ -52,6 +52,7 @@ from tacs.functions cimport *
 from paropt.ParOpt cimport *
 from egads4py.egads cimport *
 from tacs import TACS
+from egads4py import egads
 
 # Import the definitions
 from TMR cimport *
@@ -227,11 +228,12 @@ cdef class Edge:
     def invEvalPoint(self, np.ndarray[double, ndim=1, mode='c'] pt):
         cdef TMRPoint point
         cdef double t
+        cdef int fail = 0
         point.x = pt[0]
         point.y = pt[1]
         point.z = pt[2]
-        self.ptr.invEvalPoint(point, &t)
-        return t
+        fail = self.ptr.invEvalPoint(point, &t)
+        return fail, t
 
     def setName(self, aname):
         cdef char *name = tmr_convert_str_to_chars(aname)
@@ -308,11 +310,17 @@ cdef class Edge:
             else:
                 e1_tmin, e1_tmax = self.getRange()
                 e1_pt = self.evalPoint(0.5*(e1_tmin+e1_tmax))
-                t2 = e2.invEvalPoint(e1_pt)
-                e2_pt = self.evalPoint(t2)
-                dx = np.abs(e2_pt-e1_pt)
-                if np.amax(dx) < atol:
-                    matching = True
+                fail, t2 = e2.invEvalPoint(e1_pt)
+
+                if fail != 0:
+                    matching = False
+                else:
+                    e2_tmin, e2_tmax = e2.getRange()
+                    if t2 + atol >= e2_tmin and t2 <= e2_tmax + atol:
+                        e2_pt = self.evalPoint(t2)
+                        dx = np.abs(e2_pt - e1_pt)
+                        if np.amax(dx) < atol:
+                            matching = True
 
         return matching
 
@@ -2791,6 +2799,14 @@ def LoadModel(fname, int print_lev=0):
         model = TMR_LoadModelFromEGADSFile(filename, print_lev)
     if model is NULL:
         errmsg = 'Error loading model. File %s does not exist?'%(fname)
+        raise RuntimeError(errmsg)
+    return _init_Model(model)
+
+def ConvertEGADSModel(pyego egads_model, int print_lev=0):
+    cdef TMRModel *model = NULL
+    model = TMR_ConvertEGADSModel(egads_model.ptr, print_lev)
+    if model is NULL:
+        errmsg = 'Error converting EGADS model.'
         raise RuntimeError(errmsg)
     return _init_Model(model)
 
