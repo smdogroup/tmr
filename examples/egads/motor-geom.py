@@ -295,8 +295,6 @@ if count > 0:
     print('Warning: %d negative volume Jacobians'%(count))
 print('Volume = %e'%(vol))
 
-exit(0)
-
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()
 
@@ -309,7 +307,7 @@ forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 
 # Create random trees and balance the mesh. Print the output file
-forest.createRandomTrees(nrand=1, max_lev=1)
+forest.createRandomTrees(nrand=1, max_lev=3)
 forest.balance(1)
 filename = 'motor_forest%d.vtk'%(comm.rank)
 forest.writeForestToVTK(filename)

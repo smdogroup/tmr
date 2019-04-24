@@ -50,6 +50,41 @@ const int tri_edge_nodes[][2] = {{1, 2}, {2, 0}, {0, 1}};
 const int tri_node_edges[][2] = {{1, 2}, {0, 2}, {0, 1}};
 
 /*
+  Returns the index number for the (i, j) node location along
+  the structured edge.
+
+  This the structured face nodes are ordered by first counting around
+  the edges of the face counter-clockwise. After these nodes are
+  counted, the interior face nodes are ordered in a cartesian order.
+  For nx = 5, and ny = 4, this produces the following face numbering:
+
+  11-- 10-- 9 -- 8 -- 7
+  |    |    |    |    |
+  12-- 17-- 18-- 19-- 6
+  |    |    |    |    |
+  13-- 14-- 15-- 16-- 5
+  |    |    |    |    |-
+  0 -- 1 -- 2 -- 3 -- 4
+*/
+static int get_structured_index( const int nx, const int ny,
+                                 const int i, const int j ){
+  if (j == 0){
+    return i;
+  }
+  else if (i == nx-1){
+    return nx - 1 + j;
+  }
+  else if (j == ny-1){
+    return 2*nx + ny - 3 - i;
+  }
+  else if (i == 0){
+    return 2*nx + 2*ny - 4 - j;
+  }
+
+  return 2*nx + 2*ny - 4 + (i-1) + (j-1)*(nx-2);
+}
+
+/*
   Create the surface mesh object
 
   This call does not create the underlying surface. You can set
@@ -1153,6 +1188,10 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 */
 int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
                                   const double *params ){
+  // Get the face orientation
+  int face_orient = face->getOrientation();
+
+  // Get the relative orientation
   int rel_orient;
   TMRFace *copy;
   face->getCopySource(&rel_orient, &copy);
@@ -1222,7 +1261,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       else {
         // Get the mesh for the x-direction and check its orientation
         int orient_target = edge_orient[i];
-        orient_target *= face->getOrientation();
+        orient_target *= face_orient;
         int j_target = npts-1;
         if (orient_target > 0){
           j_target = 0;
@@ -1245,25 +1284,12 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   }
 
   int count = 0;
-  int *refcount = new int[ num_fixed_pts ];
-  memset(refcount, 0, num_fixed_pts*sizeof(int));
   for ( int i = 0; i < num_fixed_pts; i++ ){
-    refcount[copy_to_target[i]] += 1;
     if (copy_to_target[i] < 0){
       count++;
       copy_to_target[i] = 0;
     }
   }
-  for ( int i = 0; i < num_fixed_pts; i++ ){
-    if (refcount[i] == 0){
-      printf("zero refs for copy_to_target[%d] = %d\n", i, copy_to_target[i]);
-    }
-    if (refcount[i] > 1){
-      printf("multiple refs for copy_to_target[%d] = %d\n", i, copy_to_target[i]);
-    }
-  }
-  delete [] refcount;
-
   if (count > 0){
     fprintf(stderr, "TMRFaceMesh Error: %d errors in mapping copy to target\n",
             count);
@@ -1272,6 +1298,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   // Allocate the array for the parametric locations
   pts = new double[ 2*num_points ];
   X = new TMRPoint[ num_points ];
+  quads = new int[ 4*num_quads ];
 
   // Copy the points from around the boundaries
   for ( int i = 0; i < num_fixed_pts; i++ ){
@@ -1303,34 +1330,113 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
     TMREdgeMesh *mesh;
 
     // If the mesh is structured, copy its indices
-    int xorient = 1, yorient = 1;
-    TMREdge *copy_edge_x, *copy_edge_y;
-    if (face->getOrientation() > 0){
+    // int xorient = 1, yorient = 1;
+    // TMREdge *copy_edge_x, *copy_edge_y;
+    if (face_orient > 0){
       // Get the mesh for the x-direction and check its orientation
       edges[0]->getMesh(&mesh);
-      edges[0]->getCopySource(&copy_edge_x);
+      // edges[0]->getCopySource(&copy_edge_x);
       mesh->getMeshPoints(&nx, NULL, NULL);
-      xorient = TMREdgeMesh::getEdgeCopyOrient(edges[0])*edge_orient[0];
+      // xorient = TMREdgeMesh::getEdgeCopyOrient(edges[0])*edge_orient[0];
 
       // Get the mesh for the y-direction and check its orientation
       edges[1]->getMesh(&mesh);
-      edges[1]->getCopySource(&copy_edge_y);
+      // edges[1]->getCopySource(&copy_edge_y);
       mesh->getMeshPoints(&ny, NULL, NULL);
-      yorient = TMREdgeMesh::getEdgeCopyOrient(edges[1])*edge_orient[1];
+      // yorient = TMREdgeMesh::getEdgeCopyOrient(edges[1])*edge_orient[1];
     }
     else {
       // Get the mesh for the y-direction and check its orientation
       edges[0]->getMesh(&mesh);
-      edges[0]->getCopySource(&copy_edge_y);
+      // edges[0]->getCopySource(&copy_edge_y);
       mesh->getMeshPoints(&ny, NULL, NULL);
-      yorient = TMREdgeMesh::getEdgeCopyOrient(edges[0])*edge_orient[0];
+      // yorient = TMREdgeMesh::getEdgeCopyOrient(edges[0])*edge_orient[0];
 
       // Get the mesh for the x-direction and check its orientation
       edges[1]->getMesh(&mesh);
-      edges[1]->getCopySource(&copy_edge_x);
+      // edges[1]->getCopySource(&copy_edge_x);
       mesh->getMeshPoints(&nx, NULL, NULL);
-      xorient = TMREdgeMesh::getEdgeCopyOrient(edges[1])*edge_orient[1];
+      // xorient = TMREdgeMesh::getEdgeCopyOrient(edges[1])*edge_orient[1];
     }
+
+    // Create the structured quadrilaterals
+    int *q = quads;
+    for ( int j = 0; j < ny-1; j++ ){
+      for ( int i = 0; i < nx-1; i++ ){
+        // Compute the connectivity of the mesh
+        q[0] = get_structured_index(nx, ny, i, j);
+        q[1] = get_structured_index(nx, ny, i+1, j);
+        q[2] = get_structured_index(nx, ny, i+1, j+1);
+        q[3] = get_structured_index(nx, ny, i, j+1);
+        q += 4;
+      }
+    }
+
+    // Use a transfinite interpolation to determine the parametric
+    // points where the interior nodes should be placed.
+    for ( int j = 1; j < ny-1; j++ ){
+      for ( int i = 1; i < nx-1; i++ ){
+        double u = 1.0*i/(nx-1);
+        double v = 1.0*j/(ny-1);
+
+        // Compute the weights on the corners
+        double c1 = (1.0 - u)*(1.0 - v);
+        double c2 = u*(1.0 - v);
+        double c3 = u*v;
+        double c4 = (1.0 - u)*v;
+
+        // Compute the weights on the curves
+        double w1 = (1.0 - v);
+        double w2 = u;
+        double w3 = v;
+        double w4 = (1.0 - u);
+
+        // New parametric point
+        int p = get_structured_index(nx, ny, i, j);
+
+        // Boundary points that we're interpolating from
+        int p1 = get_structured_index(nx, ny, i, 0);
+        int p2 = get_structured_index(nx, ny, nx-1, j);
+        int p3 = get_structured_index(nx, ny, i, ny-1);
+        int p4 = get_structured_index(nx, ny, 0, j);
+
+        // Evaluate the parametric points based on the transfinite
+        // interpolation
+        pts[2*p] =
+          ((w1*pts[2*p1] + w2*pts[2*p2] +
+            w3*pts[2*p3] + w4*pts[2*p4]) -
+           (c1*pts[0] + c2*pts[2*(nx-1)] +
+            c3*pts[2*(nx+ny-2)] + c4*pts[2*(2*nx+ny-3)]));
+
+        pts[2*p+1] =
+          ((w1*pts[2*p1+1] + w2*pts[2*p2+1] +
+            w3*pts[2*p3+1] + w4*pts[2*p4+1]) -
+           (c1*pts[1] + c2*pts[2*(nx-1)+1] +
+            c3*pts[2*(nx+ny-2)+1] + c4*pts[2*(2*nx+ny-3)+1]));
+      }
+    }
+
+    // Allocate and evaluate the new physical point locations
+    for ( int i = 0; i < num_points; i++ ){
+      face->evalPoint(pts[2*i], pts[2*i+1], &X[i]);
+    }
+
+    double atol = 1e-6;
+    for ( int i = 0; i < num_points; i++ ){
+      TMRPoint a = X[i];
+      for ( int j = 0; j < num_points; j++ ){
+        TMRPoint b = copy_mesh->X[j];
+
+        if (((a.x - b.x)*(a.x - b.x) +
+             (a.y - b.y)*(a.y - b.y) +
+             (a.z - b.z)*(a.z - b.z)) < atol*atol){
+          copy_to_target[j] = i;
+          break;
+        }
+      }
+    }
+
+    /*
 
     // Set the indices depending on the orientation of the edges
     int iy = ny-2;
@@ -1344,9 +1450,12 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
         ix = 1;
       }
       for ( int i = 1; i < nx-1; i++, ix += xorient ){
+        // Get the index for this (the target face)
+        int target_index = get_structured_index(nx, ny, i, j);
+
+        // Get the index on the source face
         int copy_index = copy_mesh->getStructuredFaceIndex(copy_edge_x, ix,
                                                            copy_edge_y, iy);
-        int target_index = num_fixed_pts + (i-1) + (j-1)*(nx-2);
 
         // Set the copy-to-target index
         copy_to_target[copy_index] = target_index;
@@ -1367,6 +1476,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
         face->evalPoint(u, v, &X[target_index]);
       }
     }
+    */
   }
   else {
     for ( int i = num_fixed_pts; i < num_points; i++ ){
@@ -1384,39 +1494,23 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       pts[2*i+1] = v;
       face->evalPoint(u, v, &X[i]);
     }
-  }
 
-  // Copy over the quadrilaterals
-  quads = new int[ 4*num_quads ];
-  for ( int i = 0; i < 4*num_quads; i++ ){
-    quads[i] = copy_to_target[copy_mesh->quads[i]];
-  }
+    // Copy over the quadrilaterals
+    quads = new int[ 4*num_quads ];
+    for ( int i = 0; i < 4*num_quads; i++ ){
+      quads[i] = copy_to_target[copy_mesh->quads[i]];
+    }
 
-  // Flip the quadrilateral surface orientation, depending on the
-  // relative orientations of the copied face
-  if (orient < 0){
-    for ( int i = 0; i < num_quads; i++ ){
-      int tmp = quads[4*i+1];
-      quads[4*i+1] = quads[4*i+3];
-      quads[4*i+3] = tmp;
+    // Flip the quadrilateral surface orientation, depending on the
+    // relative orientations of the copied face
+    if (orient < 0){ //  && mesh_type != TMR_STRUCTURED){
+      for ( int i = 0; i < num_quads; i++ ){
+        int tmp = quads[4*i+1];
+        quads[4*i+1] = quads[4*i+3];
+        quads[4*i+3] = tmp;
+      }
     }
   }
-
-  // For each point in the copy mesh, check if the points in the
-  // current mesh, match up.. this is for debugging....
-  ///////////////
-  double atol = 1e-6;
-  for ( int i = 0; i < copy_mesh->num_points; i++ ){
-    int j = copy_to_target[i];
-    TMRPoint a = X[j];
-    TMRPoint b = copy_mesh->X[i];
-    if (((a.x - b.x)*(a.x - b.x) +
-         (a.y - b.y)*(a.y - b.y) +
-         (a.z - b.z)*(a.z - b.z)) > atol*atol){
-      printf("Inconsistent ordering from copy %d to target %d\n", i, j);
-    }
-  }
-  ///////////////
 
   return 0;
 }
@@ -1469,30 +1563,11 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
   int *q = quads;
   for ( int j = 0; j < ny-1; j++ ){
     for ( int i = 0; i < nx-1; i++ ){
-      // Compute the connectivity as if the element is on the
-      // interior of the mesh
-      q[0] = num_fixed_pts + (i-1) + (j-1)*(nx-2);
-      q[1] = num_fixed_pts + i + (j-1)*(nx-2);
-      q[2] = num_fixed_pts + i + j*(nx-2);
-      q[3] = num_fixed_pts + (i-1) + j*(nx-2);
-
-      // Adjust the ordering for the nodes on the boundary
-      if (j == ny-2){
-        q[2] = 2*nx + ny - 4 - i;
-        q[3] = 2*nx + ny - 3 - i;
-      }
-      if (i == 0){
-        q[0] = 2*nx + 2*ny - 4 - j;
-        q[3] = 2*nx + 2*ny - 5 - j;
-      }
-      if (i == nx-2){
-        q[1] = nx - 1 + j;
-        q[2] = nx - 1 + j+1;
-      }
-      if (j == 0){
-        q[0] = i;
-        q[1] = i+1;
-      }
+      // Compute the connectivity of the mesh
+      q[0] = get_structured_index(nx, ny, i, j);
+      q[1] = get_structured_index(nx, ny, i+1, j);
+      q[2] = get_structured_index(nx, ny, i+1, j+1);
+      q[3] = get_structured_index(nx, ny, i, j+1);
       q += 4;
     }
   }
@@ -1526,13 +1601,13 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
       double w4 = (1.0 - u);
 
       // New parametric point
-      int p = num_fixed_pts + i-1 + (j-1)*(nx-2);
+      int p = get_structured_index(nx, ny, i, j);
 
       // Boundary points that we're interpolating from
-      int p1 = i;
-      int p2 = nx-1 + j;
-      int p3 = 2*nx + ny - 3 - i;
-      int p4 = 2*nx + 2*ny - 4 - j;
+      int p1 = get_structured_index(nx, ny, i, 0);
+      int p2 = get_structured_index(nx, ny, nx-1, j);
+      int p3 = get_structured_index(nx, ny, i, ny-1);
+      int p4 = get_structured_index(nx, ny, 0, j);
 
       // Evaluate the parametric points based on the transfinite
       // interpolation
@@ -1842,41 +1917,6 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
 }
 
 /*
-  Returns the index number for the (i, j) node location along
-  the structured edge.
-
-  This the structured face nodes are ordered by first counting around
-  the edges of the face counter-clockwise. After these nodes are
-  counted, the interior face nodes are ordered in a cartesian order.
-  For nx = 5, and ny = 4, this produces the following face numbering:
-
-  11-- 10-- 9 -- 8 -- 7
-  |    |    |    |    |
-  12-- 17-- 18-- 19-- 6
-  |    |    |    |    |
-  13-- 14-- 15-- 16-- 5
-  |    |    |    |    |-
-  0 -- 1 -- 2 -- 3 -- 4
-*/
-static int get_structured_index( const int nx, const int ny,
-                                 const int i, const int j ){
-  if (j == 0){
-    return i;
-  }
-  else if (i == nx-1){
-    return nx - 1 + j;
-  }
-  else if (j == ny-1){
-    return 2*nx + ny - 3 - i;
-  }
-  else if (i == 0){
-    return 2*nx + 2*ny - 4 - j;
-  }
-
-  return 2*nx + 2*ny - 4 + (i-1) + (j-1)*(nx-2);
-}
-
-/*
   Get the index of the structured face node. Note that this only works
   if the face was meshed using the structured mesh code, otherwise
   it returns a negative index.
@@ -2000,8 +2040,8 @@ int TMRFaceMesh::getStructuredFaceIndex( TMREdge *e1, int idx1,
       edges[1]->getMesh(&mesh);
       mesh->getMeshPoints(&nx, NULL, NULL);
 
-     if ((e1 == edges[0] || e1 == edges[2]) &&
-         (e2 == edges[1] || e2 == edges[3])){
+      if ((e1 == edges[0] || e1 == edges[2]) &&
+          (e2 == edges[1] || e2 == edges[3])){
         // Check for the index along e1
         if (e1 == edges[0]){
           if (edge_orient[0] > 0){
