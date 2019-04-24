@@ -146,7 +146,8 @@ void TMRFaceMesh::setPrescribedMesh( const TMRPoint *_X,
   num_points = _npts;
   num_quads = _nquads;
 
-  // Compute a mapping that places the edge nodes first in the correct order
+  // Compute a mapping that places the edge nodes first in the correct
+  // order
   int *node_mapping = new int[ num_points ];
 
   // Set all the variable values to negative
@@ -560,6 +561,7 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     }
     else if (copy){
       mapCopyToTarget(options, params);
+      writeToVTK("copied_mesh.vtk");
     }
     else if (mesh_type == TMR_STRUCTURED){
       createStructuredMesh(options, params);
@@ -1226,13 +1228,13 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
           j_target = 0;
         }
 
-        int orient_copy = copy_orient[copy_edge];
+        int orient_copy = rel_orient*copy_orient[copy_edge];
         int j_copy = npts-1;
         if (orient_copy > 0){
           j_copy = 0;
         }
 
-        for ( int j = 0; j < npts; j++,
+        for ( int j = 0; j < npts-1; j++,
                 j_target += orient_target, j_copy += orient_copy ){
           int copy_index = copy_mesh->getFaceIndexFromEdge(copy_edge, j_copy);
           int target_index = getFaceIndexFromEdge(edges[i], j_target);
@@ -1243,12 +1245,25 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   }
 
   int count = 0;
+  int *refcount = new int[ num_fixed_pts ];
+  memset(refcount, 0, num_fixed_pts*sizeof(int));
   for ( int i = 0; i < num_fixed_pts; i++ ){
+    refcount[copy_to_target[i]] += 1;
     if (copy_to_target[i] < 0){
       count++;
       copy_to_target[i] = 0;
     }
   }
+  for ( int i = 0; i < num_fixed_pts; i++ ){
+    if (refcount[i] == 0){
+      printf("zero refs for copy_to_target[%d] = %d\n", i, copy_to_target[i]);
+    }
+    if (refcount[i] > 1){
+      printf("multiple refs for copy_to_target[%d] = %d\n", i, copy_to_target[i]);
+    }
+  }
+  delete [] refcount;
+
   if (count > 0){
     fprintf(stderr, "TMRFaceMesh Error: %d errors in mapping copy to target\n",
             count);
@@ -1268,6 +1283,9 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   for ( int i = 0; i < num_fixed_pts; i++ ){
     X[copy_to_target[i]] = copy_mesh->X[i];
   }
+
+  // Compute the relative orientations of the faces
+  int orient = rel_orient*face->getOrientation()*copy->getOrientation();
 
   if (mesh_type == TMR_STRUCTURED){
     // Get the first edge loop and the edges in the loop. There is
@@ -1375,8 +1393,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
   }
 
   // Flip the quadrilateral surface orientation, depending on the
-  // relative orientations of the copied face,
-  int orient = rel_orient*face->getOrientation()*copy->getOrientation();
+  // relative orientations of the copied face
   if (orient < 0){
     for ( int i = 0; i < num_quads; i++ ){
       int tmp = quads[4*i+1];

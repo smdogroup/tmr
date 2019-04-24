@@ -24,12 +24,12 @@ def detJacobian2d(h, x, eta):
                         -(1.0 + eta[0]),
                         (1.0 + eta[0]),
                         (1.0 - eta[0])])
-                       
+
     x1 = np.dot(N1, x[h, :])
     x2 = np.dot(N2, x[h, :])
 
     n = np.cross(x1, x2)
-    
+
     return np.sqrt(np.dot(n, n))
 
 def jacobian3d(sh, x):
@@ -41,7 +41,7 @@ def jacobian3d(sh, x):
                 eta = [(i-1)*invsqrt,
                        (j-1)*invsqrt,
                        (k-1)*invsqrt]
-                       
+
                 detJ += detJacobian3d(h, x, eta)
     return detJ
 
@@ -70,7 +70,7 @@ def detJacobian3d(h, x, eta):
                          (1.0 + eta[0])*(1.0 - eta[1]),
                          (1.0 + eta[0])*(1.0 + eta[1]),
                          (1.0 - eta[0])*(1.0 + eta[1])])
-    
+
     Xd = np.zeros((3, 3))
     for i, N in enumerate([N1, N2, N3]):
         Xd[:,i] = np.dot(N, x[h, :])
@@ -239,7 +239,7 @@ for geo in all_geos:
     edges.extend(geo.getEdges())
     faces.extend(geo.getFaces())
     vols.extend(geo.getVolumes())
-    
+
 for vol in vols:
     fail = vol.setExtrudeFaces(reverse_extrude=True)
     if fail:
@@ -247,13 +247,12 @@ for vol in vols:
 
 # Combine the geometries and mesh the assembly
 if model_type == 'full':
-    num_matches = TMR.setMatchingFaces([plate_geo, ring_geo])
-    num_matches += TMR.setMatchingFaces([shell_geo, ring_geo])
+    TMR.setMatchingFaces([plate_geo, ring_geo])
+    TMR.setMatchingFaces([shell_geo, ring_geo])
 else:
-    num_matches = TMR.setMatchingFaces([plate_geo, ring_geo])
+    TMR.setMatchingFaces([plate_geo, ring_geo])
 
 # Create the geometry
-# geo = TMR.Model(verts, edges, faces)
 geo = TMR.Model(verts, edges, faces, vols)
 
 # Create the new mesh
@@ -268,14 +267,16 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('motor.vtk', 'hex')
+mesh.writeToVTK('motor.vtk', 'quad')
 
 for index, face in enumerate(faces):
     orient, src = face.getCopySource()
     if src is not None:
+        src_mesh = src.getMesh()
+        src_mesh.writeToVTK('source_face_mesh%d.vtk'%(index))
         face_mesh = face.getMesh()
-        face_mesh.writeToVTK('copied_face%d.vtk'%(index))
-        
+        face_mesh.writeToVTK('copied_face_mesh%d.vtk'%(index))
+
 # Get the mesh
 x = mesh.getMeshPoints()
 x = x.reshape((-1, 3))
@@ -283,31 +284,18 @@ quads = mesh.getQuadConnectivity()
 hexa = mesh.getHexConnectivity()
 
 count = 0
-area = 0.0
-for q in quads:
-    j = jacobian2d(q, x)
-    if j < 0.0:
-        count += 1
-    area += j
-
-if count > 0:
-    print('Warning: %d negative surface Jacobians'%(count))
-print('Area   = %e'%(area))
-
-inverted = []
-
-count = 0
 vol = 0.0
 for h in hexa:
     j = jacobian3d(h, x)
     if j < 0.0:
-        inverted.append(h)
         count += 1
     vol += j
 
 if count > 0:
     print('Warning: %d negative volume Jacobians'%(count))
 print('Volume = %e'%(vol))
+
+exit(0)
 
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()

@@ -605,7 +605,7 @@ cdef class Face:
         a copy of the source, find their coincident edges,
         and set the edges as copies as well
         """
-        self.setCopySource(source, orient=1)
+        self.setCopySource(source, orient=-1)
 
         source_list = []
         for i in range(source.getNumEdgeLoops()):
