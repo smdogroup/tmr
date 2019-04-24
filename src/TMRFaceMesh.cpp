@@ -1121,9 +1121,9 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     // Compute the triangle edges and neighbors in the dual mesh
     int num_tri_edges;
     int *tri_edges, *tri_neighbors, *dual_edges;
-    TMR_ComputeTriEdges(num_points, num_tris, tris,
-                        &num_tri_edges, &tri_edges,
-                        &tri_neighbors, &dual_edges);
+    TMR_ComputePlanarTriEdges(num_points, num_tris, tris,
+                              &num_tri_edges, &tri_edges,
+                              &tri_neighbors, &dual_edges);
 
     // Smooth the resulting triangular mesh
     if (options.tri_smoothing_type == TMRMeshOptions::TMR_LAPLACIAN){
@@ -1374,6 +1374,17 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
     quads[i] = copy_to_target[copy_mesh->quads[i]];
   }
 
+  // Flip the quadrilateral surface orientation, depending on the
+  // relative orientations of the copied face,
+  int orient = rel_orient*face->getOrientation()*copy->getOrientation();
+  if (orient < 0){
+    for ( int i = 0; i < num_quads; i++ ){
+      int tmp = quads[4*i+1];
+      quads[4*i+1] = quads[4*i+3];
+      quads[4*i+3] = tmp;
+    }
+  }
+
   // For each point in the copy mesh, check if the points in the
   // current mesh, match up.. this is for debugging....
   ///////////////
@@ -1617,10 +1628,10 @@ void TMRFaceMesh::createUnstructuredMesh( TMRMeshOptions options,
     int num_tri_edges;
     int *tri_edges, *tri_neighbors, *dual_edges;
     int *node_to_tri_ptr, *node_to_tris;
-    TMR_ComputeTriEdges(*npts, *ntris, *mesh_tris,
-                        &num_tri_edges, &tri_edges,
-                        &tri_neighbors, &dual_edges,
-                        &node_to_tri_ptr, &node_to_tris);
+    TMR_ComputePlanarTriEdges(*npts, *ntris, *mesh_tris,
+                              &num_tri_edges, &tri_edges,
+                              &tri_neighbors, &dual_edges,
+                              &node_to_tri_ptr, &node_to_tris);
 
     // Smooth the resulting triangular mesh
     if (options.tri_smoothing_type == TMRMeshOptions::TMR_LAPLACIAN){
@@ -1679,9 +1690,9 @@ cannot perform recombination\n");
         int num_quad_edges;
         int *quad_edges;
         int *quad_neighbors, *quad_dual;
-        TMR_ComputeQuadEdges(*npts, *nquads, *mesh_quads,
-                             &num_quad_edges, &quad_edges,
-                             &quad_neighbors, &quad_dual);
+        TMR_ComputePlanarQuadEdges(*npts, *nquads, *mesh_quads,
+                                   &num_quad_edges, &quad_edges,
+                                   &quad_neighbors, &quad_dual);
 
         char filename[256];
         sprintf(filename, "quad_dual%d.vtk",

@@ -5,6 +5,78 @@ from tmr import TMR
 import numpy as np
 import argparse
 
+def jacobian2d(q, x):
+    detJ = 0.0
+    invsqrt = 1.0/np.sqrt(2)
+    for i in range(2):
+        for j in range(2):
+            eta = [(i-1)*invsqrt,
+                   (j-1)*invsqrt]
+            detJ += detJacobian2d(q, x, eta)
+    return detJ
+
+def detJacobian2d(h, x, eta):
+    N1 = 0.25*np.array([-(1.0 - eta[1]),
+                        (1.0 - eta[1]),
+                        (1.0 + eta[1]),
+                        -(1.0 + eta[1])])
+    N2 = 0.25*np.array([-(1.0 - eta[0]),
+                        -(1.0 + eta[0]),
+                        (1.0 + eta[0]),
+                        (1.0 - eta[0])])
+                       
+    x1 = np.dot(N1, x[h, :])
+    x2 = np.dot(N2, x[h, :])
+
+    n = np.cross(x1, x2)
+    
+    return np.sqrt(np.dot(n, n))
+
+def jacobian3d(sh, x):
+    detJ = 0.0
+    invsqrt = 1.0/np.sqrt(2)
+    for i in range(2):
+        for j in range(2):
+            for k in range(2):
+                eta = [(i-1)*invsqrt,
+                       (j-1)*invsqrt,
+                       (k-1)*invsqrt]
+                       
+                detJ += detJacobian3d(h, x, eta)
+    return detJ
+
+def detJacobian3d(h, x, eta):
+    N1 = 0.125*np.array([-(1.0 - eta[1])*(1.0 - eta[2]),
+                         (1.0 - eta[1])*(1.0 - eta[2]),
+                         (1.0 + eta[1])*(1.0 - eta[2]),
+                         -(1.0 + eta[1])*(1.0 - eta[2]),
+                         -(1.0 - eta[1])*(1.0 + eta[2]),
+                         (1.0 - eta[1])*(1.0 + eta[2]),
+                         (1.0 + eta[1])*(1.0 + eta[2]),
+                         -(1.0 + eta[1])*(1.0 + eta[2])])
+    N2 = 0.125*np.array([-(1.0 - eta[0])*(1.0 - eta[2]),
+                         -(1.0 + eta[0])*(1.0 - eta[2]),
+                         (1.0 + eta[0])*(1.0 - eta[2]),
+                         (1.0 - eta[0])*(1.0 - eta[2]),
+                         -(1.0 - eta[0])*(1.0 + eta[2]),
+                         -(1.0 + eta[0])*(1.0 + eta[2]),
+                         (1.0 + eta[0])*(1.0 + eta[2]),
+                        (1.0 - eta[0])*(1.0 + eta[2])])
+    N3 = 0.125*np.array([-(1.0 - eta[0])*(1.0 - eta[1]),
+                         -(1.0 + eta[0])*(1.0 - eta[1]),
+                         -(1.0 + eta[0])*(1.0 + eta[1]),
+                         -(1.0 - eta[0])*(1.0 + eta[1]),
+                         (1.0 - eta[0])*(1.0 - eta[1]),
+                         (1.0 + eta[0])*(1.0 - eta[1]),
+                         (1.0 + eta[0])*(1.0 + eta[1]),
+                         (1.0 - eta[0])*(1.0 + eta[1])])
+    
+    Xd = np.zeros((3, 3))
+    for i, N in enumerate([N1, N2, N3]):
+        Xd[:,i] = np.dot(N, x[h, :])
+
+    return np.linalg.det(Xd)
+
 # Load in the model to TMR
 comm = MPI.COMM_WORLD
 
@@ -167,11 +239,6 @@ for geo in all_geos:
     edges.extend(geo.getEdges())
     faces.extend(geo.getFaces())
     vols.extend(geo.getVolumes())
-
-print('len(vols) = ', len(vols))
-
-for v in vols:
-    print('len(v.getFaces()) = ', len(v.getFaces()))
     
 for vol in vols:
     fail = vol.setExtrudeFaces(reverse_extrude=True)
@@ -185,11 +252,9 @@ if model_type == 'full':
 else:
     num_matches = TMR.setMatchingFaces([plate_geo, ring_geo])
 
-print('num_matches = ', num_matches)
-
 # Create the geometry
-geo = TMR.Model(verts, edges, faces)
-# geo = TMR.Model(verts, edges, faces, vols)
+# geo = TMR.Model(verts, edges, faces)
+geo = TMR.Model(verts, edges, faces, vols)
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -203,33 +268,56 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('motor.vtk', 'quad')
+mesh.writeToVTK('motor.vtk', 'hex')
 
 for index, face in enumerate(faces):
-    f = face.getMesh()
-    f.writeToVTK('motor_face_mesh%d.vtk'%(index))
-
+    orient, src = face.getCopySource()
+    if src is not None:
+        face_mesh = face.getMesh()
+        face_mesh.writeToVTK('copied_face%d.vtk'%(index))
+        
+# Get the mesh
 x = mesh.getMeshPoints()
+x = x.reshape((-1, 3))
 quads = mesh.getQuadConnectivity()
-count = np.zeros(x.shape[0], dtype=np.int)
-for i in range(quads.shape[0]):
-    count[quads[i,:]] += 1
+hexa = mesh.getHexConnectivity()
 
-for i in range(count.shape[0]):
-    if count[i] == 0:
-        print('Missing ref. to node %d'%(i))
-    
+count = 0
+area = 0.0
+for q in quads:
+    j = jacobian2d(q, x)
+    if j < 0.0:
+        count += 1
+    area += j
+
+if count > 0:
+    print('Warning: %d negative surface Jacobians'%(count))
+print('Area   = %e'%(area))
+
+inverted = []
+
+count = 0
+vol = 0.0
+for h in hexa:
+    j = jacobian3d(h, x)
+    if j < 0.0:
+        inverted.append(h)
+        count += 1
+    vol += j
+
+if count > 0:
+    print('Warning: %d negative volume Jacobians'%(count))
+print('Volume = %e'%(vol))
+
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()
-
-exit(0)
 
 # Create the corresponding mesh topology from the mesh-model
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
-forest = TMR.QuadForest(comm)
-# forest = TMR.OctForest(comm)
+# forest = TMR.QuadForest(comm)
+forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 
 # Create random trees and balance the mesh. Print the output file

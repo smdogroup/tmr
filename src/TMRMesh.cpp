@@ -156,6 +156,34 @@ static int compare_edges( const void *avoid, const void *bvoid ){
 }
 
 /*
+  Compare two edges to one another directly (not-indexed)
+*/
+static int compare_edges_simple( const void *avoid, const void *bvoid ){
+  const int *a = static_cast<const int*>(avoid);
+  const int *b = static_cast<const int*>(bvoid);
+
+  // Extract the x/y locations for the a and b points
+  int ax = a[0], ay = a[1];
+  int bx = b[0], by = b[1];
+
+  int xxor = ax ^ bx;
+  int yxor = ay ^ by;
+  int sor = xxor | yxor;
+
+  // Note that here we do not distinguish between levels
+  // Check for the most-significant bit
+  int discrim = 0;
+  if (xxor > (sor ^ xxor)){
+    discrim = ax - bx;
+  }
+  else {
+    discrim = ay - by;
+  }
+
+  return discrim;
+}
+
+/*
   Compare faces. The faces themselves must be sorted such that
   the indices are increasing.
 
@@ -230,6 +258,7 @@ static inline void sort_face_nodes( int *node ){
     }
   }
 }
+
 /*
   Compute a node to triangle or node to quad data structure
 */
@@ -283,15 +312,15 @@ void TMR_ComputeNodeToElems( int nnodes, int nelems,
 /*
   Compute all of the edges within the triangular mesh
 */
-void TMR_ComputeTriEdges( int nnodes, int ntris,
-                          const int tris[],
-                          int *num_tri_edges,
-                          int **_tri_edges,
-                          int **_tri_neighbors,
-                          int **_dual_edges,
-                          int **_node_to_tri_ptr,
-                          int **_node_to_tris,
-                          int **_tri_edge_nums ){
+void TMR_ComputePlanarTriEdges( int nnodes, int ntris,
+                                const int tris[],
+                                int *num_tri_edges,
+                                int **_tri_edges,
+                                int **_tri_neighbors,
+                                int **_dual_edges,
+                                int **_node_to_tri_ptr,
+                                int **_node_to_tris,
+                                int **_tri_edge_nums ){
   // Compute the edges in the triangular mesh
   int *ptr;
   int *node_to_tris;
@@ -417,10 +446,60 @@ void TMR_ComputeTriEdges( int nnodes, int ntris,
 void TMR_ComputeQuadEdges( int nnodes, int nquads,
                            const int quads[],
                            int *_num_quad_edges,
-                           int **_quad_edges,
-                           int **_quad_neighbors,
-                           int **_dual_edges,
-                           int **_quad_edge_nums ){
+                           int **_quad_edges ){
+  // 4 edges for each quad, with 2 nodes per edge
+  int num_edges = 4*nquads;
+  int *quad_edges = new int[ 8*nquads ];
+
+  for ( int i = 0; i < nquads; i++ ){
+    for ( int j = 0; j < 4; j++ ){
+      int e[2];
+      e[0] = quads[4*i + quad_edge_nodes[j][0]];
+      e[1] = quads[4*i + quad_edge_nodes[j][1]];
+
+      if (e[0] < e[1]){
+        quad_edges[8*i + 2*j] = e[0];
+        quad_edges[8*i + 2*j + 1] = e[1];
+      }
+      else {
+        quad_edges[8*i + 2*j] = e[1];
+        quad_edges[8*i + 2*j + 1] = e[0];
+      }
+    }
+  }
+
+  // Sort all of the edges
+  qsort(quad_edges, num_edges, 2*sizeof(int), compare_edges_simple);
+
+  int index = 0;
+  for ( int i = 0; i < num_edges; index++ ){
+    if (i != index){
+      quad_edges[2*index] = quad_edges[2*i];
+      quad_edges[2*index+1] = quad_edges[2*i+1];
+    }
+
+    // Loop over the edges to find the next unique one
+    while (i < num_edges &&
+           compare_edges_simple(&quad_edges[2*index],
+                                &quad_edges[2*i]) == 0){
+      i++;
+    }
+  }
+
+  *_quad_edges = quad_edges;
+  *_num_quad_edges = index;
+}
+
+/*
+  Compute the connectivity between the edges
+*/
+void TMR_ComputePlanarQuadEdges( int nnodes, int nquads,
+                                 const int quads[],
+                                 int *_num_quad_edges,
+                                 int **_quad_edges,
+                                 int **_quad_neighbors,
+                                 int **_dual_edges,
+                                 int **_quad_edge_nums ){
   // Compute the connectivity from nodes to quads
   int *ptr;
   int *node_to_quads;
@@ -1747,61 +1826,6 @@ TMRModel* TMRMesh::createModelFromMesh(){
       }
     }
   }
-
-  int edge_count = 0;
-  for ( int i = 0; i < num_mesh_edges; i++ ){
-    if (!new_edges[i]){
-      printf("edge %d (%d, %d) not created\n", i, mesh_edges[2*i], mesh_edges[2*i+1]);
-      edge_count++;
-    }
-  }
-  printf("edge_count = %d\n", edge_count);
-
-
-  FILE *fp = fopen("unused_edges.vtk", "w");
-  fprintf(fp, "# vtk DataFile Version 3.0\n");
-  fprintf(fp, "vtk output\nASCII\nDATASET UNSTRUCTURED_GRID\nPOINTS %d float\n", 2*edge_count);
-  int p3 = -1;
-  for ( int i = 0; i < num_mesh_edges; i++ ){
-    if (!new_edges[i]){
-      int p1 = mesh_edges[2*i];
-      int p2 = mesh_edges[2*i+1];
-      if (i == 2){
-        p3 = p1;
-      }
-
-      fprintf(fp, "%e %e %e\n", X[p1].x, X[p1].y, X[p1].z);
-      fprintf(fp, "%e %e %e\n", X[p2].x, X[p2].y, X[p2].z);
-    }
-  }
-  fprintf(fp, "\nCELLS %d %d\n", edge_count, 3*edge_count);
-  for ( int i = 0; i < edge_count; i++ ){
-    fprintf(fp, "%d %d %d\n", 2, 2*i, 2*i+1);
-  }
-  fprintf(fp, "\nCELL_TYPES %d\n", edge_count);
-  for ( int i = 0; i < edge_count; i++ ){
-    fprintf(fp, "%d\n", 3);
-  }
-  fclose(fp);
-
-  // Find the closest node to p3
-  double dist = 1e20;
-  int index = -1;
-  for ( int i = 0; i < num_nodes; i++ ){
-    if (i != p3){
-      double h = ((X[i].x - X[p3].x)*(X[i].x - X[p3].x) +
-                  (X[i].y - X[p3].y)*(X[i].y - X[p3].y) +
-                  (X[i].z - X[p3].z)*(X[i].z - X[p3].z));
-      if (h < dist){
-        dist = h;
-        index = i;
-      }
-    }
-  }
-
-  printf("min dist point = %d dist = %15.8e\n", index, sqrt(dist));
-
-
 
   // Create the TMRFace objects
   TMRFace **new_faces = new TMRFace*[ num_mesh_faces ];
