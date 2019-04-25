@@ -66,7 +66,7 @@ const int tri_node_edges[][2] = {{1, 2}, {0, 2}, {0, 1}};
   |    |    |    |    |
   0 -- 1 -- 2 -- 3 -- 4
 */
-static int get_structured_index( const int nx, const int ny,
+inline int get_structured_index( const int nx, const int ny,
                                  const int i, const int j ){
   if (j == 0){
     return i;
@@ -1503,7 +1503,7 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
 
     // Flip the quadrilateral surface orientation, depending on the
     // relative orientations of the copied face
-    if (orient < 0){ //  && mesh_type != TMR_STRUCTURED){
+    if (orient < 0){
       for ( int i = 0; i < num_quads; i++ ){
         int tmp = quads[4*i+1];
         quads[4*i+1] = quads[4*i+3];
@@ -1583,10 +1583,15 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
 
   // Use a transfinite interpolation to determine the parametric
   // points where the interior nodes should be placed.
+  const int c1idx = get_structured_index(nx, ny, 0, 0);
+  const int c2idx = get_structured_index(nx, ny, nx-1, 0);
+  const int c3idx = get_structured_index(nx, ny, nx-1, ny-1);
+  const int c4idx = get_structured_index(nx, ny, 0, ny-1);
+
   for ( int j = 1; j < ny-1; j++ ){
+    double v = 1.0*j/(ny-1);
     for ( int i = 1; i < nx-1; i++ ){
       double u = 1.0*i/(nx-1);
-      double v = 1.0*j/(ny-1);
 
       // Compute the weights on the corners
       double c1 = (1.0 - u)*(1.0 - v);
@@ -1614,14 +1619,14 @@ void TMRFaceMesh::createStructuredMesh( TMRMeshOptions options,
       pts[2*p] =
         ((w1*pts[2*p1] + w2*pts[2*p2] +
           w3*pts[2*p3] + w4*pts[2*p4]) -
-         (c1*pts[0] + c2*pts[2*(nx-1)] +
-          c3*pts[2*(nx+ny-2)] + c4*pts[2*(2*nx+ny-3)]));
+         (c1*pts[2*c1idx] + c2*pts[2*c2idx] +
+          c3*pts[2*c3idx] + c4*pts[2*c4idx]));
 
       pts[2*p+1] =
         ((w1*pts[2*p1+1] + w2*pts[2*p2+1] +
           w3*pts[2*p3+1] + w4*pts[2*p4+1]) -
-         (c1*pts[1] + c2*pts[2*(nx-1)+1] +
-          c3*pts[2*(nx+ny-2)+1] + c4*pts[2*(2*nx+ny-3)+1]));
+         (c1*pts[2*c1idx+1] + c2*pts[2*c2idx+1] +
+          c3*pts[2*c3idx+1] + c4*pts[2*c4idx+1]));
     }
   }
 
@@ -1712,7 +1717,7 @@ void TMRFaceMesh::createUnstructuredMesh( TMRMeshOptions options,
 
   if (*ntris == 0){
     fprintf(stderr,
-            "TMRTriangularize warning: No triangles for mesh id %d\n",
+            "TMRFaceMesh Warning: No triangles for mesh id %d\n",
             face->getEntityId());
   }
   else { // *ntris > 0
@@ -1753,8 +1758,8 @@ void TMRFaceMesh::createUnstructuredMesh( TMRMeshOptions options,
                   num_tri_edges, dual_edges, nquads, mesh_quads, options);
       }
       else {
-        fprintf(stderr, "TMRFaceMesh error: Odd number of triangles, \
-cannot perform recombination\n");
+        fprintf(stderr, "TMRFaceMesh Error: Odd number of triangles, "
+                "cannot perform recombination\n");
       }
 
       // Simplify the new quadrilateral mesh by removing
@@ -2559,10 +2564,8 @@ void TMRFaceMesh::recombine( int ntris, const int triangles[],
                                    &new_quads[4*num_new_quads]);
       num_new_quads++;
       if (fail){
-        fprintf(stderr,
-                "TMRFaceMesh error: \
-Quad %d from triangles %d and %d failed\n",
-                i, t1, t2);
+        fprintf(stderr, "TMRFaceMesh Error: Quad %d from triangles "
+                "%d and %d failed\n", i, t1, t2);
       }
     }
   }

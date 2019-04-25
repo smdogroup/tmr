@@ -85,7 +85,7 @@ int TMR_EgadsNode::getParamsOnFace( TMRFace *face,
 int TMR_EgadsNode::isSame( TMRVertex *vt ){
   TMR_EgadsNode *v = dynamic_cast<TMR_EgadsNode*>(vt);
   if (v){
-    return EG_isSame(node, v->node);
+    return (EG_isSame(node, v->node) == EGADS_SUCCESS);
   }
   return 0;
 }
@@ -121,6 +121,7 @@ void TMR_EgadsEdge::getRange( double *tmin, double *tmax ){
 
 int TMR_EgadsEdge::getParamsOnFace( TMRFace *surface, double t,
                                     int dir, double *u, double *v ){
+  int icode = 0;
   TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace*>(surface);
   if (f){
     // Get the face topology
@@ -133,16 +134,17 @@ int TMR_EgadsEdge::getParamsOnFace( TMRFace *surface, double t,
     }
 
     double params[2];
-    int icode = EG_getEdgeUV(face, edge, sense, t, params);
+    icode = EG_getEdgeUV(face, edge, sense, t, params);
 
     *u = params[0];
     *v = params[1];
-
-    return icode;
   }
 
   // Fall through to the underlying implementation
-  return TMREdge::getParamsOnFace(surface, t, dir, u, v);
+  if (icode != EGADS_SUCCESS){
+    return TMREdge::getParamsOnFace(surface, t, dir, u, v);
+  }
+  return 0;
 }
 
 int TMR_EgadsEdge::evalPoint( double t, TMRPoint *X ){
@@ -230,7 +232,7 @@ int TMR_EgadsEdge::eval2ndDeriv( double t,
 int TMR_EgadsEdge::isSame( TMREdge *et ){
   TMR_EgadsEdge *e = dynamic_cast<TMR_EgadsEdge*>(et);
   if (e){
-    return EG_isSame(edge, e->edge);
+    return (EG_isSame(edge, e->edge) == EGADS_SUCCESS);
   }
   return 0;
 }
@@ -378,7 +380,7 @@ int TMR_EgadsFace::eval2ndDeriv( double u, double v,
 int TMR_EgadsFace::isSame( TMRFace *ft ){
   TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace*>(ft);
   if (f){
-    return EG_isSame(face, f->face);
+    return (EG_isSame(face, f->face) == EGADS_SUCCESS);
   }
   return 0;
 }

@@ -397,11 +397,11 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
         edge->evalPoint(pts[i], &X[i]);
       }
 
-      // Get the end points of the edge
-      TMRVertex *v1, *v2;
-      edge->getVertices(&v1, &v2);
-      v1->getParamOnEdge(edge, &pts[0]);
-      v2->getParamOnEdge(edge, &pts[npts-1]);
+      // Set the end points of the edge
+      double tmin, tmax;
+      edge->getRange(&tmin, &tmax);
+      pts[0] = tmin;
+      pts[npts-1] = tmax;
     }
     else {
       // Get the limits of integration that will be used
