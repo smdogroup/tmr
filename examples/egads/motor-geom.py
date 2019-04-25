@@ -5,33 +5,6 @@ from tmr import TMR
 import numpy as np
 import argparse
 
-def jacobian2d(q, x):
-    detJ = 0.0
-    invsqrt = 1.0/np.sqrt(2)
-    for i in range(2):
-        for j in range(2):
-            eta = [(i-1)*invsqrt,
-                   (j-1)*invsqrt]
-            detJ += detJacobian2d(q, x, eta)
-    return detJ
-
-def detJacobian2d(h, x, eta):
-    N1 = 0.25*np.array([-(1.0 - eta[1]),
-                        (1.0 - eta[1]),
-                        (1.0 + eta[1]),
-                        -(1.0 + eta[1])])
-    N2 = 0.25*np.array([-(1.0 - eta[0]),
-                        -(1.0 + eta[0]),
-                        (1.0 + eta[0]),
-                        (1.0 - eta[0])])
-
-    x1 = np.dot(N1, x[h, :])
-    x2 = np.dot(N2, x[h, :])
-
-    n = np.cross(x1, x2)
-
-    return np.sqrt(np.dot(n, n))
-
 def jacobian3d(sh, x):
     detJ = 0.0
     invsqrt = 1.0/np.sqrt(2)
@@ -137,7 +110,8 @@ faces[3].attributeAdd('name', egads.ATTRSTRING, 'shell-top-face')
 faces[1].attributeAdd('name', egads.ATTRSTRING, 'shell-bottom-face')
 
 # Save the shell model
-shell_model.saveModel('shell.%s'%(extension), overwrite=True)
+if comm.rank == 0:
+    shell_model.saveModel('shell.%s'%(extension), overwrite=True)
 
 # Create the bottom outer ring
 x1 = [0, 0, 6.35]
@@ -163,7 +137,8 @@ faces[4].attributeAdd('name', egads.ATTRSTRING, 'ring-inner-face1')
 faces[5].attributeAdd('name', egads.ATTRSTRING, 'ring-inner-face2')
 
 # Save the ring model
-ring_model.saveModel('ring.%s'%(extension), overwrite=True)
+if comm.rank == 0:
+    ring_model.saveModel('ring.%s'%(extension), overwrite=True)
 
 # Create the bottom plate
 x1 = [0, 0, 0]
@@ -206,7 +181,8 @@ faces[1].attributeAdd('name', egads.ATTRSTRING, 'plate-outer-face1')
 faces[0].attributeAdd('name', egads.ATTRSTRING, 'plate-outer-face2')
 
 # Save the plate model
-plate_model.saveModel('plate.%s'%(extension), overwrite=True)
+if comm.rank == 0:
+    plate_model.saveModel('plate.%s'%(extension), overwrite=True)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
@@ -219,9 +195,14 @@ if extension == 'egads':
     ring_geo = TMR.ConvertEGADSModel(ring_model)
     plate_geo = TMR.ConvertEGADSModel(plate_model)
 else:
-    shell_geo = TMR.LoadModel('shell.%s'%(extension))
-    ring_geo = TMR.LoadModel('ring.%s'%(extension))
-    plate_geo = TMR.LoadModel('plate.%s'%(extension))
+    # Load in the files
+    comm.Barrier()
+    for rank in range(comm.size):
+        if comm.rank == rank:
+            shell_geo = TMR.LoadModel('shell.%s'%(extension))
+            ring_geo = TMR.LoadModel('ring.%s'%(extension))
+            plate_geo = TMR.LoadModel('plate.%s'%(extension))
+        comm.Barrier()
 
 # All the model objects
 if model_type == 'full':
@@ -283,17 +264,18 @@ x = x.reshape((-1, 3))
 quads = mesh.getQuadConnectivity()
 hexa = mesh.getHexConnectivity()
 
-count = 0
-vol = 0.0
-for h in hexa:
-    j = jacobian3d(h, x)
-    if j < 0.0:
-        count += 1
-    vol += j
+if comm.rank == 0:
+    count = 0
+    vol = 0.0
+    for h in hexa:
+        j = jacobian3d(h, x)
+        if j < 0.0:
+            count += 1
+        vol += j
 
-if count > 0:
-    print('Warning: %d negative volume Jacobians'%(count))
-print('Volume = %e'%(vol))
+    if count > 0:
+        print('Warning: %d negative volume Jacobians'%(count))
+    print('Volume = %e'%(vol))
 
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()
@@ -307,7 +289,7 @@ forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 
 # Create random trees and balance the mesh. Print the output file
-forest.createRandomTrees(nrand=1, max_lev=3)
+forest.createRandomTrees(nrand=1, max_lev=6)
 forest.balance(1)
 filename = 'motor_forest%d.vtk'%(comm.rank)
 forest.writeForestToVTK(filename)

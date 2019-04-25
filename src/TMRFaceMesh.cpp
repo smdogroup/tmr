@@ -787,6 +787,20 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     MPI_Bcast(pts, 2*num_points, MPI_DOUBLE, 0, comm);
     MPI_Bcast(X, num_points, TMRPoint_MPI_type, 0, comm);
     MPI_Bcast(quads, 4*num_quads, MPI_INT, 0, comm);
+
+    // Broadcast the source to target information
+    if (source){
+      if (mpi_rank != 0){
+        source_to_target = new int[ num_points ];
+      }
+      MPI_Bcast(source_to_target, num_points, MPI_INT, 0, comm);
+    }
+    else if (copy){
+      if (mpi_rank != 0){
+        copy_to_target = new int[ num_points ];
+      }
+      MPI_Bcast(copy_to_target, num_points, MPI_INT, 0, comm);
+    }
   }
 }
 
