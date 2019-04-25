@@ -50,7 +50,6 @@ def detJacobian3d(h, x, eta):
 
     return np.linalg.det(Xd)
 
-# Load in the model to TMR
 comm = MPI.COMM_WORLD
 
 # Create an argument parser to read in arguments from the commnad line
@@ -232,9 +231,6 @@ if model_type == 'full':
     TMR.setMatchingFaces([shell_geo, ring_geo])
 else:
     TMR.setMatchingFaces([plate_geo, ring_geo])
-
-# Create the geometry
-geo = TMR.Model(verts, edges, faces, vols)
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)

@@ -713,8 +713,7 @@ cdef class Volume:
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
-    def setExtrudeFaces(self, list source_face_index=None,
-                        reverse_extrude=False):
+    def setExtrudeFaces(self, list source_face_index=None):
         """
         Set source and target faces if
         this is an extrudable volume
@@ -897,9 +896,10 @@ cdef class Volume:
                       'any edges with either the source or the target face.')
                 return True
 
-        # Now we have sufficiently checked if the volume
-        # can be extruded, so set the source and target faces
-        if reverse_extrude:
+        # Now we have sufficiently checked if the volume can be
+        # extruded, so set the source and target faces
+        orient, source = extrude_faces[0].getCopySource()
+        if source is None:
             extrude_faces[0].setSource(self, extrude_faces[1])
         else:
             extrude_faces[1].setSource(self, extrude_faces[0])
