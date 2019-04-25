@@ -416,16 +416,13 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
   ego context;
   EG_getContext(model, &context);
 
-  /*
   // Create the common context for all egads objects
   TMR_EgadsContext *ctx = new TMR_EgadsContext(context);
 
   // Count the number of objects
   int nverts = 0;
   int nedges = 0;
-  int nloops = 0;
   int nfaces = 0;
-  int nshells = 0;
   int nsolids = 0;
 
   // Forward index to ego map
@@ -453,6 +450,7 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
 
   if (icode){
     fprintf(stderr, "TMR: EG_getTopology returned error code %d\n", icode);
+    return NULL;
   }
   if (oclass != MODEL){
     fprintf(stderr, "TMR: Must provide model to TMR_ConvertEGADSModel\n");
@@ -466,6 +464,7 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     int *body_sense;
     icode = EG_getTopology(bodies[i], &ref, &oclass, &mtype, data,
                            &nchildren, &body_children, &body_sense);
+
     // Check that we have a body object
     if (oclass != BODY){
       // This should not occur
@@ -483,90 +482,41 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     }
   }
 
-  // Iterate over the solid bodies or sheetbodies and extract the faces
+  // Iterate over the solid bodies or sheetbodies and extract the
+  // faces, edges and nodes (vertices)
   for ( int index = 0; index < nbodies; index++ ){
-    ego ref; // reference geometry
-    int oclass, mtype; // object class and type
-    int nchild;
-    ego *children;
-    int *children_sense;
-    EG_getTopology(solids[index], &ref, &oclass, &mtype, data,
-                   &nchild, &children, &children_sense);
+    int ntopos;
+    ego *topos;
 
-    if (mtype == SHEETBODY){
-      // Retrieve the children of the shell
-      int nshell_faces;
-      ego *shell_faces;
-      int *face_sense;
-      EG_getTopology(children[0], &ref, &oclass, &mtype, data,
-                     &nshell_faces, &shell_faces, &face_sense);
-
-      for ( int i = 0; i < nshell_faces; i++ ){
-        faces[nfaces] = shell_faces[i];
-        face_map[ego_obj] = nfaces;
-        nfaces++;
-      }
+    // Add the faces, edges and nodes
+    EG_getBodyTopos(solids[index], NULL, FACE, &ntopos, &topos);
+    for ( int i = 0; i < ntopos; i++ ){
+      faces[nfaces] = topos[i];
+      face_map[topos[i]] = nfaces;
+      nfaces++;
     }
-    else if (mtype == SOLIDBODY){
-      // Loop over the closed shells
-      int ntotal = 0;
-      for ( int k = 0; k < nchild; k++ ){
-        // Retrieve the children of the shell
-        int nshell_faces;
-        ego *shell_faces;
-        int *face_sense;
-        EG_getTopology(children[k], &ref, &oclass, &mtype, data,
-                       &nshell_faces, &shell_faces, &face_sense);
+    EG_free(topos);
 
-        for ( int i = 0; i < nshell_faces; i++ ){
-          faces[nfaces] = shell_faces[i];
-          face_map[ego_obj] = nfaces;
-          nfaces++;
-        }
-      }
+    EG_getBodyTopos(solids[index], NULL, EDGE, &ntopos, &topos);
+    for ( int i = 0; i < ntopos; i++ ){
+      edges[nedges] = topos[i];
+      edge_map[topos[i]] = nedges;
+      nedges++;
     }
-  }
+    EG_free(topos);
 
-  // Now, get the remaining objects
-  ego ego_obj = model;
-  while (ego_obj){
-    int oclass, mtype;
-    ego top, prev, next;
-
-    EG_getInfo(ego_obj, &oclass, &mtype, &top, &prev, &next);
-
-    if (top == model){
-      if (oclass == NODE){
-        verts[nverts] = ego_obj;
-        vert_map[ego_obj] = nverts;
-        nverts++;
-      }
-      else if (oclass == EDGE){
-        edges[nedges] = ego_obj;
-        edge_map[ego_obj] = nedges;
-        nedges++;
-      }
-      else if (oclass == FACE){
-        faces[nfaces] = ego_obj;
-        face_map[ego_obj] = nfaces;
-        nfaces++;
-      }
-      else if (oclass == LOOP){
-        nloops++;
-      }
-      else if (oclass == SHELL){
-        nshells++;
-      }
+    EG_getBodyTopos(solids[index], NULL, NODE, &ntopos, &topos);
+    for ( int i = 0; i < ntopos; i++ ){
+      verts[nverts] = topos[i];
+      vert_map[topos[i]] = nverts;
+      nverts++;
     }
-      
-    // Set the next object
-    ego_obj = next;
+    EG_free(topos);
   }
 
   if (print_level > 0){
     printf("EGADS model loaded with:\nnverts = %d nedges = %d nfaces = %d "
-           "nloops = %d nshells = %d nsolids = %d\n",
-           nverts, nedges, nfaces, nloops, nshells, nsolids);
+           "nsolids = %d\n", nverts, nedges, nfaces, nsolids);
   }
 
   // Re-iterate through the list and create the objects needed to
@@ -622,8 +572,8 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
                                     all_vertices[idx2]);
     }
     else {
-      fprintf(stderr, "Unable to set vertices for edge %d from EGADS file\n",
-              index);
+      fprintf(stderr, "TMR Error: Unable to set vertices for edge %d "
+              "from EGADS file\n", index);
     }
 
     // Set the "name" attribute
@@ -649,8 +599,8 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     EG_getTopology(faces[index], &ref, &oclass, &mtype, data,
                    &num_loops, &face_loops, &loop_sense);
 
-    // Check if the orientation of the face is flipped relative to the natural
-    // orientation of the surface
+    // Check if the orientation of the face is flipped relative to the
+    // natural orientation of the surface
     int orientation = 1;
     if (mtype == SREVERSE){
       orientation = -1;
@@ -796,9 +746,6 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
   delete [] all_vols;
 
   return geo;
-  */
-
-  return NULL;
 }
 
 #endif // TMR_HAS_EGADS

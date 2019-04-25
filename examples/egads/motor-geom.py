@@ -215,9 +215,9 @@ opts.triangularize_print_iter = 50000
 
 # Load the separate geometries and mesh each
 if extension == 'egads':
-    shell_geo = TMR.ConvertEGADSModel(shell_model)
-    ring_geo = TMR.ConvertEGADSModel(ring_model)
-    plate_geo = TMR.ConvertEGADSModel(plate_model)
+    shell_geo = TMR.ConvertEGADSModel(shell_model, print_lev=2)
+    ring_geo = TMR.ConvertEGADSModel(ring_model, print_lev=2)
+    plate_geo = TMR.ConvertEGADSModel(plate_model, print_lev=2)
 else:
     shell_geo = TMR.LoadModel('shell.%s'%(extension))
     ring_geo = TMR.LoadModel('ring.%s'%(extension))
@@ -267,7 +267,7 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('motor.vtk', 'quad')
+mesh.writeToVTK('motor.vtk', 'hex')
 
 for index, face in enumerate(faces):
     orient, src = face.getCopySource()

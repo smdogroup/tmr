@@ -63,7 +63,7 @@ const int tri_node_edges[][2] = {{1, 2}, {0, 2}, {0, 1}};
   12-- 17-- 18-- 19-- 6
   |    |    |    |    |
   13-- 14-- 15-- 16-- 5
-  |    |    |    |    |-
+  |    |    |    |    |
   0 -- 1 -- 2 -- 3 -- 4
 */
 static int get_structured_index( const int nx, const int ny,
@@ -596,7 +596,6 @@ void TMRFaceMesh::mesh( TMRMeshOptions options,
     }
     else if (copy){
       mapCopyToTarget(options, params);
-      writeToVTK("copied_mesh.vtk");
     }
     else if (mesh_type == TMR_STRUCTURED){
       createStructuredMesh(options, params);
@@ -1291,7 +1290,8 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
     }
   }
   if (count > 0){
-    fprintf(stderr, "TMRFaceMesh Error: %d errors in mapping copy to target\n",
+    fprintf(stderr,
+            "TMRFaceMesh Error: %d errors in mapping copy to target\n",
             count);
   }
 
