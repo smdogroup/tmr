@@ -96,6 +96,7 @@ cdef extern from "TMRTopology.h":
         int getNodeNum(int*)
         void setCopySource(TMRVertex*)
         void getCopySource(TMRVertex**)
+        int isSame(TMRVertex*)
 
     cdef cppclass TMREdge(TMREntity):
         TMREdge()
@@ -113,6 +114,7 @@ cdef extern from "TMRTopology.h":
         void setCopySource(TMREdge*)
         void getCopySource(TMREdge**)
         void writeToVTK(char*)
+        int isSame(TMREdge*)
 
     cdef cppclass TMRFace(TMREntity):
         TMRFace()
@@ -129,6 +131,7 @@ cdef extern from "TMRTopology.h":
         void setCopySource(int, TMRFace*)
         void getCopySource(int*, TMRFace**)
         void writeToVTK(char*)
+        int isSame(TMRFace*)
 
     cdef cppclass TMREdgeLoop(TMREntity):
         TMREdgeLoop(int, TMREdge**, const int*)

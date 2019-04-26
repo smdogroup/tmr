@@ -146,6 +146,16 @@ cdef class Vertex:
             return self.ptr.getEntityId()
         return -1
 
+    def isSame(self, Vertex v):
+        if self.ptr.isSame(v.ptr):
+            return True
+        return False
+
+    def isSameObject(self, Vertex v):
+        if self.ptr == v.ptr:
+            return True
+        return False
+
     def setNodeNum(self, num):
         """
         setNodeNum(self, num)
@@ -268,6 +278,16 @@ cdef class Edge:
         if self.ptr:
             return self.ptr.getEntityId()
         return -1
+
+    def isSame(self, Edge e):
+        if self.ptr.isSame(e.ptr):
+            return True
+        return False
+
+    def isSameObject(self, Edge e):
+        if self.ptr == e.ptr:
+            return True
+        return False
 
     def setVertices(self, Vertex v1, Vertex v2):
         self.ptr.setVertices(v1.ptr, v2.ptr)
@@ -521,6 +541,16 @@ cdef class Face:
             return self.ptr.getEntityId()
         return -1
 
+    def isSame(self, Face f):
+        if self.ptr.isSame(f.ptr):
+            return True
+        return False
+
+    def isSameObject(self, Face f):
+        if self.ptr == f.ptr:
+            return True
+        return False
+
     def getNumEdgeLoops(self):
         return self.ptr.getNumEdgeLoops()
 
@@ -713,51 +743,44 @@ cdef class Volume:
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
-    def setExtrudeFaces(self, list source_face_index=None):
+    def getSweptFacePairs(self):
         """
-        Set source and target faces if
-        this is an extrudable volume
-
-        source_face_index: index of the face to use as the source
-        for extrusion (only used when all
-        directions are extrudable)
+        Find source and target faces to see if this is a sweepable volume
         """
-        fail = True # if true, vol cannot be extruded
-
         faces = self.getFaces()
 
-        extrude_faces = []
+        swept_faces = []
         side_faces = []
         for f in faces:
             if f.getNumEdgeLoops() == 1:
                 el = f.getEdgeLoop(0)
                 edges, dirs = el.getEdgeLoop()
                 if len(edges) != 4:
-                    extrude_faces.append(f)
+                    swept_faces.append(f)
                 else:
                     side_faces.append(f)
             else:
-                extrude_faces.append(f)
+                swept_faces.append(f)
 
         # There can only be at most two faces with # edge
         # loops != 1 and # edges != 4
-        if len(extrude_faces) > 2:
+        if len(swept_faces) > 2:
             print('Volume is not extrudable.\n'
                   'There are more than two faces with more than one edge loop '
                   'and/or more than four edges.')
-            return True
+            return []
 
         # Only one face has more than one edge loop, or more than 4 edges
         # so it won't have a match to extrude
-        elif len(extrude_faces) == 1:
+        elif len(swept_faces) == 1:
             print('Volume is not extrudable.\n'
                   'There is only one face with more than one edge loop and/or '
                   'more than four edges, so it will not have a matching face.')
-            return True
+            return []
 
         # All faces have one edge loop and four edges, set which ones
         # we will extrude through
-        elif len(extrude_faces) == 0:
+        elif len(swept_faces) == 0:
 
             # If source_face_index not set, try to determine
             # which face should be used as the source.
@@ -769,25 +792,21 @@ cdef class Volume:
             # then determine the corresponding source face.
             target_face = None
             source_face = None
-            if source_face_index is None:
+            for i, f in enumerate(faces):
+                s_v, s_f = f.getSource()
+                if s_f is not None:
+                    source_face = faces.pop(i)
+                    break
+
+            if source_face is None:
                 for i, f in enumerate(faces):
-                    s_v, s_f = f.getSource()
-                    if s_f is not None:
-                        source_face = faces.pop(i)
+                    cp_orient, cp_f = f.getCopySource()
+                    if cp_f is not None:
+                        target_face = faces.pop(i)
                         break
 
-                if source_face is None:
-                    for i, f in enumerate(faces):
-                        cp_orient, cp_f = f.getCopySource()
-                        if cp_f is not None:
-                            target_face = faces.pop(i)
-                            break
-
-                    if target_face is None:
-                        source_face = faces.pop(0)
-
-            else:
-                source_face = faces.pop(source_face_index[0])
+                if target_face is None:
+                    source_face = faces.pop(0)
 
             if (source_face is None) and (target_face is None):
                 print("Source and target faces not set.")
@@ -830,31 +849,31 @@ cdef class Volume:
                     if not match_flag:
                         target_face = faces.pop(i)
 
-            extrude_faces = [source_face, target_face]
+            swept_faces = [source_face, target_face]
             side_faces = faces
 
         # We now know which two faces are candidates for sweeping
 
         # Make sure we're not extruding two coincident faces
-        if extrude_faces[0].checkMatching(extrude_faces[1]):
+        if swept_faces[0].checkMatching(swept_faces[1]):
             print('Volume is not extrudable.\n'
                   'The faces identified as the source and target are coincident.')
-            return True
+            return []
 
         # Check that both extrude faces have same number
         # of edge loops, and same number of edges in each loop
-        if (extrude_faces[0].getNumEdgeLoops() !=
-            extrude_faces[1].getNumEdgeLoops()):
+        if (swept_faces[0].getNumEdgeLoops() !=
+            swept_faces[1].getNumEdgeLoops()):
             print('Volume is not extrudable.\n'
                   'The faces identified as the source and target have '
                   'different numbers of edge loops.')
-            return True
+            return []
 
         num_edges1 = []
         num_edges2 = []
-        for i in range(extrude_faces[0].getNumEdgeLoops()):
-            el1 = extrude_faces[0].getEdgeLoop(i)
-            el2 = extrude_faces[1].getEdgeLoop(i)
+        for i in range(swept_faces[0].getNumEdgeLoops()):
+            el1 = swept_faces[0].getEdgeLoop(i)
+            el2 = swept_faces[1].getEdgeLoop(i)
             e1, d1 = el1.getEdgeLoop()
             e2, d2 = el2.getEdgeLoop()
             num_edges1.append(len(e1))
@@ -865,7 +884,7 @@ cdef class Volume:
                 print('Volume is not extrudable.\n'
                       'The faces identified as the source and target '
                       'have different numbers of edges in their edge loops.')
-                return True
+                return []
             # else: # TODO: Reorder the edge loops
 
         # Check that each connecting face shares at least one
@@ -875,9 +894,9 @@ cdef class Volume:
             match2 = False
             el = f.getEdgeLoop(0)
             side_edges, dirs = el.getEdgeLoop()
-            for j in range(extrude_faces[0].getNumEdgeLoops()):
-                el1 = extrude_faces[0].getEdgeLoop(j)
-                el2 = extrude_faces[1].getEdgeLoop(j)
+            for j in range(swept_faces[0].getNumEdgeLoops()):
+                el1 = swept_faces[0].getEdgeLoop(j)
+                el2 = swept_faces[1].getEdgeLoop(j)
                 edges1, d1 = el1.getEdgeLoop()
                 edges2, d2 = el2.getEdgeLoop()
                 for s_e in side_edges:
@@ -894,19 +913,9 @@ cdef class Volume:
                 print('Volume is not extrudable.\n'
                       'At least one of the connecting faces does not share '
                       'any edges with either the source or the target face.')
-                return True
+                return []
 
-        # Now we have sufficiently checked if the volume can be
-        # extruded, so set the source and target faces
-        orient, source = extrude_faces[0].getCopySource()
-        if source is None:
-            extrude_faces[0].setSource(self, extrude_faces[1])
-        else:
-            extrude_faces[1].setSource(self, extrude_faces[0])
-
-        fail = False
-
-        return fail
+        return swept_faces
 
 cdef _init_Volume(TMRVolume *ptr):
     vol = Volume()
@@ -4301,7 +4310,6 @@ def setMatchingFaces(list geo_list, double atol=1e-6):
     and set them as copies
     """
 
-    num_matches = 0
     for i in range(len(geo_list)):
         ifaces = geo_list[i].getFaces()
         for j in range(i+1, len(geo_list)):
@@ -4309,7 +4317,6 @@ def setMatchingFaces(list geo_list, double atol=1e-6):
             for fi in ifaces:
                 for fj in jfaces:
                     if fi.checkMatching(fj, atol=atol):
-                        fi.setCopyFaces(fj)
-                        num_matches += 1
+                        fi.setCopySource(fj)
 
-    return num_matches
+    return
