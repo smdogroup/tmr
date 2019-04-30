@@ -84,3 +84,20 @@ mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
 mesh.writeToVTK('block.vtk', 'hex')
+
+# Create the model from the unstructured volume mesh
+model = mesh.createModelFromMesh()
+
+# Create the corresponding mesh topology from the mesh-model
+topo = TMR.Topology(comm, model)
+
+# Create the quad forest and set the topology of the forest
+# forest = TMR.QuadForest(comm)
+forest = TMR.OctForest(comm)
+forest.setTopology(topo)
+
+# Create random trees and balance the mesh. Print the output file
+forest.createRandomTrees(nrand=1, max_lev=3)
+forest.balance(1)
+filename = 'block_forest%d.vtk'%(comm.rank)
+forest.writeForestToVTK(filename)

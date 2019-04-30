@@ -986,12 +986,12 @@ void TMRMesh::mesh( TMRMeshOptions options,
         const char *name = volumes[i]->getName();
         if (name){
           fprintf(stderr,
-                  "TMRMesh: Volume meshing failed for object %s\n",
+                  "TMRMesh Error: Volume meshing failed for object %s\n",
                   name);
         }
         else {
           fprintf(stderr,
-                  "TMRMesh: Volume meshing failed for volume %d\n", i);
+                  "TMRMesh Error: Volume meshing failed for volume %d\n", i);
         }
       }
       else {
@@ -1157,10 +1157,10 @@ void TMRMesh::initMesh( int count_nodes ){
       // Set the count to the number of variables
       for ( int j = 0; j < num_nodes; j++ ){
         if (count[j] == 0){
-          printf("TMRMesh error: Node %d not referenced\n", j);
+          printf("TMRMesh Error: Node %d not referenced\n", j);
         }
         if (count[j] >= 2){
-          printf("TMRMesh error: Node %d referenced more than once %d\n",
+          printf("TMRMesh Error: Node %d referenced more than once %d\n",
                  j, count[j]);
         }
       }
@@ -1661,59 +1661,56 @@ TMRModel* TMRMesh::createModelFromMesh(){
     TMREdge *copy_edge = NULL;
     edges[i]->getCopySource(&copy_edge);
 
-    TMREdgeMesh *mesh = NULL;
-    if (copy_edge){
-      copy_edge->getMesh(&mesh);
-    }
-    else {
+    if (!copy_edge){
+      TMREdgeMesh *mesh = NULL;
       edges[i]->getMesh(&mesh);
-    }
 
-    // Get the global variables associated with the edge
-    const int *vars;
-    mesh->getNodeNums(&vars);
+      // Get the global variables associated with the edge
+      const int *vars;
+      mesh->getNodeNums(&vars);
 
-    // Get the parametric points associated with the mesh
-    int npts;
-    const double *tpts;
-    mesh->getMeshPoints(&npts, &tpts, NULL);
-    for ( int j = 0; j < npts-1; j++ ){
-      // Find the edge associated with this curve
-      int edge[3];
-      edge[0] = 0;
-      if (vars[j] < vars[j+1]){
-        edge[1] = vars[j];
-        edge[2] = vars[j+1];
-      }
-      else {
-        edge[1] = vars[j+1];
-        edge[2] = vars[j];
-      }
-
-      // Find the associated edge number
-      int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
-                               3*sizeof(int), compare_edges);
-
-      if (res){
-        int edge_num = res[0];
-        if (!new_edges[edge_num]){
-          // Check whether the node ordering is consistent with the
-          // edge orientation. If not, tag this edge as reversed.
-          if (vars[j] < vars[j+1]){
-            edge_dir[edge_num] = 1;
-          }
-          else {
-            edge_dir[edge_num] = -1;
-          }
-
-          new_edges[edge_num] =
-            new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
+      // Get the parametric points associated with the mesh
+      int npts;
+      const double *tpts;
+      mesh->getMeshPoints(&npts, &tpts, NULL);
+      for ( int j = 0; j < npts-1; j++ ){
+        // Find the edge associated with this curve
+        int edge[3];
+        edge[0] = 0;
+        if (vars[j] < vars[j+1]){
+          edge[1] = vars[j];
+          edge[2] = vars[j+1];
         }
-      }
-      else {
-        fprintf(stderr,
-                "TMRMesh error: Could not find edge (%d, %d) to split\n",
-                edge[1], edge[2]);
+        else {
+          edge[1] = vars[j+1];
+          edge[2] = vars[j];
+        }
+
+        // Find the associated edge number
+        int *res = (int*)bsearch(edge, sorted_edges, num_mesh_edges,
+                                 3*sizeof(int), compare_edges);
+
+        if (res){
+          int edge_num = res[0];
+          if (!new_edges[edge_num]){
+            // Check whether the node ordering is consistent with the
+            // edge orientation. If not, tag this edge as reversed.
+            if (vars[j] < vars[j+1]){
+              edge_dir[edge_num] = 1;
+            }
+            else {
+              edge_dir[edge_num] = -1;
+            }
+
+            new_edges[edge_num] =
+              new TMRSplitEdge(edges[i], tpts[j], tpts[j+1]);
+          }
+        }
+        else {
+          fprintf(stderr,
+                  "TMRMesh Error: Could not find edge (%d, %d) to split\n",
+                  edge[1], edge[2]);
+        }
       }
     }
   }
@@ -1797,7 +1794,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
           }
           else {
             fprintf(stderr,
-                    "TMRMesh error: Could not find edge (%d, %d) for Pcurve\n",
+                    "TMRMesh Error: Could not find edge (%d, %d) for Pcurve\n",
                     edge[1], edge[2]);
           }
         }
@@ -1939,7 +1936,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
           }
           else {
             fprintf(stderr,
-                    "TMRMesh error: Could not find edge (%d, %d) for surface\n",
+                    "TMRMesh Error: Could not find edge (%d, %d) for surface\n",
                     edge[1], edge[2]);
           }
         }
@@ -2018,7 +2015,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
           }
           else {
             fprintf(stderr,
-                    "TMRMesh error: Could not find edge (%d, %d) for hex\n",
+                    "TMRMesh Error: Could not find edge (%d, %d) for hex\n",
                     edge[1], edge[2]);
           }
         }

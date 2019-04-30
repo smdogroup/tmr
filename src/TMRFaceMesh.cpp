@@ -1862,7 +1862,7 @@ void TMRFaceMesh::getSourceToTargetMapping( const int **_source_to_target ){
 int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
   int index = -1;
 
-  if (idx >= 0 && mesh_type != TMR_NO_MESH){
+  if (e && idx >= 0 && mesh_type != TMR_NO_MESH){
     // Get the face orientation
     int face_orient = face->getOrientation();
 
@@ -1895,7 +1895,8 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
       for ( int i = 0; i < nedges; i++, edge_index += face_orient ){
         // Retrieve the underlying edge mesh
         TMREdgeMesh *mesh = NULL;
-        TMREdge *edge = edges[edge_index];
+        TMREdge *edge = edges[edge_index], *copy = NULL;
+        edge->getCopySource(&copy);
         edge->getMesh(&mesh);
 
         // Get the mesh points corresponding to this curve
@@ -1905,7 +1906,7 @@ int TMRFaceMesh::getFaceIndexFromEdge( TMREdge *e, int idx ){
         // Is this the last edge in this loop?
         int last_edge = (i == nedges-1);
 
-        if (edge == e){
+        if (e == edge || e == copy){
           if (idx < npts){
             // Check the orientation of the edge. Note that idx is the
             // absolute index along the edge.

@@ -220,17 +220,11 @@ for geo in all_geos:
     faces.extend(geo.getFaces())
     vols.extend(geo.getVolumes())
 
-for vol in vols:
-    fail = vol.setExtrudeFaces(reverse_extrude=True)
-    if fail:
-        print('Setting the swept directions failed')
+# Set all of the matching faces
+TMR.setMatchingFaces(all_geos)
 
-# Combine the geometries and mesh the assembly
-if model_type == 'full':
-    TMR.setMatchingFaces([plate_geo, ring_geo])
-    TMR.setMatchingFaces([shell_geo, ring_geo])
-else:
-    TMR.setMatchingFaces([plate_geo, ring_geo])
+# Create the new model
+geo = TMR.Model(verts, edges, faces, vols)
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -245,14 +239,6 @@ mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
 mesh.writeToVTK('motor.vtk', 'hex')
-
-for index, face in enumerate(faces):
-    orient, src = face.getCopySource()
-    if src is not None:
-        src_mesh = src.getMesh()
-        src_mesh.writeToVTK('source_face_mesh%d.vtk'%(index))
-        face_mesh = face.getMesh()
-        face_mesh.writeToVTK('copied_face_mesh%d.vtk'%(index))
 
 # Get the mesh
 x = mesh.getMeshPoints()
