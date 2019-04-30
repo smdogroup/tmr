@@ -629,57 +629,6 @@ cdef class Face:
 
         return matching
 
-    def setCopyFaces(self, Face source, double atol=1e-6):
-        """
-        Take in two coincident faces, set the target as
-        a copy of the source, find their coincident edges,
-        and set the edges as copies as well
-        """
-        self.setCopySource(source, orient=-1)
-
-        source_list = []
-        for i in range(source.getNumEdgeLoops()):
-            sloop = source.getEdgeLoop(i)
-            s_edges, dirs = sloop.getEdgeLoop()
-            source_list.extend(s_edges)
-
-        target_list = []
-        for j in range(self.getNumEdgeLoops()):
-            tloop = self.getEdgeLoop(j)
-            t_edges, dirs = tloop.getEdgeLoop()
-            target_list.extend(t_edges)
-
-        for s in source_list:
-            for t in target_list:
-                # Find the matching edge
-                if t.checkMatching(s, atol=atol):
-                    # Remove the target from the list of targets
-                    target_list.remove(t)
-
-                    # Set the source for the edge
-                    t.setCopySource(s)
-
-                    # Get the vertices that must be set
-                    sv1, sv2 = s.getVertices()
-                    tv1, tv2 = t.getVertices()
-
-                    t1, t2 = s.getRange()
-                    X, Xt = s.evalDeriv(0.5*(t1 + t2))
-                    fail, tpt = t.invEvalPoint(X)
-                    X2, X2t = t.evalDeriv(t2)
-
-                    # Find the relative orientation
-                    dot = np.dot(Xt, X2t)
-                    if dot >= 0.0:
-                        tv1.setCopySource(sv1)
-                        tv2.setCopySource(sv2)
-                    else:
-                        tv1.setCopySource(sv2)
-                        tv2.setCopySource(sv1)
-                    break
-
-        return
-
 cdef _init_Face(TMRFace *ptr):
     face = Face()
     face.ptr = ptr
@@ -4310,13 +4259,92 @@ def setMatchingFaces(list geo_list, double atol=1e-6):
     and set them as copies
     """
 
+    verts = []
+    edges = []
+    for geo in geo_list:
+        verts.extend(geo.getVertices())
+        edges.extend(geo.getEdges())
+
+    while len(verts) > 0:
+        vert = verts.pop()
+        for v in verts[:]:
+            if vert.checkMatching(v, atol=atol):
+                v.setCopySource(vert)
+                verts.remove(v)
+
+    while len(edges) > 0:
+        edge = edges.pop()
+        for e in edges[:]:
+            if edge.checkMatching(e, atol=atol):
+                e.setCopySource(edge)
+                edges.remove(e)
+
+    swept_pairs = []
+    for geo in geo_list:
+        vols = geo.getVolumes()
+        for v in vols:
+            pair = v.getSweptFacePairs()
+            swept_pairs.append((pair[0], pair[1], v))
+
+    copy_pairs = []
     for i in range(len(geo_list)):
         ifaces = geo_list[i].getFaces()
         for j in range(i+1, len(geo_list)):
             jfaces = geo_list[j].getFaces()
             for fi in ifaces:
                 for fj in jfaces:
-                    if fi.checkMatching(fj, atol=atol):
-                        fi.setCopySource(fj)
+                    if fi != fj and fi.checkMatching(fj, atol=atol):
+                        copy_pairs.append((fi, fj))
+
+    while len(swept_pairs) > 0 or len(copy_pairs) > 0:
+        edges = []
+        if len(swept_pairs) > 0:
+            pair = swept_pairs.pop(0)
+            edges = [(pair[0], pair[1], pair[2])]
+        else:
+            pair = copy_pairs.pop(0)
+            edges = [(pair[0], pair[1])]
+
+        while True:
+            len_edges = len(edges)
+            for index, pair in enumerate(swept_pairs):
+                vol = pair[2]
+                length = len(edges)
+                if edges[-1][1].isSameObject(pair[0]):
+                    edges.append((pair[0], pair[1], vol))
+                elif edges[-1][1].isSameObject(pair[1]):
+                    edges.append((pair[1], pair[0], vol))
+                elif edges[0][0].isSameObject(pair[0]):
+                    edges.insert(0, (pair[1], pair[0], vol))
+                elif edges[0][0].isSameObject(pair[1]):
+                    edges.insert(0, (pair[0], pair[1], vol))
+                if len(edges) > length:
+                    swept_pairs.pop(index)
+                    break
+
+            for index, pair in enumerate(copy_pairs):
+                length = len(edges)
+                if edges[-1][1].isSameObject(pair[0]):
+                    edges.append((pair[0], pair[1]))
+                elif edges[-1][1].isSameObject(pair[1]):
+                    edges.append((pair[1], pair[0]))
+                elif edges[0][0].isSameObject(pair[0]):
+                    edges.insert(0, (pair[1], pair[0]))
+                elif edges[0][0].isSameObject(pair[1]):
+                    edges.insert(0, (pair[0], pair[1]))
+                if len(edges) > length:
+                    copy_pairs.pop(index)
+                    break
+
+            if len_edges == len(edges):
+                break
+
+        # Now set the copy/target edges
+        for e in edges:
+            if len(e) == 3:
+                vol = e[2]
+                e[0].setSource(vol, e[1])
+            else:
+                e[0].setCopySource(e[1], orient=-1)
 
     return

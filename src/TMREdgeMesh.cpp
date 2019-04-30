@@ -195,18 +195,33 @@ int TMREdgeMesh::getEdgeCopyOrient( TMREdge *edge_source ){
   edge_source->getCopySource(&copy_edge);
 
   if (copy_edge){
-    TMRVertex *v1, *v2;
-    TMRVertex *v1_copy, *v2_copy;
-    TMRVertex *copy_v1, *copy_v2;
-
+    // Get the vertex sources from the source edge
+    TMRVertex *v1, *v2, *t;
     edge_source->getVertices(&v1, &v2);
-    v1->getCopySource(&v1_copy);
-    v2->getCopySource(&v2_copy);
-    copy_edge->getVertices(&copy_v1, &copy_v2);
+    v1->getCopySource(&t);
+    if (t){
+      v1 = t;
+    }
+    v2->getCopySource(&t);
+    if (t){
+      v2 = t;
+    }
+
+    // Get the vertex sources for the copy source edge
+    TMRVertex *v1_copy, *v2_copy;
+    copy_edge->getVertices(&v1_copy, &v2_copy);
+    v1_copy->getCopySource(&t);
+    if (t){
+      v1_copy = t;
+    }
+    v2_copy->getCopySource(&t);
+    if (t){
+      v2_copy = t;
+    }
 
     int orient = 0;
     if (edge_source->isDegenerate() && copy_edge->isDegenerate()){
-      if (v1_copy->isSame(copy_v1)){
+      if (v1_copy == v1){
         orient = 1;
       }
       else {
@@ -215,10 +230,10 @@ int TMREdgeMesh::getEdgeCopyOrient( TMREdge *edge_source ){
       }
     }
     else if (!edge_source->isDegenerate() && !copy_edge->isDegenerate()){
-      if (v1_copy->isSame(copy_v1) && v2_copy->isSame(copy_v2)){
+      if (v1_copy == v1 && v2_copy == v2){
         orient = 1;
       }
-      else if (v1_copy->isSame(copy_v2) && v2_copy->isSame(copy_v1)){
+      else if (v1_copy == v2 && v2_copy == v1){
         orient = -1;
       }
       else {
@@ -234,7 +249,9 @@ int TMREdgeMesh::getEdgeCopyOrient( TMREdge *edge_source ){
     return orient;
   }
 
-  return 0;
+  // The edges have the same orientation because edge_source is the
+  // source edge
+  return 1;
 }
 
 /*
@@ -341,24 +358,35 @@ void TMREdgeMesh::mesh( TMRMeshOptions options,
     }
 
     // Retrieve the vertices
-    TMRVertex *v1, *v2;
+    TMRVertex *v1, *v2, *t;
     edge->getVertices(&v1, &v2);
+    v1->getCopySource(&t);
+    if (t){
+      v1 = t;
+    }
+    v2->getCopySource(&t);
+    if (t){
+      v2 = t;
+    }
 
     // Get the vertex copies. These must be set to copy from the
     // verties that the edge are set to copy from.
     TMRVertex *v1_copy, *v2_copy;
-    v1->getCopySource(&v1_copy);
-    v2->getCopySource(&v2_copy);
-
-    // Get the vertices that are copies of v1 and v2
-    TMRVertex *copy_v1, *copy_v2;
-    copy->getVertices(&copy_v1, &copy_v2);
+    copy->getVertices(&v1_copy, &v2_copy);
+    v1_copy->getCopySource(&t);
+    if (t){
+      v1_copy = t;
+    }
+    v2_copy->getCopySource(&t);
+    if (t){
+      v2_copy = t;
+    }
 
     // Check the orientation. Note that if no orientation is set,
     // then we don't copy the edge.
     npts = 0;
-    if ((v1_copy->isSame(copy_v1) && v2_copy->isSame(copy_v2)) ||
-        (v1_copy->isSame(copy_v2) && v2_copy->isSame(copy_v1))){
+    if ((v1_copy == v1 && v2_copy == v2) ||
+        (v1_copy == v2 && v2_copy == v1)){
       mesh->getMeshPoints(&npts, NULL, NULL);
     }
     else {

@@ -8,45 +8,45 @@ comm = MPI.COMM_WORLD
 # Create the egads context
 ctx = egads.context()
 
-# Set the dimensions/parameters
-h1 = 10.0
-h2 = 15.0
-Lx = 100.0
-Ly = 100.0
-r1 = 15.0
-r2 = 25.0
-cx1 = 35.0
-cy1 = 35.0
-
 parts = []
 
-# Create the lower box
+r0 = 0.0625
+
+# Create the boxes
 x0 = [0, 0, 0]
-x1 = [Lx, Ly, h1]
+x1 = [0.25, 0.25, 0.25]
+B0 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
+parts.append(ctx.makeTopology(egads.MODEL, children=[B0]))
+
+# Create the x-arm
+x0 = [0.25, 0, 0]
+x1 = [0.75, 0.25, 0.25]
 B1 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
 
-# Create the cylinder cutout for the bottom box
-x0 = [cx1, cy1, 0]
-x1 = [cx1, cy1, h1]
-C12 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r2])
+x0 = [0.85, 0.125, 0]
+x1 = [0.85, 0.125, 0.25]
+C1 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r0])
+parts.append(B1.solidBoolean(C1, egads.SUBTRACTION))
 
-x0 = [cx1, cy1, 0]
-x1 = [cx1, cy1, h1]
-C11 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r1])
-parts.append(C12.solidBoolean(C11, egads.SUBTRACTION))
-parts.append(B1.solidBoolean(C12, egads.SUBTRACTION))
-
-# Create the upper box
-x0 = [0, 0, h1]
-x1 = [Lx, Ly, h2]
+# Create the y-arm
+x0 = [0, 0.25, 0]
+x1 = [0.25, 0.75, 0.25]
 B2 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
 
-# Create the cylinder cutout for the upper box
-x0 = [cx1, cy1, h1]
-x1 = [cx1, cy1, h1+h2]
-C21 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r2])
+x0 = [0, 0.85, 0.125]
+x1 = [0.25, 0.85, 0.125]
+C2 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r0])
+parts.append(B2.solidBoolean(C2, egads.SUBTRACTION))
 
-parts.append(B2.solidBoolean(C21, egads.SUBTRACTION))
+# Create the z-arm
+x0 = [0, 0, 0.25]
+x1 = [0.25, 0.25, 0.75]
+B3 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
+
+x0 = [0.125, 0,    0.85]
+x1 = [0.125, 0.25, 0.85]
+C3 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r0])
+parts.append(B3.solidBoolean(C3, egads.SUBTRACTION))
 
 # Create all of the models
 geos = []
@@ -79,8 +79,8 @@ opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 
 # Create the surface mesh
-htarget = 2.0
+htarget = 0.02
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('block.vtk', 'hex')
+mesh.writeToVTK('ortho_bracket.vtk', 'quad')

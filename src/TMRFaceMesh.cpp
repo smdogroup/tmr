@@ -1240,7 +1240,14 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
 
     // Set the orientation on each edge
     for ( int i = 0; i < nedges; i++ ){
-      copy_orient[edges[i]] = copy->getOrientation()*edge_orient[i];
+      // Index the edge orientation using the source edge
+      TMREdge *t = NULL;
+      edges[i]->getCopySource(&t);
+      if (!t){
+        t = edges[i];
+      }
+
+      copy_orient[t] = copy->getOrientation()*edge_orient[i];
     }
   }
 
@@ -1263,9 +1270,13 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
       int npts;
       mesh->getMeshPoints(&npts, NULL, NULL);
 
-      // Get the edge that we're going to copy
+      // Get the edge that we're going to copy. This could be the same
+      // edge in this loop (if it is the source)
       TMREdge *copy_edge;
       edges[i]->getCopySource(&copy_edge);
+      if (!copy_edge){
+        copy_edge = edges[i];
+      }
 
       if (copy_orient.count(copy_edge) == 0){
         fprintf(stderr,
@@ -1280,7 +1291,8 @@ int TMRFaceMesh::mapCopyToTarget( TMRMeshOptions options,
           j_target = 0;
         }
 
-        int orient_copy = rel_orient*copy_orient[copy_edge];
+        int orient_copy = TMREdgeMesh::getEdgeCopyOrient(edges[i]);
+        orient_copy *= copy_orient[copy_edge];
         int j_copy = npts-1;
         if (orient_copy > 0){
           j_copy = 0;
