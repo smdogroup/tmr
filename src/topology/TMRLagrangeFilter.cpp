@@ -51,7 +51,8 @@ void TMRLagrangeFilter::initialize( int _nlevels,
   // per node
   nlevels = _nlevels;
   vars_per_node = _vars_per_node;
-
+  max_local_vars = 0;
+  
   // Allocate arrays to store the assembler objects/forests
   tacs = new TACSAssembler*[ nlevels ];
 
@@ -125,7 +126,7 @@ void TMRLagrangeFilter::initialize( int _nlevels,
   MPI_Comm_rank(_tacs[0]->getMPIComm(), &mpi_rank);
 
   // Set the max. number of local variables
-  int max_local_vars = 0;
+  max_local_vars = 0;
 
   // Compute the max filter size
   for ( int k = 0; k < nlevels; k++ ){
