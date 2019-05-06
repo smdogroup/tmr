@@ -564,8 +564,77 @@ cdef class Face:
             return _init_EdgeLoop(loop)
         return None
 
-    def setSource(self, Volume v, Face f):
-        self.ptr.setSource(v.ptr, f.ptr)
+    def setSource(self, Volume v, Face f, set_edges=False):
+        if set_edges:
+            # Get the edges from the source face
+            source_edges = {}
+            for k in range(f.getNumEdgeLoops()):
+                loop = f.getEdgeLoop(k)
+                edges, dirs = loop.getEdgeLoop()
+                for e in edges:
+                    source_edges[e.getEntityId()] = f
+
+            # Get the edges from the target face
+            target_edges = {}
+            for k in range(self.getNumEdgeLoops()):
+                loop = self.getEdgeLoop(k)
+                edges, dirs = loop.getEdgeLoop()
+                for e in edges:
+                    target_edges[e.getEntityId()] = self
+
+            if len(target_edges) != len(target_edges):
+                print('Volume is not sweepable: '
+                      'Source/target edges cannot be set')
+                return
+
+            # Find the pairs that will be linked together
+            edge_pairs = []
+
+            # Get all of the faces in the volume
+            sweep_edge = None
+            faces = v.getFaces()
+            for fedge in faces:
+                if not (fedge.isSameObject(f) or fedge.isSameObject(self)):
+                    if fedge.getNumEdgeLoops() != 1:
+                        print('Volume is not sweepable')
+                        return
+                    loop = fedge.getEdgeLoop(0)
+                    edges, dirs = loop.getEdgeLoop()
+
+                    source_edge = None
+                    target_edge = None
+                    for e in edges:
+                        if e.getEntityId() in source_edges:
+                            source_edge = e
+                        elif e.getEntityId() in target_edges:
+                            target_edge = e
+                        elif sweep_edge is None:
+                            sweep_edge = e
+                        else:
+                            edge_pairs.append((sweep_edge, e))
+
+                    if source_edge is not None and target_edge is not None:
+                        edge_pairs.append((source_edge, target_edge))
+                    else:
+                        print('Volume is not sweepable')
+                        return
+
+            # Set the pairs of edges/faces that were found
+            for pair in edge_pairs:
+                if not pair[0].isSameObject(pair[1]):
+                    s0 = pair[0].getSource()
+                    s1 = pair[1].getSource()
+                    if s0 is None and s1 is None:
+                        pair[0].setSource(pair[1])
+                    elif s1 is None:
+                        pair[1].setSource(s0)
+                    elif s0 is None:
+                        pair[0].setSource(s1)
+
+            # Set the source/target pairs with the volume
+            self.ptr.setSource(v.ptr, f.ptr)
+        else:
+            self.ptr.setSource(v.ptr, f.ptr)
 
     def getSource(self):
         cdef TMRFace *f = NULL
@@ -4253,15 +4322,19 @@ cdef class TopoProblem(pyParOptProblemBase):
         prob.setUseRecycledSolution(truth)
         return
 
-def setMatchingFaces(list geo_list, double atol=1e-6):
+def setMatchingFaces(model_list, double atol=1e-6):
     """
-    Take in a list of geometries, find the matching faces,
+    Take in a list of TMRModel classes, find the matching faces,
     and set them as copies
     """
 
+    # Try to make this a list of TMR
+    if not isinstance(model_list, (list,)):
+        model_list = [model_list]
+
     verts = []
     edges = []
-    for geo in geo_list:
+    for geo in model_list:
         verts.extend(geo.getVertices())
         edges.extend(geo.getEdges())
 
@@ -4280,17 +4353,17 @@ def setMatchingFaces(list geo_list, double atol=1e-6):
                 edges.remove(e)
 
     swept_pairs = []
-    for geo in geo_list:
+    for geo in model_list:
         vols = geo.getVolumes()
         for v in vols:
             pair = v.getSweptFacePairs()
             swept_pairs.append((pair[0], pair[1], v))
 
     copy_pairs = []
-    for i in range(len(geo_list)):
-        ifaces = geo_list[i].getFaces()
-        for j in range(i+1, len(geo_list)):
-            jfaces = geo_list[j].getFaces()
+    for i in range(len(model_list)):
+        ifaces = model_list[i].getFaces()
+        for j in range(i+1, len(model_list)):
+            jfaces = model_list[j].getFaces()
             for fi in ifaces:
                 for fj in jfaces:
                     if fi != fj and fi.checkMatching(fj, atol=atol):
@@ -4343,7 +4416,7 @@ def setMatchingFaces(list geo_list, double atol=1e-6):
         for e in edges:
             if len(e) == 3:
                 vol = e[2]
-                e[0].setSource(vol, e[1])
+                e[0].setSource(vol, e[1], set_edges=True)
             else:
                 e[0].setCopySource(e[1], orient=-1)
 

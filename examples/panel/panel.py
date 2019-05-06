@@ -144,12 +144,12 @@ def create_panel(Lx, Ly, use_hole=True):
     # Create the loop
     dirs = [1, 1, 1, 1]
     loop = TMR.EdgeLoop([edge1, edge2, edge3, edge4], dirs)
-    face.addEdgeLoop(loop)
+    face.addEdgeLoop(1, loop)
 
     if use_hole:
         # Create the second edge loop
         loop = TMR.EdgeLoop([edge5], [1])
-        face.addEdgeLoop(loop)
+        face.addEdgeLoop(-1, loop)
 
         verts = [v1, v2, v3, v4, v5]
         edges = [edge1, edge2, edge3, edge4, edge5]

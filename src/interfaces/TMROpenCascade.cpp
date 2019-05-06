@@ -101,7 +101,7 @@ int TMR_OCCEdge::getParamsOnFace( TMRFace *surface, double t,
 
     // Get the pcurve on the surface
     Handle(Geom2d_Curve) pcurve;
-    if (dir > 0){
+    if (dir >= 0){
       double t0, t1;
       pcurve = BRep_Tool::CurveOnSurface(edge, occ_face, t0, t1);
     }

@@ -703,7 +703,7 @@ void TMRFace::setSource( TMRVolume *volume, TMRFace *face ){
   if (volume && face && face != this && !copy){
     int nloops = getNumEdgeLoops();
     if (nloops != face->getNumEdgeLoops()){
-      fprintf(stderr, "TMRFace error: Topology not equivalent. "
+      fprintf(stderr, "TMRFace Error: Topology not equivalent. "
               "Number of loops not equal. Could not set source face\n");
       return;
     }
@@ -746,7 +746,7 @@ void TMRFace::setSource( TMRVolume *volume, TMRFace *face ){
     delete [] loop_counts;
 
     if (fail){
-      fprintf(stderr, "TMRFace error: Topology not equivalent. "
+      fprintf(stderr, "TMRFace Error: Topology not equivalent. "
               "Number of edges in the edge loops do not match "
               "Could not set source face\n");
       return;

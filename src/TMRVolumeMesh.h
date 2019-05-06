@@ -56,6 +56,15 @@ class TMRVolumeMesh : public TMREntity {
   // Create a tetrahedral mesh (if possible)
   int tetMesh( TMRMeshOptions options );
 
+  // Set the node locations based on the surface node locations
+  int setNodeLocations( TMRMeshOptions options );
+
+  // Get the mapping for the swept mesh
+  int getSweptMapping( int source_plane, int dest_plane,
+                       int num_fixed_pts,  int num_quad_pts,
+                       double *A, double *b, double *c,
+                       double regfactor );
+
   // The underlying volume
   MPI_Comm comm;
   TMRVolume *volume;

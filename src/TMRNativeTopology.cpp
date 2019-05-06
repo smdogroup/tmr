@@ -101,7 +101,7 @@ int TMRVertexFromEdge::getParamOnEdge( TMREdge *_edge,
 */
 int TMRVertexFromEdge::getParamsOnFace( TMRFace *face,
                                         double *u, double *v ){
-  return edge->getParamsOnFace(face, t, 1, u, v);
+  return edge->getParamsOnFace(face, t, 0, u, v);
 }
 
 /*
@@ -723,11 +723,11 @@ TMRParametricTFIFace::TMRParametricTFIFace( TMRFace *_face,
 
     // Reparametrize the vertices on the surface
     if (dir[k] > 0){
-      edges[k]->getParamsOnFace(face, 0.0, dir[k],
+      edges[k]->getParamsOnFace(face, 0.0, 0, // dir[k],
                                 &vupt[k], &vvpt[k]);
     }
     else {
-      edges[k]->getParamsOnFace(face, 1.0, dir[k],
+      edges[k]->getParamsOnFace(face, 1.0, 0, // dir[k],
                                 &vupt[k], &vvpt[k]);
     }
   }
@@ -803,12 +803,12 @@ int TMRParametricTFIFace::evalPoint( double u, double v,
   for ( int k = 0; k < 4; k++ ){
     if (dir[k] > 0){
       fail = fail ||
-        edges[k]->getParamsOnFace(face, params[k], dir[k],
+        edges[k]->getParamsOnFace(face, params[k], 0,
                                   &cupt[k], &cvpt[k]);
     }
     else {
       fail = fail ||
-        edges[k]->getParamsOnFace(face, 1.0-params[k], dir[k],
+        edges[k]->getParamsOnFace(face, 1.0-params[k], 0,
                                   &cupt[k], &cvpt[k]);
     }
   }

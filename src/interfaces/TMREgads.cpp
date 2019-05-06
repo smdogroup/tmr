@@ -77,9 +77,28 @@ int TMR_EgadsNode::getParamOnEdge( TMREdge *edge, double *t ){
 }
 
 // Ditto
-int TMR_EgadsNode::getParamsOnFace( TMRFace *face,
+int TMR_EgadsNode::getParamsOnFace( TMRFace *surface,
                                     double *u, double *v ){
-  return TMRVertex::getParamsOnFace(face, u, v);
+  int icode = 0;
+  TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace*>(surface);
+  if (f){
+    // Get the face topology
+    ego face;
+    f->getFaceObject(&face);
+
+    int sense = 0;
+    double t = 0.0;
+    double params[2];
+    icode = EG_getEdgeUV(face, node, sense, t, params);
+
+    *u = params[0];
+    *v = params[1];
+  }
+
+  if (icode != EGADS_SUCCESS){
+    return TMRVertex::getParamsOnFace(surface, u, v);
+  }
+  return 0;
 }
 
 int TMR_EgadsNode::isSame( TMRVertex *vt ){
@@ -131,6 +150,9 @@ int TMR_EgadsEdge::getParamsOnFace( TMRFace *surface, double t,
     int sense = -1;
     if (dir > 0){
       sense = 1;
+    }
+    else if (dir == 0){
+      sense = 0;
     }
 
     double params[2];

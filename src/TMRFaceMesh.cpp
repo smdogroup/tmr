@@ -908,6 +908,11 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     }
   }
 
+  // Compute the relative orientation of the target and face surfaces
+  // (and their meshes). The negative sign is due to the fact that the
+  // faces are all oriented outwards within the same volume.
+  int rel_orient = -target_orient*source_orient;
+
   // Keep track of the source-to-target edge and target-to-source
   // edge mappings as well as their relative orientations
   std::map<TMREdge*, TMREdge*> target_to_source_edge;
@@ -1012,12 +1017,13 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
       // Get the orientation of the source edge
       int orient_source = source_edge_orient[source_edge];
+      orient_source *= rel_orient;
       int j_source = npts-1;
       if (orient_source > 0){
         j_source = 0;
       }
 
-      for ( int j = 0; j < npts; j++,
+      for ( int j = 0; j < npts-1; j++,
               j_target += orient_target, j_source += orient_source ){
         int source_index =
           source_face_mesh->getFaceIndexFromEdge(source_edge, j_source);
@@ -1073,11 +1079,9 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
 
     // Add the terms to the matrix/right-hand-side
     for ( int i = 0; i < 4; i++ ){
-      for ( int j = 0; j < 4; j++ ){
-        double B = uS[i % 2]*uS[j % 2];
-        if ((i/2) == (j/2)){
-          N[i + 4*j] += B;
-        }
+      int start = i/2, end = i/2+1;
+      for ( int j = 2*start; j < 2*end; j++ ){
+        N[i + 4*j] += uS[i % 2]*uS[j % 2];
       }
       A[i] += uS[i % 2]*uT[i/2];
     }
@@ -1110,9 +1114,8 @@ void TMRFaceMesh::mapSourceToTarget( TMRMeshOptions options,
     }
 
     // Flip the orientation of the quads to match the orientation of
-    // the face
-    int orient = -target_orient*source_orient;
-    if (orient < 0){
+    // the face if needed
+    if (rel_orient < 0){
       for ( int i = 0; i < num_quads; i++ ){
         int tmp = quads[4*i+1];
         quads[4*i+1] = quads[4*i+3];

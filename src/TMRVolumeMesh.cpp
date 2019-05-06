@@ -23,6 +23,7 @@
 #include "TMRMesh.h"
 #include "TMRNativeTopology.h"
 #include "TMRVolumeMesh.h"
+#include "tmrlapack.h"
 
 #ifdef TMR_USE_NETGEN
 // The namespace is required because of the way nglib is compiled by
@@ -147,7 +148,7 @@ void TMRVolumeMesh::writeToVTK( const char *filename ){
 }
 
 /*
-  Mesh the volume
+  Mesh the volume via sweeping (or tetrahedral meshing)
 */
 int TMRVolumeMesh::mesh( TMRMeshOptions options ){
   int mpi_rank;
@@ -215,16 +216,13 @@ int TMRVolumeMesh::mesh( TMRMeshOptions options ){
       TMRFaceMesh *mesh;
       faces[i]->getMesh(&mesh);
       if (!mesh){
-        fprintf(stderr,
-                "TMRVolumeMesh error: No mesh associated with face %d\n",
-                faces[i]->getEntityId());
+        fprintf(stderr, "TMRVolumeMesh Error: No mesh associated "
+                "with face %d\n", faces[i]->getEntityId());
         mesh_fail = 1;
       }
       else if (mesh->getMeshType() != TMR_STRUCTURED){
-        fprintf(stderr,
-                "TMRVolumeMesh error: \
-Through-thickness meshes must be structured\n");
-        fprintf(stderr,
+        fprintf(stderr, "TMRVolumeMesh Error: Through-thickness meshes "
+                "must be structured\n"
                 "Try setting source-target relations on edges and surfaces\n");
         mesh_fail = 1;
       }
@@ -237,7 +235,7 @@ Through-thickness meshes must be structured\n");
     source->getMesh(&source_mesh);
     if (source_mesh->getMeshType() == TMR_TRIANGLE){
       fprintf(stderr,
-              "TMRVolumeMesh error: Cannot extrude a triangluar mesh\n");
+              "TMRVolumeMesh Error: Cannot extrude a triangluar mesh\n");
       mesh_fail = 1;
     }
   }
@@ -353,9 +351,8 @@ Through-thickness meshes must be structured\n");
         num_swept_pts = npts;
       }
       else if (num_swept_pts != npts){
-        fprintf(stderr,
-                "TMRVolumeMesh error: \
-Inconsistent number of edge points through-thickness %d != %d\n",
+        fprintf(stderr, "TMRVolumeMesh Error: Inconsistent number of "
+                "edge points through-thickness %d != %d\n",
                 num_swept_pts, npts);
         mesh_fail = 1;
       }
@@ -418,26 +415,274 @@ Inconsistent number of edge points through-thickness %d != %d\n",
     }
   }
 
-  // Set the new coordinates within the hexahedral mesh
-  TMRFaceMesh *target_mesh;
-  target->getMesh(&target_mesh);
+  // Set the node locations using a swept meshing algorithm
+  mesh_fail = mesh_fail || setNodeLocations(options);
+
+  return mesh_fail;
+}
+
+/*
+  Compute the node locations based on the source/target and side face
+  mesh node locations
+*/
+int TMRVolumeMesh::setNodeLocations( TMRMeshOptions options ){
+  int mesh_fail = 0;
+
+  // Data for the source/target meshes
+  TMRPoint *Xsource, *Xtarget;
+  TMRFaceMesh *source_mesh, *target_mesh;
+  int num_quad_pts = 0;
+  int num_fixed_pts = 0;
+
+  // Get the information for the source surface
+  source->getMesh(&source_mesh);
+  source_mesh->getMeshPoints(&num_quad_pts, NULL, &Xsource);
+  num_fixed_pts = source_mesh->getNumFixedPoints();
+
+  // Set the source node locations in the volume
+  for ( int i = 0; i < num_quad_pts; i++ ){
+    X[i] = Xsource[i];
+  }
 
   // Get the source to target indices
+  target->getMesh(&target_mesh);
+  target_mesh->getMeshPoints(NULL, NULL, &Xtarget);
+
   const int *source_to_target;
   target_mesh->getSourceToTargetMapping(&source_to_target);
 
-  TMRPoint *x = X;
-  for ( int j = 0; j < num_swept_pts; j++ ){
+  // Set the target node locations in the volume
+  for ( int i = 0; i < num_quad_pts; i++ ){
+    X[i + num_quad_pts*(num_swept_pts-1)] = Xtarget[source_to_target[i]];
+  }
+
+  // Now, set the side nodes from the structured faces
+  int num_source_loops = source->getNumEdgeLoops();
+
+  for ( int k = 0, count = 0; k < num_source_loops; k++ ){
+    TMREdgeLoop *source_loop;
+    source->getEdgeLoop(k, &source_loop);
+
+    // Get the number of edges for this loop
+    int num_loop_edges;
+    TMREdge **loop_edges;
+    source_loop->getEdgeLoop(&num_loop_edges, &loop_edges, NULL);
+
+    for ( int i = 0; i < num_loop_edges; i++, count++ ){
+      // Get the loop edge mesh
+      TMREdgeMesh *edge_mesh;
+      loop_edges[i]->getMesh(&edge_mesh);
+
+      // Get the swept face mesh (that is structured)
+      TMRFaceMesh *swept_mesh;
+      swept_faces[count]->getMesh(&swept_mesh);
+
+      int nswept;
+      TMRPoint *Xswept;
+      swept_mesh->getMeshPoints(&nswept, NULL, &Xswept);
+
+      // Get the number of points along this edge
+      int npts;
+      edge_mesh->getMeshPoints(&npts, NULL, NULL);
+
+      // Loop over the edges on this face
+      for ( int ix = 0; ix < npts; ix++ ){
+        // Get the index on the source face mesh of the edge at the
+        // specified edge index
+        int src_face_index =
+          source_mesh->getFaceIndexFromEdge(loop_edges[i], ix);
+
+        if (src_face_index < 0 ||
+            src_face_index >= num_quad_pts){
+          fprintf(stderr,
+                  "TMRVolumeMesh Error: Source surface index %d out of range\n",
+                  src_face_index);
+        }
+        else {
+          // Loop over the through-swept nodes
+          int iy_index = num_swept_pts-1;
+          int orient = swept_edges_orient[count];
+          if (orient > 0){
+            iy_index = 0;
+          }
+
+          for ( int iy = 0; iy < num_swept_pts; iy++, iy_index += orient ){
+            int swept_face_index =
+              swept_mesh->getStructuredFaceIndex(loop_edges[i], ix,
+                                                 swept_edges[count], iy_index);
+
+            if (swept_face_index < 0 || swept_face_index >= nswept){
+              fprintf(stderr,
+                      "TMRVolumeMesh Error: Swept face index %d out of range\n",
+                      swept_face_index);
+            }
+            else {
+              X[src_face_index + iy*num_quad_pts] = Xswept[swept_face_index];
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Set the regularization factor
+  double tolerance = 1e-10;
+
+  // Set the remaining volume node locations based on a least-squares
+  // method
+  for ( int j = 1; j < num_swept_pts-1; j++ ){
     double u = 1.0*j/(num_swept_pts-1);
-    for ( int i = 0; i < num_quad_pts; i++ ){
-      x[0].x = (1.0 - u)*Xsource[i].x + u*Xtarget[source_to_target[i]].x;
-      x[0].y = (1.0 - u)*Xsource[i].y + u*Xtarget[source_to_target[i]].y;
-      x[0].z = (1.0 - u)*Xsource[i].z + u*Xtarget[source_to_target[i]].z;
-      x += 1;
+
+    // Compute the mapping from source to plane j
+    double As[9], bs[3], cs[3];
+    int icode = getSweptMapping(0, j, num_fixed_pts, num_quad_pts,
+                                As, bs, cs, tolerance);
+    if (icode){
+      fprintf(stderr, "TMRVolumeMesh Error: LAPACK error code %d\n",
+              icode);
+    }
+
+    // Compute the mapping from the target plane to plane j
+    double At[9], bt[3], ct[3];
+    icode = getSweptMapping(num_swept_pts-1, j, num_fixed_pts, num_quad_pts,
+                            At, bt, ct, tolerance);
+    if (icode){
+      fprintf(stderr, "TMRVolumeMesh Error: LAPACK error code %d\n",
+              icode);
+    }
+
+    for ( int i = num_fixed_pts; i < num_quad_pts; i++ ){
+      // Compute the mapped point from the source location
+      TMRPoint Xs, t;
+      t.x = X[i].x - cs[0];
+      t.y = X[i].y - cs[1];
+      t.z = X[i].z - cs[2];
+      Xs.x = As[0]*t.x + As[1]*t.y + As[2]*t.z + bs[0];
+      Xs.y = As[3]*t.x + As[4]*t.y + As[5]*t.z + bs[1];
+      Xs.z = As[6]*t.x + As[7]*t.y + As[8]*t.z + bs[2];
+
+      // Compute the mapped point from the target location
+      TMRPoint Xt;
+      t.x = X[i + (num_swept_pts-1)*num_quad_pts].x - ct[0];
+      t.y = X[i + (num_swept_pts-1)*num_quad_pts].y - ct[1];
+      t.z = X[i + (num_swept_pts-1)*num_quad_pts].z - ct[2];
+      Xt.x = At[0]*t.x + At[1]*t.y + At[2]*t.z + bt[0];
+      Xt.y = At[3]*t.x + At[4]*t.y + At[5]*t.z + bt[1];
+      Xt.z = At[6]*t.x + At[7]*t.y + At[8]*t.z + bt[2];
+
+      int index = i + num_quad_pts*j;
+      // Xs = X[i];
+      // Xt = X[i + (num_swept_pts-1)*num_quad_pts];
+      X[index].x = (1.0 - u)*Xs.x + u*Xt.x;
+      X[index].y = (1.0 - u)*Xs.y + u*Xt.y;
+      X[index].z = (1.0 - u)*Xs.z + u*Xt.z;
     }
   }
 
   return mesh_fail;
+}
+
+/*
+  Compute the mapping between the provided source plane and the
+  resulting destination plane
+*/
+int TMRVolumeMesh::getSweptMapping( int source_plane,
+                                    int dest_plane,
+                                    int num_fixed_pts,
+                                    int num_quad_pts,
+                                    double *A, double *b, double *c,
+                                    double tolerance ){
+  // Compute the centroid of the source plane
+  const TMRPoint *Xsrc = &X[source_plane*num_quad_pts];
+  c[0] = c[1] = c[2] = 0.0;
+  for ( int k = 0; k < num_fixed_pts; k++ ){
+    c[0] += Xsrc[k].x;
+    c[1] += Xsrc[k].y;
+    c[2] += Xsrc[k].z;
+  }
+  c[0] = c[0]/num_fixed_pts;
+  c[1] = c[1]/num_fixed_pts;
+  c[2] = c[2]/num_fixed_pts;
+
+  // Compute the centroid of the destination plane
+  const TMRPoint *Xdest = &X[dest_plane*num_quad_pts];
+  b[0] = b[1] = b[2] = 0.0;
+  for ( int k = 0; k < num_fixed_pts; k++ ){
+    b[0] += Xdest[k].x;
+    b[1] += Xdest[k].y;
+    b[2] += Xdest[k].z;
+  }
+  b[0] = b[0]/num_fixed_pts;
+  b[1] = b[1]/num_fixed_pts;
+  b[2] = b[2]/num_fixed_pts;
+
+  // Loop over the fixed points on the destination plane
+  double N[81];
+  memset(N, 0, 81*sizeof(double));
+  memset(A, 0, 9*sizeof(double));
+  for ( int k = 0; k < num_fixed_pts; k++ ){
+    // Compute the difference between the destination and
+    double xs[3];
+    xs[0] = Xsrc[k].x - c[0];
+    xs[1] = Xsrc[k].y - c[1];
+    xs[2] = Xsrc[k].z - c[2];
+
+    double xd[3];
+    xd[0] = Xdest[k].x - b[0];
+    xd[1] = Xdest[k].y - b[1];
+    xd[2] = Xdest[k].z - b[2];
+
+    for ( int i = 0; i < 9; i++ ){
+      // Enforce i/3 == j/3
+      int start = i/3;
+      int end = i/3 + 1;
+      for ( int j = 3*start; j < 3*end; j++ ){
+        N[i + 9*j] += xs[i % 3]*xs[j % 3];
+      }
+      A[i] += xs[i % 3]*xd[i/3];
+    }
+  }
+
+  // Compute the eigenvalues and eigenvectors of the matrix N
+  int info = 0, n = 9;
+  int lwork = 256, liwork = 128;
+  double eigs[9], work[256];
+  int iwork[128];
+  TmrLAPACKsyevd("V", "U", &n, N, &n,
+                 eigs, work, &lwork, iwork, &liwork, &info);
+
+  // Find the maximum eigenvalue for the purposes of applying a
+  // tolerance to small eigenvalues
+  double max_eig = 0.0;
+  for ( int i = 0; i < 9; i++ ){
+    if (eigs[i] > max_eig){
+      max_eig = eigs[i];
+    }
+  }
+
+  // N*A = rhs
+  // A = Q*Lambda^{-1}*Q^{T}*rhs
+  double temp[9];
+  for ( int i = 0; i < 9; i++ ){
+    temp[i] = 0.0;
+    if (eigs[i] > tolerance*max_eig){
+      for ( int j = 0; j < 9; j++ ){
+        temp[i] += N[9*i + j]*A[j];
+      }
+      temp[i] = temp[i]/eigs[i];
+    }
+  }
+
+  memset(A, 0, 9*sizeof(double));
+  for ( int i = 0; i < 9; i++ ){
+    if (temp[i] != 0.0){
+      for ( int j = 0; j < 9; j++ ){
+        A[j] += N[9*i + j]*temp[i];
+      }
+    }
+  }
+
+  return info;
 }
 
 /*
@@ -605,7 +850,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
           if (src_face_index < 0 ||
               src_face_index >= num_quad_pts){
             fprintf(stderr,
-                    "TMRVolume error: Source surface index %d out of range\n",
+                    "TMRVolumeMesh Error: Source surface index %d out of range\n",
                     src_face_index);
           }
           else {
@@ -623,7 +868,7 @@ int TMRVolumeMesh::setNodeNums( int *num ){
 
               if (swept_face_index < 0 || swept_face_index >= nswept){
                 fprintf(stderr,
-                        "TMRVolume error: Swept face index %d out of range\n",
+                        "TMRVolumeMesh Error: Swept face index %d out of range\n",
                         swept_face_index);
               }
               else {
