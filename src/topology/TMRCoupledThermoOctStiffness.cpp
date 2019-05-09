@@ -998,9 +998,9 @@ void TMRCoupledThermoOctStiffness::failure( const double pt[],
     TacsScalar ys = props->ys[0];
     TacsScalar aT = props->aT[0];
 
-    eff_e[0] = e[0]-aT*T[0];
-    eff_e[1] = e[1]-aT*T[0];
-    eff_e[2] = e[2]-aT*T[0];
+    eff_e[0] = e[0]-aT*x[0]*T[0];
+    eff_e[1] = e[1]-aT*x[0]*T[0];
+    eff_e[2] = e[2]-aT*x[0]*T[0];
     eff_e[3] = e[3];
     eff_e[4] = e[4];
     eff_e[5] = e[5];
@@ -1090,9 +1090,9 @@ void TMRCoupledThermoOctStiffness::addFailureDVSens( const double pt[],
 
       TacsScalar s[6], eff_e[6];
       // Compute effective strain = B*u-alpha*dT
-      eff_e[0] = e[0]-aT*T[0];
-      eff_e[1] = e[1]-aT*T[0];
-      eff_e[2] = e[2]-aT*T[0];
+      eff_e[0] = e[0]-aT*x[0]*T[0];
+      eff_e[1] = e[1]-aT*x[0]*T[0];
+      eff_e[2] = e[2]-aT*x[0]*T[0];
       eff_e[3] = e[3]*1.0;
       eff_e[4] = e[4]*1.0;
       eff_e[5] = e[5]*1.0;

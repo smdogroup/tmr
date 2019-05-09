@@ -250,6 +250,9 @@ void TMRLagrangeFilter::setDesignVars( TACSBVec *xvec ){
   // Copy the values to the local design variable vector
   x[0]->copyValues(xvec);
 
+  TacsScalar *array;
+  xvec->getArray(&array);
+
   // Distribute the design variable values
   x[0]->beginDistributeValues();
   x[0]->endDistributeValues();
