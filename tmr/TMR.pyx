@@ -4110,7 +4110,10 @@ cdef class TopoProblem(pyParOptProblemBase):
             raise ValueError(errmsg)
         f = <TACSBVec**>malloc(nforces*sizeof(TACSBVec*))
         for i in range(nforces):
-            f[i] = (<Vec>forces[i]).ptr
+            if forces[i] is not None:
+                f[i] = (<Vec>forces[i]).ptr
+            else:
+                f[i] = NULL
         prob.setLoadCases(f, nforces)
         free(f)
         return
@@ -4253,8 +4256,11 @@ cdef class TopoProblem(pyParOptProblemBase):
             nfuncs = len(funcs)
             f = <TACSFunction**>malloc(nfuncs*sizeof(TACSFunction*))
             for i in range(nfuncs):
-                f[i] = (<Function>funcs[i]).ptr
-            prob.setObjective(w,f)
+                if funcs[i] is not None:
+                    f[i] = (<Function>funcs[i]).ptr
+                else:
+                    f[i] = NULL
+            prob.setObjective(w, f)
         else:
             prob.setObjective(w)
         free(w)

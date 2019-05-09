@@ -972,14 +972,14 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
         if (mpi_rank == 0){
           for ( int k = 0; k < num_funcs; k++ ){
-            printf("%-30s: %25.10e\n",
+            printf("%-30s %25.10e\n",
                    load_case_info[i].funcs[k]->functionName(),
                    cons[count + k]);
             TACSKSFailure *ks_fail =
               dynamic_cast<TACSKSFailure*>(load_case_info[i].funcs[k]);
             if (ks_fail){
               TacsScalar max_fail = ks_fail->getMaximumFailure();
-              printf("%-30s: %25.10e\n", "TACSKSFailure max stress",
+              printf("%-30s %25.10e\n", "TACSKSFailure max stress",
                      max_fail);
             }
           }
