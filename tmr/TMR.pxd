@@ -421,6 +421,7 @@ cdef extern from "TMROctStiffness.h":
         TMRStiffnessProperties(int, double, double, double, double, double,
                                TacsScalar*, TacsScalar*, TacsScalar*,
                                TacsScalar*, TacsScalar*, TacsScalar*,
+			       TacsScalar*,
                                double, double, int)
         int nmats
         double q
@@ -452,6 +453,7 @@ cdef extern from "TMRQuadStiffness.h":
         TMRQuadStiffnessProperties(int, double, double, double, double, double,
                                    TacsScalar*, TacsScalar*, TacsScalar*,
                                    TacsScalar*, TacsScalar*, TacsScalar*,
+				   TacsScalar*,
                                    double, double, int)
         int nmats
         double q
