@@ -4123,6 +4123,11 @@ void TMROctForest::transformNode( TMROctant *oct,
   partial octrees are freed.
 */
 void TMROctForest::createNodes(){
+  if (!octants){
+    fprintf(stderr, "TMROctForest Error: Cannot call createNodes(),"
+            "no octant have been created\n");
+    return;
+  }
   if (conn){
     // The connectivity has already been created and not deleted so
     // there is no need to create it a second time.
@@ -5763,13 +5768,13 @@ int TMROctForest::getDepNodeConn( const int **ptr, const int **conn,
 */
 TMROctantArray* TMROctForest::getOctsWithName( const char *name ){
   if (!topo){
-    fprintf(stderr, "TMROctForest: Must define topology to use \
-getOctsWithName()\n");
+    fprintf(stderr, "TMROctForest Error: Must define topology to use "
+            "getOctsWithName()\n");
     return NULL;
   }
   if (!octants){
-    fprintf(stderr, "TMROctForest: Must create octants to use \
-getOctsWithName()\n");
+    fprintf(stderr, "TMROctForest: Must create octants to use "
+            "getOctsWithName()\n");
     return NULL;
   }
 
@@ -5895,14 +5900,14 @@ getOctsWithName()\n");
 int TMROctForest::getNodesWithName( const char *name,
                                     int **_nodes ){
   if (!topo){
-    fprintf(stderr, "TMROctForest: Must define topology to use \
-getNodesWithName()\n");
+    fprintf(stderr, "TMROctForest Error: Must define topology to use "
+            "getNodesWithName()\n");
     *_nodes = NULL;
     return 0;
   }
   if (!conn){
-    fprintf(stderr, "TMROctForest: Nodes must be created before calling \
-getNodesWithName()\n");
+    fprintf(stderr, "TMROctForest Error: Nodes must be created before calling "
+            "getNodesWithName()\n");
     *_nodes = NULL;
     return 0;
   }
@@ -6406,14 +6411,14 @@ int TMROctForest::computeElemInterp( TMROctant *node,
 
   // Check that the interpolation type between the meshes are identical
   if (interp_type != coarse->interp_type){
-    fprintf(stderr,
-      "TMROctForest error: Interpolation types between meshes are not identical\n");
+    fprintf(stderr, "TMROctForest Error: Interpolation types between "
+            "meshes are not identical\n");
   }
 
   if (interp_type == TMR_BERNSTEIN_POINTS && 
       mesh_order - coarse->mesh_order > 1){
-    fprintf(stderr,
-      "TMROctForest error: mesh order difference across grids should be 1\n");
+    fprintf(stderr, "TMROctForest Error: Mesh order difference across "
+            "grids should be 1\n");
   }
 
   if (interp_type == TMR_BERNSTEIN_POINTS){
@@ -6781,9 +6786,8 @@ void TMROctForest::createInterpolation( TMROctForest *coarse,
     }
     else {
       // This should not happen. Print out an error message here.
-      fprintf(stderr,
-              "[%d] TMROctForest: Destination processor does not own node\n",
-              mpi_rank);
+      fprintf(stderr, "[%d] TMROctForest Error: Destination processor does "
+              "not own node\n", mpi_rank);
     }
   }
 

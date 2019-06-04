@@ -2967,6 +2967,11 @@ void TMRQuadForest::transformNode( TMRQuadrant *quad,
   partial quadtrees are freed.
 */
 void TMRQuadForest::createNodes(){
+  if (!quadrants){
+    fprintf(stderr, "TMRQuadForest Error: Cannot call createNodes(),"
+            "no quadrants have been created\n");
+    return;
+  }
   if (conn){
     // The connectivity has already been created and not deleted so
     // there is no need to create it a second time.
@@ -3967,13 +3972,13 @@ int TMRQuadForest::getDepNodeConn( const int **ptr, const int **conn,
 */
 TMRQuadrantArray* TMRQuadForest::getQuadsWithName( const char *name ){
   if (!topo){
-    fprintf(stderr, "TMRQuadForest: Must define topology to use \
-getQuadsWithName()\n");
+    fprintf(stderr, "TMRQuadForest Error: Must define topology to use "
+            "getQuadsWithName()\n");
     return NULL;
   }
   if (!quadrants){
-    fprintf(stderr, "TMRQuadForest: Must create quadrants to use \
-getQuadsWithName()\n");
+    fprintf(stderr, "TMRQuadForest Error: Must create quadrants to use "
+            "getQuadsWithName()\n");
     return NULL;
   }
 
@@ -4069,14 +4074,14 @@ getQuadsWithName()\n");
 int TMRQuadForest::getNodesWithName( const char *name,
                                      int **_nodes ){
   if (!topo){
-    fprintf(stderr, "TMRQuadForest: Must define topology to use \
-getNodesWithName()\n");
+    fprintf(stderr, "TMRQuadForest Error: Must define topology to use "
+            "getNodesWithName()\n");
     *_nodes = NULL;
     return 0;
   }
   if (!conn){
-    fprintf(stderr, "TMRQuadForest: Nodes must be created before calling \
-getNodesWithName()\n");
+    fprintf(stderr, "TMRQuadForest Error: Nodes must be created before "
+            "calling getNodesWithName()\n");
     *_nodes = NULL;
     return 0;
   }
@@ -4404,14 +4409,14 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
 
   // Check that the interpolation type between the meshes are identical
   if (interp_type != coarse->interp_type){
-    fprintf(stderr,
-      "TMRQuadForest error: Interpolation types between meshes are not identical\n");
+    fprintf(stderr, "TMRQuadForest Error: Interpolation types between "
+            "meshes are not identical\n");
   }
 
   if (interp_type == TMR_BERNSTEIN_POINTS && 
       mesh_order - coarse->mesh_order > 1){
-    fprintf(stderr,
-      "TMRQuadForest error: mesh order difference across grids should be 1\n");
+    fprintf(stderr, "TMRQuadForest Error: mesh order difference across "
+            "grids should be 1\n");
   }
 
   if (interp_type == TMR_BERNSTEIN_POINTS){
@@ -4737,8 +4742,8 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
     }
     else {
       // This should not happen. Print out an error message here.
-      fprintf(stderr,
-              "TMRQuadForest: Destination processor does not own node\n");
+      fprintf(stderr, "[%d] TMRQuadForest Error: Destination processor does "
+              "not own node\n", mpi_rank);
     }
   }
  
