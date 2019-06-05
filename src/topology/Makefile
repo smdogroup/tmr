@@ -16,6 +16,7 @@ CXX_OBJS = TMRTopoProblem.o \
 	TMRLagrangeFilter.o \
 	TMRConformFilter.o \
 	TMRHelmholtzFilter.o \
+	TMRHelmholtzPUFilter.o \
 	TMROctStiffness.o \
 	TMRQuadStiffness.o \
 	TMR_TACSTopoCreator.o \

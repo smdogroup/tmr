@@ -801,8 +801,8 @@ int TMR_GenerateBinFile( const char *filename,
             Xe[index] = X[node];
           }
           else {
-            printf("TMR_GenerateBinFile: \
-Failed at node with block: %d x %d y: %d z: %d\n",
+            printf("TMR_GenerateBinFile: Failed at node with block: "
+                   "%d x %d y: %d z: %d\n",
                    octs[i].block, octs[i].x, octs[i].y, octs[i].z);
           }
           if (c[index] >= 0){
