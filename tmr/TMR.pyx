@@ -4127,7 +4127,7 @@ cdef int _getboundarystencil(void *_self, int diag,
 
     return fail
 
-cdef class TMRHelmholtzPUFilter(TopoFilter):
+cdef class HelmholtzPUFilter(TopoFilter):
     def __cinit__(self, int N, list assemblers,
                   list filters, int vars_per_node=1):
         cdef int nlevels = 0
