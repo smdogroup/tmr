@@ -638,6 +638,21 @@ cdef extern from "TMRMatrixFilter.h":
         TMRMatrixFilter(double, int, int, TACSAssembler**, TMROctForest**, int)
         TMRMatrixFilter(double, int, int, TACSAssembler**, TMRQuadForest**, int)
 
+cdef extern from "TMRHelmholtzPUFilter.h":
+    ctypedef int (*getinteriorstencil)( void*, int, int,
+                                        TacsScalar*, double* )
+    ctypedef int (*getboundarystencil)( void*, int, TacsScalar*, int,
+                                        TacsScalar*, double* )
+
+    cdef cppclass TMRCallbackHelmholtzPUFilter(TMRTopoFilter):
+        TMRCallbackHelmholtzPUFilter(int, int, TACSAssembler**,
+                                     TMROctForest**, int)
+        TMRCallbackHelmholtzPUFilter(int, int, TACSAssembler**,
+                                     TMRQuadForest**, int)
+        void setSelfPointer(void*)
+        void setGetInteriorStencil(getinteriorstencil)
+        void setGetBoundaryStencil(getboundarystencil)
+
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(TMRTopoFilter*, TACSMg*, int, double)

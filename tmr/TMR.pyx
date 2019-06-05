@@ -38,6 +38,9 @@ np.import_array()
 # Initialize the MPI libraries in TMR (if not already done)
 tmr_init()
 
+# Import tracebacks for callbacks
+import traceback
+
 # Import the definition required for const strings
 from libc.string cimport const_char
 from libc.stdlib cimport malloc, free
@@ -4054,6 +4057,113 @@ cdef class MatrixFilter(TopoFilter):
             free(ofiltr)
 
         free(assemb)
+        return
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def getMap(self):
+        return _init_VarMap(self.ptr.getDesignVarMap())
+
+# This wraps a C++ array with a numpy array for later useage
+cdef inplace_array_1d(int nptype, int dim1, void *data_ptr):
+    '''Return a numpy version of the array'''
+    # Set the shape of the array
+    cdef int size = 1
+    cdef np.npy_intp shape[1]
+    cdef np.ndarray ndarray
+
+    # Set the first entry of the shape array
+    shape[0] = <np.npy_intp>dim1
+
+    # Create the array itself - Note that this function will not
+    # delete the data once the ndarray goes out of scope
+    ndarray = np.PyArray_SimpleNewFromData(size, shape,
+                                           nptype, data_ptr)
+
+    return ndarray
+
+cdef int _getinteriorstencil(void *_self, int diag, int npts,
+                             const TacsScalar *X, double *alphas ):
+    cdef int fail = 0
+    try:
+        _X = inplace_array_1d(np.double, 3*npts, <void*>X)
+        _alphas = inplace_array_1d(np.double, npts, <void*>alphas)
+        (<object>_self).getInteriorStencil(diag, _X, _alphas)
+    except:
+        tb = traceback.format_exc()
+        print(tb)
+        exit(0)
+
+    return fail
+
+cdef int _getboundarystencil(void *_self, int diag,
+                             const TacsScalar *n, int npts,
+                             const TacsScalar *X, double *alphas ):
+    cdef int fail = 0
+    try:
+        _n = np.array([n[0], n[1], n[2]])
+        _X = inplace_array_1d(np.double, 3*npts, <void*>X)
+        _alphas = inplace_array_1d(np.double, npts, <void*>alphas)
+        (<object>_self).getBoundaryStencil(diag, _n, _X, _alphas)
+    except:
+        tb = traceback.format_exc()
+        print(tb)
+        exit(0)
+
+    return fail
+
+cdef class TMRHelmholtzPUFilter(TopoFilter):
+    def __cinit__(self, int N, list assemblers,
+                  list filters, int vars_per_node=1):
+        cdef int nlevels = 0
+        cdef int isqforest = 0
+        cdef TACSAssembler **assemb = NULL
+        cdef TMROctForest **ofiltr = NULL
+        cdef TMRQuadForest **qfiltr = NULL
+        cdef TMRCallbackHelmholtzPUFilter *me = NULL
+
+        if len(assemblers) != len(filters):
+            errmsg = 'MatrixFilter must have equal number of objects in lists'
+            raise ValueError(errmsg)
+
+        nlevels = len(assemblers)
+        for i in range(nlevels):
+            if isinstance(filters[i], QuadForest):
+                isqforest = 1
+            elif isinstance(filters[i], OctForest):
+                isqforest = 0
+
+        assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
+        if isqforest:
+            qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
+            for i in range(nlevels):
+                qfiltr[i] = (<QuadForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+            me = new TMRCallbackHelmholtzPUFilter(N, nlevels, assemb,
+                                                  qfiltr, vars_per_node)
+            self.ptr = me
+            self.ptr.incref()
+            free(qfiltr)
+        else:
+            ofiltr = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
+            for i in range(nlevels):
+                ofiltr[i] = (<OctForest>filters[i]).ptr
+                assemb[i] = (<Assembler>assemblers[i]).ptr
+            me = new TMRCallbackHelmholtzPUFilter(N, nlevels, assemb,
+                                                  ofiltr, vars_per_node)
+            self.ptr = me
+            self.ptr.incref()
+            free(ofiltr)
+
+        free(assemb)
+
+        # Set the pointers
+        me.setSelfPointer(<void*>self)
+        me.setGetInteriorStencil(_getinteriorstencil)
+        me.setGetBoundaryStencil(_getboundarystencil)
+
         return
 
     def __dealloc__(self):

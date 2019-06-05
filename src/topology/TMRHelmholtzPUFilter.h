@@ -45,8 +45,8 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
 
   // Compute the stencil at a boundary node with the normal n
   virtual int getBoundaryStencil( int diagonal_index,
-                                  const double n[], int npts,
-                                  const TacsScalar Xpts[], double N[] ) = 0;
+                                  const TacsScalar n[], int npts,
+                                  const TacsScalar Xpts[], double alpha[] ) = 0;
 
   // Set the design variable values (including all local values)
   void setDesignVars( TACSBVec *x );
@@ -85,6 +85,72 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
 
   // Compute the Kronecker product
   void kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y=NULL );
+};
+
+/*
+  Create a partition of unity filter with callbacks
+*/
+class TMRCallbackHelmholtzPUFilter : public TMRHelmholtzPUFilter {
+ public:
+  TMRCallbackHelmholtzPUFilter( int _N, int _nlevels,
+                                TACSAssembler *_tacs[],
+                                TMROctForest *_filter[],
+                                int _vars_per_node=1 ):
+    TMRHelmholtzPUFilter(_N, _nlevels, _tacs, _filter, _vars_per_node){
+    self = NULL;
+    getinteriorstencil = NULL;
+    getboundarystencil = NULL;
+  }
+  TMRCallbackHelmholtzPUFilter( int _N, int _nlevels,
+                        TACSAssembler *_tacs[],
+                        TMRQuadForest *_filter[],
+                        int _vars_per_node=1 ):
+    TMRHelmholtzPUFilter(_N, _nlevels, _tacs, _filter, _vars_per_node){
+    self = NULL;
+    getinteriorstencil = NULL;
+    getboundarystencil = NULL;
+  }
+  ~TMRCallbackHelmholtzPUFilter(){}
+
+  // Set the pointers/function pointers
+  void setSelfPointer( void *_self ){ self = _self; }
+  void setGetInteriorStencil( int (*func)( void*, int, int,
+                                           const TacsScalar*, double* ) ){
+    getinteriorstencil = func;
+  }
+  void setGetBoundaryStencil( int (*func)( void*, int,
+                                           const TacsScalar*, int,
+                                           const TacsScalar*, double* ) ){
+    getboundarystencil = func;
+  }
+
+  // Compute the stencil at an interior node
+  int getInteriorStencil( int diagonal_index,
+                          int npts, const TacsScalar Xpts[],
+                          double alpha[] ){
+    if (self && getinteriorstencil){
+      return getinteriorstencil(self, diagonal_index, npts, Xpts, alpha);
+    }
+    return 1;
+  }
+
+  // Compute the stencil at a boundary node with the normal n
+  int getBoundaryStencil( int diagonal_index,
+                          const TacsScalar n[], int npts,
+                          const TacsScalar Xpts[], double alpha[] ){
+    if (self && getboundarystencil){
+      return getboundarystencil(self, diagonal_index, n, npts, Xpts, alpha);
+    }
+    return 1;
+  }
+
+ private:
+  void *self;
+  int (*getinteriorstencil)( void*, int, int,
+                             const TacsScalar*, double* );
+  int (*getboundarystencil)( void*, int, const TacsScalar*, int,
+                             const TacsScalar *, double* );
+
 };
 
 #endif // TMR_HELMHOLTZ_PARTITION_UNITY_FILTER_H
