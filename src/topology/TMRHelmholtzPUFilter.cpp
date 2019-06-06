@@ -115,6 +115,7 @@ void computeQuadtreeBoundaryNormals( TMRQuadForest *filter,
   // Get the mesh order
   const double *knots;
   const int mesh_order = filter->getInterpKnots(&knots);
+  const int nodes_per_elem = mesh_order*mesh_order;
 
   // Set the maximum length of any of the block sides
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
@@ -152,7 +153,8 @@ void computeQuadtreeBoundaryNormals( TMRQuadForest *filter,
       quadtree_edge_boundary[3] && (quads[i].y + h == hmax);
 
     // Get the local connectivity
-    const int *c = &conn[mesh_order*mesh_order*i];
+    const int *c = &conn[nodes_per_elem*i];
+    Xpts->getValues(nodes_per_elem, c, X);
 
     for ( int edge = 0; edge < 4; edge++ ){
       if (quadtree_edge_boundary[edge]){
@@ -225,8 +227,13 @@ void computeQuadtreeBoundaryNormals( TMRQuadForest *filter,
   // Add contributions from all procs
   normals->beginSetValues(TACS_ADD_VALUES);
   normals->endSetValues(TACS_ADD_VALUES);
-}
 
+  // Free values
+  delete [] X;
+  delete [] N;
+  delete [] Na;
+  delete [] Nb;
+}
 
 /*
   Find the boundary faces and set them as  and set them
@@ -258,6 +265,7 @@ void computeOctreeBoundaryNormals( TMROctForest *filter,
   // Get the mesh order
   const double *knots;
   const int mesh_order = filter->getInterpKnots(&knots);
+  const int nodes_per_elem = mesh_order*mesh_order*mesh_order;
 
   // Set the maximum length of any of the block sides
   const int32_t hmax = 1 << TMR_MAX_LEVEL;
@@ -300,7 +308,8 @@ void computeOctreeBoundaryNormals( TMROctForest *filter,
       octree_face_boundary[5] && (octs[i].z + h == hmax);
 
     // Get the local connectivity
-    const int *c = &conn[mesh_order*mesh_order*mesh_order*i];
+    const int *c = &conn[nodes_per_elem*i];
+    Xpts->getValues(nodes_per_elem, c, X);
 
     for ( int surface = 0; surface < 6; surface++ ){
       if (octree_face_boundary[surface]){
@@ -315,14 +324,14 @@ void computeOctreeBoundaryNormals( TMROctForest *filter,
           d2[2] = 1.0;
         }
         else if (surface < 4){
-          d1[0] = 1.0;
           pt0[1] = -1.0 + 2.0*(surface % 2);
-          d2[2] = 1.0;
+          d1[2] = 1.0;
+          d2[0] = 1.0;
         }
         else {
+          pt0[2] = -1.0 + 2.0*(surface % 2);
           d1[0] = 1.0;
           d2[1] = 1.0;
-          pt0[2] = -1.0 + 2.0*(surface % 2);
         }
 
         for ( int m = 0; m < mesh_order; m++ ){
@@ -394,6 +403,13 @@ void computeOctreeBoundaryNormals( TMROctForest *filter,
   // Add contributions from all procs
   normals->beginSetValues(TACS_ADD_VALUES);
   normals->endSetValues(TACS_ADD_VALUES);
+
+  // Free values
+  delete [] X;
+  delete [] N;
+  delete [] Na;
+  delete [] Nb;
+  delete [] Nc;
 }
 
 /*
@@ -574,8 +590,8 @@ void TMRHelmholtzPUFilter::initialize_matrix( int _N,
     }
     else {
       TacsScalar invnorm = 1.0/sqrt(normal[0]*normal[0] +
-                                 normal[1]*normal[1] +
-                                 normal[2]*normal[2]);
+                                    normal[1]*normal[1] +
+                                    normal[2]*normal[2]);
       normal[0] *= invnorm;
       normal[1] *= invnorm;
       normal[2] *= invnorm;
@@ -587,10 +603,16 @@ void TMRHelmholtzPUFilter::initialize_matrix( int _N,
     for ( int jp = rowp[i]; jp < rowp[i+1]; jp++, j++ ){
       if (cols[jp] == i){
         Dvals[i] = alpha[j];
+        if (Dvals[i] <= 0.0){
+          Dvals[i] = 1.0;
+        }
         Avals[jp] = 0.0;
       }
       else {
         Avals[jp] = alpha[j];
+        if (Avals[jp] < 0.0){
+          Avals[jp] = 0.0;
+        }
       }
     }
 
@@ -598,6 +620,9 @@ void TMRHelmholtzPUFilter::initialize_matrix( int _N,
     if (i >= n - nc){
       for ( int jp = browp[ib]; jp < browp[ib+1]; jp++, j++ ){
         Bvals[jp] = alpha[j];
+        if (Bvals[jp] < 0.0){
+          Bvals[jp] = 0.0;
+        }
       }
     }
 
