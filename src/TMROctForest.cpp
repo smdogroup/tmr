@@ -2922,6 +2922,12 @@ void TMROctForest::balanceOctant( TMROctant *oct,
   per edge) and balances across corners optionally.
 */
 void TMROctForest::balance( int balance_corner ){
+  if (!octants){
+    fprintf(stderr, "TMROctForest Error: Cannot call balance(), "
+            "no octants have been created\n");
+    return;
+  }
+
   // Create a hash table for the balanced tree
   TMROctantHash *hash = new TMROctantHash();
   TMROctantHash *ext_hash = new TMROctantHash();
@@ -4124,8 +4130,8 @@ void TMROctForest::transformNode( TMROctant *oct,
 */
 void TMROctForest::createNodes(){
   if (!octants){
-    fprintf(stderr, "TMROctForest Error: Cannot call createNodes(),"
-            "no octant have been created\n");
+    fprintf(stderr, "TMROctForest Error: Cannot call createNodes(), "
+            "no octants have been created\n");
     return;
   }
   if (conn){

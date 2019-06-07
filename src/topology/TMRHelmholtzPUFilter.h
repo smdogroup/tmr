@@ -54,10 +54,8 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   // Set values/add values to the vector
   void addValues( TacsScalar *in, TACSBVec *out );
 
+  void initialize();
  private:
-  void initialize_matrix( int _N,
-                          TMROctForest *oct_filter,
-                          TMRQuadForest *quad_filter);
 
   // Apply the filter to get the density values
   void applyFilter( TACSBVec *in, TACSBVec *out );

@@ -421,7 +421,13 @@ TMRHelmholtzPUFilter::TMRHelmholtzPUFilter( int _N,
                                             TMROctForest *_filter[],
                                             int _vars_per_node ):
   TMRConformFilter(_nlevels, _tacs, _filter, _vars_per_node){
-  initialize_matrix(_N, _filter[0], NULL);
+  N = _N;
+  t1 = t2 = t3 = NULL;
+  B = NULL;
+  Dinv = NULL;
+  Tinv = NULL;
+  y1 = y2 = NULL;
+  temp = NULL;
 }
 
 TMRHelmholtzPUFilter::TMRHelmholtzPUFilter( int _N,
@@ -430,7 +436,28 @@ TMRHelmholtzPUFilter::TMRHelmholtzPUFilter( int _N,
                                             TMRQuadForest *_filter[],
                                             int _vars_per_node ):
   TMRConformFilter(_nlevels, _tacs, _filter, _vars_per_node){
-  initialize_matrix(_N, NULL, _filter[0]);
+  N = _N;
+  t1 = t2 = t3 = NULL;
+  B = NULL;
+  Dinv = NULL;
+  Tinv = NULL;
+  y1 = y2 = NULL;
+  temp = NULL;
+}
+
+/*
+  Destroy the filter matrix
+*/
+TMRHelmholtzPUFilter::~TMRHelmholtzPUFilter(){
+  if (t1){ t1->decref(); }
+  if (t2){ t2->decref(); }
+  if (t3){ t3->decref(); }
+  if (B){ B->decref(); }
+  if (Dinv){ Dinv->decref(); }
+  if (Tinv){ Tinv->decref(); }
+  if (y1){ y1->decref(); }
+  if (y2){ y2->decref(); }
+  if (temp){ temp->decref(); }
 }
 
 /*
@@ -439,12 +466,7 @@ TMRHelmholtzPUFilter::TMRHelmholtzPUFilter( int _N,
   This code creates a TACSAssembler object (and frees it), assembles a
   mass matrix, creates the internal variables required for the filter.
 */
-void TMRHelmholtzPUFilter::initialize_matrix( int _N,
-                                              TMROctForest *oct_forest,
-                                              TMRQuadForest *quad_forest ){
-  // The number of terms to keep in the Neumann inverse approximation
-  N = _N;
-
+void TMRHelmholtzPUFilter::initialize(){
   // Create the Assembler object
   TACSAssembler *tacs = NULL;
   if (oct_filter){
@@ -452,7 +474,7 @@ void TMRHelmholtzPUFilter::initialize_matrix( int _N,
       new TMROctTACSMatrixCreator();
     matrix_creator3d->incref();
 
-    tacs = matrix_creator3d->createTACS(oct_forest,
+    tacs = matrix_creator3d->createTACS(oct_filter[0],
                                         TACSAssembler::NATURAL_ORDER);
     tacs->incref();
     matrix_creator3d->decref();
@@ -462,7 +484,7 @@ void TMRHelmholtzPUFilter::initialize_matrix( int _N,
       new TMRQuadTACSMatrixCreator();
     matrix_creator2d->incref();
 
-    tacs = matrix_creator2d->createTACS(quad_forest,
+    tacs = matrix_creator2d->createTACS(quad_filter[0],
                                         TACSAssembler::NATURAL_ORDER);
     tacs->incref();
     matrix_creator2d->decref();
@@ -499,10 +521,10 @@ void TMRHelmholtzPUFilter::initialize_matrix( int _N,
 
   // Set the values of the surface normals
   if (oct_filter){
-    computeOctreeBoundaryNormals(oct_forest, Xpts, normals);
+    computeOctreeBoundaryNormals(oct_filter[0], Xpts, normals);
   }
   else {
-    computeQuadtreeBoundaryNormals(quad_forest, Xpts, normals);
+    computeQuadtreeBoundaryNormals(quad_filter[0], Xpts, normals);
   }
 
   // Get the values in the matrix
@@ -690,21 +712,6 @@ void TMRHelmholtzPUFilter::initialize_matrix( int _N,
     T++;
     ty++;
   }
-}
-
-/*
-  Destroy the filter matrix
-*/
-TMRHelmholtzPUFilter::~TMRHelmholtzPUFilter(){
-  t1->decref();
-  t2->decref();
-  t3->decref();
-  B->decref();
-  Dinv->decref();
-  Tinv->decref();
-  y1->decref();
-  y2->decref();
-  temp->decref();
 }
 
 /*

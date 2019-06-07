@@ -4101,8 +4101,8 @@ cdef int _getinteriorstencil(void *_self, int diag, int npts,
                              const TacsScalar *X, double *alphas ):
     cdef int fail = 0
     try:
-        _X = inplace_array_1d(np.double, 3*npts, <void*>X)
-        _alphas = inplace_array_1d(np.double, npts, <void*>alphas)
+        _X = inplace_array_1d(np.NPY_DOUBLE, 3*npts, <void*>X)
+        _alphas = inplace_array_1d(np.NPY_DOUBLE, npts, <void*>alphas)
         (<object>_self).getInteriorStencil(diag, _X, _alphas)
     except:
         tb = traceback.format_exc()
@@ -4117,8 +4117,8 @@ cdef int _getboundarystencil(void *_self, int diag,
     cdef int fail = 0
     try:
         _n = np.array([n[0], n[1], n[2]])
-        _X = inplace_array_1d(np.double, 3*npts, <void*>X)
-        _alphas = inplace_array_1d(np.double, npts, <void*>alphas)
+        _X = inplace_array_1d(np.NPY_DOUBLE, 3*npts, <void*>X)
+        _alphas = inplace_array_1d(np.NPY_DOUBLE, npts, <void*>alphas)
         (<object>_self).getBoundaryStencil(diag, _n, _X, _alphas)
     except:
         tb = traceback.format_exc()
@@ -4176,6 +4176,7 @@ cdef class HelmholtzPUFilter(TopoFilter):
         me.setSelfPointer(<void*>self)
         me.setGetInteriorStencil(_getinteriorstencil)
         me.setGetBoundaryStencil(_getboundarystencil)
+        me.initialize()
 
         return
 

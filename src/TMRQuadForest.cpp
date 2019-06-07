@@ -2190,6 +2190,12 @@ void TMRQuadForest::balanceQuadrant( TMRQuadrant *quad,
   per edge) and balances across corners optionally.
 */
 void TMRQuadForest::balance( int balance_corner ){
+  if (!quadrants){
+    fprintf(stderr, "TMRQuadForest Error: Cannot call balance(), "
+            "no quadrants have been created\n");
+    return;
+  }
+
   // Create a hash table for the balanced tree
   TMRQuadrantHash *hash = new TMRQuadrantHash();
   TMRQuadrantHash *ext_hash = new TMRQuadrantHash();
@@ -2968,7 +2974,7 @@ void TMRQuadForest::transformNode( TMRQuadrant *quad,
 */
 void TMRQuadForest::createNodes(){
   if (!quadrants){
-    fprintf(stderr, "TMRQuadForest Error: Cannot call createNodes(),"
+    fprintf(stderr, "TMRQuadForest Error: Cannot call createNodes(), "
             "no quadrants have been created\n");
     return;
   }

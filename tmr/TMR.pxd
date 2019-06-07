@@ -651,6 +651,7 @@ cdef extern from "TMRHelmholtzPUFilter.h":
                                      TMROctForest**, int)
         TMRCallbackHelmholtzPUFilter(int, int, TACSAssembler**,
                                      TMRQuadForest**, int)
+        void initialize()
         void setSelfPointer(void*)
         void setGetInteriorStencil(getinteriorstencil)
         void setGetBoundaryStencil(getboundarystencil)
