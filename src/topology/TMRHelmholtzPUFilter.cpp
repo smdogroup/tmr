@@ -343,8 +343,8 @@ void computeOctreeBoundaryNormals( TMROctForest *filter,
                       m*mesh_order*mesh_order;
             }
             else if (surface < 4){
-              node = n + (surface % 2)*(mesh_order-1)*mesh_order +
-                     m*mesh_order*mesh_order;
+              node = m + (surface % 2)*(mesh_order-1)*mesh_order +
+                     n*mesh_order*mesh_order;
             }
             else {
               node = n + m*mesh_order +
@@ -491,8 +491,8 @@ void TMRHelmholtzPUFilter::initialize(){
   }
 
   // Create the matrix that we're building
-  TACSDistMat *dist_mat = tacs->createMat();
-  B = dist_mat;
+  TACSDistMat *distMat = tacs->createMat();
+  B = distMat;
   B->incref();
 
   // Get the variable info from TACS
@@ -500,9 +500,24 @@ void TMRHelmholtzPUFilter::initialize(){
   TACSBVecDepNodes *depNodes = tacs->getBVecDepNodes();
 
   // Get the distribute vector class from the matrix (which contains
-  // all the ghost nodes from adjacent processors that will be needed)
-  TACSBVecDistribute *vecDist;
-  dist_mat->getExtColMap(&vecDist);
+  // ghost nodes from adjacent processors that will be needed)
+  TACSBVecDistribute *colDist;
+  distMat->getExtColMap(&colDist);
+
+  // Get the distributed list of indices
+  TACSBVecDistribute *tacsDist = tacs->getBVecDistribute();
+  TACSBVecIndices *tacsIndex = tacsDist->getIndices();
+
+  // Get the map between the global-external
+  // variables and the local variables (for Bext)
+  TACSBVecIndices *colIndex = colDist->getIndices();
+  const int *col_vars;
+  colIndex->getIndices(&col_vars);
+
+  // Create a merged list of indices
+  TACSBVecIndices *vecIndex = new TACSBVecIndices(tacsIndex, colIndex);
+  vecIndex->setUpInverse();
+  TACSBVecDistribute *vecDist = new TACSBVecDistribute(varMap, vecIndex);
 
   // Create the node location vector
   TACSBVec *Xpts = new TACSBVec(varMap, 3, vecDist, depNodes);
@@ -529,11 +544,11 @@ void TMRHelmholtzPUFilter::initialize(){
 
   // Get the values in the matrix
   int n, nc;
-  dist_mat->getRowMap(NULL, &n, &nc);
+  distMat->getRowMap(NULL, &n, &nc);
 
   // Get the local and external contributions
   BCSRMat *Aloc, *Bext;
-  dist_mat->getBCSRMat(&Aloc, &Bext);
+  distMat->getBCSRMat(&Aloc, &Bext);
 
   // Get the sizes of the Aloc and Bext matrices
   const int *rowp, *cols;
@@ -545,14 +560,10 @@ void TMRHelmholtzPUFilter::initialize(){
   TacsScalar *Bvals;
   Bext->getArrays(NULL, &Nb, &Mb, &browp, &bcols, &Bvals);
 
-  // Get the map between the global-external
-  // variables and the local variables (for Bext)
-  TACSBVecIndices *bindex = vecDist->getIndices();
-  const int *col_vars;
-  bindex->getIndices(&col_vars);
-
   // Create the Dinv vector
   Dinv = tacs->createVec();
+  Dinv->incref();
+
   TacsScalar *Dvals;
   Dinv->getArray(&Dvals);
 
@@ -665,7 +676,6 @@ void TMRHelmholtzPUFilter::initialize(){
   t3 = tacs->createVec();
   y1 = tacs->createVec();
   y2 = tacs->createVec();
-  Dinv->incref();
   Tinv->incref();
   t1->incref();
   t2->incref();
@@ -718,10 +728,10 @@ void TMRHelmholtzPUFilter::initialize(){
   Compute the action of the filter on the input vector using Horner's
   method
 
-  t1 = 1/s*Dinv*in
+  t1 = Dinv*in
   out = t1
   for n in range(N):
-  .   out += t1 + 1/s*D^{-1}*M*out
+  .   out = t1 + D^{-1}*M*out
 */
 void TMRHelmholtzPUFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
   // Compute t1 = 1/s*Dinv*in
@@ -733,11 +743,11 @@ void TMRHelmholtzPUFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
 
   // Apply Horner's method
   for ( int n = 0; n < N; n++ ){
-    // Compute t2 = 1/s*D^{-1}*M*out
+    // Compute out = D^{-1}*M*out
     B->mult(out, t2);
-    kronecker(Dinv, t2);
+    kronecker(Dinv, t2, out);
 
-    // Compute out = t1 + 1/s*D^{-1}*M*out
+    // Compute out = t1 + D^{-1}*M*out
     out->axpy(1.0, t1);
   }
 
@@ -757,12 +767,11 @@ void TMRHelmholtzPUFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
 
   // Apply Horner's method
   for ( int n = 0; n < N; n++ ){
-    // Compute M*D^{-1}*out
+    // Compute B*D^{-1}*out
     kronecker(Dinv, out, t2);
-    B->mult(t2, t3);
-    out->axpy(1.0, t3);
+    B->mult(t2, out);
 
-    // Compute out = t1 + 1/s*M*D^{-1}*out
+    // Compute out = t1 + M*D^{-1}*out
     out->axpy(1.0, t1);
   }
 
