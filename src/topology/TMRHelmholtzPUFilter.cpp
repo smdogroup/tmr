@@ -731,12 +731,11 @@ void TMRHelmholtzPUFilter::initialize(){
   t1 = Dinv*in
   out = t1
   for n in range(N):
-  .   out = t1 + D^{-1}*M*out
+  .   out = t1 + D^{-1}*B*out
 */
 void TMRHelmholtzPUFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
   // Compute t1 = 1/s*Dinv*in
-  t1->copyValues(in);
-  kronecker(Dinv, t1);
+  kronecker(Dinv, in, t1);
 
   // Set out = 1/s*Dinv*in
   out->copyValues(t1);
@@ -759,8 +758,7 @@ void TMRHelmholtzPUFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
   Compute the transpose of the filter operation
 */
 void TMRHelmholtzPUFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
-  t1->copyValues(in);
-  kronecker(Tinv, t1);
+  kronecker(Tinv, in, t1);
 
   // Copy the values from t1 to the out vector
   out->copyValues(t1);
