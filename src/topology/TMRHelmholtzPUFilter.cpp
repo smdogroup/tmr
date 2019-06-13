@@ -495,24 +495,26 @@ void TMRHelmholtzPUFilter::initialize(){
   B = distMat;
   B->incref();
 
-  // Get the variable info from TACS
-  TACSVarMap *varMap = tacs->getVarMap();
-  TACSBVecDepNodes *depNodes = tacs->getBVecDepNodes();
-
   // Get the distribute vector class from the matrix (which contains
   // ghost nodes from adjacent processors that will be needed)
   TACSBVecDistribute *colDist;
   distMat->getExtColMap(&colDist);
 
-  // Get the distributed list of indices
-  TACSBVecDistribute *tacsDist = tacs->getBVecDistribute();
-  TACSBVecIndices *tacsIndex = tacsDist->getIndices();
+  // Get the variable info from TACS
+  TACSVarMap *varMap = tacs->getVarMap();
 
   // Get the map between the global-external
   // variables and the local variables (for Bext)
   TACSBVecIndices *colIndex = colDist->getIndices();
   const int *col_vars;
   colIndex->getIndices(&col_vars);
+
+  // Get the dependent node information
+  TACSBVecDepNodes *depNodes = tacs->getBVecDepNodes();
+
+  // Get the distributed list of indices
+  TACSBVecDistribute *tacsDist = tacs->getBVecDistribute();
+  TACSBVecIndices *tacsIndex = tacsDist->getIndices();
 
   // Create a merged list of indices
   TACSBVecIndices *vecIndex = new TACSBVecIndices(tacsIndex, colIndex);
@@ -523,16 +525,16 @@ void TMRHelmholtzPUFilter::initialize(){
   TACSBVec *Xpts = new TACSBVec(varMap, 3, vecDist, depNodes);
   Xpts->incref();
 
+  // Create the vector for the surface normals
+  TACSBVec *normals = new TACSBVec(varMap, 3, vecDist, depNodes);
+  normals->incref();
+
   // Get the node locations from the assembler object
   tacs->getNodes(Xpts);
 
   // Distribute the node locations
   Xpts->beginDistributeValues();
   Xpts->endDistributeValues();
-
-  // Create the vector for the surface normals
-  TACSBVec *normals = new TACSBVec(varMap, 3, vecDist, depNodes);
-  normals->incref();
 
   // Set the values of the surface normals
   if (oct_filter){
@@ -541,6 +543,9 @@ void TMRHelmholtzPUFilter::initialize(){
   else {
     computeQuadtreeBoundaryNormals(quad_filter[0], Xpts, normals);
   }
+
+  normals->beginDistributeValues();
+  normals->endDistributeValues();
 
   // Get the values in the matrix
   int n, nc;
@@ -728,27 +733,41 @@ void TMRHelmholtzPUFilter::initialize(){
   Compute the action of the filter on the input vector using Horner's
   method
 
-  t1 = Dinv*in
+  t1 = D^{-1}*in
   out = t1
   for n in range(N):
   .   out = t1 + D^{-1}*B*out
 */
 void TMRHelmholtzPUFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
-  // Compute t1 = 1/s*Dinv*in
+  // Compute t1 = D^{-1}*in
   kronecker(Dinv, in, t1);
 
-  // Set out = 1/s*Dinv*in
+  // Set out = D^{-1}*in
   out->copyValues(t1);
 
   // Apply Horner's method
   for ( int n = 0; n < N; n++ ){
-    // Compute out = D^{-1}*M*out
+    // Compute out = D^{-1}*B*out
     B->mult(out, t2);
     kronecker(Dinv, t2, out);
 
-    // Compute out = t1 + D^{-1}*M*out
+    // Compute out = t1 + D^{-1}*B*out
     out->axpy(1.0, t1);
   }
+
+  // t1 = (D - B)*out - in
+  B->mult(out, t1);
+  t1->axpy(1.0, in);
+  
+  TacsScalar *D, *t1_array, *out_array;
+  int size = Dinv->getArray(&D);
+  out->getArray(&out_array);
+  t1->getArray(&t1_array);
+  for ( int i = 0; i < size; i++ ){
+    t1_array[i] = out_array[i]/D[i] - t1_array[i];
+  }
+
+  printf("||(D - B)*out - in||: %12.6e\n", t1->norm());
 
   // Multiply by Tinv
   kronecker(Tinv, out);
@@ -769,7 +788,7 @@ void TMRHelmholtzPUFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
     kronecker(Dinv, out, t2);
     B->mult(t2, out);
 
-    // Compute out = t1 + M*D^{-1}*out
+    // Compute out = t1 + B*D^{-1}*out
     out->axpy(1.0, t1);
   }
 
