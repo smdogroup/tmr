@@ -36,7 +36,7 @@ class TMRQuadHelmholtz : public TACSElement {
  public:
   static const int NUM_NODES = order*order;
 
-  TMRQuadHelmholtz( TacsScalar r ){
+  TMRQuadHelmholtz( TacsScalar r=1.0 ){
     r2 = r*r;
   }
   ~TMRQuadHelmholtz(){}
@@ -322,7 +322,7 @@ class TMROctHelmholtz : public TACSElement {
  public:
   static const int NUM_NODES = order*order*order;
 
-  TMROctHelmholtz( TacsScalar r ){
+  TMROctHelmholtz( TacsScalar r=1.0 ){
     // Set the length scale
     r2 = r*r;
   }

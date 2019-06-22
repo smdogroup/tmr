@@ -19,8 +19,10 @@
 */
 
 #include "TMRHelmholtzPUFilter.h"
-#include "TMRMatrixFilterElement.h"
+#include "TMRHelmholtzElement.h"
 #include "TMR_TACSCreator.h"
+
+#include "TACSToFH5.h"
 
 /*
   Matrix filter creator classes
@@ -35,19 +37,19 @@ public:
                        TACSElement **elements ){
     TACSElement *elem = NULL;
     if (order == 2){
-      elem = new TMRQuadMatrixElement<2>();
+      elem = new TMRQuadHelmholtz<2>();
     }
     else if (order == 3){
-      elem = new TMRQuadMatrixElement<3>();
+      elem = new TMRQuadHelmholtz<3>();
     }
     else if (order == 4){
-      elem = new TMRQuadMatrixElement<4>();
+      elem = new TMRQuadHelmholtz<4>();
     }
     else if (order == 5){
-      elem = new TMRQuadMatrixElement<5>();
+      elem = new TMRQuadHelmholtz<5>();
     }
     else if (order == 6){
-      elem = new TMRQuadMatrixElement<6>();
+      elem = new TMRQuadHelmholtz<6>();
     }
 
     for ( int i = 0; i < num_elements; i++ ){
@@ -66,19 +68,19 @@ public:
                        TACSElement **elements ){
     TACSElement *elem = NULL;
     if (order == 2){
-      elem = new TMROctMatrixElement<2>();
+      elem = new TMROctHelmholtz<2>();
     }
     else if (order == 3){
-      elem = new TMROctMatrixElement<3>();
+      elem = new TMROctHelmholtz<3>();
     }
     else if (order == 4){
-      elem = new TMROctMatrixElement<4>();
+      elem = new TMROctHelmholtz<4>();
     }
     else if (order == 5){
-      elem = new TMROctMatrixElement<5>();
+      elem = new TMROctHelmholtz<5>();
     }
     else if (order == 6){
-      elem = new TMROctMatrixElement<6>();
+      elem = new TMROctHelmholtz<6>();
     }
 
     for ( int i = 0; i < num_elements; i++ ){
@@ -582,7 +584,7 @@ void TMRHelmholtzPUFilter::initialize(){
     // Count up the number of columns in the row
     int num_acols = rowp[i+1] - rowp[i];
 
-    int ib = 0;
+    int ib = -1;
     int num_bcols = 0;
     if (i >= n - nc){
       ib = i - (n - nc);
@@ -607,7 +609,7 @@ void TMRHelmholtzPUFilter::initialize(){
     }
 
     // Add contributions from the external part
-    if (i >= n - nc){
+    if (ib >= 0){
       for ( int jp = browp[ib]; jp < browp[ib+1]; jp++, j++ ){
         indices[j] = col_vars[bcols[jp]];
       }
@@ -636,7 +638,7 @@ void TMRHelmholtzPUFilter::initialize(){
       getBoundaryStencil(diagonal_index, normal, num_indices, X, alpha);
     }
 
-    // Make the call-back to evaluate the
+    // Make the call-back to evaluate the weights
     j = 0;
     for ( int jp = rowp[i]; jp < rowp[i+1]; jp++, j++ ){
       if (cols[jp] == i){
@@ -655,7 +657,7 @@ void TMRHelmholtzPUFilter::initialize(){
     }
 
     // Add contributions from the external part
-    if (i >= n - nc){
+    if (ib >= 0){
       for ( int jp = browp[ib]; jp < browp[ib+1]; jp++, j++ ){
         Bvals[jp] = alpha[j];
         if (Bvals[jp] < 0.0){
@@ -727,6 +729,17 @@ void TMRHelmholtzPUFilter::initialize(){
     T++;
     ty++;
   }
+
+  y1->setRand(0.0, 1.0);
+  y2->setRand(0.0, 1.0);
+  applyFilter(y1, t3);
+  TacsScalar dot1 = y2->dot(t3);
+
+  applyTranspose(y2, t3);
+  TacsScalar dot2 = y1->dot(t3);
+  printf("dot1 = %15.8e dot2 = %15.8e diff = %15.8e\n",
+         dot1, dot2, (dot1 - dot2)/dot1);
+
 }
 
 /*
@@ -755,20 +768,6 @@ void TMRHelmholtzPUFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
     out->axpy(1.0, t1);
   }
 
-  // t1 = (D - B)*out - in
-  B->mult(out, t1);
-  t1->axpy(1.0, in);
-  
-  TacsScalar *D, *t1_array, *out_array;
-  int size = Dinv->getArray(&D);
-  out->getArray(&out_array);
-  t1->getArray(&t1_array);
-  for ( int i = 0; i < size; i++ ){
-    t1_array[i] = out_array[i]/D[i] - t1_array[i];
-  }
-
-  printf("||(D - B)*out - in||: %12.6e\n", t1->norm());
-
   // Multiply by Tinv
   kronecker(Tinv, out);
 }
@@ -784,15 +783,15 @@ void TMRHelmholtzPUFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
 
   // Apply Horner's method
   for ( int n = 0; n < N; n++ ){
-    // Compute B*D^{-1}*out
+    // Compute B^{T}*D^{-1}*out
     kronecker(Dinv, out, t2);
-    B->mult(t2, out);
+    B->multTranspose(t2, out);
 
-    // Compute out = t1 + B*D^{-1}*out
+    // Compute out = t1 + B^{T}*D^{-1}*out
     out->axpy(1.0, t1);
   }
 
-  // Multiply by 1/s*Dinv
+  // Multiply by Dinv
   kronecker(Dinv, out);
 }
 
