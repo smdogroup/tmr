@@ -556,6 +556,7 @@ void TMRHelmholtzPUFilter::initialize(){
   // Get the local and external contributions
   BCSRMat *Aloc, *Bext;
   distMat->getBCSRMat(&Aloc, &Bext);
+  distMat->zeroEntries();
 
   // Get the sizes of the Aloc and Bext matrices
   const int *rowp, *cols;
@@ -602,7 +603,7 @@ void TMRHelmholtzPUFilter::initialize(){
     // Add contributions from the local part of A
     int j = 0;
     for ( int jp = rowp[i]; jp < rowp[i+1]; jp++, j++ ){
-      indices[j] = owner_range[mpi_rank] + cols[jp];
+      indices[j] = cols[jp] + owner_range[mpi_rank];
       if (cols[jp] == i){
         diagonal_index = j;
       }
@@ -729,17 +730,6 @@ void TMRHelmholtzPUFilter::initialize(){
     T++;
     ty++;
   }
-
-  y1->setRand(0.0, 1.0);
-  y2->setRand(0.0, 1.0);
-  applyFilter(y1, t3);
-  TacsScalar dot1 = y2->dot(t3);
-
-  applyTranspose(y2, t3);
-  TacsScalar dot2 = y1->dot(t3);
-  printf("dot1 = %15.8e dot2 = %15.8e diff = %15.8e\n",
-         dot1, dot2, (dot1 - dot2)/dot1);
-
 }
 
 /*
@@ -876,7 +866,9 @@ void TMRHelmholtzPUFilter::setDesignVars( TACSBVec *xvec ){
   x[0]->endDistributeValues();
 
   // Temporarily allocate an array to store the variables
+  int max_size = getMaxNumLocalVars();
   TacsScalar *xlocal = new TacsScalar[ getMaxNumLocalVars() ];
+  memset(xlocal, 0, max_size*sizeof(TacsScalar));
 
   // Copy the values to the local array
   int size = getLocalValuesFromBVec(0, x[0], xlocal);

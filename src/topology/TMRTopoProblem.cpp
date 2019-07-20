@@ -217,8 +217,7 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   // Set up the solver
   int nrestart = 5;
   int is_flexible = 0;
-  atol = 1e-30;
-  // double rtol = _rtol;
+  double atol = 1e-30;
   use_recyc_sol = 0;
   ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
@@ -633,7 +632,6 @@ void TMRTopoProblem::addBucklingConstraint( double sigma,
                                             int max_lanczos,
                                             double eigtol ){
   if (!buck){
-
     // Create a geometric stiffness matrix for buckling constraint
     TACSMat *gmat = tacs->createMat();
     TACSMat *kmat = tacs->createMat();

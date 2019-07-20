@@ -209,7 +209,6 @@ class TMRTopoProblem : public ParOptProblem {
   char *prefix;
 
   // Solver parameters
-  double atol;
   int use_recyc_sol;
   
   // Set the iteration count for printing to the file
