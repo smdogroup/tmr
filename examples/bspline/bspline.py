@@ -189,7 +189,7 @@ curves[3].setVertices(v4, v1)
 # Set the curve segments around the surface
 direct = [1, 1, 1, 1]
 loop = TMR.EdgeLoop(curves, direct)
-face.addEdgeLoop(loop)
+face.addEdgeLoop(1, loop)
 
 # Create the model object
 geo = TMR.Model(vertices, curves, faces)

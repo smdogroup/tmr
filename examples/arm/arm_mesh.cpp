@@ -3,6 +3,7 @@
 #include "TMRBspline.h"
 #include "TMRQuadForest.h"
 #include "TMRMesh.h"
+#include "TMRFaceMesh.h"
 #include "TACSAssembler.h"
 #include "isoFSDTStiffness.h"
 #include "PlaneStressQuad.h"
@@ -196,17 +197,17 @@ TMRTopology* setUpTopology( MPI_Comm comm,
   edges[3] = line1;   dir[3] =-1;
 
   // Add the outer curve loop
-  face->addEdgeLoop(new TMREdgeLoop(4, edges, dir));
+  face->addEdgeLoop(1, new TMREdgeLoop(4, edges, dir));
 
   // Add the inner curve segments
   edges[4] = inner12;  dir[0] = -1;
   edges[5] = inner11;  dir[1] = -1;  
-  face->addEdgeLoop(new TMREdgeLoop(2, &edges[4], dir));
+  face->addEdgeLoop(1, new TMREdgeLoop(2, &edges[4], dir));
 
   // Add the inner curve segments
   edges[6] = inner21;  dir[0] = -1;
   edges[7] = inner22;  dir[1] = -1;  
-  face->addEdgeLoop(new TMREdgeLoop(2, &edges[6], dir));
+  face->addEdgeLoop(1, new TMREdgeLoop(2, &edges[6], dir));
 
   TMREntity::setTolerances(1e-14, 1e-14);
 

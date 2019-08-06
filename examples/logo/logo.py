@@ -85,7 +85,7 @@ edges = [edge1, edge2, edge3, edge4]
 # Create the loop
 dirs = [1, 1, 1, 1]
 loop = TMR.EdgeLoop([edge1, edge2, edge3, edge4], dirs)
-face.addEdgeLoop(loop)
+face.addEdgeLoop(1, loop)
 
 # Create the TMRModel
 faces = [face]

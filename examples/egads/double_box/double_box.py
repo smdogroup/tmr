@@ -14,18 +14,6 @@ x = [0, 0, 0.5]
 d = [0.5, 0.5, 0.5]
 b2 = ctx.makeSolidBody(egads.BOX, rdata=[x, d])
 
-# # Rotate the second box
-# nrot = 1.0
-# xform = [0.0]*12
-# xform[0] = np.cos(nrot*(np.pi/2.0))
-# xform[1] = -np.sin(nrot*(np.pi/2.0))
-# xform[4] = np.sin(nrot*(np.pi/2.0))
-# xform[5] = np.cos(nrot*(np.pi/2.0))
-# xform[10] = 1.0
-
-# xform[-3] = nrot*(np.pi/2.0)
-# ctx.makeTransform(xform)
-
 # Write out to a STEP file
 m1 = ctx.makeTopology(egads.MODEL, children=[b1])
 m2 = ctx.makeTopology(egads.MODEL, children=[b2])

@@ -32,7 +32,7 @@ class TFIPlanar : public TMRFace {
     c[2] = e[3]; d[2] = -dir[3];
     c[3] = e[0]; d[3] = -dir[0];
     TMREdgeLoop *loop = new TMREdgeLoop(4, c, d);
-    addEdgeLoop(loop);
+    addEdgeLoop(1, loop);
   }
 
   // Get the parameter range for this surface

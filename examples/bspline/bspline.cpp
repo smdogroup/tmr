@@ -234,7 +234,7 @@ void test_surface_lofter( double htarget ){
   dir[2] = 1;
   dir[3] = 1;
   TMREdgeLoop *loop = new TMREdgeLoop(ncurves, curves, dir);
-  face->addEdgeLoop(loop);
+  face->addEdgeLoop(1, loop);
 
   // Set the communicator
   MPI_Comm comm = MPI_COMM_WORLD;

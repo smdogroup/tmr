@@ -183,8 +183,7 @@ int main( int argc, char *argv[] ){
     // Get the faces from the volume
     int num_faces;
     TMRFace **faces;
-    const int *dir;
-    volume[0]->getFaces(&num_faces, &faces, &dir);
+    volume[0]->getFaces(&num_faces, &faces);
 
     // Write the surfaces files out, if needed
     int rank = 0;

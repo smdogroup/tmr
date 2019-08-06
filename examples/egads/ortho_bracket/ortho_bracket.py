@@ -10,7 +10,7 @@ ctx = egads.context()
 
 parts = []
 
-r0 = 0.0625
+r0 = 0.05
 
 # Create the boxes
 x0 = [0, 0, 0]
