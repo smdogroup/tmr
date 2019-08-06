@@ -4187,7 +4187,7 @@ cdef class HelmholtzPUFilter(TopoFilter):
     def getMap(self):
         return _init_VarMap(self.ptr.getDesignVarMap())
 
-cdef class TopoProblem(pyParOptProblemBase):
+cdef class TopoProblem(ProblemBase):
     def __cinit__(self, TopoFilter fltr, Pc pc,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL

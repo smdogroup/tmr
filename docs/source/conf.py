@@ -43,7 +43,8 @@ release = u'1'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.doctest',
+extensions = ['breathe',
+    'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
     'sphinx.ext.ifconfig',
@@ -52,8 +53,11 @@ extensions = ['sphinx.ext.doctest',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
     'sphinx.ext.mathjax',
-    'sphinxcontrib.bibtex',
-]
+    'sphinxcontrib.bibtex',]
+
+# Breathe configuration
+breathe_projects = {'paropt': '../xml'}
+breathe_default_project = 'paropt'
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -130,8 +134,7 @@ todo_include_todos = False
 # a list of builtin themes.
 #
 #html_theme = 'alabaster'
-html_theme = 'scipy'
-html_theme_path = ['_theme']
+html_theme = 'sphinxdoc'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -161,7 +164,7 @@ html_theme_path = ['_theme']
 # pixels large.
 #
 # html_favicon = None
-html_show_sourcelink = False
+# html_show_sourcelink = False
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

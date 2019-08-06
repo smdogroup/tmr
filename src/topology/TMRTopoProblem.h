@@ -21,7 +21,7 @@
 #ifndef TMR_TOPO_PROBLEM_H
 #define TMR_TOPO_PROBLEM_H
 
-#include "ParOpt.h"
+#include "ParOptProblem.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
 #include "TMRTopoFilter.h"
