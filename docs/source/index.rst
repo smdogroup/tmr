@@ -44,10 +44,55 @@ Ting Wei Chin, Mark K. Leader, Graeme J. Kennedy, A scalable framework for large
              doi = {10.1016/j.advengsoft.2019.05.004},
              author = {Ting Wei Chin and Mark K. Leader and Graeme J. Kennedy}}
 
-Installation
-------------
+Python interface and code structure
+===================================
 
-TMR has several dependencies. The current version of TMR requires the following codes:
+There are two interfaces to :class:`TMR`: the C++ interface and the Python-level
+interface. :class:`TMR` is implemented in C++, so the interface through C++
+contains all publicly accessible class member functions. The Python-level
+interface wraps the most important classes and functions, but does not provide
+an interface to all lower-level operations.
+
+There are three primary types of classes within :class:`TMR`:
+
+#. Geometry and topology-level classes which interface with the underlying
+   geometry kernel
+#. Serial mesh-level classes which are used to create moderate-size
+   quadrilateral and hexahedral meshes based on the input geometry
+#. Quadtree and Octree-level classes which are used to create, modify, refine
+   and extract information from the quad/octrees. 
+
+.. toctree::
+    :maxdepth: 2
+
+    geometry_interface
+    mesh_interface
+    octree_interface
+
+Examples
+========
+
+.. toctree::
+   :maxdepth: 2
+
+   orthogonal_bracket
+   example
+   crm
+   interp
+
+Background and theory
+=====================
+
+.. toctree::
+   :maxdepth: 2
+
+   algorithms
+   error_estimation
+
+Installation
+============
+
+TMR has several dependencies. The current version of TMR requires the following external libraries:
 
 * MPI
 * BLAS/LAPACK
@@ -63,24 +108,14 @@ In addition, the python interface for TMR requires the following:
 * mpi4py
 * Cython
 
-Detailed installation instructions are below.
-
-Contents:
----------
+Detailed installation instructions are located here:
 
 .. toctree::
    :maxdepth: 2
 
-   algorithms
-   interface_and_methods
-   error_estimation
    install
-   orthogonal_bracket
-   example
-   crm
-   interp
 
-Indices and tables
+Indices and Tables
 ==================
 
 * :ref:`genindex`

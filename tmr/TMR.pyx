@@ -97,6 +97,9 @@ cdef class Vertex:
 
         Evaluate the point on the parametric surface and returns the node
         location
+
+        Returns:
+            np.ndarray: the vertex location
         """
         cdef TMRPoint pt
         self.ptr.evalPoint(&pt)
@@ -106,12 +109,10 @@ cdef class Vertex:
         """
         setName(self, aname)
 
-        Set the name associated with the vertex
+        Set the name associated with the Vertex
 
-        Parameters
-        ----------
-        aname: str
-            name associated with the vertex
+        Args:
+            aname (str): Name associated with the Vertex
         """
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
@@ -121,12 +122,10 @@ cdef class Vertex:
         """
         getName(self)
 
-        Get the name associated with the vertex
+        Get the name associated with the Vertex
 
-        Returns
-        ----------
-        name: str
-            name associated with the entity
+        Returns:
+            str: Name associated with the entity
         """
         cdef const char *name = NULL
         if self.ptr:
@@ -138,66 +137,110 @@ cdef class Vertex:
         """
         getEntityId(self)
 
-        Get the entity id associated with the vertex
+        Get the entity id associated with the Vertex
 
-        Returns
-        ----------
-        id: int
-            id number of the model
+        Returns:
+            int: Id number of the object, -1 for NULL object
         """
         if self.ptr:
             return self.ptr.getEntityId()
         return -1
 
-    def isSame(self, Vertex v):
-        if self.ptr.isSame(v.ptr):
-            return True
-        return False
-
-    def isSameObject(self, Vertex v):
-        if self.ptr == v.ptr:
-            return True
-        return False
-
     def setNodeNum(self, num):
         """
         setNodeNum(self, num)
-        Set the node number associated with the vertex
 
-        Parameters
-        ----------
-        num: int
-            node number associated with the vertex
+        Set the node number associated with the Vertex
+
+        Args:
+            num (int): Node number associated with the Vertex
         """
         cdef int n = num
         self.ptr.setNodeNum(&n)
         return n
 
-    def setCopySource(self, Vertex vert):
-        self.ptr.setCopySource(vert.ptr)
+    def isSame(self, Vertex v):
+        """
+        isSame(self, v)
+
+        Check if the two objects are geometrically equivalent using
+        the underlying CAD kernel.
+
+        Args:
+            v (Vertex): Vertex to check
+
+        Returns:
+            bool: True if the same, False otherwise
+        """
+        if self.ptr.isSame(v.ptr):
+            return True
+        return False
+
+    def isSameObject(self, Vertex v):
+        """
+        isSameObject(self, v)
+
+        Check if the two objects have the same pointer
+
+        Args:
+            v (Vertex): Vertex to check
+
+        Returns:
+            bool: True if the same object, False otherwise
+        """
+        if self.ptr == v.ptr:
+            return True
+        return False
+
+    def setCopySource(self, Vertex v):
+        """
+        setCopySource(self, v)
+
+        Set the copy source object. The node number for this vertex is
+        copied from the copy source during meshing, effectively merging
+        this Vertex and the copy source Vertex in the final mesh.
+
+        Args:
+            v (Vertex): New vertex source
+        """
+        self.ptr.setCopySource(v.ptr)
 
     def getCopySource(self):
+        """
+        getCopySource(self)
+
+        Get the copy source object.
+
+        Returns:
+            Vertex: Vertex object, None if no source is set
+        """
         cdef TMRVertex *v = NULL
         self.ptr.getCopySource(&v)
         if v != NULL:
             return _init_Vertex(v)
         return None
 
-    def checkMatching(self, Vertex v2, double atol=1e-6):
+    def checkMatching(self, Vertex v, double tol=1e-6):
         """
+        checkMatching(self, v, tol=1e-6)
+
         Check if two verticies are coincident, within a given tolerance
+
+        Args:
+            v (Vertex): Vertex to check
+            tol (float): Tolerance for
         """
         matching = False
 
         # Check if they are the same object
-        if self.ptr == v2.ptr:
+        if self.ptr == v.ptr:
             return True
 
         # Get the points and compare them
         pt1 = self.evalPoint()
-        pt2 = v2.evalPoint()
-        dx = np.abs(pt2-pt1)
-        if np.amax(dx) < atol:
+        pt2 = v.evalPoint()
+        dx = np.abs(pt2 - pt1)
+        if np.amax(dx) < tol:
             matching = True
 
         return matching
@@ -223,6 +266,14 @@ cdef class Edge:
             self.ptr.decref()
 
     def getRange(self):
+        """
+        getRange(self)
+
+        Get the range of parameter values for this edge.
+
+        Returns:
+            tmin, tmax: The parametric end points for the edge.
+        """
         cdef double tmin, tmax
         self.ptr.getRange(&tmin, &tmax)
         return tmin, tmax
@@ -231,31 +282,49 @@ cdef class Edge:
         """
         evalPoint(self, t)
 
-        Evaluate a node location on a curve with a single
-        parametric argument *t*. Provides access to the first and second vertices
-        that begin/end the edge.
+        Evaluate a position on an edge from a single parametric argument
+        *t*. Provides access to the first and second vertices that begin/end
+        the edge.
 
-        Parameters
-        ----------
-        t: double
-          parameteric location
+        Args:
+            t (float): Parameteric location
+
+        Returns:
+            np.ndarray: the (x,y,z) location
         """
         cdef TMRPoint pt
         self.ptr.evalPoint(t, &pt)
         return np.array([pt.x, pt.y, pt.z])
 
     def evalDeriv(self, double t):
-        '''
+        """
         evalDeriv(self, t)
 
-        Evaluate a node location on an edge and its derivative
-        '''
+        Evaluate a position on an edge and the derivative of the position from
+        a single parametric argument *t*.
+
+        Returns:
+            np.ndarray: The (x,y,z) position
+            np.ndarray: The derivative of position with respect to *t*
+        """
         cdef TMRPoint pt
         cdef TMRPoint deriv
         self.ptr.evalDeriv(t, &pt, &deriv)
         return np.array([pt.x, pt.y, pt.z]), np.array([deriv.x, deriv.y, deriv.z])
 
-    def invEvalPoint(self, np.ndarray[double, ndim=1, mode='c'] pt):
+    def invEvalPoint(self, pt):
+        """
+        invEvalPoint(self, pt)
+
+        Returns the result of an inverse evaluation on the edge.
+
+        Args:
+            pt (list): The position for the inverse evaluation
+
+        Returns:
+            fail (bool): Fail flag to indicate success/failure
+            t (float): The parametric point
+        """
         cdef TMRPoint point
         cdef double t
         cdef int fail = 0
@@ -266,11 +335,27 @@ cdef class Edge:
         return fail, t
 
     def setName(self, aname):
+        """
+        setName(self, aname)
+
+        Set the name associated with the edge
+
+        Args:
+            aname (str): Name associated with the edge
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
             self.ptr.setName(name)
 
     def getName(self):
+        """
+        getName(self)
+
+        Get the name associated with the edge
+
+        Returns:
+            str: Name associated with the entity
+        """
         cdef const char *name = NULL
         if self.ptr:
             name = self.ptr.getName()
@@ -278,36 +363,113 @@ cdef class Edge:
         return None
 
     def getEntityId(self):
+        """
+        getEntityId(self)
+
+        Get the entity id associated with the edge
+
+        Returns:
+            int: Id number of the model, -1 for NULL object
+        """
         if self.ptr:
             return self.ptr.getEntityId()
         return -1
 
     def isSame(self, Edge e):
+        """
+        isSame(self, e)
+
+        Check if the two objects are geometrically equivalent using
+        the underlying CAD kernel.
+
+        Args:
+            e (Edge): Edge to check
+
+        Returns:
+            bool: True if the same, False otherwise
+        """
         if self.ptr.isSame(e.ptr):
             return True
         return False
 
     def isSameObject(self, Edge e):
+        """
+        isSameObject(self, e)
+
+        Check if the two objects have the same pointer
+
+        Args:
+            e (Edge): Edge to check
+
+        Returns:
+            bool: True if the same object, False otherwise
+        """
         if self.ptr == e.ptr:
             return True
         return False
 
     def setVertices(self, Vertex v1, Vertex v2):
+        """
+        setVertices(self, v1, v2)
+
+        Set the start and end vertices of the edge
+
+        Args:
+            v1 (Vertex): First vertex at the starting point of the edge
+            v2 (Vertex): Second vertex at the end point of the edge
+        """
         self.ptr.setVertices(v1.ptr, v2.ptr)
 
     def getVertices(self):
+        """
+        getVertices(self):
+
+        Get the start and edge vertices associated with the edge
+
+        Returns:
+            v1 (Vertex): First vertex at the starting point of the edge
+            v2 (Vertex): Second vertex at the end point of the edge
+        """
         cdef TMRVertex *v1 = NULL
         cdef TMRVertex *v2 = NULL
         self.ptr.getVertices(&v1, &v2)
         return _init_Vertex(v1), _init_Vertex(v2)
 
     def isDegenerate(self):
+        """
+        isDegenerate(self)
+
+        Is this edge degenerate (edge length = 0)
+
+        Returns:
+            bool: True if degenerate, false otherwise
+        """
         return self.ptr.isDegenerate()
 
     def setSource(self, Edge e):
+        """
+        setSource(self, e)
+
+        Set the source Edge object. When this edge is meshed, the number
+        of nodes along the edge will be equal to the number of nodes along
+        the source Edge. The source Edge will be meshed first. Note that this
+        is different than the setCopySource() which also copies the node
+        numbers from the copy source edge.
+
+        Args:
+            e (Edge): New edge source
+        """
         self.ptr.setSource(e.ptr)
 
     def getSource(self):
+        """
+        getSource(self)
+
+        Get the source Edge object
+
+        Returns:
+            Edge: Edge object, None if no source is set
+        """
         cdef TMREdge *e = NULL
         self.ptr.getSource(&e)
         if e != NULL:
@@ -315,12 +477,36 @@ cdef class Edge:
         return None
 
     def setMesh(self, EdgeMesh mesh):
+        """
+        setMesh(self, mesh)
+
+        Set the EdgeMesh object associated with the edge
+
+        Args:
+            mesh (EdgeMesh): The EdgeMesh object set for this edge
+        """
         self.ptr.setMesh(mesh.ptr)
 
     def setCopySource(self, Edge edge):
+        """
+        setCopySource(self, e)
+
+        Set the source Edge object for the node numbers
+
+        Args:
+            e (Edge): New edge source
+        """
         self.ptr.setCopySource(edge.ptr)
 
     def getCopySource(self):
+        """
+        getCopySource(self)
+
+        Get the source Edge object for the node numbers
+
+        Returns:
+            Edge: Edge object, None if no source is set
+        """
         cdef TMREdge *e = NULL
         self.ptr.getCopySource(&e)
         if e != NULL:
@@ -328,47 +514,64 @@ cdef class Edge:
         return None
 
     def writeToVTK(self, fname):
+        """
+        writeToVTK(self, fname)
+
+        Write the Edge to a VTK file for visualization.
+
+        Args:
+            fname (str): File name
+        """
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
-    def checkMatching(self, Edge e2, double atol=1e-6):
+    def checkMatching(self, Edge e, double tol=1e-6):
         """
-        Check if two edges are coincident, within a given tolerance
+        checkMatching(self, e, tol=1e6)
+
+        Check if two edges are coincident, within a given tolerance.
+
+        Args:
+            e (Edge): The Edge object to check
+            tol (float): The tolerance to use in the check
+
+        Returns:
+            bool: True if the Edges match, False otherwise
         """
         matching = False
 
         # Trivial check if they are the same object
-        if self.ptr == e2.ptr:
+        if self.ptr == e.ptr:
             return True
 
         # Get the verts on each edge
         e1_v1, e1_v2 = self.getVertices()
-        e2_v1, e2_v2 = e2.getVertices()
+        e2_v1, e2_v2 = e.getVertices()
 
         # Check if the endpoints match
-        if ((e1_v1.checkMatching(e2_v1, atol=atol) and
-             e1_v2.checkMatching(e2_v2, atol=atol)) or
-            (e1_v2.checkMatching(e2_v1, atol=atol) and
-             e1_v1.checkMatching(e2_v2, atol=atol))):
+        if ((e1_v1.checkMatching(e2_v1, tol=tol) and
+             e1_v2.checkMatching(e2_v2, tol=tol)) or
+            (e1_v2.checkMatching(e2_v1, tol=tol) and
+             e1_v1.checkMatching(e2_v2, tol=tol))):
             # Check if these are degenerate edges
-            if (self.isDegenerate() and e2.isDegenerate()):
+            if (self.isDegenerate() and e.isDegenerate()):
                 return True # same and both degenerate
-            elif self.isDegenerate() != e2.isDegenerate():
+            elif self.isDegenerate() != e.isDegenerate():
                 return False # only one is degenerate
             # Check a midpoint on each
             else:
                 e1_tmin, e1_tmax = self.getRange()
                 e1_pt = self.evalPoint(0.5*(e1_tmin + e1_tmax))
-                fail, t2 = e2.invEvalPoint(e1_pt)
+                fail, t2 = e.invEvalPoint(e1_pt)
 
                 if fail != 0:
                     matching = False
                 else:
-                    e2_tmin, e2_tmax = e2.getRange()
-                    if t2 + atol >= e2_tmin and t2 <= e2_tmax + atol:
-                        e2_pt = e2.evalPoint(t2)
+                    e2_tmin, e2_tmax = e.getRange()
+                    if t2 + tol >= e2_tmin and t2 <= e2_tmax + tol:
+                        e2_pt = e.evalPoint(t2)
                         dx = np.abs(e2_pt - e1_pt)
-                        if np.amax(dx) < atol:
+                        if np.amax(dx) < tol:
                             matching = True
 
         return matching
@@ -387,6 +590,21 @@ cdef class EdgeLoop:
     """
     cdef TMREdgeLoop *ptr
     def __cinit__(self, list edges=None, list dirs=None):
+        """
+        __cinit__(self, edges=None, dirs=None)
+
+        Create an edge loop from a collection of edges and their associated
+        directions.
+
+        The EdgeLoop should traverse the edges around an enclosing face such that
+        the face material is always to the left of the edge. This property is not
+        checked by TMR. Usually you will have to specify the directions since the
+        orientation of the edge list is important.
+
+        Args:
+            edges (list): A list of Edge objects
+            dirs (list): A list of +/- integers indicating relative direction
+        """
         cdef int nedges = 0
         cdef TMREdge **e = NULL
         cdef int *d = NULL
@@ -440,11 +658,28 @@ cdef class EdgeLoop:
             self.ptr.decref()
 
     def getEntityId(self):
+        """
+        getEntityId(self)
+
+        Get the entity id associated with the EdgeLoop
+
+        Returns:
+            int: Id number of the object, -1 for NULL object
+        """
         if self.ptr:
             return self.ptr.getEntityId()
         return -1
 
     def getEdgeLoop(self):
+        """
+        getEdgeLoop(self)
+
+        Get the list of edges and directions from this EdgeLoop
+
+        Returns:
+            list: The list of Edge objects
+            list: The list of +/- integers indicating relative directions
+        """
         cdef int nedges = 0
         cdef TMREdge **edges = NULL
         cdef const int *dirs = NULL
@@ -456,18 +691,27 @@ cdef class EdgeLoop:
             d.append(dirs[i])
         return e, d
 
-    def checkMatching(self, EdgeLoop eloop2, double atol=1e-6):
+    def checkMatching(self, EdgeLoop eloop, double tol=1e-6):
         """
-        Check if two edge loops are coincident, within a given tolerance
+        checkMatching(self, eloop, tol=1e-6)
+
+        Check if two edge loops are coincident, within a given tolerance.
+
+        Args:
+            eloop (EdgeLoop): The EdgeLoop object to check
+            tol (float): The tolerance of the check
+
+        Returns:
+            bool: True if the loops match, False otherwise
         """
         matching = False
 
         # Trivial check if they are the same object
-        if self.ptr == eloop2.ptr:
+        if self.ptr == eloop.ptr:
             return True
 
         edges1, dirs1 = self.getEdgeLoop()
-        edges2, dirs2 = eloop2.getEdgeLoop()
+        edges2, dirs2 = eloop.getEdgeLoop()
 
         # If they have different number of edges, not matching
         if len(edges1) != len(edges2):
@@ -477,7 +721,7 @@ cdef class EdgeLoop:
         nmatches = 0
         for e1 in edges1:
             for e2 in edges2:
-                if e1.checkMatching(e2, atol=atol):
+                if e1.checkMatching(e2, tol=tol):
                     nmatches += 1
 
         matching = (nmatches == len(edges1))
@@ -505,6 +749,14 @@ cdef class Face:
             self.ptr.decref()
 
     def getRange(self):
+        """
+        getRange(self)
+
+        Get the range of parameter values for this Face.
+
+        Returns:
+            umin, vmin, umax, vmax The parametric limits for the Face
+        """
         cdef double umin, vmin, umax, vmax
         self.ptr.getRange(&umin, &vmin, &umax, &vmax)
         return umin, vmin, umax, vmax
@@ -516,23 +768,36 @@ cdef class Face:
         Evaluate a node location given a parametric location
         (*u,v*). Access the edge loops that bound the face.
 
-        Parameters
-        ----------
-        u: double
-         Parametric location in u
-        v: double
-         Parametric location in v
+        Args:
+            u (float): Parametric location in u
+            v (float): Parametric location in v
         """
         cdef TMRPoint pt
         self.ptr.evalPoint(u, v, &pt)
         return np.array([pt.x, pt.y, pt.z])
 
     def setName(self, aname):
+        """
+        setName(self, aname)
+
+        Set the name associated with the Face
+
+        Args:
+            aname (str): Name associated with the Face
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
             self.ptr.setName(name)
 
     def getName(self):
+        """
+        getName(self)
+
+        Get the name associated with the Face
+
+        Returns:
+            str: Name associated with the entity
+        """
         cdef const char *name = NULL
         if self.ptr:
             name = self.ptr.getName()
@@ -540,27 +805,83 @@ cdef class Face:
         return None
 
     def getEntityId(self):
+        """
+        getEntityId(self)
+
+        Get the entity id associated with the Face
+
+        Returns:
+            int: Id number of the object, -1 for NULL object
+        """
         if self.ptr:
             return self.ptr.getEntityId()
         return -1
 
     def isSame(self, Face f):
+        """
+        isSame(self, f)
+
+        Check if the two objects are geometrically equivalent using
+        the underlying CAD kernel.
+
+        Args:
+            f (Face): Face to check
+
+        Returns:
+            bool: True if the same, False otherwise
+        """
         if self.ptr.isSame(f.ptr):
             return True
         return False
 
     def isSameObject(self, Face f):
+        """
+        isSameObject(self, f)
+
+        Check if the two objects have the same pointer
+
+        Args:
+            f (Face): Face to check
+
+        Returns:
+            bool: True if the same object, False otherwise
+        """
         if self.ptr == f.ptr:
             return True
         return False
 
     def getNumEdgeLoops(self):
+        """
+        getNumEdgeLoops(self)
+
+        Get the number of edge loops stored by this object
+
+        Returns:
+            int: The number of edge loops
+        """
         return self.ptr.getNumEdgeLoops()
 
     def addEdgeLoop(self, int _dir, EdgeLoop loop):
+        """
+        addEdgeLoop(self, _dir, loop)
+
+        Add an EdgeLoop object to the Face.
+
+        Args:
+            _dir: The direction of the EdgeLoop
+            loop: The EdgeLoop object to add
+        """
         self.ptr.addEdgeLoop(_dir, loop.ptr)
 
     def getEdgeLoop(self, k):
+        """
+        getNumEdgeLoops(self)
+
+        Get the number of edge loops stored by this object
+
+        Returns:
+            int: The number of edge loops
+        """
         cdef TMREdgeLoop *loop = NULL
         self.ptr.getEdgeLoop(k, &loop)
         if loop:
@@ -568,6 +889,20 @@ cdef class Face:
         return None
 
     def setSource(self, Volume v, Face f, set_edges=False):
+        """
+        setSource(self, v, f, set_edges=False)
+
+        Set the source Face to copy the connectivity from within the specified
+        Volume. This code copies the connectivity of the mesh on the source Face
+        to this Face, as long as they share the same Volume. The Volume is needed
+        to ensure the orientation of the Faces are taken into account.
+
+        Args:
+            v (Volume): Volume which contains both this Face and the Face *f*
+            f (Face): Source Face to set
+            set_edges (bool): Set source edges for all edges connecting the source
+            and destination Face. This is useful for mesh sweeping.
+        """
         if set_edges:
             # Get the edges from the source face
             source_edges = {}
@@ -640,6 +975,14 @@ cdef class Face:
             self.ptr.setSource(v.ptr, f.ptr)
 
     def getSource(self):
+        """
+        getSource(self)
+
+        Get the source Volume and Face object
+
+        Returns:
+            the Volume and Face objects, None if no source is set
+        """
         cdef TMRFace *f = NULL
         cdef TMRVolume *v = NULL
         self.ptr.getSource(&v, &f)
@@ -648,9 +991,29 @@ cdef class Face:
         return None, None
 
     def setCopySource(self, Face face, int orient=-1):
+        """
+        setCopySource(self, face, orient=-1)
+
+        Set the copy source Face object. The mesh for this Face will be copied
+        from the copy source Face, including node numbering. This essentially
+        merges this mesh and the copy source meshes together in the final global
+        mesh.
+
+        Args:
+            face (Fdge): New face source
+            orient (int): Relative orientation of the two Faces
+        """
         self.ptr.setCopySource(orient, face.ptr)
 
     def getCopySource(self):
+        """
+        getCopySource(self)
+
+        Get the copy source Face object and its orientation
+
+        Returns:
+            The relative orientation and Face (None if not set)
+        """
         cdef TMRFace *f = NULL
         cdef int orient = 0
         self.ptr.getCopySource(&orient, &f)
@@ -659,29 +1022,64 @@ cdef class Face:
         return orient, None
 
     def setMesh(self, FaceMesh mesh):
+        """
+        setMesh(self, mesh)
+
+        Set the FaceMesh object associated with the Face
+
+        Args:
+            mesh (FaceMesh): The FaceMesh object set for this Face
+        """
         self.ptr.setMesh(mesh.ptr)
 
     def getMesh(self):
+        """
+        getMesh(self)
+
+        Set the FaceMesh object associated with the Face
+
+        Args:
+            mesh (FaceMesh): The FaceMesh object set for this Face
+        """
         cdef TMRFaceMesh *fmesh
         self.ptr.getMesh(&fmesh)
-        return _init_FaceMesh(fmesh)
+        if fmesh != NULL:
+            return _init_FaceMesh(fmesh)
+        return None
 
     def writeToVTK(self, fname):
+        """
+        writeToVTK(self, fname)
+
+        Write the Face to a VTK file for visualization.
+
+        Args:
+            fname (str): File name
+        """
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
-    def checkMatching(self, Face f2, atol=1e-6):
+    def checkMatching(self, Face f, tol=1e-6):
         """
-        Check if two faces are coincident, within a given tolerance
+        checkMatching(self, f, tol=1e6)
+
+        Check if the two Faces are coincident, within a given tolerance.
+
+        Args:
+            f (Face): The Face object to check
+            tol (float): The tolerance to use in the check
+
+        Returns:
+            bool: True if the Faces match, False otherwise
         """
         matching = False
 
         # Trivial check if they are the same object
-        if self.ptr == f2.ptr:
+        if self.ptr == f.ptr:
             return True
 
         nloop1 = self.getNumEdgeLoops()
-        nloop2 = f2.getNumEdgeLoops()
+        nloop2 = f.getNumEdgeLoops()
         # No match if the faces have different numbers of edge loops
         if nloop1 != nloop2:
             return False
@@ -691,8 +1089,8 @@ cdef class Face:
         for i in range(nloop1):
             l1 = self.getEdgeLoop(i)
             for j in range(nloop2):
-                l2 = f2.getEdgeLoop(j)
-                if l1.checkMatching(l2, atol=atol):
+                l2 = f.getEdgeLoop(j)
+                if l1.checkMatching(l2, tol=tol):
                     nmatched += 1
                     break
 
@@ -734,11 +1132,27 @@ cdef class Volume:
             self.ptr.decref()
 
     def setName(self, aname):
+        """
+        setName(self, aname)
+
+        Set the name associated with the volume
+
+        Args:
+            aname (str): Name associated with the volume
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         if self.ptr:
             self.ptr.setName(name)
 
     def getName(self):
+        """
+        getName(self)
+
+        Get the name associated with the volume
+
+        Returns:
+            str: Name associated with the entity
+        """
         cdef const char *name = NULL
         if self.ptr:
             name = self.ptr.getName()
@@ -746,11 +1160,27 @@ cdef class Volume:
         return None
 
     def getEntityId(self):
+        """
+        getEntityId(self)
+
+        Get the entity id associated with the volume
+
+        Returns:
+            int: Id number of the model, -1 for NULL object
+        """
         if self.ptr:
             return self.ptr.getEntityId()
         return -1
 
     def getFaces(self):
+        """
+        getFaces(self)
+
+        Get the Face objects referenced by this Volume
+
+        Returns:
+            list: List of Face objects
+        """
         cdef TMRFace **f
         cdef int num_faces = 0
         if self.ptr:
@@ -766,7 +1196,12 @@ cdef class Volume:
 
     def getSweptFacePairs(self):
         """
+        getSweptFacePairs(self)
+
         Find source and target faces to see if this is a sweepable volume
+
+        Returns:
+            list: A list of two Face objects that can be swept
         """
         faces = self.getFaces()
 
@@ -1371,6 +1806,14 @@ cdef class Model:
             self.ptr.decref()
 
     def getVolumes(self):
+        """
+        getVolumes(self)
+
+        Get the list of Volume objects from the Model
+
+        Returns:
+            list: A list of the Volume objects
+        """
         cdef TMRVolume **vol
         cdef int num_vol = 0
         if self.ptr:
@@ -1381,6 +1824,14 @@ cdef class Model:
         return volumes
 
     def getFaces(self):
+        """
+        getFaces(self)
+
+        Get the list of Face objects from the Model
+
+        Returns:
+            list: A list of the Face objects
+        """
         cdef TMRFace **f
         cdef int num_faces = 0
         if self.ptr:
@@ -1391,6 +1842,14 @@ cdef class Model:
         return faces
 
     def getEdges(self):
+        """
+        getEdges(self)
+
+        Get the list of Edge objects from the Model
+
+        Returns:
+            list: A list of the Edge objects
+        """
         cdef TMREdge **e
         cdef int num_edges = 0
         if self.ptr:
@@ -1401,6 +1860,14 @@ cdef class Model:
         return edges
 
     def getVertices(self):
+        """
+        getVertices(self)
+
+        Get the list of Vertex objects from the Model
+
+        Returns:
+            list: A list of the Vertex objects
+        """
         cdef TMRVertex **v
         cdef int num_verts = 0
         if self.ptr:
@@ -1412,7 +1879,18 @@ cdef class Model:
 
     def writeModelToTecplot(self, fname,
                             vlabels=True, elabels=True, flabels=True):
-        '''Write a representation of the edge loops to a file'''
+        """
+        writeModelToTecplot(self, fname,
+                            vlabels=True, elabels=True, flabels=True)
+
+        Write a representation of the model to a tecplot file with labels.
+
+        Args:
+            fname (str): File name to write
+            vlabels (bool): Write the vertex labels
+            elabels (bool): Write the edge labels
+            flabels (bool): Write the face labels
+        """
         fp = open(fname, 'w')
         fp.write('Variables = x, y, z, tx, ty, tz\n')
 
@@ -1522,10 +2000,8 @@ cdef class MeshOptions:
         Number of smoothing steps to apply during both the Laplacian and quad
         smoothing algorithms
 
-        Parameters
-        ----------
-        value: int
-           Number of smoothing steps
+        Args:
+            value (int): Number of smoothing steps
         """
         def __get__(self):
             return self.ptr.num_smoothing_steps
@@ -1537,10 +2013,8 @@ cdef class MeshOptions:
         Use the mesh quality indicator to determine when to accept new triangles
         in the frontal algorithm.
 
-        Parameters
-        ----------
-        value: double
-          Quality factor
+        Args:
+            value (float): Quality factor
         """
         def __get__(self):
             return self.ptr.frontal_quality_factor
@@ -1552,10 +2026,8 @@ cdef class MeshOptions:
         Print level to provide more verbosity during the triangularization
         algorithm
 
-        Parameters
-        ----------
-        value: int
-           Print level for the operation
+        Args:
+            value (int): Print level for the operation
         """
         def __get__(self):
             return self.ptr.triangularize_print_level
@@ -1580,10 +2052,8 @@ cdef class MeshOptions:
         Write out a histogram of the mesh quality in the final smoothed
         quadrilateral mesh.
 
-        Parameters
-        ----------
-        value: bool
-           Whether or not to write the mesh quality histogram
+        Args:
+            value (bool): Whether or not to write the mesh quality histogram
         """
         def __get__(self):
             return self.ptr.write_mesh_quality_histogram
@@ -1786,22 +2256,16 @@ cdef class Mesh:
     def mesh(self, double h=1.0, MeshOptions opts=None,
              ElementFeatureSize fs=None):
         """
-        mesh(self, h, opts, fs)
+        mesh(self, h=1.0, opts=None, fs=None)
 
         Mesh the model with the provided mesh spacing *h*, default meshing
         options :class:`~TMR.MeshOptions` opts if it is not provided or given
         :class:`~TMR.ElementFeatureSize` fs
 
-        Parameters
-        ----------
-        h: double
-           Mesh spacing
-
-        opts: :class:`~TMR.MeshOptions`
-           Meshing options
-
-        fs: :class:`~TMR.ElementFeatureSize`
-           Element Feature Size options
+        Args:
+            h (float): Global mesh spacing parameter
+            opts (MeshOptions): Meshing options class
+            fs (ElementFeatureSize): ElementFeatureSize class specifying spacing
         """
         cdef TMRMeshOptions default
         if fs is not None:
@@ -1820,6 +2284,9 @@ cdef class Mesh:
         getMeshPoints(self)
 
         Retrieve a global array of the mesh locations
+
+        Returns:
+            np.ndarray: Numpy array of the node locations
         """
         cdef TMRPoint *X
         cdef int npts = 0
@@ -1836,6 +2303,9 @@ cdef class Mesh:
         getQuadConnectivity(self)
 
         Retrieve the global connectivity from the quadrilateral mesh
+
+        Returns:
+            np.ndarray: Numpy array of the quadrilateral connectivity
         """
         cdef const int *quads = NULL
         cdef int nquads = 0
@@ -1854,6 +2324,9 @@ cdef class Mesh:
         getTriConnectivity(self)
 
         Retrieve the global connectivity from the triangular mesh
+
+        Returns:
+            np.ndarray: Numpy array of the triangle connectivity
         """
         cdef const int *tris = NULL
         cdef int ntris = 0
@@ -1871,6 +2344,9 @@ cdef class Mesh:
         getHexConnectivity(self)
 
         Retrieve the global connectivity from the hexahedral mesh
+
+        Returns:
+            np.ndarray: Numpy array of the hexahedral connectivity
         """
         cdef const int *hex = NULL
         cdef int nhex = 0
@@ -1893,6 +2369,9 @@ cdef class Mesh:
         createModelFromMesh(self)
 
         Create a geometry model based on the input mesh
+
+        Returns:
+            Model: The Model geometry representation of the underlying mesh
         """
         cdef TMRModel *model = NULL
         model = self.ptr.createModelFromMesh()
@@ -1904,13 +2383,9 @@ cdef class Mesh:
 
         Write both the quadrilateral and hexahedral mesh to a BDF file
 
-        Parameters
-        ----------
-        fname: str
-               filename
-
-        outtype: str
-                 Type of mesh to output to BDF file i.e. quad or hex
+        Args:
+            fname (str): File name
+            outtype (str): Type of mesh to output to BDF file i.e. quad or hex
         """
         cdef char *filename = tmr_convert_str_to_chars(fname)
         cdef int flag = 3
@@ -1928,13 +2403,9 @@ cdef class Mesh:
 
         Write both the quadrilateral and hexahedral mesh to a VTK file
 
-        Parameters
-        ----------
-        fname: str
-               filename
-
-        outtype: str
-                 Type of mesh to output to VTK file i.e. quad or hex
+        Args:
+            fname (str): File name
+            outtype (str): Type of mesh to output to VTK file i.e. quad or hex
         """
         cdef char *filename = tmr_convert_str_to_chars(fname)
         cdef int flag = 3
@@ -2228,8 +2699,6 @@ cdef class Quadrant:
 
 cdef class QuadForest:
     """
-    A parallel forest of quadtrees
-
     This class defines a parallel forest of quadrtrees. The connectivity
     between quadtrees is defined at a global level. The quadrants can
     easily be redistributed across processors using the repartition()
@@ -2251,31 +2720,102 @@ cdef class QuadForest:
 
     def setMeshOrder(self, int order,
                      TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
+        """
+        setMeshOrder(self, order, interp=GAUSS_LOBATTO_POINTS)
+
+        Set the order and element nodal pattern of the mesh.
+
+        Args:
+            order (int): The number of nodes along an edge
+            interp (TMRInterpolationType): Type of interpolation to use
+        """
         self.ptr.setMeshOrder(order, interp)
 
     def getMeshOrder(self):
+        """
+        getMeshOrder(self)
+
+        Get the mesh order from the QuadForest
+
+        Returns:
+            int: Order of the mesh
+        """
         return self.ptr.getMeshOrder()
 
     def setTopology(self, Topology topo):
+        """
+        setTopology(self, topo)
+
+        Set the topology of the coarse hexahedral mesh.
+
+        Args:
+            topo (Topology): Set topo as the underlying topology object
+        """
         self.ptr.setTopology(topo.ptr)
 
     def getTopology(self):
+        """
+        getTopology(self)
+
+        Get the Topology object (if any) for this QuadForest
+
+        Returns:
+            Topology: Topology object set, None if not set
+        """
         cdef TMRTopology *topo = self.ptr.getTopology()
         if topo is not NULL:
             return _init_Topology(topo)
         return None
 
     def repartition(self):
+        """
+        repartition(self)
+
+        Repartition the mesh across processors. This redistributes the elements
+        so that there are an equal, or nearly equal, number of elements on each
+        processor.
+        """
         self.ptr.repartition()
 
     def createTrees(self, int depth=0):
+        """
+        createTrees(self, depth=0)
+
+        Create all the quadtrees in the mesh with the given level of refinement.
+        Be careful, the number of elements created scales with 4**depth!
+
+        Args:
+            depth (int): Level of refinement for all trees.
+        """
         self.ptr.createTrees(depth)
 
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
+        """
+        createRandomTrees(self, nrand=10, min_lev=0, max_lev=8)
+
+        Create a set of trees with random levels of refinement. This is useful
+        for testing purposes.
+
+        Args:
+            nrand (int): Number of random quadrants to create
+            min_lev (int): Minimum quadrant refinement level
+            max_lev (int): Maximum quadrant refinement level
+        """
         self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
     def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None,
                int min_lev=0, int max_lev=MAX_LEVEL):
+        """
+        refine(self, refine=None, min_level=0, max_level=MAX_LEVEL)
+
+        Refine the elements in the mesh by the specified number of levels. If a
+        negative number is supplied, coarsen the element.
+
+        Args:
+            refine (np.ndarray): Array of integers indicating element refinement
+            min_lev (int): Minimum quadrant refinement level
+            max_lev (int): Maximum quadrant refinement level
+        """
         if refine is not None:
             self.ptr.refine(<int*>refine.data, min_lev, max_lev)
         else:
@@ -2283,28 +2823,72 @@ cdef class QuadForest:
         return
 
     def duplicate(self):
+        """
+        duplicate(self)
+
+        Duplicate a forest by copying connectivity, topology and elements (but
+        not duplicating nodes)
+
+        Returns:
+            QuadForest: A duplicate of the QuadForest object
+        """
         cdef TMRQuadForest *dup = NULL
         dup = self.ptr.duplicate()
         return _init_QuadForest(dup)
 
     def coarsen(self):
+        """
+        coarsen(self)
+
+        Create a new forest object by coarsening all the elements within the
+        mesh by one level, if possible. Does not create new nodes.
+
+        Returns:
+            QuadForest: The coarsened QuadForest
+        """
         cdef TMRQuadForest *dup = NULL
         dup = self.ptr.coarsen()
         return _init_QuadForest(dup)
 
-    def balance(self, int btype):
-        self.ptr.balance(btype)
-
     def createNodes(self):
+        """
+        createNodes(self, btype)
+
+        Create and order the nodes in the mesh.
+        """
         self.ptr.createNodes()
 
     def getQuadsWithName(self, aname):
+        """
+        getQuadsWithName(self, aname)
+
+        Get an array of quadrants who touch a geometric object with the
+        specified name.
+
+        Args:
+            aname (str): The name to search for
+
+        Returns:
+            QuadrantArray: An array of quadrants with the specified name
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef TMRQuadrantArray *array = NULL
         array = self.ptr.getQuadsWithName(name)
         return _init_QuadrantArray(array, 1)
 
     def getNodesWithName(self, aname):
+        """
+        getNodesWithName(self, aname)
+
+        Get an array of the node numbers which touch a geometric object with the
+        specified name.
+
+        Args:
+            aname (str): The name to search for
+
+        Returns:
+            np.ndarray: An array of the local node numbers with name
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int size = 0
         cdef int *nodes = NULL
@@ -2316,11 +2900,27 @@ cdef class QuadForest:
         return array
 
     def getQuadrants(self):
+        """
+        getQuadrants(self)
+
+        Get an array of the locally owned quadrants
+
+        Returns:
+            QuadrantArray: An array of quadrants
+        """
         cdef TMRQuadrantArray *array = NULL
         self.ptr.getQuadrants(&array)
         return _init_QuadrantArray(array, 0)
 
     def getPoints(self):
+        """
+        getPoints(self)
+
+        Get the node locations for all locally owned nodes
+
+        Returns:
+            np.ndarray: An array of node locations
+        """
         cdef TMRPoint *X = NULL
         cdef int npts = 0
         npts = self.ptr.getPoints(&X)
@@ -2339,6 +2939,14 @@ cdef class QuadForest:
         return self.ptr.getLocalNodeNumber(node)
 
     def getNodeRange(self):
+        """
+        getNodeRange(self)
+
+        Get the range of nodes each processor owns
+
+        Returns:
+            np.ndarray: An array of ownership ranges
+        """
         cdef int size = 0
         cdef const int *node_range = NULL
         size = self.ptr.getOwnedNodeRange(&node_range)
@@ -2354,7 +2962,11 @@ cdef class QuadForest:
     def getMeshConn(self):
         """
         getMeshConn(self)
-        Return the distributed mesh connectivity using a global ordering
+
+        Get the portion of the connectivity stored on this processor.
+
+        Returns:
+            np.ndarray: The local part of the connectivity using global node numbers
         """
         cdef const int *conn
         cdef int nelems
@@ -2370,6 +2982,17 @@ cdef class QuadForest:
             raise RuntimeError(errmsg)
 
     def getDepNodeConn(self):
+        """
+        getDepNodeConn(self)
+
+        Return the dependent node connectivity, weights and number of dependent
+        nodes from the quadtree object
+
+        Returns:
+            ptr (np.ndarray), conn (np.ndarray), weight (np.ndarray):
+            Array of dependent nodes, Array of connectivity of dependent nodes
+            Array of weights associated with the dependent nodes
+        """
         cdef int ndep = 0
         cdef const int *_ptr = NULL
         cdef const int *_conn = NULL
@@ -2386,6 +3009,14 @@ cdef class QuadForest:
         return ptr, conn, weights
 
     def writeToVTK(self, fname):
+        """
+        writeToVTK(self, fname)
+
+        Write the portion of the local forest to a VTK file.
+
+        Args:
+            fname (str): The file name (unique on each proc)
+        """
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
@@ -2394,6 +3025,16 @@ cdef class QuadForest:
         self.ptr.writeForestToVTK(filename)
 
     def createInterpolation(self, QuadForest forest, VecInterp vec):
+        """
+        createInterpolation(self, forest, vec)
+
+        Create an interpolation object between two quadtrees that share a common
+        topology.
+
+        Args:
+            forest (QuadForest): The quadtree forest that has the common topology
+            vec (VecInterp): The interpolation operator
+        """
         if self.ptr == forest.ptr:
             errmsg = 'Cannot interpolate between the same object'
             raise ValueError(errmsg)
@@ -2556,31 +3197,63 @@ cdef class OctForest:
 
     def setMeshOrder(self, int order,
                      TMRInterpolationType interp=GAUSS_LOBATTO_POINTS):
+        """
+        setMeshOrder(self, order, interp=GAUSS_LOBATTO_POINTS)
+
+        Set the order and element nodal pattern of the mesh.
+
+        Args:
+            order (int): The number of nodes along an edge
+            interp (TMRInterpolationType): Type of interpolation to use
+        """
         self.ptr.setMeshOrder(order, interp)
 
     def getMeshOrder(self):
+        """
+        getMeshOrder(self)
+
+        Get the mesh order from the OctForest
+
+        Returns:
+            int: Order of the mesh
+        """
         return self.ptr.getMeshOrder()
 
     def setTopology(self, Topology topo):
         """
         setTopology(self, topo)
-        Set the topology (and determine the connectivity)
 
-        Parameters
-        ----------
-        topo:  :class:`~TMR.Topology`
-          Set topo as the underlying topology object
+        Set the topology of the coarse hexahedral mesh.
+
+        Args:
+            topo (Topology): Set topo as the underlying topology object
         """
         self.ptr.setTopology(topo.ptr)
 
     def getTopology(self):
+        """
+        getTopology(self)
+
+        Get the Topology object (if any) for this OctForest
+
+        Returns:
+            Topology: Topology object set, None if not set
+        """
         cdef TMRTopology *topo = self.ptr.getTopology()
         if topo is not NULL:
             return _init_Topology(topo)
         return None
 
     def setConnectivity(self, np.ndarray[int, ndim=2, mode='c'] conn):
-        '''Set non-degenerate connectivity'''
+        """
+        setConnectivity(self, conn)
+
+        Directly set the connectivity in the OctForest. This is in place
+        of the Topology definition.
+
+        Args:
+            conn (np.ndarray): Connectivity array of shape (n, 8)
+        """
         cdef int num_nodes = 0
         cdef int num_blocks = 0
         if conn.shape[1] != 8:
@@ -2593,62 +3266,55 @@ cdef class OctForest:
     def repartition(self, int max_rank=-1):
         """
         repartition(self, max_rank=-1)
+
         Repartition the mesh across processors. This redistributes the elements
         so that there are an equal, or nearly equal, number of elements on each
         processor.
 
-        Parameters
-        ----------
-        max_rank: int
-          Number of processors to distribute the mesh across. If negative, the
-          mesh is distribute across all processors
+        Args:
+            max_rank (int): Number of processors to distribute the mesh across.
+            If negative, the mesh is distributed across all processors
         """
         self.ptr.repartition(max_rank)
 
     def createTrees(self, int depth=0):
         """
-        createTrees(self, depth_level)
-        Create all the octrees in the mesh with the given level of refinement.
+        createTrees(self, depth=0)
 
-        Parameters
-        ----------
-        refine_level: int
-          Octree of refinement level depth
+        Create all the octrees in the mesh with the given level of refinement.
+        Be careful, the number of elements created scales with 8**depth!
+
+        Args:
+            depth (int): Octree of refinement level depth for all trees.
         """
         self.ptr.createTrees(depth)
 
     def createRandomTrees(self, int nrand=10, int min_lev=0, int max_lev=8):
         """
-        createRandomTrees(self, nrand, min_level, max_level)
+        createRandomTrees(self, nrand=10, min_lev=0, max_lev=8)
+
         Create a set of trees with random levels of refinement. This is useful
         for testing purposes.
 
-        Parameters
-        ----------
-        nrand: int
-          Number of random octrees
-        min_level: int
-          Minimum refinement level
-        max_level: int
-          Maximum refinement level
+        Args:
+            nrand (int): Number of random octants to create
+            min_lev (int): Minimum octant refinement level
+            max_lev (int): Maximum octant refinement level
         """
         self.ptr.createRandomTrees(nrand, min_lev, max_lev)
 
     def refine(self, np.ndarray[int, ndim=1, mode='c'] refine=None,
                int min_lev=0, int max_lev=MAX_LEVEL):
         """
-        refine(self, refine, min_level, max_level)
+        refine(self, refine=None, min_level=0, max_level=MAX_LEVEL)
+
         Refine the elements in the mesh by the specified number of levels. If a
         negative number is supplied, coarsen the element.
 
-        Parameters
-        ----------
-        refine: array of int
-          Array of integers
-        min_level: int
-          Minimum level of refinement
-        max_level: int
-          Maximum refinement level
+        Args:
+            refine (np.ndarray): Array of integers indicating element refinement
+            min_lev (int): Minimum octant refinement level
+            max_lev (int): Maximum octant refinement level
         """
         if refine is not None:
             self.ptr.refine(<int*>refine.data, min_lev, max_lev)
@@ -2659,13 +3325,12 @@ cdef class OctForest:
     def duplicate(self):
         """
         duplicate(self)
+
         Duplicate a forest by copying connectivity, topology and elements (but
         not duplicating nodes)
 
-        Returns
-        -------
-        dup: :class:`~TMR.OctForest`
-         The duplicate OctForest
+        Returns:
+            OctForest: A duplicate of the OctForest object
         """
         cdef TMROctForest *dup = NULL
         dup = self.ptr.duplicate()
@@ -2674,13 +3339,12 @@ cdef class OctForest:
     def coarsen(self):
         """
         coarsen(self)
+
         Create a new forest object by coarsening all the elements within the
         mesh by one level, if possible. Does not create new nodes.
 
-        Returns
-        -------
-        dup: :class:`~TMR.OctForest`
-         The coarsened OctForest
+        Returns:
+            OctForest: The coarsened OctForest
         """
         cdef TMROctForest *dup = NULL
         dup = self.ptr.coarsen()
@@ -2689,36 +3353,34 @@ cdef class OctForest:
     def balance(self, int btype):
         """
         balance(self, btype)
+
         Balance all the elements in the mesh to achieve a 2-to-1 balance
 
-        Parameters
-        ----------
-        btype: bool
-          Whether or not to balance corners
+        Args:
+            btype (int): Indicates whether or not to balance across octant corners
         """
         self.ptr.balance(btype)
 
     def createNodes(self):
         """
         createNodes(self)
-        Create all the nodes within the mesh
+
+        Create and order all the nodes within the mesh
         """
         self.ptr.createNodes()
 
     def getOctsWithName(self, aname):
         """
         getOctsWithName(self, aname)
-        Get an array of octants with the desired name
 
-        Parameters
-        ----------
-        aname: str
-          Get the octants with aname
+        Get an array of octants who touch a geometric object with the
+        specified name.
 
-        Returns
-        -------
-        array: :class:`~TMR.OctantArray`
-           Array of octants with name
+        Args:
+            aname (str): The name to search for
+
+        Returns:
+            OctantArray: An array of octants with the specified name
         """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef TMROctantArray *array = NULL
@@ -2728,17 +3390,15 @@ cdef class OctForest:
     def getNodesWithName(self, aname):
         """
         getNodesWithName(self, aname)
-        Get an array of nodes with the desired name
 
-        Parameters
-        ----------
-        aname: str
-          Get the nodes with aname
+        Get an array of the node numbers which touch a geometric object with the
+        specified name.
 
-        Returns
-        -------
-        array: array of int
-           Array of node numbers with name
+        Args:
+            aname (str): The name to search for
+
+        Returns:
+            np.ndarray: An array of the local node numbers with name
         """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int size = 0
@@ -2751,11 +3411,27 @@ cdef class OctForest:
         return array
 
     def getOctants(self):
+        """
+        getOctants(self)
+
+        Get an array of the locally owned octants
+
+        Returns:
+            OctantArray: An array of octants
+        """
         cdef TMROctantArray *array = NULL
         self.ptr.getOctants(&array)
         return _init_OctantArray(array, 0)
 
     def getPoints(self):
+        """
+        getPoints(self)
+
+        Get the node locations for all locally owned nodes
+
+        Returns:
+            np.ndarray: An array of node locations
+        """
         cdef TMRPoint *X = NULL
         cdef int npts = 0
         npts = self.ptr.getPoints(&X)
@@ -2767,6 +3443,14 @@ cdef class OctForest:
         return Xp
 
     def getNodeRange(self):
+        """
+        getNodeRange(self)
+
+        Get the range of nodes each processor owns
+
+        Returns:
+            np.ndarray: An array of ownership ranges
+        """
         cdef int size = 0
         cdef const int *node_range = NULL
         size = self.ptr.getOwnedNodeRange(&node_range)
@@ -2778,7 +3462,11 @@ cdef class OctForest:
     def getMeshConn(self):
         """
         getMeshConn(self)
-        Return the distributed mesh connectivity using a global ordering
+
+        Get the portion of the connectivity stored on this processor.
+
+        Returns:
+            np.ndarray: The local part of the connectivity using global node numbers
         """
         cdef const int *conn
         cdef int nelems
@@ -2792,17 +3480,14 @@ cdef class OctForest:
     def getDepNodeConn(self):
         """
         getDepNodeConn(self)
+
         Return the dependent node connectivity, weights and number of dependent
         nodes from the octree object
 
-        Return
-        ------
-        ptr: array of int
-          Array of dependent nodes
-        conn: array of int
-          Array of connectivity of dependent nodes
-        weights: array of double
-          Array of weights associated with the dependent nodes
+        Returns:
+            ptr (np.ndarray), conn (np.ndarray), weight (np.ndarray):
+            Array of dependent nodes, Array of connectivity of dependent nodes
+            Array of weights associated with the dependent nodes
         """
         cdef int ndep = 0
         cdef const int *_ptr = NULL
@@ -2820,6 +3505,14 @@ cdef class OctForest:
         return ptr, conn, weights
 
     def writeToVTK(self, fname):
+        """
+        writeToVTK(self, fname)
+
+        Write the portion of the local forest to a VTK file.
+
+        Args:
+            fname (str): The file name (unique on each proc)
+        """
         cdef char *filename = tmr_convert_str_to_chars(fname)
         self.ptr.writeToVTK(filename)
 
@@ -2830,15 +3523,13 @@ cdef class OctForest:
     def createInterpolation(self, OctForest forest, VecInterp vec):
         """
         createInterpolation(self, forest, vec)
+
         Create an interpolation object between two octrees that share a common
         topology.
 
-        Parameters
-        ----------
-        forest: :class:`~TMR.OctForest`
-          The octree forest that has the common topology
-        vec: :class:`~TACS.VecInterp`
-          The interpolation operator created
+        Args:
+            forest (OctForest): The octree forest that has the common topology
+            vec (VecInterp): The interpolation operator
         """
         if self.ptr == forest.ptr:
             errmsg = 'Cannot interpolate between the same object'
@@ -2854,16 +3545,17 @@ cdef _init_OctForest(TMROctForest* ptr):
 
 def LoadModel(fname, int print_lev=0):
     """
-    LoadModel(fname, print_lev)
+    LoadModel(fname, print_lev=0)
 
-    Initialization of the OpenCascade geometry from an IGES/STEP files
+    Load and initialize a Model class based on information within a STEP, IGES or
+    EGADS file. The file type is determined based on the extension.
 
-    Parameters
-    ----------
-    fname: str
-      Name of the geometry file
-    print_level: int
-      Print level for operation
+    Args:
+        fname (str): Name of the geometry file
+        print_lev (int): Print level for operation
+
+    Returns:
+        Model: An instance of a Model class
     """
     cdef char *filename = tmr_convert_str_to_chars(fname)
     cdef TMRModel *model = NULL
@@ -2879,6 +3571,19 @@ def LoadModel(fname, int print_lev=0):
     return _init_Model(model)
 
 def ConvertEGADSModel(pyego egads_model, int print_lev=0):
+    """
+    LoadModel(egads_model, print_lev=0)
+
+    This function wraps the egads4py object with the TMR interface layer and
+    creates a Model class.
+
+    Args:
+        egads_model (pyego): Model created from egads4py
+        print_lev (int): Print level for operation
+
+    Returns:
+        Model: An instance of a Model class
+    """
     cdef TMRModel *model = NULL
     model = TMR_ConvertEGADSModel(egads_model.ptr, print_lev)
     if model is NULL:
@@ -4452,7 +5157,7 @@ cdef class TopoProblem(ProblemBase):
         prob.setUseRecycledSolution(truth)
         return
 
-def setMatchingFaces(model_list, double atol=1e-6):
+def setMatchingFaces(model_list, double tol=1e-6):
     """
     Take in a list of TMRModel classes, find the matching faces,
     and set them as copies
@@ -4471,14 +5176,14 @@ def setMatchingFaces(model_list, double atol=1e-6):
     while len(verts) > 0:
         vert = verts.pop()
         for v in verts[:]:
-            if vert.checkMatching(v, atol=atol):
+            if vert.checkMatching(v, tol=tol):
                 v.setCopySource(vert)
                 verts.remove(v)
 
     while len(edges) > 0:
         edge = edges.pop()
         for e in edges[:]:
-            if edge.checkMatching(e, atol=atol):
+            if edge.checkMatching(e, tol=tol):
                 e.setCopySource(edge)
                 edges.remove(e)
 
@@ -4496,7 +5201,7 @@ def setMatchingFaces(model_list, double atol=1e-6):
             jfaces = model_list[j].getFaces()
             for fi in ifaces:
                 for fj in jfaces:
-                    if fi != fj and fi.checkMatching(fj, atol=atol):
+                    if fi != fj and fi.checkMatching(fj, tol=tol):
                         copy_pairs.append((fi, fj))
 
     while len(swept_pairs) > 0 or len(copy_pairs) > 0:
