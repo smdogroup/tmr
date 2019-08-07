@@ -1,5 +1,13 @@
-Example
-*******
+STEP import and meshing
+=======================
+
+The following example loads in a CAD model from a STEP file, and creates a volume mesh.
+The code consists of the following steps:
+
+* Import the CAD model from a STEP geometry file into a TMR-compatible objects using ``TMR.LoadModel`` 
+* Extract lists of the volumes, faces and edges defined from the file
+* Set source and target edges and faces. In the source-target relationship, target edges will have the same number of nodes as their source. Target faces will have the same surface mesh topology as their source faces. Source and target faces must be in the same volume object.
+* The call ``mesh = TMR.Mesh(comm, geo)`` generates a new mesh. If the model input contains vertices, edges and faces, then a surface mesh is created, if it also contains volumes, then a volume mesh is created.
 
 Listed below is an example of using TMR to generate a quadtree/octree mesh
 
@@ -36,8 +44,9 @@ Listed below is an example of using TMR to generate a quadtree/octree mesh
     htarget = 4.0
     mesh.mesh(htarget, opts=opts)
 
-Listed below is an example of using TMR to investigate the numbering convention
-of the vertex, edges, faces, and volumes
+It is sometimes necessary to identify the numbering of vertex, edges, faces, and volumes within a file.
+A convenient way to visualize this information is to create a tecplot file with labels.
+An example of generating this information is shown below:
 
 .. code-block:: python
     

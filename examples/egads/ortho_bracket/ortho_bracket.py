@@ -1,6 +1,5 @@
-import os
-from egads4py import egads
 from mpi4py import MPI
+from egads4py import egads
 from tmr import TMR
 
 comm = MPI.COMM_WORLD
@@ -91,8 +90,7 @@ model = mesh.createModelFromMesh()
 # Create the corresponding mesh topology from the mesh-model
 topo = TMR.Topology(comm, model)
 
-# Create the quad forest and set the topology of the forest
-# forest = TMR.QuadForest(comm)
+# Create the octree forest and set the topology of the forest
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
 

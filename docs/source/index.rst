@@ -75,7 +75,10 @@ Contents:
    interface_and_methods
    error_estimation
    install
+   orthogonal_bracket
    example
+   crm
+   interp
 
 Indices and tables
 ==================

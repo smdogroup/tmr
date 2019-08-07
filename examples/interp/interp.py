@@ -13,7 +13,7 @@ fine = None
 stepfile = 'beam.stp'
 if os.path.isfile(stepfile):
     # Load the geometry model
-    geo = TMR.LoadModel('beam.stp')
+    geo = TMR.LoadModel(stepfile)
 
     # Mark the boundary condition faces
     faces = geo.getFaces()

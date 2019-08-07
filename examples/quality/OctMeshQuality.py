@@ -167,7 +167,9 @@ def writeQualityToVtk(forest, ar, min_ang, fshape, fname='quality.vtk'):
     f.write('\nCELLS %d %d\n'%(nhex, nhex*9))
     for i in range(len(octs)):
         nodes = conn[8*i:8*(i+1)]
-        f.write('8 %d %d %d %d %d %d %d %d\n'%(nodes[0], nodes[1], nodes[3], nodes[2], nodes[4], nodes[5], nodes[7], nodes[6]))
+        f.write('8 %d %d %d %d %d %d %d %d\n'%(
+            nodes[0], nodes[1], nodes[3], nodes[2],
+            nodes[4], nodes[5], nodes[7], nodes[6]))
 
     # all hex
     f.write('\nCELL_TYPES %d\n'%(nhex))
