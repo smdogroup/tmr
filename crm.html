@@ -15,6 +15,7 @@
     <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Interpolation between meshes" href="interp.html" />
     <link rel="prev" title="STEP import and meshing" href="example.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
@@ -24,8 +25,8 @@
           <a href="genindex.html" title="General Index"
              accesskey="I">index</a></li>
         <li class="right" >
-          <a href="py-modindex.html" title="Python Module Index"
-             >modules</a> |</li>
+          <a href="interp.html" title="Interpolation between meshes"
+             accesskey="N">next</a> |</li>
         <li class="right" >
           <a href="example.html" title="STEP import and meshing"
              accesskey="P">previous</a> |</li>
@@ -37,6 +38,9 @@
   <h4>Previous topic</h4>
   <p class="topless"><a href="example.html"
                         title="previous chapter">STEP import and meshing</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="interp.html"
+                        title="next chapter">Interpolation between meshes</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
@@ -77,6 +81,64 @@ This planar layout is then extruded in the vertical direction.
 The intersections between the ribs and spars and OML are computed and imprinted and the leading edge, trailing edge, and upper/lower spars and ribs.</p></li>
 </ol>
 <img alt="_images/crm.png" src="_images/crm.png" />
+<p>Next, the <code class="docutils literal notranslate"><span class="pre">ucrm_9_model.step</span></code> file generated can be run through the example code in <code class="docutils literal notranslate"><span class="pre">examples/step/step_import.py</span></code> to generate the following unstructured quadrilateral mesh:</p>
+<img alt="_images/crm_mesh.png" src="_images/crm_mesh.png" />
+<p>This code consists of the following steps:</p>
+<ul class="simple">
+<li><p>The command-line arguments are parsed to obtain <code class="docutils literal notranslate"><span class="pre">htarget</span></code> the global mesh spacing, <code class="docutils literal notranslate"><span class="pre">filename</span></code> the input file name, and <code class="docutils literal notranslate"><span class="pre">output</span></code> the optional output file name</p></li>
+<li><p>A <a class="reference internal" href="geometry_interface.html#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a> instance is created by loading the STEP file <code class="docutils literal notranslate"><span class="pre">geo</span> <span class="pre">=</span> <span class="pre">TMR.LoadModel(filename)</span></code></p></li>
+<li><p>A new <a class="reference internal" href="geometry_interface.html#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a> instance is created by discarding any <a class="reference internal" href="geometry_interface.html#tmr.TMR.Volume" title="tmr.TMR.Volume"><code class="xref py py-class docutils literal notranslate"><span class="pre">Volume</span></code></a> objects from the model</p></li>
+<li><p>Mesh options are set and the model is meshed, generating a new output</p></li>
+<li><p>The final mesh is written to a VTK file</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mpi4py</span> <span class="kn">import</span> <span class="n">MPI</span>
+<span class="kn">from</span> <span class="nn">tmr</span> <span class="kn">import</span> <span class="n">TMR</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">os</span>
+
+<span class="c1"># Set the communicator</span>
+<span class="n">comm</span> <span class="o">=</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span>
+
+<span class="c1"># Create an argument parser to read in arguments from the commnad line</span>
+<span class="n">p</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
+<span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--htarget&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">4.0</span><span class="p">)</span>
+<span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--filename&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;STEP file name&#39;</span><span class="p">)</span>
+<span class="n">p</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--output&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;surface-mesh.vtk&#39;</span><span class="p">,</span>
+            <span class="n">help</span><span class="o">=</span><span class="s1">&#39;output file name&#39;</span><span class="p">)</span>
+<span class="n">args</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+<span class="c1"># Get the value of the filename</span>
+<span class="n">filename</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">filename</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;File </span><span class="si">%s</span><span class="s1"> does not exist&#39;</span><span class="o">%</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+
+<span class="c1"># Set the value of the target length scale in the mesh</span>
+<span class="n">htarget</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">htarget</span>
+
+<span class="c1"># Load the geometry model</span>
+<span class="n">geo</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">LoadModel</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+
+<span class="c1"># Create a model by discarding the volumes</span>
+<span class="n">verts</span> <span class="o">=</span> <span class="n">geo</span><span class="o">.</span><span class="n">getVertices</span><span class="p">()</span>
+<span class="n">edges</span> <span class="o">=</span> <span class="n">geo</span><span class="o">.</span><span class="n">getEdges</span><span class="p">()</span>
+<span class="n">faces</span> <span class="o">=</span> <span class="n">geo</span><span class="o">.</span><span class="n">getFaces</span><span class="p">()</span>
+<span class="n">geo_new</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span><span class="n">verts</span><span class="p">,</span> <span class="n">edges</span><span class="p">,</span> <span class="n">faces</span><span class="p">)</span>
+
+<span class="c1"># Create the new mesh</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">Mesh</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span> <span class="n">geo_new</span><span class="p">)</span>
+
+<span class="c1"># Set the meshing options</span>
+<span class="n">opts</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">MeshOptions</span><span class="p">()</span>
+<span class="n">opts</span><span class="o">.</span><span class="n">write_mesh_quality_histogram</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">opts</span><span class="o">.</span><span class="n">triangularize_print_iter</span> <span class="o">=</span> <span class="mi">50000</span>
+
+<span class="c1"># Create the surface mesh</span>
+<span class="n">mesh</span><span class="o">.</span><span class="n">mesh</span><span class="p">(</span><span class="n">htarget</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
+
+<span class="c1"># Write the surface mesh to a file</span>
+<span class="n">mesh</span><span class="o">.</span><span class="n">writeToVTK</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+</pre></div>
+</div>
 </div>
 
 
@@ -92,8 +154,8 @@ The intersections between the ribs and spars and OML are computed and imprinted 
           <a href="genindex.html" title="General Index"
              >index</a></li>
         <li class="right" >
-          <a href="py-modindex.html" title="Python Module Index"
-             >modules</a> |</li>
+          <a href="interp.html" title="Interpolation between meshes"
+             >next</a> |</li>
         <li class="right" >
           <a href="example.html" title="STEP import and meshing"
              >previous</a> |</li>

@@ -1,0 +1,779 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Quad/octree-level classes &#8212; TMR 1 documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Orthogonal bracket" href="orthogonal_bracket.html" />
+    <link rel="prev" title="Mesh generation level classes" href="mesh_interface.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="mesh_interface.html" title="Mesh generation level classes"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Quad/octree-level classes</a><ul>
+<li><a class="reference internal" href="#typical-usage">Typical Usage</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="mesh_interface.html"
+                        title="previous chapter">Mesh generation level classes</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="orthogonal_bracket.html"
+                        title="next chapter">Orthogonal bracket</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/octree_interface.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="quad-octree-level-classes">
+<h1>Quad/octree-level classes<a class="headerlink" href="#quad-octree-level-classes" title="Permalink to this headline">¶</a></h1>
+<p>The quadtree and octree level classes are used to create, refine and manipulate
+the semi-structured mesh in parallel. The quadrants or octants are stored in a
+distributed manner across processors. The following section describes the
+functions for the forest of octree operations. Analogous functionality is
+defined for the forest of quadtree object as well. The first step in creating a
+<a class="reference internal" href="#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code></a> object is typically creating a <a class="reference internal" href="#tmr.TMR.Topology" title="tmr.TMR.Topology"><code class="xref py py-class docutils literal notranslate"><span class="pre">Topology</span></code></a>
+which defines a model with mapped 2D and 3D geometry that consists entirely of
+non-degenerate quadrilateral surfaces with four non-degenerate edges and
+hexahedral volumes with 6 enclosing surfaces. This type of object can be
+created using the constructor as follows:</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.Topology">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">Topology</code><a class="headerlink" href="#tmr.TMR.Topology" title="Permalink to this definition">¶</a></dt>
+<dd><p>The main topology class that contains the objects used to build the
+underlying mesh.</p>
+<p>This class takes in a general <code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code>, but there are additional
+requirements that are placed on the model to create a proper
+topology object. These requirements are as follows:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>No edge can degenerate to a vertex.</p></li>
+<li><p>No face can degenerate to an edge or vertex.</p></li>
+<li><p>All faces must be surrounded by a single edge loop with 4</p></li>
+<li><p>All volumes must contain 6 non-degenerate faces that are
+ordered in coordinate ordering as shown below. Furthermore, all
+volumes must be of type <code class="xref py py-class docutils literal notranslate"><span class="pre">TFIVolume</span></code>.</p></li>
+</ol>
+</div></blockquote>
+</dd></dl>
+
+</li>
+</ul>
+<p>The <a class="reference internal" href="#tmr.TMR.Topology" title="tmr.TMR.Topology"><code class="xref py py-class docutils literal notranslate"><span class="pre">Topology</span></code></a> object defines additional functionality that is
+generally required only for lower-level operations. Once the topology object has
+been created, the <a class="reference internal" href="#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code></a> can be initialized. It has the
+following functions:</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.OctForest">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">OctForest</code><a class="headerlink" href="#tmr.TMR.OctForest" title="Permalink to this definition">¶</a></dt>
+<dd><p>This class defines a forest of octrees. The octrees within the
+forest can be distributed across processors. The connectivity
+between octrees is defined on all processors by setting a octree to
+node connectivity.</p>
+<p>The octrees can be redistributed across processors by using the
+repartition function. This destroys the nodes that may have been
+created (but can easily be recomputed).</p>
+<dl class="method">
+<dt id="tmr.TMR.OctForest.balance">
+<code class="sig-name descname">balance</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">btype</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.balance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Balance all the elements in the mesh to achieve a 2-to-1 balance</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>btype</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Indicates whether or not to balance across octant corners</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.coarsen">
+<code class="sig-name descname">coarsen</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.coarsen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new forest object by coarsening all the elements within the
+mesh by one level, if possible. Does not create new nodes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The coarsened OctForest</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.OctForest" title="tmr.TMR.OctForest">OctForest</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.createInterpolation">
+<code class="sig-name descname">createInterpolation</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">forest</em>, <em class="sig-param">vec</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.createInterpolation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an interpolation object between two octrees that share a common
+topology.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forest</strong> (<a class="reference internal" href="#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – The octree forest that has the common topology</p></li>
+<li><p><strong>vec</strong> (<em>VecInterp</em>) – The interpolation operator</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.createNodes">
+<code class="sig-name descname">createNodes</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.createNodes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create and order all the nodes within the mesh</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.createRandomTrees">
+<code class="sig-name descname">createRandomTrees</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">nrand=10</em>, <em class="sig-param">min_lev=0</em>, <em class="sig-param">max_lev=8</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.createRandomTrees" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a set of trees with random levels of refinement. This is useful
+for testing purposes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>nrand</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Number of random octants to create</p></li>
+<li><p><strong>min_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Minimum octant refinement level</p></li>
+<li><p><strong>max_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Maximum octant refinement level</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.createTrees">
+<code class="sig-name descname">createTrees</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">depth=0</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.createTrees" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create all the octrees in the mesh with the given level of refinement.
+Be careful, the number of elements created scales with 8**depth!</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Octree of refinement level depth for all trees.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.duplicate">
+<code class="sig-name descname">duplicate</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.duplicate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Duplicate a forest by copying connectivity, topology and elements (but
+not duplicating nodes)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>A duplicate of the OctForest object</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.OctForest" title="tmr.TMR.OctForest">OctForest</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getDepNodeConn">
+<code class="sig-name descname">getDepNodeConn</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getDepNodeConn" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the dependent node connectivity, weights and number of dependent
+nodes from the octree object</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Array of dependent nodes, Array of connectivity of dependent nodes
+Array of weights associated with the dependent nodes</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>ptr (np.ndarray), conn (np.ndarray), weight (np.ndarray)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getMeshConn">
+<code class="sig-name descname">getMeshConn</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getMeshConn" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the portion of the connectivity stored on this processor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The local part of the connectivity using global node numbers</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getMeshOrder">
+<code class="sig-name descname">getMeshOrder</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getMeshOrder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the mesh order from the OctForest</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Order of the mesh</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getNodeRange">
+<code class="sig-name descname">getNodeRange</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getNodeRange" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the range of nodes each processor owns</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>An array of ownership ranges</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getNodesWithName">
+<code class="sig-name descname">getNodesWithName</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">aname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getNodesWithName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get an array of the node numbers which touch a geometric object with the
+specified name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>aname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The name to search for</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>An array of the local node numbers with name</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getOctants">
+<code class="sig-name descname">getOctants</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getOctants" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get an array of the locally owned octants</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>An array of octants</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>OctantArray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getOctsWithName">
+<code class="sig-name descname">getOctsWithName</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">aname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getOctsWithName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get an array of octants who touch a geometric object with the
+specified name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>aname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The name to search for</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>An array of octants with the specified name</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>OctantArray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getPoints">
+<code class="sig-name descname">getPoints</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getPoints" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the node locations for all locally owned nodes</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>An array of node locations</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getTopology">
+<code class="sig-name descname">getTopology</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getTopology" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the Topology object (if any) for this OctForest</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Topology object set, None if not set</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.Topology" title="tmr.TMR.Topology">Topology</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.refine">
+<code class="sig-name descname">refine</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">refine=None</em>, <em class="sig-param">min_level=0</em>, <em class="sig-param">max_level=MAX_LEVEL</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.refine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Refine the elements in the mesh by the specified number of levels. If a
+negative number is supplied, coarsen the element.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>refine</strong> (<em>np.ndarray</em>) – Array of integers indicating element refinement</p></li>
+<li><p><strong>min_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Minimum octant refinement level</p></li>
+<li><p><strong>max_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Maximum octant refinement level</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.repartition">
+<code class="sig-name descname">repartition</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">max_rank=-1</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.repartition" title="Permalink to this definition">¶</a></dt>
+<dd><p>Repartition the mesh across processors. This redistributes the elements
+so that there are an equal, or nearly equal, number of elements on each
+processor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>max_rank</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Number of processors to distribute the mesh across.</p></li>
+<li><p><strong>negative</strong><strong>, </strong><strong>the mesh is distributed across all processors</strong> (<em>If</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.setConnectivity">
+<code class="sig-name descname">setConnectivity</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">conn</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.setConnectivity" title="Permalink to this definition">¶</a></dt>
+<dd><p>Directly set the connectivity in the OctForest. This is in place
+of the Topology definition.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>conn</strong> (<em>np.ndarray</em>) – Connectivity array of shape (n, 8)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.setMeshOrder">
+<code class="sig-name descname">setMeshOrder</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">order</em>, <em class="sig-param">interp=GAUSS_LOBATTO_POINTS</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.setMeshOrder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the order and element nodal pattern of the mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>order</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The number of nodes along an edge</p></li>
+<li><p><strong>interp</strong> (<em>TMRInterpolationType</em>) – Type of interpolation to use</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.setTopology">
+<code class="sig-name descname">setTopology</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">topo</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.setTopology" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the topology of the coarse hexahedral mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>topo</strong> (<a class="reference internal" href="#tmr.TMR.Topology" title="tmr.TMR.Topology"><em>Topology</em></a>) – Set topo as the underlying topology object</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.writeToVTK">
+<code class="sig-name descname">writeToVTK</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">fname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.writeToVTK" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write the portion of the local forest to a VTK file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>fname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The file name (unique on each proc)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+</ul>
+<p>Similarly, <a class="reference internal" href="#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code></a> can be initialized and has the similar functions:</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.QuadForest">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">QuadForest</code><a class="headerlink" href="#tmr.TMR.QuadForest" title="Permalink to this definition">¶</a></dt>
+<dd><p>This class defines a parallel forest of quadrtrees. The connectivity
+between quadtrees is defined at a global level. The quadrants can
+easily be redistributed across processors using the repartition()
+call.</p>
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.coarsen">
+<code class="sig-name descname">coarsen</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.coarsen" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a new forest object by coarsening all the elements within the
+mesh by one level, if possible. Does not create new nodes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The coarsened QuadForest</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest">QuadForest</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.createInterpolation">
+<code class="sig-name descname">createInterpolation</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">forest</em>, <em class="sig-param">vec</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.createInterpolation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an interpolation object between two quadtrees that share a common
+topology.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forest</strong> (<a class="reference internal" href="#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a>) – The quadtree forest that has the common topology</p></li>
+<li><p><strong>vec</strong> (<em>VecInterp</em>) – The interpolation operator</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.createNodes">
+<code class="sig-name descname">createNodes</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">btype</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.createNodes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create and order the nodes in the mesh.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.createRandomTrees">
+<code class="sig-name descname">createRandomTrees</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">nrand=10</em>, <em class="sig-param">min_lev=0</em>, <em class="sig-param">max_lev=8</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.createRandomTrees" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a set of trees with random levels of refinement. This is useful
+for testing purposes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>nrand</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Number of random quadrants to create</p></li>
+<li><p><strong>min_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Minimum quadrant refinement level</p></li>
+<li><p><strong>max_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Maximum quadrant refinement level</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.createTrees">
+<code class="sig-name descname">createTrees</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">depth=0</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.createTrees" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create all the quadtrees in the mesh with the given level of refinement.
+Be careful, the number of elements created scales with 4**depth!</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>depth</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Level of refinement for all trees.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.duplicate">
+<code class="sig-name descname">duplicate</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.duplicate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Duplicate a forest by copying connectivity, topology and elements (but
+not duplicating nodes)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>A duplicate of the QuadForest object</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest">QuadForest</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getDepNodeConn">
+<code class="sig-name descname">getDepNodeConn</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getDepNodeConn" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the dependent node connectivity, weights and number of dependent
+nodes from the quadtree object</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Array of dependent nodes, Array of connectivity of dependent nodes
+Array of weights associated with the dependent nodes</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>ptr (np.ndarray), conn (np.ndarray), weight (np.ndarray)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getMeshConn">
+<code class="sig-name descname">getMeshConn</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getMeshConn" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the portion of the connectivity stored on this processor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The local part of the connectivity using global node numbers</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getMeshOrder">
+<code class="sig-name descname">getMeshOrder</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getMeshOrder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the mesh order from the QuadForest</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Order of the mesh</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getNodeRange">
+<code class="sig-name descname">getNodeRange</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getNodeRange" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the range of nodes each processor owns</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>An array of ownership ranges</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getNodesWithName">
+<code class="sig-name descname">getNodesWithName</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">aname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getNodesWithName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get an array of the node numbers which touch a geometric object with the
+specified name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>aname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The name to search for</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>An array of the local node numbers with name</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getPoints">
+<code class="sig-name descname">getPoints</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getPoints" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the node locations for all locally owned nodes</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>An array of node locations</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getQuadrants">
+<code class="sig-name descname">getQuadrants</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getQuadrants" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get an array of the locally owned quadrants</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>An array of quadrants</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>QuadrantArray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getQuadsWithName">
+<code class="sig-name descname">getQuadsWithName</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">aname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getQuadsWithName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get an array of quadrants who touch a geometric object with the
+specified name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>aname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The name to search for</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>An array of quadrants with the specified name</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>QuadrantArray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getTopology">
+<code class="sig-name descname">getTopology</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getTopology" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the Topology object (if any) for this QuadForest</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Topology object set, None if not set</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.Topology" title="tmr.TMR.Topology">Topology</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.refine">
+<code class="sig-name descname">refine</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">refine=None</em>, <em class="sig-param">min_level=0</em>, <em class="sig-param">max_level=MAX_LEVEL</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.refine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Refine the elements in the mesh by the specified number of levels. If a
+negative number is supplied, coarsen the element.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>refine</strong> (<em>np.ndarray</em>) – Array of integers indicating element refinement</p></li>
+<li><p><strong>min_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Minimum quadrant refinement level</p></li>
+<li><p><strong>max_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Maximum quadrant refinement level</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.repartition">
+<code class="sig-name descname">repartition</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.repartition" title="Permalink to this definition">¶</a></dt>
+<dd><p>Repartition the mesh across processors. This redistributes the elements
+so that there are an equal, or nearly equal, number of elements on each
+processor.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.setMeshOrder">
+<code class="sig-name descname">setMeshOrder</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">order</em>, <em class="sig-param">interp=GAUSS_LOBATTO_POINTS</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.setMeshOrder" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the order and element nodal pattern of the mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>order</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The number of nodes along an edge</p></li>
+<li><p><strong>interp</strong> (<em>TMRInterpolationType</em>) – Type of interpolation to use</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.setTopology">
+<code class="sig-name descname">setTopology</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">topo</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.setTopology" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the topology of the coarse hexahedral mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>topo</strong> (<a class="reference internal" href="#tmr.TMR.Topology" title="tmr.TMR.Topology"><em>Topology</em></a>) – Set topo as the underlying topology object</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.writeToVTK">
+<code class="sig-name descname">writeToVTK</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">fname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.writeToVTK" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write the portion of the local forest to a VTK file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>fname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The file name (unique on each proc)</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+</ul>
+<div class="section" id="typical-usage">
+<h2>Typical Usage<a class="headerlink" href="#typical-usage" title="Permalink to this headline">¶</a></h2>
+<p>The typical usage for a <a class="reference internal" href="#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code></a> would consist of the following:</p>
+<ol class="arabic simple">
+<li><p>Create the object and call <a class="reference internal" href="#tmr.TMR.OctForest.setTopology" title="tmr.TMR.OctForest.setTopology"><code class="xref py py-func docutils literal notranslate"><span class="pre">setTopology()</span></code></a> to set the
+super mesh</p></li>
+<li><p>Create an initial element mesh by calling <a class="reference internal" href="#tmr.TMR.OctForest.createTrees" title="tmr.TMR.OctForest.createTrees"><code class="xref py py-func docutils literal notranslate"><span class="pre">createTrees()</span></code></a></p></li>
+<li><p>Create a refined mesh by duplicating and refining the octree forest by
+calling <a class="reference internal" href="#tmr.TMR.OctForest.duplicate" title="tmr.TMR.OctForest.duplicate"><code class="xref py py-func docutils literal notranslate"><span class="pre">duplicate()</span></code></a> followed by
+<a class="reference internal" href="#tmr.TMR.OctForest.refine" title="tmr.TMR.OctForest.refine"><code class="xref py py-func docutils literal notranslate"><span class="pre">refine()</span></code></a>. Note that the length of the integer array
+passed to refine must be equal to the number of elements in the original mesh.</p></li>
+<li><p>Balance the mesh and create nodes by calling <a class="reference internal" href="#tmr.TMR.OctForest.balance" title="tmr.TMR.OctForest.balance"><code class="xref py py-func docutils literal notranslate"><span class="pre">balance()</span></code></a>
+then <a class="reference internal" href="#tmr.TMR.OctForest.createNodes" title="tmr.TMR.OctForest.createNodes"><code class="xref py py-func docutils literal notranslate"><span class="pre">createNodes()</span></code></a></p></li>
+<li><p>Create a sequence of coarser lower-order meshes by repeated calling
+<a class="reference internal" href="#tmr.TMR.OctForest.duplicate" title="tmr.TMR.OctForest.duplicate"><code class="xref py py-func docutils literal notranslate"><span class="pre">duplicate()</span></code></a> and <a class="reference internal" href="#tmr.TMR.OctForest.coarsen" title="tmr.TMR.OctForest.coarsen"><code class="xref py py-func docutils literal notranslate"><span class="pre">coarsen()</span></code></a></p></li>
+<li><p>Create interpolants between meshes for multigrid methods by calling
+<a class="reference internal" href="#tmr.TMR.OctForest.createInterpolation" title="tmr.TMR.OctForest.createInterpolation"><code class="xref py py-func docutils literal notranslate"><span class="pre">createInterpolation()</span></code></a></p></li>
+</ol>
+<p>See <a class="reference internal" href="example.html"><span class="doc">STEP import and meshing</span></a> for an example of this usage.</p>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="mesh_interface.html" title="Mesh generation level classes"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2018, Graeme J. Kennedy.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.1.2.
+    </div>
+  </body>
+</html>

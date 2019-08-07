@@ -33,13 +33,13 @@ to the underlying geometry consist of:
 * .. automodule:: TMR
   
   .. autoclass:: Vertex
-     :members: evalPoint
+     :members:
 
 * .. autoclass:: Edge
-      :members: evalPoint
+      :members:
 
 * .. autoclass:: Face
-      :members: evalPoint
+      :members:
 
 The other objects define collections of geometric entities:
 

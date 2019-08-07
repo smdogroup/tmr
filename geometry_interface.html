@@ -1,0 +1,1118 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Geometry classes &#8212; TMR 1 documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Mesh generation level classes" href="mesh_interface.html" />
+    <link rel="prev" title="TMR Overview" href="index.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="mesh_interface.html" title="Mesh generation level classes"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="TMR Overview"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h3><a href="index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Geometry classes</a><ul>
+<li><a class="reference internal" href="#tmrentity">TMREntity</a></li>
+<li><a class="reference internal" href="#loading-a-model">Loading a model</a></li>
+<li><a class="reference internal" href="#geometry-interface">Geometry interface</a></li>
+</ul>
+</li>
+</ul>
+
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="index.html"
+                        title="previous chapter">TMR Overview</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="mesh_interface.html"
+                        title="next chapter">Mesh generation level classes</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/geometry_interface.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="geometry-classes">
+<h1>Geometry classes<a class="headerlink" href="#geometry-classes" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="tmrentity">
+<h2>TMREntity<a class="headerlink" href="#tmrentity" title="Permalink to this headline">¶</a></h2>
+<p>Almost all classes in <a class="reference internal" href="error_estimation.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> inherit from <code class="xref py py-class docutils literal notranslate"><span class="pre">Entity</span></code>. Those that do
+not are low-level data structures that are used within high-level
+operations. <code class="xref py py-class docutils literal notranslate"><span class="pre">Entity</span></code> defines a reference counting scheme for
+all objects allocated on the heap. This is handled automatically through the
+Python interface.</p>
+</div>
+<div class="section" id="loading-a-model">
+<h2>Loading a model<a class="headerlink" href="#loading-a-model" title="Permalink to this headline">¶</a></h2>
+<p>The primary geometry-level classes used within <a class="reference internal" href="error_estimation.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> consist of entity-level classes
+(<a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Vertex</span></code></a>, <a class="reference internal" href="#tmr.TMR.Edge" title="tmr.TMR.Edge"><code class="xref py py-class docutils literal notranslate"><span class="pre">Edge</span></code></a>, and <a class="reference internal" href="#tmr.TMR.Face" title="tmr.TMR.Face"><code class="xref py py-class docutils literal notranslate"><span class="pre">Face</span></code></a>) and container-level classes
+(<a class="reference internal" href="#tmr.TMR.EdgeLoop" title="tmr.TMR.EdgeLoop"><code class="xref py py-class docutils literal notranslate"><span class="pre">EdgeLoop</span></code></a>, <a class="reference internal" href="#tmr.TMR.Volume" title="tmr.TMR.Volume"><code class="xref py py-class docutils literal notranslate"><span class="pre">Volume</span></code></a>, and <a class="reference internal" href="#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a>).
+The member functions for these classes are described below.</p>
+<p>The geometry of a model is contained within the class <a class="reference internal" href="#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a> and
+is often created by a call to the function <a class="reference internal" href="#tmr.TMR.LoadModel" title="tmr.TMR.LoadModel"><code class="xref py py-func docutils literal notranslate"><span class="pre">LoadModel()</span></code></a>. This function
+loads the model data from a STEP, IGES or EGADS file and creates the TMR versions of
+the geometric entities and containers that define the model. This call attempts
+to remove any extraneous geometry defined in the file but not contained
+within the model. This function creates and initializes the internal topology of
+the model, which can then be used in subsequent meshing operations:</p>
+<ul>
+<li><dl class="function">
+<dt id="tmr.TMR.LoadModel">
+<code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">LoadModel</code><span class="sig-paren">(</span><em class="sig-param">fname</em>, <em class="sig-param">print_lev=0</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.LoadModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>Load and initialize a Model class based on information within a STEP, IGES or
+EGADS file. The file type is determined based on the extension.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the geometry file</p></li>
+<li><p><strong>print_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Print level for operation</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>An instance of a Model class</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="#tmr.TMR.Model" title="tmr.TMR.Model">Model</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</li>
+</ul>
+<p>Alternatively, a <a class="reference internal" href="#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a> instance can be created by direct in-memory
+wrapping of EGADS objects through egads4py:</p>
+<ul>
+<li><dl class="function">
+<dt id="tmr.TMR.ConvertEGADSModel">
+<code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">ConvertEGADSModel</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.ConvertEGADSModel" title="Permalink to this definition">¶</a></dt>
+<dd><p>LoadModel(egads_model, print_lev=0)</p>
+<p>This function wraps the egads4py object with the TMR interface layer and
+creates a Model class.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>egads_model</strong> (<em>pyego</em>) – Model created from egads4py</p></li>
+<li><p><strong>print_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Print level for operation</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>An instance of a Model class</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="#tmr.TMR.Model" title="tmr.TMR.Model">Model</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</li>
+</ul>
+<p>A direct connection between the geometry and octree or quadtree levels is
+provided through <a class="reference internal" href="octree_interface.html#tmr.TMR.Topology" title="tmr.TMR.Topology"><code class="xref py py-class docutils literal notranslate"><span class="pre">Topology</span></code></a> that defines the topology for
+mapped-quadrilateral and hexahedral geometries. This class can be created
+directly, but it is most common to create this using the mesh-level classes.</p>
+</div>
+<div class="section" id="geometry-interface">
+<h2>Geometry interface<a class="headerlink" href="#geometry-interface" title="Permalink to this headline">¶</a></h2>
+<p>The interface classes to the underlying geometry consist of:</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.Vertex">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">Vertex</code><a class="headerlink" href="#tmr.TMR.Vertex" title="Permalink to this definition">¶</a></dt>
+<dd><p>The vertex class is used to store both the point and to
+represent the underlying geometry</p>
+<dl class="method">
+<dt id="tmr.TMR.Vertex.checkMatching">
+<code class="sig-name descname">checkMatching</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">v</em>, <em class="sig-param">tol=1e-6</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.checkMatching" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if two verticies are coincident, within a given tolerance</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>v</strong> (<a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex"><em>Vertex</em></a>) – Vertex to check</p></li>
+<li><p><strong>tol</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Tolerance for</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.evalPoint">
+<code class="sig-name descname">evalPoint</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.evalPoint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate the point on the parametric surface and returns the node
+location</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>the vertex location</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.getCopySource">
+<code class="sig-name descname">getCopySource</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.getCopySource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the copy source object.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Vertex object, None if no source is set</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex">Vertex</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.getEntityId">
+<code class="sig-name descname">getEntityId</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.getEntityId" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the entity id associated with the Vertex</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Id number of the object, -1 for NULL object</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.getName">
+<code class="sig-name descname">getName</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.getName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the name associated with the Vertex</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Name associated with the entity</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.isSame">
+<code class="sig-name descname">isSame</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">v</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.isSame" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the two objects are geometrically equivalent using
+the underlying CAD kernel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>v</strong> (<a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex"><em>Vertex</em></a>) – Vertex to check</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the same, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.isSameObject">
+<code class="sig-name descname">isSameObject</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">v</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.isSameObject" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the two objects have the same pointer</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>v</strong> (<a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex"><em>Vertex</em></a>) – Vertex to check</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the same object, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.setCopySource">
+<code class="sig-name descname">setCopySource</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">v</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.setCopySource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the copy source object. The node number for this vertex is
+copied from the copy source during meshing, effectively merging
+this Vertex and the copy source Vertex in the final mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>v</strong> (<a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex"><em>Vertex</em></a>) – New vertex source</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.setName">
+<code class="sig-name descname">setName</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">aname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.setName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the name associated with the Vertex</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>aname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name associated with the Vertex</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Vertex.setNodeNum">
+<code class="sig-name descname">setNodeNum</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">num</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Vertex.setNodeNum" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the node number associated with the Vertex</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>num</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Node number associated with the Vertex</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+<li><dl class="class">
+<dt id="tmr.TMR.Edge">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">Edge</code><a class="headerlink" href="#tmr.TMR.Edge" title="Permalink to this definition">¶</a></dt>
+<dd><p>The edge class is used to store both the points on an edge and to
+represent the underlying geometry</p>
+<dl class="method">
+<dt id="tmr.TMR.Edge.checkMatching">
+<code class="sig-name descname">checkMatching</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">e</em>, <em class="sig-param">tol=1e6</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.checkMatching" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if two edges are coincident, within a given tolerance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>e</strong> (<a class="reference internal" href="#tmr.TMR.Edge" title="tmr.TMR.Edge"><em>Edge</em></a>) – The Edge object to check</p></li>
+<li><p><strong>tol</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – The tolerance to use in the check</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the Edges match, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.evalDeriv">
+<code class="sig-name descname">evalDeriv</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">t</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.evalDeriv" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate a position on an edge and the derivative of the position from
+a single parametric argument <em>t</em>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The (x,y,z) position
+np.ndarray: The derivative of position with respect to <em>t</em></p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.evalPoint">
+<code class="sig-name descname">evalPoint</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">t</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.evalPoint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate a position on an edge from a single parametric argument
+<em>t</em>. Provides access to the first and second vertices that begin/end
+the edge.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>t</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Parameteric location</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the (x,y,z) location</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.getCopySource">
+<code class="sig-name descname">getCopySource</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.getCopySource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the source Edge object for the node numbers</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Edge object, None if no source is set</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.Edge" title="tmr.TMR.Edge">Edge</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.getEntityId">
+<code class="sig-name descname">getEntityId</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.getEntityId" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the entity id associated with the edge</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Id number of the model, -1 for NULL object</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.getName">
+<code class="sig-name descname">getName</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.getName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the name associated with the edge</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Name associated with the entity</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.getRange">
+<code class="sig-name descname">getRange</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.getRange" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the range of parameter values for this edge.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The parametric end points for the edge.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>tmin, tmax</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.getSource">
+<code class="sig-name descname">getSource</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.getSource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the source Edge object</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Edge object, None if no source is set</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="#tmr.TMR.Edge" title="tmr.TMR.Edge">Edge</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.getVertices">
+<code class="sig-name descname">getVertices</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.getVertices" title="Permalink to this definition">¶</a></dt>
+<dd><p>getVertices(self):</p>
+<p>Get the start and edge vertices associated with the edge</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>First vertex at the starting point of the edge
+v2 (Vertex): Second vertex at the end point of the edge</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>v1 (<a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex">Vertex</a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.invEvalPoint">
+<code class="sig-name descname">invEvalPoint</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">pt</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.invEvalPoint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns the result of an inverse evaluation on the edge.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>pt</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – The position for the inverse evaluation</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Fail flag to indicate success/failure
+t (float): The parametric point</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>fail (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.isDegenerate">
+<code class="sig-name descname">isDegenerate</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.isDegenerate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Is this edge degenerate (edge length = 0)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>True if degenerate, false otherwise</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.isSame">
+<code class="sig-name descname">isSame</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">e</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.isSame" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the two objects are geometrically equivalent using
+the underlying CAD kernel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>e</strong> (<a class="reference internal" href="#tmr.TMR.Edge" title="tmr.TMR.Edge"><em>Edge</em></a>) – Edge to check</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the same, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.isSameObject">
+<code class="sig-name descname">isSameObject</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">e</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.isSameObject" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the two objects have the same pointer</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>e</strong> (<a class="reference internal" href="#tmr.TMR.Edge" title="tmr.TMR.Edge"><em>Edge</em></a>) – Edge to check</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the same object, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.setCopySource">
+<code class="sig-name descname">setCopySource</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">e</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.setCopySource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the source Edge object for the node numbers</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>e</strong> (<a class="reference internal" href="#tmr.TMR.Edge" title="tmr.TMR.Edge"><em>Edge</em></a>) – New edge source</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.setMesh">
+<code class="sig-name descname">setMesh</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">mesh</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.setMesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the EdgeMesh object associated with the edge</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>mesh</strong> (<a class="reference internal" href="mesh_interface.html#tmr.TMR.EdgeMesh" title="tmr.TMR.EdgeMesh"><em>EdgeMesh</em></a>) – The EdgeMesh object set for this edge</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.setName">
+<code class="sig-name descname">setName</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">aname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.setName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the name associated with the edge</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>aname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name associated with the edge</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.setSource">
+<code class="sig-name descname">setSource</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">e</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.setSource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the source Edge object. When this edge is meshed, the number
+of nodes along the edge will be equal to the number of nodes along
+the source Edge. The source Edge will be meshed first. Note that this
+is different than the setCopySource() which also copies the node
+numbers from the copy source edge.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>e</strong> (<a class="reference internal" href="#tmr.TMR.Edge" title="tmr.TMR.Edge"><em>Edge</em></a>) – New edge source</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.setVertices">
+<code class="sig-name descname">setVertices</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">v1</em>, <em class="sig-param">v2</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.setVertices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the start and end vertices of the edge</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>v1</strong> (<a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex"><em>Vertex</em></a>) – First vertex at the starting point of the edge</p></li>
+<li><p><strong>v2</strong> (<a class="reference internal" href="#tmr.TMR.Vertex" title="tmr.TMR.Vertex"><em>Vertex</em></a>) – Second vertex at the end point of the edge</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Edge.writeToVTK">
+<code class="sig-name descname">writeToVTK</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">fname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Edge.writeToVTK" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write the Edge to a VTK file for visualization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>fname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – File name</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+<li><dl class="class">
+<dt id="tmr.TMR.Face">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">Face</code><a class="headerlink" href="#tmr.TMR.Face" title="Permalink to this definition">¶</a></dt>
+<dd><p>The face class is used to store both the points and edges and to
+represent the underlying geometry</p>
+<dl class="method">
+<dt id="tmr.TMR.Face.addEdgeLoop">
+<code class="sig-name descname">addEdgeLoop</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">_dir</em>, <em class="sig-param">loop</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.addEdgeLoop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add an EdgeLoop object to the Face.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>_dir</strong> – The direction of the EdgeLoop</p></li>
+<li><p><strong>loop</strong> – The EdgeLoop object to add</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.checkMatching">
+<code class="sig-name descname">checkMatching</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">f</em>, <em class="sig-param">tol=1e6</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.checkMatching" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the two Faces are coincident, within a given tolerance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<a class="reference internal" href="#tmr.TMR.Face" title="tmr.TMR.Face"><em>Face</em></a>) – The Face object to check</p></li>
+<li><p><strong>tol</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – The tolerance to use in the check</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the Faces match, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.evalPoint">
+<code class="sig-name descname">evalPoint</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">u</em>, <em class="sig-param">v</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.evalPoint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Evaluate a node location given a parametric location
+(<em>u,v</em>). Access the edge loops that bound the face.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>u</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Parametric location in u</p></li>
+<li><p><strong>v</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Parametric location in v</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.getCopySource">
+<code class="sig-name descname">getCopySource</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.getCopySource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the copy source Face object and its orientation</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The relative orientation and Face (None if not set)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.getEdgeLoop">
+<code class="sig-name descname">getEdgeLoop</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.getEdgeLoop" title="Permalink to this definition">¶</a></dt>
+<dd><p>getNumEdgeLoops(self)</p>
+<p>Get the number of edge loops stored by this object</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The number of edge loops</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.getEntityId">
+<code class="sig-name descname">getEntityId</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.getEntityId" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the entity id associated with the Face</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Id number of the object, -1 for NULL object</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.getMesh">
+<code class="sig-name descname">getMesh</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.getMesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the FaceMesh object associated with the Face</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>mesh</strong> (<a class="reference internal" href="mesh_interface.html#tmr.TMR.FaceMesh" title="tmr.TMR.FaceMesh"><em>FaceMesh</em></a>) – The FaceMesh object set for this Face</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.getName">
+<code class="sig-name descname">getName</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.getName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the name associated with the Face</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Name associated with the entity</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.getNumEdgeLoops">
+<code class="sig-name descname">getNumEdgeLoops</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.getNumEdgeLoops" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the number of edge loops stored by this object</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The number of edge loops</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.getRange">
+<code class="sig-name descname">getRange</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.getRange" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the range of parameter values for this Face.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>umin, vmin, umax, vmax The parametric limits for the Face</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.getSource">
+<code class="sig-name descname">getSource</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.getSource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the source Volume and Face object</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>the Volume and Face objects, None if no source is set</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.isSame">
+<code class="sig-name descname">isSame</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">f</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.isSame" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the two objects are geometrically equivalent using
+the underlying CAD kernel.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>f</strong> (<a class="reference internal" href="#tmr.TMR.Face" title="tmr.TMR.Face"><em>Face</em></a>) – Face to check</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the same, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.isSameObject">
+<code class="sig-name descname">isSameObject</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">f</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.isSameObject" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if the two objects have the same pointer</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>f</strong> (<a class="reference internal" href="#tmr.TMR.Face" title="tmr.TMR.Face"><em>Face</em></a>) – Face to check</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the same object, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.setCopySource">
+<code class="sig-name descname">setCopySource</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">face</em>, <em class="sig-param">orient=-1</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.setCopySource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the copy source Face object. The mesh for this Face will be copied
+from the copy source Face, including node numbering. This essentially
+merges this mesh and the copy source meshes together in the final global
+mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>face</strong> (<em>Fdge</em>) – New face source</p></li>
+<li><p><strong>orient</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Relative orientation of the two Faces</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.setMesh">
+<code class="sig-name descname">setMesh</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">mesh</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.setMesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the FaceMesh object associated with the Face</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>mesh</strong> (<a class="reference internal" href="mesh_interface.html#tmr.TMR.FaceMesh" title="tmr.TMR.FaceMesh"><em>FaceMesh</em></a>) – The FaceMesh object set for this Face</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.setName">
+<code class="sig-name descname">setName</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">aname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.setName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the name associated with the Face</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>aname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name associated with the Face</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.setSource">
+<code class="sig-name descname">setSource</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">v</em>, <em class="sig-param">f</em>, <em class="sig-param">set_edges=False</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.setSource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the source Face to copy the connectivity from within the specified
+Volume. This code copies the connectivity of the mesh on the source Face
+to this Face, as long as they share the same Volume. The Volume is needed
+to ensure the orientation of the Faces are taken into account.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>v</strong> (<a class="reference internal" href="#tmr.TMR.Volume" title="tmr.TMR.Volume"><em>Volume</em></a>) – Volume which contains both this Face and the Face <em>f</em></p></li>
+<li><p><strong>f</strong> (<a class="reference internal" href="#tmr.TMR.Face" title="tmr.TMR.Face"><em>Face</em></a>) – Source Face to set</p></li>
+<li><p><strong>set_edges</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Set source edges for all edges connecting the source</p></li>
+<li><p><strong>destination Face. This is useful for mesh sweeping.</strong> (<em>and</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Face.writeToVTK">
+<code class="sig-name descname">writeToVTK</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">fname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Face.writeToVTK" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write the Face to a VTK file for visualization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>fname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – File name</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+</ul>
+<p>The other objects define collections of geometric entities:</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.EdgeLoop">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">EdgeLoop</code><a class="headerlink" href="#tmr.TMR.EdgeLoop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Contains an oriented set of edges that enclose a surface. Provides the edge
+list and their relative orientations in the loop</p>
+<dl class="method">
+<dt id="tmr.TMR.EdgeLoop.checkMatching">
+<code class="sig-name descname">checkMatching</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">eloop</em>, <em class="sig-param">tol=1e-6</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.EdgeLoop.checkMatching" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if two edge loops are coincident, within a given tolerance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>eloop</strong> (<a class="reference internal" href="#tmr.TMR.EdgeLoop" title="tmr.TMR.EdgeLoop"><em>EdgeLoop</em></a>) – The EdgeLoop object to check</p></li>
+<li><p><strong>tol</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – The tolerance of the check</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True if the loops match, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)">bool</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.EdgeLoop.getEdgeLoop">
+<code class="sig-name descname">getEdgeLoop</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.EdgeLoop.getEdgeLoop" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of edges and directions from this EdgeLoop</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The list of Edge objects
+list: The list of +/- integers indicating relative directions</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.EdgeLoop.getEntityId">
+<code class="sig-name descname">getEntityId</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.EdgeLoop.getEntityId" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the entity id associated with the EdgeLoop</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Id number of the object, -1 for NULL object</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+<li><dl class="class">
+<dt id="tmr.TMR.Volume">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">Volume</code><a class="headerlink" href="#tmr.TMR.Volume" title="Permalink to this definition">¶</a></dt>
+<dd><p>Contains an oriented collection of surfaces that enclose a
+volume. Provides a list of surfaces. All faces must be oriented
+with positive orientation outwards.</p>
+<dl class="method">
+<dt id="tmr.TMR.Volume.getEntityId">
+<code class="sig-name descname">getEntityId</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Volume.getEntityId" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the entity id associated with the volume</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Id number of the model, -1 for NULL object</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Volume.getFaces">
+<code class="sig-name descname">getFaces</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Volume.getFaces" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the Face objects referenced by this Volume</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>List of Face objects</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Volume.getName">
+<code class="sig-name descname">getName</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Volume.getName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the name associated with the volume</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Name associated with the entity</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Volume.getSweptFacePairs">
+<code class="sig-name descname">getSweptFacePairs</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Volume.getSweptFacePairs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Find source and target faces to see if this is a sweepable volume</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>A list of two Face objects that can be swept</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Volume.setName">
+<code class="sig-name descname">setName</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">aname</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Volume.setName" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the name associated with the volume</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>aname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name associated with the volume</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+<li><dl class="class">
+<dt id="tmr.TMR.Model">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">Model</code><a class="headerlink" href="#tmr.TMR.Model" title="Permalink to this definition">¶</a></dt>
+<dd><p>Contains an ordered collection of vertices, edges, faces, and volumes that
+define a model geometry.</p>
+<dl class="method">
+<dt id="tmr.TMR.Model.getEdges">
+<code class="sig-name descname">getEdges</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Model.getEdges" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of Edge objects from the Model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>A list of the Edge objects</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Model.getFaces">
+<code class="sig-name descname">getFaces</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Model.getFaces" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of Face objects from the Model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>A list of the Face objects</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Model.getVertices">
+<code class="sig-name descname">getVertices</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Model.getVertices" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of Vertex objects from the Model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>A list of the Vertex objects</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Model.getVolumes">
+<code class="sig-name descname">getVolumes</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Model.getVolumes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the list of Volume objects from the Model</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>A list of the Volume objects</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)">list</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Model.writeModelToTecplot">
+<code class="sig-name descname">writeModelToTecplot</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Model.writeModelToTecplot" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="simple">
+<dt>writeModelToTecplot(self, fname,</dt><dd><p>vlabels=True, elabels=True, flabels=True)</p>
+</dd>
+</dl>
+<p>Write a representation of the model to a tecplot file with labels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – File name to write</p></li>
+<li><p><strong>vlabels</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Write the vertex labels</p></li>
+<li><p><strong>elabels</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Write the edge labels</p></li>
+<li><p><strong>flabels</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Write the face labels</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+</ul>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="mesh_interface.html" title="Mesh generation level classes"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="TMR Overview"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2018, Graeme J. Kennedy.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.1.2.
+    </div>
+  </body>
+</html>

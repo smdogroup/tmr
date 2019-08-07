@@ -1,0 +1,372 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mesh generation level classes &#8212; TMR 1 documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quad/octree-level classes" href="octree_interface.html" />
+    <link rel="prev" title="Geometry classes" href="geometry_interface.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="octree_interface.html" title="Quad/octree-level classes"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="geometry_interface.html" title="Geometry classes"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="geometry_interface.html"
+                        title="previous chapter">Geometry classes</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="octree_interface.html"
+                        title="next chapter">Quad/octree-level classes</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/mesh_interface.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="mesh-generation-level-classes">
+<h1>Mesh generation level classes<a class="headerlink" href="#mesh-generation-level-classes" title="Permalink to this headline">¶</a></h1>
+<p><a class="reference internal" href="#tmr.TMR.Mesh" title="tmr.TMR.Mesh"><code class="xref py py-class docutils literal notranslate"><span class="pre">Mesh</span></code></a> provides the primary interface to the meshing
+functionality in <a class="reference internal" href="error_estimation.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> and is used to create quadrilateral and hexahedral
+meshes. The actual meshing operations are performed on the root processor with
+rank 0, but all connectivity and location information is broadcast to all
+processors.</p>
+<p><a class="reference internal" href="#tmr.TMR.Mesh" title="tmr.TMR.Mesh"><code class="xref py py-class docutils literal notranslate"><span class="pre">Mesh</span></code></a> attempts to mesh all <a class="reference internal" href="geometry_interface.html#tmr.TMR.Face" title="tmr.TMR.Face"><code class="xref py py-class docutils literal notranslate"><span class="pre">tmr.TMR.Face</span></code></a> and <a class="reference internal" href="geometry_interface.html#tmr.TMR.Volume" title="tmr.TMR.Volume"><code class="xref py py-class docutils literal notranslate"><span class="pre">tmr.TMR.Volume</span></code></a>
+objects contained in <a class="reference internal" href="geometry_interface.html#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a>. If only a surface mesh is desired, create
+a new <a class="reference internal" href="geometry_interface.html#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a> class without the volume objects.</p>
+<p><a class="reference internal" href="error_estimation.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> only supports swept volume mesh generation. This requires the
+specification of additional information to indicate what surfaces should be
+linked and what direction should be swept. This information is provided by
+indicating source and target geometry entities. When a source/target pair is
+set, the mesh connectivity is copied from the source to the target. A swept
+volume can only be created if:</p>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="geometry_interface.html#tmr.TMR.Volume" title="tmr.TMR.Volume"><code class="xref py py-class docutils literal notranslate"><span class="pre">Volume</span></code></a> contains a source/target <a class="reference internal" href="geometry_interface.html#tmr.TMR.Face" title="tmr.TMR.Face"><code class="xref py py-class docutils literal notranslate"><span class="pre">Face</span></code></a> object
+pair that share the same number of edge loops and each source/target edge
+pair has the same number of nodes.</p></li>
+<li><p>All other <a class="reference internal" href="geometry_interface.html#tmr.TMR.Face" title="tmr.TMR.Face"><code class="xref py py-class docutils literal notranslate"><span class="pre">Face</span></code></a> objects are structured with the same number
+of nodes along the swept direction.</p></li>
+</ol>
+<p>To ensure these conditions apply, it is often necessary to set source/target
+pairs for faces and edges.</p>
+<p>The primary mesh-level functions are as follows:</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.Mesh">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">Mesh</code><a class="headerlink" href="#tmr.TMR.Mesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mesh the geometry model. This class handles the meshing for surface objects
+without any additional information. For hexahedral meshes, the model must
+have a source or target.</p>
+<dl class="method">
+<dt id="tmr.TMR.Mesh.createModelFromMesh">
+<code class="sig-name descname">createModelFromMesh</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Mesh.createModelFromMesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a geometry model based on the input mesh</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The Model geometry representation of the underlying mesh</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="geometry_interface.html#tmr.TMR.Model" title="tmr.TMR.Model">Model</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Mesh.getHexConnectivity">
+<code class="sig-name descname">getHexConnectivity</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Mesh.getHexConnectivity" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve the global connectivity from the hexahedral mesh</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Numpy array of the hexahedral connectivity</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Mesh.getMeshPoints">
+<code class="sig-name descname">getMeshPoints</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Mesh.getMeshPoints" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve a global array of the mesh locations</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Numpy array of the node locations</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Mesh.getQuadConnectivity">
+<code class="sig-name descname">getQuadConnectivity</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Mesh.getQuadConnectivity" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve the global connectivity from the quadrilateral mesh</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Numpy array of the quadrilateral connectivity</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Mesh.getTriConnectivity">
+<code class="sig-name descname">getTriConnectivity</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Mesh.getTriConnectivity" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieve the global connectivity from the triangular mesh</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Numpy array of the triangle connectivity</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Mesh.mesh">
+<code class="sig-name descname">mesh</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">h=1.0</em>, <em class="sig-param">opts=None</em>, <em class="sig-param">fs=None</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Mesh.mesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Mesh the model with the provided mesh spacing <em>h</em>, default meshing
+options <code class="xref py py-class docutils literal notranslate"><span class="pre">MeshOptions</span></code> opts if it is not provided or given
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ElementFeatureSize</span></code> fs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>h</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Global mesh spacing parameter</p></li>
+<li><p><strong>opts</strong> (<a class="reference internal" href="#tmr.TMR.MeshOptions" title="tmr.TMR.MeshOptions"><em>MeshOptions</em></a>) – Meshing options class</p></li>
+<li><p><strong>fs</strong> (<a class="reference internal" href="#tmr.TMR.ElementFeatureSize" title="tmr.TMR.ElementFeatureSize"><em>ElementFeatureSize</em></a>) – ElementFeatureSize class specifying spacing</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Mesh.writeToBDF">
+<code class="sig-name descname">writeToBDF</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">fname</em>, <em class="sig-param">outtype=None</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Mesh.writeToBDF" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write both the quadrilateral and hexahedral mesh to a BDF file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – File name</p></li>
+<li><p><strong>outtype</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Type of mesh to output to BDF file i.e. quad or hex</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.Mesh.writeToVTK">
+<code class="sig-name descname">writeToVTK</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">fname</em>, <em class="sig-param">outtype=None</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.Mesh.writeToVTK" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write both the quadrilateral and hexahedral mesh to a VTK file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>fname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – File name</p></li>
+<li><p><strong>outtype</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Type of mesh to output to VTK file i.e. quad or hex</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+</ul>
+<p><a class="reference internal" href="#tmr.TMR.MeshOptions" title="tmr.TMR.MeshOptions"><code class="xref py py-class docutils literal notranslate"><span class="pre">MeshOptions</span></code></a> class defines a number of options that modify
+the meshing algorithm. These include the following:</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.MeshOptions">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">MeshOptions</code><a class="headerlink" href="#tmr.TMR.MeshOptions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Defines a number of options that modify the meshing algorithm.</p>
+<dl class="attribute">
+<dt id="tmr.TMR.MeshOptions.frontal_quality_factor">
+<code class="sig-name descname">frontal_quality_factor</code><a class="headerlink" href="#tmr.TMR.MeshOptions.frontal_quality_factor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Use the mesh quality indicator to determine when to accept new triangles
+in the frontal algorithm.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Quality factor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tmr.TMR.MeshOptions.mesh_type_default">
+<code class="sig-name descname">mesh_type_default</code><a class="headerlink" href="#tmr.TMR.MeshOptions.mesh_type_default" title="Permalink to this definition">¶</a></dt>
+<dd><p>Default mesh type either structured or unstructured. In the case that it
+is set to structured, the algorithm firsts checks if it is possible to
+use a mapped mesh, and reverts to an unstructured algorithm otherwise.</p>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tmr.TMR.MeshOptions.num_smoothing_steps">
+<code class="sig-name descname">num_smoothing_steps</code><a class="headerlink" href="#tmr.TMR.MeshOptions.num_smoothing_steps" title="Permalink to this definition">¶</a></dt>
+<dd><p>Number of smoothing steps to apply during both the Laplacian and quad
+smoothing algorithms</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Number of smoothing steps</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tmr.TMR.MeshOptions.triangularize_print_level">
+<code class="sig-name descname">triangularize_print_level</code><a class="headerlink" href="#tmr.TMR.MeshOptions.triangularize_print_level" title="Permalink to this definition">¶</a></dt>
+<dd><p>Print level to provide more verbosity during the triangularization
+algorithm</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Print level for the operation</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="tmr.TMR.MeshOptions.write_mesh_quality_histogram">
+<code class="sig-name descname">write_mesh_quality_histogram</code><a class="headerlink" href="#tmr.TMR.MeshOptions.write_mesh_quality_histogram" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write out a histogram of the mesh quality in the final smoothed
+quadrilateral mesh.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Whether or not to write the mesh quality histogram</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+</ul>
+<p><a class="reference internal" href="#tmr.TMR.ElementFeatureSize" title="tmr.TMR.ElementFeatureSize"><code class="xref py py-class docutils literal notranslate"><span class="pre">ElementFeatureSize</span></code></a> class is a base class that can be used to define the feature
+size of the elements in the mesh.</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.ElementFeatureSize">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">ElementFeatureSize</code><a class="headerlink" href="#tmr.TMR.ElementFeatureSize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Base class for creating feature size</p>
+</dd></dl>
+
+</li>
+</ul>
+<p>The mesh itself is created by meshing the vertices, edges, faces, and volumes
+within the mesh.  These meshes are stored in the following classes:</p>
+<p>The <a class="reference internal" href="#tmr.TMR.EdgeMesh" title="tmr.TMR.EdgeMesh"><code class="xref py py-class docutils literal notranslate"><span class="pre">EdgeMesh</span></code></a> object is created by first computing the number of
+nodes along its length, and then globally ordering the nodes. The number of
+nodes is determined based on the following criteria:</p>
+<ol class="arabic simple">
+<li><p>If the first and second vertices are different, then at least 3 nodes are
+created along the edge.</p></li>
+<li><p>If the first and second vertices are the same and the edge is not
+degenerate, then it forms a loop back on itself and at least 5 nodes are
+created (double counting the first and last node number).</p></li>
+<li><p>If the edge is a target edge, the number of nodes is taken from the source
+edge.</p></li>
+<li><p>Otherwise, the number of nodes is selected as an odd number that most
+closely matches the spacing requested along the edge.</p></li>
+</ol>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.EdgeMesh">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">EdgeMesh</code><a class="headerlink" href="#tmr.TMR.EdgeMesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the class that stores the node numbers along an edge</p>
+</dd></dl>
+
+</li>
+<li><dl class="class">
+<dt id="tmr.TMR.FaceMesh">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">FaceMesh</code><a class="headerlink" href="#tmr.TMR.FaceMesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the class that stores the structured/unstructured surface mesh</p>
+</dd></dl>
+
+</li>
+<li><dl class="class">
+<dt id="tmr.TMR.VolumeMesh">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">VolumeMesh</code><a class="headerlink" href="#tmr.TMR.VolumeMesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the class that stores the hexahedral mesh</p>
+</dd></dl>
+
+</li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="octree_interface.html" title="Quad/octree-level classes"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="geometry_interface.html" title="Geometry classes"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2018, Graeme J. Kennedy.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.1.2.
+    </div>
+  </body>
+</html>

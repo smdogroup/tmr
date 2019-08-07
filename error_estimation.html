@@ -16,7 +16,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Installing TMR" href="install.html" />
-    <link rel="prev" title="TMR Interface and Methods" href="interface_and_methods.html" /> 
+    <link rel="prev" title="Algorithms" href="algorithms.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
@@ -25,13 +25,10 @@
           <a href="genindex.html" title="General Index"
              accesskey="I">index</a></li>
         <li class="right" >
-          <a href="py-modindex.html" title="Python Module Index"
-             >modules</a> |</li>
-        <li class="right" >
           <a href="install.html" title="Installing TMR"
              accesskey="N">next</a> |</li>
         <li class="right" >
-          <a href="interface_and_methods.html" title="TMR Interface and Methods"
+          <a href="algorithms.html" title="Algorithms"
              accesskey="P">previous</a> |</li>
         <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
       </ul>
@@ -39,8 +36,8 @@
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
   <h4>Previous topic</h4>
-  <p class="topless"><a href="interface_and_methods.html"
-                        title="previous chapter">TMR Interface and Methods</a></p>
+  <p class="topless"><a href="algorithms.html"
+                        title="previous chapter">Algorithms</a></p>
   <h4>Next topic</h4>
   <p class="topless"><a href="install.html"
                         title="next chapter">Installing TMR</a></p>
@@ -71,14 +68,14 @@
             
   <div class="section" id="error-estimation">
 <h1>Error Estimation<a class="headerlink" href="#error-estimation" title="Permalink to this headline">¶</a></h1>
-<p>There are two mesh refinement strategies that are implemented in <a class="reference internal" href="interface_and_methods.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a>:
+<p>There are two mesh refinement strategies that are implemented in <code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code>:
 the first is based on the strain energy norm, while the second is an
 adjoint-based refinement technique. The strain energy based refinement method is
 designed to reduce the solution error in the natural strain energy norm.  This
 call takes the form:</p>
-<span class="target" id="module-TMR"></span><dl class="function">
-<dt id="TMR.strainEnergyError">
-<code class="sig-prename descclassname">TMR.</code><code class="sig-name descname">strainEnergyError</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#TMR.strainEnergyError" title="Permalink to this definition">¶</a></dt>
+<dl class="function">
+<dt id="tmr.TMR.strainEnergyError">
+<code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">strainEnergyError</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.strainEnergyError" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="simple">
 <dt>strainEnergyError(forest, coarse_assembler, forest_refined,</dt><dd><p>refined_assembler)</p>
 </dd>
@@ -105,9 +102,9 @@ projected onto a uniformly refined mesh.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>forest_coarse</strong> (<a class="reference internal" href="interface_and_methods.html#TMR.OctForest" title="TMR.OctForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code></a> or <a class="reference internal" href="interface_and_methods.html#TMR.QuadForest" title="TMR.QuadForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code></a>) – Forest for current mesh level</p></li>
+<li><p><strong>forest_coarse</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code>) – Forest for current mesh level</p></li>
 <li><p><strong>coarse_assembler</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Assembler</span></code>) – Finite assembler class for associated with forest</p></li>
-<li><p><strong>forest_refined</strong> (<a class="reference internal" href="interface_and_methods.html#TMR.OctForest" title="TMR.OctForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code></a> or <a class="reference internal" href="interface_and_methods.html#TMR.QuadForest" title="TMR.QuadForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code></a>) – Forest for refined mesh level</p></li>
+<li><p><strong>forest_refined</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code>) – Forest for refined mesh level</p></li>
 <li><p><strong>refined_assembler</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Assembler</span></code>) – Finite assembler class for associated with forest_refined</p></li>
 </ul>
 </dd>
@@ -126,9 +123,9 @@ set in <code class="xref py py-class docutils literal notranslate"><span class="
 <p>The adjoint-based refinement method requires an <code class="xref py py-class docutils literal notranslate"><span class="pre">Assembler</span></code> object
 for both the current level of refinement and a uniformly refined version of the
 model. The adjoint-based mesh refinement takes the form:</p>
-<span class="target" id="module-TMR"></span><dl class="function">
-<dt id="TMR.adjointError">
-<code class="sig-prename descclassname">TMR.</code><code class="sig-name descname">adjointError</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#TMR.adjointError" title="Permalink to this definition">¶</a></dt>
+<dl class="function">
+<dt id="tmr.TMR.adjointError">
+<code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">adjointError</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.adjointError" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="simple">
 <dt>adjointError(forest, coarse_assembler, forest_refined, refined_assembler,</dt><dd><p>solution_refined, adjoint_refined)</p>
 </dd>
@@ -137,9 +134,9 @@ model. The adjoint-based mesh refinement takes the form:</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>forest</strong> (<a class="reference internal" href="interface_and_methods.html#TMR.OctForest" title="TMR.OctForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code></a> or <a class="reference internal" href="interface_and_methods.html#TMR.QuadForest" title="TMR.QuadForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code></a>) – Forest for current mesh level</p></li>
+<li><p><strong>forest</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code>) – Forest for current mesh level</p></li>
 <li><p><strong>coarse_assembler</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Assembler</span></code>) – Finite assembler class for associated with forest</p></li>
-<li><p><strong>forest_refined</strong> (<a class="reference internal" href="interface_and_methods.html#TMR.OctForest" title="TMR.OctForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code></a> or <a class="reference internal" href="interface_and_methods.html#TMR.QuadForest" title="TMR.QuadForest"><code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code></a>) – Higher-order forest for refined mesh level</p></li>
+<li><p><strong>forest_refined</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">OctForest</span></code> or <code class="xref py py-class docutils literal notranslate"><span class="pre">QuadForest</span></code>) – Higher-order forest for refined mesh level</p></li>
 <li><p><strong>refined_assembler</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Assembler</span></code>) – Higher-order finite assembler class for associated with forest_refined</p></li>
 <li><p><strong>solution_refined</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Vec</span></code>) – The higher-order solution (or approximation)</p></li>
 <li><p><strong>adjoint_refined</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Vec</span></code>) – The difference between the refined and coarse adjoint solutions computed
@@ -172,13 +169,10 @@ in some manner</p></li>
           <a href="genindex.html" title="General Index"
              >index</a></li>
         <li class="right" >
-          <a href="py-modindex.html" title="Python Module Index"
-             >modules</a> |</li>
-        <li class="right" >
           <a href="install.html" title="Installing TMR"
              >next</a> |</li>
         <li class="right" >
-          <a href="interface_and_methods.html" title="TMR Interface and Methods"
+          <a href="algorithms.html" title="Algorithms"
              >previous</a> |</li>
         <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
       </ul>

@@ -15,7 +15,7 @@
     <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Algorithms" href="algorithms.html" /> 
+    <link rel="next" title="Geometry classes" href="geometry_interface.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
@@ -24,10 +24,7 @@
           <a href="genindex.html" title="General Index"
              accesskey="I">index</a></li>
         <li class="right" >
-          <a href="py-modindex.html" title="Python Module Index"
-             >modules</a> |</li>
-        <li class="right" >
-          <a href="algorithms.html" title="Algorithms"
+          <a href="geometry_interface.html" title="Geometry classes"
              accesskey="N">next</a> |</li>
         <li class="nav-item nav-item-0"><a href="#">TMR 1 documentation</a> &#187;</li> 
       </ul>
@@ -38,16 +35,18 @@
   <ul>
 <li><a class="reference internal" href="#">TMR Overview</a><ul>
 <li><a class="reference internal" href="#please-cite-us">Please cite us</a></li>
-<li><a class="reference internal" href="#installation">Installation</a></li>
-<li><a class="reference internal" href="#contents">Contents:</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#python-interface-and-code-structure">Python interface and code structure</a></li>
+<li><a class="reference internal" href="#examples">Examples</a></li>
+<li><a class="reference internal" href="#background-and-theory">Background and theory</a></li>
+<li><a class="reference internal" href="#installation">Installation</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and Tables</a></li>
 </ul>
 
   <h4>Next topic</h4>
-  <p class="topless"><a href="algorithms.html"
-                        title="next chapter">Algorithms</a></p>
+  <p class="topless"><a href="geometry_interface.html"
+                        title="next chapter">Geometry classes</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
@@ -110,9 +109,67 @@ Ting Wei Chin, Mark K. Leader, Graeme J. Kennedy, A scalable framework for large
 </pre></div>
 </div>
 </div>
+</div>
+<div class="section" id="python-interface-and-code-structure">
+<h1>Python interface and code structure<a class="headerlink" href="#python-interface-and-code-structure" title="Permalink to this headline">¶</a></h1>
+<p>There are two interfaces to <code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code>: the C++ interface and the Python-level
+interface. <code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code> is implemented in C++, so the interface through C++
+contains all publicly accessible class member functions. The Python-level
+interface wraps the most important classes and functions, but does not provide
+an interface to all lower-level operations.</p>
+<p>There are three primary types of classes within <code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code>:</p>
+<ol class="arabic simple">
+<li><p>Geometry and topology-level classes which interface with the underlying
+geometry kernel</p></li>
+<li><p>Serial mesh-level classes which are used to create moderate-size
+quadrilateral and hexahedral meshes based on the input geometry</p></li>
+<li><p>Quadtree and Octree-level classes which are used to create, modify, refine
+and extract information from the quad/octrees.</p></li>
+</ol>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="geometry_interface.html">Geometry classes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="geometry_interface.html#tmrentity">TMREntity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="geometry_interface.html#loading-a-model">Loading a model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="geometry_interface.html#geometry-interface">Geometry interface</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mesh_interface.html">Mesh generation level classes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="octree_interface.html">Quad/octree-level classes</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="octree_interface.html#typical-usage">Typical Usage</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="examples">
+<h1>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="orthogonal_bracket.html">Orthogonal bracket</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example.html">STEP import and meshing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="crm.html">Common Research Model (CRM) wingbox</a></li>
+<li class="toctree-l1"><a class="reference internal" href="interp.html">Interpolation between meshes</a></li>
+</ul>
+</div>
+</div>
+<div class="section" id="background-and-theory">
+<h1>Background and theory<a class="headerlink" href="#background-and-theory" title="Permalink to this headline">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="algorithms.html#serial-meshing-capabilities">Serial meshing capabilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="algorithms.html#mapped-quadtree-and-octree-meshing">Mapped Quadtree and octree meshing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="algorithms.html#interface-to-cad">Interface to CAD</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="error_estimation.html">Error Estimation</a></li>
+</ul>
+</div>
+</div>
 <div class="section" id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
-<p>TMR has several dependencies. The current version of TMR requires the following codes:</p>
+<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
+<p>TMR has several dependencies. The current version of TMR requires the following external libraries:</p>
 <ul class="simple">
 <li><p>MPI</p></li>
 <li><p>BLAS/LAPACK</p></li>
@@ -128,41 +185,19 @@ Ting Wei Chin, Mark K. Leader, Graeme J. Kennedy, A scalable framework for large
 <li><p>mpi4py</p></li>
 <li><p>Cython</p></li>
 </ul>
-<p>Detailed installation instructions are below.</p>
-</div>
-<div class="section" id="contents">
-<h2>Contents:<a class="headerlink" href="#contents" title="Permalink to this headline">¶</a></h2>
+<p>Detailed installation instructions are located here:</p>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="algorithms.html#serial-meshing-capabilities">Serial meshing capabilities</a></li>
-<li class="toctree-l2"><a class="reference internal" href="algorithms.html#mapped-quadtree-and-octree-meshing">Mapped Quadtree and octree meshing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="algorithms.html#interface-to-cad">Interface to CAD</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="interface_and_methods.html">TMR Interface and Methods</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="interface_and_methods.html#tmrentity">TMREntity</a></li>
-<li class="toctree-l2"><a class="reference internal" href="interface_and_methods.html#geometry-level-classes">Geometry-level classes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="interface_and_methods.html#mesh-generation-level-classes">Mesh generation-level classes</a></li>
-<li class="toctree-l2"><a class="reference internal" href="interface_and_methods.html#quad-octree-level-classes">Quad/octree-level classes</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="error_estimation.html">Error Estimation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="install.html">Installing TMR</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="install.html#prerequisites">Prerequisites</a></li>
 <li class="toctree-l2"><a class="reference internal" href="install.html#steps-to-compile">Steps to compile</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="orthogonal_bracket.html">Orthogonal bracket</a></li>
-<li class="toctree-l1"><a class="reference internal" href="example.html">STEP import and meshing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="crm.html">Common Research Model (CRM) wingbox</a></li>
-<li class="toctree-l1"><a class="reference internal" href="interp.html">Interpolation between meshes</a></li>
 </ul>
 </div>
 </div>
-</div>
 <div class="section" id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
+<h1>Indices and Tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
 <ul class="simple">
 <li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
 <li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
@@ -183,10 +218,7 @@ Ting Wei Chin, Mark K. Leader, Graeme J. Kennedy, A scalable framework for large
           <a href="genindex.html" title="General Index"
              >index</a></li>
         <li class="right" >
-          <a href="py-modindex.html" title="Python Module Index"
-             >modules</a> |</li>
-        <li class="right" >
-          <a href="algorithms.html" title="Algorithms"
+          <a href="geometry_interface.html" title="Geometry classes"
              >next</a> |</li>
         <li class="nav-item nav-item-0"><a href="#">TMR 1 documentation</a> &#187;</li> 
       </ul>
