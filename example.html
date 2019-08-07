@@ -4,7 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8" />
-    <title>Example &#8212; TMR 1 documentation</title>
+    <title>STEP import and meshing &#8212; TMR 1 documentation</title>
     <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
     <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
@@ -15,7 +15,7 @@
     <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="prev" title="Installing TMR" href="install.html" /> 
+    <link rel="prev" title="Orthogonal bracket" href="orthogonal_bracket.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
       <h3>Navigation</h3>
@@ -27,7 +27,7 @@
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
-          <a href="install.html" title="Installing TMR"
+          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
              accesskey="P">previous</a> |</li>
         <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
       </ul>
@@ -35,8 +35,8 @@
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
   <h4>Previous topic</h4>
-  <p class="topless"><a href="install.html"
-                        title="previous chapter">Installing TMR</a></p>
+  <p class="topless"><a href="orthogonal_bracket.html"
+                        title="previous chapter">Orthogonal bracket</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
@@ -62,8 +62,16 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <div class="section" id="example">
-<h1>Example<a class="headerlink" href="#example" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="step-import-and-meshing">
+<h1>STEP import and meshing<a class="headerlink" href="#step-import-and-meshing" title="Permalink to this headline">¶</a></h1>
+<p>The following example loads in a CAD model from a STEP file, and creates a volume mesh.
+The code consists of the following steps:</p>
+<ul class="simple">
+<li><p>Import the CAD model from a STEP geometry file into a TMR-compatible objects using <code class="docutils literal notranslate"><span class="pre">TMR.LoadModel</span></code></p></li>
+<li><p>Extract lists of the volumes, faces and edges defined from the file</p></li>
+<li><p>Set source and target edges and faces. In the source-target relationship, target edges will have the same number of nodes as their source. Target faces will have the same surface mesh topology as their source faces. Source and target faces must be in the same volume object.</p></li>
+<li><p>The call <code class="docutils literal notranslate"><span class="pre">mesh</span> <span class="pre">=</span> <span class="pre">TMR.Mesh(comm,</span> <span class="pre">geo)</span></code> generates a new mesh. If the model input contains vertices, edges and faces, then a surface mesh is created, if it also contains volumes, then a volume mesh is created.</p></li>
+</ul>
 <p>Listed below is an example of using TMR to generate a quadtree/octree mesh</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mpi4py</span> <span class="kn">import</span> <span class="n">MPI</span>
 <span class="kn">from</span> <span class="nn">tmr</span> <span class="kn">import</span> <span class="n">TMR</span>
@@ -97,8 +105,9 @@
 <span class="n">mesh</span><span class="o">.</span><span class="n">mesh</span><span class="p">(</span><span class="n">htarget</span><span class="p">,</span> <span class="n">opts</span><span class="o">=</span><span class="n">opts</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Listed below is an example of using TMR to investigate the numbering convention
-of the vertex, edges, faces, and volumes</p>
+<p>It is sometimes necessary to identify the numbering of vertex, edges, faces, and volumes within a file.
+A convenient way to visualize this information is to create a tecplot file with labels.
+An example of generating this information is shown below:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mpi4py</span> <span class="kn">import</span> <span class="n">MPI</span>
 <span class="kn">from</span> <span class="nn">tmr</span> <span class="kn">import</span> <span class="n">TMR</span>
 
@@ -130,7 +139,7 @@ of the vertex, edges, faces, and volumes</p>
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
-          <a href="install.html" title="Installing TMR"
+          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
              >previous</a> |</li>
         <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
       </ul>

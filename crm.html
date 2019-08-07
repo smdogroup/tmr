@@ -1,0 +1,108 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Common Research Model (CRM) wingbox &#8212; TMR 1 documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="STEP import and meshing" href="example.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="example.html" title="STEP import and meshing"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="example.html"
+                        title="previous chapter">STEP import and meshing</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/crm.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="common-research-model-crm-wingbox">
+<h1>Common Research Model (CRM) wingbox<a class="headerlink" href="#common-research-model-crm-wingbox" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">egads4py</span></code> can be used to create wingbox models that can then be meshed with TMR.
+An example of this application can be found under <code class="docutils literal notranslate"><span class="pre">examples/egads/crm</span></code> which generates a STEP model of the undeformed CRM wing.
+In this example, there are two steps to the creation of the STEP file:</p>
+<ol class="arabic simple">
+<li><p>The code <code class="docutils literal notranslate"><span class="pre">oml.py</span></code> reads in the IGES surface file and extracts the lofted airfoil curves.
+These curves are not all planar, so they are modified slightly and are projected so that they are parallel with the symmetry plane.
+This modified OML geometry is then written to the files <code class="docutils literal notranslate"><span class="pre">ucrm_9_oml.egads</span></code> and <code class="docutils literal notranslate"><span class="pre">ucrm_9_oml.step</span></code>.</p></li>
+<li><p>The code <code class="docutils literal notranslate"><span class="pre">crm.py</span></code> reads in the OML geometry.
+This code uses a doubly-connected edge loop (DCEL) data structure to create a planar layout of ribs and spars.
+This planar layout is then extruded in the vertical direction.
+The intersections between the ribs and spars and OML are computed and imprinted and the leading edge, trailing edge, and upper/lower spars and ribs.</p></li>
+</ol>
+<img alt="_images/crm.png" src="_images/crm.png" />
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="example.html" title="STEP import and meshing"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2018, Graeme J. Kennedy.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.1.2.
+    </div>
+  </body>
+</html>

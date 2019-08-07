@@ -1,0 +1,224 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Orthogonal bracket &#8212; TMR 1 documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="STEP import and meshing" href="example.html" />
+    <link rel="prev" title="Installing TMR" href="install.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="example.html" title="STEP import and meshing"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installing TMR"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="install.html"
+                        title="previous chapter">Installing TMR</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="example.html"
+                        title="next chapter">STEP import and meshing</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/orthogonal_bracket.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="orthogonal-bracket">
+<h1>Orthogonal bracket<a class="headerlink" href="#orthogonal-bracket" title="Permalink to this headline">¶</a></h1>
+<img alt="_images/orthogonal_bracket.png" src="_images/orthogonal_bracket.png" />
+<p>The orthogonal bracket is an interesting test case for topology optimization.
+It consists of three orthogonal, equally spaced members, with holes cut out in orthogonal directions.
+The following code performs the following steps:</p>
+<ul class="simple">
+<li><p>Generates the orthogonal bracket geometry using egads4py’s solid boolean operations</p></li>
+<li><p>Converts the egads4py objects to TMR-compatible geometry objects using <code class="docutils literal notranslate"><span class="pre">TMR.ConvertEGADSModel</span></code></p></li>
+<li><p>Collects all the TMR objects into a geometry model <code class="docutils literal notranslate"><span class="pre">geo</span></code></p></li>
+<li><p>Uses TMR’s automatic coincident vertex, edge and face detection, and sweeping direction detection algorithm <code class="docutils literal notranslate"><span class="pre">TMR.setMatchingFaces(geos)</span></code>.</p></li>
+<li><p>Creates the coarse mesh with the call <code class="docutils literal notranslate"><span class="pre">mesh</span> <span class="pre">=</span> <span class="pre">TMR.Mesh(comm,</span> <span class="pre">geo)</span></code>. Note that the coarse mesh is created on the root processor and copied to all processors. This call will generate EGADS errors <code class="docutils literal notranslate"><span class="pre">EGADS</span> <span class="pre">Error:</span> <span class="pre">Edge/Sense</span> <span class="pre">not</span> <span class="pre">in</span> <span class="pre">Face</span> <span class="pre">(EG_getEdgeUV)!</span></code> since different models are connected.</p></li>
+<li><p>Creates a model from the new mesh <code class="docutils literal notranslate"><span class="pre">model</span> <span class="pre">=</span> <span class="pre">mesh.createModelFromMesh()</span></code>, and uses that model to generate the topology object required for the forest-of-octrees object <code class="docutils literal notranslate"><span class="pre">topo</span> <span class="pre">=</span> <span class="pre">TMR.Topology(comm,</span> <span class="pre">model)</span></code></p></li>
+<li><p>Creates the forest of octrees <code class="docutils literal notranslate"><span class="pre">forest</span> <span class="pre">=</span> <span class="pre">TMR.OctForest(comm)</span></code></p></li>
+<li><p>Generates a random refinement and balances the mesh</p></li>
+<li><p>Writes out the mesh to a file</p></li>
+</ul>
+<p>The complete code is shown below:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">mpi4py</span> <span class="kn">import</span> <span class="n">MPI</span>
+<span class="kn">from</span> <span class="nn">egads4py</span> <span class="kn">import</span> <span class="n">egads</span>
+<span class="kn">from</span> <span class="nn">tmr</span> <span class="kn">import</span> <span class="n">TMR</span>
+
+<span class="n">comm</span> <span class="o">=</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span>
+
+<span class="c1"># Create the egads context</span>
+<span class="n">ctx</span> <span class="o">=</span> <span class="n">egads</span><span class="o">.</span><span class="n">context</span><span class="p">()</span>
+
+<span class="n">parts</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="n">r0</span> <span class="o">=</span> <span class="mf">0.05</span>
+
+<span class="c1"># Create the boxes</span>
+<span class="n">x0</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">]</span>
+<span class="n">B0</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">makeSolidBody</span><span class="p">(</span><span class="n">egads</span><span class="o">.</span><span class="n">BOX</span><span class="p">,</span> <span class="n">rdata</span><span class="o">=</span><span class="p">[</span><span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">])</span>
+<span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">makeTopology</span><span class="p">(</span><span class="n">egads</span><span class="o">.</span><span class="n">MODEL</span><span class="p">,</span> <span class="n">children</span><span class="o">=</span><span class="p">[</span><span class="n">B0</span><span class="p">]))</span>
+
+<span class="c1"># Create the x-arm</span>
+<span class="n">x0</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.25</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.75</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">]</span>
+<span class="n">B1</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">makeSolidBody</span><span class="p">(</span><span class="n">egads</span><span class="o">.</span><span class="n">BOX</span><span class="p">,</span> <span class="n">rdata</span><span class="o">=</span><span class="p">[</span><span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">])</span>
+
+<span class="n">x0</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.85</span><span class="p">,</span> <span class="mf">0.125</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.85</span><span class="p">,</span> <span class="mf">0.125</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">]</span>
+<span class="n">C1</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">makeSolidBody</span><span class="p">(</span><span class="n">egads</span><span class="o">.</span><span class="n">CYLINDER</span><span class="p">,</span> <span class="n">rdata</span><span class="o">=</span><span class="p">[</span><span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">r0</span><span class="p">])</span>
+<span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">B1</span><span class="o">.</span><span class="n">solidBoolean</span><span class="p">(</span><span class="n">C1</span><span class="p">,</span> <span class="n">egads</span><span class="o">.</span><span class="n">SUBTRACTION</span><span class="p">))</span>
+
+<span class="c1"># Create the y-arm</span>
+<span class="n">x0</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">]</span>
+<span class="n">B2</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">makeSolidBody</span><span class="p">(</span><span class="n">egads</span><span class="o">.</span><span class="n">BOX</span><span class="p">,</span> <span class="n">rdata</span><span class="o">=</span><span class="p">[</span><span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">])</span>
+
+<span class="n">x0</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">,</span> <span class="mf">0.125</span><span class="p">]</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">,</span> <span class="mf">0.125</span><span class="p">]</span>
+<span class="n">C2</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">makeSolidBody</span><span class="p">(</span><span class="n">egads</span><span class="o">.</span><span class="n">CYLINDER</span><span class="p">,</span> <span class="n">rdata</span><span class="o">=</span><span class="p">[</span><span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">r0</span><span class="p">])</span>
+<span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">B2</span><span class="o">.</span><span class="n">solidBoolean</span><span class="p">(</span><span class="n">C2</span><span class="p">,</span> <span class="n">egads</span><span class="o">.</span><span class="n">SUBTRACTION</span><span class="p">))</span>
+
+<span class="c1"># Create the z-arm</span>
+<span class="n">x0</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">]</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">]</span>
+<span class="n">B3</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">makeSolidBody</span><span class="p">(</span><span class="n">egads</span><span class="o">.</span><span class="n">BOX</span><span class="p">,</span> <span class="n">rdata</span><span class="o">=</span><span class="p">[</span><span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">])</span>
+
+<span class="n">x0</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.125</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span>    <span class="mf">0.85</span><span class="p">]</span>
+<span class="n">x1</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.125</span><span class="p">,</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">0.85</span><span class="p">]</span>
+<span class="n">C3</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">makeSolidBody</span><span class="p">(</span><span class="n">egads</span><span class="o">.</span><span class="n">CYLINDER</span><span class="p">,</span> <span class="n">rdata</span><span class="o">=</span><span class="p">[</span><span class="n">x0</span><span class="p">,</span> <span class="n">x1</span><span class="p">,</span> <span class="n">r0</span><span class="p">])</span>
+<span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">B3</span><span class="o">.</span><span class="n">solidBoolean</span><span class="p">(</span><span class="n">C3</span><span class="p">,</span> <span class="n">egads</span><span class="o">.</span><span class="n">SUBTRACTION</span><span class="p">))</span>
+
+<span class="c1"># Create all of the models</span>
+<span class="n">geos</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parts</span><span class="p">:</span>
+    <span class="n">geos</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TMR</span><span class="o">.</span><span class="n">ConvertEGADSModel</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+
+<span class="c1"># Create the full list of vertices, edges, faces and volumes</span>
+<span class="n">verts</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">edges</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">faces</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">vols</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">geo</span> <span class="ow">in</span> <span class="n">geos</span><span class="p">:</span>
+    <span class="n">verts</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">geo</span><span class="o">.</span><span class="n">getVertices</span><span class="p">())</span>
+    <span class="n">edges</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">geo</span><span class="o">.</span><span class="n">getEdges</span><span class="p">())</span>
+    <span class="n">faces</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">geo</span><span class="o">.</span><span class="n">getFaces</span><span class="p">())</span>
+    <span class="n">vols</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">geo</span><span class="o">.</span><span class="n">getVolumes</span><span class="p">())</span>
+
+<span class="c1"># Set all of the matching faces</span>
+<span class="n">TMR</span><span class="o">.</span><span class="n">setMatchingFaces</span><span class="p">(</span><span class="n">geos</span><span class="p">)</span>
+
+<span class="c1"># Create the geometry</span>
+<span class="n">geo</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">Model</span><span class="p">(</span><span class="n">verts</span><span class="p">,</span> <span class="n">edges</span><span class="p">,</span> <span class="n">faces</span><span class="p">,</span> <span class="n">vols</span><span class="p">)</span>
+
+<span class="c1"># Create the new mesh</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">Mesh</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span> <span class="n">geo</span><span class="p">)</span>
+
+<span class="c1"># Set the meshing options</span>
+<span class="n">opts</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">MeshOptions</span><span class="p">()</span>
+<span class="n">opts</span><span class="o">.</span><span class="n">write_mesh_quality_histogram</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">opts</span><span class="o">.</span><span class="n">triangularize_print_iter</span> <span class="o">=</span> <span class="mi">50000</span>
+
+<span class="c1"># Create the surface mesh</span>
+<span class="n">htarget</span> <span class="o">=</span> <span class="mf">0.02</span>
+<span class="n">mesh</span><span class="o">.</span><span class="n">mesh</span><span class="p">(</span><span class="n">htarget</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
+
+<span class="c1"># Write the surface mesh to a file</span>
+<span class="n">mesh</span><span class="o">.</span><span class="n">writeToVTK</span><span class="p">(</span><span class="s1">&#39;ortho_bracket.vtk&#39;</span><span class="p">,</span> <span class="s1">&#39;hex&#39;</span><span class="p">)</span>
+
+<span class="c1"># Create the model from the unstructured volume mesh</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">createModelFromMesh</span><span class="p">()</span>
+
+<span class="c1"># Create the corresponding mesh topology from the mesh-model</span>
+<span class="n">topo</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">Topology</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span> <span class="n">model</span><span class="p">)</span>
+
+<span class="c1"># Create the quad forest and set the topology of the forest</span>
+<span class="n">forest</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">OctForest</span><span class="p">(</span><span class="n">comm</span><span class="p">)</span>
+<span class="n">forest</span><span class="o">.</span><span class="n">setTopology</span><span class="p">(</span><span class="n">topo</span><span class="p">)</span>
+
+<span class="c1"># Create random trees and balance the mesh. Print the output file</span>
+<span class="n">forest</span><span class="o">.</span><span class="n">createRandomTrees</span><span class="p">(</span><span class="n">nrand</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">max_lev</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">forest</span><span class="o">.</span><span class="n">balance</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">filename</span> <span class="o">=</span> <span class="s1">&#39;ortho_forest</span><span class="si">%d</span><span class="s1">.vtk&#39;</span><span class="o">%</span><span class="p">(</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="p">)</span>
+<span class="n">forest</span><span class="o">.</span><span class="n">writeForestToVTK</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="example.html" title="STEP import and meshing"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installing TMR"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2018, Graeme J. Kennedy.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.1.2.
+    </div>
+  </body>
+</html>

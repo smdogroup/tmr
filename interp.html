@@ -1,0 +1,203 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Interpolation between meshes &#8212; TMR 1 documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Common Research Model (CRM) wingbox" href="crm.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="crm.html" title="Common Research Model (CRM) wingbox"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="crm.html"
+                        title="previous chapter">Common Research Model (CRM) wingbox</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/interp.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="interpolation-between-meshes">
+<h1>Interpolation between meshes<a class="headerlink" href="#interpolation-between-meshes" title="Permalink to this headline">¶</a></h1>
+<p>One of the key features of TMR is that it can be used to generate a hierarchy of meshes for multigrid.
+TMR uses an interpolation code from TACS to define interpolations between different mesh levels.
+This example demonstrates this capability and the ability to create higher-order meshes.
+Note that the meshes need not be uniformly refined/coarsened.</p>
+<p>This code consists of the following steps:</p>
+<ul class="simple">
+<li><p>The geometry is created by importing a STEP file</p></li>
+<li><p>Create the fine octree mesh with 4 nodes per edge with the Gauss-Lobatto nodes</p></li>
+<li><p>Set the refinement array, refining the first element 4 times</p></li>
+<li><p>Balance the mesh and repartition and create the nodes on the fine mesh</p></li>
+<li><p>Make the coarse mesh and perform a random refinement</p></li>
+<li><p>Create variable map objects in TACS needed for the interpolation object</p></li>
+<li><p>Create the interpolations between the coarse and fine meshes</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="kn">as</span> <span class="nn">np</span>
+<span class="kn">from</span> <span class="nn">mpi4py</span> <span class="kn">import</span> <span class="n">MPI</span>
+<span class="kn">from</span> <span class="nn">tmr</span> <span class="kn">import</span> <span class="n">TMR</span>
+<span class="kn">from</span> <span class="nn">tacs</span> <span class="kn">import</span> <span class="n">TACS</span>
+
+<span class="c1"># Set the communicator</span>
+<span class="n">comm</span> <span class="o">=</span> <span class="n">MPI</span><span class="o">.</span><span class="n">COMM_WORLD</span>
+
+<span class="c1"># The fine octree forest</span>
+<span class="n">fine</span> <span class="o">=</span> <span class="bp">None</span>
+
+<span class="n">stepfile</span> <span class="o">=</span> <span class="s1">&#39;beam.stp&#39;</span>
+<span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">stepfile</span><span class="p">):</span>
+    <span class="c1"># Load the geometry model</span>
+    <span class="n">geo</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">LoadModel</span><span class="p">(</span><span class="n">stepfile</span><span class="p">)</span>
+
+    <span class="c1"># Mark the boundary condition faces</span>
+    <span class="n">faces</span> <span class="o">=</span> <span class="n">geo</span><span class="o">.</span><span class="n">getFaces</span><span class="p">()</span>
+    <span class="n">volumes</span> <span class="o">=</span> <span class="n">geo</span><span class="o">.</span><span class="n">getVolumes</span><span class="p">()</span>
+    <span class="n">faces</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">setSource</span><span class="p">(</span><span class="n">volumes</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">faces</span><span class="p">[</span><span class="mi">5</span><span class="p">])</span>
+
+    <span class="c1"># Create the mesh</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">Mesh</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span> <span class="n">geo</span><span class="p">)</span>
+
+    <span class="c1"># Set the meshing options</span>
+    <span class="n">opts</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">MeshOptions</span><span class="p">()</span>
+    <span class="n">opts</span><span class="o">.</span><span class="n">frontal_quality_factor</span> <span class="o">=</span> <span class="mf">1.25</span>
+    <span class="n">opts</span><span class="o">.</span><span class="n">num_smoothing_steps</span> <span class="o">=</span> <span class="mi">10</span>
+    <span class="n">opts</span><span class="o">.</span><span class="n">write_mesh_quality_histogram</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="c1"># Create the surface mesh</span>
+    <span class="n">htarget</span> <span class="o">=</span> <span class="mf">4.0</span>
+    <span class="n">mesh</span><span class="o">.</span><span class="n">mesh</span><span class="p">(</span><span class="n">htarget</span><span class="p">,</span> <span class="n">opts</span><span class="p">)</span>
+
+    <span class="c1"># Create a model from the mesh</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">createModelFromMesh</span><span class="p">()</span>
+
+    <span class="c1"># Create the corresponding mesh topology from the mesh-model</span>
+    <span class="n">topo</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">Topology</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span> <span class="n">model</span><span class="p">)</span>
+    <span class="n">fine</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">OctForest</span><span class="p">(</span><span class="n">comm</span><span class="p">)</span>
+    <span class="n">fine</span><span class="o">.</span><span class="n">setTopology</span><span class="p">(</span><span class="n">topo</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">conn</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="mi">10</span><span class="p">],</span>
+                    <span class="p">[</span><span class="mi">8</span><span class="p">,</span> <span class="mi">11</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">intc</span><span class="p">)</span>
+    <span class="n">fine</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">OctForest</span><span class="p">(</span><span class="n">comm</span><span class="p">)</span>
+    <span class="n">fine</span><span class="o">.</span><span class="n">setConnectivity</span><span class="p">(</span><span class="n">conn</span><span class="p">)</span>
+
+<span class="c1"># Create the fine mesh</span>
+<span class="n">fine</span><span class="o">.</span><span class="n">createTrees</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">refine</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">fine</span><span class="o">.</span><span class="n">getOctants</span><span class="p">()),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">intc</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">comm</span><span class="o">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="n">refine</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">fine</span><span class="o">.</span><span class="n">refine</span><span class="p">(</span><span class="n">refine</span><span class="p">)</span>
+<span class="n">fine</span><span class="o">.</span><span class="n">balance</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">fine</span><span class="o">.</span><span class="n">repartition</span><span class="p">()</span>
+<span class="n">fine</span><span class="o">.</span><span class="n">setMeshOrder</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="n">TMR</span><span class="o">.</span><span class="n">GAUSS_LOBATTO_POINTS</span><span class="p">)</span>
+<span class="n">fine</span><span class="o">.</span><span class="n">createNodes</span><span class="p">()</span>
+
+<span class="c1"># Create a refinement array</span>
+<span class="n">octants</span> <span class="o">=</span> <span class="n">fine</span><span class="o">.</span><span class="n">getOctants</span><span class="p">()</span>
+<span class="n">refine</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">octants</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">intc</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">octants</span><span class="p">)):</span>
+    <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">7</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">refine</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
+    <span class="k">elif</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">refine</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+
+<span class="c1"># Make the coarse tree finer than the fine tree for testing purposes</span>
+<span class="n">coarse</span> <span class="o">=</span> <span class="n">fine</span><span class="o">.</span><span class="n">duplicate</span><span class="p">()</span>
+<span class="n">coarse</span><span class="o">.</span><span class="n">refine</span><span class="p">(</span><span class="n">refine</span><span class="p">)</span>
+<span class="n">coarse</span><span class="o">.</span><span class="n">balance</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">coarse</span><span class="o">.</span><span class="n">repartition</span><span class="p">()</span>
+<span class="n">coarse</span><span class="o">.</span><span class="n">setMeshOrder</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">TMR</span><span class="o">.</span><span class="n">GAUSS_LOBATTO_POINTS</span><span class="p">)</span>
+<span class="n">coarse</span><span class="o">.</span><span class="n">createNodes</span><span class="p">()</span>
+
+<span class="n">coarse_range</span> <span class="o">=</span> <span class="n">coarse</span><span class="o">.</span><span class="n">getNodeRange</span><span class="p">()</span>
+<span class="n">nc</span> <span class="o">=</span> <span class="n">coarse_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">coarse_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="p">]</span>
+<span class="n">coarse_map</span> <span class="o">=</span> <span class="n">TACS</span><span class="o">.</span><span class="n">VarMap</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span> <span class="n">nc</span><span class="p">)</span>
+
+<span class="n">fine_range</span> <span class="o">=</span> <span class="n">fine</span><span class="o">.</span><span class="n">getNodeRange</span><span class="p">()</span>
+<span class="n">nf</span> <span class="o">=</span> <span class="n">fine_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">fine_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="p">]</span>
+<span class="n">fine_map</span> <span class="o">=</span> <span class="n">TACS</span><span class="o">.</span><span class="n">VarMap</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span> <span class="n">nf</span><span class="p">)</span>
+
+<span class="c1"># Create the two interpolations fine -&gt; coarse and coarse -&gt; fine</span>
+<span class="n">interp</span> <span class="o">=</span> <span class="n">TACS</span><span class="o">.</span><span class="n">VecInterp</span><span class="p">(</span><span class="n">coarse_map</span><span class="p">,</span> <span class="n">fine_map</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">fine</span><span class="o">.</span><span class="n">createInterpolation</span><span class="p">(</span><span class="n">coarse</span><span class="p">,</span> <span class="n">interp</span><span class="p">)</span>
+<span class="n">interp</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+<span class="n">interp2</span> <span class="o">=</span> <span class="n">TACS</span><span class="o">.</span><span class="n">VecInterp</span><span class="p">(</span><span class="n">fine_map</span><span class="p">,</span> <span class="n">coarse_map</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">coarse</span><span class="o">.</span><span class="n">createInterpolation</span><span class="p">(</span><span class="n">fine</span><span class="p">,</span> <span class="n">interp2</span><span class="p">)</span>
+<span class="n">interp2</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="crm.html" title="Common Research Model (CRM) wingbox"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2018, Graeme J. Kennedy.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.1.2.
+    </div>
+  </body>
+</html>
