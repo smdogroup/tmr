@@ -23,40 +23,14 @@ class CreateMe(TMR.QuadConformTopoCreator):
                                         index, None, filtr)
         elem = elements.PSThermoelasticQuad(order, stiff)
         return elem
-    
-def addVertexLoad(comm, forest, attr, assembler, F):
-    # Retrieve quadrant from the forest
-    quadrants = forest.getQuadrants()
-    node_quads = forest.getNodesWithName(attr)
-    force = assembler.createVec()
-    f_array = force.getArray()
-    node_range = forest.getNodeRange()
-    mpi_rank = comm.Get_rank()
-    for i in range(len(node_quads)):
-        if ((node_quads[i] >= node_range[mpi_rank]) and
-            (node_quads[i] < node_range[mpi_rank+1])): 
-            index = node_quads[i] - node_range[mpi_rank]
-            f_array[3*index] -= F[0]
-            f_array[3*index+1] -= F[1]
-            
-    return force
 
-def addEdgeTraction(order, forest, attr, assembler, tr):
-    trac = []
-    tx = np.ones(order)*tr[0]
-    ty = np.ones(order)*tr[1]
-    for findex in range(4):
-        trac.append(elements.PSThermoQuadTraction(findex, tx, ty))
-
-    # Retrieve octants from the forest
-    quadrants = forest.getQuadrants()
-    edge_quads = forest.getQuadsWithName(attr)
-    aux = TACS.AuxElements()
-    
-    for i in range(len(edge_quads)):
-        aux.addElement(edge_quads[i].tag, trac[edge_quads[i].info])
-
-    return aux
+# Create the tractions
+trac = []
+tx = np.ones(order)*tr[0]
+ty = np.ones(order)*tr[1]
+for findex in range(4):
+    trac.append(elements.PSThermoQuadTraction(findex, tx, ty))
+        
 
 def createTopoProblem(props, forest, order=3, nlevels=2,
                       ordering=TACS.PY_MULTICOLOR_ORDER,
@@ -73,10 +47,10 @@ def createTopoProblem(props, forest, order=3, nlevels=2,
     forest.setMeshOrder(order)
     forest.repartition()
     forests.append(forest)
-    use_bernstein=1
 
     # Make the creator class
-    creator = CreateMe(bcs, forests[-1], props)
+    interp = TMR.BERNSTEIN_POINTS
+    creator = CreateMe(bcs, forests[-1], order, interp, props)
     assemblers.append(creator.createTACS(forest, ordering=ordering))
     filters.append(creator.getFilter())
 
@@ -96,7 +70,7 @@ def createTopoProblem(props, forest, order=3, nlevels=2,
         forests.append(forest)
 
         # Make the creator class
-        creator = CreateMe(bcs, forests[-1], props)
+        creator = CreateMe(bcs, forests[-1], order, interp, props)
         assemblers.append(creator.createTACS(forest, ordering=ordering))
         filters.append(creator.getFilter())
 

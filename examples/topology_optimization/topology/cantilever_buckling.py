@@ -17,38 +17,6 @@ class CreateMe(TMR.OctTopoCreator):
         elem = elements.Solid(2, stiff)
         return elem
 
-def addVertexLoad(comm, forest, attr, assembler, F):
-    # Retrieve octants from the forest
-    octants = forest.getOctants()
-    node_octs = forest.getNodesWithName(attr)
-    force = assembler.createVec()
-    f_array = force.getArray()
-    node_range = forest.getNodeRange()
-    mpi_rank = comm.Get_rank()
-    for i in range(len(node_octs)):
-        if (node_octs[i] >= node_range[mpi_rank]) and \
-               (node_octs[i] < node_range[mpi_rank+1]): 
-            index = node_octs[i]-node_range[mpi_rank]
-            
-            f_array[3*index] -= F[0]
-            f_array[3*index+1] -= F[1]
-            f_array[3*index+2] -= F[2]
-    return force
-
-def addFaceTraction(order, forest, attr, assembler, tr):
-    trac = []
-    for findex in range(6):
-        trac.append(elements.Traction3D(order, findex, tr[0], tr[1], tr[2]))
-
-    # Retrieve octants from the forest
-    octants = forest.getOctants()
-    face_octs = forest.getOctsWithName(attr)
-    aux = TACS.AuxElements()
-
-    for i in range(len(face_octs)):
-        aux.addElement(face_octs[i].tag, trac[face_octs[i].info])
-
-    return aux
 
 def createTopoProblem(props, forest, order=2, nlevels=2,
                       Xscale=1.0,ordering=TACS.PY_MULTICOLOR_ORDER):

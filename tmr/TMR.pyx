@@ -2532,7 +2532,7 @@ cdef class Topology:
     The main topology class that contains the objects used to build the
     underlying mesh.
 
-    This class takes in a general :class:`~TMR.Model`, but there are additional
+    This class takes in a general Model, but there are additional
     requirements that are placed on the model to create a proper
     topology object. These requirements are as follows:
         #. No edge can degenerate to a vertex.
@@ -2540,7 +2540,7 @@ cdef class Topology:
         #. All faces must be surrounded by a single edge loop with 4
         #. All volumes must contain 6 non-degenerate faces that are
            ordered in coordinate ordering as shown below. Furthermore, all
-           volumes must be of type :class:`~TMR.TFIVolume`.
+           volumes must be of type TFIVolume.
     """
     cdef TMRTopology *ptr
     def __cinit__(self, MPI.Comm comm=None, Model m=None):
@@ -2742,6 +2742,17 @@ cdef class QuadForest:
         """
         return self.ptr.getMeshOrder()
 
+    def getInterpType(self):
+        """
+        getInterpType(self)
+
+        Get the element interpolation type
+
+        Returns:
+            TMRInterpolationType: The element interpolation type
+        """
+        return self.ptr.getInterpType()
+
     def setTopology(self, Topology topo):
         """
         setTopology(self, topo)
@@ -2849,6 +2860,17 @@ cdef class QuadForest:
         cdef TMRQuadForest *dup = NULL
         dup = self.ptr.coarsen()
         return _init_QuadForest(dup)
+
+    def balance(self, int btype):
+        """
+        balance(self, btype)
+
+        Balance all the elements in the mesh to achieve a 2-to-1 balance
+
+        Args:
+            btype (int): Indicates whether or not to balance across octant corners
+        """
+        self.ptr.balance(btype)
 
     def createNodes(self):
         """
@@ -3218,6 +3240,17 @@ cdef class OctForest:
             int: Order of the mesh
         """
         return self.ptr.getMeshOrder()
+
+    def getInterpType(self):
+        """
+        getInterpType(self)
+
+        Get the element interpolation type
+
+        Returns:
+            TMRInterpolationType: The element interpolation type
+        """
+        return self.ptr.getInterpType()
 
     def setTopology(self, Topology topo):
         """
@@ -3792,7 +3825,7 @@ cdef class QuadConformTopoCreator:
     def __cinit__(self, BoundaryConditions bcs, QuadForest forest,
                   int order=-1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
                   *args, **kwargs):
-        self.ptr = new TMRCyTopoQuadConformCreator(bcs.ptr, forest.ptr, \
+        self.ptr = new TMRCyTopoQuadConformCreator(bcs.ptr, forest.ptr,
                                                    order, interp)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
@@ -4632,6 +4665,9 @@ cdef class LagrangeFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+    def getAssembler(self):
+        return _init_Assembler(self.ptr.getAssembler())
+
     def getMap(self):
         return _init_VarMap(self.ptr.getDesignVarMap())
 
@@ -4680,6 +4716,9 @@ cdef class ConformFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def getAssembler(self):
+        return _init_Assembler(self.ptr.getAssembler())
 
     def getMap(self):
         return _init_VarMap(self.ptr.getDesignVarMap())
@@ -4731,6 +4770,9 @@ cdef class HelmholtzFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+    def getAssembler(self):
+        return _init_Assembler(self.ptr.getAssembler())
+
     def getMap(self):
         return _init_VarMap(self.ptr.getDesignVarMap())
 
@@ -4780,6 +4822,9 @@ cdef class MatrixFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def getAssembler(self):
+        return _init_Assembler(self.ptr.getAssembler())
 
     def getMap(self):
         return _init_VarMap(self.ptr.getDesignVarMap())

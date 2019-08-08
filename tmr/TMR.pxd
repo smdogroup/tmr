@@ -355,6 +355,7 @@ cdef extern from "TMRQuadForest.h":
         void balance(int)
         void createNodes()
         int getMeshOrder()
+        TMRInterpolationType getInterpType()
         void setMeshOrder(int, TMRInterpolationType)
         void getNodeConn(const int**, int*)
         int getDepNodeConn(const int**, const int**, const double**)
@@ -409,6 +410,7 @@ cdef extern from "TMROctForest.h":
         void balance(int)
         void createNodes()
         int getMeshOrder()
+        TMRInterpolationType getInterpType()
         void setMeshOrder(int, TMRInterpolationType)
         void getNodeConn(const int**, int*)
         int getDepNodeConn(const int**, const int**, const double**)
@@ -614,6 +616,7 @@ cdef extern from "TMRCyCreator.h":
 cdef extern from "TMRTopoFilter.h":
     cdef cppclass TMRTopoFilter(TMREntity):
        TACSVarMap* getDesignVarMap()
+       TACSAssembler *getAssembler()
 
 cdef class TopoFilter:
     cdef TMRTopoFilter *ptr

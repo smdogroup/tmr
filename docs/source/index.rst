@@ -68,6 +68,7 @@ There are three primary types of classes within :class:`TMR`:
     geometry_interface
     mesh_interface
     octree_interface
+    topoptutils
 
 Examples
 ========
@@ -79,6 +80,7 @@ Examples
    example
    crm
    interp
+   cantilever_topo
 
 Background and theory
 =====================
