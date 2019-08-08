@@ -49,7 +49,6 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
 
     Returns:
         problem (TopoProblem): The allocated topology optimization problem
-        filter (QuadForest or OctForest): The
     """
     
     # Store data
@@ -122,7 +121,7 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
 
     problem = TMR.TopoProblem(filter_obj, mg)
 
-    return problem, filter_obj
+    return problem
 
 def computeVertexLoad(name, forest, assembler, point_force):
     """
@@ -461,8 +460,6 @@ class TopologyOptimizer:
                                 desc='Trust region penalty parameter value')
         self.options.add_option('tr_penalty_gamma_max', default=1e4, lower=0.0,
                                 desc='Trust region maximum penalty parameter value')
-        self.options.add_option('tr_max_iterations', default=200, types=int,
-                                desc='Maximum trust region iterations')
 
         # Trust region convergence tolerances
         self.options.add_option('tr_infeas_tol', default=1e-5, lower=0.0,
@@ -533,7 +530,7 @@ class TopologyOptimizer:
 
             # Set the penalty parameter
             tr.setPenaltyGammaMax(self.options['tr_penalty_gamma_max'])
-            tr.setMaxTrustRegionIterations(self.options['tr_max_iterations'])
+            tr.setMaxTrustRegionIterations(self.options['maxiter'])
 
             # Trust region convergence tolerances
             infeas_tol = self.options['tr_infeas_tol']
@@ -552,11 +549,10 @@ class TopologyOptimizer:
         else:
             # Create the ParOpt object with the interior point method
             opt = ParOpt.InteriorPoint(problem, max_qn_subspace, qn_type)
+            opt.setMaxMajorIterations(self.options['maxiter'])
 
         # Apply the options to ParOpt
-        # Currently incomplete
         opt.setAbsOptimalityTol(self.options['tol'])
-        opt.setMaxMajorIterations(self.options['maxiter'])
         if self.options['dh']:
             opt.checkGradients(self.options['dh'])
         if self.options['norm_type']:

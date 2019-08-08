@@ -615,8 +615,8 @@ cdef extern from "TMRCyCreator.h":
 
 cdef extern from "TMRTopoFilter.h":
     cdef cppclass TMRTopoFilter(TMREntity):
-       TACSVarMap* getDesignVarMap()
-       TACSAssembler *getAssembler()
+        TACSVarMap* getDesignVarMap()
+        TACSAssembler *getAssembler()
 
 cdef class TopoFilter:
     cdef TMRTopoFilter *ptr
@@ -662,6 +662,9 @@ cdef extern from "TMRHelmholtzPUFilter.h":
 cdef extern from "TMRTopoProblem.h":
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(TMRTopoFilter*, TACSMg*, int, double)
+        TACSAssembler *getAssembler()
+        TMRQuadForest* getFilterQuadForest()
+        TMROctForest* getFilterOctForest()
         void setLoadCases(TACSBVec**, int)
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,

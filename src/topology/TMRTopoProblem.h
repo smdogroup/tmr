@@ -109,6 +109,12 @@ class TMRTopoProblem : public ParOptProblem {
                               TacsScalar offset, TacsScalar scale,
                               int max_lanczos, double eigtol );
 
+  // Accessor functions to the underlying Assembler and Oct or QuadForest
+  // --------------------------------------------------------------------
+  TACSAssembler* getAssembler();
+  TMRQuadForest* getFilterQuadForest();
+  TMROctForest* getFilterOctForest();
+
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
   // ----------------------------------------------------------------

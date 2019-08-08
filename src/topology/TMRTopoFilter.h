@@ -22,6 +22,8 @@
 #define TMR_TOPO_FILTER_H
 
 #include "TMRBase.h"
+#include "TMRQuadForest.h"
+#include "TMROctForest.h"
 #include "TACSAssembler.h"
 
 /*
@@ -33,10 +35,14 @@ class TMRTopoFilter : public TMREntity {
   virtual MPI_Comm getMPIComm() = 0;
 
   // Get the TACSAssembler instance (on the finest mesh level)
-  virtual TACSAssembler *getAssembler() = 0;
+  virtual TACSAssembler* getAssembler() = 0;
+
+  // Get the Quad or OctForest on the finest mesh level
+  virtual TMRQuadForest* getFilterQuadForest() = 0;
+  virtual TMROctForest* getFilterOctForest() = 0;
 
   // Get the variable map information
-  virtual TACSVarMap *getDesignVarMap() = 0;
+  virtual TACSVarMap* getDesignVarMap() = 0;
 
   // Get problem definitions maximum local size of the design variable values
   virtual int getVarsPerNode() = 0;
@@ -44,7 +50,7 @@ class TMRTopoFilter : public TMREntity {
   virtual int getMaxNumLocalVars() = 0;
 
   // Create a design vector on the finest mesh level
-  virtual TACSBVec *createVec() = 0;
+  virtual TACSBVec* createVec() = 0;
 
   // Set the design variable values (including all local values)
   virtual void setDesignVars( TACSBVec *x ) = 0;

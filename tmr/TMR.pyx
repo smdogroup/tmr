@@ -4665,12 +4665,6 @@ cdef class LagrangeFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
-    def getAssembler(self):
-        return _init_Assembler(self.ptr.getAssembler())
-
-    def getMap(self):
-        return _init_VarMap(self.ptr.getDesignVarMap())
-
 cdef class ConformFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters, int vars_per_node=1):
         cdef int nlevels = 0
@@ -4716,12 +4710,6 @@ cdef class ConformFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-
-    def getAssembler(self):
-        return _init_Assembler(self.ptr.getAssembler())
-
-    def getMap(self):
-        return _init_VarMap(self.ptr.getDesignVarMap())
 
 cdef class HelmholtzFilter(TopoFilter):
     def __cinit__(self, double radius, list assemblers,
@@ -4769,9 +4757,6 @@ cdef class HelmholtzFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-
-    def getAssembler(self):
-        return _init_Assembler(self.ptr.getAssembler())
 
     def getMap(self):
         return _init_VarMap(self.ptr.getDesignVarMap())
@@ -4822,12 +4807,6 @@ cdef class MatrixFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-
-    def getAssembler(self):
-        return _init_Assembler(self.ptr.getAssembler())
-
-    def getMap(self):
-        return _init_VarMap(self.ptr.getDesignVarMap())
 
 # This wraps a C++ array with a numpy array for later useage
 cdef inplace_array_1d(int nptype, int dim1, void *data_ptr):
@@ -4937,9 +4916,9 @@ cdef class HelmholtzPUFilter(TopoFilter):
     def getMap(self):
         return _init_VarMap(self.ptr.getDesignVarMap())
 
-def convertPVecToVec(self, PVec pvec):
+def convertPVecToVec(PVec pvec):
     """
-    convertPVecToVec(self, pvec)
+    convertPVecToVec(pvec)
 
     Converts a ParOpt.PVec class to a TACS.Vec class.
 
@@ -4975,6 +4954,49 @@ cdef class TopoProblem(ProblemBase):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def getAssembler(self):
+        """
+        getAssembler(self)
+
+        Get the Assembler object associated with the finest finite-element mesh
+
+        Returns:
+            Assembler: The finest Assembler ojbect
+        """
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        return _init_Assembler(prob.getAssembler())
+
+    def getFilter(self):
+        """
+        getFilter(self)
+
+        Get the OctForest or QuadForest object associated with the finest
+        topology opt discretization.
+
+        Returns:
+            OctForest or QuadForest: The forest associated with the finest mesh
+        """
+        cdef TMRTopoProblem *prob = NULL
+        cdef TMRQuadForest *quad_forest = NULL
+        cdef TMROctForest *oct_forest = NULL
+
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+
+        quad_forest = prob.getFilterQuadForest()
+        oct_forest = prob.getFilterOctForest()
+        if quad_forest != NULL:
+            return _init_QuadForest(quad_forest)
+        if oct_forest != NULL:
+            return _init_OctForest(oct_forest)
+        return None
 
     def setF5OutputFlags(self, int freq, ElementType elem_type, int flag):
         """

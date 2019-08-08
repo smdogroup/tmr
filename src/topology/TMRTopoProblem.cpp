@@ -25,7 +25,6 @@
 #include "TACSToFH5.h"
 #include "TMR_TACSCreator.h"
 
-
 /*
   Wrap a TACSBVec object with the ParOpt vector interface
 */
@@ -355,6 +354,27 @@ TMRTopoProblem::~TMRTopoProblem(){
   if (ksm_file){
     ksm_file->decref();
   }
+}
+
+/*
+  Get the TACSAssembler object associated with the filter
+*/
+TACSAssembler* TMRTopoProblem::getAssembler(){
+  return filter->getAssembler();
+}
+
+/*
+  Get the TMRQuadForest object associated with the filter (may be NULL)
+*/
+TMRQuadForest* TMRTopoProblem::getFilterQuadForest(){
+  return filter->getFilterQuadForest();
+}
+
+/*
+  Get the TMRQuadForest object associated with the filter (may be NULL)
+*/
+TMROctForest* TMRTopoProblem::getFilterOctForest(){
+  return filter->getFilterOctForest();
 }
 
 /*

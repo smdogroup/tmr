@@ -304,6 +304,26 @@ TACSAssembler* TMRConformFilter::getAssembler(){
 }
 
 /*
+  Get the root TMRQuadForest object (if any)
+*/
+TMRQuadForest* TMRConformFilter::getFilterQuadForest(){
+  if (quad_filter){
+    return quad_filter[0];
+  }
+  return NULL;
+}
+
+/*
+  Get the root TMROctForest object (if any)
+*/
+TMROctForest* TMRConformFilter::getFilterOctForest(){
+  if (oct_filter){
+    return oct_filter[0];
+  }
+  return NULL;
+}
+
+/*
   Get the design variable mapping for the finest mesh
 */
 TACSVarMap* TMRConformFilter::getDesignVarMap(){

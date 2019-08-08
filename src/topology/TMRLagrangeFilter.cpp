@@ -216,6 +216,26 @@ TACSAssembler* TMRLagrangeFilter::getAssembler(){
 }
 
 /*
+  Get the root TMRQuadForest object (if any)
+*/
+TMRQuadForest* TMRLagrangeFilter::getFilterQuadForest(){
+  if (quad_filter){
+    return quad_filter[0];
+  }
+  return NULL;
+}
+
+/*
+  Get the root TMROctForest object (if any)
+*/
+TMROctForest* TMRLagrangeFilter::getFilterOctForest(){
+  if (oct_filter){
+    return oct_filter[0];
+  }
+  return NULL;
+}
+
+/*
   Get problem definitions maximum local size of the design variable values
 */
 int TMRLagrangeFilter::getVarsPerNode(){

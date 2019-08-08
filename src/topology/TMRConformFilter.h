@@ -46,10 +46,14 @@ class TMRConformFilter : public TMRTopoFilter {
   MPI_Comm getMPIComm();
 
   // Get the design variable mapping information
-  TACSVarMap *getDesignVarMap();
+  TACSVarMap* getDesignVarMap();
 
   // Get the TACSAssembler instance (on the finest mesh level)
-  TACSAssembler *getAssembler();
+  TACSAssembler* getAssembler();
+
+  // Get the Quad or OctForest on the finest mesh level
+  TMRQuadForest* getFilterQuadForest();
+  TMROctForest* getFilterOctForest();
 
   // Get problem definitions maximum local size of the design variable values
   int getVarsPerNode();
@@ -57,7 +61,7 @@ class TMRConformFilter : public TMRTopoFilter {
   int getMaxNumLocalVars();
 
   // Create a design vector on the finest mesh level
-  TACSBVec *createVec();
+  TACSBVec* createVec();
 
   // Set the design variable values (including all local values)
   void setDesignVars( TACSBVec *x );
