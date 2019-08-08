@@ -1,0 +1,283 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Topology Optimization Utilities &#8212; TMR 1 documentation</title>
+    <link rel="stylesheet" href="_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Orthogonal bracket" href="orthogonal_bracket.html" />
+    <link rel="prev" title="Quad/octree-level classes" href="octree_interface.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="octree_interface.html" title="Quad/octree-level classes"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="octree_interface.html"
+                        title="previous chapter">Quad/octree-level classes</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="orthogonal_bracket.html"
+                        title="next chapter">Orthogonal bracket</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/topoptutils.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <div class="section" id="topology-optimization-utilities">
+<h1>Topology Optimization Utilities<a class="headerlink" href="#topology-optimization-utilities" title="Permalink to this headline">¶</a></h1>
+<p>TMR implements the class <code class="xref py py-class docutils literal notranslate"><span class="pre">TopoProblem</span></code> which is designed for topology optimization with ParOpt.</p>
+<ul>
+<li><dl class="class">
+<dt id="tmr.TMR.TopoProblem">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">TopoProblem</code><a class="headerlink" href="#tmr.TMR.TopoProblem" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates and stores information for topology optimization problems</p>
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.addBucklingConstraint">
+<code class="sig-name descname">addBucklingConstraint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.addBucklingConstraint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add buckling/natural frequency constraints</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.addFrequencyConstraint">
+<code class="sig-name descname">addFrequencyConstraint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.addFrequencyConstraint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add buckling/natural frequency constraints</p>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+<li><span class="target" id="module-tmr.TopOptUtils"></span><dl class="function">
+<dt id="tmr.TopOptUtils.createTopoProblem">
+<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">createTopoProblem</code><span class="sig-paren">(</span><em class="sig-param">forest</em>, <em class="sig-param">callback</em>, <em class="sig-param">filter_type</em>, <em class="sig-param">nlevels=2</em>, <em class="sig-param">repartition=True</em>, <em class="sig-param">design_vars_per_node=1</em>, <em class="sig-param">s=2.0</em>, <em class="sig-param">N=10</em>, <em class="sig-param">r0=0.05</em>, <em class="sig-param">lowest_order=2</em>, <em class="sig-param">ordering=5</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#createTopoProblem"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.createTopoProblem" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a topology optimization problem instance and a hierarchy of meshes.
+This code takes in the OctForest or QuadForest on the finest mesh level
+and creates a series of coarser meshes for analysis and optimization.
+The discretization at each level is created via a callback function that
+generates the appropriate TACSCreator object and its associated filter (the
+QuadForest or OctForest on which the design parametrization is defined.)
+The code then creates a TMRTopoFilter class which stores information about
+the design parametrization and hierarchy. It creates a multigrid object and
+finally a TMRTopoProblem instance for optimization.</p>
+<p>The callback function takes in a forest object, corresponding to the finite-
+element discretization and returns a creator object and a filter object in
+the following form:</p>
+<p>creator, filter = callback(forest)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>callback</strong> – A callback function that takes in the forest and
+returns the filter and the associated creator class</p></li>
+<li><p><strong>filter_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Type of filter to create</p></li>
+<li><p><strong>forest</strong> (<em>TMROctForest</em><em> or </em><em>TMRQuadForest</em>) – Forest type</p></li>
+<li><p><strong>repartition</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Repartition the mesh</p></li>
+<li><p><strong>design_vars_per_node</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – number of design variables for each node</p></li>
+<li><p><strong>s</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Matrix filter smoothing parameter</p></li>
+<li><p><strong>N</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Matrix filter approximation parameter</p></li>
+<li><p><strong>r0</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Helmholtz filter radius</p></li>
+<li><p><strong>lowest_order</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Lowest order mesh to create</p></li>
+<li><p><strong>ordering</strong> – TACS Assembler ordering type</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The allocated topology optimization problem
+filter (QuadForest or OctForest): The</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>problem (<a class="reference internal" href="#tmr.TMR.TopoProblem" title="tmr.TMR.TopoProblem">TopoProblem</a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="tmr.TopOptUtils.computeVertexLoad">
+<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">computeVertexLoad</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">forest</em>, <em class="sig-param">assembler</em>, <em class="sig-param">point_force</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#computeVertexLoad"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.computeVertexLoad" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a load at vertices with the given name value. The assembler object must
+be created from the forest. The point_force must be equal to the number of
+variables per node in the assembler object.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
+<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
+<li><p><strong>point_force</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of point forces to apply at the vertices</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A force vector containing the point load</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Vec</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="tmr.TopOptUtils.computeTractionLoad">
+<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">computeTractionLoad</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">forest</em>, <em class="sig-param">assembler</em>, <em class="sig-param">trac</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#computeTractionLoad"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.computeTractionLoad" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a surface traction to all quadrants or octants that touch a face or edge with
+the given name. The assembler must be created from the provided forest. The list
+trac must have a traction for each face (6) for octants or each edge (4) for
+quadrants.</p>
+<p>Note: This code uses the fact that the getOctsWithName or getQuadsWithName returns
+the local face or edge index touching the surface or edge in the info member.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
+<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
+<li><p><strong>trac</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of tractions, one for each possible face/edge orientation</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A force vector containing the traction</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Vec</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="tmr.TopOptUtils.compute3DTractionLoad">
+<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">compute3DTractionLoad</code><span class="sig-paren">(</span><em class="sig-param">name</em>, <em class="sig-param">forest</em>, <em class="sig-param">assembler</em>, <em class="sig-param">tr</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#compute3DTractionLoad"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.compute3DTractionLoad" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a constant surface traction to all octants that touch a face or edge with
+the given name.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
+<li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
+<li><p><strong>tr</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – The 3D components of the traction.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A force vector containing the traction</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Vec</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="tmr.TopOptUtils.interpolateDesignVec">
+<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">interpolateDesignVec</code><span class="sig-paren">(</span><em class="sig-param">orig_filter</em>, <em class="sig-param">orig_vec</em>, <em class="sig-param">new_filter</em>, <em class="sig-param">new_vec</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#interpolateDesignVec"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.interpolateDesignVec" title="Permalink to this definition">¶</a></dt>
+<dd><p>This function interpolates a design vector from the original design space defined
+on an OctForest or QuadForest and interpolates it to a new OctForest or QuadForest.</p>
+<p>This function is used after a mesh adaptation step to get the new design space.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>orig_filter</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a>) – Original filter Oct or QuadForest object</p></li>
+<li><p><strong>orig_vec</strong> (<em>PVec</em>) – Design variables on the original mesh in a ParOpt.PVec</p></li>
+<li><p><strong>new_filter</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a>) – New filter Oct or QuadForest object</p></li>
+<li><p><strong>new_vec</strong> (<em>PVec</em>) – Design variables on the new mesh in a ParOpt.PVec (set on ouput)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="tmr.TopOptUtils.TopologyOptimizer">
+<em class="property">class </em><code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">TopologyOptimizer</code><span class="sig-paren">(</span><em class="sig-param">problem</em>, <em class="sig-param">options={}</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#TopologyOptimizer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.TopologyOptimizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Optimizer wrapper for topology optimization problems</p>
+<dl class="method">
+<dt id="tmr.TopOptUtils.TopologyOptimizer.optimize">
+<code class="sig-name descname">optimize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#TopologyOptimizer.optimize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.TopologyOptimizer.optimize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the optimization problem using the settings. Runs either InteriorPoint
+or TrustRegion optimization problems</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Optimized design point x</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>PVec</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</li>
+</ul>
+</div>
+
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="octree_interface.html" title="Quad/octree-level classes"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">TMR 1 documentation</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2018, Graeme J. Kennedy.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.1.2.
+    </div>
+  </body>
+</html>

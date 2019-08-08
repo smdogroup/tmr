@@ -1,0 +1,795 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>tmr.TopOptUtils &#8212; TMR 1 documentation</title>
+    <link rel="stylesheet" href="../../_static/sphinxdoc.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">TMR 1 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" accesskey="U">Module code</a> &#187;</li> 
+      </ul>
+    </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <h1>Source code for tmr.TopOptUtils</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">mpi4py</span> <span class="k">import</span> <span class="n">MPI</span>
+<span class="kn">from</span> <span class="nn">tacs</span> <span class="k">import</span> <span class="n">TACS</span><span class="p">,</span> <span class="n">elements</span>
+<span class="kn">from</span> <span class="nn">tmr</span> <span class="k">import</span> <span class="n">TMR</span>
+<span class="kn">from</span> <span class="nn">paropt</span> <span class="k">import</span> <span class="n">ParOpt</span>
+<span class="kn">from</span> <span class="nn">six</span> <span class="k">import</span> <span class="n">iteritems</span>
+
+<div class="viewcode-block" id="createTopoProblem"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.createTopoProblem">[docs]</a><span class="k">def</span> <span class="nf">createTopoProblem</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">callback</span><span class="p">,</span> <span class="n">filter_type</span><span class="p">,</span> <span class="n">nlevels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                      <span class="n">repartition</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">design_vars_per_node</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                      <span class="n">s</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">r0</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">lowest_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                      <span class="n">ordering</span><span class="o">=</span><span class="n">TACS</span><span class="o">.</span><span class="n">PY_MULTICOLOR_ORDER</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a topology optimization problem instance and a hierarchy of meshes.</span>
+<span class="sd">    This code takes in the OctForest or QuadForest on the finest mesh level </span>
+<span class="sd">    and creates a series of coarser meshes for analysis and optimization.</span>
+<span class="sd">    The discretization at each level is created via a callback function that </span>
+<span class="sd">    generates the appropriate TACSCreator object and its associated filter (the</span>
+<span class="sd">    QuadForest or OctForest on which the design parametrization is defined.)</span>
+<span class="sd">    The code then creates a TMRTopoFilter class which stores information about </span>
+<span class="sd">    the design parametrization and hierarchy. It creates a multigrid object and</span>
+<span class="sd">    finally a TMRTopoProblem instance for optimization.</span>
+
+<span class="sd">    The callback function takes in a forest object, corresponding to the finite-</span>
+<span class="sd">    element discretization and returns a creator object and a filter object in</span>
+<span class="sd">    the following form:</span>
+
+<span class="sd">    creator, filter = callback(forest)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        callback: A callback function that takes in the forest and </span>
+<span class="sd">                  returns the filter and the associated creator class</span>
+<span class="sd">        filter_type (str): Type of filter to create</span>
+<span class="sd">        forest (TMROctForest or TMRQuadForest): Forest type</span>
+<span class="sd">        repartition (bool): Repartition the mesh</span>
+<span class="sd">        design_vars_per_node (int): number of design variables for each node</span>
+<span class="sd">        s (float): Matrix filter smoothing parameter</span>
+<span class="sd">        N (int): Matrix filter approximation parameter</span>
+<span class="sd">        r0 (float): Helmholtz filter radius</span>
+<span class="sd">        lowest_order (int): Lowest order mesh to create</span>
+<span class="sd">        ordering: TACS Assembler ordering type</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        problem (TopoProblem): The allocated topology optimization problem</span>
+<span class="sd">        filter (QuadForest or OctForest): The</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="c1"># Store data</span>
+    <span class="n">forests</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">filters</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">assemblers</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">varmaps</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">vecindices</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Balance the forest and repartition across processors</span>
+    <span class="n">forest</span><span class="o">.</span><span class="n">balance</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">repartition</span><span class="p">:</span>
+        <span class="n">forest</span><span class="o">.</span><span class="n">repartition</span><span class="p">()</span>
+
+    <span class="c1"># Create the forest object</span>
+    <span class="n">creator</span><span class="p">,</span> <span class="n">filtr</span> <span class="o">=</span> <span class="n">callback</span><span class="p">(</span><span class="n">forest</span><span class="p">)</span>
+    <span class="n">forests</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">forest</span><span class="p">)</span>
+    <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filtr</span><span class="p">)</span>
+    <span class="n">assemblers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">createTACS</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">ordering</span><span class="p">))</span>
+    
+    <span class="k">if</span> <span class="n">filter_type</span> <span class="o">==</span> <span class="s1">&#39;lagrange&#39;</span><span class="p">:</span>
+        <span class="n">varmaps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">getMap</span><span class="p">())</span>
+        <span class="n">vecindices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">getIndices</span><span class="p">())</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">nlevels</span><span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">order</span> <span class="o">=</span> <span class="n">forests</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">getMeshOrder</span><span class="p">()</span>
+        <span class="n">interp</span> <span class="o">=</span> <span class="n">forests</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">getInterpType</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">order</span> <span class="o">&gt;</span> <span class="n">lowest_order</span><span class="p">:</span>
+            <span class="n">forest</span> <span class="o">=</span> <span class="n">forests</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">duplicate</span><span class="p">()</span>
+            <span class="n">order</span> <span class="o">=</span> <span class="n">order</span><span class="o">-</span><span class="mi">1</span>
+            <span class="n">forest</span><span class="o">.</span><span class="n">setMeshOrder</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">interp</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">forest</span> <span class="o">=</span> <span class="n">forests</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">duplicate</span><span class="p">()</span>
+            <span class="n">forest</span><span class="o">.</span><span class="n">coarsen</span><span class="p">()</span>
+            <span class="n">forest</span><span class="o">.</span><span class="n">setMeshOrder</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">interp</span><span class="p">)</span>
+
+            <span class="c1"># Balance and repartition if needed</span>
+            <span class="n">forest</span><span class="o">.</span><span class="n">balance</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">repartition</span><span class="p">:</span>
+                <span class="n">forest</span><span class="o">.</span><span class="n">repartition</span><span class="p">()</span>
+
+        <span class="c1"># Create the forest object</span>
+        <span class="n">creator</span><span class="p">,</span> <span class="n">filtr</span> <span class="o">=</span> <span class="n">callback</span><span class="p">(</span><span class="n">forest</span><span class="p">)</span>
+        <span class="n">forests</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">forest</span><span class="p">)</span>
+        <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filtr</span><span class="p">)</span>
+        <span class="n">assemblers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">createTACS</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">ordering</span><span class="p">))</span>
+        
+        <span class="k">if</span> <span class="n">filter_type</span> <span class="o">==</span> <span class="s1">&#39;lagrange&#39;</span><span class="p">:</span>
+            <span class="n">varmaps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">getMap</span><span class="p">())</span>
+            <span class="n">vecindices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">getIndices</span><span class="p">())</span>
+
+    <span class="c1"># Create the multigrid object</span>
+    <span class="n">mg</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">createMg</span><span class="p">(</span><span class="n">assemblers</span><span class="p">,</span> <span class="n">forests</span><span class="p">)</span>
+
+    <span class="c1"># Create the TMRTopoFilter object</span>
+    <span class="n">filter_obj</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">filter_type</span> <span class="o">==</span> <span class="s1">&#39;lagrange&#39;</span><span class="p">:</span>
+        <span class="n">filter_obj</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">LagrangeFilter</span><span class="p">(</span><span class="n">assemblers</span><span class="p">,</span> <span class="n">filters</span><span class="p">,</span>
+                                        <span class="n">varmaps</span><span class="p">,</span> <span class="n">vecindices</span><span class="p">,</span>
+                                        <span class="n">vars_per_node</span><span class="o">=</span><span class="n">design_vars_per_node</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">filter_type</span> <span class="o">==</span> <span class="s1">&#39;matrix&#39;</span><span class="p">:</span>
+        <span class="n">filter_obj</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">MatrixFilter</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">assemblers</span><span class="p">,</span> <span class="n">forests</span><span class="p">,</span>
+                                      <span class="n">vars_per_node</span><span class="o">=</span><span class="n">design_vars_per_node</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">filter_type</span> <span class="o">==</span> <span class="s1">&#39;conform&#39;</span><span class="p">:</span>
+        <span class="n">filter_obj</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">ConformFilter</span><span class="p">(</span><span class="n">assemblers</span><span class="p">,</span> <span class="n">filters</span><span class="p">,</span>
+                                       <span class="n">vars_per_node</span><span class="o">=</span><span class="n">design_vars_per_node</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">filter_type</span> <span class="o">==</span> <span class="s1">&#39;helmholtz&#39;</span><span class="p">:</span>
+        <span class="n">filter_obj</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">HelmholtzFiler</span><span class="p">(</span><span class="n">r0</span><span class="p">,</span> <span class="n">assemblers</span><span class="p">,</span> <span class="n">filters</span><span class="p">,</span>
+                                        <span class="n">vars_per_node</span><span class="o">=</span><span class="n">design_vars_per_node</span><span class="p">)</span>
+
+    <span class="n">problem</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">TopoProblem</span><span class="p">(</span><span class="n">filter_obj</span><span class="p">,</span> <span class="n">mg</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">problem</span><span class="p">,</span> <span class="n">filter_obj</span></div>
+
+<div class="viewcode-block" id="computeVertexLoad"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.computeVertexLoad">[docs]</a><span class="k">def</span> <span class="nf">computeVertexLoad</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="n">point_force</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Add a load at vertices with the given name value. The assembler object must</span>
+<span class="sd">    be created from the forest. The point_force must be equal to the number of</span>
+<span class="sd">    variables per node in the assembler object.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        name (str): Name of the surface where the traction will be added</span>
+<span class="sd">        forest (QuadForest or OctForest): Forest for the finite-element mesh</span>
+<span class="sd">        assembler (Assembler): TACSAssembler object for the finite-element problem</span>
+<span class="sd">        point_force (list): List of point forces to apply at the vertices</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Vec: A force vector containing the point load</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Get the number of variable per node from the assembler</span>
+    <span class="n">vars_per_node</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">getVarsPerNode</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">vars_per_node</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">point_force</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Point force length must be equal to vars_per_node&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Create the force vector and extract the array</span>
+    <span class="n">force</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">createVec</span><span class="p">()</span>
+    <span class="n">force_array</span> <span class="o">=</span> <span class="n">force</span><span class="o">.</span><span class="n">getArray</span><span class="p">()</span>
+
+    <span class="c1"># Retrieve the node numbers from the forest</span>
+    <span class="n">nodes</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getNodesWithName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+    <span class="n">comm</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">getMPIComm</span><span class="p">()</span>
+    <span class="n">node_range</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getNodeRange</span><span class="p">()</span>
+    
+    <span class="c1"># Add the point force into the force arrays</span>
+    <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">((</span><span class="n">node</span> <span class="o">&gt;=</span> <span class="n">node_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="p">])</span> <span class="ow">and</span> <span class="p">(</span><span class="n">node</span> <span class="o">&lt;</span> <span class="n">node_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="o">+</span><span class="mi">1</span><span class="p">])):</span> 
+            <span class="n">index</span> <span class="o">=</span> <span class="n">node</span> <span class="o">-</span> <span class="n">node_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="p">]</span>
+            <span class="n">force_array</span><span class="p">[</span><span class="n">vars_per_node</span><span class="o">*</span><span class="n">index</span><span class="p">:</span><span class="n">vars_per_node</span><span class="o">*</span><span class="p">(</span><span class="n">index</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">+=</span> <span class="n">point_force</span><span class="p">[:]</span>
+            
+    <span class="k">return</span> <span class="n">force</span></div>
+
+<div class="viewcode-block" id="computeTractionLoad"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.computeTractionLoad">[docs]</a><span class="k">def</span> <span class="nf">computeTractionLoad</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="n">trac</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Add a surface traction to all quadrants or octants that touch a face or edge with</span>
+<span class="sd">    the given name. The assembler must be created from the provided forest. The list</span>
+<span class="sd">    trac must have a traction for each face (6) for octants or each edge (4) for </span>
+<span class="sd">    quadrants.</span>
+
+<span class="sd">    Note: This code uses the fact that the getOctsWithName or getQuadsWithName returns</span>
+<span class="sd">    the local face or edge index touching the surface or edge in the info member.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        name (str): Name of the surface where the traction will be added</span>
+<span class="sd">        forest (QuadForest or OctForest): Forest for the finite-element mesh</span>
+<span class="sd">        assembler (Assembler): TACSAssembler object for the finite-element problem</span>
+<span class="sd">        trac (list): List of tractions, one for each possible face/edge orientation</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Vec: A force vector containing the traction</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">TMR</span><span class="o">.</span><span class="n">OctForest</span><span class="p">):</span>
+        <span class="n">octants</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getOctants</span><span class="p">()</span>
+        <span class="n">face_octs</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getOctsWithName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">TMR</span><span class="o">.</span><span class="n">QuadForest</span><span class="p">):</span>
+        <span class="n">octants</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getQuadrants</span><span class="p">()</span>
+        <span class="n">face_octs</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getQuadsWithName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    
+    <span class="c1"># Create the force vector and zero the variables in the assembler</span>
+    <span class="n">force</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">createVec</span><span class="p">()</span>
+    <span class="n">assembler</span><span class="o">.</span><span class="n">zeroVariables</span><span class="p">()</span>
+
+    <span class="c1"># Create the auxiliary element class</span>
+    <span class="n">aux</span> <span class="o">=</span> <span class="n">TACS</span><span class="o">.</span><span class="n">AuxElements</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">face_octs</span><span class="p">)):</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="n">face_octs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">tag</span>
+        <span class="k">if</span> <span class="n">index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">aux</span><span class="o">.</span><span class="n">addElement</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">trac</span><span class="p">[</span><span class="n">face_octs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">info</span><span class="p">])</span>
+
+    <span class="c1"># Keep auxiliary elements already set in the assembler</span>
+    <span class="c1"># aux_tmp = assembler.getAuxElements()</span>
+    <span class="n">assembler</span><span class="o">.</span><span class="n">setAuxElements</span><span class="p">(</span><span class="n">aux</span><span class="p">)</span>
+
+    <span class="c1"># Compute the residual where force = -residual</span>
+    <span class="n">assembler</span><span class="o">.</span><span class="n">assembleRes</span><span class="p">(</span><span class="n">force</span><span class="p">)</span>
+    <span class="n">force</span><span class="o">.</span><span class="n">scale</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0</span><span class="p">)</span>
+
+    <span class="c1"># Reset the auxiliary elements</span>
+    <span class="n">assembler</span><span class="o">.</span><span class="n">setAuxElements</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span> <span class="c1"># (aux_tmp)</span>
+
+    <span class="k">return</span> <span class="n">force</span></div>
+
+<div class="viewcode-block" id="compute3DTractionLoad"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.compute3DTractionLoad">[docs]</a><span class="k">def</span> <span class="nf">compute3DTractionLoad</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="n">tr</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Add a constant surface traction to all octants that touch a face or edge with</span>
+<span class="sd">    the given name. </span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        forest (QuadForest or OctForest): Forest for the finite-element mesh</span>
+<span class="sd">        name (str): Name of the surface where the traction will be added</span>
+<span class="sd">        assembler (Assembler): TACSAssembler object for the finite-element problem</span>
+<span class="sd">        tr (list): The 3D components of the traction.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Vec: A force vector containing the traction</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">order</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getMeshOrder</span><span class="p">()</span>
+
+    <span class="n">trac</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">findex</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">):</span>
+        <span class="n">trac</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">elements</span><span class="o">.</span><span class="n">Traction3D</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">findex</span><span class="p">,</span> <span class="n">tr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">tr</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">tr</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+
+    <span class="k">return</span> <span class="n">computeTractionLoad</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="n">trac</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="interpolateDesignVec"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.interpolateDesignVec">[docs]</a><span class="k">def</span> <span class="nf">interpolateDesignVec</span><span class="p">(</span><span class="n">orig_filter</span><span class="p">,</span> <span class="n">orig_vec</span><span class="p">,</span> <span class="n">new_filter</span><span class="p">,</span> <span class="n">new_vec</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This function interpolates a design vector from the original design space defined</span>
+<span class="sd">    on an OctForest or QuadForest and interpolates it to a new OctForest or QuadForest.</span>
+
+<span class="sd">    This function is used after a mesh adaptation step to get the new design space.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        orig_filter (OctForest or QuadForest): Original filter Oct or QuadForest object</span>
+<span class="sd">        orig_vec (PVec): Design variables on the original mesh in a ParOpt.PVec</span>
+<span class="sd">        new_filter (OctForest or QuadForest): New filter Oct or QuadForest object</span>
+<span class="sd">        new_vec (PVec): Design variables on the new mesh in a ParOpt.PVec (set on ouput)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Convert the PVec class to TACSBVec</span>
+    <span class="n">orig_x</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">convertPVecToVec</span><span class="p">(</span><span class="n">orig_vec</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">orig_x</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Original vector must be generated by TMR.TopoProblem&#39;</span><span class="p">)</span>
+    <span class="n">new_x</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">convertPVecToVec</span><span class="p">(</span><span class="n">new_vec</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">new_x</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;New vector must be generated by TMR.TopoProblem&#39;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">orig_x</span><span class="o">.</span><span class="n">getVarsPerNode</span><span class="p">()</span> <span class="o">!=</span> <span class="n">new_x</span><span class="o">.</span><span class="n">getVarsPerNode</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Number of variables per node must be consistent&#39;</span><span class="p">)</span>
+
+    <span class="n">orig_varmap</span> <span class="o">=</span> <span class="n">orig_x</span><span class="o">.</span><span class="n">getVarMap</span><span class="p">()</span>
+    <span class="n">new_varmap</span> <span class="o">=</span> <span class="n">new_x</span><span class="o">.</span><span class="n">getVarMap</span><span class="p">()</span>
+    <span class="n">vars_per_node</span> <span class="o">=</span> <span class="n">orig_x</span><span class="o">.</span><span class="n">getVarsPerNode</span><span class="p">()</span>
+
+    <span class="c1"># Create the interpolation class</span>
+    <span class="n">interp</span> <span class="o">=</span> <span class="n">TACS</span><span class="o">.</span><span class="n">VecInterp</span><span class="p">(</span><span class="n">orig_varmap</span><span class="p">,</span> <span class="n">new_varmap</span><span class="p">,</span> <span class="n">vars_per_node</span><span class="p">)</span>
+    <span class="n">new_filter</span><span class="o">.</span><span class="n">createInterpolation</span><span class="p">(</span><span class="n">orig_filter</span><span class="p">,</span> <span class="n">interp</span><span class="p">)</span>
+    <span class="n">interp</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+
+    <span class="c1"># Perform the interpolation</span>
+    <span class="n">interp</span><span class="o">.</span><span class="n">mult</span><span class="p">(</span><span class="n">orig_x</span><span class="p">,</span> <span class="n">new_x</span><span class="p">)</span>
+
+    <span class="k">return</span></div>
+
+<span class="n">_optimizers</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Interior Point&#39;</span><span class="p">,</span> <span class="s1">&#39;Trust Region&#39;</span><span class="p">]</span>
+<span class="n">_qn_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;BFGS&#39;</span><span class="p">,</span> <span class="s1">&#39;SR1&#39;</span><span class="p">,</span> <span class="s1">&#39;No Hessian approx&#39;</span><span class="p">]</span>
+<span class="n">_norm_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Infinity&#39;</span><span class="p">,</span> <span class="s1">&#39;L1&#39;</span><span class="p">,</span> <span class="s1">&#39;L2&#39;</span><span class="p">]</span>
+<span class="n">_barrier_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Monotone&#39;</span><span class="p">,</span> <span class="s1">&#39;Mehrotra&#39;</span><span class="p">,</span> <span class="s1">&#39;Complementarity fraction&#39;</span><span class="p">]</span>
+<span class="n">_start_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;None&#39;</span><span class="p">,</span> <span class="s1">&#39;Least squares multipliers&#39;</span><span class="p">,</span> <span class="s1">&#39;Affine step&#39;</span><span class="p">]</span>
+<span class="n">_bfgs_updates</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Skip negative&#39;</span><span class="p">,</span> <span class="s1">&#39;Damped&#39;</span><span class="p">]</span>
+
+<span class="k">class</span> <span class="nc">OptionData</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">types</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">values</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">desc</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lower</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">upper</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">add_option</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                   <span class="n">values</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">upper</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Add an option</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">default</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">types</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">types</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">values</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">desc</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">desc</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">lower</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">lower</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">upper</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">upper</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="s1">&#39;Key </span><span class="si">%s</span><span class="s1"> not in OptionData&#39;</span><span class="o">%</span><span class="p">(</span><span class="n">name</span><span class="p">))</span>
+
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;Set the item into the options dictionary&#39;&#39;&#39;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">:</span>
+            <span class="n">desc</span> <span class="o">=</span> <span class="s1">&#39;Key </span><span class="si">%s</span><span class="s1"> not in OptionData. &#39;</span><span class="o">%</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">desc</span> <span class="o">+=</span> <span class="s1">&#39;Set new item through add_option()&#39;</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="n">desc</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">types</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span>
+            <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">types</span><span class="p">[</span><span class="n">name</span><span class="p">])):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Value type does not match&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lower</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span>
+            <span class="n">value</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">lower</span><span class="p">[</span><span class="n">name</span><span class="p">]):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Value violates lower bound&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">upper</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span>
+            <span class="n">value</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">upper</span><span class="p">[</span><span class="n">name</span><span class="p">]):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Value violates upper bound&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span>
+            <span class="ow">not</span> <span class="n">value</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">name</span><span class="p">]):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Value not in value set </span><span class="si">%s</span><span class="s1">&#39;</span><span class="o">%</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">values</span><span class="p">[</span><span class="n">name</span><span class="p">])))</span>
+
+        <span class="c1"># Set the value</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+        <span class="k">return</span>
+
+<div class="viewcode-block" id="TopologyOptimizer"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.TopologyOptimizer">[docs]</a><span class="k">class</span> <span class="nc">TopologyOptimizer</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Optimizer wrapper for topology optimization problems</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">problem</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="p">{}):</span>
+        <span class="c1"># Set the basic problem class</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">OptionData</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_all_options</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">opt</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="c1"># Set the option names</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">iteritems</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span>
+            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="n">err</span><span class="p">)</span>
+
+        <span class="c1"># Initialize the problem</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_initialize</span><span class="p">(</span><span class="n">problem</span><span class="p">)</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">_init_all_options</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Declare options before kwargs are processed in the init method.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;optimizer&#39;</span><span class="p">,</span> <span class="s1">&#39;Trust Region&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">_optimizers</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Type of optimization algorithm&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tol&#39;</span><span class="p">,</span> <span class="mf">1.0e-6</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Tolerance for termination&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;maxiter&#39;</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Maximum number of iterations&#39;</span><span class="p">)</span>
+
+        <span class="n">desc</span> <span class="o">=</span> <span class="s1">&#39;Finite difference step size. If no gradient check will be performed.&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;dh&#39;</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="n">desc</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;norm_type&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">_norm_types</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Norm type&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;barrier_strategy&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">_barrier_types</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Barrier strategy&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;start_strategy&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">_start_types</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Starting point strategy&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;penalty_gamma&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Value of penalty parameter gamma&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;barrier_fraction&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Barrier fraction&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;barrier_power&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Barrier power&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;hessian_reset_freq&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Hessian reset frequency&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;qn_type&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;BFGS&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">_qn_types</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Type of Hessian approximation to use&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;max_qn_subspace&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Size of the QN subspace&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;qn_diag_factor&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;QN diagonal factor&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;bfgs_update_type&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">_bfgs_updates</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Barrier fraction&#39;</span><span class="p">)</span>
+
+        <span class="n">desc</span> <span class="o">=</span> <span class="s1">&#39;Boolean to indicate if a sequential linear method should be used&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;use_sequential_linear&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="n">desc</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;affine_step_multiplier_min&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Minimum multiplier for affine step&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;init_barrier_parameter&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Initial barrier parameter&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;relative_barrier&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Relative barrier parameter&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;set_qn&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Quasi-Newton&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;qn_updates&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Update the Quasi-Newton&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Line-search parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;use_line_search&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Use line search&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;max_ls_iters&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Max number of line search iterations&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;backtrack_ls&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Use backtracking line search&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;armijo_param&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Armijo parameter for line search&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;penalty_descent_frac&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Descent fraction penalty&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;min_penalty_param&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Minimum line search penalty&#39;</span><span class="p">)</span>
+
+        <span class="c1"># GMRES parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;use_hvec_prod&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Use Hvec product with GMRES&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;use_diag_hessian&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Use a diagonal Hessian&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;use_qn_gmres_precon&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Use QN GMRES preconditioner&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;set_nk_switch_tol&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;NK switch tolerance&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;eisenstat_walker_param&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Eisenstat Walker parameters: array([gamma, alpha])&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;gmres_tol&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;GMRES tolerances: array([rtol, atol])&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;gmres_subspace_size&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;GMRES subspace size&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Output options</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;output_freq&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Output frequency&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;output_file&#39;</span><span class="p">,</span> <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Output file name&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;major_iter_step_check&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Major iter step check&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;output_level&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Output level&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;grad_check_freq&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Gradient check frequency: array([freq, step_size])&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Set options for the trust region method</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_adaptive_gamma_update&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Use the adaptive penalty algorithm&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_min_size&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Minimum trust region radius size&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_max_size&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Maximum trust region radius size&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_init_size&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Initial trust region radius size&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_eta&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">upper</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region radius acceptance ratio&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_penalty_gamma&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region penalty parameter value&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_penalty_gamma_max&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e4</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region maximum penalty parameter value&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_max_iterations&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Maximum trust region iterations&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Trust region convergence tolerances</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_infeas_tol&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region infeasibility tolerance (l1 norm)&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_l1_tol&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region optimality tolerance (l1 norm)&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_linfty_tol&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region optimality tolerance (l-infinity norm)&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Trust region output file name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_output_file&#39;</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region output file name&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_write_output_freq&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region output frequency&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">_initialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">problem</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Prepare the driver for execution.</span>
+
+<span class="sd">        This is the final thing to run during setup.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            problem (ParOpt.Problem): ParOpt.Problem optimization problem</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+         <span class="c1"># TODO:</span>
+         <span class="c1"># - logic for different opt algorithms</span>
+         <span class="c1"># - treat equality constraints</span>
+
+        <span class="n">opt_type</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;optimizer&#39;</span><span class="p">]</span>
+
+        <span class="c1"># Set the limited-memory options</span>
+        <span class="n">max_qn_subspace</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;max_qn_subspace&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;qn_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;BFGS&#39;</span><span class="p">:</span>
+            <span class="n">qn_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">BFGS</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;qn_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;SR1&#39;</span><span class="p">:</span>
+            <span class="n">qn_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">SR1</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;qn_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;No Hessian approx&#39;</span><span class="p">:</span>
+            <span class="n">qn_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">NO_HESSIAN_APPROX</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">qn_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">BFGS</span>
+
+        <span class="c1"># Create the problem</span>
+        <span class="k">if</span> <span class="n">opt_type</span> <span class="o">==</span> <span class="s1">&#39;Trust Region&#39;</span><span class="p">:</span>
+            <span class="c1"># For the trust region method, you have to use a Hessian</span>
+            <span class="c1"># approximation</span>
+            <span class="k">if</span> <span class="n">qn_type</span> <span class="o">==</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">NO_HESSIAN_APPROX</span><span class="p">:</span>
+                <span class="n">qn</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">BFGS</span>
+            <span class="k">if</span> <span class="n">max_qn_subspace</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">max_qn_subspace</span> <span class="o">=</span> <span class="mi">1</span>
+
+            <span class="c1"># Create the quasi-Newton method</span>
+            <span class="n">qn</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">LBFGS</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">subspace</span><span class="o">=</span><span class="n">max_qn_subspace</span><span class="p">)</span>
+
+            <span class="c1"># Retrieve the options for the trust region problem</span>
+            <span class="n">tr_min_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_min_size&#39;</span><span class="p">]</span>
+            <span class="n">tr_max_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_max_size&#39;</span><span class="p">]</span>
+            <span class="n">tr_eta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_eta&#39;</span><span class="p">]</span>
+            <span class="n">tr_penalty_gamma</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_penalty_gamma&#39;</span><span class="p">]</span>
+            <span class="n">tr_init_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_init_size&#39;</span><span class="p">]</span>
+
+            <span class="c1"># Create the trust region sub-problem</span>
+            <span class="n">tr_init_size</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">tr_max_size</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">tr_init_size</span><span class="p">,</span> <span class="n">tr_min_size</span><span class="p">))</span>
+            <span class="n">tr</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">TrustRegion</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">qn</span><span class="p">,</span> <span class="n">tr_init_size</span><span class="p">,</span>
+                                    <span class="n">tr_min_size</span><span class="p">,</span> <span class="n">tr_max_size</span><span class="p">,</span>
+                                    <span class="n">tr_eta</span><span class="p">,</span> <span class="n">tr_penalty_gamma</span><span class="p">)</span>
+
+            <span class="c1"># Set the penalty parameter</span>
+            <span class="n">tr</span><span class="o">.</span><span class="n">setPenaltyGammaMax</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_penalty_gamma_max&#39;</span><span class="p">])</span>
+            <span class="n">tr</span><span class="o">.</span><span class="n">setMaxTrustRegionIterations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_max_iterations&#39;</span><span class="p">])</span>
+
+            <span class="c1"># Trust region convergence tolerances</span>
+            <span class="n">infeas_tol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_infeas_tol&#39;</span><span class="p">]</span>
+            <span class="n">l1_tol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_l1_tol&#39;</span><span class="p">]</span>
+            <span class="n">linfty_tol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_linfty_tol&#39;</span><span class="p">]</span>
+            <span class="n">tr</span><span class="o">.</span><span class="n">setTrustRegionTolerances</span><span class="p">(</span><span class="n">infeas_tol</span><span class="p">,</span> <span class="n">l1_tol</span><span class="p">,</span> <span class="n">linfty_tol</span><span class="p">)</span>
+
+            <span class="c1"># Trust region output file name</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_output_file&#39;</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">tr</span><span class="o">.</span><span class="n">setOutputFile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_output_file&#39;</span><span class="p">])</span>
+                <span class="n">tr</span><span class="o">.</span><span class="n">setOutputFrequency</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_write_output_freq&#39;</span><span class="p">])</span>
+
+            <span class="c1"># Create the interior-point optimizer for the trust region sub-problem</span>
+            <span class="n">opt</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">InteriorPoint</span><span class="p">(</span><span class="n">tr</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">NO_HESSIAN_APPROX</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tr</span> <span class="o">=</span> <span class="n">tr</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Create the ParOpt object with the interior point method</span>
+            <span class="n">opt</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">InteriorPoint</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">max_qn_subspace</span><span class="p">,</span> <span class="n">qn_type</span><span class="p">)</span>
+
+        <span class="c1"># Apply the options to ParOpt</span>
+        <span class="c1"># Currently incomplete</span>
+        <span class="n">opt</span><span class="o">.</span><span class="n">setAbsOptimalityTol</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tol&#39;</span><span class="p">])</span>
+        <span class="n">opt</span><span class="o">.</span><span class="n">setMaxMajorIterations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;maxiter&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;dh&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">checkGradients</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;dh&#39;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Infinity&#39;</span><span class="p">:</span>
+                <span class="n">opt</span><span class="o">.</span><span class="n">setNormType</span><span class="p">(</span><span class="n">ParOpt</span><span class="o">.</span><span class="n">INFTY_NORM</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;L1&#39;</span><span class="p">:</span>
+                <span class="n">opt</span><span class="o">.</span><span class="n">setNormType</span><span class="p">(</span><span class="n">ParOpt</span><span class="o">.</span><span class="n">L1_NORM</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;L2&#39;</span><span class="p">:</span>
+                <span class="n">opt</span><span class="o">.</span><span class="n">setNormType</span><span class="p">(</span><span class="n">ParOpt</span><span class="o">.</span><span class="n">L2_NORM</span><span class="p">)</span>
+
+        <span class="c1"># Set barrier strategy</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;barrier_strategy&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;barrier_strategy&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Monotone&#39;</span><span class="p">:</span>
+                <span class="n">barrier_strategy</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">MONOTONE</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;barrier_strategy&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Mehrotra&#39;</span><span class="p">:</span>
+                <span class="n">barrier_strategy</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">MEHROTRA</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;barrier_strategy&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Complementarity fraction&#39;</span><span class="p">:</span>
+                <span class="n">barrier_strategy</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">COMPLEMENTARITY_FRACTION</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setBarrierStrategy</span><span class="p">(</span><span class="n">barrier_strategy</span><span class="p">)</span>
+
+        <span class="c1"># Set starting point strategy</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;start_strategy&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;start_strategy&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;None&#39;</span><span class="p">:</span>
+                <span class="n">start_strategy</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">NO_START_STRATEGY</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;start_strategy&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Least squares multipliers&#39;</span><span class="p">:</span>
+                <span class="n">start_strategy</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">LEAST_SQUARES_MULTIPLIERS</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;start_strategy&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Affine step&#39;</span><span class="p">:</span>
+                <span class="n">start_strategy</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">AFFINE_STEP</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setStartingPointStrategy</span><span class="p">(</span><span class="n">start_strategy</span><span class="p">)</span>
+
+        <span class="c1"># Set norm type</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Infinity&#39;</span><span class="p">:</span>
+                <span class="n">norm_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">INFTY_NORM</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;L1&#39;</span><span class="p">:</span>
+                <span class="n">norm_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">L1_NORM</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;L2&#39;</span><span class="p">:</span>
+                <span class="n">norm_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">L2_NORM</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setBarrierStrategy</span><span class="p">(</span><span class="n">norm_type</span><span class="p">)</span>
+
+        <span class="c1"># Set BFGS update strategy</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;bfgs_update_type&#39;</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;bfgs_update_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Skip negative&#39;</span><span class="p">:</span>
+                <span class="n">bfgs_update_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">SKIP_NEGATIVE_CURVATURE</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;bfgs_update_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Damped&#39;</span><span class="p">:</span>
+                <span class="n">bfgs_update_type</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">DAMPED_UPDATE</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setBFGSUpdateType</span><span class="p">(</span><span class="n">bfgs_update_type</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;penalty_gamma&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setPenaltyGamma</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;penalty_gamma&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;barrier_fraction&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setBarrierFraction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;barrier_fraction&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;barrier_power&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setBarrierPower</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;barrier_power&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;hessian_reset_freq&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setHessianResetFrequency</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;hessian_reset_freq&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;qn_diag_factor&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setQNDiagonalFactor</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;qn_diag_factor&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_sequential_linear&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setSequentialLinearMethod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_sequential_linear&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;affine_step_multiplier_min&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setStartAffineStepMultiplierMin</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;affine_step_multiplier_min&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;init_barrier_parameter&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setInitBarrierParameter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;init_barrier_parameter&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;relative_barrier&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setRelativeBarrier</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;relative_barrier&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;set_qn&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setQuasiNewton</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;set_qn&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;qn_updates&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setUseQuasiNewtonUpdates</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;qn_updates&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_line_search&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setUseLineSearch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_line_search&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;max_ls_iters&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setMaxLineSearchIters</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;max_ls_iters&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;backtrack_ls&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setBacktrackingLineSearch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;backtrack_ls&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;armijo_param&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setArmijoParam</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;armijo_param&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;penalty_descent_frac&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setPenaltyDescentFraction</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;penalty_descent_frac&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;min_penalty_param&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setMinPenaltyParameter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;min_penalty_param&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_hvec_prod&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setUseHvecProduct</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_hvec_prod&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_diag_hessian&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setUseDiagHessian</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_diag_hessian&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_qn_gmres_precon&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setUseQNGMRESPreCon</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;use_qn_gmres_precon&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;set_nk_switch_tol&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setNKSwitchTolerance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;set_nk_switch_tol&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;eisenstat_walker_param&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setEisenstatWalkerParameters</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;eisenstat_walker_param&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                                             <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;eisenstat_walker_param&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;gmres_tol&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setGMRESTolerances</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;gmres_tol&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span>
+                                   <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;gmres_tol&#39;</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;gmres_subspace_size&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setGMRESSubspaceSize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;gmres_subspace_size&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;output_freq&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setOutputFrequency</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;output_freq&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;output_file&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setOutputFile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;output_file&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;major_iter_step_check&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setMajorIterStepCheck</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;major_iter_step_check&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;output_level&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setOutputLevel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;output_level&#39;</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;grad_check_freq&#39;</span><span class="p">]:</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setGradCheckFrequency</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;grad_check_freq&#39;</span><span class="p">])</span>
+
+        <span class="c1"># This opt object will be used again when &#39;run&#39; is executed</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">opt</span> <span class="o">=</span> <span class="n">opt</span>
+
+        <span class="k">return</span>
+
+<div class="viewcode-block" id="TopologyOptimizer.optimize"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.TopologyOptimizer.optimize">[docs]</a>    <span class="k">def</span> <span class="nf">optimize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Run the optimization problem using the settings. Runs either InteriorPoint</span>
+<span class="sd">        or TrustRegion optimization problems</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            PVec: Optimized design point x</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Run the optimization, everything else has been setup</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;optimizer&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Trust Region&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tr</span><span class="o">.</span><span class="n">optimize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">opt</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">opt</span><span class="o">.</span><span class="n">optimize</span><span class="p">()</span>
+
+        <span class="c1"># Keep the values of the design variables/multipliers</span>
+        <span class="n">x</span><span class="p">,</span> <span class="n">z</span><span class="p">,</span> <span class="n">zw</span><span class="p">,</span> <span class="n">zl</span><span class="p">,</span> <span class="n">zu</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">opt</span><span class="o">.</span><span class="n">getOptimizedPoint</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">x</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html">TMR 1 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2018, Graeme J. Kennedy.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 2.1.2.
+    </div>
+  </body>
+</html>

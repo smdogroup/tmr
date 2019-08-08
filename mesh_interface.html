@@ -72,14 +72,14 @@
   <div class="section" id="mesh-generation-level-classes">
 <h1>Mesh generation level classes<a class="headerlink" href="#mesh-generation-level-classes" title="Permalink to this headline">¶</a></h1>
 <p><a class="reference internal" href="#tmr.TMR.Mesh" title="tmr.TMR.Mesh"><code class="xref py py-class docutils literal notranslate"><span class="pre">Mesh</span></code></a> provides the primary interface to the meshing
-functionality in <a class="reference internal" href="error_estimation.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> and is used to create quadrilateral and hexahedral
+functionality in <code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code> and is used to create quadrilateral and hexahedral
 meshes. The actual meshing operations are performed on the root processor with
 rank 0, but all connectivity and location information is broadcast to all
 processors.</p>
 <p><a class="reference internal" href="#tmr.TMR.Mesh" title="tmr.TMR.Mesh"><code class="xref py py-class docutils literal notranslate"><span class="pre">Mesh</span></code></a> attempts to mesh all <a class="reference internal" href="geometry_interface.html#tmr.TMR.Face" title="tmr.TMR.Face"><code class="xref py py-class docutils literal notranslate"><span class="pre">tmr.TMR.Face</span></code></a> and <a class="reference internal" href="geometry_interface.html#tmr.TMR.Volume" title="tmr.TMR.Volume"><code class="xref py py-class docutils literal notranslate"><span class="pre">tmr.TMR.Volume</span></code></a>
 objects contained in <a class="reference internal" href="geometry_interface.html#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a>. If only a surface mesh is desired, create
 a new <a class="reference internal" href="geometry_interface.html#tmr.TMR.Model" title="tmr.TMR.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a> class without the volume objects.</p>
-<p><a class="reference internal" href="error_estimation.html#module-TMR" title="TMR"><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code></a> only supports swept volume mesh generation. This requires the
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">TMR</span></code> only supports swept volume mesh generation. This requires the
 specification of additional information to indicate what surfaces should be
 linked and what direction should be swept. This information is provided by
 indicating source and target geometry entities. When a source/target pair is

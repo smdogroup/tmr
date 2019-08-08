@@ -15,7 +15,7 @@
     <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Orthogonal bracket" href="orthogonal_bracket.html" />
+    <link rel="next" title="Topology Optimization Utilities" href="topoptutils.html" />
     <link rel="prev" title="Mesh generation level classes" href="mesh_interface.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
@@ -28,7 +28,7 @@
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
-          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
+          <a href="topoptutils.html" title="Topology Optimization Utilities"
              accesskey="N">next</a> |</li>
         <li class="right" >
           <a href="mesh_interface.html" title="Mesh generation level classes"
@@ -50,8 +50,8 @@
   <p class="topless"><a href="mesh_interface.html"
                         title="previous chapter">Mesh generation level classes</a></p>
   <h4>Next topic</h4>
-  <p class="topless"><a href="orthogonal_bracket.html"
-                        title="next chapter">Orthogonal bracket</a></p>
+  <p class="topless"><a href="topoptutils.html"
+                        title="next chapter">Topology Optimization Utilities</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
@@ -95,7 +95,7 @@ created using the constructor as follows:</p>
 <em class="property">class </em><code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">Topology</code><a class="headerlink" href="#tmr.TMR.Topology" title="Permalink to this definition">¶</a></dt>
 <dd><p>The main topology class that contains the objects used to build the
 underlying mesh.</p>
-<p>This class takes in a general <code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code>, but there are additional
+<p>This class takes in a general Model, but there are additional
 requirements that are placed on the model to create a proper
 topology object. These requirements are as follows:</p>
 <blockquote>
@@ -105,7 +105,7 @@ topology object. These requirements are as follows:</p>
 <li><p>All faces must be surrounded by a single edge loop with 4</p></li>
 <li><p>All volumes must contain 6 non-degenerate faces that are
 ordered in coordinate ordering as shown below. Furthermore, all
-volumes must be of type <code class="xref py py-class docutils literal notranslate"><span class="pre">TFIVolume</span></code>.</p></li>
+volumes must be of type TFIVolume.</p></li>
 </ol>
 </div></blockquote>
 </dd></dl>
@@ -229,6 +229,20 @@ Array of weights associated with the dependent nodes</p>
 </dd>
 <dt class="field-even">Return type</dt>
 <dd class="field-even"><p>ptr (np.ndarray), conn (np.ndarray), weight (np.ndarray)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.OctForest.getInterpType">
+<code class="sig-name descname">getInterpType</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.OctForest.getInterpType" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the element interpolation type</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The element interpolation type</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>TMRInterpolationType</p>
 </dd>
 </dl>
 </dd></dl>
@@ -447,6 +461,17 @@ between quadtrees is defined at a global level. The quadrants can
 easily be redistributed across processors using the repartition()
 call.</p>
 <dl class="method">
+<dt id="tmr.TMR.QuadForest.balance">
+<code class="sig-name descname">balance</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">btype</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.balance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Balance all the elements in the mesh to achieve a 2-to-1 balance</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>btype</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Indicates whether or not to balance across octant corners</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt id="tmr.TMR.QuadForest.coarsen">
 <code class="sig-name descname">coarsen</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.coarsen" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a new forest object by coarsening all the elements within the
@@ -537,6 +562,20 @@ Array of weights associated with the dependent nodes</p>
 </dd>
 <dt class="field-even">Return type</dt>
 <dd class="field-even"><p>ptr (np.ndarray), conn (np.ndarray), weight (np.ndarray)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.QuadForest.getInterpType">
+<code class="sig-name descname">getInterpType</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.QuadForest.getInterpType" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the element interpolation type</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The element interpolation type</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>TMRInterpolationType</p>
 </dd>
 </dl>
 </dd></dl>
@@ -763,7 +802,7 @@ then <a class="reference internal" href="#tmr.TMR.OctForest.createNodes" title="
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
         <li class="right" >
-          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
+          <a href="topoptutils.html" title="Topology Optimization Utilities"
              >next</a> |</li>
         <li class="right" >
           <a href="mesh_interface.html" title="Mesh generation level classes"
