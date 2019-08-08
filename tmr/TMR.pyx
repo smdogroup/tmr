@@ -4976,8 +4976,19 @@ cdef class TopoProblem(ProblemBase):
         if self.ptr:
             self.ptr.decref()
 
-    def setF5OutputFlags(self, int freq, ElementType elem_type,
-                         int flag):
+    def setF5OutputFlags(self, int freq, ElementType elem_type, int flag):
+        """
+        setF5OutputFlags(self, freq, elem_type, flag)
+
+        Set the output frequency and data for generating an .f5 file for solution
+        visualization. The elem_type and flag arguments dictate the type of data
+        to be written to the .f5 file.
+
+        Args:
+            freq (int): Optimization iteration frequency to write the file
+            elem_type (ElementType): TACS element type
+            flag (int): Flag indicating the type of element data to write
+        """
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
@@ -4986,8 +4997,19 @@ cdef class TopoProblem(ProblemBase):
         prob.setF5OutputFlags(freq, elem_type, flag)
         return
 
-    def setF5EigenOutputFlags(self, int freq, ElementType elem_type,
-                             int flag):
+    def setF5EigenOutputFlags(self, int freq, ElementType elem_type, int flag):
+        """
+        setF5EigenOutputFlags(self, freq, elem_type, flag)
+
+        Set the output frequency and data for generating an .f5 file for eigenvector
+        visualization. The elem_type and flag arguments dictate the type of data
+        to be written to the .f5 file.
+
+        Args:
+            freq (int): Optimization iteration frequency to write the file
+            elem_type (ElementType): TACS element type
+            flag (int): Flag indicating the type of element data to write
+        """
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
@@ -4997,6 +5019,16 @@ cdef class TopoProblem(ProblemBase):
         return
 
     def setLoadCases(self, list forces):
+        """
+        setLoadCases(self, forces)
+
+        Set the load cases to use within the optimization problem.
+        The input list of forces is used as a vector of right-hand-sides
+        within the TopoProblem solution method.
+
+        Args:
+            forces (list): A list of TACS.Vec vector instances
+        """
         cdef TACSBVec **f = NULL
         cdef int nforces = len(forces)
         cdef TMRTopoProblem *prob = NULL
@@ -5015,6 +5047,14 @@ cdef class TopoProblem(ProblemBase):
         return
 
     def getNumLoadCases(self):
+        """
+        getNumLoadCases(self)
+
+        Get the number of load cases set in the optimization problem
+
+        Returns:
+            int: The number of load cases
+        """
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
@@ -5023,6 +5063,20 @@ cdef class TopoProblem(ProblemBase):
         return prob.getNumLoadCases()
 
     def addConstraints(self, int case, list funcs, list offset, list scale):
+        """
+        addConstraints(self, case, funcs, offset, scale)
+
+        Add a list of constraints for the specified load case. The constraints
+        are specified as follows:
+
+        scale[i]*(funcs[i] + offset[i]) >= 0
+
+        Args:
+            case (int): Load case index to apply the constraints
+            funcs (list): List of TACS.Function instances
+            offset (list): List of floats specifying the constraint offset
+            scale (list): List of scale value offsets
+        """
         cdef int nfuncs = 0
         cdef TacsScalar *_offset = NULL
         cdef TacsScalar *_scale = NULL
@@ -5055,6 +5109,19 @@ cdef class TopoProblem(ProblemBase):
 
     def addStressConstraint(self, int case, StressConstraint sc,
                             TacsScalar offset=1.0, TacsScalar scale=1.0):
+        """
+        addStressConstraint(self, case, sc, offset=1.0, scale=1.0)
+
+        Add a stress constraint formulated with stress reconstruction.
+
+        scale*(sc + offset) >= 0
+
+        Args:
+            case (int): Load case index
+            sc (StressConstraint): Stress constraint instance
+            offset (float): Constraint offset
+            scale (float): Constraint scaling
+        """
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
@@ -5064,6 +5131,18 @@ cdef class TopoProblem(ProblemBase):
         return
 
     def addLinearConstraints(self, list vecs, list offset):
+        """
+        addLinearConstraints(self, vecs, offset)
+
+        Add a set of load-case independent linear constraints represented
+        by the provided vectors. The constraints are imposed as:
+
+        dot(vecs[i], x) + offset[i] >= 0.0
+
+        Args:
+            vecs (list): List of ParOpt.PVec instances
+            offset (list): List of offsets for the constraints
+        """
         cdef int nvecs
         cdef TacsScalar *_offset = NULL
         cdef ParOptVec **_vecs = NULL
@@ -5130,6 +5209,20 @@ cdef class TopoProblem(ProblemBase):
         return
 
     def setObjective(self, list weights, list funcs=None):
+        """
+        setObjective(self, weights, funcs=None)
+
+        Set the objective function for the design problem.
+
+        If no list of functions is provided, the weighted compliance is
+        assumed to be the objective. Otherwise a weighted sum of the functions
+        evaluaed for each load case is used. Note that if a weight is set to
+        zero, then the function and its gradient are not evaluated.
+
+        Args:
+            weights (list): List of weights on the compliance or function
+            funcs (list): Optional list of TACS.Function instances
+        """
         cdef int lenw = 0
         cdef TacsScalar *w = NULL
         cdef TMRTopoProblem *prob = NULL
@@ -5165,6 +5258,14 @@ cdef class TopoProblem(ProblemBase):
         return
 
     def initialize(self):
+        """
+        initialize(self)
+
+        Initialize the topology optimization instance. The optimization
+        problem cannot be solved before this call. After this call, no
+        more constraints can be added and the design problem is considered
+        fixed.
+        """
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
@@ -5174,6 +5275,14 @@ cdef class TopoProblem(ProblemBase):
         return
 
     def setPrefix(self, _prefix):
+        """
+        setPrefix(self, _prefix)
+
+        Set the file prefix for output generated by TopoProblem.
+
+        Args:
+            _prefix (str): File name prefix
+        """
         cdef char *prefix = tmr_convert_str_to_chars(_prefix)
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
@@ -5184,6 +5293,15 @@ cdef class TopoProblem(ProblemBase):
         return
 
     def setIterationCounter(self, int count):
+        """
+        setIterationCounter(self, count)
+
+        Set an offset for the iteration counter. All iteration counts will
+        start from the provided value.
+
+        Args:
+            count (int): Iteration counter offset >= 0
+        """
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
@@ -5192,8 +5310,17 @@ cdef class TopoProblem(ProblemBase):
         prob.setIterationCounter(count)
         return
 
-    def setInitDesignVars(self, PVec pvec, PVec lbvec=None,
-                          PVec ubvec=None):
+    def setInitDesignVars(self, PVec pvec, PVec lbvec=None, PVec ubvec=None):
+        """
+        setInitDesignVars(self, pvec, lbvec, ubvec)
+
+        Set the initial design variables and lower and upper bounds.
+
+        Args:
+            pvec (PVec): ParOpt.PVec class storing the initial design vector
+            lbvec (PVec): ParOpt.PVec class storing the lower bound vector
+            ubvec (PVec): ParOpt.PVec class storing the upper bound vector
+        """
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
