@@ -7,11 +7,9 @@ import numpy as np
 import argparse
 import os
 
-class CreateMe(TMR.QuadConformTopoCreator):
+class QuadConformCreator(TMR.QuadConformTopoCreator):
     def __init__(self, bcs, forest, order, interp, props=None):
         # Set the interpolation for the new filter
-        order = forest.getMeshOrder()-1
-        interp = TMR.BERNSTEIN_POINTS
         TMR.QuadConformTopoCreator.__init__(bcs, forest, order, interp)
         
         # Create the array of properties
@@ -24,70 +22,83 @@ class CreateMe(TMR.QuadConformTopoCreator):
         elem = elements.PSThermoelasticQuad(order, stiff)
         return elem
 
-# Create the tractions
-trac = []
-tx = np.ones(order)*tr[0]
-ty = np.ones(order)*tr[1]
-for findex in range(4):
-    trac.append(elements.PSThermoQuadTraction(findex, tx, ty))
-        
+class CreatorCallback:
+    def __init__(self, bcs, props):
+        self.bcs = bcs
+        self.props = props
 
-def createTopoProblem(props, forest, order=3, nlevels=2,
-                      ordering=TACS.PY_MULTICOLOR_ORDER,
-                      ite=1):
-    # Create the forest
-    forests = []
-    filters = []
-    assemblers = []
-    varmaps = []
-    vecindices = []
+    def creator_callback(self, forest):
 
-    # Create the trees, rebalance the elements and repartition
-    forest.balance(1)
-    forest.setMeshOrder(order)
-    forest.repartition()
-    forests.append(forest)
+        order = forest.getMeshOrder()-1
+        interp = TMR.BERNSTEIN_POINTS
 
-    # Make the creator class
-    interp = TMR.BERNSTEIN_POINTS
-    creator = CreateMe(bcs, forests[-1], order, interp, props)
-    assemblers.append(creator.createTACS(forest, ordering=ordering))
-    filters.append(creator.getFilter())
+        filtr = forest.duplicate()
+        filtr.coarsen()
+        creator = OctCreator(self.bcs, filter, self.props)
+        return creator, filtr
 
-    for i in range(nlevels-1):
-        if args.use_decrease_order:
-            forest = forests[-1].duplicate()
-            forest.balance(1)        
-            if order-1-i >= 3:
-                forest.setMeshOrder(order-1-i)
-            else:
-                forest.setMeshOrder(3)
-        else:
-            forest = forests[-1].coarsen()
-            forest.balance(1)
-            forest.setMeshOrder(order)
-        
-        forests.append(forest)
+def create_forest(comm, depth, htarget):
+    # Load the geometry model
+    geo = TMR.LoadModel('biclamped_traction.stp')
 
-        # Make the creator class
-        creator = CreateMe(bcs, forests[-1], order, interp, props)
-        assemblers.append(creator.createTACS(forest, ordering=ordering))
-        filters.append(creator.getFilter())
+    # Mark the boundary condition faces
+    verts = geo.getVertices()
+    edges = geo.getEdges()
+    faces = geo.getFaces()
 
-    # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests, omega=args.omega)
-   
-    # Create the topology optimization problem
-    vars_per_node = 1
-    nmats = props.getNumMaterials()
-    if nmats > 1:
-        vars_per_node = nmats+1
+    edges[1].setName('fixed')
+    edges[9].setName('fixed')
+    edges[4].setName('traction')
 
-    # Set the filter type
-    fltr = TMR.ConformFilter(assemblers, filters, vars_per_node=vars_per_node)
-    problem = TMR.TopoProblem(fltr, mg)
+    # Set the boundary conditions for the problem
+    bcs = TMR.BoundaryConditions()
+    bcs.addBoundaryCondition('fixed', [0,1,2], [0.0,0.0,0.])
 
-    return assemblers[0], problem, filters[0], varmaps[0]
+    # Create the mesh
+    mesh = TMR.Mesh(comm, geo)
+
+    # Set the meshing options
+    opts = TMR.MeshOptions()
+
+    # Create the surface mesh
+    mesh.mesh(htarget, opts)
+
+    # Create a model from the mesh
+    model = mesh.createModelFromMesh()
+
+    # Create the corresponding mesh topology from the mesh-model 
+    topo = TMR.Topology(comm, model)
+
+    # Create the quad forest and set the topology of the forest
+    forest = TMR.QuadForest(comm)
+    forest.setTopology(topo)
+
+    # Set parameters for later usage
+    forest.createTrees(depth)
+
+    return forest
+
+# Set the optimization parameters
+optimization_options = {
+    # Parameters for the trust region method
+    'tr_init_size': 0.01,
+    'tr_max_size': 0.05,
+    'tr_min_size': 1e-6,
+    'tr_eta': 0.25,
+    'tr_penalty_gamma': 20.0,
+
+    # Parameters for the interior point method (used to solve the
+    # trust region subproblem)
+    'max_qn_subspace': 2,
+    'tol': 1e-8,
+    'maxiter': 500,
+    'norm_type': 'L1',
+    'barrier_strategy': 'Complementarity fraction',
+    'start_strategy': 'Affine step'}
+
+prefix = 'results'
+optimization_options['output_file'] = os.path.join(prefix, 'output_file.dat')
+optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file.dat')
 
 # Create an argument parser to read in arguments from the command line
 p = argparse.ArgumentParser()
@@ -112,71 +123,26 @@ p.add_argument('--q_penalty', type=float, default=8.0)
 p.add_argument('--omega', type=float, default=1.0)
 args = p.parse_args()
 
-# The communicator
-comm = MPI.COMM_WORLD
-
 # Print out all of the arguments to the command line
 if comm.rank == 0:
     for arg in vars(args):
         print('%-20s'%(arg), getattr(args, arg))
 
-# Load the geometry model
-geo = TMR.LoadModel('biclamped_traction.stp')
+# Set the max nmber of iterations
+mg_levels = args.mg_levels
+max_iterations = len(mg_levels)
 
-# Mark the boundary condition faces
-verts = geo.getVertices()
-edges = geo.getEdges()
-faces = geo.getFaces()
+# Set the communicator
+comm = MPI.COMM_WORLD
 
-edges[1].setName('fixed')
-edges[9].setName('fixed')
-edges[4].setName('traction')
-
-# Set the boundary conditions for the problem
-bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed', [0,1,2], [0.0,0.0,0.])
-
-# Create the mesh
-mesh = TMR.Mesh(comm, geo)
-
-# Set the meshing options
-opts = TMR.MeshOptions()
-
-# Create the surface mesh
-mesh.mesh(args.htarget, opts)
-
-# Create a model from the mesh
-model = mesh.createModelFromMesh()
-
-# Create the corresponding mesh topology from the mesh-model 
-topo = TMR.Topology(comm, model)
-
-# Create the quad forest and set the topology of the forest
-forest = TMR.QuadForest(comm)
-forest.setTopology(topo)
+# Set the qn subspace size
+optimization_options['max_qn_subspace'] = args.qn_subspace
 
 # Compute the volume of the bracket
 r = 0.06
 a = 0.04
 vol = r*a
 vol_frac = args.vol_frac
-
-# Set the max nmber of iterations
-mg_levels = args.mg_levels
-max_iterations = len(mg_levels)
-
-# Set parameters for later usage
-forest.createTrees(args.init_depth)
-
-# The old filter/map classes
-old_filtr = None
-old_varmap = None
-
-# Values from the previous iteration
-old_dvs = None
-old_z = 0.0
-olz_zl = None
-old_zu = None
 
 # Set the values of the objective array
 obj_array = [ 1e0 ]
@@ -188,12 +154,6 @@ aT = [23.5e-6, 23.5e-6*0.5]
 kcond = [130.0*thickness, 65.0*thickness]
 ys = [450e6*thickness, 275e6*thickness]
 
-# Create the stiffness properties object
-props = TMR.QuadStiffnessProperties(rho, E, nu, _aT=aT, _kcond=kcond,
-                                    k0=1e-3, eps=0.2,
-                                    q=args.q_penalty, qtemp=0.0,
-                                    qcond=0.0)
-
 # Set the fixed mass
 max_density = sum(rho)/len(rho)
 initial_mass = vol*max_density
@@ -203,32 +163,56 @@ m_fixed = vol_frac*initial_mass
 vars_per_node = 1
 if (len(rho) > 1):
     vars_per_node = 1+len(rho)
-    
+
+# Create the stiffness properties object
+props = TMR.QuadStiffnessProperties(rho, E, nu, _aT=aT, _kcond=kcond,
+                                    k0=1e-3, eps=0.2,
+                                    q=args.q_penalty, qtemp=0.0,
+                                    qcond=0.0)
+
+# Create the tractions
+T = 2.5e6
+thermal_tractions = []
+tx = np.ones(order)*tr[0]
+ty = np.ones(order)*tr[1]
+for findex in range(4):
+    thermal_tractions.append(elements.PSThermoQuadTraction(findex, tx, ty))
+
+
+# Create the problem and filter object
+
+problem, filter_obj = TopOptUtils.createTopoProblem(forest,
+    obj.creator_callback, filter_type, nlevels=nlevels, lowest_order=3)
+
+
 time_array = np.zeros(sum(args.max_opt_iters[:]))
 t0 = MPI.Wtime()
 
 for step in range(max_iterations):
     # Create the TACSAssembler and TMRTopoProblem instance
-    nlevs = mg_levels[step]
-    assembler, problem, filtr, varmap = createTopoProblem(props, forest, 
-                                                          nlevels=nlevs,
-                                                          order=args.order)    
+    nlevels = mg_levels[step]
+
+    # Allocate the creator callback function
+    obj = CreatorCallback(bcs, props)
+
+    filter_type = 'conform'
+    args.order
+    
+    problem, filter_obj = TopOptUtils.createTopoProblem(forest,
+        ob.creator_callback, filter_type, nlevels=nlevels, lowest_order=3)
+
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
-    T = 2.5e6
-    aux = addEdgeTraction(forest.getMeshOrder(), forest, 'traction', assembler,
-                          [0.0, -T])
-    assembler.setAuxElements(aux)
-    force1 = assembler.createVec()
-    assembler.assembleRes(force1)
-    force1.scale(-1.0)
 
-    # Set the auxilary elements back to None
-    assembler.setAuxElements(None)
+    # Get the assembler object we just created
+    assembler = filter_obj.getAssembler()
+
+    # Allocate a thermal traction boundary condition
+    force1 = TopOptUtils.computeTractionLoad('traction', forest, assembler,
+        thermal_tractions)
     
     # Set the load cases
-    forces = [force1]
-    problem.setLoadCases(forces)
+    problem.setLoadCases([force1])
 
     # Set the mass constraint
     # (m_fixed - m(x))/m_fixed >= 0.0    
@@ -239,108 +223,19 @@ for step in range(max_iterations):
     problem.initialize()
     problem.setPrefix(args.prefix)
 
-    # Create the quasi-Newton Hessian approximation
-    qn_subspace_size = args.qn_subspace
-    qn = ParOpt.LBFGS(problem, subspace=qn_subspace_size)
-    problem.setIterationCounter(sum(args.max_opt_iters[:step]))
-    # Trust region problem parameters
-    tr_size = 0.01
-    tr_max_size = 0.02
-    tr_min_size = 1e-6
-    eta = 0.25
-    tr_penalty = args.tr_penalty
-    
-    # Create the trust region problem
-    tr = ParOpt.pyTrustRegion(problem, qn, tr_size,
-                              tr_min_size, tr_max_size, eta, tr_penalty)
-    # Create the ParOpt problem
-    opt = ParOpt.pyParOpt(tr, qn_subspace_size, ParOpt.NO_HESSIAN_APPROX)
-    
-    # Set the penalty parameter internally in the code. These must be
-    # consistent between the trust region object and ParOpt.
-    opt.setPenaltyGamma(tr_penalty)
-    
-    # Set parameters for ParOpt in the subproblem
-    opt.setMaxMajorIterations(500)
-    opt.setAbsOptimalityTol(args.opt_abs_tol)
-    
-    # Don't update the quasi-Newton method
-    opt.setQuasiNewton(qn)
-    opt.setUseQuasiNewtonUpdates(0)
-    
-    if args.use_L1:
-        opt.setNormType(ParOpt.L1_NORM)
-    elif args.use_Linf:
-        opt.setNormType(ParOpt.INFTY_NORM)
-    else:
-        opt.setNormType(ParOpt.L2_NORM)
+    optimization_options[maxiter] = rgs.max_opt_iters[step]
 
-    opt.setStartingPointStrategy(ParOpt.AFFINE_STEP)
-    opt.setBarrierStrategy(ParOpt.COMPLEMENTARITY_FRACTION)
-    
-    # Set the design variable bounds
-    filename = os.path.join(args.prefix, 'paropt%d.out'%(step))
-    opt.setOutputFile(filename)
-    
-    # If the old filter exists, we're on the second iteration
-    if old_filtr:            
-        # Create the interpolation
-        interp = TACS.VecInterp(old_varmap, varmap, vars_per_node)
-        filtr.createInterpolation(old_filtr, interp)
-        interp.initialize()
-        
-        # Get the optimization variables for the new optimizer
-        x, z, zw, zl, zu = opt.getOptimizedPoint()
-        
-        # Do the interpolation
-        old_vec = problem.convertPVecToVec(old_x)
-        x_vec = problem.convertPVecToVec(x)
-        interp.mult(old_vec, x_vec)
-        
-        # Set the new design variables
+    problem.setIterationCounter(sum(args.max_opt_iters[:step]))
+
+    if orig_filter:
+        # Create one of the new design vectors
+        x = problem.createDesignVec()
+        TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
         problem.setInitDesignVars(x)
-        
-    # Initialize the problem
-    tr.initialize()
-       
-    # Iterate
-    for i in range(args.max_opt_iters[step]):
-        itr = sum(args.max_opt_iters[:step]) + i
-        if comm.rank == 0:
-            print("Iteration[%d]"%(itr))
-        opt.setInitBarrierParameter(10.0)
-        opt.resetDesignAndBounds()            
-        opt.optimize()
-        
-        # Get the optimized point
-        x, z, zw, zl, zu = opt.getOptimizedPoint()
-        
-        # Write the solution out to a file
-        if i % args.output_freq == 0:
-            # Compute the iteration counter
-            itr = sum(args.max_opt_iters[:step]) + i
-            
-            # Write f5 object
-            # Output for visualization
-            flag = (TACS.ToFH5.NODES |
-                    TACS.ToFH5.DISPLACEMENTS |
-                    TACS.ToFH5.EXTRAS)
-            f5 = TACS.ToFH5(assembler, TACS.PY_PLANE_STRESS, flag)
-            f5.writeToFile(os.path.join(args.prefix, 'plate%04d.f5'%(itr))) 
-    
-            # Update the trust region method
-            infeas, l1, linfty = tr.update(x, z, zw)
-           
-            t1_ind = MPI.Wtime()
-            time_array[itr] = t1_ind-t0
-            t0 = 1.0*t1_ind
-            
-        # Check for convergence using relatively strict tolerances
-        if infeas < 1e-6 and l1 < 1e-4 and step > 1:
-            break
-            
-    # Set the old values of the variables
-    old_x, z, zw, zl, zu = opt.getOptimizedPoint()
+
+    # Optimize the problem
+    opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
+    xopt = opt.optimize()
  
     # Set the old filter/variable map for the next time through the
     # loop so that we can interpolate design variable values

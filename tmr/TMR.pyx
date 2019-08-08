@@ -4938,6 +4938,9 @@ cdef class HelmholtzPUFilter(TopoFilter):
         return _init_VarMap(self.ptr.getDesignVarMap())
 
 cdef class TopoProblem(ProblemBase):
+    """
+    Creates and stores information for topology optimization problems
+    """
     def __cinit__(self, TopoFilter fltr, Pc pc,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL

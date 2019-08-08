@@ -4,9 +4,18 @@ from tmr import TMR
 from paropt import ParOpt
 from six import iteritems
 
+# Options for the TopologyOptimizer class
+_optimizers = ['Interior Point', 'Trust Region']
+_qn_types = ['BFGS', 'SR1', 'No Hessian approx']
+_norm_types = ['Infinity', 'L1', 'L2']
+_barrier_types = ['Monotone', 'Mehrotra', 'Complementarity fraction']
+_start_types = ['None', 'Least squares multipliers', 'Affine step']
+_bfgs_updates = ['Skip negative', 'Damped']
+
+
 def createTopoProblem(forest, callback, filter_type, nlevels=2,
                       repartition=True, design_vars_per_node=1,
-                      s=2.0, N=10, r0=0.05, 
+                      s=2.0, N=10, r0=0.05, lowest_order=2,
                       ordering=TACS.PY_MULTICOLOR_ORDER):
     """
     Create a topology optimization problem instance and a hierarchy of meshes.
@@ -35,6 +44,7 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
         s (float): Matrix filter smoothing parameter
         N (int): Matrix filter approximation parameter
         r0 (float): Helmholtz filter radius
+        lowest_order (int): Lowest order mesh to create
         ordering: TACS Assembler ordering type
 
     Returns:
@@ -55,24 +65,25 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
         forest.repartition()
 
     # Create the forest object
-    creator, filter = callback(forest)
+    creator, filtr = callback(forest)
     forests.append(forest)
-    filters.append(filter)
+    filters.append(filtr)
     assemblers.append(creator.createTACS(forest, ordering))
     
     if filter_type == 'lagrange':
         varmaps.append(creator.getMap())
         vecindices.append(creator.getIndices())
 
-    for i in range(nlevels):
+    for i in range(nlevels-1):
         order = forests[-1].getMeshOrder()
         interp = forests[-1].getInterpType()
-        if order > 2:
+        if order > lowest_order:
             forest = forests[-1].duplicate()
             order = order-1
             forest.setMeshOrder(order, interp)
         else:
-            forest = forests[-1].coarsen()
+            forest = forests[-1].duplicate()
+            forest.coarsen()
             forest.setMeshOrder(order, interp)
 
             # Balance and repartition if needed
@@ -81,9 +92,9 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
                 forest.repartition()
 
         # Create the forest object
-        creator, filter = callback(forest)
+        creator, filtr = callback(forest)
         forests.append(forest)
-        filters.append(filter)
+        filters.append(filtr)
         assemblers.append(creator.createTACS(forest, ordering))
         
         if filter_type == 'lagrange':
@@ -102,23 +113,26 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
     elif filter_type == 'matrix':
         filter_obj = TMR.MatrixFilter(s, N, assemblers, forests,
                                       vars_per_node=design_vars_per_node)
+    elif filter_type == 'conform':
+        filter_obj = TMR.ConformFilter(assemblers, filters,
+                                       vars_per_node=design_vars_per_node)
     elif filter_type == 'helmholtz':
-        filter_obj = TMR.HelmholtzFiler(helmholtz_radius, assemblers, filters,
+        filter_obj = TMR.HelmholtzFiler(r0, assemblers, filters,
                                         vars_per_node=design_vars_per_node)
 
     problem = TMR.TopoProblem(filter_obj, mg)
 
     return problem, filter_obj
 
-def computeVertexLoad(forest, name, assembler, point_force):
+def computeVertexLoad(name, forest, assembler, point_force):
     """
     Add a load at vertices with the given name value. The assembler object must
     be created from the forest. The point_force must be equal to the number of
     variables per node in the assembler object.
 
     Args:
-        forest (QuadForest or OctForest): Forest for the finite-element mesh
         name (str): Name of the surface where the traction will be added
+        forest (QuadForest or OctForest): Forest for the finite-element mesh
         assembler (Assembler): TACSAssembler object for the finite-element problem
         point_force (list): List of point forces to apply at the vertices
 
@@ -224,12 +238,44 @@ def compute3DTractionLoad(name, forest, assembler, tr):
 
     return computeTractionLoad(name, forest, assembler, trac)
 
-_optimizers = ['Interior Point', 'Trust Region']
-_qn_types = ['BFGS', 'SR1', 'No Hessian approx']
-_norm_types = ['Infinity', 'L1', 'L2']
-_barrier_types = ['Monotone', 'Mehrotra', 'Complementarity fraction']
-_start_types = ['None', 'Least squares multipliers', 'Affine step']
-_bfgs_updates = ['Skip negative', 'Damped']
+def interpolateDesignVec(orig_filter, orig_vec, new_filter, new_vec):
+    """
+    This function interpolates a design vector from the original design space defined
+    on an OctForest or QuadForest and interpolates it to a new OctForest or QuadForest.
+
+    This function is used after a mesh adaptation step to get the new design space.
+
+    Args:
+        orig_filter (OctForest or QuadForest): Original filter Oct or QuadForest object
+        orig_vec (PVec): Design variables on the original mesh in a ParOpt.PVec
+        new_filter (OctForest or QuadForest): New filter Oct or QuadForest object
+        new_vec (PVec): Design variables on the new mesh in a ParOpt.PVec (set on ouput)
+    """
+
+    # Convert the PVec class to TACSBVec
+    orig_x = TMR.convertPVecToVec(orig_vec)
+    if orig_x is None:
+        raise ValueError('Original vector must be generated by TMR.TopoProblem')
+    new_x = TMR.convertPVecToVec(new_vec)
+    if new_x is None:
+        raise ValueError('New vector must be generated by TMR.TopoProblem')
+
+    if orig_x.getVarsPerNode() != new_x.getVarsPerNode():
+        raise ValueError('Number of variables per node must be consistent')
+
+    orig_varmap = orig_x.getVarMap()
+    new_varmap = new_x.getVarMap()
+    vars_per_node = orig_x.getVarsPerNode()
+
+    # Create the interpolation class
+    interp = TACS.VecInterp(orig_varmap, new_varmap, vars_per_node)
+    new_filter.createInterpolation(orig_filter, interp)
+    interp.initialize()
+
+    # Perform the interpolation
+    interp.mult(orig_x, new_x)
+
+    return
 
 class OptionData:
     def __init__(self):

@@ -23,10 +23,10 @@ class CreatorCallback:
         self.props = props
 
     def creator_callback(self, forest):
-        filter = forest.duplicate()
-        filter.coarsen()
-        creator = OctCreator(self.bcs, filter, self.props)
-        return creator, filter 
+        filtr = forest.duplicate()
+        filtr.coarsen()
+        creator = OctCreator(self.bcs, filtr, self.props)
+        return creator, filtr 
 
 def create_forest(comm, depth):
     # Load the geometry model
