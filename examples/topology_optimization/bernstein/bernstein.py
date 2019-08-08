@@ -1,3 +1,23 @@
+"""
+Bernstein-parametrized density field with thermo-elastic analysis.
+
+Recommended arguments:
+
+mpirun -np n python --max_opt_iters 25 25 25 --mg_levels 2 3 4
+
+This code performs a minimum compliance optimization with a fixed mass
+constraint using high-order plane stress elements with thermo-elastic
+analysis. The design parametrization using a one-degree lower density
+parametrization. This makes use of the "TMRConformFilter" in which the
+density parametrization is represented on the same element mesh as the
+analysis, but with a different degree polynomial. Note that there are
+multiple filters that inherit from the TMRConformFilter.
+
+The mesh is updated based on whether there is material within the element.
+If material has formed, then the element is refined, if there is almost
+not material, the element is coarsened.
+"""
+
 from __future__ import print_function
 from mpi4py import MPI
 from tmr import TMR, TopOptUtils
@@ -8,6 +28,13 @@ import argparse
 import os
 
 class QuadConformCreator(TMR.QuadConformTopoCreator):
+    """
+    This class is called to create a TACSAssembler class with an underlying
+    filter mesh that conforms with Assembler mesh. The input to the class
+    consists of the boundary conditions, the forest of quadtrees for the
+    analysis mesh, the order of the conforming filter QuadForest mesh, and
+    the type of interpolant to be used.
+    """
     def __init__(self, bcs, forest, order, interp, props=None):
         # Set the interpolation for the new filter
         TMR.QuadConformTopoCreator.__init__(bcs, forest, order, interp)
@@ -16,7 +43,15 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
         self.props = props
         
     def createElement(self, order, quadrant, index, filtr):
-        '''Create the element'''
+        """
+        Create the element for the specified quadrant
+
+        Args:
+            order (int): The order of the element
+            quadrant (TMR.Quadrant): The quadrant to be build for this element
+            index (list): The global numbers for the quadrant nodes
+            filtr (QuadForest): The QuadForest for the filter
+        """
         stiff = TMR.ThermoQuadStiffness(self.props, index, None, filtr)
         elem = elements.PSThermoelasticQuad(order, stiff)
         return elem
@@ -27,12 +62,26 @@ class CreatorCallback:
         self.props = props
 
     def creator_callback(self, forest):
+        """
+        Given the forest, instantiate a creator class that will populate a
+        TACSAssembler object with the elements. This allocates the 
+        QuadConformCreator class above and also returns the QuadForest object
+        associated with the filter. This is needed in the createTopoProblem
+        call.
+        """
         order = forest.getMeshOrder()-1
         interp = TMR.BERNSTEIN_POINTS
         creator = QuadConformCreator(self.bcs, forest, order, interp, self.props)
         return creator, creator.getFilter()
 
 def create_forest(comm, depth, htarget):
+    """
+    Create an initial forest for analysis.
+
+    This code loads in the model, sets names, meshes the geometry and creates
+    a QuadForest from the mesh. The forest is populated with quadtrees with
+    the specified depth.
+    """
     # Load the geometry model
     geo = TMR.LoadModel('biclamped_traction.stp')
 
@@ -44,10 +93,6 @@ def create_forest(comm, depth, htarget):
     edges[1].setName('fixed')
     edges[9].setName('fixed')
     edges[4].setName('traction')
-
-    # Set the boundary conditions for the problem
-    bcs = TMR.BoundaryConditions()
-    bcs.addBoundaryCondition('fixed', [0,1,2], [0.0,0.0,0.])
 
     # Create the mesh
     mesh = TMR.Mesh(comm, geo)
@@ -74,6 +119,15 @@ def create_forest(comm, depth, htarget):
     return forest
 
 def create_problem(forest, bcs, props, nlevels):
+    """
+    Create the TMRTopoProblem object and set up the topology optimization problem.
+    
+    This code is given the forest, boundary conditions, material properties and 
+    the number of multigrid levels. Based on this info, it creates the TMRTopoProblem
+    and sets up the mass-constrained compliance minimization problem. Before
+    the problem class is returned it is initialized so that it can be used for 
+    optimization.
+    """
     # Allocate the creator callback function
     obj = CreatorCallback(bcs, props)
 
