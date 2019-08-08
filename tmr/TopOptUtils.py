@@ -275,6 +275,72 @@ def interpolateDesignVec(orig_filter, orig_vec, new_filter, new_vec):
 
     return
 
+def addNaturalFrequencyConstraint(problem, omega_min, **kwargs):
+    '''
+    Add a natural frequency constraint to the topology
+    optimization problem
+
+    Args
+    problem (ParOpt.Problem): ParOpt.Problem optimization problem
+
+    omega_min (float): Minimum natural frequency, Hz
+
+    **kwargs: Frequency constraint parameters; check
+              TMR documentation for more detail
+
+    '''
+    # Convert the provided minimum natural frequency from
+    # Hz to rad/s, square it, and make it negative to fit the
+    # constraint form: omega^2 - offset >= 0.0
+    offset = -(2.0*np.pi*omega_min)**2
+    
+    # Define all the possible arguments and set defaults
+    opts = {'use_jd':True,
+            'num_eigs':10,
+            'ks_weight':50.0,
+            'sigma':-offset,
+            'scale':-0.75/offset,
+            'max_lanczos':100,
+            'tol':1e-30,
+            'eig_tol':5e-7,
+            'eig_rtol':1e-6
+            'eig_atol':1e-12
+            'num_recycle':10
+            'fgmres_size':8,
+            'max_jd_size':50,
+            'recycle_type':'num_recycling',
+            'track_eigen_iters':2}
+
+    # Apply the user defined parameters
+    if kwargs is not None:
+        for key, value in kwargs.iteritems():
+            opts[key] = value
+    
+    if opts['use_jd']:
+        # Set the recycling strategy
+        if opts['recycle_type'] == 'num_recycling':
+            recycle_type = TACS.NUM_RECYCLE
+        else:
+            recycle_type = TACS.SUM_TWO
+
+        problem.addFrequencyConstraint(opts['sigma'], opts['num_eigs'],
+                                       opts['ks_weight'], opts['offset'],
+                                       opts['scale'], opts['max_jd_size'],
+                                       opts['eig_tol'], opts['use_jd'],
+                                       opts['fgmres_size'], opts['eig_rtol'],
+                                       opts['eig_atol'], opts['num_recycle'],
+                                       opts['recycle_type'],
+                                       opts['track_eigen_iters'])
+    else: # use the Lanczos method
+        problem.addFrequencyConstraint(opts['sigma'], opts['num_eigs'],
+                                       opts['ks_weight'], opts['offset'],
+                                       opts['scale'], 
+                                       opts['max_lanczos'], opts['tol'], 0,
+                                       0, 0, 0, 0, TACS.SUM_TWO,
+                                       opts['track_eigen_iters'])
+
+    return
+
 class OptionData:
     def __init__(self):
         self.options = {}
