@@ -192,11 +192,11 @@
 
 <span class="c1"># Create the problem and filter object</span>
 <span class="n">obj</span> <span class="o">=</span> <span class="n">CreatorCallback</span><span class="p">(</span><span class="n">bcs</span><span class="p">,</span> <span class="n">props</span><span class="p">)</span>
-<span class="n">problem</span><span class="p">,</span> <span class="n">filter_obj</span> <span class="o">=</span> <span class="n">TopOptUtils</span><span class="o">.</span><span class="n">createTopoProblem</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span>
+<span class="n">problem</span> <span class="o">=</span> <span class="n">TopOptUtils</span><span class="o">.</span><span class="n">createTopoProblem</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span>
     <span class="n">obj</span><span class="o">.</span><span class="n">creator_callback</span><span class="p">,</span> <span class="n">filter_type</span><span class="p">,</span> <span class="n">nlevels</span><span class="o">=</span><span class="n">nlevels</span><span class="p">)</span>
 
 <span class="c1"># Get the assembler object we just created</span>
-<span class="n">assembler</span> <span class="o">=</span> <span class="n">filter_obj</span><span class="o">.</span><span class="n">getAssembler</span><span class="p">()</span>
+<span class="n">assembler</span> <span class="o">=</span> <span class="n">problem</span><span class="o">.</span><span class="n">getAssembler</span><span class="p">()</span>
 
 <span class="n">force1</span> <span class="o">=</span> <span class="n">TopOptUtils</span><span class="o">.</span><span class="n">compute3DTractionLoad</span><span class="p">(</span><span class="s1">&#39;surface&#39;</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
 <span class="n">force2</span> <span class="o">=</span> <span class="n">TopOptUtils</span><span class="o">.</span><span class="n">compute3DTractionLoad</span><span class="p">(</span><span class="s1">&#39;surface&#39;</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>

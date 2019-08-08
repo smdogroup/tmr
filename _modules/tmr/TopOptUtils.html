@@ -133,8 +133,7 @@
             <span class="n">order</span> <span class="o">=</span> <span class="n">order</span><span class="o">-</span><span class="mi">1</span>
             <span class="n">forest</span><span class="o">.</span><span class="n">setMeshOrder</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">interp</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">forest</span> <span class="o">=</span> <span class="n">forests</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">duplicate</span><span class="p">()</span>
-            <span class="n">forest</span><span class="o">.</span><span class="n">coarsen</span><span class="p">()</span>
+            <span class="n">forest</span> <span class="o">=</span> <span class="n">forests</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">coarsen</span><span class="p">()</span>
             <span class="n">forest</span><span class="o">.</span><span class="n">setMeshOrder</span><span class="p">(</span><span class="n">order</span><span class="p">,</span> <span class="n">interp</span><span class="p">)</span>
 
             <span class="c1"># Balance and repartition if needed</span>
