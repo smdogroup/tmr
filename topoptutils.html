@@ -71,7 +71,9 @@
             
   <div class="section" id="topology-optimization-utilities">
 <h1>Topology Optimization Utilities<a class="headerlink" href="#topology-optimization-utilities" title="Permalink to this headline">¶</a></h1>
-<p>TMR implements the class <code class="xref py py-class docutils literal notranslate"><span class="pre">TopoProblem</span></code> which is designed for topology optimization with ParOpt.</p>
+<p>TMR implements the class <a class="reference internal" href="#tmr.TMR.TopoProblem" title="tmr.TMR.TopoProblem"><code class="xref py py-class docutils literal notranslate"><span class="pre">TopoProblem</span></code></a> which is designed for topology optimization with ParOpt.
+This class can be set up to contain information about how to evaluate the objective function and constraints using a TACS.Assembler object.
+The adjoint derivative calculations for all members are implemented within the code.</p>
 <ul>
 <li><dl class="class">
 <dt id="tmr.TMR.TopoProblem">
@@ -84,14 +86,199 @@
 </dd></dl>
 
 <dl class="method">
+<dt id="tmr.TMR.TopoProblem.addConstraints">
+<code class="sig-name descname">addConstraints</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">case</em>, <em class="sig-param">funcs</em>, <em class="sig-param">offset</em>, <em class="sig-param">scale</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.addConstraints" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a list of constraints for the specified load case. The constraints
+are specified as follows:</p>
+<p>scale[i]*(funcs[i] + offset[i]) &gt;= 0</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>case</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Load case index to apply the constraints</p></li>
+<li><p><strong>funcs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of TACS.Function instances</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of floats specifying the constraint offset</p></li>
+<li><p><strong>scale</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of scale value offsets</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt id="tmr.TMR.TopoProblem.addFrequencyConstraint">
 <code class="sig-name descname">addFrequencyConstraint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.addFrequencyConstraint" title="Permalink to this definition">¶</a></dt>
 <dd><p>Add buckling/natural frequency constraints</p>
 </dd></dl>
 
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.addLinearConstraints">
+<code class="sig-name descname">addLinearConstraints</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">vecs</em>, <em class="sig-param">offset</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.addLinearConstraints" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a set of load-case independent linear constraints represented
+by the provided vectors. The constraints are imposed as:</p>
+<p>dot(vecs[i], x) + offset[i] &gt;= 0.0</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>vecs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of ParOpt.PVec instances</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of offsets for the constraints</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.addStressConstraint">
+<code class="sig-name descname">addStressConstraint</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">case</em>, <em class="sig-param">sc</em>, <em class="sig-param">offset=1.0</em>, <em class="sig-param">scale=1.0</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.addStressConstraint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a stress constraint formulated with stress reconstruction.</p>
+<p>scale*(sc + offset) &gt;= 0</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>case</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Load case index</p></li>
+<li><p><strong>sc</strong> (<em>StressConstraint</em>) – Stress constraint instance</p></li>
+<li><p><strong>offset</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Constraint offset</p></li>
+<li><p><strong>scale</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Constraint scaling</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.getNumLoadCases">
+<code class="sig-name descname">getNumLoadCases</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.getNumLoadCases" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the number of load cases set in the optimization problem</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The number of load cases</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)">int</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.initialize">
+<code class="sig-name descname">initialize</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Initialize the topology optimization instance. The optimization
+problem cannot be solved before this call. After this call, no
+more constraints can be added and the design problem is considered
+fixed.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.setF5EigenOutputFlags">
+<code class="sig-name descname">setF5EigenOutputFlags</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">freq</em>, <em class="sig-param">elem_type</em>, <em class="sig-param">flag</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.setF5EigenOutputFlags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the output frequency and data for generating an .f5 file for eigenvector
+visualization. The elem_type and flag arguments dictate the type of data
+to be written to the .f5 file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>freq</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Optimization iteration frequency to write the file</p></li>
+<li><p><strong>elem_type</strong> (<em>ElementType</em>) – TACS element type</p></li>
+<li><p><strong>flag</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Flag indicating the type of element data to write</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.setF5OutputFlags">
+<code class="sig-name descname">setF5OutputFlags</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">freq</em>, <em class="sig-param">elem_type</em>, <em class="sig-param">flag</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.setF5OutputFlags" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the output frequency and data for generating an .f5 file for solution
+visualization. The elem_type and flag arguments dictate the type of data
+to be written to the .f5 file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>freq</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Optimization iteration frequency to write the file</p></li>
+<li><p><strong>elem_type</strong> (<em>ElementType</em>) – TACS element type</p></li>
+<li><p><strong>flag</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Flag indicating the type of element data to write</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.setInitDesignVars">
+<code class="sig-name descname">setInitDesignVars</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">pvec</em>, <em class="sig-param">lbvec</em>, <em class="sig-param">ubvec</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.setInitDesignVars" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the initial design variables and lower and upper bounds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pvec</strong> (<em>PVec</em>) – ParOpt.PVec class storing the initial design vector</p></li>
+<li><p><strong>lbvec</strong> (<em>PVec</em>) – ParOpt.PVec class storing the lower bound vector</p></li>
+<li><p><strong>ubvec</strong> (<em>PVec</em>) – ParOpt.PVec class storing the upper bound vector</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.setIterationCounter">
+<code class="sig-name descname">setIterationCounter</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">count</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.setIterationCounter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set an offset for the iteration counter. All iteration counts will
+start from the provided value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>count</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Iteration counter offset &gt;= 0</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.setLoadCases">
+<code class="sig-name descname">setLoadCases</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">forces</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.setLoadCases" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the load cases to use within the optimization problem.
+The input list of forces is used as a vector of right-hand-sides
+within the TopoProblem solution method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>forces</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – A list of TACS.Vec vector instances</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.setObjective">
+<code class="sig-name descname">setObjective</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">weights</em>, <em class="sig-param">funcs=None</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.setObjective" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the objective function for the design problem.</p>
+<p>If no list of functions is provided, the weighted compliance is
+assumed to be the objective. Otherwise a weighted sum of the functions
+evaluaed for each load case is used. Note that if a weight is set to
+zero, then the function and its gradient are not evaluated.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>weights</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of weights on the compliance or function</p></li>
+<li><p><strong>funcs</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – Optional list of TACS.Function instances</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.setPrefix">
+<code class="sig-name descname">setPrefix</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">_prefix</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.setPrefix" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the file prefix for output generated by TopoProblem.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>_prefix</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – File name prefix</p>
+</dd>
+</dl>
+</dd></dl>
+
 </dd></dl>
 
 </li>
+</ul>
+<p>While you can create the <a class="reference internal" href="#tmr.TMR.TopoProblem" title="tmr.TMR.TopoProblem"><code class="xref py py-class docutils literal notranslate"><span class="pre">TopoProblem</span></code></a> from scratch, there are several utilities that can assist you with the creation of this object.
+<a class="reference internal" href="#tmr.TopOptUtils.createTopoProblem" title="tmr.TopOptUtils.createTopoProblem"><code class="xref py py-meth docutils literal notranslate"><span class="pre">createTopoProblem()</span></code></a> generates a problem class with a specified hierarchy of octree or quadtree meshes.
+The construction of the finite-element discretization and the topology parametrization are problem-specific, so these are generated through a callback.
+Several additional helper functions are implemented to enable the creation of load vectors: <a class="reference internal" href="#tmr.TopOptUtils.computeVertexLoad" title="tmr.TopOptUtils.computeVertexLoad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">computeVertexLoad()</span></code></a> creates a load vector from forces at named vertices,
+<a class="reference internal" href="#tmr.TopOptUtils.computeTractionLoad" title="tmr.TopOptUtils.computeTractionLoad"><code class="xref py py-meth docutils literal notranslate"><span class="pre">computeTractionLoad()</span></code></a> creates a load vector based on traction on named edges or faces.
+<a class="reference internal" href="#tmr.TopOptUtils.interpolateDesignVec" title="tmr.TopOptUtils.interpolateDesignVec"><code class="xref py py-meth docutils literal notranslate"><span class="pre">interpolateDesignVec()</span></code></a> interpolates between design vectors after a refinement step.</p>
+<ul>
 <li><span class="target" id="module-tmr.TopOptUtils"></span><dl class="function">
 <dt id="tmr.TopOptUtils.createTopoProblem">
 <code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">createTopoProblem</code><span class="sig-paren">(</span><em class="sig-param">forest</em>, <em class="sig-param">callback</em>, <em class="sig-param">filter_type</em>, <em class="sig-param">nlevels=2</em>, <em class="sig-param">repartition=True</em>, <em class="sig-param">design_vars_per_node=1</em>, <em class="sig-param">s=2.0</em>, <em class="sig-param">N=10</em>, <em class="sig-param">r0=0.05</em>, <em class="sig-param">lowest_order=2</em>, <em class="sig-param">ordering=5</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#createTopoProblem"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.createTopoProblem" title="Permalink to this definition">¶</a></dt>
@@ -144,7 +331,7 @@ variables per node in the assembler object.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
-<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>forest</strong> (<em>QuadForest</em><em> or </em><em>OctForest</em>) – Forest for the finite-element mesh</p></li>
 <li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
 <li><p><strong>point_force</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of point forces to apply at the vertices</p></li>
 </ul>
@@ -171,7 +358,7 @@ the local face or edge index touching the surface or edge in the info member.</p
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
-<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>forest</strong> (<em>QuadForest</em><em> or </em><em>OctForest</em>) – Forest for the finite-element mesh</p></li>
 <li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
 <li><p><strong>trac</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of tractions, one for each possible face/edge orientation</p></li>
 </ul>
@@ -193,7 +380,7 @@ the given name.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>forest</strong> (<em>QuadForest</em><em> or </em><em>OctForest</em>) – Forest for the finite-element mesh</p></li>
 <li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
 <li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
 <li><p><strong>tr</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – The 3D components of the traction.</p></li>
@@ -217,9 +404,9 @@ on an OctForest or QuadForest and interpolates it to a new OctForest or QuadFore
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>orig_filter</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a>) – Original filter Oct or QuadForest object</p></li>
+<li><p><strong>orig_filter</strong> (<em>OctForest</em><em> or </em><em>QuadForest</em>) – Original filter Oct or QuadForest object</p></li>
 <li><p><strong>orig_vec</strong> (<em>PVec</em>) – Design variables on the original mesh in a ParOpt.PVec</p></li>
-<li><p><strong>new_filter</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a>) – New filter Oct or QuadForest object</p></li>
+<li><p><strong>new_filter</strong> (<em>OctForest</em><em> or </em><em>QuadForest</em>) – New filter Oct or QuadForest object</p></li>
 <li><p><strong>new_vec</strong> (<em>PVec</em>) – Design variables on the new mesh in a ParOpt.PVec (set on ouput)</p></li>
 </ul>
 </dd>
@@ -245,6 +432,24 @@ or TrustRegion optimization problems</p>
 </dl>
 </dd></dl>
 
+</dd></dl>
+
+</li>
+<li><dl class="function">
+<dt id="tmr.TMR.convertPVecToVec">
+<code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">convertPVecToVec</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">pvec</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.convertPVecToVec" title="Permalink to this definition">¶</a></dt>
+<dd><p>Converts a ParOpt.PVec class to a TACS.Vec class.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>pvec</strong> (<em>PVec</em>) – A vector generated by TopoProblem</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A TACS.Vec instance</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Vec</p>
+</dd>
+</dl>
 </dd></dl>
 
 </li>

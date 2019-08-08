@@ -56,6 +56,15 @@
 <span class="kn">from</span> <span class="nn">paropt</span> <span class="k">import</span> <span class="n">ParOpt</span>
 <span class="kn">from</span> <span class="nn">six</span> <span class="k">import</span> <span class="n">iteritems</span>
 
+<span class="c1"># Options for the TopologyOptimizer class</span>
+<span class="n">_optimizers</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Interior Point&#39;</span><span class="p">,</span> <span class="s1">&#39;Trust Region&#39;</span><span class="p">]</span>
+<span class="n">_qn_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;BFGS&#39;</span><span class="p">,</span> <span class="s1">&#39;SR1&#39;</span><span class="p">,</span> <span class="s1">&#39;No Hessian approx&#39;</span><span class="p">]</span>
+<span class="n">_norm_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Infinity&#39;</span><span class="p">,</span> <span class="s1">&#39;L1&#39;</span><span class="p">,</span> <span class="s1">&#39;L2&#39;</span><span class="p">]</span>
+<span class="n">_barrier_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Monotone&#39;</span><span class="p">,</span> <span class="s1">&#39;Mehrotra&#39;</span><span class="p">,</span> <span class="s1">&#39;Complementarity fraction&#39;</span><span class="p">]</span>
+<span class="n">_start_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;None&#39;</span><span class="p">,</span> <span class="s1">&#39;Least squares multipliers&#39;</span><span class="p">,</span> <span class="s1">&#39;Affine step&#39;</span><span class="p">]</span>
+<span class="n">_bfgs_updates</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Skip negative&#39;</span><span class="p">,</span> <span class="s1">&#39;Damped&#39;</span><span class="p">]</span>
+
+
 <div class="viewcode-block" id="createTopoProblem"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.createTopoProblem">[docs]</a><span class="k">def</span> <span class="nf">createTopoProblem</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">callback</span><span class="p">,</span> <span class="n">filter_type</span><span class="p">,</span> <span class="n">nlevels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
                       <span class="n">repartition</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">design_vars_per_node</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
                       <span class="n">s</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">r0</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">lowest_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
@@ -319,13 +328,6 @@
     <span class="n">interp</span><span class="o">.</span><span class="n">mult</span><span class="p">(</span><span class="n">orig_x</span><span class="p">,</span> <span class="n">new_x</span><span class="p">)</span>
 
     <span class="k">return</span></div>
-
-<span class="n">_optimizers</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Interior Point&#39;</span><span class="p">,</span> <span class="s1">&#39;Trust Region&#39;</span><span class="p">]</span>
-<span class="n">_qn_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;BFGS&#39;</span><span class="p">,</span> <span class="s1">&#39;SR1&#39;</span><span class="p">,</span> <span class="s1">&#39;No Hessian approx&#39;</span><span class="p">]</span>
-<span class="n">_norm_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Infinity&#39;</span><span class="p">,</span> <span class="s1">&#39;L1&#39;</span><span class="p">,</span> <span class="s1">&#39;L2&#39;</span><span class="p">]</span>
-<span class="n">_barrier_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Monotone&#39;</span><span class="p">,</span> <span class="s1">&#39;Mehrotra&#39;</span><span class="p">,</span> <span class="s1">&#39;Complementarity fraction&#39;</span><span class="p">]</span>
-<span class="n">_start_types</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;None&#39;</span><span class="p">,</span> <span class="s1">&#39;Least squares multipliers&#39;</span><span class="p">,</span> <span class="s1">&#39;Affine step&#39;</span><span class="p">]</span>
-<span class="n">_bfgs_updates</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Skip negative&#39;</span><span class="p">,</span> <span class="s1">&#39;Damped&#39;</span><span class="p">]</span>
 
 <span class="k">class</span> <span class="nc">OptionData</span><span class="p">:</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
