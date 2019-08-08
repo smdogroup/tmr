@@ -124,11 +124,11 @@ Cantilever topology optimization
 
     # Create the problem and filter object
     obj = CreatorCallback(bcs, props)
-    problem, filter_obj = TopOptUtils.createTopoProblem(forest,
+    problem = TopOptUtils.createTopoProblem(forest,
         obj.creator_callback, filter_type, nlevels=nlevels)
 
     # Get the assembler object we just created
-    assembler = filter_obj.getAssembler()
+    assembler = problem.getAssembler()
 
     force1 = TopOptUtils.compute3DTractionLoad('surface', forest, assembler, [1, 1, 1])
     force2 = TopOptUtils.compute3DTractionLoad('surface', forest, assembler, [0, 0, 1])

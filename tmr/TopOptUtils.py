@@ -81,8 +81,7 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
             order = order-1
             forest.setMeshOrder(order, interp)
         else:
-            forest = forests[-1].duplicate()
-            forest.coarsen()
+            forest = forests[-1].coarsen()
             forest.setMeshOrder(order, interp)
 
             # Balance and repartition if needed

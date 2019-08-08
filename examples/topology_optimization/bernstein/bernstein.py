@@ -73,6 +73,54 @@ def create_forest(comm, depth, htarget):
 
     return forest
 
+def create_problem(forest, bcs, props, nlevels):
+    # Allocate the creator callback function
+    obj = CreatorCallback(bcs, props)
+
+    # Create a conforming filter
+    filter_type = 'conform'
+
+    # Create the problem and filter object
+    problem = TopOptUtils.createTopoProblem(forest,
+        obj.creator_callback, filter_type, nlevels=nlevels, lowest_order=3,
+        design_vars_per_node=design_vars_per_node)
+
+    # Get the assembler object we just created
+    assembler = problem.getAssembler()
+
+    # Set the constraint type
+    funcs = [functions.StructuralMass(assembler)]
+
+    # Create the traction objects that will be used later..
+    T = 2.5e6
+    tx = np.zeros(args.order)
+    ty = T*np.ones(args.order)
+
+    thermal_tractions = []
+    for findex in range(4):
+        thermal_tractions.append(elements.PSThermoQuadTraction(findex, tx, ty))
+
+    # Allocate a thermal traction boundary condition
+    force1 = TopOptUtils.computeTractionLoad('traction', forest, assembler,
+        thermal_tractions)
+
+    # Set the load cases
+    problem.setLoadCases([force1])
+
+    # Set the mass constraint
+    # (m_fixed - m(x))/m_fixed >= 0.0
+    problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
+    problem.setObjective(obj_array, [functions.Compliance(assembler)])
+
+    # Initialize the problem and set the prefix
+    problem.initialize()
+
+    # Set the output file name
+    flag = (TACS.ToFH5.NODES | TACS.ToFH5.DISPLACEMENTS | TACS.ToFH5.EXTRAS)
+    problem.setF5OutputFlags(5, TACS.PY_PLANE_STRESS, flag)
+
+    return problem
+
 # Set the optimization parameters
 optimization_options = {
     # Parameters for the trust region method
@@ -157,15 +205,6 @@ props = TMR.QuadStiffnessProperties(rho, E, nu, _aT=aT, _kcond=kcond,
                                     q=args.q_penalty, qtemp=0.0,
                                     qcond=0.0)
 
-# Create the traction objects that will be used later..
-T = 2.5e6
-tx = np.zeros(args.order)
-ty = T*np.ones(args.order)
-
-thermal_tractions = []
-for findex in range(4):
-    thermal_tractions.append(elements.PSThermoQuadTraction(findex, tx, ty))
-
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
 bcs.addBoundaryCondition('fixed', [0,1,2], [0.0,0.0,0.])
@@ -177,55 +216,17 @@ t0 = MPI.Wtime()
 forest = create_forest(comm, args.init_depth, args.htarget)
 forest.setMeshOrder(args.order, TMR.GAUSS_LOBATTO_POINTS)
 
-# Allocate the creator callback function
-obj = CreatorCallback(bcs, props)
-
-# Create a conforming filter
-filter_type = 'conform'
-
 # Set the original filter to NULL
 orig_filter = None
 xopt = None
 
 for step in range(max_iterations):
-    # Create the TACSAssembler and TMRTopoProblem instance
+    # Create the TMRTopoProblem instance
     nlevels = mg_levels[step]
-
-    # Create the problem and filter object
-    problem = TopOptUtils.createTopoProblem(forest,
-        obj.creator_callback, filter_type, nlevels=nlevels, lowest_order=3,
-        design_vars_per_node=design_vars_per_node)
-
-    # -----------------------------------------------------------------------
-    # Get the assembler object we just created
-    assembler = problem.getAssembler()
-
-    # Set the constraint type
-    funcs = [functions.StructuralMass(assembler)]
-
-    # Allocate a thermal traction boundary condition
-    force1 = TopOptUtils.computeTractionLoad('traction', forest, assembler,
-        thermal_tractions)
-    
-    # Set the load cases
-    problem.setLoadCases([force1])
-
-    # Set the mass constraint
-    # (m_fixed - m(x))/m_fixed >= 0.0    
-    problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
-    problem.setObjective(obj_array, [functions.Compliance(assembler)])
-    
-    # Initialize the problem and set the prefix
-    problem.initialize()
+    problem = create_problem(forest, bcs, props, nlevels)
     problem.setPrefix(args.prefix)
 
-    # Set the output file name
-    flag = (TACS.ToFH5.NODES | TACS.ToFH5.DISPLACEMENTS | TACS.ToFH5.EXTRAS)
-    problem.setF5OutputFlags(5, TACS.PY_PLANE_STRESS, flag)
-
-    # Set the max number of iterations
-    optimization_options['maxiter'] = args.max_opt_iters[step]
-    # -----------------------------------------------------------------------
+    # Extract the filter to interpolate design variables
     filtr = problem.getFilter()
 
     if orig_filter is not None:
@@ -237,11 +238,15 @@ for step in range(max_iterations):
     # Set the new original filter
     orig_filter = filtr
 
+    # Set the max number of iterations
+    optimization_options['maxiter'] = args.max_opt_iters[step]
+
     # Optimize the problem
     opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
     xopt = opt.optimize()
 
     # Create refinement array
+    assembler = problem.getAssembler()
     num_elems = assembler.getNumElements()
     refine = np.zeros(num_elems, dtype=np.int32)
 
