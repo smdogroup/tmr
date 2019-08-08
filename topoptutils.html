@@ -143,6 +143,35 @@ by the provided vectors. The constraints are imposed as:</p>
 </dd></dl>
 
 <dl class="method">
+<dt id="tmr.TMR.TopoProblem.getAssembler">
+<code class="sig-name descname">getAssembler</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.getAssembler" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the Assembler object associated with the finest finite-element mesh</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The finest Assembler ojbect</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>Assembler</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="tmr.TMR.TopoProblem.getFilter">
+<code class="sig-name descname">getFilter</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.getFilter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the OctForest or QuadForest object associated with the finest
+topology opt discretization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The forest associated with the finest mesh</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest">OctForest</a> or <a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest">QuadForest</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
 <dt id="tmr.TMR.TopoProblem.getNumLoadCases">
 <code class="sig-name descname">getNumLoadCases</code><span class="sig-paren">(</span><em class="sig-param">self</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.TopoProblem.getNumLoadCases" title="Permalink to this definition">¶</a></dt>
 <dd><p>Get the number of load cases set in the optimization problem</p>
@@ -312,8 +341,7 @@ returns the filter and the associated creator class</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
-<dd class="field-even"><p>The allocated topology optimization problem
-filter (QuadForest or OctForest): The</p>
+<dd class="field-even"><p>The allocated topology optimization problem</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>problem (<a class="reference internal" href="#tmr.TMR.TopoProblem" title="tmr.TMR.TopoProblem">TopoProblem</a>)</p>
@@ -331,7 +359,7 @@ variables per node in the assembler object.</p>
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
-<li><p><strong>forest</strong> (<em>QuadForest</em><em> or </em><em>OctForest</em>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
 <li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
 <li><p><strong>point_force</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of point forces to apply at the vertices</p></li>
 </ul>
@@ -358,7 +386,7 @@ the local face or edge index touching the surface or edge in the info member.</p
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
-<li><p><strong>forest</strong> (<em>QuadForest</em><em> or </em><em>OctForest</em>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
 <li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
 <li><p><strong>trac</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – List of tractions, one for each possible face/edge orientation</p></li>
 </ul>
@@ -380,7 +408,7 @@ the given name.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>forest</strong> (<em>QuadForest</em><em> or </em><em>OctForest</em>) – Forest for the finite-element mesh</p></li>
+<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – Forest for the finite-element mesh</p></li>
 <li><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Name of the surface where the traction will be added</p></li>
 <li><p><strong>assembler</strong> (<em>Assembler</em>) – TACSAssembler object for the finite-element problem</p></li>
 <li><p><strong>tr</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a>) – The 3D components of the traction.</p></li>
@@ -404,9 +432,9 @@ on an OctForest or QuadForest and interpolates it to a new OctForest or QuadFore
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>orig_filter</strong> (<em>OctForest</em><em> or </em><em>QuadForest</em>) – Original filter Oct or QuadForest object</p></li>
+<li><p><strong>orig_filter</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a>) – Original filter Oct or QuadForest object</p></li>
 <li><p><strong>orig_vec</strong> (<em>PVec</em>) – Design variables on the original mesh in a ParOpt.PVec</p></li>
-<li><p><strong>new_filter</strong> (<em>OctForest</em><em> or </em><em>QuadForest</em>) – New filter Oct or QuadForest object</p></li>
+<li><p><strong>new_filter</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a>) – New filter Oct or QuadForest object</p></li>
 <li><p><strong>new_vec</strong> (<em>PVec</em>) – Design variables on the new mesh in a ParOpt.PVec (set on ouput)</p></li>
 </ul>
 </dd>
@@ -437,7 +465,7 @@ or TrustRegion optimization problems</p>
 </li>
 <li><dl class="function">
 <dt id="tmr.TMR.convertPVecToVec">
-<code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">convertPVecToVec</code><span class="sig-paren">(</span><em class="sig-param">self</em>, <em class="sig-param">pvec</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.convertPVecToVec" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">tmr.TMR.</code><code class="sig-name descname">convertPVecToVec</code><span class="sig-paren">(</span><em class="sig-param">pvec</em><span class="sig-paren">)</span><a class="headerlink" href="#tmr.TMR.convertPVecToVec" title="Permalink to this definition">¶</a></dt>
 <dd><p>Converts a ParOpt.PVec class to a TACS.Vec class.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>

@@ -101,7 +101,6 @@
 
 <span class="sd">    Returns:</span>
 <span class="sd">        problem (TopoProblem): The allocated topology optimization problem</span>
-<span class="sd">        filter (QuadForest or OctForest): The</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     
     <span class="c1"># Store data</span>
@@ -174,7 +173,7 @@
 
     <span class="n">problem</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">TopoProblem</span><span class="p">(</span><span class="n">filter_obj</span><span class="p">,</span> <span class="n">mg</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">problem</span><span class="p">,</span> <span class="n">filter_obj</span></div>
+    <span class="k">return</span> <span class="n">problem</span></div>
 
 <div class="viewcode-block" id="computeVertexLoad"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.computeVertexLoad">[docs]</a><span class="k">def</span> <span class="nf">computeVertexLoad</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="n">point_force</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
@@ -513,8 +512,6 @@
                                 <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region penalty parameter value&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_penalty_gamma_max&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e4</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
                                 <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Trust region maximum penalty parameter value&#39;</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_max_iterations&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
-                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Maximum trust region iterations&#39;</span><span class="p">)</span>
 
         <span class="c1"># Trust region convergence tolerances</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;tr_infeas_tol&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e-5</span><span class="p">,</span> <span class="n">lower</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
@@ -585,7 +582,7 @@
 
             <span class="c1"># Set the penalty parameter</span>
             <span class="n">tr</span><span class="o">.</span><span class="n">setPenaltyGammaMax</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_penalty_gamma_max&#39;</span><span class="p">])</span>
-            <span class="n">tr</span><span class="o">.</span><span class="n">setMaxTrustRegionIterations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_max_iterations&#39;</span><span class="p">])</span>
+            <span class="n">tr</span><span class="o">.</span><span class="n">setMaxTrustRegionIterations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;maxiter&#39;</span><span class="p">])</span>
 
             <span class="c1"># Trust region convergence tolerances</span>
             <span class="n">infeas_tol</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tr_infeas_tol&#39;</span><span class="p">]</span>
@@ -604,11 +601,10 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="c1"># Create the ParOpt object with the interior point method</span>
             <span class="n">opt</span> <span class="o">=</span> <span class="n">ParOpt</span><span class="o">.</span><span class="n">InteriorPoint</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">max_qn_subspace</span><span class="p">,</span> <span class="n">qn_type</span><span class="p">)</span>
+            <span class="n">opt</span><span class="o">.</span><span class="n">setMaxMajorIterations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;maxiter&#39;</span><span class="p">])</span>
 
         <span class="c1"># Apply the options to ParOpt</span>
-        <span class="c1"># Currently incomplete</span>
         <span class="n">opt</span><span class="o">.</span><span class="n">setAbsOptimalityTol</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;tol&#39;</span><span class="p">])</span>
-        <span class="n">opt</span><span class="o">.</span><span class="n">setMaxMajorIterations</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;maxiter&#39;</span><span class="p">])</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;dh&#39;</span><span class="p">]:</span>
             <span class="n">opt</span><span class="o">.</span><span class="n">checkGradients</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;dh&#39;</span><span class="p">])</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="p">[</span><span class="s1">&#39;norm_type&#39;</span><span class="p">]:</span>
