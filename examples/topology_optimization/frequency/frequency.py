@@ -172,6 +172,10 @@ flag = (TACS.ToFH5.NODES |
 # Set the values of the objective array
 obj_array = [ 1.0e2 ]
 
+# Set the original filter to NULL
+orig_filter = None
+xopt = None
+
 # Start the optimization
 for step in range(max_iterations):
     nlevs = mg_levels[step]
@@ -183,11 +187,14 @@ for step in range(max_iterations):
     filter_type = 'conform'
 
     # Create the problem and filter objects
-    problem, filter_obj = TopOptUtils.createTopoProblem(forest,
-                                                        obj.creator_callback, filter_type, nlevels=nlevels, lowest_order=2)
+    problem = TopOptUtils.createTopoProblem(forest,
+                                            obj.creator_callback, filter_type, nlevels=nlevels, lowest_order=2)
+    
+    # Extract the filter to interpolate design variables
+    filtr = problem.getFilter()
 
     # Get the assembler object we just created
-    assembler = filter_obj.getAssembler()
+    assembler = problem.getAssembler()
 
     # Create the load vectors, combine them, and set them
     T = 1e3
@@ -215,25 +222,24 @@ for step in range(max_iterations):
     problem.initialize()
     problem.setPrefix(args.prefix)
 
-    optimization_options[maxiter] = args.max_opt_iters[step]
-
     problem.setIterationCounter(sum(args.max_opt_iters[:step]))
 
-    if orig_filter:
+    if orig_filter is not None:
         # Create one of the new design vectors
         x = problem.createDesignVec()
         TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
         problem.setInitDesignVars(x)
 
+    # Set the new original filter
+    orig_filter = filtr
+
+    # Set the max number of iterations
+    optimization_options['maxiter'] = args.max_opt_iters[step]
+    
     # Optimize the problem
     opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
     xopt = opt.optimize()
- 
-    # Set the old filter/variable map for the next time through the
-    # loop so that we can interpolate design variable values
-    old_varmap = varmap
-    old_filtr = filtr
-
+    
     # Create refinement array
     num_elems = assembler.getNumElements()
     refine = np.zeros(num_elems, dtype=np.int32)
