@@ -54,6 +54,7 @@
 <span class="kn">from</span> <span class="nn">tacs</span> <span class="k">import</span> <span class="n">TACS</span><span class="p">,</span> <span class="n">elements</span>
 <span class="kn">from</span> <span class="nn">tmr</span> <span class="k">import</span> <span class="n">TMR</span>
 <span class="kn">from</span> <span class="nn">paropt</span> <span class="k">import</span> <span class="n">ParOpt</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">from</span> <span class="nn">six</span> <span class="k">import</span> <span class="n">iteritems</span>
 
 <span class="c1"># Options for the TopologyOptimizer class</span>
@@ -68,15 +69,16 @@
 <div class="viewcode-block" id="createTopoProblem"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.createTopoProblem">[docs]</a><span class="k">def</span> <span class="nf">createTopoProblem</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">callback</span><span class="p">,</span> <span class="n">filter_type</span><span class="p">,</span> <span class="n">nlevels</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
                       <span class="n">repartition</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">design_vars_per_node</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
                       <span class="n">s</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">N</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">r0</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">lowest_order</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
-                      <span class="n">ordering</span><span class="o">=</span><span class="n">TACS</span><span class="o">.</span><span class="n">PY_MULTICOLOR_ORDER</span><span class="p">):</span>
+                      <span class="n">ordering</span><span class="o">=</span><span class="n">TACS</span><span class="o">.</span><span class="n">PY_MULTICOLOR_ORDER</span><span class="p">,</span>
+                      <span class="n">scale_coordinate_factor</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Create a topology optimization problem instance and a hierarchy of meshes.</span>
-<span class="sd">    This code takes in the OctForest or QuadForest on the finest mesh level </span>
+<span class="sd">    This code takes in the OctForest or QuadForest on the finest mesh level</span>
 <span class="sd">    and creates a series of coarser meshes for analysis and optimization.</span>
-<span class="sd">    The discretization at each level is created via a callback function that </span>
+<span class="sd">    The discretization at each level is created via a callback function that</span>
 <span class="sd">    generates the appropriate TACSCreator object and its associated filter (the</span>
 <span class="sd">    QuadForest or OctForest on which the design parametrization is defined.)</span>
-<span class="sd">    The code then creates a TMRTopoFilter class which stores information about </span>
+<span class="sd">    The code then creates a TMRTopoFilter class which stores information about</span>
 <span class="sd">    the design parametrization and hierarchy. It creates a multigrid object and</span>
 <span class="sd">    finally a TMRTopoProblem instance for optimization.</span>
 
@@ -87,7 +89,7 @@
 <span class="sd">    creator, filter = callback(forest)</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        callback: A callback function that takes in the forest and </span>
+<span class="sd">        callback: A callback function that takes in the forest and</span>
 <span class="sd">                  returns the filter and the associated creator class</span>
 <span class="sd">        filter_type (str): Type of filter to create</span>
 <span class="sd">        forest (TMROctForest or TMRQuadForest): Forest type</span>
@@ -98,11 +100,12 @@
 <span class="sd">        r0 (float): Helmholtz filter radius</span>
 <span class="sd">        lowest_order (int): Lowest order mesh to create</span>
 <span class="sd">        ordering: TACS Assembler ordering type</span>
+<span class="sd">        scale_coordinate_factor (float): Scale all coordinates by this factor</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        problem (TopoProblem): The allocated topology optimization problem</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    
+
     <span class="c1"># Store data</span>
     <span class="n">forests</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">filters</span> <span class="o">=</span> <span class="p">[]</span>
@@ -120,7 +123,7 @@
     <span class="n">forests</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">forest</span><span class="p">)</span>
     <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filtr</span><span class="p">)</span>
     <span class="n">assemblers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">createTACS</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">ordering</span><span class="p">))</span>
-    
+
     <span class="k">if</span> <span class="n">filter_type</span> <span class="o">==</span> <span class="s1">&#39;lagrange&#39;</span><span class="p">:</span>
         <span class="n">varmaps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">getMap</span><span class="p">())</span>
         <span class="n">vecindices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">getIndices</span><span class="p">())</span>
@@ -146,10 +149,18 @@
         <span class="n">forests</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">forest</span><span class="p">)</span>
         <span class="n">filters</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filtr</span><span class="p">)</span>
         <span class="n">assemblers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">createTACS</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">ordering</span><span class="p">))</span>
-        
+
         <span class="k">if</span> <span class="n">filter_type</span> <span class="o">==</span> <span class="s1">&#39;lagrange&#39;</span><span class="p">:</span>
             <span class="n">varmaps</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">getMap</span><span class="p">())</span>
             <span class="n">vecindices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">creator</span><span class="o">.</span><span class="n">getIndices</span><span class="p">())</span>
+
+    <span class="c1"># Scale the coordinates by scale_coordinates factor if it is != 1.0</span>
+    <span class="k">if</span> <span class="n">scale_coordinate_factor</span> <span class="o">!=</span> <span class="mf">1.0</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">assembler</span> <span class="ow">in</span> <span class="n">assemblers</span><span class="p">:</span>
+            <span class="n">X</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">createNodeVec</span><span class="p">()</span>
+            <span class="n">assembler</span><span class="o">.</span><span class="n">getNodes</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+            <span class="n">X</span><span class="o">.</span><span class="n">scale</span><span class="p">(</span><span class="n">scale_coordinate_factor</span><span class="p">)</span>
+            <span class="n">assembler</span><span class="o">.</span><span class="n">setNodes</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
 
     <span class="c1"># Create the multigrid object</span>
     <span class="n">mg</span> <span class="o">=</span> <span class="n">TMR</span><span class="o">.</span><span class="n">createMg</span><span class="p">(</span><span class="n">assemblers</span><span class="p">,</span> <span class="n">forests</span><span class="p">)</span>
@@ -204,20 +215,23 @@
 
     <span class="n">comm</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">getMPIComm</span><span class="p">()</span>
     <span class="n">node_range</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getNodeRange</span><span class="p">()</span>
-    
+
     <span class="c1"># Add the point force into the force arrays</span>
     <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">nodes</span><span class="p">:</span>
-        <span class="k">if</span> <span class="p">((</span><span class="n">node</span> <span class="o">&gt;=</span> <span class="n">node_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="p">])</span> <span class="ow">and</span> <span class="p">(</span><span class="n">node</span> <span class="o">&lt;</span> <span class="n">node_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="o">+</span><span class="mi">1</span><span class="p">])):</span> 
+        <span class="k">if</span> <span class="p">((</span><span class="n">node</span> <span class="o">&gt;=</span> <span class="n">node_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="p">])</span> <span class="ow">and</span> <span class="p">(</span><span class="n">node</span> <span class="o">&lt;</span> <span class="n">node_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="o">+</span><span class="mi">1</span><span class="p">])):</span>
             <span class="n">index</span> <span class="o">=</span> <span class="n">node</span> <span class="o">-</span> <span class="n">node_range</span><span class="p">[</span><span class="n">comm</span><span class="o">.</span><span class="n">rank</span><span class="p">]</span>
             <span class="n">force_array</span><span class="p">[</span><span class="n">vars_per_node</span><span class="o">*</span><span class="n">index</span><span class="p">:</span><span class="n">vars_per_node</span><span class="o">*</span><span class="p">(</span><span class="n">index</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span> <span class="o">+=</span> <span class="n">point_force</span><span class="p">[:]</span>
-            
+
+    <span class="c1"># Match the ordering of the vector</span>
+    <span class="n">assembler</span><span class="o">.</span><span class="n">reorderVec</span><span class="p">(</span><span class="n">force</span><span class="p">)</span>
+
     <span class="k">return</span> <span class="n">force</span></div>
 
 <div class="viewcode-block" id="computeTractionLoad"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.computeTractionLoad">[docs]</a><span class="k">def</span> <span class="nf">computeTractionLoad</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="n">trac</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Add a surface traction to all quadrants or octants that touch a face or edge with</span>
 <span class="sd">    the given name. The assembler must be created from the provided forest. The list</span>
-<span class="sd">    trac must have a traction for each face (6) for octants or each edge (4) for </span>
+<span class="sd">    trac must have a traction for each face (6) for octants or each edge (4) for</span>
 <span class="sd">    quadrants.</span>
 
 <span class="sd">    Note: This code uses the fact that the getOctsWithName or getQuadsWithName returns</span>
@@ -239,7 +253,7 @@
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">TMR</span><span class="o">.</span><span class="n">QuadForest</span><span class="p">):</span>
         <span class="n">octants</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getQuadrants</span><span class="p">()</span>
         <span class="n">face_octs</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getQuadsWithName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-    
+
     <span class="c1"># Create the force vector and zero the variables in the assembler</span>
     <span class="n">force</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">createVec</span><span class="p">()</span>
     <span class="n">assembler</span><span class="o">.</span><span class="n">zeroVariables</span><span class="p">()</span>
@@ -268,7 +282,7 @@
 <div class="viewcode-block" id="compute3DTractionLoad"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.compute3DTractionLoad">[docs]</a><span class="k">def</span> <span class="nf">compute3DTractionLoad</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="n">tr</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Add a constant surface traction to all octants that touch a face or edge with</span>
-<span class="sd">    the given name. </span>
+<span class="sd">    the given name.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        forest (QuadForest or OctForest): Forest for the finite-element mesh</span>
@@ -279,7 +293,7 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        Vec: A force vector containing the traction</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    
+
     <span class="n">order</span> <span class="o">=</span> <span class="n">forest</span><span class="o">.</span><span class="n">getMeshOrder</span><span class="p">()</span>
 
     <span class="n">trac</span> <span class="o">=</span> <span class="p">[]</span>
@@ -324,6 +338,133 @@
 
     <span class="c1"># Perform the interpolation</span>
     <span class="n">interp</span><span class="o">.</span><span class="n">mult</span><span class="p">(</span><span class="n">orig_x</span><span class="p">,</span> <span class="n">new_x</span><span class="p">)</span>
+
+    <span class="k">return</span></div>
+
+<div class="viewcode-block" id="addNaturalFrequencyConstraint"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.addNaturalFrequencyConstraint">[docs]</a><span class="k">def</span> <span class="nf">addNaturalFrequencyConstraint</span><span class="p">(</span><span class="n">problem</span><span class="p">,</span> <span class="n">omega_min</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Add a natural frequency constraint to a TopoProblem optimization problem</span>
+
+<span class="sd">    This function automatically sets good default arguments that can be</span>
+<span class="sd">    overridden with keyword arguments passed in through kwargs.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        problem (TopoProblem): TopoProblem optimization problem</span>
+<span class="sd">        omega_min (float): Minimum natural frequency, Hz</span>
+<span class="sd">        **kwargs: Frequency constraint parameters; check</span>
+<span class="sd">                TMR documentation for more detail</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Convert the provided minimum natural frequency from</span>
+    <span class="c1"># Hz to rad/s, square it, and make it negative to fit the</span>
+    <span class="c1"># constraint form: omega^2 - offset &gt;= 0.0</span>
+    <span class="n">offset</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="mf">2.0</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">pi</span><span class="o">*</span><span class="n">omega_min</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span>
+
+    <span class="c1"># Define all the possible arguments and set defaults</span>
+    <span class="n">opts</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;use_jd&#39;</span><span class="p">:</span><span class="kc">True</span><span class="p">,</span>
+            <span class="s1">&#39;num_eigs&#39;</span><span class="p">:</span><span class="mi">10</span><span class="p">,</span>
+            <span class="s1">&#39;ks_weight&#39;</span><span class="p">:</span><span class="mf">50.0</span><span class="p">,</span>
+            <span class="s1">&#39;offset&#39;</span><span class="p">:</span><span class="n">offset</span><span class="p">,</span>
+            <span class="s1">&#39;sigma&#39;</span><span class="p">:</span><span class="o">-</span><span class="n">offset</span><span class="p">,</span>
+            <span class="s1">&#39;scale&#39;</span><span class="p">:</span><span class="o">-</span><span class="mf">0.75</span><span class="o">/</span><span class="n">offset</span><span class="p">,</span>
+            <span class="s1">&#39;max_lanczos&#39;</span><span class="p">:</span><span class="mi">100</span><span class="p">,</span>
+            <span class="s1">&#39;tol&#39;</span><span class="p">:</span><span class="mf">1e-30</span><span class="p">,</span>
+            <span class="s1">&#39;eig_tol&#39;</span><span class="p">:</span><span class="mf">5e-7</span><span class="p">,</span>
+            <span class="s1">&#39;eig_rtol&#39;</span><span class="p">:</span><span class="mf">1e-6</span><span class="p">,</span>
+            <span class="s1">&#39;eig_atol&#39;</span><span class="p">:</span><span class="mf">1e-12</span><span class="p">,</span>
+            <span class="s1">&#39;num_recycle&#39;</span><span class="p">:</span><span class="mi">10</span><span class="p">,</span>
+            <span class="s1">&#39;fgmres_size&#39;</span><span class="p">:</span><span class="mi">8</span><span class="p">,</span>
+            <span class="s1">&#39;max_jd_size&#39;</span><span class="p">:</span><span class="mi">50</span><span class="p">,</span>
+            <span class="s1">&#39;recycle_type&#39;</span><span class="p">:</span><span class="s1">&#39;num_recycling&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;track_eigen_iters&#39;</span><span class="p">:</span><span class="mi">2</span><span class="p">}</span>
+
+    <span class="c1"># Apply the user defined parameters</span>
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">opts</span><span class="p">:</span>
+            <span class="n">opts</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%s</span><span class="s1"> is not a valid option&#39;</span><span class="o">%</span><span class="p">(</span><span class="n">key</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;use_jd&#39;</span><span class="p">]:</span>
+        <span class="c1"># Set the recycling strategy</span>
+        <span class="k">if</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;recycle_type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;num_recycling&#39;</span><span class="p">:</span>
+            <span class="n">recycle_type</span> <span class="o">=</span> <span class="n">TACS</span><span class="o">.</span><span class="n">NUM_RECYCLE</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">recycle_type</span> <span class="o">=</span> <span class="n">TACS</span><span class="o">.</span><span class="n">SUM_TWO</span>
+
+        <span class="n">problem</span><span class="o">.</span><span class="n">addFrequencyConstraint</span><span class="p">(</span><span class="n">opts</span><span class="p">[</span><span class="s1">&#39;sigma&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;num_eigs&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;ks_weight&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;offset&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;scale&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;max_jd_size&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;eig_tol&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;use_jd&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;fgmres_size&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;eig_rtol&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;eig_atol&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;num_recycle&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;recycle_type&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;track_eigen_iters&#39;</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span> <span class="c1"># use the Lanczos method</span>
+        <span class="n">problem</span><span class="o">.</span><span class="n">addFrequencyConstraint</span><span class="p">(</span><span class="n">opts</span><span class="p">[</span><span class="s1">&#39;sigma&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;num_eigs&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;ks_weight&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;offset&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;scale&#39;</span><span class="p">],</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;max_lanczos&#39;</span><span class="p">],</span> <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;tol&#39;</span><span class="p">],</span> <span class="mi">0</span><span class="p">,</span>
+                                       <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">TACS</span><span class="o">.</span><span class="n">SUM_TWO</span><span class="p">,</span>
+                                       <span class="n">opts</span><span class="p">[</span><span class="s1">&#39;track_eigen_iters&#39;</span><span class="p">])</span>
+
+    <span class="k">return</span></div>
+
+<div class="viewcode-block" id="densityBasedRefine"><a class="viewcode-back" href="../../topoptutils.html#tmr.TopOptUtils.densityBasedRefine">[docs]</a><span class="k">def</span> <span class="nf">densityBasedRefine</span><span class="p">(</span><span class="n">forest</span><span class="p">,</span> <span class="n">assembler</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                       <span class="n">lower</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span> <span class="n">upper</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                       <span class="n">min_lev</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_lev</span><span class="o">=</span><span class="n">TMR</span><span class="o">.</span><span class="n">MAX_LEVEL</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Apply a density-based refinement criteria.</span>
+
+<span class="sd">    This function takes in a Quad or OctForest that has been used for analysis and its</span>
+<span class="sd">    corresponding Assembler object. It then uses the data set in the constitutive object</span>
+<span class="sd">    to extract the density within each element. If the density falls below the the bound</span>
+<span class="sd">    *lower* the element is coarsened, if the density exceeds *upper* the element is</span>
+<span class="sd">    refined. If *reverse* is set, this scheme is reversed so low design values are</span>
+<span class="sd">    refined. The refinement is applied directly to the forest.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        forest (QuadForest or OctForest): OctForest or QuadForest to refine</span>
+<span class="sd">        assembler (Assembler): The TACS.Assembler object associated with forest</span>
+<span class="sd">        index (int): The index used in the call to getDVOutputValue</span>
+<span class="sd">        lower (float): the lower limit used for coarsening</span>
+<span class="sd">        upper (float): the upper limit used for refinement</span>
+<span class="sd">        reverse (bool): Reverse the refinement scheme</span>
+<span class="sd">        min_lev (int): Minimum refinement level</span>
+<span class="sd">        max_lev (int): Maximum refinement level</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Create refinement array</span>
+    <span class="n">num_elems</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">getNumElements</span><span class="p">()</span>
+    <span class="n">refine</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">num_elems</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+    <span class="c1"># Get the elements from the Assembler object</span>
+    <span class="n">elems</span> <span class="o">=</span> <span class="n">assembler</span><span class="o">.</span><span class="n">getElements</span><span class="p">()</span>
+
+    <span class="c1"># Set the parametric point where the density will be evaluated. Use the</span>
+    <span class="c1"># parametric origin within the element.</span>
+    <span class="n">pt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_elems</span><span class="p">):</span>
+        <span class="c1"># Extract the constitutive object from the element, if it is defined, otherwise</span>
+        <span class="c1"># skip the refinement.</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">elems</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">getConstitutive</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">c</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">getDVOutputValue</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">pt</span><span class="p">)</span>
+
+            <span class="c1"># Apply the refinement criteria</span>
+            <span class="k">if</span> <span class="n">reverse</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="o">&gt;=</span> <span class="n">upper</span><span class="p">:</span>
+                    <span class="n">refine</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+                <span class="k">elif</span> <span class="n">value</span> <span class="o">&lt;=</span> <span class="n">lower</span><span class="p">:</span>
+                    <span class="n">refine</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">value</span> <span class="o">&gt;=</span> <span class="n">upper</span><span class="p">:</span>
+                    <span class="n">refine</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="k">elif</span> <span class="n">value</span> <span class="o">&lt;=</span> <span class="n">lower</span><span class="p">:</span>
+                    <span class="n">refine</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+
+    <span class="c1"># Refine the forest</span>
+    <span class="n">forest</span><span class="o">.</span><span class="n">refine</span><span class="p">(</span><span class="n">refine</span><span class="p">,</span> <span class="n">min_lev</span><span class="o">=</span><span class="n">min_lev</span><span class="p">,</span> <span class="n">max_lev</span><span class="o">=</span><span class="n">max_lev</span><span class="p">)</span>
 
     <span class="k">return</span></div>
 
@@ -439,7 +580,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;qn_diag_factor&#39;</span><span class="p">,</span>
                                 <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;QN diagonal factor&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;bfgs_update_type&#39;</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">_bfgs_updates</span><span class="p">,</span>
-                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Barrier fraction&#39;</span><span class="p">)</span>
+                                <span class="n">desc</span><span class="o">=</span><span class="s1">&#39;Type of BFGS update to apply&#39;</span><span class="p">)</span>
 
         <span class="n">desc</span> <span class="o">=</span> <span class="s1">&#39;Boolean to indicate if a sequential linear method should be used&#39;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">add_option</span><span class="p">(</span><span class="s1">&#39;use_sequential_linear&#39;</span><span class="p">,</span> <span class="n">types</span><span class="o">=</span><span class="nb">bool</span><span class="p">,</span>

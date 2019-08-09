@@ -310,7 +310,7 @@ Several additional helper functions are implemented to enable the creation of lo
 <ul>
 <li><span class="target" id="module-tmr.TopOptUtils"></span><dl class="function">
 <dt id="tmr.TopOptUtils.createTopoProblem">
-<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">createTopoProblem</code><span class="sig-paren">(</span><em class="sig-param">forest</em>, <em class="sig-param">callback</em>, <em class="sig-param">filter_type</em>, <em class="sig-param">nlevels=2</em>, <em class="sig-param">repartition=True</em>, <em class="sig-param">design_vars_per_node=1</em>, <em class="sig-param">s=2.0</em>, <em class="sig-param">N=10</em>, <em class="sig-param">r0=0.05</em>, <em class="sig-param">lowest_order=2</em>, <em class="sig-param">ordering=5</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#createTopoProblem"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.createTopoProblem" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">createTopoProblem</code><span class="sig-paren">(</span><em class="sig-param">forest</em>, <em class="sig-param">callback</em>, <em class="sig-param">filter_type</em>, <em class="sig-param">nlevels=2</em>, <em class="sig-param">repartition=True</em>, <em class="sig-param">design_vars_per_node=1</em>, <em class="sig-param">s=2.0</em>, <em class="sig-param">N=10</em>, <em class="sig-param">r0=0.05</em>, <em class="sig-param">lowest_order=2</em>, <em class="sig-param">ordering=5</em>, <em class="sig-param">scale_coordinate_factor=1.0</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#createTopoProblem"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.createTopoProblem" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a topology optimization problem instance and a hierarchy of meshes.
 This code takes in the OctForest or QuadForest on the finest mesh level
 and creates a series of coarser meshes for analysis and optimization.
@@ -338,6 +338,7 @@ returns the filter and the associated creator class</p></li>
 <li><p><strong>r0</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Helmholtz filter radius</p></li>
 <li><p><strong>lowest_order</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Lowest order mesh to create</p></li>
 <li><p><strong>ordering</strong> – TACS Assembler ordering type</p></li>
+<li><p><strong>scale_coordinate_factor</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Scale all coordinates by this factor</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -436,6 +437,50 @@ on an OctForest or QuadForest and interpolates it to a new OctForest or QuadFore
 <li><p><strong>orig_vec</strong> (<em>PVec</em>) – Design variables on the original mesh in a ParOpt.PVec</p></li>
 <li><p><strong>new_filter</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a>) – New filter Oct or QuadForest object</p></li>
 <li><p><strong>new_vec</strong> (<em>PVec</em>) – Design variables on the new mesh in a ParOpt.PVec (set on ouput)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="tmr.TopOptUtils.addNaturalFrequencyConstraint">
+<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">addNaturalFrequencyConstraint</code><span class="sig-paren">(</span><em class="sig-param">problem</em>, <em class="sig-param">omega_min</em>, <em class="sig-param">**kwargs</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#addNaturalFrequencyConstraint"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.addNaturalFrequencyConstraint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a natural frequency constraint to a TopoProblem optimization problem</p>
+<p>This function automatically sets good default arguments that can be
+overridden with keyword arguments passed in through kwargs.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>problem</strong> (<a class="reference internal" href="#tmr.TMR.TopoProblem" title="tmr.TMR.TopoProblem"><em>TopoProblem</em></a>) – TopoProblem optimization problem</p></li>
+<li><p><strong>omega_min</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – Minimum natural frequency, Hz</p></li>
+<li><p><strong>**kwargs</strong> – Frequency constraint parameters; check
+TMR documentation for more detail</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="tmr.TopOptUtils.densityBasedRefine">
+<code class="sig-prename descclassname">tmr.TopOptUtils.</code><code class="sig-name descname">densityBasedRefine</code><span class="sig-paren">(</span><em class="sig-param">forest</em>, <em class="sig-param">assembler</em>, <em class="sig-param">index=0</em>, <em class="sig-param">lower=0.05</em>, <em class="sig-param">upper=0.5</em>, <em class="sig-param">reverse=False</em>, <em class="sig-param">min_lev=0</em>, <em class="sig-param">max_lev=30</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/tmr/TopOptUtils.html#densityBasedRefine"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#tmr.TopOptUtils.densityBasedRefine" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply a density-based refinement criteria.</p>
+<p>This function takes in a Quad or OctForest that has been used for analysis and its
+corresponding Assembler object. It then uses the data set in the constitutive object
+to extract the density within each element. If the density falls below the the bound
+<em>lower</em> the element is coarsened, if the density exceeds <em>upper</em> the element is
+refined. If <em>reverse</em> is set, this scheme is reversed so low design values are
+refined. The refinement is applied directly to the forest.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>forest</strong> (<a class="reference internal" href="octree_interface.html#tmr.TMR.QuadForest" title="tmr.TMR.QuadForest"><em>QuadForest</em></a><em> or </em><a class="reference internal" href="octree_interface.html#tmr.TMR.OctForest" title="tmr.TMR.OctForest"><em>OctForest</em></a>) – OctForest or QuadForest to refine</p></li>
+<li><p><strong>assembler</strong> (<em>Assembler</em>) – The TACS.Assembler object associated with forest</p></li>
+<li><p><strong>index</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The index used in the call to getDVOutputValue</p></li>
+<li><p><strong>lower</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – the lower limit used for coarsening</p></li>
+<li><p><strong>upper</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – the upper limit used for refinement</p></li>
+<li><p><strong>reverse</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Reverse the refinement scheme</p></li>
+<li><p><strong>min_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Minimum refinement level</p></li>
+<li><p><strong>max_lev</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Maximum refinement level</p></li>
 </ul>
 </dd>
 </dl>
