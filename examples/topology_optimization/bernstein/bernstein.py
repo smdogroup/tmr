@@ -1,6 +1,13 @@
 """
 Bernstein-parametrized density field with thermo-elastic analysis.
 
+This example demonstrates:
+
+1) Creating meshes using the TMR.Creator classes
+2) Analysis and optimization using higher-order elements
+3) Design-feature based adaptive refinement
+4) Use of a conforming filter
+
 Recommended arguments:
 
 mpirun -np n python --max_opt_iters 25 25 25 --mg_levels 2 3 4
@@ -38,10 +45,10 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
     def __init__(self, bcs, forest, order, interp, props=None):
         # Set the interpolation for the new filter
         TMR.QuadConformTopoCreator.__init__(bcs, forest, order, interp)
-        
+
         # Create the array of properties
         self.props = props
-        
+
     def createElement(self, order, quadrant, index, filtr):
         """
         Create the element for the specified quadrant
@@ -51,6 +58,9 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
             quadrant (TMR.Quadrant): The quadrant to be build for this element
             index (list): The global numbers for the quadrant nodes
             filtr (QuadForest): The QuadForest for the filter
+
+        Returns:
+            TACS.Element: Element to place within the Assembler
         """
         stiff = TMR.ThermoQuadStiffness(self.props, index, None, filtr)
         elem = elements.PSThermoelasticQuad(order, stiff)
@@ -64,7 +74,7 @@ class CreatorCallback:
     def creator_callback(self, forest):
         """
         Given the forest, instantiate a creator class that will populate a
-        TACSAssembler object with the elements. This allocates the 
+        TACSAssembler object with the elements. This allocates the
         QuadConformCreator class above and also returns the QuadForest object
         associated with the filter. This is needed in the createTopoProblem
         call.
@@ -76,11 +86,19 @@ class CreatorCallback:
 
 def create_forest(comm, depth, htarget):
     """
-    Create an initial forest for analysis.
+    Create an initial forest for analysis. and optimization
 
     This code loads in the model, sets names, meshes the geometry and creates
     a QuadForest from the mesh. The forest is populated with quadtrees with
     the specified depth.
+
+    Args:
+        comm (MPI_Comm): MPI communicator
+        depth (int): Depth of the initial trees
+        htarget (float): Target global element mesh size
+
+    Returns:
+        QuadForest: Initial forest for topology optimization
     """
     # Load the geometry model
     geo = TMR.LoadModel('biclamped_traction.stp')
@@ -106,7 +124,7 @@ def create_forest(comm, depth, htarget):
     # Create a model from the mesh
     model = mesh.createModelFromMesh()
 
-    # Create the corresponding mesh topology from the mesh-model 
+    # Create the corresponding mesh topology from the mesh-model
     topo = TMR.Topology(comm, model)
 
     # Create the quad forest and set the topology of the forest
@@ -121,12 +139,21 @@ def create_forest(comm, depth, htarget):
 def create_problem(forest, bcs, props, nlevels):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
-    
-    This code is given the forest, boundary conditions, material properties and 
+
+    This code is given the forest, boundary conditions, material properties and
     the number of multigrid levels. Based on this info, it creates the TMRTopoProblem
     and sets up the mass-constrained compliance minimization problem. Before
-    the problem class is returned it is initialized so that it can be used for 
+    the problem class is returned it is initialized so that it can be used for
     optimization.
+
+    Args:
+        forest (OctForest): Forest object
+        bcs (BoundaryConditions): Boundary condition object
+        props (StiffnessProperties): Material properties object
+        nlevels (int): number of multigrid levels
+
+    Returns:
+        TopoProblem: Topology optimization problem instance
     """
     # Allocate the creator callback function
     obj = CreatorCallback(bcs, props)
@@ -261,7 +288,7 @@ props = TMR.QuadStiffnessProperties(rho, E, nu, _aT=aT, _kcond=kcond,
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed', [0,1,2], [0.0,0.0,0.])
+bcs.addBoundaryCondition('fixed', [0, 1, 2], [0.0, 0.0, 0.0])
 
 time_array = np.zeros(sum(args.max_opt_iters[:]))
 t0 = MPI.Wtime()
@@ -299,31 +326,20 @@ for step in range(max_iterations):
     opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
     xopt = opt.optimize()
 
-    # Create refinement array
-    assembler = problem.getAssembler()
-    num_elems = assembler.getNumElements()
-    refine = np.zeros(num_elems, dtype=np.int32)
-
     # Refine based solely on the value of the density variable
-    elems = assembler.getElements()
-    
-    for i in range(num_elems):        
-        c = elems[i].getConstitutive()
-        if c is not None:
-            if design_vars_per_node == 1:
-                density = c.getDVOutputValue(0, np.zeros(3, dtype=float))
-            else:
-                density = 1.0 - c.getDVOutputValue(2, np.zeros(3, dtype=float))
-
-            # Refine things differently depending on whether the
-            # density is above or below a threshold
-            if density >= 0.1:
-                refine[i] = int(1)
-            elif density < 0.05:
-                refine[i] = int(-1)
-    
-    # Refine the forest
-    forest.refine(refine, min_lev=0)
+    assembler = problem.getAssembler()
+    if design_vars_per_node == 1:
+        lower = 0.05
+        upper = 0.5
+        TopOptUtils.densityBasedRefine(forest, assembler, lower=lower, upper=upper)
+    else:
+        # Refine based on the topology variable = 1 - t. Since the topology
+        # variable is stored as 1-t, we reverse the refinement criterion.
+        index = 2
+        lower = 0.5
+        upper = 0.95
+        TopOptUtils.densityBasedRefine(forest, assembler, index=index,
+            lower=lower, upper=upper, reverse=True)
 
 # Do an averaging of all the values and write to text file
 new_array=np.zeros(len(time_array))

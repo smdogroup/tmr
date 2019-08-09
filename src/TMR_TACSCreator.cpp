@@ -157,8 +157,7 @@ TMRQuadTACSCreator::~TMRQuadTACSCreator(){
 */
 TACSAssembler*
   TMRQuadTACSCreator::createTACS( TMRQuadForest *forest,
-                                  TACSAssembler::OrderingType ordering,
-                                  TacsScalar _scale ){
+                                  TACSAssembler::OrderingType ordering ){
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -233,7 +232,7 @@ TACSAssembler*
   }
 
   // Set the node locations
-  setNodeLocations(forest, tacs,_scale);
+  setNodeLocations(forest, tacs);
 
   return tacs;
 }
@@ -283,10 +282,7 @@ void TMRQuadTACSCreator::setBoundaryConditions( TMRQuadForest *forest,
   object
 */
 void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
-                                           TACSAssembler *tacs,
-                                           TacsScalar _scale ){
-  TacsScalar scale = _scale;
-
+                                           TACSAssembler *tacs ){
   // Get the communicator and the rank
   int mpi_rank;
   MPI_Comm comm = forest->getMPIComm();
@@ -298,7 +294,7 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
 
   // Get the node numbers
   const int *nodes;
-  int num_local_nodes = forest->getNodeNumbers(&nodes);
+  forest->getNodeNumbers(&nodes);
 
   // Get the points
   TMRPoint *Xp;
@@ -306,21 +302,6 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
 
   TACSBVec *X = tacs->createNodeVec();
   X->incref();
-
-  // Get the node array from the TACSBVec object
-  TacsScalar *Xn;
-  X->getArray(&Xn);
-
-  // Loop over all the nodes
-  for ( int i = 0; i < num_local_nodes; i++ ){
-    if (nodes[i] >= range[mpi_rank] &&
-        nodes[i] < range[mpi_rank+1]){
-      int loc = nodes[i] - range[mpi_rank];
-      Xn[3*loc] = scale*Xp[i].x;
-      Xn[3*loc+1] = scale*Xp[i].y;
-      Xn[3*loc+2] = scale*Xp[i].z;
-    }
-  }
 
   // Reorder the vector if needed
   tacs->reorderVec(X);
@@ -348,8 +329,7 @@ TMROctTACSCreator::~TMROctTACSCreator(){
 */
 TACSAssembler*
   TMROctTACSCreator::createTACS( TMROctForest *forest,
-                                 TACSAssembler::OrderingType ordering,
-                                 TacsScalar _scale ){
+                                 TACSAssembler::OrderingType ordering ){
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -430,7 +410,7 @@ TACSAssembler*
   }
 
   // Set the node locations
-  setNodeLocations(forest, tacs, _scale);
+  setNodeLocations(forest, tacs);
 
   return tacs;
 }
@@ -480,10 +460,7 @@ void TMROctTACSCreator::setBoundaryConditions( TMROctForest *forest,
   object
 */
 void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
-                                          TACSAssembler *tacs,
-                                          TacsScalar _scale ){
-  TacsScalar scale = _scale;
-
+                                          TACSAssembler *tacs ){
   // Get the communicator and the rank
   int mpi_rank;
   MPI_Comm comm = forest->getMPIComm();
@@ -495,7 +472,7 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
 
   // Get the node numbers
   const int *nodes;
-  int num_local_nodes = forest->getNodeNumbers(&nodes);
+  forest->getNodeNumbers(&nodes);
 
   // Get the points
   TMRPoint *Xp;
@@ -503,21 +480,6 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
 
   TACSBVec *X = tacs->createNodeVec();
   X->incref();
-
-  // Get the node array from the TACSBVec object
-  TacsScalar *Xn;
-  X->getArray(&Xn);
-
-  // Loop over all the nodes
-  for ( int i = 0; i < num_local_nodes; i++ ){
-    if (nodes[i] >= range[mpi_rank] &&
-        nodes[i] < range[mpi_rank+1]){
-      int loc = nodes[i] - range[mpi_rank];
-      Xn[3*loc] = scale*Xp[i].x;
-      Xn[3*loc+1] = scale*Xp[i].y;
-      Xn[3*loc+2] = scale*Xp[i].z;
-    }
-  }
 
   // Reorder the vector if needed
   tacs->reorderVec(X);

@@ -3625,6 +3625,9 @@ def ConvertEGADSModel(pyego egads_model, int print_lev=0):
     return _init_Model(model)
 
 cdef class BoundaryConditions:
+    """
+    Store boundary condition data associated with named geometric entities
+    """
     cdef TMRBoundaryConditions* ptr
     def __cinit__(self):
         self.ptr = new TMRBoundaryConditions()
@@ -3634,10 +3637,26 @@ cdef class BoundaryConditions:
         self.ptr.decref()
 
     def getNumBoundaryConditions(self):
+        """
+        getNumBoundaryConditions(self)
+
+        Returns:
+            int: The number of stored boundary conditions
+        """
         return self.ptr.getNumBoundaryConditions()
 
     def addBoundaryCondition(self, aname,
                              list bc_nums=None, list bc_vals=None):
+        """
+        addBoundaryCondition(self, aname, bc_nums=None, bc_vals=None)
+
+        Add a new boundary condition associated with the entity name.
+
+        Args:
+            aname (str): Name of the geometric entity
+            bc_nums (list): List of the nodal variables to constrain
+            bc_values (list): List of boundary condition values
+        """
         cdef char *name = tmr_convert_str_to_chars(aname)
         cdef int *nums = NULL
         cdef double *vals = NULL
@@ -3684,6 +3703,17 @@ cdef TACSElement* _createQuadElement(void *_self, int order,
     return NULL
 
 cdef class QuadCreator:
+    """
+    Generates a QuadForest object
+
+    This base class is used to create a QuadForest object. To use this object,
+    inherit from TMR.QuadCreator and implement the member function:
+
+    createElement(self, order, quad)
+
+    This function takes the order of the mesh and a TMR.Quadrant and returns a
+    TACS.Element object that will be placed into an Assembler object.
+    """
     cdef TMRCyQuadCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, *args, **kwargs):
         self.ptr = new TMRCyQuadCreator(bcs.ptr)
@@ -3697,6 +3727,16 @@ cdef class QuadCreator:
 
     def createTACS(self, QuadForest forest,
                    OrderingType ordering=TACS.PY_NATURAL_ORDER):
+        """
+        createTACS(self, forest, order=TACS.PY_NATURAL_ORDER)
+
+        Create the Assembler object calling self.createElement(self, order, quad)
+        for each element in the finite-element mesh.
+
+        Args:
+            forest (QuadForest): The QuadForest object to allocate
+            order (OrderingType): The type of ordering to use
+        """
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
@@ -3704,15 +3744,15 @@ cdef class QuadCreator:
 cdef TACSElement* _createOctElement(void *_self, int order,
                                     TMROctant *octant):
     cdef TACSElement *elem = NULL
-    q = Octant()
-    q.octant.x = octant.x
-    q.octant.y = octant.y
-    q.octant.z = octant.z
-    q.octant.level = octant.level
-    q.octant.info = octant.info
-    q.octant.block = octant.block
-    q.octant.tag = octant.tag
-    e = (<object>_self).createElement(order, q)
+    o = Octant()
+    o.octant.x = octant.x
+    o.octant.y = octant.y
+    o.octant.z = octant.z
+    o.octant.level = octant.level
+    o.octant.info = octant.info
+    o.octant.block = octant.block
+    o.octant.tag = octant.tag
+    e = (<object>_self).createElement(order, o)
     if e is not None:
         (<Element>e).ptr.incref()
         elem = (<Element>e).ptr
@@ -3720,6 +3760,17 @@ cdef TACSElement* _createOctElement(void *_self, int order,
     return NULL
 
 cdef class OctCreator:
+    """
+    Generates a OctCreator object
+
+    This base class is used to create a OctCreator object. To use this object,
+    inherit from TMR.OctCreator and implement the member function:
+
+    createElement(self, order, oct)
+
+    This function takes the order of the mesh and a TMR.Octant and returns a
+    TACS.Element object that will be placed into an Assembler object.
+    """
     cdef TMRCyOctCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, *args, **kwargs):
         self.ptr = new TMRCyOctCreator(bcs.ptr)
@@ -3733,6 +3784,16 @@ cdef class OctCreator:
 
     def createTACS(self, OctForest forest,
                    OrderingType ordering=TACS.PY_NATURAL_ORDER):
+        """
+        createTACS(self, forest, order=TACS.PY_NATURAL_ORDER)
+
+        Create the Assembler object calling self.createElement(self, order, oct)
+        for each element in the finite-element mesh.
+
+        Args:
+            forest (OctForest): The OctForest object to allocate
+            order (OrderingType): The type of ordering to use
+        """
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
@@ -3775,9 +3836,9 @@ cdef class QuadTopoCreator:
             self.ptr.decref()
 
     def createTACS(self, QuadForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER,scale=1.0):
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
+        assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -3837,9 +3898,9 @@ cdef class QuadConformTopoCreator:
             self.ptr.decref()
 
     def createTACS(self, QuadForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER,scale=1.0):
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
+        assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -3888,10 +3949,9 @@ cdef class OctTopoCreator:
             self.ptr.decref()
 
     def createTACS(self, OctForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER,
-                   double scale=1.0):
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
+        assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -3952,10 +4012,9 @@ cdef class OctConformTopoCreator:
             self.ptr.decref()
 
     def createTACS(self, OctForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER,
-                   double scale=1.0):
+                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(forest.ptr, ordering, scale)
+        assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
     def getFilter(self):

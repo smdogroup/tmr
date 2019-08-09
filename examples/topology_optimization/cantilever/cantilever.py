@@ -30,7 +30,7 @@ class CreatorCallback:
 
 def create_forest(comm, depth):
     # Load the geometry model
-    geo = TMR.LoadModel('beam.stp')
+    geo = TMR.LoadModel('cantilever.stp')
 
     # Mark the boundary condition faces
     verts = geo.getVertices()
@@ -96,7 +96,7 @@ comm = MPI.COMM_WORLD
 # Set the type of filter to use
 filter_type = 'lagrange'
 
-# Compute the volume of the bracket from the known geometry
+# Compute the volume
 r = 7.5
 a = 50.0
 t = 25.0
@@ -157,4 +157,4 @@ flag = (TACS.ToFH5.NODES |
         TACS.ToFH5.STRESSES |
         TACS.ToFH5.EXTRAS)
 f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
-f5.writeToFile('bracket.f5')
+f5.writeToFile(os.path.join(prefix, 'cantilever.f5'))

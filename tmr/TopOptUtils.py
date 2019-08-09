@@ -2,6 +2,7 @@ from mpi4py import MPI
 from tacs import TACS, elements
 from tmr import TMR
 from paropt import ParOpt
+import numpy as np
 from six import iteritems
 
 # Options for the TopologyOptimizer class
@@ -16,15 +17,16 @@ _bfgs_updates = ['Skip negative', 'Damped']
 def createTopoProblem(forest, callback, filter_type, nlevels=2,
                       repartition=True, design_vars_per_node=1,
                       s=2.0, N=10, r0=0.05, lowest_order=2,
-                      ordering=TACS.PY_MULTICOLOR_ORDER):
+                      ordering=TACS.PY_MULTICOLOR_ORDER,
+                      scale_coordinate_factor=1.0):
     """
     Create a topology optimization problem instance and a hierarchy of meshes.
-    This code takes in the OctForest or QuadForest on the finest mesh level 
+    This code takes in the OctForest or QuadForest on the finest mesh level
     and creates a series of coarser meshes for analysis and optimization.
-    The discretization at each level is created via a callback function that 
+    The discretization at each level is created via a callback function that
     generates the appropriate TACSCreator object and its associated filter (the
     QuadForest or OctForest on which the design parametrization is defined.)
-    The code then creates a TMRTopoFilter class which stores information about 
+    The code then creates a TMRTopoFilter class which stores information about
     the design parametrization and hierarchy. It creates a multigrid object and
     finally a TMRTopoProblem instance for optimization.
 
@@ -35,7 +37,7 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
     creator, filter = callback(forest)
 
     Args:
-        callback: A callback function that takes in the forest and 
+        callback: A callback function that takes in the forest and
                   returns the filter and the associated creator class
         filter_type (str): Type of filter to create
         forest (TMROctForest or TMRQuadForest): Forest type
@@ -46,11 +48,12 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
         r0 (float): Helmholtz filter radius
         lowest_order (int): Lowest order mesh to create
         ordering: TACS Assembler ordering type
+        scale_coordinate_factor (float): Scale all coordinates by this factor
 
     Returns:
         problem (TopoProblem): The allocated topology optimization problem
     """
-    
+
     # Store data
     forests = []
     filters = []
@@ -68,7 +71,7 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
     forests.append(forest)
     filters.append(filtr)
     assemblers.append(creator.createTACS(forest, ordering))
-    
+
     if filter_type == 'lagrange':
         varmaps.append(creator.getMap())
         vecindices.append(creator.getIndices())
@@ -94,10 +97,18 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
         forests.append(forest)
         filters.append(filtr)
         assemblers.append(creator.createTACS(forest, ordering))
-        
+
         if filter_type == 'lagrange':
             varmaps.append(creator.getMap())
             vecindices.append(creator.getIndices())
+
+    # Scale the coordinates by scale_coordinates factor if it is != 1.0
+    if scale_coordinate_factor != 1.0:
+        for assembler in assemblers:
+            X = assembler.createNodeVec()
+            assembler.getNodes(X)
+            X.scale(scale_coordinate_factor)
+            assembler.setNodes(X)
 
     # Create the multigrid object
     mg = TMR.createMg(assemblers, forests)
@@ -152,20 +163,20 @@ def computeVertexLoad(name, forest, assembler, point_force):
 
     comm = assembler.getMPIComm()
     node_range = forest.getNodeRange()
-    
+
     # Add the point force into the force arrays
     for node in nodes:
-        if ((node >= node_range[comm.rank]) and (node < node_range[comm.rank+1])): 
+        if ((node >= node_range[comm.rank]) and (node < node_range[comm.rank+1])):
             index = node - node_range[comm.rank]
             force_array[vars_per_node*index:vars_per_node*(index+1)] += point_force[:]
-            
+
     return force
 
 def computeTractionLoad(name, forest, assembler, trac):
     """
     Add a surface traction to all quadrants or octants that touch a face or edge with
     the given name. The assembler must be created from the provided forest. The list
-    trac must have a traction for each face (6) for octants or each edge (4) for 
+    trac must have a traction for each face (6) for octants or each edge (4) for
     quadrants.
 
     Note: This code uses the fact that the getOctsWithName or getQuadsWithName returns
@@ -187,7 +198,7 @@ def computeTractionLoad(name, forest, assembler, trac):
     elif isinstance(forest, TMR.QuadForest):
         octants = forest.getQuadrants()
         face_octs = forest.getQuadsWithName(name)
-    
+
     # Create the force vector and zero the variables in the assembler
     force = assembler.createVec()
     assembler.zeroVariables()
@@ -216,7 +227,7 @@ def computeTractionLoad(name, forest, assembler, trac):
 def compute3DTractionLoad(name, forest, assembler, tr):
     """
     Add a constant surface traction to all octants that touch a face or edge with
-    the given name. 
+    the given name.
 
     Args:
         forest (QuadForest or OctForest): Forest for the finite-element mesh
@@ -227,7 +238,7 @@ def compute3DTractionLoad(name, forest, assembler, tr):
     Returns:
         Vec: A force vector containing the traction
     """
-    
+
     order = forest.getMeshOrder()
 
     trac = []
@@ -276,46 +287,48 @@ def interpolateDesignVec(orig_filter, orig_vec, new_filter, new_vec):
     return
 
 def addNaturalFrequencyConstraint(problem, omega_min, **kwargs):
-    '''
-    Add a natural frequency constraint to the topology
-    optimization problem
+    """
+    Add a natural frequency constraint to a TopoProblem optimization problem
 
-    Args
-    problem (ParOpt.Problem): ParOpt.Problem optimization problem
+    This function automatically sets good default arguments that can be
+    overridden with keyword arguments passed in through kwargs.
 
-    omega_min (float): Minimum natural frequency, Hz
-
-    **kwargs: Frequency constraint parameters; check
-              TMR documentation for more detail
-
-    '''
+    Args:
+        problem (TopoProblem): TopoProblem optimization problem
+        omega_min (float): Minimum natural frequency, Hz
+        **kwargs: Frequency constraint parameters; check
+                TMR documentation for more detail
+    """
     # Convert the provided minimum natural frequency from
     # Hz to rad/s, square it, and make it negative to fit the
     # constraint form: omega^2 - offset >= 0.0
     offset = -(2.0*np.pi*omega_min)**2
-    
+
     # Define all the possible arguments and set defaults
     opts = {'use_jd':True,
             'num_eigs':10,
             'ks_weight':50.0,
+            'offset':offset,
             'sigma':-offset,
             'scale':-0.75/offset,
             'max_lanczos':100,
             'tol':1e-30,
             'eig_tol':5e-7,
-            'eig_rtol':1e-6
-            'eig_atol':1e-12
-            'num_recycle':10
+            'eig_rtol':1e-6,
+            'eig_atol':1e-12,
+            'num_recycle':10,
             'fgmres_size':8,
             'max_jd_size':50,
             'recycle_type':'num_recycling',
             'track_eigen_iters':2}
 
     # Apply the user defined parameters
-    if kwargs is not None:
-        for key, value in kwargs.iteritems():
+    for key, value in kwargs.items():
+        if key in opts:
             opts[key] = value
-    
+        else:
+            raise ValueError('%s is not a valid option'%(key))
+
     if opts['use_jd']:
         # Set the recycling strategy
         if opts['recycle_type'] == 'num_recycling':
@@ -334,10 +347,69 @@ def addNaturalFrequencyConstraint(problem, omega_min, **kwargs):
     else: # use the Lanczos method
         problem.addFrequencyConstraint(opts['sigma'], opts['num_eigs'],
                                        opts['ks_weight'], opts['offset'],
-                                       opts['scale'], 
+                                       opts['scale'],
                                        opts['max_lanczos'], opts['tol'], 0,
                                        0, 0, 0, 0, TACS.SUM_TWO,
                                        opts['track_eigen_iters'])
+
+    return
+
+def densityBasedRefine(forest, assembler, index=0,
+                       lower=0.05, upper=0.5, reverse=False,
+                       min_lev=0, max_lev=TMR.MAX_LEVEL):
+    """
+    Apply a density-based refinement criteria.
+
+    This function takes in a Quad or OctForest that has been used for analysis and its
+    corresponding Assembler object. It then uses the data set in the constitutive object
+    to extract the density within each element. If the density falls below the the bound
+    *lower* the element is coarsened, if the density exceeds *upper* the element is
+    refined. If *reverse* is set, this scheme is reversed so low design values are
+    refined. The refinement is applied directly to the forest.
+
+    Args:
+        forest (QuadForest or OctForest): OctForest or QuadForest to refine
+        assembler (Assembler): The TACS.Assembler object associated with forest
+        index (int): The index used in the call to getDVOutputValue
+        lower (float): the lower limit used for coarsening
+        upper (float): the upper limit used for refinement
+        reverse (bool): Reverse the refinement scheme
+        min_lev (int): Minimum refinement level
+        max_lev (int): Maximum refinement level
+    """
+
+    # Create refinement array
+    num_elems = assembler.getNumElements()
+    refine = np.zeros(num_elems, dtype=np.int32)
+
+    # Get the elements from the Assembler object
+    elems = assembler.getElements()
+
+    # Set the parametric point where the density will be evaluated. Use the
+    # parametric origin within the element.
+    pt = np.zeros(3, dtype=float)
+
+    for i in range(num_elems):
+        # Extract the constitutive object from the element, if it is defined, otherwise
+        # skip the refinement.
+        c = elems[i].getConstitutive()
+        if c is not None:
+            value = c.getDVOutputValue(index, pt)
+
+            # Apply the refinement criteria
+            if reverse:
+                if value >= upper:
+                    refine[i] = -1
+                elif value <= lower:
+                    refine[i] = 1
+            else:
+                if value >= upper:
+                    refine[i] = 1
+                elif value <= lower:
+                    refine[i] = -1
+
+    # Refine the forest
+    forest.refine(refine, min_lev=min_lev, max_lev=max_lev)
 
     return
 
