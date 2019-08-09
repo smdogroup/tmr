@@ -15,7 +15,6 @@
     <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Orthogonal bracket" href="orthogonal_bracket.html" />
     <link rel="prev" title="Error Estimation" href="error_estimation.html" /> 
   </head><body>
     <div class="related" role="navigation" aria-label="related navigation">
@@ -27,9 +26,6 @@
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li class="right" >
-          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
-             accesskey="N">next</a> |</li>
         <li class="right" >
           <a href="error_estimation.html" title="Error Estimation"
              accesskey="P">previous</a> |</li>
@@ -43,6 +39,7 @@
 <li><a class="reference internal" href="#">Installing TMR</a><ul>
 <li><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
 <li><a class="reference internal" href="#steps-to-compile">Steps to compile</a></li>
+<li><a class="reference internal" href="#opencascade">OpenCASCADE</a></li>
 </ul>
 </li>
 </ul>
@@ -50,9 +47,6 @@
   <h4>Previous topic</h4>
   <p class="topless"><a href="error_estimation.html"
                         title="previous chapter">Error Estimation</a></p>
-  <h4>Next topic</h4>
-  <p class="topless"><a href="orthogonal_bracket.html"
-                        title="next chapter">Orthogonal bracket</a></p>
   <div role="note" aria-label="source link">
     <h3>This Page</h3>
     <ul class="this-page-menu">
@@ -82,29 +76,121 @@
 <h1>Installing TMR<a class="headerlink" href="#installing-tmr" title="Permalink to this headline">¶</a></h1>
 <div class="section" id="prerequisites">
 <h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Permalink to this headline">¶</a></h2>
-<p>The following items are needed to use TMR:</p>
+<p>TMR has several dependencies. The current version of TMR requires the following external libraries:</p>
 <ul class="simple">
-<li><p>Blossom V</p></li>
-<li><p>METIS</p></li>
-<li><p>numpy</p></li>
-<li><p>MPI compiler and mpi4py</p></li>
-<li><p>Cython</p></li>
-</ul>
-<p>The following items are optional but needed to use some of the advance features of TMR:</p>
-<ul class="simple">
+<li><p>MPI 2.0 compatible compiler</p></li>
+<li><p>BLAS/LAPACK</p></li>
+<li><p>EGADS/egads4py (for geometry and topology information). egads4py is available here: <a class="reference external" href="https://github.com/gjkennedy/egads4py">https://github.com/gjkennedy/egads4py</a></p></li>
+<li><p>TACS (for finite-element analysis). TACS is available here: <a class="reference external" href="https://github.com/gjkennedy/paropt">https://github.com/gjkennedy/paropt</a></p></li>
+<li><p>ParOpt (for topology optimization). ParOpt is available here: <a class="reference external" href="https://github.com/gjkennedy/tacs">https://github.com/gjkennedy/tacs</a></p></li>
+<li><p>Blossom V (for perfect matching in the Quad-Blossom algorithm): <a class="reference external" href="https://pub.ist.ac.at/~vnk/software/blossom5-v2.05.src.tar.gz">Blossom-V</a></p></li>
+<li><p>METIS (for partitioning the coarse hexahedral/quadrilateral meshes): <a class="reference external" href="http://glaros.dtc.umn.edu/gkhome/metis/metis/overview">Metis</a></p></li>
 <li><p>OpenCASCADE</p></li>
-<li><p>Netgen</p></li>
+</ul>
+<p>In addition, the python interface for TMR requires the following:</p>
+<ul class="simple">
+<li><p>numpy</p></li>
+<li><p>mpi4py</p></li>
+<li><p>Cython</p></li>
 </ul>
 </div>
 <div class="section" id="steps-to-compile">
 <h2>Steps to compile<a class="headerlink" href="#steps-to-compile" title="Permalink to this headline">¶</a></h2>
 <ol class="arabic simple">
 <li><p>Clone the TMR git repository</p></li>
+<li><p>Make sure your MPI complier works. It is best to use a package manager such as apt-get (linux) or brew (OS X).</p></li>
+<li><p>Follow the instructions to install ParOpt and TACS</p></li>
+<li><p>Install the externals METIS and Blossom V. Note that the Makefile for Blossom V in the extern package creates a library libblossom5.a.</p></li>
+<li><p>Follow the instructions below to install OpenCASCADE</p></li>
 <li><p>In the base ‘tmr’ directory, copy the Makefile.in.info to Makefile.in. Edit
 the Makefile.in to match your compilers, metis and blossom V location,
 etc. If using OpenCASCADE, additional flags are required</p></li>
-<li><p>To compile, from the base directory, run <em>make</em> then <em>make interface</em></p></li>
+<li><p>To compile, from the base directory, run <em>make</em> then <em>make interface</em> for the python interface</p></li>
 </ol>
+</div>
+<div class="section" id="opencascade">
+<h2>OpenCASCADE<a class="headerlink" href="#opencascade" title="Permalink to this headline">¶</a></h2>
+<p>There are different ways to install the OpenCASCADE libraries. The instructions below should work for linux and OS X.</p>
+<ol class="arabic simple">
+<li><p>I downloaded the pre-compiled 64 bit version of OpenCASCADE for linux or OS X from Bob Haimes. For linux I got the following file: OCC680lin64.tgz, and for OS X I got the file: OCC680osx64.tgz. The website is here:</p></li>
+</ol>
+<p><a class="reference external" href="https://acdl.mit.edu/ESP/">https://acdl.mit.edu/ESP/</a></p>
+<ol class="arabic simple" start="2">
+<li><p>I untared/ziped with tar -xzf OCC680lin64.tgz in $HOME/packages/</p></li>
+<li><p>I move OpenCASCADE-6.8.0 to OpenCASCADE</p></li>
+<li><p>I added the following lines to my .bashrc file:</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Export the OpenCASCADE root directory
+export CASROOT=$HOME/packages/OpenCASCADE
+export PATH=$CASROOT/bin:$PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CASROOT/lib
+
+For OSX I added the following lines
+export CASROOT=$HOME/packages/OpenCASCADE
+export CASARCH=i686
+DYLD_LIBRARY_PATH=${CASROOT}/${CASARCH}/lib
+PATH=$CASROOT/bin:$PATH
+</pre></div>
+</div>
+<ol class="arabic simple" start="5">
+<li><p>I tried to use the draw command by typing:</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sh</span> <span class="o">./</span><span class="n">draw</span><span class="o">.</span><span class="n">sh</span>
+</pre></div>
+</div>
+<p>Once the command prompt appeared I typed:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Draw</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">&gt;</span> <span class="n">source</span> <span class="n">samples</span><span class="o">/</span><span class="n">tcl</span><span class="o">/</span><span class="n">bottle</span><span class="o">.</span><span class="n">tcl</span>
+</pre></div>
+</div>
+<p>This showed an image of the bottle example from OpenCASCADE</p>
+<p>(This step did not work under OSX, but the final step and compilation
+of the TMR library with OpenCASCADE enabled worked anyway.)</p>
+<ol class="arabic simple" start="6">
+<li><p>I added the following lines to the Makefile.in code:</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Flags for debugging and regular compilation versions
+TMR_DEBUG_FLAGS = [...] -DTMR_HAS_OPENCASCADE
+TMR_FLAGS = [...] -DTMR_HAS_OPENCASCADE
+
+OPENCASCADE_INCLUDE = -I${CASROOT}/${CASARCH}/inc
+OPENCASCADE_LIB_PATH = -L${CASROOT}/${CASARCH}/lib -Wl,-rpath,${CASROOT}/${CASARCH}/lib
+OPENCASCADE_LIBS = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKPShape -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet -lPTKernel -ldl
+</pre></div>
+</div>
+<p>If using OpenCASCADE Community Edition (OCE) (not using compiled version):</p>
+<ol class="arabic simple">
+<li><p>Clone from git repository <a class="reference external" href="https://github.com/tpaviot/oce">https://github.com/tpaviot/oce</a> to $HOME/packages/</p></li>
+<li><p>Create an empty directory $HOME/packages/OpenCASCADE</p></li>
+<li><p>Get to $HOME/packages/oce</p></li>
+<li><p>Use the following commands in the directory $HOME/packages/oce</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>cmake -DOCE_INSTALL_PREFIX:PATH=$HOME/packages/OpenCASCADE
+</pre></div>
+</div>
+<p>This will build the libraries in $HOME/packages/OpenCASCADE</p>
+<ol class="arabic simple" start="5">
+<li><p>Once cmake is done, a Makefile should be created in $HOME/packages/oce Run the commands in $HOME/packages/oce: make, make install</p></li>
+<li><p>Once completed, the build files should show up in $HOME/packages/OpenCASCADE</p></li>
+<li><p>Add the following lines to my .bashrc file:</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Export the OpenCASCADE root directory
+export CASROOT=$HOME/packages/OpenCASCADE
+export PATH=$CASROOT/bin:$PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CASROOT/lib
+</pre></div>
+</div>
+<ol class="arabic simple" start="8">
+<li><p>Added the following lines to the tmr/Makefile.in code:</p></li>
+</ol>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># Flags for debugging and regular compilation versions
+TMR_DEBUG_FLAGS = [...] -DTMR_HAS_OPENCASCADE
+TMR_FLAGS = [...] -DTMR_HAS_OPENCASCADE
+
+OPENCASCADE_INCLUDE = -I${CASROOT}/${CASARCH}/include/oce
+OPENCASCADE_LIB_PATH = -L${CASROOT}/${CASARCH}/lib -Wl,-rpath,${CASROOT}/${CASARCH}/lib
+OPENCASCADE_LIBS = -lTKBool -lTKernel -lTKFeat -lTKBO -lTKGeomAlgo -lTKMath -lTKOffset -lTKPrim -lTKPShape -lTKTopAlgo -lTKBRep -lTKG2d -lTKG3d -lTKGeomBase -lTKShHealing -lTKSTEP -lTKSTEP209 -lTKSTEPBase -lTKSTEPAttr -lTKXSBase -lTKIGES -lTKFillet -lPTKernel -ldl
+</pre></div>
+</div>
 </div>
 </div>
 
@@ -123,9 +209,6 @@ etc. If using OpenCASCADE, additional flags are required</p></li>
         <li class="right" >
           <a href="py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li class="right" >
-          <a href="orthogonal_bracket.html" title="Orthogonal bracket"
-             >next</a> |</li>
         <li class="right" >
           <a href="error_estimation.html" title="Error Estimation"
              >previous</a> |</li>
