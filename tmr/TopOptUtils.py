@@ -170,6 +170,9 @@ def computeVertexLoad(name, forest, assembler, point_force):
             index = node - node_range[comm.rank]
             force_array[vars_per_node*index:vars_per_node*(index+1)] += point_force[:]
 
+    # Match the ordering of the vector
+    assembler.reorderVec(force)
+
     return force
 
 def computeTractionLoad(name, forest, assembler, trac):
@@ -525,7 +528,7 @@ class TopologyOptimizer:
         self.options.add_option('qn_diag_factor',
                                 desc='QN diagonal factor')
         self.options.add_option('bfgs_update_type', values=_bfgs_updates,
-                                desc='Barrier fraction')
+                                desc='Type of BFGS update to apply')
 
         desc = 'Boolean to indicate if a sequential linear method should be used'
         self.options.add_option('use_sequential_linear', types=bool,

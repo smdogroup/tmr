@@ -135,13 +135,22 @@ def create_problem(forest, bcs, props, nlevels):
     # Get the assembler object we just created
     assembler = problem.getAssembler()
 
-    # Create the load vectors, combine them, and set them
-    T = 1e3
-    force1 = TopOptUtils.computeVertexLoad('pt1', forest, assembler, [0.0, -T, 0.0])
-    force2 = TopOptUtils.computeVertexLoad('pt2', forest, assembler, [0.0, 0.0, -T])
-    force1.axpy(1.0, force2)
-    assembler.reorderVec(force1)
-    problem.setLoadCases([force1])
+    # Set the load
+    P = 1.0e3
+    force = TopOptUtils.computeVertexLoad('pt1', forest, assembler, [0, P, 0])
+    temp = TopOptUtils.computeVertexLoad('pt2', forest, assembler, [0, 0, P])
+    force.axpy(1.0, temp)
+
+    problem.setLoadCases([force])
+
+    # Compute the fixed mass target
+    lx = 50.0 # mm
+    ly = 10.0 # mm
+    lz = 10.0 # mm
+    vol = lx*ly*lz
+    vol_frac = 0.25
+    density = 2600.0
+    m_fixed = vol_frac*(vol*density)
 
     # Add the fixed mass constraint
     # (m_fixed - m(x))/m_fixed >= 0.0
@@ -169,8 +178,8 @@ p.add_argument('--prefix', type=str, default='./results')
 p.add_argument('--output_freq', type=int, default=1)
 
 # Mesh parameters
-p.add_argument('--htarget', type=float, default=4.0)
-p.add_argument('--init_depth', type=int, default=1)
+p.add_argument('--htarget', type=float, default=5.0)
+p.add_argument('--init_depth', type=int, default=4)
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--refine_flag', type=bool, nargs='+', default=[True])
 
@@ -192,7 +201,6 @@ p.add_argument('--qn_subspace', type=int, default=2)
 p.add_argument('--tr_penalty', type=float, default=15.0)
 
 # Optimization parameters
-p.add_argument('--vol_frac', type=float, default=0.15)
 p.add_argument('--q_penalty', type=float, nargs='+', default=[8.0])
 p.add_argument('--ks_weight', type=float, nargs='+', default=[25.0])
 p.add_argument('--eps', type=float, nargs='+', default=[0.1])
@@ -220,7 +228,7 @@ optimization_options = {
     # trust region subproblem)
     'max_qn_subspace': args.qn_subspace,
     'tol': 1e-8,
-    'maxiter': 500,
+    'maxiter': 50,
     'norm_type': 'L1',
     'barrier_strategy': 'Complementarity fraction',
     'start_strategy': 'Affine step'}
@@ -241,13 +249,6 @@ nu = [0.3]
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(rho, E, nu, k0=1e-3, eps=0.2, q=5.0)
-
-# Compute the volume of the bracket
-r = 10.0
-a = 50.0
-vol = r*r*a
-initial_mass = vol*np.average(rho)
-m_fixed = args.vol_frac*initial_mass
 
 # Set the values of the objective array
 obj_array = [ 1.0e2 ]
@@ -294,6 +295,9 @@ for step in range(max_iterations):
     lower = 0.05
     upper = 0.5
     TopOptUtils.densityBasedRefine(forest, assembler, lower=lower, upper=upper)
+
+    # Repartition the mesh
+    forest.repartition()
 
     # Output for visualization
     flag = (TACS.ToFH5.NODES | TACS.ToFH5.EXTRAS)

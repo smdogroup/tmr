@@ -10,7 +10,7 @@ This example demonstrates:
 
 Recommended arguments:
 
-mpirun -np n python --max_opt_iters 25 25 25 --mg_levels 2 3 4
+mpirun -np n python bernstein.py --max_opt_iters 25 25 25 --mg_levels 2 3 4
 
 This code performs a minimum compliance optimization with a fixed mass
 constraint using high-order plane stress elements with thermo-elastic
@@ -340,6 +340,9 @@ for step in range(max_iterations):
         upper = 0.95
         TopOptUtils.densityBasedRefine(forest, assembler, index=index,
             lower=lower, upper=upper, reverse=True)
+
+    # Repartition the mesh
+    forest.repartition()
 
 # Do an averaging of all the values and write to text file
 new_array=np.zeros(len(time_array))

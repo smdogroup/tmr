@@ -1899,9 +1899,12 @@ cdef class Model:
         index = 0
         for v in verts:
             pt = v.evalPoint()
+            name = v.getName()
+            if name is None:
+                name = 'Vertex %d'%(index)
             if vlabels:
-                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Vertex %d\"\n'%(
-                    pt[0], pt[1], pt[2], index))
+                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"%s\"\n'%(
+                    pt[0], pt[1], pt[2], name))
             fp.write('Zone T = \"Vertex %d\"\n'%(index))
             fp.write('%e %e %e 0 0 0\n'%(pt[0], pt[1], pt[2]))
             index += 1
@@ -1913,10 +1916,13 @@ cdef class Model:
             v1, v2 = e.getVertices()
             pt1 = v1.evalPoint()
             pt2 = v2.evalPoint()
+            name = e.getName()
+            if name is None:
+                name = 'Edge %d'%(index)
             if elabels:
                 pt = 0.5*(pt1 + pt2)
-                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Edge %d\"\n'%(
-                    pt[0], pt[1], pt[2], index))
+                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"%s\"\n'%(
+                    pt[0], pt[1], pt[2], name))
             fp.write('Zone T = \"Edge %d\"\n'%(index))
             fp.write('%e %e %e  %e %e %e\n'%(pt1[0], pt1[1], pt1[2],
                 pt2[0] - pt1[0], pt2[1] - pt1[1], pt2[2] - pt1[2]))
@@ -1958,10 +1964,13 @@ cdef class Model:
                         pts[i,0], pts[i,1], pts[i,2],
                         tx[i,0], tx[i,1], tx[i,2]))
 
+            name = f.getName()
+            if name is None:
+                name = 'Face %d'%(index)
             if count != 0 and flabels:
                 xav /= count
-                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"Face %d\"\n'%(
-                    xav[0], xav[1], xav[2], index))
+                fp.write('TEXT CS=GRID3D, X=%e, Y=%e, Z=%e, T=\"%s\"\n'%(
+                    xav[0], xav[1], xav[2], name))
 
             index += 1
         return

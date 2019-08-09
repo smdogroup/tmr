@@ -294,7 +294,7 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
 
   // Get the node numbers
   const int *nodes;
-  forest->getNodeNumbers(&nodes);
+  int num_local_nodes = forest->getNodeNumbers(&nodes);
 
   // Get the points
   TMRPoint *Xp;
@@ -302,6 +302,21 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
 
   TACSBVec *X = tacs->createNodeVec();
   X->incref();
+
+  // Get the node array from the TACSBVec object
+  TacsScalar *Xn;
+  X->getArray(&Xn);
+
+   // Loop over all the nodes
+  for ( int i = 0; i < num_local_nodes; i++ ){
+    if (nodes[i] >= range[mpi_rank] &&
+        nodes[i] < range[mpi_rank+1]){
+      int loc = nodes[i] - range[mpi_rank];
+      Xn[3*loc] = Xp[i].x;
+      Xn[3*loc+1] = Xp[i].y;
+      Xn[3*loc+2] = Xp[i].z;
+    }
+  }
 
   // Reorder the vector if needed
   tacs->reorderVec(X);
@@ -472,7 +487,7 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
 
   // Get the node numbers
   const int *nodes;
-  forest->getNodeNumbers(&nodes);
+  int num_local_nodes = forest->getNodeNumbers(&nodes);
 
   // Get the points
   TMRPoint *Xp;
@@ -481,9 +496,23 @@ void TMROctTACSCreator::setNodeLocations( TMROctForest *forest,
   TACSBVec *X = tacs->createNodeVec();
   X->incref();
 
+ // Get the node array from the TACSBVec object
+  TacsScalar *Xn;
+  X->getArray(&Xn);
+
+   // Loop over all the nodes
+  for ( int i = 0; i < num_local_nodes; i++ ){
+    if (nodes[i] >= range[mpi_rank] &&
+        nodes[i] < range[mpi_rank+1]){
+      int loc = nodes[i] - range[mpi_rank];
+      Xn[3*loc] = Xp[i].x;
+      Xn[3*loc+1] = Xp[i].y;
+      Xn[3*loc+2] = Xp[i].z;
+    }
+  }
+
   // Reorder the vector if needed
   tacs->reorderVec(X);
   tacs->setNodes(X);
   X->decref();
 }
-
