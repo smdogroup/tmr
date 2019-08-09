@@ -103,6 +103,7 @@ TMR has several dependencies. The current version of TMR requires the following 
 * ParOpt (for topology optimization)
 * Blossom V (for perfect matching in the Quad-Blossom algorithm)
 * METIS (for partitioning the coarse hexahedral/quadrilateral meshes)
+* OpenCASCADE
 
 In addition, the python interface for TMR requires the following:
 
