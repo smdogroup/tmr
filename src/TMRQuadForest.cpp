@@ -1552,6 +1552,12 @@ TMRQuadForest *TMRQuadForest::coarsen(){
     coarse->quadrants = queue->toArray();
     delete queue;
 
+    // Order the labels of the coarse octants
+    coarse->quadrants->getArray(&array, &size);
+    for ( int i = 0; i < size; i++ ){
+      array[i].tag = i;
+    }
+
     // Set the owner array
     coarse->quadrants->getArray(&array, &size);
     coarse->owners = new TMRQuadrant[ mpi_size ];

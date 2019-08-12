@@ -22,154 +22,10 @@ import numpy as np
 import argparse
 import os
 
-class OctCreator(TMR.OctTopoCreator):
-    def __init__(self, bcs, filt, props):
-        TMR.OctTopoCreator.__init__(bcs, filt)
-        self.props = props
-
-    def createElement(self, order, octant, index, weights):
-        '''Create the element'''
-        stiff = TMR.OctStiffness(self.props, index, weights)
-        elem = elements.Solid(2, stiff)
-        return elem
-
-class CreatorCallback:
-    def __init__(self, bcs, props):
-        self.bcs = bcs
-        self.props = props
-
-    def creator_callback(self, forest):
-        filtr = forest.duplicate()
-        filtr.coarsen()
-        creator = OctCreator(self.bcs, filtr, self.props)
-        return creator, filtr
-
-def create_forest(comm, depth, htarget):
-    """
-    Create an initial forest for analysis and optimization.
-
-    This code loads in the model, sets names, meshes the geometry and creates
-    an OctForest from the mesh. The forest is populated with octrees with
-    the specified depth.
-
-    Args:
-        comm (MPI_Comm): MPI communicator
-        depth (int): Depth of the initial trees
-        htarget (float): Target global element mesh size
-
-    Returns:
-        OctForest: Initial forest for topology optimization
-    """
-    # Load the geometry model
-    geo = TMR.LoadModel('../cantilever/cantilever.stp')
-
-    # Mark the boundary condition faces
-    verts = geo.getVertices()
-    edges = geo.getEdges()
-    faces = geo.getFaces()
-    volumes = geo.getVolumes()
-
-    faces[3].setName('fixed')
-    faces[4].setSource(volumes[0], faces[5])
-    verts[4].setName('pt1')
-    verts[3].setName('pt2')
-
-    # Set the boundary conditions for the problem
-    bcs = TMR.BoundaryConditions()
-    bcs.addBoundaryCondition('fixed')
-
-    # Create the mesh
-    mesh = TMR.Mesh(comm, geo)
-
-    # Set the meshing options
-    opts = TMR.MeshOptions()
-
-    # Create the surface mesh
-    mesh.mesh(args.htarget, opts)
-
-    # Create a model from the mesh
-    model = mesh.createModelFromMesh()
-
-    # Create the corresponding mesh topology from the mesh-model
-    topo = TMR.Topology(comm, model)
-
-    # Create the quad forest and set the topology of the forest
-    forest = TMR.OctForest(comm)
-    forest.setTopology(topo)
-
-    # Create the trees
-    forest.createTrees(depth)
-
-    return forest
-
-def create_problem(forest, bcs, props, nlevels):
-    """
-    Create a TopoProblem instance for mass and frequency constrained compliance
-    minimization.
-
-    This problem takes in a forest at the current refinement level, boundary
-    condition information storing the names of the geometric entities to apply
-    Dirichlet boundary conditions, the material properties and the number of
-    multigrid levels.
-
-    Args:
-        forest (OctForest): Forest object
-        bcs (BoundaryConditions): Boundary condition object
-        props (StiffnessProperties): Material properties object
-        nlevels (int): number of multigrid levels
-
-    Returns:
-        TopoProblem: Topology optimization problem instance
-    """
-
-    # Allocate the creator callback function
-    obj = CreatorCallback(bcs, props)
-
-    # Define the filter type
-    filter_type = 'conform'
-
-    # Create the problem and filter objects
-    problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
-        filter_type, nlevels=nlevels, lowest_order=2)
-
-    # Get the assembler object we just created
-    assembler = problem.getAssembler()
-
-    # Set the load
-    P = 1.0e3
-    force = TopOptUtils.computeVertexLoad('pt1', forest, assembler, [0, P, 0])
-    temp = TopOptUtils.computeVertexLoad('pt2', forest, assembler, [0, 0, P])
-    force.axpy(1.0, temp)
-
-    problem.setLoadCases([force])
-
-    # Compute the fixed mass target
-    lx = 50.0 # mm
-    ly = 10.0 # mm
-    lz = 10.0 # mm
-    vol = lx*ly*lz
-    vol_frac = 0.25
-    density = 2600.0
-    m_fixed = vol_frac*(vol*density)
-
-    # Add the fixed mass constraint
-    # (m_fixed - m(x))/m_fixed >= 0.0
-    funcs = [functions.StructuralMass(assembler)]
-    problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
-
-    # Add the natural frequency constraint
-    omega_min = (0.5/np.pi)*(2e4)**0.5
-    freq_opts = {'use_jd':args.use_jd, 'num_eigs':args.num_eigs,
-                 'num_recycle':args.num_recycle, 'track_eigen_iters':nlevels}
-    TopOptUtils.addNaturalFrequencyConstraint(problem, omega_min, **freq_opts)
-
-    # Set the compliance objective
-    problem.setObjective(obj_array)
-
-    # Initialize the problem and set the prefix
-    problem.initialize()
-
-    return problem
+# Import the cantilever example set up
+import sys
+sys.path.append('../cantilever/')
+from cantilever import OctCreator, CreatorCallback, create_forest, create_problem
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
@@ -250,15 +106,13 @@ nu = [0.3]
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(rho, E, nu, k0=1e-3, eps=0.2, q=5.0)
 
-# Set the values of the objective array
-obj_array = [ 1.0e2 ]
-
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
 bcs.addBoundaryCondition('fixed', [0, 1, 2], [0.0, 0.0, 0.0])
 
 # Create the initial forest
-forest = create_forest(comm, args.init_depth, args.htarget)
+forest = create_forest(comm, args.init_depth, htarget=args.htarget,
+    filename='../cantilever/cantilever.stp')
 
 # Set the original filter to NULL
 orig_filter = None
@@ -269,6 +123,14 @@ for step in range(max_iterations):
     # Create the TopoProblem instance
     nlevels = mg_levels[step]
     problem = create_problem(forest, bcs, props, nlevels)
+
+    # Add the natural frequency constraint
+    omega_min = (0.5/np.pi)*(2e4)**0.5
+    freq_opts = {'use_jd':args.use_jd, 'num_eigs':args.num_eigs,
+                 'num_recycle':args.num_recycle, 'track_eigen_iters':nlevels}
+    TopOptUtils.addNaturalFrequencyConstraint(problem, omega_min, **freq_opts)
+
+    problem.initialize()
     problem.setPrefix(args.prefix)
 
     # Extract the filter to interpolate design variables

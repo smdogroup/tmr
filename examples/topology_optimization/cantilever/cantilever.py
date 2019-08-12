@@ -79,12 +79,11 @@ class CreatorCallback:
         Returns:
             OctTopoCreator, OctForest: The creator and filter for this forest
         """
-        filtr = forest.duplicate()
-        filtr.coarsen()
+        filtr = forest.coarsen()
         creator = OctCreator(self.bcs, filtr, self.props)
         return creator, filtr
 
-def create_forest(comm, depth):
+def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
     """
     Create an initial forest for analysis. and optimization
 
@@ -101,7 +100,7 @@ def create_forest(comm, depth):
         OctForest: Initial forest for topology optimization
     """
     # Load the geometry model
-    geo = TMR.LoadModel('cantilever.stp')
+    geo = TMR.LoadModel(filename)
 
     # Mark the boundary condition faces
     verts = geo.getVertices()
@@ -121,7 +120,6 @@ def create_forest(comm, depth):
     opts = TMR.MeshOptions()
 
     # Create the surface mesh
-    htarget = 5.0
     mesh.mesh(htarget, opts)
 
     # Create a model from the mesh
@@ -160,6 +158,7 @@ def create_problem(forest, bcs, props, nlevels):
     """
 
     # Create the problem and filter object
+    filter_type = 'lagrange'
     obj = CreatorCallback(bcs, props)
     problem = TopOptUtils.createTopoProblem(forest,
         obj.creator_callback, filter_type, nlevels=nlevels)
@@ -192,94 +191,92 @@ def create_problem(forest, bcs, props, nlevels):
     # Set the objective (scale the compliance objective)
     problem.setObjective([1.0e3])
 
-    # Initialize the problem and set the prefix
-    problem.initialize()
-
     return problem
 
-# Set the optimization parameters
-optimization_options = {
-    # Parameters for the trust region method
-    'tr_init_size': 0.01,
-    'tr_max_size': 0.1,
-    'tr_min_size': 0.01,
-    'tr_eta': 0.25,
-    'tr_penalty_gamma': 20.0,
+if __name__ == '__main__':
 
-    # Parameters for the interior point method (used to solve the
-    # trust region subproblem)
-    'max_qn_subspace': 7,
-    'qn_diag_factor': 0.01,
-    'bfgs_update_type': 'Damped',
-    'tol': 1e-8,
-    'maxiter': 25,
-    'norm_type': 'L1',
-    'barrier_strategy': 'Complementarity fraction',
-    'start_strategy': 'Affine step'}
+    # Set the optimization parameters
+    optimization_options = {
+        # Parameters for the trust region method
+        'tr_init_size': 0.01,
+        'tr_max_size': 0.1,
+        'tr_min_size': 0.01,
+        'tr_eta': 0.25,
+        'tr_penalty_gamma': 20.0,
 
-prefix = 'results'
-optimization_options['output_file'] = os.path.join(prefix, 'output_file.dat')
-optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file.dat')
+        # Parameters for the interior point method (used to solve the
+        # trust region subproblem)
+        'max_qn_subspace': 2,
+        'bfgs_update_type': 'Damped',
+        'tol': 1e-8,
+        'maxiter': 25,
+        'norm_type': 'L1',
+        'barrier_strategy': 'Complementarity fraction',
+        'start_strategy': 'Affine step'}
 
-# Set the communicator
-comm = MPI.COMM_WORLD
+    prefix = 'results'
+    optimization_options['output_file'] = os.path.join(prefix, 'output_file.dat')
+    optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file.dat')
 
-# Set the type of filter to use
-filter_type = 'lagrange'
+    # Set the communicator
+    comm = MPI.COMM_WORLD
 
-order = 2 # Order of the mesh
-nlevels = 4 # Number of multigrid levels
-forest = create_forest(comm, nlevels-1)
+    order = 2 # Order of the mesh
+    nlevels = 4 # Number of multigrid levels
+    forest = create_forest(comm, nlevels-1)
 
-# Set the boundary conditions for the problem
-bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed')
+    # Set the boundary conditions for the problem
+    bcs = TMR.BoundaryConditions()
+    bcs.addBoundaryCondition('fixed')
 
-# Create the material properties
-density = 2600.0
-rho = [density]
-E = [70e9]
-nu = [0.3]
-props = TMR.StiffnessProperties(rho, E, nu)
+    # Create the material properties
+    density = 2600.0
+    rho = [density]
+    E = [70e9]
+    nu = [0.3]
+    props = TMR.StiffnessProperties(rho, E, nu)
 
-# Set the original filter to NULL
-orig_filter = None
-xopt = None
+    # Set the original filter to NULL
+    orig_filter = None
+    xopt = None
 
-max_iterations = 2
-for step in range(max_iterations):
-    # Create the problem
-    problem = create_problem(forest, bcs, props, nlevels)
-    problem.setPrefix(prefix)
+    max_iterations = 2
+    for step in range(max_iterations):
+        # Create the problem
+        problem = create_problem(forest, bcs, props, nlevels)
 
-    # Extract the filter to interpolate design variables
-    filtr = problem.getFilter()
+        # Initialize the problem and set the prefix
+        problem.initialize()
+        problem.setPrefix(prefix)
 
-    if orig_filter is not None:
-        # Create one of the new design vectors
-        x = problem.createDesignVec()
-        TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
-        problem.setInitDesignVars(x)
+        # Extract the filter to interpolate design variables
+        filtr = problem.getFilter()
 
-    orig_filter = filtr
+        if orig_filter is not None:
+            # Create one of the new design vectors
+            x = problem.createDesignVec()
+            TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
+            problem.setInitDesignVars(x)
 
-    # Optimize
-    opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
-    xopt = opt.optimize()
+        orig_filter = filtr
 
-    # Refine based solely on the value of the density variable
+        # Optimize
+        opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
+        xopt = opt.optimize()
+
+        # Refine based solely on the value of the density variable
+        assembler = problem.getAssembler()
+        TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
+
+        # Repartition the mesh
+        forest.repartition()
+
+    # Output for visualization
+    flag = (TACS.ToFH5.NODES |
+            TACS.ToFH5.DISPLACEMENTS |
+            TACS.ToFH5.STRAINS |
+            TACS.ToFH5.STRESSES |
+            TACS.ToFH5.EXTRAS)
     assembler = problem.getAssembler()
-    TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
-
-    # Repartition the mesh
-    forest.repartition()
-
-# Output for visualization
-flag = (TACS.ToFH5.NODES |
-        TACS.ToFH5.DISPLACEMENTS |
-        TACS.ToFH5.STRAINS |
-        TACS.ToFH5.STRESSES |
-        TACS.ToFH5.EXTRAS)
-assembler = problem.getAssembler()
-f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
-f5.writeToFile(os.path.join(prefix, 'cantilever.f5'))
+    f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
+    f5.writeToFile(os.path.join(prefix, 'cantilever.f5'))

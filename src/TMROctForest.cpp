@@ -2107,6 +2107,12 @@ TMROctForest *TMROctForest::coarsen(){
     coarse->octants = queue->toArray();
     delete queue;
 
+    // Order the labels of the coarse octants
+    coarse->octants->getArray(&array, &size);
+    for ( int i = 0; i < size; i++ ){
+      array[i].tag = i;
+    }
+
     // Set the owner array
     coarse->octants->getArray(&array, &size);
     coarse->owners = new TMROctant[ mpi_size ];
