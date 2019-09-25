@@ -24,7 +24,7 @@ debug:
 	${CXX} ${SO_LINK_FLAGS} ${TMR_OBJS} ${TMR_EXTERN_LIBS} -o ${TMR_DIR}/lib/libtmr.${SO_EXT}
 
 interface: 
-	python setup.py build_ext --inplace --define TMR_HAS_OPENCASCADE,TMR_HAS_EGADS
+	${PYTHON} setup.py build_ext --inplace --define TMR_HAS_OPENCASCADE,TMR_HAS_EGADS
 
 clean:
 	${RM} lib/*.a lib/*.so

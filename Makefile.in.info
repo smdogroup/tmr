@@ -6,6 +6,8 @@ TACS_DIR = ${HOME}/git/tacs
 PAROPT_DIR = ${HOME}/git/paropt
 CXX = mpicxx
 RM = rm -f
+PYTHON=python3
+PYTHON_CONFIG=python3-config
 
 # Flags for debugging and regular compilation versions
 TMR_DEBUG_FLAGS = -fPIC -g 
@@ -38,12 +40,12 @@ METIS_INCLUDE = -I${HOME}/hg/tacs/extern/metis/include
 METIS_LIB = ${HOME}/hg/tacs/extern/metis/lib/libmetis.a
 
 # If using the python interface you'll need to include python and numpy 
-PYTHON_INCLUDE = ${shell python-config --includes}
-NUMPY_DIR=${shell python -c "import numpy; print numpy.get_include()"}
+PYTHON_INCLUDE = ${shell ${PYTHON_CONFIG} --includes}
+NUMPY_DIR=${shell ${PYTHON} -c "import numpy; print(numpy.get_include())"}
 
 # If you're going to use the python interface you'll also have to have
 # a working version of mpi4py
-MPI4PY_DIR=${shell python -c "import mpi4py; print mpi4py.get_include()"}
+MPI4PY_DIR=${shell ${PYTHON} -c "import mpi4py; print(mpi4py.get_include())"}
 
 # Include the netgen libraries
 NETGEN_INCLUDE=-I${HOME}/packages/netgen/include/
