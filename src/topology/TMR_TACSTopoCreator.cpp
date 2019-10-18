@@ -19,11 +19,6 @@
 */
 
 #include "TMR_TACSTopoCreator.h"
-#include "TMROctStiffness.h"
-#include "TMRQuadStiffness.h"
-#include "FElibrary.h"
-#include "Solid.h"
-#include "PlaneStressQuad.h"
 
 /*
   Compare integers for sorting
@@ -55,7 +50,7 @@ TMROctTACSCreator(_bcs){
 
   // Set up the variable map for the design variable numbers
   int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
-  filter_map = new TACSVarMap(comm, num_filter_local);
+  filter_map = new TACSNodeMap(comm, num_filter_local);
   filter_map->incref();
 
   // Set the filter indices to NULL
@@ -76,7 +71,7 @@ void TMROctTACSTopoCreator::getFilter( TMROctForest **_filter ){
   *_filter = filter;
 }
 
-void TMROctTACSTopoCreator::getMap( TACSVarMap **_map ){
+void TMROctTACSTopoCreator::getMap( TACSNodeMap **_map ){
   *_map = filter_map;
 }
 
@@ -437,7 +432,7 @@ TMRQuadTACSCreator(_bcs){
 
   // Set up the variable map for the design variable numbers
   int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
-  filter_map = new TACSVarMap(comm, num_filter_local);
+  filter_map = new TACSNodeMap(comm, num_filter_local);
   filter_map->incref();
 
   // Set the filter indices to NULL
@@ -458,7 +453,7 @@ void TMRQuadTACSTopoCreator::getFilter( TMRQuadForest **_filter ){
   *_filter = filter;
 }
 
-void TMRQuadTACSTopoCreator::getMap( TACSVarMap **_map ){
+void TMRQuadTACSTopoCreator::getMap( TACSNodeMap **_map ){
   *_map = filter_map;
 }
 

@@ -22,7 +22,7 @@
 #define TMR_STL_TOOLS_H
 
 #include "TMROctForest.h"
-#include "BVec.h"
+#include "TACSBVec.h"
 
 /*
   The following file contains the tools required to generate an STL

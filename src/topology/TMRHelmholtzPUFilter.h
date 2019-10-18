@@ -30,12 +30,10 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
  public:
   TMRHelmholtzPUFilter( int _N, int _nlevels,
                         TACSAssembler *_tacs[],
-                        TMROctForest *_filter[],
-                        int _vars_per_node=1 );
+                        TMROctForest *_filter[] );
   TMRHelmholtzPUFilter( int _N, int _nlevels,
                         TACSAssembler *_tacs[],
-                        TMRQuadForest *_filter[],
-                        int _vars_per_node=1 );
+                        TMRQuadForest *_filter[] );
   ~TMRHelmholtzPUFilter();
 
   // Compute the stencil at an interior node
@@ -52,7 +50,7 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   void setDesignVars( TACSBVec *x );
 
   // Set values/add values to the vector
-  void addValues( TacsScalar *in, TACSBVec *out );
+  void addValues( TACSBVec *vec );
 
   void initialize();
  private:
@@ -92,18 +90,16 @@ class TMRCallbackHelmholtzPUFilter : public TMRHelmholtzPUFilter {
  public:
   TMRCallbackHelmholtzPUFilter( int _N, int _nlevels,
                                 TACSAssembler *_tacs[],
-                                TMROctForest *_filter[],
-                                int _vars_per_node=1 ):
-    TMRHelmholtzPUFilter(_N, _nlevels, _tacs, _filter, _vars_per_node){
+                                TMROctForest *_filter[] ):
+    TMRHelmholtzPUFilter(_N, _nlevels, _tacs, _filter){
     self = NULL;
     getinteriorstencil = NULL;
     getboundarystencil = NULL;
   }
   TMRCallbackHelmholtzPUFilter( int _N, int _nlevels,
                         TACSAssembler *_tacs[],
-                        TMRQuadForest *_filter[],
-                        int _vars_per_node=1 ):
-    TMRHelmholtzPUFilter(_N, _nlevels, _tacs, _filter, _vars_per_node){
+                        TMRQuadForest *_filter[] ):
+    TMRHelmholtzPUFilter(_N, _nlevels, _tacs, _filter){
     self = NULL;
     getinteriorstencil = NULL;
     getboundarystencil = NULL;

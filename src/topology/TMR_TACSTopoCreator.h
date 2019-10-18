@@ -23,7 +23,6 @@
 
 #include "TMR_TACSCreator.h"
 #include "TACSAssembler.h"
-#include "TMROctStiffness.h"
 
 /*
   This is an abstract base class used to create octforests specialized
@@ -51,7 +50,7 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
 
   // Get the underlying objects that define the filter
   void getFilter( TMROctForest **filter );
-  void getMap( TACSVarMap **_map );
+  void getMap( TACSNodeMap **_map );
   void getIndices( TACSBVecIndices **_indices );
 
  private:
@@ -65,7 +64,7 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
 
   // The filter map for this object. This defines how the design
   // variables are distributed across all of the processors.
-  TACSVarMap *filter_map;
+  TACSNodeMap *filter_map;
 
   // The filter indices. This defines the relationship between the
   // local design variable numbers and the global design variable
@@ -97,7 +96,7 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
 
   // Get the underlying objects that define the filter
   void getFilter( TMRQuadForest **filter );
-  void getMap( TACSVarMap **_map );
+  void getMap( TACSNodeMap **_map );
   void getIndices( TACSBVecIndices **_indices );
 
  private:
@@ -112,7 +111,7 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
 
   // The filter map for this object. This defines how the design
   // variables are distributed across all of the processors.
-  TACSVarMap *filter_map;
+  TACSNodeMap *filter_map;
 
   // The filter indices. This defines the relationship between the
   // local design variable numbers and the global design variable

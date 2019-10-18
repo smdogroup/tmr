@@ -436,73 +436,6 @@ cdef extern from "TMR_TACSCreator.h":
     cdef cppclass TMROctTACSCreator(TMREntity):
         TMROctTACSCreator(TMRBoundaryConditions*)
 
-cdef extern from "TMROctStiffness.h":
-    cdef cppclass TMRStiffnessProperties(TMREntity):
-        TMRStiffnessProperties(int, double, double, double, double, double,
-                               TacsScalar*, TacsScalar*, TacsScalar*,
-                               TacsScalar*, TacsScalar*, TacsScalar*,
-			       TacsScalar*,
-                               double, double, int)
-        int nmats
-        double q
-        double eps
-        double k0
-        double beta
-        double xoffset
-        double qtemp
-        double qcond
-
-    cdef cppclass TMRAnisotropicProperties(TMREntity):
-        TMRAnisotropicProperties(int, double, double, double, double,
-                                 TacsScalar*, TacsScalar*, int)
-        int nmats
-        double q
-        double k0
-        double beta
-        double xoffset
-
-    cdef cppclass TMROctStiffness(SolidStiffness):
-        TMROctStiffness(TMRIndexWeight*, int, TMRStiffnessProperties*)
-
-    cdef cppclass TMRAnisotropicStiffness(SolidStiffness):
-        TMRAnisotropicStiffness(TMRIndexWeight*, int,
-                                TMRAnisotropicProperties*)
-
-cdef extern from "TMRQuadStiffness.h":
-    cdef cppclass TMRQuadStiffnessProperties(TMREntity):
-        TMRQuadStiffnessProperties(int, double, double, double, double, double,
-                                   TacsScalar*, TacsScalar*, TacsScalar*,
-                                   TacsScalar*, TacsScalar*, TacsScalar*,
-				   TacsScalar*,
-                                   double, double, int)
-        int nmats
-        double q
-        double eps
-        double k0
-        double beta
-        double xoffset
-        double qtemp
-        double qcond
-
-    cdef cppclass TMRQuadStiffness(PlaneStressStiffness):
-        TMRQuadStiffness(TMRIndexWeight*, int, TMRQuadStiffnessProperties*)
-
-cdef extern from "TMRCoupledThermoQuadStiffness.h":
-   cdef cppclass TMRCoupledThermoQuadStiffness(CoupledThermoPlaneStressStiffness):
-        TMRCoupledThermoQuadStiffness(TMRIndexWeight*, int,
-                                      TMRQuadStiffnessProperties*,
-                                      TMRQuadForest*, int* )
-
-cdef extern from "TMRCoupledThermoOctStiffness.h":
-   cdef cppclass TMRCoupledThermoOctStiffness(CoupledThermoSolidStiffness):
-      TMRCoupledThermoOctStiffness(TMRIndexWeight*, int,
-                                   TMRStiffnessProperties*,
-                                   TMROctForest*, int*)
-
-cdef extern from "SolidShellWrapper.h":
-    cdef cppclass SolidShellWrapper(TACSElement):
-        pass
-
 cdef extern from "TMROpenCascade.h":
     cdef TMRModel* TMR_LoadModelFromIGESFile(const char*, int)
     cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*, int)
@@ -541,13 +474,6 @@ cdef extern from "TMR_RefinementTools.h":
     double TMR_AdjointErrorEst(TMROctForest*, TACSAssembler*,
                                TMROctForest*, TACSAssembler*,
                                TACSBVec*, TACSBVec*, double*, double*)
-    cdef cppclass TMRStressConstraint(TMREntity):
-         TMRStressConstraint(TMROctForest*, TACSAssembler*, TacsScalar)
-         TacsScalar evalConstraint(TACSBVec*)
-         void evalConDeriv(TacsScalar*, int, TACSBVec*)
-
-         void writeReconToTec(TACSBVec*, char*,
-                              TacsScalar)
 
 cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
@@ -579,7 +505,7 @@ cdef extern from "TMRCyCreator.h":
                 void*, int, TMRQuadrant*, TMRIndexWeight*, int))
         TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
         void getFilter(TMRQuadForest**)
-        void getMap(TACSVarMap**)
+        void getMap(TACSNodeMap**)
         void getIndices(TACSBVecIndices**)
 
     cdef cppclass TMRCyTopoOctCreator(TMREntity):
@@ -590,7 +516,7 @@ cdef extern from "TMRCyCreator.h":
                 void*, int, TMROctant*, TMRIndexWeight*, int))
         TACSAssembler *createTACS(TMROctForest*, OrderingType)
         void getFilter(TMROctForest**)
-        void getMap(TACSVarMap**)
+        void getMap(TACSNodeMap**)
         void getIndices(TACSBVecIndices**)
 
     cdef cppclass TMRCyTopoQuadConformCreator(TMREntity):
@@ -615,7 +541,6 @@ cdef extern from "TMRCyCreator.h":
 
 cdef extern from "TMRTopoFilter.h":
     cdef cppclass TMRTopoFilter(TMREntity):
-        TACSVarMap* getDesignVarMap()
         TACSAssembler *getAssembler()
 
 cdef class TopoFilter:
@@ -623,25 +548,23 @@ cdef class TopoFilter:
 
 cdef extern from "TMRLagrangeFilter.h":
     cdef cppclass TMRLagrangeFilter(TMRTopoFilter):
-        TMRLagrangeFilter(int, TACSAssembler**, TMROctForest**,
-                          TACSVarMap**, TACSBVecIndices**, int)
-        TMRLagrangeFilter(int, TACSAssembler**, TMRQuadForest**,
-                          TACSVarMap**, TACSBVecIndices**, int)
+        TMRLagrangeFilter(int, TACSAssembler**, TMROctForest**)
+        TMRLagrangeFilter(int, TACSAssembler**, TMRQuadForest**)
 
 cdef extern from "TMRConformFilter.h":
     cdef cppclass TMRConformFilter(TMRTopoFilter):
-        TMRConformFilter(int, TACSAssembler**, TMROctForest**, int)
-        TMRConformFilter(int, TACSAssembler**, TMRQuadForest**, int)
+        TMRConformFilter(int, TACSAssembler**, TMROctForest**)
+        TMRConformFilter(int, TACSAssembler**, TMRQuadForest**)
 
 cdef extern from "TMRHelmholtzFilter.h":
     cdef cppclass TMRHelmholtzFilter(TMRTopoFilter):
-        TMRHelmholtzFilter(double, int, TACSAssembler**, TMROctForest**, int)
-        TMRHelmholtzFilter(double, int, TACSAssembler**, TMRQuadForest**, int)
+        TMRHelmholtzFilter(double, int, TACSAssembler**, TMROctForest**)
+        TMRHelmholtzFilter(double, int, TACSAssembler**, TMRQuadForest**)
 
 cdef extern from "TMRMatrixFilter.h":
     cdef cppclass TMRMatrixFilter(TMRTopoFilter):
-        TMRMatrixFilter(double, int, int, TACSAssembler**, TMROctForest**, int)
-        TMRMatrixFilter(double, int, int, TACSAssembler**, TMRQuadForest**, int)
+        TMRMatrixFilter(double, int, int, TACSAssembler**, TMROctForest**)
+        TMRMatrixFilter(double, int, int, TACSAssembler**, TMRQuadForest**)
 
 cdef extern from "TMRHelmholtzPUFilter.h":
     ctypedef int (*getinteriorstencil)( void*, int, int,
@@ -651,9 +574,9 @@ cdef extern from "TMRHelmholtzPUFilter.h":
 
     cdef cppclass TMRCallbackHelmholtzPUFilter(TMRTopoFilter):
         TMRCallbackHelmholtzPUFilter(int, int, TACSAssembler**,
-                                     TMROctForest**, int)
+                                     TMROctForest**)
         TMRCallbackHelmholtzPUFilter(int, int, TACSAssembler**,
-                                     TMRQuadForest**, int)
+                                     TMRQuadForest**)
         void initialize()
         void setSelfPointer(void*)
         void setGetInteriorStencil(getinteriorstencil)
@@ -669,8 +592,6 @@ cdef extern from "TMRTopoProblem.h":
         int getNumLoadCases()
         void addConstraints(int, TACSFunction**,
                             const TacsScalar*, const TacsScalar*, int)
-        void addStressConstraint(int, TMRStressConstraint*,
-                                 TacsScalar, TacsScalar)
         void addLinearConstraints(ParOptVec**, TacsScalar*, int)
         void addFrequencyConstraint(double, int, TacsScalar,
                                     TacsScalar, TacsScalar, int,

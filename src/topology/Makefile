@@ -11,19 +11,18 @@ include ${PAROPT_DIR}/Makefile.in
 include ${PAROPT_DIR}/ParOpt_Common.mk
 endif
 
-CXX_OBJS = TMRTopoProblem.o \
-	TMRMatrixFilter.o \
-	TMRLagrangeFilter.o \
-	TMRConformFilter.o \
+CXX_OBJS = TMRMatrixFilter.o \
+	TMRMatrixFilterModel.o \
 	TMRHelmholtzFilter.o \
-	TMRHelmholtzPUFilter.o \
-	TMROctStiffness.o \
-	TMRQuadStiffness.o \
+	TMRHelmholtzModel.o \
 	TMR_TACSTopoCreator.o \
-	SolidShellWrapper.o \
-	TMRQuadStiffness.o \
-	TMRCoupledThermoQuadStiffness.o \
-	TMRCoupledThermoOctStiffness.o 
+	TMRConformFilter.o \
+	TMRLagrangeFilter.o \
+	TMRHelmholtzPUFilter.o \
+	TMRTopoProblem.o
+
+#	TMROctStiffness.o \
+	TMRQuadStiffness.o
 
 DIR=${TMR_DIR}/src/topology
 

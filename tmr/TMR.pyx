@@ -3735,9 +3735,9 @@ cdef class QuadCreator:
         self.ptr.decref()
 
     def createTACS(self, QuadForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
+                   OrderingType ordering=TACS.NATURAL_ORDER):
         """
-        createTACS(self, forest, order=TACS.PY_NATURAL_ORDER)
+        createTACS(self, forest, order=TACS.NATURAL_ORDER)
 
         Create the Assembler object calling self.createElement(self, order, quad)
         for each element in the finite-element mesh.
@@ -3792,7 +3792,7 @@ cdef class OctCreator:
         self.ptr.decref()
 
     def createTACS(self, OctForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
+                   OrderingType ordering=TACS.NATURAL_ORDER):
         """
         createTACS(self, forest, order=TACS.PY_NATURAL_ORDER)
 
@@ -3845,7 +3845,7 @@ cdef class QuadTopoCreator:
             self.ptr.decref()
 
     def createTACS(self, QuadForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
+                   OrderingType ordering=TACS.NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
@@ -3856,9 +3856,9 @@ cdef class QuadTopoCreator:
         return _init_QuadForest(filtr)
 
     def getMap(self):
-        cdef TACSVarMap *vmap = NULL
+        cdef TACSNodeMap *vmap = NULL
         self.ptr.getMap(&vmap)
-        return _init_VarMap(vmap)
+        return _init_NodeMap(vmap)
 
     def getIndices(self):
         cdef TACSBVecIndices *indices = NULL
@@ -3907,7 +3907,7 @@ cdef class QuadConformTopoCreator:
             self.ptr.decref()
 
     def createTACS(self, QuadForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
+                   OrderingType ordering=TACS.NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
@@ -3958,7 +3958,7 @@ cdef class OctTopoCreator:
             self.ptr.decref()
 
     def createTACS(self, OctForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
+                   OrderingType ordering=TACS.NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
@@ -3969,9 +3969,9 @@ cdef class OctTopoCreator:
         return _init_OctForest(filtr)
 
     def getMap(self):
-        cdef TACSVarMap *vmap = NULL
+        cdef TACSNodeMap *vmap = NULL
         self.ptr.getMap(&vmap)
-        return _init_VarMap(vmap)
+        return _init_NodeMap(vmap)
 
     def getIndices(self):
         cdef TACSBVecIndices *indices = NULL
@@ -4021,7 +4021,7 @@ cdef class OctConformTopoCreator:
             self.ptr.decref()
 
     def createTACS(self, OctForest forest,
-                   OrderingType ordering=TACS.PY_NATURAL_ORDER):
+                   OrderingType ordering=TACS.NATURAL_ORDER):
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
@@ -4030,372 +4030,6 @@ cdef class OctConformTopoCreator:
         cdef TMROctForest *filtr = NULL
         self.ptr.getFilter(&filtr)
         return _init_OctForest(filtr)
-
-cdef class StiffnessProperties:
-    cdef TMRStiffnessProperties *ptr
-    def __cinit__(self, list _rho, list _E, list _nu, list _ys=None,
-                  list _aT=None, list _kcond=None, list _maxT=None,
-                  double q=5.0, double qtemp=0.0, double qcond=0.0,
-                  double eps=0.3, double k0=1e-6,
-                  double beta=15.0, double xoffset=0.5, int use_project=0):
-        cdef TacsScalar *rho = NULL
-        cdef TacsScalar *E = NULL
-        cdef TacsScalar *nu = NULL
-        cdef TacsScalar *ys = NULL
-        cdef TacsScalar *aT = NULL
-        cdef TacsScalar *kcond = NULL
-        cdef TacsScalar *maxT = NULL
-        cdef int nmats = 0
-        if len(_rho) != len(_E) or len(_rho) != len(_nu):
-            errmsg = 'Must specify the same number of properties'
-            raise ValueError(errmsg)
-        nmats = len(_E)
-        rho = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        E = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        nu = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        if (_ys):
-            ys = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        if (_aT):
-            aT = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        if (_kcond):
-            kcond = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        if (_maxT):
-            maxT = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        for i in range(nmats):
-            rho[i] = <TacsScalar>_rho[i]
-            E[i] = <TacsScalar>_E[i]
-            nu[i] = <TacsScalar>_nu[i]
-            if (_ys):
-                ys[i] = <TacsScalar>_ys[i]
-            if (_aT):
-                aT[i]= <TacsScalar>_aT[i]
-            if (_kcond):
-                kcond[i] = <TacsScalar>_kcond[i]
-            if (_maxT):
-                maxT[i] = <TacsScalar>_maxT[i]
-        self.ptr = new TMRStiffnessProperties(nmats, q, eps, k0, beta, xoffset,
-                                              rho, E, nu, ys, aT, kcond, maxT,
-                                              qtemp, qcond, use_project)
-        self.ptr.incref()
-        free(rho)
-        free(E)
-        free(nu)
-        if (ys):
-            free(ys)
-        if (aT):
-            free(aT)
-        if (kcond):
-            free(kcond)
-        if (maxT):
-            free(maxT)
-        return
-
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
-    def getNumMaterials(self):
-        return self.ptr.nmats
-
-    property q:
-        def __get__(self):
-            return self.ptr.q
-        def __set__(self, value):
-            self.ptr.q = value
-
-    property eps:
-        def __get__(self):
-            return self.ptr.eps
-        def __set__(self, value):
-            self.ptr.eps = value
-
-cdef class QuadStiffnessProperties:
-    cdef TMRQuadStiffnessProperties *ptr
-    def __cinit__(self, list _rho, list _E, list _nu, list _ys=None,
-                  list _aT=None, list _kcond=None, list _maxT=None,
-                  double q=5.0, double qtemp=0.0, double qcond=0.0,
-                  double eps=0.3, double k0=1e-6,
-                  double beta=15.0, double xoffset=0.5, int use_project=0):
-        cdef TacsScalar *rho = NULL
-        cdef TacsScalar *E = NULL
-        cdef TacsScalar *nu = NULL
-        cdef TacsScalar *ys = NULL
-        cdef TacsScalar *aT = NULL
-        cdef TacsScalar *kcond = NULL
-        cdef TacsScalar *maxT = NULL
-        cdef int nmats = 0
-        if len(_rho) != len(_E) or len(_rho) != len(_nu):
-            errmsg = 'Must specify the same number of properties'
-            raise ValueError(errmsg)
-        nmats = len(_E)
-        rho = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        E = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        nu = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        if (_ys):
-            ys = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        if (_aT):
-            aT = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        if (_kcond):
-            kcond = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        if (_maxT):
-            maxT = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        for i in range(nmats):
-            rho[i] = <TacsScalar>_rho[i]
-            E[i] = <TacsScalar>_E[i]
-            nu[i] = <TacsScalar>_nu[i]
-            if (_ys):
-                ys[i] = <TacsScalar>_ys[i]
-            if (_aT):
-                aT[i]= <TacsScalar>_aT[i]
-            if (_kcond):
-                kcond[i] = <TacsScalar>_kcond[i]
-            if (_maxT):
-                maxT[i] = <TacsScalar>_maxT[i]
-        self.ptr = new TMRQuadStiffnessProperties(nmats, q, eps, k0, beta, xoffset,
-                                                  rho, E, nu, ys, aT, kcond, maxT,
-                                                  qtemp, qcond, use_project)
-        self.ptr.incref()
-        free(rho)
-        free(E)
-        free(nu)
-        if (ys):
-            free(ys)
-        if (aT):
-            free(aT)
-        if (kcond):
-            free(kcond)
-        if (maxT):
-            free(maxT)
-        return
-
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
-    def getNumMaterials(self):
-        return self.ptr.nmats
-
-    property q:
-        def __get__(self):
-            return self.ptr.q
-        def __set__(self, value):
-            self.ptr.q = value
-
-    property eps:
-        def __get__(self):
-            return self.ptr.eps
-        def __set__(self, value):
-            self.ptr.eps = value
-
-cdef class AnisotropicProperties:
-    cdef TMRAnisotropicProperties *ptr
-    def __cinit__(self, list _rho, list _C,
-                  double q=5.0, double k0=1e-6,
-                  double beta=15.0, double xoffset=0.5, int use_project=0):
-        cdef TacsScalar *rho = NULL
-        cdef TacsScalar *C = NULL
-        cdef int nmats = 0
-        if len(_rho) != len(_C):
-            errmsg = 'Must specify the correct number of properties'
-            raise ValueError(errmsg)
-        nmats = len(_rho)
-        rho = <TacsScalar*>malloc(nmats*sizeof(TacsScalar));
-        C = <TacsScalar*>malloc(21*nmats*sizeof(TacsScalar));
-
-        for i in range(nmats):
-            rho[i] = <TacsScalar>_rho[i]
-        for i in range(nmats):
-            for j in range(21):
-                C[21*i+j] = <TacsScalar>_C[i][j]
-        self.ptr = new TMRAnisotropicProperties(nmats, q, k0, beta, xoffset,
-                                                rho, C, use_project)
-        self.ptr.incref()
-        free(rho)
-        free(C)
-        return
-
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
-    def getNumMaterials(self):
-        return self.ptr.nmats
-
-    property q:
-        def __get__(self):
-            return self.ptr.q
-        def __set__(self, value):
-            self.ptr.q = value
-
-cdef class OctStiffness(SolidStiff):
-    def __cinit__(self, StiffnessProperties props,
-                  list index=None, list weights=None):
-        cdef TMRIndexWeight *w = NULL
-        cdef int nw = 0
-        self.ptr = NULL
-        if weights is None or index is None:
-            errmsg = 'Must define weights and indices'
-            raise ValueError(errmsg)
-        if len(weights) != len(index):
-            errmsg = 'Weights and index list lengths must be the same'
-            raise ValueError(errmsg)
-
-        # Extract the weights
-        nw = len(weights)
-        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
-        for i in range(nw):
-            w[i].weight = <double>weights[i]
-            w[i].index = <int>index[i]
-
-        # Create the constitutive object
-        self.ptr = new TMROctStiffness(w, nw, props.ptr)
-        self.ptr.incref()
-        free(w)
-        return
-
-cdef class ThermoOctStiffness(CoupledSolid):
-    def __cinit__(self, StiffnessProperties props,
-                  list index=None, list weights=None,
-                  OctForest filtr=None):
-        cdef TMRIndexWeight *w = NULL
-        cdef int* ind = NULL
-        cdef int nw = 0
-        self.ptr = NULL
-        cdef TMROctForest *of = NULL
-        # if weights is None or index is None:
-        #     errmsg = 'Must define weights and indices'
-        #     raise ValueError(errmsg)
-        # if len(weights) != len(index):
-        #     errmsg = 'Weights and index list lengths must be the same'
-        #     raise ValueError(errmsg)
-        # Extract the weights
-        if weights:
-            nw = len(weights)
-            w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
-            for i in range(nw):
-                w[i].weight = <double>weights[i]
-                w[i].index = <int>index[i]
-        else:
-            nw = len(index)
-            ind = <int*>malloc(nw*sizeof(int));
-            for i in range(nw):
-                ind[i] = <int>index[i]
-        if filtr:
-            of = filtr.ptr
-        # Create the constitutive object
-        self.ptr = new TMRCoupledThermoOctStiffness(w, nw, props.ptr, of, ind)
-        self.ptr.incref()
-        if w:
-            free(w)
-        if ind:
-            free(ind)
-        return
-
-cdef class QuadStiffness(PlaneStress):
-    def __cinit__(self, QuadStiffnessProperties props,
-                  list index=None, list weights=None):
-        cdef TMRIndexWeight *w = NULL
-        cdef int nw = 0
-        self.ptr = NULL
-        if weights is None or index is None:
-            errmsg = 'Must define weights and indices'
-            raise ValueError(errmsg)
-        if len(weights) != len(index):
-            errmsg = 'Weights and index list lengths must be the same'
-            raise ValueError(errmsg)
-
-        # # Check that the lengths are less than 4
-        # if len(weights) > 4:
-        #     errmsg = 'Weight/index lists too long > 4'
-        #     raise ValueError(errmsg)
-
-        # Extract the weights
-        nw = len(weights)
-        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
-        for i in range(nw):
-            w[i].weight = <double>weights[i]
-            w[i].index = <int>index[i]
-
-        # Create the constitutive object
-        self.ptr = new TMRQuadStiffness(w, nw, props.ptr)
-        self.ptr.incref()
-        free(w)
-        return
-
-cdef class ThermoQuadStiffness(CoupledPlaneStress):
-    def __cinit__(self, QuadStiffnessProperties props,
-                  list index=None, list weights=None,
-                  QuadForest filtr=None ):
-        cdef TMRIndexWeight *w = NULL
-        cdef int* ind = NULL
-        cdef int nw = 0
-        self.ptr = NULL
-        cdef TMRQuadForest *qf = NULL
-        # if weights is None or index is None:
-        #     errmsg = 'Must define weights and indices'
-        #     raise ValueError(errmsg)
-        # if len(weights) != len(index):
-        #     errmsg = 'Weights and index list lengths must be the same'
-        #     raise ValueError(errmsg)
-
-        # # Check that the lengths are less than 4
-        # if len(weights) > 4:
-        #     errmsg = 'Weight/index lists too long > 4'
-        #     raise ValueError(errmsg)
-
-        # Extract the weights
-        if weights:
-            nw = len(weights)
-            w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
-            for i in range(nw):
-                w[i].weight = <double>weights[i]
-                w[i].index = <int>index[i]
-        else:
-            nw = len(index)
-            ind = <int*>malloc(nw*sizeof(int));
-            for i in range(nw):
-                ind[i] = <int>index[i]
-
-        if filtr:
-            qf = filtr.ptr
-        # Create the constitutive object
-        self.ptr =new TMRCoupledThermoQuadStiffness(w, nw, props.ptr, qf, ind)
-        self.ptr.incref()
-        if w:
-            free(w)
-        if ind:
-            free(ind)
-        return
-
-cdef class AnisotropicStiffness(SolidStiff):
-    def __cinit__(self, AnisotropicProperties props,
-                  list index=None, list weights=None):
-        cdef TMRIndexWeight *w = NULL
-        cdef int nw = 0
-        self.ptr = NULL
-        if weights is None or index is None:
-            errmsg = 'Must define weights and indices'
-            raise ValueError(errmsg)
-        if len(weights) != len(index):
-            errmsg = 'Weights and index list lengths must be the same'
-            raise ValueError(errmsg)
-
-        # Check that the lengths are less than 8
-        if len(weights) > 8:
-            errmsg = 'Weight/index lists too long > 8'
-            raise ValueError(errmsg)
-
-        # Extract the weights
-        nw = len(weights)
-        w = <TMRIndexWeight*>malloc(nw*sizeof(TMRIndexWeight));
-        for i in range(nw):
-            w[i].weight = <double>weights[i]
-            w[i].index = <int>index[i]
-
-        # Create the constitutive object
-        self.ptr = new TMRAnisotropicStiffness(w, nw, props.ptr)
-        self.ptr.incref()
-        free(w)
 
 def createMg(list assemblers, list forests, double omega=1.0,
              use_coarse_direct_solve=True,
@@ -4643,50 +4277,15 @@ def writeSTLToBin(fname, OctForest forest,
     TMR_GenerateBinFile(filename, forest.ptr, x.ptr, offset, cutoff)
     return
 
-cdef class StressConstraint:
-    cdef TMRStressConstraint *ptr
-    def __cinit__(self, OctForest oct, Assembler assembler,
-                  TacsScalar ks_weight):
-        self.ptr = NULL
-        self.ptr = new TMRStressConstraint(oct.ptr,
-                                           assembler.ptr,
-                                           ks_weight)
-        self.ptr.incref()
-
-    def __dealloc__(self):
-        if self.ptr:
-           self.ptr.decref()
-
-    def evalCon(self, Vec uvec):
-        return self.ptr.evalConstraint(uvec.ptr)
-
-    def evalConDeriv(self,
-                     np.ndarray[double, ndim=1, mode='c'] dfdx,
-                     Vec dfdu):
-        cdef int size = len(dfdx)
-        self.ptr.evalConDeriv(<TacsScalar*>dfdx.data, size,
-                              dfdu.ptr)
-        return
-
-    def writeReconToTec(self, Vec uvec, fname, TacsScalar ys=1e6):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
-        self.ptr.writeReconToTec(uvec.ptr, filename, ys)
-        return
-
 cdef class LagrangeFilter(TopoFilter):
-    def __cinit__(self, list assemblers, list filters,
-                  list varmaps=[], list varindices=[], int vars_per_node=1):
+    def __cinit__(self, list assemblers, list filters):
         cdef int nlevels = 0
         cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
         cdef TMROctForest **ofiltr = NULL
         cdef TMRQuadForest **qfiltr = NULL
-        cdef TACSVarMap **vmaps = NULL
-        cdef TACSBVecIndices **vindex = NULL
 
-        if (len(assemblers) != len(filters) or
-            len(assemblers) != len(varmaps) or
-            len(assemblers) != len(varindices)):
+        if (len(assemblers) != len(filters)):
             errmsg = 'LagrangeFilter must have equal number of objects in lists'
             raise ValueError(errmsg)
 
@@ -4698,20 +4297,13 @@ cdef class LagrangeFilter(TopoFilter):
                 isqforest = 0
 
         assemb = <TACSAssembler**>malloc(nlevels*sizeof(TACSAssembler*))
-        vmaps = <TACSVarMap**>malloc(nlevels*sizeof(TACSVarMap*))
-        vindex = <TACSBVecIndices**>malloc(nlevels*sizeof(TACSBVecIndices*))
-
-        for i in range(nlevels):
-            vmaps[i] = (<VarMap>varmaps[i]).ptr
-            vindex[i] = (<VecIndices>varindices[i]).ptr
 
         if isqforest:
             qfiltr = <TMRQuadForest**>malloc(nlevels*sizeof(TMRQuadForest*))
             for i in range(nlevels):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRLagrangeFilter(nlevels, assemb, qfiltr,
-                                             vmaps, vindex, vars_per_node)
+            self.ptr = new TMRLagrangeFilter(nlevels, assemb, qfiltr)
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -4719,14 +4311,11 @@ cdef class LagrangeFilter(TopoFilter):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRLagrangeFilter(nlevels, assemb, ofiltr,
-                                             vmaps, vindex, vars_per_node)
+            self.ptr = new TMRLagrangeFilter(nlevels, assemb, ofiltr)
             self.ptr.incref()
             free(ofiltr)
 
         free(assemb)
-        free(vmaps)
-        free(vindex)
         return
 
     def __dealloc__(self):
@@ -4734,7 +4323,7 @@ cdef class LagrangeFilter(TopoFilter):
             self.ptr.decref()
 
 cdef class ConformFilter(TopoFilter):
-    def __cinit__(self, list assemblers, list filters, int vars_per_node=1):
+    def __cinit__(self, list assemblers, list filters):
         cdef int nlevels = 0
         cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
@@ -4758,8 +4347,7 @@ cdef class ConformFilter(TopoFilter):
             for i in range(nlevels):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRConformFilter(nlevels, assemb, qfiltr,
-                                            vars_per_node)
+            self.ptr = new TMRConformFilter(nlevels, assemb, qfiltr)
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -4767,8 +4355,7 @@ cdef class ConformFilter(TopoFilter):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRConformFilter(nlevels, assemb, ofiltr,
-                                            vars_per_node)
+            self.ptr = new TMRConformFilter(nlevels, assemb, ofiltr)
             self.ptr.incref()
             free(ofiltr)
 
@@ -4780,8 +4367,7 @@ cdef class ConformFilter(TopoFilter):
             self.ptr.decref()
 
 cdef class HelmholtzFilter(TopoFilter):
-    def __cinit__(self, double radius, list assemblers,
-                  list filters, int vars_per_node=1):
+    def __cinit__(self, double radius, list assemblers, list filters):
         cdef int nlevels = 0
         cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
@@ -4805,8 +4391,7 @@ cdef class HelmholtzFilter(TopoFilter):
             for i in range(nlevels):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRHelmholtzFilter(radius, nlevels, assemb, qfiltr,
-                                              vars_per_node)
+            self.ptr = new TMRHelmholtzFilter(radius, nlevels, assemb, qfiltr)
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -4814,8 +4399,7 @@ cdef class HelmholtzFilter(TopoFilter):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRHelmholtzFilter(radius, nlevels, assemb, ofiltr,
-                                              vars_per_node)
+            self.ptr = new TMRHelmholtzFilter(radius, nlevels, assemb, ofiltr)
             self.ptr.incref()
             free(ofiltr)
 
@@ -4826,12 +4410,8 @@ cdef class HelmholtzFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
-    def getMap(self):
-        return _init_VarMap(self.ptr.getDesignVarMap())
-
 cdef class MatrixFilter(TopoFilter):
-    def __cinit__(self, double s, int N, list assemblers,
-                  list filters, int vars_per_node=1):
+    def __cinit__(self, double s, int N, list assemblers, list filters):
         cdef int nlevels = 0
         cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
@@ -4855,8 +4435,7 @@ cdef class MatrixFilter(TopoFilter):
             for i in range(nlevels):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRMatrixFilter(s, N, nlevels, assemb, qfiltr,
-                                           vars_per_node)
+            self.ptr = new TMRMatrixFilter(s, N, nlevels, assemb, qfiltr)
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -4864,8 +4443,7 @@ cdef class MatrixFilter(TopoFilter):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRMatrixFilter(s, N, nlevels, assemb, ofiltr,
-                                           vars_per_node)
+            self.ptr = new TMRMatrixFilter(s, N, nlevels, assemb, ofiltr)
             self.ptr.incref()
             free(ofiltr)
 
@@ -4925,8 +4503,7 @@ cdef int _getboundarystencil(void *_self, int diag,
     return fail
 
 cdef class HelmholtzPUFilter(TopoFilter):
-    def __cinit__(self, int N, list assemblers,
-                  list filters, int vars_per_node=1):
+    def __cinit__(self, int N, list assemblers, list filters):
         cdef int nlevels = 0
         cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
@@ -4952,7 +4529,7 @@ cdef class HelmholtzPUFilter(TopoFilter):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
             me = new TMRCallbackHelmholtzPUFilter(N, nlevels, assemb,
-                                                  qfiltr, vars_per_node)
+                                                  qfiltr)
             self.ptr = me
             self.ptr.incref()
             free(qfiltr)
@@ -4962,7 +4539,7 @@ cdef class HelmholtzPUFilter(TopoFilter):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
             me = new TMRCallbackHelmholtzPUFilter(N, nlevels, assemb,
-                                                  ofiltr, vars_per_node)
+                                                  ofiltr)
             self.ptr = me
             self.ptr.incref()
             free(ofiltr)
@@ -4980,9 +4557,6 @@ cdef class HelmholtzPUFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
-
-    def getMap(self):
-        return _init_VarMap(self.ptr.getDesignVarMap())
 
 def convertPVecToVec(PVec pvec):
     """
@@ -5195,29 +4769,6 @@ cdef class TopoProblem(ProblemBase):
         free(f)
         free(_offset)
         free(_scale)
-        return
-
-    def addStressConstraint(self, int case, StressConstraint sc,
-                            TacsScalar offset=1.0, TacsScalar scale=1.0):
-        """
-        addStressConstraint(self, case, sc, offset=1.0, scale=1.0)
-
-        Add a stress constraint formulated with stress reconstruction.
-
-        scale*(sc + offset) >= 0
-
-        Args:
-            case (int): Load case index
-            sc (StressConstraint): Stress constraint instance
-            offset (float): Constraint offset
-            scale (float): Constraint scaling
-        """
-        cdef TMRTopoProblem *prob = NULL
-        prob = _dynamicTopoProblem(self.ptr)
-        if prob == NULL:
-            errmsg = 'Expected TMRTopoProblem got other type'
-            raise ValueError(errmsg)
-        prob.addStressConstraint(case, sc.ptr, offset, scale)
         return
 
     def addLinearConstraints(self, list vecs, list offset):

@@ -13,11 +13,10 @@ _barrier_types = ['Monotone', 'Mehrotra', 'Complementarity fraction']
 _start_types = ['None', 'Least squares multipliers', 'Affine step']
 _bfgs_updates = ['Skip negative', 'Damped']
 
-
 def createTopoProblem(forest, callback, filter_type, nlevels=2,
                       repartition=True, design_vars_per_node=1,
                       s=2.0, N=10, r0=0.05, lowest_order=2,
-                      ordering=TACS.PY_MULTICOLOR_ORDER,
+                      ordering=TACS.MULTICOLOR_ORDER,
                       scale_coordinate_factor=1.0):
     """
     Create a topology optimization problem instance and a hierarchy of meshes.
@@ -58,8 +57,6 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
     forests = []
     filters = []
     assemblers = []
-    varmaps = []
-    vecindices = []
 
     # Balance the forest and repartition across processors
     forest.balance(1)
@@ -98,10 +95,6 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
         filters.append(filtr)
         assemblers.append(creator.createTACS(forest, ordering))
 
-        if filter_type == 'lagrange':
-            varmaps.append(creator.getMap())
-            vecindices.append(creator.getIndices())
-
     # Scale the coordinates by scale_coordinates factor if it is != 1.0
     if scale_coordinate_factor != 1.0:
         for assembler in assemblers:
@@ -116,18 +109,13 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
     # Create the TMRTopoFilter object
     filter_obj = None
     if filter_type == 'lagrange':
-        filter_obj = TMR.LagrangeFilter(assemblers, filters,
-                                        varmaps, vecindices,
-                                        vars_per_node=design_vars_per_node)
+        filter_obj = TMR.LagrangeFilter(assemblers, filters)
     elif filter_type == 'matrix':
-        filter_obj = TMR.MatrixFilter(s, N, assemblers, forests,
-                                      vars_per_node=design_vars_per_node)
+        filter_obj = TMR.MatrixFilter(s, N, assemblers, forests)
     elif filter_type == 'conform':
-        filter_obj = TMR.ConformFilter(assemblers, filters,
-                                       vars_per_node=design_vars_per_node)
+        filter_obj = TMR.ConformFilter(assemblers, filters)
     elif filter_type == 'helmholtz':
-        filter_obj = TMR.HelmholtzFiler(r0, assemblers, filters,
-                                        vars_per_node=design_vars_per_node)
+        filter_obj = TMR.HelmholtzFiler(r0, assemblers, filters)
 
     problem = TMR.TopoProblem(filter_obj, mg)
 
@@ -275,12 +263,12 @@ def interpolateDesignVec(orig_filter, orig_vec, new_filter, new_vec):
     if orig_x.getVarsPerNode() != new_x.getVarsPerNode():
         raise ValueError('Number of variables per node must be consistent')
 
-    orig_varmap = orig_x.getVarMap()
-    new_varmap = new_x.getVarMap()
+    orig_map = orig_x.getNodeMap()
+    new_map = new_x.getNodeMap()
     vars_per_node = orig_x.getVarsPerNode()
 
     # Create the interpolation class
-    interp = TACS.VecInterp(orig_varmap, new_varmap, vars_per_node)
+    interp = TACS.VecInterp(orig_map, new_map, vars_per_node)
     new_filter.createInterpolation(orig_filter, interp)
     interp.initialize()
 
@@ -626,9 +614,9 @@ class TopologyOptimizer:
         Args:
             problem (ParOpt.Problem): ParOpt.Problem optimization problem
         """
-         # TODO:
-         # - logic for different opt algorithms
-         # - treat equality constraints
+        # TODO:
+        # - logic for different opt algorithms
+        # - treat equality constraints
 
         opt_type = self.options['optimizer']
 

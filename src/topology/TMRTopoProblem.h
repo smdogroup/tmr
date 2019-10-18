@@ -27,10 +27,9 @@
 #include "TMRTopoFilter.h"
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
-#include "TMR_RefinementTools.h"
-#include "StructuralMass.h"
-#include "Compliance.h"
-#include "KSFailure.h"
+// #include "TMR_RefinementTools.h"op
+#include "TACSStructuralMass.h"
+#include "TACSKSFailure.h"
 #include "TACSBuckling.h"
 
 /*
@@ -78,8 +77,8 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Set the output frequency, element type and flags for f5 files
   // -------------------------------------------------------------
-  void setF5OutputFlags( int freq, ElementType elem_type, unsigned int flag );
-  void setF5EigenOutputFlags( int freq, ElementType elem_type, unsigned int flag );
+  void setF5OutputFlags( int freq, ElementType elem_type, int flag );
+  void setF5EigenOutputFlags( int freq, ElementType elem_type, int flag );
 
   // Add constraints associated with one of the load cases
   // -----------------------------------------------------
@@ -87,10 +86,10 @@ class TMRTopoProblem : public ParOptProblem {
                        const TacsScalar *_func_offset,
                        const TacsScalar *_func_scale,
                        int num_funcs );
-  void addStressConstraint( int _load_case,
-                            TMRStressConstraint *stress_func,
-                            TacsScalar _constr_offset=1.0,
-                            TacsScalar _constr_scale=1.0 );
+//  void addStressConstraint( int _load_case,
+//                            TMRStressConstraint *stress_func,
+//                            TacsScalar _constr_offset=1.0,
+//                            TacsScalar _constr_scale=1.0 );
   void addLinearConstraints( ParOptVec **vecs,
                              TacsScalar *offset,
                              int _ncon );
@@ -221,7 +220,7 @@ class TMRTopoProblem : public ParOptProblem {
   int iter_count;
 
   // Set the number of variables per node (defaults to 1)
-  int vars_per_node;
+  int design_vars_per_node;
 
   // Set the load case information. In this case, these are force
   // vectors for each load case
@@ -270,18 +269,14 @@ class TMRTopoProblem : public ParOptProblem {
     TacsScalar *offset;
     TacsScalar *scale;
     TACSFunction **funcs;
-    TMRStressConstraint *stress_func;
+    // TMRStressConstraint *stress_func;
     TacsScalar stress_func_offset;
     TacsScalar stress_func_scale;
   } *load_case_info;
 
   // Store the design variable info
-  TACSAssembler *tacs;
+  TACSAssembler *assembler;
   TMRTopoFilter *filter;
-
-  // The initial design variable values
-  int max_local_size;
-  TacsScalar *xlocal;
 
   // Store the Krylov solver and the multigrid object
   TACSKsm *ksm;
@@ -294,7 +289,7 @@ class TMRTopoProblem : public ParOptProblem {
   // Information to control the output frequency
   int f5_frequency, f5_eigen_frequency;
   ElementType f5_element_type, f5_eigen_element_type;
-  unsigned int f5_write_flag, f5_eigen_write_flag;
+  int f5_write_flag, f5_eigen_write_flag;
 };
 
 #endif // TMR_TOPO_PROBLEM_H

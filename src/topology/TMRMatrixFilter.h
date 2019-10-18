@@ -60,24 +60,22 @@ class TMRMatrixFilter : public TMRConformFilter {
  public:
   TMRMatrixFilter( double _s, int _N, int _nlevels,
                    TACSAssembler *_tacs[],
-                   TMROctForest *_filter[],
-                   int _vars_per_node=1 );
+                   TMROctForest *_filter[] );
   TMRMatrixFilter( double _s, int _N, int _nlevels,
                    TACSAssembler *_tacs[],
-                   TMRQuadForest *_filter[],
-                   int _vars_per_node=1 );
+                   TMRQuadForest *_filter[] );
   ~TMRMatrixFilter();
 
   // Set the design variable values (including all local values)
   void setDesignVars( TACSBVec *x );
 
   // Set values/add values to the vector
-  void addValues( TacsScalar *in, TACSBVec *out );
+  void addValues( TACSBVec *vec );
 
  private:
   void initialize_matrix( double _s, int _N,
                           TMROctForest *oct_filter,
-                          TMRQuadForest *quad_filter);
+                          TMRQuadForest *quad_filter );
 
   // Apply the filter to get the density values
   void applyFilter( TACSBVec *in, TACSBVec *out );

@@ -23,9 +23,9 @@ CXX_OBJS = TMRBase.o \
 	TMRBspline.o \
 	TMRTopology.o \
 	TMRNativeTopology.o \
-	TMR_RefinementTools.o \
 	TMR_STLTools.o \
-	TMR_TACSCreator.o
+	TMR_TACSCreator.o \
+	TMR_RefinementTools.o
 
 DIR=${TMR_DIR}/src
 

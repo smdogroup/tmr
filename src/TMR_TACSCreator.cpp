@@ -194,7 +194,7 @@ TACSAssembler*
   // variables-per-node
   int vars_per_node = 0;
   if (num_elements > 0){
-    vars_per_node = elements[0]->numDisplacements();
+    vars_per_node = elements[0]->getVarsPerNode();
   }
   MPI_Allreduce(MPI_IN_PLACE, &vars_per_node, 1, MPI_INT, MPI_MAX, comm);
 
@@ -204,7 +204,7 @@ TACSAssembler*
                       num_owned_nodes, num_elements, num_dep_nodes);
 
   // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(conn, ptr);
+  tacs->setElementConnectivity(ptr, conn);
   delete [] ptr;
 
   // Set the dependent node information
@@ -385,7 +385,7 @@ TACSAssembler*
   // variables-per-node
   int vars_per_node = 0;
   if (num_elements > 0){
-    vars_per_node = elements[0]->numDisplacements();
+    vars_per_node = elements[0]->getVarsPerNode();
   }
   MPI_Allreduce(MPI_IN_PLACE, &vars_per_node, 1, MPI_INT, MPI_MAX, comm);
 
@@ -395,7 +395,7 @@ TACSAssembler*
                       num_owned_nodes, num_elements, num_dep_nodes);
 
   // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(conn, ptr);
+  tacs->setElementConnectivity(ptr, conn);
   delete [] ptr;
 
   // Set the dependent node information

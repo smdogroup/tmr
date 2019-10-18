@@ -18,8 +18,12 @@
   limitations under the License.
 */
 
+#include "TMRMatrixFilterModel.h"
 #include "TMRMatrixFilter.h"
-#include "TMRMatrixFilterElement.h"
+#include "TACSQuadBasis.h"
+#include "TACSHexaBasis.h"
+#include "TACSElement2D.h"
+#include "TACSElement3D.h"
 #include "TMR_TACSCreator.h"
 
 /*
@@ -33,22 +37,21 @@ public:
                        TMRQuadForest *forest,
                        int num_elements,
                        TACSElement **elements ){
-    TACSElement *elem = NULL;
+    TACSElementModel *model = new TMRQuadMatrixModel();
+    TACSElementBasis *basis = NULL;
     if (order == 2){
-      elem = new TMRQuadMatrixElement<2>();
+      basis = new TACSLinearQuadBasis();
     }
     else if (order == 3){
-      elem = new TMRQuadMatrixElement<3>();
+      basis = new TACSQuadraticQuadBasis();
     }
     else if (order == 4){
-      elem = new TMRQuadMatrixElement<4>();
+      basis = new TACSCubicQuadBasis();
     }
-    else if (order == 5){
-      elem = new TMRQuadMatrixElement<5>();
-    }
-    else if (order == 6){
-      elem = new TMRQuadMatrixElement<6>();
-    }
+//    else if (order == 4){
+//      basis = new TACSQuarticQuadBasis();
+//    }
+    TACSElement *elem = new TACSElement2D(model, basis);
 
     for ( int i = 0; i < num_elements; i++ ){
       elements[i] = elem;
@@ -64,22 +67,21 @@ public:
                        TMROctForest *forest,
                        int num_elements,
                        TACSElement **elements ){
-    TACSElement *elem = NULL;
+    TACSElementModel *model = new TMRHexaMatrixModel();
+    TACSElementBasis *basis = NULL;
     if (order == 2){
-      elem = new TMROctMatrixElement<2>();
+      basis = new TACSLinearHexaBasis();
     }
     else if (order == 3){
-      elem = new TMROctMatrixElement<3>();
+      basis = new TACSQuadraticHexaBasis();
     }
     else if (order == 4){
-      elem = new TMROctMatrixElement<4>();
+      basis = new TACSCubicHexaBasis();
     }
-    else if (order == 5){
-      elem = new TMROctMatrixElement<5>();
-    }
-    else if (order == 6){
-      elem = new TMROctMatrixElement<6>();
-    }
+//    else if (order == 4){
+//      basis = new TACSQuarticQuadBasis();
+//    }
+    TACSElement *elem = new TACSElement3D(model, basis);
 
     for ( int i = 0; i < num_elements; i++ ){
       elements[i] = elem;
@@ -92,19 +94,17 @@ public:
 */
 TMRMatrixFilter::TMRMatrixFilter( double _s, int _N,
                                   int _nlevels,
-                                  TACSAssembler *_tacs[],
-                                  TMROctForest *_filter[],
-                                  int _vars_per_node ):
-  TMRConformFilter(_nlevels, _tacs, _filter, _vars_per_node){
+                                  TACSAssembler *_assembler[],
+                                  TMROctForest *_filter[] ):
+  TMRConformFilter(_nlevels, _assembler, _filter){
   initialize_matrix(_s, _N, _filter[0], NULL);
 }
 
 TMRMatrixFilter::TMRMatrixFilter( double _s, int _N,
                                   int _nlevels,
-                                  TACSAssembler *_tacs[],
-                                  TMRQuadForest *_filter[],
-                                  int _vars_per_node ):
-  TMRConformFilter(_nlevels, _tacs, _filter, _vars_per_node){
+                                  TACSAssembler *_assembler[],
+                                  TMRQuadForest *_filter[] ):
+  TMRConformFilter(_nlevels, _assembler, _filter){
   initialize_matrix(_s, _N, NULL, _filter[0]);
 }
 
@@ -118,15 +118,15 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
                                          TMROctForest *oct_forest,
                                          TMRQuadForest *quad_forest ){
   // Create the Assembler object
-  TACSAssembler *tacs = NULL;
+  TACSAssembler *matrix_assembler = NULL;
   if (oct_filter){
     TMROctTACSMatrixCreator *matrix_creator3d =
       new TMROctTACSMatrixCreator();
     matrix_creator3d->incref();
 
-    tacs = matrix_creator3d->createTACS(oct_forest,
-                                        TACSAssembler::NATURAL_ORDER);
-    tacs->incref();
+    matrix_assembler = matrix_creator3d->createTACS(oct_forest,
+                                                    TACSAssembler::NATURAL_ORDER);
+    matrix_assembler->incref();
     matrix_creator3d->decref();
   }
   else {
@@ -134,24 +134,24 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
       new TMRQuadTACSMatrixCreator();
     matrix_creator2d->incref();
 
-    tacs = matrix_creator2d->createTACS(quad_forest,
-                                        TACSAssembler::NATURAL_ORDER);
-    tacs->incref();
+    matrix_assembler = matrix_creator2d->createTACS(quad_forest,
+                                                    TACSAssembler::NATURAL_ORDER);
+    matrix_assembler->incref();
     matrix_creator2d->decref();
   }
 
   // Create the matrix
-  M = tacs->createMat();
+  M = matrix_assembler->createMat();
   M->incref();
 
   // Allocate the vectors needed for the application of the filter
-  Dinv = tacs->createVec();
-  Tinv = tacs->createVec();
-  t1 = tacs->createVec();
-  t2 = tacs->createVec();
-  t3 = tacs->createVec();
-  y1 = tacs->createVec();
-  y2 = tacs->createVec();
+  Dinv = matrix_assembler->createVec();
+  Tinv = matrix_assembler->createVec();
+  t1 = matrix_assembler->createVec();
+  t2 = matrix_assembler->createVec();
+  t3 = matrix_assembler->createVec();
+  y1 = matrix_assembler->createVec();
+  y2 = matrix_assembler->createVec();
   Dinv->incref();
   Tinv->incref();
   t1->incref();
@@ -161,14 +161,14 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
   y2->incref();
 
   // Create a temporary design vector
-  temp = createVec();
+  temp = assembler[0]->createDesignVec();
   temp->incref();
 
   // Assemble the mass matrix
-  tacs->assembleJacobian(1.0, 0.0, 0.0, t2, M);
+  matrix_assembler->assembleJacobian(1.0, 0.0, 0.0, t2, M);
 
   // Free this version of TACS - it's not required anymore!
-  tacs->decref();
+  matrix_assembler->decref();
 
   // Set the number of terms in the M filter
   N = _N;
@@ -329,12 +329,12 @@ void TMRMatrixFilter::kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y ){
   Set the design variables for each level
 */
 void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
-  if (getVarsPerNode() == 1){
+  const int vpn = assembler[0]->getDesignVarsPerNode();
+
+  if (vpn == 1){
     applyFilter(xvec, x[0]);
   }
   else {
-    const int vpn = getVarsPerNode();
-
     for ( int k = 0; k < vpn; k++ ){
       TacsScalar *xin, *xout;
       xvec->getArray(&xin);
@@ -368,49 +368,30 @@ void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
     }
   }
 
-  // Distribute the design variable values
-  x[0]->beginDistributeValues();
-  x[0]->endDistributeValues();
-
-  // Temporarily allocate an array to store the variables
-  TacsScalar *xlocal = new TacsScalar[ getMaxNumLocalVars() ];
-
-  // Copy the values to the local array
-  int size = getLocalValuesFromBVec(0, x[0], xlocal);
-  tacs[0]->setDesignVars(xlocal, size);
+  // Temporarily allocate an array to store the varia
+  assembler[0]->setDesignVars(x[0]);
 
   // Set the design variable values on all processors
   for ( int k = 0; k < nlevels-1; k++ ){
     filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
 
-    // Distribute the design variable values
-    x[k+1]->beginDistributeValues();
-    x[k+1]->endDistributeValues();
-
     // Set the design variable values
-    size = getLocalValuesFromBVec(k+1, x[k+1], xlocal);
-    tacs[k+1]->setDesignVars(xlocal, size);
+    assembler[k+1]->setDesignVars(x[k+1]);
   }
-
-  delete [] xlocal;
 }
 
 /*
   Add values to the output TACSBVec
 */
-void TMRMatrixFilter::addValues( TacsScalar *xlocal, TACSBVec *vec ){
-  temp->zeroEntries();
-  setBVecFromLocalValues(0, xlocal, temp, TACS_ADD_VALUES);
-  temp->beginSetValues(TACS_ADD_VALUES);
-  temp->endSetValues(TACS_ADD_VALUES);
+void TMRMatrixFilter::addValues( TACSBVec *vec ){
+  const int vpn = assembler[0]->getDesignVarsPerNode();
+  temp->copyValues(vec);
 
-  if (getVarsPerNode() == 1){
+  if (vpn == 1){
     applyTranspose(temp, y1);
     vec->axpy(1.0, y1);
   }
   else {
-    const int vpn = getVarsPerNode();
-
     for ( int k = 0; k < vpn; k++ ){
       TacsScalar *xin, *xout;
 
