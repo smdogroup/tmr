@@ -268,9 +268,6 @@ if __name__ == '__main__':
 
         # Optimize
         opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
-
-        opt.opt.checkGradients(1e-6)
-
         xopt = opt.optimize()
 
         # Refine based solely on the value of the density variable
