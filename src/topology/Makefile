@@ -19,10 +19,9 @@ CXX_OBJS = TMRMatrixFilter.o \
 	TMRConformFilter.o \
 	TMRLagrangeFilter.o \
 	TMRHelmholtzPUFilter.o \
+	TMROctConstitutive.o \
+	TMRQuadConstitutive.o \
 	TMRTopoProblem.o
-
-#	TMROctStiffness.o \
-	TMRQuadStiffness.o
 
 DIR=${TMR_DIR}/src/topology
 

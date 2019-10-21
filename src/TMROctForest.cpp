@@ -5743,6 +5743,7 @@ void TMROctForest::getNodeConn( const int **_conn,
   if (_num_owned_nodes){ *_num_owned_nodes = num_owned_nodes; }
   if (_num_owned_nodes){ *_num_owned_nodes = num_owned_nodes; }
 }
+
 /*
   Get the dependent connectivity information. Note that this call is
   not collective.

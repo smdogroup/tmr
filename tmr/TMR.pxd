@@ -566,6 +566,19 @@ cdef extern from "TMRMatrixFilter.h":
         TMRMatrixFilter(double, int, int, TACSAssembler**, TMROctForest**)
         TMRMatrixFilter(double, int, int, TACSAssembler**, TMRQuadForest**)
 
+cdef extern from "TMROctConstitutive.h":
+    cdef cppclass TMRStiffnessProperties(TMREntity):
+        TMRStiffnessProperties(int, TACSMaterialProperties**,
+                               double, double, double, double,
+                               double, double, double, double, int)
+
+    cdef cppclass TMROctConstitutive(TACSSolidConstitutive):
+        TMROctConstitutive(TMRStiffnessProperties*, TMROctForest*)
+
+cdef extern from "TMRQuadConstitutive.h":
+    cdef cppclass TMRQuadConstitutive(TACSPlaneStressConstitutive):
+        TMRQuadConstitutive(TMRStiffnessProperties*, TMRQuadForest*)
+
 cdef extern from "TMRHelmholtzPUFilter.h":
     ctypedef int (*getinteriorstencil)( void*, int, int,
                                         TacsScalar*, double* )

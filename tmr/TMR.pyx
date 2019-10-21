@@ -4558,6 +4558,82 @@ cdef class HelmholtzPUFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+cdef class StiffnessProperties:
+    cdef TMRStiffnessProperties *ptr
+    def __cinit__(self, props, **kwargs):
+        cdef int nmats = 0
+        cdef TACSMaterialProperties *single_props = NULL
+        cdef TACSMaterialProperties **_props = NULL
+        cdef double q = 5.0
+        cdef double eps = 0.3
+        cdef double k0 = 1e-6
+        cdef double ksWeight = 30.0
+        cdef double qtemp = 5.0
+        cdef double qcond = 5.0
+        cdef double beta = 10.0
+        cdef double xoffset = 0.5
+        cdef int use_project = 0
+
+        if isinstance(props, list):
+            nmats = len(props)
+            _props = <TACSMaterialProperties**>malloc(nmats*sizeof(TACSMaterialProperties*))
+            for i, obj in enumerate(props):
+                _props[i] = (<MaterialProperties>obj).ptr
+        else:
+            nmats = 1
+            single_props = (<MaterialProperties>props).ptr
+            _props = &single_props
+
+        # Convert the kwargs if any
+        if 'q' in kwargs:
+            q = kwargs['q']
+        if 'eps' in kwargs:
+            eps = kwargs['eps']
+        if 'k0' in kwargs:
+            k0 = kwargs['k0']
+        if 'ksWeight' in kwargs:
+            ksWeight = kwargs['ksWeight']
+        if 'qtemp' in kwargs:
+            qtemp = kwargs['qtemp']
+        if 'qcond' in kwargs:
+            qcond = kwargs['qcond']
+        if 'beta' in kwargs:
+            beta = kwargs['beta']
+        if 'xoffset' in kwargs:
+            xoffset = kwargs['xoffset']
+        if 'use_project' in kwargs:
+            use_project = kwargs['use_project']
+
+        self.ptr = new TMRStiffnessProperties(nmats, _props, q, eps, k0, ksWeight,
+                                              qtemp, qcond, beta, xoffset, use_project)
+        self.ptr.incref()
+
+        if nmats > 1:
+            free(_props)
+
+    def __dealloc__(self):
+        self.ptr.decref()
+
+cdef class OctConstitutive(SolidConstitutive):
+    def __cinit__(self, StiffnessProperties props=None, OctForest forest=None):
+        if props is not None and forest is not None:
+            self.cptr = new TMROctConstitutive(props.ptr, forest.ptr)
+        else:
+            errmsg = 'OctConstitutive: Must provide StiffnessProperties and OctForest'
+            raise ValueError(errmsg)
+        self.cptr.incref()
+        self.ptr = self.cptr
+
+cdef class QuadConstitutive(PlaneStressConstitutive):
+    def __cinit__(self, StiffnessProperties props=None, QuadForest forest=None):
+        if props is not None and forest is not None:
+            self.cptr = new TMRQuadConstitutive(props.ptr, forest.ptr)
+        else:
+            errmsg = 'QuadConstitutive: Must provide StiffnessProperties and QuadForest'
+            raise ValueError(errmsg)
+        self.cptr.incref()
+        self.ptr = self.cptr
+
 def convertPVecToVec(PVec pvec):
     """
     convertPVecToVec(pvec)
