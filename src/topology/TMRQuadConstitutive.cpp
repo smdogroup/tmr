@@ -361,7 +361,7 @@ void TMRQuadConstitutive::evalTangentStiffness( int elemIndex,
 
     // Evaluate the tangent stiffness
     TacsScalar Cj[6];
-    properties->evalTangentStiffness2D(Cj);
+    props->props[j]->evalTangentStiffness2D(Cj);
 
     // Compute the penalty
     TacsScalar penalty = rho/(1.0 + q*(1.0 - rho));
@@ -863,7 +863,7 @@ TacsScalar TMRQuadConstitutive::evalFailureStrainSens( int elemIndex,
 
   if (nvars == 1){
     TacsScalar C[6];
-    properties->evalTangentStiffness2D(C);
+    props->props[0]->evalTangentStiffness2D(C);
 
     TacsScalar s[3];
     s[0] = (C[0]*e[0] + C[1]*e[1] + C[2]*e[2]);
@@ -933,7 +933,7 @@ TacsScalar TMRQuadConstitutive::evalFailureStrainSens( int elemIndex,
     memset(dfde, 0, 3*sizeof(TacsScalar));
     for ( int j = 0; j < nmats; j++ ){
       TacsScalar C[6];
-      properties->evalTangentStiffness2D(C);
+      props->props[j]->evalTangentStiffness2D(C);
 
       TacsScalar s[3];
       s[0] = (C[0]*e[0] + C[1]*e[1] + C[2]*e[2]);

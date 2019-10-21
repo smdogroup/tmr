@@ -69,10 +69,6 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
     filters.append(filtr)
     assemblers.append(creator.createTACS(forest, ordering))
 
-    if filter_type == 'lagrange':
-        varmaps.append(creator.getMap())
-        vecindices.append(creator.getIndices())
-
     for i in range(nlevels-1):
         order = forests[-1].getMeshOrder()
         interp = forests[-1].getInterpType()

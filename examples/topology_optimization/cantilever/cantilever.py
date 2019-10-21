@@ -40,6 +40,17 @@ class OctCreator(TMR.OctTopoCreator):
         TMR.OctTopoCreator.__init__(bcs, filt)
         self.props = props
 
+        # Create the constitutive object - one for the entire mesh
+        self.con = TMR.OctConstitutive(props=props, forest=filt)
+
+        # Create the model (the type of physics we're using)
+        self.model = elements.LinearElasticity3D(self.con)
+
+        # Set the basis functions and create the element
+        self.basis = elements.LinearHexaBasis()
+        self.element = elements.Element3D(self.model, self.basis)
+        return
+
     def createElement(self, order, octant, index, weights):
         """
         Create the element for the given octant.
@@ -57,9 +68,7 @@ class OctCreator(TMR.OctTopoCreator):
         Returns:
             TACS.Element: Element for the given octant
         """
-        stiff = TMR.OctStiffness(self.props, index, weights)
-        elem = elements.Solid(2, stiff)
-        return elem
+        return self.element
 
 class CreatorCallback:
     def __init__(self, bcs, props):
@@ -79,9 +88,8 @@ class CreatorCallback:
         Returns:
             OctTopoCreator, OctForest: The creator and filter for this forest
         """
-        filtr = forest.coarsen()
-        creator = OctCreator(self.bcs, filtr, self.props)
-        return creator, filtr
+        creator = OctCreator(self.bcs, forest, self.props)
+        return creator, forest
 
 def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
     """
@@ -158,7 +166,7 @@ def create_problem(forest, bcs, props, nlevels):
     """
 
     # Create the problem and filter object
-    filter_type = 'lagrange'
+    filter_type = 'matrix'
     obj = CreatorCallback(bcs, props)
     problem = TopOptUtils.createTopoProblem(forest,
         obj.creator_callback, filter_type, nlevels=nlevels)
@@ -230,11 +238,9 @@ if __name__ == '__main__':
     bcs.addBoundaryCondition('fixed')
 
     # Create the material properties
-    density = 2600.0
-    rho = [density]
-    E = [70e9]
-    nu = [0.3]
-    props = TMR.StiffnessProperties(rho, E, nu)
+    material_properties = constitutive.MaterialProperties(rho=2600.0, E=70e9,
+        nu=0.3, ys=350e6)
+    props = TMR.StiffnessProperties(material_properties, q=8.0)
 
     # Set the original filter to NULL
     orig_filter = None
@@ -262,6 +268,9 @@ if __name__ == '__main__':
 
         # Optimize
         opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
+
+        opt.opt.checkGradients(1e-6)
+
         xopt = opt.optimize()
 
         # Refine based solely on the value of the density variable

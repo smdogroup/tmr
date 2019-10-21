@@ -402,7 +402,7 @@ void TMROctConstitutive::evalTangentStiffness( int elemIndex,
 
     // Evaluate the tangent stiffness
     TacsScalar Cj[21];
-    properties->evalTangentStiffness3D(Cj);
+    props->props[j]->evalTangentStiffness3D(Cj);
 
     // Compute the penalty
     TacsScalar penalty = rho/(1.0 + q*(1.0 - rho));
@@ -930,7 +930,7 @@ TacsScalar TMROctConstitutive::evalFailureStrainSens( int elemIndex,
 
   if (nvars == 1){
     TacsScalar C[21];
-    properties->evalTangentStiffness3D(C);
+    props->props[0]->evalTangentStiffness3D(C);
 
     TacsScalar s[6];
     s[0] = C[0]*e[0] + C[1]*e[1]  + C[2]*e[2]  + C[3]*e[3]  + C[4]*e[4]  + C[5]*e[5];
