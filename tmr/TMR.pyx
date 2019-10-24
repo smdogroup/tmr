@@ -3724,8 +3724,9 @@ cdef class QuadCreator:
     TACS.Element object that will be placed into an Assembler object.
     """
     cdef TMRCyQuadCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, *args, **kwargs):
-        self.ptr = new TMRCyQuadCreator(bcs.ptr)
+    def __cinit__(self, BoundaryConditions bcs, int design_vars_per_node=1,
+                  *args, **kwargs):
+        self.ptr = new TMRCyQuadCreator(bcs.ptr, design_vars_per_node, NULL)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateQuadElement(_createQuadElement)
@@ -3781,8 +3782,10 @@ cdef class OctCreator:
     TACS.Element object that will be placed into an Assembler object.
     """
     cdef TMRCyOctCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, *args, **kwargs):
-        self.ptr = new TMRCyOctCreator(bcs.ptr)
+    def __cinit__(self, BoundaryConditions bcs,
+                  int design_vars_per_node=1,
+                  *args, **kwargs):
+        self.ptr = new TMRCyOctCreator(bcs.ptr, design_vars_per_node, NULL)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateOctElement(_createOctElement)
@@ -3809,8 +3812,8 @@ cdef class OctCreator:
 
 cdef TACSElement* _createQuadTopoElement(void *_self, int order,
                                          TMRQuadrant *quad,
-                                         TMRIndexWeight *weights,
-                                         int nweights):
+                                         int nweights,
+                                         TMRIndexWeight *weights):
     cdef TACSElement *elem = NULL
     q = Quadrant()
     q.quad.x = quad.x
@@ -3833,8 +3836,9 @@ cdef TACSElement* _createQuadTopoElement(void *_self, int order,
 
 cdef class QuadTopoCreator:
     cdef TMRCyTopoQuadCreator *ptr
-    def __cinit__(self, BoundaryConditions bcs, QuadForest filt, *args, **kwargs):
-        self.ptr = new TMRCyTopoQuadCreator(bcs.ptr, filt.ptr)
+    def __cinit__(self, BoundaryConditions bcs, QuadForest filt,
+                  int design_vars_per_node=1, *args, **kwargs):
+        self.ptr = new TMRCyTopoQuadCreator(bcs.ptr, design_vars_per_node, filt.ptr)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateQuadTopoElement(_createQuadTopoElement)
@@ -3850,25 +3854,10 @@ cdef class QuadTopoCreator:
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
-    def getFilter(self):
-        cdef TMRQuadForest *filtr = NULL
-        self.ptr.getFilter(&filtr)
-        return _init_QuadForest(filtr)
-
-    def getMap(self):
-        cdef TACSNodeMap *vmap = NULL
-        self.ptr.getMap(&vmap)
-        return _init_NodeMap(vmap)
-
-    def getIndices(self):
-        cdef TACSBVecIndices *indices = NULL
-        self.ptr.getIndices(&indices)
-        return _init_VecIndices(indices)
-
 cdef TACSElement* _createQuadConformTopoElement( void *_self, int order,
                                                  TMRQuadrant *quad,
-                                                 int *index,
                                                  int nweights,
+                                                 const int *index,
                                                  TMRQuadForest *filtr ):
     cdef TACSElement *elem = NULL
     q = Quadrant()
@@ -3893,10 +3882,11 @@ cdef TACSElement* _createQuadConformTopoElement( void *_self, int order,
 cdef class QuadConformTopoCreator:
     cdef TMRCyTopoQuadConformCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, QuadForest forest,
+                  int design_vars_per_node=1,
                   int order=-1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
                   *args, **kwargs):
-        self.ptr = new TMRCyTopoQuadConformCreator(bcs.ptr, forest.ptr,
-                                                   order, interp)
+        self.ptr = new TMRCyTopoQuadConformCreator(bcs.ptr, design_vars_per_node,
+                                                   forest.ptr, order, interp)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateQuadTopoElement(_createQuadConformTopoElement)
@@ -3912,15 +3902,10 @@ cdef class QuadConformTopoCreator:
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
-    def getFilter(self):
-        cdef TMRQuadForest *filtr = NULL
-        self.ptr.getFilter(&filtr)
-        return _init_QuadForest(filtr)
-
 cdef TACSElement* _createOctTopoElement(void *_self, int order,
                                         TMROctant *octant,
-                                        TMRIndexWeight *weights,
-                                        int nweights):
+                                        int nweights,
+                                        TMRIndexWeight *weights):
     cdef TACSElement *elem = NULL
     oct = Octant()
     oct.octant.x = octant.x
@@ -3945,9 +3930,9 @@ cdef TACSElement* _createOctTopoElement(void *_self, int order,
 cdef class OctTopoCreator:
     cdef TMRCyTopoOctCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, OctForest filt,
-                  *args, **kwargs):
+                  int design_vars_per_node=1, *args, **kwargs):
         self.ptr = NULL
-        self.ptr = new TMRCyTopoOctCreator(bcs.ptr, filt.ptr)
+        self.ptr = new TMRCyTopoOctCreator(bcs.ptr, design_vars_per_node, filt.ptr)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
         self.ptr.setCreateOctTopoElement(_createOctTopoElement)
@@ -3963,25 +3948,10 @@ cdef class OctTopoCreator:
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
-    def getFilter(self):
-        cdef TMROctForest *filtr = NULL
-        self.ptr.getFilter(&filtr)
-        return _init_OctForest(filtr)
-
-    def getMap(self):
-        cdef TACSNodeMap *vmap = NULL
-        self.ptr.getMap(&vmap)
-        return _init_NodeMap(vmap)
-
-    def getIndices(self):
-        cdef TACSBVecIndices *indices = NULL
-        self.ptr.getIndices(&indices)
-        return _init_VecIndices(indices)
-
 cdef TACSElement* _createOctConformTopoElement( void *_self, int order,
                                                 TMROctant *octant,
-                                                int *index,
                                                 int nweights,
+                                                const int *index,
                                                 TMROctForest *filtr):
     cdef TACSElement *elem = NULL
     Oct = Octant()
@@ -4007,9 +3977,11 @@ cdef TACSElement* _createOctConformTopoElement( void *_self, int order,
 cdef class OctConformTopoCreator:
     cdef TMRCyTopoOctConformCreator *ptr
     def __cinit__(self, BoundaryConditions bcs, OctForest forest,
+                  int design_vars_per_node=1,
                   int order=-1, TMRInterpolationType interp=GAUSS_LOBATTO_POINTS,
                   *args, **kwargs):
-        self.ptr = new TMRCyTopoOctConformCreator(bcs.ptr, forest.ptr,
+        self.ptr = new TMRCyTopoOctConformCreator(bcs.ptr, design_vars_per_node,
+                                                  forest.ptr,
                                                   order, interp)
         self.ptr.incref()
         self.ptr.setSelfPointer(<void*>self)
@@ -4025,11 +3997,6 @@ cdef class OctConformTopoCreator:
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
-
-    def getFilter(self):
-        cdef TMROctForest *filtr = NULL
-        self.ptr.getFilter(&filtr)
-        return _init_OctForest(filtr)
 
 def createMg(list assemblers, list forests, double omega=1.0,
              use_coarse_direct_solve=True,

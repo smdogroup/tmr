@@ -431,10 +431,10 @@ cdef extern from "TMR_TACSCreator.h":
         int getNumBoundaryConditions()
 
     cdef cppclass TMRQuadTACSCreator(TMREntity):
-        TMRQuadTACSCreator(TMRBoundaryConditions*)
+        TMRQuadTACSCreator(TMRBoundaryConditions*, int, TMRQuadForest*)
 
     cdef cppclass TMROctTACSCreator(TMREntity):
-        TMROctTACSCreator(TMRBoundaryConditions*)
+        TMROctTACSCreator(TMRBoundaryConditions*, int, TMROctForest*)
 
 cdef extern from "TMROpenCascade.h":
     cdef TMRModel* TMR_LoadModelFromIGESFile(const char*, int)
@@ -479,65 +479,57 @@ cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createquadelements)(void*, int, TMRQuadrant*)
     ctypedef TACSElement* (*createoctelements)(void*, int, TMROctant*)
     ctypedef TACSElement* (*createquadtopoelements)(
-        void*, int, TMRQuadrant*, TMRIndexWeight*, int)
+        void*, int, TMRQuadrant*, int, TMRIndexWeight*)
     ctypedef TACSElement* (*createocttopoelements)(
-        void*, int, TMROctant*, TMRIndexWeight*, int)
+        void*, int, TMROctant*, int, TMRIndexWeight*)
 
     cdef cppclass TMRCyQuadCreator(TMREntity):
-        TMRCyQuadCreator(TMRBoundaryConditions*)
+        TMRCyQuadCreator(TMRBoundaryConditions*, int, TMRQuadForest*)
         void setSelfPointer(void*)
         void setCreateQuadElement(
             TACSElement* (*createquadelements)(void*, int, TMRQuadrant*))
         TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
 
     cdef cppclass TMRCyOctCreator(TMREntity):
-        TMRCyOctCreator(TMRBoundaryConditions*)
+        TMRCyOctCreator(TMRBoundaryConditions*, int, TMROctForest*)
         void setSelfPointer(void*)
         void setCreateOctElement(
             TACSElement* (*createoctelements)(void*, int, TMROctant*))
         TACSAssembler *createTACS(TMROctForest*, OrderingType)
 
     cdef cppclass TMRCyTopoQuadCreator(TMREntity):
-        TMRCyTopoQuadCreator(TMRBoundaryConditions*, TMRQuadForest*)
+        TMRCyTopoQuadCreator(TMRBoundaryConditions*, int, TMRQuadForest*)
         void setSelfPointer(void*)
         void setCreateQuadTopoElement(
             TACSElement* (*createquadtopoelements)(
-                void*, int, TMRQuadrant*, TMRIndexWeight*, int))
+                void*, int, TMRQuadrant*, int, TMRIndexWeight*))
         TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
-        void getFilter(TMRQuadForest**)
-        void getMap(TACSNodeMap**)
-        void getIndices(TACSBVecIndices**)
 
     cdef cppclass TMRCyTopoOctCreator(TMREntity):
-        TMRCyTopoOctCreator(TMRBoundaryConditions*, TMROctForest*)
+        TMRCyTopoOctCreator(TMRBoundaryConditions*, int, TMROctForest*)
         void setSelfPointer(void*)
         void setCreateOctTopoElement(
             TACSElement* (*createocttopoelements)(
-                void*, int, TMROctant*, TMRIndexWeight*, int))
+                void*, int, TMROctant*, int, TMRIndexWeight*))
         TACSAssembler *createTACS(TMROctForest*, OrderingType)
-        void getFilter(TMROctForest**)
-        void getMap(TACSNodeMap**)
-        void getIndices(TACSBVecIndices**)
 
     cdef cppclass TMRCyTopoQuadConformCreator(TMREntity):
-       TMRCyTopoQuadConformCreator(TMRBoundaryConditions*, TMRQuadForest*,
+       TMRCyTopoQuadConformCreator(TMRBoundaryConditions*, int, TMRQuadForest*,
                                    int, TMRInterpolationType)
        void setSelfPointer(void*)
        void setCreateQuadTopoElement(
           TACSElement* (*createquadtopoelements)(
-             void*, int, TMRQuadrant*, int*, int, TMRQuadForest*))
+             void*, int, TMRQuadrant*, int, const int*, TMRQuadForest*))
        TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
-       void getFilter(TMRQuadForest**)
 
     cdef cppclass TMRCyTopoOctConformCreator(TMREntity):
-        TMRCyTopoOctConformCreator(TMRBoundaryConditions*, TMROctForest*,
+        TMRCyTopoOctConformCreator(TMRBoundaryConditions*, int, TMROctForest*,
                                    int, TMRInterpolationType)
         void setSelfPointer(void*)
         void setCreateOctTopoElement(
             TACSElement* (*createocttopoelements)(
-                void*, int, TMROctant*, int*, int, TMROctForest*))
+                void*, int, TMROctant*, int, const int*, TMROctForest*))
         TACSAssembler *createTACS(TMROctForest*, OrderingType)
-        void getFilter(TMROctForest**)
 
 cdef extern from "TMRTopoFilter.h":
     cdef cppclass TMRTopoFilter(TMREntity):

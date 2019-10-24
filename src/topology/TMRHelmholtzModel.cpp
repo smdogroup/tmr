@@ -91,7 +91,7 @@ void TMRHexaHelmholtzModel::evalWeakJacobian( int elemIndex, const double time,
   DUx[1] = r*r*Ux[1];
   DUx[2] = r*r*Ux[2];
 
-  *Jac_nnz = 1;
+  *Jac_nnz = 3;
   *Jac_pairs = elem_Jac_pairs;
   Jac[0] = Jac[1] = Jac[2] = r*r;
 }

@@ -301,9 +301,6 @@ TMRTopoProblem::~TMRTopoProblem(){
     for ( int j = 0; j < load_case_info[i].num_funcs; j++ ){
       load_case_info[i].funcs[j]->decref();
     }
-//    if (load_case_info[i].stress_func){
-//      load_case_info[i].stress_func->decref();
-//    }
     if (load_case_info[i].funcs){
       delete [] load_case_info[i].funcs;
     }
@@ -447,9 +444,6 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
     load_case_info[i].funcs = NULL;
     load_case_info[i].offset = NULL;
     load_case_info[i].scale = NULL;
-//    load_case_info[i].stress_func = NULL;
-//    load_case_info[i].stress_func_offset = 1.0;
-//    load_case_info[i].stress_func_scale = 1.0;
   }
 }
 
@@ -509,27 +503,10 @@ void TMRTopoProblem::addConstraints( int load_case,
   }
   else {
     load_case_info[load_case].funcs = NULL;
-//    load_case_info[load_case].stress_func = NULL;
     load_case_info[load_case].offset = NULL;
     load_case_info[load_case].scale = NULL;
   }
 }
-
-/*
-  Add a stress constraint to the given load case using the TMRStressConstraint
-  class
-*/
-/*
-void TMRTopoProblem::addStressConstraint( int load_case,
-                                          TMRStressConstraint *stress_func,
-                                          TacsScalar constr_offset,
-                                          TacsScalar constr_scale ){
-  load_case_info[load_case].stress_func = stress_func;
-  load_case_info[load_case].stress_func_offset = constr_offset;
-  load_case_info[load_case].stress_func_scale = constr_scale;
-  load_case_info[load_case].stress_func->incref();
-}
-*/
 
 /*
   Add linear constraints to the problem.
@@ -722,9 +699,6 @@ void TMRTopoProblem::initialize(){
 
   for ( int i = 0; i < num_load_cases; i++ ){
     num_constraints += load_case_info[i].num_funcs;
-//    if (load_case_info[i].stress_func){
-//      num_constraints++;
-//    }
   }
 
   if (freq){
@@ -736,8 +710,11 @@ void TMRTopoProblem::initialize(){
     }
   }
 
+  // Get the design node map
+  TACSNodeMap *designMap = assembler->getDesignNodeMap();
+
   // Set the problem sizes
-  int nvars = 0; // filter->getNumLocalVars();
+  int nvars = design_vars_per_node*designMap->getNumNodes();
   int nw = 0;
   int nwblock = 0;
   if (design_vars_per_node > 1){
@@ -986,18 +963,6 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         }
         count += num_funcs;
       }
-
-      // Evaluate the stress constraint
-      /*
-      if (load_case_info[i].stress_func){
-        TacsScalar con_offset = load_case_info[i].stress_func_offset;
-
-        cons[count] =
-          con_offset - load_case_info[i].stress_func->evalConstraint(vars[i]);
-        cons[count] *= load_case_info[i].stress_func_scale;
-        count++;
-      }
-      */
     }
   }
 
@@ -1258,41 +1223,6 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       }
     }
     count += num_funcs;
-
-    // Compute the gradient with respect to the stress-reconstruction
-    // ks functional
-    /*
-    if (load_case_info[i].stress_func){
-      // Try to unwrap the vector
-      wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
-
-      if (wrap){
-        // Get the underlying TACS vector for the design variables
-        TACSBVec *A = wrap->vec;
-
-        // Evaluate the partial derivatives required for the adjoint
-        load_case_info[i].stress_func->evalConDeriv(xlocal,
-                                                    max_local_size,
-                                                    dfdu);
-        assembler->applyBCs(dfdu);
-
-        // Solve the system of equations
-        ksm->solve(dfdu, adjoint);
-
-        // Compute the total derivative using the adjoint
-        assembler->addAdjointResProducts(-1.0, 1, &adjoint, &A);
-
-        // Add the local values to obtain the filtered sensitivity
-        filter->addValues(A);
-
-        // Scale the constraint by -1 since the constraint is
-        // formulated as 1 - c(x, u) > 0.0
-        A->scale(-load_case_info[i].stress_func_scale);
-      }
-
-      count++;
-    }
-    */
 
     if (freq && i == 0){
       // Try to unwrap the vector

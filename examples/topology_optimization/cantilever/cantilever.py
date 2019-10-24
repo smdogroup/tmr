@@ -26,7 +26,7 @@ import numpy as np
 import argparse
 import os
 
-class OctCreator(TMR.OctTopoCreator):
+class OctCreator(TMR.OctConformTopoCreator):
     """
     An instance of an OctCreator class.
 
@@ -36,7 +36,7 @@ class OctCreator(TMR.OctTopoCreator):
     (In a conformal filter, they must have the same element mesh but may have
     different degree of approximation.)
     """
-    def __init__(self, bcs, filt, props):
+    def __init__(self, bcs, filt, props=None):
         TMR.OctTopoCreator.__init__(bcs, filt)
         self.props = props
 
@@ -88,7 +88,7 @@ class CreatorCallback:
         Returns:
             OctTopoCreator, OctForest: The creator and filter for this forest
         """
-        creator = OctCreator(self.bcs, forest, self.props)
+        creator = OctCreator(self.bcs, forest, props=self.props)
         return creator, forest
 
 def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
@@ -205,6 +205,7 @@ if __name__ == '__main__':
 
     # Set the optimization parameters
     optimization_options = {
+        'optimizer': 'Interior Point',
         # Parameters for the trust region method
         'tr_init_size': 0.01,
         'tr_max_size': 0.1,
@@ -271,18 +272,19 @@ if __name__ == '__main__':
         xopt = opt.optimize()
 
         # Refine based solely on the value of the density variable
-        assembler = problem.getAssembler()
-        TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
+        # assembler = problem.getAssembler()
+        # TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
 
         # Repartition the mesh
-        forest.repartition()
+        # forest.repartition()
+
+        break
 
     # Output for visualization
-    flag = (TACS.ToFH5.NODES |
-            TACS.ToFH5.DISPLACEMENTS |
-            TACS.ToFH5.STRAINS |
-            TACS.ToFH5.STRESSES |
-            TACS.ToFH5.EXTRAS)
+    flag = (TACS.OUTPUT_CONNECTIVITY |
+            TACS.OUTPUT_NODES |
+            TACS.OUTPUT_DISPLACEMENTS |
+            TACS.OUTPUT_STRAINS)
     assembler = problem.getAssembler()
-    f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
+    f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
     f5.writeToFile(os.path.join(prefix, 'cantilever.f5'))

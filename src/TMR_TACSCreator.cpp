@@ -140,9 +140,16 @@ void TMRBoundaryConditions::getBoundaryCondition( int bc, const char **_name,
 /*
   Initialize the TMRQuadTACSCreator data in the abstract base class
 */
-TMRQuadTACSCreator::TMRQuadTACSCreator( TMRBoundaryConditions *_bcs ){
-  bcs = _bcs;
-  if (bcs){ bcs->incref(); }
+TMRQuadTACSCreator::TMRQuadTACSCreator( TMRBoundaryConditions *_bcs,
+                                        int _design_vars_per_node,
+                                        TMRQuadForest *_filter ){
+  initialize(_bcs, _design_vars_per_node, _filter);
+}
+
+TMRQuadTACSCreator::TMRQuadTACSCreator(){
+  bcs = NULL;
+  filter = NULL;
+  design_vars_per_node = 1;
 }
 
 /*
@@ -150,6 +157,27 @@ TMRQuadTACSCreator::TMRQuadTACSCreator( TMRBoundaryConditions *_bcs ){
 */
 TMRQuadTACSCreator::~TMRQuadTACSCreator(){
   if (bcs){ bcs->decref(); }
+  if (filter){ filter->decref(); }
+}
+
+/*
+  Initialize the TMRQuadTACSCreator data
+*/
+void TMRQuadTACSCreator::initialize( TMRBoundaryConditions *_bcs,
+                                     int _design_vars_per_node,
+                                     TMRQuadForest *_filter ){
+  bcs = _bcs;
+  if (bcs){
+    bcs->incref();
+  }
+  design_vars_per_node = _design_vars_per_node;
+  if (design_vars_per_node < 1){
+    design_vars_per_node = 1;
+  }
+  filter = _filter;
+  if (filter){
+    filter->incref();
+  }
 }
 
 /*
@@ -199,42 +227,70 @@ TACSAssembler*
   MPI_Allreduce(MPI_IN_PLACE, &vars_per_node, 1, MPI_INT, MPI_MAX, comm);
 
   // Create the associated TACSAssembler object
-  TACSAssembler *tacs =
+  TACSAssembler *assembler =
     new TACSAssembler(comm, vars_per_node,
                       num_owned_nodes, num_elements, num_dep_nodes);
 
   // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(ptr, conn);
+  assembler->setElementConnectivity(ptr, conn);
   delete [] ptr;
 
   // Set the dependent node information
-  tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
+  assembler->setDependentNodes(dep_ptr, dep_conn, dep_weights);
 
   // Set the element array
-  tacs->setElements(elements);
+  assembler->setElements(elements);
   delete [] elements;
 
   // Specify the boundary conditions
-  setBoundaryConditions(forest, tacs);
+  setBoundaryConditions(forest, assembler);
 
   // Reordering everything - if needed
   if (ordering != TACSAssembler::NATURAL_ORDER){
-    tacs->computeReordering(ordering, TACSAssembler::GAUSS_SEIDEL);
+    assembler->computeReordering(ordering, TACSAssembler::GAUSS_SEIDEL);
+  }
+
+  // Set the design variable information
+  if (filter){
+    // Create the filter nodes (if not created already)
+    filter->createNodes();
+
+    // Find the number of locally owned nodes
+    const int *range;
+    filter->getOwnedNodeRange(&range);
+
+    // Create and set the design node map
+    int n = range[mpi_rank+1] - range[mpi_rank];
+    TACSNodeMap *design_map = new TACSNodeMap(comm, n);
+    assembler->setDesignNodeMap(design_vars_per_node, design_map);
+
+    // Set the dependent design variable information
+    const int *design_dep_ptr, *design_dep_conn;
+    const double *design_dep_weights;
+    int num_dep_design_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
+                                                      &dep_weights);
+
+    // Set the assembler
+    assembler->setDesignDependentNodes(num_dep_design_nodes, design_dep_ptr,
+                                       design_dep_conn, design_dep_weights);
+  }
+  else if (design_vars_per_node >= 1){
+    assembler->setDesignNodeMap(design_vars_per_node, NULL);
   }
 
   // Initialize the TACSAssembler object
-  tacs->initialize();
+  assembler->initialize();
 
   // Create the auxiliary elements
   TACSAuxElements *aux = createAuxElements(order, forest);
   if (aux){
-    tacs->setAuxElements(aux);
+    assembler->setAuxElements(aux);
   }
 
   // Set the node locations
-  setNodeLocations(forest, tacs);
+  setNodeLocations(forest, assembler);
 
-  return tacs;
+  return assembler;
 }
 
 /*
@@ -325,11 +381,18 @@ void TMRQuadTACSCreator::setNodeLocations( TMRQuadForest *forest,
 }
 
 /*
-  Initialize the TMROctTACSCreator data in the abstract base class
+  Initialize the TMRQuadTACSCreator data in the abstract base class
 */
-TMROctTACSCreator::TMROctTACSCreator( TMRBoundaryConditions *_bcs ){
-  bcs = _bcs;
-  if (bcs){ bcs->incref(); }
+TMROctTACSCreator::TMROctTACSCreator( TMRBoundaryConditions *_bcs,
+                                      int _design_vars_per_node,
+                                      TMROctForest *_filter ){
+  initialize(_bcs, _design_vars_per_node, _filter);
+}
+
+TMROctTACSCreator::TMROctTACSCreator(){
+  bcs = NULL;
+  filter = NULL;
+  design_vars_per_node = 1;
 }
 
 /*
@@ -337,6 +400,27 @@ TMROctTACSCreator::TMROctTACSCreator( TMRBoundaryConditions *_bcs ){
 */
 TMROctTACSCreator::~TMROctTACSCreator(){
   if (bcs){ bcs->decref(); }
+  if (filter){ filter->decref(); }
+}
+
+/*
+  Initialize the TMRQuadTACSCreator data
+*/
+void TMROctTACSCreator::initialize( TMRBoundaryConditions *_bcs,
+                                     int _design_vars_per_node,
+                                     TMROctForest *_filter ){
+  bcs = _bcs;
+  if (bcs){
+    bcs->incref();
+  }
+  design_vars_per_node = _design_vars_per_node;
+  if (design_vars_per_node < 1){
+    design_vars_per_node = 1;
+  }
+  filter = _filter;
+  if (filter){
+    filter->incref();
+  }
 }
 
 /*
@@ -390,44 +474,72 @@ TACSAssembler*
   MPI_Allreduce(MPI_IN_PLACE, &vars_per_node, 1, MPI_INT, MPI_MAX, comm);
 
   // Create the associated TACSAssembler object
-  TACSAssembler *tacs =
+  TACSAssembler *assembler =
     new TACSAssembler(forest->getMPIComm(), vars_per_node,
                       num_owned_nodes, num_elements, num_dep_nodes);
 
   // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(ptr, conn);
+  assembler->setElementConnectivity(ptr, conn);
   delete [] ptr;
 
   // Set the dependent node information
-  tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
+  assembler->setDependentNodes(dep_ptr, dep_conn, dep_weights);
 
   // Set the element array
-  tacs->setElements(elements);
+  assembler->setElements(elements);
   if (elements){
     delete [] elements;
   }
 
   // Specify the boundary conditions
-  setBoundaryConditions(forest, tacs);
+  setBoundaryConditions(forest, assembler);
 
   // Reordering everything - if needed
   if (ordering != TACSAssembler::NATURAL_ORDER){
-    tacs->computeReordering(ordering, TACSAssembler::GAUSS_SEIDEL);
+    assembler->computeReordering(ordering, TACSAssembler::GAUSS_SEIDEL);
+  }
+
+  // Set the design variable information
+  if (filter){
+    // Create the filter nodes (if not created already)
+    filter->createNodes();
+
+    // Find the number of locally owned nodes
+    const int *range;
+    filter->getOwnedNodeRange(&range);
+
+    // Create and set the design node map
+    int n = range[mpi_rank+1] - range[mpi_rank];
+    TACSNodeMap *design_map = new TACSNodeMap(comm, n);
+    assembler->setDesignNodeMap(design_vars_per_node, design_map);
+
+    // Set the dependent design variable information
+    const int *design_dep_ptr, *design_dep_conn;
+    const double *design_dep_weights;
+    int num_dep_design_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
+                                                      &dep_weights);
+
+    // Set the assembler
+    assembler->setDesignDependentNodes(num_dep_design_nodes, design_dep_ptr,
+                                       design_dep_conn, design_dep_weights);
+  }
+  else if (design_vars_per_node >= 1){
+    assembler->setDesignNodeMap(design_vars_per_node, NULL);
   }
 
   // Initialize the TACSAssembler object
-  tacs->initialize();
+  assembler->initialize();
 
   // Create the auxiliary elements
   TACSAuxElements *aux = createAuxElements(order, forest);
   if (aux){
-    tacs->setAuxElements(aux);
+    assembler->setAuxElements(aux);
   }
 
   // Set the node locations
-  setNodeLocations(forest, tacs);
+  setNodeLocations(forest, assembler);
 
-  return tacs;
+  return assembler;
 }
 
 /*

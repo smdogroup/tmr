@@ -84,7 +84,10 @@ class TMRBoundaryConditions : public TMREntity {
 */
 class TMRQuadTACSCreator : public TMREntity {
  public:
-  TMRQuadTACSCreator( TMRBoundaryConditions *_bcs );
+  TMRQuadTACSCreator( TMRBoundaryConditions *_bcs,
+                      int _design_vars_per_node=1,
+                      TMRQuadForest *_filter=NULL );
+  TMRQuadTACSCreator();
   virtual ~TMRQuadTACSCreator();
 
   // Create an array of elements for the given forest
@@ -104,7 +107,16 @@ class TMRQuadTACSCreator : public TMREntity {
                              TACSAssembler::OrderingType 
                                ordering=TACSAssembler::NATURAL_ORDER );
 
- private:
+  TMRQuadForest* getFilter(){
+    return filter;
+  }
+
+ protected:
+  // Initialize the data
+  void initialize( TMRBoundaryConditions *_bcs,
+                   int _design_vars_per_node,
+                   TMRQuadForest *_filter );
+
   // Set the boundary conditions
   void setBoundaryConditions( TMRQuadForest *forest,
                               TACSAssembler *tacs );
@@ -114,6 +126,8 @@ class TMRQuadTACSCreator : public TMREntity {
                          TACSAssembler *tacs );
   
   TMRBoundaryConditions *bcs;
+  int design_vars_per_node;
+  TMRQuadForest *filter;
 };
 
 /*
@@ -123,7 +137,10 @@ class TMRQuadTACSCreator : public TMREntity {
 */
 class TMROctTACSCreator : public TMREntity {
  public:
-  TMROctTACSCreator( TMRBoundaryConditions *_bcs );
+  TMROctTACSCreator( TMRBoundaryConditions *_bcs,
+                     int _design_vars_per_node=1,
+                     TMROctForest *_filter=NULL  );
+  TMROctTACSCreator();
   virtual ~TMROctTACSCreator();
 
   // Create an array of elements for the given forest
@@ -147,7 +164,16 @@ class TMROctTACSCreator : public TMREntity {
                              TACSAssembler::OrderingType 
                                ordering=TACSAssembler::NATURAL_ORDER );
 
- private:
+  TMROctForest* getFilter(){
+    return filter;
+  }
+
+ protected:
+  // Initialize the data
+  void initialize( TMRBoundaryConditions *_bcs,
+                   int _design_vars_per_node,
+                   TMROctForest *_filter );
+
   // Set the boundary conditions
   void setBoundaryConditions( TMROctForest *forest,
                               TACSAssembler *tacs );
@@ -157,6 +183,8 @@ class TMROctTACSCreator : public TMREntity {
                          TACSAssembler *tacs );
 
   TMRBoundaryConditions *bcs;
+  int design_vars_per_node;
+  TMROctForest *filter;
 };
 
 #endif // TMR_TACS_CREATOR

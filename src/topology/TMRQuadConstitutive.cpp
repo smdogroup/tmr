@@ -109,8 +109,8 @@ int TMRQuadConstitutive::setDesignVars( int elemIndex,
   const int order = forest->getMeshOrder();
   const int len = order*order;
 
-  TacsScalar *xptr = &x[nmats*len*elemIndex];
-  for ( int i = 0; i < nmats*len; i++ ){
+  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  for ( int i = 0; i < nvars*len; i++ ){
     xptr[i] = dvs[i];
   }
 
@@ -130,7 +130,7 @@ int TMRQuadConstitutive::getDesignVars( int elemIndex,
   const int len = order*order;
 
   TacsScalar *xptr = &x[nvars*len*elemIndex];
-  for ( int i = 0; i < nmats*len; i++ ){
+  for ( int i = 0; i < nvars*len; i++ ){
     dvs[i] = xptr[i];
   }
 

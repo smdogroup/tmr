@@ -48,9 +48,7 @@ public:
     else if (order == 4){
       basis = new TACSCubicQuadBasis();
     }
-//    else if (order == 4){
-//      basis = new TACSQuarticQuadBasis();
-//    }
+
     TACSElement *elem = new TACSElement2D(model, basis);
 
     for ( int i = 0; i < num_elements; i++ ){
@@ -78,9 +76,7 @@ public:
     else if (order == 4){
       basis = new TACSCubicHexaBasis();
     }
-//    else if (order == 4){
-//      basis = new TACSQuarticQuadBasis();
-//    }
+
     TACSElement *elem = new TACSElement3D(model, basis);
 
     for ( int i = 0; i < num_elements; i++ ){
@@ -385,11 +381,12 @@ void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
 */
 void TMRMatrixFilter::addValues( TACSBVec *vec ){
   const int vpn = assembler[0]->getDesignVarsPerNode();
+  vec->beginSetValues(TACS_ADD_VALUES);
+  vec->endSetValues(TACS_ADD_VALUES);
   temp->copyValues(vec);
 
   if (vpn == 1){
-    applyTranspose(temp, y1);
-    vec->axpy(1.0, y1);
+    applyTranspose(temp, vec);
   }
   else {
     for ( int k = 0; k < vpn; k++ ){
