@@ -72,6 +72,9 @@ class TMROctConstitutive : public TACSSolidConstitutive {
                       TMROctForest *_forest );
   ~TMROctConstitutive();
 
+  // Get the number of design variables at each "design node"
+  int getDesignVarsPerNode(){ return nvars; }
+
   // Retrieve the global design variable numbers
   int getDesignVarNums( int elemIndex, int dvLen, int dvNums[] );
 

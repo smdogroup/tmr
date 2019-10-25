@@ -20,78 +20,9 @@
 
 #include "TMRHelmholtzFilter.h"
 #include "TMRHelmholtzModel.h"
-#include "TACSQuadBasis.h"
-#include "TACSHexaBasis.h"
-#include "TACSElement2D.h"
-#include "TACSElement3D.h"
+#include "TMRMatrixCreator.h"
 #include "TMR_TACSCreator.h"
 #include "TMR_RefinementTools.h"
-
-/*
-  Helmholtz filter creator classes
-*/
-class TMRQuadTACSHelmholtzCreator : public TMRQuadTACSCreator {
-public:
-  TMRQuadTACSHelmholtzCreator( double r ):
-    TMRQuadTACSCreator(NULL){
-    radius = r;
-  }
-  void createElements( int order,
-                       TMRQuadForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    TACSElementModel *model = new TMRQuadHelmholtzModel(radius);
-    TACSElementBasis *basis = NULL;
-    if (order == 2){
-      basis = new TACSLinearQuadBasis();
-    }
-    else if (order == 3){
-      basis = new TACSQuadraticQuadBasis();
-    }
-    else if (order == 4){
-      basis = new TACSCubicQuadBasis();
-    }
-
-    TACSElement *elem = new TACSElement2D(model, basis);
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-
-  double radius;
-};
-
-class TMROctTACSHelmholtzCreator : public TMROctTACSCreator {
-public:
-  TMROctTACSHelmholtzCreator( double r ):
-    TMROctTACSCreator(NULL){
-    radius = r;
-  }
-  void createElements( int order,
-                       TMROctForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    TACSElementModel *model = new TMRHexaHelmholtzModel(radius);
-    TACSElementBasis *basis = NULL;
-    if (order == 2){
-      basis = new TACSLinearHexaBasis();
-    }
-    else if (order == 3){
-      basis = new TACSQuadraticHexaBasis();
-    }
-    else if (order == 4){
-      basis = new TACSCubicHexaBasis();
-    }
-
-    TACSElement *elem = new TACSElement3D(model, basis);
-
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-
-  double radius;
-};
 
 /*
   Create the Helmholtz filter object
@@ -120,15 +51,17 @@ void TMRHelmholtzFilter::initialize_helmholtz( double helmholtz_radius ){
   helmholtz_assembler = new TACSAssembler*[ nlevels ];
 
   // Create the Helmholtz creator objects
-  TMROctTACSHelmholtzCreator *helmholtz_creator3d = NULL;
-  TMRQuadTACSHelmholtzCreator *helmholtz_creator2d = NULL;
+  TMROctTACSMatrixCreator *helmholtz_creator3d = NULL;
+  TMRQuadTACSMatrixCreator *helmholtz_creator2d = NULL;
 
   if (oct_filter){
-    helmholtz_creator3d = new TMROctTACSHelmholtzCreator(helmholtz_radius);
+    TACSElementModel *model = new TMRHexaHelmholtzModel(helmholtz_radius);
+    helmholtz_creator3d = new TMROctTACSMatrixCreator(model);
     helmholtz_creator3d->incref();
   }
   else {
-    helmholtz_creator2d = new TMRQuadTACSHelmholtzCreator(helmholtz_radius);
+    TACSElementModel *model = new TMRQuadHelmholtzModel(helmholtz_radius);
+    helmholtz_creator2d = new TMRQuadTACSMatrixCreator(model);
     helmholtz_creator2d->incref();
   }
 

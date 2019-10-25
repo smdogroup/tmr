@@ -19,73 +19,11 @@
 */
 
 #include "TMRHelmholtzPUFilter.h"
+#include "TMRMatrixFilterModel.h"
 #include "TMRHelmholtzModel.h"
-#include "TACSQuadBasis.h"
-#include "TACSHexaBasis.h"
-#include "TACSElement2D.h"
-#include "TACSElement3D.h"
+#include "TMRMatrixCreator.h"
 #include "TMR_TACSCreator.h"
 #include "TACSToFH5.h"
-
-/*
-  Matrix filter creator classes
-*/
-class TMRQuadTACSMatrixCreator : public TMRQuadTACSCreator {
-public:
-  TMRQuadTACSMatrixCreator():
-    TMRQuadTACSCreator(NULL){}
-  void createElements( int order,
-                       TMRQuadForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    double radius = 1.0;
-    TACSElementModel *model = new TMRQuadHelmholtzModel(radius);
-    TACSElementBasis *basis = NULL;
-    if (order == 2){
-      basis = new TACSLinearQuadBasis();
-    }
-    else if (order == 3){
-      basis = new TACSQuadraticQuadBasis();
-    }
-    else if (order == 4){
-      basis = new TACSCubicQuadBasis();
-    }
-
-    TACSElement *elem = new TACSElement2D(model, basis);
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-};
-
-class TMROctTACSMatrixCreator : public TMROctTACSCreator {
-public:
-  TMROctTACSMatrixCreator():
-    TMROctTACSCreator(NULL){}
-  void createElements( int order,
-                       TMROctForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    double radius = 1.0;
-    TACSElementModel *model = new TMRHexaHelmholtzModel(radius);
-    TACSElementBasis *basis = NULL;
-    if (order == 2){
-      basis = new TACSLinearHexaBasis();
-    }
-    else if (order == 3){
-      basis = new TACSQuadraticHexaBasis();
-    }
-    else if (order == 4){
-      basis = new TACSCubicHexaBasis();
-    }
-
-    TACSElement *elem = new TACSElement3D(model, basis);
-
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-};
 
 /*
   Find the boundary faces and set them as  and set them
@@ -468,8 +406,9 @@ void TMRHelmholtzPUFilter::initialize(){
   // Create the Assembler object
   TACSAssembler *tacs = NULL;
   if (oct_filter){
+    TACSElementModel *model = new TMRHexaMatrixModel();
     TMROctTACSMatrixCreator *matrix_creator3d =
-      new TMROctTACSMatrixCreator();
+      new TMROctTACSMatrixCreator(model);
     matrix_creator3d->incref();
 
     tacs = matrix_creator3d->createTACS(oct_filter[0],
@@ -478,8 +417,9 @@ void TMRHelmholtzPUFilter::initialize(){
     matrix_creator3d->decref();
   }
   else {
+    TACSElementModel *model = new TMRQuadMatrixModel();
     TMRQuadTACSMatrixCreator *matrix_creator2d =
-      new TMRQuadTACSMatrixCreator();
+      new TMRQuadTACSMatrixCreator(model);
     matrix_creator2d->incref();
 
     tacs = matrix_creator2d->createTACS(quad_filter[0],

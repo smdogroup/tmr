@@ -267,8 +267,9 @@ TACSAssembler*
     // Set the dependent design variable information
     const int *design_dep_ptr, *design_dep_conn;
     const double *design_dep_weights;
-    int num_dep_design_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
-                                                      &dep_weights);
+    int num_dep_design_nodes = filter->getDepNodeConn(&design_dep_ptr,
+                                                      &design_dep_conn,
+                                                      &design_dep_weights);
 
     // Set the assembler
     assembler->setDesignDependentNodes(num_dep_design_nodes, design_dep_ptr,
@@ -516,8 +517,9 @@ TACSAssembler*
     // Set the dependent design variable information
     const int *design_dep_ptr, *design_dep_conn;
     const double *design_dep_weights;
-    int num_dep_design_nodes = filter->getDepNodeConn(&dep_ptr, &dep_conn,
-                                                      &dep_weights);
+    int num_dep_design_nodes = filter->getDepNodeConn(&design_dep_ptr,
+                                                      &design_dep_conn,
+                                                      &design_dep_weights);
 
     // Set the assembler
     assembler->setDesignDependentNodes(num_dep_design_nodes, design_dep_ptr,

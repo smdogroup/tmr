@@ -379,21 +379,22 @@ def densityBasedRefine(forest, assembler, index=0,
     for i in range(num_elems):
         # Extract the constitutive object from the element, if it is defined, otherwise
         # skip the refinement.
-        c = elems[i].getConstitutive()
-        if c is not None:
-            value = c.getDVOutputValue(index, pt)
+        dvs_per_node = elems[i].getDesignVarsPerNode()
+        dvs = elems[i].getDesignVars(i)
 
-            # Apply the refinement criteria
-            if reverse:
-                if value >= upper:
-                    refine[i] = -1
-                elif value <= lower:
-                    refine[i] = 1
-            else:
-                if value >= upper:
-                    refine[i] = 1
-                elif value <= lower:
-                    refine[i] = -1
+        # Apply the refinement criteria
+        if reverse:
+            value = np.min(dvs[index::dvs_per_node])
+            if value >= upper:
+                refine[i] = -1
+            elif value <= lower:
+                refine[i] = 1
+        else:
+            value = np.max(dvs[index::dvs_per_node])
+            if value >= upper:
+                refine[i] = 1
+            elif value <= lower:
+                refine[i] = -1
 
     # Refine the forest
     forest.refine(refine, min_lev=min_lev, max_lev=max_lev)

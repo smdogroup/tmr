@@ -20,70 +20,8 @@
 
 #include "TMRMatrixFilterModel.h"
 #include "TMRMatrixFilter.h"
-#include "TACSQuadBasis.h"
-#include "TACSHexaBasis.h"
-#include "TACSElement2D.h"
-#include "TACSElement3D.h"
+#include "TMRMatrixCreator.h"
 #include "TMR_TACSCreator.h"
-
-/*
-  Matrix filter creator classes
-*/
-class TMRQuadTACSMatrixCreator : public TMRQuadTACSCreator {
-public:
-  TMRQuadTACSMatrixCreator():
-    TMRQuadTACSCreator(NULL){}
-  void createElements( int order,
-                       TMRQuadForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    TACSElementModel *model = new TMRQuadMatrixModel();
-    TACSElementBasis *basis = NULL;
-    if (order == 2){
-      basis = new TACSLinearQuadBasis();
-    }
-    else if (order == 3){
-      basis = new TACSQuadraticQuadBasis();
-    }
-    else if (order == 4){
-      basis = new TACSCubicQuadBasis();
-    }
-
-    TACSElement *elem = new TACSElement2D(model, basis);
-
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-};
-
-class TMROctTACSMatrixCreator : public TMROctTACSCreator {
-public:
-  TMROctTACSMatrixCreator():
-    TMROctTACSCreator(NULL){}
-  void createElements( int order,
-                       TMROctForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    TACSElementModel *model = new TMRHexaMatrixModel();
-    TACSElementBasis *basis = NULL;
-    if (order == 2){
-      basis = new TACSLinearHexaBasis();
-    }
-    else if (order == 3){
-      basis = new TACSQuadraticHexaBasis();
-    }
-    else if (order == 4){
-      basis = new TACSCubicHexaBasis();
-    }
-
-    TACSElement *elem = new TACSElement3D(model, basis);
-
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-};
 
 /*
   Create the filter matrix
@@ -116,8 +54,9 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
   // Create the Assembler object
   TACSAssembler *matrix_assembler = NULL;
   if (oct_filter){
+    TACSElementModel *model = new TMRHexaMatrixModel();
     TMROctTACSMatrixCreator *matrix_creator3d =
-      new TMROctTACSMatrixCreator();
+      new TMROctTACSMatrixCreator(model);
     matrix_creator3d->incref();
 
     matrix_assembler = matrix_creator3d->createTACS(oct_forest,
@@ -126,8 +65,9 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
     matrix_creator3d->decref();
   }
   else {
+    TACSElementModel *model = new TMRQuadMatrixModel();
     TMRQuadTACSMatrixCreator *matrix_creator2d =
-      new TMRQuadTACSMatrixCreator();
+      new TMRQuadTACSMatrixCreator(model);
     matrix_creator2d->incref();
 
     matrix_assembler = matrix_creator2d->createTACS(quad_forest,

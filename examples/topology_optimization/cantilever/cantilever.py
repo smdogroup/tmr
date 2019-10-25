@@ -49,6 +49,7 @@ class OctCreator(TMR.OctConformTopoCreator):
         # Set the basis functions and create the element
         self.basis = elements.LinearHexaBasis()
         self.element = elements.Element3D(self.model, self.basis)
+
         return
 
     def createElement(self, order, octant, index, weights):
@@ -93,7 +94,7 @@ class CreatorCallback:
 
 def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
     """
-    Create an initial forest for analysis. and optimization
+    Create an initial forest for analysis and optimization
 
     This code loads in the model, sets names, meshes the geometry and creates
     a QuadForest from the mesh. The forest is populated with quadtrees with
@@ -205,7 +206,6 @@ if __name__ == '__main__':
 
     # Set the optimization parameters
     optimization_options = {
-        'optimizer': 'Interior Point',
         # Parameters for the trust region method
         'tr_init_size': 0.01,
         'tr_max_size': 0.1,
@@ -247,7 +247,7 @@ if __name__ == '__main__':
     orig_filter = None
     xopt = None
 
-    max_iterations = 2
+    max_iterations = 3
     for step in range(max_iterations):
         # Create the problem
         problem = create_problem(forest, bcs, props, nlevels)
@@ -271,20 +271,21 @@ if __name__ == '__main__':
         opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
         xopt = opt.optimize()
 
+        # Output for visualization
+        flag = (TACS.OUTPUT_CONNECTIVITY |
+                TACS.OUTPUT_NODES |
+                TACS.OUTPUT_DISPLACEMENTS |
+                TACS.OUTPUT_STRAINS)
+        assembler = problem.getAssembler()
+        f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
+        f5.writeToFile(os.path.join(prefix, 'cantilever%d.f5'%(step)))
+
         # Refine based solely on the value of the density variable
-        # assembler = problem.getAssembler()
-        # TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
+        assembler = problem.getAssembler()
+        new_forest = forest.duplicate()
+        TopOptUtils.densityBasedRefine(new_forest, assembler, lower=0.05, upper=0.5)
 
         # Repartition the mesh
-        # forest.repartition()
-
-        break
-
-    # Output for visualization
-    flag = (TACS.OUTPUT_CONNECTIVITY |
-            TACS.OUTPUT_NODES |
-            TACS.OUTPUT_DISPLACEMENTS |
-            TACS.OUTPUT_STRAINS)
-    assembler = problem.getAssembler()
-    f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
-    f5.writeToFile(os.path.join(prefix, 'cantilever.f5'))
+        new_forest.balance(1)
+        new_forest.repartition()
+        forest = new_forest
