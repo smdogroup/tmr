@@ -203,7 +203,6 @@ def create_problem(forest, bcs, props, nlevels):
     return problem
 
 if __name__ == '__main__':
-
     # Set the optimization parameters
     optimization_options = {
         # Parameters for the trust region method
@@ -282,10 +281,10 @@ if __name__ == '__main__':
 
         # Refine based solely on the value of the density variable
         assembler = problem.getAssembler()
-        new_forest = forest.duplicate()
-        TopOptUtils.densityBasedRefine(new_forest, assembler, lower=0.05, upper=0.5)
+        if forest == filtr:
+            forest = forest.duplicate()
+        TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
 
         # Repartition the mesh
-        new_forest.balance(1)
-        new_forest.repartition()
-        forest = new_forest
+        forest.balance(1)
+        forest.repartition()
