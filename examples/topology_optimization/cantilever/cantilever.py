@@ -37,7 +37,7 @@ class OctCreator(TMR.OctConformTopoCreator):
     different degree of approximation.)
     """
     def __init__(self, bcs, filt, props=None):
-        TMR.OctTopoCreator.__init__(bcs, filt)
+        TMR.OctConformTopoCreator.__init__(bcs, filt)
         self.props = props
 
         # Create the constitutive object - one for the entire mesh
@@ -281,8 +281,7 @@ if __name__ == '__main__':
 
         # Refine based solely on the value of the density variable
         assembler = problem.getAssembler()
-        if forest == filtr:
-            forest = forest.duplicate()
+        forest = forest.duplicate()
         TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
 
         # Repartition the mesh

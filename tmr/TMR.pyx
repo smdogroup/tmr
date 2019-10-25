@@ -3751,6 +3751,12 @@ cdef class QuadCreator:
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
+    def getFilter(self):
+        cdef TMRQuadForest *filtr = self.ptr.getFilter()
+        if filtr:
+            return _init_QuadForest(filtr)
+        return None
+
 cdef TACSElement* _createOctElement(void *_self, int order,
                                     TMROctant *octant):
     cdef TACSElement *elem = NULL
@@ -3810,6 +3816,13 @@ cdef class OctCreator:
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
+    def getFilter(self):
+        cdef TMROctForest *filtr = self.ptr.getFilter()
+        if filtr:
+            return _init_OctForest(filtr)
+        return None
+
+
 cdef TACSElement* _createQuadTopoElement(void *_self, int order,
                                          TMRQuadrant *quad,
                                          int nweights,
@@ -3853,6 +3866,10 @@ cdef class QuadTopoCreator:
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
+
+    def getFilter(self):
+        cdef TMRQuadForest *filtr = self.ptr.getFilter()
+        return _init_QuadForest(filtr)
 
 cdef TACSElement* _createQuadConformTopoElement( void *_self, int order,
                                                  TMRQuadrant *quad,
@@ -3902,6 +3919,10 @@ cdef class QuadConformTopoCreator:
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
 
+    def getFilter(self):
+        cdef TMRQuadForest *filtr = self.ptr.getFilter()
+        return _init_QuadForest(filtr)
+
 cdef TACSElement* _createOctTopoElement(void *_self, int order,
                                         TMROctant *octant,
                                         int nweights,
@@ -3947,6 +3968,10 @@ cdef class OctTopoCreator:
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
+
+    def getFilter(self):
+        cdef TMROctForest *filtr = self.ptr.getFilter()
+        return _init_OctForest(filtr)
 
 cdef TACSElement* _createOctConformTopoElement( void *_self, int order,
                                                 TMROctant *octant,
@@ -3997,6 +4022,10 @@ cdef class OctConformTopoCreator:
         cdef TACSAssembler *assembler = NULL
         assembler = self.ptr.createTACS(forest.ptr, ordering)
         return _init_Assembler(assembler)
+
+    def getFilter(self):
+        cdef TMROctForest *filtr = self.ptr.getFilter()
+        return _init_OctForest(filtr)
 
 def createMg(list assemblers, list forests, double omega=1.0,
              use_coarse_direct_solve=True,
@@ -4289,6 +4318,23 @@ cdef class LagrangeFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+    def getFilter(self):
+        """
+        getFilter(self)
+
+        Get the OctForest or QuadForest object associated with the filter
+
+        Returns:
+            OctForest or QuadForest: The forest associated with the filter
+        """
+        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
+        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
+        if quad_forest != NULL:
+            return _init_QuadForest(quad_forest)
+        if oct_forest != NULL:
+            return _init_OctForest(oct_forest)
+        return None
+
 cdef class ConformFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters):
         cdef int nlevels = 0
@@ -4332,6 +4378,23 @@ cdef class ConformFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def getFilter(self):
+        """
+        getFilter(self)
+
+        Get the OctForest or QuadForest object associated with the filter
+
+        Returns:
+            OctForest or QuadForest: The forest associated with the filter
+        """
+        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
+        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
+        if quad_forest != NULL:
+            return _init_QuadForest(quad_forest)
+        if oct_forest != NULL:
+            return _init_OctForest(oct_forest)
+        return None
 
 cdef class HelmholtzFilter(TopoFilter):
     def __cinit__(self, double radius, list assemblers, list filters):
@@ -4377,6 +4440,23 @@ cdef class HelmholtzFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+    def getFilter(self):
+        """
+        getFilter(self)
+
+        Get the OctForest or QuadForest object associated with the filter
+
+        Returns:
+            OctForest or QuadForest: The forest associated with the filter
+        """
+        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
+        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
+        if quad_forest != NULL:
+            return _init_QuadForest(quad_forest)
+        if oct_forest != NULL:
+            return _init_OctForest(oct_forest)
+        return None
+
 cdef class MatrixFilter(TopoFilter):
     def __cinit__(self, double s, int N, list assemblers, list filters):
         cdef int nlevels = 0
@@ -4420,6 +4500,23 @@ cdef class MatrixFilter(TopoFilter):
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def getFilter(self):
+        """
+        getFilter(self)
+
+        Get the OctForest or QuadForest object associated with the filter
+
+        Returns:
+            OctForest or QuadForest: The forest associated with the filter
+        """
+        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
+        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
+        if quad_forest != NULL:
+            return _init_QuadForest(quad_forest)
+        if oct_forest != NULL:
+            return _init_OctForest(oct_forest)
+        return None
 
 # This wraps a C++ array with a numpy array for later useage
 cdef inplace_array_1d(int nptype, int dim1, void *data_ptr):
@@ -4525,6 +4622,23 @@ cdef class HelmholtzPUFilter(TopoFilter):
         if self.ptr:
             self.ptr.decref()
 
+    def getFilter(self):
+        """
+        getFilter(self)
+
+        Get the OctForest or QuadForest object associated with the filter
+
+        Returns:
+            OctForest or QuadForest: The forest associated with the filter
+        """
+        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
+        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
+        if quad_forest != NULL:
+            return _init_QuadForest(quad_forest)
+        if oct_forest != NULL:
+            return _init_OctForest(oct_forest)
+        return None
+
 cdef class StiffnessProperties:
     cdef TMRStiffnessProperties *ptr
     def __cinit__(self, props, **kwargs):
@@ -4580,6 +4694,12 @@ cdef class StiffnessProperties:
 
     def __dealloc__(self):
         self.ptr.decref()
+
+    def getDesignVarsPerNode(self):
+        cdef int nmats = self.ptr.nmats
+        if nmats > 1:
+            return nmats+1
+        return 1
 
 cdef class OctConstitutive(SolidConstitutive):
     def __cinit__(self, StiffnessProperties props=None, OctForest forest=None):

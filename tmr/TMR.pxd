@@ -432,9 +432,11 @@ cdef extern from "TMR_TACSCreator.h":
 
     cdef cppclass TMRQuadTACSCreator(TMREntity):
         TMRQuadTACSCreator(TMRBoundaryConditions*, int, TMRQuadForest*)
+        TMRQuadForest* getFilter()
 
     cdef cppclass TMROctTACSCreator(TMREntity):
         TMROctTACSCreator(TMRBoundaryConditions*, int, TMROctForest*)
+        TMROctForest* getFilter()
 
 cdef extern from "TMROpenCascade.h":
     cdef TMRModel* TMR_LoadModelFromIGESFile(const char*, int)
@@ -483,21 +485,21 @@ cdef extern from "TMRCyCreator.h":
     ctypedef TACSElement* (*createocttopoelements)(
         void*, int, TMROctant*, int, TMRIndexWeight*)
 
-    cdef cppclass TMRCyQuadCreator(TMREntity):
+    cdef cppclass TMRCyQuadCreator(TMRQuadTACSCreator):
         TMRCyQuadCreator(TMRBoundaryConditions*, int, TMRQuadForest*)
         void setSelfPointer(void*)
         void setCreateQuadElement(
             TACSElement* (*createquadelements)(void*, int, TMRQuadrant*))
         TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
 
-    cdef cppclass TMRCyOctCreator(TMREntity):
+    cdef cppclass TMRCyOctCreator(TMROctTACSCreator):
         TMRCyOctCreator(TMRBoundaryConditions*, int, TMROctForest*)
         void setSelfPointer(void*)
         void setCreateOctElement(
             TACSElement* (*createoctelements)(void*, int, TMROctant*))
         TACSAssembler *createTACS(TMROctForest*, OrderingType)
 
-    cdef cppclass TMRCyTopoQuadCreator(TMREntity):
+    cdef cppclass TMRCyTopoQuadCreator(TMRQuadTACSCreator):
         TMRCyTopoQuadCreator(TMRBoundaryConditions*, int, TMRQuadForest*)
         void setSelfPointer(void*)
         void setCreateQuadTopoElement(
@@ -505,7 +507,7 @@ cdef extern from "TMRCyCreator.h":
                 void*, int, TMRQuadrant*, int, TMRIndexWeight*))
         TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
 
-    cdef cppclass TMRCyTopoOctCreator(TMREntity):
+    cdef cppclass TMRCyTopoOctCreator(TMROctTACSCreator):
         TMRCyTopoOctCreator(TMRBoundaryConditions*, int, TMROctForest*)
         void setSelfPointer(void*)
         void setCreateOctTopoElement(
@@ -513,7 +515,7 @@ cdef extern from "TMRCyCreator.h":
                 void*, int, TMROctant*, int, TMRIndexWeight*))
         TACSAssembler *createTACS(TMROctForest*, OrderingType)
 
-    cdef cppclass TMRCyTopoQuadConformCreator(TMREntity):
+    cdef cppclass TMRCyTopoQuadConformCreator(TMRQuadTACSCreator):
        TMRCyTopoQuadConformCreator(TMRBoundaryConditions*, int, TMRQuadForest*,
                                    int, TMRInterpolationType)
        void setSelfPointer(void*)
@@ -522,7 +524,7 @@ cdef extern from "TMRCyCreator.h":
              void*, int, TMRQuadrant*, int, const int*, TMRQuadForest*))
        TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
 
-    cdef cppclass TMRCyTopoOctConformCreator(TMREntity):
+    cdef cppclass TMRCyTopoOctConformCreator(TMROctTACSCreator):
         TMRCyTopoOctConformCreator(TMRBoundaryConditions*, int, TMROctForest*,
                                    int, TMRInterpolationType)
         void setSelfPointer(void*)
@@ -533,7 +535,9 @@ cdef extern from "TMRCyCreator.h":
 
 cdef extern from "TMRTopoFilter.h":
     cdef cppclass TMRTopoFilter(TMREntity):
-        TACSAssembler *getAssembler()
+        TACSAssembler* getAssembler()
+        TMRQuadForest* getFilterQuadForest()
+        TMROctForest* getFilterOctForest()
 
 cdef class TopoFilter:
     cdef TMRTopoFilter *ptr
@@ -563,6 +567,12 @@ cdef extern from "TMROctConstitutive.h":
         TMRStiffnessProperties(int, TACSMaterialProperties**,
                                double, double, double, double,
                                double, double, double, double, int)
+        int nmats
+        double q
+        double eps
+        double k0
+        double ksWeight
+        TACSMaterialProperties **props
 
     cdef cppclass TMROctConstitutive(TACSSolidConstitutive):
         TMROctConstitutive(TMRStiffnessProperties*, TMROctForest*)

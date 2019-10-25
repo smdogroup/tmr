@@ -458,6 +458,9 @@ void TMRQuadConstitutive::evalThermalStrain( int elemIndex,
   // Get the design variable values
   TacsScalar *xptr = &x[nvars*len*elemIndex];
 
+  // Zero the components of the thermal strain
+  e[0] = e[1] = e[2] = 0.0;
+
   // Add the derivative of the density
   for ( int j = 0; j < nmats; j++ ){
     TacsScalar rho = 0.0;

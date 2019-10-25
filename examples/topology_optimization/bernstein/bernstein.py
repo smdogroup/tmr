@@ -42,12 +42,44 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
     analysis mesh, the order of the conforming filter QuadForest mesh, and
     the type of interpolant to be used.
     """
-    def __init__(self, bcs, forest, order, interp, props=None):
+    def __init__(self, bcs, forest, order=2, interp=TMR.BERNSTEIN_POINTS,
+                 design_vars_per_node=1, props=None):
         # Set the interpolation for the new filter
-        TMR.QuadConformTopoCreator.__init__(bcs, forest, order, interp)
+        super(TMR.QuadConformTopoCreator, self).__init__(bcs, forest,
+                                                         order=order, interp=interp,
+                                                         design_vars_per_node=design_vars_per_node)
 
-        # Create the array of properties
+        # Store the properties
         self.props = props
+        self.element = None
+
+    def createTopoElement(self, order, filtr):
+        """
+        Create an element for the entire mesh
+        """
+
+        # Create the constitutive object - one for the entire mesh
+        self.con = TMR.QuadConstitutive(props=self.props, forest=filtr)
+
+        # Create the model (the type of physics we're using)
+        self.model = elements.LinearThermoelasticity2D(self.con)
+
+        # Set the basis functions and create the element
+        if order == 2:
+            self.basis = elements.LinearQuadBasis()
+        elif order == 3:
+            self.basis = elements.QuadraticQuadBasis()
+        elif order == 4:
+            self.basis = elements.CubicQuadBasis()
+        elif order == 5:
+            self.basis = elements.QuarticQuadBasis()
+
+        elements.TestElementBasis(self.basis)
+
+        # Create the elemtn type
+        self.element = elements.Element2D(self.model, self.basis)
+
+        return
 
     def createElement(self, order, quadrant, index, filtr):
         """
@@ -62,9 +94,9 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
         Returns:
             TACS.Element: Element to place within the Assembler
         """
-        stiff = TMR.ThermoQuadStiffness(self.props, index, None, filtr)
-        elem = elements.PSThermoelasticQuad(order, stiff)
-        return elem
+        if self.element is None:
+            self.createTopoElement(order, filtr)
+        return self.element
 
 class CreatorCallback:
     def __init__(self, bcs, props):
@@ -81,7 +113,10 @@ class CreatorCallback:
         """
         order = forest.getMeshOrder()-1
         interp = TMR.BERNSTEIN_POINTS
-        creator = QuadConformCreator(self.bcs, forest, order, interp, self.props)
+        dvs_per_node = self.props.getDesignVarsPerNode()
+        creator = QuadConformCreator(self.bcs, forest, order=order,
+                                     design_vars_per_node=dvs_per_node,
+                                     interp=interp, props=self.props)
         return creator, creator.getFilter()
 
 def create_forest(comm, depth, htarget):
@@ -162,9 +197,9 @@ def create_problem(forest, bcs, props, nlevels):
     filter_type = 'conform'
 
     # Create the problem and filter object
-    problem = TopOptUtils.createTopoProblem(forest,
-        obj.creator_callback, filter_type, nlevels=nlevels, lowest_order=3,
-        design_vars_per_node=design_vars_per_node)
+    problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
+                                            nlevels=nlevels, lowest_order=3,
+                                            design_vars_per_node=design_vars_per_node)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
@@ -177,13 +212,16 @@ def create_problem(forest, bcs, props, nlevels):
     tx = np.zeros(args.order)
     ty = T*np.ones(args.order)
 
-    thermal_tractions = []
-    for findex in range(4):
-        thermal_tractions.append(elements.PSThermoQuadTraction(findex, tx, ty))
+    # thermal_tractions = []
+    # for findex in range(4):
+    #     thermal_tractions.append(elements.PSThermoQuadTraction(findex, tx, ty))
 
     # Allocate a thermal traction boundary condition
-    force1 = TopOptUtils.computeTractionLoad('traction', forest, assembler,
-        thermal_tractions)
+    # force1 = TopOptUtils.computeTractionLoad('traction', forest, assembler,
+    #                                          thermal_tractions)
+    force1 = assembler.createVec()
+    force1.getArray()[:] = 1.0
+    assembler.applyBCs(force1)
 
     # Set the load cases
     problem.setLoadCases([force1])
@@ -191,19 +229,25 @@ def create_problem(forest, bcs, props, nlevels):
     # Set the mass constraint
     # (m_fixed - m(x))/m_fixed >= 0.0
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
-    problem.setObjective(obj_array, [functions.Compliance(assembler)])
+    problem.setObjective(obj_array) # , [functions.Compliance(assembler)])
 
     # Initialize the problem and set the prefix
     problem.initialize()
 
     # Set the output file name
-    flag = (TACS.ToFH5.NODES | TACS.ToFH5.DISPLACEMENTS | TACS.ToFH5.EXTRAS)
-    problem.setF5OutputFlags(5, TACS.PY_PLANE_STRESS, flag)
+    flag = (TACS.OUTPUT_CONNECTIVITY |
+            TACS.OUTPUT_NODES |
+            TACS.OUTPUT_DISPLACEMENTS |
+            TACS.OUTPUT_STRAINS |
+            TACS.OUTPUT_EXTRAS)
+    problem.setF5OutputFlags(1, TACS.PLANE_STRESS_ELEMENT, flag)
 
     return problem
 
 # Set the optimization parameters
 optimization_options = {
+    'optimizer': 'Interior Point',
+
     # Parameters for the trust region method
     'tr_init_size': 0.01,
     'tr_max_size': 0.05,
@@ -220,15 +264,13 @@ optimization_options = {
     'barrier_strategy': 'Complementarity fraction',
     'start_strategy': 'Affine step'}
 
-prefix = 'results'
-
 # Create an argument parser to read in arguments from the command line
 p = argparse.ArgumentParser()
 p.add_argument('--prefix', type=str, default='./results')
 p.add_argument('--vol_frac', type=float, default=0.25)
 p.add_argument('--htarget', type=float, default=2.5e-3)
 p.add_argument('--max_opt_iters', type=int, nargs='+',
-               default=[50])
+               default=[5])
 p.add_argument('--init_depth', type=int, default=1)
 p.add_argument('--mg_levels', type=int, nargs='+', default=[2])
 p.add_argument('--use_L1', action='store_true', default=True)
@@ -262,29 +304,47 @@ vol_frac = args.vol_frac
 
 # Set the values of the objective array
 obj_array = [ 1e0 ]
-thickness = 1.0e-2
-rho = [2600*thickness, 1300.*thickness]
-E = [70e9*thickness, 35e9*thickness]
-nu = [0.3, 0.3]
-aT = [23.5e-6, 23.5e-6*0.5]
-kcond = [130.0*thickness, 65.0*thickness]
-ys = [450e6*thickness, 275e6*thickness]
+
+# The thickness value
+t = 0.01
+
+# Create the first material properties object
+rho = 2600.0*t
+E = 70e9*t
+nu = 0.3
+alpha = 23.5e-6
+kcond = 130.0
+ys = 450e6
+mat1 = constitutive.MaterialProperties(rho=rho, E=E,
+                                       nu=nu, alpha=alpha,
+                                       kappa=kcond, ys=ys)
+
+# Create the second material properties object
+rho = 1300.0*t
+E = 35e9*t
+nu = 0.3
+alpha = 0.5*23.5e-6
+kcond = 65.0
+ys = 275e6
+mat2 = constitutive.MaterialProperties(rho=rho, E=E,
+                                       nu=nu, alpha=alpha,
+                                       kappa=kcond, ys=ys)
+
+prop_list = [mat1, mat2]
 
 # Set the fixed mass
-max_density = sum(rho)/len(rho)
+max_density = 0.5*t*(2600.0 + 1300.0)
 initial_mass = vol*max_density
 m_fixed = vol_frac*initial_mass
 
 # Set the number of variables per node
 design_vars_per_node = 1
-if (len(rho) > 1):
-    design_vars_per_node = 1+len(rho)
+if (len(prop_list) > 1):
+    design_vars_per_node = 1+len(prop_list)
 
 # Create the stiffness properties object
-props = TMR.QuadStiffnessProperties(rho, E, nu, _aT=aT, _kcond=kcond,
-                                    k0=1e-3, eps=0.2,
-                                    q=args.q_penalty, qtemp=0.0,
-                                    qcond=0.0)
+props = TMR.StiffnessProperties(prop_list, q=args.q_penalty, qtemp=0.0,
+                                qcond=0.0, eps=0.2, k0=1e-3)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
@@ -324,6 +384,7 @@ for step in range(max_iterations):
 
     # Optimize the problem
     opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
+    opt.opt.checkGradients(1e-6)
     xopt = opt.optimize()
 
     # Refine based solely on the value of the density variable
@@ -342,6 +403,7 @@ for step in range(max_iterations):
             lower=lower, upper=upper, reverse=True)
 
     # Repartition the mesh
+    forest.balance(1)
     forest.repartition()
 
 # Do an averaging of all the values and write to text file

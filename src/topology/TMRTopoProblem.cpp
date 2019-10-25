@@ -285,6 +285,7 @@ TMRTopoProblem::~TMRTopoProblem(){
 
   dfdu->decref();
   adjoint->decref();
+  assembler->decref();
 
   // Free the variables/forces
   if (forces){
