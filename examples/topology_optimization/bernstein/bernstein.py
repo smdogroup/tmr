@@ -44,11 +44,6 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
     """
     def __init__(self, bcs, forest, order=2, interp=TMR.BERNSTEIN_POINTS,
                  design_vars_per_node=1, props=None):
-        # Set the interpolation for the new filter
-        super(TMR.QuadConformTopoCreator, self).__init__(bcs, forest,
-                                                         order=order, interp=interp,
-                                                         design_vars_per_node=design_vars_per_node)
-
         # Store the properties
         self.props = props
         self.element = None
@@ -73,8 +68,6 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
             self.basis = elements.CubicQuadBasis()
         elif order == 5:
             self.basis = elements.QuarticQuadBasis()
-
-        elements.TestElementBasis(self.basis)
 
         # Create the elemtn type
         self.element = elements.Element2D(self.model, self.basis)
@@ -246,8 +239,6 @@ def create_problem(forest, bcs, props, nlevels):
 
 # Set the optimization parameters
 optimization_options = {
-    'optimizer': 'Interior Point',
-
     # Parameters for the trust region method
     'tr_init_size': 0.01,
     'tr_max_size': 0.05,

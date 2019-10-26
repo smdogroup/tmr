@@ -604,7 +604,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
 
     }
     else {
-      sprintf(line, "eigen_iteration_lanczos_res%d.dat",track_eigen_iters);
+      sprintf(line, "eigen_iteration_lanczos_res%d.dat", track_eigen_iters);
     }
     ksm_file = new KSMPrintFile(line,
                                 "KSM", mpi_rank, 1);

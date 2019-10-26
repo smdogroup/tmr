@@ -4520,7 +4520,7 @@ cdef class MatrixFilter(TopoFilter):
 
 # This wraps a C++ array with a numpy array for later useage
 cdef inplace_array_1d(int nptype, int dim1, void *data_ptr):
-    '''Return a numpy version of the array'''
+    """Return a numpy version of the array"""
     # Set the shape of the array
     cdef int size = 1
     cdef np.npy_intp shape[1]
@@ -4754,6 +4754,7 @@ cdef class TopoProblem(ProblemBase):
             raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
         self.ptr = new TMRTopoProblem(fltr.ptr, mg, gmres_subspace, rtol)
+        self.ptr.incref()
         return
 
     def __dealloc__(self):
@@ -4982,9 +4983,9 @@ cdef class TopoProblem(ProblemBase):
                                int num_recycle=0,
                                JDRecycleType recycle_type=JD_NUM_RECYCLE,
                                int track_eigen_iters=0):
-        '''
+        """
         Add buckling/natural frequency constraints
-        '''
+        """
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
@@ -5001,9 +5002,9 @@ cdef class TopoProblem(ProblemBase):
                               TacsScalar ks_weight=30.0,
                               TacsScalar offset=0.0, TacsScalar scale=0.0,
                               int max_lanczos=100, double eigtol=1e-8):
-        '''
+        """
         Add buckling/natural frequency constraints
-        '''
+        """
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
