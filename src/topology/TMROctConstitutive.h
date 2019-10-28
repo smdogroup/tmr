@@ -160,6 +160,10 @@ class TMROctConstitutive : public TACSSolidConstitutive {
                                     const TacsScalar X[], const TacsScalar e[],
                                     TacsScalar sens[] );
 
+  // Evaluate the design field value
+  TacsScalar evalDesignFieldValue( int elemIndex, const double pt[],
+                                   const TacsScalar X[], int index );
+
   // Extra info about the constitutive class
   const char *getObjectName();
 

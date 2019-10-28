@@ -200,6 +200,14 @@ def create_problem(forest, bcs, props, nlevels):
     # Set the objective (scale the compliance objective)
     problem.setObjective([1.0e3])
 
+    # Set the output file name
+    flag = (TACS.OUTPUT_CONNECTIVITY |
+            TACS.OUTPUT_NODES |
+            TACS.OUTPUT_DISPLACEMENTS |
+            TACS.OUTPUT_STRAINS |
+            TACS.OUTPUT_EXTRAS)
+    problem.setF5OutputFlags(1, TACS.SOLID_ELEMENT, flag)
+
     return problem
 
 if __name__ == '__main__':
@@ -211,6 +219,7 @@ if __name__ == '__main__':
         'tr_min_size': 0.01,
         'tr_eta': 0.25,
         'tr_penalty_gamma': 20.0,
+        'tr_write_output_freq': 1,
 
         # Parameters for the interior point method (used to solve the
         # trust region subproblem)
@@ -223,8 +232,6 @@ if __name__ == '__main__':
         'start_strategy': 'Affine step'}
 
     prefix = 'results'
-    optimization_options['output_file'] = os.path.join(prefix, 'output_file.dat')
-    optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file.dat')
 
     # Set the communicator
     comm = MPI.COMM_WORLD
@@ -246,6 +253,7 @@ if __name__ == '__main__':
     orig_filter = None
     xopt = None
 
+    count = 0
     max_iterations = 3
     for step in range(max_iterations):
         # Create the problem
@@ -254,6 +262,7 @@ if __name__ == '__main__':
         # Initialize the problem and set the prefix
         problem.initialize()
         problem.setPrefix(prefix)
+        problem.setIterationCounter(count)
 
         # Extract the filter to interpolate design variables
         filtr = problem.getFilter()
@@ -266,6 +275,13 @@ if __name__ == '__main__':
 
         orig_filter = filtr
 
+        if step == max_iterations-1:
+            optimization_options['maxiter'] = 10
+        count += optimization_options['maxiter']
+
+        optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
+        optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
+
         # Optimize
         opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
         xopt = opt.optimize()
@@ -274,7 +290,8 @@ if __name__ == '__main__':
         flag = (TACS.OUTPUT_CONNECTIVITY |
                 TACS.OUTPUT_NODES |
                 TACS.OUTPUT_DISPLACEMENTS |
-                TACS.OUTPUT_STRAINS)
+                TACS.OUTPUT_STRAINS |
+                TACS.OUTPUT_EXTRAS)
         assembler = problem.getAssembler()
         f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
         f5.writeToFile(os.path.join(prefix, 'cantilever%d.f5'%(step)))

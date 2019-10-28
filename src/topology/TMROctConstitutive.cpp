@@ -1040,6 +1040,32 @@ TacsScalar TMROctConstitutive::evalFailureStrainSens( int elemIndex,
   return 0.0;
 }
 
+// Evaluate the design field value
+TacsScalar TMROctConstitutive::evalDesignFieldValue( int elemIndex,
+                                                     const double pt[],
+                                                     const TacsScalar X[],
+                                                     int index ){
+  if (index >= 0 && index < nvars){
+    const int order = forest->getMeshOrder();
+    const int len = order*order*order;
+
+    // Evaluate the shape functions
+    forest->evalInterp(pt, N);
+
+    // Get the design variable values
+    TacsScalar *xptr = &x[nvars*len*elemIndex];
+
+    TacsScalar rho = 0.0;
+    for ( int i = 0; i < len; i++ ){
+      rho += N[i]*xptr[nvars*i + index];
+    }
+
+    return rho;
+  }
+
+  return 0.0;
+}
+
 const char* TMROctConstitutive::getObjectName(){
   return "TMROctConstitutive";
 }

@@ -928,6 +928,17 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         if (obj_funcs[i]){
           TacsScalar fobj_val;
           assembler->evalFunctions(1, &obj_funcs[i], &fobj_val);
+
+          if (mpi_rank == 0){
+            printf("%-30s %25.10e\n", obj_funcs[i]->getObjectName(), fobj_val);
+            TACSKSFailure *ks_fail =
+              dynamic_cast<TACSKSFailure*>(obj_funcs[i]);
+            if (ks_fail){
+              TacsScalar max_fail = ks_fail->getMaximumFailure();
+              printf("%-30s %25.10e\n", "TACSKSFailure max stress", max_fail);
+            }
+          }
+
           *fobj += obj_weights[i]*fobj_val;
         }
       }
@@ -940,7 +951,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       int num_funcs = load_case_info[i].num_funcs;
       if (num_funcs > 0){
         assembler->evalFunctions(num_funcs, load_case_info[i].funcs,
-                            &cons[count]);
+                                 &cons[count]);
 
         if (mpi_rank == 0){
           for ( int k = 0; k < num_funcs; k++ ){
