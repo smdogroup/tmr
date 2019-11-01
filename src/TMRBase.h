@@ -43,7 +43,7 @@ enum TMRInterpolationType { TMR_UNIFORM_POINTS,
                             TMR_GAUSS_LOBATTO_POINTS,
                             TMR_BERNSTEIN_POINTS };
 
-/*
+/**
   Base class for all point-evaluation algorithms
 */
 class TMRPoint {
@@ -68,6 +68,14 @@ class TMRPoint {
   double x, y, z;
 };
 
+/**
+  Data type for a single STL triangle
+*/
+class TMR_STLTriangle {
+ public:
+  TMRPoint p[3];
+};
+
 /*
   The MPI TMROctant data type
 */
@@ -75,6 +83,7 @@ extern MPI_Datatype TMROctant_MPI_type;
 extern MPI_Datatype TMRQuadrant_MPI_type;
 extern MPI_Datatype TMRPoint_MPI_type;
 extern MPI_Datatype TMRIndexWeight_MPI_type;
+extern MPI_Datatype TMR_STLTriangle_MPI_type;
 
 // Initialize and finalize the data type
 void TMRInitialize();

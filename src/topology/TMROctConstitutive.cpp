@@ -504,6 +504,7 @@ void TMROctConstitutive::evalThermalStrain( int elemIndex,
   TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Add the derivative of the density
+  memset(e, 0, 6*sizeof(TacsScalar));
   for ( int j = 0; j < nmats; j++ ){
     TacsScalar rho = 0.0;
     if (nvars == 1){

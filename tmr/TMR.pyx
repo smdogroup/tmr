@@ -4273,6 +4273,35 @@ def writeSTLToBin(fname, OctForest forest,
     TMR_GenerateBinFile(filename, forest.ptr, x.ptr, offset, cutoff)
     return
 
+def getSTLTriangles(OctForest forest, Vec x, int offset=0,
+                    double cutoff=0.5, int root=0):
+    cdef int ntris = 0
+    cdef TMR_STLTriangle *tris = NULL
+    cdef np.ndarray points
+    TMR_GenerateSTLTriangles(root, forest.ptr, x.ptr, offset, cutoff,
+                             &ntris, &tris)
+
+    if ntris >= 1:
+        points = np.zeros((3*ntris, 3))
+        for i in range(ntris):
+            points[3*i,0] = tris[i].p[0].x
+            points[3*i,1] = tris[i].p[0].y
+            points[3*i,2] = tris[i].p[0].z
+
+            points[3*i+1,0] = tris[i].p[1].x
+            points[3*i+1,1] = tris[i].p[1].y
+            points[3*i+1,2] = tris[i].p[1].z
+
+            points[3*i+2,0] = tris[i].p[2].x
+            points[3*i+2,1] = tris[i].p[2].y
+            points[3*i+2,2] = tris[i].p[2].z
+    else:
+        points = np.array([[]])
+
+    # delete [] tris
+
+    return points
+
 cdef class LagrangeFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters):
         cdef int nlevels = 0
@@ -4740,10 +4769,25 @@ def convertPVecToVec(PVec pvec):
         raise ValueError(errmsg)
     return _init_Vec(new_vec.vec)
 
+cdef void writeOutputCallback(void *func, const char *prefix, int iter,
+                              TMROctForest *octforest, TMRQuadForest *quadforest,
+                              TACSBVec *x):
+    if func:
+        oct = None
+        quad = None
+        if octforest:
+            oct = _init_OctForest(octforest)
+        if quadforest:
+            quad = _init_QuadForest(quadforest)
+        (<object>func).__call__(tmr_convert_char_to_str(prefix), iter,
+                                oct, quad, _init_Vec(x))
+    return
+
 cdef class TopoProblem(ProblemBase):
     """
     Creates and stores information for topology optimization problems
     """
+    cdef object callback
     def __cinit__(self, TopoFilter fltr, Pc pc,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL
@@ -4753,6 +4797,7 @@ cdef class TopoProblem(ProblemBase):
         if mg == NULL:
             raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
+        self.callback = None
         self.ptr = new TMRTopoProblem(fltr.ptr, mg, gmres_subspace, rtol)
         self.ptr.incref()
         return
@@ -5147,6 +5192,15 @@ cdef class TopoProblem(ProblemBase):
             raise ValueError(errmsg)
         prob.setUseRecycledSolution(truth)
         return
+
+    def setOutputCallback(self, callback):
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+        self.callback = callback
+        prob.setOutputCallback(<void*>callback, writeOutputCallback)
 
 def setMatchingFaces(model_list, double tol=1e-6):
     """

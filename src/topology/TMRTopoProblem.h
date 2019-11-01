@@ -206,7 +206,20 @@ class TMRTopoProblem : public ParOptProblem {
   // ---------------------
   void writeOutput( int iter, ParOptVec *x );
 
+  void setOutputCallback( void *data,
+                          void (*func)( void*, const char*, int,
+                                        TMROctForest*, TMRQuadForest*,
+                                        TACSBVec* ) ){
+    callback_ptr = data;
+    writeOutputCallback = func;
+  }
+
  private:
+  void *callback_ptr;
+  void (*writeOutputCallback)( void*, const char*, int,
+                               TMROctForest*, TMRQuadForest*,
+                               TACSBVec* );
+
   // Set the design variables across all multigrid levels
   void setDesignVars( ParOptVec *xvec );
 

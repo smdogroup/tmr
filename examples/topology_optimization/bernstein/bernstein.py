@@ -236,8 +236,6 @@ def create_problem(forest, bcs, props, nlevels):
 
 # Set the optimization parameters
 optimization_options = {
-#    'optimizer': 'Interior Point',
-
     # Parameters for the trust region method
     'tr_init_size': 0.01,
     'tr_max_size': 0.05,

@@ -146,7 +146,44 @@ def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
 
     return forest
 
-def create_problem(forest, bcs, props, nlevels):
+class FigureCallback:
+    def __init__(self, assembler, iter_offset=0):
+        self.fig = None
+
+        # Set the output file name
+        flag = (TACS.OUTPUT_CONNECTIVITY |
+                TACS.OUTPUT_NODES |
+                TACS.OUTPUT_DISPLACEMENTS |
+                TACS.OUTPUT_STRAINS |
+                TACS.OUTPUT_EXTRAS)
+        self.f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
+        self.iter_offset = iter_offset
+
+        self.has_plotly = True
+        try:
+            import plotly.graph_objects as go
+            self.go = go
+        except:
+            self.has_plotly = False
+        return
+
+    def write_output(self, prefix, iter, oct_forest, quad_forest, x):
+        self.f5.writeToFile('results/output%d.f5'%(iter + self.iter_offset))
+
+        if self.has_plotly and oct_forest is not None:
+            points = TMR.getSTLTriangles(oct_forest, x)
+
+            n = points.shape[0]
+            if n > 0 and iter % 10 == 0:
+                mesh = self.go.Mesh3d(x=points[:,0], y=points[:,1], z=points[:,2],
+                                      i=np.arange(0, n, 3, dtype=np.intc),
+                                      j=np.arange(1, n, 3, dtype=np.intc),
+                                      k=np.arange(2, n, 3, dtype=np.intc))
+                self.fig = self.go.Figure(data=[mesh])
+                self.fig.update_layout(scene_aspectmode='data')
+                self.fig.show()
+
+def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -200,13 +237,8 @@ def create_problem(forest, bcs, props, nlevels):
     # Set the objective (scale the compliance objective)
     problem.setObjective([1.0e3])
 
-    # Set the output file name
-    flag = (TACS.OUTPUT_CONNECTIVITY |
-            TACS.OUTPUT_NODES |
-            TACS.OUTPUT_DISPLACEMENTS |
-            TACS.OUTPUT_STRAINS |
-            TACS.OUTPUT_EXTRAS)
-    problem.setF5OutputFlags(1, TACS.SOLID_ELEMENT, flag)
+    cb = FigureCallback(assembler, iter_offset=iter_offset)
+    problem.setOutputCallback(cb.write_output)
 
     return problem
 
@@ -257,7 +289,8 @@ if __name__ == '__main__':
     max_iterations = 3
     for step in range(max_iterations):
         # Create the problem
-        problem = create_problem(forest, bcs, props, nlevels)
+        iter_offset = step*optimization_options['maxiter']
+        problem = create_problem(forest, bcs, props, nlevels, iter_offset=iter_offset)
 
         # Initialize the problem and set the prefix
         problem.initialize()

@@ -72,6 +72,9 @@ cdef extern from "TMRBase.h":
         int index
         double weight
 
+    cdef cppclass TMR_STLTriangle:
+        TMRPoint p[3]
+
     void TMRInitialize()
     int TMRIsInitialized()
     void TMRFinalize()
@@ -598,6 +601,9 @@ cdef extern from "TMRHelmholtzPUFilter.h":
         void setGetBoundaryStencil(getboundarystencil)
 
 cdef extern from "TMRTopoProblem.h":
+    ctypedef void (*writeoutputcallback)(void*, const char*, int,
+                                         TMROctForest*, TMRQuadForest*,
+                                         TACSBVec*)
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(TMRTopoFilter*, TACSMg*, int, double)
         TACSAssembler *getAssembler()
@@ -624,6 +630,10 @@ cdef extern from "TMRTopoProblem.h":
         void setF5OutputFlags(int, ElementType, int)
         void setF5EigenOutputFlags(int, ElementType, int)
         void setUseRecycledSolution(int)
+        void setOutputCallback(void*,
+            void (*writeoutputcallback)(void*, const char*, int,
+                                        TMROctForest*, TMRQuadForest*,
+                                        TACSBVec*))
 
     cdef cppclass ParOptBVecWrap(ParOptVec):
         ParOptBVecWrap(TACSBVec*)
@@ -632,3 +642,5 @@ cdef extern from "TMRTopoProblem.h":
 cdef extern from "TMR_STLTools.h":
     int TMR_GenerateBinFile(const char*, TMROctForest*,
                             TACSBVec*, int, double)
+    int TMR_GenerateSTLTriangles(int, TMROctForest*, TACSBVec*,
+                                 int, double, int*, TMR_STLTriangle**)

@@ -333,19 +333,9 @@ const int faceTriTable[16][13] = {
 /*
   The data structures required for the marching cubes algorithm
 */
-class Point {
- public:
-  double x, y, z;
-};
-
-class Triangle {
- public:
-  Point p[3];
-};
-
 class Cell {
  public:
-  Point p[8];
+  TMRPoint p[8];
   double val[8];
 };
 
@@ -353,10 +343,10 @@ class Cell {
   Linearly interpolate the position where an isosurface cuts an edge
   between two vertices, each with their own scalar value
 */
-Point vertex_interp( double isolevel, Point p1, Point p2,
-                     double valp1, double valp2 ){
+TMRPoint vertex_interp( double isolevel, TMRPoint p1, TMRPoint p2,
+                        double valp1, double valp2 ){
   double mu;
-  Point p;
+  TMRPoint p;
   
   if (fabs(isolevel-valp1) <= 0.0)
     return (p1);
@@ -382,10 +372,10 @@ Point vertex_interp( double isolevel, Point p1, Point p2,
   0 will be returned if the grid cell is either totally above of
   totally below the isolevel.
 */
-int polygonise( Cell grid, double isolevel, Triangle *triangles ){
+int polygonise( Cell grid, double isolevel, TMR_STLTriangle *triangles ){
   int ntriang;
   int cubeindex;
-  Point vertlist[12];
+  TMRPoint vertlist[12];
 
   /*
     Determine the index into the edge table which tells us which
@@ -458,7 +448,7 @@ int polygonise( Cell grid, double isolevel, Triangle *triangles ){
 /*
   Given a triangle, compute the face normal
 */
-void compute_normal( Triangle tri, double n[] ){
+void compute_normal( TMR_STLTriangle tri, double n[] ){
   double a[3], b[3];
   a[0] = tri.p[1].x - tri.p[0].x;
   a[1] = tri.p[1].y - tri.p[0].y;
@@ -493,9 +483,9 @@ const int face_vertex[6][4] = {
 /*
   Write out the face
 */
-int face_polygonize( Point *p, double vals[], double cutoff,
-                     Triangle *triangles ){
-  Point vertlist[8];
+int face_polygonize( TMRPoint *p, double vals[], double cutoff,
+                     TMR_STLTriangle *triangles ){
+  TMRPoint vertlist[8];
 
   // Determine the nodes that are below the cutoff
   int faceindex = 0;
@@ -542,7 +532,7 @@ int face_polygonize( Point *p, double vals[], double cutoff,
 */
 class TriangleList {
  public:
-  TriangleList( Triangle *tris, int ntris ){
+  TriangleList( TMR_STLTriangle *tris, int ntris ){
     triangles = tris;
     len = ntris;
     max_len = ntris;
@@ -553,18 +543,18 @@ class TriangleList {
     max_len = _max_len;
     if (max_len < 100){ max_len = 100; }
     len_incr = max_len;
-    triangles = new Triangle[ max_len ];
+    triangles = new TMR_STLTriangle[ max_len ];
   }
   ~TriangleList(){
     delete [] triangles;
   }
 
   // Add a triangle to the list
-  void addTriangle( Triangle *tri ){
+  void addTriangle( TMR_STLTriangle *tri ){
     if (len >= max_len){
       max_len += len_incr;
-      Triangle *temp = new Triangle[ max_len ];
-      memcpy(temp, triangles, len*sizeof(Triangle));
+      TMR_STLTriangle *temp = new TMR_STLTriangle[ max_len ];
+      memcpy(temp, triangles, len*sizeof(TMR_STLTriangle));
       delete [] triangles;
       triangles = temp;
     }
@@ -573,7 +563,7 @@ class TriangleList {
   }
 
   // Get the list of triangles
-  void getTriangles( Triangle **tris, int *ntris ){
+  void getTriangles( int *ntris, TMR_STLTriangle **tris ){
     *tris = triangles;
     *ntris = len;
   }
@@ -614,14 +604,14 @@ class TriangleList {
 
  private:
   int len, max_len, len_incr;
-  Triangle *triangles;
+  TMR_STLTriangle *triangles;
 };
 
 /*
   Write out the triangular volume elements within the STL file
 */
 void add_volume( TriangleList *list, Cell *grid, double cutoff ){
-  Triangle triangles[5];
+  TMR_STLTriangle triangles[5];
   int ntri = polygonise(*grid, cutoff, triangles);
 
   // Add the triangles to the list
@@ -637,7 +627,7 @@ void add_faces( TriangleList *list, Cell *grid, double cutoff, int bound[] ){
   // Loop over each of the faces
   for ( int face = 0; face < 6; face++ ){
     // Extract the points and values from the face
-    Point p[4];
+    TMRPoint p[4];
     int b[4];
     double vals[4];
 
@@ -649,7 +639,7 @@ void add_faces( TriangleList *list, Cell *grid, double cutoff, int bound[] ){
 
     // Check whether this face is actually on a boundary
     if (b[0] && b[1] && b[2] && b[3]){
-      Triangle triangles[4];
+      TMR_STLTriangle triangles[4];
       int ntri = face_polygonize(p, vals, cutoff, triangles);
 
       // Add the triangles to the list
@@ -659,27 +649,6 @@ void add_faces( TriangleList *list, Cell *grid, double cutoff, int bound[] ){
     }
   }
 }
- 
-// Static data for the MPI data types
-static MPI_Datatype MPI_Point_type = NULL;
-static MPI_Datatype MPI_Triangle_type = NULL;
-
-/*
-  Commit the data types
-*/
-void TMR_MPICommitSTLTypes(){
-  // Create the triangle data type required for output
-  int counts = 3;
-  MPI_Datatype type = MPI_DOUBLE;
-  MPI_Aint offset = 0;
-  MPI_Type_create_struct(1, &counts, &offset, &type, 
-			 &MPI_Point_type);
-  MPI_Type_commit(&MPI_Point_type);
-
-  MPI_Type_create_struct(1, &counts, &offset, &MPI_Point_type, 
-			 &MPI_Triangle_type);
-  MPI_Type_commit(&MPI_Triangle_type);
-}
 
 /*
   The following code generates an .STL file as output from the
@@ -688,10 +657,13 @@ void TMR_MPICommitSTLTypes(){
 
 const int ordering_transform[] = {0, 1, 3, 2, 4, 5, 7, 6};
 
-int TMR_GenerateBinFile( const char *filename,
-                         TMROctForest *filter,
-                         TACSBVec *x, int x_offset,
-                         double cutoff ){
+/**
+  Create a list of STL triangles
+*/
+int TMR_GenerateSTLTriangles( TMROctForest *filter,
+                              TACSBVec *x, int x_offset,
+                              double cutoff,
+                              TriangleList **_list ){
   // Set the return flag
   int fail = 0;
 
@@ -910,15 +882,88 @@ int TMR_GenerateBinFile( const char *filename,
   delete [] levelvals;
   delete [] Xe;
 
-  // Commit the types if they are not defined
-  if (!MPI_Point_type){
-    TMR_MPICommitSTLTypes();
+  *_list = list;
+
+  return fail;
+}
+
+int TMR_GenerateSTLTriangles( int root,
+                              TMROctForest *filter,
+                              TACSBVec *x, int x_offset,
+                              double cutoff,
+                              int *_ntris, TMR_STLTriangle **_tris ){
+
+  // Generate the triangle
+  TriangleList *list;
+  int fail = TMR_GenerateSTLTriangles(filter, x, x_offset, cutoff,
+                                      &list);
+  if (fail){
+    return fail;
   }
-   
+
   // Get the local triangles
   int ntris;
-  Triangle *tris;
-  list->getTriangles(&tris, &ntris);
+  TMR_STLTriangle *tris;
+  list->getTriangles(&ntris, &tris);
+
+  // Get the MPI communicator
+  int mpi_size, mpi_rank;
+  MPI_Comm comm = filter->getMPIComm();
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  int *counts = new int[ mpi_size ];
+  int *range = new int[ mpi_size+1 ];
+  MPI_Allgather(&ntris, 1, MPI_INT, counts, 1, MPI_INT, comm);
+
+  range[0] = 0;
+  for ( int i = 0; i < mpi_size; i++ ){
+    range[i+1] = counts[i] + range[i];
+  }
+
+  // Allocate the receiver only on the root processor
+  *_ntris = 0;
+  *_tris = NULL;
+  if (mpi_rank == root){
+    *_ntris = range[mpi_size];
+    *_tris = new TMR_STLTriangle[ *_ntris ];
+  }
+
+  MPI_Gatherv(tris, ntris, TMR_STLTriangle_MPI_type,
+              *_tris, counts, range, TMR_STLTriangle_MPI_type,
+              root, comm);
+  delete [] range;
+  delete [] counts;
+  delete list;
+
+  return fail;
+}
+
+/*
+  Generate a binary file containing the STL triangles
+*/
+int TMR_GenerateBinFile( const char *filename,
+                         TMROctForest *filter,
+                         TACSBVec *x, int x_offset,
+                         double cutoff ){
+  // Generate the triangle
+  TriangleList *list;
+  int fail = TMR_GenerateSTLTriangles(filter, x, x_offset, cutoff,
+                                      &list);
+  if (fail){
+    return fail;
+  }
+
+  // Get the MPI communicator
+  int mpi_size, mpi_rank;
+  MPI_Comm comm = filter->getMPIComm();
+  MPI_Comm_size(comm, &mpi_size);
+  MPI_Comm_rank(comm, &mpi_rank);
+
+  // Get the local triangles
+  int ntris;
+  TMR_STLTriangle *tris;
+  list->getTriangles(&ntris, &tris);
 
   // Copy the filename to a non-const array
   char *fname = new char[ strlen(filename)+1 ];
@@ -944,9 +989,11 @@ int TMR_GenerateBinFile( const char *filename,
 
     // Write out all the triangles to the file
     char datarep[] = "native";
-    MPI_File_set_view(fp, sizeof(int), MPI_Triangle_type, MPI_Triangle_type,
+    MPI_File_set_view(fp, sizeof(int), TMR_STLTriangle_MPI_type,
+                      TMR_STLTriangle_MPI_type,
                       datarep, MPI_INFO_NULL);
-    MPI_File_write_at_all(fp, range[mpi_rank], tris, ntris, MPI_Triangle_type,
+    MPI_File_write_at_all(fp, range[mpi_rank], tris, ntris,
+                          TMR_STLTriangle_MPI_type,
                           MPI_STATUS_IGNORE);
     MPI_File_close(&fp);
   }
@@ -968,8 +1015,9 @@ int TMR_GenerateBinFile( const char *filename,
 int TMR_ConvertBinToSTL( const char *binfile,
                          const char *stlfile ){
   FILE *fp = fopen(binfile, "rb");
-
-  if (!fp){ return 1; }
+  if (!fp){
+    return 1;
+  }
 
   // Try to read in the number of triangles
   int ntris;
@@ -978,9 +1026,9 @@ int TMR_ConvertBinToSTL( const char *binfile,
   }
 
   // Read in the triangles themselves
-  Triangle *tris = new Triangle[ ntris ];
+  TMR_STLTriangle *tris = new TMR_STLTriangle[ ntris ];
   unsigned int unsigned_ntris = ntris;
-  if (fread(tris, sizeof(Triangle), ntris, fp) != unsigned_ntris){
+  if (fread(tris, sizeof(TMR_STLTriangle), ntris, fp) != unsigned_ntris){
     delete [] tris;
     return 1;
   }

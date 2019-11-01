@@ -41,6 +41,12 @@
   distributed across processors.
 */
 
+int TMR_GenerateSTLTriangles( int root,
+                              TMROctForest *filter,
+                              TACSBVec *x, int x_offset,
+                              double cutoff,
+                              int *_ntris, TMR_STLTriangle **_tris );
+
 /*
   Given the design variables, write out a binary file containing the
   intersection of the level set with the grid using a combination of

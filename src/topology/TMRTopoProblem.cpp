@@ -264,6 +264,10 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   f5_eigen_frequency = -1;
   f5_eigen_element_type = TACS_ELEMENT_NONE;
   f5_eigen_write_flag = 0;
+
+  // Callback function information
+  callback_ptr = NULL;
+  writeOutputCallback = NULL;
 }
 
 /*
@@ -1448,6 +1452,13 @@ void TMRTopoProblem::addSparseInnerProduct( double alpha,
   Write the output file
 */
 void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
+  ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvec);
+  if (wrap && writeOutputCallback){
+    writeOutputCallback(callback_ptr,
+                        prefix, iter, filter->getFilterOctForest(),
+                        filter->getFilterQuadForest(), wrap->vec);
+  }
+
   // Print out the binary STL file for later visualization
   if (prefix){
     // Write out the file at a cut off of 0.25
