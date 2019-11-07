@@ -24,6 +24,8 @@
 #include "TMR_TACSCreator.h"
 #include "TACSQuadBasis.h"
 #include "TACSHexaBasis.h"
+#include "TACSQuadBernsteinBasis.h"
+#include "TACSHexaBernsteinBasis.h"
 #include "TACSElement2D.h"
 #include "TACSElement3D.h"
 
@@ -49,10 +51,10 @@ class TMRQuadTACSMatrixCreator : public TMRQuadTACSCreator {
       basis = new TACSLinearQuadBasis();
     }
     else if (order == 3){
-      basis = new TACSQuadraticQuadBasis();
+      basis = new TACSQuadraticQuadBernsteinBasis();
     }
     else if (order == 4){
-      basis = new TACSCubicQuadBasis();
+      basis = new TACSCubicQuadBernsteinBasis();
     }
 
     TACSElement *elem = new TACSElement2D(model, basis);
@@ -84,10 +86,10 @@ class TMROctTACSMatrixCreator : public TMROctTACSCreator {
       basis = new TACSLinearHexaBasis();
     }
     else if (order == 3){
-      basis = new TACSQuadraticHexaBasis();
+      basis = new TACSQuadraticHexaBernsteinBasis();
     }
     else if (order == 4){
-      basis = new TACSCubicHexaBasis();
+      basis = new TACSCubicHexaBernsteinBasis();
     }
 
     TACSElement *elem = new TACSElement3D(model, basis);

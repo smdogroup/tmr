@@ -746,10 +746,7 @@ TMROctConformTACSTopoCreator::TMROctConformTACSTopoCreator( TMRBoundaryCondition
   }
   else {
     _filter = _forest->duplicate();
-    order = _filter->getMeshOrder()-1;
-    if (order < 2){
-      order = 2;
-    }
+    order = _filter->getMeshOrder();
     _filter->setMeshOrder(order, interp_type);
   }
   _filter->incref();
@@ -822,10 +819,7 @@ TMRQuadConformTACSTopoCreator::TMRQuadConformTACSTopoCreator( TMRBoundaryConditi
   }
   else {
     _filter = _forest->duplicate();
-    order = _filter->getMeshOrder()-1;
-    if (order < 2){
-      order = 2;
-    }
+    order = _filter->getMeshOrder();
     _filter->setMeshOrder(order, interp_type);
   }
   _filter->incref();

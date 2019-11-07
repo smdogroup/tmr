@@ -107,7 +107,7 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
     if filter_type == 'lagrange':
         filter_obj = TMR.LagrangeFilter(assemblers, filters)
     elif filter_type == 'matrix':
-        filter_obj = TMR.MatrixFilter(s, N, assemblers, forests)
+        filter_obj = TMR.MatrixFilter(s, N, assemblers, filters)
     elif filter_type == 'conform':
         filter_obj = TMR.ConformFilter(assemblers, filters)
     elif filter_type == 'helmholtz':

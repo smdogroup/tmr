@@ -146,7 +146,7 @@ def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
 
     return forest
 
-class FigureCallback:
+class OutputCallback:
     def __init__(self, assembler, iter_offset=0):
         self.fig = None
 
@@ -167,8 +167,8 @@ class FigureCallback:
             self.has_plotly = False
         return
 
-    def write_output(self, prefix, iter, oct_forest, quad_forest, x):
-        self.f5.writeToFile('results/output%d.f5'%(iter + self.iter_offset))
+    def write_output(self, prefix, itr, oct_forest, quad_forest, x):
+        self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
 
         if self.has_plotly and oct_forest is not None:
             points = TMR.getSTLTriangles(oct_forest, x)
@@ -237,7 +237,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     # Set the objective (scale the compliance objective)
     problem.setObjective([1.0e3])
 
-    cb = FigureCallback(assembler, iter_offset=iter_offset)
+    cb = OutputCallback(assembler, iter_offset=iter_offset)
     problem.setOutputCallback(cb.write_output)
 
     return problem

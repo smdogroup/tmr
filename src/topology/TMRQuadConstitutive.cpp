@@ -54,7 +54,7 @@ TMRQuadConstitutive::TMRQuadConstitutive( TMRStiffnessProperties *_props,
   x = new TacsScalar[ nvars*nconn ];
   if (nvars == 1){
     for ( int i = 0; i < nconn; i++ ){
-      x[i] = 0.95/nvars;
+      x[i] = 0.95;
     }
   }
   else {

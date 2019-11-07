@@ -108,10 +108,11 @@ class CreatorCallback:
         order = forest.getMeshOrder()
         interp = TMR.BERNSTEIN_POINTS
         dvs_per_node = self.props.getDesignVarsPerNode()
-        creator = QuadConformCreator(self.bcs, forest, order=-1, # order=order,
+        creator = QuadConformCreator(self.bcs, forest, order=order,
                                      design_vars_per_node=dvs_per_node,
                                      interp=interp, props=self.props)
-        return creator, creator.getFilter()
+        filtr = creator.getFilter()
+        return creator, filtr
 
 def create_forest(comm, depth, htarget):
     """
@@ -165,7 +166,7 @@ def create_forest(comm, depth, htarget):
 
     return forest
 
-def create_problem(forest, bcs, props, nlevels):
+def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -201,13 +202,29 @@ def create_problem(forest, bcs, props, nlevels):
     # Set the constraint type
     funcs = [functions.StructuralMass(assembler)]
 
-    # Set the forces/boundary conditions that will be applied to the problem
-    T = 1e5
-    force1 = assembler.createVec()
-    indices = forest.getNodesWithName('traction')
-    force1.getArray()[2*indices+1] = -T
-    assembler.reorderVec(force1)
-    assembler.applyBCs(force1)
+    # Get the basis object from one of the elements
+    elems = assembler.getElements()
+    basis = elems[0].getElementBasis()
+
+    # Create the traction objects that will be used later..
+    T = 2.5e6
+    vpn = elems[0].getVarsPerNode()
+    trac = [0.0, T, 0.0]
+    tractions = []
+    for findex in range(4):
+        tractions.append(elements.Traction2D(vpn, findex, basis, trac))
+
+    # Allocate a thermal traction boundary condition
+    force1 = TopOptUtils.computeTractionLoad('traction', forest, assembler,
+                                             tractions)
+
+    # # Set the forces/boundary conditions that will be applied to the problem
+    # T = 1e5
+    # force1 = assembler.createVec()
+    # indices = forest.getNodesWithName('traction')
+    # force1.getArray()[2*indices+1] = -T
+    # assembler.reorderVec(force1)
+    # assembler.applyBCs(force1)
 
     # Set the load case
     problem.setLoadCases([force1])
@@ -224,15 +241,27 @@ def create_problem(forest, bcs, props, nlevels):
     # Initialize the problem and set the prefix
     problem.initialize()
 
-    # Set the output file name
-    flag = (TACS.OUTPUT_CONNECTIVITY |
-            TACS.OUTPUT_NODES |
-            TACS.OUTPUT_DISPLACEMENTS |
-            TACS.OUTPUT_STRAINS |
-            TACS.OUTPUT_EXTRAS)
-    problem.setF5OutputFlags(1, TACS.PLANE_STRESS_ELEMENT, flag)
+    # Set the callback for generating output
+    cb = OutputCallback(assembler, iter_offset=iter_offset)
+    problem.setOutputCallback(cb.write_output)
 
     return problem
+
+class OutputCallback:
+    def __init__(self, assembler, iter_offset=0):
+        self.fig = None
+
+        # Set the output file name
+        flag = (TACS.OUTPUT_CONNECTIVITY |
+                TACS.OUTPUT_NODES |
+                TACS.OUTPUT_DISPLACEMENTS |
+                TACS.OUTPUT_STRAINS |
+                TACS.OUTPUT_EXTRAS)
+        self.f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
+        self.iter_offset = iter_offset
+
+    def write_output(self, prefix, itr, oct_forest, quad_forest, x):
+        self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
 
 # Set the optimization parameters
 optimization_options = {
@@ -345,10 +374,12 @@ forest.setMeshOrder(args.order, TMR.GAUSS_LOBATTO_POINTS)
 orig_filter = None
 xopt = None
 
+iter_offset = 0
 for step in range(max_iterations):
     # Create the TMRTopoProblem instance
     nlevels = mg_levels[step]
-    problem = create_problem(forest, bcs, props, nlevels)
+    problem = create_problem(forest, bcs, props, nlevels, iter_offset=iter_offset)
+    iter_offset += args.max_opt_iters[step]
     problem.setPrefix(args.prefix)
 
     # Extract the filter to interpolate design variables
@@ -379,6 +410,7 @@ for step in range(max_iterations):
 
     # Refine based solely on the value of the density variable
     assembler = problem.getAssembler()
+    forest = forest.duplicate()
     if design_vars_per_node == 1:
         lower = 0.05
         upper = 0.5
