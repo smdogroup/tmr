@@ -385,6 +385,11 @@ for step in range(max_iterations):
     # Extract the filter to interpolate design variables
     filtr = problem.getFilter()
 
+    if filtr.getInterpType() == TMR.GAUSS_LOBATTO_POINTS:
+        print('filter type == GAUSS_LOBATTO_POINTS order = %d'%(filtr.getMeshOrder()))
+    elif filtr.getInterpType() == TMR.BERNSTEIN_POINTS:
+        print('filter type == BERNSTEIN_POINTS order = %d'%(filtr.getMeshOrder()))
+
     if orig_filter is not None:
         # Create one of the new design vectors
         x = problem.createDesignVec()
@@ -411,18 +416,23 @@ for step in range(max_iterations):
     # Refine based solely on the value of the density variable
     assembler = problem.getAssembler()
     forest = forest.duplicate()
-    if design_vars_per_node == 1:
-        lower = 0.05
-        upper = 0.5
-        TopOptUtils.densityBasedRefine(forest, assembler, lower=lower, upper=upper)
-    else:
-        # Refine based on the topology variable = 1 - t. Since the topology
-        # variable is stored as 1-t, we reverse the refinement criterion.
-        index = 2
-        lower = 0.5
-        upper = 0.95
-        TopOptUtils.densityBasedRefine(forest, assembler, index=index,
-            lower=lower, upper=upper, reverse=False)
+
+#    if design_vars_per_node == 1:
+#        lower = 0.05
+#        upper = 0.5
+#        TopOptUtils.densityBasedRefine(forest, assembler, lower=lower, upper=upper)
+#    else:
+#        # Refine based on the topology variable = 1 - t. Since the topology
+#        # variable is stored as 1-t, we reverse the refinement criterion.
+#        index = 2
+#        lower = 0.5
+#        upper = 0.95
+#        TopOptUtils.densityBasedRefine(forest, assembler, index=index,
+#            lower=lower, upper=upper, reverse=False)
+    domain_length = np.sqrt(r*a)
+    refine_distance = 0.025*domain_length
+    TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
+                                     char_length=char_length)
 
     # Repartition the mesh
     forest.balance(1)

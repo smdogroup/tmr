@@ -4769,6 +4769,29 @@ def convertPVecToVec(PVec pvec):
         raise ValueError(errmsg)
     return _init_Vec(new_vec.vec)
 
+def ApproximateDistance(filtr, Vec x, int index=0,
+                        double cutoff=0.15, double t=1.0,
+                        filename=None):
+    cdef TACSBVec *dist
+    cdef TMROctForest *oct_forest = NULL
+    cdef TMRQuadForest *quad_forest = NULL
+    cdef char *fname = NULL
+
+    if filename is not None:
+        fname = tmr_convert_str_to_chars(filename)
+    if isinstance(filtr, QuadForest):
+        quad_forest = (<QuadForest>filtr).ptr
+    elif isinstance(filtr, OctForest):
+        oct_forest = (<OctForest>filtr).ptr
+
+    if oct_forest != NULL:
+        TMRApproximateDistance(oct_forest, index, cutoff, t, x.ptr, fname, &dist)
+    if quad_forest != NULL:
+        TMRApproximateDistance(quad_forest, index, cutoff, t, x.ptr, fname, &dist)
+    if dist != NULL:
+        return _init_Vec(dist)
+    return None
+
 cdef void writeOutputCallback(void *func, const char *prefix, int iter,
                               TMROctForest *octforest, TMRQuadForest *quadforest,
                               TACSBVec *x):
