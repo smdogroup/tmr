@@ -399,7 +399,7 @@ def densityBasedRefine(forest, assembler, index=0,
 
 def approxDistanceRefine(forest, fltr, assembler, refine_distance, index=0,
                          domain_length=1.0, tfactor=0.05, cutoff=0.15,
-                         min_lev=0, max_lev=TMR.MAX_LEVEL):
+                         filename=None, min_lev=0, max_lev=TMR.MAX_LEVEL):
     """
     Apply a distance-based refinement criteria.
 
@@ -436,7 +436,7 @@ def approxDistanceRefine(forest, fltr, assembler, refine_distance, index=0,
 
     # Approximate the distance to the boundary
     dist = TMR.ApproximateDistance(fltr, x, index=index, cutoff=cutoff,
-                                   t=tfactor*domain_length)
+                                   t=tfactor*domain_length, filename=filename)
 
     # Create refinement array
     num_elems = assembler.getNumElements()

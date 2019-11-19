@@ -20,6 +20,7 @@
 
 #include "TMROctForest.h"
 #include "TMRInterpolation.h"
+#include "tmrlapack.h"
 
 /*
   Map from a block edge number to the local node numbers
@@ -1423,7 +1424,8 @@ void TMROctForest::setMeshOrder( int _mesh_order,
   interp_knots = new double[ 2*mesh_order ];
   interp_type = _interp_type;
   memset(interp_knots, 0.0, 2*(mesh_order)*sizeof(double));
-  if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
+  if (interp_type == TMR_GAUSS_LOBATTO_POINTS ||
+      interp_type == TMR_BERNSTEIN_POINTS){
     interp_knots[0] = -1.0;
     interp_knots[mesh_order-1] = 1.0;
     for ( int i = 1; i < mesh_order-1; i++ ){
@@ -5679,7 +5681,104 @@ void TMROctForest::evaluateNodeLocations(){
   // Set the knots to use in the interpolation
   const double *knots = interp_knots;
 
-  if (topo){
+  if (topo && (interp_type == TMR_BERNSTEIN_POINTS && mesh_order > 2)){
+    // Form the interpolating matrix
+    int size = mesh_order*mesh_order*mesh_order;
+    double *interp = new double[ size*size ];
+
+    // For each point within the mesh, evaluate the shape functions
+    for ( int i = 0; i < size; i++ ){
+      double pt[3];
+      pt[0] = knots[i % mesh_order];
+      pt[1] = knots[(i % mesh_order*mesh_order)/mesh_order];
+      pt[2] = knots[i / (mesh_order*mesh_order)];
+
+      // Evaluate the interpolant
+      evalInterp(pt, &interp[size*i]);
+    }
+
+    // Compute the inverse for interpolation
+    int info = 0;
+    int *ipiv = new int[ size ];
+    TmrLAPACKdgetrf(&size, &size, interp, &size, ipiv, &info);
+
+    // Apply the factoriziation to the inverse
+    double *inverse = new double[ size*size ];
+    memset(inverse, 0, size*size*sizeof(double));
+    for ( int i = 0; i < size; i++ ){
+      inverse[(size+1)*i] = 1.0;
+    }
+
+    // Compute the inverse -- note that the transpose is used here
+    // since the interpolation matrix is stored in a row-major order
+    // not column-major order.
+    TmrLAPACKdgetrs("N", &size, &size, interp, &size, ipiv,
+                    inverse, &size, &info);
+
+    // Free the rest of the data
+    delete [] ipiv;
+    delete [] interp;
+
+    // Allocate storage for the element node locations
+    TMRPoint *Xtmp = new TMRPoint[ size ];
+
+    for ( int i = 0; i < num_elements; i++ ){
+      // Get the right surface
+      TMRVolume *vol;
+      topo->getVolume(octs[i].block, &vol);
+
+      // Compute the edge length
+      const int32_t h = 1 << (TMR_MAX_LEVEL - octs[i].level);
+
+      // Compute the origin of the element in parametric space
+      // and the edge length of the element
+      double d = convert_to_coordinate(h);
+      double u = convert_to_coordinate(octs[i].x);
+      double v = convert_to_coordinate(octs[i].y);
+      double w = convert_to_coordinate(octs[i].z);
+
+      // Set the offset into the connectivity array
+      const int *c = &conn[mesh_order*mesh_order*mesh_order*i];
+
+      for ( int kk = 0; kk < mesh_order; kk++ ){
+        for ( int jj = 0; jj < mesh_order; jj++ ){
+          for ( int ii = 0; ii < mesh_order; ii++ ){
+            int local_index = ii + jj*mesh_order + kk*mesh_order*mesh_order;
+            vol->evalPoint(u + 0.5*d*(1.0 + knots[ii]),
+                           v + 0.5*d*(1.0 + knots[jj]),
+                           w + 0.5*d*(1.0 + knots[kk]),
+                           &Xtmp[local_index]);
+          }
+        }
+      }
+
+      // Look for nodes that are not assigned
+      for ( int kk = 0; kk < mesh_order; kk++ ){
+        for ( int jj = 0; jj < mesh_order; jj++ ){
+          for ( int ii = 0; ii < mesh_order; ii++ ){
+            // Compute the mesh index
+            int local_index = ii + jj*mesh_order + kk*mesh_order*mesh_order;
+            int node = c[local_index];
+            int index = getLocalNodeNumber(node);
+            if (!flags[index]){
+              flags[index] = 1;
+
+              X[index].x = X[index].y = X[index].z = 0.0;
+              for ( int j = 0; j < size; j++ ){
+                X[index].x += inverse[local_index*size + j]*Xtmp[j].x;
+                X[index].y += inverse[local_index*size + j]*Xtmp[j].y;
+                X[index].z += inverse[local_index*size + j]*Xtmp[j].z;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    delete [] inverse;
+    delete [] Xtmp;
+  }
+  else if (topo){
     for ( int i = 0; i < num_elements; i++ ){
       // Get the right surface
       TMRVolume *vol;

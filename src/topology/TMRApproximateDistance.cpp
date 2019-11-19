@@ -111,11 +111,9 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
   filter->getOwnedNodeRange(&range);
 
   // Check if this is an intermediate value of the design variables
-  int boundary_count = 0;
   for ( int i = 0; i < size; i++ ){
     if (rho_array[bsize*i + index] >= cutoff &&
         rho_array[bsize*i + index] < 1.0 - cutoff){
-      boundary_count++;
       // Set the global number
       int node = range[mpi_rank] + i;
 
@@ -317,11 +315,9 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
   filter->getOwnedNodeRange(&range);
 
   // Check if this is an intermediate value of the design variables
-  int boundary_count = 0;
   for ( int i = 0; i < size; i++ ){
     if (rho_array[bsize*i + index] >= cutoff &&
         rho_array[bsize*i + index] < 1.0 - cutoff){
-      boundary_count++;
       // Set the global number
       int node = range[mpi_rank] + i;
 

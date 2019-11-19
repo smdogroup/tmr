@@ -34,5 +34,4 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
                              TACSBVec *rho, const char *filename,
                              TACSBVec **_dist );
 
-
 #endif // TMR_APPROXIMATE_DISTANCE_H
