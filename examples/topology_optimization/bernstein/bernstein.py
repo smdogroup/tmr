@@ -193,7 +193,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
 
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
-                                            nlevels=nlevels, lowest_order=3,
+                                            nlevels=nlevels, lowest_order=2, s=1.01, N=40,
                                             design_vars_per_node=design_vars_per_node)
 
     # Get the assembler object we just created
@@ -218,14 +218,6 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     force1 = TopOptUtils.computeTractionLoad('traction', forest, assembler,
                                              tractions)
 
-    # # Set the forces/boundary conditions that will be applied to the problem
-    # T = 1e5
-    # force1 = assembler.createVec()
-    # indices = forest.getNodesWithName('traction')
-    # force1.getArray()[2*indices+1] = -T
-    # assembler.reorderVec(force1)
-    # assembler.applyBCs(force1)
-
     # Set the load case
     problem.setLoadCases([force1])
 
@@ -235,7 +227,8 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
 
     # Set the values of the objective array
     obj_array = [ 1.0 ]
-    ksfail = functions.KSFailure(assembler, 30.0)
+    ksfail = functions.KSFailure(assembler, 10.0)
+    ksfail.setKSFailureType('continuous')
     problem.setObjective(obj_array, [ksfail])
 
     # Initialize the problem and set the prefix
@@ -272,6 +265,9 @@ optimization_options = {
     'tr_eta': 0.25,
     'tr_penalty_gamma': 20.0,
     'tr_write_output_freq': 1,
+    'tr_infeas_tol': 1e-5,
+    'tr_l1_tol': 1e-5,
+    'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
@@ -342,7 +338,6 @@ mat2 = constitutive.MaterialProperties(rho=rho, E=E,
                                        kappa=kcond, ys=ys)
 
 prop_list = [mat1, mat2]
-prop_list = [mat1]
 
 # Set the fixed mass
 max_density = 0.5*(2600.0 + 1300.0)
@@ -356,7 +351,7 @@ if (len(prop_list) > 1):
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(prop_list, q=args.q_penalty, qtemp=0.0,
-                                qcond=0.0, eps=0.2, k0=1e-3)
+                                qcond=0.0, eps=0.3, k0=1e-3)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
@@ -382,6 +377,9 @@ for step in range(max_iterations):
     iter_offset += args.max_opt_iters[step]
     problem.setPrefix(args.prefix)
 
+    # Check the gradient
+    problem.checkGradients(1e-6)
+
     # Extract the filter to interpolate design variables
     filtr = problem.getFilter()
 
@@ -405,24 +403,19 @@ for step in range(max_iterations):
 
     # Optimize the problem
     opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
-    opt.opt.checkGradients(1e-6)
     xopt = opt.optimize()
 
     # Refine based solely on the value of the density variable
     assembler = problem.getAssembler()
     forest = forest.duplicate()
-    if design_vars_per_node == 1:
-        lower = 0.05
-        upper = 0.5
-        TopOptUtils.densityBasedRefine(forest, assembler, lower=lower, upper=upper)
-    else:
-        # Refine based on the topology variable = 1 - t. Since the topology
-        # variable is stored as 1-t, we reverse the refinement criterion.
-        index = 2
-        lower = 0.5
-        upper = 0.95
-        TopOptUtils.densityBasedRefine(forest, assembler, index=index,
-            lower=lower, upper=upper, reverse=False)
+
+    # Perform refinement based on distance
+    dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
+    domain_length = np.sqrt(r*a)
+    refine_distance = 0.025*domain_length
+    TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
+                                     domain_length=domain_length,
+                                     filename=dist_file)
 
     # Repartition the mesh
     forest.balance(1)

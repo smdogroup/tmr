@@ -36,7 +36,8 @@ void TMRQuadHelmholtzModel::evalWeakIntegrand( int elemIndex, const double time,
                                             int n, const double pt[], const TacsScalar X[],
                                             const TacsScalar Ut[], const TacsScalar Ux[],
                                             TacsScalar DUt[], TacsScalar DUx[] ){
-  DUt[0] = DUt[1] = DUt[2] = 0.0;
+  DUt[0] = Ut[0];
+  DUt[1] = DUt[2] = 0.0;
   DUx[0] = r*r*Ux[0];
   DUx[1] = r*r*Ux[1];
 }
@@ -47,16 +48,18 @@ void TMRQuadHelmholtzModel::evalWeakJacobian( int elemIndex, const double time,
                                            TacsScalar DUt[], TacsScalar DUx[],
                                            int *Jac_nnz, const int *Jac_pairs[],
                                            TacsScalar Jac[] ){
-  DUt[0] = DUt[1] = DUt[2] = 0.0;
+  DUt[0] = Ut[0];
+  DUt[1] = DUt[2] = 0.0;
   DUx[0] = r*r*Ux[0];
   DUx[1] = r*r*Ux[1];
 
-  *Jac_nnz = 2;
+  *Jac_nnz = 3;
   *Jac_pairs = elem_Jac_pairs;
-  Jac[0] = Jac[1] = r*r;
+  Jac[0] = 1.0;
+  Jac[1] = Jac[2] = r*r;
 }
 
-int TMRQuadHelmholtzModel::elem_Jac_pairs[] = {3, 3, 4, 4};
+int TMRQuadHelmholtzModel::elem_Jac_pairs[] = {0, 0, 3, 3, 4, 4};
 
 TMRHexaHelmholtzModel::TMRHexaHelmholtzModel( double _r ){
   r = _r;
@@ -74,7 +77,8 @@ void TMRHexaHelmholtzModel::evalWeakIntegrand( int elemIndex, const double time,
                                             int n, const double pt[], const TacsScalar X[],
                                             const TacsScalar Ut[], const TacsScalar Ux[],
                                             TacsScalar DUt[], TacsScalar DUx[] ){
-  DUt[0] = DUt[1] = DUt[2] = 0.0;
+  DUt[0] = Ut[0];
+  DUt[1] = DUt[2] = 0.0;
   DUx[0] = r*r*Ux[0];
   DUx[1] = r*r*Ux[1];
   DUx[2] = r*r*Ux[2];
@@ -86,14 +90,16 @@ void TMRHexaHelmholtzModel::evalWeakJacobian( int elemIndex, const double time,
                                            TacsScalar DUt[], TacsScalar DUx[],
                                            int *Jac_nnz, const int *Jac_pairs[],
                                            TacsScalar Jac[] ){
-  DUt[0] = DUt[1] = DUt[2] = 0.0;
+  DUt[0] = Ut[0];
+  DUt[1] = DUt[2] = 0.0;
   DUx[0] = r*r*Ux[0];
   DUx[1] = r*r*Ux[1];
   DUx[2] = r*r*Ux[2];
 
-  *Jac_nnz = 3;
+  *Jac_nnz = 4;
   *Jac_pairs = elem_Jac_pairs;
-  Jac[0] = Jac[1] = Jac[2] = r*r;
+  Jac[0] = 1.0;
+  Jac[1] = Jac[2] = Jac[3] = r*r;
 }
 
-int TMRHexaHelmholtzModel::elem_Jac_pairs[] = {3, 3, 4, 4, 5, 5};
+int TMRHexaHelmholtzModel::elem_Jac_pairs[] = {0, 0, 3, 3, 4, 4, 5, 5};

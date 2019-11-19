@@ -892,7 +892,6 @@ int TMR_GenerateSTLTriangles( int root,
                               TACSBVec *x, int x_offset,
                               double cutoff,
                               int *_ntris, TMR_STLTriangle **_tris ){
-
   // Generate the triangle
   TriangleList *list;
   int fail = TMR_GenerateSTLTriangles(filter, x, x_offset, cutoff,

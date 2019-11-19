@@ -357,7 +357,7 @@ def densityBasedRefine(forest, assembler, index=0,
     Args:
         forest (QuadForest or OctForest): OctForest or QuadForest to refine
         assembler (Assembler): The TACS.Assembler object associated with forest
-        index (int): The index used in the call to getDVOutputValue
+        index (int): The component index of the design vector used to indicate material
         lower (float): the lower limit used for coarsening
         upper (float): the upper limit used for refinement
         reverse (bool): Reverse the refinement scheme
@@ -371,10 +371,6 @@ def densityBasedRefine(forest, assembler, index=0,
 
     # Get the elements from the Assembler object
     elems = assembler.getElements()
-
-    # Set the parametric point where the density will be evaluated. Use the
-    # parametric origin within the element.
-    pt = np.zeros(3, dtype=float)
 
     for i in range(num_elems):
         # Extract the constitutive object from the element, if it is defined, otherwise
@@ -395,6 +391,72 @@ def densityBasedRefine(forest, assembler, index=0,
                 refine[i] = 1
             elif value <= lower:
                 refine[i] = -1
+
+    # Refine the forest
+    forest.refine(refine, min_lev=min_lev, max_lev=max_lev)
+
+    return
+
+def approxDistanceRefine(forest, fltr, assembler, refine_distance, index=0,
+                         domain_length=1.0, tfactor=0.05, cutoff=0.15,
+                         filename=None, min_lev=0, max_lev=TMR.MAX_LEVEL):
+    """
+    Apply a distance-based refinement criteria.
+
+    This function takes in a forest associated with the analysis, a filter associated
+    with the design variables and the corresponding assembler object. An approximate
+    distance function is computed using TMR which gives an approximation of the distance
+    to the closest point on the domain boundary. In this case, the domain boundary is
+    approximated as those points that are intermediate in [cutoff, 1-cutoff]. Since these
+    are applied to the filtered (not projected) states, there will be intermediate density
+    values. Finally, all elements that contain values that are within refine_distance to
+    the approximate boundary are refined, while all other elements are coarseend.
+
+    Notes: The index controls which component of the design variable is used to estimate
+    the distance (useful for multimaterial cases). The tfactor controls the approximation,
+    larger values of tfactor lead to more diffusive approximations, but small values may
+    lead to numerical issues. The actual factor value is determined baesd on the domain
+    length parameter which gives the characteristic length of the domain.
+
+    Args:
+        forest (QuadForest or OctForest): OctForest or QuadForest to refine
+        filtr (QuadForest or OctForest): OctForest or QuadForest for the filter object
+        assembler (Assembler): The TACS.Assembler object associated with forest
+        refine_distance (float): Refine all elements within this distance
+        index (int): The design variable component index (!= 0 for multimaterial cases)
+        tfactor (float): Factor applied to the domain_length for computing the approx dist.
+        cutoff (float): Cutoff to indicate structural interface
+        min_lev (int): Minimum refinement level
+        max_lev (int): Maximum refinement level
+    """
+
+    # Set up and solve for an approximate level set function
+    x = assembler.createDesignVec()
+    assembler.getDesignVars(x)
+
+    # Approximate the distance to the boundary
+    dist = TMR.ApproximateDistance(fltr, x, index=index, cutoff=cutoff,
+                                   t=tfactor*domain_length, filename=filename)
+
+    # Create refinement array
+    num_elems = assembler.getNumElements()
+    refine = np.zeros(num_elems, dtype=np.int32)
+
+    # Get the elements from the Assembler object
+    elems = assembler.getElements()
+
+    for i in range(num_elems):
+        # Extract the constitutive object from the element, if it is defined, otherwise
+        # skip the refinement.
+        dvNums = elems[i].getDesignVarNums(i)
+        distance = dist.getValues(dvNums)
+
+        # Apply the refinement criteria
+        value = np.min(distance)
+        if value <= refine_distance:
+            refine[i] = 1
+        else:
+            refine[i] = -1
 
     # Refine the forest
     forest.refine(refine, min_lev=min_lev, max_lev=max_lev)

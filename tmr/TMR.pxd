@@ -644,3 +644,9 @@ cdef extern from "TMR_STLTools.h":
                             TACSBVec*, int, double)
     int TMR_GenerateSTLTriangles(int, TMROctForest*, TACSBVec*,
                                  int, double, int*, TMR_STLTriangle**)
+
+cdef extern from "TMRApproximateDistance.h":
+    void TMRApproximateDistance(TMRQuadForest*, int, double, double,
+                                TACSBVec*, const char*, TACSBVec**)
+    void TMRApproximateDistance(TMROctForest*, int, double, double,
+                                TACSBVec*, const char*, TACSBVec**)

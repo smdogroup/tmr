@@ -21,6 +21,7 @@ CXX_OBJS = TMRMatrixFilter.o \
 	TMRHelmholtzPUFilter.o \
 	TMROctConstitutive.o \
 	TMRQuadConstitutive.o \
+	TMRApproximateDistance.o \
 	TMRTopoProblem.o
 
 DIR=${TMR_DIR}/src/topology

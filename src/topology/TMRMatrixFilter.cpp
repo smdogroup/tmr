@@ -320,11 +320,12 @@ void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
   Add values to the output TACSBVec
 */
 void TMRMatrixFilter::addValues( TACSBVec *vec ){
-  const int vpn = assembler[0]->getDesignVarsPerNode();
   vec->beginSetValues(TACS_ADD_VALUES);
   vec->endSetValues(TACS_ADD_VALUES);
+
   temp->copyValues(vec);
 
+  const int vpn = assembler[0]->getDesignVarsPerNode();
   if (vpn == 1){
     applyTranspose(temp, vec);
   }
@@ -356,9 +357,9 @@ void TMRMatrixFilter::addValues( TACSBVec *vec ){
       TacsScalar *yout;
       y2->getArray(&yout);
       for ( int i = 0; i < size; i++ ){
-        xout[0] += yout[0];
+        xout[0] = yout[0];
         yout++;
-        xin += vpn;
+        xout += vpn;
       }
     }
   }

@@ -46,7 +46,7 @@ class TMRQuadHelmholtzModel : public TACSElementModel {
                          TacsScalar Jac[] );
  private:
   double r;
-  static int elem_Jac_pairs[4];
+  static int elem_Jac_pairs[6];
 };
 
 class TMRHexaHelmholtzModel : public TACSElementModel {
@@ -66,7 +66,7 @@ class TMRHexaHelmholtzModel : public TACSElementModel {
                          TacsScalar Jac[] );
  private:
   double r;
-  static int elem_Jac_pairs[6];
+  static int elem_Jac_pairs[8];
 };
 
 #endif // TMR_HELMHOLTZ_MODEL_H

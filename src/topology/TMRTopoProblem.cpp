@@ -1250,6 +1250,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
 
         // Create a temporary design vector
         TACSBVec *temp = assembler->createDesignVec();
+        temp->incref();
 
         // Add the contribution from each eigenvalue derivative
         TacsScalar smallest_eigval = 0.0;
