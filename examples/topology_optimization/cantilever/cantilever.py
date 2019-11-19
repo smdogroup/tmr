@@ -206,8 +206,8 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     # Create the problem and filter object
     filter_type = 'matrix'
     obj = CreatorCallback(bcs, props)
-    problem = TopOptUtils.createTopoProblem(forest,
-        obj.creator_callback, filter_type, nlevels=nlevels)
+    problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
+                                            filter_type, nlevels=nlevels, s=1.1, N=20)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
@@ -278,12 +278,14 @@ if __name__ == '__main__':
 
     # Create the material properties
     material_properties = constitutive.MaterialProperties(rho=2600.0, E=70e9,
-        nu=0.3, ys=350e6)
+                                                          nu=0.3, ys=350e6)
     props = TMR.StiffnessProperties(material_properties, q=8.0)
 
     # Set the original filter to NULL
     orig_filter = None
     xopt = None
+
+    density_based_refine = False
 
     count = 0
     max_iterations = 3
@@ -329,10 +331,25 @@ if __name__ == '__main__':
         f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
         f5.writeToFile(os.path.join(prefix, 'cantilever%d.f5'%(step)))
 
-        # Refine based solely on the value of the density variable
-        assembler = problem.getAssembler()
         forest = forest.duplicate()
-        TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
+
+        if density_based_refine:
+            # Refine based solely on the value of the density variable
+            TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
+        else:
+            # Perform refinement based on distance
+            dist_file = os.path.join(prefix, 'distance_solution%d.f5'%(step))
+
+            # Compute the characteristic domain length
+            lx = 50.0 # mm
+            ly = 10.0 # mm
+            lz = 10.0 # mm
+            vol = lx*ly*lz
+            domain_length = vol**(1.0/3.0)
+            refine_distance = 0.025*domain_length
+            TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
+                                             domain_length=domain_length,
+                                             filename=dist_file)
 
         # Repartition the mesh
         forest.balance(1)
