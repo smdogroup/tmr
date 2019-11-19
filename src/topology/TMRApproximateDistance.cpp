@@ -103,7 +103,7 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
 
   // Determine where to place the boundary conditions
   TacsScalar *rho_array;
-  int size = rho->getArray(&rho_array);
+  int rho_size = rho->getArray(&rho_array);
   int bsize = rho->getBlockSize();
 
   // Get the ownership range of the filter
@@ -111,7 +111,7 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
   filter->getOwnedNodeRange(&range);
 
   // Check if this is an intermediate value of the design variables
-  for ( int i = 0; i < size; i++ ){
+  for ( int i = 0; i < rho_size; i++ ){
     if (rho_array[bsize*i + index] >= cutoff &&
         rho_array[bsize*i + index] < 1.0 - cutoff){
       // Set the global number
@@ -197,8 +197,8 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
 
   // Extract the actual distance using the transformation
   TacsScalar *dist_array;
-  dist->getArray(&dist_array);
-  for ( int i = 0; i < size; i++ ){
+  int dist_size = dist->getArray(&dist_array);
+  for ( int i = 0; i < dist_size; i++ ){
     if (dist_array[i] <= 0.0){
       dist_array[i] = 1e20;
     }
@@ -307,7 +307,7 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
 
   // Determine where to place the boundary conditions
   TacsScalar *rho_array;
-  int size = rho->getArray(&rho_array);
+  int rho_size = rho->getArray(&rho_array);
   int bsize = rho->getBlockSize();
 
   // Get the ownership range of the filter
@@ -315,7 +315,7 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
   filter->getOwnedNodeRange(&range);
 
   // Check if this is an intermediate value of the design variables
-  for ( int i = 0; i < size; i++ ){
+  for ( int i = 0; i < rho_size; i++ ){
     if (rho_array[bsize*i + index] >= cutoff &&
         rho_array[bsize*i + index] < 1.0 - cutoff){
       // Set the global number
@@ -401,8 +401,8 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
 
   // Extract the actual distance using the transformation
   TacsScalar *dist_array;
-  dist->getArray(&dist_array);
-  for ( int i = 0; i < size; i++ ){
+  int dist_size = dist->getArray(&dist_array);
+  for ( int i = 0; i < dist_size; i++ ){
     if (dist_array[i] <= 0.0){
       dist_array[i] = 1e20;
     }

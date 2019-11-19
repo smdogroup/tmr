@@ -338,7 +338,6 @@ mat2 = constitutive.MaterialProperties(rho=rho, E=E,
                                        kappa=kcond, ys=ys)
 
 prop_list = [mat1, mat2]
-prop_list = [mat1]
 
 # Set the fixed mass
 max_density = 0.5*(2600.0 + 1300.0)
@@ -378,6 +377,9 @@ for step in range(max_iterations):
     iter_offset += args.max_opt_iters[step]
     problem.setPrefix(args.prefix)
 
+    # Check the gradient
+    problem.checkGradients(1e-6)
+
     # Extract the filter to interpolate design variables
     filtr = problem.getFilter()
 
@@ -408,11 +410,12 @@ for step in range(max_iterations):
     forest = forest.duplicate()
 
     # Perform refinement based on distance
+    dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
     domain_length = np.sqrt(r*a)
     refine_distance = 0.025*domain_length
     TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
                                      domain_length=domain_length,
-                                     filename='distance_solution%d.f5'%(step))
+                                     filename=dist_file)
 
     # Repartition the mesh
     forest.balance(1)
