@@ -633,7 +633,7 @@ class TopologyOptimizer:
             # For the trust region method, you have to use a Hessian
             # approximation
             if qn_type == ParOpt.NO_HESSIAN_APPROX:
-                qn = ParOpt.BFGS
+                qn_type = ParOpt.BFGS
             if max_qn_subspace < 1:
                 max_qn_subspace = 1
 
