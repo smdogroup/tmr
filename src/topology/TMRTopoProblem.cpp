@@ -426,6 +426,7 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
   vars = new TACSBVec*[ num_load_cases ];
   for ( int i = 0; i < num_load_cases; i++ ){
     forces[i] = _forces[i];
+    assembler->setBCs(forces[i]);
     vars[i] = assembler->createVec();
     vars[i]->incref();
     vars[i]->zeroEntries();
@@ -441,7 +442,7 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
   //   atol = fnorm*rtol;
   //   ksm->setTolerances(rtol, atol);
   // }
-  
+
   // Allocate the load case information
   load_case_info = new LoadCaseInfo[ num_load_cases ];
   for ( int i = 0; i < num_load_cases; i++ ){

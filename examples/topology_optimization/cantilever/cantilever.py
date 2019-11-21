@@ -149,39 +149,26 @@ def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
 class OutputCallback:
     def __init__(self, assembler, iter_offset=0):
         self.fig = None
+        self.assembler = assembler
+        self.xt = self.assembler.createDesignVec()
 
         # Set the output file name
         flag = (TACS.OUTPUT_CONNECTIVITY |
                 TACS.OUTPUT_NODES |
-                TACS.OUTPUT_DISPLACEMENTS |
-                TACS.OUTPUT_STRAINS |
                 TACS.OUTPUT_EXTRAS)
-        self.f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
+        self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
         self.iter_offset = iter_offset
 
-        self.has_plotly = True
-        try:
-            import plotly.graph_objects as go
-            self.go = go
-        except:
-            self.has_plotly = False
         return
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
         self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
 
-        if self.has_plotly and oct_forest is not None:
-            points = TMR.getSTLTriangles(oct_forest, x)
+        self.assembler.getDesignVars(self.xt)
+        TMR.writeSTLToBin('results/level_set_output%d.bstl'%(itr + self.iter_offset),
+                          oct_forest, self.xt)
 
-            n = points.shape[0]
-            if n > 0 and iter % 10 == 0:
-                mesh = self.go.Mesh3d(x=points[:,0], y=points[:,1], z=points[:,2],
-                                      i=np.arange(0, n, 3, dtype=np.intc),
-                                      j=np.arange(1, n, 3, dtype=np.intc),
-                                      k=np.arange(2, n, 3, dtype=np.intc))
-                self.fig = self.go.Figure(data=[mesh])
-                self.fig.update_layout(scene_aspectmode='data')
-                self.fig.show()
+        return
 
 def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     """
@@ -207,7 +194,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     filter_type = 'matrix'
     obj = CreatorCallback(bcs, props)
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
-                                            filter_type, nlevels=nlevels, s=1.1, N=20)
+                                            filter_type, nlevels=nlevels, s=1.05, N=20)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
@@ -288,7 +275,7 @@ if __name__ == '__main__':
     density_based_refine = False
 
     count = 0
-    max_iterations = 3
+    max_iterations = 4
     for step in range(max_iterations):
         # Create the problem
         iter_offset = step*optimization_options['maxiter']
@@ -296,8 +283,8 @@ if __name__ == '__main__':
 
         # Initialize the problem and set the prefix
         problem.initialize()
-        problem.setPrefix(prefix)
         problem.setIterationCounter(count)
+        problem.checkGradients(1e-6)
 
         # Extract the filter to interpolate design variables
         filtr = problem.getFilter()
@@ -322,15 +309,7 @@ if __name__ == '__main__':
         xopt = opt.optimize()
 
         # Output for visualization
-        flag = (TACS.OUTPUT_CONNECTIVITY |
-                TACS.OUTPUT_NODES |
-                TACS.OUTPUT_DISPLACEMENTS |
-                TACS.OUTPUT_STRAINS |
-                TACS.OUTPUT_EXTRAS)
         assembler = problem.getAssembler()
-        f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
-        f5.writeToFile(os.path.join(prefix, 'cantilever%d.f5'%(step)))
-
         forest = forest.duplicate()
 
         if density_based_refine:

@@ -4268,9 +4268,23 @@ def computeReconSolution(forest, Assembler coarse,
     return
 
 def writeSTLToBin(fname, OctForest forest,
-                  Vec x, int offset=0, double cutoff=0.5):
+                  Vec x, int index=0, double cutoff=0.5):
+    """
+    writeSTLToBin(fname, forest, x, index=0, cutoff=0.5)
+
+    Write a binary STL representation of a triangularization of the
+    levelset of the design field x on the forest, generated using the
+    marching cubes algorithm, to a file.
+
+    Args:
+        fname (str): The file name of file
+        forest (OctForest): The octree forest
+        x (Vec): The design vector
+        index (int): Offset in the design vector (for multimaterial problems)
+        cutoff (double): Level-set cutoff value
+    """
     cdef char *filename = tmr_convert_str_to_chars(fname)
-    TMR_GenerateBinFile(filename, forest.ptr, x.ptr, offset, cutoff)
+    TMR_GenerateBinFile(filename, forest.ptr, x.ptr, index, cutoff)
     return
 
 def getSTLTriangles(OctForest forest, Vec x, int offset=0,

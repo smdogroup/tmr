@@ -57,8 +57,7 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
         self.con = TMR.QuadConstitutive(props=self.props, forest=filtr)
 
         # Create the model (the type of physics we're using)
-        # self.model = elements.LinearThermoelasticity2D(self.con)
-        self.model = elements.LinearElasticity2D(self.con)
+        self.model = elements.LinearThermoelasticity2D(self.con)
 
         # Set the basis functions and create the element
         if order == 2:
@@ -70,7 +69,7 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
         elif order == 5:
             self.basis = elements.QuarticQuadBasis()
 
-        # Create the elemtn type
+        # Create the element type
         self.element = elements.Element2D(self.model, self.basis)
 
         return
@@ -207,9 +206,9 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     basis = elems[0].getElementBasis()
 
     # Create the traction objects that will be used later..
-    T = 2.5e6
+    Ty = 2.5e6
     vpn = elems[0].getVarsPerNode()
-    trac = [0.0, T, 0.0]
+    trac = [0.0, Ty, 0.0]
     tractions = []
     for findex in range(4):
         tractions.append(elements.Traction2D(vpn, findex, basis, trac))
@@ -320,7 +319,7 @@ rho = 2600.0*t
 E = 70e9*t
 nu = 0.3
 alpha = 23.5e-6
-kcond = 130.0
+kcond = 130.10
 ys = 450e6
 mat1 = constitutive.MaterialProperties(rho=rho, E=E,
                                        nu=nu, alpha=alpha,
@@ -356,7 +355,7 @@ props = TMR.StiffnessProperties(prop_list, q=args.q_penalty, qtemp=0.0,
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
 bcs.addBoundaryCondition('fixed', [0, 1, 2], [0.0, 0.0, 0.0])
-# bcs.addBoundaryCondition('traction', [1, 2], [0.0, 250.0])
+bcs.addBoundaryCondition('traction', [2], [250.0])
 
 time_array = np.zeros(sum(args.max_opt_iters[:]))
 t0 = MPI.Wtime()
@@ -420,10 +419,3 @@ for step in range(max_iterations):
     # Repartition the mesh
     forest.balance(1)
     forest.repartition()
-
-# Do an averaging of all the values and write to text file
-new_array=np.zeros(len(time_array))
-comm.Allreduce(time_array, new_array,op=MPI.SUM)
-new_array /= comm.size
-if comm.rank == 0:
-    np.savetxt(os.path.join(args.prefix,'time.out'), new_array, fmt='%1.6e')
