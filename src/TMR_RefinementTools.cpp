@@ -33,13 +33,13 @@
 /*
   Create a multgrid object for a forest of octrees
 */
-void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
+void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
                        TMROctForest *forest[], TACSMg **_mg,
                        double omega,
                        int use_coarse_direct_solve,
                        int use_chebyshev_smoother ){
   // Get the communicator
-  MPI_Comm comm = tacs[0]->getMPIComm();
+  MPI_Comm comm = assembler[0]->getMPIComm();
 
   // Create the multigrid object
   int zero_guess = 0;
@@ -55,7 +55,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
   for ( int level = 0; level < num_levels-1; level++ ){
     // Create the interpolation object
     TACSBVecInterp *interp =
-      new TACSBVecInterp(tacs[level+1], tacs[level]);
+      new TACSBVecInterp(assembler[level+1], assembler[level]);
 
     // Set the interpolation
     forest[level]->createInterpolation(forest[level+1], interp);
@@ -65,7 +65,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 
     if (use_chebyshev_smoother){
       // Create the matrix
-      TACSParallelMat *mat = tacs[level]->createMat();
+      TACSParallelMat *mat = assembler[level]->createMat();
 
       // Set up the smoother
       TACSChebyshevSmoother *pc =
@@ -73,19 +73,20 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
                                   mg_smooth_iters);
 
       // Set the interpolation and TACS object within the multigrid object
-      mg->setLevel(level, tacs[level], interp, mg_iters_per_level, mat, pc);
+      mg->setLevel(level, assembler[level], interp,
+                   mg_iters_per_level, mat, pc);
     }
     else {
-      mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
+      mg->setLevel(level, assembler[level], interp, mg_iters_per_level);
     }
   }
 
   if (use_coarse_direct_solve){
     // Set the lowest level - with no interpolation object
-    mg->setLevel(num_levels-1, tacs[num_levels-1]);
+    mg->setLevel(num_levels-1, assembler[num_levels-1]);
   }
   else {
-    TACSParallelMat *mat = tacs[num_levels-1]->createMat();
+    TACSParallelMat *mat = assembler[num_levels-1]->createMat();
     TACSPc *pc = NULL;
 
     if (use_chebyshev_smoother){
@@ -99,7 +100,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
     }
 
     // Set the interpolation and TACS object within the multigrid object
-    mg->setLevel(num_levels-1, tacs[num_levels-1], NULL, 1,
+    mg->setLevel(num_levels-1, assembler[num_levels-1], NULL, 1,
                  mat, pc);
   }
 
@@ -110,13 +111,13 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 /*
   Create the TACS multigrid objects for the quadrilateral case
 */
-void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
+void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
                        TMRQuadForest *forest[], TACSMg **_mg,
                        double omega,
                        int use_coarse_direct_solve,
                        int use_chebyshev_smoother ){
   // Get the communicator
-  MPI_Comm comm = tacs[0]->getMPIComm();
+  MPI_Comm comm = assembler[0]->getMPIComm();
 
   // Create the multigrid object
   int zero_guess = 0;
@@ -132,7 +133,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
   for ( int level = 0; level < num_levels-1; level++ ){
     // Create the interpolation object
     TACSBVecInterp *interp =
-      new TACSBVecInterp(tacs[level+1], tacs[level]);
+      new TACSBVecInterp(assembler[level+1], assembler[level]);
 
     // Set the interpolation
     forest[level]->createInterpolation(forest[level+1], interp);
@@ -142,7 +143,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 
     if (use_chebyshev_smoother){
       // Create the matrix
-      TACSParallelMat *mat = tacs[level]->createMat();
+      TACSParallelMat *mat = assembler[level]->createMat();
 
       // Set up the smoother
       TACSChebyshevSmoother *pc =
@@ -150,19 +151,20 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
                                   mg_smooth_iters);
 
       // Set the interpolation and TACS object within the multigrid object
-      mg->setLevel(level, tacs[level], interp, mg_iters_per_level, mat, pc);
+      mg->setLevel(level, assembler[level], interp,
+                   mg_iters_per_level, mat, pc);
     }
     else {
-      mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
+      mg->setLevel(level, assembler[level], interp, mg_iters_per_level);
     }
   }
 
   if (use_coarse_direct_solve){
     // Set the lowest level - with no interpolation object
-    mg->setLevel(num_levels-1, tacs[num_levels-1]);
+    mg->setLevel(num_levels-1, assembler[num_levels-1]);
   }
   else {
-    TACSParallelMat *mat = tacs[num_levels-1]->createMat();
+    TACSParallelMat *mat = assembler[num_levels-1]->createMat();
     TACSPc *pc = NULL;
 
     if (use_chebyshev_smoother){
@@ -176,7 +178,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
     }
 
     // Set the interpolation and TACS object within the multigrid object
-    mg->setLevel(num_levels-1, tacs[num_levels-1], NULL, 1,
+    mg->setLevel(num_levels-1, assembler[num_levels-1], NULL, 1,
                  mat, pc);
   }
 

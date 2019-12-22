@@ -192,7 +192,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
 
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
-                                            nlevels=nlevels, lowest_order=2, s=1.01, N=40,
+                                            nlevels=nlevels, lowest_order=2, s=1.1, N=40,
                                             design_vars_per_node=design_vars_per_node)
 
     # Get the assembler object we just created
