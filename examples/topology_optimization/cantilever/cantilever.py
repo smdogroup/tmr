@@ -198,7 +198,8 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     filter_type = 'matrix'
     obj = CreatorCallback(bcs, props)
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
-                                            filter_type, nlevels=nlevels, r0=r0, N=20)
+                                            filter_type, use_galerkin=True,
+                                            nlevels=nlevels, r0=r0, N=20)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
@@ -259,7 +260,6 @@ if __name__ == '__main__':
     # Set the communicator
     comm = MPI.COMM_WORLD
 
-    order = 2 # Order of the mesh
     nlevels = 4 # Number of multigrid levels
     forest = create_forest(comm, nlevels-1)
 
@@ -284,7 +284,8 @@ if __name__ == '__main__':
     for step in range(max_iterations):
         # Create the problem
         iter_offset = step*optimization_options['maxiter']
-        problem = create_problem(forest, bcs, props, nlevels, iter_offset=iter_offset)
+        problem = create_problem(forest, bcs, props, nlevels + step,
+                                 iter_offset=iter_offset)
 
         # Initialize the problem and set the prefix
         problem.initialize()

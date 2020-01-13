@@ -227,11 +227,16 @@ def compute3DTractionLoad(name, forest, assembler, tr):
         Vec: A force vector containing the traction
     """
 
-    order = forest.getMeshOrder()
+    # Get the basis
+    element = assembler.getElements()[0]
+    basis = element.getElementBasis()
+
+    # Get the number of variables per node
+    vars_per_node = assembler.getVarsPerNode()
 
     trac = []
     for findex in range(6):
-        trac.append(elements.Traction3D(order, findex, tr[0], tr[1], tr[2]))
+        trac.append(elements.Traction3D(vars_per_node, findex, basis, tr))
 
     return computeTractionLoad(name, forest, assembler, trac)
 

@@ -141,8 +141,9 @@ void TMRMatrixFilter::initialize_matrix( double _r, int _N,
         Bi[0] = Ai[0]*r*r/(D*D);
       }
       else {
-        Ai[0] = 1.0/(1.0 + r*r/pow(D, 2.0/3.0));
-        Bi[0] = Ai[0]*r*r/pow(D, 5.0/3.0);
+        TacsScalar temp = pow(D, 2.0/3.0);
+        Ai[0] = 1.0/(1.0 + r*r/temp);
+        Bi[0] = Ai[0]*r*r/(temp*D);
       }
     }
     Bi++;
