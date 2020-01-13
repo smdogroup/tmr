@@ -26,20 +26,20 @@
 /*
   Create the filter matrix
 */
-TMRMatrixFilter::TMRMatrixFilter( double _s, int _N,
+TMRMatrixFilter::TMRMatrixFilter( double _r, int _N,
                                   int _nlevels,
                                   TACSAssembler *_assembler[],
                                   TMROctForest *_filter[] ):
   TMRConformFilter(_nlevels, _assembler, _filter){
-  initialize_matrix(_s, _N, _filter[0], NULL);
+  initialize_matrix(_r, _N, _filter[0], NULL);
 }
 
-TMRMatrixFilter::TMRMatrixFilter( double _s, int _N,
+TMRMatrixFilter::TMRMatrixFilter( double _r, int _N,
                                   int _nlevels,
                                   TACSAssembler *_assembler[],
                                   TMRQuadForest *_filter[] ):
   TMRConformFilter(_nlevels, _assembler, _filter){
-  initialize_matrix(_s, _N, NULL, _filter[0]);
+  initialize_matrix(_r, _N, NULL, _filter[0]);
 }
 
 /*
@@ -48,12 +48,16 @@ TMRMatrixFilter::TMRMatrixFilter( double _s, int _N,
   This code creates a TACSAssembler object (and frees it), assembles a
   mass matrix, creates the internal variables required for the filter.
 */
-void TMRMatrixFilter::initialize_matrix( double _s, int _N,
+void TMRMatrixFilter::initialize_matrix( double _r, int _N,
                                          TMROctForest *oct_forest,
                                          TMRQuadForest *quad_forest ){
   // Create the Assembler object
   TACSAssembler *matrix_assembler = NULL;
+
+  // Keep track of the dimension of the problem
+  int d = 2;
   if (oct_filter){
+    d = 3;
     TACSElementModel *model = new TMRHexaMatrixModel();
     TMROctTACSMatrixCreator *matrix_creator3d =
       new TMROctTACSMatrixCreator(model);
@@ -65,6 +69,7 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
     matrix_creator3d->decref();
   }
   else {
+    d = 2;
     TACSElementModel *model = new TMRQuadMatrixModel();
     TMRQuadTACSMatrixCreator *matrix_creator2d =
       new TMRQuadTACSMatrixCreator(model);
@@ -81,18 +86,18 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
   M->incref();
 
   // Allocate the vectors needed for the application of the filter
-  Dinv = matrix_assembler->createVec();
+  Ainv = matrix_assembler->createVec();
+  B = matrix_assembler->createVec();
   Tinv = matrix_assembler->createVec();
   t1 = matrix_assembler->createVec();
   t2 = matrix_assembler->createVec();
-  t3 = matrix_assembler->createVec();
   y1 = matrix_assembler->createVec();
   y2 = matrix_assembler->createVec();
-  Dinv->incref();
+  Ainv->incref();
+  B->incref();
   Tinv->incref();
   t1->incref();
   t2->incref();
-  t3->incref();
   y1->incref();
   y2->incref();
 
@@ -110,28 +115,38 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
   N = _N;
 
   // Set the scalar value associated with the filter
-  s = _s;
-  if (s <= 1.0){
-    s = 2.0;
-  }
+  r = _r;
 
   // Set all vector values to 1.0
   y2->set(1.0);
 
-  // Compute D_{i} = sum_{j=1}^{n} M_{ij}
-  M->mult(y2, Dinv);
+  // Compute D_{i} = sum_{j=1}^{n} M_{ij} (stored in B temporarily)
+  M->mult(y2, B);
 
   // Create the inverse of the diagonal matrix
-  TacsScalar *D;
-  int size = Dinv->getArray(&D);
+  TacsScalar *Bi; // The components of the D matrix that will be over-written
+  TacsScalar *Ai;
+  int size = B->getArray(&Bi);
+  Ainv->getArray(&Ai);
   for ( int i = 0; i < size; i++ ){
-    if (D[0] != 0.0){
-      D[0] = 1.0/D[0];
+    TacsScalar D = Bi[0];
+    // Check if we have a 2D or 3D problem
+    if (D == 0.0){
+      Ai[0] = 1.0;
+      Bi[0] = 0.0;
     }
     else {
-      D[0] = 0.0;
+      if (d == 2){
+        Ai[0] = 1.0/(1.0 + r*r/D);
+        Bi[0] = Ai[0]*r*r/(D*D);
+      }
+      else {
+        Ai[0] = 1.0/(1.0 + r*r/pow(D, 2.0/3.0));
+        Bi[0] = Ai[0]*r*r/pow(D, 5.0/3.0);
+      }
     }
-    D++;
+    Bi++;
+    Ai++;
   }
 
   // Apply the filter to create the normalization
@@ -160,10 +175,9 @@ void TMRMatrixFilter::initialize_matrix( double _s, int _N,
 TMRMatrixFilter::~TMRMatrixFilter(){
   t1->decref();
   t2->decref();
-  t3->decref();
   M->decref();
-  Dinv->decref();
-  Tinv->decref();
+  Ainv->decref();
+  B->decref();
   y1->decref();
   y2->decref();
   temp->decref();
@@ -173,28 +187,26 @@ TMRMatrixFilter::~TMRMatrixFilter(){
   Compute the action of the filter on the input vector using Horner's
   method
 
-  t1 = 1/s*Dinv*in
+  t1 = Ainv*in
   out = t1
   for n in range(N):
-  .   out += t1 + 1/s*D^{-1}*M*out
+  .   out += t1 + B*M*out
 */
 void TMRMatrixFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
-  // Compute t1 = 1/s*Dinv*in
+  // Compute t1 = Ainv*in
   t1->copyValues(in);
-  kronecker(Dinv, t1);
-  t1->scale(1.0/s);
+  kronecker(Ainv, t1);
 
-  // Set out = 1/s*Dinv*in
+  // Set out = Ainv*in
   out->copyValues(t1);
 
   // Apply Horner's method
   for ( int n = 0; n < N; n++ ){
-    // Compute t2 = 1/s*D^{-1}*M*out
+    // Compute t2 = B*M*out
     M->mult(out, t2);
-    kronecker(Dinv, t2);
-    out->axpy(1.0/s, t2);
+    kronecker(B, t2, out);
 
-    // Compute out = t1 + 1/s*D^{-1}*M*out
+    // Compute out = t1 + B*M*out
     out->axpy(1.0, t1);
   }
 
@@ -214,18 +226,16 @@ void TMRMatrixFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
 
   // Apply Horner's method
   for ( int n = 0; n < N; n++ ){
-    // Compute M*D^{-1}*out
-    kronecker(Dinv, out, t2);
-    M->mult(t2, t3);
-    out->axpy(1.0/s, t3);
+    // Compute M*B*out
+    kronecker(B, out, t2);
+    M->mult(t2, out);
 
-    // Compute out = t1 + 1/s*M*D^{-1}*out
+    // Compute out = t1 + M*B*out
     out->axpy(1.0, t1);
   }
 
-  // Multiply by 1/s*Dinv
-  kronecker(Dinv, out);
-  out->scale(1.0/s);
+  // Multiply by Ainv
+  kronecker(Ainv, out);
 }
 
 /*

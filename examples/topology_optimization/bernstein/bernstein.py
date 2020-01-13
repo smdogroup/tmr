@@ -115,7 +115,7 @@ class CreatorCallback:
 
 def create_forest(comm, depth, htarget):
     """
-    Create an initial forest for analysis. and optimization
+    Create an initial forest for analysis and optimization
 
     This code loads in the model, sets names, meshes the geometry and creates
     a QuadForest from the mesh. The forest is populated with quadtrees with
@@ -190,9 +190,14 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     # Create a conforming filter
     filter_type = 'matrix'
 
+    # Characteristic length of the domain
+    len0 = 0.06
+    r0 = 0.05*len0
+
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
-                                            nlevels=nlevels, lowest_order=2, s=1.1, N=40,
+                                            nlevels=nlevels, lowest_order=2,
+                                            r0=r0, N=10, use_galerkin=True,
                                             design_vars_per_node=design_vars_per_node)
 
     # Get the assembler object we just created
@@ -225,7 +230,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
 
     # Set the values of the objective array
-    obj_array = [ 1.0 ]
+    obj_array = [ 1.0e3 ]
     ksfail = functions.KSFailure(assembler, 10.0)
     ksfail.setKSFailureType('continuous')
     problem.setObjective(obj_array, [ksfail])
@@ -262,7 +267,7 @@ optimization_options = {
     'tr_max_size': 0.05,
     'tr_min_size': 1e-6,
     'tr_eta': 0.25,
-    'tr_penalty_gamma': 20.0,
+    'tr_penalty_gamma': 0.001,
     'tr_write_output_freq': 1,
     'tr_infeas_tol': 1e-5,
     'tr_l1_tol': 1e-5,
@@ -286,11 +291,8 @@ p.add_argument('--max_opt_iters', type=int, nargs='+',
                default=[5])
 p.add_argument('--init_depth', type=int, default=1)
 p.add_argument('--mg_levels', type=int, nargs='+', default=[2])
-p.add_argument('--use_L1', action='store_true', default=True)
-p.add_argument('--use_Linf', action='store_true', default=False)
 p.add_argument('--order', type=int, default=4)
 p.add_argument('--q_penalty', type=float, default=8.0)
-p.add_argument('--omega', type=float, default=1.0)
 args = p.parse_args()
 
 # Set the communicator
@@ -319,7 +321,7 @@ rho = 2600.0*t
 E = 70e9*t
 nu = 0.3
 alpha = 23.5e-6
-kcond = 130.10
+kcond = 130.0
 ys = 450e6
 mat1 = constitutive.MaterialProperties(rho=rho, E=E,
                                        nu=nu, alpha=alpha,

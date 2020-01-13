@@ -15,8 +15,9 @@ _bfgs_updates = ['Skip negative', 'Damped']
 
 def createTopoProblem(forest, callback, filter_type, nlevels=2,
                       repartition=True, design_vars_per_node=1,
-                      s=2.0, N=10, r0=0.05, lowest_order=2,
+                      r0=0.05, N=10, lowest_order=2,
                       ordering=TACS.MULTICOLOR_ORDER,
+                      use_galerkin=False,
                       scale_coordinate_factor=1.0):
     """
     Create a topology optimization problem instance and a hierarchy of meshes.
@@ -42,11 +43,11 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
         forest (TMROctForest or TMRQuadForest): Forest type
         repartition (bool): Repartition the mesh
         design_vars_per_node (int): number of design variables for each node
-        s (float): Matrix filter smoothing parameter
+        r0 (float): Helmholtz/matrix filter radius
         N (int): Matrix filter approximation parameter
-        r0 (float): Helmholtz filter radius
         lowest_order (int): Lowest order mesh to create
         ordering: TACS Assembler ordering type
+        use_galerkin: Use Galerkin projection to obtain coarse grid operators
         scale_coordinate_factor (float): Scale all coordinates by this factor
 
     Returns:
@@ -100,14 +101,14 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
             assembler.setNodes(X)
 
     # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests)
+    mg = TMR.createMg(assemblers, forests, use_galerkin=use_galerkin)
 
     # Create the TMRTopoFilter object
     filter_obj = None
     if filter_type == 'lagrange':
         filter_obj = TMR.LagrangeFilter(assemblers, filters)
     elif filter_type == 'matrix':
-        filter_obj = TMR.MatrixFilter(s, N, assemblers, filters)
+        filter_obj = TMR.MatrixFilter(r0, N, assemblers, filters)
     elif filter_type == 'conform':
         filter_obj = TMR.ConformFilter(assemblers, filters)
     elif filter_type == 'helmholtz':

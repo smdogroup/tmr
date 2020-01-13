@@ -190,11 +190,15 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
         TopoProblem: Topology optimization problem instance
     """
 
+    # Characteristic length of the domain
+    len0 = 10.0
+    r0 = 0.05*len0
+
     # Create the problem and filter object
     filter_type = 'matrix'
     obj = CreatorCallback(bcs, props)
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
-                                            filter_type, nlevels=nlevels, s=1.05, N=20)
+                                            filter_type, nlevels=nlevels, r0=r0, N=20)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
@@ -272,6 +276,7 @@ if __name__ == '__main__':
     orig_filter = None
     xopt = None
 
+    # Do not use density-based refinement. Use an approximate distance based refinement.
     density_based_refine = False
 
     count = 0

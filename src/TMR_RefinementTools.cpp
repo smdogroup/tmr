@@ -36,6 +36,7 @@
 void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
                        TMROctForest *forest[], TACSMg **_mg,
                        double omega,
+                       int use_galerkin,
                        int use_coarse_direct_solve,
                        int use_chebyshev_smoother ){
   // Get the communicator
@@ -49,7 +50,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
   int mg_sor_symm = 1;
   int mg_iters_per_level = 1;
   TACSMg *mg = new TACSMg(comm, num_levels, omega,
-                          mg_smooth_iters, mg_sor_symm);
+                          mg_smooth_iters, mg_sor_symm, use_galerkin);
 
   // Create the intepolation/restriction objects between mesh levels
   for ( int level = 0; level < num_levels-1; level++ ){
@@ -114,6 +115,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
 void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
                        TMRQuadForest *forest[], TACSMg **_mg,
                        double omega,
+                       int use_galerkin,
                        int use_coarse_direct_solve,
                        int use_chebyshev_smoother ){
   // Get the communicator
@@ -127,7 +129,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
   int mg_sor_symm = 0;
   int mg_iters_per_level = 1;
   TACSMg *mg = new TACSMg(comm, num_levels, omega,
-                          mg_smooth_iters, mg_sor_symm);
+                          mg_smooth_iters, mg_sor_symm, use_galerkin);
 
   // Create the intepolation/restriction objects between mesh levels
   for ( int level = 0; level < num_levels-1; level++ ){

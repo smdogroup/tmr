@@ -4028,6 +4028,7 @@ cdef class OctConformTopoCreator:
         return _init_OctForest(filtr)
 
 def createMg(list assemblers, list forests, double omega=1.0,
+             use_galerkin=False,
              use_coarse_direct_solve=True,
              use_chebyshev_smoother=False):
     cdef int nlevels = 0
@@ -4036,8 +4037,11 @@ def createMg(list assemblers, list forests, double omega=1.0,
     cdef TMROctForest **oforest = NULL
     cdef TACSMg *mg = NULL
     cdef int isqforest = 0
+    cdef int use_galerkn = 0
     cdef int coarse_direct = 0
     cdef int use_cheb = 0
+    if use_galerkin:
+        use_galerkn = 1
     if use_coarse_direct_solve:
         coarse_direct = 1
     if use_chebyshev_smoother:
@@ -4061,7 +4065,7 @@ def createMg(list assemblers, list forests, double omega=1.0,
             assm[i] = (<Assembler>assemblers[i]).ptr
             qforest[i] = (<QuadForest>forests[i]).ptr
         TMR_CreateTACSMg(nlevels, assm, qforest, &mg, omega,
-                         coarse_direct, use_cheb)
+                         use_galerkn, coarse_direct, use_cheb)
         free(qforest)
     else:
         oforest = <TMROctForest**>malloc(nlevels*sizeof(TMROctForest*))
@@ -4069,7 +4073,7 @@ def createMg(list assemblers, list forests, double omega=1.0,
             assm[i] = (<Assembler>assemblers[i]).ptr
             oforest[i] = (<OctForest>forests[i]).ptr
         TMR_CreateTACSMg(nlevels, assm, oforest, &mg, omega,
-                         coarse_direct, use_cheb)
+                         use_galerkn, coarse_direct, use_cheb)
         free(oforest)
     free(assm)
     if mg != NULL:
@@ -4501,7 +4505,7 @@ cdef class HelmholtzFilter(TopoFilter):
         return None
 
 cdef class MatrixFilter(TopoFilter):
-    def __cinit__(self, double s, int N, list assemblers, list filters):
+    def __cinit__(self, double r, int N, list assemblers, list filters):
         cdef int nlevels = 0
         cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
@@ -4525,7 +4529,7 @@ cdef class MatrixFilter(TopoFilter):
             for i in range(nlevels):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRMatrixFilter(s, N, nlevels, assemb, qfiltr)
+            self.ptr = new TMRMatrixFilter(r, N, nlevels, assemb, qfiltr)
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -4533,7 +4537,7 @@ cdef class MatrixFilter(TopoFilter):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            self.ptr = new TMRMatrixFilter(s, N, nlevels, assemb, ofiltr)
+            self.ptr = new TMRMatrixFilter(r, N, nlevels, assemb, ofiltr)
             self.ptr.incref()
             free(ofiltr)
 
@@ -4619,7 +4623,7 @@ cdef class HelmholtzPUFilter(TopoFilter):
         cdef TMRCallbackHelmholtzPUFilter *me = NULL
 
         if len(assemblers) != len(filters):
-            errmsg = 'MatrixFilter must have equal number of objects in lists'
+            errmsg = 'HelmholtzPUFilter must have equal number of objects in lists'
             raise ValueError(errmsg)
 
         nlevels = len(assemblers)

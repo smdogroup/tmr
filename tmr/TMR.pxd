@@ -451,7 +451,7 @@ cdef extern from "TMREgads.h" namespace "TMR_EgadsInterface":
 
 cdef extern from "TMR_RefinementTools.h":
     void TMR_CreateTACSMg(int, TACSAssembler**,
-                          TMRQuadForest**, TACSMg**, double, int, int)
+                          TMRQuadForest**, TACSMg**, double, int, int, int)
     void TMR_ComputeInterpSolution(TMRQuadForest*, TACSAssembler*,
                                    TMRQuadForest*, TACSAssembler*,
                                    TACSBVec*, TACSBVec*)
@@ -466,7 +466,7 @@ cdef extern from "TMR_RefinementTools.h":
                                TACSBVec*, TACSBVec*, double*, double*)
 
     void TMR_CreateTACSMg(int, TACSAssembler**,
-                          TMROctForest**, TACSMg**, double, int, int)
+                          TMROctForest**, TACSMg**, double, int, int, int)
     void TMR_ComputeInterpSolution(TMROctForest*, TACSAssembler*,
                                    TMROctForest*, TACSAssembler*,
                                    TACSBVec*, TACSBVec*)
