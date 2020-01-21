@@ -452,14 +452,11 @@ def approxDistanceRefine(forest, fltr, assembler, refine_distance, index=0,
     elems = assembler.getElements()
 
     for i in range(num_elems):
-        # Extract the constitutive object from the element, if it is defined, otherwise
-        # skip the refinement.
-        dvNums = elems[i].getDesignVarNums(i)
-        distance = dist.getValues(dvNums)
+        # dvNums = elems[i].getDesignVarNums(i)
+        # distance = dist.getValues(dvNums)
 
         # Apply the refinement criteria
-        value = np.min(distance)
-        if value <= refine_distance:
+        if dist[i] <= refine_distance:
             refine[i] = 1
         else:
             refine[i] = -1
@@ -722,6 +719,7 @@ class TopologyOptimizer:
                                     tr_eta, tr_penalty_gamma)
 
             # Set the penalty parameter
+            tr.setAdaptiveGammaUpdate(self.options['tr_adaptive_gamma_update'])
             tr.setPenaltyGammaMax(self.options['tr_penalty_gamma_max'])
             tr.setMaxTrustRegionIterations(self.options['maxiter'])
 

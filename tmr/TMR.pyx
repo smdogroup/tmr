@@ -4790,10 +4790,13 @@ def convertPVecToVec(PVec pvec):
 def ApproximateDistance(filtr, Vec x, int index=0,
                         double cutoff=0.15, double t=1.0,
                         filename=None):
-    cdef TACSBVec *dist
+    cdef int size
+    cdef TMRQuadrantArray *quad_array = NULL
+    cdef TMROctantArray *oct_array = NULL
     cdef TMROctForest *oct_forest = NULL
     cdef TMRQuadForest *quad_forest = NULL
     cdef char *fname = NULL
+    cdef np.ndarray dist
 
     if filename is not None:
         fname = tmr_convert_str_to_chars(filename)
@@ -4803,11 +4806,19 @@ def ApproximateDistance(filtr, Vec x, int index=0,
         oct_forest = (<OctForest>filtr).ptr
 
     if oct_forest != NULL:
-        TMRApproximateDistance(oct_forest, index, cutoff, t, x.ptr, fname, &dist)
+        oct_forest.getOctants(&oct_array)
+        oct_array.getArray(NULL, &size);
+        dist = np.zeros(size, dtype=np.double)
+        TMRApproximateDistance(oct_forest, index, cutoff, t, x.ptr, fname,
+                               <double*>dist.data)
+        return dist
     if quad_forest != NULL:
-        TMRApproximateDistance(quad_forest, index, cutoff, t, x.ptr, fname, &dist)
-    if dist != NULL:
-        return _init_Vec(dist)
+        quad_forest.getQuadrants(&quad_array)
+        quad_array.getArray(NULL, &size);
+        dist = np.zeros(size, dtype=np.double)
+        TMRApproximateDistance(quad_forest, index, cutoff, t, x.ptr, fname,
+                               <double*>dist.data)
+        return dist
     return None
 
 cdef void writeOutputCallback(void *func, const char *prefix, int iter,

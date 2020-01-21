@@ -56,6 +56,12 @@ class TMRQuadTACSMatrixCreator : public TMRQuadTACSCreator {
     else if (order == 4){
       basis = new TACSCubicQuadBernsteinBasis();
     }
+    else if (order == 5){
+      basis = new TACSQuarticQuadBernsteinBasis();
+    }
+    else if (order == 6){
+      basis = new TACSQuinticQuadBernsteinBasis();
+    }
 
     TACSElement *elem = new TACSElement2D(model, basis);
 

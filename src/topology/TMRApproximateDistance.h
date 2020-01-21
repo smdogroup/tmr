@@ -28,10 +28,10 @@
 void TMRApproximateDistance( TMRQuadForest *filter, int index,
                              double cutoff, double t,
                              TACSBVec *rho, const char *filename,
-                             TACSBVec **_dist );
+                             double *min_dist );
 void TMRApproximateDistance( TMROctForest *filter, int index,
                              double cutoff, double t,
                              TACSBVec *rho, const char *filename,
-                             TACSBVec **_dist );
+                             double *min_dist );
 
 #endif // TMR_APPROXIMATE_DISTANCE_H

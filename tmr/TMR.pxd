@@ -647,6 +647,6 @@ cdef extern from "TMR_STLTools.h":
 
 cdef extern from "TMRApproximateDistance.h":
     void TMRApproximateDistance(TMRQuadForest*, int, double, double,
-                                TACSBVec*, const char*, TACSBVec**)
+                                TACSBVec*, const char*, double*)
     void TMRApproximateDistance(TMROctForest*, int, double, double,
-                                TACSBVec*, const char*, TACSBVec**)
+                                TACSBVec*, const char*, double*)

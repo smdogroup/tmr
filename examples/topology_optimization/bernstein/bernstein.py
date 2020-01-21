@@ -68,6 +68,8 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
             self.basis = elements.CubicQuadBasis()
         elif order == 5:
             self.basis = elements.QuarticQuadBasis()
+        elif order == 6:
+            self.basis = elements.QuinticQuadBasis()
 
         # Create the element type
         self.element = elements.Element2D(self.model, self.basis)
@@ -165,7 +167,8 @@ def create_forest(comm, depth, htarget):
 
     return forest
 
-def create_problem(forest, bcs, props, nlevels, iter_offset=0):
+def create_problem(forest, bcs, props, nlevels, iter_offset=0,
+                   m_fixed=0.0, use_compliance=False):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -191,29 +194,29 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     filter_type = 'matrix'
 
     # Characteristic length of the domain
-    len0 = 0.06
-    r0 = 0.05*len0
+    r = 0.06
+    a = 0.04
+    area = r*a
+    r0 = 0.025*np.sqrt(area)
 
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
                                             nlevels=nlevels, lowest_order=2,
-                                            r0=r0, N=10, use_galerkin=True,
+                                            r0=r0, N=15, use_galerkin=True,
                                             design_vars_per_node=design_vars_per_node)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
-
-    # Set the constraint type
-    funcs = [functions.StructuralMass(assembler)]
 
     # Get the basis object from one of the elements
     elems = assembler.getElements()
     basis = elems[0].getElementBasis()
 
     # Create the traction objects that will be used later..
-    Ty = 2.5e6
+    Fn = 1000e3 # Normal heat flux
+    Ty = -2.5e6 # Traction force component in the y-direction
     vpn = elems[0].getVarsPerNode()
-    trac = [0.0, Ty, 0.0]
+    trac = [0.0, Ty, Fn]
     tractions = []
     for findex in range(4):
         tractions.append(elements.Traction2D(vpn, findex, basis, trac))
@@ -225,15 +228,23 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     # Set the load case
     problem.setLoadCases([force1])
 
+    # Set the constraint functions
+    funcs = [functions.StructuralMass(assembler)]
+
     # Set the mass constraint
     # (m_fixed - m(x))/m_fixed >= 0.0
     problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
 
     # Set the values of the objective array
-    obj_array = [ 1.0e3 ]
-    ksfail = functions.KSFailure(assembler, 10.0)
-    ksfail.setKSFailureType('continuous')
-    problem.setObjective(obj_array, [ksfail])
+    if use_compliance:
+        obj_array = [ 0.1 ]
+        compliance = functions.Compliance(assembler)
+        problem.setObjective(obj_array, [compliance])
+    else:
+        obj_array = [ 1.0e3 ]
+        ksfail = functions.KSFailure(assembler, 10.0)
+        ksfail.setKSFailureType('continuous')
+        problem.setObjective(obj_array, [ksfail])
 
     # Initialize the problem and set the prefix
     problem.initialize()
@@ -267,7 +278,7 @@ optimization_options = {
     'tr_max_size': 0.05,
     'tr_min_size': 1e-6,
     'tr_eta': 0.25,
-    'tr_penalty_gamma': 0.001,
+    'tr_penalty_gamma': 1.0,
     'tr_write_output_freq': 1,
     'tr_infeas_tol': 1e-5,
     'tr_l1_tol': 1e-5,
@@ -352,15 +363,11 @@ if (len(prop_list) > 1):
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(prop_list, q=args.q_penalty, qtemp=0.0,
-                                qcond=0.0, eps=0.3, k0=1e-3)
+                                qcond=args.q_penalty, eps=0.3, k0=1e-3)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
 bcs.addBoundaryCondition('fixed', [0, 1, 2], [0.0, 0.0, 0.0])
-bcs.addBoundaryCondition('traction', [2], [250.0])
-
-time_array = np.zeros(sum(args.max_opt_iters[:]))
-t0 = MPI.Wtime()
 
 # Create the initial forest
 forest = create_forest(comm, args.init_depth, args.htarget)
@@ -374,7 +381,9 @@ iter_offset = 0
 for step in range(max_iterations):
     # Create the TMRTopoProblem instance
     nlevels = mg_levels[step]
-    problem = create_problem(forest, bcs, props, nlevels, iter_offset=iter_offset)
+    problem = create_problem(forest, bcs, props, nlevels,
+                             iter_offset=iter_offset, m_fixed=m_fixed,
+                             use_compliance=True)
     iter_offset += args.max_opt_iters[step]
     problem.setPrefix(args.prefix)
 
@@ -415,7 +424,7 @@ for step in range(max_iterations):
     domain_length = np.sqrt(r*a)
     refine_distance = 0.025*domain_length
     TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
-                                     domain_length=domain_length,
+                                     domain_length=domain_length, index=-1,
                                      filename=dist_file)
 
     # Repartition the mesh
