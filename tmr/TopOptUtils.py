@@ -160,7 +160,7 @@ def computeVertexLoad(name, forest, assembler, point_force):
 
     return force
 
-def computeTractionLoad(name, forest, assembler, trac):
+def computeTractionLoad(names, forest, assembler, trac):
     """
     Add a surface traction to all quadrants or octants that touch a face or edge with
     the given name. The assembler must be created from the provided forest. The list
@@ -171,7 +171,7 @@ def computeTractionLoad(name, forest, assembler, trac):
     the local face or edge index touching the surface or edge in the info member.
 
     Args:
-        name (str): Name of the surface where the traction will be added
+        names (str) or list[(str)]: Name or list of names of the surface(s) where the traction will be added
         forest (QuadForest or OctForest): Forest for the finite-element mesh
         assembler (Assembler): TACSAssembler object for the finite-element problem
         trac (list): List of tractions, one for each possible face/edge orientation
@@ -182,10 +182,20 @@ def computeTractionLoad(name, forest, assembler, trac):
 
     if isinstance(forest, TMR.OctForest):
         octants = forest.getOctants()
-        face_octs = forest.getOctsWithName(name)
+        if isinstance(names, str):
+            face_octs = forest.getOctsWithName(names)
+        else:
+            face_octs = []
+            for name in names:
+                face_octs.extend(forest.getOctsWithName(name))
     elif isinstance(forest, TMR.QuadForest):
         octants = forest.getQuadrants()
-        face_octs = forest.getQuadsWithName(name)
+        if isinstance(names, str):
+            face_octs = forest.getQuadsWithName(names)
+        else:
+            face_octs = []
+            for name in names:
+                face_octs.extend(forest.getQuadsWithName(name))
 
     # Create the force vector and zero the variables in the assembler
     force = assembler.createVec()
