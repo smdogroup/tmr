@@ -34,19 +34,13 @@ verts = []
 edges = []
 faces = []
 vols = []
-# sfi = [0, 4]
 for i, geo in enumerate([geo1, geo2]):
-    vols = geo.getVolumes()
-    fail = vols[0].setExtrudeFaces()
-    if fail:
-        print("setExtrudeFaces failed for volume {}".format(i))
-
     verts.extend(geo.getVertices())
     edges.extend(geo.getEdges())
     faces.extend(geo.getFaces())
     vols.extend(geo.getVolumes())
 
-geo = TMR.Model(verts, edges, faces)
+geo = TMR.Model(verts, edges, faces, vols)
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -60,4 +54,4 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('output.vtk', 'quad')
+mesh.writeToVTK('output.vtk', 'hex')
