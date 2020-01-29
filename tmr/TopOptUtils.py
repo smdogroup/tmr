@@ -452,9 +452,6 @@ def approxDistanceRefine(forest, fltr, assembler, refine_distance, index=0,
     elems = assembler.getElements()
 
     for i in range(num_elems):
-        # dvNums = elems[i].getDesignVarNums(i)
-        # distance = dist.getValues(dvNums)
-
         # Apply the refinement criteria
         if dist[i] <= refine_distance:
             refine[i] = 1

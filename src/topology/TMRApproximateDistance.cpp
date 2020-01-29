@@ -53,10 +53,10 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
 
   // Set the number of refinements
   int num_refine = 0;
-  if (order == 3){
+  if (order <= 3){
     num_refine = 1;
   }
-  else if (order == 4){
+  else if (order <= 5){
     num_refine = 2;
   }
   else {
@@ -66,7 +66,7 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
   // Refine the forest a number of times
   for ( int i = 0; i < num_refine; i++ ){
     forest->refine();
-    forest->balance();
+    forest->balance(0);
   }
 
   // Balance the forest and create the nodes
@@ -146,64 +146,71 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
   rho->beginDistributeValues();
   rho->endDistributeValues();
 
-  // Loop over all the elements in the filter
-  for ( int i = 0; i < num_filter_elements; i++ ){
-    // Get the array of element variables
-    rho->getValues(order*order, &filter_conn[order*order*i], rho_values);
+  for ( int i = 0; i < num_elements; i++ ){
+    // Set the node location
+    TMRQuadrant n = quads[i];
+    const int32_t hf = 1 << (TMR_MAX_LEVEL - quads[i].level);
 
-    // Compute the h size
-    const int32_t h = 1 << (TMR_MAX_LEVEL - filter_quads[i].level);
+    for ( int jj = 0; jj < 2; jj++ ){
+      for ( int ii = 0; ii < 2; ii++ ){
+        // Only execute the loop if the node is positive
+        int node = conn[4*i + ii + 2*jj];
+        if (node >= 0){
+          // Set the node location
+          n.info = ii + 2*jj;
 
-    // Go through and find out where the elements are in the afrray
-    for ( int j = 0; j < extra_order*extra_order; j++ ){
-      int elem = extra_order*extra_order*i + j;
+          // Find the enclosing element on the filter mesh
+          const double knots[] = {-1.0, 1.0};
+          TMRQuadrant *filter_quad = filter->findEnclosing(2, knots, &n);
 
-      // Compute the h-size of the finer mesh
-      const int32_t hf = 1 << (TMR_MAX_LEVEL - quads[elem].level);
+          if (filter_quad){
+            // Get the values of the density at the nodes
+            int filter_elem = filter_quad->tag;
+            if (filter_elem >= 0 && filter_elem < num_filter_elements){
+              rho->getValues(order*order,
+                             &filter_conn[order*order*filter_elem],
+                             rho_values);
 
-      for ( int jj = 0; jj < 2; jj++ ){
-        for ( int ii = 0; ii < 2; ii++ ){
-          // Only execute the loop if the node is positive
-          int node = conn[4*elem + ii + 2*jj];
-          if (node < 0){
-            continue;
-          }
+              // Get the size of the filter element
+              const int32_t h = 1 << (TMR_MAX_LEVEL - filter_quad->level);
 
-          double pt[2];
-          pt[0] = -1.0 + 2.0*(quads[elem].x + hf*ii - filter_quads[i].x)/h;
-          pt[1] = -1.0 + 2.0*(quads[elem].y + hf*jj - filter_quads[i].y)/h;
+              double pt[2];
+              pt[0] = -1.0 + 2.0*(quads[i].x + hf*ii - filter_quad->x)/h;
+              pt[1] = -1.0 + 2.0*(quads[i].y + hf*jj - filter_quad->y)/h;
 
-          // Compute the interpolation
-          filter->evalInterp(pt, N);
+              // Compute the interpolation
+              filter->evalInterp(pt, N);
 
-          // Evaluate the local values of rho based on the interpolation
-          memset(rho_local, 0, bsize*sizeof(TacsScalar));
-          for ( int k = 0; k < order*order; k++ ){
-            for ( int kk = 0; kk < bsize; kk++ ){
-              rho_local[kk] += rho_values[k*bsize + kk]*N[k];
-            }
-          }
+              // Evaluate the local values of rho based on the interpolation
+              memset(rho_local, 0, bsize*sizeof(TacsScalar));
+              for ( int k = 0; k < order*order; k++ ){
+                for ( int kk = 0; kk < bsize; kk++ ){
+                  rho_local[kk] += rho_values[k*bsize + kk]*N[k];
+                }
+              }
 
-          // Check if this is an intermediate value of the design variables
-          if (index >= 0){
-            if (rho_local[index] >= cutoff &&
-                rho_local[index] <= 1.0 - cutoff){
-              int nbcs = 1;
-              int vars = 0;
-              TacsScalar value = 1.0;
-              assembler->addBCs(1, &node, nbcs, &vars, &value);
-            }
-          }
-          else {
-            // Loop over all the dimension
-            for ( int kk = 0; kk < bsize; kk++ ){
-              if (rho_local[kk] >= cutoff &&
-                  rho_local[kk] <= 1.0 - cutoff){
-                int nbcs = 1;
-                int vars = 0;
-                TacsScalar value = 1.0;
-                assembler->addBCs(1, &node, nbcs, &vars, &value);
-                break;
+              // Check if this is an intermediate value of the design variables
+              if (index >= 0 && index < bsize){
+                if (rho_local[index] >= cutoff &&
+                    rho_local[index] <= 1.0 - cutoff){
+                  int nbcs = 1;
+                  int vars = 0;
+                  TacsScalar value = 1.0;
+                  assembler->addBCs(1, &node, nbcs, &vars, &value);
+                }
+              }
+              else {
+                // Loop over all the dimension
+                for ( int kk = 0; kk < bsize; kk++ ){
+                  if (rho_local[kk] >= cutoff &&
+                      rho_local[kk] <= 1.0 - cutoff){
+                    int nbcs = 1;
+                    int vars = 0;
+                    TacsScalar value = 1.0;
+                    assembler->addBCs(1, &node, nbcs, &vars, &value);
+                    break;
+                  }
+                }
               }
             }
           }
@@ -268,6 +275,7 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
   int isflexible = 1;
   GMRES *gmres = new GMRES(mat, pc, m, nrestart, isflexible);
   gmres->incref();
+  gmres->setTolerances(1e-12, 1e-30);
 
   TACSBVec *rhs = assembler->createVec();
   TACSBVec *dist = assembler->createVec();
@@ -379,10 +387,10 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
 
   // Set the number of refinements
   int num_refine = 0;
-  if (order == 3){
+  if (order <= 3){
     num_refine = 1;
   }
-  else if (order == 4){
+  else if (order <= 5){
     num_refine = 2;
   }
   else {
@@ -392,7 +400,7 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
   // Refine the forest a number of times
   for ( int i = 0; i < num_refine; i++ ){
     forest->refine();
-    forest->balance();
+    forest->balance(0);
   }
 
   // Balance the forest and create the nodes
@@ -472,66 +480,73 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
   rho->beginDistributeValues();
   rho->endDistributeValues();
 
-  // Loop over all the elements in the filter
-  for ( int i = 0; i < num_filter_elements; i++ ){
-    // Get the array of element variables
-    rho->getValues(order*order*order, &filter_conn[order*order*order*i], rho_values);
+  for ( int i = 0; i < num_elements; i++ ){
+    // Set the node location
+    TMROctant n = octs[i];
+    const int32_t hf = 1 << (TMR_MAX_LEVEL - octs[i].level);
 
-    // Compute the h size
-    const int32_t h = 1 << (TMR_MAX_LEVEL - filter_octs[i].level);
+    for ( int kk = 0; kk < 2; kk++ ){
+      for ( int jj = 0; jj < 2; jj++ ){
+        for ( int ii = 0; ii < 2; ii++ ){
+          // Only execute the loop if the node is positive
+          int node = conn[8*i + ii + 2*jj + 4*kk];
+          if (node >= 0){
+            // Set the node location
+            n.info = ii + 2*jj + 4*kk;
 
-    // Go through and find out where the elements are in the afrray
-    for ( int j = 0; j < extra_order*extra_order*extra_order; j++ ){
-      int elem = extra_order*extra_order*extra_order*i + j;
+            // Find the enclosing element on the filter mesh
+            const double knots[] = {-1.0, 1.0};
+            TMROctant *filter_oct = filter->findEnclosing(2, knots, &n);
 
-      // Compute the h-size of the finer mesh
-      const int32_t hf = 1 << (TMR_MAX_LEVEL - octs[elem].level);
+            if (filter_oct){
+              // Get the values of the density at the nodes
+              int filter_elem = filter_oct->tag;
+              if (filter_elem >= 0 && filter_elem < num_filter_elements){
+                rho->getValues(order*order*order,
+                               &filter_conn[order*order*order*filter_elem],
+                               rho_values);
 
-      for ( int kk = 0; kk < 2; kk++ ){
-        for ( int jj = 0; jj < 2; jj++ ){
-          for ( int ii = 0; ii < 2; ii++ ){
-            // Only execute the loop if the node is positive
-            int node = conn[8*elem + ii + 2*jj + 4*kk];
-            if (node < 0){
-              continue;
-            }
+                // Get the size of the filter element
+                const int32_t h = 1 << (TMR_MAX_LEVEL - filter_oct->level);
 
-            double pt[2];
-            pt[0] = -1.0 + 2.0*(octs[elem].x + hf*ii - filter_octs[i].x)/h;
-            pt[1] = -1.0 + 2.0*(octs[elem].y + hf*jj - filter_octs[i].y)/h;
-            pt[1] = -1.0 + 2.0*(octs[elem].z + hf*kk - filter_octs[i].z)/h;
+                double pt[3];
+                pt[0] = -1.0 + 2.0*(octs[i].x + hf*ii - filter_oct->x)/h;
+                pt[1] = -1.0 + 2.0*(octs[i].y + hf*jj - filter_oct->y)/h;
+                pt[2] = -1.0 + 2.0*(octs[i].z + hf*kk - filter_oct->y)/h;
 
-            // Compute the interpolation
-            filter->evalInterp(pt, N);
+                // Compute the interpolation
+                filter->evalInterp(pt, N);
 
-            // Evaluate the local values of rho based on the interpolation
-            memset(rho_local, 0, bsize*sizeof(TacsScalar));
-            for ( int n = 0; n < order*order*order; n++ ){
-              for ( int nn = 0; nn < bsize; nn++ ){
-                rho_local[nn] += rho_values[n*bsize + nn]*N[n];
-              }
-            }
+                // Evaluate the local values of rho based on the interpolation
+                memset(rho_local, 0, bsize*sizeof(TacsScalar));
+                for ( int k = 0; k < order*order*order; k++ ){
+                  for ( int nk = 0; nk < bsize; nk++ ){
+                    rho_local[nk] += rho_values[k*bsize + nk]*N[k];
+                  }
+                }
 
-            // Check if this is an intermediate value of the design variables
-            if (index >= 0){
-              if (rho_local[index] >= cutoff &&
-                  rho_local[index] <= 1.0 - cutoff){
-                int nbcs = 1;
-                int vars = 0;
-                TacsScalar value = 1.0;
-                assembler->addBCs(1, &node, nbcs, &vars, &value);
-              }
-            }
-            else {
-              // Loop over all the dimension
-              for ( int nn = 0; nn < bsize; nn++ ){
-                if (rho_local[nn] >= cutoff &&
-                    rho_local[nn] <= 1.0 - cutoff){
-                  int nbcs = 1;
-                  int vars = 0;
-                  TacsScalar value = 1.0;
-                  assembler->addBCs(1, &node, nbcs, &vars, &value);
-                  break;
+                // Check if this is an intermediate value of the design variables
+                if (index >= 0 && index < bsize){
+                  if (rho_local[index] >= cutoff &&
+                      rho_local[index] <= 1.0 - cutoff){
+                    int nbcs = 1;
+                    int vars = 0;
+                    TacsScalar value = 1.0;
+                    assembler->addBCs(1, &node, nbcs, &vars, &value);
+                  }
+                }
+                else {
+                  // Loop over all the dimension
+                  for ( int nk = 0; nk < bsize; nk++ ){
+                    if (rho_local[nk] >= cutoff &&
+                        rho_local[nk] <= 1.0 - cutoff){
+                      int nbcs = 1;
+                      int vars = 0;
+                      TacsScalar value = 1.0;
+                      assembler->addBCs(1, &node, nbcs, &vars, &value);
+                      break;
+                    }
+                  }
                 }
               }
             }
@@ -597,11 +612,12 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
   int isflexible = 1;
   GMRES *gmres = new GMRES(mat, pc, m, nrestart, isflexible);
   gmres->incref();
+  gmres->setTolerances(1e-12, 1e-30);
 
   TACSBVec *rhs = assembler->createVec();
-  rhs->incref();
-
   TACSBVec *dist = assembler->createVec();
+  rhs->incref();
+  dist->incref();
 
   // Assemble the matrix
   assembler->assembleJacobian(1.0, 0.0, 0.0, NULL, mat);
@@ -682,4 +698,5 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
   // Deallocate objects
   dist->decref();
   assembler->decref();
-  forest->decref();}
+  forest->decref();
+}
