@@ -423,9 +423,11 @@ for step in range(max_iterations):
     dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
     domain_length = np.sqrt(r*a)
     refine_distance = 0.025*domain_length
-    TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
-                                     domain_length=domain_length, index=-1,
-                                     filename=dist_file)
+    TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
+                             interface_lev=3, interior_lev=2,
+                             domain_length=domain_length, interface_index=-1,
+                             interior_index=0, reverse=True)
+
 
     # Repartition the mesh
     forest.balance(1)

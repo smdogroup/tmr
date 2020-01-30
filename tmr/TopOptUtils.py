@@ -389,8 +389,7 @@ def densityBasedRefine(forest, assembler, index=0,
     elems = assembler.getElements()
 
     for i in range(num_elems):
-        # Extract the constitutive object from the element, if it is defined, otherwise
-        # skip the refinement.
+        # Extract the design variables from the element
         dvs_per_node = elems[i].getDesignVarsPerNode()
         dvs = elems[i].getDesignVars(i)
 
@@ -458,15 +457,103 @@ def approxDistanceRefine(forest, fltr, assembler, refine_distance, index=0,
     num_elems = assembler.getNumElements()
     refine = np.zeros(num_elems, dtype=np.int32)
 
-    # Get the elements from the Assembler object
-    elems = assembler.getElements()
-
     for i in range(num_elems):
         # Apply the refinement criteria
         if dist[i] <= refine_distance:
             refine[i] = 1
         else:
             refine[i] = -1
+
+    # Refine the forest
+    forest.refine(refine, min_lev=min_lev, max_lev=max_lev)
+
+    return
+
+def targetRefine(forest, fltr, assembler, refine_distance,
+                 interface_lev=2, interior_lev=1,
+                 interface_index=-1, interior_index=0, reverse=False,
+                 domain_length=1.0, tfactor=0.05, cutoff=0.15,
+                 filename=None, min_lev=0, max_lev=TMR.MAX_LEVEL):
+    """
+    Apply a target-based refinement strategy.
+
+    This refinement strategy employs a targeted refinement strategy. The goal is to
+    refine the interface elements, defined from an approximate distance calculation,
+    and the interior elements, defined as those elements with a given threshold of
+    the density field that are not close to the interface, to a prescribed level at
+    the first iteration. All other elements are coarsened aggressively.
+
+    Note: The interface and interior can be computed using different indices in
+    multimaterial optimization. When the interface index is negative, all materials are
+    considered during the interface distance calculation.
+
+    Args:
+        forest (QuadForest or OctForest): OctForest or QuadForest to refine
+        filtr (QuadForest or OctForest): OctForest or QuadForest for the filter object
+        assembler (Assembler): The TACS.Assembler object associated with forest
+        refine_distance (float): Refine all elements within this distance
+        interface_lev (int): Target interface refinement level
+        interior_lev (int): Target interior refinement level
+        interface_index (int): Design variable component index for the interface problem
+        interior_index (int): Design variable component index for the interior
+        reverse (boolean): Reverse the sense of the interior refinement
+        tfactor (float): Factor applied to the domain_length for computing the approx dist.
+        cutoff (float): Cutoff to indicate structural interface
+        filename (str): File name for the approximate distance calculation
+        min_lev (int): Minimum refinement level
+        max_lev (int): Maximum refinement level
+    """
+
+    # Set up and solve for an approximate level set function
+    x = assembler.createDesignVec()
+    assembler.getDesignVars(x)
+
+    # Approximate the distance to the boundary
+    dist = TMR.ApproximateDistance(fltr, x, index=interface_index, cutoff=cutoff,
+                                   t=tfactor*domain_length, filename=filename)
+
+    # Create refinement array
+    num_elems = assembler.getNumElements()
+    refine = np.zeros(num_elems, dtype=np.int32)
+
+    # Compute the levels
+    if isinstance(forest, TMR.OctForest):
+        octants = forest.getOctants()
+        lev = np.zeros(len(octants))
+        for i, oc in enumerate(octants):
+            lev[i] = oc.level
+    elif isinstance(forest, TMR.QuadForest):
+        quads = forest.getQuadrants()
+        lev = np.zeros(len(quads))
+        for i, quad in enumerate(quads):
+            lev[i] = quad.level
+
+    # Get the elements from the Assembler object
+    elems = assembler.getElements()
+
+    for i in range(num_elems):
+        # Apply the refinement criteria
+        if dist[i] <= refine_distance:
+            refine[i] = interface_lev - lev[i]
+        else:
+            # Now check whether this is in the interior or exterior of
+            # the domain
+            dvs_per_node = elems[i].getDesignVarsPerNode()
+            dvs = elems[i].getDesignVars(i)
+
+            # Apply the refinement criteria
+            if reverse:
+                value = np.min(dvs[interior_index::dvs_per_node])
+                if value >= 1.0 - cutoff:
+                    refine[i] = -1
+                elif value <= cutoff:
+                    refine[i] = interior_lev - lev[i]
+            else:
+                value = np.max(dvs[interior_index::dvs_per_node])
+                if value >= 1.0 - cutoff:
+                    refine[i] = interior_lev - lev[i]
+                elif value <= cutoff:
+                    refine[i] = -1
 
     # Refine the forest
     forest.refine(refine, min_lev=min_lev, max_lev=max_lev)
