@@ -213,7 +213,8 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0,
     basis = elems[0].getElementBasis()
 
     # Create the traction objects that will be used later..
-    Fn = 1000e3 # Normal heat flux
+    # Fn = 1000e3 # Normal heat flux
+    Fn = 0.0
     Ty = -2.5e6 # Traction force component in the y-direction
     vpn = elems[0].getVarsPerNode()
     trac = [0.0, Ty, Fn]
@@ -239,6 +240,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0,
     if use_compliance:
         obj_array = [ 0.1 ]
         compliance = functions.Compliance(assembler)
+        # compliance.setComplianceType(elements.TOTAL_STRAIN_ENERGY_DENSITY)
         problem.setObjective(obj_array, [compliance])
     else:
         obj_array = [ 1.0e3 ]
@@ -296,7 +298,7 @@ optimization_options = {
 # Create an argument parser to read in arguments from the command line
 p = argparse.ArgumentParser()
 p.add_argument('--prefix', type=str, default='./results')
-p.add_argument('--vol_frac', type=float, default=0.25)
+p.add_argument('--vol_frac', type=float, default=0.3)
 p.add_argument('--htarget', type=float, default=2.5e-3)
 p.add_argument('--max_opt_iters', type=int, nargs='+',
                default=[5])
@@ -335,7 +337,7 @@ alpha = 23.5e-6
 kcond = 130.0
 ys = 450e6
 mat1 = constitutive.MaterialProperties(rho=rho, E=E,
-                                       nu=nu, alpha=alpha,
+                                       nu=nu, alpha=alpha/(1.0 - 2*nu),
                                        kappa=kcond, ys=ys)
 
 # Create the second material properties object
@@ -346,7 +348,7 @@ alpha = 0.5*23.5e-6
 kcond = 65.0
 ys = 275e6
 mat2 = constitutive.MaterialProperties(rho=rho, E=E,
-                                       nu=nu, alpha=alpha,
+                                       nu=nu, alpha=alpha/(1.0 - 2*nu),
                                        kappa=kcond, ys=ys)
 
 prop_list = [mat1, mat2]
@@ -367,7 +369,7 @@ props = TMR.StiffnessProperties(prop_list, q=args.q_penalty, qtemp=0.0,
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed', [0, 1, 2], [0.0, 0.0, 0.0])
+bcs.addBoundaryCondition('fixed', [0, 1, 2], [0.0, 0.0, 50.0])
 
 # Create the initial forest
 forest = create_forest(comm, args.init_depth, args.htarget)
@@ -427,7 +429,6 @@ for step in range(max_iterations):
                              interface_lev=3, interior_lev=2,
                              domain_length=domain_length, interface_index=-1,
                              interior_index=0, reverse=True)
-
 
     # Repartition the mesh
     forest.balance(1)
