@@ -426,7 +426,7 @@ for step in range(max_iterations):
     domain_length = np.sqrt(r*a)
     refine_distance = 0.025*domain_length
     TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
-                             interface_lev=2, interior_lev=1,
+                             interface_lev=3, interior_lev=2,
                              domain_length=domain_length, interface_index=-1,
                              interior_index=0, reverse=True, filename=dist_file)
 
