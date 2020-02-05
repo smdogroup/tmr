@@ -45,6 +45,17 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
   int num_filter_elements = 0;
   filter->getNodeConn(&filter_conn, &num_filter_elements);
 
+  // Get the block size
+  int bsize = rho->getBlockSize();
+
+  double *N = new double[ order*order ];
+  TacsScalar *rho_values = new TacsScalar[ bsize*order*order ];
+  TacsScalar *rho_local = new TacsScalar[ bsize ];
+
+  // Distribute the design values
+  rho->beginDistributeValues();
+  rho->endDistributeValues();
+
   TMRQuadForest *forest = filter->duplicate();
   forest->incref();
 
@@ -63,17 +74,82 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
     num_refine = 3;
   }
 
-  // Refine the forest a number of times
-  for ( int i = 0; i < num_refine; i++ ){
-    forest->refine();
-    forest->balance(0);
+  // Search for those filter elements that need to be refined...
+  int *refine = new int[ num_filter_elements ];
+
+  // Flag those nodes which have low, high or intermediate values
+  int *low = new int[ bsize ];
+  int *high = new int[ bsize ];
+  int *intermediate = new int[ bsize ];
+
+  for ( int i = 0; i < num_filter_elements; i++ ){
+    rho->getValues(order*order, &filter_conn[order*order*i], rho_values);
+
+    // Reset the flags
+    for ( int kk = 0; kk < bsize; kk++ ){
+      low[kk] = 0;
+      high[kk] = 0;
+      intermediate[kk] = 0;
+    }
+
+    // Scan through all the local node values for the filter
+    for ( int j = 0; j < order*order; j++ ){
+      if (index >= 0 && index < bsize){
+        if (rho_values[bsize*j + index] < cutoff){
+          low[0] = 1;
+        }
+        else if (rho_values[bsize*j + index] > 1.0 - cutoff){
+          high[0] = 1;
+        }
+        else {
+          intermediate[0] = 1;
+        }
+      }
+      else {
+        for ( int kk = 0; kk < bsize; kk++ ){
+          if (rho_values[bsize*j + kk] < cutoff){
+            low[kk] = 1;
+          }
+          else if (rho_values[bsize*j + kk] > 1.0 - cutoff){
+            high[kk] = 1;
+          }
+          else {
+            intermediate[kk] = 1;
+          }
+        }
+      }
+    }
+
+    if (index >= 0 && index < bsize){
+      if ((low[0] && high[0]) || intermediate[0]){
+        refine[i] = num_refine;
+      }
+      else {
+        refine[i] = 0;
+      }
+    }
+    else {
+      refine[i] = 0;
+      for ( int kk = 0; kk < bsize; kk++ ){
+        if ((low[kk] && high[kk]) || intermediate[kk]){
+          refine[i] = num_refine;
+        }
+      }
+    }
   }
+
+  delete [] low;
+  delete [] high;
+  delete [] intermediate;
+
+  // Refine the forest and balance it
+  forest->refine(refine);
+  delete [] refine;
+
+  forest->balance(0);
 
   // Balance the forest and create the nodes
   forest->createNodes();
-
-  // Compute the extra order
-  int extra_order = 1 << num_refine;
 
   // Get the connectivity
   const int *conn;
@@ -134,17 +210,6 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
   TMRQuadrantArray *quad_array;
   forest->getQuadrants(&quad_array);
   quad_array->getArray(&quads, NULL);
-
-  // Get the block size
-  int bsize = rho->getBlockSize();
-
-  double *N = new double[ order*order ];
-  TacsScalar *rho_values = new TacsScalar[ bsize*order*order ];
-  TacsScalar *rho_local = new TacsScalar[ bsize ];
-
-  // Distribute the design values
-  rho->beginDistributeValues();
-  rho->endDistributeValues();
 
   for ( int i = 0; i < num_elements; i++ ){
     // Set the node location
@@ -304,15 +369,13 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
   dist->endDistributeValues();
 
   // Extract the actual distance using the transformation
-  for ( int i = 0; i < num_filter_elements; i++ ){
+  for ( int i = 0, index = 0; i < num_filter_elements; i++ ){
     double max_val = -1e20;
 
-    for ( int j = 0; j < extra_order*extra_order; j++ ){
-      int elem = extra_order*extra_order*i + j;
-
+    while (filter_quads[i].contains(&quads[index])){
       for ( int ii = 0; ii < 4; ii++ ){
         // Only execute the loop if the node is positive
-        int node = conn[4*elem + ii];
+        int node = conn[4*index + ii];
         if (node >= 0){
           TacsScalar value;
           dist->getValues(1, &node, &value);
@@ -321,6 +384,8 @@ void TMRApproximateDistance( TMRQuadForest *filter, int index,
           }
         }
       }
+
+      index++;
     }
 
     min_dist[i] = 1e20;
@@ -641,7 +706,7 @@ void TMRApproximateDistance( TMROctForest *filter, int index,
   dist->endDistributeValues();
 
   // Extract the actual distance using the transformation
-  for ( int i = 0; i < num_filter_elements; i++ ){
+  for ( int i = 0, index = 0; i < num_filter_elements; i++ ){
     double max_val = -1e20;
 
     for ( int j = 0; j < extra_order*extra_order*extra_order; j++ ){

@@ -240,7 +240,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0,
     if use_compliance:
         obj_array = [ 0.1 ]
         compliance = functions.Compliance(assembler)
-        # compliance.setComplianceType(elements.TOTAL_STRAIN_ENERGY_DENSITY)
+        compliance.setComplianceType(elements.TOTAL_STRAIN_ENERGY_DENSITY)
         problem.setObjective(obj_array, [compliance])
     else:
         obj_array = [ 1.0e3 ]
@@ -334,7 +334,7 @@ rho = 2600.0*t
 E = 70e9*t
 nu = 0.3
 alpha = 23.5e-6
-kcond = 130.0
+kcond = 130.0*t
 ys = 450e6
 mat1 = constitutive.MaterialProperties(rho=rho, E=E,
                                        nu=nu, alpha=alpha/(1.0 - 2*nu),
@@ -345,7 +345,7 @@ rho = 1300.0*t
 E = 35e9*t
 nu = 0.3
 alpha = 0.5*23.5e-6
-kcond = 65.0
+kcond = 65.0*t
 ys = 275e6
 mat2 = constitutive.MaterialProperties(rho=rho, E=E,
                                        nu=nu, alpha=alpha/(1.0 - 2*nu),
@@ -426,9 +426,9 @@ for step in range(max_iterations):
     domain_length = np.sqrt(r*a)
     refine_distance = 0.025*domain_length
     TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
-                             interface_lev=3, interior_lev=2,
+                             interface_lev=2, interior_lev=1,
                              domain_length=domain_length, interface_index=-1,
-                             interior_index=0, reverse=True)
+                             interior_index=0, reverse=True, filename=dist_file)
 
     # Repartition the mesh
     forest.balance(1)
