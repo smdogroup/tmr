@@ -797,7 +797,10 @@ class TopologyOptimizer:
                 max_qn_subspace = 1
 
             # Create the quasi-Newton method
-            qn = ParOpt.LBFGS(problem, subspace=max_qn_subspace)
+            if qn_type == ParOpt.SR1:
+                qn = ParOpt.LSR1(problem, subspace=max_qn_subspace)
+            else:
+                qn = ParOpt.LBFGS(problem, subspace=max_qn_subspace)
 
             # Retrieve the options for the trust region problem
             tr_min_size = self.options['tr_min_size']
