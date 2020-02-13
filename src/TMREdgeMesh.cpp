@@ -605,6 +605,37 @@ int TMREdgeMesh::setNodeNums( int *num ){
   return 0;
 }
 
+void TMREdgeMesh::writeToVTK( const char *filename ){
+  // Write out the vtk file
+  FILE *fp = fopen(filename, "w");
+  if (fp){
+    fprintf(fp, "# vtk DataFile Version 3.0\n");
+    fprintf(fp, "vtk output\nASCII\n");
+    fprintf(fp, "DATASET UNSTRUCTURED_GRID\n");
+
+    // Write out the points
+    fprintf(fp, "POINTS %d float\n", npts);
+    for ( int k = 0; k < npts; k++ ){
+      // Write out the point
+      fprintf(fp, "%e %e %e\n", X[k].x, X[k].y, X[k].z);
+    }
+
+    // Write out the cell values
+    fprintf(fp, "\nCELLS %d %d\n", npts-1, 3*(npts-1));
+    for ( int k = 0; k < npts-1; k++ ){
+      fprintf(fp, "2 %d %d\n", k, k+1);
+    }
+
+    // Write out the cell types
+    fprintf(fp, "\nCELL_TYPES %d\n", npts-1);
+    for ( int k = 0; k < npts-1; k++ ){
+      fprintf(fp, "%d\n", 3);
+    }
+
+    fclose(fp);
+  }
+}
+
 /*
   Retrieve the internal node numbers, associated with the same
   set of points/same order as the getMeshPoints code

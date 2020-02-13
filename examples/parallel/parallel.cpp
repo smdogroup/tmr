@@ -46,9 +46,9 @@ int main( int argc, char *argv[] ){
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
-  /*
   MPI_Comm comm = MPI_COMM_WORLD;
   TMRQuadForest *forest = new TMRQuadForest(comm);
+  forest->incref();
     
   // Set the connectivity
   int num_nodes = 8;
@@ -61,8 +61,7 @@ int main( int argc, char *argv[] ){
   forest->balance(1);
 
   // Create the nodes
-  int order = 2;
-  forest->createNodes(order);
+  forest->createNodes();
 
   // Print out the forrest using the quadrants
   int rank;
@@ -102,8 +101,8 @@ int main( int argc, char *argv[] ){
     fprintf(fp, "%d %d %d %d\n", 4*k+1, 4*k+2, 4*k+4, 4*k+3);
   }
 
-  delete forest;
-  */
+  forest->decref();
+
   TMRFinalize();
   MPI_Finalize();
   return (0);

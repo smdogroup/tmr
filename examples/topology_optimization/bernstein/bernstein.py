@@ -354,8 +354,8 @@ mat2 = constitutive.MaterialProperties(rho=rho, E=E,
 prop_list = [mat1, mat2]
 
 # Set the fixed mass
-max_density = 0.5*(2600.0 + 1300.0)
-initial_mass = vol*max_density
+average_density = 0.5*(2600.0 + 1300.0)
+initial_mass = vol*average_density
 m_fixed = vol_frac*initial_mass
 
 # Set the number of variables per node

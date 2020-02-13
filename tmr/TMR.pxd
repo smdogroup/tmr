@@ -267,6 +267,7 @@ cdef extern from "TMREdgeMesh.h":
     cdef cppclass TMREdgeMesh(TMREntity):
         TMREdgeMesh(MPI_Comm, TMREdge*, TMRPoint*, int)
         void mesh(TMRMeshOptions, TMRElementFeatureSize*)
+        void writeToVTK(const char*)
 
 cdef extern from "TMRFaceMesh.h":
     cdef cppclass TMRFaceMesh(TMREntity):

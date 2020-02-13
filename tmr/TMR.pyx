@@ -487,6 +487,21 @@ cdef class Edge:
         """
         self.ptr.setMesh(mesh.ptr)
 
+    def getMesh(self):
+        """
+        getMesh(self)
+
+        Set the EdgeMesh object associated with the Edge
+
+        Return:
+            mesh (EdgeMesh): The EdgeMesh object set for this Face
+        """
+        cdef TMREdgeMesh *emesh
+        self.ptr.getMesh(&emesh)
+        if emesh != NULL:
+            return _init_EdgeMesh(emesh)
+        return None
+
     def setCopySource(self, Edge edge):
         """
         setCopySource(self, e)
@@ -1038,7 +1053,7 @@ cdef class Face:
 
         Set the FaceMesh object associated with the Face
 
-        Args:
+        Returns:
             mesh (FaceMesh): The FaceMesh object set for this Face
         """
         cdef TMRFaceMesh *fmesh
@@ -1566,22 +1581,43 @@ cdef class BsplinePcurve(Pcurve):
 
 cdef class BsplineSurface(Surface):
     def __cinit__(self, np.ndarray[double, ndim=3, mode='c'] pts,
+                  np.ndarray[double, ndim=1, mode='c'] tu=None,
+                  np.ndarray[double, ndim=1, mode='c'] tv=None,
                   int ku=4, int kv=4):
         cdef int nx = pts.shape[0]
         cdef int ny = pts.shape[1]
-        cdef kx = ku
-        cdef ky = kv
-        cdef TMRPoint* p = <TMRPoint*>malloc(nx*ny*sizeof(TMRPoint))
+        cdef int kx = ku
+        cdef int ky = kv
+        cdef double *Tu = NULL
+        cdef double *Tv = NULL
+        cdef TMRPoint* p = NULL
         if kx > nx:
             kx = nx
         if ky > ny:
             ky = ny
+
+        # Set the points
+        p = <TMRPoint*>malloc(nx*ny*sizeof(TMRPoint))
         for j in range(ny):
             for i in range(nx):
                 p[i + j*nx].x = pts[i,j,0]
                 p[i + j*nx].y = pts[i,j,1]
                 p[i + j*nx].z = pts[i,j,2]
-        self.ptr = new TMRBsplineSurface(nx, ny, kx, ky, p)
+
+        self.ptr = NULL
+        if tu is not None and len(tu) != nx+kx:
+            errmsg = 'Incorrect BsplineSurface tu knot length'
+            raise ValueError(errmsg)
+        elif tu is not None:
+            Tu = <double*>tu.data
+
+        if tv is not None and len(tv) != ny+ky:
+            errmsg = 'Incorrect BsplineSurface tv knot length'
+            raise ValueError(errmsg)
+        elif tv is not None:
+            Tv = <double*>tv.data
+
+        self.ptr = new TMRBsplineSurface(nx, ny, kx, ky, Tu, Tv, p)
         self.ptr.incref()
         free(p)
 
@@ -2431,22 +2467,25 @@ cdef class EdgeMesh:
     This is the class that stores the node numbers along an edge
     """
     cdef TMREdgeMesh *ptr
-    def __cinit__(self, MPI.Comm comm, Edge e,
+    def __cinit__(self, MPI.Comm comm=None, Edge e=None,
                   np.ndarray[double, ndim=2, mode='c'] _X=None):
-        cdef MPI_Comm c_comm = comm.ob_mpi
+        cdef MPI_Comm c_comm = NULL
         cdef TMRPoint *X = NULL
         cdef int npts = 0
-        if _X is not None:
-            npts = _X.shape[0]
-            X = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
-            for i in range(npts):
-                X[i].x = _X[i,0]
-                X[i].y = _X[i,1]
-                X[i].z = _X[i,2]
-        self.ptr = new TMREdgeMesh(c_comm, e.ptr, X, npts)
-        if X:
-            free(X)
-        self.ptr.incref()
+        self.ptr = NULL
+        if comm is not None and e is not None:
+            c_comm = comm.ob_mpi
+            if _X is not None:
+                npts = _X.shape[0]
+                X = <TMRPoint*>malloc(npts*sizeof(TMRPoint))
+                for i in range(npts):
+                    X[i].x = _X[i,0]
+                    X[i].y = _X[i,1]
+                    X[i].z = _X[i,2]
+            self.ptr = new TMREdgeMesh(c_comm, e.ptr, X, npts)
+            if X != NULL:
+                free(X)
+            self.ptr.incref()
 
     def __dealloc__(self):
         pass
@@ -2462,6 +2501,17 @@ cdef class EdgeMesh:
             self.ptr.mesh(opts.ptr, fs)
         fs.decref()
 
+    def writeToVTK(self, fname):
+        cdef char *filename = tmr_convert_str_to_chars(fname)
+        self.ptr.writeToVTK(filename)
+
+cdef _init_EdgeMesh(TMREdgeMesh *ptr):
+    em = EdgeMesh()
+    em.ptr = ptr
+    if ptr != NULL:
+        em.ptr.incref()
+    return em
+
 cdef class FaceMesh:
     """
     This is the class that stores the structured/unstructured surface mesh
@@ -2475,6 +2525,7 @@ cdef class FaceMesh:
         cdef int *quads = NULL
         cdef int npts = 0
         cdef int nquads = 0
+        self.ptr = NULL
         if _X is not None and _quads is not None:
             c_comm = comm.ob_mpi
             npts = _X.shape[0]
@@ -3871,11 +3922,11 @@ cdef class QuadTopoCreator:
         cdef TMRQuadForest *filtr = self.ptr.getFilter()
         return _init_QuadForest(filtr)
 
-cdef TACSElement* _createQuadConformTopoElement( void *_self, int order,
-                                                 TMRQuadrant *quad,
-                                                 int nweights,
-                                                 const int *index,
-                                                 TMRQuadForest *filtr ):
+cdef TACSElement* _createQuadConformTopoElement(void *_self, int order,
+                                                TMRQuadrant *quad,
+                                                int nweights,
+                                                const int *index,
+                                                TMRQuadForest *filtr):
     cdef TACSElement *elem = NULL
     q = Quadrant()
     q.quad.x = quad.x
