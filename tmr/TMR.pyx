@@ -4665,7 +4665,7 @@ cdef int _getboundarystencil(void *_self, int diag,
     return fail
 
 cdef class HelmholtzPUFilter(TopoFilter):
-    def __cinit__(self, int N, list assemblers, list filters):
+    def __cinit__(self, int N, list assemblers, list filters, *args, **kwargs):
         cdef int nlevels = 0
         cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL

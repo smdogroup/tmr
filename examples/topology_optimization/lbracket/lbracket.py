@@ -6,168 +6,129 @@ from tacs import TACS, elements, constitutive, functions
 import numpy as np
 import argparse
 import os
+from scipy.optimize import minimize
 
 class OptWeights:
-    def __init__(self, diag, X, H, weights=None):
+    def __init__(self, diag, X, H):
         self.diag = diag
         self.X = X
-        n = self.X.shape[0]
-
-        # Account for the weighting (if supplied)
-        if weights is None:
-            self.weights = np.ones(n)
-        else:
-            self.weights = np.array(weights)
+        self.n = self.X.shape[0]
 
         # Compute the normalization
-        self.delta = 1.0 # np.max(np.absolute(self.X - self.X[self.diag,:]))
-
-        # Check if it is 2d or 3d
-        if self.X.shape[1] == 2:
-            # Compute the matrix of basis functions
-            A = np.zeros((n, 6))
-            for i in range(n):
-                dx = (self.X[i,0] - self.X[self.diag,0])/self.delta
-                dy = (self.X[i,1] - self.X[self.diag,1])/self.delta
-
-                A[i,0] = 1.0
-                A[i,1] = dx
-                A[i,2] = dy
-                A[i,3] = 0.5*dx**2
-                A[i,4] = 0.5*dy**2
-                A[i,5] = dx*dy
-
-            # Populate the d vector
-            d = np.zeros(6)
-            d[3] = H[0,0]
-            d[4] = H[1,1]
-            d[5] = 2*H[0,1]
+        if len(self.X.shape) == 1:
+            self.delta = np.max(np.absolute(self.X - self.X[self.diag]))
         else:
-            # Compute the matrix of basis functions
-            A = np.zeros((n, 10))
-            for i in range(n):
-                dx = (self.X[i,0] - self.X[self.diag,0])/self.delta
-                dy = (self.X[i,1] - self.X[self.diag,1])/self.delta
-                dz = (self.X[i,2] - self.X[self.diag,2])/self.delta
+            self.delta = np.sqrt(np.max(
+                np.sum((self.X - self.X[self.diag,:])*(self.X - self.X[self.diag,:]), axis=1)))
 
-                A[i,0] = 1.0
-                A[i,1] = dx
-                A[i,2] = dy
-                A[i,3] = dz
-                A[i,4] = 0.5*dx**2
-                A[i,5] = 0.5*dy**2
-                A[i,6] = 0.5*dz**2
-                A[i,7] = dy*dz
-                A[i,8] = dx*dz
-                A[i,9] = dx*dy
+        self.dim = 3
+        if len(self.X.shape) == 1 or self.X.shape[1] == 1:
+            self.dim = 1
 
-            # Populate the d vector
-            d = np.zeros(10)
-            d[4] = H[0,0]
-            d[5] = H[1,1]
-            d[6] = H[2,2]
-            d[7] = 2*H[1,2]
-            d[8] = 2*H[0,2]
-            d[9] = 2*H[0,1]
+            # Compute the constraint matrix
+            A = np.zeros((2, self.n-1))
 
-        self.d = d
+            # Populate the b vector
+            b = np.zeros(2)
+            b[1] = H[0,0]
+
+            index = 0
+            for i in range(self.n):
+                if i != self.diag:
+                    dx = (self.X[i] - self.X[self.diag])/self.delta
+
+                    A[0,index] = dx
+                    A[1,index] = 0.5*dx**2
+                    index += 1
+
+        elif self.X.shape[1] == 2:
+            self.dim = 2
+
+            # Compute the constraint matrix
+            A = np.zeros((5, self.n-1))
+
+            # Populate the b vector
+            b = np.zeros(5)
+            b[2] = H[0,0]
+            b[3] = H[1,1]
+            b[4] = 2.0*H[0,1]
+
+            index = 0
+            for i in range(self.n):
+                if i != self.diag:
+                    dx = (self.X[i,0] - self.X[self.diag,0])/self.delta
+                    dy = (self.X[i,1] - self.X[self.diag,1])/self.delta
+
+                    A[0,index] = dx
+                    A[1,index] = dy
+                    A[2,index] = 0.5*dx**2
+                    A[3,index] = 0.5*dy**2
+                    A[4,index] = dx*dy
+                    index += 1
+        else:
+            # Compute the constraint matrix
+            A = np.zeros((9, self.n-1))
+
+            # Populate the b vector
+            b = np.zeros(9)
+            b[3] = H[0,0]
+            b[4] = H[1,1]
+            b[5] = H[2,2]
+            b[6] = 2*H[1,2]
+            b[7] = 2*H[0,2]
+            b[8] = 2*H[0,1]
+
+            index = 0
+            for i in range(self.n):
+                if i != self.diag:
+                    dx = (self.X[i,0] - self.X[self.diag,0])/self.delta
+                    dy = (self.X[i,1] - self.X[self.diag,1])/self.delta
+                    dz = (self.X[i,2] - self.X[self.diag,2])/self.delta
+
+                    A[0,index] = dx
+                    A[1,index] = dy
+                    A[2,index] = dz
+
+                    A[3,index] = 0.5*dx**2
+                    A[4,index] = 0.5*dy**2
+                    A[5,index] = 0.5*dz**2
+
+                    A[6,index] = dy*dz
+                    A[7,index] = dx*dz
+                    A[8,index] = dx*dy
+                    index += 1
+
+        self.b = b
         self.A = A
 
         return
 
     def obj_func(self, w):
-        return 0.5*np.sum(self.weights*w**2)
+        return 0.5*np.sum(w**2)
 
     def obj_func_der(self, w):
-        return self.weights*w
+        return w
 
     def con_func(self, w):
         '''Compute the coefficients'''
-        n = len(w)
-        W = np.diag(w)
-        D = np.linalg.pinv(np.dot(self.A.T, np.dot(W, self.A)))
-        alphas = np.dot(self.d, np.dot(D, np.dot(self.A.T, W)))
-        alphas[self.diag] *= -1.0
-
-        return alphas
+        return np.dot(self.A, w) - self.b
 
     def con_func_der(self, w):
         '''Compute the derivative of the coefficients'''
-        n = len(w)
-        W = np.diag(w)
-        D = np.linalg.pinv(np.dot(self.A.T, np.dot(W, self.A)))
+        return self.A
 
-        # Writing D = (A^{T}*W*A)^{-1}
-        # dN/dw_{i} = -D*(A^{T}*ei*ei^{T}*A)*D*A^{T}*W
-        J = np.zeros((n, n))
+    def set_alphas(self, w, alpha):
+        alpha[:] = 0.0
+        index = 0
+        for i in range(self.n):
+            if i != self.diag:
+                alpha[i] = w[index]/self.delta**2
+                alpha[self.diag] += w[index]/self.delta**2
+                index += 1
 
-        for i in range(n):
-            C = -np.dot(D, np.dot(np.outer(self.A[i,:], self.A[i,:]), D))
-            e = np.zeros(n)
-            e[i] = 1.0
+        alpha[self.diag] += 1.0
 
-            dNdwi = (np.dot(C, np.dot(self.A.T, W)) +
-                     np.dot(D, np.dot(self.A.T, np.diag(e))))
-            J[:n,i] = np.dot(self.d, dNdwi)
-
-        J[self.diag,:] *= -1.0
-
-        return J
-
-    def get_alpha(self, w):
-        # Compute the matrix of basis functions
-
-        # if self.X.shape[1] == 2:
-        #     A = self.A
-        #     for i in range(A.shape[0]):
-        #         dx = self.X[i,0] - self.X[self.diag,0]
-        #         dy = self.X[i,1] - self.X[self.diag,1]
-        #         A[i,0] = 1.0
-        #         A[i,1] = dx
-        #         A[i,2] = dy
-        #         A[i,3] = 0.5*dx**2
-        #         A[i,4] = 0.5*dy**2
-        #         A[i,5] = dx*dy
-        # else:
-        #     A = self.A
-        #     for i in range(A.shape[0]):
-        #         dx = self.X[i,0] - self.X[self.diag,0]
-        #         dy = self.X[i,1] - self.X[self.diag,1]
-        #         dz = self.X[i,2] - self.X[self.diag,2]
-        #         A[i,0] = 1.0
-        #         A[i,1] = dx
-        #         A[i,2] = dy
-        #         A[i,3] = dz
-        #         A[i,4] = 0.5*dx**2
-        #         A[i,5] = 0.5*dy**2
-        #         A[i,6] = 0.5*dz**2
-        #         A[i,7] = dy*dz
-        #         A[i,8] = dx*dz
-        #         A[i,9] = dx*dy
-
-        # while True:
-        #     n = A.shape[0]
-        #     W = np.diag(w)
-        #     D = np.linalg.pinv(np.dot(A.T, np.dot(W, A)))
-        #     alphas = np.dot(self.d, np.dot(D, np.dot(A.T, W)))
-        #     alphas[self.diag] *= -1.0
-
-        #     index = -1
-        #     for i in range(n):
-        #         if i != self.diag and alphas[i] < 0.0:
-        #             index = i
-        #             break
-
-        #     if index == -1:
-        #         break
-        #     else:
-        #         w[index] = 0.0
-
-        alphas = np.zeros(self.X.shape[0])
-        alphas[:] = 1.0/(self.X.shape[0]-1)
-        alphas[self.diag] = 2.0
-
-        return alphas
+        return
 
 class Mfilter(TMR.HelmholtzPUFilter):
     def __init__(self, N, assemblers, filter, vars_per_node=1):
@@ -177,20 +138,28 @@ class Mfilter(TMR.HelmholtzPUFilter):
         '''
         Get an interior stencil point.
         '''
-        r = 0.2
-        H = r**2*np.eye(3)
+        self.r = 0.1
+        H = self.r**2*np.eye(3)
 
         # Reshape the values in the matrix
         X = X.reshape((-1, 3))
+        X = X[:,:2]
         n = X.shape[0]
 
         # Set up the optimization problem
         opt = OptWeights(diag, X, H)
 
-        # Compute the number of nodes
-        w0 = np.ones(n)/n
-        alpha[:] = opt.get_alpha(w0)
-        alpha[diag] += 1.0
+        # Set the bounds and initial point
+        w0 = np.ones(n-1)
+        bounds = []
+        for i in range(n-1):
+            bounds.append((0, None))
+
+        res = minimize(opt.obj_func, w0, jac=opt.obj_func_der, method='SLSQP', bounds=bounds,
+                       constraints={'type': 'eq', 'fun': opt.con_func, 'jac': opt.con_func_der})
+
+        # Set the optimized alpha values
+        opt.set_alphas(res.x, alpha)
 
         return
 
@@ -198,41 +167,47 @@ class Mfilter(TMR.HelmholtzPUFilter):
         '''
         Get a sentcil point on the domain boundary
         '''
-        r = 0.2
-        H = r**2*np.eye(2)
+        self.r = 0.1
+        H = self.r**2*np.eye(2)
 
         # Reshape the values in the matrix
         X = X.reshape((-1, 3))
+        X = X[:,:2]
         n = X.shape[0]
 
-        # Compute the normalization
-        delta = np.max(np.absolute(X - X[diag,:]))
+        # # Reduce the problem to a 2d problem on linearization of the
+        # # the domain boundary. First, compute an arbitrary direction
+        # # that is not aligned along the normal direction
+        # index = np.argmin(np.absolute(normal))
+        # t = np.zeros(3)
+        # t[index] = 1.0
 
-        # Reduce the problem to a 2d problem on linearization of the
-        # the domain boundary. First, compute an arbitrary direction
-        # that is not aligned along the normal direction
-        index = np.argmin(np.absolute(normal))
-        t = np.zeros(3)
-        t[index] = 1.0
+        # # Compute the in-plane directions (orthogonal to the normal direction)
+        # t2 = np.cross(t, normal)
+        # t1 = np.cross(normal, t2)
 
-        # Compute the in-plane directions (orthogonal to the normal direction)
-        t2 = np.cross(t, normal)
-        t1 = np.cross(normal, t2)
+        # # Reduce the problem on the boundary
+        # Xt = np.zeros(n, 2))
+        # Xt[:,0] = np.dot(X - X[diag,:], t1)
+        # Xt[:,1] = np.dot(X - X[diag,:], t2)
 
-        # Reduce the problem on the boundary
-        Xt = np.zeros((n, 2))
-        Xt[:,0] = np.dot(X - X[diag,:], t1)
-        Xt[:,1] = np.dot(X - X[diag,:], t2)
-
-        weights = 1.0/(1.0 + np.absolute(np.dot(X - X[diag,:], normal)/delta))
+        t = np.array([normal[1], -normal[0]])
+        Xt = np.dot(X - X[diag,:], t)
 
         # Set up the optimization problem
-        opt = OptWeights(diag, Xt, H, weights=weights)
+        opt = OptWeights(diag, Xt, H)
 
-        # Initial guess
-        w0 = np.ones(n)/n
-        alpha[:] = opt.get_alpha(w0)
-        alpha[diag] += 1.0
+        # Set the bounds and initial point
+        w0 = np.ones(n-1)
+        bounds = []
+        for i in range(n-1):
+            bounds.append((0, None))
+
+        res = minimize(opt.obj_func, w0, jac=opt.obj_func_der, method='SLSQP', bounds=bounds,
+                       constraints={'type': 'eq', 'fun': opt.con_func, 'jac': opt.con_func_der})
+
+        # Set the optimized alpha values
+        opt.set_alphas(res.x, alpha)
 
         return
 
@@ -370,6 +345,11 @@ def create_forest(comm, depth, htarget):
 
     return forest
 
+def filter_callback(assemblers, filters):
+    N = 20
+    r = 0.1
+    return Mfilter(N, assemblers, filters)
+
 def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
@@ -393,7 +373,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     obj = CreatorCallback(bcs, props)
 
     # Create a conforming filter
-    filter_type = 'matrix'
+    filter_type = filter_callback
 
     # Characteristic length of the domain
     a = 0.1
@@ -405,7 +385,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
                                             nlevels=nlevels, lowest_order=2,
                                             r0=r0, N=50, use_galerkin=True,
-                                            design_vars_per_node=design_vars_per_node)
+                                            design_vars_per_node=1)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
@@ -415,10 +395,9 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     basis = elems[0].getElementBasis()
 
     # Create the traction objects that will be used later..
-    Fn = 0.0
     Ty = -2.5e6 # Traction force component in the y-direction
     vpn = elems[0].getVarsPerNode()
-    trac = [0.0, Ty, Fn]
+    trac = [0.0, Ty]
     tractions = []
     for findex in range(4):
         tractions.append(elements.Traction2D(vpn, findex, basis, trac))
@@ -527,9 +506,6 @@ b = (2.0/5.0)*a
 vol = a**2 - (a - b)**2
 full_mass = vol*rho
 m_fixed = args.vol_frac*full_mass
-
-# Set the number of variables per node
-design_vars_per_node = 1
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(mat, q=args.q_penalty,

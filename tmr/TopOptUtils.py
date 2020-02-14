@@ -105,14 +105,17 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
 
     # Create the TMRTopoFilter object
     filter_obj = None
-    if filter_type == 'lagrange':
-        filter_obj = TMR.LagrangeFilter(assemblers, filters)
-    elif filter_type == 'matrix':
-        filter_obj = TMR.MatrixFilter(r0, N, assemblers, filters)
-    elif filter_type == 'conform':
-        filter_obj = TMR.ConformFilter(assemblers, filters)
-    elif filter_type == 'helmholtz':
-        filter_obj = TMR.HelmholtzFiler(r0, assemblers, filters)
+    if callable(filter_type):
+        filter_obj = filter_type(assemblers, filters)
+    elif isinstance(filter_type, str):
+        if filter_type == 'lagrange':
+            filter_obj = TMR.LagrangeFilter(assemblers, filters)
+        elif filter_type == 'matrix':
+            filter_obj = TMR.MatrixFilter(r0, N, assemblers, filters)
+        elif filter_type == 'conform':
+            filter_obj = TMR.ConformFilter(assemblers, filters)
+        elif filter_type == 'helmholtz':
+            filter_obj = TMR.HelmholtzFiler(r0, assemblers, filters)
 
     problem = TMR.TopoProblem(filter_obj, mg)
 

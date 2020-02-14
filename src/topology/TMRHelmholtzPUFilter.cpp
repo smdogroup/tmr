@@ -404,16 +404,16 @@ TMRHelmholtzPUFilter::~TMRHelmholtzPUFilter(){
 */
 void TMRHelmholtzPUFilter::initialize(){
   // Create the Assembler object
-  TACSAssembler *tacs = NULL;
+  TACSAssembler *matrix_assembler = NULL;
   if (oct_filter){
     TACSElementModel *model = new TMRHexaMatrixModel();
     TMROctTACSMatrixCreator *matrix_creator3d =
       new TMROctTACSMatrixCreator(model);
     matrix_creator3d->incref();
 
-    tacs = matrix_creator3d->createTACS(oct_filter[0],
-                                        TACSAssembler::NATURAL_ORDER);
-    tacs->incref();
+    matrix_assembler = matrix_creator3d->createTACS(oct_filter[0],
+                                                    TACSAssembler::NATURAL_ORDER);
+    matrix_assembler->incref();
     matrix_creator3d->decref();
   }
   else {
@@ -422,14 +422,14 @@ void TMRHelmholtzPUFilter::initialize(){
       new TMRQuadTACSMatrixCreator(model);
     matrix_creator2d->incref();
 
-    tacs = matrix_creator2d->createTACS(quad_filter[0],
-                                        TACSAssembler::NATURAL_ORDER);
-    tacs->incref();
+    matrix_assembler = matrix_creator2d->createTACS(quad_filter[0],
+                                                    TACSAssembler::NATURAL_ORDER);
+    matrix_assembler->incref();
     matrix_creator2d->decref();
   }
 
   // Create the matrix that we're building
-  TACSParallelMat *distMat = tacs->createMat();
+  TACSParallelMat *distMat = matrix_assembler->createMat();
   B = distMat;
   B->incref();
 
@@ -439,7 +439,7 @@ void TMRHelmholtzPUFilter::initialize(){
   distMat->getExtColMap(&colDist);
 
   // Get the variable info from TACS
-  TACSNodeMap *nodeMap = tacs->getNodeMap();
+  TACSNodeMap *nodeMap = matrix_assembler->getNodeMap();
 
   // Get the map between the global-external
   // variables and the local variables (for Bext)
@@ -448,10 +448,10 @@ void TMRHelmholtzPUFilter::initialize(){
   colIndex->getIndices(&col_vars);
 
   // Get the dependent node information
-  TACSBVecDepNodes *depNodes = tacs->getBVecDepNodes();
+  TACSBVecDepNodes *depNodes = matrix_assembler->getBVecDepNodes();
 
   // Get the distributed list of indices
-  TACSBVecDistribute *tacsDist = tacs->getBVecDistribute();
+  TACSBVecDistribute *tacsDist = matrix_assembler->getBVecDistribute();
   TACSBVecIndices *tacsIndex = tacsDist->getIndices();
 
   // Create a merged list of indices
@@ -468,7 +468,7 @@ void TMRHelmholtzPUFilter::initialize(){
   normals->incref();
 
   // Get the node locations from the assembler object
-  tacs->getNodes(Xpts);
+  matrix_assembler->getNodes(Xpts);
 
   // Distribute the node locations
   Xpts->beginDistributeValues();
@@ -505,7 +505,7 @@ void TMRHelmholtzPUFilter::initialize(){
   Bext->getArrays(NULL, &Nb, &Mb, &browp, &bcols, &Bvals);
 
   // Create the Dinv vector
-  Dinv = tacs->createVec();
+  Dinv = matrix_assembler->createVec();
   Dinv->incref();
 
   TacsScalar *Dvals;
@@ -533,6 +533,7 @@ void TMRHelmholtzPUFilter::initialize(){
     int *indices = new int[ num_indices ];
     TacsScalar *X = new TacsScalar[ 3*num_indices ];
     double *alpha = new double[ num_indices ];
+    memset(alpha, 0, num_indices*sizeof(double));
 
     int diagonal_index = -1;
 
@@ -614,12 +615,12 @@ void TMRHelmholtzPUFilter::initialize(){
   normals->decref();
 
   // Allocate the vectors needed for the application of the filter
-  Tinv = tacs->createVec();
-  t1 = tacs->createVec();
-  t2 = tacs->createVec();
-  t3 = tacs->createVec();
-  y1 = tacs->createVec();
-  y2 = tacs->createVec();
+  Tinv = matrix_assembler->createVec();
+  t1 = matrix_assembler->createVec();
+  t2 = matrix_assembler->createVec();
+  t3 = matrix_assembler->createVec();
+  y1 = matrix_assembler->createVec();
+  y2 = matrix_assembler->createVec();
   Tinv->incref();
   t1->incref();
   t2->incref();
@@ -628,7 +629,7 @@ void TMRHelmholtzPUFilter::initialize(){
   y2->incref();
 
   // Free this version of TACS - it's not required anymore!
-  tacs->decref();
+  matrix_assembler->decref();
 
   // Create a temporary design vector
   temp = assembler[0]->createDesignVec();
@@ -666,6 +667,29 @@ void TMRHelmholtzPUFilter::initialize(){
     T++;
     ty++;
   }
+
+  /*
+  // Write out a "basis function" from a random point in the domain
+  y1->zeroEntries();
+  TacsScalar *y;
+  y1->getArray(&y);
+  if (mpi_rank == 0){
+    y[100] = 1.0;
+  }
+
+  applyFilter(y1, y2);
+  matrix_assembler->setVariables(y2);
+
+  // Output for visualization
+  ElementType etype = TACS_SCALAR_2D_ELEMENT;
+  int write_flag = (TACS_OUTPUT_CONNECTIVITY |
+                    TACS_OUTPUT_NODES |
+                    TACS_OUTPUT_DISPLACEMENTS);
+  TACSToFH5 *f5 = new TACSToFH5(matrix_assembler, etype, write_flag);
+  f5->incref();
+  f5->writeToFile("matrix_assembler.f5");
+  f5->decref();
+  */
 }
 
 /*
@@ -819,8 +843,7 @@ void TMRHelmholtzPUFilter::addValues( TACSBVec *vec ){
 
   const int vpn = assembler[0]->getDesignVarsPerNode();
   if (vpn == 1){
-    applyTranspose(temp, y1);
-    vec->axpy(1.0, y1);
+    applyTranspose(temp, vec);
   }
   else {
     for ( int k = 0; k < vpn; k++ ){
@@ -850,9 +873,9 @@ void TMRHelmholtzPUFilter::addValues( TACSBVec *vec ){
       TacsScalar *yout;
       y2->getArray(&yout);
       for ( int i = 0; i < size; i++ ){
-        xout[0] += yout[0];
+        xout[0] = yout[0];
         yout++;
-        xin += vpn;
+        xout += vpn;
       }
     }
   }
