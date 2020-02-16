@@ -56,7 +56,7 @@ void TMRMatrixFilter::initialize_matrix( double _r, int _N,
 
   // Keep track of the dimension of the problem
   int d = 2;
-  if (oct_filter){
+  if (oct_forest){
     d = 3;
     TACSElementModel *model = new TMRHexaMatrixModel();
     TMROctTACSMatrixCreator *matrix_creator3d =
@@ -315,10 +315,9 @@ void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
     }
   }
 
-  // Temporarily allocate an array to store the varia
   assembler[0]->setDesignVars(x[0]);
 
-  // Set the design variable values on all processors
+  // Set the design variable values on all levels
   for ( int k = 0; k < nlevels-1; k++ ){
     filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
 

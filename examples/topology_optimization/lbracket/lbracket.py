@@ -131,14 +131,14 @@ class OptWeights:
         return
 
 class Mfilter(TMR.HelmholtzPUFilter):
-    def __init__(self, N, assemblers, filter, vars_per_node=1):
+    def __init__(self, N, assemblers, filters, vars_per_node=1, r=0.01):
+        self.r = r
         return
 
     def getInteriorStencil(self, diag, X, alpha):
         '''
         Get an interior stencil point.
         '''
-        self.r = 0.1
         H = self.r**2*np.eye(3)
 
         # Reshape the values in the matrix
@@ -167,7 +167,6 @@ class Mfilter(TMR.HelmholtzPUFilter):
         '''
         Get a sentcil point on the domain boundary
         '''
-        self.r = 0.1
         H = self.r**2*np.eye(2)
 
         # Reshape the values in the matrix
@@ -217,7 +216,7 @@ class QuadConformCreator(TMR.QuadConformTopoCreator):
     filter mesh that conforms with Assembler mesh. The input to the class
     consists of the boundary conditions, the forest of quadtrees for the
     analysis mesh, the order of the conforming filter QuadForest mesh, and
-    the type of interpolant to be used.
+    the type of interpolant for the filter.
     """
     def __init__(self, bcs, forest, order=2, interp=TMR.BERNSTEIN_POINTS,
                  design_vars_per_node=1, props=None):
@@ -346,9 +345,17 @@ def create_forest(comm, depth, htarget):
     return forest
 
 def filter_callback(assemblers, filters):
-    N = 20
-    r = 0.1
-    return Mfilter(N, assemblers, filters)
+    N = 15
+
+    # Find the characteristic length of the domain and set the filter length scale
+    a = 0.1
+    b = (2.0/5.0)*a
+    area = a**2 - (a - b)**2
+    r0 = 0.05*np.sqrt(area)
+
+    mfilter = Mfilter(N, assemblers, filters, r=r0)
+    mfilter.initialize()
+    return mfilter
 
 def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     """
@@ -375,16 +382,9 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     # Create a conforming filter
     filter_type = filter_callback
 
-    # Characteristic length of the domain
-    a = 0.1
-    b = (2.0/5.0)*a
-    area = a**2 - (a - b)**2
-    r0 = 0.1*np.sqrt(area)
-
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
-                                            nlevels=nlevels, lowest_order=2,
-                                            r0=r0, N=50, use_galerkin=True,
+                                            nlevels=nlevels, lowest_order=2, use_galerkin=True,
                                             design_vars_per_node=1)
 
     # Get the assembler object we just created
@@ -431,7 +431,6 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
 
     return problem
 
-
 class OutputCallback:
     def __init__(self, assembler, iter_offset=0):
         self.fig = None
@@ -446,7 +445,8 @@ class OutputCallback:
         self.iter_offset = iter_offset
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
-        self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
+        if itr % 10 == 0:
+            self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
 
 # Set the optimization parameters
 optimization_options = {
@@ -465,6 +465,7 @@ optimization_options = {
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
     'max_qn_subspace': 5,
+    'output_freq': 10,
     'tol': 1e-8,
     'maxiter': 500,
     'norm_type': 'L1',
