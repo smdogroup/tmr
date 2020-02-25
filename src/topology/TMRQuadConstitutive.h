@@ -65,18 +65,18 @@ class TMRQuadConstitutive : public TACSPlaneStressConstitutive {
                           const TacsScalar X[] );
 
   // Add the derivative of the density
-  void addDensityDVSens( int elemIndex, const double pt[],
-                         const TacsScalar X[], const TacsScalar scale,
-                         int dvLen, TacsScalar dvSens[] );
+  void addDensityDVSens( int elemIndex, TacsScalar scale,
+                         const double pt[], const TacsScalar X[],
+                         int dvLen, TacsScalar dfdx[] );
 
   // Evaluate the specific heat
   TacsScalar evalSpecificHeat( int elemIndex, const double pt[],
                                const TacsScalar X[] );
 
   // Add the derivative of the density
-  void addSpecificHeatDVSens( int elemIndex, const double pt[],
-                              const TacsScalar X[], const TacsScalar scale,
-                              int dvLen, TacsScalar dvSens[] );
+  void addSpecificHeatDVSens( int elemIndex, TacsScalar scale,
+                              const double pt[], const TacsScalar X[],
+                              int dvLen, TacsScalar dfdx[] );
 
   // Evaluate the stresss
   void evalStress( int elemIndex, const double pt[], const TacsScalar X[],
@@ -87,10 +87,20 @@ class TMRQuadConstitutive : public TACSPlaneStressConstitutive {
                              const TacsScalar X[], TacsScalar C[] );
 
   // Add the contribution
-  void addStressDVSens( int elemIndex, const double pt[],
-                        const TacsScalar X[], const TacsScalar strain[],
-                        TacsScalar scale, const TacsScalar psi[],
-                        int dvLen, TacsScalar dvSens[] );
+  void addStressDVSens( int elemIndex, TacsScalar scale,
+                        const double pt[], const TacsScalar X[],
+                        const TacsScalar strain[], const TacsScalar psi[],
+                        int dvLen, TacsScalar dfdx[] );
+
+  // Evaluate the geometric stiffness constitutive matrix
+  void evalGeometricTangentStiffness( int elemIndex, const double pt[],
+                                      const TacsScalar X[], TacsScalar C[] );
+
+  // Add the derivative of the geometric constitutive matrix
+  void addGeometricTangentStressDVSens( int elemIndex, TacsScalar scale,
+                                        const double pt[], const TacsScalar X[],
+                                        const TacsScalar e[], const TacsScalar psi[],
+                                        int dvLen, TacsScalar dfdx[] );
 
   // Evaluate the thermal strain
   void evalThermalStrain( int elemIndex, const double pt[],
@@ -113,19 +123,19 @@ class TMRQuadConstitutive : public TACSPlaneStressConstitutive {
                             const TacsScalar X[], TacsScalar C[] );
 
   // Add the derivative of the heat flux
-  void addHeatFluxDVSens( int elemIndex, const double pt[],
-                          const TacsScalar X[], const TacsScalar grad[],
-                          TacsScalar scale, const TacsScalar psi[],
-                          int dvLen, TacsScalar dvSens[] );
+  void addHeatFluxDVSens( int elemIndex, TacsScalar scale,
+                          const double pt[], const TacsScalar X[],
+                          const TacsScalar grad[], const TacsScalar psi[],
+                          int dvLen, TacsScalar dfdx[] );
 
   // Evaluate the material failure index
   TacsScalar evalFailure( int elemIndex, const double pt[],
                           const TacsScalar X[], const TacsScalar e[] );
 
   // Add the derivative of the function w.r.t. design variables
-  void addFailureDVSens( int elemIndex, const double pt[],
+  void addFailureDVSens( int elemIndex, TacsScalar scale, const double pt[],
                          const TacsScalar X[], const TacsScalar e[],
-                         TacsScalar scale, int dvLen, TacsScalar dfdx[] );
+                         int dvLen, TacsScalar dfdx[] );
 
   // Evaluate the derivative of the failure criteria w.r.t. strain
   TacsScalar evalFailureStrainSens( int elemIndex, const double pt[],

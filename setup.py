@@ -12,6 +12,8 @@ from distutils.core import Extension as Ext
 from Cython.Build import cythonize
 from Cython.Compiler import Options
 
+Options.docstrings = True
+
 # Convert from local to absolute directories
 def get_global_dir(files):
     tmr_root = os.path.abspath(os.path.dirname(__file__))
@@ -104,9 +106,6 @@ exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],
                                ('TMR_HAS_OPENCASCADE', '1'),
                                ('TMR_HAS_EGADS', '1'),
                                ('TMR_HAS_PAROPT', '1')]))
-for e in exts:
-    e.cython_directives = {'embedsignature': True,
-                           'binding': True}
 
 setup(name='tmr',
       version=0.1,

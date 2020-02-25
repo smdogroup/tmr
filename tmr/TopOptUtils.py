@@ -4,6 +4,10 @@ from tmr import TMR
 from paropt import ParOpt
 import numpy as np
 from six import iteritems
+try:
+    from scipy.optimize import minimize
+except:
+    minimize = None
 
 # Options for the TopologyOptimizer class
 _optimizers = ['Interior Point', 'Trust Region']
@@ -105,14 +109,17 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
 
     # Create the TMRTopoFilter object
     filter_obj = None
-    if filter_type == 'lagrange':
-        filter_obj = TMR.LagrangeFilter(assemblers, filters)
-    elif filter_type == 'matrix':
-        filter_obj = TMR.MatrixFilter(r0, N, assemblers, filters)
-    elif filter_type == 'conform':
-        filter_obj = TMR.ConformFilter(assemblers, filters)
-    elif filter_type == 'helmholtz':
-        filter_obj = TMR.HelmholtzFiler(r0, assemblers, filters)
+    if callable(filter_type):
+        filter_obj = filter_type(assemblers, filters)
+    elif isinstance(filter_type, str):
+        if filter_type == 'lagrange':
+            filter_obj = TMR.LagrangeFilter(assemblers, filters)
+        elif filter_type == 'matrix':
+            filter_obj = TMR.MatrixFilter(r0, N, assemblers, filters)
+        elif filter_type == 'conform':
+            filter_obj = TMR.ConformFilter(assemblers, filters)
+        elif filter_type == 'helmholtz':
+            filter_obj = TMR.HelmholtzFiler(r0, assemblers, filters)
 
     problem = TMR.TopoProblem(filter_obj, mg)
 
@@ -559,6 +566,239 @@ def targetRefine(forest, fltr, assembler, refine_distance,
     forest.refine(refine, min_lev=min_lev, max_lev=max_lev)
 
     return
+
+class OptFilterWeights:
+    def __init__(self, diag, X, H):
+        """
+        Compute an approximation of the coefficients of a Helmholtz filter.
+
+        Args:
+            diag (int): The index of the diagonal (base point) of the stencil
+            X (np.ndarray): An array of the node positions
+            H (np.ndarray): Symmetric matrix of second derivatives for the filter
+        """
+        self.diag = diag
+        self.X = X
+        self.n = self.X.shape[0]
+
+        # Compute the normalization
+        if len(self.X.shape) == 1:
+            self.delta = np.max(np.absolute(self.X - self.X[self.diag]))
+        else:
+            self.delta = np.sqrt(np.max(
+                np.sum((self.X - self.X[self.diag,:])*(self.X - self.X[self.diag,:]), axis=1)))
+
+        self.dim = 3
+        if len(self.X.shape) == 1 or self.X.shape[1] == 1:
+            self.dim = 1
+
+            # Compute the constraint matrix
+            A = np.zeros((2, self.n-1))
+
+            # Populate the b vector
+            b = np.zeros(2)
+            b[1] = H[0,0]
+
+            index = 0
+            for i in range(self.n):
+                if i != self.diag:
+                    dx = (self.X[i] - self.X[self.diag])/self.delta
+
+                    A[0,index] = dx
+                    A[1,index] = 0.5*dx**2
+                    index += 1
+
+        elif self.X.shape[1] == 2:
+            self.dim = 2
+
+            # Compute the constraint matrix
+            A = np.zeros((5, self.n-1))
+
+            # Populate the b vector
+            b = np.zeros(5)
+            b[2] = H[0,0]
+            b[3] = H[1,1]
+            b[4] = 2.0*H[0,1]
+
+            index = 0
+            for i in range(self.n):
+                if i != self.diag:
+                    dx = (self.X[i,0] - self.X[self.diag,0])/self.delta
+                    dy = (self.X[i,1] - self.X[self.diag,1])/self.delta
+
+                    A[0,index] = dx
+                    A[1,index] = dy
+                    A[2,index] = 0.5*dx**2
+                    A[3,index] = 0.5*dy**2
+                    A[4,index] = dx*dy
+                    index += 1
+        else:
+            # Compute the constraint matrix
+            A = np.zeros((9, self.n-1))
+
+            # Populate the b vector
+            b = np.zeros(9)
+            b[3] = H[0,0]
+            b[4] = H[1,1]
+            b[5] = H[2,2]
+            b[6] = 2*H[1,2]
+            b[7] = 2*H[0,2]
+            b[8] = 2*H[0,1]
+
+            index = 0
+            for i in range(self.n):
+                if i != self.diag:
+                    dx = (self.X[i,0] - self.X[self.diag,0])/self.delta
+                    dy = (self.X[i,1] - self.X[self.diag,1])/self.delta
+                    dz = (self.X[i,2] - self.X[self.diag,2])/self.delta
+
+                    A[0,index] = dx
+                    A[1,index] = dy
+                    A[2,index] = dz
+
+                    A[3,index] = 0.5*dx**2
+                    A[4,index] = 0.5*dy**2
+                    A[5,index] = 0.5*dz**2
+
+                    A[6,index] = dy*dz
+                    A[7,index] = dx*dz
+                    A[8,index] = dx*dy
+                    index += 1
+
+        self.b = b
+        self.A = A
+
+        return
+
+    def obj_func(self, w):
+        """Evaluate the sum square of the weights"""
+        return 0.5*np.sum(w**2)
+
+    def obj_func_der(self, w):
+        """Evaluate the derivative of the sum square of weights"""
+        return w
+
+    def con_func(self, w):
+        """Compute the interpolation constraints"""
+        return np.dot(self.A, w) - self.b
+
+    def con_func_der(self, w):
+        """Compute the derivative of the interpolation ocnstraints"""
+        return self.A
+
+    def set_alphas(self, w, alpha):
+        """Compute the interpolating coefficients based on the weights"""
+        alpha[:] = 0.0
+        index = 0
+        for i in range(self.n):
+            if i != self.diag:
+                alpha[i] = w[index]/self.delta**2
+                alpha[self.diag] += w[index]/self.delta**2
+                index += 1
+
+        alpha[self.diag] += 1.0
+
+        return
+
+class Mfilter(TMR.HelmholtzPUFilter):
+    def __init__(self, N, assemblers, filters, vars_per_node=1,
+                 dim=2, r=0.01):
+        """
+        Create an M-filter: A type of Helmholtz partition of unity filter that
+        approximates the Helmholtz PDE-based filter and maintains positive
+        coefficients over a range of meshes.
+
+        Args:
+            N (int): Number of terms in the approximate Neumann inverse
+            assemblers (list): List of TACS.Assembler objects
+            filters (list): List of TMR.QuadForest or TMR.OctForest objects
+            vars_per_node (int): Number of design variables at each node
+            dim (int): Spatial dimension of the problem
+            r (float): Filter radius
+
+        Note: You must call initialize() on the filter before use.
+        """
+        self.r = r
+        self.dim = dim
+        return
+
+    def getInteriorStencil(self, diag, X, alpha):
+        """Get the weights for an interior stencil point"""
+        H = self.r**2*np.eye(3)
+
+        # Reshape the values in the matrix
+        X = X.reshape((-1, 3))
+        n = X.shape[0]
+
+        if self.dim == 2:
+            X = X[:,:2]
+
+        # Set up the optimization problem
+        opt = OptFilterWeights(diag, X, H)
+
+        # Set the bounds and initial point
+        w0 = np.ones(n-1)
+        bounds = []
+        for i in range(n-1):
+            bounds.append((0, None))
+
+        res = minimize(opt.obj_func, w0, jac=opt.obj_func_der,
+                       method='SLSQP', bounds=bounds,
+                       constraints={'type': 'eq', 'fun': opt.con_func,
+                                    'jac': opt.con_func_der})
+
+        # Set the optimized alpha values
+        opt.set_alphas(res.x, alpha)
+
+        return
+
+    def getBoundaryStencil(self, diag, normal, X, alpha):
+        """Get a sentcil point on the domain boundary"""
+        H = self.r**2*np.eye(2)
+
+        # Reshape the values in the matrix
+        X = X.reshape((-1, 3))
+        n = X.shape[0]
+        if self.dim == 2:
+            X = X[:,:2]
+
+            t = np.array([normal[1], -normal[0]])
+            Xt = np.dot(X - X[diag,:], t)
+        elif self.dim == 3:
+            # Reduce the problem to a 2d problem on linearization of the
+            # the domain boundary. First, compute an arbitrary direction
+            # that is not aligned along the normal direction
+            index = np.argmin(np.absolute(normal))
+            t = np.zeros(3)
+            t[index] = 1.0
+
+            # Compute the in-plane directions (orthogonal to the normal direction)
+            t2 = np.cross(t, normal)
+            t1 = np.cross(normal, t2)
+
+            # Reduce the problem on the boundary
+            Xt = np.zeros((n, 2))
+            Xt[:,0] = np.dot(X - X[diag,:], t1)
+            Xt[:,1] = np.dot(X - X[diag,:], t2)
+
+        # Set up the optimization problem
+        opt = OptFilterWeights(diag, Xt, H)
+
+        # Set the bounds and initial point
+        w0 = np.ones(n-1)
+        bounds = []
+        for i in range(n-1):
+            bounds.append((0, None))
+
+        res = minimize(opt.obj_func, w0, jac=opt.obj_func_der,
+                       method='SLSQP', bounds=bounds,
+                       constraints={'type': 'eq', 'fun': opt.con_func,
+                                    'jac': opt.con_func_der})
+
+        # Set the optimized alpha values
+        opt.set_alphas(res.x, alpha)
+
+        return
 
 class OptionData:
     def __init__(self):

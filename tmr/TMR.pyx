@@ -4665,7 +4665,8 @@ cdef int _getboundarystencil(void *_self, int diag,
     return fail
 
 cdef class HelmholtzPUFilter(TopoFilter):
-    def __cinit__(self, int N, list assemblers, list filters):
+    cdef TMRCallbackHelmholtzPUFilter* hptr
+    def __cinit__(self, int N, list assemblers, list filters, *args, **kwargs):
         cdef int nlevels = 0
         cdef int isqforest = 0
         cdef TACSAssembler **assemb = NULL
@@ -4690,9 +4691,9 @@ cdef class HelmholtzPUFilter(TopoFilter):
             for i in range(nlevels):
                 qfiltr[i] = (<QuadForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            me = new TMRCallbackHelmholtzPUFilter(N, nlevels, assemb,
-                                                  qfiltr)
-            self.ptr = me
+            self.hptr = new TMRCallbackHelmholtzPUFilter(N, nlevels, assemb,
+                                                         qfiltr)
+            self.ptr = self.hptr
             self.ptr.incref()
             free(qfiltr)
         else:
@@ -4700,25 +4701,28 @@ cdef class HelmholtzPUFilter(TopoFilter):
             for i in range(nlevels):
                 ofiltr[i] = (<OctForest>filters[i]).ptr
                 assemb[i] = (<Assembler>assemblers[i]).ptr
-            me = new TMRCallbackHelmholtzPUFilter(N, nlevels, assemb,
-                                                  ofiltr)
-            self.ptr = me
+            self.hptr = new TMRCallbackHelmholtzPUFilter(N, nlevels, assemb,
+                                                         ofiltr)
+            self.ptr = self.hptr
             self.ptr.incref()
             free(ofiltr)
 
         free(assemb)
 
         # Set the pointers
-        me.setSelfPointer(<void*>self)
-        me.setGetInteriorStencil(_getinteriorstencil)
-        me.setGetBoundaryStencil(_getboundarystencil)
-        me.initialize()
+        self.hptr.setSelfPointer(<void*>self)
+        self.hptr.setGetInteriorStencil(_getinteriorstencil)
+        self.hptr.setGetBoundaryStencil(_getboundarystencil)
 
         return
 
     def __dealloc__(self):
         if self.ptr:
             self.ptr.decref()
+
+    def initialize(self):
+        self.hptr.initialize()
+        return
 
     def getFilter(self):
         """

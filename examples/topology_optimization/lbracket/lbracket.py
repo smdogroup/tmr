@@ -1,3 +1,13 @@
+"""
+Solve a mass-constrained von Mises stress minimization problem with an
+L-bracket type domain. The domain provided in the example STEP file contains
+a fillet that rounds the re-entrant corner. This modifies the domain compared
+to the classical L-bracket problem.
+
+Usage:
+
+mpirun -np 4 python lbracket.py --order 2 --init_depth 3 --mg_levels 4 --max_opt_iters 200
+"""
 
 from mpi4py import MPI
 from tmr import TMR, TopOptUtils
@@ -7,242 +17,13 @@ import numpy as np
 import argparse
 import os
 
-class OptWeights:
-    def __init__(self, diag, X, H, weights=None):
-        self.diag = diag
-        self.X = X
-        n = self.X.shape[0]
-
-        # Account for the weighting (if supplied)
-        if weights is None:
-            self.weights = np.ones(n)
-        else:
-            self.weights = np.array(weights)
-
-        # Compute the normalization
-        self.delta = 1.0 # np.max(np.absolute(self.X - self.X[self.diag,:]))
-
-        # Check if it is 2d or 3d
-        if self.X.shape[1] == 2:
-            # Compute the matrix of basis functions
-            A = np.zeros((n, 6))
-            for i in range(n):
-                dx = (self.X[i,0] - self.X[self.diag,0])/self.delta
-                dy = (self.X[i,1] - self.X[self.diag,1])/self.delta
-
-                A[i,0] = 1.0
-                A[i,1] = dx
-                A[i,2] = dy
-                A[i,3] = 0.5*dx**2
-                A[i,4] = 0.5*dy**2
-                A[i,5] = dx*dy
-
-            # Populate the d vector
-            d = np.zeros(6)
-            d[3] = H[0,0]
-            d[4] = H[1,1]
-            d[5] = 2*H[0,1]
-        else:
-            # Compute the matrix of basis functions
-            A = np.zeros((n, 10))
-            for i in range(n):
-                dx = (self.X[i,0] - self.X[self.diag,0])/self.delta
-                dy = (self.X[i,1] - self.X[self.diag,1])/self.delta
-                dz = (self.X[i,2] - self.X[self.diag,2])/self.delta
-
-                A[i,0] = 1.0
-                A[i,1] = dx
-                A[i,2] = dy
-                A[i,3] = dz
-                A[i,4] = 0.5*dx**2
-                A[i,5] = 0.5*dy**2
-                A[i,6] = 0.5*dz**2
-                A[i,7] = dy*dz
-                A[i,8] = dx*dz
-                A[i,9] = dx*dy
-
-            # Populate the d vector
-            d = np.zeros(10)
-            d[4] = H[0,0]
-            d[5] = H[1,1]
-            d[6] = H[2,2]
-            d[7] = 2*H[1,2]
-            d[8] = 2*H[0,2]
-            d[9] = 2*H[0,1]
-
-        self.d = d
-        self.A = A
-
-        return
-
-    def obj_func(self, w):
-        return 0.5*np.sum(self.weights*w**2)
-
-    def obj_func_der(self, w):
-        return self.weights*w
-
-    def con_func(self, w):
-        '''Compute the coefficients'''
-        n = len(w)
-        W = np.diag(w)
-        D = np.linalg.pinv(np.dot(self.A.T, np.dot(W, self.A)))
-        alphas = np.dot(self.d, np.dot(D, np.dot(self.A.T, W)))
-        alphas[self.diag] *= -1.0
-
-        return alphas
-
-    def con_func_der(self, w):
-        '''Compute the derivative of the coefficients'''
-        n = len(w)
-        W = np.diag(w)
-        D = np.linalg.pinv(np.dot(self.A.T, np.dot(W, self.A)))
-
-        # Writing D = (A^{T}*W*A)^{-1}
-        # dN/dw_{i} = -D*(A^{T}*ei*ei^{T}*A)*D*A^{T}*W
-        J = np.zeros((n, n))
-
-        for i in range(n):
-            C = -np.dot(D, np.dot(np.outer(self.A[i,:], self.A[i,:]), D))
-            e = np.zeros(n)
-            e[i] = 1.0
-
-            dNdwi = (np.dot(C, np.dot(self.A.T, W)) +
-                     np.dot(D, np.dot(self.A.T, np.diag(e))))
-            J[:n,i] = np.dot(self.d, dNdwi)
-
-        J[self.diag,:] *= -1.0
-
-        return J
-
-    def get_alpha(self, w):
-        # Compute the matrix of basis functions
-
-        # if self.X.shape[1] == 2:
-        #     A = self.A
-        #     for i in range(A.shape[0]):
-        #         dx = self.X[i,0] - self.X[self.diag,0]
-        #         dy = self.X[i,1] - self.X[self.diag,1]
-        #         A[i,0] = 1.0
-        #         A[i,1] = dx
-        #         A[i,2] = dy
-        #         A[i,3] = 0.5*dx**2
-        #         A[i,4] = 0.5*dy**2
-        #         A[i,5] = dx*dy
-        # else:
-        #     A = self.A
-        #     for i in range(A.shape[0]):
-        #         dx = self.X[i,0] - self.X[self.diag,0]
-        #         dy = self.X[i,1] - self.X[self.diag,1]
-        #         dz = self.X[i,2] - self.X[self.diag,2]
-        #         A[i,0] = 1.0
-        #         A[i,1] = dx
-        #         A[i,2] = dy
-        #         A[i,3] = dz
-        #         A[i,4] = 0.5*dx**2
-        #         A[i,5] = 0.5*dy**2
-        #         A[i,6] = 0.5*dz**2
-        #         A[i,7] = dy*dz
-        #         A[i,8] = dx*dz
-        #         A[i,9] = dx*dy
-
-        # while True:
-        #     n = A.shape[0]
-        #     W = np.diag(w)
-        #     D = np.linalg.pinv(np.dot(A.T, np.dot(W, A)))
-        #     alphas = np.dot(self.d, np.dot(D, np.dot(A.T, W)))
-        #     alphas[self.diag] *= -1.0
-
-        #     index = -1
-        #     for i in range(n):
-        #         if i != self.diag and alphas[i] < 0.0:
-        #             index = i
-        #             break
-
-        #     if index == -1:
-        #         break
-        #     else:
-        #         w[index] = 0.0
-
-        alphas = np.zeros(self.X.shape[0])
-        alphas[:] = 1.0/(self.X.shape[0]-1)
-        alphas[self.diag] = 2.0
-
-        return alphas
-
-class Mfilter(TMR.HelmholtzPUFilter):
-    def __init__(self, N, assemblers, filter, vars_per_node=1):
-        return
-
-    def getInteriorStencil(self, diag, X, alpha):
-        '''
-        Get an interior stencil point.
-        '''
-        r = 0.2
-        H = r**2*np.eye(3)
-
-        # Reshape the values in the matrix
-        X = X.reshape((-1, 3))
-        n = X.shape[0]
-
-        # Set up the optimization problem
-        opt = OptWeights(diag, X, H)
-
-        # Compute the number of nodes
-        w0 = np.ones(n)/n
-        alpha[:] = opt.get_alpha(w0)
-        alpha[diag] += 1.0
-
-        return
-
-    def getBoundaryStencil(self, diag, normal, X, alpha):
-        '''
-        Get a sentcil point on the domain boundary
-        '''
-        r = 0.2
-        H = r**2*np.eye(2)
-
-        # Reshape the values in the matrix
-        X = X.reshape((-1, 3))
-        n = X.shape[0]
-
-        # Compute the normalization
-        delta = np.max(np.absolute(X - X[diag,:]))
-
-        # Reduce the problem to a 2d problem on linearization of the
-        # the domain boundary. First, compute an arbitrary direction
-        # that is not aligned along the normal direction
-        index = np.argmin(np.absolute(normal))
-        t = np.zeros(3)
-        t[index] = 1.0
-
-        # Compute the in-plane directions (orthogonal to the normal direction)
-        t2 = np.cross(t, normal)
-        t1 = np.cross(normal, t2)
-
-        # Reduce the problem on the boundary
-        Xt = np.zeros((n, 2))
-        Xt[:,0] = np.dot(X - X[diag,:], t1)
-        Xt[:,1] = np.dot(X - X[diag,:], t2)
-
-        weights = 1.0/(1.0 + np.absolute(np.dot(X - X[diag,:], normal)/delta))
-
-        # Set up the optimization problem
-        opt = OptWeights(diag, Xt, H, weights=weights)
-
-        # Initial guess
-        w0 = np.ones(n)/n
-        alpha[:] = opt.get_alpha(w0)
-        alpha[diag] += 1.0
-
-        return
-
 class QuadConformCreator(TMR.QuadConformTopoCreator):
     """
     This class is called to create a TACSAssembler class with an underlying
     filter mesh that conforms with Assembler mesh. The input to the class
     consists of the boundary conditions, the forest of quadtrees for the
     analysis mesh, the order of the conforming filter QuadForest mesh, and
-    the type of interpolant to be used.
+    the type of interpolant for the filter.
     """
     def __init__(self, bcs, forest, order=2, interp=TMR.BERNSTEIN_POINTS,
                  design_vars_per_node=1, props=None):
@@ -317,7 +98,7 @@ class CreatorCallback:
         filtr = creator.getFilter()
         return creator, filtr
 
-def create_forest(comm, depth, htarget):
+def create_forest(comm, depth, htarget, box_refine=True):
     """
     Create an initial forest for analysis and optimization
 
@@ -349,11 +130,26 @@ def create_forest(comm, depth, htarget):
     # Create the mesh
     mesh = TMR.Mesh(comm, geo)
 
-    # Set the meshing options
-    opts = TMR.MeshOptions()
+    if box_refine:
+        hmin = htarget/2.0
+        hmax = htarget
+        pt1 = [0.03, 0.03, -1]
+        pt2 = [0.05, 0.05, 1]
+        box = TMR.BoxFeatureSize(pt1, pt2, hmin, hmax)
+        box.addBox(pt1, pt2, hmin)
 
-    # Create the surface mesh
-    mesh.mesh(htarget, opts)
+        # Set the meshing options
+        opts = TMR.MeshOptions()
+        
+        # Create the surface mesh
+        mesh.mesh(opts=opts, fs=box)
+        
+    else:
+        # Set the meshing options
+        opts = TMR.MeshOptions()
+        
+        # Create the surface mesh
+        mesh.mesh(htarget, opts=opts)
 
     # Create a model from the mesh
     model = mesh.createModelFromMesh()
@@ -369,6 +165,22 @@ def create_forest(comm, depth, htarget):
     forest.createTrees(depth)
 
     return forest
+
+def filter_callback(assemblers, filters):
+    """
+    Create and initialize a filter with the specified parameters
+    """
+    N = 15
+
+    # Find the characteristic length of the domain and set the filter length scale
+    a = 0.1
+    b = (2.0/5.0)*a
+    area = a**2 - (a - b)**2
+    r0 = 0.05*np.sqrt(area)
+
+    mfilter = TopOptUtils.Mfilter(N, assemblers, filters, dim=2, r=r0)
+    mfilter.initialize()
+    return mfilter
 
 def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     """
@@ -393,19 +205,12 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     obj = CreatorCallback(bcs, props)
 
     # Create a conforming filter
-    filter_type = 'matrix'
-
-    # Characteristic length of the domain
-    a = 0.1
-    b = (2.0/5.0)*a
-    area = a**2 - (a - b)**2
-    r0 = 0.1*np.sqrt(area)
+    filter_type = filter_callback
 
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
-                                            nlevels=nlevels, lowest_order=2,
-                                            r0=r0, N=50, use_galerkin=True,
-                                            design_vars_per_node=design_vars_per_node)
+                                            nlevels=nlevels, lowest_order=2, use_galerkin=True,
+                                            design_vars_per_node=1)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
@@ -415,10 +220,9 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     basis = elems[0].getElementBasis()
 
     # Create the traction objects that will be used later..
-    Fn = 0.0
     Ty = -2.5e6 # Traction force component in the y-direction
     vpn = elems[0].getVarsPerNode()
-    trac = [0.0, Ty, Fn]
+    trac = [0.0, Ty]
     tractions = []
     for findex in range(4):
         tractions.append(elements.Traction2D(vpn, findex, basis, trac))
@@ -452,7 +256,6 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
 
     return problem
 
-
 class OutputCallback:
     def __init__(self, assembler, iter_offset=0):
         self.fig = None
@@ -467,7 +270,8 @@ class OutputCallback:
         self.iter_offset = iter_offset
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
-        self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
+        if itr % 10 == 0:
+            self.f5.writeToFile(os.path.join(args.prefix, 'output%d.f5'%(itr + self.iter_offset)))
 
 # Set the optimization parameters
 optimization_options = {
@@ -486,6 +290,7 @@ optimization_options = {
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
     'max_qn_subspace': 5,
+    'output_freq': 10,
     'tol': 1e-8,
     'maxiter': 500,
     'norm_type': 'L1',
@@ -500,8 +305,9 @@ p.add_argument('--htarget', type=float, default=2.5e-3)
 p.add_argument('--max_opt_iters', type=int, default=200)
 p.add_argument('--init_depth', type=int, default=1)
 p.add_argument('--mg_levels', type=int, default=3)
-p.add_argument('--order', type=int, default=3)
+p.add_argument('--order', type=int, default=2)
 p.add_argument('--q_penalty', type=float, default=8.0)
+p.add_argument('--box_refine', action='store_true')
 args = p.parse_args()
 
 # Set the communicator
@@ -524,12 +330,10 @@ mat = constitutive.MaterialProperties(rho=rho, E=E, nu=nu, ys=ys)
 # Set the fixed mass
 a = 0.1
 b = (2.0/5.0)*a
-vol = a**2 - (a - b)**2
-full_mass = vol*rho
+area = a**2 - (a - b)**2
+domain_length = a
+full_mass = area*rho
 m_fixed = args.vol_frac*full_mass
-
-# Set the number of variables per node
-design_vars_per_node = 1
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(mat, q=args.q_penalty,
@@ -540,23 +344,63 @@ bcs = TMR.BoundaryConditions()
 bcs.addBoundaryCondition('fixed', [0, 1], [0.0, 0.0])
 
 # Create the initial forest
-forest = create_forest(comm, args.init_depth, args.htarget)
+forest = create_forest(comm, args.init_depth, args.htarget,
+                       box_refine=args.box_refine)
 forest.setMeshOrder(args.order, TMR.GAUSS_LOBATTO_POINTS)
 
-# Create the TMRTopoProblem instance
-problem = create_problem(forest, bcs, props, args.mg_levels, m_fixed=m_fixed)
-problem.setPrefix(args.prefix)
+# Set the original filter to NULL
+orig_filter = None
+xopt = None
+iter_offset = 0
+max_iterations = 2
 
-# Check the gradient
-problem.checkGradients(1e-6)
+for step in range(max_iterations):
+    # Create the TMRTopoProblem instance
+    mg_levels = args.mg_levels
+    if step > 0:
+        mg_levels += 1
+    problem = create_problem(forest, bcs, props, mg_levels, m_fixed=m_fixed,
+                             iter_offset=iter_offset)
+    iter_offset += args.max_opt_iters
+    problem.setPrefix(args.prefix)
 
-# Set parameters
-optimization_options['maxiter'] = args.max_opt_iters
-optimization_options['output_file'] = os.path.join(args.prefix,
-                                                   'output_file.dat')
-optimization_options['tr_output_file'] = os.path.join(args.prefix,
-                                                      'tr_output_file.dat')
+    # Check the gradient
+    problem.checkGradients(1e-6)
 
-# Optimize the problem
-opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
-xopt = opt.optimize()
+    # Extract the filter to interpolate design variables
+    filtr = problem.getFilter()
+
+    if orig_filter is not None:
+        # Create one of the new design vectors
+        x = problem.createDesignVec()
+        TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
+        problem.setInitDesignVars(x)
+
+    # Set the new original filter
+    orig_filter = filtr
+
+    # Set parameters
+    optimization_options['maxiter'] = args.max_opt_iters
+    optimization_options['output_file'] = os.path.join(args.prefix,
+                                                       'output_file%d.dat'%(step))
+    optimization_options['tr_output_file'] = os.path.join(args.prefix,
+                                                          'tr_output_file%d.dat'%(step))
+
+    # Optimize the problem
+    opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
+    xopt = opt.optimize()
+
+    # Refine based solely on the value of the density variable
+    assembler = problem.getAssembler()
+    forest = forest.duplicate()
+
+    # Perform refinement based on distance
+    dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
+    refine_distance = 0.025*domain_length
+    TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
+                             interface_lev=args.init_depth+1, interior_lev=args.init_depth,
+                             domain_length=domain_length, filename=dist_file)
+
+    # Repartition the mesh
+    forest.balance(1)
+    forest.repartition()
