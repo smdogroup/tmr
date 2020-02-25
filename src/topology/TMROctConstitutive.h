@@ -39,7 +39,7 @@ class TMRStiffnessProperties : public TMREntity {
   TMRStiffnessProperties( int _nmats, TACSMaterialProperties **_props,
                           double _q, double _eps, double _k0,
                           double _ksWeight=30.0,
-			                    double _qtemp=0.0, double _qcond=0.0,
+                          double _qtemp=0.0, double _qcond=0.0,
                           double _beta=10.0, double _xoffset=0.5,
                           int _use_project=0 );
 
@@ -55,8 +55,13 @@ class TMRStiffnessProperties : public TMREntity {
   double beta; // Parameter for the logistics function
   double xoffset;  // Offset parameter in the logistics function
   int use_project; // Flag to indicate if projection should be used (0, 1)
-
+  
   TACSMaterialProperties **props; // The TACS material properties object
+
+  TACSMaterialProperties **getMaterialProperties(){
+    return props;
+  }
+  
 };
 
 /*
@@ -71,6 +76,9 @@ class TMROctConstitutive : public TACSSolidConstitutive {
   TMROctConstitutive( TMRStiffnessProperties *_props,
                       TMROctForest *_forest );
   ~TMROctConstitutive();
+
+  // Return the stiffness properties
+  TMRStiffnessProperties* getStiffnessProperties(){ return props; }
 
   // Get the number of design variables at each "design node"
   int getDesignVarsPerNode(){ return nvars; }
