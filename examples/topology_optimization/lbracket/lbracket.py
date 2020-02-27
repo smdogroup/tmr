@@ -98,7 +98,7 @@ class CreatorCallback:
         filtr = creator.getFilter()
         return creator, filtr
 
-def create_forest(comm, depth, htarget):
+def create_forest(comm, depth, htarget, box_refine=True):
     """
     Create an initial forest for analysis and optimization
 
@@ -130,11 +130,26 @@ def create_forest(comm, depth, htarget):
     # Create the mesh
     mesh = TMR.Mesh(comm, geo)
 
-    # Set the meshing options
-    opts = TMR.MeshOptions()
+    if box_refine:
+        hmin = htarget/2.0
+        hmax = htarget
+        pt1 = [0.03, 0.03, -1]
+        pt2 = [0.05, 0.05, 1]
+        box = TMR.BoxFeatureSize(pt1, pt2, hmin, hmax)
+        box.addBox(pt1, pt2, hmin)
 
-    # Create the surface mesh
-    mesh.mesh(htarget, opts)
+        # Set the meshing options
+        opts = TMR.MeshOptions()
+        
+        # Create the surface mesh
+        mesh.mesh(opts=opts, fs=box)
+        
+    else:
+        # Set the meshing options
+        opts = TMR.MeshOptions()
+        
+        # Create the surface mesh
+        mesh.mesh(htarget, opts=opts)
 
     # Create a model from the mesh
     model = mesh.createModelFromMesh()
@@ -256,7 +271,7 @@ class OutputCallback:
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
         if itr % 10 == 0:
-            self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
+            self.f5.writeToFile(os.path.join(args.prefix, 'output%d.f5'%(itr + self.iter_offset)))
 
 # Set the optimization parameters
 optimization_options = {
@@ -290,8 +305,9 @@ p.add_argument('--htarget', type=float, default=2.5e-3)
 p.add_argument('--max_opt_iters', type=int, default=200)
 p.add_argument('--init_depth', type=int, default=1)
 p.add_argument('--mg_levels', type=int, default=3)
-p.add_argument('--order', type=int, default=3)
+p.add_argument('--order', type=int, default=2)
 p.add_argument('--q_penalty', type=float, default=8.0)
+p.add_argument('--box_refine', action='store_true')
 args = p.parse_args()
 
 # Set the communicator
@@ -328,7 +344,8 @@ bcs = TMR.BoundaryConditions()
 bcs.addBoundaryCondition('fixed', [0, 1], [0.0, 0.0])
 
 # Create the initial forest
-forest = create_forest(comm, args.init_depth, args.htarget)
+forest = create_forest(comm, args.init_depth, args.htarget,
+                       box_refine=args.box_refine)
 forest.setMeshOrder(args.order, TMR.GAUSS_LOBATTO_POINTS)
 
 # Set the original filter to NULL
