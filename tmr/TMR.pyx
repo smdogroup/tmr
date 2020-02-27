@@ -4795,7 +4795,8 @@ cdef class StiffnessProperties:
             free(_props)
 
     def __dealloc__(self):
-        self.ptr.decref()
+        if self.ptr != NULL:
+            self.ptr.decref()
 
     def getDesignVarsPerNode(self):
         cdef int nmats = self.ptr.nmats
@@ -4805,22 +4806,24 @@ cdef class StiffnessProperties:
 
 cdef class OctConstitutive(SolidConstitutive):
     def __cinit__(self, StiffnessProperties props=None, OctForest forest=None):
+        self.cptr = NULL
         if props is not None and forest is not None:
             self.cptr = new TMROctConstitutive(props.ptr, forest.ptr)
+            self.cptr.incref()
         else:
             errmsg = 'OctConstitutive: Must provide StiffnessProperties and OctForest'
             raise ValueError(errmsg)
-        self.cptr.incref()
         self.ptr = self.cptr
 
 cdef class QuadConstitutive(PlaneStressConstitutive):
     def __cinit__(self, StiffnessProperties props=None, QuadForest forest=None):
+        self.cptr = NULL
         if props is not None and forest is not None:
             self.cptr = new TMRQuadConstitutive(props.ptr, forest.ptr)
+            self.cptr.incref()
         else:
             errmsg = 'QuadConstitutive: Must provide StiffnessProperties and QuadForest'
             raise ValueError(errmsg)
-        self.cptr.incref()
         self.ptr = self.cptr
 
 def convertPVecToVec(PVec pvec):

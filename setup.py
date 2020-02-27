@@ -12,6 +12,7 @@ from distutils.core import Extension as Ext
 from Cython.Build import cythonize
 from Cython.Compiler import Options
 
+Options.embedsignature = True
 Options.docstrings = True
 
 # Convert from local to absolute directories
