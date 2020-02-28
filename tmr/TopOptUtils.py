@@ -352,8 +352,7 @@ def addNaturalFrequencyConstraint(problem, omega_min, **kwargs):
                                        opts['eig_tol'], opts['use_jd'],
                                        opts['fgmres_size'], opts['eig_rtol'],
                                        opts['eig_atol'], opts['num_recycle'],
-                                       opts['recycle_type'],
-                                       opts['track_eigen_iters'])
+                                       recycle_type, opts['track_eigen_iters'])
     else: # use the Lanczos method
         problem.addFrequencyConstraint(opts['sigma'], opts['num_eigs'],
                                        opts['ks_weight'], opts['offset'],

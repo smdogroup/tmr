@@ -44,12 +44,13 @@ p.add_argument('--mg_levels', type=int, nargs='+', default=[2])
 p.add_argument('--use_decrease_order', action='store_true', default=True)
 
 # Frequency constraint parameters
+p.add_argument('--min_freq', type=float, default=3.5)
 p.add_argument('--num_eigs', type=int, default=9)
 p.add_argument('--num_recycle', type=int, default=9)
 p.add_argument('--use_jd', action='store_true', default=False)
 
 # Optimizer settings
-p.add_argument('--max_opt_iters', type=int, nargs='+', default=[250])
+p.add_argument('--max_opt_iters', type=int, nargs='+', default=[50])
 p.add_argument('--opt_abs_tol', type=float, default=1e-6)
 p.add_argument('--opt_barrier_frac', type=float, default=0.25)
 p.add_argument('--opt_barrier_power', type=float, default=1.0)
@@ -99,12 +100,11 @@ mg_levels = args.mg_levels
 max_iterations = len(mg_levels)
 
 # Set the material properties
-rho = [2600.0]
-E = [70e9]
-nu = [0.3]
+material_properties = constitutive.MaterialProperties(rho=2600.0, E=79e9,
+                                                      nu=0.3, ys=350e6)
 
 # Create the stiffness properties object
-props = TMR.StiffnessProperties(rho, E, nu, k0=1e-3, eps=0.2, q=5.0)
+props = TMR.StiffnessProperties(material_properties, k0=1e-3, eps=0.2, q=5.0)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
@@ -112,7 +112,7 @@ bcs.addBoundaryCondition('fixed', [0, 1, 2], [0.0, 0.0, 0.0])
 
 # Create the initial forest
 forest = create_forest(comm, args.init_depth, htarget=args.htarget,
-    filename='../cantilever/cantilever.stp')
+                       filename='../cantilever/cantilever.stp')
 
 # Set the original filter to NULL
 orig_filter = None
@@ -122,13 +122,15 @@ xopt = None
 for step in range(max_iterations):
     # Create the TopoProblem instance
     nlevels = mg_levels[step]
-    problem = create_problem(forest, bcs, props, nlevels)
+    problem = create_problem(forest, bcs, props, nlevels, vol_frac=0.4)
 
     # Add the natural frequency constraint
-    omega_min = (0.5/np.pi)*(2e4)**0.5
-    freq_opts = {'use_jd':args.use_jd, 'num_eigs':args.num_eigs,
-                 'num_recycle':args.num_recycle, 'track_eigen_iters':nlevels}
-    TopOptUtils.addNaturalFrequencyConstraint(problem, omega_min, **freq_opts)
+    min_freq = args.min_freq
+    freq_opts = { 'use_jd': args.use_jd,
+                  'num_eigs': args.num_eigs,
+                  'num_recycle': args.num_recycle,
+                  'track_eigen_iters': nlevels }
+    TopOptUtils.addNaturalFrequencyConstraint(problem, min_freq, **freq_opts)
 
     problem.initialize()
     problem.setPrefix(args.prefix)
@@ -145,6 +147,9 @@ for step in range(max_iterations):
     # Set the new original filter
     orig_filter = filtr
 
+    # Check the problem gradients
+    problem.checkGradients(1e-6)
+
     # Set the max number of iterations
     optimization_options['maxiter'] = args.max_opt_iters[step]
 
@@ -154,6 +159,9 @@ for step in range(max_iterations):
 
     # Refine based solely on the value of the density variable
     assembler = problem.getAssembler()
+    forest = forest.duplicate()
+
+    # Perform the density-based refinement
     lower = 0.05
     upper = 0.5
     TopOptUtils.densityBasedRefine(forest, assembler, lower=lower, upper=upper)
@@ -162,6 +170,8 @@ for step in range(max_iterations):
     forest.repartition()
 
     # Output for visualization
-    flag = (TACS.ToFH5.NODES | TACS.ToFH5.EXTRAS)
-    f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
+    flag = (TACS.OUTPUT_CONNECTIVITY |
+            TACS.OUTPUT_NODES |
+            TACS.OUTPUT_EXTRAS)
+    f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
     f5.writeToFile('beam{0}.f5'.format(step))

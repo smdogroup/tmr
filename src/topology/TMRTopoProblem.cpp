@@ -1019,6 +1019,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
         }
       }
       err_count = 0;
+
       // If there is significant error in computing the eigenvalues,
       // reset the buckling computation
       if (err_count > 0){
@@ -1048,6 +1049,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     cons[count] = freq_scale*(cons[count] + freq_offset);
     count++;
   }
+
   // Compute the buckling constraint, if any
   if (buck){
     for ( int i = 0; i < num_load_cases; i++ ){

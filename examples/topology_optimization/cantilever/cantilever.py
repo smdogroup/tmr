@@ -170,7 +170,8 @@ class OutputCallback:
 
         return
 
-def create_problem(forest, bcs, props, nlevels, iter_offset=0):
+def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
+                   density=2600.0, iter_offset=0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -185,6 +186,9 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
         bcs (BoundaryConditions): Boundary condition object
         props (StiffnessProperties): Material properties object
         nlevels (int): number of multigrid levels
+        vol_frac (float): Volume fraction for the mass constraint
+        density (float): Density to use for the mass computation
+        iter_offset (int): iteration counter offset
 
     Returns:
         TopoProblem: Topology optimization problem instance
@@ -218,8 +222,6 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0):
     ly = 10.0 # mm
     lz = 10.0 # mm
     vol = lx*ly*lz
-    vol_frac = 0.25
-    density = 2600.0
     m_fixed = vol_frac*(vol*density)
 
     # Set the mass constraint

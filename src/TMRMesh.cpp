@@ -2042,7 +2042,7 @@ TMRModel* TMRMesh::createModelFromMesh(){
       TMRVertex *v[8];
       TMREdge *e[12];
       TMRFace *f[6];
-      int edir[12], fdir[6];
+      int edir[12];
 
       // Get the vertices
       for ( int j = 0; j < 8; j++ ){
