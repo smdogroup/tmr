@@ -140,17 +140,17 @@ def create_forest(comm, depth, htarget, box_refine=True):
 
         # Set the meshing options
         opts = TMR.MeshOptions()
-        
+
         # Create the surface mesh
         mesh.mesh(opts=opts, fs=box)
-        
+
     else:
         # Set the meshing options
         opts = TMR.MeshOptions()
-        
+
         # Create the surface mesh
         mesh.mesh(htarget, opts=opts)
-
+    
     # Create a model from the mesh
     model = mesh.createModelFromMesh()
 
@@ -302,7 +302,8 @@ p = argparse.ArgumentParser()
 p.add_argument('--prefix', type=str, default='./results')
 p.add_argument('--vol_frac', type=float, default=0.3)
 p.add_argument('--htarget', type=float, default=2.5e-3)
-p.add_argument('--max_opt_iters', type=int, default=200)
+p.add_argument('--max_iters', type=int, default=1)
+p.add_argument('--max_opt_iters', type=int, default=300)
 p.add_argument('--init_depth', type=int, default=1)
 p.add_argument('--mg_levels', type=int, default=3)
 p.add_argument('--order', type=int, default=2)
@@ -352,7 +353,7 @@ forest.setMeshOrder(args.order, TMR.GAUSS_LOBATTO_POINTS)
 orig_filter = None
 xopt = None
 iter_offset = 0
-max_iterations = 2
+max_iterations = args.max_iters
 
 for step in range(max_iterations):
     # Create the TMRTopoProblem instance
@@ -397,10 +398,12 @@ for step in range(max_iterations):
     # Perform refinement based on distance
     dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
     refine_distance = 0.025*domain_length
-    TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
-                             interface_lev=args.init_depth+1, interior_lev=args.init_depth,
-                             domain_length=domain_length, filename=dist_file)
-
+    # TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
+    #                          interface_lev=args.init_depth+1, interior_lev=args.init_depth,
+    #                          domain_length=domain_length, filename=dist_file)
+    TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
+                                     domain_length=domain_length, filename=dist_file)
+    
     # Repartition the mesh
     forest.balance(1)
     forest.repartition()
