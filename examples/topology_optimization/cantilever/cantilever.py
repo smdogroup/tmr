@@ -162,10 +162,10 @@ class OutputCallback:
         return
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
-        self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
+        self.f5.writeToFile(os.path.join(prefix, 'output%d.f5'%(itr + self.iter_offset)))
 
         self.assembler.getDesignVars(self.xt)
-        TMR.writeSTLToBin('results/level_set_output%d.bstl'%(itr + self.iter_offset),
+        TMR.writeSTLToBin(os.path.join(prefix, 'level_set_output%d.bstl'%(itr + self.iter_offset)),
                           oct_forest, self.xt)
 
         return

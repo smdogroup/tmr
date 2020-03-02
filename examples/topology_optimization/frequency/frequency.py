@@ -117,12 +117,15 @@ forest = create_forest(comm, args.init_depth, htarget=args.htarget,
 # Set the original filter to NULL
 orig_filter = None
 xopt = None
+iter_offset = 0
 
 # Start the optimization
 for step in range(max_iterations):
     # Create the TopoProblem instance
     nlevels = mg_levels[step]
-    problem = create_problem(forest, bcs, props, nlevels, vol_frac=0.4)
+    problem = create_problem(forest, bcs, props, nlevels, vol_frac=0.4,
+                             iter_offset=iter_offset)
+    iter_offset += args.max_opt_iters[step]
 
     # Add the natural frequency constraint
     min_freq = args.min_freq
