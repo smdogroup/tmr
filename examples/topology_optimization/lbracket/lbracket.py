@@ -17,6 +17,87 @@ import numpy as np
 import argparse
 import os
 
+def in_domain(x, y):
+    '''
+    Check if a point x, y is within the geometry domain
+    '''
+    l = 0.1
+    h = 0.04
+    xc = x - h
+    yc = y - h
+
+    check = True
+    
+    if (x > l) or (x < 0.0) or (y > l) or (y < 0.0):
+        check = False
+        return check
+    
+    if (xc > 0.0) & (yc > 0.0):
+        check = False
+
+    return check
+
+def in_circle(x, y, x0, y0, r):
+    '''
+    Check if a point (x, y) is in the circle centered at (x0, y0) with
+    redius r
+    '''
+    
+    dr = (x-x0)**2 + (y-y0)**2 - r**2
+    if dr <= 0:
+        check = True
+    else:
+        check = False
+
+    return check
+
+def circle_refine(x0, r, hr, h):
+    '''
+    Create a feature size with a circular refinement region using concentric circles
+    wit radius r, with target mesh size hr in each concentric circle
+
+    Args:
+        x0 (np.array): center of circle where refinement region should be centered
+        r (np.array): array of circle radii to apply refinement to
+                      -> should be in descending order
+        hr (np.array): corresponding target h values for within each concentric
+                       circle of radius r
+        h (float): target refinement outside the circular domain 
+    '''
+
+    # Create a grid of points to specify target values
+    nx = 100
+    ny = 100
+    npts = nx*ny
+    xpts = np.zeros((npts, 3))
+    x = np.linspace(0.0, 0.1, nx)
+    y = np.linspace(0.0, 0.1, ny)
+    del_i = []
+    for i in range(nx):
+        for j in range(ny):
+            if in_domain(x[i], y[j]):
+                xpts[i*ny+j, 0] = x[i]
+                xpts[i*ny+j, 1] = y[j]
+            else:
+                del_i.append(i*ny+j)
+
+    # Remove the region outside the domain
+    xpts = np.delete(xpts, del_i, 0)
+
+    # Create the refinement array
+    hvals = h*np.ones(len(xpts))
+    for i in range(len(xpts)):
+        for hi, ri in zip(hr, r):
+            if in_circle(xpts[i, 0], xpts[i, 1], x0[0], x0[1], ri):
+                hvals[i] = hi
+
+    xpts = np.ascontiguousarray(xpts)
+        
+    hmin = np.amin(hr)
+    fs = TMR.PointFeatureSize(xpts, hvals, hmin, h)
+    
+    return fs
+
 class QuadConformCreator(TMR.QuadConformTopoCreator):
     """
     This class is called to create a TACSAssembler class with an underlying
@@ -98,7 +179,7 @@ class CreatorCallback:
         filtr = creator.getFilter()
         return creator, filtr
 
-def create_forest(comm, depth, htarget, box_refine=True):
+def create_forest(comm, depth, htarget, fs_type=None):
     """
     Create an initial forest for analysis and optimization
 
@@ -110,6 +191,7 @@ def create_forest(comm, depth, htarget, box_refine=True):
         comm (MPI_Comm): MPI communicator
         depth (int): Depth of the initial trees
         htarget (float): Target global element mesh size
+        refine_type (string): feature size refinement to use ('box', or 'point')
 
     Returns:
         QuadForest: Initial forest for topology optimization
@@ -130,8 +212,8 @@ def create_forest(comm, depth, htarget, box_refine=True):
     # Create the mesh
     mesh = TMR.Mesh(comm, geo)
 
-    if box_refine:
-        hmin = htarget/2.0
+    if fs_type == 'box':
+        hmin = htarget/4.0
         hmax = htarget
         pt1 = [0.03, 0.03, -1]
         pt2 = [0.05, 0.05, 1]
@@ -144,6 +226,20 @@ def create_forest(comm, depth, htarget, box_refine=True):
         # Create the surface mesh
         mesh.mesh(opts=opts, fs=box)
 
+    elif fs_type == 'point':
+        x0 = np.array([0.04, 0.04])
+        ncircles = 10
+        r = np.linspace(0.04, 0.01, ncircles)
+        hr = htarget*np.linspace(1.0, 0.25, ncircles)
+        #np.array([htarget/2.0, htarget/4.0])
+        circle = circle_refine(x0, r, hr, htarget)
+
+        # Set the meshing options
+        opts = TMR.MeshOptions()
+
+        # Create the surface mesh
+        mesh.mesh(opts=opts, fs=circle)
+        
     else:
         # Set the meshing options
         opts = TMR.MeshOptions()
@@ -308,7 +404,8 @@ p.add_argument('--init_depth', type=int, default=1)
 p.add_argument('--mg_levels', type=int, default=3)
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--q_penalty', type=float, default=8.0)
-p.add_argument('--box_refine', action='store_true')
+p.add_argument('--fs_type', type=str, default='point',
+               help='feature size refinement type: point, box, or None')
 args = p.parse_args()
 
 # Set the communicator
@@ -346,7 +443,8 @@ bcs.addBoundaryCondition('fixed', [0, 1], [0.0, 0.0])
 
 # Create the initial forest
 forest = create_forest(comm, args.init_depth, args.htarget,
-                       box_refine=args.box_refine)
+                       fs_type=args.fs_type)
+forest.writeToVTK('forest.vtk')
 forest.setMeshOrder(args.order, TMR.GAUSS_LOBATTO_POINTS)
 
 # Set the original filter to NULL
@@ -395,6 +493,20 @@ for step in range(max_iterations):
     assembler = problem.getAssembler()
     forest = forest.duplicate()
 
+    # Output the original design variables before filtering
+    rho_vec = assembler.createDesignVec()
+    assembler.getDesignVariables(rho_vec)
+    x_vec = TMR.convertPVecToVec(xopt)
+    assembler.setDesignVars(x_vec)
+    # visualize
+    flag = (TACS.OUTPUT_CONNECTIVITY |
+            TACS.OUTPUT_NODES |
+            TACS.OUTPUT_EXTRAS)
+    f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
+    f5.writeToFile(os.path.join(args.prefix, 'dv_output%d.f5'%(step)))
+    # Set the tacs design vars back to the interpolated densities
+    assembler.setDesignVars(rho_vec)
+    
     # Perform refinement based on distance
     dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
     refine_distance = 0.025*domain_length
