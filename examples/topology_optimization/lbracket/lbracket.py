@@ -493,19 +493,19 @@ for step in range(max_iterations):
     assembler = problem.getAssembler()
     forest = forest.duplicate()
 
-    # Output the original design variables before filtering
-    rho_vec = assembler.createDesignVec()
-    assembler.getDesignVariables(rho_vec)
-    x_vec = TMR.convertPVecToVec(xopt)
-    assembler.setDesignVars(x_vec)
-    # visualize
-    flag = (TACS.OUTPUT_CONNECTIVITY |
-            TACS.OUTPUT_NODES |
-            TACS.OUTPUT_EXTRAS)
-    f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
-    f5.writeToFile(os.path.join(args.prefix, 'dv_output%d.f5'%(step)))
-    # Set the tacs design vars back to the interpolated densities
-    assembler.setDesignVars(rho_vec)
+    # # Output the original design variables before filtering
+    # rho_vec = assembler.createDesignVec()
+    # assembler.getDesignVariables(rho_vec)
+    # x_vec = TMR.convertPVecToVec(xopt)
+    # assembler.setDesignVars(x_vec)
+    # # visualize
+    # flag = (TACS.OUTPUT_CONNECTIVITY |
+    #         TACS.OUTPUT_NODES |
+    #         TACS.OUTPUT_EXTRAS)
+    # f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
+    # f5.writeToFile(os.path.join(args.prefix, 'dv_output%d.f5'%(step)))
+    # # Set the tacs design vars back to the interpolated densities
+    # assembler.setDesignVars(rho_vec)
     
     # Perform refinement based on distance
     dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
