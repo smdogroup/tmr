@@ -215,11 +215,11 @@ void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
 
           // Compute the Jacobian transformation
           TacsScalar Xd[9], J[9];
-          TacsScalar detJ = basis->getJacobianTransform(pt, Xpts, Xd, J);
+          TacsScalar detJ = basis->getJacobianTransform(n, pt, Xpts, Xd, J);
 
           // Get the field gradient for the design variable value
           TacsScalar X[3], U;
-          basis->getFieldValues(pt, Xpts, 1, x_values, X, &U);
+          basis->getFieldValues(n, pt, Xpts, 1, x_values, X, &U);
 
           TacsScalar DUt[3] = {0.0, 0.0, 0.0};
           TacsScalar DUx[3] = {0.0, 0.0, 0.0};
@@ -331,11 +331,11 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
 
           // Compute the Jacobian transformation
           TacsScalar Xd[9], J[9];
-          TacsScalar detJ = basis->getJacobianTransform(pt, Xpts, Xd, J);
+          TacsScalar detJ = basis->getJacobianTransform(n, pt, Xpts, Xd, J);
 
           // Get the field gradient for the design variable value
           TacsScalar X[3], U;
-          basis->getFieldValues(pt, Xpts, 1, psi_values, X, &U);
+          basis->getFieldValues(n, pt, Xpts, 1, psi_values, X, &U);
 
           TacsScalar DUt[3] = {0.0, 0.0, 0.0};
           TacsScalar DUx[3] = {0.0, 0.0, 0.0};

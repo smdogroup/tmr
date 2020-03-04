@@ -266,14 +266,15 @@ def filter_callback(assemblers, filters):
     """
     Create and initialize a filter with the specified parameters
     """
-    N = 15
+    # Set the number of filter iterations
+    N = args.N
 
     # Find the characteristic length of the domain and set the filter length scale
     a = 0.1
-    b = (2.0/5.0)*a
-    area = a**2 - (a - b)**2
-    r0 = 0.05*np.sqrt(area)
+    r0 = args.r0_frac*a
 
+    if assemblers[0].getMPIComm().rank == 0:
+        print('N = %d  r0 = %g'%(N, r0))
     mfilter = TopOptUtils.Mfilter(N, assemblers, filters, dim=2, r=r0)
     mfilter.initialize()
     return mfilter
@@ -404,6 +405,8 @@ p.add_argument('--init_depth', type=int, default=1)
 p.add_argument('--mg_levels', type=int, default=3)
 p.add_argument('--order', type=int, default=2)
 p.add_argument('--q_penalty', type=float, default=8.0)
+p.add_argument('--N', type=int, default=10)
+p.add_argument('--r0_frac', type=float, default=0.05)
 p.add_argument('--fs_type', type=str, default='point',
                help='feature size refinement type: point, box, or None')
 args = p.parse_args()
@@ -416,7 +419,9 @@ if comm.rank == 0:
     for arg in vars(args):
         print('%-20s'%(arg), getattr(args, arg))
 
-# Units are in m
+# Ensure that the prefix directory exists
+if not os.path.isdir(args.prefix):
+    os.mkdir(args.prefix)
 
 # Create the first material properties object
 rho = 2600.0
@@ -444,7 +449,7 @@ bcs.addBoundaryCondition('fixed', [0, 1], [0.0, 0.0])
 # Create the initial forest
 forest = create_forest(comm, args.init_depth, args.htarget,
                        fs_type=args.fs_type)
-forest.writeToVTK('forest.vtk')
+forest.writeToVTK(os.path.join(args.prefix, 'forest.vtk'))
 forest.setMeshOrder(args.order, TMR.GAUSS_LOBATTO_POINTS)
 
 # Set the original filter to NULL
@@ -495,15 +500,17 @@ for step in range(max_iterations):
 
     # Output the original design variables before filtering
     rho_vec = assembler.createDesignVec()
-    assembler.getDesignVariables(rho_vec)
+    assembler.getDesignVars(rho_vec)
     x_vec = TMR.convertPVecToVec(xopt)
     assembler.setDesignVars(x_vec)
+
     # visualize
     flag = (TACS.OUTPUT_CONNECTIVITY |
             TACS.OUTPUT_NODES |
             TACS.OUTPUT_EXTRAS)
     f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
     f5.writeToFile(os.path.join(args.prefix, 'dv_output%d.f5'%(step)))
+
     # Set the tacs design vars back to the interpolated densities
     assembler.setDesignVars(rho_vec)
     
