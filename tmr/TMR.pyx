@@ -4882,7 +4882,7 @@ def ApproximateDistance(filtr, Vec x, int index=0,
 cdef void writeOutputCallback(void *func, const char *prefix, int iter,
                               TMROctForest *octforest, TMRQuadForest *quadforest,
                               TACSBVec *x):
-    if func:
+    try:
         oct = None
         quad = None
         if octforest:
@@ -4891,6 +4891,35 @@ cdef void writeOutputCallback(void *func, const char *prefix, int iter,
             quad = _init_QuadForest(quadforest)
         (<object>func).__call__(tmr_convert_char_to_str(prefix), iter,
                                 oct, quad, _init_Vec(x))
+    except:
+        tb = traceback.format_exc()
+        print(tb)
+        exit(0)
+    return
+
+cdef void constraintCallback(void *func, TACSAssembler *assembler, TACSMg *mg,
+                             int ncon, TacsScalar *cvals):
+    try:
+        cons = (<object>func).__call__(_init_Assembler(assembler), _init_Mg(mg))
+        for i in range(min(len(cons), ncon)):
+            cvals[i] = cons[i]
+    except:
+        tb = traceback.format_exc()
+        print(tb)
+        exit(0)
+    return
+
+cdef void constraintGradientCallback(void *func, TACSAssembler *assembler, TACSMg *mg,
+                                     int ncon, TACSBVec **dcdx):
+    try:
+        vecs = []
+        for i in range(ncon):
+            vecs.append(_init_Vec(dcdx[i]))
+        (<object>func).__call__(_init_Assembler(assembler), _init_Mg(mg), vecs)
+    except:
+        tb = traceback.format_exc()
+        print(tb)
+        exit(0)
     return
 
 cdef class TopoProblem(ProblemBase):
@@ -5166,6 +5195,37 @@ cdef class TopoProblem(ProblemBase):
             raise ValueError(errmsg)
         prob.addBucklingConstraint(sigma, num_eigvals, ks_weight,
                                    offset, scale, max_lanczos, eigtol)
+        return
+
+    def addConstraintCallback(self, int ncon, confunc, gradfunc):
+        """
+        Add a constraint callback to TMRTopoProblem.
+
+        This function takes in two python functions that return the constraint
+        values and the constraint gradients, respectively. Note that the
+        constraints take the form c[i] >= 0. The number of constraints defined
+        by these functions is also provided as an input. The callback for the
+        constraint evaluation takes the form:
+
+        clist = confunc(Assembler, Mg)
+
+        where the Assembler and Mg object are associated with the topology
+        optimization problem. Note that the clist can be any list-type object.
+        The constraint gradient callback takes the form:
+
+        gradfunc(Assembler, Mg, vlist)
+
+        where vlist is a list of TACS.Vec objects. The constraint gradients should
+        overwrite any information stored in the vectors.
+
+        Args:
+            ncon (int): Number of constraints defined by confunc and gradfunc
+            confunc: Python function defining the constraints
+            gradfunc: Python function implementing the constraints
+        """
+        prob = _dynamicTopoProblem(self.ptr)
+        prob.addConstraintCallback(ncon, <void*>confunc, constraintCallback,
+                                   <void*>gradfunc, constraintGradientCallback)
         return
 
     def setObjective(self, list weights, list funcs=None):

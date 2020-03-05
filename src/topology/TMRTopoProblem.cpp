@@ -266,8 +266,14 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   f5_eigen_write_flag = 0;
 
   // Callback function information
-  callback_ptr = NULL;
+  output_callback_ptr = NULL;
   writeOutputCallback = NULL;
+
+  num_callback_constraints = 0;
+  constraint_callback_ptr = NULL;
+  constraintCallback = NULL;
+  constraint_gradient_callback_ptr = NULL;
+  constraintGradientCallback = NULL;
 }
 
 /*
@@ -657,6 +663,25 @@ void TMRTopoProblem::addBucklingConstraint( double sigma,
 }
 
 /*
+  Add callback constraint and constraint gradient calls
+*/
+void TMRTopoProblem::addConstraintCallback( int ncon,
+                                            void *con_ptr,
+                                            void (*confunc)(void*, TACSAssembler*, TACSMg*,
+                                                            int, TacsScalar*),
+                                            void *con_grad_ptr,
+                                            void (*gradfunc)(void*, TACSAssembler*, TACSMg*,
+                                                             int, TACSBVec**) ){
+  if (ncon > 0 && confunc && gradfunc){
+    num_callback_constraints = ncon;
+    constraint_callback_ptr = con_ptr;
+    constraintCallback = confunc;
+    constraint_gradient_callback_ptr = con_grad_ptr;
+    constraintGradientCallback = gradfunc;
+  }
+}
+
+/*
   Set the objective weight values - this indicates a compliance objective
 */
 void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights ){
@@ -715,6 +740,7 @@ void TMRTopoProblem::initialize(){
       num_constraints++;
     }
   }
+  num_constraints += num_callback_constraints;
 
   // Get the design node map
   TACSNodeMap *designMap = assembler->getDesignNodeMap();
@@ -1119,6 +1145,12 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     }
   }
 
+  // Evaluate the callback constraints
+  if (constraintCallback){
+    constraintCallback(constraint_callback_ptr, assembler, mg,
+                       num_callback_constraints, &cons[count]);
+  }
+
   return 0;
 }
 
@@ -1356,6 +1388,21 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     }
   } // end num_load_cases
 
+  // Evaluate the callback constraints
+  if (constraintGradientCallback){
+    TACSBVec **vecs = new TACSBVec*[ num_callback_constraints ];
+    for ( int i = 0; i < num_callback_constraints; i++ ){
+      vecs[i] = NULL;
+      wrap = dynamic_cast<ParOptBVecWrap*>(Acvec[count]);
+      if (wrap){
+        vecs[i] = wrap->vec;
+      }
+    }
+    constraintGradientCallback(constraint_gradient_callback_ptr,
+                               assembler, mg, num_callback_constraints, vecs);
+    delete [] vecs;
+  }
+
   return 0;
 }
 
@@ -1458,7 +1505,7 @@ void TMRTopoProblem::addSparseInnerProduct( double alpha,
 void TMRTopoProblem::writeOutput( int iter, ParOptVec *xvec ){
   ParOptBVecWrap *wrap = dynamic_cast<ParOptBVecWrap*>(xvec);
   if (wrap && writeOutputCallback){
-    writeOutputCallback(callback_ptr,
+    writeOutputCallback(output_callback_ptr,
                         prefix, iter, filter->getFilterOctForest(),
                         filter->getFilterQuadForest(), wrap->vec);
   }

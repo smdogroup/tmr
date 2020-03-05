@@ -27,7 +27,6 @@
 #include "TMRTopoFilter.h"
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
-// #include "TMR_RefinementTools.h"op
 #include "TACSStructuralMass.h"
 #include "TACSKSFailure.h"
 #include "TACSBuckling.h"
@@ -86,10 +85,6 @@ class TMRTopoProblem : public ParOptProblem {
                        const TacsScalar *_func_offset,
                        const TacsScalar *_func_scale,
                        int num_funcs );
-//  void addStressConstraint( int _load_case,
-//                            TMRStressConstraint *stress_func,
-//                            TacsScalar _constr_offset=1.0,
-//                            TacsScalar _constr_scale=1.0 );
   void addLinearConstraints( ParOptVec **vecs,
                              TacsScalar *offset,
                              int _ncon );
@@ -107,6 +102,13 @@ class TMRTopoProblem : public ParOptProblem {
                               TacsScalar ks_weight,
                               TacsScalar offset, TacsScalar scale,
                               int max_lanczos, double eigtol );
+  void addConstraintCallback( int ncon,
+                              void *con_ptr,
+                              void (*confunc)(void*, TACSAssembler*, TACSMg*,
+                                              int, TacsScalar*),
+                              void *con_grad_ptr,
+                              void (*gradfunc)(void*, TACSAssembler*, TACSMg*,
+                                               int, TACSBVec**) );
 
   // Accessor functions to the underlying Assembler and Oct or QuadForest
   // --------------------------------------------------------------------
@@ -137,10 +139,6 @@ class TMRTopoProblem : public ParOptProblem {
   // Set the output iteration counter
   // --------------------------------
   void setIterationCounter( int iter );
-
-  // Set the linearization point and penalty parameter
-  // -------------------------------------------------
-  void setLinearization( double q, ParOptVec *xvec );
 
   // Create a design variable vector
   // -------------------------------
@@ -210,15 +208,23 @@ class TMRTopoProblem : public ParOptProblem {
                           void (*func)( void*, const char*, int,
                                         TMROctForest*, TMRQuadForest*,
                                         TACSBVec* ) ){
-    callback_ptr = data;
+    output_callback_ptr = data;
     writeOutputCallback = func;
   }
 
  private:
-  void *callback_ptr;
+  void *output_callback_ptr;
   void (*writeOutputCallback)( void*, const char*, int,
                                TMROctForest*, TMRQuadForest*,
                                TACSBVec* );
+
+  int num_callback_constraints;
+  void *constraint_callback_ptr;
+  void (*constraintCallback)( void*, TACSAssembler*, TACSMg*,
+                              int, TacsScalar* );
+  void *constraint_gradient_callback_ptr;
+  void (*constraintGradientCallback)( void*, TACSAssembler*, TACSMg*,
+                                      int, TACSBVec** );
 
   // Set the design variables across all multigrid levels
   void setDesignVars( ParOptVec *xvec );

@@ -605,6 +605,11 @@ cdef extern from "TMRTopoProblem.h":
     ctypedef void (*writeoutputcallback)(void*, const char*, int,
                                          TMROctForest*, TMRQuadForest*,
                                          TACSBVec*)
+    ctypedef void (*constraintcallback)(void*, TACSAssembler*, TACSMg*,
+                                        int, TacsScalar*)
+    ctypedef void (*constraintgradientcallback)(void*, TACSAssembler*, TACSMg*,
+                                                int, TACSBVec**)
+
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(TMRTopoFilter*, TACSMg*, int, double)
         TACSAssembler *getAssembler()
@@ -621,6 +626,12 @@ cdef extern from "TMRTopoProblem.h":
                                     int, JDRecycleType, int)
         void addBucklingConstraint(double, int, TacsScalar,
                                    TacsScalar, TacsScalar, int, double)
+        void addConstraintCallback(int, void*,
+                                   void (*constraintcallback)(void*, TACSAssembler*, TACSMg*,
+                                                              int, TacsScalar*),
+                                   void*,
+                                   void (*constraintgradientcallback)(void*, TACSAssembler*, TACSMg*,
+                                                                      int, TACSBVec**))
         void setObjective(const TacsScalar*)
         void setObjective(const TacsScalar*, TACSFunction**)
         void initialize()
@@ -635,7 +646,6 @@ cdef extern from "TMRTopoProblem.h":
             void (*writeoutputcallback)(void*, const char*, int,
                                         TMROctForest*, TMRQuadForest*,
                                         TACSBVec*))
-
     cdef cppclass ParOptBVecWrap(ParOptVec):
         ParOptBVecWrap(TACSBVec*)
         TACSBVec *vec
