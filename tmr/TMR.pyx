@@ -4371,6 +4371,60 @@ def getSTLTriangles(OctForest forest, Vec x, int offset=0,
 
     return points
 
+cdef class TopoFilter:
+    def __cinit__(self, *args, **kwargs):
+        self.ptr = NULL
+
+    def __dealloc__(self):
+        if self.ptr:
+            self.ptr.decref()
+
+    def getFilter(self):
+        """
+        getFilter(self)
+
+        Get the OctForest or QuadForest object associated with the filter
+
+        Returns:
+            OctForest or QuadForest: The forest associated with the filter
+        """
+        cdef TMRQuadForest *quad_forest = NULL
+        cdef TMROctForest *oct_forest = NULL
+        if self.ptr != NULL:
+            quad_forest = self.ptr.getFilterQuadForest()
+            oct_forest = self.ptr.getFilterOctForest()
+            if quad_forest != NULL:
+                return _init_QuadForest(quad_forest)
+            if oct_forest != NULL:
+                return _init_OctForest(oct_forest)
+        return None
+
+    def getAssembler(self):
+        """
+        getAssembler(self)
+
+        Return the Assembler object associated with the filter
+
+        Returns:
+            Assembler: The Assembler object
+        """
+        if self.ptr != NULL:
+            return _init_Assembler(self.ptr.getAssembler())
+        return None
+
+    def addValues(self, Vec vec):
+        """
+        addValues(self, vec)
+
+        Add the filtered values to the vector
+
+        Args:
+            vec (TACS.Vec): Vector of the sensitivities
+        """
+        if self.ptr != NULL:
+            self.ptr.addValues(vec.ptr)
+        return
+
 cdef class LagrangeFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters):
         cdef int nlevels = 0
@@ -4412,27 +4466,6 @@ cdef class LagrangeFilter(TopoFilter):
         free(assemb)
         return
 
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
-    def getFilter(self):
-        """
-        getFilter(self)
-
-        Get the OctForest or QuadForest object associated with the filter
-
-        Returns:
-            OctForest or QuadForest: The forest associated with the filter
-        """
-        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
-        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
-        if quad_forest != NULL:
-            return _init_QuadForest(quad_forest)
-        if oct_forest != NULL:
-            return _init_OctForest(oct_forest)
-        return None
-
 cdef class ConformFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters):
         cdef int nlevels = 0
@@ -4472,27 +4505,6 @@ cdef class ConformFilter(TopoFilter):
 
         free(assemb)
         return
-
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
-    def getFilter(self):
-        """
-        getFilter(self)
-
-        Get the OctForest or QuadForest object associated with the filter
-
-        Returns:
-            OctForest or QuadForest: The forest associated with the filter
-        """
-        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
-        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
-        if quad_forest != NULL:
-            return _init_QuadForest(quad_forest)
-        if oct_forest != NULL:
-            return _init_OctForest(oct_forest)
-        return None
 
 cdef class HelmholtzFilter(TopoFilter):
     def __cinit__(self, double radius, list assemblers, list filters):
@@ -4534,27 +4546,6 @@ cdef class HelmholtzFilter(TopoFilter):
         free(assemb)
         return
 
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
-    def getFilter(self):
-        """
-        getFilter(self)
-
-        Get the OctForest or QuadForest object associated with the filter
-
-        Returns:
-            OctForest or QuadForest: The forest associated with the filter
-        """
-        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
-        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
-        if quad_forest != NULL:
-            return _init_QuadForest(quad_forest)
-        if oct_forest != NULL:
-            return _init_OctForest(oct_forest)
-        return None
-
 cdef class MatrixFilter(TopoFilter):
     def __cinit__(self, double r, int N, list assemblers, list filters):
         cdef int nlevels = 0
@@ -4594,27 +4585,6 @@ cdef class MatrixFilter(TopoFilter):
 
         free(assemb)
         return
-
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
-    def getFilter(self):
-        """
-        getFilter(self)
-
-        Get the OctForest or QuadForest object associated with the filter
-
-        Returns:
-            OctForest or QuadForest: The forest associated with the filter
-        """
-        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
-        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
-        if quad_forest != NULL:
-            return _init_QuadForest(quad_forest)
-        if oct_forest != NULL:
-            return _init_OctForest(oct_forest)
-        return None
 
 # This wraps a C++ array with a numpy array for later useage
 cdef inplace_array_1d(int nptype, int dim1, void *data_ptr):
@@ -4716,30 +4686,9 @@ cdef class HelmholtzPUFilter(TopoFilter):
 
         return
 
-    def __dealloc__(self):
-        if self.ptr:
-            self.ptr.decref()
-
     def initialize(self):
         self.hptr.initialize()
         return
-
-    def getFilter(self):
-        """
-        getFilter(self)
-
-        Get the OctForest or QuadForest object associated with the filter
-
-        Returns:
-            OctForest or QuadForest: The forest associated with the filter
-        """
-        cdef TMRQuadForest *quad_forest = self.ptr.getFilterQuadForest()
-        cdef TMROctForest *oct_forest = self.ptr.getFilterOctForest()
-        if quad_forest != NULL:
-            return _init_QuadForest(quad_forest)
-        if oct_forest != NULL:
-            return _init_OctForest(oct_forest)
-        return None
 
 cdef class StiffnessProperties:
     cdef TMRStiffnessProperties *ptr
@@ -4897,10 +4846,10 @@ cdef void writeOutputCallback(void *func, const char *prefix, int iter,
         exit(0)
     return
 
-cdef void constraintCallback(void *func, TACSAssembler *assembler, TACSMg *mg,
+cdef void constraintCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                              int ncon, TacsScalar *cvals):
     try:
-        cons = (<object>func).__call__(_init_Assembler(assembler), _init_Mg(mg))
+        cons = (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg))
         for i in range(min(len(cons), ncon)):
             cvals[i] = cons[i]
     except:
@@ -4909,13 +4858,13 @@ cdef void constraintCallback(void *func, TACSAssembler *assembler, TACSMg *mg,
         exit(0)
     return
 
-cdef void constraintGradientCallback(void *func, TACSAssembler *assembler, TACSMg *mg,
+cdef void constraintGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                                      int ncon, TACSBVec **dcdx):
     try:
         vecs = []
         for i in range(ncon):
             vecs.append(_init_Vec(dcdx[i]))
-        (<object>func).__call__(_init_Assembler(assembler), _init_Mg(mg), vecs)
+        (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg), vecs)
     except:
         tb = traceback.format_exc()
         print(tb)
@@ -4927,6 +4876,8 @@ cdef class TopoProblem(ProblemBase):
     Creates and stores information for topology optimization problems
     """
     cdef object callback
+    cdef object confunc
+    cdef object gradfunc
     def __cinit__(self, TopoFilter fltr, Pc pc,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL
@@ -4937,6 +4888,8 @@ cdef class TopoProblem(ProblemBase):
             raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
         self.callback = None
+        self.confunc = None
+        self.gradfunc = None
         self.ptr = new TMRTopoProblem(fltr.ptr, mg, gmres_subspace, rtol)
         self.ptr.incref()
         return
@@ -5224,6 +5177,8 @@ cdef class TopoProblem(ProblemBase):
             gradfunc: Python function implementing the constraints
         """
         prob = _dynamicTopoProblem(self.ptr)
+        self.confunc = confunc
+        self.gradfunc = gradfunc
         prob.addConstraintCallback(ncon, <void*>confunc, constraintCallback,
                                    <void*>gradfunc, constraintGradientCallback)
         return

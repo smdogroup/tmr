@@ -667,10 +667,10 @@ void TMRTopoProblem::addBucklingConstraint( double sigma,
 */
 void TMRTopoProblem::addConstraintCallback( int ncon,
                                             void *con_ptr,
-                                            void (*confunc)(void*, TACSAssembler*, TACSMg*,
+                                            void (*confunc)(void*, TMRTopoFilter*, TACSMg*,
                                                             int, TacsScalar*),
                                             void *con_grad_ptr,
-                                            void (*gradfunc)(void*, TACSAssembler*, TACSMg*,
+                                            void (*gradfunc)(void*, TMRTopoFilter*, TACSMg*,
                                                              int, TACSBVec**) ){
   if (ncon > 0 && confunc && gradfunc){
     num_callback_constraints = ncon;
@@ -1147,7 +1147,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
   // Evaluate the callback constraints
   if (constraintCallback){
-    constraintCallback(constraint_callback_ptr, assembler, mg,
+    constraintCallback(constraint_callback_ptr, filter, mg,
                        num_callback_constraints, &cons[count]);
   }
 
@@ -1399,7 +1399,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       }
     }
     constraintGradientCallback(constraint_gradient_callback_ptr,
-                               assembler, mg, num_callback_constraints, vecs);
+                               filter, mg, num_callback_constraints, vecs);
     delete [] vecs;
   }
 

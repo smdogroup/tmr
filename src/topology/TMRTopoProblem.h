@@ -104,10 +104,10 @@ class TMRTopoProblem : public ParOptProblem {
                               int max_lanczos, double eigtol );
   void addConstraintCallback( int ncon,
                               void *con_ptr,
-                              void (*confunc)(void*, TACSAssembler*, TACSMg*,
+                              void (*confunc)(void*, TMRTopoFilter*, TACSMg*,
                                               int, TacsScalar*),
                               void *con_grad_ptr,
-                              void (*gradfunc)(void*, TACSAssembler*, TACSMg*,
+                              void (*gradfunc)(void*, TMRTopoFilter*, TACSMg*,
                                                int, TACSBVec**) );
 
   // Accessor functions to the underlying Assembler and Oct or QuadForest
@@ -220,10 +220,10 @@ class TMRTopoProblem : public ParOptProblem {
 
   int num_callback_constraints;
   void *constraint_callback_ptr;
-  void (*constraintCallback)( void*, TACSAssembler*, TACSMg*,
+  void (*constraintCallback)( void*, TMRTopoFilter*, TACSMg*,
                               int, TacsScalar* );
   void *constraint_gradient_callback_ptr;
-  void (*constraintGradientCallback)( void*, TACSAssembler*, TACSMg*,
+  void (*constraintGradientCallback)( void*, TMRTopoFilter*, TACSMg*,
                                       int, TACSBVec** );
 
   // Set the design variables across all multigrid levels

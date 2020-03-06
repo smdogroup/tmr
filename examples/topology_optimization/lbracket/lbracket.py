@@ -27,11 +27,11 @@ def in_domain(x, y):
     yc = y - h
 
     check = True
-    
+
     if (x > l) or (x < 0.0) or (y > l) or (y < 0.0):
         check = False
         return check
-    
+
     if (xc > 0.0) & (yc > 0.0):
         check = False
 
@@ -42,7 +42,7 @@ def in_circle(x, y, x0, y0, r):
     Check if a point (x, y) is in the circle centered at (x0, y0) with
     redius r
     '''
-    
+
     dr = (x-x0)**2 + (y-y0)**2 - r**2
     if dr <= 0:
         check = True
@@ -62,7 +62,7 @@ def circle_refine(x0, r, hr, h):
                       -> should be in descending order
         hr (np.array): corresponding target h values for within each concentric
                        circle of radius r
-        h (float): target refinement outside the circular domain 
+        h (float): target refinement outside the circular domain
     '''
 
     # Create a grid of points to specify target values
@@ -92,10 +92,10 @@ def circle_refine(x0, r, hr, h):
                 hvals[i] = hi
 
     xpts = np.ascontiguousarray(xpts)
-        
+
     hmin = np.amin(hr)
     fs = TMR.PointFeatureSize(xpts, hvals, hmin, h)
-    
+
     return fs
 
 class QuadConformCreator(TMR.QuadConformTopoCreator):
@@ -239,14 +239,14 @@ def create_forest(comm, depth, htarget, fs_type=None):
 
         # Create the surface mesh
         mesh.mesh(opts=opts, fs=circle)
-        
+
     else:
         # Set the meshing options
         opts = TMR.MeshOptions()
 
         # Create the surface mesh
         mesh.mesh(htarget, opts=opts)
-    
+
     # Create a model from the mesh
     model = mesh.createModelFromMesh()
 
@@ -279,6 +279,150 @@ def filter_callback(assemblers, filters):
     mfilter.initialize()
     return mfilter
 
+class BucklingConstraint:
+    def __init__(self, load_factor=1.0, eig_scale=1.0, num_eigenvalues=10,
+                 max_jd_size=50, max_gmres_size=15, rho=100.0):
+
+        self.load_factor = load_factor
+        self.num_eigenvalues = num_eigenvalues
+        self.max_jd_size = max_jd_size
+        self.max_gmres_size = max_gmres_size
+        self.rho = rho
+        self.eig_scale = eig_scale
+
+        # Set None objects for things that we'll allocate later
+        self.fltr = None
+        self.mg = None
+        self.assembler = None
+        self.mat = None
+        self.oper = None
+        self.jd = None
+        self.W = None
+        self.dfdu = None
+        self.adjoint = None
+
+        return
+
+    def constraint(self, fltr, mg):
+        """
+        Evaluate the buckling constraint.
+        """
+
+        if self.fltr is None:
+            self.mg = mg
+            self.fltr = fltr
+            self.assembler = self.fltr.getAssembler()
+
+            # Get the matrix associated with the pre conditioner
+            self.mat = self.assembler.createMat()
+
+            # Set up the operator with the given matrix and the multigrid preconditioner
+            self.oper = TACS.JDSimpleOperator(self.assembler, self.mat, self.mg)
+
+            # Create the eigenvalue solver and set the number of recycling eigenvectors
+            self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
+                                          self.max_jd_size,
+                                          self.max_gmres_size)
+            self.jd.setRecycle(self.num_eigenvalues)
+
+            self.gmres = TACS.KSM(self.mg.getMat(), self.mg, 25, nrestart=20)
+            self.gmres.setMonitor(self.assembler.getMPIComm())
+
+            # Create temporary vectors needed for the constraint
+            # computation
+            self.W = []
+            for i in range(self.num_eigenvalues):
+                self.W.append(self.assembler.createVec())
+
+            self.dfdu = self.assembler.createVec()
+            self.adjoint = self.assembler.createVec()
+
+        # We would normally solve for the solution path at this point
+        # and set those variables into the assembler object. Here, we
+        # know that the path variables have already been set during
+        # the objective call, so we skip that step here. This is a bit
+        # risky, but works because the constraint and constraint
+        # gradient call always occur after the objective has been
+        # called. This allows us to safely skip this computation here.
+
+        # Assemble the preconditioner at the point K + lambda*G
+        self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
+                                 TACS.GEOMETRIC_STIFFNESS_MATRIX, 0.95*self.load_factor)
+
+        self.mg.factor()
+
+        # Assemble the exact matrix at K + lambda*G
+        self.assembler.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
+                                        TACS.GEOMETRIC_STIFFNESS_MATRIX, self.load_factor,
+                                        self.mat)
+
+        # Solve the problem
+        self.jd.solve(print_flag=True)
+
+        # Extract the eigenvalues and eigenvectors
+        self.eigs = np.zeros(self.num_eigenvalues)
+        for i in range(self.num_eigenvalues):
+            eig, error = self.jd.extractEigenvector(i, self.W[i])
+            self.eigs[i] = eig
+
+        # Compute the value of the eigenvalue constraint
+        eig_min = np.min(self.eigs)
+
+        self.beta = 0.0
+        self.eta = np.zeros(self.num_eigenvalues)
+        for i, eig in enumerate(self.eigs):
+            self.eta[i] = np.exp(-self.rho*(eig - eig_min))
+            self.beta += self.eta[i]
+
+        # Complete the computation of the eta values
+        self.eta = self.eta/self.beta
+
+        # Compute the KS function of the minimum eigenvalues
+        cval = self.eig_scale*(eig_min - np.log(self.beta)/self.rho)
+
+        return [cval]
+
+    def constraint_gradient(self, fltr, mg, vecs):
+        """
+        Compute the constraint gradient
+        """
+        dcdx = vecs[0]
+        dcdx.zeroEntries()
+
+        # Assemble and factor the stiffness matrix
+        self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
+        self.mg.factor()
+
+        for i in range(self.num_eigenvalues):
+            # Compute the scalar factor to add to
+            scale = self.eig_scale*self.eta[i]
+
+            # Add the derivative of (K + load_factor*G) w.r.t. the design
+            # variables to the constraint gradient
+            self.assembler.addMatDVSensInnerProduct(
+                scale, TACS.STIFFNESS_MATRIX,
+                self.W[i], self.W[i], dcdx)
+            self.assembler.addMatDVSensInnerProduct(
+                scale*self.load_factor, TACS.GEOMETRIC_STIFFNESS_MATRIX,
+                self.W[i], self.W[i], dcdx)
+
+            # Compute the derivative of d(W[i]^{T}*G*W[i])/d(path)
+            self.assembler.evalMatSVSensInnerProduct(
+                TACS.GEOMETRIC_STIFFNESS_MATRIX,
+                self.W[i], self.W[i], self.dfdu)
+
+            # Add the derivative of the path variables w.r.t. the
+            # design variables
+            self.gmres.solve(self.dfdu, self.adjoint)
+
+            alpha = - scale*self.load_factor
+            self.assembler.addAdjointResProducts([self.adjoint], [dcdx], alpha=alpha)
+
+        # Add the sensitivity values consistent with the filter
+        fltr.addValues(dcdx)
+
+        return
+
 def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
@@ -306,7 +450,8 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
 
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
-                                            nlevels=nlevels, lowest_order=2, use_galerkin=True,
+                                            nlevels=nlevels, lowest_order=2,
+                                            use_galerkin=True,
                                             design_vars_per_node=1)
 
     # Get the assembler object we just created
@@ -343,6 +488,11 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0, m_fixed=0.0):
     ksfail = functions.KSFailure(assembler, 100.0)
     ksfail.setKSFailureType('discrete')
     problem.setObjective(obj_array, [ksfail])
+
+    # Add the buckling constraint callback
+    buckling = BucklingConstraint(load_factor=1.0, num_eigenvalues=5,
+                                  rho=250.0, eig_scale=1e-4)
+    problem.addConstraintCallback(1, buckling.constraint, buckling.constraint_gradient)
 
     # Initialize the problem and set the prefix
     problem.initialize()
@@ -513,7 +663,7 @@ for step in range(max_iterations):
 
     # Set the tacs design vars back to the interpolated densities
     assembler.setDesignVars(rho_vec)
-    
+
     # Perform refinement based on distance
     dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
     refine_distance = 0.025*domain_length
@@ -522,7 +672,7 @@ for step in range(max_iterations):
     #                          domain_length=domain_length, filename=dist_file)
     TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
                                      domain_length=domain_length, filename=dist_file)
-    
+
     # Repartition the mesh
     forest.balance(1)
     forest.repartition()

@@ -542,9 +542,16 @@ cdef extern from "TMRTopoFilter.h":
         TACSAssembler* getAssembler()
         TMRQuadForest* getFilterQuadForest()
         TMROctForest* getFilterOctForest()
+        void addValues(TACSBVec*)
 
 cdef class TopoFilter:
     cdef TMRTopoFilter *ptr
+
+cdef inline _init_TopoFilter(TMRTopoFilter *ptr):
+   fltr = TopoFilter()
+   fltr.ptr = ptr
+   fltr.ptr.incref()
+   return fltr
 
 cdef extern from "TMRLagrangeFilter.h":
     cdef cppclass TMRLagrangeFilter(TMRTopoFilter):
@@ -605,9 +612,9 @@ cdef extern from "TMRTopoProblem.h":
     ctypedef void (*writeoutputcallback)(void*, const char*, int,
                                          TMROctForest*, TMRQuadForest*,
                                          TACSBVec*)
-    ctypedef void (*constraintcallback)(void*, TACSAssembler*, TACSMg*,
+    ctypedef void (*constraintcallback)(void*, TMRTopoFilter*, TACSMg*,
                                         int, TacsScalar*)
-    ctypedef void (*constraintgradientcallback)(void*, TACSAssembler*, TACSMg*,
+    ctypedef void (*constraintgradientcallback)(void*, TMRTopoFilter*, TACSMg*,
                                                 int, TACSBVec**)
 
     cdef cppclass TMRTopoProblem(ParOptProblem):
@@ -627,10 +634,10 @@ cdef extern from "TMRTopoProblem.h":
         void addBucklingConstraint(double, int, TacsScalar,
                                    TacsScalar, TacsScalar, int, double)
         void addConstraintCallback(int, void*,
-                                   void (*constraintcallback)(void*, TACSAssembler*, TACSMg*,
+                                   void (*constraintcallback)(void*, TMRTopoFilter*, TACSMg*,
                                                               int, TacsScalar*),
                                    void*,
-                                   void (*constraintgradientcallback)(void*, TACSAssembler*, TACSMg*,
+                                   void (*constraintgradientcallback)(void*, TMRTopoFilter*, TACSMg*,
                                                                       int, TACSBVec**))
         void setObjective(const TacsScalar*)
         void setObjective(const TacsScalar*, TACSFunction**)
