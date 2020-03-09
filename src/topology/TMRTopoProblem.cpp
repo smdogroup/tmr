@@ -244,8 +244,6 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   freq_ks_weight = 30.0;
   freq_offset = 0.0;
   freq_scale = 1.0;
-  track_eigen_iters = 0;
-  ksm_file = NULL;
 
   // Set up the buckling constraint data
   buck = NULL;
@@ -348,9 +346,6 @@ TMRTopoProblem::~TMRTopoProblem(){
     for ( int i = 0; i < num_load_cases; i++ ){
       if (obj_funcs[i]){ obj_funcs[i]->decref(); }
     }
-  }
-  if (ksm_file){
-    ksm_file->decref();
   }
 }
 
@@ -565,8 +560,7 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
                                              double eig_rtol,
                                              double eig_atol,
                                              int num_recycle,
-                                             JDRecycleType recycle_type,
-                                             int _track_eigen_iters ){
+                                             JDRecycleType recycle_type ){
   if (!freq){
     // Create a mass matrix for the frequency constraint
     TACSMat *mmat = assembler->createMat();
@@ -602,25 +596,6 @@ void TMRTopoProblem::addFrequencyConstraint( double sigma,
   freq_ks_weight = ks_weight;
   freq_offset = offset;
   freq_scale = scale;
-  track_eigen_iters = _track_eigen_iters;
-
-  if (track_eigen_iters){
-    // Get the processor rank
-    int mpi_rank;
-    char line[256];
-    MPI_Comm_rank(assembler->getMPIComm(), &mpi_rank);
-    if (use_jd){
-      sprintf(line, "eigen_iteration_jd_recycle%02d_res%d.dat", num_recycle,
-	      track_eigen_iters);
-
-    }
-    else {
-      sprintf(line, "eigen_iteration_lanczos_res%d.dat", track_eigen_iters);
-    }
-    ksm_file = new KSMPrintFile(line,
-                                "KSM", mpi_rank, 1);
-    ksm_file->incref();
-  }
 }
 
 /*
@@ -1023,8 +998,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       // Set the error counter to zero
       err_count = 0;
       // Solve the eigenvalue problem
-      freq->solve(new KSMPrintStdout("KSM", mpi_rank, 1),
-                  ksm_file);
+      freq->solve(new KSMPrintStdout("KSM", mpi_rank, 1));
 
       // Extract the first k eigenvalues
       for ( int k = 0; k < num_freq_eigvals; k++ ){

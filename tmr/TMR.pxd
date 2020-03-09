@@ -630,7 +630,7 @@ cdef extern from "TMRTopoProblem.h":
         void addFrequencyConstraint(double, int, TacsScalar,
                                     TacsScalar, TacsScalar, int,
                                     double, int, int, double, double,
-                                    int, JDRecycleType, int)
+                                    int, JDRecycleType)
         void addBucklingConstraint(double, int, TacsScalar,
                                    TacsScalar, TacsScalar, int, double)
         void addConstraintCallback(int, void*,
