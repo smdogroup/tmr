@@ -1916,8 +1916,7 @@ cdef class Model:
     def writeModelToTecplot(self, fname,
                             vlabels=True, elabels=True, flabels=True):
         """
-        writeModelToTecplot(self, fname,
-                            vlabels=True, elabels=True, flabels=True)
+        writeModelToTecplot(self, fname, vlabels=True, elabels=True, flabels=True)
 
         Write a representation of the model to a tecplot file with labels.
 
@@ -3665,7 +3664,7 @@ def LoadModel(fname, int print_lev=0):
 
 def ConvertEGADSModel(pyego egads_model, int print_lev=0):
     """
-    LoadModel(egads_model, print_lev=0)
+    ConvertEGADSModel(egads_model, print_lev=0)
 
     This function wraps the egads4py object with the TMR interface layer and
     creates a Model class.
@@ -5151,6 +5150,8 @@ cdef class TopoProblem(ProblemBase):
 
     def addConstraintCallback(self, int ncon, confunc, gradfunc):
         """
+        addConstraintCallback(self, ncon, confunc, gradfunc)
+
         Add a constraint callback to TMRTopoProblem.
 
         This function takes in two python functions that return the constraint
