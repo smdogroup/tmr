@@ -4698,6 +4698,7 @@ cdef class StiffnessProperties:
         cdef double q = 5.0
         cdef double eps = 0.3
         cdef double k0 = 1e-6
+        cdef TMRTopoPenaltyType penalty_type = TMR_RAMP_PENALTY
         cdef double ksWeight = 30.0
         cdef double qtemp = 5.0
         cdef double qcond = 5.0
@@ -4722,6 +4723,9 @@ cdef class StiffnessProperties:
             eps = kwargs['eps']
         if 'k0' in kwargs:
             k0 = kwargs['k0']
+        if 'penalty_type' in kwargs:
+            if kwargs['penalty_type'] == 'simp' or kwargs['penalty_type'] == 'SIMP':
+                penalty_type = TMR_SIMP_PENALTY
         if 'ksWeight' in kwargs:
             ksWeight = kwargs['ksWeight']
         if 'qtemp' in kwargs:
@@ -4733,9 +4737,11 @@ cdef class StiffnessProperties:
         if 'xoffset' in kwargs:
             xoffset = kwargs['xoffset']
         if 'use_project' in kwargs:
-            use_project = kwargs['use_project']
+            use_project = 0
+            if kwargs['use_project']:
+                use_project = 1
 
-        self.ptr = new TMRStiffnessProperties(nmats, _props, q, eps, k0, ksWeight,
+        self.ptr = new TMRStiffnessProperties(nmats, _props, q, eps, k0, penalty_type, ksWeight,
                                               qtemp, qcond, beta, xoffset, use_project)
         self.ptr.incref()
 
