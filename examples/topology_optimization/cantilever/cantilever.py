@@ -162,6 +162,7 @@ class OutputCallback:
         return
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
+        
         self.f5.writeToFile(os.path.join(prefix, 'output%d.f5'%(itr + self.iter_offset)))
 
         self.assembler.getDesignVars(self.xt)
@@ -169,6 +170,22 @@ class OutputCallback:
                           oct_forest, self.xt)
 
         return
+
+class MFilterCreator:
+    def __init__(self, r0_frac, N, a=0.1):
+        self.a = a
+        self.r0_frac = r0_frac
+        self.N = N
+
+    def filter_callback(self, assemblers, filters):
+        """
+        Create and initialize a filter with the specified parameters
+        """
+        # Find the characteristic length of the domain and set the filter length scale
+        r0 = self.r0_frac*self.a
+        mfilter = TopOptUtils.Mfilter(self.N, assemblers, filters, dim=3, r=r0)
+        mfilter.initialize()
+        return mfilter
 
 def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
                    density=2600.0, iter_offset=0):
@@ -196,14 +213,16 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
 
     # Characteristic length of the domain
     len0 = 10.0
-    r0 = 0.05*len0
+    r0_frac = 0.05
+    N = 20
 
     # Create the problem and filter object
-    filter_type = 'matrix'
+    mfilter = MFilterCreator(r0_frac, N, a=len0)
+    filter_type = mfilter.filter_callback
     obj = CreatorCallback(bcs, props)
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
                                             filter_type, use_galerkin=True,
-                                            nlevels=nlevels, r0=r0, N=20)
+                                            nlevels=nlevels)
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
@@ -258,7 +277,7 @@ if __name__ == '__main__':
         'start_strategy': 'Affine step'}
 
     prefix = 'results'
-
+    
     # Set the communicator
     comm = MPI.COMM_WORLD
 
@@ -288,6 +307,9 @@ if __name__ == '__main__':
         iter_offset = step*optimization_options['maxiter']
         problem = create_problem(forest, bcs, props, nlevels + step,
                                  iter_offset=iter_offset)
+
+        # Set the prefix
+        problem.setPrefix(prefix)
 
         # Initialize the problem and set the prefix
         problem.initialize()
