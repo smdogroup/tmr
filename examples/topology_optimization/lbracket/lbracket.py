@@ -18,9 +18,9 @@ import argparse
 import os
 
 def in_domain(x, y):
-    '''
+    """
     Check if a point x, y is within the geometry domain
-    '''
+    """
     l = 0.1
     h = 0.04
     xc = x - h
@@ -38,10 +38,10 @@ def in_domain(x, y):
     return check
 
 def in_circle(x, y, x0, y0, r):
-    '''
+    """
     Check if a point (x, y) is in the circle centered at (x0, y0) with
     redius r
-    '''
+    """
 
     dr = (x-x0)**2 + (y-y0)**2 - r**2
     if dr <= 0:
@@ -52,7 +52,7 @@ def in_circle(x, y, x0, y0, r):
     return check
 
 def circle_refine(x0, r, hr, h):
-    '''
+    """
     Create a feature size with a circular refinement region using concentric circles
     wit radius r, with target mesh size hr in each concentric circle
 
@@ -63,7 +63,7 @@ def circle_refine(x0, r, hr, h):
         hr (np.array): corresponding target h values for within each concentric
                        circle of radius r
         h (float): target refinement outside the circular domain
-    '''
+    """
 
     # Create a grid of points to specify target values
     nx = 100
@@ -387,7 +387,7 @@ optimization_options = {
     'tr_write_output_freq': 1,
     'tr_infeas_tol': 1e-5,
     'tr_l1_tol': 1e-5,
-    'tr_adaptive_gamma_update': False,
+    'tr_adaptive_gamma_update': True,
     'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
 
     # Parameters for the interior point method (used to solve the
@@ -414,6 +414,8 @@ if __name__ == '__main__':
     p.add_argument('--q_penalty', type=float, default=8.0)
     p.add_argument('--N', type=int, default=10)
     p.add_argument('--r0_frac', type=float, default=0.05)
+    p.add_argument('--use_project', action='store_true', default=False)
+    p.add_argument('--use_simp', action='store_true', default=False)
     p.add_argument('--fs_type', type=str, default='point',
                    help='feature size refinement type: point, box, or None')
     args = p.parse_args()
@@ -427,8 +429,11 @@ if __name__ == '__main__':
             print('%-20s'%(arg), getattr(args, arg))
 
     # Ensure that the prefix directory exists
-    if not os.path.isdir(args.prefix):
+    if comm.rank == 0 and not os.path.isdir(args.prefix):
         os.mkdir(args.prefix)
+
+    # Set a barrier here
+    comm.Barrier()
 
     # Create the first material properties object
     rho = 2600.0
@@ -446,8 +451,13 @@ if __name__ == '__main__':
     m_fixed = args.vol_frac*full_mass
 
     # Create the stiffness properties object
-    props = TMR.StiffnessProperties(mat, q=args.q_penalty,
-                                    qcond=args.q_penalty, eps=0.05, k0=1e-4)
+    penalty_type = 'RAMP'
+    if args.use_simp:
+        penalty_type = 'SIMP'
+
+    props = TMR.StiffnessProperties(mat, q=args.q_penalty, qcond=args.q_penalty,
+                                    eps=0.05, k0=1e-6, penalty_type=penalty_type,
+                                    beta=10.0, use_project=args.use_project)
 
     # Set the boundary conditions for the problem
     bcs = TMR.BoundaryConditions()
@@ -486,6 +496,10 @@ if __name__ == '__main__':
 
         # Check the gradient
         problem.checkGradients(1e-6)
+
+        # Test the element implementation
+        if comm.rank == 0:
+            assembler.testElement(0, 2)
 
         # Extract the filter to interpolate design variables
         filtr = problem.getFilter()

@@ -30,6 +30,9 @@
 #include "TACSMaterialProperties.h"
 #include "TACSSolidConstitutive.h"
 
+enum TMRTopoPenaltyType { TMR_RAMP_PENALTY,
+                          TMR_SIMP_PENALTY };
+
 /*
   The TMRStiffnessProperties class
 */
@@ -38,6 +41,7 @@ class TMRStiffnessProperties : public TMREntity {
   // Set the stiffness properties
   TMRStiffnessProperties( int _nmats, TACSMaterialProperties **_props,
                           double _q, double _eps, double _k0,
+                          TMRTopoPenaltyType _penalty_type=TMR_RAMP_PENALTY,
                           double _ksWeight=30.0,
                           double _qtemp=0.0, double _qcond=0.0,
                           double _beta=10.0, double _xoffset=0.5,
@@ -47,21 +51,18 @@ class TMRStiffnessProperties : public TMREntity {
   double q; // RAMP penalization factor
   double eps; // Stress relaxation parameter
   double k0; // Small stiffness factor >= 0 ~ 1e-6
+  TMRTopoPenaltyType penalty_type; // Type of penalization to apply
   double ksWeight; // KS parameter for the aggregation of failure values
-
   double qtemp; // RAMP penalty parameter for temperature
   double qcond; // RAMP penalty parameter for conduction problem
-
   double beta; // Parameter for the logistics function
   double xoffset;  // Offset parameter in the logistics function
   int use_project; // Flag to indicate if projection should be used (0, 1)
-  
   TACSMaterialProperties **props; // The TACS material properties object
 
   TACSMaterialProperties **getMaterialProperties(){
     return props;
   }
-  
 };
 
 /*

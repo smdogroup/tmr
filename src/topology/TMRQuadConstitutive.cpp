@@ -129,7 +129,7 @@ int TMRQuadConstitutive::getDesignVars( int elemIndex,
   const int order = forest->getMeshOrder();
   const int len = order*order;
 
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
   for ( int i = 0; i < nvars*len; i++ ){
     dvs[i] = xptr[i];
   }
@@ -147,15 +147,20 @@ int TMRQuadConstitutive::getDesignVarRange( int elemIndex,
   const int order = forest->getMeshOrder();
   const int len = order*order;
 
+  double lower = 0.0;
+  if (props->penalty_type == TMR_SIMP_PENALTY){
+    lower = 1e-3;
+  }
+
   if (nmats == 1){
     for ( int i = 0; i < len; i++ ){
-      lb[i] = 0.0;
+      lb[i] = lower;
       ub[i] = 1.0;
     }
   }
   else {
     for ( int i = 0; i < nvars*len; i++ ){
-      lb[i] = 0.0;
+      lb[i] = lower;
       ub[i] = 1e30;
     }
   }
@@ -172,12 +177,14 @@ TacsScalar TMRQuadConstitutive::evalDensity( int elemIndex,
                                              const TacsScalar X[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
 
   // Evaluate the shape functions
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Evaluate the density
   TacsScalar density = 0.0;
@@ -185,6 +192,10 @@ TacsScalar TMRQuadConstitutive::evalDensity( int elemIndex,
     TacsScalar rho = 0.0;
     for ( int i = 0; i < len; i++ ){
       rho += N[i]*xptr[i];
+    }
+
+    if (props->use_project){
+      rho = 1.0/(1.0 + exp(-beta*(rho - xoffset)));
     }
 
     density = rho*props->props[0]->getDensity();
@@ -212,6 +223,8 @@ void TMRQuadConstitutive::addDensityDVSens( int elemIndex,
                                             TacsScalar dfdx[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
 
   // Evaluate the shape functions
   forest->evalInterp(pt, N);
@@ -219,8 +232,30 @@ void TMRQuadConstitutive::addDensityDVSens( int elemIndex,
   // Add the derivative of the density
   if (nvars == 1){
     TacsScalar density = props->props[0]->getDensity();
+
+    // Compute the factor = scale*d(rho_projected)/d(rho)
+    TacsScalar factor = 0.0;
+    if (props->use_project){
+      // Get the design variable values
+      const TacsScalar *xptr = &x[nvars*len*elemIndex];
+
+      TacsScalar rho = 0.0;
+      for ( int i = 0; i < len; i++ ){
+        rho += N[i]*xptr[i];
+      }
+
+      TacsScalar rho_exp = exp(-beta*(rho - xoffset));
+      rho = 1.0/(1.0 + rho_exp);
+
+
+      factor = scale*density*beta*rho_exp*rho*rho;
+    }
+    else {
+      factor = scale*density;
+    }
+
     for ( int i = 0; i < len; i++ ){
-      dfdx[i] += scale*N[i]*density;
+      dfdx[i] += factor*N[i];
     }
   }
   else {
@@ -246,7 +281,7 @@ TacsScalar TMRQuadConstitutive::evalSpecificHeat( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Evaluate the density
   TacsScalar specific_heat = 0.0;
@@ -338,7 +373,7 @@ void TMRQuadConstitutive::evalGeometricTangentStiffness( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Add the derivative of the density
   for ( int j = 0; j < nmats; j++ ){
@@ -364,7 +399,13 @@ void TMRQuadConstitutive::evalGeometricTangentStiffness( int elemIndex,
     props->props[j]->evalTangentStiffness2D(Cj);
 
     // Compute the penalty
-    TacsScalar penalty = rho/(1.0 + q*(1.0 - rho));
+    TacsScalar penalty = 0.0;
+    if (props->penalty_type == TMR_SIMP_PENALTY){
+      penalty = pow(rho, q);
+    }
+    else {
+      penalty = rho/(1.0 + q*(1.0 - rho));
+    }
 
     // Add up the contribution to the tangent stiffness matrix
     for ( int i = 0; i < 6; i++ ){
@@ -395,7 +436,7 @@ void TMRQuadConstitutive::addGeometricTangentStressDVSens( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Add the derivative of the density
   for ( int j = 0; j < nmats; j++ ){
@@ -411,15 +452,41 @@ void TMRQuadConstitutive::addGeometricTangentStressDVSens( int elemIndex,
       }
     }
 
-    // Compute the derivative of the penalization with respect to
-    // the projected density
-    TacsScalar dpenalty =
-      (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
+    TacsScalar dpenalty = 0.0;
 
-    // Add the derivative of the projection
+    // Use projection
     if (props->use_project){
-      TacsScalar rho_proj = 1.0/(1.0 + exp(-beta*(rho - xoffset)));
-      dpenalty *= beta*exp(-beta*(rho - xoffset))*rho_proj*rho_proj;
+      // Compute the projection
+      TacsScalar rho_exp = exp(-beta*(rho - xoffset));
+      rho = 1.0/(1.0 + rho_exp);
+
+      // Compute the derivative w.r.t. the penalty value
+      if (props->penalty_type == TMR_SIMP_PENALTY){
+        dpenalty = 1.0;
+        if (q > 1.0){
+          dpenalty = q*pow(rho, q-1.0);
+        }
+      }
+      else {
+        dpenalty = (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
+      }
+
+      // Compute the derivative of the projection w.r.t.
+      dpenalty *= beta*rho_exp*rho*rho;
+
+    }
+    else {
+      // Compute the derivative of the penalization with respect to
+      // the projected density
+      if (props->penalty_type == TMR_SIMP_PENALTY){
+        dpenalty = 1.0;
+        if (q > 1.0){
+          dpenalty = q*pow(rho, q-1.0);
+        }
+      }
+      else {
+        dpenalty = (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
+      }
     }
 
     TacsScalar C[6], s[3];
@@ -462,7 +529,7 @@ void TMRQuadConstitutive::evalTangentStiffness( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Add the derivative of the density
   for ( int j = 0; j < nmats; j++ ){
@@ -488,7 +555,13 @@ void TMRQuadConstitutive::evalTangentStiffness( int elemIndex,
     props->props[j]->evalTangentStiffness2D(Cj);
 
     // Compute the penalty
-    TacsScalar penalty = rho/(1.0 + q*(1.0 - rho));
+    TacsScalar penalty = 0.0;
+    if (props->penalty_type == TMR_SIMP_PENALTY){
+      penalty = pow(rho, q);
+    }
+    else {
+      penalty = rho/(1.0 + q*(1.0 - rho));
+    }
 
     // Add up the contribution to the tangent stiffness matrix
     for ( int i = 0; i < 6; i++ ){
@@ -519,7 +592,7 @@ void TMRQuadConstitutive::addStressDVSens( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Add the derivative of the density
   for ( int j = 0; j < nmats; j++ ){
@@ -535,15 +608,42 @@ void TMRQuadConstitutive::addStressDVSens( int elemIndex,
       }
     }
 
-    // Compute the derivative of the penalization with respect to
-    // the projected density
-    TacsScalar dpenalty =
-      (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
+    // The derivative of the penalty value w.r.t. the density
+    TacsScalar dpenalty = 0.0;
 
-    // Add the derivative of the projection
+    // Use projection
     if (props->use_project){
-      TacsScalar rho_proj = 1.0/(1.0 + exp(-beta*(rho - xoffset)));
-      dpenalty *= beta*exp(-beta*(rho - xoffset))*rho_proj*rho_proj;
+      // Compute the projection
+      TacsScalar rho_exp = exp(-beta*(rho - xoffset));
+      rho = 1.0/(1.0 + rho_exp);
+
+      // Compute the derivative w.r.t. the penalty value
+      if (props->penalty_type == TMR_SIMP_PENALTY){
+        dpenalty = 1.0;
+        if (q > 1.0){
+          dpenalty = q*pow(rho, q-1.0);
+        }
+      }
+      else {
+        dpenalty = (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
+      }
+
+      // Compute the derivative of the projection w.r.t.
+      dpenalty *= beta*rho_exp*rho*rho;
+
+    }
+    else {
+      // Compute the derivative of the penalization with respect to
+      // the projected density
+      if (props->penalty_type == TMR_SIMP_PENALTY){
+        dpenalty = 1.0;
+        if (q > 1.0){
+          dpenalty = q*pow(rho, q-1.0);
+        }
+      }
+      else {
+        dpenalty = (q + 1.0)/((1.0 + q*(1.0 - rho))*(1.0 + q*(1.0 - rho)));
+      }
     }
 
     TacsScalar C[6], s[3];
@@ -580,7 +680,7 @@ void TMRQuadConstitutive::evalThermalStrain( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Zero the components of the thermal strain
   e[0] = e[1] = e[2] = 0.0;
@@ -621,7 +721,7 @@ void TMRQuadConstitutive::addThermalStrainDVSens( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Add the derivative of the density
   for ( int j = 0; j < nmats; j++ ){
@@ -684,7 +784,7 @@ void TMRQuadConstitutive::evalTangentHeatFlux( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Add the derivative of the density
   for ( int j = 0; j < nmats; j++ ){
@@ -710,7 +810,13 @@ void TMRQuadConstitutive::evalTangentHeatFlux( int elemIndex,
     props->props[j]->evalTangentHeatFlux2D(Cj);
 
     // Compute the penalty
-    TacsScalar penalty = rho/(1.0 + qcond*(1.0 - rho));
+    TacsScalar penalty = 0.0;
+    if (props->penalty_type == TMR_SIMP_PENALTY){
+      penalty = pow(rho, qcond);
+    }
+    else {
+      penalty = rho/(1.0 + qcond*(1.0 - rho));
+    }
 
     // Add up the contribution to the tangent stiffness matrix
     for ( int i = 0; i < 3; i++ ){
@@ -738,7 +844,7 @@ void TMRQuadConstitutive::addHeatFluxDVSens( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Add the derivative of the density
   for ( int j = 0; j < nmats; j++ ){
@@ -754,15 +860,42 @@ void TMRQuadConstitutive::addHeatFluxDVSens( int elemIndex,
       }
     }
 
-    // Compute the derivative of the penalization with respect to
-    // the projected density
-    TacsScalar dpenalty =
-      (qcond + 1.0)/((1.0 + qcond*(1.0 - rho))*(1.0 + qcond*(1.0 - rho)));
+    // The derivative of the penalty value w.r.t. the density
+    TacsScalar dpenalty = 0.0;
 
-    // Add the derivative of the projection
+    // Use projection
     if (props->use_project){
-      TacsScalar rho_proj = 1.0/(1.0 + exp(-beta*(rho - xoffset)));
-      dpenalty *= beta*exp(-beta*(rho - xoffset))*rho_proj*rho_proj;
+      // Compute the projection
+      TacsScalar rho_exp = exp(-beta*(rho - xoffset));
+      rho = 1.0/(1.0 + rho_exp);
+
+      // Compute the derivative w.r.t. the penalty value
+      if (props->penalty_type == TMR_SIMP_PENALTY){
+        dpenalty = 1.0;
+        if (qcond > 1.0){
+          dpenalty = qcond*pow(rho, qcond-1.0);
+        }
+      }
+      else {
+        dpenalty = (qcond + 1.0)/((1.0 + qcond*(1.0 - rho))*(1.0 + qcond*(1.0 - rho)));
+      }
+
+      // Compute the derivative of the projection w.r.t.
+      dpenalty *= beta*rho_exp*rho*rho;
+
+    }
+    else {
+      // Compute the derivative of the penalization with respect to
+      // the projected density
+      if (props->penalty_type == TMR_SIMP_PENALTY){
+        dpenalty = 1.0;
+        if (qcond > 1.0){
+          dpenalty = qcond*pow(rho, qcond-1.0);
+        }
+      }
+      else {
+        dpenalty = (qcond + 1.0)/((1.0 + qcond*(1.0 - rho))*(1.0 + qcond*(1.0 - rho)));
+      }
     }
 
     TacsScalar C[3], flux[2];
@@ -794,12 +927,14 @@ TacsScalar TMRQuadConstitutive::evalFailure( int elemIndex,
   const int order = forest->getMeshOrder();
   const int len = order*order;
   const double eps = props->eps;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
 
   // Evaluate the shape functions
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   if (nvars == 1){
     TacsScalar C[6];
@@ -810,14 +945,21 @@ TacsScalar TMRQuadConstitutive::evalFailure( int elemIndex,
     s[1] = (C[1]*e[0] + C[3]*e[1] + C[4]*e[2]);
     s[2] = (C[2]*e[0] + C[4]*e[1] + C[5]*e[2]);
 
+    TacsScalar fail = props->props[0]->vonMisesFailure2D(s);
+
+    // Interpolate the value of rho
     TacsScalar rho = 0.0;
     for ( int i = 0; i < len; i++ ){
       rho += N[i]*xptr[i];
     }
 
-    TacsScalar r_factor = rho/(eps*(1.0 - rho) + rho);
+    // Apply projection (if it is in use)
+    if (props->use_project){
+      rho = 1.0/(1.0 + exp(-beta*(rho - xoffset)));
+    }
 
-    TacsScalar fail = props->props[0]->vonMisesFailure2D(s);
+    // Compute the stress-relaxation factor
+    TacsScalar r_factor = rho/(eps*(1.0 - rho) + rho);
 
     return r_factor*fail;
   }
@@ -876,12 +1018,14 @@ void TMRQuadConstitutive::addFailureDVSens( int elemIndex,
   const int order = forest->getMeshOrder();
   const int len = order*order;
   const double eps = props->eps;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
 
   // Evaluate the shape functions
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   if (nvars == 1){
     TacsScalar C[6];
@@ -892,20 +1036,33 @@ void TMRQuadConstitutive::addFailureDVSens( int elemIndex,
     s[1] = (C[1]*e[0] + C[3]*e[1] + C[4]*e[2]);
     s[2] = (C[2]*e[0] + C[4]*e[1] + C[5]*e[2]);
 
+    // Compute the contribution to the von Mises failure
+    TacsScalar fail = props->props[0]->vonMisesFailure2D(s);
+
     TacsScalar rho = 0.0;
     for ( int i = 0; i < len; i++ ){
       rho += N[i]*xptr[i];
     }
 
     // Compute the derivative of the stress relaxation factor
-    TacsScalar d = 1.0/(eps*(1.0 - rho) + rho);
-    TacsScalar r_factor_sens = eps*d*d;
+    TacsScalar contrib = 0.0;
+    if (props->use_project){
+      TacsScalar rho_exp = exp(-beta*(rho - xoffset));
+      rho = 1.0/(1.0 + rho_exp);
 
-    // Compute the contribution to the von Mises failure
-    TacsScalar fail = props->props[0]->vonMisesFailure2D(s);
+      TacsScalar d = 1.0/(eps*(1.0 - rho) + rho);
+      TacsScalar r_factor_sens = (eps*d*d)*(beta*rho_exp*rho*rho);
 
-    // Add the derivative
-    TacsScalar contrib = scale*r_factor_sens*fail;
+      contrib = scale*r_factor_sens*fail;
+    }
+    else {
+      TacsScalar d = 1.0/(eps*(1.0 - rho) + rho);
+      TacsScalar r_factor_sens = eps*d*d;
+
+      // Add the derivative
+      contrib = scale*r_factor_sens*fail;
+    }
+
     for ( int i = 0; i < len; i++ ){
       dfdx[i] += contrib*N[i];
     }
@@ -981,12 +1138,14 @@ TacsScalar TMRQuadConstitutive::evalFailureStrainSens( int elemIndex,
   const int order = forest->getMeshOrder();
   const int len = order*order;
   const double eps = props->eps;
+  const double beta = props->beta;
+  const double xoffset = props->xoffset;
 
   // Evaluate the shape functions
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   if (nvars == 1){
     TacsScalar C[6];
@@ -1004,11 +1163,18 @@ TacsScalar TMRQuadConstitutive::evalFailureStrainSens( int elemIndex,
     dfde[1] = (C[1]*t[0] + C[3]*t[1] + C[4]*t[2]);
     dfde[2] = (C[2]*t[0] + C[4]*t[1] + C[5]*t[2]);
 
+    // Interpolate the value of rho
     TacsScalar rho = 0.0;
     for ( int i = 0; i < len; i++ ){
       rho += N[i]*xptr[i];
     }
 
+    // Apply projection (if it is in use)
+    if (props->use_project){
+      rho = 1.0/(1.0 + exp(-beta*(rho - xoffset)));
+    }
+
+    // Compute the stress-relaxation factor
     TacsScalar r_factor = rho/(eps*(1.0 - rho) + rho);
 
     for ( int i = 0; i < 3; i++ ){
@@ -1093,16 +1259,22 @@ TacsScalar TMRQuadConstitutive::evalDesignFieldValue( int elemIndex,
   if (index >= 0 && index < nvars){
     const int order = forest->getMeshOrder();
     const int len = order*order;
+    const double beta = props->beta;
+    const double xoffset = props->xoffset;
 
     // Evaluate the shape functions
     forest->evalInterp(pt, N);
 
     // Get the design variable values
-    TacsScalar *xptr = &x[nvars*len*elemIndex];
+    const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
     TacsScalar rho = 0.0;
     for ( int i = 0; i < len; i++ ){
       rho += N[i]*xptr[nvars*i + index];
+    }
+
+    if (props->use_project){
+      rho = 1.0/(1.0 + exp(-beta*(rho - xoffset)));
     }
 
     return rho;

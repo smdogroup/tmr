@@ -574,9 +574,14 @@ cdef extern from "TMRMatrixFilter.h":
         TMRMatrixFilter(double, int, int, TACSAssembler**, TMRQuadForest**)
 
 cdef extern from "TMROctConstitutive.h":
+    cdef enum TMRTopoPenaltyType:
+        TMR_SIMP_PENALTY
+        TMR_RAMP_PENALTY
+
     cdef cppclass TMRStiffnessProperties(TMREntity):
         TMRStiffnessProperties(int, TACSMaterialProperties**,
-                               double, double, double, double,
+                               double, double, double,
+                               TMRTopoPenaltyType, double,
                                double, double, double, double, int)
         int nmats
         double q
