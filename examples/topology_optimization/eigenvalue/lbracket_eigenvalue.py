@@ -17,7 +17,8 @@ from lbracket import MFilterCreator, create_forest, CreatorCallback, OutputCallb
 
 class FrequencyConstraint:
     def __init__(self, omega=1.0, eig_scale=1.0, num_eigenvalues=10,
-                 max_jd_size=50, max_gmres_size=15, rho=100.0):
+                 max_jd_size=50, max_gmres_size=15, rho=100.0,
+                 contype='semi-def'):
 
         self.omega = omega
         self.num_eigenvalues = num_eigenvalues
@@ -25,15 +26,23 @@ class FrequencyConstraint:
         self.max_gmres_size = max_gmres_size
         self.rho = rho
         self.eig_scale = eig_scale
+        self.contype = contype
 
         # Set None objects for things that we'll allocate later
         self.fltr = None
         self.mg = None
         self.assembler = None
-        self.mat = None
         self.oper = None
         self.jd = None
         self.W = None
+
+        # Matrix for the semi-definite approach
+        self.mat = None
+
+        # Matrix for the normal method
+        self.kmat = None
+        self.mmat = None
+        self.temp = None
 
         return
 
@@ -48,21 +57,31 @@ class FrequencyConstraint:
             self.assembler = self.fltr.getAssembler()
             self.comm = self.assembler.getMPIComm()
 
-            # Get the matrix associated with the pre conditioner
-            self.mat = self.assembler.createMat()
+            if self.contype == 'semi-def':
+                # Set the matrix for the operator
+                self.mat = self.assembler.createMat()
 
-            # Set up the operator with the given matrix and the multigrid preconditioner
-            self.oper = TACS.JDSimpleOperator(self.assembler, self.mat, self.mg)
+                # Set up the operator with the given matrix and the
+                # multigrid preconditioner
+                self.oper = TACS.JDSimpleOperator(self.assembler, self.mat, self.mg)
+            else:
+                # Create the mass and stiffness matrices
+                self.mmat = self.assembler.createMat()
+                self.kmat = self.assembler.createMat()
+                self.temp = self.assembler.createVec()
 
-            # Create the eigenvalue solver and set the number of recycling eigenvectors
+                # Creat ethe operator
+                self.oper = TACS.JDFrequencyOperator(self.assembler,
+                                                     self.kmat, self.mmat,
+                                                     self.mg.getMat(), self.mg)
+
+            # Create the eigenvalue solver and set the number of
+            # recycling eigenvectors
             self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
                                           self.max_jd_size,
                                           self.max_gmres_size)
             self.jd.setTolerances(5e-5)
             self.jd.setRecycle(self.num_eigenvalues)
-
-            self.gmres = TACS.KSM(self.mg.getMat(), self.mg, 25, nrestart=20)
-            self.gmres.setMonitor(self.assembler.getMPIComm())
 
             # Create temporary vectors needed for the constraint
             # computation
@@ -70,19 +89,29 @@ class FrequencyConstraint:
             for i in range(self.num_eigenvalues):
                 self.W.append(self.assembler.createVec())
 
-        # Assemble the preconditioner at the point K - omega**2*M
-        self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
-                                 TACS.MASS_MATRIX, -0.95*self.omega**2)
+        if self.contype == 'semi-def':
+            # Assemble the preconditioner at the point K - omega**2*M
+            self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
+                                     TACS.MASS_MATRIX, -0.95*self.omega**2)
+            self.mg.factor()
 
-        self.mg.factor()
-
-        # Assemble the exact matrix at K + lambda*G
-        self.assembler.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
-                                        TACS.MASS_MATRIX, -self.omega**2,
-                                        self.mat)
+            # Assemble the exact matrix at K + lambda*G
+            self.assembler.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
+                                            TACS.MASS_MATRIX, -self.omega**2,
+                                            self.mat)
+        else:
+            # Assemble the matrices for the generalized eigenvalue problem
+            self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.kmat)
+            self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
+            self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
+            self.mg.factor()
 
         # Solve the problem
-        self.jd.solve(print_flag=True)
+        self.jd.solve(print_flag=True, print_level=1)
+
+        # Check if the solve was successful, otherwise try again
+        if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
+            self.jd.solve(print_flag=True, print_level=2)
 
         # Extract the eigenvalues and eigenvectors
         self.eigs = np.zeros(self.num_eigenvalues)
@@ -102,8 +131,11 @@ class FrequencyConstraint:
         # Complete the computation of the eta values
         self.eta = self.eta/self.beta
 
-        # Compute the KS function of the minimum eigenvalues
-        cval = self.eig_scale*(eig_min - np.log(self.beta)/self.rho)
+        if self.contype == 'semi-def':
+            # Compute the KS function of the minimum eigenvalues
+            cval = self.eig_scale*(eig_min - np.log(self.beta)/self.rho)
+        else:
+            cval = self.eig_scale*((eig_min - np.log(self.beta)/self.rho) - self.omega**2)
 
         if self.comm.rank == 0:
             print('KS frequency constraint: %25.10e'%(cval))
@@ -121,14 +153,28 @@ class FrequencyConstraint:
             # Compute the scalar factor to add to
             scale = self.eig_scale*self.eta[i]
 
-            # Add the derivative of (K - omega**2*M) w.r.t. the design
-            # variables to the constraint gradient
-            self.assembler.addMatDVSensInnerProduct(
-                scale, TACS.STIFFNESS_MATRIX,
-                self.W[i], self.W[i], dcdx)
-            self.assembler.addMatDVSensInnerProduct(
-                -scale*self.omega**2, TACS.MASS_MATRIX,
-                self.W[i], self.W[i], dcdx)
+            if self.contype == 'semi-def':
+                # Add the derivative of (K - omega**2*M) w.r.t. the
+                # design variables to the constraint gradient
+                self.assembler.addMatDVSensInnerProduct(
+                    scale, TACS.STIFFNESS_MATRIX,
+                    self.W[i], self.W[i], dcdx)
+                self.assembler.addMatDVSensInnerProduct(
+                    -scale*self.omega**2, TACS.MASS_MATRIX,
+                    self.W[i], self.W[i], dcdx)
+            else:
+                # Adjust the scaling factor
+                self.mmat.mult(self.W[i], self.temp)
+                scale /= self.temp.dot(self.W[i])
+
+                # Add the derivative of (K - omega**2*M) w.r.t. the
+                # design variables to the constraint gradient
+                self.assembler.addMatDVSensInnerProduct(
+                    scale, TACS.STIFFNESS_MATRIX,
+                    self.W[i], self.W[i], dcdx)
+                self.assembler.addMatDVSensInnerProduct(
+                    -scale*self.eigs[i], TACS.MASS_MATRIX,
+                    self.W[i], self.W[i], dcdx)
 
         # Add the sensitivity values consistent with the filter
         fltr.addValues(dcdx)
@@ -356,7 +402,7 @@ def create_problem(forest, bcs, props, nlevels,
     #                               rho=250.0, eig_scale=1e-4)
     # problem.addConstraintCallback(1, buckling.constraint, buckling.constraint_gradient)
     freq = FrequencyConstraint(omega=15.0, num_eigenvalues=5,
-                               rho=200.0, eig_scale=1.0)
+                               rho=200.0, eig_scale=1.0, contype='normal')
     problem.addConstraintCallback(1, freq.constraint, freq.constraint_gradient)
 
     # Initialize the problem and set the prefix
@@ -395,11 +441,14 @@ optimization_options = {
     'tr_infeas_tol': 1e-5,
     'tr_l1_tol': 1e-5,
     'tr_adaptive_gamma_update': True,
+    'tr_penalty_gamma_max': 200.0, # Set the maximum penalty parameter
+    'tr_print_level': 2,
     'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
-    'max_qn_subspace': 5,
+    'qn_type': 'BFGS', # 'No Hessian approx',
+    'max_qn_subspace': 10,
     'output_freq': 10,
     'tol': 1e-8,
     'maxiter': 500,

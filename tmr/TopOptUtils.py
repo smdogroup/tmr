@@ -982,6 +982,7 @@ class TopologyOptimizer:
                                 desc='Trust region penalty parameter value')
         self.options.add_option('tr_penalty_gamma_max', default=1e4, lower=0.0,
                                 desc='Trust region maximum penalty parameter value')
+        self.options.add_option('tr_print_level', default=0, types=int)
 
         # Trust region convergence tolerances
         self.options.add_option('tr_infeas_tol', default=1e-5, lower=0.0,
@@ -1027,18 +1028,16 @@ class TopologyOptimizer:
 
         # Create the problem
         if opt_type == 'Trust Region':
-            # For the trust region method, you have to use a Hessian
-            # approximation
-            if qn_type == ParOpt.NO_HESSIAN_APPROX:
-                qn_type = ParOpt.BFGS
             if max_qn_subspace < 1:
                 max_qn_subspace = 1
 
             # Create the quasi-Newton method
             if qn_type == ParOpt.SR1:
                 qn = ParOpt.LSR1(problem, subspace=max_qn_subspace)
-            else:
+            elif qn_type == ParOpt.BFGS:
                 qn = ParOpt.LBFGS(problem, subspace=max_qn_subspace)
+            else:
+                qn = None
 
             # Retrieve the options for the trust region problem
             tr_min_size = self.options['tr_min_size']
@@ -1057,6 +1056,7 @@ class TopologyOptimizer:
             tr.setAdaptiveGammaUpdate(self.options['tr_adaptive_gamma_update'])
             tr.setPenaltyGammaMax(self.options['tr_penalty_gamma_max'])
             tr.setMaxTrustRegionIterations(self.options['maxiter'])
+            tr.setPrintLevel(self.options['tr_print_level'])
 
             # Trust region convergence tolerances
             infeas_tol = self.options['tr_infeas_tol']
