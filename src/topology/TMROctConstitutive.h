@@ -40,25 +40,30 @@ class TMRStiffnessProperties : public TMREntity {
  public:
   // Set the stiffness properties
   TMRStiffnessProperties( int _nmats, TACSMaterialProperties **_props,
-                          double _q, double _eps, double _k0,
+                          double _stiffness_penalty_value,
+                          double _stress_relax_value,
+                          double _stiffness_offset,
                           TMRTopoPenaltyType _penalty_type=TMR_RAMP_PENALTY,
-                          double _ksWeight=30.0,
-                          double _qtemp=0.0, double _qcond=0.0,
+                          double _mass_penalty_value=0.0,
+                          double _conduction_penalty_value=0.0,
+                          double _temperature_penalty_value=0.0,
+                          double _ks_penalty=30.0,
                           double _beta=10.0, double _xoffset=0.5,
                           int _use_project=0 );
 
   int nmats; // Number of materials to use
-  double q; // RAMP penalization factor
-  double eps; // Stress relaxation parameter
-  double k0; // Small stiffness factor >= 0 ~ 1e-6
+  TACSMaterialProperties **props; // The TACS material properties object
   TMRTopoPenaltyType penalty_type; // Type of penalization to apply
-  double ksWeight; // KS parameter for the aggregation of failure values
-  double qtemp; // RAMP penalty parameter for temperature
-  double qcond; // RAMP penalty parameter for conduction problem
+  double stiffness_penalty_value; // Penalization factor for the stiffness
+  double stiffness_offset; // Small stiffness factor >= 0 ~ 1e-6
+  double mass_penalty_value; // Mass penalty value
+  double conduction_penalty_value; // Conduction penalty value
+  double temperature_penalty_value; // Penalty value for the temperature
+  double stress_relax_value; // Stress relaxation parameter
+  double ks_penalty; // KS parameter for the aggregation of failure values
   double beta; // Parameter for the logistics function
   double xoffset;  // Offset parameter in the logistics function
   int use_project; // Flag to indicate if projection should be used (0, 1)
-  TACSMaterialProperties **props; // The TACS material properties object
 
   TACSMaterialProperties **getMaterialProperties(){
     return props;

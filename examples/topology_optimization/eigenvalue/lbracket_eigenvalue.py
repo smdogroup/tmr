@@ -80,7 +80,7 @@ class FrequencyConstraint:
             self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
                                           self.max_jd_size,
                                           self.max_gmres_size)
-            self.jd.setTolerances(5e-5)
+            self.jd.setTolerances(1e-6, 1e-8)
             self.jd.setRecycle(self.num_eigenvalues)
 
             # Create temporary vectors needed for the constraint
@@ -119,6 +119,9 @@ class FrequencyConstraint:
             eig, error = self.jd.extractEigenvector(i, self.W[i])
             self.eigs[i] = eig
 
+        # Scale the eigenvalues by the scaling factor
+        self.eigs[:] /= self.eig_scale
+
         # Compute the value of the eigenvalue constraint
         eig_min = np.min(self.eigs)
 
@@ -151,7 +154,7 @@ class FrequencyConstraint:
 
         for i in range(self.num_eigenvalues):
             # Compute the scalar factor to add to
-            scale = self.eig_scale*self.eta[i]
+            scale = self.eta[i]
 
             if self.contype == 'semi-def':
                 # Add the derivative of (K - omega**2*M) w.r.t. the
@@ -327,6 +330,7 @@ class BucklingConstraint:
         return
 
 def create_problem(forest, bcs, props, nlevels,
+                   omega=10.0, num_eigenvalues=5, contype='semi-def',
                    r0_frac=0.05, N=20, iter_offset=0, m_fixed=0.0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
@@ -342,6 +346,9 @@ def create_problem(forest, bcs, props, nlevels,
         bcs (BoundaryConditions): Boundary condition object
         props (StiffnessProperties): Material properties object
         nlevels (int): number of multigrid levels
+        omega (float): Natural frequency constraint value
+        num_eigenvalues (int): Number of eigenvalues to include in the constraint
+        contype (str): Type of constraint formulation
         r0_frac (float): Fraction of the characteristic domain length
         N (int): Number of iterations of the discrete filter
         iter_offset (int): Iteration offset counter
@@ -401,8 +408,12 @@ def create_problem(forest, bcs, props, nlevels,
     # buckling = BucklingConstraint(load_factor=1.0, num_eigenvalues=5,
     #                               rho=250.0, eig_scale=1e-4)
     # problem.addConstraintCallback(1, buckling.constraint, buckling.constraint_gradient)
-    freq = FrequencyConstraint(omega=15.0, num_eigenvalues=5,
-                               rho=200.0, eig_scale=1.0, contype='normal')
+    eig_scale = 1.0
+    if contype == 'semi-def':
+        eig_scale = 1e-3
+
+    freq = FrequencyConstraint(omega=omega, num_eigenvalues=num_eigenvalues,
+                               rho=10.0, eig_scale=eig_scale, contype=contype)
     problem.addConstraintCallback(1, freq.constraint, freq.constraint_gradient)
 
     # Initialize the problem and set the prefix
@@ -434,21 +445,21 @@ optimization_options = {
     # Parameters for the trust region method
     'tr_init_size': 0.01,
     'tr_max_size': 0.05,
-    'tr_min_size': 0.01,
+    'tr_min_size': 1e-5,
     'tr_eta': 0.1,
     'tr_penalty_gamma': 5.0,
     'tr_write_output_freq': 1,
     'tr_infeas_tol': 1e-5,
     'tr_l1_tol': 1e-5,
     'tr_adaptive_gamma_update': True,
-    'tr_penalty_gamma_max': 200.0, # Set the maximum penalty parameter
+    'tr_penalty_gamma_max': 1e6, # Set the maximum penalty parameter
     'tr_print_level': 2,
     'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
-    'qn_type': 'BFGS', # 'No Hessian approx',
-    'max_qn_subspace': 10,
+    'qn_type': 'No Hessian approx', # 'BFGS'
+    'max_qn_subspace': 4,
     'output_freq': 10,
     'tol': 1e-8,
     'maxiter': 500,
@@ -468,10 +479,19 @@ if __name__ == '__main__':
     p.add_argument('--mg_levels', type=int, default=3)
     p.add_argument('--order', type=int, default=2)
     p.add_argument('--q_penalty', type=float, default=8.0)
+    p.add_argument('--q_mass', type=float, default=3.0)
     p.add_argument('--N', type=int, default=10)
     p.add_argument('--r0_frac', type=float, default=0.05)
-    p.add_argument('--fs_type', type=str, default='point',
+    p.add_argument('--use_project', action='store_true', default=False)
+    p.add_argument('--use_simp', action='store_true', default=False)
+    p.add_argument('--fs_type', type=str, default='none',
                    help='feature size refinement type: point, box, or None')
+    p.add_argument('--contype', type=str, default='semi-def',
+                   help='constraint type: semi-def or normal')
+    p.add_argument('--num_eigenvalues', type=int, default=5,
+                   help='number of eigenvalues use in the constraint')
+    p.add_argument('--omega', type=float, default=10.0,
+                   help='natural frequency constraint value')
     args = p.parse_args()
 
     # Set the communicator
@@ -483,8 +503,11 @@ if __name__ == '__main__':
             print('%-20s'%(arg), getattr(args, arg))
 
     # Ensure that the prefix directory exists
-    if not os.path.isdir(args.prefix):
+    if comm.rank == 0 and not os.path.isdir(args.prefix):
         os.mkdir(args.prefix)
+
+    # Set a barrier
+    comm.Barrier()
 
     # Create the first material properties object
     rho = 2600.0
@@ -502,8 +525,13 @@ if __name__ == '__main__':
     m_fixed = args.vol_frac*full_mass
 
     # Create the stiffness properties object
-    props = TMR.StiffnessProperties(mat, q=args.q_penalty,
-                                    qcond=args.q_penalty, eps=0.05, k0=1e-4)
+    penalty_type = 'RAMP'
+    if args.use_simp:
+        penalty_type = 'SIMP'
+
+    props = TMR.StiffnessProperties(mat, q=args.q_penalty, qmass=args.q_mass,
+                                    eps=0.05, k0=1e-4, penalty_type=penalty_type,
+                                    beta=10.0, use_project=args.use_project)
 
     # Set the boundary conditions for the problem
     bcs = TMR.BoundaryConditions()
@@ -527,7 +555,10 @@ if __name__ == '__main__':
         mg_levels = args.mg_levels
         if step > 0:
             mg_levels += 1
-        problem = create_problem(forest, bcs, props, mg_levels, m_fixed=m_fixed,
+        problem = create_problem(forest, bcs, props, mg_levels,
+                                 omega=args.omega, contype=args.contype,
+                                 num_eigenvalues=args.num_eigenvalues,
+                                 m_fixed=m_fixed, r0_frac=args.r0_frac, N=args.N,
                                  iter_offset=iter_offset)
 
         # Get the assembler object
@@ -543,6 +574,10 @@ if __name__ == '__main__':
 
         # Check the gradient
         problem.checkGradients(1e-6)
+
+        # Test the element implementation
+        if comm.rank == 0:
+            assembler.testElement(0, 2)
 
         # Extract the filter to interpolate design variables
         filtr = problem.getFilter()

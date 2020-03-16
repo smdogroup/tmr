@@ -25,13 +25,14 @@
 */
 TMRStiffnessProperties::TMRStiffnessProperties( int _nmats,
                                                 TACSMaterialProperties **_props,
-                                                double _q,
-                                                double _eps,
-                                                double _k0,
+                                                double _stiffness_penalty_value,
+                                                double _stress_relax_value,
+                                                double _stiffness_offset,
                                                 TMRTopoPenaltyType _penalty_type,
-                                                double _ksWeight,
-                                                double _qtemp,
-                                                double _qcond,
+                                                double _mass_penalty_value,
+                                                double _conduction_penalty_value,
+                                                double _temperature_penalty_value,
+                                                double _ks_penalty,
                                                 double _beta,
                                                 double _xoffset,
                                                 int _use_project ){
@@ -42,17 +43,32 @@ TMRStiffnessProperties::TMRStiffnessProperties( int _nmats,
     props[i]->incref();
   }
 
-  q = _q;
-  k0 = _k0;
-  eps = _eps;
+  stiffness_penalty_value = _stiffness_penalty_value;
+  stiffness_offset = _stiffness_offset;
+  stress_relax_value = _stress_relax_value;
   penalty_type = _penalty_type;
+  mass_penalty_value = _mass_penalty_value;
+  conduction_penalty_value = _conduction_penalty_value;
+  temperature_penalty_value = _temperature_penalty_value;
+
+  // Make sure that the penalty values make sense
+  if (penalty_type == TMR_SIMP_PENALTY){
+    if (stiffness_penalty_value < 1.0){
+      stiffness_penalty_value = 1.0;
+    }
+    if (mass_penalty_value < 1.0){
+      mass_penalty_value = 1.0;
+    }
+    if (conduction_penalty_value < 1.0){
+      conduction_penalty_value = 1.0;
+    }
+    if (temperature_penalty_value < 1.0){
+      temperature_penalty_value = 1.0;
+    }
+  }
 
   // Set the KS weight for the multimaterial problem
-  ksWeight = _ksWeight;
-
-  // Penalization for thermoelastic problem
-  qtemp = _qtemp;
-  qcond = _qcond;
+  ks_penalty = _ks_penalty;
 
   // Projection
   beta = _beta;
@@ -217,6 +233,7 @@ TacsScalar TMROctConstitutive::evalDensity( int elemIndex,
                                             const TacsScalar X[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
+  const double q = props->mass_penalty_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -238,7 +255,17 @@ TacsScalar TMROctConstitutive::evalDensity( int elemIndex,
       rho = 1.0/(1.0 + exp(-beta*(rho - xoffset)));
     }
 
-    density = rho*props->props[0]->getDensity();
+    if (props->penalty_type == TMR_SIMP_PENALTY){
+      if (q == 1.0){
+        density = rho*props->props[0]->getDensity();
+      }
+      else {
+        density = pow(rho, 1.0/q)*props->props[0]->getDensity();
+      }
+    }
+    else {
+      density = ((q+1.0)*rho)/(1.0 + q*rho)*props->props[0]->getDensity();
+    }
   }
   else {
     for ( int j = 0; j < nmats; j++ ){
@@ -263,6 +290,7 @@ void TMROctConstitutive::addDensityDVSens( int elemIndex,
                                            TacsScalar dfdx[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
+  const double q = props->mass_penalty_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -271,27 +299,50 @@ void TMROctConstitutive::addDensityDVSens( int elemIndex,
 
   // Add the derivative of the density
   if (nvars == 1){
-    TacsScalar density = props->props[0]->getDensity();
+   TacsScalar density = props->props[0]->getDensity();
+
+    // Get the design variable values
+    const TacsScalar *xptr = &x[nvars*len*elemIndex];
+
+    TacsScalar rho = 0.0;
+    for ( int i = 0; i < len; i++ ){
+      rho += N[i]*xptr[i];
+    }
 
     // Compute the factor = scale*d(rho_projected)/d(rho)
     TacsScalar factor = 0.0;
     if (props->use_project){
-      // Get the design variable values
-      const TacsScalar *xptr = &x[nvars*len*elemIndex];
-
-      TacsScalar rho = 0.0;
-      for ( int i = 0; i < len; i++ ){
-        rho += N[i]*xptr[i];
-      }
-
       TacsScalar rho_exp = exp(-beta*(rho - xoffset));
       rho = 1.0/(1.0 + rho_exp);
 
+      if (props->penalty_type == TMR_SIMP_PENALTY){
+        if (q == 1.0){
+          factor = density;
+        }
+        else {
+          factor = density*pow(rho, (1.0 - q)/q)/q;
+        }
+      }
+      else {
+        factor = density*(q+1.0)/((q*rho + 1.0)*(q*rho + 1.0));
+      }
 
-      factor = scale*density*beta*rho_exp*rho*rho;
+      factor *= scale*beta*rho_exp*rho*rho;
     }
     else {
-      factor = scale*density;
+      if (props->penalty_type == TMR_SIMP_PENALTY){
+        if (q == 1.0){
+          factor = density;
+        }
+        else {
+          factor = density*pow(rho, (1.0 - q)/q)/q;
+        }
+      }
+      else {
+        factor = density*(q+1.0)/((q*rho + 1.0)*(q*rho + 1.0));
+      }
+
+      factor *= scale;
     }
 
     for ( int i = 0; i < len; i++ ){
@@ -406,7 +457,8 @@ void TMROctConstitutive::evalTangentStiffness( int elemIndex,
                                                TacsScalar C[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double q = props->q;
+  const double q = props->stiffness_penalty_value;
+  const double k0 = props->stiffness_offset;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -444,10 +496,10 @@ void TMROctConstitutive::evalTangentStiffness( int elemIndex,
     // Compute the penalty
     TacsScalar penalty = 0.0;
     if (props->penalty_type == TMR_SIMP_PENALTY){
-      penalty = pow(rho, q);
+      penalty = pow(rho, q) + k0;
     }
     else {
-      penalty = rho/(1.0 + q*(1.0 - rho));
+      penalty = rho/(1.0 + q*(1.0 - rho)) + k0;
     }
 
     // Add up the contribution to the tangent stiffness matrix
@@ -471,7 +523,7 @@ void TMROctConstitutive::addStressDVSens( int elemIndex,
                                           TacsScalar dfdx[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double q = props->q;
+  const double q = props->stiffness_penalty_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -567,7 +619,7 @@ void TMROctConstitutive::evalGeometricTangentStiffness( int elemIndex,
                                                         TacsScalar C[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double q = props->q + 1.0;
+  const double q = props->stiffness_penalty_value + 1.0;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -632,7 +684,7 @@ void TMROctConstitutive::addGeometricTangentStressDVSens( int elemIndex,
                                                           TacsScalar dfdx[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double q = props->q + 1.0;
+  const double q = props->stiffness_penalty_value + 1.0;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -829,7 +881,7 @@ void TMROctConstitutive::evalTangentHeatFlux( int elemIndex,
                                               TacsScalar C[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double qcond = props->qcond;
+  const double qcond = props->conduction_penalty_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -891,7 +943,7 @@ void TMROctConstitutive::addHeatFluxDVSens( int elemIndex,
                                             TacsScalar dfdx[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double qcond = props->qcond;
+  const double qcond = props->conduction_penalty_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -983,7 +1035,7 @@ TacsScalar TMROctConstitutive::evalFailure( int elemIndex,
                                             const TacsScalar e[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double eps = props->eps;
+  const double eps = props->stress_relax_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -1024,7 +1076,7 @@ TacsScalar TMROctConstitutive::evalFailure( int elemIndex,
     return r_factor*fail;
   }
   else {
-    const double ksWeight = props->ksWeight;
+    const double ks_penalty = props->ks_penalty;
     TacsScalar *fail = temp_array;
     TacsScalar max_fail = -1e20;
 
@@ -1056,10 +1108,10 @@ TacsScalar TMROctConstitutive::evalFailure( int elemIndex,
     // Compute the KS aggregate of the failure
     TacsScalar ksSum = 0.0;
     for ( int j = 0; j < nmats; j++ ){
-      ksSum += exp(ksWeight*(fail[j] - max_fail));
+      ksSum += exp(ks_penalty*(fail[j] - max_fail));
     }
 
-    TacsScalar ksFail = max_fail + log(ksSum)/ksWeight;
+    TacsScalar ksFail = max_fail + log(ksSum)/ks_penalty;
 
     return ksFail;
   }
@@ -1080,7 +1132,7 @@ void TMROctConstitutive::addFailureDVSens( int elemIndex,
                                            TacsScalar dfdx[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double eps = props->eps;
+  const double eps = props->stress_relax_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -1133,7 +1185,7 @@ void TMROctConstitutive::addFailureDVSens( int elemIndex,
     }
   }
   else {
-    const double ksWeight = props->ksWeight;
+    const double ks_penalty = props->ks_penalty;
     TacsScalar *fail = &temp_array[0];
     TacsScalar *rho = &temp_array[nmats];
     TacsScalar max_fail = -1e20;
@@ -1169,7 +1221,7 @@ void TMROctConstitutive::addFailureDVSens( int elemIndex,
     // Compute the KS aggregate of the failure
     TacsScalar ksSum = 0.0;
     for ( int j = 0; j < nmats; j++ ){
-      fail[j] = exp(ksWeight*(fail[j] - max_fail));
+      fail[j] = exp(ks_penalty*(fail[j] - max_fail));
       ksSum += fail[j];
     }
 
@@ -1208,7 +1260,7 @@ TacsScalar TMROctConstitutive::evalFailureStrainSens( int elemIndex,
                                                       TacsScalar dfde[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order*order;
-  const double eps = props->eps;
+  const double eps = props->stress_relax_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
 
@@ -1261,7 +1313,7 @@ TacsScalar TMROctConstitutive::evalFailureStrainSens( int elemIndex,
     return r_factor*fail;
   }
   else {
-    const double ksWeight = props->ksWeight;
+    const double ks_penalty = props->ks_penalty;
     TacsScalar *fail = &temp_array[0];
     TacsScalar *rho = &temp_array[nmats];
     TacsScalar max_fail = -1e20;
@@ -1297,11 +1349,11 @@ TacsScalar TMROctConstitutive::evalFailureStrainSens( int elemIndex,
     // Compute the KS aggregate of the failure
     TacsScalar ksSum = 0.0;
     for ( int j = 0; j < nmats; j++ ){
-      fail[j] = exp(ksWeight*(fail[j] - max_fail));
+      fail[j] = exp(ks_penalty*(fail[j] - max_fail));
       ksSum += fail[j];
     }
 
-    TacsScalar ksFail = max_fail + log(ksSum)/ksWeight;
+    TacsScalar ksFail = max_fail + log(ksSum)/ks_penalty;
 
     memset(dfde, 0, 6*sizeof(TacsScalar));
     for ( int j = 0; j < nmats; j++ ){

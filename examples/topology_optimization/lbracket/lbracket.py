@@ -483,6 +483,7 @@ if __name__ == '__main__':
         problem = create_problem(forest, bcs, props, mg_levels, m_fixed=m_fixed,
                                  r0_frac=args.r0_frac, N=args.N,
                                  iter_offset=iter_offset)
+
         # Get the assembler object
         assembler = problem.getAssembler()
 

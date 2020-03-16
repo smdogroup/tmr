@@ -4700,6 +4700,7 @@ cdef class StiffnessProperties:
         cdef double k0 = 1e-6
         cdef TMRTopoPenaltyType penalty_type = TMR_RAMP_PENALTY
         cdef double ksWeight = 30.0
+        cdef double qmass = 0.0
         cdef double qtemp = 5.0
         cdef double qcond = 5.0
         cdef double beta = 10.0
@@ -4716,22 +4717,38 @@ cdef class StiffnessProperties:
             single_props = (<MaterialProperties>props).ptr
             _props = &single_props
 
-        # Convert the kwargs if any
+        # Convert keyword arguments
         if 'q' in kwargs:
             q = kwargs['q']
+        if 'stiffness_penalty_value' in kwargs:
+            q = kwargs['stiffness_penalty_value']
         if 'eps' in kwargs:
             eps = kwargs['eps']
+        if 'stress_relax_value' in kwargs:
+            eps = kwargs['stress_relax_value']
         if 'k0' in kwargs:
             k0 = kwargs['k0']
+        if 'stiffness_offset' in kwargs:
+            k0 = kwargs['stiffness_offset']
         if 'penalty_type' in kwargs:
             if kwargs['penalty_type'] == 'simp' or kwargs['penalty_type'] == 'SIMP':
                 penalty_type = TMR_SIMP_PENALTY
         if 'ksWeight' in kwargs:
             ksWeight = kwargs['ksWeight']
+        if 'ks_penalty' in kwargs:
+            ks_penalty = kwargs['ks_penalty']
+        if 'qmass' in kwargs:
+            qmass = kwargs['qmass']
+        if 'mass_penalty_value' in kwargs:
+            qmass = kwargs['mass_penalty_value']
         if 'qtemp' in kwargs:
             qtemp = kwargs['qtemp']
+        if 'temperature_penalty_value' in kwargs:
+            qtemp = kwargs['temperature_penalty_value']
         if 'qcond' in kwargs:
             qcond = kwargs['qcond']
+        if 'conduction_penalty_value' in kwargs:
+            qcond = kwargs['conduction_penalty_value']
         if 'beta' in kwargs:
             beta = kwargs['beta']
         if 'xoffset' in kwargs:
@@ -4741,8 +4758,9 @@ cdef class StiffnessProperties:
             if kwargs['use_project']:
                 use_project = 1
 
-        self.ptr = new TMRStiffnessProperties(nmats, _props, q, eps, k0, penalty_type, ksWeight,
-                                              qtemp, qcond, beta, xoffset, use_project)
+        self.ptr = new TMRStiffnessProperties(nmats, _props, q, eps, k0, 
+                                              penalty_type, qmass, qcond, qtemp,
+                                              ksWeight, beta, xoffset, use_project)
         self.ptr.incref()
 
         if nmats > 1:

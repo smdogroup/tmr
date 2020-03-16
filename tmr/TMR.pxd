@@ -581,13 +581,13 @@ cdef extern from "TMROctConstitutive.h":
     cdef cppclass TMRStiffnessProperties(TMREntity):
         TMRStiffnessProperties(int, TACSMaterialProperties**,
                                double, double, double,
-                               TMRTopoPenaltyType, double,
+                               TMRTopoPenaltyType, double, double,
                                double, double, double, double, int)
         int nmats
-        double q
-        double eps
-        double k0
-        double ksWeight
+        double stiffness_penalty_value
+        double stress_relax_value
+        double stiffness_offset
+        double ks_penalty
         TACSMaterialProperties **props
 
     cdef cppclass TMROctConstitutive(TACSSolidConstitutive):
