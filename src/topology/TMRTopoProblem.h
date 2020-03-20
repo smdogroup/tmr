@@ -106,8 +106,8 @@ class TMRTopoProblem : public ParOptProblem {
                               void (*confunc)(void*, TMRTopoFilter*, TACSMg*,
                                               int, TacsScalar*),
                               void *con_grad_ptr,
-                              void (*gradfunc)(void*, TMRTopoFilter*, TACSMg*,
-                                               int, TACSBVec**) );
+                              void (*congradfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                                  int, TACSBVec**) );
 
   // Accessor functions to the underlying Assembler and Oct or QuadForest
   // --------------------------------------------------------------------
@@ -120,6 +120,12 @@ class TMRTopoProblem : public ParOptProblem {
   // ----------------------------------------------------------------
   void setObjective( const TacsScalar *_obj_weights, TACSFunction **funcs );
   void setObjective( const TacsScalar *_obj_weights );
+  void addObjectiveCallback( void *obj_ptr,
+                             void (*objfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                             TacsScalar*),
+                             void *obj_grad_ptr,
+                             void (*objgradfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                                 TACSBVec*) );
 
   // Finish the initialization tasks - assign the number of
   // constraints and variables in the problem. Allocate arrays etc.
@@ -154,7 +160,7 @@ class TMRTopoProblem : public ParOptProblem {
   // Ku=f as the starting point for the current iteration
   // ----------------------------------------------------
   void setUseRecycledSolution( int truth );
-  
+
   // Get the initial variables and bounds
   // ------------------------------------
   void getVarsAndBounds( ParOptVec *x,
@@ -218,12 +224,20 @@ class TMRTopoProblem : public ParOptProblem {
                                TACSBVec* );
 
   int num_callback_constraints;
+
   void *constraint_callback_ptr;
   void (*constraintCallback)( void*, TMRTopoFilter*, TACSMg*,
                               int, TacsScalar* );
   void *constraint_gradient_callback_ptr;
   void (*constraintGradientCallback)( void*, TMRTopoFilter*, TACSMg*,
                                       int, TACSBVec** );
+
+  void *objective_callback_ptr;
+  void (*objectiveCallback)( void*, TMRTopoFilter*, TACSMg*,
+                             TacsScalar* );
+  void *objective_gradient_callback_ptr;
+  void (*objectiveGradientCallback)( void*, TMRTopoFilter*, TACSMg*,
+                                     TACSBVec* );
 
   // Set the design variables across all multigrid levels
   void setDesignVars( ParOptVec *xvec );
@@ -233,7 +247,7 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Solver parameters
   int use_recyc_sol;
-  
+
   // Set the iteration count for printing to the file
   int iter_count;
 

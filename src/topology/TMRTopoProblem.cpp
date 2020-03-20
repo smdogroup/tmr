@@ -272,6 +272,10 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   constraintCallback = NULL;
   constraint_gradient_callback_ptr = NULL;
   constraintGradientCallback = NULL;
+  objective_callback_ptr = NULL;
+  objectiveCallback = NULL;
+  objective_gradient_callback_ptr = NULL;
+  objectiveGradientCallback = NULL;
 }
 
 /*
@@ -645,14 +649,14 @@ void TMRTopoProblem::addConstraintCallback( int ncon,
                                             void (*confunc)(void*, TMRTopoFilter*, TACSMg*,
                                                             int, TacsScalar*),
                                             void *con_grad_ptr,
-                                            void (*gradfunc)(void*, TMRTopoFilter*, TACSMg*,
-                                                             int, TACSBVec**) ){
-  if (ncon > 0 && confunc && gradfunc){
+                                            void (*congradfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                                                int, TACSBVec**) ){
+  if (ncon > 0 && confunc && congradfunc){
     num_callback_constraints = ncon;
     constraint_callback_ptr = con_ptr;
     constraintCallback = confunc;
     constraint_gradient_callback_ptr = con_grad_ptr;
-    constraintGradientCallback = gradfunc;
+    constraintGradientCallback = congradfunc;
   }
 }
 
@@ -693,6 +697,23 @@ void TMRTopoProblem::setObjective( const TacsScalar *_obj_weights,
     obj_weights[i] = _obj_weights[i];
     obj_funcs[i] = _obj_funcs[i];
     obj_funcs[i]->incref();
+  }
+}
+
+/*
+  Add callback for objective and objective gradient calls
+*/
+void TMRTopoProblem::addObjectiveCallback( void *obj_ptr,
+                                           void (*objfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                                           TacsScalar*),
+                                           void *obj_grad_ptr,
+                                           void (*objgradfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                                               TACSBVec*) ){
+  if (objfunc && objgradfunc){
+    objective_callback_ptr = obj_ptr;
+    objectiveCallback = objfunc;
+    objective_gradient_callback_ptr = obj_grad_ptr;
+    objectiveGradientCallback = objgradfunc;
   }
 }
 
@@ -930,7 +951,12 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
       assembler->setVariables(vars[i]);
 
       // Add the contribution to the objective
-      if (obj_funcs){
+      if (objectiveCallback){
+        TacsScalar fcallback;
+        objectiveCallback(objective_callback_ptr, filter, mg, &fcallback);
+        *fobj += fcallback;
+      }
+      else if (obj_funcs){
         if (obj_funcs[i]){
           TacsScalar fobj_val;
           assembler->evalFunctions(1, &obj_funcs[i], &fobj_val);
@@ -1147,7 +1173,9 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     // Evaluate the gradient of the objective. If no objective functions are
     // set, the weighted sum of the compliance is used. Otherwise the weighted
     // sum of the objective functions from each load case are used
-    if (obj_funcs){
+    if (objectiveCallback){
+      objectiveGradientCallback(objective_gradient_callback_ptr, filter, mg, g);    }
+    else if (obj_funcs){
       for ( int i = 0; i < num_load_cases; i++ ){
         assembler->setVariables(vars[i]);
 

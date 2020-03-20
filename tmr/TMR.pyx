@@ -4758,7 +4758,7 @@ cdef class StiffnessProperties:
             if kwargs['use_project']:
                 use_project = 1
 
-        self.ptr = new TMRStiffnessProperties(nmats, _props, q, eps, k0, 
+        self.ptr = new TMRStiffnessProperties(nmats, _props, q, eps, k0,
                                               penalty_type, qmass, qcond, qtemp,
                                               ksWeight, beta, xoffset, use_project)
         self.ptr.incref()
@@ -4894,13 +4894,36 @@ cdef void constraintGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg
         exit(0)
     return
 
+cdef void objectiveCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
+                            TacsScalar *fobj):
+    try:
+        fobj[0] = (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg))
+    except:
+        tb = traceback.format_exc()
+        print(tb)
+        exit(0)
+    return
+
+cdef void objectiveGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
+                                    TACSBVec *dfdx):
+    try:
+        vec = _init_Vec(dfdx)
+        (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg), vec)
+    except:
+        tb = traceback.format_exc()
+        print(tb)
+        exit(0)
+    return
+
 cdef class TopoProblem(ProblemBase):
     """
     Creates and stores information for topology optimization problems
     """
     cdef object callback
     cdef object confunc
-    cdef object gradfunc
+    cdef object congradfunc
+    cdef object objfunc
+    cdef object objgradfunc
     def __cinit__(self, TopoFilter fltr, Pc pc,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL
@@ -4912,7 +4935,9 @@ cdef class TopoProblem(ProblemBase):
 
         self.callback = None
         self.confunc = None
-        self.gradfunc = None
+        self.congradfunc = None
+        self.objfunc = None
+        self.objgradfunc = None
         self.ptr = new TMRTopoProblem(fltr.ptr, mg, gmres_subspace, rtol)
         self.ptr.incref()
         return
@@ -5172,9 +5197,9 @@ cdef class TopoProblem(ProblemBase):
                                    offset, scale, max_lanczos, eigtol)
         return
 
-    def addConstraintCallback(self, int ncon, confunc, gradfunc):
+    def addConstraintCallback(self, int ncon, confunc, congradfunc):
         """
-        addConstraintCallback(self, ncon, confunc, gradfunc)
+        addConstraintCallback(self, ncon, confunc, congradfunc)
 
         Add a constraint callback to TMRTopoProblem.
 
@@ -5184,27 +5209,27 @@ cdef class TopoProblem(ProblemBase):
         by these functions is also provided as an input. The callback for the
         constraint evaluation takes the form:
 
-        clist = confunc(Assembler, Mg)
+        clist = confunc(Filter, Mg)
 
-        where the Assembler and Mg object are associated with the topology
+        where the Filter and Mg object are associated with the topology
         optimization problem. Note that the clist can be any list-type object.
         The constraint gradient callback takes the form:
 
-        gradfunc(Assembler, Mg, vlist)
+        congradfunc(Filter, Mg, vlist)
 
         where vlist is a list of TACS.Vec objects. The constraint gradients should
         overwrite any information stored in the vectors.
 
         Args:
-            ncon (int): Number of constraints defined by confunc and gradfunc
+            ncon (int): Number of constraints defined by confunc and congradfunc
             confunc: Python function defining the constraints
-            gradfunc: Python function implementing the constraints
+            congradfunc: Python function implementing the constraint gradients
         """
         prob = _dynamicTopoProblem(self.ptr)
         self.confunc = confunc
-        self.gradfunc = gradfunc
+        self.congradfunc = congradfunc
         prob.addConstraintCallback(ncon, <void*>confunc, constraintCallback,
-                                   <void*>gradfunc, constraintGradientCallback)
+                                   <void*>congradfunc, constraintGradientCallback)
         return
 
     def setObjective(self, list weights, list funcs=None):
@@ -5254,6 +5279,38 @@ cdef class TopoProblem(ProblemBase):
         free(w)
         if (f):
             free(f)
+        return
+
+    def addObjectiveCallback(self, objfunc, objgradfunc):
+        """
+        addObjectiveCallback(self, objfunc, objgradfunc)
+
+        Add an objective callback to TMRTopoProblem.
+
+        This function takes in two python functions that return the objective
+        value and the objective gradient, respectively. The callback for the
+        objective evaluation takes the form:
+
+        fobj = objfunc(Filter, Mg)
+
+        where the Filter and Mg object are associated with the topology
+        optimization problem. Note that the clist can be any list-type object.
+        The objective gradient callback takes the form:
+
+        objgradfunc(Filter, Mg, vlist)
+
+        where vlist is a list of TACS.Vec objects. The objective gradients should
+        overwrite any information stored in the vectors.
+
+        Args:
+            objfunc: Python function defining the objective
+            objgradfunc: Python function implementing the objective gradient
+        """
+        prob = _dynamicTopoProblem(self.ptr)
+        self.objfunc = objfunc
+        self.objgradfunc = objgradfunc
+        prob.addObjectiveCallback(<void*>objfunc, objectiveCallback,
+                                  <void*>objgradfunc, objectiveGradientCallback)
         return
 
     def initialize(self):
@@ -5325,7 +5382,7 @@ cdef class TopoProblem(ProblemBase):
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        cdef ParOptVec *lb =NULL
+        cdef ParOptVec *lb = NULL
         cdef ParOptVec *ub = NULL
         if lbvec is not None:
             lb = lbvec.ptr
