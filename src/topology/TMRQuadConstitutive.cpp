@@ -185,7 +185,7 @@ TacsScalar TMRQuadConstitutive::evalDensity( int elemIndex,
   forest->evalInterp(pt, N);
 
   // Get the design variable values
-  const const TacsScalar *xptr = &x[nvars*len*elemIndex];
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
 
   // Evaluate the density
   TacsScalar density = 0.0;
