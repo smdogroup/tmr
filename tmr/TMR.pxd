@@ -628,6 +628,10 @@ cdef extern from "TMRTopoProblem.h":
                                         int, TacsScalar*)
     ctypedef void (*constraintgradientcallback)(void*, TMRTopoFilter*, TACSMg*,
                                                 int, TACSBVec**)
+    ctypedef void (*objectivecallback)(void*, TMRTopoFilter*, TACSMg*,
+                                       TacsScalar*)
+    ctypedef void (*objectivegradientcallback)(void*, TMRTopoFilter*, TACSMg*,
+                                               TACSBVec*)
 
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(TMRTopoFilter*, TACSMg*, int, double)
@@ -653,6 +657,12 @@ cdef extern from "TMRTopoProblem.h":
                                                                       int, TACSBVec**))
         void setObjective(const TacsScalar*)
         void setObjective(const TacsScalar*, TACSFunction**)
+        void addObjectiveCallback(void*,
+                                  void (*objectivecallback)(void*, TMRTopoFilter*, TACSMg*,
+                                                            TacsScalar*),
+                                  void*,
+                                  void (*objectivegradientcallback)(void*, TMRTopoFilter*, TACSMg*,
+                                                                    TACSBVec*))
         void initialize()
         void setPrefix(const char*)
         void setInitDesignVars(ParOptVec*,ParOptVec*,ParOptVec*)
