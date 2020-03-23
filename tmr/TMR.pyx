@@ -4776,6 +4776,79 @@ cdef class StiffnessProperties:
             return nmats+1
         return 1
 
+    property penalty_type:
+        def __get__(self):
+            if self.ptr.penalty_type == TMR_SIMP_PENALTY:
+                return 'SIMP'
+            else:
+                return 'RAMP'
+        def __set__(self, value):
+            if value == 'simp' or value == 'SIMP':
+                self.ptr.penalty_type = TMR_SIMP_PENALTY
+            elif value == 'ramp' or value == 'RAMP':
+                self.ptr.penalty_type == TMR_RAMP_PENALTY
+            else:
+                raise ValueError('Unrecognized penalty type')
+
+    property stiffness_penalty_value:
+        def __get__(self):
+            return self.ptr.stiffness_penalty_value
+        def __set__(self, value):
+            self.ptr.stiffness_penalty_value = value
+
+    property stiffness_offset:
+        def __get__(self):
+            return self.ptr.stiffness_offset
+        def __set__(self, value):
+            self.ptr.stiffness_offset = value
+
+    property mass_penalty_value:
+        def __get__(self):
+            return self.ptr.mass_penalty_value
+        def __set__(self, value):
+            self.ptr.mass_penalty_value = value
+
+    property conduction_penalty_value:
+        def __get__(self):
+            return self.ptr.conduction_penalty_value
+        def __set__(self, value):
+            self.ptr.conduction_penalty_value = value
+
+    property temperature_penalty_value:
+        def __get__(self):
+            return self.ptr.temperature_penalty_value
+        def __set__(self, value):
+            self.ptr.temperature_penalty_value = value
+
+    property stress_relax_value:
+        def __get__(self):
+            return self.ptr.stress_relax_value
+        def __set__(self, value):
+            self.ptr.stress_relax_value = value
+
+    property ks_penalty:
+        def __get__(self):
+            return self.ptr.ks_penalty
+        def __set__(self, value):
+            self.ptr.ks_penalty = value
+
+    property beta:
+        def __get__(self):
+            return self.ptr.beta
+        def __set__(self, value):
+            self.ptr.beta = value
+
+    property use_project:
+        def __get__(self):
+            if self.ptr.use_project:
+                return True
+            return False
+        def __set__(self, value):
+            if value:
+                self.ptr.use_project = 1
+            else:
+                self.ptr.use_project = 0
+
 cdef class OctConstitutive(SolidConstitutive):
     def __cinit__(self, StiffnessProperties props=None, OctForest forest=None):
         self.cptr = NULL

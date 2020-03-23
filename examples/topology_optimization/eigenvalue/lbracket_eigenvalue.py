@@ -18,7 +18,7 @@ from lbracket import MFilterCreator, create_forest, CreatorCallback, OutputCallb
 class FrequencyConstraint:
     def __init__(self, omega=1.0, eig_scale=1.0, num_eigenvalues=10,
                  max_jd_size=50, max_gmres_size=15, rho=100.0,
-                 contype='semi-def'):
+                 conscale=10.0, contype='semi-def'):
 
         self.omega = omega
         self.num_eigenvalues = num_eigenvalues
@@ -26,6 +26,7 @@ class FrequencyConstraint:
         self.max_gmres_size = max_gmres_size
         self.rho = rho
         self.eig_scale = eig_scale
+        self.conscale = conscale
         self.contype = contype
 
         # Set None objects for things that we'll allocate later
@@ -137,8 +138,15 @@ class FrequencyConstraint:
         if self.contype == 'semi-def':
             # Compute the KS function of the minimum eigenvalues
             cval = self.eig_scale*(eig_min - np.log(self.beta)/self.rho)
+        elif self.contype == 'ie-semi-def':
+            # Compute the induced exponential function:
+            # sum_{i} eig[i]*e^(-rho*eig[i])/ sum_{i} e^{-rho*eig[i]}
+            cval = self.eig_scale*np.dot(self.eta, self.eigs)
         else:
             cval = self.eig_scale*((eig_min - np.log(self.beta)/self.rho) - self.omega**2)
+
+        # Scale the constraint by the constraint scaling
+        cval *= self.conscale
 
         if self.comm.rank == 0:
             print('KS frequency constraint: %25.10e'%(cval))
@@ -154,11 +162,21 @@ class FrequencyConstraint:
 
         for i in range(self.num_eigenvalues):
             # Compute the scalar factor to add to
-            scale = self.eta[i]
+            scale = self.eta[i]*self.conscale
 
+            # Add the derivative of (K - omega**2*M) w.r.t. the
+            # design variables to the constraint gradient
             if self.contype == 'semi-def':
-                # Add the derivative of (K - omega**2*M) w.r.t. the
-                # design variables to the constraint gradient
+                self.assembler.addMatDVSensInnerProduct(
+                    scale, TACS.STIFFNESS_MATRIX,
+                    self.W[i], self.W[i], dcdx)
+                self.assembler.addMatDVSensInnerProduct(
+                    -scale*self.omega**2, TACS.MASS_MATRIX,
+                     self.W[i], self.W[i], dcdx)
+            elif self.contype == 'ie-semi-def':
+                cval = np.dot(self.eta, self.eigs)
+                scale *= 1.0 + self.rho*self.eig_scale*(self.eigs[i] - cval)
+
                 self.assembler.addMatDVSensInnerProduct(
                     scale, TACS.STIFFNESS_MATRIX,
                     self.W[i], self.W[i], dcdx)
@@ -170,8 +188,6 @@ class FrequencyConstraint:
                 self.mmat.mult(self.W[i], self.temp)
                 scale /= self.temp.dot(self.W[i])
 
-                # Add the derivative of (K - omega**2*M) w.r.t. the
-                # design variables to the constraint gradient
                 self.assembler.addMatDVSensInnerProduct(
                     scale, TACS.STIFFNESS_MATRIX,
                     self.W[i], self.W[i], dcdx)
@@ -395,14 +411,15 @@ def create_problem(forest, bcs, props, nlevels,
     problem.setLoadCases([force1])
 
     # Set the objective
-    problem.setObjective([1.0])
+    problem.setObjective([0.1])
 
     # Set the constraint functions
     funcs = [functions.StructuralMass(assembler)]
 
     # Set the mass constraint
     # (m_fixed - m(x))/m_fixed >= 0.0
-    problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
+    mass_scale = 1.0
+    problem.addConstraints(0, funcs, [-m_fixed], [-mass_scale/m_fixed])
 
     # Add the buckling constraint callback
     # buckling = BucklingConstraint(load_factor=1.0, num_eigenvalues=5,
@@ -410,10 +427,11 @@ def create_problem(forest, bcs, props, nlevels,
     # problem.addConstraintCallback(1, buckling.constraint, buckling.constraint_gradient)
     eig_scale = 1.0
     if contype == 'semi-def':
-        eig_scale = 1e-3
+        eig_scale = 1e-4
 
     freq = FrequencyConstraint(omega=omega, num_eigenvalues=num_eigenvalues,
-                               rho=10.0, eig_scale=eig_scale, contype=contype)
+                               rho=10.0, eig_scale=eig_scale,
+                               conscale=1.0, contype=contype)
     problem.addConstraintCallback(1, freq.constraint, freq.constraint_gradient)
 
     # Initialize the problem and set the prefix
@@ -447,34 +465,35 @@ optimization_options = {
     'tr_max_size': 0.05,
     'tr_min_size': 1e-5,
     'tr_eta': 0.1,
-    'tr_penalty_gamma': 5.0,
-    'tr_write_output_freq': 1,
-    'tr_infeas_tol': 1e-5,
-    'tr_l1_tol': 1e-5,
-    'tr_adaptive_gamma_update': True,
+    'tr_penalty_gamma': 100.0,
+    'tr_penalty_gamma_list': [100.0, 1e6],
+    'tr_adaptive_gamma_update': True, # Set whether to use an adaptive penalty or not
     'tr_penalty_gamma_max': 1e6, # Set the maximum penalty parameter
+    'tr_write_output_freq': 1,
+    'tr_infeas_tol': 1e-4,
+    'tr_l1_tol': 1e-5,
     'tr_print_level': 2,
     'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
-    'qn_type': 'No Hessian approx', # 'BFGS'
-    'max_qn_subspace': 4,
+    'qn_type': 'BFGS', # 'No Hessian approx'
+    'max_qn_subspace': 5,
+    'output_level': 2,
     'output_freq': 10,
     'tol': 1e-8,
     'maxiter': 500,
     'norm_type': 'L1',
-    'barrier_strategy': 'Complementarity fraction',
+    'barrier_strategy': 'Monotone',
     'start_strategy': 'Affine step'}
 
 if __name__ == '__main__':
     # Create an argument parser to read in arguments from the command line
     p = argparse.ArgumentParser()
     p.add_argument('--prefix', type=str, default='./results')
-    p.add_argument('--vol_frac', type=float, default=0.3)
+    p.add_argument('--vol_frac', type=float, default=0.4)
     p.add_argument('--htarget', type=float, default=2.5e-3)
-    p.add_argument('--max_iters', type=int, default=1)
-    p.add_argument('--max_opt_iters', type=int, default=300)
+    p.add_argument('--max_opt_iters', type=int, default=200)
     p.add_argument('--init_depth', type=int, default=1)
     p.add_argument('--mg_levels', type=int, default=3)
     p.add_argument('--order', type=int, default=2)
@@ -529,9 +548,9 @@ if __name__ == '__main__':
     if args.use_simp:
         penalty_type = 'SIMP'
 
-    props = TMR.StiffnessProperties(mat, q=args.q_penalty, qmass=args.q_mass,
+    props = TMR.StiffnessProperties(mat, q=0.0, qmass=0.0, use_project=False,
                                     eps=0.05, k0=1e-4, penalty_type=penalty_type,
-                                    beta=10.0, use_project=args.use_project)
+                                    beta=10.0)
 
     # Set the boundary conditions for the problem
     bcs = TMR.BoundaryConditions()
@@ -548,9 +567,19 @@ if __name__ == '__main__':
     orig_filter = None
     xopt = None
     iter_offset = 0
-    max_iterations = args.max_iters
+
+    # Check what penalization strategy to use. Use a sequence of penalization
+    # values which increase with iteration
+    q_vals = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    if props.penalty_type == 'SIMP':
+        q_vals = [1.0, 1.5, 2.0, 2.5, 3.0] 
+
+    max_iterations = len(q_vals)
 
     for step in range(max_iterations):
+        # Set the penalization type
+        props.stiffness_penalty_value = q_vals[step]
+
         # Create the TMRTopoProblem instance
         mg_levels = args.mg_levels
         if step > 0:
@@ -592,7 +621,10 @@ if __name__ == '__main__':
         orig_filter = filtr
 
         # Set parameters
-        optimization_options['maxiter'] = args.max_opt_iters
+        if step == max_iterations-1:
+            optimization_options['maxiter'] = 2*args.max_opt_iters
+        else:
+            optimization_options['maxiter'] = args.max_opt_iters
         optimization_options['output_file'] = os.path.join(args.prefix,
                                                            'output_file%d.dat'%(step))
         optimization_options['tr_output_file'] = os.path.join(args.prefix,
@@ -605,16 +637,22 @@ if __name__ == '__main__':
         # Refine based solely on the value of the density variable
         write_dvs_to_file(xopt, assembler, os.path.join(args.prefix, 'dv_output%d.f5'%(step)))
 
-        # Duplicate the forest before the refinement process - this is to avoid
-        forest = forest.duplicate()
+        if step == max_iterations-2:
+            # Duplicate the forest before the refinement process - this is to avoid
+            # refinement on the existing forest which will be needed again
+            forest = forest.duplicate()
 
-        # Perform refinement based on distance
-        dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
-        refine_distance = 0.025*domain_length
-        TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
-                                 interface_lev=args.init_depth+1, interior_lev=args.init_depth,
-                                 domain_length=domain_length, filename=dist_file)
+            # Perform refinement based on distance
+            dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
+            refine_distance = 0.025*domain_length
+            TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
+                                     interface_lev=args.init_depth+1, interior_lev=args.init_depth,
+                                     domain_length=domain_length, filename=dist_file)
 
-        # Repartition the mesh
-        forest.balance(1)
-        forest.repartition()
+            # Repartition the mesh
+            forest.balance(1)
+            forest.repartition()
+
+        # If there is projection, use it after the first iteration only
+        if args.use_project:
+            props.use_project = True

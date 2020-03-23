@@ -911,6 +911,8 @@ class TopologyOptimizer:
                                 desc='QN diagonal factor')
         self.options.add_option('bfgs_update_type', values=_bfgs_updates,
                                 desc='Type of BFGS update to apply')
+        self.options.add_option('abs_step_tol', default=0.0, lower=0.0,
+                                desc='Absolute step tolerance for the barrier subproblem')
 
         desc = 'Boolean to indicate if a sequential linear method should be used'
         self.options.add_option('use_sequential_linear', types=bool,
@@ -980,6 +982,8 @@ class TopologyOptimizer:
                                 desc='Trust region radius acceptance ratio')
         self.options.add_option('tr_penalty_gamma', default=10.0, lower=0.0,
                                 desc='Trust region penalty parameter value')
+        self.options.add_option('tr_penalty_gamma_list', default=None,
+                                desc='Trust region penalty parameter values')
         self.options.add_option('tr_penalty_gamma_max', default=1e4, lower=0.0,
                                 desc='Trust region maximum penalty parameter value')
         self.options.add_option('tr_print_level', default=0, types=int)
@@ -1052,9 +1056,14 @@ class TopologyOptimizer:
                                     tr_min_size, tr_max_size,
                                     tr_eta, tr_penalty_gamma)
 
-            # Set the penalty parameter
+            # Set the penalty parameters
             tr.setAdaptiveGammaUpdate(self.options['tr_adaptive_gamma_update'])
             tr.setPenaltyGammaMax(self.options['tr_penalty_gamma_max'])
+            tr_penalty_list = self.options['tr_penalty_gamma_list']
+            if tr_penalty_list is not None:
+                tr.setMultiplePenaltyGamma(tr_penalty_list)
+
+            # Set the max number of trust region iterations
             tr.setMaxTrustRegionIterations(self.options['maxiter'])
             tr.setPrintLevel(self.options['tr_print_level'])
 
@@ -1079,15 +1088,9 @@ class TopologyOptimizer:
 
         # Apply the options to ParOpt
         opt.setAbsOptimalityTol(self.options['tol'])
+        opt.setAbsStepTol(self.options['abs_step_tol'])
         if self.options['dh']:
             opt.checkGradients(self.options['dh'])
-        if self.options['norm_type']:
-            if self.options['norm_type'] == 'Infinity':
-                opt.setNormType(ParOpt.INFTY_NORM)
-            elif self.options['norm_type'] == 'L1':
-                opt.setNormType(ParOpt.L1_NORM)
-            elif self.options['norm_type'] == 'L2':
-                opt.setNormType(ParOpt.L2_NORM)
 
         # Set barrier strategy
         if self.options['barrier_strategy']:
@@ -1117,7 +1120,7 @@ class TopologyOptimizer:
                 norm_type = ParOpt.L1_NORM
             elif self.options['norm_type'] == 'L2':
                 norm_type = ParOpt.L2_NORM
-            opt.setBarrierStrategy(norm_type)
+            opt.setNormType(norm_type)
 
         # Set BFGS update strategy
         if self.options['bfgs_update_type']:
