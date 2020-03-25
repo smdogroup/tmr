@@ -49,7 +49,7 @@ class FrequencyConstraint:
 
     def constraint(self, fltr, mg):
         """
-        Evaluate the buckling constraint.
+        Evaluate the frequency constraint.
         """
 
         if self.fltr is None:
@@ -233,6 +233,7 @@ class BucklingConstraint:
             self.mg = mg
             self.fltr = fltr
             self.assembler = self.fltr.getAssembler()
+            self.comm = self.assembler.getMPIComm()
 
             # Get the matrix associated with the pre conditioner
             self.mat = self.assembler.createMat()
@@ -244,11 +245,12 @@ class BucklingConstraint:
             self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
                                           self.max_jd_size,
                                           self.max_gmres_size)
-            self.jd.setTolerances(5e-5)
+            self.jd.setTolerances(1e-6, 1e-8)
             self.jd.setRecycle(self.num_eigenvalues)
 
-            self.gmres = TACS.KSM(self.mg.getMat(), self.mg, 25, nrestart=20)
-            self.gmres.setMonitor(self.assembler.getMPIComm())
+            self.gmres = TACS.KSM(self.mg.getMat(), self.mg, 25, nrestart=20, isFlexible=1)
+            self.gmres.setMonitor(self.comm)
+            self.gmres.setTolerances(1e-10, 1e-30)
 
             # Create temporary vectors needed for the constraint
             # computation
@@ -256,6 +258,7 @@ class BucklingConstraint:
             for i in range(self.num_eigenvalues):
                 self.W.append(self.assembler.createVec())
 
+            self.vars = self.assembler.createVec()
             self.dfdu = self.assembler.createVec()
             self.adjoint = self.assembler.createVec()
 
@@ -266,11 +269,11 @@ class BucklingConstraint:
         # risky, but works because the constraint and constraint
         # gradient call always occur after the objective has been
         # called. This allows us to safely skip this computation here.
+        self.assembler.getVariables(self.vars)
 
         # Assemble the preconditioner at the point K + lambda*G
         self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
                                  TACS.GEOMETRIC_STIFFNESS_MATRIX, 0.95*self.load_factor)
-
         self.mg.factor()
 
         # Assemble the exact matrix at K + lambda*G
@@ -279,13 +282,20 @@ class BucklingConstraint:
                                         self.mat)
 
         # Solve the problem
-        self.jd.solve(print_flag=True)
+        self.jd.solve(print_flag=True, print_level=0)
+
+        # Check if the solve was successful, otherwise try again
+        if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
+            self.jd.solve(print_flag=True, print_level=2)
 
         # Extract the eigenvalues and eigenvectors
         self.eigs = np.zeros(self.num_eigenvalues)
         for i in range(self.num_eigenvalues):
             eig, error = self.jd.extractEigenvector(i, self.W[i])
             self.eigs[i] = eig
+
+        # Scale the eigenvalues
+        self.eigs /= self.eig_scale
 
         # Compute the value of the eigenvalue constraint
         eig_min = np.min(self.eigs)
@@ -302,6 +312,9 @@ class BucklingConstraint:
         # Compute the KS function of the minimum eigenvalues
         cval = self.eig_scale*(eig_min - np.log(self.beta)/self.rho)
 
+        if self.comm.rank == 0:
+            print('KS stability constraint: %25.10e'%(cval))
+
         return [cval]
 
     def constraint_gradient(self, fltr, mg, vecs):
@@ -311,13 +324,16 @@ class BucklingConstraint:
         dcdx = vecs[0]
         dcdx.zeroEntries()
 
+        # Set variable values
+        self.assembler.setVariables(self.vars)
+
         # Assemble and factor the stiffness matrix
         self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
         self.mg.factor()
 
         for i in range(self.num_eigenvalues):
             # Compute the scalar factor to add to
-            scale = self.eig_scale*self.eta[i]
+            scale = self.eta[i]
 
             # Add the derivative of (K + load_factor*G) w.r.t. the design
             # variables to the constraint gradient
@@ -337,7 +353,7 @@ class BucklingConstraint:
             # design variables
             self.gmres.solve(self.dfdu, self.adjoint)
 
-            alpha = - scale*self.load_factor
+            alpha = -scale*self.load_factor
             self.assembler.addAdjointResProducts([self.adjoint], [dcdx], alpha=alpha)
 
         # Add the sensitivity values consistent with the filter
@@ -346,7 +362,8 @@ class BucklingConstraint:
         return
 
 def create_problem(forest, bcs, props, nlevels,
-                   omega=10.0, num_eigenvalues=5, contype='semi-def',
+                   omega=10.0, load_factor=1.0, probtype='frequency',
+                   num_eigenvalues=5, contype='semi-def',
                    r0_frac=0.05, N=20, iter_offset=0, m_fixed=0.0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
@@ -421,18 +438,24 @@ def create_problem(forest, bcs, props, nlevels,
     mass_scale = 1.0
     problem.addConstraints(0, funcs, [-m_fixed], [-mass_scale/m_fixed])
 
-    # Add the buckling constraint callback
-    # buckling = BucklingConstraint(load_factor=1.0, num_eigenvalues=5,
-    #                               rho=250.0, eig_scale=1e-4)
-    # problem.addConstraintCallback(1, buckling.constraint, buckling.constraint_gradient)
-    eig_scale = 1.0
-    if contype == 'semi-def':
-        eig_scale = 1e-4
+    if probtype == 'frequency':
+        # Add the frequency constraint
+        eig_scale = 1.0
+        if contype == 'semi-def':
+            eig_scale = 1e-4
 
-    freq = FrequencyConstraint(omega=omega, num_eigenvalues=num_eigenvalues,
-                               rho=10.0, eig_scale=eig_scale,
-                               conscale=1.0, contype=contype)
-    problem.addConstraintCallback(1, freq.constraint, freq.constraint_gradient)
+        freq = FrequencyConstraint(omega=omega, num_eigenvalues=num_eigenvalues,
+                                   rho=10.0, eig_scale=eig_scale,
+                                   conscale=1.0, contype=contype)
+        problem.addConstraintCallback(1, freq.constraint, freq.constraint_gradient)
+    else:
+        # Add the buckling constraint callback
+        eig_scale = 1e-4
+        buckling = BucklingConstraint(load_factor=load_factor,
+                                      num_eigenvalues=num_eigenvalues,
+                                      rho=10.0, eig_scale=eig_scale)
+        problem.addConstraintCallback(1, buckling.constraint,
+                                      buckling.constraint_gradient)
 
     # Initialize the problem and set the prefix
     problem.initialize()
@@ -505,12 +528,16 @@ if __name__ == '__main__':
     p.add_argument('--use_simp', action='store_true', default=False)
     p.add_argument('--fs_type', type=str, default='none',
                    help='feature size refinement type: point, box, or None')
+    p.add_argument('--probtype', type=str, default='frequency',
+                   help='type of problem to use: frequency or buckling')
     p.add_argument('--contype', type=str, default='semi-def',
                    help='constraint type: semi-def or normal')
     p.add_argument('--num_eigenvalues', type=int, default=5,
                    help='number of eigenvalues use in the constraint')
     p.add_argument('--omega', type=float, default=10.0,
                    help='natural frequency constraint value')
+    p.add_argument('--load_factor', type=float, default=1.0,
+                   help='load factor value')
     args = p.parse_args()
 
     # Set the communicator
@@ -539,15 +566,19 @@ if __name__ == '__main__':
     a = 0.1
     b = (2.0/5.0)*a
     area = a**2 - (a - b)**2
-    domain_length = a
     full_mass = area*rho
     m_fixed = args.vol_frac*full_mass
+
+    # Set the characteristic domain length as the a-value
+    domain_length = a
 
     # Create the stiffness properties object
     penalty_type = 'RAMP'
     if args.use_simp:
         penalty_type = 'SIMP'
 
+    # Set the default to the lowest penalization q = 0.0 for RAMP, in
+    # case the penalty type is SIMP, it gets reset to 1.0
     props = TMR.StiffnessProperties(mat, q=0.0, qmass=0.0, use_project=False,
                                     eps=0.05, k0=1e-4, penalty_type=penalty_type,
                                     beta=10.0)
@@ -572,7 +603,7 @@ if __name__ == '__main__':
     # values which increase with iteration
     q_vals = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
     if props.penalty_type == 'SIMP':
-        q_vals = [1.0, 1.5, 2.0, 2.5, 3.0] 
+        q_vals = [1.0, 1.5, 2.0, 2.5, 3.0]
 
     max_iterations = len(q_vals)
 
@@ -585,7 +616,8 @@ if __name__ == '__main__':
         if step > 0:
             mg_levels += 1
         problem = create_problem(forest, bcs, props, mg_levels,
-                                 omega=args.omega, contype=args.contype,
+                                 omega=args.omega, load_factor=args.load_factor,
+                                 contype=args.contype, probtype=args.probtype,
                                  num_eigenvalues=args.num_eigenvalues,
                                  m_fixed=m_fixed, r0_frac=args.r0_frac, N=args.N,
                                  iter_offset=iter_offset)
@@ -603,6 +635,8 @@ if __name__ == '__main__':
 
         # Check the gradient
         problem.checkGradients(1e-6)
+
+        exit(0)
 
         # Test the element implementation
         if comm.rank == 0:
@@ -622,7 +656,7 @@ if __name__ == '__main__':
 
         # Set parameters
         if step == max_iterations-1:
-            optimization_options['maxiter'] = 2*args.max_opt_iters
+            optimization_options['maxiter'] = 4*args.max_opt_iters
         else:
             optimization_options['maxiter'] = args.max_opt_iters
         optimization_options['output_file'] = os.path.join(args.prefix,

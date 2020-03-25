@@ -952,9 +952,9 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
 
       // Add the contribution to the objective
       if (objectiveCallback){
-        TacsScalar fcallback;
+        TacsScalar fcallback = 0.0;
         objectiveCallback(objective_callback_ptr, filter, mg, &fcallback);
-        *fobj += fcallback;
+        *fobj = fcallback;
       }
       else if (obj_funcs){
         if (obj_funcs[i]){
