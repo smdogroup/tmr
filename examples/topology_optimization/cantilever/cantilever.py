@@ -162,7 +162,7 @@ class OutputCallback:
         return
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
-        
+
         self.f5.writeToFile(os.path.join(prefix, 'output%d.f5'%(itr + self.iter_offset)))
 
         self.assembler.getDesignVars(self.xt)
@@ -277,7 +277,7 @@ if __name__ == '__main__':
         'start_strategy': 'Affine step'}
 
     prefix = 'results'
-    
+
     # Set the communicator
     comm = MPI.COMM_WORLD
 

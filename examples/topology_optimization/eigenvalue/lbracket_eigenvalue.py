@@ -108,11 +108,11 @@ class FrequencyConstraint:
             self.mg.factor()
 
         # Solve the problem
-        self.jd.solve(print_flag=True, print_level=1)
+        self.jd.solve(print_flag=True, print_level=0)
 
         # Check if the solve was successful, otherwise try again
         if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
-            self.jd.solve(print_flag=True, print_level=2)
+            self.jd.solve(print_flag=True, print_level=1)
 
         # Extract the eigenvalues and eigenvectors
         self.eigs = np.zeros(self.num_eigenvalues)
@@ -245,7 +245,15 @@ class BucklingConstraint:
             self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
                                           self.max_jd_size,
                                           self.max_gmres_size)
-            self.jd.setTolerances(1e-6, 1e-8)
+
+            # Here, we're satisfied with
+            eig_rtol = 1e-5
+            eig_atol = 1e-5
+            self.jd.setTolerances(eig_rtol, eig_atol)
+
+            # Set the number of eigenvectors to recycle. Don't aggressively recycle,
+            # b/c this can lead to a lack of robustness
+            num_recycle = self.num_eigenvalues >> 1
             self.jd.setRecycle(self.num_eigenvalues)
 
             self.gmres = TACS.KSM(self.mg.getMat(), self.mg, 25, nrestart=20, isFlexible=1)
@@ -272,8 +280,7 @@ class BucklingConstraint:
         self.assembler.getVariables(self.vars)
 
         # Assemble the preconditioner at the point K + lambda*G
-        self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
-                                 TACS.GEOMETRIC_STIFFNESS_MATRIX, 0.95*self.load_factor)
+        self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
         self.mg.factor()
 
         # Assemble the exact matrix at K + lambda*G
@@ -282,11 +289,18 @@ class BucklingConstraint:
                                         self.mat)
 
         # Solve the problem
-        self.jd.solve(print_flag=True, print_level=0)
+        self.jd.solve(print_flag=True, print_level=1)
 
         # Check if the solve was successful, otherwise try again
-        if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
-            self.jd.solve(print_flag=True, print_level=2)
+        nconv = self.jd.getNumConvergedEigenvalues()
+        if nconv < self.num_eigenvalues:
+            # Re-assemble and factor the preconditioner. Discard the part from
+            # the geometric stiffness matrix
+            self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
+            self.mg.factor()
+
+            # Temporarily set the number of recycling vectors to zero
+            self.jd.solve(print_flag=True, print_level=1)
 
         # Extract the eigenvalues and eigenvectors
         self.eigs = np.zeros(self.num_eigenvalues)
@@ -635,8 +649,6 @@ if __name__ == '__main__':
 
         # Check the gradient
         problem.checkGradients(1e-6)
-
-        exit(0)
 
         # Test the element implementation
         if comm.rank == 0:
