@@ -5370,10 +5370,10 @@ cdef class TopoProblem(ProblemBase):
         optimization problem. Note that the clist can be any list-type object.
         The objective gradient callback takes the form:
 
-        objgradfunc(Filter, Mg, vlist)
+        objgradfunc(Filter, Mg, dfdx)
 
-        where vlist is a list of TACS.Vec objects. The objective gradients should
-        overwrite any information stored in the vectors.
+        where dfdx is a TACS.Vec object. The objective gradients should
+        overwrite any information stored in the vector.
 
         Args:
             objfunc: Python function defining the objective
