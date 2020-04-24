@@ -798,6 +798,54 @@ class Mfilter(TMR.HelmholtzPUFilter):
 
         return
 
+def setSurfaceBounds(problem, comm, forest, names,
+                     face_lb=0.99, face_ub=1.0):
+    """
+    Set upper and lower bounds on specific faces to
+    "require" material on certain boundaries
+
+    Args:
+        problem: TopoProblem object
+        comm: MPI communicator object
+        forest: TMROct(or Quad)Forest object
+        names (list): list of surface names where these
+                      bounds should be applied
+        face_lb: lower bound value to apply
+        face_ub: upper bound value to apply
+
+    """
+    assembler = problem.getAssembler()
+
+    x_vec = assembler.createDesignVec()
+    assembler.getDesignVars(x_vec)
+    x = x_vec.getArray()
+
+    dv = problem.createDesignVec()
+    lb = problem.createDesignVec()
+    ub = problem.createDesignVec()
+    dv[:] = x[:]
+    lb[:] = 1e-3
+    ub[:] = 1.0
+
+    face_dv = 0.5*(face_lb + face_ub)
+    for name in names:
+        mpi_rank = comm.Get_rank()
+        node_range = forest.getNodeRange()
+        node_octs = forest.getNodesWithName(name)
+        node_octs = node_octs.astype(int)
+
+        for i in range(len(node_octs)):
+            if (node_octs[i] >= node_range[mpi_rank]) and \
+               (node_octs[i] < node_range[mpi_rank+1]):
+                index = int(node_octs[i] - node_range[mpi_rank])
+                dv[index] = face_dv
+                lb[index] = face_lb
+                ub[index] = face_ub
+
+    problem.setInitDesignVars(dv, lbvec=lb,
+                              ubvec=ub)
+    return
+
 class OptionData:
     def __init__(self):
         self.options = {}
