@@ -799,7 +799,8 @@ class Mfilter(TMR.HelmholtzPUFilter):
         return
 
 def setSurfaceBounds(problem, comm, forest, names,
-                     face_lb=0.99, face_ub=1.0):
+                     face_lb=0.99, face_ub=1.0,
+                     constrain_octs=True):
     """
     Set upper and lower bounds on specific faces to
     "require" material on certain boundaries
@@ -812,6 +813,10 @@ def setSurfaceBounds(problem, comm, forest, names,
                       bounds should be applied
         face_lb: lower bound value to apply
         face_ub: upper bound value to apply
+        constrain_octs (bool): if True, constrain
+            the octants/quadrants on the surface;
+            If False, only constrain the boundary
+            nodes.
 
     """
     assembler = problem.getAssembler()
@@ -831,7 +836,20 @@ def setSurfaceBounds(problem, comm, forest, names,
     for name in names:
         mpi_rank = comm.Get_rank()
         node_range = forest.getNodeRange()
-        node_octs = forest.getNodesWithName(name)
+
+        if constrain_octs:
+            if isinstance(forest, TMR.OctForest):
+                octs = forest.getOctsWithName(name)
+            else:
+                octs = forest.getQuadsWithName(name)
+            conn = forest.getMeshConn()
+            node_octs = np.array([])
+            for oc in octs:
+                node_octs = np.append(node_octs,
+                                      conn[oc.tag, :])
+
+        else:
+            node_octs = forest.getNodesWithName(name)
         node_octs = node_octs.astype(int)
 
         for i in range(len(node_octs)):
