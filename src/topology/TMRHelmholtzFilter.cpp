@@ -184,7 +184,7 @@ void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
       // Get the values for this element
       int len;
       const int *nodes;
-      helmholtz_assembler[0]->getElement(i, &nodes, &len);
+      helmholtz_assembler[0]->getElement(i, &len, &nodes);
       helmholtz_assembler[0]->getElement(i, Xpts);
 
       // Get the values of the design variables at the nodes
@@ -308,7 +308,7 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
       // Get the values for this element
       int len;
       const int *nodes;
-      helmholtz_assembler[0]->getElement(i, &nodes, &len);
+      helmholtz_assembler[0]->getElement(i, &len, &nodes);
       helmholtz_assembler[0]->getElement(i, Xpts);
 
       // Get the values of the design variables at the nodes
