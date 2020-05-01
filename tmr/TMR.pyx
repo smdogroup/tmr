@@ -5122,14 +5122,16 @@ cdef class TopoProblem(ProblemBase):
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        f = <TACSBVec**>malloc(nforces*sizeof(TACSBVec*))
-        for i in range(nforces):
-            if forces[i] is not None:
-                f[i] = (<Vec>forces[i]).ptr
-            else:
-                f[i] = NULL
+        if nforces > 0:
+            f = <TACSBVec**>malloc(nforces*sizeof(TACSBVec*))
+            for i in range(nforces):
+                if forces[i] is not None:
+                    f[i] = (<Vec>forces[i]).ptr
+                else:
+                    f[i] = NULL
         prob.setLoadCases(f, nforces)
-        free(f)
+        if nforces > 0:
+            free(f)
         return
 
     def getNumLoadCases(self):

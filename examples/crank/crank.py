@@ -169,11 +169,11 @@ bcs.addBoundaryCondition('fully fixed')
 
 # Set the ordering to use
 if ordering == 'rcm':
-    ordering = TACS.PY_RCM_ORDER
+    ordering = TACS.RCM_ORDER
 elif ordering == 'multicolor':
-    ordering = TACS.PY_MULTICOLOR_ORDER
+    ordering = TACS.MULTICOLOR_ORDER
 else:
-    ordering = TACS.PY_NATURAL_ORDER
+    ordering = TACS.NATURAL_ORDER
 
 niters = 3
 for k in range(niters):

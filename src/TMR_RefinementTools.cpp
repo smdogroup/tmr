@@ -2494,7 +2494,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
     double time = 0.0;
 
     // Get the variables for this element on the coarse mesh
-    tacs->getElement(i, NULL, vars_elem);
+    tacs->getElement(i, vars_elem, NULL);
 
     // Get the node numbers for this element
     int len;

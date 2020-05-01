@@ -195,9 +195,6 @@ class FrequencyConstraint:
                     -scale*self.eigs[i], TACS.MASS_MATRIX,
                     self.W[i], self.W[i], dcdx)
 
-        # Add the sensitivity values consistent with the filter
-        fltr.addValues(dcdx)
-
         return
 
 class BucklingConstraint:
@@ -369,9 +366,6 @@ class BucklingConstraint:
 
             alpha = -scale*self.load_factor
             self.assembler.addAdjointResProducts([self.adjoint], [dcdx], alpha=alpha)
-
-        # Add the sensitivity values consistent with the filter
-        fltr.addValues(dcdx)
 
         return
 

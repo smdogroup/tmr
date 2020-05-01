@@ -310,19 +310,22 @@ TMRTopoProblem::~TMRTopoProblem(){
   }
 
   // Free the load case data
-  for ( int i = 0; i < num_load_cases; i++ ){
-    for ( int j = 0; j < load_case_info[i].num_funcs; j++ ){
-      load_case_info[i].funcs[j]->decref();
+  if (load_case_info){
+    for ( int i = 0; i < num_load_cases; i++ ){
+      for ( int j = 0; j < load_case_info[i].num_funcs; j++ ){
+        load_case_info[i].funcs[j]->decref();
+      }
+      if (load_case_info[i].funcs){
+        delete [] load_case_info[i].funcs;
+      }
+      if (load_case_info[i].offset){
+        delete [] load_case_info[i].offset;
+      }
+      if (load_case_info[i].scale){
+        delete [] load_case_info[i].scale;
+      }
     }
-    if (load_case_info[i].funcs){
-      delete [] load_case_info[i].funcs;
-    }
-    if (load_case_info[i].offset){
-      delete [] load_case_info[i].offset;
-    }
-    if (load_case_info[i].scale){
-      delete [] load_case_info[i].scale;
-    }
+    delete [] load_case_info;
   }
 
   // Free data for the linear constraint
@@ -426,6 +429,25 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
     delete [] vars;
   }
 
+  // Deallocate the load case data (if it exists)
+  if (load_case_info){
+    for ( int i = 0; i < num_load_cases; i++ ){
+      for ( int j = 0; j < load_case_info[i].num_funcs; j++ ){
+        load_case_info[i].funcs[j]->decref();
+      }
+      if (load_case_info[i].funcs){
+        delete [] load_case_info[i].funcs;
+      }
+      if (load_case_info[i].offset){
+        delete [] load_case_info[i].offset;
+      }
+      if (load_case_info[i].scale){
+        delete [] load_case_info[i].scale;
+      }
+    }
+    delete [] load_case_info;
+  }
+
   num_load_cases = _num_load_cases;
   forces = new TACSBVec*[ num_load_cases ];
   vars = new TACSBVec*[ num_load_cases ];
@@ -449,12 +471,15 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
   // }
 
   // Allocate the load case information
-  load_case_info = new LoadCaseInfo[ num_load_cases ];
-  for ( int i = 0; i < num_load_cases; i++ ){
-    load_case_info[i].num_funcs = 0;
-    load_case_info[i].funcs = NULL;
-    load_case_info[i].offset = NULL;
-    load_case_info[i].scale = NULL;
+  load_case_info = NULL;
+  if (num_load_cases > 0){
+    load_case_info = new LoadCaseInfo[ num_load_cases ];
+    for ( int i = 0; i < num_load_cases; i++ ){
+      load_case_info[i].num_funcs = 0;
+      load_case_info[i].funcs = NULL;
+      load_case_info[i].offset = NULL;
+      load_case_info[i].scale = NULL;
+    }
   }
 }
 
@@ -917,14 +942,6 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
   // Set the design variable values on all mesh levels
   setDesignVars(pxvec);
 
-  // Zero the variables
-  assembler->zeroVariables();
-
-  // Assemble the Jacobian on each level
-  double alpha = 1.0, beta = 0.0, gamma = 0.0;
-  mg->assembleJacobian(alpha, beta, gamma, NULL);
-  mg->factor();
-
   // Set the objective value
   *fobj = 0.0;
 
@@ -936,76 +953,88 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     cons[count] = linear_offset[i] + Alinear[i]->dot(pxvec);
   }
 
-  for ( int i = 0; i < num_load_cases; i++ ){
-    if (forces[i]){
-      // Solve the system: K(x)*u = forces
-      if (use_recyc_sol){
-        ksm->solve(forces[i], vars[i], 0);
-      }
-      else {
-        ksm->solve(forces[i], vars[i]);
-      }
-      assembler->setBCs(vars[i]);
+  // Perform the objective function callback
+  if (objectiveCallback){
+    TacsScalar fcallback = 0.0;
+    objectiveCallback(objective_callback_ptr, filter, mg, &fcallback);
+    *fobj = fcallback;
+  }
 
-      // Set the variables into TACSAssembler
-      assembler->setVariables(vars[i]);
+  if (num_load_cases > 0){
+    // Zero the variables
+    assembler->zeroVariables();
 
-      // Add the contribution to the objective
-      if (objectiveCallback){
-        TacsScalar fcallback = 0.0;
-        objectiveCallback(objective_callback_ptr, filter, mg, &fcallback);
-        *fobj = fcallback;
-      }
-      else if (obj_funcs){
-        if (obj_funcs[i]){
-          TacsScalar fobj_val;
-          assembler->evalFunctions(1, &obj_funcs[i], &fobj_val);
+    // Assemble the Jacobian on each level
+    double alpha = 1.0, beta = 0.0, gamma = 0.0;
+    mg->assembleJacobian(alpha, beta, gamma, NULL);
+    mg->factor();
+
+    for ( int i = 0; i < num_load_cases; i++ ){
+      if (forces[i]){
+        // Solve the system: K(x)*u = forces
+        if (use_recyc_sol){
+          ksm->solve(forces[i], vars[i], 0);
+        }
+        else {
+          ksm->solve(forces[i], vars[i]);
+        }
+        assembler->setBCs(vars[i]);
+
+        // Set the variables into TACSAssembler
+        assembler->setVariables(vars[i]);
+
+        // Add the contribution to the objective
+        if (obj_funcs){
+          if (obj_funcs[i]){
+            TacsScalar fobj_val;
+            assembler->evalFunctions(1, &obj_funcs[i], &fobj_val);
+
+            if (mpi_rank == 0){
+              printf("%-30s %25.10e\n", obj_funcs[i]->getObjectName(), fobj_val);
+              TACSKSFailure *ks_fail =
+                dynamic_cast<TACSKSFailure*>(obj_funcs[i]);
+              if (ks_fail){
+                TacsScalar max_fail = ks_fail->getMaximumFailure();
+                printf("%-30s %25.10e\n", "TACSKSFailure max stress", max_fail);
+              }
+            }
+
+            *fobj += obj_weights[i]*fobj_val;
+          }
+        }
+        // If we are dealing with a compliance objective
+        else {
+          *fobj += obj_weights[i]*vars[i]->dot(forces[i]);
+        }
+
+        // Evaluate the constraints
+        int num_funcs = load_case_info[i].num_funcs;
+        if (num_funcs > 0){
+          assembler->evalFunctions(num_funcs, load_case_info[i].funcs,
+                                  &cons[count]);
 
           if (mpi_rank == 0){
-            printf("%-30s %25.10e\n", obj_funcs[i]->getObjectName(), fobj_val);
-            TACSKSFailure *ks_fail =
-              dynamic_cast<TACSKSFailure*>(obj_funcs[i]);
-            if (ks_fail){
-              TacsScalar max_fail = ks_fail->getMaximumFailure();
-              printf("%-30s %25.10e\n", "TACSKSFailure max stress", max_fail);
+            for ( int k = 0; k < num_funcs; k++ ){
+              printf("%-30s %25.10e\n", load_case_info[i].funcs[k]->getObjectName(),
+                    cons[count + k]);
+              TACSKSFailure *ks_fail =
+                dynamic_cast<TACSKSFailure*>(load_case_info[i].funcs[k]);
+              if (ks_fail){
+                TacsScalar max_fail = ks_fail->getMaximumFailure();
+                printf("%-30s %25.10e\n", "TACSKSFailure max stress",
+                      max_fail);
+              }
             }
           }
 
-          *fobj += obj_weights[i]*fobj_val;
-        }
-      }
-      // If we are dealing with a compliance objective
-      else {
-        *fobj += obj_weights[i]*vars[i]->dot(forces[i]);
-      }
-
-      // Evaluate the constraints
-      int num_funcs = load_case_info[i].num_funcs;
-      if (num_funcs > 0){
-        assembler->evalFunctions(num_funcs, load_case_info[i].funcs,
-                                 &cons[count]);
-
-        if (mpi_rank == 0){
-          for ( int k = 0; k < num_funcs; k++ ){
-            printf("%-30s %25.10e\n", load_case_info[i].funcs[k]->getObjectName(),
-                   cons[count + k]);
-            TACSKSFailure *ks_fail =
-              dynamic_cast<TACSKSFailure*>(load_case_info[i].funcs[k]);
-            if (ks_fail){
-              TacsScalar max_fail = ks_fail->getMaximumFailure();
-              printf("%-30s %25.10e\n", "TACSKSFailure max stress",
-                     max_fail);
-            }
+          // Scale and offset the constraints that we just evaluated
+          for ( int j = 0; j < num_funcs; j++ ){
+            TacsScalar offset = load_case_info[i].offset[j];
+            TacsScalar scale = load_case_info[i].scale[j];
+            cons[count + j] = scale*(cons[count+j] + offset);
           }
+          count += num_funcs;
         }
-
-        // Scale and offset the constraints that we just evaluated
-        for ( int j = 0; j < num_funcs; j++ ){
-          TacsScalar offset = load_case_info[i].offset[j];
-          TacsScalar scale = load_case_info[i].scale[j];
-          cons[count + j] = scale*(cons[count+j] + offset);
-        }
-        count += num_funcs;
       }
     }
   }
@@ -1170,12 +1199,15 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     TACSBVec *g = wrap->vec;
     g->zeroEntries();
 
+    // Evaluate the gradient of the objective function from the callback
+    if (objectiveCallback){
+      objectiveGradientCallback(objective_gradient_callback_ptr, filter, mg, g);
+    }
+
     // Evaluate the gradient of the objective. If no objective functions are
     // set, the weighted sum of the compliance is used. Otherwise the weighted
     // sum of the objective functions from each load case are used
-    if (objectiveCallback){
-      objectiveGradientCallback(objective_gradient_callback_ptr, filter, mg, g);    }
-    else if (obj_funcs){
+    if (obj_funcs){
       for ( int i = 0; i < num_load_cases; i++ ){
         assembler->setVariables(vars[i]);
 
@@ -1205,17 +1237,15 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
           assembler->addDVSens(obj_weights[i], 1, &obj_funcs[i], &g);
         }
       }
-
-      filter->addValues(g);
     }
     else { // For compliance objective
       for ( int i = 0; i < num_load_cases; i++ ){
         assembler->setVariables(vars[i]);
         assembler->addAdjointResProducts(-obj_weights[i], 1, &vars[i], &g);
       }
-
-      filter->addValues(g);
     }
+
+    filter->addValues(g);
   }
   else {
     return 1;
@@ -1402,6 +1432,10 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     }
     constraintGradientCallback(constraint_gradient_callback_ptr,
                                filter, mg, num_callback_constraints, vecs);
+
+    for ( int i = 0; i < num_callback_constraints; i++ ){
+      filter->addValues(vecs[i]);
+    }
     delete [] vecs;
   }
 
