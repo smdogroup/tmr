@@ -4,7 +4,7 @@ Solve the eigenvalue-constrained optimization problem
 """
 from mpi4py import MPI
 from tmr import TMR, TopOptUtils
-from paropt import ParOpt
+from paropt import ParOpt, ParOptEig
 from tacs import TACS, elements, constitutive, functions
 import numpy as np
 import argparse
@@ -197,6 +197,103 @@ class FrequencyConstraint:
 
         return
 
+    def update_model(self, x, approx):
+        """
+        Update the quadratic terms in the model
+        """
+
+        # Compute the scalar coefficients that would make up the
+        # full quadratic approximation
+        self.M = self.conscale*self.rho*(np.outer(self.eta, self.eta) - np.diag(self.eta))
+
+        # Compute the entries in the matrix P
+        n = len(self.eigs)
+        m = n*(n-1)//2
+        self.P = np.zeros((m, m))
+        self.P_indices = []
+
+        index = 0
+        for i in range(n):
+            for j in range(i+1, n):
+                self.P_indices.append((i, j))
+                if self.eigs[i] != self.eigs[j]:
+                    self.P[index, index] =\
+                        2.0*(self.eta[i] - self.eta[j])/(self.eigs[i] - self.eigs[j])
+                else:
+                    self.P[index, index] = 2.0*self.rho*self.eta[i]
+                index += 1
+
+        self.P *= self.conscale
+
+        # Get the vectors from the approximation object
+        g0, hvecs = approx.getApproximationVectors()
+
+        # Create the M-matrix in the approximation = V*M*V^{T}
+        nhv = len(hvecs)
+        M = np.zeros((nhv, nhv))
+
+        # Find the number of diagonal entries in M exceeding the tolerance
+        # but not more than nhv/2. These will be included
+        nmv = 0
+
+        # Include terms that exceed a specified tolerance. In practice,
+        # these are rarely included.
+        tol = 0.01
+        for i in range(n):
+            if self.M[i,i] >= tol:
+                nmv += 1
+
+        # Fill in the values of the approximation matrix from M
+        npv = nhv - nmv
+        for i in range(nmv):
+            dfdx = TMR.convertPVecToVec(hvecs[k+mnv])
+            dfdx.zeroEntries()
+            M[i,:nmv] = self.M[i,:nmv]
+
+            # Compute the derivative
+            scale = self.conscale
+            self.assembler.addMatDVSensInnerProduct(
+                scale, TACS.STIFFNESS_MATRIX,
+                self.W[i], self.W[i], dfdx)
+            self.assembler.addMatDVSensInnerProduct(
+                -scale*self.omega**2, TACS.MASS_MATRIX,
+                    self.W[i], self.W[i], dfdx)
+
+            # Apply the filter
+            self.fltr.addValues(dfdx)
+
+        # Calculate the vectors with the largest contributions
+        indices = range(npv)
+
+        # Extract the values from the P matrix to fill in the remainder
+        # of the matrix approximation
+        for k in range(npv):
+            dfdx = TMR.convertPVecToVec(hvecs[k+nmv])
+            dfdx.zeroEntries()
+            M[k+nmv,k+nmv] = self.P[indices[k], indices[k]]
+
+            # Convert the k index to i and j indices
+            i, j = self.P_indices[indices[k]]
+
+            # Compute the derivative
+            scale = self.conscale
+            self.assembler.addMatDVSensInnerProduct(
+                scale, TACS.STIFFNESS_MATRIX,
+                self.W[i], self.W[j], dfdx)
+            self.assembler.addMatDVSensInnerProduct(
+                -scale*self.omega**2, TACS.MASS_MATRIX,
+                    self.W[i], self.W[j], dfdx)
+
+            # Apply the filter
+            self.fltr.addValues(dfdx)
+
+        # Compute the Moore-Penrose inverse of the matrix
+        Minv = np.linalg.pinv(M)
+
+        approx.setApproximationValues(M=M, Minv=Minv)
+
+        return
+
 class BucklingConstraint:
     def __init__(self, load_factor=1.0, eig_scale=1.0, num_eigenvalues=10,
                  max_jd_size=50, max_gmres_size=15, rho=100.0):
@@ -248,9 +345,7 @@ class BucklingConstraint:
             eig_atol = 1e-5
             self.jd.setTolerances(eig_rtol, eig_atol)
 
-            # Set the number of eigenvectors to recycle. Don't aggressively recycle,
-            # b/c this can lead to a lack of robustness
-            num_recycle = self.num_eigenvalues >> 1
+            # Set the number of eigenvectors to recycle
             self.jd.setRecycle(self.num_eigenvalues)
 
             self.gmres = TACS.KSM(self.mg.getMat(), self.mg, 25, nrestart=20, isFlexible=1)
@@ -276,7 +371,10 @@ class BucklingConstraint:
         # called. This allows us to safely skip this computation here.
         self.assembler.getVariables(self.vars)
 
-        # Assemble the preconditioner at the point K + lambda*G
+        # Assemble the preconditioner. In this case, we just use the
+        # stiffness matrix as the precondition. This seems to be more
+        # robust, but other options such as picking K + frac*lambda*G
+        # where frac is some fraction < 1.0.
         self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
         self.mg.factor()
 
@@ -286,7 +384,7 @@ class BucklingConstraint:
                                         self.mat)
 
         # Solve the problem
-        self.jd.solve(print_flag=True, print_level=1)
+        self.jd.solve(print_flag=True, print_level=0)
 
         # Check if the solve was successful, otherwise try again
         nconv = self.jd.getNumConvergedEigenvalues()
@@ -304,6 +402,23 @@ class BucklingConstraint:
         for i in range(self.num_eigenvalues):
             eig, error = self.jd.extractEigenvector(i, self.W[i])
             self.eigs[i] = eig
+
+            # Print out the extracted eigenvalue and error if the eigenvalues
+            # did not converge
+            if nconv < self.num_eigenvalues and self.comm.rank == 0:
+                print('Extracted eigenvalue[%2d]: %25.15e error: %25.15e'%(
+                    i, self.eigs[i], error))
+
+        # If the eigenvalues are extracted the remaining Ritz vectors, there
+        # is no guarantee that they will be sorted. We sort them here in
+        # ascending order.
+        if nconv < self.num_eigenvalues:
+            indices = np.argsort(self.eigs)
+            self.eigs = self.eigs[indices]
+            wlist = []
+            for i in indices:
+                wlist.append(self.W[i])
+            self.W = wlist
 
         # Scale the eigenvalues
         self.eigs /= self.eig_scale
@@ -338,9 +453,8 @@ class BucklingConstraint:
         # Set variable values
         self.assembler.setVariables(self.vars)
 
-        # Assemble and factor the stiffness matrix
-        self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
-        self.mg.factor()
+        # Zero the right-hand-side
+        self.dfdu.zeroEntries()
 
         for i in range(self.num_eigenvalues):
             # Compute the scalar factor to add to
@@ -356,6 +470,98 @@ class BucklingConstraint:
                 self.W[i], self.W[i], dcdx)
 
             # Compute the derivative of d(W[i]^{T}*G*W[i])/d(path)
+            # Note that here the self.adjoint member is used as a temporary
+            # vector that stores the contribution from the i-th eigenvalue.
+            self.assembler.evalMatSVSensInnerProduct(
+                TACS.GEOMETRIC_STIFFNESS_MATRIX,
+                self.W[i], self.W[i], self.adjoint)
+
+            # Add the contribution to the derivative
+            alpha = -scale*self.load_factor
+            self.dfdu.axpy(alpha, self.adjoint)
+
+        # Apply the boundary conditions
+        self.assembler.applyBCs(self.dfdu)
+
+        # Assemble and factor the stiffness matrix. This is only required if
+        # the preconditioner is factored at a point that is not the stiffness
+        # matrix.
+        # self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
+        # self.mg.factor()
+
+        # Add the derivative of the path variables w.r.t. the
+        # design variables
+        self.gmres.solve(self.dfdu, self.adjoint)
+
+        # Add the total derivative contribution
+        self.assembler.addAdjointResProducts([self.adjoint], [dcdx])
+
+        return
+
+    def update_model(self, x, approx):
+        """
+        Update the quadratic terms in the model
+        """
+
+        # Compute the scalar coefficients that would make up the
+        # full quadratic approximation
+        self.M = self.rho*(np.outer(self.eta, self.eta) - np.diag(self.eta))
+
+        # Compute the entries in the matrix P
+        n = len(self.eigs)
+        m = n*(n-1)//2
+        self.P = np.zeros((m, m))
+        self.P_indices = []
+
+        index = 0
+        for i in range(n):
+            for j in range(i+1, n):
+                self.P_indices.append((i, j))
+                if self.eigs[i] != self.eigs[j]:
+                    self.P[index, index] =\
+                        2.0*(self.eta[i] - self.eta[j])/(self.eigs[i] - self.eigs[j])
+                else:
+                    self.P[index, index] = 2.0*self.rho*self.eta[i]
+                index += 1
+
+        # Get the vectors from the approximation object
+        g0, hvecs = approx.getApproximationVectors()
+
+        # Create the M-matrix in the approximation = V*M*V^{T}
+        nhv = len(hvecs)
+        M = np.zeros((nhv, nhv))
+
+        # Find the number of diagonal entries in M exceeding the tolerance
+        # but not more than nhv/2. These will be included
+        nmv = 0
+
+        # Include terms that exceed a specified tolerance. In practice,
+        # these are rarely included.
+        tol = 0.01
+        for i in range(n):
+            if self.M[i,i] >= tol:
+                nmv += 1
+
+        # Fill in the values of the approximation matrix from M
+        npv = nhv - nmv
+        for i in range(nmv):
+            dfdx = TMR.convertPVecToVec(hvecs[i])
+            dfdx.zeroEntries()
+            M[i,:nmv] = self.M[i,:nmv]
+
+            # Compute the derivative
+            scale = 1.0
+
+            # Add the derivative of (K + load_factor*G) w.r.t. the design
+            # variables to the constraint gradient
+            self.assembler.addMatDVSensInnerProduct(
+                scale, TACS.STIFFNESS_MATRIX,
+                self.W[i], self.W[i], dfdx)
+            self.assembler.addMatDVSensInnerProduct(
+                scale*self.load_factor, TACS.GEOMETRIC_STIFFNESS_MATRIX,
+                self.W[i], self.W[i], dfdx)
+
+            # Compute the derivative of d(W[i]^{T}*G*W[i])/d(path)
             self.assembler.evalMatSVSensInnerProduct(
                 TACS.GEOMETRIC_STIFFNESS_MATRIX,
                 self.W[i], self.W[i], self.dfdu)
@@ -365,7 +571,55 @@ class BucklingConstraint:
             self.gmres.solve(self.dfdu, self.adjoint)
 
             alpha = -scale*self.load_factor
-            self.assembler.addAdjointResProducts([self.adjoint], [dcdx], alpha=alpha)
+            self.assembler.addAdjointResProducts([self.adjoint], [dfdx], alpha=alpha)
+
+            # Apply the filter
+            self.fltr.addValues(dfdx)
+
+        # Calculate the vectors with the largest contributions
+        indices = range(npv)
+
+        # Extract the values from the P matrix to fill in the remainder
+        # of the matrix approximation
+        for k in range(npv):
+            dfdx = TMR.convertPVecToVec(hvecs[k+nmv])
+            dfdx.zeroEntries()
+            M[k+nmv,k+nmv] = self.P[indices[k], indices[k]]
+
+            # Convert the k index to i and j indices
+            i, j = self.P_indices[indices[k]]
+
+            # Compute the derivative
+            scale = 1.0
+
+            # Add the derivative of (K + load_factor*G) w.r.t. the design
+            # variables to the constraint gradient
+            self.assembler.addMatDVSensInnerProduct(
+                scale, TACS.STIFFNESS_MATRIX,
+                self.W[i], self.W[j], dfdx)
+            self.assembler.addMatDVSensInnerProduct(
+                scale*self.load_factor, TACS.GEOMETRIC_STIFFNESS_MATRIX,
+                self.W[i], self.W[j], dfdx)
+
+            # Compute the derivative of d(W[i]^{T}*G*W[i])/d(path)
+            self.assembler.evalMatSVSensInnerProduct(
+                TACS.GEOMETRIC_STIFFNESS_MATRIX,
+                self.W[i], self.W[j], self.dfdu)
+
+            # Add the derivative of the path variables w.r.t. the
+            # design variables
+            self.gmres.solve(self.dfdu, self.adjoint)
+
+            alpha = -scale*self.load_factor
+            self.assembler.addAdjointResProducts([self.adjoint], [dfdx], alpha=alpha)
+
+            # Apply the filter
+            self.fltr.addValues(dfdx)
+
+        # Compute the Moore-Penrose inverse of the matrix
+        Minv = np.linalg.pinv(M)
+
+        approx.setApproximationValues(M=M, Minv=Minv)
 
         return
 
@@ -452,23 +706,25 @@ def create_problem(forest, bcs, props, nlevels,
         if contype == 'semi-def':
             eig_scale = 1e-4
 
-        freq = FrequencyConstraint(omega=omega, num_eigenvalues=num_eigenvalues,
-                                   rho=10.0, eig_scale=eig_scale,
-                                   conscale=1.0, contype=contype)
-        problem.addConstraintCallback(1, freq.constraint, freq.constraint_gradient)
+        obj = FrequencyConstraint(omega=omega, num_eigenvalues=num_eigenvalues,
+                                  rho=10.0, eig_scale=eig_scale,
+                                  conscale=1.0, contype=contype)
+        problem.addConstraintCallback(1, obj.constraint, obj.constraint_gradient)
     else:
         # Add the buckling constraint callback
         eig_scale = 1e-4
-        buckling = BucklingConstraint(load_factor=load_factor,
-                                      num_eigenvalues=num_eigenvalues,
-                                      rho=10.0, eig_scale=eig_scale)
-        problem.addConstraintCallback(1, buckling.constraint,
-                                      buckling.constraint_gradient)
+        obj = BucklingConstraint(load_factor=load_factor,
+                                 num_eigenvalues=num_eigenvalues,
+                                 max_jd_size=75,
+                                 max_gmres_size=15,
+                                 rho=10.0, eig_scale=eig_scale)
+        problem.addConstraintCallback(1, obj.constraint,
+                                      obj.constraint_gradient)
 
     # Initialize the problem and set the prefix
     problem.initialize()
 
-    return problem
+    return problem, obj
 
 def write_dvs_to_file(xopt, assembler, filename):
     # Output the original design variables before filtering
@@ -493,7 +749,7 @@ def write_dvs_to_file(xopt, assembler, filename):
 optimization_options = {
     # Parameters for the trust region method
     'tr_init_size': 0.01,
-    'tr_max_size': 0.05,
+    'tr_max_size': 0.1,
     'tr_min_size': 1e-5,
     'tr_eta': 0.1,
     'tr_penalty_gamma': 100.0,
@@ -508,11 +764,9 @@ optimization_options = {
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
-    'qn_type': 'BFGS', # 'No Hessian approx'
-    'max_qn_subspace': 5,
     'output_level': 2,
-    'output_freq': 10,
-    'tol': 1e-8,
+    'bfgs_update_type': 'Damped',
+    'tol': 1e-7,
     'maxiter': 500,
     'norm_type': 'L1',
     'barrier_strategy': 'Monotone',
@@ -528,8 +782,6 @@ if __name__ == '__main__':
     p.add_argument('--init_depth', type=int, default=1)
     p.add_argument('--mg_levels', type=int, default=3)
     p.add_argument('--order', type=int, default=2)
-    p.add_argument('--q_penalty', type=float, default=8.0)
-    p.add_argument('--q_mass', type=float, default=3.0)
     p.add_argument('--N', type=int, default=10)
     p.add_argument('--r0_frac', type=float, default=0.05)
     p.add_argument('--use_project', action='store_true', default=False)
@@ -546,6 +798,8 @@ if __name__ == '__main__':
                    help='natural frequency constraint value')
     p.add_argument('--load_factor', type=float, default=1.0,
                    help='load factor value')
+    p.add_argument('--linearized', default=False, action='store_true',
+                    help='Use a linearized approximation')
     args = p.parse_args()
 
     # Set the communicator
@@ -609,9 +863,25 @@ if __name__ == '__main__':
 
     # Check what penalization strategy to use. Use a sequence of penalization
     # values which increase with iteration
-    q_vals = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
-    if props.penalty_type == 'SIMP':
-        q_vals = [1.0, 1.5, 2.0, 2.5, 3.0]
+    if args.probtype == 'frequency':
+        # Use a convex starting point strategy for the frequency problem
+        q_vals = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+        if props.penalty_type == 'SIMP':
+            q_vals = [1.0, 2.0, 3.0, 4.0]
+    else:
+        # For the buckling problem, the design point obtained with q = 0,
+        # or q = 1 for SIMP, is not critical with respect to the stability
+        # constraint
+        q_vals = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+        if props.penalty_type == 'SIMP':
+            q_vals = [1.0, 2.0, 3.0, 4.0]
+
+    # Set the maximum number of iterations
+    opt_iters = len(q_vals)*[args.max_opt_iters]
+    opt_iters[-1] *= 4
+
+    if args.probtype != 'frequency':
+        opt_iters = [50, 200, 200, 400]
 
     max_iterations = len(q_vals)
 
@@ -623,22 +893,22 @@ if __name__ == '__main__':
         mg_levels = args.mg_levels
         if step > 0:
             mg_levels += 1
-        problem = create_problem(forest, bcs, props, mg_levels,
-                                 omega=args.omega, load_factor=args.load_factor,
-                                 contype=args.contype, probtype=args.probtype,
-                                 num_eigenvalues=args.num_eigenvalues,
-                                 m_fixed=m_fixed, r0_frac=args.r0_frac, N=args.N,
-                                 iter_offset=iter_offset)
+        problem, obj = create_problem(forest, bcs, props, mg_levels,
+                                      omega=args.omega, load_factor=args.load_factor,
+                                      contype=args.contype, probtype=args.probtype,
+                                      num_eigenvalues=args.num_eigenvalues,
+                                      m_fixed=m_fixed, r0_frac=args.r0_frac, N=args.N,
+                                      iter_offset=iter_offset)
 
         # Get the assembler object
         assembler = problem.getAssembler()
 
         # Set the callback for generating output
+        iter_offset = sum(opt_iters[:step])
         cb = OutputCallback(args.prefix, assembler, iter_offset=iter_offset, freq=5)
         problem.setOutputCallback(cb.write_output)
 
         # Keep counting the total number of iterations
-        iter_offset += args.max_opt_iters
         problem.setPrefix(args.prefix)
 
         # Check the gradient
@@ -661,14 +931,30 @@ if __name__ == '__main__':
         orig_filter = filtr
 
         # Set parameters
-        if step == max_iterations-1:
-            optimization_options['maxiter'] = 4*args.max_opt_iters
-        else:
-            optimization_options['maxiter'] = args.max_opt_iters
+        optimization_options['maxiter'] = opt_iters[step]
         optimization_options['output_file'] = os.path.join(args.prefix,
                                                            'output_file%d.dat'%(step))
         optimization_options['tr_output_file'] = os.path.join(args.prefix,
                                                               'tr_output_file%d.dat'%(step))
+
+        if args.contype == 'semi-def' and not args.linearized:
+            # Create the quadratic eigenvalue approximation object
+            num_hvecs = args.num_eigenvalues - 1
+            qn = ParOpt.LBFGS(problem, subspace=10, update_type=ParOpt.DAMPED_UPDATE)
+            approx = ParOptEig.CompactEigenApprox(problem, num_hvecs)
+
+            # Set up the corresponding quadratic problem, specify the index of the
+            # eigenvalue constraint.
+            eigenvalue_constraint_index = 1
+            eig_qn = ParOptEig.EigenQuasiNewton(qn, approx,
+                                                index=eigenvalue_constraint_index)
+
+            # Create the subproblem
+            subproblem = ParOptEig.EigenSubproblem(problem, eig_qn)
+            subproblem.setUpdateEigenModel(obj.update_model)
+
+            # Set the trust region subproblem
+            optimization_options['tr_subproblem_object'] = subproblem
 
         # Optimize the problem
         opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
@@ -677,22 +963,22 @@ if __name__ == '__main__':
         # Refine based solely on the value of the density variable
         write_dvs_to_file(xopt, assembler, os.path.join(args.prefix, 'dv_output%d.f5'%(step)))
 
-        if step == max_iterations-2:
-            # Duplicate the forest before the refinement process - this is to avoid
-            # refinement on the existing forest which will be needed again
-            forest = forest.duplicate()
+        # if step == max_iterations-2:
+        #     # Duplicate the forest before the refinement process - this is to avoid
+        #     # refinement on the existing forest which will be needed again
+        #     forest = forest.duplicate()
 
-            # Perform refinement based on distance
-            dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
-            refine_distance = 0.025*domain_length
-            TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
-                                     interface_lev=args.init_depth+1, interior_lev=args.init_depth,
-                                     domain_length=domain_length, filename=dist_file)
+        #     # Perform refinement based on distance
+        #     dist_file = os.path.join(args.prefix, 'distance_solution%d.f5'%(step))
+        #     refine_distance = 0.025*domain_length
+        #     TopOptUtils.targetRefine(forest, filtr, assembler, refine_distance,
+        #                              interface_lev=args.init_depth+1, interior_lev=args.init_depth,
+        #                              domain_length=domain_length, filename=dist_file)
 
-            # Repartition the mesh
-            forest.balance(1)
-            forest.repartition()
+        #     # Repartition the mesh
+        #     forest.balance(1)
+        #     forest.repartition()
 
-        # If there is projection, use it after the first iteration only
-        if args.use_project:
-            props.use_project = True
+        # # If there is projection, use it after the first iteration only
+        # if args.use_project:
+        #     props.use_project = True

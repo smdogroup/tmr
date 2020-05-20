@@ -264,7 +264,7 @@ def create_forest(comm, depth, htarget, fs_type=None,
     return forest
 
 class MFilterCreator:
-    def __init__(self, r0_frac, N,  a=0.1):
+    def __init__(self, r0_frac, N, a=0.1):
         self.a = a
         self.r0_frac = r0_frac
         self.N = N
@@ -360,6 +360,7 @@ class OutputCallback:
     def __init__(self, prefix, assembler, iter_offset=0, freq=10):
         self.prefix = prefix
         self.freq = freq
+        self.iter_offset = iter_offset
 
         # Set the output file name
         flag = (TACS.OUTPUT_CONNECTIVITY |
@@ -368,7 +369,6 @@ class OutputCallback:
                 TACS.OUTPUT_STRAINS |
                 TACS.OUTPUT_EXTRAS)
         self.f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
-        self.iter_offset = iter_offset
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
         if itr % self.freq == 0:

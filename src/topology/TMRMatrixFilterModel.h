@@ -29,11 +29,13 @@ class TMRQuadMatrixModel : public TACSElementModel {
   int getSpatialDim();
   int getVarsPerNode();
   void evalWeakIntegrand( int elemIndex, const double time,
-                          int n, const double pt[], const TacsScalar X[],
+                          int n, const double pt[],
+                          const TacsScalar X[], const TacsScalar Xd[],
                           const TacsScalar Ut[], const TacsScalar Ux[],
                           TacsScalar DUt[], TacsScalar DUx[] );
   void evalWeakJacobian( int elemIndex, const double time,
-                         int n, const double pt[], const TacsScalar X[],
+                         int n, const double pt[],
+                         const TacsScalar X[], const TacsScalar Xd[],
                          const TacsScalar Ut[], const TacsScalar Ux[],
                          TacsScalar DUt[], TacsScalar DUx[],
                          int *Jac_nnz, const int *Jac_pairs[],
@@ -48,11 +50,13 @@ class TMRHexaMatrixModel : public TACSElementModel {
   int getSpatialDim();
   int getVarsPerNode();
   void evalWeakIntegrand( int elemIndex, const double time,
-                          int n, const double pt[], const TacsScalar X[],
+                          int n, const double pt[],
+                          const TacsScalar X[], const TacsScalar Xd[],
                           const TacsScalar Ut[], const TacsScalar Ux[],
                           TacsScalar DUt[], TacsScalar DUx[] );
   void evalWeakJacobian( int elemIndex, const double time,
-                         int n, const double pt[], const TacsScalar X[],
+                         int n, const double pt[],
+                         const TacsScalar X[], const TacsScalar Xd[],
                          const TacsScalar Ut[], const TacsScalar Ux[],
                          TacsScalar DUt[], TacsScalar DUx[],
                          int *Jac_nnz, const int *Jac_pairs[],

@@ -877,9 +877,9 @@ class OptionData:
 
     def add_option(self, name, default=None, types=None,
                    values=None, desc=None, lower=None, upper=None):
-        '''
+        """
         Add an option
-        '''
+        """
         self.options[name] = default
         self.types[name] = types
         self.values[name] = values
@@ -896,7 +896,7 @@ class OptionData:
         return self.options[name]
 
     def __setitem__(self, name, value):
-        '''Set the item into the options dictionary'''
+        """Set the item into the options dictionary"""
         if not name in self.options:
             desc = 'Key %s not in OptionData. '%(name)
             desc += 'Set new item through add_option()'
@@ -1053,6 +1053,8 @@ class TopologyOptimizer:
         self.options.add_option('tr_penalty_gamma_max', default=1e4, lower=0.0,
                                 desc='Trust region maximum penalty parameter value')
         self.options.add_option('tr_print_level', default=0, types=int)
+        self.options.add_option('tr_subproblem_object', default=None, types=None,
+                                desc='Trust region subproblem object')
 
         # Trust region convergence tolerances
         self.options.add_option('tr_infeas_tol', default=1e-5, lower=0.0,
@@ -1098,17 +1100,6 @@ class TopologyOptimizer:
 
         # Create the problem
         if opt_type == 'Trust Region':
-            if max_qn_subspace < 1:
-                max_qn_subspace = 1
-
-            # Create the quasi-Newton method
-            if qn_type == ParOpt.SR1:
-                qn = ParOpt.LSR1(problem, subspace=max_qn_subspace)
-            elif qn_type == ParOpt.BFGS:
-                qn = ParOpt.LBFGS(problem, subspace=max_qn_subspace)
-            else:
-                qn = None
-
             # Retrieve the options for the trust region problem
             tr_min_size = self.options['tr_min_size']
             tr_max_size = self.options['tr_max_size']
@@ -1117,7 +1108,29 @@ class TopologyOptimizer:
             tr_init_size = self.options['tr_init_size']
 
             # Create the trust region sub-problem
-            subproblem = ParOpt.QuadraticSubproblem(problem, qn)
+            subproblem = self.options['tr_subproblem_object']
+            if subproblem is None:
+                if max_qn_subspace < 0:
+                    max_qn_subspace = 0
+
+                bfgs_update_type = ParOpt.SKIP_NEGATIVE_CURVATURE
+                if self.options['bfgs_update_type'] == 'Skip negative':
+                    bfgs_update_type = ParOpt.SKIP_NEGATIVE_CURVATURE
+                elif self.options['bfgs_update_type'] == 'Damped':
+                    bfgs_update_type = ParOpt.DAMPED_UPDATE
+
+                # Create the quasi-Newton method
+                if qn_type == ParOpt.SR1:
+                    qn = ParOpt.LSR1(problem, subspace=max_qn_subspace)
+                elif qn_type == ParOpt.BFGS:
+                    qn = ParOpt.LBFGS(problem, subspace=max_qn_subspace,
+                                      update_type=bfgs_update_type)
+                else:
+                    qn = None
+
+                subproblem = ParOpt.QuadraticSubproblem(problem, qn)
+
+            # Set the initial trust region problem size
             tr_init_size = min(tr_max_size, max(tr_init_size, tr_min_size))
             tr = ParOpt.TrustRegion(subproblem, tr_init_size,
                                     tr_min_size, tr_max_size,

@@ -31,7 +31,8 @@ int TMRQuadMatrixModel::getVarsPerNode(){
 }
 
 void TMRQuadMatrixModel::evalWeakIntegrand( int elemIndex, const double time,
-                                            int n, const double pt[], const TacsScalar X[],
+                                            int n, const double pt[],
+                                            const TacsScalar X[], const TacsScalar Xd[],
                                             const TacsScalar Ut[], const TacsScalar Ux[],
                                             TacsScalar DUt[], TacsScalar DUx[] ){
   DUt[0] = DUt[1] = DUt[2] = 0.0;
@@ -40,7 +41,8 @@ void TMRQuadMatrixModel::evalWeakIntegrand( int elemIndex, const double time,
 }
 
 void TMRQuadMatrixModel::evalWeakJacobian( int elemIndex, const double time,
-                                           int n, const double pt[], const TacsScalar X[],
+                                           int n, const double pt[],
+                                           const TacsScalar X[], const TacsScalar Xd[],
                                            const TacsScalar Ut[], const TacsScalar Ux[],
                                            TacsScalar DUt[], TacsScalar DUx[],
                                            int *Jac_nnz, const int *Jac_pairs[],
@@ -66,7 +68,8 @@ int TMRHexaMatrixModel::getVarsPerNode(){
 }
 
 void TMRHexaMatrixModel::evalWeakIntegrand( int elemIndex, const double time,
-                                            int n, const double pt[], const TacsScalar X[],
+                                            int n, const double pt[],
+                                            const TacsScalar X[], const TacsScalar Xd[],
                                             const TacsScalar Ut[], const TacsScalar Ux[],
                                             TacsScalar DUt[], TacsScalar DUx[] ){
   DUt[0] = DUt[1] = DUt[2] = 0.0;
@@ -75,7 +78,8 @@ void TMRHexaMatrixModel::evalWeakIntegrand( int elemIndex, const double time,
 }
 
 void TMRHexaMatrixModel::evalWeakJacobian( int elemIndex, const double time,
-                                           int n, const double pt[], const TacsScalar X[],
+                                           int n, const double pt[],
+                                           const TacsScalar X[], const TacsScalar Xd[],
                                            const TacsScalar Ut[], const TacsScalar Ux[],
                                            TacsScalar DUt[], TacsScalar DUx[],
                                            int *Jac_nnz, const int *Jac_pairs[],
