@@ -920,7 +920,6 @@ void TMRQuadConstitutive::addHeatFluxDVSens( int elemIndex,
 
       // Compute the derivative of the projection w.r.t.
       dpenalty *= beta*rho_exp*rho*rho;
-
     }
     else {
       // Compute the derivative of the penalization with respect to

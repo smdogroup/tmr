@@ -1200,7 +1200,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
     g->zeroEntries();
 
     // Evaluate the gradient of the objective function from the callback
-    if (objectiveCallback){
+    if (objectiveGradientCallback){
       objectiveGradientCallback(objective_gradient_callback_ptr, filter, mg, g);
     }
 

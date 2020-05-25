@@ -207,6 +207,8 @@ def computeTractionLoad(names, forest, assembler, trac):
     # Create the force vector and zero the variables in the assembler
     force = assembler.createVec()
     assembler.zeroVariables()
+    assembler.zeroDotVariables()
+    assembler.zeroDDotVariables()
 
     # Create the auxiliary element class
     aux = TACS.AuxElements()
