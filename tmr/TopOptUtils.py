@@ -1317,10 +1317,9 @@ class TopologyOptimizer:
         # Run the optimization, everything else has been setup
         if self.options['optimizer'] == 'Trust Region':
             self.tr.optimize(self.opt)
+            x = self.tr.getOptimizedPoint()
         else:
             self.opt.optimize()
-
-        # Keep the values of the design variables/multipliers
-        x, z, zw, zl, zu = self.opt.getOptimizedPoint()
+            x, z, zw, zl, zu = self.opt.getOptimizedPoint()
 
         return x
