@@ -275,25 +275,34 @@ class OutputCallback:
 
 # Set the optimization parameters
 optimization_options = {
+    # Set the algorithm to use
+    'algorithm': 'tr',
+
     # Parameters for the trust region method
     'tr_init_size': 0.01,
-    'tr_max_size': 0.05,
+    'tr_max_size': 0.1,
     'tr_min_size': 1e-6,
     'tr_eta': 0.25,
-    'tr_penalty_gamma': 1.0,
-    'tr_write_output_freq': 1,
+    'penalty_gamma': 10.0,
+    'tr_write_output_frequency': 1,
     'tr_infeas_tol': 1e-5,
     'tr_l1_tol': 1e-5,
     'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
+    'tr_steering_barrier_strategy': 'mehrotra_predictor_corrector',
+    'tr_steering_starting_point_strategy': 'affine_step',
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
-    'max_qn_subspace': 2,
-    'tol': 1e-8,
-    'maxiter': 500,
-    'norm_type': 'L1',
-    'barrier_strategy': 'Complementarity fraction',
-    'start_strategy': 'Affine step'}
+    'qn_subspace_size': 10,
+    'qn_type': 'bfgs',
+    'qn_update_type': 'skip_negative_curvature',
+    'abs_res_tol': 1e-8,
+    'max_major_iters': 100,
+    'norm_type': 'l1',
+    'init_barrier_param': 10.0,
+    'use_line_search': False,
+    'barrier_strategy': 'mehrotra_predictor_corrector',
+    'starting_point_strategy': 'affine_step'}
 
 # Create an argument parser to read in arguments from the command line
 p = argparse.ArgumentParser()
@@ -405,7 +414,7 @@ for step in range(max_iterations):
     orig_filter = filtr
 
     # Set the max number of iterations
-    optimization_options['maxiter'] = args.max_opt_iters[step]
+    optimization_options['tr_max_iterations'] = args.max_opt_iters[step]
 
     # Output files
     optimization_options['output_file'] = os.path.join(args.prefix,
@@ -414,8 +423,9 @@ for step in range(max_iterations):
         'tr_output_file%d.dat'%(step))
 
     # Optimize the problem
-    opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
-    xopt = opt.optimize()
+    opt = ParOpt.Optimizer(problem, optimization_options)
+    opt.optimize()
+    xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
     # Refine based solely on the value of the density variable
     assembler = problem.getAssembler()

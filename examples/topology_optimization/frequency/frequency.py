@@ -74,21 +74,24 @@ if comm.rank == 0:
 
 # Set the optimization parameters
 optimization_options = {
+    'algorithm': 'tr',
+
     # Parameters for the trust region method
     'tr_init_size': 0.01,
     'tr_max_size': 0.05,
     'tr_min_size': 1e-6,
     'tr_eta': 0.25,
+    'tr_max_iterations': 50,
     'tr_penalty_gamma': args.tr_penalty,
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
-    'max_qn_subspace': args.qn_subspace,
-    'tol': 1e-8,
-    'maxiter': 50,
-    'norm_type': 'L1',
-    'barrier_strategy': 'Complementarity fraction',
-    'start_strategy': 'Affine step'}
+    'init_barrier_param': 10.0,
+    'qn_subspace_size': args.qn_subspace,
+    'abs_res_tol': 1e-8,
+    'norm_type': 'l1',
+    'barrier_strategy': 'monotone',
+    'start_strategy': 'affine_step'}
 
 prefix = args.prefix
 optimization_options['output_file'] = os.path.join(prefix, 'output_file.dat')
@@ -154,11 +157,12 @@ for step in range(max_iterations):
     problem.checkGradients(1e-6)
 
     # Set the max number of iterations
-    optimization_options['maxiter'] = args.max_opt_iters[step]
+    optimization_options['tr_max_iterations'] = args.max_opt_iters[step]
 
     # Optimize the problem
-    opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
-    xopt = opt.optimize()
+    opt = TopOpt.Optimizer(problem, optimization_options)
+    opt.optimize()
+    xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
     # Refine based solely on the value of the density variable
     assembler = problem.getAssembler()

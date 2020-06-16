@@ -258,23 +258,25 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
 if __name__ == '__main__':
     # Set the optimization parameters
     optimization_options = {
+        # Set the algorithm to use
+        'algorithm': 'tr',
+
         # Parameters for the trust region method
         'tr_init_size': 0.01,
         'tr_max_size': 0.1,
         'tr_min_size': 0.01,
         'tr_eta': 0.25,
-        'tr_penalty_gamma': 20.0,
-        'tr_write_output_freq': 1,
+        'tr_max_iterations': 25,
+        'tr_write_output_frequency': 1,
+        'penalty_gamma': 20.0,
 
         # Parameters for the interior point method (used to solve the
         # trust region subproblem)
-        'max_qn_subspace': 2,
-        'bfgs_update_type': 'Damped',
-        'tol': 1e-8,
-        'maxiter': 25,
-        'norm_type': 'L1',
-        'barrier_strategy': 'Complementarity fraction',
-        'start_strategy': 'Affine step'}
+        'qn_subspace_size': 2,
+        'abs_res_tol': 1e-8,
+        'norm_type': 'l1',
+        'barrier_strategy': 'monotone',
+        'start_strategy': 'affine_step'}
 
     prefix = 'results'
 
@@ -304,7 +306,7 @@ if __name__ == '__main__':
     max_iterations = 4
     for step in range(max_iterations):
         # Create the problem
-        iter_offset = step*optimization_options['maxiter']
+        iter_offset = step*optimization_options['tr_max_iterations']
         problem = create_problem(forest, bcs, props, nlevels + step,
                                  iter_offset=iter_offset)
 
@@ -328,15 +330,16 @@ if __name__ == '__main__':
         orig_filter = filtr
 
         if step == max_iterations-1:
-            optimization_options['maxiter'] = 10
-        count += optimization_options['maxiter']
+            optimization_options['tr_max_iterations'] = 10
+        count += optimization_options['tr_max_iterations']
 
         optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
         optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
 
         # Optimize
-        opt = TopOptUtils.TopologyOptimizer(problem, optimization_options)
-        xopt = opt.optimize()
+        opt = ParOpt.Optimizer(problem, optimization_options)
+        opt.optimize()
+        xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
         # Output for visualization
         assembler = problem.getAssembler()
