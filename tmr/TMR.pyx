@@ -28,6 +28,9 @@ cimport mpi4py.MPI as MPI
 cimport numpy as np
 import numpy as np
 
+# Import the string library
+from libcpp.string cimport string
+
 cdef tmr_init():
     if not TMRIsInitialized():
         TMRInitialize()
@@ -114,7 +117,10 @@ cdef class Vertex:
         Args:
             aname (str): Name associated with the Vertex
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
+        if aname is not None:
+            name = sname.c_str()
         if self.ptr:
             self.ptr.setName(name)
 
@@ -343,7 +349,10 @@ cdef class Edge:
         Args:
             aname (str): Name associated with the edge
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
+        if aname is not None:
+            name = sname.c_str()
         if self.ptr:
             self.ptr.setName(name)
 
@@ -537,7 +546,10 @@ cdef class Edge:
         Args:
             fname (str): File name
         """
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
     def checkMatching(self, Edge e, double tol=1e-6):
@@ -800,7 +812,10 @@ cdef class Face:
         Args:
             aname (str): Name associated with the Face
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
+        if aname is not None:
+            name = sname.c_str()
         if self.ptr:
             self.ptr.setName(name)
 
@@ -1071,7 +1086,10 @@ cdef class Face:
         Args:
             fname (str): File name
         """
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
     def checkMatching(self, Face f, tol=1e-6):
@@ -1155,7 +1173,10 @@ cdef class Volume:
         Args:
             aname (str): Name associated with the volume
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
+        if aname is not None:
+            name = sname.c_str()
         if self.ptr:
             self.ptr.setName(name)
 
@@ -1206,7 +1227,18 @@ cdef class Volume:
         return faces
 
     def writeToVTK(self, fname):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        """
+        writeToVTK(self, fname)
+
+        Write the Volume to a VTK file for visualization.
+
+        Args:
+            fname (str): File name
+        """
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
     def getSweptFacePairs(self):
@@ -1405,17 +1437,47 @@ cdef class Curve:
             self.ptr.decref()
 
     def setName(self, aname):
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        """
+        setName(self, aname)
+
+        Set the name associated with the Curve
+
+        Args:
+            aname (str): Name associated with the Curve
+        """
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
+        if aname is not None:
+            name = sname.c_str()
         if self.ptr:
             self.ptr.setName(name)
 
     def getEntityId(self):
+        """
+        getEntityId(self)
+
+        Get the entity id associated with the Curve
+
+        Returns:
+            int: Id number of the object, -1 for NULL object
+        """
         if self.ptr:
             return self.ptr.getEntityId()
         return -1
 
     def writeToVTK(self, fname):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        """
+        writeToVTK(self, fname)
+
+        Write the Curve to a VTK file for visualization.
+
+        Args:
+            fname (str): File name
+        """
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
     def getData(self):
@@ -1471,7 +1533,18 @@ cdef class Pcurve:
             self.ptr.decref()
 
     def setName(self, aname):
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        """
+        setName(self, aname)
+
+        Set the name associated with the PCurve
+
+        Args:
+            aname (str): Name associated with the PCurve
+        """
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
+        if aname is not None:
+            name = sname.c_str()
         if self.ptr:
             self.ptr.setName(name)
 
@@ -1490,12 +1563,34 @@ cdef class Surface:
             self.ptr.decref()
 
     def setName(self, aname):
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        """
+        setName(self, aname)
+
+        Set the name associated with the Surface
+
+        Args:
+            aname (str): Name associated with the Surface
+        """
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
+        if aname is not None:
+            name = sname.c_str()
         if self.ptr:
             self.ptr.setName(name)
 
     def writeToVTK(self, fname):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        """
+        writeToVTK(self, fname)
+
+        Write the Surface to a VTK file for visualization.
+
+        Args:
+            fname (str): File name
+        """
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
     def getData(self):
@@ -2431,8 +2526,11 @@ cdef class Mesh:
             fname (str): File name
             outtype (str): Type of mesh to output to BDF file i.e. quad or hex
         """
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
         cdef int flag = 3
+        if fname is not None:
+            filename = sfilename.c_str()
         if outtype is None:
             flag = 3
         elif outtype == 'quad':
@@ -2451,8 +2549,11 @@ cdef class Mesh:
             fname (str): File name
             outtype (str): Type of mesh to output to VTK file i.e. quad or hex
         """
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
         cdef int flag = 3
+        if fname is not None:
+            filename = sfilename.c_str()
         if outtype is None:
             flag = 3
         elif outtype == 'quad':
@@ -2501,7 +2602,18 @@ cdef class EdgeMesh:
         fs.decref()
 
     def writeToVTK(self, fname):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        """
+        writeToVTK(self, fname)
+
+        Write the EdgeMesh to a VTK file for visualization.
+
+        Args:
+            fname (str): File name
+        """
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
 cdef _init_EdgeMesh(TMREdgeMesh *ptr):
@@ -2562,7 +2674,18 @@ cdef class FaceMesh:
         fs.decref()
 
     def writeToVTK(self, fname):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        """
+        writeToVTK(self, fname)
+
+        Write the FaceMesh to a VTK file for visualization.
+
+        Args:
+            fname (str): File name
+        """
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
 cdef _init_FaceMesh(TMRFaceMesh *ptr):
@@ -2952,8 +3075,11 @@ cdef class QuadForest:
         Returns:
             QuadrantArray: An array of quadrants with the specified name
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
         cdef TMRQuadrantArray *array = NULL
+        if aname is not None:
+            name = sname.c_str()
         array = self.ptr.getQuadsWithName(name)
         return _init_QuadrantArray(array, 1)
 
@@ -2970,9 +3096,12 @@ cdef class QuadForest:
         Returns:
             np.ndarray: An array of the local node numbers with name
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
         cdef int size = 0
         cdef int *nodes = NULL
+        if aname is not None:
+            name = sname.c_str()
         size = self.ptr.getNodesWithName(name, &nodes)
         array = np.zeros(size, dtype=np.intc)
         for i in range(size):
@@ -3098,11 +3227,17 @@ cdef class QuadForest:
         Args:
             fname (str): The file name (unique on each proc)
         """
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
     def writeForestToVTK(self, fname):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeForestToVTK(filename)
 
     def createInterpolation(self, QuadForest forest, VecInterp vec):
@@ -3474,8 +3609,11 @@ cdef class OctForest:
         Returns:
             OctantArray: An array of octants with the specified name
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
         cdef TMROctantArray *array = NULL
+        if aname is not None:
+            name = sname.c_str()
         array = self.ptr.getOctsWithName(name)
         return _init_OctantArray(array, 1)
 
@@ -3492,9 +3630,12 @@ cdef class OctForest:
         Returns:
             np.ndarray: An array of the local node numbers with name
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char *name = NULL
         cdef int size = 0
         cdef int *nodes = NULL
+        if aname is not None:
+            name = sname.c_str()
         size = self.ptr.getNodesWithName(name, &nodes)
         array = np.zeros(size, dtype=np.intc)
         for i in range(size):
@@ -3605,11 +3746,17 @@ cdef class OctForest:
         Args:
             fname (str): The file name (unique on each proc)
         """
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeToVTK(filename)
 
     def writeForestToVTK(self, fname):
-        cdef char *filename = tmr_convert_str_to_chars(fname)
+        cdef string sfilename = tmr_convert_str_to_chars(fname)
+        cdef const char *filename = NULL
+        if fname is not None:
+            filename = sfilename.c_str()
         self.ptr.writeForestToVTK(filename)
 
     def createInterpolation(self, OctForest forest, VecInterp vec):
@@ -3649,8 +3796,11 @@ def LoadModel(fname, int print_lev=0):
     Returns:
         Model: An instance of a Model class
     """
-    cdef char *filename = tmr_convert_str_to_chars(fname)
+    cdef string sfilename = tmr_convert_str_to_chars(fname)
+    cdef const char *filename = NULL
     cdef TMRModel *model = NULL
+    if fname is not None:
+        filename = sfilename.c_str()
     if fname.lower().endswith(('step', 'stp')):
         model = TMR_LoadModelFromSTEPFile(filename, print_lev)
     elif fname.lower().endswith(('igs', 'iges')):
@@ -3716,10 +3866,13 @@ cdef class BoundaryConditions:
             bc_nums (list): List of the nodal variables to constrain
             bc_values (list): List of boundary condition values
         """
-        cdef char *name = tmr_convert_str_to_chars(aname)
+        cdef string sname = tmr_convert_str_to_chars(aname)
+        cdef const char* name = NULL
         cdef int *nums = NULL
         cdef double *vals = NULL
         cdef int num_bcs = 0
+        if aname is not None:
+            name = sname.c_str()
         if bc_nums is not None and bc_vals is not None:
             if len(bc_nums) != len(bc_vals):
                 errstr = 'Boundary condition lists must be the same length'
@@ -4337,7 +4490,10 @@ def writeSTLToBin(fname, OctForest forest,
         index (int): Offset in the design vector (for multimaterial problems)
         cutoff (double): Level-set cutoff value
     """
-    cdef char *filename = tmr_convert_str_to_chars(fname)
+    cdef string sfilename = tmr_convert_str_to_chars(fname)
+    cdef const char *filename = NULL
+    if fname is not None:
+        filename = sfilename.c_str()
     TMR_GenerateBinFile(filename, forest.ptr, x.ptr, index, cutoff)
     return
 
@@ -4898,11 +5054,12 @@ def ApproximateDistance(filtr, Vec x, int index=0,
     cdef TMROctantArray *oct_array = NULL
     cdef TMROctForest *oct_forest = NULL
     cdef TMRQuadForest *quad_forest = NULL
-    cdef char *fname = NULL
+    cdef string sfilename = tmr_convert_str_to_chars(filename)
+    cdef const char *fname = NULL
     cdef np.ndarray dist
 
     if filename is not None:
-        fname = tmr_convert_str_to_chars(filename)
+        fname = sfilename.c_str()
     if isinstance(filtr, QuadForest):
         quad_forest = (<QuadForest>filtr).ptr
     elif isinstance(filtr, OctForest):
@@ -5414,13 +5571,13 @@ cdef class TopoProblem(ProblemBase):
         Args:
             _prefix (str): File name prefix
         """
-        cdef char *prefix = tmr_convert_str_to_chars(_prefix)
+        cdef string prefix = tmr_convert_str_to_chars(_prefix)
         cdef TMRTopoProblem *prob = NULL
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
-        prob.setPrefix(prefix)
+        prob.setPrefix(prefix.c_str())
         return
 
     def setIterationCounter(self, int count):

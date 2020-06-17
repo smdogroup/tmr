@@ -202,7 +202,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0,
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
                                             nlevels=nlevels, lowest_order=2,
-                                            r0=r0, N=15, use_galerkin=True,
+                                            r0=r0, N=20, use_galerkin=True,
                                             design_vars_per_node=design_vars_per_node)
 
     # Get the assembler object we just created
@@ -271,7 +271,8 @@ class OutputCallback:
         self.iter_offset = iter_offset
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
-        self.f5.writeToFile('results/output%d.f5'%(itr + self.iter_offset))
+        self.f5.writeToFile(os.path.join(prefix,
+            'output%d.f5'%(itr + self.iter_offset)))
 
 # Set the optimization parameters
 optimization_options = {
@@ -284,12 +285,13 @@ optimization_options = {
     'tr_min_size': 1e-6,
     'tr_eta': 0.25,
     'penalty_gamma': 10.0,
+    'tr_penalty_gamma_max': 1000.0,
     'tr_write_output_frequency': 1,
     'tr_infeas_tol': 1e-5,
     'tr_l1_tol': 1e-5,
     'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
-    'tr_steering_barrier_strategy': 'mehrotra_predictor_corrector',
-    'tr_steering_starting_point_strategy': 'affine_step',
+    'tr_steering_barrier_strategy': 'default',
+    'tr_steering_starting_point_strategy': 'default',
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)

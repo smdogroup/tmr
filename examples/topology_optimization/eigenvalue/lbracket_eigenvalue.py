@@ -756,12 +756,15 @@ optimization_options = {
     'tr_min_size': 1e-5,
     'tr_eta': 0.25,
     'penalty_gamma': 100.0,
+    'tr_penalty_gamma_max': 1000.0,
     'tr_write_output_frequency': 1,
     'tr_infeas_tol': 1e-5,
     'tr_l1_tol': 1e-5,
     'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
-    'tr_steering_barrier_strategy': 'mehrotra_predictor_corrector',
-    'tr_steering_starting_point_strategy': 'affine_step',
+    'tr_adaptive_objective': 'linear_objective',
+    'tr_adaptive_constraint': 'subproblem_constraint',
+    'tr_steering_barrier_strategy': 'default',
+    'tr_steering_starting_point_strategy': 'default',
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
@@ -941,6 +944,7 @@ if __name__ == '__main__':
         optimization_options['tr_output_file'] = os.path.join(args.prefix,
                                                               'tr_output_file%d.dat'%(step))
 
+        subproblem = None
         if args.contype == 'semi-def' and not args.linearized:
             # Create the quadratic eigenvalue approximation object
             num_hvecs = args.num_eigenvalues - 1
@@ -957,11 +961,10 @@ if __name__ == '__main__':
             subproblem = ParOptEig.EigenSubproblem(problem, eig_qn)
             subproblem.setUpdateEigenModel(obj.update_model)
 
-            # Set the trust region subproblem
-            optimization_options['tr_subproblem_object'] = subproblem
-
         # Optimize the problem
         opt = ParOpt.Optimizer(problem, optimization_options)
+        if subproblem is not None:
+            opt.setTrustRegionSubproblem(subproblem)
         opt.optimize()
         xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 

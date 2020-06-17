@@ -1,8 +1,7 @@
 from __future__ import print_function
 from mpi4py import MPI
 from tmr import TMR
-from paropt import ParOpt
-from tacs import TACS, elements, constitutive, functions
+from egads4py import egads
 import numpy as np
 import argparse
 import os
@@ -35,67 +34,69 @@ def get_edge_dirs_verts(elist):
     return edges, dirs, verts[:-1]
 
 def load_model():
-    geo = TMR.LoadModel('model.step')
+    # Create the egads context
+    ctx = egads.context()
 
-    # Get the faces/volume from the model
-    faces = geo.getFaces()
-    edges = geo.getEdges()
-    verts = geo.getVertices()
+    parts = []
 
-    # Create the edge loops
-    elist = [edges[3], edges[5], edges[45], edges[32]]
-    ex, dx, vx = get_edge_dirs_verts(elist)
+    r0 = 0.05
 
-    elist = [edges[45], edges[6], edges[7], edges[51]]
-    ey, dy, vy = get_edge_dirs_verts(elist)
+    # Create the boxes
+    x0 = [0, 0, 0]
+    x1 = [0.25, 0.25, 0.25]
+    B0 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
+    parts.append(ctx.makeTopology(egads.MODEL, children=[B0]))
 
-    elist = [edges[2], edges[32], edges[51], edges[8]]
-    ez, dz, vz = get_edge_dirs_verts(elist)
+    # Create the x-arm
+    x0 = [0.25, 0, 0]
+    x1 = [0.75, 0.25, 0.25]
+    B1 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
 
-    # Create the faces
-    fx = TMR.TFIFace(ex, dx, vx)
-    fy = TMR.TFIFace(ey, dy, vy)
-    fz = TMR.TFIFace(ez, dz, vz)
-    faces.extend([fx, fy, fz])
+    x0 = [0.85, 0.125, 0]
+    x1 = [0.85, 0.125, 0.25]
+    C1 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r0])
+    parts.append(B1.solidBoolean(C1, egads.SUBTRACTION))
 
-    # Make the volumes
-    s1 = [fx, faces[3], faces[19], faces[6], faces[10],
-          faces[9], faces[11], faces[12]]
-    d1 = [1, -1, -1, -1, 1, 1, -1, -1]
+    # Create the y-arm
+    x0 = [0, 0.25, 0]
+    x1 = [0.25, 0.75, 0.25]
+    B2 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
 
-    s2 = [fy, faces[16], faces[8], faces[5], faces[23],
-          faces[15], faces[17], faces[18]]
-    d2 = [-1, 1, -1, -1, 1, 1, -1, -1]
+    x0 = [0, 0.85, 0.125]
+    x1 = [0.25, 0.85, 0.125]
+    C2 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r0])
+    parts.append(B2.solidBoolean(C2, egads.SUBTRACTION))
 
-    s3 = [fz, faces[4], faces[20], faces[13], faces[7],
-          faces[14], faces[21], faces[22]]
-    d3 = [1, -1, 1, 1, 1, 1, -1, -1]
+    # Create the z-arm
+    x0 = [0, 0, 0.25]
+    x1 = [0.25, 0.25, 0.75]
+    B3 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
 
-    s4 = [fx, fy, fz, faces[0], faces[1], faces[2]]
-    d4 = [-1, 1, -1, -1, -1, -1]
+    x0 = [0.125, 0,    0.85]
+    x1 = [0.125, 0.25, 0.85]
+    C3 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r0])
+    parts.append(B3.solidBoolean(C3, egads.SUBTRACTION))
 
-    # Set the names
-    faces[11].setName('fx')
-    faces[12].setName('fx')
-    faces[17].setName('fy')
-    faces[18].setName('fy')
-    faces[21].setName('fz')
-    faces[22].setName('fz')
+    # Create all of the models
+    geos = []
+    for p in parts:
+        geos.append(TMR.ConvertEGADSModel(p))
 
-    # Form the 4 independent bodies that are connected through
-    v1 = TMR.Volume(s1, d1)
-    v2 = TMR.Volume(s2, d2)
-    v3 = TMR.Volume(s3, d3)
-    v4 = TMR.Volume(s4, d4)
-    vols = [v1, v2, v3, v4]
+    # Create the full list of vertices, edges, faces and volumes
+    verts = []
+    edges = []
+    faces = []
+    vols = []
+    for geo in geos:
+        verts.extend(geo.getVertices())
+        edges.extend(geo.getEdges())
+        faces.extend(geo.getFaces())
+        vols.extend(geo.getVolumes())
 
-    # Set the source/destination faces
-    faces[19].setSource(v1, faces[3])
-    faces[5].setSource(v2, faces[23])
-    faces[7].setSource(v3, faces[13])
-    faces[1].setSource(v4, fz)
+    # Set all of the matching faces
+    TMR.setMatchingFaces(geos)
 
-    # Create a new model
+    # Create the geometry
     geo = TMR.Model(verts, edges, faces, vols)
 
     return geo
@@ -106,10 +107,6 @@ comm = MPI.COMM_WORLD
 # Load the geometry model
 geo = load_model()
 
-# Set the boundary conditions for the problem
-bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fz')
-
 # Create the mesh
 mesh = TMR.Mesh(comm, geo)
 
@@ -117,7 +114,7 @@ mesh = TMR.Mesh(comm, geo)
 opts = TMR.MeshOptions()
 opts.frontal_quality_factor = 1.25
 opts.num_smoothing_steps = 50
-opts.triangularize_print_iter = 50000
+opts.triangularize_print_iter = 5
 opts.write_mesh_quality_histogram = 1
 
 # Create the surface mesh
