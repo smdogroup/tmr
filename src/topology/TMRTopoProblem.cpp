@@ -775,7 +775,7 @@ void TMRTopoProblem::initialize(){
     nwblock = 1;
   }
 
-  setProblemSizes(nvars, num_constraints, nw, nwblock);
+  setProblemSizes(nvars, num_constraints, num_constraints, nw, nwblock);
 }
 
 /*
@@ -835,14 +835,6 @@ ParOptVec *TMRTopoProblem::createDesignVec(){
 int TMRTopoProblem::isSparseInequality(){
   // These are sparse equality constraints
   return 0;
-}
-
-/*
-  Use the inequality constraint - this seems to work better
-*/
-int TMRTopoProblem::isDenseInequality(){
-  // These are sparse inequality constraints
-  return 1;
 }
 
 /*
