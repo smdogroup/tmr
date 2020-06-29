@@ -152,7 +152,6 @@ class TMRTopoProblem : public ParOptProblem {
   // Set the inequality flags
   // ------------------------
   int isSparseInequality();
-  int isDenseInequality();
   int useLowerBounds();
   int useUpperBounds();
 
