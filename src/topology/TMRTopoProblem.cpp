@@ -209,7 +209,6 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   int nrestart = 5;
   int is_flexible = 0;
   double atol = 1e-30;
-  use_recyc_sol = 0;
   ksm = new GMRES(mg->getMat(0), mg,
                   gmres_iters, nrestart, is_flexible);
   ksm->incref();
@@ -378,6 +377,20 @@ TMROctForest* TMRTopoProblem::getFilterOctForest(){
 }
 
 /*
+  Get the TMRTopoFilter object associated with the TopoProblem
+*/
+TMRTopoFilter* TMRTopoProblem::getTopoFilter(){
+  return filter;
+}
+
+/*
+  Get the TACSMg object associated with the TopoProblem
+*/
+TACSMg* TMRTopoProblem::getMg(){
+  return mg;
+}
+
+/*
   Set the output flags for any f5 output files that will be created
 */
 void TMRTopoProblem::setF5OutputFlags( int freq, ElementType elem_type,
@@ -458,17 +471,6 @@ void TMRTopoProblem::setLoadCases( TACSBVec **_forces, int _num_load_cases ){
     vars[i]->incref();
     vars[i]->zeroEntries();
   }
-
-  // If using the previous solution as a starting
-  // point, set the atol based on rtol
-  // if (use_recyc_sol){
-  //   double fnorm = 0.0;
-  //   for ( int i = 0; i < num_load_cases; i++ ){
-  //     fnorm += forces[i]->norm();
-  //   }
-  //   atol = fnorm*rtol;
-  //   ksm->setTolerances(rtol, atol);
-  // }
 
   // Allocate the load case information
   load_case_info = NULL;
@@ -856,14 +858,6 @@ int TMRTopoProblem::useUpperBounds(){
 }
 
 /*
-  If True, use the solution to Ku=f from the previous iteration
-  as the starting point to the current iterative solve
-*/
-void TMRTopoProblem::setUseRecycledSolution( int truth ){
-  use_recyc_sol = truth;
-}
-
-/*
   Set the initial design variables
 */
 void TMRTopoProblem::getVarsAndBounds( ParOptVec *xvec,
@@ -964,12 +958,7 @@ int TMRTopoProblem::evalObjCon( ParOptVec *pxvec,
     for ( int i = 0; i < num_load_cases; i++ ){
       if (forces[i]){
         // Solve the system: K(x)*u = forces
-        if (use_recyc_sol){
-          ksm->solve(forces[i], vars[i], 0);
-        }
-        else {
-          ksm->solve(forces[i], vars[i]);
-        }
+        ksm->solve(forces[i], vars[i]);
         assembler->setBCs(vars[i]);
 
         // Set the variables into TACSAssembler

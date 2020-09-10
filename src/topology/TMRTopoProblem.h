@@ -109,11 +109,13 @@ class TMRTopoProblem : public ParOptProblem {
                               void (*congradfunc)(void*, TMRTopoFilter*, TACSMg*,
                                                   int, TACSBVec**) );
 
-  // Accessor functions to the underlying Assembler and Oct or QuadForest
+  // Accessor functions to the underlying Assembler, Oct or QuadForest, TopoFilter, and Mg objects
   // --------------------------------------------------------------------
   TACSAssembler* getAssembler();
   TMRQuadForest* getFilterQuadForest();
   TMROctForest* getFilterOctForest();
+  TMRTopoFilter* getTopoFilter();
+  TACSMg* getMg();
 
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
@@ -154,11 +156,6 @@ class TMRTopoProblem : public ParOptProblem {
   int isSparseInequality();
   int useLowerBounds();
   int useUpperBounds();
-
-  // Set the option to use the previous solution to
-  // Ku=f as the starting point for the current iteration
-  // ----------------------------------------------------
-  void setUseRecycledSolution( int truth );
 
   // Get the initial variables and bounds
   // ------------------------------------
@@ -243,9 +240,6 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Store the prefix
   char *prefix;
-
-  // Solver parameters
-  int use_recyc_sol;
 
   // Set the iteration count for printing to the file
   int iter_count;

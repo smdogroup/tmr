@@ -5219,6 +5219,47 @@ cdef class TopoProblem(ProblemBase):
             return _init_OctForest(oct_forest)
         return None
 
+    def getTopoFilter(self):
+        """
+        getTopoFilter(self)
+
+        Get the TopoFilter object associated with the TopoProblem object (either
+        Lagrange, Matrix, Conform, or Helmholtz filter).
+
+        Returns:
+            Filter: The TopoFilter object associated with the TopoProblem
+        """
+        cdef TMRTopoProblem *prob = NULL
+
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+
+        return _init_TopoFilter(prob.getTopoFilter())
+
+        return
+
+    def getMg(self):
+        """
+        getMg(self)
+
+        Get the multigrid object associated with the TopoProblem object
+
+        Returns:
+            Mg: geometric multigrid object associated with the TopoProblem
+        """
+        cdef TMRTopoProblem *prob = NULL
+
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+
+        return _init_Mg(prob.getMg())
+
+        return
+
     def setF5OutputFlags(self, int freq, ElementType elem_type, int flag):
         """
         setF5OutputFlags(self, freq, elem_type, flag)
@@ -5621,15 +5662,6 @@ cdef class TopoProblem(ProblemBase):
         if ubvec is not None:
             ub = ubvec.ptr
         prob.setInitDesignVars(pvec.ptr,lb,ub)
-
-    def setUseRecycledSolution(self, int truth):
-        cdef TMRTopoProblem *prob = NULL
-        prob = _dynamicTopoProblem(self.ptr)
-        if prob == NULL:
-            errmsg = 'Expected TMRTopoProblem got other type'
-            raise ValueError(errmsg)
-        prob.setUseRecycledSolution(truth)
-        return
 
     def setOutputCallback(self, callback):
         cdef TMRTopoProblem *prob = NULL
