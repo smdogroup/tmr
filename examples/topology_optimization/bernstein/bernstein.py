@@ -109,7 +109,7 @@ class CreatorCallback:
         order = forest.getMeshOrder()
         interp = TMR.BERNSTEIN_POINTS
         dvs_per_node = self.props.getDesignVarsPerNode()
-        creator = QuadConformCreator(self.bcs, forest, order=order,
+        creator = QuadConformCreator(self.bcs, forest, order=order-1,
                                      design_vars_per_node=dvs_per_node,
                                      interp=interp, props=self.props)
         filtr = creator.getFilter()
@@ -191,7 +191,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0,
     obj = CreatorCallback(bcs, props)
 
     # Create a conforming filter
-    filter_type = 'matrix'
+    filter_type = 'lagrange'
 
     # Characteristic length of the domain
     r = 0.06
@@ -202,7 +202,7 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0,
     # Create the problem and filter object
     problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback, filter_type,
                                             nlevels=nlevels, lowest_order=2,
-                                            r0=r0, N=20, use_galerkin=True,
+                                            r0=r0, N=15, use_galerkin=True,
                                             design_vars_per_node=design_vars_per_node)
 
     # Get the assembler object we just created
@@ -259,18 +259,17 @@ def create_problem(forest, bcs, props, nlevels, iter_offset=0,
 
 class OutputCallback:
     def __init__(self, assembler, iter_offset=0):
-        self.fig = None
+        self.assembler = assembler
 
         # Set the output file name
         flag = (TACS.OUTPUT_CONNECTIVITY |
                 TACS.OUTPUT_NODES |
-                TACS.OUTPUT_DISPLACEMENTS |
-                TACS.OUTPUT_STRAINS |
                 TACS.OUTPUT_EXTRAS)
         self.f5 = TACS.ToFH5(assembler, TACS.PLANE_STRESS_ELEMENT, flag)
         self.iter_offset = iter_offset
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
+        self.assembler.setVariables(x)
         self.f5.writeToFile(os.path.join(prefix,
             'output%d.f5'%(itr + self.iter_offset)))
 
@@ -279,11 +278,15 @@ optimization_options = {
     # Set the algorithm to use
     'algorithm': 'tr',
 
+    'qn_subspace_size': 10,
+    'qn_type': 'bfgs',
+    'qn_diag_type': 'yts_over_sts',
+
     # Parameters for the trust region method
     'tr_init_size': 0.01,
     'tr_max_size': 0.1,
-    'tr_min_size': 1e-6,
-    'tr_eta': 0.25,
+    'tr_min_size': 0.01, # 1e-6,
+    'tr_eta': 0.1,
     'penalty_gamma': 10.0,
     'tr_penalty_gamma_max': 1000.0,
     'tr_write_output_frequency': 1,
@@ -295,9 +298,6 @@ optimization_options = {
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
-    'qn_subspace_size': 10,
-    'qn_type': 'bfgs',
-    'qn_update_type': 'skip_negative_curvature',
     'abs_res_tol': 1e-8,
     'max_major_iters': 100,
     'norm_type': 'l1',
@@ -376,7 +376,7 @@ if (len(prop_list) > 1):
 
 # Create the stiffness properties object
 props = TMR.StiffnessProperties(prop_list, q=args.q_penalty, qtemp=0.0,
-                                qcond=args.q_penalty, eps=0.3, k0=1e-3)
+                                qcond=0.0, eps=0.3, k0=1e-3)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()

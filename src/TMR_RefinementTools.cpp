@@ -50,7 +50,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
   int mg_sor_symm = 1;
   int mg_iters_per_level = 1;
   TACSMg *mg = new TACSMg(comm, num_levels, omega,
-                          mg_smooth_iters, mg_sor_symm, use_galerkin);
+                          mg_smooth_iters, mg_sor_symm);
 
   // Create the intepolation/restriction objects between mesh levels
   for ( int level = 0; level < num_levels-1; level++ ){
@@ -75,7 +75,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
 
       // Set the interpolation and TACS object within the multigrid object
       mg->setLevel(level, assembler[level], interp,
-                   mg_iters_per_level, mat, pc);
+                   mg_iters_per_level, use_galerkin, mat, pc);
     }
     else {
       mg->setLevel(level, assembler[level], interp, mg_iters_per_level);
@@ -102,7 +102,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
 
     // Set the interpolation and TACS object within the multigrid object
     mg->setLevel(num_levels-1, assembler[num_levels-1], NULL, 1,
-                 mat, pc);
+                 use_galerkin, mat, pc);
   }
 
   // Return the multigrid object
@@ -129,7 +129,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
   int mg_sor_symm = 0;
   int mg_iters_per_level = 1;
   TACSMg *mg = new TACSMg(comm, num_levels, omega,
-                          mg_smooth_iters, mg_sor_symm, use_galerkin);
+                          mg_smooth_iters, mg_sor_symm);
 
   // Create the intepolation/restriction objects between mesh levels
   for ( int level = 0; level < num_levels-1; level++ ){
@@ -154,7 +154,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
 
       // Set the interpolation and TACS object within the multigrid object
       mg->setLevel(level, assembler[level], interp,
-                   mg_iters_per_level, mat, pc);
+                   mg_iters_per_level, use_galerkin, mat, pc);
     }
     else {
       mg->setLevel(level, assembler[level], interp, mg_iters_per_level);
@@ -181,7 +181,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
 
     // Set the interpolation and TACS object within the multigrid object
     mg->setLevel(num_levels-1, assembler[num_levels-1], NULL, 1,
-                 mat, pc);
+                 use_galerkin, mat, pc);
   }
 
   // Return the multigrid object

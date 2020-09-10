@@ -9,14 +9,6 @@ try:
 except:
     minimize = None
 
-# Options for the TopologyOptimizer class
-_optimizers = ['Interior Point', 'Trust Region']
-_qn_types = ['BFGS', 'SR1', 'No Hessian approx']
-_norm_types = ['Infinity', 'L1', 'L2']
-_barrier_types = ['Monotone', 'Mehrotra', 'Complementarity fraction']
-_start_types = ['None', 'Least squares multipliers', 'Affine step']
-_bfgs_updates = ['Skip negative', 'Damped']
-
 def createTopoProblem(forest, callback, filter_type, nlevels=2,
                       repartition=True, design_vars_per_node=1,
                       r0=0.05, N=10, lowest_order=2,
@@ -119,7 +111,7 @@ def createTopoProblem(forest, callback, filter_type, nlevels=2,
         elif filter_type == 'conform':
             filter_obj = TMR.ConformFilter(assemblers, filters)
         elif filter_type == 'helmholtz':
-            filter_obj = TMR.HelmholtzFiler(r0, assemblers, filters)
+            filter_obj = TMR.HelmholtzFilter(r0, assemblers, filters)
 
     problem = TMR.TopoProblem(filter_obj, mg)
 

@@ -32,20 +32,21 @@
 class TMRQuadHelmholtzModel : public TACSElementModel {
  public:
   TMRQuadHelmholtzModel( double _r );
-  int getSpatialDim();
+  int getNumParameters();
   int getVarsPerNode();
   void evalWeakIntegrand( int elemIndex, const double time,
                           int n, const double pt[],
                           const TacsScalar X[], const TacsScalar Xd[],
                           const TacsScalar Ut[], const TacsScalar Ux[],
                           TacsScalar DUt[], TacsScalar DUx[] );
-  void evalWeakJacobian( int elemIndex, const double time,
-                         int n, const double pt[],
-                         const TacsScalar X[], const TacsScalar Xd[],
-                         const TacsScalar Ut[], const TacsScalar Ux[],
-                         TacsScalar DUt[], TacsScalar DUx[],
-                         int *Jac_nnz, const int *Jac_pairs[],
-                         TacsScalar Jac[] );
+  void getWeakMatrixNonzeros( ElementMatrixType matType, int elemIndex,
+                              int *Jac_nnz, const int *Jac_pairs[] );
+  void evalWeakMatrix( ElementMatrixType matType, int elemIndex,
+                       const double time, int n, const double pt[],
+                       const TacsScalar X[], const TacsScalar Xd[],
+                       const TacsScalar Ut[], const TacsScalar Ux[],
+                       TacsScalar DUt[], TacsScalar DUx[],
+                       TacsScalar Jac[] );
  private:
   double r;
   static int elem_Jac_pairs[6];
@@ -54,20 +55,21 @@ class TMRQuadHelmholtzModel : public TACSElementModel {
 class TMRHexaHelmholtzModel : public TACSElementModel {
  public:
   TMRHexaHelmholtzModel( double _r );
-  int getSpatialDim();
+  int getNumParameters();
   int getVarsPerNode();
   void evalWeakIntegrand( int elemIndex, const double time,
                           int n, const double pt[],
                           const TacsScalar X[], const TacsScalar Xd[],
                           const TacsScalar Ut[], const TacsScalar Ux[],
                           TacsScalar DUt[], TacsScalar DUx[] );
-  void evalWeakJacobian( int elemIndex, const double time,
-                         int n, const double pt[],
-                         const TacsScalar X[], const TacsScalar Xd[],
-                         const TacsScalar Ut[], const TacsScalar Ux[],
-                         TacsScalar DUt[], TacsScalar DUx[],
-                         int *Jac_nnz, const int *Jac_pairs[],
-                         TacsScalar Jac[] );
+  void getWeakMatrixNonzeros( ElementMatrixType matType, int elemIndex,
+                              int *Jac_nnz, const int *Jac_pairs[] );
+  void evalWeakMatrix( ElementMatrixType matType, int elemIndex,
+                       const double time, int n, const double pt[],
+                       const TacsScalar X[], const TacsScalar Xd[],
+                       const TacsScalar Ut[], const TacsScalar Ux[],
+                       TacsScalar DUt[], TacsScalar DUx[],
+                       TacsScalar Jac[] );
  private:
   double r;
   static int elem_Jac_pairs[8];

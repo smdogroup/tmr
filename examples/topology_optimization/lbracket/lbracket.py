@@ -381,25 +381,32 @@ optimization_options = {
     # Set the algorithm to use
     'algorithm': 'tr',
 
+    # Use a sequential linear trust-region method
+    'qn_type': 'none',
+    'sequential_linear_method': True,
+
+    # Use a BFGS method with skipped updates
+    # 'qn_type': 'bfgs',
+    # 'qn_subspace_size': 0,
+
     # Parameters for the trust region method
     'tr_init_size': 0.01,
     'tr_max_size': 0.05,
     'tr_min_size': 1e-5,
-    'tr_eta': 0.25,
-    'penalty_gamma': 100.0,
+    'tr_eta': 0.1,
+    'penalty_gamma': 5.0,
+    'tr_penalty_gamma_max': 5.0,
     'tr_write_output_frequency': 1,
     'tr_infeas_tol': 1e-5,
-    'tr_l1_tol': 1e-5,
+    'tr_l1_tol': 1e-3,
     'tr_linfty_tol': 0.0, # Don't use the l-infinity norm in the stopping criterion
-    'tr_steering_barrier_strategy': 'mehrotra_predictor_corrector',
-    'tr_steering_starting_point_strategy': 'affine_step',
+    'tr_adaptive_gamma_update': False,
+    'tr_steering_barrier_strategy': 'default',
+    'tr_steering_starting_point_strategy': 'default',
 
     # Parameters for the interior point method (used to solve the
     # trust region subproblem)
-    'qn_subspace_size': 10,
-    'qn_type': 'bfgs',
-    'qn_update_type': 'skip_negative_curvature',
-    'abs_res_tol': 1e-8,
+    'abs_res_tol': 1e-10,
     'max_major_iters': 100,
     'norm_type': 'l1',
     'init_barrier_param': 10.0,
@@ -423,7 +430,7 @@ if __name__ == '__main__':
     p.add_argument('--r0_frac', type=float, default=0.05)
     p.add_argument('--use_project', action='store_true', default=False)
     p.add_argument('--use_simp', action='store_true', default=False)
-    p.add_argument('--fs_type', type=str, default='point',
+    p.add_argument('--fs_type', type=str, default='None',
                    help='feature size refinement type: point, box, or None')
     args = p.parse_args()
 

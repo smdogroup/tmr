@@ -24,7 +24,7 @@ TMRQuadHelmholtzModel::TMRQuadHelmholtzModel( double _r ){
   r = _r;
 }
 
-int TMRQuadHelmholtzModel::getSpatialDim(){
+int TMRQuadHelmholtzModel::getNumParameters(){
   return 2;
 }
 
@@ -43,20 +43,25 @@ void TMRQuadHelmholtzModel::evalWeakIntegrand( int elemIndex, const double time,
   DUx[1] = r*r*Ux[1];
 }
 
-void TMRQuadHelmholtzModel::evalWeakJacobian( int elemIndex, const double time,
-                                              int n, const double pt[],
-                                              const TacsScalar X[], const TacsScalar Xd[],
-                                              const TacsScalar Ut[], const TacsScalar Ux[],
-                                              TacsScalar DUt[], TacsScalar DUx[],
-                                              int *Jac_nnz, const int *Jac_pairs[],
-                                              TacsScalar Jac[] ){
+void TMRQuadHelmholtzModel::getWeakMatrixNonzeros( ElementMatrixType matType,
+                                                   int elemIndex,
+                                                   int *Jac_nnz,
+                                                   const int *Jac_pairs[] ){
+  *Jac_nnz = 3;
+  *Jac_pairs = elem_Jac_pairs;
+}
+
+void TMRQuadHelmholtzModel::evalWeakMatrix( ElementMatrixType matType,
+                                            int elemIndex, const double time,
+                                            int n, const double pt[],
+                                            const TacsScalar X[], const TacsScalar Xd[],
+                                            const TacsScalar Ut[], const TacsScalar Ux[],
+                                            TacsScalar DUt[], TacsScalar DUx[],
+                                            TacsScalar Jac[] ){
   DUt[0] = Ut[0];
   DUt[1] = DUt[2] = 0.0;
   DUx[0] = r*r*Ux[0];
   DUx[1] = r*r*Ux[1];
-
-  *Jac_nnz = 3;
-  *Jac_pairs = elem_Jac_pairs;
   Jac[0] = 1.0;
   Jac[1] = Jac[2] = r*r;
 }
@@ -67,7 +72,7 @@ TMRHexaHelmholtzModel::TMRHexaHelmholtzModel( double _r ){
   r = _r;
 }
 
-int TMRHexaHelmholtzModel::getSpatialDim(){
+int TMRHexaHelmholtzModel::getNumParameters(){
   return 3;
 }
 
@@ -87,21 +92,26 @@ void TMRHexaHelmholtzModel::evalWeakIntegrand( int elemIndex, const double time,
   DUx[2] = r*r*Ux[2];
 }
 
-void TMRHexaHelmholtzModel::evalWeakJacobian( int elemIndex, const double time,
-                                              int n, const double pt[],
-                                              const TacsScalar X[], const TacsScalar Xd[],
-                                              const TacsScalar Ut[], const TacsScalar Ux[],
-                                              TacsScalar DUt[], TacsScalar DUx[],
-                                              int *Jac_nnz, const int *Jac_pairs[],
-                                              TacsScalar Jac[] ){
+void TMRHexaHelmholtzModel::getWeakMatrixNonzeros( ElementMatrixType matType,
+                                                   int elemIndex,
+                                                   int *Jac_nnz,
+                                                   const int *Jac_pairs[] ){
+  *Jac_nnz = 4;
+  *Jac_pairs = elem_Jac_pairs;
+}
+
+void TMRHexaHelmholtzModel::evalWeakMatrix( ElementMatrixType matType,
+                                            int elemIndex, const double time,
+                                            int n, const double pt[],
+                                            const TacsScalar X[], const TacsScalar Xd[],
+                                            const TacsScalar Ut[], const TacsScalar Ux[],
+                                            TacsScalar DUt[], TacsScalar DUx[],
+                                            TacsScalar Jac[] ){
   DUt[0] = Ut[0];
   DUt[1] = DUt[2] = 0.0;
   DUx[0] = r*r*Ux[0];
   DUx[1] = r*r*Ux[1];
   DUx[2] = r*r*Ux[2];
-
-  *Jac_nnz = 4;
-  *Jac_pairs = elem_Jac_pairs;
   Jac[0] = 1.0;
   Jac[1] = Jac[2] = Jac[3] = r*r;
 }

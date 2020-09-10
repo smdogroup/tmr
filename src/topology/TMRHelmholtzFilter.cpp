@@ -224,7 +224,7 @@ void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
           TacsScalar DUt[3] = {0.0, 0.0, 0.0};
           TacsScalar DUx[3] = {0.0, 0.0, 0.0};
           DUt[0] = U;
-          basis->addWeakFormResidual(n, pt, wt*detJ, J, 1, DUt, DUx, rhs_values);
+          basis->addWeakResidual(n, pt, wt*detJ, J, 1, DUt, DUx, rhs_values);
         }
       }
 
@@ -340,7 +340,7 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
           TacsScalar DUt[3] = {0.0, 0.0, 0.0};
           TacsScalar DUx[3] = {0.0, 0.0, 0.0};
           DUt[0] = U;
-          basis->addWeakFormResidual(n, pt, wt*detJ, J, 1, DUt, DUx, x_values);
+          basis->addWeakResidual(n, pt, wt*detJ, J, 1, DUt, DUx, x_values);
         }
       }
 

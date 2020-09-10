@@ -948,7 +948,9 @@ if __name__ == '__main__':
         if args.contype == 'semi-def' and not args.linearized:
             # Create the quadratic eigenvalue approximation object
             num_hvecs = args.num_eigenvalues - 1
-            qn = ParOpt.LBFGS(problem, subspace=10, update_type=ParOpt.DAMPED_UPDATE)
+            qn = ParOpt.LBFGS(problem, subspace=10,
+                              update_type=ParOpt.DAMPED_UPDATE,
+                              diag_type=ParOpt.YTS_OVER_STS)
             approx = ParOptEig.CompactEigenApprox(problem, num_hvecs)
 
             # Set up the corresponding quadratic problem, specify the index of the

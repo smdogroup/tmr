@@ -261,6 +261,10 @@ if __name__ == '__main__':
         # Set the algorithm to use
         'algorithm': 'tr',
 
+        # Set the type of quasi-Newton method to use
+        'qn_type': 'bfgs',
+        'qn_subspace_size': 2,
+
         # Parameters for the trust region method
         'tr_init_size': 0.01,
         'tr_max_size': 0.1,
@@ -269,14 +273,18 @@ if __name__ == '__main__':
         'tr_max_iterations': 25,
         'tr_write_output_frequency': 1,
         'penalty_gamma': 20.0,
+        'tr_steering_barrier_strategy': 'default',
+        'tr_steering_starting_point_strategy': 'default',
 
         # Parameters for the interior point method (used to solve the
         # trust region subproblem)
-        'qn_subspace_size': 2,
         'abs_res_tol': 1e-8,
+        'max_major_iters': 100,
         'norm_type': 'l1',
-        'barrier_strategy': 'monotone',
-        'start_strategy': 'affine_step'}
+        'init_barrier_param': 10.0,
+        'use_line_search': False,
+        'barrier_strategy': 'mehrotra_predictor_corrector',
+        'starting_point_strategy': 'affine_step'}
 
     prefix = 'results'
 
