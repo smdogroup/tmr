@@ -88,7 +88,7 @@ for filename in sys.argv[1:]:
     levels = np.linspace(0.0, 1.0, 26)
 
     # Create the contour plot
-    ax.tricontourf(tri_obj, crho, levels, cmap='coolwarm')
+    ax.tricontourf(tri_obj, crho, levels, cmap='coolwarm', extend='max')
 
     # Save the figure. The bounding box is made tight to the figure, and the pading is
     # determined via the pad_inches argument. Transparent sets the background transparent.
