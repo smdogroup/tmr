@@ -749,6 +749,8 @@ def write_dvs_to_file(xopt, assembler, filename):
 optimization_options = {
     # Set the algorithm to use
     'algorithm': 'tr',
+    'output_level': 2,
+    'tr_accept_step_strategy': 'filter_method',
 
     # Parameters for the trust region method
     'tr_init_size': 0.01,

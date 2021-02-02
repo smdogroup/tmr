@@ -847,9 +847,13 @@ void TMRBsplineCurve::split( double tsplit,
                              TMRBsplineCurve **c1,
                              TMRBsplineCurve **c2 ){
   // Find out how many times the knot should be inserted
+  const double eps_u = 1e-12;
   int insert = ku;
   for ( int i = 0; i < nctl + ku; i++ ){
-    if (Tu[i] == tsplit){
+    // |Tu - tsplit| <= eps_u ==>
+    // Tu - tsplit <= eps_u and Tu - tsplit >= -eps_u
+    if (Tu[i] <= tsplit + eps_u &&
+        Tu[i] + eps_u >= tsplit){
       insert--;
     }
   }
@@ -875,7 +879,8 @@ void TMRBsplineCurve::split( double tsplit,
   // Find the location of the split
   int mid = 0;
   for ( int i = 0; i < n+k; i++ ){
-    if (tu[i] == tsplit){
+    if (tu[i] <= tsplit + eps_u &&
+        tu[i] + eps_u >= tsplit){
       mid = i;
       break;
     }
@@ -2236,7 +2241,7 @@ int TMRBsplineSurface::eval2ndDeriv( double u, double v,
         Xv->x += Nu[i]*Nv[kv+j]*pts[index].x;
         Xv->y += Nu[i]*Nv[kv+j]*pts[index].y;
         Xv->z += Nu[i]*Nv[kv+j]*pts[index].z;
-        
+
         Xuu->x += Nu[2*ku+i]*Nv[j]*pts[index].x;
         Xuu->y += Nu[2*ku+i]*Nv[j]*pts[index].y;
         Xuu->z += Nu[2*ku+i]*Nv[j]*pts[index].z;
@@ -2582,6 +2587,9 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
   if (kv < 2){ kv = 2; }
   if (kv > MAX_BSPLINE_ORDER){ kv = MAX_BSPLINE_ORDER; }
 
+  // Set the tolerance for knot equality
+  const double eps_u = 1e-12;
+
   // Allocate data to store the indices and
   int *index = new int[ num_curves ];
   int *ptr = new int[ num_curves ];
@@ -2607,8 +2615,10 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
     int nu, ku;
     const double *curve_Tu;
     curves[i]->getData(&nu, &ku, &curve_Tu, NULL, NULL);
+    // Find the multiplicity of the knot
     while (k < (nu+ku) &&
-           curve_Tu[ptr[i]] == curve_Tu[k]){
+           (curve_Tu[ptr[i]] <= curve_Tu[k] + eps_u &&
+            curve_Tu[ptr[i]] + eps_u >= curve_Tu[k])){
       k++;
     }
 
@@ -2644,7 +2654,8 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
       curves[i]->getData(&nu, &ku, &curve_Tu, NULL, NULL);
 
       if (ptr[i] < nu+ku){
-        if (curve_Tu[ptr[i]] == tmin){
+        if (curve_Tu[ptr[i]] <= tmin + eps_u &&
+            curve_Tu[ptr[i]] + eps_u >= tmin){
           // Check if we need to update the max multiplicity
           if (max_mult < curve_mult[i]){
             max_mult = curve_mult[i];
@@ -2679,7 +2690,8 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
       // Find the multiplicity of the new knot
       int k = ptr[i];
       while (k < nu+ku &&
-             curve_Tu[ptr[i]] == curve_Tu[k]){
+             (curve_Tu[ptr[i]] <= curve_Tu[k] + eps_u &&
+              curve_Tu[ptr[i]] + eps_u >= curve_Tu[k])){
         k++;
       }
 
@@ -2729,7 +2741,8 @@ TMRBsplineSurface* TMRCurveLofter::createSurface( int kv ){
     // Keep track of the number of new knots required for each curve
     int nnew = 0;
     for ( int j = 0, k = 0; j < len; j++ ){
-      if (Tu[j] == curve_Tu[k]){
+      if (Tu[j] <= curve_Tu[k] + eps_u &&
+          Tu[j] + eps_u >= curve_Tu[k]){
         k++;
       }
       else {

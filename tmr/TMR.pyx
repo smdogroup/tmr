@@ -5238,8 +5238,6 @@ cdef class TopoProblem(ProblemBase):
 
         return _init_TopoFilter(prob.getTopoFilter())
 
-        return
-
     def getMg(self):
         """
         getMg(self)
@@ -5257,8 +5255,6 @@ cdef class TopoProblem(ProblemBase):
             raise ValueError(errmsg)
 
         return _init_Mg(prob.getMg())
-
-        return
 
     def setF5OutputFlags(self, int freq, ElementType elem_type, int flag):
         """

@@ -17,8 +17,8 @@ class CreateMe(TMR.QuadCreator):
         min_thickness = 0.2
         max_thickness = 1.0
         thickness = 2.5
-        
-        stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys, 
+
+        stiff = constitutive.isoFSDT(rho, E, nu, kcorr, ys,
                                      thickness, quad.face,
                                      min_thickness, max_thickness)
         stiff.setRefAxis(np.array([1.0, 0.0, 0.0]))
@@ -133,10 +133,10 @@ def create_panel(Lx, Ly, use_hole=True):
 
     pts = [[c-r, c], [c-r, c+r], [c, c+r], [c+r, c+r],
         [c+r, c], [c+r, c-r], [c, c-r], [c-r, c-r], [c-r, c]]
-    wts = [1.0, 1.0/np.sqrt(2), 1.0, 1.0/np.sqrt(2), 
+    wts = [1.0, 1.0/np.sqrt(2), 1.0, 1.0/np.sqrt(2),
            1.0, 1.0/np.sqrt(2), 1.0, 1.0/np.sqrt(2), 1.0]
     Tu = [0.0, 0.0, 0.0, 0.25, 0.25, 0.5, 0.5, 0.75, 0.75, 1.0, 1.0, 1.0]
-    pcurve5 = TMR.BsplinePcurve(np.array(pts), 
+    pcurve5 = TMR.BsplinePcurve(np.array(pts),
                                 tu=np.array(Tu), wts=np.array(wts), k=3)
     edge5 = TMR.EdgeFromFace(face, pcurve5)
     edge5.setVertices(v5, v5)
@@ -182,7 +182,7 @@ mesh.writeToVTK('surface-mesh.vtk')
 # Create a model from the mesh
 model = mesh.createModelFromMesh()
 
-# Create the corresponding mesh topology from the mesh-model 
+# Create the corresponding mesh topology from the mesh-model
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
@@ -202,6 +202,8 @@ creator = CreateMe(bcs)
 # Create the initial forest
 nlevels = 2
 forest.createTrees(nlevels-1)
+
+exit(0)
 
 # Target relative error
 target_rel_err = 1e-5
@@ -231,7 +233,7 @@ gmres.solve(res, ans)
 ans.scale(-1.0)
 assembler.setVariables(ans)
 
-# Output for visualization 
+# Output for visualization
 flag = (TACS.ToFH5.NODES |
         TACS.ToFH5.DISPLACEMENTS |
         TACS.ToFH5.STRAINS)
@@ -245,11 +247,11 @@ forest_refined.balance(1)
 assembler_refined = creator.createTACS(forest_refined)
 ans_refined = assembler_refined.createVec()
 TMR.computeReconSolution(forest, assembler,
-                         forest_refined, assembler_refined, 
+                         forest_refined, assembler_refined,
                         ans, ans_refined)
 assembler_refined.setVariables(ans_refined)
 
-# Output for visualization 
+# Output for visualization
 flag = (TACS.ToFH5.NODES |
         TACS.ToFH5.DISPLACEMENTS |
         TACS.ToFH5.STRAINS)
