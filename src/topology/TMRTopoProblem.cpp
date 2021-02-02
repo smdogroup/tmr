@@ -1410,6 +1410,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       if (wrap){
         vecs[i] = wrap->vec;
       }
+      count++;
     }
     constraintGradientCallback(constraint_gradient_callback_ptr,
                                filter, mg, num_callback_constraints, vecs);
