@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -35,47 +35,8 @@
 
 #include "TMRQuadForest.h"
 #include "TMROctForest.h"
+#include "TMRBoundaryConditions.h"
 #include "TACSAssembler.h"
-
-/*
-  Specify a list of boundary conditions through a list of names
-  and boundary condition information for each node
-*/
-class TMRBoundaryConditions : public TMREntity {
- public:
-  TMRBoundaryConditions();
-  ~TMRBoundaryConditions();
-
-  // Add a boundary condition associated with the specified name  
-  void addBoundaryCondition( const char *name, 
-                             int num_bcs, const int bc_nums[],
-                             const TacsScalar *_bc_vals=NULL );
-
-  // Get the number of boundary conditions
-  int getNumBoundaryConditions();
-  void getBoundaryCondition( int bc, const char **_name, 
-                             int *_num_bcs,
-                             const int **_bcs_nums,
-                             const TacsScalar **_bc_vals );
-
- public:
-  // The number of boundary conditions
-  int num_bcs;
-
-  // Linked list sub-clas for the boundary conditions -- there are
-  // typically only a handful of these objects
-  class BCNode {
-  public:
-    BCNode( const char *_name, int _num_bcs, const int *_bc_nums,
-            const TacsScalar *_bc_vals );
-    ~BCNode();
-    BCNode *next;
-    char *name;
-    int num_bcs;
-    int *bc_nums;
-    TacsScalar *bc_vals;
-  } *bc_root, *bc_current;
-};
 
 /*
   The creator object for quadrilateral meshes
@@ -104,7 +65,7 @@ class TMRQuadTACSCreator : public TMREntity {
 
   // Create the TACSAssembler object with the given order for this forest
   TACSAssembler *createTACS( TMRQuadForest *forest,
-                             TACSAssembler::OrderingType 
+                             TACSAssembler::OrderingType
                                ordering=TACSAssembler::NATURAL_ORDER );
 
   TMRQuadForest* getFilter(){
@@ -122,9 +83,9 @@ class TMRQuadTACSCreator : public TMREntity {
                               TACSAssembler *tacs );
 
   // Set the node locations
-  void setNodeLocations( TMRQuadForest *forest, 
+  void setNodeLocations( TMRQuadForest *forest,
                          TACSAssembler *tacs );
-  
+
   TMRBoundaryConditions *bcs;
   int design_vars_per_node;
   TMRQuadForest *filter;
@@ -155,13 +116,13 @@ class TMROctTACSCreator : public TMREntity {
     return NULL;
   }
 
-  // Add a boundary condition associated with the specified name  
-  void addBoundaryCondition( const char *name, 
+  // Add a boundary condition associated with the specified name
+  void addBoundaryCondition( const char *name,
                              int num_bcs, const int bc_nums[] );
 
   // Create the TACSAssembler object with the given order for this forest
   TACSAssembler *createTACS( TMROctForest *forest,
-                             TACSAssembler::OrderingType 
+                             TACSAssembler::OrderingType
                                ordering=TACSAssembler::NATURAL_ORDER );
 
   TMROctForest* getFilter(){
@@ -179,7 +140,7 @@ class TMROctTACSCreator : public TMREntity {
                               TACSAssembler *tacs );
 
   // Set the node locations
-  void setNodeLocations( TMROctForest *forest, 
+  void setNodeLocations( TMROctForest *forest,
                          TACSAssembler *tacs );
 
   TMRBoundaryConditions *bcs;

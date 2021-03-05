@@ -300,7 +300,7 @@ cdef extern from "TMRMesh.h":
 
         TMRModel *createModelFromMesh()
         void writeToVTK(const char*, int)
-        void writeToBDF(const char*, int)
+        void writeToBDF(const char*, int, TMRBoundaryConditions*)
 
     cdef cppclass TMRMeshOptions:
         TMRMeshOptions()
@@ -427,13 +427,14 @@ cdef extern from "TMROctForest.h":
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
 
-cdef extern from "TMR_TACSCreator.h":
+cdef extern from "TMRBoundaryConditions.h":
     cdef cppclass TMRBoundaryConditions(TMREntity):
         TMRBoundaryConditions()
         void addBoundaryCondition(const char*, int, const int*,
                                   const TacsScalar*)
         int getNumBoundaryConditions()
 
+cdef extern from "TMR_TACSCreator.h":
     cdef cppclass TMRQuadTACSCreator(TMREntity):
         TMRQuadTACSCreator(TMRBoundaryConditions*, int, TMRQuadForest*)
         TMRQuadForest* getFilter()

@@ -24,6 +24,7 @@ CXX_OBJS = TMRBase.o \
 	TMRTopology.o \
 	TMRNativeTopology.o \
 	TMR_STLTools.o \
+	TMRBoundaryConditions.o \
 	TMR_TACSCreator.o \
 	TMR_RefinementTools.o
 

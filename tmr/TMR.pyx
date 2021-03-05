@@ -43,6 +43,7 @@ tmr_init()
 
 # Import tracebacks for callbacks
 import traceback
+from sys import exit
 
 # Import the definition required for const strings
 from libc.string cimport const_char
@@ -2516,7 +2517,7 @@ cdef class Mesh:
         model = self.ptr.createModelFromMesh()
         return _init_Model(model)
 
-    def writeToBDF(self, fname, outtype=None):
+    def writeToBDF(self, fname, outtype=None, BoundaryConditions bcs=None):
         """
         writeToBDF(self, fname, outtype=None)
 
@@ -2537,7 +2538,10 @@ cdef class Mesh:
             flag = 1
         elif outtype == 'hex':
             flag = 2
-        self.ptr.writeToBDF(filename, flag)
+        if bcs is not None:
+           self.ptr.writeToBDF(filename, flag, bcs.ptr)
+        else:
+            self.ptr.writeToBDF(filename, flag, NULL)
 
     def writeToVTK(self, fname, outtype=None):
         """
