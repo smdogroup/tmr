@@ -1499,20 +1499,25 @@ void TMRMesh::writeToBDF( const char *filename, int flag,
           bcs->getBoundaryCondition(index, &name, &num_bcs,
                                     &bc_nums, &bc_vals);
 
+          // Set the SPC constrain string
           char spc[16];
-          for ( int i = 0; i < num_bcs; i++ ){
-            sprintf(spc, "%s%d", spc, bc_nums[i]);
+          const char *spc_list = "123456789";
+          for ( int i = 0, j = 0; i < num_bcs; i++ ){
+            if (bc_nums[i] >= 0 && bc_nums[i] <= 8){
+              spc[j] = spc_list[bc_nums[i]];
+              spc[j+1] = '\0';
+              j++;
+            }
           }
 
           // Find the faces, edges and nodes with this name
           int num_faces;
           TMRFace **faces;
           geo->getFaces(&num_faces, &faces);
-
           for ( int i = 0; i < num_faces; i++ ){
             // Set the face id == name
             const char *face_name = faces[i]->getName();
-            if (strcmp(name, face_name) == 0){
+            if (face_name && strcmp(name, face_name) == 0){
               // Get the face mesh
               TMRFaceMesh *mesh = NULL;
               faces[i]->getMesh(&mesh);
@@ -1522,7 +1527,7 @@ void TMRMesh::writeToBDF( const char *filename, int flag,
               int nnodes = mesh->getNodeNums(&vars);
 
               for ( int k = 0; k < nnodes; k++ ){
-                fprintf(fp, "%-8s%8d%8d%8s%8f\n", "SPC", 1, vars[k]+1, spc, 0.0);
+                fprintf(fp, "%-8s%8d%8d%8s%8.2f\n", "SPC", 1, vars[k]+1, spc, 0.0);
               }
             }
           }
@@ -1530,11 +1535,10 @@ void TMRMesh::writeToBDF( const char *filename, int flag,
           int num_edges;
           TMREdge **edges;
           geo->getEdges(&num_edges, &edges);
-
           for ( int i = 0; i < num_edges; i++ ){
             // Set the face id == name
             const char *edge_name = edges[i]->getName();
-            if (strcmp(name, edge_name) == 0){
+            if (edge_name && strcmp(name, edge_name) == 0){
               // Get the edge mesh
               TMREdgeMesh *mesh = NULL;
               edges[i]->getMesh(&mesh);
@@ -1555,7 +1559,7 @@ void TMRMesh::writeToBDF( const char *filename, int flag,
           for ( int i = 0; i < num_vertices; i++ ){
             // Set the face id == name
             const char *vert_name = vertices[i]->getName();
-            if (strcmp(name, vert_name) == 0){
+            if (vert_name && strcmp(name, vert_name) == 0){
               int vnum;
               vertices[i]->getNodeNum(&vnum);
               fprintf(fp, "%-8s%8d%8d%8s%8f\n", "SPC", 1, vnum+1, spc, 0.0);
