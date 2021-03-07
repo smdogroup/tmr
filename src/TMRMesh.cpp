@@ -1499,6 +1499,9 @@ void TMRMesh::writeToBDF( const char *filename, int flag,
           bcs->getBoundaryCondition(index, &name, &num_bcs,
                                     &bc_nums, &bc_vals);
 
+          // Print out a description about the boundary condition name
+          fprintf(fp, "%-41s%s\n","$       Boundary data", name);
+
           // Set the SPC constrain string
           char spc[16];
           const char *spc_list = "123456789";
