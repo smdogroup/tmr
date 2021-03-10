@@ -709,7 +709,7 @@ void TMRFace::setSource( TMRVolume *volume, TMRFace *face ){
     }
 
     int *loop_counts = new int[ nloops ];
-    
+
     // Find the number of edges in each of the loops
     for ( int i = 0; i < nloops; i++ ){
       TMREdgeLoop *loop;
@@ -736,7 +736,7 @@ void TMRFace::setSource( TMRVolume *volume, TMRFace *face ){
 
     // Check if any loop is not accounted for
     int fail = 0;
-    for ( int i = 0; i < nloops; i++ ){ 
+    for ( int i = 0; i < nloops; i++ ){
       if (loop_counts[i] != -1){
         fail = 1;
         break;
@@ -1019,44 +1019,164 @@ TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
                     int _num_edges, TMREdge **_edges,
                     int _num_faces, TMRFace **_faces,
                     int _num_volumes, TMRVolume **_volumes ){
-  num_vertices = _num_vertices;
-  num_edges = _num_edges;
-  num_faces = _num_faces;
-  num_volumes = _num_volumes;
+  vertices = NULL;
+  edges = NULL;
+  faces = NULL;
+  volumes = NULL;
+  ordered_verts = NULL;
+  ordered_edges = NULL;
+  ordered_faces = NULL;
+  ordered_volumes = NULL;
+  initialize(_num_vertices, _vertices, _num_edges, _edges,
+             _num_faces, _faces, _num_volumes, _volumes);
 
+  int fix_me = verify();
+
+  if (fix_me){
+    TMRVertex **temp_verts = new TMRVertex*[ num_vertices ];
+    memcpy(temp_verts, vertices, num_vertices*sizeof(TMRVertex*));
+
+    TMREdge **temp_edges = new TMREdge*[ num_edges ];
+    memcpy(temp_edges, edges, num_edges*sizeof(TMREdge*));
+
+    TMRFace **temp_faces = new TMRFace*[ num_faces ];
+    memcpy(temp_faces, faces, num_faces*sizeof(TMRFace*));
+
+    TMRVolume **temp_vols = new TMRVolume*[ num_volumes ];
+    memcpy(temp_vols, volumes, num_volumes*sizeof(TMRVolume*));
+
+    initialize(num_vertices, temp_verts, num_edges, temp_edges,
+               num_faces, temp_faces, num_volumes, temp_vols);
+
+    delete [] temp_verts;
+    delete [] temp_edges;
+    delete [] temp_faces;
+    delete [] temp_vols;
+  }
+}
+
+void TMRModel::initialize( int _num_vertices, TMRVertex **_vertices,
+                           int _num_edges, TMREdge **_edges,
+                           int _num_faces, TMRFace **_faces,
+                           int _num_volumes, TMRVolume **_volumes ){
+  // Handle the vertices
+  int count = 0;
+  for ( int i = 0; i < _num_vertices; i++ ){
+    if (_vertices[i]){
+      _vertices[i]->incref();
+      count++;
+    }
+  }
+
+  if (vertices){
+    for ( int i = 0; i < num_vertices; i++ ){
+      if (vertices[i]){
+        vertices[i]->decref();
+      }
+    }
+    delete [] vertices;
+  }
+
+  num_vertices = count;
   vertices = new TMRVertex*[ num_vertices ];
+
+  for ( int index = 0, i = 0; i < _num_vertices; i++ ){
+    if (_vertices[i]){
+      vertices[index] = _vertices[i];
+      index++;
+    }
+  }
+
+  // Handle the edges
+  count = 0;
+  for ( int i = 0; i < _num_edges; i++ ){
+    if (_edges[i]){
+      _edges[i]->incref();
+      count++;
+    }
+  }
+
+  if (edges){
+    for ( int i = 0; i < num_edges; i++ ){
+      if (edges[i]){
+        edges[i]->decref();
+      }
+    }
+    delete [] edges;
+  }
+
+  num_edges = count;
   edges = new TMREdge*[ num_edges ];
+
+  for ( int index = 0, i = 0; i < _num_edges; i++ ){
+    if (_edges[i]){
+      edges[index] = _edges[i];
+      index++;
+    }
+  }
+
+  // Handle the faces
+  count = 0;
+  for ( int i = 0; i < _num_faces; i++ ){
+    if (_faces[i]){
+      _faces[i]->incref();
+      count++;
+    }
+  }
+
+  if (faces){
+    for ( int i = 0; i < num_faces; i++ ){
+      if (faces[i]){
+        faces[i]->decref();
+      }
+    }
+    delete [] faces;
+  }
+
+  num_faces = count;
   faces = new TMRFace*[ num_faces ];
+
+  for ( int index = 0, i = 0; i < _num_faces; i++ ){
+    if (_faces[i]){
+      faces[index] = _faces[i];
+      index++;
+    }
+  }
+
+  // Handle the volumes
+  count = 0;
+  for ( int i = 0; i < _num_volumes; i++ ){
+    if (_volumes[i]){
+      _volumes[i]->incref();
+      count++;
+    }
+  }
+
+  if (volumes){
+    for ( int i = 0; i < num_volumes; i++ ){
+      if (volumes[i]){
+        volumes[i]->decref();
+      }
+    }
+    delete [] volumes;
+  }
+
+  num_volumes = count;
   volumes = new TMRVolume*[ num_volumes ];
 
-  for ( int i = 0; i < num_vertices; i++ ){
-    vertices[i] = _vertices[i];
-    if (vertices[i]){
-      vertices[i]->incref();
+  for ( int index = 0, i = 0; i < _num_volumes; i++ ){
+    if (_volumes[i]){
+      volumes[index] = _volumes[i];
+      index++;
     }
   }
 
-  for ( int i = 0; i < num_edges; i++ ){
-    edges[i] = _edges[i];
-    if (edges[i]){
-      edges[i]->incref();
-    }
-  }
+  if (ordered_verts){ delete [] ordered_verts; }
+  if (ordered_edges){ delete [] ordered_edges; }
+  if (ordered_faces){ delete [] ordered_faces; }
+  if (ordered_volumes){ delete [] ordered_volumes; }
 
-  for ( int i = 0; i < num_faces; i++ ){
-    faces[i] = _faces[i];
-    if (faces[i]){
-      faces[i]->incref();
-    }
-  }
-
-  for ( int i = 0; i < num_volumes; i++ ){
-    volumes[i] = _volumes[i];
-    if (volumes[i]){
-      volumes[i]->incref();
-    }
-  }
-
+  // Order the entities
   ordered_verts = new OrderedPair<TMRVertex>[ num_vertices ];
   ordered_edges = new OrderedPair<TMREdge>[ num_edges ];
   ordered_faces = new OrderedPair<TMRFace>[ num_faces ];
@@ -1091,9 +1211,6 @@ TMRModel::TMRModel( int _num_vertices, TMRVertex **_vertices,
         compare_ordered_pairs<TMRFace>);
   qsort(ordered_volumes, num_volumes, sizeof(OrderedPair<TMRVolume>),
         compare_ordered_pairs<TMRVolume>);
-
-  // Verify the edges/edge loops
-  verify();
 }
 
 /*
@@ -1160,8 +1277,8 @@ int TMRModel::verify(){
         if (cindex < 0){
           fail = 1;
           fprintf(stderr,
-                  "TMRModel error: Missing edge %d in \
-edge loop %d for face %d\n",
+                  "TMRModel error: Missing edge %d in "
+                  "edge loop %d for face %d\n",
                   j, k, face);
         }
         else {
@@ -1182,8 +1299,8 @@ edge loop %d for face %d\n",
         if (v1index < 0 || v2index < 0){
           fail = 1;
           fprintf(stderr,
-                  "TMRModel error: Vertices do not exist \
-within the vertex list\n");
+                  "TMRModel error: Vertices do not exist "
+                  "within the vertex list\n");
         }
         else {
           verts[v1index]++;
@@ -1228,28 +1345,31 @@ within the vertex list\n");
       }
     }
   }
-  else {
-    int verts_count = 0, crvs_count = 0;
-    for ( int i = 0; i < num_vertices; i++ ){
-      if (verts[i] == 0){
-        verts_count++;
-        fail = 1;
-      }
+
+  int verts_count = 0, crvs_count = 0;
+  for ( int i = 0; i < num_vertices; i++ ){
+    if (verts[i] == 0){
+      vertices[i]->decref();
+      vertices[i] = NULL;
+      verts_count++;
+      fail = 1;
     }
-    for ( int i = 0; i < num_edges; i++ ){
-      if (crvs[i] == 0){
-        crvs_count++;
-        fail = 1;
-      }
+  }
+  for ( int i = 0; i < num_edges; i++ ){
+    if (crvs[i] == 0){
+      edges[i]->decref();
+      edges[i] = NULL;
+      crvs_count++;
+      fail = 1;
     }
-    if (verts_count > 0){
-      fprintf(stderr, "TMRModel warning: %d vertices unreferenced\n",
-              verts_count);
-    }
-    if (crvs_count > 0){
-      fprintf(stderr, "TMRModel warning: %d edges unreferenced\n",
-              crvs_count);
-    }
+  }
+  if (verts_count > 0){
+    fprintf(stderr, "TMRModel warning: %d vertices unreferenced\n",
+            verts_count);
+  }
+  if (crvs_count > 0){
+    fprintf(stderr, "TMRModel warning: %d edges unreferenced\n",
+            crvs_count);
   }
 
   delete [] verts;
