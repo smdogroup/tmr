@@ -53,7 +53,7 @@ If using OpenCASCADE Community Edition (OCE) if not using compiled version
 3. Get to $HOME/packages/oce
 4. Use the following commands in the directory $HOME/packages/oce
    
-   cmake -DOCE_INSTALL_PREFIX:PATH=$HOME/packages/OpenCASCADE
+   cmake -DINSTALL_DIR=$HOME/packages/OpenCASCADE
    
 This will build the libraries in $HOME/packages/OpenCASCADE
 
