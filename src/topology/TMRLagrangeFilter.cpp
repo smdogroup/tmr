@@ -39,7 +39,7 @@ void TMRLagrangeFilter::initialize( int _nlevels,
   // Set the number of multigrid levels and the number of variables
   // per node
   nlevels = _nlevels;
-  
+
   // Allocate arrays to store the assembler objects/forests
   assembler = new TACSAssembler*[ nlevels ];
 

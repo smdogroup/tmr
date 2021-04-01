@@ -47,6 +47,14 @@ class TMRTopoFilter : public TMREntity {
 
   // Write the STL file
   virtual void writeSTLFile( int k, double cutoff, const char *filename ){}
+
+  // Apply filter/filter transpose to some vector that has same size as design variable
+  virtual void applyFilter( TACSBVec *in, TACSBVec *out ) {
+    fprintf(stderr, "TMR Filter Error: applyFilter() method is not implemented!\n");
+  }
+  virtual void applyTranspose( TACSBVec *in, TACSBVec *out ) {
+    fprintf(stderr, "TMR Filter Error: applyTranspose() method is not implemented!\n");
+  }
 };
 
 #endif // TMR_TOPO_FILTER_H

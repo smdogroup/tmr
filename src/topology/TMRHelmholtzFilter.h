@@ -46,12 +46,12 @@ class TMRHelmholtzFilter : public TMRConformFilter {
   // Set values/add values to the vector
   void addValues( TACSBVec *vec );
 
- private:
-  void initialize_helmholtz( double helmholtz_radius );
-
   // Apply the Helmholtz filter to a vector
   void applyFilter( TACSBVec *vec );
   void applyTranspose( TACSBVec *input, TACSBVec *output );
+
+ private:
+  void initialize_helmholtz( double helmholtz_radius );
 
   // Data (that may be NULL) for the Helmholtz-based PDE filter
   TACSAssembler **helmholtz_assembler;

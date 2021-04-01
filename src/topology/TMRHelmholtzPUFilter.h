@@ -53,7 +53,6 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   void addValues( TACSBVec *vec );
 
   void initialize();
- private:
 
   // Apply the filter to get the density values
   void applyFilter( TACSBVec *in, TACSBVec *out );
@@ -61,6 +60,7 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   // Apply the transpose of the filter for sensitivities
   void applyTranspose( TACSBVec *in, TACSBVec *out );
 
+ private:
   // The non-negative matrix M
   TACSMat *B;
 
