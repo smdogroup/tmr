@@ -48,3 +48,6 @@ tmr/*.cpp
 *.STEP
 *.stp
 *.step
+
+# vscode config files
+.vscode/*
