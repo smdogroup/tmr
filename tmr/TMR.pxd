@@ -544,6 +544,8 @@ cdef extern from "TMRTopoFilter.h":
         TMRQuadForest* getFilterQuadForest()
         TMROctForest* getFilterOctForest()
         void addValues(TACSBVec*)
+        void applyFilter(TACSBVec*, TACSBVec*)
+        void applyTranspose(TACSBVec*, TACSBVec*)
 
 cdef class TopoFilter:
     cdef TMRTopoFilter *ptr
@@ -633,6 +635,8 @@ cdef extern from "TMRTopoProblem.h":
                                        TacsScalar*)
     ctypedef void (*objectivegradientcallback)(void*, TMRTopoFilter*, TACSMg*,
                                                TACSBVec*)
+    ctypedef void (*qncorrectioncallback)(int, void*, ParOptVec*, ParOptScalar*,
+                                          ParOptVec*, ParOptVec*, ParOptVec*)
 
     cdef cppclass TMRTopoProblem(ParOptProblem):
         TMRTopoProblem(TMRTopoFilter*, TACSMg*, int, double)
@@ -658,6 +662,9 @@ cdef extern from "TMRTopoProblem.h":
                                    void*,
                                    void (*constraintgradientcallback)(void*, TMRTopoFilter*, TACSMg*,
                                                                       int, TACSBVec**))
+        void addQnCorrectionCallback(int, void*,
+                                     void (*qncorrectioncallback)(int, void*, ParOptVec*, ParOptScalar*,
+                                           ParOptVec*, ParOptVec*, ParOptVec*))
         void setObjective(const TacsScalar*)
         void setObjective(const TacsScalar*, TACSFunction**)
         void addObjectiveCallback(void*,
@@ -677,6 +684,9 @@ cdef extern from "TMRTopoProblem.h":
             void (*writeoutputcallback)(void*, const char*, int,
                                         TMROctForest*, TMRQuadForest*,
                                         TACSBVec*))
+        void useQnCorrectionComplianceObj()
+        void addNonDesignMass(ParOptVec*)
+
     cdef cppclass ParOptBVecWrap(ParOptVec):
         ParOptBVecWrap(TACSBVec*)
         TACSBVec *vec

@@ -109,6 +109,15 @@ class TMRTopoProblem : public ParOptProblem {
                               void (*congradfunc)(void*, TMRTopoFilter*, TACSMg*,
                                                   int, TACSBVec**) );
 
+  // Add a function callback to perform the quasi-Newton update
+  // Correction from python side
+  // ----------------------------------------------------------
+  void addQnCorrectionCallback( int ncon,
+                                void *callback_ptr,
+                                void (*callback_fun)( int, void*, ParOptVec*,
+                                                      ParOptScalar*, ParOptVec*,
+                                                      ParOptVec*, ParOptVec* ) );
+
   // Accessor functions to the underlying Assembler, Oct or QuadForest, TopoFilter, and Mg objects
   // --------------------------------------------------------------------
   TACSAssembler* getAssembler();
@@ -171,6 +180,18 @@ class TMRTopoProblem : public ParOptProblem {
   // -----------------------------------------------
   int evalObjConGradient( ParOptVec *x,
                           ParOptVec *g, ParOptVec **Ac );
+
+  // Switch on quasi-Newton correction for compliance objective
+  // ----------------------------------------------------------
+  void useQnCorrectionComplianceObj();
+
+  // Compute a correction to the quasi-Newton update
+  // -----------------------------------------------
+  void computeQuasiNewtonUpdateCorrection( ParOptVec *x,
+                                           ParOptScalar *z,
+                                           ParOptVec *zw,
+                                           ParOptVec *s,
+                                           ParOptVec *y );
 
   // Evaluate the product of the Hessian with the given vector px
   // ------------------------------------------------------------
@@ -235,6 +256,10 @@ class TMRTopoProblem : public ParOptProblem {
   void (*objectiveGradientCallback)( void*, TMRTopoFilter*, TACSMg*,
                                      TACSBVec* );
 
+  void *qn_correction_callback_ptr;
+  int qn_correction_callback_zlen;
+  void (*qnCorrectionCallback)( int, void*, ParOptVec*, ParOptScalar*,
+                                ParOptVec*, ParOptVec*, ParOptVec* );
   // Set the design variables across all multigrid levels
   void setDesignVars( ParOptVec *xvec );
 
@@ -309,10 +334,19 @@ class TMRTopoProblem : public ParOptProblem {
   ParOptVec *xinit;
   ParOptVec *xlb, *xub;
 
-  // Information to control the output frequency
+  // Information to control the output frequency.ptr
   int f5_frequency, f5_eigen_frequency;
   ElementType f5_element_type, f5_eigen_element_type;
   int f5_write_flag, f5_eigen_write_flag;
+
+  // flag for quasi-Newton update correction
+  int use_qn_correction_comp_obj;
+
+  // Finite difference step for computing second derivative of stiffness matrix
+  ParOptScalar dh_Kmat_2nd_deriv;
+
+  // Vectors used by quasi-Newton update correction
+  ParOptVec *proj_deriv, *x_h, *s_temp;
 };
 
 #endif // TMR_TOPO_PROBLEM_H

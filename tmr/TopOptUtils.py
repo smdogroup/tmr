@@ -857,3 +857,33 @@ def setSurfaceBounds(problem, comm, forest, names,
     problem.setInitDesignVars(dv, lbvec=lb,
                               ubvec=ub)
     return
+
+def createNonDesignMassVec(assembler, names, comm, forest, m0=0.5):
+    """
+    Create a design vector in ParOptVec type that contains the non-design
+    mass on nodes with given names
+
+    Args:
+        names (list): list of surface names where non-design mass should be added
+        m0 (float): non-design mass
+
+    Return:
+        mvec (BVec): a ParOpt design vector that contains non-design mass information
+    """
+    mvec = assembler.createDesignVec()
+    mvals = mvec.getArray()
+
+    for name in names:
+        mpi_rank = comm.Get_rank()
+        node_range = forest.getNodeRange()
+
+        node_octs = forest.getNodesWithName(name)
+        node_octs = node_octs.astype(int)
+
+        for i in range(len(node_octs)):
+            if (node_octs[i] >= node_range[mpi_rank]) and \
+               (node_octs[i] < node_range[mpi_rank+1]):
+                index = int(node_octs[i] - node_range[mpi_rank])
+                mvals[index] = m0
+
+    return mvec
