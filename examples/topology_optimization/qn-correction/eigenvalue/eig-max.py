@@ -16,7 +16,7 @@ import os
 import sys
 
 # Import the cantilever example setup
-sys.path.append('../cantilever/')
+sys.path.append('../../cantilever/')
 from cantilever import OctCreator, CreatorCallback, OutputCallback, MFilterCreator
 
 class FrequencyObj:
@@ -26,14 +26,23 @@ class FrequencyObj:
     order to form a well-posed frequency maximization problem
     """
 
-    def __init__(self, forest, eig_scale = 1e-3, num_eigenvalues=10,
-                 max_jd_size=50, max_gmres_size=15, ksrho=50):
+    def __init__(self, forest, eig_scale=1e2, con_scale=1.0,
+                 num_eigenvalues=10, max_jd_size=50, max_gmres_size=15, ksrho=50):
+        """
+        Args:
+            eig_scale: scale the eigenvalues internally in order to acquire better
+                       KS approximation with smaller skrho
+            con_scale: scale the mass constraint
+            num_eigenvalues: number of smallest eigenvalues to compute
+            ksrho: KS parameter
+        """
 
         # Set objects
         self.forest = forest
 
         # Set up parameters
         self.eig_scale = eig_scale
+        self.con_scale = con_scale
         self.num_eigenvalues = num_eigenvalues
         self.max_jd_size = max_jd_size
         self.max_gmres_size = max_gmres_size
@@ -105,8 +114,8 @@ class FrequencyObj:
         self.assembler.getDesignVars(dv)
 
         # Add non-design mass to the mass matrix by modifying the design variable
-        mvec = TopOptUtils.createNonDesignMassVec(self.assembler, ['pt5', 'pt6'],
-                                                  self.comm, self.forest, m0=100.0)
+        mvec = TopOptUtils.createNonDesignMassVec(self.assembler, ['pt5'],
+                                                  self.comm, self.forest, m0=200.0)
         self.fltr.applyFilter(mvec, mvec)
 
         # Update dv <- dv + mvec and update design variable
@@ -134,7 +143,7 @@ class FrequencyObj:
             self.eigs[i], _ = self.jd.extractEigenvector(i, self.eigvs[i])
 
         # Scale eigenvalues for a better KS approximation
-        self.eigs[:] /= self.eig_scale
+        self.eigs[:] *= self.eig_scale
 
         # Compute the minimal eigenvalue
         eig_min = np.min(self.eigs)
@@ -142,18 +151,22 @@ class FrequencyObj:
         # Compute KS aggregation
         self.eta = np.exp(-self.ksrho*(self.eigs - eig_min))
         self.beta = np.sum(self.eta)
-        ks = self.eig_scale*(eig_min - np.log(self.beta)/self.ksrho)
+        ks = (eig_min - np.log(self.beta)/self.ksrho)
         self.eta = self.eta/self.beta
 
         # Scale eigenvalue back
-        self.eigs[:] *= self.eig_scale
+        self.eigs[:] /= self.eig_scale
 
-        # Print the ks value
+        # Objective
+        obj = -ks
+
+        # Print values
         if self.comm.rank == 0:
-            print('KS eigenvalue obj: {:25.10e}'.format(ks))
-            print('minimum eigenvalue:{:25.10e}'.format(np.min(self.eigs)))
+            print('{:30s}{:20.10e}'.format('[Obj] KS eigenvalue:', ks))
+            print('{:30s}{:20.10e}'.format('[Obj] min eigenvalue:', eig_min))
+            print('{:30s}{:20.10e}'.format('[Obj] objective:', obj))
 
-        return -ks
+        return obj
 
 
     def objective_gradient(self, fltr, mg, dfdrho):
@@ -180,35 +193,50 @@ class FrequencyObj:
         # Zero out the gradient vector
         dfdrho.zeroEntries()
 
+        temp = self.assembler.createDesignVec()
+
         for i in range(self.num_eigenvalues):
 
             # This is a maximization problem
-            scale = -self.eta[i]
+            scale = -self.eta[i]*self.eig_scale
 
-            # Is this necessary?
-            # self.temp.zeroEntries()
-            # self.mmat.mult(self.eigvs[i], self.temp)
-            # scale /= self.temp.dot(self.eigvs[i])
+            # M-orthogonalize eigenvectors
+            self.temp.zeroEntries()
+            self.mmat.mult(self.eigvs[i], self.temp)
+            ortho = self.temp.dot(self.eigvs[i])
+            if self.comm.rank == 0:
+                print("eig[{:2d}] M-orthogonality:{:20.10e}".format(i, ortho))
+            scale /= ortho  # Always 1.0
 
-            # Compute gradient of single eigenvalue
-            self.deigs[i].zeroEntries()
-            self.assembler.addMatDVSensInnerProduct(
-                scale, TACS.STIFFNESS_MATRIX,
-                self.eigvs[i], self.eigvs[i], self.deigs[i])
-            self.assembler.addMatDVSensInnerProduct(
-                -scale*self.eigs[i], TACS.MASS_MATRIX,
-                self.eigvs[i], self.eigvs[i], self.deigs[i])
-
-            # Add to the gradient of the KS aggregation
-            dfdrho.axpy(1.0, self.deigs[i])
-
-            # Test
-            # self.assembler.addMatDVSensInnerProduct(
-            #     scale, TACS.STIFFNESS_MATRIX,
-            #     self.eigvs[i], self.eigvs[i], dfdrho)
+            # temp.zeroEntries()
             # self.assembler.addMatDVSensInnerProduct(
             #     -scale*self.eigs[i], TACS.MASS_MATRIX,
-            #     self.eigvs[i], self.eigvs[i], dfdrho)
+            #     self.eigvs[i], self.eigvs[i], temp)
+            # self.assembler.addMatDVSensInnerProduct(
+            #     scale, TACS.STIFFNESS_MATRIX,
+            #     self.eigvs[i], self.eigvs[i], temp)
+
+            # dfdrho.axpy(1.0, temp)
+
+            self.assembler.addMatDVSensInnerProduct(
+                -scale*self.eigs[i], TACS.MASS_MATRIX,
+                self.eigvs[i], self.eigvs[i], dfdrho)
+            self.assembler.addMatDVSensInnerProduct(
+                scale, TACS.STIFFNESS_MATRIX,
+                self.eigvs[i], self.eigvs[i], dfdrho)
+
+        dfdrho.beginSetValues(op=TACS.ADD_VALUES)
+        dfdrho.endSetValues(op=TACS.ADD_VALUES)
+
+        rand = self.assembler.createDesignVec()
+        rand.setRand()
+        rnorm = rand.norm()
+        norm = dfdrho.norm()
+        proj = dfdrho.dot(rand)
+        if self.comm.rank == 0:
+            print("{:30s}{:20.10e}".format('[Obj] gradient norm:', norm))
+            print("{:30s}{:20.10e}".format('[Obj] random vec norm:', rnorm))
+            print("{:30s}{:20.10e}".format('[Obj] random proj:', proj))
 
         return
 
@@ -338,24 +366,24 @@ class MassConstr:
 
         # Eval mass
         mass = self.assembler.evalFunctions([self.mass_func])[0]
-
+        mass_constr = -mass/self.m_fixed + 1
         if self.rank == 0:
-            print("Mass constraint: {:20.10e}".format(mass))
+            print("{:30s}{:20.10e}".format('[Con] mass constraint:',mass_constr))
 
-        return [-mass/self.m_fixed + 1]
+        return [mass_constr]
 
     def constraint_gradient(self, fltr, mg, vecs):
         # We only have one constraint
-        dcdx = vecs[0]
-        dcdx.zeroEntries()
+        dcdrho = vecs[0]
+        dcdrho.zeroEntries()
 
         # Evaluate the mass gradient
-        self.assembler.addDVSens([self.mass_func], [dcdx], alpha=-1/self.m_fixed)
+        self.assembler.addDVSens([self.mass_func], [dcdrho], alpha=-1/self.m_fixed)
 
         # Compute norm
-        grad_norm = dcdx.norm()
+        norm = dcdrho.norm()
         if self.rank == 0:
-            print("Mass grad norm:  {:20.10e}".format(grad_norm))
+            print("{:30s}{:20.10e}".format('[Con] gradient norm:', norm))
         return
 
 def create_geo(comm, AR, ly=10.0):
@@ -663,7 +691,7 @@ if __name__ == '__main__':
 
         if max_iterations > 1:
             if step == max_iterations-1:
-                optimization_options['tr_max_iterations'] = 10
+                optimization_options['tr_max_iterations'] = 15
         count += optimization_options['tr_max_iterations']
 
         optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
