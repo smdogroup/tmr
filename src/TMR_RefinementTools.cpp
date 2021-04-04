@@ -78,13 +78,13 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
                    mg_iters_per_level, use_galerkin, mat, pc);
     }
     else {
-      mg->setLevel(level, assembler[level], interp, mg_iters_per_level);
+      mg->setLevel(level, assembler[level], interp, mg_iters_per_level, use_galerkin);
     }
   }
 
   if (use_coarse_direct_solve){
     // Set the lowest level - with no interpolation object
-    mg->setLevel(num_levels-1, assembler[num_levels-1]);
+    mg->setLevel(num_levels-1, assembler[num_levels-1], NULL, 1, use_galerkin);
   }
   else {
     TACSParallelMat *mat = assembler[num_levels-1]->createMat();
@@ -163,7 +163,8 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
 
   if (use_coarse_direct_solve){
     // Set the lowest level - with no interpolation object
-    mg->setLevel(num_levels-1, assembler[num_levels-1]);
+    // mg->setLevel(num_levels-1, assembler[num_levels-1]);
+    mg->setLevel(num_levels-1, assembler[num_levels-1], NULL, 1, use_galerkin);
   }
   else {
     TACSParallelMat *mat = assembler[num_levels-1]->createMat();
