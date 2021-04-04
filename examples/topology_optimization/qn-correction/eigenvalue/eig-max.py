@@ -127,20 +127,50 @@ class FrequencyObj:
 
         # Reset design variable
         dv.axpy(-1.0, mvec)
+
+        # Assemble the multigrid preconditioner
         self.assembler.setDesignVars(dv)
         self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
         self.mg.factor()
 
+        # Check the whole mass
+        e = self.assembler.createVec()
+        t = self.assembler.createVec()
+        evals = e.getArray()
+        evals[:] = 1.0
+        self.mmat.mult(e, t)
+        eTMe = e.dot(t)
+        if self.comm.rank == 0:
+            print('[Mmat] eTMe = {:20.10e}'.format(eTMe))
+
         # Solve
-        self.jd.solve(print_flag=True, print_level=0)
+        self.jd.solve(print_flag=True, print_level=1)
 
         # Check if succeeded, otherwise try again
         if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
+            if self.comm.rank == 0:
+                print("[Warning] Jacobi-Davidson failed to converge for the first run.")
+
+            # Extract the eigenvalues
+            for i in range(self.num_eigenvalues):
+                self.eigs[i], error = self.jd.extractEigenvalue(i)
+
+            # Update preconditioner
+            theta = 0.9*np.min(self.eigs)
+            self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta)
+            self.mg.factor()
+
+            # Rerun the solver
             self.jd.solve(print_flag=True, print_level=1)
+
+            # If it still fails, raise the error and exit
+            if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
+                raise ValueError("No enough eigenvalues converged, check the JD solver's settings!")
+
 
         # Extract eigenvalues and eigenvectors
         for i in range(self.num_eigenvalues):
-            self.eigs[i], _ = self.jd.extractEigenvector(i, self.eigvs[i])
+            self.eigs[i], error = self.jd.extractEigenvector(i, self.eigvs[i])
 
         # Scale eigenvalues for a better KS approximation
         self.eigs[:] *= self.eig_scale
@@ -200,33 +230,37 @@ class FrequencyObj:
             # This is a maximization problem
             scale = -self.eta[i]*self.eig_scale
 
-            # M-orthogonalize eigenvectors
-            self.temp.zeroEntries()
-            self.mmat.mult(self.eigvs[i], self.temp)
-            ortho = self.temp.dot(self.eigvs[i])
-            if self.comm.rank == 0:
-                print("eig[{:2d}] M-orthogonality:{:20.10e}".format(i, ortho))
-            scale /= ortho  # Always 1.0
+            # # M-orthogonalize eigenvectors
+            # self.temp.zeroEntries()
+            # self.mmat.mult(self.eigvs[i], self.temp)
+            # ortho = self.temp.dot(self.eigvs[i])
+            # if self.comm.rank == 0:
+            #     print("eig[{:2d}] M-orthogonality:{:20.10e}".format(i, ortho))
+            # scale /= ortho  # Always 1.0
 
-            # temp.zeroEntries()
-            # self.assembler.addMatDVSensInnerProduct(
-            #     -scale*self.eigs[i], TACS.MASS_MATRIX,
-            #     self.eigvs[i], self.eigvs[i], temp)
-            # self.assembler.addMatDVSensInnerProduct(
-            #     scale, TACS.STIFFNESS_MATRIX,
-            #     self.eigvs[i], self.eigvs[i], temp)
-
-            # dfdrho.axpy(1.0, temp)
-
+            temp.zeroEntries()
             self.assembler.addMatDVSensInnerProduct(
                 -scale*self.eigs[i], TACS.MASS_MATRIX,
-                self.eigvs[i], self.eigvs[i], dfdrho)
+                self.eigvs[i], self.eigvs[i], temp)
             self.assembler.addMatDVSensInnerProduct(
                 scale, TACS.STIFFNESS_MATRIX,
-                self.eigvs[i], self.eigvs[i], dfdrho)
+                self.eigvs[i], self.eigvs[i], temp)
 
-        dfdrho.beginSetValues(op=TACS.ADD_VALUES)
-        dfdrho.endSetValues(op=TACS.ADD_VALUES)
+            temp.beginSetValues(op=TACS.ADD_VALUES)
+            temp.endSetValues(op=TACS.ADD_VALUES)
+
+            dfdrho.axpy(1.0, temp)
+
+        #     self.assembler.addMatDVSensInnerProduct(
+        #         -scale*self.eigs[i], TACS.MASS_MATRIX,
+        #         self.eigvs[i], self.eigvs[i], dfdrho)
+        #     self.assembler.addMatDVSensInnerProduct(
+        #         scale, TACS.STIFFNESS_MATRIX,
+        #         self.eigvs[i], self.eigvs[i], dfdrho)
+
+        # dfdrho.beginSetValues(op=TACS.ADD_VALUES)
+        # dfdrho.endSetValues(op=TACS.ADD_VALUES)
+
 
         rand = self.assembler.createDesignVec()
         rand.setRand()
