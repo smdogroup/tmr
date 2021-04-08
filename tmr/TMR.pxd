@@ -370,6 +370,7 @@ cdef extern from "TMRQuadForest.h":
         void getQuadrants(TMRQuadrantArray**)
         int getPoints(TMRPoint**)
         int getLocalNodeNumber(int);
+        int getExtPreOffset()
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
 
@@ -424,6 +425,7 @@ cdef extern from "TMROctForest.h":
         int getOwnedNodeRange(const int**)
         void getOctants(TMROctantArray**)
         int getPoints(TMRPoint**)
+        int getExtPreOffset()
         void writeToVTK(const char*)
         void writeForestToVTK(const char*)
 

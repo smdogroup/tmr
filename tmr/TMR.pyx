@@ -3155,6 +3155,9 @@ cdef class QuadForest:
     def getLocalNodeNumber(self, int node):
         return self.ptr.getLocalNodeNumber(node)
 
+    def getExtPreOffset(self):
+        return self.ptr.getExtPreOffset()
+
     def getNodeRange(self):
         """
         getNodeRange(self)
@@ -3743,6 +3746,9 @@ cdef class OctForest:
             conn[i] = _conn[i]
             weights[i] = _weights[i]
         return ptr, conn, weights
+
+    def getExtPreOffset(self):
+        return self.ptr.getExtPreOffset()
 
     def writeToVTK(self, fname):
         """
