@@ -15,6 +15,12 @@ import argparse
 import os
 import sys
 
+# Print colored text in terminal
+try:
+    from termcolor import colored
+except:
+    print("[Unavailable module] termcolor is not installed!")
+
 # Import the cantilever example setup
 sys.path.append('../../cantilever/')
 from cantilever import OctCreator, CreatorCallback, OutputCallback, MFilterCreator
@@ -26,8 +32,9 @@ class FrequencyObj:
     order to form a well-posed frequency maximization problem
     """
 
-    def __init__(self, forest, eig_scale=1e2, con_scale=1.0,
-                 num_eigenvalues=10, max_jd_size=50, max_gmres_size=15, ksrho=50):
+    def __init__(self, forest, len0, AR, eig_scale=1.0, con_scale=1.0,
+                 num_eigenvalues=10, max_jd_size=100, max_gmres_size=30,
+                 ksrho=50, non_design_mass=5.0):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -41,12 +48,16 @@ class FrequencyObj:
         self.forest = forest
 
         # Set up parameters
+        self.lx = len0*AR
+        self.ly = len0
+        self.lz = len0
         self.eig_scale = eig_scale
         self.con_scale = con_scale
         self.num_eigenvalues = num_eigenvalues
         self.max_jd_size = max_jd_size
         self.max_gmres_size = max_gmres_size
         self.ksrho = ksrho
+        self.non_design_mass = non_design_mass
 
         self.fltr = None
         self.mg = None
@@ -57,8 +68,8 @@ class FrequencyObj:
         self.kmat = None
         self.mmat = None
         self.temp = None
-        self.eigs = None
-        self.eigvs = None
+        self.eig = None
+        self.eigv = None
 
         return
 
@@ -83,18 +94,19 @@ class FrequencyObj:
             self.fltr = fltr
             self.assembler = self.fltr.getAssembler()
             self.comm = self.assembler.getMPIComm()
+            self.rank = self.comm.rank
 
             # Initialize space for matrices and vectors
             self.mmat = self.assembler.createMat()
             self.kmat = self.assembler.createMat()
             self.temp = self.assembler.createVec()
-            self.eigs = np.zeros(self.num_eigenvalues)
-            self.eigvs = []
+            self.eig = np.zeros(self.num_eigenvalues)
+            self.eigv = []
             for i in range(self.num_eigenvalues):
-                self.eigvs.append(self.assembler.createVec())
-            self.deigs = []
+                self.eigv.append(self.assembler.createVec())
+            self.deig = []
             for i in range(self.num_eigenvalues):
-                self.deigs.append(self.assembler.createDesignVec())
+                self.deig.append(self.assembler.createDesignVec())
 
             # Create the Jacobi-Davidson operator
             self.oper = TACS.JDFrequencyOperator(self.assembler, self.kmat, self.mmat,
@@ -103,7 +115,8 @@ class FrequencyObj:
             # Create the eigenvalue solver and set the number of recycling eigenvectors
             self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
                                           self.max_jd_size, self.max_gmres_size)
-            self.jd.setTolerances(1e-6, 1e-8)
+            self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-6, atol=1e-12)
+            # self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-12, atol=1e-15)
             self.jd.setRecycle(self.num_eigenvalues)
 
         # Assemble the stiffness matrix for the generalized eigenvalue problem
@@ -113,10 +126,53 @@ class FrequencyObj:
         dv = self.assembler.createDesignVec()
         self.assembler.getDesignVars(dv)
 
+        '''
+        Add non-design mass to some nodes
+        '''
+
         # Add non-design mass to the mass matrix by modifying the design variable
-        mvec = TopOptUtils.createNonDesignMassVec(self.assembler, ['pt5'],
-                                                  self.comm, self.forest, m0=200.0)
-        self.fltr.applyFilter(mvec, mvec)
+        # mvec = TopOptUtils.createNonDesignMassVec(self.assembler, ['pt5', 'pt6'],
+        #                                           self.comm, self.forest,
+        #                                           m0=self.non_design_mass)
+        # self.fltr.applyFilter(mvec, mvec)
+
+        # Create non-design mass vector
+        mvec = self.assembler.createDesignVec()
+        mvals = mvec.getArray()
+
+        # Get nodal locations
+        Xpts = self.forest.getPoints()
+
+        # Note: the local nodes are organized as follows:
+        # |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
+
+        # Get number of local nodes in the current processor
+        n_local_nodes = Xpts.shape[0]
+
+        # Get numbder of dependent nodes
+        _ptr, _conn, _weights = self.forest.getDepNodeConn()
+        n_dep_nodes = _conn.shape[0]
+
+        # Get number of ext_pre nodes
+        n_ext_pre = self.forest.getExtPreOffset()
+
+        # Get numbder of own nodes:
+        offset = n_dep_nodes + n_ext_pre
+
+        # # Loop over all owned nodes and set non-design mass values
+        tol = 1e-3
+        xmin = self.lx - tol
+        xmax = self.lx + tol
+        ymin = 0.25*self.ly
+        ymax = 0.75*self.ly
+        zmin = 0.0*self.lz
+        zmax = 0.2*self.lz
+        for i in range(offset, n_local_nodes):
+            x, y, z = Xpts[i]
+            if xmin < x < xmax:
+                if ymin < y < ymax:
+                    if zmin < z < zmax:
+                        mvals[i-offset] = self.non_design_mass
 
         # Update dv <- dv + mvec and update design variable
         dv.axpy(1.0, mvec)
@@ -127,9 +183,9 @@ class FrequencyObj:
 
         # Reset design variable
         dv.axpy(-1.0, mvec)
+        self.assembler.setDesignVars(dv)
 
         # Assemble the multigrid preconditioner
-        self.assembler.setDesignVars(dv)
         self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
         self.mg.factor()
 
@@ -144,7 +200,7 @@ class FrequencyObj:
             print('[Mmat] eTMe = {:20.10e}'.format(eTMe))
 
         # Solve
-        self.jd.solve(print_flag=True, print_level=1)
+        self.jd.solve(print_flag=True, print_level=0)
 
         # Check if succeeded, otherwise try again
         if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
@@ -153,39 +209,57 @@ class FrequencyObj:
 
             # Extract the eigenvalues
             for i in range(self.num_eigenvalues):
-                self.eigs[i], error = self.jd.extractEigenvalue(i)
+                self.eig[i], error = self.jd.extractEigenvalue(i)
 
             # Update preconditioner
-            theta = 0.9*np.min(self.eigs)
+            theta = 0.9*np.min(self.eig)
             self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta)
             self.mg.factor()
 
             # Rerun the solver
             self.jd.solve(print_flag=True, print_level=1)
+            nconvd = self.jd.getNumConvergedEigenvalues()
 
-            # If it still fails, raise the error and exit
-            if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
-                raise ValueError("No enough eigenvalues converged, check the JD solver's settings!")
+            # If it still fails, run one more time
+            if nconvd < self.num_eigenvalues:
 
+                # # Extract the eigenvalues
+                # for i in range(self.num_eigenvalues):
+                #     self.eig[i], error = self.jd.extractEigenvalue(i)
+
+                # # Update preconditioner
+                # theta = 0.9*np.min(self.eig)
+                # self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta)
+                # self.mg.factor()
+
+                # # Rerun the solver
+                # self.jd.solve(print_flag=True, print_level=1)
+                # nconvd = self.jd.getNumConvergedEigenvalues()
+
+                # if nconvd < self.num_eigenvalues:
+
+                msg = "No enough eigenvalues converged! ({:d}/{:d})".format(
+                    nconvd, self.num_eigenvalues)
+                raise ValueError(msg)
 
         # Extract eigenvalues and eigenvectors
         for i in range(self.num_eigenvalues):
-            self.eigs[i], error = self.jd.extractEigenvector(i, self.eigvs[i])
+            self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
 
         # Scale eigenvalues for a better KS approximation
-        self.eigs[:] *= self.eig_scale
+        self.eig[:] *= self.eig_scale
 
         # Compute the minimal eigenvalue
-        eig_min = np.min(self.eigs)
+        eig_min = np.min(self.eig)
 
         # Compute KS aggregation
-        self.eta = np.exp(-self.ksrho*(self.eigs - eig_min))
+        self.eta = np.exp(-self.ksrho*(self.eig - eig_min))
         self.beta = np.sum(self.eta)
         ks = (eig_min - np.log(self.beta)/self.ksrho)
         self.eta = self.eta/self.beta
 
         # Scale eigenvalue back
-        self.eigs[:] /= self.eig_scale
+        self.eig[:] /= self.eig_scale
 
         # Objective
         obj = -ks
@@ -194,7 +268,6 @@ class FrequencyObj:
         if self.comm.rank == 0:
             print('{:30s}{:20.10e}'.format('[Obj] KS eigenvalue:', ks))
             print('{:30s}{:20.10e}'.format('[Obj] min eigenvalue:', eig_min))
-            print('{:30s}{:20.10e}'.format('[Obj] objective:', obj))
 
         return obj
 
@@ -223,55 +296,31 @@ class FrequencyObj:
         # Zero out the gradient vector
         dfdrho.zeroEntries()
 
-        temp = self.assembler.createDesignVec()
-
         for i in range(self.num_eigenvalues):
 
             # This is a maximization problem
             scale = -self.eta[i]*self.eig_scale
 
-            # # M-orthogonalize eigenvectors
-            # self.temp.zeroEntries()
-            # self.mmat.mult(self.eigvs[i], self.temp)
-            # ortho = self.temp.dot(self.eigvs[i])
-            # if self.comm.rank == 0:
-            #     print("eig[{:2d}] M-orthogonality:{:20.10e}".format(i, ortho))
-            # scale /= ortho  # Always 1.0
-
-            temp.zeroEntries()
-            self.assembler.addMatDVSensInnerProduct(
-                -scale*self.eigs[i], TACS.MASS_MATRIX,
-                self.eigvs[i], self.eigvs[i], temp)
+            # Compute gradient of eigenvalue
+            self.deig[i].zeroEntries() # Will have error without this line, but why???
             self.assembler.addMatDVSensInnerProduct(
                 scale, TACS.STIFFNESS_MATRIX,
-                self.eigvs[i], self.eigvs[i], temp)
+                self.eigv[i], self.eigv[i], self.deig[i])
 
-            temp.beginSetValues(op=TACS.ADD_VALUES)
-            temp.endSetValues(op=TACS.ADD_VALUES)
+            self.assembler.addMatDVSensInnerProduct(
+                -scale*self.eig[i], TACS.MASS_MATRIX,
+                self.eigv[i], self.eigv[i], self.deig[i])
 
-            dfdrho.axpy(1.0, temp)
+            # Make sure the vector is properly distributed over all processors
+            self.deig[i].beginSetValues(op=TACS.ADD_VALUES)
+            self.deig[i].endSetValues(op=TACS.ADD_VALUES)
 
-        #     self.assembler.addMatDVSensInnerProduct(
-        #         -scale*self.eigs[i], TACS.MASS_MATRIX,
-        #         self.eigvs[i], self.eigvs[i], dfdrho)
-        #     self.assembler.addMatDVSensInnerProduct(
-        #         scale, TACS.STIFFNESS_MATRIX,
-        #         self.eigvs[i], self.eigvs[i], dfdrho)
+            dfdrho.axpy(1.0, self.deig[i])
 
-        # dfdrho.beginSetValues(op=TACS.ADD_VALUES)
-        # dfdrho.endSetValues(op=TACS.ADD_VALUES)
-
-
-        rand = self.assembler.createDesignVec()
-        rand.setRand()
-        rnorm = rand.norm()
+        # Compute gradient norm
         norm = dfdrho.norm()
-        proj = dfdrho.dot(rand)
         if self.comm.rank == 0:
             print("{:30s}{:20.10e}".format('[Obj] gradient norm:', norm))
-            print("{:30s}{:20.10e}".format('[Obj] random vec norm:', rnorm))
-            print("{:30s}{:20.10e}".format('[Obj] random proj:', proj))
-
         return
 
     def qn_correction(self, x, z, zw, s, y):
@@ -296,8 +345,6 @@ class FrequencyObj:
 
         update = self.assembler.createDesignVec()
         temp = self.assembler.createDesignVec()
-        rand = self.assembler.createDesignVec()
-        rand.setRand()
 
         h = 1e-6
 
@@ -311,30 +358,30 @@ class FrequencyObj:
 
         self.fltr.applyFilter(s_wrap, s_wrap)
 
-        if self.comm.rank == 0:
-            # Just want to make sure the callback is implemented correctly
-            print("calling qn_correction!...")
-
         for i in range(self.num_eigenvalues):
             """
             Compute the first part using finite difference
             P += phi^T d2Kdx2 phi
             """
 
+            # Zero out temp vector
+            temp.zeroEntries()
+
             # Compute g(rho + h*s)
             rho.axpy(h, s_wrap)
             self.assembler.setDesignVars(rho)
-            temp.zeroEntries()
             self.assembler.addMatDVSensInnerProduct(self.eta[i], TACS.STIFFNESS_MATRIX,
-                self.eigvs[i], self.eigvs[i], temp)
-            # print("g+dg:", temp.norm())
+                self.eigv[i], self.eigv[i], temp)
 
             # Compute g(rho)
             rho.axpy(-h, s_wrap)
             self.assembler.setDesignVars(rho)
             self.assembler.addMatDVSensInnerProduct(-self.eta[i], TACS.STIFFNESS_MATRIX,
-                self.eigvs[i], self.eigvs[i], temp)
-            # print("dg:", temp.norm())
+                self.eigv[i], self.eigv[i], temp)
+
+            # Distribute the vector
+            temp.beginSetValues(op=TACS.ADD_VALUES)
+            temp.endSetValues(op=TACS.ADD_VALUES)
 
             # Compute dg/h
             temp.scale(1/h)
@@ -347,9 +394,12 @@ class FrequencyObj:
             P -= phi^T (deig*dMdx) phi^T
             """
             temp.zeroEntries()
-            coeff = self.eta[i]*self.deigs[i].dot(s_wrap)
+            coeff = self.eta[i]*self.deig[i].dot(s_wrap)
             self.assembler.addMatDVSensInnerProduct(-coeff,
-                TACS.MASS_MATRIX, self.eigvs[i], self.eigvs[i], temp)
+                TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], temp)
+
+            temp.beginSetValues(op=TACS.ADD_VALUES)
+            temp.endSetValues(op=TACS.ADD_VALUES)
 
             # Get update
             update.axpy(1.0, temp)
@@ -362,7 +412,16 @@ class FrequencyObj:
         dy_norm = update.norm()
         curvature = s_wrap.dot(update)
         if self.comm.rank == 0:
-            print("curvature: {:20.10e}".format(curvature))
+            if curvature < 0:
+                try:
+                    print(colored("curvature: {:20.10e}".format(curvature), "red"))
+                except:
+                    print("curvature: {:20.10e}".format(curvature))
+            else:
+                try:
+                    print(colored("curvature: {:20.10e}".format(curvature), "green"))
+                except:
+                    print("curvature: {:20.10e}".format(curvature))
             print("norm(x):   {:20.10e}".format(x_norm))
             print("norm(s):   {:20.10e}".format(s_norm))
             print("norm(y):   {:20.10e}".format(y_norm))
@@ -371,7 +430,8 @@ class FrequencyObj:
         # Update y
         if curvature > 0:
             y_wrap = TMR.convertPVecToVec(y)
-            y_wrap.axpy(1.0, temp)
+            self.fltr.applyTranspose(update, update)
+            y_wrap.axpy(1.0, update)
 
         return
 
@@ -420,20 +480,20 @@ class MassConstr:
             print("{:30s}{:20.10e}".format('[Con] gradient norm:', norm))
         return
 
-def create_geo(comm, AR, ly=10.0):
+def create_geo(comm, lx, ly, lz):
     """
     Create a TMR.Model geometry object given aspect ratio of design domain
     """
 
     rank = comm.Get_rank()
-
     ctx = egads.context()
 
     # Dimensions
-    Lx = ly*AR
+    Lx = lx
     Ly = ly
-    Lz = ly
+    Lz = lz
 
+    # Create the domain geometry
     x0 = [0.0, 0.0, 0.0]
     x1 = [Lx, Ly, Lz]
     b1 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
@@ -460,7 +520,7 @@ def create_geo(comm, AR, ly=10.0):
 
     return geo
 
-def create_forest(comm, depth, geo, htarget=5.0):
+def create_forest(comm, depth, geo, htarget):
     """
     Create an initial forest for analysis and optimization
 
@@ -530,8 +590,9 @@ def create_forest(comm, depth, geo, htarget=5.0):
 
     return forest
 
-def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
-                   density=2600.0, iter_offset=0, AR=2.0, qn_correction=True):
+def create_problem(forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
+                   len0=1.0, AR=1.0, density=2600.0, iter_offset=0,
+                   qn_correction=True, non_design_mass=5.0, eig_scale=1.0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -554,12 +615,8 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
         TopoProblem: Topology optimization problem instance
     """
 
-    # Characteristic length of the domain
-    len0 = 10.0
-    r0_frac = 0.05
-    N = 20
-
     # Create the problem and filter object
+    N = 20
     mfilter = MFilterCreator(r0_frac, N, a=len0)
     filter_type = mfilter.filter_callback
     obj = CreatorCallback(bcs, props)
@@ -571,19 +628,22 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
     assembler = problem.getAssembler()
 
     # Compute the fixed mass target
-    lx = 10.0*AR # mm
-    ly = 10.0 # mm
-    lz = 10.0 # mm
+    lx = len0*AR # mm
+    ly = len0 # mm
+    lz = len0 # mm
     vol = lx*ly*lz
     m_fixed = vol_frac*(vol*density)
 
     # Add objective callback
-    obj_callback = FrequencyObj(forest)
-    problem.addObjectiveCallback(obj_callback.objective, obj_callback.objective_gradient)
+    obj_callback = FrequencyObj(forest,len0, AR, non_design_mass=non_design_mass,
+                                eig_scale=eig_scale)
+    problem.addObjectiveCallback(obj_callback.objective,
+                                 obj_callback.objective_gradient)
 
     # Add constraint callback
     constr_callback = MassConstr(m_fixed, assembler.getMPIComm())
-    problem.addConstraintCallback(1, constr_callback.constraint, constr_callback.constraint_gradient)
+    problem.addConstraintCallback(1, constr_callback.constraint,
+                                  constr_callback.constraint_gradient)
 
     # Use Quasi-Newton Update Correction if specified
     if qn_correction:
@@ -595,33 +655,36 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
 
     return problem
 
-def bind(instance, func, as_name=None):
-    """
-    Bind the function *func* to *instance*, with either provided name *as_name*
-    or the existing name of *func*. The provided *func* should accept the
-    instance as the first argument, i.e. "self".
-    """
-    if as_name is None:
-        as_name = func.__name__
-    bound_method = func.__get__(instance, instance.__class__)
-    setattr(instance, as_name, bound_method)
-    return bound_method
-
 if __name__ == '__main__':
 
     # Create the argument parser
     p = argparse.ArgumentParser()
-    p.add_argument('--AR', type=float, default=2.0)
+
+    # os
     p.add_argument('--prefix', type=str, default='./results')
+
+    # Geometry
+    p.add_argument('--AR', type=float, default=1.0)
+    p.add_argument('--len0', type=float, default=1.0)
+    p.add_argument('--vol-frac', type=float, default=0.4)
+    p.add_argument('--r0-frac', type=float, default=0.05)
+    p.add_argument('--htarget', type=float, default=2.0)
+    p.add_argument('--mg-levels', type=int, default=4)
+
+    # Optimization
     p.add_argument('--n-mesh-refine', type=int, default=1)
-    p.add_argument('--tr-max-iter', type=int, default=50)
-    p.add_argument('--paropt-use-filter', action='store_true')
+    p.add_argument('--tr-max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
+    p.add_argument('--non-design-mass', type=float, default=10.0)
+    p.add_argument('--eig-scale', type=float, default=1.0)
+
+    # Testing
     p.add_argument('--gradient-check', action='store_true')
+
+    # Parse arguments
     args = p.parse_args()
 
-    htarget = 10.0
-    mg_levels = 4
+    mg_levels = args.mg_levels
     prefix = args.prefix
 
     # Set the communicator
@@ -634,6 +697,11 @@ if __name__ == '__main__':
     # Barrier here
     comm.Barrier()
 
+    # Geometry parameters
+    lx = args.len0*args.AR
+    ly = args.len0
+    lz = args.len0
+
     # Set up material properties
     material_props = constitutive.MaterialProperties(rho=2600.0, E=70e3, nu=0.3, ys=100.0)
 
@@ -645,14 +713,10 @@ if __name__ == '__main__':
     bcs.addBoundaryCondition('fixed', [0,1,2], [0.0, 0.0, 0.0])
 
     # Create initial forest
-    geo = create_geo(comm, args.AR)
-    forest = create_forest(comm, mg_levels-1, geo, htarget)
+    geo = create_geo(comm, lx, ly, lz)
+    forest = create_forest(comm, mg_levels-1, geo, args.htarget)
 
     # Set up ParOpt parameters
-    strategy = 'penalty_method'
-    if args.paropt_use_filter:
-
-        strategy = 'filter_method'
     optimization_options = {
         'algorithm': 'tr',
         'output_level':0,
@@ -665,7 +729,7 @@ if __name__ == '__main__':
         'tr_l1_tol': 0.0,
         'tr_linfty_tol': 0.0,
         'tr_adaptive_gamma_update': False,
-        'tr_accept_step_strategy': strategy,
+        'tr_accept_step_strategy': 'filter_method',
         'filter_sufficient_reduction': True,
         'filter_has_feas_restore_phase': True,
         'tr_use_soc': False,
@@ -697,9 +761,11 @@ if __name__ == '__main__':
         iter_offset = step*optimization_options['tr_max_iterations']
 
         # Create the optimization problem
-        problem = create_problem(forest, bcs, stiffness_props, mg_levels+step,
-                                 vol_frac=0.25, iter_offset=iter_offset,
-                                 AR=args.AR, qn_correction=args.qn_correction)
+        problem = create_problem(forest=forest, bcs=bcs, props=stiffness_props,
+                                 nlevels=mg_levels+step, vol_frac=args.vol_frac,
+                                 r0_frac=args.r0_frac, len0=args.len0, AR=args.AR,
+                                 iter_offset=iter_offset, qn_correction=args.qn_correction,
+                                 non_design_mass=args.non_design_mass, eig_scale=args.eig_scale)
 
         # Set the prefix
         problem.setPrefix(prefix)
@@ -748,9 +814,6 @@ if __name__ == '__main__':
             dist_file = os.path.join(prefix, 'distance_solution%d.f5'%(step))
 
             # Compute the characteristic domain length
-            lx = 10.0*args.AR # mm
-            ly = 10.0 # mm
-            lz = 10.0 # mm
             vol = lx*ly*lz
             domain_length = vol**(1.0/3.0)
             refine_distance = 0.025*domain_length
