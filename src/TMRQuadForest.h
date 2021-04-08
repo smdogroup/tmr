@@ -130,6 +130,7 @@ class TMRQuadForest : public TMREntity {
   // -------------------------------------------------
   void getQuadrants( TMRQuadrantArray **_quadrants );
   int getNodeNumbers( const int **_node_numbers );
+  int getExtPreOffset();
   int getPoints( TMRPoint **_X );
   int getLocalNodeNumber( int node );
   int getInterpKnots( const double **_knots );

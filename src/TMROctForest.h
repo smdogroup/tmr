@@ -136,6 +136,7 @@ class TMROctForest : public TMREntity {
   // -----------------------------
   void getOctants( TMROctantArray **_octants );
   int getNodeNumbers( const int **_node_numbers );
+  int getExtPreOffset();
   int getPoints( TMRPoint **_X );
   int getLocalNodeNumber( int node );
   int getInterpKnots( const double **_knots );
