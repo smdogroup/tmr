@@ -1167,6 +1167,7 @@ void TMROctForest::computeBlockOwners(){
     }
   }
 }
+
 /*
   Write a representation of the connectivity of the forest out to a
   VTK file.
@@ -5034,7 +5035,7 @@ void TMROctForest::getEdgeNodes( TMROctant *oct, int edge_index,
   else {
     // Set the edge label
     int edge_label = TMR_OCT_NODE_LABEL;
-    if (mesh_order > 3 || (mesh_order >= 3 
+    if (mesh_order > 3 || (mesh_order >= 3
                            && interp_type == TMR_BERNSTEIN_POINTS)){
       edge_label = TMR_OCT_EDGE_LABEL;
     }
@@ -5149,7 +5150,7 @@ void TMROctForest::getFaceNodes( TMROctant *oct, int face_index,
     // Set the edge/face labels
     int edge_label = TMR_OCT_NODE_LABEL;
     int face_label = TMR_OCT_NODE_LABEL;
-    if (mesh_order > 3 || (mesh_order >= 3 
+    if (mesh_order > 3 || (mesh_order >= 3
                            && interp_type == TMR_BERNSTEIN_POINTS)){
       edge_label = TMR_OCT_EDGE_LABEL;
       face_label = TMR_OCT_FACE_LABEL;
@@ -6527,7 +6528,7 @@ int TMROctForest::computeElemInterp( TMROctant *node,
             "meshes are not identical\n");
   }
 
-  if (interp_type == TMR_BERNSTEIN_POINTS && 
+  if (interp_type == TMR_BERNSTEIN_POINTS &&
       mesh_order - coarse->mesh_order > 1){
     fprintf(stderr, "TMROctForest Error: Mesh order difference across "
             "grids should be 1\n");
