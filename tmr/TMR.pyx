@@ -5528,9 +5528,9 @@ cdef class TopoProblem(ProblemBase):
                                    offset, scale, max_lanczos, eigtol)
         return
 
-    def addConstraintCallback(self, int ncon, confunc, congradfunc):
+    def addConstraintCallback(self, int ncon, int nineq, confunc, congradfunc):
         """
-        addConstraintCallback(self, ncon, confunc, congradfunc)
+        addConstraintCallback(self, ncon, nineq, confunc, congradfunc)
 
         Add a constraint callback to TMRTopoProblem.
 
@@ -5559,7 +5559,7 @@ cdef class TopoProblem(ProblemBase):
         prob = _dynamicTopoProblem(self.ptr)
         self.confunc = confunc
         self.congradfunc = congradfunc
-        prob.addConstraintCallback(ncon, <void*>confunc, constraintCallback,
+        prob.addConstraintCallback(ncon, nineq, <void*>confunc, constraintCallback,
                                    <void*>congradfunc, constraintGradientCallback)
         return
 

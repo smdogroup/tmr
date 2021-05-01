@@ -15,6 +15,10 @@ import argparse
 import os
 import sys
 
+# Import optimization libraries
+import openmdao.api as om
+from paropt.paropt_driver import ParOptDriver
+
 # Print colored text in terminal
 try:
     from termcolor import colored
@@ -23,16 +27,19 @@ except:
 
 # Import the cantilever example setup
 sys.path.append('../../cantilever/')
-from cantilever import OctCreator, CreatorCallback, OutputCallback, MFilterCreator
+from cantilever import CreatorCallback, MFilterCreator, OutputCallback
 
 class FrequencyObj:
+
+    counter = 0
+
     """
     A class that evaluates the smallest eigenvalue, the objective is evaluated
     using an objective callback. We also add non-design mass to loaded nodes in
     order to form a well-posed frequency maximization problem
     """
 
-    def __init__(self, forest, len0, AR, eig_scale=1.0, con_scale=1.0,
+    def __init__(self, prefix, forest, len0, AR, eig_scale=1.0, con_scale=1.0,
                  num_eigenvalues=10, max_jd_size=100, max_gmres_size=30,
                  ksrho=50, non_design_mass=5.0):
         """
@@ -48,6 +55,8 @@ class FrequencyObj:
         self.forest = forest
 
         # Set up parameters
+        self.prefix = prefix
+        self.iter_offset = iter_offset
         self.lx = len0*AR
         self.ly = len0
         self.lz = len0
@@ -89,6 +98,8 @@ class FrequencyObj:
           - N: number of eigenvalues computed
         """
 
+        itr = FrequencyObj.counter
+
         if self.fltr is None:
             self.mg = mg
             self.fltr = fltr
@@ -119,6 +130,45 @@ class FrequencyObj:
             # self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-12, atol=1e-15)
             self.jd.setRecycle(self.num_eigenvalues)
 
+            '''
+            Create a non-design mass vector
+            '''
+            self.mvec = self.assembler.createDesignVec()
+            mvals = self.mvec.getArray()
+
+            # Get nodal locations
+            Xpts = self.forest.getPoints()
+
+            # Note: the local nodes are organized as follows:
+            # |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
+
+            # Get number of local nodes in the current processor
+            n_local_nodes = Xpts.shape[0]
+
+            # Get numbder of dependent nodes
+            _ptr, _conn, _weights = self.forest.getDepNodeConn()
+
+            # Get number of ext_pre nodes
+            n_ext_pre = self.forest.getExtPreOffset()
+
+            # Get numbder of own nodes:
+            offset = n_ext_pre
+
+            # # Loop over all owned nodes and set non-design mass values
+            tol = 1e-3
+            xmin = self.lx - tol
+            xmax = self.lx + tol
+            ymin = 0.25*self.ly - tol
+            ymax = 0.75*self.ly + tol
+            zmin = 0.0*self.lz - tol
+            zmax = 0.2*self.lz + tol
+            for i in range(offset, n_local_nodes):
+                x, y, z = Xpts[i]
+                if xmin < x < xmax:
+                    if ymin < y < ymax:
+                        if zmin < z < zmax:
+                            mvals[i-offset] = self.non_design_mass
+
         # Assemble the stiffness matrix for the generalized eigenvalue problem
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.kmat)
 
@@ -126,64 +176,54 @@ class FrequencyObj:
         dv = self.assembler.createDesignVec()
         self.assembler.getDesignVars(dv)
 
-        '''
-        Add non-design mass to some nodes
-        '''
-
-        # Add non-design mass to the mass matrix by modifying the design variable
-        # mvec = TopOptUtils.createNonDesignMassVec(self.assembler, ['pt5', 'pt6'],
-        #                                           self.comm, self.forest,
-        #                                           m0=self.non_design_mass)
-        # self.fltr.applyFilter(mvec, mvec)
-
-        # Create non-design mass vector
-        mvec = self.assembler.createDesignVec()
-        mvals = mvec.getArray()
-
-        # Get nodal locations
-        Xpts = self.forest.getPoints()
-
-        # Note: the local nodes are organized as follows:
-        # |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
-
-        # Get number of local nodes in the current processor
-        n_local_nodes = Xpts.shape[0]
-
-        # Get numbder of dependent nodes
-        _ptr, _conn, _weights = self.forest.getDepNodeConn()
-        n_dep_nodes = _conn.shape[0]
-
-        # Get number of ext_pre nodes
-        n_ext_pre = self.forest.getExtPreOffset()
-
-        # Get numbder of own nodes:
-        offset = n_dep_nodes + n_ext_pre
-
-        # # Loop over all owned nodes and set non-design mass values
-        tol = 1e-3
-        xmin = self.lx - tol
-        xmax = self.lx + tol
-        ymin = 0.25*self.ly
-        ymax = 0.75*self.ly
-        zmin = 0.0*self.lz
-        zmax = 0.2*self.lz
-        for i in range(offset, n_local_nodes):
-            x, y, z = Xpts[i]
-            if xmin < x < xmax:
-                if ymin < y < ymax:
-                    if zmin < z < zmax:
-                        mvals[i-offset] = self.non_design_mass
-
         # Update dv <- dv + mvec and update design variable
-        dv.axpy(1.0, mvec)
+        dv.axpy(1.0, self.mvec)
         self.assembler.setDesignVars(dv)
 
         # Construct mass matrix
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
 
         # Reset design variable
-        dv.axpy(-1.0, mvec)
+        dv.axpy(-1.0, self.mvec)
         self.assembler.setDesignVars(dv)
+
+        '''
+        Export non-design mass vectors to f5 file for verification
+        '''
+        # if itr % 10 == 0:
+        #     # Set up flags for data output
+        #     flag = (TACS.OUTPUT_CONNECTIVITY |
+        #             TACS.OUTPUT_NODES |
+        #             TACS.OUTPUT_EXTRAS |
+        #             TACS.OUTPUT_DISPLACEMENTS)
+
+        #     # Create f5 file writer
+        #     f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
+
+        #     # Set non-design mass vector as design variable
+        #     self.assembler.setDesignVars(self.mvec)
+
+        #     # Set dM*e as state variable
+        #     dMe = self.assembler.createVec()
+        #     dMe_vals = dMe.getArray()
+        #     dMe_vals[:] = 1.0
+        #     self.mmat.mult(dMe, dMe)
+        #     mmat_temp = self.assembler.createMat()
+        #     self.assembler.assembleMatType(TACS.MASS_MATRIX, mmat_temp)
+        #     e = self.assembler.createVec()
+        #     e_vals = e.getArray()
+        #     e_vals[:] = 1.0
+        #     mmat_temp.mult(e, e)
+        #     dMe.axpy(-1.0, e)
+        #     sv = self.assembler.createVec()
+        #     self.assembler.getVariables(sv)
+        #     self.assembler.setVariables(dMe)
+
+        #     f5.writeToFile(os.path.join(self.prefix, 'non-design-mass{:d}.f5'.format(itr)))
+
+        #     # Set dv and sv back
+        #     self.assembler.setDesignVars(dv)
+        #     self.assembler.setVariables(sv)
 
         # Assemble the multigrid preconditioner
         self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
@@ -220,24 +260,8 @@ class FrequencyObj:
             self.jd.solve(print_flag=True, print_level=1)
             nconvd = self.jd.getNumConvergedEigenvalues()
 
-            # If it still fails, run one more time
+            # If it still fails, raise error and exit
             if nconvd < self.num_eigenvalues:
-
-                # # Extract the eigenvalues
-                # for i in range(self.num_eigenvalues):
-                #     self.eig[i], error = self.jd.extractEigenvalue(i)
-
-                # # Update preconditioner
-                # theta = 0.9*np.min(self.eig)
-                # self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta)
-                # self.mg.factor()
-
-                # # Rerun the solver
-                # self.jd.solve(print_flag=True, print_level=1)
-                # nconvd = self.jd.getNumConvergedEigenvalues()
-
-                # if nconvd < self.num_eigenvalues:
-
                 msg = "No enough eigenvalues converged! ({:d}/{:d})".format(
                     nconvd, self.num_eigenvalues)
                 raise ValueError(msg)
@@ -268,6 +292,9 @@ class FrequencyObj:
         if self.comm.rank == 0:
             print('{:30s}{:20.10e}'.format('[Obj] KS eigenvalue:', ks))
             print('{:30s}{:20.10e}'.format('[Obj] min eigenvalue:', eig_min))
+
+        # increment the counter
+        FrequencyObj.counter += 1
 
         return obj
 
@@ -302,7 +329,7 @@ class FrequencyObj:
             scale = -self.eta[i]*self.eig_scale
 
             # Compute gradient of eigenvalue
-            self.deig[i].zeroEntries() # Will have error without this line, but why???
+            self.deig[i].zeroEntries()
             self.assembler.addMatDVSensInnerProduct(
                 scale, TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], self.deig[i])
@@ -346,10 +373,9 @@ class FrequencyObj:
         update = self.assembler.createDesignVec()
         temp = self.assembler.createDesignVec()
 
-        h = 1e-6
+        h = 1e-8
 
         # Create PVec type wrappers
-        x_wrap = TMR.convertPVecToVec(x)
         s_wrap = TMR.convertPVecToVec(s)
 
         # Get current nodal density
@@ -430,6 +456,7 @@ class FrequencyObj:
         # Update y
         if curvature > 0:
             y_wrap = TMR.convertPVecToVec(y)
+            # is it ok to have the same input and output?
             self.fltr.applyTranspose(update, update)
             y_wrap.axpy(1.0, update)
 
@@ -544,19 +571,17 @@ def create_forest(comm, depth, geo, htarget):
     faces = geo.getFaces()
     volumes = geo.getVolumes()
 
-    if rank == 0:
-        for index, vert in enumerate(verts):
-            x,y,z = vert.evalPoint()
-            print("verts[{:d}]: ({:.2f}, {:.2f}, {:.2f})".format(index, x, y, z))
+    # if rank == 0:
+    #     for index, vert in enumerate(verts):
+    #         x,y,z = vert.evalPoint()
+    #         print("verts[{:d}]: ({:.2f}, {:.2f}, {:.2f})".format(index, x, y, z))
 
-        for index, face in enumerate(faces):
-            umin, vmin, umax, vmax = face.getRange()
-            umid = 0.5*(umin + umax)
-            vmid = 0.5*(vmin + vmax)
-            x,y,z = face.evalPoint(umid, vmid)
-            print("faces[{:d}]: ({:.2f}, {:.2f}, {:.2f})".format(index, x, y, z))
-
-
+    #     for index, face in enumerate(faces):
+    #         umin, vmin, umax, vmax = face.getRange()
+    #         umid = 0.5*(umin + umax)
+    #         vmid = 0.5*(vmin + vmax)
+    #         x,y,z = face.evalPoint(umid, vmid)
+    #         print("faces[{:d}]: ({:.2f}, {:.2f}, {:.2f})".format(index, x, y, z))
 
     # Set source and target faces
     faces[0].setName('fixed')
@@ -587,12 +612,14 @@ def create_forest(comm, depth, geo, htarget):
 
     # Create the trees, rebalance the elements and repartition
     forest.createTrees(depth)
+    # forest.writeForestToVTK('forest-{:d}.vtk'.format(comm.rank))
+    forest.writeToVTK('mesh.vtk')
 
     return forest
 
-def create_problem(forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
+def create_problem(prefix, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
                    len0=1.0, AR=1.0, density=2600.0, iter_offset=0,
-                   qn_correction=True, non_design_mass=5.0, eig_scale=1.0):
+                   qn_correction=True, non_design_mass=5.0, eig_scale=1.0, eq_constr=False):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -635,14 +662,18 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
     m_fixed = vol_frac*(vol*density)
 
     # Add objective callback
-    obj_callback = FrequencyObj(forest,len0, AR, non_design_mass=non_design_mass,
+    obj_callback = FrequencyObj(prefix, forest, len0, AR,
+                                non_design_mass=non_design_mass,
                                 eig_scale=eig_scale)
     problem.addObjectiveCallback(obj_callback.objective,
                                  obj_callback.objective_gradient)
 
     # Add constraint callback
     constr_callback = MassConstr(m_fixed, assembler.getMPIComm())
-    problem.addConstraintCallback(1, constr_callback.constraint,
+    nineq = 1
+    if eq_constr is True:
+        nineq = 0
+    problem.addConstraintCallback(1, nineq, constr_callback.constraint,
                                   constr_callback.constraint_gradient)
 
     # Use Quasi-Newton Update Correction if specified
@@ -654,6 +685,22 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
     problem.setOutputCallback(cb.write_output)
 
     return problem
+
+class OmAnalysis(om.ExplicitComponent):
+
+    def __init__(self, problem):
+        super().__init__()
+        self.problem = problem
+        return
+
+    def setup(self):
+        return
+
+    def compute(self, inputs, outputs):
+        return
+
+    def compute_partials(self, inputs, partials):
+        return
 
 if __name__ == '__main__':
 
@@ -668,15 +715,21 @@ if __name__ == '__main__':
     p.add_argument('--len0', type=float, default=1.0)
     p.add_argument('--vol-frac', type=float, default=0.4)
     p.add_argument('--r0-frac', type=float, default=0.05)
-    p.add_argument('--htarget', type=float, default=2.0)
+    p.add_argument('--htarget', type=float, default=1.0)
     p.add_argument('--mg-levels', type=int, default=4)
+    p.add_argument('--qval', type=float, default=5.0)
 
     # Optimization
-    p.add_argument('--n-mesh-refine', type=int, default=1)
+    p.add_argument('--n-mesh-refine', type=int, default=3)
     p.add_argument('--tr-max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
     p.add_argument('--non-design-mass', type=float, default=10.0)
     p.add_argument('--eig-scale', type=float, default=1.0)
+    p.add_argument('--output-level', type=int, default=0)
+    p.add_argument('--simple-filter', action='store_false')
+    p.add_argument('--tr-eta', type=float, default=0.25)
+    p.add_argument('--tr-min', type=float, default=1e-3)
+    p.add_argument('--eq-constr', action='store_true')
 
     # Testing
     p.add_argument('--gradient-check', action='store_true')
@@ -706,7 +759,7 @@ if __name__ == '__main__':
     material_props = constitutive.MaterialProperties(rho=2600.0, E=70e3, nu=0.3, ys=100.0)
 
     # Create stiffness properties
-    stiffness_props = TMR.StiffnessProperties(material_props, k0=1e-3, eps=0.2, q=5.0)
+    stiffness_props = TMR.StiffnessProperties(material_props, k0=1e-3, eps=0.2, q=args.qval) # Try larger q val: 8, 10, 20
 
     # Set boundary conditions
     bcs = TMR.BoundaryConditions()
@@ -719,23 +772,23 @@ if __name__ == '__main__':
     # Set up ParOpt parameters
     optimization_options = {
         'algorithm': 'tr',
-        'output_level':0,
+        'output_level':args.output_level,
         'norm_type': 'l1',
         'tr_init_size': 0.05,
-        'tr_min_size': 1e-3,
-        'tr_max_size': 10.0,
-        'tr_eta': 0.25,
+        'tr_min_size': args.tr_min,
+        'tr_max_size': 1.0,
+        'tr_eta': args.tr_eta,
         'tr_infeas_tol': 1e-6,
         'tr_l1_tol': 0.0,
         'tr_linfty_tol': 0.0,
         'tr_adaptive_gamma_update': False,
         'tr_accept_step_strategy': 'filter_method',
-        'filter_sufficient_reduction': True,
+        'filter_sufficient_reduction': args.simple_filter,
         'filter_has_feas_restore_phase': True,
         'tr_use_soc': False,
         'tr_max_iterations': args.tr_max_iter,
         'penalty_gamma': 50.0,
-        'qn_subspace_size': 5,
+        'qn_subspace_size': 2, # try 5 or 10
         'qn_type': 'bfgs',
         'qn_diag_type': 'yty_over_yts',
         'abs_res_tol': 1e-8,
@@ -743,7 +796,7 @@ if __name__ == '__main__':
         'barrier_strategy': 'mehrotra_predictor_corrector',
         'tr_steering_barrier_strategy': 'mehrotra_predictor_corrector',
         'tr_steering_starting_point_strategy': 'affine_step',
-        'use_line_search': False,
+        'use_line_search': False,  # subproblem
         'max_major_iters': 200}
 
 
@@ -761,11 +814,14 @@ if __name__ == '__main__':
         iter_offset = step*optimization_options['tr_max_iterations']
 
         # Create the optimization problem
-        problem = create_problem(forest=forest, bcs=bcs, props=stiffness_props,
-                                 nlevels=mg_levels+step, vol_frac=args.vol_frac,
-                                 r0_frac=args.r0_frac, len0=args.len0, AR=args.AR,
-                                 iter_offset=iter_offset, qn_correction=args.qn_correction,
-                                 non_design_mass=args.non_design_mass, eig_scale=args.eig_scale)
+        problem = create_problem(prefix=args.prefix, forest=forest, bcs=bcs,
+                                 props=stiffness_props, nlevels=mg_levels+step,
+                                 vol_frac=args.vol_frac, r0_frac=args.r0_frac,
+                                 len0=args.len0, AR=args.AR, iter_offset=iter_offset,
+                                 qn_correction=args.qn_correction,
+                                 non_design_mass=args.non_design_mass,
+                                 eig_scale=args.eig_scale,
+                                 eq_constr=args.eq_constr)
 
         # Set the prefix
         problem.setPrefix(prefix)

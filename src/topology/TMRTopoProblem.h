@@ -101,7 +101,7 @@ class TMRTopoProblem : public ParOptProblem {
                               TacsScalar ks_weight,
                               TacsScalar offset, TacsScalar scale,
                               int max_lanczos, double eigtol );
-  void addConstraintCallback( int ncon,
+  void addConstraintCallback( int ncon, int nineq,
                               void *con_ptr,
                               void (*confunc)(void*, TMRTopoFilter*, TACSMg*,
                                               int, TacsScalar*),
@@ -241,7 +241,7 @@ class TMRTopoProblem : public ParOptProblem {
                                TACSBVec* );
 
   int num_callback_constraints;
-
+  int num_callback_ineq_constraints;
   void *constraint_callback_ptr;
   void (*constraintCallback)( void*, TMRTopoFilter*, TACSMg*,
                               int, TacsScalar* );

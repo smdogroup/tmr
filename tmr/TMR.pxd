@@ -658,7 +658,7 @@ cdef extern from "TMRTopoProblem.h":
                                     int, JDRecycleType)
         void addBucklingConstraint(double, int, TacsScalar,
                                    TacsScalar, TacsScalar, int, double)
-        void addConstraintCallback(int, void*,
+        void addConstraintCallback(int, int, void*,
                                    void (*constraintcallback)(void*, TMRTopoFilter*, TACSMg*,
                                                               int, TacsScalar*),
                                    void*,

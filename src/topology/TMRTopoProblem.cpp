@@ -267,6 +267,7 @@ TMRTopoProblem::TMRTopoProblem( TMRTopoFilter *_filter,
   writeOutputCallback = NULL;
 
   num_callback_constraints = 0;
+  num_callback_ineq_constraints = 0;
   constraint_callback_ptr = NULL;
   constraintCallback = NULL;
   constraint_gradient_callback_ptr = NULL;
@@ -691,7 +692,7 @@ void TMRTopoProblem::addBucklingConstraint( double sigma,
 /*
   Add callback constraint and constraint gradient calls
 */
-void TMRTopoProblem::addConstraintCallback( int ncon,
+void TMRTopoProblem::addConstraintCallback( int ncon, int nineq,
                                             void *con_ptr,
                                             void (*confunc)(void*, TMRTopoFilter*, TACSMg*,
                                                             int, TacsScalar*),
@@ -700,6 +701,7 @@ void TMRTopoProblem::addConstraintCallback( int ncon,
                                                                 int, TACSBVec**) ){
   if (ncon > 0 && confunc && congradfunc){
     num_callback_constraints = ncon;
+    num_callback_ineq_constraints = nineq;
     constraint_callback_ptr = con_ptr;
     constraintCallback = confunc;
     constraint_gradient_callback_ptr = con_grad_ptr;
@@ -812,7 +814,9 @@ void TMRTopoProblem::initialize(){
     nwblock = 1;
   }
 
-  setProblemSizes(nvars, num_constraints, num_constraints, nw, nwblock);
+  int num_eq = num_callback_constraints - num_callback_ineq_constraints;
+  int num_ineq = num_constraints - num_eq;
+  setProblemSizes(nvars, num_constraints, num_ineq, nw, nwblock);
 }
 
 /*
