@@ -25,9 +25,112 @@ try:
 except:
     print("[Unavailable module] termcolor is not installed!")
 
-# Import the cantilever example setup
-sys.path.append('../../cantilever/')
-from cantilever import CreatorCallback, MFilterCreator, OutputCallback
+class OctCreator(TMR.OctConformTopoCreator):
+    """
+    An instance of an OctCreator class.
+
+    This creates discretization for a Largange type filter, where the density is
+    interpolated from the nodes of a coarser finite-element mesh. In this type of
+    creator, the filter element mesh and the octree element mesh need be the same.
+    (In a conformal filter, they must have the same element mesh but may have
+    different degree of approximation.)
+    """
+    def __init__(self, bcs, filt, props=None):
+        TMR.OctConformTopoCreator.__init__(bcs, filt)
+        self.props = props
+
+        # Create the constitutive object - one for the entire mesh
+        self.con = TMR.OctConstitutive(props=props, forest=filt)
+
+        # Create the model (the type of physics we're using)
+        self.model = elements.LinearElasticity3D(self.con)
+
+        # Set the basis functions and create the element
+        self.basis = elements.LinearHexaBasis()
+        self.element = elements.Element3D(self.model, self.basis)
+
+        return
+
+    def createElement(self, order, octant, index, weights):
+        """
+        Create the element for the given octant.
+
+        This callback provides the global indices for the filter mesh and the weights
+        applied to each nodal density value to obtain the element density. The
+        local octant is also provided (but not used here).
+
+        Args:
+            order (int): Order of the underlying mesh
+            octant (Octant): The TMR.Octant class
+            index (list): List of the global node numbers referenced by the element
+            weights (list): List of weights to compute the element density
+
+        Returns:
+            TACS.Element: Element for the given octant
+        """
+        return self.element
+
+class CreatorCallback:
+    def __init__(self, bcs, props):
+        self.bcs = bcs
+        self.props = props
+
+    def creator_callback(self, forest):
+        """
+        Create the creator class and filter for the provided OctForest object.
+
+        This is called for every mesh level when the topology optimization
+        problem is created.
+
+        Args:
+            forest (OctForest): The OctForest for this mesh level
+
+        Returns:
+            OctTopoCreator, OctForest: The creator and filter for this forest
+        """
+        creator = OctCreator(self.bcs, forest, props=self.props)
+        return creator, forest
+
+class MFilterCreator:
+    def __init__(self, r0_frac, N, a=0.1):
+        self.a = a
+        self.r0_frac = r0_frac
+        self.N = N
+
+    def filter_callback(self, assemblers, filters):
+        """
+        Create and initialize a filter with the specified parameters
+        """
+        # Find the characteristic length of the domain and set the filter length scale
+        r0 = self.r0_frac*self.a
+        mfilter = TopOptUtils.Mfilter(self.N, assemblers, filters, dim=3, r=r0)
+        mfilter.initialize()
+        return mfilter
+
+class OutputCallback:
+    def __init__(self, assembler, iter_offset=0):
+        self.fig = None
+        self.assembler = assembler
+        self.xt = self.assembler.createDesignVec()
+
+        # Set the output file name
+        flag = (TACS.OUTPUT_CONNECTIVITY |
+                TACS.OUTPUT_NODES |
+                TACS.OUTPUT_EXTRAS)
+        self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
+        self.iter_offset = iter_offset
+
+        return
+
+    def write_output(self, prefix, itr, oct_forest, quad_forest, x):
+
+        self.f5.writeToFile(os.path.join(prefix, 'output%d.f5'%(itr + self.iter_offset)))
+
+        self.assembler.getDesignVars(self.xt)
+        TMR.writeSTLToBin(os.path.join(prefix, 'level_set_output%d.bstl'%(itr + self.iter_offset)),
+                          oct_forest, self.xt)
+
+        return
 
 class FrequencyObj:
 
