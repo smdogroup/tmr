@@ -32,7 +32,8 @@ if __name__ == '__main__':
     p.add_argument('--prefix', type=str, default='./results')
 
     # Geometry
-    p.add_argument('--domain', type=str, default='cantilever')
+    p.add_argument('--domain', type=str, default='cantilever',
+        choices=['cantilever', 'michell', 'mbb', 'lbracket'])
     p.add_argument('--AR', type=float, default=1.0)
     p.add_argument('--len0', type=float, default=1.0)
     p.add_argument('--vol-frac', type=float, default=0.4)

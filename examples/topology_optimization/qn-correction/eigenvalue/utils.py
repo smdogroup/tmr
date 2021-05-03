@@ -632,7 +632,7 @@ class MassConstr:
             print("{:30s}{:20.10e}".format('[Con] gradient norm:', norm))
         return
 
-def cantilever_geo(lx, ly, lz):
+def cantilever_geo(comm, lx, ly, lz):
 
     # Create an EGADS context
     ctx = egads.context()
@@ -647,7 +647,11 @@ def cantilever_geo(lx, ly, lz):
     x1 = [Lx, Ly, Lz]
     b1 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
     m1 = ctx.makeTopology(egads.MODEL, children=[b1])
-    geo = TMR.ConvertEGADSModel(m1)
+    if comm.rank == 0:
+        m1.saveModel('geo.egads', overwrite=True)
+    comm.Barrier()
+
+    geo = TMR.LoadModel('geo.egads', print_lev=0)
     verts = []
     edges = []
     faces = []
@@ -665,7 +669,7 @@ def cantilever_geo(lx, ly, lz):
 
     return geo
 
-def lbracket_geo(lx, ly, lz):
+def lbracket_geo(comm, lx, ly, lz):
 
     RATIO = 0.4
 
@@ -694,7 +698,12 @@ def lbracket_geo(lx, ly, lz):
     # Create all of the models
     geos = []
     for p in parts:
-        geos.append(TMR.ConvertEGADSModel(p))
+        if comm.rank == 0:
+            p.saveModel('geo.egads', overwrite=True)
+        comm.Barrier()
+
+        geo = TMR.LoadModel('geo.egads', print_lev=0)
+        geos.append(geo)
 
     # Create the full list of vertices, edges, faces and volumes
     verts = []
@@ -735,7 +744,7 @@ def create_forest(comm, lx, ly, lz, htarget, depth, domain_type):
 
     if domain_type == 'cantilever' or domain_type == 'michell':
         # Create geo
-        geo = cantilever_geo(lx, ly, lz)
+        geo = cantilever_geo(comm, lx, ly, lz)
 
         # Mark the boundary condition faces
         verts = geo.getVertices()
@@ -749,7 +758,7 @@ def create_forest(comm, lx, ly, lz, htarget, depth, domain_type):
 
     elif domain_type == 'mbb':
         # Create geo
-        geo = cantilever_geo(lx, ly, lz)
+        geo = cantilever_geo(comm, lx, ly, lz)
 
         # Mark the boundary condition faces
         verts = geo.getVertices()
@@ -764,7 +773,7 @@ def create_forest(comm, lx, ly, lz, htarget, depth, domain_type):
 
     elif domain_type == 'lbracket':
         # Create geo
-        geo = lbracket_geo(lx, ly, lz)
+        geo = lbracket_geo(comm, lx, ly, lz)
 
         # Mark the boundary condition faces
         verts = geo.getVertices()
