@@ -632,26 +632,41 @@ class MassConstr:
             print("{:30s}{:20.10e}".format('[Con] gradient norm:', norm))
         return
 
-def cantilever_geo(comm, lx, ly, lz):
+def cantilever_egads(comm, lx, ly, lz):
+    '''
+    Create egads model file
+    '''
+    prefix = './models'
+    name = 'cantilever_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+
+    if comm.rank == 0 and not os.path.isdir(prefix):
+        os.mkdir(prefix)
 
     # Create an EGADS context
     ctx = egads.context()
 
-    # Dimensions
-    Lx = lx
-    Ly = ly
-    Lz = lz
-
     # Create the domain geometry
     x0 = [0.0, 0.0, 0.0]
-    x1 = [Lx, Ly, Lz]
+    x1 = [lx, ly, lz]
     b1 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
     m1 = ctx.makeTopology(egads.MODEL, children=[b1])
     if comm.rank == 0:
-        m1.saveModel('geo.egads', overwrite=True)
+        m1.saveModel(os.path.join(prefix, name), overwrite=True)
     comm.Barrier()
 
-    geo = TMR.LoadModel('geo.egads', print_lev=0)
+    return
+
+def cantilever_geo(comm, lx, ly, lz):
+
+    prefix = './models'
+    name = 'cantilever_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+
+    try:
+        geo = TMR.LoadModel(os.path.join(prefix, name), print_lev=0)
+    except:
+        cantilever_egads(comm, lx, ly, lz)
+        geo = TMR.LoadModel(os.path.join(prefix, name), print_lev=0)
+
     verts = []
     edges = []
     faces = []
@@ -669,41 +684,66 @@ def cantilever_geo(comm, lx, ly, lz):
 
     return geo
 
-def lbracket_geo(comm, lx, ly, lz):
+def lbracket_egads(comm, lx, ly, lz):
+
+    prefix = './models'
+    base_name = 'lbracket_base_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+    arm1_name = 'lbracket_arm1_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+    arm2_name = 'lbracket_arm2_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+
+    if comm.rank == 0 and not os.path.isdir(prefix):
+        os.mkdir(prefix)
 
     RATIO = 0.4
 
     # Create an EGADS context
     ctx = egads.context()
-    parts = []
 
     # Create base
     x0 = [0.0, 0.0, 0.0]
     x1 = [lx*RATIO, ly, lz*RATIO]
     B0 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
-    parts.append(ctx.makeTopology(egads.MODEL, children=[B0]))
+    m1 = ctx.makeTopology(egads.MODEL, children=[B0])
+    if comm.rank == 0:
+        m1.saveModel(os.path.join(prefix, base_name), overwrite=True)
+    comm.Barrier()
 
     # Create arm 1
     x0 = [lx*RATIO, 0.0, 0.0]
     x1 = [lx*(1-RATIO), ly, lz*RATIO]
     B1 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
-    parts.append(ctx.makeTopology(egads.MODEL, children=[B1]))
+    m2 = ctx.makeTopology(egads.MODEL, children=[B1])
+    if comm.rank == 0:
+        m2.saveModel(os.path.join(prefix, arm1_name), overwrite=True)
+    comm.Barrier()
 
     # Create arm 2
     x0 = [0.0, 0.0, lz*RATIO]
     x1 = [lx*RATIO, ly, lz*(1-RATIO)]
     B2 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
-    parts.append(ctx.makeTopology(egads.MODEL, children=[B2]))
+    m3 = ctx.makeTopology(egads.MODEL, children=[B2])
+    if comm.rank == 0:
+        m3.saveModel(os.path.join(prefix, arm2_name), overwrite=True)
+    comm.Barrier()
 
-    # Create all of the models
+    return
+
+def lbracket_geo(comm, lx, ly, lz):
+
+    prefix = './models'
+    base_name = 'lbracket_base_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+    arm1_name = 'lbracket_arm1_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+    arm2_name = 'lbracket_arm2_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+
     geos = []
-    for p in parts:
-        if comm.rank == 0:
-            p.saveModel('geo.egads', overwrite=True)
-        comm.Barrier()
+    names = [base_name, arm1_name, arm2_name]
 
-        geo = TMR.LoadModel('geo.egads', print_lev=0)
-        geos.append(geo)
+    for name in names:
+        try:
+            geos.append(TMR.LoadModel(os.path.join(prefix, name), print_lev=0))
+        except:
+            lbracket_egads(comm, lx, ly, lz)
+            geos.append(TMR.LoadModel(os.path.join(prefix, name), print_lev=0))
 
     # Create the full list of vertices, edges, faces and volumes
     verts = []
