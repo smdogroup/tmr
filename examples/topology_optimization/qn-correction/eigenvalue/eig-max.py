@@ -31,7 +31,7 @@ if __name__ == '__main__':
     # os
     p.add_argument('--prefix', type=str, default='./results')
 
-    # Geometry
+    # Analysis
     p.add_argument('--domain', type=str, default='cantilever',
         choices=['cantilever', 'michell', 'mbb', 'lbracket'])
     p.add_argument('--AR', type=float, default=1.0)
@@ -41,6 +41,8 @@ if __name__ == '__main__':
     p.add_argument('--htarget', type=float, default=1.0)
     p.add_argument('--mg-levels', type=int, default=4)
     p.add_argument('--qval', type=float, default=5.0)
+    p.add_argument('--max-jd-size', type=int, default=100)
+    p.add_argument('--max-gmres-size', type=int, default=30)
 
     # Optimization
     p.add_argument('--n-mesh-refine', type=int, default=3)
@@ -148,7 +150,9 @@ if __name__ == '__main__':
                                  qn_correction=args.qn_correction,
                                  non_design_mass=args.non_design_mass,
                                  eig_scale=args.eig_scale,
-                                 eq_constr=args.eq_constr)
+                                 eq_constr=args.eq_constr,
+                                 max_jd_size=args.max_jd_size,
+                                 max_gmres_size=args.max_gmres_size)
 
         # Set the prefix
         problem.setPrefix(prefix)

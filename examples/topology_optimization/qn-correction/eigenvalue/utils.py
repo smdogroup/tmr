@@ -877,7 +877,8 @@ def create_forest(comm, lx, ly, lz, htarget, depth, domain_type):
 
 def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
                    len0=1.0, AR=1.0, density=2600.0, iter_offset=0,
-                   qn_correction=True, non_design_mass=5.0, eig_scale=1.0, eq_constr=False):
+                   qn_correction=True, non_design_mass=5.0, eig_scale=1.0, eq_constr=False,
+                   max_jd_size=100, max_gmres_size=30):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -922,7 +923,9 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r
     # Add objective callback
     obj_callback = FrequencyObj(prefix, domain, forest, len0, AR, iter_offset,
                                 non_design_mass=non_design_mass,
-                                eig_scale=eig_scale)
+                                eig_scale=eig_scale,
+                                max_jd_size=max_jd_size,
+                                max_gmres_size=max_gmres_size)
     problem.addObjectiveCallback(obj_callback.objective,
                                  obj_callback.objective_gradient)
 
