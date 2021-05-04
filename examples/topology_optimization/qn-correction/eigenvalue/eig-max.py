@@ -35,6 +35,7 @@ if __name__ == '__main__':
     p.add_argument('--domain', type=str, default='cantilever',
         choices=['cantilever', 'michell', 'mbb', 'lbracket'])
     p.add_argument('--AR', type=float, default=1.0)
+    p.add_argument('--ratio', type=float, default=0.4)
     p.add_argument('--len0', type=float, default=1.0)
     p.add_argument('--vol-frac', type=float, default=0.4)
     p.add_argument('--r0-frac', type=float, default=0.05)
@@ -80,6 +81,8 @@ if __name__ == '__main__':
     lx = args.len0*args.AR
     ly = args.len0
     lz = args.len0
+    if args.domain == 'lbracket':
+        ly = args.len0*args.ratio
 
     # Set up material properties
     material_props = constitutive.MaterialProperties(rho=2600.0, E=70e3, nu=0.3, ys=100.0)
@@ -88,7 +91,7 @@ if __name__ == '__main__':
     stiffness_props = TMR.StiffnessProperties(material_props, k0=1e-3, eps=0.2, q=args.qval) # Try larger q val: 8, 10, 20
 
     # Create initial forest
-    forest = create_forest(comm, lx, ly, lz, args.htarget, mg_levels-1, args.domain)
+    forest = create_forest(comm, lx, ly, lz, args.ratio, args.htarget, mg_levels-1, args.domain)
 
     # Set boundary conditions
     bcs = TMR.BoundaryConditions()
@@ -146,7 +149,8 @@ if __name__ == '__main__':
         problem = create_problem(prefix=args.prefix, domain=args.domain, forest=forest, bcs=bcs,
                                  props=stiffness_props, nlevels=mg_levels+step,
                                  vol_frac=args.vol_frac, r0_frac=args.r0_frac,
-                                 len0=args.len0, AR=args.AR, iter_offset=iter_offset,
+                                 len0=args.len0, AR=args.AR, ratio=args.ratio,
+                                 iter_offset=iter_offset,
                                  qn_correction=args.qn_correction,
                                  non_design_mass=args.non_design_mass,
                                  eig_scale=args.eig_scale,

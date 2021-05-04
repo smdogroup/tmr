@@ -8,6 +8,7 @@ if __name__ == '__main__':
         default=['cantilever', 'lbracket'],
         choices=['cantilever', 'lbracket'])
     p.add_argument('--AR', type=float, nargs='*', default=[1.0])
+    p.add_argument('--ratio', type=float, nargs='*', default=[0.4])
     p.add_argument('--len0', type=float, default=1.0)
     args = p.parse_args()
 
@@ -22,7 +23,8 @@ if __name__ == '__main__':
 
     if 'lbracket' in args.domain:
         for AR in args.AR:
-            lx = args.len0*AR
-            ly = args.len0
-            lz = args.len0
-            lbracket_egads(comm, lx, ly, lz)
+            for ratio in args.ratio:
+                lx = args.len0*AR
+                ly = args.len0
+                lz = args.len0
+                lbracket_egads(comm, lx, ly, lz, ratio)

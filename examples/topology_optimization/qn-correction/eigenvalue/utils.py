@@ -127,7 +127,7 @@ class FrequencyObj:
 
     itr = 0
 
-    def __init__(self, prefix, domain, forest, len0, AR, iter_offset,
+    def __init__(self, prefix, domain, forest, len0, AR, ratio, iter_offset,
                  eig_scale=1.0, con_scale=1.0, num_eigenvalues=10,
                  max_jd_size=100, max_gmres_size=30,
                  ksrho=50, non_design_mass=5.0):
@@ -150,6 +150,9 @@ class FrequencyObj:
         self.lx = len0*AR
         self.ly = len0
         self.lz = len0
+        if domain == 'lbracket':
+            self.ly = len0*ratio
+        self.ratio = ratio
         self.eig_scale = eig_scale
         self.con_scale = con_scale
         self.num_eigenvalues = num_eigenvalues
@@ -269,7 +272,7 @@ class FrequencyObj:
                 zmax = self.lz + tol
 
             elif self.domain == 'lbracket':
-                RATIO = 0.4
+                RATIO = self.ratio
                 xmin = self.lx - tol
                 xmax = self.lx + tol
                 ymin = 0.25*self.ly - tol
@@ -684,17 +687,17 @@ def cantilever_geo(comm, lx, ly, lz):
 
     return geo
 
-def lbracket_egads(comm, lx, ly, lz):
+def lbracket_egads(comm, lx, ly, lz, ratio):
 
     prefix = './models'
-    base_name = 'lbracket_base_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
-    arm1_name = 'lbracket_arm1_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
-    arm2_name = 'lbracket_arm2_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+    base_name = 'lbracket_base_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
+    arm1_name = 'lbracket_arm1_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
+    arm2_name = 'lbracket_arm2_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
 
     if comm.rank == 0 and not os.path.isdir(prefix):
         os.mkdir(prefix)
 
-    RATIO = 0.4
+    RATIO = ratio
 
     # Create an EGADS context
     ctx = egads.context()
@@ -728,12 +731,12 @@ def lbracket_egads(comm, lx, ly, lz):
 
     return
 
-def lbracket_geo(comm, lx, ly, lz):
+def lbracket_geo(comm, lx, ly, lz, ratio):
 
     prefix = './models'
-    base_name = 'lbracket_base_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
-    arm1_name = 'lbracket_arm1_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
-    arm2_name = 'lbracket_arm2_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+    base_name = 'lbracket_base_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
+    arm1_name = 'lbracket_arm1_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
+    arm2_name = 'lbracket_arm2_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
 
     geos = []
     names = [base_name, arm1_name, arm2_name]
@@ -742,7 +745,7 @@ def lbracket_geo(comm, lx, ly, lz):
         try:
             geos.append(TMR.LoadModel(os.path.join(prefix, name), print_lev=0))
         except:
-            lbracket_egads(comm, lx, ly, lz)
+            lbracket_egads(comm, lx, ly, lz, ratio)
             geos.append(TMR.LoadModel(os.path.join(prefix, name), print_lev=0))
 
     # Create the full list of vertices, edges, faces and volumes
@@ -764,7 +767,7 @@ def lbracket_geo(comm, lx, ly, lz):
 
     return geo
 
-def create_forest(comm, lx, ly, lz, htarget, depth, domain_type):
+def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
     """
     Create an initial forest for analysis and optimization
 
@@ -813,7 +816,7 @@ def create_forest(comm, lx, ly, lz, htarget, depth, domain_type):
 
     elif domain_type == 'lbracket':
         # Create geo
-        geo = lbracket_geo(comm, lx, ly, lz)
+        geo = lbracket_geo(comm, lx, ly, lz, ratio)
 
         # Mark the boundary condition faces
         verts = geo.getVertices()
@@ -876,7 +879,7 @@ def create_forest(comm, lx, ly, lz, htarget, depth, domain_type):
     return forest
 
 def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
-                   len0=1.0, AR=1.0, density=2600.0, iter_offset=0,
+                   len0=1.0, AR=1.0, ratio=0.4, density=2600.0, iter_offset=0,
                    qn_correction=True, non_design_mass=5.0, eig_scale=1.0, eq_constr=False,
                    max_jd_size=100, max_gmres_size=30):
     """
@@ -917,11 +920,17 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r
     lx = len0*AR # mm
     ly = len0 # mm
     lz = len0 # mm
+    if domain == 'lbracket':
+        ly = len0*ratio
     vol = lx*ly*lz
+    if domain == 'lbracket':
+        S1 = lx*lz
+        S2 = lx*lz*(1-ratio)**2
+        vol = (S1-S2)*ly
     m_fixed = vol_frac*(vol*density)
 
     # Add objective callback
-    obj_callback = FrequencyObj(prefix, domain, forest, len0, AR, iter_offset,
+    obj_callback = FrequencyObj(prefix, domain, forest, len0, AR, ratio, iter_offset,
                                 non_design_mass=non_design_mass,
                                 eig_scale=eig_scale,
                                 max_jd_size=max_jd_size,
