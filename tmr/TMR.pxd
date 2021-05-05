@@ -688,6 +688,8 @@ cdef extern from "TMRTopoProblem.h":
                                         TACSBVec*))
         void useQnCorrectionComplianceObj()
         void addNonDesignMass(ParOptVec*)
+        int evalObjCon(ParOptVec*, ParOptScalar*, ParOptScalar*)
+        int evalObjConGradient(ParOptVec*, ParOptVec*, ParOptVec**)
 
     cdef cppclass ParOptBVecWrap(ParOptVec):
         ParOptBVecWrap(TACSBVec*)

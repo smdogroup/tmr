@@ -195,6 +195,8 @@ class FrequencyObj:
             self.mg = mg
             self.fltr = fltr
             self.assembler = self.fltr.getAssembler()
+            self.rho_original = self.assembler.createDesignVec()
+            self.svec = self.assembler.createDesignVec()
             self.comm = self.assembler.getMPIComm()
             self.rank = self.comm.rank
 
@@ -492,6 +494,12 @@ class FrequencyObj:
 
         Then:
         dv == Fx
+
+        Args:
+            x (PVec): unfiltered design vector (not used because we get x directly from assembler)
+            s (PVec): unfiltered update step
+            y (PVec): y = Bs
+            z, zw: dummy variable for qn correction for constraints, not used here.
         """
 
         update = self.assembler.createDesignVec()
@@ -499,14 +507,15 @@ class FrequencyObj:
 
         h = 1e-8
 
-        # Create PVec type wrappers
-        s_wrap = TMR.convertPVecToVec(s)
-
         # Get current nodal density
         rho = self.assembler.createDesignVec()
         self.assembler.getDesignVars(rho)
 
-        self.fltr.applyFilter(s_wrap, s_wrap)
+        self.rho_original.copyValues(rho)
+
+        self.svec.zeroEntries()
+        self.fltr.applyFilter(TMR.convertPVecToVec(s), self.svec)
+        rho.axpy(h, self.svec)
 
         for i in range(self.num_eigenvalues):
             """
@@ -518,14 +527,12 @@ class FrequencyObj:
             temp.zeroEntries()
 
             # Compute g(rho + h*s)
-            rho.axpy(h, s_wrap)
             self.assembler.setDesignVars(rho)
             self.assembler.addMatDVSensInnerProduct(self.eta[i], TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], temp)
 
             # Compute g(rho)
-            rho.axpy(-h, s_wrap)
-            self.assembler.setDesignVars(rho)
+            self.assembler.setDesignVars(self.rho_original)
             self.assembler.addMatDVSensInnerProduct(-self.eta[i], TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], temp)
 
@@ -544,7 +551,7 @@ class FrequencyObj:
             P -= phi^T (deig*dMdx) phi^T
             """
             temp.zeroEntries()
-            coeff = self.eta[i]*self.deig[i].dot(s_wrap)
+            coeff = self.eta[i]*self.deig[i].dot(self.svec)
             self.assembler.addMatDVSensInnerProduct(-coeff,
                 TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], temp)
 
@@ -560,7 +567,7 @@ class FrequencyObj:
         s_norm = s.norm()
         y_norm = y.norm()
         dy_norm = update.norm()
-        curvature = s_wrap.dot(update)
+        curvature = self.svec.dot(update)
         if self.comm.rank == 0:
             if curvature < 0:
                 try:
@@ -580,7 +587,7 @@ class FrequencyObj:
         # Update y
         if curvature > 0:
             y_wrap = TMR.convertPVecToVec(y)
-            # is it ok to have the same input and output?
+            # is it ok to have the same input and output? yes
             self.fltr.applyTranspose(update, update)
             y_wrap.axpy(1.0, update)
 
@@ -615,7 +622,7 @@ class MassConstr:
 
         # Eval mass
         mass = self.assembler.evalFunctions([self.mass_func])[0]
-        mass_constr = -mass/self.m_fixed + 1
+        mass_constr = -mass/self.m_fixed + 1.0
         if self.rank == 0:
             print("{:30s}{:20.10e}".format('[Con] mass constraint:',mass_constr))
 
@@ -954,20 +961,114 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r
     cb = OutputCallback(assembler, iter_offset=iter_offset)
     problem.setOutputCallback(cb.write_output)
 
-    return problem
+    return problem, obj_callback
 
 class OmAnalysis(om.ExplicitComponent):
+    '''
+    This class wraps the analyses with openmdao interface such that
+    the optimization can be run with different optimizers such as
+    SNOPT and IPOPT. Note that this does not support MPI yet.
+    '''
 
-    def __init__(self, problem):
+    def __init__(self, problem, obj_callback):
+        '''
+        Args:
+            problem (TMR.TopoProblem)
+        '''
+
         super().__init__()
         self.problem = problem
+        self.obj_callback = obj_callback
+
+        self.problem.initialize()
+
+        # Initialize ParOpt.PVec vectors for later use
+        self.x_PVec = self.problem.createDesignVec()
+        self.x_Vec = TMR.convertPVecToVec(self.x_PVec)
+        self.x_vals = self.x_Vec.getArray()
+
+        self.g_PVec = self.problem.createDesignVec()
+        self.g_Vec = TMR.convertPVecToVec(self.g_PVec)
+        self.g_vals = self.g_Vec.getArray()
+
+        self.A_PVec = self.problem.createDesignVec()
+        self.A_Vec = TMR.convertPVecToVec(self.A_PVec)
+        self.A_vals = self.A_Vec.getArray()
+
+        # Get size of design variable
+        self.xlen = len(self.x_vals)
+
+        # Initialize f5 converter
+        self.assembler = self.problem.getAssembler()
+        flag = (TACS.OUTPUT_CONNECTIVITY |
+                TACS.OUTPUT_NODES |
+                TACS.OUTPUT_EXTRAS)
+        self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
+
         return
 
     def setup(self):
+        self.add_input('x', shape=(self.xlen,))
+
+        self.add_output('obj')
+        self.add_output('con')
+
+        self.declare_partials(of='obj', wrt='x')
+        self.declare_partials(of='con', wrt='x')
+
         return
 
     def compute(self, inputs, outputs):
+        x = inputs['x']
+        self.x_vals[:] = x[:]
+        fail, fobj, cons = self.problem.evalObjCon(1, self.x_PVec)
+
+        if fail:
+            raise RuntimeError("Failed to evaluate objective and constraints!")
+        else:
+            outputs['obj'] = fobj
+            outputs['con'] = cons[0]
+
         return
 
     def compute_partials(self, inputs, partials):
+        x = inputs['x']
+        self.x_vals[:] = x[:]
+        fail = self.problem.evalObjConGradient(self.x_PVec, self.g_PVec, [self.A_PVec])
+
+        if fail:
+            raise RuntimeError("Failed to evaluate objective and constraints!")
+        else:
+            partials['obj', 'x'] = self.g_vals
+            partials['con', 'x'] = self.A_vals
+
+        return
+
+    def qn_correction(self, x, z, zw, s, y):
+        x_PVec = self.problem.createDesignVec()
+        s_PVec = self.problem.createDesignVec()
+        y_PVec = self.problem.createDesignVec()
+
+        x_vals = TMR.convertPVecToVec(x_PVec).getArray()
+        s_vals = TMR.convertPVecToVec(s_PVec).getArray()
+        y_vals = TMR.convertPVecToVec(y_PVec).getArray()
+
+        x_vals[:] = x[:]
+        s_vals[:] = s[:]
+        y_vals[:] = y[:]
+
+        self.obj_callback.qn_correction(x_PVec, z, zw, s_PVec, y_PVec)
+
+        x[:] = x_vals[:]
+        s[:] = s_vals[:]
+        y[:] = y_vals[:]
+
+        return
+
+    def write_output(self, prefix, refine_step):
+        """
+        Args:
+            x (TACS.Vec)
+        """
+        self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}.f5'.format(refine_step)))
         return

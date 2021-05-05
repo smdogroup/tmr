@@ -9,6 +9,7 @@ from tacs import TACS, elements, constitutive, functions
 from egads4py import egads
 
 # Import general-purpose libraries
+import openmdao.api as om
 import numpy as np
 from mpi4py import MPI
 import argparse
@@ -21,7 +22,7 @@ from paropt.paropt_driver import ParOptDriver
 # Import utility classes and functions
 from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
 from utils import FrequencyObj, MassConstr
-from utils import create_forest, create_problem
+from utils import create_forest, create_problem, OmAnalysis
 
 if __name__ == '__main__':
 
@@ -46,6 +47,8 @@ if __name__ == '__main__':
     p.add_argument('--max-gmres-size', type=int, default=30)
 
     # Optimization
+    p.add_argument('--optimizer', type=str, default='paropt',
+        choices=['paropt', 'paropt-pyoptsparse', 'snopt', 'ipopt'])
     p.add_argument('--n-mesh-refine', type=int, default=3)
     p.add_argument('--tr-max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
@@ -58,8 +61,9 @@ if __name__ == '__main__':
     p.add_argument('--eq-constr', action='store_true')
     p.add_argument('--qn-subspace', type=int, default=2)
 
-    # Testing
+    # Test
     p.add_argument('--gradient-check', action='store_true')
+    p.add_argument('--test-om', action='store_true')
 
     # Parse arguments
     args = p.parse_args()
@@ -146,17 +150,18 @@ if __name__ == '__main__':
         iter_offset = step*optimization_options['tr_max_iterations']
 
         # Create the optimization problem
-        problem = create_problem(prefix=args.prefix, domain=args.domain, forest=forest, bcs=bcs,
-                                 props=stiffness_props, nlevels=mg_levels+step,
-                                 vol_frac=args.vol_frac, r0_frac=args.r0_frac,
-                                 len0=args.len0, AR=args.AR, ratio=args.ratio,
-                                 iter_offset=iter_offset,
-                                 qn_correction=args.qn_correction,
-                                 non_design_mass=args.non_design_mass,
-                                 eig_scale=args.eig_scale,
-                                 eq_constr=args.eq_constr,
-                                 max_jd_size=args.max_jd_size,
-                                 max_gmres_size=args.max_gmres_size)
+        problem, obj_callback = create_problem(prefix=args.prefix, domain=args.domain,
+                                    forest=forest, bcs=bcs,
+                                    props=stiffness_props, nlevels=mg_levels+step,
+                                    vol_frac=args.vol_frac, r0_frac=args.r0_frac,
+                                    len0=args.len0, AR=args.AR, ratio=args.ratio,
+                                    iter_offset=iter_offset,
+                                    qn_correction=args.qn_correction,
+                                    non_design_mass=args.non_design_mass,
+                                    eig_scale=args.eig_scale,
+                                    eq_constr=args.eq_constr,
+                                    max_jd_size=args.max_jd_size,
+                                    max_gmres_size=args.max_gmres_size)
 
         # Set the prefix
         problem.setPrefix(prefix)
@@ -172,11 +177,21 @@ if __name__ == '__main__':
         # Extract the filter to interpolate design variables
         filtr = problem.getFilter()
 
-        if orig_filter is not None:
-            # Create one of the new design vectors
-            x = problem.createDesignVec()
-            TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
-            problem.setInitDesignVars(x)
+        if args.optimizer == 'paropt':
+            if orig_filter is not None:
+                # Create one of the new design vectors
+                x = problem.createDesignVec()
+                TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
+                problem.setInitDesignVars(x)
+        else:
+            if orig_filter is not None:
+                x = problem.createDesignVec()
+                TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
+                x_init = TMR.convertPVecToVec(x).getArray()
+            else:
+                x = problem.createDesignVec()
+                x_init = TMR.convertPVecToVec(x).getArray()
+                x_init[:] = 0.95
 
         orig_filter = filtr
 
@@ -188,10 +203,43 @@ if __name__ == '__main__':
         optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
         optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
 
-        # Optimize
-        opt = ParOpt.Optimizer(problem, optimization_options)
-        opt.optimize()
-        xopt, z, zw, zl, zu = opt.getOptimizedPoint()
+        # Optimize with openmdao/pyoptsparse wrapper if specified
+        if args.optimizer == 'paropt-pyoptsparse':
+            prob = om.Problem()
+            analysis = OmAnalysis(problem, obj_callback)
+            indeps = prob.model.add_subsystem('indeps', om.IndepVarComp())
+            indeps.add_output('x', x_init)
+            prob.model.add_subsystem('topo', analysis)
+            prob.model.connect('indeps.x', 'topo.x')
+            prob.model.add_design_var('indeps.x', lower=0.0, upper=1.0)
+            prob.model.add_objective('topo.obj')
+            if args.eq_constr:
+                prob.model.add_constraint('topo.con', lower=0.0, upper=0.0)
+            else:
+                prob.model.add_constraint('topo.con', lower=0.0)
+
+            prob.driver = ParOptDriver()
+            for key in optimization_options:
+                prob.driver.options[key] = optimization_options[key]
+
+            if args.qn_correction:
+                prob.driver.use_qn_correction(analysis.qn_correction)
+
+            prob.setup()
+            prob.run_driver()
+
+            xopt = problem.createDesignVec()
+            xopt_vals = TMR.convertPVecToVec(xopt).getArray()
+            xopt_vals[:] = prob.get_val('indeps.x')[:]
+
+            # Write result to f5 file
+            analysis.write_output(prefix, step)
+
+        # Otherwise, use ParOpt.Optimizer to optimize
+        else:
+            opt = ParOpt.Optimizer(problem, optimization_options)
+            opt.optimize()
+            xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
         # Output for visualization
         assembler = problem.getAssembler()

@@ -5750,6 +5750,74 @@ cdef class TopoProblem(ProblemBase):
         prob.useQnCorrectionComplianceObj()
         return
 
+    def evalObjCon(self, int ncon, PVec x):
+        """
+        Evaluate the objective and constraint values
+
+        Args:
+            ncon (int): number of constraints
+            x (PVec): ParOpt.PVec class storing the design vector
+
+        Return:
+            fail (int): fail flag
+            fobj (float): the objective value
+            cons (ndarray): the constraint values
+        """
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+
+        cdef ParOptScalar fobj = 0.0
+        cdef ParOptScalar *_cons = <ParOptScalar*> malloc(ncon*sizeof(ParOptScalar))
+
+        fail = 0
+        fail = prob.evalObjCon(x.ptr, &fobj, _cons)
+
+        # Convert _cons to an in-place numpy array
+        _cons_npy = inplace_array_1d(np.NPY_DOUBLE, ncon, <void*>_cons)
+
+        # We make a copy since the original memory will be freed
+        cons = _cons_npy.copy()
+
+        free(_cons)
+
+        return fail, fobj, cons
+
+    def evalObjConGradient(self, PVec x, PVec g, list A):
+        """
+        Evaluate the objective and constraint gradients
+
+        Args:
+            x (PVec): ParOpt.PVec class storing the design vector
+            g (PVec): ParOpt.PVec class storing the objective gradient
+            A (list): list of ParOpt.PVec class storing the constraint gradients
+
+        Return:
+            g (ndarray): the objective gradient
+            A (list): the constraint gradients
+        """
+
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+
+        fail = 0
+
+        ncon = len(A)
+        cdef ParOptVec** _A = <ParOptVec**> malloc(ncon*sizeof(ParOptVec*))
+        for i in range(ncon):
+            _A[i] = (<PVec>A[i]).ptr
+
+        fail = prob.evalObjConGradient(x.ptr, g.ptr, _A)
+
+        free(_A)
+
+        return fail
+
 def setMatchingFaces(model_list, double tol=1e-6):
     """
     Take in a list of TMRModel classes, find the matching faces,
