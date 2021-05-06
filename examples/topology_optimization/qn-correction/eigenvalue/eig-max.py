@@ -15,6 +15,7 @@ from mpi4py import MPI
 import argparse
 import os
 import sys
+import pickle
 
 # Import optimization libraries
 from paropt.paropt_driver import ParOptDriver
@@ -50,7 +51,7 @@ if __name__ == '__main__':
     p.add_argument('--optimizer', type=str, default='paropt',
         choices=['paropt', 'paropt-pyoptsparse', 'snopt', 'ipopt'])
     p.add_argument('--n-mesh-refine', type=int, default=3)
-    p.add_argument('--tr-max-iter', type=int, default=100)
+    p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
     p.add_argument('--non-design-mass', type=float, default=10.0)
     p.add_argument('--eig-scale', type=float, default=1.0)
@@ -122,7 +123,7 @@ if __name__ == '__main__':
         'filter_sufficient_reduction': args.simple_filter,
         'filter_has_feas_restore_phase': True,
         'tr_use_soc': False,
-        'tr_max_iterations': args.tr_max_iter,
+        'tr_max_iterations': args.max_iter,
         'penalty_gamma': 50.0,
         'qn_subspace_size': args.qn_subspace, # try 5 or 10
         'qn_type': 'bfgs',
@@ -204,7 +205,7 @@ if __name__ == '__main__':
         optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
 
         # Optimize with openmdao/pyoptsparse wrapper if specified
-        if args.optimizer == 'paropt-pyoptsparse':
+        if args.optimizer != 'paropt':
             prob = om.Problem()
             analysis = OmAnalysis(problem, obj_callback)
             indeps = prob.model.add_subsystem('indeps', om.IndepVarComp())
@@ -218,22 +219,65 @@ if __name__ == '__main__':
             else:
                 prob.model.add_constraint('topo.con', lower=0.0)
 
-            prob.driver = ParOptDriver()
-            for key in optimization_options:
-                prob.driver.options[key] = optimization_options[key]
+            # Set up optimizer and options
+            if args.optimizer == 'paropt-pyoptsparse':
+                prob.driver = ParOptDriver()
+                for key in optimization_options:
+                    prob.driver.options[key] = optimization_options[key]
 
-            if args.qn_correction:
-                prob.driver.use_qn_correction(analysis.qn_correction)
+                if args.qn_correction:
+                    prob.driver.use_qn_correction(analysis.qn_correction)
 
+            elif args.optimizer == 'snopt':
+                prob.driver = om.pyOptSparseDriver()
+                prob.driver.options['optimizer'] = 'SNOPT'
+                prob.driver.opt_settings['Iterations limit'] = 9999999999999
+                prob.driver.opt_settings['Major feasibility tolerance'] = 1e-10
+                prob.driver.opt_settings['Major optimality tolerance'] = 1e-10
+                prob.driver.opt_settings['Major iterations limit'] = args.max_iter
+                prob.driver.opt_settings['Summary file'] = os.path.join(prefix, 'snopt_output_file%d.dat'%(step))
+                prob.driver.opt_settings['Print file'] = os.path.join(prefix, 'print_output_file%d.dat'%(step))
+                prob.driver.opt_settings['Major print level'] = 1
+                prob.driver.opt_settings['Minor print level'] = 0
+
+            elif args.optimizer == 'ipopt':
+                prob.driver = om.pyOptSparseDriver()
+                prob.driver.options['optimizer'] = 'IPOPT'
+                prob.driver.opt_settings['max_iter'] = args.max_iter
+                prob.driver.opt_settings['tol'] = 1e-10
+                prob.driver.opt_settings['constr_viol_tol'] = 1e-10
+                prob.driver.opt_settings['dual_inf_tol'] = 1e-10
+                prob.driver.opt_settings['output_file'] = os.path.join(prefix, 'ipopt_output_file%d.dat'%(step))
+
+            # Optimize
             prob.setup()
             prob.run_driver()
 
+            # Write result to f5 file
             xopt = problem.createDesignVec()
             xopt_vals = TMR.convertPVecToVec(xopt).getArray()
             xopt_vals[:] = prob.get_val('indeps.x')[:]
-
-            # Write result to f5 file
             analysis.write_output(prefix, step)
+
+            # Write result to pickle file
+            discreteness = np.dot(xopt_vals, 1.0-xopt_vals) / len(xopt_vals)
+            obj = prob.get_val('topo.obj')[0]
+            con = prob.get_val('topo.con')[0]
+            if args.eq_constr:
+                infeas = np.abs(con)
+            else:
+                infeas = np.max([-con, 0])
+
+            print('[Optimum] discreteness:{:20.10e}'.format(discreteness))
+            print('[Optimum] obj:         {:20.10e}'.format(obj))
+            print('[Optimum] infeas:      {:20.10e}'.format(infeas))
+
+            pkl = dict()
+            pkl['discreteness'] = discreteness
+            pkl['obj'] = obj
+            pkl['infeas'] = infeas
+            with open(os.path.join(prefix, 'output_refine%d.pkl'%(step)), 'wb') as f:
+                pickle.dump(pkl, f)
 
         # Otherwise, use ParOpt.Optimizer to optimize
         else:
