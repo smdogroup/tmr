@@ -5,6 +5,7 @@ Generate a bash script to run multiple serial cases concurrently using gnu-paral
 import os
 import sys
 import argparse
+import numpy as np
 
 def optimizer(omz):
     if omz == 'paropt':
@@ -40,7 +41,7 @@ if __name__ == '__main__':
 
     # Optimization list parameters
     p.add_argument('--vol-frac', type=float, nargs='*', default=[0.4])
-    p.add_argument('--optimizer', type=str, nargs='*', default='paropt',
+    p.add_argument('--optimizer', type=str, nargs='*', default=['paropt'],
         choices=['paropt', 'paroptqn', 'snopt', 'ipopt'])
 
     # Analysis scalar parameters
@@ -59,7 +60,11 @@ if __name__ == '__main__':
     p.add_argument('--exec', type=str, default='eig-max.py')
     p.add_argument('--create-models-exec', type=str, default='create_models.py')
 
-    # Misc
+    # PBS settings
+    p.add_argument('--partition', type=int, default=1)
+    p.add_argument('--jobname', type=str, default='serial')
+    p.add_argument('--walltime', type=int, default=24)
+    p.add_argument('--pmem', type=int, default=6)
 
     # Parse arguments
     args = p.parse_args()
@@ -112,6 +117,8 @@ if __name__ == '__main__':
                 if dom == 'lbracket':
                     for rat in args.ratio:
                         prefix = 'lbr-r{:.1f}-v{:.1f}-{:s}'.format(rat, vol, omz)
+                        if not os.path.isdir(prefix):
+                            os.mkdir(prefix)
                         if os.path.isfile(os.path.join(prefix, 'output_refine0.pkl')):
                             case_exist += 1
                         else:
@@ -121,12 +128,14 @@ if __name__ == '__main__':
                             case_num += 1
                             cases.append(" ".join(["echo \"[{:4d}/{:4d}] running case: {:s}\" && python".format(
                                         case_num, n_cases, prefix), args.exec, options, commons, ">",
-                                        "{:s}.out".format(prefix)]))
+                                        os.path.join(prefix, "{:s}.out".format(prefix))]))
 
                 # Otherwise, this is a cantilever-type domain
                 else:
                     for ar in args.AR:
                         prefix = '{:s}-a{:.1f}-v{:.1f}-{:s}'.format(domname(dom), ar, vol, omz)
+                        if not os.path.isdir(prefix):
+                            os.mkdir(prefix)
                         if os.path.isfile(os.path.join(prefix, 'output_refine0.pkl')):
                             case_exist += 1
                         else:
@@ -136,11 +145,10 @@ if __name__ == '__main__':
                             case_num += 1
                             cases.append(" ".join(["echo \"[{:4d}/{:4d}] running case: {:s}\" && python".format(
                                         case_num, n_cases, prefix), args.exec, options, commons, ">",
-                                        "{:s}.out".format(prefix)]))
+                                        os.path.join(prefix, "{:s}.out".format(prefix))]))
 
-
-    # Write lines to file
-    sh_name = 'cases-n{:d}.sh'.format(n_cases)
+    # Write lines to shell script file
+    sh_name = 'cases-n{:d}.sh'.format(case_num)
     if os.path.isfile(sh_name):
         print ("[generate_scripts.py] Warning: File {:s} exists! Replacing it...".format(sh_name))
 
@@ -149,9 +157,59 @@ if __name__ == '__main__':
         for entry in cases:
             f.write(entry + '\n')
 
+    # Print out summary
     print("------ Summary ------")
     print("Total number of cases needed:{:4d}".format(n_cases))
     print("Number of existing cases:    {:4d}".format(case_exist))
     print("Number of new cases created: {:4d}".format(case_num))
+
+    # Compute number of cases in each partition
+    part_nums = np.zeros(args.partition)
+    part_nums[:] = case_num // args.partition
+    for i in range(case_num % args.partition):
+        part_nums[i] += 1
+    print("Total number in partitions:  {:4d}".format(int(np.sum(part_nums))))
+
+    # Partition the script and create PBS scripts
+    global_index = 0
+    for pi in range(args.partition):
+
+        # Create partition shell scripts
+        part_name = 'cases-n{:d}-part{:d}.sh'.format(case_num, pi+1)
+        with open(part_name, 'w') as f:
+            for local_index in range(int(part_nums[pi])):
+                f.write(cases[global_index] + '\n')
+                global_index += 1
+
+        # Create corresponding pbs scripts
+        pbs_name = 'cases-n{:d}-part{:d}.pbs'.format(case_num, pi+1)
+        with open(pbs_name, 'w') as f:
+            f.write('#PBS -N {:s}-{:d}\n'.format(args.jobname, pi+1))
+            f.write('#PBS -A GT-gkennedy9-CODA20\n')
+            f.write('#PBS -l nodes=1:ppn=24\n')
+            f.write('#PBS -l pmem={:d}gb\n'.format(args.pmem))
+            f.write('#PBS -l walltime={:d}:00:00\n'.format(args.walltime))
+            f.write('#PBS -j oe\n')
+            f.write('#PBS -o cases-n{:d}-part{:d}.out\n'.format(case_num, pi+1))
+            f.write('#PBS -m abe\n')
+            f.write('\n')
+            f.write('parallel -j 24 :::: cases-n{:d}-part{:d}.sh\n'.format(case_num, pi+1))
+
+    # Generate submit
+    with open('submit', 'w') as f:
+        for pi in range(args.partition):
+            f.write('qsub cases-n{:d}-part{:d}.pbs\n'.format(case_num, pi+1))
+
+    os.system('chmod +x submit')
+
+
+
+
+
+
+
+
+
+
 
 
