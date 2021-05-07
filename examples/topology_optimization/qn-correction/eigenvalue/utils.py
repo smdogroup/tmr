@@ -652,6 +652,9 @@ def cantilever_egads(comm, lx, ly, lz):
     if comm.rank == 0 and not os.path.isdir(prefix):
         os.mkdir(prefix)
 
+    if os.path.isfile(os.path.join(prefix, name)):
+        return
+
     # Create an EGADS context
     ctx = egads.context()
 
@@ -703,6 +706,11 @@ def lbracket_egads(comm, lx, ly, lz, ratio):
 
     if comm.rank == 0 and not os.path.isdir(prefix):
         os.mkdir(prefix)
+
+    if os.path.isfile(os.path.join(prefix, base_name)) and \
+       os.path.isfile(os.path.join(prefix, base_name)) and \
+       os.path.isfile(os.path.join(prefix, base_name)):
+       return
 
     RATIO = ratio
 

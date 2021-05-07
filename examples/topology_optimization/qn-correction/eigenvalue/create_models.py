@@ -22,9 +22,9 @@ if __name__ == '__main__':
             cantilever_egads(comm, lx, ly, lz)
 
     if 'lbracket' in args.domain:
-        for AR in args.AR:
-            for ratio in args.ratio:
-                lx = args.len0*AR
-                ly = args.len0
-                lz = args.len0
-                lbracket_egads(comm, lx, ly, lz, ratio)
+        AR = 1.0
+        for ratio in args.ratio:
+            lx = args.len0*AR
+            ly = args.len0
+            lz = args.len0
+            lbracket_egads(comm, lx, ly, lz, ratio)
