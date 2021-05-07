@@ -79,6 +79,12 @@ if __name__ == '__main__':
     if comm.rank == 0 and not os.path.isdir(prefix):
         os.mkdir(prefix)
 
+    # Save the command and arguments that executed this script
+    if comm.rank == 0:
+        cmd = 'python ' + ' '.join(sys.argv)
+        with open(os.path.join(prefix,'exe.sh'), 'w') as f:
+            f.write(cmd + '\n')
+
     # Barrier here
     comm.Barrier()
 
