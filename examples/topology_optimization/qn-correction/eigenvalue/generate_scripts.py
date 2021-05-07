@@ -193,6 +193,7 @@ if __name__ == '__main__':
             f.write('#PBS -o cases-n{:d}-part{:d}.out\n'.format(case_num, pi+1))
             f.write('#PBS -m abe\n')
             f.write('\n')
+            f.write('cd $PBS_O_WORKDIR\n')
             f.write('parallel -j 24 :::: cases-n{:d}-part{:d}.sh\n'.format(case_num, pi+1))
 
     # Generate submit
