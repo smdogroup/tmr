@@ -511,6 +511,9 @@ class FrequencyObj:
         # derivative of stiffness matrix
         h = 1e-8
 
+        # Zero out update
+        self.update.zeroEntries()
+
         # Get current nodal density
         self.assembler.getDesignVars(self.rho)
         self.rho_original.copyValues(self.rho)
