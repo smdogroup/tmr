@@ -358,6 +358,8 @@ if __name__ == '__main__':
             pkl['max-iter'] = args.max_iter
             pkl['qn-correction'] = args.qn_correction
             pkl['non-design-mass'] = args.non_design_mass
+            pkl['eig-scale'] = args.eig_scale
+            pkl['eq-constr'] = args.eq_constr
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
             pkl['problem'] = 'eig-max'
