@@ -800,7 +800,9 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         OctForest: Initial forest for topology optimization
     """
 
-    if domain_type == 'cantilever' or domain_type == 'michell':
+    if domain_type == 'cantilever' or \
+       domain_type == 'michell' or \
+       domain_type == '3dcantilever':
         # Create geo
         geo = cantilever_geo(comm, lx, ly, lz)
 
@@ -810,6 +812,8 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         faces = geo.getFaces()
         volumes = geo.getVolumes()
         faces[0].setName('fixed')
+        verts[5].setName('pt1')
+        verts[6].setName('pt2')
 
         # Set source and target faces
         faces[0].setSource(volumes[0], faces[1])
@@ -824,7 +828,7 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         faces = geo.getFaces()
         volumes = geo.getVolumes()
         faces[0].setName('symmetry')
-        edges[3].setName('support')
+        edges[7].setName('support')
 
         # Set source and target faces
         faces[0].setSource(volumes[0], faces[1])
@@ -975,20 +979,43 @@ class OmAnalysis(om.ExplicitComponent):
     '''
     This class wraps the analyses with openmdao interface such that
     the optimization can be run with different optimizers such as
-    SNOPT and IPOPT. Note that this does not support MPI yet.
+    SNOPT and IPOPT.
+    Note that the design/gradient vectors manipulated in this class
+    are all global vectors. Local components can be queried by:
+
+    local_vec = global_vec[start:end]
+
+    where:
+    start = self.offsets[rank]
+    end = start + self.sizes[rank]
     '''
 
-    def __init__(self, problem, obj_callback):
+    def __init__(self, comm, problem, obj_callback, sizes, offsets):
         '''
         Args:
             problem (TMR.TopoProblem)
+            obj_callback (FrequencyObj)
+            sizes (list): sizes of distributed vectors on each processor
+            offsets (list): global index of the first entry in local vector
         '''
 
         super().__init__()
+        # self.options['distributed'] = True
+
+        self.comm = comm
         self.problem = problem
         self.obj_callback = obj_callback
+        self.sizes = sizes
+        self.offsets = offsets
 
-        self.problem.initialize()
+        # Should be initialized outside before this class
+        # self.problem.initialize()
+
+        # Compute some indices and dimensions
+        self.local_size = self.sizes[self.comm.rank]
+        self.global_size = np.sum(self.sizes)
+        self.start = self.offsets[self.comm.rank]
+        self.end = self.start + self.local_size
 
         # Initialize ParOpt.PVec vectors for later use
         self.x_PVec = self.problem.createDesignVec()
@@ -1003,9 +1030,6 @@ class OmAnalysis(om.ExplicitComponent):
         self.A_Vec = TMR.convertPVecToVec(self.A_PVec)
         self.A_vals = self.A_Vec.getArray()
 
-        # Get size of design variable
-        self.xlen = len(self.x_vals)
-
         # Initialize f5 converter
         self.assembler = self.problem.getAssembler()
         flag = (TACS.OUTPUT_CONNECTIVITY |
@@ -1016,10 +1040,9 @@ class OmAnalysis(om.ExplicitComponent):
         return
 
     def setup(self):
-        self.add_input('x', shape=(self.xlen,))
-
-        self.add_output('obj')
-        self.add_output('con')
+        self.add_input('x', shape=(self.global_size,))
+        self.add_output('obj', shape=1)
+        self.add_output('con', shape=1)
 
         self.declare_partials(of='obj', wrt='x')
         self.declare_partials(of='con', wrt='x')
@@ -1027,8 +1050,17 @@ class OmAnalysis(om.ExplicitComponent):
         return
 
     def compute(self, inputs, outputs):
-        x = inputs['x']
-        self.x_vals[:] = x[:]
+        # Broadcase x from root to all processor
+        # In this way we only use optimization result from
+        # root and implicitly discard results from any other
+        # optimizer to prevent potential inconsistency
+        if self.comm.rank == 0:
+            x = inputs['x']
+        else:
+            x = None
+        x =self.comm.bcast(x, root=0)
+
+        self.x_vals[:] = x[self.start:self.end]
         fail, fobj, cons = self.problem.evalObjCon(1, self.x_PVec)
 
         if fail:
@@ -1037,18 +1069,30 @@ class OmAnalysis(om.ExplicitComponent):
             outputs['obj'] = fobj
             outputs['con'] = cons[0]
 
+        # Barrier here because we don't do block communication
+        self.comm.Barrier()
+
         return
 
     def compute_partials(self, inputs, partials):
-        x = inputs['x']
-        self.x_vals[:] = x[:]
+        if self.comm.rank == 0:
+            x = inputs['x']
+        else:
+            x = None
+        x =self.comm.bcast(x, root=0)
+        self.x_vals[:] = x[self.start:self.end]
         fail = self.problem.evalObjConGradient(self.x_PVec, self.g_PVec, [self.A_PVec])
 
         if fail:
             raise RuntimeError("Failed to evaluate objective and constraints!")
         else:
-            partials['obj', 'x'] = self.g_vals
-            partials['con', 'x'] = self.A_vals
+            global_g = self.comm.allgather(self.g_vals)
+            global_g = np.concatenate(global_g)
+            global_A = self.comm.allgather(self.A_vals)
+            global_A = np.concatenate(global_A)
+
+            partials['obj', 'x'] = global_g
+            partials['con', 'x'] = global_A
 
         return
 
@@ -1061,15 +1105,15 @@ class OmAnalysis(om.ExplicitComponent):
         s_vals = TMR.convertPVecToVec(s_PVec).getArray()
         y_vals = TMR.convertPVecToVec(y_PVec).getArray()
 
-        x_vals[:] = x[:]
-        s_vals[:] = s[:]
-        y_vals[:] = y[:]
+        x_vals[:] = x[self.start:self.end]
+        s_vals[:] = s[self.start:self.end]
+        y_vals[:] = y[self.start:self.end]
 
         self.obj_callback.qn_correction(x_PVec, z, zw, s_PVec, y_PVec)
 
-        x[:] = x_vals[:]
-        s[:] = s_vals[:]
-        y[:] = y_vals[:]
+        y_vals_global = self.comm.allgather(y_vals)
+        y_vals_global = np.concatenate(y_vals_global)
+        y[:] = y_vals_global[:]
 
         return
 

@@ -212,10 +212,27 @@ if __name__ == '__main__':
 
         # Optimize with openmdao/pyoptsparse wrapper if specified
         if args.optimizer != 'paropt':
+            # Broadcast local size to all processor
+            local_size = len(x_init)
+            sizes = [ 0 ]*comm.size
+            offsets = [ 0 ]*comm.size
+            sizes = comm.allgather(local_size)
+            if comm.size > 1:
+                for i in range(1,comm.size):
+                    offsets[i] = offsets[i-1] + sizes[i-1]
+            start = offsets[comm.rank]
+            end = start + local_size
+            src_indices = np.arange(start, end, dtype=int)
+
+            # Create distributed openMDAO component
             prob = om.Problem()
-            analysis = OmAnalysis(problem, obj_callback)
+            analysis = OmAnalysis(comm, problem, obj_callback, sizes, offsets)
             indeps = prob.model.add_subsystem('indeps', om.IndepVarComp())
-            indeps.add_output('x', x_init)
+
+            # Create global design vector
+            x_init_global = comm.allgather(x_init)
+            x_init_global = np.concatenate(x_init_global)
+            indeps.add_output('x', x_init_global)
             prob.model.add_subsystem('topo', analysis)
             prob.model.connect('indeps.x', 'topo.x')
             prob.model.add_design_var('indeps.x', lower=0.0, upper=1.0)
@@ -240,56 +257,112 @@ if __name__ == '__main__':
                 prob.driver.opt_settings['Iterations limit'] = 9999999999999
                 prob.driver.opt_settings['Major feasibility tolerance'] = 1e-10
                 prob.driver.opt_settings['Major optimality tolerance'] = 1e-10
-                prob.driver.opt_settings['Major iterations limit'] = args.max_iter
                 prob.driver.opt_settings['Summary file'] = os.path.join(prefix, 'snopt_output_file%d.dat'%(step))
                 prob.driver.opt_settings['Print file'] = os.path.join(prefix, 'print_output_file%d.dat'%(step))
                 prob.driver.opt_settings['Major print level'] = 1
                 prob.driver.opt_settings['Minor print level'] = 0
 
+                if max_iterations > 1 and step == max_iterations - 1:
+                    prob.driver.opt_settings['Major iterations limit'] = 15
+                else:
+                    prob.driver.opt_settings['Major iterations limit'] = args.max_iter
+
             elif args.optimizer == 'ipopt':
                 prob.driver = om.pyOptSparseDriver()
                 prob.driver.options['optimizer'] = 'IPOPT'
-                prob.driver.opt_settings['max_iter'] = args.max_iter
                 prob.driver.opt_settings['tol'] = 1e-10
                 prob.driver.opt_settings['constr_viol_tol'] = 1e-10
                 prob.driver.opt_settings['dual_inf_tol'] = 1e-10
                 prob.driver.opt_settings['output_file'] = os.path.join(prefix, 'ipopt_output_file%d.dat'%(step))
 
+                if max_iterations > 1 and step == max_iterations - 1:
+                    prob.driver.opt_settings['max_iter'] = 15
+                else:
+                    prob.driver.opt_settings['max_iter'] = args.max_iter
+
             # Optimize
             prob.setup()
+            prob.run_model()
             prob.run_driver()
 
-            # Write result to f5 file
+            # Get optimal result from root processor and broadcast
+            if comm.rank == 0:
+                xopt_global = prob.get_val('indeps.x')
+            else:
+                xopt_global = None
+            xopt_global = comm.bcast(xopt_global, root=0)
+
+            # Create a distributed vector and store the optimal solution
+            # to hot-start the optimization on finer mesh
             xopt = problem.createDesignVec()
             xopt_vals = TMR.convertPVecToVec(xopt).getArray()
-            xopt_vals[:] = prob.get_val('indeps.x')[:]
+            xopt_vals[:] = xopt_global[start:end]
+
+            # Write result to f5 file
             analysis.write_output(prefix, step)
 
-            # Write result to pickle file
-            discreteness = np.dot(xopt_vals, 1.0-xopt_vals) / len(xopt_vals)
+            # Compute data of interest
+            discreteness = np.dot(xopt_global, 1.0-xopt_global) / len(xopt_global)
             obj = prob.get_val('topo.obj')[0]
             con = prob.get_val('topo.con')[0]
-            if args.eq_constr:
-                infeas = np.abs(con)
-            else:
-                infeas = np.max([-con, 0])
-
-            print('[Optimum] discreteness:{:20.10e}'.format(discreteness))
-            print('[Optimum] obj:         {:20.10e}'.format(obj))
-            print('[Optimum] infeas:      {:20.10e}'.format(infeas))
-
-            pkl = dict()
-            pkl['discreteness'] = discreteness
-            pkl['obj'] = obj
-            pkl['infeas'] = infeas
-            with open(os.path.join(prefix, 'output_refine%d.pkl'%(step)), 'wb') as f:
-                pickle.dump(pkl, f)
 
         # Otherwise, use ParOpt.Optimizer to optimize
         else:
             opt = ParOpt.Optimizer(problem, optimization_options)
             opt.optimize()
             xopt, z, zw, zl, zu = opt.getOptimizedPoint()
+
+            # Get optimal objective and constraint
+            fail, obj, cons = problem.evalObjCon(1, xopt)
+            con = cons[0]
+
+            # Compute discreteness
+            xopt_vals = TMR.convertPVecToVec(xopt).getArray()
+            xopt_global = comm.allgather(xopt_vals)
+            xopt_global = np.concatenate(xopt_global)
+            discreteness = np.dot(xopt_global, 1.0-xopt_global) / len(xopt_global)
+
+        # Compute infeasibility
+        if args.eq_constr:
+            infeas = np.abs(con)
+        else:
+            infeas = np.max([-con, 0])
+
+        # Export data to python pickle file
+        if comm.rank == 0:
+
+            # Check data
+            print('[Optimum] discreteness:{:20.10e}'.format(discreteness))
+            print('[Optimum] obj:         {:20.10e}'.format(obj))
+            print('[Optimum] con:         {:20.10e}'.format(con))
+            print('[Optimum] infeas:      {:20.10e}'.format(infeas))
+
+            pkl = dict()
+            pkl['discreteness'] = discreteness
+            pkl['obj'] = obj
+            pkl['con'] = con
+            pkl['infeas'] = infeas
+            pkl['domain'] = args.domain
+            pkl['AR'] = args.AR
+            pkl['ratio'] = args.ratio
+            pkl['len0'] = args.len0
+            pkl['vol-frac'] = args.vol_frac
+            pkl['r0-frac'] = args.r0_frac
+            pkl['htarget'] = args.htarget
+            pkl['mg-levels'] = args.mg_levels
+            pkl['qval'] = args.qval
+            pkl['max-jd-size'] = args.max_jd_size
+            pkl['max-gmres-size'] = args.max_gmres_size
+            pkl['optimizer'] = args.optimizer
+            pkl['n-mesh-refine'] = args.n_mesh_refine
+            pkl['max-iter'] = args.max_iter
+            pkl['qn-correction'] = args.qn_correction
+            pkl['non-design-mass'] = args.non_design_mass
+            pkl['qn-subspace'] = args.qn_subspace
+            pkl['cmd'] = cmd
+            pkl['problem'] = 'eig-max'
+            with open(os.path.join(prefix, 'output_refine%d.pkl'%(step)), 'wb') as f:
+                pickle.dump(pkl, f)
 
         # Output for visualization
         assembler = problem.getAssembler()
