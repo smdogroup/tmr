@@ -560,7 +560,7 @@ class FrequencyObj:
             """
             self.temp.zeroEntries()
 
-            coeff = self.eta[i]*self.deig[i].dot(self.svec)
+            coeff = self.eta[i]*self.eig_scale*self.deig[i].dot(self.svec)
             self.assembler.addMatDVSensInnerProduct(-coeff,
                 TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp)
 
