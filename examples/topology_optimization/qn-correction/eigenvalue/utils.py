@@ -195,7 +195,6 @@ class FrequencyObj:
             self.mg = mg
             self.fltr = fltr
             self.assembler = self.fltr.getAssembler()
-            self.rho_original = self.assembler.createDesignVec()
             self.svec = self.assembler.createDesignVec()
             self.comm = self.assembler.getMPIComm()
             self.rank = self.comm.rank
@@ -211,6 +210,12 @@ class FrequencyObj:
             self.deig = []
             for i in range(self.num_eigenvalues):
                 self.deig.append(self.assembler.createDesignVec())
+
+            # Allocate vectors for qn correction
+            self.rho = self.assembler.createDesignVec()
+            self.rho_original = self.assembler.createDesignVec()
+            self.update = self.assembler.createDesignVec()
+            self.temp = self.assembler.createDesignVec()
 
             # Create the Jacobi-Davidson operator
             self.oper = TACS.JDFrequencyOperator(self.assembler, self.kmat, self.mmat,
@@ -502,20 +507,18 @@ class FrequencyObj:
             z, zw: dummy variable for qn correction for constraints, not used here.
         """
 
-        update = self.assembler.createDesignVec()
-        temp = self.assembler.createDesignVec()
-
+        # Finite difference step length for computing second order
+        # derivative of stiffness matrix
         h = 1e-8
 
         # Get current nodal density
-        rho = self.assembler.createDesignVec()
-        self.assembler.getDesignVars(rho)
+        self.assembler.getDesignVars(self.rho)
+        self.rho_original.copyValues(self.rho)
 
-        self.rho_original.copyValues(rho)
-
+        # Apply filter to step vector
         self.svec.zeroEntries()
         self.fltr.applyFilter(TMR.convertPVecToVec(s), self.svec)
-        rho.axpy(h, self.svec)
+        self.rho.axpy(h, self.svec)
 
         for i in range(self.num_eigenvalues):
             """
@@ -524,50 +527,53 @@ class FrequencyObj:
             """
 
             # Zero out temp vector
-            temp.zeroEntries()
+            self.temp.zeroEntries()
+
+            coeff = self.eta[i]*self.eig_scale
 
             # Compute g(rho + h*s)
-            self.assembler.setDesignVars(rho)
-            self.assembler.addMatDVSensInnerProduct(self.eta[i], TACS.STIFFNESS_MATRIX,
-                self.eigv[i], self.eigv[i], temp)
+            self.assembler.setDesignVars(self.rho)
+            self.assembler.addMatDVSensInnerProduct(coeff, TACS.STIFFNESS_MATRIX,
+                self.eigv[i], self.eigv[i], self.temp)
 
-            # Compute g(rho)
+            # Compute dg = g(rho + h*s) - g(rho)
             self.assembler.setDesignVars(self.rho_original)
-            self.assembler.addMatDVSensInnerProduct(-self.eta[i], TACS.STIFFNESS_MATRIX,
-                self.eigv[i], self.eigv[i], temp)
+            self.assembler.addMatDVSensInnerProduct(-coeff, TACS.STIFFNESS_MATRIX,
+                self.eigv[i], self.eigv[i], self.temp)
 
             # Distribute the vector
-            temp.beginSetValues(op=TACS.ADD_VALUES)
-            temp.endSetValues(op=TACS.ADD_VALUES)
+            self.temp.beginSetValues(op=TACS.ADD_VALUES)
+            self.temp.endSetValues(op=TACS.ADD_VALUES)
 
             # Compute dg/h
-            temp.scale(1/h)
+            self.temp.scale(1/h)
 
             # Add to the update
-            update.axpy(1.0, temp)
+            self.update.axpy(1.0, self.temp)
 
             """
             Compute the second part:
             P -= phi^T (deig*dMdx) phi^T
             """
-            temp.zeroEntries()
+            self.temp.zeroEntries()
+
             coeff = self.eta[i]*self.deig[i].dot(self.svec)
             self.assembler.addMatDVSensInnerProduct(-coeff,
-                TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], temp)
+                TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp)
 
-            temp.beginSetValues(op=TACS.ADD_VALUES)
-            temp.endSetValues(op=TACS.ADD_VALUES)
+            self.temp.beginSetValues(op=TACS.ADD_VALUES)
+            self.temp.endSetValues(op=TACS.ADD_VALUES)
 
-            # Get update
-            update.axpy(1.0, temp)
+            # Add to the update
+            self.update.axpy(1.0, self.temp)
 
         # Compute curvature and check the norm of the update
         # to see if the magnitude makes sense
         x_norm = x.norm()
         s_norm = s.norm()
         y_norm = y.norm()
-        dy_norm = update.norm()
-        curvature = self.svec.dot(update)
+        dy_norm = self.update.norm()
+        curvature = self.svec.dot(self.update)
         if self.comm.rank == 0:
             if curvature < 0:
                 try:
@@ -588,8 +594,8 @@ class FrequencyObj:
         if curvature > 0:
             y_wrap = TMR.convertPVecToVec(y)
             # is it ok to have the same input and output? yes
-            self.fltr.applyTranspose(update, update)
-            y_wrap.axpy(1.0, update)
+            self.fltr.applyTranspose(self.update, self.update)
+            y_wrap.axpy(1.0, self.update)
 
         return
 
