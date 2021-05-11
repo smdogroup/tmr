@@ -349,6 +349,8 @@ if __name__ == '__main__':
             pkl['n-mesh-refine'] = args.n_mesh_refine
             pkl['max-iter'] = args.max_iter
             pkl['qn-correction'] = args.qn_correction
+            pkl['comp-scale'] = args.comp_scale
+            pkl['eq-constr'] = args.eq_constr
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
             pkl['problem'] = 'comp-min'
