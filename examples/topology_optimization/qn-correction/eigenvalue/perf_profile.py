@@ -22,55 +22,46 @@ legends = {
     'snopt': r'SNOPT',
 }
 
-def plotObj(data, obj_bound):
-    fig, ax = plt.subplots(1, 1, figsize=(6.4, 4.8))
-    for omz in optimizers:
-        ax.step(data[omz]['obj_normed'], data[omz]['percentile'],
-                label=legends[omz], color=colors[omz])
 
-    ax.set_xlim(1.0 + 0.05*(1.0 - obj_bound), obj_bound)
-    ax.set_xlabel('Normalized objective (eigenvalue)')
-    ax.set_ylabel('Fraction of cases')
-    fig.legend(loc='center right')
-    fig.savefig(os.path.join(args.result_folder, 'obj.pdf'))
-    return
+def getDirs(result_folder):
+    """
+    get all folder names with the following pattern:
 
-def saveTable(physics, csv='eig_data.csv'):
-    with open(os.path.join(args.result_folder,csv), 'w') as f:
-        fieldnames = ['no', 'paropt', 'paroptqn', 'snopt', 'ipopt']
-        writer = DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for num in physics:
-            writer.writerow({
-                'no': num,
-                'paropt': physics[num]['paropt']['obj'],
-                'paroptqn': physics[num]['paroptqn']['obj'],
-                'snopt': physics[num]['snopt']['obj'],
-                'ipopt': physics[num]['ipopt']['obj'],
-            })
-    return
+        e-number-name
 
+    for example:
 
-if __name__ == '__main__':
+        e-12-paroptqn
 
-    # Argument parser
-    p = argparse.ArgumentParser()
-    p.add_argument('--result-folder', type=str, default='./pkls')
-    p.add_argument('--infeas-tol', type=float, default=1e-6)
-    p.add_argument('--n-mesh-refine', type=int, default=1)
-    p.add_argument('--obj-bound', type=float, default=0.5)
-    p.add_argument('--dis-bound', type=float, default=0.25)
-    args = p.parse_args()
+    Args:
+        result_folder (str): the folder conatining all `e-number-optimizer' subfolders
 
-    # Get list of case dirs by matching folder name
-    dirs = os.listdir(args.result_folder)
+    Return:
+        dirs (list): list of dir names
+    """
+
+    dirs = os.listdir(result_folder)
     r = re.compile(r"e-\d+-.+")
     dirs = list(filter(r.match, dirs))
 
-    # Create dictionary structure
+    return dirs
+
+def createDicStruct(dirs):
+    """
+    Create the main dictionary to get data stored
+    in result pkl files
+
+    Args:
+        dirs (list): list of dir names
+
+    Return:
+        physics (dict): an empty dictionary structure,  note that its
+                        length is the number of physical problems
+    """
+
     physics = dict()
     for d in dirs:
-        e, num, omz = d.split('-')
+        _, num, omz = d.split('-')
         if num not in physics.keys():
             physics[num] = dict()
         physics[num][omz] = dict()
@@ -80,16 +71,29 @@ if __name__ == '__main__':
         physics[num][omz]['discreteness'] = None
         physics[num]['best_obj'] = PERF_INF
 
-    # Keep track numbers
-    n_physics = len(physics)
-    n_planned = len(physics)*len(optimizers)
-    n_pkls = 0
-    n_feas = 0
+    return physics
 
-    # Populate dictionary
+def populateDic(dirs, n_mesh_refine, result_folder, physics):
+    """
+    Populate the dictioanry structure
+
+    Args:
+        dirs (list): list of dir names
+        n_mesh_refine (int): number of mesh refinements, this decides which
+                             pickle contains the final result
+        result_folder (str): the folder conatining all `e-number-optimizer' subfolders
+        physics (dict): the dictionary structure to populate
+
+    Return:
+        n_pkls (int): number of existing pickles
+    """
+
+    # We keep tracking number of existing pickles
+    n_pkls = 0
+
     for d in dirs:
-        e, num, omz = d.split('-')
-        pklname = 'output_refine{:d}.pkl'.format(args.n_mesh_refine-1)
+        _, num, omz = d.split('-')
+        pklname = 'output_refine{:d}.pkl'.format(n_mesh_refine-1)
         pklpath = os.path.join(args.result_folder, d, pklname)
 
         # Success case
@@ -112,12 +116,29 @@ if __name__ == '__main__':
             physics[num][omz]['infeas'] = PERF_INF
             physics[num][omz]['discreteness'] = PERF_INF
 
+    return n_pkls
+
+def normalizeDict(physics, infeas_tol):
+    """
+    normalize the objective against the best
+
+    Args:
+        physics (dict): the dictionary structure
+        infeas_tol (float): maximum acceptable infeasibility
+
+    Return:
+        n_feas (int): number of feasible cases
+    """
+
+    # Keep tracking the feasible cases
+    n_feas = 0
+
     # Normalize obj against best
     for num in physics.keys():
         for omz in physics[num]:
             if omz != 'best_obj':
                 if physics[num][omz]['obj'] is not None:
-                    if physics[num][omz]['infeas'] < args.infeas_tol:
+                    if physics[num][omz]['infeas'] < infeas_tol:
                         physics[num][omz]['obj_normed'] = \
                             physics[num][omz]['obj'] / physics[num]['best_obj']
                         n_feas += 1
@@ -126,24 +147,163 @@ if __name__ == '__main__':
                         print('[Info] Infeasibile case detected, No:{:>5s}, ' \
                               'optimizer:{:>10s}, infeas:{:>20.10e}'.format(
                                num, omz, physics[num][omz]['infeas']))
+    return n_feas
+
+def genProfileData(optimizers, physics):
+    """
+    Prepare raw data for the profile
+
+    Args:
+        optimizers (list): list of optimizers used
+        physics (dict): the dictionary structure
+
+    Return:
+        profile_data (dict): profile data dictionary
+        n_best (int): number of winners, this should be equal to number of physical problems
+    """
 
     # Dimensinless objective for each optimizer
-    data = {}
+    profile_data = {}
+    n_physics = len(physics)
     for omz in optimizers:
-        data[omz] = dict()
-        data[omz]['obj_normed'] = [physics[num][omz]['obj_normed'] for num in physics]
-        data[omz]['obj_normed'].sort(reverse=True)
-        data[omz]['percentile'] = [(index+1)/n_physics for index, _ in enumerate(data[omz]['obj_normed'])]
+        profile_data[omz] = dict()
+
+        # Prepare objective data
+        profile_data[omz]['obj_normed'] = [physics[num][omz]['obj_normed'] for num in physics]
+        profile_data[omz]['obj_normed'].sort(reverse=True)
+        profile_data[omz]['obj_percentile'] = [(index+1)/n_physics for index, _ in enumerate(profile_data[omz]['obj_normed'])]
+
+        # Prepare discreteness data
+        profile_data[omz]['dis'] = [physics[num][omz]['discreteness'] for num in physics]
+        profile_data[omz]['dis'].sort(reverse=False)
+        profile_data[omz]['dis_percentile'] = [(index+1)/n_physics for index, _ in enumerate(profile_data[omz]['dis'])]
 
 
     # Check if number of 1.0 equals number of physical problem
     n_best = 0
     for omz in optimizers:
-        for obj in data[omz]['obj_normed']:
+        for obj in profile_data[omz]['obj_normed']:
             if obj == 1.0:
                 n_best += 1
 
+    return profile_data, n_best
+
+def plotObjProfile(profile_data, obj_bound, optimizers):
+    """
+    Plot objective profile
+
+    Args:
+        profile_data (dict): profile data
+        obj_bound (float): smallest objective to be included in the profile
+        optimizers (list): list of optimizers used
+
+    Return:
+        fig (matplotlib.Figure)
+        ax (matplotlib.axes.Axes)
+    """
+
+    fig, ax = plt.subplots(1, 1, figsize=(6.4, 4.8))
+    for omz in optimizers:
+        # Append an artificial entry to the list so we have
+        # nice-looking profile at the end
+        x = profile_data[omz]['obj_normed'].copy()
+        y = profile_data[omz]['obj_percentile'].copy()
+        if x[-1] > obj_bound:
+            x.append(obj_bound)
+            y.append(y[-1])
+        ax.step(x, y, label=legends[omz], color=colors[omz])
+
+    ax.set_xlim(1.0 + 0.05*(1.0 - obj_bound), obj_bound)
+    ax.set_xlabel('Normalized objective (eigenvalue)')
+    ax.set_ylabel('Fraction of cases')
+    fig.legend(loc='center right')
+
+    return fig, ax
+
+def plotDiscreteProfile(profile_data, optimizers):
+    """
+    Plot discreteness profile
+
+    Args:
+        profile_data (dict): profile data
+        optimizers (list): list of optimizers used
+
+    Return:
+        fig (matplotlib.Figure)
+        ax (matplotlib.axes.Axes)
+    """
+
+    fig, ax = plt.subplots(1, 1, figsize=(6.4, 4.8))
+    for omz in optimizers:
+        # Append an artificial entry to the list so we have
+        # nice-looking profile at the end
+        x = profile_data[omz]['dis'].copy()
+        y = profile_data[omz]['dis_percentile'].copy()
+        x.append(0.25)
+        y.append(y[-1])
+        ax.step(x, y, label=legends[omz], color=colors[omz])
+
+    ax.set_xlim(-0.01, 0.25)
+    ax.set_xlabel('Averaged discreteness')
+    ax.set_ylabel('Fraction of cases')
+    fig.legend(loc='center right')
+
+    return fig, ax
+
+def saveTable(physics, result_folder, csv='physics.csv'):
+    """
+    Save physics to a csv in result folder
+
+    Args:
+        physics (dict): main dictionary
+        csv (str): csv name
+    """
+
+    with open(os.path.join(result_folder, csv), 'w') as f:
+        fieldnames = ['no', 'paropt', 'paroptqn', 'snopt', 'ipopt']
+        writer = DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for num in physics:
+            writer.writerow({
+                'no': num,
+                'paropt': physics[num]['paropt']['obj'],
+                'paroptqn': physics[num]['paroptqn']['obj'],
+                'snopt': physics[num]['snopt']['obj'],
+                'ipopt': physics[num]['ipopt']['obj'],
+            })
+
+    return
+
+if __name__ == '__main__':
+
+    # Argument parser
+    p = argparse.ArgumentParser()
+    p.add_argument('--result-folder', type=str, default='.')
+    p.add_argument('--infeas-tol', type=float, default=1e-6)
+    p.add_argument('--n-mesh-refine', type=int, default=1)
+    p.add_argument('--obj-bound', type=float, default=0.5)
+    p.add_argument('--obj-profile-name', type=str, default='profile-obj.pdf')
+    p.add_argument('--dis-profile-name', type=str, default='profile-discrete.pdf')
+    args = p.parse_args()
+
+    # Get list of case dirs by matching folder name
+    dirs = getDirs(args.result_folder)
+
+    # Create dictionary structure
+    physics = createDicStruct(dirs)
+
+    # Populate dictionary
+    n_pkls = populateDic(dirs, args.n_mesh_refine, args.result_folder, physics)
+
+    # Normalize objective
+    n_feas = normalizeDict(physics, args.infeas_tol)
+
+    # Generate profile data
+    profile_data, n_best = genProfileData(optimizers, physics)
+
     # Print summary
+    n_physics = len(physics)
+    n_planned = len(physics)*len(optimizers)
     print('\n')
     print('-----------SUMMARY-----------')
     print('number of physics:         {:d}'.format(n_physics))
@@ -152,18 +312,20 @@ if __name__ == '__main__':
     print('number of existing pkls:   {:d} ({:.2f}%)'.format(n_pkls, 100*n_pkls/n_planned))
     print('number of feasible cases:  {:d} ({:.2f}%)'.format(n_feas, 100*n_feas/n_planned))
 
+    if n_best != n_physics:
+        raise RuntimeError("This should match, something's wrong!")
+
     # Set up plotting environment
     mpl_style_path = os.path.dirname(os.path.realpath(__file__)) + '/paper.mplstyle'
     plt.style.use(mpl_style_path)
 
-    plotObj(data, args.obj_bound)
-    saveTable(physics)
+    # Plot objective profile
+    fig, ax = plotObjProfile(profile_data, args.obj_bound, optimizers)
+    fig.savefig(os.path.join(args.result_folder, args.obj_profile_name))
 
+    # Plot discreteness profile
+    fig, ax = plotDiscreteProfile(profile_data, optimizers)
+    fig.savefig(os.path.join(args.result_folder, args.dis_profile_name))
 
-
-
-
-
-
-
-
+    # Save physics as csv
+    saveTable(physics, args.result_folder)
