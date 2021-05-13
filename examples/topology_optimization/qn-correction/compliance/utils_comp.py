@@ -70,6 +70,10 @@ class CompObj:
         self.force = None
         self.u = None
 
+        self.n_fail_qn_corr = 0
+        self.pos_curvs = []
+        self.neg_curvs = []
+
         return
 
     def objective(self, fltr, mg):
@@ -343,11 +347,18 @@ class CompObj:
 
         # Update y
         if curvature > 0:
+            self.pos_curvs.append(curvature)
             y_wrap = TMR.convertPVecToVec(y)
             self.fltr.applyTranspose(self.update, self.update)
             y_wrap.axpy(1.0, self.update)
 
+        else:
+            self.n_fail_qn_corr += 1
+            self.neg_curvs.append(curvature)
         return
+
+    def getFailQnCorr(self):
+        return self.n_fail_qn_corr, self.neg_curvs, self.pos_curvs
 
 
 def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,

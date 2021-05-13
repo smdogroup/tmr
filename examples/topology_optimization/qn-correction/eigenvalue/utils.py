@@ -173,6 +173,11 @@ class FrequencyObj:
         self.eig = None
         self.eigv = None
 
+        # We keep track of failed qn correction
+        self.n_fail_qn_corr = 0
+        self.pos_curvs = []
+        self.neg_curvs = []
+
         return
 
     def objective(self, fltr, mg):
@@ -518,6 +523,12 @@ class FrequencyObj:
         self.assembler.getDesignVars(self.rho)
         self.rho_original.copyValues(self.rho)
 
+        # Check if rho == Fx
+        rho_norm = self.rho.norm()
+        Fx = self.assembler.createDesignVec()
+        self.fltr.applyFilter(TMR.convertPVecToVec(x), Fx)
+        Fx_norm = Fx.norm()
+
         # Apply filter to step vector
         self.svec.zeroEntries()
         self.fltr.applyFilter(TMR.convertPVecToVec(s), self.svec)
@@ -592,15 +603,26 @@ class FrequencyObj:
             print("norm(s):   {:20.10e}".format(s_norm))
             print("norm(y):   {:20.10e}".format(y_norm))
             print("norm(dy):  {:20.10e}".format(dy_norm))
+            print("norm(Fx):  {:20.10e}".format(Fx_norm))
+            print("norm(rho): {:20.10e}".format(rho_norm))
 
         # Update y
         if curvature > 0:
+            self.pos_curvs.append(curvature)
             y_wrap = TMR.convertPVecToVec(y)
             # is it ok to have the same input and output? yes
             self.fltr.applyTranspose(self.update, self.update)
             y_wrap.axpy(1.0, self.update)
 
+        # We keep track of failed correction
+        else:
+            self.n_fail_qn_corr += 1
+            self.neg_curvs.append(curvature)
+
         return
+
+    def getFailQnCorr(self):
+        return self.n_fail_qn_corr, self.neg_curvs, self.pos_curvs
 
 class MassConstr:
     """
@@ -1133,3 +1155,14 @@ class OmAnalysis(om.ExplicitComponent):
         """
         self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}.f5'.format(refine_step)))
         return
+
+
+def getNSkipUpdate(tr_dat_file):
+    '''
+    Get number of skipped Quasi-newton Hessian update
+    in ParOpt trust region output file
+    '''
+    with open(tr_dat_file, 'r') as f:
+        # Read in entire file in a single string
+        text = f.read()
+        return text.count('skipH')

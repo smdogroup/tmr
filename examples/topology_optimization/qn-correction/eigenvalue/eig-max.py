@@ -23,7 +23,7 @@ from paropt.paropt_driver import ParOptDriver
 # Import utility classes and functions
 from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
 from utils import FrequencyObj, MassConstr
-from utils import create_forest, create_problem, OmAnalysis
+from utils import create_forest, create_problem, OmAnalysis, getNSkipUpdate
 
 if __name__ == '__main__':
 
@@ -363,6 +363,12 @@ if __name__ == '__main__':
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
             pkl['problem'] = 'eig-max'
+
+            if args.optimizer == 'paropt' or args.optimizer == 'paropt-pyoptsparse':
+                pkl['n_fail_qn_corr'], pkl['neg_curvs'], pkl['pos_curvs'] = \
+                    obj_callback.getFailQnCorr()
+                pkl['n_skipH'] = getNSkipUpdate(os.path.join(prefix, 'tr_output_file%d.dat'%(step)))
+
             with open(os.path.join(prefix, 'output_refine%d.pkl'%(step)), 'wb') as f:
                 pickle.dump(pkl, f)
 

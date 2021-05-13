@@ -1,6 +1,7 @@
 from csv import DictReader
 import argparse
 import os
+from pprint import pprint
 
 
 def dic2str(dc):
@@ -19,35 +20,26 @@ def optimizer2cmd(optimizer):
     else:
         return '--optimizer {:s}'.format(optimizer)
 
-if __name__ == '__main__':
-
-    # Argument parser
-    p = argparse.ArgumentParser()
-    p.add_argument('--csv', type=str, default='eig_cases.csv')
-    p.add_argument('--output', type=str, default='eig_cases.txt')
-    p.add_argument('--optimizer', type=str, nargs='*',
-        default=['paropt', 'paroptqn', 'snopt', 'ipopt'],
-        choices=['paropt', 'paroptqn', 'snopt', 'ipopt'])
-    p.add_argument('--exec', type=str,
-        default='~/git/tmr/examples/topology_optimization/qn-correction/eigenvalue/eig-max.py')
-    p.add_argument('--walltime', type=int, default=24)
-    args = p.parse_args()
-
+def readCSV(csvfile, start, end):
     # Create csv dictionary reader
-    with open(args.csv, mode='r', encoding='utf-8-sig') as f:
+    with open(csvfile, mode='r', encoding='utf-8-sig') as f:
         reader = DictReader(f)
 
         # Load case dictionaries in a list
-        cases = []
+        physics = []
         for row in reader:
-            cases.append(row)
+            no = int(row['no'])
+            if no >= start and no <= end:
+                physics.append(row)
+    return physics
 
+def createCaseCmds(physics, optimizers, exescript):
     # Create runcase commands
     case_cmds = []
     n_exist_case = 0
 
-    for case_dict in cases:
-        for optimizer in args.optimizer:
+    for case_dict in physics:
+        for optimizer in optimizers:
 
             # Name of case folder
             # Example: e-1-paropt
@@ -59,7 +51,7 @@ if __name__ == '__main__':
 
             if not os.path.isfile(os.path.join(case_folder, pkl_name)):
                 cmd = 'python {:s} {:s} {:s} --prefix {:s}'.format(
-                    args.exec,                         # eig-max.py
+                    exescript,                         # eig-max.py
                     dic2str(case_dict),                # --domain cantilever --AR 1.0 ...
                     optimizer2cmd(optimizer),          # --optimizer paropt --qn-correction
                     case_folder                        # --prefix e-1-paroptqn
@@ -68,12 +60,41 @@ if __name__ == '__main__':
             else:
                 n_exist_case += 1
 
-    with open(args.output, mode='w') as f:
+    return case_cmds, n_exist_case
+
+def writeCmdToTxt(textfile, case_cmds):
+    with open(textfile, mode='w') as f:
         for row in case_cmds:
             f.write(row + '\n')
+    return
+
+if __name__ == '__main__':
+
+    # Argument parser
+    p = argparse.ArgumentParser()
+    p.add_argument('--start', type=int, default=1)
+    p.add_argument('--end', type=int, default=20)
+    p.add_argument('--csv', type=str, default='eig_cases_main.csv')
+    p.add_argument('--output', type=str, default='_eig_cases.txt')
+    p.add_argument('--pbs', type=str, default='_eig_cases.pbs')
+    p.add_argument('--optimizer', type=str, nargs='*',
+        default=['paropt', 'paroptqn', 'snopt', 'ipopt'],
+        choices=['paropt', 'paroptqn', 'snopt', 'ipopt'])
+    p.add_argument('--exec', type=str, default='eig-max.py')
+    p.add_argument('--walltime', type=int, default=24)
+    args = p.parse_args()
+
+    # Create list of physics problems
+    physics = readCSV(args.csv, args.start, args.end)
+
+    # Create case commands
+    case_cmds, n_exist_case = createCaseCmds(physics, args.optimizer, args.exec)
+
+    # Write case commands to txt
+    writeCmdToTxt(args.output, case_cmds)
 
     # Print out summary
-    n_planned_cases = len(args.optimizer)*len(cases)
+    n_planned_cases = len(args.optimizer)*len(physics)
     n_new_cases = len(case_cmds)
     print("------ Summary ------")
     print("Total number of cases needed:{:4d}".format(n_planned_cases))
@@ -84,14 +105,14 @@ if __name__ == '__main__':
         raise RuntimeError('Case numbers don\'t match!')
 
     # Generate pbs
-    with open('eig_cases.pbs', 'w') as f:
+    with open(args.pbs, 'w') as f:
         f.write('#PBS -N eig_n{:d}\n'.format(n_new_cases))
         f.write('#PBS -A GT-gkennedy9-CODA20\n')
         f.write('#PBS -l nodes=1:ppn=24\n')
         f.write('#PBS -l pmem=6gb\n')
         f.write('#PBS -l walltime={:d}:00:00\n'.format(args.walltime))
         f.write('#PBS -j oe\n')
-        f.write('#PBS -o cases-n{:d}.out\n'.format(n_new_cases))
+        f.write('#PBS -o n{:d}-{:d}.out\n'.format(args.start, args.end))
         f.write('#PBS -m a\n')
         f.write('#PBS -M yfu97@gatech.edu\n')
         f.write('#PBS -t 1-{:d}\n'.format(n_new_cases))
@@ -101,7 +122,7 @@ if __name__ == '__main__':
         f.write('cd $PBS_O_WORKDIR\n')
         f.write('\n')
         f.write('#Get ith line of target file and run\n')
-        f.write('export casecmd=`cat eig_cases.txt | head -$PBS_ARRAYID | tail -1`\n')
+        f.write('export casecmd=`cat {:s} | head -$PBS_ARRAYID | tail -1`\n'.format(args.output))
         f.write('\n')
         f.write('mpirun -np 24 $casecmd\n')
         f.write('\n')
