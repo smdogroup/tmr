@@ -118,11 +118,12 @@ def populateDic(dirs, n_mesh_refine, result_folder, physics):
 
     return n_pkls
 
-def normalizeDict(physics, infeas_tol):
+def normalizeDict(problem, physics, infeas_tol):
     """
     normalize the objective against the best
 
     Args:
+        problem (str): 'eig' or 'comp'
         physics (dict): the dictionary structure
         infeas_tol (float): maximum acceptable infeasibility
 
@@ -143,7 +144,10 @@ def normalizeDict(physics, infeas_tol):
                             physics[num][omz]['obj'] / physics[num]['best_obj']
                         n_feas += 1
                     else:
-                        physics[num][omz]['obj_normed'] = -PERF_INF
+                        if problem == 'eig'
+                            physics[num][omz]['obj_normed'] = -PERF_INF
+                        else:
+                            physics[num][omz]['obj_normed'] = PERF_INF
                         print('[Info] Infeasibile case detected, No:{:>5s}, ' \
                               'optimizer:{:>10s}, infeas:{:>20.10e}'.format(
                                num, omz, physics[num][omz]['infeas']))
@@ -317,7 +321,7 @@ if __name__ == '__main__':
     n_pkls = populateDic(dirs, args.n_mesh_refine, args.result_folder, physics)
 
     # Normalize objective
-    n_feas = normalizeDict(physics, args.infeas_tol)
+    n_feas = normalizeDict(args.problem, physics, args.infeas_tol)
 
     # Generate profile data
     profile_data, n_best = genProfileData(optimizers, physics, args.problem)
