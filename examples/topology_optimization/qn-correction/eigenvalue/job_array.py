@@ -74,24 +74,34 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('--start', type=int, default=1)
     p.add_argument('--end', type=int, default=20)
-    p.add_argument('--csv', type=str, default='eig_cases_main.csv')
-    p.add_argument('--output', type=str, default='_eig_cases.txt')
-    p.add_argument('--pbs', type=str, default='_eig_cases.pbs')
+    p.add_argument('--problem', type=str, default='eig',
+        choices=['eig', 'comp'])
     p.add_argument('--optimizer', type=str, nargs='*',
         default=['paropt', 'paroptqn', 'snopt', 'ipopt'],
         choices=['paropt', 'paroptqn', 'snopt', 'ipopt'])
-    p.add_argument('--exec', type=str, default='eig-max.py')
     p.add_argument('--walltime', type=int, default=24)
     args = p.parse_args()
 
+    if args.problem == 'eig':
+        csv = 'eig_cases_main.csv'
+        output = '_eig_cases.txt'
+        pbs = '_eig_cases.pbs'
+        exescript = 'eig-max.py'
+    else:
+        csv = 'comp_cases_main.csv'
+        output = '_comp_cases.txt'
+        pbs = '_comp_cases.pbs'
+        exescript = 'comp-min.py'
+
+
     # Create list of physics problems
-    physics = readCSV(args.csv, args.start, args.end)
+    physics = readCSV(csv, args.start, args.end)
 
     # Create case commands
-    case_cmds, n_exist_case = createCaseCmds(physics, args.optimizer, args.exec)
+    case_cmds, n_exist_case = createCaseCmds(physics, args.optimizer, exescript)
 
     # Write case commands to txt
-    writeCmdToTxt(args.output, case_cmds)
+    writeCmdToTxt(output, case_cmds)
 
     # Print out summary
     n_planned_cases = len(args.optimizer)*len(physics)
@@ -105,14 +115,14 @@ if __name__ == '__main__':
         raise RuntimeError('Case numbers don\'t match!')
 
     # Generate pbs
-    with open(args.pbs, 'w') as f:
-        f.write('#PBS -N n{:d}-{:d}\n'.format(args.start, args.end))
+    with open(pbs, 'w') as f:
+        f.write('#PBS -N {:s}-n{:d}-{:d}\n'.format(args.problem, args.start, args.end))
         f.write('#PBS -A GT-gkennedy9-CODA20\n')
         f.write('#PBS -l nodes=1:ppn=24\n')
         f.write('#PBS -l pmem=6gb\n')
         f.write('#PBS -l walltime={:d}:00:00\n'.format(args.walltime))
         f.write('#PBS -j oe\n')
-        f.write('#PBS -o n{:d}-{:d}.out\n'.format(args.start, args.end))
+        f.write('#PBS -o {:s}-n{:d}-{:d}.out\n'.format(args.problem, args.start, args.end))
         f.write('#PBS -m a\n')
         f.write('#PBS -M yfu97@gatech.edu\n')
         f.write('#PBS -t 1-{:d}\n'.format(n_new_cases))
@@ -122,7 +132,7 @@ if __name__ == '__main__':
         f.write('cd $PBS_O_WORKDIR\n')
         f.write('\n')
         f.write('#Get ith line of target file and run\n')
-        f.write('export casecmd=`cat {:s} | head -$PBS_ARRAYID | tail -1`\n'.format(args.output))
+        f.write('export casecmd=`cat {:s} | head -$PBS_ARRAYID | tail -1`\n'.format(output))
         f.write('\n')
         f.write('mpirun -np 24 $casecmd\n')
         f.write('\n')

@@ -363,7 +363,7 @@ class CompObj:
 
 def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
                    len0=1.0, AR=1.0, ratio=0.4, density=2600.0, iter_offset=0,
-                   qn_correction=True,  eq_constr=False):
+                   qn_correction=True,  eq_constr=False, comp_scale=1.0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -412,7 +412,8 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r
     m_fixed = vol_frac*(vol*density)
 
     # Add objective callback
-    obj_callback = CompObj(prefix, domain, forest, len0, AR, ratio, iter_offset)
+    obj_callback = CompObj(prefix, domain, forest, len0, AR, ratio,
+                           iter_offset, comp_scale=comp_scale)
     problem.addObjectiveCallback(obj_callback.objective,
                                  obj_callback.objective_gradient)
 

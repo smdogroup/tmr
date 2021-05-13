@@ -162,7 +162,8 @@ if __name__ == '__main__':
                                     len0=args.len0, AR=args.AR, ratio=args.ratio,
                                     iter_offset=iter_offset,
                                     qn_correction=args.qn_correction,
-                                    eq_constr=args.eq_constr)
+                                    eq_constr=args.eq_constr,
+                                    comp_scale=args.comp_scale)
 
         # Set the prefix
         problem.setPrefix(prefix)
