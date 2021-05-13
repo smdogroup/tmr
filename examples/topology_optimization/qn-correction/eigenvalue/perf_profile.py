@@ -149,13 +149,14 @@ def normalizeDict(physics, infeas_tol):
                                num, omz, physics[num][omz]['infeas']))
     return n_feas
 
-def genProfileData(optimizers, physics):
+def genProfileData(optimizers, physics, problem):
     """
     Prepare raw data for the profile
 
     Args:
         optimizers (list): list of optimizers used
         physics (dict): the dictionary structure
+        problem (str): 'eig' or 'comp'
 
     Return:
         profile_data (dict): profile data dictionary
@@ -170,7 +171,10 @@ def genProfileData(optimizers, physics):
 
         # Prepare objective data
         profile_data[omz]['obj_normed'] = [physics[num][omz]['obj_normed'] for num in physics]
-        profile_data[omz]['obj_normed'].sort(reverse=True)
+        if problem == 'eig':
+            profile_data[omz]['obj_normed'].sort(reverse=True)
+        else:
+            profile_data[omz]['obj_normed'].sort(reverse=False)
         profile_data[omz]['obj_percentile'] = [(index+1)/n_physics for index, _ in enumerate(profile_data[omz]['obj_normed'])]
 
         # Prepare discreteness data
@@ -188,13 +192,15 @@ def genProfileData(optimizers, physics):
 
     return profile_data, n_best
 
-def plotObjProfile(profile_data, obj_bound, optimizers):
+def plotObjProfile(problem, profile_data, eig_bound, comp_bound, optimizers):
     """
     Plot objective profile
 
     Args:
+        problem (str): 'eig' or 'comp'
         profile_data (dict): profile data
-        obj_bound (float): smallest objective to be included in the profile
+        eig_bound (float): smallest objective to be included in the profile
+        comp_bound (float): largest objective to be included in the profile
         optimizers (list): list of optimizers used
 
     Return:
@@ -208,13 +214,26 @@ def plotObjProfile(profile_data, obj_bound, optimizers):
         # nice-looking profile at the end
         x = profile_data[omz]['obj_normed'].copy()
         y = profile_data[omz]['obj_percentile'].copy()
-        if x[-1] > obj_bound:
-            x.append(obj_bound)
-            y.append(y[-1])
+        if problem == 'eig':
+            if x[-1] > eig_bound:
+                x.append(eig_bound)
+                y.append(y[-1])
+        else:
+            if x[-1] < comp_bound:
+                x.append(comp_bound)
+                y.append(y[-1])
+
         ax.step(x, y, label=legends[omz], color=colors[omz])
 
-    ax.set_xlim(1.0 + 0.05*(1.0 - obj_bound), obj_bound)
-    ax.set_xlabel('Normalized objective (eigenvalue)')
+    if problem == 'eig':
+        ax.set_xlim(1.0 + 0.05*(1.0 - eig_bound), eig_bound)
+    else:
+        ax.set_xlim(1.0 - 0.05*(comp_bound - 1.0), comp_bound)
+
+    if problem == 'eig':
+        ax.set_xlabel('Normalized objective (eigenvalue)')
+    else:
+        ax.set_xlabel('Normalized objective (compliance)')
     ax.set_ylabel('Fraction of cases')
     fig.legend(loc='center right')
 
@@ -279,9 +298,11 @@ if __name__ == '__main__':
     # Argument parser
     p = argparse.ArgumentParser()
     p.add_argument('--result-folder', type=str, default='.')
+    p.add_argument('--problem', type=str, default='eig', choices=['eig', 'comp'])
     p.add_argument('--infeas-tol', type=float, default=1e-6)
     p.add_argument('--n-mesh-refine', type=int, default=1)
-    p.add_argument('--obj-bound', type=float, default=0.5)
+    p.add_argument('--eig-bound', type=float, default=0.5)
+    p.add_argument('--comp-bound', type=float, default=1.5)
     p.add_argument('--obj-profile-name', type=str, default='profile-obj.pdf')
     p.add_argument('--dis-profile-name', type=str, default='profile-discrete.pdf')
     args = p.parse_args()
@@ -299,7 +320,7 @@ if __name__ == '__main__':
     n_feas = normalizeDict(physics, args.infeas_tol)
 
     # Generate profile data
-    profile_data, n_best = genProfileData(optimizers, physics)
+    profile_data, n_best = genProfileData(optimizers, physics, args.problem)
 
     # Print summary
     n_physics = len(physics)
@@ -317,7 +338,7 @@ if __name__ == '__main__':
     plt.style.use(mpl_style_path)
 
     # Plot objective profile
-    fig, ax = plotObjProfile(profile_data, args.obj_bound, optimizers)
+    fig, ax = plotObjProfile(args.problem, profile_data, args.eig_bound, args.comp_bound, optimizers)
     fig.savefig(os.path.join(args.result_folder, args.obj_profile_name))
 
     # Plot discreteness profile
