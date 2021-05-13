@@ -106,7 +106,7 @@ if __name__ == '__main__':
 
     # Generate pbs
     with open(args.pbs, 'w') as f:
-        f.write('#PBS -N eig_n{:d}\n'.format(n_new_cases))
+        f.write('#PBS -N n{:d}-{:d}\n'.format(args.start, args.end))
         f.write('#PBS -A GT-gkennedy9-CODA20\n')
         f.write('#PBS -l nodes=1:ppn=24\n')
         f.write('#PBS -l pmem=6gb\n')
