@@ -144,7 +144,7 @@ def normalizeDict(problem, physics, infeas_tol):
                             physics[num][omz]['obj'] / physics[num]['best_obj']
                         n_feas += 1
                     else:
-                        if problem == 'eig'
+                        if problem == 'eig':
                             physics[num][omz]['obj_normed'] = -PERF_INF
                         else:
                             physics[num][omz]['obj_normed'] = PERF_INF
