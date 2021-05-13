@@ -307,13 +307,10 @@ if __name__ == '__main__':
     print('\n')
     print('-----------SUMMARY-----------')
     print('number of physics:         {:d}'.format(n_physics))
-    print('number of best cases       {:d}'.format(n_best))
+    print('number of best cases       {:d} (should == {:d})'.format(n_best, n_physics))
     print('number of planned cases:   {:d}'.format(n_planned))
     print('number of existing pkls:   {:d} ({:.2f}%)'.format(n_pkls, 100*n_pkls/n_planned))
     print('number of feasible cases:  {:d} ({:.2f}%)'.format(n_feas, 100*n_feas/n_planned))
-
-    if n_best != n_physics:
-        raise RuntimeError("This should match, something's wrong!")
 
     # Set up plotting environment
     mpl_style_path = os.path.dirname(os.path.realpath(__file__)) + '/paper.mplstyle'
