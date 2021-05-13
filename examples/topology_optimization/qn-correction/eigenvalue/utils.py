@@ -102,6 +102,7 @@ class OutputCallback:
         # Set the output file name
         flag = (TACS.OUTPUT_CONNECTIVITY |
                 TACS.OUTPUT_NODES |
+                TACS.OUTPUT_DISPLACEMENTS |
                 TACS.OUTPUT_EXTRAS)
         self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
         self.iter_offset = iter_offset
@@ -408,6 +409,9 @@ class FrequencyObj:
         # Extract eigenvalues and eigenvectors
         for i in range(self.num_eigenvalues):
             self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
+
+        # Set first eigenvector as state variable for visualization
+        self.assembler.setVariables(self.eigv[0])
 
         # Scale eigenvalues for a better KS approximation
         self.eig[:] *= self.eig_scale
