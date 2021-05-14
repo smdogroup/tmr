@@ -1167,6 +1167,7 @@ void TMROctForest::computeBlockOwners(){
     }
   }
 }
+
 /*
   Write a representation of the connectivity of the forest out to a
   VTK file.

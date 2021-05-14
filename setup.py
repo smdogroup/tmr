@@ -108,10 +108,14 @@ exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],
                                ('TMR_HAS_EGADS', '1'),
                                ('TMR_HAS_PAROPT', '1')]))
 
+for e in exts:
+    e.cython_directives = {'language_level' : '3',
+                           'embedsignature': True,
+                           'binding': True}
+
 setup(name='tmr',
       version=0.1,
       description='Parallel mesh generation utilities',
       author='Graeme J. Kennedy',
       author_email='graeme.kennedy@ae.gatech.edu',
-      ext_modules=cythonize(exts, language='c++',
-                            include_path=inc_dirs))
+      ext_modules=cythonize(exts, include_path=inc_dirs))
