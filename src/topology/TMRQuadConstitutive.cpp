@@ -177,6 +177,80 @@ TacsScalar TMRQuadConstitutive::evalDensity( int elemIndex,
                                              const TacsScalar X[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order;
+
+  // Evaluate the shape functions
+  forest->evalInterp(pt, N);
+
+  // Get the design variable values
+  const TacsScalar *xptr = &x[nvars*len*elemIndex];
+
+  // Evaluate the density
+  TacsScalar density = 0.0;
+  if (nvars == 1){
+    TacsScalar rho = 0.0;
+    for ( int i = 0; i < len; i++ ){
+      rho += N[i]*xptr[i];
+    }
+
+    density = rho*props->props[0]->getDensity();
+  }
+  else {
+    for ( int j = 0; j < nmats; j++ ){
+      TacsScalar rho = 0.0;
+      for ( int i = 0; i < len; i++ ){
+        rho += N[i]*xptr[nvars*i + j+1];
+      }
+
+      density += rho*props->props[j]->getDensity();
+    }
+  }
+
+  return density;
+}
+
+// Add the derivative of the density
+void TMRQuadConstitutive::addDensityDVSens( int elemIndex,
+                                            const TacsScalar scale,
+                                            const double pt[],
+                                            const TacsScalar X[],
+                                            int dvLen,
+                                            TacsScalar dfdx[] ){
+  const int order = forest->getMeshOrder();
+  const int len = order*order;
+
+  // Evaluate the shape functions
+  forest->evalInterp(pt, N);
+
+  // Add the derivative of the density
+  if (nvars == 1){
+    TacsScalar density = props->props[0]->getDensity();
+    TacsScalar factor = density*scale;
+
+    for ( int i = 0; i < len; i++ ){
+      dfdx[i] += factor*N[i];
+    }
+  }
+  else {
+    for ( int j = 0; j < nmats; j++ ){
+      TacsScalar density = props->props[j]->getDensity();
+      TacsScalar factor = density*scale;
+      for ( int i = 0; i < len; i++ ){
+        dfdx[nvars*i + j+1] += factor*N[i];
+      }
+    }
+  }
+}
+
+
+/*
+  Evaluate the material density: Linear combination of the density for
+  each material times the design density
+*/
+TacsScalar TMRQuadConstitutive::evalMassMatrixDensity( int elemIndex,
+                                                       const double pt[],
+                                                       const TacsScalar X[] ){
+  const int order = forest->getMeshOrder();
+  const int len = order*order;
   const double q = props->mass_penalty_value;
   const double beta = props->beta;
   const double xoffset = props->xoffset;
@@ -207,9 +281,8 @@ TacsScalar TMRQuadConstitutive::evalDensity( int elemIndex,
         density = pow(rho, 1.0/q)*props->props[0]->getDensity();
       }
     }
-
     else {
-      density = ((q+1.0)*rho)/(1.0 + q*rho)*props->props[0]->getDensity();
+      density = ((q + 1.0)*rho)/(1.0 + q*rho)*props->props[0]->getDensity();
     }
   }
   else {
@@ -227,12 +300,12 @@ TacsScalar TMRQuadConstitutive::evalDensity( int elemIndex,
 }
 
 // Add the derivative of the density
-void TMRQuadConstitutive::addDensityDVSens( int elemIndex,
-                                            const TacsScalar scale,
-                                            const double pt[],
-                                            const TacsScalar X[],
-                                            int dvLen,
-                                            TacsScalar dfdx[] ){
+void TMRQuadConstitutive::addMassMatrixDensityDVSens( int elemIndex,
+                                                      const TacsScalar scale,
+                                                      const double pt[],
+                                                      const TacsScalar X[],
+                                                      int dvLen,
+                                                      TacsScalar dfdx[] ){
   const int order = forest->getMeshOrder();
   const int len = order*order;
   const double q = props->mass_penalty_value;
@@ -284,7 +357,7 @@ void TMRQuadConstitutive::addDensityDVSens( int elemIndex,
         }
       }
       else {
-        factor = density*(q+1.0)/((q*rho + 1.0)*(q*rho + 1.0));
+        factor = density*(q + 1.0)/((q*rho + 1.0)*(q*rho + 1.0));
       }
 
       factor *= scale;
