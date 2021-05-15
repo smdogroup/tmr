@@ -99,7 +99,8 @@ if __name__ == '__main__':
     material_props = constitutive.MaterialProperties(rho=2600.0, E=70e3, nu=0.3, ys=100.0)
 
     # Create stiffness properties
-    stiffness_props = TMR.StiffnessProperties(material_props, k0=1e-3, eps=0.2, q=args.qval) # Try larger q val: 8, 10, 20
+    stiffness_props = TMR.StiffnessProperties(material_props, k0=1e-3, eps=0.2,
+        q=args.qval, qmass=args.qval) # Try larger q val: 8, 10, 20, using same penalty for mass
 
     # Create initial forest
     forest = create_forest(comm, lx, ly, lz, args.ratio, args.htarget, mg_levels-1, args.domain)
@@ -178,7 +179,12 @@ if __name__ == '__main__':
         problem.setIterationCounter(count)
 
         if args.gradient_check:
-            problem.checkGradients(1e-6)
+            for i in range(3):
+                xt = problem.createDesignVec()
+                xt_vals = TMR.convertPVecToVec(xt).getArray()
+                xt_vals[:] = np.random.rand(len(xt_vals))
+                problem.setInitDesignVars(xt)
+                problem.checkGradients(1e-6)
             exit(0)
 
         # Extract the filter to interpolate design variables

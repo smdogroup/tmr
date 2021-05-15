@@ -207,6 +207,7 @@ class FrequencyObj:
 
             # Initialize space for matrices and vectors
             self.mmat = self.assembler.createMat()
+            self.m0mat = self.assembler.createMat()  # For non design mass
             self.kmat = self.assembler.createMat()
             self.temp = self.assembler.createVec()
             self.eig = np.zeros(self.num_eigenvalues)
@@ -301,25 +302,34 @@ class FrequencyObj:
                 if xmin < x < xmax:
                     if ymin < y < ymax:
                         if zmin < z < zmax:
-                            mvals[i-offset] = self.non_design_mass
+                            mvals[i-offset] = 1.0
+
+            dv = self.assembler.createDesignVec()
+            self.assembler.getDesignVars(dv)
+            self.assembler.setDesignVars(self.mvec)
+            self.assembler.assembleMatType(TACS.MASS_MATRIX, self.m0mat)
+            self.m0mat.scale(self.non_design_mass)
+            self.assembler.setDesignVars(dv)
 
         # Assemble the stiffness matrix for the generalized eigenvalue problem
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.kmat)
 
-        # Get current design variable
-        dv = self.assembler.createDesignVec()
-        self.assembler.getDesignVars(dv)
+        # # Get current design variable
+        # dv = self.assembler.createDesignVec()
+        # self.assembler.getDesignVars(dv)
 
-        # Update dv <- dv + mvec and update design variable
-        dv.axpy(1.0, self.mvec)
-        self.assembler.setDesignVars(dv)
+        # # Update dv <- dv + mvec and update design variable
+        # dv.axpy(1.0, self.mvec)
+        # self.assembler.setDesignVars(dv)
 
         # Construct mass matrix
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
+        self.mmat.axpy(1.0, self.m0mat)
+        self.assembler.applyMatBCs(self.mmat)
 
         # Reset design variable
-        dv.axpy(-1.0, self.mvec)
-        self.assembler.setDesignVars(dv)
+        # dv.axpy(-1.0, self.mvec)
+        # self.assembler.setDesignVars(dv)
 
         '''
         Export non-design mass vectors to f5 file for verification
@@ -571,19 +581,33 @@ class FrequencyObj:
 
             """
             Compute the second part:
-            P -= phi^T (deig*dMdx) phi^T
+            P -= lambdai * phi^T d2Kdx2 phi
             """
+            # Zero out temp vector
             self.temp.zeroEntries()
 
-            coeff = self.eta[i]*self.eig_scale*self.deig[i].dot(self.svec)
-            self.assembler.addMatDVSensInnerProduct(-coeff,
-                TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp)
+            coeff = -self.eta[i]*self.eig[i]*self.eig_scale
 
+            # Compute g(rho + h*s)
+            self.assembler.setDesignVars(self.rho)
+            self.assembler.addMatDVSensInnerProduct(coeff, TACS.MASS_MATRIX,
+                self.eigv[i], self.eigv[i], self.temp)
+
+            # Compute dg = g(rho + h*s) - g(rho)
+            self.assembler.setDesignVars(self.rho_original)
+            self.assembler.addMatDVSensInnerProduct(-coeff, TACS.MASS_MATRIX,
+                self.eigv[i], self.eigv[i], self.temp)
+
+            # Distribute the vector
             self.temp.beginSetValues(op=TACS.ADD_VALUES)
             self.temp.endSetValues(op=TACS.ADD_VALUES)
 
+            # Compute dg/h
+            self.temp.scale(1/h)
+
             # Add to the update
             self.update.axpy(1.0, self.temp)
+            self.temp.zeroEntries()
 
         # Compute curvature and check the norm of the update
         # to see if the magnitude makes sense
