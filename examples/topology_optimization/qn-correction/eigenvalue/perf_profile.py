@@ -23,7 +23,7 @@ legends = {
 }
 
 
-def getDirs(result_folder):
+def getDirs(result_folders):
     """
     get all folder names with the following pattern:
 
@@ -34,25 +34,28 @@ def getDirs(result_folder):
         e-12-paroptqn
 
     Args:
-        result_folder (str): the folder conatining all `e-number-optimizer' subfolders
+        result_folders (list): the list of folders conatining all `e-number-optimizer' subfolders
 
     Return:
-        dirs (list): list of dir names
+        dirslist (list): list of dir names lists
     """
 
-    dirs = os.listdir(result_folder)
-    r = re.compile(r"e-\d+-.+")
-    dirs = list(filter(r.match, dirs))
+    dirslist = []
+    for f in result_folders:
+        dirs = os.listdir(f)
+        r = re.compile(r"e-\d+-.+")
+        dirs = list(filter(r.match, dirs))
+        dirslist.append(dirs)
 
-    return dirs
+    return dirslist
 
-def createDicStruct(dirs):
+def createDicStruct(dirslist):
     """
     Create the main dictionary to get data stored
     in result pkl files
 
     Args:
-        dirs (list): list of dir names
+        dirslist (list): list of dir names
 
     Return:
         physics (dict): an empty dictionary structure,  note that its
@@ -60,28 +63,29 @@ def createDicStruct(dirs):
     """
 
     physics = dict()
-    for d in dirs:
-        _, num, omz = d.split('-')
-        if num not in physics.keys():
-            physics[num] = dict()
-        physics[num][omz] = dict()
-        physics[num][omz]['obj'] = None
-        physics[num][omz]['obj_normed'] = None
-        physics[num][omz]['infeas'] = None
-        physics[num][omz]['discreteness'] = None
-        physics[num]['best_obj'] = PERF_INF
+    for dirs in dirslist:
+        for d in dirs:
+            _, num, omz = d.split('-')
+            if num not in physics.keys():
+                physics[num] = dict()
+            physics[num][omz] = dict()
+            physics[num][omz]['obj'] = None
+            physics[num][omz]['obj_normed'] = None
+            physics[num][omz]['infeas'] = None
+            physics[num][omz]['discreteness'] = None
+            physics[num]['best_obj'] = PERF_INF
 
     return physics
 
-def populateDic(dirs, n_mesh_refine, result_folder, physics):
+def populateDic(dirslist, n_mesh_refine, result_folders, physics):
     """
     Populate the dictioanry structure
 
     Args:
-        dirs (list): list of dir names
+        dirslist (list): list of dir names lists
         n_mesh_refine (int): number of mesh refinements, this decides which
                              pickle contains the final result
-        result_folder (str): the folder conatining all `e-number-optimizer' subfolders
+        result_folders (list): the list of folders conatining all `e-number-optimizer' subfolders
         physics (dict): the dictionary structure to populate
 
     Return:
@@ -91,30 +95,31 @@ def populateDic(dirs, n_mesh_refine, result_folder, physics):
     # We keep tracking number of existing pickles
     n_pkls = 0
 
-    for d in dirs:
-        _, num, omz = d.split('-')
-        pklname = 'output_refine{:d}.pkl'.format(n_mesh_refine-1)
-        pklpath = os.path.join(args.result_folder, d, pklname)
+    for i, dirs in enumerate(dirslist):
+        for d in dirs:
+            _, num, omz = d.split('-')
+            pklname = 'output_refine{:d}.pkl'.format(n_mesh_refine-1)
+            pklpath = os.path.join(result_folders[i], d, pklname)
 
-        # Success case
-        try:
-            with open(pklpath, 'rb') as f:
-                pkldict = pickle.load(f)
-                physics[num][omz]['obj'] = pkldict['obj']
-                physics[num][omz]['infeas'] = pkldict['infeas']
-                physics[num][omz]['discreteness'] = pkldict['discreteness']
+            # Success case
+            try:
+                with open(pklpath, 'rb') as f:
+                    pkldict = pickle.load(f)
+                    physics[num][omz]['obj'] = pkldict['obj']
+                    physics[num][omz]['infeas'] = pkldict['infeas']
+                    physics[num][omz]['discreteness'] = pkldict['discreteness']
 
-                if pkldict['obj'] < physics[num]['best_obj']:
-                    physics[num]['best_obj'] = pkldict['obj']
+                    if pkldict['obj'] < physics[num]['best_obj']:
+                        physics[num]['best_obj'] = pkldict['obj']
 
-                n_pkls += 1
+                    n_pkls += 1
 
-        # Fail case, no pkl generated
-        except:
-            print('[Info] {:} doesn\'t exist!'.format(pklpath))
-            physics[num][omz]['obj'] = PERF_INF
-            physics[num][omz]['infeas'] = PERF_INF
-            physics[num][omz]['discreteness'] = PERF_INF
+            # Fail case, no pkl generated
+            except:
+                print('[Info] {:} doesn\'t exist!'.format(pklpath))
+                physics[num][omz]['obj'] = PERF_INF
+                physics[num][omz]['infeas'] = PERF_INF
+                physics[num][omz]['discreteness'] = PERF_INF
 
     return n_pkls
 
@@ -148,9 +153,10 @@ def normalizeDict(problem, physics, infeas_tol):
                             physics[num][omz]['obj_normed'] = -PERF_INF
                         else:
                             physics[num][omz]['obj_normed'] = PERF_INF
-                        print('[Info] Infeasibile case detected, No:{:>5s}, ' \
-                              'optimizer:{:>10s}, infeas:{:>20.10e}'.format(
-                               num, omz, physics[num][omz]['infeas']))
+                        if physics[num][omz]['infeas'] < PERF_INF:
+                            print('[Info] Infeasibile case detected, No:{:>5s}, ' \
+                                'optimizer:{:>10s}, infeas:{:>20.10e}'.format(
+                                num, omz, physics[num][omz]['infeas']))
     return n_feas
 
 def genProfileData(optimizers, physics, problem):
@@ -301,7 +307,7 @@ if __name__ == '__main__':
 
     # Argument parser
     p = argparse.ArgumentParser()
-    p.add_argument('--result-folder', type=str, default='.')
+    p.add_argument('--result-folder', type=str, nargs='*', default=['.'])
     p.add_argument('--problem', type=str, default='eig', choices=['eig', 'comp'])
     p.add_argument('--infeas-tol', type=float, default=1e-6)
     p.add_argument('--n-mesh-refine', type=int, default=1)
@@ -312,13 +318,13 @@ if __name__ == '__main__':
     args = p.parse_args()
 
     # Get list of case dirs by matching folder name
-    dirs = getDirs(args.result_folder)
+    dirslist = getDirs(args.result_folder)
 
     # Create dictionary structure
-    physics = createDicStruct(dirs)
+    physics = createDicStruct(dirslist)
 
     # Populate dictionary
-    n_pkls = populateDic(dirs, args.n_mesh_refine, args.result_folder, physics)
+    n_pkls = populateDic(dirslist, args.n_mesh_refine, args.result_folder, physics)
 
     # Normalize objective
     n_feas = normalizeDict(args.problem, physics, args.infeas_tol)
@@ -343,11 +349,20 @@ if __name__ == '__main__':
 
     # Plot objective profile
     fig, ax = plotObjProfile(args.problem, profile_data, args.eig_bound, args.comp_bound, optimizers)
-    fig.savefig(os.path.join(args.result_folder, args.obj_profile_name))
+    if len(args.result_folder) == 1:
+        fig.savefig(os.path.join(args.result_folder[0], args.obj_profile_name))
+    else:
+        fig.savefig(args.obj_profile_name)
 
     # Plot discreteness profile
     fig, ax = plotDiscreteProfile(profile_data, optimizers)
-    fig.savefig(os.path.join(args.result_folder, args.dis_profile_name))
+    if len(args.result_folder) == 1:
+        fig.savefig(os.path.join(args.result_folder[0], args.dis_profile_name))
+    else:
+        fig.savefig(args.dis_profile_name)
 
     # Save physics as csv
-    saveTable(physics, args.result_folder)
+    if len(args.result_folder) == 1:
+        saveTable(physics, args.result_folder[0])
+    else:
+        saveTable(physics, '.')
