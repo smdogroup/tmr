@@ -644,7 +644,7 @@ class FrequencyObj:
             self.temp.endSetValues(op=TACS.ADD_VALUES)
 
             # Add to update vector
-            self.update3.axpy(self.svec.dot(self.temp), self.deig[i])
+            self.update3.axpy(1.0, self.temp)
 
         # Compute curvature and check the norm of the update
         # to see if the magnitude makes sense
