@@ -175,9 +175,7 @@ class FrequencyObj:
         self.eigv = None
 
         # We keep track of failed qn correction
-        self.n_fail_qn_corr = 0
-        self.pos_curvs = []
-        self.neg_curvs = []
+        self.curvs = []
 
         return
 
@@ -222,6 +220,8 @@ class FrequencyObj:
             self.rho = self.assembler.createDesignVec()
             self.rho_original = self.assembler.createDesignVec()
             self.update = self.assembler.createDesignVec()
+            self.update2 = self.assembler.createDesignVec()
+            self.update3 = self.assembler.createDesignVec()
             self.temp = self.assembler.createDesignVec()
 
             # Create the Jacobi-Davidson operator
@@ -532,6 +532,8 @@ class FrequencyObj:
 
         # Zero out update
         self.update.zeroEntries()
+        self.update2.zeroEntries()
+        self.update3.zeroEntries()
 
         # Get current nodal density
         self.assembler.getDesignVars(self.rho)
@@ -607,7 +609,42 @@ class FrequencyObj:
 
             # Add to the update
             self.update.axpy(1.0, self.temp)
+
+            """
+            Compute 3rd part:
+            """
+            # Zero out temp vector
             self.temp.zeroEntries()
+
+            # Compute dot(g,svec)
+            coeff = -self.eta[i]*self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(coeff, TACS.MASS_MATRIX,
+                self.eigv[i], self.eigv[i], self.temp)
+
+            # Distribute the vector
+            self.temp.beginSetValues(op=TACS.ADD_VALUES)
+            self.temp.endSetValues(op=TACS.ADD_VALUES)
+
+            # Add to update vector
+            self.update2.axpy(self.svec.dot(self.temp), self.deig[i])
+
+            """
+            Compute 4th part
+            """
+            # Zero out temp vector
+            self.temp.zeroEntries()
+
+            # Compute DVSens
+            coeff = -self.eta[i]*self.eig_scale*self.svec.dot(self.deig[i])
+            self.assembler.addMatDVSensInnerProduct(coeff, TACS.MASS_MATRIX,
+                self.eigv[i], self.eigv[i], self.temp)
+
+            # Distribute the vector
+            self.temp.beginSetValues(op=TACS.ADD_VALUES)
+            self.temp.endSetValues(op=TACS.ADD_VALUES)
+
+            # Add to update vector
+            self.update3.axpy(self.svec.dot(self.temp), self.deig[i])
 
         # Compute curvature and check the norm of the update
         # to see if the magnitude makes sense
@@ -616,6 +653,8 @@ class FrequencyObj:
         y_norm = y.norm()
         dy_norm = self.update.norm()
         curvature = self.svec.dot(self.update)
+        curvature2 = self.svec.dot(self.update2)
+        curvature3 = self.svec.dot(self.update3)
         if self.comm.rank == 0:
             if curvature < 0:
                 try:
@@ -627,6 +666,27 @@ class FrequencyObj:
                     print(colored("curvature: {:20.10e}".format(curvature), "green"))
                 except:
                     print("curvature: {:20.10e}".format(curvature))
+
+            if curvature2 < 0:
+                try:
+                    print(colored("curvature2:{:20.10e}".format(curvature2), "red"))
+                except:
+                    print("curvature2:{:20.10e}".format(curvature2))
+            else:
+                try:
+                    print(colored("curvature2:{:20.10e}".format(curvature2), "green"))
+                except:
+                    print("curvature2:{:20.10e}".format(curvature2))
+            if curvature3 < 0:
+                try:
+                    print(colored("curvature3:{:20.10e}".format(curvature3), "red"))
+                except:
+                    print("curvature3:{:20.10e}".format(curvature3))
+            else:
+                try:
+                    print(colored("curvature3:{:20.10e}".format(curvature3), "green"))
+                except:
+                    print("curvature3:{:20.10e}".format(curvature3))
             print("norm(x):   {:20.10e}".format(x_norm))
             print("norm(s):   {:20.10e}".format(s_norm))
             print("norm(y):   {:20.10e}".format(y_norm))
@@ -635,22 +695,26 @@ class FrequencyObj:
             print("norm(rho): {:20.10e}".format(rho_norm))
 
         # Update y
+        y_wrap = TMR.convertPVecToVec(y)
+
         if curvature > 0:
-            self.pos_curvs.append(curvature)
-            y_wrap = TMR.convertPVecToVec(y)
-            # is it ok to have the same input and output? yes
             self.fltr.applyTranspose(self.update, self.update)
             y_wrap.axpy(1.0, self.update)
 
-        # We keep track of failed correction
-        else:
-            self.n_fail_qn_corr += 1
-            self.neg_curvs.append(curvature)
+        if curvature2 > 0:
+            self.fltr.applyTranspose(self.update2, self.update2)
+            y_wrap.axpy(1.0, self.update2)
+
+        if curvature3 > 0:
+            self.fltr.applyTranspose(self.update3, self.update3)
+            y_wrap.axpy(1.0, self.update3)
+
+        self.curvs.append([curvature, curvature2, curvature3])
 
         return
 
-    def getFailQnCorr(self):
-        return self.n_fail_qn_corr, self.neg_curvs, self.pos_curvs
+    def getQnUpdateCurvs(self):
+        return self.curvs
 
 class MassConstr:
     """

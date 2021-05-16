@@ -371,8 +371,7 @@ if __name__ == '__main__':
             pkl['problem'] = 'eig-max'
 
             if args.optimizer == 'paropt' or args.optimizer == 'paropt-pyoptsparse':
-                pkl['n_fail_qn_corr'], pkl['neg_curvs'], pkl['pos_curvs'] = \
-                    obj_callback.getFailQnCorr()
+                pkl['curvs'] = obj_callback.getQnUpdateCurvs()
                 pkl['n_skipH'] = getNSkipUpdate(os.path.join(prefix, 'tr_output_file%d.dat'%(step)))
 
             with open(os.path.join(prefix, 'output_refine%d.pkl'%(step)), 'wb') as f:
