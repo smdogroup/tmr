@@ -111,6 +111,15 @@ class TMROctConstitutive : public TACSSolidConstitutive {
                          const double pt[], const TacsScalar X[],
                          int dvLen, TacsScalar dfdx[] );
 
+  // Evaluate the material density
+  TacsScalar evalMassMatrixDensity( int elemIndex, const double pt[],
+                                    const TacsScalar X[] );
+
+  // Add the derivative of the density
+  void addMassMatrixDensityDVSens( int elemIndex, TacsScalar scale,
+                                   const double pt[], const TacsScalar X[],
+                                   int dvLen, TacsScalar dfdx[] );
+
   // Evaluate the specific heat
   TacsScalar evalSpecificHeat( int elemIndex, const double pt[],
                                const TacsScalar X[] );
