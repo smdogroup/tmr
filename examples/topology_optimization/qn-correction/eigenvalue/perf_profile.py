@@ -282,6 +282,9 @@ def plotDiscreteProfile(profile_data, optimizers):
 
     return fig, ax
 
+def omzFields(omz):
+    return [omz+'-obj', omz+'-infeas', omz+'-discrete']
+
 def saveTable(physics, result_folder, csv='physics.csv'):
     """
     Save physics to a csv in result folder
@@ -291,18 +294,22 @@ def saveTable(physics, result_folder, csv='physics.csv'):
         csv (str): csv name
     """
 
+    fieldnames = ['no']
+    omzs = ['paropt', 'paroptqn', 'snopt', 'ipopt']
+    for omz in omzs:
+        fieldnames.extend(omzFields(omz))
+
     with open(os.path.join(result_folder, csv), 'w') as f:
-        fieldnames = ['no', 'paropt', 'paroptqn', 'snopt', 'ipopt']
         writer = DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for num in physics:
-            writer.writerow({
-                'no': num,
-                'paropt': physics[num]['paropt']['obj'],
-                'paroptqn': physics[num]['paroptqn']['obj'],
-                'snopt': physics[num]['snopt']['obj'],
-                'ipopt': physics[num]['ipopt']['obj'],
-            })
+            write_row_dict = {'no': num}
+            for omz in omzs:
+                write_row_dict[omz+'-obj'] = physics[num][omz]['obj']
+                write_row_dict[omz+'-infeas'] = physics[num][omz]['infeas']
+                write_row_dict[omz+'-discrete'] = physics[num][omz]['discreteness']
+
+            writer.writerow(write_row_dict)
 
     return
 
