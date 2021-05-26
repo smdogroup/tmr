@@ -153,6 +153,7 @@ def normalizeDict(problem, physics, infeas_tol):
                             physics[num][omz]['obj_normed'] = -PERF_INF
                         else:
                             physics[num][omz]['obj_normed'] = PERF_INF
+                        physics[num][omz]['discreteness'] = PERF_INF
                         if physics[num][omz]['infeas'] < PERF_INF:
                             print('[Info] Infeasibile case detected, No:{:>5s}, ' \
                                 'optimizer:{:>10s}, infeas:{:>20.10e}'.format(
