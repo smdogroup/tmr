@@ -242,8 +242,10 @@ def plotObjProfile(problem, profile_data, eig_bound, comp_bound, optimizers):
 
     if problem == 'eig':
         ax.set_xlabel('Normalized objective (eigenvalue)')
-    else:
+    elif problem == 'comp':
         ax.set_xlabel('Normalized objective (compliance)')
+    elif problem == 'freq':
+        ax.set_xlabel('Normalized objective (mass)')
     ax.set_ylabel('Fraction of cases')
     fig.legend(loc='center right')
 
@@ -308,7 +310,7 @@ if __name__ == '__main__':
     # Argument parser
     p = argparse.ArgumentParser()
     p.add_argument('--result-folder', type=str, nargs='*', default=['.'])
-    p.add_argument('--problem', type=str, default='eig', choices=['eig', 'comp'])
+    p.add_argument('--problem', type=str, default='eig', choices=['eig', 'comp', 'freq'])
     p.add_argument('--infeas-tol', type=float, default=1e-6)
     p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--eig-bound', type=float, default=0.5)
