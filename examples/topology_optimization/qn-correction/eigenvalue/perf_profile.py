@@ -350,16 +350,16 @@ if __name__ == '__main__':
     # Plot objective profile
     fig, ax = plotObjProfile(args.problem, profile_data, args.eig_bound, args.comp_bound, optimizers)
     if len(args.result_folder) == 1:
-        fig.savefig(os.path.join(args.result_folder[0], args.obj_profile_name))
+        fig.savefig(os.path.join(args.result_folder[0], args.obj_profile_name), dpi=800)
     else:
-        fig.savefig(args.obj_profile_name)
+        fig.savefig(args.obj_profile_name, dpi=800)
 
     # Plot discreteness profile
     fig, ax = plotDiscreteProfile(profile_data, optimizers)
     if len(args.result_folder) == 1:
-        fig.savefig(os.path.join(args.result_folder[0], args.dis_profile_name))
+        fig.savefig(os.path.join(args.result_folder[0], args.dis_profile_name), dpi=800)
     else:
-        fig.savefig(args.dis_profile_name)
+        fig.savefig(args.dis_profile_name, dpi=800)
 
     # Save physics as csv
     if len(args.result_folder) == 1:
