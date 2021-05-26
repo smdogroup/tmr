@@ -75,7 +75,7 @@ if __name__ == '__main__':
     p.add_argument('--start', type=int, default=1)
     p.add_argument('--end', type=int, default=20)
     p.add_argument('--problem', type=str, default='eig',
-        choices=['eig', 'comp'])
+        choices=['eig', 'comp', 'freq'])
     p.add_argument('--optimizer', type=str, nargs='*',
         default=['paropt', 'paroptqn', 'snopt', 'ipopt'],
         choices=['paropt', 'paroptqn', 'snopt', 'ipopt'])
@@ -87,12 +87,16 @@ if __name__ == '__main__':
         output = '_eig_cases.txt'
         pbs = '_eig_cases.pbs'
         exescript = 'eig-max.py'
-    else:
+    elif args.problem == 'comp':
         csv = 'comp_cases_main.csv'
         output = '_comp_cases.txt'
         pbs = '_comp_cases.pbs'
         exescript = 'comp-min.py'
-
+    elif args.problem == 'freq':
+        csv = 'freq_constr.csv'
+        output = '_freq_cases.txt'
+        pbs = '_freq_cases.pbs'
+        exescript = 'frequency.py'
 
     # Create list of physics problems
     physics = readCSV(csv, args.start, args.end)
