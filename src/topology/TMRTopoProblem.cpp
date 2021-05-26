@@ -1520,7 +1520,7 @@ void TMRTopoProblem::computeQuasiNewtonUpdateCorrection( ParOptVec *x,
 
   // Perform the correction via callback, if any
   if (qnCorrectionCallback){
-    qnCorrectionCallback(num_load_cases, qn_correction_callback_ptr,
+    qnCorrectionCallback(ncon, qn_correction_callback_ptr,
                          x, z, zw, s, y);
   }
 

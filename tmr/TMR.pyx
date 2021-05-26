@@ -5192,7 +5192,7 @@ cdef void qnCorrectionCallback(int ncon, void *func, ParOptVec *_x, ParOptScalar
                                ParOptVec *_zw, ParOptVec *_s, ParOptVec *_y):
     try:
         x = _init_PVec(_x)
-        z = inplace_array_1d(PAROPT_NPY_SCALAR, ncon, <void*>_z)
+        z = inplace_array_1d(np.NPY_DOUBLE, ncon, <void*>_z)
         zw = None
         if _zw != NULL:
             zw = _init_PVec(_zw)
@@ -5571,7 +5571,7 @@ cdef class TopoProblem(ProblemBase):
 
         qncorrectionfunc(x, z, zw, s, y)
 
-        where: x, zw, s, y are ParOptVec objects, zw is an array of ParOptScalar
+        where: x, zw, s, y are ParOptVec objects, z is an array of ParOptScalar
         """
         prob = _dynamicTopoProblem(self.ptr)
         self.qncorrectionfunc = qncorrectionfunc
