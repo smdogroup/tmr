@@ -532,8 +532,6 @@ class FrequencyObj:
 
         # Zero out update
         self.update.zeroEntries()
-        self.update2.zeroEntries()
-        self.update3.zeroEntries()
 
         # Get current nodal density
         self.assembler.getDesignVars(self.rho)
@@ -626,7 +624,7 @@ class FrequencyObj:
             self.temp.endSetValues(op=TACS.ADD_VALUES)
 
             # Add to update vector
-            self.update2.axpy(self.svec.dot(self.temp), self.deig[i])
+            self.update.axpy(self.svec.dot(self.temp), self.deig[i])
 
             """
             Compute 4th part
@@ -644,7 +642,7 @@ class FrequencyObj:
             self.temp.endSetValues(op=TACS.ADD_VALUES)
 
             # Add to update vector
-            self.update3.axpy(1.0, self.temp)
+            self.update.axpy(1.0, self.temp)
 
         # Compute curvature and check the norm of the update
         # to see if the magnitude makes sense
@@ -653,8 +651,6 @@ class FrequencyObj:
         y_norm = y.norm()
         dy_norm = self.update.norm()
         curvature = self.svec.dot(self.update)
-        curvature2 = self.svec.dot(self.update2)
-        curvature3 = self.svec.dot(self.update3)
         if self.comm.rank == 0:
             if curvature < 0:
                 try:
@@ -666,27 +662,6 @@ class FrequencyObj:
                     print(colored("curvature: {:20.10e}".format(curvature), "green"))
                 except:
                     print("curvature: {:20.10e}".format(curvature))
-
-            if curvature2 < 0:
-                try:
-                    print(colored("curvature2:{:20.10e}".format(curvature2), "red"))
-                except:
-                    print("curvature2:{:20.10e}".format(curvature2))
-            else:
-                try:
-                    print(colored("curvature2:{:20.10e}".format(curvature2), "green"))
-                except:
-                    print("curvature2:{:20.10e}".format(curvature2))
-            if curvature3 < 0:
-                try:
-                    print(colored("curvature3:{:20.10e}".format(curvature3), "red"))
-                except:
-                    print("curvature3:{:20.10e}".format(curvature3))
-            else:
-                try:
-                    print(colored("curvature3:{:20.10e}".format(curvature3), "green"))
-                except:
-                    print("curvature3:{:20.10e}".format(curvature3))
             print("norm(x):   {:20.10e}".format(x_norm))
             print("norm(s):   {:20.10e}".format(s_norm))
             print("norm(y):   {:20.10e}".format(y_norm))
@@ -701,15 +676,7 @@ class FrequencyObj:
             self.fltr.applyTranspose(self.update, self.update)
             y_wrap.axpy(1.0, self.update)
 
-        if curvature2 > 0:
-            self.fltr.applyTranspose(self.update2, self.update2)
-            y_wrap.axpy(1.0, self.update2)
-
-        if curvature3 > 0:
-            self.fltr.applyTranspose(self.update3, self.update3)
-            y_wrap.axpy(1.0, self.update3)
-
-        self.curvs.append([curvature, curvature2, curvature3])
+        self.curvs.append(curvature)
 
         return
 
