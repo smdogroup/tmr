@@ -6,6 +6,9 @@ from shutil import copy
 p = argparse.ArgumentParser()
 p.add_argument('result_folder', type=str)
 p.add_argument('paropt_num', type=int)
+p.add_argument('start', type=int)
+p.add_argument('end', type=int)
+p.add_argument('problem', type=str)
 args = p.parse_args()
 
 # Get all folders with name e-number-optimizer
@@ -24,7 +27,7 @@ for d in dirs:
     if not os.path.isdir(os.path.join(out_folder, d)):
         os.mkdir(os.path.join(out_folder, d))
 
-# Copy over files
+# Copy over output files
 for d in dirs:
     e, num, omz = d.split('-')
 
@@ -57,6 +60,27 @@ for d in dirs:
                     os.path.join(out_folder, d))
         except:
             pass
+
+# Copy over stdouts
+for d in dirs:
+    e, num, omz = d.split('-')
+
+    # Compute the number of stdout
+    offset = {'paropt':1, 'paroptqn':2, 'snopt':3, 'ipopt':4}
+    stdout_num = (int(num) - args.start)*len(offset) + offset[omz]
+    stdout_name = '{:s}-n{:d}-{:d}.out-{:d}'.format(args.problem,
+        args.start, args.end, stdout_num)
+
+    try:
+        copy(os.path.join(args.result_folder, stdout_name),
+                os.path.join(out_folder, d))
+    except:
+        print("Cannot copy over stdout file: {:s}".format(stdout_name))
+
+
+
+
+
 
 
 
