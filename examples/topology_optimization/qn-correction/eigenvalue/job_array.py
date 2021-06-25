@@ -14,9 +14,12 @@ def dic2str(dc):
     row = ['--{:s} {:s}'.format(k, v) for k, v in dc.items()]
     return ' '.join(row[1:])
 
-def optimizer2cmd(optimizer):
+def optimizer2cmd(optimizer, problem):
     if optimizer == 'paroptqn':
-        return '--optimizer paropt --qn-correction'
+        if problem == 'compfreq':
+            return '--optimizer paropt --qn-correction-freq'
+        else:
+            return '--optimizer paropt --qn-correction'
     else:
         return '--optimizer {:s}'.format(optimizer)
 
@@ -33,7 +36,7 @@ def readCSV(csvfile, start, end):
                 physics.append(row)
     return physics
 
-def createCaseCmds(physics, optimizers, exescript):
+def createCaseCmds(problem, physics, optimizers, exescript):
     # Create runcase commands
     case_cmds = []
     n_exist_case = 0
@@ -53,7 +56,7 @@ def createCaseCmds(physics, optimizers, exescript):
                 cmd = 'python {:s} {:s} {:s} --prefix {:s}'.format(
                     exescript,                         # eig-max.py
                     dic2str(case_dict),                # --domain cantilever --AR 1.0 ...
-                    optimizer2cmd(optimizer),          # --optimizer paropt --qn-correction
+                    optimizer2cmd(optimizer, problem), # --optimizer paropt --qn-correction
                     case_folder                        # --prefix e-1-paroptqn
                 )
                 case_cmds.append(cmd)
@@ -75,7 +78,7 @@ if __name__ == '__main__':
     p.add_argument('--start', type=int, default=1)
     p.add_argument('--end', type=int, default=20)
     p.add_argument('--problem', type=str, default='eig',
-        choices=['eig', 'comp', 'freq'])
+        choices=['eig', 'comp', 'freq', 'compfreq'])
     p.add_argument('--optimizer', type=str, nargs='*',
         default=['paropt', 'paroptqn', 'snopt', 'ipopt'],
         choices=['paropt', 'paroptqn', 'snopt', 'ipopt'])
@@ -97,12 +100,18 @@ if __name__ == '__main__':
         output = '_freq_cases.txt'
         pbs = '_freq_cases.pbs'
         exescript = 'frequency.py'
+    elif args.problem == 'compfreq':
+        csv = 'compfreq_cases_main.csv'
+        output = '_compfreq_cases.txt'
+        pbs = '_compfreq_cases.pbs'
+        exescript = 'comp-min-freq-constr.py'
 
     # Create list of physics problems
     physics = readCSV(csv, args.start, args.end)
 
     # Create case commands
-    case_cmds, n_exist_case = createCaseCmds(physics, args.optimizer, exescript)
+    case_cmds, n_exist_case = createCaseCmds(args.problem, 
+        physics, args.optimizer, exescript)
 
     # Write case commands to txt
     writeCmdToTxt(output, case_cmds)
