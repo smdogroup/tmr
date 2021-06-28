@@ -381,7 +381,7 @@ if __name__ == '__main__':
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
             pkl['problem'] = 'comp-min-freq-constr'
-            pkl['min_eig'] = 'min_eig'
+            pkl['min_eig'] = min_eig
 
             if args.optimizer == 'paropt' or args.optimizer == 'paropt-pyoptsparse':
                 pkl['n_fail_qn_corr'], pkl['neg_curvs'], pkl['pos_curvs'] = \

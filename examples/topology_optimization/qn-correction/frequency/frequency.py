@@ -65,7 +65,7 @@ if __name__ == '__main__':
     p.add_argument('--tr-min', type=float, default=1e-3)
     p.add_argument('--eq-constr', action='store_true')
     p.add_argument('--qn-subspace', type=int, default=2) # Try 2, 5, 10
-    p.add_argument('--qn-type', type=str, choices=['bfgs, scaled_bfgs'])
+    p.add_argument('--qn-type', type=str, choices=['bfgs', 'scaled_bfgs'])
 
     # Test
     p.add_argument('--gradient-check', action='store_true')
