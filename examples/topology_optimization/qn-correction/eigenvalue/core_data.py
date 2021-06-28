@@ -37,6 +37,13 @@ for d in dirs:
     except:
         print("cannot copy {:s}, file might not exist.".format(os.path.join(args.result_folder, d, 'output_refine0.pkl')))
 
+    try:
+        copy(os.path.join(args.result_folder, d, 'exe.sh'),
+                os.path.join(out_folder, d))
+    except:
+        print("cannot copy {:s}, file might not exist.".format(os.path.join(args.result_folder, d, 'exe.sh')))
+
+
     if omz == 'paropt' or omz == 'paroptqn':
         try:
             copy(os.path.join(args.result_folder, d, 'tr_output_file0.dat'),
