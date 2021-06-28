@@ -17,7 +17,7 @@ def dic2str(dc):
 def optimizer2cmd(optimizer, problem):
     if optimizer == 'paroptqn':
         if problem == 'compfreq':
-            return '--optimizer paropt --qn-correction-freq'
+            return '--optimizer paropt --qn-correction-comp'
         else:
             return '--optimizer paropt --qn-correction'
     else:
