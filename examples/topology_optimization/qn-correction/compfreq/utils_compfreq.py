@@ -9,6 +9,7 @@ import sys
 sys.path.append('../eigenvalue')
 from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
 from utils import MassConstr, FrequencyObj
+from utils import OmAnalysis
 
 sys.path.append('../frequency')
 from utils_freq import FrequencyConstr
@@ -228,3 +229,89 @@ class GEP_solver:
         min_eigv = np.min(self.eig)
 
         return min_eigv
+
+class CompFreqOmAnalysis(OmAnalysis):
+
+    def __init__(self, ncon, comm, problem, obj_callback, sizes, offsets):
+
+        OmAnalysis.__init__(self, comm, problem, obj_callback, sizes, offsets)
+
+        if ncon != 1 and ncon != 2:
+            raise ValueError("Only support ncon = 1 or 2")
+        else:
+            self.ncon = ncon
+
+        if ncon == 2:
+            self.A2_PVec = self.problem.createDesignVec()
+            self.A2_Vec = TMR.convertPVecToVec(self.A2_PVec)
+            self.A2_vals = self.A2_Vec.getArray()
+
+        return
+
+    def setup(self):
+        self.add_input('x', shape=(self.global_size,))
+        self.add_output('obj', shape=1)
+        self.add_output('con', shape=self.ncon)
+
+        self.declare_partials(of='obj', wrt='x')
+        self.declare_partials(of='con', wrt='x')
+
+        return
+
+    def compute(self, inputs, outputs):
+        # Broadcase x from root to all processor
+        # In this way we only use optimization result from
+        # root and implicitly discard results from any other
+        # optimizer to prevent potential inconsistency
+        if self.comm.rank == 0:
+            x = inputs['x']
+        else:
+            x = None
+        x =self.comm.bcast(x, root=0)
+
+        self.x_vals[:] = x[self.start:self.end]
+        fail, fobj, cons = self.problem.evalObjCon(self.ncon, self.x_PVec)
+
+        if fail:
+            raise RuntimeError("Failed to evaluate objective and constraints!")
+        else:
+            outputs['obj'] = fobj
+            outputs['con'] = cons
+
+        # Barrier here because we don't do block communication
+        self.comm.Barrier()
+
+        return
+
+    def compute_partials(self, inputs, partials):
+        if self.comm.rank == 0:
+            x = inputs['x']
+        else:
+            x = None
+        x =self.comm.bcast(x, root=0)
+        self.x_vals[:] = x[self.start:self.end]
+
+        if self.ncon == 1:
+            A_list = [self.A_PVec]
+        else:
+            A_list = [self.A_PVec, self.A2_PVec]
+
+        fail = self.problem.evalObjConGradient(self.x_PVec, self.g_PVec, A_list)
+
+        if fail:
+            raise RuntimeError("Failed to evaluate objective and constraints!")
+        else:
+            global_g = self.comm.allgather(self.g_vals)
+            global_g = np.concatenate(global_g)
+            partials['obj', 'x'] = global_g
+
+            global_A = self.comm.allgather(self.A_vals)
+            global_A = np.concatenate(global_A)
+            if self.ncon == 1:
+                partials['con', 'x'] = [global_A]
+            else:
+                global_A2 = self.comm.allgather(self.A2_vals)
+                global_A2 = np.concatenate(global_A2)
+                partials['con', 'x'] = [global_A, global_A2]
+
+        return

@@ -21,9 +21,9 @@ import pickle
 from paropt.paropt_driver import ParOptDriver
 
 # Import utility classes and functions
-from utils_compfreq import GEP_solver, create_problem
+from utils_compfreq import GEP_solver, create_problem, CompFreqOmAnalysis
 sys.path.append('../eigenvalue')
-from utils import create_forest, OmAnalysis, getNSkipUpdate
+from utils import create_forest, getNSkipUpdate
 
 
 if __name__ == '__main__':
@@ -70,6 +70,7 @@ if __name__ == '__main__':
 
     # Test
     p.add_argument('--gradient-check', action='store_true')
+    p.add_argument('--om-gradient-check', action='store_true')
     p.add_argument('--test-om', action='store_true')
 
     # Parse arguments
@@ -165,8 +166,10 @@ if __name__ == '__main__':
         # Create the optimization problem
         if args.constr == 'mass':
             has_freq_constr = False
+            ncon = 1
         elif args.constr == 'massfreq':
             has_freq_constr = True
+            ncon = 2
         problem, obj_callback = create_problem(prefix=args.prefix, domain=args.domain,
                                     forest=forest, bcs=bcs,
                                     props=stiffness_props, nlevels=mg_levels+step,
@@ -239,7 +242,7 @@ if __name__ == '__main__':
 
             # Create distributed openMDAO component
             prob = om.Problem()
-            analysis = OmAnalysis(comm, problem, obj_callback, sizes, offsets)
+            analysis = CompFreqOmAnalysis(ncon, comm, problem, obj_callback, sizes, offsets)
             indeps = prob.model.add_subsystem('indeps', om.IndepVarComp())
 
             # Create global design vector
@@ -295,6 +298,11 @@ if __name__ == '__main__':
 
             # Optimize
             prob.setup()
+
+            if args.om_gradient_check:
+                prob.check_partials()
+                exit(0)
+
             prob.run_model()
             prob.run_driver()
 
