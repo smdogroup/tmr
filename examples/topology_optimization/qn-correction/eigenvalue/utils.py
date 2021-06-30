@@ -295,7 +295,7 @@ class FrequencyObj:
                 zmax = 1.0*RATIO*self.lz + tol
 
             else:
-                raise ValueError("Unsupported domain type!")
+                print("[Warning]Unsupported domain type for non-design mass!")
 
             for i in range(offset, n_local_nodes):
                 x, y, z = Xpts[i]
@@ -1072,7 +1072,7 @@ class OmAnalysis(om.ExplicitComponent):
     SNOPT and IPOPT.
     Note that the design/gradient vectors manipulated in this class
     are all global vectors. Local components can be queried by:
-
+"alt+right"
     local_vec = global_vec[start:end]
 
     where:
