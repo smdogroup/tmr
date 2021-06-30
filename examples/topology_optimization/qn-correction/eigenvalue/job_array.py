@@ -14,10 +14,15 @@ def dic2str(dc):
     row = ['--{:s} {:s}'.format(k, v) for k, v in dc.items()]
     return ' '.join(row[1:])
 
-def optimizer2cmd(optimizer, problem):
+def optimizer2cmd(optimizer, problem, compfreq_qn):
     if optimizer == 'paroptqn':
         if problem == 'compfreq':
-            return '--optimizer paropt --qn-correction-comp'
+            if compfreq_qn == 'comp':
+                return '--optimizer paropt --qn-correction-comp'
+            elif compfreq_qn == 'freq':
+                return '--optimizer paropt --qn-correction-freq'
+            elif compfreq_qn == 'compfreq':
+                return '--optimizer paropt --qn-correction-comp --qn-correction-freq'
         else:
             return '--optimizer paropt --qn-correction'
     else:
@@ -36,7 +41,7 @@ def readCSV(csvfile, start, end):
                 physics.append(row)
     return physics
 
-def createCaseCmds(problem, physics, optimizers, exescript):
+def createCaseCmds(problem, physics, optimizers, exescript, compfreq_qn):
     # Create runcase commands
     case_cmds = []
     n_exist_case = 0
@@ -56,7 +61,7 @@ def createCaseCmds(problem, physics, optimizers, exescript):
                 cmd = 'python {:s} {:s} {:s} --prefix {:s}'.format(
                     exescript,                         # eig-max.py
                     dic2str(case_dict),                # --domain cantilever --AR 1.0 ...
-                    optimizer2cmd(optimizer, problem), # --optimizer paropt --qn-correction
+                    optimizer2cmd(optimizer, problem, compfreq_qn), # --optimizer paropt --qn-correction
                     case_folder                        # --prefix e-1-paroptqn
                 )
                 case_cmds.append(cmd)
@@ -79,6 +84,8 @@ if __name__ == '__main__':
     p.add_argument('--end', type=int, default=20)
     p.add_argument('--problem', type=str, default='eig',
         choices=['eig', 'comp', 'freq', 'compfreq'])
+    p.add_argument('--compfreq-qn', type=str, default='comp',
+        choices=['comp', 'freq', 'compfreq'])
     p.add_argument('--optimizer', type=str, nargs='*',
         default=['paropt', 'paroptqn', 'snopt', 'ipopt'],
         choices=['paropt', 'paroptqn', 'snopt', 'ipopt'])
@@ -111,7 +118,7 @@ if __name__ == '__main__':
 
     # Create case commands
     case_cmds, n_exist_case = createCaseCmds(args.problem, 
-        physics, args.optimizer, exescript)
+        physics, args.optimizer, exescript, args.compfreq_qn)
 
     # Write case commands to txt
     writeCmdToTxt(output, case_cmds)

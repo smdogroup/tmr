@@ -124,14 +124,14 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
         if has_freq_constr:
             problem.addQnCorrectionCallback(nconstr, freqconstr.qn_correction)
         else:
-            raise ValueError("doesn't have frequency constraint \
-                but has frequency correction!")
+            print("[Warning]doesn't have frequency constraint, \
+                discard frequency correction!")
 
     # Compliance and frequency
     if qn_correction_freq and qn_correction_comp:
         if not has_freq_constr:
-            raise ValueError("doesn't have frequency constraint \
-                but has frequency correction!")
+            print("[Warning]doesn't have frequency constraint, \
+                discard frequency correction!")
         def qn_callback_fun(x, z, zw, s, y):
             obj_callback.qn_correction(x, z, zw, s, y)
             freqconstr.qn_correction(x, z, zw, s, y)

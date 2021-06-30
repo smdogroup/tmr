@@ -55,7 +55,8 @@ if __name__ == '__main__':
         choices=['paropt', 'paropt-pyoptsparse', 'snopt', 'ipopt'])
     p.add_argument('--n-mesh-refine', type=int, default=3)
     p.add_argument('--max-iter', type=int, default=100)
-    p.add_argument('--has-freq-constr', action='store_true')
+    p.add_argument('--constr', type=str, default='mass',
+        choices=['mass', 'massfreq'])
     p.add_argument('--qn-correction-comp', action='store_true')
     p.add_argument('--qn-correction-freq', action='store_true')
     p.add_argument('--comp-scale', type=float, default=1.0)
@@ -162,11 +163,15 @@ if __name__ == '__main__':
         iter_offset = step*optimization_options['tr_max_iterations']
 
         # Create the optimization problem
+        if args.constr == 'mass':
+            has_freq_constr = False
+        elif args.constr == 'massfreq':
+            has_freq_constr = True
         problem, obj_callback = create_problem(prefix=args.prefix, domain=args.domain,
                                     forest=forest, bcs=bcs,
                                     props=stiffness_props, nlevels=mg_levels+step,
                                     lambda0=args.lambda0, ksrho=args.ksrho,
-                                    has_freq_constr=args.has_freq_constr,
+                                    has_freq_constr=has_freq_constr,
                                     vol_frac=args.vol_frac, r0_frac=args.r0_frac,
                                     len0=args.len0, AR=args.AR, ratio=args.ratio,
                                     iter_offset=iter_offset,
