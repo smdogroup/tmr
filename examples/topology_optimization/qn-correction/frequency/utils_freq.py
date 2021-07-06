@@ -236,24 +236,25 @@ class FrequencyConstr:
         self.mg.factor()
 
         # Solve eigenproblem
-        self.jd.solve(print_flag=True, print_level=0)
+        self.jd.solve(print_flag=True, print_level=2)
 
         # Check if succeeded, otherwise try again
         if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
             if self.comm.rank == 0:
                 print("[Warning] Jacobi-Davidson failed to converge for the first run.")
 
-            # Extract the eigenvalues
-            for i in range(self.num_eigenvalues):
-                self.eig[i], error = self.jd.extractEigenvalue(i)
+            # # Extract the eigenvalues
+            # for i in range(self.num_eigenvalues):
+            #     self.eig[i], error = self.jd.extractEigenvalue(i)
 
-            # Update preconditioner
-            theta = 0.9*np.min(self.eig)
-            self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta)
-            self.mg.factor()
+            # # Update preconditioner
+            # theta = 0.9*np.min(self.eig)
+            # # Fix this
+            # self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta)
+            # self.mg.factor()
 
             # Rerun the solver
-            self.jd.solve(print_flag=True, print_level=1)
+            self.jd.solve(print_flag=True, print_level=2)
             nconvd = self.jd.getNumConvergedEigenvalues()
 
             # If it still fails, raise error and exit
