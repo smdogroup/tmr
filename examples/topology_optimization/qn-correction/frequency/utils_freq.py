@@ -91,7 +91,7 @@ class FrequencyConstr:
         Evaluate the KS aggregation of the smallest eigenvalue for the generalized
         eigenvalue problem:
 
-        ks = -1/rho * ln tr exp(-rho*A)
+        ks = -1.0/rho * ln tr exp(-rho*A)
 
         """
 
@@ -120,7 +120,6 @@ class FrequencyConstr:
             self.rho = self.assembler.createDesignVec()
             self.rho_original = self.assembler.createDesignVec()
             self.update = self.assembler.createDesignVec()
-            self.update2 = self.assembler.createDesignVec()
             self.temp = self.assembler.createDesignVec()
 
             # Create the operator with given matrix and multigrid preconditioner
@@ -229,7 +228,7 @@ class FrequencyConstr:
         # Assemble the multigrid preconditioner
         # mgmat = K - 0.95*lambda0*M
         mgmat.axpy(-0.95*self.lambda0, self.mmat)
-        self.assembler.applyMatBCs(mgmat)  # Is this necessary?
+        self.assembler.applyMatBCs(mgmat)
 
         # Assemble mg matrix and factor
         self.mg.assembleGalerkinMat()
@@ -241,17 +240,8 @@ class FrequencyConstr:
         # Check if succeeded, otherwise try again
         if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
             if self.comm.rank == 0:
-                print("[Warning] Jacobi-Davidson failed to converge for the first run.")
-
-            # # Extract the eigenvalues
-            # for i in range(self.num_eigenvalues):
-            #     self.eig[i], error = self.jd.extractEigenvalue(i)
-
-            # # Update preconditioner
-            # theta = 0.9*np.min(self.eig)
-            # # Fix this
-            # self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta)
-            # self.mg.factor()
+                print("[Warning] Jacobi-Davidson failed to converge"
+                      " for the first run, starting rerun...")
 
             # Rerun the solver
             self.jd.solve(print_flag=True, print_level=2)
@@ -365,95 +355,62 @@ class FrequencyConstr:
         # derivative of stiffness matrix
         h = 1e-8
 
-        # Zero out update
+        # Zero out the update vector for y
         self.update.zeroEntries()
-        self.update2.zeroEntries()
 
         # Get current nodal density
         self.assembler.getDesignVars(self.rho)
         self.rho_original.copyValues(self.rho)
 
-        # Apply filter to step vector
+        # Apply filter to step vector and perturb rho
         self.svec.zeroEntries()
         self.fltr.applyFilter(TMR.convertPVecToVec(s), self.svec)
         self.rho.axpy(h, self.svec)
 
+        # Zero out temp vector to store gradient information
+        self.temp.zeroEntries()
+
+        # set density = rho + h*s
+        self.assembler.setDesignVars(self.rho)
+
         for i in range(self.num_eigenvalues):
-            """
-            Compute the first part using finite difference
-            P += phi^T d2Kdx2 phi
-            """
-
-            # Zero out temp vector
-            self.temp.zeroEntries()
-
-            coeff = self.eta[i]*self.eig_scale
-
-            # Compute g(rho + h*s)
-            self.assembler.setDesignVars(self.rho)
-            self.assembler.addMatDVSensInnerProduct(coeff, TACS.STIFFNESS_MATRIX,
+            # Compute g(rho + h*s) for d2Kdx2
+            coeff1 = self.eta[i]*self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(coeff1, TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
 
-            # Compute dg = g(rho + h*s) - g(rho)
-            self.assembler.setDesignVars(self.rho_original)
-            self.assembler.addMatDVSensInnerProduct(-coeff, TACS.STIFFNESS_MATRIX,
+            # Compute g(rho + h*s) for d2Mdx2
+            coeff2 = -self.eta[i]*self.lambda0*self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(coeff2, TACS.MASS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
 
-            # Distribute the vector
-            self.temp.beginSetValues(op=TACS.ADD_VALUES)
-            self.temp.endSetValues(op=TACS.ADD_VALUES)
+        # set density = rho
+        self.assembler.setDesignVars(self.rho_original)
 
-            # Compute dg/h
-            self.temp.scale(1/h)
-
-            # Add to the update
-            self.update.axpy(1.0, self.temp)
-
-            """
-            Compute the second part:
-            P -= lambda0 * phi^T d2Mdx2 phi
-            """
-            # Zero out temp vector
-            self.temp.zeroEntries()
-
-            coeff = -self.eta[i]*self.lambda0*self.eig_scale
-
-            # Compute g(rho + h*s)
-            self.assembler.setDesignVars(self.rho)
-            self.assembler.addMatDVSensInnerProduct(coeff, TACS.MASS_MATRIX,
+        for i in range(self.num_eigenvalues):
+            # Compute g(rho + h*s) - g(rho) for d2Kdx2
+            coeff1 = self.eta[i]*self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(-coeff1, TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
 
-            # Compute dg = g(rho + h*s) - g(rho)
-            self.assembler.setDesignVars(self.rho_original)
-            self.assembler.addMatDVSensInnerProduct(-coeff, TACS.MASS_MATRIX,
+            # Compute g(rho + h*s) - g(rho) for d2Mdx2
+            coeff2 = -self.eta[i]*self.lambda0*self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(-coeff2, TACS.MASS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
 
-            # Distribute the vector
-            self.temp.beginSetValues(op=TACS.ADD_VALUES)
-            self.temp.endSetValues(op=TACS.ADD_VALUES)
+        # Distribute the temp vector
+        self.temp.beginSetValues(op=TACS.ADD_VALUES)
+        self.temp.endSetValues(op=TACS.ADD_VALUES)
 
-            # Compute dg/h
-            self.temp.scale(1/h)
+        # Add to the update
+        self.update.axpy(1.0/h, self.temp)
 
-            # Add to the update
-            self.update.axpy(1.0, self.temp)
-
-        """
-        Compute the third part:
-        P += rho*g*g^T
-        """
-        coeff = self.eig_scale*self.ksrho*self.dcdrho.dot(self.svec)
-        self.update2.axpy(coeff, self.dcdrho)
-
-
-        # Compute curvature and check the norm of the update
-        # to see if the magnitude makes sense
+        # Compute norms for output
         x_norm = x.norm()
         s_norm = s.norm()
         y_norm = y.norm()
         dy_norm = self.update.norm()
         curvature = self.svec.dot(self.update)
-        curvature2 = self.svec.dot(self.update2)
         if self.comm.rank == 0:
             if curvature < 0:
                 try:
@@ -465,16 +422,6 @@ class FrequencyConstr:
                     print(colored("curvature: {:20.10e}".format(curvature), "green"))
                 except:
                     print("curvature: {:20.10e}".format(curvature))
-            if curvature2 < 0:
-                try:
-                    print(colored("curvature: {:20.10e}".format(curvature2), "red"))
-                except:
-                    print("curvature: {:20.10e}".format(curvature2))
-            else:
-                try:
-                    print(colored("curvature: {:20.10e}".format(curvature2), "green"))
-                except:
-                    print("curvature: {:20.10e}".format(curvature2))
 
             print("norm(x):   {:20.10e}".format(x_norm))
             print("norm(s):   {:20.10e}".format(s_norm))
@@ -487,10 +434,6 @@ class FrequencyConstr:
         if curvature > 0:
             self.fltr.applyTranspose(self.update, self.update)
             y_wrap.axpy(z[0], self.update)
-
-        # if curvature2 > 0:
-        #     self.fltr.applyTranspose(self.update2, self.update2)
-        #     y_wrap.axpy(z[0], self.update2)
 
         self.curvs.append(curvature)
 
@@ -536,7 +479,7 @@ class MassObj:
         dfdrho.zeroEntries()
 
         # Evaluate the mass gradient
-        self.assembler.addDVSens([self.mass_func], [dfdrho], alpha=1/self.m_fixed)
+        self.assembler.addDVSens([self.mass_func], [dfdrho], alpha=1.0/self.m_fixed)
 
         # Compute norm
         norm = dfdrho.norm()
@@ -591,7 +534,7 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
     vol = lx*ly*lz
     if domain == 'lbracket':
         S1 = lx*lz
-        S2 = lx*lz*(1-ratio)**2
+        S2 = lx*lz*(1.0-ratio)**2
         vol = (S1-S2)*ly
     m_fixed = vol_frac*(vol*density)
 
