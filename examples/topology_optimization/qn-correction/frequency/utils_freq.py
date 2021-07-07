@@ -128,8 +128,8 @@ class FrequencyConstr:
             # Create the eigenvalue solver and set the number of recycling eigenvectors
             self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
                                           self.max_jd_size, self.max_gmres_size)
-            self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-6, atol=1e-12)
-            # self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-12, atol=1e-15)
+            self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-6, rtol=1e-6, atol=1e-12)
+            self.jd.setThetaCutoff(0.01)
             self.jd.setRecycle(self.num_eigenvalues)
 
             '''
@@ -235,7 +235,7 @@ class FrequencyConstr:
         self.mg.factor()
 
         # Solve eigenproblem
-        self.jd.solve(print_flag=True, print_level=2)
+        self.jd.solve(print_flag=True, print_level=1)
 
         # Check if succeeded, otherwise try again
         if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
@@ -244,7 +244,7 @@ class FrequencyConstr:
                       " for the first run, starting rerun...")
 
             # Rerun the solver
-            self.jd.solve(print_flag=True, print_level=2)
+            self.jd.solve(print_flag=True, print_level=1)
             nconvd = self.jd.getNumConvergedEigenvalues()
 
             # If it still fails, raise error and exit
