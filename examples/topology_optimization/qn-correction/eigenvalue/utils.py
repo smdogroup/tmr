@@ -1072,7 +1072,7 @@ class OmAnalysis(om.ExplicitComponent):
     SNOPT and IPOPT.
     Note that the design/gradient vectors manipulated in this class
     are all global vectors. Local components can be queried by:
-"alt+right"
+
     local_vec = global_vec[start:end]
 
     where:

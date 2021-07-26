@@ -46,10 +46,13 @@ if __name__ == '__main__':
     p.add_argument('--htarget', type=float, default=1.0)
     p.add_argument('--mg-levels', type=int, default=4)
     p.add_argument('--qval', type=float, default=5.0)
-    p.add_argument('--max-jd-size', type=int, default=100)
-    p.add_argument('--max-gmres-size', type=int, default=30)
     p.add_argument('--lambda0', type=float, default=0.1)
     p.add_argument('--ksrho', type=float, default=1000)
+
+    p.add_argument('--eig-method', type=str, default='jd', choices=['jd', 'lanczos'])
+    p.add_argument('--max-jd-size', type=int, default=100)
+    p.add_argument('--max-gmres-size', type=int, default=30)
+    p.add_argument('--max-lanczos', type=int, default=30)
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
@@ -174,8 +177,10 @@ if __name__ == '__main__':
                                                  non_design_mass=args.non_design_mass,
                                                  eig_scale=args.eig_scale,
                                                  eq_constr=args.eq_constr,
+                                                 eig_method=args.eig_method,
                                                  max_jd_size=args.max_jd_size,
-                                                 max_gmres_size=args.max_gmres_size)
+                                                 max_gmres_size=args.max_gmres_size,
+                                                 max_lanczos=args.max_lanczos)
 
         # Set the prefix
         problem.setPrefix(prefix)
@@ -186,10 +191,11 @@ if __name__ == '__main__':
 
         if args.gradient_check:
             for i in range(3):
-                xt = problem.createDesignVec()
-                xt_vals = TMR.convertPVecToVec(xt).getArray()
-                xt_vals[:] = np.random.rand(len(xt_vals))
-                problem.setInitDesignVars(xt)
+                # xt = problem.createDesignVec()
+                # xt_vals = TMR.convertPVecToVec(xt).getArray()
+                # # xt_vals[:] = np.random.rand(len(xt_vals))
+                # xt_vals[:] = 0.95
+                # problem.setInitDesignVars(xt)
                 problem.checkGradients(1e-6)
             exit(0)
 

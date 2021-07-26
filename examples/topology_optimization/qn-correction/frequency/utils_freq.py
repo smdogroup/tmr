@@ -27,10 +27,10 @@ class FrequencyConstr:
 
     itr = 0
 
-    def __init__(self, prefix, domain, forest, len0, AR, ratio, iter_offset,
-                 lambda0, eig_scale=1.0, num_eigenvalues=10,
-                 max_jd_size=100, max_gmres_size=30,
-                 ksrho=50, non_design_mass=5.0):
+    def __init__(self, prefix, domain, forest, len0, AR, ratio,
+                 iter_offset, lambda0, eig_scale=1.0, num_eigenvalues=10,
+                 eig_method='jd', max_jd_size=100, max_gmres_size=30,
+                 max_lanczos=60, ksrho=50, non_design_mass=5.0):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -38,6 +38,11 @@ class FrequencyConstr:
             num_eigenvalues: number of smallest eigenvalues to compute
             ksrho: KS parameter
         """
+
+        # Check input
+        if eig_method != 'jd' and eig_method != 'lanczos':
+            raise ValueError("Invalid method for eigensolver.")
+        self.eig_method = eig_method
 
         # Set objects
         self.forest = forest
@@ -56,6 +61,7 @@ class FrequencyConstr:
         self.eig_scale = eig_scale
         self.num_eigenvalues = num_eigenvalues
         self.max_jd_size = max_jd_size
+        self.max_lanczos = max_lanczos
         self.max_gmres_size = max_gmres_size
         self.ksrho = ksrho
         self.non_design_mass = non_design_mass
@@ -66,6 +72,7 @@ class FrequencyConstr:
         self.comm = None
         self.oper = None
         self.jd = None
+        self.lanczos = None
         self.eig = None
 
         # TACS Vectors
@@ -107,7 +114,6 @@ class FrequencyConstr:
             self.mmat = self.assembler.createMat()
             self.m0mat = self.assembler.createMat()  # For non design mass
             self.Amat = self.assembler.createMat()
-            self.temp = self.assembler.createVec()
             self.eig = np.zeros(self.num_eigenvalues)
             self.eigv = []
             for i in range(self.num_eigenvalues):
@@ -122,15 +128,31 @@ class FrequencyConstr:
             self.update = self.assembler.createDesignVec()
             self.temp = self.assembler.createDesignVec()
 
-            # Create the operator with given matrix and multigrid preconditioner
-            self.oper = TACS.JDSimpleOperator(self.assembler, self.Amat, self.mg)
+            # Set up Jacobi-Davidson eigensolver
+            if self.eig_method == 'jd':
 
-            # Create the eigenvalue solver and set the number of recycling eigenvectors
-            self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
-                                          self.max_jd_size, self.max_gmres_size)
-            self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-6, rtol=1e-6, atol=1e-12)
-            self.jd.setThetaCutoff(0.01)
-            self.jd.setRecycle(self.num_eigenvalues)
+                # Create the operator with given matrix and multigrid preconditioner
+                self.oper = TACS.JDSimpleOperator(self.assembler, self.Amat, self.mg)
+
+                # Create the eigenvalue solver and set the number of recycling eigenvectors
+                self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
+                                              self.max_jd_size, self.max_gmres_size)
+                self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-6, rtol=1e-6, atol=1e-12)
+                self.jd.setThetaCutoff(0.01)
+                self.jd.setRecycle(self.num_eigenvalues)
+
+            # Set up Shift-and-invert Lanczos method
+            else:
+                assert(self.eig_method == 'lanczos')
+                sigma = 0.0
+                gmres_iters = 15
+                nrestart = 0
+                is_flexible = 0
+                eig_tol = 1e-6
+                ksm = TACS.KSM(self.Amat, self.mg, gmres_iters, nrestart, is_flexible)
+                self.lanczos = TACS.FrequencyAnalysis(self.assembler, sigma, None,
+                                                      self.Amat, ksm, self.max_lanczos,
+                                                      self.num_eigenvalues, eig_tol)
 
             '''
             Create a non-design mass matrix
@@ -234,28 +256,37 @@ class FrequencyConstr:
         self.mg.assembleGalerkinMat()
         self.mg.factor()
 
-        # Solve eigenproblem
-        self.jd.solve(print_flag=True, print_level=1)
-
-        # Check if succeeded, otherwise try again
-        if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
-            if self.comm.rank == 0:
-                print("[Warning] Jacobi-Davidson failed to converge"
-                      " for the first run, starting rerun...")
-
-            # Rerun the solver
+        """
+        Solve the eigenvalue problem
+        """
+        if self.eig_method == 'jd':
             self.jd.solve(print_flag=True, print_level=1)
-            nconvd = self.jd.getNumConvergedEigenvalues()
 
-            # If it still fails, raise error and exit
-            if nconvd < self.num_eigenvalues:
-                msg = "No enough eigenvalues converged! ({:d}/{:d})".format(
-                    nconvd, self.num_eigenvalues)
-                raise ValueError(msg)
+            # Check if succeeded, otherwise try again
+            if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
+                if self.comm.rank == 0:
+                    print("[Warning] Jacobi-Davidson failed to converge"
+                        " for the first run, starting rerun...")
 
-        # Extract eigenvalues and eigenvectors
-        for i in range(self.num_eigenvalues):
-            self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
+                # Rerun the solver
+                self.jd.solve(print_flag=True, print_level=1)
+                nconvd = self.jd.getNumConvergedEigenvalues()
+
+                # If it still fails, raise error and exit
+                if nconvd < self.num_eigenvalues:
+                    msg = "No enough eigenvalues converged! ({:d}/{:d})".format(
+                        nconvd, self.num_eigenvalues)
+                    raise ValueError(msg)
+
+            # Extract eigenvalues and eigenvectors
+            for i in range(self.num_eigenvalues):
+                self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
+        else:
+            assert(self.eig_method=='lanczos')
+            self.lanczos.solve(print_flag=True, freq=1, print_level=1)
+            # Extract eigenvalues and eigenvectors
+            for i in range(self.num_eigenvalues):
+                self.eig[i], error = self.lanczos.extractEigenvector(i, self.eigv[i])
 
         # Set first eigenvector as state variable for visualization
         self.assembler.setVariables(self.eigv[0])
@@ -491,7 +522,8 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                    vol_frac=0.25, r0_frac=0.05, len0=1.0, AR=1.0, ratio=0.4,
                    density=2600.0, iter_offset=0, qn_correction=True,
                    non_design_mass=5.0, eig_scale=1.0, eq_constr=False,
-                   max_jd_size=100, max_gmres_size=30):
+                   eig_method='jd', max_jd_size=100,
+                   max_gmres_size=30, max_lanczos=60):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -549,6 +581,8 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                                      ksrho=ksrho,
                                      non_design_mass=non_design_mass,
                                      eig_scale=eig_scale,
+                                     eig_method=eig_method,
+                                     max_lanczos=max_lanczos,
                                      max_jd_size=max_jd_size,
                                      max_gmres_size=max_gmres_size)
     nineq = 1

@@ -1477,7 +1477,7 @@ int TMRTopoProblem::evalObjConGradient( ParOptVec *xvec,
       double vi_norm = vecs[i]->norm();
       filter->addValues(vecs[i]);
       double fvi_norm = vecs[i]->norm();
-      if (mpi_rank == 1){
+      if (mpi_rank == 0){
         printf("[TMRTopoProblem]unfiltered constraint gradient norm: %20.10e\n", vi_norm);
         printf("[TMRTopoProblem]filtered constraint gradient norm:   %20.10e\n", fvi_norm);
       }
