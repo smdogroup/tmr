@@ -4571,6 +4571,19 @@ cdef class TopoFilter:
             return _init_Assembler(self.ptr.getAssembler())
         return None
 
+    def setDesignVars(self, Vec vec):
+        """
+        setDesignVars(self, vec)
+
+        Apply the filter to the design vector and set it into the assembler
+
+        Args:
+            vec (TACS.Vec): Design variable vector to be set
+        """
+        if self.ptr != NULL:
+            self.ptr.setDesignVars(vec.ptr)
+        return
+
     def addValues(self, Vec vec):
         """
         addValues(self, vec)
