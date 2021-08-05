@@ -24,6 +24,7 @@ class BaseFreq:
         self.eig_method = eig_method
         self.sep_op_type = sep_op_type
         self.eig_problem = eig_problem
+        self.ratio = ratio
         self.shift = shift
         self.estimate = estimate
         self.max_jd_size = max_jd_size
@@ -382,4 +383,4 @@ if __name__ == "__main__":
                         args.qval, args.non_design_mass, args.eig_method,
                         args.sep_op_type, args.eig_problem, args.shift,
                         args.estimate, args.max_jd_size, args.max_gmres_size,
-                        args.max_lanczos, args.num_eigenvals)
+                        args.max_lanczos, args.num_eigenvalues)
