@@ -186,7 +186,7 @@ class GEP_solver:
         """
 
         # Assemble matrices
-        self.assembler.getDesignVars(dv)
+        self.assembler.setDesignVars(dv)
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.kmat)
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
 

@@ -1,5 +1,5 @@
 """
-This script performs eigenvalue minimization with mass constraint
+This script performs mass minimization with natural frequency constraint
 """
 
 # Import analysis-related libraries
@@ -379,7 +379,7 @@ if __name__ == '__main__':
             pkl['eq-constr'] = args.eq_constr
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
-            pkl['problem'] = 'eig-max'
+            pkl['problem'] = 'frequency'
 
             if args.optimizer == 'paropt' or args.optimizer == 'paropt-pyoptsparse':
                 pkl['curvs'] = constr_callback.getQnUpdateCurvs()
