@@ -2,6 +2,7 @@ from csv import DictWriter
 from typing import ClassVar
 from baseline import run_baseline_case
 import argparse
+from mpi4py import MPI
 
 import sys
 sys.path.append('../eigenvalue')
@@ -24,13 +25,13 @@ def isint(x):
     else:
         return a == b
 
-def writeToCSV(csvfile, ls, fieldnames):
+def writeLineToCSV(csvfile, line, fieldnames, write_header=False):
     # Create csv dictionary reader
-    with open(csvfile, mode='w', encoding='utf-8-sig') as f:
+    with open(csvfile, mode='a', encoding='utf-8-sig') as f:
         writer = DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in ls:
-            writer.writerow(row)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(line)
     return
 
 if __name__ == '__main__':
@@ -41,9 +42,10 @@ if __name__ == '__main__':
     p.add_argument("--write_result_to_csv", action='store_true')
     args = p.parse_args()
 
+    comm = MPI.COMM_WORLD
     physics = readCSV(args.csv, args.start, args.end)
 
-    results = []
+    index = 0
     for case_dict in physics:
         for k in case_dict:
             if isint(case_dict[k]):
@@ -52,12 +54,22 @@ if __name__ == '__main__':
                 case_dict[k] = float(case_dict[k])
         res_dict = case_dict.copy()
         case_dict.pop('no')
-        res = run_baseline_case(**case_dict)
-        res_dict['min eig'] = res['min eig']
-        results.append(res_dict)
+        try:
+            res = run_baseline_case(**case_dict)
+            res_dict['min eig'] = res['min eig']
+        except:
+            res_dict['min eig'] = 'case failed!'
 
-    fieldnames = [s for s in results[0]]
-    writeToCSV('baseline_results.csv', results, fieldnames)
+        fieldnames = [s for s in res_dict]
+
+        write_header = False
+        if index == 0:
+            write_header = True
+
+        if comm.rank == 0:
+            writeLineToCSV('baseline_results.csv', res_dict, fieldnames, write_header)
+
+        index += 1
 
 
 
