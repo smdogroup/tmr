@@ -144,15 +144,20 @@ class FrequencyConstr:
             # Set up Shift-and-invert Lanczos method
             else:
                 assert(self.eig_method == 'lanczos')
-                sigma = 0.0
+
+                # Set up linear solver
                 gmres_iters = 15
                 nrestart = 0
                 is_flexible = 0
-                eig_tol = 1e-6
                 ksm = TACS.KSM(self.Amat, self.mg, gmres_iters, nrestart, is_flexible)
-                self.lanczos = TACS.FrequencyAnalysis(self.assembler, sigma, None,
-                                                      self.Amat, ksm, self.max_lanczos,
-                                                      self.num_eigenvalues, eig_tol)
+
+                # Set up lanczos solver
+                shift = 0.0
+                eig_tol = 1e-6
+                ep_oper = TACS.EPShiftInvertOp(shift, ksm)
+                self.sep = TACS.SEPsolver(ep_oper, self.max_lanczos,
+                                          TACS.SEP_FULL, self.assembler.getBcMap())
+                self.sep.setTolerances(eig_tol, TACS.SEP_SMALLEST, self.num_eigenvalues)
 
             '''
             Create a non-design mass matrix
@@ -231,25 +236,33 @@ class FrequencyConstr:
             self.m0mat.scale(self.non_design_mass)
             self.assembler.setDesignVars(dv)
 
+        # Assemble the mass matrix
+        self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
+        self.mmat.axpy(1.0, self.m0mat)
+        self.assembler.applyMatBCs(self.mmat)
+
         # Assemble the stiffness matrix for the generalized eigenvalue problem
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.Amat)
         mgmat = self.mg.getMat()
         mgmat.copyValues(self.Amat)
 
-        # Assemble and update matrix
-        self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
-        self.mmat.axpy(1.0, self.m0mat)
-
         # Assemble A matrix for eigensolver
         # A = K - lambda0*M
         self.Amat.axpy(-self.lambda0, self.mmat)
 
-        # Apply boundary condition
+        # Apply boundary condition (necessary?)
         self.assembler.applyMatBCs(self.Amat)
 
         # Assemble the multigrid preconditioner
-        # mgmat = K - 0.95*lambda0*M
-        mgmat.axpy(-0.95*self.lambda0, self.mmat)
+        #    mgmat = K - 0.95*lambda0*M for jd
+        # or mgmat = K - 1.00*lambda0*M for lanczos
+        if self.eig_method == 'jd':
+            mgmat.axpy(-0.95*self.lambda0, self.mmat)
+        elif self.eig_method == 'lanczos':
+            mgmat.axpy(-1.00*self.lambda0, self.mmat)
+        else:
+            raise ValueError("Invalid eig_method")
+
         self.assembler.applyMatBCs(mgmat)
 
         # Assemble mg matrix and factor
@@ -281,12 +294,14 @@ class FrequencyConstr:
             # Extract eigenvalues and eigenvectors
             for i in range(self.num_eigenvalues):
                 self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
-        else:
-            assert(self.eig_method=='lanczos')
-            self.lanczos.solve(print_flag=True, freq=1, print_level=1)
-            # Extract eigenvalues and eigenvectors
+
+        elif self.eig_method == 'lanczos':
+            self.sep.solve(self.comm, print_flag=True)
             for i in range(self.num_eigenvalues):
-                self.eig[i], error = self.lanczos.extractEigenvector(i, self.eigv[i])
+                self.eig[i], error = self.sep.extractEigenvector(i, self.eigv[i])
+
+        else:
+            raise ValueError("Invalid eig_method")
 
         # Set first eigenvector as state variable for visualization
         self.assembler.setVariables(self.eigv[0])
