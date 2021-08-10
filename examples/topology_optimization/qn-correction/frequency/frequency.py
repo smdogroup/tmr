@@ -53,6 +53,7 @@ if __name__ == '__main__':
     p.add_argument('--max-jd-size', type=int, default=100)
     p.add_argument('--max-gmres-size', type=int, default=30)
     p.add_argument('--max-lanczos', type=int, default=30)
+    p.add_argument('--jd-recycle', type=str, default='on', choices=['on', 'off'])
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
@@ -78,6 +79,11 @@ if __name__ == '__main__':
 
     mg_levels = args.mg_levels
     prefix = args.prefix
+
+    if args.jd_recycle == 'on':
+        jd_use_recycle = True
+    else:
+        jd_use_recycle = False
 
     # Set the communicator
     comm = MPI.COMM_WORLD
@@ -179,6 +185,7 @@ if __name__ == '__main__':
                                                  eq_constr=args.eq_constr,
                                                  eig_method=args.eig_method,
                                                  max_jd_size=args.max_jd_size,
+                                                 jd_use_recycle=jd_use_recycle,
                                                  max_gmres_size=args.max_gmres_size,
                                                  max_lanczos=args.max_lanczos)
 

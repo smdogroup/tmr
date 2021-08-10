@@ -30,7 +30,7 @@ class FrequencyConstr:
     def __init__(self, prefix, domain, forest, len0, AR, ratio,
                  iter_offset, lambda0, eig_scale=1.0, num_eigenvalues=10,
                  eig_method='jd', max_jd_size=100, max_gmres_size=30,
-                 max_lanczos=60, ksrho=50, non_design_mass=5.0):
+                 max_lanczos=60, ksrho=50, non_design_mass=5.0, jd_use_recycle=True):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -65,6 +65,7 @@ class FrequencyConstr:
         self.max_gmres_size = max_gmres_size
         self.ksrho = ksrho
         self.non_design_mass = non_design_mass
+        self.jd_use_recycle = jd_use_recycle
 
         self.fltr = None
         self.mg = None
@@ -139,7 +140,6 @@ class FrequencyConstr:
                                               self.max_jd_size, self.max_gmres_size)
                 self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-6, rtol=1e-6, atol=1e-12)
                 self.jd.setThetaCutoff(0.01)
-                self.jd.setRecycle(self.num_eigenvalues)
 
             # Set up Shift-and-invert Lanczos method
             else:
@@ -273,6 +273,13 @@ class FrequencyConstr:
         Solve the eigenvalue problem
         """
         if self.eig_method == 'jd':
+            if self.jd_use_recycle:
+                num_recycle = self.num_eigenvalues
+            else:
+                num_recycle = 0
+            self.jd.setRecycle(num_recycle)
+            if self.comm.rank == 0:
+                print("[JD Recycle] JD solver is recycling {:d} eigenvectors...".format(num_recycle))
             self.jd.solve(print_flag=True, print_level=1)
 
             # Check if succeeded, otherwise try again
@@ -537,7 +544,7 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                    vol_frac=0.25, r0_frac=0.05, len0=1.0, AR=1.0, ratio=0.4,
                    density=2600.0, iter_offset=0, qn_correction=True,
                    non_design_mass=5.0, eig_scale=1.0, eq_constr=False,
-                   eig_method='jd', max_jd_size=100,
+                   eig_method='jd', max_jd_size=100, jd_use_recycle=True,
                    max_gmres_size=30, max_lanczos=60):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
@@ -599,7 +606,8 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                                      eig_method=eig_method,
                                      max_lanczos=max_lanczos,
                                      max_jd_size=max_jd_size,
-                                     max_gmres_size=max_gmres_size)
+                                     max_gmres_size=max_gmres_size,
+                                     jd_use_recycle=jd_use_recycle)
     nineq = 1
     if eq_constr is True:
         nineq = 0
