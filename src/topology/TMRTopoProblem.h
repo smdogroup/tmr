@@ -27,10 +27,8 @@
 #include "TMRTopoFilter.h"
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
-#include "TMR_RefinementTools.h"
-#include "StructuralMass.h"
-#include "Compliance.h"
-#include "KSFailure.h"
+#include "TACSStructuralMass.h"
+#include "TACSKSFailure.h"
 #include "TACSBuckling.h"
 
 /*
@@ -78,8 +76,8 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Set the output frequency, element type and flags for f5 files
   // -------------------------------------------------------------
-  void setF5OutputFlags( int freq, ElementType elem_type, unsigned int flag );
-  void setF5EigenOutputFlags( int freq, ElementType elem_type, unsigned int flag );
+  void setF5OutputFlags( int freq, ElementType elem_type, int flag );
+  void setF5EigenOutputFlags( int freq, ElementType elem_type, int flag );
 
   // Add constraints associated with one of the load cases
   // -----------------------------------------------------
@@ -87,10 +85,6 @@ class TMRTopoProblem : public ParOptProblem {
                        const TacsScalar *_func_offset,
                        const TacsScalar *_func_scale,
                        int num_funcs );
-  void addStressConstraint( int _load_case,
-                            TMRStressConstraint *stress_func,
-                            TacsScalar _constr_offset=1.0,
-                            TacsScalar _constr_scale=1.0 );
   void addLinearConstraints( ParOptVec **vecs,
                              TacsScalar *offset,
                              int _ncon );
@@ -102,24 +96,38 @@ class TMRTopoProblem : public ParOptProblem {
                                double eig_rtol=1e-12,
                                double eig_atol=1e-30,
                                int num_recycle=0,
-                               JDRecycleType recycle_type=JD_NUM_RECYCLE,
-                               int _track_eigen_iters=0 );
+                               JDRecycleType recycle_type=JD_NUM_RECYCLE );
   void addBucklingConstraint( double sigma, int num_eigvals,
                               TacsScalar ks_weight,
                               TacsScalar offset, TacsScalar scale,
                               int max_lanczos, double eigtol );
+  void addConstraintCallback( int ncon,
+                              void *con_ptr,
+                              void (*confunc)(void*, TMRTopoFilter*, TACSMg*,
+                                              int, TacsScalar*),
+                              void *con_grad_ptr,
+                              void (*congradfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                                  int, TACSBVec**) );
 
-  // Accessor functions to the underlying Assembler and Oct or QuadForest
+  // Accessor functions to the underlying Assembler, Oct or QuadForest, TopoFilter, and Mg objects
   // --------------------------------------------------------------------
   TACSAssembler* getAssembler();
   TMRQuadForest* getFilterQuadForest();
   TMROctForest* getFilterOctForest();
+  TMRTopoFilter* getTopoFilter();
+  TACSMg* getMg();
 
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
   // ----------------------------------------------------------------
   void setObjective( const TacsScalar *_obj_weights, TACSFunction **funcs );
   void setObjective( const TacsScalar *_obj_weights );
+  void addObjectiveCallback( void *obj_ptr,
+                             void (*objfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                             TacsScalar*),
+                             void *obj_grad_ptr,
+                             void (*objgradfunc)(void*, TMRTopoFilter*, TACSMg*,
+                                                 TACSBVec*) );
 
   // Finish the initialization tasks - assign the number of
   // constraints and variables in the problem. Allocate arrays etc.
@@ -139,10 +147,6 @@ class TMRTopoProblem : public ParOptProblem {
   // --------------------------------
   void setIterationCounter( int iter );
 
-  // Set the linearization point and penalty parameter
-  // -------------------------------------------------
-  void setLinearization( double q, ParOptVec *xvec );
-
   // Create a design variable vector
   // -------------------------------
   ParOptVec *createDesignVec();
@@ -150,15 +154,9 @@ class TMRTopoProblem : public ParOptProblem {
   // Set the inequality flags
   // ------------------------
   int isSparseInequality();
-  int isDenseInequality();
   int useLowerBounds();
   int useUpperBounds();
 
-  // Set the option to use the previous solution to
-  // Ku=f as the starting point for the current iteration
-  // ----------------------------------------------------
-  void setUseRecycledSolution( int truth );
-  
   // Get the initial variables and bounds
   // ------------------------------------
   void getVarsAndBounds( ParOptVec *x,
@@ -207,21 +205,47 @@ class TMRTopoProblem : public ParOptProblem {
   // ---------------------
   void writeOutput( int iter, ParOptVec *x );
 
+  void setOutputCallback( void *data,
+                          void (*func)( void*, const char*, int,
+                                        TMROctForest*, TMRQuadForest*,
+                                        TACSBVec* ) ){
+    output_callback_ptr = data;
+    writeOutputCallback = func;
+  }
+
  private:
+  void *output_callback_ptr;
+  void (*writeOutputCallback)( void*, const char*, int,
+                               TMROctForest*, TMRQuadForest*,
+                               TACSBVec* );
+
+  int num_callback_constraints;
+
+  void *constraint_callback_ptr;
+  void (*constraintCallback)( void*, TMRTopoFilter*, TACSMg*,
+                              int, TacsScalar* );
+  void *constraint_gradient_callback_ptr;
+  void (*constraintGradientCallback)( void*, TMRTopoFilter*, TACSMg*,
+                                      int, TACSBVec** );
+
+  void *objective_callback_ptr;
+  void (*objectiveCallback)( void*, TMRTopoFilter*, TACSMg*,
+                             TacsScalar* );
+  void *objective_gradient_callback_ptr;
+  void (*objectiveGradientCallback)( void*, TMRTopoFilter*, TACSMg*,
+                                     TACSBVec* );
+
   // Set the design variables across all multigrid levels
   void setDesignVars( ParOptVec *xvec );
 
   // Store the prefix
   char *prefix;
 
-  // Solver parameters
-  int use_recyc_sol;
-  
   // Set the iteration count for printing to the file
   int iter_count;
 
   // Set the number of variables per node (defaults to 1)
-  int vars_per_node;
+  int design_vars_per_node;
 
   // Set the load case information. In this case, these are force
   // vectors for each load case
@@ -242,8 +266,6 @@ class TMRTopoProblem : public ParOptProblem {
   TacsScalar freq_ks_sum;
   TacsScalar freq_ks_weight;
   TacsScalar freq_offset, freq_scale;
-  int track_eigen_iters;
-  KSMPrint *ksm_file;
 
   // The buckling TACS object
   TACSLinearBuckling **buck;
@@ -270,18 +292,14 @@ class TMRTopoProblem : public ParOptProblem {
     TacsScalar *offset;
     TacsScalar *scale;
     TACSFunction **funcs;
-    TMRStressConstraint *stress_func;
+    // TMRStressConstraint *stress_func;
     TacsScalar stress_func_offset;
     TacsScalar stress_func_scale;
   } *load_case_info;
 
   // Store the design variable info
-  TACSAssembler *tacs;
+  TACSAssembler *assembler;
   TMRTopoFilter *filter;
-
-  // The initial design variable values
-  int max_local_size;
-  TacsScalar *xlocal;
 
   // Store the Krylov solver and the multigrid object
   TACSKsm *ksm;
@@ -294,7 +312,7 @@ class TMRTopoProblem : public ParOptProblem {
   // Information to control the output frequency
   int f5_frequency, f5_eigen_frequency;
   ElementType f5_element_type, f5_eigen_element_type;
-  unsigned int f5_write_flag, f5_eigen_write_flag;
+  int f5_write_flag, f5_eigen_write_flag;
 };
 
 #endif // TMR_TOPO_PROBLEM_H

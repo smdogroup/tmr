@@ -45,9 +45,6 @@ ego TMR_EgadsContext::getContext(){
   return ctx;
 }
 
-/*
-  The TMR interface to the underlying OpenCascade vertex object
-*/
 TMR_EgadsNode::TMR_EgadsNode( TMR_EgadsContext *_ctx,
                               ego _node ){
   ctx = _ctx;
@@ -76,7 +73,6 @@ int TMR_EgadsNode::getParamOnEdge( TMREdge *edge, double *t ){
   return TMRVertex::getParamOnEdge(edge, t);
 }
 
-// Ditto
 int TMR_EgadsNode::getParamsOnFace( TMRFace *surface,
                                     double *u, double *v ){
   int icode = 0;
@@ -113,9 +109,6 @@ void TMR_EgadsNode::getNodeObject( ego *n ){
   *n = node;
 }
 
-/*
-  TMR interface to the underlying OpenCascade edge object
-*/
 TMR_EgadsEdge::TMR_EgadsEdge( TMR_EgadsContext *_ctx, ego _edge,
                               int _is_degenerate ){
   ctx = _ctx;

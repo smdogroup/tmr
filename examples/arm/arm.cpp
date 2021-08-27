@@ -4,9 +4,10 @@
 #include "TMRMesh.h"
 #include "TMRQuadForest.h"
 #include "TACSAssembler.h"
-#include "isoFSDTStiffness.h"
-#include "PlaneStressQuad.h"
-#include "PlaneStressTraction.h"
+#include "TACSLinearElasticity.h"
+#include "TACSQuadBasis.h"
+#include "TACSElement2D.h"
+#include "TACSTraction2D.h"
 #include "TACSToFH5.h"
 #include <stdio.h>
 #include <math.h>
@@ -471,13 +472,29 @@ int main( int argc, char *argv[] ){
   forest->repartition();
   forest->createNodes();
 
-    // Allocate the stiffness object
-  TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
-  PlaneStressStiffness *stiff = 
-    new PlaneStressStiffness(rho, E, nu);
+  // Allocate the stiffness object
+  TacsScalar rho = 2700.0;
+  TacsScalar specific_heat = 921.096;
+  TacsScalar E = 70e3;
+  TacsScalar nu = 0.3;
+  TacsScalar ys = 270.0;
+  TacsScalar cte = 24.0e-6;
+  TacsScalar kappa = 230.0;
+  TACSMaterialProperties *props =
+    new TACSMaterialProperties(rho, specific_heat, E, nu, ys, cte, kappa);
+
+  // Create the plane stress constitutive object
+  TACSPlaneStressConstitutive *stiff =
+    new TACSPlaneStressConstitutive(props);
+
+  // Create the linear elasticity basis
+  TACSElementModel *model = new TACSLinearElasticity2D(stiff, TACS_LINEAR_STRAIN);
+
+  // Create the linear basis
+  TACSElementBasis *linear_basis = new TACSLinearQuadBasis();
 
   // Allocate the solid element class
-  TACSElement *elem = new PlaneStressQuad<2>(stiff, LINEAR, mpi_rank);
+  TACSElement *elem = new TACSElement2D(model, linear_basis);
 
   // Find the number of nodes for this processor
   const int *range;
@@ -510,7 +527,7 @@ int main( int argc, char *argv[] ){
   }
   
   // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(elem_conn, ptr);
+  tacs->setElementConnectivity(ptr, elem_conn);
   delete [] ptr;
 
   // Set the dependent node information
@@ -552,9 +569,11 @@ int main( int argc, char *argv[] ){
 
   double tx = 0.0;
   double ty = 100.0;
-  PSQuadTraction<2> *trac[4];
+  TacsScalar Tc[2] = {tx, ty};
+  TACSElement *trac[4];
   for ( int k = 0; k < 4; k++ ){
-    trac[k] = new PSQuadTraction<2>(k, tx, ty);
+    trac[k] = new TACSTraction2D(model->getVarsPerNode(), k,
+                                 linear_basis, Tc);
     trac[k]->incref();
   }
 
@@ -599,7 +618,7 @@ int main( int argc, char *argv[] ){
   // Create the preconditioner
   TACSBVec *res = tacs->createVec();
   TACSBVec *ans = tacs->createVec();
-  FEMat *mat = tacs->createFEMat();
+  TACSSchurMat *mat = tacs->createSchurMat();
 
   // Increment the reference count to the matrix/vectors
   res->incref();
@@ -610,7 +629,7 @@ int main( int argc, char *argv[] ){
   int lev = 4500;
   double fill = 10.0;
   int reorder_schur = 1;
-  PcScMat *pc = new PcScMat(mat, lev, fill, reorder_schur);
+  TACSSchurPc *pc = new TACSSchurPc(mat, lev, fill, reorder_schur);
   pc->incref();
 
   // Assemble and factor the stiffness/Jacobian matrix
@@ -630,11 +649,12 @@ int main( int argc, char *argv[] ){
   tacs->setVariables(ans);
 
   // Create and write out an fh5 file
-  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                             TACSElement::OUTPUT_DISPLACEMENTS |
-                             TACSElement::OUTPUT_STRESSES |
-                             TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_PLANE_STRESS, write_flag);
+  int write_flag = (TACS_OUTPUT_CONNECTIVITY |
+                    TACS_OUTPUT_NODES |
+                    TACS_OUTPUT_DISPLACEMENTS |
+                    TACS_OUTPUT_STRESSES |
+                    TACS_OUTPUT_EXTRAS);
+  TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_PLANE_STRESS_ELEMENT, write_flag);
   f5->incref();
     
   // Write out the solution

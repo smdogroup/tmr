@@ -32,6 +32,7 @@ MPI_Datatype TMROctant_MPI_type;
 MPI_Datatype TMRQuadrant_MPI_type;
 MPI_Datatype TMRPoint_MPI_type;
 MPI_Datatype TMRIndexWeight_MPI_type;
+MPI_Datatype TMR_STLTriangle_MPI_type;
 
 /*
   Initialize TMR data type
@@ -80,7 +81,13 @@ void TMRInitialize(){
     MPI_Type_create_struct(2, len, disp, types, 
                            &TMRIndexWeight_MPI_type);
     MPI_Type_commit(&TMRIndexWeight_MPI_type);
-    
+
+    counts[0] = 3;
+    offset[0] = 0;
+    MPI_Type_create_struct(1, counts, offset, &TMRPoint_MPI_type,
+                           &TMR_STLTriangle_MPI_type);
+    MPI_Type_commit(&TMR_STLTriangle_MPI_type);
+
     // Set the TMR initialization flag
     TMR_is_initialized = 1;
   }
@@ -101,6 +108,7 @@ void TMRFinalize(){
   MPI_Type_free(&TMRQuadrant_MPI_type);
   MPI_Type_free(&TMRPoint_MPI_type);
   MPI_Type_free(&TMRIndexWeight_MPI_type);
+  MPI_Type_free(&TMR_STLTriangle_MPI_type);
 }
 
 TMREntity::TMREntity(): entity_id(entity_id_count){

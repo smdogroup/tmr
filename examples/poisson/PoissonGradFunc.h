@@ -7,39 +7,40 @@ class TACSPoissonGradFunction : public TACSFunction {
  public:
   enum PoissonGradFunctionType { DISCRETE, CONTINUOUS,
                                  PNORM_DISCRETE, PNORM_CONTINUOUS };
-  
+
   TACSPoissonGradFunction( TACSAssembler *_tacs,
                            TacsScalar _ksWeight,
                            const TacsScalar _dir[],
                            PoissonGradFunctionType ksType=CONTINUOUS );
   ~TACSPoissonGradFunction();
-  
-  const char *functionName();
+
+  const char *getObjectName();
   void setGradFunctionType( PoissonGradFunctionType _ksType );
-  TACSFunctionCtx *createFunctionCtx();
 
   void initEvaluation( EvaluationType ftype );
   void finalEvaluation( EvaluationType ftype );
-  void initThread( double tcoef, EvaluationType ftype,
-                   TACSFunctionCtx *ctx );
   void elementWiseEval( EvaluationType ftype,
-                        TACSElement *element, int elemNum,
-                        const TacsScalar Xpts[], const TacsScalar vars[],
-                        const TacsScalar dvars[], const TacsScalar ddvars[],
-                        TACSFunctionCtx *ctx );
-  void finalThread( double tcoef, EvaluationType ftype,
-                    TACSFunctionCtx *ctx );
+                        int elemIndex, TACSElement *element,
+                        double time,
+                        TacsScalar scale,
+                        const TacsScalar Xpts[],
+                        const TacsScalar vars[],
+                        const TacsScalar dvars[],
+                        const TacsScalar ddvars[] );
 
   TacsScalar getFunctionValue();
 
-  void getElementSVSens( double alpha, double beta, double gamma, 
-                         TacsScalar *elemSVSens, 
-                         TACSElement *element, int elemNum,
-                         const TacsScalar Xpts[], const TacsScalar vars[],
-                         const TacsScalar dvars[], const TacsScalar ddvars[],
-                         TACSFunctionCtx *ctx );
+  oid getElementSVSens( int elemIndex, TACSElement *element,
+                        double time,
+                        TacsScalar alpha, TacsScalar beta,
+                        TacsScalar gamma,
+                        const TacsScalar Xpts[],
+                        const TacsScalar vars[],
+                        const TacsScalar dvars[],
+                        const TacsScalar ddvars[],
+                        TacsScalar dfdu[] );
 
- private:  
+ private:
   // The name of the function
   static const char *funcName;
 

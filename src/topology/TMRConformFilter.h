@@ -34,19 +34,14 @@ class TMRConformFilter : public TMRTopoFilter {
  public:
   TMRConformFilter( int _nlevels,
                     TACSAssembler *_tacs[],
-                    TMROctForest *_filter[],
-                    int _vars_per_node=1 );
+                    TMROctForest *_filter[] );
   TMRConformFilter( int _nlevels,
                     TACSAssembler *_tacs[],
-                    TMRQuadForest *_filter[],
-                    int _vars_per_node=1 );
+                    TMRQuadForest *_filter[] );
   ~TMRConformFilter();
 
   // Get the MPI communicator
   MPI_Comm getMPIComm();
-
-  // Get the design variable mapping information
-  TACSVarMap* getDesignVarMap();
 
   // Get the TACSAssembler instance (on the finest mesh level)
   TACSAssembler* getAssembler();
@@ -55,20 +50,12 @@ class TMRConformFilter : public TMRTopoFilter {
   TMRQuadForest* getFilterQuadForest();
   TMROctForest* getFilterOctForest();
 
-  // Get problem definitions maximum local size of the design variable values
-  int getVarsPerNode();
-  int getNumLocalVars();
-  int getMaxNumLocalVars();
-
-  // Create a design vector on the finest mesh level
-  TACSBVec* createVec();
-
   // Set the design variable values (including all local values)
   void setDesignVars( TACSBVec *x );
 
   // Set values/add values to the vector
-  void addValues( TacsScalar *in, TACSBVec *out );
-  void setValues( TacsScalar *in, TACSBVec *out );
+  void addValues( TACSBVec *vec );
+  void setValues( TACSBVec *vec );
 
   void writeSTLFile( int k, double cutoff, const char *filename ){
     if (oct_filter){
@@ -76,17 +63,9 @@ class TMRConformFilter : public TMRTopoFilter {
     }
   }
  protected:
-  // Get/set values from the TACSBVec object
-  int getLocalValuesFromBVec( int level, TACSBVec *vec, TacsScalar *xloc );
-  void setBVecFromLocalValues( int level, const TacsScalar *xloc, TACSBVec *vec,
-                               TACSBVecOperation op );
-
   // The number of multigrid levels
   int nlevels;
-  TACSAssembler **tacs;
-
-  // The number of variables per node
-  int vars_per_node;
+  TACSAssembler **assembler;
 
   // The maximum number of local design variables
   int max_local_vars;
@@ -94,26 +73,17 @@ class TMRConformFilter : public TMRTopoFilter {
   // Set the information about the filter at each level
   TMROctForest **oct_filter;
   TMRQuadForest **quad_filter;
-  TACSVarMap **filter_maps;
-  TACSBVecDistribute **filter_dist;
   TACSBVecInterp **filter_interp;
-  TACSBVecDepNodes **filter_dep_nodes;
 
   // Create the design variable values at each level
   TACSBVec **x;
 
  private:
-  void createMapIndices( TMRQuadForest *quad_filter,
-                         TMROctForest *oct_filter,
-                         TACSVarMap **map,
-                         TACSBVecIndices **indices );
-
   // Initialize the problem
   void initialize( int _nlevels,
                    TACSAssembler *_tacs[],
                    TMROctForest *_oct_filter[],
-                   TMRQuadForest *_quad_filter[],
-                   int _vars_per_node=1 );
+                   TMRQuadForest *_quad_filter[] );
 };
 
 #endif // TMR_CONFORM_FILTER_H

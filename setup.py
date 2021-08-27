@@ -12,6 +12,9 @@ from distutils.core import Extension as Ext
 from Cython.Build import cythonize
 from Cython.Compiler import Options
 
+Options.embedsignature = True
+Options.docstrings = True
+
 # Convert from local to absolute directories
 def get_global_dir(files):
     tmr_root = os.path.abspath(os.path.dirname(__file__))
@@ -100,9 +103,14 @@ mod = 'TMR'
 exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],
                 include_dirs=inc_dirs, libraries=libs,
                 library_dirs=lib_dirs, runtime_library_dirs=runtime_lib_dirs,
-                define_macros=[('math_Memory_HeaderFile', '1')]))
+                define_macros=[('math_Memory_HeaderFile', '1'),
+                               ('TMR_HAS_OPENCASCADE', '1'),
+                               ('TMR_HAS_EGADS', '1'),
+                               ('TMR_HAS_PAROPT', '1')]))
+
 for e in exts:
-    e.cython_directives = {'embedsignature': True,
+    e.cython_directives = {'language_level' : '3',
+                           'embedsignature': True,
                            'binding': True}
 
 setup(name='tmr',
@@ -110,5 +118,4 @@ setup(name='tmr',
       description='Parallel mesh generation utilities',
       author='Graeme J. Kennedy',
       author_email='graeme.kennedy@ae.gatech.edu',
-      ext_modules=cythonize(exts, language='c++',
-                            include_path=inc_dirs))
+      ext_modules=cythonize(exts, include_path=inc_dirs))

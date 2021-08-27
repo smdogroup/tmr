@@ -1,8 +1,6 @@
 from __future__ import print_function
 from mpi4py import MPI
 from tmr import TMR
-from paropt import ParOpt
-from tacs import TACS, elements, constitutive, functions
 import numpy as np
 import argparse
 import os
@@ -71,10 +69,6 @@ opts = TMR.MeshOptions()
 opts.num_smoothing_steps = 10
 opts.triangularize_print_iter = 50000
 opts.write_mesh_quality_histogram = 1
-opts.triangularize_print_iter = 5
-opts.write_triangularize_intermediate = 1
-opts.triangularize_print_level = 2
-opts.write_post_smooth_triangle = 1
 opts.frontal_quality_factor = 1.2
 
 # Create the surface mesh

@@ -29,13 +29,11 @@
 class TMRHelmholtzPUFilter : public TMRConformFilter {
  public:
   TMRHelmholtzPUFilter( int _N, int _nlevels,
-                        TACSAssembler *_tacs[],
-                        TMROctForest *_filter[],
-                        int _vars_per_node=1 );
+                        TACSAssembler *_assembler[],
+                        TMROctForest *_filter[] );
   TMRHelmholtzPUFilter( int _N, int _nlevels,
-                        TACSAssembler *_tacs[],
-                        TMRQuadForest *_filter[],
-                        int _vars_per_node=1 );
+                        TACSAssembler *_assembler[],
+                        TMRQuadForest *_filter[] );
   ~TMRHelmholtzPUFilter();
 
   // Compute the stencil at an interior node
@@ -52,7 +50,7 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   void setDesignVars( TACSBVec *x );
 
   // Set values/add values to the vector
-  void addValues( TacsScalar *in, TACSBVec *out );
+  void addValues( TACSBVec *vec );
 
   void initialize();
  private:
@@ -73,7 +71,7 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   TACSBVec *Dinv, *Tinv;
 
   // Temporary vectors required for the matrix computation
-  TACSBVec *t1, *t2, *t3;
+  TACSBVec *t1, *t2;
 
   // Another set of temporary vectors
   TACSBVec *y1, *y2;
@@ -91,19 +89,17 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
 class TMRCallbackHelmholtzPUFilter : public TMRHelmholtzPUFilter {
  public:
   TMRCallbackHelmholtzPUFilter( int _N, int _nlevels,
-                                TACSAssembler *_tacs[],
-                                TMROctForest *_filter[],
-                                int _vars_per_node=1 ):
-    TMRHelmholtzPUFilter(_N, _nlevels, _tacs, _filter, _vars_per_node){
+                                TACSAssembler *_assembler[],
+                                TMROctForest *_filter[] ):
+    TMRHelmholtzPUFilter(_N, _nlevels, _assembler, _filter){
     self = NULL;
     getinteriorstencil = NULL;
     getboundarystencil = NULL;
   }
   TMRCallbackHelmholtzPUFilter( int _N, int _nlevels,
-                        TACSAssembler *_tacs[],
-                        TMRQuadForest *_filter[],
-                        int _vars_per_node=1 ):
-    TMRHelmholtzPUFilter(_N, _nlevels, _tacs, _filter, _vars_per_node){
+                        TACSAssembler *_assembler[],
+                        TMRQuadForest *_filter[] ):
+    TMRHelmholtzPUFilter(_N, _nlevels, _assembler, _filter){
     self = NULL;
     getinteriorstencil = NULL;
     getboundarystencil = NULL;

@@ -76,11 +76,11 @@ coarse.createNodes()
 
 coarse_range = coarse.getNodeRange()
 nc = coarse_range[comm.rank+1] - coarse_range[comm.rank]
-coarse_map = TACS.VarMap(comm, nc)
+coarse_map = TACS.NodeMap(comm, nc)
 
 fine_range = fine.getNodeRange()
 nf = fine_range[comm.rank+1] - fine_range[comm.rank]
-fine_map = TACS.VarMap(comm, nf)
+fine_map = TACS.NodeMap(comm, nf)
 
 # Create the two interpolations fine -> coarse and coarse -> fine
 interp = TACS.VecInterp(coarse_map, fine_map, 1)

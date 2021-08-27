@@ -19,75 +19,11 @@
 */
 
 #include "TMRHelmholtzPUFilter.h"
-#include "TMRHelmholtzElement.h"
+#include "TMRMatrixFilterModel.h"
+#include "TMRHelmholtzModel.h"
+#include "TMRMatrixCreator.h"
 #include "TMR_TACSCreator.h"
-
 #include "TACSToFH5.h"
-
-/*
-  Matrix filter creator classes
-*/
-class TMRQuadTACSMatrixCreator : public TMRQuadTACSCreator {
-public:
-  TMRQuadTACSMatrixCreator():
-    TMRQuadTACSCreator(NULL){}
-  void createElements( int order,
-                       TMRQuadForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    TACSElement *elem = NULL;
-    if (order == 2){
-      elem = new TMRQuadHelmholtz<2>();
-    }
-    else if (order == 3){
-      elem = new TMRQuadHelmholtz<3>();
-    }
-    else if (order == 4){
-      elem = new TMRQuadHelmholtz<4>();
-    }
-    else if (order == 5){
-      elem = new TMRQuadHelmholtz<5>();
-    }
-    else if (order == 6){
-      elem = new TMRQuadHelmholtz<6>();
-    }
-
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-};
-
-class TMROctTACSMatrixCreator : public TMROctTACSCreator {
-public:
-  TMROctTACSMatrixCreator():
-    TMROctTACSCreator(NULL){}
-  void createElements( int order,
-                       TMROctForest *forest,
-                       int num_elements,
-                       TACSElement **elements ){
-    TACSElement *elem = NULL;
-    if (order == 2){
-      elem = new TMROctHelmholtz<2>();
-    }
-    else if (order == 3){
-      elem = new TMROctHelmholtz<3>();
-    }
-    else if (order == 4){
-      elem = new TMROctHelmholtz<4>();
-    }
-    else if (order == 5){
-      elem = new TMROctHelmholtz<5>();
-    }
-    else if (order == 6){
-      elem = new TMROctHelmholtz<6>();
-    }
-
-    for ( int i = 0; i < num_elements; i++ ){
-      elements[i] = elem;
-    }
-  }
-};
 
 /*
   Find the boundary faces and set them as  and set them
@@ -166,10 +102,10 @@ void computeQuadtreeBoundaryNormals( TMRQuadForest *filter,
 
         if (edge < 2){
           pt0[0] = -1.0 + 2.0*(edge % 2);
-          d1[1] = 1.0;
+          d1[1] = -1.0 + 2.0*(edge % 2);
         }
         else {
-          d1[0] = 1.0;
+          d1[0] = 1.0 - 2.0*(edge % 2);
           pt0[1] = -1.0 + 2.0*(edge % 2);
         }
 
@@ -212,9 +148,6 @@ void computeQuadtreeBoundaryNormals( TMRQuadForest *filter,
             TacsScalar invnorm = 1.0/sqrt(normal[0]*normal[0] +
                                           normal[1]*normal[1] +
                                           normal[2]*normal[2]);
-            if (edge % 2 == 0){
-              invnorm *= -1.0;
-            }
             normal[0] *= invnorm;
             normal[1] *= invnorm;
             normal[2] *= invnorm;
@@ -419,12 +352,12 @@ void computeOctreeBoundaryNormals( TMROctForest *filter,
 */
 TMRHelmholtzPUFilter::TMRHelmholtzPUFilter( int _N,
                                             int _nlevels,
-                                            TACSAssembler *_tacs[],
-                                            TMROctForest *_filter[],
-                                            int _vars_per_node ):
-  TMRConformFilter(_nlevels, _tacs, _filter, _vars_per_node){
+                                            TACSAssembler *_assembler[],
+                                            TMROctForest *_filter[] ):
+  TMRConformFilter(_nlevels, _assembler, _filter){
   N = _N;
-  t1 = t2 = t3 = NULL;
+  t1 = t2 = NULL;
+  y1 = y2 = NULL;
   B = NULL;
   Dinv = NULL;
   Tinv = NULL;
@@ -434,12 +367,12 @@ TMRHelmholtzPUFilter::TMRHelmholtzPUFilter( int _N,
 
 TMRHelmholtzPUFilter::TMRHelmholtzPUFilter( int _N,
                                             int _nlevels,
-                                            TACSAssembler *_tacs[],
-                                            TMRQuadForest *_filter[],
-                                            int _vars_per_node ):
-  TMRConformFilter(_nlevels, _tacs, _filter, _vars_per_node){
+                                            TACSAssembler *_assembler[],
+                                            TMRQuadForest *_filter[] ):
+  TMRConformFilter(_nlevels, _assembler, _filter){
   N = _N;
-  t1 = t2 = t3 = NULL;
+  t1 = t2 = NULL;
+  y1 = y2 = NULL;
   B = NULL;
   Dinv = NULL;
   Tinv = NULL;
@@ -453,7 +386,6 @@ TMRHelmholtzPUFilter::TMRHelmholtzPUFilter( int _N,
 TMRHelmholtzPUFilter::~TMRHelmholtzPUFilter(){
   if (t1){ t1->decref(); }
   if (t2){ t2->decref(); }
-  if (t3){ t3->decref(); }
   if (B){ B->decref(); }
   if (Dinv){ Dinv->decref(); }
   if (Tinv){ Tinv->decref(); }
@@ -470,30 +402,32 @@ TMRHelmholtzPUFilter::~TMRHelmholtzPUFilter(){
 */
 void TMRHelmholtzPUFilter::initialize(){
   // Create the Assembler object
-  TACSAssembler *tacs = NULL;
+  TACSAssembler *matrix_assembler = NULL;
   if (oct_filter){
+    TACSElementModel *model = new TMRHexaMatrixModel();
     TMROctTACSMatrixCreator *matrix_creator3d =
-      new TMROctTACSMatrixCreator();
+      new TMROctTACSMatrixCreator(model);
     matrix_creator3d->incref();
 
-    tacs = matrix_creator3d->createTACS(oct_filter[0],
-                                        TACSAssembler::NATURAL_ORDER);
-    tacs->incref();
+    matrix_assembler = matrix_creator3d->createTACS(oct_filter[0],
+                                                    TACSAssembler::NATURAL_ORDER);
+    matrix_assembler->incref();
     matrix_creator3d->decref();
   }
   else {
+    TACSElementModel *model = new TMRQuadMatrixModel();
     TMRQuadTACSMatrixCreator *matrix_creator2d =
-      new TMRQuadTACSMatrixCreator();
+      new TMRQuadTACSMatrixCreator(model);
     matrix_creator2d->incref();
 
-    tacs = matrix_creator2d->createTACS(quad_filter[0],
-                                        TACSAssembler::NATURAL_ORDER);
-    tacs->incref();
+    matrix_assembler = matrix_creator2d->createTACS(quad_filter[0],
+                                                    TACSAssembler::NATURAL_ORDER);
+    matrix_assembler->incref();
     matrix_creator2d->decref();
   }
 
   // Create the matrix that we're building
-  TACSDistMat *distMat = tacs->createMat();
+  TACSParallelMat *distMat = matrix_assembler->createMat();
   B = distMat;
   B->incref();
 
@@ -503,7 +437,7 @@ void TMRHelmholtzPUFilter::initialize(){
   distMat->getExtColMap(&colDist);
 
   // Get the variable info from TACS
-  TACSVarMap *varMap = tacs->getVarMap();
+  TACSNodeMap *nodeMap = matrix_assembler->getNodeMap();
 
   // Get the map between the global-external
   // variables and the local variables (for Bext)
@@ -512,27 +446,27 @@ void TMRHelmholtzPUFilter::initialize(){
   colIndex->getIndices(&col_vars);
 
   // Get the dependent node information
-  TACSBVecDepNodes *depNodes = tacs->getBVecDepNodes();
+  TACSBVecDepNodes *depNodes = matrix_assembler->getBVecDepNodes();
 
   // Get the distributed list of indices
-  TACSBVecDistribute *tacsDist = tacs->getBVecDistribute();
+  TACSBVecDistribute *tacsDist = matrix_assembler->getBVecDistribute();
   TACSBVecIndices *tacsIndex = tacsDist->getIndices();
 
   // Create a merged list of indices
   TACSBVecIndices *vecIndex = new TACSBVecIndices(tacsIndex, colIndex);
   vecIndex->setUpInverse();
-  TACSBVecDistribute *vecDist = new TACSBVecDistribute(varMap, vecIndex);
+  TACSBVecDistribute *vecDist = new TACSBVecDistribute(nodeMap, vecIndex);
 
   // Create the node location vector
-  TACSBVec *Xpts = new TACSBVec(varMap, 3, vecDist, depNodes);
+  TACSBVec *Xpts = new TACSBVec(nodeMap, 3, vecDist, depNodes);
   Xpts->incref();
 
   // Create the vector for the surface normals
-  TACSBVec *normals = new TACSBVec(varMap, 3, vecDist, depNodes);
+  TACSBVec *normals = new TACSBVec(nodeMap, 3, vecDist, depNodes);
   normals->incref();
 
   // Get the node locations from the assembler object
-  tacs->getNodes(Xpts);
+  matrix_assembler->getNodes(Xpts);
 
   // Distribute the node locations
   Xpts->beginDistributeValues();
@@ -569,7 +503,7 @@ void TMRHelmholtzPUFilter::initialize(){
   Bext->getArrays(NULL, &Nb, &Mb, &browp, &bcols, &Bvals);
 
   // Create the Dinv vector
-  Dinv = tacs->createVec();
+  Dinv = matrix_assembler->createVec();
   Dinv->incref();
 
   TacsScalar *Dvals;
@@ -578,8 +512,8 @@ void TMRHelmholtzPUFilter::initialize(){
   // Get the mpi rank info
   int mpi_rank;
   const int *owner_range;
-  varMap->getOwnerRange(&owner_range);
-  MPI_Comm_rank(varMap->getMPIComm(), &mpi_rank);
+  nodeMap->getOwnerRange(&owner_range);
+  MPI_Comm_rank(nodeMap->getMPIComm(), &mpi_rank);
 
   for ( int i = 0; i < n; i++ ){
     // Count up the number of columns in the row
@@ -597,6 +531,7 @@ void TMRHelmholtzPUFilter::initialize(){
     int *indices = new int[ num_indices ];
     TacsScalar *X = new TacsScalar[ 3*num_indices ];
     double *alpha = new double[ num_indices ];
+    memset(alpha, 0, num_indices*sizeof(double));
 
     int diagonal_index = -1;
 
@@ -678,24 +613,22 @@ void TMRHelmholtzPUFilter::initialize(){
   normals->decref();
 
   // Allocate the vectors needed for the application of the filter
-  Tinv = tacs->createVec();
-  t1 = tacs->createVec();
-  t2 = tacs->createVec();
-  t3 = tacs->createVec();
-  y1 = tacs->createVec();
-  y2 = tacs->createVec();
+  Tinv = matrix_assembler->createVec();
+  t1 = matrix_assembler->createVec();
+  t2 = matrix_assembler->createVec();
+  y1 = matrix_assembler->createVec();
+  y2 = matrix_assembler->createVec();
   Tinv->incref();
   t1->incref();
   t2->incref();
-  t3->incref();
   y1->incref();
   y2->incref();
 
   // Free this version of TACS - it's not required anymore!
-  tacs->decref();
+  matrix_assembler->decref();
 
   // Create a temporary design vector
-  temp = createVec();
+  temp = assembler[0]->createDesignVec();
   temp->incref();
 
   // Create the inverse of the diagonal matrix
@@ -822,12 +755,12 @@ void TMRHelmholtzPUFilter::kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y ){
   Set the design variables for each level
 */
 void TMRHelmholtzPUFilter::setDesignVars( TACSBVec *xvec ){
-  if (getVarsPerNode() == 1){
+  const int vpn = assembler[0]->getDesignVarsPerNode();
+
+  if (vpn == 1){
     applyFilter(xvec, x[0]);
   }
   else {
-    const int vpn = getVarsPerNode();
-
     for ( int k = 0; k < vpn; k++ ){
       TacsScalar *xin, *xout;
       xvec->getArray(&xin);
@@ -861,51 +794,31 @@ void TMRHelmholtzPUFilter::setDesignVars( TACSBVec *xvec ){
     }
   }
 
-  // Distribute the design variable values
-  x[0]->beginDistributeValues();
-  x[0]->endDistributeValues();
+  assembler[0]->setDesignVars(x[0]);
 
-  // Temporarily allocate an array to store the variables
-  int max_size = getMaxNumLocalVars();
-  TacsScalar *xlocal = new TacsScalar[ getMaxNumLocalVars() ];
-  memset(xlocal, 0, max_size*sizeof(TacsScalar));
-
-  // Copy the values to the local array
-  int size = getLocalValuesFromBVec(0, x[0], xlocal);
-  tacs[0]->setDesignVars(xlocal, size);
-
-  // Set the design variable values on all processors
+  // Set the design variable values on all levels
   for ( int k = 0; k < nlevels-1; k++ ){
     filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
 
-    // Distribute the design variable values
-    x[k+1]->beginDistributeValues();
-    x[k+1]->endDistributeValues();
-
     // Set the design variable values
-    size = getLocalValuesFromBVec(k+1, x[k+1], xlocal);
-    tacs[k+1]->setDesignVars(xlocal, size);
+    assembler[k+1]->setDesignVars(x[k+1]);
   }
-
-  delete [] xlocal;
 }
 
 /*
   Add values to the output TACSBVec
 */
-void TMRHelmholtzPUFilter::addValues( TacsScalar *xlocal, TACSBVec *vec ){
-  temp->zeroEntries();
-  setBVecFromLocalValues(0, xlocal, temp, TACS_ADD_VALUES);
-  temp->beginSetValues(TACS_ADD_VALUES);
-  temp->endSetValues(TACS_ADD_VALUES);
+void TMRHelmholtzPUFilter::addValues( TACSBVec *vec ){
+  vec->beginSetValues(TACS_ADD_VALUES);
+  vec->endSetValues(TACS_ADD_VALUES);
 
-  if (getVarsPerNode() == 1){
-    applyTranspose(temp, y1);
-    vec->axpy(1.0, y1);
+  temp->copyValues(vec);
+
+  const int vpn = assembler[0]->getDesignVarsPerNode();
+  if (vpn == 1){
+    applyTranspose(temp, vec);
   }
   else {
-    const int vpn = getVarsPerNode();
-
     for ( int k = 0; k < vpn; k++ ){
       TacsScalar *xin, *xout;
 
@@ -933,9 +846,9 @@ void TMRHelmholtzPUFilter::addValues( TacsScalar *xlocal, TACSBVec *vec ){
       TacsScalar *yout;
       y2->getArray(&yout);
       for ( int i = 0; i < size; i++ ){
-        xout[0] += yout[0];
+        xout[0] = yout[0];
         yout++;
-        xin += vpn;
+        xout += vpn;
       }
     }
   }

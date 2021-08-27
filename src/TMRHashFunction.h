@@ -31,7 +31,7 @@
 inline uint32_t TMRIntegerPairHash( uint32_t u, uint32_t v ){
   uint32_t w = 0;
   TMR_MIX_INT(u, v, w);
-  return  TMR_FINAL_HASH(u, v, w);
+  return TMR_FINAL_HASH(u, v, w);
 }
 
 /*
@@ -39,29 +39,29 @@ inline uint32_t TMRIntegerPairHash( uint32_t u, uint32_t v ){
 */
 inline uint32_t TMRIntegerTripletHash( uint32_t u, uint32_t v, uint32_t w ){
   TMR_MIX_INT(u, v, w);
-  return  TMR_FINAL_HASH(u, v, w);  
+  return TMR_FINAL_HASH(u, v, w);
 }
 
 /*
   Create a hash value for four-tuples of unsigned integers
 */
-inline uint32_t TMRIntegerFourTupleHash( uint32_t u, uint32_t v, 
+inline uint32_t TMRIntegerFourTupleHash( uint32_t u, uint32_t v,
                                          uint32_t w, uint32_t x ){
   TMR_MIX_INT(u, v, w);
   u += x;
-  return  TMR_FINAL_HASH(u, v, w);  
+  return TMR_FINAL_HASH(u, v, w);
 }
 
 /*
   Create a hash value for four-tuples of unsigned integers
 */
-inline uint32_t TMRIntegerFiveTupleHash( uint32_t u, uint32_t v, 
+inline uint32_t TMRIntegerFiveTupleHash( uint32_t u, uint32_t v,
                                          uint32_t w, uint32_t x,
                                          uint32_t z ){
   TMR_MIX_INT(u, v, w);
   u += x;
   v += z;
-  return  TMR_FINAL_HASH(u, v, w);  
+  return TMR_FINAL_HASH(u, v, w);
 }
 
 #endif // TMR_HASH_FUNCTION_H

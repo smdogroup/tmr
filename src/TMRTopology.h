@@ -318,6 +318,12 @@ class TMRModel : public TMREntity {
   int getVolumeIndex( TMRVolume *volume );
 
  private:
+  // Initialize the model
+  void initialize( int _num_vertices, TMRVertex **_vertices,
+                   int _num_edges, TMREdge **_edges,
+                   int _num_faces, TMRFace **_faces,
+                   int _num_volumes, TMRVolume **_volumes );
+
   // Verify that everything is more or less well defined. Print out
   // error messages if something doesn't make sense.
   int verify();
