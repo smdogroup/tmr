@@ -1,7 +1,9 @@
 #include "TMROctForest.h"
 #include "TACSMeshLoader.h"
 #include "TACSAssembler.h"
-#include "Solid.h"
+#include "TACSElement3D.h"
+#include "TACSHexaBasis.h"
+#include "TACSLinearElasticity.h"
 #include "TACSMg.h"
 #include "TMR_STLTools.h"
 
@@ -316,8 +318,14 @@ int main( int argc, char *argv[] ){
   TMROctForest *forest[NUM_LEVELS];
   forest[0] = new TMROctForest(comm, order, TMR_GAUSS_LOBATTO_POINTS);
   forest[0]->incref();
+
+  // Set the forest node ordering
+  forest[0]->setMeshOrder(order, TMR_GAUSS_LOBATTO_POINTS);
+
+  // Set the connectivity and create the trees
   forest[0]->setConnectivity(npts, conn, nelems);
   forest[0]->createRandomTrees(15, 0, 10);  
+  forest[0]->balance(0);
   forest[0]->repartition();
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){
@@ -348,18 +356,32 @@ int main( int argc, char *argv[] ){
   }
 
   // Allocate the stiffness object
-  TacsScalar rho = 2570.0, E = 70e9, nu = 0.3, ys = 1.0;
-  SolidStiffness *stiff = new SolidStiffness(rho, E, nu, ys);
+  TacsScalar rho = 2700.0;
+  TacsScalar specific_heat = 921.096;
+  TacsScalar E = 70e3;
+  TacsScalar nu = 0.3;
+  TacsScalar ys = 270.0;
+  TacsScalar cte = 24.0e-6;
+  TacsScalar kappa = 230.0;
+  TACSMaterialProperties *props =
+    new TACSMaterialProperties(rho, specific_heat, E, nu, ys, cte, kappa);
+  TACSSolidConstitutive *stiff = new TACSSolidConstitutive(props);
+  TACSElementModel *model = new TACSLinearElasticity3D(stiff, TACS_LINEAR_STRAIN);
+
+  // Create the hexa basis
+  TACSElementBasis *basis2 = new TACSLinearHexaBasis();
+  TACSElementBasis *basis3 = new TACSQuadraticHexaBasis();
+  TACSElementBasis *basis4 = new TACSCubicHexaBasis();
 
   // Allocate the solid element class
   TACSElement *solid[NUM_LEVELS];
-  solid[0] = new Solid<4>(stiff, LINEAR, mpi_rank);
-  solid[1] = new Solid<3>(stiff, LINEAR, mpi_rank);
-  solid[2] = new Solid<2>(stiff, LINEAR, mpi_rank);
-  solid[3] = new Solid<2>(stiff, LINEAR, mpi_rank);
-  
+  solid[0] = new TACSElement3D(model, basis4);
+  solid[1] = new TACSElement3D(model, basis3);
+  solid[2] = new TACSElement3D(model, basis2);
+  solid[3] = new TACSElement3D(model, basis2);
+
   // Create the TACSAssembler objects
-  TACSAssembler *tacs[NUM_LEVELS];
+  TACSAssembler *assembler[NUM_LEVELS];
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){
     // Find the number of nodes for this processor
@@ -381,10 +403,10 @@ int main( int argc, char *argv[] ){
 
     // Create the associated TACSAssembler object
     int vars_per_node = 3;
-    tacs[level] = new TACSAssembler(comm, vars_per_node,
-                                    num_nodes, num_elements,
-                                    num_dep_nodes);
-    tacs[level]->incref();
+    assembler[level] = new TACSAssembler(comm, vars_per_node,
+                                         num_nodes, num_elements,
+                                         num_dep_nodes);
+    assembler[level]->incref();
 
     // Set the element ptr
     int order = forest[level]->getMeshOrder();
@@ -392,13 +414,13 @@ int main( int argc, char *argv[] ){
     for ( int i = 0; i < num_elements+1; i++ ){
       ptr[i] = order*order*order*i;
     }
-    
+
     // Set the element connectivity into TACSAssembler
-    tacs[level]->setElementConnectivity(elem_conn, ptr);
+    assembler[level]->setElementConnectivity(ptr, elem_conn);
     delete [] ptr;
     
     // Set the dependent node information
-    tacs[level]->setDependentNodes(dep_ptr, dep_conn, dep_weights);
+    assembler[level]->setDependentNodes(dep_ptr, dep_conn, dep_weights);
 
     // Set the elements
     TACSElement **elems = new TACSElement*[ num_elements ];
@@ -408,11 +430,11 @@ int main( int argc, char *argv[] ){
     }
     
     // Set the element array
-    tacs[level]->setElements(elems);
+    assembler[level]->setElements(elems);
     delete [] elems;
 
     // Initialize the TACSAssembler object
-    tacs[level]->initialize();
+    assembler[level]->initialize();
 
     // Get the octant locations
     TMROctantArray *octants;
@@ -425,7 +447,7 @@ int main( int argc, char *argv[] ){
 
     // Create the node vector
     TacsScalar *Xn;
-    TACSBVec *X = tacs[level]->createNodeVec();
+    TACSBVec *X = assembler[level]->createNodeVec();
     X->getArray(&Xn);
 
     // Get the points
@@ -448,7 +470,7 @@ int main( int argc, char *argv[] ){
     }
     
     // Set the node locations into TACSAssembler
-    tacs[level]->setNodes(X);
+    assembler[level]->setNodes(X);
   }
 
   // Create the interpolation
@@ -456,9 +478,9 @@ int main( int argc, char *argv[] ){
 
   for ( int level = 0; level < NUM_LEVELS-1; level++ ){
     // Create the interpolation object
-    interp[level] = new TACSBVecInterp(tacs[level+1]->getVarMap(),
-                                       tacs[level]->getVarMap(),
-                                       tacs[level]->getVarsPerNode());
+    interp[level] = new TACSBVecInterp(assembler[level+1]->getNodeMap(),
+                                       assembler[level]->getNodeMap(),
+                                       assembler[level]->getVarsPerNode());
     interp[level]->incref();
 
     // Set the interpolation
@@ -470,23 +492,24 @@ int main( int argc, char *argv[] ){
 
   // Create a vector on the finest level
   TACSBVec *x[NUM_LEVELS];
-  x[0] = tacs[0]->createVec();
+  x[0] = assembler[0]->createVec();
   x[0]->incref();
-  tacs[0]->getNodes(x[0]);
+  assembler[0]->getNodes(x[0]);
   for ( int level = 0; level < NUM_LEVELS-1; level++ ){
-    x[level+1] = tacs[level+1]->createVec();
+    x[level+1] = assembler[level+1]->createVec();
     x[level+1]->incref();
     interp[level]->multWeightTranspose(x[level], x[level+1]);
   }
 
   // Create and write out an fh5 file
-  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                             TACSElement::OUTPUT_DISPLACEMENTS |
-                             TACSElement::OUTPUT_EXTRAS);
+  int write_flag = (TACS_OUTPUT_CONNECTIVITY |
+                    TACS_OUTPUT_NODES |
+                    TACS_OUTPUT_DISPLACEMENTS |
+                    TACS_OUTPUT_EXTRAS);
 
   for ( int level = 0; level < NUM_LEVELS; level++ ){
-    tacs[level]->setVariables(x[level]);
-    TACSToFH5 *f5 = new TACSToFH5(tacs[level], TACS_SOLID, write_flag);
+    assembler[level]->setVariables(x[level]);
+    TACSToFH5 *f5 = new TACSToFH5(assembler[level], TACS_SOLID_ELEMENT, write_flag);
     f5->incref();
     
     // Write out the solution
@@ -499,7 +522,7 @@ int main( int argc, char *argv[] ){
   // Create the level
   for ( int level = 0; level < NUM_LEVELS; level++ ){
     x[level]->decref();
-    tacs[level]->decref();
+    assembler[level]->decref();
     forest[level]->decref();
   }
 

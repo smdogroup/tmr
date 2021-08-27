@@ -20,6 +20,7 @@
 
 #include "TMRQuadForest.h"
 #include "TMRInterpolation.h"
+#include "tmrlapack.h"
 #include <stdlib.h>
 
 /*
@@ -930,7 +931,8 @@ void TMRQuadForest::setMeshOrder( int _mesh_order,
   interp_type = _interp_type;
   interp_knots = new double[ 2*(mesh_order) ];
   memset(interp_knots, 0.0, 2*(mesh_order)*sizeof(double));
-  if (interp_type == TMR_GAUSS_LOBATTO_POINTS){
+  if (interp_type == TMR_GAUSS_LOBATTO_POINTS ||
+      interp_type == TMR_BERNSTEIN_POINTS){
     interp_knots[0] = -1.0;
     interp_knots[mesh_order-1] = 1.0;
     for ( int i = 1; i < mesh_order-1; i++ ){
@@ -3218,11 +3220,11 @@ TMRQuadrantArray *TMRQuadForest::createLocalNodes(){
   // If the mesh order is high enough, we will have multiple nodes
   // per edge/face
   initLabel(mesh_order, interp_type, label_type);
-  
+
   node_label = label_type[0];
   edge_label = label_type[1];
   face_label = label_type[2];
-  
+
   // Set the node locations
   if (mesh_order == 2){
     // First of all, add all the nodes from the local elements
@@ -3500,7 +3502,7 @@ void TMRQuadForest::createLocalConn( TMRQuadrantArray *nodes,
   // If the mesh order is high enough, we will have multiple nodes
   // per edge/face
   initLabel(mesh_order, interp_type, label_type);
-  
+
   node_label = label_type[0];
   edge_label = label_type[1];
   face_label = label_type[2];
@@ -3705,11 +3707,11 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
   // If the mesh order is high enough, we will have multiple nodes
   // per edge/face
   initLabel(mesh_order, interp_type, label_type);
-  
+
   node_label = label_type[0];
   edge_label = label_type[1];
   face_label = label_type[2];
-  
+
   // Allocate space to store the free node variables
   int *edge_nodes = new int[ mesh_order ];
 
@@ -3802,13 +3804,13 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
               int index = node_nums[c[offset]];
               if (index < 0){
                 index = -index-1;
-                
+
                 // Compute the shape functions
                 int ptr = dep_ptr[index];
                 for ( int j = 0; j < mesh_order; j++ ){
                   dep_conn[ptr + j] = edge_nodes[j];
                 }
-              
+
                 // Compute parametric location along the edge
                 int u = 0.0;
                 if (edge_index < 2){
@@ -3817,7 +3819,7 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
                 else {
                   u = (mesh_order-1)*(-1 + (quads[i].childId() % 2)) + k;
                 }
-                
+
                 // Evaluate dependent weights
                 eval_bernstein_weights(mesh_order, u, &dep_weights[ptr]);
               }
@@ -3845,7 +3847,7 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
                 for ( int j = 0; j < mesh_order; j++ ){
                   dep_conn[ptr + j] = edge_nodes[j];
                 }
-                
+
                 // Compute parametric location along the edge
                 double u = 0.0;
                 if (edge_index < 2){
@@ -3859,14 +3861,14 @@ void TMRQuadForest::createDependentConn( const int *node_nums,
 
                 // Evaluate the shape functions
                 lagrange_shape_functions(mesh_order, u, interp_knots,
-                                         &dep_weights[ptr]);                
+                                         &dep_weights[ptr]);
               }
             }
           }
         }
       }
     }
-  } 
+  }
 
   delete [] edge_nodes;
 }
@@ -3889,7 +3891,93 @@ void TMRQuadForest::evaluateNodeLocations(){
   // Set the knots to use in the interpolation
   const double *knots = interp_knots;
 
-  if (topo){
+  if (topo && (interp_type == TMR_BERNSTEIN_POINTS && mesh_order > 2)){
+    // Form the interpolating matrix
+    int size = mesh_order*mesh_order;
+    double *interp = new double[ size*size ];
+
+    // For each point within the mesh, evaluate the shape functions
+    for ( int i = 0; i < size; i++ ){
+      double pt[2];
+      pt[0] = knots[i % mesh_order];
+      pt[1] = knots[i / mesh_order];
+
+      // Evaluate the interpolant
+      evalInterp(pt, &interp[size*i]);
+    }
+
+    // Compute the inverse for interpolation
+    int info = 0;
+    int *ipiv = new int[ size ];
+    TmrLAPACKdgetrf(&size, &size, interp, &size, ipiv, &info);
+
+    // Apply the factoriziation to the inverse
+    double *inverse = new double[ size*size ];
+    memset(inverse, 0, size*size*sizeof(double));
+    for ( int i = 0; i < size; i++ ){
+      inverse[(size+1)*i] = 1.0;
+    }
+
+    // Compute the inverse -- note that the transpose is used here
+    // since the interpolation matrix is stored in a row-major order
+    // not column-major order.
+    TmrLAPACKdgetrs("N", &size, &size, interp, &size, ipiv,
+                    inverse, &size, &info);
+
+    // Free the rest of the data
+    delete [] ipiv;
+    delete [] interp;
+
+    // Allocate storage for the element node locations
+    TMRPoint *Xtmp = new TMRPoint[ size ];
+
+    for ( int i = 0; i < num_elements; i++ ){
+      // Get the right surface
+      TMRFace *surf;
+      topo->getFace(quads[i].face, &surf);
+
+      // Compute the edge length
+      const int32_t h = 1 << (TMR_MAX_LEVEL - quads[i].level);
+
+      // Compute the origin of the element in parametric space
+      // and the edge length of the element
+      double d = convert_to_coordinate(h);
+      double u = convert_to_coordinate(quads[i].x);
+      double v = convert_to_coordinate(quads[i].y);
+
+      for ( int jj = 0; jj < mesh_order; jj++ ){
+        for ( int ii = 0; ii < mesh_order; ii++ ){
+          int local_index = ii + jj*mesh_order;
+          surf->evalPoint(u + 0.5*d*(1.0 + knots[ii]),
+                          v + 0.5*d*(1.0 + knots[jj]),
+                          &Xtmp[local_index]);
+        }
+      }
+
+      for ( int jj = 0; jj < mesh_order; jj++ ){
+        for ( int ii = 0; ii < mesh_order; ii++ ){
+          // Compute the mesh index
+          int local_index = ii + jj*mesh_order;
+          int node = conn[mesh_order*mesh_order*i + local_index];
+          int index = getLocalNodeNumber(node);
+          if (!flags[index]){
+            flags[index] = 1;
+
+            X[index].x = X[index].y = X[index].z = 0.0;
+            for ( int j = 0; j < size; j++ ){
+              X[index].x += inverse[local_index*size + j]*Xtmp[j].x;
+              X[index].y += inverse[local_index*size + j]*Xtmp[j].y;
+              X[index].z += inverse[local_index*size + j]*Xtmp[j].z;
+            }
+          }
+        }
+      }
+    }
+
+    delete [] inverse;
+    delete [] Xtmp;
+  }
+  else if (topo){
     for ( int i = 0; i < num_elements; i++ ){
       // Get the right surface
       TMRFace *surf;
@@ -3973,7 +4061,7 @@ int TMRQuadForest::getDepNodeConn( const int **ptr, const int **conn,
   and checks if each quadrant lies on a face or boundary. If the face
   name matches, the quadrant is added without modification. If
   the quadrant lies on an edge, the quadrant is modified so that the
-  tag indicates which edge the quadrant lies on using the regular edge
+  info indicates which edge the quadrant lies on using the regular edge
   ordering scheme.
 
   input:
@@ -4425,7 +4513,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
             "meshes are not identical\n");
   }
 
-  if (interp_type == TMR_BERNSTEIN_POINTS && 
+  if (interp_type == TMR_BERNSTEIN_POINTS &&
       mesh_order - coarse->mesh_order > 1){
     fprintf(stderr, "TMRQuadForest Error: mesh order difference across "
             "grids should be 1\n");
@@ -4434,7 +4522,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   if (interp_type == TMR_BERNSTEIN_POINTS){
     // Create the evenly spaced "Bern knots"
     const double *bern_knots = interp_knots;
-    
+
     // Check whether the node is on a coarse mesh surface in either
     // the x,y,z directions
     if ((i == 0 && quad->x == node->x) ||
@@ -4522,7 +4610,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
                                coarse->interp_knots, Nv);
     }
   }
-  
+
   // Get the coarse grid information
   const int *cdep_ptr;
   const int *cdep_conn;
@@ -4532,7 +4620,7 @@ int TMRQuadForest::computeElemInterp( TMRQuadrant *node,
   // Get the coarse connectivity array
   const int num = quad->tag;
   const int *c = &(coarse->conn[coarse_nodes_per_element*num]);
-  
+
   // Loop over the nodes that are within this octant
   int nweights = 0;
   for ( int jj = jstart; jj < jend; jj++ ){
@@ -4620,7 +4708,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
 
   // Allocate a queue to store the nodes that are on other procs
   TMRQuadrantQueue *ext_queue = new TMRQuadrantQueue();
-  
+
   // Set the knots to use in the interpolation
   const double *knots = interp_knots;
 
@@ -4634,12 +4722,12 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
         if (!flags[index]){
           // We're going to handle this node now, mark it as done
           flags[index] = 1;
-          
+
           // Find the enclosing coarse quad on this
           // processor if it exits
           TMRQuadrant node = quads[i];
           node.info = j;
-          
+
           // Find the MPI owner or the
           int mpi_owner = mpi_rank;
           TMRQuadrant *t = coarse->findEnclosing(mesh_order, knots,
@@ -4652,7 +4740,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
 
             for ( int k = 0; k < nweights; k++ ){
               vars[k] = weights[k].index;
-              wvals[k] = weights[k].weight;             
+              wvals[k] = weights[k].weight;
             }
             interp->addInterp(c[j], wvals, vars, nweights);
           }
@@ -4680,7 +4768,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
   TMRQuadrant *array;
   ext_array->getArray(&array, &size);
   qsort(array, size, sizeof(TMRQuadrant), compare_quadrant_tags);
-  
+
   // The number of quadrants that will be sent from this processor
   // to all other processors in the communicator
   int *quad_ptr = new int[ mpi_size+1 ];
@@ -4745,12 +4833,12 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
       // Compute the element interpolation
       int nweights = computeElemInterp(&recv_nodes[i], coarse, t,
                                        weights, tmp);
-      
+
       for ( int k = 0; k < nweights; k++ ){
         vars[k] = weights[k].index;
         wvals[k] = weights[k].weight;
       }
-      interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);      
+      interp->addInterp(recv_nodes[i].tag, wvals, vars, nweights);
     }
     else {
       // This should not happen. Print out an error message here.
@@ -4758,7 +4846,7 @@ void TMRQuadForest::createInterpolation( TMRQuadForest *coarse,
               "not own node\n", mpi_rank);
     }
   }
- 
+
   // Free the recv array
   delete recv_array;
 

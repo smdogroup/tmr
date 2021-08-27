@@ -32,21 +32,19 @@ class TMRHelmholtzFilter : public TMRConformFilter {
  public:
   TMRHelmholtzFilter( double helmholtz_radius,
                       int _nlevels,
-                      TACSAssembler *_tacs[],
-                      TMROctForest *_filter[],
-                      int _vars_per_node=1 );
+                      TACSAssembler *_assembler[],
+                      TMROctForest *_filter[] );
   TMRHelmholtzFilter( double helmholtz_radius,
                       int _nlevels,
-                      TACSAssembler *_tacs[],
-                      TMRQuadForest *_filter[],
-                      int _vars_per_node=1 );
+                      TACSAssembler *_assembler[],
+                      TMRQuadForest *_filter[] );
   ~TMRHelmholtzFilter();
 
   // Set the design variable values (including all local values)
   void setDesignVars( TACSBVec *x );
 
   // Set values/add values to the vector
-  void addValues( TacsScalar *in, TACSBVec *out );
+  void addValues( TACSBVec *vec );
 
  private:
   void initialize_helmholtz( double helmholtz_radius );
@@ -56,7 +54,7 @@ class TMRHelmholtzFilter : public TMRConformFilter {
   void applyTranspose( TACSBVec *input, TACSBVec *output );
 
   // Data (that may be NULL) for the Helmholtz-based PDE filter
-  TACSAssembler **helmholtz_tacs;
+  TACSAssembler **helmholtz_assembler;
   TACSKsm *helmholtz_ksm;
   TACSMg *helmholtz_mg;
   TACSBVec *helmholtz_rhs, *helmholtz_psi;

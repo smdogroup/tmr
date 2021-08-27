@@ -118,6 +118,7 @@ class TMRTriangle {
     tag = status = 0;
     quality = 0.0;
   }
+
   // The indices of this triangle
   uint32_t u, v, w;
 

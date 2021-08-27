@@ -193,100 +193,63 @@ void TMRFaceMesh::setPrescribedMesh( const TMRPoint *_X,
   // Keep track of whether we encounter any problems
   int fail = 0;
 
+  // Get the face orientation
+  int face_orient = face->getOrientation();
+
   // Retrieve the boundary node numbers from the surface loops
   int pt = 0;
   for ( int k = 0; k < face->getNumEdgeLoops(); k++ ){
     // Get the curve information for this loop segment
     TMREdgeLoop *loop;
     face->getEdgeLoop(k, &loop);
-
     int nedges;
     TMREdge **edges;
-    const int *dir;
-    loop->getEdgeLoop(&nedges, &edges, &dir);
+    const int *edge_orient;
+    loop->getEdgeLoop(&nedges, &edges, &edge_orient);
 
-    for ( int i = 0; i < nedges; i++ ){
+    int edge_index = nedges-1;
+    if (face_orient > 0){
+      edge_index = 0;
+    }
+
+    for ( int i = 0; i < nedges; i++, edge_index += face_orient ){
       // Retrieve the underlying curve mesh
+      TMREdge *edge = edges[edge_index];
       TMREdgeMesh *mesh = NULL;
-      edges[i]->getMesh(&mesh);
-
-      // Retrieve the variable numbers for this loop
-      const int *edge_vars;
-      int npts = mesh->getNodeNums(&edge_vars);
+      edge->getMesh(&mesh);
 
       // Get the points along the edge
+      int npts;
       TMRPoint *Xedge;
-      mesh->getMeshPoints(NULL, NULL, &Xedge);
+      mesh->getMeshPoints(&npts, NULL, &Xedge);
 
-      // Find the closest point
-      if (edges[i]->isDegenerate()){
-        int min_k = -1;
+      // Find the orientation on the edge
+      int orientation = face_orient*edge_orient[edge_index];
+
+      int index = npts-1;
+      if (orientation > 0){
+        index = 0;
+      }
+
+      for ( int j = 0; j < npts-1; j++, index += orientation ){
+        int min_index = -1;
         double min_dist = 1e20;
-        for ( int k = 0; k < num_points; k++ ){
+        for ( int point = 0; point < num_points; point++ ){
           double dist =
-            (Xedge[0].x - _X[k].x)*(Xedge[0].x - _X[k].x) +
-            (Xedge[0].y - _X[k].y)*(Xedge[0].y - _X[k].y) +
-            (Xedge[0].z - _X[k].z)*(Xedge[0].z - _X[k].z);
+            (Xedge[index].x - _X[point].x)*(Xedge[index].x - _X[point].x) +
+            (Xedge[index].y - _X[point].y)*(Xedge[index].y - _X[point].y) +
+            (Xedge[index].z - _X[point].z)*(Xedge[index].z - _X[point].z);
           if (dist < min_dist){
             min_dist = dist;
-            min_k = k;
+            min_index = point;
           }
         }
-        if (node_mapping[min_k] == -1){
-          node_mapping[min_k] = pt;
+        if (node_mapping[min_index] == -1){
+          node_mapping[min_index] = pt;
           pt++;
         }
         else {
           fail = 1;
-        }
-      }
-      else {
-        // Find the point on the curve
-        if (dir[i] > 0){
-          for ( int j = 0; j < npts-1; j++ ){
-            int min_k = -1;
-            double min_dist = 1e20;
-            for ( int k = 0; k < num_points; k++ ){
-              double dist =
-                (Xedge[j].x - _X[k].x)*(Xedge[j].x - _X[k].x) +
-                (Xedge[j].y - _X[k].y)*(Xedge[j].y - _X[k].y) +
-                (Xedge[j].z - _X[k].z)*(Xedge[j].z - _X[k].z);
-              if (dist < min_dist){
-                min_dist = dist;
-                min_k = k;
-              }
-            }
-            if (node_mapping[min_k] == -1){
-              node_mapping[min_k] = pt;
-              pt++;
-            }
-            else {
-              fail = 1;
-            }
-          }
-        }
-        else {
-          for ( int j = npts-1; j >= 1; j-- ){
-            int min_k = -1;
-            double min_dist = 1e20;
-            for ( int k = 0; k < num_points; k++ ){
-              double dist =
-                (Xedge[j].x - _X[k].x)*(Xedge[j].x - _X[k].x) +
-                (Xedge[j].y - _X[k].y)*(Xedge[j].y - _X[k].y) +
-                (Xedge[j].z - _X[k].z)*(Xedge[j].z - _X[k].z);
-              if (dist < min_dist){
-                min_dist = dist;
-                min_k = k;
-              }
-            }
-            if (node_mapping[min_k] == -1){
-              node_mapping[min_k] = pt;
-              pt++;
-            }
-            else {
-              fail = 1;
-            }
-          }
         }
       }
     }

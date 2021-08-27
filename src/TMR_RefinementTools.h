@@ -32,11 +32,13 @@
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMROctForest *forest[], TACSMg **_mg,
                        double omega=1.0,
+                       int use_galerkin=0,
                        int use_coarse_direct_solve=1,
                        int use_chebyshev_smoother=0 );
 void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
                        TMRQuadForest *forest[], TACSMg **_mg,
                        double omega=1.0,
+                       int use_galerkin=0,
                        int use_coarse_direct_solve=1,
                        int use_chebyshev_smoother=0 );
 
@@ -124,6 +126,7 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   This makes strong assumptions about the element type and constitutive
   matrix. Be careful when using this method
 */
+/*
 class TMRStressConstraint : public TMREntity {
  public:
   TMRStressConstraint( TMROctForest *_forest,
@@ -194,71 +197,5 @@ class TMRStressConstraint : public TMREntity {
   // Temporary vector
   TacsScalar *tmp;
 };
-
-/*
-  Evaluate a curvature constraint
 */
-class TMRCurvatureConstraint : public TMREntity {
- public:
-  TMRCurvatureConstraint( TMROctForest *_forest,
-                          TacsScalar _aggregate_weight );
-  TMRCurvatureConstraint( TMROctForest *_forest,
-                          TACSVarMap *_varmap,
-                          TacsScalar _aggregate_weight );
-  ~TMRCurvatureConstraint();
-
-  // Evaluate the curvature constraint
-  TacsScalar evalConstraint( TACSBVec *_xvec );
-
-  // Write the curvature to file
-  void writeCurvatureToFile( TACSBVec *_xvec, const char *filename );
-
- private:
-  void computeNodeDeriv();
-  void estimateHessian( const TacsScalar elem_Xpts[], 
-                        const TacsScalar elem_vals[],
-                        const TacsScalar elem_derivs[], 
-                        TacsScalar *val, TacsScalar g[], TacsScalar H[] );
-  TacsScalar evalCurvature( const TacsScalar val,
-                            const TacsScalar g[],
-                            const TacsScalar H[] );
-  TacsScalar evalCurvDeriv( const TacsScalar val, const TacsScalar g[],
-                            const TacsScalar H[], TacsScalar *dval,
-                            TacsScalar dg[], TacsScalar dH[] );
-  TacsScalar evalCurvature( const int elem_size,
-                            const double N[], const double Na[],
-                            const double Nb[], const double Nc[],
-                            const TacsScalar J[], const TacsScalar Xpts[],
-                            const TacsScalar elem_vals[],
-                            const TacsScalar elem_deriv[] );
-  TacsScalar addCurvDeriv( const TacsScalar alpha, const int elem_size,
-                           const double N[], const double Na[],
-                           const double Nb[], const double Nc[],
-                           const TacsScalar J[], const TacsScalar Xpts[],
-                           const TacsScalar elem_vals[],
-                           const TacsScalar elem_deriv[],
-                           TacsScalar dvals[], TacsScalar dderiv[] );
-
-  void init( TMROctForest *_forest, TACSVarMap *_varmap,
-             TacsScalar _aggregate_weight );
-
-  // The variable map
-  TACSVarMap *varmap;
-
-  // The TMROctForest
-  TMROctForest *forest;
-
-  // The vector of weights for the reconstruction
-  TACSBVec *weights;
-  
-  // The variables and their derivatives
-  TACSBVec *xvec;
-  TACSBVec *xderiv, *dfderiv;
-
-  // Values for the curvature aggregation
-  TacsScalar aggregate_weight;
-  TacsScalar max_curvature;
-  TacsScalar aggregate_numer, aggregate_denom;
-};
-
 #endif // TMR_REFINEMENT_TOOLS_H

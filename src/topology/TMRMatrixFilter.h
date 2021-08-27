@@ -31,53 +31,61 @@
 
   Mass-matrix approach:
 
-  Given a matrix M with non-negative entries, and a scalar s > 1, a
+  Given a matrix M with non-negative entries, and a scalar r >= 0, a
   filter matrix F can be formed as follows. First construct a diagonal
   matrix D such that
 
-  D_{i} = 1/(s-1)*sum_{j} M_{ij}
+  D_{i} = sum_{j} M_{ij}
 
-  Then the matrix A = (sI - D^{-1}M) is an M matrix, and F = A^{-1}
-  satisfies the properties of a partition-of-unity filter.
+  The filter matrix F, can be formed implicitly as
 
-  Using a Neumann series, the inverse of A can be expressed as
+  F = (D + r^2*D^{-2/d}*(D - M))^{-1}*D
 
-  A^{-1} ~ \sum_{n=0}^{infty} 1/s**(n+1)*(D^{-1}*M)**n
+  or
 
-  However, this series has to be truncated. Since all entries of D and
-  M are positive, this filter maintains positivity. However, the
-  property Fe = e will be lost. This can be restored by introducing a
-  truncation value N, and a scaling diagonal matrix
+  F = (1 + r^2*D^{-2/d-1}*(D - M))^{-1}
 
-  T = Diag{\sum_{n=0}^{N} 1/s**(n+1)(D^{-1}*M)**n e}
+  Note that the filter matrix satisfies the property that F*e = e, where
+  e is a vector of all unit entries.
 
-  So the final filter can be written as follows:
+  Introducing the definitions:
 
-  F = T^{-1}*[ \sum_{n=0}^{N} 1/s**(n+1)*(D^{-1}*M)**n ]
+  Ainv = (1 + r^2*D^{-2/d})^{-1}
+
+  and
+
+  B = r^2*D^{-2/d-1}*Ainv
+
+  Then the approximate action of the filter matrix can be written using a
+  Neumann series as
+
+  F ~ T^{T} * \sum_{n=0}^{N} (B*M)^{n} A^{-1}
+
+  Where T is defined as
+
+  T = \sum_{n=0}^{N} (B*M)^{n} A^{-1} e
 */
 
 class TMRMatrixFilter : public TMRConformFilter {
  public:
-  TMRMatrixFilter( double _s, int _N, int _nlevels,
+  TMRMatrixFilter( double _r, int _N, int _nlevels,
                    TACSAssembler *_tacs[],
-                   TMROctForest *_filter[],
-                   int _vars_per_node=1 );
-  TMRMatrixFilter( double _s, int _N, int _nlevels,
+                   TMROctForest *_filter[] );
+  TMRMatrixFilter( double _r, int _N, int _nlevels,
                    TACSAssembler *_tacs[],
-                   TMRQuadForest *_filter[],
-                   int _vars_per_node=1 );
+                   TMRQuadForest *_filter[] );
   ~TMRMatrixFilter();
 
   // Set the design variable values (including all local values)
   void setDesignVars( TACSBVec *x );
 
   // Set values/add values to the vector
-  void addValues( TacsScalar *in, TACSBVec *out );
+  void addValues( TACSBVec *vec );
 
  private:
-  void initialize_matrix( double _s, int _N,
+  void initialize_matrix( double _r, int _N,
                           TMROctForest *oct_filter,
-                          TMRQuadForest *quad_filter);
+                          TMRQuadForest *quad_filter );
 
   // Apply the filter to get the density values
   void applyFilter( TACSBVec *in, TACSBVec *out );
@@ -91,14 +99,14 @@ class TMRMatrixFilter : public TMRConformFilter {
   // The number of terms to include in the approximate inverse
   int N;
 
-  // The scalar > 1.0
-  double s;
+  // The scalar for the approximate Helmholtz
+  double r;
 
   // Store the inverse of the diagonal matrices
-  TACSBVec *Dinv, *Tinv;
+  TACSBVec *Ainv, *B, *Tinv;
 
   // Temporary vectors required for the matrix computation
-  TACSBVec *t1, *t2, *t3;
+  TACSBVec *t1, *t2;
 
   // Another set of temporary vectors
   TACSBVec *y1, *y2;

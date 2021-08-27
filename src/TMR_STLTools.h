@@ -22,7 +22,7 @@
 #define TMR_STL_TOOLS_H
 
 #include "TMROctForest.h"
-#include "BVec.h"
+#include "TACSBVec.h"
 
 /*
   The following file contains the tools required to generate an STL
@@ -40,6 +40,12 @@
   This two-step process is required because the design variables are
   distributed across processors.
 */
+
+int TMR_GenerateSTLTriangles( int root,
+                              TMROctForest *filter,
+                              TACSBVec *x, int x_offset,
+                              double cutoff,
+                              int *_ntris, TMR_STLTriangle **_tris );
 
 /*
   Given the design variables, write out a binary file containing the

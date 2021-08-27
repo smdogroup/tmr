@@ -2,9 +2,6 @@
 #include "TMRNativeTopology.h"
 #include "TMRMesh.h"
 #include "TMRQuadForest.h"
-#include "TACSAssembler.h"
-#include "TACSToFH5.h"
-#include "PlaneStressQuad.h"
 #include <stdio.h>
 #include <math.h>
 
@@ -279,105 +276,6 @@ void test_surface_lofter( double htarget ){
   forest->createNodes();
   tnodes = MPI_Wtime() - tnodes;
   printf("[%d] Nodes: %f\n", mpi_rank, tnodes);
-
-  // Allocate the stiffness object
-  TacsScalar rho = 2570.0, E = 70e9, nu = 0.3;
-  PlaneStressStiffness *stiff = 
-    new PlaneStressStiffness(rho, E, nu);
-
-  // Allocate the solid element class
-  TACSElement *elem = new PlaneStressQuad<2>(stiff, LINEAR);
-  
-  // Create the TACSAssembler objects
-  TACSAssembler *tacs = NULL;
-
-  // Find the number of nodes for this processor
-  const int *range;
-  forest->getOwnedNodeRange(&range);
-  int num_nodes = range[mpi_rank+1] - range[mpi_rank];
-
-  // Create the mesh
-  const int *elem_conn;
-  int num_elements = 0;
-  forest->getNodeConn(&elem_conn, &num_elements);
-
-  // Get the dependent node information
-  const int *dep_ptr, *dep_conn;
-  const double *dep_weights;
-  int num_dep_nodes = forest->getDepNodeConn(&dep_ptr, &dep_conn,
-                                             &dep_weights);
-
-  // Create the associated TACSAssembler object
-  int vars_per_node = 2;
-  tacs = new TACSAssembler(comm, vars_per_node,
-                           num_nodes, num_elements,
-                           num_dep_nodes);
-  tacs->incref();
-
-  // Set the element ptr
-  int *ptr = new int[ num_elements+1 ];
-  for ( int i = 0; i < num_elements+1; i++ ){
-    ptr[i] = 4*i;
-  }
-  
-  // Set the element connectivity into TACSAssembler
-  tacs->setElementConnectivity(elem_conn, ptr);
-  delete [] ptr;
-    
-  // Set the dependent node information
-  tacs->setDependentNodes(dep_ptr, dep_conn, dep_weights);
-
-  // Set the elements
-  TACSElement **elems = new TACSElement*[ num_elements ];
-  for ( int k = 0; k < num_elements; k++ ){
-    elems[k] = elem;
-  }
-    
-  // Set the element array
-  tacs->setElements(elems);
-  delete [] elems;
-    
-  // Initialize the TACSAssembler object
-  tacs->initialize();
-
-  // Create the node vector
-  TacsScalar *Xn;
-  TACSBVec *X = tacs->createNodeVec();
-  X->getArray(&Xn);
-
-  // Get the points
-  TMRPoint *Xp;
-  forest->getPoints(&Xp);
-
-  // Get all of the local node numbers
-  const int *local_nodes;
-  int num_local_nodes = forest->getNodeNumbers(&local_nodes);
-  
-  // Loop over all the nodes
-  for ( int i = 0; i < num_local_nodes; i++ ){
-    if (local_nodes[i] >= range[mpi_rank] &&
-        local_nodes[i] < range[mpi_rank+1]){
-      int loc = local_nodes[i] - range[mpi_rank];
-      Xn[3*loc] = Xp[i].x;
-      Xn[3*loc+1] = Xp[i].y;
-      Xn[3*loc+2] = Xp[i].z;
-    }
-  }
-    
-  // Set the node locations into TACSAssembler
-  tacs->setNodes(X);
-
-  // Create and write out an fh5 file
-  unsigned int write_flag = (TACSElement::OUTPUT_NODES |
-                             TACSElement::OUTPUT_DISPLACEMENTS |
-                             TACSElement::OUTPUT_STRESSES |
-                             TACSElement::OUTPUT_EXTRAS);
-  TACSToFH5 *f5 = new TACSToFH5(tacs, TACS_PLANE_STRESS, write_flag);
-  f5->incref();
-    
-  // Write out the solution
-  f5->writeToFile("output.f5");
-  f5->decref();
 
   // Deallocate the mesh
   forest->decref();

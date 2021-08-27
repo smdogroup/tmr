@@ -34,23 +34,11 @@ class TMRLagrangeFilter : public TMRTopoFilter {
  public:
   TMRLagrangeFilter( int _nlevels,
                      TACSAssembler *_tacs[],
-                     TMROctForest *_filter[],
-                     TACSVarMap *_filter_maps[],
-                     TACSBVecIndices *filter_indices[],
-                     int _vars_per_node=1 );
+                     TMROctForest *_filter[] );
   TMRLagrangeFilter( int _nlevels,
                      TACSAssembler *_tacs[],
-                     TMRQuadForest *_filter[],
-                     TACSVarMap *_filter_maps[],
-                     TACSBVecIndices *filter_indices[],
-                     int _vars_per_node=1 );
+                     TMRQuadForest *_filter[] );
   ~TMRLagrangeFilter();
-
-  // Get the MPI communicator
-  MPI_Comm getMPIComm();
-
-  // Get the design variable map
-  TACSVarMap* getDesignVarMap();
 
   // Get the TACSAssembler instance (on the finest mesh level)
   TACSAssembler* getAssembler();
@@ -59,20 +47,12 @@ class TMRLagrangeFilter : public TMRTopoFilter {
   TMRQuadForest* getFilterQuadForest();
   TMROctForest* getFilterOctForest();
 
-  // Get problem definitions maximum local size of the design variable values
-  int getVarsPerNode();
-  int getNumLocalVars();
-  int getMaxNumLocalVars();
-
-  // Create a design vector on the finest mesh level
-  TACSBVec* createVec();
-
   // Set the design variable values (including all local values)
   void setDesignVars( TACSBVec *x );
 
   // Set values/add values to the vector
-  void addValues( TacsScalar *in, TACSBVec *out );
-  void setValues( TacsScalar *in, TACSBVec *out );
+  void addValues( TACSBVec *vec );
+  void setValues( TACSBVec *vec );
 
   // Write the STL file
   void writeSTLFile( int k, double cutoff, const char *filename ){
@@ -83,33 +63,19 @@ class TMRLagrangeFilter : public TMRTopoFilter {
  private:
   // Initialize the problem
   void initialize( int _nlevels,
-                   TACSAssembler *_tacs[],
+                   TACSAssembler *_assembler[],
                    TMROctForest *_oct_filter[],
-                   TMRQuadForest *_quad_filter[],
-                   TACSVarMap *_filter_maps[],
-                   TACSBVecIndices *filter_indices[],
-                   int _vars_per_node=1 );
-
-  // Get/set values from the TACSBVec object
-  int getLocalValuesFromBVec( int level, TACSBVec *vec, TacsScalar *xloc );
-  void setBVecFromLocalValues( int level, const TacsScalar *xloc, TACSBVec *vec,
-                               TACSBVecOperation op );
+                   TMRQuadForest *_quad_filter[] );
 
   // The number of multigrid levels
   int nlevels;
-  TACSAssembler **tacs;
-
-  // The number of variables per node
-  int vars_per_node;
-
-  // The maximum number of local design variables
-  int max_local_vars;
+  TACSAssembler **assembler;
 
   // Set the information about the filter at each level
   TMROctForest **oct_filter;
   TMRQuadForest **quad_filter;
-  TACSVarMap **filter_maps;
-  TACSBVecDistribute **filter_dist;
+
+  // Design interpolation operators
   TACSBVecInterp **filter_interp;
 
   // Create the design variable values at each level

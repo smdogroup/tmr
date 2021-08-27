@@ -23,6 +23,7 @@
 
 #include "TMRTopology.h"
 #include "TMRFeatureSize.h"
+#include "TMRBoundaryConditions.h"
 
 /*
   The type of face mesh algorithm to apply
@@ -158,7 +159,8 @@ class TMRMesh : public TMREntity {
 
   // Write the mesh to a BDF file
   void writeToBDF( const char *filename,
-                   int flag=(TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX) );
+                   int flag=(TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX),
+                   TMRBoundaryConditions *bcs=NULL );
 
   // Retrieve the mesh components
   int getMeshPoints( TMRPoint **_X );

@@ -23,7 +23,7 @@
 
 #include "TMRTopology.h"
 #include "TMRQuadrant.h"
-#include "BVecInterp.h"
+#include "TACSBVecInterp.h"
 
 /*
   A parallel forest of quadtrees

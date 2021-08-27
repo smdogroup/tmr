@@ -23,7 +23,7 @@
 
 #include "TMRTopology.h"
 #include "TMROctant.h"
-#include "BVecInterp.h"
+#include "TACSBVecInterp.h"
 
 /*
   TMR Forest class

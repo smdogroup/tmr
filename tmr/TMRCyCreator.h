@@ -29,8 +29,9 @@
 */
 class TMRCyQuadCreator : public TMRQuadTACSCreator {
  public:
-  TMRCyQuadCreator( TMRBoundaryConditions *_bcs ):
-    TMRQuadTACSCreator(_bcs){}
+  TMRCyQuadCreator( TMRBoundaryConditions *_bcs, int _design_vars_per_node=1,
+                    TMRQuadForest *_filter=NULL ):
+    TMRQuadTACSCreator(_bcs, _design_vars_per_node, _filter){}
 
   void setSelfPointer( void *_self ){
     self = _self;
@@ -74,8 +75,9 @@ class TMRCyQuadCreator : public TMRQuadTACSCreator {
 */
 class TMRCyOctCreator : public TMROctTACSCreator {
  public:
-  TMRCyOctCreator( TMRBoundaryConditions *_bcs ):
-    TMROctTACSCreator(_bcs){}
+  TMRCyOctCreator( TMRBoundaryConditions *_bcs, int _design_vars_per_node=1,
+                   TMROctForest *_filter=NULL ):
+    TMROctTACSCreator(_bcs, _design_vars_per_node, _filter){}
 
   void setSelfPointer( void *_self ){
     self = _self;
@@ -120,31 +122,32 @@ class TMRCyOctCreator : public TMROctTACSCreator {
 class TMRCyTopoQuadCreator : public TMRQuadTACSTopoCreator {
  public:
   TMRCyTopoQuadCreator( TMRBoundaryConditions *_bcs,
+                        int _design_vars_per_node,
                         TMRQuadForest *_filter ):
-  TMRQuadTACSTopoCreator(_bcs, _filter){}
+  TMRQuadTACSTopoCreator(_bcs, _design_vars_per_node, _filter){}
 
   void setSelfPointer( void *_self ){
     self = _self;
   }
   void setCreateQuadTopoElement( 
-    TACSElement* (*func)(void*, int, TMRQuadrant*, TMRIndexWeight*, int) ){
+    TACSElement* (*func)(void*, int, TMRQuadrant*, int, TMRIndexWeight*) ){
     createquadtopoelement = func;
   }
 
   // Create the element
   TACSElement *createElement( int order, 
                               TMRQuadrant *quad,
-                              TMRIndexWeight *weights, 
-                              int nweights ){
+                              int nweights,
+                              TMRIndexWeight *weights ){
     TACSElement *elem =
-      createquadtopoelement(self, order, quad, weights, nweights);
+      createquadtopoelement(self, order, quad, nweights, weights);
     return elem;
   }
 
  private:
   void *self; // Pointer to the python-level object
   TACSElement* (*createquadtopoelement)( 
-    void*, int, TMRQuadrant*, TMRIndexWeight *weights, int nweights );
+    void*, int, TMRQuadrant*, int nweights, TMRIndexWeight *weights );
 };
 
 /*
@@ -153,31 +156,32 @@ class TMRCyTopoQuadCreator : public TMRQuadTACSTopoCreator {
 class TMRCyTopoOctCreator : public TMROctTACSTopoCreator {
  public:
   TMRCyTopoOctCreator( TMRBoundaryConditions *_bcs,
+                        int _design_vars_per_node,
                        TMROctForest *_filter ):
-  TMROctTACSTopoCreator(_bcs, _filter){}
+  TMROctTACSTopoCreator(_bcs, _design_vars_per_node, _filter){}
 
   void setSelfPointer( void *_self ){
     self = _self;
   }
   void setCreateOctTopoElement( 
-    TACSElement* (*func)(void*, int, TMROctant*, TMRIndexWeight*, int) ){
+    TACSElement* (*func)(void*, int, TMROctant*, int, TMRIndexWeight*) ){
     createocttopoelement = func;
   }
 
   // Create the element
   TACSElement *createElement( int order, 
                               TMROctant *oct,
-                              TMRIndexWeight *weights, 
-                              int nweights ){
+                              int nweights,
+                              TMRIndexWeight *weights ){
     TACSElement *elem =
-      createocttopoelement(self, order, oct, weights, nweights);
+      createocttopoelement(self, order, oct, nweights, weights);
     return elem;
   }
 
  private:
   void *self; // Pointer to the python-level object
   TACSElement* (*createocttopoelement)( 
-    void*, int, TMROctant*, TMRIndexWeight *weights, int nweights );
+    void*, int, TMROctant*, int nweights, TMRIndexWeight *weights );
 };
 
 /*
@@ -186,36 +190,35 @@ class TMRCyTopoOctCreator : public TMROctTACSTopoCreator {
 class TMRCyTopoQuadConformCreator : public TMRQuadConformTACSTopoCreator {
  public:
   TMRCyTopoQuadConformCreator( TMRBoundaryConditions *_bcs,
+                               int _design_vars_per_node,
                                TMRQuadForest *_forest,
                                int order=-1,
                                TMRInterpolationType interp_type=TMR_UNIFORM_POINTS ):
-  TMRQuadConformTACSTopoCreator(_bcs, _forest, order, interp_type){}
+  TMRQuadConformTACSTopoCreator(_bcs, _design_vars_per_node, _forest, order, interp_type){}
 
   void setSelfPointer( void *_self ){
     self = _self;
   }
-  void setCreateQuadTopoElement( 
-                                TACSElement* (*func)(void*, int, TMRQuadrant*,
-                                                     int*, int, TMRQuadForest*) ){
+  void setCreateQuadTopoElement( TACSElement* (*func)(void*, int, TMRQuadrant*,
+                                                      int, const int*, TMRQuadForest*) ){
     createquadtopoelement = func;
   }
 
   // Create the element
   TACSElement *createElement( int order, 
                               TMRQuadrant *quad,
-                              int *index, 
                               int nweights,
-                              TMRQuadForest *filter ){
+                              const int *index,
+                              TMRQuadForest *fltr ){
     TACSElement *elem =
-      createquadtopoelement(self, order, quad, index, nweights,
-                            filter);
+      createquadtopoelement(self, order, quad, nweights, index, fltr);
     return elem;
   }
 
  private:
   void *self; // Pointer to the python-level object
-  TACSElement* (*createquadtopoelement)( void*, int, TMRQuadrant*, int *index,
-                                         int nweights, TMRQuadForest* );
+  TACSElement* (*createquadtopoelement)( void*, int, TMRQuadrant*, int nweights,
+                                         const int *index, TMRQuadForest* );
 };
 
 /*
@@ -224,36 +227,36 @@ class TMRCyTopoQuadConformCreator : public TMRQuadConformTACSTopoCreator {
 class TMRCyTopoOctConformCreator : public TMROctConformTACSTopoCreator {
  public:
   TMRCyTopoOctConformCreator( TMRBoundaryConditions *_bcs,
+                              int _design_vars_per_node,
                               TMROctForest *_forest,
                               int order=-1,
                               TMRInterpolationType interp_type=TMR_UNIFORM_POINTS ):
-  TMROctConformTACSTopoCreator(_bcs, _forest, order, interp_type){}
+  TMROctConformTACSTopoCreator(_bcs, _design_vars_per_node, _forest, order, interp_type){}
 
   void setSelfPointer( void *_self ){
     self = _self;
   }
   void setCreateOctTopoElement( 
                                TACSElement* (*func)(void*, int, TMROctant*,
-                                                    int*, int, TMROctForest*) ){
+                                                    int, const int*, TMROctForest*) ){
     createocttopoelement = func;
   }
 
   // Create the element
   TACSElement *createElement( int order, 
                               TMROctant *oct,
-                              int *index, 
                               int nweights,
-                              TMROctForest *filter ){
+                              const int *index,
+                              TMROctForest *fltr ){
     TACSElement *elem =
-      createocttopoelement(self, order, oct, index, nweights,
-                           filter);
+      createocttopoelement(self, order, oct, nweights, index, fltr);
     return elem;
   }
 
  private:
   void *self; // Pointer to the python-level object
-  TACSElement* (*createocttopoelement)( void*, int, TMROctant*, int *index,
-                                        int nweights, TMROctForest* );
+  TACSElement* (*createocttopoelement)( void*, int, TMROctant*, int nweights,
+                                        const int *index, TMROctForest* );
 };
 
 #endif // TMR_CY_CREATOR_H

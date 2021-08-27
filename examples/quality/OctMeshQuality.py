@@ -58,10 +58,8 @@ def computeShape(forest):
                    6:[7,4,2], 7:[5,6,3]}
     for i in range(len(octs)):
         npts = 8
-        nodes = conn[npts*i:npts*(i+1)]
-        pts = np.zeros((npts,3))
-        pts[:, :] = Xpts[nodes[:], :]
-        # Initialize the numerator
+        nodes = conn[i,:]
+        pts = Xpts[nodes[:], :]
         num = 0.0
         # Compute the individual Ak matrices
         for j in range(npts):
@@ -90,14 +88,13 @@ def computeAR(forest):
     for i in range(len(octs)):
         # Get the points
         npts = 8
-        nodes = conn[npts*i:npts*(i+1)]
-        pts = np.zeros((npts,3))
-        pts[:, :] = Xpts[nodes[:], :]
+        nodes = conn[i,:]
+        pts = Xpts[nodes[:], :]
         edge_lengths = np.zeros(12)
         # Compute the length of each edge on the octant
         for j, edge_pts in enumerate(edge_list):
-            v1 = pts[edge_pts[0]]
-            v2 = pts[edge_pts[1]]
+            v1 = pts[edge_pts[0],:]
+            v2 = pts[edge_pts[1],:]
             edge_lengths[j] = np.linalg.norm(v1-v2)
         # Compute the aspect ratio of the octant
         ar[i] = np.amax(edge_lengths)/np.amin(edge_lengths)
@@ -118,9 +115,8 @@ def computeMinAngle(forest):
     for i in range(len(octs)):
         # Get the points
         npts = 8
-        nodes = conn[npts*i:npts*(i+1)]
-        pts = np.zeros((npts,3))
-        pts[:, :] = Xpts[nodes[:], :]
+        nodes = conn[i,:]
+        pts = Xpts[nodes[:], :]
         min_angle = 90.0
         for j in range(npts):
             node_neighbors = angle_list[j]
@@ -166,7 +162,7 @@ def writeQualityToVtk(forest, ar, min_ang, fshape, fname='quality.vtk'):
     # write out the mesh connectivity
     f.write('\nCELLS %d %d\n'%(nhex, nhex*9))
     for i in range(len(octs)):
-        nodes = conn[8*i:8*(i+1)]
+        nodes = conn[i,:]
         f.write('8 %d %d %d %d %d %d %d %d\n'%(
             nodes[0], nodes[1], nodes[3], nodes[2],
             nodes[4], nodes[5], nodes[7], nodes[6]))

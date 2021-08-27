@@ -19,7 +19,6 @@
 */
 
 #include "TMR_RefinementTools.h"
-#include "TensorToolbox.h"
 #include "TACSElementAlgebra.h"
 #include "tacslapack.h"
 
@@ -34,13 +33,14 @@
 /*
   Create a multgrid object for a forest of octrees
 */
-void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
+void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
                        TMROctForest *forest[], TACSMg **_mg,
                        double omega,
+                       int use_galerkin,
                        int use_coarse_direct_solve,
                        int use_chebyshev_smoother ){
   // Get the communicator
-  MPI_Comm comm = tacs[0]->getMPIComm();
+  MPI_Comm comm = assembler[0]->getMPIComm();
 
   // Create the multigrid object
   int zero_guess = 0;
@@ -56,7 +56,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
   for ( int level = 0; level < num_levels-1; level++ ){
     // Create the interpolation object
     TACSBVecInterp *interp =
-      new TACSBVecInterp(tacs[level+1], tacs[level]);
+      new TACSBVecInterp(assembler[level+1], assembler[level]);
 
     // Set the interpolation
     forest[level]->createInterpolation(forest[level+1], interp);
@@ -66,7 +66,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 
     if (use_chebyshev_smoother){
       // Create the matrix
-      TACSPMat *mat = tacs[level]->createMat();
+      TACSParallelMat *mat = assembler[level]->createMat();
 
       // Set up the smoother
       TACSChebyshevSmoother *pc =
@@ -74,19 +74,22 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
                                   mg_smooth_iters);
 
       // Set the interpolation and TACS object within the multigrid object
-      mg->setLevel(level, tacs[level], interp, mg_iters_per_level, mat, pc);
+      mg->setLevel(level, assembler[level], interp,
+                   mg_iters_per_level, use_galerkin, mat, pc);
     }
     else {
-      mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
+      mg->setLevel(level, assembler[level], interp,
+                   mg_iters_per_level, use_galerkin);
     }
   }
 
   if (use_coarse_direct_solve){
     // Set the lowest level - with no interpolation object
-    mg->setLevel(num_levels-1, tacs[num_levels-1]);
+    mg->setLevel(num_levels-1, assembler[num_levels-1],
+                 NULL, 1, use_galerkin);
   }
   else {
-    TACSPMat *mat = tacs[num_levels-1]->createMat();
+    TACSParallelMat *mat = assembler[num_levels-1]->createMat();
     TACSPc *pc = NULL;
 
     if (use_chebyshev_smoother){
@@ -100,8 +103,8 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
     }
 
     // Set the interpolation and TACS object within the multigrid object
-    mg->setLevel(num_levels-1, tacs[num_levels-1], NULL, 1,
-                 mat, pc);
+    mg->setLevel(num_levels-1, assembler[num_levels-1], NULL, 1,
+                 use_galerkin, mat, pc);
   }
 
   // Return the multigrid object
@@ -111,13 +114,14 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 /*
   Create the TACS multigrid objects for the quadrilateral case
 */
-void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
+void TMR_CreateTACSMg( int num_levels, TACSAssembler *assembler[],
                        TMRQuadForest *forest[], TACSMg **_mg,
                        double omega,
+                       int use_galerkin,
                        int use_coarse_direct_solve,
                        int use_chebyshev_smoother ){
   // Get the communicator
-  MPI_Comm comm = tacs[0]->getMPIComm();
+  MPI_Comm comm = assembler[0]->getMPIComm();
 
   // Create the multigrid object
   int zero_guess = 0;
@@ -133,7 +137,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
   for ( int level = 0; level < num_levels-1; level++ ){
     // Create the interpolation object
     TACSBVecInterp *interp =
-      new TACSBVecInterp(tacs[level+1], tacs[level]);
+      new TACSBVecInterp(assembler[level+1], assembler[level]);
 
     // Set the interpolation
     forest[level]->createInterpolation(forest[level+1], interp);
@@ -143,7 +147,7 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
 
     if (use_chebyshev_smoother){
       // Create the matrix
-      TACSPMat *mat = tacs[level]->createMat();
+      TACSParallelMat *mat = assembler[level]->createMat();
 
       // Set up the smoother
       TACSChebyshevSmoother *pc =
@@ -151,19 +155,22 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
                                   mg_smooth_iters);
 
       // Set the interpolation and TACS object within the multigrid object
-      mg->setLevel(level, tacs[level], interp, mg_iters_per_level, mat, pc);
+      mg->setLevel(level, assembler[level], interp,
+                   mg_iters_per_level, use_galerkin, mat, pc);
     }
     else {
-      mg->setLevel(level, tacs[level], interp, mg_iters_per_level);
+      mg->setLevel(level, assembler[level], interp,
+                   mg_iters_per_level, use_galerkin);
     }
   }
 
   if (use_coarse_direct_solve){
     // Set the lowest level - with no interpolation object
-    mg->setLevel(num_levels-1, tacs[num_levels-1]);
+    mg->setLevel(num_levels-1, assembler[num_levels-1],
+                 NULL, 1, use_galerkin);
   }
   else {
-    TACSPMat *mat = tacs[num_levels-1]->createMat();
+    TACSParallelMat *mat = assembler[num_levels-1]->createMat();
     TACSPc *pc = NULL;
 
     if (use_chebyshev_smoother){
@@ -177,8 +184,8 @@ void TMR_CreateTACSMg( int num_levels, TACSAssembler *tacs[],
     }
 
     // Set the interpolation and TACS object within the multigrid object
-    mg->setLevel(num_levels-1, tacs[num_levels-1], NULL, 1,
-                 mat, pc);
+    mg->setLevel(num_levels-1, assembler[num_levels-1], NULL, 1,
+                 use_galerkin, mat, pc);
   }
 
   // Return the multigrid object
@@ -212,11 +219,11 @@ static TacsScalar computeJacobianTrans2D( const TacsScalar Xpts[],
   }
 
   // Compute the cross-product with the normal
-  Tensor::crossProduct3D(&Xd[6], &Xd[0], &Xd[3]);
-  Tensor::normalize3D(&Xd[6]);
+  crossProduct(1.0, &Xd[6], &Xd[0], &Xd[3]);
+  vec3Scale(1.0/sqrt(vec3Dot(&Xd[6], &Xd[6])), &Xd[6]);
 
   // Compute the transpose of the Jacobian transformation
-  return FElibrary::jacobian3d(Xd, J);
+  return inv3x3(Xd, J);
 }
 
 /*
@@ -252,7 +259,7 @@ static TacsScalar computeJacobianTrans3D( const TacsScalar Xpts[],
   }
 
   // Compute the transpose of the Jacobian transformation
-  return FElibrary::jacobian3d(Xd, J);
+  return inv3x3(Xd, J);
 }
 
 // Specify the maximum order
@@ -725,10 +732,10 @@ static void computeElemRecon2D( const int vars_per_node,
       // Normalize the first direction
       TacsScalar d1[3], d2[3];
       d1[0] = Xd[0];  d1[1] = Xd[1];  d1[2] = Xd[2];
-      Tensor::normalize3D(d1);
+      vec3Scale(1.0/sqrt(vec3Dot(d1, d1)), d1);
 
       // Compute d2 = n x d1
-      Tensor::crossProduct3D(d2, &Xd[6], d1);
+      crossProduct(1.0, d2, &Xd[6], d1);
 
       // First, compute the contributions to the righ-hand-side. The
       // right vector contains the difference between the prescribed
@@ -1003,7 +1010,7 @@ static void computeLocalWeights( TACSAssembler *tacs,
     for ( int i = 0; i < nelems; i++ ){
       int len = 0;
       const int *nodes;
-      tacs->getElement(i, &nodes, &len);
+      tacs->getElement(i, &len, &nodes);
 
       // Compute the local weights
       for ( int j = 0; j < len; j++ ){
@@ -1024,7 +1031,7 @@ static void computeLocalWeights( TACSAssembler *tacs,
       // Get the node numbers for this elements
       int len = 0;
       const int *nodes;
-      tacs->getElement(elem, &nodes, &len);
+      tacs->getElement(elem, &len, &nodes);
 
       // Compute the local weights
       for ( int j = 0; j < len; j++ ){
@@ -1105,7 +1112,7 @@ static void computeNodeDeriv2D( TMRQuadForest *forest,
     // Get the element nodes
     int len = 0;
     const int *nodes;
-    tacs->getElement(elem, &nodes, &len);
+    tacs->getElement(elem, &len, &nodes);
 
     // Get the local weight values for this element
     TacsScalar welem[MAX_ORDER*MAX_ORDER];
@@ -1244,7 +1251,7 @@ static void computeNodeDeriv3D( TMROctForest *forest,
     // Get the element nodes
     int len = 0;
     const int *nodes = NULL;
-    tacs->getElement(elem, &nodes, &len);
+    tacs->getElement(elem, &len, &nodes);
 
     // Get the local weight values for this element
     TacsScalar welem[MAX_ORDER*MAX_ORDER*MAX_ORDER];
@@ -1395,7 +1402,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
     // Get the node numbers and node locations for this element
     int len;
     const int *nodes;
-    tacs->getElement(elem, &nodes, &len);
+    tacs->getElement(elem, &len, &nodes);
 
     // Get the derivatives at the nodes
     vec->getValues(len, nodes, uelem);
@@ -1411,7 +1418,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
     if (compute_difference){
       // Get the refined element nodes
       const int *refined_nodes;
-      tacs_refined->getElement(elem, &refined_nodes, &len);
+      tacs_refined->getElement(elem, &len, &refined_nodes);
 
       // Zero the refined element contribution
       memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
@@ -1456,7 +1463,7 @@ void addRefinedSolution2D( TMRQuadForest *forest,
     else {
       // Get the refined element nodes
       const int *refined_nodes;
-      tacs_refined->getElement(elem, &refined_nodes, &len);
+      tacs_refined->getElement(elem, &len, &refined_nodes);
 
       // Zero the refined element contribution
       memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
@@ -1583,7 +1590,7 @@ void addRefinedSolution3D( TMROctForest *forest,
     // Get the node numbers for this element
     int len;
     const int *nodes;
-    tacs->getElement(elem, &nodes, &len);
+    tacs->getElement(elem, &len, &nodes);
 
     // Get the derivatives at the nodes
     vec->getValues(len, nodes, uelem);
@@ -1599,7 +1606,7 @@ void addRefinedSolution3D( TMROctForest *forest,
     if (compute_difference){
       // Get the refined element nodes
       const int *refined_nodes;
-      refined_tacs->getElement(elem, &refined_nodes, &len);
+      refined_tacs->getElement(elem, &len, &refined_nodes);
 
       // Zero the refined element contribution
       memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
@@ -1652,7 +1659,7 @@ void addRefinedSolution3D( TMROctForest *forest,
     else {
       // Get the refined element nodes
       const int *refined_nodes;
-      refined_tacs->getElement(elem, &refined_nodes, &len);
+      refined_tacs->getElement(elem, &len, &refined_nodes);
 
       // Zero the refined element contribution
       memset(uref, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
@@ -1737,7 +1744,7 @@ int inverseEvalPoint( const TacsScalar Xp[],
 
   // Get the order of the forest
   const int order = forest->getMeshOrder();
-  
+
   // Find the closes point
   for ( int iter = 0; iter < max_iterations; iter++ ){
     double N[MAX_ORDER*MAX_ORDER];
@@ -1752,7 +1759,7 @@ int inverseEvalPoint( const TacsScalar Xp[],
     TMRPoint X, Xu, Xv, Xuu, Xuv, Xvv;
     X.zero();  Xu.zero();  Xv.zero();
     Xuu.zero();  Xuv.zero();  Xvv.zero();
-    
+
     // Evaluate the points and their derivatives
     for ( int i = 0; i < order*order; i++ ){
       const TacsScalar x = Xpts[3*i];
@@ -1763,7 +1770,7 @@ int inverseEvalPoint( const TacsScalar Xp[],
       X.x += N[i]*x;
       X.y += N[i]*y;
       X.z += N[i]*z;
-      
+
       // First derivatives
       Xu.x += N1[i]*x;
       Xu.y += N1[i]*y;
@@ -1771,7 +1778,7 @@ int inverseEvalPoint( const TacsScalar Xp[],
       Xv.x += N2[i]*x;
       Xv.y += N2[i]*y;
       Xv.z += N2[i]*z;
-      
+
       // Second derivatives
       Xuu.x += N11[i]*x;
       Xuu.y += N11[i]*y;
@@ -1802,21 +1809,21 @@ int inverseEvalPoint( const TacsScalar Xp[],
 
     // The increments along the parametric directions
     double du = 0.0, dv = 0.0;
-    
+
     // Solve the 2x2 system
     double det = Juu*Jvv - Juv*Juv;
     if (det != 0.0){
       du = (Jvv*ru - Juv*rv)/det;
       dv = (Juu*rv - Juv*ru)/det;
     }
-    
+
     // Compute the updates
     pt[0] = pt[0] - du;
     pt[1] = pt[1] - dv;
 
     // Check if the convergence test is satisfied
-    if (fabs(r.x) < eps_dist && 
-        fabs(r.y) < eps_dist && 
+    if (fabs(r.x) < eps_dist &&
+        fabs(r.y) < eps_dist &&
         fabs(r.z) < eps_dist){
       return 0;
     }
@@ -1825,7 +1832,7 @@ int inverseEvalPoint( const TacsScalar Xp[],
     double dotr = r.dot(r);
     double dotu = Xu.dot(Xu);
     double dotv = Xv.dot(Xv);
-    if (ru*ru < eps_cosine*eps_cosine*dotu*dotr && 
+    if (ru*ru < eps_cosine*eps_cosine*dotu*dotr &&
         rv*rv < eps_cosine*eps_cosine*dotv*dotr){
       return 0;
     }
@@ -1887,7 +1894,7 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
     // Get the element unknowns for the coarse mesh
     int len = 0;
     const int *nodes;
-    tacs->getElement(elem, &nodes, &len);
+    tacs->getElement(elem, &len, &nodes);
 
     // Get the node locations for the coarse mesh
     TacsScalar Xpts[3*max_num_nodes], Xpts_refined[3*max_num_nodes];
@@ -1906,7 +1913,7 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
         double pt[2];
         pt[0] = refined_knots[n];
         pt[1] = refined_knots[m];
-        
+
         // Evaluate the shape functions
         double N[max_num_nodes];
         forest->evalInterp(pt, N);
@@ -1926,7 +1933,7 @@ void TMR_ComputeInterpSolution( TMRQuadForest *forest,
     // Get the element unknowns for the refined mesh
     int refined_len = 0;
     const int *refined_nodes;
-    tacs_refined->getElement(elem, &refined_nodes, &refined_len);
+    tacs_refined->getElement(elem, &refined_len, &refined_nodes);
 
     uvec_refined->setValues(refined_len, refined_nodes, vars_interp,
                             TACS_INSERT_NONZERO_VALUES);
@@ -2009,7 +2016,7 @@ void TMR_ComputeInterpSolution( TMROctForest *forest,
     // Get the element unknowns for the coarse mesh
     int len = 0;
     const int *nodes;
-    tacs->getElement(elem, &nodes, &len);
+    tacs->getElement(elem, &len, &nodes);
 
     // For each element, interpolate the solution
     memset(vars_interp, 0, vars_per_node*num_refined_nodes*sizeof(TacsScalar));
@@ -2047,7 +2054,7 @@ void TMR_ComputeInterpSolution( TMROctForest *forest,
     // Get the element unknowns for the refined mesh
     int refined_len = 0;
     const int *refined_nodes;
-    tacs_refined->getElement(elem, &refined_nodes, &refined_len);
+    tacs_refined->getElement(elem, &refined_len, &refined_nodes);
 
     uvec_refined->setValues(refined_len, refined_nodes, vars_interp,
                             TACS_INSERT_NONZERO_VALUES);
@@ -2107,14 +2114,14 @@ void TMR_ComputeReconSolution( TMRQuadForest *forest,
   // Allocate a vector for the derivatives
   int vars_per_node = tacs->getVarsPerNode();
   TACSBVec *uderiv =
-    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
+    new TACSBVec(tacs->getNodeMap(), 3*vars_per_node,
                  tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   uderiv->incref();
 
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
   // inter-process references.
-  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
+  TACSBVec *weights = new TACSBVec(tacs->getNodeMap(), 1,
                                    tacs->getBVecDistribute(),
                                    tacs->getBVecDepNodes());
   weights->incref();
@@ -2192,7 +2199,7 @@ void TMR_ComputeReconSolution( TMRQuadForest *forest,
   uvec_refined->endSetValues(TACS_ADD_VALUES);
 
   // Create a vector for the refined weights
-  TACSBVec *weights_refined = new TACSBVec(tacs_refined->getVarMap(), 1,
+  TACSBVec *weights_refined = new TACSBVec(tacs_refined->getNodeMap(), 1,
                                            tacs_refined->getBVecDistribute(),
                                            tacs_refined->getBVecDepNodes());
   weights_refined->incref();
@@ -2262,14 +2269,14 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
   // Allocate a vector for the derivatives
   int vars_per_node = tacs->getVarsPerNode();
   TACSBVec *uderiv =
-    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
+    new TACSBVec(tacs->getNodeMap(), 3*vars_per_node,
                  tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   uderiv->incref();
 
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
   // inter-process references.
-  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
+  TACSBVec *weights = new TACSBVec(tacs->getNodeMap(), 1,
                                    tacs->getBVecDistribute(),
                                    tacs->getBVecDepNodes());
   weights->incref();
@@ -2346,7 +2353,7 @@ void TMR_ComputeReconSolution( TMROctForest *forest,
   uvec_refined->endSetValues(TACS_ADD_VALUES);
 
   // Create a vector for the refined weights
-  TACSBVec *weights_refined = new TACSBVec(tacs_refined->getVarMap(), 1,
+  TACSBVec *weights_refined = new TACSBVec(tacs_refined->getNodeMap(), 1,
                                            tacs_refined->getBVecDistribute(),
                                            tacs_refined->getBVecDepNodes());
   weights_refined->incref();
@@ -2469,7 +2476,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
   // inter-process references.
-  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
+  TACSBVec *weights = new TACSBVec(tacs->getNodeMap(), 1,
                                    tacs->getBVecDistribute(),
                                    tacs->getBVecDepNodes());
   weights->incref();
@@ -2477,7 +2484,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
 
   // Compute the nodal derivatives
   TACSBVec *uderiv =
-    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
+    new TACSBVec(tacs->getNodeMap(), 3*vars_per_node,
                  tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   uderiv->incref();
   computeNodeDeriv2D(forest, tacs, uvec, weights, uderiv);
@@ -2491,12 +2498,12 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
     double time = 0.0;
 
     // Get the variables for this element on the coarse mesh
-    tacs->getElement(i, NULL, vars_elem);
+    tacs->getElement(i, vars_elem, NULL);
 
     // Get the node numbers for this element
     int len;
     const int *nodes;
-    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, &len, &nodes);
 
     // Compute the solution on the refined mesh
     uderiv->getValues(len, nodes, delem);
@@ -2536,7 +2543,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
 
     // Compute the strain/potential energy
     TacsScalar Te, Pe;
-    elem->computeEnergies(time, &Te, &Pe, Xpts, vars_interp, dvars);
+    elem->computeEnergies(i, time, Xpts, vars_interp, dvars, &Te, &Pe);
     error[i] = fabs(TacsRealPart(Pe));
 
     // Add up the total error
@@ -2627,7 +2634,7 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
   // inter-process references.
-  TACSBVec *weights = new TACSBVec(tacs->getVarMap(), 1,
+  TACSBVec *weights = new TACSBVec(tacs->getNodeMap(), 1,
                                    tacs->getBVecDistribute(),
                                    tacs->getBVecDepNodes());
   weights->incref();
@@ -2635,7 +2642,7 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
 
   // Compute the nodal derivatives
   TACSBVec *uderiv =
-    new TACSBVec(tacs->getVarMap(), 3*vars_per_node,
+    new TACSBVec(tacs->getNodeMap(), 3*vars_per_node,
                  tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   uderiv->incref();
   computeNodeDeriv3D(forest, tacs, uvec, weights, uderiv);
@@ -2651,7 +2658,7 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
     // Get the node numbers for this element
     int len;
     const int *nodes;
-    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, &len, &nodes);
 
     // Get the values of the derivatives at the nodes
     uderiv->getValues(len, nodes, delem);
@@ -2701,7 +2708,7 @@ double TMR_StrainEnergyErrorEst( TMROctForest *forest,
 
     // Compute the strain/potential energy
     TacsScalar Te, Pe;
-    elem->computeEnergies(time, &Te, &Pe, Xpts, vars_elem, dvars);
+    elem->computeEnergies(i, time, Xpts, vars_interp, dvars, &Te, &Pe);
     error[i] = fabs(TacsRealPart(Pe));
 
     // Add up the total error
@@ -2838,7 +2845,7 @@ void createPartUnityVector( TMRQuadForest *pu,
   pu->getOwnedNodeRange(&pu_range);
 
   int num_pu_local = pu_range[mpi_rank+1] - pu_range[mpi_rank];
-  TACSVarMap *pu_map = new TACSVarMap(comm, num_pu_local);
+  TACSNodeMap *pu_map = new TACSNodeMap(comm, num_pu_local);
 
   // Create/retrieve the dependent node information
   const int *dep_ptr = NULL, *dep_conn = NULL;
@@ -2914,6 +2921,7 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
                             TACSBVec *adjoint_refined,
                             double *error,
                             double *adj_corr ){
+/*
   // The maximum number of nodes
   const int max_num_nodes = MAX_ORDER*MAX_ORDER;
 
@@ -3003,7 +3011,7 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
     adjoint_refined->getValues(refine_len, refine_nodes, adj_interp);
 
     // Compute the localized error on the refined mesh
-    memset(err, 0, element->numNodes()*sizeof(TacsScalar));
+    memset(err, 0, element->getNumNodes()*sizeof(TacsScalar));
     element->addLocalizedError(time, err, adj_interp,
                                Xpts, vars_interp);
 
@@ -3080,6 +3088,8 @@ double TMR_AdjointErrorEst( TMRQuadForest *forest,
 
   // Return the error
   return total_error_remain;
+*/
+  return 0.0;
 }
 
 /*
@@ -3108,6 +3118,7 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
                             TACSBVec *adjoint_refined,
                             double *error,
                             double *adj_corr ){
+/*
   const int max_num_nodes = MAX_ORDER*MAX_ORDER*MAX_ORDER;
 
   // Get the order of the mesh and the number of enrichment shape functions
@@ -3138,7 +3149,7 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
   TacsScalar total_adjoint_corr = 0.0;
 
   // Create a vector for the predicted nodal errors.
-  TACSBVec *nodal_error = new TACSBVec(tacs_refined->getVarMap(), 1,
+  TACSBVec *nodal_error = new TACSBVec(tacs_refined->getNodeMap(), 1,
                                        tacs_refined->getBVecDistribute(),
                                        tacs_refined->getBVecDepNodes());
   nodal_error->incref();
@@ -3180,7 +3191,7 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
     adjoint_refined->getValues(refine_len, refine_nodes, adj_interp);
 
     // Compute the localized error on the refined mesh
-    memset(err, 0, element->numNodes()*sizeof(TacsScalar));
+    memset(err, 0, element->getNumNodes()*sizeof(TacsScalar));
     element->addLocalizedError(time, err, adj_interp,
                                Xpts, vars_interp);
 
@@ -3192,7 +3203,7 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
     }
 
     // Add up the total adjoint correction
-    for ( int i = 0; i < element->numNodes(); i++ ){
+    for ( int i = 0; i < element->getNumNodes(); i++ ){
       total_adjoint_corr += err[i];
     }
 
@@ -3213,7 +3224,7 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
     // Get the node numbers for the refined mesh
     int len = 0;
     const int *nodes;
-    tacs_refined->getElement(elem, &nodes, &len);
+    tacs_refined->getElement(elem, &len, &nodes);
 
     // Get the adjoint variables for this element
     nodal_error->getValues(len, nodes, err);
@@ -3257,11 +3268,14 @@ double TMR_AdjointErrorEst( TMROctForest *forest,
 
   // Return the error
   return total_error_remain;
+*/
+  return 0.0;
 }
 
 /*
   Evaluate the stress constraints on a more-refined mesh
 */
+/*
 TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
                                           TACSAssembler *_tacs,
                                           TacsScalar _ks_weight ){
@@ -3294,7 +3308,7 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
   // Create the weight vector - the weights are the number of times
   // each node is referenced by adjacent elements, including
   // inter-process references.
-  weights = new TACSBVec(tacs->getVarMap(), 1,
+  weights = new TACSBVec(tacs->getNodeMap(), 1,
                          tacs->getBVecDistribute(),
                          tacs->getBVecDepNodes());
   weights->incref();
@@ -3305,12 +3319,12 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
   // Allocate a vector for the derivatives
   int vars_per_node = tacs->getVarsPerNode();
   int deriv_per_node = 3*vars_per_node;
-  uderiv = new TACSBVec(tacs->getVarMap(), deriv_per_node,
+  uderiv = new TACSBVec(tacs->getNodeMap(), deriv_per_node,
                         tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   uderiv->incref();
 
   // Allocate derivative vector
-  dfduderiv = new TACSBVec(tacs->getVarMap(), deriv_per_node,
+  dfduderiv = new TACSBVec(tacs->getNodeMap(), deriv_per_node,
                            tacs->getBVecDistribute(), tacs->getBVecDepNodes());
   dfduderiv->incref();
 
@@ -3328,10 +3342,12 @@ TMRStressConstraint::TMRStressConstraint( TMROctForest *_forest,
   ubar = new TacsScalar[ vars_per_node*max_enrich ];
   tmp = new TacsScalar[ neq*(max_enrich + vars_per_node) ];
 }
+*/
 
 /*
   Free the data that was allocated
 */
+/*
 TMRStressConstraint::~TMRStressConstraint(){
   forest->decref();
   interp_forest->decref();
@@ -3348,13 +3364,15 @@ TMRStressConstraint::~TMRStressConstraint(){
   delete [] ubar;
   delete [] tmp;
 }
+*/
 
 /*
   Evaluate the constraint on the refined mesh
 */
+/*
 TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   const int vars_per_node = tacs->getVarsPerNode();
-  
+
   // Copy the values
   uvec->copyValues(_uvec);
 
@@ -3380,8 +3398,8 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
   const double *gaussPts, *gaussWts;
 
   //int num_quad_pts = FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
-  int num_quad_pts =
-    FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
+  int num_quad_pts = 0;
+  // FElibrary::getGaussPtsWts(order+1, &gaussPts, &gaussWts);
 
   // int num_quad_pts =
   //   FElibrary::getGaussPtsWts(LOBATTO_QUADRATURE, order+2,
@@ -3405,7 +3423,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // Get the node numbers and node locations for this element
     int len;
     const int *nodes;
-    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, &len, &nodes);
     tacs->getElement(i, Xpts);
 
     // Retrieve the nodal values and nodal derivatives
@@ -3473,7 +3491,7 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     // Get the node numbers and node locations for this element
     int len;
     const int *nodes;
-    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, &len, &nodes);
     tacs->getElement(i, Xpts);
 
     // Retrieve the nodal values and nodal derivatives
@@ -3533,13 +3551,15 @@ TacsScalar TMRStressConstraint::evalConstraint( TACSBVec *_uvec ){
     printf("KS stress value:  %25.10e\n", ks_func_val);
     printf("Max stress value: %25.10e\n", ks_max_fail);
   }
-  
+
   return ks_func_val;
 }
+*/
 
 /*
   Evaluate the derivative w.r.t. state and design vectors
 */
+/*
 void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
                                         TACSBVec *dfdu ){
 
@@ -3615,7 +3635,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
     // Get the node numbers and node locations for this element
     int len;
     const int *nodes;
-    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, &len, &nodes);
 
     // Get the local weight used for computing uderiv
     TacsScalar welem[order*order*order];
@@ -3751,14 +3771,14 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
         }
       }
     }
-    
+
     // Compute dubar/du and dubar/duderiv
     addEnrichDeriv(A, dbdu, dubardu, dubar_duderiv);
 
     // Compute the product (df/dubar)(dubar/du)
     memset(dfdu_elem, 0, 3*p*sizeof(TacsScalar));
-        
-    for ( int ii = 0; ii < m; ii++ ){ 
+
+    for ( int ii = 0; ii < m; ii++ ){
       for ( int jj = 0; jj < p; jj++ ){
         for ( int c = 0; c < 3; c++ ){
           dfdu_elem[3*jj+c] += dfdubar[3*ii+c]*dubardu[m*jj+ii];
@@ -3805,7 +3825,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
     // Get the element nodes
     int len = 0;
     const int *nodes = NULL;
-    tacs->getElement(elem, &nodes, &len);
+    tacs->getElement(elem, &len, &nodes);
 
     // Get the local weight values for this element
     TacsScalar welem[MAX_ORDER*MAX_ORDER*MAX_ORDER];
@@ -3891,7 +3911,7 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   dfdu->endSetValues(TACS_ADD_VALUES);
 
   tacs->applyBCs(dfdu);
-  
+
   // Free allocated memory
   delete [] dfdu_elem;
   delete [] dfdubar;
@@ -3902,10 +3922,12 @@ void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
   delete [] duderiv_du;
   delete [] dUd;
 }
+*/
 
 /*
   Evaluate the strain
 */
+/*
 TacsScalar TMRStressConstraint::evalStrain( const double pt[],
                                             const TacsScalar *Xpts,
                                             const TacsScalar *vars,
@@ -3972,7 +3994,7 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
 
   // Invert the derivatives to obtain the Jacobian
   // transformation matrixx and its determinant
-  TacsScalar detJ = FElibrary::jacobian3d(Xd, J);
+  TacsScalar detJ = inv3x3(Xd, J);
 
   // Evaluate the contribution from the enrichment functions
   double Nr[MAX_3D_ENRICH];
@@ -4031,10 +4053,11 @@ TacsScalar TMRStressConstraint::evalStrain( const double pt[],
 
   return detJ;
 }
-
+*/
 /*
   Add the element contribution to the strain derivative
 */
+/*
 TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
                                                 const TacsScalar J[],
                                                 const TacsScalar alpha,
@@ -4094,10 +4117,11 @@ TacsScalar TMRStressConstraint::addStrainDeriv( const double pt[],
 
   return 0.0;
 }
-
+*/
 /*
   Add the element contribution to the derivative dubar/du
 */
+/*
 void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
                                           TacsScalar dbdu[],
                                           TacsScalar dubardu[],
@@ -4144,11 +4168,13 @@ void TMRStressConstraint::addEnrichDeriv( TacsScalar A[],
   delete [] dbduT_A;
   delete [] ipiv;
 }
+*/
 
 /*
   Output the von Misess stress from the reconstructed solution to a
   tecplot file
 */
+/*
 void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
                                            const char *fname,
                                            TacsScalar ys ){
@@ -4204,7 +4230,7 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
     // Get the node numbers and node locations for this element
     int len;
     const int *nodes;
-    tacs->getElement(i, &nodes, &len);
+    tacs->getElement(i, &len, &nodes);
     tacs->getElement(i, Xpts);
 
     // Retrieve the nodal values and nodal derivatives
@@ -4296,1190 +4322,4 @@ void TMRStressConstraint::writeReconToTec( TACSBVec *_uvec,
   // Close the file
   fclose(fp);
 }
-
-
-
-TMRCurvatureConstraint::TMRCurvatureConstraint( TMROctForest *_forest,
-                                                TACSVarMap *_varmap,
-                                                TacsScalar _aggregate_weight ){
-  init(_forest, _varmap, _aggregate_weight);
-}
-
-
-TMRCurvatureConstraint::TMRCurvatureConstraint( TMROctForest *_forest,
-                                                TacsScalar _aggregate_weight ){
-  init(_forest, NULL, _aggregate_weight);
-}
-
-TMRCurvatureConstraint::~TMRCurvatureConstraint(){
-  forest->decref();
-  varmap->decref();
-  weights->decref();
-  xvec->decref();
-  xderiv->decref();
-  dfderiv->decref();
-}
-
-void TMRCurvatureConstraint::init( TMROctForest *_forest,
-                                   TACSVarMap *_varmap,
-                                   TacsScalar _aggregate_weight ){
-  // Set the order/ksweight
-  forest = _forest;
-  forest->incref();
-  aggregate_weight = _aggregate_weight;
-
-  // Set the communicator
-  MPI_Comm comm = forest->getMPIComm();
-  int rank;
-  MPI_Comm_rank(comm, &rank);
-
-  // Set up a dependent node connectivity
-  const int *range = NULL;
-  forest->getOwnedNodeRange(&range);
-
-  // Copy or create the design variable map
-  if (_varmap){
-    varmap = _varmap;
-  }
-  else {
-    varmap = new TACSVarMap(comm, range[rank+1] - range[rank]);
-  }
-  varmap->incref();
-
-  // Get the number of local nodes
-  const int *node_numbers = NULL;
-  forest->getNodeNumbers(&node_numbers);
-  int num_ext_nodes = 0;
-
-  // Create an array of the external node numbers
-  int *ext_nodes = new int[ num_ext_nodes ];
-  for ( int i = 0; i < num_ext_nodes; i++ ){
-    if (node_numbers[i] >= 0 &&
-        (node_numbers[i] < range[rank] ||
-         node_numbers[i] >= range[rank+1])){
-      ext_nodes[num_ext_nodes] = node_numbers[i];
-      num_ext_nodes++;
-    }
-  }
-
-  // Create an index object
-  TACSBVecIndices *ext_indices =
-    new TACSBVecIndices(&ext_nodes, num_ext_nodes);
-
-  // Allocate the distribution class for the design variables
-  TACSBVecDistribute *ext_dist =
-    new TACSBVecDistribute(varmap, ext_indices);
-
-  // Create the dependent node data
-  const int *_dep_ptr = NULL, *_dep_conn = NULL;
-  const double *_dep_weights = NULL;
-  int num_dep_nodes = forest->getDepNodeConn(&_dep_ptr, &_dep_conn,
-                                             &_dep_weights);
-
-  // Allocate the new memory and copy over the data
-  int *dep_ptr = new int[ num_dep_nodes+1 ];
-  memcpy(dep_ptr, _dep_ptr, (num_dep_nodes+1)*sizeof(int));
-
-  // Copy over the connectivity
-  int size = dep_ptr[num_dep_nodes];
-  int *dep_conn = new int[ size ];
-  memcpy(dep_conn, _dep_conn, size*sizeof(int));
-
-  // Copy over the weights
-  double *dep_weights = new double[ size ];
-  memcpy(dep_weights, _dep_weights, size*sizeof(double));
-
-  // Allocate the dependent node data structure
-  TACSBVecDepNodes *dep_nodes =
-    new TACSBVecDepNodes(num_dep_nodes, &dep_ptr, &dep_conn, &dep_weights);
-
-  // Set the variable map for the design variables
-  weights = new TACSBVec(varmap, 1, ext_dist, dep_nodes);
-  weights->incref();
-
-  // Compute the local weights in each vector
-  const int order = forest->getMeshOrder();
-  const int max_nodes = order*order*order;
-  TacsScalar *welem = new TacsScalar[ max_nodes ];
-
-  // Get the connectivity
-  int nelems;
-  const int *conn;
-  forest->getNodeConn(&conn, &nelems);
-
-  // Add unit entries to all the free variables
-  for ( int i = 0; i < nelems; i++ ){
-    for ( int j = 0; j < max_nodes; j++ ){
-      welem[j] = 1.0;
-      if (conn[j] < 0){
-        welem[j] = 0.0;
-      }
-    }
-
-    weights->setValues(max_nodes, &conn[0], welem, TACS_ADD_VALUES);
-    conn += max_nodes;
-  }
-
-  // Finish setting all of the values
-  weights->beginSetValues(TACS_ADD_VALUES);
-  weights->endSetValues(TACS_ADD_VALUES);
-
-  // Distribute the values
-  weights->beginDistributeValues();
-  weights->endDistributeValues();
-
-  // Free the weights
-  delete [] welem;
-
-  // Set the values
-  xvec = new TACSBVec(varmap, 1, ext_dist, dep_nodes);
-  xvec->incref();
-
-  // Allocate a vector for the derivatives
-  int deriv_per_node = 3;
-  xderiv = new TACSBVec(varmap, deriv_per_node, ext_dist, dep_nodes);
-  xderiv->incref();
-
-  // Allocate derivative vector
-  dfderiv = new TACSBVec(varmap, deriv_per_node, ext_dist, dep_nodes);
-  dfderiv->incref();
-}
-
-void TMRCurvatureConstraint::computeNodeDeriv(){
-  // Zero the nodal derivatives
-  xderiv->zeroEntries();
-
-  // Get the interpolation knot positions
-  const double *knots;
-  const int order = forest->getInterpKnots(&knots);
-
-  // Get the number of elements and connectivity
-  int nelems;
-  const int *conn;
-  forest->getNodeConn(&conn, &nelems);
-
-  // Number of derivatives per node - x,y,z derivatives
-  const int deriv_per_node = 3;
-
-  // Allocate space for the element-wise values and derivatives
-  const int elem_size = order*order*order;
-  TacsScalar *elem_weights = new TacsScalar[ elem_size ];
-  TacsScalar *elem_vals = new TacsScalar[ elem_size ];
-  TacsScalar *elem_derivs = new TacsScalar[ deriv_per_node*elem_size ];
-  TacsScalar *elem_Xpts = new TacsScalar[ 3*elem_size ];
-
-  // Get the nodes
-  TMRPoint *X;
-  forest->getPoints(&X);
-
-  // Perform the reconstruction for the local
-  for ( int elem = 0; elem < nelems; elem++ ){
-    // Get the local weight values for this element
-    weights->getValues(elem_size, &conn[elem_size*elem], elem_weights);
-
-    // Get the local element variables
-    xvec->getValues(elem_size, &conn[elem_size*elem], elem_vals);
-
-    // Now get the node locations for the locally refined mesh
-    for ( int j = 0; j < elem_size; j++ ){
-      int c = conn[elem_size*elem + j];
-      int node = forest->getLocalNodeNumber(c);
-      elem_Xpts[3*j] = X[node].x;
-      elem_Xpts[3*j+1] = X[node].y;
-      elem_Xpts[3*j+2] = X[node].z;
-    }
-
-    // Compute the derivative of the components of the variables along
-    // each of the 3-coordinate directions
-    TacsScalar *d = elem_derivs;
-
-    // Compute the contributions to the derivative from this side of
-    // the element
-    for ( int kk = 0; kk < order; kk++ ){
-      for ( int jj = 0; jj < order; jj++ ){
-        for ( int ii = 0; ii < order; ii++ ){
-          double pt[3];
-          pt[0] = knots[ii];
-          pt[1] = knots[jj];
-          pt[2] = knots[kk];
-
-          // Evaluate the the shape functions
-          double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          forest->evalInterp(pt, N, Na, Nb, Nc);
-
-          // Evaluate the Jacobian transformation at this point
-          TacsScalar Xd[9], J[9];
-          computeJacobianTrans3D(elem_Xpts, Na, Nb, Nc, Xd,
-                                 J, elem_size);
-
-          // Compute the derivatives from the interpolated solution
-          TacsScalar vard[3];
-          vard[0] = vard[1] = vard[2] = 0.0;
-
-          const TacsScalar *v = elem_vals;
-          for ( int i = 0; i < elem_size; i++ ){
-            vard[0] += v[0]*Na[i];
-            vard[1] += v[0]*Nb[i];
-            vard[2] += v[0]*Nc[i];
-            v++;
-          }
-
-          // Evaluate the x/y/z derivatives of each value at the
-          // independent nodes
-          TacsScalar winv = 1.0/elem_weights[ii + jj*order + kk*order*order];
-          if (conn[elem_size*elem + ii + jj*order + kk*order*order] >= 0){
-            d[0] = winv*(vard[0]*J[0] + vard[1]*J[1] + vard[2]*J[2]);
-            d[1] = winv*(vard[0]*J[3] + vard[1]*J[4] + vard[2]*J[5]);
-            d[2] = winv*(vard[0]*J[6] + vard[1]*J[7] + vard[2]*J[8]);
-            d += 3;
-          }
-          else {
-            d[0] = d[1] = d[2] = 0.0;
-            d += 3;
-          }
-        }
-      }
-    }
-
-    // Add the values of the derivatives
-    xderiv->setValues(elem_size, &conn[elem_size*elem],
-                      elem_derivs, TACS_ADD_VALUES);
-  }
-
-  // Free the element values
-  delete [] elem_weights;
-  delete [] elem_vals;
-  delete [] elem_derivs;
-  delete [] elem_Xpts;
-
-  // Add the values in parallel
-  xderiv->beginSetValues(TACS_ADD_VALUES);
-  xderiv->endSetValues(TACS_ADD_VALUES);
-
-  // Distribute the values so that we can call getValues
-  xderiv->beginDistributeValues();
-  xderiv->endDistributeValues();
-}
-
-/*
-  Compute the polynomial coefficients
 */
-void evalPoly( const TacsScalar x[], TacsScalar N[],
-               TacsScalar Nx[], TacsScalar Ny[], TacsScalar Nz[] ){
-  N[0] = 1.0;
-
-  // Linear terms
-  N[1] = x[0];
-  N[2] = x[1];
-  N[3] = x[2];
-
-  // Quadratic terms
-  N[4] = x[2]*x[1];
-  N[5] = x[0]*x[2];
-  N[6] = x[0]*x[1];
-  N[7] = x[0]*x[0];
-  N[8] = x[1]*x[1];
-  N[9] = x[2]*x[2];
-
-  // Add the additional basis functions xyz, x^2*(y + z + yz),
-  // y^2*(x + z + xz), z^2*(x + y + xy)
-  N[10] = x[0]*x[1]*x[2];
-
-  N[11] = x[0]*x[0]*x[1];
-  N[12] = x[0]*x[0]*x[2];
-  N[13] = x[0]*x[0]*x[1]*x[2];
-
-  N[14] = x[1]*x[1]*x[0];
-  N[15] = x[1]*x[1]*x[2];
-  N[16] = x[1]*x[1]*x[0]*x[2];
-
-  N[17] = x[2]*x[2]*x[0];
-  N[18] = x[2]*x[2]*x[1];
-  N[19] = x[2]*x[2]*x[0]*x[1];
-
-  // Derivative w.r.t. x[0]
-  Nx[0] = 0.0;
-  Nx[1] = 1.0;
-  Nx[2] = 0.0;
-  Nx[3] = 0.0;
-  Nx[4] = 0.0;
-  Nx[5] = x[2];
-  Nx[6] = x[1];
-  Nx[7] = 2*x[0];
-  Nx[8] = 0.0;
-  Nx[9] = 0.0;
-  Nx[10] = x[1]*x[2];
-  Nx[11] = 2*x[0]*x[1];
-  Nx[12] = 2*x[0]*x[2];
-  Nx[13] = 2*x[0]*x[1]*x[2];
-  Nx[14] = x[1]*x[1];
-  Nx[15] = 0.0;
-  Nx[16] = x[1]*x[1]*x[2];
-  Nx[17] = x[2]*x[2];
-  Nx[18] = 0.0;
-  Nx[19] = x[2]*x[2]*x[1];
-
-  // Derivative w.r.t. x[1]
-  Ny[0] = 0.0;
-  Ny[1] = 0.0;
-  Ny[2] = 1.0;
-  Ny[3] = 0.0;
-  Ny[4] = x[2];
-  Ny[5] = 0.0;
-  Ny[6] = x[0];
-  Ny[7] = 0.0;
-  Ny[8] = 2*x[1];
-  Ny[9] = 0.0;
-  Ny[10] = x[0]*x[2];
-  Ny[11] = x[0]*x[0];
-  Ny[12] = 0.0;
-  Ny[13] = x[0]*x[0]*x[2];
-  Ny[14] = 2*x[1]*x[0];
-  Ny[15] = 2*x[1]*x[2];
-  Ny[16] = 2*x[1]*x[0]*x[2];
-  Ny[17] = 0.0;
-  Ny[18] = x[2]*x[2];
-  Ny[19] = x[2]*x[2]*x[0];
-
-  // Derivative w.r.t. x[2]
-  Nz[0] = 0.0;
-  Nz[1] = 0.0;
-  Nz[2] = 0.0;
-  Nz[3] = 1.0;
-  Nz[4] = x[1];
-  Nz[5] = x[0];
-  Nz[6] = 0.0;
-  Nz[7] = 0.0;
-  Nz[8] = 0.0;
-  Nz[9] = 2*x[2];
-  Nz[10] = x[0]*x[1];
-  Nz[11] = 0.0;
-  Nz[12] = x[0]*x[0];
-  Nz[13] = x[0]*x[0]*x[1];
-  Nz[14] = 0.0;
-  Nz[15] = x[1]*x[1];
-  Nz[16] = x[1]*x[1]*x[0];
-  Nz[17] = 2*x[2]*x[0];
-  Nz[18] = 2*x[2]*x[1];
-  Nz[19] = 2*x[2]*x[0]*x[1];
-}
-
-void testPoly(){
-  // Do a test
-  for ( int i = 0; i < 20; i++ ){
-    TacsScalar x[3] = {-0.132, 0.234, 3.102};
-
-    double dh = 1e-6;
-    TacsScalar N[20], Nx[20], Ny[20], Nz[20];
-    TacsScalar N1[20], Nx1[20], Ny1[20], Nz1[20];
-    evalPoly(x, N, Nx, Ny, Nz);
-
-    TacsScalar tmp = x[0];
-    x[0] = tmp + dh;
-    evalPoly(x, N1, Nx1, Ny1, Nz1);
-    x[0] = tmp;
-    for ( int j = 0; j < 20; j++ ){
-      TacsScalar fd = (N1[j] - N[j])/dh;
-      printf("Rel x-err[%2d] = %15.4e\n",j, (Nx[j] - fd)/fd);
-    }
-
-    tmp = x[1];
-    x[1] = tmp + dh;
-    evalPoly(x, N1, Nx1, Ny1, Nz1);
-    x[1] = tmp;
-    for ( int j = 0; j < 20; j++ ){
-      TacsScalar fd = (N1[j] - N[j])/dh;
-      printf("Rel y-err[%2d] = %15.4e\n", j,(Ny[j] - fd)/fd);
-    }
-
-    tmp = x[2];
-    x[2] = tmp + dh;
-    evalPoly(x, N1, Nx1, Ny1, Nz1);
-    x[2] = tmp;
-    for ( int j = 0; j < 20; j++ ){
-      TacsScalar fd = (N1[j] - N[j])/dh;
-      printf("Rel z-err[%2d] = %15.4e\n", j, (Nz[j] - fd)/fd);
-    }
-  }
-}
-
-/*
-  Fit a tri-quadratic model to the data and determine the
-  model gradient and Hessian at the element centroid
-*/
-void TMRCurvatureConstraint::estimateHessian( const TacsScalar elem_Xpts[],
-                                              const TacsScalar elem_vals[],
-                                              const TacsScalar elem_derivs[],
-                                              TacsScalar *val,
-                                              TacsScalar g[],
-                                              TacsScalar H[] ){
-  // Compute the central node location
-  TacsScalar c[3];
-  c[0] = c[1] = c[2] = 0.0;
-  for ( int i = 0; i < 8; i++ ){
-    c[0] += 0.125*elem_Xpts[3*i];
-    c[1] += 0.125*elem_Xpts[3*i+1];
-    c[2] += 0.125*elem_Xpts[3*i+2];
-  }
-
-  // For each point, form the entries of the matrix A
-  TacsScalar A[32*20], rhs[32];
-
-  for ( int i = 0; i < 8; i++ ){
-    TacsScalar N[20], Nx[20], Ny[20], Nz[20];
-    TacsScalar x[3];
-    x[0] = elem_Xpts[3*i] - c[0];
-    x[1] = elem_Xpts[3*i+1] - c[1];
-    x[2] = elem_Xpts[3*i+2] - c[2];
-    evalPoly(x, N, Nx, Ny, Nz);
-
-    // Place the entries into the matrix
-    rhs[4*i] = elem_vals[i];
-    rhs[4*i+1] = elem_derivs[3*i];
-    rhs[4*i+2] = elem_derivs[3*i+1];
-    rhs[4*i+3] = elem_derivs[3*i+2];
-    for ( int j = 0; j < 20; j++ ){
-      A[4*i + 32*j] = N[j];
-      A[4*i+1 + 32*j] = Nx[j];
-      A[4*i+2 + 32*j] = Ny[j];
-      A[4*i+3 + 32*j] = Nz[j];
-    }
-  }
-
-  // Singular values
-  TacsScalar s[20];
-  int nrhs = 1;
-  int m = 32, n = 20;
-  double rcond = -1.0;
-  int rank;
-
-  // Length of the work array
-  int lwork = 512;
-  TacsScalar work[512];
-
-  // LAPACK output status
-  int info;
-
-  // Using LAPACK, compute the least squares solution
-  LAPACKdgelss(&m, &n, &nrhs, A, &m, rhs, &m, s,
-               &rcond, &rank, work, &lwork, &info);
-
-  *val = rhs[0];
-
-  // Set and perturb the gradient
-  g[0] = rhs[1];
-  if (g[0] < 0.0){ g[0] = g[0] - 1e-6; }
-  else { g[0] = g[0] + 1e-6; }
-
-  g[1] = rhs[2];
-  if (g[1] < 0.0){ g[1] = g[1] - 1e-6; }
-  else { g[1] = g[1] + 1e-6; }
-
-  g[2] = rhs[3];
-  if (g[2] < 0.0){ g[2] = g[2] - 1e-6; }
-  else { g[2] = g[2] + 1e-6; }
-
-  H[0] = rhs[7];
-  H[1] = rhs[6];
-  H[2] = rhs[5];
-  H[3] = rhs[8];
-  H[4] = rhs[4];
-  H[5] = rhs[9];
-}
-
-TacsScalar TMRCurvatureConstraint::evalCurvature( const TacsScalar val,
-                                                  const TacsScalar g[],
-                                                  const TacsScalar H[] ){
-  // Compute the squared norm of the gradient
-  TacsScalar gn = g[0]*g[0] + g[1]*g[1] + g[2]*g[2];
-  TacsScalar sqrtgn = sqrt(gn);
-
-  // Compute the entries of the cofactor matrix
-  TacsScalar Hf[8];
-  Hf[0] = H[3]*H[5] - H[4]*H[4];
-  Hf[1] = H[4]*H[2] - H[1]*H[5];
-  Hf[2] = H[1]*H[4] - H[3]*H[2];
-  Hf[3] = H[0]*H[5] - H[2]*H[2];
-  Hf[4] = H[1]*H[2] - H[0]*H[4];
-  Hf[5] = H[0]*H[3] - H[1]*H[1];
-
-  TacsScalar Hfact =
-    (g[0]*(Hf[0]*g[0] + Hf[1]*g[1] + Hf[2]*g[2]) +
-     g[1]*(Hf[1]*g[0] + Hf[3]*g[1] + Hf[4]*g[2]) +
-     g[2]*(Hf[2]*g[0] + Hf[4]*g[1] + Hf[5]*g[2]));
-
-  // Compute the inner product with the Hessian matrix
-  TacsScalar Hprod =
-    (g[0]*(H[0]*g[0] + H[1]*g[1] + H[2]*g[2]) +
-     g[1]*(H[1]*g[0] + H[3]*g[1] + H[4]*g[2]) +
-     g[2]*(H[2]*g[0] + H[4]*g[1] + H[5]*g[2]));
-
-  // Compute the Gaussian and mean curvature
-  TacsScalar KG = 0.0;
-  if (gn != 0.0){
-    KG = Hfact/(gn*gn);
-  }
-  TacsScalar KM = 0.0;
-  if (gn != 0.0){
-    KM = 0.5*(Hprod - gn*(H[0] + H[3] + H[5]))/(gn*sqrtgn);
-  }
-
-  // Compute the principal curvature
-  TacsScalar sqrtk = sqrt(KM*KM - KG);
-  TacsScalar k1 = fabs(KM + sqrtk);
-  TacsScalar k2 = fabs(KM - sqrtk);
-
-  // Compute the approximate max curvature
-  TacsScalar kmax = 0.0, kdiff = 0.0;
-  if (k1 > k2){
-    kmax = k1;
-    kdiff = k2 - kmax;
-  }
-  else {
-    kmax = k2;
-    kdiff = k1 - k2;
-  }
-
-  // Compute the indicator factor
-  TacsScalar factor =
-    1.0 - 16*(val - 0.5)*(val - 0.5)*(val - 0.5)*(val - 0.5);
-
-  // Evaluate the result
-  TacsScalar result =
-    factor*(kmax + log(1.0 + exp(aggregate_weight*kdiff))/aggregate_weight);
-
-  return result;
-}
-
-TacsScalar TMRCurvatureConstraint::evalCurvDeriv( const TacsScalar val,
-                                                  const TacsScalar g[],
-                                                  const TacsScalar H[],
-                                                  TacsScalar *dval,
-                                                  TacsScalar dg[],
-                                                  TacsScalar dH[] ){
-
-  // Compute the squared norm of the gradient
-  TacsScalar gn = g[0]*g[0] + g[1]*g[1] + g[2]*g[2];
-  TacsScalar sqrtgn = sqrt(gn);
-
-  // Compute the entries of the cofactor matrix
-  TacsScalar Hf[8];
-  Hf[0] = H[3]*H[5] - H[4]*H[4];
-  Hf[1] = H[4]*H[2] - H[1]*H[5];
-  Hf[2] = H[1]*H[4] - H[3]*H[2];
-  Hf[3] = H[0]*H[5] - H[2]*H[2];
-  Hf[4] = H[1]*H[2] - H[0]*H[4];
-  Hf[5] = H[0]*H[3] - H[1]*H[1];
-
-  TacsScalar Hfact =
-    (g[0]*(Hf[0]*g[0] + Hf[1]*g[1] + Hf[2]*g[2]) +
-     g[1]*(Hf[1]*g[0] + Hf[3]*g[1] + Hf[4]*g[2]) +
-     g[2]*(Hf[2]*g[0] + Hf[4]*g[1] + Hf[5]*g[2]));
-
-  // Compute the inner product with the Hessian matrix
-  TacsScalar Hprod =
-    (g[0]*(H[0]*g[0] + H[1]*g[1] + H[2]*g[2]) +
-     g[1]*(H[1]*g[0] + H[3]*g[1] + H[4]*g[2]) +
-     g[2]*(H[2]*g[0] + H[4]*g[1] + H[5]*g[2]));
-
-  // Compute the Gaussian and mean curvature
-  TacsScalar KG = 0.0;
-  if (gn != 0.0){
-    KG = Hfact/(gn*gn);
-  }
-  TacsScalar KM = 0.0;
-  if (gn != 0.0){
-    KM = 0.5*(Hprod - gn*(H[0] + H[3] + H[5]))/(gn*sqrtgn);
-  }
-
-  // Compute the principal curvatures
-  TacsScalar sqrtk = sqrt(KM*KM - KG);
-  TacsScalar k1 = fabs(KM + sqrtk);
-  TacsScalar k2 = fabs(KM - sqrtk);
-
-  // Compute the approximate max curvature
-  TacsScalar kmax = 0.0, kdiff = 0.0;
-  if (k1 > k2){
-    kmax = k1;
-    kdiff = k2 - kmax;
-  }
-  else {
-    kmax = k2;
-    kdiff = k1 - k2;
-  }
-
-  // Compute the indicator factor
-  TacsScalar factor =
-    1.0 - 16*(val - 0.5)*(val - 0.5)*(val - 0.5)*(val - 0.5);
-
-  // Evaluate the result
-  TacsScalar expdiff = exp(aggregate_weight*kdiff);
-  TacsScalar ksres = (kmax + log(1.0 + expdiff)/aggregate_weight);
-  TacsScalar result = factor*ksres;
-
-  // Start to take the derivative
-  TacsScalar dfactor = ksres;
-  TacsScalar dkmax = factor;
-  TacsScalar dkdiff = factor*expdiff/(1.0 + expdiff);
-  TacsScalar dk1 = 0.0, dk2 = 0.0;
-  if (k1 > k2){
-    dk1 = dkmax - dkdiff;
-    dk2 = dkdiff;
-  }
-  else {
-    dk2 = dkmax - dkdiff;
-    dk1 = dkdiff;
-  }
-
-  // Compute the derivatives of the principal curvatures
-  TacsScalar dKM = 0.0;
-  TacsScalar dsqrtk = 0.0;
-  if (KM + sqrtk > 0.0){
-    dKM = dk1;
-    dsqrtk = dk1;
-  }
-  else {
-    dKM = -dk1;
-    dsqrtk = -dk1;
-  }
-
-  if (KM - sqrtk > 0.0){
-    dKM += dk2;
-    dsqrtk -= dk2;
-  }
-  else {
-    dKM -= dk2;
-    dsqrtk += dk2;
-  }
-
-  TacsScalar dKG = -0.5*dsqrtk/sqrtk;
-  dKM += dsqrtk*KM/sqrtk;
-
-  // Cary the derivative through to dHprod and dgn
-  TacsScalar dHprod = 0.5*dKM/(gn*sqrtgn);
-  TacsScalar dHfact = dKG/(gn*gn);
-  TacsScalar dgn = -0.5*dKM*((1.5*Hprod -
-                              0.5*gn*(H[0] + H[3] + H[5]))/(gn*gn*sqrtgn));
-  dgn -= 2.0*dKG*Hfact/(gn*gn*gn);
-
-  // Compute the derivative of res w.r.t. H
-  dH[0] = -0.5*dKM/sqrtgn + dHprod*g[0]*g[0];
-  dH[1] = 2.0*dHprod*g[0]*g[1];
-  dH[2] = 2.0*dHprod*g[0]*g[2];
-  dH[3] = -0.5*dKM/sqrtgn + dHprod*g[1]*g[1];
-  dH[4] = 2.0*dHprod*g[1]*g[2];
-  dH[5] = -0.5*dKM/sqrtgn + dHprod*g[2]*g[2];
-
-  // Compute the derivative of g w.r.t. h
-  dg[0] = 2.0*dgn*g[0] + 2.0*(dHprod*(H[0]*g[0] + H[1]*g[1] + H[2]*g[2]) +
-                              dHfact*(Hf[0]*g[0] + Hf[1]*g[1] + Hf[2]*g[2]));
-  dg[1] = 2.0*dgn*g[1] + 2.0*(dHprod*(H[1]*g[0] + H[3]*g[1] + H[4]*g[2]) +
-                              dHfact*(Hf[1]*g[0] + Hf[3]*g[1] + Hf[4]*g[2]));
-  dg[2] = 2.0*dgn*g[2] + 2.0*(dHprod*(H[2]*g[0] + H[4]*g[1] + H[5]*g[2]) +
-                              dHfact*(Hf[2]*g[0] + Hf[4]*g[1] + Hf[5]*g[2]));
-
-  TacsScalar dHf[6];
-  dHf[0] = dHfact*g[0]*g[0];
-  dHf[1] = 2.0*dHfact*g[0]*g[1];
-  dHf[2] = 2.0*dHfact*g[0]*g[2];
-  dHf[3] = dHfact*g[1]*g[1];
-  dHf[4] = 2.0*dHfact*g[1]*g[2];
-  dHf[5] = dHfact*g[2]*g[2];
-
-  dH[0] += H[5]*dHf[3] - H[4]*dHf[4] + H[3]*dHf[5];
-  dH[1] +=-H[5]*dHf[1] + H[4]*dHf[2] + H[2]*dHf[4] - 2*H[1]*dHf[5];
-  dH[2] += H[4]*dHf[1] - H[3]*dHf[2] - 2*H[2]*dHf[3] + H[1]*dHf[4];
-  dH[3] += H[5]*dHf[0] - H[2]*dHf[2] + H[0]*dHf[5];
-  dH[4] += -2*H[4]*dHf[0] + H[2]*dHf[1] + H[1]*dHf[2] - H[0]*dHf[4];
-  dH[5] += H[3]*dHf[0] - H[1]*dHf[1] + H[0]*dHf[3];
-
-  // Compute the derivative of the value w.r.t h
-  *dval = -64*dfactor*(val - 0.5)*(val - 0.5)*(val - 0.5);
-
-  return result;
-}
-
-TacsScalar TMRCurvatureConstraint::evalCurvature( const int elem_size,
-                                                  const double N[],
-                                                  const double Na[],
-                                                  const double Nb[],
-                                                  const double Nc[],
-                                                  const TacsScalar J[],
-                                                  const TacsScalar Xpts[],
-                                                  const TacsScalar elem_vals[],
-                                                  const TacsScalar elem_deriv[] ){
-  // Derivatives along each coordinate direction
-  const int deriv_per_node = 3;
-
-  // Evaluate the gradient and Hessian
-  TacsScalar val = 0.0;
-  TacsScalar g[3], h[9];
-  g[0] = g[1] = g[2] = 0.0;
-  h[0] = h[1] = h[2] = h[3] = h[4] =
-    h[5] = h[6] = h[7] = h[8] = 0.0;
-
-  for ( int j = 0; j < elem_size; j++ ){
-    // Evaluate the function value
-    val += elem_vals[j]*N[j];
-
-    // Evaluate the gradient
-    g[0] += elem_deriv[deriv_per_node*j]*N[j];
-    g[1] += elem_deriv[deriv_per_node*j+1]*N[j];
-    g[2] += elem_deriv[deriv_per_node*j+2]*N[j];
-
-    // Estimate the Hessian
-    h[0] += elem_deriv[deriv_per_node*j]*Na[j];
-    h[1] += elem_deriv[deriv_per_node*j]*Nb[j];
-    h[2] += elem_deriv[deriv_per_node*j]*Nc[j];
-
-    h[3] += elem_deriv[deriv_per_node*j+1]*Na[j];
-    h[4] += elem_deriv[deriv_per_node*j+1]*Nb[j];
-    h[5] += elem_deriv[deriv_per_node*j+1]*Nc[j];
-
-    h[6] += elem_deriv[deriv_per_node*j+2]*Na[j];
-    h[7] += elem_deriv[deriv_per_node*j+2]*Nb[j];
-    h[8] += elem_deriv[deriv_per_node*j+2]*Nc[j];
-  }
-
-  // Compute the approximate Hessian
-  TacsScalar H[6];
-  H[0] = (J[0]*h[0] + J[3]*h[1] + J[6]*h[2]);
-  H[1] = 0.5*((J[1]*h[0] + J[4]*h[1] + J[7]*h[2]) +
-              (J[0]*h[3] + J[3]*h[4] + J[6]*h[5]));
-  H[2] = 0.5*((J[2]*h[0] + J[5]*h[1] + J[8]*h[2]) +
-              (J[0]*h[6] + J[3]*h[7] + J[6]*h[8]));
-
-  H[3] = (J[1]*h[3] + J[4]*h[4] + J[7]*h[5]);
-  H[4] = 0.5*((J[2]*h[3] + J[5]*h[4] + J[8]*h[5]) +
-              (J[1]*h[6] + J[4]*h[7] + J[7]*h[8]));
-  H[5] = (J[2]*h[6] + J[5]*h[7] + J[8]*h[8]);
-
-  return evalCurvature(val, g, H);
-}
-
-TacsScalar TMRCurvatureConstraint::addCurvDeriv( const TacsScalar alpha,
-                                                 const int elem_size,
-                                                 const double N[],
-                                                 const double Na[],
-                                                 const double Nb[],
-                                                 const double Nc[],
-                                                 const TacsScalar J[],
-                                                 const TacsScalar Xpts[],
-                                                 const TacsScalar elem_vals[],
-                                                 const TacsScalar elem_deriv[],
-                                                 TacsScalar dvals[],
-                                                 TacsScalar dderiv[] ){
-  // The spatial derivatives
-  const int deriv_per_node = 3;
-
-  // Evaluate the gradient and Hessian
-  TacsScalar val = 0.0;
-  TacsScalar g[3], h[9];
-  g[0] = g[1] = g[2] = 0.0;
-  h[0] = h[1] = h[2] = h[3] = h[4] =
-    h[5] = h[6] = h[7] = h[8] = 0.0;
-
-  for ( int j = 0; j < elem_size; j++ ){
-    // Evaluate the function value
-    val += elem_vals[j]*N[j];
-
-    // Evaluate the gradient
-    g[0] += elem_deriv[deriv_per_node*j]*N[j];
-    g[1] += elem_deriv[deriv_per_node*j+1]*N[j];
-    g[2] += elem_deriv[deriv_per_node*j+2]*N[j];
-
-    // Estimate the Hessian
-    h[0] += elem_deriv[deriv_per_node*j]*Na[j];
-    h[1] += elem_deriv[deriv_per_node*j]*Nb[j];
-    h[2] += elem_deriv[deriv_per_node*j]*Nc[j];
-
-    h[3] += elem_deriv[deriv_per_node*j+1]*Na[j];
-    h[4] += elem_deriv[deriv_per_node*j+1]*Nb[j];
-    h[5] += elem_deriv[deriv_per_node*j+1]*Nc[j];
-
-    h[6] += elem_deriv[deriv_per_node*j+2]*Na[j];
-    h[7] += elem_deriv[deriv_per_node*j+2]*Nb[j];
-    h[8] += elem_deriv[deriv_per_node*j+2]*Nc[j];
-  }
-
-  // Compute the approximate Hessian
-  TacsScalar H[6];
-  H[0] = (J[0]*h[0] + J[3]*h[1] + J[6]*h[2]);
-  H[1] = 0.5*((J[1]*h[0] + J[4]*h[1] + J[7]*h[2]) +
-              (J[0]*h[3] + J[3]*h[4] + J[6]*h[5]));
-  H[2] = 0.5*((J[2]*h[0] + J[5]*h[1] + J[8]*h[2]) +
-              (J[0]*h[6] + J[3]*h[7] + J[6]*h[8]));
-
-  H[3] = (J[1]*h[3] + J[4]*h[4] + J[7]*h[5]);
-  H[4] = 0.5*((J[2]*h[3] + J[5]*h[4] + J[8]*h[5]) +
-              (J[1]*h[6] + J[4]*h[7] + J[7]*h[8]));
-  H[5] = (J[2]*h[6] + J[5]*h[7] + J[8]*h[8]);
-
-  TacsScalar dval;
-  TacsScalar dg[3], dH[6];
-
-  TacsScalar result = evalCurvDeriv(val, g, H, &dval, dg, dH);
-
-  // Compute the derivative w.r.t. the Hessian
-  TacsScalar dh[9];
-  dh[0] = J[0]*dH[0] + 0.5*J[1]*dH[1] + 0.5*J[2]*dH[2];
-  dh[1] = J[3]*dH[0] + 0.5*J[4]*dH[1] + 0.5*J[5]*dH[2];
-  dh[2] = J[6]*dH[0] + 0.5*J[7]*dH[1] + 0.5*J[8]*dH[2];
-
-  dh[3] = 0.5*J[0]*dH[1] + J[1]*dH[3] + 0.5*J[2]*dH[4];
-  dh[4] = 0.5*J[3]*dH[1] + J[4]*dH[3] + 0.5*J[5]*dH[4];
-  dh[5] = 0.5*J[6]*dH[1] + J[7]*dH[3] + 0.5*J[8]*dH[4];
-
-  dh[6] = 0.5*J[0]*dH[2] + 0.5*J[1]*dH[4] + J[2]*dH[5];
-  dh[7] = 0.5*J[3]*dH[2] + 0.5*J[4]*dH[4] + J[5]*dH[5];
-  dh[8] = 0.5*J[6]*dH[2] + 0.5*J[7]*dH[4] + J[8]*dH[5];
-
-  for ( int j = 0; j < elem_size; j++ ){
-    // Evaluate the function value
-    dvals[j] += alpha*dval*N[j];
-
-    // Evaluate the gradient
-    dderiv[deriv_per_node*j] +=
-      alpha*(N[j]*dg[0] + Na[j]*dh[0] + Nb[j]*dh[1] + Nc[j]*dh[2]);
-    dderiv[deriv_per_node*j+1] +=
-      alpha*(N[j]*dg[1] + Na[j]*dh[3] + Nb[j]*dh[4] + Nc[j]*dh[5]);
-    dderiv[deriv_per_node*j+2] +=
-      alpha*(N[j]*dg[2] + Na[j]*dh[6] + Nb[j]*dh[7] + Nc[j]*dh[8]);
-  }
-
-  return result;
-}
-/*
-  Evaluate the constraint on the refined mesh
-*/
-TacsScalar TMRCurvatureConstraint::evalConstraint( TACSBVec *_xvec ){
-  
-  // Get the communicator from the forest
-  MPI_Comm comm = forest->getMPIComm();
-
-  // Copy the values
-  const int bsize = _xvec->getBlockSize();
-  TacsScalar *xvals;
-  _xvec->getArray(&xvals);
-
-  TacsScalar *xlocal;
-  int size = xvec->getArray(&xlocal);
-  for ( int i = 0; i < size; i++ ){
-    xlocal[i] = xvals[0];
-    xvals += bsize;
-  }
-
-  // Distribute the variable values so that the non-owned values can
-  // be accessed locally
-  xvec->beginDistributeValues();
-  xvec->endDistributeValues();
-
-  // Compute the derivatives at the nodes
-  computeNodeDeriv();
-
-  // Get the interpolation knot positions
-  const double *knots;
-  const int order = forest->getInterpKnots(&knots);
-
-  // Get the quadrature points/weights
-  const double *gaussPts, *gaussWts;
-  FElibrary::getGaussPtsWts(order, &gaussPts, &gaussWts);
-
-  // Get the higher-order points
-  TMRPoint *X;
-  forest->getPoints(&X);
-
-  // Set the max value of the curvature
-  max_curvature = 0.0;
-
-  // Number of derivatives per node - x,y,z derivatives
-  const int deriv_per_node = 3;
-
-  // Allocate space for the element-wise values and derivatives
-  const int elem_size = order*order*order;
-  TacsScalar *elem_vals = new TacsScalar[ elem_size ];
-  TacsScalar *elem_derivs = new TacsScalar[ deriv_per_node*elem_size ];
-  TacsScalar *elem_Xpts = new TacsScalar[ 3*elem_size ];
-
-  // Get the number of elements and connectivity
-  int num_elements;
-  const int *conn;
-  forest->getNodeConn(&conn, &num_elements);
-
-  for ( int elem = 0; elem < num_elements; elem++ ){
-    // Now get the node locations for the locally refined mesh
-    for ( int j = 0; j < 8; j++ ){
-      int c = conn[8*elem + j];
-      int node = forest->getLocalNodeNumber(c);
-      elem_Xpts[3*j] = X[node].x;
-      elem_Xpts[3*j+1] = X[node].y;
-      elem_Xpts[3*j+2] = X[node].z;
-    }
-
-    // Retrieve the nodal values and nodal derivatives
-    xvec->getValues(8, &conn[8*elem], elem_vals);
-    xderiv->getValues(8, &conn[8*elem], elem_derivs);
-
-    // Estimate the model Hessian/gradient information
-    TacsScalar val, g[3], H[6];
-    estimateHessian(elem_Xpts, elem_vals, elem_derivs,
-                    &val, g, H);
-
-    val = 0.0;
-    for ( int j = 0; j < 8; j++ ){
-      val += 0.125*elem_vals[j];
-    }
-
-    // Compute the curvatures
-    TacsScalar result = evalCurvature(val, g, H);
-
-    // Set the maximum curvature
-    if (result > max_curvature){
-      max_curvature = result;
-    }
-  }
-
-  // Find the maximum curvature value across all of the processors
-  MPI_Allreduce(MPI_IN_PLACE, &max_curvature, 1,
-                TACS_MPI_TYPE, MPI_MAX, comm);
-
-  aggregate_numer = 0.0;
-  aggregate_denom = 0.0;
-
-
-  for ( int elem = 0; elem < num_elements; elem++ ){
-    // Now get the node locations for the locally refined mesh
-    for ( int j = 0; j < 8; j++ ){
-      int c = conn[8*elem + j];
-      int node = forest->getLocalNodeNumber(c);
-      elem_Xpts[3*j] = X[node].x;
-      elem_Xpts[3*j+1] = X[node].y;
-      elem_Xpts[3*j+2] = X[node].z;
-    }
-
-    // Retrieve the nodal values and nodal derivatives
-    xvec->getValues(8, &conn[8*elem], elem_vals);
-    xderiv->getValues(8, &conn[8*elem], elem_derivs);
-
-    // Estimate the model Hessian/gradient information
-    TacsScalar val, g[3], H[6];
-    estimateHessian(elem_Xpts, elem_vals, elem_derivs,
-                    &val, g, H);
-
-    val = 0.0;
-    for ( int j = 0; j < 8; j++ ){
-      val += 0.125*elem_vals[j];
-    }
-
-    // Compute the curvatures
-    TacsScalar result = evalCurvature(val, g, H);
-    TacsScalar expres = exp(aggregate_weight*(result - max_curvature));
-    aggregate_numer += result*expres;
-    aggregate_denom += expres;
-  }
-
-  TacsScalar tmp[2];
-  tmp[0] = aggregate_numer;
-  tmp[1] = aggregate_denom;
-  MPI_Allreduce(MPI_IN_PLACE, tmp, 2, TACS_MPI_TYPE, MPI_SUM, comm);
-  aggregate_numer = tmp[0];
-  aggregate_denom = tmp[1];
-
-  TacsScalar func_val = aggregate_numer/aggregate_denom;
-
-  int mpi_rank;
-  MPI_Comm_rank(comm, &mpi_rank);
-  if (mpi_rank == 0){
-    printf("Induced curvature:  %25.10e\n", func_val);
-    printf("Max curvature:      %25.10e\n", max_curvature);
-  }
-  
-  return func_val;
-}
-
-/*
-  Evaluate the derivative w.r.t. state and design vectors
-*/
-/*
-void TMRStressConstraint::evalConDeriv( TacsScalar *dfdx, int size,
-                                        TACSBVec *dfdu ){
-
-  for ( int i = 0; i < nelems; i++ ){
-    // Now get the node locations for the locally refined mesh
-    const int elem_size = order*order*order;
-    for ( int j = 0; j < elem_size; j++ ){
-      int c = conn[elem_size*i + j];
-      int node = forest->getLocalNodeNumber(c);
-      Xpts[3*j] = X[node].x;
-      Xpts[3*j+1] = X[node].y;
-      Xpts[3*j+2] = X[node].z;
-    }
-
-    // Retrieve the nodal values and nodal derivatives
-    xderiv->getValues(len, nodes, xvarderiv);
-
-    // For each quadrature point, evaluate the strain at the
-    // quadrature point and evaluate the stress constraint
-    for ( int kk = 0; kk < num_quad_pts; kk++ ){
-      for ( int jj = 0; jj < num_quad_pts; jj++ ){
-        for ( int ii = 0; ii < num_quad_pts; ii++ ){
-          // Set the parametric location within the element
-          double pt[3];
-          pt[0] = knots[ii];
-          pt[1] = knots[jj];
-          pt[2] = knots[kk];
-
-          // Compute the element shape functions at this point
-          double N[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          double Na[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          double Nb[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          double Nc[MAX_ORDER*MAX_ORDER*MAX_ORDER];
-          forest->evalInterp(pt, N, Na, Nb, Nc);
-
-          // Evaluate the Jacobian transformation at this point
-          TacsScalar Xd[9], J[9];
-          TacsScalar detJ = computeJacobianTrans3D(Xpts, Na, Nb, Nc, Xd, J,
-                                                   elem_size);
-          detJ *= gaussWts[ii]*gaussWts[jj]*gaussWts[kk];
-
-          // Compute the curvature
-          TacsScalar result =
-            evalCurvature(elem_size, N, Na, Nb, Nc, J,
-                          Xpts, elem_vars, elem_deriv);
-
-          TacsScalar expres = exp(ksweight*(result - max_curvature));
-        }
-      }
-    }
-  }
-
-*/
-        // TacsScalar efp = exp(P*(fail - max_fail));
-
-        // s = weight*h*(((1.0 + P*fail)*fail_denom -
-        //                P*max_fail*fail_numer)*efp)/(fail_denom*fail_denom);
-
-
-
-void TMRCurvatureConstraint::writeCurvatureToFile( TACSBVec *_xvec,
-                                                   const char *filename ){
-  // Copy the values
-  const int bsize = _xvec->getBlockSize();
-  TacsScalar *xvals;
-  _xvec->getArray(&xvals);
-
-  TacsScalar *xlocal;
-  int size = xvec->getArray(&xlocal);
-  for ( int i = 0; i < size; i++ ){
-    xlocal[i] = xvals[0];
-    xvals += bsize;
-  }
-
-  // Distribute the variable values so that the non-owned values can
-  // be accessed locally
-  xvec->beginDistributeValues();
-  xvec->endDistributeValues();
-
-  // Compute the derivatives at the nodes
-  computeNodeDeriv();
-
-  // Get the higher-order points
-  TMRPoint *X;
-  forest->getPoints(&X);
-
-  // Get the number of local nodes
-  int num_local_nodes = forest->getNodeNumbers(NULL);
-
-  // Get the local connectivity
-  int num_elements = 0;
-  const int *conn = NULL;
-  forest->getNodeConn(&conn, &num_elements);
-
-  // Create file to write out the von Misses stress to .dat file
-  FILE *fp = fopen(filename, "w");
-  fprintf(fp, "TITLE = \"Reconstruction Solution\"\n");
-  fprintf(fp, "FILETYPE = FULL\n");
-  fprintf(fp, "VARIABLES = X, Y, Z, val, kval\n");
-  fprintf(fp, "ZONE ZONETYPE = FEBRICK, N = %d, E = %d, DATAPACKING = BLOCK,",
-          num_local_nodes, num_elements);
-  fprintf(fp, "VARLOCATION=([4,5]=CELLCENTERED)\n");
-
-  for ( int i = 0; i < num_local_nodes; i++ ){
-    fprintf(fp, "%e\n", X[i].x);
-  }
-  for ( int i = 0; i < num_local_nodes; i++ ){
-    fprintf(fp, "%e\n", X[i].y);
-  }
-  for ( int i = 0; i < num_local_nodes; i++ ){
-    fprintf(fp, "%e\n", X[i].z);
-  }
-
-  TacsScalar elem_Xpts[24], elem_vals[8], elem_derivs[24];
-
-  for ( int elem = 0; elem < num_elements; elem++ ){
-    // Now get the node locations for the locally refined mesh
-    for ( int j = 0; j < 8; j++ ){
-      int c = conn[8*elem + j];
-      int node = forest->getLocalNodeNumber(c);
-      elem_Xpts[3*j] = X[node].x;
-      elem_Xpts[3*j+1] = X[node].y;
-      elem_Xpts[3*j+2] = X[node].z;
-    }
-
-    // Retrieve the nodal values and nodal derivatives
-    xvec->getValues(8, &conn[8*elem], elem_vals);
-    xderiv->getValues(8, &conn[8*elem], elem_derivs);
-
-    // Estimate the model Hessian/gradient information
-    TacsScalar val, g[3], H[6];
-    estimateHessian(elem_Xpts, elem_vals, elem_derivs,
-                    &val, g, H);
-
-    fprintf(fp, "%e\n", val);
-  }
-
-  for ( int elem = 0; elem < num_elements; elem++ ){
-    // Now get the node locations for the locally refined mesh
-    for ( int j = 0; j < 8; j++ ){
-      int c = conn[8*elem + j];
-      int node = forest->getLocalNodeNumber(c);
-      elem_Xpts[3*j] = X[node].x;
-      elem_Xpts[3*j+1] = X[node].y;
-      elem_Xpts[3*j+2] = X[node].z;
-    }
-
-    // Retrieve the nodal values and nodal derivatives
-    xvec->getValues(8, &conn[8*elem], elem_vals);
-    xderiv->getValues(8, &conn[8*elem], elem_derivs);
-
-    // Estimate the model Hessian/gradient information
-    TacsScalar val, g[3], H[6];
-    estimateHessian(elem_Xpts, elem_vals, elem_derivs,
-                    &val, g, H);
-
-    val = 0.0;
-    for ( int j = 0; j < 8; j++ ){
-      val += 0.125*elem_vals[j];
-    }
-
-    // Compute the curvatures
-    TacsScalar result = evalCurvature(val, g, H);
-
-    fprintf(fp, "%e\n", result);
-  }
-
-  // Print out the connectivity
-  const int ordering[8] = {0, 1, 3, 2, 4, 5, 7, 6};
-  for ( int i = 0; i < num_elements; i++ ){
-    for ( int j = 0; j < 8; j++ ){
-      int node = forest->getLocalNodeNumber(conn[8*i+ordering[j]]);
-      fprintf(fp, "%d ", node+1);
-    }
-    fprintf(fp, "\n");
-  }
-
-  fclose(fp);
-}

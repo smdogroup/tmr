@@ -10,19 +10,36 @@ class CreateMe(TMR.OctCreator):
     def __init__(self, bcs):
         TMR.OctTopoCreator.__init__(bcs)
 
+        # Create the stiffness object
+        self.props = constitutive.MaterialProperties(rho=2570.0, E=70e9, nu=0.3, ys=350e6)
+        self.stiff = constitutive.SolidConstitutive(self.props)
+
+        # Set up the basis function
+        self.model = elements.LinearElasticity3D(self.stiff)
+
     def createElement(self, order, octant):
-        '''Create the element'''
-        rho = 0.1015 # lbs/in
-        E = 100e6 # 100,000 ksi
-        nu = 0.3
-        stiff = constitutive.isoSolidStiff(rho, E, nu)
-        elem = elements.Solid(order, stiff)
-        return elem
+        """Create the element"""
+        if order == 2:
+            basis = elements.LinearHexaBasis()
+        elif order == 3:
+            basis = elements.QuadraticHexaBasis()
+        elif order == 4:
+            basis = elements.CubicHexaBasis()
+
+        return elements.Element3D(self.model, basis)
 
 def addFaceTraction(order, forest, attr, assembler, tr):
+    vpn = assembler.getVarsPerNode()
+    if order == 2:
+        basis = elements.LinearHexaBasis()
+    elif order == 3:
+        basis = elements.QuadraticHexaBasis()
+    elif order == 4:
+        basis = elements.CubicHexaBasis()
+
     trac = []
     for findex in range(6):
-        trac.append(elements.Traction3D(order, findex, tr[0], tr[1], tr[2]))
+        trac.append(elements.Traction3D(vpn, findex, basis, tr))
 
     # Retrieve octants from the forest
     octants = forest.getOctants()
@@ -80,7 +97,7 @@ def createProblem(forest, bcs, ordering, mesh_order=2, nlevels=2,
         assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests, use_coarse_direct_solve=True, 
+    mg = TMR.createMg(assemblers, forests, use_coarse_direct_solve=True,
                       use_chebyshev_smoother=False)
 
     return assemblers[0], mg
@@ -153,14 +170,14 @@ opts.triangularize_print_iter = 50000
 # Create the surface mesh
 mesh.mesh(htarget, opts)
 
-# Create the corresponding mesh topology from the mesh-model 
+# Create the corresponding mesh topology from the mesh-model
 model = mesh.createModelFromMesh()
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
 forest = TMR.OctForest(comm)
 forest.setTopology(topo)
-forest.createRandomTrees(5, 0, 2)
+forest.createTrees(2)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
@@ -169,18 +186,18 @@ bcs.addBoundaryCondition('fully fixed')
 
 # Set the ordering to use
 if ordering == 'rcm':
-    ordering = TACS.PY_RCM_ORDER
+    ordering = TACS.RCM_ORDER
 elif ordering == 'multicolor':
-    ordering = TACS.PY_MULTICOLOR_ORDER
+    ordering = TACS.MULTICOLOR_ORDER
 else:
-    ordering = TACS.PY_NATURAL_ORDER
+    ordering = TACS.NATURAL_ORDER
 
-niters = 3
+niters = 1
 for k in range(niters):
     t = MPI.Wtime()
     # Create the topology problem
-    assembler, mg = createProblem(forest, bcs, ordering, 
-                                  mesh_order=order, nlevels=2+k)
+    assembler, mg = createProblem(forest, bcs, ordering,
+                                  mesh_order=order, nlevels=3+k)
     if comm.rank == 0:
         print('Creating TACS assembler objects', MPI.Wtime() - t)
 
@@ -202,7 +219,7 @@ for k in range(niters):
     mg.assembleJacobian(1.0, 0.0, 0.0, res)
     if comm.rank == 0:
         print('Assembling the Jacobians', MPI.Wtime() - t)
-    
+
     # Factor the matrix
     t = MPI.Wtime()
     mg.factor()
@@ -217,10 +234,11 @@ for k in range(niters):
     assembler.setVariables(ans)
 
     # Output for visualization
-    flag = (TACS.ToFH5.NODES |
-            TACS.ToFH5.DISPLACEMENTS |
-            TACS.ToFH5.STRESSES)
-    f5 = TACS.ToFH5(assembler, TACS.PY_SOLID, flag)
+    flag = (TACS.OUTPUT_CONNECTIVITY |
+            TACS.OUTPUT_NODES |
+            TACS.OUTPUT_DISPLACEMENTS |
+            TACS.OUTPUT_STRESSES)
+    f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
     f5.writeToFile('crank%d.f5'%(k))
 
     if order >= 4:

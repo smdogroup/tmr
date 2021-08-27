@@ -4,11 +4,6 @@
 #include "TMRQuadForest.h"
 #include "TMRMesh.h"
 #include "TMRFaceMesh.h"
-#include "TACSAssembler.h"
-#include "isoFSDTStiffness.h"
-#include "PlaneStressQuad.h"
-#include "PlaneStressTraction.h"
-#include "TACSToFH5.h"
 #include <stdio.h>
 #include <math.h>
 

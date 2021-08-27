@@ -51,7 +51,10 @@ class TMREdgeMesh : public TMREntity {
   // Retrieve the mesh points
   void getMeshPoints( int *_npts, const double **_pts, TMRPoint **X );
 
-  // Set the
+  // Write the edge points to the file
+  void writeToVTK( const char *filename );
+
+  // Get the relative orientation of the edge
   static int getEdgeCopyOrient( TMREdge *e );
 
  private:

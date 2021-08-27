@@ -19,11 +19,6 @@
 */
 
 #include "TMR_TACSTopoCreator.h"
-#include "TMROctStiffness.h"
-#include "TMRQuadStiffness.h"
-#include "FElibrary.h"
-#include "Solid.h"
-#include "PlaneStressQuad.h"
 
 /*
   Compare integers for sorting
@@ -36,52 +31,23 @@ static int compare_integers( const void *a, const void *b ){
   Set up a creator class for the given filter problem
 */
 TMROctTACSTopoCreator::TMROctTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                              TMROctForest *_filter ):
-TMROctTACSCreator(_bcs){
-  // Reference the filter
-  filter = _filter;
-  filter->incref();
-
+                                              int _design_vars_per_node,
+                                              TMROctForest *_filter ){
   int mpi_rank;
   MPI_Comm comm = filter->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Create the nodes within the filter
-  filter->createNodes();
+  _filter->createNodes();
 
-  // Get the node range for the filter design variables
-  const int *filter_range;
-  filter->getOwnedNodeRange(&filter_range);
-
-  // Set up the variable map for the design variable numbers
-  int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
-  filter_map = new TACSVarMap(comm, num_filter_local);
-  filter_map->incref();
-
-  // Set the filter indices to NULL
-  filter_indices = NULL;
+  initialize(_bcs, _design_vars_per_node, _filter);
 }
 
 /*
   Free the creator object
 */
 TMROctTACSTopoCreator::~TMROctTACSTopoCreator(){
-  filter->decref();
-  filter_map->decref();
   if (filter_indices){ filter_indices->decref(); }
-}
-
-// Get the underlying information about the filter
-void TMROctTACSTopoCreator::getFilter( TMROctForest **_filter ){
-  *_filter = filter;
-}
-
-void TMROctTACSTopoCreator::getMap( TACSVarMap **_map ){
-  *_map = filter_map;
-}
-
-void TMROctTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
-  *_indices = filter_indices;
 }
 
 void TMROctTACSTopoCreator::computeWeights( const int mesh_order,
@@ -408,7 +374,7 @@ void TMROctTACSTopoCreator::createElements( int order,
   for ( int i = 0; i < num_octs; i++ ){
     // Allocate the stiffness object
     elements[i] = createElement(order, &octs[i],
-                                &weights[nweights*i], nweights);
+                                nweights, &weights[nweights*i]);
   }
 
   delete [] weights;
@@ -418,27 +384,15 @@ void TMROctTACSTopoCreator::createElements( int order,
   Set up a creator class for the given filter problem
 */
 TMRQuadTACSTopoCreator::TMRQuadTACSTopoCreator( TMRBoundaryConditions *_bcs,
+                                                int _design_vars_per_node,
                                                 TMRQuadForest *_filter ):
-TMRQuadTACSCreator(_bcs){
-  // Reference the filter
-  filter = _filter;
-  filter->incref();
-
+TMRQuadTACSCreator(_bcs, _design_vars_per_node, _filter){
   int mpi_rank;
   MPI_Comm comm = filter->getMPIComm();
   MPI_Comm_rank(comm, &mpi_rank);
 
   // Create the nodes within the filter
   filter->createNodes();
-
-  // Get the node range for the filter design variables
-  const int *filter_range;
-  filter->getOwnedNodeRange(&filter_range);
-
-  // Set up the variable map for the design variable numbers
-  int num_filter_local = filter_range[mpi_rank+1] - filter_range[mpi_rank];
-  filter_map = new TACSVarMap(comm, num_filter_local);
-  filter_map->incref();
 
   // Set the filter indices to NULL
   filter_indices = NULL;
@@ -448,22 +402,7 @@ TMRQuadTACSCreator(_bcs){
   Free the creator object
 */
 TMRQuadTACSTopoCreator::~TMRQuadTACSTopoCreator(){
-  filter->decref();
-  filter_map->decref();
   if (filter_indices){ filter_indices->decref(); }
-}
-
-// Get the underlying information about the problem
-void TMRQuadTACSTopoCreator::getFilter( TMRQuadForest **_filter ){
-  *_filter = filter;
-}
-
-void TMRQuadTACSTopoCreator::getMap( TACSVarMap **_map ){
-  *_map = filter_map;
-}
-
-void TMRQuadTACSTopoCreator::getIndices( TACSBVecIndices **_indices ){
-  *_indices = filter_indices;
 }
 
 /*
@@ -784,7 +723,7 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   for ( int i = 0; i < num_quads; i++ ){
     // Allocate the stiffness object
     elements[i] = createElement(order, &quads[i],
-                                &weights[nweights*i], nweights);
+                                nweights, &weights[nweights*i]);
   }
   // Free the weights
   delete [] weights;
@@ -794,41 +733,34 @@ void TMRQuadTACSTopoCreator::createElements( int order,
   Set up a creator class for the given forest problem
 */
 TMROctConformTACSTopoCreator::TMROctConformTACSTopoCreator( TMRBoundaryConditions *_bcs,
+                                                            int _design_vars_per_node,
                                                             TMROctForest *_forest,
                                                             int order,
-                                                            TMRInterpolationType interp_type ):
-  TMROctTACSCreator(_bcs){
+                                                            TMRInterpolationType interp_type ){
   // Use the forest as the filter in these cases
+  TMROctForest *_filter = NULL;
   if (order < 0 ||
       (order == _forest->getMeshOrder() &&
        interp_type == _forest->getInterpType())){
-    filter = _forest;
+    _filter = _forest;
   }
   else {
-    filter = _forest->duplicate();
-    order = filter->getMeshOrder()-1;
-    if (order < 2){
-      order = 2;
-    }
-    filter->setMeshOrder(order, interp_type);
+    _filter = _forest->duplicate();
+    order = _filter->getMeshOrder();
+    _filter->setMeshOrder(order, interp_type);
   }
-  filter->incref();
+  _filter->incref();
 
   // Create the nodes within the filter
-  filter->createNodes();
+  _filter->createNodes();
+
+  initialize(_bcs, _design_vars_per_node, _filter);
 }
 
 /*
   Free the creator object
 */
-TMROctConformTACSTopoCreator::~TMROctConformTACSTopoCreator(){
-  filter->decref();
-}
-
-// Get the underlying information about the problem
-void TMROctConformTACSTopoCreator::getFilter( TMROctForest **_filter ){
-  *_filter = filter;
-}
+TMROctConformTACSTopoCreator::~TMROctConformTACSTopoCreator(){}
 
 /*
   Create all of the elements for the topology optimization problem
@@ -856,24 +788,16 @@ void TMROctConformTACSTopoCreator::createElements( int order,
   const int filter_order = filter->getMeshOrder();
   const int nweights = filter_order*filter_order*filter_order;
 
-  // Allocate the weights for all of the local elements
-  int *index = new int[ nweights*num_octs ];
-
   // Loop over the nodes and convert to the local numbering scheme
   const int *conn;
   filter->getNodeConn(&conn);
-
-  // Get the local node index on this processor
-  for ( int i = 0; i < nweights*num_octs; i++ ){
-    index[i] = filter->getLocalNodeNumber(conn[i]);
-  }
 
   // Loop over the octants
   octants->getArray(&octs, &num_octs);
   for ( int i = 0; i < num_octs; i++ ){
     // Allocate the stiffness object
     elements[i] = createElement(order, &octs[i],
-                                &index[nweights*i], nweights,
+                                nweights, &conn[nweights*i],
                                 filter);
   }
 }
@@ -882,41 +806,34 @@ void TMROctConformTACSTopoCreator::createElements( int order,
   Set up a creator class for the given forest problem
 */
 TMRQuadConformTACSTopoCreator::TMRQuadConformTACSTopoCreator( TMRBoundaryConditions *_bcs,
+                                                              int _design_vars_per_node,
                                                               TMRQuadForest *_forest,
                                                               int order,
-                                                              TMRInterpolationType interp_type ):
-  TMRQuadTACSCreator(_bcs){
-  // Create and reference the filter
+                                                              TMRInterpolationType interp_type ){
+  // Use the forest as the filter in these cases
+  TMRQuadForest *_filter = NULL;
   if (order < 0 ||
       (order == _forest->getMeshOrder() &&
        interp_type == _forest->getInterpType())){
-    filter = _forest;
+    _filter = _forest;
   }
   else {
-    filter = _forest->duplicate();
-    order = filter->getMeshOrder()-1;
-    if (order < 2){
-      order = 2;
-    }
-    filter->setMeshOrder(order, interp_type);
+    _filter = _forest->duplicate();
+    order = _filter->getMeshOrder();
+    _filter->setMeshOrder(order, interp_type);
   }
-  filter->incref();
+  _filter->incref();
 
   // Create the nodes within the filter
-  filter->createNodes();
+  _filter->createNodes();
+
+  initialize(_bcs, _design_vars_per_node, _filter);
 }
 
 /*
   Free the creator object
 */
-TMRQuadConformTACSTopoCreator::~TMRQuadConformTACSTopoCreator(){
-  filter->decref();
-}
-
-// Get the underlying information about the problem
-void TMRQuadConformTACSTopoCreator::getFilter( TMRQuadForest **_filter ){
-  *_filter = filter;
-}
+TMRQuadConformTACSTopoCreator::~TMRQuadConformTACSTopoCreator(){}
 
 /*
   Create all of the elements for the topology optimization problem
@@ -945,24 +862,16 @@ void TMRQuadConformTACSTopoCreator::createElements( int order,
   const int filter_order = filter->getMeshOrder();
   const int nweights = filter_order*filter_order;
 
-  // Allocate the weights for all of the local elements
-  int *index = new int[ nweights*num_quads ];
-
   // Loop over the nodes and convert to the local numbering scheme
   const int *conn;
   filter->getNodeConn(&conn);
-
-  // Get the local node index on this processor
-  for ( int i = 0; i < nweights*num_quads; i++ ){
-    index[i] = filter->getLocalNodeNumber(conn[i]);
-  }
 
   // Loop over the octants
   quadrants->getArray(&quads, &num_quads);
   for ( int i = 0; i < num_quads; i++ ){
     // Allocate the stiffness object
     elements[i] = createElement(order, &quads[i],
-                                &index[nweights*i], nweights,
+                                nweights, &conn[nweights*i],
                                 filter);
   }
 }
