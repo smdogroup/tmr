@@ -544,7 +544,7 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                    vol_frac=0.25, r0_frac=0.05, len0=1.0, AR=1.0, ratio=0.4,
                    density=2600.0, iter_offset=0, qn_correction=True,
                    non_design_mass=5.0, eig_scale=1.0, eq_constr=False,
-                   eig_method='jd', max_jd_size=100, jd_use_recycle=True,
+                   num_eigenvalues=10, eig_method='jd', max_jd_size=100, jd_use_recycle=True,
                    max_gmres_size=30, max_lanczos=60):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
@@ -603,6 +603,7 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                                      ksrho=ksrho,
                                      non_design_mass=non_design_mass,
                                      eig_scale=eig_scale,
+                                     num_eigenvalues=num_eigenvalues,
                                      eig_method=eig_method,
                                      max_lanczos=max_lanczos,
                                      max_jd_size=max_jd_size,

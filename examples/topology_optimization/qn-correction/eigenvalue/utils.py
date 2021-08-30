@@ -352,13 +352,13 @@ class FrequencyObj:
         #     dMe = self.assembler.createVec()
         #     dMe_vals = dMe.getArray()
         #     dMe_vals[:] = 1.0
-        #     self.mmat.mult(dMe, dMe)
+        #     self.mmat.mult(dMe, dMe) # Notice: mult(a,a) only works for serial!
         #     mmat_temp = self.assembler.createMat()
         #     self.assembler.assembleMatType(TACS.MASS_MATRIX, mmat_temp)
         #     e = self.assembler.createVec()
         #     e_vals = e.getArray()
         #     e_vals[:] = 1.0
-        #     mmat_temp.mult(e, e)
+        #     mmat_temp.mult(e, e) # Notice: mult(a,a) only works for serial!
         #     dMe.axpy(-1.0, e)
         #     sv = self.assembler.createVec()
         #     self.assembler.getVariables(sv)

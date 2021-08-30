@@ -52,6 +52,7 @@ if __name__ == '__main__':
     p.add_argument('--eig-method', type=str, default='jd', choices=['jd', 'lanczos'])
     p.add_argument('--max-jd-size', type=int, default=100)
     p.add_argument('--max-gmres-size', type=int, default=30)
+    p.add_argument('--num-eigenvalues', type=int, default=10)
     p.add_argument('--max-lanczos', type=int, default=30)
     p.add_argument('--jd-recycle', type=str, default='on', choices=['on', 'off'])
 
@@ -183,6 +184,7 @@ if __name__ == '__main__':
                                                  non_design_mass=args.non_design_mass,
                                                  eig_scale=args.eig_scale,
                                                  eq_constr=args.eq_constr,
+                                                 num_eigenvalues=args.num_eigenvalues,
                                                  eig_method=args.eig_method,
                                                  max_jd_size=args.max_jd_size,
                                                  jd_use_recycle=jd_use_recycle,
