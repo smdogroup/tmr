@@ -16,13 +16,12 @@ from utils import create_forest
 class BaseFreq:
 
     def __init__(self, comm, domain, AR, ratio, len0, r0_frac,
-                 htarget, mg_levels, qval, eig_method, sep_op_type,
+                 htarget, mg_levels, qval, eig_method,
                  eig_problem, shift, estimate,
                  max_jd_size, max_gmres_size, max_lanczos,
                  non_design_mass, num_eigenvalues):
 
         self.eig_method = eig_method
-        self.sep_op_type = sep_op_type
         self.eig_problem = eig_problem
         self.ratio = ratio
         self.shift = shift
@@ -67,6 +66,15 @@ class BaseFreq:
         self.mmat = self.assembler.createMat()
         self.m0mat = self.assembler.createMat()
         self.Amat = self.assembler.createMat()
+
+        self.Imat = self.assembler.createMat()
+        self.Imat.addDiag(1.0)
+
+        # Allocate space for eigenvalues and eigenvectors
+        self.eigvals = np.zeros(self.num_eigenvalues)
+        self.eigenvecs = []
+        for i in range(self.num_eigenvalues):
+            self.eigenvecs.append(self.assembler.createVec())
 
         # Create a non-design mass matrix
         self.mvec = self.assembler.createDesignVec()
@@ -127,15 +135,14 @@ class BaseFreq:
 
         # Set up solver
         if self.eig_method == 'jd':
-            if self.eig_problem == 'simple':
-                jd_oper = TACS.JDSimpleOperator(self.assembler, self.kmat, self.mg)
-            elif self.eig_problem == 'Amat':
-                jd_oper = TACS.JDSimpleOperator(self.assembler, self.Amat, self.mg)
-            elif self.eig_problem == 'general':
+            if self.eig_problem == 'general':
                 jd_oper = TACS.JDFrequencyOperator(self.assembler, self.kmat,
                     self.mmat, self.mg.getMat(), self.mg)
+            elif self.eig_problem == 'Amat':
+                jd_oper = TACS.JDSimpleOperator(self.assembler, self.Amat, self.mg)
             else:
                 raise ValueError("Invalid eig_problem:", self.eig_problem)
+
             self.jd = TACS.JacobiDavidson(jd_oper, self.num_eigenvalues,
                 self.max_jd_size, self.max_gmres_size)
             self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-6, atol=1e-12)
@@ -144,27 +151,14 @@ class BaseFreq:
         elif self.eig_method == 'lanczos':
             ksmk = TACS.KSM(self.kmat, self.mg, 15, 0, 0)
             ksmA = TACS.KSM(self.Amat, self.mg, 15, 0, 0)
-            if self.eig_problem == 'simple':
-                if self.sep_op_type == 'regular':
-                    ep_oper = TACS.EPRegularOp(self.kmat)
-                elif self.sep_op_type == 'shift-invert':
-                    ep_oper = TACS.EPShiftInvertOp(self.shift, ksmk)
-                else:
-                    raise ValueError("Invalid sep_op_type")
+
+            if self.eig_problem == 'general':
+                ep_oper = TACS.EPGeneralizedShiftInvertOp(self.shift, ksmk, self.mmat)
             elif self.eig_problem == 'Amat':
-                if self.sep_op_type == 'regular':
-                    ep_oper = TACS.EPRegularOp(self.Amat)
-                elif self.sep_op_type == 'shift-invert':
-                    ep_oper = TACS.EPShiftInvertOp(self.shift, ksmA)
-                else:
-                    raise ValueError("Invalid sep_op_type")
-            elif self.eig_problem == 'general':
-                if self.sep_op_type == 'general-shift-invert':
-                    ep_oper = TACS.EPGeneralizedShiftInvertOp(self.shift, ksmk, self.mmat)
-                else:
-                    raise ValueError("Invalid sep_op_type")
+                ep_oper = TACS.EPShiftInvertOp(self.shift, ksmA)
             else:
                 raise ValueError("Invalid eig_problem:", self.eig_problem)
+
             self.sep = TACS.SEPsolver(ep_oper, self.max_lanczos,
                                       TACS.SEP_FULL, self.assembler.getBcMap())
             self.sep.setTolerances(1e-6, TACS.SEP_SMALLEST, self.num_eigenvalues)
@@ -197,54 +191,43 @@ class BaseFreq:
         self.Amat.copyValues(self.kmat)
         self.Amat.axpy(-self.estimate, self.mmat)
 
+        # Get the matrix associated with the preconditioner
+        mgmat = self.mg.getMat()
+
         # Solve the GEP
         if self.eig_method == 'jd':
 
             # Assemble and factor the preconditioner
-            if self.eig_problem == 'general' or self.eig_problem == 'simple':
-                self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
+            if self.eig_problem == 'general':
+                # mgmat = K
+                mgmat.copyValues(self.kmat)
             elif self.eig_problem == 'Amat':
-                self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0,
-                    TACS.MASS_MATRIX, -self.estimate)
+                # mgmat = K - 0.95*estimate*M
+                mgmat.copyValues(self.kmat)
+                mgmat.axpy(-self.estimate*0.95, self.mmat)
             else:
                 raise ValueError("invalid eig_problem")
 
-            self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
+            self.mg.assembleGalerkinMat()
             self.mg.factor()
 
-            self.jd.solve(print_flag=True, print_level=1)
+            self.jd.solve(print_flag=True, print_level=2)
+
             assert(self.jd.getNumConvergedEigenvalues() == self.num_eigenvalues)
-            eigvec = self.assembler.createVec()
-            eig, err = self.jd.extractEigenvector(0, eigvec)
+            for i in range(self.num_eigenvalues):
+                self.eigvals[i], err = self.jd.extractEigenvector(i, self.eigenvecs[i])
 
         elif self.eig_method == 'lanczos':
-
-            # Assemble the multigrid preconditioner:
-            mgmat = self.mg.getMat()
 
             # mgmat = K - shift*M
             if self.eig_problem == 'general':
                 mgmat.copyValues(self.kmat)
                 mgmat.axpy(-self.shift, self.mmat)
                 # self.kmat.axpy(-self.shift, self.mmat) # Is this necessary?
-            # mgmat = K - shift*I or mgmat = K
-            elif self.eig_problem == 'simple':
-                if self.sep_op_type == 'regular':
-                    mgmat.copyValues(self.kmat)
-                elif self.sep_op_type == 'shift-invert':
-                    mgmat.copyValues(self.kmat)
-                    mgmat.addDiag(-self.shift)
-                else:
-                    raise ValueError("Invalid sep-op-type")
-            # mgmat = A - shift*I or mgmat = A
+            # mgmat = A - shift*I
             elif self.eig_problem == 'Amat':
-                if self.sep_op_type == 'regular':
-                    mgmat.copyValues(self.Amat)
-                elif self.sep_op_type == 'shift-invert':
-                    mgmat.copyValues(self.Amat)
-                    mgmat.addDiag(-self.shift)
-                else:
-                    raise ValueError("Invalid sep-op-type")
+                mgmat.copyValues(self.Amat)
+                mgmat.addDiag(-self.shift)
             else:
                 raise ValueError("Invalid eig_problem")
 
@@ -252,56 +235,98 @@ class BaseFreq:
             self.mg.factor()
 
             self.sep.solve(self.comm, print_flag=True)
-            eigvec = self.assembler.createVec()
-            eig, err = self.sep.extractEigenvector(0, eigvec)
+
+            print("Printing orthogonality....")
+            self.sep.printOrthogonality()
+            print("checkOrthogonality() = {:20.10e}".format(self.sep.checkOrthogonality()))
+            for i in range(self.num_eigenvalues):
+                self.eigvals[i], err = self.sep.extractEigenvector(i, self.eigenvecs[i])
 
         else:
             raise ValueError("Invalid eig_method")
 
+        '''
+        Check residuals
+        '''
+
         res1 = self.assembler.createVec()
         res2 = self.assembler.createVec()
         res3 = self.assembler.createVec()
+        one = self.assembler.createVec()
+        one_arr = one.getArray()
+        one_arr[:] = 1.0
 
         Kv = self.assembler.createVec()
         Mv = self.assembler.createVec()
         Av = self.assembler.createVec()
-        self.kmat.mult(eigvec, Kv)
-        self.mmat.mult(eigvec, Mv)
-        self.Amat.mult(eigvec, Av)
 
-        res1.copyValues(Kv)
-        res1.axpy(-eig, Mv)
+        general_res = np.zeros(self.num_eigenvalues)
+        Amat_res = np.zeros(self.num_eigenvalues)
+        eigvec_norm = np.zeros(self.num_eigenvalues)
+        eigvec_Mnorm = np.zeros(self.num_eigenvalues)
+        eigvec_sum = np.zeros(self.num_eigenvalues)
 
-        res2.copyValues(Kv)
-        res2.axpy(-eig, eigvec)
+        for i in range(self.num_eigenvalues):
+            self.kmat.mult(self.eigenvecs[i], Kv)
+            self.mmat.mult(self.eigenvecs[i], Mv)
+            self.Amat.mult(self.eigenvecs[i], Av)
 
-        res3.copyValues(Av)
-        res3.axpy(-eig, eigvec)
+            res1.copyValues(Kv)
+            res1.axpy(-self.eigvals[i], Mv)
 
-        print("(general) |Kv - lambda*Mv| = {:20.10e}".format(res1.norm()))
-        print("(simple)  |Kv - lambda*v | = {:20.10e}".format(res2.norm()))
-        print("(A-matrix)|Av - lambda*v | = {:20.10e}".format(res3.norm()))
-        print("(eigenvec) v^T*v           = {:20.10e}".format(eigvec.dot(eigvec)))
+            res2.copyValues(Kv)
+            res2.axpy(-self.eigvals[i], self.eigenvecs[i])
 
-        # v1 = self.assembler.createVec()
-        # M1 = self.assembler.createMat()
-        # v1.setRand()
-        # M1.addDiag(1.0) # Why this doesn't work??
-        # print("(test) norm(v1)    = {:20.10e}".format(v1.norm()))
-        # M1.mult(v1, v1)
-        # print("(test) norm(M1*v1) = {:20.10e}".format(v1.norm()))
+            res3.copyValues(Av)
+            res3.axpy(-self.eigvals[i], self.eigenvecs[i])
 
-        return eig, err
+            general_res[i] = res1.norm()
+            Amat_res[i] = res3.norm()
+            eigvec_norm[i] = self.eigenvecs[i].dot(self.eigenvecs[i])
+            eigvec_Mnorm[i] = self.eigenvecs[i].dot(Mv)
+            eigvec_sum[i] = self.eigenvecs[i].dot(one)
+
+        print("\n(general) |Kv - lambda*Mv|")
+        for i in range(self.num_eigenvalues):
+            print("{:4d}{:20.10e}".format(i, general_res[i]))
+
+        print("\n(A-matrix)|Av - lambda*v |")
+        for i in range(self.num_eigenvalues):
+            print("{:4d}{:20.10e}".format(i, Amat_res[i]))
+
+        print("\n(eigenvec) v^T*v")
+        for i in range(self.num_eigenvalues):
+            print("{:4d}{:20.10e}".format(i, eigvec_norm[i]))
+
+        print("\n(eigenvec) v^TMv")
+        for i in range(self.num_eigenvalues):
+            print("{:4d}{:20.10e}".format(i, eigvec_Mnorm[i]))
+
+        print("\n(eigenvec) v^T*1")
+        for i in range(self.num_eigenvalues):
+            print("{:4d}{:20.10e}".format(i, eigvec_sum[i]))
+
+        v1 = self.assembler.createVec()
+        v2 = self.assembler.createVec()
+        M1 = self.assembler.createMat()
+        v1.setRand()
+        M1.addDiag(1.0) # Why this doesn't work??
+        print("(test) norm(v1)    = {:20.10e}".format(v1.norm()))
+        M1.mult(v1, v2)
+        print("(test) norm(M1*v1) = {:20.10e}".format(v2.norm()))
+        exit()
+
+        return self.eigvals[0], err
 
 def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
                       qval=5.0, non_design_mass=10.0, eig_method='lanczos',
-                      sep_op_type='general-shift-invert', eig_problem='general',
+                      eig_problem='general',
                       shift=0.0, estimate=0.0, max_jd_size=100, max_gmres_size=30,
-                      max_lanczos=50, num_eigenvals=5):
+                      max_lanczos=50, num_eigenvals=5, random_design=False):
     comm = MPI.COMM_WORLD
     bf = BaseFreq(comm, domain, AR, ratio, len0,
                   r0_frac, htarget, mg_levels,
-                  qval, eig_method, sep_op_type, eig_problem,
+                  qval, eig_method, eig_problem,
                   shift, estimate,
                   max_jd_size, max_gmres_size,
                   max_lanczos, non_design_mass,
@@ -309,6 +334,10 @@ def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
     dv = TMR.convertPVecToVec(bf.problem.createDesignVec())
     dv_vals = dv.getArray()
     dv_vals[:] = 0.95
+    if random_design:
+        np.random.seed(0)
+        dv_vals[:] = np.random.rand()
+
     eig, err = bf.solve(dv)
 
     if comm.rank == 0:
@@ -349,7 +378,7 @@ if __name__ == "__main__":
 
     p = argparse.ArgumentParser()
 
-    # Geometry
+    # Geometry, mesh, load
     p.add_argument('--domain', type=str, default='cantilever',
         choices=['cantilever', 'michell', 'mbb', 'lbracket'])
     p.add_argument('--AR', type=float, default=1.0)
@@ -364,23 +393,21 @@ if __name__ == "__main__":
     # Solver
     p.add_argument('--eig-method', type=str, default='jd',
         choices=['jd', 'lanczos'])
-    p.add_argument('--sep-op-type', type=str, default='shift-invert',
-        choices=['regular', 'shift-invert', 'general-shift-invert'])
     p.add_argument('--eig-problem', type=str, default='general',
-        choices=['general', 'simple', 'Amat'],
-        help='Whether we solve Ku=lu or Ku=lMu or Au=lu, where A=K-e*I')
+        choices=['general', 'Amat'],
+        help='Whether we solve Ku=lMu or Au=lu, where A=K-estimate*M')
     p.add_argument('--shift', type=float, default=0.0, help='eigenvalue shift for lanczos')
     p.add_argument('--estimate', type=float, default=0.0, help='eigenvalue estimate for Amat')
     p.add_argument('--max-jd-size', type=int, default=100)
     p.add_argument('--max-gmres-size', type=int, default=30)
     p.add_argument('--max-lanczos', type=int, default=50)
     p.add_argument('--num-eigenvalues', type=int, default=5)
-
+    p.add_argument('--random-design', action='store_true')
     args = p.parse_args()
 
     run_baseline_case(args.domain, args.AR, args.ratio, args.len0,
                         args.r0_frac, args.htarget, args.mg_levels,
                         args.qval, args.non_design_mass, args.eig_method,
-                        args.sep_op_type, args.eig_problem, args.shift,
+                        args.eig_problem, args.shift,
                         args.estimate, args.max_jd_size, args.max_gmres_size,
-                        args.max_lanczos, args.num_eigenvalues)
+                        args.max_lanczos, args.num_eigenvalues, args.random_design)
