@@ -211,7 +211,7 @@ class BaseFreq:
             self.mg.assembleGalerkinMat()
             self.mg.factor()
 
-            self.jd.solve(print_flag=True, print_level=2)
+            self.jd.solve(print_flag=True, print_level=1)
 
             assert(self.jd.getNumConvergedEigenvalues() == self.num_eigenvalues)
             for i in range(self.num_eigenvalues):
@@ -236,9 +236,9 @@ class BaseFreq:
 
             self.sep.solve(self.comm, print_flag=True)
 
-            print("Printing orthogonality....")
-            self.sep.printOrthogonality()
-            print("checkOrthogonality() = {:20.10e}".format(self.sep.checkOrthogonality()))
+            # print("Printing orthogonality....")
+            # self.sep.printOrthogonality()
+            # print("checkOrthogonality() = {:20.10e}".format(self.sep.checkOrthogonality()))
             for i in range(self.num_eigenvalues):
                 self.eigvals[i], err = self.sep.extractEigenvector(i, self.eigenvecs[i])
 
@@ -286,35 +286,26 @@ class BaseFreq:
             eigvec_Mnorm[i] = self.eigenvecs[i].dot(Mv)
             eigvec_sum[i] = self.eigenvecs[i].dot(one)
 
-        print("\n(general) |Kv - lambda*Mv|")
-        for i in range(self.num_eigenvalues):
-            print("{:4d}{:20.10e}".format(i, general_res[i]))
+        if self.assembler.getMPIComm().rank == 0:
+            print("\n(general) |Kv - lambda*Mv|")
+            for i in range(self.num_eigenvalues):
+                print("{:4d}{:20.10e}".format(i, general_res[i]))
 
-        print("\n(A-matrix)|Av - lambda*v |")
-        for i in range(self.num_eigenvalues):
-            print("{:4d}{:20.10e}".format(i, Amat_res[i]))
+            print("\n(A-matrix)|Av - lambda*v |")
+            for i in range(self.num_eigenvalues):
+                print("{:4d}{:20.10e}".format(i, Amat_res[i]))
 
-        print("\n(eigenvec) v^T*v")
-        for i in range(self.num_eigenvalues):
-            print("{:4d}{:20.10e}".format(i, eigvec_norm[i]))
+            print("\n(eigenvec) v^T*v")
+            for i in range(self.num_eigenvalues):
+                print("{:4d}{:20.10e}".format(i, eigvec_norm[i]))
 
-        print("\n(eigenvec) v^TMv")
-        for i in range(self.num_eigenvalues):
-            print("{:4d}{:20.10e}".format(i, eigvec_Mnorm[i]))
+            print("\n(eigenvec) v^TMv")
+            for i in range(self.num_eigenvalues):
+                print("{:4d}{:20.10e}".format(i, eigvec_Mnorm[i]))
 
-        print("\n(eigenvec) v^T*1")
-        for i in range(self.num_eigenvalues):
-            print("{:4d}{:20.10e}".format(i, eigvec_sum[i]))
-
-        v1 = self.assembler.createVec()
-        v2 = self.assembler.createVec()
-        M1 = self.assembler.createMat()
-        v1.setRand()
-        M1.addDiag(1.0) # Why this doesn't work??
-        print("(test) norm(v1)    = {:20.10e}".format(v1.norm()))
-        M1.mult(v1, v2)
-        print("(test) norm(M1*v1) = {:20.10e}".format(v2.norm()))
-        exit()
+            print("\n(eigenvec) v^T*1")
+            for i in range(self.num_eigenvalues):
+                print("{:4d}{:20.10e}".format(i, eigvec_sum[i]))
 
         return self.eigvals[0], err
 
