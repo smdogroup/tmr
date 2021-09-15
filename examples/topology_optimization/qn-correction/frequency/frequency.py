@@ -310,14 +310,9 @@ if __name__ == '__main__':
             prob.setup()
 
             # Optimize and write result to f5 file
-            try:
-                prob.run_model()
-                prob.run_driver()
-            except:
-                info = "fail"
-                analysis.write_output(prefix, step, info=info)
-            else:
-                analysis.write_output(prefix, step, info=None)
+            prob.run_model()
+            prob.run_driver()
+            analysis.write_output(prefix, step)
 
             # Get optimal result from root processor and broadcast
             if comm.rank == 0:
