@@ -38,11 +38,10 @@ for d in dirs:
         print("cannot copy {:s}, file might not exist.".format(os.path.join(args.result_folder, d, 'output_refine0.pkl')))
 
     try:
-        copy(os.path.join(args.result_folder, d, 'exe.sh'),
-                os.path.join(out_folder, d))
+        copy(os.path.join(args.result_folder, d, 'fail.f5'),
+             os.path.join(out_folder, d))
     except:
-        print("cannot copy {:s}, file might not exist.".format(os.path.join(args.result_folder, d, 'exe.sh')))
-
+        pass
 
     if omz == 'paropt' or omz == 'paroptqn':
         try:
@@ -83,10 +82,6 @@ for d in dirs:
                 os.path.join(out_folder, d))
     except:
         print("Cannot copy over stdout file: {:s}".format(stdout_name))
-
-
-
-
 
 
 
