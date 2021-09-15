@@ -255,7 +255,7 @@ class FrequencyConstr:
 
         # Assemble the multigrid preconditioner
         #    mgmat = K - 0.95*lambda0*M for jd
-        # or mgmat = K - 1.00*lambda0*M for lanczos
+        # or mgmat = K - 1.00*lambda0*M for lanczos (why?)
         if self.eig_method == 'jd':
             mgmat.axpy(-0.95*self.lambda0, self.mmat)
         elif self.eig_method == 'lanczos':
@@ -283,10 +283,30 @@ class FrequencyConstr:
             self.jd.solve(print_flag=True, print_level=1)
 
             # Check if succeeded, otherwise try again
-            if self.jd.getNumConvergedEigenvalues() < self.num_eigenvalues:
+            nconvd = self.jd.getNumConvergedEigenvalues()
+            if nconvd < self.num_eigenvalues:
                 if self.comm.rank == 0:
                     print("[Warning] Jacobi-Davidson failed to converge"
                         " for the first run, starting rerun...")
+
+                if self.jd_use_recycle:
+                    self.jd.setRecycle(nconvd)
+
+                # Modify the matrix associated with the preconditioner
+                # so that the matrix is positive definite
+                I = self.assembler.createMat()
+                I.addDiag(1.0) # Create an identity matrix
+
+                # Update mgmat so that it's positive definite
+                eig0, err = self.jd.extractEigenvalue(0)
+                if eig0 > 0:
+                    if self.comm.rank == 0:
+                        print("[mgmat] Smallest eigenvalue is already positive, don't update mgmat!")
+                    else:
+                        mgmat.axpy(-eig0, I)
+                        self.assembler.applyMatBcs(mgmat)
+                        self.mg.assembleGalerkinMat()
+                        self.mg.factor()
 
                 # Rerun the solver
                 self.jd.solve(print_flag=True, print_level=1)
