@@ -8,6 +8,7 @@ import numpy as np
 from mpi4py import MPI
 import argparse
 import sys
+import os
 
 sys.path.append('../eigenvalue')
 from utils import CreatorCallback, MFilterCreator
@@ -15,12 +16,13 @@ from utils import create_forest
 
 class BaseFreq:
 
-    def __init__(self, comm, domain, AR, ratio, len0, r0_frac,
+    def __init__(self, prefix, comm, domain, AR, ratio, len0, r0_frac,
                  htarget, mg_levels, qval, eig_method,
                  eig_problem, shift, estimate,
                  max_jd_size, max_gmres_size, max_lanczos,
-                 non_design_mass, num_eigenvalues):
+                 non_design_mass, num_eigenvalues, index_eigvec_to_visual):
 
+        self.prefix = prefix
         self.eig_method = eig_method
         self.eig_problem = eig_problem
         self.ratio = ratio
@@ -31,6 +33,7 @@ class BaseFreq:
         self.max_lanczos = max_lanczos
         self.num_eigenvalues = num_eigenvalues
         self.non_design_mass = non_design_mass
+        self.index_eigvec_to_visual = index_eigvec_to_visual
 
         # Create geometry, material, bc, mesh
         self.lx = len0*AR
@@ -166,6 +169,13 @@ class BaseFreq:
         else:
             raise ValueError("Invalid eig_method:", self.eig_method)
 
+        # Set up f5 writer
+        flag = (TACS.OUTPUT_CONNECTIVITY |
+                TACS.OUTPUT_NODES |
+                TACS.OUTPUT_DISPLACEMENTS |
+                TACS.OUTPUT_EXTRAS)
+        self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
+
         return
 
     def solve(self, dv):
@@ -213,7 +223,12 @@ class BaseFreq:
 
             self.jd.solve(print_flag=True, print_level=1)
 
-            assert(self.jd.getNumConvergedEigenvalues() == self.num_eigenvalues)
+            nconverged = self.jd.getNumConvergedEigenvalues()
+            if (nconverged < self.num_eigenvalues):
+                if self.assembler.getMPIComm().rank == 0:
+                    print("[Error] not enough eigenvalues converged! {:d}/{:d}".format(
+                        nconverged, self.num_eigenvalues))
+
             for i in range(self.num_eigenvalues):
                 self.eigvals[i], err = self.jd.extractEigenvector(i, self.eigenvecs[i])
 
@@ -244,6 +259,10 @@ class BaseFreq:
 
         else:
             raise ValueError("Invalid eig_method")
+
+        # Export to f5
+        self.assembler.setVariables(self.eigenvecs[self.index_eigvec_to_visual])
+        self.f5.writeToFile(os.path.join(self.prefix, "baseline.f5"))
 
         '''
         Check residuals
@@ -309,19 +328,24 @@ class BaseFreq:
 
         return self.eigvals[0], err
 
-def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
+def run_baseline_case(prefix, domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
                       qval=5.0, non_design_mass=10.0, eig_method='lanczos',
                       eig_problem='general',
                       shift=0.0, estimate=0.0, max_jd_size=100, max_gmres_size=30,
-                      max_lanczos=50, num_eigenvals=5, random_design=False):
+                      max_lanczos=50, num_eigenvals=5, random_design=False,
+                      index_eigvec=0):
+
+    if not os.path.isdir(prefix):
+        os.mkdir(prefix)
+
     comm = MPI.COMM_WORLD
-    bf = BaseFreq(comm, domain, AR, ratio, len0,
+    bf = BaseFreq(prefix, comm, domain, AR, ratio, len0,
                   r0_frac, htarget, mg_levels,
                   qval, eig_method, eig_problem,
                   shift, estimate,
                   max_jd_size, max_gmres_size,
                   max_lanczos, non_design_mass,
-                  num_eigenvals)
+                  num_eigenvals, index_eigvec)
     dv = TMR.convertPVecToVec(bf.problem.createDesignVec())
     dv_vals = dv.getArray()
     dv_vals[:] = 0.95
@@ -394,11 +418,16 @@ if __name__ == "__main__":
     p.add_argument('--max-lanczos', type=int, default=50)
     p.add_argument('--num-eigenvalues', type=int, default=5)
     p.add_argument('--random-design', action='store_true')
+    p.add_argument('--index-eigenvec', type=int, default=0)
+
+    # OS
+    p.add_argument('--prefix', type=str, default='results')
     args = p.parse_args()
 
-    run_baseline_case(args.domain, args.AR, args.ratio, args.len0,
+    run_baseline_case(args.prefix, args.domain, args.AR, args.ratio, args.len0,
                         args.r0_frac, args.htarget, args.mg_levels,
                         args.qval, args.non_design_mass, args.eig_method,
                         args.eig_problem, args.shift,
                         args.estimate, args.max_jd_size, args.max_gmres_size,
-                        args.max_lanczos, args.num_eigenvalues, args.random_design)
+                        args.max_lanczos, args.num_eigenvalues, args.random_design,
+                        args.index_eigenvec)
