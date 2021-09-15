@@ -1207,12 +1207,11 @@ class OmAnalysis(om.ExplicitComponent):
 
         return
 
-    def write_output(self, prefix, refine_step):
-        """
-        Args:
-            x (TACS.Vec)
-        """
-        self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}.f5'.format(refine_step)))
+    def write_output(self, prefix, refine_step, info=None):
+        if info is None:
+            self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}.f5'.format(refine_step)))
+        elif isinstance(info, str):
+            self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}_{:s}.f5'.format(refine_step, info)))
         return
 
 

@@ -292,10 +292,23 @@ class FrequencyConstr:
                 self.jd.solve(print_flag=True, print_level=1)
                 nconvd = self.jd.getNumConvergedEigenvalues()
 
-                # If it still fails, raise error and exit
+                # If it still fails, raise error, save fail f5 and exit
                 if nconvd < self.num_eigenvalues:
                     msg = "No enough eigenvalues converged! ({:d}/{:d})".format(
                         nconvd, self.num_eigenvalues)
+
+                    # set the unconverged eigenvector as state variable for visualization
+                    for i in range(self.num_eigenvalues):
+                        self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
+                    self.assembler.setVariables(self.eigv[nconvd])
+
+                    flag_fail = (TACS.OUTPUT_CONNECTIVITY |
+                                TACS.OUTPUT_NODES |
+                                TACS.OUTPUT_DISPLACEMENTS |
+                                TACS.OUTPUT_EXTRAS)
+                    f5_fail = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag_fail)
+                    f5_fail.writeToFile(os.path.join(self.prefix, "fail.f5"))
+
                     raise ValueError(msg)
 
             # Extract eigenvalues and eigenvectors

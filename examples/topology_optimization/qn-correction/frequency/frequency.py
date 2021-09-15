@@ -307,10 +307,17 @@ if __name__ == '__main__':
                 else:
                     prob.driver.opt_settings['max_iter'] = args.max_iter
 
-            # Optimize
             prob.setup()
-            prob.run_model()
-            prob.run_driver()
+
+            # Optimize and write result to f5 file
+            try:
+                prob.run_model()
+                prob.run_driver()
+            except:
+                info = "fail"
+                analysis.write_output(prefix, step, info=info)
+            else:
+                analysis.write_output(prefix, step, info=None)
 
             # Get optimal result from root processor and broadcast
             if comm.rank == 0:
@@ -324,9 +331,6 @@ if __name__ == '__main__':
             xopt = problem.createDesignVec()
             xopt_vals = TMR.convertPVecToVec(xopt).getArray()
             xopt_vals[:] = xopt_global[start:end]
-
-            # Write result to f5 file
-            analysis.write_output(prefix, step)
 
             # Compute data of interest
             discreteness = np.dot(xopt_global, 1.0-xopt_global) / len(xopt_global)
