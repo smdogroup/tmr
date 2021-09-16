@@ -259,7 +259,8 @@ class FrequencyConstr:
         if self.eig_method == 'jd':
             mgmat.axpy(-0.95*self.lambda0, self.mmat)
         elif self.eig_method == 'lanczos':
-            mgmat.axpy(-1.00*self.lambda0, self.mmat)
+            # mgmat.axpy(-1.00*self.lambda0, self.mmat)
+            mgmat.axpy(-0.95*self.lambda0, self.mmat)
         else:
             raise ValueError("Invalid eig_method")
 
