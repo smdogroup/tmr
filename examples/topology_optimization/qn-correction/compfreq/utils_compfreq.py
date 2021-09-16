@@ -21,7 +21,7 @@ from utils_comp import CompObj
 try:
     from termcolor import colored
 except:
-    print("[Unavailable module] termcolor is not installed!")
+    pass
 
 def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                    has_freq_constr=True,

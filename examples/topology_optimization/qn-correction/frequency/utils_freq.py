@@ -13,7 +13,7 @@ from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
 try:
     from termcolor import colored
 except:
-    print("[Unavailable module] termcolor is not installed!")
+    pass
 
 class FrequencyConstr:
     """

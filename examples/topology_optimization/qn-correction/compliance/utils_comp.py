@@ -15,7 +15,7 @@ from utils import MassConstr
 try:
     from termcolor import colored
 except:
-    print("[Unavailable module] termcolor is not installed!")
+    pass
 
 class CompObj:
     """
