@@ -20,7 +20,8 @@ class BaseFreq:
                  htarget, mg_levels, qval, eig_method,
                  eig_problem, shift, estimate,
                  max_jd_size, max_gmres_size, max_lanczos,
-                 non_design_mass, num_eigenvalues, index_eigvec_to_visual):
+                 non_design_mass, num_eigenvalues, index_eigvec_to_visual,
+                 lanczos_spectrum, lanczos_mgmat_coeff):
 
         self.prefix = prefix
         self.eig_method = eig_method
@@ -34,6 +35,8 @@ class BaseFreq:
         self.num_eigenvalues = num_eigenvalues
         self.non_design_mass = non_design_mass
         self.index_eigvec_to_visual = index_eigvec_to_visual
+        self.lanczos_spectrum = lanczos_spectrum
+        self.lanczos_mgmat_coeff = lanczos_mgmat_coeff
 
         # Create geometry, material, bc, mesh
         self.lx = len0*AR
@@ -152,8 +155,10 @@ class BaseFreq:
             self.jd.setRecycle(self.num_eigenvalues)
 
         elif self.eig_method == 'lanczos':
-            ksmk = TACS.KSM(self.kmat, self.mg, 15, 0, 0)
-            ksmA = TACS.KSM(self.Amat, self.mg, 15, 0, 0)
+            self.ksm_kmat = self.assembler.createMat()
+            self.ksm_Amat = self.assembler.createMat()
+            ksmk = TACS.KSM(self.ksm_kmat, self.mg, 15, 0, 0)
+            ksmA = TACS.KSM(self.ksm_Amat, self.mg, 15, 0, 0)
 
             if self.eig_problem == 'general':
                 ep_oper = TACS.EPGeneralizedShiftInvertOp(self.shift, ksmk, self.mmat)
@@ -164,7 +169,13 @@ class BaseFreq:
 
             self.sep = TACS.SEPsolver(ep_oper, self.max_lanczos,
                                       TACS.SEP_FULL, self.assembler.getBcMap())
-            self.sep.setTolerances(1e-6, TACS.SEP_SMALLEST, self.num_eigenvalues)
+            if self.lanczos_spectrum == 'smallest':
+                spectrum = TACS.SEP_SMALLEST
+            elif self.lanczos_spectrum == 'smallest_magnitude':
+                spectrum = TACS.SEP_SMALLEST_MAGNITUDE
+            else:
+                raise ValueError("invalid spectrum")
+            self.sep.setTolerances(1e-6, spectrum   , self.num_eigenvalues)
 
         else:
             raise ValueError("Invalid eig_method:", self.eig_method)
@@ -238,11 +249,15 @@ class BaseFreq:
             if self.eig_problem == 'general':
                 mgmat.copyValues(self.kmat)
                 mgmat.axpy(-self.shift, self.mmat)
-                # self.kmat.axpy(-self.shift, self.mmat) # Is this necessary?
-            # mgmat = A - shift*I
+                self.ksm_kmat.copyValues(mgmat)
+            # mgmat = K - 0.95*estimate*M - shift*I
             elif self.eig_problem == 'Amat':
-                mgmat.copyValues(self.Amat)
+                mgmat.copyValues(self.kmat)
+                mgmat.axpy(-self.estimate*self.lanczos_mgmat_coeff, self.mmat)
                 mgmat.addDiag(-self.shift)
+
+                self.ksm_Amat.copyValues(self.Amat)
+                self.ksm_Amat.addDiag(-self.shift)
             else:
                 raise ValueError("Invalid eig_problem")
 
@@ -306,25 +321,33 @@ class BaseFreq:
             eigvec_sum[i] = self.eigenvecs[i].dot(one)
 
         if self.assembler.getMPIComm().rank == 0:
-            print("\n(general) |Kv - lambda*Mv|")
+            print("(eigenvalues)")
             for i in range(self.num_eigenvalues):
-                print("{:4d}{:20.10e}".format(i, general_res[i]))
-
-            print("\n(A-matrix)|Av - lambda*v |")
-            for i in range(self.num_eigenvalues):
-                print("{:4d}{:20.10e}".format(i, Amat_res[i]))
-
-            print("\n(eigenvec) v^T*v")
-            for i in range(self.num_eigenvalues):
-                print("{:4d}{:20.10e}".format(i, eigvec_norm[i]))
-
-            print("\n(eigenvec) v^TMv")
-            for i in range(self.num_eigenvalues):
-                print("{:4d}{:20.10e}".format(i, eigvec_Mnorm[i]))
+                print("{:4d}{:20.10e}".format(i, self.eigvals[i]))
 
             print("\n(eigenvec) v^T*1")
             for i in range(self.num_eigenvalues):
                 print("{:4d}{:20.10e}".format(i, eigvec_sum[i]))
+
+            if self.eig_problem == 'general':
+                print("\n(residual) |Kv - lambda*Mv|")
+                for i in range(self.num_eigenvalues):
+                    print("{:4d}{:20.10e}".format(i, general_res[i]))
+
+            if self.eig_problem == 'Amat':
+                print("\n(residual)|Av - lambda*v|")
+                for i in range(self.num_eigenvalues):
+                    print("{:4d}{:20.10e}".format(i, Amat_res[i]))
+
+            # if self.eig_problem == 'Amat':
+            #     print("\n(orthogonality) v^T*v")
+            #     for i in range(self.num_eigenvalues):
+            #         print("{:4d}{:20.10e}".format(i, eigvec_norm[i]))
+
+            # if self.eig_problem == 'general':
+            #     print("\n(orthogonality) v^TMv")
+            #     for i in range(self.num_eigenvalues):
+            #         print("{:4d}{:20.10e}".format(i, eigvec_Mnorm[i]))
 
         return self.eigvals[0], err
 
@@ -333,7 +356,8 @@ def run_baseline_case(prefix, domain, AR, ratio, len0, r0_frac, htarget, mg_leve
                       eig_problem='general',
                       shift=0.0, estimate=0.0, max_jd_size=100, max_gmres_size=30,
                       max_lanczos=50, num_eigenvals=5, random_design=False,
-                      index_eigvec=0):
+                      index_eigvec=0, lanczos_spectrum='smallest',
+                      lanczos_mgmat_coeff=0.95):
 
     if not os.path.isdir(prefix):
         os.mkdir(prefix)
@@ -345,7 +369,9 @@ def run_baseline_case(prefix, domain, AR, ratio, len0, r0_frac, htarget, mg_leve
                   shift, estimate,
                   max_jd_size, max_gmres_size,
                   max_lanczos, non_design_mass,
-                  num_eigenvals, index_eigvec)
+                  num_eigenvals, index_eigvec,
+                  lanczos_spectrum,
+                  lanczos_mgmat_coeff)
     dv = TMR.convertPVecToVec(bf.problem.createDesignVec())
     dv_vals = dv.getArray()
     dv_vals[:] = 0.95
@@ -419,6 +445,9 @@ if __name__ == "__main__":
     p.add_argument('--num-eigenvalues', type=int, default=5)
     p.add_argument('--random-design', action='store_true')
     p.add_argument('--index-eigenvec', type=int, default=0)
+    p.add_argument('--lanczos-spectrum', type=str, default='smallest',
+        choices=['smallest', 'smallest_magnitude'])
+    p.add_argument('--lanczos-mgmat-coeff', type=float, default=0.95)
 
     # OS
     p.add_argument('--prefix', type=str, default='results')
@@ -430,4 +459,4 @@ if __name__ == "__main__":
                         args.eig_problem, args.shift,
                         args.estimate, args.max_jd_size, args.max_gmres_size,
                         args.max_lanczos, args.num_eigenvalues, args.random_design,
-                        args.index_eigenvec)
+                        args.index_eigenvec, args.lanczos_spectrum, args.lanczos_mgmat_coeff)
