@@ -30,7 +30,8 @@ class FrequencyConstr:
     def __init__(self, prefix, domain, forest, len0, AR, ratio,
                  iter_offset, lambda0, eig_scale=1.0, num_eigenvalues=10,
                  eig_method='jd', max_jd_size=100, max_gmres_size=30,
-                 max_lanczos=60, ksrho=50, non_design_mass=5.0, jd_use_recycle=True):
+                 max_lanczos=60, ksrho=50, non_design_mass=5.0, jd_use_recycle=True,
+                 lanczos_shift=-10):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -66,6 +67,8 @@ class FrequencyConstr:
         self.ksrho = ksrho
         self.non_design_mass = non_design_mass
         self.jd_use_recycle = jd_use_recycle
+
+        self.lanczos_shift = lanczos_shift
 
         self.fltr = None
         self.mg = None
@@ -152,9 +155,8 @@ class FrequencyConstr:
                 ksm = TACS.KSM(self.Amat, self.mg, gmres_iters, nrestart, is_flexible)
 
                 # Set up lanczos solver
-                shift = 0.0
                 eig_tol = 1e-6
-                ep_oper = TACS.EPShiftInvertOp(shift, ksm)
+                ep_oper = TACS.EPShiftInvertOp(self.lanczos_shift, ksm)
                 self.sep = TACS.SEPsolver(ep_oper, self.max_lanczos,
                                           TACS.SEP_FULL, self.assembler.getBcMap())
                 self.sep.setTolerances(eig_tol, TACS.SEP_SMALLEST, self.num_eigenvalues)
@@ -241,32 +243,24 @@ class FrequencyConstr:
         self.mmat.axpy(1.0, self.m0mat)
         self.assembler.applyMatBCs(self.mmat)
 
-        # Assemble the stiffness matrix for the generalized eigenvalue problem
+        # Reference the matrix associated with the multigrid preconditioner
+        # We finally want:
+        # mgmat = K - 0.95*lambda0*M
+        # here we assemble the K part first
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.Amat)
         mgmat = self.mg.getMat()
         mgmat.copyValues(self.Amat)
 
-        # Assemble A matrix for eigensolver
+        # Assemble A matrix for the simple eigenvalue problem and apply bcs
         # A = K - lambda0*M
         self.Amat.axpy(-self.lambda0, self.mmat)
-
-        # Apply boundary condition (necessary?)
         self.assembler.applyMatBCs(self.Amat)
 
-        # Assemble the multigrid preconditioner
-        #    mgmat = K - 0.95*lambda0*M for jd
-        # or mgmat = K - 1.00*lambda0*M for lanczos (why?)
-        if self.eig_method == 'jd':
-            mgmat.axpy(-0.95*self.lambda0, self.mmat)
-        elif self.eig_method == 'lanczos':
-            # mgmat.axpy(-1.00*self.lambda0, self.mmat)
-            mgmat.axpy(-0.95*self.lambda0, self.mmat)
-        else:
-            raise ValueError("Invalid eig_method")
-
+        # Finish assembling the multigrid preconditioner
+        mgmat.axpy(-0.95*self.lambda0, self.mmat)
         self.assembler.applyMatBCs(mgmat)
 
-        # Assemble mg matrix and factor
+        # Factor the multigrid preconditioner
         self.mg.assembleGalerkinMat()
         self.mg.factor()
 
@@ -337,6 +331,11 @@ class FrequencyConstr:
                 self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
 
         elif self.eig_method == 'lanczos':
+            # For shift-and-invert lanczos, we need to apply shift to
+            # both multigrid preconditioner and the underlying matrix
+            # of the Krylov subspace solver
+            self.Amat.addDiag(-self.lanczos_shift)
+            mgmat.addDiag(-self.lanczos_shift)
             self.sep.solve(self.comm, print_flag=True)
             for i in range(self.num_eigenvalues):
                 self.eig[i], error = self.sep.extractEigenvector(i, self.eigv[i])
@@ -579,7 +578,7 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                    density=2600.0, iter_offset=0, qn_correction=True,
                    non_design_mass=5.0, eig_scale=1.0, eq_constr=False,
                    num_eigenvalues=10, eig_method='jd', max_jd_size=100, jd_use_recycle=True,
-                   max_gmres_size=30, max_lanczos=60):
+                   max_gmres_size=30, max_lanczos=60, lanczos_shift=-10):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -642,7 +641,8 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                                      max_lanczos=max_lanczos,
                                      max_jd_size=max_jd_size,
                                      max_gmres_size=max_gmres_size,
-                                     jd_use_recycle=jd_use_recycle)
+                                     jd_use_recycle=jd_use_recycle,
+                                     lanczos_shift=lanczos_shift)
     nineq = 1
     if eq_constr is True:
         nineq = 0

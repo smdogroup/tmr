@@ -55,6 +55,7 @@ if __name__ == '__main__':
     p.add_argument('--num-eigenvalues', type=int, default=10)
     p.add_argument('--max-lanczos', type=int, default=30)
     p.add_argument('--jd-recycle', type=str, default='on', choices=['on', 'off'])
+    p.add_argument('--lanczos-shift', type=float, default=-10.0)
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
@@ -189,7 +190,8 @@ if __name__ == '__main__':
                                                  max_jd_size=args.max_jd_size,
                                                  jd_use_recycle=jd_use_recycle,
                                                  max_gmres_size=args.max_gmres_size,
-                                                 max_lanczos=args.max_lanczos)
+                                                 max_lanczos=args.max_lanczos,
+                                                 lanczos_shift=args.lanczos_shift)
 
         # Set the prefix
         problem.setPrefix(prefix)
