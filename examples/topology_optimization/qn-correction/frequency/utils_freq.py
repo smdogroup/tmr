@@ -152,7 +152,8 @@ class FrequencyConstr:
                 gmres_iters = 15
                 nrestart = 0
                 is_flexible = 0
-                ksm = TACS.KSM(self.Amat, self.mg, gmres_iters, nrestart, is_flexible)
+                self.ksm_Amat = self.assembler.createMat()  # We need a separate matrix to apply shift
+                ksm = TACS.KSM(self.ksm_Amat, self.mg, gmres_iters, nrestart, is_flexible)
 
                 # Set up lanczos solver
                 eig_tol = 1e-6
@@ -334,7 +335,8 @@ class FrequencyConstr:
             # For shift-and-invert lanczos, we need to apply shift to
             # both multigrid preconditioner and the underlying matrix
             # of the Krylov subspace solver
-            self.Amat.addDiag(-self.lanczos_shift)
+            self.ksm_Amat.copyValues(self.Amat)
+            self.ksm_Amat.addDiag(-self.lanczos_shift)
             mgmat.addDiag(-self.lanczos_shift)
             self.sep.solve(self.comm, print_flag=True)
             for i in range(self.num_eigenvalues):
@@ -342,6 +344,38 @@ class FrequencyConstr:
 
         else:
             raise ValueError("Invalid eig_method")
+
+        # Debug: print out residuals
+        debug_initialized = 0
+        if debug_initialized == 0:
+            debug_initialized = 1
+            res = self.assembler.createVec()
+            one = self.assembler.createVec()
+            Av  = self.assembler.createVec()
+            one_arr = one.getArray()
+            one_arr[:] = 1.0
+            debug_counter = 0
+
+            residual  = np.zeros(self.num_eigenvalues)
+            eigvec_l1 = np.zeros(self.num_eigenvalues)
+            eigvec_l2 = np.zeros(self.num_eigenvalues)
+
+        for i in range(self.num_eigenvalues):
+            self.Amat.mult(self.eigv[i], Av)  # Compute Av
+
+            res.copyValues(Av)
+            res.axpy(-self.eig[i], self.eigv[i]) # Compute res = Av - lambda*v
+
+            residual[i] = res.norm()
+            eigvec_l1[i] = self.eigv[i].dot(one) # Compute l1 norm
+            eigvec_l2[i] = self.eigv[i].dot(self.eigv[i])**0.5  # Compute l2 norm
+
+        debug_counter += 1
+        if self.assembler.getMPIComm().rank == 0:
+            print("Optimization iteration:{:4d}".format(debug_counter))
+            print("{:4s}{:15s}{:15s}{:15s}".format("No", "Eig Res", "Eigv l1 norm", "Eigv l2 norm"))
+            for i in range(self.num_eigenvalues):
+                print("{:4d}{:15.5e}{:15.5e}{:15.5e}".format(i, residual[i], eigvec_l1[i], eigvec_l2[i]))
 
         # Set first eigenvector as state variable for visualization
         self.assembler.setVariables(self.eigv[0])
