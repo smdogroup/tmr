@@ -135,6 +135,11 @@ class FrequencyConstr:
             # Set up Jacobi-Davidson eigensolver
             if self.eig_method == 'jd':
 
+                # Create an identity matrix for later use
+                I = self.assembler.createMat()
+                I.addDiag(1.0) # Create an identity matrix
+
+
                 # Create the operator with given matrix and multigrid preconditioner
                 self.oper = TACS.JDSimpleOperator(self.assembler, self.Amat, self.mg)
 
@@ -287,11 +292,6 @@ class FrequencyConstr:
 
                 if self.jd_use_recycle:
                     self.jd.setRecycle(nconvd)
-
-                # Modify the matrix associated with the preconditioner
-                # so that the matrix is positive definite
-                I = self.assembler.createMat()
-                I.addDiag(1.0) # Create an identity matrix
 
                 # Update mgmat so that it's positive definite
                 eig0, err = self.jd.extractEigenvalue(0)
