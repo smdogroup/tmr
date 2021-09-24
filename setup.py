@@ -51,7 +51,7 @@ inc_dirs.extend(get_global_dir(rel_inc_dirs))
 lib_dirs.extend(get_global_dir(rel_lib_dirs))
 
 # Add the include directories from OpenCascade
-for sufix in ['include/oce', 'inc', 'include']:
+for sufix in ['include/opencascade', 'include/oce', 'inc', 'include']:
     cas_inc = os.path.join(os.environ['CASROOT'], sufix)
     if os.path.isdir(cas_inc):
         inc_dirs.append(cas_inc)
