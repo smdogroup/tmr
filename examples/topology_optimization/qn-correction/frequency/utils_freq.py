@@ -300,7 +300,7 @@ class FrequencyConstr:
                         print("[mgmat] Smallest eigenvalue is already positive, don't update mgmat!")
                     else:
                         mgmat.axpy(-eig0, I)
-                        self.assembler.applyMatBcs(mgmat)
+                        self.assembler.applyMatBCs(mgmat)
                         self.mg.assembleGalerkinMat()
                         self.mg.factor()
 
