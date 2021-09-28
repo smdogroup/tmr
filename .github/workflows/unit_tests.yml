@@ -1,0 +1,141 @@
+name: Build and unit tests
+
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  # Remove push when finally merging.
+  push:
+    branches: [ github-action ]
+  pull_request:
+    branches: [ github-action ]
+
+  # Allows you to run this workflow manually from the Actions tab.
+  workflow_dispatch:
+
+jobs:
+  # This job is called test_docs.
+  unit_test_and_docs:
+    # Run on Ubuntu
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+
+    name: TMR Build/Test
+
+    steps:
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it.
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Install and run unit tests
+        run: |
+          echo "=============================================================";
+          echo "Run #${GITHUB_RUN_NUMBER}";
+          echo "Run ID: ${GITHUB_RUN_ID}";
+          echo "Testing: ${GITHUB_REPOSITORY}";
+          echo "Triggered by: ${GITHUB_EVENT_NAME}";
+          echo "Initiated by: ${GITHUB_ACTOR}";
+          echo "=============================================================";
+
+          echo "=============================================================";
+          echo "Create conda environment";
+          echo "=============================================================";
+          source $CONDA/etc/profile.d/conda.sh;
+          echo $CONDA/bin >> $GITHUB_PATH;
+          conda create -n TMR python=3.8 numpy=1.18 scipy=1.4 -q -y;
+          conda activate TMR;
+
+          echo "=============================================================";
+          echo "Installing dependencies";
+          echo "=============================================================";
+
+          # Set directory variables
+          export TMR_DIR=${GITHUB_WORKSPACE};
+
+          # Install conda libraries
+          conda install -c anaconda openmpi -q -y;
+          conda install gxx_linux-64 -q -y;
+          conda install -c anaconda openblas -q -y;
+          conda install -c conda-forge lapack -q -y;
+          conda install -c conda-forge metis -q -y;
+          conda install -c conda-forge mpi4py  -q -y;
+
+          # Install packages via pip
+          pip install testflo;
+          pip install cython;
+
+          # Install Blossom V
+          cd $TMR_DIR/extern;
+          wget https://pub.ist.ac.at/~vnk/software/blossom5-v2.05.src.tar.gz;
+          tar -zxf blossom5-v2.05.src.tar.gz;
+          cd blossom5-v2.05.src;
+          cp ../Makefile-blossom5 Makefile;
+          make;
+          make lib;
+
+          # Install OpenCASCADE 
+          cd $TMR_DIR/extern;
+          wget https://acdl.mit.edu/ESP/OCC741lin64.tgz;
+          tar -zxf OCC741lin64.tgz;
+          mv OpenCASCADE-7.4.1/ OpenCASCADE;
+          export CASROOT=$TMR_DIR/extern/OpenCASCADE;
+          export CASARCH=;
+          export PATH=$CASROOT/bin:$PATH;
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CASROOT/lib;
+
+          # Install egads4py
+          cd $TMR_DIR/extern;
+          git clone https://github.com/smdogroup/egads4py.git;
+          cd egads4py;
+          rm -rf tests;
+          rm -rf examples;
+          cp Makefile.in.info Makefile.in;
+          make EGADS_DIR=$TMR_DIR/extern/egads4py;
+          make interface;
+          export PYTHONPATH=${PYTHONPATH}:${TMR_DIR}/extern/egads4py;
+
+          # Install tacs
+          cd $TMR_DIR/extern;
+          git clone https://github.com/smdogroup/tacs.git;
+          cd tacs;
+          rm -rf tests;
+          rm -rf examples;
+          cp Makefile.in.info Makefile.in;
+          make TACS_DIR=$TMR_DIR/extern/tacs METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
+          make interface TACS_DIR=$TMR_DIR/extern/tacs METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
+          export PYTHONPATH=${PYTHONPATH}:${TMR_DIR}/extern/tacs;
+
+          # Install paropt
+          cd $TMR_DIR/extern;
+          git clone https://github.com/smdogroup/paropt.git;
+          cd paropt;
+          rm -rf tests;
+          rm -rf examples;
+          cp Makefile.in.info Makefile.in;
+          make PAROPT_DIR=$TMR_DIR/extern/paropt;
+          make interface PAROPT_DIR=$TMR_DIR/extern/paropt;
+          export PYTHONPATH=${PYTHONPATH}:${TMR_DIR}/extern/paropt;
+
+          # Copy over and modify Makefile.in
+          cd $TMR_DIR;
+          head -n -4 Makefile.in.info > Makefile.in;
+          sed -i 's/TMR_DEBUG_FLAGS = -fPIC -g/TMR_DEBUG_FLAGS = -fPIC -g -DTMR_HAS_OPENCASCADE -DTMR_HAS_EGADS/g' Makefile.in;
+          sed -i 's/TMR_FLAGS = -fPIC -O3/TMR_FLAGS = -fPIC -O3 -DTMR_HAS_OPENCASCADE -DTMR_HAS_EGADS/g' Makefile.in;
+
+          # Compile TMR
+          echo "=============================================================";
+          echo "Installing TMR";
+          echo "=============================================================";
+          cd $TMR_DIR;
+          make TMR_DIR=$TMR_DIR EGADS_DIR=$TMR_DIR/extern/egads4py TACS_DIR=$TMR_DIR/extern/tacs PAROPT_DIR=$TMR_DIR/extern/paropt METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
+          make interface TMR_DIR=$TMR_DIR EGADS_DIR=$TMR_DIR/extern/egads4py TACS_DIR=$TMR_DIR/extern/tacs PAROPT_DIR=$TMR_DIR/extern/paropt METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
+
+          echo "=============================================================";
+          echo "running tests";
+          echo "=============================================================";
+
+          rm -rf examples;
+          testflo .;
