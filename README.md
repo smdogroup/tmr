@@ -1,4 +1,6 @@
-# README #
+[![Build and unit tests](https://github.com/smdogroup/tmr/actions/workflows/unit_tests.yml/badge.svg)](https://github.com/smdogroup/tmr/actions/workflows/unit_tests.yml)
+
+# TMR #
 
 TMR is a mesh generation and refinement tool for creating large-scale quadrilateral and octree meshes in parallel. TMR creates a coarse quadrilateral or hexahedral mesh and builds refined quadtree or octree meshes on each coarse element. To ensure compatibility, TMR computes the necessary compatibility relationships between adjacent quadrilateral or hexahedral elements of different refinement levels.
 
