@@ -131,6 +131,7 @@ class FrequencyConstr:
             self.rho_original = self.assembler.createDesignVec()
             self.update = self.assembler.createDesignVec()
             self.temp = self.assembler.createDesignVec()
+            I = None
 
             # Set up Jacobi-Davidson eigensolver
             if self.eig_method == 'jd':
@@ -298,11 +299,11 @@ class FrequencyConstr:
                 if eig0 > 0:
                     if self.comm.rank == 0:
                         print("[mgmat] Smallest eigenvalue is already positive, don't update mgmat!")
-                    else:
-                        mgmat.axpy(-eig0, I)
-                        self.assembler.applyMatBCs(mgmat)
-                        self.mg.assembleGalerkinMat()
-                        self.mg.factor()
+                else:
+                    mgmat.axpy(-eig0, I)
+                    self.assembler.applyMatBCs(mgmat)
+                    self.mg.assembleGalerkinMat()
+                    self.mg.factor()
 
                 # Rerun the solver
                 self.jd.solve(print_flag=True, print_level=1)
