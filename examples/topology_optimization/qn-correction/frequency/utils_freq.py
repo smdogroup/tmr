@@ -31,7 +31,7 @@ class FrequencyConstr:
                  iter_offset, lambda0, eig_scale=1.0, num_eigenvalues=10,
                  eig_method='jd', max_jd_size=100, max_gmres_size=30,
                  max_lanczos=60, ksrho=50, non_design_mass=5.0, jd_use_recycle=True,
-                 lanczos_shift=-10):
+                 lanczos_shift=-10.0, jd_use_Amat_shift=False):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -69,6 +69,8 @@ class FrequencyConstr:
         self.jd_use_recycle = jd_use_recycle
 
         self.lanczos_shift = lanczos_shift
+        self.jd_use_Amat_shift = jd_use_Amat_shift
+        self.old_min_eigval = 0.0
 
         self.fltr = None
         self.mg = None
@@ -131,15 +133,9 @@ class FrequencyConstr:
             self.rho_original = self.assembler.createDesignVec()
             self.update = self.assembler.createDesignVec()
             self.temp = self.assembler.createDesignVec()
-            I = None
 
             # Set up Jacobi-Davidson eigensolver
             if self.eig_method == 'jd':
-
-                # Create an identity matrix for later use
-                I = self.assembler.createMat()
-                I.addDiag(1.0) # Create an identity matrix
-
 
                 # Create the operator with given matrix and multigrid preconditioner
                 self.oper = TACS.JDSimpleOperator(self.assembler, self.Amat, self.mg)
@@ -261,10 +257,20 @@ class FrequencyConstr:
         # Assemble A matrix for the simple eigenvalue problem and apply bcs
         # A = K - lambda0*M
         self.Amat.axpy(-self.lambda0, self.mmat)
+
+        # We may shift the eigenvalues of A by adding value to diagonal entries:
+        # A <- A - (old-1.0)*I
+        # so that all eigenvalues for A are likely to be positive (and no smaller than 1.0)
+        if self.jd_use_Amat_shift:
+            self.Amat.addDiag(1.0 - self.old_min_eigval)
+
+        # Apply bcs to A
         self.assembler.applyMatBCs(self.Amat)
 
         # Finish assembling the multigrid preconditioner
         mgmat.axpy(-0.95*self.lambda0, self.mmat)
+        if self.jd_use_Amat_shift:
+            mgmat.addDiag(1.0 - self.old_min_eigval)
         self.assembler.applyMatBCs(mgmat)
 
         # Factor the multigrid preconditioner
@@ -300,7 +306,7 @@ class FrequencyConstr:
                     if self.comm.rank == 0:
                         print("[mgmat] Smallest eigenvalue is already positive, don't update mgmat!")
                 else:
-                    mgmat.axpy(-eig0, I)
+                    mgmat.addDiag(-eig0)
                     self.assembler.applyMatBCs(mgmat)
                     self.mg.assembleGalerkinMat()
                     self.mg.factor()
@@ -331,6 +337,16 @@ class FrequencyConstr:
             # Extract eigenvalues and eigenvectors
             for i in range(self.num_eigenvalues):
                 self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
+            
+            # Adjust eigenvalues and shift matrices back
+            if self.jd_use_Amat_shift:
+                for i in range(self.num_eigenvalues):
+                    self.eig[i] += (self.old_min_eigval - 1.0)
+                self.Amat.addDiag(self.old_min_eigval - 1.0)
+                self.assembler.applyMatBCs(self.Amat)
+
+                # Set the shift value for next optimization iteration
+                self.old_min_eigval = self.eig[0]  # smallest eigenvalue
 
         elif self.eig_method == 'lanczos':
             # For shift-and-invert lanczos, we need to apply shift to
@@ -613,7 +629,7 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                    density=2600.0, iter_offset=0, qn_correction=True,
                    non_design_mass=5.0, eig_scale=1.0, eq_constr=False,
                    num_eigenvalues=10, eig_method='jd', max_jd_size=100, jd_use_recycle=True,
-                   max_gmres_size=30, max_lanczos=60, lanczos_shift=-10):
+                   max_gmres_size=30, max_lanczos=60, lanczos_shift=-10, jd_use_Amat_shift=False):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -677,7 +693,8 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                                      max_jd_size=max_jd_size,
                                      max_gmres_size=max_gmres_size,
                                      jd_use_recycle=jd_use_recycle,
-                                     lanczos_shift=lanczos_shift)
+                                     lanczos_shift=lanczos_shift,
+                                     jd_use_Amat_shift=jd_use_Amat_shift)
     nineq = 1
     if eq_constr is True:
         nineq = 0
