@@ -56,7 +56,7 @@ if __name__ == '__main__':
     p.add_argument('--max-lanczos', type=int, default=30)
     p.add_argument('--jd-recycle', type=str, default='on', choices=['on', 'off'])
     p.add_argument('--lanczos-shift', type=float, default=-10.0)
-    p.add_argument('--jd-use-Amat-shift', action='store_true')
+    p.add_argument('--jd-use-Amat-shift', type=str, default='on', choices=['on', 'off'])
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
@@ -87,6 +87,11 @@ if __name__ == '__main__':
         jd_use_recycle = True
     else:
         jd_use_recycle = False
+    
+    if args.jd_use_Amat_shift == 'on':
+        jd_use_Amat_shift = True
+    else:
+        jd_use_Amat_shift = False
 
     # Set the communicator
     comm = MPI.COMM_WORLD
@@ -193,7 +198,7 @@ if __name__ == '__main__':
                                                  max_gmres_size=args.max_gmres_size,
                                                  max_lanczos=args.max_lanczos,
                                                  lanczos_shift=args.lanczos_shift,
-                                                 jd_use_Amat_shift=args.jd_use_Amat_shift)
+                                                 jd_use_Amat_shift=jd_use_Amat_shift)
 
         # Set the prefix
         problem.setPrefix(prefix)
