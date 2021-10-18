@@ -73,6 +73,7 @@ if __name__ == '__main__':
     p.add_argument('--eq-constr', action='store_true')
     p.add_argument('--qn-subspace', type=int, default=2) # Try 2, 5, 10
     p.add_argument('--qn-type', type=str, choices=['bfgs', 'scaled_bfgs'])
+    p.add_argument('--paropt-type', type=str, choices=['penalty_method', 'filter_method'])
 
     # Test
     p.add_argument('--gradient-check', action='store_true')
@@ -135,6 +136,10 @@ if __name__ == '__main__':
         bcs.addBoundaryCondition('fixed', [0,1,2], [0.0, 0.0, 0.0])
 
     # Set up ParOpt parameters
+    if args.paropt_type == 'penalty_method':
+        adaptive_gamma_update = True
+    else:
+        adaptive_gamma_update = False
     optimization_options = {
         'algorithm': 'tr',
         'output_level':args.output_level,
@@ -146,8 +151,8 @@ if __name__ == '__main__':
         'tr_infeas_tol': 1e-6,
         'tr_l1_tol': 0.0,
         'tr_linfty_tol': 0.0,
-        'tr_adaptive_gamma_update': False,
-        'tr_accept_step_strategy': 'filter_method',
+        'tr_adaptive_gamma_update': adaptive_gamma_update,
+        'tr_accept_step_strategy': args.paropt_type,
         'filter_sufficient_reduction': args.simple_filter,
         'filter_has_feas_restore_phase': True,
         'tr_use_soc': False,
