@@ -72,8 +72,9 @@ if __name__ == '__main__':
     p.add_argument('--tr-min', type=float, default=1e-3)
     p.add_argument('--eq-constr', action='store_true')
     p.add_argument('--qn-subspace', type=int, default=2) # Try 2, 5, 10
-    p.add_argument('--qn-type', type=str, choices=['bfgs', 'scaled_bfgs'])
-    p.add_argument('--paropt-type', type=str, choices=['penalty_method', 'filter_method'])
+    p.add_argument('--qn-type', type=str, default='bfgs', choices=['bfgs', 'scaled_bfgs'])
+    p.add_argument('--paropt-type', type=str, default='filter_method', 
+        choices=['penalty_method', 'filter_method'])
 
     # Test
     p.add_argument('--gradient-check', action='store_true')
@@ -159,7 +160,7 @@ if __name__ == '__main__':
         'tr_max_iterations': args.max_iter,
         'penalty_gamma': 50.0,
         'qn_subspace_size': args.qn_subspace, # try 5 or 10
-        'qn_type': 'bfgs',
+        'qn_type': args.qn_type,
         'qn_diag_type': 'yty_over_yts',
         'abs_res_tol': 1e-8,
         'starting_point_strategy': 'affine_step',
