@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
-        choices=['paropt', 'snopt', 'ipopt'])
+        choices=['paropt', 'snopt', 'ipopt', 'mma'])
     p.add_argument('--n-mesh-refine', type=int, default=3)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
@@ -170,6 +170,22 @@ if __name__ == '__main__':
         'use_line_search': False,  # subproblem
         'max_major_iters': 200}
 
+    mma_options = {
+        'algorithm': 'mma',
+        'mma_asymptote_contract': 0.7,
+        'mma_asymptote_relax': 1.2,
+        'mma_bound_relax': 0,
+        'mma_delta_regularization': 1e-05,
+        'mma_eps_regularization': 0.001,
+        'mma_infeas_tol': 1e-05,
+        'mma_init_asymptote_offset': 0.25,
+        'mma_l1_tol': 1e-06,
+        'mma_linfty_tol': 1e-06,
+        'mma_max_asymptote_offset': 10,
+        'mma_max_iterations': args.max_iter,
+        'mma_min_asymptote_offset': 0.01,
+        'mma_use_constraint_linearization': True
+    }
 
     # Set the original filter to NULL
     orig_filter = None
@@ -182,7 +198,7 @@ if __name__ == '__main__':
     max_iterations = args.n_mesh_refine
     for step in range(max_iterations):
         # Create the problem
-        iter_offset = step*optimization_options['tr_max_iterations']
+        iter_offset = step*args.max_iter
 
         # Create the optimization problem
         problem, obj_callback, constr_callback = create_problem(prefix=args.prefix, domain=args.domain,
@@ -226,7 +242,7 @@ if __name__ == '__main__':
         # Extract the filter to interpolate design variables
         filtr = problem.getFilter()
 
-        if args.optimizer == 'paropt':
+        if args.optimizer == 'paropt' or args.optimizer == 'mma':
             if orig_filter is not None:
                 # Create one of the new design vectors
                 x = problem.createDesignVec()
@@ -247,13 +263,15 @@ if __name__ == '__main__':
         if max_iterations > 1:
             if step == max_iterations-1:
                 optimization_options['tr_max_iterations'] = 15
-        count += optimization_options['tr_max_iterations']
+                mma_options['mma_max_iterations'] = 15
+        count += args.max_iter
 
         optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
         optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
+        mma_options['mma_output_file'] = os.path.join(prefix, 'mma_output_file%d.dat'%(step))
 
         # Optimize with openmdao/pyoptsparse wrapper if specified
-        if args.optimizer != 'paropt':
+        if args.optimizer == 'snopt' or args.optimizer == 'ipopt':
             # Broadcast local size to all processor
             local_size = len(x_init)
             sizes = [ 0 ]*comm.size
@@ -341,7 +359,10 @@ if __name__ == '__main__':
 
         # Otherwise, use ParOpt.Optimizer to optimize
         else:
-            opt = ParOpt.Optimizer(problem, optimization_options)
+            if args.optimizer == 'mma':
+                opt = ParOpt.Optimizer(problem, mma_options)
+            else:
+                opt = ParOpt.Optimizer(problem, optimization_options)
             opt.optimize()
             xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
