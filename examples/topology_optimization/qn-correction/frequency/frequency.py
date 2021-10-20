@@ -403,6 +403,7 @@ if __name__ == '__main__':
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
             pkl['problem'] = 'frequency'
+            pkl['paropt-type'] = args.paropt_type
 
             if args.optimizer == 'paropt' or args.optimizer == 'paropt-pyoptsparse':
                 pkl['curvs'] = constr_callback.getQnUpdateCurvs()
