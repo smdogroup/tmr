@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
-        choices=['paropt', 'paropt-pyoptsparse', 'snopt', 'ipopt'])
+        choices=['paropt', 'snopt', 'ipopt'])
     p.add_argument('--n-mesh-refine', type=int, default=3)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
@@ -285,15 +285,7 @@ if __name__ == '__main__':
                 prob.model.add_constraint('topo.con', lower=0.0)
 
             # Set up optimizer and options
-            if args.optimizer == 'paropt-pyoptsparse':
-                prob.driver = ParOptDriver()
-                for key in optimization_options:
-                    prob.driver.options[key] = optimization_options[key]
-
-                if args.qn_correction:
-                    prob.driver.use_qn_correction(analysis.qn_correction)
-
-            elif args.optimizer == 'snopt':
+            if args.optimizer == 'snopt':
                 prob.driver = om.pyOptSparseDriver()
                 prob.driver.options['optimizer'] = 'SNOPT'
                 prob.driver.opt_settings['Iterations limit'] = 9999999999999
@@ -405,7 +397,7 @@ if __name__ == '__main__':
             pkl['problem'] = 'frequency'
             pkl['paropt-type'] = args.paropt_type
 
-            if args.optimizer == 'paropt' or args.optimizer == 'paropt-pyoptsparse':
+            if args.optimizer == 'paropt':
                 pkl['curvs'] = constr_callback.getQnUpdateCurvs()
                 pkl['n_skipH'] = getNSkipUpdate(os.path.join(prefix, 'tr_output_file%d.dat'%(step)))
 
