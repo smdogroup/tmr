@@ -87,8 +87,8 @@ if __name__ == '__main__':
     p.add_argument('--compfreq-qn', type=str, default='comp',
         choices=['comp', 'freq', 'compfreq'])
     p.add_argument('--optimizer', type=str, nargs='*',
-        default=['paropt', 'paroptqn', 'snopt', 'ipopt'],
-        choices=['paropt', 'paroptqn', 'snopt', 'ipopt'])
+        default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'],
+        choices=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'])
     p.add_argument('--walltime', type=int, default=24)
     args = p.parse_args()
 
