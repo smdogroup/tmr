@@ -50,7 +50,7 @@ if __name__ == '__main__':
     p.add_argument('--ksrho', type=float, default=1000)
 
     p.add_argument('--eig-method', type=str, default='jd', choices=['jd', 'lanczos'])
-    p.add_argument('--max-jd-size', type=int, default=100)
+    p.add_argument('--max-jd-size', type=int, default=200)
     p.add_argument('--max-gmres-size', type=int, default=30)
     p.add_argument('--num-eigenvalues', type=int, default=10)
     p.add_argument('--max-lanczos', type=int, default=30)
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
         choices=['paropt', 'snopt', 'ipopt', 'mma'])
-    p.add_argument('--n-mesh-refine', type=int, default=3)
+    p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
     p.add_argument('--non-design-mass', type=float, default=10.0)
@@ -71,9 +71,9 @@ if __name__ == '__main__':
     p.add_argument('--tr-eta', type=float, default=0.25)
     p.add_argument('--tr-min', type=float, default=1e-3)
     p.add_argument('--eq-constr', action='store_true')
-    p.add_argument('--qn-subspace', type=int, default=2) # Try 2, 5, 10
-    p.add_argument('--qn-type', type=str, default='bfgs', choices=['bfgs', 'scaled_bfgs'])
-    p.add_argument('--paropt-type', type=str, default='filter_method', 
+    p.add_argument('--qn-subspace', type=int, default=10)
+    p.add_argument('--qn-type', type=str, default='scaled_bfgs', choices=['bfgs', 'scaled_bfgs'])
+    p.add_argument('--paropt-type', type=str, default='penalty_method', 
         choices=['penalty_method', 'filter_method'])
 
     # Test
