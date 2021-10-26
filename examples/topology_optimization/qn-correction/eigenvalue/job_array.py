@@ -10,8 +10,12 @@ def dic2str(dc):
     example:
     dc = {'no':1, 'domain':'cantilever', 'AR': 1}
     dic2str(dc) = '--domain cantilever --AR 1'
+    
+    Note:
+    key name starting with 1 or more underscores
+    are considered comments and will not be included
     '''
-    row = ['--{:s} {:s}'.format(k, v) for k, v in dc.items()]
+    row = ['--{:s} {:s}'.format(k, v) for k, v in dc.items() if k[0] != '_']
     return ' '.join(row[1:])
 
 def optimizer2cmd(optimizer, problem, compfreq_qn):
@@ -50,11 +54,14 @@ def createCaseCmds(problem, physics, optimizers, exescript, compfreq_qn):
         for optimizer in optimizers:
 
             # Name of case folder
-            # Example: e-1-paropt
-            case_folder = 'e-{:s}-{:s}'.format(case_dict['no'], optimizer)
+            # Example: 1-paropt
+            case_folder = '{:s}-{:s}'.format(case_dict['no'], optimizer)
 
             # If case is not done already, create cmd
-            n_mesh_refine = int(case_dict['n-mesh-refine'])
+            try:
+                n_mesh_refine = int(case_dict['n-mesh-refine'])
+            except KeyError:
+                n_mesh_refine = 1
             pkl_name = 'output_refine{:d}.pkl'.format(n_mesh_refine - 1)
 
             if not os.path.isfile(os.path.join(case_folder, pkl_name)):
@@ -62,7 +69,7 @@ def createCaseCmds(problem, physics, optimizers, exescript, compfreq_qn):
                     exescript,                         # eig-max.py
                     dic2str(case_dict),                # --domain cantilever --AR 1.0 ...
                     optimizer2cmd(optimizer, problem, compfreq_qn), # --optimizer paropt --qn-correction
-                    case_folder                        # --prefix e-1-paroptqn
+                    case_folder                        # --prefix 1-paroptqn
                 )
                 case_cmds.append(cmd)
             else:
