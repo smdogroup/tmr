@@ -41,7 +41,7 @@ if __name__ == '__main__':
     p.add_argument('--AR', type=float, default=1.0)
     p.add_argument('--ratio', type=float, default=0.4)
     p.add_argument('--len0', type=float, default=1.0)
-    p.add_argument('--vol-frac', type=float, default=0.4)
+    p.add_argument('--vol-frac', type=float, default=1.0)
     p.add_argument('--r0-frac', type=float, default=0.05)
     p.add_argument('--htarget', type=float, default=1.0)
     p.add_argument('--mg-levels', type=int, default=4)
