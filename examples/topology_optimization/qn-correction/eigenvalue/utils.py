@@ -9,7 +9,7 @@ import os
 try:
     from termcolor import colored
 except:
-        pass
+    pass
 
 class OctCreator(TMR.OctConformTopoCreator):
     """
