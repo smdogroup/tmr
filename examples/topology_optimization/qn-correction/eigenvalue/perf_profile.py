@@ -38,6 +38,8 @@ def getDirs(result_folders):
         dirs = os.listdir(f)
         r = re.compile(r"\d+-.+")
         dirs = list(filter(r.match, dirs))
+        sort_key = lambda text : int(text.split('-')[0])
+        dirs.sort(key=sort_key)
         dirslist.append(dirs)
 
     return dirslist
