@@ -8,33 +8,26 @@ from pprint import pprint
 from csv import DictWriter
 
 PERF_INF = 1e20
-optimizers = ['paropt', 'paroptqn', 'snopt', 'ipopt']
 colors = {
     'paropt': '#00876C',
     'paroptqn': '#BC5090',
     'ipopt': '#7A4EFE',
     'snopt': '#2e2e2e',
+    'mma': '#FFA600'
 }
-legends = {
-    'paropt': r'ParOpt filterSQP',
-    'paroptqn': r'ParOpt filterSQP w/ qn',
-    'ipopt': r'IPOPT',
-    'snopt': r'SNOPT',
-}
-
 
 def getDirs(result_folders):
     """
     get all folder names with the following pattern:
 
-        e-number-name
+        number-name
 
     for example:
 
-        e-12-paroptqn
+        12-paroptqn
 
     Args:
-        result_folders (list): the list of folders conatining all `e-number-optimizer' subfolders
+        result_folders (list): the list of folders conatining all `number-optimizer' subfolders
 
     Return:
         dirslist (list): list of dir names lists
@@ -43,7 +36,7 @@ def getDirs(result_folders):
     dirslist = []
     for f in result_folders:
         dirs = os.listdir(f)
-        r = re.compile(r"e-\d+-.+")
+        r = re.compile(r"\d+-.+")
         dirs = list(filter(r.match, dirs))
         dirslist.append(dirs)
 
@@ -65,7 +58,7 @@ def createDicStruct(dirslist):
     physics = dict()
     for dirs in dirslist:
         for d in dirs:
-            _, num, omz = d.split('-')
+            num, omz = d.split('-')
             if num not in physics.keys():
                 physics[num] = dict()
             physics[num][omz] = dict()
@@ -85,7 +78,7 @@ def populateDic(dirslist, n_mesh_refine, result_folders, physics):
         dirslist (list): list of dir names lists
         n_mesh_refine (int): number of mesh refinements, this decides which
                              pickle contains the final result
-        result_folders (list): the list of folders conatining all `e-number-optimizer' subfolders
+        result_folders (list): the list of folders conatining all `number-optimizer' subfolders
         physics (dict): the dictionary structure to populate
 
     Return:
@@ -97,7 +90,7 @@ def populateDic(dirslist, n_mesh_refine, result_folders, physics):
 
     for i, dirs in enumerate(dirslist):
         for d in dirs:
-            _, num, omz = d.split('-')
+            num, omz = d.split('-')
             pklname = 'output_refine{:d}.pkl'.format(n_mesh_refine-1)
             pklpath = os.path.join(result_folders[i], d, pklname)
 
@@ -203,7 +196,7 @@ def genProfileData(optimizers, physics, problem):
 
     return profile_data, n_best
 
-def plotObjProfile(problem, profile_data, eig_bound, comp_bound, optimizers):
+def plotObjProfile(problem, profile_data, eig_bound, comp_bound, optimizers, legends):
     """
     Plot objective profile
 
@@ -252,7 +245,7 @@ def plotObjProfile(problem, profile_data, eig_bound, comp_bound, optimizers):
 
     return fig, ax
 
-def plotDiscreteProfile(profile_data, optimizers):
+def plotDiscreteProfile(profile_data, optimizers, legends):
     """
     Plot discreteness profile
 
@@ -320,12 +313,26 @@ if __name__ == '__main__':
     p.add_argument('--result-folder', type=str, nargs='*', default=['.'])
     p.add_argument('--problem', type=str, default='eig', choices=['eig', 'comp', 'freq'])
     p.add_argument('--infeas-tol', type=float, default=1e-6)
+    p.add_argument('--optimizers', type=str, nargs='*',
+        default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'],
+        choices=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'])
     p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--eig-bound', type=float, default=0.5)
     p.add_argument('--comp-bound', type=float, default=1.5)
     p.add_argument('--obj-profile-name', type=str, default='profile-obj.pdf')
     p.add_argument('--dis-profile-name', type=str, default='profile-discrete.pdf')
+    p.add_argument('--paropt-type', type=str, default='sl1QP',
+        choices=['sl1QP', 'filterSQP'])
     args = p.parse_args()
+
+    legends = {
+        'paropt': r'ParOpt {:s}'.format(args.paropt_type),
+        'paroptqn': r'ParOpt {:s} w/ qn'.format(args.paropt_type),
+        'ipopt': r'IPOPT',
+        'snopt': r'SNOPT',
+        'mma': r'MMA'
+    }
+    legends = {key: legends[key] for key in args.optimizers}
 
     # Get list of case dirs by matching folder name
     dirslist = getDirs(args.result_folder)
@@ -340,6 +347,7 @@ if __name__ == '__main__':
     n_feas = normalizeDict(args.problem, physics, args.infeas_tol)
 
     # Generate profile data
+    optimizers = args.optimizers
     profile_data, n_best = genProfileData(optimizers, physics, args.problem)
 
     # Print summary
@@ -358,14 +366,15 @@ if __name__ == '__main__':
     plt.style.use(mpl_style_path)
 
     # Plot objective profile
-    fig, ax = plotObjProfile(args.problem, profile_data, args.eig_bound, args.comp_bound, optimizers)
+    fig, ax = plotObjProfile(args.problem, profile_data, args.eig_bound,
+        args.comp_bound, optimizers, legends)
     if len(args.result_folder) == 1:
         fig.savefig(os.path.join(args.result_folder[0], args.obj_profile_name), dpi=800)
     else:
         fig.savefig(args.obj_profile_name, dpi=800)
 
     # Plot discreteness profile
-    fig, ax = plotDiscreteProfile(profile_data, optimizers)
+    fig, ax = plotDiscreteProfile(profile_data, optimizers, legends)
     if len(args.result_folder) == 1:
         fig.savefig(os.path.join(args.result_folder[0], args.dis_profile_name), dpi=800)
     else:
