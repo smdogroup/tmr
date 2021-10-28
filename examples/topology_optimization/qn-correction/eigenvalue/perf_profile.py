@@ -321,8 +321,6 @@ if __name__ == '__main__':
     p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--eig-bound', type=float, default=0.5)
     p.add_argument('--comp-bound', type=float, default=1.5)
-    p.add_argument('--obj-profile-name', type=str, default='profile-obj.pdf')
-    p.add_argument('--dis-profile-name', type=str, default='profile-discrete.pdf')
     p.add_argument('--paropt-type', type=str, default='sl1QP',
         choices=['sl1QP', 'filterSQP'])
     args = p.parse_args()
@@ -371,16 +369,18 @@ if __name__ == '__main__':
     fig, ax = plotObjProfile(args.problem, profile_data, args.eig_bound,
         args.comp_bound, optimizers, legends)
     if len(args.result_folder) == 1:
-        fig.savefig(os.path.join(args.result_folder[0], args.obj_profile_name), dpi=800)
+        fig.savefig(os.path.join(args.result_folder[0], 
+            "profile_obj_infeas_{:.0e}.pdf".format(args.infeas_tol)), dpi=800)
     else:
-        fig.savefig(args.obj_profile_name, dpi=800)
+        fig.savefig("profile_obj_infeas_{:.0e}.pdf".format(args.infeas_tol), dpi=800)
 
     # Plot discreteness profile
     fig, ax = plotDiscreteProfile(profile_data, optimizers, legends)
     if len(args.result_folder) == 1:
-        fig.savefig(os.path.join(args.result_folder[0], args.dis_profile_name), dpi=800)
+        fig.savefig(os.path.join(args.result_folder[0],
+            "profile_dis_infeas_{:.0e}.pdf".format(args.infeas_tol)), dpi=800)
     else:
-        fig.savefig(args.dis_profile_name, dpi=800)
+        fig.savefig("profile_dis_infeas_{:.0e}.pdf".format(args.infeas_tol), dpi=800)
 
     # Save physics as csv
     if len(args.result_folder) == 1:
