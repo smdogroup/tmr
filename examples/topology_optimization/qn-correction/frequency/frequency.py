@@ -73,7 +73,7 @@ if __name__ == '__main__':
     p.add_argument('--eq-constr', action='store_true')
     p.add_argument('--qn-subspace', type=int, default=10)
     p.add_argument('--qn-type', type=str, default='scaled_bfgs', choices=['bfgs', 'scaled_bfgs'])
-    p.add_argument('--paropt-type', type=str, default='penalty_method', 
+    p.add_argument('--paropt-type', type=str, default='penalty_method',
         choices=['penalty_method', 'filter_method'])
 
     # Test
@@ -89,7 +89,7 @@ if __name__ == '__main__':
         jd_use_recycle = True
     else:
         jd_use_recycle = False
-    
+
     if args.jd_use_Amat_shift == 'on':
         jd_use_Amat_shift = True
     else:
@@ -365,6 +365,15 @@ if __name__ == '__main__':
                 opt = ParOpt.Optimizer(problem, optimization_options)
             opt.optimize()
             xopt, z, zw, zl, zu = opt.getOptimizedPoint()
+
+            # If we use MMA, manually create the f5 file
+            if args.optimizer == 'mma':
+                flag = (TACS.OUTPUT_CONNECTIVITY |
+                        TACS.OUTPUT_NODES |
+                        TACS.OUTPUT_DISPLACEMENTS |
+                        TACS.OUTPUT_EXTRAS)
+                f5 = TACS.ToFH5(problem.getAssembler(), TACS.SOLID_ELEMENT, flag)
+                f5.writeToFile(os.path.join(args.prefix, 'output_refine{:d}.f5'.format(step)))
 
             # Get optimal objective and constraint
             fail, obj, cons = problem.evalObjCon(1, xopt)
