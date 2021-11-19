@@ -21,7 +21,7 @@ class BaseFreq:
                  eig_problem, shift, estimate,
                  max_jd_size, max_gmres_size, max_lanczos,
                  non_design_mass, num_eigenvalues, index_eigvec_to_visual,
-                 lanczos_spectrum, lanczos_mgmat_coeff):
+                 lanczos_spectrum, lanczos_mgmat_coeff, jd_Amat_shift):
 
         self.prefix = prefix
         self.eig_method = eig_method
@@ -37,6 +37,7 @@ class BaseFreq:
         self.index_eigvec_to_visual = index_eigvec_to_visual
         self.lanczos_spectrum = lanczos_spectrum
         self.lanczos_mgmat_coeff = lanczos_mgmat_coeff
+        self.jd_Amat_shift = jd_Amat_shift
 
         # Create geometry, material, bc, mesh
         self.lx = len0*AR
@@ -211,6 +212,8 @@ class BaseFreq:
         # A = K - estimate*M
         self.Amat.copyValues(self.kmat)
         self.Amat.axpy(-self.estimate, self.mmat)
+        self.Amat.addDiag(-self.jd_Amat_shift)
+        self.assembler.applyMatBCs(self.Amat)
 
         # Get the matrix associated with the preconditioner
         mgmat = self.mg.getMat()
@@ -226,6 +229,7 @@ class BaseFreq:
                 # mgmat = K - 0.95*estimate*M
                 mgmat.copyValues(self.kmat)
                 mgmat.axpy(-self.estimate*0.95, self.mmat)
+                mgmat.addDiag(-self.jd_Amat_shift)
             else:
                 raise ValueError("invalid eig_problem")
 
@@ -242,6 +246,12 @@ class BaseFreq:
 
             for i in range(self.num_eigenvalues):
                 self.eigvals[i], err = self.jd.extractEigenvector(i, self.eigenvecs[i])
+            
+            # Adjust eigenvalues and shift Amat back
+            for i in range(self.num_eigenvalues):
+                self.eigvals[i] += self.jd_Amat_shift
+            self.Amat.addDiag(self.jd_Amat_shift)
+            mgmat.addDiag(self.jd_Amat_shift)
 
         elif self.eig_method == 'lanczos':
 
@@ -357,7 +367,8 @@ def run_baseline_case(prefix, domain, AR, ratio, len0, r0_frac, htarget, mg_leve
                       shift=0.0, estimate=0.0, max_jd_size=100, max_gmres_size=30,
                       max_lanczos=50, num_eigenvals=5, random_design=False,
                       index_eigvec=0, lanczos_spectrum='smallest',
-                      lanczos_mgmat_coeff=0.95):
+                      lanczos_mgmat_coeff=0.95,
+                      jd_Amat_shift=0.0):
 
     if not os.path.isdir(prefix):
         os.mkdir(prefix)
@@ -371,7 +382,8 @@ def run_baseline_case(prefix, domain, AR, ratio, len0, r0_frac, htarget, mg_leve
                   max_lanczos, non_design_mass,
                   num_eigenvals, index_eigvec,
                   lanczos_spectrum,
-                  lanczos_mgmat_coeff)
+                  lanczos_mgmat_coeff,
+                  jd_Amat_shift)
     dv = TMR.convertPVecToVec(bf.problem.createDesignVec())
     dv_vals = dv.getArray()
     dv_vals[:] = 0.95
@@ -432,21 +444,24 @@ if __name__ == "__main__":
     p.add_argument('--non-design-mass', type=float, default=10.0)
 
     # Solver
-    p.add_argument('--eig-method', type=str, default='jd',
-        choices=['jd', 'lanczos'])
-    p.add_argument('--eig-problem', type=str, default='general',
-        choices=['general', 'Amat'],
+    p.add_argument('--eig-method', type=str, default='jd', choices=['jd', 'lanczos'])
+    p.add_argument('--eig-problem', type=str, default='general', choices=['general', 'Amat'],
         help='Whether we solve Ku=lMu or Au=lu, where A=K-estimate*M')
-    p.add_argument('--shift', type=float, default=0.0, help='eigenvalue shift for lanczos')
     p.add_argument('--estimate', type=float, default=0.0, help='eigenvalue estimate for Amat')
-    p.add_argument('--max-jd-size', type=int, default=100)
-    p.add_argument('--max-gmres-size', type=int, default=30)
-    p.add_argument('--max-lanczos', type=int, default=50)
     p.add_argument('--num-eigenvalues', type=int, default=5)
     p.add_argument('--random-design', action='store_true')
-    p.add_argument('--index-eigenvec', type=int, default=0)
-    p.add_argument('--lanczos-spectrum', type=str, default='smallest',
-        choices=['smallest', 'smallest_magnitude'])
+    p.add_argument('--index-eigenvec', type=int, default=0, help='which eigenvector to visualize')
+
+    # JD options
+    p.add_argument('--max-jd-size', type=int, default=100)
+    p.add_argument('--max-gmres-size', type=int, default=30)
+    p.add_argument('--jd-Amat-shift', type=float, default=0.0, 
+        help='shift of all eigenvalues of A, shifted_eig(A) = eig(A) - shift')
+
+    # Lanczos options
+    p.add_argument('--max-lanczos', type=int, default=50)
+    p.add_argument('--lanczos-shift', type=float, default=0.0, help='eigenvalue shift for lanczos')
+    p.add_argument('--lanczos-spectrum', type=str, default='smallest', choices=['smallest', 'smallest_magnitude'])
     p.add_argument('--lanczos-mgmat-coeff', type=float, default=0.95)
 
     # OS
@@ -454,9 +469,10 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     run_baseline_case(args.prefix, args.domain, args.AR, args.ratio, args.len0,
-                        args.r0_frac, args.htarget, args.mg_levels,
-                        args.qval, args.non_design_mass, args.eig_method,
-                        args.eig_problem, args.shift,
-                        args.estimate, args.max_jd_size, args.max_gmres_size,
-                        args.max_lanczos, args.num_eigenvalues, args.random_design,
-                        args.index_eigenvec, args.lanczos_spectrum, args.lanczos_mgmat_coeff)
+                      args.r0_frac, args.htarget, args.mg_levels,
+                      args.qval, args.non_design_mass, args.eig_method,
+                      args.eig_problem, args.lanczos_shift,
+                      args.estimate, args.max_jd_size, args.max_gmres_size,
+                      args.max_lanczos, args.num_eigenvalues, args.random_design,
+                      args.index_eigenvec, args.lanczos_spectrum, args.lanczos_mgmat_coeff,
+                      args.jd_Amat_shift)
