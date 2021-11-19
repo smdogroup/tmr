@@ -280,7 +280,7 @@ def plotDiscreteProfile(profile_data, optimizers, legends):
 def omzFields(omz):
     return [omz+'-obj', omz+'-infeas', omz+'-discrete']
 
-def saveTable(physics, result_folder, csv='physics.csv'):
+def saveTable(physics, result_folder, optimizers, csv='physics.csv'):
     """
     Save physics to a csv in result folder
 
@@ -290,8 +290,7 @@ def saveTable(physics, result_folder, csv='physics.csv'):
     """
 
     fieldnames = ['no']
-    omzs = ['paropt', 'paroptqn', 'snopt', 'ipopt']
-    for omz in omzs:
+    for omz in optimizers:
         fieldnames.extend(omzFields(omz))
 
     with open(os.path.join(result_folder, csv), 'w') as f:
@@ -299,7 +298,7 @@ def saveTable(physics, result_folder, csv='physics.csv'):
         writer.writeheader()
         for num in physics:
             write_row_dict = {'no': num}
-            for omz in omzs:
+            for omz in optimizers:
                 write_row_dict[omz+'-obj'] = physics[num][omz]['obj']
                 write_row_dict[omz+'-infeas'] = physics[num][omz]['infeas']
                 write_row_dict[omz+'-discrete'] = physics[num][omz]['discreteness']
@@ -384,6 +383,6 @@ if __name__ == '__main__':
 
     # Save physics as csv
     if len(args.result_folder) == 1:
-        saveTable(physics, args.result_folder[0])
+        saveTable(physics, args.result_folder[0], args.optimizers)
     else:
-        saveTable(physics, '.')
+        saveTable(physics, '.', args.optimizers)
