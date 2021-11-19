@@ -327,6 +327,15 @@ if __name__ == '__main__':
             opt.optimize()
             xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
+            # If we use MMA, manually create the f5 file
+            if args.optimizer == 'mma':
+                flag = (TACS.OUTPUT_CONNECTIVITY |
+                        TACS.OUTPUT_NODES |
+                        TACS.OUTPUT_DISPLACEMENTS |
+                        TACS.OUTPUT_EXTRAS)
+                f5 = TACS.ToFH5(problem.getAssembler(), TACS.SOLID_ELEMENT, flag)
+                f5.writeToFile(os.path.join(args.prefix, 'output_refine{:d}.f5'.format(step)))
+
             # Get optimal objective and constraint
             fail, obj, cons = problem.evalObjCon(1, xopt)
             con = cons[0]
