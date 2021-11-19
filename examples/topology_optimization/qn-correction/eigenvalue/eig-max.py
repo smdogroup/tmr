@@ -44,13 +44,13 @@ if __name__ == '__main__':
     p.add_argument('--htarget', type=float, default=1.0)
     p.add_argument('--mg-levels', type=int, default=4)
     p.add_argument('--qval', type=float, default=5.0)
-    p.add_argument('--max-jd-size', type=int, default=100)
+    p.add_argument('--max-jd-size', type=int, default=200)
     p.add_argument('--max-gmres-size', type=int, default=30)
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
-        choices=['paropt', 'paropt-pyoptsparse', 'snopt', 'ipopt'])
-    p.add_argument('--n-mesh-refine', type=int, default=3)
+        choices=['paropt', 'snopt', 'ipopt', 'mma'])
+    p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
     p.add_argument('--non-design-mass', type=float, default=10.0)
@@ -60,7 +60,9 @@ if __name__ == '__main__':
     p.add_argument('--tr-eta', type=float, default=0.25)
     p.add_argument('--tr-min', type=float, default=1e-3)
     p.add_argument('--eq-constr', action='store_true')
-    p.add_argument('--qn-subspace', type=int, default=2)
+    p.add_argument('--qn-subspace', type=int, default=10)
+    p.add_argument('--paropt-type', type=str, default='penalty_method', 
+        choices=['penalty_method', 'filter_method'])
 
     # Test
     p.add_argument('--gradient-check', action='store_true')
@@ -114,9 +116,13 @@ if __name__ == '__main__':
         bcs.addBoundaryCondition('fixed', [0,1,2], [0.0, 0.0, 0.0])
 
     # Set up ParOpt parameters
+    if args.paropt_type == 'penalty_method':
+        adaptive_gamma_update = True
+    else:
+        adaptive_gamma_update = False
     optimization_options = {
         'algorithm': 'tr',
-        'output_level':args.output_level,
+        'output_level': args.output_level,
         'norm_type': 'l1',
         'tr_init_size': 0.05,
         'tr_min_size': args.tr_min,
@@ -125,14 +131,14 @@ if __name__ == '__main__':
         'tr_infeas_tol': 1e-6,
         'tr_l1_tol': 0.0,
         'tr_linfty_tol': 0.0,
-        'tr_adaptive_gamma_update': False,
-        'tr_accept_step_strategy': 'filter_method',
+        'tr_adaptive_gamma_update': adaptive_gamma_update,
+        'tr_accept_step_strategy': args.paropt_type,
         'filter_sufficient_reduction': args.simple_filter,
         'filter_has_feas_restore_phase': True,
         'tr_use_soc': False,
         'tr_max_iterations': args.max_iter,
         'penalty_gamma': 50.0,
-        'qn_subspace_size': args.qn_subspace, # try 5 or 10
+        'qn_subspace_size': args.qn_subspace,
         'qn_type': 'bfgs',
         'qn_diag_type': 'yty_over_yts',
         'abs_res_tol': 1e-8,
@@ -143,6 +149,22 @@ if __name__ == '__main__':
         'use_line_search': False,  # subproblem
         'max_major_iters': 200}
 
+    mma_options = {
+        'algorithm': 'mma',
+        'mma_asymptote_contract': 0.7,
+        'mma_asymptote_relax': 1.2,
+        'mma_bound_relax': 0,
+        'mma_delta_regularization': 1e-05,
+        'mma_eps_regularization': 0.001,
+        'mma_infeas_tol': 1e-05,
+        'mma_init_asymptote_offset': 0.25,
+        'mma_l1_tol': 1e-06,
+        'mma_linfty_tol': 1e-06,
+        'mma_max_asymptote_offset': 10,
+        'mma_max_iterations': args.max_iter,
+        'mma_min_asymptote_offset': 0.01,
+        'mma_use_constraint_linearization': True
+    }
 
     # Set the original filter to NULL
     orig_filter = None
@@ -190,7 +212,7 @@ if __name__ == '__main__':
         # Extract the filter to interpolate design variables
         filtr = problem.getFilter()
 
-        if args.optimizer == 'paropt':
+        if args.optimizer == 'paropt' or args.optimizer == 'mma':
             if orig_filter is not None:
                 # Create one of the new design vectors
                 x = problem.createDesignVec()
@@ -211,13 +233,15 @@ if __name__ == '__main__':
         if max_iterations > 1:
             if step == max_iterations-1:
                 optimization_options['tr_max_iterations'] = 15
+                mma_options['mma_max_iterations'] = 15
         count += optimization_options['tr_max_iterations']
 
         optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
         optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
+        mma_options['mma_output_file'] = os.path.join(prefix, 'mma_output_file%d.dat'%(step))
 
         # Optimize with openmdao/pyoptsparse wrapper if specified
-        if args.optimizer != 'paropt':
+        if args.optimizer == 'snopt' or args.optimizer == 'ipopt':
             # Broadcast local size to all processor
             local_size = len(x_init)
             sizes = [ 0 ]*comm.size
@@ -249,15 +273,7 @@ if __name__ == '__main__':
                 prob.model.add_constraint('topo.con', lower=0.0)
 
             # Set up optimizer and options
-            if args.optimizer == 'paropt-pyoptsparse':
-                prob.driver = ParOptDriver()
-                for key in optimization_options:
-                    prob.driver.options[key] = optimization_options[key]
-
-                if args.qn_correction:
-                    prob.driver.use_qn_correction(analysis.qn_correction)
-
-            elif args.optimizer == 'snopt':
+            if args.optimizer == 'snopt':
                 prob.driver = om.pyOptSparseDriver()
                 prob.driver.options['optimizer'] = 'SNOPT'
                 prob.driver.opt_settings['Iterations limit'] = 9999999999999
@@ -314,7 +330,11 @@ if __name__ == '__main__':
 
         # Otherwise, use ParOpt.Optimizer to optimize
         else:
-            opt = ParOpt.Optimizer(problem, optimization_options)
+            if args.optimizer == 'mma':
+                pass
+                opt = ParOpt.Optimizer(problem, mma_options)
+            else:
+                opt = ParOpt.Optimizer(problem, optimization_options)
             opt.optimize()
             xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
@@ -369,8 +389,9 @@ if __name__ == '__main__':
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
             pkl['problem'] = 'eig-max'
+            pkl['paropt-type'] = args.paropt_type
 
-            if args.optimizer == 'paropt' or args.optimizer == 'paropt-pyoptsparse':
+            if args.optimizer == 'paropt':
                 pkl['curvs'] = obj_callback.getQnUpdateCurvs()
                 pkl['n_skipH'] = getNSkipUpdate(os.path.join(prefix, 'tr_output_file%d.dat'%(step)))
 

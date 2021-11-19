@@ -96,7 +96,7 @@ if __name__ == '__main__':
     p.add_argument('--optimizer', type=str, nargs='*',
         default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'],
         choices=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'])
-    p.add_argument('--walltime', type=int, default=2)
+    p.add_argument('--walltime', type=int, default=24)
     args = p.parse_args()
 
     if args.problem == 'eig':
