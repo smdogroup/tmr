@@ -52,3 +52,6 @@ tmr/*.cpp
 
 # vscode config files
 .vscode/*
+
+# ccls cache files
+.ccls-cache
