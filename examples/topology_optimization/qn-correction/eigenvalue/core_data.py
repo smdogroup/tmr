@@ -17,7 +17,7 @@ r = re.compile(r"\d+-.+")
 dirs = list(filter(r.match, dirs))
 
 # Output folder name
-out_folder = args.result_folder + '-core'
+out_folder = args.result_folder.strip(r'/') + '-core'
 
 # Make directories
 if not os.path.isdir(out_folder):
