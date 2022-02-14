@@ -11,9 +11,9 @@ p.add_argument('end', type=int)
 p.add_argument('problem', type=str)
 args = p.parse_args()
 
-# Get all folders with name e-number-optimizer
+# Get all folders with name number-optimizer
 dirs = os.listdir(args.result_folder)
-r = re.compile(r"e-\d+-.+")
+r = re.compile(r"\d+-.+")
 dirs = list(filter(r.match, dirs))
 
 # Output folder name
@@ -29,7 +29,7 @@ for d in dirs:
 
 # Copy over output files
 for d in dirs:
-    e, num, omz = d.split('-')
+    num, omz = d.split('-')
 
     try:
         copy(os.path.join(args.result_folder, d, 'output_refine0.pkl'),
@@ -55,6 +55,13 @@ for d in dirs:
         except:
             pass
 
+    elif omz == 'mma':
+        try:
+            copy(os.path.join(args.result_folder, d, 'mma_output_file0.dat'),
+                 os.path.join(out_folder, d))
+        except:
+            pass
+
     else:
         try:
             copy(os.path.join(args.result_folder, d, omz+'_output_file0.dat'),
@@ -69,10 +76,10 @@ for d in dirs:
 
 # Copy over stdouts
 for d in dirs:
-    e, num, omz = d.split('-')
+    num, omz = d.split('-')
 
     # Compute the number of stdout
-    offset = {'paropt':1, 'paroptqn':2, 'snopt':3, 'ipopt':4}
+    offset = {'paropt':1, 'paroptqn':2, 'snopt':3, 'ipopt':4, 'mma':5}
     stdout_num = (int(num) - args.start)*len(offset) + offset[omz]
     stdout_name = '{:s}-n{:d}-{:d}.out-{:d}'.format(args.problem,
         args.start, args.end, stdout_num)
@@ -82,8 +89,3 @@ for d in dirs:
                 os.path.join(out_folder, d))
     except:
         print("Cannot copy over stdout file: {:s}".format(stdout_name))
-
-
-
-
-
