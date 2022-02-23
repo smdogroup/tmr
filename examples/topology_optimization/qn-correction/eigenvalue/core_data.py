@@ -6,16 +6,21 @@ from glob import glob
 
 p = argparse.ArgumentParser()
 p.add_argument('result_folder', type=str)
-p.add_argument('start', type=int)
-p.add_argument('end', type=int)
-p.add_argument('problem', type=str)
 p.add_argument('--single_optimizer', action='store_true')
 args = p.parse_args()
+
+# Find start, end and problem
+start = int(args.result_folder.split('-')[1])
+end = int(args.result_folder.split('-')[2])
+out_list = glob(os.path.join(args.result_folder, '*.out*'))
+problem = os.path.basename(out_list[0]).split('-')[0]
 
 # Get all folders with name number-optimizer
 dirs = os.listdir(args.result_folder)
 r = re.compile(r"\d+-.+")
 dirs = list(filter(r.match, dirs))
+rank = {'paropt':.1, 'paroptqn':.2, 'snopt':.3, 'ipopt':.4, 'mma':.5}
+dirs.sort(key=lambda s:int(s.split('-')[0]) + rank[s.split('-')[1]])
 
 # Output folder name
 out_folder = args.result_folder.strip(r'/') + '-core'
@@ -87,11 +92,11 @@ for d in dirs:
 
     offset = {'paropt':1, 'paroptqn':2, 'snopt':3, 'ipopt':4, 'mma':5}
     if args.single_optimizer:
-        stdout_num = int(num) - args.start + 1
+        stdout_num = int(num) - start + 1
     else:
-        stdout_num = (int(num) - args.start)*len(offset) + offset[omz]
-    stdout_name = '{:s}-n{:d}-{:d}.out-{:d}'.format(args.problem,
-        args.start, args.end, stdout_num)
+        stdout_num = (int(num) - start)*len(offset) + offset[omz]
+    stdout_name = '{:s}-n{:d}-{:d}.out-{:d}'.format(problem,
+        start, end, stdout_num)
 
     try:
         copy(os.path.join(args.result_folder, stdout_name),
