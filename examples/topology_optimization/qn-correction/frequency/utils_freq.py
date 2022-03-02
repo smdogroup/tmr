@@ -92,6 +92,7 @@ class FrequencyConstr:
         # TACS Matrices
         self.mmat = None
         self.m0mat = None
+        self.k0mat = None
         self.Amat = None
 
         # We keep track of failed qn correction
@@ -119,6 +120,7 @@ class FrequencyConstr:
             # Initialize space for matrices and vectors
             self.mmat = self.assembler.createMat()
             self.m0mat = self.assembler.createMat()  # For non design mass
+            self.k0mat = self.assembler.createMat()  # For non design stiffness
             self.Amat = self.assembler.createMat()
             self.eig = np.zeros(self.num_eigenvalues)
             self.eigv = []
@@ -189,9 +191,10 @@ class FrequencyConstr:
             offset = n_ext_pre
 
             # # Loop over all owned nodes and set non-design mass values
-            tol = 1e-6
+            tol = 1e-6 # Make sure our ranges are inclusive
+            depth = 0.1  # depth for non-design mass
             if self.domain == 'cantilever':
-                xmin = self.lx - tol
+                xmin = (1-depth)*self.lx - tol
                 xmax = self.lx + tol
                 ymin = 0.25*self.ly - tol
                 ymax = 0.75*self.ly + tol
@@ -199,7 +202,7 @@ class FrequencyConstr:
                 zmax = 0.2*self.lz + tol
 
             elif self.domain == 'michell':
-                xmin = self.lx - tol
+                xmin = (1-depth)*self.lx - tol
                 xmax = self.lx + tol
                 ymin = 0.25*self.ly - tol
                 ymax = 0.75*self.ly + tol
@@ -211,12 +214,12 @@ class FrequencyConstr:
                 xmax = 0.2*self.lx + tol
                 ymin = 0.25*self.ly - tol
                 ymax = 0.75*self.ly + tol
-                zmin = self.lz - tol
+                zmin = (1-depth)*self.lz - tol
                 zmax = self.lz + tol
 
             elif self.domain == 'lbracket':
                 RATIO = self.ratio
-                xmin = self.lx - tol
+                xmin = (1-depth)*self.lx - tol
                 xmax = self.lx + tol
                 ymin = 0.25*self.ly - tol
                 ymax = 0.75*self.ly + tol
@@ -237,10 +240,13 @@ class FrequencyConstr:
             dv = self.assembler.createDesignVec()
             self.assembler.getDesignVars(dv)
 
-            # Assemble a constant non-design mass matrix m0mat
+            # Assemble non-design mass and stiffness matrices
             self.assembler.setDesignVars(self.mvec)
             self.assembler.assembleMatType(TACS.MASS_MATRIX, self.m0mat)
+            self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.k0mat)
             self.m0mat.scale(self.non_design_mass)
+            self.assembler.applyMatBCs(self.m0mat)
+            self.assembler.applyMatBCs(self.k0mat)
 
             # Save the non-design mass to f5
             flag_m0 = (TACS.OUTPUT_CONNECTIVITY |
@@ -263,6 +269,8 @@ class FrequencyConstr:
         # mgmat = K - 0.95*lambda0*M
         # here we assemble the K part first
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.Amat)
+        self.Amat.axpy(1.0, self.k0mat)
+        self.assembler.applyMatBCs(self.Amat)
         mgmat = self.mg.getMat()
         mgmat.copyValues(self.Amat)
 
