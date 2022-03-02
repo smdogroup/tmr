@@ -60,9 +60,20 @@ for d in dirs:
         print('[Warning] No pkl file fonud in {:s}'.format(src))
 
     # Copy over failing eigenvalue f5 file
-    f5_list = glob(join(src, 'fail.f5'))
-    if f5_list:
-        copy(f5_list[0], dest)
+    fail_list = glob(join(src, 'fail.f5'))
+    if fail_list:
+        os.system('f5tovtk {:s}'.format(fail_list[0]))
+    fail_list = glob(join(src, 'fail.vtk'))
+    if fail_list:
+        copy(fail_list[0], dest)
+
+    # Copy over failing eigenvalue f5 file
+    m0_list = glob(join(src, 'non_design_mass.f5'))
+    if m0_list:
+        os.system('f5tovtk {:s}'.format(m0_list[0]))
+    m0_list = glob(join(src, 'non_design_mass.vtk'))
+    if m0_list:
+        copy(m0_list[0], dest)
 
     # Copy over outputs
     if omz == 'paropt' or omz == 'paroptqn':
@@ -81,8 +92,8 @@ for d in dirs:
 
     # Convert f5 to vtk and copy over vtk
     # Note that we only want the last f5/vtk
-    f5_list= glob(join(src, '*.f5'))
-    vtk_list = glob(join(src, '*.vtk'))
+    f5_list= glob(join(src, 'output*.f5'))
+    vtk_list = glob(join(src, 'output*.vtk'))
 
     # function that gets the version number
     version_number = lambda s : int(re.findall('([0-9]+)\.', s)[-1])
@@ -93,7 +104,7 @@ for d in dirs:
         os.system('f5tovtk {:s}'.format(f5))
 
     # Now we should have vtk
-    vtk_list = glob(join(src, '*.vtk'))
+    vtk_list = glob(join(src, 'output*.vtk'))
     if vtk_list:
         vtk_list.sort(key=version_number)
         vtk = vtk_list[-1]
