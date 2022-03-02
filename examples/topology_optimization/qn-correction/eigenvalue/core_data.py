@@ -3,60 +3,66 @@ import argparse
 import re
 from shutil import copy
 from glob import glob
+from os.path import join
 
 p = argparse.ArgumentParser()
 p.add_argument('result_folder', type=str)
-p.add_argument('--optimizers', nargs='*',
+p.add_argument('--include_stdout', action='store_true')
+p.add_argument('--stdout_optimizers', nargs='*',
     default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'],
     help='Make sure the order is consistent with order defined in job_array.py')
 args = p.parse_args()
 
+# Strip trailing /, if any
+result_folder = args.result_folder.strip(r'/')
+
 # Find start, end and problem
-start = int(args.result_folder.split('-')[1])
+start = int(result_folder.split('-')[1])
 try:
-    end = int(args.result_folder.split('-')[2])
+    end = int(result_folder.split('-')[2])
 except:
     end = start
-out_list = glob(os.path.join(args.result_folder, '*.out*'))
+out_list = glob(join(result_folder, '*.out*'))
 problem = os.path.basename(out_list[0]).split('-')[0]
 
 # Get all folders with name number-optimizer
-dirs = os.listdir(args.result_folder)
+dirs = os.listdir(result_folder)
 r = re.compile(r"\d+-.+")
 dirs = list(filter(r.match, dirs))
 rank = {'paropt':.1, 'paroptqn':.2, 'snopt':.3, 'ipopt':.4, 'mma':.5}
 dirs.sort(key=lambda s:int(s.split('-')[0]) + rank[s.split('-')[1]])
 
 # Output folder name
-out_folder = args.result_folder.strip(r'/') + '-core'
+out_folder = result_folder + '-core'
 
 # Make directories
 if not os.path.isdir(out_folder):
     os.mkdir(out_folder)
-
 for d in dirs:
-    if not os.path.isdir(os.path.join(out_folder, d)):
-        os.mkdir(os.path.join(out_folder, d))
+    if not os.path.isdir(join(out_folder, d)):
+        os.mkdir(join(out_folder, d))
 
 # Copy over output files
 for d in dirs:
-    print('populating {:s}'.format(os.path.join(out_folder, d)))
+    print('populating {:s}'.format(join(out_folder, d)))
+
+    src = join(result_folder, d)
+    dest = join(out_folder, d)
 
     num, omz = d.split('-')
 
     # Copy over pickles
-    try:
-        for pkl in glob(os.path.join(args.result_folder, d, 'output_refine*.pkl')):
-            copy(pkl, os.path.join(out_folder, d))
-    except:
-        print('no output_refine*.pkl in {:s}'.format(os.path.join(args.result_folder, d)))
+    pkl_list = glob(join(src, 'output_refine*.pkl'))
+    if pkl_list:
+        for pkl in pkl_list:
+            copy(pkl, dest)
+    else:
+        print('[Warning] No pkl file fonud in {:s}'.format(src))
 
     # Copy over failing eigenvalue f5 file
-    try:
-        copy(os.path.join(args.result_folder, d, 'fail.f5'),
-             os.path.join(out_folder, d))
-    except:
-        pass
+    f5_list = glob(join(src, 'fail.f5'))
+    if f5_list:
+        copy(f5_list[0], dest)
 
     # Copy over outputs
     if omz == 'paropt' or omz == 'paroptqn':
@@ -66,42 +72,43 @@ for d in dirs:
     else:
         prefix = omz+'_output_file'
 
-    try:
-        for dat in glob(os.path.join(args.result_folder, d, prefix+'*.dat')):
-            copy(dat, os.path.join(out_folder, d))
-    except:
-        print('no {:s}*.dat in {:s}'.format(prefix, os.path.join(args.result_folder, d)))
-
-    # Copy over f5
-    if omz == 'paropt' or omz == 'paroptqn':
-        try:
-            outputf5 = glob(os.path.join(args.result_folder, d, 'output*.f5'))
-            outputf5 = [os.path.basename(f5) for f5 in outputf5]  # Get basenames
-            outputf5.sort(key=lambda x: int(x.split('.')[0][6:]))  # Sort f5 by iteration number
-            copy(os.path.join(args.result_folder, d, outputf5[-1]), os.path.join(out_folder, d))
-
-        except:
-            print('failing to copy over f5 file from {:s}'.format(os.path.join(args.result_folder, d)))
-
+    dat_list = glob(join(src, prefix+'*.dat'))
+    if dat_list:
+        for dat in dat_list:
+            copy(dat, dest)
     else:
-        try:
-            for f5 in glob(os.path.join(args.result_folder, d, 'output_refine*.f5')):
-                copy(f5, os.path.join(out_folder, d))
-        except:
-            print('failing to copy over f5 file from {:s}'.format(os.path.join(args.result_folder, d)))
+        print('[Warning] No dat file fonud in {:s}'.format(src))
 
-# for d in dirs:
-#    num, omz = d.split('-')
+    # Convert f5 to vtk and copy over vtk
+    # Note that we only want the last f5/vtk
+    f5_list= glob(join(src, '*.f5'))
+    vtk_list = glob(join(src, '*.vtk'))
+
+    # function that gets the version number
+    version_number = lambda s : int(re.findall('([0-9]+)\.', s)[-1])
+
+    if not vtk_list and f5_list:
+        f5_list.sort(key=version_number)  # Sort by version number in ascent order
+        f5 = f5_list[-1]  # pick the largest one
+        os.system('f5tovtk {:s}'.format(f5))
+
+    # Now we should have vtk
+    vtk_list = glob(join(src, '*.vtk'))
+    if vtk_list:
+        vtk_list.sort(key=version_number)
+        vtk = vtk_list[-1]
+        copy(vtk, dest)
+    else:
+        print('[Waning] no f5 and vtk found in {:s}'.format(src))
 
     # Copy over stdouts
-
-    offset = {optimizer: i+1 for i, optimizer in enumerate(args.optimizers)}
-    stdout_num = (int(num) - start)*len(offset) + offset[omz]
-    stdout_name = '{:s}-n{:d}-{:d}.out-{:d}'.format(problem,
-        start, end, stdout_num)
-
-    try:
-        copy(os.path.join(args.result_folder, stdout_name),
-                os.path.join(out_folder, d))
-    except:
-        print("Cannot copy over stdout file: {:s}".format(stdout_name))
+    if args.include_stdout:
+        offset = {optimizer: i+1 for i, optimizer in enumerate(args.optimizers)}
+        stdout_num = (int(num) - start)*len(offset) + offset[omz]
+        stdout_name = '{:s}-n{:d}-{:d}.out-{:d}'.format(problem,
+            start, end, stdout_num)
+        try:
+            opy(join(result_folder, stdout_name),
+                    join(out_folder, d))
+        except:
+            print("Cannot copy over stdout file: {:s}".format(stdout_name))
