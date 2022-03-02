@@ -6,12 +6,17 @@ from glob import glob
 
 p = argparse.ArgumentParser()
 p.add_argument('result_folder', type=str)
-p.add_argument('--single_optimizer', action='store_true')
+p.add_argument('--optimizers', nargs='*',
+    default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'],
+    help='Make sure the order is consistent with order defined in job_array.py')
 args = p.parse_args()
 
 # Find start, end and problem
 start = int(args.result_folder.split('-')[1])
-end = int(args.result_folder.split('-')[2])
+try:
+    end = int(args.result_folder.split('-')[2])
+except:
+    end = start
 out_list = glob(os.path.join(args.result_folder, '*.out*'))
 problem = os.path.basename(out_list[0]).split('-')[0]
 
@@ -90,11 +95,8 @@ for d in dirs:
 
     # Copy over stdouts
 
-    offset = {'paropt':1, 'paroptqn':2, 'snopt':3, 'ipopt':4, 'mma':5}
-    if args.single_optimizer:
-        stdout_num = int(num) - start + 1
-    else:
-        stdout_num = (int(num) - start)*len(offset) + offset[omz]
+    offset = {optimizer: i+1 for i, optimizer in enumerate(args.optimizers)}
+    stdout_num = (int(num) - start)*len(offset) + offset[omz]
     stdout_name = '{:s}-n{:d}-{:d}.out-{:d}'.format(problem,
         start, end, stdout_num)
 
