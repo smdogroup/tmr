@@ -233,12 +233,24 @@ class FrequencyConstr:
                         if zmin < z < zmax:
                             mvals[i-offset] = 1.0
 
-            # Assemble a constant non-design mass matrix
+            # Back up design variable
             dv = self.assembler.createDesignVec()
             self.assembler.getDesignVars(dv)
+
+            # Assemble a constant non-design mass matrix m0mat
             self.assembler.setDesignVars(self.mvec)
             self.assembler.assembleMatType(TACS.MASS_MATRIX, self.m0mat)
             self.m0mat.scale(self.non_design_mass)
+
+            # Save the non-design mass to f5
+            flag_m0 = (TACS.OUTPUT_CONNECTIVITY |
+                       TACS.OUTPUT_NODES |
+                       TACS.OUTPUT_DISPLACEMENTS |
+                       TACS.OUTPUT_EXTRAS)
+            f5_m0 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag_m0)
+            f5_m0.writeToFile(os.path.join(self.prefix, "non_design_mass.f5"))
+
+            # Set design variable back
             self.assembler.setDesignVars(dv)
 
         # Assemble the mass matrix
@@ -337,7 +349,7 @@ class FrequencyConstr:
             # Extract eigenvalues and eigenvectors
             for i in range(self.num_eigenvalues):
                 self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
-            
+
             # Adjust eigenvalues and shift matrices back
             if self.jd_use_Amat_shift:
                 for i in range(self.num_eigenvalues):
