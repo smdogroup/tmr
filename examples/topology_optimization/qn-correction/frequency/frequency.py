@@ -3,11 +3,9 @@ This script performs mass minimization with natural frequency constraint
 """
 
 # Import analysis-related libraries
-from sympy import refine
 from tmr import TMR, TopOptUtils
 from paropt import ParOpt
-from tacs import TACS, elements, constitutive, functions
-from egads4py import egads
+from tacs import TACS, constitutive
 
 # Import general-purpose libraries
 import openmdao.api as om
@@ -18,14 +16,10 @@ import os
 import sys
 import pickle
 
-# Import optimization libraries
-from paropt.paropt_driver import ParOptDriver
-
 # Import utility classes and functions
 from utils_freq import create_problem, ReducedProblem, getFixedDVIndices, ReduOmAnalysis
 
 sys.path.append('../eigenvalue')
-from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
 from utils import create_forest, getNSkipUpdate
 
 if __name__ == '__main__':
@@ -65,7 +59,8 @@ if __name__ == '__main__':
     p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
-    p.add_argument('--non-design-mass', type=float, default=10.0)
+    p.add_argument('--fixed-mass', type=float, default=1.0,
+        help='value for fixed nodal design variables, must be within [0, 1]')
     p.add_argument('--eig-scale', type=float, default=1.0)
     p.add_argument('--output-level', type=int, default=0)
     p.add_argument('--simple-filter', action='store_false')
@@ -190,7 +185,6 @@ if __name__ == '__main__':
 
     # Set the original filter to NULL
     old_filter = None
-    xopt = None
 
     # Number of mesh refinements we have
     n_refine_steps = args.n_mesh_refine
@@ -211,7 +205,6 @@ if __name__ == '__main__':
                                                  len0=args.len0, AR=args.AR, ratio=args.ratio,
                                                  iter_offset=iter_offset,
                                                  qn_correction=args.qn_correction,
-                                                 non_design_mass=args.non_design_mass,
                                                  eig_scale=args.eig_scale,
                                                  eq_constr=args.eq_constr,
                                                  num_eigenvalues=args.num_eigenvalues,
@@ -222,6 +215,12 @@ if __name__ == '__main__':
                                                  max_lanczos=args.max_lanczos,
                                                  lanczos_shift=args.lanczos_shift,
                                                  jd_use_Amat_shift=jd_use_Amat_shift)
+
+        # Function handle for qn correction, if specified
+        if args.qn_correction:
+            qn_corr_func = constr_callback.qn_correction
+        else:
+            qn_corr_func = None
 
         # Set the prefix
         problem.setPrefix(prefix)
@@ -241,7 +240,8 @@ if __name__ == '__main__':
         # Create a reduced problem by fixing design variables where a constant mass
         # need to be applied to
         fixed_dv_idx = getFixedDVIndices(forest, args.domain, args.len0, args.AR, args.ratio)
-        redu_prob = ReducedProblem(problem, fixed_dv_idx)
+        redu_prob = ReducedProblem(problem, fixed_dv_idx, fixed_dv_val=args.fixed_mass,
+            qn_correction_func=qn_corr_func)
 
         # Create a reduced x0
         redu_x0 = redu_prob.createDesignVec()
@@ -257,23 +257,11 @@ if __name__ == '__main__':
             # Populate _x
             TopOptUtils.interpolateDesignVec(old_filter, _xopt, new_filter, _x)
 
-            # copy value from _x to redu_x0
+            # copy values from _x to redu_x0
             redu_prob.DVtoreduDV(_x, redu_x0)
 
         else:  # This is the first step, we just set x0 to 0.95
             redu_x0[:] = 0.95
-
-        # if args.optimizer == 'paropt' or args.optimizer == 'mma':
-        #     if old_filter is not None:  # This is a refined problem
-        #         # Create one of the new design vectors
-        #         x = problem.createDesignVec()
-        #         TopOptUtils.interpolateDesignVec(old_filter, xopt, new_filter, x)
-        #         problem.setInitDesignVars(x)
-        # else:
-        #     if old_filter is not None:  # This is refined problem
-        #         x = problem.createDesignVec()
-        #         TopOptUtils.interpolateDesignVec(old_filter, xopt, new_filter, x)
-        #         x_init = TMR.convertPVecToVec(x).getArray()
 
         # Update filter
         old_filter = new_filter
@@ -346,9 +334,7 @@ if __name__ == '__main__':
             omprob.setup()
 
             # Optimize and write result to f5 file
-            omprob.run_model()  # TODO: needed?
             omprob.run_driver()
-            # analysis.write_output(prefix, step)
 
             # Get optimal result from root processor and broadcast
             if comm.rank == 0:
@@ -378,7 +364,6 @@ if __name__ == '__main__':
             redu_xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
             # Get optimal objective and constraint
-            # fail, obj, cons = problem.evalObjCon(1, xopt)
             fail, obj, cons = redu_prob.evalObjCon(redu_xopt)
             con = cons[0]
 
@@ -429,7 +414,6 @@ if __name__ == '__main__':
             pkl['n-mesh-refine'] = args.n_mesh_refine
             pkl['max-iter'] = args.max_iter
             pkl['qn-correction'] = args.qn_correction
-            pkl['non-design-mass'] = args.non_design_mass
             pkl['eig-scale'] = args.eig_scale
             pkl['eq-constr'] = args.eq_constr
             pkl['qn-subspace'] = args.qn_subspace
