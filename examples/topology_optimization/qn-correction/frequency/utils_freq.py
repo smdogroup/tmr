@@ -134,7 +134,9 @@ class FrequencyConstr:
             self.rho = self.assembler.createDesignVec()
             self.rho_original = self.assembler.createDesignVec()
             self.update = self.assembler.createDesignVec()
+            self.update_vals = self.update.getArray()
             self.temp = self.assembler.createDesignVec()
+            self.temp_vals = self.temp.getArray()
 
             # Set up Jacobi-Davidson eigensolver
             if self.eig_method == 'jd':
@@ -389,7 +391,7 @@ class FrequencyConstr:
         self.dcdrho = dcdrho
         return
 
-    def qn_correction(self, x, z, zw, s, y):
+    def qn_correction(self, zero_idx, z, s, y):
         """
         Update y:
         y <- y + z*F^T P Fs
@@ -399,7 +401,7 @@ class FrequencyConstr:
         P: Positive definite part of the constraint Hessian
 
         Note:
-        x is raw design variable (unfiltered) and it's NOT equal to
+        x, s correspond raw design variable (unfiltered) and it's NOT equal to
         the design variable in the assembler:
 
         if:
@@ -408,12 +410,14 @@ class FrequencyConstr:
         Then:
         dv == Fx
 
-        Args:
-            x (PVec): unfiltered design vector (not used because we get x directly from assembler)
+        Inputs:
+            zero_idx (int list): indices to-be-zeroed in order to compute
+                                 the Hessian-vector product for reduced problem
             s (PVec): unfiltered update step
-            z, zw: multipliers for dense and sparse constraints, only z is used here
+            z (array-like): multipliers for dense constraints
 
-        Output:
+
+        Outputs:
             y (PVec): y = Bs
         """
 
@@ -440,10 +444,18 @@ class FrequencyConstr:
         self.assembler.setDesignVars(self.rho)
 
         for i in range(self.num_eigenvalues):
+            # Zero entries in temp, if needed
+            if zero_idx:
+                self.temp_vals[zero_idx] = 0.0
+
             # Compute g(rho + h*s) for d2Kdx2
             coeff1 = self.eta[i]*self.eig_scale
             self.assembler.addMatDVSensInnerProduct(coeff1, TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
+
+            # Zero entries in temp, if needed
+            if zero_idx:
+                self.temp_vals[zero_idx] = 0.0
 
             # Compute g(rho + h*s) for d2Mdx2
             coeff2 = -self.eta[i]*self.lambda0*self.eig_scale
@@ -454,10 +466,18 @@ class FrequencyConstr:
         self.assembler.setDesignVars(self.rho_original)
 
         for i in range(self.num_eigenvalues):
+            # Zero entries in temp, if needed
+            if zero_idx:
+                self.temp_vals[zero_idx] = 0.0
+
             # Compute g(rho + h*s) - g(rho) for d2Kdx2
             coeff1 = self.eta[i]*self.eig_scale
             self.assembler.addMatDVSensInnerProduct(-coeff1, TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
+
+            # Zero entries in temp, if needed
+            if zero_idx:
+                self.temp_vals[zero_idx] = 0.0
 
             # Compute g(rho + h*s) - g(rho) for d2Mdx2
             coeff2 = -self.eta[i]*self.lambda0*self.eig_scale
@@ -468,11 +488,17 @@ class FrequencyConstr:
         self.temp.beginSetValues(op=TACS.ADD_VALUES)
         self.temp.endSetValues(op=TACS.ADD_VALUES)
 
+        # Zero entries in temp, if needed
+        if zero_idx:
+            self.temp_vals[zero_idx] = 0.0
+
         # Add to the update
         self.update.axpy(1.0/h, self.temp)
+        if zero_idx:
+            self.update_vals[zero_idx] = 0.0
 
         # Compute norms for output
-        x_norm = x.norm()
+        rho_norm = self.rho.norm()
         s_norm = s.norm()
         y_norm = y.norm()
         dy_norm = self.update.norm()
@@ -489,7 +515,7 @@ class FrequencyConstr:
                 except:
                     print("curvature: {:20.10e}".format(curvature))
 
-            print("norm(x):   {:20.10e}".format(x_norm))
+            print("norm(rho):   {:20.10e}".format(rho_norm))
             print("norm(s):   {:20.10e}".format(s_norm))
             print("norm(y):   {:20.10e}".format(y_norm))
             print("norm(dy):  {:20.10e}".format(dy_norm))
@@ -499,6 +525,8 @@ class FrequencyConstr:
 
         if curvature > 0:
             self.fltr.applyTranspose(self.update, self.update)
+            if zero_idx:
+                self.update_vals[zero_idx] = 0.0
             y_wrap.axpy(z[0], self.update)
 
         self.curvs.append(curvature)
@@ -555,7 +583,7 @@ class MassObj:
 
 def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                    vol_frac=0.25, r0_frac=0.05, len0=1.0, AR=1.0, ratio=0.4,
-                   density=2600.0, iter_offset=0, qn_correction=True,
+                   density=2600.0, iter_offset=0,
                    eig_scale=1.0, eq_constr=False,
                    num_eigenvalues=10, eig_method='jd', max_jd_size=100, jd_use_recycle=True,
                    max_gmres_size=30, max_lanczos=60, lanczos_shift=-10, jd_use_Amat_shift=False):
@@ -628,10 +656,6 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
         nineq = 0
     problem.addConstraintCallback(1, nineq, constr_callback.constraint,
                                   constr_callback.constraint_gradient)
-
-    # Use Quasi-Newton Update Correction if specified
-    if qn_correction:
-        problem.addQnCorrectionCallback(1, constr_callback.qn_correction)
 
     # Set output callback
     cb = OutputCallback(assembler, iter_offset=iter_offset)
@@ -716,12 +740,17 @@ class ReducedProblem(ParOpt.Problem):
 
         return fail
 
-    def reduDVtoDV(self, reduDV, DV):
+    def reduDVtoDV(self, reduDV, DV, fixed_val=None):
         '''
         Convert the reduced design vector to full-sized design vector
         '''
+        if fixed_val is None:
+            val = self.fixed_dv_val
+        else:
+            val = fixed_val
+
         if self.fixed_dv_idx:
-            DV[self.fixed_dv_idx] = self.fixed_dv_val
+            DV[self.fixed_dv_idx] = val
         DV[self.free_dv_idx] = reduDV[:]
 
         return
@@ -737,9 +766,11 @@ class ReducedProblem(ParOpt.Problem):
     def computeQuasiNewtonUpdateCorrection(self, x, z, zw, s, y):
         if self.qn_correction_func:
             # Populate full-sized vectors
-            self.reduDVtoDV(x, self._x)
-            self.reduDVtoDV(s, self._s)
-            self.qn_correction_func(self._x, z, None, self._s, self._y)
+            self.reduDVtoDV(s, self._s, fixed_val=0.0)
+            self.reduDVtoDV(y, self._y, fixed_val=0.0)
+
+            # Update y and copy back
+            self.qn_correction_func(self.fixed_dv_idx, z, self._s, self._y)
             self.DVtoreduDV(self._y, y)
         return
 

@@ -204,7 +204,6 @@ if __name__ == '__main__':
                                                  r0_frac=args.r0_frac,
                                                  len0=args.len0, AR=args.AR, ratio=args.ratio,
                                                  iter_offset=iter_offset,
-                                                 qn_correction=args.qn_correction,
                                                  eig_scale=args.eig_scale,
                                                  eq_constr=args.eq_constr,
                                                  num_eigenvalues=args.num_eigenvalues,
