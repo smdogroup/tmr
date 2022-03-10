@@ -333,6 +333,7 @@ if __name__ == '__main__':
             omprob.setup()
 
             # Optimize and write result to f5 file
+            omprob.run_model()
             omprob.run_driver()
 
             # Get optimal result from root processor and broadcast

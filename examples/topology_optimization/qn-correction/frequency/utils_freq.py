@@ -965,8 +965,10 @@ class ReduOmAnalysis(om.ExplicitComponent):
         else:
             global_g = self.comm.allgather(np.array(self.g))
             global_g = np.concatenate(global_g)
-            global_A = self.comm.allgather(np.array(self.A))
-            global_A = np.concatenate(global_A)
+            global_A = []
+            for i in range(self.ncon):
+                global_A.append(self.comm.allgather(np.array(self.A[i])))
+                global_A[i] = np.concatenate(global_A[i])
 
             partials['obj', 'x'] = global_g
             partials['con', 'x'] = global_A
