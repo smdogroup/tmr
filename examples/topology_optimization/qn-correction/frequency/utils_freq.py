@@ -1,5 +1,6 @@
 from tmr import TMR, TopOptUtils
 from tacs import TACS, elements, functions
+from paropt import ParOpt
 from egads4py import egads
 import numpy as np
 import openmdao.api as om
@@ -91,8 +92,8 @@ class FrequencyConstr:
 
         # TACS Matrices
         self.mmat = None
-        self.m0mat = None
-        self.k0mat = None
+        # self.m0mat = None
+        # self.k0mat = None
         self.Amat = None
 
         # We keep track of failed qn correction
@@ -119,8 +120,8 @@ class FrequencyConstr:
 
             # Initialize space for matrices and vectors
             self.mmat = self.assembler.createMat()
-            self.m0mat = self.assembler.createMat()  # For non design mass
-            self.k0mat = self.assembler.createMat()  # For non design stiffness
+            # self.m0mat = self.assembler.createMat()  # For non design mass
+            # self.k0mat = self.assembler.createMat()  # For non design stiffness
             self.Amat = self.assembler.createMat()
             self.eig = np.zeros(self.num_eigenvalues)
             self.eigv = []
@@ -166,102 +167,103 @@ class FrequencyConstr:
                                           TACS.SEP_FULL, self.assembler.getBcMap())
                 self.sep.setTolerances(eig_tol, TACS.SEP_SMALLEST, self.num_eigenvalues)
 
-            '''
-            Create a non-design mass matrix
-            '''
-            self.mvec = self.assembler.createDesignVec()
-            mvals = self.mvec.getArray()
+            if 0:
+                '''
+                Create a non-design mass matrix
+                '''
+                self.mvec = self.assembler.createDesignVec()
+                mvals = self.mvec.getArray()
 
-            # Get nodal locations
-            Xpts = self.forest.getPoints()
+                # Get nodal locations
+                Xpts = self.forest.getPoints()
 
-            # Note: the local nodes are organized as follows:
-            # |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
+                # Note: the local nodes are organized as follows:
+                # |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
 
-            # Get number of local nodes in the current processor
-            n_local_nodes = Xpts.shape[0]
+                # Get number of local nodes in the current processor
+                n_local_nodes = Xpts.shape[0]
 
-            # Get numbder of dependent nodes
-            _ptr, _conn, _weights = self.forest.getDepNodeConn()
+                # Get numbder of dependent nodes
+                _ptr, _conn, _weights = self.forest.getDepNodeConn()
 
-            # Get number of ext_pre nodes
-            n_ext_pre = self.forest.getExtPreOffset()
+                # Get number of ext_pre nodes
+                n_ext_pre = self.forest.getExtPreOffset()
 
-            # Get numbder of own nodes:
-            offset = n_ext_pre
+                # Get numbder of own nodes:
+                offset = n_ext_pre
 
-            # # Loop over all owned nodes and set non-design mass values
-            tol = 1e-6 # Make sure our ranges are inclusive
-            depth = 0.1  # depth for non-design mass
-            if self.domain == 'cantilever':
-                xmin = (1-depth)*self.lx - tol
-                xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.0*self.lz - tol
-                zmax = 0.2*self.lz + tol
+                # # Loop over all owned nodes and set non-design mass values
+                tol = 1e-6 # Make sure our ranges are inclusive
+                depth = 0.1  # depth for non-design mass
+                if self.domain == 'cantilever':
+                    xmin = (1-depth)*self.lx - tol
+                    xmax = self.lx + tol
+                    ymin = 0.25*self.ly - tol
+                    ymax = 0.75*self.ly + tol
+                    zmin = 0.0*self.lz - tol
+                    zmax = 0.2*self.lz + tol
 
-            elif self.domain == 'michell':
-                xmin = (1-depth)*self.lx - tol
-                xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.4*self.lz - tol
-                zmax = 0.6*self.lz + tol
+                elif self.domain == 'michell':
+                    xmin = (1-depth)*self.lx - tol
+                    xmax = self.lx + tol
+                    ymin = 0.25*self.ly - tol
+                    ymax = 0.75*self.ly + tol
+                    zmin = 0.4*self.lz - tol
+                    zmax = 0.6*self.lz + tol
 
-            elif self.domain == 'mbb':
-                xmin = 0.0*self.lx - tol
-                xmax = 0.2*self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = (1-depth)*self.lz - tol
-                zmax = self.lz + tol
+                elif self.domain == 'mbb':
+                    xmin = 0.0*self.lx - tol
+                    xmax = 0.2*self.lx + tol
+                    ymin = 0.25*self.ly - tol
+                    ymax = 0.75*self.ly + tol
+                    zmin = (1-depth)*self.lz - tol
+                    zmax = self.lz + tol
 
-            elif self.domain == 'lbracket':
-                RATIO = self.ratio
-                xmin = (1-depth)*self.lx - tol
-                xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.5*RATIO*self.lz - tol
-                zmax = 1.0*RATIO*self.lz + tol
+                elif self.domain == 'lbracket':
+                    RATIO = self.ratio
+                    xmin = (1-depth)*self.lx - tol
+                    xmax = self.lx + tol
+                    ymin = 0.25*self.ly - tol
+                    ymax = 0.75*self.ly + tol
+                    zmin = 0.5*RATIO*self.lz - tol
+                    zmax = 1.0*RATIO*self.lz + tol
 
-            else:
-                print("[Warning]Unsupported domain type for non-design mass!")
+                else:
+                    print("[Warning]Unsupported domain type for non-design mass!")
 
-            for i in range(offset, n_local_nodes):
-                x, y, z = Xpts[i]
-                if xmin < x < xmax:
-                    if ymin < y < ymax:
-                        if zmin < z < zmax:
-                            mvals[i-offset] = 1.0
+                for i in range(offset, n_local_nodes):
+                    x, y, z = Xpts[i]
+                    if xmin < x < xmax:
+                        if ymin < y < ymax:
+                            if zmin < z < zmax:
+                                mvals[i-offset] = 1.0
 
-            # Back up design variable
-            dv = self.assembler.createDesignVec()
-            self.assembler.getDesignVars(dv)
+                # Back up design variable
+                dv = self.assembler.createDesignVec()
+                self.assembler.getDesignVars(dv)
 
-            # Assemble non-design mass and stiffness matrices
-            self.assembler.setDesignVars(self.mvec)
-            self.assembler.assembleMatType(TACS.MASS_MATRIX, self.m0mat)
-            self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.k0mat)
-            self.m0mat.scale(self.non_design_mass)
-            self.assembler.applyMatBCs(self.m0mat)
-            self.assembler.applyMatBCs(self.k0mat)
+                # Assemble non-design mass and stiffness matrices
+                self.assembler.setDesignVars(self.mvec)
+                self.assembler.assembleMatType(TACS.MASS_MATRIX, self.m0mat)
+                self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.k0mat)
+                self.m0mat.scale(self.non_design_mass)
+                self.assembler.applyMatBCs(self.m0mat)
+                self.assembler.applyMatBCs(self.k0mat)
 
-            # Save the non-design mass to f5
-            flag_m0 = (TACS.OUTPUT_CONNECTIVITY |
-                       TACS.OUTPUT_NODES |
-                       TACS.OUTPUT_DISPLACEMENTS |
-                       TACS.OUTPUT_EXTRAS)
-            f5_m0 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag_m0)
-            f5_m0.writeToFile(os.path.join(self.prefix, "non_design_mass.f5"))
+                # Save the non-design mass to f5
+                flag_m0 = (TACS.OUTPUT_CONNECTIVITY |
+                        TACS.OUTPUT_NODES |
+                        TACS.OUTPUT_DISPLACEMENTS |
+                        TACS.OUTPUT_EXTRAS)
+                f5_m0 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag_m0)
+                f5_m0.writeToFile(os.path.join(self.prefix, "non_design_mass.f5"))
 
-            # Set design variable back
-            self.assembler.setDesignVars(dv)
+                # Set design variable back
+                self.assembler.setDesignVars(dv)
 
         # Assemble the mass matrix
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
-        self.mmat.axpy(1.0, self.m0mat)
+        # self.mmat.axpy(1.0, self.m0mat)
         self.assembler.applyMatBCs(self.mmat)
 
         # Reference the matrix associated with the multigrid preconditioner
@@ -269,7 +271,7 @@ class FrequencyConstr:
         # mgmat = K - 0.95*lambda0*M
         # here we assemble the K part first
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.Amat)
-        self.Amat.axpy(1.0, self.k0mat)
+        # self.Amat.axpy(1.0, self.k0mat)
         self.assembler.applyMatBCs(self.Amat)
         mgmat = self.mg.getMat()
         mgmat.copyValues(self.Amat)
@@ -730,3 +732,323 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
     problem.setOutputCallback(cb.write_output)
 
     return problem, obj_callback, constr_callback
+
+class ReducedProblem(ParOpt.Problem):
+    """
+    A reduced problem by fixing some design variables in the original problem
+    """
+
+    def __init__(self, original_prob, fixed_dv_idx : list, fixed_dv_val=1.0):
+        self.prob = original_prob
+        self.assembler = self.prob.getAssembler()
+        self.comm = self.assembler.getMPIComm()
+        self.ncon = 1  # Hard-coded for now
+
+        # Allocate full-size vectors for the original problem
+        self._x = self.prob.createDesignVec()
+        self._g = self.prob.createDesignVec()
+        self._A = []
+        for i in range(self.ncon):
+            self._A.append(self.prob.createDesignVec())
+
+        # Get indices of fixed design variables, these indices
+        # are with respect to the original full-sized problem
+        self.fixed_dv_idx = fixed_dv_idx
+        self.fixed_dv_val = fixed_dv_val
+
+        # Compute the indices of fixed design variables, these indices
+        # are with respect to the original full-sized problem
+        self.free_dv_idx = [i for i in range(len(self._x)) if i not in self.fixed_dv_idx]
+        self.nvars = len(self.free_dv_idx)
+
+        # # Get vars and bounds from the original problem
+        # self._x0 = self.prob.createDesignVec()
+        # self._lb = self.prob.createDesignVec()
+        # self._ub = self.prob.createDesignVec()
+        # self.prob.getVarsAndBounds(self._x0, self._lb, self._ub)
+
+        super().__init__(self.comm, self.nvars, self.ncon)
+        return
+
+    def getNumCons(self):
+        return self.ncon
+
+    def getVarsAndBounds(self, x, lb, ub):
+
+        # # Set bounds
+        # x[:] = self._x0[self.free_dv_idx]
+        # lb[:] = self._lb[self.free_dv_idx]
+        # ub[:] = self._ub[self.free_dv_idx]
+        x[:] = 0.95
+        lb[:] = 1e-3
+        ub[:] = 1.0
+        return
+
+    def evalObjCon(self, x):
+        # Fix dv values for full-sized problem
+        if self.fixed_dv_idx:
+            self._x[self.fixed_dv_idx] = self.fixed_dv_val
+
+        # Pass over free dv values from reduced problem to full-sized problem
+        self._x[self.free_dv_idx] = x[:]
+
+        # Run analysis in full-sized problem
+        fail, fobj, con = self.prob.evalObjCon(self.ncon, self._x)
+
+        return fail, fobj, con
+
+    def evalObjConGradient(self, x, g, A):
+        # Fix dv values and pass over free dv values - already done in evalObjCon()
+        # self._x[self.fixed_dv_idx] = self.fixed_dv_val
+        # self._x[self.free_dv_idx] = x[:]
+
+        # Run analysis in full-sized problem to get gradient
+        fail = self.prob.evalObjConGradient(self._x, self._g, self._A)
+
+        # Get reduced gradient and constraint jacobian
+        g[:] = self._g[self.free_dv_idx]
+        for i in range(self.ncon):
+            A[i][:] = self._A[i][self.free_dv_idx]
+
+        return fail
+
+    def reduDVtoDV(self, reduDV, DV):
+        '''
+        Convert the reduced design vector to full-sized design vector
+        '''
+        if self.fixed_dv_idx:
+            DV[self.fixed_dv_idx] = self.fixed_dv_val
+        DV[self.free_dv_idx] = reduDV[:]
+
+        return
+
+    def DVtoreduDV(self, DV, reduDV):
+        '''
+        Convert the full-sized design vector to reduced design vector
+        '''
+        reduDV[:] = DV[self.free_dv_idx]
+
+        return
+
+
+    # def computeQuasiNewtonUpdateCorrection(self, x, z, zw, s, y):
+    #     return
+
+def getFixedDVIndices(forest, domain, len0, AR, ratio):
+    """
+    Get indices for fixed design variables
+    """
+
+    fixed_dv_idx = []
+
+    # Compute geometric parameters
+    lx = len0*AR
+    ly = len0
+    lz = len0
+
+    # Get nodal locations
+    Xpts = forest.getPoints()
+
+    # Note: the local nodes are organized as follows:
+    # |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
+
+    # Get number of local nodes in the current processor
+    n_local_nodes = Xpts.shape[0]
+
+    # Get numbder of dependent nodes
+    _ptr, _conn, _weights = forest.getDepNodeConn()
+
+    # Get number of ext_pre nodes
+    n_ext_pre = forest.getExtPreOffset()
+
+    # Get numbder of own nodes:
+    offset = n_ext_pre
+
+    # # Loop over all owned nodes and set non-design mass values
+    tol = 1e-6 # Make sure our ranges are inclusive
+    depth = 0.1  # depth for non-design mass
+    if domain == 'cantilever':
+        xmin = (1-depth)*lx - tol
+        xmax = lx + tol
+        ymin = 0.25*ly - tol
+        ymax = 0.75*ly + tol
+        zmin = 0.0*lz - tol
+        zmax = 0.2*lz + tol
+
+    elif domain == 'michell':
+        xmin = (1-depth)*lx - tol
+        xmax = lx + tol
+        ymin = 0.25*ly - tol
+        ymax = 0.75*ly + tol
+        zmin = 0.4*lz - tol
+        zmax = 0.6*lz + tol
+
+    elif domain == 'mbb':
+        xmin = 0.0*lx - tol
+        xmax = 0.2*lx + tol
+        ymin = 0.25*ly - tol
+        ymax = 0.75*ly + tol
+        zmin = (1-depth)*lz - tol
+        zmax = lz + tol
+
+    elif domain == 'lbracket':
+        xmin = (1-depth)*lx - tol
+        xmax = lx + tol
+        ymin = 0.25*ly - tol
+        ymax = 0.75*ly + tol
+        zmin = 0.5*ratio*lz - tol
+        zmax = 1.0*ratio*lz + tol
+
+    else:
+        raise ValueError("[Error]Unsupported domain type for non-design mass!")
+
+    for i in range(offset, n_local_nodes):
+        x, y, z = Xpts[i]
+        if xmin < x < xmax:
+            if ymin < y < ymax:
+                if zmin < z < zmax:
+                    fixed_dv_idx.append(i-offset)
+
+    return fixed_dv_idx
+
+class ReduOmAnalysis(om.ExplicitComponent):
+    '''
+    This class wraps the analyses with openmdao interface such that
+    the optimization can be run with different optimizers such as
+    SNOPT and IPOPT.
+    Note that the design/gradient vectors manipulated in this class
+    are all global vectors. Local components can be queried by:
+
+    local_vec = global_vec[start:end]
+
+    where:
+    start = self.offsets[rank]
+    end = start + self.sizes[rank]
+    '''
+
+    def __init__(self, comm, problem, x0):
+        '''
+        Args:
+            comm (MPI communicator)
+            problem (ParOpt.Problem)
+            x0 (indexible array object)
+        '''
+
+        super().__init__()
+
+        # Copy over parameters
+        self.comm = comm
+        self.problem = problem
+
+        # Compute sizes and offsets
+        local_size = len(x0)
+        sizes = [ 0 ]*comm.size
+        offsets = [ 0 ]*comm.size
+        sizes = comm.allgather(local_size)
+        if comm.size > 1:
+            for i in range(1,comm.size):
+                offsets[i] = offsets[i-1] + sizes[i-1]
+        self.sizes = sizes
+        self.offsets = offsets
+
+        # Get number of constraints
+        self.ncon = self.problem.getNumCons()
+
+        # Compute some indices and dimensions
+        self.local_size = self.sizes[self.comm.rank]
+        self.global_size = np.sum(self.sizes)
+        self.start = self.offsets[self.comm.rank]
+        self.end = self.start + self.local_size
+
+        # Allocate paropt vectors
+        self.x = self.problem.createDesignVec()
+        self.g = self.problem.createDesignVec()
+        self.A = []
+        for i in range(self.ncon):
+            self.A.append(self.problem.createDesignVec())
+
+        # # Initialize f5 converter
+        # self.assembler = self.problem.getAssembler()
+        # flag = (TACS.OUTPUT_CONNECTIVITY |
+        #         TACS.OUTPUT_NODES |
+        #         TACS.OUTPUT_EXTRAS)
+        # self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
+
+        return
+
+    def setup(self):
+        self.add_input('x', shape=(self.global_size,))
+        self.add_output('obj', shape=1)
+        self.add_output('con', shape=1)
+
+        self.declare_partials(of='obj', wrt='x')
+        self.declare_partials(of='con', wrt='x')
+
+        return
+
+    def compute(self, inputs, outputs):
+        # Broadcase x from root to all processor
+        # In this way we only use optimization result from
+        # root and implicitly discard results from any other
+        # optimizer to prevent potential inconsistency
+        if self.comm.rank == 0:
+            x = inputs['x']
+        else:
+            x = None
+        x =self.comm.bcast(x, root=0)
+
+        # Each processor only use its owned part to evaluate func and grad
+        self.x[:] = x[self.start:self.end]
+        fail, fobj, cons = self.problem.evalObjCon(self.x)
+
+        if fail:
+            raise RuntimeError("Failed to evaluate objective and constraints!")
+        else:
+            outputs['obj'] = fobj
+            outputs['con'] = cons[0]
+
+        # Barrier here because we don't do block communication
+        self.comm.Barrier()
+
+        return
+
+    def compute_partials(self, inputs, partials):
+        # Broadcase x from root to all processor
+        # In this way we only use optimization result from
+        # root and implicitly discard results from any other
+        # optimizer to prevent potential inconsistency
+        if self.comm.rank == 0:
+            x = inputs['x']
+        else:
+            x = None
+        x =self.comm.bcast(x, root=0)
+
+        # Each processor only use its owned part to evaluate func and grad
+        self.x[:] = x[self.start:self.end]
+        fail = self.problem.evalObjConGradient(self.x, self.g, self.A)
+
+        if fail:
+            raise RuntimeError("Failed to evaluate objective and constraints!")
+        else:
+            global_g = self.comm.allgather(np.array(self.g))
+            global_g = np.concatenate(global_g)
+            global_A = self.comm.allgather(np.array(self.A))
+            global_A = np.concatenate(global_A)
+
+            partials['obj', 'x'] = global_g
+            partials['con', 'x'] = global_A
+        return
+
+    def globalVecToLocalvec(self, global_vec, local_vec):
+        '''
+        Assign corresponding part of the global vector to local vector
+        '''
+        local_vec[:] = global_vec[self.start: self.end]
+        return
+
+    # def write_output(self, prefix, refine_step, info=None):
+    #     if info is None:
+    #         self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}.f5'.format(refine_step)))
+    #     elif isinstance(info, str):
+    #         self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}_{:s}.f5'.format(refine_step, info)))
+    #     return
