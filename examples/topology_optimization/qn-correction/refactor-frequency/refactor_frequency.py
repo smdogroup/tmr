@@ -5,8 +5,7 @@ This script performs mass minimization with natural frequency constraint
 # Import analysis-related libraries
 from tmr import TMR, TopOptUtils
 from paropt import ParOpt
-from tacs import TACS, elements, constitutive, functions
-from egads4py import egads
+from tacs import TACS, constitutive
 
 # Import general-purpose libraries
 import openmdao.api as om
@@ -17,15 +16,11 @@ import os
 import sys
 import pickle
 
-# Import optimization libraries
-from paropt.paropt_driver import ParOptDriver
-
 # Import utility classes and functions
-from utils_freq import create_problem
+from refactor_utils_freq import create_problem, ReducedProblem, getFixedDVIndices, ReduOmAnalysis
 
 sys.path.append('../eigenvalue')
-from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
-from utils import create_forest, OmAnalysis, getNSkipUpdate
+from utils import create_forest, getNSkipUpdate
 
 if __name__ == '__main__':
 
@@ -64,7 +59,8 @@ if __name__ == '__main__':
     p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
-    p.add_argument('--non-design-mass', type=float, default=10.0)
+    p.add_argument('--fixed-mass', type=float, default=1.0,
+        help='value for fixed nodal design variables, must be within [0, 1]')
     p.add_argument('--eig-scale', type=float, default=1.0)
     p.add_argument('--output-level', type=int, default=0)
     p.add_argument('--simple-filter', action='store_false')
@@ -108,10 +104,10 @@ if __name__ == '__main__':
         with open(os.path.join(prefix,'exe.sh'), 'w') as f:
             f.write(cmd + '\n')
 
-    # Barrier here
+    # Allow root processor some time to save execution command
     comm.Barrier()
 
-    # Geometry parameters
+    # Compute derived geometry parameters
     lx = args.len0*args.AR
     ly = args.len0
     lz = args.len0
@@ -188,16 +184,15 @@ if __name__ == '__main__':
     }
 
     # Set the original filter to NULL
-    orig_filter = None
-    xopt = None
+    old_filter = None
 
-    # Do not use density-based refinement. Use an approximate distance based refinement.
-    density_based_refine = False
+    # Number of mesh refinements we have
+    n_refine_steps = args.n_mesh_refine
 
-    count = 0
-    max_iterations = args.n_mesh_refine
-    for step in range(max_iterations):
-        # Create the problem
+    # This is the mesh refinement loop: each step corresponds to a refined mesh
+    # except for the first step where the original (coarse) mesh is used
+    for step in range(n_refine_steps):
+        # Compute the offset
         iter_offset = step*args.max_iter
 
         # Create the optimization problem
@@ -209,8 +204,6 @@ if __name__ == '__main__':
                                                  r0_frac=args.r0_frac,
                                                  len0=args.len0, AR=args.AR, ratio=args.ratio,
                                                  iter_offset=iter_offset,
-                                                 qn_correction=args.qn_correction,
-                                                 non_design_mass=args.non_design_mass,
                                                  eig_scale=args.eig_scale,
                                                  eq_constr=args.eq_constr,
                                                  num_eigenvalues=args.num_eigenvalues,
@@ -222,168 +215,170 @@ if __name__ == '__main__':
                                                  lanczos_shift=args.lanczos_shift,
                                                  jd_use_Amat_shift=jd_use_Amat_shift)
 
+        # Function handle for qn correction, if specified
+        if args.qn_correction:
+            qn_corr_func = constr_callback.qn_correction
+        else:
+            qn_corr_func = None
+
         # Set the prefix
         problem.setPrefix(prefix)
 
-        # Initialize the problem and set the prefix
+        # Initialize the problem, set conuter and the prefix
         problem.initialize()
-        problem.setIterationCounter(count)
-
-        if args.gradient_check:
-            for i in range(3):
-                # xt = problem.createDesignVec()
-                # xt_vals = TMR.convertPVecToVec(xt).getArray()
-                # # xt_vals[:] = np.random.rand(len(xt_vals))
-                # xt_vals[:] = 0.95
-                # problem.setInitDesignVars(xt)
-                problem.checkGradients(1e-6)
-            exit(0)
+        problem.setIterationCounter(iter_offset)
 
         # Extract the filter to interpolate design variables
-        filtr = problem.getFilter()
+        new_filter = problem.getFilter()
 
-        if args.optimizer == 'paropt' or args.optimizer == 'mma':
-            if orig_filter is not None:
-                # Create one of the new design vectors
-                x = problem.createDesignVec()
-                TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
-                problem.setInitDesignVars(x)
-        else:
-            if orig_filter is not None:
-                x = problem.createDesignVec()
-                TopOptUtils.interpolateDesignVec(orig_filter, xopt, filtr, x)
-                x_init = TMR.convertPVecToVec(x).getArray()
-            else:
-                x = problem.createDesignVec()
-                x_init = TMR.convertPVecToVec(x).getArray()
-                x_init[:] = 0.95
+        # Create a reduced problem by fixing design variables where a constant mass
+        # need to be applied to
+        fixed_dv_idx = getFixedDVIndices(forest, args.domain, args.len0, args.AR, args.ratio)
+        redu_prob = ReducedProblem(problem, fixed_dv_idx, fixed_dv_val=args.fixed_mass,
+            qn_correction_func=qn_corr_func)
 
-        orig_filter = filtr
+        # Check gradient
+        if args.gradient_check:
+            redu_prob.checkGradients(1e-6)
+            exit(0)
 
-        if max_iterations > 1:
-            if step == max_iterations-1:
+        # Create a reduced x0
+        redu_x0 = redu_prob.createDesignVec()
+
+        # Helper variable: a full-sized design vector
+        _x = problem.createDesignVec()
+        _xopt = problem.createDesignVec()
+
+        if step != 0:  # This is a refined step - interpolation needed
+            # Populate _xopt
+            redu_prob.reduDVtoDV(redu_xopt, _xopt)
+
+            # Populate _x
+            TopOptUtils.interpolateDesignVec(old_filter, _xopt, new_filter, _x)
+
+            # copy values from _x to redu_x0
+            redu_prob.DVtoreduDV(_x, redu_x0)
+
+        else:  # This is the first step, we just set x0 to 0.95
+            redu_x0[:] = 0.95
+
+        # Update filter
+        old_filter = new_filter
+
+        # Adjust maxiter for optimizer if this is the last refined step
+        if n_refine_steps > 1:
+            if step == n_refine_steps - 1:
                 optimization_options['tr_max_iterations'] = 15
                 mma_options['mma_max_iterations'] = 15
-        count += args.max_iter
 
+        # Set output path
         optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
         optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
         mma_options['mma_output_file'] = os.path.join(prefix, 'mma_output_file%d.dat'%(step))
 
+        # Allocate space to store xopt
+        redu_xopt = redu_prob.createDesignVec()
+
         # Optimize with openmdao/pyoptsparse wrapper if specified
         if args.optimizer == 'snopt' or args.optimizer == 'ipopt':
-            # Broadcast local size to all processor
-            local_size = len(x_init)
-            sizes = [ 0 ]*comm.size
-            offsets = [ 0 ]*comm.size
-            sizes = comm.allgather(local_size)
-            if comm.size > 1:
-                for i in range(1,comm.size):
-                    offsets[i] = offsets[i-1] + sizes[i-1]
-            start = offsets[comm.rank]
-            end = start + local_size
-            src_indices = np.arange(start, end, dtype=int)
 
             # Create distributed openMDAO component
-            prob = om.Problem()
-            analysis = OmAnalysis(comm, problem, obj_callback, sizes, offsets)
-            indeps = prob.model.add_subsystem('indeps', om.IndepVarComp())
+            omprob = om.Problem()
+            analysis = ReduOmAnalysis(comm, redu_prob, redu_x0)
+            indeps = omprob.model.add_subsystem('indeps', om.IndepVarComp())
 
             # Create global design vector
-            x_init_global = comm.allgather(x_init)
-            x_init_global = np.concatenate(x_init_global)
-            indeps.add_output('x', x_init_global)
-            prob.model.add_subsystem('topo', analysis)
-            prob.model.connect('indeps.x', 'topo.x')
-            prob.model.add_design_var('indeps.x', lower=0.0, upper=1.0)
-            prob.model.add_objective('topo.obj')
+            redu_x0_g = comm.allgather(np.array(redu_x0))
+            redu_x0_g = np.concatenate(redu_x0_g)
+            indeps.add_output('x', redu_x0_g)
+            omprob.model.add_subsystem('topo', analysis)
+            omprob.model.connect('indeps.x', 'topo.x')
+            omprob.model.add_design_var('indeps.x', lower=0.0, upper=1.0)
+            omprob.model.add_objective('topo.obj')
             if args.eq_constr:
-                prob.model.add_constraint('topo.con', lower=0.0, upper=0.0)
+                omprob.model.add_constraint('topo.con', lower=0.0, upper=0.0)
             else:
-                prob.model.add_constraint('topo.con', lower=0.0)
+                omprob.model.add_constraint('topo.con', lower=0.0)
 
             # Set up optimizer and options
             if args.optimizer == 'snopt':
-                prob.driver = om.pyOptSparseDriver()
-                prob.driver.options['optimizer'] = 'SNOPT'
-                prob.driver.opt_settings['Iterations limit'] = 9999999999999
-                prob.driver.opt_settings['Major feasibility tolerance'] = 1e-10
-                prob.driver.opt_settings['Major optimality tolerance'] = 1e-10
-                prob.driver.opt_settings['Summary file'] = os.path.join(prefix, 'snopt_output_file%d.dat'%(step))
-                prob.driver.opt_settings['Print file'] = os.path.join(prefix, 'print_output_file%d.dat'%(step))
-                prob.driver.opt_settings['Major print level'] = 1
-                prob.driver.opt_settings['Minor print level'] = 0
+                omprob.driver = om.pyOptSparseDriver()
+                omprob.driver.options['optimizer'] = 'SNOPT'
+                omprob.driver.opt_settings['Iterations limit'] = 9999999999999
+                omprob.driver.opt_settings['Major feasibility tolerance'] = 1e-10
+                omprob.driver.opt_settings['Major optimality tolerance'] = 1e-10
+                omprob.driver.opt_settings['Summary file'] = os.path.join(prefix, 'snopt_output_file%d.dat'%(step))
+                omprob.driver.opt_settings['Print file'] = os.path.join(prefix, 'print_output_file%d.dat'%(step))
+                omprob.driver.opt_settings['Major print level'] = 1
+                omprob.driver.opt_settings['Minor print level'] = 0
 
-                if max_iterations > 1 and step == max_iterations - 1:
-                    prob.driver.opt_settings['Major iterations limit'] = 15
+                if n_refine_steps > 1 and step == n_refine_steps - 1:
+                    omprob.driver.opt_settings['Major iterations limit'] = 15
                 else:
-                    prob.driver.opt_settings['Major iterations limit'] = args.max_iter
+                    omprob.driver.opt_settings['Major iterations limit'] = args.max_iter
 
             elif args.optimizer == 'ipopt':
-                prob.driver = om.pyOptSparseDriver()
-                prob.driver.options['optimizer'] = 'IPOPT'
-                prob.driver.opt_settings['tol'] = 1e-10
-                prob.driver.opt_settings['constr_viol_tol'] = 1e-10
-                prob.driver.opt_settings['dual_inf_tol'] = 1e-10
-                prob.driver.opt_settings['output_file'] = os.path.join(prefix, 'ipopt_output_file%d.dat'%(step))
+                omprob.driver = om.pyOptSparseDriver()
+                omprob.driver.options['optimizer'] = 'IPOPT'
+                omprob.driver.opt_settings['tol'] = 1e-10
+                omprob.driver.opt_settings['constr_viol_tol'] = 1e-10
+                omprob.driver.opt_settings['dual_inf_tol'] = 1e-10
+                omprob.driver.opt_settings['output_file'] = os.path.join(prefix, 'ipopt_output_file%d.dat'%(step))
 
-                if max_iterations > 1 and step == max_iterations - 1:
-                    prob.driver.opt_settings['max_iter'] = 15
+                if n_refine_steps > 1 and step == n_refine_steps - 1:
+                    omprob.driver.opt_settings['max_iter'] = 15
                 else:
-                    prob.driver.opt_settings['max_iter'] = args.max_iter
+                    omprob.driver.opt_settings['max_iter'] = args.max_iter
 
-            prob.setup()
+            omprob.setup()
 
             # Optimize and write result to f5 file
-            prob.run_model()
-            prob.run_driver()
-            analysis.write_output(prefix, step)
+            omprob.run_model()
+            omprob.run_driver()
 
             # Get optimal result from root processor and broadcast
             if comm.rank == 0:
-                xopt_global = prob.get_val('indeps.x')
+                redu_xopt_g = omprob.get_val('indeps.x')  # Global vector
             else:
-                xopt_global = None
-            xopt_global = comm.bcast(xopt_global, root=0)
+                redu_xopt_g = None
+            redu_xopt_g = comm.bcast(redu_xopt_g, root=0)
 
             # Create a distributed vector and store the optimal solution
             # to hot-start the optimization on finer mesh
-            xopt = problem.createDesignVec()
-            xopt_vals = TMR.convertPVecToVec(xopt).getArray()
-            xopt_vals[:] = xopt_global[start:end]
+            analysis.globalVecToLocalvec(redu_xopt_g, redu_xopt)
 
             # Compute data of interest
-            discreteness = np.dot(xopt_global, 1.0-xopt_global) / len(xopt_global)
-            obj = prob.get_val('topo.obj')[0]
-            con = prob.get_val('topo.con')[0]
+            discreteness = np.dot(redu_xopt_g, 1.0-redu_xopt_g) / len(redu_xopt_g)
+            obj = omprob.get_val('topo.obj')[0]
+            con = omprob.get_val('topo.con')[0]
 
         # Otherwise, use ParOpt.Optimizer to optimize
         else:
             if args.optimizer == 'mma':
-                opt = ParOpt.Optimizer(problem, mma_options)
+                # opt = ParOpt.Optimizer(problem, mma_options)
+                opt = ParOpt.Optimizer(redu_prob, mma_options)
             else:
-                opt = ParOpt.Optimizer(problem, optimization_options)
+                # opt = ParOpt.Optimizer(problem, optimization_options)
+                opt = ParOpt.Optimizer(redu_prob, optimization_options)
             opt.optimize()
-            xopt, z, zw, zl, zu = opt.getOptimizedPoint()
-
-            # If we use MMA, manually create the f5 file
-            if args.optimizer == 'mma':
-                flag = (TACS.OUTPUT_CONNECTIVITY |
-                        TACS.OUTPUT_NODES |
-                        TACS.OUTPUT_DISPLACEMENTS |
-                        TACS.OUTPUT_EXTRAS)
-                f5 = TACS.ToFH5(problem.getAssembler(), TACS.SOLID_ELEMENT, flag)
-                f5.writeToFile(os.path.join(args.prefix, 'output_refine{:d}.f5'.format(step)))
+            redu_xopt, z, zw, zl, zu = opt.getOptimizedPoint()
 
             # Get optimal objective and constraint
-            fail, obj, cons = problem.evalObjCon(1, xopt)
+            fail, obj, cons = redu_prob.evalObjCon(redu_xopt)
             con = cons[0]
 
             # Compute discreteness
-            xopt_vals = TMR.convertPVecToVec(xopt).getArray()
-            xopt_global = comm.allgather(xopt_vals)
-            xopt_global = np.concatenate(xopt_global)
-            discreteness = np.dot(xopt_global, 1.0-xopt_global) / len(xopt_global)
+            redu_xopt_g = comm.allgather(np.array(redu_xopt))
+            redu_xopt_g = np.concatenate(redu_xopt_g)
+            discreteness = np.dot(redu_xopt_g, 1.0-redu_xopt_g) / len(redu_xopt_g)
+
+        # Manually create the f5 file
+        flag = (TACS.OUTPUT_CONNECTIVITY |
+                TACS.OUTPUT_NODES |
+                TACS.OUTPUT_DISPLACEMENTS |
+                TACS.OUTPUT_EXTRAS)
+        f5 = TACS.ToFH5(problem.getAssembler(), TACS.SOLID_ELEMENT, flag)
+        f5.writeToFile(os.path.join(args.prefix, 'output_refine{:d}.f5'.format(step)))
 
         # Compute infeasibility
         if args.eq_constr:
@@ -419,7 +414,6 @@ if __name__ == '__main__':
             pkl['n-mesh-refine'] = args.n_mesh_refine
             pkl['max-iter'] = args.max_iter
             pkl['qn-correction'] = args.qn_correction
-            pkl['non-design-mass'] = args.non_design_mass
             pkl['eig-scale'] = args.eig_scale
             pkl['eq-constr'] = args.eq_constr
             pkl['qn-subspace'] = args.qn_subspace
@@ -439,7 +433,8 @@ if __name__ == '__main__':
         forest = forest.duplicate()
 
         # If not the final step, refine and repartition the mesh
-        if step != max_iterations-1:
+        density_based_refine = False  # Hard-coded - don't use density based refine
+        if step != n_refine_steps-1:
             if density_based_refine:
                 # Refine based solely on the value of the density variable
                 TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
@@ -451,7 +446,7 @@ if __name__ == '__main__':
                 vol = lx*ly*lz
                 domain_length = vol**(1.0/3.0)
                 refine_distance = 0.025*domain_length
-                TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
+                TopOptUtils.approxDistanceRefine(forest, new_filter, assembler, refine_distance,
                                                 domain_length=domain_length,
                                                 filename=dist_file)
 
