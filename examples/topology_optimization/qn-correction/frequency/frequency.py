@@ -228,11 +228,6 @@ if __name__ == '__main__':
         problem.initialize()
         problem.setIterationCounter(iter_offset)
 
-        if args.gradient_check:
-            for i in range(3):
-                problem.checkGradients(1e-6)
-            exit(0)
-
         # Extract the filter to interpolate design variables
         new_filter = problem.getFilter()
 
@@ -241,6 +236,11 @@ if __name__ == '__main__':
         fixed_dv_idx = getFixedDVIndices(forest, args.domain, args.len0, args.AR, args.ratio)
         redu_prob = ReducedProblem(problem, fixed_dv_idx, fixed_dv_val=args.fixed_mass,
             qn_correction_func=qn_corr_func)
+
+        # Check gradient
+        if args.gradient_check:
+            redu_prob.checkGradients(1e-6)
+            exit(0)
 
         # Create a reduced x0
         redu_x0 = redu_prob.createDesignVec()

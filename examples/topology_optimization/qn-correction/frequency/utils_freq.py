@@ -726,9 +726,8 @@ class ReducedProblem(ParOpt.Problem):
         return fail, fobj, con
 
     def evalObjConGradient(self, x, g, A):
-        # Fix dv values and pass over free dv values - already done in evalObjCon()
-        # self._x[self.fixed_dv_idx] = self.fixed_dv_val
-        # self._x[self.free_dv_idx] = x[:]
+        # Populate full-sized design variable
+        self.reduDVtoDV(x, self._x)
 
         # Run analysis in full-sized problem to get gradient
         fail = self.prob.evalObjConGradient(self._x, self._g, self._A)
