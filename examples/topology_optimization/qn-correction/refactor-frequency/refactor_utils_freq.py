@@ -981,3 +981,84 @@ class ReduOmAnalysis(om.ExplicitComponent):
         '''
         local_vec[:] = global_vec[self.start: self.end]
         return
+
+class GeneralEigSolver:
+    """
+    This class checks the actual smallest generalized eigenvalue with the
+    Jacobi-Davidson method
+    """
+    def __init__(self, problem, N=10, max_jd_size=100, max_gmres_size=30):
+        """
+        Args:
+            problem (TMR.TopoProblem): An instance that contains all components we need.
+            N (int): number of eigenpairs sought
+        """
+
+        self.N = N
+
+        # Get references from problem instance
+        self.assembler = problem.getAssembler()
+        self.filter = problem.getTopoFilter()
+        self.mg = problem.getMg()
+
+        # Allocate space for K and M matrix
+        self.kmat = self.assembler.createMat()
+        self.mmat = self.assembler.createMat()
+
+        # Allocate space for the nodal density, eigenvalues and eigenvectors
+        self.rho = self.assembler.createDesignVec()
+        self.evals = np.zeros(N)
+        self.evecs = [self.assembler.createVec() for _ in range(N)]
+
+        # Create operator for the generalized eigenvalue problem
+        self.oper = TACS.JDFrequencyOperator(self.assembler,
+                                             self.kmat, self.mmat,
+                                             self.mg.getMat(), self.mg)
+
+        # Set up the JD solver
+        self.jd = TACS.JacobiDavidson(self.oper, N, max_jd_size, max_gmres_size)
+        self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-12, atol=1e-15)
+        self.jd.setRecycle(self.N)
+
+        # Temp vectors to check residual
+        self.MatVec = self.assembler.createVec()
+        self.temp = self.assembler.createVec()
+        self.res = np.zeros(N)
+
+        return
+
+    def compute(self, x):
+        """
+        Take in x, update the design variable in the assembler, assemble
+        K, M and mg matrices, and solve the generalized eigenvalue problem.
+
+        Args:
+            x (PVec): the (unfiltered) design variable of the full (not reduced) problem
+        """
+
+        # Update the assembler with x
+        self.filter.applyFilter(TMR.convertPVecToVec(x), self.rho)
+        self.assembler.setDesignVars(self.rho)
+
+        # Update matrices and factor the multigrid preconditioner
+        self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.kmat)
+        self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
+        self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
+        self.mg.factor()
+
+        # Solve and check success
+        self.jd.solve(print_flag=True, print_level=0)
+        assert( self.jd.getNumConvergedEigenvalues() >= self.N)
+
+        # Extract eigenpairs
+        for i in range(self.N): self.evals[i], err = self.jd.extractEigenvector(i, self.evecs[i])
+
+        # Check residuals
+        for i in range(self.N):
+            self.kmat.mult(self.evecs[i], self.MatVec)  # Compute K*v
+            self.temp.copyValues(self.MatVec)
+            self.mmat.mult(self.evecs[i], self.MatVec)  # Compute M*v
+            self.temp.axpy(-self.evals[i], self.MatVec)
+            self.res[i] = self.temp.norm()
+
+        return self.evals, self.evecs, self.res

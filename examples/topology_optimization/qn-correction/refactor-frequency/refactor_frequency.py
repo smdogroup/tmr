@@ -17,7 +17,7 @@ import sys
 import pickle
 
 # Import utility classes and functions
-from refactor_utils_freq import create_problem, ReducedProblem, getFixedDVIndices, ReduOmAnalysis
+from refactor_utils_freq import create_problem, ReducedProblem, getFixedDVIndices, ReduOmAnalysis, GeneralEigSolver
 
 sys.path.append('../eigenvalue')
 from utils import create_forest, getNSkipUpdate
@@ -250,10 +250,7 @@ if __name__ == '__main__':
         _xopt = problem.createDesignVec()
 
         if step != 0:  # This is a refined step - interpolation needed
-            # Populate _xopt
-            redu_prob.reduDVtoDV(redu_xopt, _xopt)
-
-            # Populate _x
+            # Interpolate x from xopt from last refinement step
             TopOptUtils.interpolateDesignVec(old_filter, _xopt, new_filter, _x)
 
             # copy values from _x to redu_x0
@@ -386,6 +383,16 @@ if __name__ == '__main__':
         else:
             infeas = np.max([-con, 0])
 
+        # Populate _xopt
+        redu_prob.reduDVtoDV(redu_xopt, _xopt)
+
+        # Solve the generalized eigenvalue problem once to cross-check the feasibility
+        ges = GeneralEigSolver(problem, max_jd_size=args.max_jd_size, max_gmres_size=args.max_gmres_size)
+        evals, evecs, res = ges.compute(_xopt)
+        del ges
+        # print('%15s%15s'%('eigenvalue', 'residual'))
+        # for ii, e in enumerate(evals): print('[%2d]%15.5e%15.5e'%(ii, e, res[ii]))
+
         # Export data to python pickle file
         if comm.rank == 0:
 
@@ -420,6 +427,8 @@ if __name__ == '__main__':
             pkl['cmd'] = cmd
             pkl['problem'] = 'frequency'
             pkl['paropt-type'] = args.paropt_type
+            pkl['gep-evals'] = evals
+            pkl['gep-res'] = res
 
             if args.optimizer == 'paropt':
                 pkl['curvs'] = constr_callback.getQnUpdateCurvs()
