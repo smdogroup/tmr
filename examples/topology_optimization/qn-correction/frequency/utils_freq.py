@@ -784,6 +784,8 @@ def getFixedDVIndices(forest, domain, len0, AR, ratio):
     lx = len0*AR
     ly = len0
     lz = len0
+    if domain == 'lbracket':
+        ly = len0*ratio
 
     # Get nodal locations
     Xpts = forest.getPoints()
