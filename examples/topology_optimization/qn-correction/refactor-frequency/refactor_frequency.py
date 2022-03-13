@@ -17,7 +17,8 @@ import sys
 import pickle
 
 # Import utility classes and functions
-from refactor_utils_freq import create_problem, ReducedProblem, getFixedDVIndices, ReduOmAnalysis, GeneralEigSolver
+from refactor_utils_freq import create_problem, ReducedProblem, getFixedDVIndices
+from refactor_utils_freq import ReduOmAnalysis, GeneralEigSolver, find_indices, test_beam_frequency
 
 sys.path.append('../eigenvalue')
 from utils import create_forest, getNSkipUpdate
@@ -44,14 +45,10 @@ if __name__ == '__main__':
     p.add_argument('--lambda0', type=float, default=0.1)
     p.add_argument('--ksrho', type=float, default=1000)
 
-    p.add_argument('--eig-method', type=str, default='jd', choices=['jd', 'lanczos'])
     p.add_argument('--max-jd-size', type=int, default=200)
     p.add_argument('--max-gmres-size', type=int, default=30)
     p.add_argument('--num-eigenvalues', type=int, default=10)
-    p.add_argument('--max-lanczos', type=int, default=30)
     p.add_argument('--jd-recycle', type=str, default='on', choices=['on', 'off'])
-    p.add_argument('--lanczos-shift', type=float, default=-10.0)
-    p.add_argument('--jd-use-Amat-shift', type=str, default='on', choices=['on', 'off'])
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
@@ -66,14 +63,15 @@ if __name__ == '__main__':
     p.add_argument('--simple-filter', action='store_false')
     p.add_argument('--tr-eta', type=float, default=0.25)
     p.add_argument('--tr-min', type=float, default=1e-3)
-    p.add_argument('--eq-constr', action='store_true')
     p.add_argument('--qn-subspace', type=int, default=10)
     p.add_argument('--qn-type', type=str, default='scaled_bfgs', choices=['bfgs', 'scaled_bfgs'])
     p.add_argument('--paropt-type', type=str, default='penalty_method',
         choices=['penalty_method', 'filter_method'])
 
     # Test
-    p.add_argument('--gradient-check', action='store_true')
+    p.add_argument('--test-gradient-check', action='store_true')
+    p.add_argument('--test-beam-frequency', action='store_true')
+
 
     # Parse arguments
     args = p.parse_args()
@@ -85,11 +83,6 @@ if __name__ == '__main__':
         jd_use_recycle = True
     else:
         jd_use_recycle = False
-
-    if args.jd_use_Amat_shift == 'on':
-        jd_use_Amat_shift = True
-    else:
-        jd_use_Amat_shift = False
 
     # Set the communicator
     comm = MPI.COMM_WORLD
@@ -205,15 +198,10 @@ if __name__ == '__main__':
                                                  len0=args.len0, AR=args.AR, ratio=args.ratio,
                                                  iter_offset=iter_offset,
                                                  eig_scale=args.eig_scale,
-                                                 eq_constr=args.eq_constr,
                                                  num_eigenvalues=args.num_eigenvalues,
-                                                 eig_method=args.eig_method,
                                                  max_jd_size=args.max_jd_size,
                                                  jd_use_recycle=jd_use_recycle,
-                                                 max_gmres_size=args.max_gmres_size,
-                                                 max_lanczos=args.max_lanczos,
-                                                 lanczos_shift=args.lanczos_shift,
-                                                 jd_use_Amat_shift=jd_use_Amat_shift)
+                                                 max_gmres_size=args.max_gmres_size)
 
         # Function handle for qn correction, if specified
         if args.qn_correction:
@@ -237,8 +225,8 @@ if __name__ == '__main__':
         redu_prob = ReducedProblem(problem, fixed_dv_idx, fixed_dv_val=args.fixed_mass,
             qn_correction_func=qn_corr_func)
 
-        # Check gradient
-        if args.gradient_check:
+        # Check gradient and exit
+        if args.test_gradient_check:
             redu_prob.checkGradients(1e-6)
             exit(0)
 
@@ -248,6 +236,16 @@ if __name__ == '__main__':
         # Helper variable: a full-sized design vector
         _x = problem.createDesignVec()
         _xopt = problem.createDesignVec()
+
+        # Run the analysis for test beam and exit
+        if args.test_beam_frequency:
+            xmax = 0.5*args.len0*args.AR
+            indices = find_indices(forest, args.domain, args.len0, args.AR, args.ratio, xmax=xmax)
+            _x[:] = 0.05
+            _x[indices] = 0.95
+            _x[fixed_dv_idx] = 1.0
+            test_beam_frequency(problem, _x, args.prefix)
+            exit()
 
         if step != 0:  # This is a refined step - interpolation needed
             # Interpolate x from xopt from last refinement step
@@ -292,10 +290,7 @@ if __name__ == '__main__':
             omprob.model.connect('indeps.x', 'topo.x')
             omprob.model.add_design_var('indeps.x', lower=0.0, upper=1.0)
             omprob.model.add_objective('topo.obj')
-            if args.eq_constr:
-                omprob.model.add_constraint('topo.con', lower=0.0, upper=0.0)
-            else:
-                omprob.model.add_constraint('topo.con', lower=0.0)
+            omprob.model.add_constraint('topo.con', lower=0.0)
 
             # Set up optimizer and options
             if args.optimizer == 'snopt':
@@ -378,10 +373,7 @@ if __name__ == '__main__':
         f5.writeToFile(os.path.join(args.prefix, 'output_refine{:d}.f5'.format(step)))
 
         # Compute infeasibility
-        if args.eq_constr:
-            infeas = np.abs(con)
-        else:
-            infeas = np.max([-con, 0])
+        infeas = np.max([-con, 0])
 
         # Populate _xopt
         redu_prob.reduDVtoDV(redu_xopt, _xopt)
@@ -422,7 +414,6 @@ if __name__ == '__main__':
             pkl['max-iter'] = args.max_iter
             pkl['qn-correction'] = args.qn_correction
             pkl['eig-scale'] = args.eig_scale
-            pkl['eq-constr'] = args.eq_constr
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
             pkl['problem'] = 'frequency'
