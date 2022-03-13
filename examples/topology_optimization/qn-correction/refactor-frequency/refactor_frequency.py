@@ -44,11 +44,9 @@ if __name__ == '__main__':
     p.add_argument('--qval', type=float, default=5.0)
     p.add_argument('--lambda0', type=float, default=0.1)
     p.add_argument('--ksrho', type=float, default=1000)
-
     p.add_argument('--max-jd-size', type=int, default=200)
     p.add_argument('--max-gmres-size', type=int, default=30)
     p.add_argument('--num-eigenvalues', type=int, default=10)
-    p.add_argument('--jd-recycle', type=str, default='on', choices=['on', 'off'])
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
@@ -56,6 +54,8 @@ if __name__ == '__main__':
     p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
+    p.add_argument('--mscale', type=float, default=10.0)
+    p.add_argument('--kscale', type=float, default=1.0)
     p.add_argument('--fixed-mass', type=float, default=1.0,
         help='value for fixed nodal design variables, must be within [0, 1]')
     p.add_argument('--eig-scale', type=float, default=1.0)
@@ -68,21 +68,15 @@ if __name__ == '__main__':
     p.add_argument('--paropt-type', type=str, default='penalty_method',
         choices=['penalty_method', 'filter_method'])
 
-    # Test
+    # Tests
     p.add_argument('--test-gradient-check', action='store_true')
     p.add_argument('--test-beam-frequency', action='store_true')
-
 
     # Parse arguments
     args = p.parse_args()
 
     mg_levels = args.mg_levels
     prefix = args.prefix
-
-    if args.jd_recycle == 'on':
-        jd_use_recycle = True
-    else:
-        jd_use_recycle = False
 
     # Set the communicator
     comm = MPI.COMM_WORLD
@@ -200,8 +194,8 @@ if __name__ == '__main__':
                                                  eig_scale=args.eig_scale,
                                                  num_eigenvalues=args.num_eigenvalues,
                                                  max_jd_size=args.max_jd_size,
-                                                 jd_use_recycle=jd_use_recycle,
-                                                 max_gmres_size=args.max_gmres_size)
+                                                 max_gmres_size=args.max_gmres_size,
+                                                 mscale=args.mscale, kscale=args.kscale)
 
         # Function handle for qn correction, if specified
         if args.qn_correction:
@@ -239,12 +233,17 @@ if __name__ == '__main__':
 
         # Run the analysis for test beam and exit
         if args.test_beam_frequency:
+
+            # Set design variables
             xmax = 0.5*args.len0*args.AR
             indices = find_indices(forest, args.domain, args.len0, args.AR, args.ratio, xmax=xmax)
             _x[:] = 0.05
-            _x[indices] = 0.95
-            _x[fixed_dv_idx] = 1.0
-            test_beam_frequency(problem, _x, args.prefix)
+            if indices: _x[indices] = 0.95
+            if fixed_dv_idx: _x[fixed_dv_idx] = 0.0
+
+            # Run
+            test_beam_frequency(problem, _x, args.prefix, add_non_design_mass=True,
+                non_design_mass_indices=fixed_dv_idx, mscale=args.mscale, kscale=args.kscale)
             exit()
 
         if step != 0:  # This is a refined step - interpolation needed
@@ -416,6 +415,7 @@ if __name__ == '__main__':
             pkl['eig-scale'] = args.eig_scale
             pkl['qn-subspace'] = args.qn_subspace
             pkl['cmd'] = cmd
+            pkl['lambda0'] = args.lambda0
             pkl['problem'] = 'frequency'
             pkl['paropt-type'] = args.paropt_type
             pkl['gep-evals'] = evals

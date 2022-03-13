@@ -28,8 +28,8 @@ class FrequencyConstr:
 
     def __init__(self, prefix, domain, forest, len0, AR, ratio,
                  iter_offset, lambda0, eig_scale=1.0, num_eigenvalues=10,
-                 max_jd_size=100, max_gmres_size=30,
-                 ksrho=50, jd_use_recycle=True):
+                 max_jd_size=100, max_gmres_size=30, ksrho=50,
+                 mscale=10.0, kscale=1.0):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -45,6 +45,8 @@ class FrequencyConstr:
         self.prefix = prefix
         self.domain = domain
         self.iter_offset = iter_offset
+        self.len0 = len0
+        self.AR = AR
         self.lx = len0*AR
         self.ly = len0
         self.lz = len0
@@ -57,7 +59,8 @@ class FrequencyConstr:
         self.max_jd_size = max_jd_size
         self.max_gmres_size = max_gmres_size
         self.ksrho = ksrho
-        self.jd_use_recycle = jd_use_recycle
+        self.mscale = mscale
+        self.kscale = kscale
 
         self.old_min_eigval = 0.0
 
@@ -79,9 +82,10 @@ class FrequencyConstr:
 
         # TACS Matrices
         self.mmat = None
-        # self.m0mat = None
-        # self.k0mat = None
+        self.m0mat = None
+        self.k0mat = None
         self.Amat = None
+        self.mgmat = None
 
         # We keep track of failed qn correction
         self.curvs = []
@@ -99,6 +103,7 @@ class FrequencyConstr:
 
         if self.fltr is None:
             self.mg = mg
+            self.mgmat = mg.getMat()
             self.fltr = fltr
             self.assembler = self.fltr.getAssembler()
             self.svec = self.assembler.createDesignVec()
@@ -107,8 +112,6 @@ class FrequencyConstr:
 
             # Initialize space for matrices and vectors
             self.mmat = self.assembler.createMat()
-            # self.m0mat = self.assembler.createMat()  # For non design mass
-            # self.k0mat = self.assembler.createMat()  # For non design stiffness
             self.Amat = self.assembler.createMat()
             self.eig = np.zeros(self.num_eigenvalues)
             self.eigv = []
@@ -136,20 +139,23 @@ class FrequencyConstr:
             self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-6, rtol=1e-6, atol=1e-12)
             self.jd.setThetaCutoff(0.01)
 
+            # Compute non-design matrices
+            indices = getFixedDVIndices(self.forest, self.domain, self.len0, self.AR, self.ratio)
+            self.computeNonDesignMat(indices, mscale=self.mscale, kscale=self.kscale, save_f5=True)
+
         # Assemble the mass matrix
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
-        # self.mmat.axpy(1.0, self.m0mat)
-        self.assembler.applyMatBCs(self.mmat)
 
         # Reference the matrix associated with the multigrid preconditioner
         # We finally want:
-        # mgmat = K - 0.95*lambda0*M
-        # here we assemble the K part first
+        # A     = K - lambda0*M + I - old*I
+        # mgmat = K - lambda0*M + I - old*I  (positive definite)
+
+        # Assemble the stiffness matrix
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.Amat)
-        # self.Amat.axpy(1.0, self.k0mat)
-        self.assembler.applyMatBCs(self.Amat)
-        mgmat = self.mg.getMat()
-        mgmat.copyValues(self.Amat)
+
+        # Apply non-design mass to M and K
+        self.addNonDesignMat(self.mmat, self.Amat)
 
         # Assemble A matrix for the simple eigenvalue problem and apply bcs
         # A = K - lambda0*M
@@ -163,10 +169,8 @@ class FrequencyConstr:
         # Apply bcs to A
         self.assembler.applyMatBCs(self.Amat)
 
-        # Finish assembling the multigrid preconditioner
-        mgmat.axpy(-0.95*self.lambda0, self.mmat)
-        mgmat.addDiag(1.0 - self.old_min_eigval)
-        self.assembler.applyMatBCs(mgmat)
+        # Copy over from A to mgmat
+        self.mgmat.copyValues(self.Amat)
 
         # Factor the multigrid preconditioner
         self.mg.assembleGalerkinMat()
@@ -175,13 +179,7 @@ class FrequencyConstr:
         """
         Solve the eigenvalue problem
         """
-        if self.jd_use_recycle:
-            num_recycle = self.num_eigenvalues
-        else:
-            num_recycle = 0
-        self.jd.setRecycle(num_recycle)
-        if self.comm.rank == 0:
-            print("[JD Recycle] JD solver is recycling {:d} eigenvectors...".format(num_recycle))
+        self.jd.setRecycle(self.num_eigenvalues)
         self.jd.solve(print_flag=True, print_level=1)
 
         # Check if succeeded, otherwise try again
@@ -191,8 +189,7 @@ class FrequencyConstr:
                 print("[Warning] Jacobi-Davidson failed to converge"
                     " for the first run, starting rerun...")
 
-            if self.jd_use_recycle:
-                self.jd.setRecycle(nconvd)
+            self.jd.setRecycle(nconvd)
 
             # Update mgmat so that it's positive definite
             eig0, err = self.jd.extractEigenvalue(0)
@@ -200,8 +197,8 @@ class FrequencyConstr:
                 if self.comm.rank == 0:
                     print("[mgmat] Smallest eigenvalue is already positive, don't update mgmat!")
             else:
-                mgmat.addDiag(-eig0)
-                self.assembler.applyMatBCs(mgmat)
+                self.mgmat.addDiag(-eig0)
+                self.assembler.applyMatBCs(self.mgmat)
                 self.mg.assembleGalerkinMat()
                 self.mg.factor()
 
@@ -228,18 +225,20 @@ class FrequencyConstr:
 
                 raise ValueError(msg)
 
-            # Extract eigenvalues and eigenvectors
-            for i in range(self.num_eigenvalues):
-                self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
+        # Extract eigenvalues and eigenvectors
+        for i in range(self.num_eigenvalues):
+            self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
 
-            # Adjust eigenvalues and shift matrices back
-            for i in range(self.num_eigenvalues):
-                self.eig[i] += (self.old_min_eigval - 1.0)
-            self.Amat.addDiag(self.old_min_eigval - 1.0)
-            self.assembler.applyMatBCs(self.Amat)
+        # Adjust eigenvalues and shift matrices back:
+        # A <- A - I + old*I
+        # i.e. now A = K - lambda0*M
+        for i in range(self.num_eigenvalues):
+            self.eig[i] += (self.old_min_eigval - 1.0)
+        self.Amat.addDiag(self.old_min_eigval - 1.0)
+        self.assembler.applyMatBCs(self.Amat)
 
-            # Set the shift value for next optimization iteration
-            self.old_min_eigval = self.eig[0]  # smallest eigenvalue
+        # Set the shift value for next optimization iteration
+        self.old_min_eigval = self.eig[0]  # smallest eigenvalue
 
         # Debug: print out residuals
         debug_initialized = 0
@@ -297,7 +296,6 @@ class FrequencyConstr:
             print('{:30s}{:20.10e}'.format('[Constr] min eigenvalue:', eig_min))
 
         return [ks]
-
 
     def constraint_gradient(self, fltr, mg, vecs):
         """
@@ -486,6 +484,58 @@ class FrequencyConstr:
     def getQnUpdateCurvs(self):
         return self.curvs
 
+    def computeNonDesignMat(self, indices, mscale, kscale, save_f5=False):
+        """
+        In this frequency constrained problem, we apply the frequency load
+        by adding non-design block of material. This non-design block of
+        material is modeled by M0 and K0, where
+        M0 = M(dv[indices] = 1.0) * mscale
+        K0 = K(dv[indices] = 1.0) * kscale
+        """
+
+        # Populate the non-design mass vector
+        dv_one = self.assembler.createDesignVec()
+        if indices: dv_one.getArray()[indices] = 1.0
+
+        # Back up design variable
+        dv_backup = self.assembler.createDesignVec()
+        self.assembler.getDesignVars(dv_backup)
+
+        # Assemble non-design mass and stiffness matrix
+        self.m0mat = self.assembler.createMat()
+        self.k0mat = self.assembler.createMat()
+        self.assembler.setDesignVars(dv_one)
+        self.assembler.assembleMatType(TACS.MASS_MATRIX, self.m0mat)
+        self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.k0mat)
+        self.m0mat.scale(mscale)
+        self.k0mat.scale(kscale)
+
+        # Save geometry to f5
+        if save_f5:
+            flag_m0 = (TACS.OUTPUT_CONNECTIVITY |
+                       TACS.OUTPUT_NODES |
+                       TACS.OUTPUT_DISPLACEMENTS |
+                       TACS.OUTPUT_EXTRAS)
+            f5_m0 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag_m0)
+            f5_m0.writeToFile(os.path.join(self.prefix, "non_design_mass.f5"))
+
+        # Set design variable back
+        self.assembler.setDesignVars(dv_backup)
+
+        return
+
+    def addNonDesignMat(self, mmat, kmat):
+
+        # Update mmat and apply boundary conditions
+        mmat.axpy(1.0, self.m0mat)
+        self.assembler.applyMatBCs(mmat)
+
+        # Update kmat and apply boundary conditions
+        kmat.axpy(1.0, self.k0mat)
+        self.assembler.applyMatBCs(mmat)
+
+        return
+
 class MassObj:
     """
     Mass objective takes the following form:
@@ -535,8 +585,8 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                    vol_frac=0.25, r0_frac=0.05, len0=1.0, AR=1.0, ratio=0.4,
                    density=2600.0, iter_offset=0,
                    eig_scale=1.0,
-                   num_eigenvalues=10, max_jd_size=100, jd_use_recycle=True,
-                   max_gmres_size=30):
+                   num_eigenvalues=10, max_jd_size=100, max_gmres_size=30,
+                   mscale=10.0, kscale=1.0):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -596,7 +646,7 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
                                      num_eigenvalues=num_eigenvalues,
                                      max_jd_size=max_jd_size,
                                      max_gmres_size=max_gmres_size,
-                                     jd_use_recycle=jd_use_recycle)
+                                     mscale=mscale, kscale=kscale)
     problem.addConstraintCallback(1, 1, constr_callback.constraint,
                                   constr_callback.constraint_gradient)
 
@@ -970,13 +1020,18 @@ class GeneralEigSolver:
 
         return
 
-    def compute(self, x, print_level=0):
+    def compute(self, x, add_non_design_mass=False, non_design_mass_indices=None,
+                mscale=1.0, kscale=1.0):
         """
         Take in x, update the design variable in the assembler, assemble
         K, M and mg matrices, and solve the generalized eigenvalue problem.
 
         Args:
             x (PVec): the (unfiltered) design variable of the full (not reduced) problem
+            add_non_design_mass (Bool): if set to True,  modify the generalized eigenvalue
+                                        problem as follows:
+                                        M <- M + M0, M0 = M(dv[indices] = 1.0) * mscale
+                                        K <- K + K0, K0 = K(dv[indices] = 1.0) * kscale
         """
 
         # Update the assembler with x
@@ -986,11 +1041,45 @@ class GeneralEigSolver:
         # Update matrices and factor the multigrid preconditioner
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.kmat)
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
+
+        # Update M and K, if specified
+        if add_non_design_mass:
+
+            indices = non_design_mass_indices
+
+            # Populate the non-design mass vector
+            dv_one = self.assembler.createDesignVec()
+            if indices: dv_one.getArray()[indices] = 1.0
+
+            # Back up design variable
+            dv_backup = self.assembler.createDesignVec()
+            self.assembler.getDesignVars(dv_backup)
+
+            # Assemble non-design mass and stiffness matrix
+            m0mat = self.assembler.createMat()
+            k0mat = self.assembler.createMat()
+            self.assembler.setDesignVars(dv_one)
+            self.assembler.assembleMatType(TACS.MASS_MATRIX, m0mat)
+            self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, k0mat)
+            m0mat.scale(mscale)
+            k0mat.scale(kscale)
+
+            # Set design variable back
+            self.assembler.setDesignVars(dv_backup)
+
+            # Update kmat
+            self.kmat.axpy(1.0, k0mat)
+            self.assembler.applyMatBCs(self.kmat)
+
+            # Update mmat
+            self.mmat.axpy(1.0, m0mat)
+            self.assembler.applyMatBCs(self.mmat)
+
         self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
         self.mg.factor()
 
         # Solve and check success
-        self.jd.solve(print_flag=True, print_level=print_level)
+        self.jd.solve(print_flag=True, print_level=1)
         assert( self.jd.getNumConvergedEigenvalues() >= self.N)
 
         # Extract eigenpairs
@@ -1052,18 +1141,20 @@ def find_indices(forest, domain, len0, AR, ratio,
 
     return indices
 
-def test_beam_frequency(problem, x, prefix):
+def test_beam_frequency(problem, x, prefix, add_non_design_mass,
+                        non_design_mass_indices, mscale, kscale):
     """
     Set design variables as desired, compute the fundamental frequency,
     then generate f5 file
     """
     assembler = problem.getAssembler()
-    comm = assembler.getMPIComm()
 
     ges = GeneralEigSolver(problem)
-    evals, evecs, res = ges.compute(x, print_level=1)
+    evals, evecs, res = ges.compute(x, add_non_design_mass=add_non_design_mass,
+        non_design_mass_indices=non_design_mass_indices, mscale=mscale, kscale=kscale)
     assembler.setVariables(evecs[0])
 
+    # comm = assembler.getMPIComm()
     # if comm.rank == 0:
     #     print("%4s%20s%20s" % ('No.', 'eigenvalue', 'residual'))
     #     for i, (e, r) in enumerate(zip(evals, res)):
