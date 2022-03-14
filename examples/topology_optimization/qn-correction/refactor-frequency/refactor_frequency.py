@@ -379,7 +379,11 @@ if __name__ == '__main__':
 
         # Solve the generalized eigenvalue problem once to cross-check the feasibility
         ges = GeneralEigSolver(problem, max_jd_size=args.max_jd_size, max_gmres_size=args.max_gmres_size)
-        evals, evecs, res = ges.compute(_xopt)
+        try:
+            evals, evecs, res = ges.compute(_xopt)
+        except:
+            evals, evecs, res = None, None, None
+
         del ges
         # print('%15s%15s'%('eigenvalue', 'residual'))
         # for ii, e in enumerate(evals): print('[%2d]%15.5e%15.5e'%(ii, e, res[ii]))
