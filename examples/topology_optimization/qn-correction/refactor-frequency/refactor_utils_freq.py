@@ -10,12 +10,6 @@ import sys
 sys.path.append('../eigenvalue')
 from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
 
-# Print colored text in terminal
-try:
-    from termcolor import colored
-except:
-    pass
-
 class FrequencyConstr:
     """
     A class that evaluates the smallest eigenvalue, the objective is evaluated
@@ -107,6 +101,7 @@ class FrequencyConstr:
             self.fltr = fltr
             self.assembler = self.fltr.getAssembler()
             self.svec = self.assembler.createDesignVec()
+            self.svec_vals = self.svec.getArray()
             self.comm = self.assembler.getMPIComm()
             self.rank = self.comm.rank
 
@@ -364,68 +359,54 @@ class FrequencyConstr:
             s (PVec): unfiltered update step
             z (array-like): multipliers for dense constraints
 
-
         Outputs:
-            y (PVec): y = Bs
+            y (PVec): y = y + z*F^T P Fs
         """
 
+        """[1] Compute svec <- F * s"""
+        # Apply filter to s: svec = Fs
+        self.svec.zeroEntries()
+        self.fltr.applyFilter(TMR.convertPVecToVec(s), self.svec)
+
+        """[1.5] Zero out entries in svec if called by a reduced problem"""
+        if zero_idx:
+            self.svec_vals[zero_idx] = 0.0
+
+        """[2] Compute update <- P * svec by finite differencing"""
         # Finite difference step length for computing second order
         # derivative of stiffness matrix
         h = 1e-8
 
-        # Zero out the update vector for y
-        self.update.zeroEntries()
+        # Save original rho for later use
+        self.assembler.getDesignVars(self.rho_original)
 
-        # Get current nodal density
-        self.assembler.getDesignVars(self.rho)
-        self.rho_original.copyValues(self.rho)
-
-        # Apply filter to step vector and perturb rho
-        self.svec.zeroEntries()
-        self.fltr.applyFilter(TMR.convertPVecToVec(s), self.svec)
+        # Perturb rho <- rho + h*svec and set it to assembler
+        self.rho.copyValues(self.rho_original)
         self.rho.axpy(h, self.svec)
-
-        # Zero out temp vector to store gradient information
-        self.temp.zeroEntries()
-
-        # set density = rho + h*s
         self.assembler.setDesignVars(self.rho)
 
-        for i in range(self.num_eigenvalues):
-            # Zero entries in temp, if needed
-            if zero_idx:
-                self.temp_vals[zero_idx] = 0.0
+        # Prepare the temp vector
+        self.temp.zeroEntries()
 
+        for i in range(self.num_eigenvalues):
             # Compute g(rho + h*s) for d2Kdx2
             coeff1 = self.eta[i]*self.eig_scale
             self.assembler.addMatDVSensInnerProduct(coeff1, TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
-
-            # Zero entries in temp, if needed
-            if zero_idx:
-                self.temp_vals[zero_idx] = 0.0
 
             # Compute g(rho + h*s) for d2Mdx2
             coeff2 = -self.eta[i]*self.lambda0*self.eig_scale
             self.assembler.addMatDVSensInnerProduct(coeff2, TACS.MASS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
 
-        # set density = rho
+        # set density back to original
         self.assembler.setDesignVars(self.rho_original)
 
         for i in range(self.num_eigenvalues):
-            # Zero entries in temp, if needed
-            if zero_idx:
-                self.temp_vals[zero_idx] = 0.0
-
             # Compute g(rho + h*s) - g(rho) for d2Kdx2
             coeff1 = self.eta[i]*self.eig_scale
             self.assembler.addMatDVSensInnerProduct(-coeff1, TACS.STIFFNESS_MATRIX,
                 self.eigv[i], self.eigv[i], self.temp)
-
-            # Zero entries in temp, if needed
-            if zero_idx:
-                self.temp_vals[zero_idx] = 0.0
 
             # Compute g(rho + h*s) - g(rho) for d2Mdx2
             coeff2 = -self.eta[i]*self.lambda0*self.eig_scale
@@ -436,47 +417,39 @@ class FrequencyConstr:
         self.temp.beginSetValues(op=TACS.ADD_VALUES)
         self.temp.endSetValues(op=TACS.ADD_VALUES)
 
-        # Zero entries in temp, if needed
-        if zero_idx:
-            self.temp_vals[zero_idx] = 0.0
+        # Prepare update vector
+        self.update.zeroEntries()
 
-        # Add to the update
+        # Finish computing P * svec
         self.update.axpy(1.0/h, self.temp)
+
+        """[2.5] Zero out entries in update if called by a reduced problem"""
         if zero_idx:
             self.update_vals[zero_idx] = 0.0
 
-        # Compute norms for output
+        """[Debug print]"""
+        curvature = self.svec.dot(self.update)
         rho_norm = self.rho.norm()
         s_norm = s.norm()
         y_norm = y.norm()
         dy_norm = self.update.norm()
-        curvature = self.svec.dot(self.update)
         if self.comm.rank == 0:
-            if curvature < 0:
-                try:
-                    print(colored("curvature: {:20.10e}".format(curvature), "red"))
-                except:
-                    print("curvature: {:20.10e}".format(curvature))
-            else:
-                try:
-                    print(colored("curvature: {:20.10e}".format(curvature), "green"))
-                except:
-                    print("curvature: {:20.10e}".format(curvature))
-
+            print("curvature: {:20.10e}".format(curvature))
             print("norm(rho):   {:20.10e}".format(rho_norm))
             print("norm(s):   {:20.10e}".format(s_norm))
             print("norm(y):   {:20.10e}".format(y_norm))
             print("norm(dy):  {:20.10e}".format(dy_norm))
 
-        # Update y
-        y_wrap = TMR.convertPVecToVec(y)
-
+        """[3] Compute y <- y + z * F^T * update"""
+        # only perform such update when curvature condition is satisfied
         if curvature > 0:
-            self.fltr.applyTranspose(self.update, self.update)
+            self.fltr.applyTranspose(self.update, self.update)  # update <- F*T update
             if zero_idx:
                 self.update_vals[zero_idx] = 0.0
-            y_wrap.axpy(z[0], self.update)
+            y_wrap = TMR.convertPVecToVec(y)  # prepare y
+            y_wrap.axpy(z[0], self.update)  # y <- y + z * update
 
+        # Save curvature
         self.curvs.append(curvature)
 
         return
