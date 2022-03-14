@@ -673,9 +673,7 @@ class ReducedProblem(ParOpt.Problem):
         # Allocate full-size vectors for the original problem
         self._x = self.prob.createDesignVec()
         self._g = self.prob.createDesignVec()
-        self._A = []
-        for i in range(self.ncon):
-            self._A.append(self.prob.createDesignVec())
+        self._A = [self.prob.createDesignVec() for _ in range(self.ncon)]
 
         # Allocate helper variables for the qn correction, if needed
         if self.qn_correction_func:
@@ -701,9 +699,6 @@ class ReducedProblem(ParOpt.Problem):
     def getVarsAndBounds(self, x, lb, ub):
 
         # # Set bounds
-        # x[:] = self._x0[self.free_dv_idx]
-        # lb[:] = self._lb[self.free_dv_idx]
-        # ub[:] = self._ub[self.free_dv_idx]
         x[:] = 0.95
         lb[:] = 1e-3
         ub[:] = 1.0
@@ -743,7 +738,8 @@ class ReducedProblem(ParOpt.Problem):
 
         if self.fixed_dv_idx:
             DV[self.fixed_dv_idx] = val
-        DV[self.free_dv_idx] = reduDV[:]
+        if self.free_dv_idx:
+            DV[self.free_dv_idx] = reduDV[:]
 
         return
 
@@ -751,7 +747,8 @@ class ReducedProblem(ParOpt.Problem):
         '''
         Convert the full-sized design vector to reduced design vector
         '''
-        reduDV[:] = DV[self.free_dv_idx]
+        if self.free_dv_idx:
+            reduDV[:] = DV[self.free_dv_idx]
 
         return
 

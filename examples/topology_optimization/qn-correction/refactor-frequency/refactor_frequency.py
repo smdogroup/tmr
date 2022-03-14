@@ -380,7 +380,8 @@ if __name__ == '__main__':
         # Solve the generalized eigenvalue problem once to cross-check the feasibility
         ges = GeneralEigSolver(problem, max_jd_size=args.max_jd_size, max_gmres_size=args.max_gmres_size)
         try:
-            evals, evecs, res = ges.compute(_xopt)
+            evals, evecs, res = ges.compute(_xopt, add_non_design_mass=True,
+                non_design_mass_indices=fixed_dv_idx, mscale=args.mscale, kscale=args.kscale)
         except:
             evals, evecs, res = None, None, None
 
