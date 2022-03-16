@@ -229,7 +229,6 @@ if __name__ == '__main__':
 
         # Helper variable: a full-sized design vector
         _x = problem.createDesignVec()
-        _xopt = problem.createDesignVec()
 
         # Run the analysis for test beam and exit
         if args.test_beam_frequency:
@@ -252,6 +251,7 @@ if __name__ == '__main__':
 
             # copy values from _x to redu_x0
             redu_prob.DVtoreduDV(_x, redu_x0)
+            redu_prob.setInitDesignVars(redu_x0)
 
         else:  # This is the first step, we just set x0 to 0.95
             redu_x0[:] = 0.95
@@ -375,6 +375,7 @@ if __name__ == '__main__':
         infeas = np.max([-con, 0])
 
         # Populate _xopt
+        _xopt = problem.createDesignVec()
         redu_prob.reduDVtoDV(redu_xopt, _xopt)
 
         # Solve the generalized eigenvalue problem once to cross-check the feasibility

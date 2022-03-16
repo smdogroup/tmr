@@ -663,16 +663,27 @@ class ReducedProblem(ParOpt.Problem):
         self.free_dv_idx = [i for i in range(len(self._x)) if i not in self.fixed_dv_idx]
         self.nvars = len(self.free_dv_idx)
 
+        # Initial dv - can be set by calling setInitDesignVars()
+        self.xinit = None
+
         super().__init__(self.comm, self.nvars, self.ncon)
         return
 
     def getNumCons(self):
         return self.ncon
 
-    def getVarsAndBounds(self, x, lb, ub):
+    def setInitDesignVars(self, xinit):
+        self.xinit = xinit
+        return
 
-        # # Set bounds
-        x[:] = 0.95
+    def getVarsAndBounds(self, x, lb, ub):
+        # Set initial x
+        if self.xinit is None:
+            x[:] = 0.95
+        else:
+            x[:] = self.xinit[:]
+
+        # Set bounds
         lb[:] = 1e-3
         ub[:] = 1.0
         return
