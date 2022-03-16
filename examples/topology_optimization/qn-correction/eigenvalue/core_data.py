@@ -8,6 +8,8 @@ from os.path import join
 p = argparse.ArgumentParser()
 p.add_argument('result_folder', type=str)
 p.add_argument('--include_stdout', action='store_true')
+p.add_argument('--include_non_design_mass', action='store_true')
+p.add_argument('--include_fail', action='store_true')
 p.add_argument('--stdout_optimizers', nargs='*',
     default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'],
     help='Make sure the order is consistent with order defined in job_array.py')
@@ -60,22 +62,24 @@ for d in dirs:
         print('[Warning] No pkl file fonud in {:s}'.format(src))
 
     # Copy over failing eigenvalue f5 file
-    fail_f5_list = glob(join(src, 'fail.f5'))
-    fail_vtk_list = glob(join(src, 'fail.vtk'))
-    if fail_f5_list and not fail_vtk_list:
-        os.system('f5tovtk {:s}'.format(fail_f5_list[0]))
-    fail_vtk_list = glob(join(src, 'fail.vtk'))
-    if fail_vtk_list:
-        copy(fail_vtk_list[0], dest)
+    if args.include_fail:
+        fail_f5_list = glob(join(src, 'fail.f5'))
+        fail_vtk_list = glob(join(src, 'fail.vtk'))
+        if fail_f5_list and not fail_vtk_list:
+            os.system('f5tovtk {:s}'.format(fail_f5_list[0]))
+        fail_vtk_list = glob(join(src, 'fail.vtk'))
+        if fail_vtk_list:
+            copy(fail_vtk_list[0], dest)
 
-    # Copy over failing eigenvalue f5 file
-    m0_f5_list = glob(join(src, 'non_design_mass.f5'))
-    m0_vtk_list = glob(join(src, 'non_design_mass.vtk'))
-    if m0_f5_list and not m0_vtk_list:
-        os.system('f5tovtk {:s}'.format(m0_f5_list[0]))
-    m0_vtk_list = glob(join(src, 'non_design_mass.vtk'))
-    if m0_vtk_list:
-        copy(m0_vtk_list[0], dest)
+    # Copy over non-design mass f5 file
+    if args.include_non_design_mass:
+        m0_f5_list = glob(join(src, 'non_design_mass.f5'))
+        m0_vtk_list = glob(join(src, 'non_design_mass.vtk'))
+        if m0_f5_list and not m0_vtk_list:
+            os.system('f5tovtk {:s}'.format(m0_f5_list[0]))
+        m0_vtk_list = glob(join(src, 'non_design_mass.vtk'))
+        if m0_vtk_list:
+            copy(m0_vtk_list[0], dest)
 
     # Copy over outputs
     if omz == 'paropt' or omz == 'paroptqn':
