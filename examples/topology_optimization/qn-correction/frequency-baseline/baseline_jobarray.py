@@ -4,9 +4,32 @@ from baseline import run_baseline_case
 import argparse
 from mpi4py import MPI
 
-import sys
-sys.path.append('../eigenvalue')
-from job_array import readCSV, dic2str
+def readCSV(csvfile, start, end):
+    # Create csv dictionary reader
+    with open(csvfile, mode='r', encoding='utf-8-sig') as f:
+        reader = DictReader(f)
+
+        # Load case dictionaries in a list
+        physics = []
+        for row in reader:
+            no = int(row['no'])
+            if no >= start and no <= end:
+                physics.append(row)
+    return physics
+
+def dic2str(dc):
+    '''
+    Convert a dictionary to a string with argument-type format
+    example:
+    dc = {'no':1, 'domain':'cantilever', 'AR': 1}
+    dic2str(dc) = '--domain cantilever --AR 1'
+    
+    Note:
+    key name starting with 1 or more underscores
+    are considered comments and will not be included
+    '''
+    row = ['--{:s} {:s}'.format(k, v) for k, v in dc.items() if k[0] != '_']
+    return ' '.join(row[1:])
 
 def isfloat(x):
     try:
@@ -38,7 +61,7 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument("start", type=int)
     p.add_argument("end", type=int)
-    p.add_argument("--csv", type=str, default='baselines.csv')
+    p.add_argument("--csv", type=str, default='cases.csv')
     p.add_argument("--write_result_to_csv", action='store_true')
     args = p.parse_args()
 
@@ -67,12 +90,7 @@ if __name__ == '__main__':
             write_header = True
 
         if comm.rank == 0:
-            writeLineToCSV('baseline_results.csv', res_dict, fieldnames, write_header)
+            writeLineToCSV('results.csv', res_dict, fieldnames, write_header)
 
         index += 1
-
-
-
-
-
 
