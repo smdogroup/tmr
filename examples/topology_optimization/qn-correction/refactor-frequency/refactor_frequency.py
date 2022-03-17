@@ -52,6 +52,7 @@ if __name__ == '__main__':
     p.add_argument('--optimizer', type=str, default='paropt',
         choices=['paropt', 'snopt', 'ipopt', 'mma'])
     p.add_argument('--n-mesh-refine', type=int, default=1)
+    p.add_argument('--niter-finest', type=int, default=100)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--qn-correction', action='store_true')
     p.add_argument('--mscale', type=float, default=10.0)
@@ -262,8 +263,8 @@ if __name__ == '__main__':
         # Adjust maxiter for optimizer if this is the last refined step
         if n_refine_steps > 1:
             if step == n_refine_steps - 1:
-                optimization_options['tr_max_iterations'] = 15
-                mma_options['mma_max_iterations'] = 15
+                optimization_options['tr_max_iterations'] = args.niter_finest
+                mma_options['mma_max_iterations'] = args.niter_finest
 
         # Set output path
         optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
@@ -304,7 +305,7 @@ if __name__ == '__main__':
                 omprob.driver.opt_settings['Minor print level'] = 0
 
                 if n_refine_steps > 1 and step == n_refine_steps - 1:
-                    omprob.driver.opt_settings['Major iterations limit'] = 15
+                    omprob.driver.opt_settings['Major iterations limit'] = args.niter_finest
                 else:
                     omprob.driver.opt_settings['Major iterations limit'] = args.max_iter
 
@@ -317,7 +318,7 @@ if __name__ == '__main__':
                 omprob.driver.opt_settings['output_file'] = os.path.join(prefix, 'ipopt_output_file%d.dat'%(step))
 
                 if n_refine_steps > 1 and step == n_refine_steps - 1:
-                    omprob.driver.opt_settings['max_iter'] = 15
+                    omprob.driver.opt_settings['max_iter'] = args.niter_finest
                 else:
                     omprob.driver.opt_settings['max_iter'] = args.max_iter
 
