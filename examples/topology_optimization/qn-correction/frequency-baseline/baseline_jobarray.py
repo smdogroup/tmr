@@ -1,4 +1,4 @@
-from csv import DictWriter
+from csv import DictWriter, DictReader
 from typing import ClassVar
 from baseline import run_baseline_case
 import argparse
@@ -80,7 +80,8 @@ if __name__ == '__main__':
         try:
             res = run_baseline_case(**case_dict)
             res_dict['min eig'] = res['min eig']
-        except:
+            res_dict['sol time'] = '{:.2f} s'.format(res['sol time'])
+        except Exception as e:
             res_dict['min eig'] = 'case failed!'
 
         fieldnames = [s for s in res_dict]

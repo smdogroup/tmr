@@ -19,6 +19,7 @@ class BaseFreq:
                  max_jd_size, max_gmres_size, max_lanczos,
                  mscale, kscale, num_eigenvalues):
 
+        self.comm = comm
         self.eig_method = eig_method
         self.ratio = ratio
         self.max_jd_size = max_jd_size
@@ -191,25 +192,18 @@ class BaseFreq:
             eig, err = self.sep.extractEigenvector(0, eigvec)
 
         res1 = self.assembler.createVec()
-        res2 = self.assembler.createVec()
-        res3 = self.assembler.createVec()
 
         Kv = self.assembler.createVec()
         Mv = self.assembler.createVec()
-        Av = self.assembler.createVec()
         self.kmat.mult(eigvec, Kv)
         self.mmat.mult(eigvec, Mv)
 
         res1.copyValues(Kv)
         res1.axpy(-eig, Mv)
-
-        res2.copyValues(Kv)
-        res2.axpy(-eig, eigvec)
-
-        res3.copyValues(Av)
-        res3.axpy(-eig, eigvec)
-
-        print("(general) |Kv - lambda*Mv| = {:20.10e}".format(res1.norm()))
+        
+        residual = res1.norm()
+        if self.comm.rank == 0:
+            print("(general) |Kv - lambda*Mv| = {:20.10e}".format(residual))
 
         # v1 = self.assembler.createVec()
         # M1 = self.assembler.createMat()
@@ -222,9 +216,10 @@ class BaseFreq:
         return eig, err
 
 def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
-                      qval=5.0, mscale=50.0, kscale=1.0, eig_method='jd',
+                      qval=5.0, mscale=10.0, kscale=10.0, eig_method='jd',
                       max_jd_size=200, max_gmres_size=30,
                       max_lanczos=50, num_eigenvals=5):
+    ts = MPI.Wtime()
     comm = MPI.COMM_WORLD
     bf = BaseFreq(comm, domain, AR, ratio, len0,
                   r0_frac, htarget, mg_levels,
@@ -236,6 +231,8 @@ def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
     dv_vals = dv.getArray()
     dv_vals[:] = 0.95
     eig, err = bf.solve(dv)
+    te = MPI.Wtime()
+    sol_time = te - ts
 
     if comm.rank == 0:
         print("--------- Summary ---------")
@@ -253,6 +250,7 @@ def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
         print("method:   {:>20s}".format(eig_method))
         print("min eig:  {:>20e}".format(eig))
         print("error:    {:>20e}".format(err))
+        print("time:    {:>20.3f}s".format(sol_time))
 
     ret_dict = {}
     ret_dict["domain"] = domain
@@ -268,6 +266,7 @@ def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
     ret_dict["method"] = eig_method
     ret_dict["min eig"] = eig
     ret_dict["error"] = err
+    ret_dict["sol time"] = sol_time
 
     return ret_dict
 
@@ -281,11 +280,11 @@ if __name__ == "__main__":
     p.add_argument('--AR', type=float, default=1.0)
     p.add_argument('--ratio', type=float, default=0.4)
     p.add_argument('--len0', type=float, default=1.0)
-    p.add_argument('--r0-frac', type=float, default=0.05)
-    p.add_argument('--htarget', type=float, default=1.0)
+    p.add_argument('--r0-frac', type=float, default=0.0625)
+    p.add_argument('--htarget', type=float, default=0.5)
     p.add_argument('--mg-levels', type=int, default=3)
     p.add_argument('--qval', type=float, default=5.0)
-    p.add_argument('--mscale', type=float, default=50.0)
+    p.add_argument('--mscale', type=float, default=10.0)
     p.add_argument('--kscale', type=float, default=1.0)
 
     # Solver
