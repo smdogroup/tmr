@@ -103,6 +103,8 @@ mod = 'TMR'
 exts.append(Ext('tmr.%s'%(mod), sources=['tmr/%s.pyx'%(mod)],
                 include_dirs=inc_dirs, libraries=libs,
                 library_dirs=lib_dirs, runtime_library_dirs=runtime_lib_dirs,
+                extra_compile_args=["-std=c++11"],
+                extra_link_args=["-std=c++11"],
                 define_macros=[('math_Memory_HeaderFile', '1'),
                                ('TMR_HAS_OPENCASCADE', '1'),
                                ('TMR_HAS_EGADS', '1'),
