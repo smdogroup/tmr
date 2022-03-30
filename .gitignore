@@ -55,3 +55,6 @@ tmr/*.cpp
 
 # ccls cache files
 .ccls-cache
+
+# macOS file system file
+.DS_Store
