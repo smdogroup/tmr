@@ -66,6 +66,7 @@ jobs:
           # Install packages via pip
           pip install testflo;
           pip install cython;
+          pip install pyNastran;
 
           # Install Blossom V
           cd $TMR_DIR/extern;
