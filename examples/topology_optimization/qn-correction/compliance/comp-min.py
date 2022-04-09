@@ -318,6 +318,14 @@ if __name__ == '__main__':
             obj = prob.get_val('topo.obj')[0]
             con = prob.get_val('topo.con')[0]
 
+            # Compute discreteness for rho
+            rhoopt = problem.getAssembler().createDesignVec()
+            problem.getTopoFilter().applyFilter(TMR.convertPVecToVec(xopt), rhoopt)
+            rhoopt_global = comm.allgather(rhoopt.getArray())
+            rhoopt_global = np.concatenate(rhoopt_global)
+            discreteness_rho = np.dot(rhoopt_global, 1.0-rhoopt_global) / len(rhoopt_global)
+
+
         # Otherwise, use ParOpt.Optimizer to optimize
         else:
             if args.optimizer == 'mma':
@@ -346,6 +354,13 @@ if __name__ == '__main__':
             xopt_global = np.concatenate(xopt_global)
             discreteness = np.dot(xopt_global, 1.0-xopt_global) / len(xopt_global)
 
+            # Compute discreteness for rho
+            rhoopt = problem.getAssembler().createDesignVec()
+            problem.getTopoFilter().applyFilter(TMR.convertPVecToVec(xopt), rhoopt)
+            rhoopt_global = comm.allgather(rhoopt.getArray())
+            rhoopt_global = np.concatenate(rhoopt_global)
+            discreteness_rho = np.dot(rhoopt_global, 1.0-rhoopt_global) / len(rhoopt_global)
+
         # Compute infeasibility
         if args.eq_constr:
             infeas = np.abs(con)
@@ -357,12 +372,14 @@ if __name__ == '__main__':
 
             # Check data
             print('[Optimum] discreteness:{:20.10e}'.format(discreteness))
+            print('[Optimum] discrete_rho:{:20.10e}'.format(discreteness_rho))
             print('[Optimum] obj:         {:20.10e}'.format(obj))
             print('[Optimum] con:         {:20.10e}'.format(con))
             print('[Optimum] infeas:      {:20.10e}'.format(infeas))
 
             pkl = dict()
             pkl['discreteness'] = discreteness
+            pkl['discreteness_rho'] = discreteness_rho
             pkl['obj'] = obj
             pkl['con'] = con
             pkl['infeas'] = infeas
