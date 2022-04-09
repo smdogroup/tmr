@@ -271,8 +271,11 @@ if __name__ == '__main__':
         optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
         mma_options['mma_output_file'] = os.path.join(prefix, 'mma_output_file%d.dat'%(step))
 
-        # Allocate space to store xopt
+        # Allocate space to store reduced/full optimal x/rho
         redu_xopt = redu_prob.createDesignVec()
+        redu_rhoopt = redu_prob.createDesignVec()
+        xopt = problem.getAssembler().createDesignVec()
+        rhoopt = problem.getAssembler().createDesignVec()
 
         # Optimize with openmdao/pyoptsparse wrapper if specified
         if args.optimizer == 'snopt' or args.optimizer == 'ipopt':
@@ -344,6 +347,14 @@ if __name__ == '__main__':
             obj = omprob.get_val('topo.obj')[0]
             con = omprob.get_val('topo.con')[0]
 
+            # Compute discreteness for rho
+            redu_prob.reduDVtoDV(redu_xopt, xopt.getArray())
+            problem.getTopoFilter().applyFilter(xopt, rhoopt)
+            redu_prob.DVtoreduDV(rhoopt.getArray(), redu_rhoopt)
+            redu_rhoopt_g = comm.allgather(np.array(redu_rhoopt))
+            redu_rhoopt_g = np.concatenate(redu_rhoopt_g)
+            discreteness_rho = np.dot(redu_rhoopt_g, 1.0-redu_rhoopt_g) / len(redu_rhoopt_g)
+
         # Otherwise, use ParOpt.Optimizer to optimize
         else:
             if args.optimizer == 'mma':
@@ -363,6 +374,14 @@ if __name__ == '__main__':
             redu_xopt_g = comm.allgather(np.array(redu_xopt))
             redu_xopt_g = np.concatenate(redu_xopt_g)
             discreteness = np.dot(redu_xopt_g, 1.0-redu_xopt_g) / len(redu_xopt_g)
+
+            # Compute discreteness for rho
+            redu_prob.reduDVtoDV(redu_xopt, xopt.getArray())
+            problem.getTopoFilter().applyFilter(xopt, rhoopt)
+            redu_prob.DVtoreduDV(rhoopt.getArray(), redu_rhoopt)
+            redu_rhoopt_g = comm.allgather(np.array(redu_rhoopt))
+            redu_rhoopt_g = np.concatenate(redu_rhoopt_g)
+            discreteness_rho = np.dot(redu_rhoopt_g, 1.0-redu_rhoopt_g) / len(redu_rhoopt_g)
 
         # Manually create the f5 file
         flag = (TACS.OUTPUT_CONNECTIVITY |
@@ -396,12 +415,14 @@ if __name__ == '__main__':
 
             # Check data
             print('[Optimum] discreteness:{:20.10e}'.format(discreteness))
+            print('[Optimum] discrete_rho:{:20.10e}'.format(discreteness_rho))
             print('[Optimum] obj:         {:20.10e}'.format(obj))
             print('[Optimum] con:         {:20.10e}'.format(con))
             print('[Optimum] infeas:      {:20.10e}'.format(infeas))
 
             pkl = dict()
             pkl['discreteness'] = discreteness
+            pkl['discreteness_rho'] = discreteness_rho
             pkl['obj'] = obj
             pkl['con'] = con
             pkl['infeas'] = infeas
