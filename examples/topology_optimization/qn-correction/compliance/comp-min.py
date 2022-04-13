@@ -377,6 +377,7 @@ if __name__ == '__main__':
             print('[Optimum] obj:         {:20.10e}'.format(obj))
             print('[Optimum] con:         {:20.10e}'.format(con))
             print('[Optimum] infeas:      {:20.10e}'.format(infeas))
+            print('Qn time: {:10.2e} s'.format(obj_callback.getAveragedQnTime()))
 
             pkl = dict()
             pkl['discreteness'] = discreteness
@@ -403,6 +404,7 @@ if __name__ == '__main__':
             pkl['cmd'] = cmd
             pkl['problem'] = 'comp-min'
             pkl['paropt-type'] = args.paropt_type
+            pkl['qn-time'] = obj_callback.getAveragedQnTime()
 
             if args.optimizer == 'paropt':
                 pkl['n_fail_qn_corr'], pkl['neg_curvs'], pkl['pos_curvs'] = \

@@ -419,6 +419,7 @@ if __name__ == '__main__':
             print('[Optimum] obj:         {:20.10e}'.format(obj))
             print('[Optimum] con:         {:20.10e}'.format(con))
             print('[Optimum] infeas:      {:20.10e}'.format(infeas))
+            print('Qn time: {:10.2e} s'.format(constr_callback.getAveragedQnTime()))
 
             pkl = dict()
             pkl['discreteness'] = discreteness
@@ -448,6 +449,7 @@ if __name__ == '__main__':
             pkl['paropt-type'] = args.paropt_type
             pkl['gep-evals'] = evals
             pkl['gep-res'] = res
+            pkl['qn-time'] = constr_callback.getAveragedQnTime()
 
             if args.optimizer == 'paropt':
                 pkl['curvs'] = constr_callback.getQnUpdateCurvs()

@@ -6,6 +6,7 @@ import numpy as np
 import openmdao.api as om
 import os
 import sys
+from mpi4py import MPI
 
 sys.path.append('../eigenvalue')
 from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
@@ -83,6 +84,9 @@ class FrequencyConstr:
 
         # We keep track of failed qn correction
         self.curvs = []
+
+        # Time qn step
+        self.qn_time = []
 
         return
 
@@ -362,6 +366,8 @@ class FrequencyConstr:
         Outputs:
             y (PVec): y = y + z*F^T P Fs
         """
+        # Timer
+        t_start = MPI.Wtime()
 
         """[1] Compute svec <- F * s"""
         # Apply filter to s: svec = Fs
@@ -452,10 +458,15 @@ class FrequencyConstr:
         # Save curvature
         self.curvs.append(curvature)
 
+        # Timer
+        self.qn_time.append(MPI.Wtime() - t_start)
         return
 
     def getQnUpdateCurvs(self):
         return self.curvs
+    
+    def getAveragedQnTime(self):
+        return np.average(self.qn_time)
 
     def computeNonDesignMat(self, indices, mscale, kscale, save_f5=False):
         """

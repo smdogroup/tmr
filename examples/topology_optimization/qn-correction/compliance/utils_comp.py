@@ -6,6 +6,7 @@ import numpy as np
 import openmdao.api as om
 import os
 import sys
+from mpi4py import MPI
 
 sys.path.append('../eigenvalue')
 from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
@@ -73,6 +74,7 @@ class CompObj:
         self.n_fail_qn_corr = 0
         self.pos_curvs = []
         self.neg_curvs = []
+        self.qn_time = []
 
         return
 
@@ -280,6 +282,8 @@ class CompObj:
             y (PVec): y = Bs
             z, zw: dummy variable for qn correction for constraints, not used here.
         """
+        # Timer
+        t_start = MPI.Wtime()
 
         # Finite difference step length for computing second order
         # derivative of stiffness matrix
@@ -355,10 +359,16 @@ class CompObj:
         else:
             self.n_fail_qn_corr += 1
             self.neg_curvs.append(curvature)
+
+        # Timer
+        self.qn_time.append(MPI.Wtime() - t_start)
         return
 
     def getFailQnCorr(self):
         return self.n_fail_qn_corr, self.neg_curvs, self.pos_curvs
+
+    def getAveragedQnTime(self):
+        return np.average(self.qn_time)
 
 
 def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
