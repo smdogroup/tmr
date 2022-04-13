@@ -51,6 +51,7 @@ if __name__ == '__main__':
         choices=['paropt', 'snopt', 'ipopt', 'mma'])
     p.add_argument('--n-mesh-refine', type=int, default=3)
     p.add_argument('--max-iter', type=int, default=100)
+    p.add_argument('--niter-finest', type=int, default=15)
     p.add_argument('--qn-correction', action='store_true')
     p.add_argument('--comp-scale', type=float, default=1.0)
     p.add_argument('--output-level', type=int, default=0)
@@ -222,8 +223,8 @@ if __name__ == '__main__':
 
         if max_iterations > 1:
             if step == max_iterations-1:
-                optimization_options['tr_max_iterations'] = 15
-                mma_options['mma_max_iterations'] = 15
+                optimization_options['tr_max_iterations'] = args.niter_finest
+                mma_options['mma_max_iterations'] = args.niter_finest
         count += args.max_iter
 
         optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
@@ -275,7 +276,7 @@ if __name__ == '__main__':
                 prob.driver.opt_settings['Minor print level'] = 0
 
                 if max_iterations > 1 and step == max_iterations - 1:
-                    prob.driver.opt_settings['Major iterations limit'] = 15
+                    prob.driver.opt_settings['Major iterations limit'] = args.niter_finest
                 else:
                     prob.driver.opt_settings['Major iterations limit'] = args.max_iter
 
@@ -288,7 +289,7 @@ if __name__ == '__main__':
                 prob.driver.opt_settings['output_file'] = os.path.join(prefix, 'ipopt_output_file%d.dat'%(step))
 
                 if max_iterations > 1 and step == max_iterations - 1:
-                    prob.driver.opt_settings['max_iter'] = 15
+                    prob.driver.opt_settings['max_iter'] = args.niter_finest
                 else:
                     prob.driver.opt_settings['max_iter'] = args.max_iter
 
