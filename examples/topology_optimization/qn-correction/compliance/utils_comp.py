@@ -128,64 +128,85 @@ class CompObj:
             offset = n_ext_pre
 
             # Create force vector
-            if self.domain == '3dcantilever':
-                self.force = TopOptUtils.computeVertexLoad('pt1',
-                    self.forest, self.assembler, [0, 0, -self.nodal_force])
-                temp = TopOptUtils.computeVertexLoad('pt2',
-                    self.forest, self.assembler, [0, self.nodal_force, 0])
-                self.force.axpy(1.0, temp)
-                self.n_loaded_nodes = 2
+            # if self.domain == '3dcantilever':
+                # self.force = TopOptUtils.computeVertexLoad('pt1',
+                #     self.forest, self.assembler, [0, 0, -self.nodal_force])
+                # temp = TopOptUtils.computeVertexLoad('pt2',
+                #     self.forest, self.assembler, [0, self.nodal_force, 0])
+                # self.force.axpy(1.0, temp)
+                # self.n_loaded_nodes = 2
+
+            tol = 1e-6
+            if self.domain == 'cantilever':
+                xmin = self.lx - tol
+                xmax = self.lx + tol
+                ymin = 0.25*self.ly - tol
+                ymax = 0.75*self.ly + tol
+                zmin = 0.0*self.lz - tol
+                zmax = 0.2*self.lz + tol
+
+            elif self.domain == '3dcantilever':
+                xmin = self.lx - tol
+                xmax = self.lx + tol
+                ymin = 0.0*self.ly - tol
+                ymax = 0.2*self.ly + tol
+                zmin = 0.0*self.lz - tol
+                zmax = 0.2*self.lz + tol
+                y2min = 0.8*self.ly - tol
+                y2max = 1.0*self.ly + tol
+                z2min = 0.8*self.lz - tol
+                z2max = 1.0*self.lz + tol
+
+            elif self.domain == 'michell':
+                xmin = self.lx - tol
+                xmax = self.lx + tol
+                ymin = 0.25*self.ly - tol
+                ymax = 0.75*self.ly + tol
+                zmin = 0.4*self.lz - tol
+                zmax = 0.6*self.lz + tol
+
+            elif self.domain == 'mbb':
+                xmin = 0.0*self.lx - tol
+                xmax = 0.2*self.lx + tol
+                ymin = 0.25*self.ly - tol
+                ymax = 0.75*self.ly + tol
+                zmin = self.lz - tol
+                zmax = self.lz + tol
+
+            elif self.domain == 'lbracket':
+                RATIO = self.ratio
+                xmin = self.lx - tol
+                xmax = self.lx + tol
+                ymin = 0.25*self.ly - tol
+                ymax = 0.75*self.ly + tol
+                zmin = 0.5*RATIO*self.lz - tol
+                zmax = 1.0*RATIO*self.lz + tol
 
             else:
-                tol = 1e-6
-                if self.domain == 'cantilever':
-                    xmin = self.lx - tol
-                    xmax = self.lx + tol
-                    ymin = 0.25*self.ly - tol
-                    ymax = 0.75*self.ly + tol
-                    zmin = 0.0*self.lz - tol
-                    zmax = 0.2*self.lz + tol
+                raise ValueError("Unsupported domain type!")
 
-                elif self.domain == 'michell':
-                    xmin = self.lx - tol
-                    xmax = self.lx + tol
-                    ymin = 0.25*self.ly - tol
-                    ymax = 0.75*self.ly + tol
-                    zmin = 0.4*self.lz - tol
-                    zmax = 0.6*self.lz + tol
+            self.n_loaded_nodes = 0
+            for i in range(offset, n_local_nodes):
+                x, y, z = Xpts[i]
+                if xmin < x < xmax:
+                    if ymin < y < ymax:
+                        if zmin < z < zmax:
+                            self.force_vals[3*(i-offset)+2] = -self.nodal_force
+                            self.n_loaded_nodes += 1
 
-                elif self.domain == 'mbb':
-                    xmin = 0.0*self.lx - tol
-                    xmax = 0.2*self.lx + tol
-                    ymin = 0.25*self.ly - tol
-                    ymax = 0.75*self.ly + tol
-                    zmin = self.lz - tol
-                    zmax = self.lz + tol
-
-                elif self.domain == 'lbracket':
-                    RATIO = self.ratio
-                    xmin = self.lx - tol
-                    xmax = self.lx + tol
-                    ymin = 0.25*self.ly - tol
-                    ymax = 0.75*self.ly + tol
-                    zmin = 0.5*RATIO*self.lz - tol
-                    zmax = 1.0*RATIO*self.lz + tol
-
-                else:
-                    raise ValueError("Unsupported domain type!")
-
-                self.n_loaded_nodes = 0
+            if self.domain == '3dcantilever':
                 for i in range(offset, n_local_nodes):
                     x, y, z = Xpts[i]
                     if xmin < x < xmax:
-                        if ymin < y < ymax:
-                            if zmin < z < zmax:
-                                self.force_vals[3*(i-offset)+2] = -self.nodal_force
+                        if y2min < y < y2max:
+                            if z2min < z < z2max:
+                                self.force_vals[3*(i-offset)+1] = self.nodal_force
                                 self.n_loaded_nodes += 1
-                self.n_loaded_nodes = self.comm.allreduce(self.n_loaded_nodes)
 
-                # Match the reordering of the vector
-                self.assembler.reorderVec(self.force)
+            self.n_loaded_nodes = self.comm.allreduce(self.n_loaded_nodes)
+
+            # Match the reordering of the vector
+            self.assembler.reorderVec(self.force)
 
 
         '''
