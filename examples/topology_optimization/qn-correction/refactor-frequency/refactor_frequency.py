@@ -451,6 +451,7 @@ if __name__ == '__main__':
             pkl['gep-evals'] = evals
             pkl['gep-res'] = res
             pkl['qn-time'] = constr_callback.getAveragedQnTime()
+            pkl['snapshot'] = redu_prob.get_snapshot()
 
             if args.optimizer == 'paropt':
                 pkl['curvs'] = constr_callback.getQnUpdateCurvs()

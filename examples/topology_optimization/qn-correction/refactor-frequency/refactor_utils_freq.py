@@ -464,7 +464,7 @@ class FrequencyConstr:
 
     def getQnUpdateCurvs(self):
         return self.curvs
-    
+
     def getAveragedQnTime(self):
         return np.average(self.qn_time)
 
@@ -677,6 +677,10 @@ class ReducedProblem(ParOpt.Problem):
         # Initial dv - can be set by calling setInitDesignVars()
         self.xinit = None
 
+        self.num_obj_evals = 0
+        self.save_snapshot_every = 1
+        self.snapshot = {'iter': [], 'obj': [], 'infeas': [], 'discreteness': []}
+
         super().__init__(self.comm, self.nvars, self.ncon)
         return
 
@@ -705,6 +709,17 @@ class ReducedProblem(ParOpt.Problem):
 
         # Run analysis in full-sized problem
         fail, fobj, con = self.prob.evalObjCon(self.ncon, self._x)
+
+        # Save a snapshot of the result
+        if self.num_obj_evals % self.save_snapshot_every == 0:
+            self.snapshot['iter'].append(self.num_obj_evals)
+            self.snapshot['obj'].append(fobj)
+            self.snapshot['infeas'].append(np.max([-con[0], 0]))  # hard-coded
+            x_g = self.comm.allgather(np.array(x))
+            x_g = np.concatenate(x_g)
+            self.snapshot['discreteness'].append(np.dot(x_g, 1.0 - x_g) / len(x_g))
+
+        self.num_obj_evals += 1
 
         return fail, fobj, con
 
@@ -757,6 +772,9 @@ class ReducedProblem(ParOpt.Problem):
             self.qn_correction_func(self.fixed_dv_idx, z, self._s, self._y)
             self.DVtoreduDV(self._y, y)
         return
+
+    def get_snapshot(self):
+        return self.snapshot
 
 def getFixedDVIndices(forest, domain, len0, AR, ratio):
     """
