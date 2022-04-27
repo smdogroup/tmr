@@ -318,6 +318,7 @@ if __name__ == '__main__':
                 omprob.driver.opt_settings['tol'] = 1e-10
                 omprob.driver.opt_settings['constr_viol_tol'] = 1e-10
                 omprob.driver.opt_settings['dual_inf_tol'] = 1e-10
+                omprob.driver.opt_settings['print_info_string'] = 'yes'
                 omprob.driver.opt_settings['output_file'] = os.path.join(prefix, 'ipopt_output_file%d.dat'%(step))
 
                 if n_refine_steps > 1 and step == n_refine_steps - 1:
