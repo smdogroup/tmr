@@ -286,6 +286,7 @@ if __name__ == '__main__':
                 prob.driver.opt_settings['tol'] = 1e-10
                 prob.driver.opt_settings['constr_viol_tol'] = 1e-10
                 prob.driver.opt_settings['dual_inf_tol'] = 1e-10
+                prob.driver.opt_settings['print_info_string'] = 'yes'
                 prob.driver.opt_settings['output_file'] = os.path.join(prefix, 'ipopt_output_file%d.dat'%(step))
 
                 if max_iterations > 1 and step == max_iterations - 1:
