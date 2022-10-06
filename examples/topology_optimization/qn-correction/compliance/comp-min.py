@@ -179,7 +179,8 @@ if __name__ == '__main__':
         iter_offset = step*args.max_iter
 
         # Create the optimization problem
-        problem, obj_callback = create_problem(prefix=args.prefix, domain=args.domain,
+        problem, obj_callback, constr_callback = create_problem(
+                                    prefix=args.prefix, domain=args.domain,
                                     forest=forest, bcs=bcs,
                                     props=stiffness_props, nlevels=mg_levels+step,
                                     vol_frac=args.vol_frac, r0_frac=args.r0_frac,
@@ -406,6 +407,12 @@ if __name__ == '__main__':
             pkl['problem'] = 'comp-min'
             pkl['paropt-type'] = args.paropt_type
             pkl['qn-time'] = obj_callback.getAveragedQnTime()
+
+            # Save snapshot
+            pkl['snapshot'] = obj_callback.get_snapshot()
+            assert(len(obj_callback.get_snapshot()['iter']) == len(constr_callback.get_snapshot()['iter']))
+            pkl['snapshot']['infeas'] = constr_callback.get_snapshot()['infeas']
+
 
             if args.optimizer == 'paropt':
                 pkl['n_fail_qn_corr'], pkl['neg_curvs'], pkl['pos_curvs'] = \

@@ -546,6 +546,7 @@ cdef extern from "TMRTopoFilter.h":
         TMRQuadForest* getFilterQuadForest()
         TMROctForest* getFilterOctForest()
         void setDesignVars(TACSBVec*)
+        void getDesignVars(TACSBVec**)
         void addValues(TACSBVec*)
         void applyFilter(TACSBVec*, TACSBVec*)
         void applyTranspose(TACSBVec*, TACSBVec*)

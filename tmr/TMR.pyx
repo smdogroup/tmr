@@ -4593,6 +4593,17 @@ cdef class TopoFilter:
             self.ptr.setDesignVars(vec.ptr)
         return
 
+    def getDesignVars(self, Vec vec):
+        """
+        Get the (unfiltered) design variable
+        Args:
+            vec (TACS.Vec): Design variable vector to populate
+        """
+        if self.ptr != NULL:
+            return self.ptr.getDesignVars(&vec.ptr)
+        return
+
+
     def addValues(self, Vec vec):
         """
         addValues(self, vec)
@@ -5228,6 +5239,7 @@ cdef class TopoProblem(ProblemBase):
     cdef object objfunc
     cdef object objgradfunc
     cdef object qncorrectionfunc
+    cdef ParOptVec *xptr
     def __cinit__(self, TopoFilter fltr, Pc pc,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL
@@ -5245,6 +5257,9 @@ cdef class TopoProblem(ProblemBase):
         self.qncorrectionfunc = None
         self.ptr = new TMRTopoProblem(fltr.ptr, mg, gmres_subspace, rtol)
         self.ptr.incref()
+
+        # Pointer to the raw design variable
+        self.xptr = NULL
         return
 
     def __dealloc__(self):
@@ -5796,6 +5811,9 @@ cdef class TopoProblem(ProblemBase):
 
         free(_cons)
 
+        # Store the x pointer
+        self.xptr = x.ptr
+
         return fail, fobj, cons
 
     def evalObjConGradient(self, PVec x, PVec g, list A):
@@ -5830,6 +5848,13 @@ cdef class TopoProblem(ProblemBase):
         free(_A)
 
         return fail
+
+    def getDesignVar(self):
+        if(self.xptr):
+            return _init_PVec(self.xptr)
+        else:
+            print("Warning, cannot initialize design variable vector")
+            return None
 
 def setMatchingFaces(model_list, double tol=1e-6):
     """

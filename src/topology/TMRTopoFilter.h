@@ -41,6 +41,11 @@ class TMRTopoFilter : public TMREntity {
   // Set the design variables
   virtual void setDesignVars( TACSBVec *vec ) = 0;
 
+  // Get the unfiltered design variables
+  virtual void getDesignVars( TACSBVec **vec ){
+    fprintf(stderr, "TMR Filter Error: getDesignVars() method is not implemented!\n");
+  };
+
   // Set values/add values to the vector
   virtual void addValues( TACSBVec *vec ) = 0;
   virtual void setValues( TACSBVec *vec ) = 0;

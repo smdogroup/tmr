@@ -76,6 +76,13 @@ class CompObj:
         self.neg_curvs = []
         self.qn_time = []
 
+        # Save snapshots throughout optimization iterations
+        self.num_obj_evals = 0
+        self.save_snapshot_every = 1
+        self.snapshot = {'iter': [], 'obj': [], 'discreteness': [], 'discreteness_rho': []}
+        self.snapshot_x = None
+        self.snapshot_rho = None
+
         return
 
     def objective(self, fltr, mg):
@@ -90,6 +97,9 @@ class CompObj:
             self.svec = self.assembler.createDesignVec()
             self.comm = self.assembler.getMPIComm()
             self.rank = self.comm.rank
+
+            self.snapshot_x = self.assembler.createDesignVec()
+            self.snapshot_rho = self.assembler.createDesignVec()
 
             # Allocate vectors for qn correction
             self.rho = self.assembler.createDesignVec()
@@ -247,6 +257,30 @@ class CompObj:
         if self.comm.rank == 0:
             print('{:30s}{:20.10e}'.format('[Obj] scaled compliance:', obj))
 
+        # Save a snapshot of the result
+        if self.num_obj_evals % self.save_snapshot_every == 0:
+            self.snapshot['iter'].append(self.num_obj_evals)
+            self.snapshot['obj'].append(obj)
+
+            # Get x and rho
+            fltr.getDesignVars(self.snapshot_x)
+            self.assembler.getDesignVars(self.snapshot_rho)
+
+            # Compute discreteness
+            snapshot_x_global = self.comm.allgather(self.snapshot_x.getArray())
+            snapshot_x_global = np.concatenate(snapshot_x_global)
+            discreteness = np.dot(snapshot_x_global, 1.0-snapshot_x_global) / len(snapshot_x_global)
+
+            # Compute discreteness for rho
+            snapshot_rho_global = self.comm.allgather(self.snapshot_rho.getArray())
+            snapshot_rho_global = np.concatenate(snapshot_rho_global)
+            discreteness_rho = np.dot(snapshot_rho_global, 1.0-snapshot_rho_global) / len(snapshot_rho_global)
+
+            self.snapshot['discreteness'].append(discreteness)
+            self.snapshot['discreteness_rho'].append(discreteness_rho)
+
+        self.num_obj_evals += 1
+
         return obj
 
 
@@ -391,6 +425,9 @@ class CompObj:
     def getAveragedQnTime(self):
         return np.average(self.qn_time)
 
+    def get_snapshot(self):
+        return self.snapshot
+
 
 def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
                    len0=1.0, AR=1.0, ratio=0.4, density=2600.0, iter_offset=0,
@@ -464,4 +501,4 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r
     cb = OutputCallback(assembler, iter_offset=iter_offset)
     problem.setOutputCallback(cb.write_output)
 
-    return problem, obj_callback
+    return problem, obj_callback, constr_callback

@@ -702,6 +702,11 @@ class MassConstr:
         self.fltr = None
         self.mass_func = None
 
+        # Save snapshots throughout optimization iterations
+        self.num_obj_evals = 0
+        self.save_snapshot_every = 1
+        self.snapshot = {'iter': [], 'infeas': []}
+
         return
 
     def constraint(self, fltr, mg):
@@ -715,6 +720,13 @@ class MassConstr:
         mass_constr = -mass/self.m_fixed + 1.0
         if self.rank == 0:
             print("{:30s}{:20.10e}".format('[Con] mass constraint:',mass_constr))
+
+        # Save a snapshot of the result
+        if self.num_obj_evals % self.save_snapshot_every == 0:
+            self.snapshot['iter'].append(self.num_obj_evals)
+            self.snapshot['infeas'].append(np.max([-mass_constr, 0]))  # hard-coded
+
+        self.num_obj_evals += 1
 
         return [mass_constr]
 
@@ -731,6 +743,9 @@ class MassConstr:
         if self.rank == 0:
             print("{:30s}{:20.10e}".format('[Con] gradient norm:', norm))
         return
+
+    def get_snapshot(self):
+        return self.snapshot
 
 def cantilever_egads(comm, lx, ly, lz):
     '''

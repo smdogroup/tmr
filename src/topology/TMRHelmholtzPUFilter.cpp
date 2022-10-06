@@ -755,6 +755,7 @@ void TMRHelmholtzPUFilter::kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y ){
   Set the design variables for each level
 */
 void TMRHelmholtzPUFilter::setDesignVars( TACSBVec *xvec ){
+  xraw = xvec;
   const int vpn = assembler[0]->getDesignVarsPerNode();
 
   if (vpn == 1){
@@ -803,6 +804,13 @@ void TMRHelmholtzPUFilter::setDesignVars( TACSBVec *xvec ){
     // Set the design variable values
     assembler[k+1]->setDesignVars(x[k+1]);
   }
+}
+
+/*
+  Get the unfiltered design variable
+*/
+void TMRHelmholtzPUFilter::getDesignVars( TACSBVec **xvec ){
+  *xvec = xraw;
 }
 
 /*
