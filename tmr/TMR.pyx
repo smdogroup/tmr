@@ -4600,8 +4600,8 @@ cdef class TopoFilter:
             vec (TACS.Vec): Design variable vector to populate
         """
         if self.ptr != NULL:
-            return self.ptr.getDesignVars(&vec.ptr)
-        return
+            self.ptr.getDesignVars(&vec.ptr)
+            return
 
 
     def addValues(self, Vec vec):
