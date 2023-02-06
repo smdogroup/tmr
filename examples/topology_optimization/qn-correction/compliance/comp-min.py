@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
-        choices=['paropt', 'snopt', 'ipopt', 'mma'])
+        choices=['paropt', 'snopt', 'ipopt', 'mma', 'mma4py'])
     p.add_argument('--n-mesh-refine', type=int, default=3)
     p.add_argument('--max-iter', type=int, default=100)
     p.add_argument('--niter-finest', type=int, default=15)
@@ -161,7 +161,8 @@ if __name__ == '__main__':
         'mma_max_asymptote_offset': 10,
         'mma_max_iterations': args.max_iter,
         'mma_min_asymptote_offset': 0.01,
-        'mma_use_constraint_linearization': True
+        'mma_use_constraint_linearization': True,
+        'mma_move_limit': 0.3
     }
 
 
@@ -232,8 +233,84 @@ if __name__ == '__main__':
         optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
         mma_options['mma_output_file'] = os.path.join(prefix, 'mma_output_file%d.dat'%(step))
 
+        # Optimize using mma4py
+        if args.optimizer == 'mma4py':
+
+            from mma4py import Problem as MMAProblemBase
+            from mma4py import Optimizer as MMAOptimizer
+
+            class MMAProblem(MMAProblemBase):
+
+                def __init__(self, comm, nvars, nvars_l, prob):
+                    self.ncon = 1
+                    super().__init__(comm, nvars, nvars_l, self.ncon)
+                    self.prob = prob
+
+                    self.xvec = prob.createDesignVec()
+                    self.gvec = prob.createDesignVec()
+                    self.gcvec = prob.createDesignVec()
+
+                    self.xvals = TMR.convertPVecToVec(self.xvec).getArray()
+                    self.gvals = TMR.convertPVecToVec(self.gvec).getArray()
+                    self.gcvals = TMR.convertPVecToVec(self.gcvec).getArray()
+                    return
+
+                def getVarsAndBounds(self, x, lb, ub) -> None:
+                    x[:] = 0.95
+                    lb[:] = 0.0
+                    ub[:] = 1.0
+                    return
+
+                def evalObjCon(self, x, cons) -> float:
+                    self.xvals[:] = x[:]
+                    fail, obj, _cons = self.prob.evalObjCon(self.ncon, self.xvec)
+                    cons[:] = -_cons[:]
+                    return obj
+
+                def evalObjConGrad(self, x, g, gcon):
+                    self.xvals[:] = x[:]
+                    self.prob.evalObjConGradient(self.xvec, self.gvec, [self.gcvec])
+                    g[:] = self.gvals[:]
+                    gcon[0, :] = -self.gcvals[:]
+                    return
+
+            nvars_l = len(x_init)
+            nvars = np.zeros(1, dtype=type(nvars_l))
+            comm.Allreduce(np.array([nvars_l]), nvars)
+            mmaprob = MMAProblem(comm, nvars[0], nvars_l, problem)
+            out_file = os.path.join(prefix, 'mma4py_output_file%d.dat'%(step))
+            mmaopt = MMAOptimizer(mmaprob, out_file)
+            mmaopt.optimize(args.max_iter)
+
+            # Manually create the f5 file
+            flag = (TACS.OUTPUT_CONNECTIVITY |
+                    TACS.OUTPUT_NODES |
+                    TACS.OUTPUT_DISPLACEMENTS |
+                    TACS.OUTPUT_EXTRAS)
+            f5 = TACS.ToFH5(problem.getAssembler(), TACS.SOLID_ELEMENT, flag)
+            f5.writeToFile(os.path.join(args.prefix, 'output_refine{:d}.f5'.format(step)))
+
+            # Get optimal objective and constraint
+            xopt_vals = mmaopt.getOptimizedDesign()
+            xopt = problem.createDesignVec()
+            TMR.convertPVecToVec(xopt).getArray()[:] = xopt_vals[:]
+            fail, obj, cons = problem.evalObjCon(1, xopt)
+            con = cons[0]
+
+            # Compute discreteness
+            xopt_global = comm.allgather(xopt_vals)
+            xopt_global = np.concatenate(xopt_global)
+            discreteness = np.dot(xopt_global, 1.0-xopt_global) / len(xopt_global)
+
+            # Compute discreteness for rho
+            rhoopt = problem.getAssembler().createDesignVec()
+            problem.getTopoFilter().applyFilter(TMR.convertPVecToVec(xopt), rhoopt)
+            rhoopt_global = comm.allgather(rhoopt.getArray())
+            rhoopt_global = np.concatenate(rhoopt_global)
+            discreteness_rho = np.dot(rhoopt_global, 1.0-rhoopt_global) / len(rhoopt_global)
+
         # Optimize with openmdao/pyoptsparse wrapper if specified
-        if args.optimizer == 'snopt' or args.optimizer == 'ipopt':
+        elif args.optimizer == 'snopt' or args.optimizer == 'ipopt':
             # Broadcast local size to all processor
             local_size = len(x_init)
             sizes = [ 0 ]*comm.size
@@ -379,7 +456,8 @@ if __name__ == '__main__':
             print('[Optimum] obj:         {:20.10e}'.format(obj))
             print('[Optimum] con:         {:20.10e}'.format(con))
             print('[Optimum] infeas:      {:20.10e}'.format(infeas))
-            print('Qn time: {:10.2e} s'.format(obj_callback.getAveragedQnTime()))
+            if args.qn_correction:
+                print('Qn time: {:10.2e} s'.format(obj_callback.getAveragedQnTime()))
 
             pkl = dict()
             pkl['discreteness'] = discreteness
@@ -406,7 +484,9 @@ if __name__ == '__main__':
             pkl['cmd'] = cmd
             pkl['problem'] = 'comp-min'
             pkl['paropt-type'] = args.paropt_type
-            pkl['qn-time'] = obj_callback.getAveragedQnTime()
+            pkl['qn-time'] = None
+            if args.qn_correction:
+                pkl['qn-time'] = obj_callback.getAveragedQnTime()
 
             # Save snapshot
             pkl['snapshot'] = obj_callback.get_snapshot()
