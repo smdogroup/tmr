@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
-        choices=['paropt', 'snopt', 'ipopt', 'mma'])
+        choices=['paropt', 'snopt', 'ipopt', 'mma', 'mma4py'])
     p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--niter-finest', type=int, default=100)
     p.add_argument('--max-iter', type=int, default=100)
@@ -277,8 +277,77 @@ if __name__ == '__main__':
         xopt = problem.getAssembler().createDesignVec()
         rhoopt = problem.getAssembler().createDesignVec()
 
+        # Optimize using mma4py
+        if args.optimizer == 'mma4py':
+
+            from mma4py import Problem as MMAProblemBase
+            from mma4py import Optimizer as MMAOptimizer
+
+            class MMAProblem(MMAProblemBase):
+
+                def __init__(self, comm, nvars, nvars_l, prob):
+                    self.ncon = 1
+                    super().__init__(comm, nvars, nvars_l, self.ncon)
+                    self.prob = prob
+
+                    self.xvec = prob.createDesignVec()
+                    self.gvec = prob.createDesignVec()
+                    self.gcvec = prob.createDesignVec()
+                    return
+
+                def getVarsAndBounds(self, x, lb, ub) -> None:
+                    self.prob.getVarsAndBounds(x, lb, ub)
+                    return
+
+                def evalObjCon(self, x, cons) -> float:
+                    fail, obj, con = self.prob.evalObjCon(x)
+                    cons[:] = -con[:]
+                    return obj
+
+                def evalObjConGrad(self, x, g, gcon):
+                    self.prob.evalObjConGradient(x, g, gcon)
+                    gcon[:] = -gcon[:]
+                    return
+
+            nvars_l = len(redu_x0)
+            nvars = np.zeros(1, dtype=type(nvars_l))
+            comm.Allreduce(np.array([nvars_l]), nvars)
+            mmaprob = MMAProblem(comm, nvars[0], nvars_l, redu_prob)
+            out_file = os.path.join(prefix, 'mma4py_output_file%d.dat'%(step))
+            mmaopt = MMAOptimizer(mmaprob, out_file)
+            mmaopt.optimize(args.max_iter)
+
+            # Manually create the f5 file
+            flag = (TACS.OUTPUT_CONNECTIVITY |
+                    TACS.OUTPUT_NODES |
+                    TACS.OUTPUT_DISPLACEMENTS |
+                    TACS.OUTPUT_EXTRAS)
+            f5 = TACS.ToFH5(problem.getAssembler(), TACS.SOLID_ELEMENT, flag)
+            f5.writeToFile(os.path.join(args.prefix, 'output_refine{:d}.f5'.format(step)))
+
+            # Get optimal objective and constraint
+            redu_xopt_vals = mmaopt.getOptimizedDesign()
+            redu_xopt = redu_prob.createDesignVec()
+            redu_xopt[:] = redu_xopt_vals[:]
+
+            fail, obj, cons = redu_prob.evalObjCon(redu_xopt)
+            con = cons[0]
+
+            # Compute discreteness
+            redu_xopt_g = comm.allgather(np.array(redu_xopt))
+            redu_xopt_g = np.concatenate(redu_xopt_g)
+            discreteness = np.dot(redu_xopt_g, 1.0-redu_xopt_g) / len(redu_xopt_g)
+
+            # Compute discreteness for rho
+            redu_prob.reduDVtoDV(redu_xopt, xopt.getArray())
+            problem.getTopoFilter().applyFilter(xopt, rhoopt)
+            redu_prob.DVtoreduDV(rhoopt.getArray(), redu_rhoopt)
+            redu_rhoopt_g = comm.allgather(np.array(redu_rhoopt))
+            redu_rhoopt_g = np.concatenate(redu_rhoopt_g)
+            discreteness_rho = np.dot(redu_rhoopt_g, 1.0-redu_rhoopt_g) / len(redu_rhoopt_g)
+
         # Optimize with openmdao/pyoptsparse wrapper if specified
-        if args.optimizer == 'snopt' or args.optimizer == 'ipopt':
+        elif args.optimizer == 'snopt' or args.optimizer == 'ipopt':
 
             # Create distributed openMDAO component
             omprob = om.Problem()
@@ -420,7 +489,8 @@ if __name__ == '__main__':
             print('[Optimum] obj:         {:20.10e}'.format(obj))
             print('[Optimum] con:         {:20.10e}'.format(con))
             print('[Optimum] infeas:      {:20.10e}'.format(infeas))
-            print('Qn time: {:10.2e} s'.format(constr_callback.getAveragedQnTime()))
+            if args.qn_correction:
+                print('Qn time: {:10.2e} s'.format(constr_callback.getAveragedQnTime()))
 
             pkl = dict()
             pkl['discreteness'] = discreteness
@@ -450,8 +520,10 @@ if __name__ == '__main__':
             pkl['paropt-type'] = args.paropt_type
             pkl['gep-evals'] = evals
             pkl['gep-res'] = res
-            pkl['qn-time'] = constr_callback.getAveragedQnTime()
             pkl['snapshot'] = redu_prob.get_snapshot()
+            pkl['qn-time'] = None
+            if args.qn_correction:
+                pkl['qn-time'] = constr_callback.getAveragedQnTime()
 
             if args.optimizer == 'paropt':
                 pkl['curvs'] = constr_callback.getQnUpdateCurvs()
