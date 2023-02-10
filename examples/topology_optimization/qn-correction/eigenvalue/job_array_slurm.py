@@ -113,7 +113,7 @@ if __name__ == '__main__':
         csv = 'freq_constr.csv'
         output = '_freq_cases.txt'
         pbs = '_freq_cases.sbatch'
-        exescript = 'frequency.py'
+        exescript = 'refactor_frequency.py'
     elif args.problem == 'compfreq':
         csv = 'compfreq_cases_main.csv'
         output = '_compfreq_cases.txt'
