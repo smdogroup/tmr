@@ -57,7 +57,7 @@ jobs:
 
           # Install conda libraries
           conda install -c anaconda openmpi -q -y;
-          conda install gxx_linux-64 -q -y;
+          conda install gxx_linux-64=9.3.0 -q -y;
           conda install -c anaconda openblas -q -y;
           conda install -c conda-forge lapack -q -y;
           conda install -c conda-forge metis -q -y;
