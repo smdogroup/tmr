@@ -45,7 +45,7 @@ jobs:
           echo "=============================================================";
           source $CONDA/etc/profile.d/conda.sh;
           echo $CONDA/bin >> $GITHUB_PATH;
-          conda create -n TMR python=3.8 numpy=1.18 scipy=1.4 -q -y;
+          conda create -n TMR python=3.8 numpy scipy -q -y;
           conda activate TMR;
 
           echo "=============================================================";
