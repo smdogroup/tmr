@@ -79,9 +79,9 @@ jobs:
 
           # Install OpenCASCADE 
           cd $TMR_DIR/extern;
-          wget https://acdl.mit.edu/ESP/OCC741lin64.tgz;
-          tar -zxf OCC741lin64.tgz;
-          mv OpenCASCADE-7.4.1/ OpenCASCADE;
+          wget https://acdl.mit.edu/ESP/otherOCCs/OCC681lin64.tgz;
+          tar -zxf OCC681lin64.tgz;
+          mv OpenCASCADE-6.8.1/ OpenCASCADE;
           export CASROOT=$TMR_DIR/extern/OpenCASCADE;
           export CASARCH=;
           export PATH=$CASROOT/bin:$PATH;
