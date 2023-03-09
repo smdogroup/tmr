@@ -62,11 +62,13 @@ jobs:
           conda install -c conda-forge lapack -q -y;
           conda install -c conda-forge metis -q -y;
           conda install -c conda-forge mpi4py  -q -y;
-          conda install -c conda-forge libglu -q -y;
 
           # Install packages via pip
           pip install testflo;
           pip install cython;
+
+          # Install libraries via apt-get
+          sudo apt-get install libglu1-mesa
 
           # Install Blossom V
           cd $TMR_DIR/extern;
