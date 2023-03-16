@@ -1091,16 +1091,16 @@ void TMRQuadForest::evalInterp( const double pt[], double N[],
   double Nv[MAX_ORDER], Nvd[MAX_ORDER], Nvdd[MAX_ORDER];
 
   if (interp_type == TMR_BERNSTEIN_POINTS){
+    // Evaluate the bernstein shape functions
+    bernstein_shape_func_second_derivative(mesh_order, pt[0], Nu, Nud, Nudd);
+    bernstein_shape_func_second_derivative(mesh_order, pt[0], Nv, Nvd, Nvdd);
+  }
+  else {
     // Evaluate the shape functions
     lagrange_shape_func_second_derivative(mesh_order, pt[0], interp_knots,
                                           Nu, Nud, Nudd);
     lagrange_shape_func_second_derivative(mesh_order, pt[1], interp_knots,
                                           Nv, Nvd, Nvdd);
-  }
-  else {
-    // Evaluate the bernstein shape functions
-    bernstein_shape_func_second_derivative(mesh_order, pt[0], Nu, Nud, Nudd);
-    bernstein_shape_func_second_derivative(mesh_order, pt[0], Nv, Nvd, Nvdd);
   }
 
   for ( int j = 0; j < mesh_order; j++ ){

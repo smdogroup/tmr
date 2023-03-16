@@ -219,7 +219,7 @@ static TacsScalar computeJacobianTrans2D( const TacsScalar Xpts[],
   }
 
   // Compute the cross-product with the normal
-  crossProduct(1.0, &Xd[6], &Xd[0], &Xd[3]);
+  crossProduct(&Xd[0], &Xd[3], &Xd[6]);
   vec3Scale(1.0/sqrt(vec3Dot(&Xd[6], &Xd[6])), &Xd[6]);
 
   // Compute the transpose of the Jacobian transformation
@@ -735,7 +735,7 @@ static void computeElemRecon2D( const int vars_per_node,
       vec3Scale(1.0/sqrt(vec3Dot(d1, d1)), d1);
 
       // Compute d2 = n x d1
-      crossProduct(1.0, d2, &Xd[6], d1);
+      crossProduct(&Xd[6], d1, d2);
 
       // First, compute the contributions to the righ-hand-side. The
       // right vector contains the difference between the prescribed
@@ -2498,7 +2498,7 @@ double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
     double time = 0.0;
 
     // Get the variables for this element on the coarse mesh
-    tacs->getElement(i, vars_elem, NULL);
+    tacs->getElement(i, NULL, vars_elem);
 
     // Get the node numbers for this element
     int len;
