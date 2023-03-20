@@ -51,6 +51,7 @@ if __name__ == '__main__':
     # Optimization
     p.add_argument('--optimizer', type=str, default='paropt',
         choices=['paropt', 'snopt', 'ipopt', 'mma', 'mma4py'])
+    p.add_argument('--hessian', default='bfgs', choices=['bfgs', 'sr1'])
     p.add_argument('--n-mesh-refine', type=int, default=1)
     p.add_argument('--niter-finest', type=int, default=100)
     p.add_argument('--max-iter', type=int, default=100)
@@ -125,6 +126,9 @@ if __name__ == '__main__':
         adaptive_gamma_update = True
     else:
         adaptive_gamma_update = False
+    qn_type = args.qn_type
+    if args.hessian == 'sr1':
+        qn_type = 'sr1'
     optimization_options = {
         'algorithm': 'tr',
         'output_level':args.output_level,
@@ -144,7 +148,7 @@ if __name__ == '__main__':
         'tr_max_iterations': args.max_iter,
         'penalty_gamma': 50.0,
         'qn_subspace_size': args.qn_subspace, # try 5 or 10
-        'qn_type': args.qn_type,
+        'qn_type': qn_type,
         'qn_diag_type': 'yty_over_yts',
         'abs_res_tol': 1e-8,
         'starting_point_strategy': 'affine_step',
@@ -385,6 +389,7 @@ if __name__ == '__main__':
                 omprob.driver = om.pyOptSparseDriver()
                 omprob.driver.options['optimizer'] = 'IPOPT'
                 omprob.driver.opt_settings['tol'] = 1e-10
+                omprob.driver.opt_settings["limited_memory_update_type"] = args.hessian
                 omprob.driver.opt_settings['constr_viol_tol'] = 1e-10
                 omprob.driver.opt_settings['dual_inf_tol'] = 1e-10
                 omprob.driver.opt_settings['print_info_string'] = 'yes'

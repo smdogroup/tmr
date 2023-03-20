@@ -11,7 +11,7 @@ p.add_argument('--include_stdout', action='store_true')
 p.add_argument('--include_non_design_mass', action='store_true')
 p.add_argument('--include_fail', action='store_true')
 p.add_argument('--stdout_optimizers', nargs='*',
-    default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'],
+    default=['paropt', 'paroptqn', 'paroptsr1', 'snopt', 'ipopt', 'ipoptsr1', 'mma', 'mma4py'],
     help='Make sure the order is consistent with order defined in job_array.py')
 args = p.parse_args()
 
@@ -31,7 +31,7 @@ problem = os.path.basename(out_list[0]).split('-')[0]
 dirs = os.listdir(result_folder)
 r = re.compile(r"\d+-.+")
 dirs = list(filter(r.match, dirs))
-rank = {'paropt':.1, 'paroptqn':.2, 'snopt':.3, 'ipopt':.4, 'mma':.5}
+rank = {'paropt':.1, 'paroptqn':.2, 'snopt':.3, 'ipopt':.4, 'mma':.5, 'mma4py': .6, 'paroptsr1': .7, 'ipoptsr1': .8}
 dirs.sort(key=lambda s:int(s.split('-')[0]) + rank[s.split('-')[1]])
 
 # Output folder name
@@ -66,7 +66,8 @@ for d in dirs:
         fail_f5_list = glob(join(src, 'fail.f5'))
         fail_vtk_list = glob(join(src, 'fail.vtk'))
         if fail_f5_list and not fail_vtk_list:
-            os.system('f5tovtk {:s}'.format(fail_f5_list[0]))
+            cmd = 'srun --account=gts-gkennedy9-coda20 f5tovtk {:s}'.format(fail_f5_list[0])
+            print("[warning]vtk doesn't exist, run %s to generate" % cmd)
         fail_vtk_list = glob(join(src, 'fail.vtk'))
         if fail_vtk_list:
             copy(fail_vtk_list[0], dest)
@@ -76,16 +77,17 @@ for d in dirs:
         m0_f5_list = glob(join(src, 'non_design_mass.f5'))
         m0_vtk_list = glob(join(src, 'non_design_mass.vtk'))
         if m0_f5_list and not m0_vtk_list:
-            os.system('f5tovtk {:s}'.format(m0_f5_list[0]))
+            cmd = 'srun --account=gts-gkennedy9-coda20 f5tovtk {:s}'.format(m0_f5_list[0])
+            print("[warning]vtk doesn't exist, run %s to generate" % cmd)
         m0_vtk_list = glob(join(src, 'non_design_mass.vtk'))
         if m0_vtk_list:
             copy(m0_vtk_list[0], dest)
 
     # Copy over outputs
-    if omz == 'paropt' or omz == 'paroptqn':
+    if omz == 'paropt' or omz == 'paroptqn' or omz == 'paroptsr1':
         prefix = 'tr_output_file'
-    elif omz == 'mma':
-        prefix = 'mma_output_file'
+    elif omz == 'ipoptsr1':
+        prefix = 'ipopt_output_file'
     else:
         prefix = omz+'_output_file'
 
@@ -107,7 +109,9 @@ for d in dirs:
     if not vtk_list and f5_list:
         f5_list.sort(key=version_number)  # Sort by version number in ascent order
         f5 = f5_list[-1]  # pick the largest one
-        os.system('f5tovtk {:s}'.format(f5))
+        cmd = 'srun --account=gts-gkennedy9-coda20 f5tovtk {:s}'.format(f5)
+        print("[warning]vtk doesn't exist, run %s to generate" % cmd)
+
 
     # Now we should have vtk
     vtk_list = glob(join(src, 'output*.vtk'))

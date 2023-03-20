@@ -10,7 +10,7 @@ def dic2str(dc):
     example:
     dc = {'no':1, 'domain':'cantilever', 'AR': 1}
     dic2str(dc) = '--domain cantilever --AR 1'
-    
+
     Note:
     key name starting with 1 or more underscores
     are considered comments and will not be included
@@ -29,6 +29,10 @@ def optimizer2cmd(optimizer, problem, compfreq_qn):
                 return '--optimizer paropt --qn-correction-comp --qn-correction-freq'
         else:
             return '--optimizer paropt --qn-correction'
+    elif optimizer == "paroptsr1":
+        return '--optimizer paropt --hessian sr1'
+    elif optimizer == "ipoptsr1":
+        return '--optimizer ipopt --hessian sr1'
     else:
         return '--optimizer {:s}'.format(optimizer)
 
@@ -94,8 +98,8 @@ if __name__ == '__main__':
     p.add_argument('--compfreq-qn', type=str, default='comp',
         choices=['comp', 'freq', 'compfreq'])
     p.add_argument('--optimizer', type=str, nargs='*',
-        default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma', 'mma4py'],
-        choices=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma', 'mma4py'])
+        default=['paropt', 'paroptqn', 'paroptsr1', 'snopt', 'ipopt', 'ipoptsr1', 'mma', 'mma4py'],
+        choices=['paropt', 'paroptqn', 'paroptsr1', 'snopt', 'ipopt', 'ipoptsr1', 'mma', 'mma4py'])
     p.add_argument('--walltime', type=int, default=24, help='in hours')
     args = p.parse_args()
 
@@ -124,7 +128,7 @@ if __name__ == '__main__':
     physics = readCSV(csv, args.start, args.end)
 
     # Create case commands
-    case_cmds, n_exist_case = createCaseCmds(args.problem, 
+    case_cmds, n_exist_case = createCaseCmds(args.problem,
         physics, args.optimizer, exescript, args.compfreq_qn)
 
     # Write case commands to txt
