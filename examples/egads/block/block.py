@@ -43,7 +43,7 @@ B2 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
 
 # Create the cylinder cutout for the upper box
 x0 = [cx1, cy1, h1]
-x1 = [cx1, cy1, h1+h2]
+x1 = [cx1, cy1, h1 + h2]
 C21 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r2])
 
 parts.append(B2.solidBoolean(C21, egads.SUBTRACTION))
@@ -83,7 +83,7 @@ htarget = 2.0
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('block.vtk', 'hex')
+mesh.writeToVTK("block.vtk", "hex")
 
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()
@@ -99,5 +99,5 @@ forest.setTopology(topo)
 # Create random trees and balance the mesh. Print the output file
 forest.createRandomTrees(nrand=1, max_lev=3)
 forest.balance(1)
-filename = 'block_forest%d.vtk'%(comm.rank)
+filename = "block_forest%d.vtk" % (comm.rank)
 forest.writeForestToVTK(filename)

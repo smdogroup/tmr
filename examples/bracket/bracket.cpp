@@ -1,11 +1,11 @@
 #ifdef TMR_HAS_OPENCASCADE
 
-#include "TMROpenCascade.h"
-#include "TMRMesh.h"
 #include "TACSMeshLoader.h"
+#include "TMRMesh.h"
 #include "TMROctForest.h"
+#include "TMROpenCascade.h"
 
-int main( int argc, char *argv[] ){
+int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
@@ -14,16 +14,20 @@ int main( int argc, char *argv[] ){
   int write_faces_to_vtk = 0;
   int test_surf_mesh = 0;
   int order = 2;
-  for ( int k = 0; k < argc; k++ ){
-    if (strcmp(argv[k], "--write_faces") == 0){
+  for (int k = 0; k < argc; k++) {
+    if (strcmp(argv[k], "--write_faces") == 0) {
       write_faces_to_vtk = 1;
     }
-    if (strcmp(argv[k], "--test_surf_mesh") == 0){
+    if (strcmp(argv[k], "--test_surf_mesh") == 0) {
       test_surf_mesh = 1;
     }
-    if (sscanf(argv[k], "order=%d", &order) == 1){
-      if (order < 2){ order = 2; }
-      if (order > 5){ order = 5; }
+    if (sscanf(argv[k], "order=%d", &order) == 1) {
+      if (order < 2) {
+        order = 2;
+      }
+      if (order > 5) {
+        order = 5;
+      }
     }
   }
 
@@ -36,7 +40,7 @@ int main( int argc, char *argv[] ){
 
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
-  if (geo){
+  if (geo) {
     geo->incref();
 
     // Get the volume
@@ -51,8 +55,8 @@ int main( int argc, char *argv[] ){
     // Write the surfaces files out, if needed
     int rank = 0;
     MPI_Comm_rank(comm, &rank);
-    if (rank == 0 && write_faces_to_vtk){
-      for ( int i = 0; i < num_faces; i++ ){
+    if (rank == 0 && write_faces_to_vtk) {
+      for (int i = 0; i < num_faces; i++) {
         char output[128];
         sprintf(output, "faces%d.vtk", i);
         faces[i]->writeToVTK(output);
@@ -68,7 +72,7 @@ int main( int argc, char *argv[] ){
     TMRFace *upper = faces[upper_face_num];
     upper->setSource(volume[0], lower);
 
-    if (test_surf_mesh){
+    if (test_surf_mesh) {
       int num_verts, num_edges;
       TMRVertex **verts;
       TMREdge **edges;
@@ -76,9 +80,8 @@ int main( int argc, char *argv[] ){
       geo->getEdges(&num_edges, &edges);
       geo->getFaces(&num_faces, &faces);
 
-      TMRModel *geo_surf = new TMRModel(num_verts, verts,
-                                        num_edges, edges,
-                                        num_faces, faces);
+      TMRModel *geo_surf =
+          new TMRModel(num_verts, verts, num_edges, edges, num_faces, faces);
       geo_surf->incref();
 
       TMRMesh *mesh_surf = new TMRMesh(comm, geo_surf);
@@ -142,4 +145,4 @@ int main( int argc, char *argv[] ){
   return 0;
 }
 
-#endif // TMR_HAS_OPENCASCADE
+#endif  // TMR_HAS_OPENCASCADE

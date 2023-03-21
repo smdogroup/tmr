@@ -6,6 +6,7 @@ import argparse
 import os
 from OctMeshQuality import *
 
+
 def get_edge_dirs_verts(elist):
     edge_list = elist[:]
 
@@ -17,7 +18,7 @@ def get_edge_dirs_verts(elist):
     nedges = len(edge_list)
     for k in range(nedges):
         for i, edge in enumerate(edge_list):
-            v1, v2 = edge.getVertices()        
+            v1, v2 = edge.getVertices()
             if v1.getEntityId() == vnext.getEntityId():
                 dirs.append(1)
                 edges.append(edge_list.pop(i))
@@ -32,8 +33,9 @@ def get_edge_dirs_verts(elist):
 
     return edges, dirs, verts[:-1]
 
+
 def load_model():
-    geo = TMR.LoadModel('beam.step')
+    geo = TMR.LoadModel("beam.step")
 
     # Get the faces/volume from the model
     faces = geo.getFaces()
@@ -42,14 +44,15 @@ def load_model():
     vols = geo.getVolumes()
 
     # Set the names
-    faces[6].setName('hole')
-    faces[7].setName('hole')
-    faces[0].setName('fixed')
+    faces[6].setName("hole")
+    faces[7].setName("hole")
+    faces[0].setName("fixed")
 
     # Set the source/destination faces
     faces[1].setSource(vols[0], faces[3])
 
     return geo
+
 
 # The communicator
 comm = MPI.COMM_WORLD
@@ -59,7 +62,7 @@ geo = load_model()
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed')
+bcs.addBoundaryCondition("fixed")
 
 # Create the mesh
 mesh = TMR.Mesh(comm, geo)
@@ -77,7 +80,7 @@ mesh.mesh(0.02, opts)
 # Create a model from the mesh
 model = mesh.createModelFromMesh()
 
-# Create the corresponding mesh topology from the mesh-model 
+# Create the corresponding mesh topology from the mesh-model
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
@@ -92,6 +95,6 @@ fshape = computeShape(forest)
 
 # Wrtie the mesh quality to vtk
 writeQualityToVtk(forest, ar, min_ang, fshape)
-plotShapeHist(fshape, xmin=np.amin(fshape), fname='beam_shape_hist.pdf')
-plotARHist(ar, fname='beam_ar_hist.pdf', xmax=np.ceil(4.0*np.amax(ar))/4.0)
-plotMinAngHist(min_ang, xmin=np.amin(min_ang)-1.0, fname='beam_ang_hist.pdf')
+plotShapeHist(fshape, xmin=np.amin(fshape), fname="beam_shape_hist.pdf")
+plotARHist(ar, fname="beam_ar_hist.pdf", xmax=np.ceil(4.0 * np.amax(ar)) / 4.0)
+plotMinAngHist(min_ang, xmin=np.amin(min_ang) - 1.0, fname="beam_ang_hist.pdf")

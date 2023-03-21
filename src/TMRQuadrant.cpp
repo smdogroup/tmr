@@ -19,12 +19,13 @@
 */
 
 #include "TMRQuadrant.h"
+
 #include "TMRHashFunction.h"
 
 /*
   Get the child id of the quadrant
 */
-int TMRQuadrant::childId(){
+int TMRQuadrant::childId() {
   int id = 0;
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
@@ -37,33 +38,32 @@ int TMRQuadrant::childId(){
 /*
   Return the sibling of the quadrant
 */
-void TMRQuadrant::getSibling( int id, TMRQuadrant *sib ){
+void TMRQuadrant::getSibling(int id, TMRQuadrant *sib) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
-  int32_t xr = ((x & h) ? x-h : x);
-  int32_t yr = ((y & h) ? y-h : y);
+  int32_t xr = ((x & h) ? x - h : x);
+  int32_t yr = ((y & h) ? y - h : y);
 
   sib->face = face;
   sib->level = level;
   sib->info = 0;
-  sib->x = ((id & 1) ? xr+h : xr);
-  sib->y = ((id & 2) ? yr+h : yr);
+  sib->x = ((id & 1) ? xr + h : xr);
+  sib->y = ((id & 2) ? yr + h : yr);
 }
 
 /*
   Get the parent of the quadrant
 */
-void TMRQuadrant::parent( TMRQuadrant *p ){
-  if (level > 0){
+void TMRQuadrant::parent(TMRQuadrant *p) {
+  if (level > 0) {
     p->face = face;
-    p->level = level-1;
+    p->level = level - 1;
     p->info = 0;
     const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
     p->x = x & ~h;
     p->y = y & ~h;
-  }
-  else {
+  } else {
     p->face = face;
     p->level = 0;
     p->info = 0;
@@ -75,7 +75,7 @@ void TMRQuadrant::parent( TMRQuadrant *p ){
 /*
   Get the edge neighbour
 */
-void TMRQuadrant::edgeNeighbor( int edge, TMRQuadrant *neighbor ){
+void TMRQuadrant::edgeNeighbor(int edge, TMRQuadrant *neighbor) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->face = face;
   neighbor->level = level;
@@ -88,14 +88,14 @@ void TMRQuadrant::edgeNeighbor( int edge, TMRQuadrant *neighbor ){
 /*
   Get the neighbor along a corner
 */
-void TMRQuadrant::cornerNeighbor( int corner, TMRQuadrant *neighbor ){
+void TMRQuadrant::cornerNeighbor(int corner, TMRQuadrant *neighbor) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->face = face;
   neighbor->level = level;
   neighbor->info = 0;
 
-  neighbor->x = x + (2*(corner & 1) - 1)*h;
-  neighbor->y = y + ((corner & 2) - 1)*h;
+  neighbor->x = x + (2 * (corner & 1) - 1) * h;
+  neighbor->y = y + ((corner & 2) - 1) * h;
 }
 
 /*
@@ -105,8 +105,8 @@ void TMRQuadrant::cornerNeighbor( int corner, TMRQuadrant *neighbor ){
   if self > quadrant. Ties are broken by the level of the quadrant such
   that the quadrants will be sorted by location then level.
 */
-int TMRQuadrant::compare( const TMRQuadrant *quadrant ) const {
-  if (face != quadrant->face){
+int TMRQuadrant::compare(const TMRQuadrant *quadrant) const {
+  if (face != quadrant->face) {
     return face - quadrant->face;
   }
 
@@ -115,23 +115,21 @@ int TMRQuadrant::compare( const TMRQuadrant *quadrant ) const {
   uint32_t sor = xxor | yxor;
 
   // If there is no most-significant bit, then we are done
-  if (sor == 0){
+  if (sor == 0) {
     return level - quadrant->level;
   }
 
   // Check for the most-significant bit
   int discrim = 0;
-  if (xxor > (sor ^ xxor)){
+  if (xxor > (sor ^ xxor)) {
     discrim = x - quadrant->x;
-  }
-  else {
+  } else {
     discrim = y - quadrant->y;
   }
 
-  if (discrim > 0){
+  if (discrim > 0) {
     return 1;
-  }
-  else if (discrim < 0){
+  } else if (discrim < 0) {
     return -1;
   }
   return 0;
@@ -141,8 +139,8 @@ int TMRQuadrant::compare( const TMRQuadrant *quadrant ) const {
   Compare two quadrants to determine whether they have the same Morton
   encoding, but may be at different levels.
 */
-int TMRQuadrant::comparePosition( const TMRQuadrant *quadrant ) const {
-  if (face != quadrant->face){
+int TMRQuadrant::comparePosition(const TMRQuadrant *quadrant) const {
+  if (face != quadrant->face) {
     return face - quadrant->face;
   }
 
@@ -153,17 +151,15 @@ int TMRQuadrant::comparePosition( const TMRQuadrant *quadrant ) const {
   // Note that here we do not distinguish between levels
   // Check for the most-significant bit
   int discrim = 0;
-  if (xxor > (sor ^ xxor)){
+  if (xxor > (sor ^ xxor)) {
     discrim = x - quadrant->x;
-  }
-  else {
+  } else {
     discrim = y - quadrant->y;
   }
 
-  if (discrim > 0){
+  if (discrim > 0) {
     return 1;
-  }
-  else if (discrim < 0){
+  } else if (discrim < 0) {
     return -1;
   }
   return 0;
@@ -173,8 +169,8 @@ int TMRQuadrant::comparePosition( const TMRQuadrant *quadrant ) const {
   Compare two quadrants to determine whether they have the same Morton
   encoding, but may be at different levels.
 */
-int TMRQuadrant::compareNode( const TMRQuadrant *quadrant ) const {
-  if (face != quadrant->face){
+int TMRQuadrant::compareNode(const TMRQuadrant *quadrant) const {
+  if (face != quadrant->face) {
     return face - quadrant->face;
   }
 
@@ -185,17 +181,15 @@ int TMRQuadrant::compareNode( const TMRQuadrant *quadrant ) const {
   // Note that here we do not distinguish between levels
   // Check for the most-significant bit
   int discrim = 0;
-  if (xxor > (sor ^ xxor)){
+  if (xxor > (sor ^ xxor)) {
     discrim = x - quadrant->x;
-  }
-  else {
+  } else {
     discrim = y - quadrant->y;
   }
 
-  if (discrim > 0){
+  if (discrim > 0) {
     return 1;
-  }
-  else if (discrim < 0){
+  } else if (discrim < 0) {
     return -1;
   }
   return info - quadrant->info;
@@ -206,13 +200,12 @@ int TMRQuadrant::compareNode( const TMRQuadrant *quadrant ) const {
   quadrant itself. This can be used to determine whether the given
   quadrant is a descendent of this object.
 */
-int TMRQuadrant::contains( TMRQuadrant *quad ){
+int TMRQuadrant::contains(TMRQuadrant *quad) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
   // Check whether the quadrant lies within this quadrant
-  if ((quad->face == face) &&
-      (quad->x >= x && quad->x < x + h) &&
-      (quad->y >= y && quad->y < y + h)){
+  if ((quad->face == face) && (quad->x >= x && quad->x < x + h) &&
+      (quad->y >= y && quad->y < y + h)) {
     return 1;
   }
 
@@ -222,9 +215,9 @@ int TMRQuadrant::contains( TMRQuadrant *quad ){
 /*
   Compare two quadrants within the same sub-tree
 */
-static int compare_quadrants( const void *a, const void *b ){
-  const TMRQuadrant *ao = static_cast<const TMRQuadrant*>(a);
-  const TMRQuadrant *bo = static_cast<const TMRQuadrant*>(b);
+static int compare_quadrants(const void *a, const void *b) {
+  const TMRQuadrant *ao = static_cast<const TMRQuadrant *>(a);
+  const TMRQuadrant *bo = static_cast<const TMRQuadrant *>(b);
 
   return ao->compare(bo);
 }
@@ -232,9 +225,9 @@ static int compare_quadrants( const void *a, const void *b ){
 /*
   Compare two quadrant positions
 */
-static int compare_position( const void *a, const void *b ){
-  const TMRQuadrant *ao = static_cast<const TMRQuadrant*>(a);
-  const TMRQuadrant *bo = static_cast<const TMRQuadrant*>(b);
+static int compare_position(const void *a, const void *b) {
+  const TMRQuadrant *ao = static_cast<const TMRQuadrant *>(a);
+  const TMRQuadrant *bo = static_cast<const TMRQuadrant *>(b);
 
   return ao->comparePosition(bo);
 }
@@ -242,9 +235,9 @@ static int compare_position( const void *a, const void *b ){
 /*
   Compare two quadrant nodes
 */
-static int compare_nodes( const void *a, const void *b ){
-  const TMRQuadrant *ao = static_cast<const TMRQuadrant*>(a);
-  const TMRQuadrant *bo = static_cast<const TMRQuadrant*>(b);
+static int compare_nodes(const void *a, const void *b) {
+  const TMRQuadrant *ao = static_cast<const TMRQuadrant *>(a);
+  const TMRQuadrant *bo = static_cast<const TMRQuadrant *>(b);
 
   return ao->compareNode(bo);
 }
@@ -252,8 +245,8 @@ static int compare_nodes( const void *a, const void *b ){
 /*
   Store a array of quadrants
 */
-TMRQuadrantArray::TMRQuadrantArray( TMRQuadrant *_array, int _size,
-                                    int _use_node_index ){
+TMRQuadrantArray::TMRQuadrantArray(TMRQuadrant *_array, int _size,
+                                   int _use_node_index) {
   array = _array;
   size = _size;
   max_size = size;
@@ -264,16 +257,14 @@ TMRQuadrantArray::TMRQuadrantArray( TMRQuadrant *_array, int _size,
 /*
   Destroy the quadrant array
 */
-TMRQuadrantArray::~TMRQuadrantArray(){
-  delete [] array;
-}
+TMRQuadrantArray::~TMRQuadrantArray() { delete[] array; }
 
 /*
   Duplicate the array and return the copy
 */
-TMRQuadrantArray* TMRQuadrantArray::duplicate(){
-  TMRQuadrant *arr = new TMRQuadrant[ size ];
-  memcpy(arr, array, size*sizeof(TMRQuadrant));
+TMRQuadrantArray *TMRQuadrantArray::duplicate() {
+  TMRQuadrant *arr = new TMRQuadrant[size];
+  memcpy(arr, array, size * sizeof(TMRQuadrant));
 
   TMRQuadrantArray *dup = new TMRQuadrantArray(arr, size, use_node_index);
   dup->is_sorted = is_sorted;
@@ -285,42 +276,39 @@ TMRQuadrantArray* TMRQuadrantArray::duplicate(){
   Sort the list and remove duplicates from the array of possible
   entries.
 */
-void TMRQuadrantArray::sort(){
-  if (use_node_index){
+void TMRQuadrantArray::sort() {
+  if (use_node_index) {
     qsort(array, size, sizeof(TMRQuadrant), compare_nodes);
 
     // Now that the Quadrants are sorted, remove duplicates
-    int i = 0; // Location from which to take entries
-    int j = 0; // Location to place entries
+    int i = 0;  // Location from which to take entries
+    int j = 0;  // Location to place entries
 
-    for ( ; i < size; i++, j++ ){
-      while ((i < size-1) &&
-             (array[i].compareNode(&array[i+1]) == 0)){
+    for (; i < size; i++, j++) {
+      while ((i < size - 1) && (array[i].compareNode(&array[i + 1]) == 0)) {
         i++;
       }
 
-      if (i != j){
+      if (i != j) {
         array[j] = array[i];
       }
     }
 
     // The new size of the array
     size = j;
-  }
-  else {
+  } else {
     qsort(array, size, sizeof(TMRQuadrant), compare_quadrants);
 
     // Now that the Quadrants are sorted, remove duplicates
-    int i = 0; // Location from which to take entries
-    int j = 0; // Location to place entries
+    int i = 0;  // Location from which to take entries
+    int j = 0;  // Location to place entries
 
-    for ( ; i < size; i++, j++ ){
-      while ((i < size-1) &&
-             (array[i].comparePosition(&array[i+1]) == 0)){
+    for (; i < size; i++, j++) {
+      while ((i < size - 1) && (array[i].comparePosition(&array[i + 1]) == 0)) {
         i++;
       }
 
-      if (i != j){
+      if (i != j) {
         array[j] = array[i];
       }
     }
@@ -335,38 +323,37 @@ void TMRQuadrantArray::sort(){
 /*
   Determine if the array contains the specified quadrant
 */
-TMRQuadrant* TMRQuadrantArray::contains( TMRQuadrant *q,
-                                         const int use_position ){
-  if (!is_sorted){
+TMRQuadrant *TMRQuadrantArray::contains(TMRQuadrant *q,
+                                        const int use_position) {
+  if (!is_sorted) {
     is_sorted = 1;
     sort();
   }
 
-  if (use_node_index){
-    return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant),
-                                 compare_nodes);
-  }
-  else {
+  if (use_node_index) {
+    return (TMRQuadrant *)bsearch(q, array, size, sizeof(TMRQuadrant),
+                                  compare_nodes);
+  } else {
     // Search for nodes - these will share the same
-    if (use_position){
-      return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant),
-                                   compare_position);
+    if (use_position) {
+      return (TMRQuadrant *)bsearch(q, array, size, sizeof(TMRQuadrant),
+                                    compare_position);
     }
 
     // Search the array for an identical element
-    return (TMRQuadrant*)bsearch(q, array, size, sizeof(TMRQuadrant),
-                                 compare_quadrants);
+    return (TMRQuadrant *)bsearch(q, array, size, sizeof(TMRQuadrant),
+                                  compare_quadrants);
   }
 }
 
 /*
   Merge the entries of two arrays
 */
-void TMRQuadrantArray::merge( TMRQuadrantArray * list ){
-  if (!is_sorted){
+void TMRQuadrantArray::merge(TMRQuadrantArray *list) {
+  if (!is_sorted) {
     sort();
   }
-  if (!list->is_sorted){
+  if (!list->is_sorted) {
     list->sort();
   }
 
@@ -376,15 +363,14 @@ void TMRQuadrantArray::merge( TMRQuadrantArray * list ){
   // Scan through the list and determine the number
   // of duplicates
   int j = 0, i = 0;
-  for ( ; i < size; i++ ){
-    while ((j < list->size) &&
-           (list->array[j].compare(&array[i]) < 0)){
+  for (; i < size; i++) {
+    while ((j < list->size) && (list->array[j].compare(&array[i]) < 0)) {
       j++;
     }
-    if (j >= list->size){
+    if (j >= list->size) {
       break;
     }
-    if (array[i].compare(&list->array[j]) == 0){
+    if (array[i].compare(&list->array[j]) == 0) {
       nduplicates++;
     }
   }
@@ -393,40 +379,38 @@ void TMRQuadrantArray::merge( TMRQuadrantArray * list ){
   int len = size + list->size - nduplicates;
 
   // Allocate a new array if required
-  if (len > max_size){
+  if (len > max_size) {
     max_size = len;
 
     TMRQuadrant *temp = array;
-    array = new TMRQuadrant[ max_size ];
-    memcpy(array, temp, size*sizeof(TMRQuadrant));
+    array = new TMRQuadrant[max_size];
+    memcpy(array, temp, size * sizeof(TMRQuadrant));
 
     // Free the old array
-    delete [] temp;
+    delete[] temp;
   }
 
   // Set the pointer to the end of the new array
-  int end = len-1;
+  int end = len - 1;
 
   // Copy the new array back
-  i = size-1;
-  j = list->size-1;
-  while (i >= 0 && j >= 0){
-    if (array[i].compare(&list->array[j]) > 0){
+  i = size - 1;
+  j = list->size - 1;
+  while (i >= 0 && j >= 0) {
+    if (array[i].compare(&list->array[j]) > 0) {
       array[end] = array[i];
       end--, i--;
-    }
-    else if (list->array[j].compare(&array[i]) > 0){
+    } else if (list->array[j].compare(&array[i]) > 0) {
       array[end] = list->array[j];
       end--, j--;
-    }
-    else { // b[j] == a[i]
+    } else {  // b[j] == a[i]
       array[end] = array[i];
       end--, j--, i--;
     }
   }
 
   // Only need to copy over remaining elements from b - if any
-  while (j >= 0){
+  while (j >= 0) {
     array[j] = list->array[j];
     j--;
   }
@@ -438,15 +422,19 @@ void TMRQuadrantArray::merge( TMRQuadrantArray * list ){
 /*
   Get the array
 */
-void TMRQuadrantArray::getArray( TMRQuadrant **_array, int *_size ){
-  if (_array){ *_array = array; }
-  if (_size){ *_size = size; }
+void TMRQuadrantArray::getArray(TMRQuadrant **_array, int *_size) {
+  if (_array) {
+    *_array = array;
+  }
+  if (_size) {
+    *_size = size;
+  }
 }
 
 /*
   Create an queue of quadrants
 */
-TMRQuadrantQueue::TMRQuadrantQueue(){
+TMRQuadrantQueue::TMRQuadrantQueue() {
   root = tip = NULL;
   num_elems = 0;
 }
@@ -454,9 +442,9 @@ TMRQuadrantQueue::TMRQuadrantQueue(){
 /*
   Free the queue
 */
-TMRQuadrantQueue::~TMRQuadrantQueue(){
+TMRQuadrantQueue::~TMRQuadrantQueue() {
   QuadQueueNode *node = root;
-  while (node){
+  while (node) {
     QuadQueueNode *tmp = node;
     node = node->next;
     delete tmp;
@@ -466,20 +454,17 @@ TMRQuadrantQueue::~TMRQuadrantQueue(){
 /*
   Get the length of the quadrant queue
 */
-int TMRQuadrantQueue::length(){
-  return num_elems;
-}
+int TMRQuadrantQueue::length() { return num_elems; }
 
 /*
   Push a value onto the quadrant queue
 */
-void TMRQuadrantQueue::push( TMRQuadrant *quad ){
-  if (!tip){
+void TMRQuadrantQueue::push(TMRQuadrant *quad) {
+  if (!tip) {
     root = new QuadQueueNode();
     root->quad = *quad;
     tip = root;
-  }
-  else {
+  } else {
     tip->next = new QuadQueueNode();
     tip->next->quad = *quad;
     tip = tip->next;
@@ -490,17 +475,18 @@ void TMRQuadrantQueue::push( TMRQuadrant *quad ){
 /*
   Pop a value from the quadrant queue
 */
-TMRQuadrant TMRQuadrantQueue::pop(){
-  if (!root){
+TMRQuadrant TMRQuadrantQueue::pop() {
+  if (!root) {
     return TMRQuadrant();
-  }
-  else {
+  } else {
     num_elems--;
     TMRQuadrant temp = root->quad;
     QuadQueueNode *tmp = root;
     root = root->next;
     delete tmp;
-    if (num_elems == 0){ tip = NULL; }
+    if (num_elems == 0) {
+      tip = NULL;
+    }
     return temp;
   }
 }
@@ -508,14 +494,14 @@ TMRQuadrant TMRQuadrantQueue::pop(){
 /*
   Convert the queue to an array
 */
-TMRQuadrantArray* TMRQuadrantQueue::toArray(){
+TMRQuadrantArray *TMRQuadrantQueue::toArray() {
   // Allocate the array
-  TMRQuadrant *array = new TMRQuadrant[ num_elems ];
+  TMRQuadrant *array = new TMRQuadrant[num_elems];
 
   // Scan through the queue and retrieve the quadrants
   QuadQueueNode *node = root;
   int index = 0;
-  while (node){
+  while (node) {
     array[index] = node->quad;
     node = node->next;
     index++;
@@ -533,22 +519,22 @@ TMRQuadrantArray* TMRQuadrantQueue::toArray(){
   elements with other values. It is used to create unique lists of
   elements and nodes within the quadree mesh.
 */
-TMRQuadrantHash::TMRQuadrantHash( int _use_node_index ){
+TMRQuadrantHash::TMRQuadrantHash(int _use_node_index) {
   use_node_index = _use_node_index;
   num_elems = 0;
   num_buckets = min_num_buckets;
-  hash_buckets = new QuadHashNode*[ num_buckets ];
-  memset(hash_buckets, 0, num_buckets*sizeof(QuadHashNode*));
+  hash_buckets = new QuadHashNode *[num_buckets];
+  memset(hash_buckets, 0, num_buckets * sizeof(QuadHashNode *));
 }
 
 /*
   Free the memory allocated by the quadrant hash
 */
-TMRQuadrantHash::~TMRQuadrantHash(){
+TMRQuadrantHash::~TMRQuadrantHash() {
   // Free all the elements in the hash
-  for ( int i = 0; i < num_buckets; i++ ){
+  for (int i = 0; i < num_buckets; i++) {
     QuadHashNode *node = hash_buckets[i];
-    while (node){
+    while (node) {
       // Delete the old guy
       QuadHashNode *tmp = node;
       node = node->next;
@@ -556,23 +542,23 @@ TMRQuadrantHash::~TMRQuadrantHash(){
     }
   }
 
-  delete [] hash_buckets;
+  delete[] hash_buckets;
 }
 
 /*
   Covert the hash table to an array
 */
-TMRQuadrantArray* TMRQuadrantHash::toArray(){
+TMRQuadrantArray *TMRQuadrantHash::toArray() {
   // Create an array of quadrants
-  TMRQuadrant *array = new TMRQuadrant[ num_elems ];
+  TMRQuadrant *array = new TMRQuadrant[num_elems];
 
   // Loop over all the buckets
-  for ( int i = 0, index = 0; i < num_buckets; i++ ){
+  for (int i = 0, index = 0; i < num_buckets; i++) {
     // Get the hash bucket and extract all the elements from this
     // bucket into the array
     QuadHashNode *node = hash_buckets[i];
 
-    while (node){
+    while (node) {
       array[index] = node->quad;
       index++;
       node = node->next;
@@ -580,8 +566,8 @@ TMRQuadrantArray* TMRQuadrantHash::toArray(){
   }
 
   // Create an array object and add it to the list
-  TMRQuadrantArray *list = new TMRQuadrantArray(array, num_elems,
-                                                use_node_index);
+  TMRQuadrantArray *list =
+      new TMRQuadrantArray(array, num_elems, use_node_index);
   return list;
 }
 
@@ -598,32 +584,31 @@ TMRQuadrantArray* TMRQuadrantHash::toArray(){
   returns:
   true if the quadrant is added, false if it is not
 */
-int TMRQuadrantHash::addQuadrant( TMRQuadrant *quad ){
-  if (num_elems > 10*num_buckets){
+int TMRQuadrantHash::addQuadrant(TMRQuadrant *quad) {
+  if (num_elems > 10 * num_buckets) {
     // Redistribute the quadrants to new buckets
     int num_old_buckets = num_buckets;
-    num_buckets = 2*num_buckets;
-    QuadHashNode **new_buckets = new QuadHashNode*[ num_buckets ];
-    memset(new_buckets, 0, num_buckets*sizeof(QuadHashNode*));
+    num_buckets = 2 * num_buckets;
+    QuadHashNode **new_buckets = new QuadHashNode *[num_buckets];
+    memset(new_buckets, 0, num_buckets * sizeof(QuadHashNode *));
 
     // Keep track of the end bucket
-    QuadHashNode **end_buckets = new QuadHashNode*[ num_buckets ];
+    QuadHashNode **end_buckets = new QuadHashNode *[num_buckets];
 
     // Redistribute the quadrant nodes based on the new
     // number of buckets within the hash data structure
-    for ( int i = 0; i < num_old_buckets; i++ ){
+    for (int i = 0; i < num_old_buckets; i++) {
       QuadHashNode *node = hash_buckets[i];
-      while (node){
+      while (node) {
         int bucket = getBucket(&(node->quad));
 
         // If this is the first new bucket, create
         // the new node
-        if (!new_buckets[bucket]){
+        if (!new_buckets[bucket]) {
           new_buckets[bucket] = new QuadHashNode;
           new_buckets[bucket]->quad = node->quad;
           end_buckets[bucket] = new_buckets[bucket];
-        }
-        else {
+        } else {
           end_buckets[bucket]->next = new QuadHashNode;
           end_buckets[bucket]->next->quad = node->quad;
           end_buckets[bucket] = end_buckets[bucket]->next;
@@ -640,8 +625,8 @@ int TMRQuadrantHash::addQuadrant( TMRQuadrant *quad ){
       }
     }
 
-    delete [] end_buckets;
-    delete [] hash_buckets;
+    delete[] end_buckets;
+    delete[] hash_buckets;
     hash_buckets = new_buckets;
   }
 
@@ -649,38 +634,36 @@ int TMRQuadrantHash::addQuadrant( TMRQuadrant *quad ){
 
   // If no quadrant has been added to the bucket,
   // create a new bucket
-  if (!hash_buckets[bucket]){
+  if (!hash_buckets[bucket]) {
     hash_buckets[bucket] = new QuadHashNode;
     hash_buckets[bucket]->quad = *quad;
     num_elems++;
     return 1;
-  }
-  else {
+  } else {
     // Get the head node for the corresponding bucket
     QuadHashNode *node = hash_buckets[bucket];
-    if (use_node_index){
+    if (use_node_index) {
       // Search the bucket to see if there's another node in the list
-      while (node){
-        if (node->quad.compareNode(quad) == 0){
+      while (node) {
+        if (node->quad.compareNode(quad) == 0) {
           return 0;
         }
 
         // If the next node does not exist, quit while node
         // is the last node in the linked list
-        if (!node->next){
+        if (!node->next) {
           break;
         }
         node = node->next;
       }
-    }
-    else {
+    } else {
       // Perform the same search, except using quads
-      while (node){
-        if (node->quad.compare(quad) == 0){
+      while (node) {
+        if (node->quad.compare(quad) == 0) {
           return 0;
         }
 
-        if (!node->next){
+        if (!node->next) {
           break;
         }
         node = node->next;
@@ -702,11 +685,11 @@ int TMRQuadrantHash::addQuadrant( TMRQuadrant *quad ){
   This code creates a value based on the quadrant location within the
   mesh and then takes the remainder of the number of buckets.
 */
-int TMRQuadrantHash::getBucket( TMRQuadrant *quad ){
+int TMRQuadrantHash::getBucket(TMRQuadrant *quad) {
   // The hash value
   uint32_t val = 0;
 
-  if (use_node_index){
+  if (use_node_index) {
     uint32_t u = 0, v = 0, w = 0;
     u = quad->face;
     v = (1 << TMR_MAX_LEVEL) + quad->x;
@@ -714,8 +697,7 @@ int TMRQuadrantHash::getBucket( TMRQuadrant *quad ){
 
     // Compute the hash value
     val = TMRIntegerTripletHash(u, v, w);
-  }
-  else {
+  } else {
     uint32_t u = 0, v = 0, w = 0;
     u = quad->face;
     v = (1 << TMR_MAX_LEVEL) + quad->x;

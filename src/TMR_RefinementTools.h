@@ -21,103 +21,84 @@
 #ifndef TMR_REFINEMENT_TOOLS_H
 #define TMR_REFINEMENT_TOOLS_H
 
-#include "TMRQuadForest.h"
-#include "TMROctForest.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
+#include "TMROctForest.h"
+#include "TMRQuadForest.h"
 
 /*
   Create a TACS multigrid object
 */
-void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
-                       TMROctForest *forest[], TACSMg **_mg,
-                       double omega=1.0,
-                       int use_galerkin=0,
-                       int use_coarse_direct_solve=1,
-                       int use_chebyshev_smoother=0 );
-void TMR_CreateTACSMg( int nlevels, TACSAssembler *tacs[],
-                       TMRQuadForest *forest[], TACSMg **_mg,
-                       double omega=1.0,
-                       int use_galerkin=0,
-                       int use_coarse_direct_solve=1,
-                       int use_chebyshev_smoother=0 );
+void TMR_CreateTACSMg(int nlevels, TACSAssembler *tacs[],
+                      TMROctForest *forest[], TACSMg **_mg, double omega = 1.0,
+                      int use_galerkin = 0, int use_coarse_direct_solve = 1,
+                      int use_chebyshev_smoother = 0);
+void TMR_CreateTACSMg(int nlevels, TACSAssembler *tacs[],
+                      TMRQuadForest *forest[], TACSMg **_mg, double omega = 1.0,
+                      int use_galerkin = 0, int use_coarse_direct_solve = 1,
+                      int use_chebyshev_smoother = 0);
 
 /*
   Compute a direct interpolation from a lower-order mesh to a
   higher-order one
 */
-void TMR_ComputeInterpSolution( TMRQuadForest *forest,
-                                TACSAssembler *tacs,
-                                TMRQuadForest *forest_refined,
-                                TACSAssembler *tacs_refined,
-                                TACSBVec *_uvec,
-                                TACSBVec *_uvec_refined );
-void TMR_ComputeInterpSolution( TMROctForest *forest,
-                                TACSAssembler *tacs,
-                                TMROctForest *forest_refined,
-                                TACSAssembler *tacs_refined,
-                                TACSBVec *_uvec,
-                                TACSBVec *_uvec_refined );
+void TMR_ComputeInterpSolution(TMRQuadForest *forest, TACSAssembler *tacs,
+                               TMRQuadForest *forest_refined,
+                               TACSAssembler *tacs_refined, TACSBVec *_uvec,
+                               TACSBVec *_uvec_refined);
+void TMR_ComputeInterpSolution(TMROctForest *forest, TACSAssembler *tacs,
+                               TMROctForest *forest_refined,
+                               TACSAssembler *tacs_refined, TACSBVec *_uvec,
+                               TACSBVec *_uvec_refined);
 
 /*
   Compute the reconstructed solution on a uniformly refined mesh
 */
-void TMR_ComputeReconSolution( TMRQuadForest *forest,
-                               TACSAssembler *tacs,
-                               TMRQuadForest *forest_refined,
-                               TACSAssembler *tacs_refined,
-                               TACSBVec *_uvec=NULL,
-                               TACSBVec *_uvec_refined=NULL,
-                               const int compute_difference=0 );
-void TMR_ComputeReconSolution( TMROctForest *forest,
-                               TACSAssembler *tacs,
-                               TMROctForest *forest_refined,
-                               TACSAssembler *tacs_refined,
-                               TACSBVec *_uvec=NULL,
-                               TACSBVec *_uvec_refined=NULL,
-                               const int compute_difference=0 );
+void TMR_ComputeReconSolution(TMRQuadForest *forest, TACSAssembler *tacs,
+                              TMRQuadForest *forest_refined,
+                              TACSAssembler *tacs_refined,
+                              TACSBVec *_uvec = NULL,
+                              TACSBVec *_uvec_refined = NULL,
+                              const int compute_difference = 0);
+void TMR_ComputeReconSolution(TMROctForest *forest, TACSAssembler *tacs,
+                              TMROctForest *forest_refined,
+                              TACSAssembler *tacs_refined,
+                              TACSBVec *_uvec = NULL,
+                              TACSBVec *_uvec_refined = NULL,
+                              const int compute_difference = 0);
 
 /*
   Print the error as a series of bins
 */
-void TMR_PrintErrorBins( MPI_Comm comm, const double *error,
-                         const int nelems, double *mean=NULL,
-                         double *stddev=NULL );
+void TMR_PrintErrorBins(MPI_Comm comm, const double *error, const int nelems,
+                        double *mean = NULL, double *stddev = NULL);
 
 /*
   Perform a mesh refinement based on the strain engery refinement
   criteria.
 */
-double TMR_StrainEnergyErrorEst( TMRQuadForest *forest,
-                                 TACSAssembler *tacs,
-                                 TMRQuadForest *forest_refined,
-                                 TACSAssembler *tacs_refined,
-                                 double *error );
-double TMR_StrainEnergyErrorEst( TMROctForest *forest,
-                                 TACSAssembler *tacs,
-                                 TMROctForest *forest_refined,
-                                 TACSAssembler *tacs_refined,
-                                 double *error );
+double TMR_StrainEnergyErrorEst(TMRQuadForest *forest, TACSAssembler *tacs,
+                                TMRQuadForest *forest_refined,
+                                TACSAssembler *tacs_refined, double *error);
+double TMR_StrainEnergyErrorEst(TMROctForest *forest, TACSAssembler *tacs,
+                                TMROctForest *forest_refined,
+                                TACSAssembler *tacs_refined, double *error);
 
 /*
   Perform adjoint-based mesh refinement on the forest of quadtrees
 */
-double TMR_AdjointErrorEst( TMRQuadForest *forest,
-                            TACSAssembler *tacs,
-                            TMRQuadForest *forest_refined,
-                            TACSAssembler *tacs_refined,
-                            TACSBVec *solution_refined,
-                            TACSBVec *adjoint_refined,
-                            double *error,
-                            double *adj_corr );
-double TMR_AdjointErrorEst( TMROctForest *forest,
-                            TACSAssembler *tacs,
-                            TMROctForest *forest_refined,
-                            TACSAssembler *tacs_refined,
-                            TACSBVec *solution_refined,
-                            TACSBVec *adjoint_refined,
-                            double *error,
-                            double *adj_corr );
+double TMR_AdjointErrorEst(TMRQuadForest *forest, TACSAssembler *tacs,
+                           TMRQuadForest *forest_refined,
+                           TACSAssembler *tacs_refined,
+                           TACSBVec *solution_refined,
+                           TACSBVec *adjoint_refined, double *error,
+                           double *adj_corr);
+double TMR_AdjointErrorEst(TMROctForest *forest, TACSAssembler *tacs,
+                           TMROctForest *forest_refined,
+                           TACSAssembler *tacs_refined,
+                           TACSBVec *solution_refined,
+                           TACSBVec *adjoint_refined, double *error,
+                           double *adj_corr);
 
 /*
   Evaluate a stress constraint based on a higher-order interpolation
@@ -198,4 +179,4 @@ class TMRStressConstraint : public TMREntity {
   TacsScalar *tmp;
 };
 */
-#endif // TMR_REFINEMENT_TOOLS_H
+#endif  // TMR_REFINEMENT_TOOLS_H

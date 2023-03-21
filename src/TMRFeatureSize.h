@@ -28,9 +28,9 @@
 */
 class TMRElementFeatureSize : public TMREntity {
  public:
-  TMRElementFeatureSize( double _hmin );
+  TMRElementFeatureSize(double _hmin);
   virtual ~TMRElementFeatureSize();
-  virtual double getFeatureSize( TMRPoint pt );
+  virtual double getFeatureSize(TMRPoint pt);
 
  protected:
   // The min local feature size
@@ -42,10 +42,10 @@ class TMRElementFeatureSize : public TMREntity {
 */
 class TMRLinearElementSize : public TMRElementFeatureSize {
  public:
-  TMRLinearElementSize( double _hmin, double _hmax,
-                        double c, double _ax, double _ay, double _az );
+  TMRLinearElementSize(double _hmin, double _hmax, double c, double _ax,
+                       double _ay, double _az);
   ~TMRLinearElementSize();
-  double getFeatureSize( TMRPoint pt );
+  double getFeatureSize(TMRPoint pt);
 
  private:
   double hmax;
@@ -57,11 +57,10 @@ class TMRLinearElementSize : public TMRElementFeatureSize {
 */
 class TMRBoxFeatureSize : public TMRElementFeatureSize {
  public:
-  TMRBoxFeatureSize( TMRPoint p1, TMRPoint p2,
-                     double _hmin, double _hmax );
+  TMRBoxFeatureSize(TMRPoint p1, TMRPoint p2, double _hmin, double _hmax);
   ~TMRBoxFeatureSize();
-  void addBox( TMRPoint p1, TMRPoint p2, double h );
-  double getFeatureSize( TMRPoint pt );
+  void addBox(TMRPoint p1, TMRPoint p2, double h);
+  double getFeatureSize(TMRPoint pt);
 
  private:
   // Maximum feature size
@@ -71,12 +70,12 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
   class BoxSize {
    public:
     // Check whether the box contains a point
-    int contains( TMRPoint p );
+    int contains(TMRPoint p);
 
     // Data for the box and its location
-    TMRPoint m; // Center of the box
-    TMRPoint d; // Half-edge length of each box
-    double h; // Mesh size within the box
+    TMRPoint m;  // Center of the box
+    TMRPoint d;  // Half-edge length of each box
+    double h;    // Mesh size within the box
   };
 
   // The list of boxes that are stored
@@ -86,24 +85,24 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
   static const int MAX_LIST_BOXES = 256;
   class BoxList {
    public:
-    BoxList(){ next = NULL; }
+    BoxList() { next = NULL; }
     BoxSize boxes[MAX_LIST_BOXES];
     BoxList *next;
-  } *list_root, *list_current;
+  } * list_root, *list_current;
 
   // Store the information about the size
   class BoxNode {
    public:
     static const int MAX_NUM_BOXES = 10;
 
-    BoxNode( BoxSize *cover, TMRPoint m, TMRPoint d );
+    BoxNode(BoxSize *cover, TMRPoint m, TMRPoint d);
     ~BoxNode();
 
     // Add a box
-    void addBox( BoxSize *ptr );
+    void addBox(BoxSize *ptr);
 
     // Add a box to the data structure
-    void getSize( TMRPoint pt, double *h );
+    void getSize(TMRPoint pt, double *h);
 
     // The mid-point of the node and the distance from the mid-point
     // to the box sides
@@ -115,7 +114,7 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
     // The number of boxes and the pointers to them
     int num_boxes;
     BoxSize **boxes;
-  } *root;
+  } * root;
 };
 
 /*
@@ -126,29 +125,28 @@ class TMRBoxFeatureSize : public TMRElementFeatureSize {
 */
 class TMRPointLocator : public TMREntity {
  public:
-  TMRPointLocator( int npts, TMRPoint *pts );
+  TMRPointLocator(int npts, TMRPoint *pts);
   ~TMRPointLocator();
 
   // Find the K-closest points within the point cloud. Note
   // that K cannot exceed
-  void locateClosest( const int K, const TMRPoint pt,
-                      int *nk, int *indx, double *dist );
+  void locateClosest(const int K, const TMRPoint pt, int *nk, int *indx,
+                     double *dist);
 
  private:
   static const int MAX_BIN_SIZE = 16;
 
   // Private functions
-  int split( int start, int end );
-  int partitionPoints( TMRPoint *loc, TMRPoint *normal,
-                       int *indx, int np );
+  int split(int start, int end);
+  int partitionPoints(TMRPoint *loc, TMRPoint *normal, int *indx, int np);
 
   // Find the points that are closest to the provided point
-  void locateClosest( const int K, const int root, const TMRPoint pt,
-                      int *nk, int *indx, double *dist );
+  void locateClosest(const int K, const int root, const TMRPoint pt, int *nk,
+                     int *indx, double *dist);
 
   // Insert the point into the list
-  void insertIndex( const int K, int dindx, double d,
-                    int *nk, int *indx, double *dist );
+  void insertIndex(const int K, int dindx, double d, int *nk, int *indx,
+                   double *dist);
 
   // Point data
   int npts;
@@ -169,11 +167,10 @@ class TMRPointFeatureSize : public TMRElementFeatureSize {
   // Maximum number of points used
   static const int MAX_CLOSEST_POINTS = 64;
 
-  TMRPointFeatureSize( int npts, TMRPoint *pts, double *hvals,
-                       double _hmin, double _hmax,
-                       int _num_sample_pts=16 );
+  TMRPointFeatureSize(int npts, TMRPoint *pts, double *hvals, double _hmin,
+                      double _hmax, int _num_sample_pts = 16);
   ~TMRPointFeatureSize();
-  double getFeatureSize( TMRPoint pt );
+  double getFeatureSize(TMRPoint pt);
 
  private:
   // Find the closest point in the point cloud
@@ -190,4 +187,4 @@ class TMRPointFeatureSize : public TMRElementFeatureSize {
   int num_sample_pts;
 };
 
-#endif // TMR_FEATURE_SIZE_H
+#endif  // TMR_FEATURE_SIZE_H

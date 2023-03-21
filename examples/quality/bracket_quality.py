@@ -7,6 +7,7 @@ import argparse
 import os
 from OctMeshQuality import *
 
+
 def get_edge_dirs_verts(elist):
     edge_list = elist[:]
 
@@ -18,7 +19,7 @@ def get_edge_dirs_verts(elist):
     nedges = len(edge_list)
     for k in range(nedges):
         for i, edge in enumerate(edge_list):
-            v1, v2 = edge.getVertices()        
+            v1, v2 = edge.getVertices()
             if v1.getEntityId() == vnext.getEntityId():
                 dirs.append(1)
                 edges.append(edge_list.pop(i))
@@ -32,6 +33,7 @@ def get_edge_dirs_verts(elist):
         verts.append(vnext)
 
     return edges, dirs, verts[:-1]
+
 
 def load_model():
     # Create the egads context
@@ -72,7 +74,7 @@ def load_model():
     x1 = [0.25, 0.25, 0.75]
     B3 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
 
-    x0 = [0.125, 0,    0.85]
+    x0 = [0.125, 0, 0.85]
     x1 = [0.125, 0.25, 0.85]
     C3 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r0])
     parts.append(B3.solidBoolean(C3, egads.SUBTRACTION))
@@ -101,6 +103,7 @@ def load_model():
 
     return geo
 
+
 # The communicator
 comm = MPI.COMM_WORLD
 
@@ -123,7 +126,7 @@ mesh.mesh(0.02, opts)
 # Create a model from the mesh
 model = mesh.createModelFromMesh()
 
-# Create the corresponding mesh topology from the mesh-model 
+# Create the corresponding mesh topology from the mesh-model
 topo = TMR.Topology(comm, model)
 
 # Create the quad forest and set the topology of the forest
@@ -137,7 +140,7 @@ min_ang = computeMinAngle(forest)
 fshape = computeShape(forest)
 
 # Wrtie the mesh quality to vtk
-writeQualityToVtk(forest, ar, min_ang, fshape,fname='quality-bracket.vtk')
-plotShapeHist(fshape, xmin=np.amin(fshape), fname='bracket_shape_hist.pdf')
-plotARHist(ar, fname='bracket_ar_hist.pdf', xmax=np.ceil(4.0*np.amax(ar))/4.0)
-plotMinAngHist(min_ang, fname='bracket_ang_hist.pdf', xmin=np.amin(min_ang)-1.0)
+writeQualityToVtk(forest, ar, min_ang, fshape, fname="quality-bracket.vtk")
+plotShapeHist(fshape, xmin=np.amin(fshape), fname="bracket_shape_hist.pdf")
+plotARHist(ar, fname="bracket_ar_hist.pdf", xmax=np.ceil(4.0 * np.amax(ar)) / 4.0)
+plotMinAngHist(min_ang, fname="bracket_ang_hist.pdf", xmin=np.amin(min_ang) - 1.0)

@@ -18,11 +18,13 @@
   limitations under the License.
 */
 
+#include "TMRFeatureSize.h"
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "TMRFeatureSize.h"
+
 #include "tmrlapack.h"
 
 /*
@@ -32,29 +34,23 @@
   domain. Element grading can be implemented by overriding this class
   to modify the feature size as a function of position.
 */
-TMRElementFeatureSize::TMRElementFeatureSize( double _hmin ){
-  hmin = _hmin;
-}
+TMRElementFeatureSize::TMRElementFeatureSize(double _hmin) { hmin = _hmin; }
 
-TMRElementFeatureSize::~TMRElementFeatureSize(){}
+TMRElementFeatureSize::~TMRElementFeatureSize() {}
 
 /*
   Return the feature size - hmin
 */
-double TMRElementFeatureSize::getFeatureSize( TMRPoint pt ){
-  return hmin;
-}
+double TMRElementFeatureSize::getFeatureSize(TMRPoint pt) { return hmin; }
 
 /*
   Create a feature size dependency that is linear but does not
   exceed hmin or hmax anywhere in the domain
 */
-TMRLinearElementSize::TMRLinearElementSize( double _hmin, double _hmax,
-                                            double _c,
-                                            double _ax,
-                                            double _ay,
-                                            double _az ):
-TMRElementFeatureSize(_hmin){
+TMRLinearElementSize::TMRLinearElementSize(double _hmin, double _hmax,
+                                           double _c, double _ax, double _ay,
+                                           double _az)
+    : TMRElementFeatureSize(_hmin) {
   hmax = _hmax;
   c = _c;
   ax = _ax;
@@ -62,33 +58,37 @@ TMRElementFeatureSize(_hmin){
   az = _az;
 }
 
-TMRLinearElementSize::~TMRLinearElementSize(){}
+TMRLinearElementSize::~TMRLinearElementSize() {}
 
 /*
   Get the feature size based on the input coefficients
 */
-double TMRLinearElementSize::getFeatureSize( TMRPoint pt ){
-  double h = c + ax*pt.x + ay*pt.y + az*pt.z;
-  if (h < hmin){ h = hmin; }
-  if (h > hmax){ h = hmax; }
+double TMRLinearElementSize::getFeatureSize(TMRPoint pt) {
+  double h = c + ax * pt.x + ay * pt.y + az * pt.z;
+  if (h < hmin) {
+    h = hmin;
+  }
+  if (h > hmax) {
+    h = hmax;
+  }
   return h;
 }
 
 /*
   Create the feature size within a box
 */
-TMRBoxFeatureSize::TMRBoxFeatureSize( TMRPoint p1, TMRPoint p2,
-                                      double _hmin, double _hmax ):
-TMRElementFeatureSize(_hmin){
+TMRBoxFeatureSize::TMRBoxFeatureSize(TMRPoint p1, TMRPoint p2, double _hmin,
+                                     double _hmax)
+    : TMRElementFeatureSize(_hmin) {
   hmax = _hmax;
 
   TMRPoint m1, d1;
-  m1.x = 0.5*(p1.x + p2.x);
-  m1.y = 0.5*(p1.y + p2.y);
-  m1.z = 0.5*(p1.z + p2.z);
-  d1.x = 0.5*fabs(p1.x - p2.x);
-  d1.y = 0.5*fabs(p1.y - p2.y);
-  d1.z = 0.5*fabs(p1.z - p2.z);
+  m1.x = 0.5 * (p1.x + p2.x);
+  m1.y = 0.5 * (p1.y + p2.y);
+  m1.z = 0.5 * (p1.z + p2.z);
+  d1.x = 0.5 * fabs(p1.x - p2.x);
+  d1.y = 0.5 * fabs(p1.y - p2.y);
+  d1.z = 0.5 * fabs(p1.z - p2.z);
 
   // Allocate the root for the boxes
   list_current = new BoxList();
@@ -110,9 +110,9 @@ TMRElementFeatureSize(_hmin){
 /*
   Free the data allocated by the feature-size object
 */
-TMRBoxFeatureSize::~TMRBoxFeatureSize(){
+TMRBoxFeatureSize::~TMRBoxFeatureSize() {
   delete root;
-  while (list_root){
+  while (list_root) {
     BoxList *tmp = list_root;
     list_root = list_root->next;
     delete tmp;
@@ -122,17 +122,17 @@ TMRBoxFeatureSize::~TMRBoxFeatureSize(){
 /*
   Add a box that is designed to constrain the feature size
 */
-void TMRBoxFeatureSize::addBox( TMRPoint p1, TMRPoint p2, double hval ){
+void TMRBoxFeatureSize::addBox(TMRPoint p1, TMRPoint p2, double hval) {
   TMRPoint m1, d1;
-  m1.x = 0.5*(p1.x + p2.x);
-  m1.y = 0.5*(p1.y + p2.y);
-  m1.z = 0.5*(p1.z + p2.z);
-  d1.x = 0.5*fabs(p1.x - p2.x);
-  d1.y = 0.5*fabs(p1.y - p2.y);
-  d1.z = 0.5*fabs(p1.z - p2.z);
+  m1.x = 0.5 * (p1.x + p2.x);
+  m1.y = 0.5 * (p1.y + p2.y);
+  m1.z = 0.5 * (p1.z + p2.z);
+  d1.x = 0.5 * fabs(p1.x - p2.x);
+  d1.y = 0.5 * fabs(p1.y - p2.y);
+  d1.z = 0.5 * fabs(p1.z - p2.z);
 
   // Check if we need to expand the array of boxes
-  if (num_boxes >= MAX_LIST_BOXES){
+  if (num_boxes >= MAX_LIST_BOXES) {
     list_current->next = new BoxList();
     list_current = list_current->next;
     num_boxes = 0;
@@ -151,18 +151,22 @@ void TMRBoxFeatureSize::addBox( TMRPoint p1, TMRPoint p2, double hval ){
 /*
   Retrieve the feature size
 */
-double TMRBoxFeatureSize::getFeatureSize( TMRPoint pt ){
+double TMRBoxFeatureSize::getFeatureSize(TMRPoint pt) {
   double h = hmax;
   root->getSize(pt, &h);
-  if (h < hmin){ h = hmin; }
-  if (h > hmax){ h = hmax; }
+  if (h < hmin) {
+    h = hmin;
+  }
+  if (h > hmax) {
+    h = hmax;
+  }
   return h;
 }
 
 /*
   Check if the box contains the point
 */
-int TMRBoxFeatureSize::BoxSize::contains( TMRPoint p ){
+int TMRBoxFeatureSize::BoxSize::contains(TMRPoint p) {
   // Compute the lower/upper bounds
   double xl = m.x - d.x;
   double xu = m.x + d.x;
@@ -172,9 +176,8 @@ int TMRBoxFeatureSize::BoxSize::contains( TMRPoint p ){
   double zu = m.z + d.z;
 
   // Return true if the box contains the point
-  if ((p.x >= xl && p.x <= xu) &&
-      (p.y >= yl && p.y <= yu) &&
-      (p.z >= zl && p.z <= zu)){
+  if ((p.x >= xl && p.x <= xu) && (p.y >= yl && p.y <= yu) &&
+      (p.z >= zl && p.z <= zu)) {
     return 1;
   }
   return 0;
@@ -183,13 +186,11 @@ int TMRBoxFeatureSize::BoxSize::contains( TMRPoint p ){
 /*
   Create the box node and allocate a single box (for now)
 */
-TMRBoxFeatureSize::BoxNode::BoxNode( BoxSize *cover,
-                                     TMRPoint m1,
-                                     TMRPoint d1 ){
+TMRBoxFeatureSize::BoxNode::BoxNode(BoxSize *cover, TMRPoint m1, TMRPoint d1) {
   m = m1;
   d = d1;
   num_boxes = 1;
-  boxes = new BoxSize*[ MAX_NUM_BOXES ];
+  boxes = new BoxSize *[MAX_NUM_BOXES];
   boxes[0] = cover;
   memset(c, 0, sizeof(c));
 }
@@ -197,12 +198,12 @@ TMRBoxFeatureSize::BoxNode::BoxNode( BoxSize *cover,
 /*
   Deallocate all of the data
 */
-TMRBoxFeatureSize::BoxNode::~BoxNode(){
-  if (boxes){
-    delete [] boxes;
+TMRBoxFeatureSize::BoxNode::~BoxNode() {
+  if (boxes) {
+    delete[] boxes;
   }
-  for ( int i = 0; i < 8; i++ ){
-    if (c[i]){
+  for (int i = 0; i < 8; i++) {
+    if (c[i]) {
       delete c[i];
     }
   }
@@ -211,7 +212,7 @@ TMRBoxFeatureSize::BoxNode::~BoxNode(){
 /*
   Add a box to the octree data structure
 */
-void TMRBoxFeatureSize::BoxNode::addBox( BoxSize *ptr ){
+void TMRBoxFeatureSize::BoxNode::addBox(BoxSize *ptr) {
   // Get the dimensions for the box
   double xl = ptr->m.x - ptr->d.x;
   double xu = ptr->m.x + ptr->d.x;
@@ -230,21 +231,19 @@ void TMRBoxFeatureSize::BoxNode::addBox( BoxSize *ptr ){
 
   // Check if this box coverss any part of this node, if not we're
   // done
-  if (!((xu >= nxl && xl <= nxu) &&
-        (yu >= nyl && yl <= nyu) &&
-        (zu >= nzl && zl <= nzu))){
+  if (!((xu >= nxl && xl <= nxu) && (yu >= nyl && yl <= nyu) &&
+        (zu >= nzl && zl <= nzu))) {
     return;
   }
 
   // Check if the boxes at this level are currently in use
-  if (boxes){
+  if (boxes) {
     // Check if this box covers the entire node or not
-    if ((xl <= nxl && xu >= nxu) &&
-        (yl <= nyl && yu >= nyu) &&
-        (zl <= nzl && zu >= nzu)){
+    if ((xl <= nxl && xu >= nxu) && (yl <= nyl && yu >= nyu) &&
+        (zl <= nzl && zu >= nzu)) {
       // This box fully covers the node. Check if the h-dimension is
       // more strict than the current covering box
-      if (boxes[0]->h > ptr->h){
+      if (boxes[0]->h > ptr->h) {
         boxes[0] = ptr;
       }
       return;
@@ -252,46 +251,45 @@ void TMRBoxFeatureSize::BoxNode::addBox( BoxSize *ptr ){
 
     // Otherwise, the box only covers part of the node and we have
     // to add it to the list of local boxes
-    if (num_boxes < MAX_NUM_BOXES){
+    if (num_boxes < MAX_NUM_BOXES) {
       boxes[num_boxes] = ptr;
       num_boxes++;
       return;
-    }
-    else {
+    } else {
       // Allocate new children
-      for ( int k = 0; k < 2; k++ ){
-        double zl = m.z + (k-1)*d.z;
-        double zu = m.z + k*d.z;
+      for (int k = 0; k < 2; k++) {
+        double zl = m.z + (k - 1) * d.z;
+        double zu = m.z + k * d.z;
 
-        for ( int j = 0; j < 2; j++ ){
-          double yl = m.y + (j-1)*d.y;
-          double yu = m.y + j*d.y;
+        for (int j = 0; j < 2; j++) {
+          double yl = m.y + (j - 1) * d.y;
+          double yu = m.y + j * d.y;
 
-          for ( int i = 0; i < 2; i++ ){
-            double xl = m.x + (i-1)*d.x;
-            double xu = m.x + i*d.x;
+          for (int i = 0; i < 2; i++) {
+            double xl = m.x + (i - 1) * d.x;
+            double xu = m.x + i * d.x;
 
             // Set the mid-points and distances for each child
             TMRPoint m1, d1;
-            m1.x = 0.5*(xu + xl);
-            m1.y = 0.5*(yu + yl);
-            m1.z = 0.5*(zu + zl);
-            d1.x = 0.5*(xu - xl);
-            d1.y = 0.5*(yu - yl);
-            d1.z = 0.5*(zu - zl);
+            m1.x = 0.5 * (xu + xl);
+            m1.y = 0.5 * (yu + yl);
+            m1.z = 0.5 * (zu + zl);
+            d1.x = 0.5 * (xu - xl);
+            d1.y = 0.5 * (yu - yl);
+            d1.z = 0.5 * (zu - zl);
 
             // Create the child nodes
-            c[i + 2*j + 4*k] = new BoxNode(boxes[0], m1, d1);
+            c[i + 2 * j + 4 * k] = new BoxNode(boxes[0], m1, d1);
           }
         }
       }
 
       // Add the boxes to the rest of the tree
-      while (num_boxes > 0){
-        for ( int k = 0; k < 2; k++ ){
-          for ( int j = 0; j < 2; j++ ){
-            for ( int i = 0; i < 2; i++ ){
-              c[i + 2*j + 4*k]->addBox(boxes[num_boxes-1]);
+      while (num_boxes > 0) {
+        for (int k = 0; k < 2; k++) {
+          for (int j = 0; j < 2; j++) {
+            for (int i = 0; i < 2; i++) {
+              c[i + 2 * j + 4 * k]->addBox(boxes[num_boxes - 1]);
             }
           }
         }
@@ -299,16 +297,16 @@ void TMRBoxFeatureSize::BoxNode::addBox( BoxSize *ptr ){
       }
 
       // Free the boxes
-      delete [] boxes;
+      delete[] boxes;
       boxes = NULL;
     }
   }
 
   // Add the boxes to the child - if applicable
-  for ( int k = 0; k < 2; k++ ){
-    for ( int j = 0; j < 2; j++ ){
-      for ( int i = 0; i < 2; i++ ){
-        c[i + 2*j + 4*k]->addBox(ptr);
+  for (int k = 0; k < 2; k++) {
+    for (int j = 0; j < 2; j++) {
+      for (int i = 0; i < 2; i++) {
+        c[i + 2 * j + 4 * k]->addBox(ptr);
       }
     }
   }
@@ -317,34 +315,33 @@ void TMRBoxFeatureSize::BoxNode::addBox( BoxSize *ptr ){
 /*
   Get the element size based on the extent of the box
 */
-void TMRBoxFeatureSize::BoxNode::getSize( TMRPoint p, double *hval ){
+void TMRBoxFeatureSize::BoxNode::getSize(TMRPoint p, double *hval) {
   // Scan through the tree and find the most-constraining box size
-  for ( int k = 0; k < 2; k++ ){
-    double zl = m.z + (k-1)*d.z;
-    double zu = m.z + k*d.z;
+  for (int k = 0; k < 2; k++) {
+    double zl = m.z + (k - 1) * d.z;
+    double zu = m.z + k * d.z;
 
-    for ( int j = 0; j < 2; j++ ){
-      double yl = m.y + (j-1)*d.y;
-      double yu = m.y + j*d.y;
+    for (int j = 0; j < 2; j++) {
+      double yl = m.y + (j - 1) * d.y;
+      double yu = m.y + j * d.y;
 
-      for ( int i = 0; i < 2; i++ ){
-        double xl = m.x + (i-1)*d.x;
-        double xu = m.x + i*d.x;
+      for (int i = 0; i < 2; i++) {
+        double xl = m.x + (i - 1) * d.x;
+        double xu = m.x + i * d.x;
 
         // Check if the point lies in the box and the box exists
-        if ((p.x >= xl && p.x <= xu) &&
-            (p.y >= yl && p.y <= yu) &&
-            (p.z >= zl && p.z <= zu)){
-          if (c[i + 2*j + 4*k]){
-            return c[i + 2*j + 4*k]->getSize(p, hval);
+        if ((p.x >= xl && p.x <= xu) && (p.y >= yl && p.y <= yu) &&
+            (p.z >= zl && p.z <= zu)) {
+          if (c[i + 2 * j + 4 * k]) {
+            return c[i + 2 * j + 4 * k]->getSize(p, hval);
           }
         }
       }
     }
   }
 
-  for ( int i = 0; i < num_boxes; i++ ){
-    if (boxes[i]->contains(p) && *hval > boxes[i]->h){
+  for (int i = 0; i < num_boxes; i++) {
+    if (boxes[i]->contains(p) && *hval > boxes[i]->h) {
       *hval = boxes[i]->h;
     }
   }
@@ -354,96 +351,95 @@ void TMRBoxFeatureSize::BoxNode::getSize( TMRPoint p, double *hval ){
   Create the point locator: This is used to find the points from the
   initial point set that are closest to the provided point.
 */
-TMRPointLocator::TMRPointLocator( int _npts, TMRPoint *_pts ){
+TMRPointLocator::TMRPointLocator(int _npts, TMRPoint *_pts) {
   npts = _npts;
-  pts = new TMRPoint[ npts ];
-  memcpy(pts, _pts, npts*sizeof(TMRPoint));
+  pts = new TMRPoint[npts];
+  memcpy(pts, _pts, npts * sizeof(TMRPoint));
 
   // Calculate approximately how many nodes there should be
-  max_num_nodes = int(2.0*npts/MAX_BIN_SIZE) + 1;
+  max_num_nodes = int(2.0 * npts / MAX_BIN_SIZE) + 1;
   num_nodes = 0;
 
   // The point indicies
-  indices = new int[ npts ];
-  for ( int i = 0; i < npts; i++ ){
+  indices = new int[npts];
+  for (int i = 0; i < npts; i++) {
     indices[i] = i;
   }
 
   // Set up the data structure that represents the splitting planes
-  nodes = new int[ 2*max_num_nodes ];
-  index_offset = new int[ max_num_nodes ];
-  index_count = new int[ max_num_nodes ];
+  nodes = new int[2 * max_num_nodes];
+  index_offset = new int[max_num_nodes];
+  index_count = new int[max_num_nodes];
 
   // The base point and normal direction for the splitting planes
-  node_loc = new TMRPoint[ max_num_nodes ];
-  node_normal = new TMRPoint[ max_num_nodes ];
-  memset(node_loc, 0, max_num_nodes*sizeof(TMRPoint));
-  memset(node_normal, 0, max_num_nodes*sizeof(TMRPoint));
+  node_loc = new TMRPoint[max_num_nodes];
+  node_normal = new TMRPoint[max_num_nodes];
+  memset(node_loc, 0, max_num_nodes * sizeof(TMRPoint));
+  memset(node_normal, 0, max_num_nodes * sizeof(TMRPoint));
 
   // Recursively split the points
   split(0, npts);
 }
 
-
-TMRPointLocator::~TMRPointLocator(){
-  delete [] pts;
-  delete [] indices;
-  delete [] nodes;
-  delete [] index_offset;
-  delete [] index_count;
-  delete [] node_loc;
-  delete [] node_normal;
+TMRPointLocator::~TMRPointLocator() {
+  delete[] pts;
+  delete[] indices;
+  delete[] nodes;
+  delete[] index_offset;
+  delete[] index_count;
+  delete[] node_loc;
+  delete[] node_normal;
 }
 
 /*
   Split the list of indices into approximately two. Those on one half
   of a plane and those on the other.
 */
-int TMRPointLocator::split( int start, int end ){
+int TMRPointLocator::split(int start, int end) {
   int root = num_nodes;
 
   num_nodes++;
 
   // Need to extend the arrays to make them fit
-  if (num_nodes >= max_num_nodes){
-    int max_num_nodes = 2*(num_nodes+1);
+  if (num_nodes >= max_num_nodes) {
+    int max_num_nodes = 2 * (num_nodes + 1);
 
     // Allocate and set a new nodes pointer
-    int *temp_nodes = new int[ 2*max_num_nodes ];
-    memcpy(temp_nodes, nodes, 2*num_nodes*sizeof(int));
-    delete [] nodes;
+    int *temp_nodes = new int[2 * max_num_nodes];
+    memcpy(temp_nodes, nodes, 2 * num_nodes * sizeof(int));
+    delete[] nodes;
     nodes = temp_nodes;
 
     // Allocate and set a new offset array
-    int *temp_index_offset = new int[ max_num_nodes ];
-    memcpy(temp_index_offset, index_offset, num_nodes*sizeof(int));
-    delete [] index_offset;
+    int *temp_index_offset = new int[max_num_nodes];
+    memcpy(temp_index_offset, index_offset, num_nodes * sizeof(int));
+    delete[] index_offset;
     index_offset = temp_index_offset;
 
     // Allocate more space for the index counts
-    int *temp_index_count = new int[ max_num_nodes ];
-    memcpy(temp_index_count, index_count, num_nodes*sizeof(int));
-    delete [] index_count;
+    int *temp_index_count = new int[max_num_nodes];
+    memcpy(temp_index_count, index_count, num_nodes * sizeof(int));
+    delete[] index_count;
     index_count = temp_index_count;
 
     // Allocate more space for the average plane locations
-    TMRPoint *temp_node_loc = new TMRPoint[ max_num_nodes ];
-    memcpy(temp_node_loc, node_loc, num_nodes*sizeof(TMRPoint));
-    delete [] node_loc;
+    TMRPoint *temp_node_loc = new TMRPoint[max_num_nodes];
+    memcpy(temp_node_loc, node_loc, num_nodes * sizeof(TMRPoint));
+    delete[] node_loc;
     node_loc = temp_node_loc;
 
     // Allocate more space for the plane normals
-    TMRPoint *temp_node_normal = new TMRPoint[ max_num_nodes ];
-    memcpy(temp_node_normal, node_normal, num_nodes*sizeof(TMRPoint));
-    delete [] node_normal;
+    TMRPoint *temp_node_normal = new TMRPoint[max_num_nodes];
+    memcpy(temp_node_normal, node_normal, num_nodes * sizeof(TMRPoint));
+    delete[] node_normal;
     node_normal = temp_node_normal;
   }
 
   // If there are fewer than the max number of points in a bin, end
   // the recursion here and store the result of the last split
-  if (end - start <= MAX_BIN_SIZE){
-    nodes[2*root] = -1;
-    nodes[2*root+1] = -1;
+  if (end - start <= MAX_BIN_SIZE) {
+    nodes[2 * root] = -1;
+    nodes[2 * root + 1] = -1;
 
     // Set the offset into the node
     index_offset[root] = start;
@@ -463,7 +459,7 @@ int TMRPointLocator::split( int start, int end ){
   int mid = partitionPoints(&node_loc[root], &node_normal[root],
                             &indices[start], end - start);
 
-  if (mid == 0 || mid == end-start){
+  if (mid == 0 || mid == end - start) {
     return root;
   }
 
@@ -471,8 +467,8 @@ int TMRPointLocator::split( int start, int end ){
   // the recursion.
   int left_node = split(start, start + mid);
   int right_node = split(start + mid, end);
-  nodes[2*root] = left_node;
-  nodes[2*root+1] = right_node;
+  nodes[2 * root] = left_node;
+  nodes[2 * root + 1] = right_node;
 
   return root;
 }
@@ -481,18 +477,18 @@ int TMRPointLocator::split( int start, int end ){
   Split the array of indices into two sets: those indices that
   correspond to points on either side of a plane in three-space.
 */
-int TMRPointLocator::partitionPoints( TMRPoint *loc, TMRPoint *normal,
-                                      int *indx, int np ){
+int TMRPointLocator::partitionPoints(TMRPoint *loc, TMRPoint *normal, int *indx,
+                                     int np) {
   // The inertia about the average location of the point cloud
   double I[9];
-  memset(I, 0, 9*sizeof(double));
+  memset(I, 0, 9 * sizeof(double));
 
   // Zero the average location
   double x = 0.0, y = 0.0, z = 0.0;
 
   // Find the average point and the moment of inertia about the
   // average point
-  for ( int i = 0; i < np; i++ ){
+  for (int i = 0; i < np; i++) {
     int n = indx[i];
 
     // Keep track of the average location
@@ -501,30 +497,30 @@ int TMRPointLocator::partitionPoints( TMRPoint *loc, TMRPoint *normal,
     z += pts[n].z;
 
     // The moments of inertia
-    I[0] += (pts[n].y*pts[n].y + pts[n].z*pts[n].z); // y^2 + z^2
-    I[4] += (pts[n].x*pts[n].x + pts[n].z*pts[n].z); // x^2 + z^2
-    I[8] += (pts[n].x*pts[n].x + pts[n].y*pts[n].y); // x^2 + y^2
+    I[0] += (pts[n].y * pts[n].y + pts[n].z * pts[n].z);  // y^2 + z^2
+    I[4] += (pts[n].x * pts[n].x + pts[n].z * pts[n].z);  // x^2 + z^2
+    I[8] += (pts[n].x * pts[n].x + pts[n].y * pts[n].y);  // x^2 + y^2
 
     // The products of inertia
-    I[1] -= pts[n].x*pts[n].y; // Ixy = - xy
-    I[2] -= pts[n].x*pts[n].z; // Ixz = - xz
-    I[5] -= pts[n].y*pts[n].z; // Ixz = - yz
+    I[1] -= pts[n].x * pts[n].y;  // Ixy = - xy
+    I[2] -= pts[n].x * pts[n].z;  // Ixz = - xz
+    I[5] -= pts[n].y * pts[n].z;  // Ixz = - yz
   }
 
   // Set the average location
-  x = x/np;
-  y = y/np;
-  z = z/np;
+  x = x / np;
+  y = y / np;
+  z = z / np;
 
   // Convert the inertia so that is about the average location using
   // the parallel axis theorem
-  I[0] = I[0] - np*(y*y + z*z);
-  I[4] = I[4] - np*(x*x + z*z);
-  I[8] = I[8] - np*(x*x + y*y);
+  I[0] = I[0] - np * (y * y + z * z);
+  I[4] = I[4] - np * (x * x + z * z);
+  I[8] = I[8] - np * (x * x + y * y);
 
-  I[1] = I[1] + np*x*y;
-  I[2] = I[2] + np*x*z;
-  I[5] = I[5] + np*y*z;
+  I[1] = I[1] + np * x * y;
+  I[2] = I[2] + np * x * z;
+  I[5] = I[5] + np * y * z;
 
   // Copy over the symmetric part of the products of inertia
   I[3] = I[1];
@@ -536,8 +532,8 @@ int TMRPointLocator::partitionPoints( TMRPoint *loc, TMRPoint *normal,
   int lwork = 64, liwork = 64;
   double eigs[3], work[64];
   int iwork[64];
-  TmrLAPACKsyevd("V", "U", &N, I, &N,
-                 eigs, work, &lwork, iwork, &liwork, &info);
+  TmrLAPACKsyevd("V", "U", &N, I, &N, eigs, work, &lwork, iwork, &liwork,
+                 &info);
 
   // Extract the normal
   double nx = I[0];
@@ -546,25 +542,23 @@ int TMRPointLocator::partitionPoints( TMRPoint *loc, TMRPoint *normal,
 
   // Loop over all the indices and decide where they should go
   int low = 0;
-  int high = np-1;
+  int high = np - 1;
 
   // Now, split the index array such that the indices below
   // the lower index
-  while (high > low){
+  while (high > low) {
     while (high > low &&
-           ((pts[indx[low]].x - x)*nx +
-            (pts[indx[low]].y - y)*ny +
-            (pts[indx[low]].z - z)*nz) < 0.0){
+           ((pts[indx[low]].x - x) * nx + (pts[indx[low]].y - y) * ny +
+            (pts[indx[low]].z - z) * nz) < 0.0) {
       low++;
     }
     while (high > low &&
-           ((pts[indx[high]].x - x)*nx +
-            (pts[indx[high]].y - y)*ny +
-            (pts[indx[high]].z - z)*nz) >= 0.0){
+           ((pts[indx[high]].x - x) * nx + (pts[indx[high]].y - y) * ny +
+            (pts[indx[high]].z - z) * nz) >= 0.0) {
       high--;
     }
 
-    if (high > low){
+    if (high > low) {
       // Switch the two indices that don't match
       int temp = indx[high];
       indx[high] = indx[low];
@@ -583,7 +577,7 @@ int TMRPointLocator::partitionPoints( TMRPoint *loc, TMRPoint *normal,
   normal->z = nz;
 
   // If this didn't work, issue an error message
-  if (low == 0 || low == np){
+  if (low == 0 || low == np) {
     fprintf(stderr, "n = (%25.16e, %25.16e, %25.16e\n", nx, ny, nz);
     fprintf(stderr, "TMRPointLocator: Error splitting points\n");
   }
@@ -595,8 +589,8 @@ int TMRPointLocator::partitionPoints( TMRPoint *loc, TMRPoint *normal,
   Locate the closest points to a given point: Initiate the recursive
   call.
 */
-void TMRPointLocator::locateClosest( const int K, const TMRPoint pt,
-                                     int *nk, int *indx, double *dist ){
+void TMRPointLocator::locateClosest(const int K, const TMRPoint pt, int *nk,
+                                    int *indx, double *dist) {
   locateClosest(K, 0, pt, nk, indx, dist);
 }
 
@@ -613,34 +607,33 @@ void TMRPointLocator::locateClosest( const int K, const TMRPoint pt,
   indx:   The indices of the K-closest values
   nk:     The actual number of points in the list nk <= K
 */
-void TMRPointLocator::locateClosest( const int K, const int root,
-                                     const TMRPoint pt,
-                                     int *nk, int *indx, double *dist ){
+void TMRPointLocator::locateClosest(const int K, const int root,
+                                    const TMRPoint pt, int *nk, int *indx,
+                                    double *dist) {
   int start = index_offset[root];
-  int left_node = nodes[2*root];
-  int right_node = nodes[2*root+1];
+  int left_node = nodes[2 * root];
+  int right_node = nodes[2 * root + 1];
 
-  if (start != -1){
+  if (start != -1) {
     // This node is a leaf. Do an exhaustive search of the points
     // to find the ones that are closest to the given point
     int end = start + index_count[root];
 
     // Loop over the indices in the leaf
-    for ( int k = start; k < end; k++ ){
+    for (int k = start; k < end; k++) {
       int n = indices[k];
 
       // Compute the square of the distances
-      double t = ((pts[n].x - pt.x)*(pts[n].x - pt.x) +
-                  (pts[n].y - pt.y)*(pts[n].y - pt.y) +
-                  (pts[n].z - pt.z)*(pts[n].z - pt.z));
+      double t = ((pts[n].x - pt.x) * (pts[n].x - pt.x) +
+                  (pts[n].y - pt.y) * (pts[n].y - pt.y) +
+                  (pts[n].z - pt.z) * (pts[n].z - pt.z));
 
       // Insert the point if needed
-      if ((*nk < K) || (t < dist[K-1])){
+      if ((*nk < K) || (t < dist[K - 1])) {
         insertIndex(K, n, t, nk, indx, dist);
       }
     }
-  }
-  else {
+  } else {
     // This is not a leaf node. Figure out which side we should search
     // and then perform the recursive search on that side.
     double x = node_loc[root].x;
@@ -653,27 +646,24 @@ void TMRPointLocator::locateClosest( const int K, const int root,
     double nz = node_normal[root].z;
 
     // The normal distance
-    double ndist = ((pt.x - x)*nx +
-                    (pt.y - y)*ny +
-                    (pt.z - z)*nz);
+    double ndist = ((pt.x - x) * nx + (pt.y - y) * ny + (pt.z - z) * nz);
 
-    if (ndist < 0.0){ // The point lies to the 'left' of the plane
+    if (ndist < 0.0) {  // The point lies to the 'left' of the plane
       locateClosest(K, left_node, pt, nk, indx, dist);
 
       // If the minimum distance to the plane is less than the minimum
       // distance then search the other branch too - there could be a
       // point on that branch that lies closer than *dist
-      if (*nk < K || ndist*ndist < dist[*nk-1]){
+      if (*nk < K || ndist * ndist < dist[*nk - 1]) {
         locateClosest(K, right_node, pt, nk, indx, dist);
       }
-    }
-    else { // The point lies to the 'right' of the plane
+    } else {  // The point lies to the 'right' of the plane
       locateClosest(K, right_node, pt, nk, indx, dist);
 
       // If the minimum distance to the plane is less than the minimum
       // distance then search the other branch too - there could be a
       // point on that branch that lies closer than *dist
-      if (*nk < K || ndist*ndist < dist[*nk-1]){
+      if (*nk < K || ndist * ndist < dist[*nk - 1]) {
         locateClosest(K, left_node, pt, nk, indx, dist);
       }
     }
@@ -694,16 +684,14 @@ void TMRPointLocator::locateClosest( const int K, const int root,
   indx:   the sorted list of index values
   dist;   the distances
 */
-void TMRPointLocator::insertIndex( const int K, int dindx,
-                                   double d, int *nk,
-                                   int *indx, double *dist ){
-  if (*nk == 0){
+void TMRPointLocator::insertIndex(const int K, int dindx, double d, int *nk,
+                                  int *indx, double *dist) {
+  if (*nk == 0) {
     dist[*nk] = d;
     indx[*nk] = dindx;
     *nk += 1;
     return;
-  }
-  else if (*nk < K && dist[*nk-1] <= d){
+  } else if (*nk < K && dist[*nk - 1] <= d) {
     dist[*nk] = d;
     indx[*nk] = dindx;
     *nk += 1;
@@ -712,11 +700,11 @@ void TMRPointLocator::insertIndex( const int K, int dindx,
 
   // Place it into the list
   int i = 0;
-  while (i < *nk && (d >= dist[i])){
+  while (i < *nk && (d >= dist[i])) {
     i++;
   }
 
-  for ( ; i < *nk; i++ ){
+  for (; i < *nk; i++) {
     int tindx = indx[i];
     double t = dist[i];
     indx[i] = dindx;
@@ -725,7 +713,7 @@ void TMRPointLocator::insertIndex( const int K, int dindx,
     d = t;
   }
 
-  if (*nk < K){
+  if (*nk < K) {
     indx[*nk] = dindx;
     dist[*nk] = d;
     *nk += 1;
@@ -736,11 +724,10 @@ void TMRPointLocator::insertIndex( const int K, int dindx,
   Set the feature size based on a point cloud and the mesh size at
   those points
 */
-TMRPointFeatureSize::TMRPointFeatureSize( int _npts, TMRPoint *_pts,
-                                          double *_hvals,
-                                          double _hmin, double _hmax,
-                                          int _num_sample_pts ):
-  TMRElementFeatureSize(_hmin){
+TMRPointFeatureSize::TMRPointFeatureSize(int _npts, TMRPoint *_pts,
+                                         double *_hvals, double _hmin,
+                                         double _hmax, int _num_sample_pts)
+    : TMRElementFeatureSize(_hmin) {
   npts = _npts;
   hmin = _hmin;
   hmax = _hmax;
@@ -750,21 +737,21 @@ TMRPointFeatureSize::TMRPointFeatureSize( int _npts, TMRPoint *_pts,
 
   // Set the number of sample points
   num_sample_pts = _num_sample_pts;
-  if (num_sample_pts > MAX_CLOSEST_POINTS){
+  if (num_sample_pts > MAX_CLOSEST_POINTS) {
     num_sample_pts = MAX_CLOSEST_POINTS;
   }
 
   // Set the feature sizes assocaited with each spatial point
-  hvals = new double[ npts ];
-  memcpy(hvals, _hvals, npts*sizeof(double));
+  hvals = new double[npts];
+  memcpy(hvals, _hvals, npts * sizeof(double));
 }
 
-TMRPointFeatureSize::~TMRPointFeatureSize(){
-  delete [] hvals;
+TMRPointFeatureSize::~TMRPointFeatureSize() {
+  delete[] hvals;
   locator->decref();
 }
 
-double TMRPointFeatureSize::getFeatureSize( TMRPoint pt ){
+double TMRPointFeatureSize::getFeatureSize(TMRPoint pt) {
   // Get the closest points and use them to compute a set of weights
   int indx[MAX_CLOSEST_POINTS];
   double dist[MAX_CLOSEST_POINTS];
@@ -775,42 +762,44 @@ double TMRPointFeatureSize::getFeatureSize( TMRPoint pt ){
   locator->locateClosest(num_sample_pts, pt, &n, indx, dist);
 
   // The maximum h-size squared
-  double d = 10*hmax;
-  double dinv = 1.0/d;
+  double d = 10 * hmax;
+  double dinv = 1.0 / d;
 
   // Set the first weight (on the closest point) to 1
   double wsum = 1.0;
   weights[0] = 1.0;
 
   // Compute the weights
-  for ( int i = 0; i < n; i++ ){
+  for (int i = 0; i < n; i++) {
     dist[i] = sqrt(dist[i]);
-    if (dist[i] < d){
-      weights[i] = 1.0 - dinv*dist[i];
-    }
-    else {
+    if (dist[i] < d) {
+      weights[i] = 1.0 - dinv * dist[i];
+    } else {
       weights[i] = 0.0;
     }
-    if (i == 0){
+    if (i == 0) {
       wsum = weights[i];
-    }
-    else {
+    } else {
       wsum += weights[i];
     }
   }
 
   // Set the weights so that they satisfy a partition of unity
   // property
-  wsum = 1.0/wsum;
+  wsum = 1.0 / wsum;
 
   // Compute the new value of h
   double h = 0.0;
-  for ( int i = 0; i < n; i++ ){
-    h += wsum*weights[i]*hvals[indx[i]];
+  for (int i = 0; i < n; i++) {
+    h += wsum * weights[i] * hvals[indx[i]];
   }
 
-  if (h < hmin){ h = hmin; }
-  if (h > hmax){ h = hmax; }
+  if (h < hmin) {
+    h = hmin;
+  }
+  if (h > hmax) {
+    h = hmax;
+  }
 
   return h;
 }

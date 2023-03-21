@@ -28,19 +28,19 @@ class TMRQuadMatrixModel : public TACSElementModel {
   TMRQuadMatrixModel();
   int getNumParameters();
   int getVarsPerNode();
-  void evalWeakIntegrand( int elemIndex, const double time,
-                          int n, const double pt[],
-                          const TacsScalar X[], const TacsScalar Xd[],
-                          const TacsScalar Ut[], const TacsScalar Ux[],
-                          TacsScalar DUt[], TacsScalar DUx[] );
-  void getWeakMatrixNonzeros( ElementMatrixType matType, int elemIndex,
-                              int *Jac_nnz, const int *Jac_pairs[] );
-  void evalWeakMatrix( ElementMatrixType matType, int elemIndex,
-                       const double time, int n, const double pt[],
-                       const TacsScalar X[], const TacsScalar Xd[],
-                       const TacsScalar Ut[], const TacsScalar Ux[],
-                       TacsScalar DUt[], TacsScalar DUx[],
-                       TacsScalar Jac[] );
+  void evalWeakIntegrand(int elemIndex, const double time, int n,
+                         const double pt[], const TacsScalar X[],
+                         const TacsScalar Xd[], const TacsScalar Ut[],
+                         const TacsScalar Ux[], TacsScalar DUt[],
+                         TacsScalar DUx[]);
+  void getWeakMatrixNonzeros(ElementMatrixType matType, int elemIndex,
+                             int *Jac_nnz, const int *Jac_pairs[]);
+  void evalWeakMatrix(ElementMatrixType matType, int elemIndex,
+                      const double time, int n, const double pt[],
+                      const TacsScalar X[], const TacsScalar Xd[],
+                      const TacsScalar Ut[], const TacsScalar Ux[],
+                      TacsScalar DUt[], TacsScalar DUx[], TacsScalar Jac[]);
+
  private:
   static int elem_Jac_pairs[2];
 };
@@ -50,21 +50,21 @@ class TMRHexaMatrixModel : public TACSElementModel {
   TMRHexaMatrixModel();
   int getNumParameters();
   int getVarsPerNode();
-  void evalWeakIntegrand( int elemIndex, const double time,
-                          int n, const double pt[],
-                          const TacsScalar X[], const TacsScalar Xd[],
-                          const TacsScalar Ut[], const TacsScalar Ux[],
-                          TacsScalar DUt[], TacsScalar DUx[] );
-  void getWeakMatrixNonzeros( ElementMatrixType matType, int elemIndex,
-                              int *Jac_nnz, const int *Jac_pairs[] );
-  void evalWeakMatrix( ElementMatrixType matType, int elemIndex,
-                       const double time, int n, const double pt[],
-                       const TacsScalar X[], const TacsScalar Xd[],
-                       const TacsScalar Ut[], const TacsScalar Ux[],
-                       TacsScalar DUt[], TacsScalar DUx[],
-                       TacsScalar Jac[] );
+  void evalWeakIntegrand(int elemIndex, const double time, int n,
+                         const double pt[], const TacsScalar X[],
+                         const TacsScalar Xd[], const TacsScalar Ut[],
+                         const TacsScalar Ux[], TacsScalar DUt[],
+                         TacsScalar DUx[]);
+  void getWeakMatrixNonzeros(ElementMatrixType matType, int elemIndex,
+                             int *Jac_nnz, const int *Jac_pairs[]);
+  void evalWeakMatrix(ElementMatrixType matType, int elemIndex,
+                      const double time, int n, const double pt[],
+                      const TacsScalar X[], const TacsScalar Xd[],
+                      const TacsScalar Ut[], const TacsScalar Ux[],
+                      TacsScalar DUt[], TacsScalar DUx[], TacsScalar Jac[]);
+
  private:
   static int elem_Jac_pairs[2];
 };
 
-#endif // TMR_MATRIX_FILTER_MODEL_H
+#endif  // TMR_MATRIX_FILTER_MODEL_H

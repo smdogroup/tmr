@@ -28,38 +28,35 @@
 */
 class TMRHelmholtzPUFilter : public TMRConformFilter {
  public:
-  TMRHelmholtzPUFilter( int _N, int _nlevels,
-                        TACSAssembler *_assembler[],
-                        TMROctForest *_filter[] );
-  TMRHelmholtzPUFilter( int _N, int _nlevels,
-                        TACSAssembler *_assembler[],
-                        TMRQuadForest *_filter[] );
+  TMRHelmholtzPUFilter(int _N, int _nlevels, TACSAssembler *_assembler[],
+                       TMROctForest *_filter[]);
+  TMRHelmholtzPUFilter(int _N, int _nlevels, TACSAssembler *_assembler[],
+                       TMRQuadForest *_filter[]);
   ~TMRHelmholtzPUFilter();
 
   // Compute the stencil at an interior node
-  virtual int getInteriorStencil( int diagonal_index,
-                                  int npts, const TacsScalar Xpts[],
-                                  double alpha[] ) = 0;
+  virtual int getInteriorStencil(int diagonal_index, int npts,
+                                 const TacsScalar Xpts[], double alpha[]) = 0;
 
   // Compute the stencil at a boundary node with the normal n
-  virtual int getBoundaryStencil( int diagonal_index,
-                                  const TacsScalar n[], int npts,
-                                  const TacsScalar Xpts[], double alpha[] ) = 0;
+  virtual int getBoundaryStencil(int diagonal_index, const TacsScalar n[],
+                                 int npts, const TacsScalar Xpts[],
+                                 double alpha[]) = 0;
 
   // Set the design variable values (including all local values)
-  void setDesignVars( TACSBVec *x );
+  void setDesignVars(TACSBVec *x);
 
   // Set values/add values to the vector
-  void addValues( TACSBVec *vec );
+  void addValues(TACSBVec *vec);
 
   void initialize();
- private:
 
+ private:
   // Apply the filter to get the density values
-  void applyFilter( TACSBVec *in, TACSBVec *out );
+  void applyFilter(TACSBVec *in, TACSBVec *out);
 
   // Apply the transpose of the filter for sensitivities
-  void applyTranspose( TACSBVec *in, TACSBVec *out );
+  void applyTranspose(TACSBVec *in, TACSBVec *out);
 
   // The non-negative matrix M
   TACSMat *B;
@@ -80,7 +77,7 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   TACSBVec *temp;
 
   // Compute the Kronecker product
-  void kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y=NULL );
+  void kronecker(TACSBVec *c, TACSBVec *x, TACSBVec *y = NULL);
 };
 
 /*
@@ -88,51 +85,48 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
 */
 class TMRCallbackHelmholtzPUFilter : public TMRHelmholtzPUFilter {
  public:
-  TMRCallbackHelmholtzPUFilter( int _N, int _nlevels,
-                                TACSAssembler *_assembler[],
-                                TMROctForest *_filter[] ):
-    TMRHelmholtzPUFilter(_N, _nlevels, _assembler, _filter){
+  TMRCallbackHelmholtzPUFilter(int _N, int _nlevels,
+                               TACSAssembler *_assembler[],
+                               TMROctForest *_filter[])
+      : TMRHelmholtzPUFilter(_N, _nlevels, _assembler, _filter) {
     self = NULL;
     getinteriorstencil = NULL;
     getboundarystencil = NULL;
   }
-  TMRCallbackHelmholtzPUFilter( int _N, int _nlevels,
-                        TACSAssembler *_assembler[],
-                        TMRQuadForest *_filter[] ):
-    TMRHelmholtzPUFilter(_N, _nlevels, _assembler, _filter){
+  TMRCallbackHelmholtzPUFilter(int _N, int _nlevels,
+                               TACSAssembler *_assembler[],
+                               TMRQuadForest *_filter[])
+      : TMRHelmholtzPUFilter(_N, _nlevels, _assembler, _filter) {
     self = NULL;
     getinteriorstencil = NULL;
     getboundarystencil = NULL;
   }
-  ~TMRCallbackHelmholtzPUFilter(){}
+  ~TMRCallbackHelmholtzPUFilter() {}
 
   // Set the pointers/function pointers
-  void setSelfPointer( void *_self ){ self = _self; }
-  void setGetInteriorStencil( int (*func)( void*, int, int,
-                                           const TacsScalar*, double* ) ){
+  void setSelfPointer(void *_self) { self = _self; }
+  void setGetInteriorStencil(int (*func)(void *, int, int, const TacsScalar *,
+                                         double *)) {
     getinteriorstencil = func;
   }
-  void setGetBoundaryStencil( int (*func)( void*, int,
-                                           const TacsScalar*, int,
-                                           const TacsScalar*, double* ) ){
+  void setGetBoundaryStencil(int (*func)(void *, int, const TacsScalar *, int,
+                                         const TacsScalar *, double *)) {
     getboundarystencil = func;
   }
 
   // Compute the stencil at an interior node
-  int getInteriorStencil( int diagonal_index,
-                          int npts, const TacsScalar Xpts[],
-                          double alpha[] ){
-    if (self && getinteriorstencil){
+  int getInteriorStencil(int diagonal_index, int npts, const TacsScalar Xpts[],
+                         double alpha[]) {
+    if (self && getinteriorstencil) {
       return getinteriorstencil(self, diagonal_index, npts, Xpts, alpha);
     }
     return 1;
   }
 
   // Compute the stencil at a boundary node with the normal n
-  int getBoundaryStencil( int diagonal_index,
-                          const TacsScalar n[], int npts,
-                          const TacsScalar Xpts[], double alpha[] ){
-    if (self && getboundarystencil){
+  int getBoundaryStencil(int diagonal_index, const TacsScalar n[], int npts,
+                         const TacsScalar Xpts[], double alpha[]) {
+    if (self && getboundarystencil) {
       return getboundarystencil(self, diagonal_index, n, npts, Xpts, alpha);
     }
     return 1;
@@ -140,11 +134,9 @@ class TMRCallbackHelmholtzPUFilter : public TMRHelmholtzPUFilter {
 
  private:
   void *self;
-  int (*getinteriorstencil)( void*, int, int,
-                             const TacsScalar*, double* );
-  int (*getboundarystencil)( void*, int, const TacsScalar*, int,
-                             const TacsScalar *, double* );
-
+  int (*getinteriorstencil)(void *, int, int, const TacsScalar *, double *);
+  int (*getboundarystencil)(void *, int, const TacsScalar *, int,
+                            const TacsScalar *, double *);
 };
 
-#endif // TMR_HELMHOLTZ_PARTITION_UNITY_FILTER_H
+#endif  // TMR_HELMHOLTZ_PARTITION_UNITY_FILTER_H

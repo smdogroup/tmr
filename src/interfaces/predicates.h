@@ -7,8 +7,8 @@
 
 TMR_EXTERN_C_BEGIN
 void exactinit();
-double orient2d( double pa[], double pb[], double pc[] );
-double incircle( double pa[], double pb[], double pc[], double pd[] );
+double orient2d(double pa[], double pb[], double pc[]);
+double incircle(double pa[], double pb[], double pc[], double pd[]);
 TMR_EXTERN_C_END
 
-#endif // TMR_GEOMETRIC_PREDICATES_H
+#endif  // TMR_GEOMETRIC_PREDICATES_H

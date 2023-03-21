@@ -31,22 +31,22 @@
 
 class TMRQuadHelmholtzModel : public TACSElementModel {
  public:
-  TMRQuadHelmholtzModel( double _r );
+  TMRQuadHelmholtzModel(double _r);
   int getNumParameters();
   int getVarsPerNode();
-  void evalWeakIntegrand( int elemIndex, const double time,
-                          int n, const double pt[],
-                          const TacsScalar X[], const TacsScalar Xd[],
-                          const TacsScalar Ut[], const TacsScalar Ux[],
-                          TacsScalar DUt[], TacsScalar DUx[] );
-  void getWeakMatrixNonzeros( ElementMatrixType matType, int elemIndex,
-                              int *Jac_nnz, const int *Jac_pairs[] );
-  void evalWeakMatrix( ElementMatrixType matType, int elemIndex,
-                       const double time, int n, const double pt[],
-                       const TacsScalar X[], const TacsScalar Xd[],
-                       const TacsScalar Ut[], const TacsScalar Ux[],
-                       TacsScalar DUt[], TacsScalar DUx[],
-                       TacsScalar Jac[] );
+  void evalWeakIntegrand(int elemIndex, const double time, int n,
+                         const double pt[], const TacsScalar X[],
+                         const TacsScalar Xd[], const TacsScalar Ut[],
+                         const TacsScalar Ux[], TacsScalar DUt[],
+                         TacsScalar DUx[]);
+  void getWeakMatrixNonzeros(ElementMatrixType matType, int elemIndex,
+                             int *Jac_nnz, const int *Jac_pairs[]);
+  void evalWeakMatrix(ElementMatrixType matType, int elemIndex,
+                      const double time, int n, const double pt[],
+                      const TacsScalar X[], const TacsScalar Xd[],
+                      const TacsScalar Ut[], const TacsScalar Ux[],
+                      TacsScalar DUt[], TacsScalar DUx[], TacsScalar Jac[]);
+
  private:
   double r;
   static int elem_Jac_pairs[6];
@@ -54,25 +54,25 @@ class TMRQuadHelmholtzModel : public TACSElementModel {
 
 class TMRHexaHelmholtzModel : public TACSElementModel {
  public:
-  TMRHexaHelmholtzModel( double _r );
+  TMRHexaHelmholtzModel(double _r);
   int getNumParameters();
   int getVarsPerNode();
-  void evalWeakIntegrand( int elemIndex, const double time,
-                          int n, const double pt[],
-                          const TacsScalar X[], const TacsScalar Xd[],
-                          const TacsScalar Ut[], const TacsScalar Ux[],
-                          TacsScalar DUt[], TacsScalar DUx[] );
-  void getWeakMatrixNonzeros( ElementMatrixType matType, int elemIndex,
-                              int *Jac_nnz, const int *Jac_pairs[] );
-  void evalWeakMatrix( ElementMatrixType matType, int elemIndex,
-                       const double time, int n, const double pt[],
-                       const TacsScalar X[], const TacsScalar Xd[],
-                       const TacsScalar Ut[], const TacsScalar Ux[],
-                       TacsScalar DUt[], TacsScalar DUx[],
-                       TacsScalar Jac[] );
+  void evalWeakIntegrand(int elemIndex, const double time, int n,
+                         const double pt[], const TacsScalar X[],
+                         const TacsScalar Xd[], const TacsScalar Ut[],
+                         const TacsScalar Ux[], TacsScalar DUt[],
+                         TacsScalar DUx[]);
+  void getWeakMatrixNonzeros(ElementMatrixType matType, int elemIndex,
+                             int *Jac_nnz, const int *Jac_pairs[]);
+  void evalWeakMatrix(ElementMatrixType matType, int elemIndex,
+                      const double time, int n, const double pt[],
+                      const TacsScalar X[], const TacsScalar Xd[],
+                      const TacsScalar Ut[], const TacsScalar Ux[],
+                      TacsScalar DUt[], TacsScalar DUx[], TacsScalar Jac[]);
+
  private:
   double r;
   static int elem_Jac_pairs[8];
 };
 
-#endif // TMR_HELMHOLTZ_MODEL_H
+#endif  // TMR_HELMHOLTZ_MODEL_H
