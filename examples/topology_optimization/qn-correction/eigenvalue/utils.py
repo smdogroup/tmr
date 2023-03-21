@@ -11,6 +11,7 @@ try:
 except:
     pass
 
+
 class OctCreator(TMR.OctConformTopoCreator):
     """
     An instance of an OctCreator class.
@@ -21,6 +22,7 @@ class OctCreator(TMR.OctConformTopoCreator):
     (In a conformal filter, they must have the same element mesh but may have
     different degree of approximation.)
     """
+
     def __init__(self, bcs, filt, props=None):
         TMR.OctConformTopoCreator.__init__(bcs, filt)
         self.props = props
@@ -56,6 +58,7 @@ class OctCreator(TMR.OctConformTopoCreator):
         """
         return self.element
 
+
 class CreatorCallback:
     def __init__(self, bcs, props):
         self.bcs = bcs
@@ -77,6 +80,7 @@ class CreatorCallback:
         creator = OctCreator(self.bcs, forest, props=self.props)
         return creator, forest
 
+
 class MFilterCreator:
     def __init__(self, r0_frac, N, a=0.1):
         self.a = a
@@ -88,10 +92,11 @@ class MFilterCreator:
         Create and initialize a filter with the specified parameters
         """
         # Find the characteristic length of the domain and set the filter length scale
-        r0 = self.r0_frac*self.a
+        r0 = self.r0_frac * self.a
         mfilter = TopOptUtils.Mfilter(self.N, assemblers, filters, dim=3, r=r0)
         mfilter.initialize()
         return mfilter
+
 
 class OutputCallback:
     def __init__(self, assembler, iter_offset=0):
@@ -100,24 +105,31 @@ class OutputCallback:
         self.xt = self.assembler.createDesignVec()
 
         # Set the output file name
-        flag = (TACS.OUTPUT_CONNECTIVITY |
-                TACS.OUTPUT_NODES |
-                TACS.OUTPUT_DISPLACEMENTS |
-                TACS.OUTPUT_EXTRAS)
+        flag = (
+            TACS.OUTPUT_CONNECTIVITY
+            | TACS.OUTPUT_NODES
+            | TACS.OUTPUT_DISPLACEMENTS
+            | TACS.OUTPUT_EXTRAS
+        )
         self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
         self.iter_offset = iter_offset
 
         return
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
-
-        self.f5.writeToFile(os.path.join(prefix, 'output%d.f5'%(itr + self.iter_offset)))
+        self.f5.writeToFile(
+            os.path.join(prefix, "output%d.f5" % (itr + self.iter_offset))
+        )
 
         self.assembler.getDesignVars(self.xt)
-        TMR.writeSTLToBin(os.path.join(prefix, 'level_set_output%d.bstl'%(itr + self.iter_offset)),
-                          oct_forest, self.xt)
+        TMR.writeSTLToBin(
+            os.path.join(prefix, "level_set_output%d.bstl" % (itr + self.iter_offset)),
+            oct_forest,
+            self.xt,
+        )
 
         return
+
 
 class FrequencyObj:
     """
@@ -128,10 +140,23 @@ class FrequencyObj:
 
     itr = 0
 
-    def __init__(self, prefix, domain, forest, len0, AR, ratio, iter_offset,
-                 eig_scale=1.0, con_scale=1.0, num_eigenvalues=10,
-                 max_jd_size=100, max_gmres_size=30,
-                 ksrho=50, non_design_mass=5.0):
+    def __init__(
+        self,
+        prefix,
+        domain,
+        forest,
+        len0,
+        AR,
+        ratio,
+        iter_offset,
+        eig_scale=1.0,
+        con_scale=1.0,
+        num_eigenvalues=10,
+        max_jd_size=100,
+        max_gmres_size=30,
+        ksrho=50,
+        non_design_mass=5.0,
+    ):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -148,11 +173,11 @@ class FrequencyObj:
         self.prefix = prefix
         self.domain = domain
         self.iter_offset = iter_offset
-        self.lx = len0*AR
+        self.lx = len0 * AR
         self.ly = len0
         self.lz = len0
-        if domain == 'lbracket':
-            self.ly = len0*ratio
+        if domain == "lbracket":
+            self.ly = len0 * ratio
         self.ratio = ratio
         self.eig_scale = eig_scale
         self.con_scale = con_scale
@@ -225,19 +250,21 @@ class FrequencyObj:
             self.temp = self.assembler.createDesignVec()
 
             # Create the Jacobi-Davidson operator
-            self.oper = TACS.JDFrequencyOperator(self.assembler, self.kmat, self.mmat,
-                                                 self.mg.getMat(), self.mg)
+            self.oper = TACS.JDFrequencyOperator(
+                self.assembler, self.kmat, self.mmat, self.mg.getMat(), self.mg
+            )
 
             # Create the eigenvalue solver and set the number of recycling eigenvectors
-            self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
-                                          self.max_jd_size, self.max_gmres_size)
+            self.jd = TACS.JacobiDavidson(
+                self.oper, self.num_eigenvalues, self.max_jd_size, self.max_gmres_size
+            )
             self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-6, atol=1e-12)
             # self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-12, atol=1e-15)
             self.jd.setRecycle(self.num_eigenvalues)
 
-            '''
+            """
             Create a non-design mass vector
-            '''
+            """
             self.mvec = self.assembler.createDesignVec()
             mvals = self.mvec.getArray()
 
@@ -261,38 +288,38 @@ class FrequencyObj:
 
             # # Loop over all owned nodes and set non-design mass values
             tol = 1e-6
-            if self.domain == 'cantilever':
+            if self.domain == "cantilever":
                 xmin = self.lx - tol
                 xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.0*self.lz - tol
-                zmax = 0.2*self.lz + tol
+                ymin = 0.25 * self.ly - tol
+                ymax = 0.75 * self.ly + tol
+                zmin = 0.0 * self.lz - tol
+                zmax = 0.2 * self.lz + tol
 
-            elif self.domain == 'michell':
+            elif self.domain == "michell":
                 xmin = self.lx - tol
                 xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.4*self.lz - tol
-                zmax = 0.6*self.lz + tol
+                ymin = 0.25 * self.ly - tol
+                ymax = 0.75 * self.ly + tol
+                zmin = 0.4 * self.lz - tol
+                zmax = 0.6 * self.lz + tol
 
-            elif self.domain == 'mbb':
-                xmin = 0.0*self.lx - tol
-                xmax = 0.2*self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
+            elif self.domain == "mbb":
+                xmin = 0.0 * self.lx - tol
+                xmax = 0.2 * self.lx + tol
+                ymin = 0.25 * self.ly - tol
+                ymax = 0.75 * self.ly + tol
                 zmin = self.lz - tol
                 zmax = self.lz + tol
 
-            elif self.domain == 'lbracket':
+            elif self.domain == "lbracket":
                 RATIO = self.ratio
                 xmin = self.lx - tol
                 xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.5*RATIO*self.lz - tol
-                zmax = 1.0*RATIO*self.lz + tol
+                ymin = 0.25 * self.ly - tol
+                ymax = 0.75 * self.ly + tol
+                zmin = 0.5 * RATIO * self.lz - tol
+                zmax = 1.0 * RATIO * self.lz + tol
 
             else:
                 print("[Warning]Unsupported domain type for non-design mass!")
@@ -302,7 +329,7 @@ class FrequencyObj:
                 if xmin < x < xmax:
                     if ymin < y < ymax:
                         if zmin < z < zmax:
-                            mvals[i-offset] = 1.0
+                            mvals[i - offset] = 1.0
 
             dv = self.assembler.createDesignVec()
             self.assembler.getDesignVars(dv)
@@ -331,9 +358,9 @@ class FrequencyObj:
         # dv.axpy(-1.0, self.mvec)
         # self.assembler.setDesignVars(dv)
 
-        '''
+        """
         Export non-design mass vectors to f5 file for verification
-        '''
+        """
         # itr = FrequencyObj.itr + self.iter_offset
         # if itr % 10 == 0:
         #     # Set up flags for data output
@@ -371,9 +398,9 @@ class FrequencyObj:
         #     self.assembler.setDesignVars(dv)
         #     self.assembler.setVariables(sv)
         # FrequencyObj.itr += 1
-        '''
+        """
         End export non-design mass vectors to f5 file for verification
-        '''
+        """
 
         # Assemble the multigrid preconditioner
         self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
@@ -387,7 +414,7 @@ class FrequencyObj:
         self.mmat.mult(e, t)
         eTMe = e.dot(t)
         if self.comm.rank == 0:
-            print('[Mmat] eTMe = {:20.10e}'.format(eTMe))
+            print("[Mmat] eTMe = {:20.10e}".format(eTMe))
 
         # Solve
         self.jd.solve(print_flag=True, print_level=0)
@@ -402,8 +429,10 @@ class FrequencyObj:
                 self.eig[i], error = self.jd.extractEigenvalue(i)
 
             # Update preconditioner
-            theta = 0.9*np.min(self.eig)
-            self.mg.assembleMatCombo(TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta)
+            theta = 0.9 * np.min(self.eig)
+            self.mg.assembleMatCombo(
+                TACS.STIFFNESS_MATRIX, 1.0, TACS.MASS_MATRIX, -theta
+            )
             self.mg.factor()
 
             # Rerun the solver
@@ -413,7 +442,8 @@ class FrequencyObj:
             # If it still fails, raise error and exit
             if nconvd < self.num_eigenvalues:
                 msg = "No enough eigenvalues converged! ({:d}/{:d})".format(
-                    nconvd, self.num_eigenvalues)
+                    nconvd, self.num_eigenvalues
+                )
                 raise ValueError(msg)
 
         # Extract eigenvalues and eigenvectors
@@ -430,10 +460,10 @@ class FrequencyObj:
         eig_min = np.min(self.eig)
 
         # Compute KS aggregation
-        self.eta = np.exp(-self.ksrho*(self.eig - eig_min))
+        self.eta = np.exp(-self.ksrho * (self.eig - eig_min))
         self.beta = np.sum(self.eta)
-        ks = (eig_min - np.log(self.beta)/self.ksrho)
-        self.eta = self.eta/self.beta
+        ks = eig_min - np.log(self.beta) / self.ksrho
+        self.eta = self.eta / self.beta
 
         # Scale eigenvalue back
         self.eig[:] /= self.eig_scale
@@ -443,11 +473,10 @@ class FrequencyObj:
 
         # Print values
         if self.comm.rank == 0:
-            print('{:30s}{:20.10e}'.format('[Obj] KS eigenvalue:', ks))
-            print('{:30s}{:20.10e}'.format('[Obj] min eigenvalue:', eig_min))
+            print("{:30s}{:20.10e}".format("[Obj] KS eigenvalue:", ks))
+            print("{:30s}{:20.10e}".format("[Obj] min eigenvalue:", eig_min))
 
         return obj
-
 
     def objective_gradient(self, fltr, mg, dfdrho):
         """
@@ -474,19 +503,22 @@ class FrequencyObj:
         dfdrho.zeroEntries()
 
         for i in range(self.num_eigenvalues):
-
             # This is a maximization problem
-            scale = -self.eta[i]*self.eig_scale
+            scale = -self.eta[i] * self.eig_scale
 
             # Compute gradient of eigenvalue
             self.deig[i].zeroEntries()
             self.assembler.addMatDVSensInnerProduct(
-                scale, TACS.STIFFNESS_MATRIX,
-                self.eigv[i], self.eigv[i], self.deig[i])
+                scale, TACS.STIFFNESS_MATRIX, self.eigv[i], self.eigv[i], self.deig[i]
+            )
 
             self.assembler.addMatDVSensInnerProduct(
-                -scale*self.eig[i], TACS.MASS_MATRIX,
-                self.eigv[i], self.eigv[i], self.deig[i])
+                -scale * self.eig[i],
+                TACS.MASS_MATRIX,
+                self.eigv[i],
+                self.eigv[i],
+                self.deig[i],
+            )
 
             # Make sure the vector is properly distributed over all processors
             self.deig[i].beginSetValues(op=TACS.ADD_VALUES)
@@ -497,7 +529,7 @@ class FrequencyObj:
         # Compute gradient norm
         norm = dfdrho.norm()
         if self.comm.rank == 0:
-            print("{:30s}{:20.10e}".format('[Obj] gradient norm:', norm))
+            print("{:30s}{:20.10e}".format("[Obj] gradient norm:", norm))
         return
 
     def qn_correction(self, x, z, zw, s, y):
@@ -557,24 +589,26 @@ class FrequencyObj:
             # Zero out temp vector
             self.temp.zeroEntries()
 
-            coeff = self.eta[i]*self.eig_scale
+            coeff = self.eta[i] * self.eig_scale
 
             # Compute g(rho + h*s)
             self.assembler.setDesignVars(self.rho)
-            self.assembler.addMatDVSensInnerProduct(coeff, TACS.STIFFNESS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            self.assembler.addMatDVSensInnerProduct(
+                coeff, TACS.STIFFNESS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
             # Compute dg = g(rho + h*s) - g(rho)
             self.assembler.setDesignVars(self.rho_original)
-            self.assembler.addMatDVSensInnerProduct(-coeff, TACS.STIFFNESS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            self.assembler.addMatDVSensInnerProduct(
+                -coeff, TACS.STIFFNESS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
             # Distribute the vector
             self.temp.beginSetValues(op=TACS.ADD_VALUES)
             self.temp.endSetValues(op=TACS.ADD_VALUES)
 
             # Compute dg/h
-            self.temp.scale(1/h)
+            self.temp.scale(1 / h)
 
             # Add to the update
             self.update.axpy(1.0, self.temp)
@@ -586,24 +620,26 @@ class FrequencyObj:
             # Zero out temp vector
             self.temp.zeroEntries()
 
-            coeff = -self.eta[i]*self.eig[i]*self.eig_scale
+            coeff = -self.eta[i] * self.eig[i] * self.eig_scale
 
             # Compute g(rho + h*s)
             self.assembler.setDesignVars(self.rho)
-            self.assembler.addMatDVSensInnerProduct(coeff, TACS.MASS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            self.assembler.addMatDVSensInnerProduct(
+                coeff, TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
             # Compute dg = g(rho + h*s) - g(rho)
             self.assembler.setDesignVars(self.rho_original)
-            self.assembler.addMatDVSensInnerProduct(-coeff, TACS.MASS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            self.assembler.addMatDVSensInnerProduct(
+                -coeff, TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
             # Distribute the vector
             self.temp.beginSetValues(op=TACS.ADD_VALUES)
             self.temp.endSetValues(op=TACS.ADD_VALUES)
 
             # Compute dg/h
-            self.temp.scale(1/h)
+            self.temp.scale(1 / h)
 
             # Add to the update
             self.update.axpy(1.0, self.temp)
@@ -615,9 +651,10 @@ class FrequencyObj:
             self.temp.zeroEntries()
 
             # Compute dot(g,svec)
-            coeff = -self.eta[i]*self.eig_scale
-            self.assembler.addMatDVSensInnerProduct(coeff, TACS.MASS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            coeff = -self.eta[i] * self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(
+                coeff, TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
             # Distribute the vector
             self.temp.beginSetValues(op=TACS.ADD_VALUES)
@@ -633,9 +670,10 @@ class FrequencyObj:
             self.temp.zeroEntries()
 
             # Compute DVSens
-            coeff = -self.eta[i]*self.eig_scale*self.svec.dot(self.deig[i])
-            self.assembler.addMatDVSensInnerProduct(coeff, TACS.MASS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            coeff = -self.eta[i] * self.eig_scale * self.svec.dot(self.deig[i])
+            self.assembler.addMatDVSensInnerProduct(
+                coeff, TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
             # Distribute the vector
             self.temp.beginSetValues(op=TACS.ADD_VALUES)
@@ -683,6 +721,7 @@ class FrequencyObj:
     def getQnUpdateCurvs(self):
         return self.curvs
 
+
 class MassConstr:
     """
     Mass constraint takes the following form:
@@ -693,7 +732,6 @@ class MassConstr:
     """
 
     def __init__(self, m_fixed, comm):
-
         self.m_fixed = m_fixed
         self.comm = comm
         self.rank = self.comm.Get_rank()
@@ -705,7 +743,7 @@ class MassConstr:
         # Save snapshots throughout optimization iterations
         self.num_obj_evals = 0
         self.save_snapshot_every = 1
-        self.snapshot = {'iter': [], 'infeas': []}
+        self.snapshot = {"iter": [], "infeas": []}
 
         return
 
@@ -717,42 +755,43 @@ class MassConstr:
 
         # Eval mass
         mass = self.assembler.evalFunctions([self.mass_func])[0]
-        mass_constr = -mass/self.m_fixed + 1.0
+        mass_constr = -mass / self.m_fixed + 1.0
         if self.rank == 0:
-            print("{:30s}{:20.10e}".format('[Con] mass constraint:',mass_constr))
+            print("{:30s}{:20.10e}".format("[Con] mass constraint:", mass_constr))
 
         # Save a snapshot of the result
         if self.num_obj_evals % self.save_snapshot_every == 0:
-            self.snapshot['iter'].append(self.num_obj_evals)
-            self.snapshot['infeas'].append(np.max([-mass_constr, 0]))  # hard-coded
+            self.snapshot["iter"].append(self.num_obj_evals)
+            self.snapshot["infeas"].append(np.max([-mass_constr, 0]))  # hard-coded
 
         self.num_obj_evals += 1
 
         return [mass_constr]
 
-    def constraint_gradient(self, fltr, mg, vecs):
+    def constraint_gradient(self, fltr, mg, vecs, index=0):
         # We only have one constraint
-        dcdrho = vecs[0]
+        dcdrho = vecs[index]
         dcdrho.zeroEntries()
 
         # Evaluate the mass gradient
-        self.assembler.addDVSens([self.mass_func], [dcdrho], alpha=-1/self.m_fixed)
+        self.assembler.addDVSens([self.mass_func], [dcdrho], alpha=-1 / self.m_fixed)
 
         # Compute norm
         norm = dcdrho.norm()
         if self.rank == 0:
-            print("{:30s}{:20.10e}".format('[Con] gradient norm:', norm))
+            print("{:30s}{:20.10e}".format("[Con] gradient norm:", norm))
         return
 
     def get_snapshot(self):
         return self.snapshot
 
+
 def cantilever_egads(comm, lx, ly, lz):
-    '''
+    """
     Create egads model file
-    '''
-    prefix = './models'
-    name = 'cantilever_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+    """
+    prefix = "./models"
+    name = "cantilever_{:.1f}_{:.1f}_{:.1f}.egads".format(lx, ly, lz)
 
     if comm.rank == 0 and not os.path.isdir(prefix):
         os.mkdir(prefix)
@@ -774,10 +813,10 @@ def cantilever_egads(comm, lx, ly, lz):
 
     return
 
-def cantilever_geo(comm, lx, ly, lz):
 
-    prefix = './models'
-    name = 'cantilever_{:.1f}_{:.1f}_{:.1f}.egads'.format(lx, ly, lz)
+def cantilever_geo(comm, lx, ly, lz):
+    prefix = "./models"
+    name = "cantilever_{:.1f}_{:.1f}_{:.1f}.egads".format(lx, ly, lz)
 
     try:
         geo = TMR.LoadModel(os.path.join(prefix, name), print_lev=0)
@@ -802,20 +841,28 @@ def cantilever_geo(comm, lx, ly, lz):
 
     return geo
 
-def lbracket_egads(comm, lx, ly, lz, ratio):
 
-    prefix = './models'
-    base_name = 'lbracket_base_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
-    arm1_name = 'lbracket_arm1_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
-    arm2_name = 'lbracket_arm2_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
+def lbracket_egads(comm, lx, ly, lz, ratio):
+    prefix = "./models"
+    base_name = "lbracket_base_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads".format(
+        lx, ly, lz, ratio
+    )
+    arm1_name = "lbracket_arm1_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads".format(
+        lx, ly, lz, ratio
+    )
+    arm2_name = "lbracket_arm2_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads".format(
+        lx, ly, lz, ratio
+    )
 
     if comm.rank == 0 and not os.path.isdir(prefix):
         os.mkdir(prefix)
 
-    if os.path.isfile(os.path.join(prefix, base_name)) and \
-       os.path.isfile(os.path.join(prefix, base_name)) and \
-       os.path.isfile(os.path.join(prefix, base_name)):
-       return
+    if (
+        os.path.isfile(os.path.join(prefix, base_name))
+        and os.path.isfile(os.path.join(prefix, base_name))
+        and os.path.isfile(os.path.join(prefix, base_name))
+    ):
+        return
 
     RATIO = ratio
 
@@ -824,7 +871,7 @@ def lbracket_egads(comm, lx, ly, lz, ratio):
 
     # Create base
     x0 = [0.0, 0.0, 0.0]
-    x1 = [lx*RATIO, ly, lz*RATIO]
+    x1 = [lx * RATIO, ly, lz * RATIO]
     B0 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
     m1 = ctx.makeTopology(egads.MODEL, children=[B0])
     if comm.rank == 0:
@@ -832,8 +879,8 @@ def lbracket_egads(comm, lx, ly, lz, ratio):
     comm.Barrier()
 
     # Create arm 1
-    x0 = [lx*RATIO, 0.0, 0.0]
-    x1 = [lx*(1-RATIO), ly, lz*RATIO]
+    x0 = [lx * RATIO, 0.0, 0.0]
+    x1 = [lx * (1 - RATIO), ly, lz * RATIO]
     B1 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
     m2 = ctx.makeTopology(egads.MODEL, children=[B1])
     if comm.rank == 0:
@@ -841,8 +888,8 @@ def lbracket_egads(comm, lx, ly, lz, ratio):
     comm.Barrier()
 
     # Create arm 2
-    x0 = [0.0, 0.0, lz*RATIO]
-    x1 = [lx*RATIO, ly, lz*(1-RATIO)]
+    x0 = [0.0, 0.0, lz * RATIO]
+    x1 = [lx * RATIO, ly, lz * (1 - RATIO)]
     B2 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
     m3 = ctx.makeTopology(egads.MODEL, children=[B2])
     if comm.rank == 0:
@@ -851,12 +898,18 @@ def lbracket_egads(comm, lx, ly, lz, ratio):
 
     return
 
-def lbracket_geo(comm, lx, ly, lz, ratio):
 
-    prefix = './models'
-    base_name = 'lbracket_base_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
-    arm1_name = 'lbracket_arm1_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
-    arm2_name = 'lbracket_arm2_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads'.format(lx, ly, lz, ratio)
+def lbracket_geo(comm, lx, ly, lz, ratio):
+    prefix = "./models"
+    base_name = "lbracket_base_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads".format(
+        lx, ly, lz, ratio
+    )
+    arm1_name = "lbracket_arm1_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads".format(
+        lx, ly, lz, ratio
+    )
+    arm2_name = "lbracket_arm2_{:.1f}_{:.1f}_{:.1f}_r{:.1f}.egads".format(
+        lx, ly, lz, ratio
+    )
 
     geos = []
     names = [base_name, arm1_name, arm2_name]
@@ -887,6 +940,7 @@ def lbracket_geo(comm, lx, ly, lz, ratio):
 
     return geo
 
+
 def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
     """
     Create an initial forest for analysis and optimization
@@ -905,9 +959,11 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         OctForest: Initial forest for topology optimization
     """
 
-    if domain_type == 'cantilever' or \
-       domain_type == 'michell' or \
-       domain_type == '3dcantilever':
+    if (
+        domain_type == "cantilever"
+        or domain_type == "michell"
+        or domain_type == "3dcantilever"
+    ):
         # Create geo
         geo = cantilever_geo(comm, lx, ly, lz)
 
@@ -916,14 +972,14 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         edges = geo.getEdges()
         faces = geo.getFaces()
         volumes = geo.getVolumes()
-        faces[0].setName('fixed')
-        verts[5].setName('pt1')
-        verts[6].setName('pt2')
+        faces[0].setName("fixed")
+        verts[5].setName("pt1")
+        verts[6].setName("pt2")
 
         # Set source and target faces
         faces[0].setSource(volumes[0], faces[1])
 
-    elif domain_type == 'mbb':
+    elif domain_type == "mbb":
         # Create geo
         geo = cantilever_geo(comm, lx, ly, lz)
 
@@ -932,13 +988,13 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         edges = geo.getEdges()
         faces = geo.getFaces()
         volumes = geo.getVolumes()
-        faces[0].setName('symmetry')
-        edges[7].setName('support')
+        faces[0].setName("symmetry")
+        edges[7].setName("support")
 
         # Set source and target faces
         faces[0].setSource(volumes[0], faces[1])
 
-    elif domain_type == 'lbracket':
+    elif domain_type == "lbracket":
         # Create geo
         geo = lbracket_geo(comm, lx, ly, lz, ratio)
 
@@ -947,7 +1003,7 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         edges = geo.getEdges()
         faces = geo.getFaces()
         volumes = geo.getVolumes()
-        faces[17].setName('fixed')
+        faces[17].setName("fixed")
 
         # Set source and target faces
         faces[0].setSource(volumes[0], faces[1])
@@ -1002,10 +1058,28 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
 
     return forest
 
-def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
-                   len0=1.0, AR=1.0, ratio=0.4, density=2600.0, iter_offset=0,
-                   qn_correction=True, non_design_mass=5.0, eig_scale=1.0, eq_constr=False,
-                   max_jd_size=100, max_gmres_size=30):
+
+def create_problem(
+    prefix,
+    domain,
+    forest,
+    bcs,
+    props,
+    nlevels,
+    vol_frac=0.25,
+    r0_frac=0.05,
+    len0=1.0,
+    AR=1.0,
+    ratio=0.4,
+    density=2600.0,
+    iter_offset=0,
+    qn_correction=True,
+    non_design_mass=5.0,
+    eig_scale=1.0,
+    eq_constr=False,
+    max_jd_size=100,
+    max_gmres_size=30,
+):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -1033,42 +1107,52 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r
     mfilter = MFilterCreator(r0_frac, N, a=len0)
     filter_type = mfilter.filter_callback
     obj = CreatorCallback(bcs, props)
-    problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
-                                            filter_type, use_galerkin=True,
-                                            nlevels=nlevels)
+    problem = TopOptUtils.createTopoProblem(
+        forest, obj.creator_callback, filter_type, use_galerkin=True, nlevels=nlevels
+    )
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
 
     # Compute the fixed mass target
-    lx = len0*AR # mm
-    ly = len0 # mm
-    lz = len0 # mm
-    if domain == 'lbracket':
-        ly = len0*ratio
-    vol = lx*ly*lz
-    if domain == 'lbracket':
-        S1 = lx*lz
-        S2 = lx*lz*(1-ratio)**2
-        vol = (S1-S2)*ly
-    m_fixed = vol_frac*(vol*density)
+    lx = len0 * AR  # mm
+    ly = len0  # mm
+    lz = len0  # mm
+    if domain == "lbracket":
+        ly = len0 * ratio
+    vol = lx * ly * lz
+    if domain == "lbracket":
+        S1 = lx * lz
+        S2 = lx * lz * (1 - ratio) ** 2
+        vol = (S1 - S2) * ly
+    m_fixed = vol_frac * (vol * density)
 
     # Add objective callback
-    obj_callback = FrequencyObj(prefix, domain, forest, len0, AR, ratio, iter_offset,
-                                non_design_mass=non_design_mass,
-                                eig_scale=eig_scale,
-                                max_jd_size=max_jd_size,
-                                max_gmres_size=max_gmres_size)
-    problem.addObjectiveCallback(obj_callback.objective,
-                                 obj_callback.objective_gradient)
+    obj_callback = FrequencyObj(
+        prefix,
+        domain,
+        forest,
+        len0,
+        AR,
+        ratio,
+        iter_offset,
+        non_design_mass=non_design_mass,
+        eig_scale=eig_scale,
+        max_jd_size=max_jd_size,
+        max_gmres_size=max_gmres_size,
+    )
+    problem.addObjectiveCallback(
+        obj_callback.objective, obj_callback.objective_gradient
+    )
 
     # Add constraint callback
     constr_callback = MassConstr(m_fixed, assembler.getMPIComm())
     nineq = 1
     if eq_constr is True:
         nineq = 0
-    problem.addConstraintCallback(1, nineq, constr_callback.constraint,
-                                  constr_callback.constraint_gradient)
+    problem.addConstraintCallback(
+        1, nineq, constr_callback.constraint, constr_callback.constraint_gradient
+    )
 
     # Use Quasi-Newton Update Correction if specified
     if qn_correction:
@@ -1080,8 +1164,9 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r
 
     return problem, obj_callback
 
+
 class OmAnalysis(om.ExplicitComponent):
-    '''
+    """
     This class wraps the analyses with openmdao interface such that
     the optimization can be run with different optimizers such as
     SNOPT and IPOPT.
@@ -1093,16 +1178,16 @@ class OmAnalysis(om.ExplicitComponent):
     where:
     start = self.offsets[rank]
     end = start + self.sizes[rank]
-    '''
+    """
 
     def __init__(self, comm, problem, obj_callback, sizes, offsets):
-        '''
+        """
         Args:
             problem (TMR.TopoProblem)
             obj_callback (FrequencyObj)
             sizes (list): sizes of distributed vectors on each processor
             offsets (list): global index of the first entry in local vector
-        '''
+        """
 
         super().__init__()
         # self.options['distributed'] = True
@@ -1137,20 +1222,18 @@ class OmAnalysis(om.ExplicitComponent):
 
         # Initialize f5 converter
         self.assembler = self.problem.getAssembler()
-        flag = (TACS.OUTPUT_CONNECTIVITY |
-                TACS.OUTPUT_NODES |
-                TACS.OUTPUT_EXTRAS)
+        flag = TACS.OUTPUT_CONNECTIVITY | TACS.OUTPUT_NODES | TACS.OUTPUT_EXTRAS
         self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
 
         return
 
     def setup(self):
-        self.add_input('x', shape=(self.global_size,))
-        self.add_output('obj', shape=1)
-        self.add_output('con', shape=1)
+        self.add_input("x", shape=(self.global_size,))
+        self.add_output("obj", shape=1)
+        self.add_output("con", shape=1)
 
-        self.declare_partials(of='obj', wrt='x')
-        self.declare_partials(of='con', wrt='x')
+        self.declare_partials(of="obj", wrt="x")
+        self.declare_partials(of="con", wrt="x")
 
         return
 
@@ -1160,19 +1243,19 @@ class OmAnalysis(om.ExplicitComponent):
         # root and implicitly discard results from any other
         # optimizer to prevent potential inconsistency
         if self.comm.rank == 0:
-            x = inputs['x']
+            x = inputs["x"]
         else:
             x = None
-        x =self.comm.bcast(x, root=0)
+        x = self.comm.bcast(x, root=0)
 
-        self.x_vals[:] = x[self.start:self.end]
+        self.x_vals[:] = x[self.start : self.end]
         fail, fobj, cons = self.problem.evalObjCon(1, self.x_PVec)
 
         if fail:
             raise RuntimeError("Failed to evaluate objective and constraints!")
         else:
-            outputs['obj'] = fobj
-            outputs['con'] = cons[0]
+            outputs["obj"] = fobj
+            outputs["con"] = cons[0]
 
         # Barrier here because we don't do block communication
         self.comm.Barrier()
@@ -1181,11 +1264,11 @@ class OmAnalysis(om.ExplicitComponent):
 
     def compute_partials(self, inputs, partials):
         if self.comm.rank == 0:
-            x = inputs['x']
+            x = inputs["x"]
         else:
             x = None
-        x =self.comm.bcast(x, root=0)
-        self.x_vals[:] = x[self.start:self.end]
+        x = self.comm.bcast(x, root=0)
+        self.x_vals[:] = x[self.start : self.end]
         fail = self.problem.evalObjConGradient(self.x_PVec, self.g_PVec, [self.A_PVec])
 
         if fail:
@@ -1196,8 +1279,8 @@ class OmAnalysis(om.ExplicitComponent):
             global_A = self.comm.allgather(self.A_vals)
             global_A = np.concatenate(global_A)
 
-            partials['obj', 'x'] = global_g
-            partials['con', 'x'] = global_A
+            partials["obj", "x"] = global_g
+            partials["con", "x"] = global_A
 
         return
 
@@ -1210,9 +1293,9 @@ class OmAnalysis(om.ExplicitComponent):
         s_vals = TMR.convertPVecToVec(s_PVec).getArray()
         y_vals = TMR.convertPVecToVec(y_PVec).getArray()
 
-        x_vals[:] = x[self.start:self.end]
-        s_vals[:] = s[self.start:self.end]
-        y_vals[:] = y[self.start:self.end]
+        x_vals[:] = x[self.start : self.end]
+        s_vals[:] = s[self.start : self.end]
+        y_vals[:] = y[self.start : self.end]
 
         self.obj_callback.qn_correction(x_PVec, z, zw, s_PVec, y_PVec)
 
@@ -1224,18 +1307,24 @@ class OmAnalysis(om.ExplicitComponent):
 
     def write_output(self, prefix, refine_step, info=None):
         if info is None:
-            self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}.f5'.format(refine_step)))
+            self.f5.writeToFile(
+                os.path.join(prefix, "output_refine{:d}.f5".format(refine_step))
+            )
         elif isinstance(info, str):
-            self.f5.writeToFile(os.path.join(prefix, 'output_refine{:d}_{:s}.f5'.format(refine_step, info)))
+            self.f5.writeToFile(
+                os.path.join(
+                    prefix, "output_refine{:d}_{:s}.f5".format(refine_step, info)
+                )
+            )
         return
 
 
 def getNSkipUpdate(tr_dat_file):
-    '''
+    """
     Get number of skipped Quasi-newton Hessian update
     in ParOpt trust region output file
-    '''
-    with open(tr_dat_file, 'r') as f:
+    """
+    with open(tr_dat_file, "r") as f:
         # Read in entire file in a single string
         text = f.read()
-        return text.count('skipH')
+        return text.count("skipH")

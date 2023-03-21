@@ -26,6 +26,9 @@ from utils_comp import create_problem
 sys.path.append("../eigenvalue")
 from utils import create_forest, OmAnalysis, getNSkipUpdate
 
+sys.path.append("../refactor_frequency")
+from refactor_utils_freq import GeneralEigSolver
+
 
 if __name__ == "__main__":
     # Create the argument parser
@@ -493,6 +496,14 @@ if __name__ == "__main__":
                 rhoopt_global
             )
 
+        # Try to perform a generalized eigenvalue analysis
+        ges = GeneralEigSolver(problem, max_jd_size=200, max_gmres_size=30)
+        try:
+            evals, evecs, res = ges.compute(xopt)
+        except:
+            evals, evecs, res = None, None, None
+        del ges
+
         # Compute infeasibility
         if args.eq_constr:
             infeas = np.abs(con)
@@ -535,6 +546,8 @@ if __name__ == "__main__":
             pkl["cmd"] = cmd
             pkl["problem"] = "comp-min"
             pkl["paropt-type"] = args.paropt_type
+            pkl["gep-evals"] = evals
+            pkl["gep-res"] = res
             pkl["qn-time"] = None
             if args.qn_correction:
                 pkl["qn-time"] = obj_callback.getAveragedQnTime()

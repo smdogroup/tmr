@@ -115,6 +115,7 @@ class CompObj:
             self.fltr = fltr
             self.assembler = self.fltr.getAssembler()
             self.svec = self.assembler.createDesignVec()
+            self.svec_vals = self.svec.getArray()
             self.comm = self.assembler.getMPIComm()
             self.rank = self.comm.rank
 
@@ -125,6 +126,7 @@ class CompObj:
             self.rho = self.assembler.createDesignVec()
             self.rho_original = self.assembler.createDesignVec()
             self.update = self.assembler.createDesignVec()
+            self.update_vals = self.update.getArray()
 
             # Initialize space for matrices and vectors
             self.kmat = self.assembler.createMat()
@@ -339,7 +341,7 @@ class CompObj:
             print("{:30s}{:20.10e}".format("[Obj] gradient norm:", norm))
         return
 
-    def qn_correction(self, x, z, zw, s, y):
+    def qn_correction(self, x, z, zw, s, y, zero_idx=None):
         """
         Update y:
         y <- y + F^T P Fs
@@ -353,7 +355,6 @@ class CompObj:
         the design variable in the assembler:
 
         if:
-        self.assembler.getDesignVars(dv)
 
         Then:
         dv == Fx
@@ -378,6 +379,10 @@ class CompObj:
         # Apply filter to step vector
         self.svec.zeroEntries()
         self.fltr.applyFilter(TMR.convertPVecToVec(s), self.svec)
+
+        if zero_idx:
+            self.svec_vals[zero_idx] = 0.0
+
         self.rho.axpy(h, self.svec)
 
         """
@@ -410,9 +415,11 @@ class CompObj:
         # Compute dg/h
         self.update.scale(1 / h)
 
+        if zero_idx:
+            self.update_vals[zero_idx] = 0.0
+
         # Compute curvature and check the norm of the update
         # to see if the magnitude makes sense
-        x_norm = x.norm()
         s_norm = s.norm()
         y_norm = y.norm()
         dy_norm = self.update.norm()
@@ -428,7 +435,6 @@ class CompObj:
                     print(colored("curvature: {:20.10e}".format(curvature), "green"))
                 except:
                     print("curvature: {:20.10e}".format(curvature))
-            print("norm(x):   {:20.10e}".format(x_norm))
             print("norm(s):   {:20.10e}".format(s_norm))
             print("norm(y):   {:20.10e}".format(y_norm))
             print("norm(dy):  {:20.10e}".format(dy_norm))
@@ -438,6 +444,8 @@ class CompObj:
             self.pos_curvs.append(curvature)
             y_wrap = TMR.convertPVecToVec(y)
             self.fltr.applyTranspose(self.update, self.update)
+            if zero_idx:
+                self.update_vals[zero_idx] = 0.0
             y_wrap.axpy(1.0, self.update)
 
         else:

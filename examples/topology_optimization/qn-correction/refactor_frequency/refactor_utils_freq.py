@@ -37,6 +37,7 @@ class FrequencyConstr:
         max_jd_size=100,
         max_gmres_size=30,
         ksrho=50,
+        add_non_design_mass=True,
         mscale=10.0,
         kscale=1.0,
     ):
@@ -69,6 +70,7 @@ class FrequencyConstr:
         self.max_jd_size = max_jd_size
         self.max_gmres_size = max_gmres_size
         self.ksrho = ksrho
+        self.add_non_design_mass = add_non_design_mass
         self.mscale = mscale
         self.kscale = kscale
 
@@ -155,12 +157,13 @@ class FrequencyConstr:
             self.jd.setThetaCutoff(0.01)
 
             # Compute non-design matrices
-            indices = getFixedDVIndices(
-                self.forest, self.domain, self.len0, self.AR, self.ratio
-            )
-            self.computeNonDesignMat(
-                indices, mscale=self.mscale, kscale=self.kscale, save_f5=True
-            )
+            if self.add_non_design_mass:
+                indices = getFixedDVIndices(
+                    self.forest, self.domain, self.len0, self.AR, self.ratio
+                )
+                self.computeNonDesignMat(
+                    indices, mscale=self.mscale, kscale=self.kscale, save_f5=True
+                )
 
         # Assemble the mass matrix
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
@@ -174,7 +177,8 @@ class FrequencyConstr:
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.Amat)
 
         # Apply non-design mass to M and K
-        self.addNonDesignMat(self.mmat, self.Amat)
+        if self.add_non_design_mass:
+            self.addNonDesignMat(self.mmat, self.Amat)
 
         # Assemble A matrix for the simple eigenvalue problem and apply bcs
         # A = K - lambda0*M
@@ -331,14 +335,14 @@ class FrequencyConstr:
 
         return [ks]
 
-    def constraint_gradient(self, fltr, mg, vecs):
+    def constraint_gradient(self, fltr, mg, vecs, index=0):
         """
         gradient of the spectral aggregate
         g = sum_k eta_k phi^T dAdx phi
         """
 
         # We only have one constraint
-        dcdrho = vecs[0]
+        dcdrho = vecs[index]
 
         # Zero out the gradient vector
         dcdrho.zeroEntries()
@@ -725,11 +729,12 @@ class ReducedProblem(ParOpt.Problem):
         fixed_dv_idx: list,
         fixed_dv_val=1.0,
         qn_correction_func=None,
+        ncon=1,
     ):
         self.prob = original_prob
         self.assembler = self.prob.getAssembler()
         self.comm = self.assembler.getMPIComm()
-        self.ncon = 1  # Hard-coded for now
+        self.ncon = ncon
         self.qn_correction_func = qn_correction_func
 
         # Allocate full-size vectors for the original problem
