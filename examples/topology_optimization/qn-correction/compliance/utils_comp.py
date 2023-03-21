@@ -1,4 +1,3 @@
-
 from tmr import TMR, TopOptUtils
 from tacs import TACS, elements, functions
 from egads4py import egads
@@ -8,7 +7,7 @@ import os
 import sys
 from mpi4py import MPI
 
-sys.path.append('../eigenvalue')
+sys.path.append("../eigenvalue")
 from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
 from utils import MassConstr
 
@@ -17,6 +16,7 @@ try:
     from termcolor import colored
 except:
     pass
+
 
 class CompObj:
     """
@@ -27,9 +27,24 @@ class CompObj:
 
     itr = 0
 
-    def __init__(self, prefix, domain, forest, len0, AR, ratio, iter_offset,
-                 comp_scale=1.0, con_scale=1.0, nodal_force=1.0, gmres_subspace=50,
-                 rtol=1e-10, atol=1e-30, nrestart=10, is_flexible=0):
+    def __init__(
+        self,
+        prefix,
+        domain,
+        forest,
+        len0,
+        AR,
+        ratio,
+        iter_offset,
+        comp_scale=1.0,
+        con_scale=1.0,
+        nodal_force=1.0,
+        gmres_subspace=50,
+        rtol=1e-10,
+        atol=1e-30,
+        nrestart=10,
+        is_flexible=0,
+    ):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -46,11 +61,11 @@ class CompObj:
         self.prefix = prefix
         self.domain = domain
         self.iter_offset = iter_offset
-        self.lx = len0*AR
+        self.lx = len0 * AR
         self.ly = len0
         self.lz = len0
-        if domain == 'lbracket':
-            self.ly = len0*ratio
+        if domain == "lbracket":
+            self.ly = len0 * ratio
         self.ratio = ratio
         self.comp_scale = comp_scale
         self.con_scale = con_scale
@@ -79,7 +94,12 @@ class CompObj:
         # Save snapshots throughout optimization iterations
         self.num_obj_evals = 0
         self.save_snapshot_every = 1
-        self.snapshot = {'iter': [], 'obj': [], 'discreteness': [], 'discreteness_rho': []}
+        self.snapshot = {
+            "iter": [],
+            "obj": [],
+            "discreteness": [],
+            "discreteness_rho": [],
+        }
         self.snapshot_x = None
         self.snapshot_rho = None
 
@@ -112,14 +132,19 @@ class CompObj:
             self.u = self.assembler.createVec()
 
             # Set the solver
-            self.gmres = TACS.KSM(self.mg.getMat(), self.mg, self.gmres_subspace,
-                                  self.nrestart, self.is_flexible)
+            self.gmres = TACS.KSM(
+                self.mg.getMat(),
+                self.mg,
+                self.gmres_subspace,
+                self.nrestart,
+                self.is_flexible,
+            )
             self.gmres.setMonitor(self.comm)
             self.gmres.setTolerances(self.rtol, self.atol)
 
-            '''
+            """
             Create force vector
-            '''
+            """
             self.force_vals = self.force.getArray()
 
             # Get nodal locations
@@ -139,58 +164,58 @@ class CompObj:
 
             # Create force vector
             # if self.domain == '3dcantilever':
-                # self.force = TopOptUtils.computeVertexLoad('pt1',
-                #     self.forest, self.assembler, [0, 0, -self.nodal_force])
-                # temp = TopOptUtils.computeVertexLoad('pt2',
-                #     self.forest, self.assembler, [0, self.nodal_force, 0])
-                # self.force.axpy(1.0, temp)
-                # self.n_loaded_nodes = 2
+            # self.force = TopOptUtils.computeVertexLoad('pt1',
+            #     self.forest, self.assembler, [0, 0, -self.nodal_force])
+            # temp = TopOptUtils.computeVertexLoad('pt2',
+            #     self.forest, self.assembler, [0, self.nodal_force, 0])
+            # self.force.axpy(1.0, temp)
+            # self.n_loaded_nodes = 2
 
             tol = 1e-6
-            if self.domain == 'cantilever':
+            if self.domain == "cantilever":
                 xmin = self.lx - tol
                 xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.0*self.lz - tol
-                zmax = 0.2*self.lz + tol
+                ymin = 0.25 * self.ly - tol
+                ymax = 0.75 * self.ly + tol
+                zmin = 0.0 * self.lz - tol
+                zmax = 0.2 * self.lz + tol
 
-            elif self.domain == '3dcantilever':
+            elif self.domain == "3dcantilever":
                 xmin = self.lx - tol
                 xmax = self.lx + tol
-                ymin = 0.0*self.ly - tol
-                ymax = 0.2*self.ly + tol
-                zmin = 0.0*self.lz - tol
-                zmax = 0.2*self.lz + tol
-                y2min = 0.8*self.ly - tol
-                y2max = 1.0*self.ly + tol
-                z2min = 0.8*self.lz - tol
-                z2max = 1.0*self.lz + tol
+                ymin = 0.0 * self.ly - tol
+                ymax = 0.2 * self.ly + tol
+                zmin = 0.0 * self.lz - tol
+                zmax = 0.2 * self.lz + tol
+                y2min = 0.8 * self.ly - tol
+                y2max = 1.0 * self.ly + tol
+                z2min = 0.8 * self.lz - tol
+                z2max = 1.0 * self.lz + tol
 
-            elif self.domain == 'michell':
+            elif self.domain == "michell":
                 xmin = self.lx - tol
                 xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.4*self.lz - tol
-                zmax = 0.6*self.lz + tol
+                ymin = 0.25 * self.ly - tol
+                ymax = 0.75 * self.ly + tol
+                zmin = 0.4 * self.lz - tol
+                zmax = 0.6 * self.lz + tol
 
-            elif self.domain == 'mbb':
-                xmin = 0.0*self.lx - tol
-                xmax = 0.2*self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
+            elif self.domain == "mbb":
+                xmin = 0.0 * self.lx - tol
+                xmax = 0.2 * self.lx + tol
+                ymin = 0.25 * self.ly - tol
+                ymax = 0.75 * self.ly + tol
                 zmin = self.lz - tol
                 zmax = self.lz + tol
 
-            elif self.domain == 'lbracket':
+            elif self.domain == "lbracket":
                 RATIO = self.ratio
                 xmin = self.lx - tol
                 xmax = self.lx + tol
-                ymin = 0.25*self.ly - tol
-                ymax = 0.75*self.ly + tol
-                zmin = 0.5*RATIO*self.lz - tol
-                zmax = 1.0*RATIO*self.lz + tol
+                ymin = 0.25 * self.ly - tol
+                ymax = 0.75 * self.ly + tol
+                zmin = 0.5 * RATIO * self.lz - tol
+                zmax = 1.0 * RATIO * self.lz + tol
 
             else:
                 raise ValueError("Unsupported domain type!")
@@ -201,16 +226,16 @@ class CompObj:
                 if xmin < x < xmax:
                     if ymin < y < ymax:
                         if zmin < z < zmax:
-                            self.force_vals[3*(i-offset)+2] = -self.nodal_force
+                            self.force_vals[3 * (i - offset) + 2] = -self.nodal_force
                             self.n_loaded_nodes += 1
 
-            if self.domain == '3dcantilever':
+            if self.domain == "3dcantilever":
                 for i in range(offset, n_local_nodes):
                     x, y, z = Xpts[i]
                     if xmin < x < xmax:
                         if y2min < y < y2max:
                             if z2min < z < z2max:
-                                self.force_vals[3*(i-offset)+1] = self.nodal_force
+                                self.force_vals[3 * (i - offset) + 1] = self.nodal_force
                                 self.n_loaded_nodes += 1
 
             self.n_loaded_nodes = self.comm.allreduce(self.n_loaded_nodes)
@@ -218,10 +243,9 @@ class CompObj:
             # Match the reordering of the vector
             self.assembler.reorderVec(self.force)
 
-
-        '''
+        """
         Export force vectors to f5 file for verification
-        '''
+        """
         # itr = CompObj.itr + self.iter_offset
         # if itr % 10 == 0:
         #     # Set up flags for data output
@@ -239,9 +263,9 @@ class CompObj:
         #         self.iter_offset+CompObj.itr)))
 
         # CompObj.itr += 1
-        '''
+        """
         End export non-design mass vectors to f5 file for verification
-        '''
+        """
 
         # Assemble the multigrid preconditioner
         self.mg.assembleMatType(TACS.STIFFNESS_MATRIX)
@@ -251,16 +275,16 @@ class CompObj:
         self.gmres.solve(self.force, self.u)
 
         # Objective
-        obj = self.comp_scale/self.n_loaded_nodes*self.force.dot(self.u)
+        obj = self.comp_scale / self.n_loaded_nodes * self.force.dot(self.u)
 
         # Print values
         if self.comm.rank == 0:
-            print('{:30s}{:20.10e}'.format('[Obj] scaled compliance:', obj))
+            print("{:30s}{:20.10e}".format("[Obj] scaled compliance:", obj))
 
         # Save a snapshot of the result
         if self.num_obj_evals % self.save_snapshot_every == 0:
-            self.snapshot['iter'].append(self.num_obj_evals)
-            self.snapshot['obj'].append(obj)
+            self.snapshot["iter"].append(self.num_obj_evals)
+            self.snapshot["obj"].append(obj)
 
             # Get x and rho
             fltr.getDesignVars(self.snapshot_x)
@@ -269,20 +293,23 @@ class CompObj:
             # Compute discreteness
             snapshot_x_global = self.comm.allgather(self.snapshot_x.getArray())
             snapshot_x_global = np.concatenate(snapshot_x_global)
-            discreteness = np.dot(snapshot_x_global, 1.0-snapshot_x_global) / len(snapshot_x_global)
+            discreteness = np.dot(snapshot_x_global, 1.0 - snapshot_x_global) / len(
+                snapshot_x_global
+            )
 
             # Compute discreteness for rho
             snapshot_rho_global = self.comm.allgather(self.snapshot_rho.getArray())
             snapshot_rho_global = np.concatenate(snapshot_rho_global)
-            discreteness_rho = np.dot(snapshot_rho_global, 1.0-snapshot_rho_global) / len(snapshot_rho_global)
+            discreteness_rho = np.dot(
+                snapshot_rho_global, 1.0 - snapshot_rho_global
+            ) / len(snapshot_rho_global)
 
-            self.snapshot['discreteness'].append(discreteness)
-            self.snapshot['discreteness_rho'].append(discreteness_rho)
+            self.snapshot["discreteness"].append(discreteness)
+            self.snapshot["discreteness_rho"].append(discreteness_rho)
 
         self.num_obj_evals += 1
 
         return obj
-
 
     def objective_gradient(self, fltr, mg, dfdrho):
         """
@@ -295,12 +322,12 @@ class CompObj:
         dfdrho.zeroEntries()
 
         # scale the objective
-        scale = -self.comp_scale/self.n_loaded_nodes
+        scale = -self.comp_scale / self.n_loaded_nodes
 
         # Compute gradient
         self.assembler.addMatDVSensInnerProduct(
-            scale, TACS.STIFFNESS_MATRIX,
-            self.u, self.u, dfdrho)
+            scale, TACS.STIFFNESS_MATRIX, self.u, self.u, dfdrho
+        )
 
         # Make sure the vector is properly distributed over all processors
         dfdrho.beginSetValues(op=TACS.ADD_VALUES)
@@ -309,7 +336,7 @@ class CompObj:
         # Compute gradient norm
         norm = dfdrho.norm()
         if self.comm.rank == 0:
-            print("{:30s}{:20.10e}".format('[Obj] gradient norm:', norm))
+            print("{:30s}{:20.10e}".format("[Obj] gradient norm:", norm))
         return
 
     def qn_correction(self, x, z, zw, s, y):
@@ -366,20 +393,22 @@ class CompObj:
 
         # Compute g(rho + h*s)
         self.assembler.setDesignVars(self.rho)
-        self.assembler.addMatDVSensInnerProduct(coeff, TACS.STIFFNESS_MATRIX,
-            self.u, self.u, self.update)
+        self.assembler.addMatDVSensInnerProduct(
+            coeff, TACS.STIFFNESS_MATRIX, self.u, self.u, self.update
+        )
 
         # Compute dg = g(rho + h*s) -g(rho)
         self.assembler.setDesignVars(self.rho_original)
-        self.assembler.addMatDVSensInnerProduct(-coeff, TACS.STIFFNESS_MATRIX,
-            self.u, self.u, self.update)
+        self.assembler.addMatDVSensInnerProduct(
+            -coeff, TACS.STIFFNESS_MATRIX, self.u, self.u, self.update
+        )
 
         # Distribute the vector
         self.update.beginSetValues(op=TACS.ADD_VALUES)
         self.update.endSetValues(op=TACS.ADD_VALUES)
 
         # Compute dg/h
-        self.update.scale(1/h)
+        self.update.scale(1 / h)
 
         # Compute curvature and check the norm of the update
         # to see if the magnitude makes sense
@@ -429,9 +458,24 @@ class CompObj:
         return self.snapshot
 
 
-def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r0_frac=0.05,
-                   len0=1.0, AR=1.0, ratio=0.4, density=2600.0, iter_offset=0,
-                   qn_correction=True,  eq_constr=False, comp_scale=1.0):
+def create_problem(
+    prefix,
+    domain,
+    forest,
+    bcs,
+    props,
+    nlevels,
+    vol_frac=0.25,
+    r0_frac=0.05,
+    len0=1.0,
+    AR=1.0,
+    ratio=0.4,
+    density=2600.0,
+    iter_offset=0,
+    qn_correction=True,
+    eq_constr=False,
+    comp_scale=1.0,
+):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -459,39 +503,42 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, vol_frac=0.25, r
     mfilter = MFilterCreator(r0_frac, N, a=len0)
     filter_type = mfilter.filter_callback
     obj = CreatorCallback(bcs, props)
-    problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
-                                            filter_type, use_galerkin=True,
-                                            nlevels=nlevels)
+    problem = TopOptUtils.createTopoProblem(
+        forest, obj.creator_callback, filter_type, use_galerkin=True, nlevels=nlevels
+    )
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
 
     # Compute the fixed mass target
-    lx = len0*AR # mm
-    ly = len0 # mm
-    lz = len0 # mm
-    if domain == 'lbracket':
-        ly = len0*ratio
-    vol = lx*ly*lz
-    if domain == 'lbracket':
-        S1 = lx*lz
-        S2 = lx*lz*(1-ratio)**2
-        vol = (S1-S2)*ly
-    m_fixed = vol_frac*(vol*density)
+    lx = len0 * AR  # mm
+    ly = len0  # mm
+    lz = len0  # mm
+    if domain == "lbracket":
+        ly = len0 * ratio
+    vol = lx * ly * lz
+    if domain == "lbracket":
+        S1 = lx * lz
+        S2 = lx * lz * (1 - ratio) ** 2
+        vol = (S1 - S2) * ly
+    m_fixed = vol_frac * (vol * density)
 
     # Add objective callback
-    obj_callback = CompObj(prefix, domain, forest, len0, AR, ratio,
-                           iter_offset, comp_scale=comp_scale)
-    problem.addObjectiveCallback(obj_callback.objective,
-                                 obj_callback.objective_gradient)
+    obj_callback = CompObj(
+        prefix, domain, forest, len0, AR, ratio, iter_offset, comp_scale=comp_scale
+    )
+    problem.addObjectiveCallback(
+        obj_callback.objective, obj_callback.objective_gradient
+    )
 
     # Add constraint callback
     constr_callback = MassConstr(m_fixed, assembler.getMPIComm())
     nineq = 1
     if eq_constr is True:
         nineq = 0
-    problem.addConstraintCallback(1, nineq, constr_callback.constraint,
-                                  constr_callback.constraint_gradient)
+    problem.addConstraintCallback(
+        1, nineq, constr_callback.constraint, constr_callback.constraint_gradient
+    )
 
     # Use Quasi-Newton Update Correction if specified
     if qn_correction:

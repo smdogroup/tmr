@@ -8,8 +8,9 @@ import os
 import sys
 from mpi4py import MPI
 
-sys.path.append('../eigenvalue')
+sys.path.append("../eigenvalue")
 from utils import OctCreator, CreatorCallback, MFilterCreator, OutputCallback
+
 
 class FrequencyConstr:
     """
@@ -21,10 +22,24 @@ class FrequencyConstr:
         c = ks >= 0
     """
 
-    def __init__(self, prefix, domain, forest, len0, AR, ratio,
-                 iter_offset, lambda0, eig_scale=1.0, num_eigenvalues=10,
-                 max_jd_size=100, max_gmres_size=30, ksrho=50,
-                 mscale=10.0, kscale=1.0):
+    def __init__(
+        self,
+        prefix,
+        domain,
+        forest,
+        len0,
+        AR,
+        ratio,
+        iter_offset,
+        lambda0,
+        eig_scale=1.0,
+        num_eigenvalues=10,
+        max_jd_size=100,
+        max_gmres_size=30,
+        ksrho=50,
+        mscale=10.0,
+        kscale=1.0,
+    ):
         """
         Args:
             eig_scale: scale the eigenvalues internally in order to acquire better
@@ -42,11 +57,11 @@ class FrequencyConstr:
         self.iter_offset = iter_offset
         self.len0 = len0
         self.AR = AR
-        self.lx = len0*AR
+        self.lx = len0 * AR
         self.ly = len0
         self.lz = len0
-        if domain == 'lbracket':
-            self.ly = len0*ratio
+        if domain == "lbracket":
+            self.ly = len0 * ratio
         self.ratio = ratio
         self.lambda0 = lambda0
         self.eig_scale = eig_scale
@@ -133,14 +148,19 @@ class FrequencyConstr:
             self.oper = TACS.JDSimpleOperator(self.assembler, self.Amat, self.mg)
 
             # Create the eigenvalue solver and set the number of recycling eigenvectors
-            self.jd = TACS.JacobiDavidson(self.oper, self.num_eigenvalues,
-                                            self.max_jd_size, self.max_gmres_size)
+            self.jd = TACS.JacobiDavidson(
+                self.oper, self.num_eigenvalues, self.max_jd_size, self.max_gmres_size
+            )
             self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-6, rtol=1e-6, atol=1e-12)
             self.jd.setThetaCutoff(0.01)
 
             # Compute non-design matrices
-            indices = getFixedDVIndices(self.forest, self.domain, self.len0, self.AR, self.ratio)
-            self.computeNonDesignMat(indices, mscale=self.mscale, kscale=self.kscale, save_f5=True)
+            indices = getFixedDVIndices(
+                self.forest, self.domain, self.len0, self.AR, self.ratio
+            )
+            self.computeNonDesignMat(
+                indices, mscale=self.mscale, kscale=self.kscale, save_f5=True
+            )
 
         # Assemble the mass matrix
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
@@ -185,8 +205,10 @@ class FrequencyConstr:
         nconvd = self.jd.getNumConvergedEigenvalues()
         if nconvd < self.num_eigenvalues:
             if self.comm.rank == 0:
-                print("[Warning] Jacobi-Davidson failed to converge"
-                    " for the first run, starting rerun...")
+                print(
+                    "[Warning] Jacobi-Davidson failed to converge"
+                    " for the first run, starting rerun..."
+                )
 
             self.jd.setRecycle(nconvd)
 
@@ -194,7 +216,9 @@ class FrequencyConstr:
             eig0, err = self.jd.extractEigenvalue(0)
             if eig0 > 0:
                 if self.comm.rank == 0:
-                    print("[mgmat] Smallest eigenvalue is already positive, don't update mgmat!")
+                    print(
+                        "[mgmat] Smallest eigenvalue is already positive, don't update mgmat!"
+                    )
             else:
                 self.mgmat.addDiag(-eig0)
                 self.assembler.applyMatBCs(self.mgmat)
@@ -208,17 +232,20 @@ class FrequencyConstr:
             # If it still fails, raise error, save fail f5 and exit
             if nconvd < self.num_eigenvalues:
                 msg = "No enough eigenvalues converged! ({:d}/{:d})".format(
-                    nconvd, self.num_eigenvalues)
+                    nconvd, self.num_eigenvalues
+                )
 
                 # set the unconverged eigenvector as state variable for visualization
                 for i in range(self.num_eigenvalues):
                     self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
                 self.assembler.setVariables(self.eigv[nconvd])
 
-                flag_fail = (TACS.OUTPUT_CONNECTIVITY |
-                            TACS.OUTPUT_NODES |
-                            TACS.OUTPUT_DISPLACEMENTS |
-                            TACS.OUTPUT_EXTRAS)
+                flag_fail = (
+                    TACS.OUTPUT_CONNECTIVITY
+                    | TACS.OUTPUT_NODES
+                    | TACS.OUTPUT_DISPLACEMENTS
+                    | TACS.OUTPUT_EXTRAS
+                )
                 f5_fail = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag_fail)
                 f5_fail.writeToFile(os.path.join(self.prefix, "fail.f5"))
 
@@ -232,7 +259,7 @@ class FrequencyConstr:
         # A <- A - I + old*I
         # i.e. now A = K - lambda0*M
         for i in range(self.num_eigenvalues):
-            self.eig[i] += (self.old_min_eigval - 1.0)
+            self.eig[i] += self.old_min_eigval - 1.0
         self.Amat.addDiag(self.old_min_eigval - 1.0)
         self.assembler.applyMatBCs(self.Amat)
 
@@ -245,12 +272,12 @@ class FrequencyConstr:
             debug_initialized = 1
             res = self.assembler.createVec()
             one = self.assembler.createVec()
-            Av  = self.assembler.createVec()
+            Av = self.assembler.createVec()
             one_arr = one.getArray()
             one_arr[:] = 1.0
             debug_counter = 0
 
-            residual  = np.zeros(self.num_eigenvalues)
+            residual = np.zeros(self.num_eigenvalues)
             eigvec_l1 = np.zeros(self.num_eigenvalues)
             eigvec_l2 = np.zeros(self.num_eigenvalues)
 
@@ -258,18 +285,26 @@ class FrequencyConstr:
             self.Amat.mult(self.eigv[i], Av)  # Compute Av
 
             res.copyValues(Av)
-            res.axpy(-self.eig[i], self.eigv[i]) # Compute res = Av - lambda*v
+            res.axpy(-self.eig[i], self.eigv[i])  # Compute res = Av - lambda*v
 
             residual[i] = res.norm()
-            eigvec_l1[i] = self.eigv[i].dot(one) # Compute l1 norm
-            eigvec_l2[i] = self.eigv[i].dot(self.eigv[i])**0.5  # Compute l2 norm
+            eigvec_l1[i] = self.eigv[i].dot(one)  # Compute l1 norm
+            eigvec_l2[i] = self.eigv[i].dot(self.eigv[i]) ** 0.5  # Compute l2 norm
 
         debug_counter += 1
         if self.assembler.getMPIComm().rank == 0:
             print("Optimization iteration:{:4d}".format(debug_counter))
-            print("{:4s}{:15s}{:15s}{:15s}".format("No", "Eig Res", "Eigv l1 norm", "Eigv l2 norm"))
+            print(
+                "{:4s}{:15s}{:15s}{:15s}".format(
+                    "No", "Eig Res", "Eigv l1 norm", "Eigv l2 norm"
+                )
+            )
             for i in range(self.num_eigenvalues):
-                print("{:4d}{:15.5e}{:15.5e}{:15.5e}".format(i, residual[i], eigvec_l1[i], eigvec_l2[i]))
+                print(
+                    "{:4d}{:15.5e}{:15.5e}{:15.5e}".format(
+                        i, residual[i], eigvec_l1[i], eigvec_l2[i]
+                    )
+                )
 
         # Set first eigenvector as state variable for visualization
         self.assembler.setVariables(self.eigv[0])
@@ -281,18 +316,18 @@ class FrequencyConstr:
         eig_min = np.min(self.eig)
 
         # Compute KS aggregation
-        self.eta = np.exp(-self.ksrho*(self.eig - eig_min))
+        self.eta = np.exp(-self.ksrho * (self.eig - eig_min))
         self.beta = np.sum(self.eta)
-        ks = (eig_min - np.log(self.beta)/self.ksrho)
-        self.eta = self.eta/self.beta
+        ks = eig_min - np.log(self.beta) / self.ksrho
+        self.eta = self.eta / self.beta
 
         # Scale eigenvalue back
         self.eig[:] /= self.eig_scale
 
         # Print values
         if self.comm.rank == 0:
-            print('{:30s}{:20.10e}'.format('[Constr] KS eigenvalue:', ks))
-            print('{:30s}{:20.10e}'.format('[Constr] min eigenvalue:', eig_min))
+            print("{:30s}{:20.10e}".format("[Constr] KS eigenvalue:", ks))
+            print("{:30s}{:20.10e}".format("[Constr] min eigenvalue:", eig_min))
 
         return [ks]
 
@@ -309,19 +344,22 @@ class FrequencyConstr:
         dcdrho.zeroEntries()
 
         for i in range(self.num_eigenvalues):
-
             # Compute the coefficient
-            coeff = self.eta[i]*self.eig_scale
+            coeff = self.eta[i] * self.eig_scale
 
             # Compute gradient of eigenvalue
             self.deig[i].zeroEntries()
             self.assembler.addMatDVSensInnerProduct(
-                coeff, TACS.STIFFNESS_MATRIX,
-                self.eigv[i], self.eigv[i], self.deig[i])
+                coeff, TACS.STIFFNESS_MATRIX, self.eigv[i], self.eigv[i], self.deig[i]
+            )
 
             self.assembler.addMatDVSensInnerProduct(
-                -coeff*self.lambda0, TACS.MASS_MATRIX,
-                self.eigv[i], self.eigv[i], self.deig[i])
+                -coeff * self.lambda0,
+                TACS.MASS_MATRIX,
+                self.eigv[i],
+                self.eigv[i],
+                self.deig[i],
+            )
 
             # Make sure the vector is properly distributed over all processors
             self.deig[i].beginSetValues(op=TACS.ADD_VALUES)
@@ -333,7 +371,7 @@ class FrequencyConstr:
         # Compute gradient norm
         norm = dcdrho.norm()
         if self.comm.rank == 0:
-            print("{:30s}{:20.10e}".format('[Constr] gradient norm:', norm))
+            print("{:30s}{:20.10e}".format("[Constr] gradient norm:", norm))
 
         self.dcdrho = dcdrho
         return
@@ -396,28 +434,32 @@ class FrequencyConstr:
 
         for i in range(self.num_eigenvalues):
             # Compute g(rho + h*s) for d2Kdx2
-            coeff1 = self.eta[i]*self.eig_scale
-            self.assembler.addMatDVSensInnerProduct(coeff1, TACS.STIFFNESS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            coeff1 = self.eta[i] * self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(
+                coeff1, TACS.STIFFNESS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
             # Compute g(rho + h*s) for d2Mdx2
-            coeff2 = -self.eta[i]*self.lambda0*self.eig_scale
-            self.assembler.addMatDVSensInnerProduct(coeff2, TACS.MASS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            coeff2 = -self.eta[i] * self.lambda0 * self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(
+                coeff2, TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
         # set density back to original
         self.assembler.setDesignVars(self.rho_original)
 
         for i in range(self.num_eigenvalues):
             # Compute g(rho + h*s) - g(rho) for d2Kdx2
-            coeff1 = self.eta[i]*self.eig_scale
-            self.assembler.addMatDVSensInnerProduct(-coeff1, TACS.STIFFNESS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            coeff1 = self.eta[i] * self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(
+                -coeff1, TACS.STIFFNESS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
             # Compute g(rho + h*s) - g(rho) for d2Mdx2
-            coeff2 = -self.eta[i]*self.lambda0*self.eig_scale
-            self.assembler.addMatDVSensInnerProduct(-coeff2, TACS.MASS_MATRIX,
-                self.eigv[i], self.eigv[i], self.temp)
+            coeff2 = -self.eta[i] * self.lambda0 * self.eig_scale
+            self.assembler.addMatDVSensInnerProduct(
+                -coeff2, TACS.MASS_MATRIX, self.eigv[i], self.eigv[i], self.temp
+            )
 
         # Distribute the temp vector
         self.temp.beginSetValues(op=TACS.ADD_VALUES)
@@ -427,7 +469,7 @@ class FrequencyConstr:
         self.update.zeroEntries()
 
         # Finish computing P * svec
-        self.update.axpy(1.0/h, self.temp)
+        self.update.axpy(1.0 / h, self.temp)
 
         """[2.5] Zero out entries in update if called by a reduced problem"""
         if zero_idx:
@@ -479,7 +521,8 @@ class FrequencyConstr:
 
         # Populate the non-design mass vector
         dv_one = self.assembler.createDesignVec()
-        if indices: dv_one.getArray()[indices] = 1.0
+        if indices:
+            dv_one.getArray()[indices] = 1.0
 
         # Back up design variable
         dv_backup = self.assembler.createDesignVec()
@@ -496,10 +539,12 @@ class FrequencyConstr:
 
         # Save geometry to f5
         if save_f5:
-            flag_m0 = (TACS.OUTPUT_CONNECTIVITY |
-                       TACS.OUTPUT_NODES |
-                       TACS.OUTPUT_DISPLACEMENTS |
-                       TACS.OUTPUT_EXTRAS)
+            flag_m0 = (
+                TACS.OUTPUT_CONNECTIVITY
+                | TACS.OUTPUT_NODES
+                | TACS.OUTPUT_DISPLACEMENTS
+                | TACS.OUTPUT_EXTRAS
+            )
             f5_m0 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag_m0)
             f5_m0.writeToFile(os.path.join(self.prefix, "non_design_mass.f5"))
 
@@ -509,7 +554,6 @@ class FrequencyConstr:
         return
 
     def addNonDesignMat(self, mmat, kmat):
-
         # Update mmat and apply boundary conditions
         mmat.axpy(1.0, self.m0mat)
         self.assembler.applyMatBCs(mmat)
@@ -520,6 +564,7 @@ class FrequencyConstr:
 
         return
 
+
 class MassObj:
     """
     Mass objective takes the following form:
@@ -527,7 +572,6 @@ class MassObj:
     """
 
     def __init__(self, m_fixed, comm):
-
         self.m_fixed = m_fixed
         self.comm = comm
         self.rank = self.comm.Get_rank()
@@ -548,7 +592,7 @@ class MassObj:
         mass = self.assembler.evalFunctions([self.mass_func])[0]
         obj = mass / self.m_fixed
         if self.rank == 0:
-            print("{:30s}{:20.10e}".format('[Obj] mass objective:',obj))
+            print("{:30s}{:20.10e}".format("[Obj] mass objective:", obj))
 
         return obj
 
@@ -557,20 +601,38 @@ class MassObj:
         dfdrho.zeroEntries()
 
         # Evaluate the mass gradient
-        self.assembler.addDVSens([self.mass_func], [dfdrho], alpha=1.0/self.m_fixed)
+        self.assembler.addDVSens([self.mass_func], [dfdrho], alpha=1.0 / self.m_fixed)
 
         # Compute norm
         norm = dfdrho.norm()
         if self.rank == 0:
-            print("{:30s}{:20.10e}".format('[Con] gradient norm:', norm))
+            print("{:30s}{:20.10e}".format("[Con] gradient norm:", norm))
         return
 
-def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
-                   vol_frac=0.25, r0_frac=0.05, len0=1.0, AR=1.0, ratio=0.4,
-                   density=2600.0, iter_offset=0,
-                   eig_scale=1.0,
-                   num_eigenvalues=10, max_jd_size=100, max_gmres_size=30,
-                   mscale=10.0, kscale=1.0):
+
+def create_problem(
+    prefix,
+    domain,
+    forest,
+    bcs,
+    props,
+    nlevels,
+    lambda0,
+    ksrho,
+    vol_frac=0.25,
+    r0_frac=0.05,
+    len0=1.0,
+    AR=1.0,
+    ratio=0.4,
+    density=2600.0,
+    iter_offset=0,
+    eig_scale=1.0,
+    num_eigenvalues=10,
+    max_jd_size=100,
+    max_gmres_size=30,
+    mscale=10.0,
+    kscale=1.0,
+):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -597,42 +659,53 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
     mfilter = MFilterCreator(r0_frac, N, a=len0)
     filter_type = mfilter.filter_callback
     obj = CreatorCallback(bcs, props)
-    problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
-                                            filter_type, use_galerkin=True,
-                                            nlevels=nlevels)
+    problem = TopOptUtils.createTopoProblem(
+        forest, obj.creator_callback, filter_type, use_galerkin=True, nlevels=nlevels
+    )
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
 
     # Compute the fixed mass target
-    lx = len0*AR # mm
-    ly = len0 # mm
-    lz = len0 # mm
-    if domain == 'lbracket':
-        ly = len0*ratio
-    vol = lx*ly*lz
-    if domain == 'lbracket':
-        S1 = lx*lz
-        S2 = lx*lz*(1.0-ratio)**2
-        vol = (S1-S2)*ly
-    m_fixed = vol_frac*(vol*density)
+    lx = len0 * AR  # mm
+    ly = len0  # mm
+    lz = len0  # mm
+    if domain == "lbracket":
+        ly = len0 * ratio
+    vol = lx * ly * lz
+    if domain == "lbracket":
+        S1 = lx * lz
+        S2 = lx * lz * (1.0 - ratio) ** 2
+        vol = (S1 - S2) * ly
+    m_fixed = vol_frac * (vol * density)
 
     # Add objective callback
     obj_callback = MassObj(m_fixed, assembler.getMPIComm())
-    problem.addObjectiveCallback(obj_callback.objective,
-                                 obj_callback.objective_gradient)
+    problem.addObjectiveCallback(
+        obj_callback.objective, obj_callback.objective_gradient
+    )
 
     # Add constraint callback
-    constr_callback = FrequencyConstr(prefix, domain, forest, len0, AR, ratio,
-                                     iter_offset, lambda0,
-                                     ksrho=ksrho,
-                                     eig_scale=eig_scale,
-                                     num_eigenvalues=num_eigenvalues,
-                                     max_jd_size=max_jd_size,
-                                     max_gmres_size=max_gmres_size,
-                                     mscale=mscale, kscale=kscale)
-    problem.addConstraintCallback(1, 1, constr_callback.constraint,
-                                  constr_callback.constraint_gradient)
+    constr_callback = FrequencyConstr(
+        prefix,
+        domain,
+        forest,
+        len0,
+        AR,
+        ratio,
+        iter_offset,
+        lambda0,
+        ksrho=ksrho,
+        eig_scale=eig_scale,
+        num_eigenvalues=num_eigenvalues,
+        max_jd_size=max_jd_size,
+        max_gmres_size=max_gmres_size,
+        mscale=mscale,
+        kscale=kscale,
+    )
+    problem.addConstraintCallback(
+        1, 1, constr_callback.constraint, constr_callback.constraint_gradient
+    )
 
     # Set output callback
     cb = OutputCallback(assembler, iter_offset=iter_offset)
@@ -640,14 +713,19 @@ def create_problem(prefix, domain, forest, bcs, props, nlevels, lambda0, ksrho,
 
     return problem, obj_callback, constr_callback
 
+
 class ReducedProblem(ParOpt.Problem):
     """
     A reduced problem by fixing some design variables in the original problem
     """
 
-    def __init__(self, original_prob, fixed_dv_idx : list,
-        fixed_dv_val=1.0, qn_correction_func=None):
-
+    def __init__(
+        self,
+        original_prob,
+        fixed_dv_idx: list,
+        fixed_dv_val=1.0,
+        qn_correction_func=None,
+    ):
         self.prob = original_prob
         self.assembler = self.prob.getAssembler()
         self.comm = self.assembler.getMPIComm()
@@ -671,7 +749,9 @@ class ReducedProblem(ParOpt.Problem):
 
         # Compute the indices of fixed design variables, these indices
         # are with respect to the original full-sized problem
-        self.free_dv_idx = [i for i in range(len(self._x)) if i not in self.fixed_dv_idx]
+        self.free_dv_idx = [
+            i for i in range(len(self._x)) if i not in self.fixed_dv_idx
+        ]
         self.nvars = len(self.free_dv_idx)
 
         # Initial dv - can be set by calling setInitDesignVars()
@@ -679,7 +759,7 @@ class ReducedProblem(ParOpt.Problem):
 
         self.num_obj_evals = 0
         self.save_snapshot_every = 1
-        self.snapshot = {'iter': [], 'obj': [], 'infeas': [], 'discreteness': []}
+        self.snapshot = {"iter": [], "obj": [], "infeas": [], "discreteness": []}
 
         super().__init__(self.comm, self.nvars, self.ncon)
         return
@@ -712,12 +792,12 @@ class ReducedProblem(ParOpt.Problem):
 
         # Save a snapshot of the result
         if self.num_obj_evals % self.save_snapshot_every == 0:
-            self.snapshot['iter'].append(self.num_obj_evals)
-            self.snapshot['obj'].append(fobj)
-            self.snapshot['infeas'].append(np.max([-con[0], 0]))  # hard-coded
+            self.snapshot["iter"].append(self.num_obj_evals)
+            self.snapshot["obj"].append(fobj)
+            self.snapshot["infeas"].append(np.max([-con[0], 0]))  # hard-coded
             x_g = self.comm.allgather(np.array(x))
             x_g = np.concatenate(x_g)
-            self.snapshot['discreteness'].append(np.dot(x_g, 1.0 - x_g) / len(x_g))
+            self.snapshot["discreteness"].append(np.dot(x_g, 1.0 - x_g) / len(x_g))
 
         self.num_obj_evals += 1
 
@@ -738,9 +818,9 @@ class ReducedProblem(ParOpt.Problem):
         return fail
 
     def reduDVtoDV(self, reduDV, DV, fixed_val=None):
-        '''
+        """
         Convert the reduced design vector to full-sized design vector
-        '''
+        """
         if fixed_val is None:
             val = self.fixed_dv_val
         else:
@@ -754,9 +834,9 @@ class ReducedProblem(ParOpt.Problem):
         return
 
     def DVtoreduDV(self, DV, reduDV):
-        '''
+        """
         Convert the full-sized design vector to reduced design vector
-        '''
+        """
         if self.free_dv_idx:
             reduDV[:] = DV[self.free_dv_idx]
 
@@ -776,6 +856,7 @@ class ReducedProblem(ParOpt.Problem):
     def get_snapshot(self):
         return self.snapshot
 
+
 def getFixedDVIndices(forest, domain, len0, AR, ratio):
     """
     Get indices for fixed design variables
@@ -784,11 +865,11 @@ def getFixedDVIndices(forest, domain, len0, AR, ratio):
     fixed_dv_idx = []
 
     # Compute geometric parameters
-    lx = len0*AR
+    lx = len0 * AR
     ly = len0
     lz = len0
-    if domain == 'lbracket':
-        ly = len0*ratio
+    if domain == "lbracket":
+        ly = len0 * ratio
 
     # Get nodal locations
     Xpts = forest.getPoints()
@@ -809,39 +890,39 @@ def getFixedDVIndices(forest, domain, len0, AR, ratio):
     offset = n_ext_pre
 
     # # Loop over all owned nodes and set non-design mass values
-    tol = 1e-6 # Make sure our ranges are inclusive
+    tol = 1e-6  # Make sure our ranges are inclusive
     depth = 0.1  # depth for non-design mass
-    if domain == 'cantilever':
-        xmin = (1-depth)*lx - tol
+    if domain == "cantilever":
+        xmin = (1 - depth) * lx - tol
         xmax = lx + tol
-        ymin = 0.25*ly - tol
-        ymax = 0.75*ly + tol
-        zmin = 0.0*lz - tol
-        zmax = 0.2*lz + tol
+        ymin = 0.25 * ly - tol
+        ymax = 0.75 * ly + tol
+        zmin = 0.0 * lz - tol
+        zmax = 0.2 * lz + tol
 
-    elif domain == 'michell':
-        xmin = (1-depth)*lx - tol
+    elif domain == "michell":
+        xmin = (1 - depth) * lx - tol
         xmax = lx + tol
-        ymin = 0.25*ly - tol
-        ymax = 0.75*ly + tol
-        zmin = 0.4*lz - tol
-        zmax = 0.6*lz + tol
+        ymin = 0.25 * ly - tol
+        ymax = 0.75 * ly + tol
+        zmin = 0.4 * lz - tol
+        zmax = 0.6 * lz + tol
 
-    elif domain == 'mbb':
-        xmin = 0.0*lx - tol
-        xmax = 0.2*lx + tol
-        ymin = 0.25*ly - tol
-        ymax = 0.75*ly + tol
-        zmin = (1-depth)*lz - tol
+    elif domain == "mbb":
+        xmin = 0.0 * lx - tol
+        xmax = 0.2 * lx + tol
+        ymin = 0.25 * ly - tol
+        ymax = 0.75 * ly + tol
+        zmin = (1 - depth) * lz - tol
         zmax = lz + tol
 
-    elif domain == 'lbracket':
-        xmin = (1-depth)*lx - tol
+    elif domain == "lbracket":
+        xmin = (1 - depth) * lx - tol
         xmax = lx + tol
-        ymin = 0.25*ly - tol
-        ymax = 0.75*ly + tol
-        zmin = 0.5*ratio*lz - tol
-        zmax = 1.0*ratio*lz + tol
+        ymin = 0.25 * ly - tol
+        ymax = 0.75 * ly + tol
+        zmin = 0.5 * ratio * lz - tol
+        zmax = 1.0 * ratio * lz + tol
 
     else:
         raise ValueError("[Error]Unsupported domain type for non-design mass!")
@@ -851,12 +932,13 @@ def getFixedDVIndices(forest, domain, len0, AR, ratio):
         if xmin < x < xmax:
             if ymin < y < ymax:
                 if zmin < z < zmax:
-                    fixed_dv_idx.append(i-offset)
+                    fixed_dv_idx.append(i - offset)
 
     return fixed_dv_idx
 
+
 class ReduOmAnalysis(om.ExplicitComponent):
-    '''
+    """
     This class wraps the analyses with openmdao interface such that
     the optimization can be run with different optimizers such as
     SNOPT and IPOPT.
@@ -868,15 +950,15 @@ class ReduOmAnalysis(om.ExplicitComponent):
     where:
     start = self.offsets[rank]
     end = start + self.sizes[rank]
-    '''
+    """
 
     def __init__(self, comm, redu_prob, x0):
-        '''
+        """
         Args:
             comm (MPI communicator)
             problem (ParOpt.Problem)
             x0 (indexible array object)
-        '''
+        """
 
         super().__init__()
 
@@ -886,12 +968,12 @@ class ReduOmAnalysis(om.ExplicitComponent):
 
         # Compute sizes and offsets
         local_size = len(x0)
-        sizes = [ 0 ]*comm.size
-        offsets = [ 0 ]*comm.size
+        sizes = [0] * comm.size
+        offsets = [0] * comm.size
         sizes = comm.allgather(local_size)
         if comm.size > 1:
-            for i in range(1,comm.size):
-                offsets[i] = offsets[i-1] + sizes[i-1]
+            for i in range(1, comm.size):
+                offsets[i] = offsets[i - 1] + sizes[i - 1]
         self.sizes = sizes
         self.offsets = offsets
 
@@ -914,12 +996,12 @@ class ReduOmAnalysis(om.ExplicitComponent):
         return
 
     def setup(self):
-        self.add_input('x', shape=(self.global_size,))
-        self.add_output('obj', shape=1)
-        self.add_output('con', shape=1)
+        self.add_input("x", shape=(self.global_size,))
+        self.add_output("obj", shape=1)
+        self.add_output("con", shape=1)
 
-        self.declare_partials(of='obj', wrt='x')
-        self.declare_partials(of='con', wrt='x')
+        self.declare_partials(of="obj", wrt="x")
+        self.declare_partials(of="con", wrt="x")
 
         return
 
@@ -929,20 +1011,20 @@ class ReduOmAnalysis(om.ExplicitComponent):
         # root and implicitly discard results from any other
         # optimizer to prevent potential inconsistency
         if self.comm.rank == 0:
-            x = inputs['x']
+            x = inputs["x"]
         else:
             x = None
-        x =self.comm.bcast(x, root=0)
+        x = self.comm.bcast(x, root=0)
 
         # Each processor only use its owned part to evaluate func and grad
-        self.x[:] = x[self.start:self.end]
+        self.x[:] = x[self.start : self.end]
         fail, fobj, cons = self.problem.evalObjCon(self.x)
 
         if fail:
             raise RuntimeError("Failed to evaluate objective and constraints!")
         else:
-            outputs['obj'] = fobj
-            outputs['con'] = cons[0]
+            outputs["obj"] = fobj
+            outputs["con"] = cons[0]
 
         # Barrier here because we don't do block communication
         self.comm.Barrier()
@@ -955,13 +1037,13 @@ class ReduOmAnalysis(om.ExplicitComponent):
         # root and implicitly discard results from any other
         # optimizer to prevent potential inconsistency
         if self.comm.rank == 0:
-            x = inputs['x']
+            x = inputs["x"]
         else:
             x = None
-        x =self.comm.bcast(x, root=0)
+        x = self.comm.bcast(x, root=0)
 
         # Each processor only use its owned part to evaluate func and grad
-        self.x[:] = x[self.start:self.end]
+        self.x[:] = x[self.start : self.end]
         fail = self.problem.evalObjConGradient(self.x, self.g, self.A)
 
         if fail:
@@ -974,22 +1056,24 @@ class ReduOmAnalysis(om.ExplicitComponent):
                 global_A.append(self.comm.allgather(np.array(self.A[i])))
                 global_A[i] = np.concatenate(global_A[i])
 
-            partials['obj', 'x'] = global_g
-            partials['con', 'x'] = global_A
+            partials["obj", "x"] = global_g
+            partials["con", "x"] = global_A
         return
 
     def globalVecToLocalvec(self, global_vec, local_vec):
-        '''
+        """
         Assign corresponding part of the global vector to local vector
-        '''
-        local_vec[:] = global_vec[self.start: self.end]
+        """
+        local_vec[:] = global_vec[self.start : self.end]
         return
+
 
 class GeneralEigSolver:
     """
     This class checks the actual smallest generalized eigenvalue with the
     Jacobi-Davidson method
     """
+
     def __init__(self, problem, N=10, max_jd_size=200, max_gmres_size=30):
         """
         Args:
@@ -1014,9 +1098,9 @@ class GeneralEigSolver:
         self.evecs = [self.assembler.createVec() for _ in range(N)]
 
         # Create operator for the generalized eigenvalue problem
-        self.oper = TACS.JDFrequencyOperator(self.assembler,
-                                             self.kmat, self.mmat,
-                                             self.mg.getMat(), self.mg)
+        self.oper = TACS.JDFrequencyOperator(
+            self.assembler, self.kmat, self.mmat, self.mg.getMat(), self.mg
+        )
 
         # Set up the JD solver
         self.jd = TACS.JacobiDavidson(self.oper, N, max_jd_size, max_gmres_size)
@@ -1030,8 +1114,14 @@ class GeneralEigSolver:
 
         return
 
-    def compute(self, x, add_non_design_mass=False, non_design_mass_indices=None,
-                mscale=1.0, kscale=1.0):
+    def compute(
+        self,
+        x,
+        add_non_design_mass=False,
+        non_design_mass_indices=None,
+        mscale=1.0,
+        kscale=1.0,
+    ):
         """
         Take in x, update the design variable in the assembler, assemble
         K, M and mg matrices, and solve the generalized eigenvalue problem.
@@ -1054,12 +1144,12 @@ class GeneralEigSolver:
 
         # Update M and K, if specified
         if add_non_design_mass:
-
             indices = non_design_mass_indices
 
             # Populate the non-design mass vector
             dv_one = self.assembler.createDesignVec()
-            if indices: dv_one.getArray()[indices] = 1.0
+            if indices:
+                dv_one.getArray()[indices] = 1.0
 
             # Back up design variable
             dv_backup = self.assembler.createDesignVec()
@@ -1090,10 +1180,11 @@ class GeneralEigSolver:
 
         # Solve and check success
         self.jd.solve(print_flag=True, print_level=1)
-        assert( self.jd.getNumConvergedEigenvalues() >= self.N)
+        assert self.jd.getNumConvergedEigenvalues() >= self.N
 
         # Extract eigenpairs
-        for i in range(self.N): self.evals[i], err = self.jd.extractEigenvector(i, self.evecs[i])
+        for i in range(self.N):
+            self.evals[i], err = self.jd.extractEigenvector(i, self.evecs[i])
 
         # Check residuals
         for i in range(self.N):
@@ -1105,9 +1196,20 @@ class GeneralEigSolver:
 
         return self.evals, self.evecs, self.res
 
-def find_indices(forest, domain, len0, AR, ratio,
-                 xmin=0.0,  ymin=0.0,  zmin=0.0,
-                 xmax=None, ymax=None, zmax=None):
+
+def find_indices(
+    forest,
+    domain,
+    len0,
+    AR,
+    ratio,
+    xmin=0.0,
+    ymin=0.0,
+    zmin=0.0,
+    xmax=None,
+    ymax=None,
+    zmax=None,
+):
     """
     Return indices for the design vector such that:
     xmin, ymin, zmin <= x, y, z <= xmax, ymax, zmax
@@ -1115,16 +1217,19 @@ def find_indices(forest, domain, len0, AR, ratio,
     indices = []
 
     # Compute geometric parameters
-    lx = len0*AR
+    lx = len0 * AR
     ly = len0
     lz = len0
-    if domain == 'lbracket':
-        ly = len0*ratio
+    if domain == "lbracket":
+        ly = len0 * ratio
 
     # Set max to default
-    if not xmax: xmax = lx
-    if not ymax: ymax = ly
-    if not zmax: zmax = lz
+    if not xmax:
+        xmax = lx
+    if not ymax:
+        ymax = ly
+    if not zmax:
+        zmax = lz
 
     # Get nodal locations
     Xpts = forest.getPoints()
@@ -1147,12 +1252,14 @@ def find_indices(forest, domain, len0, AR, ratio,
         if xmin <= x <= xmax:
             if ymin <= y <= ymax:
                 if zmin <= z <= zmax:
-                    indices.append(i-offset)
+                    indices.append(i - offset)
 
     return indices
 
-def test_beam_frequency(problem, x, prefix, add_non_design_mass,
-                        non_design_mass_indices, mscale, kscale):
+
+def test_beam_frequency(
+    problem, x, prefix, add_non_design_mass, non_design_mass_indices, mscale, kscale
+):
     """
     Set design variables as desired, compute the fundamental frequency,
     then generate f5 file
@@ -1160,8 +1267,13 @@ def test_beam_frequency(problem, x, prefix, add_non_design_mass,
     assembler = problem.getAssembler()
 
     ges = GeneralEigSolver(problem)
-    evals, evecs, res = ges.compute(x, add_non_design_mass=add_non_design_mass,
-        non_design_mass_indices=non_design_mass_indices, mscale=mscale, kscale=kscale)
+    evals, evecs, res = ges.compute(
+        x,
+        add_non_design_mass=add_non_design_mass,
+        non_design_mass_indices=non_design_mass_indices,
+        mscale=mscale,
+        kscale=kscale,
+    )
     assembler.setVariables(evecs[0])
 
     # comm = assembler.getMPIComm()
@@ -1170,15 +1282,12 @@ def test_beam_frequency(problem, x, prefix, add_non_design_mass,
     #     for i, (e, r) in enumerate(zip(evals, res)):
     #         print("%4d%20.5e%20.5e" % (i, e, r))
 
-    flag = (TACS.OUTPUT_CONNECTIVITY |
-            TACS.OUTPUT_NODES |
-            TACS.OUTPUT_DISPLACEMENTS |
-            TACS.OUTPUT_EXTRAS)
+    flag = (
+        TACS.OUTPUT_CONNECTIVITY
+        | TACS.OUTPUT_NODES
+        | TACS.OUTPUT_DISPLACEMENTS
+        | TACS.OUTPUT_EXTRAS
+    )
     f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
-    f5.writeToFile(os.path.join(prefix, 'test_beam.f5'))
+    f5.writeToFile(os.path.join(prefix, "test_beam.f5"))
     return
-
-
-
-
-
