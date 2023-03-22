@@ -70,23 +70,12 @@ def parse_args():
     p.add_argument("--max-iter", type=int, default=100)
     p.add_argument("--qn-correction", action="store_true")
     p.add_argument("--comp-scale", type=float, default=1.0)
-    p.add_argument("--mscale", type=float, default=10.0)
-    p.add_argument("--kscale", type=float, default=1.0)
-    p.add_argument(
-        "--fixed-mass",
-        type=float,
-        default=1.0,
-        help="value for fixed nodal design variables, must be within [0, 1]",
-    )
     p.add_argument("--eig-scale", type=float, default=1.0)
     p.add_argument("--output-level", type=int, default=0)
     p.add_argument("--simple-filter", action="store_false")
     p.add_argument("--tr-eta", type=float, default=0.25)
     p.add_argument("--tr-min", type=float, default=1e-3)
     p.add_argument("--qn-subspace", type=int, default=10)
-    p.add_argument(
-        "--qn-type", type=str, default="scaled_bfgs", choices=["bfgs", "scaled_bfgs"]
-    )
     p.add_argument(
         "--paropt-type",
         type=str,
@@ -102,31 +91,12 @@ def parse_args():
     return args
 
 
-def prepare_prefix(comm, prefix):
-    # Create prefix directory if not exist
-    if comm.rank == 0 and not os.path.isdir(prefix):
-        os.mkdir(prefix)
-
-    # Save the command and arguments that executed this script
-    if comm.rank == 0:
-        cmd = "python " + " ".join(sys.argv)
-        with open(os.path.join(prefix, "exe.sh"), "w") as f:
-            f.write(cmd + "\n")
-
-    # Allow root processor some time to save execution command
-    comm.Barrier()
-    return cmd
-
-
 def create_paropt_options(args):
     # Set up ParOpt parameters
     if args.paropt_type == "penalty_method":
         adaptive_gamma_update = True
     else:
         adaptive_gamma_update = False
-    qn_type = args.qn_type
-    if args.hessian == "sr1":
-        qn_type = "sr1"
     options = {
         "algorithm": "tr",
         "output_level": args.output_level,
@@ -146,7 +116,7 @@ def create_paropt_options(args):
         "tr_max_iterations": args.max_iter,
         "penalty_gamma": 50.0,
         "qn_subspace_size": args.qn_subspace,  # try 5 or 10
-        "qn_type": qn_type,
+        "qn_type": args.hessian,
         "qn_diag_type": "yty_over_yts",
         "abs_res_tol": 1e-8,
         "starting_point_strategy": "affine_step",
@@ -307,7 +277,20 @@ if __name__ == "__main__":
     # Set arguments and create result directory
     args = parse_args()
     comm = MPI.COMM_WORLD
-    cmd = prepare_prefix(comm, args.prefix)
+
+    # Create prefix directory if not exist
+    if comm.rank == 0 and not os.path.isdir(args.prefix):
+        os.mkdir(args.prefix)
+
+    # Save the command and arguments that executed this script
+    cmd = None
+    if comm.rank == 0:
+        cmd = "python " + " ".join(sys.argv)
+        with open(os.path.join(args.prefix, "exe.sh"), "w") as f:
+            f.write(cmd + "\n")
+
+    # Allow root processor some time to save execution command
+    comm.Barrier()
 
     # Compute geometry parameters
     lx = args.len0 * args.AR
@@ -357,12 +340,12 @@ if __name__ == "__main__":
             iter_offset=iter_offset,
         )
 
-    # Function handle for qn correction, if specified
-    if args.qn_correction:
-        qn_corr_func_cls = QnCorr(comp_obj, freq_constr)
-        qn_corr_func = qn_corr_func_cls.qn_correction_func
-    else:
-        qn_corr_func = None
+        # Function handle for qn correction, if specified
+        if args.qn_correction:
+            qn_corr_func_cls = QnCorr(comp_obj, freq_constr)
+            qn_corr_func = qn_corr_func_cls.qn_correction_func
+        else:
+            qn_corr_func = None
 
         # Set the prefix
         problem.setPrefix(args.prefix)
