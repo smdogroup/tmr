@@ -50,30 +50,27 @@ class TMRVertex : public TMREntity {
   virtual ~TMRVertex();
 
   // Evalue the point
-  virtual int evalPoint( TMRPoint *p ) = 0;
+  virtual int evalPoint(TMRPoint *p) = 0;
 
   // Get the parameters on the associated curve/surface
-  virtual int getParamOnEdge( TMREdge *edge, double *t );
-  virtual int getParamsOnFace( TMRFace *face,
-                               double *u, double *v );
+  virtual int getParamOnEdge(TMREdge *edge, double *t);
+  virtual int getParamsOnFace(TMRFace *face, double *u, double *v);
 
   // Is this the same underlying vertex
-  virtual int isSame( TMRVertex *vert ){
-    return this == vert;
-  }
+  virtual int isSame(TMRVertex *vert) { return this == vert; }
 
   // Set the node number to copy from
-  void setCopySource( TMRVertex *vert );
-  void getCopySource( TMRVertex **vert );
+  void setCopySource(TMRVertex *vert);
+  void getCopySource(TMRVertex **vert);
 
   // Set/retrieve the node numbers
   void resetNodeNum();
-  int setNodeNum( int *num );
-  int getNodeNum( int *num );
+  int setNodeNum(int *num);
+  int getNodeNum(int *num);
 
  private:
   int var;
-  TMRVertex *copy; // Source numbering for the vertex
+  TMRVertex *copy;  // Source numbering for the vertex
 };
 
 /*
@@ -85,62 +82,59 @@ class TMREdge : public TMREntity {
   virtual ~TMREdge();
 
   // Get the parameter range for this surface
-  virtual void getRange( double *tmin, double *tmax ) = 0;
+  virtual void getRange(double *tmin, double *tmax) = 0;
 
   // Given the parametric point, compute the x,y,z location
-  virtual int evalPoint( double t, TMRPoint *X ) = 0;
+  virtual int evalPoint(double t, TMRPoint *X) = 0;
 
   // Perform the inverse evaluation
-  virtual int invEvalPoint( TMRPoint p, double *t );
+  virtual int invEvalPoint(TMRPoint p, double *t);
 
   // Given the parametric point, evaluate the first derivative
-  virtual int evalDeriv( double t, TMRPoint *X,
-                         TMRPoint *Xt );
+  virtual int evalDeriv(double t, TMRPoint *X, TMRPoint *Xt);
 
   // Given the parametric point, evaluate the second derivative
-  virtual int eval2ndDeriv( double t, TMRPoint *X,
-                            TMRPoint *Xt, TMRPoint *Xtt );
+  virtual int eval2ndDeriv(double t, TMRPoint *X, TMRPoint *Xt, TMRPoint *Xtt);
 
   // Parametrize the curve on the given surface
-  virtual int getParamsOnFace( TMRFace *face, double t,
-                               int dir, double *u, double *v );
+  virtual int getParamsOnFace(TMRFace *face, double t, int dir, double *u,
+                              double *v);
 
   // Is this the same underlying edge?
-  virtual int isSame( TMREdge *edge ){
-    return this == edge;
-  }
+  virtual int isSame(TMREdge *edge) { return this == edge; }
 
   // Is this edge degenerate
-  virtual int isDegenerate(){ return 0; }
+  virtual int isDegenerate() { return 0; }
 
   // Set/retrieve the vertices at the beginning and end of the curve
-  void setVertices( TMRVertex *_v1, TMRVertex *_v2 );
-  void getVertices( TMRVertex **_v1, TMRVertex **_v2 );
+  void setVertices(TMRVertex *_v1, TMRVertex *_v2);
+  void getVertices(TMRVertex **_v1, TMRVertex **_v2);
 
   // Set/retrieve the source edge
-  void setSource( TMREdge *_edge );
-  void getSource( TMREdge **_edge );
+  void setSource(TMREdge *_edge);
+  void getSource(TMREdge **_edge);
 
   // Set the node number to copy from
-  void setCopySource( TMREdge *edge );
-  void getCopySource( TMREdge **_edge );
+  void setCopySource(TMREdge *edge);
+  void getCopySource(TMREdge **_edge);
 
   // Set/retrieve the mesh
-  void setMesh( TMREdgeMesh *_mesh );
-  void getMesh( TMREdgeMesh **_mesh );
+  void setMesh(TMREdgeMesh *_mesh);
+  void getMesh(TMREdgeMesh **_mesh);
 
   // Write the object to the VTK file
-  void writeToVTK( const char *filename );
+  void writeToVTK(const char *filename);
+
  private:
   // The start/end vertices of the curve
   TMRVertex *v1, *v2;
 
   // The mesh for the curve - if it exists
   TMREdgeMesh *mesh;
-  TMREdge *source; // Source edge (may be NULL)
+  TMREdge *source;  // Source edge (may be NULL)
 
   // Copy the node numbers from this edge (if possible)
-  TMREdge *copy; // Edge to copy node numbers from
+  TMREdge *copy;  // Edge to copy node numbers from
 
   // Derivative step size
   static double deriv_step_size;
@@ -156,13 +150,11 @@ class TMREdge : public TMREntity {
 */
 class TMREdgeLoop : public TMREntity {
  public:
-  TMREdgeLoop( int _ncurves, TMREdge *_edges[],
-               const int _dir[] );
+  TMREdgeLoop(int _ncurves, TMREdge *_edges[], const int _dir[]);
   ~TMREdgeLoop();
 
   // Retrieve the edges in the loop and their orientations
-  void getEdgeLoop( int *_ncurves, TMREdge **_edges[],
-                    const int *_dir[] );
+  void getEdgeLoop(int *_ncurves, TMREdge **_edges[], const int *_dir[]);
 
  private:
   int nedges;
@@ -175,57 +167,53 @@ class TMREdgeLoop : public TMREntity {
 */
 class TMRFace : public TMREntity {
  public:
-  TMRFace( int _orientation=1 );
+  TMRFace(int _orientation = 1);
   virtual ~TMRFace();
 
   // Get the underlying normal direction
   virtual int getOrientation();
 
   // Get the parameter range for this surface
-  virtual void getRange( double *umin, double *vmin,
-                         double *umax, double *vmax ) = 0;
+  virtual void getRange(double *umin, double *vmin, double *umax,
+                        double *vmax) = 0;
 
   // Given the parametric point, compute the x,y,z location
-  virtual int evalPoint( double u, double v, TMRPoint *X ) = 0;
+  virtual int evalPoint(double u, double v, TMRPoint *X) = 0;
 
   // Perform the inverse evaluation
-  virtual int invEvalPoint( TMRPoint p, double *u, double *v );
+  virtual int invEvalPoint(TMRPoint p, double *u, double *v);
 
   // Given the parametric point, evaluate the first derivative
-  virtual int evalDeriv( double u, double v,
-                         TMRPoint *X,
-                         TMRPoint *Xu, TMRPoint *Xv );
+  virtual int evalDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu,
+                        TMRPoint *Xv);
 
   // Given the parametric point, evaluate the second derivatives
-  virtual int eval2ndDeriv( double u, double v,
-                            TMRPoint *X,
-                            TMRPoint *Xu, TMRPoint *Xv,
-                            TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
+  virtual int eval2ndDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu,
+                           TMRPoint *Xv, TMRPoint *Xuu, TMRPoint *Xuv,
+                           TMRPoint *Xvv);
 
   // Is this the same underlying face?
-  virtual int isSame( TMRFace *face ){
-    return this == face;
-  }
+  virtual int isSame(TMRFace *face) { return this == face; }
 
   // Add an edge loop to the face
   int getNumEdgeLoops();
-  void addEdgeLoop( int loop_dir, TMREdgeLoop *loop );
-  int getEdgeLoop( int k, TMREdgeLoop **loop );
+  void addEdgeLoop(int loop_dir, TMREdgeLoop *loop);
+  int getEdgeLoop(int k, TMREdgeLoop **loop);
 
   // Set/retrieve the source face
-  void setSource( TMRVolume *_volume, TMRFace *_face );
-  void getSource( TMRVolume **_volume, TMRFace **_face );
+  void setSource(TMRVolume *_volume, TMRFace *_face);
+  void getSource(TMRVolume **_volume, TMRFace **_face);
 
   // Set/retrieve the copy face
-  void setCopySource( int _copy_orient, TMRFace *_copy );
-  void getCopySource( int *_copy_orient, TMRFace **_copy );
+  void setCopySource(int _copy_orient, TMRFace *_copy);
+  void getCopySource(int *_copy_orient, TMRFace **_copy);
 
   // Set/retrieve the mesh
-  void setMesh( TMRFaceMesh *_mesh );
-  void getMesh( TMRFaceMesh **_mesh );
+  void setMesh(TMRFaceMesh *_mesh);
+  void getMesh(TMRFaceMesh **_mesh);
 
   // Write the object to the VTK file
-  void writeToVTK( const char *filename );
+  void writeToVTK(const char *filename);
 
  private:
   // Relative orientation of the normal direction and the parametric
@@ -236,8 +224,8 @@ class TMRFace : public TMREntity {
   TMRFaceMesh *mesh;
 
   // Store information about the source face
-  TMRVolume *source_volume; // Source volume
-  TMRFace *source; // Source face (may be NULL)
+  TMRVolume *source_volume;  // Source volume
+  TMRFace *source;           // Source face (may be NULL)
 
   // Store information about a mesh that will be directly copied
   int copy_orient;
@@ -262,25 +250,25 @@ class TMRFace : public TMREntity {
 */
 class TMRVolume : public TMREntity {
  public:
-  TMRVolume( int _nfaces, TMRFace **_faces );
+  TMRVolume(int _nfaces, TMRFace **_faces);
   virtual ~TMRVolume();
 
   // Get the parameter range for this volume
-  virtual void getRange( double *umin, double *vmin, double *wmin,
-                         double *umax, double *vmax, double *wmax );
+  virtual void getRange(double *umin, double *vmin, double *wmin, double *umax,
+                        double *vmax, double *wmax);
 
   // Given the parametric point u,v,w compute the physical location x,y,z
-  virtual int evalPoint( double u, double v, double w, TMRPoint *X );
+  virtual int evalPoint(double u, double v, double w, TMRPoint *X);
 
   // Get the faces that enclose this volume
-  void getFaces( int *_num_faces, TMRFace ***_faces );
+  void getFaces(int *_num_faces, TMRFace ***_faces);
 
   // Set/retrieve the mesh
-  void setMesh( TMRVolumeMesh *_mesh );
-  void getMesh( TMRVolumeMesh **_mesh );
+  void setMesh(TMRVolumeMesh *_mesh);
+  void getMesh(TMRVolumeMesh **_mesh);
 
   // Write the object to the VTK file
-  void writeToVTK( const char *filename );
+  void writeToVTK(const char *filename);
 
  private:
   // Store the face information
@@ -299,30 +287,28 @@ class TMRVolume : public TMREntity {
 */
 class TMRModel : public TMREntity {
  public:
-  TMRModel( int _num_vertices, TMRVertex **_vertices,
-            int _num_edges, TMREdge **_edges,
-            int _num_faces, TMRFace **_faces,
-            int _num_volumes=0, TMRVolume **_volumes=NULL );
+  TMRModel(int _num_vertices, TMRVertex **_vertices, int _num_edges,
+           TMREdge **_edges, int _num_faces, TMRFace **_faces,
+           int _num_volumes = 0, TMRVolume **_volumes = NULL);
   ~TMRModel();
 
   // Retrieve the underlying vertices/curves/surfaces
-  void getVertices( int *_num_vertices, TMRVertex ***_vertices );
-  void getEdges( int *_num_edges, TMREdge ***_edges );
-  void getFaces( int *_num_faces, TMRFace ***_faces );
-  void getVolumes( int *_num_volumes, TMRVolume ***_volumes );
+  void getVertices(int *_num_vertices, TMRVertex ***_vertices);
+  void getEdges(int *_num_edges, TMREdge ***_edges);
+  void getFaces(int *_num_faces, TMRFace ***_faces);
+  void getVolumes(int *_num_volumes, TMRVolume ***_volumes);
 
   // Query geometric objects based on pointer values
-  int getVertexIndex( TMRVertex *vertex );
-  int getEdgeIndex( TMREdge *edge );
-  int getFaceIndex( TMRFace *face );
-  int getVolumeIndex( TMRVolume *volume );
+  int getVertexIndex(TMRVertex *vertex);
+  int getEdgeIndex(TMREdge *edge);
+  int getFaceIndex(TMRFace *face);
+  int getVolumeIndex(TMRVolume *volume);
 
  private:
   // Initialize the model
-  void initialize( int _num_vertices, TMRVertex **_vertices,
-                   int _num_edges, TMREdge **_edges,
-                   int _num_faces, TMRFace **_faces,
-                   int _num_volumes, TMRVolume **_volumes );
+  void initialize(int _num_vertices, TMRVertex **_vertices, int _num_edges,
+                  TMREdge **_edges, int _num_faces, TMRFace **_faces,
+                  int _num_volumes, TMRVolume **_volumes);
 
   // Verify that everything is more or less well defined. Print out
   // error messages if something doesn't make sense.
@@ -339,13 +325,13 @@ class TMRModel : public TMREntity {
   // enables a fast object -> object index lookup
   template <class ctype>
   class OrderedPair {
-  public:
+   public:
     int num;
     ctype *obj;
   };
 
   template <class ctype>
-  static int compare_ordered_pairs( const void *avoid, const void *bvoid );
+  static int compare_ordered_pairs(const void *avoid, const void *bvoid);
 
   OrderedPair<TMRVertex> *ordered_verts;
   OrderedPair<TMREdge> *ordered_edges;
@@ -395,7 +381,7 @@ class TMRModel : public TMREntity {
 */
 class TMRTopology : public TMREntity {
  public:
-  TMRTopology( MPI_Comm _comm, TMRModel *geo );
+  TMRTopology(MPI_Comm _comm, TMRModel *geo);
   ~TMRTopology();
 
   // Retrieve the face/edge/node information
@@ -403,29 +389,28 @@ class TMRTopology : public TMREntity {
   int getNumFaces();
   int getNumEdges();
   int getNumVertices();
-  void getVolume( int vol_num, TMRVolume **volume );
-  void getFace( int face_num, TMRFace **face );
-  void getEdge( int edge_num, TMREdge **edge );
-  void getVertex( int vertex_num, TMRVertex **vertex );
+  void getVolume(int vol_num, TMRVolume **volume);
+  void getFace(int face_num, TMRFace **face);
+  void getEdge(int edge_num, TMREdge **edge);
+  void getVertex(int vertex_num, TMRVertex **vertex);
 
   // Retrive the quadtree connectivity from the topology object
-  void getConnectivity( int *nnodes, int *nedges, int *nfaces,
-                        const int **face_nodes, const int **face_edges );
+  void getConnectivity(int *nnodes, int *nedges, int *nfaces,
+                       const int **face_nodes, const int **face_edges);
 
   // Retrieve the octree connectivity from the topology object
-  void getConnectivity( int *nnodes, int *nedges, int *nfaces, int *nvolumes,
-                        const int **volume_nodes, const int **volume_edges,
-                        const int **volume_faces );
+  void getConnectivity(int *nnodes, int *nedges, int *nfaces, int *nvolumes,
+                       const int **volume_nodes, const int **volume_edges,
+                       const int **volume_faces);
 
  private:
   // Compute the face connectivity
-  void computeConnectivty( int num_entities, int num_edges,
-                           int num_faces, const int ftoedges[],
-                           int **_face_to_face_ptr,
-                           int **_face_to_face );
-  void reorderEntities( int num_entities, int num_edges, int num_faces,
-                        const int *ftoedges, int *entity_to_new_num,
-                        int *new_num_to_entity, int use_rcm=1 );
+  void computeConnectivty(int num_entities, int num_edges, int num_faces,
+                          const int ftoedges[], int **_face_to_face_ptr,
+                          int **_face_to_face);
+  void reorderEntities(int num_entities, int num_edges, int num_faces,
+                       const int *ftoedges, int *entity_to_new_num,
+                       int *new_num_to_entity, int use_rcm = 1);
 
   // Connectivity for face -> edge, face -> vertex and edge -> vertex
   void computeFaceConn();
@@ -456,4 +441,4 @@ class TMRTopology : public TMREntity {
   TMRModel *geo;
 };
 
-#endif // TMR_TOPOLOGY_H
+#endif  // TMR_TOPOLOGY_H

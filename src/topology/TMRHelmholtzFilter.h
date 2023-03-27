@@ -21,37 +21,33 @@
 #ifndef TMR_HELMHOLTZ_FILTER_H
 #define TMR_HELMHOLTZ_FILTER_H
 
-#include "TMRConformFilter.h"
 #include "TACSAssembler.h"
 #include "TACSMg.h"
+#include "TMRConformFilter.h"
 
 /*
   Create a Helmholtz filter object
 */
 class TMRHelmholtzFilter : public TMRConformFilter {
  public:
-  TMRHelmholtzFilter( double helmholtz_radius,
-                      int _nlevels,
-                      TACSAssembler *_assembler[],
-                      TMROctForest *_filter[] );
-  TMRHelmholtzFilter( double helmholtz_radius,
-                      int _nlevels,
-                      TACSAssembler *_assembler[],
-                      TMRQuadForest *_filter[] );
+  TMRHelmholtzFilter(double helmholtz_radius, int _nlevels,
+                     TACSAssembler *_assembler[], TMROctForest *_filter[]);
+  TMRHelmholtzFilter(double helmholtz_radius, int _nlevels,
+                     TACSAssembler *_assembler[], TMRQuadForest *_filter[]);
   ~TMRHelmholtzFilter();
 
   // Set the design variable values (including all local values)
-  void setDesignVars( TACSBVec *x );
+  void setDesignVars(TACSBVec *x);
 
   // Set values/add values to the vector
-  void addValues( TACSBVec *vec );
+  void addValues(TACSBVec *vec);
 
  private:
-  void initialize_helmholtz( double helmholtz_radius );
+  void initialize_helmholtz(double helmholtz_radius);
 
   // Apply the Helmholtz filter to a vector
-  void applyFilter( TACSBVec *vec );
-  void applyTranspose( TACSBVec *input, TACSBVec *output );
+  void applyFilter(TACSBVec *vec);
+  void applyTranspose(TACSBVec *input, TACSBVec *output);
 
   // Data (that may be NULL) for the Helmholtz-based PDE filter
   TACSAssembler **helmholtz_assembler;
@@ -64,4 +60,4 @@ class TMRHelmholtzFilter : public TMRConformFilter {
   TACSBVec *temp;
 };
 
-#endif // TMR_HELMHOLTZ_FILTER_H
+#endif  // TMR_HELMHOLTZ_FILTER_H

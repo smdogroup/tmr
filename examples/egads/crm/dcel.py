@@ -1,32 +1,30 @@
-'''
+"""
 Implementation of a DECL data structure
-'''
+"""
 import numpy as np
 
+
 def orient2d(self, ax, ay, bx, by, cx, cy):
-    '''Check the relative orientation of the points a, b, and pt'''
-    A = np.array([
-        [ax - cx, ay - cy],
-        [bx - cx, by - cy]])
+    """Check the relative orientation of the points a, b, and pt"""
+    A = np.array([[ax - cx, ay - cy], [bx - cx, by - cy]])
     # This is NOT robust to precision errors
-    return  A[0,0]*A[1,1] - A[0,1]*A[1,0] >= 0.0
+    return A[0, 0] * A[1, 1] - A[0, 1] * A[1, 0] >= 0.0
+
 
 class face:
     def __init__(self):
         self.edge = None
 
     def contains(self, X):
-        '''
+        """
         Check if this face contains the edge
-        '''
+        """
         e = self.edge
 
         while True:
             u = next.u
             v = next.v
-            check = oriend2d(X[u][0], X[u][1],
-                             X[v][0], X[v][1],
-                             px, py)
+            check = oriend2d(X[u][0], X[u][1], X[v][0], X[v][1], px, py)
 
             # Check if this is false, if so, the
             # point is not in the face
@@ -41,6 +39,7 @@ class face:
                 break
 
         return True
+
 
 class edge:
     def __init__(self, u, v, name):
@@ -57,11 +56,12 @@ class edge:
         # Name the edge
         self.name = name
 
+
 class dcel:
     def __init__(self, X, conn, names=None):
-        '''
+        """
         Initialize the DCEL from points and a list of polygons
-        '''
+        """
 
         # Create a list of the vertices
         self.verts = []
@@ -75,7 +75,7 @@ class dcel:
         self.edges = {}
 
         if names is None:
-            names = [None]*len(conn)
+            names = [None] * len(conn)
 
         # Loop over all of the input polygons
         for p, name in zip(conn, names):
@@ -89,9 +89,9 @@ class dcel:
             first = None
             prev = None
 
-            for i in range(len(p)-1):
+            for i in range(len(p) - 1):
                 u = p[i]
-                v = p[i+1]
+                v = p[i + 1]
 
                 # Set the key for the owned edge
                 if (u, v) not in self.edges:
@@ -124,9 +124,9 @@ class dcel:
         return
 
     def get_connectivity(self):
-        '''
+        """
         Retrieve a list of the edges
-        '''
+        """
         edge_dict = {}
 
         # Order the edges
@@ -137,7 +137,7 @@ class dcel:
                 edge_dict[e] = index
 
         # Set the edges
-        edges = [None]*len(edge_dict)
+        edges = [None] * len(edge_dict)
         for key in edge_dict:
             edges[edge_dict[key]] = key
 
@@ -175,9 +175,9 @@ class dcel:
         return self.verts, edges, faces, sense
 
     def find_enclosing(self, px, py):
-        '''
+        """
         Find the face that encloses the point (if any)
-        '''
+        """
         for f in self.faces:
             if f.contains(self.X, px, py):
                 return f
@@ -185,9 +185,9 @@ class dcel:
         return None
 
     def find_closest_edge(self, px, py):
-        '''
+        """
         Find the closest edge
-        '''
+        """
         closest = None
         dist = 0.0
 
@@ -200,31 +200,33 @@ class dcel:
             dy = self.verts[v][1] - self.verts[u][1]
             nx = dy
             ny = -dx
-            inv = 1.0/np.sqrt(nx**2 + ny**2)
+            inv = 1.0 / np.sqrt(nx**2 + ny**2)
 
             ax = px - self.verts[u][0]
             ay = py - self.verts[u][1]
 
-            proj = (ax*dx + ay*dy)*inv*inv
+            proj = (ax * dx + ay * dy) * inv * inv
             if proj > 1.0:
-                dist = np.sqrt((px - self.verts[v][0])**2 +
-                               (py - self.verts[v][1])**2)
+                dist = np.sqrt(
+                    (px - self.verts[v][0]) ** 2 + (py - self.verts[v][1]) ** 2
+                )
             elif proj < 0.0:
-                dist = np.sqrt((px - self.verts[u][0])**2 +
-                               (py - self.verts[u][1])**2)
+                dist = np.sqrt(
+                    (px - self.verts[u][0]) ** 2 + (py - self.verts[u][1]) ** 2
+                )
             else:
-                dist = np.fabs((ax*nx + ay*ny)*inv)
+                dist = np.fabs((ax * nx + ay * ny) * inv)
 
             if closest is None or dist < min_dist:
                 closest = (u, v)
-                min_dist = 1.0*dist
+                min_dist = 1.0 * dist
 
         return self.edges[closest], min_dist
 
     def add_vertex(self, e, px, py):
-        '''
+        """
         Add a vertex along the given edge at the given point
-        '''
+        """
 
         # Set the u, v vertex values
         u = e[0]
@@ -295,9 +297,9 @@ class dcel:
         return w
 
     def add_edge_from_face(self, f, u, v, name=None):
-        '''
+        """
         Split a face shared by the
-        '''
+        """
         e1 = None
         e2 = None
 
@@ -366,7 +368,7 @@ class dcel:
         return
 
     def get_intersection(self, u, v, xr, yr, dxr, dyr):
-        '''
+        """
         Find the intersection between the edge and the line
 
         Solve the equation
@@ -376,7 +378,7 @@ class dcel:
 
         u*dx - v*dxrb = xrb - x
         u*dy - v*dyrb = yrb - y
-        '''
+        """
 
         x = self.verts[u][0]
         y = self.verts[u][1]
@@ -385,17 +387,18 @@ class dcel:
 
         # Check if the two lines are parallel
         tol = 1e-9
-        if np.fabs(dx*dyr - dy*dxr) < tol*np.fabs(dx*dxr + dy*dyr):
+        if np.fabs(dx * dyr - dy * dxr) < tol * np.fabs(dx * dxr + dy * dyr):
             return None
 
         # Solve for uv = [u, -v]
-        uv = np.linalg.solve(np.array([[dx, dxr],
-                                       [dy, dyr]], dtype=np.float),
-                             np.array([xr - x, yr - y], dtype=np.float))
+        uv = np.linalg.solve(
+            np.array([[dx, dxr], [dy, dyr]], dtype=np.float),
+            np.array([xr - x, yr - y], dtype=np.float),
+        )
         return uv[0]
 
     def split_face(self, f, x, y, dx, dy):
-        '''Split the face'''
+        """Split the face"""
 
         # Set the edges and the edge parameters
         e1 = None
@@ -426,13 +429,13 @@ class dcel:
             return
 
         # Add the first vertex
-        px = (1.0 - p1)*self.verts[e1.u][0] + p1*self.verts[e1.v][0]
-        py = (1.0 - p1)*self.verts[e1.u][1] + p1*self.verts[e1.v][1]
+        px = (1.0 - p1) * self.verts[e1.u][0] + p1 * self.verts[e1.v][0]
+        py = (1.0 - p1) * self.verts[e1.u][1] + p1 * self.verts[e1.v][1]
         w = self.add_vertex((e1.u, e1.v), px, py)
 
         # Add the first vertex
-        px = (1.0 - p2)*self.verts[e2.u][0] + p2*self.verts[e2.v][0]
-        py = (1.0 - p2)*self.verts[e2.u][1] + p2*self.verts[e2.v][1]
+        px = (1.0 - p2) * self.verts[e2.u][0] + p2 * self.verts[e2.v][0]
+        py = (1.0 - p2) * self.verts[e2.u][1] + p2 * self.verts[e2.v][1]
         x = self.add_vertex((e2.u, e2.v), px, py)
 
         # Add the vertex
@@ -441,7 +444,7 @@ class dcel:
         return
 
     def plot(self):
-        '''Plot the DCEL'''
+        """Plot the DCEL"""
         import matplotlib.pylab as plt
 
         plt.figure()
@@ -455,22 +458,18 @@ class dcel:
                 y.append(self.verts[e.v][1])
                 e = e.next
 
-            plt.plot(x, y, '-o')
+            plt.plot(x, y, "-o")
 
-        plt.axis('equal')
+        plt.axis("equal")
         return
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import matplotlib.pylab as plt
 
-    X = [[0, 0], [1, 0], [2, 0],
-         [0.5, 1], [1.5, 1], [2.5, 1],
-         [0.5, 2], [2, 2]]
+    X = [[0, 0], [1, 0], [2, 0], [0.5, 1], [1.5, 1], [2.5, 1], [0.5, 2], [2, 2]]
 
-    conn = [
-        [0, 1, 2, 4, 3],
-        [4, 2, 5],
-        [3, 4, 5, 7, 6]]
+    conn = [[0, 1, 2, 4, 3], [4, 2, 5], [3, 4, 5, 7, 6]]
 
     d = dcel(X, conn)
     d.add_vertex((0, 1), 0.5, 0)

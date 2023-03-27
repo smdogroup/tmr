@@ -42,7 +42,7 @@ x0 = [0, 0, 0.25]
 x1 = [0.25, 0.25, 0.75]
 B3 = ctx.makeSolidBody(egads.BOX, rdata=[x0, x1])
 
-x0 = [0.125, 0,    0.85]
+x0 = [0.125, 0, 0.85]
 x1 = [0.125, 0.25, 0.85]
 C3 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r0])
 parts.append(B3.solidBoolean(C3, egads.SUBTRACTION))
@@ -82,7 +82,7 @@ htarget = 0.02
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('ortho_bracket.vtk', 'hex')
+mesh.writeToVTK("ortho_bracket.vtk", "hex")
 
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()
@@ -97,5 +97,5 @@ forest.setTopology(topo)
 # Create random trees and balance the mesh. Print the output file
 forest.createRandomTrees(nrand=1, max_lev=3)
 forest.balance(1)
-filename = 'ortho_forest%d.vtk'%(comm.rank)
+filename = "ortho_forest%d.vtk" % (comm.rank)
 forest.writeForestToVTK(filename)

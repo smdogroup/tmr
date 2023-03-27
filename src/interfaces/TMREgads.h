@@ -26,17 +26,18 @@
 /*
   Include the TMR files required
 */
-#include "egads.h"
 #include "TMRTopology.h"
+#include "egads.h"
 
 namespace TMR_EgadsInterface {
 
 class TMR_EgadsContext : public TMREntity {
-  public:
+ public:
   TMR_EgadsContext();
-  TMR_EgadsContext( ego _ctx );
+  TMR_EgadsContext(ego _ctx);
   ~TMR_EgadsContext();
   ego getContext();
+
  private:
   int ismine;
   ego ctx;
@@ -51,13 +52,14 @@ class TMR_EgadsContext : public TMREntity {
 */
 class TMR_EgadsNode : public TMRVertex {
  public:
-  TMR_EgadsNode( TMR_EgadsContext* _ctx, ego _node );
+  TMR_EgadsNode(TMR_EgadsContext *_ctx, ego _node);
   ~TMR_EgadsNode();
-  int evalPoint( TMRPoint *p );
-  int getParamOnEdge( TMREdge *edge, double *t );
-  int getParamsOnFace( TMRFace *face, double *u, double *v );
-  int isSame( TMRVertex *v );
-  void getNodeObject( ego *n );
+  int evalPoint(TMRPoint *p);
+  int getParamOnEdge(TMREdge *edge, double *t);
+  int getParamsOnFace(TMRFace *face, double *u, double *v);
+  int isSame(TMRVertex *v);
+  void getNodeObject(ego *n);
+
  private:
   TMR_EgadsContext *ctx;
   ego node;
@@ -65,18 +67,18 @@ class TMR_EgadsNode : public TMRVertex {
 
 class TMR_EgadsEdge : public TMREdge {
  public:
-  TMR_EgadsEdge( TMR_EgadsContext* _ctx, ego _edge, int _is_degenerate=0 );
+  TMR_EgadsEdge(TMR_EgadsContext *_ctx, ego _edge, int _is_degenerate = 0);
   ~TMR_EgadsEdge();
-  void getRange( double *tmin, double *tmax );
-  int evalPoint( double t, TMRPoint *X );
-  int invEvalPoint( TMRPoint X, double *t );
-  int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt );
-  int eval2ndDeriv( double t, TMRPoint *X, TMRPoint *Xt, TMRPoint *Xtt );
-  int getParamsOnFace( TMRFace *face, double t,
-                       int dir, double *u, double *v );
-  int isSame( TMREdge *e );
+  void getRange(double *tmin, double *tmax);
+  int evalPoint(double t, TMRPoint *X);
+  int invEvalPoint(TMRPoint X, double *t);
+  int evalDeriv(double t, TMRPoint *X, TMRPoint *Xt);
+  int eval2ndDeriv(double t, TMRPoint *X, TMRPoint *Xt, TMRPoint *Xtt);
+  int getParamsOnFace(TMRFace *face, double t, int dir, double *u, double *v);
+  int isSame(TMREdge *e);
   int isDegenerate();
-  void getEdgeObject( ego *e );
+  void getEdgeObject(ego *e);
+
  private:
   TMR_EgadsContext *ctx;
   ego edge;
@@ -85,19 +87,17 @@ class TMR_EgadsEdge : public TMREdge {
 
 class TMR_EgadsFace : public TMRFace {
  public:
-  TMR_EgadsFace( TMR_EgadsContext* _ctx, int _normal_dir, ego _face );
+  TMR_EgadsFace(TMR_EgadsContext *_ctx, int _normal_dir, ego _face);
   ~TMR_EgadsFace();
-  void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax );
-  int evalPoint( double u, double v, TMRPoint *X );
-  int invEvalPoint( TMRPoint p, double *u, double *v );
-  int evalDeriv( double u, double v, TMRPoint *X,
-                 TMRPoint *Xu, TMRPoint *Xv );
-  int eval2ndDeriv( double u, double v, TMRPoint *X,
-                    TMRPoint *Xu, TMRPoint *Xv,
-                    TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
-  int isSame( TMRFace *v );
-  void getFaceObject( ego *f );
+  void getRange(double *umin, double *vmin, double *umax, double *vmax);
+  int evalPoint(double u, double v, TMRPoint *X);
+  int invEvalPoint(TMRPoint p, double *u, double *v);
+  int evalDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu, TMRPoint *Xv);
+  int eval2ndDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu, TMRPoint *Xv,
+                   TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv);
+  int isSame(TMRFace *v);
+  void getFaceObject(ego *f);
+
  private:
   TMR_EgadsContext *ctx;
   ego face;
@@ -106,12 +106,10 @@ class TMR_EgadsFace : public TMRFace {
 /*
   Initialization of the OpenCascade geometry from an IGES/STEP files
 */
-TMRModel* TMR_LoadModelFromEGADSFile( const char *filename,
-                                      int print_level=0 );
-TMRModel* TMR_ConvertEGADSModel( ego model,
-                                 int print_level=0 );
+TMRModel *TMR_LoadModelFromEGADSFile(const char *filename, int print_level = 0);
+TMRModel *TMR_ConvertEGADSModel(ego model, int print_level = 0);
 
-}
+}  // namespace TMR_EgadsInterface
 
-#endif // TMR_HAS_EGADS
-#endif // TMR_EGADS_H
+#endif  // TMR_HAS_EGADS
+#endif  // TMR_EGADS_H

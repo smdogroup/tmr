@@ -21,10 +21,10 @@
 #ifndef TMR_TOPO_FILTER_H
 #define TMR_TOPO_FILTER_H
 
-#include "TMRBase.h"
-#include "TMRQuadForest.h"
-#include "TMROctForest.h"
 #include "TACSAssembler.h"
+#include "TMRBase.h"
+#include "TMROctForest.h"
+#include "TMRQuadForest.h"
 
 /*
   Abstract base class for the filter problem
@@ -32,21 +32,21 @@
 class TMRTopoFilter : public TMREntity {
  public:
   // Get the TACSAssembler instance (on the finest mesh level)
-  virtual TACSAssembler* getAssembler() = 0;
+  virtual TACSAssembler *getAssembler() = 0;
 
   // Get the Quad or OctForest on the finest mesh level
-  virtual TMRQuadForest* getFilterQuadForest() = 0;
-  virtual TMROctForest* getFilterOctForest() = 0;
+  virtual TMRQuadForest *getFilterQuadForest() = 0;
+  virtual TMROctForest *getFilterOctForest() = 0;
 
   // Set the design variables
-  virtual void setDesignVars( TACSBVec *vec ) = 0;
+  virtual void setDesignVars(TACSBVec *vec) = 0;
 
   // Set values/add values to the vector
-  virtual void addValues( TACSBVec *vec ) = 0;
-  virtual void setValues( TACSBVec *vec ) = 0;
+  virtual void addValues(TACSBVec *vec) = 0;
+  virtual void setValues(TACSBVec *vec) = 0;
 
   // Write the STL file
-  virtual void writeSTLFile( int k, double cutoff, const char *filename ){}
+  virtual void writeSTLFile(int k, double cutoff, const char *filename) {}
 };
 
-#endif // TMR_TOPO_FILTER_H
+#endif  // TMR_TOPO_FILTER_H

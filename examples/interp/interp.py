@@ -10,7 +10,7 @@ comm = MPI.COMM_WORLD
 # The fine octree forest
 fine = None
 
-stepfile = 'beam.stp'
+stepfile = "beam.stp"
 if os.path.isfile(stepfile):
     # Load the geometry model
     geo = TMR.LoadModel(stepfile)
@@ -19,7 +19,7 @@ if os.path.isfile(stepfile):
     faces = geo.getFaces()
     volumes = geo.getVolumes()
     faces[4].setSource(volumes[0], faces[5])
-    
+
     # Create the mesh
     mesh = TMR.Mesh(comm, geo)
 
@@ -36,13 +36,14 @@ if os.path.isfile(stepfile):
     # Create a model from the mesh
     model = mesh.createModelFromMesh()
 
-    # Create the corresponding mesh topology from the mesh-model 
+    # Create the corresponding mesh topology from the mesh-model
     topo = TMR.Topology(comm, model)
     fine = TMR.OctForest(comm)
     fine.setTopology(topo)
 else:
-    conn = np.array([[0, 1, 3, 4, 6, 7, 9, 10],
-                     [8, 11, 2, 5, 7, 10, 1, 4]], dtype=np.intc)
+    conn = np.array(
+        [[0, 1, 3, 4, 6, 7, 9, 10], [8, 11, 2, 5, 7, 10, 1, 4]], dtype=np.intc
+    )
     fine = TMR.OctForest(comm)
     fine.setConnectivity(conn)
 
@@ -75,11 +76,11 @@ coarse.setMeshOrder(2, TMR.GAUSS_LOBATTO_POINTS)
 coarse.createNodes()
 
 coarse_range = coarse.getNodeRange()
-nc = coarse_range[comm.rank+1] - coarse_range[comm.rank]
+nc = coarse_range[comm.rank + 1] - coarse_range[comm.rank]
 coarse_map = TACS.NodeMap(comm, nc)
 
 fine_range = fine.getNodeRange()
-nf = fine_range[comm.rank+1] - fine_range[comm.rank]
+nf = fine_range[comm.rank + 1] - fine_range[comm.rank]
 fine_map = TACS.NodeMap(comm, nf)
 
 # Create the two interpolations fine -> coarse and coarse -> fine

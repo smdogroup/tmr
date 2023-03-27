@@ -20,41 +20,35 @@
 
 #include "TMRMatrixFilterModel.h"
 
-TMRQuadMatrixModel::TMRQuadMatrixModel(){}
+TMRQuadMatrixModel::TMRQuadMatrixModel() {}
 
-int TMRQuadMatrixModel::getNumParameters(){
-  return 2;
-}
+int TMRQuadMatrixModel::getNumParameters() { return 2; }
 
-int TMRQuadMatrixModel::getVarsPerNode(){
-  return 1;
-}
+int TMRQuadMatrixModel::getVarsPerNode() { return 1; }
 
-void TMRQuadMatrixModel::evalWeakIntegrand( int elemIndex, const double time,
-                                            int n, const double pt[],
-                                            const TacsScalar X[], const TacsScalar Xd[],
-                                            const TacsScalar Ut[], const TacsScalar Ux[],
-                                            TacsScalar DUt[], TacsScalar DUx[] ){
+void TMRQuadMatrixModel::evalWeakIntegrand(
+    int elemIndex, const double time, int n, const double pt[],
+    const TacsScalar X[], const TacsScalar Xd[], const TacsScalar Ut[],
+    const TacsScalar Ux[], TacsScalar DUt[], TacsScalar DUx[]) {
   DUt[0] = DUt[1] = DUt[2] = 0.0;
   DUx[0] = DUx[1] = 0.0;
   DUt[0] = Ut[0];
 }
 
-void TMRQuadMatrixModel::getWeakMatrixNonzeros( ElementMatrixType matType,
-                                                int elemIndex,
-                                                int *Jac_nnz,
-                                                const int *Jac_pairs[] ){
+void TMRQuadMatrixModel::getWeakMatrixNonzeros(ElementMatrixType matType,
+                                               int elemIndex, int *Jac_nnz,
+                                               const int *Jac_pairs[]) {
   *Jac_nnz = 1;
   *Jac_pairs = elem_Jac_pairs;
 }
 
-void TMRQuadMatrixModel::evalWeakMatrix( ElementMatrixType matType,
-                                         int elemIndex, const double time,
-                                         int n, const double pt[],
-                                         const TacsScalar X[], const TacsScalar Xd[],
-                                         const TacsScalar Ut[], const TacsScalar Ux[],
-                                         TacsScalar DUt[], TacsScalar DUx[],
-                                         TacsScalar Jac[] ){
+void TMRQuadMatrixModel::evalWeakMatrix(ElementMatrixType matType,
+                                        int elemIndex, const double time, int n,
+                                        const double pt[], const TacsScalar X[],
+                                        const TacsScalar Xd[],
+                                        const TacsScalar Ut[],
+                                        const TacsScalar Ux[], TacsScalar DUt[],
+                                        TacsScalar DUx[], TacsScalar Jac[]) {
   DUt[0] = DUt[1] = DUt[2] = 0.0;
   DUx[0] = DUx[1] = 0.0;
   DUt[0] = Ut[0];
@@ -63,41 +57,35 @@ void TMRQuadMatrixModel::evalWeakMatrix( ElementMatrixType matType,
 
 int TMRQuadMatrixModel::elem_Jac_pairs[] = {0, 0};
 
-TMRHexaMatrixModel::TMRHexaMatrixModel(){}
+TMRHexaMatrixModel::TMRHexaMatrixModel() {}
 
-int TMRHexaMatrixModel::getNumParameters(){
-  return 3;
-}
+int TMRHexaMatrixModel::getNumParameters() { return 3; }
 
-int TMRHexaMatrixModel::getVarsPerNode(){
-  return 1;
-}
+int TMRHexaMatrixModel::getVarsPerNode() { return 1; }
 
-void TMRHexaMatrixModel::evalWeakIntegrand( int elemIndex, const double time,
-                                            int n, const double pt[],
-                                            const TacsScalar X[], const TacsScalar Xd[],
-                                            const TacsScalar Ut[], const TacsScalar Ux[],
-                                            TacsScalar DUt[], TacsScalar DUx[] ){
+void TMRHexaMatrixModel::evalWeakIntegrand(
+    int elemIndex, const double time, int n, const double pt[],
+    const TacsScalar X[], const TacsScalar Xd[], const TacsScalar Ut[],
+    const TacsScalar Ux[], TacsScalar DUt[], TacsScalar DUx[]) {
   DUt[0] = DUt[1] = DUt[2] = 0.0;
   DUx[0] = DUx[1] = DUx[2] = 0.0;
   DUt[0] = Ut[0];
 }
 
-void TMRHexaMatrixModel::getWeakMatrixNonzeros( ElementMatrixType matType,
-                                                int elemIndex,
-                                                int *Jac_nnz,
-                                                const int *Jac_pairs[] ){
+void TMRHexaMatrixModel::getWeakMatrixNonzeros(ElementMatrixType matType,
+                                               int elemIndex, int *Jac_nnz,
+                                               const int *Jac_pairs[]) {
   *Jac_nnz = 1;
   *Jac_pairs = elem_Jac_pairs;
 }
 
-void TMRHexaMatrixModel::evalWeakMatrix( ElementMatrixType matType,
-                                         int elemIndex, const double time,
-                                         int n, const double pt[],
-                                         const TacsScalar X[], const TacsScalar Xd[],
-                                         const TacsScalar Ut[], const TacsScalar Ux[],
-                                         TacsScalar DUt[], TacsScalar DUx[],
-                                         TacsScalar Jac[] ){
+void TMRHexaMatrixModel::evalWeakMatrix(ElementMatrixType matType,
+                                        int elemIndex, const double time, int n,
+                                        const double pt[], const TacsScalar X[],
+                                        const TacsScalar Xd[],
+                                        const TacsScalar Ut[],
+                                        const TacsScalar Ux[], TacsScalar DUt[],
+                                        TacsScalar DUx[], TacsScalar Jac[]) {
   DUt[0] = DUt[1] = DUt[2] = 0.0;
   DUx[0] = DUx[1] = DUx[2] = 0.0;
   DUt[0] = Ut[0];

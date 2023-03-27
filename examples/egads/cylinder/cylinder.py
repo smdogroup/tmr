@@ -10,8 +10,8 @@ comm = MPI.COMM_WORLD
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
-p.add_argument('--htarget', type=float, default=8.0)
-p.add_argument('--extension', type=str, default='egads', help='egads or step')
+p.add_argument("--htarget", type=float, default=8.0)
+p.add_argument("--extension", type=str, default="egads", help="egads or step")
 args = p.parse_args()
 
 htarget = args.htarget
@@ -32,7 +32,7 @@ radius = 75.0
 c2 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x1, x2, radius])
 
 model = c1.solidBoolean(c2, egads.SUBTRACTION)
-model.saveModel('cylinder_sweep.%s'%(extension), overwrite=True)
+model.saveModel("cylinder_sweep.%s" % (extension), overwrite=True)
 
 # Set the meshing options
 opts = TMR.MeshOptions()
@@ -40,7 +40,7 @@ opts.write_mesh_quality_histogram = 1
 opts.triangularize_print_iter = 50000
 
 # Load the separate geometries and mesh each
-geo = TMR.LoadModel('cylinder_sweep.%s'%(extension))
+geo = TMR.LoadModel("cylinder_sweep.%s" % (extension))
 
 faces = geo.getFaces()
 vols = geo.getVolumes()
@@ -58,7 +58,7 @@ opts.triangularize_print_iter = 50000
 mesh.mesh(htarget, opts)
 
 # Write the surface mesh to a file
-mesh.writeToVTK('cylinder_sweep.vtk', 'hex')
+mesh.writeToVTK("cylinder_sweep.vtk", "hex")
 
 # Create the model from the unstructured volume mesh
 model = mesh.createModelFromMesh()
@@ -73,5 +73,5 @@ forest.setTopology(topo)
 # Create random trees and balance the mesh. Print the output file
 forest.createRandomTrees(nrand=3, max_lev=2)
 forest.balance(1)
-filename = 'cylinder_forest%d.vtk'%(comm.rank)
+filename = "cylinder_forest%d.vtk" % (comm.rank)
 forest.writeForestToVTK(filename)

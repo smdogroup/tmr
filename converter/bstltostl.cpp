@@ -6,41 +6,43 @@
   is the results of a parallel I/O and is in bindary) to a regular
   .stl file.
 */
-int main( int argc, char * argv[] ){
+int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
   // Convert the extension (if any) on the input file to a .stl
   // extension since this will convert successful
-  if (argc <= 1){
+  if (argc <= 1) {
     fprintf(stderr, "Error, no input files\n");
     return (1);
   }
 
   // Loop over all of the input files
-  for ( int k = 1; k < argc; k++ ){
-    char *infile = new char[ strlen(argv[k])+1 ];
+  for (int k = 1; k < argc; k++) {
+    char *infile = new char[strlen(argv[k]) + 1];
     strcpy(infile, argv[k]);
 
     // Set the output file
-    char *outfile = new char[ strlen(infile)+5 ];
+    char *outfile = new char[strlen(infile) + 5];
     int len = strlen(infile);
-    int i = len-1;
-    for ( ; i >= 0; i-- ){
-      if (infile[i] == '.'){ break; }     
+    int i = len - 1;
+    for (; i >= 0; i--) {
+      if (infile[i] == '.') {
+        break;
+      }
     }
-    if (i == 0){ 
-      i = len-1; 
+    if (i == 0) {
+      i = len - 1;
     }
     strcpy(outfile, infile);
     strcpy(&outfile[i], ".stl");
-    
-    if (strcmp(infile, outfile) != 0){
+
+    if (strcmp(infile, outfile) != 0) {
       TMR_ConvertBinToSTL(infile, outfile);
     }
-  
-    delete [] infile;
-    delete [] outfile;
+
+    delete[] infile;
+    delete[] outfile;
   }
 
   TMRFinalize();

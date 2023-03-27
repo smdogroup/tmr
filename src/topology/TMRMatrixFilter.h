@@ -68,30 +68,27 @@
 
 class TMRMatrixFilter : public TMRConformFilter {
  public:
-  TMRMatrixFilter( double _r, int _N, int _nlevels,
-                   TACSAssembler *_tacs[],
-                   TMROctForest *_filter[] );
-  TMRMatrixFilter( double _r, int _N, int _nlevels,
-                   TACSAssembler *_tacs[],
-                   TMRQuadForest *_filter[] );
+  TMRMatrixFilter(double _r, int _N, int _nlevels, TACSAssembler *_tacs[],
+                  TMROctForest *_filter[]);
+  TMRMatrixFilter(double _r, int _N, int _nlevels, TACSAssembler *_tacs[],
+                  TMRQuadForest *_filter[]);
   ~TMRMatrixFilter();
 
   // Set the design variable values (including all local values)
-  void setDesignVars( TACSBVec *x );
+  void setDesignVars(TACSBVec *x);
 
   // Set values/add values to the vector
-  void addValues( TACSBVec *vec );
+  void addValues(TACSBVec *vec);
 
  private:
-  void initialize_matrix( double _r, int _N,
-                          TMROctForest *oct_filter,
-                          TMRQuadForest *quad_filter );
+  void initialize_matrix(double _r, int _N, TMROctForest *oct_filter,
+                         TMRQuadForest *quad_filter);
 
   // Apply the filter to get the density values
-  void applyFilter( TACSBVec *in, TACSBVec *out );
+  void applyFilter(TACSBVec *in, TACSBVec *out);
 
   // Apply the transpose of the filter for sensitivities
-  void applyTranspose( TACSBVec *in, TACSBVec *out );
+  void applyTranspose(TACSBVec *in, TACSBVec *out);
 
   // The non-negative matrix M
   TACSMat *M;
@@ -115,7 +112,7 @@ class TMRMatrixFilter : public TMRConformFilter {
   TACSBVec *temp;
 
   // Compute the Kronecker product
-  void kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y=NULL );
+  void kronecker(TACSBVec *c, TACSBVec *x, TACSBVec *y = NULL);
 };
 
-#endif // TMR_MATRIX_FILTER_H
+#endif  // TMR_MATRIX_FILTER_H

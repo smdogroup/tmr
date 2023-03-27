@@ -23,35 +23,35 @@
 
 #include "ParOptProblem.h"
 #include "TACSAssembler.h"
+#include "TACSBuckling.h"
+#include "TACSKSFailure.h"
 #include "TACSMg.h"
-#include "TMRTopoFilter.h"
+#include "TACSStructuralMass.h"
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
-#include "TACSStructuralMass.h"
-#include "TACSKSFailure.h"
-#include "TACSBuckling.h"
+#include "TMRTopoFilter.h"
 
 /*
   Wrap a TACSBVec object with the ParOptVec interface
 */
 class ParOptBVecWrap : public ParOptVec {
  public:
-  ParOptBVecWrap( TACSBVec *_vec );
+  ParOptBVecWrap(TACSBVec *_vec);
   ~ParOptBVecWrap();
 
   // Perform standard operations required for linear algebra
   // -------------------------------------------------------
-  void set( ParOptScalar alpha );
+  void set(ParOptScalar alpha);
   void zeroEntries();
-  void copyValues( ParOptVec *pvec );
+  void copyValues(ParOptVec *pvec);
   double norm();
   double maxabs();
   double l1norm();
-  ParOptScalar dot( ParOptVec *pvec );
-  void mdot( ParOptVec **vecs, int nvecs, ParOptScalar *output );
-  void scale( ParOptScalar alpha );
-  void axpy( ParOptScalar alpha, ParOptVec *pvec );
-  int getArray( ParOptScalar **array );
+  ParOptScalar dot(ParOptVec *pvec);
+  void mdot(ParOptVec **vecs, int nvecs, ParOptScalar *output);
+  void scale(ParOptScalar alpha);
+  void axpy(ParOptScalar alpha, ParOptVec *pvec);
+  int getArray(ParOptScalar **array);
 
   // The underlying TACSBVec object
   TACSBVec *vec;
@@ -64,70 +64,64 @@ class TMRTopoProblem : public ParOptProblem {
  public:
   // Create the topology optimization object
   // ---------------------------------------
-  TMRTopoProblem( TMRTopoFilter *_filter, TACSMg *_mg,
-                  int gmres_iters=50, double rtol=1e-9 );
+  TMRTopoProblem(TMRTopoFilter *_filter, TACSMg *_mg, int gmres_iters = 50,
+                 double rtol = 1e-9);
   ~TMRTopoProblem();
 
   // Set the load cases - note that this destroys internal information
   // stored in the load case data associated with the constraints.
   // -----------------------------------------------------------------
-  void setLoadCases( TACSBVec **_forces, int _num_load_cases );
+  void setLoadCases(TACSBVec **_forces, int _num_load_cases);
   int getNumLoadCases();
 
   // Set the output frequency, element type and flags for f5 files
   // -------------------------------------------------------------
-  void setF5OutputFlags( int freq, ElementType elem_type, int flag );
-  void setF5EigenOutputFlags( int freq, ElementType elem_type, int flag );
+  void setF5OutputFlags(int freq, ElementType elem_type, int flag);
+  void setF5EigenOutputFlags(int freq, ElementType elem_type, int flag);
 
   // Add constraints associated with one of the load cases
   // -----------------------------------------------------
-  void addConstraints( int _load_case, TACSFunction **_funcs,
-                       const TacsScalar *_func_offset,
-                       const TacsScalar *_func_scale,
-                       int num_funcs );
-  void addLinearConstraints( ParOptVec **vecs,
-                             TacsScalar *offset,
-                             int _ncon );
-  void addFrequencyConstraint( double sigma, int num_eigvals,
-                               TacsScalar ks_weight,
-                               TacsScalar offset, TacsScalar scale,
-                               int max_subspace_size, double eigtol,
-                               int use_jd=0, int fgmres_size=5,
-                               double eig_rtol=1e-12,
-                               double eig_atol=1e-30,
-                               int num_recycle=0,
-                               JDRecycleType recycle_type=JD_NUM_RECYCLE );
-  void addBucklingConstraint( double sigma, int num_eigvals,
-                              TacsScalar ks_weight,
-                              TacsScalar offset, TacsScalar scale,
-                              int max_lanczos, double eigtol );
-  void addConstraintCallback( int ncon,
-                              void *con_ptr,
-                              void (*confunc)(void*, TMRTopoFilter*, TACSMg*,
-                                              int, TacsScalar*),
-                              void *con_grad_ptr,
-                              void (*congradfunc)(void*, TMRTopoFilter*, TACSMg*,
-                                                  int, TACSBVec**) );
+  void addConstraints(int _load_case, TACSFunction **_funcs,
+                      const TacsScalar *_func_offset,
+                      const TacsScalar *_func_scale, int num_funcs);
+  void addLinearConstraints(ParOptVec **vecs, TacsScalar *offset, int _ncon);
+  void addFrequencyConstraint(double sigma, int num_eigvals,
+                              TacsScalar ks_weight, TacsScalar offset,
+                              TacsScalar scale, int max_subspace_size,
+                              double eigtol, int use_jd = 0,
+                              int fgmres_size = 5, double eig_rtol = 1e-12,
+                              double eig_atol = 1e-30, int num_recycle = 0,
+                              JDRecycleType recycle_type = JD_NUM_RECYCLE);
+  void addBucklingConstraint(double sigma, int num_eigvals,
+                             TacsScalar ks_weight, TacsScalar offset,
+                             TacsScalar scale, int max_lanczos, double eigtol);
+  void addConstraintCallback(int ncon, void *con_ptr,
+                             void (*confunc)(void *, TMRTopoFilter *, TACSMg *,
+                                             int, TacsScalar *),
+                             void *con_grad_ptr,
+                             void (*congradfunc)(void *, TMRTopoFilter *,
+                                                 TACSMg *, int, TACSBVec **));
 
-  // Accessor functions to the underlying Assembler, Oct or QuadForest, TopoFilter, and Mg objects
+  // Accessor functions to the underlying Assembler, Oct or QuadForest,
+  // TopoFilter, and Mg objects
   // --------------------------------------------------------------------
-  TACSAssembler* getAssembler();
-  TMRQuadForest* getFilterQuadForest();
-  TMROctForest* getFilterOctForest();
-  TMRTopoFilter* getTopoFilter();
-  TACSMg* getMg();
+  TACSAssembler *getAssembler();
+  TMRQuadForest *getFilterQuadForest();
+  TMROctForest *getFilterOctForest();
+  TMRTopoFilter *getTopoFilter();
+  TACSMg *getMg();
 
   // Set the objective - in this case either compliance or a function
   // for one of the load cases
   // ----------------------------------------------------------------
-  void setObjective( const TacsScalar *_obj_weights, TACSFunction **funcs );
-  void setObjective( const TacsScalar *_obj_weights );
-  void addObjectiveCallback( void *obj_ptr,
-                             void (*objfunc)(void*, TMRTopoFilter*, TACSMg*,
-                                             TacsScalar*),
-                             void *obj_grad_ptr,
-                             void (*objgradfunc)(void*, TMRTopoFilter*, TACSMg*,
-                                                 TACSBVec*) );
+  void setObjective(const TacsScalar *_obj_weights, TACSFunction **funcs);
+  void setObjective(const TacsScalar *_obj_weights);
+  void addObjectiveCallback(void *obj_ptr,
+                            void (*objfunc)(void *, TMRTopoFilter *, TACSMg *,
+                                            TacsScalar *),
+                            void *obj_grad_ptr,
+                            void (*objgradfunc)(void *, TMRTopoFilter *,
+                                                TACSMg *, TACSBVec *));
 
   // Finish the initialization tasks - assign the number of
   // constraints and variables in the problem. Allocate arrays etc.
@@ -136,16 +130,16 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Set the output prefix for files
   // -------------------------------
-  void setPrefix( const char *prefix );
+  void setPrefix(const char *prefix);
 
   // Set the initial design variable values
   // --------------------------------------
-  void setInitDesignVars( ParOptVec *vars, ParOptVec *lb = NULL,
-                          ParOptVec *ub = NULL );
+  void setInitDesignVars(ParOptVec *vars, ParOptVec *lb = NULL,
+                         ParOptVec *ub = NULL);
 
   // Set the output iteration counter
   // --------------------------------
-  void setIterationCounter( int iter );
+  void setIterationCounter(int iter);
 
   // Create a design variable vector
   // -------------------------------
@@ -159,84 +153,74 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Get the initial variables and bounds
   // ------------------------------------
-  void getVarsAndBounds( ParOptVec *x,
-                         ParOptVec *lb, ParOptVec *ub );
+  void getVarsAndBounds(ParOptVec *x, ParOptVec *lb, ParOptVec *ub);
 
   // Evaluate the objective and constraints
   // --------------------------------------
-  int evalObjCon( ParOptVec *x,
-                  ParOptScalar *fobj, ParOptScalar *cons );
+  int evalObjCon(ParOptVec *x, ParOptScalar *fobj, ParOptScalar *cons);
 
   // Evaluate the objective and constraint gradients
   // -----------------------------------------------
-  int evalObjConGradient( ParOptVec *x,
-                          ParOptVec *g, ParOptVec **Ac );
+  int evalObjConGradient(ParOptVec *x, ParOptVec *g, ParOptVec **Ac);
 
   // Evaluate the product of the Hessian with the given vector px
   // ------------------------------------------------------------
-  int evalHvecProduct( ParOptVec *xvec,
-                       ParOptScalar *z,
-                       ParOptVec *zw,
-                       ParOptVec *pxvec,
-                       ParOptVec *hvec );
+  int evalHvecProduct(ParOptVec *xvec, ParOptScalar *z, ParOptVec *zw,
+                      ParOptVec *pxvec, ParOptVec *hvec);
 
   // Evaluate the sparse constraints
   // -------------------------------
-  void evalSparseCon( ParOptVec *x, ParOptVec *out );
+  void evalSparseCon(ParOptVec *x, ParOptVec *out);
 
   // Compute the Jacobian-vector product out = J(x)*px
   // --------------------------------------------------
-  void addSparseJacobian( double alpha, ParOptVec *x,
-                          ParOptVec *px, ParOptVec *out );
+  void addSparseJacobian(double alpha, ParOptVec *x, ParOptVec *px,
+                         ParOptVec *out);
 
   // Compute the transpose Jacobian-vector product out = J(x)^{T}*pzw
   // -----------------------------------------------------------------
-  void addSparseJacobianTranspose( double alpha, ParOptVec *x,
-                                   ParOptVec *pzw,
-                                   ParOptVec *out );
+  void addSparseJacobianTranspose(double alpha, ParOptVec *x, ParOptVec *pzw,
+                                  ParOptVec *out);
 
   // Add the inner product of the constraints to the matrix such
   // that A += J(x)*cvec*J(x)^{T} where cvec is a diagonal matrix
   // ------------------------------------------------------------
-  void addSparseInnerProduct( double alpha, ParOptVec *x,
-                              ParOptVec *cvec, double *A );
+  void addSparseInnerProduct(double alpha, ParOptVec *x, ParOptVec *cvec,
+                             double *A);
 
   // Write the output file
   // ---------------------
-  void writeOutput( int iter, ParOptVec *x );
+  void writeOutput(int iter, ParOptVec *x);
 
-  void setOutputCallback( void *data,
-                          void (*func)( void*, const char*, int,
-                                        TMROctForest*, TMRQuadForest*,
-                                        TACSBVec* ) ){
+  void setOutputCallback(void *data,
+                         void (*func)(void *, const char *, int, TMROctForest *,
+                                      TMRQuadForest *, TACSBVec *)) {
     output_callback_ptr = data;
     writeOutputCallback = func;
   }
 
  private:
   void *output_callback_ptr;
-  void (*writeOutputCallback)( void*, const char*, int,
-                               TMROctForest*, TMRQuadForest*,
-                               TACSBVec* );
+  void (*writeOutputCallback)(void *, const char *, int, TMROctForest *,
+                              TMRQuadForest *, TACSBVec *);
 
   int num_callback_constraints;
 
   void *constraint_callback_ptr;
-  void (*constraintCallback)( void*, TMRTopoFilter*, TACSMg*,
-                              int, TacsScalar* );
+  void (*constraintCallback)(void *, TMRTopoFilter *, TACSMg *, int,
+                             TacsScalar *);
   void *constraint_gradient_callback_ptr;
-  void (*constraintGradientCallback)( void*, TMRTopoFilter*, TACSMg*,
-                                      int, TACSBVec** );
+  void (*constraintGradientCallback)(void *, TMRTopoFilter *, TACSMg *, int,
+                                     TACSBVec **);
 
   void *objective_callback_ptr;
-  void (*objectiveCallback)( void*, TMRTopoFilter*, TACSMg*,
-                             TacsScalar* );
+  void (*objectiveCallback)(void *, TMRTopoFilter *, TACSMg *, TacsScalar *);
   void *objective_gradient_callback_ptr;
-  void (*objectiveGradientCallback)( void*, TMRTopoFilter*, TACSMg*,
-                                     TACSBVec* );
+  void (*objectiveGradientCallback)(void *, TMRTopoFilter *, TACSMg *,
+                                    TACSBVec *);
 
   // Set the design variables across all multigrid levels
-  void setDesignVars( ParOptVec *xvec );
+  void setDesignVars(ParOptVec *xvec);
 
   // Store the prefix
   char *prefix;
@@ -295,7 +279,7 @@ class TMRTopoProblem : public ParOptProblem {
     // TMRStressConstraint *stress_func;
     TacsScalar stress_func_offset;
     TacsScalar stress_func_scale;
-  } *load_case_info;
+  } * load_case_info;
 
   // Store the design variable info
   TACSAssembler *assembler;
@@ -315,4 +299,4 @@ class TMRTopoProblem : public ParOptProblem {
   int f5_write_flag, f5_eigen_write_flag;
 };
 
-#endif // TMR_TOPO_PROBLEM_H
+#endif  // TMR_TOPO_PROBLEM_H

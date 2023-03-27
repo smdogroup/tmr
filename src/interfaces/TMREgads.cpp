@@ -18,45 +18,41 @@
   limitations under the License.
 */
 
-#include <map>
 #include "TMREgads.h"
+
+#include <map>
 
 #ifdef TMR_HAS_EGADS
 
 using namespace TMR_EgadsInterface;
 
-TMR_EgadsContext::TMR_EgadsContext(){
+TMR_EgadsContext::TMR_EgadsContext() {
   EG_open(&ctx);
   ismine = 1;
 }
 
-TMR_EgadsContext::TMR_EgadsContext( ego _ctx ){
+TMR_EgadsContext::TMR_EgadsContext(ego _ctx) {
   ctx = _ctx;
   ismine = 0;
 }
 
-TMR_EgadsContext::~TMR_EgadsContext(){
-  if (ismine){
+TMR_EgadsContext::~TMR_EgadsContext() {
+  if (ismine) {
     EG_close(ctx);
   }
 }
 
-ego TMR_EgadsContext::getContext(){
-  return ctx;
-}
+ego TMR_EgadsContext::getContext() { return ctx; }
 
-TMR_EgadsNode::TMR_EgadsNode( TMR_EgadsContext *_ctx,
-                              ego _node ){
+TMR_EgadsNode::TMR_EgadsNode(TMR_EgadsContext *_ctx, ego _node) {
   ctx = _ctx;
   ctx->incref();
   node = _node;
 }
 
-TMR_EgadsNode::~TMR_EgadsNode(){
-  ctx->decref();
-}
+TMR_EgadsNode::~TMR_EgadsNode() { ctx->decref(); }
 
-int TMR_EgadsNode::evalPoint( TMRPoint *X ){
+int TMR_EgadsNode::evalPoint(TMRPoint *X) {
   double eval[3];
   double params[2] = {0.0, 0.0};
   int icode = EG_evaluate(node, params, eval);
@@ -69,15 +65,14 @@ int TMR_EgadsNode::evalPoint( TMRPoint *X ){
 }
 
 // Not great, but the best we can do for now...
-int TMR_EgadsNode::getParamOnEdge( TMREdge *edge, double *t ){
+int TMR_EgadsNode::getParamOnEdge(TMREdge *edge, double *t) {
   return TMRVertex::getParamOnEdge(edge, t);
 }
 
-int TMR_EgadsNode::getParamsOnFace( TMRFace *surface,
-                                    double *u, double *v ){
+int TMR_EgadsNode::getParamsOnFace(TMRFace *surface, double *u, double *v) {
   int icode = 0;
-  TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace*>(surface);
-  if (f){
+  TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace *>(surface);
+  if (f) {
     // Get the face topology
     ego face;
     f->getFaceObject(&face);
@@ -91,37 +86,33 @@ int TMR_EgadsNode::getParamsOnFace( TMRFace *surface,
     *v = params[1];
   }
 
-  if (icode != EGADS_SUCCESS){
+  if (icode != EGADS_SUCCESS) {
     return TMRVertex::getParamsOnFace(surface, u, v);
   }
   return 0;
 }
 
-int TMR_EgadsNode::isSame( TMRVertex *vt ){
-  TMR_EgadsNode *v = dynamic_cast<TMR_EgadsNode*>(vt);
-  if (v){
+int TMR_EgadsNode::isSame(TMRVertex *vt) {
+  TMR_EgadsNode *v = dynamic_cast<TMR_EgadsNode *>(vt);
+  if (v) {
     return (EG_isSame(node, v->node) == EGADS_SUCCESS);
   }
   return 0;
 }
 
-void TMR_EgadsNode::getNodeObject( ego *n ){
-  *n = node;
-}
+void TMR_EgadsNode::getNodeObject(ego *n) { *n = node; }
 
-TMR_EgadsEdge::TMR_EgadsEdge( TMR_EgadsContext *_ctx, ego _edge,
-                              int _is_degenerate ){
+TMR_EgadsEdge::TMR_EgadsEdge(TMR_EgadsContext *_ctx, ego _edge,
+                             int _is_degenerate) {
   ctx = _ctx;
   ctx->incref();
   edge = _edge;
   is_degenerate = _is_degenerate;
 }
 
-TMR_EgadsEdge::~TMR_EgadsEdge(){
-  ctx->decref();
-}
+TMR_EgadsEdge::~TMR_EgadsEdge() { ctx->decref(); }
 
-void TMR_EgadsEdge::getRange( double *tmin, double *tmax ){
+void TMR_EgadsEdge::getRange(double *tmin, double *tmax) {
   double range[4];
 
   int periodic;
@@ -131,20 +122,19 @@ void TMR_EgadsEdge::getRange( double *tmin, double *tmax ){
   *tmax = range[1];
 }
 
-int TMR_EgadsEdge::getParamsOnFace( TMRFace *surface, double t,
-                                    int dir, double *u, double *v ){
+int TMR_EgadsEdge::getParamsOnFace(TMRFace *surface, double t, int dir,
+                                   double *u, double *v) {
   int icode = 0;
-  TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace*>(surface);
-  if (f){
+  TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace *>(surface);
+  if (f) {
     // Get the face topology
     ego face;
     f->getFaceObject(&face);
 
     int sense = -1;
-    if (dir > 0){
+    if (dir > 0) {
       sense = 1;
-    }
-    else if (dir == 0){
+    } else if (dir == 0) {
       sense = 0;
     }
 
@@ -156,13 +146,13 @@ int TMR_EgadsEdge::getParamsOnFace( TMRFace *surface, double t,
   }
 
   // Fall through to the underlying implementation
-  if (icode != EGADS_SUCCESS){
+  if (icode != EGADS_SUCCESS) {
     return TMREdge::getParamsOnFace(surface, t, dir, u, v);
   }
   return 0;
 }
 
-int TMR_EgadsEdge::evalPoint( double t, TMRPoint *X ){
+int TMR_EgadsEdge::evalPoint(double t, TMRPoint *X) {
   double eval[18];
 
   // Evaluate the position of the object
@@ -177,7 +167,7 @@ int TMR_EgadsEdge::evalPoint( double t, TMRPoint *X ){
   return icode;
 }
 
-int TMR_EgadsEdge::invEvalPoint( TMRPoint X, double *t ){
+int TMR_EgadsEdge::invEvalPoint(TMRPoint X, double *t) {
   // Set the position
   double pos[3];
   pos[0] = X.x;
@@ -195,9 +185,7 @@ int TMR_EgadsEdge::invEvalPoint( TMRPoint X, double *t ){
   return icode;
 }
 
-int TMR_EgadsEdge::evalDeriv( double t,
-                              TMRPoint *X,
-                              TMRPoint *Xt ){
+int TMR_EgadsEdge::evalDeriv(double t, TMRPoint *X, TMRPoint *Xt) {
   double eval[18];
 
   // Evaluate the position of the object
@@ -217,10 +205,8 @@ int TMR_EgadsEdge::evalDeriv( double t,
   return icode;
 }
 
-int TMR_EgadsEdge::eval2ndDeriv( double t,
-                                 TMRPoint *X,
-                                 TMRPoint *Xt,
-                                 TMRPoint *Xtt ){
+int TMR_EgadsEdge::eval2ndDeriv(double t, TMRPoint *X, TMRPoint *Xt,
+                                TMRPoint *Xtt) {
   double eval[18];
 
   // Evaluate the position of the object
@@ -244,39 +230,32 @@ int TMR_EgadsEdge::eval2ndDeriv( double t,
   return icode;
 }
 
-int TMR_EgadsEdge::isSame( TMREdge *et ){
-  TMR_EgadsEdge *e = dynamic_cast<TMR_EgadsEdge*>(et);
-  if (e){
+int TMR_EgadsEdge::isSame(TMREdge *et) {
+  TMR_EgadsEdge *e = dynamic_cast<TMR_EgadsEdge *>(et);
+  if (e) {
     return (EG_isSame(edge, e->edge) == EGADS_SUCCESS);
   }
   return 0;
 }
 
-void TMR_EgadsEdge::getEdgeObject( ego *e ){
-  *e = edge;
-}
+void TMR_EgadsEdge::getEdgeObject(ego *e) { *e = edge; }
 
-int TMR_EgadsEdge::isDegenerate(){
-  return is_degenerate;
-}
+int TMR_EgadsEdge::isDegenerate() { return is_degenerate; }
 
 /*
   TMR interface to the underlying egads face object
 */
-TMR_EgadsFace::TMR_EgadsFace( TMR_EgadsContext *_ctx, int _normal_dir,
-                              ego _face ):
-  TMRFace(_normal_dir){
+TMR_EgadsFace::TMR_EgadsFace(TMR_EgadsContext *_ctx, int _normal_dir, ego _face)
+    : TMRFace(_normal_dir) {
   ctx = _ctx;
   ctx->incref();
   face = _face;
 }
 
-TMR_EgadsFace::~TMR_EgadsFace(){
-  ctx->decref();
-}
+TMR_EgadsFace::~TMR_EgadsFace() { ctx->decref(); }
 
-void TMR_EgadsFace::getRange( double *umin, double *vmin,
-                              double *umax, double *vmax ){
+void TMR_EgadsFace::getRange(double *umin, double *vmin, double *umax,
+                             double *vmax) {
   double range[4];
 
   int periodic;
@@ -289,7 +268,7 @@ void TMR_EgadsFace::getRange( double *umin, double *vmin,
   *vmax = range[3];
 }
 
-int TMR_EgadsFace::evalPoint( double u, double v, TMRPoint *X ){
+int TMR_EgadsFace::evalPoint(double u, double v, TMRPoint *X) {
   double eval[18];
 
   // Evaluate the position of the object
@@ -304,7 +283,7 @@ int TMR_EgadsFace::evalPoint( double u, double v, TMRPoint *X ){
   return icode;
 }
 
-int TMR_EgadsFace::invEvalPoint( TMRPoint X, double *u, double *v ){
+int TMR_EgadsFace::invEvalPoint(TMRPoint X, double *u, double *v) {
   // Set the position
   double pos[3];
   pos[0] = X.x;
@@ -323,10 +302,8 @@ int TMR_EgadsFace::invEvalPoint( TMRPoint X, double *u, double *v ){
   return icode;
 }
 
-int TMR_EgadsFace::evalDeriv( double u, double v,
-                              TMRPoint *X,
-                              TMRPoint *Xu,
-                              TMRPoint *Xv ){
+int TMR_EgadsFace::evalDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu,
+                             TMRPoint *Xv) {
   double eval[18];
 
   // Evaluate the position of the object
@@ -350,13 +327,9 @@ int TMR_EgadsFace::evalDeriv( double u, double v,
   return icode;
 }
 
-int TMR_EgadsFace::eval2ndDeriv( double u, double v,
-                                 TMRPoint *X,
-                                 TMRPoint *Xu,
-                                 TMRPoint *Xv,
-                                 TMRPoint *Xuu,
-                                 TMRPoint *Xuv,
-                                 TMRPoint *Xvv ){
+int TMR_EgadsFace::eval2ndDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu,
+                                TMRPoint *Xv, TMRPoint *Xuu, TMRPoint *Xuv,
+                                TMRPoint *Xvv) {
   double eval[18];
 
   // Evaluate the position of the object
@@ -392,23 +365,21 @@ int TMR_EgadsFace::eval2ndDeriv( double u, double v,
   return icode;
 }
 
-int TMR_EgadsFace::isSame( TMRFace *ft ){
-  TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace*>(ft);
-  if (f){
+int TMR_EgadsFace::isSame(TMRFace *ft) {
+  TMR_EgadsFace *f = dynamic_cast<TMR_EgadsFace *>(ft);
+  if (f) {
     return (EG_isSame(face, f->face) == EGADS_SUCCESS);
   }
   return 0;
 }
 
-void TMR_EgadsFace::getFaceObject( ego *f ){
-  *f = face;
-}
+void TMR_EgadsFace::getFaceObject(ego *f) { *f = face; }
 
 /*
   Create the TMRModel by loading in an EGADS model file
 */
-TMRModel* TMR_EgadsInterface::TMR_LoadModelFromEGADSFile( const char *filename,
-                                                          int print_level ){
+TMRModel *TMR_EgadsInterface::TMR_LoadModelFromEGADSFile(const char *filename,
+                                                         int print_level) {
   // Create the common context for all egads objects
   TMR_EgadsContext *ctx = new TMR_EgadsContext();
 
@@ -416,7 +387,7 @@ TMRModel* TMR_EgadsInterface::TMR_LoadModelFromEGADSFile( const char *filename,
   int flags = 0;
   ego model;
   int icode = EG_loadModel(ctx->getContext(), flags, filename, &model);
-  if (icode != 0){
+  if (icode != 0) {
     fprintf(stderr, "TMR: Error reading egads file with error code %d\n",
             icode);
     return NULL;
@@ -428,8 +399,8 @@ TMRModel* TMR_EgadsInterface::TMR_LoadModelFromEGADSFile( const char *filename,
 /*
   Create a TMR model from an EGADS model object
 */
-TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
-                                                     int print_level ){
+TMRModel *TMR_EgadsInterface::TMR_ConvertEGADSModel(ego model,
+                                                    int print_level) {
   ego context;
   EG_getContext(model, &context);
 
@@ -462,38 +433,36 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
   int *bsense;
 
   // Get all the bodies in the object
-  int icode = EG_getTopology(model, &ref, &oclass, &mtype, data,
-                             &nbodies, &bodies, &bsense);
+  int icode = EG_getTopology(model, &ref, &oclass, &mtype, data, &nbodies,
+                             &bodies, &bsense);
 
-  if (icode){
+  if (icode) {
     fprintf(stderr, "TMR: EG_getTopology returned error code %d\n", icode);
     return NULL;
   }
-  if (oclass != MODEL){
+  if (oclass != MODEL) {
     fprintf(stderr, "TMR: Must provide model to TMR_ConvertEGADSModel\n");
     return NULL;
   }
 
   // Iterate over the bodies
-  for ( int i = 0; i < nbodies; i++ ){
+  for (int i = 0; i < nbodies; i++) {
     int nchildren;
     ego *body_children;
     int *body_sense;
-    icode = EG_getTopology(bodies[i], &ref, &oclass, &mtype, data,
-                           &nchildren, &body_children, &body_sense);
+    icode = EG_getTopology(bodies[i], &ref, &oclass, &mtype, data, &nchildren,
+                           &body_children, &body_sense);
 
     // Check that we have a body object
-    if (oclass != BODY){
+    if (oclass != BODY) {
       // This should not occur
       fprintf(stderr, "TMR: EGADS model does not define a body\n");
       return NULL;
-    }
-    else if (mtype == WIREBODY){
+    } else if (mtype == WIREBODY) {
       // Cannot convert wirebodies to anything useful
       fprintf(stderr, "TMR: Cannot convert wirebody to TMR object\n");
       return NULL;
-    }
-    else if (mtype == SOLIDBODY || mtype == SHEETBODY){
+    } else if (mtype == SOLIDBODY || mtype == SHEETBODY) {
       solids[nsolids] = bodies[i];
       nsolids++;
     }
@@ -501,13 +470,13 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
 
   // Iterate over the solid bodies or sheetbodies and extract the
   // faces, edges and nodes (vertices)
-  for ( int index = 0; index < nbodies; index++ ){
+  for (int index = 0; index < nbodies; index++) {
     int ntopos;
     ego *topos;
 
     // Add the faces, edges and nodes
     EG_getBodyTopos(solids[index], NULL, FACE, &ntopos, &topos);
-    for ( int i = 0; i < ntopos; i++ ){
+    for (int i = 0; i < ntopos; i++) {
       faces[nfaces] = topos[i];
       face_map[topos[i]] = nfaces;
       nfaces++;
@@ -515,7 +484,7 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     EG_free(topos);
 
     EG_getBodyTopos(solids[index], NULL, EDGE, &ntopos, &topos);
-    for ( int i = 0; i < ntopos; i++ ){
+    for (int i = 0; i < ntopos; i++) {
       edges[nedges] = topos[i];
       edge_map[topos[i]] = nedges;
       nedges++;
@@ -523,7 +492,7 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     EG_free(topos);
 
     EG_getBodyTopos(solids[index], NULL, NODE, &ntopos, &topos);
-    for ( int i = 0; i < ntopos; i++ ){
+    for (int i = 0; i < ntopos; i++) {
       verts[nverts] = topos[i];
       vert_map[topos[i]] = nverts;
       nverts++;
@@ -531,16 +500,18 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     EG_free(topos);
   }
 
-  if (print_level > 0){
-    printf("EGADS model loaded with:\nnverts = %d nedges = %d nfaces = %d "
-           "nsolids = %d\n", nverts, nedges, nfaces, nsolids);
+  if (print_level > 0) {
+    printf(
+        "EGADS model loaded with:\nnverts = %d nedges = %d nfaces = %d "
+        "nsolids = %d\n",
+        nverts, nedges, nfaces, nsolids);
   }
 
   // Re-iterate through the list and create the objects needed to
   // define the geometry in TMR
-  TMRVertex **all_vertices = new TMRVertex*[ nverts ];
-  memset(all_vertices, 0, nverts*sizeof(TMRVertex*));
-  for ( int index = 0; index < nverts; index++ ){
+  TMRVertex **all_vertices = new TMRVertex *[nverts];
+  memset(all_vertices, 0, nverts * sizeof(TMRVertex *));
+  for (int index = 0; index < nverts; index++) {
     all_vertices[index] = new TMR_EgadsNode(ctx, verts[index]);
 
     // Set the "name" attribute
@@ -548,49 +519,46 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     const int *ints = NULL;
     const double *reals = NULL;
     const char *str = NULL;
-    if ((EG_attributeRet(verts[index], "name", &atype, &len,
-                         &ints, &reals, &str) == EGADS_SUCCESS) &&
-        str != NULL){
+    if ((EG_attributeRet(verts[index], "name", &atype, &len, &ints, &reals,
+                         &str) == EGADS_SUCCESS) &&
+        str != NULL) {
       all_vertices[index]->setName(str);
     }
   }
 
-  TMREdge **all_edges = new TMREdge*[ nedges ];
-  memset(all_edges, 0, nedges*sizeof(TMREdge*));
-  for ( int index = 0; index < nedges; index++ ){
-    ego ref; // reference geometry
-    int oclass, mtype; // object class and type
+  TMREdge **all_edges = new TMREdge *[nedges];
+  memset(all_edges, 0, nedges * sizeof(TMREdge *));
+  for (int index = 0; index < nedges; index++) {
+    ego ref;            // reference geometry
+    int oclass, mtype;  // object class and type
     int nchildren;
     ego *children;
     int *sense;
-    EG_getTopology(edges[index], &ref, &oclass, &mtype, data,
-                   &nchildren, &children, &sense);
+    EG_getTopology(edges[index], &ref, &oclass, &mtype, data, &nchildren,
+                   &children, &sense);
 
     int isdegenerate = 0;
     int idx1 = vert_map[children[0]];
     int idx2 = -1;
-    if (mtype == ONENODE){
+    if (mtype == ONENODE) {
       idx2 = idx1;
-    }
-    else if (mtype == DEGENERATE){
+    } else if (mtype == DEGENERATE) {
       idx2 = idx1;
       isdegenerate = 1;
-    }
-    else if (nchildren == 2){
+    } else if (nchildren == 2) {
       idx2 = vert_map[children[1]];
     }
 
     // Set a flag to indicate that the edge is degenerate
     all_edges[index] = new TMR_EgadsEdge(ctx, edges[index], isdegenerate);
 
-    if ((idx1 >= 0 && idx1 < nverts) &&
-        (idx2 >= 0 && idx2 < nverts)){
-      all_edges[index]->setVertices(all_vertices[idx1],
-                                    all_vertices[idx2]);
-    }
-    else {
-      fprintf(stderr, "TMR Error: Unable to set vertices for edge %d "
-              "from EGADS file\n", index);
+    if ((idx1 >= 0 && idx1 < nverts) && (idx2 >= 0 && idx2 < nverts)) {
+      all_edges[index]->setVertices(all_vertices[idx1], all_vertices[idx2]);
+    } else {
+      fprintf(stderr,
+              "TMR Error: Unable to set vertices for edge %d "
+              "from EGADS file\n",
+              index);
     }
 
     // Set the "name" attribute
@@ -598,28 +566,28 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     const int *ints = NULL;
     const double *reals = NULL;
     const char *str = NULL;
-    if ((EG_attributeRet(edges[index], "name", &atype, &len,
-                         &ints, &reals, &str) == EGADS_SUCCESS) &&
-        str != NULL){
+    if ((EG_attributeRet(edges[index], "name", &atype, &len, &ints, &reals,
+                         &str) == EGADS_SUCCESS) &&
+        str != NULL) {
       all_edges[index]->setName(str);
     }
   }
 
-  TMRFace **all_faces = new TMRFace*[ nfaces ];
-  memset(all_faces, 0, nfaces*sizeof(TMRFace*));
-  for ( int index = 0; index < nfaces; index++ ){
-    ego ref; // reference geometry
-    int oclass, mtype; // object class and type
+  TMRFace **all_faces = new TMRFace *[nfaces];
+  memset(all_faces, 0, nfaces * sizeof(TMRFace *));
+  for (int index = 0; index < nfaces; index++) {
+    ego ref;            // reference geometry
+    int oclass, mtype;  // object class and type
     int num_loops;
     ego *face_loops;
     int *loop_sense;
-    EG_getTopology(faces[index], &ref, &oclass, &mtype, data,
-                   &num_loops, &face_loops, &loop_sense);
+    EG_getTopology(faces[index], &ref, &oclass, &mtype, data, &num_loops,
+                   &face_loops, &loop_sense);
 
     // Check if the orientation of the face is flipped relative to the
     // natural orientation of the surface
     int orientation = 1;
-    if (mtype == SREVERSE){
+    if (mtype == SREVERSE) {
       orientation = -1;
     }
 
@@ -630,27 +598,27 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     const int *ints = NULL;
     const double *reals = NULL;
     const char *str = NULL;
-    if ((EG_attributeRet(faces[index], "name", &atype, &len,
-                         &ints, &reals, &str) == EGADS_SUCCESS) &&
-        str != NULL){
+    if ((EG_attributeRet(faces[index], "name", &atype, &len, &ints, &reals,
+                         &str) == EGADS_SUCCESS) &&
+        str != NULL) {
       all_faces[index]->setName(str);
     }
 
     // Create the corresponding loops
-    for ( int i = 0; i < num_loops; i++ ){
-      ego loop_ref; // reference geometry
-      int loop_oclass, loop_mtype; // object class and type
+    for (int i = 0; i < num_loops; i++) {
+      ego loop_ref;                 // reference geometry
+      int loop_oclass, loop_mtype;  // object class and type
       int num_edges;
       ego *loop_edges;
       int *edge_sense;
-      EG_getTopology(face_loops[i], &loop_ref, &loop_oclass, &loop_mtype,
-                     data, &num_edges, &loop_edges, &edge_sense);
+      EG_getTopology(face_loops[i], &loop_ref, &loop_oclass, &loop_mtype, data,
+                     &num_edges, &loop_edges, &edge_sense);
 
       // Create the edge list to go into the EdgeLoop object
-      TMREdge **edgs = new TMREdge*[ num_edges ];
-      int *dir = new int[ num_edges ];
+      TMREdge **edgs = new TMREdge *[num_edges];
+      int *dir = new int[num_edges];
 
-      for ( int k = 0; k < num_edges; k++ ){
+      for (int k = 0; k < num_edges; k++) {
         dir[k] = edge_sense[k];
         int edge_index = edge_map[loop_edges[k]];
         edgs[k] = all_edges[edge_index];
@@ -661,36 +629,36 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
                                     new TMREdgeLoop(num_edges, edgs, dir));
 
       // Free the allocated data
-      delete [] edgs;
-      delete [] dir;
+      delete[] edgs;
+      delete[] dir;
     }
   }
 
   // Create the volumes
-  TMRVolume **all_vols = new TMRVolume*[ nsolids ];
-  memset(all_vols, 0, nsolids*sizeof(TMRVolume*));
-  for ( int index = 0; index < nsolids; index++ ){
-    ego ref; // reference geometry
-    int oclass, mtype; // object class and type
+  TMRVolume **all_vols = new TMRVolume *[nsolids];
+  memset(all_vols, 0, nsolids * sizeof(TMRVolume *));
+  for (int index = 0; index < nsolids; index++) {
+    ego ref;            // reference geometry
+    int oclass, mtype;  // object class and type
     int nchild;
     ego *children;
     int *children_sense;
-    EG_getTopology(solids[index], &ref, &oclass, &mtype, data,
-                   &nchild, &children, &children_sense);
+    EG_getTopology(solids[index], &ref, &oclass, &mtype, data, &nchild,
+                   &children, &children_sense);
 
-    if (mtype == SHEETBODY){
+    if (mtype == SHEETBODY) {
       // Retrieve the children of the shell
       int nshell_faces;
       ego *shell_faces;
       int *face_sense;
-      EG_getTopology(children[0], &ref, &oclass, &mtype, data,
-                     &nshell_faces, &shell_faces, &face_sense);
+      EG_getTopology(children[0], &ref, &oclass, &mtype, data, &nshell_faces,
+                     &shell_faces, &face_sense);
 
       // Allocate the faces arrays/directions
-      TMRFace **vol_faces = new TMRFace*[ nshell_faces ];
+      TMRFace **vol_faces = new TMRFace *[nshell_faces];
 
       // Now, extract the faces from the underlying shell(s)
-      for ( int i = 0; i < nshell_faces; i++ ){
+      for (int i = 0; i < nshell_faces; i++) {
         int face_index = face_map[shell_faces[i]];
 
         // Assign the face pointer
@@ -699,34 +667,33 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
 
       // Create the volume object
       all_vols[index] = new TMRVolume(nshell_faces, vol_faces);
-      delete [] vol_faces;
-    }
-    else if (mtype == SOLIDBODY){
+      delete[] vol_faces;
+    } else if (mtype == SOLIDBODY) {
       // Loop over the closed shells
       int ntotal = 0;
-      for ( int k = 0; k < nchild; k++ ){
+      for (int k = 0; k < nchild; k++) {
         // Retrieve the children of the shell
         int nshell_faces;
         ego *shell_faces;
         int *face_sense;
-        EG_getTopology(children[k], &ref, &oclass, &mtype, data,
-                       &nshell_faces, &shell_faces, &face_sense);
+        EG_getTopology(children[k], &ref, &oclass, &mtype, data, &nshell_faces,
+                       &shell_faces, &face_sense);
         ntotal += nshell_faces;
       }
 
       // Allocate the faces arrays/directions
-      TMRFace **vol_faces = new TMRFace*[ ntotal ];
+      TMRFace **vol_faces = new TMRFace *[ntotal];
 
-      for ( int k = 0, vol_index = 0; k < nchild; k++ ){
+      for (int k = 0, vol_index = 0; k < nchild; k++) {
         // Retrieve the children of the shell
         int nshell_faces;
         ego *shell_faces;
         int *face_sense;
-        EG_getTopology(children[k], &ref, &oclass, &mtype, data,
-                       &nshell_faces, &shell_faces, &face_sense);
+        EG_getTopology(children[k], &ref, &oclass, &mtype, data, &nshell_faces,
+                       &shell_faces, &face_sense);
 
         // Now, extract the faces from the underlying shell(s)
-        for ( int i = 0; i < nshell_faces; i++, vol_index++ ){
+        for (int i = 0; i < nshell_faces; i++, vol_index++) {
           int face_index = face_map[shell_faces[i]];
 
           // Assign the face pointer
@@ -736,7 +703,7 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
 
       // Create the volume object
       all_vols[index] = new TMRVolume(ntotal, vol_faces);
-      delete [] vol_faces;
+      delete[] vol_faces;
     }
 
     // Set the "name" attribute
@@ -744,25 +711,23 @@ TMRModel* TMR_EgadsInterface::TMR_ConvertEGADSModel( ego model,
     const int *ints = NULL;
     const double *reals = NULL;
     const char *str = NULL;
-    if ((EG_attributeRet(solids[index], "name", &atype, &len,
-                         &ints, &reals, &str) == EGADS_SUCCESS) &&
-        str != NULL){
+    if ((EG_attributeRet(solids[index], "name", &atype, &len, &ints, &reals,
+                         &str) == EGADS_SUCCESS) &&
+        str != NULL) {
       all_vols[index]->setName(str);
     }
   }
 
-  TMRModel *geo = new TMRModel(nverts, all_vertices,
-                               nedges, all_edges,
-                               nfaces, all_faces,
-                               nsolids, all_vols);
+  TMRModel *geo = new TMRModel(nverts, all_vertices, nedges, all_edges, nfaces,
+                               all_faces, nsolids, all_vols);
 
   // Free the arrays
-  delete [] all_vertices;
-  delete [] all_edges;
-  delete [] all_faces;
-  delete [] all_vols;
+  delete[] all_vertices;
+  delete[] all_edges;
+  delete[] all_faces;
+  delete[] all_vols;
 
   return geo;
 }
 
-#endif // TMR_HAS_EGADS
+#endif  // TMR_HAS_EGADS

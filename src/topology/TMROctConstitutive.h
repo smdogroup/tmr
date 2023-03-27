@@ -26,12 +26,11 @@
   optimization using TACS.
 */
 
-#include "TMROctForest.h"
 #include "TACSMaterialProperties.h"
 #include "TACSSolidConstitutive.h"
+#include "TMROctForest.h"
 
-enum TMRTopoPenaltyType { TMR_RAMP_PENALTY,
-                          TMR_SIMP_PENALTY };
+enum TMRTopoPenaltyType { TMR_RAMP_PENALTY, TMR_SIMP_PENALTY };
 
 /*
   The TMRStiffnessProperties class
@@ -39,35 +38,31 @@ enum TMRTopoPenaltyType { TMR_RAMP_PENALTY,
 class TMRStiffnessProperties : public TMREntity {
  public:
   // Set the stiffness properties
-  TMRStiffnessProperties( int _nmats, TACSMaterialProperties **_props,
-                          double _stiffness_penalty_value,
-                          double _stress_relax_value,
-                          double _stiffness_offset,
-                          TMRTopoPenaltyType _penalty_type=TMR_RAMP_PENALTY,
-                          double _mass_penalty_value=0.0,
-                          double _conduction_penalty_value=0.0,
-                          double _temperature_penalty_value=0.0,
-                          double _ks_penalty=30.0,
-                          double _beta=10.0, double _xoffset=0.5,
-                          int _use_project=0 );
+  TMRStiffnessProperties(int _nmats, TACSMaterialProperties **_props,
+                         double _stiffness_penalty_value,
+                         double _stress_relax_value, double _stiffness_offset,
+                         TMRTopoPenaltyType _penalty_type = TMR_RAMP_PENALTY,
+                         double _mass_penalty_value = 0.0,
+                         double _conduction_penalty_value = 0.0,
+                         double _temperature_penalty_value = 0.0,
+                         double _ks_penalty = 30.0, double _beta = 10.0,
+                         double _xoffset = 0.5, int _use_project = 0);
 
-  int nmats; // Number of materials to use
-  TACSMaterialProperties **props; // The TACS material properties object
-  TMRTopoPenaltyType penalty_type; // Type of penalization to apply
-  double stiffness_penalty_value; // Penalization factor for the stiffness
-  double stiffness_offset; // Small stiffness factor >= 0 ~ 1e-6
-  double mass_penalty_value; // Mass penalty value
-  double conduction_penalty_value; // Conduction penalty value
-  double temperature_penalty_value; // Penalty value for the temperature
-  double stress_relax_value; // Stress relaxation parameter
-  double ks_penalty; // KS parameter for the aggregation of failure values
-  double beta; // Parameter for the logistics function
-  double xoffset;  // Offset parameter in the logistics function
-  int use_project; // Flag to indicate if projection should be used (0, 1)
+  int nmats;                         // Number of materials to use
+  TACSMaterialProperties **props;    // The TACS material properties object
+  TMRTopoPenaltyType penalty_type;   // Type of penalization to apply
+  double stiffness_penalty_value;    // Penalization factor for the stiffness
+  double stiffness_offset;           // Small stiffness factor >= 0 ~ 1e-6
+  double mass_penalty_value;         // Mass penalty value
+  double conduction_penalty_value;   // Conduction penalty value
+  double temperature_penalty_value;  // Penalty value for the temperature
+  double stress_relax_value;         // Stress relaxation parameter
+  double ks_penalty;  // KS parameter for the aggregation of failure values
+  double beta;        // Parameter for the logistics function
+  double xoffset;     // Offset parameter in the logistics function
+  int use_project;    // Flag to indicate if projection should be used (0, 1)
 
-  TACSMaterialProperties **getMaterialProperties(){
-    return props;
-  }
+  TACSMaterialProperties **getMaterialProperties() { return props; }
 };
 
 /*
@@ -79,123 +74,118 @@ class TMRStiffnessProperties : public TMREntity {
 */
 class TMROctConstitutive : public TACSSolidConstitutive {
  public:
-  TMROctConstitutive( TMRStiffnessProperties *_props,
-                      TMROctForest *_forest );
+  TMROctConstitutive(TMRStiffnessProperties *_props, TMROctForest *_forest);
   ~TMROctConstitutive();
 
   // Return the stiffness properties
-  TMRStiffnessProperties* getStiffnessProperties(){ return props; }
+  TMRStiffnessProperties *getStiffnessProperties() { return props; }
 
   // Get the number of design variables at each "design node"
-  int getDesignVarsPerNode(){ return nvars; }
+  int getDesignVarsPerNode() { return nvars; }
 
   // Retrieve the global design variable numbers
-  int getDesignVarNums( int elemIndex, int dvLen, int dvNums[] );
+  int getDesignVarNums(int elemIndex, int dvLen, int dvNums[]);
 
   // Set the element design variable from the design vector
-  int setDesignVars( int elemIndex, int dvLen, const TacsScalar dvs[] );
+  int setDesignVars(int elemIndex, int dvLen, const TacsScalar dvs[]);
 
   // Get the element design variables values
-  int getDesignVars( int elemIndex, int dvLen, TacsScalar dvs[] );
+  int getDesignVars(int elemIndex, int dvLen, TacsScalar dvs[]);
 
   // Get the lower and upper bounds for the design variable values
-  int getDesignVarRange( int elemIndex, int dvLen,
-                         TacsScalar lb[], TacsScalar ub[] );
+  int getDesignVarRange(int elemIndex, int dvLen, TacsScalar lb[],
+                        TacsScalar ub[]);
 
   // Evaluate the material density
-  TacsScalar evalDensity( int elemIndex, const double pt[],
-                          const TacsScalar X[] );
+  TacsScalar evalDensity(int elemIndex, const double pt[],
+                         const TacsScalar X[]);
 
   // Add the derivative of the density
-  void addDensityDVSens( int elemIndex, TacsScalar scale,
-                         const double pt[], const TacsScalar X[],
-                         int dvLen, TacsScalar dfdx[] );
+  void addDensityDVSens(int elemIndex, TacsScalar scale, const double pt[],
+                        const TacsScalar X[], int dvLen, TacsScalar dfdx[]);
 
   // Evaluate the material density
-  TacsScalar evalMassMatrixDensity( int elemIndex, const double pt[],
-                                    const TacsScalar X[] );
+  TacsScalar evalMassMatrixDensity(int elemIndex, const double pt[],
+                                   const TacsScalar X[]);
 
   // Add the derivative of the density
-  void addMassMatrixDensityDVSens( int elemIndex, TacsScalar scale,
-                                   const double pt[], const TacsScalar X[],
-                                   int dvLen, TacsScalar dfdx[] );
+  void addMassMatrixDensityDVSens(int elemIndex, TacsScalar scale,
+                                  const double pt[], const TacsScalar X[],
+                                  int dvLen, TacsScalar dfdx[]);
 
   // Evaluate the specific heat
-  TacsScalar evalSpecificHeat( int elemIndex, const double pt[],
-                               const TacsScalar X[] );
+  TacsScalar evalSpecificHeat(int elemIndex, const double pt[],
+                              const TacsScalar X[]);
 
   // Add the derivative of the density
-  void addSpecificHeatDVSens( int elemIndex, TacsScalar scale,
-                              const double pt[], const TacsScalar X[],
-                              int dvLen, TacsScalar dfdx[] );
+  void addSpecificHeatDVSens(int elemIndex, TacsScalar scale, const double pt[],
+                             const TacsScalar X[], int dvLen,
+                             TacsScalar dfdx[]);
 
   // Evaluate the stresss
-  void evalStress( int elemIndex, const double pt[], const TacsScalar X[],
-                   const TacsScalar strain[], TacsScalar stress[] );
+  void evalStress(int elemIndex, const double pt[], const TacsScalar X[],
+                  const TacsScalar strain[], TacsScalar stress[]);
 
   // Evaluate the tangent stiffness
-  void evalTangentStiffness( int elemIndex, const double pt[],
-                             const TacsScalar X[], TacsScalar C[] );
+  void evalTangentStiffness(int elemIndex, const double pt[],
+                            const TacsScalar X[], TacsScalar C[]);
 
   // Add the contribution
-  void addStressDVSens( int elemIndex, TacsScalar scale,
-                        const double pt[], const TacsScalar X[],
-                        const TacsScalar strain[], const TacsScalar psi[],
-                        int dvLen, TacsScalar dfdx[] );
+  void addStressDVSens(int elemIndex, TacsScalar scale, const double pt[],
+                       const TacsScalar X[], const TacsScalar strain[],
+                       const TacsScalar psi[], int dvLen, TacsScalar dfdx[]);
 
   // Evaluate the geometric stiffness constitutive matrix
-  void evalGeometricTangentStiffness( int elemIndex, const double pt[],
-                                      const TacsScalar X[], TacsScalar C[] );
+  void evalGeometricTangentStiffness(int elemIndex, const double pt[],
+                                     const TacsScalar X[], TacsScalar C[]);
 
   // Add the derivative of the geometric constitutive matrix
-  void addGeometricTangentStressDVSens( int elemIndex, TacsScalar scale,
-                                        const double pt[], const TacsScalar X[],
-                                        const TacsScalar e[], const TacsScalar psi[],
-                                        int dvLen, TacsScalar dfdx[] );
+  void addGeometricTangentStressDVSens(int elemIndex, TacsScalar scale,
+                                       const double pt[], const TacsScalar X[],
+                                       const TacsScalar e[],
+                                       const TacsScalar psi[], int dvLen,
+                                       TacsScalar dfdx[]);
 
   // Evaluate the thermal strain
-  void evalThermalStrain( int elemIndex, const double pt[],
-                          const TacsScalar X[], TacsScalar theta,
-                          TacsScalar strain[] );
+  void evalThermalStrain(int elemIndex, const double pt[], const TacsScalar X[],
+                         TacsScalar theta, TacsScalar strain[]);
 
   // Evaluate the thermal strain sensitivity
-  void addThermalStrainDVSens( int elemIndex, const double pt[],
-                               const TacsScalar X[], TacsScalar theta,
-                               const TacsScalar psi[],
-                               int dvLen, TacsScalar dfdx[] );
+  void addThermalStrainDVSens(int elemIndex, const double pt[],
+                              const TacsScalar X[], TacsScalar theta,
+                              const TacsScalar psi[], int dvLen,
+                              TacsScalar dfdx[]);
 
   // Evaluate the heat flux, given the thermal gradient
-  void evalHeatFlux( int elemIndex, const double pt[],
-                     const TacsScalar X[], const TacsScalar grad[],
-                     TacsScalar flux[] );
+  void evalHeatFlux(int elemIndex, const double pt[], const TacsScalar X[],
+                    const TacsScalar grad[], TacsScalar flux[]);
 
   // Evaluate the tangent of the heat flux
-  void evalTangentHeatFlux( int elemIndex, const double pt[],
-                            const TacsScalar X[], TacsScalar C[] );
+  void evalTangentHeatFlux(int elemIndex, const double pt[],
+                           const TacsScalar X[], TacsScalar C[]);
 
   // Add the derivative of the heat flux
-  void addHeatFluxDVSens( int elemIndex, TacsScalar scale,
-                          const double pt[], const TacsScalar X[],
-                          const TacsScalar grad[], const TacsScalar psi[],
-                          int dvLen, TacsScalar dfdx[] );
+  void addHeatFluxDVSens(int elemIndex, TacsScalar scale, const double pt[],
+                         const TacsScalar X[], const TacsScalar grad[],
+                         const TacsScalar psi[], int dvLen, TacsScalar dfdx[]);
 
   // Evaluate the material failure index
-  TacsScalar evalFailure( int elemIndex, const double pt[],
-                          const TacsScalar X[], const TacsScalar e[] );
+  TacsScalar evalFailure(int elemIndex, const double pt[], const TacsScalar X[],
+                         const TacsScalar e[]);
 
   // Add the derivative of the function w.r.t. design variables
-  void addFailureDVSens( int elemIndex, TacsScalar scale, const double pt[],
-                         const TacsScalar X[], const TacsScalar e[],
-                         int dvLen, TacsScalar dfdx[] );
+  void addFailureDVSens(int elemIndex, TacsScalar scale, const double pt[],
+                        const TacsScalar X[], const TacsScalar e[], int dvLen,
+                        TacsScalar dfdx[]);
 
   // Evaluate the derivative of the failure criteria w.r.t. strain
-  TacsScalar evalFailureStrainSens( int elemIndex, const double pt[],
-                                    const TacsScalar X[], const TacsScalar e[],
-                                    TacsScalar sens[] );
+  TacsScalar evalFailureStrainSens(int elemIndex, const double pt[],
+                                   const TacsScalar X[], const TacsScalar e[],
+                                   TacsScalar sens[]);
 
   // Evaluate the design field value
-  TacsScalar evalDesignFieldValue( int elemIndex, const double pt[],
-                                   const TacsScalar X[], int index );
+  TacsScalar evalDesignFieldValue(int elemIndex, const double pt[],
+                                  const TacsScalar X[], int index);
 
   // Extra info about the constitutive class
   const char *getObjectName();
@@ -207,9 +197,9 @@ class TMROctConstitutive : public TACSSolidConstitutive {
 
   // Information about the design variable values
   int nmats, nvars;
-  TacsScalar *x; // All the design variable values
-  double *N; // Space for the shape functions
-  TacsScalar *temp_array; // Temporary array
+  TacsScalar *x;           // All the design variable values
+  double *N;               // Space for the shape functions
+  TacsScalar *temp_array;  // Temporary array
 };
 
-#endif // TMR_OCTANT_STIFFNESS_H
+#endif  // TMR_OCTANT_STIFFNESS_H

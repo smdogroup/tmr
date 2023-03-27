@@ -19,20 +19,19 @@
 */
 
 #include "TMRNativeTopology.h"
-#include <stdio.h>
+
 #include <math.h>
+#include <stdio.h>
 
 /*
   Create a vertex from a point
 */
-TMRVertexFromPoint::TMRVertexFromPoint( TMRPoint p ){
-  pt = p;
-}
+TMRVertexFromPoint::TMRVertexFromPoint(TMRPoint p) { pt = p; }
 
 /*
   Read out the point
 */
-int TMRVertexFromPoint::evalPoint( TMRPoint *p ){
+int TMRVertexFromPoint::evalPoint(TMRPoint *p) {
   *p = pt;
   return 0;
 }
@@ -40,8 +39,7 @@ int TMRVertexFromPoint::evalPoint( TMRPoint *p ){
 /*
   Create a vertex from curve
 */
-TMRVertexFromEdge::TMRVertexFromEdge( TMREdge *_edge,
-                                      double _t ){
+TMRVertexFromEdge::TMRVertexFromEdge(TMREdge *_edge, double _t) {
   t = _t;
   edge = _edge;
   edge->incref();
@@ -51,8 +49,7 @@ TMRVertexFromEdge::TMRVertexFromEdge( TMREdge *_edge,
 /*
   Evaluate the vertex based on a node location
 */
-TMRVertexFromEdge::TMRVertexFromEdge( TMREdge *_edge,
-                                      TMRPoint p ){
+TMRVertexFromEdge::TMRVertexFromEdge(TMREdge *_edge, TMRPoint p) {
   edge = _edge;
   edge->incref();
   setName(edge->getName());
@@ -65,31 +62,24 @@ TMRVertexFromEdge::TMRVertexFromEdge( TMREdge *_edge,
 /*
   Free the object
 */
-TMRVertexFromEdge::~TMRVertexFromEdge(){
-  edge->decref();
-}
+TMRVertexFromEdge::~TMRVertexFromEdge() { edge->decref(); }
 
 /*
   Evaluate the point
 */
-int TMRVertexFromEdge::evalPoint( TMRPoint *p ){
-  return edge->evalPoint(t, p);
-}
+int TMRVertexFromEdge::evalPoint(TMRPoint *p) { return edge->evalPoint(t, p); }
 
 /*
   Retrieve the underlying curve object
 */
-TMREdge* TMRVertexFromEdge::getEdge(){
-  return edge;
-}
+TMREdge *TMRVertexFromEdge::getEdge() { return edge; }
 
 /*
   Get the underlying parametric point
 */
-int TMRVertexFromEdge::getParamOnEdge( TMREdge *_edge,
-                                       double *_t ){
+int TMRVertexFromEdge::getParamOnEdge(TMREdge *_edge, double *_t) {
   int fail = 0;
-  if (edge == _edge){
+  if (edge == _edge) {
     *_t = t;
     return fail;
   }
@@ -99,16 +89,14 @@ int TMRVertexFromEdge::getParamOnEdge( TMREdge *_edge,
 /*
   Get the underlying parametric point (if any)
 */
-int TMRVertexFromEdge::getParamsOnFace( TMRFace *face,
-                                        double *u, double *v ){
+int TMRVertexFromEdge::getParamsOnFace(TMRFace *face, double *u, double *v) {
   return edge->getParamsOnFace(face, t, 0, u, v);
 }
 
 /*
   Determine the vertex location based on a surface location
 */
-TMRVertexFromFace::TMRVertexFromFace( TMRFace *_face,
-                                      double _u, double _v ){
+TMRVertexFromFace::TMRVertexFromFace(TMRFace *_face, double _u, double _v) {
   face = _face;
   face->incref();
   setName(face->getName());
@@ -120,8 +108,7 @@ TMRVertexFromFace::TMRVertexFromFace( TMRFace *_face,
   First determine the parametric vertex locations by projecting
   the point onto the surface.
 */
-TMRVertexFromFace::TMRVertexFromFace( TMRFace *_face,
-                                      TMRPoint p ){
+TMRVertexFromFace::TMRVertexFromFace(TMRFace *_face, TMRPoint p) {
   face = _face;
   face->incref();
   setName(face->getName());
@@ -131,23 +118,20 @@ TMRVertexFromFace::TMRVertexFromFace( TMRFace *_face,
 /*
   Free the data
 */
-TMRVertexFromFace::~TMRVertexFromFace(){
-  face->decref();
-}
+TMRVertexFromFace::~TMRVertexFromFace() { face->decref(); }
 
 /*
   Evaluate the point on the surface
 */
-int TMRVertexFromFace::evalPoint( TMRPoint *p ){
+int TMRVertexFromFace::evalPoint(TMRPoint *p) {
   return face->evalPoint(u, v, p);
 }
 
 /*
   Get the underlying parametric point (if any)
 */
-int TMRVertexFromFace::getParamsOnFace( TMRFace *_face,
-                                        double *_u, double *_v ){
-  if (face == _face){
+int TMRVertexFromFace::getParamsOnFace(TMRFace *_face, double *_u, double *_v) {
+  if (face == _face) {
     *_u = u;
     *_v = v;
     return 1;
@@ -158,12 +142,11 @@ int TMRVertexFromFace::getParamsOnFace( TMRFace *_face,
 /*
   Create the curve parametrized on the surface
 */
-TMREdgeFromFace::TMREdgeFromFace( TMRFace *_face,
-                                  TMRPcurve *_pcurve,
-                                  int _is_degen ){
+TMREdgeFromFace::TMREdgeFromFace(TMRFace *_face, TMRPcurve *_pcurve,
+                                 int _is_degen) {
   nfaces = 1;
-  faces = new TMRFace*[ nfaces ];
-  pcurves = new TMRPcurve*[ nfaces ];
+  faces = new TMRFace *[nfaces];
+  pcurves = new TMRPcurve *[nfaces];
   faces[0] = _face;
   faces[0]->incref();
   pcurves[0] = _pcurve;
@@ -175,26 +158,26 @@ TMREdgeFromFace::TMREdgeFromFace( TMRFace *_face,
 /*
   Destroy the curve
 */
-TMREdgeFromFace::~TMREdgeFromFace(){
-  for ( int i = 0; i < nfaces; i++ ){
+TMREdgeFromFace::~TMREdgeFromFace() {
+  for (int i = 0; i < nfaces; i++) {
     faces[i]->decref();
     pcurves[i]->decref();
   }
-  delete [] faces;
-  delete [] pcurves;
+  delete[] faces;
+  delete[] pcurves;
 }
 
 /*
   Get the parameter range for this curve
 */
-void TMREdgeFromFace::getRange( double *tmin, double *tmax ){
+void TMREdgeFromFace::getRange(double *tmin, double *tmax) {
   pcurves[0]->getRange(tmin, tmax);
 }
 
 /*
   Given the parametric point, evaluate the x,y,z location
 */
-int TMREdgeFromFace::evalPoint( double t, TMRPoint *X ){
+int TMREdgeFromFace::evalPoint(double t, TMRPoint *X) {
   double u, v;
   int fail = pcurves[0]->evalPoint(t, &u, &v);
   fail = fail || faces[0]->evalPoint(u, v, X);
@@ -204,11 +187,10 @@ int TMREdgeFromFace::evalPoint( double t, TMRPoint *X ){
 /*
   Parametrize the curve on the given surface
 */
-int TMREdgeFromFace::getParamsOnFace( TMRFace *surf,
-                                      double t, int dir,
-                                      double *u, double *v ){
-  for ( int i = 0; i < nfaces; i++ ){
-    if (surf == faces[i]){
+int TMREdgeFromFace::getParamsOnFace(TMRFace *surf, double t, int dir,
+                                     double *u, double *v) {
+  for (int i = 0; i < nfaces; i++) {
+    if (surf == faces[i]) {
       return pcurves[i]->evalPoint(t, u, v);
     }
   }
@@ -222,7 +204,7 @@ int TMREdgeFromFace::getParamsOnFace( TMRFace *surf,
 /*
   Given the point, find the parametric location
 */
-int TMREdgeFromFace::invEvalPoint( TMRPoint X, double *t ){
+int TMREdgeFromFace::invEvalPoint(TMRPoint X, double *t) {
   *t = 0.0;
   int fail = 1;
   return fail;
@@ -231,36 +213,35 @@ int TMREdgeFromFace::invEvalPoint( TMRPoint X, double *t ){
 /*
   Given the parametric point, evaluate the derivative
 */
-int TMREdgeFromFace::evalDeriv( double t, TMRPoint *X, TMRPoint *Xt ){
+int TMREdgeFromFace::evalDeriv(double t, TMRPoint *X, TMRPoint *Xt) {
   int fail = 0;
   double u, v, ut, vt;
   pcurves[0]->evalDeriv(t, &u, &v, &ut, &vt);
   TMRPoint Xu, Xv;
   faces[0]->evalDeriv(u, v, X, &Xu, &Xv);
-  Xt->x = ut*Xu.x + vt*Xv.x;
-  Xt->y = ut*Xu.y + vt*Xv.y;
-  Xt->z = ut*Xu.z + vt*Xv.z;
+  Xt->x = ut * Xu.x + vt * Xv.x;
+  Xt->y = ut * Xu.y + vt * Xv.y;
+  Xt->z = ut * Xu.z + vt * Xv.z;
   return fail;
 }
 
 /*
   Add an additional parametrization of the edge along the face
 */
-void TMREdgeFromFace::addEdgeFromFace( TMRFace *_face,
-                                       TMRPcurve *_pcurve ){
+void TMREdgeFromFace::addEdgeFromFace(TMRFace *_face, TMRPcurve *_pcurve) {
   nfaces++;
-  TMRFace **_faces = new TMRFace*[ nfaces ];
-  TMRPcurve **_pcurves = new TMRPcurve*[ nfaces ];
-  for ( int i = 0; i < nfaces-1; i++ ){
+  TMRFace **_faces = new TMRFace *[nfaces];
+  TMRPcurve **_pcurves = new TMRPcurve *[nfaces];
+  for (int i = 0; i < nfaces - 1; i++) {
     _faces[i] = faces[i];
     _pcurves[i] = pcurves[i];
   }
   _face->incref();
   _pcurve->incref();
-  _faces[nfaces-1] = _face;
-  _pcurves[nfaces-1] = _pcurve;
-  delete [] faces;
-  delete [] pcurves;
+  _faces[nfaces - 1] = _face;
+  _pcurves[nfaces - 1] = _pcurve;
+  delete[] faces;
+  delete[] pcurves;
   faces = _faces;
   pcurves = _pcurves;
 }
@@ -268,8 +249,7 @@ void TMREdgeFromFace::addEdgeFromFace( TMRFace *_face,
 /*
   Split/segment the curve
 */
-TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
-                            double _t1, double _t2 ){
+TMRSplitEdge::TMRSplitEdge(TMREdge *_edge, double _t1, double _t2) {
   edge = _edge;
   edge->incref();
   setName(edge->getName());
@@ -281,17 +261,22 @@ TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
   // Check the range
   double tmin, tmax;
   edge->getRange(&tmin, &tmax);
-  if (t1 < tmin){ t1 = tmin; }
-  else if (t1 > tmax){ t1 = tmax; }
-  if (t2 > tmax){ t2 = tmax; }
-  else if (t2 < tmin){ t2 = tmin; }
+  if (t1 < tmin) {
+    t1 = tmin;
+  } else if (t1 > tmax) {
+    t1 = tmax;
+  }
+  if (t2 > tmax) {
+    t2 = tmax;
+  } else if (t2 < tmin) {
+    t2 = tmin;
+  }
 }
 
 /*
   Split the curve to the nearest points
 */
-TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
-                            TMRPoint *p1, TMRPoint *p2 ){
+TMRSplitEdge::TMRSplitEdge(TMREdge *_edge, TMRPoint *p1, TMRPoint *p2) {
   edge = _edge;
   edge->incref();
   setName(edge->getName());
@@ -303,10 +288,16 @@ TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
   // Check the range
   double tmin, tmax;
   edge->getRange(&tmin, &tmax);
-  if (t1 < tmin){ t1 = tmin; }
-  else if (t1 > tmax){ t1 = tmax; }
-  if (t2 > tmax){ t2 = tmax; }
-  else if (t2 < tmin){ t2 = tmin; }
+  if (t1 < tmin) {
+    t1 = tmin;
+  } else if (t1 > tmax) {
+    t1 = tmax;
+  }
+  if (t2 > tmax) {
+    t2 = tmax;
+  } else if (t2 < tmin) {
+    t2 = tmin;
+  }
 }
 
 /*
@@ -314,8 +305,7 @@ TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
   this curve using a parametric location. Otherwise do the same as
   before.
 */
-TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
-                            TMRVertex *v1, TMRVertex *v2 ){
+TMRSplitEdge::TMRSplitEdge(TMREdge *_edge, TMRVertex *v1, TMRVertex *v2) {
   edge = _edge;
   edge->incref();
   setName(edge->getName());
@@ -330,23 +320,27 @@ TMRSplitEdge::TMRSplitEdge( TMREdge *_edge,
   // Check the range
   double tmin, tmax;
   edge->getRange(&tmin, &tmax);
-  if (t1 < tmin){ t1 = tmin; }
-  else if (t1 > tmax){ t1 = tmax; }
-  if (t2 > tmax){ t2 = tmax; }
-  else if (t2 < tmin){ t2 = tmin; }
+  if (t1 < tmin) {
+    t1 = tmin;
+  } else if (t1 > tmax) {
+    t1 = tmax;
+  }
+  if (t2 > tmax) {
+    t2 = tmax;
+  } else if (t2 < tmin) {
+    t2 = tmin;
+  }
 }
 
 /*
   Decrease the reference count
 */
-TMRSplitEdge::TMRSplitEdge(){
-  edge->decref();
-}
+TMRSplitEdge::TMRSplitEdge() { edge->decref(); }
 
 /*
   Get the parameter range
 */
-void TMRSplitEdge::getRange( double *tmin, double *tmax ){
+void TMRSplitEdge::getRange(double *tmin, double *tmax) {
   *tmin = 0.0;
   *tmax = 1.0;
 }
@@ -354,33 +348,33 @@ void TMRSplitEdge::getRange( double *tmin, double *tmax ){
 /*
   Evaluate the point
 */
-int TMRSplitEdge::evalPoint( double t, TMRPoint *X ){
-  t = (1.0 - t)*t1 + t*t2;
+int TMRSplitEdge::evalPoint(double t, TMRPoint *X) {
+  t = (1.0 - t) * t1 + t * t2;
   return edge->evalPoint(t, X);
 }
 
 /*
   Get the parameter on the split curve
 */
-int TMRSplitEdge::getParamsOnFace( TMRFace *face, double t,
-                                   int dir, double *u, double *v ){
-  t = (1.0 - t)*t1 + t*t2;
+int TMRSplitEdge::getParamsOnFace(TMRFace *face, double t, int dir, double *u,
+                                  double *v) {
+  t = (1.0 - t) * t1 + t * t2;
   return edge->getParamsOnFace(face, t, dir, u, v);
 }
 
 /*
   Create a transfinite interpolation edge
 */
-TMRTFIEdge::TMRTFIEdge( TMRVertex *_v1, TMRVertex *_v2 ){
+TMRTFIEdge::TMRTFIEdge(TMRVertex *_v1, TMRVertex *_v2) {
   setVertices(_v1, _v2);
 }
 
-TMRTFIEdge::~TMRTFIEdge(){}
+TMRTFIEdge::~TMRTFIEdge() {}
 
 /*
   Set the parameter range
 */
-void TMRTFIEdge::getRange( double *tmin, double *tmax ){
+void TMRTFIEdge::getRange(double *tmin, double *tmax) {
   *tmin = 0.0;
   *tmax = 1.0;
 }
@@ -388,19 +382,20 @@ void TMRTFIEdge::getRange( double *tmin, double *tmax ){
 /*
   Evaluate the point based on the vertex locations
 */
-int TMRTFIEdge::evalPoint( double t, TMRPoint *X ){
+int TMRTFIEdge::evalPoint(double t, TMRPoint *X) {
   TMRVertex *_v1, *_v2;
   getVertices(&_v1, &_v2);
 
   // Evaluate the points
-  TMRPoint p1, p2;;
+  TMRPoint p1, p2;
+  ;
   int f1 = _v1->evalPoint(&p1);
   int f2 = _v2->evalPoint(&p2);
 
   // Interpolate between the start/end locations
-  X->x = (1.0 - t)*p1.x + t*p2.x;
-  X->y = (1.0 - t)*p1.y + t*p2.y;
-  X->z = (1.0 - t)*p1.z + t*p2.z;
+  X->x = (1.0 - t) * p1.x + t * p2.x;
+  X->y = (1.0 - t) * p1.y + t * p2.y;
+  X->z = (1.0 - t) * p1.z + t * p2.z;
 
   return f1 || f2;
 }
@@ -409,10 +404,9 @@ int TMRTFIEdge::evalPoint( double t, TMRPoint *X ){
   Create a transfinite-interpolation (TFI) face from the given set of
   edges and vertices
 */
-TMRTFIFace::TMRTFIFace( TMREdge *_edges[],
-                        const int _dir[],
-                        TMRVertex *verts[] ){
-  for ( int k = 0; k < 4; k++ ){
+TMRTFIFace::TMRTFIFace(TMREdge *_edges[], const int _dir[],
+                       TMRVertex *verts[]) {
+  for (int k = 0; k < 4; k++) {
     // Set the edge
     edges[k] = _edges[k];
     edges[k]->incref();
@@ -423,38 +417,34 @@ TMRTFIFace::TMRTFIFace( TMREdge *_edges[],
   }
 
   // Set the vertices for this surface
-  if (dir[0] > 0){
+  if (dir[0] > 0) {
     edges[0]->setVertices(verts[0], verts[1]);
     edges[0]->getRange(&tmin[0], &tmax[0]);
-  }
-  else {
+  } else {
     edges[0]->setVertices(verts[1], verts[0]);
     edges[0]->getRange(&tmax[0], &tmin[0]);
   }
 
-  if (dir[1] > 0){
+  if (dir[1] > 0) {
     edges[1]->setVertices(verts[1], verts[2]);
     edges[1]->getRange(&tmin[1], &tmax[1]);
-  }
-  else {
+  } else {
     edges[1]->setVertices(verts[2], verts[1]);
     edges[1]->getRange(&tmax[1], &tmin[1]);
   }
 
-  if (dir[2] > 0){
+  if (dir[2] > 0) {
     edges[2]->setVertices(verts[2], verts[3]);
     edges[2]->getRange(&tmin[2], &tmax[2]);
-  }
-  else {
+  } else {
     edges[2]->setVertices(verts[3], verts[2]);
     edges[2]->getRange(&tmax[2], &tmin[2]);
   }
 
-  if (dir[3] > 0){
+  if (dir[3] > 0) {
     edges[3]->setVertices(verts[3], verts[0]);
     edges[3]->getRange(&tmin[3], &tmax[3]);
-  }
-  else {
+  } else {
     edges[3]->setVertices(verts[0], verts[3]);
     edges[3]->getRange(&tmax[3], &tmin[3]);
   }
@@ -467,8 +457,8 @@ TMRTFIFace::TMRTFIFace( TMREdge *_edges[],
 /*
   Destroy the parametric TFI object
 */
-TMRTFIFace::~TMRTFIFace(){
-  for ( int k = 0; k < 4; k++ ){
+TMRTFIFace::~TMRTFIFace() {
+  for (int k = 0; k < 4; k++) {
     edges[k]->decref();
   }
 }
@@ -481,8 +471,8 @@ int TMRTFIFace::max_newton_iters = 25;
 /*
   The range must always be between [0,1] for all curves
 */
-void TMRTFIFace::getRange( double *umin, double *vmin,
-                           double *umax, double *vmax ){
+void TMRTFIFace::getRange(double *umin, double *vmin, double *umax,
+                          double *vmax) {
   *umin = 0.0;
   *vmin = 0.0;
   *umax = 1.0;
@@ -496,31 +486,30 @@ void TMRTFIFace::getRange( double *umin, double *vmin,
   parametric surface coordinates (us(u,v), vs(u,v)) in terms
   of the TFI parameter coordinates (u,v)
 */
-int TMRTFIFace::evalPoint( double u, double v,
-                           TMRPoint *X ){
+int TMRTFIFace::evalPoint(double u, double v, TMRPoint *X) {
   int fail = 0;
 
   // Evaluate the points on the edges
   TMRPoint e[4];
-  double params[4] = {u, v, 1.0-u, 1.0-v};
+  double params[4] = {u, v, 1.0 - u, 1.0 - v};
 
-  for ( int k = 0; k < 4; k++ ){
-    double p = (1.0 - params[k])*tmin[k] + params[k]*tmax[k];
+  for (int k = 0; k < 4; k++) {
+    double p = (1.0 - params[k]) * tmin[k] + params[k] * tmax[k];
     fail = fail || edges[k]->evalPoint(p, &e[k]);
   }
 
   // Evaluate the point on the surface
-  X->x = (1.0-u)*e[3].x + u*e[1].x + (1.0-v)*e[0].x + v*e[2].x
-    - ((1.0-u)*(1.0-v)*c[0].x + u*(1.0-v)*c[1].x +
-       u*v*c[2].x + v*(1.0-u)*c[3].x);
+  X->x = (1.0 - u) * e[3].x + u * e[1].x + (1.0 - v) * e[0].x + v * e[2].x -
+         ((1.0 - u) * (1.0 - v) * c[0].x + u * (1.0 - v) * c[1].x +
+          u * v * c[2].x + v * (1.0 - u) * c[3].x);
 
-  X->y = (1.0-u)*e[3].y + u*e[1].y + (1.0-v)*e[0].y + v*e[2].y
-    - ((1.0-u)*(1.0-v)*c[0].y + u*(1.0-v)*c[1].y +
-       u*v*c[2].y + v*(1.0-u)*c[3].y);
+  X->y = (1.0 - u) * e[3].y + u * e[1].y + (1.0 - v) * e[0].y + v * e[2].y -
+         ((1.0 - u) * (1.0 - v) * c[0].y + u * (1.0 - v) * c[1].y +
+          u * v * c[2].y + v * (1.0 - u) * c[3].y);
 
-  X->z = (1.0-u)*e[3].z + u*e[1].z + (1.0-v)*e[0].z + v*e[2].z
-    - ((1.0-u)*(1.0-v)*c[0].z + u*(1.0-v)*c[1].z +
-       u*v*c[2].z + v*(1.0-u)*c[3].z);
+  X->z = (1.0 - u) * e[3].z + u * e[1].z + (1.0 - v) * e[0].z + v * e[2].z -
+         ((1.0 - u) * (1.0 - v) * c[0].z + u * (1.0 - v) * c[1].z +
+          u * v * c[2].z + v * (1.0 - u) * c[3].z);
 
   return fail;
 }
@@ -528,8 +517,7 @@ int TMRTFIFace::evalPoint( double u, double v,
 /*
   Inverse evaluation: This is not yet implemented
 */
-int TMRTFIFace::invEvalPoint( TMRPoint point,
-                              double *uf, double *vf ){
+int TMRTFIFace::invEvalPoint(TMRPoint point, double *uf, double *vf) {
   int fail = 0;
   *uf = 0.0;
   *vf = 0.0;
@@ -542,12 +530,12 @@ int TMRTFIFace::invEvalPoint( TMRPoint point,
   double u = 0.5, v = 0.5;
 
   // Perform a newton iteration until convergence
-  for ( int k = 0; k < max_newton_iters; k++ ){
+  for (int k = 0; k < max_newton_iters; k++) {
     // Set the point and their derivatives
     TMRPoint X, Xu, Xv;
     fail = fail || evalDeriv(u, v, &X, &Xu, &Xv);
 
-   // Compute the difference between the position on the surface
+    // Compute the difference between the position on the surface
     // and the point
     TMRPoint r;
     r.x = (X.x - point.x);
@@ -566,34 +554,32 @@ int TMRTFIFace::invEvalPoint( TMRPoint point,
     double du = 0.0, dv = 0.0;
 
     // Check for the bounds on u
-    if (u <= umin && ru >= 0.0){
+    if (u <= umin && ru >= 0.0) {
       ru = 0.0;
       Juu = 1.0;
       Juv = 0.0;
-    }
-    else if (u >= umax && ru <= 0.0){
+    } else if (u >= umax && ru <= 0.0) {
       ru = 0.0;
       Juu = 1.0;
       Juv = 0.0;
     }
 
     // Check for the bounds on v
-    if (v <= vmin && rv >= 0.0){
+    if (v <= vmin && rv >= 0.0) {
       rv = 0.0;
       Jvv = 1.0;
       Juv = 0.0;
-    }
-    else if (v >= vmax && rv <= 0.0){
+    } else if (v >= vmax && rv <= 0.0) {
       rv = 0.0;
       Jvv = 1.0;
       Juv = 0.0;
     }
 
     // Solve the 2x2 system
-    double det = Juu*Jvv - Juv*Juv;
-    if (det != 0.0){
-      du = (Jvv*ru - Juv*rv)/det;
-      dv = (Juu*rv - Juv*ru)/det;
+    double det = Juu * Jvv - Juv * Juv;
+    if (det != 0.0) {
+      du = (Jvv * ru - Juv * rv) / det;
+      dv = (Juu * rv - Juv * ru) / det;
     }
 
     // Compute the updates
@@ -601,15 +587,19 @@ int TMRTFIFace::invEvalPoint( TMRPoint point,
     double vnew = v - dv;
 
     // Truncate the u/v values to the bounds
-    if (unew < umin){ unew = umin; }
-    else if (unew > umax){ unew = umax; }
-    if (vnew < vmin){ vnew = vmin; }
-    else if (vnew > vmax){ vnew = vmax; }
+    if (unew < umin) {
+      unew = umin;
+    } else if (unew > umax) {
+      unew = umax;
+    }
+    if (vnew < vmin) {
+      vnew = vmin;
+    } else if (vnew > vmax) {
+      vnew = vmax;
+    }
 
     // Check if the convergence test is satisfied
-    if (fabs(r.x) < eps_dist &&
-        fabs(r.y) < eps_dist &&
-        fabs(r.z) < eps_dist){
+    if (fabs(r.x) < eps_dist && fabs(r.y) < eps_dist && fabs(r.z) < eps_dist) {
       *uf = u;
       *vf = v;
       return 0;
@@ -619,8 +609,8 @@ int TMRTFIFace::invEvalPoint( TMRPoint point,
     double dotr = r.dot(r);
     double dotu = Xu.dot(Xu);
     double dotv = Xv.dot(Xv);
-    if (ru*ru < eps_cosine*eps_cosine*dotu*dotr &&
-        rv*rv < eps_cosine*eps_cosine*dotv*dotr){
+    if (ru * ru < eps_cosine * eps_cosine * dotu * dotr &&
+        rv * rv < eps_cosine * eps_cosine * dotv * dotr) {
       *uf = u;
       *vf = v;
       return 0;
@@ -637,59 +627,58 @@ int TMRTFIFace::invEvalPoint( TMRPoint point,
 /*
   Derivative evaluation: This is not yet implemented
 */
-int TMRTFIFace::evalDeriv( double u, double v,
-                           TMRPoint *X,
-                           TMRPoint *Xu, TMRPoint *Xv ){
+int TMRTFIFace::evalDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu,
+                          TMRPoint *Xv) {
   int fail = 0;
 
   // Evaluate the points on the edges
   TMRPoint e[4], ed[4];
-  double params[4] = {u, v, 1.0-u, 1.0-v};
+  double params[4] = {u, v, 1.0 - u, 1.0 - v};
   int d[4] = {1, 1, -1, -1};
 
   // Evaluate the curves along the v-direction
-  for ( int k = 0; k < 4; k++ ){
-    double p = (1.0 - params[k])*tmin[k] + params[k]*tmax[k];
+  for (int k = 0; k < 4; k++) {
+    double p = (1.0 - params[k]) * tmin[k] + params[k] * tmax[k];
     fail = fail || edges[k]->evalDeriv(p, &e[k], &ed[k]);
 
     // Evaluate the derivative w.r.t. u/v
-    ed[k].x *= d[k]*(tmax[k] - tmin[k]);
-    ed[k].y *= d[k]*(tmax[k] - tmin[k]);
-    ed[k].z *= d[k]*(tmax[k] - tmin[k]);
+    ed[k].x *= d[k] * (tmax[k] - tmin[k]);
+    ed[k].y *= d[k] * (tmax[k] - tmin[k]);
+    ed[k].z *= d[k] * (tmax[k] - tmin[k]);
   }
 
   // Evaluate the point on the surface
-  X->x = (1.0-u)*e[3].x + u*e[1].x + (1.0-v)*e[0].x + v*e[2].x
-    - ((1.0-u)*(1.0-v)*c[0].x + u*(1.0-v)*c[1].x +
-       u*v*c[2].x + v*(1.0-u)*c[3].x);
+  X->x = (1.0 - u) * e[3].x + u * e[1].x + (1.0 - v) * e[0].x + v * e[2].x -
+         ((1.0 - u) * (1.0 - v) * c[0].x + u * (1.0 - v) * c[1].x +
+          u * v * c[2].x + v * (1.0 - u) * c[3].x);
 
-  X->y = (1.0-u)*e[3].y + u*e[1].y + (1.0-v)*e[0].y + v*e[2].y
-    - ((1.0-u)*(1.0-v)*c[0].y + u*(1.0-v)*c[1].y +
-       u*v*c[2].y + v*(1.0-u)*c[3].y);
+  X->y = (1.0 - u) * e[3].y + u * e[1].y + (1.0 - v) * e[0].y + v * e[2].y -
+         ((1.0 - u) * (1.0 - v) * c[0].y + u * (1.0 - v) * c[1].y +
+          u * v * c[2].y + v * (1.0 - u) * c[3].y);
 
-  X->z = (1.0-u)*e[3].z + u*e[1].z + (1.0-v)*e[0].z + v*e[2].z
-    - ((1.0-u)*(1.0-v)*c[0].z + u*(1.0-v)*c[1].z +
-       u*v*c[2].z + v*(1.0-u)*c[3].z);
-
-  // Evaluate the point on the surface
-  Xu->x = e[1].x - e[3].x + (1.0-v)*ed[0].x + v*ed[2].x
-    - ((1.0-v)*(c[1].x - c[0].x) + v*(c[2].x - c[3].x));
-
-  Xu->y = e[1].y - e[3].y + (1.0-v)*ed[0].y + v*ed[2].y
-    - ((1.0-v)*(c[1].y - c[0].y) + v*(c[2].y - c[3].y));
-
-  Xu->z = e[1].z - e[3].z + (1.0-v)*ed[0].z + v*ed[2].z
-    - ((1.0-v)*(c[1].z - c[0].z) + v*(c[2].z - c[3].z));
+  X->z = (1.0 - u) * e[3].z + u * e[1].z + (1.0 - v) * e[0].z + v * e[2].z -
+         ((1.0 - u) * (1.0 - v) * c[0].z + u * (1.0 - v) * c[1].z +
+          u * v * c[2].z + v * (1.0 - u) * c[3].z);
 
   // Evaluate the point on the surface
-  Xv->x = (1.0-u)*ed[3].x + u*ed[1].x + e[2].x - e[0].x +
-    - ((1.0-u)*(c[3].x - c[0].x) + u*(c[2].x - c[1].x));
+  Xu->x = e[1].x - e[3].x + (1.0 - v) * ed[0].x + v * ed[2].x -
+          ((1.0 - v) * (c[1].x - c[0].x) + v * (c[2].x - c[3].x));
 
-  Xv->y = (1.0-u)*ed[3].y + u*ed[1].y + e[2].y - e[0].y +
-    - ((1.0-u)*(c[3].y - c[0].y) + u*(c[2].y - c[1].y));
+  Xu->y = e[1].y - e[3].y + (1.0 - v) * ed[0].y + v * ed[2].y -
+          ((1.0 - v) * (c[1].y - c[0].y) + v * (c[2].y - c[3].y));
 
-  Xv->z = (1.0-u)*ed[3].z + u*ed[1].z + e[2].z - e[0].z +
-    - ((1.0-u)*(c[3].z - c[0].z) + u*(c[2].z - c[1].z));
+  Xu->z = e[1].z - e[3].z + (1.0 - v) * ed[0].z + v * ed[2].z -
+          ((1.0 - v) * (c[1].z - c[0].z) + v * (c[2].z - c[3].z));
+
+  // Evaluate the point on the surface
+  Xv->x = (1.0 - u) * ed[3].x + u * ed[1].x + e[2].x - e[0].x +
+          -((1.0 - u) * (c[3].x - c[0].x) + u * (c[2].x - c[1].x));
+
+  Xv->y = (1.0 - u) * ed[3].y + u * ed[1].y + e[2].y - e[0].y +
+          -((1.0 - u) * (c[3].y - c[0].y) + u * (c[2].y - c[1].y));
+
+  Xv->z = (1.0 - u) * ed[3].z + u * ed[1].z + e[2].z - e[0].z +
+          -((1.0 - u) * (c[3].z - c[0].z) + u * (c[2].z - c[1].z));
 
   return fail;
 }
@@ -700,15 +689,14 @@ int TMRTFIFace::evalDeriv( double u, double v,
   The transfinite interpolation is performed in the parameter space
   and all points are obtained directly from the surface object itself.
 */
-TMRParametricTFIFace::TMRParametricTFIFace( TMRFace *_face,
-                                            TMREdge *_edges[],
-                                            const int _dir[],
-                                            TMRVertex *verts[] ){
+TMRParametricTFIFace::TMRParametricTFIFace(TMRFace *_face, TMREdge *_edges[],
+                                           const int _dir[],
+                                           TMRVertex *verts[]) {
   face = _face;
   face->incref();
   setName(face->getName());
 
-  for ( int k = 0; k < 4; k++ ){
+  for (int k = 0; k < 4; k++) {
     // Retrieve the parametric curves on the surface
     edges[k] = _edges[k];
     edges[k]->incref();
@@ -716,48 +704,43 @@ TMRParametricTFIFace::TMRParametricTFIFace( TMRFace *_face,
 
     double tmin = 0.0, tmax = 0.0;
     edges[k]->getRange(&tmin, &tmax);
-    if (tmin != 0.0 || tmax != 1.0){
+    if (tmin != 0.0 || tmax != 1.0) {
       fprintf(stderr,
               "TMRParametricTFIFace error: All edges must have t in [0, 1]\n");
     }
 
     // Reparametrize the vertices on the surface
-    if (dir[k] > 0){
-      edges[k]->getParamsOnFace(face, 0.0, 0, // dir[k],
+    if (dir[k] > 0) {
+      edges[k]->getParamsOnFace(face, 0.0, 0,  // dir[k],
                                 &vupt[k], &vvpt[k]);
-    }
-    else {
-      edges[k]->getParamsOnFace(face, 1.0, 0, // dir[k],
+    } else {
+      edges[k]->getParamsOnFace(face, 1.0, 0,  // dir[k],
                                 &vupt[k], &vvpt[k]);
     }
   }
 
   // Set the vertices for this surface
-  if (dir[0] > 0){
+  if (dir[0] > 0) {
     edges[0]->setVertices(verts[0], verts[1]);
-  }
-  else {
+  } else {
     edges[0]->setVertices(verts[1], verts[0]);
   }
 
-  if (dir[1] > 0){
+  if (dir[1] > 0) {
     edges[1]->setVertices(verts[1], verts[2]);
-  }
-  else {
+  } else {
     edges[1]->setVertices(verts[2], verts[1]);
   }
 
-  if (dir[2] > 0){
+  if (dir[2] > 0) {
     edges[2]->setVertices(verts[2], verts[3]);
-  }
-  else {
+  } else {
     edges[2]->setVertices(verts[3], verts[2]);
   }
 
-  if (dir[3] > 0){
+  if (dir[3] > 0) {
     edges[3]->setVertices(verts[3], verts[0]);
-  }
-  else {
+  } else {
     edges[3]->setVertices(verts[0], verts[3]);
   }
 
@@ -769,9 +752,9 @@ TMRParametricTFIFace::TMRParametricTFIFace( TMRFace *_face,
 /*
   Destroy the parametric TFI object
 */
-TMRParametricTFIFace::~TMRParametricTFIFace(){
+TMRParametricTFIFace::~TMRParametricTFIFace() {
   face->decref();
-  for ( int k = 0; k < 4; k++ ){
+  for (int k = 0; k < 4; k++) {
     edges[k]->decref();
   }
 }
@@ -779,8 +762,8 @@ TMRParametricTFIFace::~TMRParametricTFIFace(){
 /*
   The range must always be between [0,1] for all curves
 */
-void TMRParametricTFIFace::getRange( double *umin, double *vmin,
-                                     double *umax, double *vmax ){
+void TMRParametricTFIFace::getRange(double *umin, double *vmin, double *umax,
+                                    double *vmax) {
   *umin = 0.0;
   *vmin = 0.0;
   *umax = 1.0;
@@ -794,34 +777,30 @@ void TMRParametricTFIFace::getRange( double *umin, double *vmin,
   parametric surface coordinates (us(u,v), vs(u,v)) in terms
   of the TFI parameter coordinates (u,v)
 */
-int TMRParametricTFIFace::evalPoint( double u, double v,
-                                     TMRPoint *X ){
+int TMRParametricTFIFace::evalPoint(double u, double v, TMRPoint *X) {
   int fail = 0;
   double cupt[4], cvpt[4];
-  double params[4] = {u, v, 1.0-u, 1.0-v};
+  double params[4] = {u, v, 1.0 - u, 1.0 - v};
 
-  for ( int k = 0; k < 4; k++ ){
-    if (dir[k] > 0){
+  for (int k = 0; k < 4; k++) {
+    if (dir[k] > 0) {
       fail = fail ||
-        edges[k]->getParamsOnFace(face, params[k], 0,
-                                  &cupt[k], &cvpt[k]);
-    }
-    else {
-      fail = fail ||
-        edges[k]->getParamsOnFace(face, 1.0-params[k], 0,
-                                  &cupt[k], &cvpt[k]);
+             edges[k]->getParamsOnFace(face, params[k], 0, &cupt[k], &cvpt[k]);
+    } else {
+      fail = fail || edges[k]->getParamsOnFace(face, 1.0 - params[k], 0,
+                                               &cupt[k], &cvpt[k]);
     }
   }
 
   // Compute the parametric coordinates
   double us, vs;
-  us = (1.0-u)*cupt[3] + u*cupt[1] + (1.0-v)*cupt[0] + v*cupt[2]
-    - ((1.0-u)*(1.0-v)*vupt[0] + u*(1.0-v)*vupt[1] +
-       u*v*vupt[2] + v*(1.0-u)*vupt[3]);
+  us = (1.0 - u) * cupt[3] + u * cupt[1] + (1.0 - v) * cupt[0] + v * cupt[2] -
+       ((1.0 - u) * (1.0 - v) * vupt[0] + u * (1.0 - v) * vupt[1] +
+        u * v * vupt[2] + v * (1.0 - u) * vupt[3]);
 
-  vs = (1.0-u)*cvpt[3] + u*cvpt[1] + (1.0-v)*cvpt[0] + v*cvpt[2]
-    - ((1.0-u)*(1.0-v)*vvpt[0] + u*(1.0-v)*vvpt[1] +
-       u*v*vvpt[2] + v*(1.0-u)*vvpt[3]);
+  vs = (1.0 - u) * cvpt[3] + u * cvpt[1] + (1.0 - v) * cvpt[0] + v * cvpt[2] -
+       ((1.0 - u) * (1.0 - v) * vvpt[0] + u * (1.0 - v) * vvpt[1] +
+        u * v * vvpt[2] + v * (1.0 - u) * vvpt[3]);
 
   fail = fail || face->evalPoint(us, vs, X);
   return fail;
@@ -830,8 +809,7 @@ int TMRParametricTFIFace::evalPoint( double u, double v,
 /*
   Inverse evaluation: This is not yet implemented
 */
-int TMRParametricTFIFace::invEvalPoint( TMRPoint p,
-                                        double *u, double *v ){
+int TMRParametricTFIFace::invEvalPoint(TMRPoint p, double *u, double *v) {
   *u = 0.0;
   *v = 0.0;
   int fail = 1;
@@ -841,9 +819,8 @@ int TMRParametricTFIFace::invEvalPoint( TMRPoint p,
 /*
   Derivative evaluation: This is not yet implemented
 */
-int TMRParametricTFIFace::evalDeriv( double u, double v,
-                                     TMRPoint *X,
-                                     TMRPoint *Xu, TMRPoint *Xv ){
+int TMRParametricTFIFace::evalDeriv(double u, double v, TMRPoint *X,
+                                    TMRPoint *Xu, TMRPoint *Xv) {
   // Evaluate the curves along the v-direction
   int fail = 1;
   X->zero();
@@ -856,20 +833,19 @@ int TMRParametricTFIFace::evalDeriv( double u, double v,
 /*
   Create the TFI volume
 */
-TMRTFIVolume::TMRTFIVolume( TMRFace *_faces[],
-                            TMREdge *_edges[], const int _dir[],
-                            TMRVertex *_verts[] ):
-TMRVolume(6, _faces){
-  for ( int i = 0; i < 6; i++ ){
+TMRTFIVolume::TMRTFIVolume(TMRFace *_faces[], TMREdge *_edges[],
+                           const int _dir[], TMRVertex *_verts[])
+    : TMRVolume(6, _faces) {
+  for (int i = 0; i < 6; i++) {
     faces[i] = _faces[i];
     faces[i]->incref();
   }
-  for ( int i = 0; i < 12; i++ ){
+  for (int i = 0; i < 12; i++) {
     edges[i] = _edges[i];
     edges[i]->incref();
     edge_dir[i] = _dir[i];
   }
-  for ( int i = 0; i < 8; i++ ){
+  for (int i = 0; i < 8; i++) {
     verts[i] = _verts[i];
     verts[i]->incref();
     verts[i]->evalPoint(&c[i]);
@@ -879,14 +855,14 @@ TMRVolume(6, _faces){
 /*
   Destroy the TFI volume object
 */
-TMRTFIVolume::~TMRTFIVolume(){
-  for ( int i = 0; i < 6; i++ ){
+TMRTFIVolume::~TMRTFIVolume() {
+  for (int i = 0; i < 6; i++) {
     faces[i]->decref();
   }
-  for ( int i = 0; i < 12; i++ ){
+  for (int i = 0; i < 12; i++) {
     edges[i]->decref();
   }
-  for ( int i = 0; i < 8; i++ ){
+  for (int i = 0; i < 8; i++) {
     verts[i]->decref();
   }
 }
@@ -894,8 +870,8 @@ TMRTFIVolume::~TMRTFIVolume(){
 /*
   Get the parameter range for this volume
 */
-void TMRTFIVolume::getRange( double *umin, double *vmin, double *wmin,
-                             double *umax, double *vmax, double *wmax ){
+void TMRTFIVolume::getRange(double *umin, double *vmin, double *wmin,
+                            double *umax, double *vmax, double *wmax) {
   *umin = *vmin = *wmin = 0.0;
   *umax = *vmax = *wmax = 1.0;
 }
@@ -903,64 +879,66 @@ void TMRTFIVolume::getRange( double *umin, double *vmin, double *wmin,
 /*
   Evaluate the point within the volume
 */
-int TMRTFIVolume::evalPoint( double u, double v, double w,
-                             TMRPoint *X ){
+int TMRTFIVolume::evalPoint(double u, double v, double w, TMRPoint *X) {
   int fail = 0;
 
   // Evaluate/retrieve the points on the edges
   TMRPoint e[12];
-  for ( int k = 0; k < 12; k++ ){
+  for (int k = 0; k < 12; k++) {
     double t;
-    if (k < 4){
+    if (k < 4) {
       t = u;
-    }
-    else if (k < 8){
+    } else if (k < 8) {
       t = v;
-    }
-    else {
+    } else {
       t = w;
     }
 
-    if (edge_dir[k] > 0){
+    if (edge_dir[k] > 0) {
       fail = fail || edges[k]->evalPoint(t, &e[k]);
-    }
-    else {
-      fail = fail || edges[k]->evalPoint(1.0-t, &e[k]);
+    } else {
+      fail = fail || edges[k]->evalPoint(1.0 - t, &e[k]);
     }
   }
 
-  X->x = ((1.0-v)*(1.0-w)*e[0].x + v*(1.0-w)*e[1].x +
-       (1.0-v)*w*e[2].x + v*w*e[3].x +
-       (1.0-u)*(1.0-w)*e[4].x + u*(1.0-w)*e[5].x +
-       (1.0-u)*w*e[6].x + u*w*e[7].x +
-       (1.0-u)*(1.0-v)*e[8].x + u*(1.0-v)*e[9].x +
-       (1.0-u)*v*e[10].x + u*v*e[11].x)
-    - 2.0*((1.0-u)*(1.0-v)*(1.0-w)*c[0].x + u*(1.0-v)*(1.0-w)*c[1].x +
-           (1.0-u)*v*(1.0-w)*c[2].x + u*v*(1.0-w)*c[3].x +
-           (1.0-u)*(1.0-v)*w*c[4].x + u*(1.0-v)*w*c[5].x +
-           (1.0-u)*v*w*c[6].x + u*v*w*c[7].x);
+  X->x =
+      ((1.0 - v) * (1.0 - w) * e[0].x + v * (1.0 - w) * e[1].x +
+       (1.0 - v) * w * e[2].x + v * w * e[3].x +
+       (1.0 - u) * (1.0 - w) * e[4].x + u * (1.0 - w) * e[5].x +
+       (1.0 - u) * w * e[6].x + u * w * e[7].x +
+       (1.0 - u) * (1.0 - v) * e[8].x + u * (1.0 - v) * e[9].x +
+       (1.0 - u) * v * e[10].x + u * v * e[11].x) -
+      2.0 * ((1.0 - u) * (1.0 - v) * (1.0 - w) * c[0].x +
+             u * (1.0 - v) * (1.0 - w) * c[1].x +
+             (1.0 - u) * v * (1.0 - w) * c[2].x + u * v * (1.0 - w) * c[3].x +
+             (1.0 - u) * (1.0 - v) * w * c[4].x + u * (1.0 - v) * w * c[5].x +
+             (1.0 - u) * v * w * c[6].x + u * v * w * c[7].x);
 
-  X->y = ((1.0-v)*(1.0-w)*e[0].y + v*(1.0-w)*e[1].y +
-       (1.0-v)*w*e[2].y + v*w*e[3].y +
-       (1.0-u)*(1.0-w)*e[4].y + u*(1.0-w)*e[5].y +
-       (1.0-u)*w*e[6].y + u*w*e[7].y +
-       (1.0-u)*(1.0-v)*e[8].y + u*(1.0-v)*e[9].y +
-       (1.0-u)*v*e[10].y + u*v*e[11].y)
-    - 2.0*((1.0-u)*(1.0-v)*(1.0-w)*c[0].y + u*(1.0-v)*(1.0-w)*c[1].y +
-           (1.0-u)*v*(1.0-w)*c[2].y + u*v*(1.0-w)*c[3].y +
-           (1.0-u)*(1.0-v)*w*c[4].y + u*(1.0-v)*w*c[5].y +
-           (1.0-u)*v*w*c[6].y + u*v*w*c[7].y);
+  X->y =
+      ((1.0 - v) * (1.0 - w) * e[0].y + v * (1.0 - w) * e[1].y +
+       (1.0 - v) * w * e[2].y + v * w * e[3].y +
+       (1.0 - u) * (1.0 - w) * e[4].y + u * (1.0 - w) * e[5].y +
+       (1.0 - u) * w * e[6].y + u * w * e[7].y +
+       (1.0 - u) * (1.0 - v) * e[8].y + u * (1.0 - v) * e[9].y +
+       (1.0 - u) * v * e[10].y + u * v * e[11].y) -
+      2.0 * ((1.0 - u) * (1.0 - v) * (1.0 - w) * c[0].y +
+             u * (1.0 - v) * (1.0 - w) * c[1].y +
+             (1.0 - u) * v * (1.0 - w) * c[2].y + u * v * (1.0 - w) * c[3].y +
+             (1.0 - u) * (1.0 - v) * w * c[4].y + u * (1.0 - v) * w * c[5].y +
+             (1.0 - u) * v * w * c[6].y + u * v * w * c[7].y);
 
-  X->z = ((1.0-v)*(1.0-w)*e[0].z + v*(1.0-w)*e[1].z +
-       (1.0-v)*w*e[2].z + v*w*e[3].z +
-       (1.0-u)*(1.0-w)*e[4].z + u*(1.0-w)*e[5].z +
-       (1.0-u)*w*e[6].z + u*w*e[7].z +
-       (1.0-u)*(1.0-v)*e[8].z + u*(1.0-v)*e[9].z +
-       (1.0-u)*v*e[10].z + u*v*e[11].z)
-    - 2.0*((1.0-u)*(1.0-v)*(1.0-w)*c[0].z + u*(1.0-v)*(1.0-w)*c[1].z +
-           (1.0-u)*v*(1.0-w)*c[2].z + u*v*(1.0-w)*c[3].z +
-           (1.0-u)*(1.0-v)*w*c[4].z + u*(1.0-v)*w*c[5].z +
-           (1.0-u)*v*w*c[6].z + u*v*w*c[7].z);
+  X->z =
+      ((1.0 - v) * (1.0 - w) * e[0].z + v * (1.0 - w) * e[1].z +
+       (1.0 - v) * w * e[2].z + v * w * e[3].z +
+       (1.0 - u) * (1.0 - w) * e[4].z + u * (1.0 - w) * e[5].z +
+       (1.0 - u) * w * e[6].z + u * w * e[7].z +
+       (1.0 - u) * (1.0 - v) * e[8].z + u * (1.0 - v) * e[9].z +
+       (1.0 - u) * v * e[10].z + u * v * e[11].z) -
+      2.0 * ((1.0 - u) * (1.0 - v) * (1.0 - w) * c[0].z +
+             u * (1.0 - v) * (1.0 - w) * c[1].z +
+             (1.0 - u) * v * (1.0 - w) * c[2].z + u * v * (1.0 - w) * c[3].z +
+             (1.0 - u) * (1.0 - v) * w * c[4].z + u * (1.0 - v) * w * c[5].z +
+             (1.0 - u) * v * w * c[6].z + u * v * w * c[7].z);
 
   return 1;
 }
@@ -968,10 +946,15 @@ int TMRTFIVolume::evalPoint( double u, double v, double w,
 /*
   Get the underlying face, edge and volume entities
 */
-void TMRTFIVolume::getEntities( TMRFace ***_faces,
-                                TMREdge ***_edges,
-                                TMRVertex ***_verts ){
-  if (_faces){ *_faces = faces; }
-  if (_edges){ *_edges = edges; }
-  if (_verts){ *_verts = verts; }
+void TMRTFIVolume::getEntities(TMRFace ***_faces, TMREdge ***_edges,
+                               TMRVertex ***_verts) {
+  if (_faces) {
+    *_faces = faces;
+  }
+  if (_edges) {
+    *_edges = edges;
+  }
+  if (_verts) {
+    *_verts = verts;
+  }
 }

@@ -21,55 +21,43 @@
 #ifndef TMR_MESH_H
 #define TMR_MESH_H
 
-#include "TMRTopology.h"
-#include "TMRFeatureSize.h"
 #include "TMRBoundaryConditions.h"
+#include "TMRFeatureSize.h"
+#include "TMRTopology.h"
 
 /*
   The type of face mesh algorithm to apply
 */
-enum TMRFaceMeshType { TMR_NO_MESH,
-                       TMR_STRUCTURED,
-                       TMR_UNSTRUCTURED,
-                       TMR_TRIANGLE };
+enum TMRFaceMeshType {
+  TMR_NO_MESH,
+  TMR_STRUCTURED,
+  TMR_UNSTRUCTURED,
+  TMR_TRIANGLE
+};
 
 /*
   Methods for computing the mesh connectivity and dual connectivity
   information from other data.
 */
-void TMR_ComputeNodeToElems( int nnodes, int nelems,
-                             int num_elem_nodes,
-                             const int conn[],
-                             int **_ptr,
-                             int **_node_to_elems );
-void TMR_ComputePlanarTriEdges( int nnodes, int ntris,
-                                const int tris[],
-                                int *num_tri_edges,
-                                int **_tri_edges,
-                                int **_tri_neighbors,
-                                int **_dual_edges,
-                                int **_node_to_tri_ptr=NULL,
-                                int **_node_to_tris=NULL,
-                                int **_tri_edge_nums=NULL );
-void TMR_ComputePlanarQuadEdges( int nnodes, int nquads,
-                                 const int quads[],
-                                 int *_num_quad_edges,
-                                 int **_quad_edges,
-                                 int **_quad_neighbors=NULL,
-                                 int **_dual_edges=NULL,
-                                 int **_quad_edge_nums=NULL );
-void TMR_ComputeQuadEdges( int nnodes, int nquads,
-                           const int quads[],
-                           int *_num_quad_edges,
-                           int **_quad_edges );
-void TMR_ComputeHexEdgesAndFaces( int nnodes, int nhex,
-                                  const int hex[],
-                                  int *_num_hex_edges,
-                                  int **_hex_edges,
-                                  int **_hex_edge_nums,
-                                  int *_num_hex_faces,
-                                  int **_hex_faces,
-                                  int **_hex_face_nums );
+void TMR_ComputeNodeToElems(int nnodes, int nelems, int num_elem_nodes,
+                            const int conn[], int **_ptr, int **_node_to_elems);
+void TMR_ComputePlanarTriEdges(int nnodes, int ntris, const int tris[],
+                               int *num_tri_edges, int **_tri_edges,
+                               int **_tri_neighbors, int **_dual_edges,
+                               int **_node_to_tri_ptr = NULL,
+                               int **_node_to_tris = NULL,
+                               int **_tri_edge_nums = NULL);
+void TMR_ComputePlanarQuadEdges(int nnodes, int nquads, const int quads[],
+                                int *_num_quad_edges, int **_quad_edges,
+                                int **_quad_neighbors = NULL,
+                                int **_dual_edges = NULL,
+                                int **_quad_edge_nums = NULL);
+void TMR_ComputeQuadEdges(int nnodes, int nquads, const int quads[],
+                          int *_num_quad_edges, int **_quad_edges);
+void TMR_ComputeHexEdgesAndFaces(int nnodes, int nhex, const int hex[],
+                                 int *_num_hex_edges, int **_hex_edges,
+                                 int **_hex_edge_nums, int *_num_hex_faces,
+                                 int **_hex_faces, int **_hex_face_nums);
 
 /*
   Global options for meshing
@@ -81,7 +69,7 @@ class TMRMeshOptions {
   /*
     Create the mesh options objects with the default settings
   */
-  TMRMeshOptions(){
+  TMRMeshOptions() {
     // Set the default print level
     triangularize_print_level = 0;
     triangularize_print_iter = 1000;
@@ -145,35 +133,34 @@ class TMRMesh : public TMREntity {
   static const int TMR_QUAD = 1;
   static const int TMR_HEX = 2;
 
-  TMRMesh( MPI_Comm _comm, TMRModel *_geo );
+  TMRMesh(MPI_Comm _comm, TMRModel *_geo);
   ~TMRMesh();
 
   // Mesh the underlying geometry
-  void mesh( TMRMeshOptions options, double htarget );
-  void mesh( TMRMeshOptions options,
-             TMRElementFeatureSize *fs );
+  void mesh(TMRMeshOptions options, double htarget);
+  void mesh(TMRMeshOptions options, TMRElementFeatureSize *fs);
 
   // Write the mesh to a VTK file
-  void writeToVTK( const char *filename,
-                   int flag=(TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX) );
+  void writeToVTK(const char *filename,
+                  int flag = (TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX));
 
   // Write the mesh to a BDF file
-  void writeToBDF( const char *filename,
-                   int flag=(TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX),
-                   TMRBoundaryConditions *bcs=NULL );
+  void writeToBDF(const char *filename,
+                  int flag = (TMRMesh::TMR_QUAD | TMRMesh::TMR_HEX),
+                  TMRBoundaryConditions *bcs = NULL);
 
   // Retrieve the mesh components
-  int getMeshPoints( TMRPoint **_X );
-  void getQuadConnectivity( int *_nquads, const int **_quads );
-  void getTriConnectivity( int *_ntris, const int **_tris );
-  void getHexConnectivity( int *_nhex, const int **_hex );
+  int getMeshPoints(TMRPoint **_X);
+  void getQuadConnectivity(int *_nquads, const int **_quads);
+  void getTriConnectivity(int *_ntris, const int **_tris);
+  void getHexConnectivity(int *_nhex, const int **_hex);
 
   // Create a topology object (with underlying mesh geometry)
-  TMRModel* createModelFromMesh();
+  TMRModel *createModelFromMesh();
 
  private:
   // Allocate and initialize the underlying mesh
-  void initMesh( int count_nodes=0 );
+  void initMesh(int count_nodes = 0);
 
   // Reset the mesh
   void resetMesh();
@@ -203,4 +190,4 @@ class TMRMesh : public TMREntity {
   int *tet;
 };
 
-#endif // TMR_MESH_H
+#endif  // TMR_MESH_H

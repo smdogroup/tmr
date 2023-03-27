@@ -93,8 +93,9 @@ v = [0, 1, 2, 0, 2, 3]
 binary.append(b)
 vert.append(v)
 
-xpts = np.array([[0, 0], [1, 0], [1, 1], [0, 1],
-                 [0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]])
+xpts = np.array(
+    [[0, 0], [1, 0], [1, 1], [0, 1], [0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]]
+)
 
 x = np.array(xpts)
 y = 0.0
@@ -109,12 +110,14 @@ for k in xrange(len(binary)):
         y += 1.25
 
     for j in xrange(0, len(v), 3):
-        plt.plot([x[v[j], 0], x[v[j+1], 0], x[v[j+2], 0], x[v[j], 0]],
-                 [x[v[j], 1], x[v[j+1], 1], x[v[j+2], 1], x[v[j], 1]])
+        plt.plot(
+            [x[v[j], 0], x[v[j + 1], 0], x[v[j + 2], 0], x[v[j], 0]],
+            [x[v[j], 1], x[v[j + 1], 1], x[v[j + 2], 1], x[v[j], 1]],
+        )
 
     x[:, 0] += 1.25
 
-print x
+print(x)
 
 # Create the vertex and edge tables
 edge_table = np.zeros(16, dtype=np.intc)
@@ -126,34 +129,34 @@ for k in xrange(len(binary)):
     index = 0
     for i in xrange(4):
         if b[i] == 1:
-            index |= (1 << i)
+            index |= 1 << i
 
     # Index the code
     for i in xrange(len(v)):
         vert_table[index, i] = v[i]
-    
+
     # Compute the vertex code
     code = 0
     for v in vert[k]:
-        code |= (1 << v)    
+        code |= 1 << v
 
     # Add the code to the edge table
     edge_table[index] = code
 
 # Print out all the results
-s = 'const int faceEdgeTable[16] = {%d'%(edge_table[0])
+s = "const int faceEdgeTable[16] = {%d" % (edge_table[0])
 for k in xrange(1, len(binary)):
-    s += ', %d'%(edge_table[k])
-s += '};\n'
+    s += ", %d" % (edge_table[k])
+s += "};\n"
 
-s += 'const int faceTriTable[16][13] = {'
+s += "const int faceTriTable[16][13] = {"
 for i in xrange(16):
-    s += '\n  {%d'%(vert_table[i, 0])
+    s += "\n  {%d" % (vert_table[i, 0])
     for j in xrange(1, 13):
-        s += ', %d'%(vert_table[i, j])
-    s += '},'
-s += '};'
+        s += ", %d" % (vert_table[i, j])
+    s += "},"
+s += "};"
 
-print s
+print(s)
 
 plt.show()

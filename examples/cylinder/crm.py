@@ -12,6 +12,7 @@ import ksFSDT
 from pyoptsparse import Optimization, OPT
 from scipy import sparse
 
+
 # Guess the spar, rib and skin indices
 def get_face_indices(faces):
     ucrm_skins = []
@@ -26,8 +27,8 @@ def get_face_indices(faces):
             loop = face.getEdgeLoop(k)
 
             elist, dirs = loop.getEdgeLoop()
-            pts = np.zeros((len(elist)+1, 3))
-            tx = np.zeros((len(elist)+1, 3))
+            pts = np.zeros((len(elist) + 1, 3))
+            tx = np.zeros((len(elist) + 1, 3))
             for i, e in enumerate(elist):
                 v1, v2 = e.getVertices()
                 if dirs[i] > 0:
@@ -37,23 +38,23 @@ def get_face_indices(faces):
                     pt1 = v2.evalPoint()
                     pt2 = v1.evalPoint()
                 if i == 0:
-                    pts[0,:] = pt1[:]
-                pts[i+1,:] = pt2[:]
+                    pts[0, :] = pt1[:]
+                pts[i + 1, :] = pt2[:]
 
             for i in range(len(elist)):
-                tx[i,:] = pts[i+1,:] - pts[i,:]
-            tx[-1,:] = pts[1,:] - pts[0,:]
+                tx[i, :] = pts[i + 1, :] - pts[i, :]
+            tx[-1, :] = pts[1, :] - pts[0, :]
 
             # Find the average normal direction
             for i in range(len(elist)):
-                nx += np.cross(tx[i], tx[i+1])
+                nx += np.cross(tx[i], tx[i + 1])
             nx /= np.sqrt(np.dot(nx, nx))
 
             # Quit after the first face loop
             break
 
         # Normal directions
-        theta = 30*np.pi/180.0
+        theta = 30 * np.pi / 180.0
         face_dir = np.array([0.0, 0.0, 1.0])
         rib_dir = np.array([np.sin(theta), np.cos(theta), 0.0])
         spar_dir = np.array([-np.cos(theta), np.sin(theta), 0.0])
@@ -71,11 +72,13 @@ def get_face_indices(faces):
 
     return ucrm_skins, ucrm_spars, ucrm_ribs
 
+
 def uniquify(seq):
     set = {}
     for e in seq:
         set[e] = 1
     return sorted(set.keys())
+
 
 def get_face_to_face_index(faces, edges):
     # Set the face indices
@@ -118,6 +121,7 @@ def get_face_to_face_index(faces, edges):
 
     return face_to_face
 
+
 def get_constraint_pairs(face_to_face, face_set):
     pairs = []
     for index in face_set:
@@ -126,10 +130,11 @@ def get_constraint_pairs(face_to_face, face_set):
                 pairs.append((index, adj))
     return pairs
 
+
 class uCRM_VonMisesMassMin:
-    '''
+    """
     Mass minimization with a von Mises stress constraint
-    '''
+    """
 
     def __init__(self, comm, num_components):
         # Set the communicator
@@ -156,7 +161,6 @@ class uCRM_VonMisesMassMin:
         return
 
     def setAssembler(self, assembler, ksfunc):
-
         # Create tacs assembler object from mesh loader
         self.assembler = assembler
 
@@ -174,25 +178,27 @@ class uCRM_VonMisesMassMin:
         self.gmres = TACS.KSM(self.mat, self.pc, 10)
 
         # For visualization
-        flag = (TACS.ToFH5.NODES |
-                TACS.ToFH5.DISPLACEMENTS |
-                TACS.ToFH5.STRAINS |
-                TACS.ToFH5.EXTRAS)
+        flag = (
+            TACS.ToFH5.NODES
+            | TACS.ToFH5.DISPLACEMENTS
+            | TACS.ToFH5.STRAINS
+            | TACS.ToFH5.EXTRAS
+        )
         self.f5 = TACS.ToFH5(self.assembler, TACS.PY_SHELL, flag)
 
         return
 
     def getVarsAndBounds(self, x, lb, ub):
-        '''Set the values of the bounds'''
+        """Set the values of the bounds"""
         xvals = np.zeros(self.nvars, TACS.dtype)
         self.assembler.getDesignVars(xvals)
-        xvals[:] = self.thickness_scale*xvals
+        xvals[:] = self.thickness_scale * xvals
 
-        xlb = 1e20*np.ones(self.nvars, TACS.dtype)
-        xub = -1e20*np.ones(self.nvars, TACS.dtype)
+        xlb = 1e20 * np.ones(self.nvars, TACS.dtype)
+        xub = -1e20 * np.ones(self.nvars, TACS.dtype)
         self.assembler.getDesignVarRange(xlb, xub)
-        xlb[:] = self.thickness_scale*xlb
-        xub[:] = self.thickness_scale*xub
+        xlb[:] = self.thickness_scale * xlb
+        xub[:] = self.thickness_scale * xub
 
         self.comm.Allreduce(xvals, x, op=MPI.MAX)
         self.comm.Allreduce(xlb, lb, op=MPI.MIN)
@@ -201,10 +207,10 @@ class uCRM_VonMisesMassMin:
         return
 
     def objcon(self, xdict):
-        '''Evaluate the objective and constraint'''
+        """Evaluate the objective and constraint"""
 
         # Extract the values of x
-        self.x[:] = xdict['x']/self.thickness_scale
+        self.x[:] = xdict["x"] / self.thickness_scale
 
         # Evaluate the objective and constraints
         fail = 0
@@ -230,27 +236,27 @@ class uCRM_VonMisesMassMin:
         fvals = self.assembler.evalFunctions(self.funcs)
 
         # Set the mass as the objective
-        fobj = self.mass_scale*fvals[0]
+        fobj = self.mass_scale * fvals[0]
 
         # Set the KS function (the approximate maximum ratio of the
         # von Mises stress to the design stress) so that it is less
         # than or equal to 1.0
-        con[0] = 1.0 - fvals[1] # ~= 1.0 - max (sigma/design) >= 0
+        con[0] = 1.0 - fvals[1]  # ~= 1.0 - max (sigma/design) >= 0
 
         # Create the dictionary of functions
-        funcs = {'objective': fobj, 'con': con}
+        funcs = {"objective": fobj, "con": con}
 
         return funcs, fail
 
     def gobjcon(self, xdict, funcs):
-        '''Evaluate the objective and constraint gradient'''
+        """Evaluate the objective and constraint gradient"""
         fail = 0
 
         # Evaluate the derivative of the mass and place it in the
         # objective gradient
         gx = np.zeros(self.nvars, TACS.dtype)
         self.assembler.evalDVSens(self.funcs[0], gx)
-        gx[:] *= self.mass_scale/self.thickness_scale
+        gx[:] *= self.mass_scale / self.thickness_scale
 
         # Compute the total derivative w.r.t. material design variables
         dfdx = np.zeros(self.nvars, TACS.dtype)
@@ -267,17 +273,18 @@ class uCRM_VonMisesMassMin:
         self.assembler.evalAdjointResProduct(self.adjoint, product)
 
         # Set the constraint gradient
-        dfdx[:] = -(dfdx - product)/self.thickness_scale
+        dfdx[:] = -(dfdx - product) / self.thickness_scale
 
         # Write out the solution file every 10 iterations
         if self.iter_count % 10 == 0:
-            self.f5.writeToFile('results/ucrm_iter%d.f5'%(self.iter_count))
+            self.f5.writeToFile("results/ucrm_iter%d.f5" % (self.iter_count))
         self.iter_count += 1
 
         # Create the sensitivity dictionary
-        sens = {'objective':{'x': gx}, 'con':{'x': dfdx}}
+        sens = {"objective": {"x": gx}, "con": {"x": dfdx}}
 
         return sens, fail
+
 
 class CreateMe(TMR.QuadCreator):
     def __init__(self, bcs, topo, elem_dict):
@@ -287,10 +294,11 @@ class CreateMe(TMR.QuadCreator):
         return
 
     def createElement(self, order, quad):
-        '''Create the element'''
+        """Create the element"""
         # Get the model name and set the face
         attr = topo.getFace(quad.face).getName()
-        return self.elem_dict[order-2][attr]
+        return self.elem_dict[order - 2][attr]
+
 
 def addFaceTraction(order, assembler):
     # Create the surface traction
@@ -301,7 +309,7 @@ def addFaceTraction(order, assembler):
 
     # Loop over the nodes and create the traction forces in the x/y/z
     # directions
-    nnodes = order*order
+    nnodes = order * order
     tx = np.zeros(nnodes, dtype=TACS.dtype)
     ty = np.zeros(nnodes, dtype=TACS.dtype)
     tz = np.zeros(nnodes, dtype=TACS.dtype)
@@ -314,14 +322,15 @@ def addFaceTraction(order, assembler):
 
     return aux
 
+
 def createRefined(topo, elem_dict, forest, bcs, pttype=TMR.UNIFORM_POINTS):
     new_forest = forest.duplicate()
-    new_forest.setMeshOrder(forest.getMeshOrder()+1, pttype)
+    new_forest.setMeshOrder(forest.getMeshOrder() + 1, pttype)
     creator = CreateMe(bcs, topo, elem_dict)
     return new_forest, creator.createTACS(new_forest)
 
-def createProblem(order, topo, elem_dict, forest, bcs,
-                  pttype=TMR.UNIFORM_POINTS):
+
+def createProblem(order, topo, elem_dict, forest, bcs, pttype=TMR.UNIFORM_POINTS):
     # Create the trees, rebalance the elements and repartition
     forest.balance(1)
     forest.setMeshOrder(order, pttype)
@@ -330,8 +339,17 @@ def createProblem(order, topo, elem_dict, forest, bcs,
     assembler = creator.createTACS(forest)
     return assembler
 
-def createProblemMg(topo, elem_dict, forest, bcs, ordering,
-                    order=2, nlevels=2, pttype=TMR.UNIFORM_POINTS):
+
+def createProblemMg(
+    topo,
+    elem_dict,
+    forest,
+    bcs,
+    ordering,
+    order=2,
+    nlevels=2,
+    pttype=TMR.UNIFORM_POINTS,
+):
     # Create the forest
     forests = []
     assemblers = []
@@ -347,7 +365,7 @@ def createProblemMg(topo, elem_dict, forest, bcs, ordering,
     assemblers.append(creator.createTACS(forest, ordering))
 
     while order > 2:
-        order = order-1
+        order = order - 1
         forest = forests[-1].duplicate()
         forest.setMeshOrder(order, pttype)
         forest.balance(1)
@@ -362,18 +380,19 @@ def createProblemMg(topo, elem_dict, forest, bcs, ordering,
 
     return assemblers[0], mg
 
+
 # Set the communicator
 comm = MPI.COMM_WORLD
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
-p.add_argument('--steps', type=int, default=5)
-p.add_argument('--htarget', type=float, default=4.0)
-p.add_argument('--order', type=int, default=3)
-p.add_argument('--ordering', type=str, default='multicolor')
-p.add_argument('--ksweight', type=float, default=10.0)
-p.add_argument('--element_count_target', type=float, default=20e3)
-p.add_argument('--optimizer', type=str, default='snopt')
+p.add_argument("--steps", type=int, default=5)
+p.add_argument("--htarget", type=float, default=4.0)
+p.add_argument("--order", type=int, default=3)
+p.add_argument("--ordering", type=str, default="multicolor")
+p.add_argument("--ksweight", type=float, default=10.0)
+p.add_argument("--element_count_target", type=float, default=20e3)
+p.add_argument("--optimizer", type=str, default="snopt")
 args = p.parse_args()
 
 # Set the KS parameter
@@ -393,37 +412,37 @@ ordering = args.ordering
 ordering = ordering.lower()
 
 tol = 1e-4
-fname = 'results/crm_opt.out'
+fname = "results/crm_opt.out"
 options = {}
-if args.optimizer == 'snopt':
-    options['Print file'] = fname
-    options['Summary file'] = fname + '_summary'
-    options['Major optimality tolerance'] = tol
-    options['Major iterations limit'] = 50
-elif args.optimizer == 'ipopt':
-    options['print_user_options'] = 'yes'
-    options['tol'] = tol
-    options['nlp_scaling_method'] = 'none'
-    options['limited_memory_max_history'] = 25
-    options['bound_relax_factor'] = 0.0
-    options['linear_solver'] = 'ma27'
-    options['output_file'] = fname
-    options['max_iter'] = 10000
-elif args.optimizer == 'paropt':
+if args.optimizer == "snopt":
+    options["Print file"] = fname
+    options["Summary file"] = fname + "_summary"
+    options["Major optimality tolerance"] = tol
+    options["Major iterations limit"] = 50
+elif args.optimizer == "ipopt":
+    options["print_user_options"] = "yes"
+    options["tol"] = tol
+    options["nlp_scaling_method"] = "none"
+    options["limited_memory_max_history"] = 25
+    options["bound_relax_factor"] = 0.0
+    options["linear_solver"] = "ma27"
+    options["output_file"] = fname
+    options["max_iter"] = 10000
+elif args.optimizer == "paropt":
     # options['this is an option'] = value
-    options['algorithm'] = 'tr'
-    options['abs_optimality_tol'] = 1e-8
-    options['max_iterations'] = 20
-    options['qn_subspace_size'] = 10
+    options["algorithm"] = "tr"
+    options["abs_optimality_tol"] = 1e-8
+    options["max_iterations"] = 20
+    options["qn_subspace_size"] = 10
 
     # Set the trust region size
-    options['tr_init_size'] = 0.5
-    options['tr_max_size'] = 2.0
-    options['tr_min_size'] = 1e-5
-    options['tr_penalty_gamma'] = 20.0
+    options["tr_init_size"] = 0.5
+    options["tr_max_size"] = 2.0
+    options["tr_min_size"] = 1e-5
+    options["tr_penalty_gamma"] = 20.0
 
 # Create the CRM wingbox model and set the names
-geo = TMR.LoadModel('ucrm_9_model.step')
+geo = TMR.LoadModel("ucrm_9_model.step")
 verts = geo.getVertices()
 edges = geo.getEdges()
 faces = geo.getFaces()
@@ -431,13 +450,13 @@ geo = TMR.Model(verts, edges, faces)
 
 # Set the edge names
 for i, e in enumerate(edges):
-    attr = 'E%d'%(i)
+    attr = "E%d" % (i)
     e.setName(attr)
 
 # Set the face names and create the constitutive objects
 elem_dict = [{}, {}, {}, {}]
 for i, f in enumerate(faces):
-    attr = 'F%d'%(i)
+    attr = "F%d" % (i)
     f.setName(attr)
 
 # The root rib for boundary conditions
@@ -457,25 +476,26 @@ pairs.extend(get_constraint_pairs(face_to_face, ucrm_ribs))
 num_design_vars = len(faces)
 
 # Set the material properties
-rho = 97.5e-3 # 0.0975 lb/in^3
-E = 10000e3 # 10,000 ksi: Young's modulus
-nu = 0.3 # Poisson ratio
-kcorr = 5.0/6.0 # Shear correction factor
-ys = 20e3 # psi
+rho = 97.5e-3  # 0.0975 lb/in^3
+E = 10000e3  # 10,000 ksi: Young's modulus
+nu = 0.3  # Poisson ratio
+kcorr = 5.0 / 6.0  # Shear correction factor
+ys = 20e3  # psi
 thickness = 1.0
-min_thickness = 0.125 # 1/8th of an inch
+min_thickness = 0.125  # 1/8th of an inch
 max_thickness = 100.0
 
 # Set the different directions
-skin_spar_dir = np.array([np.sin(30*np.pi/180.0), np.cos(30*np.pi/180), 0.0])
+skin_spar_dir = np.array([np.sin(30 * np.pi / 180.0), np.cos(30 * np.pi / 180), 0.0])
 rib_dir = np.array([1.0, 0.0, 0.0])
 
 # Set the face names and create the constitutive objects
 elem_dict = [{}, {}, {}, {}]
 for i, f in enumerate(faces):
-    attr = 'F%d'%(i)
-    stiff = ksFSDT.ksFSDT(ksweight, rho, E, nu, kcorr, ys, thickness,
-                          i, min_thickness, max_thickness)
+    attr = "F%d" % (i)
+    stiff = ksFSDT.ksFSDT(
+        ksweight, rho, E, nu, kcorr, ys, thickness, i, min_thickness, max_thickness
+    )
 
     # Set the reference direction
     if i in ucrm_ribs:
@@ -492,8 +512,7 @@ for i, f in enumerate(faces):
 
     # Create the elements of different orders
     for j in range(4):
-        elem_dict[j][attr] = elements.MITCShell(j+2, stiff,
-                                                component_num=comp)
+        elem_dict[j][attr] = elements.MITCShell(j + 2, stiff, component_num=comp)
 
 # Initial target mesh spacing
 htarget = args.htarget
@@ -512,12 +531,12 @@ opts.triangularize_print_iter = 50000
 
 # Create the surface mesh
 mesh.mesh(htarget, opts)
-mesh.writeToVTK('results/crm_mesh.vtk')
+mesh.writeToVTK("results/crm_mesh.vtk")
 
 # The boundary condition object
 bcs = TMR.BoundaryConditions()
 for edge_num in ucrm_root_edges:
-    bcs.addBoundaryCondition('E%d'%(edge_num), [0, 1, 2, 3, 4, 5])
+    bcs.addBoundaryCondition("E%d" % (edge_num), [0, 1, 2, 3, 4, 5])
 
 # Set the feature size object
 feature_size = None
@@ -537,9 +556,9 @@ forest.setMeshOrder(order, TMR.UNIFORM_POINTS)
 forest.createTrees(depth)
 
 # Set the ordering to use
-if ordering == 'rcm':
+if ordering == "rcm":
     ordering = TACS.PY_RCM_ORDER
-elif ordering == 'multicolor':
+elif ordering == "multicolor":
     ordering = TACS.PY_MULTICOLOR_ORDER
 else:
     ordering = TACS.PY_NATURAL_ORDER
@@ -556,21 +575,21 @@ for step in range(steps):
     # Get the design variable values from the assembler object
     if step == 0:
         assembler.getDesignVars(opt_problem.x)
-        
+
     # Create the KS functional
     func = functions.KSFailure(assembler, ksweight)
-    func.setKSFailureType('continuous')
+    func.setKSFailureType("continuous")
 
     # Set the new assembler object
     opt_problem.setAssembler(assembler, func)
 
     if step % 2 == 0:
-        xdict = {'x': opt_problem.thickness_scale*opt_problem.x }
+        xdict = {"x": opt_problem.thickness_scale * opt_problem.x}
         # Solve the analysis problem at the first step
         opt_problem.objcon(xdict)
     else:
         # Create the optimization problem
-        prob = Optimization('topo', opt_problem.objcon)
+        prob = Optimization("topo", opt_problem.objcon)
 
         # Add the variable group
         n = opt_problem.nvars
@@ -578,13 +597,13 @@ for step in range(steps):
         lb = np.zeros(n)
         ub = np.zeros(n)
         opt_problem.getVarsAndBounds(x0, lb, ub)
-        prob.addVarGroup('x', n, value=x0, lower=lb, upper=ub)
+        prob.addVarGroup("x", n, value=x0, lower=lb, upper=ub)
 
         # Add the constraints
-        prob.addConGroup('con', opt_problem.ncon, lower=0.0, upper=None)
+        prob.addConGroup("con", opt_problem.ncon, lower=0.0, upper=None)
 
         # Add the objective
-        prob.addObj('objective')
+        prob.addObj("objective")
 
         # Set up the sparse constraint Jacobian
         rowp = [0]
@@ -594,26 +613,32 @@ for step in range(steps):
             data.extend([1.0, -1.0])
             cols.extend([pair[0], pair[1]])
             rowp.append(rowp[i] + 2)
-        jacobian = {'csr':[rowp, cols, data], 'shape':[len(pairs), n]}
+        jacobian = {"csr": [rowp, cols, data], "shape": [len(pairs), n]}
 
         # Set the linear constraint Jacobian
         tscale = opt_problem.thickness_scale
-        prob.addConGroup('lincon', len(pairs),
-                         lower=-0.05*tscale, upper=0.05*tscale,
-                         wrt='x', jac={'x': jacobian}, linear=True)
+        prob.addConGroup(
+            "lincon",
+            len(pairs),
+            lower=-0.05 * tscale,
+            upper=0.05 * tscale,
+            wrt="x",
+            jac={"x": jacobian},
+            linear=True,
+        )
 
         # Set the output file name
-        fname = 'results/crm_opt%02d.out'%(step)
-        if args.optimizer == 'snopt':
-            options['Print file'] = fname
-            options['Summary file'] = fname + '_summary'
-        elif args.optimizer == 'ipopt':
-            options['output_file'] = fname
-        elif args.optimizer == 'paropt':
-            options['tr_penalty_gamma'] = 20.0
-            options['filename'] = fname
+        fname = "results/crm_opt%02d.out" % (step)
+        if args.optimizer == "snopt":
+            options["Print file"] = fname
+            options["Summary file"] = fname + "_summary"
+        elif args.optimizer == "ipopt":
+            options["output_file"] = fname
+        elif args.optimizer == "paropt":
+            options["tr_penalty_gamma"] = 20.0
+            options["filename"] = fname
             if step >= 2:
-                options['max_iterations'] = 20
+                options["max_iterations"] = 20
 
         # Create the optimizer and optimize it!
         opt = OPT(args.optimizer, options=options)
@@ -623,15 +648,15 @@ for step in range(steps):
     fval = assembler.evalFunctions([func])[0]
 
     # Write out the current solution
-    filename = 'results/crm_solution%02d.f5'%(step)
+    filename = "results/crm_solution%02d.f5" % (step)
     opt_problem.f5.writeToFile(filename)
 
     # Create the refined mesh
     forest_refined = forest.duplicate()
-    assembler_refined, mg = createProblemMg(topo, elem_dict,
-                                            forest_refined, bcs, ordering,
-                                            order=order+1, nlevels=order)
-    aux = addFaceTraction(order+1, assembler_refined)
+    assembler_refined, mg = createProblemMg(
+        topo, elem_dict, forest_refined, bcs, ordering, order=order + 1, nlevels=order
+    )
+    aux = addFaceTraction(order + 1, assembler_refined)
     assembler_refined.setAuxElements(aux)
 
     # Set the design variables in the refined assembler object
@@ -642,9 +667,9 @@ for step in range(steps):
 
     # Compute the reconstructed solution on the refined mesh
     ans_interp = assembler_refined.createVec()
-    TMR.computeInterpSolution(forest, assembler,
-                              forest_refined, assembler_refined,
-                              ans, ans_interp)
+    TMR.computeInterpSolution(
+        forest, assembler, forest_refined, assembler_refined, ans, ans_interp
+    )
 
     # Set the interpolated solution on the fine mesh
     assembler_refined.setVariables(ans_interp)
@@ -660,65 +685,75 @@ for step in range(steps):
     # adjoint on the refined mesh
     adjoint_rhs = assembler_refined.createVec()
     func_refined = functions.KSFailure(assembler_refined, ksweight)
-    func_refined.setKSFailureType('continuous')
-    
+    func_refined.setKSFailureType("continuous")
+
     # Evaluate the functional on the refined mesh
     fval_refined = assembler_refined.evalFunctions([func_refined])[0]
     assembler_refined.evalSVSens(func_refined, adjoint_rhs)
-    
+
     # Create the GMRES object on the fine mesh
     gmres = TACS.KSM(mat, pc, 100, isFlexible=1)
     gmres.setMonitor(comm, freq=10)
     gmres.setTolerances(1e-14, 1e-30)
-    
+
     # Solve the linear system
     adjoint_refined = assembler_refined.createVec()
     gmres.solve(adjoint_rhs, adjoint_refined)
     adjoint_refined.scale(-1.0)
-    
+
     # Compute the adjoint correction on the fine mesh
     adjoint_corr = adjoint_refined.dot(res_refined)
-    
+
     # Compute the adjoint correction
-    err_est, adjoint_corr, error =\
-             TMR.adjointError(forest, assembler,
-                              forest_refined, assembler_refined,
-                              ans_interp, adjoint_refined)
-    
+    err_est, adjoint_corr, error = TMR.adjointError(
+        forest,
+        assembler,
+        forest_refined,
+        assembler_refined,
+        ans_interp,
+        adjoint_refined,
+    )
+
     # Compute the reconstructed adjoint solution on the refined mesh
     adjoint = assembler.createVec()
     adjoint_interp = assembler_refined.createVec()
-    TMR.computeInterpSolution(forest_refined, assembler_refined,
-                              forest, assembler,
-                              adjoint_refined, adjoint)
-    TMR.computeInterpSolution(forest, assembler,
-                              forest_refined, assembler_refined,
-                              adjoint, adjoint_interp)
+    TMR.computeInterpSolution(
+        forest_refined, assembler_refined, forest, assembler, adjoint_refined, adjoint
+    )
+    TMR.computeInterpSolution(
+        forest, assembler, forest_refined, assembler_refined, adjoint, adjoint_interp
+    )
     adjoint_refined.axpy(-1.0, adjoint_interp)
-    
+
     # Assemble the adjoint contribution
-    err_est, __, error =\
-             TMR.adjointError(forest, assembler,
-                              forest_refined, assembler_refined,
-                              ans_interp, adjoint_refined)
+    err_est, __, error = TMR.adjointError(
+        forest,
+        assembler,
+        forest_refined,
+        assembler_refined,
+        ans_interp,
+        adjoint_refined,
+    )
 
     # Compute the refined function value
     fval_corr = fval_refined + adjoint_corr
 
-    flag = (TACS.ToFH5.NODES |
-            TACS.ToFH5.DISPLACEMENTS |
-            TACS.ToFH5.STRAINS |
-            TACS.ToFH5.EXTRAS)
+    flag = (
+        TACS.ToFH5.NODES
+        | TACS.ToFH5.DISPLACEMENTS
+        | TACS.ToFH5.STRAINS
+        | TACS.ToFH5.EXTRAS
+    )
     f5_refine = TACS.ToFH5(assembler_refined, TACS.PY_SHELL, flag)
-    f5_refine.writeToFile('results/crm_solution_refined%02d.f5'%(step))
+    f5_refine.writeToFile("results/crm_solution_refined%02d.f5" % (step))
 
     # Compute the refinement from the error estimate
     low = -16
     high = 4
     bins_per_decade = 10
-    nbins = bins_per_decade*(high - low)
-    bounds = 10**np.linspace(high, low, nbins+1)
-    bins = np.zeros(nbins+2, dtype=np.int)
+    nbins = bins_per_decade * (high - low)
+    bounds = 10 ** np.linspace(high, low, nbins + 1)
+    bins = np.zeros(nbins + 2, dtype=np.int)
 
     # Compute the mean and standard deviations of the log(error)
     err_est = comm.allreduce(np.sum(error), op=MPI.SUM)
@@ -727,8 +762,8 @@ for step in range(steps):
     mean /= ntotal
 
     # Compute the standard deviation
-    stddev = comm.allreduce(np.sum((np.log(error) - mean)**2), op=MPI.SUM)
-    stddev = np.sqrt(stddev/(ntotal-1))
+    stddev = comm.allreduce(np.sum((np.log(error) - mean) ** 2), op=MPI.SUM)
+    stddev = np.sqrt(stddev / (ntotal - 1))
 
     # Get the total number of nodes
     nnodes = comm.allreduce(assembler.getNumOwnedNodes(), op=MPI.SUM)
@@ -740,10 +775,9 @@ for step in range(steps):
         elif error[i] < bounds[-1]:
             bins[-1] += 1
         else:
-            for j in range(len(bounds)-1):
-                if (error[i] <= bounds[j] and
-                    error[i] > bounds[j+1]):
-                    bins[j+1] += 1
+            for j in range(len(bounds) - 1):
+                if error[i] <= bounds[j] and error[i] > bounds[j + 1]:
+                    bins[j + 1] += 1
 
     # Compute the number of bins
     bins = comm.allreduce(bins, MPI.SUM)
@@ -753,20 +787,20 @@ for step in range(steps):
 
     # Print out the result
     if comm.rank == 0:
-        print('fval      = ', fval)
-        print('fval corr = ', fval_corr)
-        print('estimate  = ', err_est)
-        print('mean      = ', mean)
-        print('stddev    = ', stddev)
+        print("fval      = ", fval)
+        print("fval corr = ", fval_corr)
+        print("estimate  = ", err_est)
+        print("mean      = ", mean)
+        print("stddev    = ", stddev)
 
         # Set the data
         data = np.zeros((nbins, 4))
-        for i in range(nbins-1, -1, -1):
-            data[i,0] = bounds[i]
-            data[i,1] = bounds[i+1]
-            data[i,2] = bins[i+1]
-            data[i,3] = 100.0*bins[i+1]/total
-        np.savetxt('results/crm_data%d.txt'%(step), data)
+        for i in range(nbins - 1, -1, -1):
+            data[i, 0] = bounds[i]
+            data[i, 1] = bounds[i + 1]
+            data[i, 2] = bins[i + 1]
+            data[i, 3] = 100.0 * bins[i + 1] / total
+        np.savetxt("results/crm_data%d.txt" % (step), data)
 
     # Perform the refinement
     # Ensure that we're using an unstructured mesh
@@ -774,15 +808,15 @@ for step in range(steps):
 
     # Find the positions of the center points of each node
     nelems = assembler.getNumElements()
-    
+
     # Allocate the positions
     Xp = np.zeros((nelems, 3))
     for i in range(nelems):
         # Get the information about the given element
         elem, Xpt, vrs, dvars, ddvars = assembler.getElementData(i)
-        
+
         # Get the approximate element centroid
-        Xp[i,:] = np.average(Xpt.reshape((-1, 3)), axis=0)
+        Xp[i, :] = np.average(Xpt.reshape((-1, 3)), axis=0)
 
     # Prepare to collect things to the root processor (only one where
     # it is required)
@@ -794,14 +828,14 @@ for step in range(steps):
         count = comm.gather(size, root=root)
         count = np.array(count, dtype=np.int)
         ntotal = np.sum(count)
-        
+
         errors = np.zeros(np.sum(count))
-        Xpt = np.zeros(3*np.sum(count))
+        Xpt = np.zeros(3 * np.sum(count))
         comm.Gatherv(error, [errors, count])
-        comm.Gatherv(Xp.flatten(), [Xpt, 3*count])
-        
+        comm.Gatherv(Xp.flatten(), [Xpt, 3 * count])
+
         # Reshape the point array
-        Xpt = Xpt.reshape(-1,3)
+        Xpt = Xpt.reshape(-1, 3)
 
         # Asymptotic order of accuracy on per-element basis
         s = 1.0
@@ -812,31 +846,29 @@ for step in range(steps):
         d = 2.0
 
         # Set the exponent
-        exponent = d/(d + s)
+        exponent = d / (d + s)
 
         # Compute the target error as a fixed fraction of the
         # error estimate. This will result in the size of the
         # mesh increasing at each iteration.
-        cval = (element_count_target)**(-1.0/d)
-        cval *= (np.sum(errors**(exponent)))**(1.0/d)
+        cval = (element_count_target) ** (-1.0 / d)
+        cval *= (np.sum(errors ** (exponent))) ** (1.0 / d)
 
         # Compute the element-wise target error
-        hvals = cval*errors**(-(1.0/(d + s)))
+        hvals = cval * errors ** (-(1.0 / (d + s)))
 
         # Set the values of
         if feature_size is not None:
             for i, hp in enumerate(hvals):
-                hlocal = feature_size.getFeatureSize(Xpt[i,:])
-                hvals[i] = np.min(
-                    (np.max((hp*hlocal, 0.25*hlocal)), 2*hlocal))
+                hlocal = feature_size.getFeatureSize(Xpt[i, :])
+                hvals[i] = np.min((np.max((hp * hlocal, 0.25 * hlocal)), 2 * hlocal))
         else:
             for i, hp in enumerate(hvals):
-                hvals[i] = np.min(
-                    (np.max((hp*htarget, 0.25*htarget)), 2*htarget))
+                hvals[i] = np.min((np.max((hp * htarget, 0.25 * htarget)), 2 * htarget))
 
         # Allocate the feature size object
         hmax = args.htarget
-        hmin = 0.05*args.htarget
+        hmin = 0.05 * args.htarget
         feature_size = TMR.PointFeatureSize(Xpt, hvals, hmin, hmax)
     else:
         size = error.shape[0]
@@ -845,7 +877,7 @@ for step in range(steps):
         comm.Gatherv(Xp.flatten(), None)
 
         # Create a dummy feature size object...
-        feature_size = TMR.ConstElementSize(0.5*htarget)
+        feature_size = TMR.ConstElementSize(0.5 * htarget)
 
     # Create the surface mesh
     mesh.mesh(fs=feature_size, opts=opts)
@@ -853,7 +885,7 @@ for step in range(steps):
     # Create the corresponding mesh topology from the mesh-model
     model = mesh.createModelFromMesh()
     topo = TMR.Topology(comm, model)
-    
+
     # Create the quad forest and set the topology of the forest
     depth = 0
     forest = TMR.QuadForest(comm)
