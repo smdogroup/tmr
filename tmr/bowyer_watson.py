@@ -181,7 +181,6 @@ class quadnode:
 
 class triangluate:
     def __init__(self, pts, segs, hole=None, maxd=2):
-
         self.tri_key = 0
         self.tris = {}
         self.edge_to_tris = {}

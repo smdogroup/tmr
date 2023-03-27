@@ -232,7 +232,6 @@ def computeElemError(uvals, ubar, Xpts, nquad=5):
 
 
 def computeError(Xpts, nx, ny, dh=1e-30):
-
     # Parametric locations within the global mesh
     u = np.linspace(-1, 1, 2 * nx + 1)
     v = np.linspace(-1, 1, 2 * nx + 1)
