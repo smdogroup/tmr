@@ -20,6 +20,7 @@ jobs:
     - name: Run clang-format style check for C/C++ programs.
       uses: jidicula/clang-format-action@v4.8.0
       with:
+        exclude-regex: 'src/interfaces/predicates.*'
         clang-format-version: '13'
         check-path: ${{ matrix.path }}
         fallback-style: 'Google'
