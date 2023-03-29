@@ -19,63 +19,58 @@
 */
 
 #include "TMRHelmholtzFilter.h"
+
 #include "TMRHelmholtzModel.h"
 #include "TMRMatrixCreator.h"
-#include "TMR_TACSCreator.h"
 #include "TMR_RefinementTools.h"
+#include "TMR_TACSCreator.h"
 
 /*
   Create the Helmholtz filter object
 */
-TMRHelmholtzFilter::TMRHelmholtzFilter( double helmholtz_radius,
-                                        int _nlevels,
-                                        TACSAssembler *_assembler[],
-                                        TMROctForest *_filter[] ):
-  TMRConformFilter(_nlevels, _assembler, _filter){
+TMRHelmholtzFilter::TMRHelmholtzFilter(double helmholtz_radius, int _nlevels,
+                                       TACSAssembler *_assembler[],
+                                       TMROctForest *_filter[])
+    : TMRConformFilter(_nlevels, _assembler, _filter) {
   initialize_helmholtz(helmholtz_radius);
 }
 
-TMRHelmholtzFilter::TMRHelmholtzFilter( double helmholtz_radius,
-                                        int _nlevels,
-                                        TACSAssembler *_assembler[],
-                                        TMRQuadForest *_filter[] ):
-  TMRConformFilter(_nlevels, _assembler, _filter){
+TMRHelmholtzFilter::TMRHelmholtzFilter(double helmholtz_radius, int _nlevels,
+                                       TACSAssembler *_assembler[],
+                                       TMRQuadForest *_filter[])
+    : TMRConformFilter(_nlevels, _assembler, _filter) {
   initialize_helmholtz(helmholtz_radius);
 }
 
 /*
   Initialize the Helmholtz filter data
 */
-void TMRHelmholtzFilter::initialize_helmholtz( double helmholtz_radius ){
+void TMRHelmholtzFilter::initialize_helmholtz(double helmholtz_radius) {
   // Allocate space for the assembler objects
-  helmholtz_assembler = new TACSAssembler*[ nlevels ];
+  helmholtz_assembler = new TACSAssembler *[nlevels];
 
   // Create the Helmholtz creator objects
   TMROctTACSMatrixCreator *helmholtz_creator3d = NULL;
   TMRQuadTACSMatrixCreator *helmholtz_creator2d = NULL;
 
-  if (oct_filter){
+  if (oct_filter) {
     TACSElementModel *model = new TMRHexaHelmholtzModel(helmholtz_radius);
     helmholtz_creator3d = new TMROctTACSMatrixCreator(model);
     helmholtz_creator3d->incref();
-  }
-  else {
+  } else {
     TACSElementModel *model = new TMRQuadHelmholtzModel(helmholtz_radius);
     helmholtz_creator2d = new TMRQuadTACSMatrixCreator(model);
     helmholtz_creator2d->incref();
   }
 
-  for ( int k = 0; k < nlevels; k++ ){
+  for (int k = 0; k < nlevels; k++) {
     // Create the assembler object
-    if (helmholtz_creator3d){
-      helmholtz_assembler[k] =
-        helmholtz_creator3d->createTACS(oct_filter[k],
-                                        TACSAssembler::NATURAL_ORDER);
-    }
-    else {
-      helmholtz_assembler[k] =
-        helmholtz_creator2d->createTACS(quad_filter[k],
-                                        TACSAssembler::NATURAL_ORDER);
+    if (helmholtz_creator3d) {
+      helmholtz_assembler[k] = helmholtz_creator3d->createTACS(
+          oct_filter[k], TACSAssembler::NATURAL_ORDER);
+    } else {
+      helmholtz_assembler[k] = helmholtz_creator2d->createTACS(
+          quad_filter[k], TACSAssembler::NATURAL_ORDER);
     }
     helmholtz_assembler[k]->incref();
   }
@@ -86,10 +81,9 @@ void TMRHelmholtzFilter::initialize_helmholtz( double helmholtz_radius ){
   helmholtz_vec->incref();
 
   // Destroy the helmholtz creator object
-  if (helmholtz_creator3d){
+  if (helmholtz_creator3d) {
     helmholtz_creator3d->decref();
-  }
-  else {
+  } else {
     helmholtz_creator2d->decref();
   }
 
@@ -101,13 +95,12 @@ void TMRHelmholtzFilter::initialize_helmholtz( double helmholtz_radius ){
 
   // Create the multigrid object
   double helmholtz_omega = 0.5;
-  if (oct_filter){
-    TMR_CreateTACSMg(nlevels, helmholtz_assembler, oct_filter,
-                     &helmholtz_mg, helmholtz_omega);
-  }
-  else {
-    TMR_CreateTACSMg(nlevels, helmholtz_assembler, quad_filter,
-                     &helmholtz_mg, helmholtz_omega);
+  if (oct_filter) {
+    TMR_CreateTACSMg(nlevels, helmholtz_assembler, oct_filter, &helmholtz_mg,
+                     helmholtz_omega);
+  } else {
+    TMR_CreateTACSMg(nlevels, helmholtz_assembler, quad_filter, &helmholtz_mg,
+                     helmholtz_omega);
   }
   helmholtz_mg->incref();
 
@@ -121,8 +114,8 @@ void TMRHelmholtzFilter::initialize_helmholtz( double helmholtz_radius ){
   int is_flexible = 0;
 
   // Create the GMRES object
-  helmholtz_ksm = new GMRES(helmholtz_mg->getMat(0), helmholtz_mg,
-                            gmres_iters, nrestart, is_flexible);
+  helmholtz_ksm = new GMRES(helmholtz_mg->getMat(0), helmholtz_mg, gmres_iters,
+                            nrestart, is_flexible);
   helmholtz_ksm->incref();
   helmholtz_ksm->setMonitor(new KSMPrintStdout("Filter GMRES", mpi_rank, 10));
   helmholtz_ksm->setTolerances(1e-12, 1e-30);
@@ -137,17 +130,17 @@ void TMRHelmholtzFilter::initialize_helmholtz( double helmholtz_radius ){
   temp->incref();
 }
 
-TMRHelmholtzFilter::~TMRHelmholtzFilter(){
+TMRHelmholtzFilter::~TMRHelmholtzFilter() {
   helmholtz_mg->decref();
   helmholtz_ksm->decref();
   helmholtz_vec->decref();
   helmholtz_rhs->decref();
   helmholtz_psi->decref();
 
-  for ( int k = 0; k < nlevels; k++ ){
+  for (int k = 0; k < nlevels; k++) {
     helmholtz_assembler[k]->decref();
   }
-  delete [] helmholtz_assembler;
+  delete[] helmholtz_assembler;
   temp->decref();
 }
 
@@ -156,7 +149,7 @@ TMRHelmholtzFilter::~TMRHelmholtzFilter(){
 
   Here the input/output vector are the same
 */
-void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
+void TMRHelmholtzFilter::applyFilter(TACSBVec *xvars) {
   // Get the number of design variables per node
   const int vars_per_node = assembler[0]->getDesignVarsPerNode();
 
@@ -171,16 +164,16 @@ void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
   TACSElement **elements = helmholtz_assembler[0]->getElements();
 
   // Allocate space for element-level data
-  TacsScalar *Xpts = new TacsScalar[ 3*max_nodes ];
-  TacsScalar *x_values = new TacsScalar[ vars_per_node*max_nodes ];
-  TacsScalar *rhs_values = new TacsScalar[ max_nodes ];
+  TacsScalar *Xpts = new TacsScalar[3 * max_nodes];
+  TacsScalar *x_values = new TacsScalar[vars_per_node * max_nodes];
+  TacsScalar *rhs_values = new TacsScalar[max_nodes];
 
-  for ( int k = 0; k < vars_per_node; k++ ){
+  for (int k = 0; k < vars_per_node; k++) {
     // Zero the entries in the RHS vector
     helmholtz_rhs->zeroEntries();
     helmholtz_assembler[0]->zeroVariables();
 
-    for ( int i = 0; i < num_elements; i++ ){
+    for (int i = 0; i < num_elements; i++) {
       // Get the values for this element
       int len;
       const int *nodes;
@@ -190,11 +183,11 @@ void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
       // Get the values of the design variables at the nodes
       xvars->getValues(len, nodes, x_values);
 
-     // Condense the design variables so that the x_values array
+      // Condense the design variables so that the x_values array
       // is of length (len) and not len*vars_per_node
-      if (vars_per_node > 1){
-        for ( int j = 0; j < len; j++ ){
-          x_values[j] = x_values[vars_per_node*j + k];
+      if (vars_per_node > 1) {
+        for (int j = 0; j < len; j++) {
+          x_values[j] = x_values[vars_per_node * j + k];
         }
       }
 
@@ -202,13 +195,13 @@ void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
       TACSElementBasis *basis = elements[i]->getElementBasis();
 
       // Zero the values on the right-hand-side
-      memset(rhs_values, 0, max_nodes*sizeof(TacsScalar));
+      memset(rhs_values, 0, max_nodes * sizeof(TacsScalar));
 
-      if (basis){
+      if (basis) {
         // Get the number of quadrature points
         const int nquad = basis->getNumQuadraturePoints();
 
-        for ( int n = 0; n < nquad; n++ ){
+        for (int n = 0; n < nquad; n++) {
           // Get the quadrature weight/point pair
           double pt[3];
           double wt = basis->getQuadraturePoint(n, pt);
@@ -224,7 +217,7 @@ void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
           TacsScalar DUt[3] = {0.0, 0.0, 0.0};
           TacsScalar DUx[3] = {0.0, 0.0, 0.0};
           DUt[0] = U;
-          basis->addWeakResidual(n, pt, wt*detJ, J, 1, DUt, DUx, rhs_values);
+          basis->addWeakResidual(n, pt, wt * detJ, J, 1, DUt, DUx, rhs_values);
         }
       }
 
@@ -248,21 +241,20 @@ void TMRHelmholtzFilter::applyFilter( TACSBVec *xvars ){
     TacsScalar *hpsi;
     const int size = helmholtz_psi->getArray(&hpsi);
 
-    for ( int i = 0; i < size; i++ ){
-      xarr[vars_per_node*i + k] = hpsi[i];
+    for (int i = 0; i < size; i++) {
+      xarr[vars_per_node * i + k] = hpsi[i];
     }
   }
 
-  delete [] Xpts;
-  delete [] x_values;
-  delete [] rhs_values;
+  delete[] Xpts;
+  delete[] x_values;
+  delete[] rhs_values;
 }
 
 /*
   Compute the sensitivity w.r.t the Helmholtz filter
 */
-void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
-                                         TACSBVec *output ){
+void TMRHelmholtzFilter::applyTranspose(TACSBVec *input, TACSBVec *output) {
   output->zeroEntries();
 
   // Get the number of design variables per node
@@ -279,11 +271,11 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
   TACSElement **elements = helmholtz_assembler[0]->getElements();
 
   // Allocate space for element-level data
-  TacsScalar *Xpts = new TacsScalar[ 3*max_nodes ];
-  TacsScalar *x_values = new TacsScalar[ vars_per_node*max_nodes ];
-  TacsScalar *psi_values = new TacsScalar[ max_nodes ];
+  TacsScalar *Xpts = new TacsScalar[3 * max_nodes];
+  TacsScalar *x_values = new TacsScalar[vars_per_node * max_nodes];
+  TacsScalar *psi_values = new TacsScalar[max_nodes];
 
-  for ( int k = 0; k < vars_per_node; k++ ){
+  for (int k = 0; k < vars_per_node; k++) {
     // Get the input array
     TacsScalar *xarr;
     input->getArray(&xarr);
@@ -292,8 +284,8 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
     TacsScalar *hrhs;
     const int size = helmholtz_rhs->getArray(&hrhs);
 
-    for ( int i = 0; i < size; i++ ){
-      hrhs[i] = xarr[vars_per_node*i + k];
+    for (int i = 0; i < size; i++) {
+      hrhs[i] = xarr[vars_per_node * i + k];
     }
 
     // Solve for the filtered values of the design variables
@@ -304,7 +296,7 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
     helmholtz_psi->beginDistributeValues();
     helmholtz_psi->endDistributeValues();
 
-    for ( int i = 0; i < num_elements; i++ ){
+    for (int i = 0; i < num_elements; i++) {
       // Get the values for this element
       int len;
       const int *nodes;
@@ -318,13 +310,13 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
       TACSElementBasis *basis = elements[i]->getElementBasis();
 
       // Zero the values on the right-hand-side
-      memset(x_values, 0, max_nodes*sizeof(TacsScalar));
+      memset(x_values, 0, max_nodes * sizeof(TacsScalar));
 
-      if (basis){
+      if (basis) {
         // Get the number of quadrature points
         const int nquad = basis->getNumQuadraturePoints();
 
-        for ( int n = 0; n < nquad; n++ ){
+        for (int n = 0; n < nquad; n++) {
           // Get the quadrature weight/point pair
           double pt[3];
           double wt = basis->getQuadraturePoint(n, pt);
@@ -340,14 +332,14 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
           TacsScalar DUt[3] = {0.0, 0.0, 0.0};
           TacsScalar DUx[3] = {0.0, 0.0, 0.0};
           DUt[0] = U;
-          basis->addWeakResidual(n, pt, wt*detJ, J, 1, DUt, DUx, x_values);
+          basis->addWeakResidual(n, pt, wt * detJ, J, 1, DUt, DUx, x_values);
         }
       }
 
-      if (vars_per_node > 1){
-        for ( int j = len-1; j >= 0; j-- ){
-          x_values[vars_per_node*j + k] = x_values[j];
-          if (!(j == 0 && k == 0)){
+      if (vars_per_node > 1) {
+        for (int j = len - 1; j >= 0; j--) {
+          x_values[vars_per_node * j + k] = x_values[j];
+          if (!(j == 0 && k == 0)) {
             x_values[j] = 0.0;
           }
         }
@@ -357,9 +349,9 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
     }
   }
 
-  delete [] Xpts;
-  delete [] x_values;
-  delete [] psi_values;
+  delete[] Xpts;
+  delete[] x_values;
+  delete[] psi_values;
 
   output->beginSetValues(TACS_ADD_VALUES);
   output->endSetValues(TACS_ADD_VALUES);
@@ -368,7 +360,7 @@ void TMRHelmholtzFilter::applyTranspose( TACSBVec *input,
 /*
   Set the design variables for each level
 */
-void TMRHelmholtzFilter::setDesignVars( TACSBVec *xvec ){
+void TMRHelmholtzFilter::setDesignVars(TACSBVec *xvec) {
   // Copy the values to the local design variable vector
   x[0]->copyValues(xvec);
 
@@ -376,17 +368,17 @@ void TMRHelmholtzFilter::setDesignVars( TACSBVec *xvec ){
   assembler[0]->setDesignVars(x[0]);
 
   // Set the design variable values on all processors
-  for ( int k = 0; k < nlevels-1; k++ ){
-    filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
+  for (int k = 0; k < nlevels - 1; k++) {
+    filter_interp[k]->multWeightTranspose(x[k], x[k + 1]);
 
-    assembler[k]->setDesignVars(x[k+1]);
+    assembler[k]->setDesignVars(x[k + 1]);
   }
 }
 
 /*
   Add values to the output TACSBVec
 */
-void TMRHelmholtzFilter::addValues( TACSBVec *vec ){
+void TMRHelmholtzFilter::addValues(TACSBVec *vec) {
   vec->beginSetValues(TACS_ADD_VALUES);
   vec->endSetValues(TACS_ADD_VALUES);
 

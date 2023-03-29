@@ -4,8 +4,8 @@ from mpi4py import MPI
 from tmr import TMR
 import unittest
 
-class EgadsTest(unittest.TestCase):
 
+class EgadsTest(unittest.TestCase):
     def test_block(self):
         comm = MPI.COMM_WORLD
 
@@ -47,7 +47,7 @@ class EgadsTest(unittest.TestCase):
 
         # Create the cylinder cutout for the upper box
         x0 = [cx1, cy1, h1]
-        x1 = [cx1, cy1, h1+h2]
+        x1 = [cx1, cy1, h1 + h2]
         C21 = ctx.makeSolidBody(egads.CYLINDER, rdata=[x0, x1, r2])
 
         parts.append(B2.solidBoolean(C21, egads.SUBTRACTION))

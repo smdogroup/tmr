@@ -8,16 +8,17 @@ comm = MPI.COMM_WORLD
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
-p.add_argument('--htarget', type=float, default=4.0)
-p.add_argument('--filename', type=str, default=None, help='STEP file name')
-p.add_argument('--output', type=str, default='surface-mesh.vtk',
-               help='output file name')
+p.add_argument("--htarget", type=float, default=4.0)
+p.add_argument("--filename", type=str, default=None, help="STEP file name")
+p.add_argument(
+    "--output", type=str, default="surface-mesh.vtk", help="output file name"
+)
 args = p.parse_args()
 
 # Get the value of the filename
 filename = args.filename
 if not os.path.isfile(filename):
-    raise ValueError('File %s does not exist'%(filename))
+    raise ValueError("File %s does not exist" % (filename))
 
 # Set the value of the target length scale in the mesh
 htarget = args.htarget

@@ -21,8 +21,8 @@
 #ifndef TMR_TACS_TOPO_CREATOR_H
 #define TMR_TACS_TOPO_CREATOR_H
 
-#include "TMR_TACSCreator.h"
 #include "TACSAssembler.h"
+#include "TMR_TACSCreator.h"
 
 /*
   This is an abstract base class used to create octforests specialized
@@ -32,28 +32,23 @@
 */
 class TMROctTACSTopoCreator : public TMROctTACSCreator {
  public:
-  TMROctTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                         int _design_vars_per_node,
-                         TMROctForest *_filter );
+  TMROctTACSTopoCreator(TMRBoundaryConditions *_bcs, int _design_vars_per_node,
+                        TMROctForest *_filter);
   ~TMROctTACSTopoCreator();
 
   // Create the elements
-  void createElements( int order,
-                       TMROctForest *forest,
-                       int num_elements,
-                       TACSElement **elements );
+  void createElements(int order, TMROctForest *forest, int num_elements,
+                      TACSElement **elements);
 
   // Create the element
-  virtual TACSElement *createElement( int order,
-                                      TMROctant *oct,
-                                      int nweights,
-                                      TMRIndexWeight *weights ) = 0;
+  virtual TACSElement *createElement(int order, TMROctant *oct, int nweights,
+                                     TMRIndexWeight *weights) = 0;
 
  private:
   // Compute the weights for a given point
-  void computeWeights( const int mesh_order, const double *knots,
-                       TMROctant *node, TMROctant *oct,
-                       TMRIndexWeight *weights, double *tmp );
+  void computeWeights(const int mesh_order, const double *knots,
+                      TMROctant *node, TMROctant *oct, TMRIndexWeight *weights,
+                      double *tmp);
 
   // The filter indices. This defines the relationship between the
   // local design variable numbers and the global design variable
@@ -67,29 +62,23 @@ class TMROctTACSTopoCreator : public TMROctTACSCreator {
 */
 class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
  public:
-  TMRQuadTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                          int _design_vars_per_node,
-                          TMRQuadForest *_filter );
+  TMRQuadTACSTopoCreator(TMRBoundaryConditions *_bcs, int _design_vars_per_node,
+                         TMRQuadForest *_filter);
   ~TMRQuadTACSTopoCreator();
 
   // Create the elements
-  void createElements( int order,
-                       TMRQuadForest *forest,
-                       int num_elements,
-                       TACSElement **elements );
+  void createElements(int order, TMRQuadForest *forest, int num_elements,
+                      TACSElement **elements);
 
   // Create the element
-  virtual TACSElement *createElement( int order,
-                                      TMRQuadrant *oct,
-                                      int nweights,
-                                      TMRIndexWeight *weights ) = 0;
+  virtual TACSElement *createElement(int order, TMRQuadrant *oct, int nweights,
+                                     TMRIndexWeight *weights) = 0;
 
  private:
   // Compute the weights for a given point
-  void computeWeights( const int mesh_order, const double *knots,
-                       TMRQuadrant *node, TMRQuadrant *quad,
-                       TMRIndexWeight *weights, double *tmp,
-                       int sort=1 );
+  void computeWeights(const int mesh_order, const double *knots,
+                      TMRQuadrant *node, TMRQuadrant *quad,
+                      TMRIndexWeight *weights, double *tmp, int sort = 1);
 
   // The filter indices. This defines the relationship between the
   // local design variable numbers and the global design variable
@@ -104,26 +93,20 @@ class TMRQuadTACSTopoCreator : public TMRQuadTACSCreator {
 */
 class TMROctConformTACSTopoCreator : public TMROctTACSCreator {
  public:
-  TMROctConformTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                int _design_vars_per_node,
-                                TMROctForest *_forest,
-                                int order=-1,
-                                TMRInterpolationType interp_type=
-                                  TMR_UNIFORM_POINTS);
+  TMROctConformTACSTopoCreator(
+      TMRBoundaryConditions *_bcs, int _design_vars_per_node,
+      TMROctForest *_forest, int order = -1,
+      TMRInterpolationType interp_type = TMR_UNIFORM_POINTS);
   ~TMROctConformTACSTopoCreator();
 
   // Create the elements
-  void createElements( int order,
-                       TMROctForest *forest,
-                       int num_elements,
-                       TACSElement **elements );
+  void createElements(int order, TMROctForest *forest, int num_elements,
+                      TACSElement **elements);
 
   // Create the element
-  virtual TACSElement *createElement( int order,
-                                      TMROctant *oct,
-                                      int nconn,
-                                      const int *index,
-                                      TMROctForest *filter ) = 0;
+  virtual TACSElement *createElement(int order, TMROctant *oct, int nconn,
+                                     const int *index,
+                                     TMROctForest *filter) = 0;
 };
 
 /*
@@ -133,26 +116,20 @@ class TMROctConformTACSTopoCreator : public TMROctTACSCreator {
 */
 class TMRQuadConformTACSTopoCreator : public TMRQuadTACSCreator {
  public:
-  TMRQuadConformTACSTopoCreator( TMRBoundaryConditions *_bcs,
-                                 int _design_vars_per_node,
-                                 TMRQuadForest *_forest,
-                                 int order=-1,
-                                 TMRInterpolationType interp_type=
-                                   TMR_UNIFORM_POINTS );
+  TMRQuadConformTACSTopoCreator(
+      TMRBoundaryConditions *_bcs, int _design_vars_per_node,
+      TMRQuadForest *_forest, int order = -1,
+      TMRInterpolationType interp_type = TMR_UNIFORM_POINTS);
   ~TMRQuadConformTACSTopoCreator();
 
   // Create the elements
-  void createElements( int order,
-                       TMRQuadForest *forest,
-                       int num_elements,
-                       TACSElement **elements );
+  void createElements(int order, TMRQuadForest *forest, int num_elements,
+                      TACSElement **elements);
 
   // Create the element
-  virtual TACSElement *createElement( int order,
-                                      TMRQuadrant *oct,
-                                      int nconn,
-                                      const int *index,
-                                      TMRQuadForest *filter ) = 0;
+  virtual TACSElement *createElement(int order, TMRQuadrant *oct, int nconn,
+                                     const int *index,
+                                     TMRQuadForest *filter) = 0;
 };
 
-#endif // TMR_TACS_TOPO_CREATOR_H
+#endif  // TMR_TACS_TOPO_CREATOR_H

@@ -6,12 +6,15 @@ import numpy as np
 import argparse
 import os
 
+
 class CreateMe(TMR.OctCreator):
     def __init__(self, bcs):
         TMR.OctTopoCreator.__init__(bcs)
 
         # Create the stiffness object
-        self.props = constitutive.MaterialProperties(rho=2570.0, E=70e9, nu=0.3, ys=350e6)
+        self.props = constitutive.MaterialProperties(
+            rho=2570.0, E=70e9, nu=0.3, ys=350e6
+        )
         self.stiff = constitutive.SolidConstitutive(self.props)
 
         # Set up the basis function
@@ -27,6 +30,7 @@ class CreateMe(TMR.OctCreator):
             basis = elements.CubicHexaBasis()
 
         return elements.Element3D(self.model, basis)
+
 
 def addFaceTraction(order, forest, attr, assembler, tr):
     vpn = assembler.getVarsPerNode()
@@ -51,15 +55,18 @@ def addFaceTraction(order, forest, attr, assembler, tr):
 
     return aux
 
+
 def createRefined(forest, bcs, pttype=TMR.GAUSS_LOBATTO_POINTS):
     refined = forest.duplicate()
-    refined.setMeshOrder(forest.getMeshOrder()+1, pttype)
+    refined.setMeshOrder(forest.getMeshOrder() + 1, pttype)
     refined.balance(1)
     creator = CreateMe(bcs)
     return refined, creator.createTACS(refined)
 
-def createProblem(forest, bcs, ordering, mesh_order=2, nlevels=2,
-                  pttype=TMR.GAUSS_LOBATTO_POINTS):
+
+def createProblem(
+    forest, bcs, ordering, mesh_order=2, nlevels=2, pttype=TMR.GAUSS_LOBATTO_POINTS
+):
     # Create the forest
     forests = []
     assemblers = []
@@ -75,7 +82,7 @@ def createProblem(forest, bcs, ordering, mesh_order=2, nlevels=2,
     assemblers.append(creator.createTACS(forest, ordering))
 
     while mesh_order > 2:
-        mesh_order = mesh_order-1
+        mesh_order = mesh_order - 1
         forest = forests[-1].duplicate()
         forest.balance(1)
         forest.setMeshOrder(mesh_order, pttype)
@@ -85,7 +92,7 @@ def createProblem(forest, bcs, ordering, mesh_order=2, nlevels=2,
         creator = CreateMe(bcs)
         assemblers.append(creator.createTACS(forest, ordering))
 
-    for i in range(nlevels-1):
+    for i in range(nlevels - 1):
         forest = forests[-1].coarsen()
         forest.setMeshOrder(2, pttype)
         forest.balance(1)
@@ -97,19 +104,21 @@ def createProblem(forest, bcs, ordering, mesh_order=2, nlevels=2,
         assemblers.append(creator.createTACS(forest, ordering))
 
     # Create the multigrid object
-    mg = TMR.createMg(assemblers, forests, use_coarse_direct_solve=True,
-                      use_chebyshev_smoother=False)
+    mg = TMR.createMg(
+        assemblers, forests, use_coarse_direct_solve=True, use_chebyshev_smoother=False
+    )
 
     return assemblers[0], mg
+
 
 # Set the communicator
 comm = MPI.COMM_WORLD
 
 # Create an argument parser to read in arguments from the commnad line
 p = argparse.ArgumentParser()
-p.add_argument('--htarget', type=float, default=0.15)
-p.add_argument('--ordering', type=str, default='natural')
-p.add_argument('--order', type=int, default=3)
+p.add_argument("--htarget", type=float, default=0.15)
+p.add_argument("--ordering", type=str, default="natural")
+p.add_argument("--order", type=int, default=3)
 args = p.parse_args()
 
 # Set the element order
@@ -124,7 +133,7 @@ ordering = args.ordering
 ordering = ordering.lower()
 
 # Set the filename
-filename = 'crank.stp'
+filename = "crank.stp"
 
 # Set the value of the target length scale in the mesh
 htarget = args.htarget
@@ -139,23 +148,23 @@ faces[7].setSource(vols[0], faces[6])
 
 # Set the names
 v0 = None
-faces[4].setName('fixed')
+faces[4].setName("fixed")
 for i in range(faces[4].getNumEdgeLoops()):
     eloop = faces[4].getEdgeLoop(i)
     edges, d = eloop.getEdgeLoop()
     for e in edges:
-        e.setName('fixed')
+        e.setName("fixed")
         v1, v2 = e.getVertices()
         if v0 is None:
-            v1.setName('fully fixed')
-            v2.setName('fixed')
+            v1.setName("fully fixed")
+            v2.setName("fixed")
             v0 = v1
         else:
-            v1.setName('fixed')
-            v2.setName('fixed')
+            v1.setName("fixed")
+            v2.setName("fixed")
 
 # Set the loads
-faces[5].setName('load')
+faces[5].setName("load")
 
 # Create the new mesh
 mesh = TMR.Mesh(comm, geo)
@@ -181,13 +190,13 @@ forest.createTrees(2)
 
 # Set the boundary conditions for the problem
 bcs = TMR.BoundaryConditions()
-bcs.addBoundaryCondition('fixed', [0, 1, 2])
-bcs.addBoundaryCondition('fully fixed')
+bcs.addBoundaryCondition("fixed", [0, 1, 2])
+bcs.addBoundaryCondition("fully fixed")
 
 # Set the ordering to use
-if ordering == 'rcm':
+if ordering == "rcm":
     ordering = TACS.RCM_ORDER
-elif ordering == 'multicolor':
+elif ordering == "multicolor":
     ordering = TACS.MULTICOLOR_ORDER
 else:
     ordering = TACS.NATURAL_ORDER
@@ -196,20 +205,21 @@ niters = 1
 for k in range(niters):
     t = MPI.Wtime()
     # Create the topology problem
-    assembler, mg = createProblem(forest, bcs, ordering,
-                                  mesh_order=order, nlevels=3+k)
+    assembler, mg = createProblem(
+        forest, bcs, ordering, mesh_order=order, nlevels=3 + k
+    )
     if comm.rank == 0:
-        print('Creating TACS assembler objects', MPI.Wtime() - t)
+        print("Creating TACS assembler objects", MPI.Wtime() - t)
 
     # Computet the surface traction magnitude
     diameter = 1.0
-    circ = np.pi*diameter
-    Area = 0.25*circ
-    ty = 5000.0/Area
+    circ = np.pi * diameter
+    Area = 0.25 * circ
+    ty = 5000.0 / Area
     tr = [0.0, ty, 0.0]
 
     # Add the surface traction
-    aux = addFaceTraction(order, forest, 'load', assembler, tr)
+    aux = addFaceTraction(order, forest, "load", assembler, tr)
     assembler.setAuxElements(aux)
 
     # Create the assembler object
@@ -218,13 +228,13 @@ for k in range(niters):
     t = MPI.Wtime()
     mg.assembleJacobian(1.0, 0.0, 0.0, res)
     if comm.rank == 0:
-        print('Assembling the Jacobians', MPI.Wtime() - t)
+        print("Assembling the Jacobians", MPI.Wtime() - t)
 
     # Factor the matrix
     t = MPI.Wtime()
     mg.factor()
     if comm.rank == 0:
-        print('Factoring the Jacobians', MPI.Wtime() - t)
+        print("Factoring the Jacobians", MPI.Wtime() - t)
     gmres = TACS.KSM(mg.getMat(), mg, 100, isFlexible=1)
     gmres.setMonitor(comm, freq=1)
     gmres.solve(res, ans)
@@ -234,21 +244,23 @@ for k in range(niters):
     assembler.setVariables(ans)
 
     # Output for visualization
-    flag = (TACS.OUTPUT_CONNECTIVITY |
-            TACS.OUTPUT_NODES |
-            TACS.OUTPUT_DISPLACEMENTS |
-            TACS.OUTPUT_STRESSES)
+    flag = (
+        TACS.OUTPUT_CONNECTIVITY
+        | TACS.OUTPUT_NODES
+        | TACS.OUTPUT_DISPLACEMENTS
+        | TACS.OUTPUT_STRESSES
+    )
     f5 = TACS.ToFH5(assembler, TACS.SOLID_ELEMENT, flag)
-    f5.writeToFile('crank%d.f5'%(k))
+    f5.writeToFile("crank%d.f5" % (k))
 
     if order >= 4:
         if comm.rank == 0:
-            print('Cannot perform adaptive refinement with order >= 4')
+            print("Cannot perform adaptive refinement with order >= 4")
         break
 
     ksweight = 10
     func = functions.KSFailure(assembler, ksweight)
-    func.setKSFailureType('continuous')
+    func.setKSFailureType("continuous")
 
     func = functions.Compliance(assembler)
     fval = assembler.evalFunctions([func])
@@ -259,9 +271,9 @@ for k in range(niters):
 
         if True:
             # Compute the strain energy error estimate
-            err_est, error = TMR.strainEnergyError(forest, assembler,
-                                                   forest_refined,
-                                                   assembler_refined)
+            err_est, error = TMR.strainEnergyError(
+                forest, assembler, forest_refined, assembler_refined
+            )
         else:
             # Compute the adjoint
             assembler.evalSVSens(func, res)
@@ -272,20 +284,20 @@ for k in range(niters):
             adjoint.scale(-1.0)
 
             # Compute the adjoint and use adjoint-based refinement
-            err_est, func_corr, error = \
-                     TMR.adjointError(forest, assembler,
-                                      forest_refined, assembler_refined, adjoint)
+            err_est, func_corr, error = TMR.adjointError(
+                forest, assembler, forest_refined, assembler_refined, adjoint
+            )
 
         # Print the error estimate
         if comm.rank == 0:
-            print('estimate = ', err_est)
+            print("estimate = ", err_est)
 
         # Compute the refinement from the error estimate
         nbins = 30
         low = -15
         high = 0
-        bounds = 10**np.linspace(low, high, nbins+1)
-        bins = np.zeros(nbins+2, dtype=np.int)
+        bounds = 10 ** np.linspace(low, high, nbins + 1)
+        bins = np.zeros(nbins + 2, dtype=np.int)
 
         # Compute the bins
         for i in range(len(error)):
@@ -294,10 +306,9 @@ for k in range(niters):
             elif error[i] > bounds[-1]:
                 bins[-1] += 1
             else:
-                for j in range(len(bounds)-1):
-                    if (error[i] >= bounds[j] and
-                        error[i] < bounds[j+1]):
-                        bins[j+1] += 1
+                for j in range(len(bounds) - 1):
+                    if error[i] >= bounds[j] and error[i] < bounds[j + 1]:
+                        bins[j + 1] += 1
 
         # Compute the number of bins
         bins = comm.allreduce(bins, MPI.SUM)
@@ -309,24 +320,28 @@ for k in range(niters):
         bsum = bins[-1]
         cutoff = bounds[-1]
         for i in range(len(bounds), -1, -1):
-            if bsum > 0.25*total:
+            if bsum > 0.25 * total:
                 cutoff = bounds[i]
                 break
             bsum += bins[i]
 
         # Print out the result
         if comm.rank == 0:
-            print('%10s  %10s  %12s  %12s'%(
-                'low', 'high', 'bins', 'percentage'))
-            print('%10.2e  %10s  %12d  %12.2f'%(
-                bounds[-1], ' ', bins[-1], 1.0*bins[-1]/total))
-            for k in range(nbins-1, -1, -1):
-                print('%10.2e  %10.2e  %12d  %12.2f'%(
-                    bounds[k], bounds[k+1], bins[k+1],
-                    100.0*bins[k]/total))
-            print('%10s  %10.2e  %12d  %12.2f'%(
-                ' ', bounds[0], bins[0], 100.0*bins[0]/total))
-            print('cutoff:  %15.2e'%(cutoff))
+            print("%10s  %10s  %12s  %12s" % ("low", "high", "bins", "percentage"))
+            print(
+                "%10.2e  %10s  %12d  %12.2f"
+                % (bounds[-1], " ", bins[-1], 1.0 * bins[-1] / total)
+            )
+            for k in range(nbins - 1, -1, -1):
+                print(
+                    "%10.2e  %10.2e  %12d  %12.2f"
+                    % (bounds[k], bounds[k + 1], bins[k + 1], 100.0 * bins[k] / total)
+                )
+            print(
+                "%10s  %10.2e  %12d  %12.2f"
+                % (" ", bounds[0], bins[0], 100.0 * bins[0] / total)
+            )
+            print("cutoff:  %15.2e" % (cutoff))
 
         # Compute the refinement
         refine = np.zeros(len(error), dtype=np.intc)

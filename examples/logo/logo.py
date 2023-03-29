@@ -1,6 +1,6 @@
-'''
+"""
 Create the TMR logo
-'''
+"""
 
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
@@ -10,13 +10,13 @@ from tmr import TMR
 width = 72
 height = 32
 
-img = Image.new('RGB', (width, height), color=(255, 255, 255))
-fnt = ImageFont.truetype('/Library/Fonts/Arial Bold.ttf', 32)
+img = Image.new("RGB", (width, height), color=(255, 255, 255))
+fnt = ImageFont.truetype("/Library/Fonts/Arial Bold.ttf", 32)
 d = ImageDraw.Draw(img)
-d.text((2,-2), 'TMR', font=fnt, fill=(0, 0, 0))
-img.save('tmr.png')
+d.text((2, -2), "TMR", font=fnt, fill=(0, 0, 0))
+img.save("tmr.png")
 pixels = list(img.getdata())
-pixels = [pixels[i*width:(i + 1)*width] for i in range(height)]
+pixels = [pixels[i * width : (i + 1) * width] for i in range(height)]
 
 # Set the bounding box for now
 xlow = [0.0, 0.0, -5.0]
@@ -34,10 +34,10 @@ cutoff = 128
 for j in range(height):
     for i in range(width):
         (R, G, B) = pixels[j][i]
-        gscale = (0.3*R) + (0.59*G) + (0.11*B)
+        gscale = (0.3 * R) + (0.59 * G) + (0.11 * B)
         if gscale < cutoff:
-            xlow = [i, height-j, -1]
-            xhigh = [i+1, height-(j+1), 1]
+            xlow = [i, height - j, -1]
+            xhigh = [i + 1, height - (j + 1), 1]
             box.addBox(xlow, xhigh, h)
 
 # Set the number of load cases
@@ -48,8 +48,8 @@ y = [0.0, height]
 pts = np.zeros((nu, nv, 3))
 for j in range(nv):
     for i in range(nu):
-        pts[i,j,0] = x[i]
-        pts[i,j,1] = y[j]
+        pts[i, j, 0] = x[i]
+        pts[i, j, 1] = y[j]
 
 # Create the b-spline surface
 surf = TMR.BsplineSurface(pts)
@@ -104,5 +104,4 @@ opts.mesh_type_default = TMR.UNSTRUCTURED
 # Mesh the geometry with the given target size
 htarget = 10.0
 mesh.mesh(fs=box, opts=opts)
-mesh.writeToVTK('surface-mesh.vtk')
-
+mesh.writeToVTK("surface-mesh.vtk")

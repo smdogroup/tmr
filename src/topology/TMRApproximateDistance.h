@@ -21,17 +21,15 @@
 #ifndef TMR_APPROXIMATE_DISTANCE_H
 #define TMR_APPROXIMATE_DISTANCE_H
 
-#include "TMRQuadForest.h"
-#include "TMROctForest.h"
 #include "TACSAssembler.h"
+#include "TMROctForest.h"
+#include "TMRQuadForest.h"
 
-void TMRApproximateDistance( TMRQuadForest *filter, int index,
-                             double cutoff, double t,
-                             TACSBVec *rho, const char *filename,
-                             double *min_dist );
-void TMRApproximateDistance( TMROctForest *filter, int index,
-                             double cutoff, double t,
-                             TACSBVec *rho, const char *filename,
-                             double *min_dist );
+void TMRApproximateDistance(TMRQuadForest *filter, int index, double cutoff,
+                            double t, TACSBVec *rho, const char *filename,
+                            double *min_dist);
+void TMRApproximateDistance(TMROctForest *filter, int index, double cutoff,
+                            double t, TACSBVec *rho, const char *filename,
+                            double *min_dist);
 
-#endif // TMR_APPROXIMATE_DISTANCE_H
+#endif  // TMR_APPROXIMATE_DISTANCE_H

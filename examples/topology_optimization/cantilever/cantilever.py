@@ -26,6 +26,7 @@ import numpy as np
 import argparse
 import os
 
+
 class OctCreator(TMR.OctConformTopoCreator):
     """
     An instance of an OctCreator class.
@@ -36,6 +37,7 @@ class OctCreator(TMR.OctConformTopoCreator):
     (In a conformal filter, they must have the same element mesh but may have
     different degree of approximation.)
     """
+
     def __init__(self, bcs, filt, props=None):
         TMR.OctConformTopoCreator.__init__(bcs, filt)
         self.props = props
@@ -71,6 +73,7 @@ class OctCreator(TMR.OctConformTopoCreator):
         """
         return self.element
 
+
 class CreatorCallback:
     def __init__(self, bcs, props):
         self.bcs = bcs
@@ -92,7 +95,8 @@ class CreatorCallback:
         creator = OctCreator(self.bcs, forest, props=self.props)
         return creator, forest
 
-def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
+
+def create_forest(comm, depth, htarget=5.0, filename="cantilever.stp"):
     """
     Create an initial forest for analysis and optimization
 
@@ -117,10 +121,10 @@ def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
     volumes = geo.getVolumes()
 
     # Set source and target faces
-    faces[3].setName('fixed')
+    faces[3].setName("fixed")
     faces[4].setSource(volumes[0], faces[5])
-    verts[4].setName('pt1')
-    verts[3].setName('pt2')
+    verts[4].setName("pt1")
+    verts[3].setName("pt2")
 
     # Create the mesh
     mesh = TMR.Mesh(comm, geo)
@@ -146,6 +150,7 @@ def create_forest(comm, depth, htarget=5.0, filename='cantilever.stp'):
 
     return forest
 
+
 class OutputCallback:
     def __init__(self, assembler, iter_offset=0):
         self.fig = None
@@ -153,23 +158,26 @@ class OutputCallback:
         self.xt = self.assembler.createDesignVec()
 
         # Set the output file name
-        flag = (TACS.OUTPUT_CONNECTIVITY |
-                TACS.OUTPUT_NODES |
-                TACS.OUTPUT_EXTRAS)
+        flag = TACS.OUTPUT_CONNECTIVITY | TACS.OUTPUT_NODES | TACS.OUTPUT_EXTRAS
         self.f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
         self.iter_offset = iter_offset
 
         return
 
     def write_output(self, prefix, itr, oct_forest, quad_forest, x):
-
-        self.f5.writeToFile(os.path.join(prefix, 'output%d.f5'%(itr + self.iter_offset)))
+        self.f5.writeToFile(
+            os.path.join(prefix, "output%d.f5" % (itr + self.iter_offset))
+        )
 
         self.assembler.getDesignVars(self.xt)
-        TMR.writeSTLToBin(os.path.join(prefix, 'level_set_output%d.bstl'%(itr + self.iter_offset)),
-                          oct_forest, self.xt)
+        TMR.writeSTLToBin(
+            os.path.join(prefix, "level_set_output%d.bstl" % (itr + self.iter_offset)),
+            oct_forest,
+            self.xt,
+        )
 
         return
+
 
 class MFilterCreator:
     def __init__(self, r0_frac, N, a=0.1):
@@ -182,13 +190,15 @@ class MFilterCreator:
         Create and initialize a filter with the specified parameters
         """
         # Find the characteristic length of the domain and set the filter length scale
-        r0 = self.r0_frac*self.a
+        r0 = self.r0_frac * self.a
         mfilter = TopOptUtils.Mfilter(self.N, assemblers, filters, dim=3, r=r0)
         mfilter.initialize()
         return mfilter
 
-def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
-                   density=2600.0, iter_offset=0):
+
+def create_problem(
+    forest, bcs, props, nlevels, vol_frac=0.25, density=2600.0, iter_offset=0
+):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
 
@@ -220,32 +230,32 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
     mfilter = MFilterCreator(r0_frac, N, a=len0)
     filter_type = mfilter.filter_callback
     obj = CreatorCallback(bcs, props)
-    problem = TopOptUtils.createTopoProblem(forest, obj.creator_callback,
-                                            filter_type, use_galerkin=True,
-                                            nlevels=nlevels)
+    problem = TopOptUtils.createTopoProblem(
+        forest, obj.creator_callback, filter_type, use_galerkin=True, nlevels=nlevels
+    )
 
     # Get the assembler object we just created
     assembler = problem.getAssembler()
 
     # Set the load
     P = 1.0e3
-    force = TopOptUtils.computeVertexLoad('pt1', forest, assembler, [0, P, 0])
-    temp = TopOptUtils.computeVertexLoad('pt2', forest, assembler, [0, 0, P])
+    force = TopOptUtils.computeVertexLoad("pt1", forest, assembler, [0, P, 0])
+    temp = TopOptUtils.computeVertexLoad("pt2", forest, assembler, [0, 0, P])
     force.axpy(1.0, temp)
 
     # Set the load cases into the topology optimization problem
     problem.setLoadCases([force])
 
     # Compute the fixed mass target
-    lx = 50.0 # mm
-    ly = 10.0 # mm
-    lz = 10.0 # mm
-    vol = lx*ly*lz
-    m_fixed = vol_frac*(vol*density)
+    lx = 50.0  # mm
+    ly = 10.0  # mm
+    lz = 10.0  # mm
+    vol = lx * ly * lz
+    m_fixed = vol_frac * (vol * density)
 
     # Set the mass constraint
     funcs = [functions.StructuralMass(assembler)]
-    problem.addConstraints(0, funcs, [-m_fixed], [-1.0/m_fixed])
+    problem.addConstraints(0, funcs, [-m_fixed], [-1.0 / m_fixed])
 
     # Set the objective (scale the compliance objective)
     problem.setObjective([1.0e3])
@@ -255,52 +265,52 @@ def create_problem(forest, bcs, props, nlevels, vol_frac=0.25,
 
     return problem
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Set the optimization parameters
     optimization_options = {
         # Set the algorithm to use
-        'algorithm': 'tr',
-
+        "algorithm": "tr",
         # Set the type of quasi-Newton method to use
-        'qn_type': 'bfgs',
-        'qn_subspace_size': 2,
-
+        "qn_type": "bfgs",
+        "qn_subspace_size": 2,
         # Parameters for the trust region method
-        'tr_init_size': 0.01,
-        'tr_max_size': 0.1,
-        'tr_min_size': 0.01,
-        'tr_eta': 0.25,
-        'tr_max_iterations': 25,
-        'tr_write_output_frequency': 1,
-        'penalty_gamma': 20.0,
-        'tr_steering_barrier_strategy': 'default',
-        'tr_steering_starting_point_strategy': 'default',
-
+        "tr_init_size": 0.01,
+        "tr_max_size": 0.1,
+        "tr_min_size": 0.01,
+        "tr_eta": 0.25,
+        "tr_max_iterations": 25,
+        "tr_write_output_frequency": 1,
+        "penalty_gamma": 20.0,
+        "tr_steering_barrier_strategy": "default",
+        "tr_steering_starting_point_strategy": "default",
         # Parameters for the interior point method (used to solve the
         # trust region subproblem)
-        'abs_res_tol': 1e-8,
-        'max_major_iters': 100,
-        'norm_type': 'l1',
-        'init_barrier_param': 10.0,
-        'use_line_search': False,
-        'barrier_strategy': 'mehrotra_predictor_corrector',
-        'starting_point_strategy': 'affine_step'}
+        "abs_res_tol": 1e-8,
+        "max_major_iters": 100,
+        "norm_type": "l1",
+        "init_barrier_param": 10.0,
+        "use_line_search": False,
+        "barrier_strategy": "mehrotra_predictor_corrector",
+        "starting_point_strategy": "affine_step",
+    }
 
-    prefix = 'results'
+    prefix = "results"
 
     # Set the communicator
     comm = MPI.COMM_WORLD
 
-    nlevels = 4 # Number of multigrid levels
-    forest = create_forest(comm, nlevels-1)
+    nlevels = 4  # Number of multigrid levels
+    forest = create_forest(comm, nlevels - 1)
 
     # Set the boundary conditions for the problem
     bcs = TMR.BoundaryConditions()
-    bcs.addBoundaryCondition('fixed')
+    bcs.addBoundaryCondition("fixed")
 
     # Create the material properties
-    material_properties = constitutive.MaterialProperties(rho=2600.0, E=70e9,
-                                                          nu=0.3, ys=350e6)
+    material_properties = constitutive.MaterialProperties(
+        rho=2600.0, E=70e9, nu=0.3, ys=350e6
+    )
     props = TMR.StiffnessProperties(material_properties, q=8.0)
 
     # Set the original filter to NULL
@@ -314,9 +324,10 @@ if __name__ == '__main__':
     max_iterations = 4
     for step in range(max_iterations):
         # Create the problem
-        iter_offset = step*optimization_options['tr_max_iterations']
-        problem = create_problem(forest, bcs, props, nlevels + step,
-                                 iter_offset=iter_offset)
+        iter_offset = step * optimization_options["tr_max_iterations"]
+        problem = create_problem(
+            forest, bcs, props, nlevels + step, iter_offset=iter_offset
+        )
 
         # Set the prefix
         problem.setPrefix(prefix)
@@ -337,12 +348,16 @@ if __name__ == '__main__':
 
         orig_filter = filtr
 
-        if step == max_iterations-1:
-            optimization_options['tr_max_iterations'] = 10
-        count += optimization_options['tr_max_iterations']
+        if step == max_iterations - 1:
+            optimization_options["tr_max_iterations"] = 10
+        count += optimization_options["tr_max_iterations"]
 
-        optimization_options['output_file'] = os.path.join(prefix, 'output_file%d.dat'%(step))
-        optimization_options['tr_output_file'] = os.path.join(prefix, 'tr_output_file%d.dat'%(step))
+        optimization_options["output_file"] = os.path.join(
+            prefix, "output_file%d.dat" % (step)
+        )
+        optimization_options["tr_output_file"] = os.path.join(
+            prefix, "tr_output_file%d.dat" % (step)
+        )
 
         # Optimize
         opt = ParOpt.Optimizer(problem, optimization_options)
@@ -358,18 +373,23 @@ if __name__ == '__main__':
             TopOptUtils.densityBasedRefine(forest, assembler, lower=0.05, upper=0.5)
         else:
             # Perform refinement based on distance
-            dist_file = os.path.join(prefix, 'distance_solution%d.f5'%(step))
+            dist_file = os.path.join(prefix, "distance_solution%d.f5" % (step))
 
             # Compute the characteristic domain length
-            lx = 50.0 # mm
-            ly = 10.0 # mm
-            lz = 10.0 # mm
-            vol = lx*ly*lz
-            domain_length = vol**(1.0/3.0)
-            refine_distance = 0.025*domain_length
-            TopOptUtils.approxDistanceRefine(forest, filtr, assembler, refine_distance,
-                                             domain_length=domain_length,
-                                             filename=dist_file)
+            lx = 50.0  # mm
+            ly = 10.0  # mm
+            lz = 10.0  # mm
+            vol = lx * ly * lz
+            domain_length = vol ** (1.0 / 3.0)
+            refine_distance = 0.025 * domain_length
+            TopOptUtils.approxDistanceRefine(
+                forest,
+                filtr,
+                assembler,
+                refine_distance,
+                domain_length=domain_length,
+                filename=dist_file,
+            )
 
         # Repartition the mesh
         forest.balance(1)

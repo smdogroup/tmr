@@ -5,40 +5,35 @@
 
 class TACSPoissonGradFunction : public TACSFunction {
  public:
-  enum PoissonGradFunctionType { DISCRETE, CONTINUOUS,
-                                 PNORM_DISCRETE, PNORM_CONTINUOUS };
+  enum PoissonGradFunctionType {
+    DISCRETE,
+    CONTINUOUS,
+    PNORM_DISCRETE,
+    PNORM_CONTINUOUS
+  };
 
-  TACSPoissonGradFunction( TACSAssembler *_tacs,
-                           TacsScalar _ksWeight,
-                           const TacsScalar _dir[],
-                           PoissonGradFunctionType ksType=CONTINUOUS );
+  TACSPoissonGradFunction(TACSAssembler *_tacs, TacsScalar _ksWeight,
+                          const TacsScalar _dir[],
+                          PoissonGradFunctionType ksType = CONTINUOUS);
   ~TACSPoissonGradFunction();
 
   const char *getObjectName();
-  void setGradFunctionType( PoissonGradFunctionType _ksType );
+  void setGradFunctionType(PoissonGradFunctionType _ksType);
 
-  void initEvaluation( EvaluationType ftype );
-  void finalEvaluation( EvaluationType ftype );
-  void elementWiseEval( EvaluationType ftype,
-                        int elemIndex, TACSElement *element,
-                        double time,
-                        TacsScalar scale,
-                        const TacsScalar Xpts[],
-                        const TacsScalar vars[],
-                        const TacsScalar dvars[],
-                        const TacsScalar ddvars[] );
+  void initEvaluation(EvaluationType ftype);
+  void finalEvaluation(EvaluationType ftype);
+  void elementWiseEval(EvaluationType ftype, int elemIndex,
+                       TACSElement *element, double time, TacsScalar scale,
+                       const TacsScalar Xpts[], const TacsScalar vars[],
+                       const TacsScalar dvars[], const TacsScalar ddvars[]);
 
   TacsScalar getFunctionValue();
 
-  oid getElementSVSens( int elemIndex, TACSElement *element,
-                        double time,
-                        TacsScalar alpha, TacsScalar beta,
-                        TacsScalar gamma,
-                        const TacsScalar Xpts[],
-                        const TacsScalar vars[],
-                        const TacsScalar dvars[],
-                        const TacsScalar ddvars[],
-                        TacsScalar dfdu[] );
+  oid getElementSVSens(int elemIndex, TACSElement *element, double time,
+                       TacsScalar alpha, TacsScalar beta, TacsScalar gamma,
+                       const TacsScalar Xpts[], const TacsScalar vars[],
+                       const TacsScalar dvars[], const TacsScalar ddvars[],
+                       TacsScalar dfdu[]);
 
  private:
   // The name of the function
@@ -62,4 +57,4 @@ class TACSPoissonGradFunction : public TACSFunction {
   int maxNumNodes;
 };
 
-#endif // TACS_POISSON_GRAD_FUNCTION_H
+#endif  // TACS_POISSON_GRAD_FUNCTION_H

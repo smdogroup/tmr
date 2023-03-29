@@ -37,17 +37,15 @@
   output:
   N:      the values of the shape functions at u
 */
-inline void lagrange_shape_functions( const int order,
-                                      const double u,
-                                      const double *knots,
-                                      double *N ){
+inline void lagrange_shape_functions(const int order, const double u,
+                                     const double *knots, double *N) {
   // Loop over the shape functions
-  for ( int i = 0; i < order; i++ ){
+  for (int i = 0; i < order; i++) {
     N[i] = 1.0;
-    for ( int j = 0; j < order; j++ ){
-      if (i != j){
-        double d = 1.0/(knots[i] - knots[j]);
-        N[i] *= (u - knots[j])*d;
+    for (int j = 0; j < order; j++) {
+      if (i != j) {
+        double d = 1.0 / (knots[i] - knots[j]);
+        N[i] *= (u - knots[j]) * d;
       }
     }
   }
@@ -66,27 +64,25 @@ inline void lagrange_shape_functions( const int order,
   N:      the values of the shape functions at u
   Nd:     the derivative of the shape functions at u
 */
-inline void lagrange_shape_func_derivative( const int order,
-                                            const double u,
-                                            const double *knots,
-                                            double *N,
-                                            double *Nd ){
+inline void lagrange_shape_func_derivative(const int order, const double u,
+                                           const double *knots, double *N,
+                                           double *Nd) {
   // Loop over the shape function knot locations
-  for ( int i = 0; i < order; i++ ){
+  for (int i = 0; i < order; i++) {
     N[i] = 1.0;
     Nd[i] = 0.0;
 
     // Loop over each point again, except for the current control
     // point, adding the contribution to the shape function
-    for ( int j = 0; j < order; j++ ){
-      if (i != j){
-        double d = 1.0/(knots[i] - knots[j]);
-        N[i] *= (u - knots[j])*d;
+    for (int j = 0; j < order; j++) {
+      if (i != j) {
+        double d = 1.0 / (knots[i] - knots[j]);
+        N[i] *= (u - knots[j]) * d;
 
         // Now add up the contribution to the derivative
-        for ( int k = 0; k < order; k++ ){
-          if (k != i && k != j){
-            d *= (u - knots[k])/(knots[i] - knots[k]);
+        for (int k = 0; k < order; k++) {
+          if (k != i && k != j) {
+            d *= (u - knots[k]) / (knots[i] - knots[k]);
           }
         }
 
@@ -111,37 +107,36 @@ inline void lagrange_shape_func_derivative( const int order,
   Nd:     the derivative of the shape functions at u
   Ndd:    the second derivative of the shape functions at u
 */
-inline void lagrange_shape_func_second_derivative( const int order,
-                                                   const double u,
-                                                   const double *knots,
-                                                   double *N,
-                                                   double *Nd,
-                                                   double *Ndd ){
- // Loop over the shape function control points
-  for ( int i = 0; i < order; i++ ){
+inline void lagrange_shape_func_second_derivative(const int order,
+                                                  const double u,
+                                                  const double *knots,
+                                                  double *N, double *Nd,
+                                                  double *Ndd) {
+  // Loop over the shape function control points
+  for (int i = 0; i < order; i++) {
     N[i] = 1.0;
     Nd[i] = 0.0;
     Ndd[i] = 0.0;
 
     // Loop over each point again, except for the current control
     // point, adding the contribution to the shape function
-    for ( int j = 0; j < order; j++ ){
-      if (i != j){
-        double tj = 1.0/(knots[i] - knots[j]);
+    for (int j = 0; j < order; j++) {
+      if (i != j) {
+        double tj = 1.0 / (knots[i] - knots[j]);
         double dj = tj;
-        N[i] = N[i]*(u - knots[j])*dj;
+        N[i] = N[i] * (u - knots[j]) * dj;
 
         // Loop over all the knots again to determine the
         // contribution to the derivative of the shape function
-        for ( int k = 0; k < order; k++ ){
-          if (k != i && k != j){
-            double dk = 1.0/(knots[i] - knots[k]);
-            dj *= (u - knots[k])*dk;
+        for (int k = 0; k < order; k++) {
+          if (k != i && k != j) {
+            double dk = 1.0 / (knots[i] - knots[k]);
+            dj *= (u - knots[k]) * dk;
             dk *= tj;
 
-            for ( int m = 0; m < order; m++ ){
-              if (m != i && m != j && m != k){
-                dk *= (u - knots[m])/(knots[i] - knots[m]);
+            for (int m = 0; m < order; m++) {
+              if (m != i && m != j && m != k) {
+                dk *= (u - knots[m]) / (knots[i] - knots[m]);
               }
             }
             Ndd[i] += dk;
@@ -166,19 +161,18 @@ inline void lagrange_shape_func_second_derivative( const int order,
   output:
   N:      the values of the shape functions at u
 */
-inline void bernstein_shape_functions( const int order,
-                                       const double u,
-                                       double *N ){
-  double u1 = 0.5*(1.0 - u);
-  double u2 = 0.5*(u + 1.0);
+inline void bernstein_shape_functions(const int order, const double u,
+                                      double *N) {
+  double u1 = 0.5 * (1.0 - u);
+  double u2 = 0.5 * (u + 1.0);
 
   N[0] = 1.0;
-  for ( int j = 1; j < order; j++ ){
+  for (int j = 1; j < order; j++) {
     double s = 0.0;
-    for ( int k = 0; k < j; k++ ){
+    for (int k = 0; k < j; k++) {
       double t = N[k];
-      N[k] = s + u1*t;
-      s = u2*t;
+      N[k] = s + u1 * t;
+      s = u2 * t;
     }
     N[j] = s;
   }
@@ -197,33 +191,31 @@ inline void bernstein_shape_functions( const int order,
   N:      the values of the shape functions at u
   Nd:     the derivative of the shape functions at u
 */
-inline void bernstein_shape_func_derivative( const int order,
-                                             const double u,
-                                             double *N,
-                                             double *Nd ){
-  double u1 = 0.5*(1.0 - u);
-  double u2 = 0.5*(u + 1.0);
+inline void bernstein_shape_func_derivative(const int order, const double u,
+                                            double *N, double *Nd) {
+  double u1 = 0.5 * (1.0 - u);
+  double u2 = 0.5 * (u + 1.0);
 
   // Compute the basis for the order-1 bernstein polynomial
   N[0] = 1.0;
-  for ( int j = 1; j < order-1; j++ ){
+  for (int j = 1; j < order - 1; j++) {
     double s = 0.0;
-    for ( int k = 0; k < j; k++ ){
+    for (int k = 0; k < j; k++) {
       double t = N[k];
-      N[k] = s + u1*t;
-      s = u2*t;
+      N[k] = s + u1 * t;
+      s = u2 * t;
     }
     N[j] = s;
   }
 
   // Add the contributions to the derivative
-  for ( int j = 0; j < order; j++ ){
+  for (int j = 0; j < order; j++) {
     Nd[j] = 0.0;
-    if (j > 0){
-      Nd[j] += 0.5*(order-1)*N[j-1];
+    if (j > 0) {
+      Nd[j] += 0.5 * (order - 1) * N[j - 1];
     }
-    if (j < order-1){
-      Nd[j] -= 0.5*(order-1)*N[j];
+    if (j < order - 1) {
+      Nd[j] -= 0.5 * (order - 1) * N[j];
     }
   }
 
@@ -245,44 +237,42 @@ inline void bernstein_shape_func_derivative( const int order,
   Nd:     the derivative of the shape functions at u
   Ndd:    the second derivative of the shape functions at u
 */
-inline void bernstein_shape_func_second_derivative( const int order,
-                                                    const double u,
-                                                    double *N,
-                                                    double *Nd,
-                                                    double *Ndd ){
-  double u1 = 0.5*(1.0 - u);
-  double u2 = 0.5*(u + 1.0);
+inline void bernstein_shape_func_second_derivative(const int order,
+                                                   const double u, double *N,
+                                                   double *Nd, double *Ndd) {
+  double u1 = 0.5 * (1.0 - u);
+  double u2 = 0.5 * (u + 1.0);
 
   // Compute the basis for the order-1 bernstein polynomial
   N[0] = 1.0;
-  for ( int j = 1; j < order-2; j++ ){
+  for (int j = 1; j < order - 2; j++) {
     double s = 0.0;
-    for ( int k = 0; k < j; k++ ){
+    for (int k = 0; k < j; k++) {
       double t = N[k];
-      N[k] = s + u1*t;
-      s = u2*t;
+      N[k] = s + u1 * t;
+      s = u2 * t;
     }
     N[j] = s;
   }
 
   // Add the contributions to the derivative
-  for ( int j = 0; j < order-1; j++ ){
+  for (int j = 0; j < order - 1; j++) {
     Nd[j] = 0.0;
-    if (j > 0){
-      Nd[j] += 0.5*(order-2)*N[j-1];
+    if (j > 0) {
+      Nd[j] += 0.5 * (order - 2) * N[j - 1];
     }
-    if (j < order-2){
-      Nd[j] -= 0.5*(order-2)*N[j];
+    if (j < order - 2) {
+      Nd[j] -= 0.5 * (order - 2) * N[j];
     }
   }
 
-  for ( int j = 0; j < order; j++ ){
+  for (int j = 0; j < order; j++) {
     Ndd[j] = 0.0;
-    if (j > 0){
-      Ndd[j] += 0.5*(order-1)*Nd[j-1];
+    if (j > 0) {
+      Ndd[j] += 0.5 * (order - 1) * Nd[j - 1];
     }
-    if (j < order-1){
-      Ndd[j] -= 0.5*(order-1)*Nd[j];
+    if (j < order - 1) {
+      Ndd[j] -= 0.5 * (order - 1) * Nd[j];
     }
   }
 
@@ -306,7 +296,7 @@ inline void bernstein_shape_func_second_derivative( const int order,
   o-------o-------o
 
   The basis functions on Ec are indexed from -(mesh_order-1) to
-  (mesh_order-1). The input argument u gives the index of the basis 
+  (mesh_order-1). The input argument u gives the index of the basis
   function on the two adjacent refined elements.
 
   input:
@@ -314,155 +304,131 @@ inline void bernstein_shape_func_second_derivative( const int order,
   u:           the index of the basis function on the refined edge
 
   output:
-  N:           the weights on the basis functions on the coarse edge 
+  N:           the weights on the basis functions on the coarse edge
 */
-inline void eval_bernstein_weights( const int mesh_order,
-                                    const int u,
-                                    double *N ){
+inline void eval_bernstein_weights(const int mesh_order, const int u,
+                                   double *N) {
   // Weights evaluated from the subdivison matrix
-  if (mesh_order == 2){
-    if (u == -1){
+  if (mesh_order == 2) {
+    if (u == -1) {
       N[0] = 1.0;
       N[1] = 0.0;
-    }
-    else if (u == 0){
+    } else if (u == 0) {
       N[0] = 0.5;
       N[1] = 0.5;
-    }
-    else { // u == 1
+    } else {  // u == 1
       N[0] = 0.0;
       N[1] = 1.0;
     }
-  }
-  else if (mesh_order == 3){
-    if (u == -2){
+  } else if (mesh_order == 3) {
+    if (u == -2) {
       N[0] = 1.0;
       N[1] = 0.0;
       N[2] = 0.0;
-    }
-    else if (u == -1){
+    } else if (u == -1) {
       N[0] = 0.5;
       N[1] = 0.5;
       N[2] = 0.0;
-    }
-    else if (u == 0){
+    } else if (u == 0) {
       N[0] = 0.25;
       N[1] = 0.5;
       N[2] = 0.25;
-    }
-    else if (u == 1){
+    } else if (u == 1) {
       N[0] = 0.0;
       N[1] = 0.5;
       N[2] = 0.5;
-    }
-    else { // u == 2
+    } else {  // u == 2
       N[0] = 0.0;
       N[1] = 0.0;
       N[2] = 1.0;
     }
-  }
-  else if (mesh_order == 4){
-    if (u == -3){
+  } else if (mesh_order == 4) {
+    if (u == -3) {
       N[0] = 1.0;
       N[1] = 0.0;
       N[2] = 0.0;
       N[3] = 0.0;
-    }
-    else if (u == -2){
+    } else if (u == -2) {
       N[0] = 0.5;
       N[1] = 0.5;
       N[2] = 0.0;
       N[3] = 0.0;
-    }
-    else if (u == -1){
+    } else if (u == -1) {
       N[0] = 0.25;
       N[1] = 0.5;
       N[2] = 0.25;
       N[3] = 0.0;
-    }
-    else if (u == 0){
+    } else if (u == 0) {
       N[0] = 0.125;
       N[1] = 0.375;
       N[2] = 0.375;
       N[3] = 0.125;
-    }
-    else if (u == 1){
+    } else if (u == 1) {
       N[0] = 0.0;
       N[1] = 0.25;
       N[2] = 0.5;
       N[3] = 0.25;
-    }
-    else if (u == 2){
+    } else if (u == 2) {
       N[0] = 0.0;
       N[1] = 0.0;
       N[2] = 0.5;
       N[3] = 0.5;
-    }
-    else { // u == 3
+    } else {  // u == 3
       N[0] = 0.0;
       N[1] = 0.0;
       N[2] = 0.0;
       N[3] = 1.0;
     }
-  }
-  else if (mesh_order == 5){
-    if (u == -4){
+  } else if (mesh_order == 5) {
+    if (u == -4) {
       N[0] = 1.0;
       N[1] = 0.0;
       N[2] = 0.0;
       N[3] = 0.0;
       N[4] = 0.0;
-    }
-    else if (u == -3){
+    } else if (u == -3) {
       N[0] = 0.5;
       N[1] = 0.5;
       N[2] = 0.0;
       N[3] = 0.0;
       N[4] = 0.0;
-    }
-    else if (u == -2){
+    } else if (u == -2) {
       N[0] = 0.25;
       N[1] = 0.5;
       N[2] = 0.25;
       N[3] = 0.0;
       N[4] = 0.0;
-    }
-    else if (u == -1){
+    } else if (u == -1) {
       N[0] = 0.125;
       N[1] = 0.375;
       N[2] = 0.375;
       N[3] = 0.125;
       N[4] = 0.0;
-    }
-    else if (u == 0){
+    } else if (u == 0) {
       N[0] = 0.0625;
       N[1] = 0.25;
       N[2] = 0.375;
       N[3] = 0.25;
       N[4] = 0.0625;
-    }
-    else if (u == 1){
+    } else if (u == 1) {
       N[0] = 0.0;
       N[1] = 0.125;
       N[2] = 0.375;
       N[3] = 0.375;
       N[4] = 0.125;
-    }
-    else if (u == 2){
+    } else if (u == 2) {
       N[0] = 0.0;
       N[1] = 0.0;
       N[2] = 0.25;
       N[3] = 0.5;
       N[4] = 0.25;
-    }
-    else if (u == 3){
+    } else if (u == 3) {
       N[0] = 0.0;
       N[1] = 0.0;
       N[2] = 0.0;
       N[3] = 0.5;
       N[4] = 0.5;
-    }
-    else { // u == 4
+    } else {  // u == 4
       N[0] = 0.0;
       N[1] = 0.0;
       N[2] = 0.0;
@@ -473,7 +439,7 @@ inline void eval_bernstein_weights( const int mesh_order,
 }
 
 /*
-  Evaluate the weights on the coarse mesh that interpolate the 
+  Evaluate the weights on the coarse mesh that interpolate the
   Bernstein polynomial from the fine mesh.
 
   Note: This only works for cases in which there is at most one-order
@@ -487,117 +453,99 @@ inline void eval_bernstein_weights( const int mesh_order,
   output:
   N:                  the weights in the coarse space
 */
-inline int eval_bernstein_interp_weights( const int mesh_order,
-                                          const int coarse_mesh_order,
-                                          const int u,
-                                          double *N ){
+inline int eval_bernstein_interp_weights(const int mesh_order,
+                                         const int coarse_mesh_order,
+                                         const int u, double *N) {
   // Weights evaluated from the subdivison matrix
-  if (mesh_order - coarse_mesh_order == 1){
-    if (coarse_mesh_order == 2){
-      if (u == 0){
+  if (mesh_order - coarse_mesh_order == 1) {
+    if (coarse_mesh_order == 2) {
+      if (u == 0) {
         N[0] = 1.0;
         N[1] = 0.0;
-      }
-      else if (u == 1){
+      } else if (u == 1) {
         N[0] = 0.5;
         N[1] = 0.5;
-      }
-      else if (u == 2){
+      } else if (u == 2) {
         N[0] = 0.0;
         N[1] = 1.0;
       }
-    }
-    else if (coarse_mesh_order == 3){
-      if (u == 0){
+    } else if (coarse_mesh_order == 3) {
+      if (u == 0) {
         N[0] = 1.0;
         N[1] = 0.0;
         N[2] = 0.0;
-      }
-      else if (u == 1){
-        N[0] = 1./3;
-        N[1] = 2./3;
+      } else if (u == 1) {
+        N[0] = 1. / 3;
+        N[1] = 2. / 3;
         N[2] = 0.0;
-      }
-      else if (u == 2){
+      } else if (u == 2) {
         N[0] = 0.0;
-        N[1] = 2./3;
-        N[2] = 1./3;
-      }
-      else if (u == 3){
+        N[1] = 2. / 3;
+        N[2] = 1. / 3;
+      } else if (u == 3) {
         N[0] = 0.0;
         N[1] = 0.0;
         N[2] = 1.0;
       }
-    }
-    else if (coarse_mesh_order == 4){
-      if (u == 0){
+    } else if (coarse_mesh_order == 4) {
+      if (u == 0) {
         N[0] = 1.0;
         N[1] = 0.0;
         N[2] = 0.0;
-        N[3] = 0.0;        
-      }
-      else if (u == 1){
+        N[3] = 0.0;
+      } else if (u == 1) {
         N[0] = 0.25;
         N[1] = 0.75;
         N[2] = 0.0;
         N[3] = 0.0;
-      }
-      else if (u == 2){
+      } else if (u == 2) {
         N[0] = 0.0;
         N[1] = 0.0;
         N[2] = 0.75;
         N[3] = 0.25;
-      }
-      else if (u == 3){
+      } else if (u == 3) {
         N[0] = 0.0;
         N[1] = 0.5;
         N[2] = 0.5;
         N[3] = 0.0;
-      }
-      else if (u == 4){
+      } else if (u == 4) {
         N[0] = 0.0;
         N[1] = 0.0;
         N[2] = 0.0;
-        N[3] = 1.0;        
+        N[3] = 1.0;
       }
-    }
-    else if (coarse_mesh_order == 5){
-      if (u == 0){
+    } else if (coarse_mesh_order == 5) {
+      if (u == 0) {
         N[0] = 1.0;
         N[1] = 0.0;
         N[2] = 0.0;
         N[3] = 0.0;
         N[4] = 0.0;
-      }
-      else if (u == 1){
+      } else if (u == 1) {
         N[0] = 0.2;
         N[1] = 0.8;
         N[2] = 0.0;
         N[3] = 0.0;
         N[4] = 0.0;
-      }
-      else if (u == 2){
+      } else if (u == 2) {
         N[0] = 0.0;
         N[1] = 0.4;
         N[2] = 0.6;
         N[3] = 0.0;
         N[4] = 0.0;
-      }
-      else if (u == 3){
+      } else if (u == 3) {
         N[0] = 0.0;
         N[1] = 0.0;
         N[2] = 0.6;
         N[3] = 0.4;
         N[4] = 0.0;
-      }
-      else if (u == 4){
+      } else if (u == 4) {
         N[0] = 0.0;
         N[1] = 0.0;
         N[2] = 0.0;
         N[3] = 0.8;
-        N[4] = 0.2;      
-      }
-      else if (u == 5){
+        N[4] = 0.2;
+      } else if (u == 5) {
         N[0] = 0.0;
         N[1] = 0.0;
         N[2] = 0.0;
@@ -606,9 +554,9 @@ inline int eval_bernstein_interp_weights( const int mesh_order,
       }
     }
     return 0;
-  }  
+  }
   // Failed
   return 1;
 }
 
-#endif // TMR_INTERPOLATION_FUNCTIONS_H
+#endif  // TMR_INTERPOLATION_FUNCTIONS_H

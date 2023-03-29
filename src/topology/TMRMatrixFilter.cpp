@@ -18,27 +18,26 @@
   limitations under the License.
 */
 
-#include "TMRMatrixFilterModel.h"
 #include "TMRMatrixFilter.h"
+
 #include "TMRMatrixCreator.h"
+#include "TMRMatrixFilterModel.h"
 #include "TMR_TACSCreator.h"
 
 /*
   Create the filter matrix
 */
-TMRMatrixFilter::TMRMatrixFilter( double _r, int _N,
-                                  int _nlevels,
-                                  TACSAssembler *_assembler[],
-                                  TMROctForest *_filter[] ):
-  TMRConformFilter(_nlevels, _assembler, _filter){
+TMRMatrixFilter::TMRMatrixFilter(double _r, int _N, int _nlevels,
+                                 TACSAssembler *_assembler[],
+                                 TMROctForest *_filter[])
+    : TMRConformFilter(_nlevels, _assembler, _filter) {
   initialize_matrix(_r, _N, _filter[0], NULL);
 }
 
-TMRMatrixFilter::TMRMatrixFilter( double _r, int _N,
-                                  int _nlevels,
-                                  TACSAssembler *_assembler[],
-                                  TMRQuadForest *_filter[] ):
-  TMRConformFilter(_nlevels, _assembler, _filter){
+TMRMatrixFilter::TMRMatrixFilter(double _r, int _N, int _nlevels,
+                                 TACSAssembler *_assembler[],
+                                 TMRQuadForest *_filter[])
+    : TMRConformFilter(_nlevels, _assembler, _filter) {
   initialize_matrix(_r, _N, NULL, _filter[0]);
 }
 
@@ -48,35 +47,34 @@ TMRMatrixFilter::TMRMatrixFilter( double _r, int _N,
   This code creates a TACSAssembler object (and frees it), assembles a
   mass matrix, creates the internal variables required for the filter.
 */
-void TMRMatrixFilter::initialize_matrix( double _r, int _N,
-                                         TMROctForest *oct_forest,
-                                         TMRQuadForest *quad_forest ){
+void TMRMatrixFilter::initialize_matrix(double _r, int _N,
+                                        TMROctForest *oct_forest,
+                                        TMRQuadForest *quad_forest) {
   // Create the Assembler object
   TACSAssembler *matrix_assembler = NULL;
 
   // Keep track of the dimension of the problem
   int d = 2;
-  if (oct_forest){
+  if (oct_forest) {
     d = 3;
     TACSElementModel *model = new TMRHexaMatrixModel();
     TMROctTACSMatrixCreator *matrix_creator3d =
-      new TMROctTACSMatrixCreator(model);
+        new TMROctTACSMatrixCreator(model);
     matrix_creator3d->incref();
 
-    matrix_assembler = matrix_creator3d->createTACS(oct_forest,
-                                                    TACSAssembler::NATURAL_ORDER);
+    matrix_assembler =
+        matrix_creator3d->createTACS(oct_forest, TACSAssembler::NATURAL_ORDER);
     matrix_assembler->incref();
     matrix_creator3d->decref();
-  }
-  else {
+  } else {
     d = 2;
     TACSElementModel *model = new TMRQuadMatrixModel();
     TMRQuadTACSMatrixCreator *matrix_creator2d =
-      new TMRQuadTACSMatrixCreator(model);
+        new TMRQuadTACSMatrixCreator(model);
     matrix_creator2d->incref();
 
-    matrix_assembler = matrix_creator2d->createTACS(quad_forest,
-                                                    TACSAssembler::NATURAL_ORDER);
+    matrix_assembler =
+        matrix_creator2d->createTACS(quad_forest, TACSAssembler::NATURAL_ORDER);
     matrix_assembler->incref();
     matrix_creator2d->decref();
   }
@@ -124,26 +122,24 @@ void TMRMatrixFilter::initialize_matrix( double _r, int _N,
   M->mult(y2, B);
 
   // Create the inverse of the diagonal matrix
-  TacsScalar *Bi; // The components of the D matrix that will be over-written
+  TacsScalar *Bi;  // The components of the D matrix that will be over-written
   TacsScalar *Ai;
   int size = B->getArray(&Bi);
   Ainv->getArray(&Ai);
-  for ( int i = 0; i < size; i++ ){
+  for (int i = 0; i < size; i++) {
     TacsScalar D = Bi[0];
     // Check if we have a 2D or 3D problem
-    if (D == 0.0){
+    if (D == 0.0) {
       Ai[0] = 1.0;
       Bi[0] = 0.0;
-    }
-    else {
-      if (d == 2){
-        Ai[0] = 1.0/(1.0 + r*r/D);
-        Bi[0] = Ai[0]*r*r/(D*D);
-      }
-      else {
-        TacsScalar temp = pow(D, 2.0/3.0);
-        Ai[0] = 1.0/(1.0 + r*r/temp);
-        Bi[0] = Ai[0]*r*r/(temp*D);
+    } else {
+      if (d == 2) {
+        Ai[0] = 1.0 / (1.0 + r * r / D);
+        Bi[0] = Ai[0] * r * r / (D * D);
+      } else {
+        TacsScalar temp = pow(D, 2.0 / 3.0);
+        Ai[0] = 1.0 / (1.0 + r * r / temp);
+        Bi[0] = Ai[0] * r * r / (temp * D);
       }
     }
     Bi++;
@@ -158,11 +154,10 @@ void TMRMatrixFilter::initialize_matrix( double _r, int _N,
   TacsScalar *T, *ty;
   size = Tinv->getArray(&T);
   y1->getArray(&ty);
-  for ( int i = 0; i < size; i++ ){
-    if (ty[0] != 0.0){
-      T[0] = 1.0/ty[0];
-    }
-    else {
+  for (int i = 0; i < size; i++) {
+    if (ty[0] != 0.0) {
+      T[0] = 1.0 / ty[0];
+    } else {
       T[0] = 0.0;
     }
     T++;
@@ -173,7 +168,7 @@ void TMRMatrixFilter::initialize_matrix( double _r, int _N,
 /*
   Destroy the filter matrix
 */
-TMRMatrixFilter::~TMRMatrixFilter(){
+TMRMatrixFilter::~TMRMatrixFilter() {
   t1->decref();
   t2->decref();
   M->decref();
@@ -193,7 +188,7 @@ TMRMatrixFilter::~TMRMatrixFilter(){
   for n in range(N):
   .   out += t1 + B*M*out
 */
-void TMRMatrixFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
+void TMRMatrixFilter::applyFilter(TACSBVec *in, TACSBVec *out) {
   // Compute t1 = Ainv*in
   t1->copyValues(in);
   kronecker(Ainv, t1);
@@ -202,7 +197,7 @@ void TMRMatrixFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
   out->copyValues(t1);
 
   // Apply Horner's method
-  for ( int n = 0; n < N; n++ ){
+  for (int n = 0; n < N; n++) {
     // Compute t2 = B*M*out
     M->mult(out, t2);
     kronecker(B, t2, out);
@@ -218,7 +213,7 @@ void TMRMatrixFilter::applyFilter( TACSBVec *in, TACSBVec *out ){
 /*
   Compute the transpose of the filter operation
 */
-void TMRMatrixFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
+void TMRMatrixFilter::applyTranspose(TACSBVec *in, TACSBVec *out) {
   t1->copyValues(in);
   kronecker(Tinv, t1);
 
@@ -226,7 +221,7 @@ void TMRMatrixFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
   out->copyValues(t1);
 
   // Apply Horner's method
-  for ( int n = 0; n < N; n++ ){
+  for (int n = 0; n < N; n++) {
     // Compute M*B*out
     kronecker(B, out, t2);
     M->mult(t2, out);
@@ -245,26 +240,25 @@ void TMRMatrixFilter::applyTranspose( TACSBVec *in, TACSBVec *out ){
 
   y = (c o x)
 */
-void TMRMatrixFilter::kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y ){
-  if (c && x && y){
+void TMRMatrixFilter::kronecker(TACSBVec *c, TACSBVec *x, TACSBVec *y) {
+  if (c && x && y) {
     TacsScalar *cvals, *xvals, *yvals;
     int size = c->getArray(&cvals);
     x->getArray(&xvals);
     y->getArray(&yvals);
 
-    for ( int i = 0; i < size; i++ ){
-      yvals[0] = cvals[0]*xvals[0];
+    for (int i = 0; i < size; i++) {
+      yvals[0] = cvals[0] * xvals[0];
       yvals++;
       xvals++;
       cvals++;
     }
-  }
-  else if (c && x){
+  } else if (c && x) {
     TacsScalar *cvals, *xvals;
     int size = c->getArray(&cvals);
     x->getArray(&xvals);
 
-    for ( int i = 0; i < size; i++ ){
+    for (int i = 0; i < size; i++) {
       xvals[0] *= cvals[0];
       xvals++;
       cvals++;
@@ -275,14 +269,13 @@ void TMRMatrixFilter::kronecker( TACSBVec *c, TACSBVec *x, TACSBVec *y ){
 /*
   Set the design variables for each level
 */
-void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
+void TMRMatrixFilter::setDesignVars(TACSBVec *xvec) {
   const int vpn = assembler[0]->getDesignVarsPerNode();
 
-  if (vpn == 1){
+  if (vpn == 1) {
     applyFilter(xvec, x[0]);
-  }
-  else {
-    for ( int k = 0; k < vpn; k++ ){
+  } else {
+    for (int k = 0; k < vpn; k++) {
       TacsScalar *xin, *xout;
       xvec->getArray(&xin);
       x[0]->getArray(&xout);
@@ -294,7 +287,7 @@ void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
       // Copy the values to the input vector (y1)
       TacsScalar *yin;
       int size = y1->getArray(&yin);
-      for ( int i = 0; i < size; i++ ){
+      for (int i = 0; i < size; i++) {
         yin[0] = xin[0];
         yin++;
         xin += vpn;
@@ -307,7 +300,7 @@ void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
       // Copy the values from y2 to the output vector x[0]
       TacsScalar *yout;
       y2->getArray(&yout);
-      for ( int i = 0; i < size; i++ ){
+      for (int i = 0; i < size; i++) {
         xout[0] = yout[0];
         yout++;
         xout += vpn;
@@ -318,29 +311,28 @@ void TMRMatrixFilter::setDesignVars( TACSBVec *xvec ){
   assembler[0]->setDesignVars(x[0]);
 
   // Set the design variable values on all levels
-  for ( int k = 0; k < nlevels-1; k++ ){
-    filter_interp[k]->multWeightTranspose(x[k], x[k+1]);
+  for (int k = 0; k < nlevels - 1; k++) {
+    filter_interp[k]->multWeightTranspose(x[k], x[k + 1]);
 
     // Set the design variable values
-    assembler[k+1]->setDesignVars(x[k+1]);
+    assembler[k + 1]->setDesignVars(x[k + 1]);
   }
 }
 
 /*
   Add values to the output TACSBVec
 */
-void TMRMatrixFilter::addValues( TACSBVec *vec ){
+void TMRMatrixFilter::addValues(TACSBVec *vec) {
   vec->beginSetValues(TACS_ADD_VALUES);
   vec->endSetValues(TACS_ADD_VALUES);
 
   temp->copyValues(vec);
 
   const int vpn = assembler[0]->getDesignVarsPerNode();
-  if (vpn == 1){
+  if (vpn == 1) {
     applyTranspose(temp, vec);
-  }
-  else {
-    for ( int k = 0; k < vpn; k++ ){
+  } else {
+    for (int k = 0; k < vpn; k++) {
       TacsScalar *xin, *xout;
 
       // Get the pointer to the array and offset by vars per node
@@ -350,7 +342,7 @@ void TMRMatrixFilter::addValues( TACSBVec *vec ){
       // Copy the values to the input vector (y1)
       TacsScalar *yin;
       int size = y1->getArray(&yin);
-      for ( int i = 0; i < size; i++ ){
+      for (int i = 0; i < size; i++) {
         yin[0] = xin[0];
         yin++;
         xin += vpn;
@@ -366,7 +358,7 @@ void TMRMatrixFilter::addValues( TACSBVec *vec ){
 
       TacsScalar *yout;
       y2->getArray(&yout);
-      for ( int i = 0; i < size; i++ ){
+      for (int i = 0; i < size; i++) {
         xout[0] = yout[0];
         yout++;
         xout += vpn;
