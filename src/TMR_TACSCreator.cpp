@@ -70,11 +70,9 @@ void TMRQuadTACSCreator::initialize(TMRBoundaryConditions *_bcs,
 /*
   Create the TACSAssembler object
 */
-TACSAssembler*
-  TMRQuadTACSCreator::createTACS( TMRQuadForest *forest,
-                                  TACSAssembler::OrderingType ordering,
-                                  int num_comps,
-                                  const char **components){
+TACSAssembler *TMRQuadTACSCreator::createTACS(
+    TMRQuadForest *forest, TACSAssembler::OrderingType ordering, int num_comps,
+    const char **components) {
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -107,19 +105,16 @@ TACSAssembler*
   createElements(order, forest, num_elements, elements);
 
   // set the component numbers in the elements if specified
-  if (components && (num_comps > 0))
-  {
-    TMRQuadrantArray* array;
+  if (components && (num_comps > 0)) {
+    TMRQuadrantArray *array;
     TMRQuadrant *quads;
     int size;
-    for (int i = 0; i < num_comps; i++)
-    {
+    for (int i = 0; i < num_comps; i++) {
       // get the quads associated with this component name
       array = forest->getQuadsWithName(components[i]);
       array->getArray(&quads, &size);
       // set the component number for the element id associated with each quad
-      for (int j = 0; j < size; j++)
-      {
+      for (int j = 0; j < size; j++) {
         int elem_id = quads[j].tag;
         elements[elem_id]->setComponentNum(i);
       }
@@ -334,11 +329,9 @@ void TMROctTACSCreator::initialize(TMRBoundaryConditions *_bcs,
 /*
   Create the TACSAssembler object
 */
-TACSAssembler*
-  TMROctTACSCreator::createTACS( TMROctForest *forest,
-                                 TACSAssembler::OrderingType ordering,
-                                 int num_comps,
-                                 const char **components ){
+TACSAssembler *TMROctTACSCreator::createTACS(
+    TMROctForest *forest, TACSAssembler::OrderingType ordering, int num_comps,
+    const char **components) {
   // Get the communicator and the rank
   MPI_Comm comm = forest->getMPIComm();
   int mpi_rank;
@@ -375,19 +368,16 @@ TACSAssembler*
   createElements(order, forest, num_elements, elements);
 
   // set the component numbers in the elements if specified
-  if (components && (num_comps > 0))
-  {
-    TMROctantArray* array;
+  if (components && (num_comps > 0)) {
+    TMROctantArray *array;
     TMROctant *octs;
     int size;
-    for (int i = 0; i < num_comps; i++)
-    {
+    for (int i = 0; i < num_comps; i++) {
       // get the quads associated with this component name
       array = forest->getOctsWithName(components[i]);
       array->getArray(&octs, &size);
       // set the component number for the element id associated with each quad
-      for (int j = 0; j < size; j++)
-      {
+      for (int j = 0; j < size; j++) {
         int elem_id = octs[j].tag;
         elements[elem_id]->setComponentNum(i);
       }

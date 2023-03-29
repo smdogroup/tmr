@@ -60,11 +60,10 @@ class TMRQuadTACSCreator : public TMREntity {
   }
 
   // Create the TACSAssembler object with the given order for this forest
-  TACSAssembler *createTACS( TMRQuadForest *forest,
-                             TACSAssembler::OrderingType
-                               ordering=TACSAssembler::NATURAL_ORDER,
-                             int num_comps=0,
-                             const char **components=NULL );
+  TACSAssembler *createTACS(
+      TMRQuadForest *forest,
+      TACSAssembler::OrderingType ordering = TACSAssembler::NATURAL_ORDER,
+      int num_comps = 0, const char **components = NULL);
 
   TMRQuadForest *getFilter() { return filter; }
 
@@ -109,11 +108,10 @@ class TMROctTACSCreator : public TMREntity {
   void addBoundaryCondition(const char *name, int num_bcs, const int bc_nums[]);
 
   // Create the TACSAssembler object with the given order for this forest
-  TACSAssembler *createTACS( TMROctForest *forest,
-                             TACSAssembler::OrderingType
-                               ordering=TACSAssembler::NATURAL_ORDER,
-                             int num_comps=0,
-                             const char **components=NULL );
+  TACSAssembler *createTACS(
+      TMROctForest *forest,
+      TACSAssembler::OrderingType ordering = TACSAssembler::NATURAL_ORDER,
+      int num_comps = 0, const char **components = NULL);
 
   TMROctForest *getFilter() { return filter; }
 
