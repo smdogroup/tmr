@@ -172,7 +172,9 @@ TMRTopoProblem::TMRTopoProblem(TMRTopoFilter *_filter, TACSMg *_mg,
 
   // The multigrid object
   mg = _mg;
-  mg->incref();
+  if (mg) {
+    mg->incref();
+  }
 
   // Set the number of variables per node
   design_vars_per_node = assembler->getDesignVarsPerNode();
@@ -192,13 +194,17 @@ TMRTopoProblem::TMRTopoProblem(TMRTopoFilter *_filter, TACSMg *_mg,
   MPI_Comm_rank(assembler->getMPIComm(), &mpi_rank);
 
   // Set up the solver
-  int nrestart = 5;
-  int is_flexible = 0;
-  double atol = 1e-30;
-  ksm = new GMRES(mg->getMat(0), mg, gmres_iters, nrestart, is_flexible);
-  ksm->incref();
-  ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  ksm->setTolerances(rtol, atol);
+  if (mg) {
+    int nrestart = 5;
+    int is_flexible = 0;
+    double atol = 1e-30;
+    ksm = new GMRES(mg->getMat(0), mg, gmres_iters, nrestart, is_flexible);
+    ksm->incref();
+    ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
+    ksm->setTolerances(rtol, atol);
+  } else {
+    ksm = NULL;
+  }
 
   // Set the iteration count
   iter_count = 0;
@@ -282,8 +288,12 @@ TMRTopoProblem::~TMRTopoProblem() {
   }
 
   // Free the solver/multigrid information
-  mg->decref();
-  ksm->decref();
+  if (mg) {
+    mg->decref();
+  }
+  if (ksm) {
+    ksm->decref();
+  }
 
   dfdu->decref();
   adjoint->decref();
@@ -416,6 +426,13 @@ void TMRTopoProblem::setPrefix(const char *_prefix) {
   Set the load cases for each problem
 */
 void TMRTopoProblem::setLoadCases(TACSBVec **_forces, int _num_load_cases) {
+  if (!mg) {
+    fprintf(stderr,
+            "TMRTopoProblem: Cannot call setLoadCases, multigrid object not "
+            "defined\n");
+    return;
+  }
+
   // Pre-incref the input forces
   for (int i = 0; i < _num_load_cases; i++) {
     if (_forces[i]) {
@@ -572,6 +589,13 @@ void TMRTopoProblem::addFrequencyConstraint(
     TacsScalar scale, int max_subspace_size, double eigtol, int use_jd,
     int fgmres_size, double eig_rtol, double eig_atol, int num_recycle,
     JDRecycleType recycle_type) {
+  if (!mg) {
+    fprintf(stderr,
+            "TMRTopoProblem: Cannot call addFrequencyConstraint, multigrid "
+            "object not defined\n");
+    return;
+  }
+
   if (!freq) {
     // Create a mass matrix for the frequency constraint
     TACSMat *mmat = assembler->createMat();
@@ -613,6 +637,13 @@ void TMRTopoProblem::addBucklingConstraint(double sigma, int num_eigvals,
                                            TacsScalar ks_weight,
                                            TacsScalar offset, TacsScalar scale,
                                            int max_lanczos, double eigtol) {
+  if (!mg) {
+    fprintf(stderr,
+            "TMRTopoProblem: Cannot call addBucklingConstraint, multigrid "
+            "object not defined\n");
+    return;
+  }
+
   if (!buck) {
     // Create a geometric stiffness matrix for buckling constraint
     TACSMat *gmat = assembler->createMat();
@@ -911,7 +942,7 @@ int TMRTopoProblem::evalObjCon(ParOptVec *pxvec, ParOptScalar *fobj,
     *fobj = fcallback;
   }
 
-  if (num_load_cases > 0) {
+  if (num_load_cases > 0 && mg) {
     // Zero the variables
     assembler->zeroVariables();
 
@@ -1152,7 +1183,7 @@ int TMRTopoProblem::evalObjConGradient(ParOptVec *xvec, ParOptVec *gvec,
     // Evaluate the gradient of the objective. If no objective functions are
     // set, the weighted sum of the compliance is used. Otherwise the weighted
     // sum of the objective functions from each load case are used
-    if (obj_funcs) {
+    if (obj_funcs && mg) {
       for (int i = 0; i < num_load_cases; i++) {
         assembler->setVariables(vars[i]);
 
