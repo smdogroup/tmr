@@ -21,10 +21,10 @@
 #ifndef TMR_LAGRANGE_FILTER_H
 #define TMR_LAGRANGE_FILTER_H
 
-#include "TMRTopoFilter.h"
+#include "TACSAssembler.h"
 #include "TMROctForest.h"
 #include "TMRQuadForest.h"
-#include "TACSAssembler.h"
+#include "TMRTopoFilter.h"
 #include "TMR_STLTools.h"
 
 /*
@@ -32,40 +32,37 @@
 */
 class TMRLagrangeFilter : public TMRTopoFilter {
  public:
-  TMRLagrangeFilter( int _nlevels,
-                     TACSAssembler *_tacs[],
-                     TMROctForest *_filter[] );
-  TMRLagrangeFilter( int _nlevels,
-                     TACSAssembler *_tacs[],
-                     TMRQuadForest *_filter[] );
+  TMRLagrangeFilter(int _nlevels, TACSAssembler *_tacs[],
+                    TMROctForest *_filter[]);
+  TMRLagrangeFilter(int _nlevels, TACSAssembler *_tacs[],
+                    TMRQuadForest *_filter[]);
   ~TMRLagrangeFilter();
 
   // Get the TACSAssembler instance (on the finest mesh level)
-  TACSAssembler* getAssembler();
+  TACSAssembler *getAssembler();
 
   // Get the Quad or OctForest on the finest mesh level
-  TMRQuadForest* getFilterQuadForest();
-  TMROctForest* getFilterOctForest();
+  TMRQuadForest *getFilterQuadForest();
+  TMROctForest *getFilterOctForest();
 
   // Set the design variable values (including all local values)
-  void setDesignVars( TACSBVec *x );
+  void setDesignVars(TACSBVec *x);
 
   // Set values/add values to the vector
-  void addValues( TACSBVec *vec );
-  void setValues( TACSBVec *vec );
+  void addValues(TACSBVec *vec);
+  void setValues(TACSBVec *vec);
 
   // Write the STL file
-  void writeSTLFile( int k, double cutoff, const char *filename ){
-    if (oct_filter){
+  void writeSTLFile(int k, double cutoff, const char *filename) {
+    if (oct_filter) {
       TMR_GenerateBinFile(filename, oct_filter[0], x[0], k, cutoff);
     }
   }
+
  private:
   // Initialize the problem
-  void initialize( int _nlevels,
-                   TACSAssembler *_assembler[],
-                   TMROctForest *_oct_filter[],
-                   TMRQuadForest *_quad_filter[] );
+  void initialize(int _nlevels, TACSAssembler *_assembler[],
+                  TMROctForest *_oct_filter[], TMRQuadForest *_quad_filter[]);
 
   // The number of multigrid levels
   int nlevels;
@@ -82,4 +79,4 @@ class TMRLagrangeFilter : public TMRTopoFilter {
   TACSBVec **x;
 };
 
-#endif // TMR_LAGRANGE_FILTER_H
+#endif  // TMR_LAGRANGE_FILTER_H

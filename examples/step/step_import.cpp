@@ -1,12 +1,12 @@
 #ifdef TMR_HAS_OPENCASCADE
 
-#include "TMROpenCascade.h"
-#include "TMRMesh.h"
-#include "TACSMeshLoader.h"
 #include "MITCShell.h"
+#include "TACSMeshLoader.h"
+#include "TMRMesh.h"
+#include "TMROpenCascade.h"
 #include "isoFSDTStiffness.h"
 
-int main( int argc, char *argv[] ){
+int main(int argc, char *argv[]) {
   MPI_Init(&argc, &argv);
   TMRInitialize();
 
@@ -20,21 +20,23 @@ int main( int argc, char *argv[] ){
   int test_bdf_file = 0;
 
   double htarget = 4.0;
-  for ( int k = 0; k < argc; k++ ){
-    if (sscanf(argv[k], "h=%lf", &htarget) == 1){
-      if (htarget < 0.1){ htarget = 0.1; }
+  for (int k = 0; k < argc; k++) {
+    if (sscanf(argv[k], "h=%lf", &htarget) == 1) {
+      if (htarget < 0.1) {
+        htarget = 0.1;
+      }
     }
-    if (sscanf(argv[k], "file=%s", filename) == 1){
+    if (sscanf(argv[k], "file=%s", filename) == 1) {
       printf("file=%s\n", filename);
     }
-    if (strcmp(argv[k], "--test_bdf") == 0){
+    if (strcmp(argv[k], "--test_bdf") == 0) {
       test_bdf_file = 1;
     }
   }
 
   // Load in the geometry file
   TMRModel *geo = TMR_LoadModelFromSTEPFile(filename);
-  if (geo){
+  if (geo) {
     geo->incref();
 
     // Get the vertices
@@ -52,9 +54,8 @@ int main( int argc, char *argv[] ){
     TMRFace **faces;
     geo->getFaces(&num_faces, &faces);
 
-    TMRModel *model = new TMRModel(num_verts, verts,
-                                   num_edges, edges, 
-                                   num_faces, faces);
+    TMRModel *model =
+        new TMRModel(num_verts, verts, num_edges, edges, num_faces, faces);
 
     // Allocate the new mesh
     TMRMesh *mesh = new TMRMesh(MPI_COMM_WORLD, model);
@@ -71,7 +72,7 @@ int main( int argc, char *argv[] ){
     mesh->mesh(options, htarget);
     mesh->writeToVTK("surface-mesh.vtk");
 
-    if (test_bdf_file){
+    if (test_bdf_file) {
       mesh->writeToBDF("surface-mesh.bdf");
     }
 
@@ -80,21 +81,21 @@ int main( int argc, char *argv[] ){
     geo->decref();
   }
 
-  if (test_bdf_file){
+  if (test_bdf_file) {
     TACSMeshLoader *loader = new TACSMeshLoader(comm);
     loader->incref();
 
     loader->scanBDFFile("surface-mesh.bdf");
 
     // Create the solid stiffness object
-    isoFSDTStiffness *stiff = 
-      new isoFSDTStiffness(1.0, 1.0, 0.3, 0.833, 1.0, 1.0);
+    isoFSDTStiffness *stiff =
+        new isoFSDTStiffness(1.0, 1.0, 0.3, 0.833, 1.0, 1.0);
     MITCShell<2> *elem = new MITCShell<2>(stiff);
 
-    for ( int i = 0; i < loader->getNumComponents(); i++ ){ 
+    for (int i = 0; i < loader->getNumComponents(); i++) {
       loader->setElement(i, elem);
     }
-    
+
     // Create the TACSAssembler object
     TACSAssembler *tacs = loader->createTACS(6);
     tacs->incref();
@@ -117,17 +118,17 @@ int main( int argc, char *argv[] ){
     tacs->setVariables(ans);
 
     // Create the f5 visualization object
-    TACSToFH5 *f5 = loader->createTACSToFH5(tacs, TACS_SHELL, 
-                                            TACSElement::OUTPUT_NODES |
-                                            TACSElement::OUTPUT_DISPLACEMENTS);
+    TACSToFH5 *f5 = loader->createTACSToFH5(
+        tacs, TACS_SHELL,
+        TACSElement::OUTPUT_NODES | TACSElement::OUTPUT_DISPLACEMENTS);
     f5->incref();
     f5->writeToFile("surface-mesh.f5");
   }
-  
+
   TMRFinalize();
   MPI_Finalize();
 
   return 0;
 }
 
-#endif // TMR_HAS_OPENCASCADE
+#endif  // TMR_HAS_OPENCASCADE

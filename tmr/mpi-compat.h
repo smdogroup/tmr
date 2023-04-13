@@ -11,4 +11,4 @@ typedef void *PyMPI_MPI_Message;
 #define MPI_Message PyMPI_MPI_Message
 #endif
 
-#endif/*MPI_COMPAT_H*/
+#endif /*MPI_COMPAT_H*/

@@ -45,7 +45,7 @@ jobs:
           echo "=============================================================";
           source $CONDA/etc/profile.d/conda.sh;
           echo $CONDA/bin >> $GITHUB_PATH;
-          conda create -n TMR python=3.8 numpy=1.18 scipy=1.4 -q -y;
+          conda create -n TMR python=3.8 numpy scipy -q -y;
           conda activate TMR;
 
           echo "=============================================================";
@@ -57,7 +57,7 @@ jobs:
 
           # Install conda libraries
           conda install -c anaconda openmpi -q -y;
-          conda install gxx_linux-64 -q -y;
+          conda install gxx_linux-64=9.3.0 -q -y;
           conda install -c anaconda openblas -q -y;
           conda install -c conda-forge lapack -q -y;
           conda install -c conda-forge metis -q -y;
@@ -66,7 +66,9 @@ jobs:
           # Install packages via pip
           pip install testflo;
           pip install cython;
-          pip install pyNastran;
+
+          # Install libraries via apt-get
+          sudo apt-get install libglu1-mesa
 
           # Install Blossom V
           cd $TMR_DIR/extern;
@@ -79,9 +81,9 @@ jobs:
 
           # Install OpenCASCADE 
           cd $TMR_DIR/extern;
-          wget https://acdl.mit.edu/ESP/OCC741lin64.tgz;
-          tar -zxf OCC741lin64.tgz;
-          mv OpenCASCADE-7.4.1/ OpenCASCADE;
+          wget https://acdl.mit.edu/ESP/otherOCCs/OCC681lin64.tgz;
+          tar -zxf OCC681lin64.tgz;
+          mv OpenCASCADE-6.8.1/ OpenCASCADE;
           export CASROOT=$TMR_DIR/extern/OpenCASCADE;
           export CASARCH=;
           export PATH=$CASROOT/bin:$PATH;
@@ -94,7 +96,7 @@ jobs:
           rm -rf tests;
           rm -rf examples;
           cp Makefile.in.info Makefile.in;
-          make EGADS_DIR=$TMR_DIR/extern/egads4py;
+          make EGADS_DIR=$TMR_DIR/extern/egads4py OPENCASCADE_INCLUDE=-I$CASROOT/$CASARCH/inc;
           make interface;
           export PYTHONPATH=${PYTHONPATH}:${TMR_DIR}/extern/egads4py;
 
@@ -105,7 +107,7 @@ jobs:
           rm -rf tests;
           rm -rf examples;
           cp Makefile.in.info Makefile.in;
-          make TACS_DIR=$TMR_DIR/extern/tacs METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
+          make OPENCASCADE_INCLUDE=-I$CASROOT/$CASARCH/inc TACS_DIR=$TMR_DIR/extern/tacs METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
           make interface TACS_DIR=$TMR_DIR/extern/tacs METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
           export PYTHONPATH=${PYTHONPATH}:${TMR_DIR}/extern/tacs;
 
@@ -131,8 +133,8 @@ jobs:
           echo "Installing TMR";
           echo "=============================================================";
           cd $TMR_DIR;
-          make TMR_DIR=$TMR_DIR EGADS_DIR=$TMR_DIR/extern/egads4py TACS_DIR=$TMR_DIR/extern/tacs PAROPT_DIR=$TMR_DIR/extern/paropt METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
-          make interface TMR_DIR=$TMR_DIR EGADS_DIR=$TMR_DIR/extern/egads4py TACS_DIR=$TMR_DIR/extern/tacs PAROPT_DIR=$TMR_DIR/extern/paropt METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
+          make OPENCASCADE_INCLUDE=-I$CASROOT/$CASARCH/inc TMR_DIR=$TMR_DIR EGADS_DIR=$TMR_DIR/extern/egads4py TACS_DIR=$TMR_DIR/extern/tacs PAROPT_DIR=$TMR_DIR/extern/paropt METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
+          make interface OPENCASCADE_INCLUDE=-I$CASROOT/$CASARCH/inc TMR_DIR=$TMR_DIR EGADS_DIR=$TMR_DIR/extern/egads4py TACS_DIR=$TMR_DIR/extern/tacs PAROPT_DIR=$TMR_DIR/extern/paropt METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
 
           echo "=============================================================";
           echo "running tests";

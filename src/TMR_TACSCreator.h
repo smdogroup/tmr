@@ -33,10 +33,10 @@
   objects needed for TACSAssembler.
 */
 
-#include "TMRQuadForest.h"
-#include "TMROctForest.h"
-#include "TMRBoundaryConditions.h"
 #include "TACSAssembler.h"
+#include "TMRBoundaryConditions.h"
+#include "TMROctForest.h"
+#include "TMRQuadForest.h"
 
 /*
   The creator object for quadrilateral meshes
@@ -45,46 +45,38 @@
 */
 class TMRQuadTACSCreator : public TMREntity {
  public:
-  TMRQuadTACSCreator( TMRBoundaryConditions *_bcs,
-                      int _design_vars_per_node=1,
-                      TMRQuadForest *_filter=NULL );
+  TMRQuadTACSCreator(TMRBoundaryConditions *_bcs, int _design_vars_per_node = 1,
+                     TMRQuadForest *_filter = NULL);
   TMRQuadTACSCreator();
   virtual ~TMRQuadTACSCreator();
 
   // Create an array of elements for the given forest
-  virtual void createElements( int order,
-                               TMRQuadForest *forest,
-                               int num_elements,
-                               TACSElement **elements ) = 0;
+  virtual void createElements(int order, TMRQuadForest *forest,
+                              int num_elements, TACSElement **elements) = 0;
 
   // Create any auxiliary element for the given quadrant
-  virtual TACSAuxElements *createAuxElements( int order,
-                                              TMRQuadForest *forest ){
+  virtual TACSAuxElements *createAuxElements(int order, TMRQuadForest *forest) {
     return NULL;
   }
 
   // Create the TACSAssembler object with the given order for this forest
-  TACSAssembler *createTACS( TMRQuadForest *forest,
-                             TACSAssembler::OrderingType
-                               ordering=TACSAssembler::NATURAL_ORDER );
+  TACSAssembler *createTACS(
+      TMRQuadForest *forest,
+      TACSAssembler::OrderingType ordering = TACSAssembler::NATURAL_ORDER,
+      int num_comps = 0, const char **components = NULL);
 
-  TMRQuadForest* getFilter(){
-    return filter;
-  }
+  TMRQuadForest *getFilter() { return filter; }
 
  protected:
   // Initialize the data
-  void initialize( TMRBoundaryConditions *_bcs,
-                   int _design_vars_per_node,
-                   TMRQuadForest *_filter );
+  void initialize(TMRBoundaryConditions *_bcs, int _design_vars_per_node,
+                  TMRQuadForest *_filter);
 
   // Set the boundary conditions
-  void setBoundaryConditions( TMRQuadForest *forest,
-                              TACSAssembler *tacs );
+  void setBoundaryConditions(TMRQuadForest *forest, TACSAssembler *tacs);
 
   // Set the node locations
-  void setNodeLocations( TMRQuadForest *forest,
-                         TACSAssembler *tacs );
+  void setNodeLocations(TMRQuadForest *forest, TACSAssembler *tacs);
 
   TMRBoundaryConditions *bcs;
   int design_vars_per_node;
@@ -98,54 +90,45 @@ class TMRQuadTACSCreator : public TMREntity {
 */
 class TMROctTACSCreator : public TMREntity {
  public:
-  TMROctTACSCreator( TMRBoundaryConditions *_bcs,
-                     int _design_vars_per_node=1,
-                     TMROctForest *_filter=NULL  );
+  TMROctTACSCreator(TMRBoundaryConditions *_bcs, int _design_vars_per_node = 1,
+                    TMROctForest *_filter = NULL);
   TMROctTACSCreator();
   virtual ~TMROctTACSCreator();
 
   // Create an array of elements for the given forest
-  virtual void createElements( int order,
-                               TMROctForest *forest,
-                               int num_elements,
-                               TACSElement **elements ) = 0;
+  virtual void createElements(int order, TMROctForest *forest, int num_elements,
+                              TACSElement **elements) = 0;
 
   // Create any auxiliary element for the given quadrant
-  virtual TACSAuxElements *createAuxElements( int order,
-                                              TMROctForest *forest ){
+  virtual TACSAuxElements *createAuxElements(int order, TMROctForest *forest) {
     return NULL;
   }
 
   // Add a boundary condition associated with the specified name
-  void addBoundaryCondition( const char *name,
-                             int num_bcs, const int bc_nums[] );
+  void addBoundaryCondition(const char *name, int num_bcs, const int bc_nums[]);
 
   // Create the TACSAssembler object with the given order for this forest
-  TACSAssembler *createTACS( TMROctForest *forest,
-                             TACSAssembler::OrderingType
-                               ordering=TACSAssembler::NATURAL_ORDER );
+  TACSAssembler *createTACS(
+      TMROctForest *forest,
+      TACSAssembler::OrderingType ordering = TACSAssembler::NATURAL_ORDER,
+      int num_comps = 0, const char **components = NULL);
 
-  TMROctForest* getFilter(){
-    return filter;
-  }
+  TMROctForest *getFilter() { return filter; }
 
  protected:
   // Initialize the data
-  void initialize( TMRBoundaryConditions *_bcs,
-                   int _design_vars_per_node,
-                   TMROctForest *_filter );
+  void initialize(TMRBoundaryConditions *_bcs, int _design_vars_per_node,
+                  TMROctForest *_filter);
 
   // Set the boundary conditions
-  void setBoundaryConditions( TMROctForest *forest,
-                              TACSAssembler *tacs );
+  void setBoundaryConditions(TMROctForest *forest, TACSAssembler *tacs);
 
   // Set the node locations
-  void setNodeLocations( TMROctForest *forest,
-                         TACSAssembler *tacs );
+  void setNodeLocations(TMROctForest *forest, TACSAssembler *tacs);
 
   TMRBoundaryConditions *bcs;
   int design_vars_per_node;
   TMROctForest *filter;
 };
 
-#endif // TMR_TACS_CREATOR
+#endif  // TMR_TACS_CREATOR

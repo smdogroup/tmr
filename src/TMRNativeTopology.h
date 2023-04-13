@@ -28,25 +28,18 @@
 */
 class TMREdgeFromCurve : public TMREdge {
  public:
-  TMREdgeFromCurve( TMRCurve *_curve ){
+  TMREdgeFromCurve(TMRCurve *_curve) {
     curve = _curve;
     curve->incref();
   }
-  ~TMREdgeFromCurve(){
-    curve->decref();
-  }
-  void getRange( double *tmin, double *tmax ){
-    curve->getRange(tmin, tmax);
-  }
-  int evalPoint( double t, TMRPoint *X ){
-    return curve->evalPoint(t, X);
-  }
-  int invEvalPoint( TMRPoint p, double *t ){
-    return curve->invEvalPoint(p, t);
-  }
-  int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt ){
+  ~TMREdgeFromCurve() { curve->decref(); }
+  void getRange(double *tmin, double *tmax) { curve->getRange(tmin, tmax); }
+  int evalPoint(double t, TMRPoint *X) { return curve->evalPoint(t, X); }
+  int invEvalPoint(TMRPoint p, double *t) { return curve->invEvalPoint(p, t); }
+  int evalDeriv(double t, TMRPoint *X, TMRPoint *Xt) {
     return curve->evalDeriv(t, X, Xt);
   }
+
  private:
   TMRCurve *curve;
 };
@@ -56,28 +49,24 @@ class TMREdgeFromCurve : public TMREdge {
 */
 class TMRFaceFromSurface : public TMRFace {
  public:
-  TMRFaceFromSurface( TMRSurface *_surf ){
+  TMRFaceFromSurface(TMRSurface *_surf) {
     surf = _surf;
     surf->incref();
   }
-  ~TMRFaceFromSurface(){
-    surf->decref();
-  }
-  void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax ){
+  ~TMRFaceFromSurface() { surf->decref(); }
+  void getRange(double *umin, double *vmin, double *umax, double *vmax) {
     surf->getRange(umin, vmin, umax, vmax);
   }
-  int evalPoint( double u, double v, TMRPoint *X ){
+  int evalPoint(double u, double v, TMRPoint *X) {
     return surf->evalPoint(u, v, X);
   }
-  int invEvalPoint( TMRPoint p, double *u, double *v ){
+  int invEvalPoint(TMRPoint p, double *u, double *v) {
     return surf->invEvalPoint(p, u, v);
   }
-  int evalDeriv( double u, double v,
-                 TMRPoint *X,
-                 TMRPoint *Xu, TMRPoint *Xv ){
+  int evalDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu, TMRPoint *Xv) {
     return surf->evalDeriv(u, v, X, Xu, Xv);
   }
+
  private:
   TMRSurface *surf;
 };
@@ -87,9 +76,10 @@ class TMRFaceFromSurface : public TMRFace {
 */
 class TMRVertexFromPoint : public TMRVertex {
  public:
-  TMRVertexFromPoint( TMRPoint p );
-  ~TMRVertexFromPoint(){}
-  int evalPoint( TMRPoint *p );
+  TMRVertexFromPoint(TMRPoint p);
+  ~TMRVertexFromPoint() {}
+  int evalPoint(TMRPoint *p);
+
  private:
   TMRPoint pt;
 };
@@ -103,13 +93,13 @@ class TMRVertexFromPoint : public TMRVertex {
 */
 class TMRVertexFromEdge : public TMRVertex {
  public:
-  TMRVertexFromEdge( TMREdge *_edge, double _t );
-  TMRVertexFromEdge( TMREdge *_edge, TMRPoint p );
+  TMRVertexFromEdge(TMREdge *_edge, double _t);
+  TMRVertexFromEdge(TMREdge *_edge, TMRPoint p);
   ~TMRVertexFromEdge();
-  int evalPoint( TMRPoint *p );
-  int getParamOnEdge( TMREdge *edge, double *t );
-  int getParamsOnFace( TMRFace *face, double *u, double *v );
-  TMREdge* getEdge();
+  int evalPoint(TMRPoint *p);
+  int getParamOnEdge(TMREdge *edge, double *t);
+  int getParamsOnFace(TMRFace *face, double *u, double *v);
+  TMREdge *getEdge();
 
  private:
   double t;
@@ -122,13 +112,12 @@ class TMRVertexFromEdge : public TMRVertex {
 */
 class TMRVertexFromFace : public TMRVertex {
  public:
-  TMRVertexFromFace( TMRFace *_face, double _u, double _v );
-  TMRVertexFromFace( TMRFace *_face, TMRPoint p );
+  TMRVertexFromFace(TMRFace *_face, double _u, double _v);
+  TMRVertexFromFace(TMRFace *_face, TMRPoint p);
   ~TMRVertexFromFace();
-  int evalPoint( TMRPoint *p );
-  int getParamsOnFace( TMRFace *surf,
-                       double *u, double *v );
-  TMRFace* getFace();
+  int evalPoint(TMRPoint *p);
+  int getParamsOnFace(TMRFace *surf, double *u, double *v);
+  TMRFace *getFace();
 
  private:
   double u, v;
@@ -140,16 +129,16 @@ class TMRVertexFromFace : public TMRVertex {
 */
 class TMREdgeFromFace : public TMREdge {
  public:
-  TMREdgeFromFace( TMRFace *_face, TMRPcurve *_pcurve, int _is_degen=0 );
+  TMREdgeFromFace(TMRFace *_face, TMRPcurve *_pcurve, int _is_degen = 0);
   ~TMREdgeFromFace();
-  void getRange( double *tmin, double *tmax );
-  int evalPoint( double t, TMRPoint *X );
-  int getParamsOnFace( TMRFace *face, double t,
-                       int dir, double *u, double *v );
-  int invEvalPoint( TMRPoint X, double *t );
-  int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt );
-  int isDegenerate(){ return is_degen; }
-  void addEdgeFromFace( TMRFace *_face, TMRPcurve *_pcurve );
+  void getRange(double *tmin, double *tmax);
+  int evalPoint(double t, TMRPoint *X);
+  int getParamsOnFace(TMRFace *face, double t, int dir, double *u, double *v);
+  int invEvalPoint(TMRPoint X, double *t);
+  int evalDeriv(double t, TMRPoint *X, TMRPoint *Xt);
+  int isDegenerate() { return is_degen; }
+  void addEdgeFromFace(TMRFace *_face, TMRPcurve *_pcurve);
+
  private:
   int is_degen;
   int nfaces;
@@ -162,15 +151,14 @@ class TMREdgeFromFace : public TMREdge {
 */
 class TMRSplitEdge : public TMREdge {
  public:
-  TMRSplitEdge( TMREdge *_edge, double _t1, double _t2 );
-  TMRSplitEdge( TMREdge *_edge, TMRPoint *p1, TMRPoint *p2 );
-  TMRSplitEdge( TMREdge *_edge, TMRVertex *p1, TMRVertex *p2 );
+  TMRSplitEdge(TMREdge *_edge, double _t1, double _t2);
+  TMRSplitEdge(TMREdge *_edge, TMRPoint *p1, TMRPoint *p2);
+  TMRSplitEdge(TMREdge *_edge, TMRVertex *p1, TMRVertex *p2);
   TMRSplitEdge();
 
-  void getRange( double *tmin, double *tmax );
-  int evalPoint( double t, TMRPoint *X );
-  int getParamsOnFace( TMRFace *face, double t,
-                       int dir, double *u, double *v );
+  void getRange(double *tmin, double *tmax);
+  int evalPoint(double t, TMRPoint *X);
+  int getParamsOnFace(TMRFace *face, double t, int dir, double *u, double *v);
 
  private:
   // Evaluate the bspline curve
@@ -185,10 +173,10 @@ class TMRSplitEdge : public TMREdge {
 */
 class TMRTFIEdge : public TMREdge {
  public:
-  TMRTFIEdge( TMRVertex *_v1, TMRVertex *_v2 );
+  TMRTFIEdge(TMRVertex *_v1, TMRVertex *_v2);
   ~TMRTFIEdge();
-  void getRange( double *tmin, double *tmax );
-  int evalPoint( double t, TMRPoint *X );
+  void getRange(double *tmin, double *tmax);
+  int evalPoint(double t, TMRPoint *X);
 };
 
 /*
@@ -206,17 +194,13 @@ class TMRTFIEdge : public TMREdge {
 */
 class TMRTFIFace : public TMRFace {
  public:
-  TMRTFIFace( TMREdge *_edges[], const int dir[],
-              TMRVertex *verts[] );
+  TMRTFIFace(TMREdge *_edges[], const int dir[], TMRVertex *verts[]);
   ~TMRTFIFace();
 
-  void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax );
-  int evalPoint( double u, double v, TMRPoint *X );
-  int invEvalPoint( TMRPoint p, double *u, double *v );
-  int evalDeriv( double u, double v,
-                 TMRPoint *X,
-                 TMRPoint *Xu, TMRPoint *Xv );
+  void getRange(double *umin, double *vmin, double *umax, double *vmax);
+  int evalPoint(double u, double v, TMRPoint *X);
+  int invEvalPoint(TMRPoint p, double *u, double *v);
+  int evalDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu, TMRPoint *Xv);
 
  private:
   // Set the number of Newton iterations
@@ -262,17 +246,13 @@ class TMRTFIFace : public TMRFace {
 */
 class TMRParametricTFIFace : public TMRFace {
  public:
-  TMRParametricTFIFace( TMRFace *_face,
-                        TMREdge *_edges[], const int dir[],
-                        TMRVertex *verts[] );
+  TMRParametricTFIFace(TMRFace *_face, TMREdge *_edges[], const int dir[],
+                       TMRVertex *verts[]);
   ~TMRParametricTFIFace();
-  void getRange( double *umin, double *vmin,
-                 double *umax, double *vmax );
-  int evalPoint( double u, double v, TMRPoint *X );
-  int invEvalPoint( TMRPoint p, double *u, double *v );
-  int evalDeriv( double u, double v,
-                 TMRPoint *X,
-                 TMRPoint *Xu, TMRPoint *Xv );
+  void getRange(double *umin, double *vmin, double *umax, double *vmax);
+  int evalPoint(double u, double v, TMRPoint *X);
+  int invEvalPoint(TMRPoint p, double *u, double *v);
+  int evalDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu, TMRPoint *Xv);
 
  private:
   TMRFace *face;
@@ -314,15 +294,13 @@ class TMRParametricTFIFace : public TMRFace {
 */
 class TMRTFIVolume : public TMRVolume {
  public:
-  TMRTFIVolume( TMRFace *_faces[],
-                TMREdge *_edges[], const int dir[],
-                TMRVertex *verts[] );
+  TMRTFIVolume(TMRFace *_faces[], TMREdge *_edges[], const int dir[],
+               TMRVertex *verts[]);
   ~TMRTFIVolume();
-  void getRange( double *umin, double *vmin, double *wmin,
-                 double *umax, double *vmax, double *wmax );
-  int evalPoint( double u, double v, double w, TMRPoint *X );
-  void getEntities( TMRFace ***_faces, TMREdge ***_edges,
-                    TMRVertex ***_verts );
+  void getRange(double *umin, double *vmin, double *wmin, double *umax,
+                double *vmax, double *wmax);
+  int evalPoint(double u, double v, double w, TMRPoint *X);
+  void getEntities(TMRFace ***_faces, TMREdge ***_edges, TMRVertex ***_verts);
 
  private:
   // Faces surrounding the volume: coordinate ordered
@@ -337,4 +315,4 @@ class TMRTFIVolume : public TMRVolume {
   TMRPoint c[8];
 };
 
-#endif // TMR_NATIVE_TOPOLOGY_H
+#endif  // TMR_NATIVE_TOPOLOGY_H

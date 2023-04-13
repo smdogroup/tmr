@@ -19,12 +19,13 @@
 */
 
 #include "TMROctant.h"
+
 #include "TMRHashFunction.h"
 
 /*
   Get the child id of the octant
 */
-int TMROctant::childId(){
+int TMROctant::childId() {
   int id = 0;
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
@@ -38,36 +39,35 @@ int TMROctant::childId(){
 /*
   Return the sibling of the octant
 */
-void TMROctant::getSibling( int id, TMROctant *sib ){
+void TMROctant::getSibling(int id, TMROctant *sib) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
-  int32_t xr = ((x & h) ? x-h : x);
-  int32_t yr = ((y & h) ? y-h : y);
-  int32_t zr = ((z & h) ? z-h : z);
+  int32_t xr = ((x & h) ? x - h : x);
+  int32_t yr = ((y & h) ? y - h : y);
+  int32_t zr = ((z & h) ? z - h : z);
 
   sib->block = block;
   sib->level = level;
   sib->info = 0;
-  sib->x = ((id & 1) ? xr+h : xr);
-  sib->y = ((id & 2) ? yr+h : yr);
-  sib->z = ((id & 4) ? zr+h : zr);
+  sib->x = ((id & 1) ? xr + h : xr);
+  sib->y = ((id & 2) ? yr + h : yr);
+  sib->z = ((id & 4) ? zr + h : zr);
 }
 
 /*
   Get the parent of the octant
 */
-void TMROctant::parent( TMROctant *p ){
-  if (level > 0){
+void TMROctant::parent(TMROctant *p) {
+  if (level > 0) {
     p->block = block;
-    p->level = level-1;
+    p->level = level - 1;
     p->info = 0;
     const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
     p->x = x & ~h;
     p->y = y & ~h;
     p->z = z & ~h;
-  }
-  else {
+  } else {
     p->block = block;
     p->level = 0;
     p->info = 0;
@@ -80,7 +80,7 @@ void TMROctant::parent( TMROctant *p ){
 /*
   Get the face neighbour
 */
-void TMROctant::faceNeighbor( int face, TMROctant *neighbor ){
+void TMROctant::faceNeighbor(int face, TMROctant *neighbor) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->block = block;
   neighbor->level = level;
@@ -94,63 +94,55 @@ void TMROctant::faceNeighbor( int face, TMROctant *neighbor ){
 /*
   Get the neighbor along an edge
 */
-void TMROctant::edgeNeighbor( int edge, TMROctant *neighbor ){
+void TMROctant::edgeNeighbor(int edge, TMROctant *neighbor) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->block = block;
   neighbor->level = level;
   neighbor->info = 0;
 
-  if (edge < 4){
+  if (edge < 4) {
     // Edges parallel to the x-direction
     neighbor->x = x;
-    if (edge % 2 == 0){
-      neighbor->y = y-h;
-    }
-    else {
-      neighbor->y = y+h;
+    if (edge % 2 == 0) {
+      neighbor->y = y - h;
+    } else {
+      neighbor->y = y + h;
     }
 
-    if (edge < 2){
-      neighbor->z = z-h;
+    if (edge < 2) {
+      neighbor->z = z - h;
+    } else {
+      neighbor->z = z + h;
     }
-    else {
-      neighbor->z = z+h;
-    }
-  }
-  else if (edge < 8){
+  } else if (edge < 8) {
     // Edges parallel to the y-direction
     neighbor->y = y;
 
-    if (edge % 2 == 0){
-      neighbor->x = x-h;
-    }
-    else {
-      neighbor->x = x+h;
+    if (edge % 2 == 0) {
+      neighbor->x = x - h;
+    } else {
+      neighbor->x = x + h;
     }
 
-    if (edge < 6){
-      neighbor->z = z-h;
+    if (edge < 6) {
+      neighbor->z = z - h;
+    } else {
+      neighbor->z = z + h;
     }
-    else {
-      neighbor->z = z+h;
-    }
-  }
-  else {
+  } else {
     // Edges parallel to the z-direction
     neighbor->z = z;
 
-    if (edge % 2 == 0){
-      neighbor->x = x-h;
-    }
-    else {
-      neighbor->x = x+h;
+    if (edge % 2 == 0) {
+      neighbor->x = x - h;
+    } else {
+      neighbor->x = x + h;
     }
 
-    if (edge < 10){
-      neighbor->y = y-h;
-    }
-    else {
-      neighbor->y = y+h;
+    if (edge < 10) {
+      neighbor->y = y - h;
+    } else {
+      neighbor->y = y + h;
     }
   }
 }
@@ -158,15 +150,15 @@ void TMROctant::edgeNeighbor( int edge, TMROctant *neighbor ){
 /*
   Get the neighbor along a corner
 */
-void TMROctant::cornerNeighbor( int corner, TMROctant *neighbor ){
+void TMROctant::cornerNeighbor(int corner, TMROctant *neighbor) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
   neighbor->block = block;
   neighbor->level = level;
   neighbor->info = 0;
 
-  neighbor->x = x + (2*(corner & 1) - 1)*h;
-  neighbor->y = y + ((corner & 2) - 1)*h;
-  neighbor->z = z + ((corner & 4)/2 - 1)*h;
+  neighbor->x = x + (2 * (corner & 1) - 1) * h;
+  neighbor->y = y + ((corner & 2) - 1) * h;
+  neighbor->z = z + ((corner & 4) / 2 - 1) * h;
 }
 
 /*
@@ -176,9 +168,9 @@ void TMROctant::cornerNeighbor( int corner, TMROctant *neighbor ){
   if self > octant. Ties are broken by the level of the octant such
   that the octants will be sorted by location then level.
 */
-int TMROctant::compare( const TMROctant *octant ) const {
+int TMROctant::compare(const TMROctant *octant) const {
   // If these octants are on different blocks, we're done...
-  if (block != octant->block){
+  if (block != octant->block) {
     return block - octant->block;
   }
 
@@ -189,26 +181,23 @@ int TMROctant::compare( const TMROctant *octant ) const {
   uint32_t sor = xxor | yxor | zxor;
 
   // If there is no most-significant bit, then we are done
-  if (sor == 0){
+  if (sor == 0) {
     return level - octant->level;
   }
 
   // Check for the most-significant bit
   int discrim = 0;
-  if (xxor > (sor ^ xxor)){
+  if (xxor > (sor ^ xxor)) {
     discrim = x - octant->x;
-  }
-  else if (yxor > (sor ^ yxor)){
+  } else if (yxor > (sor ^ yxor)) {
     discrim = y - octant->y;
-  }
-  else {
+  } else {
     discrim = z - octant->z;
   }
 
-  if (discrim > 0){
+  if (discrim > 0) {
     return 1;
-  }
-  else if (discrim < 0){
+  } else if (discrim < 0) {
     return -1;
   }
   return 0;
@@ -218,9 +207,9 @@ int TMROctant::compare( const TMROctant *octant ) const {
   Compare two octants to determine whether they have the same Morton
   position.
 */
-int TMROctant::comparePosition( const TMROctant *octant ) const {
+int TMROctant::comparePosition(const TMROctant *octant) const {
   // If these octants are on different blocks, we're done...
-  if (block != octant->block){
+  if (block != octant->block) {
     return block - octant->block;
   }
 
@@ -233,20 +222,17 @@ int TMROctant::comparePosition( const TMROctant *octant ) const {
   // Note that here we do not distinguish between levels
   // Check for the most-significant bit
   int discrim = 0;
-  if (xxor > (sor ^ xxor)){
+  if (xxor > (sor ^ xxor)) {
     discrim = x - octant->x;
-  }
-  else if (yxor > (sor ^ yxor)){
+  } else if (yxor > (sor ^ yxor)) {
     discrim = y - octant->y;
-  }
-  else {
+  } else {
     discrim = z - octant->z;
   }
 
-  if (discrim > 0){
+  if (discrim > 0) {
     return 1;
-  }
-  else if (discrim < 0){
+  } else if (discrim < 0) {
     return -1;
   }
   return 0;
@@ -256,9 +242,9 @@ int TMROctant::comparePosition( const TMROctant *octant ) const {
   Compare two octants to determine whether they have the same Morton
   position and info.
 */
-int TMROctant::compareNode( const TMROctant *octant ) const {
+int TMROctant::compareNode(const TMROctant *octant) const {
   // If these octants are on different blocks, we're done...
-  if (block != octant->block){
+  if (block != octant->block) {
     return block - octant->block;
   }
 
@@ -271,20 +257,17 @@ int TMROctant::compareNode( const TMROctant *octant ) const {
   // Note that here we do not distinguish between levels
   // Check for the most-significant bit
   int discrim = 0;
-  if (xxor > (sor ^ xxor)){
+  if (xxor > (sor ^ xxor)) {
     discrim = x - octant->x;
-  }
-  else if (yxor > (sor ^ yxor)){
+  } else if (yxor > (sor ^ yxor)) {
     discrim = y - octant->y;
-  }
-  else {
+  } else {
     discrim = z - octant->z;
   }
 
-  if (discrim > 0){
+  if (discrim > 0) {
     return 1;
-  }
-  else if (discrim < 0){
+  } else if (discrim < 0) {
     return -1;
   }
   return info - octant->info;
@@ -295,14 +278,12 @@ int TMROctant::compareNode( const TMROctant *octant ) const {
   itself. This can be used to determine whether the given octant is a
   descendent of this object.
 */
-int TMROctant::contains( TMROctant *oct ){
+int TMROctant::contains(TMROctant *oct) {
   const int32_t h = 1 << (TMR_MAX_LEVEL - level);
 
   // Check whether the octant lies within this octant
-  if ((oct->block == block) &&
-      (oct->x >= x && oct->x < x + h) &&
-      (oct->y >= y && oct->y < y + h) &&
-      (oct->z >= z && oct->z < z + h)){
+  if ((oct->block == block) && (oct->x >= x && oct->x < x + h) &&
+      (oct->y >= y && oct->y < y + h) && (oct->z >= z && oct->z < z + h)) {
     return 1;
   }
 
@@ -312,9 +293,9 @@ int TMROctant::contains( TMROctant *oct ){
 /*
   Compare two octants within the same sub-tree
 */
-static int compare_octants( const void *a, const void *b ){
-  const TMROctant *ao = static_cast<const TMROctant*>(a);
-  const TMROctant *bo = static_cast<const TMROctant*>(b);
+static int compare_octants(const void *a, const void *b) {
+  const TMROctant *ao = static_cast<const TMROctant *>(a);
+  const TMROctant *bo = static_cast<const TMROctant *>(b);
 
   return ao->compare(bo);
 }
@@ -322,9 +303,9 @@ static int compare_octants( const void *a, const void *b ){
 /*
   Compare two octant positions
 */
-static int compare_position( const void *a, const void *b ){
-  const TMROctant *ao = static_cast<const TMROctant*>(a);
-  const TMROctant *bo = static_cast<const TMROctant*>(b);
+static int compare_position(const void *a, const void *b) {
+  const TMROctant *ao = static_cast<const TMROctant *>(a);
+  const TMROctant *bo = static_cast<const TMROctant *>(b);
 
   return ao->comparePosition(bo);
 }
@@ -332,9 +313,9 @@ static int compare_position( const void *a, const void *b ){
 /*
   Compare two octant nodes
 */
-static int compare_nodes( const void *a, const void *b ){
-  const TMROctant *ao = static_cast<const TMROctant*>(a);
-  const TMROctant *bo = static_cast<const TMROctant*>(b);
+static int compare_nodes(const void *a, const void *b) {
+  const TMROctant *ao = static_cast<const TMROctant *>(a);
+  const TMROctant *bo = static_cast<const TMROctant *>(b);
 
   return ao->compareNode(bo);
 }
@@ -342,8 +323,8 @@ static int compare_nodes( const void *a, const void *b ){
 /*
   Store a array of octants
 */
-TMROctantArray::TMROctantArray( TMROctant *_array, int _size,
-                                int _use_node_index ){
+TMROctantArray::TMROctantArray(TMROctant *_array, int _size,
+                               int _use_node_index) {
   array = _array;
   size = _size;
   max_size = size;
@@ -354,16 +335,14 @@ TMROctantArray::TMROctantArray( TMROctant *_array, int _size,
 /*
   Destroy the octant array
 */
-TMROctantArray::~TMROctantArray(){
-  delete [] array;
-}
+TMROctantArray::~TMROctantArray() { delete[] array; }
 
 /*
   Duplicate the array and return the copy
 */
-TMROctantArray* TMROctantArray::duplicate(){
-  TMROctant *arr = new TMROctant[ size ];
-  memcpy(arr, array, size*sizeof(TMROctant));
+TMROctantArray *TMROctantArray::duplicate() {
+  TMROctant *arr = new TMROctant[size];
+  memcpy(arr, array, size * sizeof(TMROctant));
 
   TMROctantArray *dup = new TMROctantArray(arr, size, use_node_index);
   dup->is_sorted = is_sorted;
@@ -375,42 +354,39 @@ TMROctantArray* TMROctantArray::duplicate(){
   Sort the list and remove duplicates from the array of possible
   entries.
 */
-void TMROctantArray::sort(){
-  if (use_node_index){
+void TMROctantArray::sort() {
+  if (use_node_index) {
     qsort(array, size, sizeof(TMROctant), compare_nodes);
 
     // Now that the Octants are sorted, remove duplicates
-    int i = 0; // Location from which to take entries
-    int j = 0; // Location to place entries
+    int i = 0;  // Location from which to take entries
+    int j = 0;  // Location to place entries
 
-    for ( ; i < size; i++, j++ ){
-      while ((i < size-1) &&
-             (array[i].compareNode(&array[i+1]) == 0)){
+    for (; i < size; i++, j++) {
+      while ((i < size - 1) && (array[i].compareNode(&array[i + 1]) == 0)) {
         i++;
       }
 
-      if (i != j){
+      if (i != j) {
         array[j] = array[i];
       }
     }
 
     // The new size of the array
     size = j;
-  }
-  else {
+  } else {
     qsort(array, size, sizeof(TMROctant), compare_octants);
 
     // Now that the Octants are sorted, remove duplicates
-    int i = 0; // Location from which to take entries
-    int j = 0; // Location to place entries
+    int i = 0;  // Location from which to take entries
+    int j = 0;  // Location to place entries
 
-    for ( ; i < size; i++, j++ ){
-      while ((i < size-1) &&
-             (array[i].comparePosition(&array[i+1]) == 0)){
+    for (; i < size; i++, j++) {
+      while ((i < size - 1) && (array[i].comparePosition(&array[i + 1]) == 0)) {
         i++;
       }
 
-      if (i != j){
+      if (i != j) {
         array[j] = array[i];
       }
     }
@@ -425,37 +401,36 @@ void TMROctantArray::sort(){
 /*
   Determine if the array contains the specified octant
 */
-TMROctant* TMROctantArray::contains( TMROctant *q, int use_position ){
-  if (!is_sorted){
+TMROctant *TMROctantArray::contains(TMROctant *q, int use_position) {
+  if (!is_sorted) {
     is_sorted = 1;
     sort();
   }
 
-  if (use_node_index){
-    return (TMROctant*)bsearch(q, array, size, sizeof(TMROctant),
-                               compare_nodes);
-  }
-  else {
+  if (use_node_index) {
+    return (TMROctant *)bsearch(q, array, size, sizeof(TMROctant),
+                                compare_nodes);
+  } else {
     // Search for nodes - these will share the same
-    if (use_position){
-      return (TMROctant*)bsearch(q, array, size, sizeof(TMROctant),
-                                 compare_position);
+    if (use_position) {
+      return (TMROctant *)bsearch(q, array, size, sizeof(TMROctant),
+                                  compare_position);
     }
 
     // Search the array for an identical element
-    return (TMROctant*)bsearch(q, array, size, sizeof(TMROctant),
-                               compare_octants);
+    return (TMROctant *)bsearch(q, array, size, sizeof(TMROctant),
+                                compare_octants);
   }
 }
 
 /*
   Merge the entries of two arrays
 */
-void TMROctantArray::merge( TMROctantArray *list ){
-  if (!is_sorted){
+void TMROctantArray::merge(TMROctantArray *list) {
+  if (!is_sorted) {
     sort();
   }
-  if (!list->is_sorted){
+  if (!list->is_sorted) {
     list->sort();
   }
 
@@ -465,15 +440,14 @@ void TMROctantArray::merge( TMROctantArray *list ){
   // Scan through the list and determine the number
   // of duplicates
   int j = 0, i = 0;
-  for ( ; i < size; i++ ){
-    while ((j < list->size) &&
-	   (list->array[j].compare(&array[i]) < 0)){
+  for (; i < size; i++) {
+    while ((j < list->size) && (list->array[j].compare(&array[i]) < 0)) {
       j++;
     }
-    if (j >= list->size){
+    if (j >= list->size) {
       break;
     }
-    if (array[i].compare(&list->array[j]) == 0){
+    if (array[i].compare(&list->array[j]) == 0) {
       nduplicates++;
     }
   }
@@ -482,40 +456,38 @@ void TMROctantArray::merge( TMROctantArray *list ){
   int len = size + list->size - nduplicates;
 
   // Allocate a new array if required
-  if (len > max_size){
+  if (len > max_size) {
     max_size = len;
 
     TMROctant *temp = array;
-    array = new TMROctant[ max_size ];
-    memcpy(array, temp, size*sizeof(TMROctant));
+    array = new TMROctant[max_size];
+    memcpy(array, temp, size * sizeof(TMROctant));
 
     // Free the old array
-    delete [] temp;
+    delete[] temp;
   }
 
   // Set the pointer to the end of the new array
-  int end = len-1;
+  int end = len - 1;
 
   // Copy the new array back
-  i = size-1;
-  j = list->size-1;
-  while (i >= 0 && j >= 0){
-    if (array[i].compare(&list->array[j]) > 0){
+  i = size - 1;
+  j = list->size - 1;
+  while (i >= 0 && j >= 0) {
+    if (array[i].compare(&list->array[j]) > 0) {
       array[end] = array[i];
       end--, i--;
-    }
-    else if (list->array[j].compare(&array[i]) > 0){
+    } else if (list->array[j].compare(&array[i]) > 0) {
       array[end] = list->array[j];
       end--, j--;
-    }
-    else { // b[j] == a[i]
+    } else {  // b[j] == a[i]
       array[end] = array[i];
       end--, j--, i--;
     }
   }
 
   // Only need to copy over remaining elements from b - if any
-  while (j >= 0){
+  while (j >= 0) {
     array[j] = list->array[j];
     j--;
   }
@@ -527,15 +499,19 @@ void TMROctantArray::merge( TMROctantArray *list ){
 /*
   Get the underlying array
 */
-void TMROctantArray::getArray( TMROctant **_array, int *_size ){
-  if (_array){ *_array = array; }
-  if (_size){ *_size = size; }
+void TMROctantArray::getArray(TMROctant **_array, int *_size) {
+  if (_array) {
+    *_array = array;
+  }
+  if (_size) {
+    *_size = size;
+  }
 }
 
 /*
   Create an queue of octants
 */
-TMROctantQueue::TMROctantQueue(){
+TMROctantQueue::TMROctantQueue() {
   root = tip = NULL;
   num_elems = 0;
 }
@@ -543,9 +519,9 @@ TMROctantQueue::TMROctantQueue(){
 /*
   Free the queue
 */
-TMROctantQueue::~TMROctantQueue(){
+TMROctantQueue::~TMROctantQueue() {
   OctQueueNode *node = root;
-  while (node){
+  while (node) {
     OctQueueNode *tmp = node;
     node = node->next;
     delete tmp;
@@ -555,20 +531,17 @@ TMROctantQueue::~TMROctantQueue(){
 /*
   Get the length of the octant queue
 */
-int TMROctantQueue::length(){
-  return num_elems;
-}
+int TMROctantQueue::length() { return num_elems; }
 
 /*
   Push a value onto the octant queue
 */
-void TMROctantQueue::push( TMROctant *oct ){
-  if (!tip){
+void TMROctantQueue::push(TMROctant *oct) {
+  if (!tip) {
     root = new OctQueueNode();
     root->oct = *oct;
     tip = root;
-  }
-  else {
+  } else {
     tip->next = new OctQueueNode();
     tip->next->oct = *oct;
     tip = tip->next;
@@ -579,17 +552,18 @@ void TMROctantQueue::push( TMROctant *oct ){
 /*
   Pop a value from the octant queue
 */
-TMROctant TMROctantQueue::pop(){
-  if (!root){
+TMROctant TMROctantQueue::pop() {
+  if (!root) {
     return TMROctant();
-  }
-  else {
+  } else {
     num_elems--;
     TMROctant temp = root->oct;
     OctQueueNode *tmp = root;
     root = root->next;
     delete tmp;
-    if (num_elems == 0){ tip = NULL; }
+    if (num_elems == 0) {
+      tip = NULL;
+    }
     return temp;
   }
 }
@@ -597,14 +571,14 @@ TMROctant TMROctantQueue::pop(){
 /*
   Convert the queue to an array
 */
-TMROctantArray* TMROctantQueue::toArray(){
+TMROctantArray *TMROctantQueue::toArray() {
   // Allocate the array
-  TMROctant *array = new TMROctant[ num_elems ];
+  TMROctant *array = new TMROctant[num_elems];
 
   // Scan through the queue and retrieve the octants
   OctQueueNode *node = root;
   int index = 0;
-  while (node){
+  while (node) {
     array[index] = node->oct;
     node = node->next;
     index++;
@@ -622,22 +596,22 @@ TMROctantArray* TMROctantQueue::toArray(){
   elements with other values. It is used to create unique lists of
   elements and nodes within the octree mesh.
 */
-TMROctantHash::TMROctantHash( int _use_node_index ){
+TMROctantHash::TMROctantHash(int _use_node_index) {
   use_node_index = _use_node_index;
   num_elems = 0;
   num_buckets = min_num_buckets;
-  hash_buckets = new OctHashNode*[ num_buckets ];
-  memset(hash_buckets, 0, num_buckets*sizeof(OctHashNode*));
+  hash_buckets = new OctHashNode *[num_buckets];
+  memset(hash_buckets, 0, num_buckets * sizeof(OctHashNode *));
 }
 
 /*
   Free the memory allocated by the octant hash
 */
-TMROctantHash::~TMROctantHash(){
+TMROctantHash::~TMROctantHash() {
   // Free all the elements in the hash
-  for ( int i = 0; i < num_buckets; i++ ){
+  for (int i = 0; i < num_buckets; i++) {
     OctHashNode *node = hash_buckets[i];
-    while (node){
+    while (node) {
       // Delete the old guy
       OctHashNode *tmp = node;
       node = node->next;
@@ -645,23 +619,23 @@ TMROctantHash::~TMROctantHash(){
     }
   }
 
-  delete [] hash_buckets;
+  delete[] hash_buckets;
 }
 
 /*
   Covert the hash table to an array
 */
-TMROctantArray *TMROctantHash::toArray(){
+TMROctantArray *TMROctantHash::toArray() {
   // Create an array of octants
-  TMROctant *array = new TMROctant[ num_elems ];
+  TMROctant *array = new TMROctant[num_elems];
 
   // Loop over all the buckets
-  for ( int i = 0, index = 0; i < num_buckets; i++ ){
+  for (int i = 0, index = 0; i < num_buckets; i++) {
     // Get the hash bucket and extract all the elements from this
     // bucket into the array
     OctHashNode *node = hash_buckets[i];
 
-    while (node){
+    while (node) {
       array[index] = node->oct;
       index++;
       node = node->next;
@@ -669,8 +643,7 @@ TMROctantArray *TMROctantHash::toArray(){
   }
 
   // Create an array object and add it to the list
-  TMROctantArray *list = new TMROctantArray(array, num_elems,
-                                            use_node_index);
+  TMROctantArray *list = new TMROctantArray(array, num_elems, use_node_index);
   return list;
 }
 
@@ -687,32 +660,31 @@ TMROctantArray *TMROctantHash::toArray(){
   returns:
   true if the octant is added, false if it is not
 */
-int TMROctantHash::addOctant( TMROctant *oct ){
-  if (num_elems > 10*num_buckets){
+int TMROctantHash::addOctant(TMROctant *oct) {
+  if (num_elems > 10 * num_buckets) {
     // Redistribute the octants to new buckets
     int num_old_buckets = num_buckets;
-    num_buckets = 2*num_buckets;
-    OctHashNode **new_buckets = new OctHashNode*[ num_buckets ];
-    memset(new_buckets, 0, num_buckets*sizeof(OctHashNode*));
+    num_buckets = 2 * num_buckets;
+    OctHashNode **new_buckets = new OctHashNode *[num_buckets];
+    memset(new_buckets, 0, num_buckets * sizeof(OctHashNode *));
 
     // Keep track of the end bucket
-    OctHashNode **end_buckets = new OctHashNode*[ num_buckets ];
+    OctHashNode **end_buckets = new OctHashNode *[num_buckets];
 
     // Redistribute the octant nodes based on the new
     // number of buckets within the hash data structure
-    for ( int i = 0; i < num_old_buckets; i++ ){
+    for (int i = 0; i < num_old_buckets; i++) {
       OctHashNode *node = hash_buckets[i];
-      while (node){
+      while (node) {
         int bucket = getBucket(&(node->oct));
 
         // If this is the first new bucket, create
         // the new node
-        if (!new_buckets[bucket]){
+        if (!new_buckets[bucket]) {
           new_buckets[bucket] = new OctHashNode;
           new_buckets[bucket]->oct = node->oct;
           end_buckets[bucket] = new_buckets[bucket];
-        }
-        else {
+        } else {
           end_buckets[bucket]->next = new OctHashNode;
           end_buckets[bucket]->next->oct = node->oct;
           end_buckets[bucket] = end_buckets[bucket]->next;
@@ -729,8 +701,8 @@ int TMROctantHash::addOctant( TMROctant *oct ){
       }
     }
 
-    delete [] end_buckets;
-    delete [] hash_buckets;
+    delete[] end_buckets;
+    delete[] hash_buckets;
     hash_buckets = new_buckets;
   }
 
@@ -738,42 +710,40 @@ int TMROctantHash::addOctant( TMROctant *oct ){
 
   // If no octant has been added to the bucket,
   // create a new bucket
-  if (!hash_buckets[bucket]){
+  if (!hash_buckets[bucket]) {
     hash_buckets[bucket] = new OctHashNode;
     hash_buckets[bucket]->oct = *oct;
     num_elems++;
     return 1;
-  }
-  else {
+  } else {
     // Get the head node for the corresponding bucket
     OctHashNode *node = hash_buckets[bucket];
-    if (use_node_index){
-      while (node){
+    if (use_node_index) {
+      while (node) {
         // The octant is in the list, quit now and return false
-        if (node->oct.compareNode(oct) == 0){
+        if (node->oct.compareNode(oct) == 0) {
           return 0;
         }
 
         // If the next node does not exist, quit
         // while node is the last node in the linked
         // list
-        if (!node->next){
+        if (!node->next) {
           break;
         }
         node = node->next;
       }
-    }
-    else {
-      while (node){
+    } else {
+      while (node) {
         // The octant is in the list, quit now and return false
-        if (node->oct.compare(oct) == 0){
+        if (node->oct.compare(oct) == 0) {
           return 0;
         }
 
         // If the next node does not exist, quit
         // while node is the last node in the linked
         // list
-        if (!node->next){
+        if (!node->next) {
           break;
         }
         node = node->next;
@@ -795,11 +765,11 @@ int TMROctantHash::addOctant( TMROctant *oct ){
   This code creates a value based on the octant location within the
   mesh and then takes the remainder of the number of buckets.
 */
-int TMROctantHash::getBucket( TMROctant *oct ){
+int TMROctantHash::getBucket(TMROctant *oct) {
   // The has value
   uint32_t val = 0;
 
-  if (use_node_index){
+  if (use_node_index) {
     uint32_t u = 0, v = 0, w = 0, x = 0;
     u = oct->block;
     v = (1 << TMR_MAX_LEVEL) + oct->x;
@@ -810,8 +780,7 @@ int TMROctantHash::getBucket( TMROctant *oct ){
     // Compute the hash value
     // val = TMRIntegerFiveTupleHash(u, v, w, x, y);
     val = TMRIntegerFourTupleHash(u, v, w, x);
-  }
-  else {
+  } else {
     uint32_t u = 0, v = 0, w = 0, x = 0;
     u = oct->block;
     v = (1 << TMR_MAX_LEVEL) + oct->x;

@@ -40,23 +40,22 @@
 class TMRCurve : public TMREntity {
  public:
   // Get the parameter range for this edge
-  virtual void getRange( double *tmin, double *tmax ) = 0;
+  virtual void getRange(double *tmin, double *tmax) = 0;
 
   // Given the parametric point, evaluate the x,y,z location
-  virtual int evalPoint( double t, TMRPoint *X ) = 0;
+  virtual int evalPoint(double t, TMRPoint *X) = 0;
 
   // Given the point, find the parametric location
-  virtual int invEvalPoint( TMRPoint X, double *t );
+  virtual int invEvalPoint(TMRPoint X, double *t);
 
   // Given the parametric point, evaluate the derivative
-  virtual int evalDeriv( double t, TMRPoint *X, TMRPoint *Xt );
+  virtual int evalDeriv(double t, TMRPoint *X, TMRPoint *Xt);
 
   // Given the parametric point, evaluate the second derivative
-  virtual int eval2ndDeriv( double t, TMRPoint *X,
-                            TMRPoint *Xt, TMRPoint *Xtt );
+  virtual int eval2ndDeriv(double t, TMRPoint *X, TMRPoint *Xt, TMRPoint *Xtt);
 
   // Write the object to the VTK file
-  void writeToVTK( const char *filename );
+  void writeToVTK(const char *filename);
 
  private:
   // Finite-difference step size
@@ -69,28 +68,26 @@ class TMRCurve : public TMREntity {
 class TMRSurface : public TMREntity {
  public:
   // Get the parameter range for this surface
-  virtual void getRange( double *umin, double *vmin,
-                         double *umax, double *vmax ) = 0;
+  virtual void getRange(double *umin, double *vmin, double *umax,
+                        double *vmax) = 0;
 
   // Given the parametric point, compute the x,y,z location
-  virtual int evalPoint( double u, double v, TMRPoint *X ) = 0;
+  virtual int evalPoint(double u, double v, TMRPoint *X) = 0;
 
   // Perform the inverse evaluation
-  virtual int invEvalPoint( TMRPoint p, double *u, double *v ) = 0;
+  virtual int invEvalPoint(TMRPoint p, double *u, double *v) = 0;
 
   // Given the parametric point, evaluate the first derivative
-  virtual int evalDeriv( double u, double v,
-                         TMRPoint *X,
-                         TMRPoint *Xu, TMRPoint *Xv );
+  virtual int evalDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu,
+                        TMRPoint *Xv);
 
   // Given the parametric point, evaluate the second derivatives
-  virtual int eval2ndDeriv( double u, double v,
-                            TMRPoint *X,
-                            TMRPoint *Xu, TMRPoint *Xv,
-                            TMRPoint *Xuu, TMRPoint *Xuv, TMRPoint *Xvv );
+  virtual int eval2ndDeriv(double u, double v, TMRPoint *X, TMRPoint *Xu,
+                           TMRPoint *Xv, TMRPoint *Xuu, TMRPoint *Xuv,
+                           TMRPoint *Xvv);
 
   // Write the object to the VTK file
-  void writeToVTK( const char *filename );
+  void writeToVTK(const char *filename);
 
  private:
   // Finite-difference step size
@@ -104,19 +101,18 @@ class TMRSurface : public TMREntity {
 class TMRPcurve : public TMREntity {
  public:
   // Get the parameter range for this edge
-  virtual void getRange( double *tmin, double *tmax ) = 0;
+  virtual void getRange(double *tmin, double *tmax) = 0;
 
   // Given the parametric point, evaluate the x,y,z location
-  virtual int evalPoint( double t, double *u, double *v ) = 0;
+  virtual int evalPoint(double t, double *u, double *v) = 0;
 
   // Given the parametric point, evaluate the derivative
-  virtual int evalDeriv( double t, double *u, double *v,
-                         double *ut, double *vt ) = 0;
+  virtual int evalDeriv(double t, double *u, double *v, double *ut,
+                        double *vt) = 0;
 
   // Given the parametric point, evaluate the derivative
-  virtual int eval2ndDeriv( double t, double *u, double *v,
-                            double *ut, double *vt,
-                            double *utt, double *vtt ) = 0;
+  virtual int eval2ndDeriv(double t, double *u, double *v, double *ut,
+                           double *vt, double *utt, double *vtt) = 0;
 };
 
-#endif // TMR_GEOMETRY_H
+#endif  // TMR_GEOMETRY_H

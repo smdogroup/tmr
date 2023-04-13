@@ -10,7 +10,7 @@
   You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,8 +21,8 @@
 #ifndef TMR_STL_TOOLS_H
 #define TMR_STL_TOOLS_H
 
-#include "TMROctForest.h"
 #include "TACSBVec.h"
+#include "TMROctForest.h"
 
 /*
   The following file contains the tools required to generate an STL
@@ -41,11 +41,9 @@
   distributed across processors.
 */
 
-int TMR_GenerateSTLTriangles( int root,
-                              TMROctForest *filter,
-                              TACSBVec *x, int x_offset,
-                              double cutoff,
-                              int *_ntris, TMR_STLTriangle **_tris );
+int TMR_GenerateSTLTriangles(int root, TMROctForest *filter, TACSBVec *x,
+                             int x_offset, double cutoff, int *_ntris,
+                             TMR_STLTriangle **_tris);
 
 /*
   Given the design variables, write out a binary file containing the
@@ -61,17 +59,14 @@ int TMR_GenerateSTLTriangles( int root,
   filter:     the octant forest
   x:          the vertex-values of the design variables
   x_offset:   the offset variable values
-  cutoff      the level set design variable value 
+  cutoff      the level set design variable value
 
   binary output data format:
   1 integer representing the number of triangles = ntri
   3*ntri doubles representing the cell-vertices in CCW ordering
 */
-extern int TMR_GenerateBinFile( const char *filename,
-                                TMROctForest *filter,
-                                TACSBVec *x, int x_offset,
-                                double cutoff );
-
+extern int TMR_GenerateBinFile(const char *filename, TMROctForest *filter,
+                               TACSBVec *x, int x_offset, double cutoff);
 
 /*
   Take the binary file generated from above and convert to the .STL
@@ -80,7 +75,6 @@ extern int TMR_GenerateBinFile( const char *filename,
   Note that this is a serial code and should only be called by a
   single processor.
 */
-extern int TMR_ConvertBinToSTL( const char *binfile,
-                                const char *stlfile );
+extern int TMR_ConvertBinToSTL(const char *binfile, const char *stlfile);
 
-#endif // TMR_STL_TOOLS_H
+#endif  // TMR_STL_TOOLS_H

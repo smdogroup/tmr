@@ -30,6 +30,7 @@ import numpy as np
 
 # Import the string library
 from libcpp.string cimport string
+from libc.string cimport strcpy
 
 cdef tmr_init():
     if not TMRIsInitialized():
@@ -2107,6 +2108,8 @@ cdef class Model:
                     xav[0], xav[1], xav[2], name))
 
             index += 1
+        
+        fp.close()
         return
 
 cdef _init_Model(TMRModel* ptr):
@@ -3952,7 +3955,7 @@ cdef class QuadCreator:
         self.ptr.decref()
 
     def createTACS(self, QuadForest forest,
-                   OrderingType ordering=TACS.NATURAL_ORDER):
+                   OrderingType ordering=TACS.NATURAL_ORDER, comp_names=None):
         """
         createTACS(self, forest, order=TACS.NATURAL_ORDER)
 
@@ -3962,9 +3965,30 @@ cdef class QuadCreator:
         Args:
             forest (QuadForest): The QuadForest object to allocate
             order (OrderingType): The type of ordering to use
+            comp_names (list[str]): List of component names to assign
         """
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(forest.ptr, ordering)
+        cdef int ncomps = 0
+        cdef char** components = NULL
+        cdef string temp_name
+        if comp_names is not None:
+            ncomps = len(comp_names)
+            # allocate pointers to the component names
+            components = <char**>malloc(ncomps*sizeof(char*))
+            for icomp,name in enumerate(comp_names):
+                # get the temporary name as a c++ string 
+                temp_name = tmr_convert_str_to_chars(name)
+                # allocate space for the current name
+                components[icomp] = <char*>malloc((temp_name.length())*sizeof(char))
+                # copy the name to store it
+                strcpy(components[icomp], temp_name.c_str())
+        # create/initialize the TACSAssembler object          
+        assembler = self.ptr.createTACS(forest.ptr, ordering, ncomps, <const char**>components)
+        # free allocated memory
+        if (components): 
+            for i in range(ncomps):
+                free(components[i])
+            free(components)
         return _init_Assembler(assembler)
 
     def getFilter(self):
@@ -4017,7 +4041,7 @@ cdef class OctCreator:
         self.ptr.decref()
 
     def createTACS(self, OctForest forest,
-                   OrderingType ordering=TACS.NATURAL_ORDER):
+                   OrderingType ordering=TACS.NATURAL_ORDER, comp_names=None):
         """
         createTACS(self, forest, order=TACS.PY_NATURAL_ORDER)
 
@@ -4027,9 +4051,31 @@ cdef class OctCreator:
         Args:
             forest (OctForest): The OctForest object to allocate
             order (OrderingType): The type of ordering to use
+            comp_names (list[str]): List of component names to assign
         """
         cdef TACSAssembler *assembler = NULL
-        assembler = self.ptr.createTACS(forest.ptr, ordering)
+        # assembler = self.ptr.createTACS(forest.ptr, ordering)
+        cdef int ncomps = 0
+        cdef char** components = NULL
+        cdef string temp_name
+        if comp_names is not None:
+            ncomps = len(comp_names)
+            # allocate pointers to the component names
+            components = <char**>malloc(ncomps*sizeof(char*))
+            for icomp,name in enumerate(comp_names):
+                # get the temporary name as a c++ string 
+                temp_name = tmr_convert_str_to_chars(name)
+                # allocate space for the current name
+                components[icomp] = <char*>malloc((temp_name.length())*sizeof(char))
+                # copy the name to store it
+                strcpy(components[icomp], temp_name.c_str())
+        # create/initialize the TACSAssembler object          
+        assembler = self.ptr.createTACS(forest.ptr, ordering, ncomps, <const char**>components)
+        # free allocated memory
+        if (components): 
+            for i in range(ncomps):
+                free(components[i])
+            free(components)
         return _init_Assembler(assembler)
 
     def getFilter(self):

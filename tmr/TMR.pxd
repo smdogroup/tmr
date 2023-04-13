@@ -497,14 +497,14 @@ cdef extern from "TMRCyCreator.h":
         void setSelfPointer(void*)
         void setCreateQuadElement(
             TACSElement* (*createquadelements)(void*, int, TMRQuadrant*))
-        TACSAssembler *createTACS(TMRQuadForest*, OrderingType)
+        TACSAssembler *createTACS(TMRQuadForest*, OrderingType, int, const char**)
 
     cdef cppclass TMRCyOctCreator(TMROctTACSCreator):
         TMRCyOctCreator(TMRBoundaryConditions*, int, TMROctForest*)
         void setSelfPointer(void*)
         void setCreateOctElement(
             TACSElement* (*createoctelements)(void*, int, TMROctant*))
-        TACSAssembler *createTACS(TMROctForest*, OrderingType)
+        TACSAssembler *createTACS(TMROctForest*, OrderingType, int, const char**)
 
     cdef cppclass TMRCyTopoQuadCreator(TMRQuadTACSCreator):
         TMRCyTopoQuadCreator(TMRBoundaryConditions*, int, TMRQuadForest*)

@@ -22,6 +22,7 @@
 #define TMR_OCTANT_H
 
 #include <stdlib.h>
+
 #include "TMRBase.h"
 
 /*
@@ -35,21 +36,21 @@
 class TMROctant {
  public:
   int childId();
-  void getSibling( int id, TMROctant *sib );
-  void parent( TMROctant *parent );
-  void faceNeighbor( int face, TMROctant *neighbor );
-  void edgeNeighbor( int edge, TMROctant *neighbor );
-  void cornerNeighbor( int corner, TMROctant *neighbor );
-  int compare( const TMROctant *oct ) const;
-  int comparePosition( const TMROctant *oct ) const;
-  int compareNode( const TMROctant *oct ) const;
-  int contains( TMROctant *oct );
+  void getSibling(int id, TMROctant *sib);
+  void parent(TMROctant *parent);
+  void faceNeighbor(int face, TMROctant *neighbor);
+  void edgeNeighbor(int edge, TMROctant *neighbor);
+  void cornerNeighbor(int corner, TMROctant *neighbor);
+  int compare(const TMROctant *oct) const;
+  int comparePosition(const TMROctant *oct) const;
+  int compareNode(const TMROctant *oct) const;
+  int contains(TMROctant *oct);
 
-  int32_t block; // The block that owns this octant
-  int32_t x, y, z; // The x,y,z coordinates
-  int32_t tag;   // A tag to store additional data
-  int16_t level; // The refinement level
-  int16_t info; // Info about the octant
+  int32_t block;    // The block that owns this octant
+  int32_t x, y, z;  // The x,y,z coordinates
+  int32_t tag;      // A tag to store additional data
+  int16_t level;    // The refinement level
+  int16_t info;     // Info about the octant
 };
 
 /*
@@ -63,15 +64,14 @@ class TMROctant {
 */
 class TMROctantArray {
  public:
-  TMROctantArray( TMROctant *array, int size,
-                  int _use_node_index=0 );
+  TMROctantArray(TMROctant *array, int size, int _use_node_index = 0);
   ~TMROctantArray();
 
-  TMROctantArray* duplicate();
-  void getArray( TMROctant **_array, int *_size );
+  TMROctantArray *duplicate();
+  void getArray(TMROctant **_array, int *_size);
   void sort();
-  TMROctant* contains( TMROctant *q, int use_nodes=0 );
-  void merge( TMROctantArray * list );
+  TMROctant *contains(TMROctant *q, int use_nodes = 0);
+  void merge(TMROctantArray *list);
 
  private:
   int use_node_index;
@@ -92,15 +92,15 @@ class TMROctantQueue {
   ~TMROctantQueue();
 
   int length();
-  void push( TMROctant *oct );
+  void push(TMROctant *oct);
   TMROctant pop();
-  TMROctantArray* toArray();
+  TMROctantArray *toArray();
 
  private:
   // Class that defines an element within the queue
   class OctQueueNode {
-  public:
-    OctQueueNode(){ next = NULL; }
+   public:
+    OctQueueNode() { next = NULL; }
     TMROctant oct;
     OctQueueNode *next;
   };
@@ -119,19 +119,19 @@ class TMROctantQueue {
 */
 class TMROctantHash {
  public:
-  TMROctantHash( int _use_node_index=0 );
+  TMROctantHash(int _use_node_index = 0);
   ~TMROctantHash();
 
-  TMROctantArray * toArray();
-  int addOctant( TMROctant *oct );
+  TMROctantArray *toArray();
+  int addOctant(TMROctant *oct);
 
  private:
   // The minimum bucket size
-  static const int min_num_buckets = (1 << 12)-1;
+  static const int min_num_buckets = (1 << 12) - 1;
 
   class OctHashNode {
-  public:
-    OctHashNode(){ next = NULL; }
+   public:
+    OctHashNode() { next = NULL; }
     TMROctant oct;
     OctHashNode *next;
   };
@@ -147,7 +147,7 @@ class TMROctantHash {
   int num_elems;
 
   // Get the buckets to place the octant in
-  int getBucket( TMROctant *oct );
+  int getBucket(TMROctant *oct);
 };
 
-#endif // TMR_OCTANT_H
+#endif  // TMR_OCTANT_H
