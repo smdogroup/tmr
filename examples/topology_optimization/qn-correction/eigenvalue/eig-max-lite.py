@@ -53,7 +53,7 @@ def get_args():
     p.add_argument("--len0", type=float, default=1.0, help="characteristic length")
     p.add_argument("--vol-frac", type=float, default=0.4, help="volume fraction")
     p.add_argument("--r0-frac", type=float, default=0.05)
-    p.add_argument("--htarget", type=float, default=1.0)
+    p.add_argument("--htarget", type=float, default=0.5)
     p.add_argument("--mg-levels", type=int, default=4)
 
     # Optimization

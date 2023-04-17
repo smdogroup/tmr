@@ -4,6 +4,7 @@ from egads4py import egads
 import numpy as np
 import openmdao.api as om
 import os
+from datetime import datetime
 
 # Print colored text in terminal
 try:
@@ -201,6 +202,9 @@ class FrequencyObj:
 
         # We keep track of failed qn correction
         self.curvs = []
+
+        # Obj counter
+        self.counter_obj = 0
 
         return
 
@@ -461,9 +465,15 @@ class FrequencyObj:
         # Write eigenvalues to txt
         if self.comm.rank == 0:
             with open(os.path.join(self.prefix, "eigenvalues.txt"), "a") as f:
+                f.write("[%4d]" % self.counter_obj)
                 for i in range(self.num_eigenvalues):
                     f.write("%20.10e" % self.eig[i])
                 f.write("\n")
+
+        # Write time to txt
+        if self.comm.rank == 0:
+            with open(os.path.join(self.prefix, "time.txt"), "a") as f:
+                f.write("[%4d] %s\n" % (self.counter_obj, datetime.now()))
 
         # Set first eigenvector as state variable for visualization
         self.assembler.setVariables(self.eigv[0])
@@ -490,6 +500,8 @@ class FrequencyObj:
         if self.comm.rank == 0:
             print("{:30s}{:20.10e}".format("[Obj] KS eigenvalue:", ks))
             print("{:30s}{:20.10e}".format("[Obj] min eigenvalue:", eig_min))
+
+        self.counter_obj += 1
 
         return obj
 
