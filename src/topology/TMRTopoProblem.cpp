@@ -666,7 +666,7 @@ void TMRTopoProblem::addBucklingConstraint(double sigma, int num_eigvals,
   Add callback constraint and constraint gradient calls
 */
 void TMRTopoProblem::addConstraintCallback(
-    int ncon, void *con_ptr,
+    int ncon, int nineq, void *con_ptr,
     void (*confunc)(void *, TMRTopoFilter *, TACSMg *, int, TacsScalar *),
     void *con_grad_ptr,
     void (*congradfunc)(void *, TMRTopoFilter *, TACSMg *, int, TACSBVec **)) {

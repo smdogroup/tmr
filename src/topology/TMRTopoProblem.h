@@ -95,7 +95,7 @@ class TMRTopoProblem : public ParOptProblem {
   void addBucklingConstraint(double sigma, int num_eigvals,
                              TacsScalar ks_weight, TacsScalar offset,
                              TacsScalar scale, int max_lanczos, double eigtol);
-  void addConstraintCallback(int ncon, void *con_ptr,
+  void addConstraintCallback(int ncon, int nineq, void *con_ptr,
                              void (*confunc)(void *, TMRTopoFilter *, TACSMg *,
                                              int, TacsScalar *),
                              void *con_grad_ptr,

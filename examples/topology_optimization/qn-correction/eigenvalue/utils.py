@@ -155,7 +155,7 @@ class FrequencyObj:
         max_jd_size=100,
         max_gmres_size=30,
         ksrho=50,
-        non_design_mass=5.0,
+        non_design_mass=None,
     ):
         """
         Args:
@@ -204,8 +204,98 @@ class FrequencyObj:
 
         return
 
-    def objective(self, fltr, mg):
+    def non_design_mass_mats(self):
         """
+        Compute K0 and M0 associated with the non-design mass
+        """
+        m0mat = self.assembler.createMat()
+        k0mat = self.assembler.createMat()
+
+        mvec = self.assembler.createDesignVec()
+        mvals = mvec.getArray()
+
+        # Get nodal locations
+        Xpts = self.forest.getPoints()
+
+        # Note: the local nodes are organized as follows:
+        # |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
+
+        # Get number of local nodes in the current processor
+        n_local_nodes = Xpts.shape[0]
+
+        # Get numbder of dependent nodes
+        _ptr, _conn, _weights = self.forest.getDepNodeConn()
+
+        # Get number of ext_pre nodes
+        n_ext_pre = self.forest.getExtPreOffset()
+
+        # Get numbder of own nodes:
+        offset = n_ext_pre
+
+        # # Loop over all owned nodes and set non-design mass values
+        tol = 1e-6
+        if self.domain == "cantilever":
+            xmin = self.lx - tol
+            xmax = self.lx + tol
+            ymin = 0.25 * self.ly - tol
+            ymax = 0.75 * self.ly + tol
+            zmin = 0.0 * self.lz - tol
+            zmax = 0.2 * self.lz + tol
+
+        elif self.domain == "michell":
+            xmin = self.lx - tol
+            xmax = self.lx + tol
+            ymin = 0.25 * self.ly - tol
+            ymax = 0.75 * self.ly + tol
+            zmin = 0.4 * self.lz - tol
+            zmax = 0.6 * self.lz + tol
+
+        elif self.domain == "mbb":
+            xmin = 0.0 * self.lx - tol
+            xmax = 0.2 * self.lx + tol
+            ymin = 0.25 * self.ly - tol
+            ymax = 0.75 * self.ly + tol
+            zmin = self.lz - tol
+            zmax = self.lz + tol
+
+        elif self.domain == "lbracket":
+            RATIO = self.ratio
+            xmin = self.lx - tol
+            xmax = self.lx + tol
+            ymin = 0.25 * self.ly - tol
+            ymax = 0.75 * self.ly + tol
+            zmin = 0.5 * RATIO * self.lz - tol
+            zmax = 1.0 * RATIO * self.lz + tol
+
+        else:
+            print("[Warning]Unsupported domain type for non-design mass!")
+
+        for i in range(offset, n_local_nodes):
+            x, y, z = Xpts[i]
+            if xmin < x < xmax:
+                if ymin < y < ymax:
+                    if zmin < z < zmax:
+                        mvals[i - offset] = 1.0
+
+        # Save design variable
+        dv = self.assembler.createDesignVec()
+        self.assembler.getDesignVars(dv)
+
+        # set dv as the non-design vector and assemble matrices
+        self.assembler.setDesignVars(mvec)
+        self.assembler.assembleMatType(TACS.MASS_MATRIX, m0mat)
+        self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, k0mat)
+
+        # Scale mass matrix
+        m0mat.scale(self.non_design_mass)
+
+        # Reset design variable
+        self.assembler.setDesignVars(dv)
+
+        return k0mat, m0mat
+
+    def objective(self, fltr, mg):
+        r"""
         Evaluate the KS aggregation of the smallest eigenvalue for the generalized
         eigenvalue problem:
 
@@ -230,7 +320,6 @@ class FrequencyObj:
 
             # Initialize space for matrices and vectors
             self.mmat = self.assembler.createMat()
-            self.m0mat = self.assembler.createMat()  # For non design mass
             self.kmat = self.assembler.createMat()
             self.temp = self.assembler.createVec()
             self.eig = np.zeros(self.num_eigenvalues)
@@ -262,101 +351,20 @@ class FrequencyObj:
             # self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-12, atol=1e-15)
             self.jd.setRecycle(self.num_eigenvalues)
 
-            """
-            Create a non-design mass vector
-            """
-            self.mvec = self.assembler.createDesignVec()
-            mvals = self.mvec.getArray()
+            # Compute non-design mass and stiffness matrix
+            if self.non_design_mass:
+                m0mat, k0mat = self.non_design_mass_mats()
 
-            # Get nodal locations
-            Xpts = self.forest.getPoints()
-
-            # Note: the local nodes are organized as follows:
-            # |--- dependent nodes -- | ext_pre | -- owned local -- | - ext_post -|
-
-            # Get number of local nodes in the current processor
-            n_local_nodes = Xpts.shape[0]
-
-            # Get numbder of dependent nodes
-            _ptr, _conn, _weights = self.forest.getDepNodeConn()
-
-            # Get number of ext_pre nodes
-            n_ext_pre = self.forest.getExtPreOffset()
-
-            # Get numbder of own nodes:
-            offset = n_ext_pre
-
-            # # Loop over all owned nodes and set non-design mass values
-            tol = 1e-6
-            if self.domain == "cantilever":
-                xmin = self.lx - tol
-                xmax = self.lx + tol
-                ymin = 0.25 * self.ly - tol
-                ymax = 0.75 * self.ly + tol
-                zmin = 0.0 * self.lz - tol
-                zmax = 0.2 * self.lz + tol
-
-            elif self.domain == "michell":
-                xmin = self.lx - tol
-                xmax = self.lx + tol
-                ymin = 0.25 * self.ly - tol
-                ymax = 0.75 * self.ly + tol
-                zmin = 0.4 * self.lz - tol
-                zmax = 0.6 * self.lz + tol
-
-            elif self.domain == "mbb":
-                xmin = 0.0 * self.lx - tol
-                xmax = 0.2 * self.lx + tol
-                ymin = 0.25 * self.ly - tol
-                ymax = 0.75 * self.ly + tol
-                zmin = self.lz - tol
-                zmax = self.lz + tol
-
-            elif self.domain == "lbracket":
-                RATIO = self.ratio
-                xmin = self.lx - tol
-                xmax = self.lx + tol
-                ymin = 0.25 * self.ly - tol
-                ymax = 0.75 * self.ly + tol
-                zmin = 0.5 * RATIO * self.lz - tol
-                zmax = 1.0 * RATIO * self.lz + tol
-
-            else:
-                print("[Warning]Unsupported domain type for non-design mass!")
-
-            for i in range(offset, n_local_nodes):
-                x, y, z = Xpts[i]
-                if xmin < x < xmax:
-                    if ymin < y < ymax:
-                        if zmin < z < zmax:
-                            mvals[i - offset] = 1.0
-
-            dv = self.assembler.createDesignVec()
-            self.assembler.getDesignVars(dv)
-            self.assembler.setDesignVars(self.mvec)
-            self.assembler.assembleMatType(TACS.MASS_MATRIX, self.m0mat)
-            self.m0mat.scale(self.non_design_mass)
-            self.assembler.setDesignVars(dv)
-
-        # Assemble the stiffness matrix for the generalized eigenvalue problem
+        # Assemble mass and stiffness matrix for the generalized eigenvalue problem
+        self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
         self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.kmat)
 
-        # # Get current design variable
-        # dv = self.assembler.createDesignVec()
-        # self.assembler.getDesignVars(dv)
-
-        # # Update dv <- dv + mvec and update design variable
-        # dv.axpy(1.0, self.mvec)
-        # self.assembler.setDesignVars(dv)
-
-        # Construct mass matrix
-        self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
-        self.mmat.axpy(1.0, self.m0mat)
-        self.assembler.applyMatBCs(self.mmat)
-
-        # Reset design variable
-        # dv.axpy(-1.0, self.mvec)
-        # self.assembler.setDesignVars(dv)
+        # Add non-design offsets
+        if self.non_design_mass:
+            self.mmat.axpy(1.0, m0mat)
+            self.kmat.axpy(1.0, k0mat)
+            self.assembler.applyMatBCs(self.mmat)
+            self.assembler.applyMatBCs(self.kmat)
 
         """
         Export non-design mass vectors to f5 file for verification
@@ -450,6 +458,13 @@ class FrequencyObj:
         for i in range(self.num_eigenvalues):
             self.eig[i], error = self.jd.extractEigenvector(i, self.eigv[i])
 
+        # Write eigenvalues to txt
+        if self.comm.rank == 0:
+            with open(os.path.join(self.prefix, "eigenvalues.txt"), "a") as f:
+                for i in range(self.num_eigenvalues):
+                    f.write("%20.10e" % self.eig[i])
+                f.write("\n")
+
         # Set first eigenvector as state variable for visualization
         self.assembler.setVariables(self.eigv[0])
 
@@ -479,7 +494,7 @@ class FrequencyObj:
         return obj
 
     def objective_gradient(self, fltr, mg, dfdrho):
-        """
+        r"""
         Compute the gradient of frequency ks aggragation w.r.t. \rho: \frac{\partial ks}{\partial \rho}
 
         Note that if the filter takes the following matrix form:
@@ -1010,24 +1025,42 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         faces[6].setSource(volumes[1], faces[7])
         faces[12].setSource(volumes[2], faces[13])
 
+    elif domain_type == "beam":
+        # Create geo
+        geo = cantilever_geo(comm, lx, ly, lz)
+
+        # Mark the boundary condition faces
+        verts = geo.getVertices()
+        edges = geo.getEdges()
+        faces = geo.getFaces()
+        volumes = geo.getVolumes()
+        # faces[0].setName("fixed")
+        # faces[1].setName("fixed")
+
+        for i in range(8):
+            verts[i].setName("fixed")
+
+        # Set source and target faces
+        faces[0].setSource(volumes[0], faces[1])
+
     else:
         raise ValueError("Unsupported domain type!")
 
     # # Print geometry element locations
     # if comm.rank == 0:
     #     for index, vert in enumerate(verts):
-    #         x,y,z = vert.evalPoint()
+    #         x, y, z = vert.evalPoint()
     #         print("verts[{:d}]: ({:.2f}, {:.2f}, {:.2f})".format(index, x, y, z))
 
     #     for index, edge in enumerate(edges):
-    #         x,y,z = edge.evalPoint(0.5)
+    #         x, y, z = edge.evalPoint(0.5)
     #         print("edge[{:d}]: ({:.2f}, {:.2f}, {:.2f})".format(index, x, y, z))
 
     #     for index, face in enumerate(faces):
     #         umin, vmin, umax, vmax = face.getRange()
-    #         umid = 0.5*(umin + umax)
-    #         vmid = 0.5*(vmin + vmax)
-    #         x,y,z = face.evalPoint(umid, vmid)
+    #         umid = 0.5 * (umin + umax)
+    #         vmid = 0.5 * (vmin + vmax)
+    #         x, y, z = face.evalPoint(umid, vmid)
     #         print("faces[{:d}]: ({:.2f}, {:.2f}, {:.2f})".format(index, x, y, z))
 
     #     for index, vol in enumerate(volumes):
