@@ -157,6 +157,8 @@ class FrequencyObj:
         max_gmres_size=30,
         ksrho=50,
         non_design_mass=None,
+        write_f5_every=None,
+        f5_dir=None,
     ):
         """
         Args:
@@ -187,6 +189,8 @@ class FrequencyObj:
         self.max_gmres_size = max_gmres_size
         self.ksrho = ksrho
         self.non_design_mass = non_design_mass
+        self.write_f5_every = write_f5_every
+        self.f5_dir = f5_dir
 
         self.fltr = None
         self.mg = None
@@ -297,6 +301,22 @@ class FrequencyObj:
         self.assembler.setDesignVars(dv)
 
         return k0mat, m0mat
+
+    def write_f5(self, f5_dir, index):
+        if self.comm.rank == 0 and not os.path.isdir(f5_dir):
+            os.mkdir(f5_dir)
+        self.comm.Barrier()
+
+        # Manually create the f5 file
+        flag = (
+            TACS.OUTPUT_CONNECTIVITY
+            | TACS.OUTPUT_NODES
+            | TACS.OUTPUT_DISPLACEMENTS
+            | TACS.OUTPUT_EXTRAS
+        )
+        f5 = TACS.ToFH5(self.assembler, TACS.SOLID_ELEMENT, flag)
+        f5.writeToFile(os.path.join(f5_dir, "iter_{:d}.f5".format(index)))
+        return
 
     def objective(self, fltr, mg):
         r"""
@@ -474,6 +494,11 @@ class FrequencyObj:
         if self.comm.rank == 0:
             with open(os.path.join(self.prefix, "time.txt"), "a") as f:
                 f.write("[%4d] %s\n" % (self.counter_obj, datetime.now()))
+
+        # Write f5
+        if self.write_f5_every is not None:
+            if self.counter_obj % self.write_f5_every == 0:
+                self.write_f5(self.f5_dir, self.counter_obj)
 
         # Set first eigenvector as state variable for visualization
         self.assembler.setVariables(self.eigv[0])
@@ -1037,7 +1062,7 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         faces[6].setSource(volumes[1], faces[7])
         faces[12].setSource(volumes[2], faces[13])
 
-    elif domain_type == "beam":
+    elif domain_type == "8pts":
         # Create geo
         geo = cantilever_geo(comm, lx, ly, lz)
 
@@ -1046,11 +1071,27 @@ def create_forest(comm, lx, ly, lz, ratio, htarget, depth, domain_type):
         edges = geo.getEdges()
         faces = geo.getFaces()
         volumes = geo.getVolumes()
-        # faces[0].setName("fixed")
-        # faces[1].setName("fixed")
 
         for i in range(8):
             verts[i].setName("fixed")
+
+        # Set source and target faces
+        faces[0].setSource(volumes[0], faces[1])
+
+    elif domain_type == "4edges":
+        # Create geo
+        geo = cantilever_geo(comm, lx, ly, lz)
+
+        # Mark the boundary condition faces
+        verts = geo.getVertices()
+        edges = geo.getEdges()
+        faces = geo.getFaces()
+        volumes = geo.getVolumes()
+
+        edges[0].setName("fixed")
+        edges[2].setName("fixed")
+        edges[5].setName("fixed")
+        edges[7].setName("fixed")
 
         # Set source and target faces
         faces[0].setSource(volumes[0], faces[1])
@@ -1124,6 +1165,8 @@ def create_problem(
     eq_constr=False,
     max_jd_size=100,
     max_gmres_size=30,
+    write_f5_every=None,
+    f5_dir=None,
 ):
     """
     Create the TMRTopoProblem object and set up the topology optimization problem.
@@ -1185,6 +1228,8 @@ def create_problem(
         eig_scale=eig_scale,
         max_jd_size=max_jd_size,
         max_gmres_size=max_gmres_size,
+        write_f5_every=write_f5_every,
+        f5_dir=f5_dir,
     )
     problem.addObjectiveCallback(
         obj_callback.objective, obj_callback.objective_gradient

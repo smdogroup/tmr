@@ -46,7 +46,14 @@ def get_args():
         "--domain",
         type=str,
         default="cantilever",
-        choices=["cantilever", "michell", "mbb", "lbracket", "beam"],
+        choices=[
+            "cantilever",
+            "michell",
+            "mbb",
+            "lbracket",
+            "8pts",
+            "4edges",
+        ],
     )
     p.add_argument("--AR", type=float, default=1.0)
     p.add_argument("--ratio", type=float, default=0.4)
@@ -55,6 +62,7 @@ def get_args():
     p.add_argument("--r0-frac", type=float, default=0.05)
     p.add_argument("--htarget", type=float, default=0.5)
     p.add_argument("--mg-levels", type=int, default=4)
+    p.add_argument("--write-f5-every", type=int, default=None)
 
     # Optimization
     p.add_argument("--optimizer", type=str, default="mma", choices=["mma"])
@@ -148,6 +156,8 @@ if __name__ == "__main__":
             eq_constr=False,
             max_jd_size=200,
             max_gmres_size=30,
+            write_f5_every=args.write_f5_every,
+            f5_dir=os.path.join(args.prefix, "f5_refine%d" % step),
         )
 
         # Set the prefix
