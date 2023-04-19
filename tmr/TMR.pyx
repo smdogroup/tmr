@@ -5165,7 +5165,10 @@ cdef void writeOutputCallback(void *func, const char *prefix, int iter,
 cdef void constraintCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                              int ncon, TacsScalar *cvals):
     try:
-        cons = (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg))
+        mgobj = None
+        if mg != NULL:
+            mgobj = _init_Mg(mg)
+        cons = (<object>func).__call__(_init_TopoFilter(fltr), mgobj)
         for i in range(min(len(cons), ncon)):
             cvals[i] = cons[i]
     except:
@@ -5177,10 +5180,13 @@ cdef void constraintCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
 cdef void constraintGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                                      int ncon, TACSBVec **dcdx):
     try:
+        mgobj = None
+        if mg != NULL:
+            mgobj = _init_Mg(mg)
         vecs = []
         for i in range(ncon):
             vecs.append(_init_Vec(dcdx[i]))
-        (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg), vecs)
+        (<object>func).__call__(_init_TopoFilter(fltr), mgobj, vecs)
     except:
         tb = traceback.format_exc()
         print(tb)
@@ -5190,7 +5196,10 @@ cdef void constraintGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg
 cdef void objectiveCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                             TacsScalar *fobj):
     try:
-        fobj[0] = (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg))
+        mgobj = None
+        if mg != NULL:
+            mgobj = _init_Mg(mg)
+        fobj[0] = (<object>func).__call__(_init_TopoFilter(fltr), mgobj)
     except:
         tb = traceback.format_exc()
         print(tb)
@@ -5200,8 +5209,12 @@ cdef void objectiveCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
 cdef void objectiveGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                                     TACSBVec *dfdx):
     try:
+        mgobj = None
+        if mg != NULL:
+            mgobj = _init_Mg(mg)
+
         vec = _init_Vec(dfdx)
-        (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg), vec)
+        (<object>func).__call__(_init_TopoFilter(fltr), mgobj, vec)
     except:
         tb = traceback.format_exc()
         print(tb)
@@ -5217,14 +5230,15 @@ cdef class TopoProblem(ProblemBase):
     cdef object congradfunc
     cdef object objfunc
     cdef object objgradfunc
-    def __cinit__(self, TopoFilter fltr, Pc pc,
+    def __cinit__(self, TopoFilter fltr, pc=None,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL
 
-        # Check for a multigrid preconditioner
-        mg = _dynamicTACSMg(pc.ptr)
-        if mg == NULL:
-            raise ValueError('TopoProblem requires a TACSMg preconditioner')
+        if pc is not None:
+            # Check for a multigrid preconditioner
+            mg = _dynamicTACSMg((<Pc>pc).ptr)
+            if mg == NULL:
+                raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
         self.callback = None
         self.confunc = None
@@ -5311,13 +5325,18 @@ cdef class TopoProblem(ProblemBase):
             Mg: geometric multigrid object associated with the TopoProblem
         """
         cdef TMRTopoProblem *prob = NULL
+        cdef TACSMg *mg = NULL
 
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
 
-        return _init_Mg(prob.getMg())
+        mg = prob.getMg()
+        if mg != NULL:
+            return _init_Mg(prob.getMg())
+
+        return None
 
     def setF5OutputFlags(self, int freq, ElementType elem_type, int flag):
         """
