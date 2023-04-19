@@ -10,6 +10,43 @@ from tmr import TMR, TopOptUtils
 from paropt import ParOpt
 from tacs import constitutive, TACS
 from utils import create_forest, create_problem
+from mma4py import Problem as MMAProblemBase
+from mma4py import Optimizer as MMAOptimizer
+
+
+class MMAProblem(MMAProblemBase):
+    def __init__(self, comm, nvars, nvars_l, prob):
+        self.ncon = 1
+        super().__init__(comm, nvars, nvars_l, self.ncon)
+        self.prob = prob
+
+        self.xvec = prob.createDesignVec()
+        self.gvec = prob.createDesignVec()
+        self.gcvec = prob.createDesignVec()
+
+        self.xvals = TMR.convertPVecToVec(self.xvec).getArray()
+        self.gvals = TMR.convertPVecToVec(self.gvec).getArray()
+        self.gcvals = TMR.convertPVecToVec(self.gcvec).getArray()
+        return
+
+    def getVarsAndBounds(self, x, lb, ub) -> None:
+        x[:] = 0.95
+        lb[:] = 0.0
+        ub[:] = 1.0
+        return
+
+    def evalObjCon(self, x, cons) -> float:
+        self.xvals[:] = x[:]
+        fail, obj, _cons = self.prob.evalObjCon(self.ncon, self.xvec)
+        cons[:] = -_cons[:]
+        return obj
+
+    def evalObjConGrad(self, x, g, gcon):
+        self.xvals[:] = x[:]
+        self.prob.evalObjConGradient(self.xvec, self.gvec, [self.gcvec])
+        g[:] = self.gvals[:]
+        gcon[0, :] = -self.gcvals[:]
+        return
 
 
 def get_mma_options(prefix, step, maxit):
@@ -32,6 +69,36 @@ def get_mma_options(prefix, step, maxit):
         "mma_output_file": os.path.join(prefix, "mma_output_file%d.dat" % (step)),
     }
     return mma_options
+
+
+def optimize(problem, optimizer, prefix, refine_step, maxit):
+    if optimizer == "pmma":
+        mma_options = get_mma_options(prefix, refine_step, maxit)
+        opt = ParOpt.Optimizer(problem, mma_options)
+        opt.optimize()
+        xopt, _, _, _, _ = opt.getOptimizedPoint()
+    else:  # mma4py
+        # Get communicator
+        comm = problem.getAssembler().getMPIComm()
+
+        # Compute local and global vector sizes
+        nvars_l = len(TMR.convertPVecToVec(problem.createDesignVec()).getArray())
+        nvars = np.zeros(1, dtype=type(nvars_l))
+        comm.Allreduce(np.array([nvars_l]), nvars)
+
+        # Define mma4py problem and optimizer, and optimize
+        mmaprob = MMAProblem(comm, nvars[0], nvars_l, problem)
+        mmaopt = MMAOptimizer(
+            mmaprob, os.path.join(prefix, "mma4py_output_file%d.dat" % (refine_step))
+        )
+        mmaopt.optimize(maxit, movelim=0.1)
+
+        # Get optimized design in PVec type
+        xopt_vals = mmaopt.getOptimizedDesign()
+        xopt = problem.createDesignVec()
+        TMR.convertPVecToVec(xopt).getArray()[:] = xopt_vals[:]
+
+    return xopt
 
 
 def get_args():
@@ -62,12 +129,12 @@ def get_args():
     p.add_argument("--r0-frac", type=float, default=0.05)
     p.add_argument("--htarget", type=float, default=0.5)
     p.add_argument("--mg-levels", type=int, default=4)
-    p.add_argument("--write-f5-every", type=int, default=None)
+    p.add_argument("--write-f5-every", type=int, default=10)
 
     # Optimization
-    p.add_argument("--optimizer", type=str, default="mma", choices=["mma"])
+    p.add_argument("--optimizer", type=str, default="pmma", choices=["pmma", "mma4py"])
     p.add_argument("--max-iters", type=int, nargs="+", default=[100])
-    p.add_argument("--non-design-mass", type=float, default=None)
+    p.add_argument("--non-design-mass", type=float, default=10.0)
     p.add_argument("--eig-scale", type=float, default=1.0)
 
     # Test
@@ -166,6 +233,7 @@ if __name__ == "__main__":
         # Initialize the problem and set the prefix
         problem.initialize()
         problem.setIterationCounter(count)
+        count += maxit
 
         # Check gradient and exit, if specified
         if args.gradient_check:
@@ -188,16 +256,8 @@ if __name__ == "__main__":
 
         orig_filter = filtr
 
-        # Set up options
-        mma_options = get_mma_options(args.prefix, step, maxit)
-        count += maxit
-
-        opt = ParOpt.Optimizer(problem, mma_options)
-        opt.optimize()
-        xopt, z, zw, zl, zu = opt.getOptimizedPoint()
-
-        # Get optimal objective and constraint
-        fail, obj, cons = problem.evalObjCon(1, xopt)
+        # Optimize
+        xopt = optimize(problem, args.optimizer, args.prefix, step, maxit)
 
         # Manually create the f5 file
         flag = (
