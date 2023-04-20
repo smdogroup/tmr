@@ -134,7 +134,7 @@ def get_args():
     # Optimization
     p.add_argument("--optimizer", type=str, default="pmma", choices=["pmma", "mma4py"])
     p.add_argument("--max-iters", type=int, nargs="+", default=[100])
-    p.add_argument("--non-design-mass", type=float, default=10.0)
+    p.add_argument("--non-design-mass", type=float, default=None)
     p.add_argument("--eig-scale", type=float, default=1.0)
 
     # Test

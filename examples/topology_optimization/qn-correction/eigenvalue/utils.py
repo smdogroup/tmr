@@ -275,6 +275,9 @@ class FrequencyObj:
             zmin = 0.5 * RATIO * self.lz - tol
             zmax = 1.0 * RATIO * self.lz + tol
 
+        elif self.domain == "4edges":
+            xmin, xmax, ymin, ymax, zmin, zmax = 6 * (0.0,)
+
         else:
             print("[Warning]Unsupported domain type for non-design mass!")
 
@@ -377,7 +380,7 @@ class FrequencyObj:
 
             # Compute non-design mass and stiffness matrix
             if self.non_design_mass:
-                m0mat, k0mat = self.non_design_mass_mats()
+                self.m0mat, self.k0mat = self.non_design_mass_mats()
 
         # Assemble mass and stiffness matrix for the generalized eigenvalue problem
         self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
@@ -385,8 +388,8 @@ class FrequencyObj:
 
         # Add non-design offsets
         if self.non_design_mass:
-            self.mmat.axpy(1.0, m0mat)
-            self.kmat.axpy(1.0, k0mat)
+            self.mmat.axpy(1.0, self.m0mat)
+            self.kmat.axpy(1.0, self.k0mat)
             self.assembler.applyMatBCs(self.mmat)
             self.assembler.applyMatBCs(self.kmat)
 
