@@ -4417,28 +4417,28 @@ def adjointError(forest, Assembler coarse,
     -----------
     forest: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
       Forest for current mesh level
-    coarse_assembler: :class:`~TACS.Assembler`
-      Finite assembler class for associated with forest
+    coarse: :class:`~TACS.Assembler`
+      Finite assembler class associated with forest
     forest_refined: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
       Higher-order forest for refined mesh level
-    refined_assembler: :class:`~TACS.Assembler`
-      Higher-order finite assembler class for associated with forest_refined
-    solution_refined: :class:`~TACS.Vec`
+    refined: :class:`~TACS.Assembler`
+      Higher-order finite assembler class associated with forest_refined
+    solution: :class:`~TACS.Vec`
       The higher-order solution (or approximation)
-    adjoint_refined: :class:`~TACS.Vec`
+    adjoint: :class:`~TACS.Vec`
       The difference between the refined and coarse adjoint solutions computed
       in some manner
 
     Returns
     -------
-    ans: double
-      Total strain energy error
-
-    err: array of double
-      Elemental strain energy error
+    err_est: double
+      Total error estimate for the output functional
 
     adj_corr: TacsScalar
-      Adjoint-based functional correction
+      Adjoint-based output functional correction
+
+    err: array of double
+      Element-wise error indicators
     """
     cdef TacsScalar ans = 0.0
     cdef TacsScalar adj_corr = 0.0
@@ -4467,8 +4467,28 @@ def adjointError(forest, Assembler coarse,
 
 def computeInterpSolution(forest, Assembler coarse,
                           forest_refined, Assembler refined,
-                          Vec uvec=None, Vec uvec_refined=None,
-                          compute_diff=False):
+                          Vec uvec=None, Vec uvec_refined=None):
+    """
+    Given coarse and fine sets of forests and assemblers, interpolates a field 
+    from the coarse space in the fine space using its higher-order basis.
+
+    Parameters
+    -----------
+    forest: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
+      Forest for current mesh level
+    coarse: :class:`~TACS.Assembler`
+      Finite assembler class associated with forest
+    forest_refined: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
+      Higher-order forest for refined mesh level
+    refined: :class:`~TACS.Assembler`
+      Higher-order finite assembler class associated with forest_refined
+    uvec: :class:`~TACS.Vec` or None
+      The coarse-space field to interpolate. If None, the current set of states
+      in the coarse assembler are used.
+    uvec_refined: :class:`~TACS.Vec` or None
+      The fine-space field that is returned. If None, a vector is created by the
+      fine assembler.
+    """
     cdef TMROctForest *oct_forest = NULL
     cdef TMROctForest *oct_forest_refined = NULL
     cdef TMRQuadForest *quad_forest = NULL
@@ -4497,6 +4517,34 @@ def computeReconSolution(forest, Assembler coarse,
                          forest_refined, Assembler refined,
                          Vec uvec=None, Vec uvec_refined=None,
                          compute_diff=False):
+    """
+    Given coarse and fine sets of forests and assemblers, reconstruct a field
+    in the fine-space given a field in the coarse-space. Enriches the field in 
+    the fine-space with higher-order information obtained from local least-
+    square solutions on each element. 
+
+    Parameters
+    -----------
+    forest: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
+      Forest for current mesh level
+    coarse: :class:`~TACS.Assembler`
+      Finite assembler class associated with forest
+    forest_refined: :class:`~TMR.OctForest` or :class:`~TMR.QuadForest`
+      Higher-order forest for refined mesh level
+    refined: :class:`~TACS.Assembler`
+      Higher-order finite assembler class associated with forest_refined
+    uvec: :class:`~TACS.Vec` or None
+      The coarse-space field to reconstruct. If None, the current set of states
+      in the coarse assembler are used.
+    uvec_refined: :class:`~TACS.Vec` or None
+      The fine-space field that is returned. If None, a vector is created by the
+      fine assembler.
+    compute_diff: Bool
+      If True, uvec_refined is the difference between the high-order 
+      reconstructed field in the fine-space and the coarse-space field that is
+      interpolated on the fine-space. If False, uvec_refined is just the high-
+      order reconstructed field in the fine-space. 
+    """
     cdef TMROctForest *oct_forest = NULL
     cdef TMROctForest *oct_forest_refined = NULL
     cdef TMRQuadForest *quad_forest = NULL
