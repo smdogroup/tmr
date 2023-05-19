@@ -59,7 +59,6 @@ jobs:
           conda install -c conda-forge boa -q -y;
           # Install conda libraries
           mamba install -c conda-forge openmpi openmpi-mpicxx openmpi-mpicc -q -y;
-          mamba install gxx_linux-64=9.3.0 -q -y;
           mamba install -c anaconda openblas -q -y;
           mamba install -c conda-forge lapack -q -y;
           mamba install -c conda-forge metis -q -y;
