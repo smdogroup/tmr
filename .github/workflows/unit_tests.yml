@@ -55,13 +55,15 @@ jobs:
           # Set directory variables
           export TMR_DIR=${GITHUB_WORKSPACE};
 
+          # Install mamba
+          conda install -c conda-forge boa -q -y;
           # Install conda libraries
-          conda install -c anaconda openmpi -q -y;
-          conda install gxx_linux-64=9.3.0 -q -y;
-          conda install -c anaconda openblas -q -y;
-          conda install -c conda-forge lapack -q -y;
-          conda install -c conda-forge metis -q -y;
-          conda install -c conda-forge mpi4py  -q -y;
+          mamba install -c anaconda openmpi -q -y;
+          mamba install gxx_linux-64=9.3.0 -q -y;
+          mamba install -c anaconda openblas -q -y;
+          mamba install -c conda-forge lapack -q -y;
+          mamba install -c conda-forge metis -q -y;
+          mamba install -c conda-forge mpi4py  -q -y;
 
           # Install packages via pip
           pip install testflo;
