@@ -55,13 +55,13 @@ jobs:
           # Set directory variables
           export TMR_DIR=${GITHUB_WORKSPACE};
 
-          # Install conda libraries
+          # zlib 1.2.12 apparently breaks this install, so we pin an older version
+          conda install zlib=1.2.11;
           conda install -c anaconda openmpi -q -y;
           conda install gxx_linux-64=9.3.0 -q -y;
           conda install -c anaconda openblas -q -y;
           conda install -c conda-forge lapack -q -y;
           conda install -c conda-forge metis -q -y;
-          conda install -c conda-forge mpi4py  -q -y;
 
           # Install packages via pip
           pip install testflo;
