@@ -379,6 +379,7 @@ void TMR_EgadsFace::getFaceObject(ego *f) { *f = face; }
   Create the TMRModel by loading in an EGADS model file
 */
 TMRModel *TMR_EgadsInterface::TMR_LoadModelFromEGADSFile(const char *filename,
+                                                         const char *units,
                                                          int print_level) {
   // Create the common context for all egads objects
   TMR_EgadsContext *ctx = new TMR_EgadsContext();
@@ -386,7 +387,7 @@ TMRModel *TMR_EgadsInterface::TMR_LoadModelFromEGADSFile(const char *filename,
   // Load in the egads model from the file
   int flags = 0;
   ego model;
-  int icode = EG_loadModel(ctx->getContext(), flags, filename, &model);
+  int icode = EG_loadModel(ctx->getContext(), flags, filename, units, &model);
   if (icode != 0) {
     fprintf(stderr, "TMR: Error reading egads file with error code %d\n",
             icode);

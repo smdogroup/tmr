@@ -106,7 +106,8 @@ class TMR_EgadsFace : public TMRFace {
 /*
   Initialization of the OpenCascade geometry from an IGES/STEP files
 */
-TMRModel *TMR_LoadModelFromEGADSFile(const char *filename, int print_level = 0);
+TMRModel *TMR_LoadModelFromEGADSFile(const char *filename, const char *units,
+                                     int print_level = 0);
 TMRModel *TMR_ConvertEGADSModel(ego model, int print_level = 0);
 
 }  // namespace TMR_EgadsInterface
