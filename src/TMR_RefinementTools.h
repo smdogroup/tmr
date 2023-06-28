@@ -91,8 +91,8 @@ double TMR_AdjointErrorEst(TMRQuadForest *forest, TACSAssembler *tacs,
                            TMRQuadForest *forest_refined,
                            TACSAssembler *tacs_refined,
                            TACSBVec *solution_refined,
-                           TACSBVec *adjoint_refined, double *error,
-                           double *adj_corr);
+                           TACSBVec *adjoint_refined, double *node_error,
+                           double *elem_error, double *adj_corr);
 double TMR_AdjointErrorEst(TMROctForest *forest, TACSAssembler *tacs,
                            TMROctForest *forest_refined,
                            TACSAssembler *tacs_refined,
