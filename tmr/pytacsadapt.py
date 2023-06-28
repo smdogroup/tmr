@@ -13,6 +13,7 @@ layer of TACS and TMR.
 import copy
 from mpi4py import MPI
 import numpy as np
+import h5py
 from tmr import TMR
 from tmr.pygeometryloader import *
 from tacs.utilities import BaseUI
@@ -205,6 +206,33 @@ class pyApproximationSpace(BaseUI):
         self.refine_iter += 1
         return
 
+    def writeField(self, field, field_name, reset=True):
+        """
+        Sets the problem variables with the supplied field and writes out the
+        solution data file. Uses the field name to name the file.
+        Optionally, will reset the problem variables with the current state
+        field if specified.
+
+        Parameters
+        ----------
+        field : TACS Vec or np.ndarray (1D, float)
+            Vector to set as the problem variables when writing out the file
+
+        field_name : str
+            Name of the field to add to the end of the file name
+
+        reset : bool
+            Flag for resetting the problem variables with the current state
+        """
+        # set the field in the problem variables
+        self.problem.setVariables(field)
+        self.problem.writeSolution(baseName=f"{self.prob_name}_{field_name}")
+
+        if reset:
+            # re-write the states back into the problem
+            self.problem.setVariables(self.state)
+        return
+
 
 # =============================================================================
 # pyTACSAdapt
@@ -217,7 +245,13 @@ class pyTACSAdapt(BaseUI):
     """
 
     def __init__(
-        self, comm, _initCallBack, _elemCallBack, _probCallBack, _adapt_output, **kwargs
+        self,
+        comm,
+        _initCallBack,
+        _elemCallBack,
+        _probCallBack,
+        _adapt_output,
+        adapt_params={},
     ):
         """
         Constructor
@@ -249,7 +283,7 @@ class pyTACSAdapt(BaseUI):
         _adapt_output : str
             Name of the output to be used for the adaptive analysis
 
-        kwargs : keyword args
+        adapt_params : dict
             arg=value pairs that can be used to specify adaptation parameters
         """
         # Set MPI communicator
@@ -260,14 +294,45 @@ class pyTACSAdapt(BaseUI):
         self.coarse = pyApproximationSpace(comm, _elemCallBack, _probCallBack)
         self.fine = pyApproximationSpace(comm, _elemCallBack, _probCallBack)
         self.adapt_output = _adapt_output
-        self.error_tol = kwargs.get("error_tol", None)
-        self.num_min_ref_levels = kwargs.get("num_min_ref_levels", 0)
-        self.num_max_ref_levels = kwargs.get("num_max_ref_levels", TMR.MAX_LEVEL)
-        self.num_decrease_iters = kwargs.get("num_decrease_iters", None)
-        self.mesh_history = {}
-        self.output_history = {}
-        self.error_history = {}
-        self.adaptation_history = {}
+
+        # set the adaptation parameters
+        valid_strategies = ("decreasing_threshold", "fixed_growth")
+        self.adapt_strategy = adapt_params.get("adapt_strategy", "").lower()
+        if self.adapt_strategy:
+            assert (
+                self.adapt_strategy in valid_strategies
+            ), f"adaptation strategy must be one of {valid_strategies}"
+            # get the general adaptation params
+            self.num_min_ref_levels = adapt_params.get("num_min_ref_levels", 0)
+            self.num_max_ref_levels = adapt_params.get(
+                "num_max_ref_levels", TMR.MAX_LEVEL
+            )
+            self.error_tol = adapt_params.get("error_tol")
+            assert (
+                self.error_tol is not None
+            ), f"error tolerance must be specified for adaptation"
+            # get strategy-specific params
+            if self.adapt_strategy == "decreasing_threshold":
+                self.num_decrease_iters = adapt_params.get("num_decrease_iters")
+                assert (
+                    self.num_decrease_iters is not None
+                ), f"number of decrease iterations must be specified for adaptation strategy `{self.adapt_strategy}`"
+            if self.adapt_strategy == "fixed_growth":
+                self.growth_refine_factor = np.clip(
+                    adapt_params.get("growth_refine_factor", 0.0), 0.0, 1.0
+                )
+                self.growth_coarsen_factor = np.clip(
+                    adapt_params.get("growth_coarsen_factor", 0.0), 0.0, 1.0
+                )
+
+        # initialize the storage for saving model info
+        self.mesh_history = {}  # mesh size (ndof)
+        self.output_history = {}  # outputs/corrected outputs
+        self.error_history = {}  # error estimates
+        self.adaptation_history = {
+            "threshold": {},  # refine/coarsen thresholds
+            "element_errors": {},
+        }  # element-wise errors
 
         # set the output used for adaptation
         self.setOutputOfInterest(self.adapt_output)
@@ -365,6 +430,8 @@ class pyTACSAdapt(BaseUI):
         # create and set up the problem used for analysis
         if "prob_name" not in kwargs:
             kwargs["prob_name"] = f"{model_type}_{model.refine_iter}"
+        else:
+            kwargs["prob_name"] += f"_{model_type}_{model.refine_iter}"
         model.createProblem(**kwargs)
 
         # record the number of degrees of freedom for this model
@@ -405,7 +472,7 @@ class pyTACSAdapt(BaseUI):
 
         # write out the state field
         if writeSolution:
-            model.problem.writeSolution(baseName=f"{model.prob_name}_state")
+            model.writeField(model.state, "state")
         return
 
     def solveAdjoint(self, model_type, writeSolution=False):
@@ -434,12 +501,45 @@ class pyTACSAdapt(BaseUI):
 
         # write out the adjoint field
         if writeSolution:
-            # overwrite the state field in the problem with the adjoint field
-            model.problem.setVariables(model.adjoint)
-            model.problem.writeSolution(baseName=f"{model.prob_name}_adjoint")
-            # re-write the states back into the problem
-            model.problem.setVariables(model.state)
+            model.writeField(model.adjoint, "adjoint")
         return
+
+    def evaluateResidual(self, model_type, vec=None, writeSolution=False):
+        """
+        Evaluates the residual of the specified model for a given perturbation.
+        Optionally write out the residual to a data file.
+
+        Parameters
+        ----------
+        model_type : str in ('coarse', 'fine')
+            Selector for which model to evaluate the residual on
+
+        vec : TACS Vec or np.ndarray (1D, float)
+            Vector to add to rhs when evaluating the residual
+
+        writeSolution : bool
+            Boolean flag for writing out the residual field to a data file
+
+        Returns
+        -------
+        res : TACS Vec
+            Residual vector
+        """
+        # select the appropriate model
+        model = self._selectModel(model_type)
+
+        # create the residual vector
+        res = model.assembler.createVec()
+        res.zeroEntries()
+
+        # evaluate the residual
+        model.problem.getResidual(res, Fext=vec)
+
+        # write out the residual field
+        if writeSolution:
+            model.writeField(res, "residual")
+
+        return res
 
     def interpolateField(self, field_type, writeSolution=False):
         """
@@ -477,13 +577,7 @@ class pyTACSAdapt(BaseUI):
 
         # write out the selected field
         if writeSolution:
-            # set the field in the fine problem
-            self.fine.problem.setVariables(getattr(self.fine, field_type))
-            self.fine.problem.writeSolution(
-                baseName=f"{self.fine.prob_name}_{field_type}_interp"
-            )
-            # reset the state field in the fine problem
-            self.fine.problem.setVariables(self.fine.state)
+            self.fine.writeField(getattr(self.fine, field_type), f"{field_type}_interp")
         return
 
     def reconstructField(self, field_type, compute_diff=False, writeSolution=False):
@@ -524,20 +618,21 @@ class pyTACSAdapt(BaseUI):
 
         # write out the selected field
         if writeSolution:
-            # set the field in the fine problem
-            self.fine.problem.setVariables(getattr(self.fine, field_type))
-            self.fine.problem.writeSolution(
-                baseName=f"{self.fine.prob_name}_{field_type}_recon"
-            )
-            # reset the state field in the fine problem
-            self.fine.problem.setVariables(self.fine.state)
+            self.fine.writeField(getattr(self.fine, field_type), f"{field_type}_recon")
         return
 
-    def estimateOutputError(self):
+    def estimateOutputError(self, writeSolution=False):
         """
         Do the adjoint-based error estimation for the output of interest. Uses
         the current state and adjoint fields in the fine-space model for the
-        estimation.
+        estimation. Optionally output the nodal error field to a data file.
+
+        NOTE: Nodal error field is a scalar and is written to the "u" variable.
+
+        Parameters
+        ----------
+        writeSolution : bool
+            Boolean flag for writing out node error field to a data file
 
         Returns
         -------
@@ -551,7 +646,12 @@ class pyTACSAdapt(BaseUI):
             The error in the output associated with each element in the mesh
         """
         # do the error estimation
-        error_estimate, output_correction, element_errors = TMR.adjointError(
+        (
+            error_estimate,
+            output_correction,
+            element_errors,
+            node_errors,
+        ) = TMR.adjointError(
             self.coarse.forest,
             self.coarse.assembler,
             self.fine.forest,
@@ -566,7 +666,70 @@ class pyTACSAdapt(BaseUI):
         ] += output_correction
         self.error_history[f"adapt_iter_{self.fine.refine_iter}"] = error_estimate
 
-        return error_estimate, output_correction, element_errors
+        # write out the nodal error field
+        if writeSolution:
+            vpn = self.fine.assembler.getVarsPerNode()
+            node_error_vars = np.zeros(vpn * len(node_errors))
+            node_error_vars[::vpn] = node_errors
+            self.fine.writeField(field=node_error_vars, field_name="error")
+
+        return error_estimate, output_correction, element_errors, node_errors
+
+    def collectErrors(self, element_errors=None, node_errors=None):
+        """
+        Collects errors that are distributed across all the processors
+
+        Parameters
+        ----------
+        element_errors : np.ndarray (1D, float)
+            Distributed array of element errors
+
+        node_errors : np.ndarray (1D, float)
+            Distributed array of node errors
+
+        Returns
+        -------
+        total_errors : np.ndarray (1D, float) or list[np.ndarray (1D, float)]
+            Collected errors from all processors. If both element and nodal
+            errors are collected, element errors are the first element in the
+            returned list.
+        """
+        total_errors = []
+        if element_errors is not None:
+            # collect the error localized to the distributed elements
+            elem_counts = self.comm.allgather(len(element_errors))
+            element_errors_tot = np.empty(sum(elem_counts))
+            self.comm.Allgatherv(element_errors, [element_errors_tot, elem_counts])
+            total_errors.append(element_errors_tot)
+        if node_errors is not None:
+            # collect the error distributed to the nodes
+            node_counts = self.comm.allgather(len(node_errors))
+            node_errors_tot = np.empty(sum(node_counts))
+            self.comm.Allgatherv(node_errors, [node_errors_tot, node_counts])
+            total_errors.append(node_errors_tot)
+        if len(total_errors) == 1:
+            total_errors = total_errors[0]
+        return total_errors
+
+    def refineModel(self, element_errors=None):
+        """
+        Applies mesh refinement to the model using the selected adaptation
+        strategy and a distribution of element-wise errors. If adaptation is not
+        being done, uniform refinement is applied
+
+        Parameters
+        ----------
+        element_errors : np.ndarray (1D, float) [num_elements]
+            The error in the output associated with each element in the mesh
+        """
+        if self.adapt_strategy == "decreasing_threshold":
+            self.adaptModelDecreasingThreshold(element_errors)
+        elif self.adapt_strategy == "fixed_growth":
+            self.adaptModelFixedGrowth(element_errors)
+        else:
+            # apply uniform refinement to the coarse model
+            self.coarse.applyRefinement()
+        return
 
     def adaptModelDecreasingThreshold(self, element_errors):
         """
@@ -584,7 +747,8 @@ class pyTACSAdapt(BaseUI):
         """
         # get the total number of elements
         nelems = len(element_errors)
-        nelems_tot = self.comm.allreduce(nelems, op=MPI.SUM)
+        elem_counts = self.comm.allgather(nelems)
+        nelems_tot = sum(elem_counts)
 
         # choose elements based on an equidistributed target error
         target_error = self.error_tol / nelems_tot
@@ -594,22 +758,199 @@ class pyTACSAdapt(BaseUI):
         )
 
         # record the refinement threshold:error_ratio pair for this iteration
-        elem_counts = self.comm.allgather(nelems)
-        total_error_ratios = np.zeros(nelems_tot)
-        self.comm.Allgatherv(error_ratio, [total_error_ratios, elem_counts])
-        self.adaptation_history[refine_threshold] = total_error_ratios
+        error_ratio_tot = np.zeros(nelems_tot)
+        self.comm.Allgatherv(error_ratio, [error_ratio_tot, elem_counts])
+        self.adaptation_history["threshold"][
+            f"refine_{self.coarse.refine_iter}"
+        ] = refine_threshold
+        self.adaptation_history["element_errors"][
+            f"adapt_iter_{self.coarse.refine_iter}"
+        ] = error_ratio_tot
 
         # get the refinement indicator array
-        refine = np.array(error_ratio >= refine_threshold, dtype=int)
-        nref = np.count_nonzero(refine)
+        adapt_indicator = np.array(error_ratio >= refine_threshold, dtype=int)
+        nref = np.count_nonzero(adapt_indicator)
         nref = self.comm.allreduce(nref, op=MPI.SUM)
 
         # adapt the coarse-space model
         self.coarse.applyRefinement(
-            refine.astype(np.intc),
+            adapt_indicator.astype(np.intc),
             num_min_levels=self.num_min_ref_levels,
             num_max_levels=self.num_max_ref_levels,
         )
+        return
+
+    def adaptModelFixedGrowth(self, element_errors):
+        """
+        Refines elements in the coarse-space model based on a fixed growth
+        adaptation strategy.
+
+        Parameters
+        ----------
+        element_errors : np.ndarray (1D, float) [num_elements]
+            The error in the output associated with each element in the mesh
+        """
+        # get the elem counts
+        nelems = len(element_errors)
+        elem_counts = self.comm.allgather(nelems)
+        nelems_tot = sum(elem_counts)
+        nrefine = int(self.growth_refine_factor * nelems_tot)
+        ncoarse = int(self.growth_coarsen_factor * nelems_tot)
+
+        # gather all the element errors on each proc
+        element_errors_tot = np.empty(nelems_tot)
+        self.comm.Allgatherv(element_errors, [element_errors_tot, elem_counts])
+
+        # compute the error ratio for all elements
+        target_error = self.error_tol / nelems_tot
+        error_ratio_tot = element_errors_tot / target_error
+
+        # sort all the element error ratios in descending order
+        sorted_inds = np.flip(np.argsort(error_ratio_tot))
+
+        # create the adaptation indicator array
+        adapt_indicator_tot = np.zeros(nelems_tot, dtype=int)
+        refine_inds = None
+        coarse_inds = None
+        if nrefine > 0:
+            refine_inds = sorted_inds[:nrefine]
+            adapt_indicator_tot[refine_inds] = np.where(
+                error_ratio_tot[refine_inds] >= 1.0, 1, adapt_indicator_tot[refine_inds]
+            )
+        if ncoarse > 0:
+            coarse_inds = sorted_inds[-ncoarse:]
+            adapt_indicator_tot[coarse_inds] = np.where(
+                error_ratio_tot[coarse_inds] < 1.0, -1, adapt_indicator_tot[coarse_inds]
+            )
+
+        # update the adaptation history
+        if refine_inds is not None:
+            ind = 0
+            while error_ratio_tot[refine_inds[ind]] >= 1.0:
+                self.adaptation_history["threshold"][
+                    f"refine_{self.coarse.refine_iter}"
+                ] = error_ratio_tot[refine_inds[ind]]
+                ind += 1
+                if ind >= nrefine:
+                    break
+        if coarse_inds is not None:
+            ind = ncoarse - 1
+            while error_ratio_tot[coarse_inds[ind]] < 1.0:
+                self.adaptation_history["threshold"][
+                    f"coarsen_{self.coarse.refine_iter}"
+                ] = error_ratio_tot[coarse_inds[ind]]
+                ind -= 1
+                if ind <= 0:
+                    break
+        self.adaptation_history["element_errors"][
+            f"adapt_iter_{self.coarse.refine_iter}"
+        ] = error_ratio_tot
+
+        # scatter the adaptation indicator to each proc
+        adapt_indicator = np.empty(nelems, dtype=int)
+        self.comm.Scatterv([adapt_indicator_tot, elem_counts], adapt_indicator, root=0)
+
+        # adapt the coarse-space model
+        self.coarse.applyRefinement(
+            adapt_indicator.astype(np.intc),
+            num_min_levels=self.num_min_ref_levels,
+            num_max_levels=self.num_max_ref_levels,
+        )
+        return
+
+    def writeModelHistory(self, filename=""):
+        """
+        Writes out the model history information to an .hdf5 file
+
+        Parameters
+        ----------
+        filename : str
+            name of output file, should include the proper .hdf5 file extension
+        """
+        if self.comm.rank == 0:
+            if not filename:
+                filename = "model_history.hdf5"
+            with h5py.File(filename, "w") as h5:
+                # store the mesh histories
+                h5["mesh_history/coarse"] = np.array(
+                    [
+                        self.mesh_history[key]
+                        for key in self.mesh_history.keys()
+                        if "coarse" in key
+                    ]
+                )
+                h5["mesh_history/fine"] = np.array(
+                    [
+                        self.mesh_history[key]
+                        for key in self.mesh_history.keys()
+                        if "fine" in key
+                    ]
+                )
+
+                # store the output histories
+                h5["output_history/coarse"] = np.array(
+                    [
+                        self.output_history[key]
+                        for key in self.output_history.keys()
+                        if "coarse" in key
+                    ]
+                )
+                h5["output_history/fine"] = np.array(
+                    [
+                        self.output_history[key]
+                        for key in self.output_history.keys()
+                        if "fine" in key
+                    ]
+                )
+                h5["output_history"].attrs["output_name"] = self.adapt_output.replace(
+                    "_", " "
+                ).upper()
+
+                # store the error estimate history
+                h5["error_estimate_history"] = np.array(
+                    list(self.error_history.values())
+                )
+
+                # store the adaptation refinement histories
+                h5["adaptation_history/threshold/refine"] = np.array(
+                    [
+                        self.adaptation_history["threshold"][key]
+                        for key in self.adaptation_history["threshold"].keys()
+                        if "refine" in key
+                    ]
+                )
+                h5["adaptation_history/threshold/coarsen"] = np.array(
+                    [
+                        self.adaptation_history["threshold"][key]
+                        for key in self.adaptation_history["threshold"].keys()
+                        if "coarsen" in key
+                    ]
+                )
+                for key, val in self.adaptation_history["element_errors"].items():
+                    h5[f"adaptation_history/element_errors/{key}"] = val
+                if self.adapt_strategy:
+                    h5["adaptation_history"].attrs[
+                        "strategy"
+                    ] = self.adapt_strategy.replace("_", " ").lower()
+                    h5["adaptation_history"].attrs["error_tolerance"] = self.error_tol
+                    h5["adaptation_history"].attrs[
+                        "max_refine_levels"
+                    ] = self.num_max_ref_levels
+                    h5["adaptation_history"].attrs[
+                        "min_refine_levels"
+                    ] = self.num_min_ref_levels
+                    if hasattr(self, "num_decrease_iters"):
+                        h5["adaptation_history"].attrs[
+                            "threshold_decrease_iters"
+                        ] = self.num_decrease_iters
+                    if hasattr(self, "growth_refine_factor"):
+                        h5["adaptation_history"].attrs[
+                            "growth_refine_factor"
+                        ] = self.growth_refine_factor
+                    if hasattr(self, "growth_coarsen_factor"):
+                        h5["adaptation_history"].attrs[
+                            "growth_coarsen_factor"
+                        ] = self.growth_coarsen_factor
         return
 
     def _selectModel(self, model_type):
