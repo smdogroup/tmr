@@ -467,9 +467,289 @@ void TMR_RemoveFloatingShapes(TopoDS_Compound &compound,
 }
 
 /*
+  Sew the faces of a loaded compound
+*/
+void TMR_SewCompound(TopoDS_Compound &compound, int print_level, double sew_tol,
+                     bool nonmanifold_mode) {
+  // get the shapes from the original compound
+  TopTools_IndexedMapOfShape verts, edges, wires, faces, shells, solids;
+  TopExp::MapShapes(compound, TopAbs_VERTEX, verts);
+  TopExp::MapShapes(compound, TopAbs_EDGE, edges);
+  TopExp::MapShapes(compound, TopAbs_WIRE, wires);
+  TopExp::MapShapes(compound, TopAbs_FACE, faces);
+  TopExp::MapShapes(compound, TopAbs_SHELL, shells);
+  TopExp::MapShapes(compound, TopAbs_SOLID, solids);
+
+  // create the sewing object and set options
+  BRepBuilderAPI_Sewing *sew =
+      new BRepBuilderAPI_Sewing(sew_tol, true, true, true, nonmanifold_mode);
+
+  // add the compound to be sewn
+  sew->Add(compound);
+
+  // do the sewing/analysis
+  sew->Perform();
+
+  // check if anything was done
+  if ((print_level > 0) &&
+      (sew->IsModified(compound) || sew->IsModifiedSubShape(compound))) {
+    // print an update
+    printf(
+        "Original compound:\nnverts=%i, nedge=%i, nwires=%i, nfaces=%i, "
+        "nshells=%i, nsolids=%i\n",
+        verts.Extent(), edges.Extent(), wires.Extent(), faces.Extent(),
+        shells.Extent(), solids.Extent());
+    printf("  Found %i free edges\n", sew->NbFreeEdges());
+    printf("  Found %i multiple edges\n", sew->NbMultipleEdges());
+    printf("  Found %i contiguous edges\n", sew->NbContigousEdges());
+    printf("  Found %i degenerated shapes\n", sew->NbDegeneratedShapes());
+    printf("Loaded compound was sewn with tolerance=%.3e\n", sew_tol);
+
+    // set the updated compound
+    compound = TopoDS::Compound(sew->SewedShape());
+  } else if (print_level > 0) {
+    printf("Loaded compound was not sewn\n");
+  }
+  delete sew;
+  return;
+}
+
+void TMR_SewModelIGES(char *filename, const char *units, int print_level,
+                      double sew_tol, bool nonmanifold_mode) {
+  // create the file reader
+  IGESControl_Reader reader;
+  Interface_Static::SetCVal("xstep.cascade.unit", units);
+  IFSelect_ReturnStatus status = reader.ReadFile(filename);
+  if (status != IFSelect_RetDone) {
+    fprintf(stderr, "TMR Warning: IGES file reader failed\n");
+  }
+
+  // inspect the root transfers
+  reader.PrintCheckLoad(Standard_False, IFSelect_ItemsByEntity);
+
+  // The number of root objects for transfer
+  int nroots = reader.NbRootsForTransfer();
+  for (int k = 1; k <= nroots; k++) {
+    Standard_Boolean ok = reader.TransferOneRoot(k);
+    if (!ok) {
+      fprintf(stderr, "TMR Warning: Transfer %d not OK!\n", k);
+    }
+  }
+
+  // Load the different shapes
+  int nbs = reader.NbShapes();
+
+  // Build the compound shape
+  TopoDS_Compound compound;
+  BRep_Builder builder;
+  builder.MakeCompound(compound);
+  for (int i = 1; i <= nbs; i++) {
+    TopoDS_Shape shape = reader.Shape(i);
+    builder.Add(compound, shape);
+  }
+
+  // do the sewing
+  TMR_SewCompound(compound, print_level, sew_tol, nonmanifold_mode);
+
+  // get the new filename
+  char new_file[512];
+  int len = strlen(filename);
+  char *ext = strrchr(filename, '.');  // get the file extension
+  int ext_len = strlen(ext);
+  int val = snprintf(new_file, len - ext_len + 1, "%s",
+                     filename);  // add original name
+  strcat(new_file, "_sewn");     // add the sewn tag
+  strcat(new_file, ext);         // add the file extension
+
+  // create the file writer
+  IGESControl_Writer writer;
+  Interface_Static::SetCVal("write.iges.unit", units);
+
+  // add the compound
+  Standard_Boolean ok = writer.AddShape(compound);
+  if (!ok) {
+    fprintf(stderr, "TMR Warning: adding compound not OK!\n");
+  }
+
+  // write out the new IGES file
+  ok = writer.Write(new_file);
+  if (!ok) {
+    fprintf(stderr, "TMR Warning: writing %s failed!\n", new_file);
+  }
+  return;
+}
+
+void TMR_SewModelSTEP(char *filename, const char *units, int print_level,
+                      double sew_tol, bool nonmanifold_mode) {
+  // create the file reader
+  STEPControl_Reader reader;
+  Interface_Static::SetCVal("xstep.cascade.unit", units);
+  IFSelect_ReturnStatus status = reader.ReadFile(filename);
+  if (status != IFSelect_RetDone) {
+    fprintf(stderr, "TMR Warning: STEP file reader failed\n");
+  }
+
+  // inspect the root transfers
+  reader.PrintCheckLoad(Standard_False, IFSelect_ItemsByEntity);
+
+  // The number of root objects for transfer
+  int nroots = reader.NbRootsForTransfer();
+  for (int k = 1; k <= nroots; k++) {
+    Standard_Boolean ok = reader.TransferRoot(k);
+    if (!ok) {
+      fprintf(stderr, "TMR Warning: Transfer %d not OK!\n", k);
+    }
+  }
+
+  // Load the different shapes
+  int nbs = reader.NbShapes();
+
+  // Build the shape
+  TopoDS_Compound compound;
+  BRep_Builder builder;
+  builder.MakeCompound(compound);
+  for (int i = 1; i <= nbs; i++) {
+    TopoDS_Shape shape = reader.Shape(i);
+    builder.Add(compound, shape);
+  }
+
+  TMR_RemoveFloatingShapes(compound, TopAbs_EDGE);
+
+  // do the sewing
+  TMR_SewCompound(compound, print_level, sew_tol, nonmanifold_mode);
+
+  // get the new filename
+  char new_file[512];
+  int len = strlen(filename);
+  char *ext = strrchr(filename, '.');  // get the file extension
+  int ext_len = strlen(ext);
+  int val = snprintf(new_file, len - ext_len + 1, "%s",
+                     filename);  // add original name
+  strcat(new_file, "_sewn");     // add the sewn tag
+  strcat(new_file, ext);         // add the file extension
+
+  // create the file writer
+  STEPControl_Writer writer;
+  Interface_Static::SetCVal("write.step.unit", units);
+
+  // add the compound
+  IFSelect_ReturnStatus stat = writer.Transfer(compound, STEPControl_AsIs);
+  if (stat != IFSelect_RetVoid && stat != IFSelect_RetDone) {
+    fprintf(stderr, "TMR Warning: error transferring compound!\n");
+  }
+
+  // write out the new STEP file
+  stat = writer.Write(new_file);
+  if (stat != IFSelect_RetVoid && stat != IFSelect_RetDone) {
+    fprintf(stderr, "TMR Warning: writing %s failed!\n", new_file);
+  }
+  return;
+}
+
+void TMR_FixCompound(TopoDS_Compound &compound, int print_level, double tol) {
+  // create the shape fixer and set parameters
+  ShapeFix_Shape *shape_fixer = new ShapeFix_Shape(compound);
+  shape_fixer->SetPrecision(tol);
+
+  // apply the shape fixing
+  shape_fixer->Perform();
+
+  // check the status
+  if (print_level > 0 && shape_fixer->Status(ShapeExtend_OK)) {
+    printf("Loaded compound shape was not fixed. Nothing was done\n");
+  } else if (print_level > 0 && shape_fixer->Status(ShapeExtend_DONE)) {
+    printf("Loaded compound shape was fixed with the following changes:\n");
+    if (shape_fixer->Status(ShapeExtend_DONE1)) {
+      printf("  free edges were fixed\n");
+    }
+    if (shape_fixer->Status(ShapeExtend_DONE2)) {
+      printf("  free wires were fixed\n");
+    }
+    if (shape_fixer->Status(ShapeExtend_DONE3)) {
+      printf("  free faces were fixed\n");
+    }
+    if (shape_fixer->Status(ShapeExtend_DONE4)) {
+      printf("  free shells were fixed\n");
+    }
+    if (shape_fixer->Status(ShapeExtend_DONE5)) {
+      printf("  free solids were fixed\n");
+    }
+    if (shape_fixer->Status(ShapeExtend_DONE6)) {
+      printf("  shapes in compound were fixed\n");
+    }
+  } else if (print_level > 0 && shape_fixer->Status(ShapeExtend_FAIL)) {
+    printf("Loaded compound shape failed to be fixed. Error during fixing\n");
+  }
+
+  // set the fixed compound shape
+  if (shape_fixer->Status(ShapeExtend_DONE)) {
+    compound = TopoDS::Compound(shape_fixer->Shape());
+  }
+  delete shape_fixer;
+
+  // create the wireframe fixer and set parameters
+  ShapeFix_Wireframe *wire_fixer = new ShapeFix_Wireframe(compound);
+  wire_fixer->SetPrecision(tol);
+  wire_fixer->ModeDropSmallEdges() = true;
+
+  // apply the wireframe fixing
+  wire_fixer->FixWireGaps();
+  wire_fixer->FixSmallEdges();
+
+  // check the status for wire gaps
+  if (print_level > 0 && wire_fixer->StatusWireGaps(ShapeExtend_OK)) {
+    printf("Loaded compound wireframe gaps not fixed. No gaps were found\n");
+  } else if (print_level > 0 && wire_fixer->StatusWireGaps(ShapeExtend_DONE)) {
+    printf("Loaded compound wireframe gaps were fixed:\n");
+    if (wire_fixer->StatusWireGaps(ShapeExtend_DONE1)) {
+      printf("  gaps in 3D were fixed\n");
+    }
+    if (wire_fixer->StatusWireGaps(ShapeExtend_DONE2)) {
+      printf("  gaps in 2D were fixed\n");
+    }
+  } else if (print_level > 0 && wire_fixer->StatusWireGaps(ShapeExtend_FAIL)) {
+    printf("Loaded compound wireframe gaps failed to be fixed:\n");
+    if (wire_fixer->StatusWireGaps(ShapeExtend_FAIL1)) {
+      printf("  error fixing gaps in 3D\n");
+    }
+    if (wire_fixer->StatusWireGaps(ShapeExtend_FAIL2)) {
+      printf("  error fixing gaps in 2D\n");
+    }
+  }
+
+  // check the status for small edges
+  if (print_level > 0 && wire_fixer->StatusSmallEdges(ShapeExtend_OK)) {
+    printf(
+        "Loaded compound wireframe edges not fixed. No small edges were "
+        "found\n");
+  } else if (print_level > 0 &&
+             wire_fixer->StatusSmallEdges(ShapeExtend_DONE)) {
+    printf("Loaded compound wireframe edges were fixed:\n");
+    if (wire_fixer->StatusSmallEdges(ShapeExtend_DONE1)) {
+      printf("  small edges were fixed\n");
+    }
+  } else if (print_level > 0 &&
+             wire_fixer->StatusSmallEdges(ShapeExtend_FAIL)) {
+    printf("Loaded compound wireframe edges failed to be fixed:\n");
+    if (wire_fixer->StatusSmallEdges(ShapeExtend_FAIL1)) {
+      printf("  error fixing small edges\n");
+    }
+  }
+
+  // set the fixed compound shape
+  if (wire_fixer->StatusWireGaps(ShapeExtend_DONE) ||
+      wire_fixer->StatusSmallEdges(ShapeExtend_DONE)) {
+    compound = TopoDS::Compound(wire_fixer->Shape());
+  }
+  delete wire_fixer;
+  return;
+}
+
+/*
   Create the TMRModel based on the IGES input file
 */
-TMRModel *TMR_LoadModelFromIGESFile(const char *filename, int print_level) {
+TMRModel *TMR_LoadModelFromIGESFile(const char *filename, const char *units,
+                                    int print_level) {
   FILE *fp = fopen(filename, "r");
   if (!fp) {
     return NULL;
@@ -477,6 +757,7 @@ TMRModel *TMR_LoadModelFromIGESFile(const char *filename, int print_level) {
   fclose(fp);
 
   IGESControl_Reader reader;
+  Interface_Static::SetCVal("xstep.cascade.unit", units);
   IFSelect_ReturnStatus status = reader.ReadFile(filename);
   if (status != IFSelect_RetDone) {
     fprintf(stderr, "TMR Warning: IGES file reader failed\n");
@@ -514,7 +795,8 @@ TMRModel *TMR_LoadModelFromIGESFile(const char *filename, int print_level) {
 /*
   Create the TMRModel based on the STEP input file
 */
-TMRModel *TMR_LoadModelFromSTEPFile(const char *filename, int print_level) {
+TMRModel *TMR_LoadModelFromSTEPFile(const char *filename, const char *units,
+                                    int print_level) {
   FILE *fp = fopen(filename, "r");
   if (!fp) {
     return NULL;
@@ -522,6 +804,7 @@ TMRModel *TMR_LoadModelFromSTEPFile(const char *filename, int print_level) {
   fclose(fp);
 
   STEPControl_Reader reader;
+  Interface_Static::SetCVal("xstep.cascade.unit", units);
   IFSelect_ReturnStatus status = reader.ReadFile(filename);
   if (status != IFSelect_RetDone) {
     fprintf(stderr, "TMR Warning: STEP file reader failed\n");
@@ -612,9 +895,9 @@ TMRModel *TMR_LoadModelFromCompound(TopoDS_Compound &compound,
 
   if (print_level > 0) {
     printf(
-        "Compound loaded with:\nnverts = %d nedges = %d nfaces = %d "
-        "nwires = %d nshells = %d nsolids = %d\n",
-        nverts, nedges, nfaces, nwires, nshells, nsolids);
+        "Compound loaded with:\nnverts=%d, nedges=%d, nwires=%d, "
+        "nfaces=%d, nshells=%d, nsolids=%d\n",
+        nverts, nedges, nwires, nfaces, nshells, nsolids);
   }
 
   // Re-iterate through the list and create the objects needed to
