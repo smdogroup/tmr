@@ -444,12 +444,14 @@ cdef extern from "TMR_TACSCreator.h":
         TMROctForest* getFilter()
 
 cdef extern from "TMROpenCascade.h":
-    cdef TMRModel* TMR_LoadModelFromIGESFile(const char*, int)
-    cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*, int)
+    cdef void TMR_SewModelIGES(char *, const char *, int, double, bool)
+    cdef void TMR_SewModelSTEP(char *, const char *, int, double, bool)
+    cdef TMRModel* TMR_LoadModelFromIGESFile(const char*, const char*, int)
+    cdef TMRModel* TMR_LoadModelFromSTEPFile(const char*, const char*, int)
 
 cdef extern from "TMREgads.h" namespace "TMR_EgadsInterface":
     cdef TMRModel* TMR_ConvertEGADSModel"TMR_EgadsInterface::TMR_ConvertEGADSModel"(ego, int)
-    cdef TMRModel* TMR_LoadModelFromEGADSFile"TMR_EgadsInterface::TMR_LoadModelFromEGADSFile"(const char*, int)
+    cdef TMRModel* TMR_LoadModelFromEGADSFile"TMR_EgadsInterface::TMR_LoadModelFromEGADSFile"(const char*, const char*, int)
 
 cdef extern from "TMR_RefinementTools.h":
     void TMR_CreateTACSMg(int, TACSAssembler**,
@@ -465,7 +467,7 @@ cdef extern from "TMR_RefinementTools.h":
                                     double*)
     double TMR_AdjointErrorEst(TMRQuadForest*, TACSAssembler*,
                                TMRQuadForest*, TACSAssembler*,
-                               TACSBVec*, TACSBVec*, double*, double*)
+                               TACSBVec*, TACSBVec*, double*, double*, double*)
 
     void TMR_CreateTACSMg(int, TACSAssembler**,
                           TMROctForest**, TACSMg**, double, int, int, int)
