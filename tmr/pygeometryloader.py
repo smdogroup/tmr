@@ -161,12 +161,12 @@ class pyGeometryLoader(BaseUI):
 
     def readGeometryFile(self, geom_file, **kwargs):
         """
-        Read in a STEP/IGES file and make the TMR geometry model
+        Read in a STEP/IGES/EGADS file and make the TMR geometry model
 
         Parameters
         ----------
         geom_file : str
-            Filename of the geometry file to load (STEP/IGES)
+            Filename of the geometry file to load (STEP/IGES/EGADS)
 
         kwargs : keyword args
             arg=value pairs that will directly be passed to TMR.LoadModel
@@ -178,6 +178,12 @@ class pyGeometryLoader(BaseUI):
 
         # load in the geometry model
         self.geom_model = TMR.LoadModel(fname=geom_file, **kwargs)
+        if self.geom_type == "quad":
+            # ensure no solids are in model for quad type
+            verts = self.geom_model.getVertices()
+            edges = self.geom_model.getEdges()
+            faces = self.geom_model.getFaces()
+            self.geom_model = TMR.Model(verts, edges, faces)
         return
 
     @model_method
@@ -188,6 +194,7 @@ class pyGeometryLoader(BaseUI):
         edge_names=None,
         vert_names=None,
         writeToTecplot=False,
+        **kwargs,
     ):
         """
         Specify labels for geometric entities in the model (volumes, faces,
@@ -218,6 +225,9 @@ class pyGeometryLoader(BaseUI):
             Boolean flag to write out the geometry and its labels to a Tecplot-
             formatted .dat ASCII file. Helpful when checking if the labels were
             set correctly.
+
+        kwargs : keyword arguments
+            arg=value pairs that will be passed to writeModelToTecplot()
         """
         # set the names for volumes
         if vol_names is not None:
@@ -247,9 +257,9 @@ class pyGeometryLoader(BaseUI):
         self._updateComps()
 
         # write out to Tecplot if requested
-        if writeToTecplot:
+        if writeToTecplot and self.comm.rank == 0:
             tec_name = self.model_name + ".dat"
-            self.geom_model.writeModelToTecplot(tec_name)
+            self.geom_model.writeModelToTecplot(fname=tec_name, **kwargs)
         return
 
     @model_method
@@ -316,11 +326,10 @@ class pyGeometryLoader(BaseUI):
                 self.bcs.addBoundaryCondition(name, nums, vals)
             else:
                 # warn user their supplied label isn't in the model
-                if self.comm.rank == 0:
-                    self._user_warning(
-                        self.comm.rank,
-                        f"skipping boundary condition definition for `{name}`, label not found in model",
-                    )
+                self._user_warning(
+                    self.comm.rank,
+                    f'skipping boundary condition definition for "{name}", label not found in model',
+                )
         return
 
     def setMeshOptions(self, **kwargs):
@@ -362,10 +371,9 @@ class pyGeometryLoader(BaseUI):
             if key in allowed_keys:
                 setattr(self.mesh_options, key, val)
             else:
-                if self.comm.rank == 0:
-                    self._user_warning(
-                        self.comm.rank, f"skipping `{key}`, not a valid mesh option"
-                    )
+                self._user_warning(
+                    self.comm.rank, f'skipping "{key}", not a valid mesh option'
+                )
         return
 
     def setElementFeatureSize(self, feature_type, **kwargs):
@@ -401,7 +409,7 @@ class pyGeometryLoader(BaseUI):
         return
 
     @model_method
-    def createMesh(self, h, writeBDF=False):
+    def createMesh(self, h=1.0, writeBDF=False):
         """
         Mesh the geometry with specified mesh parameters
 
@@ -409,6 +417,7 @@ class pyGeometryLoader(BaseUI):
         ----------
         h : float
             Global element size target used during meshing
+            (Only used if no ElementFeatureSize has been defined)
 
         writeBDF : bool
             Boolean flag to write out the mesh to a .bdf format
@@ -866,7 +875,7 @@ class pyGeometryLoader(BaseUI):
 
         # check that all elements belong to a component
         comps_not_found = [ind for ind, val in enumerate(compIDList) if val == -1]
-        if comps_not_found and self.comm.rank == 0:
+        if comps_not_found:
             # warn user if some elements aren't in a any component
             self._user_warning(
                 self.comm.rank,
@@ -1041,10 +1050,13 @@ class pyGeometryLoader(BaseUI):
             label = vol.getName()
             if label is not None:
                 if self.geom_type == "oct":
-                    if label in self.compIDtoLabel.values() and self.comm.rank == 0:
+                    if (
+                        self.compIDtoLabel.get(self.nComp)
+                        and label != self.compIDtoLabel[self.nComp]
+                    ):
                         self._user_warning(
                             self.comm.rank,
-                            f"component description `{label}` for ID {self.nComp} already exists",
+                            f'component ID {self.nComp}: description updated "{self.compIDtoLabel[self.nComp]}" ---> "{label}"',
                         )
                     self.compIDtoLabel[self.nComp] = label
                     self.compDescripts.append(label)
@@ -1058,10 +1070,13 @@ class pyGeometryLoader(BaseUI):
             label = face.getName()
             if label is not None:
                 if self.geom_type == "quad":
-                    if label in self.compIDtoLabel.values() and self.comm.rank == 0:
+                    if (
+                        self.compIDtoLabel.get(self.nComp)
+                        and label != self.compIDtoLabel[self.nComp]
+                    ):
                         self._user_warning(
                             self.comm.rank,
-                            f"component description `{label}` for ID {self.nComp} already exists",
+                            f'component ID {self.nComp}: description updated "{self.compIDtoLabel[self.nComp]}" ---> "{label}"',
                         )
                     self.compIDtoLabel[self.nComp] = label
                     self.compDescripts.append(label)
@@ -1084,14 +1099,14 @@ class pyGeometryLoader(BaseUI):
                 comps_not_set.append(label)
 
         # warn user about labels that are not valid component descriptions
-        if comps_not_set and self.comm.rank == 0:
+        if comps_not_set:
             self._user_warning(
                 self.comm.rank,
                 f"the following geometry labels are not valid component descriptions:\n\t{comps_not_set}",
             )
         return
 
-    def _user_warning(self, rank, msg):
+    def _user_warning(self, rank, msg, rootOnly=True):
         """
         Writes a warning to the screen on the specified proc. The user should
         not use this function directly.
@@ -1101,5 +1116,8 @@ class pyGeometryLoader(BaseUI):
         msg : str
             message to write to screen
         """
-        print(f"[{rank}] pyGeometryLoader Warning:\n\t{msg}")
+        if rootOnly and rank == 0:
+            print(f"[{rank}] pyGeometryLoader Warning:\n\t{msg}")
+        elif not rootOnly:
+            print(f"[{rank}] pyGeometryLoader Warning:\n\t{msg}")
         return
