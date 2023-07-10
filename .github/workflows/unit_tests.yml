@@ -79,7 +79,7 @@ jobs:
           make;
           make lib;
 
-          # Install OpenCASCADE 
+          # Install OpenCASCADE
           cd $TMR_DIR/extern;
           wget https://acdl.mit.edu/ESP/otherOCCs/OCC681lin64.tgz;
           tar -zxf OCC681lin64.tgz;
@@ -118,7 +118,7 @@ jobs:
           rm -rf tests;
           rm -rf examples;
           cp Makefile.in.info Makefile.in;
-          make PAROPT_DIR=$TMR_DIR/extern/paropt;
+          make PAROPT_DIR=$TMR_DIR/extern/paropt METIS_INCLUDE=-I${CONDA_PREFIX}/include/ METIS_LIB="-L${CONDA_PREFIX}/lib/ -lmetis";
           make interface PAROPT_DIR=$TMR_DIR/extern/paropt;
           export PYTHONPATH=${PYTHONPATH}:${TMR_DIR}/extern/paropt;
 
