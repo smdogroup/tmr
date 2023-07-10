@@ -781,7 +781,8 @@ void TMRTopoProblem::initialize() {
     nwblock = 1;
   }
 
-  setProblemSizes(nvars, num_constraints, num_constraints, nw, nwblock);
+  setProblemSizes(nvars, num_constraints, nw);
+  setNumInequalities(num_constraints, nwblock);
 }
 
 /*
@@ -854,6 +855,15 @@ int TMRTopoProblem::useUpperBounds() {
     return 0;
   }
   return 1;
+}
+
+// TODO: Is this right?
+ParOptQuasiDefMat *TMRTopoProblem::createQuasiDefMat() {
+  int nwblock = 0;
+  if (design_vars_per_node > 1) {
+    nwblock = 1;
+  }
+  return new ParOptQuasiDefBlockMat(this, nwblock);
 }
 
 /*
@@ -1101,7 +1111,8 @@ int TMRTopoProblem::evalObjCon(ParOptVec *pxvec, ParOptScalar *fobj,
           err_count = 0;
 
           // Solve the eigenvalue problem
-          buck[i]->solve(forces[i], new KSMPrintStdout("KSM", mpi_rank, 1));
+          TACSBVec *u0 = NULL;  // TODO: Is this right? do we need a u0? --Aaron
+          buck[i]->solve(forces[i], u0, new KSMPrintStdout("KSM", mpi_rank, 1));
 
           // Extract the first k eigenvalues
           for (int k = 0; k < num_buck_eigvals; k++) {
