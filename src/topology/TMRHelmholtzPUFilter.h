@@ -47,7 +47,7 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   void setDesignVars(TACSBVec *x);
 
   // Get the unfiltered design variable
-  void getDesignVars( TACSBVec **x );
+  void getDesignVars(TACSBVec **x);
 
   // Set values/add values to the vector
   void addValues(TACSBVec *vec);

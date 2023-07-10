@@ -376,7 +376,7 @@ TMRTopoProblem::~TMRTopoProblem() {
   }
 
   // Free extra vectors for qn update correction
-  if (use_qn_correction_comp_obj){
+  if (use_qn_correction_comp_obj) {
     proj_deriv->decref();
     x_h->decref();
     s_temp->decref();
@@ -714,12 +714,11 @@ void TMRTopoProblem::addConstraintCallback(
 /*
   Add quasi-Newton update correction callback calls
 */
-void TMRTopoProblem::addQnCorrectionCallback( int ncon,
-                                              void *callback_ptr,
-                                              void (*callback_fun)( int, void*, ParOptVec*,
-                                                                    ParOptScalar*, ParOptVec*,
-                                                                    ParOptVec*, ParOptVec* ) ){
-  if (callback_ptr){
+void TMRTopoProblem::addQnCorrectionCallback(
+    int ncon, void *callback_ptr,
+    void (*callback_fun)(int, void *, ParOptVec *, ParOptScalar *, ParOptVec *,
+                         ParOptVec *, ParOptVec *)) {
+  if (callback_ptr) {
     qn_correction_callback_zlen = ncon;
     qn_correction_callback_ptr = callback_ptr;
     qnCorrectionCallback = callback_fun;
@@ -1272,12 +1271,13 @@ int TMRTopoProblem::evalObjConGradient(ParOptVec *xvec, ParOptVec *gvec,
     double gnorm = g->norm();
     filter->addValues(g);  // Apply filter transpose to the gradient
     double fgnorm = g->norm();
-    if (mpi_rank == 0){
-      printf("[TMRTopoProblem]unfiltered objective gradient norm: %20.10e\n", gnorm);
-      printf("[TMRTopoProblem]filtered objective gradient norm:   %20.10e\n", fgnorm);
+    if (mpi_rank == 0) {
+      printf("[TMRTopoProblem]unfiltered objective gradient norm: %20.10e\n",
+             gnorm);
+      printf("[TMRTopoProblem]filtered objective gradient norm:   %20.10e\n",
+             fgnorm);
     }
-  }
-  else {
+  } else {
     return 1;
   }
 
@@ -1463,13 +1463,15 @@ int TMRTopoProblem::evalObjConGradient(ParOptVec *xvec, ParOptVec *gvec,
     constraintGradientCallback(constraint_gradient_callback_ptr, filter, mg,
                                num_callback_constraints, vecs);
 
-    for ( int i = 0; i < num_callback_constraints; i++ ){
+    for (int i = 0; i < num_callback_constraints; i++) {
       double vi_norm = vecs[i]->norm();
       filter->addValues(vecs[i]);
       double fvi_norm = vecs[i]->norm();
-      if (mpi_rank == 0){
-        printf("[TMRTopoProblem]unfiltered constraint gradient norm: %20.10e\n", vi_norm);
-        printf("[TMRTopoProblem]filtered constraint gradient norm:   %20.10e\n", fvi_norm);
+      if (mpi_rank == 0) {
+        printf("[TMRTopoProblem]unfiltered constraint gradient norm: %20.10e\n",
+               vi_norm);
+        printf("[TMRTopoProblem]filtered constraint gradient norm:   %20.10e\n",
+               fvi_norm);
       }
     }
     delete[] vecs;
@@ -1478,12 +1480,11 @@ int TMRTopoProblem::evalObjConGradient(ParOptVec *xvec, ParOptVec *gvec,
   return 0;
 }
 
-
 // Switch on quasi-Newton correction for compliance objective
 // Note that this can be called only once, otherwise will
 // encounter memory leak for extra vectors.
 // ----------------------------------------------------------
-void TMRTopoProblem::useQnCorrectionComplianceObj(){
+void TMRTopoProblem::useQnCorrectionComplianceObj() {
   // Switch on the flag
   use_qn_correction_comp_obj = 1;
 
@@ -1499,19 +1500,15 @@ void TMRTopoProblem::useQnCorrectionComplianceObj(){
 
 // Compute a correction to the quasi-Newton update
 // -----------------------------------------------
-void TMRTopoProblem::computeQuasiNewtonUpdateCorrection( ParOptVec *x,
-                                                         ParOptScalar *z,
-                                                         ParOptVec *zw,
-                                                         ParOptVec *s,
-                                                         ParOptVec *y ){
+void TMRTopoProblem::computeQuasiNewtonUpdateCorrection(
+    ParOptVec *x, ParOptScalar *z, ParOptVec *zw, ParOptVec *s, ParOptVec *y) {
   // Get processor rank
   int rank = 0;
   MPI_Comm_rank(assembler->getMPIComm(), &rank);
 
   // Perform the correction via callback, if any
-  if (qnCorrectionCallback){
-    qnCorrectionCallback(ncon, qn_correction_callback_ptr,
-                         x, z, zw, s, y);
+  if (qnCorrectionCallback) {
+    qnCorrectionCallback(ncon, qn_correction_callback_ptr, x, z, zw, s, y);
   }
 
   /*
@@ -1533,11 +1530,11 @@ void TMRTopoProblem::computeQuasiNewtonUpdateCorrection( ParOptVec *x,
 
     ymod ~ P*s = (H + N)*s ~ y + N*s
   */
-  if (use_qn_correction_comp_obj){
-
+  if (use_qn_correction_comp_obj) {
     // Zero out the vector that stores projected derivative
     proj_deriv->zeroEntries();
-    ParOptBVecWrap *proj_deriv_wrap = dynamic_cast<ParOptBVecWrap*>(proj_deriv);
+    ParOptBVecWrap *proj_deriv_wrap =
+        dynamic_cast<ParOptBVecWrap *>(proj_deriv);
 
     //[Test] Update design variable back to x and solve the system again
     // setDesignVars(x);
@@ -1551,15 +1548,15 @@ void TMRTopoProblem::computeQuasiNewtonUpdateCorrection( ParOptVec *x,
 
     // Compute first derivative at x
     if (proj_deriv_wrap) {
-      for ( int i = 0; i < num_load_cases; i++ ){
+      for (int i = 0; i < num_load_cases; i++) {
         // assembler->setVariables(vars[i]);
-        assembler->addAdjointResProducts(-obj_weights[i], 1, &vars[i], &proj_deriv_wrap->vec);
+        assembler->addAdjointResProducts(-obj_weights[i], 1, &vars[i],
+                                         &proj_deriv_wrap->vec);
       }
     }
 
     double gx = proj_deriv->norm();
-    if (rank == 0)
-      printf("Qn correction: norm of g(x)    = %.5e\n", gx);
+    if (rank == 0) printf("Qn correction: norm of g(x)    = %.5e\n", gx);
 
     // Update design variable: x <-- x + h*s
     x_h->copyValues(x);
@@ -1568,32 +1565,32 @@ void TMRTopoProblem::computeQuasiNewtonUpdateCorrection( ParOptVec *x,
 
     // Compute first derivative at x + h*s
     if (proj_deriv_wrap) {
-      for ( int i = 0; i < num_load_cases; i++ ){
+      for (int i = 0; i < num_load_cases; i++) {
         // assembler->setVariables(vars[i]);
-        assembler->addAdjointResProducts(obj_weights[i], 1, &vars[i], &proj_deriv_wrap->vec);
+        assembler->addAdjointResProducts(obj_weights[i], 1, &vars[i],
+                                         &proj_deriv_wrap->vec);
       }
     }
 
     double dgx = proj_deriv->norm();
-    if (rank == 0)
-      printf("Qn correction: norm of dg(x)   = %.5e\n", dgx);
+    if (rank == 0) printf("Qn correction: norm of dg(x)   = %.5e\n", dgx);
 
     // Divide by h so we get projected derivative by finite differencing
-    proj_deriv->scale(1/dh_Kmat_2nd_deriv);
+    proj_deriv->scale(1 / dh_Kmat_2nd_deriv);
 
     double dgxdh = proj_deriv->norm();
-    if (rank == 0)
-      printf("Qn correction: norm of dg(x)/dh= %.5e\n", dgxdh);
+    if (rank == 0) printf("Qn correction: norm of dg(x)/dh= %.5e\n", dgxdh);
 
     // Apply filter transpose to projected derivative
     filter->addValues(proj_deriv_wrap->vec);
-    // filter->applyTranspose(proj_deriv_wrap->vec, proj_deriv_wrap->vec);  // Same as addValues()
+    // filter->applyTranspose(proj_deriv_wrap->vec, proj_deriv_wrap->vec);  //
+    // Same as addValues()
 
     double xval = x->norm();
     double sval = s->norm();
     double yyal = y->norm();
     double yup = proj_deriv->norm();
-    if (rank == 0){
+    if (rank == 0) {
       printf("Qn correction: norm of x       = %.5e\n", xval);
       printf("Qn correction: norm of s       = %.5e\n", sval);
       printf("Qn correction: norm of y       = %.5e\n", yyal);
@@ -1602,12 +1599,11 @@ void TMRTopoProblem::computeQuasiNewtonUpdateCorrection( ParOptVec *x,
 
     // Test if y^Ts > 0
     s_temp->copyValues(s);
-    ParOptBVecWrap *s_temp_wrap = dynamic_cast<ParOptBVecWrap*>(s_temp);
+    ParOptBVecWrap *s_temp_wrap = dynamic_cast<ParOptBVecWrap *>(s_temp);
     filter->applyTranspose(s_temp_wrap->vec, s_temp_wrap->vec);
 
     ParOptScalar yTs = s_temp->dot(proj_deriv);
-    if (rank == 0)
-      printf("Qn correction: yTs  = %.5e\n", yTs);
+    if (rank == 0) printf("Qn correction: yTs  = %.5e\n", yTs);
 
     // Update y
     y->axpy(1.0, proj_deriv);

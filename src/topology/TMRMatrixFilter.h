@@ -87,9 +87,8 @@ class TMRMatrixFilter : public TMRConformFilter {
   void applyTranspose(TACSBVec *in, TACSBVec *out);
 
  private:
-  void initialize_matrix( double _r, int _N,
-                          TMROctForest *oct_filter,
-                          TMRQuadForest *quad_filter );
+  void initialize_matrix(double _r, int _N, TMROctForest *oct_filter,
+                         TMRQuadForest *quad_filter);
 
   // The non-negative matrix M
   TACSMat *M;

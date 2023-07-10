@@ -47,7 +47,7 @@ class TMRHelmholtzFilter : public TMRConformFilter {
   void applyTranspose(TACSBVec *input, TACSBVec *output);
 
  private:
-  void initialize_helmholtz( double helmholtz_radius );
+  void initialize_helmholtz(double helmholtz_radius);
 
   // Data (that may be NULL) for the Helmholtz-based PDE filter
   TACSAssembler **helmholtz_assembler;

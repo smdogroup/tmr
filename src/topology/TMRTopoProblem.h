@@ -105,11 +105,10 @@ class TMRTopoProblem : public ParOptProblem {
   // Add a function callback to perform the quasi-Newton update
   // Correction from python side
   // ----------------------------------------------------------
-  void addQnCorrectionCallback( int ncon,
-                                void *callback_ptr,
-                                void (*callback_fun)( int, void*, ParOptVec*,
-                                                      ParOptScalar*, ParOptVec*,
-                                                      ParOptVec*, ParOptVec* ) );
+  void addQnCorrectionCallback(int ncon, void *callback_ptr,
+                               void (*callback_fun)(int, void *, ParOptVec *,
+                                                    ParOptScalar *, ParOptVec *,
+                                                    ParOptVec *, ParOptVec *));
 
   // Accessor functions to the underlying Assembler, Oct or QuadForest,
   // TopoFilter, and Mg objects
@@ -178,11 +177,9 @@ class TMRTopoProblem : public ParOptProblem {
 
   // Compute a correction to the quasi-Newton update
   // -----------------------------------------------
-  void computeQuasiNewtonUpdateCorrection( ParOptVec *x,
-                                           ParOptScalar *z,
-                                           ParOptVec *zw,
-                                           ParOptVec *s,
-                                           ParOptVec *y );
+  void computeQuasiNewtonUpdateCorrection(ParOptVec *x, ParOptScalar *z,
+                                          ParOptVec *zw, ParOptVec *s,
+                                          ParOptVec *y);
 
   // Evaluate the product of the Hessian with the given vector px
   // ------------------------------------------------------------
@@ -242,8 +239,8 @@ class TMRTopoProblem : public ParOptProblem {
 
   void *qn_correction_callback_ptr;
   int qn_correction_callback_zlen;
-  void (*qnCorrectionCallback)( int, void*, ParOptVec*, ParOptScalar*,
-                                ParOptVec*, ParOptVec*, ParOptVec* );
+  void (*qnCorrectionCallback)(int, void *, ParOptVec *, ParOptScalar *,
+                               ParOptVec *, ParOptVec *, ParOptVec *);
   // Set the design variables across all multigrid levels
   void setDesignVars(ParOptVec *xvec);
 
