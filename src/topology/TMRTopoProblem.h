@@ -281,7 +281,7 @@ class TMRTopoProblem : public ParOptProblem {
     // TMRStressConstraint *stress_func;
     TacsScalar stress_func_offset;
     TacsScalar stress_func_scale;
-  } *load_case_info;
+  } * load_case_info;
 
   // Store the design variable info
   TACSAssembler *assembler;
