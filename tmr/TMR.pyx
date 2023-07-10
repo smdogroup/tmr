@@ -2108,7 +2108,7 @@ cdef class Model:
                     xav[0], xav[1], xav[2], name))
 
             index += 1
-        
+
         fp.close()
         return
 
@@ -3976,16 +3976,16 @@ cdef class QuadCreator:
             # allocate pointers to the component names
             components = <char**>malloc(ncomps*sizeof(char*))
             for icomp,name in enumerate(comp_names):
-                # get the temporary name as a c++ string 
+                # get the temporary name as a c++ string
                 temp_name = tmr_convert_str_to_chars(name)
                 # allocate space for the current name
                 components[icomp] = <char*>malloc((temp_name.length())*sizeof(char))
                 # copy the name to store it
                 strcpy(components[icomp], temp_name.c_str())
-        # create/initialize the TACSAssembler object          
+        # create/initialize the TACSAssembler object
         assembler = self.ptr.createTACS(forest.ptr, ordering, ncomps, <const char**>components)
         # free allocated memory
-        if (components): 
+        if (components):
             for i in range(ncomps):
                 free(components[i])
             free(components)
@@ -4063,16 +4063,16 @@ cdef class OctCreator:
             # allocate pointers to the component names
             components = <char**>malloc(ncomps*sizeof(char*))
             for icomp,name in enumerate(comp_names):
-                # get the temporary name as a c++ string 
+                # get the temporary name as a c++ string
                 temp_name = tmr_convert_str_to_chars(name)
                 # allocate space for the current name
                 components[icomp] = <char*>malloc((temp_name.length())*sizeof(char))
                 # copy the name to store it
                 strcpy(components[icomp], temp_name.c_str())
-        # create/initialize the TACSAssembler object          
+        # create/initialize the TACSAssembler object
         assembler = self.ptr.createTACS(forest.ptr, ordering, ncomps, <const char**>components)
         # free allocated memory
-        if (components): 
+        if (components):
             for i in range(ncomps):
                 free(components[i])
             free(components)
@@ -4463,14 +4463,14 @@ def adjointError(forest, Assembler coarse,
         oct_forest_refined = (<OctForest>forest_refined).ptr
         err_est = TMR_AdjointErrorEst(oct_forest, coarse.ptr,
                                       oct_forest_refined, refined.ptr,
-                                      solution.ptr, adjoint.ptr,
+                                      solution.getBVecPtr(), adjoint.getBVecPtr(),
                                       <double*>err.data, &adj_corr)
     elif isinstance(forest, QuadForest):
         quad_forest = (<QuadForest>forest).ptr
         quad_forest_refined = (<QuadForest>forest_refined).ptr
         err_est = TMR_AdjointErrorEst(quad_forest, coarse.ptr,
                                       quad_forest_refined, refined.ptr,
-                                      solution.ptr, adjoint.ptr,
+                                      solution.getBVecPtr(), adjoint.getBVecPtr(),
                                       <double*>err.data, &adj_corr)
     return err_est, adj_corr, err
 
@@ -4485,9 +4485,9 @@ def computeInterpSolution(forest, Assembler coarse,
     cdef TACSBVec *uvec_ptr = NULL
     cdef TACSBVec *uvec_refined_ptr = NULL
     if uvec is not None:
-        uvec_ptr = uvec.ptr
+        uvec_ptr = uvec.getBVecPtr()
     if uvec_refined is not None:
-        uvec_refined_ptr = uvec_refined.ptr
+        uvec_refined_ptr = uvec_refined.getBVecPtr()
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
         oct_forest_refined = (<OctForest>forest_refined).ptr
@@ -4516,9 +4516,9 @@ def computeReconSolution(forest, Assembler coarse,
     if compute_diff:
         diff = 1
     if uvec is not None:
-        uvec_ptr = uvec.ptr
+        uvec_ptr = uvec.getBVecPtr()
     if uvec_refined is not None:
-        uvec_refined_ptr = uvec_refined.ptr
+        uvec_refined_ptr = uvec_refined.getBVecPtr()
     if isinstance(forest, OctForest):
         oct_forest = (<OctForest>forest).ptr
         oct_forest_refined = (<OctForest>forest_refined).ptr
@@ -4553,7 +4553,7 @@ def writeSTLToBin(fname, OctForest forest,
     cdef const char *filename = NULL
     if fname is not None:
         filename = sfilename.c_str()
-    TMR_GenerateBinFile(filename, forest.ptr, x.ptr, index, cutoff)
+    TMR_GenerateBinFile(filename, forest.ptr, x.getBVecPtr(), index, cutoff)
     return
 
 def getSTLTriangles(OctForest forest, Vec x, int offset=0,
@@ -4561,7 +4561,7 @@ def getSTLTriangles(OctForest forest, Vec x, int offset=0,
     cdef int ntris = 0
     cdef TMR_STLTriangle *tris = NULL
     cdef np.ndarray points
-    TMR_GenerateSTLTriangles(root, forest.ptr, x.ptr, offset, cutoff,
+    TMR_GenerateSTLTriangles(root, forest.ptr, x.getBVecPtr(), offset, cutoff,
                              &ntris, &tris)
 
     if ntris >= 1:
@@ -4636,7 +4636,7 @@ cdef class TopoFilter:
             vec (TACS.Vec): Design variable vector to be set
         """
         if self.ptr != NULL:
-            self.ptr.setDesignVars(vec.ptr)
+            self.ptr.setDesignVars(vec.getBVecPtr())
         return
 
     def getDesignVars(self, Vec vec):
@@ -4660,7 +4660,7 @@ cdef class TopoFilter:
             vec (TACS.Vec): Vector of the sensitivities
         """
         if self.ptr != NULL:
-            self.ptr.addValues(vec.ptr)
+            self.ptr.addValues(vec.getBVecPtr())
         return
 
     def applyFilter(self, Vec vec_in, Vec vec_out):
@@ -5182,14 +5182,14 @@ def ApproximateDistance(filtr, Vec x, int index=0,
         oct_forest.getOctants(&oct_array)
         oct_array.getArray(NULL, &size);
         dist = np.zeros(size, dtype=np.double)
-        TMRApproximateDistance(oct_forest, index, cutoff, t, x.ptr, fname,
+        TMRApproximateDistance(oct_forest, index, cutoff, t, x.getBVecPtr(), fname,
                                <double*>dist.data)
         return dist
     if quad_forest != NULL:
         quad_forest.getQuadrants(&quad_array)
         quad_array.getArray(NULL, &size);
         dist = np.zeros(size, dtype=np.double)
-        TMRApproximateDistance(quad_forest, index, cutoff, t, x.ptr, fname,
+        TMRApproximateDistance(quad_forest, index, cutoff, t, x.getBVecPtr(), fname,
                                <double*>dist.data)
         return dist
     return None
@@ -5215,7 +5215,10 @@ cdef void writeOutputCallback(void *func, const char *prefix, int iter,
 cdef void constraintCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                              int ncon, TacsScalar *cvals):
     try:
-        cons = (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg))
+        mgobj = None
+        if mg != NULL:
+            mgobj = _init_Mg(mg)
+        cons = (<object>func).__call__(_init_TopoFilter(fltr), mgobj)
         for i in range(min(len(cons), ncon)):
             cvals[i] = cons[i]
     except:
@@ -5227,10 +5230,13 @@ cdef void constraintCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
 cdef void constraintGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                                      int ncon, TACSBVec **dcdx):
     try:
+        mgobj = None
+        if mg != NULL:
+            mgobj = _init_Mg(mg)
         vecs = []
         for i in range(ncon):
             vecs.append(_init_Vec(dcdx[i]))
-        (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg), vecs)
+        (<object>func).__call__(_init_TopoFilter(fltr), mgobj, vecs)
     except:
         tb = traceback.format_exc()
         print(tb)
@@ -5240,7 +5246,10 @@ cdef void constraintGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg
 cdef void objectiveCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                             TacsScalar *fobj):
     try:
-        fobj[0] = (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg))
+        mgobj = None
+        if mg != NULL:
+            mgobj = _init_Mg(mg)
+        fobj[0] = (<object>func).__call__(_init_TopoFilter(fltr), mgobj)
     except:
         tb = traceback.format_exc()
         print(tb)
@@ -5250,8 +5259,12 @@ cdef void objectiveCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
 cdef void objectiveGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
                                     TACSBVec *dfdx):
     try:
+        mgobj = None
+        if mg != NULL:
+            mgobj = _init_Mg(mg)
+
         vec = _init_Vec(dfdx)
-        (<object>func).__call__(_init_TopoFilter(fltr), _init_Mg(mg), vec)
+        (<object>func).__call__(_init_TopoFilter(fltr), mgobj, vec)
     except:
         tb = traceback.format_exc()
         print(tb)
@@ -5286,14 +5299,15 @@ cdef class TopoProblem(ProblemBase):
     cdef object objgradfunc
     cdef object qncorrectionfunc
     cdef ParOptVec *xptr
-    def __cinit__(self, TopoFilter fltr, Pc pc,
+    def __cinit__(self, TopoFilter fltr, pc=None,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL
 
-        # Check for a multigrid preconditioner
-        mg = _dynamicTACSMg(pc.ptr)
-        if mg == NULL:
-            raise ValueError('TopoProblem requires a TACSMg preconditioner')
+        if pc is not None:
+            # Check for a multigrid preconditioner
+            mg = _dynamicTACSMg((<Pc>pc).ptr)
+            if mg == NULL:
+                raise ValueError('TopoProblem requires a TACSMg preconditioner')
 
         self.callback = None
         self.confunc = None
@@ -5384,13 +5398,18 @@ cdef class TopoProblem(ProblemBase):
             Mg: geometric multigrid object associated with the TopoProblem
         """
         cdef TMRTopoProblem *prob = NULL
+        cdef TACSMg *mg = NULL
 
         prob = _dynamicTopoProblem(self.ptr)
         if prob == NULL:
             errmsg = 'Expected TMRTopoProblem got other type'
             raise ValueError(errmsg)
 
-        return _init_Mg(prob.getMg())
+        mg = prob.getMg()
+        if mg != NULL:
+            return _init_Mg(prob.getMg())
+
+        return None
 
     def setF5OutputFlags(self, int freq, ElementType elem_type, int flag):
         """
@@ -5456,7 +5475,7 @@ cdef class TopoProblem(ProblemBase):
             f = <TACSBVec**>malloc(nforces*sizeof(TACSBVec*))
             for i in range(nforces):
                 if forces[i] is not None:
-                    f[i] = (<Vec>forces[i]).ptr
+                    f[i] = (<Vec>forces[i]).getBVecPtr()
                 else:
                     f[i] = NULL
         prob.setLoadCases(f, nforces)
