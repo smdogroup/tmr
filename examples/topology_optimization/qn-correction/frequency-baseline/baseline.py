@@ -12,13 +12,27 @@ import sys
 from utils import CreatorCallback, MFilterCreator
 from utils import create_forest
 
+
 class BaseFreq:
-
-    def __init__(self, comm, domain, AR, ratio, len0, r0_frac,
-                 htarget, mg_levels, qval, eig_method, 
-                 max_jd_size, max_gmres_size, max_lanczos,
-                 mscale, kscale, num_eigenvalues):
-
+    def __init__(
+        self,
+        comm,
+        domain,
+        AR,
+        ratio,
+        len0,
+        r0_frac,
+        htarget,
+        mg_levels,
+        qval,
+        eig_method,
+        max_jd_size,
+        max_gmres_size,
+        max_lanczos,
+        mscale,
+        kscale,
+        num_eigenvalues,
+    ):
         self.comm = comm
         self.eig_method = eig_method
         self.ratio = ratio
@@ -30,28 +44,35 @@ class BaseFreq:
         self.kscale = kscale
 
         # Create geometry, material, bc, mesh
-        self.lx = len0*AR
+        self.lx = len0 * AR
         self.ly = len0
         self.lz = len0
-        material_props = constitutive.MaterialProperties(rho=2600.0, E=70e3, nu=0.3, ys=100.0)
-        stiffness_props = TMR.StiffnessProperties(material_props, k0=1e-3, eps=0.2,
-            q=qval, qmass=qval)
-        forest = create_forest(comm, self.lx, self.ly, self.lz, ratio, htarget, mg_levels-1, domain)
+        material_props = constitutive.MaterialProperties(
+            rho=2600.0, E=70e3, nu=0.3, ys=100.0
+        )
+        stiffness_props = TMR.StiffnessProperties(
+            material_props, k0=1e-3, eps=0.2, q=qval, qmass=qval
+        )
+        forest = create_forest(
+            comm, self.lx, self.ly, self.lz, ratio, htarget, mg_levels - 1, domain
+        )
         bcs = TMR.BoundaryConditions()
-        if domain == 'mbb':
-            bcs.addBoundaryCondition('symmetry', [0], [0.0])
-            bcs.addBoundaryCondition('support', [1,2], [0.0, 0.0])
+        if domain == "mbb":
+            bcs.addBoundaryCondition("symmetry", [0], [0.0])
+            bcs.addBoundaryCondition("support", [1, 2], [0.0, 0.0])
         else:
-            bcs.addBoundaryCondition('fixed', [0,1,2], [0.0, 0.0, 0.0])
+            bcs.addBoundaryCondition("fixed", [0, 1, 2], [0.0, 0.0, 0.0])
 
         # Topology analysis problem object
         mfilter = MFilterCreator(r0_frac, 20, a=len0)
         obj = CreatorCallback(bcs, stiffness_props)
-        problem = TopOptUtils.createTopoProblem(forest,
-                                                obj.creator_callback,
-                                                mfilter.filter_callback,
-                                                use_galerkin=True,
-                                                nlevels=mg_levels)
+        problem = TopOptUtils.createTopoProblem(
+            forest,
+            obj.creator_callback,
+            mfilter.filter_callback,
+            use_galerkin=True,
+            nlevels=mg_levels,
+        )
 
         # Set members and allocate space for data
         self.fltr = problem.getTopoFilter()
@@ -74,45 +95,45 @@ class BaseFreq:
 
         tol = 1e-6
         depth = 0.1
-        if domain == 'cantilever':
-            xmin = (1-depth)*self.lx - tol
+        if domain == "cantilever":
+            xmin = (1 - depth) * self.lx - tol
             xmax = self.lx + tol
-            ymin = 0.25*self.ly - tol
-            ymax = 0.75*self.ly + tol
-            zmin = 0.0*self.lz - tol
-            zmax = 0.2*self.lz + tol
+            ymin = 0.25 * self.ly - tol
+            ymax = 0.75 * self.ly + tol
+            zmin = 0.0 * self.lz - tol
+            zmax = 0.2 * self.lz + tol
 
-        elif domain == 'michell':
-            xmin = (1-depth)*self.lx - tol
+        elif domain == "michell":
+            xmin = (1 - depth) * self.lx - tol
             xmax = self.lx + tol
-            ymin = 0.25*self.ly - tol
-            ymax = 0.75*self.ly + tol
-            zmin = 0.4*self.lz - tol
-            zmax = 0.6*self.lz + tol
+            ymin = 0.25 * self.ly - tol
+            ymax = 0.75 * self.ly + tol
+            zmin = 0.4 * self.lz - tol
+            zmax = 0.6 * self.lz + tol
 
-        elif domain == 'mbb':
-            xmin = 0.0*self.lx - tol
-            xmax = 0.2*self.lx + tol
-            ymin = 0.25*self.ly - tol
-            ymax = 0.75*self.ly + tol
-            zmin = (1-depth)*self.lz - tol
+        elif domain == "mbb":
+            xmin = 0.0 * self.lx - tol
+            xmax = 0.2 * self.lx + tol
+            ymin = 0.25 * self.ly - tol
+            ymax = 0.75 * self.ly + tol
+            zmin = (1 - depth) * self.lz - tol
             zmax = self.lz + tol
 
-        elif domain == 'lbracket':
+        elif domain == "lbracket":
             RATIO = self.ratio
-            xmin = (1-depth)*self.lx - tol
+            xmin = (1 - depth) * self.lx - tol
             xmax = self.lx + tol
-            ymin = 0.25*self.ly - tol
-            ymax = 0.75*self.ly + tol
-            zmin = 0.5*RATIO*self.lz - tol
-            zmax = 1.0*RATIO*self.lz + tol
+            ymin = 0.25 * self.ly - tol
+            ymax = 0.75 * self.ly + tol
+            zmin = 0.5 * RATIO * self.lz - tol
+            zmax = 1.0 * RATIO * self.lz + tol
 
         for i in range(offset, n_local_nodes):
             x, y, z = Xpts[i]
             if xmin < x < xmax:
                 if ymin < y < ymax:
                     if zmin < z < zmax:
-                        mvals[i-offset] = 1.0
+                        mvals[i - offset] = 1.0
 
         # Assemble a constant non-design mass matrix
         dv = self.assembler.createDesignVec()
@@ -125,19 +146,22 @@ class BaseFreq:
         self.assembler.setDesignVars(dv)
 
         # Set up solver
-        if self.eig_method == 'jd':
-            jd_oper = TACS.JDFrequencyOperator(self.assembler, self.kmat,
-                self.mmat, self.mg.getMat(), self.mg)
-            self.jd = TACS.JacobiDavidson(jd_oper, self.num_eigenvalues,
-                self.max_jd_size, self.max_gmres_size)
+        if self.eig_method == "jd":
+            jd_oper = TACS.JDFrequencyOperator(
+                self.assembler, self.kmat, self.mmat, self.mg.getMat(), self.mg
+            )
+            self.jd = TACS.JacobiDavidson(
+                jd_oper, self.num_eigenvalues, self.max_jd_size, self.max_gmres_size
+            )
             self.jd.setTolerances(eig_rtol=1e-6, eig_atol=1e-8, rtol=1e-6, atol=1e-12)
             self.jd.setRecycle(self.num_eigenvalues)
 
-        elif self.eig_method == 'lanczos':
+        elif self.eig_method == "lanczos":
             ksmk = TACS.KSM(self.kmat, self.mg, 15, 0, 0)
             ep_oper = TACS.EPGeneralizedShiftInvertOp(0.0, ksmk, self.mmat)
-            self.sep = TACS.SEPsolver(ep_oper, self.max_lanczos,
-                                      TACS.SEP_FULL, self.assembler.getBcMap())
+            self.sep = TACS.SEPsolver(
+                ep_oper, self.max_lanczos, TACS.SEP_FULL, self.assembler.getBcMap()
+            )
             self.sep.setTolerances(1e-6, TACS.SEP_SMALLEST, self.num_eigenvalues)
 
         return
@@ -151,20 +175,17 @@ class BaseFreq:
         self.assembler.setDesignVars(dv)
 
         # Assemble kmat
-        self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX,
-                                    self.kmat)
+        self.assembler.assembleMatType(TACS.STIFFNESS_MATRIX, self.kmat)
         self.kmat.axpy(1.0, self.k0mat)
         self.assembler.applyMatBCs(self.kmat)
 
         # Assemble mmat
-        self.assembler.assembleMatType(TACS.MASS_MATRIX,
-                                    self.mmat)
+        self.assembler.assembleMatType(TACS.MASS_MATRIX, self.mmat)
         self.mmat.axpy(1.0, self.m0mat)
         self.assembler.applyMatBCs(self.mmat)
 
         # Solve the GEP
-        if self.eig_method == 'jd':
-
+        if self.eig_method == "jd":
             # Assemble and factor the preconditioner
             mgmat = self.mg.getMat()
             mgmat.copyValues(self.kmat)
@@ -172,12 +193,11 @@ class BaseFreq:
             self.mg.factor()
 
             self.jd.solve(print_flag=True, print_level=1)
-            assert(self.jd.getNumConvergedEigenvalues() == self.num_eigenvalues)
+            assert self.jd.getNumConvergedEigenvalues() == self.num_eigenvalues
             eigvec = self.assembler.createVec()
             eig, err = self.jd.extractEigenvector(0, eigvec)
 
-        elif self.eig_method == 'lanczos':
-
+        elif self.eig_method == "lanczos":
             # Assemble the multigrid preconditioner:
             mgmat = self.mg.getMat()
 
@@ -200,7 +220,7 @@ class BaseFreq:
 
         res1.copyValues(Kv)
         res1.axpy(-eig, Mv)
-        
+
         residual = res1.norm()
         if self.comm.rank == 0:
             print("(general) |Kv - lambda*Mv| = {:20.10e}".format(residual))
@@ -215,18 +235,44 @@ class BaseFreq:
 
         return eig, err
 
-def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
-                      qval=5.0, mscale=10.0, kscale=10.0, eig_method='jd',
-                      max_jd_size=200, max_gmres_size=30,
-                      max_lanczos=50, num_eigenvals=5):
+
+def run_baseline_case(
+    domain,
+    AR,
+    ratio,
+    len0,
+    r0_frac,
+    htarget,
+    mg_levels,
+    qval=5.0,
+    mscale=10.0,
+    kscale=10.0,
+    eig_method="jd",
+    max_jd_size=200,
+    max_gmres_size=30,
+    max_lanczos=50,
+    num_eigenvals=5,
+):
     ts = MPI.Wtime()
     comm = MPI.COMM_WORLD
-    bf = BaseFreq(comm, domain, AR, ratio, len0,
-                  r0_frac, htarget, mg_levels,
-                  qval, eig_method, 
-                  max_jd_size, max_gmres_size,
-                  max_lanczos, mscale, kscale,
-                  num_eigenvals)
+    bf = BaseFreq(
+        comm,
+        domain,
+        AR,
+        ratio,
+        len0,
+        r0_frac,
+        htarget,
+        mg_levels,
+        qval,
+        eig_method,
+        max_jd_size,
+        max_gmres_size,
+        max_lanczos,
+        mscale,
+        kscale,
+        num_eigenvals,
+    )
     dv = TMR.convertPVecToVec(bf.problem.createDesignVec())
     dv_vals = dv.getArray()
     dv_vals[:] = 0.95
@@ -270,35 +316,50 @@ def run_baseline_case(domain, AR, ratio, len0, r0_frac, htarget, mg_levels,
 
     return ret_dict
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     p = argparse.ArgumentParser()
 
     # Geometry
-    p.add_argument('--domain', type=str, default='cantilever',
-        choices=['cantilever', 'michell', 'mbb', 'lbracket'])
-    p.add_argument('--AR', type=float, default=1.0)
-    p.add_argument('--ratio', type=float, default=0.4)
-    p.add_argument('--len0', type=float, default=1.0)
-    p.add_argument('--r0-frac', type=float, default=0.0625)
-    p.add_argument('--htarget', type=float, default=0.5)
-    p.add_argument('--mg-levels', type=int, default=3)
-    p.add_argument('--qval', type=float, default=5.0)
-    p.add_argument('--mscale', type=float, default=10.0)
-    p.add_argument('--kscale', type=float, default=1.0)
+    p.add_argument(
+        "--domain",
+        type=str,
+        default="cantilever",
+        choices=["cantilever", "michell", "mbb", "lbracket"],
+    )
+    p.add_argument("--AR", type=float, default=1.0)
+    p.add_argument("--ratio", type=float, default=0.4)
+    p.add_argument("--len0", type=float, default=1.0)
+    p.add_argument("--r0-frac", type=float, default=0.0625)
+    p.add_argument("--htarget", type=float, default=0.5)
+    p.add_argument("--mg-levels", type=int, default=3)
+    p.add_argument("--qval", type=float, default=5.0)
+    p.add_argument("--mscale", type=float, default=10.0)
+    p.add_argument("--kscale", type=float, default=1.0)
 
     # Solver
-    p.add_argument('--eig-method', type=str, default='jd',
-        choices=['jd', 'lanczos'])
-    p.add_argument('--max-jd-size', type=int, default=200)
-    p.add_argument('--max-gmres-size', type=int, default=60)
-    p.add_argument('--max-lanczos', type=int, default=50)
-    p.add_argument('--num-eigenvalues', type=int, default=5)
+    p.add_argument("--eig-method", type=str, default="jd", choices=["jd", "lanczos"])
+    p.add_argument("--max-jd-size", type=int, default=200)
+    p.add_argument("--max-gmres-size", type=int, default=60)
+    p.add_argument("--max-lanczos", type=int, default=50)
+    p.add_argument("--num-eigenvalues", type=int, default=5)
 
     args = p.parse_args()
 
-    run_baseline_case(args.domain, args.AR, args.ratio, args.len0,
-                        args.r0_frac, args.htarget, args.mg_levels,
-                        args.qval, args.mscale, args.kscale, args.eig_method,
-                        args.max_jd_size, args.max_gmres_size,
-                        args.max_lanczos, args.num_eigenvalues)
+    run_baseline_case(
+        args.domain,
+        args.AR,
+        args.ratio,
+        args.len0,
+        args.r0_frac,
+        args.htarget,
+        args.mg_levels,
+        args.qval,
+        args.mscale,
+        args.kscale,
+        args.eig_method,
+        args.max_jd_size,
+        args.max_gmres_size,
+        args.max_lanczos,
+        args.num_eigenvalues,
+    )

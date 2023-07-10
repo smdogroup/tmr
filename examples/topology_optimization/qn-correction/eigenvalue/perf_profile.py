@@ -9,12 +9,13 @@ from csv import DictWriter
 
 PERF_INF = 1e20
 colors = {
-    'paropt': '#00876C',
-    'paroptqn': '#BC5090',
-    'ipopt': '#7A4EFE',
-    'snopt': '#2e2e2e',
-    'mma': '#FFA600'
+    "paropt": "#00876C",
+    "paroptqn": "#BC5090",
+    "ipopt": "#7A4EFE",
+    "snopt": "#2e2e2e",
+    "mma": "#FFA600",
 }
+
 
 def getDirs(result_folders):
     """
@@ -38,11 +39,12 @@ def getDirs(result_folders):
         dirs = os.listdir(f)
         r = re.compile(r"\d+-.+")
         dirs = list(filter(r.match, dirs))
-        sort_key = lambda text : int(text.split('-')[0])
+        sort_key = lambda text: int(text.split("-")[0])
         dirs.sort(key=sort_key)
         dirslist.append(dirs)
 
     return dirslist
+
 
 def createDicStruct(dirslist):
     """
@@ -60,17 +62,18 @@ def createDicStruct(dirslist):
     physics = dict()
     for dirs in dirslist:
         for d in dirs:
-            num, omz = d.split('-')
+            num, omz = d.split("-")
             if num not in physics.keys():
                 physics[num] = dict()
             physics[num][omz] = dict()
-            physics[num][omz]['obj'] = None
-            physics[num][omz]['obj_normed'] = None
-            physics[num][omz]['infeas'] = None
-            physics[num][omz]['discreteness'] = None
-            physics[num]['best_obj'] = PERF_INF
+            physics[num][omz]["obj"] = None
+            physics[num][omz]["obj_normed"] = None
+            physics[num][omz]["infeas"] = None
+            physics[num][omz]["discreteness"] = None
+            physics[num]["best_obj"] = PERF_INF
 
     return physics
+
 
 def populateDic(dirslist, n_mesh_refine, result_folders, physics):
     """
@@ -92,31 +95,32 @@ def populateDic(dirslist, n_mesh_refine, result_folders, physics):
 
     for i, dirs in enumerate(dirslist):
         for d in dirs:
-            num, omz = d.split('-')
-            pklname = 'output_refine{:d}.pkl'.format(n_mesh_refine-1)
+            num, omz = d.split("-")
+            pklname = "output_refine{:d}.pkl".format(n_mesh_refine - 1)
             pklpath = os.path.join(result_folders[i], d, pklname)
 
             # Success case
             try:
-                with open(pklpath, 'rb') as f:
+                with open(pklpath, "rb") as f:
                     pkldict = pickle.load(f)
-                    physics[num][omz]['obj'] = pkldict['obj']
-                    physics[num][omz]['infeas'] = pkldict['infeas']
-                    physics[num][omz]['discreteness'] = pkldict['discreteness']
+                    physics[num][omz]["obj"] = pkldict["obj"]
+                    physics[num][omz]["infeas"] = pkldict["infeas"]
+                    physics[num][omz]["discreteness"] = pkldict["discreteness"]
 
-                    if pkldict['obj'] < physics[num]['best_obj']:
-                        physics[num]['best_obj'] = pkldict['obj']
+                    if pkldict["obj"] < physics[num]["best_obj"]:
+                        physics[num]["best_obj"] = pkldict["obj"]
 
                     n_pkls += 1
 
             # Fail case, no pkl generated
             except:
-                print('[Info] {:} doesn\'t exist!'.format(pklpath))
-                physics[num][omz]['obj'] = PERF_INF
-                physics[num][omz]['infeas'] = PERF_INF
-                physics[num][omz]['discreteness'] = PERF_INF
+                print("[Info] {:} doesn't exist!".format(pklpath))
+                physics[num][omz]["obj"] = PERF_INF
+                physics[num][omz]["infeas"] = PERF_INF
+                physics[num][omz]["discreteness"] = PERF_INF
 
     return n_pkls
+
 
 def normalizeDict(problem, physics, infeas_tol):
     """
@@ -137,23 +141,28 @@ def normalizeDict(problem, physics, infeas_tol):
     # Normalize obj against best
     for num in physics.keys():
         for omz in physics[num]:
-            if omz != 'best_obj':
-                if physics[num][omz]['obj'] is not None:
-                    if physics[num][omz]['infeas'] < infeas_tol:
-                        physics[num][omz]['obj_normed'] = \
-                            physics[num][omz]['obj'] / physics[num]['best_obj']
+            if omz != "best_obj":
+                if physics[num][omz]["obj"] is not None:
+                    if physics[num][omz]["infeas"] < infeas_tol:
+                        physics[num][omz]["obj_normed"] = (
+                            physics[num][omz]["obj"] / physics[num]["best_obj"]
+                        )
                         n_feas += 1
                     else:
-                        if problem == 'eig':
-                            physics[num][omz]['obj_normed'] = -PERF_INF
+                        if problem == "eig":
+                            physics[num][omz]["obj_normed"] = -PERF_INF
                         else:
-                            physics[num][omz]['obj_normed'] = PERF_INF
-                        physics[num][omz]['discreteness'] = PERF_INF
-                        if physics[num][omz]['infeas'] < PERF_INF:
-                            print('[Info] Infeasibile case detected, No:{:>5s}, ' \
-                                'optimizer:{:>10s}, infeas:{:>20.10e}'.format(
-                                num, omz, physics[num][omz]['infeas']))
+                            physics[num][omz]["obj_normed"] = PERF_INF
+                        physics[num][omz]["discreteness"] = PERF_INF
+                        if physics[num][omz]["infeas"] < PERF_INF:
+                            print(
+                                "[Info] Infeasibile case detected, No:{:>5s}, "
+                                "optimizer:{:>10s}, infeas:{:>20.10e}".format(
+                                    num, omz, physics[num][omz]["infeas"]
+                                )
+                            )
     return n_feas
+
 
 def genProfileData(optimizers, physics, problem):
     """
@@ -176,27 +185,36 @@ def genProfileData(optimizers, physics, problem):
         profile_data[omz] = dict()
 
         # Prepare objective data
-        profile_data[omz]['obj_normed'] = [physics[num][omz]['obj_normed'] for num in physics]
-        if problem == 'eig':
-            profile_data[omz]['obj_normed'].sort(reverse=True)
+        profile_data[omz]["obj_normed"] = [
+            physics[num][omz]["obj_normed"] for num in physics
+        ]
+        if problem == "eig":
+            profile_data[omz]["obj_normed"].sort(reverse=True)
         else:
-            profile_data[omz]['obj_normed'].sort(reverse=False)
-        profile_data[omz]['obj_percentile'] = [(index+1)/n_physics for index, _ in enumerate(profile_data[omz]['obj_normed'])]
+            profile_data[omz]["obj_normed"].sort(reverse=False)
+        profile_data[omz]["obj_percentile"] = [
+            (index + 1) / n_physics
+            for index, _ in enumerate(profile_data[omz]["obj_normed"])
+        ]
 
         # Prepare discreteness data
-        profile_data[omz]['dis'] = [physics[num][omz]['discreteness'] for num in physics]
-        profile_data[omz]['dis'].sort(reverse=False)
-        profile_data[omz]['dis_percentile'] = [(index+1)/n_physics for index, _ in enumerate(profile_data[omz]['dis'])]
-
+        profile_data[omz]["dis"] = [
+            physics[num][omz]["discreteness"] for num in physics
+        ]
+        profile_data[omz]["dis"].sort(reverse=False)
+        profile_data[omz]["dis_percentile"] = [
+            (index + 1) / n_physics for index, _ in enumerate(profile_data[omz]["dis"])
+        ]
 
     # Check if number of 1.0 equals number of physical problem
     n_best = 0
     for omz in optimizers:
-        for obj in profile_data[omz]['obj_normed']:
+        for obj in profile_data[omz]["obj_normed"]:
             if obj == 1.0:
                 n_best += 1
 
     return profile_data, n_best
+
 
 def plotObjProfile(problem, profile_data, eig_bound, comp_bound, optimizers, legends):
     """
@@ -218,9 +236,9 @@ def plotObjProfile(problem, profile_data, eig_bound, comp_bound, optimizers, leg
     for omz in optimizers:
         # Append an artificial entry to the list so we have
         # nice-looking profile at the end
-        x = profile_data[omz]['obj_normed'].copy()
-        y = profile_data[omz]['obj_percentile'].copy()
-        if problem == 'eig':
+        x = profile_data[omz]["obj_normed"].copy()
+        y = profile_data[omz]["obj_percentile"].copy()
+        if problem == "eig":
             if x[-1] > eig_bound:
                 x.append(eig_bound)
                 y.append(y[-1])
@@ -231,21 +249,22 @@ def plotObjProfile(problem, profile_data, eig_bound, comp_bound, optimizers, leg
 
         ax.step(x, y, label=legends[omz], color=colors[omz])
 
-    if problem == 'eig':
-        ax.set_xlim(1.0 + 0.05*(1.0 - eig_bound), eig_bound)
+    if problem == "eig":
+        ax.set_xlim(1.0 + 0.05 * (1.0 - eig_bound), eig_bound)
     else:
-        ax.set_xlim(1.0 - 0.05*(comp_bound - 1.0), comp_bound)
+        ax.set_xlim(1.0 - 0.05 * (comp_bound - 1.0), comp_bound)
 
-    if problem == 'eig':
-        ax.set_xlabel('Normalized objective (eigenvalue)')
-    elif problem == 'comp':
-        ax.set_xlabel('Normalized objective (compliance)')
-    elif problem == 'freq':
-        ax.set_xlabel('Normalized objective (mass)')
-    ax.set_ylabel('Fraction of cases')
-    fig.legend(loc='center right')
+    if problem == "eig":
+        ax.set_xlabel("Normalized objective (eigenvalue)")
+    elif problem == "comp":
+        ax.set_xlabel("Normalized objective (compliance)")
+    elif problem == "freq":
+        ax.set_xlabel("Normalized objective (mass)")
+    ax.set_ylabel("Fraction of cases")
+    fig.legend(loc="center right")
 
     return fig, ax
+
 
 def plotDiscreteProfile(profile_data, optimizers, legends):
     """
@@ -264,23 +283,25 @@ def plotDiscreteProfile(profile_data, optimizers, legends):
     for omz in optimizers:
         # Append an artificial entry to the list so we have
         # nice-looking profile at the end
-        x = profile_data[omz]['dis'].copy()
-        y = profile_data[omz]['dis_percentile'].copy()
+        x = profile_data[omz]["dis"].copy()
+        y = profile_data[omz]["dis_percentile"].copy()
         x.append(0.25)
         y.append(y[-1])
         ax.step(x, y, label=legends[omz], color=colors[omz])
 
     ax.set_xlim(-0.01, 0.25)
-    ax.set_xlabel('Averaged discreteness')
-    ax.set_ylabel('Fraction of cases')
-    fig.legend(loc='center right')
+    ax.set_xlabel("Averaged discreteness")
+    ax.set_ylabel("Fraction of cases")
+    fig.legend(loc="center right")
 
     return fig, ax
 
-def omzFields(omz):
-    return [omz+'-obj', omz+'-infeas', omz+'-discrete']
 
-def saveTable(physics, result_folder, optimizers, csv='physics.csv'):
+def omzFields(omz):
+    return [omz + "-obj", omz + "-infeas", omz + "-discrete"]
+
+
+def saveTable(physics, result_folder, optimizers, csv="physics.csv"):
     """
     Save physics to a csv in result folder
 
@@ -289,47 +310,54 @@ def saveTable(physics, result_folder, optimizers, csv='physics.csv'):
         csv (str): csv name
     """
 
-    fieldnames = ['no']
+    fieldnames = ["no"]
     for omz in optimizers:
         fieldnames.extend(omzFields(omz))
 
-    with open(os.path.join(result_folder, csv), 'w') as f:
+    with open(os.path.join(result_folder, csv), "w") as f:
         writer = DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for num in physics:
-            write_row_dict = {'no': num}
+            write_row_dict = {"no": num}
             for omz in optimizers:
-                write_row_dict[omz+'-obj'] = physics[num][omz]['obj']
-                write_row_dict[omz+'-infeas'] = physics[num][omz]['infeas']
-                write_row_dict[omz+'-discrete'] = physics[num][omz]['discreteness']
+                write_row_dict[omz + "-obj"] = physics[num][omz]["obj"]
+                write_row_dict[omz + "-infeas"] = physics[num][omz]["infeas"]
+                write_row_dict[omz + "-discrete"] = physics[num][omz]["discreteness"]
 
             writer.writerow(write_row_dict)
 
     return
 
-if __name__ == '__main__':
 
+if __name__ == "__main__":
     # Argument parser
     p = argparse.ArgumentParser()
-    p.add_argument('--result-folder', type=str, nargs='*', default=['.'])
-    p.add_argument('--problem', type=str, default='eig', choices=['eig', 'comp', 'freq'])
-    p.add_argument('--infeas-tol', type=float, default=1e-6)
-    p.add_argument('--optimizers', type=str, nargs='*',
-        default=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'],
-        choices=['paropt', 'paroptqn', 'snopt', 'ipopt', 'mma'])
-    p.add_argument('--n-mesh-refine', type=int, default=1)
-    p.add_argument('--eig-bound', type=float, default=0.5)
-    p.add_argument('--comp-bound', type=float, default=1.5)
-    p.add_argument('--paropt-type', type=str, default='sl1QP',
-        choices=['sl1QP', 'filterSQP'])
+    p.add_argument("--result-folder", type=str, nargs="*", default=["."])
+    p.add_argument(
+        "--problem", type=str, default="eig", choices=["eig", "comp", "freq"]
+    )
+    p.add_argument("--infeas-tol", type=float, default=1e-6)
+    p.add_argument(
+        "--optimizers",
+        type=str,
+        nargs="*",
+        default=["paropt", "paroptqn", "snopt", "ipopt", "mma"],
+        choices=["paropt", "paroptqn", "snopt", "ipopt", "mma"],
+    )
+    p.add_argument("--n-mesh-refine", type=int, default=1)
+    p.add_argument("--eig-bound", type=float, default=0.5)
+    p.add_argument("--comp-bound", type=float, default=1.5)
+    p.add_argument(
+        "--paropt-type", type=str, default="sl1QP", choices=["sl1QP", "filterSQP"]
+    )
     args = p.parse_args()
 
     legends = {
-        'paropt': r'ParOpt {:s}'.format(args.paropt_type),
-        'paroptqn': r'ParOpt {:s} w/ qn'.format(args.paropt_type),
-        'ipopt': r'IPOPT',
-        'snopt': r'SNOPT',
-        'mma': r'MMA'
+        "paropt": r"ParOpt {:s}".format(args.paropt_type),
+        "paroptqn": r"ParOpt {:s} w/ qn".format(args.paropt_type),
+        "ipopt": r"IPOPT",
+        "snopt": r"SNOPT",
+        "mma": r"MMA",
     }
     legends = {key: legends[key] for key in args.optimizers}
 
@@ -351,33 +379,52 @@ if __name__ == '__main__':
 
     # Print summary
     n_physics = len(physics)
-    n_planned = len(physics)*len(optimizers)
-    print('\n')
-    print('-----------SUMMARY-----------')
-    print('number of physics:         {:d}'.format(n_physics))
-    print('number of best cases       {:d} (should == {:d})'.format(n_best, n_physics))
-    print('number of planned cases:   {:d}'.format(n_planned))
-    print('number of existing pkls:   {:d} ({:.2f}%)'.format(n_pkls, 100*n_pkls/n_planned))
-    print('number of feasible cases:  {:d} ({:.2f}%)'.format(n_feas, 100*n_feas/n_planned))
+    n_planned = len(physics) * len(optimizers)
+    print("\n")
+    print("-----------SUMMARY-----------")
+    print("number of physics:         {:d}".format(n_physics))
+    print("number of best cases       {:d} (should == {:d})".format(n_best, n_physics))
+    print("number of planned cases:   {:d}".format(n_planned))
+    print(
+        "number of existing pkls:   {:d} ({:.2f}%)".format(
+            n_pkls, 100 * n_pkls / n_planned
+        )
+    )
+    print(
+        "number of feasible cases:  {:d} ({:.2f}%)".format(
+            n_feas, 100 * n_feas / n_planned
+        )
+    )
 
     # Set up plotting environment
-    mpl_style_path = os.path.dirname(os.path.realpath(__file__)) + '/paper.mplstyle'
+    mpl_style_path = os.path.dirname(os.path.realpath(__file__)) + "/paper.mplstyle"
     plt.style.use(mpl_style_path)
 
     # Plot objective profile
-    fig, ax = plotObjProfile(args.problem, profile_data, args.eig_bound,
-        args.comp_bound, optimizers, legends)
+    fig, ax = plotObjProfile(
+        args.problem, profile_data, args.eig_bound, args.comp_bound, optimizers, legends
+    )
     if len(args.result_folder) == 1:
-        fig.savefig(os.path.join(args.result_folder[0], 
-            "profile_obj_infeas_{:.0e}.pdf".format(args.infeas_tol)), dpi=800)
+        fig.savefig(
+            os.path.join(
+                args.result_folder[0],
+                "profile_obj_infeas_{:.0e}.pdf".format(args.infeas_tol),
+            ),
+            dpi=800,
+        )
     else:
         fig.savefig("profile_obj_infeas_{:.0e}.pdf".format(args.infeas_tol), dpi=800)
 
     # Plot discreteness profile
     fig, ax = plotDiscreteProfile(profile_data, optimizers, legends)
     if len(args.result_folder) == 1:
-        fig.savefig(os.path.join(args.result_folder[0],
-            "profile_dis_infeas_{:.0e}.pdf".format(args.infeas_tol)), dpi=800)
+        fig.savefig(
+            os.path.join(
+                args.result_folder[0],
+                "profile_dis_infeas_{:.0e}.pdf".format(args.infeas_tol),
+            ),
+            dpi=800,
+        )
     else:
         fig.savefig("profile_dis_infeas_{:.0e}.pdf".format(args.infeas_tol), dpi=800)
 
@@ -385,4 +432,4 @@ if __name__ == '__main__':
     if len(args.result_folder) == 1:
         saveTable(physics, args.result_folder[0], args.optimizers)
     else:
-        saveTable(physics, '.', args.optimizers)
+        saveTable(physics, ".", args.optimizers)

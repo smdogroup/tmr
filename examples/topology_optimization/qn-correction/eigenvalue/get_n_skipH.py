@@ -28,21 +28,20 @@ def getDirs(result_folder):
 
     return dirs
 
-if __name__ == '__main__':
 
+if __name__ == "__main__":
     # Argument parser
     p = argparse.ArgumentParser()
-    p.add_argument('--result-folder', type=str, default=['.'])
+    p.add_argument("--result-folder", type=str, default=["."])
     args = p.parse_args()
 
     dirs = getDirs(args.result_folder)
 
     for d in dirs:
-        if 'paroptqn' in d:
-            pklname = os.path.join(args.result_folder, d, 'output_refine0.pkl')
+        if "paroptqn" in d:
+            pklname = os.path.join(args.result_folder, d, "output_refine0.pkl")
 
-            with open(pklname, 'rb') as f:
+            with open(pklname, "rb") as f:
                 pkldict = pickle.load(f)
-                nskipH = pkldict['n_skipH']
-                print("{:<20s}{:<20s}{:<20d}".format(d, 'nskipH', nskipH))
-
+                nskipH = pkldict["n_skipH"]
+                print("{:<20s}{:<20s}{:<20d}".format(d, "nskipH", nskipH))
