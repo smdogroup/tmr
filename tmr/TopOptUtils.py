@@ -955,6 +955,7 @@ def setSurfaceBounds(
     problem.setInitDesignVars(dv, lbvec=lb, ubvec=ub)
     return
 
+
 def createNonDesignMassVec(assembler, names, comm, forest, m0=0.5):
     """
     Create a design vector in ParOptVec type that contains the non-design
@@ -978,8 +979,9 @@ def createNonDesignMassVec(assembler, names, comm, forest, m0=0.5):
         node_octs = node_octs.astype(int)
 
         for i in range(len(node_octs)):
-            if (node_octs[i] >= node_range[mpi_rank]) and \
-               (node_octs[i] < node_range[mpi_rank+1]):
+            if (node_octs[i] >= node_range[mpi_rank]) and (
+                node_octs[i] < node_range[mpi_rank + 1]
+            ):
                 index = int(node_octs[i] - node_range[mpi_rank])
                 mvals[index] = m0
 
