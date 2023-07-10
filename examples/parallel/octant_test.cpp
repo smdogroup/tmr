@@ -436,7 +436,7 @@ int main(int argc, char *argv[]) {
 
     // Write out the solution
     char filename[128];
-    sprintf(filename, "output%d.f5", level);
+    snprintf(filename, sizeof(filename), "output%d.f5", level);
     f5->writeToFile(filename);
     f5->decref();
   }

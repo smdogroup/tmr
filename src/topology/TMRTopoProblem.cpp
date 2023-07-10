@@ -1514,36 +1514,34 @@ void TMRTopoProblem::writeOutput(int iter, ParOptVec *xvec) {
   // Print out the binary STL file for later visualization
   if (prefix) {
     // Write out the file at a cut off of 0.25
-    char *filename = new char[strlen(prefix) + 100];
+    char filename[strlen(prefix) + 100];
 
     for (int k = 0; k < design_vars_per_node; k++) {
       double cutoff = 0.5;
-      sprintf(filename, "%s/levelset05_var%d_binary%04d.bstl", prefix, k,
-              iter_count);
+      snprintf(filename, sizeof(filename),
+               "%s/levelset05_var%d_binary%04d.bstl", prefix, k, iter_count);
 
       // Write the STL file
       filter->writeSTLFile(k, cutoff, filename);
     }
-
-    delete[] filename;
   }
 
   if (prefix) {
     if (f5_frequency > 0 && (iter % f5_frequency) == 0) {
       // Create the filename
-      char *filename = new char[strlen(prefix) + 100];
-      sprintf(filename, "%s/tacs_output%04d.f5", prefix, iter_count);
+      char filename[strlen(prefix) + 100];
+      snprintf(filename, sizeof(filename), "%s/tacs_output%04d.f5", prefix,
+               iter_count);
 
       TACSToFH5 *f5 = new TACSToFH5(assembler, f5_element_type, f5_write_flag);
       f5->incref();
       f5->writeToFile(filename);
       f5->decref();
-      delete[] filename;
     }
 
     if ((buck || freq) && f5_eigen_frequency > 0 &&
         (iter % f5_eigen_frequency) == 0) {
-      char *filename = new char[strlen(prefix) + 100];
+      char filename[strlen(prefix) + 100];
       TACSToFH5 *f5 =
           new TACSToFH5(assembler, f5_eigen_element_type, f5_eigen_write_flag);
       f5->incref();
@@ -1557,8 +1555,9 @@ void TMRTopoProblem::writeOutput(int iter, ParOptVec *xvec) {
             TacsScalar error;
             buck[i]->extractEigenvector(k, tmp, &error);
             assembler->setVariables(tmp);
-            sprintf(filename, "%s/load%d_eigenvector%02d_output%d.f5", prefix,
-                    i, k, iter);
+            snprintf(filename, sizeof(filename),
+                     "%s/load%d_eigenvector%02d_output%d.f5", prefix, i, k,
+                     iter);
             f5->writeToFile(filename);
           }
         }
@@ -1567,15 +1566,13 @@ void TMRTopoProblem::writeOutput(int iter, ParOptVec *xvec) {
           TacsScalar error;
           freq->extractEigenvector(k, tmp, &error);
           assembler->setVariables(tmp);
-          sprintf(filename, "%s/freq_eigenvector%02d_output%d.f5", prefix, k,
-                  iter);
+          snprintf(filename, sizeof(filename),
+                   "%s/freq_eigenvector%02d_output%d.f5", prefix, k, iter);
           f5->writeToFile(filename);
         }
       }
       tmp->decref();
-
       f5->decref();
-      delete[] filename;
     }
   }
 
