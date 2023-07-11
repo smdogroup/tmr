@@ -48,3 +48,13 @@ tmr/*.cpp
 *.STEP
 *.stp
 *.step
+*.egads
+
+# vscode config files
+.vscode/*
+
+# ccls cache files
+.ccls-cache
+
+# macOS file system file
+.DS_Store

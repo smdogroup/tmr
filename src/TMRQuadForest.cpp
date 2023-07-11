@@ -1025,6 +1025,11 @@ int TMRQuadForest::getNodeNumbers(const int **_node_numbers) {
 }
 
 /*
+  Get the number of ext_pre nodes
+*/
+int TMRQuadForest::getExtPreOffset() { return ext_pre_offset; }
+
+/*
   Get the node locations
 */
 int TMRQuadForest::getPoints(TMRPoint **_X) {

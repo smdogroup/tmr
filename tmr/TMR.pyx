@@ -53,6 +53,9 @@ from libc.stdlib cimport malloc, free
 # Import C methods for python
 from cpython cimport PyObject, Py_INCREF
 
+# Include numpy and datatype related definitions
+include "ParOptDefs.pxi"
+
 # Import TACS and ParOpt
 from tacs.TACS cimport *
 from tacs.constitutive cimport *
@@ -3155,6 +3158,9 @@ cdef class QuadForest:
     def getLocalNodeNumber(self, int node):
         return self.ptr.getLocalNodeNumber(node)
 
+    def getExtPreOffset(self):
+        return self.ptr.getExtPreOffset()
+
     def getNodeRange(self):
         """
         getNodeRange(self)
@@ -3743,6 +3749,9 @@ cdef class OctForest:
             conn[i] = _conn[i]
             weights[i] = _weights[i]
         return ptr, conn, weights
+
+    def getExtPreOffset(self):
+        return self.ptr.getExtPreOffset()
 
     def writeToVTK(self, fname):
         """
@@ -4630,6 +4639,17 @@ cdef class TopoFilter:
             self.ptr.setDesignVars(vec.getBVecPtr())
         return
 
+    def getDesignVars(self, Vec vec):
+        """
+        Get the (unfiltered) design variable
+        Args:
+            vec (TACS.Vec): Design variable vector to populate
+        """
+        if self.ptr != NULL:
+            self.ptr.getDesignVars(vec.getBVecPtr())
+            return
+
+
     def addValues(self, Vec vec):
         """
         addValues(self, vec)
@@ -4642,6 +4662,36 @@ cdef class TopoFilter:
         if self.ptr != NULL:
             self.ptr.addValues(vec.getBVecPtr())
         return
+
+    def applyFilter(self, Vec vec_in, Vec vec_out):
+        """
+        applyFilter(self, vec_in, vec_out)
+
+        Apply filter:
+        vec_out = F*vec_in
+
+        Args:
+            vec_in (TACS.Vec): input vector
+            vec_out (TACS.Vec): output vector
+        """
+
+        if self.ptr != NULL:
+            self.ptr.applyFilter(vec_in.getBVecPtr(), vec_out.getBVecPtr())
+
+    def applyTranspose(self, Vec vec_in, Vec vec_out):
+        """
+        applyTranspose(self, vec_in, vec_out)
+
+        Apply filter transpose:
+        vec_out = F^T*vec_in
+
+        Args:
+            vec_in (TACS.Vec): input vector
+            vec_out (TACS.Vec): output vector
+        """
+
+        if self.ptr != NULL:
+            self.ptr.applyTranspose(vec_in.getBVecPtr(), vec_out.getBVecPtr())
 
 cdef class LagrangeFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters):
@@ -5221,6 +5271,23 @@ cdef void objectiveGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
         exit(0)
     return
 
+cdef void qnCorrectionCallback(int ncon, void *func, ParOptVec *_x, ParOptScalar *_z,
+                               ParOptVec *_zw, ParOptVec *_s, ParOptVec *_y):
+    try:
+        x = _init_PVec(_x)
+        z = inplace_array_1d(np.NPY_DOUBLE, ncon, <void*>_z)
+        zw = None
+        if _zw != NULL:
+            zw = _init_PVec(_zw)
+        s = _init_PVec(_s)
+        y = _init_PVec(_y)
+        (<object>func).__call__(x, z, zw, s, y)
+    except:
+        tb = traceback.format_exc()
+        print(tb)
+        exit(0)
+    return
+
 cdef class TopoProblem(ProblemBase):
     """
     Creates and stores information for topology optimization problems
@@ -5230,6 +5297,8 @@ cdef class TopoProblem(ProblemBase):
     cdef object congradfunc
     cdef object objfunc
     cdef object objgradfunc
+    cdef object qncorrectionfunc
+    cdef ParOptVec *xptr
     def __cinit__(self, TopoFilter fltr, pc=None,
                   int gmres_subspace=50, double rtol=1e-9):
         cdef TACSMg *mg = NULL
@@ -5245,8 +5314,12 @@ cdef class TopoProblem(ProblemBase):
         self.congradfunc = None
         self.objfunc = None
         self.objgradfunc = None
+        self.qncorrectionfunc = None
         self.ptr = new TMRTopoProblem(fltr.ptr, mg, gmres_subspace, rtol)
         self.ptr.incref()
+
+        # Pointer to the raw design variable
+        self.xptr = NULL
         return
 
     def __dealloc__(self):
@@ -5548,9 +5621,9 @@ cdef class TopoProblem(ProblemBase):
                                    offset, scale, max_lanczos, eigtol)
         return
 
-    def addConstraintCallback(self, int ncon, confunc, congradfunc):
+    def addConstraintCallback(self, int ncon, int nineq, confunc, congradfunc):
         """
-        addConstraintCallback(self, ncon, confunc, congradfunc)
+        addConstraintCallback(self, ncon, nineq, confunc, congradfunc)
 
         Add a constraint callback to TMRTopoProblem.
 
@@ -5579,8 +5652,23 @@ cdef class TopoProblem(ProblemBase):
         prob = _dynamicTopoProblem(self.ptr)
         self.confunc = confunc
         self.congradfunc = congradfunc
-        prob.addConstraintCallback(ncon, <void*>confunc, constraintCallback,
+        prob.addConstraintCallback(ncon, nineq, <void*>confunc, constraintCallback,
                                    <void*>congradfunc, constraintGradientCallback)
+        return
+
+    def addQnCorrectionCallback(self, int ncon, qncorrectionfunc):
+        """
+        Add a quasi-Newton update correction callback to TMRTopoProblem.
+
+        The argument qncorrectionfunc is a python function that takes the following form:
+
+        qncorrectionfunc(x, z, zw, s, y)
+
+        where: x, zw, s, y are ParOptVec objects, z is an array of ParOptScalar
+        """
+        prob = _dynamicTopoProblem(self.ptr)
+        self.qncorrectionfunc = qncorrectionfunc
+        prob.addQnCorrectionCallback(ncon, <void*>qncorrectionfunc, qnCorrectionCallback)
         return
 
     def setObjective(self, list weights, list funcs=None):
@@ -5749,6 +5837,89 @@ cdef class TopoProblem(ProblemBase):
             raise ValueError(errmsg)
         self.callback = callback
         prob.setOutputCallback(<void*>callback, writeOutputCallback)
+
+    def useQnCorrectionComplianceObj(self):
+        prob = _dynamicTopoProblem(self.ptr)
+        prob.useQnCorrectionComplianceObj()
+        return
+
+    def evalObjCon(self, int ncon, PVec x):
+        """
+        Evaluate the objective and constraint values
+
+        Args:
+            ncon (int): number of constraints
+            x (PVec): ParOpt.PVec class storing the design vector
+
+        Return:
+            fail (int): fail flag
+            fobj (float): the objective value
+            cons (ndarray): the constraint values
+        """
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+
+        cdef ParOptScalar fobj = 0.0
+        cdef ParOptScalar *_cons = <ParOptScalar*> malloc(ncon*sizeof(ParOptScalar))
+
+        fail = 0
+        fail = prob.evalObjCon(x.ptr, &fobj, _cons)
+
+        # Convert _cons to an in-place numpy array
+        _cons_npy = inplace_array_1d(np.NPY_DOUBLE, ncon, <void*>_cons)
+
+        # We make a copy since the original memory will be freed
+        cons = _cons_npy.copy()
+
+        free(_cons)
+
+        # Store the x pointer
+        self.xptr = x.ptr
+
+        return fail, fobj, cons
+
+    def evalObjConGradient(self, PVec x, PVec g, list A):
+        """
+        Evaluate the objective and constraint gradients
+
+        Args:
+            x (PVec): ParOpt.PVec class storing the design vector
+            g (PVec): ParOpt.PVec class storing the objective gradient
+            A (list): list of ParOpt.PVec class storing the constraint gradients
+
+        Return:
+            g (ndarray): the objective gradient
+            A (list): the constraint gradients
+        """
+
+        cdef TMRTopoProblem *prob = NULL
+        prob = _dynamicTopoProblem(self.ptr)
+        if prob == NULL:
+            errmsg = 'Expected TMRTopoProblem got other type'
+            raise ValueError(errmsg)
+
+        fail = 0
+
+        ncon = len(A)
+        cdef ParOptVec** _A = <ParOptVec**> malloc(ncon*sizeof(ParOptVec*))
+        for i in range(ncon):
+            _A[i] = (<PVec>A[i]).ptr
+
+        fail = prob.evalObjConGradient(x.ptr, g.ptr, _A)
+
+        free(_A)
+
+        return fail
+
+    def getDesignVar(self):
+        if(self.xptr):
+            return _init_PVec(self.xptr)
+        else:
+            print("Warning, cannot initialize design variable vector")
+            return None
 
 def setMatchingFaces(model_list, double tol=1e-6):
     """
