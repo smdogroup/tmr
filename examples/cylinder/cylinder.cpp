@@ -480,7 +480,7 @@ int main(int argc, char *argv[]) {
 
       // Write out the solution
       char outfile[128];
-      sprintf(outfile, "solution%02d.f5", iter);
+      snprintf(outfile, sizeof(outfile), "solution%02d.f5", iter);
       f5->writeToFile(outfile);
       f5->decref();
 
@@ -619,7 +619,7 @@ int main(int argc, char *argv[]) {
         tacs[0]->setDesignVars(error, nelems);
         f5 = new TACSToFH5(tacs[0], TACS_SHELL, write_flag);
         f5->incref();
-        sprintf(outfile, "error%02d.f5", iter);
+        snprintf(outfile, sizeof(outfile), "error%02d.f5", iter);
         f5->writeToFile(outfile);
         f5->decref();
 

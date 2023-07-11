@@ -151,6 +151,8 @@ class TMRTopoProblem : public ParOptProblem {
   int useLowerBounds();
   int useUpperBounds();
 
+  ParOptQuasiDefMat *createQuasiDefMat();
+
   // Get the initial variables and bounds
   // ------------------------------------
   void getVarsAndBounds(ParOptVec *x, ParOptVec *lb, ParOptVec *ub);
