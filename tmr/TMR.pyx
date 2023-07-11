@@ -4646,7 +4646,7 @@ cdef class TopoFilter:
             vec (TACS.Vec): Design variable vector to populate
         """
         if self.ptr != NULL:
-            self.ptr.getDesignVars(&vec.ptr)
+            self.ptr.getDesignVars(vec.getBVecPtr())
             return
 
 
@@ -4676,7 +4676,7 @@ cdef class TopoFilter:
         """
 
         if self.ptr != NULL:
-            self.ptr.applyFilter(vec_in.ptr, vec_out.ptr)
+            self.ptr.applyFilter(vec_in.getBVecPtr(), vec_out.getBVecPtr())
 
     def applyTranspose(self, Vec vec_in, Vec vec_out):
         """
@@ -4691,7 +4691,7 @@ cdef class TopoFilter:
         """
 
         if self.ptr != NULL:
-            self.ptr.applyTranspose(vec_in.ptr, vec_out.ptr)
+            self.ptr.applyTranspose(vec_in.getBVecPtr(), vec_out.getBVecPtr())
 
 cdef class LagrangeFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters):

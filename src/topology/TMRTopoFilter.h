@@ -42,7 +42,7 @@ class TMRTopoFilter : public TMREntity {
   virtual void setDesignVars(TACSBVec *vec) = 0;
 
   // Get the unfiltered design variables
-  virtual void getDesignVars(TACSBVec **vec) {
+  virtual void getDesignVars(TACSBVec *vec) {
     fprintf(stderr,
             "TMR Filter Error: getDesignVars() method is not implemented!\n");
   };

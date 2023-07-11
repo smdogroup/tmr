@@ -809,9 +809,11 @@ void TMRHelmholtzPUFilter::setDesignVars(TACSBVec *xvec) {
 }
 
 /*
-  Get the unfiltered design variable
+  Get the unfiltered design variable at the finest level
 */
-void TMRHelmholtzPUFilter::getDesignVars(TACSBVec **xvec) { *xvec = xraw; }
+void TMRHelmholtzPUFilter::getDesignVars(TACSBVec *xvec) {
+  xvec->copyValues(xraw);
+}
 
 /*
   Add values to the output TACSBVec
