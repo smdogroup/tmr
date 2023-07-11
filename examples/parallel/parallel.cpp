@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
   int rank;
   MPI_Comm_rank(comm, &rank);
   char filename[128];
-  sprintf(filename, "parallel%d.dat", rank);
+  snprintf(filename, sizeof(filename), "parallel%d.dat", rank);
   FILE *fp = fopen(filename, "w");
 
   fprintf(fp, "Variables = X, Y\n");

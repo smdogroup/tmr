@@ -79,7 +79,7 @@ jobs:
           make;
           make lib;
 
-          # Install OpenCASCADE 
+          # Install OpenCASCADE
           cd $TMR_DIR/extern;
           wget https://acdl.mit.edu/ESP/otherOCCs/OCC681lin64.tgz;
           tar -zxf OCC681lin64.tgz;
