@@ -2071,10 +2071,12 @@ void TMRTriangularize::frontal(TMRMeshOptions options,
       if (options.write_triangularize_intermediate) {
         char filename[256];
         if (face) {
-          sprintf(filename, "intermediate_triangle%d_iter%d.vtk",
-                  face->getEntityId(), iter);
+          snprintf(filename, sizeof(filename),
+                   "intermediate_triangle%d_iter%d.vtk", face->getEntityId(),
+                   iter);
         } else {
-          sprintf(filename, "intermediate_triangle_iter%d.vtk", iter);
+          snprintf(filename, sizeof(filename),
+                   "intermediate_triangle_iter%d.vtk", iter);
         }
         writeToVTK(filename);
       }

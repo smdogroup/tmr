@@ -351,6 +351,9 @@ TMRHelmholtzPUFilter::TMRHelmholtzPUFilter(int _N, int _nlevels,
   Tinv = NULL;
   y1 = y2 = NULL;
   temp = NULL;
+
+  xraw = assembler[0]->createDesignVec();
+  xraw->incref();
 }
 
 TMRHelmholtzPUFilter::TMRHelmholtzPUFilter(int _N, int _nlevels,
@@ -365,6 +368,9 @@ TMRHelmholtzPUFilter::TMRHelmholtzPUFilter(int _N, int _nlevels,
   Tinv = NULL;
   y1 = y2 = NULL;
   temp = NULL;
+
+  xraw = assembler[0]->createDesignVec();
+  xraw->incref();
 }
 
 /*
@@ -394,6 +400,9 @@ TMRHelmholtzPUFilter::~TMRHelmholtzPUFilter() {
   }
   if (temp) {
     temp->decref();
+  }
+  if (xraw) {
+    xraw->decref();
   }
 }
 
@@ -749,6 +758,7 @@ void TMRHelmholtzPUFilter::kronecker(TACSBVec *c, TACSBVec *x, TACSBVec *y) {
   Set the design variables for each level
 */
 void TMRHelmholtzPUFilter::setDesignVars(TACSBVec *xvec) {
+  xraw->copyValues(xvec);
   const int vpn = assembler[0]->getDesignVarsPerNode();
 
   if (vpn == 1) {
@@ -796,6 +806,13 @@ void TMRHelmholtzPUFilter::setDesignVars(TACSBVec *xvec) {
     // Set the design variable values
     assembler[k + 1]->setDesignVars(x[k + 1]);
   }
+}
+
+/*
+  Get the unfiltered design variable at the finest level
+*/
+void TMRHelmholtzPUFilter::getDesignVars(TACSBVec *xvec) {
+  xvec->copyValues(xraw);
 }
 
 /*

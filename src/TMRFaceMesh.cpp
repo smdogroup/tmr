@@ -713,7 +713,8 @@ void TMRFaceMesh::mesh(TMRMeshOptions options, TMRElementFeatureSize *fs) {
 
       if (options.write_post_smooth_quad) {
         char filename[256];
-        sprintf(filename, "post_smooth_quad%d.vtk", face->getEntityId());
+        snprintf(filename, sizeof(filename), "post_smooth_quad%d.vtk",
+                 face->getEntityId());
         writeToVTK(filename);
       }
     }
@@ -1658,7 +1659,8 @@ void TMRFaceMesh::createUnstructuredMesh(
 
   if (options.write_init_domain_triangle) {
     char filename[256];
-    sprintf(filename, "init_domain_triangle%d.vtk", face->getEntityId());
+    snprintf(filename, sizeof(filename), "init_domain_triangle%d.vtk",
+             face->getEntityId());
     tri->writeToVTK(filename);
   }
 
@@ -1672,7 +1674,8 @@ void TMRFaceMesh::createUnstructuredMesh(
 
   if (options.write_pre_smooth_triangle) {
     char filename[256];
-    sprintf(filename, "pre_smooth_triangle%d.vtk", face->getEntityId());
+    snprintf(filename, sizeof(filename), "pre_smooth_triangle%d.vtk",
+             face->getEntityId());
     tri->writeToVTK(filename);
   }
 
@@ -1706,7 +1709,8 @@ void TMRFaceMesh::createUnstructuredMesh(
 
     if (options.write_post_smooth_triangle) {
       char filename[256];
-      sprintf(filename, "post_smooth_triangle%d.vtk", face->getEntityId());
+      snprintf(filename, sizeof(filename), "post_smooth_triangle%d.vtk",
+               face->getEntityId());
       writeTrisToVTK(filename, *ntris, *mesh_tris);
     }
 
@@ -1737,7 +1741,8 @@ void TMRFaceMesh::createUnstructuredMesh(
 
       if (options.write_pre_smooth_quad) {
         char filename[256];
-        sprintf(filename, "pre_smooth_quad%d.vtk", face->getEntityId());
+        snprintf(filename, sizeof(filename), "pre_smooth_quad%d.vtk",
+                 face->getEntityId());
         writeToVTK(filename);
       }
 
@@ -1750,7 +1755,8 @@ void TMRFaceMesh::createUnstructuredMesh(
                                    &quad_edges, &quad_neighbors, &quad_dual);
 
         char filename[256];
-        sprintf(filename, "quad_dual%d.vtk", face->getEntityId());
+        snprintf(filename, sizeof(filename), "quad_dual%d.vtk",
+                 face->getEntityId());
         writeDualToVTK(filename, 4, *nquads, *mesh_quads, num_quad_edges,
                        quad_dual, *Xpts);
 
@@ -2453,7 +2459,8 @@ void TMRFaceMesh::recombine(int ntris, const int triangles[],
   // Write the dual mesh to a file
   if (options.write_dual_recombine) {
     char filename[256];
-    sprintf(filename, "dual_recombine%d.vtk", face->getEntityId());
+    snprintf(filename, sizeof(filename), "dual_recombine%d.vtk",
+             face->getEntityId());
     writeDualToVTK(filename, 3, ntris, triangles, num_dual_edges, graph_edges,
                    X);
   }
