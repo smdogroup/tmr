@@ -46,6 +46,7 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepBuilderAPI_Sewing.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck.hxx>
 #include <BRepCheck_Analyzer.hxx>
@@ -83,6 +84,7 @@
 #include <IGESControl_Controller.hxx>
 #include <IGESControl_Reader.hxx>
 #include <IGESControl_Writer.hxx>
+#include <Interface_Static.hxx>
 #include <Precision.hxx>
 #include <STEPControl_Reader.hxx>
 #include <STEPControl_StepModelType.hxx>
@@ -92,6 +94,7 @@
 #include <ShapeConstruct_Curve.hxx>
 #include <ShapeFix.hxx>
 #include <ShapeFix_Shape.hxx>
+#include <ShapeFix_Wireframe.hxx>
 #include <ShapeUpgrade_ShapeDivideClosed.hxx>
 #include <Standard.hxx>
 #include <Standard_ErrorHandler.hxx>
@@ -172,8 +175,14 @@ class TMR_OCCFace : public TMRFace {
 /*
   Initialization of the OpenCascade geometry from an IGES/STEP files
 */
-TMRModel *TMR_LoadModelFromIGESFile(const char *filename, int print_level = 0);
-TMRModel *TMR_LoadModelFromSTEPFile(const char *filename, int print_level = 0);
+void TMR_SewModelIGES(char *filename, const char *units, int print_level = 0,
+                      double sew_tol = 1.e-6, bool nonmanifold_mode = false);
+void TMR_SewModelSTEP(char *filename, const char *units, int print_level = 0,
+                      double sew_tol = 1.e-6, bool nonmanifold_mode = false);
+TMRModel *TMR_LoadModelFromIGESFile(const char *filename, const char *units,
+                                    int print_level = 0);
+TMRModel *TMR_LoadModelFromSTEPFile(const char *filename, const char *units,
+                                    int print_level = 0);
 TMRModel *TMR_LoadModelFromCompound(TopoDS_Compound &compound,
                                     int print_level = 0);
 

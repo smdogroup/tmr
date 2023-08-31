@@ -210,7 +210,7 @@ static TacsScalar computeJacobianTrans2D(const TacsScalar Xpts[],
 
   // Compute the cross-product with the normal
   crossProduct(&Xd[0], &Xd[3], &Xd[6]);
-  vec3Scale(1.0 / sqrt(vec3Dot(&Xd[6], &Xd[6])), &Xd[6]);
+  vec3Normalize(&Xd[6]);
 
   // Compute the transpose of the Jacobian transformation
   return inv3x3(Xd, J);
@@ -713,7 +713,7 @@ static void computeElemRecon2D(const int vars_per_node, TMRQuadForest *forest,
       d1[0] = Xd[0];
       d1[1] = Xd[1];
       d1[2] = Xd[2];
-      vec3Scale(1.0 / sqrt(vec3Dot(d1, d1)), d1);
+      vec3Normalize(d1);
 
       // Compute d2 = n x d1
       crossProduct(&Xd[6], d1, d2);
@@ -2835,7 +2835,9 @@ void createPartUnityVector(TMRQuadForest *pu, TACSBVec **pu_vec) {
 }
 
 /*
-  Refine the mesh using the original solution and the adjoint solution
+  Estimate error in a functional output using an adjoint-weighted residual.
+
+  Assumes steady solution, transient problems not yet supported.
 
   input:
   forest:           the forest of quadtrees
@@ -2847,186 +2849,212 @@ void createPartUnityVector(TMRQuadForest *pu, TACSBVec **pu_vec) {
                     solutions computed in some manner
 
   output:
-  adj_corr:      adjoint-based functional correction
+  node_error:       the node-wise error indicators
+  elem_error:       the localized element-wise error indicators
+  adj_corr:         adjoint-based functional output correction
 
   returns:
-  absolute functional error estimate
+  absolute functional output error estimate
 */
 double TMR_AdjointErrorEst(TMRQuadForest *forest, TACSAssembler *tacs,
                            TMRQuadForest *forest_refined,
                            TACSAssembler *tacs_refined,
                            TACSBVec *solution_refined,
-                           TACSBVec *adjoint_refined, double *error,
-                           double *adj_corr) {
-  /*
-    // The maximum number of nodes
-    const int max_num_nodes = MAX_ORDER*MAX_ORDER;
+                           TACSBVec *adjoint_refined, double *node_error,
+                           double *elem_error, double *adj_corr) {
+  // The maximum number of nodes
+  const int max_num_nodes = MAX_ORDER * MAX_ORDER;
 
-    // Get the number of variables per node
-    const int vars_per_node = tacs->getVarsPerNode();
+  // Get the number of variables per node
+  const int vars_per_node = tacs->getVarsPerNode();
 
-    // Get the order of the mesh and the number of enrichment shape functions
-    const double *refined_knots;
-    const int refined_order = forest_refined->getInterpKnots(&refined_knots);
-    const int num_refined_nodes = refined_order*refined_order;
+  // Get the order of the mesh and the number of enrichment shape functions
+  const double *refined_knots;
+  const int refined_order = forest_refined->getInterpKnots(&refined_knots);
+  const int num_refined_nodes = refined_order * refined_order;
 
-    // Perform a local refinement of the nodes based on the strain energy
-    // within each element
-    const int nelems = tacs->getNumElements();
+  // Get the number of elements in the coarse/refined mesh
+  const int nelems = tacs->getNumElements();
 
-    // Get the communicator
-    MPI_Comm comm = tacs->getMPIComm();
+  // Get the communicator
+  MPI_Comm comm = tacs->getMPIComm();
 
-    // Allocate the element arrays needed for the reconstruction
-    TacsScalar *vars_interp = new TacsScalar[ vars_per_node*num_refined_nodes ];
-    TacsScalar *adj_interp = new TacsScalar[ vars_per_node*num_refined_nodes ];
+  // Allocate the element arrays needed for the adjoint-weighted residual
+  TacsScalar *vars_refined = new TacsScalar[vars_per_node * num_refined_nodes];
+  TacsScalar *dvars_refined = new TacsScalar[vars_per_node * num_refined_nodes];
+  TacsScalar *ddvars_refined =
+      new TacsScalar[vars_per_node * num_refined_nodes];
+  TacsScalar *adj_refined = new TacsScalar[vars_per_node * num_refined_nodes];
+  TacsScalar *res_refined = new TacsScalar[vars_per_node * num_refined_nodes];
+  memset(dvars_refined, 0,
+         vars_per_node * num_refined_nodes * sizeof(TacsScalar));
+  memset(ddvars_refined, 0,
+         vars_per_node * num_refined_nodes * sizeof(TacsScalar));
 
-    // Allocate the nodal error estimates array
-    TacsScalar *err = new TacsScalar[ num_refined_nodes ];
-    TacsScalar pu_err[4];
+  // Allocate arrays for storing the nodal error esimates and nodal
+  // element counts - updated per element
+  TacsScalar *err = new TacsScalar[num_refined_nodes];
+  TacsScalar *weights = new TacsScalar[num_refined_nodes];
 
-    // Keep track of the total error remaining from each element
-    // indicator and the adjoint error correction
-    TacsScalar total_adjoint_corr = 0.0;
+  // Keep track of the total output functional error estimate and the total
+  // output functional correction terms
+  TacsScalar total_error_est = 0.0;
+  TacsScalar total_output_corr = 0.0;
 
-    // Create the partition of unity
-    TMRQuadForest *pu = NULL;
-    if (forest->getMeshOrder() > 2){
-      pu = forest->duplicate();
-      pu->incref();
-      pu->setMeshOrder(2);
-      pu->createNodes();
-    }
-    else {
-      pu = forest;
-      pu->incref();
-    }
+  // Create a distributed vector for the nodal error estimates
+  TACSNodeMap *refined_map = tacs_refined->getNodeMap();
+  TACSBVecDistribute *refined_dist = tacs_refined->getBVecDistribute();
+  TACSBVecDepNodes *refined_dep_nodes = tacs_refined->getBVecDepNodes();
+  TACSBVec *nodal_error =
+      new TACSBVec(refined_map, 1, refined_dist, refined_dep_nodes);
+  nodal_error->incref();
+  nodal_error->zeroEntries();
 
-    // Create a vector for the predicted nodal errors.
-    TACSBVec *nodal_error;
-    createPartUnityVector(pu, &nodal_error);
-    nodal_error->incref();
+  // Create a distributed vector for the element count of each node
+  // This is used for error localization from the nodes to the elements
+  TACSBVec *nodal_weights =
+      new TACSBVec(refined_map, 1, refined_dist, refined_dep_nodes);
+  nodal_weights->incref();
+  computeLocalWeights(tacs_refined, nodal_weights);
 
-    // Distribute the values for the adjoint/solution
-    solution_refined->beginDistributeValues();
-    adjoint_refined->beginDistributeValues();
-    solution_refined->endDistributeValues();
-    adjoint_refined->endDistributeValues();
+  // Distribute the values for the adjoint/solution
+  solution_refined->beginDistributeValues();
+  adjoint_refined->beginDistributeValues();
+  solution_refined->endDistributeValues();
+  adjoint_refined->endDistributeValues();
 
-    // Get the auxiliary elements (surface tractions) associated with
-    // the element class
-    TACSAuxElements *aux_elements = tacs_refined->getAuxElements();
-    int num_aux_elems = 0;
-    TACSAuxElem *aux = NULL;
-    if (aux_elements){
-      aux_elements->sort();
-      num_aux_elems = aux_elements->getAuxElements(&aux);
-    }
+  // Get the auxiliary elements defined in the problem
+  TACSAuxElements *aux_elements = tacs_refined->getAuxElements();
+  int num_aux_elems = 0;
+  TACSAuxElem *aux = NULL;
+  if (aux_elements) {
+    aux_elements->sort();
+    num_aux_elems = aux_elements->getAuxElements(&aux);
+  }
 
-    // Get the partition of unity connectivity
-    const int *pu_conn;
-    pu->getNodeConn(&pu_conn);
+  // Compute the nodal error estimates using an adjoint-weighted residual for
+  // each element on this proc
+  int aux_count = 0;
+  for (int elem = 0; elem < nelems; elem++) {
+    // Set the simulation time
+    double time = 0.0;
 
-    // Compute the residual on the refined mesh with the interpolated
-    // variables.
-    int aux_count = 0;
-    for ( int elem = 0; elem < nelems; elem++ ){
-      // Set the simulation time
-      double time = 0.0;
+    // Get the node numbers for this element in the refined mesh
+    int nnodes = 0;
+    const int *node_inds;
+    tacs_refined->getElement(elem, &nnodes, &node_inds);
 
-      // Get the node numbers for the refined mesh
-      int refine_len = 0;
-      const int *refine_nodes;
-      tacs_refined->getElement(elem, &refine_nodes, &refine_len);
+    // Get the node locations for this element
+    TacsScalar Xpts[3 * max_num_nodes];
+    TACSElement *element = tacs_refined->getElement(elem, Xpts);
 
-      // Get the node locations
-      TacsScalar Xpts[3*max_num_nodes];
-      TACSElement *element = tacs_refined->getElement(elem, Xpts);
+    // Get the state and adjoint variables for this element
+    solution_refined->getValues(nnodes, node_inds, vars_refined);
+    adjoint_refined->getValues(nnodes, node_inds, adj_refined);
 
-      // Get the adjoint variables for this element
-      solution_refined->getValues(refine_len, refine_nodes, vars_interp);
-      adjoint_refined->getValues(refine_len, refine_nodes, adj_interp);
+    // Compute the residual on the element
+    memset(err, 0, nnodes * sizeof(TacsScalar));
+    memset(res_refined, 0, nnodes * vars_per_node * sizeof(TacsScalar));
+    element->addResidual(elem, time, Xpts, vars_refined, dvars_refined,
+                         ddvars_refined, res_refined);
 
-      // Compute the localized error on the refined mesh
-      memset(err, 0, element->getNumNodes()*sizeof(TacsScalar));
-      element->addLocalizedError(time, err, adj_interp,
-                                 Xpts, vars_interp);
-
-      // Add the contribution from any forces
-      while (aux_count < num_aux_elems && aux[aux_count].num == elem){
-        aux[aux_count].elem->addLocalizedError(time, err, adj_interp,
-                                               Xpts, vars_interp);
-        aux_count++;
+    // Compute the nodal error estimates with the adjoint-weighted residual
+    for (int inode = 0; inode < nnodes; inode++) {
+      for (int ivar = 0; ivar < vars_per_node; ivar++) {
+        int ind = vars_per_node * inode + ivar;
+        err[inode] += -1. * (res_refined[ind] * adj_refined[ind]);
       }
+    }
 
-      // Add up the total adjoint correction
-      for ( int j = 0; j < 2; j++ ){
-        for ( int i = 0; i < 2; i++ ){
-          int node = (i*(refined_order-1) +
-                      j*refined_order*(refined_order-1));
-          total_adjoint_corr += TacsRealPart(err[node]);
-          pu_err[i + 2*j] = err[node];
+    // Add the contribution from any loads - opposite sign for error
+    // contribution
+    while (aux_count < num_aux_elems && aux[aux_count].num == elem) {
+      memset(res_refined, 0, nnodes * vars_per_node * sizeof(TacsScalar));
+      aux[aux_count].elem->addResidual(elem, time, Xpts, vars_refined,
+                                       dvars_refined, ddvars_refined,
+                                       res_refined);
+      for (int inode = 0; inode < nnodes; inode++) {
+        for (int ivar = 0; ivar < vars_per_node; ivar++) {
+          int ind = vars_per_node * inode + ivar;
+          err[inode] += 1. * (res_refined[ind] * adj_refined[ind]);
         }
       }
-
-      // Add the contributions to the nodal error
-      nodal_error->setValues(4, &pu_conn[4*elem], pu_err, TACS_ADD_VALUES);
+      aux_count++;
     }
 
-    // Finish setting the values into the nodal error array
-    nodal_error->beginSetValues(TACS_ADD_VALUES);
-    nodal_error->endSetValues(TACS_ADD_VALUES);
+    // Add the nodal errors to the total output functional correction term
+    for (int i = 0; i < nnodes; i++) total_output_corr += TacsRealPart(err[i]);
 
-    // Distribute the values back to all nodes
-    nodal_error->beginDistributeValues();
-    nodal_error->endDistributeValues();
+    // Add the nodal errors from this element to the nodal error vector
+    nodal_error->setValues(nnodes, node_inds, err, TACS_ADD_VALUES);
+  }
 
-    // Finish setting the values into the array
-    double total_error_remain = 0.0;
-    for ( int elem = 0; elem < nelems; elem++ ){
-      // Get the error for this mesh
-      nodal_error->getValues(4, &pu_conn[4*elem], pu_err);
+  // Finish setting the values into the nodal error array
+  nodal_error->beginSetValues(TACS_ADD_VALUES);
+  nodal_error->endSetValues(TACS_ADD_VALUES);
 
-      // Compute the element indicator error as a function of the nodal
-      // error estimate.
-      error[elem] = 0.0;
-      for ( int i = 0; i < 4; i++ ){
-        error[elem] += TacsRealPart(pu_err[i]);
+  // Distribute the values back to all nodes
+  nodal_error->beginDistributeValues();
+  nodal_error->endDistributeValues();
+
+  // Localize the error from the nodes to the elements with an equal split
+  for (int elem = 0; elem < nelems; elem++) {
+    // Get the node numbers for this element in the refined mesh
+    int nnodes = 0;
+    const int *node_inds;
+    tacs_refined->getElement(elem, &nnodes, &node_inds);
+
+    // Get the errors and element counts for the nodes of this element
+    nodal_error->getValues(nnodes, node_inds, err);
+    nodal_weights->getValues(nnodes, node_inds, weights);
+
+    // Compute the element indicator error as a function of the nodal
+    // error estimate.
+    elem_error[elem] = 0.0;
+    for (int i = 0; i < nnodes; i++) {
+      if (node_inds[i] < 0) {
+        // skip dependent nodes - handled in beginSetValues() with dep weights
+        continue;
       }
-      error[elem] = 0.25*fabs(error[elem]);
+      elem_error[elem] += fabs(TacsRealPart(err[i])) / weights[i];
     }
+  }
 
-    // Add up the absolute value of the total nodal error contributions
-    TacsScalar *nerr;
-    int size = nodal_error->getArray(&nerr);
-    for ( int i = 0; i < size; i++ ){
-      total_error_remain += fabs(TacsRealPart(nerr[i]));
-    }
+  // Add up the absolute value of the nodal errors to get the output
+  // functional error
+  TacsScalar *nerr;
+  int size = nodal_error->getArray(&nerr);
+  memcpy(node_error, nerr, size * sizeof(double));
+  for (int i = 0; i < size; i++) {
+    total_error_est += fabs(TacsRealPart(nerr[i]));
+  }
 
-    // Sum up the contributions across all processors
-    double temp[2];
-    temp[0] = total_error_remain;
-    temp[1] = total_adjoint_corr;
-    MPI_Allreduce(MPI_IN_PLACE, temp, 2, MPI_DOUBLE, MPI_SUM, comm);
-    total_error_remain = temp[0];
-    total_adjoint_corr = temp[1];
+  // Sum up the contributions across all processors
+  double temp[2];
+  temp[0] = total_error_est;
+  temp[1] = total_output_corr;
+  MPI_Allreduce(MPI_IN_PLACE, temp, 2, MPI_DOUBLE, MPI_SUM, comm);
+  total_error_est = temp[0];
+  total_output_corr = temp[1];
 
-    // Free the data that is no longer required
-    delete [] vars_interp;
-    delete [] adj_interp;
-    delete [] err;
-    pu->decref();
-    nodal_error->decref();
+  // Free the data that is no longer required
+  delete[] vars_refined;
+  delete[] dvars_refined;
+  delete[] ddvars_refined;
+  delete[] adj_refined;
+  delete[] res_refined;
+  delete[] err;
+  delete[] weights;
+  nodal_error->decref();
+  nodal_weights->decref();
 
-    // Set the adjoint residual correction
-    if (adj_corr){
-      *adj_corr = total_adjoint_corr;
-    }
+  // Set the adjoint residual correction
+  if (adj_corr) {
+    *adj_corr = total_output_corr;
+  }
 
-    // Return the error
-    return total_error_remain;
-  */
-  return 0.0;
+  // Return the error
+  return total_error_est;
 }
 
 /*
