@@ -172,7 +172,9 @@ TMRTopoProblem::TMRTopoProblem(TMRTopoFilter *_filter, TACSMg *_mg,
 
   // The multigrid object
   mg = _mg;
-  mg->incref();
+  if (mg) {
+    mg->incref();
+  }
 
   // Set the number of variables per node
   design_vars_per_node = assembler->getDesignVarsPerNode();
@@ -192,13 +194,17 @@ TMRTopoProblem::TMRTopoProblem(TMRTopoFilter *_filter, TACSMg *_mg,
   MPI_Comm_rank(assembler->getMPIComm(), &mpi_rank);
 
   // Set up the solver
-  int nrestart = 5;
-  int is_flexible = 0;
-  double atol = 1e-30;
-  ksm = new GMRES(mg->getMat(0), mg, gmres_iters, nrestart, is_flexible);
-  ksm->incref();
-  ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
-  ksm->setTolerances(rtol, atol);
+  if (mg) {
+    int nrestart = 5;
+    int is_flexible = 0;
+    double atol = 1e-30;
+    ksm = new GMRES(mg->getMat(0), mg, gmres_iters, nrestart, is_flexible);
+    ksm->incref();
+    ksm->setMonitor(new KSMPrintStdout("GMRES", mpi_rank, 10));
+    ksm->setTolerances(rtol, atol);
+  } else {
+    ksm = NULL;
+  }
 
   // Set the iteration count
   iter_count = 0;
@@ -252,6 +258,7 @@ TMRTopoProblem::TMRTopoProblem(TMRTopoFilter *_filter, TACSMg *_mg,
   writeOutputCallback = NULL;
 
   num_callback_constraints = 0;
+  num_callback_ineq_constraints = 0;
   constraint_callback_ptr = NULL;
   constraintCallback = NULL;
   constraint_gradient_callback_ptr = NULL;
@@ -260,6 +267,19 @@ TMRTopoProblem::TMRTopoProblem(TMRTopoFilter *_filter, TACSMg *_mg,
   objectiveCallback = NULL;
   objective_gradient_callback_ptr = NULL;
   objectiveGradientCallback = NULL;
+  qn_correction_callback_ptr = NULL;
+  qn_correction_callback_zlen = 0;
+  qnCorrectionCallback = NULL;
+
+  // By default, we don't use quasi-Newton update correction
+  use_qn_correction_comp_obj = 0;
+
+  // Set default finite difference step
+  dh_Kmat_2nd_deriv = 1e-6;
+
+  proj_deriv = NULL;
+  x_h = NULL;
+  s_temp = NULL;
 }
 
 /*
@@ -282,8 +302,12 @@ TMRTopoProblem::~TMRTopoProblem() {
   }
 
   // Free the solver/multigrid information
-  mg->decref();
-  ksm->decref();
+  if (mg) {
+    mg->decref();
+  }
+  if (ksm) {
+    ksm->decref();
+  }
 
   dfdu->decref();
   adjoint->decref();
@@ -349,6 +373,13 @@ TMRTopoProblem::~TMRTopoProblem() {
         obj_funcs[i]->decref();
       }
     }
+  }
+
+  // Free extra vectors for qn update correction
+  if (use_qn_correction_comp_obj) {
+    proj_deriv->decref();
+    x_h->decref();
+    s_temp->decref();
   }
 }
 
@@ -416,6 +447,13 @@ void TMRTopoProblem::setPrefix(const char *_prefix) {
   Set the load cases for each problem
 */
 void TMRTopoProblem::setLoadCases(TACSBVec **_forces, int _num_load_cases) {
+  if (!mg) {
+    fprintf(stderr,
+            "TMRTopoProblem: Cannot call setLoadCases, multigrid object not "
+            "defined\n");
+    return;
+  }
+
   // Pre-incref the input forces
   for (int i = 0; i < _num_load_cases; i++) {
     if (_forces[i]) {
@@ -572,6 +610,13 @@ void TMRTopoProblem::addFrequencyConstraint(
     TacsScalar scale, int max_subspace_size, double eigtol, int use_jd,
     int fgmres_size, double eig_rtol, double eig_atol, int num_recycle,
     JDRecycleType recycle_type) {
+  if (!mg) {
+    fprintf(stderr,
+            "TMRTopoProblem: Cannot call addFrequencyConstraint, multigrid "
+            "object not defined\n");
+    return;
+  }
+
   if (!freq) {
     // Create a mass matrix for the frequency constraint
     TACSMat *mmat = assembler->createMat();
@@ -613,6 +658,13 @@ void TMRTopoProblem::addBucklingConstraint(double sigma, int num_eigvals,
                                            TacsScalar ks_weight,
                                            TacsScalar offset, TacsScalar scale,
                                            int max_lanczos, double eigtol) {
+  if (!mg) {
+    fprintf(stderr,
+            "TMRTopoProblem: Cannot call addBucklingConstraint, multigrid "
+            "object not defined\n");
+    return;
+  }
+
   if (!buck) {
     // Create a geometric stiffness matrix for buckling constraint
     TACSMat *gmat = assembler->createMat();
@@ -645,16 +697,31 @@ void TMRTopoProblem::addBucklingConstraint(double sigma, int num_eigvals,
   Add callback constraint and constraint gradient calls
 */
 void TMRTopoProblem::addConstraintCallback(
-    int ncon, void *con_ptr,
+    int ncon, int nineq, void *con_ptr,
     void (*confunc)(void *, TMRTopoFilter *, TACSMg *, int, TacsScalar *),
     void *con_grad_ptr,
     void (*congradfunc)(void *, TMRTopoFilter *, TACSMg *, int, TACSBVec **)) {
   if (ncon > 0 && confunc && congradfunc) {
     num_callback_constraints = ncon;
+    num_callback_ineq_constraints = nineq;
     constraint_callback_ptr = con_ptr;
     constraintCallback = confunc;
     constraint_gradient_callback_ptr = con_grad_ptr;
     constraintGradientCallback = congradfunc;
+  }
+}
+
+/*
+  Add quasi-Newton update correction callback calls
+*/
+void TMRTopoProblem::addQnCorrectionCallback(
+    int ncon, void *callback_ptr,
+    void (*callback_fun)(int, void *, ParOptVec *, ParOptScalar *, ParOptVec *,
+                         ParOptVec *, ParOptVec *)) {
+  if (callback_ptr) {
+    qn_correction_callback_zlen = ncon;
+    qn_correction_callback_ptr = callback_ptr;
+    qnCorrectionCallback = callback_fun;
   }
 }
 
@@ -750,7 +817,11 @@ void TMRTopoProblem::initialize() {
     nwblock = 1;
   }
 
-  setProblemSizes(nvars, num_constraints, num_constraints, nw, nwblock);
+  int num_eq = num_callback_constraints - num_callback_ineq_constraints;
+  int num_ineq = num_constraints - num_eq;
+
+  setProblemSizes(nvars, num_constraints, nw);
+  setNumInequalities(num_ineq, nwblock);
 }
 
 /*
@@ -823,6 +894,15 @@ int TMRTopoProblem::useUpperBounds() {
     return 0;
   }
   return 1;
+}
+
+// TODO: Is this right?
+ParOptQuasiDefMat *TMRTopoProblem::createQuasiDefMat() {
+  int nwblock = 0;
+  if (design_vars_per_node > 1) {
+    nwblock = 1;
+  }
+  return new ParOptQuasiDefBlockMat(this, nwblock);
 }
 
 /*
@@ -911,7 +991,7 @@ int TMRTopoProblem::evalObjCon(ParOptVec *pxvec, ParOptScalar *fobj,
     *fobj = fcallback;
   }
 
-  if (num_load_cases > 0) {
+  if (num_load_cases > 0 && mg) {
     // Zero the variables
     assembler->zeroVariables();
 
@@ -1070,7 +1150,8 @@ int TMRTopoProblem::evalObjCon(ParOptVec *pxvec, ParOptScalar *fobj,
           err_count = 0;
 
           // Solve the eigenvalue problem
-          buck[i]->solve(forces[i], new KSMPrintStdout("KSM", mpi_rank, 1));
+          TACSBVec *u0 = NULL;  // TODO: Is this right? do we need a u0? --Aaron
+          buck[i]->solve(forces[i], u0, new KSMPrintStdout("KSM", mpi_rank, 1));
 
           // Extract the first k eigenvalues
           for (int k = 0; k < num_buck_eigvals; k++) {
@@ -1144,15 +1225,26 @@ int TMRTopoProblem::evalObjConGradient(ParOptVec *xvec, ParOptVec *gvec,
     TACSBVec *g = wrap->vec;
     g->zeroEntries();
 
+    // // Add non-design mass to mass matrix, if specified
+    // if (m0vec){
+    //   m0vec->axpy(1.0, xvec);
+    //   setDesignVars(m0vec);
+    // }
+
     // Evaluate the gradient of the objective function from the callback
     if (objectiveGradientCallback) {
       objectiveGradientCallback(objective_gradient_callback_ptr, filter, mg, g);
     }
 
+    // // Reset design variable if having non-design mass
+    // if (m0vec){
+    //   setDesignVars(xvec);
+    // }
+
     // Evaluate the gradient of the objective. If no objective functions are
     // set, the weighted sum of the compliance is used. Otherwise the weighted
     // sum of the objective functions from each load case are used
-    if (obj_funcs) {
+    if (obj_funcs && mg) {
       for (int i = 0; i < num_load_cases; i++) {
         assembler->setVariables(vars[i]);
 
@@ -1188,7 +1280,15 @@ int TMRTopoProblem::evalObjConGradient(ParOptVec *xvec, ParOptVec *gvec,
       }
     }
 
-    filter->addValues(g);
+    double gnorm = g->norm();
+    filter->addValues(g);  // Apply filter transpose to the gradient
+    double fgnorm = g->norm();
+    if (mpi_rank == 0) {
+      printf("[TMRTopoProblem]unfiltered objective gradient norm: %20.10e\n",
+             gnorm);
+      printf("[TMRTopoProblem]filtered objective gradient norm:   %20.10e\n",
+             fgnorm);
+    }
   } else {
     return 1;
   }
@@ -1376,12 +1476,152 @@ int TMRTopoProblem::evalObjConGradient(ParOptVec *xvec, ParOptVec *gvec,
                                num_callback_constraints, vecs);
 
     for (int i = 0; i < num_callback_constraints; i++) {
+      double vi_norm = vecs[i]->norm();
       filter->addValues(vecs[i]);
+      double fvi_norm = vecs[i]->norm();
+      if (mpi_rank == 0) {
+        printf("[TMRTopoProblem]unfiltered constraint gradient norm: %20.10e\n",
+               vi_norm);
+        printf("[TMRTopoProblem]filtered constraint gradient norm:   %20.10e\n",
+               fvi_norm);
+      }
     }
     delete[] vecs;
   }
 
   return 0;
+}
+
+// Switch on quasi-Newton correction for compliance objective
+// Note that this can be called only once, otherwise will
+// encounter memory leak for extra vectors.
+// ----------------------------------------------------------
+void TMRTopoProblem::useQnCorrectionComplianceObj() {
+  // Switch on the flag
+  use_qn_correction_comp_obj = 1;
+
+  // Create space for extra vectors
+  proj_deriv = createDesignVec();
+  proj_deriv->incref();
+  x_h = createDesignVec();
+  x_h->incref();
+  s_temp = createDesignVec();
+  s_temp->incref();
+  return;
+}
+
+// Compute a correction to the quasi-Newton update
+// -----------------------------------------------
+void TMRTopoProblem::computeQuasiNewtonUpdateCorrection(
+    ParOptVec *x, ParOptScalar *z, ParOptVec *zw, ParOptVec *s, ParOptVec *y) {
+  // Get processor rank
+  int rank = 0;
+  MPI_Comm_rank(assembler->getMPIComm(), &rank);
+
+  // Perform the correction via callback, if any
+  if (qnCorrectionCallback) {
+    qnCorrectionCallback(ncon, qn_correction_callback_ptr, x, z, zw, s, y);
+  }
+
+  /*
+    Perform quasi-Newton update correction for compliance objective
+
+    The exact Hessian of the compliance is composed of the difference
+    between two contributions:
+
+    H = P - N
+
+    Here P is a positive-definite term while N is positive semi-definite.
+    Since the true Hessian is a difference between the two, the quasi-Newton
+    Hessian update can be written as:
+
+    H*s = y = P*s - N*s
+
+    This often leads to damped update steps as the optimization converges.
+    Instead, we want to approximate just P, so  we modify y so that
+
+    ymod ~ P*s = (H + N)*s ~ y + N*s
+  */
+  if (use_qn_correction_comp_obj) {
+    // Zero out the vector that stores projected derivative
+    proj_deriv->zeroEntries();
+    ParOptBVecWrap *proj_deriv_wrap =
+        dynamic_cast<ParOptBVecWrap *>(proj_deriv);
+
+    //[Test] Update design variable back to x and solve the system again
+    // setDesignVars(x);
+    // for ( int i = 0; i < num_load_cases; i++ ){
+    //   if (forces[i]){
+    //     ksm->solve(forces[i], vars[i]);
+    //     assembler->setBCs(vars[i]);
+    //     assembler->setVariables(vars[i]);
+    //   }
+    // }
+
+    // Compute first derivative at x
+    if (proj_deriv_wrap) {
+      for (int i = 0; i < num_load_cases; i++) {
+        // assembler->setVariables(vars[i]);
+        assembler->addAdjointResProducts(-obj_weights[i], 1, &vars[i],
+                                         &proj_deriv_wrap->vec);
+      }
+    }
+
+    double gx = proj_deriv->norm();
+    if (rank == 0) printf("Qn correction: norm of g(x)    = %.5e\n", gx);
+
+    // Update design variable: x <-- x + h*s
+    x_h->copyValues(x);
+    x_h->axpy(dh_Kmat_2nd_deriv, s);
+    setDesignVars(x_h);
+
+    // Compute first derivative at x + h*s
+    if (proj_deriv_wrap) {
+      for (int i = 0; i < num_load_cases; i++) {
+        // assembler->setVariables(vars[i]);
+        assembler->addAdjointResProducts(obj_weights[i], 1, &vars[i],
+                                         &proj_deriv_wrap->vec);
+      }
+    }
+
+    double dgx = proj_deriv->norm();
+    if (rank == 0) printf("Qn correction: norm of dg(x)   = %.5e\n", dgx);
+
+    // Divide by h so we get projected derivative by finite differencing
+    proj_deriv->scale(1 / dh_Kmat_2nd_deriv);
+
+    double dgxdh = proj_deriv->norm();
+    if (rank == 0) printf("Qn correction: norm of dg(x)/dh= %.5e\n", dgxdh);
+
+    // Apply filter transpose to projected derivative
+    filter->addValues(proj_deriv_wrap->vec);
+    // filter->applyTranspose(proj_deriv_wrap->vec, proj_deriv_wrap->vec);  //
+    // Same as addValues()
+
+    double xval = x->norm();
+    double sval = s->norm();
+    double yyal = y->norm();
+    double yup = proj_deriv->norm();
+    if (rank == 0) {
+      printf("Qn correction: norm of x       = %.5e\n", xval);
+      printf("Qn correction: norm of s       = %.5e\n", sval);
+      printf("Qn correction: norm of y       = %.5e\n", yyal);
+      printf("Qn correction: norm of yupdate = %.5e\n", yup);
+    }
+
+    // Test if y^Ts > 0
+    s_temp->copyValues(s);
+    ParOptBVecWrap *s_temp_wrap = dynamic_cast<ParOptBVecWrap *>(s_temp);
+    filter->applyTranspose(s_temp_wrap->vec, s_temp_wrap->vec);
+
+    ParOptScalar yTs = s_temp->dot(proj_deriv);
+    if (rank == 0) printf("Qn correction: yTs  = %.5e\n", yTs);
+
+    // Update y
+    y->axpy(1.0, proj_deriv);
+  }
+
+  return;
 }
 
 /*
@@ -1483,36 +1723,34 @@ void TMRTopoProblem::writeOutput(int iter, ParOptVec *xvec) {
   // Print out the binary STL file for later visualization
   if (prefix) {
     // Write out the file at a cut off of 0.25
-    char *filename = new char[strlen(prefix) + 100];
+    char filename[strlen(prefix) + 100];
 
     for (int k = 0; k < design_vars_per_node; k++) {
       double cutoff = 0.5;
-      sprintf(filename, "%s/levelset05_var%d_binary%04d.bstl", prefix, k,
-              iter_count);
+      snprintf(filename, sizeof(filename),
+               "%s/levelset05_var%d_binary%04d.bstl", prefix, k, iter_count);
 
       // Write the STL file
       filter->writeSTLFile(k, cutoff, filename);
     }
-
-    delete[] filename;
   }
 
   if (prefix) {
     if (f5_frequency > 0 && (iter % f5_frequency) == 0) {
       // Create the filename
-      char *filename = new char[strlen(prefix) + 100];
-      sprintf(filename, "%s/tacs_output%04d.f5", prefix, iter_count);
+      char filename[strlen(prefix) + 100];
+      snprintf(filename, sizeof(filename), "%s/tacs_output%04d.f5", prefix,
+               iter_count);
 
       TACSToFH5 *f5 = new TACSToFH5(assembler, f5_element_type, f5_write_flag);
       f5->incref();
       f5->writeToFile(filename);
       f5->decref();
-      delete[] filename;
     }
 
     if ((buck || freq) && f5_eigen_frequency > 0 &&
         (iter % f5_eigen_frequency) == 0) {
-      char *filename = new char[strlen(prefix) + 100];
+      char filename[strlen(prefix) + 100];
       TACSToFH5 *f5 =
           new TACSToFH5(assembler, f5_eigen_element_type, f5_eigen_write_flag);
       f5->incref();
@@ -1526,8 +1764,9 @@ void TMRTopoProblem::writeOutput(int iter, ParOptVec *xvec) {
             TacsScalar error;
             buck[i]->extractEigenvector(k, tmp, &error);
             assembler->setVariables(tmp);
-            sprintf(filename, "%s/load%d_eigenvector%02d_output%d.f5", prefix,
-                    i, k, iter);
+            snprintf(filename, sizeof(filename),
+                     "%s/load%d_eigenvector%02d_output%d.f5", prefix, i, k,
+                     iter);
             f5->writeToFile(filename);
           }
         }
@@ -1536,15 +1775,13 @@ void TMRTopoProblem::writeOutput(int iter, ParOptVec *xvec) {
           TacsScalar error;
           freq->extractEigenvector(k, tmp, &error);
           assembler->setVariables(tmp);
-          sprintf(filename, "%s/freq_eigenvector%02d_output%d.f5", prefix, k,
-                  iter);
+          snprintf(filename, sizeof(filename),
+                   "%s/freq_eigenvector%02d_output%d.f5", prefix, k, iter);
           f5->writeToFile(filename);
         }
       }
       tmp->decref();
-
       f5->decref();
-      delete[] filename;
     }
   }
 

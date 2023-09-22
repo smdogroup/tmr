@@ -1466,6 +1466,11 @@ int TMROctForest::getNodeNumbers(const int **_node_numbers) {
 }
 
 /*
+  Get the number of ext_pre nodes
+*/
+int TMROctForest::getExtPreOffset() { return ext_pre_offset; }
+
+/*
   Get the node locations
 */
 int TMROctForest::getPoints(TMRPoint **_X) {

@@ -46,6 +46,9 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   // Set the design variable values (including all local values)
   void setDesignVars(TACSBVec *x);
 
+  // Get the unfiltered design variable
+  void getDesignVars(TACSBVec *x);
+
   // Set values/add values to the vector
   void addValues(TACSBVec *vec);
 
@@ -58,6 +61,7 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
   // Apply the transpose of the filter for sensitivities
   void applyTranspose(TACSBVec *in, TACSBVec *out);
 
+ private:
   // The non-negative matrix M
   TACSMat *B;
 
@@ -75,6 +79,9 @@ class TMRHelmholtzPUFilter : public TMRConformFilter {
 
   // Temporary design variable vector
   TACSBVec *temp;
+
+  // The unfiltered design variable
+  TACSBVec *xraw;
 
   // Compute the Kronecker product
   void kronecker(TACSBVec *c, TACSBVec *x, TACSBVec *y = NULL);

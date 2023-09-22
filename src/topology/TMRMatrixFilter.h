@@ -80,15 +80,15 @@ class TMRMatrixFilter : public TMRConformFilter {
   // Set values/add values to the vector
   void addValues(TACSBVec *vec);
 
- private:
-  void initialize_matrix(double _r, int _N, TMROctForest *oct_filter,
-                         TMRQuadForest *quad_filter);
-
   // Apply the filter to get the density values
   void applyFilter(TACSBVec *in, TACSBVec *out);
 
   // Apply the transpose of the filter for sensitivities
   void applyTranspose(TACSBVec *in, TACSBVec *out);
+
+ private:
+  void initialize_matrix(double _r, int _N, TMROctForest *oct_filter,
+                         TMRQuadForest *quad_filter);
 
   // The non-negative matrix M
   TACSMat *M;

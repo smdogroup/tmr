@@ -19,7 +19,7 @@ int main(int argc, char *argv[]) {
   TMRInitialize();
 
   char filename[256];
-  sprintf(filename, "misc1.step");
+  snprintf(filename, sizeof(filename), "misc1.step");
 
   double htarget = 4.0;
   int surface_only = 0;

@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
     if (rank == 0 && write_faces_to_vtk) {
       for (int i = 0; i < num_faces; i++) {
         char output[128];
-        sprintf(output, "faces%d.vtk", i);
+        snprintf(output, sizeof(output), "faces%d.vtk", i);
         faces[i]->writeToVTK(output);
       }
     }

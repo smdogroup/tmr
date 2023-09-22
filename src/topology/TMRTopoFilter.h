@@ -41,12 +41,29 @@ class TMRTopoFilter : public TMREntity {
   // Set the design variables
   virtual void setDesignVars(TACSBVec *vec) = 0;
 
+  // Get the unfiltered design variables
+  virtual void getDesignVars(TACSBVec *vec) {
+    fprintf(stderr,
+            "TMR Filter Error: getDesignVars() method is not implemented!\n");
+  };
+
   // Set values/add values to the vector
   virtual void addValues(TACSBVec *vec) = 0;
   virtual void setValues(TACSBVec *vec) = 0;
 
   // Write the STL file
   virtual void writeSTLFile(int k, double cutoff, const char *filename) {}
+
+  // Apply filter/filter transpose to some vector that has same size as design
+  // variable
+  virtual void applyFilter(TACSBVec *in, TACSBVec *out) {
+    fprintf(stderr,
+            "TMR Filter Error: applyFilter() method is not implemented!\n");
+  }
+  virtual void applyTranspose(TACSBVec *in, TACSBVec *out) {
+    fprintf(stderr,
+            "TMR Filter Error: applyTranspose() method is not implemented!\n");
+  }
 };
 
 #endif  // TMR_TOPO_FILTER_H

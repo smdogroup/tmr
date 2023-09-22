@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
   MPI_Comm comm = MPI_COMM_WORLD;
 
   char filename[256];
-  sprintf(filename, "misc1.step");
+  snprintf(filename, sizeof(filename), "misc1.step");
 
   // Flag to indicate whether to write/test a BDF file
   int test_bdf_file = 0;
