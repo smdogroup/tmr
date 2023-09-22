@@ -4017,8 +4017,8 @@ void TMRQuadForest::getNodeConn(const int **_conn, int *_num_elements,
   if (_num_owned_nodes) {
     *_num_owned_nodes = num_owned_nodes;
   }
-  if (_num_owned_nodes) {
-    *_num_owned_nodes = num_owned_nodes;
+  if (_num_local_nodes) {
+    *_num_local_nodes = num_local_nodes;
   }
 }
 
