@@ -1,7 +1,7 @@
 """
 A simple example to test adaptive analysis with TACS/TMR. 
 
-This example uses a square flat plate, fully fixed on all edges, with a uniform
+This example uses a square flat plate, fully fixed on two edges, with a uniform
 pressure load. Static analysis is performed, followed by either uniform or 
 adaptive refinement. Adaptive refinement is based on a selected output of 
 interest. Various options for this example can be selected through command line 
@@ -9,11 +9,10 @@ arguments, see below.
 
 To run a simple adaptive analysis on the KS failure output, do the following:
 1. run `python make_plate_geom.py` to generate the square plate geometry file
-2. run `mpirun -np 4 python plate_adapt.py --niters 8 --adapt`
-3. run `mpirun -np 4 python plate_adapt.py --niters 5`
-4. compare the results of adaptive and uniform refinement between step 2 and 3
+2. run `mpirun -np 4 python plate_adapt.py --niters 4`
+3. run `mpirun -np 4 python plate_adapt.py --niters 10 --strategy fixed_growth --ref_factor 0.1`
+4. compare the results of uniform and adaptive refinement between step 2 and 3
 """
-import sys
 import os
 import argparse
 from mpi4py import MPI
@@ -114,28 +113,25 @@ def initCallBack(coarse_space, **kwargs):
 
     # load the geometry for the coarse model
     coarse_space.geomLoader = pyGeometryLoader(coarse_space.comm, geom_type)
-    coarse_space.geomLoader.readGeometryFile(geom_file)
+    coarse_space.geomLoader.readGeometryFile(geom_file=geom_file, print_lev=0)
 
-    # name the face and edges
-    face_names = {0: "panel"}
-    edge_names = {0: "south", 1: "east", 2: "north", 3: "west"}
+    # name the geometry
+    edge_names = {0: "bottom", 1: "right", 2: "top", 3: "left"}
+    face_names = {0: "plate"}
     coarse_space.geomLoader.nameGeometricEntities(
         face_names=face_names, edge_names=edge_names
     )
 
     # specify boundary conditions - use defaults for nums and vals to fully fix
-    bc_names = ["south", "east", "north", "west"]
-    bc_nums = {}
-    bc_info = {"type": "edge", "bc_names": bc_names, "bc_nums": bc_nums}
+    bc_names = ["left", "right"]
+    bc_info = {"type": "edge", "bc_names": bc_names}
     coarse_space.geomLoader.setBoundaryConditions(bc_info)
 
     # set the meshing options
-    coarse_space.geomLoader.setMeshOptions(write_mesh_quality_histogram=0)
-    if not args.adapt:
-        coarse_space.geomLoader.setMeshOptions(mesh_type_default=TMR.STRUCTURED)
+    coarse_space.geomLoader.setMeshOptions(write_mesh_quality_histogram=False)
 
     # create the initial coarse mesh
-    coarse_space.geomLoader.createMesh(h=args.hinit)
+    coarse_space.geomLoader.createMesh(h=args.hinit, writeBDF=False)
 
     # create the topology
     coarse_space.geomLoader.createTopology(useMesh=True)
@@ -168,26 +164,26 @@ if __name__ == "__main__":
 
     # parse input arguments
     parser = argparse.ArgumentParser(
-        description="Mesh refinement test case for a fully-clamped flat plate"
+        description="Mesh refinement test case for a plate"
     )
     parser.add_argument(
         "--hinit",
-        default=0.25,
+        default=0.125,
         type=float,
         help="target mesh size used for initial mesh generation",
     )
     parser.add_argument(
-        "--order", default=3, type=int, help="order of elements in the mesh"
+        "--p", default=-3.0e4, type=float, help="uniform pressure load to apply"
     )
     parser.add_argument(
-        "--p", default=-1.0e2, type=float, help="uniform pressure load to apply"
+        "--order", default=3, type=int, help="order of elements in the mesh"
     )
     parser.add_argument(
         "--output", default="ks_fail", type=str, help="name of output of interest"
     )
     parser.add_argument(
         "--ksweight",
-        default=1.0e6,
+        default=1.0e2,
         type=float,
         help="weight factor (rho) used for KS-aggregated outputs",
     )
@@ -198,28 +194,28 @@ if __name__ == "__main__":
         help="number of refinement iterations to perform",
     )
     parser.add_argument(
-        "--adapt",
-        default=False,
-        action="store_true",
-        help="boolean flag to apply adaptive/uniform mesh refinement",
+        "--strategy",
+        default="",
+        type=str,
+        help="type of adaptation strategy to use (leave empty for uniform refinement)",
     )
     parser.add_argument(
         "--err_tol",
-        default=1.0e-6,
+        default=1.0e-3,
         type=float,
         help="target output error criterion used for adaptation termination",
-    )
-    parser.add_argument(
-        "--nmaxlevs",
-        default=30,
-        type=int,
-        help="max number of refinement levels allowed during adaptation",
     )
     parser.add_argument(
         "--ndecrease",
         default=5,
         type=int,
-        help="number of iterations needed to decrease the refinement threshold to 1",
+        help="number of iterations needed to decrease the refinement threshold to 0",
+    )
+    parser.add_argument(
+        "--ref_factor",
+        default=0.0,
+        type=float,
+        help="fixed-growth refinement fraction applied each adaptive iteraton",
     )
     args = parser.parse_args()
     for key in vars(args):
@@ -229,21 +225,24 @@ if __name__ == "__main__":
     if comm.rank == 0:
         for item in os.listdir(os.getcwd()):
             fname, fext = os.path.splitext(item)
-            if fext in [".f5", ".plt"]:
+            if fext in [".hdf5", ".f5", ".plt"]:
                 os.remove(os.path.join(os.getcwd(), item))
 
     # create the adaptive model
+    adapt_params = {
+        "adapt_strategy": args.strategy,
+        "error_tol": args.err_tol,
+        "num_decrease_iters": args.ndecrease,
+        "growth_refine_factor": args.ref_factor,
+    }
     model = pyTACSAdapt(
         comm,
         initCallBack,
         elemCallBack,
         probCallBack,
         args.output.lower(),
-        error_tol=args.err_tol,
-        num_max_ref_levels=args.nmaxlevs,
-        num_decrease_iters=args.ndecrease,
+        adapt_params,
     )
-    model.setOutputOfInterest(args.output.lower())
 
     # initialize the coarse-space model
     model.initializeCoarseSpace(
@@ -257,7 +256,7 @@ if __name__ == "__main__":
         # set up the coarse-space model
         model.setupModel(model_type="coarse", cmd_ln_args=args)
         model.coarse.setAuxElements(
-            geom_labels=["panel"], aux_type="pressure", faceIndex=0, p=args.p
+            geom_labels=["plate"], aux_type="pressure", faceIndex=0, p=args.p
         )
         printroot("coarse model set up")
 
@@ -265,7 +264,7 @@ if __name__ == "__main__":
         model.solvePrimal(model_type="coarse", writeSolution=True)
         printroot("coarse primal problem solved")
 
-        if args.adapt:
+        if args.strategy:
             # solve the coarse adjoint problem
             model.solveAdjoint(model_type="coarse", writeSolution=False)
             printroot("coarse adjoint problem solved")
@@ -273,7 +272,7 @@ if __name__ == "__main__":
             # set up the fine-space model
             model.createFineSpace(cmd_ln_args=args)
             model.fine.setAuxElements(
-                geom_labels=["panel"], aux_type="pressure", faceIndex=0, p=args.p
+                geom_labels=["plate"], aux_type="pressure", faceIndex=0, p=args.p
             )
             printroot("fine model set up")
 
@@ -293,6 +292,7 @@ if __name__ == "__main__":
                 error_estimate,
                 output_correction,
                 element_errors,
+                node_errors,
             ) = model.estimateOutputError()
             printroot("output error estimated")
 
@@ -303,16 +303,19 @@ if __name__ == "__main__":
             elif k < (args.niters):
                 # do the adaptation if not yet satisfied
                 printroot("applying adaptive refinement")
-                model.adaptModelDecreasingThreshold(element_errors)
+                model.refineModel(element_errors)
 
         # otherwise do uniform mesh refinement
         else:
             if k < (args.niters):
                 printroot("applying uniform refinement")
-                model.coarse.applyRefinement()
+                model.refineModel()
 
     # print out final information
     printroot(f"mesh_history: {model.mesh_history}")
     printroot(f"output_history: {model.output_history}")
     printroot(f"error_history: {model.error_history}")
     printroot(f"adaptation_history: {model.adaptation_history}")
+
+    # write the model history file
+    model.writeModelHistory()
