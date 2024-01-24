@@ -45,6 +45,7 @@ def makePlateGeom(width=1.0, height=1.0, npanels=1, makeIGES=False):
     coords = np.zeros([nverts, 3])
     coords[:, 0] = X.ravel()
     coords[:, 1] = Y.ravel()
+    coords *= 1000.0  # egads defaults to use mm as units, not m
     # print(coords)
 
     # make the quad node connectivity - used to make the edge and face connectivity
@@ -159,7 +160,7 @@ def makePlateGeom(width=1.0, height=1.0, npanels=1, makeIGES=False):
         fname += ".iges"
     else:
         fname += ".step"
-    model.saveModel(fname, overwrite=True)
+    model.saveModel(fname, units="M", overwrite=True)
     return
 
 
