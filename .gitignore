@@ -49,6 +49,7 @@ tmr/*.cpp
 *.stp
 *.step
 *.egads
+*.hdf5
 
 # vscode config files
 .vscode/*
