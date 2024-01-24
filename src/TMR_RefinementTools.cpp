@@ -3016,8 +3016,11 @@ double TMR_AdjointErrorEst(TMRQuadForest *forest, TACSAssembler *tacs,
         // skip dependent nodes - handled in beginSetValues() with dep weights
         continue;
       }
-      elem_error[elem] += fabs(TacsRealPart(err[i])) / weights[i];
+      elem_error[elem] += TacsRealPart(err[i]) / weights[i];
     }
+    // absolute value after the sum allows for error cancellation between each
+    // basis function within an element
+    elem_error[elem] = fabs(elem_error[elem]);
   }
 
   // Add up the absolute value of the nodal errors to get the output
@@ -3025,8 +3028,8 @@ double TMR_AdjointErrorEst(TMRQuadForest *forest, TACSAssembler *tacs,
   TacsScalar *nerr;
   int size = nodal_error->getArray(&nerr);
   memcpy(node_error, nerr, size * sizeof(double));
-  for (int i = 0; i < size; i++) {
-    total_error_est += fabs(TacsRealPart(nerr[i]));
+  for (int i = 0; i < nelems; i++) {
+    total_error_est += elem_error[i];
   }
 
   // Sum up the contributions across all processors
