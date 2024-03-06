@@ -4,6 +4,8 @@ TMR is a parallel meshing/geometry package for use with TACS
 
 import os
 
+__all__ = []
+
 
 def get_cython_include():
     """
