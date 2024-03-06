@@ -76,6 +76,7 @@ import tacs
 if "tacs" in sys.modules:
     inc_dirs.extend(tacs.get_include())
     inc_dirs.extend(tacs.get_cython_include())
+    inc_dirs.append(os.path.split(tacs.get_cython_include()[0])[0])
     tacs_lib_dirs, tacs_libs = tacs.get_libraries()
     lib_dirs.extend(tacs_lib_dirs)
     libs.extend(tacs_libs)
@@ -87,6 +88,7 @@ import paropt
 if "paropt" in sys.modules:
     inc_dirs.extend(paropt.get_include())
     inc_dirs.extend(paropt.get_cython_include())
+    inc_dirs.append(os.path.split(paropt.get_cython_include()[0])[0])
     paropt_lib_dirs, paropt_libs = paropt.get_libraries()
     lib_dirs.extend(paropt_lib_dirs)
     libs.extend(paropt_libs)
@@ -98,6 +100,7 @@ import egads4py
 if "egads4py" in sys.modules:
     inc_dirs.extend(egads4py.get_include())
     inc_dirs.extend(egads4py.get_cython_include())
+    inc_dirs.append(os.path.split(egads4py.get_cython_include()[0])[0])
     egads4py_lib_dirs, egads4py_libs = egads4py.get_libraries()
     lib_dirs.extend(egads4py_lib_dirs)
     libs.extend(egads4py_libs)

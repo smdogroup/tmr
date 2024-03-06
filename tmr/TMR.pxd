@@ -19,7 +19,6 @@
 # limitations under the License.
 
 # For MPI
-from mpi4py.libmpi cimport *
 cimport mpi4py.MPI as MPI
 
 # Import numpy
@@ -29,21 +28,45 @@ import numpy as np
 # Import TACS
 from tacs import TACS
 from tacs cimport TACS
-from tacs.TACS import *
-from tacs.TACS cimport *
-from tacs.constitutive import *
-from tacs.constitutive cimport *
+from tacs.TACS import Vec, VecInterp, Assembler, Mg, Element, Function, Pc
+from tacs.TACS cimport (
+    Vec,
+    VecInterp,
+    Assembler,
+    Mg,
+    Element,
+    Function,
+    Pc,
+    TACSFunction,
+    TACSBVec,
+    TACSBVecInterp,
+    TACSAssembler,
+    TACSMg,
+    _init_Vec,
+    _init_VecInterp,
+    _init_Assembler,
+    _init_Mg,
+    _dynamicTACSMg,
+)
+from tacs.constitutive import (
+    PlaneStressConstitutive,
+    SolidConstitutive,
+    MaterialProperties,
+)
+from tacs.constitutive cimport (
+    PlaneStressConstitutive,
+    SolidConstitutive,
+    MaterialProperties,
+    TACSMaterialProperties,
+)
 
 # Import ParOpt
-from paropt.ParOpt import *
-from paropt.ParOpt cimport *
+from paropt.ParOpt import PVec, ProblemBase
+from paropt.ParOpt cimport PVec, ProblemBase, ParOptVec, _init_PVec
 
 # Import EGADS
-from egads4py.egads import *
-from egads4py.egads cimport *
-
-# Import all of the TMR header files
-from tmr.cpp_headers.TMR cimport *
+from egads4py.egads import pyego
+from egads4py.egads cimport pyego
 
 cdef inline char* tmr_convert_str_to_chars(s):
    if isinstance(s, unicode):

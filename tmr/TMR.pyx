@@ -19,7 +19,6 @@
 # limitations under the License.
 
 # # For the use of MPI
-from mpi4py.libmpi cimport *
 cimport mpi4py.MPI as MPI
 
 # Import numpy
@@ -40,6 +39,9 @@ from libcpp cimport bool
 
 # Import C methods for python
 from cpython cimport PyObject, Py_INCREF
+
+# Import all of the TMR header files
+from tmr.cpp_headers.TMR cimport *
 
 cdef tmr_init():
     if not TMRIsInitialized():

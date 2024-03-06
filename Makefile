@@ -24,7 +24,7 @@ debug:
 	${CXX} ${SO_LINK_FLAGS} ${TMR_OBJS} ${TMR_EXTERN_LIBS} -o ${TMR_DIR}/lib/libtmr.${SO_EXT}
 
 interface:
-	pip install -e .\[all\]
+	pip install -e .
 
 clean:
 	${RM} lib/*.a lib/*.so
