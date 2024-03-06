@@ -327,8 +327,8 @@ class pyTACSAdapt(BaseUI):
 
         # initialize the storage for saving model info
         self.mesh_history = {}  # mesh size (ndof)
-        self.output_history = {}  # outputs/corrected outputs
-        self.error_history = {}  # error estimates
+        self.output_history = {}  # outputs
+        self.error_history = {}  # error estimates and output corrections
         self.adaptation_history = {
             "threshold": {},  # refine/coarsen thresholds
             "element_errors": {},
@@ -661,10 +661,10 @@ class pyTACSAdapt(BaseUI):
         )
 
         # update histories
-        self.output_history[
-            f"{self.fine.prob_name}_{self.fine.output_name}"
-        ] += output_correction
-        self.error_history[f"adapt_iter_{self.fine.refine_iter}"] = error_estimate
+        self.error_history[f"adapt_iter_{self.fine.refine_iter}_error"] = error_estimate
+        self.error_history[
+            f"adapt_iter_{self.fine.refine_iter}_correction"
+        ] = output_correction
 
         # write out the nodal error field
         if writeSolution:
@@ -908,7 +908,20 @@ class pyTACSAdapt(BaseUI):
 
                 # store the error estimate history
                 h5["error_estimate_history"] = np.array(
-                    list(self.error_history.values())
+                    [
+                        self.error_history[key]
+                        for key in self.error_history.keys()
+                        if "error" in key
+                    ]
+                )
+
+                # store the output correction history
+                h5["output_correction_history"] = np.array(
+                    [
+                        self.error_history[key]
+                        for key in self.error_history.keys()
+                        if "correction" in key
+                    ]
                 )
 
                 # store the adaptation refinement histories
