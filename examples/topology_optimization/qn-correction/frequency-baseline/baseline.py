@@ -1,6 +1,7 @@
 """
 Compute the base frequencies for different domains with concentrated mass
 """
+
 from tmr import TMR, TopOptUtils
 from tacs import TACS, constitutive
 
