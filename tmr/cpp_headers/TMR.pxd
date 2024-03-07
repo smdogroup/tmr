@@ -30,11 +30,27 @@ from libc.stdint cimport int32_t, int16_t
 cimport numpy as np
 import numpy as np
 
-# Import TACS
-from paropt.cpp_headers.ParOpt cimport *
-from tacs.cpp_headers.TACS cimport *
-from tacs.cpp_headers.constitutive cimport *
-from egads4py.egads cimport *
+# Import the definitions from the headers
+from paropt.cpp_headers.ParOpt cimport ParOptScalar, ParOptVec, ParOptProblem
+from tacs.cpp_headers.TACS cimport (
+    TacsScalar,
+    TACSAssembler,
+    TACSElement,
+    TACSFunction,
+    TACSBVec,
+    TACSBVecInterp,
+    TACSMg,
+    OrderingType,
+    ElementType,
+    JDRecycleType,
+    JD_NUM_RECYCLE,
+)
+from tacs.cpp_headers.constitutive cimport (
+    TACSMaterialProperties,
+    TACSPlaneStressConstitutive,
+    TACSSolidConstitutive,
+)
+from egads4py.egads cimport ego
 
 cdef extern from "TMRBase.h":
     enum:

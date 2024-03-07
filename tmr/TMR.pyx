@@ -43,6 +43,8 @@ from cpython cimport PyObject, Py_INCREF
 # Import all of the TMR header files
 from tmr.cpp_headers.TMR cimport *
 
+from tacs import TACS
+
 cdef tmr_init():
     if not TMRIsInitialized():
         TMRInitialize()

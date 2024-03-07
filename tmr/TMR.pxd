@@ -27,7 +27,6 @@ import numpy as np
 
 # Import TACS
 from tacs import TACS
-from tacs cimport TACS
 from tacs.TACS import Vec, VecInterp, Assembler, Mg, Element, Function, Pc
 from tacs.TACS cimport (
     Vec,
