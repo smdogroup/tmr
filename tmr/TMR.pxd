@@ -18,13 +18,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# For MPI
-cimport mpi4py.MPI as MPI
-
-# Import numpy
-cimport numpy as np
-import numpy as np
-
 # Import TACS
 from tacs import TACS
 from tacs.TACS import Vec, VecInterp, Assembler, Mg, Element, Function, Pc

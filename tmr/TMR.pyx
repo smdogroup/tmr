@@ -25,6 +25,9 @@ cimport mpi4py.MPI as MPI
 cimport numpy as np
 import numpy as np
 
+# Ensure that numpy is initialized
+np.import_array()
+
 # Import the string library
 from libcpp.string cimport string
 from libc.string cimport strcpy
@@ -48,9 +51,6 @@ from tacs import TACS
 cdef tmr_init():
     if not TMRIsInitialized():
         TMRInitialize()
-
-# Ensure that numpy is initialized
-np.import_array()
 
 # Initialize the MPI libraries in TMR (if not already done)
 tmr_init()

@@ -26,10 +26,6 @@ cimport mpi4py.MPI as MPI
 from libc.string cimport const_char
 from libc.stdint cimport int32_t, int16_t
 
-# Import numpy
-cimport numpy as np
-import numpy as np
-
 # Import the definitions from the headers
 from paropt.cpp_headers.ParOpt cimport ParOptScalar, ParOptVec, ParOptProblem
 from tacs.cpp_headers.TACS cimport (
