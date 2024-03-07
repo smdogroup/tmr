@@ -475,9 +475,9 @@ if __name__ == "__main__":
                 omprob.driver.opt_settings["Minor print level"] = 0
 
                 if args.n_mesh_refine > 1 and step == args.n_mesh_refine - 1:
-                    omprob.driver.opt_settings[
-                        "Major iterations limit"
-                    ] = args.niter_finest
+                    omprob.driver.opt_settings["Major iterations limit"] = (
+                        args.niter_finest
+                    )
                 else:
                     omprob.driver.opt_settings["Major iterations limit"] = args.max_iter
 

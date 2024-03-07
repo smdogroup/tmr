@@ -436,9 +436,9 @@ class pyTACSAdapt(BaseUI):
 
         # record the number of degrees of freedom for this model
         nnodes = model.assembler.getNumOwnedNodes()
-        self.mesh_history[
-            model.prob_name
-        ] = model.assembler.getVarsPerNode() * model.comm.allreduce(nnodes, op=MPI.SUM)
+        self.mesh_history[model.prob_name] = (
+            model.assembler.getVarsPerNode() * model.comm.allreduce(nnodes, op=MPI.SUM)
+        )
         return
 
     def solvePrimal(self, model_type, writeSolution=False, **kwargs):
@@ -662,9 +662,9 @@ class pyTACSAdapt(BaseUI):
 
         # update histories
         self.error_history[f"adapt_iter_{self.fine.refine_iter}_error"] = error_estimate
-        self.error_history[
-            f"adapt_iter_{self.fine.refine_iter}_correction"
-        ] = output_correction
+        self.error_history[f"adapt_iter_{self.fine.refine_iter}_correction"] = (
+            output_correction
+        )
 
         # write out the nodal error field
         if writeSolution:
@@ -942,9 +942,9 @@ class pyTACSAdapt(BaseUI):
                 for key, val in self.adaptation_history["element_errors"].items():
                     h5[f"adaptation_history/element_errors/{key}"] = val
                 if self.adapt_strategy:
-                    h5["adaptation_history"].attrs[
-                        "strategy"
-                    ] = self.adapt_strategy.replace("_", " ").lower()
+                    h5["adaptation_history"].attrs["strategy"] = (
+                        self.adapt_strategy.replace("_", " ").lower()
+                    )
                     h5["adaptation_history"].attrs["error_tolerance"] = self.error_tol
                     h5["adaptation_history"].attrs[
                         "max_refine_levels"

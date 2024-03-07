@@ -397,9 +397,9 @@ if __name__ == "__main__":
                 prob.driver.opt_settings["Minor print level"] = 0
 
                 if max_iterations > 1 and step == max_iterations - 1:
-                    prob.driver.opt_settings[
-                        "Major iterations limit"
-                    ] = args.niter_finest
+                    prob.driver.opt_settings["Major iterations limit"] = (
+                        args.niter_finest
+                    )
                 else:
                     prob.driver.opt_settings["Major iterations limit"] = args.max_iter
 

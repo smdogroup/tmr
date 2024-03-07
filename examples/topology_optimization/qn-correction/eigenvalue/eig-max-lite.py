@@ -1,6 +1,7 @@
 """
 This script performs eigenvalue minimization with mass constraint
 """
+
 import numpy as np
 from mpi4py import MPI
 import argparse

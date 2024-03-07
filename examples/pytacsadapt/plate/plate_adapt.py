@@ -13,6 +13,7 @@ To run a simple adaptive analysis on the KS failure output, do the following:
 3. run `mpirun -np 4 python plate_adapt.py --niters 10 --strategy fixed_growth --ref_factor 0.1`
 4. compare the results of uniform and adaptive refinement between step 2 and 3
 """
+
 import os
 import argparse
 from mpi4py import MPI

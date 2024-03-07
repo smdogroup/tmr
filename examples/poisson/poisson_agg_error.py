@@ -2,6 +2,7 @@
 Plot the aggregation error as a function of rho for the KS and p-norm
 functionals
 """
+
 from __future__ import print_function
 import tikzplots as tkz
 import numpy as np
