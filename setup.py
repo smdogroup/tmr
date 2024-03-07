@@ -2,17 +2,16 @@ import os
 from subprocess import check_output
 import sys
 
-# Numpy/mpi4py must be installed prior to installing TACS
+# Numpy/mpi4py must be installed prior to installing
 import numpy
 import mpi4py
 
 # Import distutils
-from setuptools import setup
+from setuptools import setup, find_packages
 from distutils.core import Extension as Ext
 from Cython.Build import cythonize
 from Cython.Compiler import Options
 
-Options.embedsignature = True
 Options.docstrings = True
 
 
@@ -77,6 +76,7 @@ import tacs
 if "tacs" in sys.modules:
     inc_dirs.extend(tacs.get_include())
     inc_dirs.extend(tacs.get_cython_include())
+    inc_dirs.append(os.path.split(tacs.get_cython_include()[0])[0])
     tacs_lib_dirs, tacs_libs = tacs.get_libraries()
     lib_dirs.extend(tacs_lib_dirs)
     libs.extend(tacs_libs)
@@ -88,6 +88,7 @@ import paropt
 if "paropt" in sys.modules:
     inc_dirs.extend(paropt.get_include())
     inc_dirs.extend(paropt.get_cython_include())
+    inc_dirs.append(os.path.split(paropt.get_cython_include()[0])[0])
     paropt_lib_dirs, paropt_libs = paropt.get_libraries()
     lib_dirs.extend(paropt_lib_dirs)
     libs.extend(paropt_libs)
@@ -99,6 +100,7 @@ import egads4py
 if "egads4py" in sys.modules:
     inc_dirs.extend(egads4py.get_include())
     inc_dirs.extend(egads4py.get_cython_include())
+    inc_dirs.append(os.path.split(egads4py.get_cython_include()[0])[0])
     egads4py_lib_dirs, egads4py_libs = egads4py.get_libraries()
     lib_dirs.extend(egads4py_lib_dirs)
     libs.extend(egads4py_libs)
@@ -127,16 +129,16 @@ exts.append(
 
 for e in exts:
     e.cython_directives = {
-        "language_level": "3",
         "embedsignature": True,
         "binding": True,
     }
 
 setup(
     name="tmr",
-    version=0.1,
+    version=1.0,
     description="Parallel mesh generation utilities",
     author="Graeme J. Kennedy",
     author_email="graeme.kennedy@ae.gatech.edu",
+    packages=find_packages(include=["tmr*"]),
     ext_modules=cythonize(exts, include_path=inc_dirs),
 )

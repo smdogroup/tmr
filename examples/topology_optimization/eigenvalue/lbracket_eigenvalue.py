@@ -2,6 +2,7 @@
 Solve the eigenvalue-constrained optimization problem
 
 """
+
 from mpi4py import MPI
 from tmr import TMR, TopOptUtils
 from paropt import ParOpt, ParOptEig

@@ -1,6 +1,7 @@
 """
 Imports a STL file and applies a smoothing to it
 """
+
 from __future__ import print_function
 
 # Import the locate point code

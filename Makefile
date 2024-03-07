@@ -13,7 +13,7 @@ default:
 	    echo "making $@ in $$subdir"; \
 	    echo; (cd $$subdir && $(MAKE) TMR_DIR=${TMR_DIR}) || exit 1; \
 	done
-	${CXX} ${SO_LINK_FLAGS} ${TMR_OBJS} ${TMR_EXTERN_LIBS} -o ${TMR_DIR}/lib/libtmr.${SO_EXT} 
+	${CXX} ${SO_LINK_FLAGS} ${TMR_OBJS} ${TMR_EXTERN_LIBS} -o ${TMR_DIR}/lib/libtmr.${SO_EXT}
 
 debug:
 	echo "Building Real TMR"
@@ -24,7 +24,7 @@ debug:
 	${CXX} ${SO_LINK_FLAGS} ${TMR_OBJS} ${TMR_EXTERN_LIBS} -o ${TMR_DIR}/lib/libtmr.${SO_EXT}
 
 interface:
-	${PYTHON} setup.py build_ext --inplace
+	pip install -e .
 
 clean:
 	${RM} lib/*.a lib/*.so

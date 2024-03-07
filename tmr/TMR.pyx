@@ -1,4 +1,4 @@
-# distutils: language=c++
+#distutils: language=c++
 
 # This file is part of the package TMR for adaptive mesh refinement.
 
@@ -18,55 +18,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function, division
-
-# For the use of MPI
-from mpi4py.libmpi cimport *
+# # For the use of MPI
 cimport mpi4py.MPI as MPI
 
 # Import numpy
 cimport numpy as np
 import numpy as np
 
-# Import the string library
-from libcpp.string cimport string
-from libc.string cimport strcpy
-
-cdef tmr_init():
-    if not TMRIsInitialized():
-        TMRInitialize()
-
 # Ensure that numpy is initialized
 np.import_array()
 
-# Initialize the MPI libraries in TMR (if not already done)
-tmr_init()
+# Import the string library
+from libcpp.string cimport string
+from libc.string cimport strcpy
 
 # Import tracebacks for callbacks
 import traceback
 from sys import exit
 
 # Import the definition required for const strings
-from libc.string cimport const_char
-from libc.stdlib cimport malloc, free
+from libc.stdlib cimport const_char, malloc, free
+from libcpp cimport bool
 
 # Import C methods for python
 from cpython cimport PyObject, Py_INCREF
 
+# Import all of the TMR header files
+from tmr.cpp_headers.TMR cimport *
+
+from tacs import TACS
+
+cdef tmr_init():
+    if not TMRIsInitialized():
+        TMRInitialize()
+
+# Initialize the MPI libraries in TMR (if not already done)
+tmr_init()
+
 # Include numpy and datatype related definitions
 include "ParOptDefs.pxi"
-
-# Import TACS and ParOpt
-from tacs.TACS cimport *
-from tacs.constitutive cimport *
-from tacs.functions cimport *
-from paropt.ParOpt cimport *
-from egads4py.egads cimport *
-from tacs import TACS
-from egads4py import egads
-
-# Import the definitions
-from TMR cimport *
 
 # Include the mpi4py header
 cdef extern from "mpi-compat.h":
@@ -2345,6 +2335,7 @@ cdef class PointFeatureSize(ElementFeatureSize):
         return
 
 cdef class PointLocator:
+    cdef TMRPointLocator *ptr
     def __cinit__(self, np.ndarray[double, ndim=2, mode='c'] X):
         cdef int npts = 0
         cdef TMRPoint *pts
@@ -3814,16 +3805,16 @@ def sewModel(file, units="M", int print_level=0, sew_options={}):
     cdef char *filename = tmr_convert_str_to_chars(file)
     cdef const char *units_chars = tmr_convert_str_to_chars(units)
     if file.lower().endswith(('step', 'stp')):
-        TMR_SewModelSTEP(filename, 
-                         units_chars, 
-                         print_level, 
-                         sew_options.get("sew_tol",1e-6),  
+        TMR_SewModelSTEP(filename,
+                         units_chars,
+                         print_level,
+                         sew_options.get("sew_tol",1e-6),
                          sew_options.get("nonmanifold_mode",False))
     elif file.lower().endswith(('iges', 'igs')):
-        TMR_SewModelIGES(filename, 
-                         units_chars, 
-                         print_level, 
-                         sew_options.get("sew_tol",1e-6),  
+        TMR_SewModelIGES(filename,
+                         units_chars,
+                         print_level,
+                         sew_options.get("sew_tol",1e-6),
                          sew_options.get("nonmanifold_mode",False))
     else:
         print("model file extension not supported")
@@ -3948,7 +3939,7 @@ cdef class BoundaryConditions:
         return
 
 cdef TACSElement* _createQuadElement(void *_self, int order,
-                                     TMRQuadrant *quad):
+                                     TMRQuadrant *quad) noexcept:
     cdef TACSElement *elem = NULL
     q = Quadrant()
     q.quad.x = quad.x
@@ -4032,7 +4023,7 @@ cdef class QuadCreator:
         return None
 
 cdef TACSElement* _createOctElement(void *_self, int order,
-                                    TMROctant *octant):
+                                    TMROctant *octant) noexcept:
     cdef TACSElement *elem = NULL
     o = Octant()
     o.octant.x = octant.x
@@ -4122,7 +4113,7 @@ cdef class OctCreator:
 cdef TACSElement* _createQuadTopoElement(void *_self, int order,
                                          TMRQuadrant *quad,
                                          int nweights,
-                                         TMRIndexWeight *weights):
+                                         TMRIndexWeight *weights) noexcept:
     cdef TACSElement *elem = NULL
     q = Quadrant()
     q.quad.x = quad.x
@@ -4171,7 +4162,7 @@ cdef TACSElement* _createQuadConformTopoElement(void *_self, int order,
                                                 TMRQuadrant *quad,
                                                 int nweights,
                                                 const int *index,
-                                                TMRQuadForest *filtr):
+                                                TMRQuadForest *filtr) noexcept:
     cdef TACSElement *elem = NULL
     q = Quadrant()
     q.quad.x = quad.x
@@ -4222,7 +4213,7 @@ cdef class QuadConformTopoCreator:
 cdef TACSElement* _createOctTopoElement(void *_self, int order,
                                         TMROctant *octant,
                                         int nweights,
-                                        TMRIndexWeight *weights):
+                                        TMRIndexWeight *weights) noexcept:
     cdef TACSElement *elem = NULL
     oct = Octant()
     oct.octant.x = octant.x
@@ -4273,7 +4264,7 @@ cdef TACSElement* _createOctConformTopoElement( void *_self, int order,
                                                 TMROctant *octant,
                                                 int nweights,
                                                 const int *index,
-                                                TMROctForest *filtr):
+                                                TMROctForest *filtr) noexcept:
     cdef TACSElement *elem = NULL
     Oct = Octant()
     Oct.octant.x = octant.x
@@ -4504,7 +4495,7 @@ def adjointError(forest, Assembler coarse,
         err_est = TMR_AdjointErrorEst(quad_forest, coarse.ptr,
                                       quad_forest_refined, refined.ptr,
                                       solution.getBVecPtr(), adjoint.getBVecPtr(),
-                                      <double*>node_error.data, 
+                                      <double*>node_error.data,
                                       <double*>elem_error.data,
                                       &adj_corr)
     return err_est, adj_corr, elem_error, node_error
@@ -4513,7 +4504,7 @@ def computeInterpSolution(forest, Assembler coarse,
                           forest_refined, Assembler refined,
                           Vec uvec=None, Vec uvec_refined=None):
     """
-    Given coarse and fine sets of forests and assemblers, interpolates a field 
+    Given coarse and fine sets of forests and assemblers, interpolates a field
     from the coarse space in the fine space using its higher-order basis.
 
     Parameters
@@ -4563,9 +4554,9 @@ def computeReconSolution(forest, Assembler coarse,
                          compute_diff=False):
     """
     Given coarse and fine sets of forests and assemblers, reconstruct a field
-    in the fine-space given a field in the coarse-space. Enriches the field in 
+    in the fine-space given a field in the coarse-space. Enriches the field in
     the fine-space with higher-order information obtained from local least-
-    square solutions on each element. 
+    square solutions on each element.
 
     Parameters
     -----------
@@ -4584,10 +4575,10 @@ def computeReconSolution(forest, Assembler coarse,
       The fine-space field that is returned. If None, a vector is created by the
       fine assembler.
     compute_diff: Bool
-      If True, uvec_refined is the difference between the high-order 
+      If True, uvec_refined is the difference between the high-order
       reconstructed field in the fine-space and the coarse-space field that is
       interpolated on the fine-space. If False, uvec_refined is just the high-
-      order reconstructed field in the fine-space. 
+      order reconstructed field in the fine-space.
     """
     cdef TMROctForest *oct_forest = NULL
     cdef TMROctForest *oct_forest_refined = NULL
@@ -4664,11 +4655,11 @@ def getSTLTriangles(OctForest forest, Vec x, int offset=0,
     else:
         points = np.array([[]])
 
-    # delete [] tris
-
     return points
 
 cdef class TopoFilter:
+    cdef TMRTopoFilter *ptr
+
     def __cinit__(self, *args, **kwargs):
         self.ptr = NULL
 
@@ -4775,6 +4766,12 @@ cdef class TopoFilter:
 
         if self.ptr != NULL:
             self.ptr.applyTranspose(vec_in.getBVecPtr(), vec_out.getBVecPtr())
+
+cdef _init_TopoFilter(TMRTopoFilter *ptr):
+   fltr = TopoFilter()
+   fltr.ptr = ptr
+   fltr.ptr.incref()
+   return fltr
 
 cdef class LagrangeFilter(TopoFilter):
     def __cinit__(self, list assemblers, list filters):
@@ -4956,7 +4953,7 @@ cdef inplace_array_1d(int nptype, int dim1, void *data_ptr):
     return ndarray
 
 cdef int _getinteriorstencil(void *_self, int diag, int npts,
-                             const TacsScalar *X, double *alphas ):
+                             const TacsScalar *X, double *alphas) noexcept:
     cdef int fail = 0
     try:
         _X = inplace_array_1d(np.NPY_DOUBLE, 3*npts, <void*>X)
@@ -4971,7 +4968,7 @@ cdef int _getinteriorstencil(void *_self, int diag, int npts,
 
 cdef int _getboundarystencil(void *_self, int diag,
                              const TacsScalar *n, int npts,
-                             const TacsScalar *X, double *alphas ):
+                             const TacsScalar *X, double *alphas) noexcept:
     cdef int fail = 0
     try:
         _n = np.array([n[0], n[1], n[2]])
@@ -5279,7 +5276,7 @@ def ApproximateDistance(filtr, Vec x, int index=0,
 
 cdef void writeOutputCallback(void *func, const char *prefix, int iter,
                               TMROctForest *octforest, TMRQuadForest *quadforest,
-                              TACSBVec *x):
+                              TACSBVec *x) noexcept:
     try:
         oct = None
         quad = None
@@ -5296,7 +5293,7 @@ cdef void writeOutputCallback(void *func, const char *prefix, int iter,
     return
 
 cdef void constraintCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
-                             int ncon, TacsScalar *cvals):
+                             int ncon, TacsScalar *cvals) noexcept:
     try:
         mgobj = None
         if mg != NULL:
@@ -5311,7 +5308,7 @@ cdef void constraintCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
     return
 
 cdef void constraintGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
-                                     int ncon, TACSBVec **dcdx):
+                                     int ncon, TACSBVec **dcdx) noexcept:
     try:
         mgobj = None
         if mg != NULL:
@@ -5327,7 +5324,7 @@ cdef void constraintGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg
     return
 
 cdef void objectiveCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
-                            TacsScalar *fobj):
+                            TacsScalar *fobj) noexcept:
     try:
         mgobj = None
         if mg != NULL:
@@ -5340,7 +5337,7 @@ cdef void objectiveCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
     return
 
 cdef void objectiveGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
-                                    TACSBVec *dfdx):
+                                    TACSBVec *dfdx) noexcept:
     try:
         mgobj = None
         if mg != NULL:
@@ -5355,7 +5352,7 @@ cdef void objectiveGradientCallback(void *func, TMRTopoFilter *fltr, TACSMg *mg,
     return
 
 cdef void qnCorrectionCallback(int ncon, void *func, ParOptVec *_x, ParOptScalar *_z,
-                               ParOptVec *_zw, ParOptVec *_s, ParOptVec *_y):
+                               ParOptVec *_zw, ParOptVec *_s, ParOptVec *_y) noexcept:
     try:
         x = _init_PVec(_x)
         z = inplace_array_1d(np.NPY_DOUBLE, ncon, <void*>_z)

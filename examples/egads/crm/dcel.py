@@ -1,6 +1,7 @@
 """
 Implementation of a DECL data structure
 """
+
 import numpy as np
 
 
